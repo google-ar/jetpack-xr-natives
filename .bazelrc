@@ -1,0 +1,53 @@
+# Copyright 2024 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+build --cxxopt=-Wno-c++20-designator
+build --cxxopt=-Wno-implicit-fallthrough
+
+build --action_env=CC
+build --action_env=CXX
+build --action_env=PATH
+build --action_env=CXXFLAGS=-std=c++20
+build --action_env=BAZEL_CXXOPTS=-std=c++20
+build --repo_env=CC=clang++
+build --host_linkopt=-fuse-ld=lld
+
+build:release --copt=-O3
+
+build --spawn_strategy=sandboxed
+
+# Common platform definitions.
+common:android_armeabi-v7a_config --platforms=@com_google_jxr_natives//platforms:android_armeabi-v7a
+common:android_arm64-v8a_config --platforms=@com_google_jxr_natives//platforms:android_arm64-v8a
+common:android_x86_32_config --platforms=@com_google_jxr_natives//platforms:android_x86_32
+common:android_x86_64_config --platforms=@com_google_jxr_natives//platforms:android_x86_64
+
+build:android_armeabi-v7a_config --cpu=armeabi-v7a
+build:android_arm64-v8a_config --cpu=arm64-v8a
+build:android_x86_32_config --cpu=x86
+build:android_x86_64_config --cpu=x86_64
+
+
+# Config for building in a standalone environment.
+build:android_armeabi-v7a --config=android_armeabi-v7a_config
+build:android_armeabi-v7a --crosstool_top=@androidndk//:toolchain
+build:android_arm64-v8a --config=android_arm64-v8a_config
+build:android_arm64-v8a --crosstool_top=@androidndk//:toolchain
+build:android_x86_32 --config=android_x86_32_config
+build:android_x86_32 --crosstool_top=@androidndk//:toolchain
+build:android_x86_64 --config=android_x86_64_config
+build:android_x86_64 --crosstool_top=@androidndk//:toolchain
+
+# Alias.
+build:android_arm64 --config=android_arm64-v8a
