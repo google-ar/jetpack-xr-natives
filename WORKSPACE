@@ -38,9 +38,9 @@ http_archive(
     url = "https://github.com/bazelbuild/rules_android/archive/refs/tags/v0.5.1.zip",
 )
 
-RULES_ANDROID_NDK_COMMIT = "81ec8b79dc50ee97e336a25724fdbb28e33b8d41"
+RULES_ANDROID_NDK_COMMIT = "cb776db8e671084669f141d2003e1b61c1a7d21b"
 
-RULES_ANDROID_NDK_SHA = "b29409496439cdcdb50a8e161c4953ca78a548e16d3ee729a1b5cd719ffdacbf"
+RULES_ANDROID_NDK_SHA = "3ebbdcc0768f6b7703c6abe9e5c14591994a9eeaa22c98a7663f72a901332556"
 
 http_archive(
     name = "rules_android_ndk",
