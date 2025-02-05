@@ -1,7 +1,7 @@
 # Jetpack XR Natives
 
 Jetpack XR Natives is a collection of native libraries that are used by the
-[Jetpack XR SDK](https://developer.android.com/develop/devices/xr/jetpack-xr-sdk).
+[Jetpack XR SDK](https://developer.android.com/develop/xr/jetpack-xr-sdk).
 
 ## How to Build
 

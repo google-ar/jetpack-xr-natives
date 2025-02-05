@@ -259,11 +259,38 @@ jobject CreateJavaAnchorPersistenceState(
 
 jlong CreateJavaAnchorHandle(const XrSpace& xr_space) {
   static_assert(sizeof(XrSpace) <= sizeof(uint64_t));
-#if defined(__aarch64__)
-  return reinterpret_cast<jlong>(xr_space);
-#else
-  return static_cast<jlong>(reinterpret_cast<intptr_t>(&xr_space));
-#endif
+  // jlong is signed, uint64_t is not, and xr_space originally starts as a
+  // pointer. Reinterpret into a value type, then static for the sign.
+  return static_cast<jlong>(reinterpret_cast<uint64_t>(xr_space));
+}
+
+jobject CreateJavaHandState(
+    JNIEnv* env, const XrHandJointLocationsEXT& xr_hand_joint_locations) {
+  jclass hand_state_class = GetJxrClass(env, PACKAGE_OPENXR, "HandState");
+  jmethodID hand_state_constructor =
+      env->GetMethodID(hand_state_class, "<init>", "(ZLjava/util/List;)V");
+
+  jclass array_list_class = env->FindClass("java/util/ArrayList");
+  jmethodID array_list_constructor =
+      env->GetMethodID(array_list_class, "<init>", "()V");
+  jobject array_list = env->NewObject(array_list_class, array_list_constructor);
+
+  jmethodID list_add_method =
+      env->GetMethodID(array_list_class, "add", "(Ljava/lang/Object;)Z");
+
+  for (uint32_t i = 0; i < xr_hand_joint_locations.jointCount; ++i) {
+    const XrHandJointLocationEXT& joint =
+        xr_hand_joint_locations.jointLocations[i];
+
+    if (joint.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) {
+      jobject poseObject = CreateJavaPose(env, joint.pose);
+      env->CallBooleanMethod(array_list, list_add_method, poseObject);
+      env->DeleteLocalRef(poseObject);
+    }
+  }
+
+  return env->NewObject(hand_state_class, hand_state_constructor,
+                        xr_hand_joint_locations.isActive, array_list);
 }
 
 }  // namespace androidx::xr::openxr

@@ -21,6 +21,17 @@
 #include "openxr/jobject_creator.h"
 #include "openxr/openxr_manager.h"
 
+inline jlong CreateJavaLongFromCreateAnchorResult(
+    androidx::xr::openxr::OpenXrManager::CreateAnchorResult
+        create_anchor_result,
+    const XrSpace& xr_space) {
+  if (create_anchor_result !=
+      androidx::xr::openxr::OpenXrManager::CreateAnchorResult::kSuccess) {
+    return static_cast<jlong>(create_anchor_result);
+  }
+  return androidx::xr::openxr::CreateJavaAnchorHandle(xr_space);
+}
+
 static jobject NativeGetPlaneState(JNIEnv* env, jlong plane_id,
                                    jlong monotonic_time_ns) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
@@ -50,12 +61,12 @@ static jlong NativeCreateAnchorForPlane(JNIEnv* env, jlong plane_id,
 
   XrPosef xr_pose = androidx::xr::openxr::ConvertToXrPosef(env, pose);
   XrSpace anchor;
-  xr_manager.CreateAnchorForPlane(plane_id,
-                                  /*plane=*/nullptr,
-                                  static_cast<int64_t>(monotonic_time_ns),
-                                  xr_pose, &anchor);
-
-  return androidx::xr::openxr::CreateJavaAnchorHandle(anchor);
+  androidx::xr::openxr::OpenXrManager::CreateAnchorResult result =
+      xr_manager.CreateAnchorForPlane(plane_id,
+                                      /*plane=*/nullptr,
+                                      static_cast<int64_t>(monotonic_time_ns),
+                                      xr_pose, &anchor);
+  return CreateJavaLongFromCreateAnchorResult(result, anchor);
 }
 
 extern "C" {

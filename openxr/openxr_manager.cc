@@ -43,7 +43,7 @@ constexpr char kApplicationName[] = "JetpackXrCore";
 // TODO: b/327487822 - Change this from a global list to something more
 // flexible. Also split up between "required" and "optional" extensions, and
 // check against xrEnumerateInstanceExtensionProperties()
-std::array<const char *, 9> kExtensions = {
+std::array<const char *, 10> kExtensions = {
     XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME,
     XR_MND_HEADLESS_EXTENSION_NAME,
     XR_KHR_CONVERT_TIMESPEC_TIME_EXTENSION_NAME,
@@ -53,6 +53,7 @@ std::array<const char *, 9> kExtensions = {
     XR_ANDROID_UNBOUNDED_REFERENCE_SPACE_EXTENSION_NAME,
     XR_ANDROID_RAYCAST_EXTENSION_NAME,
     XR_ANDROID_DEPTH_TEXTURE_EXTENSION_NAME,
+    XR_EXT_HAND_TRACKING_EXTENSION_NAME,
 };
 
 constexpr XrPosef kIdentityPose = {
@@ -69,8 +70,6 @@ constexpr XrViewStateFlags kViewStateValidFlags =
 
 // Maps the XrViewConfigurationType to the number of views for that view type.
 const int kViewTypeStereoViewCount = 2;
-
-constexpr int64_t kNanosPerSecond = 1000000000;
 
 #define XR_ENUM_CASE_STR(name, val) \
   case name:                        \
@@ -151,6 +150,21 @@ bool GetDepthCameraImageWidthAndHeight(
       return false;
   }
 }
+
+constexpr OpenXrManager::CreateAnchorResult MapAnchorCreateResult(
+    XrResult xr_result) {
+  switch (xr_result) {
+    case XR_SUCCESS:
+      return OpenXrManager::CreateAnchorResult::kSuccess;
+    case XR_ERROR_LIMIT_REACHED:
+      return OpenXrManager::CreateAnchorResult::kErrorLimitReached;
+    case XR_ERROR_RUNTIME_FAILURE:
+      return OpenXrManager::CreateAnchorResult::kErrorRuntimeFailure;
+    default:
+      return OpenXrManager::CreateAnchorResult::kErrorRuntimeFailure;
+  }
+}
+
 }  // namespace
 
 OpenXrManagerClockInterface *OpenXrManager::GetOpenXrManagerClock() {
@@ -240,6 +254,16 @@ bool OpenXrManager::InitExtensionFunctions() {
       xrGetInstanceProcAddr(instance_, "xrAcquireDepthSwapchainImagesANDROID",
                             reinterpret_cast<PFN_xrVoidFunction *>(
                                 &acquire_depth_swapchain_images_)));
+  // Hand functions.
+  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+      instance_, "xrCreateHandTrackerEXT",
+      reinterpret_cast<PFN_xrVoidFunction *>(&create_hand_tracker_)));
+  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+      instance_, "xrDestroyHandTrackerEXT",
+      reinterpret_cast<PFN_xrVoidFunction *>(&destroy_hand_tracker_)));
+  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+      instance_, "xrLocateHandJointsEXT",
+      reinterpret_cast<PFN_xrVoidFunction *>(&locate_hand_joints_)));
   return true;
 }
 
@@ -423,10 +447,11 @@ bool OpenXrManager::UnpersistAnchor(const XrUuidEXT &anchor_uuid) {
   return true;
 }
 
-bool OpenXrManager::LocatePersistedAnchorSpace(const XrUuidEXT &anchor_uuid,
-                                               XrSpace *out_anchor_space) {
+OpenXrManager::CreateAnchorResult OpenXrManager::LocatePersistedAnchorSpace(
+    const XrUuidEXT &anchor_uuid, XrSpace *out_anchor_space) {
   absl::uint128 anchor_uuid_uint128 = UuidToUint128(anchor_uuid);
   XrSpace anchor_space = XR_NULL_HANDLE;
+  XrResult xr_result;
   {
     absl::MutexLock lock(&mutex_);
     auto iter = persist_anchor_uuid_to_space_map_.find(anchor_uuid_uint128);
@@ -434,15 +459,20 @@ bool OpenXrManager::LocatePersistedAnchorSpace(const XrUuidEXT &anchor_uuid,
       anchor_space = iter->second;
     } else {
       if (!CreatePersistenceHandleIfNecessary()) {
-        return false;
+        return CreateAnchorResult::kErrorRuntimeFailure;
       }
       XrPersistedAnchorSpaceCreateInfoANDROID create_info = {
           .type = XR_TYPE_PERSISTED_ANCHOR_SPACE_CREATE_INFO_ANDROID,
           .next = nullptr,
           .anchorId = anchor_uuid,
       };
-      XR_RETURN_IF_FAILED(create_persisted_anchor_space_(
-          persistence_handle_, &create_info, &anchor_space));
+      XrResult xr_result = create_persisted_anchor_space_(
+          persistence_handle_, &create_info, &anchor_space);
+      if (XR_FAILED(xr_result)) {
+        LOG(ERROR) << "Failed to create persisted anchor space with: "
+                   << XrEnumStr(xr_result);
+        return MapAnchorCreateResult(xr_result);
+      }
       persist_anchor_uuid_to_space_map_[anchor_uuid_uint128] = anchor_space;
     }
   }
@@ -450,11 +480,15 @@ bool OpenXrManager::LocatePersistedAnchorSpace(const XrUuidEXT &anchor_uuid,
   XrSpaceLocation location = {
       .type = XR_TYPE_SPACE_LOCATION,
   };
-  XR_RETURN_IF_FAILED(xrLocateSpace(anchor_space,
-                                    GetSpaceInDefaultReferenceSpace(),
-                                    GetXrTimeNow(), &location));
+  xr_result = xrLocateSpace(anchor_space, GetSpaceInDefaultReferenceSpace(),
+                            GetXrTimeNow(), &location);
+  if (XR_FAILED(xr_result)) {
+    LOG(ERROR) << "Failed to locate persisted anchor with: "
+               << XrEnumStr(xr_result);
+    return MapAnchorCreateResult(xr_result);
+  }
   *out_anchor_space = anchor_space;
-  return true;
+  return MapAnchorCreateResult(xr_result);
 }
 
 bool OpenXrManager::HitTest(XrRaycastInfoANDROID *raycast_info,
@@ -465,6 +499,35 @@ bool OpenXrManager::HitTest(XrRaycastInfoANDROID *raycast_info,
     raycast_info->trackerCount = 1;
     raycast_info->trackers = &planes_trackable_tracker_;
     XR_RETURN_IF_FAILED(raycast_(session_, raycast_info, out_hit_results));
+  }
+  return true;
+}
+
+bool OpenXrManager::LocateHandJoints(bool is_left_hand, XrTime time,
+                                     XrHandJointLocationsEXT *hand_joints) {
+  {
+    absl::MutexLock lock(&mutex_);
+    if (!MaybeCreateHandTrackers()) {
+      return false;
+    }
+
+    XrHandTrackerEXT hand_tracker =
+        is_left_hand ? left_hand_tracker_ : right_hand_tracker_;
+
+    XrHandJointsLocateInfoEXT locate_info{
+        .type = XR_TYPE_HAND_JOINTS_LOCATE_INFO_EXT,
+        .baseSpace = GetSpaceInDefaultReferenceSpace(),
+        .time = time,
+    };
+
+    hand_joints->type = XR_TYPE_HAND_JOINT_LOCATIONS_EXT;
+    hand_joints->next = nullptr;
+    hand_joints->jointCount = XR_HAND_JOINT_COUNT_EXT;
+    hand_joints->jointLocations =
+        is_left_hand ? left_hand_joint_locations_ : right_hand_joint_locations_;
+
+    XR_RETURN_IF_FAILED(
+        locate_hand_joints_(hand_tracker, &locate_info, hand_joints));
   }
   return true;
 }
@@ -612,6 +675,24 @@ void OpenXrManager::DeInitWithLockHeld(bool stop_polling_thread) {
       planes_trackable_tracker_ = XR_NULL_HANDLE;
       if (XR_FAILED(result)) {
         LOG(ERROR) << "Failed to destroy trackable tracker with error: "
+                   << XrEnumStr(result);
+      }
+    }
+
+    // Destroy hand trackers.
+    if (left_hand_tracker_ != XR_NULL_HANDLE) {
+      XrResult result = destroy_hand_tracker_(left_hand_tracker_);
+      left_hand_tracker_ = XR_NULL_HANDLE;
+      if (XR_FAILED(result)) {
+        LOG(ERROR) << "Failed to destroy left hand tracker with error: "
+                   << XrEnumStr(result);
+      }
+    }
+    if (right_hand_tracker_ != XR_NULL_HANDLE) {
+      XrResult result = destroy_hand_tracker_(right_hand_tracker_);
+      right_hand_tracker_ = XR_NULL_HANDLE;
+      if (XR_FAILED(result)) {
+        LOG(ERROR) << "Failed to destroy right hand tracker with error: "
                    << XrEnumStr(result);
       }
     }
@@ -778,7 +859,36 @@ bool OpenXrManager::CreateSession() {
   return true;
 }
 
-bool OpenXrManager::MaybeCreateTrackableTracker() {
+void OpenXrManager::ConfigureTrackerSettings(bool enable_plane_tracking,
+                                             bool enable_hand_tracking,
+                                             bool enable_depth_estimation,
+                                             bool enable_anchor_persistence) {
+  {
+    absl::MutexLock lock(&mutex_);
+    tracker_settings_.plane_tracking_enabled = enable_plane_tracking;
+    tracker_settings_.hand_tracking_enabled = enable_hand_tracking;
+    tracker_settings_.depth_estimation_enabled = enable_depth_estimation;
+    tracker_settings_.anchor_persistence_enabled = enable_anchor_persistence;
+  }
+}
+
+bool OpenXrManager::MaybeCreateTrackableTrackers() {
+  if (tracker_settings_.plane_tracking_enabled) {
+    MaybeCreatePlanesTracker();
+  }
+  if (tracker_settings_.hand_tracking_enabled) {
+    MaybeCreateHandTrackers();
+  }
+  if (tracker_settings_.depth_estimation_enabled) {
+    CreateDepthSwapchainIfNecessary();
+  }
+  if (tracker_settings_.anchor_persistence_enabled) {
+    CreatePersistenceHandleIfNecessary();
+  }
+  return true;
+}
+
+bool OpenXrManager::MaybeCreatePlanesTracker() {
   if (planes_trackable_tracker_ != XR_NULL_HANDLE) {
     return true;
   }
@@ -790,6 +900,34 @@ bool OpenXrManager::MaybeCreateTrackableTracker() {
   return true;
 }
 
+bool OpenXrManager::MaybeCreateHandTrackers() {
+  if (left_hand_tracker_ == XR_NULL_HANDLE) {
+    XrHandTrackerCreateInfoEXT left_hand_tracker_create_info = {
+        .type = XR_TYPE_HAND_TRACKER_CREATE_INFO_EXT,
+        .next = nullptr,
+        .hand = XR_HAND_LEFT_EXT,
+        .handJointSet = XR_HAND_JOINT_SET_DEFAULT_EXT,
+    };
+
+    XR_RETURN_IF_FAILED(create_hand_tracker_(
+        session_, &left_hand_tracker_create_info, &left_hand_tracker_));
+  }
+
+  if (right_hand_tracker_ == XR_NULL_HANDLE) {
+    XrHandTrackerCreateInfoEXT right_hand_tracker_create_info = {
+        .type = XR_TYPE_HAND_TRACKER_CREATE_INFO_EXT,
+        .next = nullptr,
+        .hand = XR_HAND_RIGHT_EXT,
+        .handJointSet = XR_HAND_JOINT_SET_DEFAULT_EXT,
+    };
+
+    XR_RETURN_IF_FAILED(create_hand_tracker_(
+        session_, &right_hand_tracker_create_info, &right_hand_tracker_));
+  }
+
+  return true;
+}
+
 std::vector<XrTrackableANDROID> OpenXrManager::GetPlanes() {
   uint32_t trackableCountOutput = 0;
 
@@ -797,7 +935,7 @@ std::vector<XrTrackableANDROID> OpenXrManager::GetPlanes() {
   XrResult result;
   {
     absl::MutexLock lock(&mutex_);
-    if (!MaybeCreateTrackableTracker()) {
+    if (!MaybeCreatePlanesTracker()) {
       return {};
     }
     result = get_all_trackables_(planes_trackable_tracker_, 0,
@@ -932,8 +1070,8 @@ bool OpenXrManager::ChoosePlane(const PlaneConstraints &plane_constraints,
   return false;
 }
 
-bool OpenXrManager::CreateAnchor(XrTime time, const XrPosef &pose,
-                                 XrSpace *out_anchor_space) {
+OpenXrManager::CreateAnchorResult OpenXrManager::CreateAnchor(
+    XrTime time, const XrPosef &pose, XrSpace *out_anchor_space) {
   XrAnchorSpaceCreateInfoANDROID trackable_anchor_create_info = {
       .type = XR_TYPE_ANCHOR_SPACE_CREATE_INFO_ANDROID,
       .space = GetSpaceInDefaultReferenceSpace(),
@@ -942,22 +1080,24 @@ bool OpenXrManager::CreateAnchor(XrTime time, const XrPosef &pose,
       .trackable = XR_NULL_TRACKABLE_ANDROID,
   };
 
+  XrResult xr_result;
   {
     absl::ReaderMutexLock lock(&mutex_);
-    XR_RETURN_IF_FAILED(create_anchor_space_(
-        session_, &trackable_anchor_create_info, out_anchor_space));
+    xr_result = create_anchor_space_(session_, &trackable_anchor_create_info,
+                                     out_anchor_space);
+    if (XR_FAILED(xr_result)) {
+      LOG(ERROR) << "Failed to create anchor with: " << XrEnumStr(xr_result);
+    }
   }
-  return true;
+  return MapAnchorCreateResult(xr_result);
 }
 
-bool OpenXrManager::CreateAnchorForPlane(XrTrackableANDROID trackable,
-                                         XrTrackablePlaneANDROID *plane,
-                                         XrTime time,
-                                         const XrPosef &relative_pose,
-                                         XrSpace *out_anchor_space) {
+OpenXrManager::CreateAnchorResult OpenXrManager::CreateAnchorForPlane(
+    XrTrackableANDROID trackable, XrTrackablePlaneANDROID *plane, XrTime time,
+    const XrPosef &relative_pose, XrSpace *out_anchor_space) {
   if (trackable == XR_NULL_TRACKABLE_ANDROID) {
     LOG(ERROR) << "Cannot create anchor for null trackable.";
-    return false;
+    return CreateAnchorResult::kErrorRuntimeFailure;
   }
 
   // If the provided plane is null, we will retrieve the plane from the
@@ -972,7 +1112,7 @@ bool OpenXrManager::CreateAnchorForPlane(XrTrackableANDROID trackable,
   if (plane == nullptr && !GetPlaneState(trackable, default_reference_space_,
                                          time, retrieved_plane)) {
     LOG(ERROR) << "Failed to get plane for trackable during anchor creation.";
-    return false;
+    return CreateAnchorResult::kErrorRuntimeFailure;
   }
 
   // We are creating the anchor relative to the center pose of the plane as we
@@ -989,12 +1129,17 @@ bool OpenXrManager::CreateAnchorForPlane(XrTrackableANDROID trackable,
       .trackable = trackable,
   };
 
+  XrResult xr_result;
   {
     absl::ReaderMutexLock lock(&mutex_);
-    XR_RETURN_IF_FAILED(create_anchor_space_(
-        session_, &trackableAnchorCreateInfo, out_anchor_space));
+    xr_result = create_anchor_space_(session_, &trackableAnchorCreateInfo,
+                                     out_anchor_space);
+    if (XR_FAILED(xr_result)) {
+      LOG(ERROR) << "Failed to create anchor for plane with: "
+                 << XrEnumStr(xr_result);
+    }
   }
-  return true;
+  return MapAnchorCreateResult(xr_result);
 }
 
 bool OpenXrManager::GetAnchorLocationData(
@@ -1032,8 +1177,9 @@ bool OpenXrManager::CreateSemanticAnchor(
   if (!ChoosePlane(plane_constraints, &selected_trackable, &selected_plane)) {
     return false;
   }
-  if (!CreateAnchorForPlane(selected_trackable, &selected_plane, GetXrTimeNow(),
-                            kIdentityPose, out_anchor_space)) {
+  if (CreateAnchorForPlane(selected_trackable, &selected_plane, GetXrTimeNow(),
+                           kIdentityPose,
+                           out_anchor_space) != CreateAnchorResult::kSuccess) {
     return false;
   }
   if (!ExportAnchor(*out_anchor_space, out_anchor_token)) {
@@ -1139,7 +1285,7 @@ void OpenXrManager::HandleSessionChangedEvent(
       // not already created.
       {
         absl::MutexLock lock(&mutex_);
-        MaybeCreateTrackableTracker();
+        MaybeCreateTrackableTrackers();
       }
       break;
     }

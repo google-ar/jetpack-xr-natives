@@ -74,6 +74,11 @@ jobject CreateJavaAnchorPersistenceState(
 // Returns a JVM object of type `long` from an `XrSpace`.
 jlong CreateJavaAnchorHandle(const XrSpace& xr_space);
 
+// Returns a JVM object of type `androidx.xr.openxr.HandState` from an
+// `XrHandJointLocationsEXT`.
+jobject CreateJavaHandState(
+    JNIEnv* env, const XrHandJointLocationsEXT& xr_hand_joint_locations);
+
 }  // namespace androidx::xr::openxr
 
 #endif  // JETPACK_XR_NATIVES_OPENXR_JOBJECT_CREATOR_H_

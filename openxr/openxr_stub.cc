@@ -63,7 +63,18 @@ const XrRaycastHitResultsANDROID kRaycastHitResults = {
     .resultsCountOutput = 1,
     .results = &kRaycastHitResult,
 };
+const XrHandJointLocationEXT kHandJoint = {
+    .locationFlags = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT |
+                     XR_SPACE_LOCATION_POSITION_VALID_BIT,
+    .pose = {.orientation = {.x = 1, .y = 2, .z = 3, .w = 4},
+             .position = {.x = 5, .y = 6, .z = 7}},
+    .radius = 1,
+};
+
+const int kAnchorResourceLimit = 5;
+
 int convert_to_khr_time_call_counter = 0;
+int create_anchor_call_counter = 0;
 
 }  // namespace
 
@@ -122,6 +133,10 @@ Internal_xrGetTrackablePlaneANDROID(XrTrackableTrackerANDROID trackableTracker,
 XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateAnchorSpaceANDROID(
     XrSession session, const XrAnchorSpaceCreateInfoANDROID* createInfo,
     XrSpace* anchorOutput) {
+  ++create_anchor_call_counter;
+  if (create_anchor_call_counter > kAnchorResourceLimit) {
+    return XR_ERROR_LIMIT_REACHED;
+  }
   *anchorOutput = kSpace;
   return XR_SUCCESS;
 }
@@ -168,6 +183,10 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreatePersistedAnchorSpaceANDROID(
     XrDeviceAnchorPersistenceANDROID handle,
     const XrPersistedAnchorSpaceCreateInfoANDROID* createInfo,
     XrSpace* anchorOutput) {
+  ++create_anchor_call_counter;
+  if (create_anchor_call_counter > kAnchorResourceLimit) {
+    return XR_ERROR_LIMIT_REACHED;
+  }
   if (anchorOutput) {
     *anchorOutput = kSpace;
   }
@@ -199,6 +218,29 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrRaycastANDROID(
   return XR_SUCCESS;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateHandTrackerEXT(
+    XrSession session, const XrHandTrackerCreateInfoEXT* createInfo,
+    XrHandTrackerEXT* handTracker) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL
+Internal_xrDestroyHandTrackerEXT(XrHandTrackerEXT handTracker) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrLocateHandJointsEXT(
+    XrHandTrackerEXT handTracker, const XrHandJointsLocateInfoEXT* locateInfo,
+    XrHandJointLocationsEXT* locations) {
+  locations->type = XR_TYPE_HAND_JOINT_LOCATIONS_EXT;
+  locations->isActive = true;
+  locations->jointCount = 1;
+  locations->jointLocations[0].locationFlags = kHandJoint.locationFlags;
+  locations->jointLocations[0].pose = kHandJoint.pose;
+  locations->jointLocations[0].radius = kHandJoint.radius;
+  return XR_SUCCESS;
+}
+
 }  // extern "C"
 
 namespace {
@@ -207,40 +249,43 @@ PFN_xrVoidFunction ToXrVoidFunction(TypedFunction* function) {
   return reinterpret_cast<PFN_xrVoidFunction>(function);
 }
 
-const auto kXrFunctions =
-    new absl::flat_hash_map<absl::string_view, PFN_xrVoidFunction>({
-        {"xrInitializeLoaderKHR",
-         ToXrVoidFunction(Internal_xrInitializeLoaderKHR)},
-        {"xrConvertTimespecTimeToTimeKHR",
-         ToXrVoidFunction(Internal_xrConvertTimespecTimeToTimeKHR)},
-        {"xrCreateTrackableTrackerANDROID",
-         ToXrVoidFunction(Internal_xrCreateTrackableTrackerANDROID)},
-        {"xrGetAllTrackablesANDROID",
-         ToXrVoidFunction(Internal_xrGetAllTrackablesANDROID)},
-        {"xrGetTrackablePlaneANDROID",
-         ToXrVoidFunction(Internal_xrGetTrackablePlaneANDROID)},
-        {"xrDestroyTrackableTrackerANDROID",
-         ToXrVoidFunction(Internal_xrDestroyTrackableTrackerANDROID)},
-        {"xrCreateAnchorSpaceANDROID",
-         ToXrVoidFunction(Internal_xrCreateAnchorSpaceANDROID)},
-        {"xrShareAnchorANDROID",
-         ToXrVoidFunction(Internal_xrShareAnchorANDROID)},
-        {"xrCreateDeviceAnchorPersistenceANDROID",
-         ToXrVoidFunction(Internal_xrCreateDeviceAnchorPersistenceANDROID)},
-        {"xrDestroyDeviceAnchorPersistenceANDROID",
-         ToXrVoidFunction(Internal_xrDestroyDeviceAnchorPersistenceANDROID)},
-        {"xrPersistAnchorANDROID",
-         ToXrVoidFunction(Internal_xrPersistAnchorANDROID)},
-        {"xrGetAnchorPersistStateANDROID",
-         ToXrVoidFunction(Internal_xrGetAnchorPersistStateANDROID)},
-        {"xrCreatePersistedAnchorSpaceANDROID",
-         ToXrVoidFunction(Internal_xrCreatePersistedAnchorSpaceANDROID)},
-        {"xrEnumeratePersistedAnchorsANDROID",
-         ToXrVoidFunction(Internal_xrEnumeratePersistedAnchorsANDROID)},
-        {"xrUnpersistAnchorANDROID",
-         ToXrVoidFunction(Internal_xrUnpersistAnchorANDROID)},
-        {"xrRaycastANDROID", ToXrVoidFunction(Internal_xrRaycastANDROID)},
-    });
+const auto kXrFunctions = new absl::flat_hash_map<absl::string_view,
+                                                  PFN_xrVoidFunction>({
+    {"xrInitializeLoaderKHR", ToXrVoidFunction(Internal_xrInitializeLoaderKHR)},
+    {"xrConvertTimespecTimeToTimeKHR",
+     ToXrVoidFunction(Internal_xrConvertTimespecTimeToTimeKHR)},
+    {"xrCreateTrackableTrackerANDROID",
+     ToXrVoidFunction(Internal_xrCreateTrackableTrackerANDROID)},
+    {"xrGetAllTrackablesANDROID",
+     ToXrVoidFunction(Internal_xrGetAllTrackablesANDROID)},
+    {"xrGetTrackablePlaneANDROID",
+     ToXrVoidFunction(Internal_xrGetTrackablePlaneANDROID)},
+    {"xrDestroyTrackableTrackerANDROID",
+     ToXrVoidFunction(Internal_xrDestroyTrackableTrackerANDROID)},
+    {"xrCreateAnchorSpaceANDROID",
+     ToXrVoidFunction(Internal_xrCreateAnchorSpaceANDROID)},
+    {"xrShareAnchorANDROID", ToXrVoidFunction(Internal_xrShareAnchorANDROID)},
+    {"xrCreateDeviceAnchorPersistenceANDROID",
+     ToXrVoidFunction(Internal_xrCreateDeviceAnchorPersistenceANDROID)},
+    {"xrDestroyDeviceAnchorPersistenceANDROID",
+     ToXrVoidFunction(Internal_xrDestroyDeviceAnchorPersistenceANDROID)},
+    {"xrPersistAnchorANDROID",
+     ToXrVoidFunction(Internal_xrPersistAnchorANDROID)},
+    {"xrGetAnchorPersistStateANDROID",
+     ToXrVoidFunction(Internal_xrGetAnchorPersistStateANDROID)},
+    {"xrCreatePersistedAnchorSpaceANDROID",
+     ToXrVoidFunction(Internal_xrCreatePersistedAnchorSpaceANDROID)},
+    {"xrEnumeratePersistedAnchorsANDROID",
+     ToXrVoidFunction(Internal_xrEnumeratePersistedAnchorsANDROID)},
+    {"xrUnpersistAnchorANDROID",
+     ToXrVoidFunction(Internal_xrUnpersistAnchorANDROID)},
+    {"xrRaycastANDROID", ToXrVoidFunction(Internal_xrRaycastANDROID)},
+    {"xrCreateHandTrackerEXT",
+     ToXrVoidFunction(Internal_xrCreateHandTrackerEXT)},
+    {"xrDestroyHandTrackerEXT",
+     ToXrVoidFunction(Internal_xrDestroyHandTrackerEXT)},
+    {"xrLocateHandJointsEXT", ToXrVoidFunction(Internal_xrLocateHandJointsEXT)},
+});
 
 }  // namespace
 
@@ -262,6 +307,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 XRAPI_ATTR XrResult XRAPI_CALL
 xrCreateInstance(const XrInstanceCreateInfo* createInfo, XrInstance* instance) {
   *instance = kInstance;
+  create_anchor_call_counter = 0;
   return XR_SUCCESS;
 }
 

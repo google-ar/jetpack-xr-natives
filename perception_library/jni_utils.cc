@@ -43,13 +43,13 @@ jobject CreateJavaPose(JNIEnv* env, const XrPosef& xr_pose) {
 
 XrPosef CreateXrPose(JNIEnv* env, const jobject& java_pose) {
   jclass pose_class = GetJxrClass(env, PACKAGE_PERCEPTION, "Pose");
-  jfieldID pose_tx_field = env->GetFieldID(pose_class, "tx", "F");
-  jfieldID pose_ty_field = env->GetFieldID(pose_class, "ty", "F");
-  jfieldID pose_tz_field = env->GetFieldID(pose_class, "tz", "F");
-  jfieldID pose_qx_field = env->GetFieldID(pose_class, "qx", "F");
-  jfieldID pose_qy_field = env->GetFieldID(pose_class, "qy", "F");
-  jfieldID pose_qz_field = env->GetFieldID(pose_class, "qz", "F");
-  jfieldID pose_qw_field = env->GetFieldID(pose_class, "qw", "F");
+  jfieldID pose_tx_field = env->GetFieldID(pose_class, "mTx", "F");
+  jfieldID pose_ty_field = env->GetFieldID(pose_class, "mTy", "F");
+  jfieldID pose_tz_field = env->GetFieldID(pose_class, "mTz", "F");
+  jfieldID pose_qx_field = env->GetFieldID(pose_class, "mQx", "F");
+  jfieldID pose_qy_field = env->GetFieldID(pose_class, "mQy", "F");
+  jfieldID pose_qz_field = env->GetFieldID(pose_class, "mQz", "F");
+  jfieldID pose_qw_field = env->GetFieldID(pose_class, "mQw", "F");
   return {
       .orientation{.x = env->GetFloatField(java_pose, pose_qx_field),
                    .y = env->GetFloatField(java_pose, pose_qy_field),
@@ -132,8 +132,8 @@ jobject CreateAnchorDataForAnchor(JNIEnv* env, jobject anchor_token,
   jmethodID anchor_data_constructor =
       env->GetMethodID(anchor_data_class, "<init>", "()V");
   anchor_data = env->NewObject(anchor_data_class, anchor_data_constructor);
-  jfieldID anchor_token_field =
-      env->GetFieldID(anchor_data_class, "anchorToken", "Landroid/os/IBinder;");
+  jfieldID anchor_token_field = env->GetFieldID(
+      anchor_data_class, "mAnchorToken", "Landroid/os/IBinder;");
   env->SetObjectField(anchor_data, anchor_token_field,
                       env->NewGlobalRef(anchor_token));
 
@@ -141,7 +141,7 @@ jobject CreateAnchorDataForAnchor(JNIEnv* env, jobject anchor_token,
   // pointer. Check the size to make sure it is appropriate.
   static_assert(sizeof(XrSpace) <= sizeof(uint64_t));
   jfieldID anchor_id_field =
-      env->GetFieldID(anchor_data_class, "anchorId", "J");
+      env->GetFieldID(anchor_data_class, "mAnchorId", "J");
   env->SetLongField(anchor_data, anchor_id_field,
                     reinterpret_cast<uint64_t>(anchor_id));
 

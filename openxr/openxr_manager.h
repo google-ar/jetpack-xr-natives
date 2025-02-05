@@ -55,6 +55,22 @@ class OpenXrManager {
     XrPlaneLabelANDROID label;
   };
 
+  // Enum returned by functions that call xrCreateAnchorSpaceANDROID which
+  // provides details on the result returned by OpenXR.
+  enum CreateAnchorResult : int32_t {
+    kSuccess = 0,               // XR_SUCCESS
+    kErrorRuntimeFailure = -2,  // XR_ERROR_RUNTIME_FAILURE
+    kErrorLimitReached = -10,     // XR_ERROR_LIMIT_REACHED
+  };
+
+  // The settings of the OpenXR trackers.
+  struct TrackerSettings {
+    bool plane_tracking_enabled = true;
+    bool hand_tracking_enabled = true;
+    bool depth_estimation_enabled = true;
+    bool anchor_persistence_enabled = true;
+  };
+
   // Amount of time between calls xrPollEvent on the polling loop.
   const int32_t kNanosPerSecond = 1000000000;
   const timespec kPollingInterval = {0, kNanosPerSecond / 60};
@@ -114,20 +130,22 @@ class OpenXrManager {
                    XrTrackablePlaneANDROID* out_plane);
 
   // Creates an anchor at the pose provided in the default reference space.
-  // Returns true if the XrSpace for the anchor was created successfully.
-  // Returns false if there was an error creating the anchor space.
-  bool CreateAnchor(XrTime time, const XrPosef& pose,
-                    XrSpace* out_anchor_space);
+  // Returns a CreateAnchorResult enum corresponding to whether the anchor was
+  // loaded successfully and populated in out_anchor_space, or if the function
+  // encountered an error.
+  CreateAnchorResult CreateAnchor(XrTime time, const XrPosef& pose,
+                                  XrSpace* out_anchor_space);
 
   // Creates an anchor at a point relative to the center point of the provided
   // trackable and plane. If the plane is null this will load the plane from
-  // the trackable. This is thread safe. Returns true if successful and
-  // populates the out_anchor_space. Returns false if there was an error
-  // creating the anchor.
-  bool CreateAnchorForPlane(XrTrackableANDROID trackable,
-                            XrTrackablePlaneANDROID* plane, XrTime time,
-                            const XrPosef& relative_pose,
-                            XrSpace* out_anchor_space);
+  // the trackable. This is thread safe. Returns a CreateAnchorResult enum
+  // corresponding to whether the anchor was loaded successfully and populated
+  // in out_anchor_space, or if the function encountered an error.
+  CreateAnchorResult CreateAnchorForPlane(XrTrackableANDROID trackable,
+                                          XrTrackablePlaneANDROID* plane,
+                                          XrTime time,
+                                          const XrPosef& relative_pose,
+                                          XrSpace* out_anchor_space);
 
   // Returns the OpenXR location data associated with an anchor space at a
   // specified time. May return a location that is invalid or untracked, as
@@ -216,9 +234,10 @@ class OpenXrManager {
 
   // Locates an anchor persisted in the previous sessions using the
   // `anchor_uuid`. The anchor space will be created if it is not already
-  // created. If the anchor is located successfully, out_anchor_space contains
-  // the anchor space. The call is thread-safe.
-  bool LocatePersistedAnchorSpace(const XrUuidEXT& anchor_uuid,
+  // created. The call is thread-safe. Returns a CreateAnchorResult enum
+  // corresponding to whether the anchor was loaded successfully and populated
+  // in out_anchor_space, or if the function encountered an error.
+  CreateAnchorResult LocatePersistedAnchorSpace(const XrUuidEXT& anchor_uuid,
                                   XrSpace* out_anchor_space)
       ABSL_LOCKS_EXCLUDED(mutex_);
 
@@ -227,6 +246,9 @@ class OpenXrManager {
 
   bool HitTest(XrRaycastInfoANDROID* raycast_info,
                XrRaycastHitResultsANDROID* out_hit_results);
+
+  bool LocateHandJoints(bool is_left_hand, XrTime time,
+                        XrHandJointLocationsEXT* hand_joints);
 
   // Gets the smooth depth image from the depth swapchain. This is a public
   // function that is expected to be called from the jni thread.
@@ -242,6 +264,13 @@ class OpenXrManager {
 
   // Returns the current XrInstance.
   XrInstance GetXrInstance();
+
+  // Configures the trackers settings.
+  void ConfigureTrackerSettings(bool enable_plane_tracking,
+                                bool enable_hand_tracking,
+                                bool enable_depth_estimation,
+                                bool enable_anchor_persistence)
+      ABSL_LOCKS_EXCLUDED(mutex_);
 
  private:
   // Enum values representing whether OpenXR instance and session have started.
@@ -311,7 +340,8 @@ class OpenXrManager {
   //   EXITING - Calls xrDestroySession to end the session, and DeInit to clear
   //             out the instance data from the manager.
   //   SYNCHRONIZED - Calls MaybeCreateTrackableTracker to start looking for
-  //                  trackables.
+  //                  trackables and MaybeCreateHandTrackers to start tracking
+  //                  hands.
   void HandleSessionChangedEvent(
       const XrEventDataSessionStateChanged& changed_event);
 
@@ -328,13 +358,20 @@ class OpenXrManager {
   // Checks if polling has stopped.
   bool ShouldPoll() const ABSL_LOCKS_EXCLUDED(mutex_);
 
-  // Creates a trackable tracker. This is used to search for and keep track of
-  // the current trackables. This will be called when the session becomes in
+  // Creates a set of trackers which are expected to be enabled. This is called
+  // when the session becomes in focus.
+  bool MaybeCreateTrackableTrackers() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
+  // Creates a planes tracker. This is used to search for and keep track of
+  // the plane trackables. This will be called when the session becomes in
   // focus or whenever planes are queried if it does not already exist. It
   // should be kept alive as long as we expect to use trackables (which for now
   // is the entire session). Only one trackable tracker is required for the
   // duration of the session.
-  bool MaybeCreateTrackableTracker() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+  bool MaybeCreatePlanesTracker() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
+  // Creates the left and right hand trackers if they are not already created.
+  bool MaybeCreateHandTrackers() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   // Creates persistence_handle_ if it is not already created. Returns true if
   // the handle is created or has already been created before. Returns false if
@@ -361,6 +398,14 @@ class OpenXrManager {
   XrSpace unbounded_space_ = XR_NULL_HANDLE;
   XrTrackableTrackerANDROID planes_trackable_tracker_ ABSL_GUARDED_BY(mutex_) =
       XR_NULL_HANDLE;
+  XrHandTrackerEXT left_hand_tracker_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
+  XrHandTrackerEXT right_hand_tracker_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
+  XrHandJointLocationEXT
+      left_hand_joint_locations_[XR_HAND_JOINT_COUNT_EXT] ABSL_GUARDED_BY(
+          mutex_);
+  XrHandJointLocationEXT
+      right_hand_joint_locations_[XR_HAND_JOINT_COUNT_EXT] ABSL_GUARDED_BY(
+          mutex_);
   XrDeviceAnchorPersistenceANDROID persistence_handle_ ABSL_GUARDED_BY(mutex_) =
       XR_NULL_HANDLE;
   // absl::uint128 is a substitute for XrUuidExt.
@@ -385,6 +430,9 @@ class OpenXrManager {
 
   // This flag controls whether or not the polling thread should still run.
   bool stop_polling_ ABSL_GUARDED_BY(mutex_) = false;
+
+  // This set of flags controls whether or not a tracker is enabled.
+  TrackerSettings tracker_settings_ ABSL_GUARDED_BY(mutex_);
 
   // Mutex to guard variables that are accessible by the polling thread. It must
   // be called after the initialization_mutex_.
@@ -423,6 +471,10 @@ class OpenXrManager {
   PFN_xrCreatePersistedAnchorSpaceANDROID create_persisted_anchor_space_;
 
   PFN_xrRaycastANDROID raycast_;
+
+  PFN_xrCreateHandTrackerEXT create_hand_tracker_;
+  PFN_xrDestroyHandTrackerEXT destroy_hand_tracker_;
+  PFN_xrLocateHandJointsEXT locate_hand_joints_;
 
   PFN_xrCreateDepthSwapchainANDROID create_depth_swapchain_;
   PFN_xrDestroyDepthSwapchainANDROID destroy_depth_swapchain_;

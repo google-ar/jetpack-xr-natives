@@ -214,9 +214,10 @@ static jobject CreateAnchorOnPlane(JNIEnv* env, jlong plane_id, jobject pose,
   XrTime xr_time = xr_manager.GetXrTimeFromNanoseconds(monotonic_time_ns);
   XrSpace anchor_space = XR_NULL_HANDLE;
   XrPosef xr_pose = vr::realitycore::CreateXrPose(env, pose);
-  if (!xr_manager.CreateAnchorForPlane(
-          static_cast<XrTrackableANDROID>(plane_id), nullptr, xr_time, xr_pose,
-          &anchor_space)) {
+  if (xr_manager.CreateAnchorForPlane(static_cast<XrTrackableANDROID>(plane_id),
+                                      nullptr, xr_time, xr_pose,
+                                      &anchor_space) !=
+      androidx::xr::openxr::OpenXrManager::CreateAnchorResult::kSuccess) {
     return nullptr;
   }
 #ifdef __ANDROID__
@@ -273,7 +274,8 @@ static jobject CreatePersistedAnchor(JNIEnv* env, jlong highBits,
   XrSpace anchor_id = XR_NULL_HANDLE;
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
-  if (!xr_manager.LocatePersistedAnchorSpace(xr_uuid, &anchor_id)) {
+  if (xr_manager.LocatePersistedAnchorSpace(xr_uuid, &anchor_id) !=
+      androidx::xr::openxr::OpenXrManager::CreateAnchorResult::kSuccess) {
     return nullptr;
   }
 #ifdef __ANDROID__

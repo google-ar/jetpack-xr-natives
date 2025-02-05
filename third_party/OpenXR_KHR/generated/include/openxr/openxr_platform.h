@@ -813,39 +813,48 @@ XRAPI_ATTR XrResult XRAPI_CALL xrUnshareAnchorANDROID(
 
 #ifdef XR_USE_PLATFORM_ANDROID
 
-// XR_ANDROID_scene_meshing is a preprocessor guard. Do not pass it to API calls.
-#define XR_ANDROID_scene_meshing 1
-XR_DEFINE_HANDLE(XrSceneMeshingTrackerANDROID)
-#define XR_ANDROID_scene_meshing_SPEC_VERSION 1
-#define XR_ANDROID_SCENE_MESHING_EXTENSION_NAME "XR_ANDROID_scene_meshing"
-// XrSystemSceneMeshingPropertiesANDROID extends XrSystemProperties
-typedef struct XrSystemSceneMeshingPropertiesANDROID {
+// XR_ANDROIDX_scene_meshing is a preprocessor guard. Do not pass it to API calls.
+#define XR_ANDROIDX_scene_meshing 1
+XR_DEFINE_HANDLE(XrSceneMeshingTrackerANDROIDX)
+#define XR_ANDROIDX_scene_meshing_SPEC_VERSION 1
+#define XR_ANDROIDX_SCENE_MESHING_EXTENSION_NAME "XR_ANDROIDX_scene_meshing"
+
+typedef enum XrMeshSemanticANDROIDX {
+    XR_MESH_SEMANTIC_OTHER_ANDROIDX = 0,
+    XR_MESH_SEMANTIC_FLOOR_ANDROIDX = 1,
+    XR_MESH_SEMANTIC_CEILING_ANDROIDX = 2,
+    XR_MESH_SEMANTIC_WALL_ANDROIDX = 3,
+    XR_MESH_SEMANTIC_TABLE_ANDROIDX = 4,
+    XR_MESH_SEMANTIC_MAX_ENUM_ANDROIDX = 0x7FFFFFFF
+} XrMeshSemanticANDROIDX;
+// XrSystemSceneMeshingPropertiesANDROIDX extends XrSystemProperties
+typedef struct XrSystemSceneMeshingPropertiesANDROIDX {
     XrStructureType       type;
     void* XR_MAY_ALIAS    next;
     XrBool32              supportsSceneMeshing;
-} XrSystemSceneMeshingPropertiesANDROID;
+} XrSystemSceneMeshingPropertiesANDROIDX;
 
-typedef struct XrSceneMeshingTrackerCreateInfoANDROID {
-    XrStructureType       type;
-    void* XR_MAY_ALIAS    next;
-} XrSceneMeshingTrackerCreateInfoANDROID;
+typedef struct XrSceneMeshingTrackerCreateInfoANDROIDX {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+} XrSceneMeshingTrackerCreateInfoANDROIDX;
 
-typedef struct XrSceneMeshAcquireInfoANDROID {
+typedef struct XrSceneMeshAcquireInfoANDROIDX {
     XrStructureType             type;
     const void* XR_MAY_ALIAS    next;
     XrSpace                     baseSpace;
     XrTime                      displayTime;
     XrBoxf                      boundingVolume;
-} XrSceneMeshAcquireInfoANDROID;
+} XrSceneMeshAcquireInfoANDROIDX;
 
-typedef struct XrSceneMeshReleaseInfoANDROID {
+typedef struct XrSceneMeshReleaseInfoANDROIDX {
     XrStructureType             type;
     const void* XR_MAY_ALIAS    next;
     struct AHardwareBuffer *    buffer;
     int32_t                     releaseFenceFd;
-} XrSceneMeshReleaseInfoANDROID;
+} XrSceneMeshReleaseInfoANDROIDX;
 
-typedef struct XrSceneSubmeshANDROID {
+typedef struct XrSceneSubmeshANDROIDX {
     XrStructureType             type;
     const void* XR_MAY_ALIAS    next;
     XrUuid                      submeshId;
@@ -858,40 +867,40 @@ typedef struct XrSceneSubmeshANDROID {
     uint32_t                    indicesOffset;
     uint32_t                    indicesCount;
     uint32_t                    verticesCount;
-} XrSceneSubmeshANDROID;
+} XrSceneSubmeshANDROIDX;
 
-typedef struct XrSceneMeshANDROID {
-    XrStructureType                  type;
-    const void* XR_MAY_ALIAS         next;
-    int32_t                          acquireFenceFd;
-    struct AHardwareBuffer *         buffer;
-    uint32_t                         submeshCount;
-    const XrSceneSubmeshANDROID *    submeshes;
-} XrSceneMeshANDROID;
+typedef struct XrSceneMeshANDROIDX {
+    XrStructureType                   type;
+    const void* XR_MAY_ALIAS          next;
+    int32_t                           acquireFenceFd;
+    struct AHardwareBuffer *          buffer;
+    uint32_t                          submeshCount;
+    const XrSceneSubmeshANDROIDX *    submeshes;
+} XrSceneMeshANDROIDX;
 
-typedef XrResult (XRAPI_PTR *PFN_xrCreateSceneMeshingTrackerANDROID)(XrSession session, const XrSceneMeshingTrackerCreateInfoANDROID* createInfo, XrSceneMeshingTrackerANDROID* tracker);
-typedef XrResult (XRAPI_PTR *PFN_xrDestroySceneMeshingTrackerANDROID)(XrSceneMeshingTrackerANDROID tracker);
-typedef XrResult (XRAPI_PTR *PFN_xrAcquireSceneMeshANDROID)(XrSceneMeshingTrackerANDROID tracker, const XrSceneMeshAcquireInfoANDROID* acquireInfo, XrSceneMeshANDROID* mesh);
-typedef XrResult (XRAPI_PTR *PFN_xrReleaseSceneMeshANDROID)(XrSceneMeshingTrackerANDROID tracker, const XrSceneMeshReleaseInfoANDROID* releaseInfo);
+typedef XrResult (XRAPI_PTR *PFN_xrCreateSceneMeshingTrackerANDROIDX)(XrSession session, const XrSceneMeshingTrackerCreateInfoANDROIDX* createInfo, XrSceneMeshingTrackerANDROIDX* tracker);
+typedef XrResult (XRAPI_PTR *PFN_xrDestroySceneMeshingTrackerANDROIDX)(XrSceneMeshingTrackerANDROIDX tracker);
+typedef XrResult (XRAPI_PTR *PFN_xrAcquireSceneMeshANDROIDX)(XrSceneMeshingTrackerANDROIDX tracker, const XrSceneMeshAcquireInfoANDROIDX* acquireInfo, XrSceneMeshANDROIDX* mesh);
+typedef XrResult (XRAPI_PTR *PFN_xrReleaseSceneMeshANDROIDX)(XrSceneMeshingTrackerANDROIDX tracker, const XrSceneMeshReleaseInfoANDROIDX* releaseInfo);
 
 #ifndef XR_NO_PROTOTYPES
 #ifdef XR_EXTENSION_PROTOTYPES
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateSceneMeshingTrackerANDROID(
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateSceneMeshingTrackerANDROIDX(
     XrSession                                   session,
-    const XrSceneMeshingTrackerCreateInfoANDROID* createInfo,
-    XrSceneMeshingTrackerANDROID*               tracker);
+    const XrSceneMeshingTrackerCreateInfoANDROIDX* createInfo,
+    XrSceneMeshingTrackerANDROIDX*              tracker);
 
-XRAPI_ATTR XrResult XRAPI_CALL xrDestroySceneMeshingTrackerANDROID(
-    XrSceneMeshingTrackerANDROID                tracker);
+XRAPI_ATTR XrResult XRAPI_CALL xrDestroySceneMeshingTrackerANDROIDX(
+    XrSceneMeshingTrackerANDROIDX               tracker);
 
-XRAPI_ATTR XrResult XRAPI_CALL xrAcquireSceneMeshANDROID(
-    XrSceneMeshingTrackerANDROID                tracker,
-    const XrSceneMeshAcquireInfoANDROID*        acquireInfo,
-    XrSceneMeshANDROID*                         mesh);
+XRAPI_ATTR XrResult XRAPI_CALL xrAcquireSceneMeshANDROIDX(
+    XrSceneMeshingTrackerANDROIDX               tracker,
+    const XrSceneMeshAcquireInfoANDROIDX*       acquireInfo,
+    XrSceneMeshANDROIDX*                        mesh);
 
-XRAPI_ATTR XrResult XRAPI_CALL xrReleaseSceneMeshANDROID(
-    XrSceneMeshingTrackerANDROID                tracker,
-    const XrSceneMeshReleaseInfoANDROID*        releaseInfo);
+XRAPI_ATTR XrResult XRAPI_CALL xrReleaseSceneMeshANDROIDX(
+    XrSceneMeshingTrackerANDROIDX               tracker,
+    const XrSceneMeshReleaseInfoANDROIDX*       releaseInfo);
 #endif /* XR_EXTENSION_PROTOTYPES */
 #endif /* !XR_NO_PROTOTYPES */
 #endif /* XR_USE_PLATFORM_ANDROID */
@@ -904,9 +913,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrReleaseSceneMeshANDROID(
 #define XR_ANDROIDSYS_BACKGROUND_TRACKING_EXTENSION_NAME "XR_ANDROIDSYS_background_tracking"
 // XrInstanceCreateInfoBackgroundTrackingANDROIDSYS extends XrInstanceCreateInfo
 typedef struct XrInstanceCreateInfoBackgroundTrackingANDROIDSYS {
-    XrStructureType       type;
-    void* XR_MAY_ALIAS    next;
-    struct AIBinder*      token;
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+    struct AIBinder*            token;
 } XrInstanceCreateInfoBackgroundTrackingANDROIDSYS;
 
 #endif /* XR_USE_PLATFORM_ANDROID */

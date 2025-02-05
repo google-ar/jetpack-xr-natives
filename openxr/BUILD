@@ -101,7 +101,7 @@ cc_library(
     deps = [
         ":openxr_manager_clock",
         ":openxr_manager_utils",
-        "//third_party/OpenXR_KHR:openxr_headers_androidxr",
+        "//third_party/OpenXR_KHR:openxr_headers_androidxr",  # build_cleaner: keep
         "@abseil-cpp//absl/base:core_headers",
         "@abseil-cpp//absl/base:no_destructor",
         "@abseil-cpp//absl/container:flat_hash_map",

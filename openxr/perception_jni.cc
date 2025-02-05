@@ -23,17 +23,29 @@
 #include "openxr/openxr_manager.h"
 #include "common/namespace_util.h"
 
+namespace {
+jlong CreateJavaLongFromCreateAnchorResult(
+    androidx::xr::openxr::OpenXrManager::CreateAnchorResult
+        create_anchor_result,
+    const XrSpace& xr_space) {
+  if (create_anchor_result !=
+      androidx::xr::openxr::OpenXrManager::CreateAnchorResult::kSuccess) {
+    return static_cast<jlong>(create_anchor_result);
+  }
+  return androidx::xr::openxr::CreateJavaAnchorHandle(xr_space);
+}
+}  // namespace
+
 static jlong NativeCreateAnchor(JNIEnv* env, jobject pose,
                                 jlong monotonic_time_ns) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   XrPosef xr_pose = androidx::xr::openxr::ConvertToXrPosef(env, pose);
   XrSpace anchor;
-  if (!xr_manager.CreateAnchor(static_cast<int64_t>(monotonic_time_ns), xr_pose,
-                               &anchor)) {
-    return 0;
-  }
-  return androidx::xr::openxr::CreateJavaAnchorHandle(anchor);
+  androidx::xr::openxr::OpenXrManager::CreateAnchorResult result =
+      xr_manager.CreateAnchor(static_cast<int64_t>(monotonic_time_ns), xr_pose,
+                              &anchor);
+  return CreateJavaLongFromCreateAnchorResult(result, anchor);
 }
 
 static jlongArray NativeGetPlanes(JNIEnv* env) {
@@ -134,10 +146,9 @@ static jlong NativeLoadAnchor(JNIEnv* env, jobject uuid) {
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   XrUuidEXT xr_uuid = androidx::xr::openxr::ConvertToXrUuid(env, uuid);
   XrSpace anchor;
-  if (!xr_manager.LocatePersistedAnchorSpace(xr_uuid, &anchor)) {
-    return 0;
-  }
-  return androidx::xr::openxr::CreateJavaAnchorHandle(anchor);
+  androidx::xr::openxr::OpenXrManager::CreateAnchorResult result =
+      xr_manager.LocatePersistedAnchorSpace(xr_uuid, &anchor);
+  return CreateJavaLongFromCreateAnchorResult(result, anchor);
 }
 
 static jboolean NativeUnpersistAnchor(JNIEnv* env, jobject uuid) {
