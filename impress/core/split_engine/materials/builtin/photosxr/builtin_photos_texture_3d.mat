@@ -1,0 +1,369 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+material {
+  name : "stereo_quad",
+  constants : [
+    {
+      name : enableColorConversion,
+      type : bool,
+      default : false
+    }
+  ],
+  parameters: [
+    // Textures.
+    { type: sampler2d, name: imageTexture},
+    {
+      type: samplerExternal,
+      name: videoTexture,
+      transformName: videoTextureTransform
+    },
+    {
+      type: samplerExternal,
+      name: auxiliaryVideoTexture,
+      transformName: auxiliaryVideoTextureTransform
+    },
+    { type: sampler2d, name: thumbnailTexture },
+    { type: sampler2d, name: blurTexture },
+
+    // Texture branch & blend amount parameters.
+    { type: bool, name: showVideo },
+    { type: float, name: thumbnailMix },
+    { type: float, name: blurMix },
+    { type: float3, name: blurFallbackColor },
+
+    // Stereo control parameters.
+    { type: bool, name: isStereo },
+    { type: bool, name: isStereoUsingAuxiliaryTexture },
+    { type: int, name: stereoAxis },
+    { type: float, name: stereoDisparityAdjustment },
+
+    // Non-panorama tile effects.
+    { type: mat3, name: uvTransform },
+    { type: float, name: parallaxAmount },
+    { type: float, name: extraZoomAfterParallax },
+    { type: float, name: maxWindowPopDistance },
+    { type: float, name: maxMediaInsetDistance },
+    { type: float, name: edgeFadeAmount },
+    { type: float, name: windowEdgeFadeThickness },
+    { type: float, name: insetMediaEdgeFadeThickness },
+    { type: float, name: cornerRadius },
+    { type: float3, name: curveParams }, // [curve_amount, curve_radius, curve_angle]
+    { type: float, name: blurCenterClearAmount },
+    { type: float, name: blurCenterEdgeFadeThickness },
+    { type: bool, name: blurCenterMaskFlip },
+
+    // Noise animation parameters.
+    { type: float, name: noiseInBlurMix },
+    { type: float, name: frameTimeSeconds },
+    { type: float, name: timeScale },
+    { type: float, name: pulseXyScale },
+    { type: float4, name: pulseExponent },
+    { type: float4, name: pulseMultiplier },
+    { type: float, name: grainXyScale },
+    { type: float2, name: grainMaskExpAndMultiplier },
+    { type: float, name: grainDimAmount },
+    { type: float2, name: grainExpAndMultiplier },
+
+    // Effects for panorama mode.
+    { type: bool, name: isPano },
+    { type: float3, name: panoFovDegrees }, // [horizontal, vertical_top, vertical_bottom]
+    { type: float, name: panoSphericalAmount },
+    { type: float, name: panoSphereRadius },
+    { type: float2, name: panoBlurFadeToGrayExponent },
+    { type: float2, name: panoBlurFadeToGraySubtractor },
+    { type: float, name: panoMediaEdgeFadeExponent },
+    { type: float, name: panoCornerRadiusDecreaseExponent },
+
+   // Final color corrections and opacity.
+   { type: float, name: gammaToSrgb },
+   { type: float3, name: tintColor },
+   { type: float, name: opacity }
+  ],
+  requires : [
+      uv0
+  ],
+  variables : [
+    modelScale,
+    // Media plane is a virtual plane, set further behind in the z axis than the actual quad.
+    // Using mediaUv will ensure that the media appears to be rendering at the media plane.
+    // In the case of a panorama, this will be the same as uv0.
+    mediaUv,
+    // Captures whether the material is being used in stereo mode or not at 'x'
+    // If true, captures the index of the camera eye at 'y'
+    // 0.0 is the left eye, 1.0 is the right eye.
+    stereoData
+  ],
+  depthCulling: false,
+  shadingModel: unlit,
+  culling: none,
+  blending : transparent,
+  // Videos are flipped by videoTextureTransform, and images are flipped by uvTransform.
+  flipUV: false,
+}
+
+vertex {
+  #include "quad_parallax_helpers.glsl"
+  #include "panorama_helpers.glsl"
+  #include "curved_panel.glsl"
+
+  precision highp float;
+
+  bool IsSamplingAuxiliaryTexture() {
+    return materialParams.isStereoUsingAuxiliaryTexture && materialParams.isStereo && variable_stereoData.y == 1.0;
+  }
+
+  void materialVertex(inout MaterialVertexInputs material) {
+    mat4 world_from_model = getWorldFromModelMatrix();
+    material.modelScale.xyz = vec3(
+        length(world_from_model[0].xyz),
+        length(world_from_model[1].xyz),
+        length(world_from_model[2].xyz)
+    );
+
+    vec3 camera_pos = mulMat4x4Float3(inverse(getWorldFromModelMatrix()), getWorldCameraPosition()).xyz;
+
+    vec3 uv_h = vec3(material.uv0, 1.0);
+    if (materialParams.showVideo) {
+      mat3 texture_transform = IsSamplingAuxiliaryTexture() ? materialParams.auxiliaryVideoTextureTransform : materialParams.videoTextureTransform;
+      uv_h = materialParams.uvTransform * texture_transform * uv_h;
+    } else {
+      uv_h = materialParams.uvTransform * uv_h;
+    }
+    vec2 transformed_uv = uv_h.xy / uv_h.z;
+
+    if (materialParams.isPano) {
+      vec3 morphed_pos = getPosition().xyz;
+      // Morph the quad vertices into a sphere.
+      if (materialParams.panoSphericalAmount > 0.0) {
+        morphed_pos = morphToSpherePos(getPosition().xyz, camera_pos, materialParams.panoSphericalAmount, materialParams.panoSphereRadius);
+      }
+      material.worldPosition = mulMat4x4Float3(world_from_model, morphed_pos);
+      material.mediaUv.xy = transformed_uv;
+      material.uv0 = transformed_uv;
+    } else {
+      vec3 window_pos = getPosition().xyz;
+
+      // Curve the panel assuming a cylinder shape.
+      float curve_amount = materialParams.curveParams[0];
+      if (curve_amount > 0.0) {
+        float curve_radius = materialParams.curveParams[1];
+        float curve_angle = materialParams.curveParams[2];
+        vec3 curved_pos = surface_curve_pos(getPosition().xyz, curve_radius, curve_angle, material.modelScale.x);
+        window_pos = mix(window_pos,  curved_pos, vec3(curve_amount));
+      }
+
+      // To increase the FOV when the media is immersive, bring the "window"
+      // vertices slightly forward proportionally to the edge fade amount.
+      // Edge fade amount will be 1.0 when a stereo media is shown.
+      // Refer to the comment in quadParallaxUv() for more details.
+      float window_pop_dz = materialParams.maxWindowPopDistance * materialParams.edgeFadeAmount;
+      vec3 moved_window_pos = window_pos
+                                      + vec3(0., 0., window_pop_dz);
+      material.worldPosition = mulMat4x4Float3(world_from_model,
+                                              moved_window_pos);
+
+      QuadParallaxParams p;
+      p.uv = transformed_uv;
+      p.original_pos = getPosition().xyz;
+      p.window_pop_dz = window_pop_dz;
+      p.moved_window_pos = moved_window_pos;
+      p.camera_pos = camera_pos;
+      p.extra_zoom_after_parallax = materialParams.extraZoomAfterParallax;
+      p.max_media_inset = materialParams.maxMediaInsetDistance;
+      p.parallax_amount = materialParams.parallaxAmount;
+      material.mediaUv.xy = quadParallaxUv(p);
+    }
+
+#if defined(VARIANT_HAS_STEREO)
+    material.stereoData.x = 1.0;
+    material.stereoData.y = (getEyeIndex() % 2 < 1) ? 0.0 : 1.0;
+#else
+    material.stereoData.x = 0.0;
+#endif
+  }
+}
+
+fragment {
+  #include "spatialize_animation.glsl"
+  #include "panorama_helpers.glsl"
+  #include "color_space_helpers.glsl"
+  #include "sdf_fade.glsl"
+
+  // Necessary for high res textures.
+  precision highp float;
+
+  // Blend different layers according to the following diagram:
+  // (broken link)
+  vec4 blendLayers(vec3 media, vec3 thumbnail, vec3 blur, float media_to_blur_edge_fade, float blur_mask, float final_mask) {
+    // 1. Mix the media with the thumbnail.
+    vec3 blend = mix(media, thumbnail, materialParams.thumbnailMix);
+
+    // 2. Fade the edges of the above blend with the blur texture.
+    blend = mix(blend, blur, media_to_blur_edge_fade);
+
+    // 3. Now mix in blur for pixels that are not at the edges.
+    blend = mix(blend, blur, materialParams.blurMix * blur_mask);
+
+    // 4. Now mask the final result with the final mask.
+    // Use premultiplied alpha.
+    float alpha = materialParams.opacity * (1. - final_mask);
+    return vec4(blend.xyz * materialParams.tintColor, 1.0) * alpha;
+  }
+
+  vec3 blurColor(vec2 uv) {
+    vec3 blur = texture(materialParams_blurTexture, uv).xyz;
+
+    if (materialParams.isPano) {
+      FadePanoBlurParams p;
+      p.uv = getUV0();
+      p.blur_color = blur;
+      p.fallback_color = materialParams.blurFallbackColor;
+      p.color_mix_multiplier = materialParams.panoBlurFadeToGrayExponent;
+      p.color_mix_subtractor = materialParams.panoBlurFadeToGraySubtractor;
+      p.pano_spherical_amount = materialParams.panoSphericalAmount;
+      blur = panoFadeBlurToColor(p);
+    } else {
+      if (materialParams.noiseInBlurMix > 0.0) {
+        NoiseAnimParams p;
+        p.xy = getUV0() * variable_modelScale.xy;
+        p.pulse_xy_scale = materialParams.pulseXyScale;
+        p.pulse_exponent = materialParams.pulseExponent;
+        p.pulse_multiplier = materialParams.pulseMultiplier;
+        p.grain_xy_scale = materialParams.grainXyScale;
+        p.grain_mask_exponent = materialParams.grainMaskExpAndMultiplier[0];
+        p.grain_mask_multiplier = materialParams.grainMaskExpAndMultiplier[1];
+        p.grain_dim_amount = materialParams.grainDimAmount;
+        p.grain_exponent = materialParams.grainExpAndMultiplier[0];
+        p.grain_multiplier= materialParams.grainExpAndMultiplier[1];
+        p.t = materialParams.frameTimeSeconds;
+        p.time_scale = materialParams.timeScale;
+        vec3 blur_noise = spatializeNoiseAnimation(p);
+        blur = mix(blur, blur + blur_noise, materialParams.noiseInBlurMix);
+      }
+    }
+    return blur;
+  }
+
+  vec2 stereoAdjustedUv(vec2 uv) {
+    if (variable_stereoData.x == 0.0 || !materialParams.isStereo ||
+        materialParams.isStereoUsingAuxiliaryTexture) {
+      return uv;
+    }
+    vec2 stereo_uv = uv;
+    int ax = int(materialParams.stereoAxis);
+    stereo_uv[ax] = uv[ax] * 0.5 + variable_stereoData.y * 0.5;
+    float disparity_direction = variable_stereoData.y == 0.0 ? -1.0 : 1.0;
+    stereo_uv[ax] += materialParams.stereoDisparityAdjustment * 0.5 * disparity_direction;
+    stereo_uv[ax] = clamp(stereo_uv[ax], variable_stereoData.y * 0.5, 0.5 + variable_stereoData.y * 0.5);
+
+    return stereo_uv;
+  }
+
+  void material(inout MaterialInputs material) {
+    prepareMaterial(material);
+    vec2 media_uv = variable_mediaUv.xy;
+
+    // 0. Calculate the media uv for panorama mode. This needs to be done
+    // in the fragment shader to avoid warping.
+    if (materialParams.isPano) {
+      vec2 uv_on_sphere = getUV0();
+      if (materialParams.panoSphericalAmount < 1.0) {
+        uv_on_sphere = panoParallaxUv(getWorldPosition().xyz, getWorldCameraPosition().xyz);
+      }
+      media_uv =
+          tileUvToPanoFov(uv_on_sphere, materialParams.panoFovDegrees[0],
+          materialParams.panoFovDegrees[1],
+          materialParams.panoFovDegrees[2]);
+    }
+
+    vec3 thumbnail = texture(materialParams_thumbnailTexture, media_uv).xyz;
+
+    // 1. Obtain the media color.
+    vec3 media;
+    vec2 maybe_stereo_uv = stereoAdjustedUv(media_uv);
+    if (materialParams.showVideo)
+    {
+      if (materialParams.isStereoUsingAuxiliaryTexture && variable_stereoData.y == 1.0) {
+        media = texture(materialParams_auxiliaryVideoTexture, maybe_stereo_uv).xyz;
+      } else {
+        media = texture(materialParams_videoTexture, maybe_stereo_uv).xyz;
+      }
+    } else {
+      media = texture(materialParams_imageTexture, maybe_stereo_uv).xyz;
+    }
+
+
+    // 2. Obtain the blur color. This will be a mono blurred texture for
+    // images, and simply a solid color for videos for now.
+    vec3 blur = blurColor(media_uv);
+
+    // 3. Fade the edges of the media with the blur texture.
+    float media_to_blur_edge_fade;
+    if (materialParams.isPano) {
+      // Only fade the media edges in an axis if the media has a
+      // noticable gap along that axis of the photoshere. Otherwise, the media
+      // should appear seamless around the sphere.
+      float dx = 0.0;
+      if (abs(materialParams.panoFovDegrees[0] - 360.)/360. > 0.01) {
+        dx = abs(media_uv.x - 0.5) / 0.5;
+      }
+      float dy = 0.0;
+      if (abs(materialParams.panoFovDegrees[1] - materialParams.panoFovDegrees[2] - 180.)/180. > 0.01) {
+        dy = abs(media_uv.y - 0.5) / 0.5;
+      }
+      // The lower the exponent, the smoother the fade.
+      media_to_blur_edge_fade = pow(max(dx, dy), materialParams.panoMediaEdgeFadeExponent);
+    } else {
+      // Gently transition from the media texture to the blur texture when the
+      // viewing direction is big and the window is revealing the edges of the
+      // original media.
+      float corner_radius = materialParams.cornerRadius * materialParams.edgeFadeAmount;
+      float fade_to_blur_amount = materialParams.parallaxAmount;
+      float edge_fade_thickness = materialParams.insetMediaEdgeFadeThickness * materialParams.parallaxAmount;
+      media_to_blur_edge_fade =  edgeFadeAlpha(media_uv, variable_modelScale.xy, edge_fade_thickness, 1.0, corner_radius);
+    }
+
+    // 4. Calculate the blur mask.
+    float blur_mask = 1.0;
+    if (!materialParams.isPano && materialParams.blurCenterClearAmount > 0.0) {
+      blur_mask = edgeFadeAlpha(media_uv, variable_modelScale.xy, materialParams.blurCenterEdgeFadeThickness,
+                                materialParams.blurCenterClearAmount, materialParams.cornerRadius);
+      if (materialParams.blurCenterMaskFlip) {
+        blur_mask = 1.0 - blur_mask;
+      }
+    }
+
+    // 5. Now mix blur and media textures for pixels that are not at the edges.
+    float final_mask;
+    float radius = materialParams.cornerRadius;
+    if (materialParams.isPano) {
+      // 5a. Decrease the tile radius as the pano spherecial amount increases so
+      // that it can finish the transition in a regular sphere shape.
+      radius *= (1.0 - pow(materialParams.panoSphericalAmount,
+                           materialParams.panoCornerRadiusDecreaseExponent));
+      final_mask =
+          edgeFadeAlpha(getUV0(), variable_modelScale.xy, 0.0, 1.0, radius);
+    } else {
+       // 5b. Fade the edges of the window with the blur texture.
+      float edge_fade_thickness = materialParams.windowEdgeFadeThickness * materialParams.edgeFadeAmount;
+      final_mask =
+          edgeFadeAlpha(getUV0(), variable_modelScale.xy, edge_fade_thickness, 1.0, radius);
+    }
+
+    // 5. Apply final color corrections.
+    vec4 blended_result = blendLayers(media, thumbnail, blur, media_to_blur_edge_fade, blur_mask, final_mask);
+    material.baseColor = colorCorrected(blended_result, materialParams.showVideo, materialConstants_enableColorConversion, materialParams.gammaToSrgb);
+  }
+}

@@ -1,0 +1,117 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// For video and images with 360 degree views.
+// Mapping is assumed to be equirectangular.
+
+material {
+    name : "XR Media 360 Skybox",
+    constants : [
+        {
+            name : enableColorConversion,
+            type : bool,
+            default : false
+        }
+    ],
+    "parameters" : [
+        {
+          // The texture displaying the primary view of the media.
+          "type" : {SAMPLER_EXTERNAL},
+          "name" : mediaTexture
+        },
+        {
+          // The texture displaying the secondary view of the media.
+          // This is only used for interleaved stereo content.
+          type : {SAMPLER_EXTERNAL},
+          name : mediaAuxiliaryTexture
+        },
+        { type: int, name: stereoType }
+    ],
+    variables : [
+        eyeDirection,
+        // Captures whether the material is being used in stereo mode or not at 'x'
+        // If true, captures the index of the camera eye at 'y'
+        // 0.0 is the left eye, 1.0 is the right eye.
+        stereoData
+    ],
+    requires : [ uv0 ],
+    vertexDomain : device,
+    depthWrite : false,
+    shadingModel : unlit,
+    variantFilter : [ skinning ],
+    culling: none,
+    flipUV : false
+}
+
+vertex {
+  void materialVertex(inout MaterialVertexInputs material) {
+#if defined(VARIANT_HAS_STEREO)
+    material.stereoData.x = 1.0;
+    material.stereoData.y = (getEyeIndex() % 2 < 1) ? 0.0 : 1.0;
+#else
+    material.stereoData.x = 0.0;
+#endif
+  }
+}
+
+fragment {
+  #include "stereo.glsl"
+  #include "color_conversion_helpers.glsl"
+
+  void material(inout MaterialInputs material) {
+    prepareMaterial(material);
+
+    vec2 uv = getUV0();
+
+    float azimuth = atan(variable_eyeDirection.z, variable_eyeDirection.x);
+    float elevation = acos(-variable_eyeDirection.y);
+
+    // Map angles to texture UV coordinates.
+    uv.x = (azimuth + PI) / (2.0 * PI);
+    uv.y = elevation / PI;
+
+    // Adjust UVs based on stereo encoding and eye position.
+    bool isLeftEye = (variable_stereoData.y < 1.0);
+    uv = CalculateStereoUvs(uv, materialParams.stereoType, isLeftEye);
+    uv.y = 1.0 - uv.y;
+
+    vec4 textureColor = vec4(0.0);
+    if (variable_stereoData.x > 0.0 && materialParams.stereoType == kInterleavedLeftPrimary) {
+      textureColor = (variable_stereoData.y == 0.0) ?
+        texture(materialParams_mediaTexture, uv).rgba :
+        texture(materialParams_mediaAuxiliaryTexture, uv).rgba;
+    } else if (variable_stereoData.x > 0.0 && materialParams.stereoType == kInterleavedRightPrimary) {
+      textureColor = (variable_stereoData.y == 0.0) ?
+        texture(materialParams_mediaAuxiliaryTexture, uv).rgba:
+        texture(materialParams_mediaTexture, uv).rgba;
+    } else {
+      textureColor = texture(materialParams_mediaTexture, uv).rgba;
+    }
+
+    material.baseColor = vec4(inverseTonemapSRGB(textureColor.rgb), textureColor.a);
+    if (materialConstants_enableColorConversion) {
+      material.baseColor.xyz = applyGlobalMaterialConversionMatrix(material.baseColor.xyz);
+    }
+  }
+}
+
+vertex {
+  void materialVertex(inout MaterialVertexInputs material) {
+    float3 pos = getPosition().xyz;
+
+    mat4 worldFromClipMatrix = inverse(getClipFromWorldMatrix());
+    float4 worldSpacePosition = mulMat4x4Float3(worldFromClipMatrix, pos);
+    material.eyeDirection.xyz = worldSpacePosition.xyz;
+  }
+}

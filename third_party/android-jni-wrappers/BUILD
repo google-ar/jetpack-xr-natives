@@ -27,6 +27,6 @@ cc_library(
         ".",
     ],
     deps = [
-        "//third_party/jnipp",
+        "@third_party//jnipp",
     ],
 )

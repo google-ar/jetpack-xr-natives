@@ -1,0 +1,266 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// web.proto
+// Defines messages for communication between JS and C++.
+
+syntax = "proto3";
+
+package imp.scripting;
+
+import "google/protobuf/any.proto";
+import "core/math/math.proto";
+import "core/ncsb/node_handle_message.proto";
+import "core/proto/imp.proto";
+import "core/view/framework/animation/gltf_animator_state.proto";
+
+// option cc_api_version = 2;
+// option cc_api_version = 2;
+option java_package = "com.google.ar.imp.core.scripting";
+
+// Makes a request to load a model from a uri.
+message LoadModelRequest {
+  string remote_uri = 1;
+  bool enabled = 2;
+}
+
+// TODO: Merge this into LoadModelRequest.
+message LoadModelFromInputStreamRequest {
+  string model_key = 1;
+  bool enabled = 2;
+}
+
+message LoadAndApplyEnvironmentLightFromInputStreamRequest {
+  // The key of pre-built image based lighting from the asset manager.
+  string ibl_key = 1;
+}
+
+// Makes a request to load a scene.
+message LoadSceneRequest {
+  string scene = 1;
+  bool enabled = 2;
+}
+
+// Makes a request to load raw binary in proto format.
+message LoadFileRequest {
+  // Unique name for the file, this is used as the id for Impress' file loading.
+  // If not unique, Impress will load the cached model with the existing id.
+  string file_id = 1;
+  // Base64 encoded string with the file contents for the .glb model. The
+  // contents are decoded on the native side and passed to the asset manager to
+  // load the file.
+  string file_contents = 2;
+  bool enabled = 3;
+}
+
+// Creates a new, empty node.
+message CreateNodeRequest {}
+
+// Makes a request to destroy a node.
+// TODO: Move Imp specific responses and requests to a new file.
+message DestroyNodeRequest {
+  imp.NodeHandleMessage target = 1;
+}
+
+// Finds a node with the given name or path, returns the first matching node.
+message FindNodeRequest {
+  string location_path = 1;
+}
+
+// Sets the camera projection parameters.
+// vertical_fov is in degrees.
+// near and far are the clip plane distances from the camera in meters.
+// Note: this may not persist across resizing events, so we would need to
+// expose a resize event to JS in order to provide that opportunity.
+// TODO: Provide ability to reset to defaults.
+message SetCameraProjectionRequest {
+  oneof projection {
+    float vertical_fov = 1;
+    Mat4f matrix = 2;
+  }
+  optional float near = 3;
+  optional float far = 4;
+}
+
+// A message with log information.
+enum TransformType {
+  TRANSFORM_TYPE_LOCAL = 0;
+  TRANSFORM_TYPE_WORLD = 1;
+}
+
+// Gets translation, rotation, and/or scale of a node.
+//
+// The boolean values determine whether that aspect is included in the response.
+// The local boolean determines if the local or world transform will be ret
+message GetTransformRequest {
+  imp.NodeHandleMessage target = 1;
+  bool translation = 2;
+  bool rotation = 3;
+  bool scale = 4;
+  TransformType transform_type = 5;
+}
+
+// Response for GetTransformRequest with node transform relative to its parent.
+//
+// The coordinate system is right-handed - i.e. positive x to the right,
+// positive y is up, and positive z goes backward from the node.
+// Default scale is 1 unit is 1 meter.
+// TODO; unify with TransformData.
+message GetTransformResponse {
+  Float3 translation = 1 [(imp.optional_type) = ABSL_OPTIONAL];
+  Quatf rotation = 2 [(imp.optional_type) = ABSL_OPTIONAL];
+  Float3 scale = 3 [(imp.optional_type) = ABSL_OPTIONAL];
+}
+
+// Sets translation, rotation, and/or scale of a node relative to its parent.
+//
+// The coordinate system is right-handed - i.e. positive x to the right,
+// positive y is up, and positive z goes backward from the node.
+// Default scale is 1 unit is 1 meter.
+// TODO; unify with TransformData.
+message SetTransformRequest {
+  imp.NodeHandleMessage target = 1;
+  Float3 translation = 2 [(imp.optional_type) = ABSL_OPTIONAL];
+  Quatf rotation = 3 [(imp.optional_type) = ABSL_OPTIONAL];
+  Float3 scale = 4 [(imp.optional_type) = ABSL_OPTIONAL];
+  TransformType transform_type = 5;
+}
+
+// Gets the transform of a given node.
+message GetTransformMatrixRequest {
+  imp.NodeHandleMessage target = 1;
+  TransformType transform_type = 2;
+}
+
+// Response for GetTransformMatrixRequest with the transform of a given node.
+//
+// The matrix is an affine transformation matrix.
+// The coordinate system is right-handed - i.e. positive x to the right,
+// positive y is up, and positive z goes backward from the node.
+// Default scale is 1 unit is 1 meter.
+// The matrix is expected to be in column-major order as in OpenGL.
+message GetTransformMatrixResponse {
+  Mat4f transform = 2;
+}
+
+// Sets the transform of a given node.
+//
+// The matrix is expected to be an affine transformation matrix.
+// The coordinate system is right-handed - i.e. positive x to the right,
+// positive y is up, and positive z goes backward from the node.
+// Default scale is 1 unit is 1 meter.
+// The matrix is expected to be in column-major order as in OpenGL.
+message SetTransformMatrixRequest {
+  imp.NodeHandleMessage target = 1;
+  Mat4f transform = 2;
+  TransformType transform_type = 3;
+}
+
+// Makes a request to set the enable state of a node.
+// TODO: Move Imp specific responses and requests to a new file.
+message SetNodeEnabledRequest {
+  imp.NodeHandleMessage target = 1;
+  bool enabled = 2;
+}
+
+message GetNodeActiveRequest {
+  imp.NodeHandleMessage target = 1;
+}
+
+message GetNodeActiveResponse {
+  bool active = 1;
+}
+
+// Response type for all requests that return a list of Nodes.
+message NodeListResponse {
+  repeated imp.NodeHandleMessage nodes = 1;
+}
+
+// Makes a request to set the parent of a node. A null parent field will unset.
+// TODO: Move Imp specific responses and requests to a new file.
+message SetParentRequest {
+  imp.NodeHandleMessage target = 1;
+  imp.NodeHandleMessage parent = 2;
+}
+
+// Get the children node of the target node.
+message GetChildrenRequest {
+  imp.NodeHandleMessage target = 1;
+}
+
+// Represents an absl::Duration.
+message Duration {
+  oneof unit {
+    int64 milliseconds = 1;
+    int64 nanoseconds = 2;
+  }
+}
+
+// Request to dynamically add an animation to a node.
+message AnimateNodeRequest {
+  imp.NodeHandleMessage target = 1;
+  Duration duration = 3;
+  Float3 translation = 4 [(imp.optional_type) = ABSL_OPTIONAL];
+  Quatf rotation = 5 [(imp.optional_type) = ABSL_OPTIONAL];
+  Float3 scale = 6 [(imp.optional_type) = ABSL_OPTIONAL];
+}
+
+// Request for all gltf animation names associated with a node.
+message GetAnimationNamesRequest {
+  imp.NodeHandleMessage target = 1;
+}
+
+// Response containing a list of all animation names on the gltf.
+message GetAnimationNamesResponse {
+  repeated string names = 1;
+}
+
+// Request for the camera node.
+message GetCameraRequest {}
+
+// Request to play the requested gltf animation.
+message PlayAnimationRequest {
+  imp.NodeHandleMessage target = 1;
+  imp.GltfAnimatorState.PlayCommand play_command = 2;
+}
+
+message GetNodeNameRequest {
+  imp.NodeHandleMessage target = 1;
+}
+
+message GetNodeNameResponse {
+  string name = 1;
+}
+
+message SetNodeNameRequest {
+  imp.NodeHandleMessage target = 1;
+  string name = 2;
+}
+
+message ComponentData {
+  oneof data {
+    google.protobuf.Any any_data = 1;
+    string textproto_data = 2;
+  }
+}
+
+message AddComponentRequest {
+  imp.NodeHandleMessage target = 1;
+  ComponentData component_data = 2;
+}
+
+message UpdateComponentRequest {
+  imp.NodeHandleMessage target = 1;
+  ComponentData component_data = 2;
+}

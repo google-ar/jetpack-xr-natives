@@ -1,0 +1,92 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+material {
+  name : "svxr_plane",
+  constants : [
+    {
+      name : enableColorConversion,
+      type : bool,
+      default : false
+    }
+  ],
+  parameters: [
+    {
+      type: float3,
+      name: highlight_point
+    },
+    {
+      type: sampler2d,
+      name: dot_pattern
+    },
+    {
+      type: float3,
+      name: plane_control // (falloff, cutoff, throw)
+    },
+    {
+      type: float4,
+      name: falloff_color
+    },
+    {
+      type: float4,
+      name: cutoff_color
+    },
+    {
+      type: float2,
+      name: uv_scale
+    }
+  ],
+  requires : [
+    uv0
+  ],
+  variables : [],
+  vertexDomain : object,
+  shadingModel : unlit,
+  blending : transparent,
+}
+vertex {
+  void materialVertex(inout MaterialVertexInputs material) {
+  }
+}
+fragment {
+#include "color_conversion_helpers.glsl"
+
+  // Necessary for high res textures.
+  precision highp float;
+
+  void material(inout MaterialInputs material) {
+    prepareMaterial(material);
+
+    float falloff = materialParams.plane_control.x;
+    float cutoff = materialParams.plane_control.y;
+    float throw = materialParams.plane_control.z;
+
+    float distance = length(getUserWorldPosition() -
+                             materialParams.highlight_point);
+    // 1.0 at falloff, 0.0 at cutoff.
+    float t = pow(1.0 - saturate((distance - falloff) /
+                                 (cutoff - falloff)),
+                  throw);
+
+    vec4 base_color = t * materialParams.falloff_color +
+                      (1.0 - t) * materialParams.cutoff_color;
+
+    vec4 dot_pattern = texture(materialParams_dot_pattern,
+                               getUV0() * materialParams.uv_scale);
+    material.baseColor = dot_pattern * base_color;
+    if (materialConstants_enableColorConversion) {
+        material.baseColor.xyz = applyGlobalMaterialConversionMatrix(material.baseColor.xyz);
+    }
+  }
+}

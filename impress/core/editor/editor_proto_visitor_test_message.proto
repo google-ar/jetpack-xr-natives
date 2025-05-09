@@ -1,0 +1,137 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp.editor;
+
+import "google/protobuf/any.proto";
+import "core/math/math.proto";
+import "core/proto/imp.proto";
+import "core/proto/test_standard.proto";
+
+enum TestEnum {
+  A = 0;
+  B = 1;
+  C = 2;
+  D = 4;
+}
+
+message SimpleMessage {
+  int32 i32 = 1;
+  string str = 2;
+}
+
+message NullableMessage {
+  optional int32 i32 = 1 [(imp.optional_type) = UNIQUE_PTR];
+  optional SimpleMessage m = 2 [(imp.optional_type) = UNIQUE_PTR];
+}
+
+message OptionalMessage {
+  optional int32 i32 = 1;
+}
+
+message OneofMessage {
+  oneof variant {
+    sint32 i32 = 1;
+    double dbl = 2;
+    string str = 3;
+    SimpleMessage msg = 4;
+  }
+}
+
+message OptionalOneofMessage {
+  OneofMessage optional_oneof = 1 [(imp.optional_type) = ABSL_OPTIONAL];
+}
+
+message UniqueMessage {
+  optional int32 value = 1 [(imp.optional_type) = UNIQUE_PTR];
+}
+
+message RecursiveMessage {
+  message Nested {
+    oneof value_or_next {
+      int32 value = 1;
+      RecursiveMessage next = 2 [(imp.optional_type) = UNIQUE_PTR];
+    }
+  }
+  int32 value = 1;
+  Nested nested = 2;
+}
+
+message RecursiveMessageUsingMap {
+  int32 value = 1;
+  map<string, RecursiveMessageUsingMap> recursive_map = 2;
+}
+
+message OptionalNestedMessage {
+  optional int32 i32 = 1;
+  OptionalMessage nested = 2 [(imp.optional_type) = ABSL_OPTIONAL];
+}
+
+message MessageWithOptionalString {
+  optional string str = 1;
+}
+
+message MessageWithNestedOptional {
+  MessageWithOptionalString nested = 1 [(imp.optional_type) = ABSL_OPTIONAL];
+}
+
+message ContainsStandardProto {
+  test.StandardMessage standard_msg = 1
+      [(imp.is_imported_standard_proto) = true];
+
+  oneof variant {
+    int32 i32 = 2;
+    test.StandardMessage oneof_msg = 3
+        [(imp.is_imported_standard_proto) = true];
+  }
+
+  test.StandardMessage.NestedMessage nested_msg = 4
+      [(imp.is_imported_standard_proto) = true];
+}
+
+message EditorProtoVisitorTestMessage {
+  int32 i32 = 1;
+  uint64 u64 = 2;
+  float flt = 3;
+  double dbl = 4;
+  string str = 5;
+  bool b = 6;
+  SimpleMessage msg = 7;
+  repeated double dbls = 8;
+  repeated SimpleMessage messages = 9;
+  map<sint32, string> m1 = 10;
+  map<string, SimpleMessage> m2 = 11;
+  TestEnum test_enum = 12;
+  oneof inline_variant {
+    sint32 iv_i32 = 13;
+    double iv_dbl = 14;
+    string iv_str = 15;
+    SimpleMessage iv_msg = 16;
+  }
+  OptionalMessage optional_message = 17;
+  OneofMessage oneof_message = 18;
+  OptionalOneofMessage optional_oneof_message = 19;
+  UniqueMessage unique_message = 20;
+  RecursiveMessage recursive_message = 21;
+  RecursiveMessageUsingMap recursive_message_using_map = 22;
+  MessageWithOptionalString message_with_optional_string = 23;
+  MessageWithNestedOptional message_with_nested_optional = 24;
+  ContainsStandardProto contains_standard_proto = 25;
+  google.protobuf.Any any = 26;
+  float flt_as_slider = 27
+      [(imp.editor_control) = { slider_float: { min: 0 max: 1 precision: 2 } }];
+  Float4 color_picker = 28 [(imp.editor_control) = { color_picker_4: {} }];
+}

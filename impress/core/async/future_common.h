@@ -1,0 +1,168 @@
+/*
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#ifndef THIRD_PARTY_IMPRESS_CORE_ASYNC_FUTURE_COMMON_H_
+#define THIRD_PARTY_IMPRESS_CORE_ASYNC_FUTURE_COMMON_H_
+
+#include <cstdint>
+
+#include "absl/types/optional.h"
+#include "absl/types/variant.h"
+#include "core/async/executor.h"
+#include "core/async/future_group.h"
+#include "core/async/task_priority.h"
+
+namespace imp {
+
+// Determines what happens when an error is returned to a future when KeptBy has
+// been called.
+//
+// Often, user code should handle errors explicitly in the final Future in a
+// chain of futures. However, this functionality handles errors automatically
+// for simple cases & debugging.
+//
+// If the error is explicitly handled, then this behavior will not happen.
+//
+// Examples:
+//
+// // The error is *not* handled so the KeptBy error handling *will* occur.
+// future.Then([](Foo foo) { }).KeptBy(this);
+//
+// // The error is explicitly handled and *not* propagated so the KeptBy error
+// // handling *will not* occur.
+// future.Then([](absl::StatusOr<Foo> foo) { /* handle error*/ }).KeptBy(this);
+//
+// // The error is explicitly handled and propagated so the KeptBy error
+// // handling *will* occur.
+// future.Then([](absl::StatusOr<Foo> foo) {
+//   return foo.status();
+// }).KeptBy(this);
+//
+enum class FutureKeptByMode : uint8_t {
+  // Default behavior.
+  //
+  // Indicates that the error will automatically be logged as a WARNING. This
+  // makes it easier to debug errors when no explicit error handling has been
+  // added for the future.
+  //
+  // Note: The log is treated as a warning because this may not indicate an
+  // actual problem. For example, a future could be cancelled upon exit as an
+  // expected part of the apps flow.
+  kLogOnError,
+  // Indicates that the program should crash when an error occurs.
+  kDieOnError,
+  // Indicates that nothing will happen when an error occurs, silently swallows
+  // the error.
+  kDoNothingOnError
+};
+
+// Determines how Future's run the functors passed into Future<T>::Then and
+// Future<T>::Schedule.
+enum class FutureExecutorMode {
+  // If the current executor is not the future's target executor, then the
+  // future's functor is scheduld on the executor. Otherwise, the functor is
+  // called immediately.
+  kScheduleIfNotOnExecutorThread,
+  // Always schedules the future's functor on the target executor regardless of
+  // if the current executor is already the target executor.
+  kScheduleAlways
+};
+
+using ExecutorTypeOrExecutor = absl::variant<Executor::Type, Executor*>;
+
+// Options used to configure calls to Future<T>::Schedule.
+struct FutureScheduleOptions {
+  // Controls which executor the functor is run on. Defaults to foreground.
+  ExecutorTypeOrExecutor executor = Executor::Type::kForeground;
+
+  // Controls how future's run the functor passed into Future<T>::Schedule.
+  // Defaults to always scheduling the functor on the executor.
+  FutureExecutorMode executor_mode = FutureExecutorMode::kScheduleAlways;
+
+  // The priority of the task passed into Future<T>::Schedule.
+  // Note: If a FutureGroup is specified, this value will be overridden by the
+  // task priority of the provided FutureGroup.
+  int task_priority = kNormalTaskPriority;
+
+  // The FutureGroup to assign the scheduled Future to.
+  std::optional<FutureGroup> future_group = std::nullopt;
+};
+
+// Options used to configure calls to Future<T>::Then.
+struct FutureThenOptions {
+  // Controls which executor the functor is run on. Defaults to foreground.
+  ExecutorTypeOrExecutor executor = Executor::Type::kForeground;
+
+  // Controls how future's run the functor passed into Future<T>::Then. Defaults
+  // to always scheduling the functor on the executor if the current executor
+  // isn't the target executor. Otherwise, calls the functor immediately.
+  FutureExecutorMode executor_mode =
+      FutureExecutorMode::kScheduleIfNotOnExecutorThread;
+
+  // The priority of the task passed into Future<T>::Then.
+  // Note: If a FutureGroup is specified, this value will be overridden by the
+  // task priority of the provided FutureGroup.
+  int task_priority = kNormalTaskPriority;
+
+  // The FutureGroup to assign the Future to.
+  std::optional<FutureGroup> future_group = std::nullopt;
+};
+
+// Forward declaration of Future.
+template <typename T>
+class Future;
+
+// Holds a non-owning reference to a Future. Semantically, this is similar to
+// using std::weak_ptr.
+//
+// This makes it possible to refer to a future without keeping it alive.
+template <typename T>
+class WeakFuture {
+ public:
+  WeakFuture() {};
+
+  // NOLINTNEXTLINE: Implicit conversion allowed.
+  WeakFuture(const Future<T>& future) : impl_wrapper_(future.impl_wrapper_) {}
+
+  // Returns the Future referenced by the WeakFuture, creating a hard reference
+  // to it.
+  //
+  // If the referenced future has alerady been destroyed, then returns nullopt.
+  //
+  // Similar to std::weak_ptr::lock
+  absl::optional<Future<T>> Lock() const {
+    if (auto impl_wrapper = impl_wrapper_.lock()) {
+      return Future<T>(impl_wrapper);
+    }
+    return absl::nullopt;
+  }
+
+ private:
+  std::weak_ptr<typename Future<T>::ImplWrapper> impl_wrapper_;
+};
+
+// Helper function for creating a WeakFuture from a given future.
+//
+// This is the same as creating a WeakFuture directly, except that make_weak can
+// implicitly deduce the type of WeakFuture from the future passed in.
+template <typename T>
+WeakFuture<T> make_weak(Future<T> f) {
+  return WeakFuture<T>(f);
+}
+
+}  // namespace imp
+
+#endif  // THIRD_PARTY_IMPRESS_CORE_ASYNC_FUTURE_COMMON_H_

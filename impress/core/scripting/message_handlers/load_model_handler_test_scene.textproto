@@ -1,0 +1,7 @@
+name: "Avocado"
+disabled: true
+components: {
+  [type.googleapis.com/imp.GltfState] {
+    asset: "third_party/arcore/googledata/sceneform/assets/gltf_2p0_sample_assets/Avocado/glTF-Binary/Avocado.glb"
+  }
+}

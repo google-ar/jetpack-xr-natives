@@ -1,0 +1,41 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// events.proto
+// Defines editor-specific proto events.
+
+syntax = "proto3";
+
+package imp.editor;
+
+import "core/editor/component_editor.proto";
+import "core/math/math.proto";
+import "core/ncsb/node_handle_message.proto";
+import "core/proto/imp.proto";
+
+// option cc_api_version = 2;
+
+// This message is sent when a node is modified in the editor.
+message NodeUpdatedEvent {
+  option (imp.is_event) = true;
+
+  imp.NodeHandleMessage target = 1;
+  bool enabled = 2 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  Float3 translation = 3 [(imp.optional_type) = ABSL_OPTIONAL];
+  Quatf rotation = 4 [(imp.optional_type) = ABSL_OPTIONAL];
+  Float3 scale = 5 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  ComponentStateChanged component = 6 [(imp.optional_type) = ABSL_OPTIONAL];
+}

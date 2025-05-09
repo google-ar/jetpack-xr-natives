@@ -1,0 +1,41 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import "third_party/arcore/proto/video/ar_derived_data.proto";
+
+// option cc_api_version = 2;
+option java_package = "com.google.ar.imp.playback.scene";
+
+message ArPlaybackScene {
+  // Camera intrinsics + plane data.
+  ar.video.ARSession scene_data = 1;
+
+  oneof video_source {
+    // Links to video.
+    string video_url = 2;
+    // Stores video data in the protobuf.
+    bytes video_data = 3;
+  }
+
+  oneof light_probe_source {
+    // Links to light probe data.
+    string light_probe_url = 4;
+    // Stores light probe data in the protobuf.
+    bytes light_probe_data = 5;
+  }
+}

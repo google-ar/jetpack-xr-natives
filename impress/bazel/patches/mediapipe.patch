@@ -1,0 +1,279 @@
+diff --git a/mediapipe/framework/encode_binary_proto.bzl b/mediapipe/framework/encode_binary_proto.bzl
+index 04a307fe..5040e3af 100644
+--- a/mediapipe/framework/encode_binary_proto.bzl
++++ b/mediapipe/framework/encode_binary_proto.bzl
+@@ -44,21 +44,35 @@ PROTOC = "@com_google_protobuf//:protoc"
+ 
+ def _canonicalize_proto_path_oss(f):
+     if not f.root.path:
++        if f.path.startswith("external"):
++            repo_name, _, file_name = f.path[len("external/"):].partition("/")
++            return struct(
++                proto_path = paths.join("external", repo_name),
++                file_name = file_name,
++            )
+         return struct(
+             proto_path = ".",
+             file_name = f.short_path,
+         )
+ 
+-    # `f.path` looks like "<genfiles>/external/<repo>/(_virtual_imports/<library>/)?<file_name>"
+-    repo_name, _, file_name = f.path[len(paths.join(f.root.path, "external") + "/"):].partition("/")
+-    if file_name.startswith("_virtual_imports/"):
+-        # This is a virtual import; move "_virtual_imports/<library>" from `repo_name` to `file_name`.
+-        repo_name = paths.join(repo_name, *file_name.split("/", 2)[:2])
+-        file_name = file_name.split("/", 2)[-1]
+-    return struct(
+-        proto_path = paths.join(f.root.path, "external", repo_name),
+-        file_name = file_name,
+-    )
++    # `f.path` looks like "<genfiles>/external/protobuf+/src/google/protobuf/_virtual_imports/any_proto/google/protobuf/any.proto"
++    if "_virtual_imports/" in f.path:
++        repo_name, _, file_name = f.path[len(paths.join(f.root.path, "external") + "/"):].partition("_virtual_imports/")
++
++        # We want the proto path to be bazel-out/arm64-v8a-opt/bin/external/protobuf+/src/google/protobuf/_virtual_imports/any_proto
++        # We want the file_name to be google/protobuf/any.proto
++        repo_name = paths.join(repo_name, "_virtual_imports", file_name.split("/")[0])
++        file_name = file_name.split("/", 1)[-1]
++        return struct(
++            proto_path = paths.join(f.root.path, "external", repo_name),
++            file_name = file_name,
++        )
++    else:
++        repo_name, _, file_name = f.path[len(paths.join(f.root.path, "external") + "/"):].partition("/")
++        return struct(
++            proto_path = paths.join(f.root.path, "external", repo_name),
++            file_name = file_name,
++        )
+ 
+ def _map_root_path(f):
+     return _canonicalize_proto_path_oss(f).proto_path
+diff --git a/mediapipe/framework/port/BUILD b/mediapipe/framework/port/BUILD
+index 31c82230..2a24cd50 100644
+--- a/mediapipe/framework/port/BUILD
++++ b/mediapipe/framework/port/BUILD
+@@ -165,6 +165,7 @@ cc_library(
+     deps = [
+         ":status_matchers",
+         "//mediapipe/framework/deps:message_matchers",
++        "//mediapipe/framework/deps:status_matchers",
+         "@com_google_googletest//:gtest",
+     ],
+ )
+diff --git a/mediapipe/framework/port/build_config.bzl b/mediapipe/framework/port/build_config.bzl
+index 0b58cf75..dfbab759 100644
+--- a/mediapipe/framework/port/build_config.bzl
++++ b/mediapipe/framework/port/build_config.bzl
+@@ -3,7 +3,6 @@
+ 
+ """.bzl file for mediapipe open source build configs."""
+ 
+-load("@npm//@bazel/typescript:index.bzl", "ts_project")
+ load(
+     "//mediapipe/framework/tool:mediapipe_proto.bzl",
+     _mediapipe_cc_proto_library = "mediapipe_cc_proto_library",
+@@ -23,71 +22,3 @@ def provided_args(**kwargs):
+ def replace_suffix(string, old, new):
+     """Returns a string with an old suffix replaced by a new suffix."""
+     return string.endswith(old) and string[:-len(old)] + new or string
+-
+-def mediapipe_ts_library(
+-        name,
+-        srcs = [],
+-        visibility = None,
+-        deps = [],
+-        testonly = 0,
+-        allow_unoptimized_namespaces = False):
+-    """Generate ts_project for MediaPipe open source version.
+-
+-    Args:
+-      name: the name of the mediapipe_ts_library.
+-      srcs: the .ts files of the mediapipe_ts_library for Bazel use.
+-      visibility: visibility of this target.
+-      deps: a list of dependency labels for Bazel use.
+-      testonly: test only or not.
+-      allow_unoptimized_namespaces: ignored, used only internally
+-    """
+-    _ignore = [allow_unoptimized_namespaces]  # buildifier: disable=unused-variable
+-
+-    ts_project(**provided_args(
+-        name = name,
+-        srcs = srcs,
+-        visibility = visibility,
+-        deps = deps + [
+-            "@npm//@types/jasmine",
+-            "@npm//@types/node",
+-            "@npm//@types/offscreencanvas",
+-            "@npm//@types/google-protobuf",
+-            "@npm//@webgpu/types",
+-        ],
+-        testonly = testonly,
+-        declaration = True,
+-        tsconfig = "//:tsconfig.json",
+-    ))
+-
+-def mediapipe_ts_declaration(
+-        name,
+-        srcs,
+-        visibility = None,
+-        deps = []):
+-    """Generate ts_declaration for MediaPipe open source version.
+-
+-    Args:
+-      name: the name of the mediapipe_ts_declaration.
+-      srcs: the .d.ts files of the mediapipe_ts_declaration for Bazel use.
+-      visibility: visibility of this target.
+-      deps: a list of dependency labels for Bazel use
+-    """
+-
+-    # Bazel does not create JS files for .d.ts files, which leads to import
+-    # failures in our open source build. We simply re-name the .d.ts files
+-    # to .ts to work around this problem.
+-    for src in srcs:
+-        native.genrule(
+-            name = replace_suffix(src, ".d.ts", "_d_ts"),
+-            srcs = [src],
+-            outs = [replace_suffix(src, ".d.ts", ".ts")],
+-            visibility = visibility,
+-            cmd = "cp -n $< $@;",
+-        )
+-
+-    mediapipe_ts_library(
+-        name = name,
+-        srcs = [replace_suffix(src, ".d.ts", "_d_ts") for src in srcs],
+-        visibility = visibility,
+-        deps = deps,
+-    )
+diff --git a/mediapipe/framework/tool/mediapipe_graph.bzl b/mediapipe/framework/tool/mediapipe_graph.bzl
+index 22b43656..c4462e6f 100644
+--- a/mediapipe/framework/tool/mediapipe_graph.bzl
++++ b/mediapipe/framework/tool/mediapipe_graph.bzl
+@@ -23,7 +23,6 @@ load("//mediapipe/framework/tool:build_defs.bzl", "clean_dep")
+ # buildifier: disable=out-of-order-load
+ # buildifier: disable=same-origin-load
+ load("//mediapipe/framework/deps:descriptor_set.bzl", "direct_descriptor_set", "transitive_descriptor_set")
+-load("@org_tensorflow//tensorflow/lite/core/shims:cc_library_with_tflite.bzl", "cc_library_with_tflite")
+ 
+ def mediapipe_binary_graph(name, graph = None, output_name = None, deps = [], testonly = False, **kwargs):
+     """Converts a graph from text format to binary format."""
+@@ -147,39 +146,21 @@ def mediapipe_simple_subgraph(
+         },
+         testonly = testonly,
+     )
+-    if not tflite_deps:
+-        native.cc_library(
+-            name = name,
+-            srcs = [
+-                name + "_linked.cc",
+-                graph_base_name + ".inc",
+-            ],
+-            deps = [
+-                clean_dep("//mediapipe/framework:calculator_framework"),
+-                clean_dep("//mediapipe/framework:subgraph"),
+-            ] + deps,
+-            alwayslink = 1,
+-            visibility = visibility,
+-            testonly = testonly,
+-            **kwargs
+-        )
+-    else:
+-        cc_library_with_tflite(
+-            name = name,
+-            srcs = [
+-                name + "_linked.cc",
+-                graph_base_name + ".inc",
+-            ],
+-            tflite_deps = tflite_deps,
+-            deps = [
+-                clean_dep("//mediapipe/framework:calculator_framework"),
+-                clean_dep("//mediapipe/framework:subgraph"),
+-            ] + deps,
+-            alwayslink = 1,
+-            visibility = visibility,
+-            testonly = testonly,
+-            **kwargs
+-        )
++    native.cc_library(
++        name = name,
++        srcs = [
++            name + "_linked.cc",
++            graph_base_name + ".inc",
++        ],
++        deps = [
++            clean_dep("//mediapipe/framework:calculator_framework"),
++            clean_dep("//mediapipe/framework:subgraph"),
++        ] + deps,
++        alwayslink = 1,
++        visibility = visibility,
++        testonly = testonly,
++        **kwargs
++    )
+ 
+ def mediapipe_reexport_library(
+         name,
+diff --git a/mediapipe/framework/tool/mediapipe_proto.bzl b/mediapipe/framework/tool/mediapipe_proto.bzl
+index ff40577c..d09be09b 100644
+--- a/mediapipe/framework/tool/mediapipe_proto.bzl
++++ b/mediapipe/framework/tool/mediapipe_proto.bzl
+@@ -4,9 +4,7 @@
+ # buildifier: disable=out-of-order-load
+ load("//mediapipe/framework/tool:mediapipe_graph.bzl", "mediapipe_options_library")
+ load("//mediapipe/framework/tool:mediapipe_proto_allowlist.bzl", "rewrite_target_list")
+-load("@com_google_protobuf//:protobuf.bzl", "cc_proto_library", "py_proto_library")
+ load("@rules_proto//proto:defs.bzl", _proto_library = "proto_library")
+-load("@rules_proto_grpc//js:defs.bzl", "js_proto_library")
+ 
+ java_proto_library = native.java_proto_library
+ java_lite_proto_library = native.java_lite_proto_library
+@@ -373,15 +371,6 @@ def mediapipe_py_proto_library_oss(
+       testonly: test only proto or not.
+     """
+     _ignore = [api_version, proto_deps]
+-    py_proto_library(**provided_args(
+-        name = name,
+-        srcs = srcs,
+-        visibility = visibility,
+-        default_runtime = "@com_google_protobuf//:protobuf_python",
+-        protoc = "@com_google_protobuf//:protoc",
+-        deps = py_proto_deps + ["@com_google_protobuf//:protobuf_python"],
+-        testonly = testonly,
+-    ))
+ 
+ def mediapipe_cc_proto_library_oss(
+         name,
+@@ -401,18 +390,6 @@ def mediapipe_cc_proto_library_oss(
+     """
+     _ignore = [deps]
+ 
+-    cc_proto_library(**provided_args(
+-        name = name,
+-        srcs = srcs,
+-        visibility = visibility,
+-        deps = cc_deps,
+-        testonly = testonly,
+-        cc_libs = ["@com_google_protobuf//:protobuf"],
+-        protoc = "@com_google_protobuf//:protoc",
+-        default_runtime = "@com_google_protobuf//:protobuf",
+-        alwayslink = 1,
+-    ))
+-
+ def mediapipe_js_proto_library_oss(
+         name,
+         srcs,
+@@ -441,16 +418,6 @@ def mediapipe_js_proto_library_oss(
+         deps = lib_proto_deps,
+         visibility = visibility,
+     )
+-    js_proto_library(
+-        name = name,
+-        protos = [replace_suffix(name, "_jspb_proto", "_lib_proto")],
+-        output_mode = "NO_PREFIX_FLAT",
+-        # Need to specify this to work around bug in js_proto_library()
+-        # https://github.com/bazelbuild/rules_nodejs/issues/3503
+-        legacy_path = "unused",
+-        deps = js_deps,
+-        visibility = visibility,
+-    )
+ 
+ def mediapipe_py_proto_library(**kwargs):
+     mediapipe_py_proto_library_oss(**kwargs)

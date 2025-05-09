@@ -1,0 +1,34 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+// Serialized data for AudioPlayer
+message AudioPlayerState {
+  // The path (file or url) to an audio file.
+  // This could be empty if the AudioPlayer is created with dynamic data.
+  string asset = 1;
+  // If set to true, automatically plays the audio after AudioPlayer is created.
+  // If unspecified, it will default to be false.
+  optional bool auto_play = 2;
+  // Loop count of the audio. Audio will not loop if set to 0. Audio will loop
+  // indefinitely if set to -1.
+  // If unspecified, it will default to be 0.
+  optional int32 loop_count = 3;
+  // Volume of the audio. The value should be within the range of [0, 1].
+  // If unspecified, it will default to be 1.0f.
+  optional float volume = 4;
+}

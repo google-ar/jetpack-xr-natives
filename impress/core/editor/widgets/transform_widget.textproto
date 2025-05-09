@@ -1,0 +1,149 @@
+name: "transform-widget"
+
+groups: {
+  groups: "EditorOverlay"
+}
+
+disabled: true
+transform: {
+  scale: {
+    x: 0.01
+    y: 0.01
+    z: 0.01
+  }
+}
+
+components: {
+  [type.googleapis.com/imp.GltfState] {
+    asset: "core/editor/widgets/transform_widget.glb"
+  }
+}
+
+components: {
+  [type.googleapis.com/imp.StatelessComponent] {
+    type: "imp.editor.TransformWidget"
+  }
+}
+
+children: {
+  name: "model_root"
+
+  children: {
+    name: "center"
+
+    components: {
+      [type.googleapis.com/imp.editor.TransformWidgetModeControlState] {
+        translate: { name: "translate" }
+        rotate: { name: "rotate" }
+        scale: { name: "scale" }
+      }
+    }
+  }
+
+  children: {
+    name: "translate"
+
+    children: {
+      name: "translate_x"
+      components: {
+        [type.googleapis.com/imp.editor.TransformWidgetAspectState] {
+          axis: { x: 1 y: 0 z: 0 }
+          aspect: TRANSFORM_ASPECT_TRANSLATE
+          transform_widget_mode_control: { name: "center" }
+        }
+      }
+    }
+    children: {
+      name: "translate_y"
+      components: {
+        [type.googleapis.com/imp.editor.TransformWidgetAspectState] {
+          axis: { x: 0 y: 1 z: 0 }
+          aspect: TRANSFORM_ASPECT_TRANSLATE
+          transform_widget_mode_control: { name: "center" }
+        }
+      }
+    }
+    children: {
+      name: "translate_z"
+      components: {
+        [type.googleapis.com/imp.editor.TransformWidgetAspectState] {
+          axis: { x: 0 y: 0 z: 1 }
+          aspect: TRANSFORM_ASPECT_TRANSLATE
+          transform_widget_mode_control: { name: "center" }
+        }
+      }
+    }
+  }
+
+  children: {
+    name: "rotate"
+    disabled: true
+
+    children: {
+      name: "rotate_x"
+      components: {
+        [type.googleapis.com/imp.editor.TransformWidgetAspectState] {
+          axis: { x: 1 y: 0 z: 0 }
+          aspect: TRANSFORM_ASPECT_ROTATE
+          transform_widget_mode_control: { name: "center" }
+        }
+      }
+    }
+    children: {
+      name: "rotate_y"
+      components: {
+        [type.googleapis.com/imp.editor.TransformWidgetAspectState] {
+          axis: { x: 0 y: 1 z: 0 }
+          aspect: TRANSFORM_ASPECT_ROTATE
+          transform_widget_mode_control: { name: "center" }
+        }
+      }
+    }
+    children: {
+      name: "rotate_z"
+      components: {
+        [type.googleapis.com/imp.editor.TransformWidgetAspectState] {
+          axis: { x: 0 y: 0 z: 1 }
+          aspect: TRANSFORM_ASPECT_ROTATE
+          transform_widget_mode_control: { name: "center" }
+        }
+      }
+    }
+  }
+
+  children: {
+    name: "scale"
+    disabled: true
+
+    children: {
+      name: "scale_x"
+      components: {
+        [type.googleapis.com/imp.editor.TransformWidgetAspectState] {
+          axis: { x: 1 y: 0 z: 0 }
+          aspect: TRANSFORM_ASPECT_SCALE
+          transform_widget_mode_control: { name: "center" }
+        }
+      }
+    }
+    children: {
+      name: "scale_y"
+      components: {
+        [type.googleapis.com/imp.editor.TransformWidgetAspectState] {
+          axis: { x: 0 y: 1 z: 0 }
+          aspect: TRANSFORM_ASPECT_SCALE
+          transform_widget_mode_control: { name: "center" }
+        }
+      }
+    }
+    children: {
+      name: "scale_z"
+      components: {
+        [type.googleapis.com/imp.editor.TransformWidgetAspectState] {
+          axis: { x: 0 y: 0 z: 1 }
+          aspect: TRANSFORM_ASPECT_SCALE
+          transform_widget_mode_control: { name: "center" }
+        }
+      }
+    }
+  }
+}

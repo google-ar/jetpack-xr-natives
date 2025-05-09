@@ -1,0 +1,41 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import "core/view/framework/camera/camera_state.proto";
+
+// Casts contact shadows upon members of its target group.
+message ContactShadowProjectorState {
+  string target_group = 1;
+  // Size of the texture the shadow is drawn on. Default is 256.
+  optional int32 texture_size = 2;
+  // Blur factor for the contact shadow.
+  // A factor of 0 means no blur.
+  optional float blur_factor = 3;
+
+  // Whether the projector's camera will use perspective or be orthographic.
+  // By default it is orthographic.
+  optional CameraState.ProjectionType projection_type = 4;
+
+  // TODO: Remove dependence on an arbitrary set size
+  // later, when smart positioning and scaling are implemented.
+  optional float receiver_size = 5;
+
+  // Whether the shadow projector is static or updates every frame.
+  // By default it is static.
+  optional bool is_static = 6;
+}

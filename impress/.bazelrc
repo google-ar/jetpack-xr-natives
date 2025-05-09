@@ -1,0 +1,125 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+build --cxxopt=-fpermissive
+build --cxxopt=-fexceptions
+build --cxxopt=-Wno-absolute-value
+build --cxxopt=-Wno-c++20-designator
+build --cxxopt=-Wno-c99-designator
+build --cxxopt=-Wno-deprecated-declarations
+build --cxxopt=-Wno-enum-compare
+build --cxxopt=-Wno-error=switch
+build --cxxopt=-Wno-error
+build --cxxopt=-Wno-implicit-fallthrough
+build --cxxopt=-Wno-inconsistent-missing-override
+build --cxxopt=-Wno-macro-redefined
+build --cxxopt=-Wno-mismatched-tags
+build --cxxopt=-Wno-reorder-init-list
+build --cxxopt=-Wno-return-type
+build --cxxopt=-Wno-self-assign-overloaded
+build --cxxopt=-Wno-switch
+build --cxxopt=-Wno-unused-command-line-argument
+build --cxxopt=-Wno-unused-function
+build --cxxopt=-Wno-unused-lambda-capture
+build --cxxopt=-Wno-unused-local-typedef
+build --cxxopt=-Wno-unused-parameter
+build --cxxopt=-Wno-unused-result
+build --cxxopt=-Wno-unused-variable
+build --javacopt="-source 17 -target 17"
+
+build --action_env=CC
+build --action_env=CXX
+build --action_env=PATH
+build --action_env=CXXFLAGS=-std=c++17
+build --action_env=BAZEL_CXXOPTS=-std=c++17
+build --repo_env=CC=clang++
+build --host_linkopt=-fuse-ld=lld
+
+build:release --copt=-O3
+
+build --spawn_strategy=sandboxed
+build --sandbox_tmpfs_path=/tmp
+build --incompatible_disallow_empty_glob=False
+
+# Common platform definitions.
+common:android_arm64-v8a_common --platforms=@com_google_impress//platforms:android_arm64-v8a
+common:android_x86_64_common --platforms=@com_google_impress//platforms:android_x86_64
+
+# Common config for arm64 on both Android XR and standalone Impress builds.
+build:android_arm64-v8a_common --cpu=arm64-v8a
+build:android_arm64-v8a_common --fat_apk_cpu=arm64-v8a
+build:android_arm64-v8a_common --android_cpu=arm64-v8a
+build:android_arm64-v8a_common --platforms=@com_google_impress//platforms:android_arm64-v8a
+build:android_arm64-v8a_common --android_platforms=@com_google_impress//platforms:android_arm64-v8a
+
+# Common config for x86_64 on both Android XR and standalone Impress builds.
+build:android_x86_64_common --cpu=x86_64
+build:android_x86_64_common --fat_apk_cpu=x86_64
+build:android_x86_64_common --android_cpu=x86_64
+build:android_x86_64_common --platforms=@com_google_impress//platforms:android_x86_64
+build:android_x86_64_common --android_platforms=@com_google_impress//platforms:android_x86_64
+
+# Common config for x86_32 on both Android XR and standalone Impress builds.
+build:android_x86_32_common --cpu=x86
+build:android_x86_32_common --fat_apk_cpu=x86
+build:android_x86_32_common --android_cpu=x86
+build:android_x86_32_common --platforms=@com_google_impress//platforms:android_x86_32
+build:android_x86_32_common --android_platforms=@com_google_impress//platforms:android_x86_32
+
+# Common config for x86_64 on both Android XR and standalone Impress builds.
+build:android_armeabi-v7a_common --cpu=armeabi-v7a
+build:android_armeabi-v7a_common --fat_apk_cpu=armeabi-v7a
+build:android_armeabi-v7a_common --android_cpu=armeabi-v7a
+build:android_armeabi-v7a_common --platforms=@com_google_impress//platforms:android_armeabi-v7a
+build:android_armeabi-v7a_common --android_platforms=@com_google_impress//platforms:android_armeabi-v7a
+
+# Alias.
+build:androidxr_arm64 --config=android_arm64-v8a_common
+build:androidxr_x86_64 --config=android_x86_64_common
+build:androidxr_x86_32 --config=android_x86_32_common
+build:androidxr_armeabi-v7a --config=android_armeabi-v7a_common
+
+# Config for standalone Impress builds. Note: the Android NDK toolchain has a
+# libc++ .so that is incompatible with the AndroidXR platform libc++ .so.
+build:android_arm64-v8a --config=android_arm64-v8a_common
+build:android_arm64-v8a --crosstool_top=@androidndk//:toolchain
+build:android_arm64-v8a --host_crosstool_top=@local_config_cc//:toolchain
+build:android_arm64-v8a --android_crosstool_top=@androidndk//:toolchain
+build:android_x86_64 --config=android_x86_64_common
+build:android_x86_64 --crosstool_top=@androidndk//:toolchain
+build:android_x86_64 --host_crosstool_top=@local_config_cc//:toolchain
+build:android_x86_64 --android_crosstool_top=@androidndk//:toolchain
+build:android_x86_32 --config=android_x86_32_common
+build:android_x86_32 --crosstool_top=@androidndk//:toolchain
+build:android_x86_32 --host_crosstool_top=@local_config_cc//:toolchain
+build:android_x86_32 --android_crosstool_top=@androidndk//:toolchain
+build:android_armeabi-v7a --config=android_armeabi-v7a_common
+build:android_armeabi-v7a --crosstool_top=@androidndk//:toolchain
+build:android_armeabi-v7a --host_crosstool_top=@local_config_cc//:toolchain
+build:android_armeabi-v7a --android_crosstool_top=@androidndk//:toolchain
+
+# Alias.
+build:android_arm64 --config=android_arm64-v8a
+
+# Impress defines
+build -c opt
+build --define=IMP_INCLUDE_STEREO_VARIANT_BY_DEFAULT=1
+build --copt=-D_LIBCPP_ABI_NAMESPACE=__1
+build --define=IMP_EMBED_ASSETS=1
+build --define=IMP_ANDROID_EXTERNAL_TEXTURE_SURFACE_USES_IMAGE_READER=1
+build --define=FILAMENT_USES_OPENGL_GLES3=1
+build --config=release
+build --define=FILAMENT_ENABLE_MULTIVIEW=1
+build --define=IMP_ENABLE_STEREO_TYPE_MULTIVIEW=1
+            

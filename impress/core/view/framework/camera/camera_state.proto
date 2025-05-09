@@ -1,0 +1,60 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import "core/math/math.proto";
+import "core/proto/imp.proto";
+
+// Defines the state and behavior of the CameraComponent
+message CameraState {
+  enum ProjectionType {
+    PERSPECTIVE = 0;
+    ORTHOGRAPHIC = 1;
+    CUSTOM = 2;
+  }
+  // The default projection type will be perspective.
+  ProjectionType projection_type = 7;
+
+  // Whether this is the active camera in the scene. Only one can be active.
+  optional bool start_as_current_camera = 1;
+
+  // For perspective cameras, the vertical fov in degrees.
+  optional float fov = 2;
+
+  // For orthographic cameras, the size of the view. Scales the projection.
+  optional float orthographic_scale = 8;
+
+  // The near and far clip planes in meters.
+  optional float near = 3;
+  optional float far = 4;
+
+  // A float that represents a fixed, locked aspect ratio for the camera.
+  //
+  // If set, the aspect ratio will be set to the given value,
+  // and viewport changes will not affect the camera's aspect ratio.
+  // Given aspect ratio must be greater than 0.
+  //
+  // By default or unset, the camera's aspect ratio
+  // will always match the viewport's aspect ratio.
+  optional float locked_aspect_ratio = 6;
+
+  // Define a custom projection matrix for the CameraComponent that will be used
+  // if the projection type is CUSTOM. This overrides all other fields
+  // related to the projection matrix, and automatic projection
+  // updates from viewport resizes as a result will be ignored.
+  imp.Mat4 custom_projection_matrix = 5 [(imp.optional_type) = ABSL_OPTIONAL];
+}

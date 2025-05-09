@@ -1,0 +1,25 @@
+name: "camera_visualizer"
+groups: {
+  groups: "Main"
+}
+components: {
+  [type.googleapis.com/imp.GltfState] {
+    asset: "core/editor/visualizers/camera_visualizer.gltf"
+    material_variant: 0
+    collider_mode: NONE
+  }
+}
+
+children: {
+  name: "camera_transparent"
+  groups: {
+    groups: "EditorOverlay"
+  }
+  components: {
+    [type.googleapis.com/imp.GltfState] {
+      asset: "core/editor/visualizers/camera_visualizer.gltf"
+      material_variant: 1
+      collider_mode: NONE
+    }
+  }
+}

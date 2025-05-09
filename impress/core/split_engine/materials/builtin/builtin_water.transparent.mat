@@ -1,0 +1,140 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+material {
+    name : "Reflection Water effect with alpha",
+    constants : [
+        {
+            name : enableColorConversion,
+            type : bool,
+            default : false
+        }
+    ],
+    parameters : [
+        {
+            type : samplerCubemap,
+            name : reflectionCube
+        },
+        {
+            type : sampler2d,
+            name : normalMap
+        },
+        {
+            type : float,
+            name : normalTiling
+        },
+        {
+            type : float,
+            name : normalSpeed
+        },
+        {
+            type : sampler2d,
+            name : alphaMap
+        },
+        {
+            type : float,
+            name : alphaStepMultiplier
+        },
+        {
+            type : float,
+            name : normalZ
+        },
+        {
+            type : float,
+            name : normalBoundary
+        }
+    ],
+    requires : [
+        uv0,
+        tangents
+    ],
+    vertexDomain : object,
+    shadingModel : unlit,
+    blending : transparent,
+    quality : high,
+    culling : back,
+}
+
+fragment {
+#include "color_conversion_helpers.glsl"
+
+    // Necessary because we use getUserTime() in the uvs.
+    precision highp float;
+
+    float3 UnpackNormal(float4 normal) {
+        return (normal.xyz * 2.0 - 1.0);
+    }
+
+    float3 NormalBlend_Reoriented(float3 a, float3 b) {
+        float3 t = a.xyz + float3(0.0, 0.0, 1.0);
+        float3 u = b.xyz * float3(-1.0, -1.0, 1.0);
+        return (t / t.z) * dot(t, u) - u;
+    }
+
+    float Fresnel_Effect(float exp) {
+        float3 normal = getWorldGeometricNormalVector(); // already normalized in vertex shader
+        float3 viewDir =
+                getWorldViewVector(); // normalize(getWorldCameraPosition() - getWorldPosition());
+
+        // float ndotv = getNdotV(); // can't use before prepareMaterial()
+        float ndotv = saturate(dot(normal, viewDir));
+        return pow(1.0 - ndotv, exp);
+    }
+
+    float3 NormalStrength(float3 In, float Strength) {
+        return float3(In.rg * Strength, mix(1.0, In.b, saturate(Strength)));
+    }
+
+    float rgb2luma(vec3 rgb){
+        return sqrt(dot(rgb, vec3(0.299, 0.587, 0.114)));
+    }
+
+    void material(inout MaterialInputs material) {
+        // Normal map
+        float offset = getUserTime().x * materialParams.normalSpeed;
+
+        float2 uv_a = getUV0() * materialParams.normalTiling + offset;
+        float2 uv_b = getUV0() * materialParams.normalTiling - offset;
+        float3 normal_a = UnpackNormal(texture(materialParams_normalMap, uv_a));
+        float3 normal_b = UnpackNormal(texture(materialParams_normalMap, uv_b));
+
+        float3 blended = NormalBlend_Reoriented(normal_a, normal_b);
+
+        float minusFresnel = 1.0 - Fresnel_Effect(0.04);
+        float3 normalStrength = NormalStrength(blended, minusFresnel);
+
+        if(getUV0().y < materialParams.normalBoundary){
+            material.normal = float3(0.0, 0.0, materialParams.normalZ);
+        }
+        else{
+            material.normal = normalStrength;
+        }
+
+        // Attention! here is the prepareMaterial()
+        prepareMaterial(material);
+
+        // Reflection texture
+        float3 reflectionTexture =
+                texture(materialParams_reflectionCube, getWorldReflectedVector()).rgb;
+
+        // alpha map texture use to get the water transparency
+        vec4 alpha_map = texture(materialParams_alphaMap, getUV0());
+        alpha_map.r = alpha_map.r * materialParams.alphaStepMultiplier;
+
+        material.baseColor = float4(reflectionTexture * alpha_map.r, alpha_map.r);
+        if (materialConstants_enableColorConversion) {
+            material.baseColor.xyz = applyGlobalMaterialConversionMatrix(material.baseColor.xyz);
+        }
+    }
+}

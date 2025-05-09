@@ -1,0 +1,106 @@
+name: "light_visualizer"
+
+children: {
+  name: "directional_light"
+  groups: {
+    groups: "Main"
+  }
+  components: {
+    [type.googleapis.com/imp.GltfState] {
+      asset: "core/editor/visualizers/light_assets/directional_light.gltf"
+      material_variant: 0
+      collider_mode: NONE
+    }
+  }
+
+  children: {
+    groups: {
+      groups: "EditorOverlay"
+    }
+    components: {
+      [type.googleapis.com/imp.GltfState] {
+        asset: "core/editor/visualizers/light_assets/directional_light.gltf"
+        material_variant: 1
+        collider_mode: NONE
+      }
+    }
+  }
+}
+
+children: {
+  name: "point_light"
+  groups: {
+    groups: "Main"
+  }
+  components: {
+    [type.googleapis.com/imp.GltfState] {
+      asset: "core/editor/visualizers/light_assets/point_light.gltf"
+      material_variant: 0
+      collider_mode: NONE
+    }
+  }
+
+  children: {
+    groups: {
+      groups: "EditorOverlay"
+    }
+    components: {
+      [type.googleapis.com/imp.GltfState] {
+        asset: "core/editor/visualizers/light_assets/point_light.gltf"
+        material_variant: 1
+        collider_mode: NONE
+      }
+    }
+  }
+}
+
+children: {
+  name: "spot_light"
+  groups: {
+    groups: "Main"
+  }
+  components: {
+    [type.googleapis.com/imp.GltfState] {
+      asset: "core/editor/visualizers/light_assets/spot_light.gltf"
+      material_variant: 0
+      collider_mode: NONE
+    }
+  }
+  children: {
+    groups: {
+      groups: "EditorOverlay"
+    }
+    components: {
+      [type.googleapis.com/imp.GltfState] {
+        asset: "core/editor/visualizers/light_assets/spot_light.gltf"
+        material_variant: 1
+        collider_mode: NONE
+      }
+    }
+  }
+  children: {
+    name: "directional_light"
+    groups: {
+      groups: "Main"
+    }
+    components: {
+      [type.googleapis.com/imp.GltfState] {
+        asset: "core/editor/visualizers/light_assets/directional_light.gltf"
+        material_variant: 0
+        collider_mode: NONE
+      }
+    }
+    children: {
+      groups: {
+        groups: "EditorOverlay"
+      }
+      components: {
+        [type.googleapis.com/imp.GltfState] {
+          asset: "core/editor/visualizers/light_assets/directional_light.gltf"
+          material_variant: 1
+          collider_mode: NONE
+        }
+      }
+    }
+  }
+}

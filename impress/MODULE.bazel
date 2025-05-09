@@ -1,0 +1,152 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+module(
+    name = "com_google_impress",
+)
+
+# Bazel modules
+bazel_dep(name = "apple_support", version = "1.15.1", repo_name = "build_bazel_apple_support")
+bazel_dep(name = "aspect_bazel_lib", version = "1.16.3")
+bazel_dep(name = "bazel_skylib", version = "1.7.1")
+bazel_dep(name = "glog", version = "0.5.0", repo_name = "com_google_glog")
+bazel_dep(name = "googletest", version = "1.15.2", repo_name = "com_google_googletest")
+bazel_dep(name = "jsoncpp", version = "1.9.6")
+bazel_dep(name = "platforms", version = "0.0.10")
+bazel_dep(name = "re2", version = "2024-07-02")
+bazel_dep(name = "rules_android", version = "0.6.0", repo_name = "build_bazel_rules_android")
+bazel_dep(name = "rules_android_ndk", version = "0.1.2")
+bazel_dep(name = "rules_apple", version = "3.16.0", repo_name = "build_bazel_rules_apple")
+bazel_dep(name = "rules_foreign_cc", version = "0.13.0")
+bazel_dep(name = "rules_java", version = "8.6.2")
+bazel_dep(name = "rules_jvm_external", version = "6.6")
+bazel_dep(name = "rules_license", version = "1.0.0")
+bazel_dep(name = "rules_nodejs", version = "6.3.2")
+bazel_dep(name = "rules_pkg", version = "1.0.1")
+bazel_dep(name = "rules_proto", version = "7.0.1")
+bazel_dep(name = "rules_proto_grpc", version = "5.0.1")
+bazel_dep(name = "rules_python", version = "1.0.0")
+bazel_dep(name = "rules_swift", version = "2.2.4", repo_name = "build_bazel_rules_swift")
+bazel_dep(name = "stardoc", version = "0.7.1", repo_name = "io_bazel_stardoc")
+bazel_dep(name = "zlib", version = "1.3.1.bcr.3")
+
+# Bazel modules with patcher and/or overrides
+bazel_dep(name = "abseil-cpp", version = "20240722.0", repo_name = "com_google_absl")
+single_version_override(
+    module_name = "abseil-cpp",
+    patch_strip = 1,
+    patches = ["//:bazel/patches/com_google_absl.patch"],
+)
+
+bazel_dep(name = "protobuf", version = "29.0", repo_name = "com_google_protobuf")
+single_version_override(
+    module_name = "protobuf",
+    patch_strip = 1,
+    patches = ["//:bazel/patches/com_google_protobuf.patch"],
+)
+
+bazel_dep(name = "gflags", version = "2.2.2")
+single_version_override(
+    module_name = "gflags",
+    patch_strip = 1,
+    patches = ["//:bazel/patches/gflags.patch"],
+)
+
+bazel_dep(name = "rules_kotlin", version = "2.1.0")
+single_version_override(
+    module_name = "rules_kotlin",
+    patch_strip = 1,
+    patches = ["//:bazel/patches/rules_kotlin.patch"],
+)
+
+# TODO investigate upgrading to latest version (https://github.com/bazelbuild/rules_python/commit/e6a6a3aa0c6a7e051c7a3b7573befc5b710dc189 may be relevant)
+bazel_dep(name = "rules_cc", version = "0.0.17")
+
+# http_archive repos
+non_module_repos = use_extension("//:non_module_dependencies.bzl", "non_module_repos")
+use_repo(non_module_repos, "SDL2")
+use_repo(non_module_repos, "basis_universal")
+use_repo(non_module_repos, "boost_beast")
+use_repo(non_module_repos, "civetweb")
+use_repo(non_module_repos, "com_github_google_flatbuffers")
+use_repo(non_module_repos, "com_google_sandboxed_api")
+use_repo(non_module_repos, "com_google_zetasql")
+use_repo(non_module_repos, "dear_imgui")
+use_repo(non_module_repos, "draco")
+use_repo(non_module_repos, "glslang")
+use_repo(non_module_repos, "hedron_compile_commands")
+use_repo(non_module_repos, "implot")
+use_repo(non_module_repos, "mediapipe")
+use_repo(non_module_repos, "meshoptimizer")
+use_repo(non_module_repos, "robin_map")
+use_repo(non_module_repos, "smol_v")
+use_repo(non_module_repos, "spirv_cross")
+use_repo(non_module_repos, "spirv_tools")
+use_repo(non_module_repos, "stblib")
+use_repo(non_module_repos, "tinyfiledialogs")
+use_repo(non_module_repos, "vulkan_memory_allocator")
+use_repo(non_module_repos, "zip")
+use_repo(non_module_repos, "zlib_imp")
+use_repo(non_module_repos, "zstdlib")
+
+maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+maven.install(
+    artifacts = [
+        "androidx.activity:activity-ktx:1.3.0-alpha03",
+        "androidx.annotation:annotation:1.3.0-alpha01",
+        "androidx.annotation:annotation-experimental:1.4.1",
+        "androidx.concurrent:concurrent-futures:1.1.0",
+        "androidx.constraintlayout:constraintlayout:2.2.0-alpha05",
+        "androidx.core:core:1.6.0-beta02",
+        "androidx.core:core-ktx:1.5.0-beta02",
+        "androidx.fragment:fragment:1.1.0",
+        "androidx.lifecycle:lifecycle-common:2.4.0-alpha01",
+        "androidx.lifecycle:lifecycle-runtime-ktx:2.4.0-alpha01",
+        "androidx.lifecycle:lifecycle-runtime:2.4.0-alpha01",
+        "androidx.lifecycle:lifecycle-viewmodel-ktx:2.4.0-alpha01",
+        "com.google.errorprone:error_prone_annotations:2.27.1",
+        "com.google.flogger:flogger-system-backend:0.6",
+        "com.google.flogger:flogger:0.6",
+        "com.google.guava:guava:31.1-android",
+        "com.google.guava:listenablefuture:1.0",
+    ],
+    fetch_sources = True,
+    lock_file = "//:maven_install.json",
+    repositories = [
+        "https://maven.google.com",
+        "https://dl.google.com/dl/android/maven2",
+        "https://repo1.maven.org/maven2",
+    ],
+)
+use_repo(maven, "maven")
+
+# Set up the Android NDK
+android_ndk_repository_extension = use_extension("@rules_android_ndk//:extension.bzl", "android_ndk_repository_extension")
+android_ndk_repository_extension.configure(api_level = 29)
+use_repo(android_ndk_repository_extension, "androidndk")
+
+register_toolchains("@androidndk//:all")
+
+# Ignore root user error for presubmits.
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    ignore_root_user_error = True,
+    python_version = "3.11",
+)
+
+bazel_dep(name = "third_party")
+local_path_override(
+    module_name = "third_party",
+    path = "../third_party",
+)

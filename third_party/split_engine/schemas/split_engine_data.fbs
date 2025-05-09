@@ -1,0 +1,473 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+include "split_engine/schemas/split_engine_primitive.fbs";
+
+namespace android_xr.schemas;
+
+// LINT.IfChange
+
+table BoundsInfo {
+  bounds : Box (required, id: 0);
+}
+
+// LINT.IfChange
+enum VertexAttribute : uint8 {
+  POSITION = 0,
+  TANGENTS = 1,
+  COLOR = 2,
+  UV0 = 3,
+  UV1 = 4,
+  BONE_INDICES = 5,
+  BONE_WEIGHTS = 6,
+  MORPH_POSITION_0 = 8,
+  MORPH_POSITION_1 = 9,
+  MORPH_POSITION_2 = 10,
+  MORPH_POSITION_3 = 11,
+  MORPH_TANGENTS_0 = 12,
+  MORPH_TANGENTS_1 = 13,
+  MORPH_TANGENTS_2 = 14,
+  MORPH_TANGENTS_3 = 15,
+}
+
+enum AttributeType : uint8 {
+  BYTE = 0,
+  BYTE2 = 1,
+  BYTE3 = 2,
+  BYTE4 = 3,
+  UBYTE = 4,
+  UBYTE2 = 5,
+  UBYTE3 = 6,
+  UBYTE4 = 7,
+  SHORT = 8,
+  SHORT2 = 9,
+  SHORT3 = 10,
+  SHORT4 = 11,
+  USHORT = 12,
+  USHORT2 = 13,
+  USHORT3 = 14,
+  USHORT4 = 15,
+  INT = 16,
+  UINT = 17,
+  FLOAT = 18,
+  FLOAT2 = 19,
+  FLOAT3 = 20,
+  FLOAT4 = 21,
+  HALF = 22,
+  HALF2 = 23,
+  HALF3 = 24,
+  HALF4 = 25,
+}
+
+struct VertexAttributeInfo {
+  attribute: VertexAttribute (id: 0);
+  type: AttributeType (id: 1);
+  offset: uint32 (id: 2);
+  normalized: bool (id: 3);
+}
+
+table VertexBlockInfo {
+  // TODO: If attributes were separated out, we could build
+  // in-place in mesh_builder.cc.
+  attributes: [VertexAttributeInfo] (required, id: 0);
+  buffer: [uint8] (required, id: 1);
+  stride: uint32 (id: 2);
+}
+
+table VertexBufferInfo {
+  blocks: [VertexBlockInfo] (required, id: 0);
+  vertex_count: ulong (id: 1);
+  advanced_skinning: bool (id: 2);
+}
+
+enum IndexType : uint8 {
+  USHORT = 0,
+  UINT = 1,
+}
+
+table IndexBufferInfo {
+  type: IndexType (id: 0);
+  buffer: [uint8] (required, id: 1);
+}
+// LINT.ThenChange(//depot/google3/third_party/impress/core/split_engine/flatbuffer_size_calculator.cc)
+
+// LINT.IfChange
+table MorphTargetAttributeInfo {
+  positions : [uint8] (required, id: 0);
+  tangents: [uint8] (required, id: 1);
+}
+
+table MorphTargetBufferInfo {
+  targets : [MorphTargetAttributeInfo] (required, id: 0);
+  vertex_count : ulong (id: 1);
+}
+
+enum VertexAccessFlags : ubyte (bit_flags) {
+  kPosition = 0,  // (1 << 0)
+  kTangent = 1,   // (1 << 1)
+}
+
+table VertexBuffer {
+  id: uint64 (id: 0);
+  buffer: VertexBufferInfo (id: 1);
+  vertex_access_flags: VertexAccessFlags (id: 2);
+}
+
+table IndexBuffer {
+  id: uint64 (id: 0);
+  buffer: IndexBufferInfo (id: 1);
+  store_index_data: bool (id: 2);
+}
+
+table MorphTargetBuffer {
+  id: uint64 (id: 0);
+  buffer: MorphTargetBufferInfo (id: 1);
+}
+
+table ImageParams {
+  level: uint8 (id: 0);
+  format: uint8 (id: 1);
+  type: uint8 (id: 2);
+  alignment: uint8 (id: 3);
+  left: uint32 (id: 4);
+  top: uint32 (id: 5);
+  stride: uint32 (id: 6);
+}
+
+table PixelBuffer {
+  buffer: [ubyte] (id: 0);
+}
+
+table Texture {
+  id: uint64 (id: 0);
+  width: uint32 (id: 1);
+  height: uint32 (id: 2);
+  format: uint16 (id: 3);
+  levels: uint8 (id: 4);
+  sampler: uint8 (id: 5);
+  mips: bool (id: 6);
+  image_params: [ImageParams] (required, id: 7);
+  pixel_buffers: [PixelBuffer] (required, id: 8);
+}
+// LINT.ThenChange(//depot/google3/third_party/impress/core/split_engine/flatbuffer_size_calculator.cc)
+
+table LayerMask {
+  select: uint8 (id: 0);
+  values: uint8 (id: 1);
+}
+
+table Bones {
+  bones: [Mat4f] (id: 0);
+}
+
+table MorphWeights {
+  weights: [float] (id: 0);
+  offset: uint32 (id: 1);
+}
+
+union TransformData {
+  Mat4f = 1,
+  Mat4 = 2,
+}
+
+table Transform {
+  data: TransformData (id: 1);
+}
+
+table Parent {
+  entity: uint32 (id: 0);
+}
+
+table BoxCollider {
+  center: Float3 (id: 0);
+  half_extent: Float3 (id: 1);
+}
+
+table SphereCollider {
+  center: Float3 (id: 0);
+  radius: Float (id: 1);
+}
+
+table CapsuleCollider {
+  center: Float3 (id: 0);
+  height: Float (id: 1);
+  radius: Float (id: 2);
+}
+
+// A per-triangle mesh collider. In order for this to be used, the corresponding
+// VertexBuffers and IndexBuffers must specify that mesh data should be
+// retained. This can be done by configuring vertex_access_flags and
+// store_index_data fields, respectively.
+table MeshCollider {
+  // Empty
+}
+
+// Type of collider, primarily used for removal operations.
+enum ColliderType : uint8 {
+  BoxCollider = 0,
+  MeshCollider = 1,
+  SphereCollider = 2,
+  CapsuleCollider = 3,
+}
+
+// Collider data that includees optional parameters for creation.
+union ColliderData {
+  BoxCollider = 1,
+  MeshCollider = 2,
+  SphereCollider = 3,
+  CapsuleCollider = 4,
+}
+
+table AddOrUpdateCollider {
+  // Adds or updates the collider from the node associated with this client
+  // entity id. Does nothing if the node is not found.
+  entity: uint32 (id: 0);
+  // Adds the collider when the same type of collider doesn't exist; Updates
+  // the collider when the same type of collider already exists.
+  collider_data: ColliderData (id: 2);
+  // Updates the enabled state of the collider if set.
+  // Otherwise the enabled state is left unchanged.
+  enabled: Bool (id: 3);
+}
+
+table RemoveCollider {
+  // Removes the collider from the node associated with this client entity id.
+  // Does nothing if the node is not found.
+  entity: uint32 (id: 0);
+  // Removes the type of the collider if exists.
+  collider_type: ColliderType (id: 1);
+}
+
+table AddNode {
+  // Adds a node associated with this client entity id.
+  entity: uint32 (id: 0);
+}
+
+table UpdateNode {
+  // Updates the node associated with this client entity id.
+  // Does nothing if the node is not found.
+  entity: uint32 (id: 0);
+
+  // Updates the name of the node if set.
+  // Otherwise the name is left unchanged.
+  //
+  // Used for debugging purposes only.
+  name: string (id: 1);
+
+  // Updates the enabled state of the node if set.
+  // Otherwise the enabled state is left unchanged.
+  enabled: Bool (id: 2);
+
+  // Updates the transform of the node if set.
+  // Otherwise the transform is left unchanged.
+  transform: Transform (id: 3);
+
+  // Updates the parent of the node if set.
+  // Otherwise the parent is left unchanged.
+  parent: Parent (id: 4);
+}
+
+// LINT.IfChange
+// For a given cubemap level, the offset in bytes of each face.
+table FaceOffsets {
+  px: uint (id: 0); // +x face offset in bytes
+  nx: uint (id: 1); // -x face offset in bytes
+  py: uint (id: 2); // +y face offset in bytes
+  ny: uint (id: 3); // -y face offset in bytes
+  pz: uint (id: 4); // +z face offset in bytes
+  nz: uint (id: 5); // -z face offset in bytes
+}
+
+// The dimensions and face offsets of a single mipmap level of a cubemap.
+table CubemapLevel {
+  // The offset in bytes of each face on the cube.
+  face_offsets: FaceOffsets (id: 0);
+
+  // The size of each face in bytes.
+  face_size: uint (id: 1);
+}
+
+// The width, height, and bytes of an image.
+table ImageContents {
+  // The width of the image.
+  width: uint (id: 0);
+
+  // The height of the image.
+  height: uint (id: 1);
+
+  // The image data.
+  memory: [ubyte] (id: 2);
+}
+
+// The dimensions and face offsets of a single mipmap level of a cubemap, and
+// the corresponding stitched image of the cubemap level.
+table CubemapLevelImageContents {
+  // The dimensions and face offsets of a single mipmap level of a cubemap.
+  cubemap_level: CubemapLevel (id: 0);
+
+  // The image of the cubemap level, consisting of six square images stitched
+  // together according to the dimensions and offsets in cubemap_level.
+  stitched_face_image: ImageContents (id: 1);
+}
+
+// Spherical harmonics coefficients and number of bands. Used to approximate
+// radiance of an Image-Based Lighting (IBL) cubemap. See
+// https://google.github.io/filament/Filament.md.html#lighting/imagebasedlights/distantlightprobes
+// for an explanation of how Spherical Harmonics are used to approximate IBL
+// radiance.
+table SphericalHarmonics {
+  // The spherical harmonics coefficients.
+  coefficients: [Float3] (id: 0);
+
+  // The number of spherical harmonics bands.
+  num_bands: uint8 (id: 1);
+}
+
+// The serialized components of an Image-Based Lighting (IBL) asset.
+table ImageBasedLightingAsset {
+  // The ID of the ImageBasedLightingAsset.
+  id: uint64 (id: 0);
+
+  // The IBL cubemap image contents for each mipmap level of the cubemap.
+  ibl_cubemap_level_image_contents: [CubemapLevelImageContents] (id: 1);
+
+  // The skybox cubemap image contents
+  skybox_cubemap_level_image_contents: CubemapLevelImageContents (id: 2);
+
+  // The spherical harmonics coefficients and number of bands, used in IBL radiance calculations.
+  spherical_harmonics: SphericalHarmonics (id: 3);
+}
+// LINT.ThenChange(//depot/google3/third_party/impress/core/split_engine/flatbuffer_size_calculator.cc)
+
+
+table RemoveNode {
+  // Removes the node associated with this client entity id.
+  // Does nothing if the node is not found.
+  entity: uint32 (id: 0);
+}
+
+table AssignUserIdToNode {
+  // Assigns the user_id to the node associated with this client entity id.
+  // Does nothing if the node is not found.
+  entity: uint32 (id: 0);
+
+  // The user_id to assign.
+  user_id: uint64 (id: 1);
+}
+
+table MorphTargetInfo {
+  morph_target_buffer_offset: uint64 (id: 0);
+  morph_target_buffer_count: uint64 (id: 1);
+}
+
+table GeometryUpdate {
+  vertex_buffer_id: uint64 (id: 0); // the VertexBuffer* id
+  index_buffer_id: uint64 (id: 1); // the IndexBuffer* id
+  offset: uint32 (id: 2);
+  count: uint32 (id: 3);
+  primitive_type: uint8 (id: 4); // TODO: Consider making this an enum.
+}
+
+table PrimitiveUpdate {
+  // Specifies which primitive index to update within the renderable.
+  primitive_index: uint32 (id: 0);
+
+  // Updates the geometry of the primitive if set.
+  // Otherwise the geometry is left unchanged.
+  geometry: GeometryUpdate (id: 1);
+
+  // Updates the material of the primitive if set.
+  // Otherwise the material is left unchanged.
+  material_instance_id: UInt64 (id: 2);
+
+  // Updates the blend order of the primitive if set.
+  // Otherwise the blend order is left unchanged.
+  blend_order: UInt16 (id: 3);
+
+  // Updates the global blend order of the renderable if set.
+  // Otherwise the global blend order is left unchanged.
+  global_blend_order_enabled: Bool (id: 4);
+}
+
+table RenderableFlags {
+  // Whether the renderable is culled based on its bounds.
+  culling_enabled: Bool (id: 0);
+}
+
+table MorphTargetData {
+  // The id of the morph target buffer associated with this renderable.
+  morph_target_buffer_id: UInt64 (id: 0);
+
+  // The morph target info for each primitive.
+  morph_target_info: [MorphTargetInfo] (id: 1);
+}
+
+table AddRenderable {
+  // Adds a renderable associated with this client entity id.
+  entity: uint32 (id: 0);
+
+  // The number of primitives that are rendered by this renderable.
+  primitive_count: uint32 (id: 1);
+
+  // The number of bones that influence the vertices of this renderable.
+  skinning_bone_count: UInt32 (id: 2);
+
+  // All the morph target data in a sub-table.
+  morph_target_data: MorphTargetData (id: 3);
+
+  // Flags such as whether culling is enabled.
+  renderable_flags: RenderableFlags (id: 4);
+}
+
+table UpdateRenderable {
+  // Updates the renderable associated with this client entity id.
+  // Does nothing if the node is not found.
+  entity: uint32 (id: 0);
+
+  // Updates the primitives that are rendered by this renderable if set.
+  // Otherwise the primitives are left unchanged.
+  primitives: [PrimitiveUpdate] (id: 1);
+
+  // Updates the bounds of the renderable if set.
+  // Otherwise the bounds are left unchanged.
+  //
+  // The bounds are used for frustum culling.
+  bounds: BoundsInfo (id: 2);
+
+  // Updates the layer mask of the renderable if set.
+  // Otherwise the layer mask is left unchanged.
+  //
+  // The layer mask is used to control visibility of the renderable.
+  layer_mask: LayerMask (id: 3);
+
+  // Updates the bones of the renderable if set.
+  // Otherwise the bones are left unchanged.
+  bones: Bones (id: 4);
+
+  // Updates the morph weights of the renderable if set.
+  // Otherwise the morph weights are left unchanged.
+  morph_weights: MorphWeights (id: 5);
+
+  // Updates the priority of the renderable if set.
+  // Otherwise the priority is left unchanged.
+  priority: UInt8 (id: 6);
+}
+
+table RemoveRenderable {
+  // Removes the renderable associated with this client entity id.
+  // Does nothing if the node is not found.
+  entity: uint32 (id: 0);
+}
+
+// LINT.ThenChange(//depot/google3/third_party/split_engine/schemas/split_engine_schema_version.h)

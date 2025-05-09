@@ -1,0 +1,81 @@
+# Copyright 2024 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+load("@build_bazel_rules_android//android:rules.bzl", "android_library")
+
+package(default_visibility = ["//visibility:public"])
+
+licenses(["notice"])
+
+android_library(
+    name = "scripting",
+    srcs = [
+        "ApiBridge.java",
+        "ApiRequest.java",
+        "EventDispatcher.java",
+        "EventListener.java",
+        "EventListenerHandle.java",
+        "MessageUtils.java",
+        "Node.java",
+        "ScriptApi.java",
+        "ScriptBridge.java",
+    ],
+    javacopts = ["-Xep:AndroidJdkLibsChecker:OFF"],
+    deps = [
+        ":api_exception",
+        ":script_endpoint",
+        "//core/math:math_java_proto_lite",
+        "//core/ncsb:node_handle_message_java_proto_lite",
+        "//core/scripting/proto:api_java_proto_lite",
+        "//core/scripting/proto:bridge_java_proto_lite",
+        "//core/scripting/proto:events_java_proto_lite",
+        "//core/view/framework:framework_java_proto_lite",
+        "//java/com/google/ar/imp/view",
+        "@com_google_protobuf//java/lite",
+        "@maven//:androidx_annotation_annotation",
+        "@maven//:androidx_appcompat_appcompat",
+        "@maven//:com_google_guava_guava",
+        "@third_party//filament/android:filament_android_no_jni",
+    ],
+)
+
+android_library(
+    name = "script_endpoint",
+    srcs = [
+        "ScriptEndpoint.java",
+    ],
+)
+
+android_library(
+    name = "api_exception",
+    srcs = [
+        "ApiException.java",
+    ],
+)
+
+android_library(
+    name = "surface_renderer_api",
+    srcs = [
+        "SurfaceRendererApi.java",
+    ],
+    javacopts = ["-Xep:AndroidJdkLibsChecker:OFF"],
+    deps = [
+        ":scripting",
+        "//core/math:math_java_proto_lite",
+        "//core/ncsb:node_handle_message_java_proto_lite",
+        "//core/render_passes:surface_renderer_scripting_java_proto_lite",
+        "//java/com/google/ar/imp/view",
+        "@maven//:androidx_annotation_annotation",
+    ],
+)

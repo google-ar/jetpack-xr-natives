@@ -1,0 +1,70 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+// This file contains annotation messages that are used to describe editor
+// controls that will be displayed for a user to modify a field in an impress
+// proto. Example usage:
+//
+// message EditableState {
+//   float x = 1 [(imp.editor_control) = { slider_float: { min: 0 max: 25 } }];
+// }
+
+// Prevents a field from being editable, i.e. it will not appear in the panel.
+message EditorControlDisabled {}
+
+// Displays a floating-point slider with the given min, max, and precision.
+// Precision defaults to 0, which gives the slider integer-step. A value of 2,
+// for example, will give the slider 2 decimal points of precision in the step.
+// If logarithmic is true, the slider will use a logarithmic scale.
+message EditorControlSliderFloat {
+  float min = 1;
+  float max = 2;
+  uint32 precision = 3;
+  bool logarithmic = 4;
+}
+// Displays an integer slider with the given min and max.
+message EditorControlSliderInt {
+  int32 min = 1;
+  int32 max = 2;
+}
+
+// Displays a color-picker widget.
+message EditorControlColor3 {}
+
+// Displays a color-picker widget including alpha.
+message EditorControlColor4 {}
+
+// Displays a field that can be dropped into by materials from the asset
+// library.
+message EditorControlMaterial {}
+
+// Displays a field that can be dropped into by textures from the asset library.
+message EditorControlTexture {}
+
+// The top-level type that is a one-of of all possible editor controls above.
+message EditorControlType {
+  oneof type {
+    EditorControlDisabled disabled = 1;
+    EditorControlSliderFloat slider_float = 2;
+    EditorControlSliderInt slider_int = 3;
+    EditorControlColor3 color_picker_3 = 4;
+    EditorControlColor4 color_picker_4 = 5;
+    EditorControlMaterial material = 6;
+    EditorControlTexture texture = 7;
+  }
+}

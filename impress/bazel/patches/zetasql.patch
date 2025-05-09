@@ -1,0 +1,13 @@
+diff --git a/zetasql/base/BUILD b/zetasql/base/BUILD
+index b510fec..b88fea7 100644
+--- a/zetasql/base/BUILD
++++ b/zetasql/base/BUILD
+@@ -15,7 +15,7 @@
+ 
+ licenses(["notice"])
+ 
+-package(default_visibility = [":zetasql_implementation"])
++package(default_visibility = ["//visibility:public"])
+ 
+ package_group(
+     name = "zetasql_implementation",

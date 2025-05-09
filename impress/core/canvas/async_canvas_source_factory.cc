@@ -1,0 +1,43 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <memory>
+
+#include "absl/memory/memory.h"
+#include "core/canvas/async_canvas_source.h"
+#include "core/config.h"
+#include "core/view/base_view.h"
+#if IMP_PLATFORM(WASM)
+#include "core/canvas/wasm_async_canvas_source.h"
+#else
+#include "core/canvas/async_canvas_source_wrapper.h"
+#include "core/canvas/canvas_source.h"
+#endif
+
+namespace imp {
+
+namespace AsyncCanvasSourceFactory {
+
+std::unique_ptr<AsyncCanvasSource> Create(BaseView& view) {
+#if IMP_PLATFORM(WASM)
+  return std::make_unique<WasmAsyncCanvasSource>(view);
+#else
+  return absl::make_unique<AsyncCanvasSourceWrapper>(
+      CanvasSource::Create(view));
+#endif
+};
+
+}  // namespace AsyncCanvasSourceFactory
+
+}  // namespace imp

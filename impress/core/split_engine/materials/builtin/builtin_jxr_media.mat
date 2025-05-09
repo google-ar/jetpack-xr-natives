@@ -1,0 +1,150 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+material {
+    "name" : "JXR Media Flat Plane",
+    constants : [
+        {
+            name : enableColorConversion,
+            type : bool,
+            default : false
+        },
+        {
+            name : useSuperSampling,
+            type : bool,
+            default : false
+        }
+    ],
+    "parameters" : [
+        {
+          // The texture displaying the primary view of the media.
+          "type" : {SAMPLER_EXTERNAL},
+          "name" : mediaTexture
+        },
+        {
+          // The texture displaying the secondary view of the media.
+          // This is only used for interleaved stereo content.
+          type : {SAMPLER_EXTERNAL},
+          name : mediaAuxiliaryTexture
+        },
+        {
+          // Composited into the alpha channel of the media texture.
+          "type" : sampler2d,
+          "name" : primaryAlphaMaskTexture
+        },
+        {
+          // Composited into the alpha channel of the secondary view of the
+          // media texture.
+          // This is only used for interleaved stereo content.
+          type : sampler2d,
+          name : auxiliaryAlphaMaskTexture
+        },
+        { type: int, name: stereoType },
+        {
+          // radius for feathering the edges of the quad in UV space
+          type : float2,
+          name : featherRadius
+        }
+    ],
+    "requires" : [
+        "uv0"
+    ],
+    variables : [
+        // Captures whether the material is being used in stereo mode
+        //    or not at 'x'
+        // If true, captures the index of the camera eye at 'y'
+        // 0.0 is the left eye, 1.0 is the right eye.
+        stereoData
+    ],
+    "shadingModel" : "unlit",
+    "flipUV" : false,
+    blending : transparent
+}
+
+vertex {
+  void materialVertex(inout MaterialVertexInputs material) {
+#if defined(VARIANT_HAS_STEREO)
+    material.stereoData.x = 1.0;
+    material.stereoData.y = (getEyeIndex() % 2 < 1) ? 0.0 : 1.0;
+#else
+    material.stereoData.x = 0.0;
+#endif
+  }
+}
+
+fragment {
+#include "color_conversion_helpers.glsl"
+#include "stereo.glsl"
+#include "super_sample.glsl"
+
+  void material(inout MaterialInputs material) {
+    prepareMaterial(material);
+    bool isLeftEye = (variable_stereoData.y < 1.0);
+    // Making this a highp slightly sharpens the resulting image.
+    highp vec2 uv =
+        CalculateStereoUvs(getUV0(), materialParams.stereoType, isLeftEye);
+
+    if (!gl_FrontFacing) {
+      uv.x = 1.0 - uv.x;
+    }
+    uv.y = 1.0 - uv.y;
+
+    vec4 alphaMaskColor = vec4(0.0, 0.0, 0.0, 1.0);
+    vec4 textureColor = vec4(0.0);
+    highp vec2 alpha_uv = getUV0();
+
+    #define SAMPLE_TEXTURE(sampler, uv, color) \
+      if (materialConstants_useSuperSampling) { \
+        SUPER_SAMPLE_INTO(sampler, uv, color); \
+      } else { \
+        color = texture(sampler, uv); \
+      }
+
+    if (variable_stereoData.x > 0.0 &&
+        materialParams.stereoType == kInterleavedLeftPrimary) {
+      if (variable_stereoData.y == 0.0) {
+        SAMPLE_TEXTURE(materialParams_mediaTexture, uv, textureColor);
+        SAMPLE_TEXTURE(materialParams_primaryAlphaMaskTexture, uv, alphaMaskColor);
+      } else {
+        SAMPLE_TEXTURE(materialParams_mediaAuxiliaryTexture, uv, textureColor);
+        SAMPLE_TEXTURE(materialParams_auxiliaryAlphaMaskTexture, uv, alphaMaskColor);
+      }
+    } else if (variable_stereoData.x > 0.0 &&
+               materialParams.stereoType == kInterleavedRightPrimary) {
+      if (variable_stereoData.y == 0.0) {
+        SAMPLE_TEXTURE(materialParams_mediaAuxiliaryTexture, uv, textureColor);
+        SAMPLE_TEXTURE(materialParams_auxiliaryAlphaMaskTexture, uv, alphaMaskColor);
+      } else {
+        SAMPLE_TEXTURE(materialParams_mediaTexture, uv, textureColor);
+        SAMPLE_TEXTURE(materialParams_primaryAlphaMaskTexture, uv, alphaMaskColor);
+      }
+    } else {
+        SAMPLE_TEXTURE(materialParams_mediaTexture, uv, textureColor);
+        SAMPLE_TEXTURE(materialParams_primaryAlphaMaskTexture, uv, alphaMaskColor);
+    }
+
+    textureColor.a *= alphaMaskColor.a;
+
+    // determine feathered alpha based on the UVs
+    float alpha =
+        getEdgeFeatheredAlpha(
+            alpha_uv, materialParams.featherRadius) * textureColor.a;
+    material.baseColor = vec4(sRGBToLinear(textureColor).rgb*alpha, alpha);
+
+    if (materialConstants_enableColorConversion) {
+      material.baseColor.xyz = applyGlobalMaterialConversionMatrix(
+          material.baseColor.xyz);
+    }
+  }
+}

@@ -1,0 +1,542 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// LINT: LEGACY_NAMES
+syntax = "proto3";
+
+package imp.gltf;
+
+import "core/loader/provider/extensions/behavior/behavior.proto";
+import "core/loader/provider/extensions/interactivity/interactivity.proto";
+import "core/proto/imp.proto";
+
+message Buffer {
+  string name = 1 [ctype = STRING_PIECE];
+  string uri = 2 [ctype = STRING_PIECE];
+  uint32 byte_length = 3;
+  string access = 4 [ctype = STRING_PIECE, json_name = "*do_not_use*"];
+}
+
+message MeshoptCompression {
+  uint32 buffer = 1;
+  uint32 byteOffset = 2;
+  uint32 byteLength = 3;
+  uint32 byteStride = 4;
+  uint32 count = 5;
+  string mode = 6;
+  string filter = 7;
+}
+
+message BufferViewExtensions {
+  optional MeshoptCompression meshopt_compression = 2
+      [json_name = "EXT_meshopt_compression", (imp.optional_type) = UNIQUE_PTR];
+}
+
+message BufferView {
+  enum Target {
+    INVALID = 0;
+    ARRAY_BUFFER_TARGET = 34962;
+    ELEMENT_ARRAY_BUFFER_TARGET = 34963;
+  }
+
+  string name = 1 [ctype = STRING_PIECE];
+  optional uint32 buffer = 2;
+  uint32 byte_offset = 3;
+  uint32 byte_length = 4;
+  uint32 byte_stride = 5;
+  Target target = 6;
+  BufferViewExtensions extensions = 7;
+}
+
+enum ComponentType {
+  INVALID = 0;
+  BYTE = 5120;
+  UNSIGNED_BYTE = 5121;
+  SHORT = 5122;
+  UNSIGNED_SHORT = 5123;
+  UNSIGNED_INT = 5125;
+  FLOAT = 5126;
+}
+
+message SparseAccessorIndices {
+  uint32 buffer_view = 1;
+  uint32 byte_offset = 2;
+  ComponentType component_type = 3;
+}
+
+message SparseAccessorValues {
+  uint32 buffer_view = 1;
+  uint32 byte_offset = 2;
+}
+
+message SparseAccessor {
+  uint32 count = 1;
+  SparseAccessorIndices indices = 2;
+  SparseAccessorValues values = 3;
+}
+
+message Accessor {
+  string name = 1 [ctype = STRING_PIECE];
+  optional uint32 buffer_view = 2;
+  uint32 byte_offset = 3;
+  ComponentType component_type = 4;
+  bool normalized = 5;
+  uint32 count = 6;
+  string type = 7 [ctype = STRING_PIECE];
+  repeated float max = 8;
+  repeated float min = 9;
+  SparseAccessor sparse = 10 [(imp.optional_type) = ABSL_OPTIONAL];
+}
+
+message Sampler {
+  enum MinMagFilter {
+    INVALID_FILTER = 0;
+    NEAREST = 9728;
+    LINEAR = 9729;
+    NEAREST_MIPMAP_NEAREST = 9984;
+    LINEAR_MIPMAP_NEAREST = 9985;
+    NEAREST_MIPMAP_LINEAR = 9986;
+    LINEAR_MIPMAP_LINEAR = 9987;
+  }
+  enum WrapMode {
+    INVALID_WRAP = 0;
+    CLAMP_TO_EDGE = 33071;
+    MIRRORED_REPEAT = 33648;
+    REPEAT = 10497;
+  }
+
+  string name = 1 [ctype = STRING_PIECE];
+  MinMagFilter mag_filter = 2;
+  MinMagFilter min_filter = 3;
+  WrapMode wrap_s = 4;
+  WrapMode wrap_t = 5;
+}
+
+message Image {
+  string name = 1 [ctype = STRING_PIECE];
+  string uri = 2 [ctype = STRING_PIECE];
+  string mime_type = 3 [ctype = STRING_PIECE];
+  optional uint32 buffer_view = 4;
+  string access = 5 [ctype = STRING_PIECE, json_name = "*do_not_use*"];
+}
+
+message TextureBasisu {
+  optional uint32 source = 1;
+}
+
+message TextureWebp {
+  optional uint32 source = 1;
+}
+
+message TextureExtensions {
+  optional TextureBasisu basisu = 2
+      [json_name = "KHR_texture_basisu", (imp.optional_type) = UNIQUE_PTR];
+  optional TextureWebp webp = 3
+      [json_name = "EXT_texture_webp", (imp.optional_type) = UNIQUE_PTR];
+}
+
+message Texture {
+  string name = 1 [ctype = STRING_PIECE];
+  optional uint32 sampler = 2;
+  optional uint32 source = 3;
+  TextureExtensions extensions = 4;
+}
+
+message TextureTransform {
+  repeated float offset = 1;
+  repeated float scale = 2;
+  float rotation = 3;
+  optional int32 tex_coord = 4;
+}
+
+message TextureInfoExtensions {
+  optional TextureTransform xform = 1
+      [json_name = "KHR_texture_transform", (imp.optional_type) = UNIQUE_PTR];
+}
+
+message TextureInfo {
+  optional uint32 index = 1;
+  int32 tex_coord = 2;
+  TextureInfoExtensions extensions = 3;
+}
+
+message NormalTextureInfo {
+  optional uint32 index = 1;
+  int32 tex_coord = 2;
+  optional float scale = 3;
+  TextureInfoExtensions extensions = 4;
+}
+
+message OcclusionTextureInfo {
+  optional uint32 index = 1;
+  int32 tex_coord = 2;
+  optional float strength = 3;
+  TextureInfoExtensions extensions = 4;
+}
+
+message PbrMetallicRoughness {
+  repeated float base_color_factor = 1;
+  TextureInfo base_color_texture = 2;
+  optional float metallic_factor = 3;
+  optional float roughness_factor = 4;
+  TextureInfo metallic_roughness_texture = 5;
+}
+
+message PbrSpecularGlossiness {
+  repeated float diffuse_factor = 1;
+  TextureInfo diffuse_texture = 2;
+  repeated float specular_factor = 3;
+  optional float glossiness_factor = 4;
+  TextureInfo specular_glossiness_texture = 5;
+}
+
+message MaterialClearcoat {
+  optional float clearcoat_factor = 1;
+  TextureInfo clearcoat_texture = 2;
+  optional float clearcoat_roughness_factor = 3;
+  TextureInfo clearcoat_roughness_texture = 4;
+  NormalTextureInfo clearcoat_normal_texture = 5;
+}
+
+message MaterialSheen {
+  repeated float sheen_color_factor = 1;
+  TextureInfo sheen_color_texture = 2;
+  float sheen_roughness_factor = 3;
+  TextureInfo sheen_roughness_texture = 4;
+}
+
+message MaterialIor {
+  optional float ior = 1;
+}
+
+message MaterialTransmission {
+  optional float transmission_factor = 1;
+  TextureInfo transmission_texture = 2;
+}
+
+// The mask material contains no material information, simply an extension that
+// operates as a flag on a material to indicate if its a mask.
+message MaterialMask {}
+
+message Material {
+  message MaterialExtensions {
+    message MaterialUnlit {}
+    optional PbrSpecularGlossiness pbr_specular_glossiness = 1 [
+      json_name = "KHR_materials_pbrSpecularGlossiness",
+      (imp.optional_type) = UNIQUE_PTR
+    ];
+    optional MaterialUnlit unlit = 2
+        [json_name = "KHR_materials_unlit", (imp.optional_type) = UNIQUE_PTR];
+    optional MaterialClearcoat clearcoat = 3 [
+      json_name = "KHR_materials_clearcoat",
+      (imp.optional_type) = UNIQUE_PTR
+    ];
+    optional MaterialSheen sheen = 4
+        [json_name = "KHR_materials_sheen", (imp.optional_type) = UNIQUE_PTR];
+    optional MaterialIor ior = 5
+        [json_name = "KHR_materials_ior", (imp.optional_type) = UNIQUE_PTR];
+    optional MaterialTransmission transmission = 6 [
+      json_name = "KHR_materials_transmission",
+      (imp.optional_type) = UNIQUE_PTR
+    ];
+    MaterialMask mask = 7
+        [json_name = "GOOG_mask", (imp.optional_type) = ABSL_OPTIONAL];
+  }
+
+  string name = 1 [ctype = STRING_PIECE];
+  PbrMetallicRoughness pbr_metallic_roughness = 2;
+  NormalTextureInfo normal_texture = 3;
+  OcclusionTextureInfo occlusion_texture = 4;
+  TextureInfo emissive_texture = 5;
+  repeated float emissive_factor = 6;
+  string alpha_mode = 7 [ctype = STRING_PIECE];
+  optional float alpha_cutoff = 8;
+  bool double_sided = 9;
+  MaterialExtensions extensions = 10;
+}
+
+message Primitive {
+  enum Mode {
+    POINTS = 0;
+    LINES = 1;
+    LINE_LOOP = 2;
+    LINE_STRIP = 3;
+    TRIANGLES = 4;
+    TRIANGLE_STRIP = 5;
+    TRIANGLE_FAN = 6;
+  }
+  message Draco {
+    optional uint32 buffer_view = 1;
+    map<string, uint32> attributes = 2;
+  }
+  message MaterialsVariant {
+    message Mapping {
+      uint32 material = 1;
+      repeated uint32 variants = 2;
+    }
+    repeated Mapping mappings = 1;
+  }
+  message Extensions {
+    optional Draco draco = 1 [
+      json_name = "KHR_draco_mesh_compression",
+      (imp.optional_type) = UNIQUE_PTR
+    ];
+    MaterialsVariant materials_variants = 2 [
+      json_name = "KHR_materials_variants",
+      (imp.optional_type) = ABSL_OPTIONAL
+    ];
+  }
+  map<string, uint32> attributes = 1;
+  optional uint32 indices = 2;
+  optional uint32 material = 3;
+  optional Mode mode = 4;
+  Extensions extensions = 5;
+  message Target {
+    optional uint32 position = 1 [json_name = "POSITION"];
+    optional uint32 normal = 2 [json_name = "NORMAL"];
+    optional uint32 tangent = 3 [json_name = "TANGENT"];
+  }
+  repeated Target targets = 6;
+}
+
+message Mesh {
+  message Extras {
+    repeated string target_names = 1 [json_name = "targetNames"];
+  }
+  string name = 1 [ctype = STRING_PIECE];
+  repeated Primitive primitives = 2;
+  repeated float weights = 3;  // default morph target weights.
+  Extras extras = 4 [(imp.optional_type) = ABSL_OPTIONAL];
+}
+
+message Skin {
+  string name = 1 [ctype = STRING_PIECE];
+  optional uint32 inverse_bind_matrices = 2;
+  optional uint32 skeleton = 3;
+  repeated uint32 joints = 4;
+}
+
+message Node {
+  message LightsPunctual {
+    optional uint32 light = 1;
+  }
+
+  message AudioExtension {
+    optional uint32 emitter = 1;
+  }
+
+  // TODO: Remove this when deprecating KHR_behavior.
+  message KhrVisibility {
+    optional bool visible = 1;
+  }
+
+  message KhrNodeVisibility {
+    optional bool visible = 1;
+  }
+
+  message KhrNodeSelectability {
+    optional bool selectable = 1;
+  }
+
+  message KhrNodeHoverability {
+    optional bool hoverable = 1;
+  }
+
+  message Extensions {
+    LightsPunctual lights_punctual = 1 [
+      json_name = "KHR_lights_punctual",
+      (imp.optional_type) = ABSL_OPTIONAL
+    ];
+    AudioExtension audio_extension = 2
+        [json_name = "ADBE_audio_emitter", (imp.optional_type) = ABSL_OPTIONAL];
+    KhrVisibility khr_visibility = 3
+        [json_name = "KHR_visibility", (imp.optional_type) = ABSL_OPTIONAL];
+
+    KhrNodeVisibility khr_node_visibility = 4 [
+      json_name = "KHR_node_visibility",
+      (imp.optional_type) = ABSL_OPTIONAL
+    ];
+
+    KhrNodeSelectability khr_node_selectability = 5 [
+      json_name = "KHR_node_selectability",
+      (imp.optional_type) = ABSL_OPTIONAL
+    ];
+
+    KhrNodeHoverability khr_node_hoverability = 6 [
+      json_name = "KHR_node_hoverability",
+      (imp.optional_type) = ABSL_OPTIONAL
+    ];
+  }
+
+  string name = 1 [ctype = STRING_PIECE];
+  repeated uint32 children = 2;
+  optional uint32 skin = 3;
+  optional uint32 mesh = 4;
+  repeated double matrix = 5;
+  repeated float rotation = 6;
+  repeated float scale = 7;
+  repeated double translation = 8;
+  Extensions extensions = 9;
+  repeated float weights = 10;  // default morph target weights.
+}
+
+message Scene {
+  message AudioExtension {
+    repeated uint32 emitters = 1;
+  }
+
+  message Extensions {
+    AudioExtension audio_extension = 1
+        [json_name = "ADBE_audio_emitter", (imp.optional_type) = ABSL_OPTIONAL];
+  }
+
+  string name = 1 [ctype = STRING_PIECE];
+  repeated uint32 nodes = 2;
+  Extensions extensions = 3;
+}
+
+message AnimationSampler {
+  optional uint32 input = 1;
+  string interpolation = 2 [ctype = STRING_PIECE];
+  optional uint32 output = 3;
+}
+
+message AnimationChannel {
+  message AnimationPointer {
+    string pointer = 1 [ctype = STRING_PIECE];
+  }
+
+  message Extensions {
+    AnimationPointer animation_pointer = 1 [
+      json_name = "KHR_animation_pointer",
+      (imp.optional_type) = ABSL_OPTIONAL
+    ];
+  }
+
+  message Target {
+    optional uint32 node = 1;
+    string path = 2 [ctype = STRING_PIECE];
+    Extensions extensions = 3;
+  }
+  optional uint32 sampler = 1;
+  Target target = 2;
+}
+
+message Animation {
+  string name = 1 [ctype = STRING_PIECE];
+  repeated AnimationChannel channels = 2;
+  repeated AnimationSampler samplers = 3;
+}
+
+message LightPunctual {
+  message Spot {
+    optional float inner_cone_angle = 1;
+    optional float outer_cone_angle = 2;
+  }
+  string name = 1 [ctype = STRING_PIECE];
+  repeated float color = 2;
+  optional float intensity = 3;
+  string type = 4 [ctype = STRING_PIECE];
+  optional float range = 5;
+  optional Spot spot = 6 [(imp.optional_type) = UNIQUE_PTR];
+}
+
+message MaterialVariant {
+  string name = 1 [ctype = STRING_PIECE];
+}
+
+// extensions/2.0/KHR_audio/schema/glTF.KHR_audio.schema.json
+message AudioExtension {
+  // https://github.com/omigroup/gltf-extensions/blob/main/extensions/2.0/KHR_audio/schema/emitter.schema.json
+  message Emitter {
+    // https://github.com/omigroup/gltf-extensions/blob/main/extensions/2.0/KHR_audio/schema/emitter.positional.schema.json
+    message Positional {
+      optional float cone_inner_angle = 1;
+      optional float cone_outer_angle = 2;
+      optional float cone_outer_gain = 3;
+      string distance_model = 4 [ctype = STRING_PIECE];
+      optional float max_distance = 5;
+      optional float ref_distance = 6;
+      optional float rolloff_factor = 7;
+    }
+
+    string name = 1 [ctype = STRING_PIECE];
+    string type = 2 [ctype = STRING_PIECE];
+    optional float gain = 3;
+    repeated uint32 sources = 4;
+    optional Positional positional = 5;
+  }
+
+  // https://github.com/omigroup/gltf-extensions/blob/main/extensions/2.0/KHR_audio/schema/source.schema.json
+  message Source {
+    string name = 1 [ctype = STRING_PIECE];
+    optional bool auto_play = 2;
+    optional float gain = 3;
+    optional bool loop = 4;
+    uint32 audio = 5;
+  }
+
+  // https://github.com/omigroup/gltf-extensions/blob/main/extensions/2.0/KHR_audio/schema/audio.schema.json
+  message Audio {
+    string uri = 1 [ctype = STRING_PIECE];
+    string mime_type = 2 [ctype = STRING_PIECE];
+    optional uint32 buffer_view = 3;
+    string access = 4 [ctype = STRING_PIECE, json_name = "*do_not_use*"];
+  }
+
+  repeated Emitter emitters = 1;
+  repeated Source sources = 2;
+  repeated Audio audio = 3;
+}
+
+message Gltf {
+  message Extensions {
+    message LightsPunctual {
+      repeated LightPunctual lights = 1;
+    }
+    LightsPunctual lights_punctual = 1 [
+      json_name = "KHR_lights_punctual",
+      (imp.optional_type) = ABSL_OPTIONAL
+    ];
+    message MaterialsVariants {
+      repeated MaterialVariant variants = 1;
+    }
+    MaterialsVariants materials_variants = 2 [
+      json_name = "KHR_materials_variants",
+      (imp.optional_type) = ABSL_OPTIONAL
+    ];
+    AudioExtension audio_extension = 3
+        [json_name = "ADBE_audio_emitter", (imp.optional_type) = ABSL_OPTIONAL];
+    Behavior behavior = 4
+        [json_name = "KHR_behavior", (imp.optional_type) = ABSL_OPTIONAL];
+    Interactivity interactivity = 5
+        [json_name = "KHR_interactivity", (imp.optional_type) = ABSL_OPTIONAL];
+  }
+  repeated string extensions_used = 1 [ctype = STRING_PIECE];
+  repeated string extensions_required = 2 [ctype = STRING_PIECE];
+  repeated Accessor accessors = 3;
+  repeated Animation animations = 4;
+  repeated Buffer buffers = 5;
+  repeated BufferView buffer_views = 6;
+  repeated Image images = 7;
+  repeated Material materials = 8;
+  repeated Mesh meshes = 9;
+  repeated Node nodes = 10;
+  repeated Sampler samplers = 11;
+  repeated Scene scenes = 12;
+  repeated Skin skins = 13;
+  repeated Texture textures = 14;
+  uint32 scene = 15;
+  Extensions extensions = 16;
+}

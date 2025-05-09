@@ -1,0 +1,100 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+material {
+  name : "svxr_footprint",
+  constants : [
+    {
+      name : enableColorConversion,
+      type : bool,
+      default : false
+    }
+  ],
+  parameters: [
+    {
+      type: float3,
+      name: primary_touch_point
+    },
+    {
+      type: float2,
+      name: touch_control // (falloff, cutoff)
+    },
+    {
+      type: float4,
+      name: touch_response // (multiplier, offset, throw, alpha)
+    },
+    {
+      type: float3,
+      name: secondary_touch_point
+    },
+    {
+      type: float4,
+      name: falloff_color
+    },
+    {
+      type: float4,
+      name: cutoff_color
+    }
+  ],
+  requires : [
+      uv0,
+      tangents
+  ],
+  variables : [],
+  vertexDomain : object,
+  shadingModel : unlit,
+  blending : transparent,
+}
+vertex {
+  void materialVertex(inout MaterialVertexInputs material) {
+  }
+}
+fragment {
+#include "color_conversion_helpers.glsl"
+
+  // Necessary for high res textures.
+  precision highp float;
+
+  void material(inout MaterialInputs material) {
+    prepareMaterial(material);
+
+    float falloff = materialParams.touch_control.x;
+    float cutoff = materialParams.touch_control.y;
+
+    float x_primary = length(getUserWorldPosition() -
+                             materialParams.primary_touch_point);
+    // 1.0 at falloff, 0.0 at cutoff.
+    float t_primary = 1.0 - saturate((x_primary - falloff) /
+                                     (cutoff - falloff));
+    float x_secondary = length(getUserWorldPosition() -
+                               materialParams.secondary_touch_point);
+    // 1.0 at falloff, 0.0 at cutoff.
+    float t_secondary = 1.0 - saturate((x_secondary - falloff) /
+                                       (cutoff - falloff));
+    float t = saturate(t_primary + t_secondary);
+
+    float multiplier = materialParams.touch_response.x;
+    float offset = materialParams.touch_response.y;
+    float throw_factor = materialParams.touch_response.z;
+    float alpha = materialParams.touch_response.w;
+
+    float a = (multiplier * pow(t, throw_factor) + offset) * alpha;
+    vec4 base_color = materialParams.falloff_color * t + 
+                      materialParams.cutoff_color * (1.0 - t);
+    material.baseColor = base_color * a;
+    if (materialConstants_enableColorConversion) {
+        material.baseColor.xyz = applyGlobalMaterialConversionMatrix(material.baseColor.xyz);
+    }
+  }
+}

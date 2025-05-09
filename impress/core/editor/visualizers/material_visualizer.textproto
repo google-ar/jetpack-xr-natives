@@ -1,0 +1,72 @@
+# proto-file: core/ncsb/node_data.proto
+# proto-message: NodeData
+
+name: "material-definition-renderer"
+children: [
+  {
+    name: "material-visualization"
+    groups: {
+      groups: "<replaceme>"
+    }
+    transform: {
+      position: {
+        z: -3
+      }
+    }
+    components: [
+      {
+        [type.googleapis.com/imp.PrimitiveShapeRendererState] {
+          frustrum_culling_mode: DISABLED
+          shadow_casting_mode: NONE
+          shadow_receiving_mode: NONE
+          primitive: {
+            sphere_mesh: {
+              radius: 1
+              resolution: 100
+              flip_uv: true
+            }
+            # Will be replaced by material that is being visualized.
+            material: {}
+          }
+        }
+      }
+    ]
+    children: [
+      {
+        name: "light"
+        transform: {
+          # Note: this is "upside-down" because of how ImGui renders textures.
+          position: {
+            y: -2
+            z: 2
+          }
+          rotation: {
+            x: -0.315497
+            y: -0.43642
+            z: 0.82596
+            w: 0.166703
+          }
+        }
+        components: [
+          {
+            [type.googleapis.com/imp.LightState] {
+              type: 0
+              intensity: 1000
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    name: "material-definition-renderer-camera"
+    components: [
+      {
+        [type.googleapis.com/imp.CameraState] {
+          start_as_current_camera: false
+          locked_aspect_ratio: 1
+        }
+      }
+    ]
+  }
+]

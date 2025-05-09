@@ -1,0 +1,53 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// bridge.proto
+// Defines wrapper messages for communication between JS and C++.
+
+syntax = "proto3";
+
+package imp.scripting;
+
+import "google/protobuf/any.proto";
+
+// option cc_api_version = 2;
+// option cc_api_version = 2;
+option java_package = "com.google.ar.imp.core.scripting";
+
+// Container for messages sent from JS to C++.
+message MessageToNative {
+  uint32 message_id = 1;
+  google.protobuf.Any content = 2;
+}
+
+// Container for messages sent from C++ to JS.
+message MessageToScript {
+  uint32 message_id = 1;
+  string error = 2;
+  google.protobuf.Any content = 3;
+}
+
+// A message with log information.
+enum LogLevel {
+  INFO = 0;
+  WARNING = 1;
+  ERROR = 2;
+  FATAL = 3;
+}
+
+// Contains a native log message and corresponding severity level.
+message LogMessage {
+  LogLevel level = 1;
+  string log = 2;
+}

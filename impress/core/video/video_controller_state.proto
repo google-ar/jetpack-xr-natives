@@ -1,0 +1,39 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+// Serialized data for VideoController.
+message VideoControllerState {
+  // Required views for multiview video.
+  enum MultiviewMode {
+    // The value for unset values is at the bottom,
+    // because the first value listed in an enum must be zero.
+    UNSET = 0;
+    MONOSCOPIC = 1;
+    MULTIVIEW = 2;
+    MULTIVIEW_WITH_DEPTH = 3;
+  }
+
+  // The path (file or url) to a video file.
+  string asset = 1;
+  // DRM license's URL.
+  optional string drm_license_url = 2;
+  // DRM scheme UUID.
+  optional string drm_scheme_uuid = 3;
+  // Multiview mode.
+  MultiviewMode multiview_mode = 4;
+}

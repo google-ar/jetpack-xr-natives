@@ -1,0 +1,129 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import public "core/proto/imp.proto";
+
+// option cc_api_version = 2;
+option java_multiple_files = true;
+option java_package = "com.google.ar.imp.proto";
+
+// Represents an impress node that can be used to reference nodes within a .isf
+// file.
+//
+// See an example usage:
+//   depot/google3/samples/isf
+message NodeSceneHandle {
+  option (imp.native_type) = "::imp::NodeSceneHandle";
+  option (imp.native_include) =
+      "core/scene_handles/scene_handles.h";
+  option (imp.no_codegen) = true;
+
+  // Used to identify what node to map to within a .isf file.
+  oneof identifier {
+    // Maps to a name from NodeData or NodeReferenceData within a .isf file.
+    //
+    // Node names within a .isf file are not guaranteed to be unique.
+    // If multiple nodes have the same name then it is unspecified which node
+    // will be assigned to the NodeSceneHandle.
+    string name = 1;
+
+    // Maps to a unique_id from NodeData or NodeReferenceData within a .isf
+    // file.
+    //
+    // unique_id is guaranteed to be unique within a .isf file when loading the
+    // file.
+    sint32 unique_id = 2;
+  }
+}
+
+// Represents an impress component that can be referenced within a .isf file.
+//
+// It is automatically guaranteed that the component represented by the handle
+// will be setup prior to the component referencing the handle.
+//
+// Example usage:
+//
+// message FooState {
+//  # Add the header of your component for use in generated code.
+//  option (imp.native_include) =
+//      "third_party/path/to/your_component.h";
+//
+//  # Use the imp.template_type option to generate the desired type of component
+//  # handle. In this case, "ComponentSceneHandle<YourComponent>".
+//  ComponentSceneHandle bar_comp = 1
+//      [(imp.template_type) = "::imp::YourComponent"];
+// }
+//
+message ComponentSceneHandle {
+  option (imp.native_type) = "::imp::ComponentSceneHandle";
+  option (imp.native_include) =
+      "core/scene_handles/scene_handles.h";
+  option (imp.no_codegen) = true;
+
+  // Identifies which node within a .isf has the component being referenced.
+  oneof identifier {
+    // Maps to a name from NodeData or NodeReferenceData within a .isf file.
+    //
+    // Node names within a .isf file are not guaranteed to be unique.
+    // If multiple nodes have the same name then it is unspecified which node
+    // will be assigned to the NodeSceneHandle.
+    string name = 1;
+
+    // Maps to a unique_id from NodeData or NodeReferenceData within a .isf
+    // file.
+    //
+    // unique_id is guaranteed to be unique within a .isf file when loading the
+    // file.
+    sint32 unique_id = 2;
+  }
+}
+
+// Represents an impress node that can be used to reference glTF nodes within a
+// glTF specified by a .isf file.
+//
+// See an example usage:
+//   depot/google3/samples/isf
+message GltfNodeSceneHandle {
+  option (imp.native_type) = "::imp::GltfNodeSceneHandle";
+  option (imp.native_include) =
+      "core/scene_handles/scene_handles.h";
+  option (imp.no_codegen) = true;
+
+  // Used to identify what node to map to within a .isf file.
+  // If no identifier is assigned, then the glTF node will be looked for on the
+  // node that the component containing the GltfNodeSceneHandle is attached to.
+  oneof identifier {
+    // Maps to a name from NodeData or NodeReferenceData within a .isf file.
+    //
+    // Node names within a .isf file are not guaranteed to be unique.
+    // If multiple nodes have the same name then it is unspecified which node
+    // will be assigned to the NodeSceneHandle.
+    string name = 1;
+
+    // Maps to a unique_id from NodeData or NodeReferenceData within a .isf
+    // file.
+    //
+    // unique_id is guaranteed to be unique within a .isf file when loading the
+    // file.
+    sint32 unique_id = 2;
+  }
+
+  // The name of the node within a glTF file that this handle should be assigned
+  // to.
+  string gltf_node_name = 3;
+}

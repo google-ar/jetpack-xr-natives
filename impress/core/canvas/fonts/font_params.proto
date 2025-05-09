@@ -1,0 +1,59 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+// Constants that describe the font weight of the text being rendered.
+enum FontWeight {
+  FONT_WEIGHT_NORMAL = 0;
+  FONT_WEIGHT_LIGHT = 1;
+  FONT_WEIGHT_MEDIUM = 2;
+  FONT_WEIGHT_BOLD = 3;
+}
+
+// Constants that describe the stylistic aspect of the text being rendered such
+// as it being italics or not.
+enum TextStyle {
+  TEXT_STYLE_NORMAL = 0;
+  TEXT_STYLE_ITALIC = 1;
+}
+
+// Determines which system font is loaded when calling LoadSystemFont.
+//
+// For convenience, a different font can be specified per-platform. This is
+// useful because the supported platforms (Android, iOS) have no overlap between
+// available system fonts.
+message SystemFontParams {
+  // If unspecified, then the font weight will be normal.
+  FontWeight font_weight = 1;
+
+  // If unspecified, then the text style will be normal.
+  TextStyle text_style = 2;
+
+  // If unspecified, then the default Android system font family is used.
+  string android_family_name = 3;
+
+  // If unspecified, then HelveticaNeue is used.
+  string ios_family_name = 4;
+
+  // If unspecified, then sans-seriff is used.
+  string wasm_family_name = 5;
+
+  // If unspecified, then the default system's font family is used.
+  // On OSX: HelveticaNeue
+  // On Linux: Sans
+  string desktop_family_name = 6;
+}

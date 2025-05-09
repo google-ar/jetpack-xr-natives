@@ -1,0 +1,115 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+// option cc_api_version = 2;
+option java_multiple_files = true;
+option java_package = "com.google.ar.imp.proto";
+
+// Serialized data for GltfRenderer
+message GltfState {
+  // Determines which (if any) collider components will be automatically added
+  // to the nodes in the glTF scene.
+  //
+  // This makes it possible to do things like detect when a glTF is tapped.
+  //
+  // The presence of colliders make it so intersection tests can be performed
+  // against a glTF. Intersection tests are performed automatically in response
+  // to pointer input.
+  enum ColliderMode {
+    // Every node in the glTF scene that contains a mesh will have a
+    // GltfCollider component.
+    //
+    // This makes it possible to independently detect when different nodes
+    // within a single glTF are intersected. Pointer events will be sent to
+    // these individual nodes, which will then bubble up so they can still be
+    // handled at the level of this component's node.
+    //
+    // This also makes it possible to disable/enable collisions for each mesh
+    // within a glTF.
+    //
+    // The GltfCollider component will automatically produce the correct result
+    // as the mesh changes due to skinning.
+    // The node this component is attached to will have a BoxCollider component
+    // set to the combined bounds of the glTF in the bind pose.
+    GLTF_COLLIDER_BOUNDS_PER_MESH_DEFAULT = 0;
+    //
+    // In this mode, GltfCollider works as mesh collider.
+    // TODO: Update the description when above issue is
+    // solved.
+    GLTF_COLLIDER_TRIANGLES_PER_MESH = 3;
+    //
+    // In this mode, collision accelerator will be built for each applicable
+    // mesh.
+    // TODO: Merge this mode with GLTF_COLLIDER_TRIANGLES_PER_MESH.
+    GLTF_COLLIDER_MESH_COLLISION_ACCELERATOR = 4;
+    //
+    // In this mode, the BoxCollider will not be updated when animation occurs.
+    // However, that can be done manually.
+    BOX_COLLIDER = 1;
+    // No collider components will be added.
+    NONE = 2;
+  }
+
+  // Determines whether the shared material instance will be used directly or
+  // duplicated.
+  enum MaterialSharingMode {
+    // GltfRenderer will duplicate the shared material instance.
+    //
+    // Using duplicated material instances allows setting the material instance
+    // parameters without affecting other GltfRenderer that's using the same
+    // material. Please note that prevents instanced rendering.
+    DUPLICATED_DEFAULT = 0;
+    // GltfRenderer will use the shared material instance.
+    //
+    // Using the shared material instance allows instanced rendering of the
+    // gltf, which reduces number of drawcalls (You'll also need to call
+    // imp::BaseView::GetSharedEngine()->setAutomaticInstancingEnabled(true) to
+    // enable that). Tweaked material parameters will be refected on all
+    // GltfRenderer that's using this shared material.
+    SHARED = 1;
+  }
+
+  // The path (file or url) to a binary gltf file.  The root of this gltf
+  // will be created as a child of the node containing the GltfState.
+  // For google3 assets, the path should start from the root of google3, i.e.
+  // third_party/arcore/googledata/sceneform/assets/gltf_2p0_sample_assets/DamagedHelmet/glTF-Binary/DamagedHelmet.glb
+  string asset = 1;
+
+  // Determines which (if any) collider components will be automatically added
+  // to the nodes in the glTF scene.
+  //
+  // If unassigned, then the collider_mode specified by
+  // AssetManager::GetDefaultLoadOptions is used. By default, this will be
+  // GLTF_COLLIDER_BOUNDS_PER_MESH_DEFAULT.
+  optional ColliderMode collider_mode = 2;
+
+  // Contents of a .glb file to load. An id must be passed to the asset field.
+  optional string contents = 3;
+
+  // When the asset has material variants, specify used material.
+  // An number id must be passed to this field.
+  optional int32 material_variant = 4;
+
+  // Determines whether GltfRenderer will use the shared material instance
+  // directly or duplicate it and use the duplicated instance.
+  //
+  // If unassigned, then the material_sharing_mode specified by
+  // AssetManager::GetDefaultLoadOptions is used. By default, this will be
+  // DUPLICATED_DEFAULT.
+  optional MaterialSharingMode material_sharing_mode = 5;
+}

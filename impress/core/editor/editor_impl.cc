@@ -1,0 +1,1045 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <algorithm>
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "core/common/log.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "core/assets/gltf/gltf_audio_extension.h"
+#include "core/assets/gltf/gltf_behavior_extension.h"
+#include "core/assets/gltf/gltf_interactivity_extension.h"
+#include "core/async/future.h"
+#include "core/common/registry.h"
+#include "core/common/robin_set.h"
+#include "core/config.h"
+#include "core/editor/command_manager.h"
+#include "core/editor/components/camera_rotate.h"
+#include "core/editor/components/camera_translate.h"
+#include "core/editor/components/camera_zoom.h"
+#include "core/editor/components/grid.h"
+#include "core/editor/editor.h"
+#include "core/editor/editor_constants.h"
+#include "core/editor/editor_info.h"
+#include "core/editor/editor_input_handler.h"
+#include "core/editor/editor_plugin.h"
+#include "core/editor/editor_style.h"
+#include "core/editor/events.h"
+#include "core/editor/layout/editor_panel_ids.h"
+#include "core/editor/layout/layout_composer.h"
+#include "core/editor/layout/layout_config.proto.imp.h"
+#include "core/editor/selection_controller.h"
+#include "core/editor/selection_controller_impl.h"
+#include "core/editor/visualizers/camera_visualizer.h"
+#include "core/editor/visualizers/light_visualizer.h"
+#include "core/editor/visualizers/visualizer_manager.h"
+#include "core/editor/widget.h"
+#include "core/editor/widget_layout_info.h"
+#include "core/editor/widget_ui_system.h"
+#include "core/editor/widgets/asset_library.h"
+#include "core/editor/widgets/component_ui.h"
+#include "core/editor/widgets/console.h"
+#include "core/editor/widgets/editor_mode_toggle.h"
+#include "core/editor/widgets/environment_light_editor.h"
+#include "core/editor/widgets/event_injector.h"
+#include "core/editor/widgets/filament_view_settings_widget.h"
+#include "core/editor/widgets/file_drag_and_drop.h"
+#include "core/editor/widgets/hierarchy.h"
+#include "core/editor/widgets/materials_widget.h"
+#include "core/editor/widgets/node_details.h"
+#include "core/editor/widgets/performance/performance_window.h"
+#include "core/editor/widgets/toggle_camera.h"
+#include "core/editor/widgets/transform.h"
+#include "core/editor/widgets/vertex_select_widget.h"
+#include "core/editor/widgets/visualize_bounds.h"
+#include "core/editor/widgets/visualize_colliders.h"
+#include "core/editor/widgets/visualize_origins.h"
+#include "core/input/key_codes.h"
+#include "core/input/keyboard_event.h"
+#include "core/input/pointer_event.h"
+#include "core/math/vec.h"
+#include "core/ncsb/component_handle.h"
+#include "core/ncsb/dispatcher/dispatcher.h"
+#include "core/ncsb/node_data.proto.imp.h"
+#include "core/ncsb/node_flag.h"
+#include "core/ncsb/node_handle.h"
+#include "core/ncsb/scene_metadata.h"
+#include "core/ncsb/system.h"
+#include "core/view/base_view.h"
+#include "core/view/framework/assets/gltf_asset.h"
+#include "core/view/framework/assets/gltf_renderer.h"
+#include "core/view/framework/assets/gltf_state.proto.imp.h"
+#include "core/view/framework/camera/camera_component.h"
+#include "core/view/framework/camera/camera_manager.h"
+#include "core/view/framework/display_layer/display_layer_manager.h"
+#include "core/view/framework/gestures/gesture_manager.h"
+#include "core/view/framework/gestures/tap_gesture.h"
+#include "core/view/framework/input/pointer_input_handler.h"
+#include "core/view/framework/lighting/light_component.h"
+#include "core/view/framework/lighting/light_manager.h"
+#include "core/view/framework/scene/scene_reference.h"
+#include "core/view/framework/scene/scene_system.h"
+
+#if IMP_PLATFORM(ANDROID)
+#include "core/view/platforms/android/wrappers/imp_lifecycle_callback.h"
+#endif
+
+#if IMP_PLATFORM(DESKTOP) || IMP_PLATFORM(WASM)
+
+#endif
+
+namespace imp::editor {
+
+namespace {
+// Number of fingers required to toggle the editor.
+constexpr int kToggleEditorPointerCount = 3;
+// The default camera angle constants.
+constexpr float kCameraPitch = -45;
+constexpr float kCameraYaw = 45;
+constexpr float3 kCameraPosition = float3(3.5, 5, 3.5);
+// The default camera near/far clip so that farther away objects can be seen.
+constexpr float kCameraNearClipPlane = 0.01f;
+constexpr float kCameraFarClipPlane = 250.0f;
+// Select the platform-dependent layout.
+constexpr LayoutConfig kDefaultLayoutConfig =
+#if (IMP_PLATFORM(ANDROID) || IMP_PLATFORM(IOS))
+    kDefaultMobileLayoutConfig;
+#else
+    kDefaultDesktopLayoutConfig;
+#endif
+}  // namespace
+
+// The real implementation of the Impress editor.
+class EditorImpl : public Editor {
+ public:
+  // Indicates which camera is used.
+  enum class CameraMode { kApp, kEditor };
+  // Indicates where the input should be routed to.
+  enum class InputMode { kApp, kEditor };
+  // A state of the Editor.
+  struct EditorState {
+    CameraMode camera_mode;
+    InputMode input_mode;
+  };
+
+  explicit EditorImpl(BaseView* view, std::unique_ptr<EditorPlugin> plugin,
+                      bool is_sandbox);
+  void Initialize() override;
+
+  bool IsEnabled() const override;
+  void SetEnabled(bool enabled) override;
+  void SwitchToEditorMode() override;
+  void SwitchToAppMode() override;
+
+  // The Editor nodes and environment.
+  void AddNode(NodeHandle node) override;
+  void RemoveNode(NodeHandle node) override;
+  void SelectNode(NodeHandle node) override;
+  void AddSandboxNode(NodeHandle node) override;
+  void RemoveSandboxNode(NodeHandle node) override;
+  NodeHandle GetEditorRoot() override;
+
+  // Sets which camera is used.
+  void SetCameraMode(CameraMode camera_mode);
+  // Returns the availability of the cameras.
+  EditorPlugin::CameraConfiguration GetCameraConfiguration() const override;
+  ComponentHandle<CameraComponent> GetCamera() override;
+  ComponentHandle<CameraComponent> GetActiveCamera() override;
+
+  // Sets which input mode is used.
+  void SetInputMode(InputMode input_mode);
+  Dispatcher& GetDispatcher() override;
+
+  // Handles simulation state.
+  EditorInfo::RunMode GetRunMode() const override;
+  void SetInEditMode(bool in_edit_mode) override;
+  bool IsPaused() const override;
+  void SetPaused(bool paused) override;
+  void StepNextFrame() override;
+  bool HasFramesToStep() override;
+
+  WidgetUiSystem& GetWidgetUiSystem() override;
+  AssetLibrary* GetAssetLibrary() override;
+  EventInjector& GetEventInjector() override;
+  GltfAsset::LoadOptions GetGltfLoadOptions() const override;
+
+ private:
+  // Used to provide access to EditorInformation without needing to access the
+  // actual full Editor. This is useful to avoid circular dependencies with the
+  // Editor class.
+  class Info : public EditorInfo {
+   public:
+    explicit Info(EditorImpl& editor);
+
+    bool IsEnabled() const override;
+    EditorInfo::RunMode GetRunMode() const override;
+    bool IsPaused() const override;
+    bool HasFramesToStep() const override;
+
+   private:
+    EditorImpl& editor_;
+  };
+
+  // Connects to the given Dispatcher to listen for events which may trigger the
+  // switching of the active CameraMode.
+  void EnableCameraModeToggling(Dispatcher& dispatcher);
+
+  // Connects to the given Dispatcher to listen for events which may trigger the
+  // enabling or disabling of Editor.
+  void EnableEditorToggling(Dispatcher& dispatcher);
+
+  // Enables Undo/Redo functionality keyboard triggers.
+  void EnableUndoAndRedo(Dispatcher& dispatcher);
+
+  // Registers a handler for dealing with changes made through "Settings" menu.
+  void RegisterEditorSettingChangedEventHandler();
+
+  // Forwards UpdateSystem::PreComponentsUpdateEvent and
+  // UpdateSystem::PostComponentsUpdateEvent from the app dispatcher to the
+  // Editor Dispatcher.
+  void EnableUpdateSystemEventForwarding();
+
+  // Switches between CameraModes. Should only be used under the
+  // CameraConfiguration::kEditorAndAppCameraDefault, will switch InputMode as
+  // well.
+  void ToggleCameraMode();
+
+  std::vector<NodeHandle> GetAllOverlappingNodes(Pointer p);
+
+  // Places the Editor camera at the average position of all nodes in the
+  // View, ignoring LightComponents, editor nodes, and the app camera.
+  void InitializeCameraPosition();
+
+  // Registers common widgets and initializes the WidgetUISystem.
+  void InitializeWidgetUiSystem();
+
+  // Applies the given setting of camera mode and input mode to the Editor.
+  void ApplyEditorState(EditorState editor_state);
+
+  // Used in Sandbox mode to store the NodeData for the state of the scene at
+  // the time of switching to Play mode so that we can restore it when switching
+  // back to Edit mode.
+  struct BackupNodeData {
+    std::string path;
+    NodeData node_data;
+    SceneSystem::MetadataMode metadata_mode;
+  };
+
+  std::unique_ptr<EditorPlugin> plugin_;
+  Dispatcher dispatcher_;
+  WidgetUiSystem widget_ui_system_;
+  RobinSet<Widget*> selected_node_component_widgets_;
+  NodeHandle editor_root_node_;
+  EditorState current_state_;
+  // Used to store the state of the Editor when it is disabled.
+  EditorState saved_state_;
+  NodeHandle grid_;
+  ComponentHandle<CameraComponent> camera_;
+  bool camera_position_initialized_;
+  CommandManager& command_manager_;
+  AssetLibrary* asset_library_;
+  EventInjector* event_injector_;
+  std::unique_ptr<VisualizerManager> visualizer_manager_;
+  std::unique_ptr<GestureManager> gesture_manager_;
+  Dispatcher::ScopedConnection gesture_manager_connection_;
+  bool is_editor_input_handler_in_use_ = false;
+  bool enabled_;
+  bool initialized_ = false;
+  bool is_sandbox_ = false;
+  EditorInfo::RunMode run_mode_ = EditorInfo::RunMode::kPlayMode;
+  bool is_paused_ = false;
+  bool has_frames_to_step_ = false;
+  std::vector<BackupNodeData> backup_node_data_;
+  std::vector<NodeHandle> sandbox_nodes_;
+  GltfAsset::LoadOptions gltf_load_options_;
+};
+
+EditorImpl::EditorImpl(BaseView* view, std::unique_ptr<EditorPlugin> plugin,
+                       bool is_sandbox)
+    : Editor(view),
+      plugin_(std::move(plugin)),
+      widget_ui_system_(view, true,
+                        std::make_unique<LayoutComposer>(kDefaultLayoutConfig)),
+      editor_root_node_(NodeHandle()),
+      current_state_({CameraMode::kApp, InputMode::kApp}),
+      camera_position_initialized_(false),
+      command_manager_(view->GetRegistry().GetOrCreate<CommandManager>()),
+      enabled_(false),
+      is_sandbox_(is_sandbox) {
+  // In sandbox builds, start off in edit mode.
+  if (is_sandbox_) {
+    run_mode_ = EditorInfo::RunMode::kEditMode;
+  }
+
+  view->GetRegistry().Register<EditorInfo>(std::make_unique<Info>(*this));
+}
+
+void EditorImpl::Initialize() {
+  if (initialized_) {
+    IMP_LOG(imp::INFO) << "Initialize() has already called. Ignoring this call...";
+    return;
+  }
+  visualizer_manager_ = std::make_unique<VisualizerManager>(&GetView());
+  GetView().GetRegistry().Register<SelectionController>(
+      std::make_unique<SelectionControllerImpl>(&GetView()));
+  editor_root_node_ = GetView().CreateNode();
+  editor_root_node_->SetEnabled(false);
+#if IMP_RUNTIME(DEV)
+  editor_root_node_->SetAsEditorStaging(true);
+#endif
+
+  InitializeWidgetUiSystem();
+  visualizer_manager_->RegisterVisualizer<LightComponent, LightVisualizer>();
+  if (GetCameraConfiguration() !=
+      EditorPlugin::CameraConfiguration::kEditorCameraOnly) {
+    // When the app camera presents, showing the camera visualization.
+    visualizer_manager_
+        ->RegisterVisualizer<CameraComponent, CameraVisualizer>();
+  }
+
+  // TODO Declare the dependencies within each extensions instead
+  // of require the implementer to declare them.
+  GetView()
+      .GetComponentManager()
+      .GetComponentSystem<GltfRenderer>()
+      .RegisterExtensionWithDependency<GltfBehaviorExtension,
+                                       GltfAudioExtension>();
+
+  GetView()
+      .GetComponentManager()
+      .GetComponentSystem<GltfRenderer>()
+      .RegisterExtensionWithDependency<GltfInteractivityExtension,
+                                       GltfAudioExtension>();
+
+  // Set the default light and camera components as authored so that the full
+  // component widgets are available in edit mode.
+  //
+  // This isn't needed outside of sandbox builds, because in that case we are
+  // always in play mode, and all component widgets always show up in play mode
+  // since that is appropriate for the debugging use case of the editor.
+  if (is_sandbox_) {
+    auto camera_metadata = GetView()
+                               .GetCameraManager()
+                               .GetCamera()
+                               ->GetNode()
+                               ->GetOrAddComponent<SceneMetadata>();
+    camera_metadata->SetComponentAuthored(
+        CameraComponent::IsfInfo::kTypeUrlHash, true);
+    if (GetView().GetLightManager().IsDefaultLoadEnabled()) {
+      auto light_metadata = GetView()
+                                .GetLightManager()
+                                .GetOrCreateDefaultDirectionalLight()
+                                ->GetNode()
+                                ->GetOrAddComponent<SceneMetadata>();
+      light_metadata->SetComponentAuthored(
+          LightComponent::IsfInfo::kTypeUrlHash, true);
+    }
+  }
+
+  // Build the Editor camera pivot.
+  NodeHandle pivot = GetView().CreateNode();
+  pivot->SetName("editor-camera-pivot");
+  AddNode(pivot);
+
+  // Build the Editor camera.
+  NodeHandle camera_node = GetView().CreateNode();
+  camera_node->SetName("editor-camera");
+  camera_node->SetParent(pivot);
+  camera_ = camera_node->AddComponent<CameraComponent>();
+  camera_->SetNearAndFarClip(kCameraNearClipPlane, kCameraFarClipPlane);
+  camera_node->AddComponent<CameraRotate>(pivot, kCameraPitch, kCameraYaw);
+  camera_node->AddComponent<CameraTranslate>(pivot);
+  camera_node->AddComponent<CameraZoom>(pivot);
+
+  // An overlaying helper layer for 3d widgets and visualizers, e.g. transform
+  // widget shows here.
+  GetView().GetDisplayLayerManager().CreateLayer(kOverlayGroup, kOverlayGroup);
+  GetView().GetDisplayLayerManager().SetCamera(kOverlayGroup, camera_);
+
+  // Build the Editor grid.
+  grid_ = GetView().CreateNode();
+  grid_->SetName("grid");
+  grid_->AddComponent<Grid>().KeptBy(grid_);
+  AddNode(grid_);
+
+  Dispatcher& app_dispatcher = GetView().GetDispatcher();
+
+  // Allow editor toggling from both App camera mode (app Dispatcher) and Editor
+  // camera mode (Editor Dispatcher).
+  EnableEditorToggling(app_dispatcher);
+  EnableEditorToggling(dispatcher_);
+
+  // Allow camera mode toggling from both App camera mode (app Dispatcher) and
+  // Editor camera mode (Editor Dispatcher).
+  EnableCameraModeToggling(app_dispatcher);
+  EnableCameraModeToggling(dispatcher_);
+
+  // Enable undo/redo of changes to the scene made in the editor.
+  // TODO: Remove the connection to app dispatcher when
+  // successfully prevent the user to change node properties when app dispatcher
+  // handles the input.
+  EnableUndoAndRedo(app_dispatcher);
+  EnableUndoAndRedo(dispatcher_);
+
+  // Allows loading mesh data on CPU.
+  // Allows Vertex Selection functionality for meshes loaded on CPU.
+  RegisterEditorSettingChangedEventHandler();
+
+  // Forward UpdateSystem::PreComponentsUpdateEvent& and
+  // UpdateSystem::PostComponentsUpdateEvent& to Editor dispatcher.
+  EnableUpdateSystemEventForwarding();
+
+  IMP_LOG(imp::INFO) << "Camera Controls:";
+  IMP_LOG(imp::INFO) << "Left Click & Drag to rotate the camera.";
+  IMP_LOG(imp::INFO) << "Right Click & Drag to move the camera.";
+  IMP_LOG(imp::INFO) << "Rotate the scroll wheel to zoom the camera in & out.";
+  initialized_ = true;
+
+  if (plugin_) {
+    // If an EditorPlugin is present, invoke the OnEditorInitialized() callback
+    // and get a LayoutComposer.
+    plugin_->OnEditorInitialized();
+    std::unique_ptr<LayoutComposer> layout_composer =
+        plugin_->CreateLayoutComposer();
+    if (layout_composer) {
+      widget_ui_system_.SetLayoutComposer(std::move(layout_composer));
+    }
+  }
+
+  // Setup the ImGui style for the editor.
+  // If the extension doesn't exist, then ImGui hasn't been setup so this can't
+  // be done. This happens in unit tests.
+  if (GetView().GetHost()->TryGetExtension() != nullptr) {
+    SetupEditorImGuiStyle();
+  }
+
+#if IMP_ENABLE_EDITOR_ON_STARTUP
+  SetEnabled(true);
+  SwitchToEditorMode();
+#else
+  SetEnabled(false);
+#endif
+}
+
+bool EditorImpl::IsEnabled() const { return enabled_; }
+
+void EditorImpl::SetEnabled(bool enabled) {
+  if (!initialized_) {
+    IMP_LOG(imp::FATAL) << "A call to Initialize() is required before using the Editor.";
+  }
+
+  enabled_ = enabled;
+  widget_ui_system_.SetEnabled(enabled);
+
+#if IMP_PLATFORM(ANDROID)
+  absl::StatusOr<std::reference_wrapper<ImpLifeCycleCallback>> callback =
+      GetView().GetRegistry().Get<ImpLifeCycleCallback>();
+  if (callback.ok()) {
+    callback.value().get().OnEditorEnabled(enabled_);
+  }
+#endif
+
+  if (enabled) {
+    ApplyEditorState(saved_state_);
+  } else {
+    saved_state_ = current_state_;
+    ApplyEditorState({CameraMode::kApp, InputMode::kApp});
+  }
+
+  GetView().GetDispatcher().Send(EditorEnabledEvent(enabled));
+}
+
+void EditorImpl::SwitchToEditorMode() {
+  if (!enabled_) {
+    return;
+  }
+  ApplyEditorState({CameraMode::kEditor, InputMode::kEditor});
+}
+
+void EditorImpl::SwitchToAppMode() {
+  if (!enabled_) {
+    return;
+  }
+  ApplyEditorState({CameraMode::kApp, InputMode::kApp});
+}
+
+void EditorImpl::ApplyEditorState(EditorState editor_state) {
+  // Make sure the camera mode is valid for the current configuration.
+  CameraMode camera_mode = (GetCameraConfiguration() ==
+                            EditorPlugin::CameraConfiguration::kAppCameraOnly)
+                               ? CameraMode::kApp
+                               : editor_state.camera_mode;
+  camera_mode = (GetCameraConfiguration() ==
+                 EditorPlugin::CameraConfiguration::kEditorCameraOnly)
+                    ? CameraMode::kEditor
+                    : camera_mode;
+  SetCameraMode(camera_mode);
+  SetInputMode(editor_state.input_mode);
+}
+
+void EditorImpl::ToggleCameraMode() {
+  if (!enabled_) {
+    return;
+  }
+  ApplyEditorState((current_state_.camera_mode == CameraMode::kApp)
+                       ? EditorState{CameraMode::kEditor, InputMode::kEditor}
+                       : EditorState{CameraMode::kApp, InputMode::kApp});
+}
+
+void EditorImpl::InitializeCameraPosition() {
+  NodeHandle app_camera = GetView().GetCameraManager().GetCamera()->GetNode();
+  float3 average_position(0, 0, 0);
+  int32_t count = 0;
+  GetView().ForEachNode(
+      [this, app_camera, &average_position, &count](NodeHandle node) {
+        if (node == app_camera) {
+          return;
+        }
+        if (node->GetComponent<LightComponent>()) {
+          return;
+        }
+        PathManager& path_manager = GetView().GetPathManager();
+        if (path_manager.IsAncestorOf(editor_root_node_, node)) {
+          return;
+        }
+        average_position += node->GetWorldPosition();
+        count++;
+      },
+      NodeFlags::kIsRoot);
+
+  if (count > 0) {
+    average_position /= count;
+  }
+
+  camera_->GetNode()->GetParent()->SetWorldPosition(average_position);
+  camera_->GetNode()->SetWorldPosition(average_position + kCameraPosition);
+  camera_position_initialized_ = true;
+}
+
+void EditorImpl::InitializeWidgetUiSystem() {
+  BaseView& view = GetView();
+
+  widget_ui_system_.AddWidget<Hierarchy>(
+      WidgetLayoutInfo(panel_ids::kSceneWindow), view);
+  if (GetCameraConfiguration() ==
+      EditorPlugin::CameraConfiguration::kEditorAndAppCameraDefault) {
+    widget_ui_system_.AddWidget<ToggleCamera>(
+        WidgetLayoutInfo(panel_ids::kSceneWindow), view);
+  }
+  event_injector_ = widget_ui_system_.AddWidget<EventInjector>(
+      WidgetLayoutInfo(panel_ids::kSceneWindow), view);
+  widget_ui_system_.AddWidget<FilamentViewSettingsWidget>(
+      WidgetLayoutInfo(panel_ids::kSceneWindow), view);
+
+  widget_ui_system_.AddWidget<NodeDetails>(
+      WidgetLayoutInfo(panel_ids::kDetailsWindow), view);
+  widget_ui_system_.AddWidget<Transform>(
+      WidgetLayoutInfo(panel_ids::kDetailsWindow), view);
+  widget_ui_system_.AddWidget<MaterialsWidget>(
+      WidgetLayoutInfo(panel_ids::kDetailsWindow), view);
+  widget_ui_system_.AddWidget<ComponentUi>(
+      WidgetLayoutInfo(panel_ids::kDetailsWindow), view,
+      /*component_widgets_panel_id=*/
+      WidgetLayoutInfo(panel_ids::kDetailsWindow));
+
+  widget_ui_system_.AddWidget<Console>(WidgetLayoutInfo(panel_ids::kTabBar),
+                                       view);
+  widget_ui_system_.AddWidget<PerformanceWindow>(
+      WidgetLayoutInfo(panel_ids::kTabBar), view);
+  widget_ui_system_.AddWidget<EnvironmentLightEditor>(
+      WidgetLayoutInfo(panel_ids::kTabBar), view);
+#if IMP_PLATFORM(DESKTOP) || IMP_PLATFORM(WASM)
+  
+  asset_library_ = widget_ui_system_.AddWidget<AssetLibrary>(
+      WidgetLayoutInfo(panel_ids::kTabBar), view);
+#endif
+
+  widget_ui_system_.AddWidget<VisualizeBounds>(
+      WidgetLayoutInfo(panel_ids::kFreeform), view);
+  widget_ui_system_.AddWidget<VisualizeColliders>(
+      WidgetLayoutInfo(panel_ids::kFreeform), view);
+  widget_ui_system_.AddWidget<VisualizeOrigins>(
+      WidgetLayoutInfo(panel_ids::kFreeform), view);
+  widget_ui_system_.AddWidget<FileDragAndDrop>(
+      WidgetLayoutInfo(panel_ids::kFreeform), view);
+
+  // Edit mode is only available in the Impress sandbox.
+  if (is_sandbox_) {
+    widget_ui_system_.AddWidget<EditorModeToggle>(
+        WidgetLayoutInfo(panel_ids::kToolBar), view);
+  }
+}
+
+void EditorImpl::SetCameraMode(CameraMode camera_mode) {
+  // Return early if the desired camera is already in use.
+  if (current_state_.camera_mode == camera_mode) {
+    return;
+  }
+
+  switch (camera_mode) {
+    case CameraMode::kEditor:
+      // Initialize editor camera position and put the editor camera in use.
+      if (!camera_position_initialized_) {
+        InitializeCameraPosition();
+      }
+      GetView().GetHost()->SetEditorCameraOverride({}, camera_->GetCamera());
+      current_state_.camera_mode = CameraMode::kEditor;
+
+      // Enables the lighting, grid, and all Nodes under the editor root Node,
+      // and visualize them.
+      editor_root_node_->SetEnabled(true);
+      GetView().GetDisplayLayerManager().SetLayerEnabled(kOverlayGroup, true);
+      break;
+    case CameraMode::kApp:
+      GetView().GetHost()->SetEditorCameraOverride({}, nullptr);
+      current_state_.camera_mode = CameraMode::kApp;
+
+      // Disables the lighting, grid, visualizers and all Nodes under the editor
+      // root Node.
+      editor_root_node_->SetEnabled(false);
+      GetView().GetDisplayLayerManager().SetLayerEnabled(kOverlayGroup, false);
+  }
+}
+
+void EditorImpl::SetInputMode(editor::EditorImpl::InputMode input_mode) {
+  // Return early if desired input mode is already in use.
+  if (current_state_.input_mode == input_mode) {
+    return;
+  }
+  current_state_.input_mode = input_mode;
+
+  switch (input_mode) {
+    case editor::EditorImpl::InputMode::kEditor:
+      // Use the editor-specific Dispatcher.
+      // Support gestures in Editor input mode.
+      if (!gesture_manager_) {
+        gesture_manager_ = std::make_unique<GestureManager>(&dispatcher_);
+      }
+      // Store the connection to later disconnect it.
+      gesture_manager_connection_ =
+          dispatcher_.Connect([this](const PointerHitEvent& event) {
+            gesture_manager_->OnPointerHitEvent(event);
+          });
+
+      // Clean up the previous input handler added by the Editor.
+      if (is_editor_input_handler_in_use_) {
+        GetView().GetInputManager().PopInputHandler();
+      }
+      // Editor will take over the input.
+      GetView().GetInputManager().PushInputHandler(
+          std::make_unique<EditorInputHandler>(&GetView(), dispatcher_));
+      is_editor_input_handler_in_use_ = true;
+      break;
+    case editor::EditorImpl::InputMode::kApp:
+      // Disconnect the Editor input.
+      gesture_manager_connection_.Disconnect();
+      if (is_editor_input_handler_in_use_) {
+        GetView().GetInputManager().PopInputHandler();
+      }
+      is_editor_input_handler_in_use_ = false;
+
+      // Push a specific input handler that can use the Editor camera, if in
+      // Editor camera only mode.
+      if (GetCameraConfiguration() ==
+          EditorPlugin::CameraConfiguration::kEditorCameraOnly) {
+        // Use an app dispatcher what uses the editor camera.
+        GetView().GetInputManager().PushInputHandler(
+            std::make_unique<EditorInputHandler>(&GetView(),
+                                                 GetView().GetDispatcher()));
+        is_editor_input_handler_in_use_ = true;
+      }
+  }
+}
+
+void EditorImpl::EnableCameraModeToggling(Dispatcher& dispatcher) {
+  // Toggle the camera mode on Tab.
+  dispatcher.Connect(
+      [this](const imp::KeyboardEvent& event) {
+        if (event.type == KeyboardEventType::kOnUp &&
+            event.key.code == VirtualKeyCode::VK_TAB) {
+          ToggleCameraMode();
+        }
+      },
+      this);
+  // Toggle the camera on ToggleCameraEvent.
+  dispatcher.Connect(
+      [this](const ToggleCameraEvent& event) { ToggleCameraMode(); }, this);
+}
+
+void EditorImpl::EnableEditorToggling(Dispatcher& dispatcher) {
+  // Toggle the Editor on F1.
+  dispatcher.Connect(
+      [this](const imp::KeyboardEvent& event) {
+        if (event.type == KeyboardEventType::kOnUp &&
+            event.key.code == VirtualKeyCode::VK_F1) {
+          SetEnabled(!enabled_);
+        }
+      },
+      this);
+  // Toggle the Editor with 3 finger tap.
+  dispatcher.Connect(
+      [this](const imp::TapGesture::TapEvent& event) mutable {
+        if (event.pointer_count == kToggleEditorPointerCount) {
+          SetEnabled(!enabled_);
+        }
+      },
+      this);
+}
+
+void EditorImpl::EnableUndoAndRedo(Dispatcher& dispatcher) {
+  dispatcher.Connect(
+      [this](const imp::KeyboardEvent& event) {
+        if (!enabled_ || event.type != KeyboardEventType::kOnUp) {
+          return;
+        }
+        if (event.key.code == VirtualKeyCode::VK_z &&
+            HasKeyModifier(KeyModifier::CTRL_OR_GUI, event.key.modifiers)) {
+          command_manager_.Undo();
+        }
+        if (event.key.code == VirtualKeyCode::VK_y &&
+            HasKeyModifier(KeyModifier::CTRL_OR_GUI, event.key.modifiers)) {
+          command_manager_.Redo();
+        }
+      },
+      this);
+}
+
+void EditorImpl::RegisterEditorSettingChangedEventHandler() {
+  dispatcher_.Connect(
+      [this](const EditorSettingChangedEvent& event) {
+        if (event.vertex_selection_enabled.has_value()) {
+          if (*event.vertex_selection_enabled) {
+            widget_ui_system_.AddWidget<VertexSelectWidget>(
+                WidgetLayoutInfo(panel_ids::kFreeform), GetView(), dispatcher_,
+                editor_root_node_);
+          } else {
+            widget_ui_system_.RemoveWidget<VertexSelectWidget>();
+          }
+        }
+
+        std::optional<bool> load_mesh_data_on_cpu_enabled =
+            event.load_mesh_data_on_cpu_enabled;
+        if (load_mesh_data_on_cpu_enabled.has_value()) {
+          if (*load_mesh_data_on_cpu_enabled) {
+            gltf_load_options_.collider_mode =
+                GltfState::ColliderMode::GLTF_COLLIDER_TRIANGLES_PER_MESH;
+          } else {
+            gltf_load_options_.collider_mode =
+                GltfState::ColliderMode::GLTF_COLLIDER_BOUNDS_PER_MESH_DEFAULT;
+          }
+        }
+
+        std::optional<bool> bvh_mesh_collision_acceleration_enabled =
+            event.bvh_mesh_collision_acceleration_enabled;
+        if (bvh_mesh_collision_acceleration_enabled.has_value()) {
+          if (*bvh_mesh_collision_acceleration_enabled) {
+            gltf_load_options_.collider_mode = GltfState::ColliderMode::
+                GLTF_COLLIDER_MESH_COLLISION_ACCELERATOR;
+          } else {
+            gltf_load_options_.collider_mode =
+                GltfState::ColliderMode::GLTF_COLLIDER_TRIANGLES_PER_MESH;
+          }
+        }
+      },
+      this);
+}
+
+void EditorImpl::EnableUpdateSystemEventForwarding() {
+  GetView().GetDispatcher().Connect(
+      [this](const UpdateSystem::PreComponentsUpdateEvent& event) {
+        dispatcher_.Send(event);
+      },
+      this);
+  GetView().GetDispatcher().Connect(
+      [this](const UpdateSystem::PostComponentsUpdateEvent& event) {
+        dispatcher_.Send(event);
+        // The component update pass has ended, so the frame has been stepped.
+        if (run_mode_ == EditorInfo::RunMode::kPlayMode && is_paused_ &&
+            has_frames_to_step_) {
+          has_frames_to_step_ = false;
+        }
+      },
+      this);
+}
+
+EditorInfo::RunMode EditorImpl::GetRunMode() const { return run_mode_; }
+
+void EditorImpl::SetInEditMode(bool in_edit_mode) {
+  if (!is_sandbox_) return;
+
+  // If we're currently switching modes, return early.
+  if (run_mode_ == EditorInfo::RunMode::kSwitchingToEditMode ||
+      run_mode_ == EditorInfo::RunMode::kSwitchingToPlayMode) {
+    return;
+  }
+
+  // Determine the target run mode and the switch mode.
+  EditorInfo::RunMode run_mode = in_edit_mode ? EditorInfo::RunMode::kEditMode
+                                              : EditorInfo::RunMode::kPlayMode;
+  EditorInfo::RunMode switch_mode =
+      in_edit_mode ? EditorInfo::RunMode::kSwitchingToEditMode
+                   : EditorInfo::RunMode::kSwitchingToPlayMode;
+
+  // If we're already in the target run mode, return early.
+  if (run_mode_ == run_mode) {
+    return;
+  }
+
+  // Entering Play mode works by backing up the entire
+  // scene graph as NodeData so that it can be recreated as a way to revert the
+  // nodes to their original state when Stop is pressed.
+
+  // Deselect node, they are all getting reset.
+  SelectNode({});
+
+  // Used to gather all the nodes that must be destroyed when switching modes.
+  std::vector<NodeHandle> to_destroy;
+
+  GetView().ForEachNode(
+      [this, &to_destroy, in_edit_mode](NodeHandle node) {
+        // Don't recreate editor nodes.
+        if (node == editor_root_node_) {
+          return;
+        }
+
+#if IMP_RUNTIME(DEV)
+        if (node->IsEditorStaging()) {
+          return;
+        }
+#endif
+
+        // Don't recreate sandbox nodes.
+        for (const auto& sandbox_node : sandbox_nodes_) {
+          if (node == sandbox_node) {
+            return;
+          }
+        }
+
+        // Skip the default camera.
+        // TODO: What happens when the main camera has been
+        // re-parented? Or when the user overrides the main camera?
+        if (node ==
+            GetView().GetCameraManager().GetDefaultCamera()->GetNode()) {
+          return;
+        }
+
+        // Skip the default light.
+        if (GetView().GetLightManager().GetDefaultDirectionalLight() &&
+            node == GetView()
+                        .GetLightManager()
+                        .GetDefaultDirectionalLight()
+                        ->GetNode()) {
+          return;
+        }
+
+        // If we are entering Play mode, then we must save all the root nodes as
+        // NodeData so that they can be restored to their original state when
+        // stopping.
+        if (!in_edit_mode) {
+          // Handle nodes that don't have metadata as well for things like
+          // default cameras and lights that aren't created by the editor.
+          auto scene_metadata = node->GetComponent<SceneMetadata>();
+          SceneSystem::MetadataMode metadata_mode =
+              scene_metadata ? SceneSystem::MetadataMode::kInclude
+                             : SceneSystem::MetadataMode::kExclude;
+          SceneSystem::SaveMode save_mode =
+              scene_metadata ? SceneSystem::SaveMode::kAuthoredContent
+                             : SceneSystem::SaveMode::kFull;
+
+          std::string path;
+          auto scene_reference = node->GetComponent<SceneReference>();
+          if (scene_reference) {
+            path = scene_reference->GetAssetUrl();
+          }
+
+          absl::StatusOr<NodeData> node_data =
+              GetView().GetSceneSystem().SaveToData(node, save_mode);
+          if (!node_data.ok()) {
+            IMP_LOG(imp::FATAL) << "Unable to play scene because node failed to save "
+                       << node_data.status();
+          }
+          backup_node_data_.push_back({path, *node_data, metadata_mode});
+        }
+
+        to_destroy.push_back(node);
+      },
+      NodeFlags::kIsRoot);
+
+  // Destroy the nodes and re-create from the NodeData
+  //
+  // This is done even when entering Play mode instead of just using the already
+  // existing nodes because many of the components haven't had Setup called on
+  // them yet, and destroying then re-creating the scene is the easiest way to
+  // get all the Setup methods to run with the correct dependency order.
+  for (NodeHandle node : to_destroy) {
+    GetView().DestroyNode(node);
+  }
+
+  // If the active camera is destroyed, then set the camera back to the default.
+  if (!GetView().GetCameraManager().GetCamera().IsValid()) {
+    GetView().GetCameraManager().SetCamera(
+        GetView().GetCameraManager().GetDefaultCamera());
+  }
+
+  // Wait until after destroying nodes to set the flag so that it doesn't impact
+  // the life cyle methods of destroyed nodes.
+  run_mode_ = switch_mode;
+
+  // Recreate the scene from the backed up NodeData.
+  Future<absl::Status> result(absl::OkStatus());
+  for (const BackupNodeData& backup_node_data : backup_node_data_) {
+    result = result.Combine(GetView().GetSceneSystem().LoadScene(
+        backup_node_data.node_data, backup_node_data.path,
+        SceneSystem::LoadSceneOptions{.metadata_mode =
+                                          backup_node_data.metadata_mode}));
+  }
+
+  // If we are entering edit mode, then we must remove the backup NodeData.
+  // Next time Play mode is entered, new backup NodeData will be created.
+  if (in_edit_mode) {
+    backup_node_data_.clear();
+  }
+
+  // Also, always unpause when entering edit mode.
+  if (in_edit_mode) {
+    SetPaused(false);
+  }
+
+  // If plugin camera mode is linked, playing the editor automatically switches
+  // to the app camera.
+  if (GetCameraConfiguration() ==
+      EditorPlugin::CameraConfiguration::kEditorCameraOnly) {
+    if (in_edit_mode) {
+      SetInputMode(InputMode::kEditor);
+    } else {
+      SetInputMode(InputMode::kApp);
+    }
+  }
+
+  // After we finish re-creating the scene, update the run mode to the target.
+  result.Then([this, run_mode](absl::Status status) { run_mode_ = run_mode; })
+      .KeptBy(&GetView());
+}
+
+bool EditorImpl::IsPaused() const { return is_paused_; }
+
+void EditorImpl::SetPaused(bool is_paused) { is_paused_ = is_paused; }
+
+void EditorImpl::StepNextFrame() { has_frames_to_step_ = true; }
+
+bool EditorImpl::HasFramesToStep() { return has_frames_to_step_; }
+
+void EditorImpl::AddNode(NodeHandle node) {
+  if (node->GetParent()) {
+    IMP_LOG(imp::FATAL) << "Only top-level editor nodes should be added to the editor.";
+  }
+  node->SetParent(editor_root_node_);
+}
+void EditorImpl::RemoveNode(NodeHandle node) { node->SetParent(NodeHandle()); }
+
+void EditorImpl::AddSandboxNode(NodeHandle node) {
+  auto it = std::find(sandbox_nodes_.begin(), sandbox_nodes_.end(), node);
+  if (it != sandbox_nodes_.end()) {
+    return;
+  }
+  sandbox_nodes_.push_back(node);
+}
+
+void EditorImpl::RemoveSandboxNode(NodeHandle node) {
+  auto it = std::find(sandbox_nodes_.begin(), sandbox_nodes_.end(), node);
+  if (it != sandbox_nodes_.end()) {
+    sandbox_nodes_.erase(it);
+  }
+}
+
+Dispatcher& EditorImpl::GetDispatcher() { return dispatcher_; }
+
+EditorPlugin::CameraConfiguration EditorImpl::GetCameraConfiguration() const {
+  if (plugin_) {
+    return plugin_->GetCameraConfiguration();
+  }
+  return EditorPlugin::CameraConfiguration::kEditorAndAppCameraDefault;
+}
+
+NodeHandle EditorImpl::GetEditorRoot() { return editor_root_node_; }
+
+ComponentHandle<CameraComponent> EditorImpl::GetCamera() { return camera_; }
+
+ComponentHandle<CameraComponent> EditorImpl::GetActiveCamera() {
+  if (current_state_.camera_mode == CameraMode::kEditor) {
+    return camera_;
+  } else {
+    return GetView().GetCameraManager().GetCamera();
+  }
+}
+
+WidgetUiSystem& EditorImpl::GetWidgetUiSystem() { return widget_ui_system_; }
+
+AssetLibrary* EditorImpl::GetAssetLibrary() { return asset_library_; }
+
+EventInjector& EditorImpl::GetEventInjector() { return *event_injector_; }
+
+void EditorImpl::SelectNode(NodeHandle node) {
+  GetView().GetRegistry().Get<SelectionController>()->get().TrySelectNode(node);
+}
+
+GltfAsset::LoadOptions EditorImpl::GetGltfLoadOptions() const {
+  return gltf_load_options_;
+}
+
+Editor& GetOrCreateEditor(BaseView* view, std::unique_ptr<EditorPlugin> plugin,
+                          bool is_sandbox) {
+  if (plugin && view->GetRegistry().Get<editor::Editor>().ok()) {
+    IMP_LOG(imp::FATAL)
+        << "An EditorPlugin may not be injected if an Editor already exists in "
+           "the Registry.";
+  }
+  editor::Editor& editor = view->GetRegistry().GetOrRegister<editor::Editor>(
+      [view, plugin = std::move(plugin), is_sandbox]() mutable {
+        return std::make_unique<editor::EditorImpl>(view, std::move(plugin),
+                                                    is_sandbox);
+      });
+
+  editor.Initialize();  // Initialize the Editor if not already initialized.
+
+  if (is_sandbox) {
+    editor.SetEnabled(true);
+    editor.SwitchToEditorMode();
+  }
+
+  return editor;
+}
+
+EditorImpl::Info::Info(EditorImpl& editor) : editor_(editor) {}
+
+bool EditorImpl::Info::IsEnabled() const { return editor_.enabled_; }
+
+EditorInfo::RunMode EditorImpl::Info::GetRunMode() const {
+  return editor_.GetRunMode();
+}
+
+bool EditorImpl::Info::IsPaused() const { return editor_.IsPaused(); }
+
+bool EditorImpl::Info::HasFramesToStep() const {
+  return editor_.HasFramesToStep();
+}
+
+}  // namespace imp::editor

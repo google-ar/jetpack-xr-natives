@@ -1,0 +1,111 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto2";
+
+package com.google.ar.imp.view;
+
+// option cc_api_version = 2;
+option java_package = "com.google.ar.imp.view";
+option java_multiple_files = true;
+
+// Configurations for an ImpSurfaceView or ImpTextureView. A default instance is
+// sufficient for functional rendering.
+message SetupParams {
+  // Configures the threading model to use with Impress.
+  enum ThreadMode {
+    // Impress will run on the main thread using the choreographer. In most
+    // cases, this should be fine for performance since rendering is still done
+    // on a background thread. However, long running work using the Impress API
+    // could block the main thread. The benefit of this is that calls can be
+    // made between Impress and android APIs without needing to hop between
+    // threads.
+    MAIN_DEFAULT = 0;
+    // Impress will run on a background thread using the choreographer.
+    // All calls into Impress must happen from the background thread. That means
+    // that custom jni calls or calls into Impress scripting should use
+    // impApi.getFrameScheduler() to execute the work on the background thread.
+    BACKGROUND = 1;
+  }
+
+  // Configures the foveated rendering level when building for Xr
+  enum FoveationLevel {
+    OFF_DEFAULT = 0;
+    LOW = 1;
+    MEDIUM = 2;
+    HIGH = 3;
+  }
+
+  optional string custom_native_library = 1;
+  optional bool is_opaque = 2 [default = true];
+  optional int64 platform_handle = 3;
+  optional string view_identifier = 4;
+  optional float desired_size_scale = 5 [default = 1.0];
+  optional ThreadMode thread_mode = 6;
+  // Additional flags to be enabled when creating the backing swap chain in
+  // Filament. Flags should be taken from the config constants in
+  // filament/swapchain.h (e.g., filament::SwapChain::CONFIG_READABLE).
+  optional int64 swap_chain_flags = 7 [default = 0];
+  // When building for XR, whether or not to submit depth images along with
+  // color images in projection layers.
+  // https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#XR_KHR_composition_layer_depth
+  optional bool enable_composition_layer_depth = 8 [default = false];
+  // When building for XR, whether or not to apply enhanced stereoscopic
+  // rendering.
+  optional bool use_enhanced_stereoscopic_rendering = 9 [default = true];
+  // When building for XR, whether or not to use the max swapchain size over the
+  // recommended swapchain size.
+  optional bool use_max_swapchain_size = 10 [default = false];
+  // When building for XR, the level of foveation to use, as per the
+  // XR_FB_foveation OpenXR extension.
+  // https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#XR_FB_foveation
+  // Note: If foveation_level is not OFF_DEFAULT, use_quad_views must be false.
+  optional FoveationLevel foveation_level = 11 [default = OFF_DEFAULT];
+  optional bool skip_native_library_load = 12 [default = false];
+  // When building for XR, whether or not to render with quad views. In this
+  // configuration, each eye consists of two viewports of which one is smaller
+  // and fully included inside of the larger FoV one.
+  // https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#XR_VARJO_quad_views
+  // Note: If use_quad_views is true, foveation_level must be OFF_DEFAULT.
+  optional bool use_quad_views = 13 [default = false];
+  // When building for XR, whether or not to use Varjo foveated rendering. In
+  // this configuration, the smaller (higher resolution) viewport follows the
+  // eye movement, while the larger (lower resolution) viewport is fixed.
+  // https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#XR_VARJO_foveated_rendering
+  // Note: use_quad_views must be true to use this feature.
+  optional bool use_varjo_foveated_rendering = 14 [default = false];
+  // Selects the default reference space for XR applications. This should match
+  // values from
+  // https://registry.khronos.org/OpenXR/specs/1.1/man/html/XrReferenceSpaceType.html.
+  // Default to be STAGE.
+  optional int64 openxr_reference_space_type = 15 [default = 3];
+  // When building for XR, whether or not to use the eye gaze interaction
+  // extension.
+  // https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#XR_EXT_eye_gaze_interaction
+  optional bool use_eye_gaze_interaction = 16 [default = true];
+  // When building for XR, whether or not to use the AndroidSys IPD Eye
+  // Calibration extension.
+  optional bool use_ipd_eye_calibration = 17 [default = true];
+  // When building for XR, whether or not to use the Android depth texture
+  // extension.
+  optional bool use_android_depth_texture = 19 [default = false];
+  // Set to true to use default XR actions, or false if you plan to manually
+  // set XR actions with AttachXrActions.
+  optional bool use_xr_action_defaults = 20 [default = true];
+  // When building for XR, whether or not to use the FB color space extension.
+  // https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#XR_FB_color_space
+  optional bool use_fb_color_space = 21 [default = false];
+  // When building for XR, whether or not to use the AndroidSYS extensions.
+  optional bool enable_android_system_extensions = 22 [default = false];
+}

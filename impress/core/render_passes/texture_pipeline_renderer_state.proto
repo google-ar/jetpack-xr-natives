@@ -1,0 +1,165 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import "core/math/math.proto";
+import "core/proto/imp.proto";
+import "core/scene_handles/scene_handles.proto";
+import "core/view/framework/render/material_definition.proto";
+import "core/view/utils/proto/render_settings.proto";
+
+// Component for rendering a sequence of passes into offscreen textures prior to
+// the main scene being rendered.
+//
+// This can be used to create visual effects that require multiple render passes
+// like outlines and mirrors.
+//
+// Each pass can output color & depth textures that can then be used as inputs
+// into subsequent passes or the main scene.
+//
+// Each pass can specify a group to control which set of nodes get
+// rendered in which pass.
+message TexturePipelineRendererState {
+  option (imp.native_include) =
+      "core/view/framework/camera/camera_component.h";
+
+  // TODO: Use TextureConfig that's shared with
+  // OnDemandTexturePipelineRenderer.
+  message Texture {
+    // NextID: 15
+    enum Format {
+      // Auto is RGBA8 for Color textures.
+      // Auto is Depth24 for Depth textures.
+      AUTO = 0;
+      RGBA8 = 1;
+      RGB8 = 2;
+      RG8 = 3;
+      R8 = 4;
+      RGBA32F = 8;
+      RGB32F = 10;
+      RG32F = 11;
+      R32F = 7;
+      RGBA16F = 9;
+      RGB16F = 12;
+      RG16F = 13;
+      R16F = 14;
+      DEPTH24 = 5;
+      DEPTH32F = 6;
+      // TODO: Add additional formats.
+    }
+
+    // Specifies the name to use for registering the texture within
+    // the TextureRegistry. This allows the texture from this pass to be
+    // referenced by a MaterialDefinition or code.
+    string name = 1;
+
+    // Specifies the format to use for the texture.
+    Format format = 2;
+  }
+
+  // Used to automatically configure the size of the output textures for a pass.
+  message AutomaticTextureSize {
+    enum Mode {
+      // Size of the view in device independent coordinates. This is nice when
+      // using shaders impacted by the resolution, for example kernel width in
+      // image processing.
+      DEFAULT_VIEW_SIZE_VIRTUAL_PIXELS = 0;
+      // The real size of the view in physical pixels.
+      VIEW_SIZE_PHYSICAL_PIXELS = 1;
+    }
+
+    // Controls how the automatic texture size is determined.
+    Mode mode = 1;
+
+    // If assigned, this factor is multiplied against the automatic size.
+    optional float factor = 2;
+
+    // If true, the texture will resize as the view resizes. Resizes will delete
+    // the old registered texture and create a new one under the same name. To
+    // be safe, clients should not assume that the texture instance will persist
+    // across frames.
+    bool resize_with_view = 3;
+  }
+
+  // NextID: 13
+  message Pass {
+    // Determines which group this pass should render.
+    // Must be specified.
+    string group = 1;
+
+    // If assigned, a camera to use for the render pass. Otherwise, uses the
+    // main camera.
+    ComponentSceneHandle camera = 2
+        [(imp.template_type) = "::imp::CameraComponent"];
+
+    // Configuration for the output color texture from this pass.
+    oneof color_texture_config {
+      // If color_texture is assigned, a new color texture will be created.
+      Texture color_texture = 3;
+      // If registered_color_texture is assigned, texture pipeline renderer will
+      // render to that texture. The texture needs to be registered to
+      // TextureRegistry before setting up TexturePipelineRenderer.
+      // Please note that the texture needs to have
+      // filament::Texture::Usage::COLOR_ATTACHMENT and
+      // filament::Texture::Usage::SAMPLEABLE for this to work.
+      string registered_color_texture = 9;
+    }
+
+    // If assigned, controls the layer of the color texture to render to. Only
+    // applies to 3D textures or 2D array textures. To use this, first register
+    // a color texture with depth N, then set this to a layer index in [0, N).
+    optional int32 color_texture_layer = 12;
+
+    // Configuration for the output depth texture from this pass.
+    // If no configuration is specified, then no depth texture it output.
+    Texture depth_texture = 4 [(imp.optional_type) = ABSL_OPTIONAL];
+
+    // Specifies the size of the texture.
+    // If unassigned, defaults to VIEW_SIZE_VIRTUAL_PIXELS.
+    oneof texture_size {
+      AutomaticTextureSize automatic_size = 5;
+      UInt2 pixel_size = 6;
+    }
+
+    // If assigned, this material is used to render all nodes in the group for
+    // this pass.
+    MaterialDefinition override_material = 7
+        [(imp.optional_type) = ABSL_OPTIONAL];
+
+    // If assgined, the settings will be applied on top of the default view
+    // render settings.
+    imp.render_settings.ViewRenderSettings render_settings = 8
+        [(imp.optional_type) = ABSL_OPTIONAL];
+
+    // view_port_left_bottom = {left, bottom}.
+    // If assigned, the rendering viewport will be {left, bottom, width,
+    // height}.
+    // If not assigned, the rendering viewport will be {0, 0, width, height}.
+    Int2 view_port_left_bottom = 10 [(imp.optional_type) = ABSL_OPTIONAL];
+
+    // If true, the main view's render settings will be used for rendering the
+    // pass.
+    bool use_main_view_settings = 11;
+  }
+
+  // List of render passes evaluated in-order.
+  repeated Pass passes = 1;
+
+  // Optional relative ordering between TexturePipelineRenderer's.
+  // Higher priority renders first.  If unset, defaults to 0.
+  int32 priority = 2;
+}

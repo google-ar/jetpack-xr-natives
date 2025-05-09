@@ -1,0 +1,32 @@
+diff --git a/include/boost/beast/core/detail/varint.hpp b/include/boost/beast/core/detail/varint.hpp
+index 37f0b9d1..29bde189 100644
+--- a/include/boost/beast/core/detail/varint.hpp
++++ b/include/boost/beast/core/detail/varint.hpp
+@@ -10,7 +10,6 @@
+ #ifndef BOOST_BEAST_DETAIL_VARINT_HPP
+ #define BOOST_BEAST_DETAIL_VARINT_HPP
+ 
+-#include <boost/static_assert.hpp>
+ #include <cstdlib>
+ #include <iterator>
+ #include <type_traits>
+@@ -40,9 +39,6 @@ varint_read(FwdIt& first)
+ {
+     using value_type = typename
+         std::iterator_traits<FwdIt>::value_type;
+-    BOOST_STATIC_ASSERT(
+-        std::is_integral<value_type>::value &&
+-        sizeof(value_type) == 1);
+     std::size_t value = 0;
+     std::size_t factor = 1;
+     while((*first & 0x80) != 0)
+@@ -60,9 +56,6 @@ varint_write(FwdIt& first, std::size_t value)
+ {
+     using value_type = typename
+         std::iterator_traits<FwdIt>::value_type;
+-    BOOST_STATIC_ASSERT(
+-        std::is_integral<value_type>::value &&
+-        sizeof(value_type) == 1);
+     while(value > 127)
+     {
+         *first++ = static_cast<value_type>(

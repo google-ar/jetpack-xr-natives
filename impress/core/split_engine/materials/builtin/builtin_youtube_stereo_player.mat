@@ -1,0 +1,217 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+material {
+  name : "stereo_player",
+  constants : [
+    {
+      name : enableColorConversion,
+      type : bool,
+      default : false
+    },
+    {
+      // 0 = monoscopic, 1 = top/bottom, 2 = left/right stereo.
+      name : stereoType,
+      type : int,
+      default : 0
+    },
+    {
+      name : enableColorCorrection,
+      type : bool,
+      default : false
+    }
+  ],
+  parameters: [
+    {
+      type: {SAMPLER_EXTERNAL},
+      name: videoTexture
+    },
+    {
+      type: bool,
+      name: flipVertically
+    },
+    {
+      type: bool,
+      name: flipHorizontally
+    },
+    {
+      type: bool,
+      name: isStereo
+    },
+    {
+      // Indicates if the stereo mode is left/right or top/bottom.
+      type: bool,
+      name: isLeftRightStereo
+    },
+    {
+      // Indicates which eye this material is for.
+      // 0 = left, 1 = right, 2 = both.
+      type: int,
+      name: eyeMode
+    },
+    // Below three parameters are used for color correction.
+    {
+      name : maxContentLightLevel,
+      type : int,
+      default : -1
+    },
+    {
+      name: colorConversionMatrix,
+      type: float3x3
+    },
+    {
+      name: transferFunction,
+      type: int,
+      default: 0
+      // Expected values:
+      // 1: Linear
+      // 2: SRGB
+      // 3: SMPTE170M
+      // 10: Gamma22
+      // 6: ST2084
+      // 7: HLG
+      // Source: (broken link)
+    }
+  ],
+  requires : [
+      uv0
+  ],
+  variables : [
+    // Captures whether the material is being used in stereo mode or not at 'x'.
+    // If true, captures the index of the camera eye at 'y':
+    // 0.0 is the left eye, 1.0 is the right eye.
+    stereoData
+  ],
+  shadingModel: unlit,
+  depthCulling: false,
+  culling: none,
+  blending: transparent,
+}
+
+vertex {
+  void materialVertex(inout MaterialVertexInputs material) {
+    bool isLeftEye = (getEyeIndex() % 2 < 1);
+#if defined(VARIANT_HAS_STEREO)
+    material.stereoData.x = 1.0;
+    material.stereoData.y = isLeftEye ? 0.0 : 1.0;
+#else
+    material.stereoData.x = 0.0;
+#endif
+    bool correctEye = (materialParams.eyeMode == 2) ||
+        (materialParams.eyeMode == 0 && isLeftEye) ||
+        (materialParams.eyeMode == 1 && !isLeftEye);
+    // Force all the vertices to be at the same position so that we don't
+    // generate any triagles. This means we also don't need to handle anything
+    // in the fragment as all the triangles are thrown away.
+    if (!correctEye) {
+      material.worldPosition = vec4(0.0, 0.0, 0.0, 1.0);
+    }
+  }
+}
+
+fragment {
+#include "color_conversion_helpers.glsl"
+#include "super_sample.glsl"
+#include "dataspace_support.glsl"
+
+  // Necessary for high res textures.
+  precision highp float;
+
+  highp float sRGB_to_linear(highp float color) {
+    return color <= 0.04045 ?
+        color / 12.92 : pow((color + 0.055) / 1.055, 2.4);
+  }
+
+  vec3 sRGB_to_linear(vec3 color) {
+    return vec3(
+        sRGB_to_linear(color.r),
+        sRGB_to_linear(color.g),
+        sRGB_to_linear(color.b));
+  }
+
+  void material(inout MaterialInputs material) {
+    prepareMaterial(material);
+
+    vec2 uv = getUV0();
+    vec4 color;
+    bool isStereo = materialParams.isStereo && variable_stereoData.x > 0.0;
+    vec2 uv_for_this_eye = uv;
+    float flipHorizontally = materialParams.flipHorizontally ? 1.0 : 0.0;
+    float flipVertically = materialParams.flipVertically ? 1.0 : 0.0;
+
+    if (isStereo)
+    {
+      float stereoData = variable_stereoData.y;
+      if (materialParams.isLeftRightStereo)
+      {
+        uv_for_this_eye.x = (uv.x * 0.5) + (stereoData * 0.5);
+
+        uv_for_this_eye.x = mix(
+          uv_for_this_eye.x,
+          mix(
+            0.5 - uv_for_this_eye.x,
+            1.5 - uv_for_this_eye.x,
+            stereoData
+          ),
+          flipHorizontally
+        );
+
+        uv_for_this_eye.y = mix(
+          uv_for_this_eye.y,
+          1.0 - uv_for_this_eye.y,
+          flipVertically
+        );
+      }
+      else  // top/bottom stereo
+      {
+        uv_for_this_eye.y = (uv.y * 0.5) + (stereoData * 0.5);
+
+        uv_for_this_eye.y = mix(
+          uv_for_this_eye.y,
+          mix(
+            0.5 - uv_for_this_eye.y,
+            1.5 - uv_for_this_eye.y,
+            stereoData
+          ),
+          flipVertically
+        );
+
+        uv_for_this_eye.x = mix(
+          uv_for_this_eye.x,
+          1.0 - uv_for_this_eye.x,
+          flipHorizontally
+        );
+      }
+      SUPER_SAMPLE_INTO(materialParams_videoTexture, uv_for_this_eye, color);
+    }
+    else  // mono
+    {
+      uv.x = mix(uv.x, 1.0 - uv.x, flipHorizontally);
+      uv.y = mix(uv.y, 1.0 - uv.y, flipVertically);
+      SUPER_SAMPLE_INTO(materialParams_videoTexture, uv, color);
+    }
+
+    color.a = 1.0;
+    if (materialConstants_enableColorCorrection) {
+      material.baseColor.rgb =
+          convertColor(color.rgb, materialParams.colorConversionMatrix);
+    } else {
+      material.baseColor.rgb = sRGB_to_linear(color.rgb);
+      if (materialConstants_enableColorConversion) {
+        material.baseColor.rgb =
+            applyGlobalMaterialConversionMatrix(material.baseColor.xyz);
+      }
+    }
+  }
+}

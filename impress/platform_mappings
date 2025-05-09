@@ -1,0 +1,5 @@
+flags:
+  --cpu=arm64-v8a
+    //platforms:android_arm64-v8a
+  --cpu=x86_64
+    //platforms:android_x86_64

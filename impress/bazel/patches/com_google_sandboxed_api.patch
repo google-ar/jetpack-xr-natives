@@ -1,0 +1,155 @@
+diff --git a/sandboxed_api/BUILD b/sandboxed_api/BUILD
+index 02f85db..504a917 100644
+--- a/sandboxed_api/BUILD
++++ b/sandboxed_api/BUILD
+@@ -33,7 +33,6 @@ cc_library(
+ cc_library(
+     name = "embed_file",
+     srcs = [
+-        "embed_file.cc",
+         "file_toc.h",
+     ],
+     hdrs = ["embed_file.h"],
+@@ -44,7 +43,6 @@ cc_library(
+         "@com_google_absl//absl/container:flat_hash_map",
+         "@com_google_absl//absl/strings",
+         "@com_google_absl//absl/synchronization",
+-        "@com_google_sandboxed_api//sandboxed_api/sandbox2:util",
+         "@com_google_sandboxed_api//sandboxed_api/util:fileops",
+         "@com_google_sandboxed_api//sandboxed_api/util:raw_logging",
+     ],
+diff --git a/sandboxed_api/bazel/embed_data.bzl b/sandboxed_api/bazel/embed_data.bzl
+index 3e18af8..21daaba 100644
+--- a/sandboxed_api/bazel/embed_data.bzl
++++ b/sandboxed_api/bazel/embed_data.bzl
+@@ -33,6 +33,7 @@ def _sapi_cc_embed_data_impl(ctx):
+     args.add(ctx.attr.namespace if ctx.attr.namespace else "")
+     args.add(h_file_artifact)
+     args.add(cc_file_artifact)
++    args.add("flatten" if ctx.attr.flatten else "")
+     args.add_all(ctx.files.srcs)
+ 
+     ctx.actions.run(
+@@ -62,10 +63,11 @@ _sapi_cc_embed_data = rule(
+             default = Label(_FILEWRAPPER),
+         ),
+         "outs": attr.output_list(),
++        "flatten": attr.bool(),
+     },
+ )
+ 
+-def sapi_cc_embed_data(name, srcs = [], namespace = "", **kwargs):
++def sapi_cc_embed_data(name, srcs = [], namespace = "", flatten = False, **kwargs):
+     """Embeds arbitrary binary data in cc_*() rules.
+ 
+     Args:
+@@ -80,6 +82,7 @@ def sapi_cc_embed_data(name, srcs = [], namespace = "", **kwargs):
+         srcs = srcs,
+         namespace = namespace,
+         ident = name,
++        flatten = flatten,
+         outs = [
+             "%s.h" % name,
+             "%s.cc" % name,
+diff --git a/sandboxed_api/sandbox2/util.h b/sandboxed_api/sandbox2/util.h
+index 5ba81df..5e6efbe 100644
+--- a/sandboxed_api/sandbox2/util.h
++++ b/sandboxed_api/sandbox2/util.h
+@@ -55,7 +55,6 @@ class CharPtrArray {
+ 
+ // Converts an array of char* (terminated by a nullptr, like argv, or environ
+ // arrays), to an std::vector<std::string>.
+-ABSL_DEPRECATE_AND_INLINE()
+ inline void CharPtrArrToVecString(char* const* arr,
+                                   std::vector<std::string>* vec) {
+   *vec = sandbox2::util::CharPtrArray(arr).ToStringVector();
+diff --git a/sandboxed_api/tools/filewrapper/BUILD b/sandboxed_api/tools/filewrapper/BUILD
+index 2ab971d..487820b 100644
+--- a/sandboxed_api/tools/filewrapper/BUILD
++++ b/sandboxed_api/tools/filewrapper/BUILD
+@@ -33,6 +33,25 @@ cc_binary(
+     ],
+ )
+ 
++# A version for use outside of bazel.
++cc_binary(
++    name = "prebuilt_filewrapper",
++    srcs = ["filewrapper.cc"],
++    copts = sapi_platform_copts(),
++    visibility = ["//visibility:public"],
++    deps = [
++        "@com_google_absl//absl/strings",
++        "@com_google_absl//absl/strings:str_format",
++        "//sandboxed_api/util:fileops",
++        "//sandboxed_api/util:raw_logging",
++        "//sandboxed_api/util:strerror",
++    ],
++    features = [
++        "fully_static_link",  # link libc statically
++        "-pie",
++    ],
++)
++
+ sapi_cc_embed_data(
+     name = "filewrapper_embedded",
+     srcs = ["testdata/filewrapper_embedded.bin"],
+diff --git a/sandboxed_api/tools/filewrapper/filewrapper.cc b/sandboxed_api/tools/filewrapper/filewrapper.cc
+index 3e5783e..d13cc09 100644
+--- a/sandboxed_api/tools/filewrapper/filewrapper.cc
++++ b/sandboxed_api/tools/filewrapper/filewrapper.cc
+@@ -198,7 +198,7 @@ constexpr const char kCcNamespaceEndFmt[] =
+ )";
+ 
+ int main(int argc, char* argv[]) {
+-  if (argc < 7) {
++  if (argc < 8) {
+     // We're not aiming for human usability here, as this tool is always run as
+     // part of the build.
+     absl::FPrintF(stderr,
+@@ -245,6 +245,10 @@ int main(int argc, char* argv[]) {
+   if (!package_name.empty()) {
+     absl::StrAppend(&package_name, "/");
+   }
++
++  std::string flatten(*arg++);
++  --argc;
++
+   absl::StrAppend(&package_name, name);
+   absl::FPrintF(out_cc.get(), kCcFileHeaderFmt, package_name);
+   if (have_ns) {
+@@ -263,8 +267,34 @@ int main(int argc, char* argv[]) {
+         ident.begin(), ident.end(),
+         [](char c) { return !absl::ascii_isalnum(c); }, '_');
+     absl::FPrintF(out_cc.get(), kCcDataBeginFmt, ident);
++
++    std::string path = sapi::file_util::fileops::StripBasename(in_filename);
++    // If this is a generated file, strip the generated directory from path.
++    int bin_position = path.find("bin");
++    if (bin_position != std::string::npos) {
++      // Adding 3 takes us to the character after "bin".
++      int substring_index = bin_position + 3;
++      if (substring_index < path.length()) {
++        if (path[substring_index] == '/') {
++          substring_index++;
++        }
++        path = path.substr(substring_index);
++      } else {
++        path = "";
++      }
++    }
++    // If this file is part of impress used externally, remove that.
++    int com_google_impress_position = path.find("com_google_impress+");
++    if (com_google_impress_position != std::string::npos) {
++      path = path.substr(com_google_impress_position + 20);
++    }
++    if (!path.empty()) {
++      path += "/";
++    }
++    std::string prefix = flatten == "flatten" ? "" : path;
++
+     // Remember identifiers, they are needed in the kToc array.
+-    toc_entries.emplace_back(std::move(basename), std::move(ident));
++    toc_entries.emplace_back(prefix + basename, std::move(ident));
+ 
+     int c;
+     while ((c = fgetc(in.get())) != EOF) {

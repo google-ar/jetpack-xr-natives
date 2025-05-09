@@ -1,0 +1,281 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package test;
+
+import "google/protobuf/any.proto";
+import "core/proto/imp.proto";
+import "core/proto/test_standard.proto";
+import "core/proto/unused_import.proto";
+
+option (imp.impress_append_namespace) = true;
+
+enum TestEnum {
+  A = 0;
+  B = 1;
+  C = 2;
+  D = 4;
+}
+
+enum TestEnum2 {
+  K = 0;
+}
+
+message TestMessageSimple {
+  int32 i32 = 1;
+}
+
+message TestMessage {
+  enum NestedEnum {
+    DEFAULT = 0;
+    A = 4;
+    B = 2;
+    C = 1;
+    D = 3;
+  }
+
+  message NestedMessage {
+    enum RecursivelyNestedEnum {
+      DEFAULT = 0;
+      E = 2;
+      F = 1;
+    }
+    bytes b = 1;
+    sint32 si32 = 2;
+    sint64 si64 = 3;
+    fixed32 fi32 = 4;
+    fixed64 fi64 = 5;
+    optional sint32 optional_si32 = 6;
+  }
+
+  NestedMessage nested = 1;
+  int32 i32 = 2;
+  uint64 u64 = 3;
+  float flt = 4;
+  double dbl = 5;
+  string str = 6;
+  bool b = 7;
+  repeated NestedMessage nesteds = 8;
+  repeated double dbls = 9;
+  map<sint32, string> m1 = 10;
+  map<string, NestedMessage> m2 = 11;
+  string underscore_case = 12;
+  TestEnum test_enum = 13;
+}
+
+message ChangedMessage {
+  TestMessage.NestedMessage nested = 1;
+  sfixed32 i32 = 2;
+  fixed64 u64 = 3;
+  double flt = 4;
+  float dbl = 5;
+  bytes str = 6;
+  bool b = 7;
+  repeated TestMessage.NestedMessage nesteds = 8;
+  repeated double dbls = 9;
+  map<sint32, string> m1 = 10;
+  map<string, TestMessage.NestedMessage> m2 = 11;
+}
+
+message NullableMessage {
+  optional sfixed32 i32 = 1 [(imp.optional_type) = UNIQUE_PTR];
+  optional ChangedMessage m = 2 [(imp.optional_type) = UNIQUE_PTR];
+}
+
+message OptionalChangedMessage {
+  optional sfixed32 i32 = 1;
+  ChangedMessage m = 2 [(imp.optional_type) = ABSL_OPTIONAL];
+}
+
+message NativeMessage {
+  option (imp.native_type) = "::test::NativeStruct";
+  option (imp.native_include) = "core/proto/test_native.h";
+
+  sint32 i32 = 1;
+  uint64 u64 = 2;
+  float flt = 3;
+}
+
+message OneofMessage {
+  oneof variant {
+    sint32 i32 = 1;
+    double dbl = 2;
+    string str = 3;
+    TestMessage msg = 4;
+  }
+}
+
+message OptionalOneofMessage {
+  OneofMessage optional_oneof = 1 [(imp.optional_type) = ABSL_OPTIONAL];
+}
+
+message OneOfMessageContainingMessage {
+  oneof variant {
+    TestMessageSimple simple = 1;
+    string str = 2;
+  }
+}
+
+message RepeatedOneof {
+  repeated OneofMessage variants = 1;
+}
+
+message UniqueMessage {
+  optional int32 value = 1 [(imp.optional_type) = UNIQUE_PTR];
+}
+
+message RecursiveMessage {
+  message Nested {
+    oneof value_or_next {
+      int32 value = 1;
+      RecursiveMessage next = 2 [(imp.optional_type) = UNIQUE_PTR];
+    }
+  }
+  int32 value = 1;
+  Nested nested = 2;
+}
+
+message RecursiveMessageUsingMap {
+  int32 value = 1;
+  map<string, RecursiveMessageUsingMap> recursive_map = 2;
+}
+
+message NodeData {
+  map<int32, ChildData> children = 1;
+}
+
+message ChildData {
+  int32 value = 1;
+  NodeData node = 2;
+}
+
+message StringData {
+  string str = 1;
+  string view = 2 [ctype = STRING_PIECE];
+}
+
+message NoCodegen {
+  option (imp.no_codegen) = true;
+
+  NativeMessage msg = 1;
+}
+
+message NativeNoCodegenMessage {
+  option (imp.no_codegen) = true;
+  option (imp.native_type) = "::test::NativeNoCodegenStruct";
+  option (imp.native_include) = "core/proto/test_native.h";
+
+  sint32 i32 = 1;
+}
+
+message TestAny {
+  google.protobuf.Any any = 1;
+}
+
+message TestAnyVector {
+  repeated google.protobuf.Any any = 1;
+}
+
+message OptionalMessage {
+  optional sfixed32 i32 = 1;
+}
+
+message OptionalNestedMessage {
+  optional sfixed32 i32 = 1;
+  OptionalMessage nested = 2 [(imp.optional_type) = ABSL_OPTIONAL];
+}
+
+message MessageWithOptionalString {
+  optional string str = 1;
+}
+
+message MessageWithOptionalFloat {
+  optional float flt = 1;
+}
+
+message MessageWithNestedOptional {
+  MessageWithOptionalString nested = 1 [(imp.optional_type) = ABSL_OPTIONAL];
+}
+
+message TemplatedNativeMessage {
+  option (imp.no_codegen) = true;
+  option (imp.native_type) = "::test::TemplatedNativeStruct";
+  option (imp.native_include) = "core/proto/test_native.h";
+}
+
+message ContainsTemplatedFieldsWithMultipleIncludesMessage {
+  option (imp.native_include) =
+      "core/proto/test_include_one.h";
+  option (imp.native_include) =
+      "core/proto/test_include_two.h";
+
+  TemplatedNativeMessage type_one = 1
+      [(imp.template_type) = "::test::IncludedTypeOne"];
+  TemplatedNativeMessage type_two = 2
+      [(imp.template_type) = "::test::IncludedTypeTwo"];
+}
+
+message ContainsStandardProto {
+  StandardMessage standard_msg = 1 [(imp.is_imported_standard_proto) = true];
+
+  oneof variant {
+    int32 i32 = 2;
+    StandardMessage oneof_msg = 3 [(imp.is_imported_standard_proto) = true];
+  }
+
+  StandardMessage.NestedMessage nested_msg = 4
+      [(imp.is_imported_standard_proto) = true];
+}
+
+message TestRepeatedMerge {
+  message NestedMessage {
+    sint32 si32 = 1;
+    fixed64 fi64 = 5;
+  }
+
+  repeated double dbls = 1;
+  repeated double dbls_concat = 2
+      [(imp.repeated_merge_strategy) = IMP_REPEATED_MERGE_STRATEGY_CONCAT];
+  repeated NestedMessage nesteds = 3;
+  repeated NestedMessage nesteds_overwrite = 4
+      [(imp.repeated_merge_strategy) = IMP_REPEATED_MERGE_STRATEGY_OVERWRITE];
+  repeated NestedMessage nesteds_concat = 5
+      [(imp.repeated_merge_strategy) = IMP_REPEATED_MERGE_STRATEGY_CONCAT];
+}
+
+message TestOptionalEnum {
+  optional TestEnum enum_optional = 1;
+  optional TestEnum enum_unique = 2 [(imp.optional_type) = UNIQUE_PTR];
+}
+
+message TestUnusedOption {
+  string unused_option_field = 1 [(test.unused_test_option) = true];
+}
+
+message TestRepeatedBool {
+  repeated bool bools = 1;
+}
+
+message TestMapMessage {
+  message Value {
+    string key = 1;
+  }
+  map<string, Value> map = 1;
+}
+
+message TestNestedMapMessage {
+  map<string, TestMapMessage> nested_map = 1;
+}

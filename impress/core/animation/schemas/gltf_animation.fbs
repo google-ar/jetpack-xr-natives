@@ -1,0 +1,324 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+include "core/common/schemas/math.fbs";
+
+namespace imp.animation.schemas;
+
+// TODO: Move node_targets and morph_target_node_targets into
+// node_animations and morph_target_animations, respectively.
+table GltfAnimation {
+  name : string (required);
+  first_t : float;
+  last_t : float;
+
+  node_animations : [GltfNodeAnimation];  // optional
+  node_targets : [GltfNodeAnimationTarget];  // optional
+  morph_target_animations : [MorphTargetAnimation];  // optional
+  morph_target_node_targets : [GltfNodeAnimationTarget];  // optional
+  material_animations: [MaterialAnimation];  // optional
+  material_targets: [MaterialAnimationTarget];  // optional
+  light_animations: [LightPunctualAnimation];  // optional
+  light_targets: [LightAnimationTarget];  // optional
+}
+root_type GltfAnimation;
+file_identifier "ImpA";
+
+union ChannelFloat2 {
+  kConstant:ConstantFloat2,
+  kStep:StepCurveFloat2,
+  kLinear:LinearCurveFloat2,
+  kCubic:CubicCurveFloat2,
+}
+
+union ChannelFloat3 {
+  kConstant:ConstantFloat3,
+  kStep:StepCurveFloat3,
+  kLinear:LinearCurveFloat3,
+  kCubic:CubicCurveFloat3,
+}
+
+union ChannelFloat4 {
+  kConstant:ConstantFloat4,
+  kStep:StepCurveFloat4,
+  kLinear:LinearCurveFloat4,
+  kCubic:CubicCurveFloat4,
+}
+
+union ChannelQuatf {
+  kConstant:ConstantQuatf,
+  kStep:StepCurveQuatf,
+  kLinear:LinearCurveQuatf,
+  kCubic:CubicCurveQuatf,
+}
+
+union ChannelFloatVector {
+  kConstant:ConstantFloatVector,
+  kStep:StepCurveFloatVector,
+  kLinear:LinearCurveFloatVector,
+  kCubic:CubicCurveFloatVector,
+}
+
+union ChannelFloat {
+  kConstant:ConstantFloat,
+  kStep:StepCurveFloat,
+  kLinear:LinearCurveFloat,
+  kCubic:CubicCurveFloat,
+}
+
+// TODO: Rename to TrsAnimation and make t/r/s fields optional.
+table GltfNodeAnimation {
+  translation : ChannelFloat3;
+  rotation : ChannelQuatf;
+  scale : ChannelFloat3;
+}
+root_type GltfNodeAnimation;
+file_identifier "ImNA";
+
+table MorphTargetAnimation {
+  weights : ChannelFloatVector (required);
+}
+root_type MorphTargetAnimation;
+file_identifier "IMTA";
+
+table MaterialAnimation {
+  base_color_factor: ChannelFloat4;
+  metallic_factor: ChannelFloat;
+  roughness_factor: ChannelFloat;
+  alpha_cutoff: ChannelFloat;
+  emissive_factor: ChannelFloat3;
+  normal_texture_scale: ChannelFloat;
+  occlusion_texture_strength: ChannelFloat;
+  ior: ChannelFloat;
+  transmission: ChannelFloat;
+  texture_transforms: [TextureTransformAnimation];  // optional
+}
+root_type MaterialAnimation;
+file_identifier "ImRA";
+
+table TextureTransformAnimation {
+  offset: ChannelFloat2;
+  rotation: ChannelFloat;
+  scale: ChannelFloat2;
+  target: uint16;
+}
+root_type TextureTransformAnimation;
+file_identifier "ITTA";
+
+table LightPunctualAnimation {
+  color: ChannelFloat3;
+  intensity: ChannelFloat;
+  range: ChannelFloat;
+  inner_cone_angle: ChannelFloat;
+  outer_cone_angle: ChannelFloat;
+}
+root_type LightPunctualAnimation;
+file_identifier "ImIA";
+
+struct GltfNodeAnimationTarget {
+  bone : uint16;
+}
+
+struct MaterialAnimationTarget {
+  material_id: uint16;
+}
+
+struct LightAnimationTarget {
+  light_id: uint16;
+}
+
+struct FrameTime {
+  t : float;
+}
+
+
+struct ConstantFloat2 {
+  value : schemas.Float2;
+}
+
+struct StepFrameFloat2 {
+  position : schemas.Float2;
+}
+table StepCurveFloat2 {
+  times : [FrameTime] (required);
+  values : [StepFrameFloat2] (required);
+}
+
+struct LinearFrameFloat2 {
+  position : schemas.Float2;
+}
+table LinearCurveFloat2 {
+  times : [FrameTime] (required);
+  values : [LinearFrameFloat2] (required);
+}
+
+struct CubicFrameFloat2 {
+  in_tangent : schemas.Float2;
+  position : schemas.Float2;
+  out_tangent : schemas.Float2;
+}
+table CubicCurveFloat2 {
+  times : [FrameTime] (required);
+  values : [CubicFrameFloat2] (required);
+}
+
+struct ConstantFloat3 {
+  value : schemas.Float3;
+}
+
+struct StepFrameFloat3 {
+  position : schemas.Float3;
+}
+table StepCurveFloat3 {
+  times : [FrameTime] (required);
+  values : [StepFrameFloat3] (required);
+}
+
+struct LinearFrameFloat3 {
+  position : schemas.Float3;
+}
+table LinearCurveFloat3 {
+  times : [FrameTime] (required);
+  values : [LinearFrameFloat3] (required);
+}
+
+struct CubicFrameFloat3 {
+  in_tangent : schemas.Float3;
+  position : schemas.Float3;
+  out_tangent : schemas.Float3;
+}
+table CubicCurveFloat3 {
+  times : [FrameTime] (required);
+  values : [CubicFrameFloat3] (required);
+}
+
+struct ConstantFloat4 {
+  value : schemas.Float4;
+}
+
+struct StepFrameFloat4 {
+  position : schemas.Float4;
+}
+table StepCurveFloat4 {
+  times : [FrameTime] (required);
+  values : [StepFrameFloat4] (required);
+}
+
+struct LinearFrameFloat4 {
+  position : schemas.Float4;
+}
+table LinearCurveFloat4 {
+  times : [FrameTime] (required);
+  values : [LinearFrameFloat4] (required);
+}
+
+struct CubicFrameFloat4 {
+  in_tangent : schemas.Float4;
+  position : schemas.Float4;
+  out_tangent : schemas.Float4;
+}
+table CubicCurveFloat4 {
+  times : [FrameTime] (required);
+  values : [CubicFrameFloat4] (required);
+}
+
+struct ConstantQuatf {
+  value : schemas.Quatf;
+}
+
+struct StepFrameQuatf {
+  position : schemas.Quatf;
+}
+table StepCurveQuatf {
+  times : [FrameTime] (required);
+  values : [StepFrameQuatf] (required);
+}
+
+struct LinearFrameQuatf {
+  position : schemas.Quatf;
+}
+table LinearCurveQuatf {
+  times : [FrameTime] (required);
+  values : [LinearFrameQuatf] (required);
+}
+
+struct CubicFrameQuatf {
+  in_tangent : schemas.Quatf;
+  position : schemas.Quatf;
+  out_tangent : schemas.Quatf;
+}
+table CubicCurveQuatf {
+  times : [FrameTime] (required);
+  values : [CubicFrameQuatf] (required);
+}
+
+struct ConstantFloatVector {
+  value : [float:256];
+}
+
+struct StepFrameFloatVector {
+  position : [float:256];
+}
+table StepCurveFloatVector {
+  times : [FrameTime] (required);
+  values : [StepFrameFloatVector] (required);
+}
+
+struct LinearFrameFloatVector {
+  position : [float:256];
+}
+table LinearCurveFloatVector {
+  times : [FrameTime] (required);
+  values : [LinearFrameFloatVector] (required);
+}
+
+struct CubicFrameFloatVector {
+  in_tangent : [float:256];
+  position : [float:256];
+  out_tangent : [float:256];
+}
+table CubicCurveFloatVector {
+  times : [FrameTime] (required);
+  values : [CubicFrameFloatVector] (required);
+}
+
+struct ConstantFloat {
+  value : schemas.Float;
+}
+
+struct StepFrameFloat {
+  position : schemas.Float;
+}
+table StepCurveFloat {
+  times : [FrameTime] (required);
+  values : [StepFrameFloat] (required);
+}
+
+struct LinearFrameFloat {
+  position : schemas.Float;
+}
+table LinearCurveFloat {
+  times : [FrameTime] (required);
+  values : [LinearFrameFloat] (required);
+}
+
+struct CubicFrameFloat {
+  in_tangent : schemas.Float;
+  position : schemas.Float;
+  out_tangent : schemas.Float;
+}
+table CubicCurveFloat {
+  times : [FrameTime] (required);
+  values : [CubicFrameFloat] (required);
+}

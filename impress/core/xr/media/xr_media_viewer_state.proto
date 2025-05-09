@@ -1,0 +1,61 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+// Configuration Data for a media renderer (for image, video, etc).
+message XrMediaViewerState {
+  // The shape of the media.
+  enum ShapeType {
+    DEFAULT_FLAT = 0;
+    VR180 = 1;
+    FULL360 = 2;
+    USE_EXISTING = 3;  // Use mesh from an existing renderer on the same node.
+  }
+
+  // How the two sides of stereo media are stored.
+  // Enum consts are defined to match the values returned by media3.
+  // Please see here for more information:
+  // //depot/google3/third_party/java_src/android_libs/media/libraries/common/src/main/java/androidx/media3/common/C.java
+  // LINT.IfChange
+  enum StereoType {
+    MONOSCOPIC = 0;
+    TOP_BOTTOM = 1;
+    LEFT_RIGHT = 2;
+    STEREO_MESH = 3;
+    INTERLEAVED_LEFT_PRIMARY = 4;
+    INTERLEAVED_RIGHT_PRIMARY = 5;
+    INTERLEAVED_LEFT_PRIMARY_WITH_DEPTH = 6;
+    INTERLEAVED_RIGHT_PRIMARY_WITH_DEPTH = 7;
+    // The value for unset values is at the bottom,
+    // because the first value listed in an enum must be zero.
+    UNSET = -1;
+  }
+  // LINT.ThenChange(//depot/google3/core/xr/media/data/stereo.glsl)
+
+  string asset_url = 1;
+
+  ShapeType shape_type = 2;
+  StereoType stereo_type = 3;
+
+  optional string custom_material = 6;
+
+  // DRM license's URL.
+  optional string drm_license_url = 7;
+
+  // DRM scheme UUID.
+  optional string drm_scheme_uuid = 8;
+}

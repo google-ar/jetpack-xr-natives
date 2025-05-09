@@ -1,0 +1,115 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+include "core/common/schemas/math.fbs";
+namespace imp.schemas;
+
+table BoundsInfo {
+  bounds : Box (required);
+}
+
+enum VertexAttribute : uint8 {
+  POSITION = 0,
+  TANGENTS = 1,
+  COLOR = 2,
+  UV0 = 3,
+  UV1 = 4,
+  BONE_INDICES = 5,
+  BONE_WEIGHTS = 6,
+  MORPH_POSITION_0 = 8,
+  MORPH_POSITION_1 = 9,
+  MORPH_POSITION_2 = 10,
+  MORPH_POSITION_3 = 11,
+  MORPH_TANGENTS_0 = 12,
+  MORPH_TANGENTS_1 = 13,
+  MORPH_TANGENTS_2 = 14,
+  MORPH_TANGENTS_3 = 15,
+}
+
+enum AttributeType : uint8 {
+  BYTE,
+  BYTE2,
+  BYTE3,
+  BYTE4,
+  UBYTE,
+  UBYTE2,
+  UBYTE3,
+  UBYTE4,
+  SHORT,
+  SHORT2,
+  SHORT3,
+  SHORT4,
+  USHORT,
+  USHORT2,
+  USHORT3,
+  USHORT4,
+  INT,
+  UINT,
+  FLOAT,
+  FLOAT2,
+  FLOAT3,
+  FLOAT4,
+  HALF,
+  HALF2,
+  HALF3,
+  HALF4,
+}
+
+struct VertexAttributeInfo {
+  attribute: VertexAttribute;
+  type: AttributeType;
+  offset: uint32;
+  normalized: bool;
+}
+
+table VertexBlockInfo {
+  // TODO: If attributes were separated out, we could build
+  // in-place in mesh_builder.cc.
+  attributes: [VertexAttributeInfo] (required);
+  buffer: [uint8] (required);
+  stride: uint32;
+}
+
+table VertexBufferInfo {
+  blocks: [VertexBlockInfo] (required);
+  vertex_count: ulong;
+  advanced_skinning: bool;
+}
+
+enum IndexType : uint8 {
+  USHORT,
+  UINT,
+}
+
+table IndexBufferInfo {
+  type: IndexType;
+  buffer: [uint8] (required);
+}
+
+// "SkinningBufferInfo" not to be confused with "SkinInfo". The latter describes
+// the entire skeleton and joint hierarchy, whereas this one is the list of
+// per-vertex bone indices and weights.
+table SkinningBufferInfo {
+  bone_indices_and_weights: [Float2] (required);
+}
+
+table MorphTargetAttributeInfo {
+  positions : [uint8] (required);
+  tangents: [uint8] (required);
+}
+
+table MorphTargetBufferInfo {
+  targets : [MorphTargetAttributeInfo] (required);
+  vertex_count : ulong;
+}

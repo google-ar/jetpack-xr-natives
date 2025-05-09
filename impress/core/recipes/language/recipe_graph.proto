@@ -1,0 +1,372 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import "google/protobuf/any.proto";
+import "core/math/math.proto";
+import "core/ncsb/node_handle_message.proto";
+import "core/proto/imp.proto";
+import "core/scene_handles/scene_handles.proto";
+
+// NodeId is a unique identifier for a node.
+message NodeId {
+  uint32 index = 1;
+}
+
+// SocketConnection specifies a return value from a node's return values.
+//
+// A SocketConnection can reference the return values of certain ExecutableNode
+// like CallStatement.
+// A SocketConnection can also reference values of ValueNode. Please note that
+// ValueNode will always be re-evalutated when referenced.
+// A SocketConnection can also reference values of arguments passed to an
+// EventNode.
+message SocketConnection {
+  NodeId node_id = 1;
+  string socket_name = 2;
+}
+
+// ExecutableNodeConnection specifies a connection to an ExecutableNode.
+message ExecutableNodeConnection {
+  NodeId node_id = 1 [(imp.optional_type) = ABSL_OPTIONAL];
+}
+
+// LiteralArray represents a list of literals.
+message LiteralArray {
+  repeated Literal values = 1;
+}
+
+// LiteralTuple represents a tuple of literals. This is functionally the same as
+// a LiteralArray, but is handled as a different type in the interpreter.
+message LiteralTuple {
+  repeated Literal values = 1;
+}
+
+// LiteralMap represents a map of literals.
+message LiteralMap {
+  map<string, Literal> values = 1;
+}
+
+// TODO: Create more scalable way to introduce Impress types into
+// Recipe Literals.
+// RecipeRayHit represents an imp::RayHit.
+message RecipeRayHit {
+  float distance = 1;
+  NodeHandleMessage node = 2;
+  Float3 world_point = 3;
+  Quatf world_orientation = 4;
+  Float3 world_normal = 5 [(imp.optional_type) = ABSL_OPTIONAL];
+}
+
+// Literal represents a constant value.
+message Literal {
+  oneof value {
+    int32 int_value = 1;
+    float float_value = 2;
+    double double_value = 3;
+    bool bool_value = 4;
+    string string_value = 5;
+    Float2 float2_value = 6;
+    Float3 float3_value = 7;
+    Float4 float4_value = 8;
+    Quatf quatf_value = 9;
+    Mat3f mat3f_value = 10;
+    Mat4f mat4f_value = 11;
+    NodeHandleMessage node_value = 12;
+    google.protobuf.Any proto_value = 13;
+    Box box_value = 14;
+    NodeSceneHandle node_scene_value = 15;
+    LiteralArray array_value = 16;
+    LiteralTuple tuple_value = 17;
+    LiteralMap map_value = 18;
+    RecipeRayHit ray_hit_value = 19;
+  }
+}
+
+// ValueConnection specifies a connection to a value.
+// The value can be either a literal value or an evaluated value from a socket
+// on a node.
+message ValueConnection {
+  oneof connection {
+    SocketConnection socket_connection = 1;
+    Literal literal_value = 2;
+  }
+}
+
+// VariableDeclaration specifies the declaration of a Recipe variable.
+// Variables can only be one of the following types and can be initialized with
+// a Literal.
+message VariableDeclaration {
+  enum Type {
+    UNKNOWN_VARIABLE_TYPE = 0;
+
+    INT = 1;
+    FLOAT = 2;
+    DOUBLE = 3;
+    BOOL = 4;
+    STRING = 5;
+    FLOAT2 = 6;
+    FLOAT3 = 7;
+    FLOAT4 = 8;
+    QUATF = 9;
+    MAT3F = 10;
+    MAT4F = 11;
+    NODE = 12;
+    PROTO = 13;
+    BOX = 14;
+    NODE_SCENE = 15;
+    ARRAY = 16;
+    TUPLE = 17;
+    MAP = 18;
+    RAY_HIT = 19;
+  }
+
+  string name = 1;
+  Type type = 2;
+  Literal init_value = 3 [(imp.optional_type) = ABSL_OPTIONAL];
+}
+
+// Identifier can be used to reference a Recipe variable.
+message Identifier {
+  string name = 1;
+}
+
+message UnaryExpression {
+  enum UnaryOps {
+    UNKNOWN_UNARY_OP = 0;
+
+    ABSOLUTE = 1;  // 'abs'
+    SQRT = 8;      // 'sqrt'
+    LOG = 9;       // 'log'
+    // sign of value. 1 if value > 0. 0 if value == 0. -1 if value < 0.
+    SIGN = 10;
+    // normalized value.
+    NORMALIZE = 11;
+
+    // Trigonometry Operators
+    SIN = 2;
+    COS = 3;
+    TAN = 4;
+    ASIN = 5;
+    ACOS = 6;
+    ATAN = 7;
+
+    // Boolean Operators
+    NOT = 12;
+  }
+
+  UnaryOps op = 1;
+  ValueConnection input = 2;
+}
+
+message BinaryExpression {
+  enum BinaryOps {
+    UNKNOWN_BINARY_OP = 0;
+
+    // Arithmetic Operators
+    ADD = 1;       // '+'
+    SUBTRACT = 2;  // '-'
+    MULTIPLY = 3;  // '*'
+    DIVIDE = 4;    // '/'
+    MOD = 13;      // '%'
+
+    // Relational Operators
+    EQUALS = 5;                 // '=='
+    NOT_EQUALS = 6;             // '!='
+    GREATER_THAN = 7;           // '>'
+    LESS_THAN = 8;              // '<'
+    GREATER_THAN_OR_EQUAL = 9;  // '>='
+    LESS_THAN_OR_EQUAL = 10;    // '<='
+
+    // Logical Operators
+    AND = 11;  // '&&'
+    OR = 12;   // '||'
+
+    // Vector Operators
+    DOT = 14;
+    CROSS = 15;
+
+    MIN = 16;  // Returns the smaller value of the two values.
+    MAX = 17;  // Returns the larger value of the two values.
+  }
+
+  BinaryOps op = 1;
+  ValueConnection left = 2;
+  ValueConnection right = 3;
+}
+
+// CallExpression calls a function that's registerd in RecipeSystem.
+// A CallExpression can take arbitary number of arguments and return a
+// map of values.
+message CallExpression {
+  string name = 1;
+  repeated ValueConnection args = 2;
+  map<string, ValueConnection> named_args = 3;
+}
+
+message CallStatement {
+  CallExpression expression = 1;
+  ExecutableNodeConnection next_node = 2;
+}
+
+message AsyncCallStatement {
+  CallExpression expression = 1;
+  ExecutableNodeConnection next_node = 2;
+  ExecutableNodeConnection on_done_node = 3;
+}
+
+message AssignmentStatement {
+  enum AssignmentOps {
+    UNKNOWN_ASSIGNMENT_OP = 0;
+
+    ASSIGN = 1;           // '='
+    ADD_ASSIGN = 2;       // '+='
+    SUBTRACT_ASSIGN = 3;  // '-='
+    MULTIPLY_ASSIGN = 4;  // '*='
+    DIVIDE_ASSIGN = 5;    // '/='
+  }
+
+  AssignmentOps op = 1;
+  repeated Identifier targets = 2;
+  ValueConnection value = 3;
+  ExecutableNodeConnection next_node = 4;
+}
+
+message BranchStatement {
+  ValueConnection test = 1;
+  ExecutableNodeConnection true_next_node = 2;
+  ExecutableNodeConnection false_next_node = 3;
+}
+
+// VariableDeclarationStatement is intended for declaring variables dynamically
+// during graph execution. Please note that variables declared during graph
+// execution are considered temporary and will go out of scope when the graph
+// finishes executing. If a variable needs to be shared across the entire graph,
+// consider declaring it as a member variable of the graph.
+message VariableDeclarationStatement {
+  VariableDeclaration declaration = 1;
+  ExecutableNodeConnection next_node = 2;
+}
+
+// LoopStatement performs one or more executions of an execution node, and is a
+// pure control flow mechanism.
+// To prevent infinite loops, the count read by this node must be a positive
+// integer value.
+message LoopStatement {
+  ValueConnection start_index = 1;
+  ValueConnection end_index = 2;
+  ValueConnection increment = 3;
+  ExecutableNodeConnection looped_node = 4;
+  ExecutableNodeConnection completed_node = 5;
+}
+
+// WhileStatement performs executions of an execution node until a condition is
+// met, and is a pure control flow mechanism. To prevent infinite while loops,
+// the condition read by this node must not be a constant true value.
+message WhileStatement {
+  ValueConnection condition = 1;
+  ExecutableNodeConnection looped_node = 2;
+  ExecutableNodeConnection completed_node = 3;
+}
+
+// SequenceStatement iterates through the list of executable nodes in the order
+// of their stored indices.
+message SequenceStatement {
+  repeated ExecutableNodeConnection next_nodes = 1;
+}
+
+// EventTrigger fires an event with the given name and associated arguments out
+// of the RecipeGraph.
+message EventTrigger {
+  string event_name = 1;
+  map<string, ValueConnection> args = 2;
+  ExecutableNodeConnection next_node = 3;
+}
+
+// ValueNode represents a node that can be evaluated on demand to return values.
+//   - ValueNode returns at least one value.
+//.  - ValueNode can reference other ValueNode as parameters.
+//.  - ValueNode is evaluated on demand and cannot have any execution flow
+// connection.
+message ValueNode {
+  oneof value {
+    Identifier identifier = 1;
+    BinaryExpression binary_expression = 2;
+    CallExpression call_expression = 3;
+    UnaryExpression unary_expression = 4;
+  }
+}
+
+// ExecutableNodes are the building blocks of the execution model of the
+// RecipeGraph, and form the execution flow. Each executable node can trigger
+// executions in 0 or more downstream nodes, depending on its connections and
+// the nature of the node itself.
+//   - ExecutableNode can reference ValueNode as parameters.
+//   - ExecutableNode can reference return values from other ExecutableNode as
+//   parameters as long as they’re executed before it.
+//   - ExecutableNode does not have to return any values.
+//   - ExecutableNode does not have to be connected to ExecutableNode. Having no
+//   consequent connection means the execution has reached an end.
+//
+// TODO: Add support for triggering custom events within events.
+message ExecutableNode {
+  oneof statement {
+    CallStatement call = 1;
+    AssignmentStatement assignment = 2;
+    BranchStatement branch = 3;
+    VariableDeclarationStatement variable_declaration = 4;
+    LoopStatement loop = 5;
+    SequenceStatement sequence = 6;
+    EventTrigger event = 7;
+    AsyncCallStatement async_call = 8;
+    WhileStatement while_loop = 9;
+  }
+}
+
+// EventNode is an execution entry point for RecipeGraph.
+//   - EventNode contains a string name.
+//   - EventNode can have execution flows to ExecutableNode.
+//   - EventNode can have a list of socket names. These socket names are
+//     associated with the arguments passed to the next_node.
+message EventNode {
+  string event_name = 1;
+  ExecutableNodeConnection next_node = 2;
+  repeated string socket_names = 3;
+}
+
+// RecipeNode represents a node in a RecipeGraph.
+//   - RecipeNode contains NodeId.
+//   - RecipeNode contains a string name which is purely for visualization
+//     purposes, and have no effect on execution.
+//   - RecipeNode can be of one of the following types:
+//       ValueNode, ExecutableNode, and EventNode.
+message RecipeNode {
+  NodeId id = 1;
+  string name = 2;
+  oneof node {
+    ValueNode value_node = 3;
+    ExecutableNode executable_node = 4;
+    EventNode event_node = 5;
+  }
+}
+
+// RecipeGraph contains a graph of RecipeNode and can be used to construct a
+// RecipeRuntimeGraph.
+message RecipeGraph {
+  repeated RecipeNode recipe_nodes = 1;
+  repeated VariableDeclaration member_declarations = 2;
+}

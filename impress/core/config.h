@@ -1,0 +1,193 @@
+/*
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#ifndef THIRD_PARTY_IMPRESS_CORE_CONFIG_H_
+#define THIRD_PARTY_IMPRESS_CORE_CONFIG_H_
+
+// Imp adds iteration and debug support in 'dev' builds.  The binary cost is
+// non trivial so these are removed in 'ship' builds.
+// expect IMP_RUNTIME_CONFIG=DEV or
+// IMP_RUNTIME_CONFIG=SHIP
+#define IMP_RUNTIME_PRIVATE_DEFINITION_DEV() 0
+#define IMP_RUNTIME_PRIVATE_DEFINITION_SHIP() 1
+#define IMP_RUNTIME_XSMASH(X, Y) X##Y()
+#define IMP_RUNTIME_SMASH(X, Y) IMP_RUNTIME_XSMASH(X, Y)
+// Ex: IMP_RUNTIME(DEV) === 1 in 'dev' builds
+#define IMP_RUNTIME(X)                     \
+  (IMP_RUNTIME_PRIVATE_DEFINITION_##X() == \
+   IMP_RUNTIME_SMASH(IMP_RUNTIME_PRIVATE_DEFINITION_, IMP_RUNTIME_CONFIG))
+
+// Imp supports targeting OpenGL or Metal backends.
+// expect IMP_MATERIAL_API_CONFIG=OPENGL or
+// IMP_MATERIAL_API_CONFIG=METAL or
+// IMP_MATERIAL_API_CONFIG=VULKAN
+#define IMP_MATERIAL_API_PRIVATE_DEFINITION_OPENGL() 0
+#define IMP_MATERIAL_API_PRIVATE_DEFINITION_METAL() 1
+#define IMP_MATERIAL_API_PRIVATE_DEFINITION_VULKAN() 2
+#define IMP_MATERIAL_API_XSMASH(X, Y) X##Y()
+#define IMP_MATERIAL_API_SMASH(X, Y) IMP_MATERIAL_API_XSMASH(X, Y)
+// Ex: IMP_MATERIAL_API(OPENGL) === 1 when using an OpenGL backend.
+#define IMP_MATERIAL_API(X)                                     \
+  (IMP_MATERIAL_API_PRIVATE_DEFINITION_##X() ==                 \
+   IMP_MATERIAL_API_SMASH(IMP_MATERIAL_API_PRIVATE_DEFINITION_, \
+                          IMP_MATERIAL_API_CONFIG))
+
+// PLATFORM macros; more than one may be enabled in a translation unit.
+#define IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID() 0
+#define IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API19() 0
+#define IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API21() 0
+#define IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API23() 0
+#define IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API24() 0
+#define IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API29() 0
+#define IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API30() 0
+#define IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API33() 0
+#define IMP_PLATFORM_PRIVATE_DEFINITION_IOS() 0
+#define IMP_PLATFORM_PRIVATE_DEFINITION_IOS_SIMULATOR() 0
+#define IMP_PLATFORM_PRIVATE_DEFINITION_WASM() 0
+#define IMP_PLATFORM_PRIVATE_DEFINITION_MACOS() 0
+#define IMP_PLATFORM_PRIVATE_DEFINITION_WINDOWS() 0
+#define IMP_PLATFORM_PRIVATE_DEFINITION_LINUX() 0
+#define IMP_PLATFORM_PRIVATE_DEFINITION_ROBOLECTRIC() 0
+#define IMP_PLATFORM_PRIVATE_DEFINITION_DESKTOP() 0
+// Ex: IMP_PLATFORM(ANDROID) is 1 when compiling for android, 0 otherwise.
+#define IMP_PLATFORM(X) IMP_PLATFORM_PRIVATE_DEFINITION_##X()
+
+// ---- Discovered Platforms
+
+#if defined(__EMSCRIPTEN__)
+// Wasm
+#undef IMP_PLATFORM_PRIVATE_DEFINITION_WASM
+#define IMP_PLATFORM_PRIVATE_DEFINITION_WASM() 1
+
+#elif defined(_WINDOWS) || defined(_WIN32) || defined(WIN32)
+// Windows
+#undef IMP_PLATFORM_PRIVATE_DEFINITION_WINDOWS
+#define IMP_PLATFORM_PRIVATE_DEFINITION_WINDOWS() 1
+
+#elif defined(__APPLE__)
+// Apple
+#include <TargetConditionals.h>
+#if TARGET_OS_IPHONE
+// Apple:iOS
+#undef IMP_PLATFORM_PRIVATE_DEFINITION_IOS
+#define IMP_PLATFORM_PRIVATE_DEFINITION_IOS() 1
+#endif
+#if TARGET_OS_MAC && !TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
+// Apple:Mac
+#undef IMP_PLATFORM_PRIVATE_DEFINITION_MACOS
+#define IMP_PLATFORM_PRIVATE_DEFINITION_MACOS() 1
+#endif
+#if TARGET_OS_SIMULATOR
+// Apple:Simulator
+#undef IMP_PLATFORM_PRIVATE_DEFINITION_IOS_SIMULATOR
+#define IMP_PLATFORM_PRIVATE_DEFINITION_IOS_SIMULATOR() 1
+#endif
+// (End of Apple)
+#elif defined(__ANDROID__)
+// Android
+#undef IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID
+#define IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID() 1
+#if !defined(__ANDROID_API__)
+#error "__ANDROID_API__ must be defined"
+#endif
+// Note: To instantiate ImpView, we require at least API 19 toolchain; before
+// that, OpenGLES 3.0 didn't exist.
+#if __ANDROID_API__ >= 19
+// Android:Api19
+#undef IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API19
+#define IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API19() 1
+#endif
+#if __ANDROID_API__ >= 21
+// Android:Api21
+#undef IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API21
+#define IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API21() 1
+#endif
+#if __ANDROID_API__ >= 23
+// Android:Api23
+#undef IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API23
+#define IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API23() 1
+#endif
+#if __ANDROID_API__ >= 24
+// Android:Api24
+#undef IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API24
+#define IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API24() 1
+#endif
+#if __ANDROID_API__ >= 29
+// Android:Api29
+#undef IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API29
+#define IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API29() 1
+#endif
+#if __ANDROID_API__ >= 30
+// Android:Api30
+#undef IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API30
+#define IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API30() 1
+#endif
+#if __ANDROID_API__ >= 33
+// Android:Api33
+#undef IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API33
+#define IMP_PLATFORM_PRIVATE_DEFINITION_ANDROID_API33() 1
+#endif
+
+// (End of Android)
+#elif defined(__linux__) || defined(__linux)
+// Linux
+#undef IMP_PLATFORM_PRIVATE_DEFINITION_LINUX
+#define IMP_PLATFORM_PRIVATE_DEFINITION_LINUX() 1
+
+#endif
+
+// ---- Explicitly requested Platforms.
+
+// Creating a custom macro ROBOLECTRIC_CC to avoid using Android-native APIs and
+// files when testing the cc libraries on Android running on Robolectric
+#if defined(ROBOLECTRIC_IMP_PLATFORM)
+
+#undef IMP_PLATFORM_PRIVATE_DEFINITION_ROBOLECTRIC
+#define IMP_PLATFORM_PRIVATE_DEFINITION_ROBOLECTRIC() 1
+
+#endif
+
+// ---- Implicit (logical) Platforms.
+
+#if (IMP_PLATFORM(WINDOWS) || IMP_PLATFORM(LINUX) || IMP_PLATFORM(MACOS)) && \
+    !IMP_PLATFORM(ROBOLECTRIC)
+
+#undef IMP_PLATFORM_PRIVATE_DEFINITION_DESKTOP
+#define IMP_PLATFORM_PRIVATE_DEFINITION_DESKTOP() 1
+
+#endif
+
+// ---- Configuration for different threading APIs.
+
+#define IMP_THREADS_PRIVATE_DEFINITION_STDLIB() 0
+#define IMP_THREADS_PRIVATE_DEFINITION_GOOGLE3() 0
+// Ex: IMP_THREADS(STDLIB) is 1 when compiling for WASM, 0 otherwise.
+#define IMP_THREADS(X) IMP_THREADS_PRIVATE_DEFINITION_##X()
+
+#undef IMP_THREADS_PRIVATE_DEFINITION_STDLIB
+#define IMP_THREADS_PRIVATE_DEFINITION_STDLIB() 1
+#undef IMP_THREADS_PRIVATE_DEFINITION_GOOGLE3
+#define IMP_THREADS_PRIVATE_DEFINITION_GOOGLE3() 0
+
+// ---- Default editor configuration.
+
+#ifdef IMP_INVERT_EDITOR_INPUT
+#define IMP_INVERT_EDITOR_INPUT_DEFAULT_VALUE true
+#else
+#define IMP_INVERT_EDITOR_INPUT_DEFAULT_VALUE false
+#endif
+
+#endif  // THIRD_PARTY_IMPRESS_CORE_CONFIG_H_

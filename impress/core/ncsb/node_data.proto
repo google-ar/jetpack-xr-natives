@@ -1,0 +1,156 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import "google/protobuf/any.proto";
+import "core/math/math.proto";
+import "core/proto/imp.proto";
+
+// option cc_api_version = 2;
+option java_multiple_files = true;
+option java_package = "com.google.ar.imp.proto";
+
+// Represents the transformation data of a node.
+// Includes position, scale, and rotation.
+// Rotation can be represented either as euler angles, or as a quaternion.
+message TransformData {
+  // Determines the position of a node. Default is (0,0,0).
+  Float3 position = 1 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // Determines the scale of a node. Default is (1,1,1).
+  Float3 scale = 2 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // Determines the rotation of a node. Defaults to an identity quaternion.
+  //
+  // Can be assigned as either a quaternion or as euler angles.
+  oneof rotation_oneof {
+    // Rotation as quaternion (should be a normalized float4).
+    Quatf rotation = 3;
+
+    // Euler angles in degrees. This uses (x,y,z) as (pitch, yaw, roll), and
+    // uses a YXZ rotation order. YXZ can be thought of as "Turn to face the
+    // target(y), then look up or down(x), then tilt your head side to side(z)".
+    Float3 euler_angles = 4;
+  }
+}
+
+// Represents a component along with settings that can be applied to any
+// component regardless of what type it is.
+message ComponentWithMetadata {
+  // If set to true, then the component starts out disabled when it is loaded.
+  // IsEnabled() will be false within the component's Setup method, and
+  // OnActiveStatusChanged will not be called until the first time the component
+  // becomes active.
+  bool disabled = 1;
+
+  // A proto registered by a component using IsfInfo or StatelessIsfInfo.
+  // Determines what type of component to add with what data.
+  google.protobuf.Any component = 2;
+}
+
+// Represents a node including its properties, children, and components.
+//
+// NodeData is the root type of a .isf file, which can be used to load a
+// hierarchy of impress node's from data at runtime. The .isf is generated using
+// the imp_isf_data build rule. It's just an imp proto, so it can be constructed
+// dynamically too.
+//
+// See //depot/google3/samples/isf for an example.
+message NodeData {
+  // Specifies a list of groups used to control when a node is
+  // rendered.
+  message Groups {
+    repeated string groups = 1;
+  }
+
+  // Represents the name of the node. Not required to be assigned.
+  string name = 1;
+
+  // A unique identifier for the node.
+  // Can be used by a NodeSceneHandle field within a component's proto to
+  // reference this node.
+  optional sint32 unique_id = 2;
+
+  // Specifies the path to another .isf file to use as the base for this node.
+  //
+  // All settings, components, and children within the base .isf file will be
+  // applied to this node. Anything specified within this file will override
+  // whatever is specified in the base .isf, merging the two together.
+  //
+  // If the base .isf and this .isf both contain a component called FooState,
+  // then the fields of FooState will be merged together, preferring the fields
+  // within this .isf.
+  //
+  // If this node has a child whose name matches a child of the base .isf, then
+  // the children will also be merged together.
+  //
+  // Scene handles can refer to nodes within the base .isf, but unique_id's are
+  // required to be globally unique across both files.
+  // TODO: Explore a better way to reference scene handles across
+  // files, probably by a pathing scheme.
+  //
+  // See:
+  // samples/isf/data/sample_scene.textproto
+  string base = 3;
+
+  // If set to true, then the node starts out disabled when it is loaded.
+  // By default, node is enabled.
+  optional bool disabled = 4;
+
+  // Specifies what groups this node is part of.
+  //
+  // If unassigned, the node is part of the group
+  // Node::kMainGroupName ("Main").
+  //
+  // By default, only the main group is rendered. To render other groups,
+  // use the components TexturePassesRenderer, OverlayPassesRenderer, or a
+  // custom component that renders a group.
+  //
+  // TODO: Implement TexturePassesRenderer
+  // TODO: Implement OverlayPassesRenderer
+  Groups groups = 5 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // Represents the transform of the node as a position, rotation, and scale.
+  TransformData transform = 6;
+
+  // List of components to add to this node.
+  //
+  // Each element must be a proto registered by a component using IsfInfo or
+  // StatelessIsfInfo.
+  repeated google.protobuf.Any components = 7;
+
+  // List of components to add to to this node configured with additional
+  // settings that are common to all components.
+  //
+  // This field is separate from the regular components field so that authors
+  // of .isf files don't need to write the boilerplate for adding metadata in
+  // the more common case where is isn't needed.
+  repeated ComponentWithMetadata components_with_metadata = 8;
+
+  // List of children parented to this node.
+  // Can be imported from another .isf file, or fully defined in the same file.
+  repeated NodeData children = 9;
+}
+
+// Represents a component that can be loaded from a .isf file that does not have
+// a particular proto message associated with that component. Used to load
+// components that don't contain any component-specific Serialized data.
+message StatelessComponent {
+  // The type of the component to be created.  This should match the string
+  // passed into the Savable::Stateless in the component's header file.
+  string type = 1;
+}

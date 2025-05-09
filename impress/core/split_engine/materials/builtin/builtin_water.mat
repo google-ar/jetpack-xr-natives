@@ -1,0 +1,112 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+material {
+    name : "Water Reflection Effect",
+    constants : [
+        {
+            name : enableColorConversion,
+            type : bool,
+            default : false
+        }
+    ],
+    parameters : [
+        {
+            type : samplerCubemap,
+            name : reflectionCube
+        },
+        {
+            type : sampler2d,
+            name : normalMap
+        },
+        {
+            type : float,
+            name : normalTiling
+        },
+        {
+            type : float,
+            name : normalSpeed
+        }
+    ],
+    requires : [
+        uv0,
+        tangents
+    ],
+    variables : [],
+    vertexDomain : object,
+    shadingModel : unlit,
+    blending : opaque,
+    quality : low,
+    culling : back,
+}
+
+fragment {
+#include "color_conversion_helpers.glsl"
+
+    // Necessary because we use getUserTime() in the uvs.
+    precision highp float;
+
+    float3 UnpackNormal(float4 normal) {
+        return (normal.xyz * 2.0 - 1.0);
+    }
+
+    float3 NormalBlend_Reoriented(float3 a, float3 b) {
+        float3 t = a.xyz + float3(0.0, 0.0, 1.0);
+        float3 u = b.xyz * float3(-1.0, -1.0, 1.0);
+        return (t / t.z) * dot(t, u) - u;
+    }
+
+    float Fresnel_Effect(float exp) {
+        float3 normal = getWorldGeometricNormalVector(); // already normalized in vertex shader
+        float3 viewDir =
+                getWorldViewVector(); // normalize(getWorldCameraPosition() - getWorldPosition());
+
+        // float ndotv = getNdotV(); // can't use before prepareMaterial()
+        float ndotv = saturate(dot(normal, viewDir));
+        return pow(1.0 - ndotv, exp);
+    }
+
+    float3 NormalStrength(float3 In, float Strength) {
+        return float3(In.rg * Strength, mix(1.0, In.b, saturate(Strength)));
+    }
+
+    void material(inout MaterialInputs material) {
+        // Normal map
+        float offset = getUserTime().x * materialParams.normalSpeed;
+
+        float2 uv_a = getUV0() * materialParams.normalTiling + offset;
+        float2 uv_b = getUV0() * materialParams.normalTiling - offset;
+        float3 normal_a = UnpackNormal(textureLod(materialParams_normalMap, uv_a, 0.0));
+        float3 normal_b = UnpackNormal(textureLod(materialParams_normalMap, uv_b, 0.0));
+
+        float3 blended = NormalBlend_Reoriented(normal_a, normal_b);
+
+        float minusFresnel = 1.0 - Fresnel_Effect(0.04);
+        float3 normalStrength = NormalStrength(blended, minusFresnel);
+
+        material.normal = normalStrength;
+
+        // Attention! here is the prepareMaterial()
+        prepareMaterial(material);
+
+        // Reflection texture
+        float3 reflectionTexture =
+                texture(materialParams_reflectionCube, getWorldReflectedVector()).rgb;
+
+        material.baseColor = float4(reflectionTexture, 1.0);
+        if (materialConstants_enableColorConversion) {
+            material.baseColor.xyz = applyGlobalMaterialConversionMatrix(material.baseColor.xyz);
+        }
+    }
+}

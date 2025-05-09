@@ -1,0 +1,50 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+material {
+  name : "Valid Receiver Material Test",
+  depthWrite: false,
+  parameters: [
+    { type: sampler2d, name: shadowTexture },
+    { type: mat4, name: projection }
+  ],
+  variables : [
+        uv
+  ],
+  requires: [ uv0 ],
+  blending: opaque,
+  shadingModel: unlit,
+}
+
+vertex {
+  void materialVertex(inout MaterialVertexInputs material) {
+    float3 worldPosition =
+      mulMat4x4Float3(getWorldFromModelMatrix(), getPosition().xyz).xyz;
+    float4 clip_pos = mulMat4x4Float3(materialParams.projection, worldPosition);
+    material.uv.xy = (clip_pos.xy / clip_pos.w + 1.0) * 0.5;
+  }
+}
+
+fragment {
+  void material(inout MaterialInputs material) {
+    prepareMaterial(material);
+    float2 uv = variable_uv.xy;
+    if (uv.x >= 0.0f && uv.x <= 1.0f && uv.y >= 0.0f && uv.y <= 1.0f) {
+      float shadow = 1.0 - texture(materialParams_shadowTexture, uv).r;
+      float strong_shadow = shadow * shadow;
+      vec3 shadow_final = vec3(strong_shadow);
+      material.baseColor = vec4(shadow_final, 1.0);
+    }
+  }
+}

@@ -1,0 +1,105 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import "core/proto/imp.proto";
+
+message SyncData {
+  int32 sync_value = 1;
+}
+
+message AsyncData {
+  int32 async_value = 1;
+}
+
+message NoSetupData {
+  int32 no_setup_value = 1;
+}
+
+message TypeWithDependencyA {
+  option (imp.native_type) = "::imp::test::TypeWithDependencyA";
+  option (imp.native_include) =
+      "core/ncsb/test_component_native.h";
+}
+
+message TypeWithDependencyB {
+  option (imp.native_type) = "::imp::test::TypeWithDependencyB";
+  option (imp.native_include) =
+      "core/ncsb/test_component_native.h";
+}
+
+message ContainsFieldWithDep {
+  int32 int_val = 1;
+  TypeWithDependencyA field = 2;
+}
+
+message ContainsFieldsWithDuplicateDeps {
+  int32 int_val = 1;
+  TypeWithDependencyA field = 2;
+  TypeWithDependencyA field_two = 3;
+}
+
+message ContainsFieldsWithTwoDeps {
+  int32 int_val = 1;
+  TypeWithDependencyA field = 2;
+  TypeWithDependencyB field_two = 3;
+}
+
+message ContainsFieldsWithOptionalDep {
+  int32 int_val = 1;
+  optional TypeWithDependencyA field = 2 [(imp.optional_type) = ABSL_OPTIONAL];
+}
+
+message ContainsFieldsWithUniqueDep {
+  int32 int_val = 1;
+  optional TypeWithDependencyA field = 2 [(imp.optional_type) = UNIQUE_PTR];
+}
+
+message ContainsFieldsWithRepeatedDep {
+  int32 int_val = 1;
+  repeated TypeWithDependencyA field = 2;
+}
+
+message ContainsFieldsWithMappedDep {
+  int32 int_val = 1;
+  map<string, TypeWithDependencyA> field = 2;
+}
+
+message ContainsFieldsWithOneOfDeps {
+  oneof one_of {
+    int32 int_val = 1;
+    TypeWithDependencyA field = 2;
+    TypeWithDependencyB field_two = 3;
+  }
+}
+
+message ContainsFieldWithNestedDep {
+  message Nested {
+    TypeWithDependencyA field = 1;
+  }
+  Nested nested = 1;
+}
+
+// Used by component_test.cc to test AddComponentWithState.
+message DummyState {
+  int32 data = 1;
+}
+
+// Used by component_test.cc to test AddComponentWithState.
+message DummyMoveOnlyState {
+  optional int32 data = 1 [(imp.optional_type) = UNIQUE_PTR];
+}

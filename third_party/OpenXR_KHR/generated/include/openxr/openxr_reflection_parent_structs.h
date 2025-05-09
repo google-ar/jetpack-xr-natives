@@ -2,7 +2,7 @@
 #define OPENXR_REFLECTION_PARENT_STRUCTS_H_ 1
 
 /*
-** Copyright (c) 2017-2024, The Khronos Group Inc.
+** Copyright (c) 2017-2025 The Khronos Group Inc.
 **
 ** SPDX-License-Identifier: Apache-2.0 OR MIT
 */
@@ -66,6 +66,7 @@ This file contains expansion macros (X Macros) for OpenXR structures that have a
     _avail(XrEventDataSpaceEraseCompleteFB, XR_TYPE_EVENT_DATA_SPACE_ERASE_COMPLETE_FB) \
     _avail(XrEventDataSpaceShareCompleteFB, XR_TYPE_EVENT_DATA_SPACE_SHARE_COMPLETE_FB) \
     _avail(XrEventDataSpaceListSaveCompleteFB, XR_TYPE_EVENT_DATA_SPACE_LIST_SAVE_COMPLETE_FB) \
+    _avail(XrEventDataPassthroughLayerResumedMETA, XR_TYPE_EVENT_DATA_PASSTHROUGH_LAYER_RESUMED_META) \
     _avail(XrEventDataRecommendedResolutionChangedANDROID, XR_TYPE_EVENT_DATA_RECOMMENDED_RESOLUTION_CHANGED_ANDROID) \
     _avail(XrEventDataHeadsetFitChangedML, XR_TYPE_EVENT_DATA_HEADSET_FIT_CHANGED_ML) \
     _avail(XrEventDataEyeCalibrationChangedML, XR_TYPE_EVENT_DATA_EYE_CALIBRATION_CHANGED_ML) \
@@ -268,11 +269,6 @@ This file contains expansion macros (X Macros) for OpenXR structures that have a
     _avail(XrFutureCompletionEXT, XR_TYPE_FUTURE_COMPLETION_EXT) \
     _avail(XrWorldMeshStateRequestCompletionML, XR_TYPE_WORLD_MESH_STATE_REQUEST_COMPLETION_ML) \
     _avail(XrWorldMeshRequestCompletionML, XR_TYPE_WORLD_MESH_REQUEST_COMPLETION_ML) \
-    _avail(XrCreateSpatialContextCompletionEXTX1, XR_TYPE_CREATE_SPATIAL_CONTEXT_COMPLETION_EXTX1) \
-    _avail(XrCreateSpatialDiscoverySnapshotCompletionEXTX1, XR_TYPE_CREATE_SPATIAL_DISCOVERY_SNAPSHOT_COMPLETION_EXTX1) \
-    _avail(XrCreateSpatialPersistenceContextCompletionEXTX1, XR_TYPE_CREATE_SPATIAL_PERSISTENCE_CONTEXT_COMPLETION_EXTX1) \
-    _avail(XrPersistSpatialEntityCompletionEXTX1, XR_TYPE_PERSIST_SPATIAL_ENTITY_COMPLETION_EXTX1) \
-    _avail(XrUnpersistSpatialEntityCompletionEXTX1, XR_TYPE_UNPERSIST_SPATIAL_ENTITY_COMPLETION_EXTX1) \
 
 
 
@@ -318,18 +314,14 @@ This file contains expansion macros (X Macros) for OpenXR structures that have a
 
 
 
-/// Like XR_LIST_ALL_STRUCTURE_TYPES, but only includes types whose parent struct type is XrSpatialCapabilityConfigurationBaseHeaderEXTX1
-#define XR_LIST_ALL_CHILD_STRUCTURE_TYPES_XrSpatialCapabilityConfigurationBaseHeaderEXTX1(_avail, _unavail) \
-    _impl_XR_LIST_ALL_CHILD_STRUCTURE_TYPES_XrSpatialCapabilityConfigurationBaseHeaderEXTX1_CORE(_avail, _unavail) \
+/// Like XR_LIST_ALL_STRUCTURE_TYPES, but only includes types whose parent struct type is XrShareSpacesRecipientBaseHeaderMETA
+#define XR_LIST_ALL_CHILD_STRUCTURE_TYPES_XrShareSpacesRecipientBaseHeaderMETA(_avail, _unavail) \
+    _impl_XR_LIST_ALL_CHILD_STRUCTURE_TYPES_XrShareSpacesRecipientBaseHeaderMETA_CORE(_avail, _unavail) \
 
 
-// Implementation detail of XR_LIST_ALL_CHILD_STRUCTURE_TYPES_XrSpatialCapabilityConfigurationBaseHeaderEXTX1()
-#define _impl_XR_LIST_ALL_CHILD_STRUCTURE_TYPES_XrSpatialCapabilityConfigurationBaseHeaderEXTX1_CORE(_avail, _unavail) \
-    _avail(XrSpatialCapabilityConfigurationPlaneTrackingEXTX1, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_PLANE_TRACKING_EXTX1) \
-    _avail(XrSpatialCapabilityConfigurationQrCodeEXTX1, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_QR_CODE_EXTX1) \
-    _avail(XrSpatialCapabilityConfigurationMicroQrCodeEXTX1, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_MICRO_QR_CODE_EXTX1) \
-    _avail(XrSpatialCapabilityConfigurationArucoMarkerEXTX1, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_ARUCO_MARKER_EXTX1) \
-    _avail(XrSpatialCapabilityConfigurationAprilTagEXTX1, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_APRIL_TAG_EXTX1) \
+// Implementation detail of XR_LIST_ALL_CHILD_STRUCTURE_TYPES_XrShareSpacesRecipientBaseHeaderMETA()
+#define _impl_XR_LIST_ALL_CHILD_STRUCTURE_TYPES_XrShareSpacesRecipientBaseHeaderMETA_CORE(_avail, _unavail) \
+    _avail(XrShareSpacesRecipientGroupsMETA, XR_TYPE_SHARE_SPACES_RECIPIENT_GROUPS_META) \
 
 
 

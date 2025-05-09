@@ -1,0 +1,236 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import "core/canvas/fonts/font_params.proto";
+import "core/math/math.proto";
+import "core/proto/imp.proto";
+
+// Renders a text string in 3D space.
+//
+// This component is an alternative to using CanvasSource directly to render
+// text. In some ways, it's more constrained than CanvasSource. However, it's
+// built to be more optimal in cases where a large number of rapidly changing
+// labels need to be rendered.
+//
+// Internally it uses a font atlas, so each glyph in the text is rendered on a
+// separate quad within the text renderer's mesh. This means that all labels
+// share glyphs instead of duplicating them in texture memory and repeatedly
+// re-drawing them.
+//
+// Next ID: 21
+message TextRendererState {
+  // Type used for bottom_pivot and top_pivot. These two fields respectively
+  // determine how a pivot.y value of 0 or a pivot.y value of 1 positions text
+  // about the node origin. Values between 0 and 1 are linearly interpolated.
+  //
+  // For example, a pivot.y value of 0.5, a bottom_pivot value of
+  // VERTICAL_PIVOT_DESCENT, and a top_pivot value of VERTICAL_PIVOT_ASCENT will
+  // position the text visually such that it is centered about halfway between
+  // the descent and ascent of the default font.
+  enum VerticalPivot {
+    // Defaults to `VERTICAL_PIVOT_BASELINE' for bottom_pivot, and
+    // `VERTICAL_PIVOT_ASCENT' for top_pivot.
+    VERTICAL_PIVOT_UNSPECIFIED = 0;
+    // Align to the bottom of the extent of the *current* text value.
+    //
+    // If there are no descenders, for example, as in the word "text", then this
+    // edge will align closely to the bottom of the four characters. However,
+    // with a descender, such as in the word "yarn", then this edge will instead
+    // align to the bottom extent of the "y".
+    //
+    // Note that the extent includes the stroke of the text. The extent lies on
+    // the outside edge of the stroke.
+    VERTICAL_PIVOT_BOTTOM_EXTENT = 1;
+    // Align to the descent of the *default font*.
+    VERTICAL_PIVOT_DESCENT = 2;
+    // Align to the baseline.
+    VERTICAL_PIVOT_BASELINE = 3;
+    // Align to the ascent of the *default font*.
+    //
+    // The ascent of the default font is generally, but not necessarily, the
+    // highest extent that any glyph will reach. However, especially in the case
+    // of fallback fonts, some glyphs will extend beyond the ascent of the
+    // default font.
+    //
+    // Note that this aligns to the fill, not the stroke.
+    VERTICAL_PIVOT_ASCENT = 4;
+    // Align to the top of the extent of the *current* text value.
+    //
+    // If there are no ascenders, for example, as in the word "aeon", then this
+    // edge will align closely to the top of the four characters. However, with
+    // an ascender, such as in the word "harp", then this edge will instead
+    // align to the top extent of the "h".
+    //
+    // Note that the extent includes the stroke of the text. The extent lies on
+    // the outside edge of the stroke.
+    VERTICAL_PIVOT_TOP_EXTENT = 5;
+  }
+
+  // Type used for left_pivot and right_pivot. These two fields respectively
+  // determine how a pivot.x value of 0 or a pivot.x value of 1 positions text
+  // about the node origin. Values between 0 and 1 are linearly interpolated.
+  //
+  // For example, a pivot.x value of 0.5, a left_pivot value of
+  // HORIZONTAL_PIVOT_LEFT, and a right_pivot value of HORIZONTAL_PIVOT_RIGHT
+  // will position the text visually such that it is centered about halfway
+  // across the length of the text.
+  enum HorizontalPivot {
+    // Defaults to `HORIZONTAL_PIVOT_START_OR_END'.
+    HORIZONTAL_PIVOT_UNSPECIFIED = 0;
+    // Align to the left edge of the typographic bounds of the text, ignoring
+    // stroke. Typographic bounds includes the full advance width of the text.
+    // So contrary to left and left_extent which aligns to the left edge
+    // pixels of the text, typographic bounds can include leading and trailing
+    // space.
+    HORIZONTAL_PIVOT_TYPOGRAPHIC_LEFT = 1;
+    // Align to the left extent of the text.
+    //
+    // The extent lies along the outside edge of the text, including the stroke.
+    HORIZONTAL_PIVOT_LEFT_EXTENT = 2;
+    // Align to the left of the text.
+    //
+    // Note that this aligns to the fill, not the stroke.
+    HORIZONTAL_PIVOT_LEFT = 3;
+    // Align to the right of the text.
+    //
+    // Note that this aligns to the fill, not the stroke.
+    HORIZONTAL_PIVOT_RIGHT = 4;
+    // Align to the right edge of the typographic bounds of the text, ignoring
+    // stroke. Typographic bounds includes the full advance width of the text.
+    // So contrary to right and right_extent which aligns to the right edge
+    // pixels of the text, typographic bounds can include leading and trailing
+    // space.
+    HORIZONTAL_PIVOT_TYPOGRAPHIC_RIGHT = 5;
+    // Align to the right extent of the text.
+    //
+    // The extent lies along the outside edge of the text, including the stroke.
+    HORIZONTAL_PIVOT_RIGHT_EXTENT = 6;
+  }
+
+  // The text to render.
+  string text = 1;
+
+  // Specifies what font to use to render this text. This could be either a
+  // registered font or a system font with font weight and text style.
+  oneof font_params {
+    // Specifies what registered font to use to render this text.
+    //
+    // Fonts are registered for use by calling GlyphAtlas::AddFont to a
+    // GlyphAtlas object in the Impress Registry.
+    //
+    // If empty, then a default system font is used.
+    string font_name = 2;
+
+    // Specifies what font to use to render this text that's supplied by each
+    // platform.
+    SystemFontParams system_font_params = 12;
+  }
+
+  // Specifies the size of the font in pixels.
+  //
+  // LINT.IfChange(font_size_pixels)
+  // The default value is 150.
+  // LINT.ThenChange(//depot/google3/core/text/glyph_atlas.h:font_size_pixels)
+  optional float font_size_pixels = 3;
+
+  // Specifies the color used to render the text.
+  // The color is specified in the range of 0.0 - 1.0 for each component.
+  // The default value is white: (1.0, 1.0, 1.0, 1.0).
+  oneof color {
+    // Alpha is set to 1.0
+    imp.Float3 color_rgb = 4;
+    // Alpha is explicitly specified.
+    imp.Float4 color_rgba = 5;
+  }
+
+  // Specifies the pivot.
+  //
+  // A text mesh will be created with the origin point at the bottom left
+  // corner. The pivot essentially represents a ratio for how much of the mesh
+  // is translated. So that a different point of the text is attached to the
+  // node position.
+  //
+  // (0.0, 0.0) means the bottom left corner of the text's bounds is aligned
+  // with the node position.
+  // (1.0, 1.0) means the top right corner of the text's bounds is aligned with
+  // the node position.
+  // (0.5, 0.5) means the center of the text's bounds is aligned with the node
+  // position.
+  //
+  // The default value is Center left (0.0, 0.5)
+  //
+  // See also bottom_pivot and top_pivot.
+  imp.Float2 pivot = 6 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // See the corresponding enum definitions for an explanation of the following
+  // three values.
+  VerticalPivot top_pivot = 15;
+  VerticalPivot bottom_pivot = 16;
+  HorizontalPivot left_pivot = 17;
+  HorizontalPivot right_pivot = 18;
+
+  // Specifies the width of the stroke in pixels.
+  // If zero (or unset) then there is no stroke.
+  float stroke_width_pixels = 7;
+
+  // Specifies the color used to render the stroke part of the text.
+  // The color is specified in the range of 0.0 - 1.0 for each component.
+  // The default value is white: (1.0, 1.0, 1.0, 1.0).
+  oneof stroke_color {
+    // Alpha is set to 1.0
+    imp.Float3 stroke_color_rgb = 8;
+    // Alpha is explicitly specified.
+    imp.Float4 stroke_color_rgba = 9;
+  }
+
+  // Specifies the offset of the label's pivot point from the world anchor,
+  // in pixels. Increasing x moves the label to the right, increasing y moves
+  // the label down. The offset is in the same scale as the font size, so an
+  // offset on the y axis of 150 pixels would shift a text of font size 150 down
+  // by its own height.
+  imp.Float2 offset = 10;
+
+  // Specifies the url to the material to be used.
+  // Materials can be loaded by using imp_material to specify the material file
+  // to be used and referencing the url by calling GetUrl on the material asset.
+  //
+  // If empty, the default Impress text material is used.
+  optional string material = 11;
+  // TODO: Add ability to control font, font size.
+  // Probably by adding support for registering a FontHolder with the GlyphAtlas
+  // by name, and specifying that name here.
+
+  // Opacity multiplier applied to the text and stroke colors.
+  // If unset will default to 1.0.
+  optional float opacity_multiplier = 13;
+
+  // The amount of additional space as a percentage of the font size that should
+  // be added to each glyph after layout. Default value of 0 adds no
+  // additional tracking. Value of 0.5 adds half the font size of space between
+  // each glyph, and -0.5 would subtract half the font size of space between
+  // each glyph, leading to the glyphs overlapping each other.
+  optional float text_tracking = 14;
+
+  // Any TextRenderers which set batch to true will pool their GPU resources
+  // together. This is useful if you expect the GPU resources to change every
+  // frame, as batched TextRenderers can reduce GPU uploads from N per frame to
+  // around 1-3 total per frame. It's not necessarily useful, however, if you
+  // have a scene with very few TextRenderers, since batching may incur CPU/GPU
+  // memory usage and CPU processing overhead.
+  bool batch = 20;
+}

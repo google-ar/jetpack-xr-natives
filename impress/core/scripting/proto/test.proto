@@ -1,0 +1,66 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// test.proto
+// Defines messages for testing proto-related features.
+
+syntax = "proto3";
+
+package imp.scripting;
+
+import "google/protobuf/any.proto";
+import "core/proto/imp.proto";
+
+// option cc_api_version = 2;
+// option cc_api_version = 2;
+
+/** A basic message. */
+message Message1 {
+  float n = 1;
+}
+
+message Message2 {
+  uint32 id = 1;
+  google.protobuf.Any content = 2;
+}
+
+message Request1 {
+  uint32 val = 1;
+}
+
+message Response1 {
+  uint32 val = 1;
+}
+
+message Request2 {
+  bool val = 1;
+}
+
+message Event1 {
+  option (imp.is_event) = true;
+
+  sint32 val = 1;
+}
+
+message Event2 {
+  option (imp.is_event) = true;
+
+  sint32 val = 1;
+}
+
+message CustomComponentState {
+  uint32 n = 1;
+  uint32 m = 2;
+  string name = 3;
+}

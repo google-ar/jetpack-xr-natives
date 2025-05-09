@@ -1,0 +1,47 @@
+diff --git a/absl/base/BUILD.bazel b/absl/base/BUILD.bazel
+index 96503c90..a7ca2c5a 100644
+--- a/absl/base/BUILD.bazel
++++ b/absl/base/BUILD.bazel
+@@ -210,7 +210,7 @@ cc_library(
+         "//absl:msvc_compiler": [],
+         "//absl:clang-cl_compiler": [],
+         "//absl:wasm": [],
+-        "//conditions:default": ["-pthread"],
++        "//conditions:default": [],
+     }) + ABSL_DEFAULT_LINKOPTS,
+     visibility = [
+         "//visibility:public",
+@@ -279,7 +279,7 @@ cc_library(
+             "-ladvapi32",
+         ],
+         "//absl:wasm": [],
+-        "//conditions:default": ["-pthread"],
++        "//conditions:default": [],
+     }) + ABSL_DEFAULT_LINKOPTS,
+     deps = [
+         ":atomic_hook",
+diff --git a/absl/log/internal/BUILD.bazel b/absl/log/internal/BUILD.bazel
+index 2dbf337a..d49ffdbc 100644
+--- a/absl/log/internal/BUILD.bazel
++++ b/absl/log/internal/BUILD.bazel
+@@ -79,6 +79,7 @@ cc_library(
+         "//absl/base:config",
+         "//absl/base:core_headers",
+     ],
++    alwayslink = 1,
+ )
+ 
+ cc_library(
+diff --git a/absl/synchronization/BUILD.bazel b/absl/synchronization/BUILD.bazel
+index dafeba33..4b120942 100644
+--- a/absl/synchronization/BUILD.bazel
++++ b/absl/synchronization/BUILD.bazel
+@@ -127,7 +127,7 @@ cc_library(
+         "//absl:msvc_compiler": [],
+         "//absl:clang-cl_compiler": [],
+         "//absl:wasm": [],
+-        "//conditions:default": ["-pthread"],
++        "//conditions:default": [],
+     }) + ABSL_DEFAULT_LINKOPTS,
+     visibility = ["//visibility:public"],
+     deps = [

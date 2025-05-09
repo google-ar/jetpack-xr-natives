@@ -1,0 +1,88 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import "core/proto/imp.proto";
+
+// option cc_api_version = 2;
+// option cc_api_version = 2;
+option java_multiple_files = true;
+option java_package = "com.google.ar.imp.proto";
+
+// Serialized data for GltfAnimator component.
+// Used to play skeletal animations on GltfState on the same node.
+message GltfAnimatorState {
+  // Identifies an animation playback channel. Animations played on different
+  // playback channels are independent of each other. Each playback channel has
+  // its own animation state such as speed, blend time, and looping.
+  message PlaybackChannelId {
+    int32 id = 1;
+  }
+
+  // Options that control how the animation is played.
+  message AnimOptions {
+    bool looping = 1;
+
+    // Playback speed, multiplies the animation timestep. If default 0, uses 1.
+    // Many parameters for controlling animations reference the original asset's
+    // timings, which get affected by this multiplier before being rendered.
+    // TODO default to 1 instead.
+    float speed_multiplier = 2 [
+      (imp.editor_control) = { slider_float: { min: 0 max: 2 precision: 2 } }
+    ];
+
+    // Time (in seconds) in the animation to start the playback from. A value
+    // higher than the duration of the animation sets the paths to their ending
+    // state and immediately stops. A negative value sets the paths to their
+    // starting state and immediately stops.
+    // This value is compared directly with the keyframe times of the original
+    // animation asset, before multiplying by speed_multiplier.
+    float start_time_seconds = 3;
+
+    // Duration (in seconds) to blend from the previous animation that was
+    // playing on the same playback channel. This is in terms of real time,
+    // after multiplying by speed_multiplier.
+    float blend_time_seconds = 4;
+
+    // Which playback channel to play the animation on. Animations on different
+    // playback channels do not interact with each other, and are assumed to
+    // affect disjoint sets of bones.
+    PlaybackChannelId playback_channel = 5;
+
+    // Whether to persist the channel after the animation is done playing.
+    bool persist_channel = 6;
+  }
+
+  // A command to start playing an animation.
+  message PlayCommand {
+    // The index or name of the animation to play. If unset, defaults to playing
+    // the first animation.
+    oneof animation {
+      int32 index = 1;
+      string name = 2;
+    }
+
+    // The options to play the animation with.
+    AnimOptions options = 3;
+  }
+
+  // Optional starting animation to play immediately when the
+  // GltfAnimator is setup.
+  PlayCommand starting_animation = 1 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // TODO support GltfAsset from proto.
+}

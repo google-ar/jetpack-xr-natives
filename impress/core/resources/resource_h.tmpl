@@ -1,0 +1,41 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#ifndef {UPCASE_PATH}_
+#define {UPCASE_PATH}_
+
+#include "core/resources/resource_definition.h"
+
+namespace {namespace}
+{
+
+// Registers resources so that they can be loaded.
+//
+// Resources are automatically registered when passed into the AssetManager.
+//
+// However, resources must be registered explicitly by calling this function to
+// load them by their string identifier. For example, when referencing a
+// resource by string in a .isf file.
+//
+// Registering the resources makes it possible to reference a resource by
+// nothing but its string identifier and have it automatically switch between
+// loading an embedded version of a resource and a remote version of a resource
+// based on if the imp_assets were embedded in a build.
+void Register{package_id}();
+
+{resources}
+
+}  // {namespace}
+
+#endif  // {UPCASE_PATH}_

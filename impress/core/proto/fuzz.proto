@@ -1,0 +1,185 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package fuzz;
+
+import "core/proto/imp.proto";
+
+message OtherMessage {
+  int32 i32 = 1;
+  int64 i64 = 2;
+  sint32 s32 = 3;
+  sint64 s64 = 4;
+  uint32 u32 = 5;
+  uint64 u64 = 6;
+  fixed32 f32 = 7;
+  fixed64 f64 = 8;
+  sfixed32 sf32 = 9;
+  sfixed64 sf64 = 10;
+  float flt = 11;
+  double dbl = 12;
+  bool b = 13;
+  string str = 14;
+  string str_view = 15 [ctype = STRING_PIECE];
+  bytes data = 16;
+
+  repeated int32 repeated_i32 = 19;
+  repeated int64 repeated_i64 = 20;
+  repeated sint32 repeated_s32 = 21;
+  repeated sint64 repeated_s64 = 22;
+  repeated uint32 repeated_u32 = 23;
+  repeated uint64 repeated_u64 = 24;
+  repeated fixed32 repeated_f32 = 25;
+  repeated fixed64 repeated_f64 = 26;
+  repeated sfixed32 repeated_sf32 = 27;
+  repeated sfixed64 repeated_sf64 = 28;
+  repeated float repeated_flt = 29;
+  repeated double repeated_dbl = 30;
+  repeated string repeated_str = 32;
+  repeated string repeated_str_view = 33 [ctype = STRING_PIECE];
+  repeated bytes repeated_data = 34;
+
+  optional int32 optional_i32 = 37;
+  optional int64 optional_i64 = 38;
+  optional sint32 optional_s32 = 39;
+  optional sint64 optional_s64 = 40;
+  optional uint32 optional_u32 = 41;
+  optional uint64 optional_u64 = 42;
+  optional fixed32 optional_f32 = 43;
+  optional fixed64 optional_f64 = 44;
+  optional sfixed32 optional_sf32 = 45;
+  optional sfixed64 optional_sf64 = 46;
+  optional float optional_flt = 47;
+  optional double optional_dbl = 48;
+  optional bool optional_b = 49;
+  optional string optional_str = 50;
+  optional string optional_str_view = 51 [ctype = STRING_PIECE];
+  optional bytes optional_data = 52;
+
+  oneof u {
+    int32 u_i32 = 63;
+    int64 u_i64 = 64;
+    sint32 u_s32 = 65;
+    sint64 u_s64 = 66;
+    uint32 u_u32 = 67;
+    uint64 u_u64 = 68;
+    fixed32 u_f32 = 69;
+    fixed64 u_f64 = 70;
+    sfixed32 u_sf32 = 71;
+    sfixed64 u_sf64 = 72;
+    float u_flt = 73;
+    double u_dbl = 74;
+    bool u_b = 75;
+    string u_str = 76;
+    string u_str_view = 77 [ctype = STRING_PIECE];
+    bytes u_data = 78;
+  }
+}
+
+message FuzzEverything {
+  enum NestedEnum {
+    DEFAULT = 0;
+    FOO = 1;
+    BAR = 2;
+    BAZ = -1;
+  }
+
+  int32 i32 = 1;
+  int64 i64 = 2;
+  sint32 s32 = 3;
+  sint64 s64 = 4;
+  uint32 u32 = 5;
+  uint64 u64 = 6;
+  fixed32 f32 = 7;
+  fixed64 f64 = 8;
+  sfixed32 sf32 = 9;
+  sfixed64 sf64 = 10;
+  float flt = 11;
+  double dbl = 12;
+  bool b = 13;
+  string str = 14;
+  string str_view = 15 [ctype = STRING_PIECE];
+  bytes data = 16;
+  NestedEnum enum_ = 17;
+  OtherMessage msg = 18;
+
+  repeated int32 repeated_i32 = 19;
+  repeated int64 repeated_i64 = 20;
+  repeated sint32 repeated_s32 = 21;
+  repeated sint64 repeated_s64 = 22;
+  repeated uint32 repeated_u32 = 23;
+  repeated uint64 repeated_u64 = 24;
+  repeated fixed32 repeated_f32 = 25;
+  repeated fixed64 repeated_f64 = 26;
+  repeated sfixed32 repeated_sf32 = 27;
+  repeated sfixed64 repeated_sf64 = 28;
+  repeated float repeated_flt = 29;
+  repeated double repeated_dbl = 30;
+  repeated string repeated_str = 32;
+  repeated string repeated_str_view = 33 [ctype = STRING_PIECE];
+  repeated bytes repeated_data = 34;
+  repeated NestedEnum repeated_enum_ = 35;
+  repeated OtherMessage repeated_msg = 36;
+
+  optional int32 optional_i32 = 37;
+  optional int64 optional_i64 = 38;
+  optional sint32 optional_s32 = 39;
+  optional sint64 optional_s64 = 40;
+  optional uint32 optional_u32 = 41;
+  optional uint64 optional_u64 = 42;
+  optional fixed32 optional_f32 = 43;
+  optional fixed64 optional_f64 = 44;
+  optional sfixed32 optional_sf32 = 45;
+  optional sfixed64 optional_sf64 = 46;
+  optional float optional_flt = 47;
+  optional double optional_dbl = 48;
+  optional bool optional_b = 49;
+  optional string optional_str = 50;
+  optional string optional_str_view = 51
+      [ctype = STRING_PIECE, (imp.optional_type) = UNIQUE_PTR];
+  optional bytes optional_data = 52;
+  optional NestedEnum optional_enum_ = 53 [(imp.optional_type) = UNIQUE_PTR];
+  optional OtherMessage optional_msg = 54 [(imp.optional_type) = UNIQUE_PTR];
+
+  map<int32, OtherMessage> mi32_msg = 55;
+  map<sint32, string> ms32_string = 56;
+  map<string, uint64> mstr_u64 = 57;
+  map<fixed32, OtherMessage> mf32_msg = 58;
+  map<fixed64, sfixed32> mf64_s32 = 59;
+  map<sfixed64, bytes> msf64_bytes = 60;
+  map<uint64, NestedEnum> mu64_enum = 61;
+
+  oneof u {
+    int32 u_i32 = 63;
+    int64 u_i64 = 64;
+    sint32 u_s32 = 65;
+    sint64 u_s64 = 66;
+    uint32 u_u32 = 67;
+    uint64 u_u64 = 68;
+    fixed32 u_f32 = 69;
+    fixed64 u_f64 = 70;
+    sfixed32 u_sf32 = 71;
+    sfixed64 u_sf64 = 72;
+    float u_flt = 73;
+    double u_dbl = 74;
+    bool u_b = 75;
+    string u_str = 76;
+    string u_str_view = 77 [ctype = STRING_PIECE];
+    bytes u_data = 78;
+    NestedEnum u_enum_ = 79;
+    OtherMessage u_msg = 80;
+  }
+}

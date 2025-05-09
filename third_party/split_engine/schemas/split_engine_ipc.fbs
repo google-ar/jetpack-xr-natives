@@ -1,0 +1,338 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+include "split_engine/schemas/split_engine_data.fbs";
+include "split_engine/schemas/split_engine_material.fbs";
+
+namespace android_xr.schemas;
+
+// LINT.IfChange
+
+//
+// Client->Service requests.
+//
+
+// A "message group" is an arbitrary logical grouping of messages, all
+// sharing a single backing memory buffer.
+table BeginMessageGroup {
+}
+
+table EndMessageGroup {
+}
+
+union MessageGroupTypes {
+  BeginMessageGroup = 1,
+  EndMessageGroup = 2,
+}
+
+table MessageGroup {
+  group_id: uint64 (id: 0);
+  message_group: MessageGroupTypes (id: 2);
+}
+
+// Adds any number of vertex and index buffers which can later be referenced by
+// Renderables to use for rendering geometry.
+// LINT.IfChange
+table AddMeshData {
+  vertex_buffers: [VertexBuffer] (id: 0);
+  index_buffers: [IndexBuffer] (id: 1);
+}
+// LINT.ThenChange(//depot/google3/third_party/impress/core/split_engine/flatbuffer_size_calculator.cc)
+
+// Removes any number of previously-added vertex and index buffers.
+// This will free the memory associated with the buffers. Note: this must be
+// done only after all Renderables referencing the buffers have been removed.
+table RemoveMeshData {
+  vertex_buffer_ids: [uint64] (id: 0);
+  index_buffer_ids: [uint64] (id: 1);
+}
+
+// Adds any number of morph target buffers which can later be referenced by
+// Renderables to use for doing geometry morphing, aka blend-shapes.
+// LINT.IfChange
+table AddMorphTargetBuffers {
+  morph_target_buffers: [MorphTargetBuffer] (id: 0);
+}
+// LINT.ThenChange(//depot/google3/third_party/impress/core/split_engine/flatbuffer_size_calculator.cc)
+
+// Removes any number of previously-added morph target buffers.
+// This will free the memory associated with the buffers. Note: this must be
+// done only after all Renderables referencing the buffers have been removed.
+table RemoveMorphTargetBuffers {
+  morph_target_buffer_ids: [uint64] (id: 0);
+}
+
+// Adds any number of textures which can later be referenced by Material
+// texture sampler parameters. Textures contain raw image data.
+// LINT.IfChange
+table AddTextures {
+  textures: [Texture] (id: 0);
+}
+// LINT.ThenChange(//depot/google3/third_party/impress/core/split_engine/flatbuffer_size_calculator.cc)
+
+// Removes any number of previously-added textures.
+// This will free the memory associated with the textures. Note: this must be
+// done only after all Material instances referencing the textures have been
+// removed.
+table RemoveTextures {
+  texture_ids: [uint64] (id: 0);
+}
+
+// The following material-related commands are unsafe except for local
+// development and specialized use cases. Most apps should use built-in
+// materials instead, since those are backwards-compatible schema-based material
+// definitions. See BuiltInMaterialRequest and SetBuiltInMaterialParameters - 
+// these are the only material-related commands that should be used in
+// production apps.
+
+// Adds "raw" materials - i.e. precompiled shader programs as binary data.
+// This API is unsafe except for local development and specialized use cases.
+// AddMaterials commands will most likely be rejected by the backend service.
+// After adding materials, instances can be created using AddMaterialInstances.
+table AddMaterials {
+  materials: [Material] (id: 0);
+}
+
+// Removes any number of previously-added materials.
+// This will free the memory associated with the materials. Note: this must be
+// done only after all Material instances referencing the materials have been
+// removed.
+table RemoveMaterials {
+  material_ids: [uint64] (id: 0);
+}
+
+// Creates instances of previously-added materials. MaterialInstances can be set
+// on Renderables to specify the shader to use for rendering.
+// To set parameters on material instances, use SetMaterialParameters.
+table AddMaterialInstances {
+  instances: [MaterialInstance] (id: 0);
+}
+
+// Duplicates any number of previously-added material instances.
+// This will create new material instances with the same parameters as currently
+// set on the original instances.
+table DuplicateMaterialInstances {
+  duplicates: [DuplicateMaterialInstance] (id: 0);
+}
+
+// Removes any number of previously-added material instances.
+// This will free the memory associated with the instances. Note: this must be
+// done only after all Renderables referencing the instances have been removed.
+table RemoveMaterialInstances {
+  instance_ids: [uint64] (id: 0);
+}
+
+// Sets parameters on any number of previously-added material instances.
+table SetMaterialParameters {
+  parameters: [MaterialParameters] (id: 0);
+}
+
+// Sets parameters on any number of previously-added built-in material
+// instances. This is the preferred way to set material parameters in production
+// apps, as it ensures backwards compatibility via schema-based material
+// definitions.
+table SetBuiltInMaterialParameters {
+  parameters: [BuiltInMaterialInstanceParameters] (id: 0);
+}
+
+// Adds any number of nodes to the scene graph. Nodes control the scene
+// hierarchy and can be used to control the transform and visibility of
+// Renderables.
+table AddNodes {
+  adds: [AddNode] (id: 0);
+}
+
+// Updates settings on any number of previously-added nodes such as transform,
+// parent-child relationships, and to enable / disable.
+table UpdateNodes {
+  updates: [UpdateNode] (id: 0);
+}
+
+// Removes any number of previously-added nodes. Note: removing a parent node
+// will also remove all child nodes.
+table RemoveNodes {
+  removes: [RemoveNode] (id: 0);
+}
+
+// Assigns a user-defined ID to any number of previously-added nodes.
+// This is used for associating nodes with user-defined data that is external to
+// the Split Engine spec.
+table AssignUserIdToNodes {
+  assignments: [AssignUserIdToNode] (id: 0);
+}
+
+// Adds any number of Renderables to the scene graph. Renderables are the
+// "leaf" nodes of the scene graph and represent the actual geometry to be
+// rendered. Renderables can be assigned to meshes, materials, and nodes.
+table AddRenderables {
+  adds: [AddRenderable] (id: 0);
+}
+
+// Updates any number of previously-added Renderables. This can be used to
+// change the mesh, material, and many other properties of Renderables.
+table UpdateRenderables {
+  updates: [UpdateRenderable] (id: 0);
+}
+
+// Removes any number of previously-added Renderables. Note: it is critical to
+// remove Renderables before removing Materials, Meshes, etc. used by that
+// renderable.
+table RemoveRenderables {
+  removes: [RemoveRenderable] (id: 0);
+}
+
+// Adds any number of ImageBasedLightingAssets to the scene graph.
+// ImageBasedLightingAssets are used to provide environment lighting and also
+// to provide "skyboxes" for the environment.
+// LINT.IfChange
+table AddImageBasedLightingAssets {
+  image_based_lighting_assets: [ImageBasedLightingAsset] (id: 0);
+}
+// LINT.ThenChange(//depot/google3/third_party/impress/core/split_engine/flatbuffer_size_calculator.cc)
+
+// Removes any number of ImageBasedLightingAssets from the scene graph.
+// Note: if the IBL is currently set as the preferred environment, it will be
+// automatically replaced with the default environment.
+table RemoveImageBasedLightingAssets {
+  image_based_lighting_asset_ids: [uint64] (id: 0);
+}
+
+// Sets the preferred environment for the scene. This can be an
+// ImageBasedLightingAsset or the default environment if the id is 0.
+table SetPreferredEnvironmentIblAsset {
+  image_based_lighting_asset_id: uint64 (id: 0);
+  intensity: float (id: 1);
+  tint: Float3 (id: 2);
+}
+
+// Adds or updates the Collider for a Node. This determines how input is routed
+// by the renderer backend. A Node can only have one Collider at a time.
+table AddOrUpdateColliders {
+  addOrUpdates: [AddOrUpdateCollider] (id: 0);
+}
+
+// Removes the Collider for a Node.
+table RemoveColliders {
+  removes: [RemoveCollider] (id: 0);
+}
+
+// The set of all command types that can be sent to the Split Engine service.
+// Commands are one-way messages sent from the client to the service with no
+// response. They contain serialized data that forms the current state of the
+// 3D scene for this particular client. The backend renderer will use this data
+// to render the 3D scene.
+union CommandTypes {
+  // MeshData requests.
+  AddMeshData = 1,
+  RemoveMeshData = 2,
+
+  // MorphTargetBuffer requests.
+  AddMorphTargetBuffers = 3,
+  RemoveMorphTargetBuffers = 4,
+
+  // Texture requests.
+  AddTextures = 5,
+  RemoveTextures = 6,
+
+  // Material requests.
+  AddMaterials = 7,
+  RemoveMaterials = 8,
+
+  // MaterialInstance requests.
+  AddMaterialInstances = 9,
+  DuplicateMaterialInstances = 10,
+  RemoveMaterialInstances = 11,
+
+  // MaterialParameter requests.
+  SetMaterialParameters = 12,
+  SetBuiltInMaterialParameters = 13,
+
+  // Node requests.
+  AddNodes = 14,
+  UpdateNodes = 15,
+  RemoveNodes = 16,
+  AssignUserIdToNodes = 17,
+
+  // Renderable requests.
+  AddRenderables = 18,
+  UpdateRenderables = 19,
+  RemoveRenderables = 20,
+
+  // ImageBasedLightingAsset requests.
+  AddImageBasedLightingAssets = 21,
+  RemoveImageBasedLightingAssets = 22,
+  SetPreferredEnvironmentIblAsset = 23,
+
+  // Collider requests.
+  AddOrUpdateColliders = 24,
+  RemoveColliders = 25,
+}
+
+// LINT.IfChange
+table Command {
+  command: CommandTypes (id: 1);
+}
+// LINT.ThenChange(//depot/google3/third_party/impress/core/split_engine/flatbuffer_size_calculator.cc)
+
+root_type Command;
+
+// A request is an async message sent across the Split Engine bridge through the
+// SendRequest API.
+union RequestTypes {
+  BuiltInMaterialRequest = 1,
+}
+table Request {
+  request: RequestTypes (id: 1);
+}
+
+root_type Request;
+
+// The set of error codes for the API.
+enum ErrorCode : short {
+  UNKNOWN_ERROR = 0,
+  INVALID_ARGUMENT_ERROR = 1,
+  FAILED_PRECONDITION_ERROR = 2,
+  NOT_FOUND_ERROR = 3,
+  ALREADY_EXISTS_ERROR = 4,
+  OUT_OF_RANGE_ERROR = 5,
+  PERMISSION_DENIED_ERROR = 6,
+  INTERNAL_ERROR = 7,
+  UNIMPLEMENTED_ERROR = 8,
+  ABORTED_ERROR = 9,
+  UNAVAILABLE_ERROR = 10,
+  RESOURCE_EXHAUSTED_ERROR = 11,
+  DEADLINE_EXCEEDED_ERROR = 12,
+  DATA_LOSS_ERROR = 13,
+  UNAUTHENTICATED_ERROR = 14,
+  CANCELLED_ERROR = 15,
+}
+
+// Describes an error that occurred when processing a Request.
+table ErrorResponse {
+  error_code: ErrorCode (id: 0);
+  error_message: string (id: 1);
+}
+
+// A response is sent back from the Split Engine service to the client in
+// fulfillment of a request. If the error string is set, the request failed.
+union ResponseTypes {
+  ErrorResponse = 1,
+}
+table Response {
+  response: ResponseTypes (id: 1);
+}
+
+root_type Response;
+
+// LINT.ThenChange(//depot/google3/third_party/split_engine/schemas/split_engine_schema_version.h)

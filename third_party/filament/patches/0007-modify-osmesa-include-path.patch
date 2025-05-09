@@ -1,0 +1,26 @@
+diff --git a/filament/backend/include/backend/platforms/PlatformOSMesa.h b/filament/backend/include/backend/platforms/PlatformOSMesa.h
+index 5f6658f94..f3d582d6c 100644
+--- a/filament/backend/include/backend/platforms/PlatformOSMesa.h
++++ b/filament/backend/include/backend/platforms/PlatformOSMesa.h
+@@ -22,7 +22,7 @@
+ #include "bluegl/BlueGL.h"
+ 
+ #if defined(__linux__)
+-#include <osmesa.h>
++#include <GL/osmesa.h>
+ #elif defined(__APPLE__)
+ #undef GLAPI
+ #include <GL/osmesa.h>
+diff --git a/libs/bluegl/src/BlueGLOSMesa.cpp b/libs/bluegl/src/BlueGLOSMesa.cpp
+index 88ab35ad3..9afe2547a 100644
+--- a/libs/bluegl/src/BlueGLOSMesa.cpp
++++ b/libs/bluegl/src/BlueGLOSMesa.cpp
+@@ -19,7 +19,7 @@
+ 
+ #if defined(__linux__)
+ 
+-#include <osmesa.h>
++#include <GL/osmesa.h>
+ 
+ // This is to ensure that linking during compilation will not fail even if
+ // OSMesaGetProcAddress is not linked.

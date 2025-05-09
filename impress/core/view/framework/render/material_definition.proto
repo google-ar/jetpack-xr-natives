@@ -1,0 +1,71 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import "core/math/math.proto";
+import "core/proto/imp.proto";
+
+// option cc_api_version = 2;
+option java_multiple_files = true;
+option java_package = "com.google.ar.imp.proto";
+
+// Refers to an Impress material asset along with a set of parameters that
+// should be applied to the material.
+//
+// Useful for defining materials in Isf files or other protos.
+//
+// Use MaterialFactory::LoadMaterial to load a material from this definition.
+message MaterialDefinition {
+  message Parameter {
+    // The name of the material parameter.
+    string name = 1;
+
+    // The value of the material parameter.
+    oneof val {
+      // Texture loaded by AssetManager::LoadImage.
+      // The path may be the google3 path to an image asset within an imp_assets
+      // rule, or a url.
+      string image_asset_texture = 2 [(imp.editor_control) = { texture: {} }];
+      // Name of a texture stored in the TextureRegistry.
+      string registered_texture = 3;
+
+      float float_val = 4;
+
+      Float2 float2_val = 5;
+
+      Float3 float3_val = 6;
+
+      Float4 float4_val = 7;
+
+      int32 int_val = 8;
+
+      uint32 uint_val = 9;
+
+      bool bool_val = 10;
+    }
+  }
+
+  // The path to a compiled material (.cmat) file output by the imp_material
+  // build rule.
+  //
+  // The path may be the google3 path to a material asset within an imp_assets
+  // rule, or a url.
+  string asset = 1 [(imp.editor_control) = { material: {} }];
+
+  // List of parameters to apply to the loaded material.
+  repeated Parameter parameters = 2;
+}

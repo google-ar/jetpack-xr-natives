@@ -5,7 +5,7 @@ Jetpack XR Natives is a collection of native libraries that are used by the
 
 ## How to Build
 
-This library requires [Bazel](https://bazel.build/) version 6 to build. Once
+This library requires [Bazel](https://bazel.build/) version 8.0.0 to build. Once
 installed, this library can be built using the following commands:
 
 ```shell

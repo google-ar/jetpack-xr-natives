@@ -32,7 +32,7 @@ cc_library(
     includes = [
         "generated/include/openxr",
     ],
-    strip_include_prefix = "//third_party/OpenXR_KHR/generated/include",
+    strip_include_prefix = "//OpenXR_KHR/generated/include",
 )
 
 cc_library(
@@ -74,7 +74,7 @@ cc_library(
     ] + OPENXR_ANDROID_LINKOPTS,
     deps = [
         ":openxr_headers_androidxr",
-        "//third_party/android-jni-wrappers",
+        "//android-jni-wrappers",
         "@jsoncpp",
     ],
 )

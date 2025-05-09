@@ -1,0 +1,54 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import "core/math/math.proto";
+import "core/proto/imp.proto";
+
+enum LineJointShape {
+  // A flat bevel.
+  LINE_JOINT_SHAPE_BEVEL = 0;
+  // A single extra point on the outside of the joint.
+  LINE_JOINT_SHAPE_MITER = 1;
+  // A rounded joint.
+  LINE_JOINT_SHAPE_ROUND = 2;
+}
+
+enum LineCapShape {
+  LINE_CAP_SHAPE_NONE = 0;
+  LINE_CAP_SHAPE_ROUNDED = 1;
+  // e.g. outer portion of turn arrows, for end caps only.
+  LINE_CAP_SHAPE_ARROW_OUTER = 2;
+  // e.g. inner portion (offset from end) of turn arrows, for end caps only.
+  LINE_CAP_SHAPE_ARROW_INNER = 3;
+  LINE_CAP_SHAPE_CUSTOM = 4;
+}
+
+message LineRendererState {
+  repeated imp.Float3 points = 1 [(imp.editor_control) = { disabled: {} }];
+  imp.Float3 normal = 2 [(imp.editor_control) = { disabled: {} }];
+  imp.Float4 color = 3 [(imp.editor_control) = { color_picker_4: {} }];
+  float width = 4 [
+    (imp.editor_control) = { slider_float: { min: 0 max: 0.5 precision: 2 } }
+  ];
+  float feather = 5
+      [(imp.editor_control) = { slider_float: { min: 0 max: 1 precision: 2 } }];
+  LineJointShape joint_shape = 6 [(imp.editor_control) = { disabled: {} }];
+  LineCapShape start_cap_shape = 7 [(imp.editor_control) = { disabled: {} }];
+  LineCapShape end_cap_shape = 8 [(imp.editor_control) = { disabled: {} }];
+  bool wrap = 9 [(imp.editor_control) = { disabled: {} }];
+}

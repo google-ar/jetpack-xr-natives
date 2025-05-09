@@ -1,0 +1,13 @@
+diff --git a/bazel/gflags.bzl b/bazel/gflags.bzl
+index 533fd61..23b6448 100644
+--- a/bazel/gflags.bzl
++++ b/bazel/gflags.bzl
+@@ -87,7 +87,7 @@ def gflags_library(hdrs=[], srcs=[], threads=1):
+     if threads:
+         linkopts += select({
+             "//:x64_windows": [],
+-            "//conditions:default": ["-lpthread"],
++            "//conditions:default": [],
+         })
+     else:
+         name += "_nothreads"

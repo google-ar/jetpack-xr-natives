@@ -1,0 +1,86 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import "core/math/math.proto";
+import "core/proto/imp.proto";
+import "core/view/framework/render/material_definition.proto";
+
+// Impress component for rendering 2D sprites.
+// Next ID: 12
+message SpriteRendererState {
+  enum RenderSpace {
+    // Draws the sprite in screen space and positioned by the world-to-screen
+    // coordinates of its node.
+    WORLD_TO_SCREEN = 0;
+    // Draws the sprite in screen space and positioned by device screen
+    // coordinates.
+    SCREEN = 1;
+  }
+
+  optional string image = 1;
+
+  imp.Float4 color = 2 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  imp.Float4 outline_color = 3 [(imp.optional_type) = ABSL_OPTIONAL];
+  // The priority used to provide a limited amount of control over the
+  // draw order of this node. The priority is clamped to the range [0..7]. 0 is
+  // rendered first, 7 is rendered last.
+  // The default priority is the same as the default priority of
+  // RenderComponent.
+  optional int32 priority = 4;
+  // The top-left corner of the displayed UV rect.
+  imp.Float2 uv_offset = 5 [(imp.optional_type) = ABSL_OPTIONAL];
+  // The width and height of the displayed UV rect.
+  imp.Float2 uv_scale = 6 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // The pivot of a sprite is a fixed point where the sprite is rotated or
+  // scaled around, which is also the position of the node.
+  //
+  // Note that x=0 is the left edge of the sprite and y=0 is the bottom edge.
+  // The values of `pivot_position` outside the range ([0, 1], [0, 1]) result in
+  // a pivot point that is not in the rectangle of the sprite. The default
+  // position is (0.5, 0.5).
+  imp.Float2 pivot_position = 7 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // The size for the sprite texture in virtual pixels. This can be used to
+  // overwrite the texture size no matter what the source is. It is useful if
+  // we need a fixed sprite size on screen but the texture size is not
+  // determined yet, e.g. external textures.
+  // If this is unset, the default texture size is exactly same as the source.
+  imp.Float2 texture_size = 8 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // The size for the sprite texture in physical pixels. This is useful if
+  // we need a fixed sprite size on screen but the texture size is not
+  // determined yet, e.g. external textures.
+  // If this is unset, the default texture size is exactly same as the source.
+  // NOTE: If texture_size is set, that will be used and this value is ignored.
+  imp.Float2 physical_texture_size = 9 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // Specifies a custom material to be used in the SpriteRenderer. This allows
+  // any material to be loaded into the SpriteRenderer that fits within the
+  // bounds of the MaterialDefinition, and is useful if there are parameters
+  // that need to be set on the material to be loaded from isf.
+  imp.MaterialDefinition material = 10 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // Determines the coordinate and vertex domain to render the sprite in. World
+  // space renders the sprite as a world-positioned billboard, screen space
+  // draws the sprite in device domain and positions it in device screen
+  // coordinates, while world-to-screen space draws the sprite in device domain
+  // and positions it in world-projected-to-screen space.
+  optional RenderSpace render_space = 11;
+}

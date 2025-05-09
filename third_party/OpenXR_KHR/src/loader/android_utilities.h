@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2024, The Khronos Group Inc.
+// Copyright (c) 2020-2025 The Khronos Group Inc.
 // Copyright (c) 2020-2021, Collabora, Ltd.
 //
 // SPDX-License-Identifier:  Apache-2.0 OR MIT
@@ -8,7 +8,7 @@
 #pragma once
 #ifdef __ANDROID__
 
-#include "third_party/android-jni-wrappers/wrap/android.content.h"
+#include "android-jni-wrappers/wrap/android.content.h"
 
 #include <string>
 namespace Json {

@@ -1,0 +1,64 @@
+From 6b43a206fa7dfb967710becf2bcff02bbd057f87 Mon Sep 17 00:00:00 2001
+From: Jeff McGlynn <no-reply@google.com>
+Date: Thu, 29 Aug 2019 11:22:30 -0700
+Subject: [PATCH 7/9] jni api checks
+
+---
+ .../java/com/google/android/filament/Material.java   |  5 +++++
+ .../google/android/filament/MaterialInstance.java    | 12 ++++++++++++
+ 2 files changed, 17 insertions(+)
+
+diff --git a/android/filament-android/src/main/java/com/google/android/filament/Material.java b/android/filament-android/src/main/java/com/google/android/filament/Material.java
+index 7c2b73e4..2f736384 100644
+--- a/android/filament-android/src/main/java/com/google/android/filament/Material.java
++++ b/android/filament-android/src/main/java/com/google/android/filament/Material.java
+@@ -279,11 +279,16 @@ public class Material {
+         }
+     }
+ 
++    // LINT.IfChange(api)
++    @UsedByNative("material_java_wrappers.h")
+     public Material(long nativeMaterial) {
+         mNativeObject = nativeMaterial;
+         long nativeDefaultInstance = nGetDefaultInstance(nativeMaterial);
+         mDefaultInstance = new MaterialInstance(this, nativeDefaultInstance);
+     }
++    // LINT.ThenChange(
++    //     //depot/google3/third_party/arcore/ar/sceneform/loader/model/model_material_jni.cc:api
++    // )
+ 
+     public static class Builder {
+         public enum ShadowSamplingQuality {
+diff --git a/android/filament-android/src/main/java/com/google/android/filament/MaterialInstance.java b/android/filament-android/src/main/java/com/google/android/filament/MaterialInstance.java
+index 4cf3c9a1..992df66b 100644
+--- a/android/filament-android/src/main/java/com/google/android/filament/MaterialInstance.java
++++ b/android/filament-android/src/main/java/com/google/android/filament/MaterialInstance.java
+@@ -16,6 +16,8 @@
+ 
+ package com.google.android.filament;
+ 
++import com.google.android.filament.proguard.UsedByNative;
++
+ import androidx.annotation.IntRange;
+ import androidx.annotation.NonNull;
+ import androidx.annotation.Size;
+@@ -64,6 +66,16 @@ public class MaterialInstance {
+         mNativeMaterial = nGetMaterial(mNativeObject);
+     }
+ 
++    // LINT.IfChange(api)
++    @UsedByNative("material_java_wrappers.h")
++    MaterialInstance(long nativeMaterial, long nativeMaterialInstance) {
++        mNativeMaterial = nativeMaterial;
++        mNativeObject = nativeMaterialInstance;
++    }
++    // LINT.ThenChange(
++    //     //depot/google3/third_party/arcore/ar/sceneform/loader/model/model_material_jni.cc:api
++    // )
++
+     /**
+      * Creates a new {@link #MaterialInstance} using another {@link #MaterialInstance} as a template for initialization.
+      * The new {@link #MaterialInstance} is an instance of the same {@link Material} of the template instance and
+-- 
+2.28.0.1011.ga647a8990f-goog
+

@@ -1,0 +1,178 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto2";
+
+package imp;
+
+import "google/protobuf/descriptor.proto";
+import "core/proto/imp_editor.proto";
+
+// Used as a field option to configure the type generated for a field.
+enum OptionalType {
+  // Default configuration.
+  // Generates singular scalar fields as an absl::optional type.
+  //
+  // i.e.
+  // absl::optional<int32> int_field_name;
+  // Type message_field_name;
+  OPTIONAL_TYPE_UNKNOWN = 0;
+
+  // Explicitly generates message fields as an absl::optional type.  Since
+  // message fields always have explicit presence, we need to mark them as
+  // ABSL_OPTIONAL to disambiguate.
+  //
+  // i.e.
+  // absl::optional<Type> field_name;
+  ABSL_OPTIONAL = 1;
+
+  // Originally, we used this enum to add support for absl::optional fields, but
+  // that functionality is now covered by the optional label in base proto3.
+  // Thus the old enum value 1, which was optional, is now DEPRECATED.
+
+  // Generates the field as an std::unique_ptr.
+  //
+  // i.e.
+  // std::unique_ptr<Type> field_name;
+  //
+  // It is recommended to use this in cases where you need to support a
+  // recursive type. It will also cause the generated C++ type to be move-only,
+  // which can be either desired or not depending on the use case.
+  UNIQUE_PTR = 2;
+}
+
+// Used as a field option to configure how repeated fields are merged.
+enum RepeatedMergeStrategy {
+  // Default configuration.
+  //
+  // If the field is a message type, then the merge type is PER_ELEMENT.
+  // Otherwise, the merge type is OVERWRITE.
+  IMP_REPEATED_MERGE_STRATEGY_AUTOMATIC = 0;
+
+  // The repeated field is merged by combining each individual element.
+  //
+  // Example:
+  //
+  // message Foo {
+  //   sint32 val = 1;
+  //   sint32 val2 = 2;
+  // }
+  //
+  // base proto:
+  //  foos: [{val: 1, val2: 11}, {val: 2, val2: 22}]
+  //
+  // sub proto:
+  //  foos: [{}, {val: 3}, {val: 4, val2: 44}]
+  //
+  // merged proto:
+  //  foos: [{val: 1, val2: 11}, {val: 3, val2: 22}, {val: 4, val2: 44}]
+  //
+  // This is only supported for message types.
+  //
+  // The reason this isn't supported for non-message types is because there is
+  // no way to encode that index i should be overidden without overriding index
+  // i-1, making this not useful for non-message types. (i.e. [1, 2, 3] merged
+  // with [0, 0, 4] would result in [0, 0, 4])
+  //
+  // Note that this is the default merge type for message fields.
+  IMP_REPEATED_MERGE_STRATEGY_PER_ELEMENT = 1;
+
+  // The repeated field is merged by replacing the elements.
+  //
+  // Example:
+  //
+  // base proto:
+  //  foos: [1, 2, 3]
+  //
+  // sub proto:
+  //  foos: [4, 5]
+  //
+  // merged proto:
+  //  foos: [4, 5]
+  //
+  // Note that this is the default merge type for non-message fields.
+  IMP_REPEATED_MERGE_STRATEGY_OVERWRITE = 2;
+
+  // The repeated field is merged by concatenating the elements.
+  //
+  // Example:
+  //
+  //
+  // base proto:
+  //  foos: [1, 2, 3]
+  //
+  // sub proto:
+  //  foos: [4, 5]
+  //
+  // merged proto:
+  //  foos: [1, 2, 3, 4, 5]
+  IMP_REPEATED_MERGE_STRATEGY_CONCAT = 3;
+}
+
+extend google.protobuf.FileOptions {
+  // Indicates if the namespace "imp_proto" should be appended to the generated
+  // Impress proto file.
+  //
+  // For instance, if the package if foo.bar and this is set to true, then the
+  // generated file will be in the namespace foo::bar::imp_proto.
+  //
+  // This is primarily useful to differentiate the namespace for an Impress
+  // proto and a standard google3 proto so that both versions can be used
+  // together in the same binary.
+  //
+  // For some well-known external protobuffer packages like google.protobuf,
+  // this is done automatically regardless of this option.
+  optional bool impress_append_namespace = 451171886;
+}
+
+extend google.protobuf.FieldOptions {
+  // The optional_type instructs the impress C++ code generator to use either
+  // absl::optional or std::unique_ptr for fields marked with the optional
+  // keyword. See the FieldType enum  for details.
+  optional OptionalType optional_type = 356368908;
+
+  // An optional type to apply as template parameters to the field.
+  // This is only useful for messages that use both native_type and no_codegen
+  // to map to a templated type with custom serialization, and is an advanced
+  // feature.
+  optional string template_type = 389386103;
+
+  // Indicates that the field is imported and that the C++ type is generated
+  // using the standard C++ compiler instead of the Impress one. This makes it
+  // possible to embed a standard C++ proto type as a field within an Impress
+  // proto. In general, this is intended to be used as a compatibility layer
+  // between systems written using standard C++ protos and Impress protos.
+  optional bool is_imported_standard_proto = 396617070;
+
+  optional RepeatedMergeStrategy repeated_merge_strategy = 469521111;
+
+  // Determines how this field is displayed in the Impress editor.
+  optional EditorControlType editor_control = 459851990;
+}
+
+extend google.protobuf.MessageOptions {
+  optional string native_type = 268371054;
+  repeated string native_include = 268371055;
+
+  // no_codegen turns off code generation in imp proto.
+  // Use this when a proto will only be used to transport data, where there is
+  // no need to directly inspect or modify the protos fields.
+  //
+  // No code or class is written for cc.  Serialization and deserialization is
+  // implemented however, so data can be moved through the proto.
+  optional bool no_codegen = 295799568;
+
+  // is_event will make the generated code inherit imp::Event
+  optional bool is_event = 300238411;
+}

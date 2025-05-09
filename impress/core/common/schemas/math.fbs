@@ -1,0 +1,178 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+native_include "core/math/flatbuffer_support.h";
+namespace imp.schemas;
+
+struct Float {
+  value : float;
+}
+
+struct Float2 (native_type:"imp::float2") {
+  x : float;
+  y : float;
+}
+
+struct Float3 (native_type:"imp::float3") {
+  x : float;
+  y : float;
+  z : float;
+}
+
+struct Float4 (native_type:"imp::float4") {
+  x : float;
+  y : float;
+  z : float;
+  w : float;
+}
+
+struct Double3 (native_type:"imp::double3") {
+  x : double;
+  y : double;
+  z : double;
+}
+
+struct Quatf (native_type:"imp::quatf") {
+  x : float;
+  y : float;
+  z : float;
+  w : float;
+}
+
+struct Int {
+  value : int;
+}
+
+struct Int2 {
+  x : int;
+  y : int;
+}
+
+struct Int3 {
+  x : int;
+  y : int;
+  z : int;
+}
+
+struct Int4 {
+  x : int;
+  y : int;
+  z : int;
+  w : int;
+}
+
+table IntArray {
+  values : [int] (required);
+}
+
+struct Bool {
+  value : bool;
+}
+
+struct Bool2 {
+  x : bool;
+  y : bool;
+}
+
+struct Bool3 {
+  x : bool;
+  y : bool;
+  z : bool;
+}
+
+struct Bool4 {
+  x : bool;
+  y : bool;
+  z : bool;
+  w : bool;
+}
+
+struct Mat3f (native_type:"imp::mat3f") {
+  m00 : float;
+  m01 : float;
+  m02 : float;
+  m10 : float;
+  m11 : float;
+  m12 : float;
+  m20 : float;
+  m21 : float;
+  m22 : float;
+}
+
+struct Mat4f (native_type:"imp::mat4f") {
+  m00 : float;
+  m01 : float;
+  m02 : float;
+  m03 : float;
+  m10 : float;
+  m11 : float;
+  m12 : float;
+  m13 : float;
+  m20 : float;
+  m21 : float;
+  m22 : float;
+  m23 : float;
+  m30 : float;
+  m31 : float;
+  m32 : float;
+  m33 : float;
+}
+
+struct Mat4 (native_type:"imp::mat4") {
+  m00 : double;
+  m01 : double;
+  m02 : double;
+  m03 : double;
+  m10 : double;
+  m11 : double;
+  m12 : double;
+  m13 : double;
+  m20 : double;
+  m21 : double;
+  m22 : double;
+  m23 : double;
+  m30 : double;
+  m31 : double;
+  m32 : double;
+  m33 : double;
+}
+
+table Mat3fArray {
+  mats : [Mat3f] (required);
+}
+
+table Mat4fArray {
+  mats : [Mat4f] (required);
+}
+
+struct Transformf {
+  position : Float3;
+  rotation : Quatf;
+  scale : Float3;
+}
+
+struct PreciseTransform {
+  position : Double3;
+  rotation : Quatf;
+  scale : Float3;
+}
+
+struct Box {
+  center : Float3;
+  half_extent : Float3;
+}
+
+table String {
+  value : string;
+}

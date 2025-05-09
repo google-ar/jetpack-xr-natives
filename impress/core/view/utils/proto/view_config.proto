@@ -1,0 +1,71 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Defines the proto for render settings
+// For now, it's only intended to be used by SwapChainRenderer
+
+syntax = "proto3";
+
+package imp;
+
+import "core/proto/imp.proto";
+import "core/view/utils/proto/render_settings.proto";
+
+// option cc_api_version = 2;
+option java_package = "com.google.ar.imp.core";
+
+message ViewConfig {
+  enum ShaderCachingMode {
+    SHADER_CACHING_MODE_UNSPECIFIED = 0;
+    SHADER_CACHING_MODE_ENABLED = 1;
+    SHADER_CACHING_MODE_DISABLED = 2;
+  }
+
+  enum DefaultLightingLoading {
+    DEFAULT_LIGHTING_LOADING_UNSPECIFIED = 0;
+    DEFAULT_LIGHTING_LOADING_ENABLED = 1;
+    DEFAULT_LIGHTING_LOADING_DISABLED = 2;
+  }
+
+  render_settings.ViewRenderSettings main_view_render_settings = 1
+      [(imp.optional_type) = ABSL_OPTIONAL];
+  ShaderCachingMode shader_caching_mode = 2;
+  DefaultLightingLoading default_lighting_loading = 3;
+
+  // The amount of time the foreground executor will pump per frame.
+  optional float foreground_executor_timeout_ms = 4;
+
+  // The amount of time the background executor will pump per frame if Impress
+  // is using a background executor that requires explicit pumping.
+  optional float background_executor_timeout_ms = 5;
+
+  // If true, use the system's own frame scheduled handler instead of providing
+  // a callback handler to Filament.
+  optional bool use_system_frame_scheduled_handler = 6;
+
+  // The size of the texture used by the GlyphAtlas.
+  enum GlyphAtlasTextureSize {
+    // A 2048x2048 texture size.
+    SIZE2048 = 0;
+    // A 2048x4096 texture size.
+    SIZE2048X4096 = 1;
+    // A 4096x4096 texture size.
+    SIZE4096 = 2;
+  }
+
+  // The size of the texture used by the GlyphAtlas. The default is SIZE2048,
+  // which is 2048x2048.
+  GlyphAtlasTextureSize glyph_atlas_texture_size = 7
+      [(imp.optional_type) = ABSL_OPTIONAL];
+}

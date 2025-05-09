@@ -1,0 +1,130 @@
+# proto-file: core/ncsb/node_data.proto
+
+name: "SimpleGraph"
+transform: {
+  position: {
+    z: 0.0
+  }
+}
+components: [
+  {
+    [type.googleapis.com/imp.RecipeRunnerState] {
+      graph: {
+        member_declarations: [
+          {
+            type: FLOAT
+            name: "target_x_position"
+            init_value: {
+              float_value: 10.0
+            }
+          }
+        ]
+        recipe_nodes: [
+          {
+            id: {
+              index: 0
+            }
+            value_node: {
+              identifier: {
+                name: "NodeSelf"
+              }
+            }
+          },
+          {
+            id: {
+              index: 1
+            }
+            value_node: {
+              identifier: {
+                name: "target_x_position"
+              }
+            }
+          },
+          {
+            id: {
+              index: 2
+            }
+            event_node: {
+              event_name: "OnStartEvent"
+              next_node: {
+                node_id: {
+                  index: 4
+                }
+              }
+            }
+          },
+          {
+            id: {
+              index: 3
+            }
+            event_node: {
+              event_name: "OnUpdateEvent"
+              next_node: {
+                node_id: {
+                  index: 6
+                }
+              }
+            }
+          },
+          {
+            id: {
+              index: 4
+            }
+            executable_node: {
+              call: {
+                expression: {
+                  name: "CreateNode"
+                  args: [
+                    {
+                      socket_connection: {
+                        node_id: {
+                          index: 0
+                        }
+                        socket_name: "out"
+                      }
+                    },
+                    {
+                      literal_value: {
+                        string_value: "FooNode"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            id: {
+              index: 6
+            }
+            executable_node: {
+              call: {
+                expression: {
+                  name: "SetXPositionOffset"
+                  args: [
+                    {
+                      socket_connection: {
+                        node_id: {
+                          index: 0
+                        }
+                        socket_name: "out"
+                      }
+                    },
+                    {
+                      socket_connection: {
+                        node_id: {
+                          index: 1
+                        }
+                        socket_name: "out"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+]

@@ -1,0 +1,91 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+material {
+    name : "Line3D",
+    requires : [
+        uv0,     // Anti-aliasing texture coordinate.
+        custom0, // Extrusion vector.
+        custom1, // Style indices.
+        custom2, // Direction of the line at the vertex.
+        custom3, // Distance from the start of the line.
+        custom4  // Offset direction.
+    ],
+    parameters : [
+      {
+        type: float4,
+        name: color
+      },
+      {
+        type: float,
+        name: width
+      },
+      {
+        type: float,
+        name: feather
+      },
+      // TODO: just calculate these from getWorldViewVector()...
+      {
+        type: float,
+        name: cameraTiltRadians
+      },
+      {
+        type: float3,
+        name: cameraDirectionWorld
+      },
+      {
+        type : float,
+        name : zoom
+      },
+      {
+        type: float,
+        name: widenIntensity
+      }
+    ],
+    culling : none,
+    depthWrite : true,
+    blending : transparent,
+    shadingModel : unlit,
+    flipUV: false,
+    featureLevel : 0
+}
+
+vertex {
+  #define VERTEX
+  #include "line.glsl"
+
+  void materialVertex(inout MaterialVertexInputs material) {
+    float3 position = getPosition().xyz;
+    float3 model_extruded = position + GetExtrusionVector() * materialParams.width;
+    material.worldPosition =
+      mulMat4x4Float3(getWorldFromModelMatrix(), model_extruded);
+  }
+}
+
+fragment {
+  #define FRAG
+
+  void material(inout MaterialInputs material) {
+    prepareMaterial(material);
+    vec2 uv = getUV0();
+    float a = materialParams.color.w;
+    float edge = abs((uv.x * 2.0) - 1.0);
+    if (edge > materialParams.feather) {
+      a = min(materialParams.color.w,
+              (1.0 - edge) / (1.0 - materialParams.feather));
+    }
+    vec3 color = materialParams.color.xyz * a;
+    material.baseColor = vec4(inverseTonemapSRGB(color.xyz) * a, a);
+  }
+}

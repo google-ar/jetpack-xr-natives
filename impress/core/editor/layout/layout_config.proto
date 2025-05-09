@@ -1,0 +1,67 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp.editor;
+
+import "core/math/math.proto";
+
+option java_multiple_files = true;
+
+// Configures the appearance of the layout.
+message LayoutConfig {
+  // Generally, this enum describes how compact the layout is.
+  // These are essentially presets which describe where on the screen each
+  // layout subsection will be rendered.
+  enum LayoutType {
+    MULTIPLE_WINDOWS_DEFAULT =
+        0;  // Draw a tabbed window at the bottom of the screen, a Details
+            // window on the right of the screen, and a Scene window on the left
+            // of the screen.
+    SINGLE_TABBED_WINDOW = 1;  // Draw a single tabbed window with
+                               // default Details and Scene tabs.
+  }
+  // Where a window is pinned.
+  enum WindowPinState {
+    PINNED_TO_BOTTOM_DEFAULT = 0;
+    PINNED_TO_TOP = 1;
+  }
+  // Whether a window is expanded or collapsed.
+  enum WindowExpandedState {
+    COLLAPSED_DEFAULT = 0;
+    EXPANDED = 1;
+  }
+  // The state of the tabbed window in the layout.
+  message TabbedWindowState {
+    optional WindowPinState pin_state = 1;
+    optional WindowExpandedState expanded_state = 2;
+    optional float max_window_height_multiplier = 3;
+  }
+
+  // Describes where on the screen each layout subsection will be rendered.
+  optional LayoutType layout_type = 1;
+  // The initial state of the tabbed window.
+  optional TabbedWindowState initial_tabbed_window_state = 2;
+  // If true, draw a circular cursor at ImGuiIO::MousePos.
+  optional bool show_cursor = 3;
+  // Controls the speed of UI lerping. Value of 1 makes things pop instantly.
+  optional float lerp_factor = 4;
+  // Overscan area. The overscan area is the area along the border a video
+  // signal which is not visible on the actual display. Setting the X and Y
+  // components of the overscan property to positive values will pad the UI
+  // horizontally and vertically so that they aren't occluded by the display
+  // device.
+  optional Float2 overscan = 5;
+}

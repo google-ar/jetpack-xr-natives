@@ -1,0 +1,56 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import "core/math/arrays.proto";
+
+// option cc_api_version = 2;
+
+// Possible animation values.
+message AnimationValues {
+  oneof type {
+    FloatArray floats = 1;
+    Float2Array float2s = 2;
+    Float3Array float3s = 3;
+    Float4Array float4s = 4;
+    QuatfArray quatfs = 5;
+  }
+}
+
+// Possible interpolation modes.
+enum InterpolationMode {
+  INTERPOLATION_DEFAULT = 0;
+  // glTF interpolation modes. See
+  // https://www.khronos.org/registry/glTF/specs/2.0/glTF-2.0.html#appendix-c-interpolation
+  // for more details.
+  INTERPOLATION_LINEAR = 1;
+  INTERPOLATION_STEP = 2;
+  INTERPOLATION_CUBIC = 3;
+  // Easing curves. See https://easings.net/ for more details.
+  INTERPOLATION_EASE_IN_SINE = 4;
+  INTERPOLATION_EASE_OUT_SINE = 5;
+  INTERPOLATION_EASE_IN_OUT_SINE = 6;
+  INTERPOLATION_EASE_IN_QUAD = 7;
+  INTERPOLATION_EASE_OUT_QUAD = 8;
+  INTERPOLATION_EASE_IN_OUT_QUAD = 9;
+  INTERPOLATION_EASE_IN_CUBIC = 10;
+  INTERPOLATION_EASE_OUT_CUBIC = 11;
+  INTERPOLATION_EASE_IN_OUT_CUBIC = 12;
+  INTERPOLATION_EASE_IN_BACK = 13;
+  INTERPOLATION_EASE_OUT_BACK = 14;
+  INTERPOLATION_EASE_IN_OUT_BACK = 15;
+}

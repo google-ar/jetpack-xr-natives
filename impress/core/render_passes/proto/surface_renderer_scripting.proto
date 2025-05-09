@@ -1,0 +1,71 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Defines the proto for SurfaceRenderer related messages
+
+syntax = "proto3";
+
+package imp.surface_renderer;
+
+import "core/math/math.proto";
+import "core/ncsb/node_handle_message.proto";
+import "core/proto/imp.proto";
+import "core/view/utils/proto/render_settings.proto";
+
+// option cc_api_version = 2;
+option java_package = "com.google.ar.imp.core";
+
+message SurfaceRendererSettings {
+  optional string group = 1;
+  oneof camera {
+    imp.NodeHandleMessage camera_node = 2;
+    string camera_node_name = 3;
+  }
+  imp.render_settings.OverrideMode override_mode = 4;
+  imp.render_settings.ViewRenderSettings render_settings = 5
+      [(imp.optional_type) = ABSL_OPTIONAL];
+  imp.UInt2 view_port_size = 6 [(imp.optional_type) = ABSL_OPTIONAL];
+  optional int32 display_id = 7 [(imp.optional_type) = ABSL_OPTIONAL];
+  // Defaults to kSwapChainFlagTransparent.
+  optional uint64 swap_chain_flags = 8 [(imp.optional_type) = ABSL_OPTIONAL];
+}
+
+message CreateNodeWithSurfaceRendererRequest {
+  SurfaceRendererSettings settings = 1;
+}
+
+message SetCameraRequest {
+  imp.NodeHandleMessage surface_renderer_node = 1;
+  oneof camera {
+    imp.NodeHandleMessage camera_node = 2;
+    string camera_node_name = 3;
+  }
+}
+
+message SetGroupRequest {
+  imp.NodeHandleMessage surface_renderer_node = 1;
+  string group = 2;
+}
+
+message SetViewPortSizeRequest {
+  imp.NodeHandleMessage surface_renderer_node = 1;
+  imp.UInt2 view_port_size = 2;
+}
+
+// TODO
+/* message SetRenderSettingsRequesst {
+  imp.NodeHandleMessage surface_renderer_node = 1;
+  imp.render_settings.OverrideMode override_mode = 2;
+  imp.render_settings.ViewRenderSettings render_settings = 3;
+} */

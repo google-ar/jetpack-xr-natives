@@ -1,0 +1,66 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+material {
+    name : "Procedural Grid",
+    requires : [
+        "position"
+    ],
+    shadingModel : "unlit",
+    blending : "transparent",
+    depthWrite: false,
+    doubleSided : true,
+    featureLevel : 0
+}
+
+fragment {
+    float getGridIntensity(vec2 pos, vec2 dpdx, vec2 dpdy, float gridScale) {
+        float lineScale = 500.0; // lines per cell
+        const float oo_root2 = 0.70710678118654757;
+        float m =
+          length(vec2(length(dpdx), length(dpdy))) * oo_root2 * gridScale;
+        vec2 gridCoord = pos * gridScale + vec2(0.5, 0.5);
+        vec2 cellCoord = fract(gridCoord);
+        vec2 distFromCenter = 0.5 - abs(vec2(0.5) - cellCoord);
+        vec2 distFromSides = 0.5 - distFromCenter;
+        float lineBoundary = 1.0 / lineScale;
+        vec2 sdf = vec2(0.5 + (1.0 * lineBoundary)) - distFromSides;
+        float alphaX = smoothstep(0.5 - m, 0.5 + m, sdf.x);
+        float alphaY = smoothstep(0.5 - m, 0.5 + m, sdf.y);
+        float fadeTerm = max(0.0, pow(1.0 - min(m, 1.0), 8.0));
+        return fadeTerm * max(alphaX, alphaY);
+    }
+
+    void material(inout MaterialInputs material) {
+        vec2 pos = getWorldPosition().xz + getWorldOffset().xz;
+        vec2 dpdx = dFdx(pos);
+        vec2 dpdy = dFdy(pos);
+        prepareMaterial(material);
+
+        // Colors for different units.
+        // Based on (broken link).
+        const vec3 colorM = vec3(0.12, 0.12, 0.14);
+        const vec3 colorDM = vec3(0.23, 0.25, 0.26);
+        const vec3 colorCM = vec3(0.37, 0.38, 0.40);
+        const vec3 colorMM = vec3(0.50, 0.52, 0.54);
+
+        float alphaM = getGridIntensity(pos, dpdx, dpdy, 1.0);
+        float alphaDM = max(0.0, getGridIntensity(pos, dpdx, dpdy, 10.0) - alphaM);
+        float alphaCM = max(0.0, getGridIntensity(pos, dpdx, dpdy, 100.0) - (alphaM + alphaDM));
+        float alphaMM = max(0.0, getGridIntensity(pos, dpdx, dpdy, 1000.0) - (alphaM + alphaDM + alphaCM));
+        float c = alphaM + alphaDM + alphaCM + alphaMM;
+        vec3 rgb = colorM * alphaM + colorDM * alphaDM + colorCM * alphaCM + colorMM * alphaMM;
+        material.baseColor = vec4(rgb, c);
+    }
+}

@@ -1,0 +1,88 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import "core/math/math.proto";
+import "core/proto/imp.proto";
+import "core/render_passes/texture_config.proto";
+import "core/scene_handles/scene_handles.proto";
+import "core/view/utils/proto/render_settings.proto";
+
+// Contains parameters for rendering on-demand offscreen textures.
+//
+// Each pass can output color (required) & depth textures (optional).
+message OnDemandTexturePipelineRenderParams {
+  option (imp.native_include) =
+      "core/view/framework/camera/camera_component.h";
+
+  // NextID: 11
+  message Pass {
+    // Determines which group this pass should render.
+    // Must be specified.
+    string group = 1;
+
+    // If assigned, a camera to use for the render pass. Otherwise, uses the
+    // main camera.
+    ComponentSceneHandle camera = 2
+        [(imp.template_type) = "::imp::CameraComponent"];
+
+    // Configuration for the output color texture from this pass.
+    oneof color_texture_config {
+      // If color_texture is assigned, a new color texture will be created.
+      TextureConfig color_texture = 3;
+      // If registered_color_texture is assigned, texture pipeline renderer will
+      // render to that texture. The texture needs to be registered to
+      // TextureRegistry before setting up TexturePipelineRenderer.
+      // Please note that the texture needs to have
+      // filament::Texture::Usage::COLOR_ATTACHMENT and
+      // filament::Texture::Usage::SAMPLEABLE for this to work.
+      string registered_color_texture = 4;
+    }
+
+    // If assigned, controls the layer of the color texture to render to. Only
+    // applies to 3D textures or 2D array textures. To use this, first register
+    // a color texture with depth N, then set this to a layer index in [0, N).
+    optional int32 color_texture_layer = 10;
+
+    // Configuration for the output depth texture from this pass.
+    // If no configuration is specified, then no depth texture it outputs.
+    TextureConfig depth_texture = 5 [(imp.optional_type) = ABSL_OPTIONAL];
+
+    // Specifies the size of the rendering region.
+    // If color_texture is not using pre-registered texture, this is the size of
+    // the texture to create.
+    UInt2 render_region_size = 6;
+
+    // If assgined, the settings will be applied on top of the default view
+    // render settings.
+    imp.render_settings.ViewRenderSettings render_settings = 7
+        [(imp.optional_type) = ABSL_OPTIONAL];
+
+    // view_port_left_bottom = {left, bottom}.
+    // If assigned, the rendering viewport will be {left, bottom, width,
+    // height}.
+    // If not assigned, the rendering viewport will be {0, 0, width, height}.
+    Int2 view_port_left_bottom = 8 [(imp.optional_type) = ABSL_OPTIONAL];
+
+    // If true, the main view's render settings will be used for rendering the
+    // pass.
+    bool use_main_view_settings = 9;
+  }
+
+  // List of render passes evaluated in-order.
+  repeated Pass passes = 1;
+}

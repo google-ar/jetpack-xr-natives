@@ -1,0 +1,50 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import "core/math/math.proto";
+
+option java_multiple_files = true;
+// option cc_api_version = 2;
+// option cc_api_version = 2;
+
+// Represents an input pointer
+message PointerMessage {
+  int32 id = 1;
+  Float2 point = 2;
+}
+
+// Lists the different possible input pointer event types
+enum PointerEventTypeMessage {
+  // One or more pointers are interrupted.
+  CANCEL = 0;
+  // One or more pointers go down i.e., mouse click down, touch down.
+  DOWN = 1;
+  // One or more pointers go up i.e., mouse click up, touch up.
+  UP = 2;
+  // One or more pointers change coordinates.
+  MOVE = 3;
+  // Mouse wheel moves.
+  WHEEL = 4;
+}
+
+// Represents an input pointer event
+message PointerEventMessage {
+  PointerEventTypeMessage type = 1;
+  repeated PointerMessage pointers = 2;
+  int64 elapsed_time = 3;
+}
