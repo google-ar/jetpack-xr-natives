@@ -14,6 +14,7 @@
 
 #include "core/physics/physics_manager.h"
 
+#include <algorithm>
 #include <cstddef>
 
 #include "bullet/src/BulletCollision/BroadphaseCollision/btAxisSweep3.h"
@@ -40,6 +41,8 @@ static constexpr float kPhysicsWorldHalfExtent = 1000.0f;
 // The threshold for the distance between two objects, below which is
 // considered as a collision.
 static constexpr float kCollisionDistanceThreshold = 0.001f;
+// The max time step length for a single physics step.
+static constexpr float kMaxTimeStepLength = 0.015f;
 
 PhysicsManager::PhysicsManager(BaseView& view)
     : Updater(view),
@@ -52,13 +55,19 @@ PhysicsManager::PhysicsManager(BaseView& view)
                     kPhysicsWorldHalfExtent))),
       world_(btDiscreteDynamicsWorld(&physics_dispatcher_,
                                      &aabb_overlapping_pair_cache_, &solver_,
-                                     &collision_configuration_)) {
+                                     &collision_configuration_)),
+      play_simulation_(true),
+      simulation_step_speed_(1.0f) {
   // TODO: Make gravity configurable.
   world_.setGravity(btVector3(0., -9.80625, 0.));
 }
 
 void PhysicsManager::Update(const FrameTime& frame_time) {
-  world_.stepSimulation(frame_time.GetDeltaSeconds());
+  if (!play_simulation_) {
+    return;
+  }
+
+  world_.stepSimulation(frame_time.GetDeltaSeconds() * simulation_step_speed_);
 
   ProcessCollisions();
 }
@@ -141,6 +150,37 @@ bool PhysicsManager::HasActiveCollidables(NodeHandle node) const {
   }
 
   return false;
+}
+
+void PhysicsManager::PlaySimulation(bool play) { play_simulation_ = play; }
+
+void PhysicsManager::SetSimulationStepSpeed(float speed) {
+  simulation_step_speed_ = std::max(0.0f, speed);
+}
+
+float PhysicsManager::GetSimulationStepSpeed() const {
+  return simulation_step_speed_;
+}
+
+void PhysicsManager::FastForwardSimulation(float duration) {
+  if (play_simulation_ || duration <= 0.0f) {
+    return;
+  }
+
+  if (duration > kMaxTimeStepLength) {
+    float accumlated_time_step = 0.0f;
+    while (accumlated_time_step < duration) {
+      if (accumlated_time_step + kMaxTimeStepLength > duration) {
+        float remaining_time_step = duration - accumlated_time_step;
+        world_.stepSimulation(remaining_time_step);
+        break;
+      }
+      world_.stepSimulation(kMaxTimeStepLength);
+      accumlated_time_step += kMaxTimeStepLength;
+    }
+  } else {
+    world_.stepSimulation(duration);
+  }
 }
 
 }  // namespace imp

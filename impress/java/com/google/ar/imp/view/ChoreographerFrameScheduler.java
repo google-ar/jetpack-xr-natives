@@ -33,8 +33,8 @@ public final class ChoreographerFrameScheduler extends FrameScheduler {
   /** Makes a new instance of the frame scheduler */
   public static class Factory implements FrameScheduler.Factory {
     @Override
-    public FrameScheduler create(ThreadMode threadMode) {
-      return new ChoreographerFrameScheduler(threadMode);
+    public FrameScheduler create(ThreadMode threadMode, String threadName) {
+      return new ChoreographerFrameScheduler(threadMode, threadName);
     }
   }
 
@@ -79,7 +79,11 @@ public final class ChoreographerFrameScheduler extends FrameScheduler {
   private State state = State.STOPPED;
 
   ChoreographerFrameScheduler(ThreadMode threadMode) {
-    super(threadMode);
+    this(threadMode, (String) null);
+  }
+
+  ChoreographerFrameScheduler(ThreadMode threadMode, String threadName) {
+    super(threadMode, threadName);
     this.state = State.STOPPED;
     this.choreographerHolder = new AndroidChoreographerHolder();
     this.frameCallback = new FrameCallback(this);
@@ -87,7 +91,12 @@ public final class ChoreographerFrameScheduler extends FrameScheduler {
   }
 
   ChoreographerFrameScheduler(ThreadMode threadMode, ChoreographerHolder choreographerHolder) {
-    super(threadMode);
+    this(threadMode, choreographerHolder, null);
+  }
+
+  ChoreographerFrameScheduler(
+      ThreadMode threadMode, ChoreographerHolder choreographerHolder, String threadName) {
+    super(threadMode, threadName);
     this.state = State.STOPPED;
     this.choreographerHolder = choreographerHolder;
     this.frameCallback = new FrameCallback(this);

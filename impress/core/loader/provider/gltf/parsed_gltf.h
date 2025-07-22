@@ -25,7 +25,7 @@
 namespace imp::loader::details::provider_gltf {
 
 struct ParsedGltf {
-  imp::gltf::Gltf gltf;
+  imp::gltf::imp_proto::Gltf gltf;
   std::vector<BufferAccess> owned;
 };
 

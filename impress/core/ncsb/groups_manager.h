@@ -18,13 +18,18 @@
 #define THIRD_PARTY_IMPRESS_CORE_NCSB_GROUPS_MANAGER_H_
 
 #include <cstddef>
-#include <functional>
 #include <string>
+#include <variant>
 
+#include "absl/base/attributes.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/strings/string_view.h"
 #include "filament/filament/include/filament/Scene.h"
 #include "core/common/hash.h"
+#include "core/common/owned_or_borrowed_ptr.h"
+#include "core/common/owned_or_unowned_memory.h"
+#include "core/common/owned_ptr.h"
+#include "core/lighting/environment_light.h"
 #include "core/ncsb/dispatcher/event.h"
 #include "core/ncsb/node_handle.h"
 #include "core/view/base_view.h"
@@ -45,6 +50,20 @@ class NodeController;
 // filament::Scene for rendering.
 class GroupsManager {
  public:
+  // The type of environment light for a group.
+  enum class AutomatedLightingMode {
+    // the group doesn't have an environment light.
+    kNoEnvironmentLight,
+    // the group uses the main group's environment light.
+    kUseMainGroupEnvironmentLight,
+  };
+
+  // A variant that can hold any type of environment light.
+  using EnvironmentLightHolder =
+      std::variant<OwnedOrBorrowedPtr<EnvironmentLight>,
+                   OwnedOrUnownedMemory<EnvironmentLight>,
+                   AutomatedLightingMode>;
+
   // GroupCreatedEvent will be sent out through imp::View's Dispatcher when a
   // group is created.
   //
@@ -92,11 +111,37 @@ class GroupsManager {
   // If there is no node in the group, then returns an empty string_view.
   absl::string_view GetGroupName(HashValue group_hash);
 
+  // Sets the environment light for the specified group.
+  // If the group doesn't exist and the environment light is not
+  // kNoEnvironmentLight, it will be created.
+  //
+  // Note: This function can take all types of environment light, see the
+  // constructor of EnvironmentLightHolder for details.
+  void SetGroupEnvironmentLight(absl::string_view group_name,
+                                EnvironmentLightHolder environment_light);
+
+  // Returns the environment light type for the specified group.
+  BorrowedPtr<EnvironmentLight> GetEnvironmentLight(
+      absl::string_view group_name);
+
+  // Returns raw pointer to the environment light for the specified group. An
+  // API for LightManager for backwards compatibility.
+  ABSL_DEPRECATED(
+      "For better memory management, use OwnedOrBorrowedPtr<EnvironmentLight> "
+      "for new code instead.")
+  EnvironmentLight* GetRawEnvironmentLight(absl::string_view group_name);
+
  private:
   struct Group {
     filament::Scene* scene;
     size_t num_nodes_in_layer = 0;
+    EnvironmentLightHolder environment_light =
+        AutomatedLightingMode::kNoEnvironmentLight;
   };
+
+  Group* CreateGroup(absl::string_view group_name, HashValue group_hash);
+
+  void DestroyGroup(HashValue group_hash);
 
   void AddNodeToGroup(absl::string_view group_name, HashValue group_hash,
                       NodeHandle node);
@@ -105,6 +150,15 @@ class GroupsManager {
 
   void SetNodeActiveInGroup(HashValue group_hash, NodeHandle node,
                             bool is_active);
+
+  bool GroupHasEnvironmentLight(Group& group);
+
+  // Returns the environment light of the main group if the group has
+  // kUseMainGroupEnvironmentLight set. Otherwise, returns the environment light
+  // of the group.
+  EnvironmentLightHolder& GetEffectiveEnvironmentLight(Group& group);
+
+  void ProcessGroupEnvironmentLightChange(Group& group);
 
   // NodeController needs to call AddNodeToGroup, RemoveNodeFromGroup, and
   // SetNodeActiveInGroup which is used to implement the public API on Node for

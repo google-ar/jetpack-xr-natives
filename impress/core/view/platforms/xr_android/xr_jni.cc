@@ -31,7 +31,6 @@
 #include "core/view/platforms/xr_android/xr_session_host.h"
 #include "mediapipe/framework/port/status_macros.h"
 
-
 #define JNI_METHOD(return_type, method_name) \
   IMP_JNI return_type JNICALL                \
       Java_com_google_ar_imp_view_xr_ImpXrApi_##method_name
@@ -101,11 +100,12 @@ JNI_METHOD(jlong, nCreateSessionHost)
 (JNIEnv* env, jclass /*clazz*/, jobject context, jlong view_handle,
  jboolean use_composition_layer_depth,
  jboolean use_enhanced_stereoscopic_rendering, jboolean use_max_swapchain_size,
- int foveation_level, jboolean use_quad_views,
- jboolean use_varjo_foveated_rendering, jlong openxr_reference_space_type,
- jboolean use_eye_gaze_interaction, jboolean use_android_depth_texture,
- jboolean use_xr_action_defaults, jboolean use_fb_color_space,
- jboolean enable_android_system_extensions) {
+ jint foveation_level, jboolean use_quad_views,
+ jboolean use_varjo_foveated_rendering, jint msaa_sample_count,
+ jlong openxr_reference_space_type, jboolean use_eye_gaze_interaction,
+ jboolean use_android_depth_texture, jboolean use_xr_action_defaults,
+ jboolean use_fb_color_space, jboolean enable_android_system_extensions,
+ jfloat swapchain_size_multiplier) {
   context = env->NewGlobalRef(context);
   absl::Status status = InitializeLoader(env, context);
   if (!status.ok()) {
@@ -121,12 +121,14 @@ JNI_METHOD(jlong, nCreateSessionHost)
   options.foveation_level = XrFoveationLevelFBFromInt(foveation_level);
   options.use_quad_views = use_quad_views;
   options.use_varjo_foveated_rendering = use_varjo_foveated_rendering;
+  options.msaa_sample_count = msaa_sample_count;
   options.reference_space_type =
       static_cast<XrReferenceSpaceType>(openxr_reference_space_type);
   options.use_eye_gaze_interaction = use_eye_gaze_interaction;
   options.use_android_depth_texture = use_android_depth_texture;
   options.use_fb_color_space = use_fb_color_space;
   options.enable_android_system_extensions = enable_android_system_extensions;
+  options.swapchain_size_multiplier = swapchain_size_multiplier;
 
   auto session_host = std::make_unique<XrSessionHost>(std::move(view), options);
   auto& xr_action_controller =

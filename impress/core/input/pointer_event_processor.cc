@@ -14,12 +14,15 @@
 
 #include "core/input/pointer_event_processor.h"
 
+#include <string>
 #include <vector>
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
-#include "core/common/platform_helpers.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "core/config.h"
+#include "core/math/vec.h"
 #include "mediapipe/framework/port/status_macros.h"
 
 namespace imp {
@@ -99,8 +102,17 @@ absl::Status PointerEventProcessor::UpdatePointerEvent(
     Pointer::Id id = changed_ids[i];
     float2 point = changed_points[i];
     auto iter = last_pointers_.find(id);
-    if (iter == last_pointers_.end())
-      return absl::InternalError("Tried to update unknown pointer");
+    if (iter == last_pointers_.end()) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "Tried to update unknown pointer id ", id, " for PointerEventType ",
+          event.Type(), ". Existing pointers and their locations are: ",
+          absl::StrJoin(
+              last_pointers_, ", ",
+              absl::PairFormatter(absl::AlphaNumFormatter(), "=",
+                                  [](std::string* out, const float2& vec) {
+                                    absl::StrAppend(out, ToString(vec));
+                                  }))));
+    }
     changed_deltas[i] = point - iter->second;
     last_pointers_[id] = point;
   }

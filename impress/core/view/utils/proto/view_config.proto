@@ -54,6 +54,11 @@ message ViewConfig {
   // a callback handler to Filament.
   optional bool use_system_frame_scheduled_handler = 6;
 
+  // Flag to preinitialize the Metal platform. This is an experiment to try and
+  // fetch the command queue before initializing the Filament engine.
+  // TODO Remove this flag once the experiment is complete.
+  optional bool should_preinitialize_metal_platform = 8;
+
   // The size of the texture used by the GlyphAtlas.
   enum GlyphAtlasTextureSize {
     // A 2048x2048 texture size.

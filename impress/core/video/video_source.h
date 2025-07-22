@@ -30,11 +30,11 @@
 #include "core/common/robin_map.h"
 #include "core/common/small_source_location.h"
 #include "core/math/vec.h"
+#include "core/media/media_color_space.h"
 #include "core/media/media_source.h"
 #include "core/media/media_type.h"
 #include "core/render/android/android_defines.h"
 #include "core/render/texture.h"
-#include "core/video/video_color_space.h"
 #include "core/view/base_view.h"
 
 namespace imp::video {
@@ -85,7 +85,7 @@ class VideoSource : public media::MediaSource {
   // Returns the color space information of the video, including the standard,
   // transfer function, range, luma and chroma bitdepths, and the maximum
   // content light level.
-  virtual VideoColorSpace GetColorSpace() const = 0;
+  virtual MediaColorSpace GetColorSpace() const = 0;
 
   virtual MediaStereoMode GetStereoMode() const = 0;
 

@@ -32,6 +32,8 @@ message LayoutConfig {
             // of the screen.
     SINGLE_TABBED_WINDOW = 1;  // Draw a single tabbed window with
                                // default Details and Scene tabs.
+    MULTIPLE_WINDOWS_WORLD_LAYOUT =
+        2;  // Draw all the windows from left to right without overlapping.
   }
   // Where a window is pinned.
   enum WindowPinState {

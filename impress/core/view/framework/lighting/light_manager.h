@@ -17,23 +17,20 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_LIGHTING_LIGHT_MANAGER_H_
 #define THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_LIGHTING_LIGHT_MANAGER_H_
 
-#include <memory>
 #include <optional>
-#include <string>
 
+#include "absl/base/attributes.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
+#include "core/common/owned_ptr.h"
 #include "core/lighting/environment_light.h"
 #include "core/lighting/image_based_lighting_asset.h"
 #include "core/ncsb/component_handle.h"
-#include "core/ncsb/dispatcher/dispatcher.h"
-#include "core/ncsb/dispatcher/event.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/lighting/light_component.h"
 #include "core/view/utils/asset.h"
-#include "core/view/utils/string_map.h"
 
 namespace imp {
 
@@ -44,7 +41,7 @@ namespace imp {
 // code.
 class LightManager {
  public:
-  explicit LightManager(BaseView* view);
+  explicit LightManager(BaseView& view);
 
   static const AssetDefinition& GetDefaultLightingResource();
 
@@ -64,8 +61,22 @@ class LightManager {
   // Please note that if environment_light is nullptr, the indirect light for
   // the default group will be removed.
   void SetEnvironmentLight(
+      OwnedPtr<EnvironmentLight> environment_light,
+      absl::string_view group_name = GroupsManager::kMainGroupName);
+  void SetEnvironmentLight(
+      BorrowedPtr<EnvironmentLight> environment_light,
+      absl::string_view group_name = GroupsManager::kMainGroupName);
+  // Sets the group to use the main group's environment light. This will be
+  // cancelled if the group is set to use a different environment light.
+  void MirrorMainGroupEnvironmentLightToGroup(absl::string_view group_name);
+  // Removes the environment light from the group.
+  void ClearEnvironmentLight(
+      absl::string_view group_name = GroupsManager::kMainGroupName);
+  ABSL_DEPRECATED("Switch to use OwnedPtr<EnvironmentLight> instead.")
+  void SetEnvironmentLight(
       EnvironmentLightPtr environment_light,
       absl::string_view group_name = GroupsManager::kMainGroupName);
+  ABSL_DEPRECATED("Switch to use BorrowedPtr<EnvironmentLight> instead.")
   void SetEnvironmentLight(
       EnvironmentLight* environment_light,
       absl::string_view group_name = GroupsManager::kMainGroupName);
@@ -75,6 +86,12 @@ class LightManager {
   //
   // For groups using default lighting, this could return nullptr if the default
   // lighting asset is still being loaded.
+  BorrowedPtr<EnvironmentLight> GetGroupEnvironmentLight(
+      absl::string_view group_name = GroupsManager::kMainGroupName);
+  ABSL_DEPRECATED(
+      "Switch to use OwnedPtr<EnvironmentLight> or "
+      "BorrowedPtr<EnvironmentLight> "
+      "instead.")
   EnvironmentLight* GetEnvironmentLight(
       absl::string_view group_name = GroupsManager::kMainGroupName);
 
@@ -130,32 +147,23 @@ class LightManager {
   // This will not create new directional light or environment light, which
   // also means that the main group remains as the owner of the environment
   // light that's shared across groups.
+  ABSL_DEPRECATED("Using GroupsManager::SetGroupEnvironmentLight(..) instead.")
   void ApplyMainGroupLighting(absl::string_view group_name);
 
  private:
   void SetupDefaultDirectionalLight();
 
-  // Updates the indirect light of the filament::Scene associated with
-  // `group_name`. If the scene doesn't exist, this will be no-op.
-  void UpdateEnvironmentLight(EnvironmentLight* environment_light,
-                              absl::string_view group_name);
-
   void AddDefaultDirectionalLightToGroup(absl::string_view group_name);
 
   Future<absl::Status> SetupDefaultLighting();
 
-  BaseView* view_;
+  BaseView& view_;
 
   std::optional<Future<AssetPtr<ImageBasedLightingAsset>>> default_ibl_;
 
   std::optional<Future<absl::Status>> default_lighting_status_;
 
-  StringMap<OwnedOrUnownedEnvironmentLight> environment_lighting_map_;
-
   ComponentHandle<LightComponent> default_directional_light_;
-
-  Dispatcher::ScopedConnection group_created_event_connection_;
-  Dispatcher::ScopedConnection group_destroyed_event_connection_;
 
   bool is_default_load_enabled_ = true;
 };

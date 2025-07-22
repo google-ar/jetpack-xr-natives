@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "imp_google3_copts")
 
 package(
@@ -25,10 +26,14 @@ licenses(["notice"])
 
 cc_library(
     name = "shapes",
+    srcs = [
+        "rect.cc",
+    ],
     hdrs = [
         "box.h",
         "capsule.h",
         "circle.h",
+        "cone.h",
         "cylinder.h",
         "line.h",
         "line_segment.h",
@@ -42,6 +47,21 @@ cc_library(
         "//core/math",
         "@com_google_absl//absl/strings:str_format",
         "@third_party//filament/filament:filament_hdrs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "matchers",
+    testonly = 1,
+    hdrs = [
+        "shape_matchers.h",
+    ],
+    copts = imp_google3_copts(),
+    linkstatic = True,
+    deps = [
+        ":shapes",
+        "@mediapipe//mediapipe/framework/port:gtest_main",
     ],
     alwayslink = 1,
 )

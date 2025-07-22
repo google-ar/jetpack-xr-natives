@@ -41,6 +41,7 @@
 #include "core/ncsb/component_system.h"
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
+#include "core/render/texture_options.h"
 #include "core/render_passes/texture_pipeline_renderer_state.proto.imp.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/material_factory.h"
@@ -381,9 +382,9 @@ absl::Status TexturePipelineRenderer::InitializeTextures(
 
     OwnedTexturePtr depth_texture;
     if (is_multiview) {
-      TextureFactory::Options options = {
-          .mag_filter = TextureFactory::MagFilter::NEAREST,
-          .min_filter = TextureFactory::MinFilter::NEAREST,
+      TextureSamplerOptions sampler_options = {
+          .mag_filter = TextureSamplerOptions::MagFilter::NEAREST,
+          .min_filter = TextureSamplerOptions::MinFilter::NEAREST,
       };
       TextureFactory::TextureCreationSettings settings = {
           .width = texture_size.x,
@@ -394,7 +395,7 @@ absl::Status TexturePipelineRenderer::InitializeTextures(
           .sampler_type = filament::Texture::Sampler::SAMPLER_2D_ARRAY,
           .usage = filament::Texture::Usage::DEPTH_ATTACHMENT |
                    filament::Texture::Usage::SAMPLEABLE,
-          .options = options,
+          .sampler_options = sampler_options,
       };
       depth_texture = GetView().GetTextureFactory().CreateTexture(settings);
     } else {
@@ -402,8 +403,10 @@ absl::Status TexturePipelineRenderer::InitializeTextures(
           texture_size.x, texture_size.y, depth_format,
           filament::Texture::Usage::DEPTH_ATTACHMENT |
               filament::Texture::Usage::SAMPLEABLE,
-          {.mag_filter = TextureFactory::MagFilter::NEAREST,
-           .min_filter = TextureFactory::MinFilter::NEAREST});
+          TextureSamplerOptions{
+              .mag_filter = TextureSamplerOptions::MagFilter::NEAREST,
+              .min_filter = TextureSamplerOptions::MinFilter::NEAREST,
+          });
     }
 
     if (texture_proto.name.empty()) {
@@ -569,6 +572,9 @@ void TexturePipelineRenderer::RenderPasses(
       // or not instead of always clearing when rendering to subregions.
       filament_renderer->setClearOptions(
           filament::Renderer::ClearOptions{.clear = false, .discard = false});
+    } else if (pass.clear_color.has_value()) {
+      filament_renderer->setClearOptions(
+          {.clearColor = pass.clear_color.value(), .clear = true});
     }
 
     // Send the pre-pass event.
@@ -584,7 +590,7 @@ void TexturePipelineRenderer::RenderPasses(
     post_pass_event.pass_index = i;
     GetNode()->Send(post_pass_event);
 
-    if (runtime_pass.rendering_to_subregion) {
+    if (runtime_pass.rendering_to_subregion || pass.clear_color.has_value()) {
       filament_renderer->setClearOptions(clear_options);
     }
 

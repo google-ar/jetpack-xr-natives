@@ -85,6 +85,9 @@ message SetupParams {
   // https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#XR_VARJO_foveated_rendering
   // Note: use_quad_views must be true to use this feature.
   optional bool use_varjo_foveated_rendering = 14 [default = false];
+  // When building for XR, the number of MSAA samples per pixel for the color
+  // and depth textures. Zero means MSAA is disabled.
+  optional int32 msaa_sample_count = 25 [default = 0];
   // Selects the default reference space for XR applications. This should match
   // values from
   // https://registry.khronos.org/OpenXR/specs/1.1/man/html/XrReferenceSpaceType.html.
@@ -108,4 +111,9 @@ message SetupParams {
   optional bool use_fb_color_space = 21 [default = false];
   // When building for XR, whether or not to use the AndroidSYS extensions.
   optional bool enable_android_system_extensions = 22 [default = false];
+  // When building for XR and not using max swapchain size, the multiplier to be
+  // applied to the recommended swapchain size.
+  optional float swapchain_size_multiplier = 23 [default = 1.0];
+  // The name of the thread that the background frame scheduler will run on.
+  optional string background_thread_name = 24 [default = "impressThread"];
 }

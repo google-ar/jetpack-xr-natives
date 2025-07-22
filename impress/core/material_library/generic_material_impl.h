@@ -85,21 +85,32 @@ class GenericMaterialImpl : public GenericMaterial {
   TextureAndSampler GetBaseColorTexture() const override;
   absl::Status SetBaseColorUvTransform(const mat3f& uv_transform) override;
   void SetBaseColorFactor(const float4& factor) override;
+  float4 GetBaseColorFactor() const override;
+
   TextureAndSampler GetMetallicRoughnessTexture() const override;
   absl::Status SetMetallicRoughnessUvTransform(
       const mat3f& uv_transform) override;
   void SetMetallicFactor(float factor) override;
+  float GetMetallicFactor() const override;
   void SetRoughnessFactor(float factor) override;
+  float GetRoughnessFactor() const override;
+
   TextureAndSampler GetNormalTexture() const override;
   absl::Status SetNormalUvTransform(const mat3f& uv_transform) override;
   void SetNormalScale(float scale) override;
+  float GetNormalScale() const override;
+
   TextureAndSampler GetAmbientOcclusionTexture() const override;
   absl::Status SetAmbientOcclusionUvTransform(
       const mat3f& uv_transform) override;
   void SetAmbientOcclusionStrength(float strength) override;
+  float GetAmbientOcclusionStrength() const override;
+
   TextureAndSampler GetEmissiveTexture() const override;
   absl::Status SetEmissiveUvTransform(const mat3f& uv_transform) override;
   void SetEmissiveFactor(const float3& factor) override;
+  float3 GetEmissiveFactor() const override;
+
   TextureAndSampler GetClearcoatTexture() const override;
   TextureAndSampler GetClearcoatNormalTexture() const override;
   TextureAndSampler GetClearcoatRoughnessTexture() const override;
@@ -112,7 +123,9 @@ class GenericMaterialImpl : public GenericMaterial {
   absl::Status SetTransmissionUvTransform(const mat3f& uv_transform) override;
   void SetTransmissionFactor(float factor) override;
   void SetIndexOfRefraction(float index_of_refraction) override;
+
   void SetAlphaCutoff(float alpha_cutoff) override;
+  float GetAlphaCutoff() const override;
 
  protected:
   BorrowedMaterialPtr GetMaterialInternal(
@@ -245,6 +258,7 @@ void GenericMaterialImpl::ApplyMaterialParameter(absl::string_view name,
 template <>
 void GenericMaterialImpl::ApplyMaterialParameter(absl::string_view name,
                                                  const std::vector<mat3f>& v);
+
 }  // namespace imp
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_GENERIC_MATERIAL_IMPL_H_

@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load("//build_tools:imp.bzl", "if_linux", "if_macos", "imp_copts")
 load(
     "//core/proto:imp_cc_proto_library.bzl",
@@ -114,7 +116,8 @@ cc_library(
     ] + if_linux([
         "@com_google_absl//absl/debugging:leak_check",
         "//third_party/fontconfig",
-        "//third_party/skia/HEAD:fontmgr_fontconfig_freetype",
+        "//third_party/skia/HEAD:fontmgr_fontconfig",
+        "//third_party/skia/HEAD:freetype_support",
     ]) + if_macos([
         "//third_party/skia/HEAD:fontmgr_coretext",
     ]),

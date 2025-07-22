@@ -14,19 +14,120 @@
 
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 
+#include <sys/types.h>
+
+#include <functional>
+#include <optional>
 #include <utility>
 
+#include "core/common/log.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
+#include "core/common/registry.h"
 #include "core/common/small_source_location.h"
 #include "core/materials/material.h"
+#include "core/math/mat.h"
+#include "core/media/media_color_space.h"
+#include "core/render/display_color_space.h"
+#include "core/split_engine/shared/split_engine_defines.h"
+#include "core/split_engine/split_engine_renderer.h"
+#include "core/view/base_view.h"
 
 namespace imp::split_engine {
+namespace {
+constexpr absl::string_view kColorConversionMatrixParameter =
+    "colorConversionMatrix";
+constexpr absl::string_view kTransferFunctionParameter = "transferFunction";
+constexpr absl::string_view kMaxContentLightLevelParameter =
+    "maxContentLightLevel";
+}  // namespace
 
-BuiltInCustomMaterial::BuiltInCustomMaterial(OwnedMaterialPtr material)
-    : material_(std::move(material)) {}
+BuiltInCustomMaterial::BuiltInCustomMaterial(BridgeId bridge_id,
+                                             OwnedMaterialPtr material)
+    : bridge_id_(bridge_id), material_(std::move(material)) {}
+
+BridgeId BuiltInCustomMaterial::GetBridgeId() const { return bridge_id_; }
 
 BorrowedMaterialPtr BuiltInCustomMaterial::GetMaterialInternal(
     SmallSourceLocation loc) const {
   return material_.Borrow(loc);
+}
+
+void BuiltInCustomMaterial::UpdateColorSpaceParameters(
+    BaseView& view, std::optional<TextureId> texture_id) {
+  // Start with the default color space parameters.
+  imp::mat3f color_transform_matrix =
+      default_color_space_.GetColorTransformMatrixDisplayP3().value_or(
+          imp::kIdentityMat3f);
+  int transfer_function = static_cast<int>(default_color_space_.GetTransfer());
+  int max_content_light_level = default_color_space_.GetMaxContentLightLevel();
+
+  // SplitEngineRenderer has the information about the color space of the
+  // surface texture.
+  absl::StatusOr<std::reference_wrapper<SplitEngineRenderer>> renderer =
+      view.GetRegistry().Get<SplitEngineRenderer>();
+  if (!renderer.ok()) {
+    // When there is no renderer, there's no way to request P3 color space, so
+    // the color transform matrix should be set to sRGB. This only happens in
+    // local (material) mode.
+    color_transform_matrix =
+        default_color_space_.GetColorTransformMatrixSRGB().value_or(
+            imp::kIdentityMat3f);
+  }
+
+  if (renderer.ok() && texture_id.has_value()) {
+    absl::StatusOr<MediaColorSpace> source_texture_color_space =
+        renderer->get().GetTextureColorSpace(GetBridgeId(), texture_id.value());
+    if (source_texture_color_space.ok() &&
+        source_texture_color_space->GetStandard() !=
+            MediaColorSpace::Standard::kUnknown) {
+      color_transform_matrix = source_texture_color_space.value()
+                                   .GetColorTransformMatrixDisplayP3()
+                                   .value_or(imp::kIdentityMat3f);
+      transfer_function =
+          static_cast<int>(source_texture_color_space.value().GetTransfer());
+      max_content_light_level =
+          source_texture_color_space.value().GetMaxContentLightLevel();
+    }
+  }
+
+  GetMaterial()->SetParameter(kColorConversionMatrixParameter,
+                              color_transform_matrix);
+  GetMaterial()->SetParameter(kTransferFunctionParameter, transfer_function);
+  GetMaterial()->SetParameter(kMaxContentLightLevelParameter,
+                              max_content_light_level);
+}
+
+void BuiltInCustomMaterial::OverrideColorSpaceParameters(
+    BaseView& view, MediaColorSpace color_space) {
+  imp::mat3f color_transform_matrix;
+
+  switch (GetRequiredDisplayColorSpace()) {
+    case DisplayColorSpace::kBT709:
+      color_transform_matrix =
+          color_space.GetColorTransformMatrixSRGB().value_or(
+              imp::kIdentityMat3f);
+      break;
+    case DisplayColorSpace::kP3:
+      color_transform_matrix =
+          color_space.GetColorTransformMatrixDisplayP3().value_or(
+              imp::kIdentityMat3f);
+      break;
+    default:
+      IMP_LOG(imp::ERROR) << "Unsupported display color space. Falling back to SRGB.";
+      color_transform_matrix =
+          color_space.GetColorTransformMatrixSRGB().value_or(
+              imp::kIdentityMat3f);
+      break;
+  }
+  int transfer_function = static_cast<int>(color_space.GetTransfer());
+  int max_content_light_level = color_space.GetMaxContentLightLevel();
+
+  GetMaterial()->SetParameter(kColorConversionMatrixParameter,
+                              color_transform_matrix);
+  GetMaterial()->SetParameter(kTransferFunctionParameter, transfer_function);
+  GetMaterial()->SetParameter(kMaxContentLightLevelParameter,
+                              max_content_light_level);
 }
 
 }  // namespace imp::split_engine

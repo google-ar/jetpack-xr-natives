@@ -24,6 +24,16 @@ namespace imp {
 namespace {
 
 template <typename T>
+std::string Create2x2MatrixString(T m) {
+  const auto* a = m.asArray();
+  // Column-major order.
+  return absl::StrFormat(
+      "[ % .3f % .3f  ]\n"
+      "[ % .3f % .3f  ]\n",
+      a[0], a[1], a[2], a[3]);
+}
+
+template <typename T>
 std::string Create3x3MatrixString(T m) {
   const auto* a = m.asArray();
   // Column-major order.
@@ -58,6 +68,8 @@ bool IsYUp(const mat4f& m) {
   return dot(imp::kUp, (m * float4(imp::kUp, 0)).xyz) >= kDotThreshold;
 }
 
+std::string ToString(const mat2f& m) { return Create2x2MatrixString(m); }
+std::string ToString(const mat2& m) { return Create2x2MatrixString(m); }
 std::string ToString(const mat3f& m) { return Create3x3MatrixString(m); }
 std::string ToString(const mat3& m) { return Create3x3MatrixString(m); }
 std::string ToString(const mat4f& m) { return Create4x4MatrixString(m); }

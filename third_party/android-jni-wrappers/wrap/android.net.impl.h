@@ -14,6 +14,11 @@ inline std::string Uri::toString() const {
     return object().call<std::string>(Meta::data().toString);
 }
 
+inline std::string Uri::getAuthority() const {
+    assert(!isNull());
+    return object().call<std::string>(Meta::data().getAuthority);
+}
+
 inline Uri_Builder Uri_Builder::construct() {
     return Uri_Builder(Meta::data().clazz().newInstance(Meta::data().init));
 }

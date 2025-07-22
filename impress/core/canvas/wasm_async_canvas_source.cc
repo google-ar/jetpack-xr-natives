@@ -91,13 +91,13 @@ absl::string_view GetTextStyleFromTextOptions(
 class WasmCanvasManagerCallbacks
     : public WasmCanvasManager::PixelBufferCallbacks {
  public:
-  WasmCanvasManagerCallbacks(WasmAsyncCanvasSource& source)
-      : source_(source) {};
+  WasmCanvasManagerCallbacks(WasmAsyncCanvasSource& source, BaseView& view)
+      : source_(source), view_(view) {};
 
   void OnPixelBufferUpdated(uint8_t* data, int length,
                             uint32_t* dirty_rects_data,
                             int dirty_rects_length) override {
-    source_.OnPixelBufferReady(data, length, dirty_rects_data,
+    source_.OnPixelBufferReady(view_, data, length, dirty_rects_data,
                                dirty_rects_length);
   };
 
@@ -107,19 +107,14 @@ class WasmCanvasManagerCallbacks
 
  private:
   WasmAsyncCanvasSource& source_;
+  BaseView& view_;
 };
 
 }  // namespace
 
-WasmAsyncCanvasSource::WasmAsyncCanvasSource(BaseView& view)
-    : view_(view),
-      context_(view.GetContext()),
-      pixel_buffer_callbacks_(
-          std::make_unique<WasmCanvasManagerCallbacks>(*this)),
-      measuring_canvas_(
+WasmAsyncCanvasSource::WasmAsyncCanvasSource()
+    : measuring_canvas_(
           std::make_unique<WasmCanvasManager>(nullptr, float2(0.0f))),
-      drawing_canvas_(std::make_unique<WasmCanvasManager>(
-          pixel_buffer_callbacks_.get(), float2(0.0f))),
       measuring_scoped_canvas_(*this, measuring_canvas_.get(), float2(0.0f),
                                false) {}
 
@@ -251,23 +246,23 @@ Future<ScopedCanvas::FontInfo> WasmAsyncCanvasSource::GetFontInfo(
 }
 
 std::unique_ptr<AsyncScopedCanvas> WasmAsyncCanvasSource::StartDrawing(
-    uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) {
+    BaseView& view, uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) {
   absl::MutexLock lock(&canvas_mutex_);
   bool did_texture_change = false;
   if (!texture_ || pixel_size_ != pixel_size) {
     pixel_size_ = pixel_size;
 #if IMP_RUNTIME(DEV)
-    texture_ = view_.GetTextureFactory().CreateTexture(
+    texture_ = view.GetTextureFactory().CreateTexture(
         pixel_size_.x, pixel_size_.y, filament::Texture::InternalFormat::RGBA8,
         filament::Texture::Usage::COLOR_ATTACHMENT |
             filament::Texture::Usage::BLIT_SRC |
             filament::Texture::Usage::DEFAULT);
 #else
-    texture_ = view_.GetTextureFactory().CreateTexture(
+    texture_ = view.GetTextureFactory().CreateTexture(
         pixel_size_.x, pixel_size_.y, filament::Texture::InternalFormat::RGBA8);
 #endif
     drawing_canvas_ = std::make_unique<WasmCanvasManager>(
-        pixel_buffer_callbacks_.get(), pixel_size_);
+        std::make_unique<WasmCanvasManagerCallbacks>(*this, view), pixel_size_);
     did_texture_change = true;
   }
 
@@ -277,7 +272,8 @@ std::unique_ptr<AsyncScopedCanvas> WasmAsyncCanvasSource::StartDrawing(
 
 // TODO: Implement kClear mode.
 std::unique_ptr<AsyncScopedCanvas> WasmAsyncCanvasSource::StartDrawing(
-    uint2 pixel_size, ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
+    BaseView& view, uint2 pixel_size,
+    ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
     ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) {
   absl::MutexLock lock(&canvas_mutex_);
   bool did_texture_change = false;
@@ -289,16 +285,16 @@ std::unique_ptr<AsyncScopedCanvas> WasmAsyncCanvasSource::StartDrawing(
     OwnedTexturePtr old_texture = std::move(texture_);
 
 #if IMP_RUNTIME(DEV)
-    texture_ = view_.GetTextureFactory().CreateTexture(
+    texture_ = view.GetTextureFactory().CreateTexture(
         pixel_size_.x, pixel_size_.y, filament::Texture::InternalFormat::RGBA8,
         filament::Texture::Usage::COLOR_ATTACHMENT |
             filament::Texture::Usage::DEFAULT);
 #else
-    texture_ = view_.GetTextureFactory().CreateTexture(
+    texture_ = view.GetTextureFactory().CreateTexture(
         pixel_size_.x, pixel_size_.y, filament::Texture::InternalFormat::RGBA8);
 #endif
     drawing_canvas_ = std::make_unique<WasmCanvasManager>(
-        pixel_buffer_callbacks_.get(), pixel_size_);
+        std::make_unique<WasmCanvasManagerCallbacks>(*this, view), pixel_size_);
     did_texture_change = true;
 
     on_texture_changed_fn(texture_.Borrow(loc));
@@ -308,7 +304,8 @@ std::unique_ptr<AsyncScopedCanvas> WasmAsyncCanvasSource::StartDrawing(
                                             pixel_size_, did_texture_change);
 }
 
-void WasmAsyncCanvasSource::OnPixelBufferReady(uint8_t* data, int length,
+void WasmAsyncCanvasSource::OnPixelBufferReady(BaseView& view, uint8_t* data,
+                                               int length,
                                                uint32_t* dirty_rects_data,
                                                int dirty_rects_length) {
   filament::backend::PixelDataFormat format = filament::Texture::Format::RGBA;
@@ -344,7 +341,7 @@ void WasmAsyncCanvasSource::OnPixelBufferReady(uint8_t* data, int length,
         free(data);
         free(dirty_rects_data);
       })
-      .KeptBy(&view_);
+      .KeptBy(&view);
 }
 
 void WasmAsyncCanvasSource::OnRectCleared(Rect rect) {

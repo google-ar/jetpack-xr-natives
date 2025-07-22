@@ -34,6 +34,8 @@ class TextureExternalMaterial : public imp::split_engine::SplitEngineMaterial {
   static imp::Future<std::unique_ptr<TextureExternalMaterial>> Create(
       imp::BaseView& view);
 
+  ~TextureExternalMaterial() override;
+
   void SetTexture(imp::OwnedOrBorrowedTexturePtr texture);
 
  protected:

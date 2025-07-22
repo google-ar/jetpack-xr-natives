@@ -132,6 +132,8 @@ class ComponentManager {
   // Completely detaches all components from all entities.
   void DetachAll();
 
+  void DestroyPools();
+
   BaseComponentPool* GetComponentPoolById(ComponentId component_id);
 
   // Returns the System for a given type of component.

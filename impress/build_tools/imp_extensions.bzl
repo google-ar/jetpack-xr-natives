@@ -27,7 +27,7 @@ def imp_extensions(
     the impress applcation if the default ones are not appropriate.
 
     Current supported extensions are named as such:
-    "draco", "basis", "meshopt", "verification", "behavior", "webp"
+    "draco", "basis", "meshopt", "verification", "behavior", "webp", "mesh_features"
 
     Args:
       name: The name of the cc_library generated from this rule
@@ -47,6 +47,15 @@ def imp_extensions(
     else:
         deps = deps + [
             "@com_google_impress//core/loader/provider/extensions:extension_draco_noop",
+        ]
+
+    if "mesh_features" in extensions:
+        deps = deps + [
+            "@com_google_impress//core/loader/provider/extensions:extension_mesh_features_impl",
+        ]
+    else:
+        deps = deps + [
+            "@com_google_impress//core/loader/provider/extensions:extension_mesh_features_noop",
         ]
 
     if "basis" in extensions:

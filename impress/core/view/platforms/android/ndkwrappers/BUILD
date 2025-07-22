@@ -33,29 +33,6 @@ selects.config_setting_group(
     ],
 )
 
-cc_library(
-    name = "hardware_buffer_helper",
-    srcs = select({
-        ":mvhevc_on_android": ["hardware_buffer_helper.cc"],
-        "//conditions:default": [],
-    }),
-    hdrs = select({
-        ":mvhevc_on_android": ["hardware_buffer_helper.h"],
-        "//conditions:default": [],
-    }),
-    copts = imp_google3_copts(),
-    deps = [
-        "//core/common:log",
-        "//core/common:robin_map",
-        "//core/render/android:definitions",
-        "@com_google_absl//absl/cleanup",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:string_view",
-    ],
-    alwayslink = 1,
-)
-
 # Wrapper library for Android NDK AImage.
 cc_library(
     name = "image",
@@ -72,9 +49,10 @@ cc_library(
         "-lmediandk",
         "-lnativewindow",
     ],
-    deps = select({
+    deps = [
+        "@mediapipe//mediapipe/framework/port:status",
+    ] + select({
         ":mvhevc_on_android": [
-            ":hardware_buffer_helper",
             "//core/common:log",
             "//core/common:robin_map",
             "//core/math",
@@ -119,7 +97,6 @@ cc_library(
         ],
         "//conditions:default": [],
     }) + [
-        ":hardware_buffer_helper",
         "//core/common:log",
     ],
     alwayslink = 1,

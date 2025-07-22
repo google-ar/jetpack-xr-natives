@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load("//build_tools:assets.bzl", "imp_assets")
 load("//build_tools:imp.bzl", "if_android", "if_desktop", "if_emscripten", "if_ios", "if_non_android", "imp_google3_copts")
 load(
@@ -186,6 +188,7 @@ cc_library(
         "//core/view:base_view",
         "//core/view/framework",
         "//javascript/core/wasm/audio:audio.js.lds",
+        "//third_party/emscripten:embind",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",

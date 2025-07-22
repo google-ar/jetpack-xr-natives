@@ -16,6 +16,7 @@ material {
     "name" : "JXR Media Flat Plane",
     constants : [
         {
+            // Only applies a global color conversion matrix.
             name : enableColorConversion,
             type : bool,
             default : false
@@ -24,6 +25,16 @@ material {
             name : useSuperSampling,
             type : bool,
             default : false
+        },
+        {
+            // Enables a comprehensive color correction pipeline, encompassing:
+            // - Color conversion
+            // - Transfer function application
+            // - Color range adjustment
+            // - Peak luminance handling (for HDR tonemapping)
+            name : enableColorCorrection,
+            type : bool,
+            default : true
         }
     ],
     "parameters" : [
@@ -55,6 +66,32 @@ material {
           // radius for feathering the edges of the quad in UV space
           type : float2,
           name : featherRadius
+        },
+        // Below three parameters are used for color correction.
+        // TODO - (broken link): Move max luminance float conversion out of the
+        // material and pass a float instead.
+        {
+          name : maxContentLightLevel,
+          type : int,
+          default : 0
+        },
+        {
+          name: colorConversionMatrix,
+          type: float3x3
+        },
+        {
+          // When unset, it defaults to linear.
+          name: transferFunction,
+          type: int,
+          default: 1
+          // Expected values:
+          // 1: Linear
+          // 2: SRGB
+          // 3: SMPTE170M
+          // 10: Gamma22
+          // 6: ST2084
+          // 7: HLG
+          // Source: (broken link)
         }
     ],
     "requires" : [
@@ -69,6 +106,9 @@ material {
     ],
     "shadingModel" : "unlit",
     "flipUV" : false,
+    // Disable depth culling to avoid clipping with the environment.
+    depthCulling: false,
+    culling: none,
     blending : transparent
 }
 
@@ -85,6 +125,7 @@ vertex {
 
 fragment {
 #include "color_conversion_helpers.glsl"
+#include "dataspace_support.glsl"
 #include "stereo.glsl"
 #include "super_sample.glsl"
 
@@ -130,21 +171,26 @@ fragment {
         SAMPLE_TEXTURE(materialParams_primaryAlphaMaskTexture, uv, alphaMaskColor);
       }
     } else {
-        SAMPLE_TEXTURE(materialParams_mediaTexture, uv, textureColor);
-        SAMPLE_TEXTURE(materialParams_primaryAlphaMaskTexture, uv, alphaMaskColor);
+      SAMPLE_TEXTURE(materialParams_mediaTexture, uv, textureColor);
+      SAMPLE_TEXTURE(materialParams_primaryAlphaMaskTexture, uv, alphaMaskColor);
     }
 
     textureColor.a *= alphaMaskColor.a;
 
     // determine feathered alpha based on the UVs
     float alpha =
-        getEdgeFeatheredAlpha(
-            alpha_uv, materialParams.featherRadius) * textureColor.a;
-    material.baseColor = vec4(sRGBToLinear(textureColor).rgb*alpha, alpha);
+      getEdgeFeatheredAlpha(
+        alpha_uv, materialParams.featherRadius) * textureColor.a;
 
-    if (materialConstants_enableColorConversion) {
-      material.baseColor.xyz = applyGlobalMaterialConversionMatrix(
-          material.baseColor.xyz);
+    if (materialConstants_enableColorCorrection) {
+      material.baseColor = vec4(convertColor(textureColor.rgb, materialParams.colorConversionMatrix) * alpha, alpha);
+    } else if (materialConstants_enableColorConversion) {
+      material.baseColor = vec4(sRGBToLinear(textureColor).rgb*alpha, alpha);
+      material.baseColor.xyz =
+        applyGlobalMaterialConversionMatrix(material.baseColor.xyz);
+    } else {
+      material.baseColor = vec4(sRGBToLinear(textureColor).rgb*alpha, alpha);
     }
   }
 }
+

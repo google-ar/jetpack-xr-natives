@@ -28,6 +28,7 @@
 #include "core/common/small_source_location.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
+#include "core/media/media_color_space.h"
 #include "core/render/android/android_defines.h"
 #include "core/render/android/platform_android_external_texture_surface.h"
 #include "core/render/content_security_level.h"
@@ -59,7 +60,7 @@ class SplitEnginePlatformAndroidExternalTextureSurface
   RobinMap<SurfaceViewType, Texture*> GetTextures() override;
   ContentSecurityLevel GetContentSecurityLevel() const override;
 
-  absl::StatusOr<SurfaceColorSpace> GetSurfaceColorSpace() const override;
+  absl::StatusOr<MediaColorSpace> GetMediaColorSpace() const override;
 
  protected:
   BorrowedTexturePtr BorrowTextureImpl(SmallSourceLocation loc) override;

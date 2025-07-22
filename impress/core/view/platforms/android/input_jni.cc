@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <cstdint>
+
+#include "absl/status/status.h"
 #if defined(__ANDROID__)
 #include <android/native_window_jni.h>
 
@@ -86,9 +88,13 @@ JNI_METHOD(void, nProcessPointerEvent)
   env->ReleaseFloatArrayElements(x, xList, 0);
   env->ReleaseFloatArrayElements(y, yList, 0);
 
-  THROW_IF_ERROR(
-      env, view_host->GetView()->GetInputManager().ProcessPointerInput(
-               action, ids, points, absl::Milliseconds((int64_t)timestamp)));
+  absl::Status status =
+      view_host->GetView()->GetInputManager().ProcessPointerInput(
+          action, ids, points, absl::Milliseconds((int64_t)timestamp));
+
+  if (!status.ok()) {
+    IMP_LOG(imp::ERROR) << "Failed to process pointer input: " << status;
+  }
 }
 
 // LINT.ThenChange(

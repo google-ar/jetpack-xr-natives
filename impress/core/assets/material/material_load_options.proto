@@ -18,11 +18,13 @@ package imp;
 
 // Specifies the material variants to pre-compile.
 // See filament::UserVariantFilterBit for more information.
+// The DEFAULT can be set for each variant at runtime.
 message MaterialPreCompileVariants {
   enum VariantPreCompileMode {
-    EXCLUDED = 0;
-    LOW_PRIORITY = 1;
-    HIGH_PRIORITY = 2;
+    DEFAULT = 0;
+    EXCLUDED = 1;
+    LOW_PRIORITY = 2;
+    HIGH_PRIORITY = 3;
   }
 
   VariantPreCompileMode directional_lighting = 1;
@@ -30,8 +32,9 @@ message MaterialPreCompileVariants {
   VariantPreCompileMode shadow_receiver = 3;
   VariantPreCompileMode skinning = 4;
   VariantPreCompileMode fog = 5;
-  VariantPreCompileMode vsm = 6;
-  VariantPreCompileMode ssr = 7;
+  VariantPreCompileMode vsm = 6;  // Variance shadow maps
+  VariantPreCompileMode ssr = 7;  // Screen-space reflections
+  VariantPreCompileMode ste = 8;  // Instanced stereo rendering
 }
 
 // A material constant:
@@ -48,7 +51,6 @@ message MaterialPreCompileConstant {
 // Specifies the material pre-compile options.
 message MaterialPreCompileOptions {
   MaterialPreCompileVariants variants = 1;
-  bool wait_for_high_priority_variants = 2;
   repeated MaterialPreCompileConstant constants = 3;
   optional int32 spherical_harmonics_bands = 4;  // Default is 3.
 

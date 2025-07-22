@@ -42,6 +42,7 @@ class HashEntity {
 // TODO: Split the BaseRenderableManager code to a separate class.
 // TODO: Add mutex guard when accessing variables that are shared
 // among threads.
+// TODO: Add tests for split_engine_subspace_manager_impl
 class SplitEngineSubspaceManagerImpl : public SplitEngineSubspaceManager,
                                        public imp::Rememberer {
  public:

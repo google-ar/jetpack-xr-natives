@@ -287,4 +287,8 @@ bool ViewState::ShouldUseSystemFrameScheduledHandler() const {
   return view_->GetConfig().use_system_frame_scheduled_handler.value_or(false);
 }
 
+bool ViewState::ShouldPreinitializeMetalPlatform() const {
+  return view_->GetConfig().should_preinitialize_metal_platform.value_or(false);
+}
+
 }  // namespace imp

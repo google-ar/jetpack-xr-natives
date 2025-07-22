@@ -43,8 +43,7 @@ void XrEditorPlugin::OnEditorInitialized() {
 }
 
 std::unique_ptr<LayoutComposer> XrEditorPlugin::CreateLayoutComposer() {
-  imp::editor::LayoutConfig layout_config =
-      imp::editor::kDefaultMobileLayoutConfig;
+  imp::editor::LayoutConfig layout_config = imp::editor::kDefaultXrLayoutConfig;
   // Render a cursor in XR.
   layout_config.show_cursor = true;
   // Pin the window to the top.

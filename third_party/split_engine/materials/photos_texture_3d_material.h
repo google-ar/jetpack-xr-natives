@@ -22,17 +22,15 @@
 #include <utility>
 #include <variant>
 
-#include "absl/container/flat_hash_map.h"
 #include "core/common/log.h"
+#include "absl/strings/string_view.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
-#include "core/render/texture.h"
-#include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
 #include "core/split_engine/materials/split_engine_material.h"
 #include "imp.h"
+#include "split_engine/materials/photos_texture_3d_material_params.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
-#include "split_engine/schemas/split_engine_primitive_generated.h"
 
 namespace android_xr {
 
@@ -40,23 +38,11 @@ namespace android_xr {
 class PhotosTexture3DMaterial : public imp::split_engine::SplitEngineMaterial {
  public:
   static imp::Future<std::unique_ptr<PhotosTexture3DMaterial>> Create(
-      imp::BaseView& view);
+      imp::BaseView& view, const PhotosTexture3DMaterialParams& params);
 
-  // Sets a parameter value.  T must be one of the supported FlatBuffer types.
-  // Caller is responsible for ensuring that the type matches the parameter name
-  // as defined in //third_party/split_engine/schemas/split_engine_material.fbs
-  template <typename Param>
-  void SetParameter(const typename Param::ValueType& value) {
-    parameters_[Param::kName] = imp::split_engine::Pack(value);
-    MarkParametersDirty();
-  }
+  ~PhotosTexture3DMaterial() override;
 
-  // Specialization for textures, taking an OwnedOrBorrowedTexturePtr.
-  void SetTexture(const std::string& name,
-                  imp::OwnedOrBorrowedTexturePtr texture) {
-    parameters_[name] = std::move(texture);
-    MarkParametersDirty();
-  }
+  void MarkParametersDirty() { SplitEngineMaterial::MarkParametersDirty(); }
 
  protected:
   flatbuffers::Offset<void> SerializeParameters(
@@ -66,38 +52,17 @@ class PhotosTexture3DMaterial : public imp::split_engine::SplitEngineMaterial {
 
  private:
   PhotosTexture3DMaterial(
-      imp::BaseView& view,
+      imp::BaseView& view, const PhotosTexture3DMaterialParams& params,
       imp::split_engine::PlaceholderOrBuiltInMaterialPtr material);
 
-  // Variant storing all supported parameter types for this material.
-  using ParameterValue =
-      std::variant<std::monostate, android_xr::schemas::Bool,
-                   android_xr::schemas::Float, android_xr::schemas::Float2,
-                   android_xr::schemas::Float3, android_xr::schemas::Float4,
-                   android_xr::schemas::Mat3f, imp::OwnedOrBorrowedTexturePtr>;
-
-  absl::flat_hash_map<std::string, ParameterValue> parameters_;
-
-  template <typename T>
-  const T* ParamOrNull(const std::string& name) const {
-    auto itr = parameters_.find(name);
-    if (itr != parameters_.end()) {
-      if (std::holds_alternative<T>(itr->second)) {
-        return std::get_if<T>(&itr->second);
-      } else {
-        LOG(FATAL) << "[photosxr] Set value of parameter " << name
-                   << " is not of type " << typeid(T).name();
-      }
-    }
-    return nullptr;
-  }
-
+  template <typename Param>
   void WriteTexture(
-      const std::string& name,
       flatbuffers::Offset<android_xr::schemas::BuiltInTextureParameter>& offset,
       flatbuffers::FlatBufferBuilder& fbb,
       imp::split_engine::BuiltInTextureParameterCreator&
           texture_parameter_creator) const;
+
+  const PhotosTexture3DMaterialParams& params_;
 };
 
 }  // namespace android_xr

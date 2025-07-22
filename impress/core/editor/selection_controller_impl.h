@@ -47,6 +47,11 @@ class SelectionControllerImpl : public SelectionController, public System {
   // is already selected, no event will be sent.
   void TrySelectNode(NodeHandle node_to_select) override;
 
+  // Disables selecting the model on ModelLoadedEvents. Enabled by default.
+  void DisableSelectModelWhenLoaded(bool disable_select_model_on_load) {
+    disable_select_model_on_load_ = disable_select_model_on_load;
+  }
+
  private:
   void CycleOrUpdateSelection(NodeHandle target,
                               std::vector<NodeHandle> intersecting_nodes);
@@ -57,6 +62,7 @@ class SelectionControllerImpl : public SelectionController, public System {
   NodeHandle selected_node_;
   std::vector<NodeHandle> selectable_nodes_;
   int selected_node_index_ = 0;
+  bool disable_select_model_on_load_ = false;
 };
 
 }  // namespace imp::editor

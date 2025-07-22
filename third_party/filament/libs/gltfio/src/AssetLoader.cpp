@@ -44,13 +44,14 @@
 #include "filament/libs/math/include/math/vec3.h"
 #include "filament/libs/math/include/math/vec4.h"
 
+#include <private/utils/Tracing.h>
+
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/EntityManager.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/Log.h"
 #include "filament/libs/utils/include/utils/Panic.h"
 #include "filament/libs/utils/include/utils/NameComponentManager.h"
-#include "filament/libs/utils/include/utils/Systrace.h"
 
 #include "robin_map/include/tsl/robin_map.h"
 
@@ -262,7 +263,7 @@ struct FAssetLoader : public AssetLoader {
             mEngine(*config.engine),
             mDefaultNodeName(config.defaultNodeName) {
         if (config.ext) {
-            FILAMENT_CHECK_PRECONDITION(AssetConfigurationExtended::isSupported())
+            FILAMENT_CHECK_POSTCONDITION(AssetConfigurationExtended::isSupported())
                     << "Extend asset loading is not supported on this platform";
             mLoaderExtended = std::make_unique<AssetLoaderExtended>(
                     *config.ext, config.engine, mMaterials);
@@ -471,7 +472,7 @@ FilamentInstance* FAssetLoader::createInstance(FFilamentAsset* fAsset) {
 }
 
 FFilamentAsset* FAssetLoader::createRootAsset(const cgltf_data* srcAsset) {
-    SYSTRACE_CALL();
+    FILAMENT_TRACING_CALL(FILAMENT_TRACING_CATEGORY_GLTFIO);
     #if !GLTFIO_DRACO_SUPPORTED
     for (cgltf_size i = 0; i < srcAsset->extensions_required_count; i++) {
         if (!strcmp(srcAsset->extensions_required[i], "KHR_draco_mesh_compression")) {

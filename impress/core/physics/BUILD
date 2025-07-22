@@ -14,6 +14,7 @@
 
 # Impress Physics
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:assets.bzl", "imp_assets")
 load(
     "//build_tools:imp.bzl",
@@ -142,6 +143,72 @@ cc_library(
 )
 
 cc_library(
+    name = "capsule_collidable_shape",
+    srcs = ["collidable_shapes/capsule_collidable_shape.cc"],
+    hdrs = ["collidable_shapes/capsule_collidable_shape.h"],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":collidable_shape",
+        ":physics_helper",
+        "//core:config",
+        "//core/geometry/shapes",
+        "//core/math",
+        "//core/ncsb",
+        "//core/view/framework",
+        "@bullet//:BulletCollision",  # build_cleaner: keep
+        "@bullet//:BulletDynamics",  # build_cleaner: keep
+        "@bullet//:LinearMath",
+        "@com_google_absl//absl/log:check",
+    ] + if_dev_runtime(["//core/common:debug_draw"]),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "cylinder_collidable_shape",
+    srcs = ["collidable_shapes/cylinder_collidable_shape.cc"],
+    hdrs = ["collidable_shapes/cylinder_collidable_shape.h"],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":collidable_shape",
+        ":physics_helper",
+        "//core:config",
+        "//core/geometry/shapes",
+        "//core/math",
+        "//core/ncsb",
+        "//core/view/framework",
+        "@bullet//:BulletCollision",  # build_cleaner: keep
+        "@bullet//:BulletDynamics",  # build_cleaner: keep
+        "@bullet//:LinearMath",
+        "@com_google_absl//absl/log:check",
+    ] + if_dev_runtime(["//core/common:debug_draw"]),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "cone_collidable_shape",
+    srcs = ["collidable_shapes/cone_collidable_shape.cc"],
+    hdrs = ["collidable_shapes/cone_collidable_shape.h"],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":collidable_shape",
+        ":physics_helper",
+        "//core:config",
+        "//core/geometry/shapes",
+        "//core/math",
+        "//core/ncsb",
+        "//core/view/framework",
+        "@bullet//:BulletCollision",  # build_cleaner: keep
+        "@bullet//:BulletDynamics",  # build_cleaner: keep
+        "@bullet//:LinearMath",
+        "@com_google_absl//absl/log:check",
+    ] + if_dev_runtime(["//core/common:debug_draw"]),
+    alwayslink = 1,
+)
+
+cc_library(
     name = "convex_hull_mesh_collidable_shape",
     srcs = [
         "collidable_shapes/convex_hull_mesh_collidable_shape.cc",
@@ -192,12 +259,14 @@ cc_library(
         ":collidable_shape",
         ":physics_helper",
         "//core:config",
+        "//core/common:filament_helpers",
         "//core/common:platform_helpers",
         "//core/common:registry",
         "//core/common:robin_map",
         "//core/geometry/shapes",
         "//core/math",
         "//core/math:aabb_helpers",
+        "//core/model/mesh",
         "//core/model/mesh:mesh_data",
         "//core/ncsb",
         "//core/view:base_view",
@@ -233,8 +302,11 @@ cc_library(
     defines = imp_defines(),
     deps = [
         ":box_collidable_shape",
+        ":capsule_collidable_shape",
         ":collidable_shape",
+        ":cone_collidable_shape",
         ":convex_hull_mesh_collidable_shape",
+        ":cylinder_collidable_shape",
         ":physics_helper",
         ":physics_proto_cc",
         ":sphere_collidable_shape",

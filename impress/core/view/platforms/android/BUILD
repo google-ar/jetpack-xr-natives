@@ -13,6 +13,7 @@
 # limitations under the License.
 
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "if_android", "if_non_android", "imp_google3_copts")
 
 package(
@@ -73,6 +74,7 @@ cc_library(
         "//core/view/platforms/android/wrappers:imp_lifecycle_callback",
         "//core/window:filament_host",
         "@com_google_absl//absl/base",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@third_party//filament/filament:filament_hdrs",

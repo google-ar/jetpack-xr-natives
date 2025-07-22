@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "imp_copts", "imp_linkopts")
 load("//build_tools:imp_extensions.bzl", "imp_extensions")
 
@@ -33,6 +34,7 @@ imp_extensions(
         "verification",
         "behavior",
         "interactivity",
+        "mesh_features",
     ],
 )
 
@@ -96,7 +98,6 @@ cc_library(
     linkstatic = True,
     deps = [
         "//core/common:buffer_access",
-        "//core/common:optional_error",
         "//core/loader/provider/gltf:imp_cc_schema",
         "@com_google_absl//absl/status:statusor",
     ],
@@ -134,8 +135,10 @@ cc_library(
     linkstatic = True,
     deps = [
         ":extension_draco",
+        "//core/common:buffer_access",
         "//core/common:optional_error",
-        "@com_google_absl//absl/types:variant",
+        "//core/loader/provider/gltf:imp_cc_schema",
+        "@com_google_absl//absl/status:statusor",
     ],
     alwayslink = 1,
 )
@@ -166,8 +169,10 @@ cc_library(
     linkstatic = True,
     deps = [
         ":extension_meshopt",
-        "//core/common:platform_helpers",
-        "@mediapipe//mediapipe/framework/port:status",
+        "//core/common:buffer_access",
+        "//core/loader/provider/gltf:imp_cc_schema",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@meshoptimizer",
     ],
     alwayslink = 1,
@@ -183,6 +188,52 @@ cc_library(
     linkstatic = True,
     deps = [
         ":extension_meshopt",
+        "//core/common:buffer_access",
+        "//core/loader/provider/gltf:imp_cc_schema",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "extension_mesh_features",
+    hdrs = [
+        "gltf_extension_mesh_features.h",
+    ],
+    copts = imp_copts(),
+    linkopts = imp_linkopts(),
+    linkstatic = True,
+    deps = ["//core/loader/provider/gltf:imp_cc_schema"],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "extension_mesh_features_impl",
+    srcs = [
+        "gltf_extension_mesh_features.cc",
+    ],
+    copts = imp_copts(),
+    linkopts = imp_linkopts(),
+    linkstatic = True,
+    deps = [
+        ":extension_mesh_features",
+        "//core/loader/provider/gltf:imp_cc_schema",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "extension_mesh_features_noop",
+    srcs = [
+        "gltf_extension_mesh_features_noop.cc",
+    ],
+    copts = imp_copts(),
+    linkopts = imp_linkopts(),
+    linkstatic = True,
+    deps = [
+        ":extension_mesh_features",
+        "//core/loader/provider/gltf:imp_cc_schema",
     ],
     alwayslink = 1,
 )

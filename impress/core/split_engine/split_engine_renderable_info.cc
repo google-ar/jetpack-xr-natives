@@ -31,6 +31,7 @@
 #include "core/model/mesh/mesh_vertex_data.h"
 #include "core/model/mesh/vertex_format.h"
 #include "core/render/base_renderable_manager.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/skinning_helpers.h"
 #include "core/split_engine/split_engine_filament_resource_ptrs.h"
 
@@ -42,7 +43,7 @@ using RenderableInstance = filament::RenderableManager::Instance;
 
 }  // namespace
 
-absl::Status SplitEngineRenderableInfo::Setup() {
+absl::Status SplitEngineRenderableInfo::Setup(BridgeId bridge_id) {
   BaseRenderableManager& rm = GetView().GetRenderableManager();
   RenderableInstance renderable = rm.GetInstance(GetEntity());
   if (!renderable) {
@@ -54,6 +55,8 @@ absl::Status SplitEngineRenderableInfo::Setup() {
   size_t primitive_count =
       GetView().GetRenderableManager().GetPrimitiveCount(renderable);
   primitives_.resize(primitive_count);
+
+  bridge_id_ = bridge_id;
 
   return absl::OkStatus();
 }
@@ -157,6 +160,10 @@ void SplitEngineRenderableInfo::SetSkinningBoneCount(
 
 uint32_t SplitEngineRenderableInfo::GetSkinningBoneCount() const noexcept {
   return skinning_bone_count_;
+}
+
+BridgeId SplitEngineRenderableInfo::GetBridgeId() const noexcept {
+  return bridge_id_;
 }
 
 absl::Status SplitEngineRenderableInfo::SetMaterialInstance(

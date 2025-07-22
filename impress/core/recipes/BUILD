@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:assets.bzl", "imp_assets")
 load("//build_tools:imp.bzl", "if_dev_runtime", "imp_google3_copts")
 load(
@@ -84,11 +85,14 @@ cc_library(
         "//core/common:robin_map",
         "//core/input",
         "//core/ncsb",
+        "//core/recipes/language:recipe_async_execution_manager",
+        "//core/recipes/language:recipe_execution_context",
         "//core/recipes/language:recipe_graph_cc",
         "//core/recipes/language:recipe_runtime_event",
         "//core/recipes/language:recipe_runtime_graph",
         "//core/recipes/language:recipe_scope",
         "//core/recipes/language:recipe_system",
+        "//core/recipes/language:recipe_types_cc",
         "//core/recipes/language:recipe_utils",
         "//core/view/framework",
         "//core/view/utils:frame_time",

@@ -18,6 +18,7 @@ load(
     "@com_github_google_flatbuffers//:build_defs.bzl",
     "flatbuffer_cc_library",
 )
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
     "//build_tools:imp.bzl",
     "IMP_FLATBUFFER_INCLUDE_PATHS",

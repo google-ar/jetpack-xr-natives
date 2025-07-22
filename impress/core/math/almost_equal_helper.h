@@ -19,6 +19,7 @@
 
 #include <math.h>
 
+#include <cmath>
 #include <cstdio>
 #include <type_traits>
 
@@ -72,6 +73,14 @@ constexpr double MaxDelta(AlmostEqualKind kind) {
 // (broken link)/
 template <AlmostEqualKind kind, class T, EnableIfFloatingPoint<T> = 0>
 bool AlmostEqualHelper(T lhs, T rhs) {
+  if (std::isnan(lhs) || std::isnan(rhs)) {
+    return std::isnan(lhs) == std::isnan(rhs);
+  }
+
+  if (std::isinf(lhs) || std::isinf(rhs)) {
+    return std::isinf(lhs) == std::isinf(rhs);
+  }
+
   // Check if the numbers are really close -- needed
   // when comparing numbers near zero.
   double diff = abs(lhs - rhs);

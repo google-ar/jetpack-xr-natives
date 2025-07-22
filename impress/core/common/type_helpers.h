@@ -35,6 +35,9 @@ class IsAnyOf {
 template <typename T, typename... Us>
 constexpr bool kIsAnyOf = IsAnyOf<T, Us...>::value;
 
+template <typename Left, typename Right>
+using EnableIfSameType = std::enable_if_t<std::is_same_v<Left, Right>, int>;
+
 }  // namespace imp
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_COMMON_TYPE_HELPERS_H_

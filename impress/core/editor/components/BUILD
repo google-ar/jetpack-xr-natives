@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:assets.bzl", "imp_assets")
 
 # Components for Impress Previewer.
@@ -149,9 +150,11 @@ imp_assets(
 cc_library(
     name = "world_space_editor_ui",
     srcs = [
+        "spatial_ui_canvas.cc",
         "world_space_editor_ui.cc",
     ],
     hdrs = [
+        "spatial_ui_canvas.h",
         "world_space_editor_ui.h",
     ],
     copts = imp_google3_copts(),
@@ -159,19 +162,24 @@ cc_library(
         ":world_space_editor_ui_assets",
         "//core/actions:action_config",
         "//core/actions:controller_events",
-        "//core/assets",
         "//core/async:future",
+        "//core/common:debug_draw",
         "//core/common:log",
         "//core/common:registry",
         "//core/editor",
+        "//core/editor/xr:xr_grab_handle",
+        "//core/input",
         "//core/math",
         "//core/ncsb",
         "//core/render",
         "//core/view:base_view",
         "//core/view/framework",
         "//core/view/framework:framework_proto_cc",
+        "//core/view/utils:frame_time",
+        "//core/view/utils:string_map",
         "//core/window:filament_host",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:optional",
         "@dear_imgui",
@@ -185,9 +193,15 @@ imp_material(
     src = ":world_space_editor_ui_texture.mat",
 )
 
+imp_material(
+    name = "spatial_ui_canvas_texture",
+    src = ":spatial_ui_canvas_texture.mat",
+)
+
 imp_assets(
     name = "world_space_editor_ui_assets",
     srcs = [
+        ":spatial_ui_canvas_texture",
         ":world_space_editor_ui_texture",
     ],
     namespace = "imp::editor::world_space_editor_ui_assets",

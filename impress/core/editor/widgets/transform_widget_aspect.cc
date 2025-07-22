@@ -19,6 +19,7 @@
 
 #include "absl/status/status.h"
 #include "filament/libs/math/include/math/TVecHelpers.h"
+#include "core/collision/collision_helpers.h"
 #include "core/collision/ray.h"
 #include "core/common/registry.h"
 #include "core/editor/command_manager.h"
@@ -27,7 +28,6 @@
 #include "core/editor/events.proto.imp.h"
 #include "core/editor/node_value_command.h"
 #include "core/editor/widgets/transform_widget_aspect_state.proto.imp.h"
-#include "core/geometry/closest_point.h"
 #include "core/math/almost_equal.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
@@ -140,8 +140,8 @@ std::optional<float3> TransformWidgetAspect::ComputeClosestPoint() const {
   float3 model_position = active_node_->GetWorldPosition();
 
   float3 direction = normalize(GetAxis());
-  std::optional<float> distance_to_move =
-      ClosestPointOnRayToLine(Ray(model_position, direction), pointer);
+  std::optional<float> distance_to_move = collision::ClosestPointOnRayToLine(
+      Ray(model_position, direction), pointer);
   if (!distance_to_move.has_value()) {
     return model_position;
   }

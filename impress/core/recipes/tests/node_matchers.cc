@@ -26,6 +26,7 @@
 #include "core/proto/proto_writer.h"
 #include "core/recipes/language/recipe_graph.proto.imp.h"
 #include "core/recipes/language/recipe_utils.h"
+#include "core/recipes/tests/recipe_matchers.h"
 #include "core/scene_handles/scene_handles.h"
 
 namespace imp::recipes_testing {
@@ -84,9 +85,8 @@ void LiteralMatcher::DescribeTo(std::ostream* os) const {
   std::visit(ValueVariant{*os}, expected_.value);
 }
 
-::testing::PolymorphicMatcher<LiteralMatcher> EqualsLiteral(
-    const Literal& literal) {
-  return ::testing::MakePolymorphicMatcher(LiteralMatcher(literal));
+::testing::Matcher<const Literal&> EqualsLiteral(const Literal& literal) {
+  return ::testing::MakeMatcher(new LiteralMatcher(literal));
 }
 
 }  // namespace imp::recipes_testing

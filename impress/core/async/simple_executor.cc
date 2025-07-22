@@ -49,7 +49,12 @@ TaskId SimpleExecutor::ScheduleInvocable(Invocable<void()> invocable,
   if (finished_) {
     return kInvalidTaskId;
   }
-  return task_scheduler_->PushTask(std::move(invocable), task_priority);
+  const absl::StatusOr<TaskId> status_or_task_id =
+      task_scheduler_->PushTask(std::move(invocable), task_priority);
+  if (!status_or_task_id.ok()) {
+    return kInvalidTaskId;
+  }
+  return *status_or_task_id;
 }
 
 TaskId SimpleExecutor::ReserveTaskId() {
@@ -67,8 +72,11 @@ bool SimpleExecutor::ScheduleWithReservedTaskId(TaskId reserved_task_id,
   if (finished_) {
     return false;
   }
-  task_scheduler_->PushWithReservedTaskId(reserved_task_id, std::move(function),
-                                          task_priority);
+  absl::Status push_status = task_scheduler_->PushWithReservedTaskId(
+      reserved_task_id, std::move(function), task_priority);
+  if (!push_status.ok()) {
+    return false;
+  }
   return true;
 }
 
@@ -111,7 +119,12 @@ size_t SimpleExecutor::PumpInternal(bool drain) {
 
   std::vector<Invocable<void()>> invocables;
   while (!task_scheduler_->IsEmpty()) {
-    invocables.push_back(task_scheduler_->PopTask());
+    absl::StatusOr<Invocable<void()>> status_or_invocable =
+        task_scheduler_->PopTask();
+    if (!status_or_invocable.ok()) {
+      break;
+    }
+    invocables.push_back(*std::move(status_or_invocable));
     if (!drain) {
       break;
     }
@@ -144,6 +157,14 @@ bool SimpleExecutor::HasPendingTasks() {
     return false;
   }
   return !task_scheduler_->IsEmpty();
+}
+
+int SimpleExecutor::GetPendingTaskCount() {
+  absl::MutexLock lock(&mu_);
+  if (finished_) {
+    return 0;
+  }
+  return task_scheduler_->GetTaskCount();
 }
 
 size_t SimpleExecutor::DrainWithTimeout(absl::Duration timeout) {

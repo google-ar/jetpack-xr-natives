@@ -39,6 +39,12 @@ absl::StatusOr<Variable> Sinh(const recipe::Variable& value) {
       return TransformVector(std::sinh, std::get<float3>(value));
     case Literal::kValue_Float4Value:
       return TransformVector(std::sinh, std::get<float4>(value));
+    case Literal::kValue_Mat2fValue:
+      return TransformMatrix(std::sinh, std::get<mat2f>(value));
+    case Literal::kValue_Mat3fValue:
+      return TransformMatrix(std::sinh, std::get<mat3f>(value));
+    case Literal::kValue_Mat4fValue:
+      return TransformMatrix(std::sinh, std::get<mat4f>(value));
     default:
       return absl::InvalidArgumentError(
           "input must be a floating-point type or a floatN type.");
@@ -57,6 +63,12 @@ absl::StatusOr<Variable> Asinh(const recipe::Variable& value) {
       return TransformVector(std::asinh, std::get<float3>(value));
     case Literal::kValue_Float4Value:
       return TransformVector(std::asinh, std::get<float4>(value));
+    case Literal::kValue_Mat2fValue:
+      return TransformMatrix(std::asinh, std::get<mat2f>(value));
+    case Literal::kValue_Mat3fValue:
+      return TransformMatrix(std::asinh, std::get<mat3f>(value));
+    case Literal::kValue_Mat4fValue:
+      return TransformMatrix(std::asinh, std::get<mat4f>(value));
     default:
       return absl::InvalidArgumentError(
           "input must be a floating-point type or a floatN type.");
@@ -75,6 +87,12 @@ absl::StatusOr<Variable> Cosh(const recipe::Variable& value) {
       return TransformVector(std::cosh, std::get<float3>(value));
     case Literal::kValue_Float4Value:
       return TransformVector(std::cosh, std::get<float4>(value));
+    case Literal::kValue_Mat2fValue:
+      return TransformMatrix(std::cosh, std::get<mat2f>(value));
+    case Literal::kValue_Mat3fValue:
+      return TransformMatrix(std::cosh, std::get<mat3f>(value));
+    case Literal::kValue_Mat4fValue:
+      return TransformMatrix(std::cosh, std::get<mat4f>(value));
     default:
       return absl::InvalidArgumentError(
           "input must be a floating-point type or a floatN type.");
@@ -93,6 +111,12 @@ absl::StatusOr<Variable> Acosh(const recipe::Variable& value) {
       return TransformVector(std::acosh, std::get<float3>(value));
     case Literal::kValue_Float4Value:
       return TransformVector(std::acosh, std::get<float4>(value));
+    case Literal::kValue_Mat2fValue:
+      return TransformMatrix(std::acosh, std::get<mat2f>(value));
+    case Literal::kValue_Mat3fValue:
+      return TransformMatrix(std::acosh, std::get<mat3f>(value));
+    case Literal::kValue_Mat4fValue:
+      return TransformMatrix(std::acosh, std::get<mat4f>(value));
     default:
       return absl::InvalidArgumentError(
           "input must be a floating-point type or a floatN type.");
@@ -111,6 +135,12 @@ absl::StatusOr<Variable> Tanh(const recipe::Variable& value) {
       return TransformVector(std::tanh, std::get<float3>(value));
     case Literal::kValue_Float4Value:
       return TransformVector(std::tanh, std::get<float4>(value));
+    case Literal::kValue_Mat2fValue:
+      return TransformMatrix(std::tanh, std::get<mat2f>(value));
+    case Literal::kValue_Mat3fValue:
+      return TransformMatrix(std::tanh, std::get<mat3f>(value));
+    case Literal::kValue_Mat4fValue:
+      return TransformMatrix(std::tanh, std::get<mat4f>(value));
     default:
       return absl::InvalidArgumentError(
           "input must be a floating-point type or a floatN type.");
@@ -129,6 +159,12 @@ absl::StatusOr<Variable> Atanh(const recipe::Variable& value) {
       return TransformVector(std::atanh, std::get<float3>(value));
     case Literal::kValue_Float4Value:
       return TransformVector(std::atanh, std::get<float4>(value));
+    case Literal::kValue_Mat2fValue:
+      return TransformMatrix(std::atanh, std::get<mat2f>(value));
+    case Literal::kValue_Mat3fValue:
+      return TransformMatrix(std::atanh, std::get<mat3f>(value));
+    case Literal::kValue_Mat4fValue:
+      return TransformMatrix(std::atanh, std::get<mat4f>(value));
     default:
       return absl::InvalidArgumentError(
           "input must be a floating-point type or a floatN type.");

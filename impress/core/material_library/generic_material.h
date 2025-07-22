@@ -76,6 +76,8 @@ class GenericMaterial {
   // Sets the UV transform for the base color texture.
   virtual absl::Status SetBaseColorUvTransform(const mat3f& uv_transform) = 0;
   virtual void SetBaseColorFactor(const float4& factor) = 0;
+  virtual float4 GetBaseColorFactor() const = 0;
+
   // Gets the metallic roughness texture and sampler. Note: this may be a
   // placeholder white texture if the material does not have a metallic
   // roughness channel.
@@ -83,19 +85,28 @@ class GenericMaterial {
   virtual absl::Status SetMetallicRoughnessUvTransform(
       const mat3f& uv_transform) = 0;
   virtual void SetMetallicFactor(float factor) = 0;
+  virtual float GetMetallicFactor() const = 0;
   virtual void SetRoughnessFactor(float factor) = 0;
+  virtual float GetRoughnessFactor() const = 0;
+
   // Gets the normal texture and sampler. Note: this may be a placeholder white
   // texture if the material does not have a normal channel.
   virtual TextureAndSampler GetNormalTexture() const = 0;
   virtual absl::Status SetNormalUvTransform(const mat3f& uv_transform) = 0;
   virtual void SetNormalScale(float scale) = 0;
+  virtual float GetNormalScale() const = 0;
+
   virtual TextureAndSampler GetAmbientOcclusionTexture() const = 0;
   virtual absl::Status SetAmbientOcclusionUvTransform(
       const mat3f& uv_transform) = 0;
   virtual void SetAmbientOcclusionStrength(float strength) = 0;
+  virtual float GetAmbientOcclusionStrength() const = 0;
+
   virtual TextureAndSampler GetEmissiveTexture() const = 0;
   virtual absl::Status SetEmissiveUvTransform(const mat3f& uv_transform) = 0;
   virtual void SetEmissiveFactor(const float3& factor) = 0;
+  virtual float3 GetEmissiveFactor() const = 0;
+
   virtual TextureAndSampler GetClearcoatTexture() const = 0;
   virtual TextureAndSampler GetClearcoatNormalTexture() const = 0;
   virtual TextureAndSampler GetClearcoatRoughnessTexture() const = 0;
@@ -109,7 +120,9 @@ class GenericMaterial {
       const mat3f& uv_transform) = 0;
   virtual void SetTransmissionFactor(float factor) = 0;
   virtual void SetIndexOfRefraction(float index_of_refraction) = 0;
+
   virtual void SetAlphaCutoff(float alpha_cutoff) = 0;
+  virtual float GetAlphaCutoff() const = 0;
 
  protected:
   virtual BorrowedMaterialPtr GetMaterialInternal(

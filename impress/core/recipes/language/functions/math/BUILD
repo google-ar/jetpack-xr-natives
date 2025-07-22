@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "imp_google3_copts")
 
 package(
@@ -32,6 +33,7 @@ cc_library(
         "constants.cc",
         "exponential.cc",
         "hyperbolic.cc",
+        "matrix.cc",
         "utility.cc",
         "vector.cc",
     ],
@@ -44,6 +46,7 @@ cc_library(
         "//core/recipes/language:base_recipe_system",
         "//core/recipes/language:recipe_graph_cc",
         "//core/recipes/language:recipe_utils",
+        "@com_google_absl//absl/random",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:string_view",

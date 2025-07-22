@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:assets.bzl", "imp_assets")
 load("//build_tools:imp.bzl", "imp_copts")
 load("//build_tools:imp_material.bzl", "imp_material")
@@ -276,4 +277,4 @@ cc_library(
 )
 
 # --config=android_all
-# --android_ndk_min_sdk_version=21
+# --android_ndk_min_sdk_version=23

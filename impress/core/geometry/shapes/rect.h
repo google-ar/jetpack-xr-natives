@@ -17,6 +17,9 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_MATH_RECT_H_
 #define THIRD_PARTY_IMPRESS_CORE_MATH_RECT_H_
 
+#include <string>
+
+#include "absl/strings/str_format.h"
 #include "core/math/vec.h"
 
 namespace imp {
@@ -34,7 +37,15 @@ struct Rect {
 
   // Half extent from the center both axes.
   float2 half_extent;
+
+  template <typename Sink>
+  friend void AbslStringify(Sink& sink, const Rect& rect) {
+    absl::Format(&sink, "Rect (center: %s, halfExtent: %s)",
+                 ToString(rect.center), ToString(rect.half_extent));
+  }
 };
+
+std::string ToString(const Rect& rect);
 
 }  // namespace imp
 

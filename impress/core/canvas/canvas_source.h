@@ -27,10 +27,9 @@
 #include "core/async/future.h"
 #include "core/canvas/platform_canvas_source.h"
 #include "core/canvas/scoped_canvas.h"
-#include "core/common/invocable.h"
+#include "core/common/context.h"
 #include "core/common/small_source_location.h"
 #include "core/math/vec.h"
-#include "core/render/texture.h"
 #include "core/view/base_view.h"
 
 namespace imp {
@@ -50,7 +49,7 @@ namespace imp {
 // This class is thread-safe ((broken link)).
 class CanvasSource {
  public:
-  static std::unique_ptr<CanvasSource> Create(BaseView& view);
+  static std::unique_ptr<CanvasSource> Create(Context context);
 
   // Note: This is exposed for testing. Real clients should use
   // CanvasSource::Create to create a CanvasSource.
@@ -154,7 +153,7 @@ class CanvasSource {
   // TODO: Remove this API in favor of the other overload after
   // fully migrating to OwnedPtr/BorrowedPtr.
   std::unique_ptr<ScopedCanvas> StartDrawing(
-      uint2 pixel_size,
+      BaseView& view, uint2 pixel_size,
       ScopedCanvas::DrawMode draw_mode = ScopedCanvas::DrawMode::kClear);
 
   // *EXPERIMENTAL*
@@ -184,7 +183,8 @@ class CanvasSource {
   // NOTE: The Draw functions called on the returned ScopedCanvas don't actually
   // apply to the texture until the ScopedCanvas is destroyed.
   std::unique_ptr<ScopedCanvas> StartDrawing(
-      uint2 pixel_size, ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
+      BaseView& view, uint2 pixel_size,
+      ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
       ScopedCanvas::DrawMode draw_mode = ScopedCanvas::DrawMode::kClear,
       SmallSourceLocation loc = SmallSourceLocation::Current());
 

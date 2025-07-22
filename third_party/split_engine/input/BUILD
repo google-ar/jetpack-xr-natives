@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@com_google_impress//build_tools:imp.bzl", "if_non_android")
+load("@com_google_impress//build_tools:imp.bzl", "if_android", "if_non_android")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -54,6 +54,7 @@ cc_library(
 cc_library(
     name = "split_engine_input_event_jni",
     srcs = ["split_engine_input_event_jni.cc"],
+    features = if_android(["-layering_check"]),
     deps = [
         ":split_engine_input_event",
         ":split_engine_input_event_hit_info",

@@ -32,12 +32,12 @@ public class WaterMaterial extends Material {
   }
 
   /**
-   * Sets the reflection cube for the water material.
+   * Sets the reflection map for the water material.
    *
-   * @param reflectionCube The native handle of the texture to be used as the reflection cube.
+   * @param reflectionMap The native handle of the texture to be used as the reflection map.
    */
-  public void setReflectionCube(long reflectionCube) {
-    impressApi.setReflectionCubeOnWaterMaterial(getNativeHandle(), reflectionCube);
+  public void setReflectionMap(long reflectionMap) {
+    impressApi.setReflectionMapOnWaterMaterial(getNativeHandle(), reflectionMap);
   }
 
   /**

@@ -101,7 +101,7 @@ JNI_METHOD(void, nSetRenderViewSurfaceDimensions)
 }  // extern "C"
 
 RenderViewToSurfaceTextureWrapper::RenderViewToSurfaceTextureWrapper(
-    NodeHandle node, jobject android_view, int width, int height,
+    NodeHandle node, jobject android_view, ViewSize view_size,
     AndroidExternalTextureSurface& surface)
     : JavaWrapper(node->GetView().GetContext().GetJniEnv(),
                   "com/google/ar/imp/core/scripting/viewtexture/"
@@ -109,10 +109,11 @@ RenderViewToSurfaceTextureWrapper::RenderViewToSurfaceTextureWrapper(
                   "(Landroid/content/Context;Landroid/view/View;Landroid/view/"
                   "Surface;IIJ)V",
                   node->GetView().GetContext().GetActivityContext(),
-                  android_view, surface.GetSurface()->Reference(), width,
-                  height, ToJava(this)),
+                  android_view, surface.GetSurface()->Reference(),
+                  view_size.width, view_size.height, ToJava(this)),
       node_(node),
-      surface_(surface) {
+      surface_(surface),
+      view_size_(view_size) {
   CallVoidMethod(GetMethodHandle("initialize", "()V"));
   release_ = GetMethodHandle("release", "()V");
   dispatch_generic_motion_event_ = GetMethodHandle(
@@ -129,10 +130,13 @@ BorrowedTexturePtr RenderViewToSurfaceTextureWrapper::BorrowTexture() {
   return surface_.BorrowTexture();
 }
 
-int2 RenderViewToSurfaceTextureWrapper::GetSize() const { return size_; }
+int2 RenderViewToSurfaceTextureWrapper::GetSize() const {
+  return {view_size_.width, view_size_.height};
+}
 
 void RenderViewToSurfaceTextureWrapper::SetSize(int2 size) {
-  size_ = size;
+  view_size_.width = size.x;
+  view_size_.height = size.y;
 
   if (absl::Status status = surface_.SetDefaultBufferSize(size); !status.ok()) {
     IMP_LOG(imp::ERROR) << "Failed to set default buffer size: " << status.ToString();
@@ -141,7 +145,10 @@ void RenderViewToSurfaceTextureWrapper::SetSize(int2 size) {
   // Set the scale to correct for aspect ratio.
   float aspect = static_cast<float>(size.x) / static_cast<float>(size.y);
   float3 scale;
-  if (aspect > 1) {
+  if (view_size_.meters_per_pixel.has_value()) {
+    float meters_per_pixel = *view_size_.meters_per_pixel;
+    scale = {size.x * meters_per_pixel, size.y * meters_per_pixel, 1};
+  } else if (aspect > 1) {
     scale = {1, 1.f / aspect, 1};
   } else {
     scale = {aspect, 1, 1};
@@ -160,7 +167,7 @@ void RenderViewToSurfaceTextureWrapper::DispatchTouchEvent(
 }
 
 Future<absl::Status> AndroidViewRenderer::Setup(
-    jobject android_view, int width, int height,
+    jobject android_view, ViewSize view_size,
     InputForwardingMode input_forwarding_mode,
     absl::optional<imp::MaterialDefinition> material_definition,
     absl::optional<uint32_t> blend_priority) {
@@ -179,7 +186,7 @@ Future<absl::Status> AndroidViewRenderer::Setup(
   }
   surface_ = std::move(*surface);
   renderer_wrapper_ = std::make_unique<RenderViewToSurfaceTextureWrapper>(
-      renderer_node_, android_view, width, height, *surface_);
+      renderer_node_, android_view, view_size, *surface_);
 
   // Add a collider so we get hit events.
   renderer_node_->AddComponent<BoxCollider>(kBaseBoxBounds);
@@ -285,7 +292,7 @@ AndroidViewRenderer::LoadMaterial(
   if (material_definition) {
     return GetView()
         .GetMaterialFactory()
-        .LoadMaterial(material_definition.value())
+        .LoadMaterial(*material_definition)
         .Then([](OwnedMaterialPtr material) {
           return TextureMaterialVariant(std::move(material));
         });

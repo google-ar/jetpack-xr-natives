@@ -15,19 +15,17 @@
 #include "core/assets/material/material_helpers.h"
 
 #include "absl/status/status.h"
+#include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/include/filament/Material.h"
 #include "filament/libs/filabridge/include/filament/MaterialEnums.h"
 #include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
+#include "core/async/future_common.h"
 
 namespace imp::material_helpers {
 
 namespace {
-
-struct FilamentVariantMask {
-  filament::UserVariantFilterMask high_priority_mask = 0;
-  filament::UserVariantFilterMask low_priority_mask = 0;
-};
+filament::UserVariantFilterMask default_high_priority_mask = 0;
 
 filament::UserVariantFilterMask GetMaterialVariantMask(
     const imp::MaterialPreCompileVariants& material_pre_compile_variants,
@@ -66,15 +64,31 @@ filament::UserVariantFilterMask GetMaterialVariantMask(
     variant_mask |= static_cast<uint32_t>(filament::UserVariantFilterBit::VSM);
   }
 
+  if (material_pre_compile_variants.ste == pre_compile_mode) {
+    variant_mask |= static_cast<uint32_t>(filament::UserVariantFilterBit::STE);
+  }
+
   return variant_mask;
 }
+}  // namespace
 
 FilamentVariantMask GetMaterialVariantMask(
     const imp::MaterialPreCompileVariants& material_pre_compile_variants) {
   FilamentVariantMask variant_mask;
 
-  variant_mask.high_priority_mask = GetMaterialVariantMask(
-      material_pre_compile_variants, MaterialPreCompileVariants::HIGH_PRIORITY);
+  // Build default set of high priority variants. The variant must be set to
+  // DEFAULT and be in the static default variant.
+  filament::UserVariantFilterMask implicitly_high_priority_mask =
+      default_high_priority_mask &
+      GetMaterialVariantMask(material_pre_compile_variants,
+                             MaterialPreCompileVariants::DEFAULT);
+
+  filament::UserVariantFilterMask explicitly_high_priority_mask =
+      GetMaterialVariantMask(material_pre_compile_variants,
+                             MaterialPreCompileVariants::HIGH_PRIORITY);
+
+  variant_mask.high_priority_mask =
+      implicitly_high_priority_mask | explicitly_high_priority_mask;
 
   variant_mask.low_priority_mask = GetMaterialVariantMask(
       material_pre_compile_variants, MaterialPreCompileVariants::LOW_PRIORITY);
@@ -82,32 +96,45 @@ FilamentVariantMask GetMaterialVariantMask(
   return variant_mask;
 }
 
-}  // namespace
+void SetDefaultHighPriorityVariants(
+    filament::UserVariantFilterMask high_priority_mask) {
+  default_high_priority_mask = high_priority_mask;
+}
 
 Future<absl::Status> PreCompileMaterial(
     filament::Material* material,
     const MaterialPreCompileOptions& pre_compile_options) {
   Future<absl::Status> compile_status = Future<absl::Status>(absl::OkStatus());
-
   FilamentVariantMask variant_mask =
       GetMaterialVariantMask(pre_compile_options.variants);
 
   if (variant_mask.high_priority_mask) {
     // Compiles the high priority variants.
-    if (pre_compile_options.wait_for_high_priority_variants) {
-      // Resets `compile_status` so that it wouldn't be ready right away.
-      compile_status = Future<absl::Status>();
-      // Registers the callback so that `compile_status` becomes ready when the
-      // high priority variants' compilation is complete.
-      material->compile(filament::backend::CompilerPriorityQueue::HIGH,
-                        variant_mask.high_priority_mask, nullptr,
-                        [compile_status](filament::Material* material) {
-                          compile_status.Return(absl::OkStatus());
-                        });
-    } else {
-      material->compile(filament::backend::CompilerPriorityQueue::HIGH,
-                        variant_mask.high_priority_mask);
-    }
+    // Resets `compile_status` so that it wouldn't be ready right away.
+    compile_status = Future<absl::Status>();
+    // Registers the callback so that `compile_status` becomes ready when the
+    // high priority variants' compilation is complete.
+    material->compile(filament::backend::CompilerPriorityQueue::HIGH,
+                      variant_mask.high_priority_mask, nullptr,
+                      [compile_status](filament::Material* material) {
+                        compile_status.Return(absl::OkStatus());
+                      });
+
+    compile_status = compile_status.Then(
+        [](absl::Status status) mutable {
+          // Force the chain of futures to wait until the next time the
+          // foreground executor is pumped before continuing.
+          //
+          // This is because the compile callback can occur within a call to
+          // filament::Renderer::render which is not a safe time to complete the
+          // future. When a material is finished loading it will likely cause
+          // material assignments to change, possibly destroying materials,
+          // which can cause use-after-free issues when done within a render
+          // call.
+          return status;
+        },
+        FutureThenOptions{.executor_mode =
+                              FutureExecutorMode::kScheduleAlways});
   }
 
   if (variant_mask.low_priority_mask) {

@@ -20,7 +20,10 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <string>
 
+#include "absl/base/nullability.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/include/filament/Engine.h"
@@ -30,6 +33,7 @@
 #include "filament/filament/include/filament/VertexBuffer.h"
 #include "core/image/image_contents.h"
 #include "core/render/base_texture_builder.h"
+#include "core/render/safe_filament_texture_builder.h"
 #include "core/view/base_view.h"
 
 namespace imp {
@@ -60,7 +64,7 @@ class TextureBuilder : public BaseTextureBuilder {
   TextureBuilder& Name(absl::string_view name) override;
   void Finalize(filament::Texture* texture) override;
 
-  filament::Texture* Build(filament::Engine& engine);
+  filament::Texture* /*absl_nullable*/ Build(filament::Engine& engine);
 
  protected:
   TextureBuilder& ImageInternal(filament::Engine& engine,
@@ -71,8 +75,8 @@ class TextureBuilder : public BaseTextureBuilder {
  private:
   BaseView* view_;
   std::unique_ptr<BaseTextureBuilder> spy_;
-  filament::Texture::Builder builder_;
-  filament::Texture* texture_;
+  SafeFilamentTextureBuilder builder_;
+  absl::StatusOr<filament::Texture* /*absl_nonnull*/> texture_;
 
   std::string name_;
 };

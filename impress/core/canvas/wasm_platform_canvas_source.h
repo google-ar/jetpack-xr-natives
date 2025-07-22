@@ -21,16 +21,16 @@
 #include <vector>
 
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "core/async/future.h"
-#include "core/canvas/async_canvas_source.h"
 #include "core/canvas/platform_canvas_source.h"
 #include "core/canvas/scoped_canvas.h"
 #include "core/canvas/wasm_async_canvas_source.h"
+#include "core/common/small_source_location.h"
 #include "core/math/vec.h"
 #include "core/render/texture.h"
 #include "imp.h"
+
 namespace imp {
 
 // A synchronous wrapper around a WasmAsyncCanvasSource to be used as a
@@ -39,7 +39,6 @@ namespace imp {
 // have a remote message port.
 class WasmPlatformCanvasSource : public PlatformCanvasSource {
  public:
-  explicit WasmPlatformCanvasSource(BaseView& view);
   ~WasmPlatformCanvasSource() = default;
 
   bool IsFeatureSupported(ScopedCanvas::Feature feature) override;
@@ -74,14 +73,16 @@ class WasmPlatformCanvasSource : public PlatformCanvasSource {
       const ScopedCanvas::TextOptions& text_options) override;
 
   std::unique_ptr<ScopedCanvas> StartDrawing(
-      uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) override;
+      BaseView& view, uint2 pixel_size,
+      ScopedCanvas::DrawMode draw_mode) override;
 
   std::unique_ptr<ScopedCanvas> StartDrawing(
-      uint2 pixel_size, ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
+      BaseView& view, uint2 pixel_size,
+      ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
       ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) override;
 
  private:
-  std::unique_ptr<WasmAsyncCanvasSource> wrapped_;
+  WasmAsyncCanvasSource wrapped_;
 };
 
 }  // namespace imp

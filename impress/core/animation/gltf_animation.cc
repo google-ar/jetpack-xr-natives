@@ -24,6 +24,7 @@
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "flatbuffers/buffer.h"
 #include "core/animation/gltf_node_animation.h"
@@ -401,22 +402,40 @@ GltfAnimation::EvaluateLightParameters(float t,
 }
 
 bool GltfAnimation::SanitizeT(bool repeat, absl::Duration* t) const {
-  absl::Duration first_t = FirstT();
-  if (*t < first_t) {
+  return SanitizeT(repeat, t, FirstT(), LastT());
+}
+
+bool GltfAnimation::SanitizeT(bool repeat, absl::Duration* t,
+                              absl::Duration start_time) const {
+  return SanitizeT(repeat, t, start_time, LastT());
+}
+
+bool GltfAnimation::SanitizeT(bool repeat, absl::Duration* t,
+                              absl::Duration start_time,
+                              absl::Duration end_time) const {
+  absl::Duration animation_start = FirstT();
+  absl::Duration animation_end = LastT();
+  absl::Duration first_t = clamp(start_time, animation_start, animation_end);
+  absl::Duration last_t = clamp(end_time, animation_start, animation_end);
+  const bool last_before_first = last_t < first_t;
+  if ((last_before_first && *t > first_t) ||
+      (!last_before_first && *t < first_t)) {
     // Emulate pre-existing behavior: ticking an animator with a time before the
     // start time (e.g. a negative time) cause the animation to immediately end.
     return true;
   }
 
-  absl::Duration last_t = LastT();
-
-  if (*t < last_t) {
+  if ((last_before_first && *t > last_t) ||
+      (!last_before_first && *t < last_t)) {
     return false;
   }
 
-  if (auto duration = last_t - first_t;
+  if (auto duration = last_before_first ? first_t - last_t : last_t - first_t;
       repeat && duration > absl::ZeroDuration()) {
-    *t = first_t + ((*t - first_t) % duration);
+    absl::Duration start_t = last_before_first ? last_t : first_t;
+    *t = start_t + ((*t - start_t) % duration);
+  } else {
+    *t = last_t;
   }
   return true;
 }

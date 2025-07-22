@@ -43,6 +43,7 @@
 #include "core/view/framework/input/pointer_input_handler.h"
 #include "core/view/framework/render/material_definition.proto.imp.h"
 #include "core/view/framework/render/primitive_shape_renderer.h"
+#include "core/view/framework/view.h"
 #include "core/view/platforms/android/wrappers/motion_event.h"
 #include "split_engine/input/split_engine_input_event.h"
 #include "split_engine/materials/texture_external_material.h"
@@ -53,7 +54,7 @@ namespace imp::android {
 class RenderViewToSurfaceTextureWrapper : public JavaWrapper {
  public:
   explicit RenderViewToSurfaceTextureWrapper(
-      NodeHandle node, jobject android_view, int width, int height,
+      NodeHandle node, jobject android_view, ViewSize view_size,
       AndroidExternalTextureSurface& surface);
   ~RenderViewToSurfaceTextureWrapper() override;
 
@@ -77,7 +78,7 @@ class RenderViewToSurfaceTextureWrapper : public JavaWrapper {
   JniHandle release_;
   JniHandle dispatch_generic_motion_event_;
   JniHandle dispatch_touch_event_;
-  int2 size_;
+  ViewSize view_size_;
 };
 
 // Component to manage rendering and lifetime.
@@ -87,7 +88,7 @@ class AndroidViewRenderer : public Component {
   using CleanupDependencies = CleanupIds<PrimitiveShapeRenderer>;
 
   Future<absl::Status> Setup(
-      jobject android_view, int width, int height,
+      jobject android_view, ViewSize view_size,
       InputForwardingMode input_forwarding_mode =
           InputForwardingMode::INPUT_FORWARDING_MODE_DEFAULT,
       absl::optional<imp::MaterialDefinition> material_definition =

@@ -23,6 +23,7 @@
 #include <variant>
 #include <vector>
 
+#include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
@@ -98,6 +99,13 @@ using InteractivityEventOffset = Offset<schemas::InteractivityEvent>;
 using InteractivityEventOffsets =
     PairedVector<InteractivityEventOffset, InteractivityEventId::ReferredType>;
 
+using InteractivityTypeId = model::ModelData::InteractivityTypeId;
+using InteractivityGraphTypeDataOffset =
+    Offset<schemas::InteractivityGraphTypeData>;
+using InteractivityGraphTypeDataOffsets =
+    PairedVector<InteractivityGraphTypeDataOffset,
+                 InteractivityTypeId::ReferredType>;
+
 using InteractivityValue =
     std::variant<absl::monostate, bool, int, float, float2, float3, float4,
                  mat4f, absl::string_view>;
@@ -114,25 +122,24 @@ InteractivityNodeFlowOffset CreateInteractivityNodeFlow(
 
 InteractivityNodeConfigurationOffset CreateInteractivityNodeConfiguration(
     FlatBufferBuilder& fbb, schemas::InteractivityNodeConfigurationType id,
-    schemas::InteractivityVariableType type, InteractivityConfiguration value) {
+    InteractivityConfiguration value) {
   struct Visitor {
     FlatBufferBuilder& fbb;
     schemas::InteractivityNodeConfigurationType id;
-    schemas::InteractivityVariableType type;
 
     InteractivityNodeConfigurationOffset operator()(const int value) {
       return schemas::CreateInteractivityNodeConfiguration(
-          fbb, id, type, schemas::InteractivityConfigurationValue::Int,
+          fbb, id, schemas::InteractivityConfigurationValue::Int,
           fbb.CreateStruct(schemas::Int(value)).Union());
     }
     InteractivityNodeConfigurationOffset operator()(const bool value) {
       return schemas::CreateInteractivityNodeConfiguration(
-          fbb, id, type, schemas::InteractivityConfigurationValue::Bool,
+          fbb, id, schemas::InteractivityConfigurationValue::Bool,
           fbb.CreateStruct(schemas::Bool(value)).Union());
     }
     InteractivityNodeConfigurationOffset operator()(const float value) {
       return schemas::CreateInteractivityNodeConfiguration(
-          fbb, id, type, schemas::InteractivityConfigurationValue::Float,
+          fbb, id, schemas::InteractivityConfigurationValue::Float,
           fbb.CreateStruct(schemas::Float(value)).Union());
     }
     InteractivityNodeConfigurationOffset operator()(
@@ -140,7 +147,7 @@ InteractivityNodeConfigurationOffset CreateInteractivityNodeConfiguration(
       // schemas::CreateString is creating a "String" table wrapping the
       // actual Flatbuffer string.
       return schemas::CreateInteractivityNodeConfiguration(
-          fbb, id, type, schemas::InteractivityConfigurationValue::String,
+          fbb, id, schemas::InteractivityConfigurationValue::String,
           schemas::CreateString(fbb,
                                 fbb.CreateString(value.data(), value.size()))
               .Union());
@@ -148,14 +155,14 @@ InteractivityNodeConfigurationOffset CreateInteractivityNodeConfiguration(
     InteractivityNodeConfigurationOffset operator()(
         const std::vector<int>& value) {
       return schemas::CreateInteractivityNodeConfiguration(
-          fbb, id, type, schemas::InteractivityConfigurationValue::IntArray,
+          fbb, id, schemas::InteractivityConfigurationValue::IntArray,
           schemas::CreateIntArray(fbb,
                                   fbb.CreateVector(value.data(), value.size()))
               .Union());
     }
   };
 
-  return std::visit(Visitor{fbb, id, type}, value);
+  return std::visit(Visitor{fbb, id}, value);
 }
 
 InteractivityNodeOffset CreateInteractivityNode(
@@ -259,22 +266,6 @@ absl::Status CreateInteractivityNodeConfigurations(
         configurations,
     InteractivityNodeConfigurationOffsets& out_configuration_offsets) {
   for (const auto& [_, configuration] : configurations) {
-    schemas::InteractivityVariableType configuration_type;
-    switch (configuration.type) {
-      case imp::gltf::Interactivity::Graph::ValueType::BOOL:
-        configuration_type = schemas::InteractivityVariableType::BOOL;
-        break;
-      case imp::gltf::Interactivity::Graph::ValueType::INT:
-        configuration_type = schemas::InteractivityVariableType::INT;
-        break;
-      case imp::gltf::Interactivity::Graph::ValueType::FLOAT:
-        configuration_type = schemas::InteractivityVariableType::FLOAT;
-        break;
-      default:
-        configuration_type = schemas::InteractivityVariableType::NIL;
-        break;
-    }
-
     switch (configuration.id) {
       case imp::gltf::Interactivity::Graph::Node::ConfigurationType::
           NUMBER_OF_OUTPUT_FLOWS:
@@ -288,7 +279,7 @@ absl::Status CreateInteractivityNodeConfigurations(
                 fbb,
                 schemas::InteractivityNodeConfigurationType::
                     NUMBER_OF_OUTPUT_FLOWS,
-                configuration_type, std::get<int>(configuration.value)));
+                std::get<int>(configuration.value)));
         break;
       case imp::gltf::Interactivity::Graph::Node::ConfigurationType::VARIABLE:
         if (!std::get_if<std::string>(&configuration.value)) {
@@ -299,7 +290,7 @@ absl::Status CreateInteractivityNodeConfigurations(
         out_configuration_offsets.push_back(
             CreateInteractivityNodeConfiguration(
                 fbb, schemas::InteractivityNodeConfigurationType::VARIABLE,
-                configuration_type,
+
                 std::get<std::string>(configuration.value)));
         break;
       case imp::gltf::Interactivity::Graph::Node::ConfigurationType::POINTER:
@@ -311,7 +302,7 @@ absl::Status CreateInteractivityNodeConfigurations(
         out_configuration_offsets.push_back(
             CreateInteractivityNodeConfiguration(
                 fbb, schemas::InteractivityNodeConfigurationType::POINTER,
-                configuration_type,
+
                 std::get<std::string>(configuration.value)));
         break;
       case imp::gltf::Interactivity::Graph::Node::ConfigurationType::EVENT:
@@ -323,7 +314,7 @@ absl::Status CreateInteractivityNodeConfigurations(
         out_configuration_offsets.push_back(
             CreateInteractivityNodeConfiguration(
                 fbb, schemas::InteractivityNodeConfigurationType::EVENT,
-                configuration_type, std::get<int>(configuration.value)));
+                std::get<int>(configuration.value)));
         break;
       case imp::gltf::Interactivity::Graph::Node::ConfigurationType::NODE_INDEX:
         if (!std::get_if<int>(&configuration.value)) {
@@ -334,7 +325,7 @@ absl::Status CreateInteractivityNodeConfigurations(
         out_configuration_offsets.push_back(
             CreateInteractivityNodeConfiguration(
                 fbb, schemas::InteractivityNodeConfigurationType::NODE_INDEX,
-                configuration_type, std::get<int>(configuration.value)));
+                std::get<int>(configuration.value)));
         break;
       case imp::gltf::Interactivity::Graph::Node::ConfigurationType::
           STOP_PROPAGATION:
@@ -347,7 +338,7 @@ absl::Status CreateInteractivityNodeConfigurations(
             CreateInteractivityNodeConfiguration(
                 fbb,
                 schemas::InteractivityNodeConfigurationType::STOP_PROPAGATION,
-                configuration_type, std::get<bool>(configuration.value)));
+                std::get<bool>(configuration.value)));
         break;
       case imp::gltf::Interactivity::Graph::Node::ConfigurationType::
           EASING_TYPE:
@@ -359,7 +350,7 @@ absl::Status CreateInteractivityNodeConfigurations(
         out_configuration_offsets.push_back(
             CreateInteractivityNodeConfiguration(
                 fbb, schemas::InteractivityNodeConfigurationType::EASING_TYPE,
-                configuration_type,
+
                 std::get<std::string>(configuration.value)));
         break;
       case imp::gltf::Interactivity::Graph::Node::ConfigurationType::
@@ -373,7 +364,7 @@ absl::Status CreateInteractivityNodeConfigurations(
             CreateInteractivityNodeConfiguration(
                 fbb,
                 schemas::InteractivityNodeConfigurationType::EASING_DURATION,
-                configuration_type, std::get<float>(configuration.value)));
+                std::get<float>(configuration.value)));
         break;
       case imp::gltf::Interactivity::Graph::Node::ConfigurationType::CASES:
         if (!std::get_if<
@@ -387,10 +378,69 @@ absl::Status CreateInteractivityNodeConfigurations(
         out_configuration_offsets.push_back(
             CreateInteractivityNodeConfiguration(
                 fbb, schemas::InteractivityNodeConfigurationType::CASES,
-                configuration_type,
+
                 std::get<imp::gltf::Interactivity::Graph::Node::Configuration::
                              IntArray>(configuration.value)
                     .values));
+        break;
+      case imp::gltf::Interactivity::Graph::Node::ConfigurationType::TYPE:
+        if (!std::get_if<int>(&configuration.value)) {
+          return absl::InternalError(
+              absl::StrFormat("Interactivity configuration id %d has no value",
+                              configuration.id));
+        }
+        out_configuration_offsets.push_back(
+            CreateInteractivityNodeConfiguration(
+                fbb, schemas::InteractivityNodeConfigurationType::TYPE,
+                std::get<int>(configuration.value)));
+        break;
+      case imp::gltf::Interactivity::Graph::Node::ConfigurationType::
+          NUMBER_OF_INPUT_FLOWS:
+        if (!std::get_if<int>(&configuration.value)) {
+          return absl::InternalError(absl::StrFormat(
+              "Interactivity configuration id %d was not an int",
+              configuration.id));
+        }
+        out_configuration_offsets.push_back(
+            CreateInteractivityNodeConfiguration(
+                fbb,
+                schemas::InteractivityNodeConfigurationType::
+                    NUMBER_OF_INPUT_FLOWS,
+                std::get<int>(configuration.value)));
+        break;
+      case imp::gltf::Interactivity::Graph::Node::ConfigurationType::IS_RANDOM:
+        if (!std::get_if<bool>(&configuration.value)) {
+          return absl::InternalError(
+              absl::StrFormat("Interactivity configuration id %d is not a bool",
+                              configuration.id));
+        }
+        out_configuration_offsets.push_back(
+            CreateInteractivityNodeConfiguration(
+                fbb, schemas::InteractivityNodeConfigurationType::IS_RANDOM,
+                std::get<bool>(configuration.value)));
+        break;
+      case imp::gltf::Interactivity::Graph::Node::ConfigurationType::IS_LOOP:
+        if (!std::get_if<bool>(&configuration.value)) {
+          return absl::InternalError(
+              absl::StrFormat("Interactivity configuration id %d is not a bool",
+                              configuration.id));
+        }
+        out_configuration_offsets.push_back(
+            CreateInteractivityNodeConfiguration(
+                fbb, schemas::InteractivityNodeConfigurationType::IS_LOOP,
+                std::get<bool>(configuration.value)));
+        break;
+      case imp::gltf::Interactivity::Graph::Node::ConfigurationType::MESSAGE:
+        if (!std::get_if<std::string>(&configuration.value)) {
+          return absl::InternalError(
+              absl::StrFormat("Interactivity configuration id %d has no value",
+                              configuration.id));
+        }
+        out_configuration_offsets.push_back(
+            CreateInteractivityNodeConfiguration(
+                fbb, schemas::InteractivityNodeConfigurationType::MESSAGE,
+
+                std::get<std::string>(configuration.value)));
         break;
       default:
         return absl::InternalError(
@@ -499,12 +549,62 @@ absl::Status CreateInteractivityEvents(
   return absl::OkStatus();
 }
 
+absl::StatusOr<InteractivityGraphTypeDataOffset>
+CreateInteractivityGraphTypeDataOffset(FlatBufferBuilder& fbb,
+                                       gltf::Interactivity::Graph::Type type) {
+  if (type.signature == "bool") {
+    return schemas::CreateInteractivityGraphTypeData(
+        fbb, schemas::InteractivityVariableType::BOOL);
+  } else if (type.signature == "int") {
+    return schemas::CreateInteractivityGraphTypeData(
+        fbb, schemas::InteractivityVariableType::INT);
+  } else if (type.signature == "float") {
+    return schemas::CreateInteractivityGraphTypeData(
+        fbb, schemas::InteractivityVariableType::FLOAT);
+  } else if (type.signature == "float2") {
+    return schemas::CreateInteractivityGraphTypeData(
+        fbb, schemas::InteractivityVariableType::FLOAT2);
+  } else if (type.signature == "float3") {
+    return schemas::CreateInteractivityGraphTypeData(
+        fbb, schemas::InteractivityVariableType::FLOAT3);
+  } else if (type.signature == "float4") {
+    return schemas::CreateInteractivityGraphTypeData(
+        fbb, schemas::InteractivityVariableType::FLOAT4);
+  } else if (type.signature == "float2x2") {
+    return schemas::CreateInteractivityGraphTypeData(
+        fbb, schemas::InteractivityVariableType::MAT2F);
+  } else if (type.signature == "float3x3") {
+    return schemas::CreateInteractivityGraphTypeData(
+        fbb, schemas::InteractivityVariableType::MAT3F);
+  } else if (type.signature == "float4x4") {
+    return schemas::CreateInteractivityGraphTypeData(
+        fbb, schemas::InteractivityVariableType::MAT4F);
+  }
+
+  // TODO: Add support for passing custom types through loader.
+  return absl::InternalError(
+      absl::StrFormat("Unknown interactivity type: %s", type.signature));
+}
+
+absl::Status CreateInteractivityGraphTypeDataOffsets(
+    FlatBufferBuilder& fbb,
+    const std::vector<imp::gltf::Interactivity::Graph::Type>& types,
+    InteractivityGraphTypeDataOffsets& out_type_offsets) {
+  for (const auto& type : types) {
+    MP_ASSIGN_OR_RETURN(auto type_offset,
+                     CreateInteractivityGraphTypeDataOffset(fbb, type));
+    out_type_offsets.push_back(std::move(type_offset));
+  }
+  return absl::OkStatus();
+}
+
 InteractivityGraphOffset CreateInteractivityGraphOffset(
     flatbuffers::FlatBufferBuilder& fbb,
     const InteractivityDeclarationOffsets& interactivity_declaration_offsets,
     const InteractivityNodeOffsets& interactivity_node_offsets,
     const InteractivityVariableOffsets& interactivity_variable_offsets,
-    const InteractivityEventOffsets& interactivity_event_offsets) {
+    const InteractivityEventOffsets& interactivity_event_offsets,
+    const InteractivityGraphTypeDataOffsets& interactivity_type_offsets) {
   return schemas::CreateInteractivityGraph(
       fbb,
       CreateVector<schemas::Declaration>(fbb,
@@ -513,7 +613,9 @@ InteractivityGraphOffset CreateInteractivityGraphOffset(
       CreateVector<schemas::InteractivityVariable>(
           fbb, interactivity_variable_offsets),
       CreateVector<schemas::InteractivityEvent>(fbb,
-                                                interactivity_event_offsets));
+                                                interactivity_event_offsets),
+      CreateVector<schemas::InteractivityGraphTypeData>(
+          fbb, interactivity_type_offsets));
 }
 
 InteractivityOffset CreateInteractivityOffset(
@@ -538,6 +640,7 @@ InteractivityLoaderExtensionImpl::AddInteractivity(
     InteractivityNodeOffsets node_offsets;
     InteractivityVariableOffsets variable_offsets;
     InteractivityEventOffsets event_offsets;
+    InteractivityGraphTypeDataOffsets type_offsets;
 
     for (const auto& declaration : graph.declarations) {
       declaration_offsets.push_back(
@@ -573,9 +676,13 @@ InteractivityLoaderExtensionImpl::AddInteractivity(
     MP_RETURN_IF_ERROR(
         CreateInteractivityEvents(fbb_, graph.events, event_offsets));
 
-    interactivity_graph_offsets.push_back(
-        CreateInteractivityGraphOffset(fbb_, declaration_offsets, node_offsets,
-                                       variable_offsets, event_offsets));
+    // Create Interactivity Types
+    MP_RETURN_IF_ERROR(CreateInteractivityGraphTypeDataOffsets(fbb_, graph.types,
+                                                            type_offsets));
+
+    interactivity_graph_offsets.push_back(CreateInteractivityGraphOffset(
+        fbb_, declaration_offsets, node_offsets, variable_offsets,
+        event_offsets, type_offsets));
   }
 
   return CreateInteractivityOffset(fbb_, interactivity_graph_offsets,

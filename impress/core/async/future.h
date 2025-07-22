@@ -19,6 +19,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -278,16 +279,25 @@ class ABSL_MUST_USE_RESULT Future {
   template <typename ListT>
   static Future<std::vector<Value>> MergeList(const ListT& futures);
 
-  // Updates the priority of this Future. The actual priority used is the
-  // highest priority of itself and all of it's children.
+  // Updates the priority of this future, which is only used when the future is
+  // scheduled. See FutureThenOptions and FutureScheduleOptions for more
+  // details.
   //
-  // This will bubble up the priority to the parent Future if there is one.
+  // The value set here is the "self priority" of the future. The actual
+  // priority used for this future - the "active priority"- is calculated as the
+  // maximum value across (1) the active priorities of its direct children*, if
+  // any, and (2) its own self priority, if specified. To mark the future as
+  // having an unspecified self priority, use std::nullopt.
   //
-  // Combined futures are considred children of the futures they are combined
-  // with.
-  //
-  // Nested futures are considered the parent of the containing future.
-  void UpdatePriority(int priority);
+  // *In terms of priority, there are three cases where a future is considered a
+  // child of another future:
+  // 1. A future returned by Then() is considered a child of the future that
+  //    Then() was called on.
+  // 2. A future with a lambda that returns an inner future is considered a
+  //    child of the inner future.
+  // 3. The future returned by Combine(), Merge(), or variants thereof is
+  //    considered a child of all of the Futures passed in.
+  void UpdatePriority(std::optional<int> priority);
 
   // Returns the actual priority used for this future. This is the highest
   // priority of itself and all of it's children.
@@ -299,8 +309,13 @@ class ABSL_MUST_USE_RESULT Future {
   // priority you expect in this case.
   int GetActivePriority() const;
 
-  // Returns the priority set on this future.
-  int GetSelfPriority() const;
+  // Returns the self priority of this future, which is initially std::nullopt,
+  // and can be updated by calling UpdatePriority.
+  //
+  // If a future's self priority is std::nullopt, the future has no specified
+  // priority and will either inherit its priority from a child future, if
+  // possible, or use kNormalTaskPriority.
+  std::optional<int> GetSelfPriority() const;
 
   // Returns the Future's depth in the chain. (1 if no chain.)
   int GetDepth() const;
@@ -445,20 +460,21 @@ auto Future<T>::Then(Fn&& fn, FutureThenOptions then_options) const {
 
   if (then_options.future_group) {
     then_options.future_group->AddFuture(then.impl_wrapper_->GetImpl());
-  } else if (then_options.task_priority != kNormalTaskPriority) {
-    then.impl_wrapper_->GetImpl()->UpdatePriority(then_options.task_priority);
-  } else {
-    impl_wrapper_->GetImpl()->BubbleUpPriority(kNormalTaskPriority);
   }
 
   // Schedule the result producer to be invoked when this future becomes ready
   // with the result of this future.
-  //
-  // It's ok to call AddChild after UpdatePriority is called because the
-  // priority will still be bubbled correctly through the "changed_priority"
-  // parameter in RefreshActivePriority. It's necessary to call AddChild after
-  // the above block for the FutureGroup to work correctly.
   impl_wrapper_->GetImpl()->AddChild(then.impl_wrapper_->GetImpl());
+
+  if (then_options.future_group) {
+    return then;
+  }
+
+  if (then_options.task_priority) {
+    then.impl_wrapper_->GetImpl()->UpdatePriority(then_options.task_priority);
+  } else {
+    impl_wrapper_->GetImpl()->BubbleUpPriority(kNormalTaskPriority);
+  }
 
   return then;
 }
@@ -596,7 +612,7 @@ Future<T> Future<T>::Schedule(Fn&& fn, FutureScheduleOptions schedule_options) {
 
   if (schedule_options.future_group) {
     schedule_options.future_group->AddFuture(future.impl_wrapper_->GetImpl());
-  } else if (schedule_options.task_priority != kNormalTaskPriority) {
+  } else if (schedule_options.task_priority) {
     future.impl_wrapper_->GetImpl()->UpdatePriority(
         schedule_options.task_priority);
   }
@@ -742,7 +758,7 @@ Future<std::vector<typename Future<T>::Value>> Future<T>::MergeList(
 }
 
 template <typename T>
-void Future<T>::UpdatePriority(int priority) {
+void Future<T>::UpdatePriority(std::optional<int> priority) {
   impl_wrapper_->GetImpl()->UpdatePriority(priority);
 }
 
@@ -752,7 +768,7 @@ int Future<T>::GetActivePriority() const {
 }
 
 template <typename T>
-int Future<T>::GetSelfPriority() const {
+std::optional<int> Future<T>::GetSelfPriority() const {
   return impl_wrapper_->GetImpl()->GetSelfPriority();
 }
 

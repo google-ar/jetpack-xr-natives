@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_COLLISION_COLLISION_HELPERS_H_
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -29,6 +30,7 @@
 #include "core/collision/plane.h"
 #include "core/collision/ray.h"
 #include "core/geometry/shapes/box.h"
+#include "core/geometry/shapes/cone.h"
 #include "core/geometry/shapes/cylinder.h"
 #include "core/geometry/shapes/line_segment.h"
 #include "core/geometry/shapes/rect.h"
@@ -134,6 +136,19 @@ struct DistanceFromShape {
   TVec3<T> closest_point;
 };
 
+// Finds the closest point on the ray (first argument) to the reference line
+// (infinite line, second argument). Returns a value "t" that the closest point
+// is ray.origin + t * ray.direction. Returns std::nullopt if the reference line
+// is parallel to the ray.
+template <typename T>
+std::optional<T> ClosestPointOnRayToLine(const GenericRay<T>& ray,
+                                         const GenericRay<T>& reference_line);
+
+// ClosestPointOnRayToLine assuming the rays' directions are pre-normalized.
+template <typename T>
+std::optional<T> ClosestPointOnRayToLinePreNormalized(
+    const GenericRay<T>& ray, const GenericRay<T>& reference_line);
+
 // Test an infinite plane for ray intersection.
 // out_col_point parameter provides an intersection point if it exists,
 // otherwise it's unchanged.
@@ -232,7 +247,27 @@ MultiPrimitiveMeshIntersectsRay(absl::Span<const MeshVertexAndIndexData> meshes,
 // ray. Truncation happens at 0 and length.
 template <typename T>
 CylinderIntersectionInfo<T> CylinderLateralSurfaceIntersectsRay(
-    Cylinder<T> cylinder, const GenericRay<T>& ray);
+    GenericCylinder<T> cylinder, const GenericRay<T>& ray);
+
+// Test if a truncated finite cylinder intersects a ray.
+template <typename T>
+std::optional<RayIntersection<T>> CylinderIntersectsRay(
+    const Cylinder& cylinder, const GenericRay<T>& ray);
+
+// CylinderIntersectsRay assuming the ray's direction is pre-normalized.
+template <typename T>
+std::optional<RayIntersection<T>> CylinderIntersectsRayPreNormalized(
+    const Cylinder& cylinder, const GenericRay<T>& ray);
+
+// Test if a cone intersects a ray.
+template <typename T>
+std::optional<RayIntersection<T>> ConeIntersectsRay(const Cone& cone,
+                                                    const GenericRay<T>& ray);
+
+// ConeIntersectsRay assuming the ray's direction is pre-normalized.
+template <typename T>
+std::optional<RayIntersection<T>> ConeIntersectsRayPreNormalized(
+    const Cone& cone, const GenericRay<T>& ray);
 
 // Calculates the distance from a point to a line (the line is represented by a
 // Ray, but the sign of direction doesn't matter).
@@ -246,6 +281,43 @@ DistanceFromShape<T> DistanceFromPointToLine(TVec3<T>& point,
 template <typename T>
 std::optional<DistanceFromShape<T>> RayDistanceFromLineSegment(
     const GenericRay<T>& ray, const LineSegment& line_segment);
+
+template <typename T>
+std::optional<T> ClosestPointOnRayToLine(const GenericRay<T>& ray,
+                                         const GenericRay<T>& reference_line) {
+  return ClosestPointOnRayToLinePreNormalized<T>(
+      {ray.origin, normalize(ray.direction)},
+      {reference_line.origin, normalize(reference_line.direction)});
+}
+
+template <typename T>
+std::optional<T> ClosestPointOnRayToLinePreNormalized(
+    const GenericRay<T>& ray, const GenericRay<T>& reference_line) {
+  // The reference line.
+  TVec3<T> a0 = reference_line.origin;
+  TVec3<T> a = reference_line.direction;
+
+  // The ray.
+  TVec3<T> b0 = ray.origin;
+  TVec3<T> b = ray.direction;
+
+  // Calculate the "x" to minimize the distance of "b0+x*b" to Ray (a0,a) by:
+  // Vector from b0+x*b to a0: v1 = (b0 + x * b - a0)
+  // Rejection of v1 on (a0,a): v2 = v1 - dot(v1, a) * a
+  // distance = ||v2||
+  // find shortest distance by solving: d(distance^2)/dx = 0
+  // therefore, "x = x_top / x_bottom" equals to the following:
+  TVec3<T> A = b - dot(b, a) * a;
+  T x_bottom = dot(A, A);
+  if (x_bottom == 0) {
+    // The line is parallel with the ray.
+    return std::nullopt;
+  }
+  TVec3<T> c0 = b0 - a0;
+  TVec3<T> B = c0 - dot(c0, a) * a;
+  T x_top = -dot(A, B);
+  return x_top / x_bottom;
+}
 
 template <typename T>
 std::optional<RayIntersection<T>> AABBIntersectsRay(const imp::Box& box,
@@ -589,7 +661,7 @@ MultiPrimitiveMeshIntersectsRay(absl::Span<const MeshVertexAndIndexData> meshes,
 
 template <typename T>
 CylinderIntersectionInfo<T> CylinderLateralSurfaceIntersectsRay(
-    Cylinder<T> cylinder, const GenericRay<T>& ray) {
+    GenericCylinder<T> cylinder, const GenericRay<T>& ray) {
   TVec3<T> up = normalize(cylinder.up);
   TVec3<T> forward = normalize(cylinder.forward);
   TVec3<T> center = cylinder.center;
@@ -658,6 +730,369 @@ CylinderIntersectionInfo<T> CylinderLateralSurfaceIntersectsRay(
   }
 
   return result;
+}
+
+template <typename T>
+std::optional<T> RayIntersectPlane(const GenericRay<T>& ray, const TVec3<T>& n,
+                                   const TVec3<T>& p0) {
+  // Assuming vectors are all normalized
+  T denom = dot(n, ray.direction);
+  if (abs(denom) > kFltEpsilon) {
+    TVec3<T> p0r0 = p0 - ray.origin;
+    T t = dot(p0r0, n) / denom;
+    if (t >= 0) {
+      return t;
+    }
+  }
+  return std::nullopt;
+}
+
+template <typename T>
+std::optional<TVec3<T>> RayIntersectDisk(const GenericRay<T>& ray,
+                                         const TVec3<T>& n, const TVec3<T>& p0,
+                                         T radius) {
+  std::optional<T> t = RayIntersectPlane(ray, n, p0);
+  if (t.has_value()) {
+    // Calculate intersection point
+    TVec3<T> p = ray.origin + ray.direction * t.value();
+    // Vector from disk center to intersection point
+    TVec3<T> v = p - p0;
+    // Squared distance from disk center to intersection point
+    T d2 = dot(v, v);
+    T radius_squared = radius * radius;
+    if (d2 < radius_squared || AlmostEqual<T>(d2, radius_squared)) {
+      return p;
+    }
+  }
+  return std::nullopt;
+}
+
+template <typename T>
+std::optional<RayIntersection<T>> CylinderIntersectsRay(
+    const Cylinder& cylinder, const GenericRay<T>& ray) {
+  T length_ray_direction_squared = dot(ray.direction, ray.direction);
+  if (AlmostEqual<T>(length_ray_direction_squared, 1)) {
+    return CylinderIntersectsRayPreNormalized<T>(cylinder, ray);
+  }
+  std::optional<RayIntersection<T>> result = CylinderIntersectsRayPreNormalized(
+      cylinder, GenericRay<T>{ray.origin, normalize(ray.direction)});
+  if (result.has_value()) {
+    result->distance /= sqrt(length_ray_direction_squared);
+  }
+  return result;
+}
+
+template <typename T>
+std::optional<RayIntersection<T>> CylinderIntersectsRayPreNormalized(
+    const Cylinder& cylinder, const GenericRay<T>& ray) {
+  // Adjust the ray origin so that the cylinder base is on the zx-plane at y = 0
+  TVec3<T> origin = ray.origin - cylinder.base;
+  TVec3<T> direction = ray.direction;
+
+  const T r_squared = cylinder.radius * cylinder.radius;
+  const T origin_xz_squared = origin.x * origin.x + origin.z * origin.z;
+  const bool ray_start_on_cylinder_side =
+      AlmostEqual<T>(origin_xz_squared, r_squared);
+  const bool ray_start_on_cylinder_base = AlmostEqual<T>(origin.y, 0);
+  const bool ray_start_on_cylinder_top =
+      AlmostEqual<T>(origin.y, cylinder.height);
+  const bool ray_inside_infinite_cylinder = origin_xz_squared < r_squared;
+  const bool ray_start_on_cylinder_base_or_top =
+      ray_start_on_cylinder_base || ray_start_on_cylinder_top;
+  const bool ray_start_between_cylinder_base_and_top =
+      origin.y > 0 && origin.y < cylinder.height;
+  const bool ray_start_in_cylinder =
+      ray_start_between_cylinder_base_and_top && ray_inside_infinite_cylinder;
+
+  // Check the edge cases first: when the ray starts on cylinder boundaries
+  // the hit point is at the ray origin.
+  if (ray_inside_infinite_cylinder) {
+    if (ray_start_on_cylinder_base_or_top) {
+      collision::RayIntersection<T> result;
+      result.collision_point = ray.origin;
+      result.distance = 0;
+      result.normal = ray_start_on_cylinder_top ? kUp : kDown;
+      return result;
+    }  // else the ray starts strictly inside the cylinder so fall through.
+  } else if (ray_start_on_cylinder_side &&
+             (ray_start_between_cylinder_base_and_top ||
+              ray_start_on_cylinder_base_or_top)) {
+    collision::RayIntersection<T> result;
+    result.collision_point = ray.origin;
+    result.distance = 0;
+    result.normal = normalize(TVec3<T>(origin.x, 0, origin.z));
+    return result;
+  }
+
+  // Ray does not start on a cylinder boundary, but either inside or outside.
+
+  // Assume the base cap is closer for the ray to intersect for now.
+  float3 cylinder_top = cylinder.base + cylinder.height * kUp;
+  const float3* closer_cap_center = &cylinder.base;
+
+  RayIntersection<T> result;
+
+  std::optional<T> t1 = ClosestPointOnRayToLinePreNormalized<T>(
+      ray, GenericRay<T>(cylinder.base, kUp));
+
+  if (t1.has_value()) {
+    // p1 is the closest point on the ray to the cylinder's center line.
+    TVec3<T> p1 = origin + t1.value() * direction;
+    T p1_xz_squared = p1.x * p1.x + p1.z * p1.z;
+
+    if (p1_xz_squared > r_squared) {
+      // The ray doesn't intersect the infinite cylinder.
+      return std::nullopt;
+    }
+
+    // t is the distance from the ray origin to the intersection between the
+    // ray and the infinite cylinder.
+    T t = t1.value() -
+          sqrt((r_squared - p1_xz_squared) /
+               (direction.x * direction.x + direction.z * direction.z)) *
+              (ray_start_in_cylinder ? -1 : 1);
+    // l is the distance from the adjusted ray-cylinder intersection to the
+    // zx-plane at y = 0.
+    T l = origin.y + t * direction.y;
+
+    // Return if the intersection is on the capped cylinder.
+    if (l >= 0.0 && l <= cylinder.height) {
+      result.collision_point = ray.origin + t * direction;
+      result.distance = t;
+      result.normal =
+          normalize(TVec3<T>(result.collision_point.x - cylinder.base.x, 0,
+                             result.collision_point.z - cylinder.base.z) *
+                    (ray_start_in_cylinder ? -1 : 1));
+      return result;
+    }
+
+    // No intersection on the side. Check if the ray intersects the caps.
+
+    if (AlmostEqual<T>(direction.y, 0)) {
+      // The ray is parallel to the caps of the cylinder.
+      return std::nullopt;
+    }
+
+    // Adjust which cap is closer for the ray to intersect and the distance t.
+    if (l > 0) {
+      t = (cylinder.height - origin.y) / direction.y;
+      closer_cap_center = &cylinder_top;
+    } else {
+      t = -origin.y / direction.y;
+    }
+    result.collision_point = ray.origin + t * direction;
+    result.distance = t;
+
+    // Check if the ray actually intersects the closer cap.
+    TVec3<T> p = result.collision_point - *closer_cap_center;
+    if (p.x * p.x + p.z * p.z > r_squared) {
+      return std::nullopt;
+    }
+
+  } else {
+    // The ray is parallel to the cylinder center line.
+    // Adjust which cap is closer for the ray to intersect.
+    if (!ray_start_in_cylinder) {
+      if (origin.y > 0) {
+        closer_cap_center = &cylinder_top;
+      }
+    } else {
+      if (direction.y > 0) {
+        closer_cap_center = &cylinder_top;
+      }
+    }
+    std::optional<TVec3<T>> cap_intersection =
+        RayIntersectDisk<T>(ray, kUp, *closer_cap_center, cylinder.radius);
+    if (!cap_intersection.has_value()) {
+      return std::nullopt;
+    }
+    result.collision_point = cap_intersection.value();
+    result.distance = length(result.collision_point - ray.origin);
+  }
+
+  const bool is_base_cap = closer_cap_center == &cylinder.base;
+  if (ray_start_in_cylinder) {
+    result.normal = is_base_cap ? kUp : kDown;
+  } else {
+    result.normal = is_base_cap ? kDown : kUp;
+  }
+  return result;
+}
+
+template <typename T>
+std::optional<RayIntersection<T>> RayIntersectsConeSidePreNormalized(
+    const GenericRay<T>& ray, const Cone& cone) {
+  // we use vectors from the tip of the cone in the calculations below, see
+  // (broken link)/
+
+  const TVec3<T> tip = cone.base + cone.height * kUp;
+  const TVec3<T> cone_normal = kDown;
+  const TVec3<T> co = ray.origin - tip;  // vector from cone tip to ray origin
+  const T height_squared = cone.height * cone.height;
+  const T cos_theta_squared =
+      height_squared / (height_squared + cone.radius * cone.radius);
+  const T dot_d_n = dot(ray.direction, cone_normal);
+  const T dot_co_n = dot(co, cone_normal);
+  const T dot_co_n_squared = dot_co_n * dot_co_n;
+  const T dot_co_co = dot(co, co);
+
+  // use a quadratic equation ax^2 + bx + c = 0 and solve for x
+  // where x is t, the distance from the ray origin to the intersection on the
+  // cone side
+  T a = dot_d_n * dot_d_n - cos_theta_squared;
+  T b = 2 * (dot_d_n * dot_co_n - dot(ray.direction, co) * cos_theta_squared);
+  T c = dot_co_n_squared - dot_co_co * cos_theta_squared;
+
+  // adjust for float math precision errors
+  if (RoughlyEqual<T>(a, 0)) {
+    a = 0;
+  }
+  if (RoughlyEqual<T>(b, 0)) {
+    b = 0;
+  }
+  if (RoughlyEqual<T>(c, 0)) {
+    c = 0;
+  }
+
+  // determinant, aka discriminant of the quadratic equation
+  T det = b * b - 4 * a * c;
+  if (RoughlyEqual<T>(det, 0)) {
+    det = 0;
+  }
+
+  if (det < 0) {
+    return std::nullopt;
+  }
+
+  bool hit_found = false;
+  TVec3<T> cp;  // vector from the cone tip to the intersection point
+  T t;          // result distance
+  T h;          // result vertical distance used for normal calculation
+
+  T t1, t2;  // candidate solutions to evaluate when >= 0
+
+  if (a != 0) {
+    det = sqrt(det);
+    t1 = (-b - det) / (2 * a);
+    t2 = (-b + det) / (2 * a);
+    if (t1 > t2) {
+      std::swap(t1, t2);  // make t1 <= t2 so we can skip eval t2 if t1 is a hit
+    }
+  } else if (b != 0) {
+    // one candidate solution
+    t1 = -c / b;
+    t2 = -1;
+  } else if (c == 0) {
+    // infinitely many solutions, clamp distance to tip or base if ray origin is
+    // outside the cone
+    hit_found = true;
+    t = sqrt(dot_co_co);
+    h = dot_co_n;
+    bool recalc_h = true;
+    if (h > cone.height) {
+      // ray origin is below the cone, clamp distance to base
+      t -= t * cone.height / h;
+    } else if (h > 0) {
+      // ray origin is on the side of the cone
+      t = 0;
+    } else {
+      // ray origin is above the tip of the cone, no clamping
+      recalc_h = false;
+    }
+    cp = co + t * ray.direction;
+    if (recalc_h) {
+      h = dot(cp, cone_normal);
+    }
+  } else {
+    // no solution
+    return std::nullopt;
+  }
+
+  if (!hit_found && t1 >= 0.0) {
+    cp = co + t1 * ray.direction;
+    h = dot(cp, cone_normal);
+    if ((h > 0.0 && h <= cone.height) || RoughlyEqual<T>(h, 0)) {
+      hit_found = true;
+      t = t1;
+    }
+  }
+
+  if (!hit_found && t2 >= 0.0) {
+    cp = co + t2 * ray.direction;
+    h = dot(cp, cone_normal);
+    if ((h > 0.0 && h <= cone.height) || RoughlyEqual<T>(h, 0)) {
+      hit_found = true;
+      t = t2;
+    }
+  }
+
+  if (!hit_found) {
+    return std::nullopt;
+  }
+
+  bool ray_origin_inside_cone = false;
+  if (dot_co_n > 0) {
+    const T cos_co_n_squared = dot_co_n_squared / dot_co_co;
+    if (cos_co_n_squared > cos_theta_squared &&
+        !AlmostEqual(cos_co_n_squared, cos_theta_squared)) {
+      ray_origin_inside_cone = true;
+    }
+  }
+
+  RayIntersection<T> result;
+  result.collision_point = cp + tip;
+  result.distance = t;
+  if (AlmostEqual(result.collision_point, tip)) {
+    result.normal = ray_origin_inside_cone ? kDown : kUp;
+  } else {
+    if (ray_origin_inside_cone) {
+      result.normal = normalize(cone_normal - cp * h / dot(cp, cp));
+    } else {
+      result.normal = normalize(cp * h / dot(cp, cp) - cone_normal);
+    }
+  }
+
+  return result;
+}
+
+template <typename T>
+std::optional<RayIntersection<T>> ConeIntersectsRay(const Cone& cone,
+                                                    const GenericRay<T>& ray) {
+  T length_ray_direction_squared = dot(ray.direction, ray.direction);
+  if (AlmostEqual<T>(length_ray_direction_squared, 1)) {
+    return ConeIntersectsRayPreNormalized<T>(cone, ray);
+  }
+  std::optional<RayIntersection<T>> result = ConeIntersectsRayPreNormalized<T>(
+      cone, GenericRay<T>{ray.origin, normalize(ray.direction)});
+  if (result.has_value()) {
+    result->distance /= sqrt(length_ray_direction_squared);
+  }
+  return result;
+}
+
+template <typename T>
+std::optional<RayIntersection<T>> ConeIntersectsRayPreNormalized(
+    const Cone& cone, const GenericRay<T>& ray) {
+  // Check if the ray intersects the cone side and base and return the closer
+  // intersection.
+  std::optional<RayIntersection<T>> side_intersection =
+      RayIntersectsConeSidePreNormalized<T>(ray, cone);
+
+  std::optional<TVec3<T>> base_intersection_point =
+      RayIntersectDisk<T>(ray, kUp, cone.base, cone.radius);
+
+  if (base_intersection_point.has_value()) {
+    collision::RayIntersection<T> result;
+    result.distance = norm(base_intersection_point.value() - ray.origin);
+    if (!side_intersection.has_value() ||
+        result.distance < side_intersection->distance) {
+      result.collision_point = base_intersection_point.value();
+      result.normal = ray.origin.y <= cone.base.y ? kDown : kUp;
+      return result;
+    }
+  }
+
+  return side_intersection;
 }
 
 template <typename T>

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "imp_google3_copts")
 load(
     "//core/proto:imp_cc_proto_library.bzl",
@@ -75,11 +76,11 @@ cc_library(
         "//core/common:robin_map",
         "//core/materials",
         "//core/math",
+        "//core/media:media_color_space",
         "//core/media:media_type",
         "//core/ncsb",
         "//core/render",
         "//core/render/android:definitions",
-        "//core/video:video_color_space",
         "//core/video:video_controller",
         "//core/video:video_controller_proto_cc",
         "//core/view:base_view",

@@ -41,28 +41,30 @@ class StaticMeshCollidableShape : public CollidableShape {
  public:
   explicit StaticMeshCollidableShape(NodeHandle node);
 
-  btCollisionShape* GetCollidableShape() const override;
+  void CreateBtCollisionShape() override;
+
+  btCollisionShape* GetBtCollisionShape() const override;
 
   float3 GetCollidableCenter() const override;
 
   CollidableShape::CollisionShape GetCollisionShape(
-      const btTransform& transform) const override;
+      const btTransform& bt_trans) const override;
 
   void ApplyScalingToBulletCollider() override {}
 
 #if IMP_RUNTIME(DEV)
-  void Visualize(const btTransform& transform) const override;
+  void Visualize(const btTransform& bt_trans) const override;
 #endif
 
  private:
-  btTransform AddBtCollisionShape();
-
   NodeHandle node_;
   btTriangleMesh triangle_mesh_;
   std::unique_ptr<btCollisionShape> collidable_shape_;
 
   Box world_bounds_;
   absl::Span<const MeshVertexAndIndexData> mesh_data_;
+
+  void PushTriangles(MeshVertexData* vertex_data, MeshIndexData* index_data);
 };
 
 }  // namespace imp

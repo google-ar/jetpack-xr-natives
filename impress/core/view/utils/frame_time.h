@@ -41,6 +41,12 @@ class FrameTime {
   // been applied yet.
   bool HasAccumulatedTime() const;
 
+  // Returns the accumulated delta time, which is the pending delta time that
+  // hasn't actually been applied yet.
+  absl::Duration GetAccumulatedDeltaTime() const {
+    return accumulated_delta_time_;
+  }
+
   absl::Duration GetDeltaTime() const { return delta_time_; }
   absl::Duration GetElapsedTime() const { return last_time_ - start_time_; }
 

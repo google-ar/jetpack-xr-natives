@@ -22,16 +22,16 @@
 #include <cstdint>
 
 #include "absl/status/status.h"
-#include "absl/strings/str_format.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/backend/include/backend/PixelBufferDescriptor.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/Texture.h"
 #include "split_engine/schemas/split_engine_data_generated.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
-#include "mediapipe/framework/port/status_macros.h"
 
 namespace imp::split_engine {
+
+namespace {
 
 // TODO: Remove this copy, once we can use the Filament API
 // Source: FTexture::maxLevelCount
@@ -58,23 +58,19 @@ static inline uint8_t MaxLevelCount(uint32_t width, uint32_t height) {
   return MaxLevelCount(maxDimension);
 }
 
-static absl::Status ValidateSamplerType(
-    filament::backend::SamplerType sampler_type) noexcept {
-  switch (sampler_type) {
-    case filament::backend::SamplerType::SAMPLER_2D:
-    case filament::backend::SamplerType::SAMPLER_2D_ARRAY:
-    case filament::backend::SamplerType::SAMPLER_CUBEMAP:
-    case filament::backend::SamplerType::SAMPLER_EXTERNAL:
-    case filament::backend::SamplerType::SAMPLER_3D:
-    case filament::backend::SamplerType::SAMPLER_CUBEMAP_ARRAY:
-      return absl::OkStatus();
-  }
-
-  // No default case to get a compiler error if new enum is added.
-  // Return is reachable if user input is invalid.
-  return absl::InvalidArgumentError(absl::StrFormat(
-      "Invalid sampler type: %u", static_cast<uint32_t>(sampler_type)));
+// TODO: Remove this copy once we can use the Filament API.
+// Source: FTexture::valueForLevel
+// (broken link)
+//
+// Returns the width or height for a given mipmap level from the base value.
+static inline size_t ValueForLevel(uint8_t const level,
+                                   size_t const base_level_value) {
+  // The size for the Mipmap is the length or width divided by 2 for each level
+  // (rounded down but it can't be less than 1).
+  return std::max(size_t(1), base_level_value >> level);
 }
+
+}  // namespace
 
 absl::Status TextureValidator::ValidateAddTexturesMessage(
     const android_xr::schemas::AddTextures& command, filament::Engine& engine) {
@@ -87,19 +83,6 @@ absl::Status TextureValidator::ValidateAddTexturesMessage(
       return absl::InvalidArgumentError(
           "Invalid AddTextures message. "
           "Arrays image_params and pixel_buffers must have the same length.");
-    }
-
-    // Prevent crash in Filament's Texture.cpp
-    // FILAMENT_CHECK_PRECONDITION(validateSamplerType(mImpl->mTarget))
-    MP_RETURN_IF_ERROR(ValidateSamplerType(
-        static_cast<filament::backend::SamplerType>(texture->sampler())));
-
-    // Prevent panic in Filament's VulkanTexture.cpp
-    // assert_invariant(width <= this->width && height <= this->height);
-    if (texture->width() == 0 || texture->height() == 0) {
-      return absl::InvalidArgumentError(
-          "Invalid AddTextures message. "
-          "Texture width and height must be non-zero.");
     }
 
     if (texture->mips()) {
@@ -120,16 +103,6 @@ absl::Status TextureValidator::ValidateAddTexturesMessage(
         return absl::InvalidArgumentError(
             "Invalid AddTextures message. Texture format is not mipmappable.");
       }
-    }
-
-    // Prevent panic in Filament's Texture::Builder::build:
-    // FILAMENT_CHECK_PRECONDITION(Texture::isTextureFormatSupported(engine,
-    //     mImpl->mFormat))
-    if (!filament::Texture::isTextureFormatSupported(
-            engine,
-            static_cast<filament::backend::TextureFormat>(texture->format()))) {
-      return absl::InvalidArgumentError(
-          "Invalid AddTextures message. Texture format is not supported.");
     }
 
     // Prevent panic in Filament's FTexture::setImage:
@@ -209,14 +182,18 @@ absl::Status TextureValidator::ValidateAddTexturesMessage(
       }
 
       using PBD = filament::backend::PixelBufferDescriptor;
-      const size_t stride =
-          image_params->stride() ? image_params->stride() : texture->width();
+      // Note: each level should be a power of 2 less than the previous level.
+      // This is how mips levels are calculated.
+      const int32_t stride = image_params->stride()
+                                 ? image_params->stride()
+                                 : ValueForLevel(i, texture->width());
+      const int32_t height = ValueForLevel(i, texture->height());
       const size_t bpp =
           PBD::computeDataSize(pixel_data_format, pixel_data_type, 1, 1, 1);
       const size_t bpr =
           PBD::computeDataSize(pixel_data_format, pixel_data_type, stride, 1,
                                image_params->alignment());
-      const size_t bpl = bpr * texture->height();
+      const size_t bpl = bpr * height;
       // Prevent panic in Filament's FTexture::setImage:
       // FILAMENT_CHECK_PRECONDITION(bpp * p.left + bpr * p.top +
       //     bpl * (0 + depth) <= p.size)

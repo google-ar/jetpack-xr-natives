@@ -20,13 +20,13 @@
 #include <memory>
 
 #include "core/canvas/async_canvas_source.h"
-#include "core/view/base_view.h"
+#include "core/common/context.h"
 
 namespace imp {
 
 namespace AsyncCanvasSourceFactory {
 
-std::unique_ptr<AsyncCanvasSource> Create(BaseView& view);
+std::unique_ptr<AsyncCanvasSource> Create(Context context);
 
 }  // namespace AsyncCanvasSourceFactory
 

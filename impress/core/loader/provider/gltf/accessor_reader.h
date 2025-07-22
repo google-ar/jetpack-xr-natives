@@ -38,7 +38,7 @@
 
 namespace imp::loader::details {
 
-using AccessorId = TypedId<const imp::gltf::Accessor, int>;
+using AccessorId = TypedId<const imp::gltf::imp_proto::Accessor, int>;
 
 // Reads data from a gltf accessor. A buffer will be created if the
 // corresponding accessor uses undefined bufferview (a.k.a default value 0s), or
@@ -63,14 +63,16 @@ class AccessorReader {
   };
 
   // Creates a new AccessorReader, according to gltf information.
-  static absl::StatusOr<AccessorReader> Create(const imp::gltf::Gltf& gltf,
-                                               int accessor_index);
+  static absl::StatusOr<AccessorReader> Create(
+      const imp::gltf::imp_proto::Gltf& gltf, int accessor_index);
 
-  static absl::StatusOr<AccessorReader> Create(const imp::gltf::Gltf& gltf,
-                                               AccessorId accessor_id);
+  static absl::StatusOr<AccessorReader> Create(
+      const imp::gltf::imp_proto::Gltf& gltf, AccessorId accessor_id);
 
   absl::string_view GetType() const { return type_; }
-  gltf::ComponentType GetComponentType() const { return component_type_; }
+  gltf::imp_proto::ComponentType GetComponentType() const {
+    return component_type_;
+  }
   size_t GetStride() const { return stride_; }
   size_t GetCount() const { return count_; }
 
@@ -111,7 +113,8 @@ class AccessorReader {
   struct SparseAccessorReader {
     // The number of sparse values.
     size_t count = 0;
-    gltf::ComponentType indices_type = gltf::ComponentType::INVALID;
+    gltf::imp_proto::ComponentType indices_type =
+        gltf::imp_proto::ComponentType::INVALID;
     // The indices of sparse values.
     const uint8_t* indices_data = nullptr;
     // The sparse values.
@@ -120,9 +123,10 @@ class AccessorReader {
 
   AccessorReader() = default;
 
-  static size_t GetAccessorTypeSize(absl::string_view type,
-                                    imp::gltf::ComponentType component_type);
-  static size_t GetAccessorTypeSize(const gltf::Accessor& accessor);
+  static size_t GetAccessorTypeSize(
+      absl::string_view type,
+      imp::gltf::imp_proto::ComponentType component_type);
+  static size_t GetAccessorTypeSize(const gltf::imp_proto::Accessor& accessor);
 
   // Adds only the sparse data to existing buffer (or overwrites the existing
   // buffer with only the sparse data). Ignores the base data.
@@ -141,7 +145,7 @@ class AccessorReader {
   template <typename ComponentType>
   BufferAccess GetFloatBufferFromType(float (*unpack)(ComponentType)) const;
 
-  gltf::ComponentType component_type_;
+  gltf::imp_proto::ComponentType component_type_;
   // The type is coming from gltf proto, which outlive this class, so that it is
   // safe to use string_view here.
   absl::string_view type_;
@@ -199,23 +203,23 @@ absl::Status AccessorReader::ApplySparseValues(DenseDataAccess& out_data,
   for (size_t i = 0; i < sparse_accessor_->count; ++i) {
     size_t index = -1;
     switch (sparse_accessor_->indices_type) {
-      case gltf::ComponentType::BYTE:
+      case gltf::imp_proto::ComponentType::BYTE:
         index = *reinterpret_cast<const int8_t*>(
             sparse_accessor_->indices_data + (i * indices_stride));
         break;
-      case gltf::ComponentType::UNSIGNED_BYTE:
+      case gltf::imp_proto::ComponentType::UNSIGNED_BYTE:
         index = *reinterpret_cast<const uint8_t*>(
             sparse_accessor_->indices_data + (i * indices_stride));
         break;
-      case gltf::ComponentType::SHORT:
+      case gltf::imp_proto::ComponentType::SHORT:
         index = *reinterpret_cast<const int16_t*>(
             sparse_accessor_->indices_data + (i * indices_stride));
         break;
-      case gltf::ComponentType::UNSIGNED_SHORT:
+      case gltf::imp_proto::ComponentType::UNSIGNED_SHORT:
         index = *reinterpret_cast<const uint16_t*>(
             sparse_accessor_->indices_data + (i * indices_stride));
         break;
-      case gltf::ComponentType::UNSIGNED_INT:
+      case gltf::imp_proto::ComponentType::UNSIGNED_INT:
         index = *reinterpret_cast<const uint32_t*>(
             sparse_accessor_->indices_data + (i * indices_stride));
         break;
@@ -253,7 +257,7 @@ template <typename ComponentType>
 BufferAccess AccessorReader::GetFloatBufferFromType(
     float (*unpack)(ComponentType)) const {
   size_t float_type_size =
-      GetAccessorTypeSize(type_, imp::gltf::ComponentType::FLOAT);
+      GetAccessorTypeSize(type_, imp::gltf::imp_proto::ComponentType::FLOAT);
   size_t component_count = float_type_size / sizeof(float);
 
   DenseDataAccess dense_data = GetPackedData();

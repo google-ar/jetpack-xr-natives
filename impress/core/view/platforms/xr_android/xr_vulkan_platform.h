@@ -45,6 +45,9 @@ class XrVulkanPlatform : public XrPlatformBase {
   void setXrInstance(XrInstance instance);
   void setXrSystemId(XrSystemId systemId);
   void setVulkanSharedContext(VulkanSharedContext context);
+
+  Customization getCustomization() const noexcept override;
+
   SwapChainBundle getSwapChainBundle(SwapChainPtr handle) noexcept override;
   bool hasResized(SwapChainPtr handle) noexcept override;
   VkResult recreate(SwapChainPtr handle) noexcept override;

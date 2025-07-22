@@ -17,6 +17,7 @@
 #ifndef TNT_IMAGE_EXPECTATIONS_H
 #define TNT_IMAGE_EXPECTATIONS_H
 
+#include <filesystem>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -35,26 +36,34 @@ do {                                                                \
         screenshotParams);                                          \
 } while (0)
 
+namespace test {
+
 /**
  * Stores user-provided configuration values for an image expectation
  */
 class ScreenshotParams {
 public:
-    ScreenshotParams(int width, int height, std::string fileName, uint32_t expectedPixelHash);
+    // TODO: Add a set of environments where this test should use a different golden.
+    ScreenshotParams(int width, int height, std::string fileName, uint32_t expectedPixelHash,
+            bool isSrgb = false);
 
     int width() const;
     int height() const;
+    bool isSrgb() const;
     uint32_t expectedHash() const;
 
-    std::string outputDirectoryPath() const;
-    std::string generatedActualFileName() const;
-    std::string generatedActualFilePath() const;
-    std::string goldenFileName() const;
-    std::string goldenFilePath() const;
+    static std::filesystem::path actualDirectoryPath();
+    std::string actualFileName() const;
+    std::filesystem::path actualFilePath() const;
+    static std::filesystem::path expectedDirectoryPath();
+    std::string expectedFileName() const;
+    std::filesystem::path expectedFilePath() const;
+    const std::string filePrefix() const;
 
 private:
     int mWidth;
     int mHeight;
+    bool mIsSrgb;
     uint32_t mExpectedPixelHash;
     std::string mFileName;
 };
@@ -79,6 +88,12 @@ public:
      */
     uint32_t hash() const;
     /**
+     * Gets the bytes of the render target. The hash should usually be preferable for comparisons
+     * but this is available for debugging.
+     * @return The stored bytes.
+     */
+    const std::vector<unsigned char>& bytes() const;
+    /**
      * Thread safe as this is backed by an atomic.
      * Once this returns true it will never return false.
      * @return Whether the bytes have actually been copied from the GPU to the buffer.
@@ -91,11 +106,26 @@ private:
         ScreenshotParams params;
         std::atomic<bool> bytesFilled = false;
         std::vector<unsigned char> bytes;
+
+        uint32_t hash() const;
     };
 
     // We need a memory location that won't be invalidated to pass to GPU callbacks as they can't
     // be canceled during the destructor.
     std::unique_ptr<Internal> mInternal;
+};
+
+class LoadedPng {
+public:
+    explicit LoadedPng(std::string filePath);
+
+    uint32_t hash() const;
+
+    const std::vector<unsigned char>& bytes() const;
+
+private:
+    std::string mFilePath;
+    std::vector<unsigned char> mBytes;
 };
 
 class ImageExpectation {
@@ -130,7 +160,10 @@ public:
 
 private:
     filament::backend::DriverApi& mApi;
-    std::vector<ImageExpectation> mExpectations;
+    // Store expectations in unique pointers because they are self referential.
+    std::vector<std::unique_ptr<ImageExpectation>> mExpectations;
 };
+
+} // namespace test
 
 #endif //TNT_IMAGE_EXPECTATIONS_H

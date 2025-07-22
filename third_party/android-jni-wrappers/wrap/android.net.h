@@ -38,10 +38,22 @@ class Uri : public ObjectWrapperBase {
     std::string toString() const;
 
     /*!
+     * Wrapper for the getAuthority method
+     *
+     * Java prototype:
+     * `public abstract java.lang.String getAuthority();`
+     *
+     * JNI signature: ()Ljava/lang/String;
+     *
+     */
+    std::string getAuthority() const;
+
+    /*!
      * Class metadata
      */
     struct Meta : public MetaBaseDroppable {
         jni::method_t toString;
+        jni::method_t getAuthority;
 
         /*!
          * Singleton accessor

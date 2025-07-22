@@ -79,7 +79,8 @@ struct ProcessedPrimitive {
 // Compute vertex/index/morph target buffer Id's, per-material bounds (in root
 // space), and mesh bounds (in mesh space).
 OptionalError ProcessPrimitives(
-    const gltf::Gltf& gltf, const std::vector<imp::gltf::Primitive>& primitives,
+    const gltf::imp_proto::Gltf& gltf,
+    const std::vector<imp::gltf::imp_proto::Primitive>& primitives,
     const mat4& transform, uint16_t sampled_joint_count,
     LoadedModelBuilder* out_model_builder,
     GltfPrimitiveVector<ProcessedPrimitive>* out_processed_primitives,

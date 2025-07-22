@@ -29,10 +29,10 @@
 namespace imp::loader::details::provider_gltf {
 namespace {
 using ::filament::math::float3;
-using ::imp::gltf::Buffer;
-using ::imp::gltf::BufferView;
-using ::imp::gltf::Gltf;
-using ::imp::gltf::Material;
+using ::imp::gltf::imp_proto::Buffer;
+using ::imp::gltf::imp_proto::BufferView;
+using ::imp::gltf::imp_proto::Gltf;
+using ::imp::gltf::imp_proto::Material;
 
 }  // namespace
 
@@ -44,19 +44,19 @@ const Material& GltfModel::GetMaterial(absl::optional<uint32_t> index) const {
   return index ? gltf_root_->materials[*index] : empty_material_;
 }
 
-const imp::gltf::Accessor& GltfModel::GetAccessor(int index) const {
+const imp::gltf::imp_proto::Accessor& GltfModel::GetAccessor(int index) const {
   return gltf_root_->accessors[index];
 }
 
-const imp::gltf::Texture& GltfModel::GetTexture(int index) const {
+const imp::gltf::imp_proto::Texture& GltfModel::GetTexture(int index) const {
   return gltf_root_->textures[index];
 }
 
-const imp::gltf::Sampler& GltfModel::GetSampler(int index) const {
+const imp::gltf::imp_proto::Sampler& GltfModel::GetSampler(int index) const {
   return gltf_root_->samplers[index];
 }
 
-const imp::gltf::Image& GltfModel::GetImage(int index) const {
+const imp::gltf::imp_proto::Image& GltfModel::GetImage(int index) const {
   return gltf_root_->images[index];
 }
 

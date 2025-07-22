@@ -30,12 +30,12 @@ android_library(
         ":scene_leash_node_factory",
         ":split_engine_input_event",
         ":subspace_node",
+        "@com_google_impress//core/split_engine/android/extensions/java/com/google/imp/splitengine/extensions:extensions_java",
         "@com_google_impress//java/com/google/ar/imp/view",
         "@com_google_impress//java/com/google/ar/imp/view:frame_scheduler",
         "@com_google_impress//java/com/google/ar/imp/view/splitengine",
+        "@com_google_impress//java/com/google/vr/androidxr/extensions:platform_extensions_jar",
         "@maven//:androidx_annotation_annotation",
-        "@third_party//jetpack_xr/java/com/google/vr/realitycore/runtime/androidxr/extensions:platform_extensions_jar",
-        "@third_party//jetpack_xr/java/com/google/vr/realitycore/runtime/androidxr/extensions:xrextensionslib",
     ],
 )
 
@@ -50,7 +50,7 @@ android_library(
     ],
     tags = ["included_in_archive=//java/com/google/ar/imp/apibindings:impress_no_native_lib_aar"],
     deps = [
-        "@third_party//jetpack_xr/java/com/google/vr/realitycore/runtime/androidxr/extensions:platform_extensions_jar",
+        "@com_google_impress//java/com/google/vr/androidxr/extensions:platform_extensions_jar",
     ],
 )
 
@@ -64,8 +64,8 @@ android_library(
         "-Xep:AndroidJdkLibsChecker:OFF",
     ],
     deps = [
+        "@com_google_impress//java/com/google/vr/androidxr/extensions:platform_extensions_jar",
         "@maven//:androidx_annotation_annotation",
-        "@third_party//jetpack_xr/java/com/google/vr/realitycore/runtime/androidxr/extensions:platform_extensions_jar",
     ],
 )
 
@@ -79,15 +79,15 @@ android_library(
         "-Xep:AndroidJdkLibsChecker:OFF",
     ],
     deps = [
-        "//java/com/google/vr/realitycore/runtime/androidxr:jxr_platform_adapter_axr",
-        "//java/com/google/vr/realitycore/runtime/androidxr/perception:fov",
-        "//java/com/google/vr/realitycore/runtime/androidxr/perception:pose",
-        "//java/com/google/vr/realitycore/runtime/androidxr/perception:view_projection",
-        "//java/com/google/vr/realitycore/runtime/androidxr/perception:view_projections",
+        "//third_party/jetpack_xr/java/com/google/vr/realitycore/runtime/androidxr:jxr_platform_adapter_axr",
+        "//third_party/jetpack_xr/java/com/google/vr/realitycore/runtime/androidxr/perception:fov",
+        "//third_party/jetpack_xr/java/com/google/vr/realitycore/runtime/androidxr/perception:pose",
+        "//third_party/jetpack_xr/java/com/google/vr/realitycore/runtime/androidxr/perception:view_projection",
+        "//third_party/jetpack_xr/java/com/google/vr/realitycore/runtime/androidxr/perception:view_projections",
         "@com_google_impress//java/com/google/ar/imp/view/splitengine",
+        "@com_google_impress//java/com/google/vr/androidxr/extensions:platform_extensions_jar",
         "@maven//:androidx_annotation_annotation",
         "@maven//:com_google_guava_guava",
-        "@third_party//jetpack_xr/java/com/google/vr/realitycore/runtime/androidxr/extensions:platform_extensions_jar",
     ],
 )
 
@@ -101,6 +101,6 @@ android_library(
         "-Xep:AndroidJdkLibsChecker:OFF",
     ],
     deps = [
-        "@third_party//jetpack_xr/java/com/google/vr/realitycore/runtime/androidxr/extensions:platform_extensions_jar",
+        "@com_google_impress//java/com/google/vr/androidxr/extensions:platform_extensions_jar",
     ],
 )

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "if_android_external_texture_surface_uses_image_reader", "imp_defines", "imp_google3_copts")
 
 package(
@@ -44,6 +45,7 @@ cc_library(
         "//core/common:robin_map",
         "//core/common:small_source_location",
         "//core/math",
+        "//core/media:media_color_space",
         "//core/render",
         "//core/render:content_security_level",
         "//core/split_engine:split_engine_serializer",
@@ -76,8 +78,8 @@ cc_library(
         "//core/common:robin_map",
         "//core/common:small_source_location",
         "//core/math",
+        "//core/media:media_color_space",
         "//core/render:content_security_level",
-        "//core/video:video_color_space",
         "//core/view/platforms/android/wrappers:graphics",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/status",
@@ -100,6 +102,7 @@ cc_library(
         "//core/common:robin_map",
         "//core/common:small_source_location",
         "//core/math",
+        "//core/media:media_color_space",
         "//core/render",
         "//core/render:content_security_level",
         "//core/view:base_view",
@@ -137,11 +140,11 @@ cc_library(
         "//core/common:robin_map",
         "//core/common:small_source_location",
         "//core/math",
+        "//core/media:media_color_space",
         "//core/ncsb",
         "//core/render",
         "//core/render:content_security_level",
         "//core/view:base_view",
-        "//core/view/platforms/android/ndkwrappers:hardware_buffer_helper",
         "//core/view/platforms/android/ndkwrappers:image",
         "//core/view/platforms/android/ndkwrappers:image_reader",
         "//core/view/platforms/android/wrappers:graphics",
@@ -162,7 +165,7 @@ cc_library(
 )
 
 # --config=android_all
-# --android_ndk_min_sdk_version=21
+# --android_ndk_min_sdk_version=23
 
 # TODO: (broken link) - The test requires --define=IMP_ANDROID_EXTERNAL_TEXTURE_SURFACE_USES_IMAGE_READER=1
 # to be enabled to pass, but it seems all the extra parameters are directed to cc_library through

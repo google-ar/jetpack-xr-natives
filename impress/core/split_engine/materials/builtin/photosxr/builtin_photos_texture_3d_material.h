@@ -17,15 +17,20 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_MATERIALS_BUILTIN_BUILTIN_PHOTOS_TEXTURE_3D_MATERIAL_H_
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_MATERIALS_BUILTIN_BUILTIN_PHOTOS_TEXTURE_3D_MATERIAL_H_
 
+#include <optional>
+
 #include "absl/status/status.h"
-#include "absl/strings/string_view.h"
 #include "flatbuffers/verifier.h"
 #include "core/async/future.h"
-#include "core/material_library/material_param_value.h"
 #include "core/materials/material.h"
+#include "core/math/vec.h"
+#include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/update_system.h"
+#include "core/render/display_color_space.h"
+#include "core/render/texture.h"
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
@@ -36,7 +41,8 @@ class BuiltInPhotosTexture3dMaterial : public BuiltInCustomMaterial {
  public:
   // Creates a built-in photos 3D texture material based on the given spec.
   static Future<BuiltInMaterialPtr> Create(
-      BaseView& view, const android_xr::schemas::BuiltInMaterialD1750064& spec);
+      BaseView& view, BridgeId bridge_id,
+      const android_xr::schemas::BuiltInMaterialD1750064& spec);
 
   BuiltInMaterialPtr Duplicate() const override;
 
@@ -45,10 +51,31 @@ class BuiltInPhotosTexture3dMaterial : public BuiltInCustomMaterial {
       const android_xr::schemas::BuiltInMaterialInstanceParameters& parameters,
       const TextureBorrower& texture_borrower) override;
 
+  // The PhotosXR material always requires display color space to be P3.
+  DisplayColorSpace GetRequiredDisplayColorSpace() const override {
+    return DisplayColorSpace::kP3;
+  }
+
  private:
-  BuiltInPhotosTexture3dMaterial(BaseView& view, OwnedMaterialPtr material);
+  BuiltInPhotosTexture3dMaterial(BaseView& view, BridgeId bridge_id,
+                                 OwnedMaterialPtr material);
 
   BaseView& view_;
+  // Workaround to not change the schema.
+  // TODO: Consider updating the schema to match the data type.
+  float3 fade_params_;
+  float2 blur_params_;
+  // We have 5 samplers in the material, max 4 can be used:
+  // 1: media texture (either video or image)
+  // 2: (if video) we may have an auxiliaryVideoTexture
+  // 3: thumbnailTexture
+  // 4: blurTexture
+  // thumbnail and blur textures are all derived from the media texture, so we
+  // don't need to keep track of their texture ids.
+  std::optional<TextureId> image_texture_id_;
+  std::optional<TextureId> video_texture_id_;
+  bool show_video_;
+  Dispatcher::ScopedConnection post_frame_update_connection_;
 };
 
 }  // namespace imp::split_engine

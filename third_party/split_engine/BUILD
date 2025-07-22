@@ -15,6 +15,7 @@
 load(
     "@com_github_google_flatbuffers//:build_defs.bzl",
     "flatbuffer_cc_library",
+    "flatbuffer_library_public",
 )
 load(
     "@com_google_impress//build_tools:imp.bzl",
@@ -58,6 +59,38 @@ flatbuffer_cc_library(
     include_paths = IMP_FLATBUFFER_INCLUDE_PATHS,
     includes = [],
     out_prefix = "schemas/",
+)
+
+# Embedded schema is needed for fuzz testing.
+flatbuffer_library_public(
+    name = "fbs_with_embedded_schema_srcs",
+    srcs = schemas,
+    outs = [
+        item
+        for f in schemas
+        for item in (
+            "embedded_schemas/" + f.replace(".fbs", "_generated.h").split("/")[-1],
+            "embedded_schemas/" + f.replace(".fbs", "_bfbs_generated.h").split("/")[-1],
+        )
+    ],
+    flatc_args = [arg for arg in IMP_FLATC_ARGS if arg != "--keep-prefix"] + [
+        "--bfbs-gen-embed",
+        "--gen-name-strings",
+        "--include-prefix third_party/split_engine/embedded_schemas",
+    ],
+    include_paths = IMP_FLATBUFFER_INCLUDE_PATHS,
+    language_flag = "-c",
+    out_prefix = "embedded_schemas/",
+)
+
+cc_library(
+    name = "fbs_with_embedded_schema",
+    srcs = [":fbs_with_embedded_schema_srcs"],
+    hdrs = [":fbs_with_embedded_schema_srcs"],
+    deps = [
+        "@com_github_google_flatbuffers//:flatbuffers",
+    ],
+    alwayslink = 1,
 )
 
 cc_library(

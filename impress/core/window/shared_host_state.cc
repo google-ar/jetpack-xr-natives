@@ -14,13 +14,22 @@
 
 #include "core/window/shared_host_state.h"
 
+#include <algorithm>
+#include <memory>
+#include <string>
+#include <utility>
+
 #include "absl/algorithm/container.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "filament/filament/backend/include/backend/DriverEnums.h"
+#include "filament/filament/include/filament/Engine.h"
 #include "filament/libs/utils/include/utils/Panic.h"
+#include "core/async/executor.h"
+#include "core/async/executor_helpers.h"
 #include "core/async/simple_executor.h"
-#include "core/common/platform_helpers.h"
+#include "core/async/thread_pool_executor.h"
 #include "core/config.h"
 #include "core/window/filament_host.h"
 
@@ -37,8 +46,13 @@
 #include <EGL/eglext.h>
 #include <GLES2/gl2.h>
 
+#include "filament/filament/backend/include/backend/platforms/OpenGLPlatform.h"
 #include "filament/filament/backend/include/backend/platforms/PlatformEGLAndroid.h"
 #endif  // IMP_MATERIAL_API(OPENGL) && IMP_PLATFORM(ANDROID)
+
+#if IMP_MATERIAL_API(METAL)
+#include "filament/filament/backend/include/backend/platforms/PlatformMetal.h"
+#endif  // IMP_MATERIAL_API(METAL)
 
 #if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(VULKAN)
 #include "filament/filament/backend/include/backend/platforms/VulkanPlatformAndroid.h"
@@ -96,7 +110,8 @@ absl::StatusOr<Engine*> SharedHostState::GetOrCreateEngine(
     void* shared_gl_context, bool should_use_shared_context,
     const filament::Engine::Config& config,
     const filament::backend::FeatureLevel featureLevel,
-    bool pause_rendering_thread, SharedContextDeleter shared_context_deleter) {
+    bool pause_rendering_thread, SharedContextDeleter shared_context_deleter,
+    bool preinitialize_metal_platform) {
   // If an engine already exists then it is reused, but only if it is
   // initialized with the same backend, platform, and context.
   if (engine_ != nullptr) {
@@ -161,6 +176,22 @@ absl::StatusOr<Engine*> SharedHostState::GetOrCreateEngine(
   // NOTE: This is done prior to creating the filament engine so that any panics
   // that occur during engine creation can be caught.
   utils::Panic::setPanicHandler(FilamentPanicHandler, nullptr);
+
+#if IMP_MATERIAL_API(METAL)
+  if (preinitialize_metal_platform) {
+    filament::backend::PlatformMetal* platform_metal =
+        platform == nullptr
+            ? (new filament::backend::PlatformMetal())
+            : static_cast<filament::backend::PlatformMetal*>(platform);
+
+    if (!platform_metal->initialize()) {
+      return absl::ResourceExhaustedError(
+          "Failed to initialize Metal platform.");
+    }
+
+    platform = platform_metal;
+  }
+#endif
 
   engine_ = filament::Engine::Builder()
                 .backend(backend)
@@ -269,6 +300,50 @@ Executor* SharedHostState::GetBackgroundExecutor() {
 
 void SharedHostState::RequestSynchronousShutdown() {
   use_async_shutdown_ = false;
+}
+
+absl::StatusOr<std::string> SharedHostState::GetVendorString() {
+#if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(OPENGL)
+  filament::backend::OpenGLPlatform* opengl_platform =
+      static_cast<filament::backend::OpenGLPlatform*>(platform_);
+  if (!engine_ || !opengl_platform) {
+    return absl::InternalError("Filament is not initialized");
+  }
+  auto driver = engine_->getDriver();
+  if (!driver) {
+    return absl::InternalError("Driver is null");
+  }
+  utils::CString vendor_string = opengl_platform->getVendorString(driver);
+  if (vendor_string.empty()) {
+    return absl::InternalError("Vendor string is empty");
+  }
+  return std::string(vendor_string.data(), vendor_string.size());
+#else
+  return absl::InternalError(
+      "Vendor string is not supported for non-OpenGL and Android platforms");
+#endif
+}
+
+absl::StatusOr<std::string> SharedHostState::GetRendererString() {
+#if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(OPENGL)
+  filament::backend::OpenGLPlatform* opengl_platform =
+      static_cast<filament::backend::OpenGLPlatform*>(platform_);
+  if (!engine_ || !opengl_platform) {
+    return absl::InternalError("Filament is not initialized");
+  }
+  auto driver = engine_->getDriver();
+  if (!driver) {
+    return absl::InternalError("Driver is null");
+  }
+  utils::CString renderer_string = opengl_platform->getRendererString(driver);
+  if (renderer_string.empty()) {
+    return absl::InternalError("Renderer string is empty");
+  }
+  return std::string(renderer_string.data(), renderer_string.size());
+#else
+  return absl::InternalError(
+      "Renderer string is not supported for non-OpenGL and Android platforms");
+#endif
 }
 
 #if IMP_PLATFORM(ANDROID)

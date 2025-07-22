@@ -41,8 +41,10 @@
 #include "core/math/vec.h"
 #include "core/render/content_security_level.h"
 #include "core/render/image_asset.h"
+#include "core/render/safe_filament_texture_builder.h"
 #include "core/render/texture.h"
 #include "core/render/texture_builder.h"
+#include "core/render/texture_options.h"
 #include "core/view/base_view.h"
 
 namespace imp {
@@ -179,7 +181,24 @@ OwnedTexturePtr TextureFactory::CreateExternalTexture(
 }
 
 TexturePtr TextureFactory::CreateTexture(const ImageAsset& image,
-                                         TextureFactory::Options options) {
+                                         Options options) {
+  return CreateTexture(
+      image,
+      TextureGenerationOptions{
+          .generated_mipmap_levels = options.generated_mipmap_levels,
+          .texture_format_override = options.texture_format_override,
+      },
+      TextureSamplerOptions{
+          .wrap_mode = options.wrap_mode,
+          .mag_filter = options.mag_filter,
+          .min_filter = options.min_filter,
+          .anisotropy = options.anisotropy,
+      });
+}
+
+TexturePtr TextureFactory::CreateTexture(
+    const ImageAsset& image, TextureGenerationOptions generation_options,
+    TextureSamplerOptions sampler_options) {
   // TODO : This is identical to ImageContents variant, but
   // returns a TexturePtr instead of an OwnedTexturePtr.
   filament::Engine* engine = view_.GetSharedEngine();
@@ -190,38 +209,40 @@ TexturePtr TextureFactory::CreateTexture(const ImageAsset& image,
         "%s_tex", GetLocalFilenameFromFilename(image.GetName())));
   }
   texture_builder.Sampler(filament::Texture::Sampler::SAMPLER_2D);
-  texture_builder.Format(options.texture_format_override.has_value()
-                             ? *options.texture_format_override
+  texture_builder.Format(generation_options.texture_format_override.has_value()
+                             ? *generation_options.texture_format_override
                              : image.GetTextureFormat());
   texture_builder.Width(image.GetWidth());
   texture_builder.Height(image.GetHeight());
-  if (options.generated_mipmap_levels.has_value()) {
-    texture_builder.Levels(options.generated_mipmap_levels.value());
+  if (generation_options.generated_mipmap_levels.has_value()) {
+    texture_builder.Levels(generation_options.generated_mipmap_levels.value());
   }
   image::ImageContents& image_contents = image.GetImageContents();
   texture_builder.Image(*engine, image_contents, {});
-  if (options.generated_mipmap_levels.has_value()) {
+  if (generation_options.generated_mipmap_levels.has_value()) {
     texture_builder.GenerateMipmaps(*engine);
   }
-  filament::Texture* texture = texture_builder.Build(*engine);
-  if (texture == nullptr) {
+  absl::StatusOr<filament::Texture*> texture = texture_builder.Build(*engine);
+  if (!texture.ok()) {
     IMP_LOG(imp::ERROR) << "Could not create texture.";
     return {};
   }
 
-  filament::TextureSampler sampler(options.min_filter, options.mag_filter,
-                                   options.wrap_mode);
-  sampler.setAnisotropy(options.anisotropy);
+  filament::TextureSampler sampler(sampler_options.min_filter,
+                                   sampler_options.mag_filter,
+                                   sampler_options.wrap_mode);
+  sampler.setAnisotropy(sampler_options.anisotropy);
 
   // Using `new` to access a non-public constructor, see (broken link).
   TexturePtr result =
-      absl::WrapUnique(new Texture(view_, nullptr, texture, sampler));
+      absl::WrapUnique(new Texture(view_, nullptr, *texture, sampler));
   result->SetName(image.GetName());
   return result;
 }
 
 TexturePtr TextureFactory::CreateTexture(const ImageAsset& image) {
-  return CreateTexture(image, Options{});
+  return CreateTexture(image, TextureGenerationOptions{},
+                       TextureSamplerOptions{});
 }
 
 TexturePtr TextureFactory::CreateTexture(
@@ -236,22 +257,41 @@ TexturePtr TextureFactory::CreateTexture(
   texture_builder.Height(height);
   texture_builder.Levels(1u);
   texture_builder.Name(name_str);
-  filament::Texture* texture = texture_builder.Build(*view_.GetSharedEngine());
+  absl::StatusOr<filament::Texture*> texture =
+      texture_builder.Build(*view_.GetSharedEngine());
+  if (!texture.ok()) {
+    IMP_LOG(imp::ERROR) << "Could not create texture.";
+    return {};
+  }
   filament::TextureSampler sampler(MagFilter::LINEAR, WrapMode::CLAMP_TO_EDGE);
 
-  return absl::WrapUnique(new Texture(view_, nullptr, texture, sampler));
+  return absl::WrapUnique(new Texture(view_, nullptr, *texture, sampler));
 }
 
 TexturePtr TextureFactory::CreateTexture(int width, int height,
                                          TextureFactory::Format format,
                                          TextureFactory::Usage usage) {
-  return CreateTexture(width, height, format, usage, {});
+  return CreateTexture(width, height, format, usage, TextureSamplerOptions{});
+}
+
+TexturePtr TextureFactory::CreateTexture(
+    int width, int height, TextureFactory::Format format,
+    TextureFactory::Usage usage, Options options,
+    std::optional<absl::string_view> name) {
+  return CreateTexture(width, height, format, usage,
+                       TextureSamplerOptions{
+                           .wrap_mode = options.wrap_mode,
+                           .mag_filter = options.mag_filter,
+                           .min_filter = options.min_filter,
+                           .anisotropy = options.anisotropy,
+                       },
+                       name);
 }
 
 // Creates an empty texture of specified size, format, usage, and options.
 TexturePtr TextureFactory::CreateTexture(
     int width, int height, TextureFactory::Format format,
-    TextureFactory::Usage usage, Options options,
+    TextureFactory::Usage usage, TextureSamplerOptions sampler_options,
     std::optional<absl::string_view> name) {
   std::string name_str =
       name.has_value() ? absl::StrFormat("%s_tex", *name) : "";
@@ -265,9 +305,10 @@ TexturePtr TextureFactory::CreateTexture(
                                    .levels(1u)
                                    .build(*view_.GetSharedEngine());
 
-  filament::TextureSampler sampler(options.min_filter, options.mag_filter,
-                                   options.wrap_mode);
-  sampler.setAnisotropy(options.anisotropy);
+  filament::TextureSampler sampler(sampler_options.min_filter,
+                                   sampler_options.mag_filter,
+                                   sampler_options.wrap_mode);
+  sampler.setAnisotropy(sampler_options.anisotropy);
 
   return absl::WrapUnique(new Texture(view_, nullptr, texture, sampler));
 }
@@ -292,7 +333,9 @@ TexturePtr TextureFactory::CreateTexture(intptr_t id, uint32_t width,
 }
 
 TexturePtr TextureFactory::CreateTexture(TextureCreationSettings settings) {
-  filament::Texture::Builder texture_builder = filament::Texture::Builder{}
+  // This place is reachable from Renderer, use SafeFilamentTextureBuilder to
+  // prevent panics.
+  SafeFilamentTextureBuilder texture_builder = SafeFilamentTextureBuilder{}
                                                    .width(settings.width)
                                                    .height(settings.height)
                                                    .format(settings.format);
@@ -317,24 +360,50 @@ TexturePtr TextureFactory::CreateTexture(TextureCreationSettings settings) {
     texture_builder.sampler(*settings.sampler_type);
   }
 
-  filament::Texture* texture = texture_builder.build(*view_.GetSharedEngine());
+  absl::StatusOr<filament::Texture*> texture =
+      texture_builder.build(*view_.GetSharedEngine());
+  if (!texture.ok()) {
+    return {};
+  }
 
   filament::TextureSampler sampler =
       filament::TextureSampler(MagFilter::LINEAR, WrapMode::CLAMP_TO_EDGE);
 
-  if (settings.options) {
+  if (settings.sampler_options) {
+    sampler = filament::TextureSampler(settings.sampler_options->min_filter,
+                                       settings.sampler_options->mag_filter,
+                                       settings.sampler_options->wrap_mode);
+    sampler.setAnisotropy(settings.sampler_options->anisotropy);
+  } else if (settings.options) {
     sampler = filament::TextureSampler(settings.options->min_filter,
                                        settings.options->mag_filter,
                                        settings.options->wrap_mode);
     sampler.setAnisotropy(settings.options->anisotropy);
   }
 
-  return absl::WrapUnique(new Texture(view_, nullptr, texture, sampler));
+  return absl::WrapUnique(new Texture(view_, nullptr, *texture, sampler));
+}
+
+TexturePtr TextureFactory::CreateTexture(
+    absl::Span<const AssetPtr<ImageAsset>> images, Options options) {
+  return CreateTexture(
+      images,
+      TextureGenerationOptions{
+          .generated_mipmap_levels = options.generated_mipmap_levels,
+          .texture_format_override = options.texture_format_override,
+      },
+      TextureSamplerOptions{
+          .wrap_mode = options.wrap_mode,
+          .mag_filter = options.mag_filter,
+          .min_filter = options.min_filter,
+          .anisotropy = options.anisotropy,
+      });
 }
 
 TexturePtr TextureFactory::CreateTexture(
     absl::Span<const AssetPtr<ImageAsset>> images,
-    TextureFactory::Options options) {
+    TextureGenerationOptions generation_options,
+    TextureSamplerOptions sampler_options) {
   if (images.empty()) {
     IMP_LOG(imp::ERROR) << "CreateTexture: image array cannot be empty.";
     return {};
@@ -356,7 +425,8 @@ TexturePtr TextureFactory::CreateTexture(
 
   filament::Texture::Builder texture_builder;
   texture_builder.sampler(filament::Texture::Sampler::SAMPLER_2D_ARRAY);
-  texture_builder.levels(options.generated_mipmap_levels.value_or(1));
+  texture_builder.levels(
+      generation_options.generated_mipmap_levels.value_or(1));
   texture_builder.format(format);
   texture_builder.width(texture_dimensions.x);
   texture_builder.height(texture_dimensions.y);
@@ -377,27 +447,49 @@ TexturePtr TextureFactory::CreateTexture(
     }
   }
 
-  if (options.generated_mipmap_levels.has_value()) {
+  if (generation_options.generated_mipmap_levels.has_value()) {
     texture->generateMipmaps(*engine);
   }
 
-  filament::TextureSampler sampler(options.min_filter, options.mag_filter,
-                                   options.wrap_mode);
-  sampler.setAnisotropy(options.anisotropy);
+  filament::TextureSampler sampler(sampler_options.min_filter,
+                                   sampler_options.mag_filter,
+                                   sampler_options.wrap_mode);
+  sampler.setAnisotropy(sampler_options.anisotropy);
 
   return absl::WrapUnique(new Texture(view_, nullptr, texture, sampler));
 }
 
 TexturePtr TextureFactory::CreateTexture(
     absl::Span<const AssetPtr<ImageAsset>> images) {
-  return CreateTexture(images, Options{
-                                   .mag_filter = MagFilter::NEAREST,
-                                   .min_filter = MinFilter::NEAREST,
-                               });
+  return CreateTexture(images, TextureGenerationOptions{},
+                       TextureSamplerOptions{
+                           .mag_filter = MagFilter::NEAREST,
+                           .min_filter = MinFilter::NEAREST,
+                       });
 }
 
 OwnedTexturePtr TextureFactory::CreateTexture(
     image::ImageContents& image_contents, Options options,
+    std::optional<absl::string_view> name) {
+  return CreateTexture(
+      image_contents,
+      TextureGenerationOptions{
+          .generated_mipmap_levels = options.generated_mipmap_levels,
+          .texture_format_override = options.texture_format_override,
+      },
+      TextureSamplerOptions{
+          .wrap_mode = options.wrap_mode,
+          .mag_filter = options.mag_filter,
+          .min_filter = options.min_filter,
+          .anisotropy = options.anisotropy,
+      },
+      name);
+}
+
+OwnedTexturePtr TextureFactory::CreateTexture(
+    image::ImageContents& image_contents,
+    TextureGenerationOptions generation_options,
+    TextureSamplerOptions sampler_options,
     std::optional<absl::string_view> name) {
   // TODO : This is identical to ImageAsset variant, but
   // returns a OwnedTexturePtr instead of a TexturePtr.
@@ -410,38 +502,99 @@ OwnedTexturePtr TextureFactory::CreateTexture(
   }
 
   texture_builder.Sampler(filament::Texture::Sampler::SAMPLER_2D);
-  texture_builder.Format(options.texture_format_override.has_value()
-                             ? *options.texture_format_override
+  texture_builder.Format(generation_options.texture_format_override.has_value()
+                             ? *generation_options.texture_format_override
                              : image_contents.GetTextureFormat());
 
   texture_builder.Width(image_contents.GetWidth());
   texture_builder.Height(image_contents.GetHeight());
-  if (options.generated_mipmap_levels.has_value()) {
-    texture_builder.Levels(options.generated_mipmap_levels.value());
+  if (generation_options.generated_mipmap_levels.has_value()) {
+    texture_builder.Levels(generation_options.generated_mipmap_levels.value());
   } else {
     texture_builder.Levels(image_contents.GetLevelCount());
   }
   texture_builder.Image(*engine, image_contents, {});
-  if (options.generated_mipmap_levels.has_value()) {
+  if (generation_options.generated_mipmap_levels.has_value()) {
     texture_builder.GenerateMipmaps(*engine);
   }
-  filament::Texture* texture = texture_builder.Build(*engine);
-  if (texture == nullptr) {
+  absl::StatusOr<filament::Texture*> texture = texture_builder.Build(*engine);
+  if (!texture.ok()) {
     IMP_LOG(imp::ERROR) << "Could not create texture.";
     return {};
   }
 
-  filament::TextureSampler sampler(options.min_filter, options.mag_filter,
-                                   options.wrap_mode);
-  sampler.setAnisotropy(options.anisotropy);
+  filament::TextureSampler sampler(sampler_options.min_filter,
+                                   sampler_options.mag_filter,
+                                   sampler_options.wrap_mode);
+  sampler.setAnisotropy(sampler_options.anisotropy);
 
   // Using `new` to access a non-public constructor, see (broken link).
-  OwnedTexturePtr result = WrapTexture(texture);
+  OwnedTexturePtr result = WrapTexture(*texture);
 
   if (name.has_value()) {
     result->SetName(*name);
   }
   return result;
+}
+
+OwnedTexturePtr TextureFactory::CreateTextureWithMipmaps(
+    absl::Span<const AssetPtr<ImageAsset>> images,
+    TextureGenerationOptions generation_options,
+    TextureSamplerOptions sampler_options) {
+  if (images.empty()) {
+    IMP_LOG(imp::ERROR) << "CreateTexture: image array cannot be empty.";
+    return {};
+  }
+
+  filament::Engine* engine = view_.GetSharedEngine();
+
+  const ImageAsset& base_image = *images[0];
+
+  filament::Texture::Builder texture_builder;
+  texture_builder.sampler(SamplerType::SAMPLER_2D);
+  texture_builder.levels(
+      generation_options.generated_mipmap_levels.value_or(images.size()));
+  texture_builder.format(base_image.GetTextureFormat());
+  texture_builder.width(base_image.GetWidth());
+  texture_builder.height(base_image.GetHeight());
+  texture_builder.depth(1);
+
+  filament::Texture* texture = texture_builder.build(*engine);
+  if (texture == nullptr) {
+    IMP_LOG(imp::ERROR) << "Could not create texture.";
+    return {};
+  }
+
+  if (generation_options.generated_mipmap_levels.has_value()) {
+    texture->generateMipmaps(*engine);
+  } else {
+    for (int level = 0; level < images.size(); ++level) {
+      auto descriptors = images[level]->GetLevelDescriptors();
+      if (descriptors.empty()) {
+        IMP_LOG(imp::ERROR) << "Failed to create texture: image level descriptors needs "
+                      "to have at least one level.";
+        return {};
+      }
+
+      if (images[level]->GetWidth() != texture->getWidth(level) ||
+          images[level]->GetHeight() != texture->getHeight(level)) {
+        IMP_LOG(imp::ERROR) << "Failed to create texture: image level dimensions do "
+                      "not match.";
+        return {};
+      }
+
+      texture->setImage(*engine, level, 0, 0, 0, texture->getWidth(level),
+                        texture->getHeight(level), 1,
+                        std::move(descriptors[0]));
+    }
+  }
+
+  filament::TextureSampler sampler(sampler_options.min_filter,
+                                   sampler_options.mag_filter,
+                                   sampler_options.wrap_mode);
+  sampler.setAnisotropy(sampler_options.anisotropy);
+
+  return absl::WrapUnique(new Texture(view_, nullptr, texture, sampler));
 }
 
 TexturePtr TextureFactory::WrapTexture(
@@ -476,7 +629,8 @@ OwnedTexturePtr TextureFactory::CreatePlaceholderTexture() {
       (sizeof(uint32_t) * kNumPlaceholderTexturePixels),
       filament::Texture::InternalFormat::RGBA8);
 
-  return CreateTexture(image_contents, Options{}, "PlaceholderTexture");
+  return CreateTexture(image_contents, TextureGenerationOptions{},
+                       TextureSamplerOptions{}, "PlaceholderTexture");
 }
 
 }  // namespace imp

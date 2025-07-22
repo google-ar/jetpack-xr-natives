@@ -14,16 +14,15 @@
 
 // Provides functionality for super sampling using 4 samples
 
-// TODO: Macro needed because filament doesn't support samplerExternal types as a
+// TODO: b/376704169 - Macro needed because filament doesn't support samplerExternal types as a
 // function parameter. We should move back to using a function once this is supported.
-#define SUPER_SAMPLE_INTO(tex, uv, result)                      \
-    {                                                           \
-        vec2 _ss_x = dFdx(uv) * 0.4;                            \
-        vec2 _ss_y = dFdy(uv) * 0.4;                            \
-        vec4 _ss_a = texture(tex, uv);                          \
-        vec4 _ss_b = texture(tex, uv + _ss_x);                  \
-        vec4 _ss_c = texture(tex, uv - _ss_x);                  \
-        vec4 _ss_d = texture(tex, uv + _ss_y);                  \
-        vec4 _ss_e = texture(tex, uv - _ss_y);                  \
-        result = (_ss_a + _ss_b + _ss_c + _ss_d + _ss_e) / 5.0; \
-    }
+// This samples in a pentagon with a radius of 0.37 dfdx/dfdy around the center pixel.
+#define SUPER_SAMPLE_INTO(tex, uv, result)                                \
+    highp vec2 _ss_x = dFdx(uv) * 0.37;                                   \
+    highp vec2 _ss_y = dFdy(uv) * 0.37;                                   \
+    vec4 _ss_a = texture(tex, uv + _ss_x);                                \
+    vec4 _ss_b = texture(tex, uv + 0.309017 * _ss_x + 0.951057 * _ss_y);  \
+    vec4 _ss_c = texture(tex, uv + -0.809017 * _ss_x + 0.587785 * _ss_y); \
+    vec4 _ss_d = texture(tex, uv + -0.809017 * _ss_x - 0.587785 * _ss_y); \
+    vec4 _ss_e = texture(tex, uv + 0.309017 * _ss_x - 0.951057 * _ss_y);  \
+    result = (_ss_a + _ss_b + _ss_c + _ss_d + _ss_e) / 5.0;

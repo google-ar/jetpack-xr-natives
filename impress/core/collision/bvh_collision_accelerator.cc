@@ -33,7 +33,7 @@ std::optional<collision::MultiPrimitiveMeshIntersection<float>>
 BvhCollisionAccelerator::Intersect(const Ray& ray) const {
   // Find the closest intersection among all the bvhs.
   std::optional<Bvh::RayIntersection> min_ray_intersection;
-  size_t hit_primitve_id = 0;
+  size_t hit_primitive_id = 0;
   for (size_t primitive_id = 0; primitive_id < bvhs_.size(); ++primitive_id) {
     std::optional<Bvh::RayIntersection> ray_intersection =
         bvhs_[primitive_id].IntersectRay(ray);
@@ -41,7 +41,7 @@ BvhCollisionAccelerator::Intersect(const Ray& ray) const {
         (!min_ray_intersection ||
          ray_intersection->distance < min_ray_intersection->distance)) {
       min_ray_intersection = ray_intersection;
-      hit_primitve_id = primitive_id;
+      hit_primitive_id = primitive_id;
     }
   }
   if (min_ray_intersection) {
@@ -50,14 +50,14 @@ BvhCollisionAccelerator::Intersect(const Ray& ray) const {
         min_ray_intersection->distance * normalize(ray.direction) + ray.origin;
     result.collision_normal = min_ray_intersection->normal;
     result.intersection_dist = min_ray_intersection->distance;
-    result.primitive_id = hit_primitve_id;
+    result.primitive_id = hit_primitive_id;
     result.triangle_id = min_ray_intersection->triangle_id;
     return result;
   }
   return std::nullopt;
 }
 
-// Create a bvh for each primitive in the a (gltf) mesh.
+// Create a bvh for each primitive in the (gltf) mesh.
 void BvhCollisionAccelerator::Create(
     absl::Span<const MeshVertexAndIndexData> mesh_data, Box aabb) {
   bvhs_.reserve(mesh_data.size());

@@ -123,21 +123,17 @@ absl::Status SplitEngineSubspaceManagerImpl::ForwardInputEvent(
   bool secondary_hit_node_is_valid =
       input_event.secondary_hit_node && input_event.secondary_hit_node->target;
 
-  imp::mat4f world_from_task_space;
+  imp::mat4f world_from_subspace;
   imp::NodeHandle subspace_root_node;
   auto it = subspace_map_.find(subspace_id);
   if (it != subspace_map_.end()) {
     subspace_root_node = it->second.GetNode();
     if (subspace_root_node.IsValid()) {
-      world_from_task_space = it->second.GetWorldFromTaskTransform();
+      world_from_subspace = it->second.GetWorldFromSubspaceTransform();
     }
   }
 
   if (!hit_node_is_valid && !secondary_hit_node_is_valid) {
-    if (input_event.dispatch_flag ==
-        SplitEngineInputEvent::DispatchFlag::NONE) {
-      return absl::FailedPreconditionError("No hit node is valid");
-    }
     if (subspace_root_node.IsValid()) {
       subspace_root_node->Send(input_event);
     } else {
@@ -149,14 +145,14 @@ absl::Status SplitEngineSubspaceManagerImpl::ForwardInputEvent(
   if (hit_node_is_valid) {
     if (subspace_root_node.IsValid()) {
       input_event.hit_node->world_hit_position =
-          (world_from_task_space * input_event.hit_node->hit_position).xyz;
+          (world_from_subspace * input_event.hit_node->hit_position).xyz;
     }
     input_event.hit_node->target->Send(input_event);
   }
   if (secondary_hit_node_is_valid) {
     if (subspace_root_node.IsValid()) {
       input_event.secondary_hit_node->world_hit_position =
-          (world_from_task_space * input_event.secondary_hit_node->hit_position)
+          (world_from_subspace * input_event.secondary_hit_node->hit_position)
               .xyz;
     }
     input_event.secondary_hit_node->target->Send(input_event);

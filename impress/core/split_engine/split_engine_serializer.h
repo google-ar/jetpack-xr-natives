@@ -17,10 +17,13 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_SPLIT_ENGINE_SERIALIZER_H_
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_SPLIT_ENGINE_SERIALIZER_H_
 
+#include <sys/types.h>
+
 #include <cstdint>
 #include <memory>
 
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/Material.h"
 #include "filament/filament/include/filament/MorphTargetBuffer.h"
@@ -41,6 +44,7 @@
 #include "core/math/mat.h"
 #include "core/math/math.h"
 #include "core/model/mesh/base_mesh_builder.h"
+#include "core/split_engine/android/split_engine_android_bridge.h"
 #include "core/split_engine/split_engine_mesh_serializer.h"
 #include "core/split_engine/split_engine_texture_serializer.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
@@ -65,10 +69,14 @@ namespace imp::split_engine {
 class SplitEngineSerializer {
  public:
   virtual ~SplitEngineSerializer() = default;
+
   // Returns the ID of the given object for serializing pointers.
-  static std::uint64_t GetId(const void* ptr) {
-    return static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(ptr));
-  }
+  static std::uint64_t GetId(const void* ptr);
+  // Disassociates the given ID from the object it was associated with.
+  static void RemoveId(uint64_t id);
+
+  // Returns the bridge that this serializer uses to serialize data.
+  virtual SplitEngineAndroidBridge& GetBridge() = 0;
 
   // Adds a material via material (used for ID) and raw binary material data.
   // TODO: Due to how Filament material versioning works, we need

@@ -20,9 +20,9 @@
 
 #include <backend/Platform.h>
 
+#include "filament/libs/utils/include/utils/Logger.h"
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/debug.h"
-#include "filament/libs/utils/include/utils/Log.h"
 #include "filament/libs/utils/include/utils/ostream.h"
 
 #if __has_include(<android/surface_texture.h>)
@@ -59,7 +59,7 @@ void ExternalStreamManagerAndroid::destroy(ExternalStreamManagerAndroid* pExtern
 ExternalStreamManagerAndroid::ExternalStreamManagerAndroid() noexcept
         : mVm(VirtualMachineEnv::get()) {
     if (__builtin_available(android 28, *)) {
-        slog.d << "Using ASurfaceTexture" << io::endl;
+        DLOG(INFO) << "Using ASurfaceTexture";
     }
 }
 

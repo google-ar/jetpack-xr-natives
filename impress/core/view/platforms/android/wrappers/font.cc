@@ -16,6 +16,8 @@
 
 #include <jni.h>
 
+#include <utility>
+
 #include "core/common/jni_helpers.h"
 #include "core/view/platforms/android/wrappers/file.h"
 #include "core/view/platforms/android/wrappers/font_style.h"
@@ -29,13 +31,13 @@ Font::Font(JNIEnv* env, jobject j_font) : JavaWrapper(env, j_font) {
 }
 
 File Font::GetFile() {
-  jobject file = CallObjectMethod(get_file_);
-  return File(Env(), file);
+  JniUniquePtr<jobject> file = WrapJni(Env(), CallObjectMethod(get_file_));
+  return File(Env(), std::move(file));
 }
 
 FontStyle Font::GetStyle() {
-  jobject style = CallObjectMethod(get_style_);
-  return FontStyle(Env(), style);
+  JniUniquePtr<jobject> style = WrapJni(Env(), CallObjectMethod(get_style_));
+  return FontStyle(Env(), style.get());
 }
 
 }  // namespace imp::android

@@ -24,6 +24,7 @@
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
 #include "core/async/future.h"
+#include "core/async/future_common.h"
 #include "core/async/future_group.h"
 #include "core/resources/url_loader.h"
 
@@ -40,23 +41,32 @@ class EmscriptenUrlLoader : public UrlLoader {
 // TODO: Implement a way to add headers to the request.
 Future<absl::Cord> EmscriptenUrlLoader::LoadUrl(
     const std::string& url, std::optional<FutureGroup> future_group) {
-  auto future = new Future<absl::Cord>();
+  Future<absl::Cord> future;
+  WeakFuture<absl::Cord>* weak_future = new WeakFuture<absl::Cord>(future);
   emscripten_async_wget_data(
-      url.c_str(), future,
+      url.c_str(), weak_future,
       [](void* args, void* data, int size) {
-        auto future = static_cast<Future<absl::Cord>*>(args);
-        absl::Cord result;
-        result.Append(absl::string_view(static_cast<char*>(data), size));
-        future->Return(result);
-        delete future;
+        WeakFuture<absl::Cord>* weak_future =
+            static_cast<WeakFuture<absl::Cord>*>(args);
+        std::optional<Future<absl::Cord>> future = weak_future->Lock();
+        if (future.has_value()) {
+          absl::Cord result;
+          result.Append(absl::string_view(static_cast<char*>(data), size));
+          future->Return(result);
+        }
+        delete weak_future;
       },
       [](void* args) {
-        auto future = static_cast<Future<absl::Cord>*>(args);
-        future->Return(
-            absl::UnavailableError("Failed to create URLConnection."));
-        delete future;
+        WeakFuture<absl::Cord>* weak_future =
+            static_cast<WeakFuture<absl::Cord>*>(args);
+        std::optional<Future<absl::Cord>> future = weak_future->Lock();
+        if (future.has_value()) {
+          future->Return(
+              absl::UnavailableError("Failed to create URLConnection."));
+        }
+        delete weak_future;
       });
-  return *future;
+  return future;
 }
 
 }  // namespace

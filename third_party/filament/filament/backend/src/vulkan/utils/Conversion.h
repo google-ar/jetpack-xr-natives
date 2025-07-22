@@ -17,6 +17,8 @@
 #ifndef TNT_FILAMENT_BACKEND_VULKAN_UTILS_CONVERSION_H
 #define TNT_FILAMENT_BACKEND_VULKAN_UTILS_CONVERSION_H
 
+#include "Definitions.h"
+
 #include <backend/DriverEnums.h>
 
 #include <private/backend/BackendUtils.h>  // for getFormatSize()
@@ -47,6 +49,9 @@ VkFormat getVkFormatLinear(VkFormat format);
 // than a driver-level Texture format, and can account for a specified byte alignment.
 uint32_t getBytesPerPixel(TextureFormat format);
 
+// Required for aligning textures in staging buffers.
+uint8_t getTexelBlockSize(VkFormat format);
+
 VkCompareOp getCompareOp(SamplerCompareFunc func);
 VkBlendFactor getBlendFactor(BlendFunction mode);
 VkCullModeFlags getCullMode(CullingMode mode);
@@ -68,6 +73,12 @@ float getMaxLod(SamplerMinFilter filter);
 VkSamplerYcbcrModelConversion getYcbcrModelConversion(SamplerYcbcrModelConversion model);
 VkSamplerYcbcrRange getYcbcrRange(SamplerYcbcrRange range);
 VkChromaLocation getChromaLocation(ChromaLocation loc);
+
+// Ycbcr related functions
+SamplerYcbcrModelConversion getYcbcrModelConversionFilament(VkSamplerYcbcrModelConversion model);
+SamplerYcbcrRange getYcbcrRangeFilament(VkSamplerYcbcrRange range);
+ChromaLocation getChromaLocationFilament(VkChromaLocation loc);
+TextureSwizzle getSwizzleFilament(VkComponentSwizzle c, uint8_t rgbaIndex);
 
 inline VkImageViewType getViewType(SamplerType target) {
     switch (target) {

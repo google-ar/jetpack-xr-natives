@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "imp_google3_copts", "imp_test_copts")
 load(
     "//core/proto:imp_cc_proto_library.bzl",
@@ -31,6 +32,23 @@ proto_library(
     name = "recipe_graph",
     srcs = ["recipe_graph.proto"],
     deps = [
+        ":recipe_types",
+        "//core/proto:imp_proto",
+    ],
+)
+
+imp_cc_proto_library(
+    name = "recipe_graph_cc",
+    proto = ":recipe_graph",
+    deps = [
+        ":recipe_types_cc",
+    ],
+)
+
+proto_library(
+    name = "recipe_types",
+    srcs = ["recipe_types.proto"],
+    deps = [
         "//core/math:math_proto",
         "//core/ncsb:node_handle_message_proto",
         "//core/proto:imp_proto",
@@ -40,8 +58,8 @@ proto_library(
 )
 
 imp_cc_proto_library(
-    name = "recipe_graph_cc",
-    proto = ":recipe_graph",
+    name = "recipe_types_cc",
+    proto = ":recipe_types",
     deps = [
         "//core/ncsb:node_handle_message_imp_proto",
         "//core/proto:any_imp_proto",
@@ -81,6 +99,7 @@ cc_library(
         "//core/proto:any_imp_proto",
         "//core/scene_handles",
         "//core/view/utils:string_map",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/hash",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -109,11 +128,13 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
-        ":recipe_graph_cc",
+        ":recipe_custom_statement",
         ":recipe_traits",
+        ":recipe_types_cc",
         ":recipe_utils",
         ":registered_function",
         "//core/async:future",
+        "//core/common:invocable",
         "//core/view/utils:string_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -136,13 +157,15 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         ":base_recipe_system",
-        ":recipe_graph_cc",
+        ":recipe_custom_statement",
         ":recipe_scope",
+        ":recipe_types_cc",
         ":recipe_utils",
         ":registered_function",
         "//core/assets/gltf:gltf_audio_extension",
         "//core/async:future",
         "//core/common:filament_helpers",
+        "//core/common:invocable",
         "//core/common:log",
         "//core/common:registry",
         "//core/common:type_traits",
@@ -175,7 +198,7 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
-        ":recipe_graph_cc",
+        ":recipe_types_cc",
         ":recipe_utils",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
@@ -194,19 +217,25 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
+        ":recipe_async_execution_manager",
+        ":recipe_custom_statement",
+        ":recipe_execution_context",
         ":recipe_graph_cc",
         ":recipe_runtime_event",
         ":recipe_scope",
         ":recipe_system",
         ":recipe_traits",
+        ":recipe_types_cc",
         ":recipe_utils",
         "//core/async:future",
         "//core/common:invocable",
+        "//core/common:log",
         "//core/common:registry",
         "//core/common:type_traits",
         "//core/ncsb",
         "//core/view:base_view",
         "//core/view/utils:string_map",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -242,8 +271,58 @@ cc_library(
     deps = [
         ":recipe_utils",
         "//:testing_api",
+        "//core/recipes/tests:recipe_matchers",
         "@com_google_absl//absl/status:statusor",
         "@mediapipe//mediapipe/framework/port:gtest_main",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "recipe_custom_statement",
+    hdrs = ["recipe_custom_statement.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        ":recipe_async_execution_manager",
+        ":recipe_execution_context",
+        ":recipe_graph_cc",
+        ":recipe_utils",
+        "//core/async:future",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:string_view",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "recipe_async_execution_manager",
+    srcs = [
+        "recipe_async_execution_manager.cc",
+    ],
+    hdrs = [
+        "recipe_async_execution_manager.h",
+    ],
+    copts = imp_google3_copts(),
+    deps = [
+        ":recipe_graph_cc",
+        ":recipe_scope",
+        ":recipe_utils",
+        "//core/common:log",
+        "//core/common:ref_counter",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "recipe_execution_context",
+    hdrs = ["recipe_execution_context.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        ":recipe_async_execution_manager",
+        ":recipe_scope",
+        "//core/view:base_view",
     ],
     alwayslink = 1,
 )

@@ -23,14 +23,15 @@
 #include <vector>
 
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
 #include "absl/types/span.h"
+#include "core/common/small_source_location.h"
 #include "core/materials/material.h"
 #include "core/math/mat.h"
 #include "core/model/mesh/mesh_index_data.h"
 #include "core/model/mesh/mesh_vertex_and_index_data.h"
 #include "core/model/mesh/mesh_vertex_data.h"
 #include "core/ncsb/component.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_filament_resource_ptrs.h"
 
 namespace imp::split_engine {
@@ -40,7 +41,7 @@ namespace imp::split_engine {
 // Used to track things like mesh data to do per-triangle collision detection.
 class SplitEngineRenderableInfo : public Component {
  public:
-  absl::Status Setup();
+  absl::Status Setup(BridgeId bridge_id);
 
   absl::Status SetPrimitiveMeshData(size_t primitive_index,
                                     MeshVertexData* vertex_data,
@@ -61,6 +62,18 @@ class SplitEngineRenderableInfo : public Component {
 
   void SetSkinningBoneCount(uint32_t skinning_bone_count) noexcept;
   uint32_t GetSkinningBoneCount() const noexcept;
+
+  BridgeId GetBridgeId() const noexcept;
+
+  template <typename Fn>
+  void ForEachTexture(
+      Fn fn, SmallSourceLocation loc = SmallSourceLocation::Current()) {
+    for (auto& primitive : primitives_) {
+      if (primitive.material_instance) {
+        primitive.material_instance->ForEachTexture(fn, loc);
+      }
+    }
+  }
 
  private:
   struct PrimitiveInfo {
@@ -88,6 +101,10 @@ class SplitEngineRenderableInfo : public Component {
   BorrowedIndexBufferPtr index_buffer_;
 
   uint32_t skinning_bone_count_ = 0;
+
+  // This should always be set, so setting a default to garbage is a hint that
+  // something bad is happening.
+  BridgeId bridge_id_ = UINT64_MAX - 1337;
 };
 
 }  // namespace imp::split_engine

@@ -20,17 +20,18 @@
 #include <Metal/Metal.h>
 
 #include "private/backend/Driver.h"
-#include "backend/Program.h"
 
 #include <backend/DriverEnums.h>
+#include <backend/Program.h>
 
+#include "filament/libs/utils/include/utils/bitset.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
-
-#include <memory>
-#include "robin_map/include/tsl/robin_map.h"
-
 #include "filament/libs/utils/include/utils/Hash.h"
 #include "filament/libs/utils/include/utils/Invocable.h"
+
+#include "robin_map/include/tsl/robin_map.h"
+
+#include <memory>
 
 namespace filament {
 namespace backend {

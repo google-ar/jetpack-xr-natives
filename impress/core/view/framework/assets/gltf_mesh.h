@@ -232,6 +232,9 @@ class GltfMesh : public Component {
   // GPU to apply skinning on the CPU.
   bool IsSkinned() const;
 
+  // Get the original glTF node index this GltfMesh is representing
+  uint64_t GetOriginalGltfIndex() const;
+
   // Update skinned mesh with new skinning data.
   void UpdateSkinnedMesh();
 

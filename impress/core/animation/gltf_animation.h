@@ -21,6 +21,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/time/time.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/vector.h"
 #include "core/animation/gltf_node_animation.h"
@@ -188,6 +189,10 @@ class GltfAnimation {
   absl::Duration Duration() const;
 
   bool SanitizeT(bool repeat, absl::Duration* t) const;
+  bool SanitizeT(bool repeat, absl::Duration* t,
+                 absl::Duration start_time) const;
+  bool SanitizeT(bool repeat, absl::Duration* t, absl::Duration start_time,
+                 absl::Duration end_time) const;
 
  private:
   using MaterialParameter = MaterialAnimation::MaterialParameter;

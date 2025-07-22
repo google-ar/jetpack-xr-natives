@@ -37,6 +37,8 @@ using mat3f = ::filament::math::mat3f;
 using mat4 = ::filament::math::mat4;
 using mat4f = ::filament::math::mat4f;
 
+inline constexpr mat2 kIdentityMat2{};
+inline constexpr mat2f kIdentityMat2f{};
 inline constexpr mat3 kIdentityMat3{};
 inline constexpr mat3f kIdentityMat3f{};
 inline constexpr mat4 kIdentityMat4{};
@@ -44,6 +46,8 @@ inline constexpr mat4f kIdentityMat4f{};
 
 bool IsYUp(const mat4f& m);
 
+std::string ToString(const mat2f& m);
+std::string ToString(const mat2& m);
 std::string ToString(const mat3f& m);
 std::string ToString(const mat3& m);
 std::string ToString(const mat4f& m);

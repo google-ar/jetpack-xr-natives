@@ -14,17 +14,22 @@
 
 #include "core/loader/provider/extensions/gltf_extension_meshopt.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <string>
 
-#include "core/common/platform_helpers.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "core/common/buffer_access.h"
+#include "core/loader/provider/gltf/gltf.proto.imp.h"
 #include "meshoptimizer/src/meshoptimizer.h"
 
 namespace imp::loader::extensions {
 
-absl::StatusOr<BufferAccess> ResolveMeshOpt(imp::gltf::Gltf* gltf) {
+absl::StatusOr<BufferAccess> ResolveMeshOpt(imp::gltf::imp_proto::Gltf* gltf) {
   std::string output_storage = "";
   for (auto& buffer_view : gltf->buffer_views) {
-    imp::gltf::MeshoptCompression* compression =
+    imp::gltf::imp_proto::MeshoptCompression* compression =
         buffer_view.extensions.meshopt_compression.get();
     if (!compression) continue;
     if (compression->buffer >= gltf->buffers.size())

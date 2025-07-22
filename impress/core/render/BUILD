@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "if_android", "imp_copts", "imp_defines", "imp_google3_copts", "imp_test_copts")
 
 package(
@@ -37,12 +38,14 @@ cc_library(
         "image_helpers.h",
         "texture.h",
         "texture_factory.h",
+        "texture_options.h",
         "texture_registry.h",
     ],
     copts = imp_google3_copts(),
     linkstatic = True,
     deps = [
         ":content_security_level",
+        ":safe_filament_texture_builder",
         ":texture_builder",
         "//core/assets",
         "//core/async:executor",
@@ -71,6 +74,30 @@ cc_library(
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
         "@third_party//filament/filament/backend:pixel_buffer_descriptor",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "safe_filament_texture_builder",
+    srcs = [
+        "safe_filament_texture_builder.cc",
+    ],
+    hdrs = [
+        "safe_filament_texture_builder.h",
+    ],
+    copts = imp_google3_copts(),
+    linkstatic = True,
+    deps = [
+        "@com_google_absl//absl/base:nullability",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
+        "@mediapipe//mediapipe/framework/port:status",
+        "@third_party//filament/filament:filament_hdrs",
+        "@third_party//filament/filament/backend:driver_enums",
+        "@third_party//filament/filament/backend:pixel_buffer_descriptor",
+        "@third_party//filament/libs:utils_hdrs",
     ],
     alwayslink = 1,
 )
@@ -119,8 +146,13 @@ cc_library(
     defines = imp_defines(),
     deps = [
         ":base_texture_builder",
+        ":safe_filament_texture_builder",
+        "//core/common:log",
         "//core/image",
         "//core/view:base_view",
+        "@com_google_absl//absl/base:nullability",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:string_view",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
@@ -164,6 +196,6 @@ cc_library(
     srcs = ["display_color_space.cc"],
     hdrs = ["display_color_space.h"],
     defines = imp_defines(),
-    deps = ["//core/render/android:platform_android_external_texture_surface"],
+    deps = ["//core/media:media_color_space"],
     alwayslink = 1,
 )

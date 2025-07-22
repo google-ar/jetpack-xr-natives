@@ -43,6 +43,8 @@
 #include "core/editor/editor_plugin.h"
 #include "core/editor/editor_style.h"
 #include "core/editor/events.h"
+#include "core/editor/file_loader_helper.h"
+#include "core/editor/file_type_registry.h"
 #include "core/editor/layout/editor_panel_ids.h"
 #include "core/editor/layout/layout_composer.h"
 #include "core/editor/layout/layout_config.proto.imp.h"
@@ -66,6 +68,7 @@
 #include "core/editor/widgets/materials_widget.h"
 #include "core/editor/widgets/node_details.h"
 #include "core/editor/widgets/performance/performance_window.h"
+#include "core/editor/widgets/settings_widget.h"
 #include "core/editor/widgets/toggle_camera.h"
 #include "core/editor/widgets/transform.h"
 #include "core/editor/widgets/vertex_select_widget.h"
@@ -290,6 +293,18 @@ EditorImpl::EditorImpl(BaseView* view, std::unique_ptr<EditorPlugin> plugin,
   }
 
   view->GetRegistry().Register<EditorInfo>(std::make_unique<Info>(*this));
+  FileTypeRegistry& file_type_registry =
+      view->GetRegistry().GetOrCreate<FileTypeRegistry>();
+  file_type_registry.RegisterFileTypeLoader(
+      kFileTypeGltf, std::make_unique<GltfFileLoader>(*view));
+  file_type_registry.RegisterFileTypeLoader(
+      kFileTypeIsf, std::make_unique<IsfFileLoader>(*view));
+  file_type_registry.RegisterFileTypeLoader(
+      kFileTypeHdrImage, std::make_unique<IblFileLoader>(*view));
+#if IMP_RUNTIME(DEV)
+  file_type_registry.RegisterFileTypeLoader(
+      kFileTypeIsfTextProto, std::make_unique<TextProtoFileLoader>(*view));
+#endif
 }
 
 void EditorImpl::Initialize() {
@@ -570,6 +585,8 @@ void EditorImpl::InitializeWidgetUiSystem() {
   
   asset_library_ = widget_ui_system_.AddWidget<AssetLibrary>(
       WidgetLayoutInfo(panel_ids::kTabBar), view);
+  widget_ui_system_.AddWidget<SettingsWidget>(
+      WidgetLayoutInfo(panel_ids::kMenuBar), GetView());
 #endif
 
   widget_ui_system_.AddWidget<VisualizeBounds>(
@@ -607,6 +624,7 @@ void EditorImpl::SetCameraMode(CameraMode camera_mode) {
       // and visualize them.
       editor_root_node_->SetEnabled(true);
       GetView().GetDisplayLayerManager().SetLayerEnabled(kOverlayGroup, true);
+
       break;
     case CameraMode::kApp:
       GetView().GetHost()->SetEditorCameraOverride({}, nullptr);

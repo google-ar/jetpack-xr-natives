@@ -27,6 +27,7 @@
 #include "core/common/log.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "core/common/owned_ptr_traits.h"
 #include "core/common/owned_ptr_utilities.h"
 #include "core/common/ref_counter.h"
 #include "core/common/small_source_location.h"
@@ -109,6 +110,16 @@ class OwnedPtr {
   OwnedPtr(OwnedPtr&& other) noexcept;
   OwnedPtr& operator=(OwnedPtr&& other) noexcept;
 
+  // Move constructor and assignment for upcasting OwnedPtrs.
+  template <
+      typename U, typename E,
+      imp_owned_ptr_traits::EnableIfCanUpcastOwnedPtr<T, Deleter, U, E> = 0>
+  OwnedPtr(OwnedPtr<U, E>&& other) noexcept;
+  template <
+      typename U, typename E,
+      imp_owned_ptr_traits::EnableIfCanUpcastOwnedPtr<T, Deleter, U, E> = 0>
+  OwnedPtr& operator=(OwnedPtr<U, E>&& other) noexcept;
+
   explicit operator bool() const;
   bool operator==(const OwnedPtr<T, Deleter>& other) const;
   bool operator!=(const OwnedPtr<T, Deleter>& other) const;
@@ -166,12 +177,18 @@ class OwnedPtr {
     explicit AdditionalFieldsHolder(Deleter deleter)
         : Deleter(std::move(deleter)) {}
 
+    AdditionalFieldsHolder(RefCounter ref_counter, Deleter deleter)
+        : Deleter(std::move(deleter)), ref_counter_(std::move(ref_counter)) {}
+
     const RefCounter& GetRefCounter() const { return ref_counter_; }
 
     Deleter& GetDeleter() { return static_cast<Deleter&>(*this); }
 
    private:
     RefCounter ref_counter_;
+
+    template <typename U, typename E>
+    friend class OwnedPtr;
   };
 
   T* ptr_ = nullptr;
@@ -181,7 +198,10 @@ class OwnedPtr {
   friend H AbslHashValue(H hash, const OwnedPtr<T, Deleter>& ptr) {
     return H::combine(std::move(hash), ptr.ptr_);
   }
+
   friend class BorrowedPtr<T>;
+  template <typename U, typename E>
+  friend class OwnedPtr;
 };
 
 // BorrowedPtr holds a non-owning pointer to an object of type T.
@@ -204,9 +224,37 @@ class BorrowedPtr {
   BorrowedPtr<T>(const BorrowedPtr&) = default;
   BorrowedPtr<T>& operator=(const BorrowedPtr&) = default;
 
+  // Copy constructor and assignment for upcasting BorrowedPtrs.
+  template <typename U,
+            imp_owned_ptr_traits::EnableIfCanUpcastBorrowedPtr<T, U> = 0>
+  BorrowedPtr(const BorrowedPtr<U>& other) noexcept;
+  template <typename U,
+            imp_owned_ptr_traits::EnableIfCanUpcastBorrowedPtr<T, U> = 0>
+  BorrowedPtr& operator=(const BorrowedPtr<U>& other) noexcept;
+
+  // Explicit copy constructor for downcasting BorrowedPtrs. This is separate
+  // from upcasting to prevent implicit conversions when downcasting.
+  template <typename U,
+            imp_owned_ptr_traits::EnableIfCanDowncastBorrowedPtr<T, U> = 0>
+  explicit BorrowedPtr(const BorrowedPtr<U>& other) noexcept;
+
   // Ensure that move constructor and assignment are noexcept.
   BorrowedPtr(BorrowedPtr&& other) noexcept = default;
   BorrowedPtr& operator=(BorrowedPtr&& other) noexcept = default;
+
+  // Move constructor and assignment for upcasting BorrowedPtrs.
+  template <typename U,
+            imp_owned_ptr_traits::EnableIfCanUpcastBorrowedPtr<T, U> = 0>
+  BorrowedPtr(BorrowedPtr<U>&& other) noexcept;
+  template <typename U,
+            imp_owned_ptr_traits::EnableIfCanUpcastBorrowedPtr<T, U> = 0>
+  BorrowedPtr& operator=(BorrowedPtr<U>&& other) noexcept;
+
+  // Explicit move constructor for downcasting BorrowedPtrs. This is separate
+  // from upcasting to prevent implicit conversions when downcasting.
+  template <typename U,
+            imp_owned_ptr_traits::EnableIfCanDowncastBorrowedPtr<T, U> = 0>
+  explicit BorrowedPtr(BorrowedPtr<U>&& other) noexcept;
 
   explicit operator bool() const;
   bool operator==(const BorrowedPtr<T>& other) const;
@@ -249,6 +297,8 @@ class BorrowedPtr {
   }
   template <typename U, typename Deleter>
   friend class OwnedPtr;
+  template <typename U>
+  friend class BorrowedPtr;
 };
 
 template <typename T, typename Deleter>
@@ -288,6 +338,34 @@ OwnedPtr<T, Deleter>& OwnedPtr<T, Deleter>::operator=(
   ptr_ = other.ptr_;
   other.ptr_ = nullptr;
   additional_fields_ = std::move(other.additional_fields_);
+  return *this;
+}
+
+template <typename T, typename Deleter>
+template <typename U, typename E,
+          imp_owned_ptr_traits::EnableIfCanUpcastOwnedPtr<T, Deleter, U, E>>
+OwnedPtr<T, Deleter>::OwnedPtr(OwnedPtr<U, E>&& other) noexcept {
+  Reset();
+
+  ptr_ = other.ptr_;
+  other.ptr_ = nullptr;
+  additional_fields_ =
+      AdditionalFieldsHolder(std::move(other.additional_fields_.ref_counter_),
+                             std::move(other.additional_fields_.GetDeleter()));
+}
+
+template <typename T, typename Deleter>
+template <typename U, typename E,
+          imp_owned_ptr_traits::EnableIfCanUpcastOwnedPtr<T, Deleter, U, E>>
+OwnedPtr<T, Deleter>& OwnedPtr<T, Deleter>::operator=(
+    OwnedPtr<U, E>&& other) noexcept {
+  Reset();
+
+  ptr_ = other.ptr_;
+  other.ptr_ = nullptr;
+  additional_fields_ =
+      AdditionalFieldsHolder(std::move(other.additional_fields_.ref_counter_),
+                             std::move(other.additional_fields_.GetDeleter()));
   return *this;
 }
 
@@ -342,6 +420,56 @@ BorrowedPtr<T>::BorrowedPtr() {}
 template <typename T>
 BorrowedPtr<T>::BorrowedPtr(T* ptr, RefCounter::Ref ref)
     : ptr_(ptr), ref_(std::move(ref)) {}
+
+template <typename T>
+template <typename U, imp_owned_ptr_traits::EnableIfCanUpcastBorrowedPtr<T, U>>
+BorrowedPtr<T>::BorrowedPtr(const BorrowedPtr<U>& other) noexcept {
+  ptr_ = other.ptr_;
+  ref_ = other.ref_;
+}
+
+template <typename T>
+template <typename U, imp_owned_ptr_traits::EnableIfCanUpcastBorrowedPtr<T, U>>
+BorrowedPtr<T>& BorrowedPtr<T>::operator=(
+    const BorrowedPtr<U>& other) noexcept {
+  ptr_ = other.ptr_;
+  ref_ = other.ref_;
+  return *this;
+}
+
+template <typename T>
+template <typename U,
+          imp_owned_ptr_traits::EnableIfCanDowncastBorrowedPtr<T, U>>
+BorrowedPtr<T>::BorrowedPtr(const BorrowedPtr<U>& other) noexcept {
+  ptr_ = static_cast<T*>(other.ptr_);
+  ref_ = other.ref_;
+}
+
+template <typename T>
+template <typename U, imp_owned_ptr_traits::EnableIfCanUpcastBorrowedPtr<T, U>>
+BorrowedPtr<T>::BorrowedPtr(BorrowedPtr<U>&& other) noexcept {
+  ptr_ = other.ptr_;
+  other.ptr_ = nullptr;
+  ref_ = std::move(other.ref_);
+}
+
+template <typename T>
+template <typename U, imp_owned_ptr_traits::EnableIfCanUpcastBorrowedPtr<T, U>>
+BorrowedPtr<T>& BorrowedPtr<T>::operator=(BorrowedPtr<U>&& other) noexcept {
+  ptr_ = other.ptr_;
+  other.ptr_ = nullptr;
+  ref_ = std::move(other.ref_);
+  return *this;
+}
+
+template <typename T>
+template <typename U,
+          imp_owned_ptr_traits::EnableIfCanDowncastBorrowedPtr<T, U>>
+BorrowedPtr<T>::BorrowedPtr(BorrowedPtr<U>&& other) noexcept {
+  ptr_ = static_cast<T*>(other.ptr_);
+  other.ptr_ = nullptr;
+  ref_ = std::move(other.ref_);
+}
 
 template <typename T>
 T& BorrowedPtr<T>::operator*() const {

@@ -23,10 +23,10 @@
 #include "filament/filament/include/filament/Texture.h"
 #include "core/async/future.h"
 #include "core/media/media_asset.h"
+#include "core/media/media_color_space.h"
 #include "core/media/media_source.h"
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
-#include "core/video/video_color_space.h"
 #include "core/video/video_source.h"
 #include "core/view/base_view.h"
 
@@ -82,7 +82,7 @@ class MacOSVideoSource : public VideoSource {
   StatusOr<int> GetLoopCount() const override;
   VideoSource::State GetState() const override;
   uint2 GetVideoSize() const override;
-  VideoColorSpace GetColorSpace() const override;
+  MediaColorSpace GetColorSpace() const override;
   MediaStereoMode GetStereoMode() const override;
 
   void SetOnPlaybackCompleteCallback(std::function<void()> callback) override;
@@ -385,7 +385,7 @@ uint2 MacOSVideoSource::GetVideoSize() const {
   return {size.width, size.height};
 }
 
-VideoColorSpace MacOSVideoSource::GetColorSpace() const { return VideoColorSpace(); }
+MediaColorSpace MacOSVideoSource::GetColorSpace() const { return MediaColorSpace(); }
 
 MediaStereoMode MacOSVideoSource::GetStereoMode() const {
   // TODO: Implement stereo mode retrieval for MacOSVideoSource.

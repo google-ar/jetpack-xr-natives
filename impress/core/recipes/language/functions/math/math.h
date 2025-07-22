@@ -46,6 +46,8 @@ void RegisterMathExponentialFunctions(BaseRecipeSystem* recipe_system);
  */
 void RegisterMathHyperbolicFunctions(BaseRecipeSystem* recipe_system);
 
+void RegisterMathMatrixFunctions(BaseRecipeSystem* recipe_system);
+
 void RegisterMathUtilityFunctions(BaseRecipeSystem* recipe_system);
 
 void RegisterMathVectorFunctions(BaseRecipeSystem* recipe_system);

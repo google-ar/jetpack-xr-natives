@@ -23,7 +23,8 @@
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
 #include "core/assets/gltf/interactivity/converted_graph.h"
-#include "core/assets/gltf/interactivity/node_converters.h"
+#include "core/assets/gltf/interactivity/node_converters/utils.h"
+#include "core/assets/gltf/object_model/pointer_parser.h"
 #include "core/async/future.h"
 #include "core/common/robin_map.h"
 #include "core/model/model_data.h"
@@ -31,7 +32,6 @@
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/component_system.h"
 #include "core/ncsb/system.h"
-#include "core/recipes/language/recipe_graph.proto.imp.h"
 #include "core/recipes/recipe_runner.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/gltf_extension.h"
@@ -84,6 +84,10 @@ class GltfInteractivityExtension : public GltfExtension {
     absl::StatusOr<VariableDeclaration::Type> GetRecipeType(
         model::ModelData::InteractivityData::ValueType value_type) const;
 
+    // Returns the pointer parser that's shared between interactivity
+    // converters.
+    gltf::PointerParser& GetPointerParser();
+
    private:
     StringMap<gltf::interactivity::NodeConverter> node_converters_;
     RobinMap<model::ModelData::InteractivityData::ValueType,
@@ -102,6 +106,7 @@ class GltfInteractivityExtension : public GltfExtension {
       ComponentHandle<GltfRenderer> gltf_renderer) override;
 
   std::vector<int> tap_node_gltf_indices_;
+  std::vector<int> hover_node_gltf_indicies_;
   ComponentHandle<RecipeRunner> recipe_runner_;
 };
 

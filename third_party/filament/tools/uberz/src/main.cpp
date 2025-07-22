@@ -26,6 +26,7 @@
 
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/memalign.h"
+#include "filament/libs/utils/include/utils/Panic.h"
 
 #include <uberz/ReadableArchive.h>
 #include <uberz/WritableArchive.h>

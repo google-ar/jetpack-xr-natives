@@ -176,8 +176,6 @@ utils::io::sstream& CodeGenerator::generateCommonProlog(utils::io::sstream& out,
         // TODO: Handle webgpu here
         case TargetApi::WEBGPU:
             //For now, no differences so inherit the same changes.
-            // TODO Define a separte environment, OR relevant checks
-            out << "#define TARGET_VULKAN_ENVIRONMENT\n";
             out << "#define TARGET_WEBGPU_ENVIRONMENT\n";
             break;
         case TargetApi::ALL:
@@ -937,6 +935,15 @@ utils::io::sstream& CodeGenerator::generateSpecializationConstant(utils::io::sst
     std::string const constantString = std::visit(SpecializationConstantFormatter(), value);
 
     static const char* types[] = { "int", "float", "bool" };
+
+    // Spec constants aren't fully supported in Tint,
+    //  workaround until (broken link) is resolved
+    if (mTargetApi == TargetApi::WEBGPU) {
+        std::string const variableName = "FILAMENT_SPEC_CONST_" + std::to_string(id) + "_" + name;
+        out << " const " << types[value.index()] << " " << variableName << " = " << constantString << ";\n";
+        out << types[value.index()] << " " << name << " =  " << variableName << ";\n";
+        return out;
+    }
     if (mTargetLanguage == MaterialBuilderBase::TargetLanguage::SPIRV) {
         out << "layout (constant_id = " << id << ") const "
             << types[value.index()] << " " << name << " = " << constantString << ";\n";

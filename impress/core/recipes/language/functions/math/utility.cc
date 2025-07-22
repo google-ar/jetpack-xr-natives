@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <cmath>
-#include <variant>
 
+#include "absl/random/random.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -50,6 +50,13 @@ void RegisterMathUtilityFunctions(BaseRecipeSystem* recipe_system) {
     static_assert(__FINITE_MATH_ONLY__ == 0, "Infinite math is required.");
 #endif
     return std::isnan(input);
+  });
+
+  recipe_system->RegisterFunction("Random", []() -> float {
+    // Generates a value that is greater or equal to zero, and less than
+    // one. Refer to the Abseil Random library.
+    absl::BitGen random_generator;
+    return absl::Uniform(random_generator, 0, 1.0);
   });
 
   recipe_system->RegisterFunction(

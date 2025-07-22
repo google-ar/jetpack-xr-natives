@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "imp_google3_copts")
 load(
     "//core/proto:imp_cc_proto_library.bzl",
@@ -79,6 +80,7 @@ cc_library(
         "//core/async:future",
         "@com_google_absl//absl/status",
         "@third_party//filament/filament:filament_hdrs",
+        "@third_party//filament/filament/backend:driver_enums",
         "@third_party//filament/libs:filabridge_hdrs",
     ],
     alwayslink = 1,

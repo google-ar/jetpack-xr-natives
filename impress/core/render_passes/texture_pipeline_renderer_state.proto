@@ -95,7 +95,7 @@ message TexturePipelineRendererState {
     bool resize_with_view = 3;
   }
 
-  // NextID: 13
+  // NextID: 14
   message Pass {
     // Determines which group this pass should render.
     // Must be specified.
@@ -154,6 +154,11 @@ message TexturePipelineRendererState {
     // If true, the main view's render settings will be used for rendering the
     // pass.
     bool use_main_view_settings = 11;
+
+    // If supplied, the color will be cleared to the specified `clear_color`
+    // value before rendering the pass. Ignored if the pass renders to a
+    // subregion.
+    Float4 clear_color = 13 [(imp.optional_type) = ABSL_OPTIONAL];
   }
 
   // List of render passes evaluated in-order.

@@ -17,13 +17,136 @@
 #ifndef VR_THIRD_PARTY_SPLIT_ENGINE_MATERIALS_PHOTOS_TEXTURE_3D_MATERIAL_PARAMS_H_
 #define VR_THIRD_PARTY_SPLIT_ENGINE_MATERIALS_PHOTOS_TEXTURE_3D_MATERIAL_PARAMS_H_
 
+#include <optional>
+#include <variant>
+
+#include "absl/container/flat_hash_map.h"
+#include "core/common/log.h"
 #include "absl/strings/string_view.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
+#include "core/render/texture.h"
+#include "core/split_engine/flatbuffer_utils.h"
+#include "imp.h"
+#include "split_engine/schemas/split_engine_primitive_generated.h"
 
 // Helper structs to ensure type safety when setting parameters on the
 // PhotosTexture3DMaterial.
-namespace params {
+namespace android_xr {
+
+// Helper for inferring the packed type from a parameter type.
+template <typename Param>
+struct PackedFrom {
+  using Type = decltype(imp::split_engine::Pack(
+      std::declval<typename Param::ValueType>()));
+};
+
+// A key-value table of material parameters for the PhotosTexture3DMaterial.
+// This is kept outside of the material class so that parameters can be set
+// immediately without having to wait for the async material creation to finish.
+// The material will read from this table when serializing its parameters.
+class PhotosTexture3DMaterialParams {
+ public:
+  // Sets a parameter value. Param must be one of the structs defined in this
+  // file. Returns true if the value changed so the dirty bit should be set.
+  template <typename Param>
+  bool Set(typename Param::ValueType value) {
+    if constexpr (std::is_same_v<typename Param::ValueType,
+                                 imp::BorrowedTexturePtr>) {
+      if (Get<Param>() == value) {
+        return false;
+      }
+      parameters_[Param::kName] = std::move(value);
+      return true;
+    } else {
+      if (Get<Param>() == value) {
+        return false;
+      }
+      parameters_[Param::kName] = imp::split_engine::Pack(value);
+      return true;
+    }
+  }
+
+  // Gets the packed schema type for a parameter, e.g.
+  // android_xr::schemas::Float3.
+  template <typename Param>
+  const PackedFrom<Param>::Type* GetPacked() const {
+    auto itr = parameters_.find(Param::kName);
+    if (itr == parameters_.end()) return nullptr;
+    auto value_ptr =
+        std::get_if<typename PackedFrom<Param>::Type>(&itr->second);
+    if (value_ptr == nullptr) {
+      LOG_EVERY_N_SEC(ERROR, 1) << "[photosxr] Set value of parameter "
+                                << Param::kName << " is not of expected type.";
+      return nullptr;
+    }
+    return value_ptr;
+  }
+
+  // Gets the unpacked value for a parameter, e.g. imp::float3, etc.
+  // Returns nullopt if the parameter is not set.
+  template <typename Param>
+  typename std::optional<typename Param::ValueType> Get() const {
+    if constexpr (std::is_same_v<typename Param::ValueType,
+                                 imp::BorrowedTexturePtr>) {
+      auto itr = parameters_.find(Param::kName);
+      if (itr == parameters_.end()) return {};
+      if (auto* texture_ptr =
+              std::get_if<imp::BorrowedTexturePtr>(&itr->second)) {
+        return *texture_ptr;
+      } else {
+        LOG_EVERY_N_SEC(ERROR, 1)
+            << "[photosxr] Set value of parameter " << Param::kName
+            << " is not of expected type.";
+        return std::nullopt;
+      }
+    } else {
+      auto packed_value = GetPacked<Param>();
+      if (packed_value == nullptr) {
+        return std::nullopt;
+      }
+      return imp::split_engine::UnPack(*packed_value);
+    }
+  }
+
+ private:
+  // Variant storing all supported parameter types for this material.
+  using ParamValue =
+      std::variant<std::monostate, android_xr::schemas::Bool,
+                   android_xr::schemas::Float, android_xr::schemas::Float2,
+                   android_xr::schemas::Float3, android_xr::schemas::Float4,
+                   android_xr::schemas::Mat3f, imp::BorrowedTexturePtr>;
+
+  // The keys of this map only ever point to the string constants in the structs
+  // below.
+  absl::flat_hash_map<absl::string_view, ParamValue> parameters_;
+};
+
+namespace photos_params {
+
+// Texture parameters.
+struct ImageTexture {
+  static constexpr absl::string_view kName = "image_texture";
+  using ValueType = imp::BorrowedTexturePtr;
+};
+struct VideoTexture {
+  static constexpr absl::string_view kName = "video_texture";
+  using ValueType = imp::BorrowedTexturePtr;
+};
+struct AuxiliaryVideoTexture {
+  static constexpr absl::string_view kName = "auxiliary_video_texture";
+  using ValueType = imp::BorrowedTexturePtr;
+};
+struct ThumbnailTexture {
+  static constexpr absl::string_view kName = "thumbnail_texture";
+  using ValueType = imp::BorrowedTexturePtr;
+};
+struct BlurTexture {
+  static constexpr absl::string_view kName = "blur_texture";
+  using ValueType = imp::BorrowedTexturePtr;
+};
+
+// Scalar/vector/matrix parameters.
 struct ShowVideo {
   static constexpr absl::string_view kName = "show_video";
   using ValueType = bool;
@@ -196,6 +319,7 @@ struct Opacity {
   static constexpr absl::string_view kName = "opacity";
   using ValueType = float;
 };
-}  // namespace params
+}  // namespace photos_params
+}  // namespace android_xr
 
 #endif  // VR_THIRD_PARTY_SPLIT_ENGINE_MATERIALS_PHOTOS_TEXTURE_3D_MATERIAL_PARAMS_H_

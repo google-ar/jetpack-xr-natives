@@ -174,7 +174,7 @@ def if_optimized(a, otherwise = []):
     })
 
 # A looser set of copts which is compatible with e.g. //util/status
-def filament_google3_copts(c_plus_plus = True):
+def filament_google3_copts():
     out_copts = [
         "-Wno-reorder",
         "-Wno-unused-variable",
@@ -183,13 +183,17 @@ def filament_google3_copts(c_plus_plus = True):
         "-Wno-c++20-designator",
         "-Wno-implicit-fallthrough",
         "-Wno-string-conversion",
-        "-Wno-google3-literal-operator",
         "-Wno-pass-failed",  # clang misses #pragma loop optimizations
     ]
     return out_copts
 
-def filament_copts(c_plus_plus = True):
-    out_common_copts = filament_google3_copts(c_plus_plus) + [
+def filament_copts():
+    """Compilation flags for Filament
+
+    Returns:
+        A list of copts for Filament.
+    """
+    out_common_copts = filament_google3_copts() + [
         "-Wno-ctad-maybe-unsupported",
     ]
     out_copts_bitcode_optimized = out_common_copts + [
@@ -248,7 +252,14 @@ def filament_defines():
     ) + if_systrace(
         ["SYSTRACE_TAG=1"],
         ["SYSTRACE_TAG=0"],
-    )
+    ) + if_android([
+        # Disable perfetto on Android due to size increase.
+        "FILAMENT_TRACING_ENABLED=0",
+    ]) + [
+        # Disable GTAO on g3 due to size increase.
+        "FILAMENT_DISABLE_GTAO=1",
+        "FILAMENT_RELAXED_CORRECTNESS_ASSERTIONS=1",
+    ]
     return out_defines
 
 def filament_linkopts():
@@ -332,6 +343,8 @@ BUILTIN_MATERIAL_INCLUDES = [
     "separableGaussianBlur.fs",
     "separableGaussianBlur.vs",
     "sgsr/sgsr1_shader_mobile.fs",
+    # Disable GTAO due to size increase.
+    # "ssao/gtaoImpl.fs",
     "ssao/saoImpl.fs",
     "ssao/ssaoUtils.fs",
     "ssao/ssct.fs",
@@ -374,6 +387,9 @@ BUILTIN_MATERIAL_NAMES = [
     "ssao/bilateralBlurBentNormals",
     "ssao/mipmapDepth",
     "skybox",
+    # Disable GTAO due to size increase.
+    # "ssao/gtao",
+    # "ssao/gtaoBentNormals",
     "ssao/sao",
     "ssao/saoBentNormals",
     "separableGaussianBlur",

@@ -31,7 +31,7 @@ namespace imp {
 absl::Status CreateGenericMaterialSchemas(
     loader::details::LoadedModelBuilder& builder,
     const loader::details::provider_gltf::GltfModel& model,
-    const std::vector<imp::gltf::Primitive>& primitives,
+    const std::vector<imp::gltf::imp_proto::Primitive>& primitives,
     const loader::details::provider_gltf::GltfPrimitiveVector<
         loader::details::provider_gltf::ProcessedPrimitive>&
         processed_primitives,

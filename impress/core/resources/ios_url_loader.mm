@@ -170,7 +170,9 @@ class IosUrlLoader : public UrlLoader {
 }
 
 - (IMPURLTaskData *)dataForTask:(NSURLSessionTask *)task {
-  return [_taskData objectForKey:task];
+  @synchronized(_taskData) {
+    return [_taskData objectForKey:task];
+  }
 }
 
 - (IMPURLTaskData *)startTrackingTask:(NSURLSessionTask *)task
@@ -178,21 +180,30 @@ class IosUrlLoader : public UrlLoader {
                      withNativeLoader:(imp::resources::IosUrlLoader *)nativeLoader {
   IMPURLTaskData *result = [[IMPURLTaskData alloc] initForURLString:URLString
                                                    withNativeLoader:nativeLoader];
-  [_taskData setObject:result forKey:task];
+  @synchronized(_taskData) {
+    [_taskData setObject:result forKey:task];
+  }
   return result;
 }
 
 - (void)stopTrackingTask:(NSURLSessionTask *)task {
-  [_taskData removeObjectForKey:task];
+  @synchronized(_taskData) {
+    [_taskData removeObjectForKey:task];
+  }
 }
 
 - (void)cancelAll {
-  for (NSURLSessionTask *task in _taskData) {
-    IMPURLTaskData *data = [self dataForTask:task];
+  NSMutableDictionary<NSURLSessionTask *, IMPURLTaskData *> *taskDataCopy;
+  @synchronized(_taskData) {
+    taskDataCopy = [_taskData copy];
+    [_taskData removeAllObjects];
+  }
+
+  for (NSURLSessionTask *task in taskDataCopy) {
+    IMPURLTaskData *data = [taskDataCopy objectForKey:task];
     [data cancel];
     [task cancel];
   }
-  [_taskData removeAllObjects];
 }
 
 - (void)URLSession:(NSURLSession *)session

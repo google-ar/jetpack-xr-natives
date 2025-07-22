@@ -21,20 +21,21 @@ import android.os.StrictMode;
 import android.os.StrictMode.ThreadPolicy;
 import android.util.Log;
 import androidx.annotation.Nullable;
-import androidx.xr.extensions.splitengine.SplitEngineTypeConverter;
 import com.android.extensions.xr.XrExtensions;
 import com.android.extensions.xr.node.InputEvent;
 import com.android.extensions.xr.node.Mat4f;
 import com.android.extensions.xr.node.Node;
 import com.android.extensions.xr.node.NodeTransaction;
 import com.android.extensions.xr.node.NodeTransform;
-import androidx.xr.extensions.splitengine.SplitEngineBridge;
 import com.android.extensions.xr.subspace.Subspace;
 import com.google.androidxr.splitengine.SceneLeashNodeFactory.SceneLeash;
 import com.google.ar.imp.view.FrameScheduler;
 import com.google.ar.imp.view.View;
 import com.google.ar.imp.view.splitengine.ImpSplitEngineRenderer;
+import com.google.imp.splitengine.extensions.AndroidXrRendererConnection;
+import com.google.imp.splitengine.extensions.IRendererConnection;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 
 /** Manages CPM nodes created for SplitEgine applications. */
@@ -55,7 +56,7 @@ public class SplitEngineSubspaceManager {
   private final Node applicationSceneNode;
   private final Node applicationWindowLeashNode;
   private View view;
-  private SplitEngineBridge splitEngineBridge;
+  private final IRendererConnection systemRendererConnection;
   private long subspaceManagerNativeHandle;
   private final FrameScheduler frameScheduler;
 
@@ -93,7 +94,8 @@ public class SplitEngineSubspaceManager {
     try (NodeTransaction transaction = xrExtensions.createNodeTransaction()) {
       Subspace subspace =
           xrExtensions.createSubspace(
-              SplitEngineTypeConverter.toFramework(splitEngineBridge), subspaceId);
+              ((AndroidXrRendererConnection) systemRendererConnection).getConnectionHandle(),
+              subspaceId);
       transaction.setSubspace(node, subspace).setParent(node, applicationSceneNode).apply();
     }
     SubspaceNode subspaceNode = new SubspaceNode(subspaceId, node);
@@ -187,7 +189,7 @@ public class SplitEngineSubspaceManager {
 
   // Destroys the subspace manager.
   public void destroy() {
-    for (SubspaceNode subspaceNode : subspaceNodes.values()) {
+    for (SubspaceNode subspaceNode : new ArrayList<>(subspaceNodes.values())) {
       deleteSubspace(subspaceNode.subspaceId);
     }
     nDestroySubspaceManager(subspaceManagerNativeHandle, view.getViewHostHandle());
@@ -238,7 +240,7 @@ public class SplitEngineSubspaceManager {
     loadLibrary(nativeLibrary);
 
     this.view = renderer.getView();
-    this.splitEngineBridge = renderer.getBridge();
+    this.systemRendererConnection = renderer.getRendererConnection();
     this.frameScheduler = renderer.getFrameScheduler();
     this.subspaceManagerNativeHandle = nSetupNativeSubspaceManager(view.getViewHostHandle());
   }

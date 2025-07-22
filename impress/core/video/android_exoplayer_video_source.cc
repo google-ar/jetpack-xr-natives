@@ -38,6 +38,7 @@
 #include "core/media/android/android_exoplayer.h"
 #include "core/media/android/android_exoplayer_listener.h"
 #include "core/media/media_asset.h"
+#include "core/media/media_color_space.h"
 #include "core/media/media_source.h"
 #include "core/media/media_type.h"
 #include "core/render/android/android_defines.h"
@@ -45,7 +46,6 @@
 #include "core/render/content_security_level.h"
 #include "core/render/texture.h"
 #include "core/resources/resource_manager.h"
-#include "core/video/video_color_space.h"
 #include "core/video/video_source.h"
 #include "core/view/base_view.h"
 #include "util/task/status_builder.h"
@@ -107,12 +107,12 @@ uint2 AndroidExoPlayerVideoSource::GetVideoSize() const {
   return {*width, *height};
 }
 
-VideoColorSpace AndroidExoPlayerVideoSource::GetColorSpace() const {
+MediaColorSpace AndroidExoPlayerVideoSource::GetColorSpace() const {
   absl::MutexLock lock(&mu_);
-  absl::StatusOr<VideoColorSpace> color_space = exoplayer_->GetColorSpace();
+  absl::StatusOr<MediaColorSpace> color_space = exoplayer_->GetColorSpace();
   if (!color_space.ok()) {
     IMP_LOG(imp::ERROR) << "Unable to get color space.";
-    return VideoColorSpace();
+    return MediaColorSpace();
   }
   return *color_space;
 }

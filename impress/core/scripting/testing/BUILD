@@ -13,6 +13,8 @@
 # limitations under the License.
 
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load("//build_tools:imp.bzl", "if_android", "if_ios", "imp_default_jni_linkopts")
 load("//core/scripting/testing:build_defs.bzl", "scripting_end_to_end_test", "standalone_jasmine_test_script")
 

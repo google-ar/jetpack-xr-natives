@@ -31,12 +31,13 @@
 #include <backend/DriverEnums.h>
 #include <backend/Handle.h>
 
+#include <private/utils/Tracing.h>
+
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/CString.h"
 #include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/ostream.h"
 #include "filament/libs/utils/include/utils/Panic.h"
-#include "filament/libs/utils/include/utils/Systrace.h"
 
 #include <algorithm>
 #include <functional>
@@ -119,7 +120,7 @@ void FrameGraph::reset() noexcept {
 
 FrameGraph& FrameGraph::compile() noexcept {
 
-    SYSTRACE_CALL();
+    FILAMENT_TRACING_CALL(FILAMENT_TRACING_CATEGORY_FILAMENT);
 
     DependencyGraph& dependencyGraph = mGraph;
 
@@ -200,7 +201,7 @@ void FrameGraph::execute(backend::DriverApi& driver) noexcept {
     auto const& passNodes = mPassNodes;
     auto& resourceAllocator = mResourceAllocator;
 
-    SYSTRACE_NAME("FrameGraph");
+    FILAMENT_TRACING_NAME(FILAMENT_TRACING_CATEGORY_FILAMENT, "FrameGraph");
     driver.pushGroupMarker("FrameGraph");
 
     auto first = passNodes.begin();
@@ -210,7 +211,7 @@ void FrameGraph::execute(backend::DriverApi& driver) noexcept {
         first++;
         assert_invariant(!node->isCulled());
 
-        SYSTRACE_NAME(node->getName());
+        FILAMENT_TRACING_NAME(FILAMENT_TRACING_CATEGORY_FILAMENT, node->getName());
         driver.pushGroupMarker(node->getName());
 
         // devirtualize resourcesList
@@ -476,7 +477,7 @@ bool FrameGraph::isAcyclic() const noexcept {
     return mGraph.isAcyclic();
 }
 
-void FrameGraph::export_graphviz(utils::io::ostream& out, char const* name) {
+void FrameGraph::export_graphviz(utils::io::ostream& out, char const* name) const noexcept {
     mGraph.export_graphviz(out, name);
 }
 
@@ -572,6 +573,11 @@ fgviewer::FrameGraphInfo FrameGraph::getFrameGraphInfo(const char *viewName) con
 
     info.setResources(std::move(resources));
     info.setPasses(std::move(passes));
+
+    // Generate GraphViz DOT data
+    utils::io::sstream out;
+    this->export_graphviz(out, viewName);
+    info.setGraphvizData(utils::CString(out.c_str()));
 
     return info;
 #else

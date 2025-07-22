@@ -31,15 +31,16 @@ namespace imp {
  * radius: radius of the cylinder.
  */
 template <typename T>
-struct Cylinder {
-  Cylinder()
+struct GenericCylinder {
+  GenericCylinder()
       : center(TVec3<T>(0, 0, 0)),
         up(TVec3<T>(0, 1, 0)),
         length(1),
         forward(TVec3<T>(1, 0, 0)),
         radius(0.1) {}
 
-  Cylinder(TVec3<T> center, TVec3<T> up, T length, TVec3<T> forward, T radius)
+  GenericCylinder(TVec3<T> center, TVec3<T> up, T length, TVec3<T> forward,
+                  T radius)
       : center(center),
         up(up),
         length(length),
@@ -51,6 +52,13 @@ struct Cylinder {
   T length;
   TVec3<T> forward;
   T radius;
+};
+
+// Represents a cylinder with bottom ring center on xz plane and height on Y-up.
+struct Cylinder {
+  float3 base;
+  float radius;
+  float height;
 };
 
 }  // namespace imp

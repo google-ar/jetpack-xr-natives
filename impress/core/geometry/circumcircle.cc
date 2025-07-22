@@ -16,8 +16,8 @@
 
 #include <optional>
 
+#include "core/collision/collision_helpers.h"
 #include "core/collision/ray.h"
-#include "core/geometry/closest_point.h"
 #include "core/geometry/shapes/circle.h"
 #include "core/geometry/shapes/triangle.h"
 #include "core/math/almost_equal.h"
@@ -46,7 +46,7 @@ std::optional<Circle> GetCircumcircle(const Triangle& triangle) {
   Ray bisector_line_2((a + c) / 2.0f, normalize(cross(ac, normal)));
 
   std::optional<float3> t =
-      ClosestPointOnRayToLine(bisector_line_1, bisector_line_2);
+      collision::ClosestPointOnRayToLine(bisector_line_1, bisector_line_2);
   float3 circumcenter = midpoint_ab + *t * bisector_line_1_direction;
   return Circle{.center = circumcenter,
                 .normal = normal,

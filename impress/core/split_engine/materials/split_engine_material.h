@@ -30,6 +30,7 @@
 #include "core/ncsb/update_system.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/utils/frame_time.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
@@ -78,10 +79,15 @@ class SplitEngineMaterial {
   void MarkParametersDirty(bool dirty = true) const;
   bool AreParametersDirty() const;
 
+  // Destroys the material. This should be called by subclasses destructors
+  // prior to destroying any owned textures to ensure proper destruction order.
+  void Cleanup();
+
  private:
   BaseView& view_;
   android_xr::schemas::BuiltInMaterialParameters parameters_type_;
   PlaceholderOrBuiltInMaterialPtr material_;
+  bool cleanup_called_ = false;
 };
 
 // An updater that calls Update() on all SplitEngineMaterials in the view.

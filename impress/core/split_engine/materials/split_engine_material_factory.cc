@@ -14,12 +14,18 @@
 
 #include "core/split_engine/materials/split_engine_material_factory.h"
 
+#include <cstdint>
 #include <memory>
+#include <vector>
 
 #include "absl/container/flat_hash_set.h"
+#include "core/common/log.h"
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "flatbuffers/buffer.h"
+#include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
 #include "core/material_library/generic_material_spec.h"
 #include "core/material_library/material_package.h"
@@ -33,6 +39,8 @@
 #include "core/split_engine/materials/builtin/builtin_water_material.h"
 #include "core/split_engine/materials/builtin/builtin_youtube_stereo_player_material.h"
 #include "core/split_engine/materials/builtin/photosxr/builtin_photos_texture_3d_material.h"
+#include "core/split_engine/materials/builtin_material_creator_helper.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/gltf_asset.h"
@@ -54,52 +62,63 @@ SplitEngineMaterialFactory::SplitEngineMaterialFactory(BaseView& view)
 }
 
 Future<BuiltInMaterialPtr> SplitEngineMaterialFactory::HandleCreateRequest(
-    const android_xr::schemas::BuiltInMaterialRequest& spec) {
-  switch (spec.data_type()) {
+    BridgeId bridge_id,
+    const android_xr::schemas::BuiltInMaterialRequest& request) {
+  switch (request.data_type()) {
     case android_xr::schemas::BuiltInMaterialSpec::GenericMaterialSpec:
       return CreateBuiltInGenericMaterial(
-          *spec.data_as<android_xr::schemas::GenericMaterialSpec>());
+          *request.data_as<android_xr::schemas::GenericMaterialSpec>());
     default:
       // All other built-in types can be created statically.
-      return HandleCreateRequest(view_, spec);
+      return HandleCreateRequest(view_, bridge_id, request);
   }
 }
 
 Future<BuiltInMaterialPtr> SplitEngineMaterialFactory::HandleCreateRequest(
-    BaseView& view, const android_xr::schemas::BuiltInMaterialRequest& spec) {
-  switch (spec.data_type()) {
+    BaseView& view, BridgeId bridge_id,
+    const android_xr::schemas::BuiltInMaterialRequest& request) {
+  switch (request.data_type()) {
     case android_xr::schemas::BuiltInMaterialSpec::GenericMaterialSpec:
       return Future<BuiltInMaterialPtr>(absl::InternalError(
           "Generic materials cannot be created statically."));
     case android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterial5cf26af8:
       return BuiltInWaterMaterial::Create(
-          view, *spec.data_as<android_xr::schemas::BuiltInMaterial5cf26af8>());
+          view, bridge_id,
+          *request.data_as<android_xr::schemas::BuiltInMaterial5cf26af8>());
     case android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialE3ca0ab9:
       return BuiltInVignetteMaterial::Create(
-          view, *spec.data_as<android_xr::schemas::BuiltInMaterialE3ca0ab9>());
+          view, bridge_id,
+          *request.data_as<android_xr::schemas::BuiltInMaterialE3ca0ab9>());
     case android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialD1750064:
       return BuiltInPhotosTexture3dMaterial::Create(
-          view, *spec.data_as<android_xr::schemas::BuiltInMaterialD1750064>());
+          view, bridge_id,
+          *request.data_as<android_xr::schemas::BuiltInMaterialD1750064>());
     case android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialEb117dd9:
       return BuiltInYouTubeStereoPlayerMaterial::Create(
-          view, *spec.data_as<android_xr::schemas::BuiltInMaterialEb117dd9>());
+          view, bridge_id,
+          *request.data_as<android_xr::schemas::BuiltInMaterialEb117dd9>());
     case android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterial1b616c8a:
       return BuiltInJxrMediaMaterial::Create(
-          view, *spec.data_as<android_xr::schemas::BuiltInMaterial1b616c8a>());
+          view, bridge_id,
+          *request.data_as<android_xr::schemas::BuiltInMaterial1b616c8a>());
     case android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterial0d0cb9aa:
       return BuiltInSVXRFootprintMaterial::Create(
-          view, *spec.data_as<android_xr::schemas::BuiltInMaterial0d0cb9aa>());
+          view, bridge_id,
+          *request.data_as<android_xr::schemas::BuiltInMaterial0d0cb9aa>());
     case android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialbd7fe08c:
       return BuiltInSVXRPlaneMaterial::Create(
-          view, *spec.data_as<android_xr::schemas::BuiltInMaterialbd7fe08c>());
+          view, bridge_id,
+          *request.data_as<android_xr::schemas::BuiltInMaterialbd7fe08c>());
     case android_xr::schemas::BuiltInMaterialSpec::
         BuiltInMaterialTextureExternal:
       return BuiltInTextureExternalMaterial::Create(
-          view,
-          *spec.data_as<android_xr::schemas::BuiltInMaterialTextureExternal>());
+          view, bridge_id,
+          *request
+               .data_as<android_xr::schemas::BuiltInMaterialTextureExternal>());
     default:
-      return Future<BuiltInMaterialPtr>(absl::InvalidArgumentError(
-          absl::StrFormat("Unsupported material type: %d", spec.data_type())));
+      return Future<BuiltInMaterialPtr>(
+          absl::InvalidArgumentError(absl::StrFormat(
+              "Unsupported material type: %d", request.data_type())));
   }
 }
 
@@ -116,6 +135,33 @@ SplitEngineMaterialFactory::CreateBuiltInGenericMaterial(
       .Then([this, spec](MaterialPackage::MaterialCache materials_by_params) {
         return BuiltInGenericMaterial::Create(view_, spec, materials_by_params);
       });
+}
+
+std::vector<Future<BuiltInMaterialPtr>>
+SplitEngineMaterialFactory::CreateBuiltInCustomMaterialWithDefaultParams() {
+  // Bridge IDs don't matter here - we just want to make sure AssetManager
+  // actually loads the material. Same for the material instance IDs.
+  const BridgeId kFakeBridgeId = 1;
+  const uint64_t kFakeMaterialInstanceId = 0;
+
+  std::vector<Future<BuiltInMaterialPtr>> builtin_material_futures;
+  for (auto spec_type : CreateBuiltInCustomMaterialSpecList()) {
+    flatbuffers::FlatBufferBuilder builder;
+    flatbuffers::Offset<android_xr::schemas::BuiltInMaterialRequest>
+        fbb_request = android_xr::schemas::CreateBuiltInMaterialRequest(
+            builder, kFakeMaterialInstanceId, spec_type,
+            CreateBuiltInMaterialSpecWithDefaultParameters(builder, spec_type));
+    builder.Finish(fbb_request);
+
+    const android_xr::schemas::BuiltInMaterialRequest* request =
+        flatbuffers::GetRoot<android_xr::schemas::BuiltInMaterialRequest>(
+            builder.GetBufferPointer());
+
+    IMP_LOG(imp::INFO) << "Preloading material: " << absl::StrCat(spec_type);
+    builtin_material_futures.push_back(
+        HandleCreateRequest(view_, kFakeBridgeId, *request));
+  }
+  return builtin_material_futures;
 }
 
 }  // namespace imp::split_engine

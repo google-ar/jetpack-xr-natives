@@ -21,6 +21,7 @@
 
 #include "filament/libs/utils/include/utils/JobSystem.h"
 #include "filament/libs/utils/include/utils/Log.h"
+#include "filament/libs/utils/include/utils/Panic.h"
 
 using namespace filament;
 using namespace filament::math;

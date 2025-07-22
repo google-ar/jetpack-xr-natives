@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "imp_defines", "imp_google3_copts")
 
 package(
@@ -40,6 +41,7 @@ cc_library(
         "//core/common:owned_or_borrowed_ptr",
         "//core/common:owned_or_unowned_memory",
         "//core/common:owned_ptr",
+        "//core/common:small_source_location",
         "//core/material_library:material_param_value",
         "//core/render",
         "//core/split_engine:split_engine_serializer",

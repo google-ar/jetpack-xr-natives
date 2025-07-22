@@ -8,7 +8,8 @@ namespace wrap {
 namespace android::net {
 Uri::Meta::Meta()
     : MetaBaseDroppable(Uri::getTypeName()),
-      toString(classRef().getMethod("toString", "()Ljava/lang/String;")) {
+    toString(classRef().getMethod("toString", "()Ljava/lang/String;")),
+    getAuthority(classRef().getMethod("getAuthority", "()Ljava/lang/String;")) {
     MetaBaseDroppable::dropClassRef();
 }
 Uri_Builder::Meta::Meta()

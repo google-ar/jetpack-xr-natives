@@ -17,14 +17,17 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_LAYOUT_LAYOUT_COMPOSER_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_LAYOUT_LAYOUT_COMPOSER_H_
 
+#include <string>
 #include <vector>
 
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "dear_imgui/imgui.h"
 #include "core/common/invocable.h"
 #include "core/editor/layout/layout_config.proto.imp.h"
 #include "core/editor/widget.h"
 #include "core/editor/widget_layout_info.h"
+#include "core/view/utils/string_map.h"
 
 namespace imp::editor {
 
@@ -33,6 +36,14 @@ namespace imp::editor {
 // Scene section, or as a standalone tab.
 class LayoutComposer {
  public:
+  // Information about a sub-window (e.g. scene window, details window) that is
+  // drawn by the LayoutComposer for world layout.
+  struct SubWindowInfo {
+    std::string label;
+    ImVec2 window_size;
+    ImVec2 window_position;
+  };
+
   explicit LayoutComposer(LayoutConfig layout_config);
 
   virtual ~LayoutComposer() = default;
@@ -43,6 +54,10 @@ class LayoutComposer {
   // are afterwards cleared from memory.
   // This function should be called once per frame to draw the Editor UI.
   virtual void DrawLayout();
+
+  // Returns the information about the sub-windows that are registered for world
+  // layout.
+  absl::Span<const SubWindowInfo> GetSubWindowInfo();
 
  private:
   // Draws the given Invocable in the Details section.
@@ -87,6 +102,11 @@ class LayoutComposer {
   // Queues the given Invocable to be drawn at the end after the layout.
   void DrawAfterLayout(imp::Invocable<void()> draw_function);
 
+  // Draws a window for world layout. The window will be drawn from left to
+  // right without overlapping.
+  void DrawWindowForWorldLayout(absl::string_view window_label,
+                                imp::Invocable<void()> draw_function);
+
   // Draws a standalone details window.
   void DrawStandaloneDetailsWindow();
   // Draws the details draw functions and a placeholder if none exist.
@@ -105,6 +125,9 @@ class LayoutComposer {
   void DrawCursor();
   //
   void DrawAfterLayout();
+
+  // Resisters or updates the sub-window for world layout.
+  void UpdateSubWindowRegistration(absl::string_view label);
 
   // Wraps an Invocable in a CollapsingHeader.
   imp::Invocable<void()> BuildHeaderDrawFunction(
@@ -130,6 +153,9 @@ class LayoutComposer {
   float window_y_offset_ = 0;
   ImGuiID selected_tab_id_ = 0;
   ImGuiTextFilter details_filter_;
+  StringMap<SubWindowInfo> sub_window_info_map_;
+  std::vector<SubWindowInfo> sub_window_info_;
+  float window_x_offset_for_world_layout_ = 0;
 };
 }  // namespace imp::editor
 

@@ -53,7 +53,7 @@
 namespace imp::animation {
 namespace {
 
-using imp::gltf::AnimationSampler;
+using imp::gltf::imp_proto::AnimationSampler;
 using imp::loader::details::AccessorReader;
 using imp::loader::details::DenseDataAccess;
 using imp::loader::details::provider_gltf::AnimationId;
@@ -191,7 +191,7 @@ absl::StatusOr<flatbuffers::Offset<void>> SerializeWeights(
 }
 
 template <typename T>
-OptionalError AddWeightsChannel(const imp::gltf::Gltf& gltf,
+OptionalError AddWeightsChannel(const imp::gltf::imp_proto::Gltf& gltf,
                                 const AnimationSampler sampler,
                                 flatbuffers::FlatBufferBuilder* fbb,
                                 T* out_type,
@@ -203,10 +203,11 @@ OptionalError AddWeightsChannel(const imp::gltf::Gltf& gltf,
   DenseDataAccess weights;
 
   // According to the spec, vector animations must be 3d floating point values.
-  if (reader.GetComponentType() != imp::gltf::ComponentType::FLOAT ||
+  if (reader.GetComponentType() != imp::gltf::imp_proto::ComponentType::FLOAT ||
       reader.GetType() != ExpectedLayoutType<T>()) {
     // Special case: support normalized UNSIGNED_BYTE weights.
-    if (reader.GetComponentType() == imp::gltf::ComponentType::UNSIGNED_BYTE &&
+    if (reader.GetComponentType() ==
+            imp::gltf::imp_proto::ComponentType::UNSIGNED_BYTE &&
         reader.GetType() == "SCALAR") {
       MP_ASSIGN_OR_RETURN(weights, reader.GetPackedFloatData());
     } else {
@@ -236,8 +237,8 @@ OptionalError AddWeightsChannel(const imp::gltf::Gltf& gltf,
 }
 
 OptionalError SerializeSqtAnimation(
-    const imp::gltf::Gltf& gltf, const GltfLookup& lookup, NodeId node,
-    AnimationId animation, flatbuffers::FlatBufferBuilder* fbb,
+    const imp::gltf::imp_proto::Gltf& gltf, const GltfLookup& lookup,
+    NodeId node, AnimationId animation, flatbuffers::FlatBufferBuilder* fbb,
     absl::optional<flatbuffers::Offset<animation::schemas::GltfNodeAnimation>>*
         out_offset,
     absl::optional<
@@ -249,7 +250,7 @@ OptionalError SerializeSqtAnimation(
   ChannelId rotation_channel = channel_set.rotation_channels[node];
   ChannelId scale_channel = channel_set.scale_channels[node];
   ChannelId weights_channel = channel_set.weights_channels[node];
-  TypedSpan<const imp::gltf::AnimationChannel> animation_channels(
+  TypedSpan<const imp::gltf::imp_proto::AnimationChannel> animation_channels(
       lookup.animations[animation].channels);
   const std::vector<AnimationSampler>& animation_samplers =
       lookup.animations[animation].samplers;
@@ -318,7 +319,7 @@ OptionalError SerializeSqtAnimation(
 }  // namespace
 
 absl::StatusOr<FlatBufferAccess<schemas::GltfAnimation>> GetAnimation(
-    const imp::gltf::Gltf& gltf,
+    const imp::gltf::imp_proto::Gltf& gltf,
     const imp::loader::details::provider_gltf::GltfLookup& lookup,
     imp::loader::details::provider_gltf::AnimationId animation) {
   flatbuffers::FlatBufferBuilder fbb;
@@ -346,7 +347,7 @@ absl::StatusOr<FlatBufferAccess<schemas::GltfAnimation>> GetAnimation(
   constexpr absl::string_view kNode = "nodes";
   constexpr absl::string_view kMaterial = "materials";
 
-  for (const imp::gltf::AnimationChannel& c :
+  for (const imp::gltf::imp_proto::AnimationChannel& c :
        lookup.animations[animation].channels) {
     if (c.target.path != kPointer) {
       if (!c.target.node) {

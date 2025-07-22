@@ -38,12 +38,12 @@
 #include "core/media/android/android_exoplayer.h"
 #include "core/media/android/android_exoplayer_listener.h"
 #include "core/media/media_asset.h"
+#include "core/media/media_color_space.h"
 #include "core/media/media_source.h"
 #include "core/media/media_type.h"
 #include "core/render/android/android_defines.h"
 #include "core/render/android/android_external_texture_surface.h"
 #include "core/render/texture.h"
-#include "core/video/video_color_space.h"
 #include "core/video/video_source.h"
 #include "core/view/base_view.h"
 
@@ -76,7 +76,7 @@ class AndroidExoPlayerVideoSource : public VideoSource,
 
   uint2 GetVideoSize() const override;
 
-  VideoColorSpace GetColorSpace() const override;
+  MediaColorSpace GetColorSpace() const override;
   MediaStereoMode GetStereoMode() const override;
   ContentSecurityLevel GetSecurityLevel() const { return security_level_; }
 

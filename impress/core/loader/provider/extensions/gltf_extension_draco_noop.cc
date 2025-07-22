@@ -14,14 +14,18 @@
 
 #include <vector>
 
+#include "absl/status/statusor.h"
+#include "core/common/buffer_access.h"
 #include "core/common/optional_error.h"
 #include "core/loader/provider/extensions/gltf_extension_draco.h"
+#include "core/loader/provider/gltf/gltf.proto.imp.h"
 
 namespace imp {
 namespace loader {
 namespace extensions {
 
-absl::StatusOr<std::vector<BufferAccess>> ResolveDraco(imp::gltf::Gltf* gltf) {
+absl::StatusOr<std::vector<BufferAccess>> ResolveDraco(
+    imp::gltf::imp_proto::Gltf* gltf) {
   for (auto& mesh : gltf->meshes) {
     for (auto& prim : mesh.primitives) {
       if (prim.extensions.draco) {

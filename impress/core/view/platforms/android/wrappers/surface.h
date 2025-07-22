@@ -19,7 +19,6 @@
 
 #include <jni.h>
 
-#include <cstdint>
 #include <memory>
 
 #include "absl/status/status.h"
@@ -31,9 +30,6 @@
 #include "core/view/platforms/android/wrappers/surface_texture.h"
 
 namespace imp::android {
-
-using FPANativeWindow_setUsage = int (*)(void* window, uint64_t usage);
-using FPANativeWindow_release = int (*)(void* window);
 
 // JNI wrapper for the Android Surface class.
 class Surface : public JavaWrapper {
@@ -53,9 +49,6 @@ class Surface : public JavaWrapper {
   void UnlockCanvasAndPost(Canvas& canvas);
   ContentSecurityLevel GetContentSecurityLevel() const;
 
-  // Load the necessary runtime symbols.
-  static absl::Status LoadRuntimeLibraries();
-
  private:
   Surface(const Context& context, jobject j_surface,
           ContentSecurityLevel security_level);
@@ -69,9 +62,6 @@ class Surface : public JavaWrapper {
   JniHandle unlock_canvas_and_post_;
 
   ContentSecurityLevel security_level_;
-
-  static FPANativeWindow_setUsage ANativeWindow_setUsage_;
-  static FPANativeWindow_release ANativeWindow_release_;
 };
 
 }  // namespace imp::android

@@ -32,7 +32,7 @@ namespace imp::loader::details::provider_gltf {
 using Gltf2Attribute = VertexAttribute;
 using Gltf2AttributeMask = VertexAttributeMask;
 
-using AccessorId = TypedId<const imp::gltf::Accessor, int>;
+using AccessorId = TypedId<const imp::gltf::imp_proto::Accessor, int>;
 
 OptionalError GetAttributeType(absl::string_view type, int component_type,
                                schemas::AttributeType *out_type);

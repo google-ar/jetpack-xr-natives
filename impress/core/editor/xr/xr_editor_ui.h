@@ -18,11 +18,12 @@
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_XR_EDITOR_UI_H_
 
 #include "core/editor/components/world_space_editor_ui.h"
-#include "core/editor/xr/xr_grab_handle.h"
+#include "core/editor/layout/editor_panel_ids.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node_handle.h"
+#include "core/view/utils/string_map.h"
 namespace imp::editor {
 
 // A Component that sets up the Impress Editor to render in world space for XR.
@@ -33,37 +34,33 @@ namespace imp::editor {
 class XrEditorUi : public imp::Component {
  public:
   struct SetupOptions {
-    // Defines the world-space distance the Impress Editor panel will be
-    // rendered from the Camera.
-    float distance_from_camera;
-
     // Scales the entire Editor panel up (maintaining the same
     // underlying resolution) by a given factor. This can be used if the UI is
     // too small to see.
     float editor_scale;
 
-    // Degrees to the right of the horizontal center where the panel will be
-    // anchored to. The center of the panel will be aligned to this angle.
-    float horizontal_offset_degrees;
-
-    // Degrees above the horizon where the Editor panel will be anchored to. The
-    // top of the Editor panel will be aligned to this angle.
-    float vertical_offset_degrees;
-
     // The underlying resolution of the ImGui UI. Increasing this without also
     // increasing the editor_scale will make the UI elements appear smaller.
     imp::float2 editor_resolution;
+
+    // A map of editor panel names to their settings. If a panel is not
+    // specified, it will default to WorldSpaceEditorUi::kDefaultCanvasPosition.
+    //   - x(distance_from_camera)
+    //   - y(horizontal_offset_degrees)
+    //   - z(vertical_offset_degrees)
+    StringMap<float3> editor_panel_settings;
   };
-  void Setup(const SetupOptions& options = SetupOptions{
-                 .distance_from_camera = 3.0f,
-                 .editor_scale = 2.0f,
-                 .horizontal_offset_degrees = -45.0f,
-                 .vertical_offset_degrees = 0.0f,
-                 .editor_resolution = {500, 500}});
+  void Setup(
+      const SetupOptions& options = SetupOptions{
+          .editor_scale = 2.0f,
+          .editor_resolution = {2000, 800},
+          .editor_panel_settings = {
+              {panel_ids::kSceneWindow.data(), float3{3.0f, -55.0f, 0.0f}},
+              {panel_ids::kDetailsWindow.data(), float3{3.0f, -30.0f, -10.0f}},
+              {panel_ids::kTabBar.data(), float3{3.0f, -55.0f, 20.0f}}}});
 
  private:
   imp::NodeHandle editor_node_;
-  imp::ComponentHandle<XrGrabHandle> xr_editor_grab_handle_;
   imp::ComponentHandle<WorldSpaceEditorUi> world_space_editor_ui_;
   imp::float3 ray_origin_;
   imp::float3 ray_direction_;

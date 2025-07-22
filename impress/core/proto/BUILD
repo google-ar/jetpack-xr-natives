@@ -16,6 +16,8 @@
 # See (broken link) for documentation, user guide and examples.
 
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:defs.bzl", "cc_proto_library")
 load("//build_tools:imp.bzl", "if_dev_runtime", "imp_copts")
 load(

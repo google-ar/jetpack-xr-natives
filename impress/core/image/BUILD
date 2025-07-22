@@ -13,6 +13,7 @@
 # limitations under the License.
 
 load("@bazel_skylib//lib:selects.bzl", "selects")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:assets.bzl", "imp_assets")
 load("//build_tools:imp.bzl", "if_android", "if_non_android", "imp_copts")
 
@@ -44,6 +45,14 @@ cc_library(
         "@third_party//filament/filament/backend:driver_enums",
         "@third_party//filament/filament/backend:pixel_buffer_descriptor",
     ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "wasm_texture_contents",
+    hdrs = ["wasm_texture_contents.h"],
+    copts = imp_copts(),
+    linkstatic = True,
     alwayslink = 1,
 )
 
@@ -173,8 +182,8 @@ cc_library(
     alwayslink = 1,
 )
 
-# Note that the imp_app rule adds the `--bind` and `-s ALLOW_MEMORY_GROWTH=1` linkopt flag. If you
-# are depending on this library without the imp_app rule, ensure that you have those linkopt flags.
+# Note that the imp_app rule adds the `-s ALLOW_MEMORY_GROWTH=1` linkopt flag. If you are depending
+# on this library without the imp_app rule, ensure that you have this linkopt flag.
 cc_library(
     name = "wasm_decode_image",
     srcs = ["wasm_decode_image.cc"],
@@ -186,16 +195,20 @@ cc_library(
     tags = ["nobuilder"],
     deps = [
         ":image",
+        ":wasm_texture_contents",
         "//base:atomic_sequence_num",
         "//core/async:future",
         "//core/common:log",
-        "//core/common:robin_map",
         "//core/resources",
         "//javascript/core/wasm/decode_image:decode_image.js.lds",
         "//third_party/emscripten:GL-webgl2-full_es3",
+        "//third_party/emscripten:embind",
         "@com_google_absl//absl/base:no_destructor",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/types:optional",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
         "@third_party//filament/filament/backend:pixel_buffer_descriptor",
@@ -383,6 +396,10 @@ imp_assets(
     namespace = "imp::test_data",
 )
 
-# --android_ndk_min_sdk_version=21
+# --android_ndk_min_sdk_version=23
+
+# --config=ios_x86_64
+
+# --android_ndk_min_sdk_version=23
 
 # --config=ios_x86_64

@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdio>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -58,12 +59,18 @@ using NodePlacements = recipe_internal::SimpleConnectionNodePlacements;
 
 constexpr float kWindowHeightPct = 0.5f;
 constexpr int kRecipeVariablesWindowWidth = 450;
+// The multiplier for the zoom power of the node editor. The larger the number,
+// the larger the jumps for each zoom level.
+constexpr float kWindowZoomPower = 1.02f;
+constexpr int kRightMouseButtonIndex = 1;
+constexpr char kCreateNodePopupName[] = "selected_popup";
 
 }  // namespace
 
 RecipeEditor::RecipeEditor(BaseView& view) : view_(view) {
   ax::NodeEditor::Config config;
   config.EnableSmoothZoom = true;
+  config.SmoothZoomPower = kWindowZoomPower;
 
   context_ = ax::NodeEditor::CreateEditor(&config);
 
@@ -107,6 +114,18 @@ void RecipeEditor::DrawImGui() {
 
   ax::NodeEditor::SetCurrentEditor(context_);
 
+  // We're using IsBackgroundDoubleClicked since this is the only way to detect
+  // a right click within the editor window in NodeEditor.
+  // TODO: (broken link) - Have right click occur on single click
+  if (ImGui::IsMouseDown(kRightMouseButtonIndex) &&
+      ax::NodeEditor::IsBackgroundDoubleClicked() && !create_node_popup_open_) {
+    ImGui::OpenPopup(kCreateNodePopupName);
+    create_node_popup_open_ = true;
+  }
+  if (create_node_popup_open_) {
+    DrawCreateNodePopup();
+  }
+  ax::NodeEditor::SetCurrentEditor(context_);
   ax::NodeEditor::Begin("Recipe Editor",
                         ImVec2(-1, view_.GetSize().y * kWindowHeightPct));
 
@@ -231,6 +250,65 @@ void RecipeEditor::DrawSearchBar() {
 
   search_result_index_ =
       std::clamp(search_result_index_, size_t(0), search_results_.size() - 1);
+}
+
+void RecipeEditor::DrawCreateNodePopup() {
+  if (ImGui::BeginPopup(kCreateNodePopupName)) {
+    const char* items[] = {"Assignment Statement", "Binary Expression",
+                           "Unary Expression", "Identifier"};
+    // TODO: (broken link) - Add a field in the Recipe Editor popup for searching
+    // the list of available Recipe Nodes
+    ImGui::SeparatorText("Available Nodes");
+    for (const char* item : items) {
+      if (ImGui::BeginMenu(item)) {
+        if (strcmp(item, "Binary Expression") == 0) {
+          for (const BinaryExpression::BinaryOps binary_op :
+               proto::EnumMetaData<BinaryExpression::BinaryOps>::kValues) {
+            ImGui::MenuItem(
+                std::string(
+                    proto::EnumMetaData<BinaryExpression::BinaryOps>::GetName(
+                        binary_op))
+                    .c_str());
+            // TODO: (broken link) - Add logic to create the node
+          }
+        }
+        if (strcmp(item, "Unary Expression") == 0) {
+          for (const UnaryExpression::UnaryOps unary_op :
+               proto::EnumMetaData<UnaryExpression::UnaryOps>::kValues) {
+            ImGui::MenuItem(
+                std::string(
+                    proto::EnumMetaData<UnaryExpression::UnaryOps>::GetName(
+                        unary_op))
+                    .c_str());
+            // TODO: (broken link) - Add logic to create the node
+          }
+        }
+        if (strcmp(item, "Assignment Statement") == 0) {
+          auto assignment_ops =
+              proto::EnumMetaData<AssignmentStatement::AssignmentOps>::kValues;
+          for (const AssignmentStatement::AssignmentOps assignment_op :
+               assignment_ops) {
+            ImGui::MenuItem(
+                std::string(
+                    proto::EnumMetaData<AssignmentStatement::AssignmentOps>::
+                        GetName(assignment_op))
+                    .c_str());
+            // TODO: (broken link) - Add logic to create the node
+          }
+        }
+        if (strcmp(item, "Identifier") == 0) {
+          // TODO: (broken link) - Find a way to get a list of all identifiers
+          // within the graph since recipe_graph.proto does not contain this
+          // information.
+          ImGui::MenuItem("Identifier");
+        }
+        ImGui::EndMenu();
+      }
+    }
+    ImGui::EndPopup();
+  } else {
+    create_node_popup_open_ = false;
+  }
 }
 
 void RecipeEditor::DrawGraph() {

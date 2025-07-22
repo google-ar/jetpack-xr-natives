@@ -183,6 +183,11 @@ void GenericMaterialImpl::SetBaseColorFactor(const float4& factor) {
   ApplyMaterialParameter(kBaseColorFactor, factor);
 }
 
+float4 GenericMaterialImpl::GetBaseColorFactor() const {
+  return material_->GetFilamentMaterialInstance()->getParameter<float4>(
+      kBaseColorFactor.data());
+}
+
 TextureAndSampler GenericMaterialImpl::GetMetallicRoughnessTexture() const {
   if (auto it = texture_lookup_.find(kMetallicRoughnessIndex);
       it != texture_lookup_.end()) {
@@ -199,8 +204,19 @@ absl::Status GenericMaterialImpl::SetMetallicRoughnessUvTransform(
 void GenericMaterialImpl::SetMetallicFactor(float factor) {
   ApplyMaterialParameter(kMetallicFactor, factor);
 }
+
+float GenericMaterialImpl::GetMetallicFactor() const {
+  return material_->GetFilamentMaterialInstance()->getParameter<float>(
+      kMetallicFactor.data());
+}
+
 void GenericMaterialImpl::SetRoughnessFactor(float factor) {
   ApplyMaterialParameter(kRoughnessFactor, factor);
+}
+
+float GenericMaterialImpl::GetRoughnessFactor() const {
+  return material_->GetFilamentMaterialInstance()->getParameter<float>(
+      kRoughnessFactor.data());
 }
 
 TextureAndSampler GenericMaterialImpl::GetNormalTexture() const {
@@ -220,6 +236,11 @@ void GenericMaterialImpl::SetNormalScale(float scale) {
   ApplyMaterialParameter(kNormalScale, scale);
 }
 
+float GenericMaterialImpl::GetNormalScale() const {
+  return material_->GetFilamentMaterialInstance()->getParameter<float>(
+      kNormalScale.data());
+}
+
 TextureAndSampler GenericMaterialImpl::GetAmbientOcclusionTexture() const {
   if (auto it = texture_lookup_.find(kAoIndex); it != texture_lookup_.end()) {
     return it->second;
@@ -234,6 +255,11 @@ absl::Status GenericMaterialImpl::SetAmbientOcclusionUvTransform(
 
 void GenericMaterialImpl::SetAmbientOcclusionStrength(float strength) {
   ApplyMaterialParameter(kAoStrength, strength);
+}
+
+float GenericMaterialImpl::GetAmbientOcclusionStrength() const {
+  return material_->GetFilamentMaterialInstance()->getParameter<float>(
+      kAoStrength.data());
 }
 
 TextureAndSampler GenericMaterialImpl::GetEmissiveTexture() const {
@@ -251,6 +277,11 @@ absl::Status GenericMaterialImpl::SetEmissiveUvTransform(
 
 void GenericMaterialImpl::SetEmissiveFactor(const float3& factor) {
   ApplyMaterialParameter(kEmissiveFactor, factor);
+}
+
+float3 GenericMaterialImpl::GetEmissiveFactor() const {
+  return material_->GetFilamentMaterialInstance()->getParameter<float3>(
+      kEmissiveFactor.data());
 }
 
 TextureAndSampler GenericMaterialImpl::GetClearcoatTexture() const {
@@ -322,12 +353,17 @@ void GenericMaterialImpl::SetTransmissionFactor(float factor) {
 void GenericMaterialImpl::SetIndexOfRefraction(float index_of_refraction) {
   ApplyMaterialParameter(kIndexOfRefraction, index_of_refraction);
 }
+
 void GenericMaterialImpl::SetAlphaCutoff(float alpha_cutoff) {
   if (material_->GetFilamentMaterialInstance()
           ->getMaterial()
           ->getBlendingMode() == filament::Material::BlendingMode::MASKED) {
     material_->GetFilamentMaterialInstance()->setMaskThreshold(alpha_cutoff);
   }
+}
+
+float GenericMaterialImpl::GetAlphaCutoff() const {
+  return material_->GetFilamentMaterialInstance()->getMaskThreshold();
 }
 
 template <>

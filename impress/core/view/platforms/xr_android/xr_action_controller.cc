@@ -25,13 +25,11 @@
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "core/actions/action_config.h"
 #include "core/actions/controller_input_handler.h"
 #include "core/actions/input_action_event.h"
-#include "core/common/platform_helpers.h"
 #include "core/common/robin_set.h"
 #include "core/common/trace.h"
 #include "core/view/platforms/xr_android/openxr_includes.h"
@@ -601,6 +599,11 @@ absl::Status XrActionController::SetupXrActionSetBindings(
   XrResult xr_suggest_interaction_profile_bindings_result =
       xrSuggestInteractionProfileBindings(xr_session_host_.GetXrInstance(),
                                           &suggested_bindings);
+  if (xr_suggest_interaction_profile_bindings_result ==
+      XR_ERROR_PATH_UNSUPPORTED) {
+    // If the interaction profile is unsupported, we can safely ignore it.
+    return absl::OkStatus();
+  }
   MP_RETURN_IF_ERROR(xr_session_host_.ToStatus(
       xr_suggest_interaction_profile_bindings_result));
   return absl::OkStatus();

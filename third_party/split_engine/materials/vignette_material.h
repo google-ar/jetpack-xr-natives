@@ -35,6 +35,8 @@ class VignetteMaterial : public imp::split_engine::SplitEngineMaterial {
   static imp::Future<std::unique_ptr<VignetteMaterial>> Create(
       imp::BaseView& view);
 
+  ~VignetteMaterial() override;
+
   void SetColor(const imp::float4& color);
   void SetCoverage(float coverage);
   void SetFeather(float feather);

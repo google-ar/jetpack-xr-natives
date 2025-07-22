@@ -34,25 +34,25 @@
 
 namespace imp::loader::details::provider_gltf {
 namespace {
-using ::imp::gltf::Gltf;
+using ::imp::gltf::imp_proto::Gltf;
 using MinFilter = schemas::MinFilter;
 using MagFilter = schemas::MagFilter;
 using WrapMode = schemas::WrapMode;
 
 constexpr MinFilter ConvertMinFilter(int filter) {
   switch (filter) {
-    case imp::gltf::Sampler::NEAREST:
+    case imp::gltf::imp_proto::Sampler::NEAREST:
       return MinFilter::NEAREST;
-    case imp::gltf::Sampler::LINEAR:
+    case imp::gltf::imp_proto::Sampler::LINEAR:
       return MinFilter::LINEAR;
-    case imp::gltf::Sampler::NEAREST_MIPMAP_NEAREST:
+    case imp::gltf::imp_proto::Sampler::NEAREST_MIPMAP_NEAREST:
       return MinFilter::NEAREST_MIPMAP_NEAREST;
-    case imp::gltf::Sampler::LINEAR_MIPMAP_NEAREST:
+    case imp::gltf::imp_proto::Sampler::LINEAR_MIPMAP_NEAREST:
       return MinFilter::LINEAR_MIPMAP_NEAREST;
-    case imp::gltf::Sampler::NEAREST_MIPMAP_LINEAR:
+    case imp::gltf::imp_proto::Sampler::NEAREST_MIPMAP_LINEAR:
       return MinFilter::NEAREST_MIPMAP_NEAREST;
     default:
-    case imp::gltf::Sampler::LINEAR_MIPMAP_LINEAR:
+    case imp::gltf::imp_proto::Sampler::LINEAR_MIPMAP_LINEAR:
       return MinFilter::LINEAR_MIPMAP_LINEAR;
       break;
   }
@@ -60,31 +60,31 @@ constexpr MinFilter ConvertMinFilter(int filter) {
 
 constexpr MagFilter ConvertMagFilter(int filter) {
   switch (filter) {
-    case imp::gltf::Sampler::NEAREST:
+    case imp::gltf::imp_proto::Sampler::NEAREST:
       return MagFilter::NEAREST;
     default:
-    case imp::gltf::Sampler::LINEAR:
+    case imp::gltf::imp_proto::Sampler::LINEAR:
       return MagFilter::LINEAR;
   }
 }
 
 constexpr WrapMode ConvertWrapMode(int wrap_mode) {
   switch (wrap_mode) {
-    case imp::gltf::Sampler::CLAMP_TO_EDGE:
+    case imp::gltf::imp_proto::Sampler::CLAMP_TO_EDGE:
       return WrapMode::CLAMP_TO_EDGE;
-    case imp::gltf::Sampler::REPEAT:
+    case imp::gltf::imp_proto::Sampler::REPEAT:
     default:
       return WrapMode::REPEAT;
-    case imp::gltf::Sampler::MIRRORED_REPEAT:
+    case imp::gltf::imp_proto::Sampler::MIRRORED_REPEAT:
       return WrapMode::MIRRORED_REPEAT;
   }
 }
 
 OptionalError ParseGltf(const BufferAccess& access,
-                        absl::optional<imp::gltf::Gltf>& out_gltf) {
+                        absl::optional<imp::gltf::imp_proto::Gltf>& out_gltf) {
   absl::string_view data(reinterpret_cast<const char*>(access.Data()),
                          access.Size());
-  imp::gltf::Gltf parse_result;
+  imp::gltf::imp_proto::Gltf parse_result;
 
   proto::JsonMessageVisitor visitor;
   std::unique_ptr<loader::extensions::Behavior> behavior =
@@ -97,7 +97,7 @@ OptionalError ParseGltf(const BufferAccess& access,
 
   MP_RETURN_IF_ERROR(imp::proto::ParseJson(data, &parse_result, &visitor));
   out_gltf.emplace(std::move(parse_result));
-  imp::gltf::Gltf* gltf = &out_gltf.value();
+  imp::gltf::imp_proto::Gltf* gltf = &out_gltf.value();
 
   // Validate data.
   auto check_optional = [](auto id, const auto& container) {
@@ -263,7 +263,7 @@ constexpr const char* kErrDataTooShort = "data too short";
 constexpr const char* kErrBadVersion = "bad version";
 
 OptionalError ParseGlb(const BufferAccess& access,
-                       absl::optional<imp::gltf::Gltf>& out_gltf) {
+                       absl::optional<imp::gltf::imp_proto::Gltf>& out_gltf) {
   constexpr const size_t kGlbChunkHeaderSize = 8;
   constexpr const uint32_t kGlbVersion = 2;
   constexpr const uint32_t kGlbMagicJsonChunk = 0x4E4F534A;  // 'JSON'
@@ -298,7 +298,7 @@ OptionalError ParseGlb(const BufferAccess& access,
   uint32_t bin_size = 0;
   MP_RETURN_IF_ERROR(
       ParseGltf(BufferAccess::Wrap(json_chunk, json_size), out_gltf));
-  imp::gltf::Gltf* gltf = &out_gltf.value();
+  imp::gltf::imp_proto::Gltf* gltf = &out_gltf.value();
 
   if (size > access.Size()) {
     return Error(kErrDataTooShort);
@@ -338,8 +338,9 @@ OptionalError ParseGlb(const BufferAccess& access,
 
 }  // namespace
 
-OptionalError TryParseGltf(const imp::BufferAccess& primary_resource,
-                           absl::optional<imp::gltf::Gltf>& out_gltf) {
+OptionalError TryParseGltf(
+    const imp::BufferAccess& primary_resource,
+    absl::optional<imp::gltf::imp_proto::Gltf>& out_gltf) {
   constexpr const uint32_t kGlbMagic = 0x46546C67;  // 'glTF'
   // Check whether the buffer is a .glb file.
   if (primary_resource.Size() < kGlbHeaderSize) {

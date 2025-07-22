@@ -27,6 +27,7 @@
 #include "core/config.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
+#include "core/media/media_color_space.h"
 #include "core/render/android/android_defines.h"
 #include "core/render/android/platform_android_external_texture_surface.h"
 #include "core/render/content_security_level.h"
@@ -153,21 +154,21 @@ DefaultPlatformAndroidExternalTextureSurface::GetContentSecurityLevel() const {
   return security_level_;
 }
 
-absl::StatusOr<SurfaceColorSpace>
-DefaultPlatformAndroidExternalTextureSurface::GetSurfaceColorSpace() const {
+absl::StatusOr<MediaColorSpace>
+DefaultPlatformAndroidExternalTextureSurface::GetMediaColorSpace() const {
 #if IMP_PLATFORM(ANDROID)
 #if __ANDROID_API__ >= 33
   int32_t data_space = surface_texture_->GetDataSpace();
-  return SurfaceColorSpace(data_space);
+  return MediaColorSpace(data_space);
 #else
   return absl::UnimplementedError(
-      "GetSurfaceColorSpace for "
+      "GetMediaColorSpace for "
       "DefaultPlatformAndroidExternalTextureSurface requires Android API level "
       "33 or higher.");
 #endif  // __ANDROID_API__ >= 33
 #else
   return absl::UnimplementedError(
-      "GetSurfaceColorSpace is not implemented for "
+      "GetMediaColorSpace is not implemented for "
       "DefaultPlatformAndroidExternalTextureSurface on this platform.");
 #endif  // IMP_PLATFORM(ANDROID)
 }

@@ -22,23 +22,28 @@
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "core/common/registry.h"
 #include "core/common/robin_set.h"
 #include "core/config.h"
 #include "core/input/pointer_event.h"
+#include "core/ncsb/component.h"
 #include "core/ncsb/node_handle.h"
+#include "core/recipes/language/recipe_async_execution_manager.h"
+#include "core/recipes/language/recipe_execution_context.h"
 #include "core/recipes/language/recipe_graph.proto.imp.h"
 #include "core/recipes/language/recipe_runtime_event.h"
 #include "core/recipes/language/recipe_runtime_graph.h"
 #include "core/recipes/language/recipe_scope.h"
 #include "core/recipes/language/recipe_system.h"
+#include "core/recipes/language/recipe_types.proto.imp.h"
 #include "core/recipes/language/recipe_utils.h"
 #include "core/recipes/recipe_event.h"
 #include "core/recipes/recipe_runner_state.proto.imp.h"
+#include "core/view/framework/gestures/hover_gesture.h"
 #include "core/view/framework/gestures/tap_gesture.h"
+#include "core/view/framework/input/pointer_input_handler.h"
 #include "core/view/utils/frame_time.h"
 #include "mediapipe/framework/port/status_macros.h"
 
@@ -48,8 +53,7 @@
 
 namespace imp {
 
-using AsyncExecutionHandle = RecipeRuntimeGraph::AsyncExecutionHandle;
-using ExecutionResult = RecipeRuntimeGraph::ExecutionResult;
+using AsyncExecution = RecipeAsyncExecutionManager::AsyncExecution;
 using RuntimeState = RecipeRunner::RuntimeState;
 
 namespace {
@@ -100,6 +104,12 @@ absl::Status RecipeRunner::Setup() {
     runtime_state_ = RuntimeState::kReady;
   }
 
+  RecipeSystem& recipe_system =
+      GetView().GetRegistry().GetOrCreate<RecipeSystem>(GetView());
+
+  // Creates the local RecipeScope.
+  scope_ = std::make_unique<RecipeScope>(&recipe_system.GetRootScope());
+
   return absl::OkStatus();
 }
 
@@ -126,6 +136,11 @@ void RecipeRunner::Update(const FrameTime& frame_time) {
     return;
   }
 
+  // Set the value for the RecipeRunner's `time_since_start` global recipe
+  // variable for this frame.
+  scope_->GetVariable(std::string(recipe::kTimeSinceStart))->get() =
+      recipe::Variable((float)absl::ToDoubleSeconds(elapsed_time_));
+
   // Pending events from the previous round of execution are now executed.
   std::vector<RecipeRuntimeEvent> pending_queue;
   std::swap(pending_queue, runtime_event_queue_);
@@ -135,83 +150,60 @@ void RecipeRunner::Update(const FrameTime& frame_time) {
     GetView().GetDispatcher().Send(RecipeEvent(event.name, event.arguments));
   }
 
-  RecipeRuntimeEvent on_update_event{
-      .name = std::string(recipe::kOnUpdateEventName)};
-  on_update_event.arguments[std::string(recipe::kDeltaSecondsSocketName)] =
-      frame_time.GetDeltaSeconds();
-  on_update_event.arguments[std::string(recipe::kElapsedSecondsSocketName)] =
-      absl::ToDoubleSeconds(elapsed_time_);
+  // Triggers the OnUpdateEvent if a `OnUpdateEvent` Recipe Event node exists in
+  // the RecipeRuntimeGraph.
+  if (runtime_graph_->HasEvent(recipe::kOnUpdateEventName)) {
+    RecipeRuntimeEvent on_update_event{
+        .name = std::string(recipe::kOnUpdateEventName)};
+    on_update_event.arguments[std::string(recipe::kDeltaSecondsSocketName)] =
+        frame_time.GetDeltaSeconds();
+    on_update_event.arguments[std::string(recipe::kElapsedSecondsSocketName)] =
+        absl::ToDoubleSeconds(elapsed_time_);
 
-  TriggerEventAndHandleExecutionResult(on_update_event);
-
-  auto it = scheduled_executions_.begin();
-  while (it != scheduled_executions_.end()) {
-    ScheduledExecution& scheduled_execution = *it;
-    TryResumeScheduledExecution(scheduled_execution);
-    if (scheduled_execution.async_execution_handles.empty()) {
-      it = scheduled_executions_.erase(it);
-    } else {
-      ++it;
-    }
+    TriggerEventAndHandleExecutionResult(on_update_event);
   }
+
+  // Consume all previously scheduled async executions that are ready
+  async_execution_manager_.ForEachAsyncExecution(
+      [this](const RecipeAsyncExecutionManager::AsyncExecution& execution) {
+        if (!execution.handle.Ready()) {
+          return;
+        }
+        RecipeRuntimeGraph::ExecutionResult result =
+            runtime_graph_->ResumeExecution(execution, GetView());
+
+        if (!result.ok() && result.code() != absl::StatusCode::kCancelled) {
+          IMP_LOG(imp::ERROR) << "Async execution failed: " << result;
+        }
+      });
+
+  async_execution_manager_.DeleteFinishedScopes();
 }
+
 void RecipeRunner::TriggerEventAndHandleExecutionResult(
     const RecipeRuntimeEvent& event) {
-  std::unique_ptr<RecipeScope> scope =
-      std::make_unique<RecipeScope>(scope_.get());
-  absl::StatusOr<ExecutionResult> execution_result =
-      runtime_graph_->TriggerEvent(event, scope.get());
+  // Create a new scope based on the base member scope, and the async execution
+  // manager is its sole owner
+  // TODO Improve the management of RecipeScope, currently the
+  // scope passed to TriggerEvent has to match the active scope in
+  // RecipeAsyncExecutionManager
+  RecipeScope* scope = async_execution_manager_.AddScope(scope_.get());
 
-  if (!execution_result.ok()) {
+  RecipeExecutionContext context =
+      RecipeExecutionContext{.scope = *scope,
+                             .view = GetView(),
+                             .async_manager = async_execution_manager_};
+
+  RecipeRuntimeGraph::ExecutionResult result =
+      runtime_graph_->TriggerEvent(event, context);
+
+  if (!result.ok()) {
     IMP_LOG(imp::ERROR) << "RecipeEvent " << event.name
-               << " exeuction failed: " << execution_result.status();
+               << " execution failed: " << result;
     return;
   }
 
   output::Recipe("RecipeEvent %s execution succeeded.", event.name);
-
-  if (!execution_result->async_execution_handles.empty()) {
-    ScheduledExecution scheduled_execution;
-    // Gather info from execution result.
-    for (const AsyncExecutionHandle& handle :
-         execution_result->async_execution_handles) {
-      scheduled_execution.async_execution_handles.push_back(handle);
-    }
-
-    scheduled_execution.scope = std::move(scope);
-    scheduled_executions_.push_back(std::move(scheduled_execution));
-  }
-}
-
-void RecipeRunner::TryResumeScheduledExecution(
-    ScheduledExecution& scheduled_execution) {
-  std::vector<AsyncExecutionHandle> new_handles;
-  auto it = scheduled_execution.async_execution_handles.begin();
-  while (it != scheduled_execution.async_execution_handles.end()) {
-    const AsyncExecutionHandle& handle = *it;
-    if (handle.Ready()) {
-      absl::StatusOr<ExecutionResult> execution_result =
-          runtime_graph_->ResumeExecution(handle,
-                                          scheduled_execution.scope.get());
-      if (execution_result.ok()) {
-        output::Recipe("Async execution succeed.");
-        for (const AsyncExecutionHandle& handle :
-             execution_result->async_execution_handles) {
-          new_handles.push_back(handle);
-        }
-      } else {
-        IMP_LOG(imp::ERROR) << "Async execution failed: " << execution_result.status();
-      }
-
-      it = scheduled_execution.async_execution_handles.erase(it);
-    } else {
-      ++it;
-    }
-  }
-
-  for (const AsyncExecutionHandle& new_handle : new_handles) {
-    scheduled_execution.async_execution_handles.push_back(new_handle);
-  }
 }
 
 absl::Status RecipeRunner::Start() {
@@ -219,11 +211,9 @@ absl::Status RecipeRunner::Start() {
     return absl::OkStatus();
   }
 
-  RecipeSystem& recipe_system =
-      GetView().GetRegistry().GetOrCreate<RecipeSystem>(GetView());
+  // Clears all variables created in a previous invocation.
+  scope_->ClearLocalVariables();
 
-  // Creates the local RecipeScope.
-  scope_ = std::make_unique<RecipeScope>(&recipe_system.GetRootScope());
   // Declare default variables.
   VariableDeclaration node_self_variable_declaration{
       .name = std::string(recipe::kNodeSelfVariableName),
@@ -248,6 +238,16 @@ absl::Status RecipeRunner::Start() {
 
   // Resets the elapsed time.
   elapsed_time_ = absl::ZeroDuration();
+
+  // Initializes the `time_since_start` variable to the value of `elapsed_time_`
+  VariableDeclaration time_since_start_declaration{
+      .name = std::string(recipe::kTimeSinceStart),
+      .type = VariableDeclaration::Type::FLOAT,
+      .init_value =
+          Literal{.value = (float)absl::ToDoubleSeconds(elapsed_time_)},
+  };
+
+  MP_RETURN_IF_ERROR(scope_->DeclareVariable(time_since_start_declaration));
 
   // Starts listening to tap events.
   tap_event_connection_ =
@@ -276,10 +276,57 @@ absl::Status RecipeRunner::Start() {
         runtime_event_queue_.push_back(std::move(on_tap_event));
       });
 
-  // Triggers the OnStartEvent.
-  RecipeRuntimeEvent on_start_event{.name =
-                                        std::string(recipe::kOnStartEventName)};
-  TriggerEventAndHandleExecutionResult(on_start_event);
+  hover_event_connection_ =
+      Connect([this](const HoverGesture::HoverEvent& hover_event) {
+        if (!hover_targets_.has_value()) {
+          return;
+        }
+
+        const std::string target_socket_name =
+            std::string(recipe::kHoverTargetSocketName);
+        const std::string controller_index_socket_name =
+            std::string(recipe::kHoverControllerIndexSocketName);
+
+        NodeHandle hover_target;
+        for (const NodeHandle& hit_node : hover_event.all_intersecting_nodes) {
+          if (hover_targets_->contains(hit_node)) {
+            hover_target = hit_node;
+            break;
+          }
+        }
+
+        if (hover_target == hovered_node_) {
+          return;
+        }
+
+        if (hovered_node_.IsValid()) {
+          RecipeRuntimeEvent on_hover_end_event{
+              .name = std::string(recipe::kOnHoverEndEventName)};
+          on_hover_end_event.arguments[target_socket_name] = hovered_node_;
+          on_hover_end_event.arguments[controller_index_socket_name] = 0;
+
+          runtime_event_queue_.push_back(std::move(on_hover_end_event));
+        }
+
+        if (hover_target.IsValid()) {
+          RecipeRuntimeEvent on_hover_begin_event{
+              .name = std::string(recipe::kOnHoverBeginEventName)};
+          on_hover_begin_event.arguments[target_socket_name] = hover_target;
+          on_hover_begin_event.arguments[controller_index_socket_name] = 0;
+
+          runtime_event_queue_.push_back(std::move(on_hover_begin_event));
+        }
+
+        hovered_node_ = hover_target;
+      });
+
+  // Triggers the OnStartEvent if a `OnStartEvent` Recipe Event node exists in
+  // the RecipeRuntimeGraph.
+  if (runtime_graph_->HasEvent(recipe::kOnStartEventName)) {
+    RecipeRuntimeEvent on_start_event{
+        .name = std::string(recipe::kOnStartEventName)};
+    TriggerEventAndHandleExecutionResult(on_start_event);
+  }
 
   runtime_state_ = RuntimeState::kRunning;
 
@@ -293,6 +340,7 @@ void RecipeRunner::Stop() {
 
   // Disconnects event listeners.
   tap_event_connection_.Disconnect();
+  hover_event_connection_.Disconnect();
   runtime_graph_->SetRuntimeEventListener([](RecipeRuntimeEvent event) {});
 
   runtime_state_ = RuntimeState::kStopped;
@@ -310,10 +358,31 @@ void RecipeRunner::SetTapTargets(absl::Span<NodeHandle> tap_targets) {
   }
 }
 
+void RecipeRunner::SetHoverTargets(absl::Span<NodeHandle> hover_targets) {
+  if (!hover_targets_) {
+    hover_targets_ = RobinSet<NodeHandle>();
+  } else {
+    hover_targets_->clear();
+  }
+
+  for (NodeHandle node : hover_targets) {
+    hover_targets_->insert(node);
+  }
+}
+
 std::optional<const std::vector<NodeHandle>> RecipeRunner::GetTapTargets()
     const {
   if (tap_targets_) {
     return std::vector<NodeHandle>(tap_targets_->begin(), tap_targets_->end());
+  }
+  return std::nullopt;
+}
+
+std::optional<const std::vector<NodeHandle>> RecipeRunner::GetHoverTargets()
+    const {
+  if (hover_targets_) {
+    return std::vector<NodeHandle>(hover_targets_->begin(),
+                                   hover_targets_->end());
   }
   return std::nullopt;
 }

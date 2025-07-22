@@ -34,21 +34,16 @@
 namespace imp {
 BoxCollidableShape::BoxCollidableShape(NodeHandle node) : node_(node) {}
 
-btTransform BoxCollidableShape::AddBtCollisionShape() {
+void BoxCollidableShape::CreateBtCollisionShape() {
   auto collider = node_->GetComponent<BoxCollider>();
   Box local_box = collider->GetLocalBox();
   collidable_shape_ =
       std::make_unique<btBoxShape>(ToBtVector3(local_box.halfExtent));
 
-  btTransform transform;
-  transform.setIdentity();
-  transform.setOrigin(ToBtVector3(collider->GetWorldBox().center));
   collidable_center_ = local_box.center;
-
-  return transform;
 }
 
-btCollisionShape* BoxCollidableShape::GetCollidableShape() const {
+btCollisionShape* BoxCollidableShape::GetBtCollisionShape() const {
   return collidable_shape_.get();
 }
 
@@ -57,10 +52,10 @@ float3 BoxCollidableShape::GetCollidableCenter() const {
 }
 
 CollidableShape::CollisionShape BoxCollidableShape::GetCollisionShape(
-    const btTransform& transform) const {
+    const btTransform& bt_trans) const {
   const btBoxShape* box = static_cast<btBoxShape*>(collidable_shape_.get());
   
-  return Box{.center = ToVec3<float>(transform.getOrigin()),
+  return Box{.center = ToVec3<float>(bt_trans.getOrigin()),
              .halfExtent = ToVec3<float>(box->getHalfExtentsWithMargin())};
 }
 
@@ -73,13 +68,13 @@ void BoxCollidableShape::ApplyScalingToBulletCollider() {
 }
 
 #if IMP_RUNTIME(DEV)
-void BoxCollidableShape::Visualize(const btTransform& transform) const {
+void BoxCollidableShape::Visualize(const btTransform& bt_trans) const {
   const float3 world_scale = node_->GetWorldScale();
   if (world_scale.x > 0 && world_scale.y > 0 && world_scale.z > 0) {
     btBoxShape* box = static_cast<btBoxShape*>(collidable_shape_.get());
 
     const float3 local_box_center =
-        node_->LocalFromWorldPoint(ToVec3<float>(transform.getOrigin()));
+        node_->LocalFromWorldPoint(ToVec3<float>(bt_trans.getOrigin()));
     float3 local_box_half_extent =
         ToVec3<float>(box->getHalfExtentsWithMargin());
     local_box_half_extent.x /= world_scale.x;

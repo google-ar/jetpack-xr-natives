@@ -31,7 +31,7 @@ namespace imp {
 // Implementation of CanvasSource for iOS.
 class IosPlatformCanvasSource : public PlatformCanvasSource {
  public:
-  explicit IosPlatformCanvasSource(BaseView& view);
+  IosPlatformCanvasSource();
   ~IosPlatformCanvasSource() override;
 
   bool IsFeatureSupported(ScopedCanvas::Feature feature) override;
@@ -66,10 +66,12 @@ class IosPlatformCanvasSource : public PlatformCanvasSource {
       const ScopedCanvas::TextOptions& text_options) override;
 
   std::unique_ptr<ScopedCanvas> StartDrawing(
-      uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) override;
+      BaseView& view, uint2 pixel_size,
+      ScopedCanvas::DrawMode draw_mode) override;
 
   std::unique_ptr<ScopedCanvas> StartDrawing(
-      uint2 pixel_size, ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
+      BaseView& view, uint2 pixel_size,
+      ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
       ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) override;
 
  private:
@@ -91,7 +93,6 @@ class IosPlatformCanvasSource : public PlatformCanvasSource {
 
   std::unique_ptr<PlatformPod> platform_pod_;
 
-  BaseView& view_;
   OwnedTexturePtr texture_;
 
   float pixels_per_dp_;

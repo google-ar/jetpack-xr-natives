@@ -78,6 +78,10 @@ struct RecipeTypeToStringVisitor {
                            value.y, value.z);
   }
 
+  std::string operator()(const mat2f& value) const {
+    return imp::ToString(value);
+  }
+
   std::string operator()(const mat3f& value) const {
     return imp::ToString(value);
   }
@@ -198,46 +202,50 @@ std::string NodeIdToString(const NodeId& id) {
 }
 
 VariableDeclaration::Type ToType(const Variable& var) {
-  if (std::holds_alternative<int>(var)) {
-    return VariableDeclaration::Type::INT;
-  } else if (std::holds_alternative<float>(var)) {
-    return VariableDeclaration::Type::FLOAT;
-  } else if (std::holds_alternative<double>(var)) {
-    return VariableDeclaration::Type::DOUBLE;
-  } else if (std::holds_alternative<bool>(var)) {
-    return VariableDeclaration::Type::BOOL;
-  } else if (std::holds_alternative<std::string>(var)) {
-    return VariableDeclaration::Type::STRING;
-  } else if (std::holds_alternative<float2>(var)) {
-    return VariableDeclaration::Type::FLOAT2;
-  } else if (std::holds_alternative<float3>(var)) {
-    return VariableDeclaration::Type::FLOAT3;
-  } else if (std::holds_alternative<float4>(var)) {
-    return VariableDeclaration::Type::FLOAT4;
-  } else if (std::holds_alternative<quatf>(var)) {
-    return VariableDeclaration::Type::QUATF;
-  } else if (std::holds_alternative<mat3f>(var)) {
-    return VariableDeclaration::Type::MAT3F;
-  } else if (std::holds_alternative<mat4f>(var)) {
-    return VariableDeclaration::Type::MAT4F;
-  } else if (std::holds_alternative<NodeHandle>(var)) {
-    return VariableDeclaration::Type::NODE;
-  } else if (std::holds_alternative<NodeSceneHandle>(var)) {
-    return VariableDeclaration::Type::NODE_SCENE;
-  } else if (std::holds_alternative<google::protobuf::imp_proto::Any>(var)) {
-    return VariableDeclaration::Type::PROTO;
-  } else if (std::holds_alternative<::filament::Box>(var)) {
-    return VariableDeclaration::Type::BOX;
-  } else if (std::holds_alternative<LiteralArray>(var)) {
-    return VariableDeclaration::Type::ARRAY;
-  } else if (std::holds_alternative<LiteralTuple>(var)) {
-    return VariableDeclaration::Type::TUPLE;
-  } else if (std::holds_alternative<LiteralMap>(var)) {
-    return VariableDeclaration::Type::MAP;
-  } else if (std::holds_alternative<RecipeRayHit>(var)) {
-    return VariableDeclaration::Type::RAY_HIT;
+  switch (var.index()) {
+    case Literal::kValue_IntValue:
+      return VariableDeclaration::Type::INT;
+    case Literal::kValue_FloatValue:
+      return VariableDeclaration::Type::FLOAT;
+    case Literal::kValue_DoubleValue:
+      return VariableDeclaration::Type::DOUBLE;
+    case Literal::kValue_BoolValue:
+      return VariableDeclaration::Type::BOOL;
+    case Literal::kValue_StringValue:
+      return VariableDeclaration::Type::STRING;
+    case Literal::kValue_Float2Value:
+      return VariableDeclaration::Type::FLOAT2;
+    case Literal::kValue_Float3Value:
+      return VariableDeclaration::Type::FLOAT3;
+    case Literal::kValue_Float4Value:
+      return VariableDeclaration::Type::FLOAT4;
+    case Literal::kValue_QuatfValue:
+      return VariableDeclaration::Type::QUATF;
+    case Literal::kValue_Mat2fValue:
+      return VariableDeclaration::Type::MAT2F;
+    case Literal::kValue_Mat3fValue:
+      return VariableDeclaration::Type::MAT3F;
+    case Literal::kValue_Mat4fValue:
+      return VariableDeclaration::Type::MAT4F;
+    case Literal::kValue_NodeValue:
+      return VariableDeclaration::Type::NODE;
+    case Literal::kValue_NodeSceneValue:
+      return VariableDeclaration::Type::NODE_SCENE;
+    case Literal::kValue_ProtoValue:
+      return VariableDeclaration::Type::PROTO;
+    case Literal::kValue_BoxValue:
+      return VariableDeclaration::Type::BOX;
+    case Literal::kValue_ArrayValue:
+      return VariableDeclaration::Type::ARRAY;
+    case Literal::kValue_TupleValue:
+      return VariableDeclaration::Type::TUPLE;
+    case Literal::kValue_MapValue:
+      return VariableDeclaration::Type::MAP;
+    case Literal::kValue_RayHitValue:
+      return VariableDeclaration::Type::RAY_HIT;
+    default:
+      return VariableDeclaration::Type::UNKNOWN_VARIABLE_TYPE;
   }
-  return VariableDeclaration::Type::UNKNOWN_VARIABLE_TYPE;
 }
 
 VariableDeclaration::Type ToType(const Literal& literal) {
@@ -284,6 +292,9 @@ void SetToDefault(const VariableDeclaration::Type& type, Variable& var) {
       break;
     case VariableDeclaration::Type::QUATF:
       var.emplace<quatf>();
+      break;
+    case VariableDeclaration::Type::MAT2F:
+      var.emplace<mat2f>();
       break;
     case VariableDeclaration::Type::MAT3F:
       var.emplace<mat3f>();
@@ -470,6 +481,54 @@ std::optional<float3> CoerceToFloat3(const Variable& var) {
 
       if (x.has_value() && y.has_value() && z.has_value()) {
         float3 rv{x.value(), y.value(), z.value()};
+        return rv;
+      }
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<float4> CoerceToFloat4(const Variable& var) {
+  if (std::holds_alternative<float4>(var)) {
+    auto val = std::get<float4>(var);
+    return val;
+  } else if (std::holds_alternative<quatf>(var)) {
+    auto val = std::get<quatf>(var);
+    return float4{val.x, val.y, val.z, val.w};
+  } else if (std::holds_alternative<LiteralTuple>(var)) {
+    auto tuple = std::get<LiteralTuple>(var);
+    if (tuple.values.size() == 4) {
+      auto x = CoerceToFloat(tuple.values[0].value);
+      auto y = CoerceToFloat(tuple.values[1].value);
+      auto z = CoerceToFloat(tuple.values[2].value);
+      auto w = CoerceToFloat(tuple.values[3].value);
+
+      if (x.has_value() && y.has_value() && z.has_value() && w.has_value()) {
+        float4 rv{x.value(), y.value(), z.value(), w.value()};
+        return rv;
+      }
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<quatf> CoerceToQuatf(const Variable& var) {
+  if (std::holds_alternative<quatf>(var)) {
+    auto val = std::get<quatf>(var);
+    return val;
+  } else if (std::holds_alternative<float4>(var)) {
+    auto val = std::get<float4>(var);
+    return quatf{val.x, val.y, val.z, val.w};
+  } else if (std::holds_alternative<LiteralTuple>(var)) {
+    auto tuple = std::get<LiteralTuple>(var);
+    if (tuple.values.size() == 4) {
+      auto x = CoerceToFloat(tuple.values[0].value);
+      auto y = CoerceToFloat(tuple.values[1].value);
+      auto z = CoerceToFloat(tuple.values[2].value);
+      auto w = CoerceToFloat(tuple.values[3].value);
+
+      if (x.has_value() && y.has_value() && z.has_value() && w.has_value()) {
+        quatf rv{x.value(), y.value(), z.value(), w.value()};
         return rv;
       }
     }

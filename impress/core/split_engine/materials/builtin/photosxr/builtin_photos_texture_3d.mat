@@ -19,11 +19,17 @@ material {
       name : enableColorConversion,
       type : bool,
       default : false
+    },
+    // A flag for enabling color correction + support HDR.
+    {
+      name : enableColorCorrection,
+      type : bool,
+      default : true
     }
   ],
   parameters: [
     // Textures.
-    { type: sampler2d, name: imageTexture},
+    { type: sampler2d, name: imageTexture },
     {
       type: samplerExternal,
       name: videoTexture,
@@ -46,6 +52,9 @@ material {
     // Stereo control parameters.
     { type: bool, name: isStereo },
     { type: bool, name: isStereoUsingAuxiliaryTexture },
+    // This value has different meanings depending on the value of isStereoUsingAuxiliaryTexture.
+    // If false, 0: left-right side-by-side; 1: top-bottom over-under;
+    // If true, 0: left is primary, right is auxiliary; 1: right is primary, left is auxiliary.
     { type: int, name: stereoAxis },
     { type: float, name: stereoDisparityAdjustment },
 
@@ -55,13 +64,10 @@ material {
     { type: float, name: extraZoomAfterParallax },
     { type: float, name: maxWindowPopDistance },
     { type: float, name: maxMediaInsetDistance },
-    { type: float, name: edgeFadeAmount },
-    { type: float, name: windowEdgeFadeThickness },
-    { type: float, name: insetMediaEdgeFadeThickness },
+    { type: float3, name: fadeParams }, // [edgeFadeAmount, windowEdgeFadeThickness, insetMediaEdgeFadeThickness]
     { type: float, name: cornerRadius },
     { type: float3, name: curveParams }, // [curve_amount, curve_radius, curve_angle]
-    { type: float, name: blurCenterClearAmount },
-    { type: float, name: blurCenterEdgeFadeThickness },
+    { type: float2, name: blurParams },  // [blurCenterClearAmount, blurCenterEdgeFadeThickness]
     { type: bool, name: blurCenterMaskFlip },
 
     // Noise animation parameters.
@@ -86,16 +92,45 @@ material {
     { type: float, name: panoMediaEdgeFadeExponent },
     { type: float, name: panoCornerRadiusDecreaseExponent },
 
-   // Final color corrections and opacity.
-   { type: float, name: gammaToSrgb },
-   { type: float3, name: tintColor },
-   { type: float, name: opacity }
+    // Final color corrections and opacity.
+    { type: float, name: gammaToSrgb },
+    { type: float3, name: tintColor },
+    { type: float, name: opacity },
+
+    // Parameters for color correction.
+    // Note: we assume that all the samplers have the same color space since
+    // they all derive from the main media asset.
+    // Meaning, we only need one color space data for all the samplers.
+    {
+      type : int,
+      name : maxContentLightLevel,
+      default : -1
+    },
+    {
+      type: float3x3,
+      name: colorConversionMatrix
+    },
+    {
+      type: int,
+      name: transferFunction,
+      default: 0
+      // Expected values:
+      // 1: Linear
+      // 2: SRGB
+      // 3: SMPTE170M
+      // 10: Gamma22
+      // 6: ST2084
+      // 7: HLG
+      // Source: (broken link)
+    }
   ],
   requires : [
       uv0
   ],
   variables : [
     modelScale,
+    cameraPos,
+    morphedPos,
     // Media plane is a virtual plane, set further behind in the z axis than the actual quad.
     // Using mediaUv will ensure that the media appears to be rendering at the media plane.
     // In the case of a panorama, this will be the same as uv0.
@@ -121,7 +156,8 @@ vertex {
   precision highp float;
 
   bool IsSamplingAuxiliaryTexture() {
-    return materialParams.isStereoUsingAuxiliaryTexture && materialParams.isStereo && variable_stereoData.y == 1.0;
+    float auxiliaryEye = materialParams.stereoAxis == 0 ? 1.0 : 0.0;
+    return materialParams.isStereoUsingAuxiliaryTexture && materialParams.isStereo && variable_stereoData.y == auxiliaryEye;
   }
 
   void materialVertex(inout MaterialVertexInputs material) {
@@ -133,25 +169,17 @@ vertex {
     );
 
     vec3 camera_pos = mulMat4x4Float3(inverse(getWorldFromModelMatrix()), getWorldCameraPosition()).xyz;
+    material.cameraPos.xyz = camera_pos;
 
-    vec3 uv_h = vec3(material.uv0, 1.0);
-    if (materialParams.showVideo) {
-      mat3 texture_transform = IsSamplingAuxiliaryTexture() ? materialParams.auxiliaryVideoTextureTransform : materialParams.videoTextureTransform;
-      uv_h = materialParams.uvTransform * texture_transform * uv_h;
-    } else {
-      uv_h = materialParams.uvTransform * uv_h;
-    }
-    vec2 transformed_uv = uv_h.xy / uv_h.z;
-
+    vec2 uv = material.uv0;
     if (materialParams.isPano) {
       vec3 morphed_pos = getPosition().xyz;
       // Morph the quad vertices into a sphere.
       if (materialParams.panoSphericalAmount > 0.0) {
         morphed_pos = morphToSpherePos(getPosition().xyz, camera_pos, materialParams.panoSphericalAmount, materialParams.panoSphereRadius);
       }
+      material.morphedPos.xyz = morphed_pos;
       material.worldPosition = mulMat4x4Float3(world_from_model, morphed_pos);
-      material.mediaUv.xy = transformed_uv;
-      material.uv0 = transformed_uv;
     } else {
       vec3 window_pos = getPosition().xyz;
 
@@ -168,23 +196,34 @@ vertex {
       // vertices slightly forward proportionally to the edge fade amount.
       // Edge fade amount will be 1.0 when a stereo media is shown.
       // Refer to the comment in quadParallaxUv() for more details.
-      float window_pop_dz = materialParams.maxWindowPopDistance * materialParams.edgeFadeAmount;
+      float edgeFadeAmount = materialParams.fadeParams[0];
+      float window_pop_dz = materialParams.maxWindowPopDistance *
+                                         edgeFadeAmount;
       vec3 moved_window_pos = window_pos
                                       + vec3(0., 0., window_pop_dz);
       material.worldPosition = mulMat4x4Float3(world_from_model,
                                               moved_window_pos);
 
       QuadParallaxParams p;
-      p.uv = transformed_uv;
-      p.original_pos = getPosition().xyz;
+      p.uv = uv;
       p.window_pop_dz = window_pop_dz;
       p.moved_window_pos = moved_window_pos;
       p.camera_pos = camera_pos;
       p.extra_zoom_after_parallax = materialParams.extraZoomAfterParallax;
       p.max_media_inset = materialParams.maxMediaInsetDistance;
       p.parallax_amount = materialParams.parallaxAmount;
-      material.mediaUv.xy = quadParallaxUv(p);
+      uv = quadParallaxUv(p);
+   }
+
+    // Apply uv transforms after the pano or parallax calculation.
+    vec3 uv_h = vec3(uv, 1.0);
+    if (materialParams.showVideo) {
+      mat3 texture_transform = IsSamplingAuxiliaryTexture() ? materialParams.auxiliaryVideoTextureTransform : materialParams.videoTextureTransform;
+      uv_h = materialParams.uvTransform * texture_transform * uv_h;
+    } else {
+      uv_h = materialParams.uvTransform * uv_h;
     }
+    material.mediaUv.xy = uv_h.xy / uv_h.z;
 
 #if defined(VARIANT_HAS_STEREO)
     material.stereoData.x = 1.0;
@@ -200,13 +239,22 @@ fragment {
   #include "panorama_helpers.glsl"
   #include "color_space_helpers.glsl"
   #include "sdf_fade.glsl"
+  #include "dataspace_support.glsl"
+  #include "super_sample.glsl"
 
   // Necessary for high res textures.
   precision highp float;
 
+  bool IsSamplingAuxiliaryTexture() {
+    float auxiliaryEye = materialParams.stereoAxis == 0 ? 1.0 : 0.0;
+    return materialParams.isStereoUsingAuxiliaryTexture && materialParams.isStereo && variable_stereoData.y == auxiliaryEye;
+  }
+
   // Blend different layers according to the following diagram:
   // (broken link)
-  vec4 blendLayers(vec3 media, vec3 thumbnail, vec3 blur, float media_to_blur_edge_fade, float blur_mask, float final_mask) {
+  vec3 blendLayers(
+      vec3 media, vec3 thumbnail, vec3 blur,
+      float media_to_blur_edge_fade, float blur_mask) {
     // 1. Mix the media with the thumbnail.
     vec3 blend = mix(media, thumbnail, materialParams.thumbnailMix);
 
@@ -216,10 +264,7 @@ fragment {
     // 3. Now mix in blur for pixels that are not at the edges.
     blend = mix(blend, blur, materialParams.blurMix * blur_mask);
 
-    // 4. Now mask the final result with the final mask.
-    // Use premultiplied alpha.
-    float alpha = materialParams.opacity * (1. - final_mask);
-    return vec4(blend.xyz * materialParams.tintColor, 1.0) * alpha;
+    return blend;
   }
 
   vec3 blurColor(vec2 uv) {
@@ -256,7 +301,7 @@ fragment {
     return blur;
   }
 
-  vec2 stereoAdjustedUv(vec2 uv) {
+   vec2 stereoAdjustedUv(vec2 uv) {
     if (variable_stereoData.x == 0.0 || !materialParams.isStereo ||
         materialParams.isStereoUsingAuxiliaryTexture) {
       return uv;
@@ -275,12 +320,17 @@ fragment {
     prepareMaterial(material);
     vec2 media_uv = variable_mediaUv.xy;
 
-    // 0. Calculate the media uv for panorama mode. This needs to be done
+    // 0. Get the thumbnail color.
+    vec3 thumbnail = texture(materialParams_thumbnailTexture, media_uv).xyz;
+
+    // 1a. Calculate the media uv for panorama mode. This needs to be done
     // in the fragment shader to avoid warping.
     if (materialParams.isPano) {
-      vec2 uv_on_sphere = getUV0();
+      vec2 uv_on_sphere = media_uv;
+      // If the pano morph is not complete, calculate the uv on a virtual
+      // sphere at an infinite distance.
       if (materialParams.panoSphericalAmount < 1.0) {
-        uv_on_sphere = panoParallaxUv(getWorldPosition().xyz, getWorldCameraPosition().xyz);
+        uv_on_sphere = panoParallaxUv(variable_morphedPos.xyz, variable_cameraPos.xyz);
       }
       media_uv =
           tileUvToPanoFov(uv_on_sphere, materialParams.panoFovDegrees[0],
@@ -288,22 +338,24 @@ fragment {
           materialParams.panoFovDegrees[2]);
     }
 
-    vec3 thumbnail = texture(materialParams_thumbnailTexture, media_uv).xyz;
-
     // 1. Obtain the media color.
     vec3 media;
     vec2 maybe_stereo_uv = stereoAdjustedUv(media_uv);
     if (materialParams.showVideo)
     {
-      if (materialParams.isStereoUsingAuxiliaryTexture && variable_stereoData.y == 1.0) {
-        media = texture(materialParams_auxiliaryVideoTexture, maybe_stereo_uv).xyz;
+      // We need super sampling especially for high resolution videos.
+      vec4 super_sampled;
+      if (IsSamplingAuxiliaryTexture()) {
+        SUPER_SAMPLE_INTO(
+          materialParams_auxiliaryVideoTexture, maybe_stereo_uv, super_sampled);
       } else {
-        media = texture(materialParams_videoTexture, maybe_stereo_uv).xyz;
+        SUPER_SAMPLE_INTO(
+          materialParams_videoTexture, maybe_stereo_uv, super_sampled);
       }
+      media = super_sampled.xyz;
     } else {
       media = texture(materialParams_imageTexture, maybe_stereo_uv).xyz;
     }
-
 
     // 2. Obtain the blur color. This will be a mono blurred texture for
     // images, and simply a solid color for videos for now.
@@ -311,6 +363,7 @@ fragment {
 
     // 3. Fade the edges of the media with the blur texture.
     float media_to_blur_edge_fade;
+    float edgeFadeAmount = materialParams.fadeParams[0];
     if (materialParams.isPano) {
       // Only fade the media edges in an axis if the media has a
       // noticable gap along that axis of the photoshere. Otherwise, the media
@@ -329,17 +382,21 @@ fragment {
       // Gently transition from the media texture to the blur texture when the
       // viewing direction is big and the window is revealing the edges of the
       // original media.
-      float corner_radius = materialParams.cornerRadius * materialParams.edgeFadeAmount;
+      float corner_radius = materialParams.cornerRadius * edgeFadeAmount;
       float fade_to_blur_amount = materialParams.parallaxAmount;
-      float edge_fade_thickness = materialParams.insetMediaEdgeFadeThickness * materialParams.parallaxAmount;
-      media_to_blur_edge_fade =  edgeFadeAlpha(media_uv, variable_modelScale.xy, edge_fade_thickness, 1.0, corner_radius);
+      float insetMediaEdgeFadeThickness = materialParams.fadeParams[2];
+      float edge_fade_thickness = insetMediaEdgeFadeThickness *
+                                         materialParams.parallaxAmount;
+      media_to_blur_edge_fade = edgeFadeAlpha(media_uv, variable_modelScale.xy, edge_fade_thickness, 1.0, corner_radius);
     }
 
     // 4. Calculate the blur mask.
     float blur_mask = 1.0;
-    if (!materialParams.isPano && materialParams.blurCenterClearAmount > 0.0) {
-      blur_mask = edgeFadeAlpha(media_uv, variable_modelScale.xy, materialParams.blurCenterEdgeFadeThickness,
-                                materialParams.blurCenterClearAmount, materialParams.cornerRadius);
+    float blurCenterClearAmount = materialParams.blurParams[0];
+    float blurCenterEdgeFadeThickness = materialParams.blurParams[1];
+    if (!materialParams.isPano && blurCenterClearAmount > 0.0) {
+      blur_mask = edgeFadeAlpha(media_uv, variable_modelScale.xy, blurCenterEdgeFadeThickness,
+                                blurCenterClearAmount, materialParams.cornerRadius);
       if (materialParams.blurCenterMaskFlip) {
         blur_mask = 1.0 - blur_mask;
       }
@@ -357,13 +414,55 @@ fragment {
           edgeFadeAlpha(getUV0(), variable_modelScale.xy, 0.0, 1.0, radius);
     } else {
        // 5b. Fade the edges of the window with the blur texture.
-      float edge_fade_thickness = materialParams.windowEdgeFadeThickness * materialParams.edgeFadeAmount;
+      float windowEdgeFadeThickness = materialParams.fadeParams[1];
+      float edge_fade_thickness = windowEdgeFadeThickness * edgeFadeAmount;
       final_mask =
           edgeFadeAlpha(getUV0(), variable_modelScale.xy, edge_fade_thickness, 1.0, radius);
     }
 
-    // 5. Apply final color corrections.
-    vec4 blended_result = blendLayers(media, thumbnail, blur, media_to_blur_edge_fade, blur_mask, final_mask);
-    material.baseColor = colorCorrected(blended_result, materialParams.showVideo, materialConstants_enableColorConversion, materialParams.gammaToSrgb);
+    // 6. Apply final color corrections.
+
+    if (materialConstants_enableColorCorrection) {
+      // Bring everything to the linear colorspace (and tone mapped if needed),
+      // before the composition.
+      //
+      // Note: Blending can happen in gamma space, but the resulting color will
+      // appear darker than if we blended in linear space.
+      //
+      // Note: While tonemapping could be done after composition, we are doing
+      // it beforehand for simplicity, keeping the tonemapping logic in
+      // convertColor.
+      vec3 blended_result =
+        blendLayers(
+          convertColor(media, materialParams.colorConversionMatrix),
+          convertColor(thumbnail, materialParams.colorConversionMatrix),
+          convertColor(blur, materialParams.colorConversionMatrix),
+          media_to_blur_edge_fade,
+          blur_mask
+        );
+
+      // 7. Now mask the final result with the final mask.
+      // Premultiply alpha AFTER the color is corrected.
+      float alpha = materialParams.opacity * (1. - final_mask);
+      vec4 final_color =
+          vec4(blended_result * materialParams.tintColor, 1.0) * alpha;
+
+      material.baseColor = final_color;
+    } else {
+      vec3 blended_result =
+        blendLayers(
+          media, thumbnail, blur, media_to_blur_edge_fade, blur_mask);
+
+      float alpha = materialParams.opacity * (1. - final_mask);
+      vec4 final_color =
+          vec4(blended_result * materialParams.tintColor, 1.0) * alpha;
+      final_color.rgb =
+          sRGBToLinear(
+            final_color.rgb,
+            materialConstants_enableColorConversion,
+            materialParams.gammaToSrgb);
+
+      material.baseColor = final_color;
+    }
   }
 }

@@ -95,12 +95,30 @@ class BaseStateVisitor {
 // component Setup methods are called in when deserializing .isf files with
 // SceneSystem::LoadScene.
 //
-// Ex:
+// Example 1 - IsfDependencies:
 //   using IsfInfo = IsfInfo<&GltfAnimator::state_,
 //   IsfDependencies<GltfRenderer>>;
 //
-// The above example declares that when deserializing GltfAnimator, it should
+// Example 1 declares that when deserializing GltfAnimator, it should
 // not be Setup until after the GltfRenderer component has finished being setup.
+//
+// Example 2 - IsfDependents:
+//   using IsfInfo = IsfInfo<&ExternalAnimationInjector::state_, void,
+//   IsfDependents<GltfAnimator>>;
+//
+// Example 2 declares that the when deserializing a node, the
+// ExternalAnimationInjector component should finish Setup before GltfAnimator
+// is Setup.
+//
+// Example 3 - IsfDependencies and IsfDependents:
+//   using IsfInfo = IsfInfo<&GltfAnimator::state_,
+//   IsfDependencies<GltfRenderer>, IsfDependents<GltfAnimator>>;
+//
+// Example 3 declares that when deserializing GltfAnimator, it should
+// not be Setup until after the GltfRenderer component has finished being setup.
+// It also declares that when deserializing a node, the GltfAnimator component
+// should finish Setup before GltfRenderer is Setup.
+
 //
 // For more examples:
 //   third_party/impress/core/view/framework/tests/scene_system_test.cc
@@ -108,6 +126,12 @@ template <typename... Dependencies>
 struct IsfDependencies {
   static constexpr std::array<HashValue, sizeof...(Dependencies)> kDependencies{
       Dependencies::IsfInfo::kTypeUrlHash...};
+};
+
+template <typename... Dependents>
+struct IsfDependents {
+  static constexpr std::array<HashValue, sizeof...(Dependents)> kDependents{
+      Dependents::IsfInfo::kTypeUrlHash...};
 };
 
 namespace shared_isf_info_handlers {
@@ -199,7 +223,8 @@ static State DeduceStateHelper(State Component::*);
 // templated base class instead of in the concrete derived class that is
 // registered. Care should be taken when using this, since there must still be a
 // 1:1 mapping between registered component types and state types.
-template <typename Comp, auto state_field, typename Dependencies = void>
+template <typename Comp, auto state_field, typename Dependencies = void,
+          typename Dependents = void>
 struct IsfInfoWithExplicitComp {
   constexpr IsfInfoWithExplicitComp() {
     static_assert(
@@ -207,6 +232,11 @@ struct IsfInfoWithExplicitComp {
             std::is_same_v<void, Dependencies>,
         "Dependencies template parameter must be a template expansion of type "
         "IsfDependencies");
+    static_assert(
+        type_traits::IsTemplateType<Dependents, IsfDependents>::value ||
+            std::is_same_v<void, Dependents>,
+        "Dependents template parameter must be a template expansion of type "
+        "IsfDependents");
     using StateContainerT =
         decltype(isf_info_type_traits::DeduceComponentHelper(state_field));
     static_assert(std::is_base_of_v<StateContainerT, Comp> ||
@@ -229,6 +259,7 @@ struct IsfInfoWithExplicitComp {
   static constexpr HashValue kTypeUrlHash = StateT::kTypeUrlHash;
 
   using DependenciesT = Dependencies;
+  using DependentsT = Dependents;
 
   // Helper for adding a component to the passed in entity and deserializing the
   // proto data into the component's state_field. Does not call Setup, that is
@@ -356,10 +387,11 @@ struct IsfInfoWithExplicitComp {
 //
 // See Examples:
 //   third_party/impress/core/view/framework/tests/scene_system_test.cc
-template <auto state_field, typename Dependencies = void>
+template <auto state_field, typename Dependencies = void,
+          typename Dependents = void>
 using IsfInfo = IsfInfoWithExplicitComp<
     decltype(isf_info_type_traits::DeduceComponentHelper(state_field)),
-    state_field, Dependencies>;
+    state_field, Dependencies, Dependents>;
 
 // Alternative to IsfnInfo for declaring that a component type can be
 // deserialized from a .isf file when calling SceneSystem::LoadScene.
@@ -382,7 +414,7 @@ using IsfInfo = IsfInfoWithExplicitComp<
 // See Examples:
 //   third_party/impress/core/view/framework/tests/scene_system_test.cc
 template <typename Comp, const absl::string_view& type_url,
-          typename Dependencies = void>
+          typename Dependencies = void, typename Dependents = void>
 struct StatelessIsfInfo {
   constexpr StatelessIsfInfo() {
     static_assert(
@@ -390,6 +422,11 @@ struct StatelessIsfInfo {
             std::is_same_v<void, Dependencies>,
         "Dependencies template parameter must be a template expansion of type "
         "IsfDependencies");
+    static_assert(
+        type_traits::IsTemplateType<Dependents, IsfDependents>::value ||
+            std::is_same_v<void, Dependents>,
+        "Dependents template parameter must be a template expansion of type "
+        "IsfDependents");
   }
 
   // The type of the component.
@@ -406,6 +443,7 @@ struct StatelessIsfInfo {
   static constexpr HashValue kTypeUrlHash = imp::Hash(type_url);
 
   using DependenciesT = Dependencies;
+  using DependentsT = Dependents;
 
   // Helper for adding a component to the passed in entity. Does not call Setup,
   // that is done later as part of the LoadScene process.

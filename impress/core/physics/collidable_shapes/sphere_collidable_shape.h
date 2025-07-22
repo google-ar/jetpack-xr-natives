@@ -33,19 +33,19 @@ class SphereCollidableShape : public CollidableShape {
  public:
   SphereCollidableShape(NodeHandle node);
 
-  btTransform AddBtCollisionShape();
+  void CreateBtCollisionShape() override;
 
-  btCollisionShape* GetCollidableShape() const override;
+  btCollisionShape* GetBtCollisionShape() const override;
 
   float3 GetCollidableCenter() const override;
 
   CollidableShape::CollisionShape GetCollisionShape(
-      const btTransform& transform) const override;
+      const btTransform& bt_trans) const override;
 
   void ApplyScalingToBulletCollider() override;
 
 #if IMP_RUNTIME(DEV)
-  void Visualize(const btTransform& transform) const override;
+  void Visualize(const btTransform& bt_trans) const override;
 #endif
 
  private:
@@ -58,7 +58,7 @@ class SphereCollidableShape : public CollidableShape {
   // Local offset of the center of the sphere in Impress.
   float3 collidable_center_;
 
-  float3 scale_prev_ = float3(0.0f);
+  float3 scale_prev_ = float3(1.0f);
 };
 
 }  // namespace imp

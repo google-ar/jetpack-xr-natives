@@ -38,21 +38,16 @@
 namespace imp {
 SphereCollidableShape::SphereCollidableShape(NodeHandle node) : node_(node) {}
 
-btTransform SphereCollidableShape::AddBtCollisionShape() {
+void SphereCollidableShape::CreateBtCollisionShape() {
   auto collider = node_->GetComponent<SphereCollider>();
   Sphere local_sphere = collider->GetSphere();
   collidable_shape_ =
       std::make_unique<btSphereShape>(btScalar(local_sphere.radius));
 
-  btTransform transform;
-  transform.setIdentity();
-  transform.setOrigin(ToBtVector3(collider->GetWorldSphere().center));
   collidable_center_ = local_sphere.center;
-
-  return transform;
 }
 
-btCollisionShape* SphereCollidableShape::GetCollidableShape() const {
+btCollisionShape* SphereCollidableShape::GetBtCollisionShape() const {
   return collidable_shape_.get();
 }
 
@@ -61,11 +56,11 @@ float3 SphereCollidableShape::GetCollidableCenter() const {
 }
 
 CollidableShape::CollisionShape SphereCollidableShape::GetCollisionShape(
-    const btTransform& transform) const {
+    const btTransform& bt_trans) const {
   const btSphereShape* sphere =
       static_cast<btSphereShape*>(collidable_shape_.get());
   
-  return Sphere(ToVec3<float>(transform.getOrigin()), sphere->getRadius());
+  return Sphere(ToVec3<float>(bt_trans.getOrigin()), sphere->getRadius());
 }
 
 void SphereCollidableShape::ApplyScalingToBulletCollider() {
@@ -78,16 +73,18 @@ void SphereCollidableShape::ApplyScalingToBulletCollider() {
 }
 
 #if IMP_RUNTIME(DEV)
-void SphereCollidableShape::Visualize(const btTransform& transform) const {
+void SphereCollidableShape::Visualize(const btTransform& bt_trans) const {
   const float3 world_scale = node_->GetWorldScale();
   if (world_scale.x > 0 && world_scale.y > 0 && world_scale.z > 0) {
     btSphereShape* sphere =
         static_cast<btSphereShape*>(collidable_shape_.get());
     
 
-    debug_draw::Global().SphereLines(
-        ToVec3<float>(transform.getOrigin()), sphere->getRadius(),
-        debug_draw::GetColor(debug_draw::DebugColor::kDeepOrange));
+    const float3 local_center =
+        node_->LocalFromWorldPoint(ToVec3<float>(bt_trans.getOrigin()));
+    debug_draw::Local(node_.GetEntity())
+        .SphereLines(local_center, sphere->getRadius() / world_scale.x,
+                     debug_draw::GetColor(debug_draw::DebugColor::kDeepOrange));
   }
 }
 #endif

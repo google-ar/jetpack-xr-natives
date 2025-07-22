@@ -18,7 +18,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <new>
 #include <utility>
 #include <vector>
 
@@ -41,7 +40,6 @@
 #include "core/split_engine/flatbuffer_size_calculator.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "split_engine/schemas/split_engine_data_generated.h"
-#include "split_engine/schemas/split_engine_ipc_generated.h"
 
 namespace imp::split_engine {
 
@@ -345,7 +343,7 @@ SplitEngineMorphTargetBufferBuilder::SerializeMorphTargetBuffer(
       });
 
   return android_xr::schemas::CreateMorphTargetBuffer(
-      builder, reinterpret_cast<uint64_t>(morph_target_buffer_),
+      builder, SplitEngineSerializer::GetId(morph_target_buffer_),
       android_xr::schemas::CreateMorphTargetBufferInfo(
           builder, builder.CreateVector(attribute_offsets), vertex_count_));
 }

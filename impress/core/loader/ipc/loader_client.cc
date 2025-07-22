@@ -69,7 +69,8 @@ OptionalError LoaderClient::Start(absl::string_view uri, BufferAccess&& access,
       builder.CreateVector(reinterpret_cast<const uint8_t*>(access.Data()),
                            access.Size()),
       options.use_lite_materials, options.exclude_excess_nodes,
-      options.remove_shadow_planes);
+      options.remove_shadow_planes,
+      static_cast<int32_t>(options.compression_type));
   auto request_offset = schemas::CreateRequest(
       builder, schemas::RequestTypes::Start, command_offset.Union());
   builder.Finish(request_offset);

@@ -18,6 +18,7 @@
 #define TNT_FILAFLAT_UNFLATTENER_H
 
 #include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/CString.h"
 
 #include <private/filament/Variant.h>

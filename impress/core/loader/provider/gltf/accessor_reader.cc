@@ -42,10 +42,10 @@
 namespace imp::loader::details {
 namespace {
 using ::filament::math::float3;
-using ::imp::gltf::Accessor;
-using ::imp::gltf::Buffer;
-using ::imp::gltf::BufferView;
-using ::imp::gltf::Gltf;
+using ::imp::gltf::imp_proto::Accessor;
+using ::imp::gltf::imp_proto::Buffer;
+using ::imp::gltf::imp_proto::BufferView;
+using ::imp::gltf::imp_proto::Gltf;
 
 absl::StatusOr<const uint8_t*> GetDataFromBufferView(
     const Gltf& gltf, const Accessor& accessor, const BufferView& buffer_view) {
@@ -69,20 +69,21 @@ absl::StatusOr<const uint8_t*> GetDataFromBufferView(
 
 // The size of the indexable type in an accessor.
 size_t AccessorReader::GetAccessorTypeSize(
-    absl::string_view type, imp::gltf::ComponentType component_type) {
+    absl::string_view type,
+    imp::gltf::imp_proto::ComponentType component_type) {
   // Logic taken from cgltf_calc_size.
   size_t size = 0;
   switch (component_type) {
-    case imp::gltf::ComponentType::BYTE:
-    case imp::gltf::ComponentType::UNSIGNED_BYTE:
+    case imp::gltf::imp_proto::ComponentType::BYTE:
+    case imp::gltf::imp_proto::ComponentType::UNSIGNED_BYTE:
       size = 1;
       break;
-    case imp::gltf::ComponentType::SHORT:
-    case imp::gltf::ComponentType::UNSIGNED_SHORT:
+    case imp::gltf::imp_proto::ComponentType::SHORT:
+    case imp::gltf::imp_proto::ComponentType::UNSIGNED_SHORT:
       size = 2;
       break;
-    case imp::gltf::ComponentType::UNSIGNED_INT:
-    case imp::gltf::ComponentType::FLOAT:
+    case imp::gltf::imp_proto::ComponentType::UNSIGNED_INT:
+    case imp::gltf::imp_proto::ComponentType::FLOAT:
       size = 4;
       break;
     default:
@@ -205,7 +206,7 @@ absl::StatusOr<AccessorReader> AccessorReader::Create(const Gltf& gltf,
 }
 
 absl::StatusOr<AccessorReader> AccessorReader::Create(
-    const imp::gltf::Gltf& gltf, AccessorId accessor_id) {
+    const imp::gltf::imp_proto::Gltf& gltf, AccessorId accessor_id) {
   return Create(gltf, static_cast<int>(accessor_id));
 }
 
@@ -213,11 +214,13 @@ BufferAccess AccessorReader::CopyAndPackData() const {
   // MAT4 is not an enum in filament::VertexBuffer::AttributeType, so that it
   // cannot be included in the mirrored type schema::AttributeType. This edge
   // case is handled separately.
-  if (type_ == "MAT4" && component_type_ == gltf::ComponentType::FLOAT) {
+  if (type_ == "MAT4" &&
+      component_type_ == gltf::imp_proto::ComponentType::FLOAT) {
     return CopyAndPackData<mat4f>();
   }
   // Used for indices data in some case.
-  if (type_ == "VEC3" && component_type_ == gltf::ComponentType::UNSIGNED_INT) {
+  if (type_ == "VEC3" &&
+      component_type_ == gltf::imp_proto::ComponentType::UNSIGNED_INT) {
     return CopyAndPackData<uint3>();
   }
   schemas::AttributeType attribute_type;
@@ -309,22 +312,22 @@ DenseDataAccess AccessorReader::GetPackedData(
 
 absl::StatusOr<DenseDataAccess> AccessorReader::GetPackedFloatData(
     AccessorReader::CopyOption copy_option) const {
-  if (component_type_ == gltf::FLOAT) {
+  if (component_type_ == gltf::imp_proto::FLOAT) {
     return GetPackedData(copy_option);
   } else {
     BufferAccess result;
     // Picks an unpack method to transcode with.
     switch (component_type_) {
-      case gltf::BYTE:
+      case gltf::imp_proto::BYTE:
         result = GetFloatBufferFromType(filament::math::unpackSnorm8);
         break;
-      case gltf::UNSIGNED_BYTE:
+      case gltf::imp_proto::UNSIGNED_BYTE:
         result = GetFloatBufferFromType(filament::math::unpackUnorm8);
         break;
-      case gltf::SHORT:
+      case gltf::imp_proto::SHORT:
         result = GetFloatBufferFromType(filament::math::unpackSnorm16);
         break;
-      case gltf::UNSIGNED_SHORT:
+      case gltf::imp_proto::UNSIGNED_SHORT:
         result = GetFloatBufferFromType(filament::math::unpackUnorm16);
         break;
       default:
@@ -334,7 +337,7 @@ absl::StatusOr<DenseDataAccess> AccessorReader::GetPackedFloatData(
     auto attribute_type = GetAttributeType();
     return DenseDataAccess(
         std::move(result), count_,
-        GetAccessorTypeSize(type_, imp::gltf::ComponentType::FLOAT));
+        GetAccessorTypeSize(type_, imp::gltf::imp_proto::ComponentType::FLOAT));
   }
 }
 

@@ -43,4 +43,13 @@ message RigidBodyState {
   physics.CollidableType collidable_type = 4;
   Float3 gravity = 5 [(imp.optional_type) = ABSL_OPTIONAL];
   float restitution = 6;
+  Float3 linear_velocity = 7;
+  Float3 angular_velocity = 8;
+  // The angular factor in bullet controls the percentage of angular velocity
+  // applied. Setting angular factor to 0 means the correponding axis is locked.
+  Float3 angular_factor = 9 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // The linear factor in bullet controls the percentage of linear velocity
+  // applied. Setting linear factor to 0 means the correponding axis is locked.
+  Float3 linear_factor = 10 [(imp.optional_type) = ABSL_OPTIONAL];
 }

@@ -17,10 +17,15 @@ include "core/common/schemas/math.fbs";
 namespace imp.schemas;
 
 enum InteractivityVariableType : uint8 {
-  NIL,
   BOOL,
   INT,
   FLOAT,
+  FLOAT2,
+  FLOAT3,
+  FLOAT4,
+  MAT2F,
+  MAT3F,
+  MAT4F
 }
 
 union InteractivityValue {
@@ -63,11 +68,15 @@ enum InteractivityNodeConfigurationType : uint8 {
   EASING_TYPE,
   EASING_DURATION,
   CASES,
+  TYPE,
+  NUMBER_OF_INPUT_FLOWS,
+  IS_RANDOM,
+  IS_LOOP,
+  MESSAGE,
 }
 
 table InteractivityNodeConfiguration {
   id : InteractivityNodeConfigurationType;
-  type : InteractivityVariableType;
   value : InteractivityConfigurationValue (required);
 }
 
@@ -101,11 +110,16 @@ table InteractivityEvent {
   values: [InteractivityVariable];
 }
 
+table InteractivityGraphTypeData {
+  type : InteractivityVariableType;
+}
+
 table InteractivityGraph {
   declarations : [Declaration];
   nodes : [InteractivityNode];
   variables : [InteractivityVariable];
   events : [InteractivityEvent];
+  types: [InteractivityGraphTypeData];
 }
 
 table Interactivity {

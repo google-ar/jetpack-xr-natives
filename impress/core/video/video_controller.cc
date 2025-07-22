@@ -33,6 +33,7 @@
 #include "core/common/small_source_location.h"
 #include "core/config.h"
 #include "core/math/vec.h"
+#include "core/media/media_color_space.h"
 #include "core/media/media_source.h"
 #include "core/media/media_type.h"
 #include "core/ncsb/component.h"
@@ -41,7 +42,6 @@
 #include "core/render/android/android_defines.h"
 #include "core/render/android/android_external_texture_surface.h"
 #include "core/render/texture.h"
-#include "core/video/video_color_space.h"
 #include "core/video/video_controller_state.proto.imp.h"
 #include "core/video/video_source.h"
 #include "core/video/video_source_factory.h"
@@ -149,7 +149,7 @@ absl::Status VideoController::OnVideoLoaded(
   textures_.clear();
   // Now that the new video source is loaded, switch the asset.
   source_ = std::move(source);
-  video_color_space_ = source_->GetColorSpace();
+  media_color_space_ = source_->GetColorSpace();
   media_stereo_mode_ = source_->GetStereoMode();
 // Set up textures for the video source.
 #if IMP_PLATFORM(ANDROID) && \
@@ -225,11 +225,11 @@ MediaStereoMode VideoController::GetMediaStereoMode() const {
   return media_stereo_mode_;
 }
 
-video::VideoColorSpace VideoController::GetVideoColorSpace() const {
-  return video_color_space_;
+MediaColorSpace VideoController::GetVideoColorSpace() const {
+  return media_color_space_;
 }
 
-video::VideoColorSpace VideoController::GetSourceColorSpace() const {
+MediaColorSpace VideoController::GetSourceColorSpace() const {
   return source_->GetColorSpace();
 }
 

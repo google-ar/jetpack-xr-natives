@@ -24,7 +24,7 @@ android_library(
         "ImpSplitEngine.java",
         "ImpSplitEngineApi.java",
         "ImpSplitEngineRenderer.java",
-        "SplitEngineBridgeServiceProvider.java",
+        "RendererConnectionServiceProvider.java",
     ],
     custom_package = "com.google.ar.imp.view.splitengine",
     javacopts = [
@@ -32,13 +32,13 @@ android_library(
     ],
     tags = ["included_in_archive=//java/com/google/ar/imp/apibindings:impress_no_native_lib_aar"],
     deps = [
+        "//core/split_engine/android/extensions/java/com/google/imp/splitengine/extensions:extensions_java",  # unuseddeps: keep
         "//java/com/google/ar/imp/view",
         "//java/com/google/ar/imp/view:frame_scheduler",
         "//java/com/google/ar/imp/view:imp_api_scuba",
+        "@com_google_impress//java/com/google/vr/androidxr/extensions:platform_extensions_jar",
         "@maven//:androidx_annotation_annotation",
         "@maven//:androidx_concurrent_concurrent_futures",
         "@maven//:com_google_guava_guava",
-        "@third_party//jetpack_xr/java/com/google/vr/realitycore/runtime/androidxr/extensions:platform_extensions_jar",
-        "@third_party//jetpack_xr/java/com/google/vr/realitycore/runtime/androidxr/extensions:xrextensionslib",
     ],
 )

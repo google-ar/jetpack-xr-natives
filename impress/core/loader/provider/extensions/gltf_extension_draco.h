@@ -29,7 +29,8 @@ namespace extensions {
 
 // Returned buffers must be kept alive for as long as the
 // `gltf` because they are referenced by the `gltf`.
-absl::StatusOr<std::vector<BufferAccess>> ResolveDraco(imp::gltf::Gltf* gltf);
+absl::StatusOr<std::vector<BufferAccess>> ResolveDraco(
+    imp::gltf::imp_proto::Gltf* gltf);
 
 }  // namespace extensions
 }  // namespace loader

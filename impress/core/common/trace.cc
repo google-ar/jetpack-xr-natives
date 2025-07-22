@@ -14,3 +14,22 @@
 
 #include "core/common/trace.h"
 
+#if IMP_TRACE_USE_PERFETTO
+
+#include "third_party/perfetto/include/perfetto/tracing/backend_type.h"
+#include "third_party/perfetto/include/perfetto/tracing/string_helpers.h"
+#include "third_party/perfetto/include/perfetto/tracing/tracing.h"
+#include "third_party/perfetto/include/perfetto/tracing/track.h"
+#include "third_party/perfetto/include/perfetto/tracing/track_event.h"
+#include "third_party/perfetto/include/perfetto/tracing/track_event_category_registry.h"
+
+PERFETTO_TRACK_EVENT_STATIC_STORAGE_IN_NAMESPACE(imp_perfetto_tracing);
+
+void imp_perfetto_tracing::InitializePerfetto() {
+  perfetto::TracingInitArgs args = {};
+  args.backends = perfetto::BackendType::kSystemBackend;
+  perfetto::Tracing::Initialize(args);
+  imp_perfetto_tracing::TrackEvent::Register();
+}
+
+#endif  // IMP_TRACE_USE_PERFETTO

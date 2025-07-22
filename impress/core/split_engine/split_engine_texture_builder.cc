@@ -27,10 +27,8 @@
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/image/image_contents.h"
-#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "split_engine/schemas/split_engine_data_generated.h"
-#include "split_engine/schemas/split_engine_ipc_generated.h"
 
 namespace imp::split_engine {
 
@@ -132,7 +130,7 @@ flatbuffers::Offset<android_xr::schemas::Texture>
 SplitEngineTextureBuilder::SerializeTexture(
     filament::Texture& texture, flatbuffers::FlatBufferBuilder& fbb) {
   return android_xr::schemas::CreateTexture(
-      fbb, reinterpret_cast<TextureId>(&texture), width_, height_,
+      fbb, SplitEngineSerializer::GetId(&texture), width_, height_,
       static_cast<uint16_t>(format_), levels_, static_cast<uint8_t>(sampler_),
       mips_, CreateFlatbufferImageParams(fbb),
       CreateFlatbufferPixelBuffers(fbb));

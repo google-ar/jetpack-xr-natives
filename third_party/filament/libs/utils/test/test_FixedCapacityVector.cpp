@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
+#include "filament/libs/utils/include/utils/Panic.h"
 
 using namespace utils;
 

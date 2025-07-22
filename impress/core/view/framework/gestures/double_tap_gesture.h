@@ -53,7 +53,11 @@ class DoubleTapGesture : public Gesture {
   void OnCancel() override;
 
  private:
-  static constexpr float kDoubleTapThresholdPixels = 16.0f;
+  // Distance in between the first touch and second touch to still be
+  // considered a double tap. Matches the default value used by Android
+  // GestureDetector.
+  static constexpr float kDoubleTapThresholdPixels = 100.0f;
+
   static constexpr absl::Duration kDoubleTapThresholdMs =
       absl::Milliseconds(400);
 

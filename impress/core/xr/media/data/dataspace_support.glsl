@@ -42,7 +42,10 @@ highp float maxOf(highp float3 value) {
 
 // Converts a PQ-encoded color to display-linear color in cd/m^3.
 // Returns: color in the range [0,10000]
-highp float3 pqToLuminance(highp float3 v) {
+highp float3 pqToLuminance(highp float3 v_input) { // Changed 'v' to 'v_input' for clarity
+    // Clamp the input PQ signal to its defined valid range [0,1]
+    highp float3 v = clamp(v_input, 0.0, 1.0);
+
     // See https://www.itu.int/rec/R-REC-BT.2100 regarding the PQ EOTF for
     // background on the calculation. m1,m2 are inverted from the spec
     // definitions since they're always used inverted.
@@ -93,8 +96,10 @@ highp float3 hlgInvOETF(highp float3 color) {
 
 // Converts an HLG-encoded color into linear color in the range [0,302].
 highp float3 hlgToLuminance(highp float3 color) {
+    // Clamp the input HLG signal to its defined valid range [0,1]
+    highp float3 clamped_color = clamp(color, 0.0, 1.0);
     float ignore;
-    return hlgOOTF(hlgInvOETF(color), /*Lw=*/maxHlgToSdrDisplayLuminance, /*luminance=*/ignore);
+    return hlgOOTF(hlgInvOETF(clamped_color), /*Lw=*/maxHlgToSdrDisplayLuminance, /*luminance=*/ignore);
 }
 
 highp float smpte170mToLinear(highp float channel) {
@@ -166,9 +171,12 @@ highp float3 convertColor(highp float3 color, float3x3 colorTransformMatrix) {
 
     if (materialParams.transferFunction == kTransferFunctionST2084) {
         // 10000 is the maximum absolute luminance of ST2084 (PQ).
+        // TODO - b/410027510: Update SpF shader code to compare maxContentLightLevel to 0.
+        // TODO - b/415049056: Move this computation out of the shader code to avoid repeating
+        // them for each pixel.
         highp float maxInputLum =
-            (materialParams.maxContentLightLevel != -1) ?
-            float(materialParams.maxContentLightLevel) : 10000.0;
+            (materialParams.maxContentLightLevel > 0) ?
+            min(float(materialParams.maxContentLightLevel), 10000.0) : 10000.0;
         const highp float maxOutputLum = 203.0; // SDR reference white.
 
         // Calculate relative luminance (1.0 = SDR white).
@@ -187,9 +195,11 @@ highp float3 convertColor(highp float3 color, float3x3 colorTransformMatrix) {
     // HLG transfer function.
     if (materialParams.transferFunction == kTransferFunctionHLG) {
         // 1000 is the maximum absolute luminance of HLG.
+        // TODO - b/415049056: Move this computation out of the shader code to avoid repeating
+        // them for each pixel.
         highp float maxInputLum =
-            (materialParams.maxContentLightLevel != -1) ?
-            float(materialParams.maxContentLightLevel) : 1000.0;
+            (materialParams.maxContentLightLevel > 0) ?
+            min(float(materialParams.maxContentLightLevel), 1000.0) : 1000.0;
         const highp float maxOutputLum = 203.0;
         highp float relativeMaxInputLum = maxInputLum / maxOutputLum;
 

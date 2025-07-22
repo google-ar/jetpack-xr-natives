@@ -219,8 +219,11 @@ backend_vulkan_srcs = backend_srcs + [
     "src/vulkan/VulkanAsyncHandles.h",
     "src/vulkan/VulkanBlitter.cpp",
     "src/vulkan/VulkanBlitter.h",
-    "src/vulkan/VulkanBuffer.cpp",
     "src/vulkan/VulkanBuffer.h",
+    "src/vulkan/VulkanBufferCache.h",
+    "src/vulkan/VulkanBufferCache.cpp",
+    "src/vulkan/VulkanBufferProxy.h",
+    "src/vulkan/VulkanBufferProxy.cpp",
     "src/vulkan/VulkanCommands.cpp",
     "src/vulkan/VulkanCommands.h",
     "src/vulkan/VulkanConstants.h",
@@ -233,6 +236,8 @@ backend_vulkan_srcs = backend_srcs + [
     "src/vulkan/VulkanDriver.cpp",
     "src/vulkan/VulkanDriverFactory.h",
     "src/vulkan/VulkanDriver.h",
+    "src/vulkan/VulkanExternalImageManager.cpp",
+    "src/vulkan/VulkanExternalImageManager.h",
     "src/vulkan/VulkanFboCache.cpp",
     "src/vulkan/VulkanFboCache.h",
     "src/vulkan/VulkanHandles.cpp",
@@ -255,6 +260,8 @@ backend_vulkan_srcs = backend_srcs + [
     "src/vulkan/VulkanReadPixels.cpp",
     "src/vulkan/VulkanTexture.cpp",
     "src/vulkan/VulkanTexture.h",
+    "src/vulkan/VulkanYcbcrConversionCache.cpp",
+    "src/vulkan/VulkanYcbcrConversionCache.h",
     "src/vulkan/utils/Conversion.cpp",
     "src/vulkan/utils/Conversion.h",
     "src/vulkan/utils/Definitions.h",
@@ -396,11 +403,13 @@ cc_library(
     alwayslink = 1,
 )
 
-backend_opengl_defines = filament_defines() + [
-    "FILAMENT_SUPPORTS_OPENGL=1",
-] + if_profiling_mode(
+backend_defines = filament_defines() + if_profiling_mode(
     ["FILAMENT_FORCE_PROFILING_MODE"],
 )
+
+backend_opengl_defines = backend_defines + [
+    "FILAMENT_SUPPORTS_OPENGL=1",
+]
 
 backend_deps = [
     ":backend_hdrs",
@@ -408,7 +417,9 @@ backend_deps = [
     ":driver_enums",
     ":pixel_buffer_descriptor",
     "@third_party//filament/libs:math_hdrs",
+    "@third_party//filament/libs:utils",
     "@third_party//filament/libs:utils_hdrs",
+    "@third_party//filament/libs:utils_private_hdrs",
     "@robin_map",
 ]
 
@@ -504,7 +515,7 @@ cc_library(
         "generated/vkshaders/vkshaders.c",
     ],
     hdrs = [],
-    copts = filament_copts(False),
+    copts = filament_copts(),
     data = [],
     includes = ["generated"],
     linkstatic = 1,
@@ -526,30 +537,21 @@ cc_library(
             ["src/vulkan/platform/VulkanPlatformLinuxWindows.cpp"],
         ),
         copts = filament_copts(),
-        defines = filament_defines() + [
+        defines = backend_defines + [
             "FILAMENT_DRIVER_SUPPORTS_VULKAN",
             # Needed, otherwise Filament sets this to 1, which is incompatible with Google3
             "VMA_DYNAMIC_VULKAN_FUNCTIONS=0",
-        ] + if_profiling_mode(
-            ["FILAMENT_FORCE_PROFILING_MODE"],
-        ) + extra_defines,
+        ] + extra_defines,
         includes = [
             "src",
         ],
         linkstatic = True,
         textual_hdrs = backend_textual_hdrs,
-        deps = deps + [
-            ":backend_utils",
+        deps = deps + backend_deps + [
             ":backend_vk_hdrs",
-            ":driver_enums",
             ":generated_vkshaders",
-            ":pixel_buffer_descriptor",
-            "@robin_map",
             "@smol_v//:smol-v",
             "@spirv_headers//:spirv_cpp_headers",
-            "@third_party//filament/libs:math_hdrs",
-            "@third_party//filament/libs:utils",
-            "@third_party//filament/libs:utils_hdrs",
             "@vulkan_memory_allocator",
         ],
         alwayslink = 1,
@@ -617,13 +619,9 @@ objc_library(
         "src/opengl",
     ],
     textual_hdrs = backend_opengl_textual_hdrs,
-    deps = [
-        ":backend_hdrs",
-        ":backend_utils",
-        ":driver_enums",
+    deps = backend_deps + [
         "//third_party/apple_frameworks:CoreGraphics",
         "//third_party/apple_frameworks:CoreVideo",
-        "@third_party//filament/libs:utils",
     ] + if_ios(
         [],
         [
@@ -643,11 +641,8 @@ objc_library(
         "src",
     ],
     textual_hdrs = backend_metal_textual_hdrs,
-    deps = [
-        ":backend_hdrs",
-        ":backend_utils",
+    deps = backend_deps + [
         "@third_party//filament/filament:filament_hdrs",
-        "@third_party//filament/libs:utils",
     ],
 )
 

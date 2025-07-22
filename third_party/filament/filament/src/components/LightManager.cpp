@@ -23,9 +23,9 @@
 
 #include <filament/LightManager.h>
 
+#include "filament/libs/utils/include/utils/Logger.h"
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/debug.h"
-#include "filament/libs/utils/include/utils/Log.h"
 #include "filament/libs/utils/include/utils/ostream.h"
 
 #include "filament/libs/math/include/math/fast.h"
@@ -230,8 +230,7 @@ void FLightManager::terminate() noexcept {
     auto& manager = mManager;
     if (!manager.empty()) {
 #ifndef NDEBUG
-        slog.d << "cleaning up " << manager.getComponentCount()
-               << " leaked Light components" << io::endl;
+        DLOG(INFO) << "cleaning up " << manager.getComponentCount() << " leaked Light components";
 #endif
         while (!manager.empty()) {
             Instance const ci = manager.end() - 1;

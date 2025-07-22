@@ -19,21 +19,16 @@
 
 #include <cstdint>
 #include <memory>
-#include <string>
 #include <vector>
 
 #include "absl/base/thread_annotations.h"
-#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "core/async/future.h"
 #include "core/canvas/async_canvas_source.h"
 #include "core/canvas/async_scoped_canvas.h"
 #include "core/canvas/scoped_canvas.h"
-#include "core/common/invocable.h"
 #include "core/common/small_source_location.h"
 #include "core/geometry/shapes/rect.h"
 #include "core/math/vec.h"
@@ -49,7 +44,12 @@ namespace imp {
 // shapes such as the rounded rectangle.
 class WasmAsyncCanvasSource : public AsyncCanvasSource {
  public:
-  explicit WasmAsyncCanvasSource(BaseView& view);
+  WasmAsyncCanvasSource();
+
+  // Because this class passes a pointer to itself to callbacks, it may not be
+  // copied or moved.
+  WasmAsyncCanvasSource(const WasmAsyncCanvasSource&) = delete;
+  WasmAsyncCanvasSource(WasmAsyncCanvasSource&&) = delete;
 
   bool IsFeatureSupported(ScopedCanvas::Feature feature) override;
 
@@ -83,23 +83,25 @@ class WasmAsyncCanvasSource : public AsyncCanvasSource {
       const ScopedCanvas::TextOptions& text_options) override;
 
   std::unique_ptr<AsyncScopedCanvas> StartDrawing(
-      uint2 pixel_size, ScopedCanvas::DrawMode draw_mode =
-                            ScopedCanvas::DrawMode::kClear) override;
+      BaseView& view, uint2 pixel_size,
+      ScopedCanvas::DrawMode draw_mode =
+          ScopedCanvas::DrawMode::kClear) override;
 
   std::unique_ptr<AsyncScopedCanvas> StartDrawing(
-      uint2 pixel_size, ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
+      BaseView& view, uint2 pixel_size,
+      ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
       ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) override;
 
-  void OnPixelBufferReady(uint8_t* data, int length, uint32_t* dirty_rects_data,
-                          int dirty_rects_length);
+  void OnPixelBufferReady(BaseView& view, uint8_t* data, int length,
+                          uint32_t* dirty_rects_data, int dirty_rects_length);
 
   void OnRectCleared(Rect rect);
 
   class WasmScopedCanvas : public AsyncScopedCanvas {
    public:
-    explicit WasmScopedCanvas(WasmAsyncCanvasSource& source,
-                              WasmCanvasManager* platform_canvas_wrapper,
-                              uint2 pixel_size, bool did_texture_change);
+    WasmScopedCanvas(WasmAsyncCanvasSource& source,
+                     WasmCanvasManager* platform_canvas_wrapper,
+                     uint2 pixel_size, bool did_texture_change);
     ~WasmScopedCanvas() override;
 
     Texture* GetTexture() override;
@@ -161,14 +163,10 @@ class WasmAsyncCanvasSource : public AsyncCanvasSource {
   };
 
  private:
-  BaseView& view_;
-  const Context& context_;
   OwnedTexturePtr texture_;
   uint2 pixel_size_;
   absl::Mutex canvas_mutex_;
 
-  std::unique_ptr<WasmCanvasManager::PixelBufferCallbacks>
-      pixel_buffer_callbacks_;
   // TODO Combine both canvases into one.
   // A wrapper for the web canvas, specifically used for measuring text.
   std::unique_ptr<WasmCanvasManager> measuring_canvas_;

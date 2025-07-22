@@ -76,6 +76,5 @@ android_library(
         "//java/com/google/ar/imp/view:imp_api_scuba_proxy_test_view_no_jni",
         "//java/com/google/ar/imp/view/splitengine",
         "@maven//:androidx_appcompat_appcompat",
-        "@third_party//jetpack_xr/java/com/google/vr/realitycore/runtime/androidxr/extensions:platform_extensions_provider",
     ],
 )

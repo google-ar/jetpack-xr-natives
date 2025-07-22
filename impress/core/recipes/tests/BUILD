@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "imp_test_copts")
 
 package(
@@ -34,12 +35,34 @@ cc_library(
     ],
     copts = imp_test_copts(),
     deps = [
+        ":recipe_matchers",
+        "//core/ncsb",
+        "//core/proto:any_imp_proto",
+        "//core/proto:proto_writer",
+        "//core/recipes/language:recipe_graph_cc",
+        "//core/recipes/language:recipe_utils",
+        "//core/scene_handles",
+        "@com_google_absl//absl/types:variant",
+        "@mediapipe//mediapipe/framework/port:gtest_main",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "recipe_matchers",
+    testonly = 1,
+    hdrs = [
+        "recipe_matchers.h",
+    ],
+    copts = imp_test_copts(),
+    deps = [
+        "//core/common:type_helpers",
         "//core/geometry/shapes",
         "//core/math",
         "//core/ncsb",
         "//core/proto:any_imp_proto",
         "//core/proto:proto_writer",
-        "//core/recipes/language:recipe_graph_cc",
+        "//core/recipes/language:recipe_types_cc",
         "//core/recipes/language:recipe_utils",
         "//core/scene_handles",
         "@com_google_absl//absl/types:variant",

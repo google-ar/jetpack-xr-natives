@@ -21,6 +21,8 @@ import "core/loader/provider/extensions/behavior/behavior.proto";
 import "core/loader/provider/extensions/interactivity/interactivity.proto";
 import "core/proto/imp.proto";
 
+option (imp.impress_append_namespace) = true;
+
 message Buffer {
   string name = 1 [ctype = STRING_PIECE];
   string uri = 2 [ctype = STRING_PIECE];
@@ -280,6 +282,26 @@ message Primitive {
     optional uint32 buffer_view = 1;
     map<string, uint32> attributes = 2;
   }
+  message FeatureIdTexture {
+    optional uint32 index = 1 [(imp.optional_type) = ABSL_OPTIONAL];
+    int32 tex_coord = 2;
+    int32 channels = 3;
+    TextureInfoExtensions extensions = 4;
+  }
+  message FeatureIdAttribute {
+    uint32 id = 1;
+  }
+  message FeatureId {
+    uint32 feature_count = 1 [json_name = "featureCount"];
+    optional uint32 null_feature_id = 2 [json_name = "nullFeatureId"];
+    string label = 3 [ctype = STRING_PIECE];
+    optional FeatureIdAttribute attribute = 4
+        [(imp.optional_type) = ABSL_OPTIONAL];
+    optional FeatureIdTexture texture = 5 [(imp.optional_type) = ABSL_OPTIONAL];
+  }
+  message MeshFeatures {
+    repeated FeatureId feature_ids = 1 [json_name = "featureIds"];
+  }
   message MaterialsVariant {
     message Mapping {
       uint32 material = 1;
@@ -296,6 +318,8 @@ message Primitive {
       json_name = "KHR_materials_variants",
       (imp.optional_type) = ABSL_OPTIONAL
     ];
+    optional MeshFeatures mesh_features = 3
+        [json_name = "EXT_mesh_features", (imp.optional_type) = ABSL_OPTIONAL];
   }
   map<string, uint32> attributes = 1;
   optional uint32 indices = 2;

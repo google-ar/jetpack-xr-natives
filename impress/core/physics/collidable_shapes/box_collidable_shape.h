@@ -33,19 +33,19 @@ class BoxCollidableShape : public CollidableShape {
  public:
   BoxCollidableShape(NodeHandle node);
 
-  btTransform AddBtCollisionShape();
+  void CreateBtCollisionShape() override;
 
-  btCollisionShape* GetCollidableShape() const override;
+  btCollisionShape* GetBtCollisionShape() const override;
 
   float3 GetCollidableCenter() const override;
 
   CollidableShape::CollisionShape GetCollisionShape(
-      const btTransform& transform) const override;
+      const btTransform& bt_trans) const override;
 
   void ApplyScalingToBulletCollider() override;
 
 #if IMP_RUNTIME(DEV)
-  void Visualize(const btTransform& transform) const override;
+  void Visualize(const btTransform& bt_trans) const override;
 #endif
 
  private:

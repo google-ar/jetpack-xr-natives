@@ -17,6 +17,7 @@
 #include <backend/Platform.h>
 
 #include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/ostream.h"
 
 #include <atomic>
 #include <utility>

@@ -301,6 +301,8 @@ message ViewRenderSettings {
   RenderQuality render_quality = 4 [(imp.optional_type) = ABSL_OPTIONAL];
   ColorGrading color_grading = 5 [(imp.optional_type) = ABSL_OPTIONAL];
   optional bool shadowing_enabled = 6;
+  optional MultiSampleAntiAliasingOptions multi_sample_anti_aliasing_options =
+      7;
   // TODO: Add support for the following settings.
   /*  optional bool front_face_winding_inverted = 2;
     optional bool frustum_culling_enabled = 3;
@@ -313,10 +315,9 @@ message ViewRenderSettings {
     optional VignetteOptions vignette_options = 14;
     optional AmbientOcclusionOptions ambient_occlusion_options = 15;
     optional TemporalAntiAliasingOptions temporal_anti_aliasing_options = 16;
-    optional MultiSampleAntiAliasingOptions multi_sample_anti_aliasing_options =
-        17;
-    optional VsmShadowOptions vsm_shadow_options = 18;
-    optional SoftShadowOptions soft_shadow_options = 19;
+    optional VsmShadowOptions vsm_shadow_options = 17;
+    optional SoftShadowOptions soft_shadow_options = 18;
     optional ScreenSpaceReflectionsOptions screen_space_reflections_options =
-    20; optional GuardBandOptions guard_band_options = 21; */
+    19;
+    optional GuardBandOptions guard_band_options = 20; */
 }

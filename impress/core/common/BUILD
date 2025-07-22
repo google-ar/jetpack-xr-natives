@@ -18,6 +18,7 @@ load(
     "flatbuffer_cc_library",
 )
 load("@com_google_sandboxed_api//sandboxed_api/bazel:embed_data.bzl", "sapi_cc_embed_data")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "IMP_FLATBUFFER_INCLUDE_PATHS", "IMP_FLATC_ARGS", "if_android", "if_non_android", "imp_copts", "imp_defines", "imp_google3_copts")
 load("//core/loader/data:generic_material.bzl", "process_and_build_material")
 
@@ -175,6 +176,8 @@ cc_library(
         ":common",
         ":context",
         ":typed_ids",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/types:variant",
@@ -266,6 +269,7 @@ cc_library(
     ],
     hdrs = [
         "owned_ptr.h",
+        "owned_ptr_traits.h",
         "owned_ptr_utilities.h",
     ],
     copts = imp_copts(),
@@ -290,6 +294,19 @@ cc_library(
     ],
     copts = imp_copts(),
     alwayslink = 1,
+)
+
+py_test(
+    name = "owned_ptr_nc_test",
+    size = "large",
+    srcs = ["owned_ptr_nc_test.py"],
+    data = ["owned_ptr_nc"],
+    tags = ["non_compile_test"],
+    deps = [
+        "//testing/pybase",
+        "//testing/pybase:fake_target_util",
+        "//third_party/py/google/protobuf:use_fast_cpp_protos",  # Automatically added (broken link)
+    ],
 )
 
 cc_library(
@@ -556,12 +573,19 @@ cc_library(
         "trace_details.h",
     ],
     copts = imp_copts(),
+    defines = imp_defines(),
     deps = [
         ":type_traits",
         "//core:config",
         "@com_google_absl//absl/strings",
         "@third_party//filament/libs:utils_hdrs",
-    ],
+    ] + select({
+        "//core:imp_perfetto_enabled": [
+            "//core/common:log",
+            "//third_party/perfetto:libperfetto_client_experimental",
+        ],
+        "//conditions:default": [],
+    }),
     alwayslink = 1,
 )
 
@@ -605,6 +629,20 @@ cc_library(
         "@com_google_absl//absl/types:span",
         "@third_party//filament/libs:utils",  # build_cleaner: keep
         "@third_party//filament/libs:utils_hdrs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "variant",
+    srcs = ["variant.h"],
+    hdrs = [
+        "variant.h",
+    ],
+    copts = imp_copts(),
+    deps = [
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
     ],
     alwayslink = 1,
 )

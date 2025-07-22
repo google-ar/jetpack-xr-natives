@@ -78,9 +78,8 @@ void ConfigurePaintForStrokeTextOptions(
   paint.SetAntiAlias(true);
 }
 
-AndroidPlatformCanvasSource::AndroidPlatformCanvasSource(BaseView& view)
-    : view_(view),
-      context_(view.GetContext()),
+AndroidPlatformCanvasSource::AndroidPlatformCanvasSource(Context context)
+    : context_(context),
       surface_texture_(context_, false),
       surface_(context_, surface_texture_),
       paint_(context_),
@@ -172,10 +171,10 @@ ScopedCanvas::FontInfo AndroidPlatformCanvasSource::GetFontInfo(
 }
 
 std::unique_ptr<ScopedCanvas> AndroidPlatformCanvasSource::StartDrawing(
-    uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) {
+    BaseView& view, uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) {
   bool did_texture_change = false;
   if (!texture_) {
-    texture_ = view_.GetTextureFactory().CreateExternalTexture(
+    texture_ = view.GetTextureFactory().CreateExternalTexture(
         surface_texture_.WeakReference(), pixel_size);
     did_texture_change = true;
   }
@@ -189,11 +188,12 @@ std::unique_ptr<ScopedCanvas> AndroidPlatformCanvasSource::StartDrawing(
 }
 
 std::unique_ptr<ScopedCanvas> AndroidPlatformCanvasSource::StartDrawing(
-    uint2 pixel_size, ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
+    BaseView& view, uint2 pixel_size,
+    ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
     ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) {
   bool did_texture_change = false;
   if (!texture_) {
-    texture_ = view_.GetTextureFactory().CreateExternalTexture(
+    texture_ = view.GetTextureFactory().CreateExternalTexture(
         surface_texture_.WeakReference(), pixel_size);
     did_texture_change = true;
 

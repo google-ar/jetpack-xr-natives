@@ -15,21 +15,15 @@
 #include "core/physics/trigger_volume.h"
 
 #include <memory>
-#include <variant>
 
 #include "absl/log/check.h"
 #include "absl/status/status.h"
-#include "absl/types/optional.h"
 #include "bullet/src/BulletCollision/CollisionDispatch/btCollisionObject.h"
 #include "bullet/src/BulletCollision/CollisionDispatch/btGhostObject.h"
 #include "bullet/src/LinearMath/btTransform.h"
 #include "core/common/registry.h"
 #include "core/config.h"
-#include "core/geometry/shapes/box.h"
-#include "core/geometry/shapes/sphere.h"
-#include "core/math/vec.h"
 #include "core/physics/collidable.h"
-#include "core/physics/physics_helper.h"
 #include "core/physics/physics_manager.h"
 #include "core/physics/rigid_body.h"
 #include "core/view/base_view.h"
@@ -53,12 +47,10 @@ absl::Status TriggerVolume::Setup() {
       /*output*/ start_transform, /*input*/ GetNode()));
 
   trigger_volume_ = std::make_unique<btGhostObject>();
-  trigger_volume_->setCollisionShape(collidable_.GetCollidableShape());
+  trigger_volume_->setCollisionShape(collidable_.GetBtCollisionShape());
   trigger_volume_->setCollisionFlags(trigger_volume_->getCollisionFlags() |
                                      btCollisionObject::CF_NO_CONTACT_RESPONSE);
-  trigger_volume_->setWorldTransform(ToBtTransform(
-      GetNode()->GetWorldPosition() + collidable_.GetCollidableCenter(),
-      GetNode()->GetWorldRotation()));
+  trigger_volume_->setWorldTransform(start_transform);
 
   physics_manager_ =
       &GetView().GetRegistry().GetOrCreate<PhysicsManager>(GetView());
@@ -75,18 +67,14 @@ void TriggerVolume::Cleanup() {
 
 void TriggerVolume::Update(const FrameTime& frame_time) {
   // Update Bullet collider's transformation.
-  trigger_volume_->setWorldTransform(ToBtTransform(
-      GetNode()->GetWorldPosition() + collidable_.GetCollidableCenter(),
-      GetNode()->GetWorldRotation()));
-  collidable_.ApplyScalingToBulletCollider();
+  trigger_volume_->setWorldTransform(collidable_.GetNodeBtTransform());
 
 #if IMP_RUNTIME(DEV)
   collidable_.Visualize(trigger_volume_->getWorldTransform());
 #endif
 }
 
-absl::optional<std::variant<Sphere, Box>> TriggerVolume::GetCollisionShape()
-    const {
+Collidable::CollisionShape TriggerVolume::GetCollisionShape() const {
   return collidable_.GetCollisionShape(trigger_volume_->getWorldTransform());
 }
 

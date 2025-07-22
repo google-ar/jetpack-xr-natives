@@ -29,7 +29,6 @@
 #include "core/common/robin_map.h"
 #include "core/math/mat.h"
 #include "core/render/android/android_defines.h"
-#include "core/view/platforms/android/ndkwrappers/hardware_buffer_helper.h"
 
 namespace imp::android {
 
@@ -73,9 +72,11 @@ class Image {
   absl::StatusOr<int32_t> GetWidth() const;
   absl::StatusOr<int32_t> GetHeight() const;
 
-  // Returns true if the Image contains native hardware buffers for left and
-  // right views.
+  // Returns true if this Image is multiview.
   bool IsMultiview() const;
+
+  // Returns true if this Image is single view or left-primary multiview.
+  bool IsLeftPrimary() const;
 
   // Returns the native hardware buffer of the underlying AImage.
   const AHardwareBuffer* GetHardwareBuffer() const;
@@ -99,9 +100,14 @@ class Image {
 
   AImage* aimage_ = nullptr;
   AHardwareBuffer* ahardware_buffer_ = nullptr;
-  AHardwareBuffer* auxiliary_view_buffer_holder_ = nullptr;
+  AHardwareBuffer* auxiliary_view_ahardware_buffer_ = nullptr;
+
+  bool is_multiview_ = false;
+  bool is_left_primary_ = true;
 
   static std::unique_ptr<ImageAPIProvider> api_provider;
+
+  absl::Status UpdateMultivewInfoUsingImageAPIProvider();
 
   // Returns the static API provider for class Image.
   static std::unique_ptr<ImageAPIProvider>& GetImageAPIProvider();

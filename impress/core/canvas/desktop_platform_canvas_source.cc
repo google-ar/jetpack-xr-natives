@@ -84,9 +84,6 @@ SkColor ToSkColor(float4 color) {
 }
 }  // namespace
 
-DesktopPlatformCanvasSource::DesktopPlatformCanvasSource(BaseView& view)
-    : view_(view) {}
-
 bool DesktopPlatformCanvasSource::IsFeatureSupported(
     ScopedCanvas::Feature feature) {
   switch (feature) {
@@ -205,18 +202,18 @@ ScopedCanvas::FontInfo DesktopPlatformCanvasSource::GetFontInfo(
 }
 
 std::unique_ptr<ScopedCanvas> DesktopPlatformCanvasSource::StartDrawing(
-    uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) {
+    BaseView& view, uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) {
   bool did_texture_change = false;
   if (!texture_ || pixel_size_ != pixel_size) {
     pixel_size_ = pixel_size;
 #if IMP_RUNTIME(DEV)
-    texture_ = view_.GetTextureFactory().CreateTexture(
+    texture_ = view.GetTextureFactory().CreateTexture(
         pixel_size_.x, pixel_size_.y, filament::Texture::InternalFormat::RGBA8,
         filament::Texture::Usage::COLOR_ATTACHMENT |
             filament::Texture::Usage::BLIT_SRC |
             filament::Texture::Usage::DEFAULT);
 #else
-    texture_ = view_.GetTextureFactory().CreateTexture(
+    texture_ = view.GetTextureFactory().CreateTexture(
         pixel_size_.x, pixel_size_.y, filament::Texture::InternalFormat::RGBA8);
 #endif
     did_texture_change = true;
@@ -227,7 +224,8 @@ std::unique_ptr<ScopedCanvas> DesktopPlatformCanvasSource::StartDrawing(
 }
 
 std::unique_ptr<ScopedCanvas> DesktopPlatformCanvasSource::StartDrawing(
-    uint2 pixel_size, ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
+    BaseView& view, uint2 pixel_size,
+    ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
     ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) {
   bool did_texture_change = false;
   if (!texture_ || pixel_size_ != pixel_size) {
@@ -238,12 +236,12 @@ std::unique_ptr<ScopedCanvas> DesktopPlatformCanvasSource::StartDrawing(
     OwnedTexturePtr old_texture = std::move(texture_);
 
 #if IMP_RUNTIME(DEV)
-    texture_ = view_.GetTextureFactory().CreateTexture(
+    texture_ = view.GetTextureFactory().CreateTexture(
         pixel_size_.x, pixel_size_.y, filament::Texture::InternalFormat::RGBA8,
         filament::Texture::Usage::COLOR_ATTACHMENT |
             filament::Texture::Usage::DEFAULT);
 #else
-    texture_ = view_.GetTextureFactory().CreateTexture(
+    texture_ = view.GetTextureFactory().CreateTexture(
         pixel_size_.x, pixel_size_.y, filament::Texture::InternalFormat::RGBA8);
 #endif
     did_texture_change = true;

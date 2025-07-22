@@ -90,12 +90,6 @@ public final class SplitEngineInputEvent {
     nSplitEngineInputEventCreateHitNode(nHandle);
     nSplitEngineInputEventSetHitNodeNodeId(nHandle, nodeId);
     nSplitEngineInputEventSetHitNodeHitPositionIsValid(nHandle, hitPositionIsValid);
-    if (hitPositionIsValid) {
-      nSplitEngineInputEventSetHitNodeHitPosition(
-          nHandle, hitPosition.x, hitPosition.y, hitPosition.z);
-    } else {
-      nSplitEngineInputEventSetHitNodeHitPosition(nHandle, 0f, 0f, 0f);
-    }
     nSplitEngineInputEventSetHitNodeTransform(
         nHandle,
         transform[0],
@@ -114,6 +108,12 @@ public final class SplitEngineInputEvent {
         transform[13],
         transform[14],
         transform[15]);
+    if (hitPositionIsValid) {
+      nSplitEngineInputEventSetHitNodeHitPosition(
+          nHandle, hitPosition.x, hitPosition.y, hitPosition.z);
+    } else {
+      nSplitEngineInputEventSetHitNodeHitPosition(nHandle, 0f, 0f, 0f);
+    }
   }
 
   private static void setSecondaryHitNode(long nHandle, HitInfo hitInfo) {

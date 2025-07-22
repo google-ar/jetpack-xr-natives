@@ -38,6 +38,7 @@
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/owned_or_unowned_memory.h"
 #include "core/common/owned_ptr.h"
+#include "core/common/small_source_location.h"
 #include "core/material_library/material_param_value.h"
 #include "core/render/texture.h"
 #include "core/split_engine/split_engine_serializer.h"
@@ -180,6 +181,16 @@ class Material {
 
   imp::StringMap<const filament::Texture*> GetUnownedFilamentTextures() const;
 
+  template <typename Fn>
+  void ForEachTexture(
+      Fn fn, SmallSourceLocation loc = SmallSourceLocation::Current()) {
+    for (auto& [_, texture] : parameters_to_owned_or_borrowed_textures_) {
+      if (texture) {
+        fn(texture.Borrow(loc));
+      }
+    }
+  }
+
  private:
   void SetTextureImpl(absl::string_view parameter_name, const Texture* texture,
                       std::optional<filament::TextureSampler> sampler_override);
@@ -195,12 +206,12 @@ class Material {
   std::string name_;
 
   // Tracks textures used by the material
-  // If the texture is represented by an OwnedTexturePtr, then it is owned here
-  // and will be released when the material is destroyed, or if the property is
-  // reassigned.
+  // If the texture is represented by an OwnedTexturePtr, then it is owned
+  // here and will be released when the material is destroyed, or if the
+  // property is reassigned.
   //
-  // If the texture is a BorrowedTexturePtr it is owned elsewhere and only used
-  // here. This level of tracking  is provided for debugging purposes to
+  // If the texture is a BorrowedTexturePtr it is owned elsewhere and only
+  // used here. This level of tracking  is provided for debugging purposes to
   // detect if the filament texture is destroyed while it is in use.
   StringMap<OwnedOrBorrowedPtr<Texture>>
       parameters_to_owned_or_borrowed_textures_;

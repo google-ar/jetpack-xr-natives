@@ -34,10 +34,10 @@
 #include "core/math/vec.h"
 #include "core/media/android/android_media_source.h"
 #include "core/media/media_asset.h"
+#include "core/media/media_color_space.h"
 #include "core/media/media_type.h"
 #include "core/render/android/android_external_texture_surface.h"
 #include "core/render/texture.h"
-#include "core/video/video_color_space.h"
 #include "core/video/video_source.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
@@ -79,7 +79,7 @@ class AndroidVideoSource : public media::AndroidMediaSource<VideoSource> {
             media_player_ptr_->GetVideoHeight()};
   }
 
-  VideoColorSpace GetColorSpace() const override { return VideoColorSpace(); }
+  MediaColorSpace GetColorSpace() const override { return MediaColorSpace(); }
 
   MediaStereoMode GetStereoMode() const override {
     // AndroidMediaPlayer does not support stereo mode.

@@ -21,9 +21,11 @@
 #include <memory>
 #include <optional>
 #include <tuple>
+#include <utility>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -36,7 +38,12 @@
 #include "apibindings/bindings_texture.h"
 #include "apibindings/stereo_surface.h"
 #include "core/common/jni_helpers.h"
+#include "core/material_library/generic_material_parameters.h"
+#include "core/material_library/generic_material_spec.h"
+#include "core/media/media_color_space.h"
 #include "core/media/media_type.h"
+#include "core/render/content_security_level.h"
+#include "core/split_engine/materials/split_engine_generic_material.h"
 #include "core/view/platforms/android/wrappers/surface.h"
 #include "imp.h"
 #include "split_engine/materials/water_reflection_material.h"
@@ -47,6 +54,9 @@ namespace imp {
 // Implements an Impress View for the ImpressJava API used by Jetpack XR.
 class ImpressApiView : public View {
  public:
+  // Texture token value which unsets an alpha mask on a stereo surface.
+  constexpr static int kUnSetAlphaMaskToken = -1;
+
   // Converts a native pointer to a Java handle.
   template <class T>
   inline jlong ToJava(T* p);
@@ -55,17 +65,22 @@ class ImpressApiView : public View {
   template <class T>
   inline T* FromJava(jlong n);
 
-  // Sets a value parameter on the water reflection Split Engine material.
-  template <typename ParameterValueT, typename SetterFn>
-  absl::Status SetWaterMaterialValueParameter(std::intptr_t water_material,
-                                              ParameterValueT value,
-                                              SetterFn setter_fn);
-
   // Sets a texture parameter on the water reflection Split Engine material.
   template <typename SetterFn>
   absl::Status SetWaterMaterialTextureParameter(std::intptr_t water_material,
                                                 std::intptr_t texture,
                                                 SetterFn setter_fn);
+
+  // Sets a texture parameter on the generic Split Engine material.
+  template <typename SetterFn>
+  absl::Status SetGenericMaterialTextureParameter(
+      std::intptr_t generic_material, std::intptr_t texture,
+      SetterFn setter_fn);
+
+  // Returns the Split Engine material subtype from a bindings material handle.
+  template <typename SplitEngineMaterialT>
+  absl::StatusOr<SplitEngineMaterialT*> GetMaterialFromBindingsMaterial(
+      std::intptr_t material_handle);
 
   // Sets up the native side of the Impress API
   void SetupImpressApiNative();
@@ -121,28 +136,42 @@ class ImpressApiView : public View {
   // Returns the entity ID of the new node. A StereoSurfaceEntity can be
   // destroyed by calling DestroyImpressNode with the return value from this
   // method.
-  int32_t CreateStereoSurfaceEntity(imp::MediaStereoMode stereo_mode);
+  absl::StatusOr<int32_t> CreateStereoSurfaceEntity(
+      MediaStereoMode stereo_mode, ContentSecurityLevel content_security_level,
+      bool use_super_sampling);
 
   // Sets the canvas shape of a stereo surface using its entity ID.
-  void SetStereoSurfaceEntityCanvasShape(
-      int32_t node_id, imp::StereoSurface::CanvasShape canvas_shape);
+  absl::Status SetStereoSurfaceEntityCanvasShape(
+      int32_t node_id, StereoSurface::CanvasShape canvas_shape);
 
   // Returns the surface associated with a stereo surface entity.
-  android::Surface* GetSurfaceFromStereoSurfaceEntity(int32_t node_id);
+  absl::StatusOr<android::Surface*> GetSurfaceFromStereoSurfaceEntity(
+      int32_t node_id);
 
   // Sets the Left/Right and Top/Bottom feather radius of a surface entity.
-  void SetFeatherRadiusForStereoSurfaceEntity(
-      int32_t node_id, const imp::float2& feather_radius);
+  absl::Status SetFeatherRadiusForStereoSurfaceEntity(
+      int32_t node_id, const float2& feather_radius);
 
   // Sets the stereo mode of a stereo surface entity.
-  void SetStereoModeForStereoSurfaceEntity(int32_t node_id,
-                                           imp::MediaStereoMode stereo_mode);
+  absl::Status SetStereoModeForStereoSurfaceEntity(int32_t node_id,
+                                                   MediaStereoMode stereo_mode);
+
   // Sets an alpha mask on an stereo surface entity using an image asset.
-  void SetPrimaryAlphaMaskForStereoSurfaceEntity(int32_t node_id,
-                                                 int64_t alpha_mask_token);
+  absl::Status SetPrimaryAlphaMaskForStereoSurfaceEntity(
+      int32_t node_id, int64_t alpha_mask_token);
+
   // Sets an alpha mask on an stereo surface entity using an image asset.
-  void SetAuxiliaryAlphaMaskForStereoSurfaceEntity(int32_t node_id,
-                                                   int64_t alpha_mask_token);
+  absl::Status SetAuxiliaryAlphaMaskForStereoSurfaceEntity(
+      int32_t node_id, int64_t alpha_mask_token);
+
+  // Configures the color space metadata for content rendered on the stereo
+  // surface. When set to an unknown color space, the system will attempt a
+  // best-effort color conversion. If specific color space parameters are
+  // provided, these will be used to explicitly define the source color space
+  // for backend color conversion.
+  absl::Status SetContentColorMetadataForStereoSurfaceEntity(
+      int32_t node_id, MediaColorSpace color_space = {});
+
   // Loads a texture from the assets folder or a remote texture from a URL.
   void LoadTexture(absl::string_view path, filament::TextureSampler sampler,
                    std::unique_ptr<AssetLoader> asset_loader);
@@ -164,9 +193,9 @@ class ImpressApiView : public View {
 
   // TODO: Refactor API bindings layer to be more modular so that
   // water material specific methods are not added to the ImpressApiView.
-  // Sets the reflection cube for the water material.
-  absl::Status SetReflectionCubeOnWaterMaterial(std::intptr_t water_material,
-                                                std::intptr_t reflection_cube);
+  // Sets the reflection map for the water material.
+  absl::Status SetReflectionMapOnWaterMaterial(std::intptr_t water_material,
+                                               std::intptr_t reflection_map);
 
   // Sets the normal map for the water material.
   absl::Status SetNormalMapOnWaterMaterial(std::intptr_t water_material,
@@ -195,6 +224,154 @@ class ImpressApiView : public View {
   // Sets the normal boundary for the water material.
   absl::Status SetNormalBoundaryOnWaterMaterial(std::intptr_t water_material,
                                                 float normal_boundary);
+
+  // Creates a new generic material using a given spec, and resolves the asset
+  // loader when it is ready.
+  void CreateGenericMaterial(std::unique_ptr<AssetLoader> asset_loader,
+                             imp::GenericMaterialSpec generic_material_spec);
+
+  // Sets the base color texture for the generic material. This texture defines
+  // the albedo or diffuse color of the material.
+  absl::Status SetBaseColorTextureOnGenericMaterial(
+      std::intptr_t generic_material, std::intptr_t base_color_texture);
+
+  // Sets the UV transformation matrix for the base color texture. This allows
+  // for scaling, rotating, and translating the texture coordinates.
+  absl::Status SetBaseColorUvTransformOnGenericMaterial(
+      std::intptr_t generic_material, const mat3f& uv_transform);
+
+  // Sets the base color factors for the generic material. These factors
+  // multiply the base color texture or define a uniform base color.
+  absl::Status SetBaseColorFactorsOnGenericMaterial(
+      std::intptr_t generic_material, const float4& factors);
+
+  // Sets the metallic-roughness texture for the generic material. This texture
+  // defines the metallic and roughness properties of the material.
+  absl::Status SetMetallicRoughnessTextureOnGenericMaterial(
+      std::intptr_t generic_material, std::intptr_t metallic_roughness_texture);
+
+  // Sets the UV transformation matrix for the metallic-roughness texture.
+  // Controls how the metallic-roughness texture is mapped onto the surface.
+  absl::Status SetMetallicRoughnessUvTransformOnGenericMaterial(
+      std::intptr_t generic_material, const mat3f& uv_transform);
+
+  // Sets the metallic factor for the generic material. Controls the metalness
+  // of the material, ranging from non-metal to metal.
+  absl::Status SetMetallicFactorOnGenericMaterial(
+      std::intptr_t generic_material, float factor);
+
+  // Sets the roughness factor for the generic material. Controls the surface
+  // roughness, affecting the sharpness of reflections.
+  absl::Status SetRoughnessFactorOnGenericMaterial(
+      std::intptr_t generic_material, float factor);
+
+  // Sets the normal map texture for the generic material. This texture perturbs
+  // the surface normals, creating detailed surface features.
+  absl::Status SetNormalTextureOnGenericMaterial(std::intptr_t generic_material,
+                                                 std::intptr_t normal_texture);
+
+  // Sets the UV transformation matrix for the normal map texture. Adjusts the
+  // mapping of the normal map texture.
+  absl::Status SetNormalUvTransformOnGenericMaterial(
+      std::intptr_t generic_material, const mat3f& uv_transform);
+
+  // Sets the factor of the normal map effect. Controls the strength of the
+  // normal map's influence.
+  absl::Status SetNormalFactorOnGenericMaterial(std::intptr_t generic_material,
+                                                float factor);
+
+  // Sets the ambient occlusion texture for the generic material. Simulates the
+  // occlusion of ambient light by surface details.
+  absl::Status SetAmbientOcclusionTextureOnGenericMaterial(
+      std::intptr_t generic_material, std::intptr_t ambient_occlusion_texture);
+
+  // Sets the UV transformation matrix for the ambient occlusion texture.
+  // Controls the mapping of the ambient occlusion texture.
+  absl::Status SetAmbientOcclusionUvTransformOnGenericMaterial(
+      std::intptr_t generic_material, const mat3f& uv_transform);
+
+  // Sets the factor of the ambient occlusion effect.
+  absl::Status SetAmbientOcclusionFactorOnGenericMaterial(
+      std::intptr_t generic_material, float factor);
+
+  // Sets the emissive texture for the generic material. Defines the light
+  // emitted by the material.
+  absl::Status SetEmissiveTextureOnGenericMaterial(
+      std::intptr_t generic_material, std::intptr_t emissive_texture);
+
+  // Sets the UV transformation matrix for the emissive texture.
+  absl::Status SetEmissiveUvTransformOnGenericMaterial(
+      std::intptr_t generic_material, const mat3f& uv_transform);
+
+  // Sets the emissive color factors for the generic material. Multiplies the
+  // emissive texture or defines a uniform emissive color.
+  absl::Status SetEmissiveFactorsOnGenericMaterial(
+      std::intptr_t generic_material, const float3& factors);
+
+  // Sets the clearcoat texture for the generic material. Adds a clearcoat layer
+  // to the material, affecting reflections.
+  absl::Status SetClearcoatTextureOnGenericMaterial(
+      std::intptr_t generic_material, std::intptr_t clearcoat_texture);
+
+  // Sets the clearcoat normal texture for the generic material. Perturbs the
+  // normals of the clearcoat layer.
+  absl::Status SetClearcoatNormalTextureOnGenericMaterial(
+      std::intptr_t generic_material, std::intptr_t clearcoat_normal_texture);
+
+  // Sets the clearcoat roughness texture for the generic material. Controls the
+  // roughness of the clearcoat layer.
+  absl::Status SetClearcoatRoughnessTextureOnGenericMaterial(
+      std::intptr_t generic_material,
+      std::intptr_t clearcoat_roughness_texture);
+
+  // Sets the clearcoat factors for the generic material. Multiplies the
+  // clearcoat texture or defines a uniform clearcoat color:
+  absl::Status SetClearcoatFactorsOnGenericMaterial(
+      std::intptr_t generic_material, const float3& factor);
+
+  // Sets the sheen color texture for the generic material. Defines the color of
+  // the sheen effect, visible at grazing angles.
+  absl::Status SetSheenColorTextureOnGenericMaterial(
+      std::intptr_t generic_material, std::intptr_t sheen_color_texture);
+
+  // Sets the sheen color factors for the generic material. Multiplies the sheen
+  // color texture or defines a uniform sheen color.
+  absl::Status SetSheenColorFactorsOnGenericMaterial(
+      std::intptr_t generic_material, const float3& factors);
+
+  // Sets the sheen roughness texture for the generic material. Controls the
+  // roughness of the sheen effect.
+  absl::Status SetSheenRoughnessTextureOnGenericMaterial(
+      std::intptr_t generic_material, std::intptr_t sheen_roughness_texture);
+
+  // Sets the sheen roughness factor for the generic material. Controls the
+  // roughness of the sheen effect.
+  absl::Status SetSheenRoughnessFactorOnGenericMaterial(
+      std::intptr_t generic_material, float factor);
+
+  // Sets the transmission texture for the generic material. Defines the
+  // transmission of light through the material.
+  absl::Status SetTransmissionTextureOnGenericMaterial(
+      std::intptr_t generic_material, std::intptr_t transmission_texture);
+
+  // Sets the UV transformation matrix for the transmission texture.
+  absl::Status SetTransmissionUvTransformOnGenericMaterial(
+      std::intptr_t generic_material, const mat3f& uv_transform);
+
+  // Sets the transmission factor for the generic material. Controls the amount
+  // of light transmitted through the material.
+  absl::Status SetTransmissionFactorOnGenericMaterial(
+      std::intptr_t generic_material, float factor);
+
+  // Sets the index of refraction for the generic material. Defines how much
+  // light bends when entering the material.
+  absl::Status SetIndexOfRefractionOnGenericMaterial(
+      std::intptr_t generic_material, float index_of_refraction);
+
+  // Sets the alpha cutoff for the generic material. Defines the threshold for
+  // transparency, used for cutout effects.
+  absl::Status SetAlphaCutoffOnGenericMaterial(std::intptr_t generic_material,
+                                               float alpha_cutoff);
 
   // Sets the material override for the mesh of a glTF model.
   absl::Status SetMaterialOverride(int32_t node_id, std::intptr_t material,
@@ -226,6 +403,9 @@ class ImpressApiView : public View {
   // destroy them in the right order (materials before textures).
   absl::flat_hash_set<std::intptr_t> bindings_material_set_;
   absl::flat_hash_set<std::intptr_t> bindings_texture_set_;
+
+  absl::StatusOr<BorrowedTexturePtr> BorrowTexture(
+      std::intptr_t texture_handle);
 };
 
 template <class T>
@@ -239,48 +419,56 @@ inline T* ImpressApiView::FromJava(jlong n) {
                       android_xr::WaterReflectionMaterial>::FromJava(n);
 };
 
-template <typename ParameterValueT, typename SetterFn>
-absl::Status ImpressApiView::SetWaterMaterialValueParameter(
-    std::intptr_t water_material, ParameterValueT value, SetterFn setter_fn) {
-  BindingsMaterial* bindings_material =
-      FromJava<BindingsMaterial>(water_material);
-  if (!bindings_material) {
-    return absl::InvalidArgumentError("Provided material handle is not valid.");
-  }
-
+template <typename SetterFn>
+absl::Status ImpressApiView::SetWaterMaterialTextureParameter(
+    std::intptr_t water_material, std::intptr_t texture, SetterFn setter_fn) {
   MP_ASSIGN_OR_RETURN(
-      android_xr::WaterReflectionMaterial * water_mat,
-      bindings_material->GetMaterial<android_xr::WaterReflectionMaterial>());
+      android_xr::WaterReflectionMaterial * water_material_ptr,
+      GetMaterialFromBindingsMaterial<android_xr::WaterReflectionMaterial>(
+          water_material));
+  MP_ASSIGN_OR_RETURN(BorrowedTexturePtr borrowed_texture, BorrowTexture(texture));
 
-  setter_fn(water_mat, value);
+  setter_fn(water_material_ptr, borrowed_texture);
   return absl::OkStatus();
 }
 
 template <typename SetterFn>
-absl::Status ImpressApiView::SetWaterMaterialTextureParameter(
-    std::intptr_t water_material, std::intptr_t texture, SetterFn setter_fn) {
+absl::Status ImpressApiView::SetGenericMaterialTextureParameter(
+    std::intptr_t generic_material, std::intptr_t texture, SetterFn setter_fn) {
+  MP_ASSIGN_OR_RETURN(
+      split_engine::SplitEngineGenericMaterial * generic_material_ptr,
+      GetMaterialFromBindingsMaterial<split_engine::SplitEngineGenericMaterial>(
+          generic_material));
+  MP_ASSIGN_OR_RETURN(BorrowedTexturePtr borrowed_texture, BorrowTexture(texture));
+
+  imp::GenericMaterialTextureParameter texture_parameter_payload;
+  // Since we only set one texture at a time, we can assume the texture id is
+  // always 1.
+  uint64_t texture_id = 1;
+  texture_parameter_payload.texture_id = texture_id;
+  std::ignore = setter_fn(
+      generic_material_ptr, texture_parameter_payload,
+      imp::TextureBorrower([expected_texture_id = texture_id,
+                            borrowed_texture = std::move(borrowed_texture)](
+                               uint64_t id) -> BorrowedTexturePtr {
+        // The only call to this function should be with the one ID we
+        // have.
+        
+        return borrowed_texture.WithNewLocation();
+      }));
+  return absl::OkStatus();
+}
+
+template <typename SplitEngineMaterialT>
+absl::StatusOr<SplitEngineMaterialT*>
+ImpressApiView::GetMaterialFromBindingsMaterial(std::intptr_t material_handle) {
   BindingsMaterial* bindings_material =
-      FromJava<BindingsMaterial>(water_material);
+      FromJava<BindingsMaterial>(material_handle);
   if (!bindings_material) {
     return absl::InvalidArgumentError("Provided material handle is not valid.");
   }
 
-  MP_ASSIGN_OR_RETURN(
-      android_xr::WaterReflectionMaterial * water_mat,
-      bindings_material->GetMaterial<android_xr::WaterReflectionMaterial>());
-
-  BindingsTexture* bindings_texture = FromJava<BindingsTexture>(texture);
-  if (!bindings_texture) {
-    return absl::InvalidArgumentError("Provided texture handle is not valid.");
-  }
-
-  BorrowedTexturePtr borrowed_texture = bindings_texture->GetTexture();
-  if (!borrowed_texture) {
-    return absl::InvalidArgumentError(
-        "Texture associated with handle is not valid.");
-  }
-  setter_fn(water_mat, borrowed_texture);
-  return absl::OkStatus();
+  return bindings_material->GetMaterial<SplitEngineMaterialT>();
 }
 
 }  // namespace imp

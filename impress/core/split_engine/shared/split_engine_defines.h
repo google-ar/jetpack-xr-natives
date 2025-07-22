@@ -28,7 +28,14 @@ constexpr uint32_t kUndefinedUserId = 0;
 // An entity ID set to this represents an invalid Node, ie. NodeHandle().
 constexpr uint32_t kInvalidEntityId = 0;
 
-// Uniquely identifies the connection of a Split Engine application.
+// Uniquely identifies a SplitEngineBridge on the client side. This is used in
+// the SplitEngineBridgeSender message group tracking and release callbacks to
+// ensure that the correct SplitEngineBridge is used for the callback.
+using ClientId = uint64_t;
+
+// Uniquely identifies the connection of a Split Engine application on the
+// system (SplitEngineRenderer) side. This is used to track app content context
+// and cleanup on the system side.
 using BridgeId = uint64_t;
 
 // Uniquely identifies a shared buffer in a Split Engine application.

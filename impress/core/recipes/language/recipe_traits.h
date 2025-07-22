@@ -49,10 +49,11 @@ struct IsSqrtAvailable<InputT,
 template <typename InputT, typename = void>
 struct IsLogAvailable : std::false_type {};
 
+// This will return true for bool, so we explicitly disallow it
 template <typename InputT>
 struct IsLogAvailable<InputT,
                       std::void_t<decltype(log(std::declval<InputT>()))>>
-    : std::true_type {};
+    : std::integral_constant<bool, !std::is_same_v<InputT, bool>> {};
 
 template <typename InputT, typename = void>
 struct IsSinAvailable : std::false_type {};
@@ -123,7 +124,15 @@ struct IsNotAvailable : std::false_type {};
 
 template <typename InputT>
 struct IsNotAvailable<InputT, std::void_t<decltype(!(std::declval<InputT>()))>>
-    : std::true_type {};
+    : std::integral_constant<bool, (std::is_same_v<InputT, bool>)> {};
+
+template <typename InputT, typename = void>
+struct IsBitwiseNotAvailable : std::false_type {};
+
+template <typename InputT>
+struct IsBitwiseNotAvailable<InputT,
+                             std::void_t<decltype(~(std::declval<InputT>()))>>
+    : std::integral_constant<bool, (std::is_same_v<InputT, int>)> {};
 
 template <typename LeftT, typename RightT, typename = void>
 struct IsAddAvailable : std::false_type {};
@@ -231,7 +240,18 @@ template <typename LeftT, typename RightT>
 struct IsAndAvailable<
     LeftT, RightT,
     std::void_t<decltype(std::declval<LeftT>() && std::declval<RightT>())>>
-    : std::true_type {};
+    : std::integral_constant<bool, (std::is_same_v<LeftT, bool> &&
+                                    std::is_same_v<RightT, bool>)> {};
+
+template <typename LeftT, typename RightT, typename = void>
+struct IsBitwiseAndAvailable : std::false_type {};
+
+template <typename LeftT, typename RightT>
+struct IsBitwiseAndAvailable<
+    LeftT, RightT,
+    std::void_t<decltype(std::declval<LeftT>() & std::declval<RightT>())>>
+    : std::integral_constant<bool, (std::is_same_v<LeftT, int> &&
+                                    std::is_same_v<RightT, int>)> {};
 
 template <typename LeftT, typename RightT, typename = void>
 struct IsOrAvailable : std::false_type {};
@@ -240,7 +260,38 @@ template <typename LeftT, typename RightT>
 struct IsOrAvailable<
     LeftT, RightT,
     std::void_t<decltype(std::declval<LeftT>() || std::declval<RightT>())>>
-    : std::true_type {};
+    : std::integral_constant<bool, (std::is_same_v<LeftT, bool> &&
+                                    std::is_same_v<RightT, bool>)> {};
+
+template <typename LeftT, typename RightT, typename = void>
+struct IsBitwiseOrAvailable : std::false_type {};
+
+template <typename LeftT, typename RightT>
+struct IsBitwiseOrAvailable<
+    LeftT, RightT,
+    std::void_t<decltype(std::declval<LeftT>() | std::declval<RightT>())>>
+    : std::integral_constant<bool, (std::is_same_v<LeftT, int> &&
+                                    std::is_same_v<RightT, int>)> {};
+
+template <typename LeftT, typename RightT, typename = void>
+struct IsXorAvailable : std::false_type {};
+
+template <typename LeftT, typename RightT>
+struct IsXorAvailable<
+    LeftT, RightT,
+    std::void_t<decltype(std::declval<LeftT>() != std::declval<RightT>())>>
+    : std::integral_constant<bool, (std::is_same_v<LeftT, bool> &&
+                                    std::is_same_v<RightT, bool>)> {};
+
+template <typename LeftT, typename RightT, typename = void>
+struct IsBitwiseXorAvailable : std::false_type {};
+
+template <typename LeftT, typename RightT>
+struct IsBitwiseXorAvailable<
+    LeftT, RightT,
+    std::void_t<decltype(std::declval<LeftT>() ^ std::declval<RightT>())>>
+    : std::integral_constant<bool, (std::is_same_v<LeftT, int> &&
+                                    std::is_same_v<RightT, int>)> {};
 
 template <typename LeftT, typename RightT, typename = void>
 struct IsAssignAvailable : std::false_type {};
@@ -344,6 +395,10 @@ constexpr bool kIsNormalizeAvailable =
 template <typename InputT>
 constexpr bool kIsNotAvailable = internal::IsNotAvailable<InputT>::value;
 
+template <typename InputT>
+constexpr bool kIsBitwiseNotAvailable =
+    internal::IsBitwiseNotAvailable<InputT>::value;
+
 template <typename LeftT, typename RightT>
 constexpr bool kIsAddAvailable = internal::IsAddAvailable<LeftT, RightT>::value;
 
@@ -390,7 +445,22 @@ template <typename LeftT, typename RightT>
 constexpr bool kIsAndAvailable = internal::IsAndAvailable<LeftT, RightT>::value;
 
 template <typename LeftT, typename RightT>
+constexpr bool kIsBitwiseAndAvailable =
+    internal::IsBitwiseAndAvailable<LeftT, RightT>::value;
+
+template <typename LeftT, typename RightT>
 constexpr bool kIsOrAvailable = internal::IsOrAvailable<LeftT, RightT>::value;
+
+template <typename LeftT, typename RightT>
+constexpr bool kIsBitwiseOrAvailable =
+    internal::IsBitwiseOrAvailable<LeftT, RightT>::value;
+
+template <typename LeftT, typename RightT>
+constexpr bool kIsXorAvailable = internal::IsXorAvailable<LeftT, RightT>::value;
+
+template <typename LeftT, typename RightT>
+constexpr bool kIsBitwiseXorAvailable =
+    internal::IsBitwiseXorAvailable<LeftT, RightT>::value;
 
 template <typename LeftT, typename RightT>
 constexpr bool kIsAssignAvailable =

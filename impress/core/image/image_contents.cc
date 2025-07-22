@@ -154,13 +154,17 @@ ImageContents::CreatePreStitchedImage(int width, int height,
         "Both width and height must be positive.");
   }
 
-  const int channels = memory.size() / (width * height);
+  // Direct multiplication (width * height) can overflow.
+  // So, divide twice.
+  const int64_t channels =
+      (static_cast<int64_t>(memory.size()) / static_cast<int64_t>(width)) /
+      static_cast<int64_t>(height);
   if (channels != 3 && channels != 4) {
     return absl::InvalidArgumentError(
         "The size of the memory buffer is not consistent with the image width,"
         "height, and number of channels.");
   }
-  return std::make_unique<StitchedImageContents>(width, height, channels,
-                                                 std::move(memory));
+  return std::make_unique<StitchedImageContents>(
+      width, height, static_cast<int>(channels), std::move(memory));
 }
 }  // namespace imp::image

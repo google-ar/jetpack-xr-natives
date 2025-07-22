@@ -297,8 +297,13 @@ GenericMaterialTextureParameter FromTextureParameterFlatbuffer(
     const GenericMaterialTextureParameterSchema& texture_parameter) {
   return GenericMaterialTextureParameter{
       .texture_id = texture_parameter.texture(),
-      .sampler = ConvertSampler(*texture_parameter.sampler()),
-      .uv_transform = FromMat3fFlatbuffer(*texture_parameter.uv_transform()),
+      .sampler = (texture_parameter.sampler()
+                      ? ConvertSampler(texture_parameter.sampler()).value()
+                      : filament::TextureSampler()),
+      .uv_transform =
+          texture_parameter.uv_transform()
+              ? FromMat3fFlatbuffer(*texture_parameter.uv_transform())
+              : mat3f(),
       .uses_uv1 = texture_parameter.uses_uv1()
                       ? FromBoolFlatbuffer(*texture_parameter.uses_uv1())
                       : false,
@@ -309,6 +314,7 @@ template <typename GenericMaterialTextureParameterSchema>
 std::optional<GenericMaterialTextureParameter> FromTextureParameterFlatbuffer(
     const GenericMaterialTextureParameterSchema* texture_parameter) {
   if (texture_parameter == nullptr) return std::nullopt;
+
   return FromTextureParameterFlatbuffer(*texture_parameter);
 }
 

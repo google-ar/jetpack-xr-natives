@@ -254,6 +254,14 @@ class Local : public DrawSpace {
   void CapsuleLines(const filament::math::float3& center, float height,
                     float radius, const Color& color);
 
+  // Draws a cylinder with lines defining its shape with the given color.
+  void CylinderLines(const filament::math::float3& base, float radius,
+                     float height, const Color& color);
+
+  // Draws a cone with lines defining its shape with the given color.
+  void ConeLines(const filament::math::float3& base, float radius, float height,
+                 const Color& color);
+
   void MeshLines(absl::Span<const MeshVertexAndIndexData> mesh,
                  const Color& color);
 };

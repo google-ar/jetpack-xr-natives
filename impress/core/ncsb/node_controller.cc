@@ -60,17 +60,30 @@ void NodeController::PostCreated() {
 }
 
 void NodeController::PreDestroyed() {
+  NodeHandle node = GetNode();
+
+  // Clear the remembered objects before doing anything else during destruction.
+  // This is to ensure that the node is still valid when the remembered objects
+  // are destroyed.
+  rememberer_.ClearRemembered();
+
+  // It's possible that the node was destroyed when ClearRemembered was running.
+  // In that case, we don't need to do anything.
+  if (!node) {
+    return;
+  }
+
   if (!group_hashes_) {
     // If group_hashes_, just in the main group.
     view_->GetGroupsManager().RemoveNodeFromGroup(GroupsManager::kMainGroupHash,
-                                                  GetNode());
+                                                  node);
   } else {
     // Remove from all the groups.
     for (HashValue group_hash : *group_hashes_) {
-      view_->GetGroupsManager().RemoveNodeFromGroup(group_hash, GetNode());
+      view_->GetGroupsManager().RemoveNodeFromGroup(group_hash, node);
     }
   }
-  view_->GetPathManager().SetRoot(GetNode(), false);
+  view_->GetPathManager().SetRoot(node, false);
 }
 
 void NodeController::SetEnabled(bool enabled) {

@@ -18,16 +18,20 @@
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_COMPONENTS_WORLD_SPACE_EDITOR_UI_H_
 
 #include "absl/status/status.h"
+#include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "dear_imgui/imgui.h"
 #include "core/actions/controller_events.h"
-#include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
+#include "core/editor/components/spatial_ui_canvas.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component.h"
+#include "core/ncsb/component_handle.h"
+#include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/node_handle.h"
 #include "core/render/texture.h"
-#include "core/view/framework/assets/material_asset.h"
+#include "core/view/utils/string_map.h"
+
 namespace imp::editor {
 /*
  * When enabled, WorldSpaceEditorUi renders the Editor on a quad in world space.
@@ -39,9 +43,15 @@ namespace imp::editor {
  */
 class WorldSpaceEditorUi : public Component {
  public:
+  constexpr static absl::string_view kWorldUiName = "WorldUi";
+  constexpr static float3 kDefaultCanvasPosition = {3.0f, -45.0f, 0.0f};
+
   // A fatal error will be thrown if a WorldSpaceEditorUi is already in the
   // scene.
-  Future<absl::Status> Setup(float2 texture_resolution = {800, 600});
+  Future<absl::Status> Setup(float2 texture_resolution = {800, 600},
+                             StringMap<float3> canvas_position_map = {});
+
+  void Cleanup();
 
   // Enabling will switch to rendering on a world-space quad.
   // Disabling will restore rendering to screen-space.
@@ -49,9 +59,9 @@ class WorldSpaceEditorUi : public Component {
   // layout when disabled.
   void OnActiveStatusChanged(bool is_active);
 
-  // Given the components of a ray cast, performs a collision test with the
-  // WorldSpaceEditorUi. Updates the ImGui mouse position if a hit occurs.
-  void ProcessRayCast(float3 ray_origin, float3 ray_direction);
+  // Updates corresponding SpatialUiCanvas with the new settings.
+  Future<absl::Status> UpdateSpatialUiCanvas(
+      SpatialUiCanvas::SpatialUiCanvasSettings settings);
 
  private:
   // TODO Support raycasts derived from a mouse.
@@ -72,10 +82,21 @@ class WorldSpaceEditorUi : public Component {
   // Transforms a world point into a pixel coordinate for the ImGui UI.
   ImVec2 CalculateImGuiPointFromWorldPoint(float3 world_point);
 
-  TexturePtr texture_;
+  // Returns the position of the canvas that is known with Setup, otherwise
+  // returns the default position.
+  float3 GetKnownCanvasPosition(absl::string_view canvas_name) const;
+
+  OwnedTexturePtr texture_;
   float2 texture_resolution_;
   float texture_aspect_ratio_;
   absl::optional<ControllerHitEvent::Hand> active_hand_;
+
+  // The position of each canvas that is known with Setup.
+  StringMap<float3> canvas_position_map_;
+  // All the panels keyed by their names.
+  StringMap<NodeHandle> spatial_ui_canvases_;
+  // The canvas that is currently being hit by the input.
+  ComponentHandle<SpatialUiCanvas> hit_canvas_;
 };
 }  // namespace imp::editor
 

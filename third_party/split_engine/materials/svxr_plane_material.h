@@ -35,6 +35,8 @@ class SVXRPlaneMaterial : public imp::split_engine::SplitEngineMaterial {
   static imp::Future<std::unique_ptr<SVXRPlaneMaterial>> Create(
       imp::BaseView& view);
 
+  ~SVXRPlaneMaterial() override;
+
   void SetHighlightPoint(const imp::float3& highlight_point);
   void SetDotPattern(imp::OwnedOrBorrowedTexturePtr dot_pattern);
   void SetPlaneControl(const imp::float3& plane_control);

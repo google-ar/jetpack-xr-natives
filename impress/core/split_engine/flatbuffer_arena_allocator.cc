@@ -21,20 +21,21 @@
 #include <utility>
 
 #include "zetasql/base/arena.h"
+#include "absl/log/check.h"
 #include "core/common/log.h"
-#include "filament/libs/utils/include/utils/compiler.h"
-#include "core/common/platform_helpers.h"
+#include "absl/strings/string_view.h"
+
+static constexpr absl::string_view kTag = "[FlatbufferArenaAllocator]: ";
 
 namespace imp {
 
 FlatbufferArenaAllocator::ArenaAndAllocFunc::ArenaAndAllocFunc(
-    size_t block_size, LowLevelAllocFunc first_block_alloc,
-    LowLevelDeallocFunc first_block_dealloc, void* user)
-    : first_block_head_(first_block_alloc ? first_block_alloc(block_size, user)
-                                          : nullptr),
-      first_block_alloc_(first_block_alloc),
-      first_block_dealloc_(first_block_dealloc),
-      user_(user),
+    size_t block_size, MemoryOptions memory_options)
+    : first_block_head_(memory_options.first_block_alloc
+                            ? memory_options.first_block_alloc(
+                                  block_size, memory_options.user)
+                            : nullptr),
+      memory_options_(memory_options),
       in_use_(true) {
   arena_ = std::make_unique<zetasql_base::UnsafeArena>(static_cast<char*>(first_block_head_),
                                          block_size);
@@ -52,26 +53,20 @@ FlatbufferArenaAllocator::ArenaAndAllocFunc::operator=(
     ArenaAndAllocFunc&& other) {
   arena_ = std::move(other.arena_);
   first_block_head_ = other.first_block_head_;
-  first_block_alloc_ = other.first_block_alloc_;
-  first_block_dealloc_ = other.first_block_dealloc_;
-  user_ = other.user_;
+  memory_options_ = other.memory_options_;
   in_use_ = other.in_use_;
 
   other.first_block_head_ = nullptr;
-  other.first_block_alloc_ = nullptr;
-  other.first_block_dealloc_ = nullptr;
-  other.user_ = nullptr;
+  other.memory_options_ = {};
   other.in_use_ = false;
 
   return *this;
 }
 
 bool FlatbufferArenaAllocator::ArenaAndAllocFunc::IsMatch(
-    size_t block_size, LowLevelAllocFunc first_block_alloc,
-    LowLevelDeallocFunc first_block_dealloc, void* user) {
+    size_t block_size, const MemoryOptions& memory_options) {
   return (!in_use_ && arena_ && arena_->block_size() == block_size &&
-          first_block_alloc_ == first_block_alloc &&
-          first_block_dealloc_ == first_block_dealloc && user_ == user);
+          memory_options_ == memory_options);
 }
 
 void FlatbufferArenaAllocator::ArenaAndAllocFunc::SetInUse() { in_use_ = true; }
@@ -82,24 +77,26 @@ void FlatbufferArenaAllocator::ArenaAndAllocFunc::Reset() {
 }
 
 void FlatbufferArenaAllocator::ArenaAndAllocFunc::Clear() {
-  if (first_block_dealloc_ != nullptr) {
-    first_block_dealloc_(first_block_head_, user_);
+  if (memory_options_.first_block_dealloc != nullptr) {
+    memory_options_.first_block_dealloc(first_block_head_,
+                                        memory_options_.user);
   }
   arena_.reset();
   first_block_head_ = nullptr;
-  first_block_alloc_ = nullptr;
-  first_block_dealloc_ = nullptr;
-  user_ = nullptr;
+  memory_options_ = {};
   in_use_ = false;
 }
 
 FlatbufferArenaAllocator::ArenaHandle FlatbufferArenaAllocator::CreateArena(
-    size_t block_size, LowLevelAllocFunc first_block_alloc,
-    LowLevelDeallocFunc first_block_dealloc, void* user) {
+    size_t block_size) {
+  return CreateArena(block_size, {});
+}
+
+FlatbufferArenaAllocator::ArenaHandle FlatbufferArenaAllocator::CreateArena(
+    size_t block_size, MemoryOptions memory_options) {
   // First try to find an arena to reuse.
   for (int i = 0; i < arenas_.size(); ++i) {
-    if (i != active_arena_ && arenas_[i].IsMatch(block_size, first_block_alloc,
-                                                 first_block_dealloc, user)) {
+    if (i != active_arena_ && arenas_[i].IsMatch(block_size, memory_options)) {
       // The handle is the index into the vector.
       active_arena_ = i;
       arenas_[i].SetInUse();
@@ -109,8 +106,7 @@ FlatbufferArenaAllocator::ArenaHandle FlatbufferArenaAllocator::CreateArena(
   // If no empty arenas are found to reuse then allocate a new one.
   // Note that even when we don't reuse arenas, we still reuse slots in the
   // arenas_ vector.
-  ArenaAndAllocFunc new_arena(block_size, first_block_alloc,
-                              first_block_dealloc, user);
+  ArenaAndAllocFunc new_arena(block_size, memory_options);
   for (int i = 0; i < arenas_.size(); ++i) {
     if (!arenas_[i].Get()) {
       arenas_[i] = std::move(new_arena);
@@ -126,12 +122,7 @@ FlatbufferArenaAllocator::ArenaHandle FlatbufferArenaAllocator::CreateArena(
 
 void FlatbufferArenaAllocator::DestroyArena(ArenaHandle arena_handle,
                                             bool allow_recycle) {
-  if (UTILS_UNLIKELY(arena_handle < 0 || arena_handle >= arenas_.size())) {
-    IMP_LOG(imp::ERROR) << "[FlatbufferPoolAllocator] DestroyArena received invalid "
-                  "arena handle "
-               << arena_handle;
-    return;
-  }
+  
 
   ArenaAndAllocFunc& arena = arenas_[arena_handle];
   if (allow_recycle) {
@@ -143,6 +134,7 @@ void FlatbufferArenaAllocator::DestroyArena(ArenaHandle arena_handle,
   // Clients should never call DestroyArena on the active arena, but we can
   // simply defend against it anyway.
   if (active_arena_ == arena_handle) {
+    
     IMP_LOG(imp::WARNING)
         << "[FlatbufferPoolAllocator] DestroyArena called on active arena: "
         << active_arena_;
@@ -151,32 +143,27 @@ void FlatbufferArenaAllocator::DestroyArena(ArenaHandle arena_handle,
 }
 
 size_t FlatbufferArenaAllocator::GetArenaSize(ArenaHandle arena_handle) {
-  if (UTILS_UNLIKELY(arena_handle < 0 || arena_handle >= arenas_.size()) ||
-      (arenas_[arena_handle].Get() == nullptr)) {
-    IMP_LOG(imp::ERROR) << "[FlatbufferPoolAllocator] GetArenaSize received invalid "
-                  "arena handle "
-               << arena_handle;
-    return 0;
-  }
+  
+
   return arenas_[arena_handle].Get()->status().bytes_allocated();
 }
 
 void* FlatbufferArenaAllocator::GetArenaHead(ArenaHandle arena_handle) {
-  if (UTILS_UNLIKELY(arena_handle < 0 || arena_handle >= arenas_.size()) ||
-      (arenas_[arena_handle].Get() == nullptr)) {
-    IMP_LOG(imp::ERROR) << "[FlatbufferPoolAllocator] GetArenaHead received invalid "
-                  "arena handle "
-               << arena_handle;
-    return 0;
-  }
+  
+  
+
   return arenas_[arena_handle].GetArenaHead();
 }
 
 uint8_t* FlatbufferArenaAllocator::allocate(size_t size) {
-  if (UTILS_UNLIKELY(active_arena_ < 0 || active_arena_ >= arenas_.size())) {
-    return nullptr;
+  
+  
+
+  if (arenas_[active_arena_].GetGrowthStrategy() ==
+      GrowthStrategy::kDontGrowBeyondFirstBlock) {
+    
   }
-  assert(arenas_[active_arena_].Get());
+
   return reinterpret_cast<uint8_t*>(arenas_[active_arena_].Get()->Alloc(size));
 }
 

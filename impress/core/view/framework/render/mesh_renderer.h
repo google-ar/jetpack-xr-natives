@@ -27,6 +27,7 @@
 #include "core/async/future.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/small_source_location.h"
+#include "core/geometry/shapes/box.h"
 #include "core/materials/material.h"
 #include "core/model/mesh/mesh.h"
 #include "core/ncsb/component.h"
@@ -171,6 +172,9 @@ class MeshRenderer : public Component {
   // Updates the AABB for this MeshRenderer with the union of all AABBs for
   // the meshes.
   void UpdateRenderableAabb();
+
+  // Gets the AABB for this MeshRenderer.
+  const Box& GetRenderableAabb() const;
 
   // Sets the shadow mode that this node can cast onto other nodes.
   // Shadow casting and shadow receiving do not impact each other. For instance,

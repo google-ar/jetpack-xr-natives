@@ -113,6 +113,9 @@ OwnedTexturePtr CreateIblCubemapTexture(CubemapImageContents& cubemaps,
           .format = TextureFactory::Format::R11F_G11F_B10F,
           .levels = cubemaps.cubemap->levels.size(),
           .sampler_type = TextureFactory::SamplerType::SAMPLER_CUBEMAP});
+  if (!cubemaps.cubemap->texture) {
+    return {};
+  }
 
   for (uint8_t level = 0; level < cubemaps.cubemap->levels.size(); level++) {
     CubemapLevel& cubemap_level = cubemaps.cubemap->levels[level];
@@ -136,6 +139,9 @@ OwnedTexturePtr CreateSkyboxCubemapTexture(CubemapLevelImageContents& cubemap,
           .height = skybox_cubemap->levels.front().face_size,
           .format = TextureFactory::Format::R11F_G11F_B10F,
           .sampler_type = TextureFactory::SamplerType::SAMPLER_CUBEMAP});
+  if (!skybox_cubemap->texture) {
+    return {};
+  }
 
   MovePixelsToTexture(engine, skybox_cubemap->texture.get(), 0,
                       skybox_cubemap->levels.front(),

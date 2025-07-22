@@ -14,6 +14,7 @@
 
 # IPC library for Impress spawned child processes.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
     "//build_tools:imp.bzl",
     "imp_copts",

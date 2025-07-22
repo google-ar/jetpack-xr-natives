@@ -14,14 +14,19 @@
 
 #include "core/assets/gltf/gltf_interactivity_extension.h"
 
+#include <cstdint>
 #include <memory>
+#include <optional>
+#include <stack>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
@@ -29,25 +34,45 @@
 #include "core/animation/property_animator.h"
 #include "core/animation/property_animator_state.proto.imp.h"
 #include "core/assets/gltf/interactivity/converted_graph.h"
+#include "core/assets/gltf/interactivity/custom_statements/animation_start.h"
+#include "core/assets/gltf/interactivity/custom_statements/animation_stop.h"
+#include "core/assets/gltf/interactivity/custom_statements/multi_gate.h"
+#include "core/assets/gltf/interactivity/custom_statements/set_delay.h"
+#include "core/assets/gltf/interactivity/custom_statements/throttle.h"
+#include "core/assets/gltf/interactivity/custom_statements/wait_all.h"
 #include "core/assets/gltf/interactivity/node_converter_constants.h"
 #include "core/assets/gltf/interactivity/node_converters.h"
+#include "core/assets/gltf/interactivity/node_converters/animation/animation.h"
+#include "core/assets/gltf/interactivity/node_converters/debug/debug.h"
 #include "core/assets/gltf/interactivity/node_converters/event/event.h"
+#include "core/assets/gltf/interactivity/node_converters/flow/flow.h"
 #include "core/assets/gltf/interactivity/node_converters/math/math.h"
+#include "core/assets/gltf/interactivity/node_converters/pointer/pointer.h"
+#include "core/assets/gltf/interactivity/node_converters/utils.h"
+#include "core/assets/gltf/object_model/pointer_declarations/core_pointers.h"
+#include "core/assets/gltf/object_model/pointer_parser.h"
+#include "core/assets/gltf/object_model/property_pointer.h"
 #include "core/async/future.h"
 #include "core/common/registry.h"
+#include "core/common/robin_map.h"
 #include "core/math/arrays.proto.imp.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
+#include "core/model/entity_data.h"
 #include "core/model/model_data.h"
+#include "core/model/shared_data.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/component_system.h"
 #include "core/ncsb/node_handle.h"
 #include "core/recipes/language/recipe_graph.proto.imp.h"
 #include "core/recipes/language/recipe_system.h"
+#include "core/recipes/language/recipe_types.proto.imp.h"
+#include "core/recipes/language/recipe_utils.h"
 #include "core/recipes/recipe_runner.h"
 #include "core/recipes/recipe_runner_state.proto.imp.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/animation/animation.proto.imp.h"
+#include "core/view/framework/assets/gltf_mesh.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/framework/assets/gltf_scene.h"
 #include "core/view/framework/scene/scene_system.h"
@@ -56,6 +81,8 @@ namespace imp {
 
 using model::ModelData;
 using InteractivityData = model::ModelData::InteractivityData;
+using PropertyPointer = gltf::PropertyPointer;
+using PointerParser = gltf::PointerParser;
 
 namespace {
 
@@ -94,6 +121,71 @@ void WorldAnimateToFunction(NodeHandle root, NodeHandle node,
   play_future.KeptBy(node);
 }
 
+/**
+ * Iterates through the entire glTF node tree and returns a list of indices
+ * correlating to glTF nodes that are considered "hoverable" according the
+ * KHR_node_hoverability extension.
+ *
+ * Link to KHR_node_hoverability extension spec:
+ * https://github.com/KhronosGroup/glTF/blob/355fdb80fe4601eefa687e3380b615a524d4e00a/extensions/2.0/Khronos/KHR_node_hoverability/README.md
+ *
+ * Parameters:
+ *  ModelData model_data - the model data for the glTF model
+ *  ComponentHandle<GltfScene> gltf_scene - the reference to the GltfScene
+ * object for the model
+ *  NodeHandle root_node - the root node for the glTF Model
+ * Returns:
+ *  std::vector<int> - the list of indicies correlating to  hoverable glTF Nodes
+ * on the glTF Model
+ */
+std::vector<int> GetHoverableNodes(const ModelData& model_data,
+                                   const ComponentHandle<GltfScene>& gltf_scene,
+                                   const NodeHandle& root_node) {
+  const auto& entities = model_data.Entities();
+  RobinMap<NodeHandle, model::EntityId> node_to_entity_id_map;
+  for (const auto entity_id : entities.Ids<model::EntityId>()) {
+    NodeHandle node =
+        gltf_scene->GetNodeFromBone(model_data.Entities()[entity_id].bone);
+    if (!node.IsValid()) {
+      continue;
+    }
+    node_to_entity_id_map.insert({node, entity_id});
+  }
+
+  if (node_to_entity_id_map.empty()) {
+    return std::vector<int>{};
+  }
+
+  std::stack<NodeHandle> node_stack;
+  for (const NodeHandle& child : root_node->GetChildren()) {
+    node_stack.push(child);
+  }
+
+  std::vector<int> hover_node_gltf_indicies;
+  while (!node_stack.empty()) {
+    NodeHandle current_node = node_stack.top();
+    node_stack.pop();
+
+    if (!node_to_entity_id_map.contains(current_node)) {
+      continue;
+    }
+
+    std::optional<model::NodeHoverability> hoverable =
+        entities[node_to_entity_id_map.at(current_node)].node_hoverability;
+    if (!hoverable.has_value() || !hoverable->hoverable.has_value() ||
+        hoverable->hoverable.value()) {
+      uint64_t gltf_index =
+          entities[node_to_entity_id_map.at(current_node)].original_index;
+      hover_node_gltf_indicies.push_back(static_cast<int>(gltf_index));
+      for (const NodeHandle& child : current_node->GetChildren()) {
+        node_stack.push(child);
+      }
+    }
+  }
+
+  return hover_node_gltf_indicies;
+}
+
 }  // namespace
 
 Future<absl::Status> GltfInteractivityExtension::SetupInternal(
@@ -108,6 +200,15 @@ Future<absl::Status> GltfInteractivityExtension::SetupInternal(
     return Future<absl::Status>(absl::FailedPreconditionError(
         "No interactivity extension information found."));
   }
+
+  if (!gltf_renderer->GetModelRoot().IsValid()) {
+    return Future<absl::Status>(
+        absl::InvalidArgumentError("Invalid Model Root Node Handle."));
+  }
+
+  hover_node_gltf_indicies_ = GetHoverableNodes(
+      model_data, gltf_renderer->GetNode()->GetComponent<GltfScene>(),
+      gltf_renderer->GetModelRoot());
 
   const InteractivityData& interactivity_data = *model_data.Interactivity();
   // TODO: Support loading non-default graphs.
@@ -182,17 +283,30 @@ bool GltfInteractivityExtension::IsValidFor(
 
 absl::Status GltfInteractivityExtension::Start() {
   if (recipe_runner_) {
+    ComponentHandle<GltfScene> gltf_scene =
+        recipe_runner_->GetNode()->GetComponent<GltfScene>();
+
     // Converts the tap node indices to NodeHandles.
     std::vector<NodeHandle> tap_targets;
     tap_targets.reserve(tap_node_gltf_indices_.size());
     for (int index : tap_node_gltf_indices_) {
-      tap_targets.push_back(recipe_runner_->GetNode()
-                                ->GetComponent<GltfScene>()
-                                ->GetOrCreateNodeFromGltfNodeIndex(index));
+      tap_targets.push_back(
+          gltf_scene->GetOrCreateNodeFromGltfNodeIndex(index));
     }
     // Sets the tap targets on the RecipeRunner.
     recipe_runner_->SetTapTargets(
         absl::Span<NodeHandle>(tap_targets.data(), tap_targets.size()));
+
+    // Converts the hover node indices to NodeHandles.
+    std::vector<NodeHandle> hover_targets;
+    hover_targets.reserve(hover_node_gltf_indicies_.size());
+    for (int index : hover_node_gltf_indicies_) {
+      hover_targets.push_back(
+          gltf_scene->GetOrCreateNodeFromGltfNodeIndex(index));
+    }
+    // Sets the hover targets on the RecipeRunner
+    recipe_runner_->SetHoverTargets(
+        absl::Span<NodeHandle>(hover_targets.data(), hover_targets.size()));
 
     return recipe_runner_->Start();
   }
@@ -205,35 +319,15 @@ GltfInteractivityExtension::System::System(BaseView* view)
   view->GetSceneSystem().RegisterComponentIsfInfo<RecipeRunner>();
 
   RegisterInteractivityNodeConverter(
-      gltf::interactivity::GetEventOnStartConverter());
-  RegisterInteractivityNodeConverter(
-      gltf::interactivity::GetEventOnTickConverter());
-  RegisterInteractivityNodeConverter(
       gltf::interactivity::GetVariableSetConverter());
   RegisterInteractivityNodeConverter(
       gltf::interactivity::GetVariableGetConverter());
   RegisterInteractivityNodeConverter(
-      gltf::interactivity::GetEventSendConverter());
-  RegisterInteractivityNodeConverter(
-      gltf::interactivity::GetEventReceiveConverter());
-  RegisterInteractivityNodeConverter(
       gltf::interactivity::GetDebugConsoleConverter());
-  RegisterInteractivityNodeConverter(
-      gltf::interactivity::GetFlowForLoopConverter());
-  RegisterInteractivityNodeConverter(
-      gltf::interactivity::GetFlowSequenceConverter());
   RegisterInteractivityNodeConverter(
       gltf::interactivity::GetFlowDelayConverter());
   RegisterInteractivityNodeConverter(
       gltf::interactivity::GetFlowBranchConverter());
-  RegisterInteractivityNodeConverter(
-      gltf::interactivity::GetNodeOnSelectConverter());
-  RegisterInteractivityNodeConverter(
-      gltf::interactivity::GetWorldGetConverter());
-  RegisterInteractivityNodeConverter(
-      gltf::interactivity::GetWorldSetConverter());
-  RegisterInteractivityNodeConverter(
-      gltf::interactivity::GetWorldAnimateToConverter());
   RegisterInteractivityNodeConverter(
       gltf::interactivity::GetMathAddConverter());
   RegisterInteractivityNodeConverter(
@@ -296,11 +390,6 @@ GltfInteractivityExtension::System::System(BaseView* view)
   RegisterInteractivityNodeConverter(
       gltf::interactivity::GetTypeCastFloatToIntConverter());
   RegisterInteractivityNodeConverter(
-      gltf::interactivity::GetWorldStartAnimationConverter());
-  RegisterInteractivityNodeConverter(
-      gltf::interactivity::GetWorldStopAnimationConverter());
-  RegisterInteractivityNodeConverter(gltf::interactivity::GetMathPiConverter());
-  RegisterInteractivityNodeConverter(
       gltf::interactivity::GetMathComposeConverter());
   RegisterInteractivityNodeConverter(
       gltf::interactivity::GetMathDecomposeConverter());
@@ -313,8 +402,20 @@ GltfInteractivityExtension::System::System(BaseView* view)
   RegisterInteractivityNodeConverter(
       gltf::interactivity::GetAsyncPlaySoundConverter());
 
+  // (broken link) start
+  RegisterInteractivityNodeConverters(
+      gltf::interactivity::GetAnimationNodeConverters());
+  RegisterInteractivityNodeConverters(
+      gltf::interactivity::GetDebugNodeConverters());
+  RegisterInteractivityNodeConverters(
+      gltf::interactivity::GetEventNodeConverters());
+  RegisterInteractivityNodeConverters(
+      gltf::interactivity::GetFlowNodeConverters());
   RegisterInteractivityNodeConverters(
       gltf::interactivity::GetMathNodeConverters());
+  RegisterInteractivityNodeConverters(
+      gltf::interactivity::GetPointerConverters());
+  // (broken link) end
 
   // TODO: Support more types.
   // TODO: We're not supporting registering String types for now,
@@ -333,8 +434,25 @@ GltfInteractivityExtension::System::System(BaseView* view)
   RegisterInteractivityType(InteractivityData::ValueType::FLOAT4,
                             VariableDeclaration::Type::FLOAT4);
 
+  // Register core pointer declarations to the pointer parser.
+  GetPointerParser().RegisterPointerDeclarations(
+      gltf::GetCorePointerDeclarations());
+
   RecipeSystem& recipe_system =
       GetView().GetRegistry().GetOrCreate<RecipeSystem>(GetView());
+
+  recipe_system.RegisterCustomStatementType<
+      gltf::interactivity::AnimationStartCustomStatement>();
+  recipe_system.RegisterCustomStatementType<
+      gltf::interactivity::AnimationStopCustomStatement>();
+  recipe_system.RegisterCustomStatementType<
+      gltf::interactivity::MultiGateCustomStatement>();
+  recipe_system.RegisterCustomStatementType<
+      gltf::interactivity::SetDelayCustomStatement>();
+  recipe_system.RegisterCustomStatementType<
+      gltf::interactivity::ThrottleCustomStatement>();
+  recipe_system.RegisterCustomStatementType<
+      gltf::interactivity::WaitAllCustomStatement>();
 
   recipe_system.RegisterFunction(
       gltf::interactivity::kGetNodeByIndexFunctionName,
@@ -403,6 +521,143 @@ GltfInteractivityExtension::System::System(BaseView* view)
           }
         });
       });
+
+  recipe_system.RegisterFunction(
+      gltf::interactivity::kGetHoverEventDataFunctionName,
+      [](NodeHandle hovered_node, int controllerIndex) -> recipe::Variables {
+        ComponentHandle<GltfMesh> mesh = hovered_node->GetComponent<GltfMesh>();
+        uint64_t gltf_index =
+            mesh.IsValid() ? mesh->GetOriginalGltfIndex() : -1;
+        const std::string hover_node_index_socket_name =
+            std::string(gltf::interactivity::kHoverNodeIndexOutputValueSocket);
+        const std::string controller_index_socket_name = std::string(
+            gltf::interactivity::kHoverControllerIndexOutputValueSocket);
+        recipe::Variables arguments;
+        arguments[hover_node_index_socket_name] = static_cast<int>(gltf_index);
+        arguments[controller_index_socket_name] = controllerIndex;
+        return arguments;
+      });
+
+  recipe_system.RegisterFunction(
+      gltf::interactivity::kPointerGetFunctionName,
+      [this](recipe::Args args) -> absl::StatusOr<recipe::Variables> {
+        // Arguments:
+        // 0 - NodeHandle : The gltf model node.
+        // 1 - default_value : The default value to return if the pointer is
+        // not valid for the model.
+        // 2 - pointer_path_0 : The first component of the pointer path.
+        // 3 - pointer_path_1 : The second component of the pointer path.
+        // ...
+        recipe::Variables return_values;
+        return_values["isValid"] = false;
+
+        if (args.size() <= 2) {
+          return absl::InvalidArgumentError(
+              "Expected at least 3 arguments for pointer/get.");
+        }
+
+        if (!std::holds_alternative<NodeHandle>(args[0])) {
+          return absl::InvalidArgumentError(
+              "The first argument to pointer/get must be a NodeHandle.");
+        }
+        NodeHandle gltf_model = std::get<NodeHandle>(args[0]);
+
+        return_values["value"] = args[1];
+
+        std::string pointer_path;
+        // The first two arguments are the default value and the gltf model node
+        // handle, so we skip them when constructing the pointer path.
+        for (int i = 2; i < args.size(); ++i) {
+          absl::StrAppend(&pointer_path, recipe::ToString(args[i]));
+        }
+
+        std::optional<PropertyPointer> pointer =
+            GetPointerParser().TryParse(pointer_path);
+        if (!pointer.has_value()) {
+          // Returns error if pointer is invalid.
+          return absl::NotFoundError(
+              absl::StrFormat("Invalid pointer: %s.", pointer_path));
+        }
+
+        absl::StatusOr<PropertyPointer::PointerValue> value =
+            pointer->GetValue(gltf_model);
+        if (!value.ok()) {
+          // Returns default values if pointer is not valid for the model.
+          return return_values;
+        }
+
+        return_values["value"] =
+            absl::ConvertVariantTo<recipe::Variable>(value.value());
+        return_values["isValid"] = true;
+
+        return return_values;
+      });
+
+  recipe_system.RegisterFunction(
+      "Switch",
+      [](recipe::Args input_args) -> absl::StatusOr<recipe::Variable> {
+        if (input_args.size() < 3) {
+          return absl::InvalidArgumentError(
+              "Switch requires at least 3 arguments, namely the selection "
+              "value, the "
+              "default value, and the case to value connection offset map.");
+        }
+        recipe::Variable input_selection = input_args[0];
+        recipe::Variable input_default = input_args[1];
+        recipe::Variable input_case_to_value_offset = input_args[2];
+
+        // Check the validity and get the actual value of "selection".
+        if (!std::holds_alternative<int>(input_selection)) {
+          return absl::InvalidArgumentError(
+              "Switch requires the 1st parameter (selection value) to be an "
+              "integer.");
+        }
+        int selection = std::get<int>(input_selection);
+
+        // Check the validity of the case to value connection offset map.
+        if (!std::holds_alternative<LiteralMap>(input_case_to_value_offset)) {
+          return absl::InvalidArgumentError(
+              "Switch requires the 3rd parameter (case to value connection "
+              "offset) "
+              "to be a LiteralMap.");
+        }
+        LiteralMap case_to_value_offset_map =
+            std::get<LiteralMap>(input_case_to_value_offset);
+        for (const auto& [key, value] : case_to_value_offset_map.values) {
+          if (!std::holds_alternative<int>(value.value)) {
+            return absl::InvalidArgumentError(
+                "Switch requires the 3rd parameter (case to value connection "
+                "offset "
+                "map) to have integer values in the map.");
+          }
+        }
+
+        // KHR_Interactivity spec requires all the value connections matched to
+        // "cases" to have the same type as the default value connection. Here
+        // we check that.
+        int value_type_index = input_default.index();
+        for (int i = 3; i < input_args.size(); i++) {
+          if (input_args[i].index() != value_type_index) {
+            return absl::InvalidArgumentError(
+                "Switch requires all the value connections matched to cases to "
+                "have "
+                "the same type as the default value connection.");
+          }
+        }
+
+        if (case_to_value_offset_map.values.find(std::to_string(selection)) ==
+            case_to_value_offset_map.values.end()) {
+          return input_default;
+        }
+        int offset = std::get<int>(
+            case_to_value_offset_map.values[std::to_string(selection)].value);
+        if (offset + 3 >= input_args.size()) {
+          return absl::InvalidArgumentError(absl::StrFormat(
+              "case %d has an offset of %d, which is out of range.", selection,
+              offset));
+        }
+        return input_args[offset + 3];
+      });
 }
 
 void GltfInteractivityExtension::System::RegisterInteractivityNodeConverter(
@@ -446,6 +701,10 @@ GltfInteractivityExtension::System::GetRecipeType(
         "No InteractivityType for type %d was found.", value_type));
   }
   return it->second;
+}
+
+PointerParser& GltfInteractivityExtension::System::GetPointerParser() {
+  return GetView().GetRegistry().GetOrCreate<PointerParser>();
 }
 
 }  // namespace imp

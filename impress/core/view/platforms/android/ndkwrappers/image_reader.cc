@@ -30,7 +30,6 @@
 #include "absl/strings/str_cat.h"
 #include "core/common/context.h"
 #include "core/view/base_view.h"
-#include "core/view/platforms/android/ndkwrappers/hardware_buffer_helper.h"
 #include "core/view/platforms/android/ndkwrappers/image.h"
 
 namespace imp::android {
@@ -44,16 +43,6 @@ ImageReader::ImageReader(int32_t width, int32_t height, int32_t format,
 absl::StatusOr<std::unique_ptr<ImageReader>> ImageReader::Create(
     const BaseView& view, int32_t width, int32_t height, int32_t format,
     uint64_t usage, int32_t max_images) {
-  // TODO : When the Qualcomm changes for MV-HEVC playback are
-  // available in the official release, return the status error if MV-HEVC
-  // playback is not supported.
-  if (absl::Status status = AHardwareBufferHelper::LoadRuntimeLibraries();
-      status != absl::OkStatus()) {
-    IMP_LOG(imp::INFO)
-        << "Cannot load the required runtime symbols from libnativewindow.so. "
-        << status.message();
-  }
-
   // Create image reader.
   std::unique_ptr<ImageReader> image_reader = absl::WrapUnique<ImageReader>(
       new ImageReader(width, height, format, usage, max_images));

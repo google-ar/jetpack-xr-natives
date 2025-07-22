@@ -29,12 +29,12 @@
 
 namespace imp::loader::details::provider_gltf {
 
-using NodeId = TypedId<const imp::gltf::Node, int>;
-using MaterialId = TypedId<const imp::gltf::Material, int>;
-using LightPunctualId = TypedId<const imp::gltf::LightPunctual, int>;
-using ChannelId = TypedId<const imp::gltf::AnimationChannel, int>;
-using AnimationId = TypedId<const imp::gltf::Animation, int>;
-using ImageId = TypedId<const imp::gltf::Image, int>;
+using NodeId = TypedId<const imp::gltf::imp_proto::Node, int>;
+using MaterialId = TypedId<const imp::gltf::imp_proto::Material, int>;
+using LightPunctualId = TypedId<const imp::gltf::imp_proto::LightPunctual, int>;
+using ChannelId = TypedId<const imp::gltf::imp_proto::AnimationChannel, int>;
+using AnimationId = TypedId<const imp::gltf::imp_proto::Animation, int>;
+using ImageId = TypedId<const imp::gltf::imp_proto::Image, int>;
 
 // Since most meshes have 1-4 primitives, pick a watermark that eliminates most
 // primitive-related vector allocations.
@@ -45,29 +45,30 @@ using GltfPrimitiveVector = absl::InlinedVector<T, kGltfPrimitiveWatermark>;
 // Simple wrapper for the tinygltf root object.
 class GltfModel {
  public:
-  explicit GltfModel(imp::gltf::Gltf* gltf_root);
+  explicit GltfModel(imp::gltf::imp_proto::Gltf* gltf_root);
 
-  const imp::gltf::Material& GetMaterial(absl::optional<uint32_t> index) const;
-  const imp::gltf::Accessor& GetAccessor(int index) const;
-  const imp::gltf::Texture& GetTexture(int index) const;
-  const imp::gltf::Sampler& GetSampler(int index) const;
-  const imp::gltf::Image& GetImage(int index) const;
+  const imp::gltf::imp_proto::Material& GetMaterial(
+      absl::optional<uint32_t> index) const;
+  const imp::gltf::imp_proto::Accessor& GetAccessor(int index) const;
+  const imp::gltf::imp_proto::Texture& GetTexture(int index) const;
+  const imp::gltf::imp_proto::Sampler& GetSampler(int index) const;
+  const imp::gltf::imp_proto::Image& GetImage(int index) const;
 
-  const imp::gltf::Gltf& Root() const { return *gltf_root_; }
+  const imp::gltf::imp_proto::Gltf& Root() const { return *gltf_root_; }
 
   int GetTextureCount() const;
   int GetImageCount() const;
   int GetSamplerCount() const;
 
  private:
-  imp::gltf::Gltf* gltf_root_;
+  imp::gltf::imp_proto::Gltf* gltf_root_;
 
-  imp::gltf::Material empty_material_;
-  imp::gltf::Sampler empty_sampler_;
+  imp::gltf::imp_proto::Material empty_material_;
+  imp::gltf::imp_proto::Sampler empty_sampler_;
 };
 
 absl::StatusOr<BufferAccess> BufferAccessFromBufferView(
-    const imp::gltf::Gltf& gltf, uint32_t buffer_view_index,
+    const imp::gltf::imp_proto::Gltf& gltf, uint32_t buffer_view_index,
     uint32_t byte_offset = 0);
 
 }  // namespace imp::loader::details::provider_gltf

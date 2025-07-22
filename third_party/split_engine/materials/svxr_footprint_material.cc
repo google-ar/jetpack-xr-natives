@@ -55,6 +55,8 @@ SVXRFootprintMaterial::SVXRFootprintMaterial(
                               BuiltInMaterial0d0cb9aaParameters,
                           std::move(material)) {}
 
+SVXRFootprintMaterial::~SVXRFootprintMaterial() { Cleanup(); }
+
 flatbuffers::Offset<void> SVXRFootprintMaterial::SerializeParameters(
     flatbuffers::FlatBufferBuilder& fbb,
     imp::split_engine::BuiltInTextureParameterCreator&

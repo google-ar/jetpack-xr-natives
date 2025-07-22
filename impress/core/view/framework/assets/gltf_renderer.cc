@@ -782,7 +782,9 @@ NodeHandle GltfRenderer::GetOrCreateNode(absl::string_view name) {
 void GltfRenderer::ScheduleSkinningUpdate() { skinning_scheduled_ = true; }
 
 void GltfRenderer::UpdateSkinning() {
-  IMP_TRACE();
+  if (runtime_skins_.empty()) {
+    return;
+  }
 
   GltfRenderer::System& system =
       GetView().GetComponentManager().GetComponentSystem<GltfRenderer>();
@@ -803,130 +805,125 @@ void GltfRenderer::UpdateSkinning() {
   auto* engine = BaseView::GetSharedEngine();
   filament::TransformManager& tm = engine->getTransformManager();
 
-  if (!runtime_skins_.empty()) {
-    BaseRenderableManager& renderable_manager =
-        GetView().GetRenderableManager();
-    const ModelData& data = gltf_asset_->GetModelData();
-    size_t bone_count = data.Skeleton().bones.size();
+  BaseRenderableManager& renderable_manager = GetView().GetRenderableManager();
+  const ModelData& data = gltf_asset_->GetModelData();
+  size_t bone_count = data.Skeleton().bones.size();
 
-    if (root_xforms_.size() < bone_count) {
-      root_xforms_.resize(bone_count);
+  if (root_xforms_.size() < bone_count) {
+    root_xforms_.resize(bone_count);
+  }
+  if (root_xforms_updated_.size() < bone_count) {
+    root_xforms_updated_.Resize(bone_count);
+  }
+  root_xforms_updated_.SetAll(false);
+
+  for (RuntimeSkin& runtime_skin : runtime_skins_) {
+    const ModelData::SkinData& skin_data = data.Skins()[runtime_skin.skin];
+
+    // Walk the Joint tree composing local transforms into world transforms.
+    for (JointId self : skin_data.joints.Ids<JointId>()) {
+      BoneId source = skin_data.joints[self].source;
+      if (root_xforms_updated_.Get(source)) continue;
+      const mat4f& parent_from_joint =
+          scene->GetLocalTransformMatFromBone(source);
+      if (model::ModelData::JointParentId parent =
+              skin_data.joints[self].parent) {
+        BoneId parent_source = skin_data.joints[parent].source;
+        const mat4f& root_from_parent = root_xforms_[parent_source];
+        root_xforms_[source] = root_from_parent * parent_from_joint;
+      } else {
+        root_xforms_[source] = parent_from_joint;
+      }
+      root_xforms_updated_.Set(source);
     }
-    if (root_xforms_updated_.size() < bone_count) {
-      root_xforms_updated_.Resize(bone_count);
-    }
-    root_xforms_updated_.SetAll(false);
 
-    for (RuntimeSkin& runtime_skin : runtime_skins_) {
-      const ModelData::SkinData& skin_data = data.Skins()[runtime_skin.skin];
+    utils::Entity root_entity = GetModelRoot()->GetEntity();
+    for (RuntimeSkinnedEntity& runtime_skinned_entity :
+         runtime_skin.skinned_entities) {
+      PairedVector<mat4f, SampledJoint>& sampled_xforms =
+          runtime_skinned_entity.sampled_xforms;
+      const SkinnedEntityData::Proxy skinned_entity =
+          skin_data.skinned_entities[runtime_skinned_entity.skinned_entity];
+      EntityId target = skinned_entity.target;
+      const ModelData::SampledJointLookup<filament::Aabb>&
+          sampled_joint_bounds = skinned_entity.sampled_joint_bounds;
+      const PairedBitVector<ModelData::SampledJointData>& sampled_joint_in_use =
+          skinned_entity.sampled_joint_in_use;
+      auto combined_bounds = filament::Aabb{};
 
-      // Walk the Joint tree composing local transforms into world transforms.
-      for (JointId self : skin_data.joints.Ids<JointId>()) {
-        BoneId source = skin_data.joints[self].source;
-        if (root_xforms_updated_.Get(source)) continue;
-        const mat4f& parent_from_joint =
-            scene->GetLocalTransformMatFromBone(source);
-        if (model::ModelData::JointParentId parent =
-                skin_data.joints[self].parent) {
-          BoneId parent_source = skin_data.joints[parent].source;
-          const mat4f& root_from_parent = root_xforms_[parent_source];
-          root_xforms_[source] = root_from_parent * parent_from_joint;
-        } else {
-          root_xforms_[source] = parent_from_joint;
-        }
-        root_xforms_updated_.Set(source);
+      const utils::Entity target_entity = node_entities_[target];
+      mat4f target_from_root;
+      if (tm.isAccurateTranslationsEnabled()) {
+        mat4 world_from_target =
+            tm.getWorldTransformAccurate(tm.getInstance(target_entity));
+        mat4 world_from_root =
+            tm.getWorldTransformAccurate(tm.getInstance(root_entity));
+        target_from_root =
+            inverse(mat4f(inverse(world_from_root) * world_from_target));
+      } else {
+        mat4f world_from_target =
+            tm.getWorldTransform(tm.getInstance(target_entity));
+        mat4f world_from_root =
+            tm.getWorldTransform(tm.getInstance(root_entity));
+        target_from_root =
+            inverse(inverse(world_from_root) * world_from_target);
       }
 
-      utils::Entity root_entity = GetModelRoot()->GetEntity();
-      for (RuntimeSkinnedEntity& runtime_skinned_entity :
-           runtime_skin.skinned_entities) {
-        PairedVector<mat4f, SampledJoint>& sampled_xforms =
-            runtime_skinned_entity.sampled_xforms;
-        const SkinnedEntityData::Proxy skinned_entity =
-            skin_data.skinned_entities[runtime_skinned_entity.skinned_entity];
-        EntityId target = skinned_entity.target;
-        const ModelData::SampledJointLookup<filament::Aabb>&
-            sampled_joint_bounds = skinned_entity.sampled_joint_bounds;
-        const PairedBitVector<ModelData::SampledJointData>&
-            sampled_joint_in_use = skinned_entity.sampled_joint_in_use;
-        auto combined_bounds = filament::Aabb{};
+      for (auto sampled_joint :
+           skin_data.sampled_joints.Ids<SampledJointId>()) {
+        if (!sampled_joint_in_use.Get(sampled_joint)) continue;
+        JointId joint = skin_data.sampled_joints[sampled_joint].joint;
+        BoneId bone = skin_data.joints[joint].source;
+        const mat4f& bind_bone_from_bind_pose =
+            skin_data.inverse_bind_poses[sampled_joint];
+        const mat4f& root_from_joint = root_xforms_[bone];
+        const mat4f target_from_bind_pose =
+            target_from_root * root_from_joint * bind_bone_from_bind_pose;
+        sampled_xforms[sampled_joint] = target_from_bind_pose;
 
-        const utils::Entity target_entity = node_entities_[target];
-        mat4f target_from_root;
-        if (tm.isAccurateTranslationsEnabled()) {
-          mat4 world_from_target =
-              tm.getWorldTransformAccurate(tm.getInstance(target_entity));
-          mat4 world_from_root =
-              tm.getWorldTransformAccurate(tm.getInstance(root_entity));
-          target_from_root =
-              inverse(mat4f(inverse(world_from_root) * world_from_target));
-        } else {
-          mat4f world_from_target =
-              tm.getWorldTransform(tm.getInstance(target_entity));
-          mat4f world_from_root =
-              tm.getWorldTransform(tm.getInstance(root_entity));
-          target_from_root =
-              inverse(inverse(world_from_root) * world_from_target);
+        filament::Aabb joint_bounds =
+            sampled_joint_bounds[sampled_joint].transform(
+                target_from_bind_pose);
+        if (!joint_bounds.isEmpty()) {
+          combined_bounds.min = min(combined_bounds.min, joint_bounds.min);
+          combined_bounds.max = max(combined_bounds.max, joint_bounds.max);
         }
-
-        for (auto sampled_joint :
-             skin_data.sampled_joints.Ids<SampledJointId>()) {
-          if (!sampled_joint_in_use.Get(sampled_joint)) continue;
-          JointId joint = skin_data.sampled_joints[sampled_joint].joint;
-          BoneId bone = skin_data.joints[joint].source;
-          const mat4f& bind_bone_from_bind_pose =
-              skin_data.inverse_bind_poses[sampled_joint];
-          const mat4f& root_from_joint = root_xforms_[bone];
-          const mat4f target_from_bind_pose =
-              target_from_root * root_from_joint * bind_bone_from_bind_pose;
-          sampled_xforms[sampled_joint] = target_from_bind_pose;
-
-          filament::Aabb joint_bounds =
-              sampled_joint_bounds[sampled_joint].transform(
-                  target_from_bind_pose);
-          if (!joint_bounds.isEmpty()) {
-            combined_bounds.min = min(combined_bounds.min, joint_bounds.min);
-            combined_bounds.max = max(combined_bounds.max, joint_bounds.max);
-          }
-        }
-
-        filament::RenderableManager::Instance target_instance =
-            renderable_manager.GetInstance(target_entity);
-
-        // TODO: Should be able to accumulate these settings and
-        // use as "deltas" so if this gets called multiple times per frame, we
-        // update the new data. Then, when we go to call View::Render, we
-        // serialize all the data. Could be a good use-case for an Updater:
-        // google3/third_party/impress/core/view/utils/render_state_validator.h
-        renderable_manager.SetBones(target_instance, sampled_xforms.data(),
-                                    sampled_xforms.size());
-
-        if (combined_bounds.isEmpty()) {
-          // Don't convert default-value 'Box' into 'Aabb'; it doesn't work
-          // with -ffast-math.
-          combined_bounds.min = imp::kZero3;
-          combined_bounds.max = imp::kZero3;
-        }
-
-        if (!instance_info_.instance_transforms.empty()) {
-          filament::Aabb base_bounds = combined_bounds;
-          for (auto instance_transform : NodeHandle(target_entity)
-                                             ->GetComponent<GltfMesh>()
-                                             ->GetInstanceTransforms()) {
-            filament::Aabb bounds = base_bounds.transform(instance_transform);
-            combined_bounds.min = min(combined_bounds.min, bounds.min);
-            combined_bounds.max = max(combined_bounds.max, bounds.max);
-          }
-        }
-
-        renderable_manager.SetAxisAlignedBoundingBox(
-            target_instance, {.center = combined_bounds.center(),
-                              .halfExtent = combined_bounds.extent()});
       }
+
+      filament::RenderableManager::Instance target_instance =
+          renderable_manager.GetInstance(target_entity);
+
+      // TODO: Should be able to accumulate these settings and
+      // use as "deltas" so if this gets called multiple times per frame, we
+      // update the new data. Then, when we go to call View::Render, we
+      // serialize all the data. Could be a good use-case for an Updater:
+      // google3/third_party/impress/core/view/utils/render_state_validator.h
+      renderable_manager.SetBones(target_instance, sampled_xforms.data(),
+                                  sampled_xforms.size());
+
+      if (combined_bounds.isEmpty()) {
+        // Don't convert default-value 'Box' into 'Aabb'; it doesn't work
+        // with -ffast-math.
+        combined_bounds.min = imp::kZero3;
+        combined_bounds.max = imp::kZero3;
+      }
+
+      if (!instance_info_.instance_transforms.empty()) {
+        filament::Aabb base_bounds = combined_bounds;
+        for (auto instance_transform : NodeHandle(target_entity)
+                                           ->GetComponent<GltfMesh>()
+                                           ->GetInstanceTransforms()) {
+          filament::Aabb bounds = base_bounds.transform(instance_transform);
+          combined_bounds.min = min(combined_bounds.min, bounds.min);
+          combined_bounds.max = max(combined_bounds.max, bounds.max);
+        }
+      }
+
+      renderable_manager.SetAxisAlignedBoundingBox(
+          target_instance, {.center = combined_bounds.center(),
+                            .halfExtent = combined_bounds.extent()});
     }
   }
-
-  if (gltf_asset_->GetModelData().GetStoredVertexData().empty()) return;
 }
 
 const PairedVector<mat4f, SampledJoint>& GltfRenderer::GetSampledTransforms(

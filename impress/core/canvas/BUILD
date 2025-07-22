@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load("//build_tools:imp.bzl", "imp_copts")
 
 package(
@@ -41,6 +43,7 @@ cc_library(
         "//core/common:small_source_location",
         "//core/math",
         "//core/text:text_helpers",
+        "//core/view:base_view",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
     ],
@@ -58,12 +61,8 @@ cc_library(
         ":canvas_source",
         "//core:config",
         "//core/async:future",
-        "//core/canvas/fonts:font_holder",
-        "//core/math",
-        "//core/view:base_view",
+        "//core/common:context",
         "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings:string_view",
     ] + select({
         "//core:emscripten": [
             ":wasm_async_canvas_source",
@@ -90,6 +89,7 @@ cc_library(
         "//core/common:small_source_location",
         "//core/math",
         "//core/text:text_helpers",
+        "//core/view:base_view",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
@@ -203,6 +203,7 @@ cc_library(
         "//core/geometry/shapes",
         "//core/math",
         "//core/render",
+        "//core/view:base_view",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
     ],
@@ -233,22 +234,21 @@ cc_library(
     copts = imp_copts(),
     tags = ["nobuilder"],
     deps = [
-        ":async_canvas_source",
         ":canvas_interfaces",
         ":wasm_async_canvas_source",
         "//:api",
         "//core/async:future",
+        "//core/common:small_source_location",
         "//core/math",
         "//core/render",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:string_view",
     ],
     alwayslink = 1,
 )
 
-# Note that the imp_app rule adds the `--bind` and `-s ALLOW_MEMORY_GROWTH=1` linkopt flag. If you
-# are depending on this library without the imp_app rule, ensure that you have those linkopt flags.
+# Note that the imp_app rule adds `-s ALLOW_MEMORY_GROWTH=1` linkopt flag. If you are depending on
+# this library without the imp_app rule, ensure that you have that linkopt flag.
 cc_library(
     name = "wasm_async_canvas_source",
     srcs = ["wasm_async_canvas_source.cc"],
@@ -263,7 +263,6 @@ cc_library(
         "//core/async:future",
         "//core/canvas/fonts:font_holder",
         "//core/canvas/fonts:font_params_proto_cc",
-        "//core/common:invocable",
         "//core/common:log",
         "//core/common:small_source_location",
         "//core/geometry/shapes",
@@ -274,10 +273,7 @@ cc_library(
         "//core/view/platforms/wasm:wasm_canvas_manager",
         "//third_party/emscripten:GL-webgl2-full_es3",
         "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/types:variant",

@@ -21,7 +21,6 @@
 
 #include "core/collision/collision_helpers.h"
 #include "core/collision/ray.h"
-#include "core/geometry/closest_point.h"
 #include "core/geometry/geometry_helper.h"
 #include "core/geometry/shapes/capsule.h"
 #include "core/geometry/shapes/sphere.h"
@@ -84,8 +83,8 @@ std::optional<collision::RayIntersection<T>> CapsuleIntersectsRay(
   // The center of the sphere that the ray may intersect.
   TVec3<T> closer_sphere_center = capsule.center;
 
-  std::optional<T> t1 =
-      ClosestPointOnRayToLine<T>(ray, GenericRay<T>(capsule.center, kUp));
+  std::optional<T> t1 = collision::ClosestPointOnRayToLine<T>(
+      ray, GenericRay<T>(capsule.center, kUp));
   if (!t1.has_value()) {
     // The ray is parallel to the capsule. Find the hemisphere that the ray may
     // intersect.

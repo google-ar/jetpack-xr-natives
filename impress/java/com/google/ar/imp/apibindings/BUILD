@@ -13,36 +13,27 @@
 # limitations under the License.
 
 load("@build_bazel_rules_android//android:rules.bzl", "android_library")
-load("@rules_kotlin//kotlin:jvm.bzl", "kt_jvm_library")
 load("//build_tools/single_jar:single_jar.bzl", "single_jar")
 
 package(default_visibility = ["//visibility:public"])
 
 licenses(["notice"])
 
-kt_jvm_library(
-    name = "status",
-    srcs = [
-        "Status.kt",
-    ],
-)
-
 android_library(
-    name = "impress_api",
+    name = "impress_api_lib",
     srcs = [
         "IAssetAnimator.java",
         "IAssetLoader.java",
         "ImpressApi.java",
         "ImpressApiImpl.java",
+        "KhronosPbrMaterial.java",
+        "KhronosPbrMaterialSpec.java",
         "Material.java",
         "Texture.java",
         "TextureSampler.java",
         "WaterMaterial.java",
     ],
-    tags = ["included_in_archive=//java/com/google/ar/imp/apibindings:impress_no_native_lib_aar"],
     deps = [
-        ":status",
-        "//apibindings:impress_api_jni",
         "//java/com/google/ar/imp/view",
         "//java/com/google/ar/imp/view/splitengine",  # unuseddeps: keep
         "@maven//:androidx_annotation_annotation",
@@ -51,6 +42,39 @@ android_library(
         "@maven//:com_google_guava_guava",
         "@third_party//split_engine/java/com/google/androidxr/splitengine:split_engine_subspace_manager",  # unuseddeps: keep
         "@third_party//split_engine/java/com/google/androidxr/splitengine:subspace_node",  # unuseddeps: keep
+    ],
+)
+
+android_library(
+    name = "impress_api",
+    tags = ["included_in_archive=//java/com/google/ar/imp/apibindings:impress_no_native_lib_aar"],
+    exports = [
+        ":impress_api_lib",
+        "//apibindings:impress_api_jni",
+    ],
+)
+
+android_library(
+    name = "test_impress_api",
+    testonly = 1,
+    exports = [
+        ":impress_api_lib",
+        "//apibindings:test_impress_api_jni",
+    ],
+)
+
+android_library(
+    name = "fake_impress_api_impl",
+    srcs = [
+        "FakeImpressApiImpl.java",
+    ],
+    tags = ["included_in_archive=//java/com/google/ar/imp/apibindings:impress_no_native_lib_aar"],
+    deps = [
+        ":impress_api",
+        "//java/com/google/ar/imp/view",
+        "@maven//:androidx_annotation_annotation",
+        "@maven//:androidx_concurrent_concurrent_futures",
+        "@maven//:com_google_guava_guava",
     ],
 )
 
@@ -66,15 +90,16 @@ single_jar(
     # .jar targets.
     # LINT.IfChange(jar_deps)
     jars = [
-        "status.jar",
+        ":fake_impress_api_impl",
+        ":libimpress_api_lib.jar",
         "//java/com/google/ar/imp/view:libview.jar",
         "//java/com/google/ar/imp/view/splitengine:libsplitengine.jar",
         "//java/com/google/ar/imp/view/input:libinput_manager.jar",
         "//java/com/google/ar/imp/view:libimp_api_scuba.jar",
         "//java/com/google/ar/imp/view:libframe_scheduler.jar",
         "//java/com/google/ar/imp/view:libchoreographer_holder.jar",
-        "//java/com/google/ar/imp/core/web:libfragment_host.jar",
         "@third_party//split_engine/java/com/google/androidxr/splitengine:libsplit_engine_subspace_manager.jar",
+        "//core/split_engine/android/extensions/java/com/google/imp/splitengine/extensions:libextensions_java.jar",
         "@third_party//split_engine/java/com/google/androidxr/splitengine:libsubspace_node.jar",
         "@third_party//split_engine/java/com/google/androidxr/splitengine:libsplit_engine_input_event.jar",
         "@third_party//split_engine/java/com/google/androidxr/splitengine:libscene_leash_node_factory.jar",

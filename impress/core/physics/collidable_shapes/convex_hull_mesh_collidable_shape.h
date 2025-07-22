@@ -28,7 +28,9 @@
 #include "bullet/src/LinearMath/btVector3.h"
 #include "core/config.h"
 #include "core/math/vec.h"
+#include "core/model/mesh/mesh_index_data.h"
 #include "core/model/mesh/mesh_vertex_and_index_data.h"
+#include "core/model/mesh/mesh_vertex_data.h"
 #include "core/ncsb/node_handle.h"
 #include "core/physics/collidable_shapes/collidable_shape.h"
 
@@ -39,28 +41,30 @@ class ConvexHullMeshCollidableShape : public CollidableShape {
  public:
   explicit ConvexHullMeshCollidableShape(NodeHandle node);
 
-  btCollisionShape* GetCollidableShape() const override;
+  void CreateBtCollisionShape() override;
+
+  btCollisionShape* GetBtCollisionShape() const override;
 
   float3 GetCollidableCenter() const override;
 
   CollidableShape::CollisionShape GetCollisionShape(
-      const btTransform& transform) const override;
+      const btTransform& bt_trans) const override;
 
   void ApplyScalingToBulletCollider() override {}
 
 #if IMP_RUNTIME(DEV)
-  void Visualize(const btTransform& transform) const override;
+  void Visualize(const btTransform& bt_trans) const override;
 #endif
 
  private:
-  btTransform AddBtCollisionShape();
-
   NodeHandle node_;
   btAlignedObjectArray<btVector3> vertices_;
   btCollisionShape* collidable_shape_;
   std::unique_ptr<btConvexHullShape> convex_hull_shape_;
 
   absl::Span<const MeshVertexAndIndexData> mesh_data_;
+
+  void PushVertices(MeshVertexData* vertex_data, MeshIndexData* index_data);
 };
 
 }  // namespace imp

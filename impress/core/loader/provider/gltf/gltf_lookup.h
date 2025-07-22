@@ -71,9 +71,9 @@ enum class TextureTransformChannels : uint16_t {
 
 struct GltfLookup {
   template <typename T>
-  using NodeLookup = PairedVector<T, const imp::gltf::Node>;
+  using NodeLookup = PairedVector<T, const imp::gltf::imp_proto::Node>;
   struct ChannelSet {
-    TypedSpan<const gltf::AnimationChannel> channels;
+    TypedSpan<const gltf::imp_proto::AnimationChannel> channels;
     NodeLookup<ChannelId> translation_channels;
     NodeLookup<ChannelId> rotation_channels;
     NodeLookup<ChannelId> scale_channels;
@@ -87,9 +87,9 @@ struct GltfLookup {
   using TextureTransformChannelMap =
       RobinMap<TexturableParameters, std::optional<TextureTransformChannelSet>>;
   template <typename T>
-  using MaterialLookup = PairedVector<T, const gltf::Material>;
+  using MaterialLookup = PairedVector<T, const gltf::imp_proto::Material>;
   struct MaterialChannelSet {
-    TypedSpan<const gltf::AnimationChannel> channels;
+    TypedSpan<const gltf::imp_proto::AnimationChannel> channels;
     MaterialLookup<ChannelId> base_color_factor_channel;
     MaterialLookup<ChannelId> metallic_factor_channel;
     MaterialLookup<ChannelId> roughness_factor_channel;
@@ -102,9 +102,9 @@ struct GltfLookup {
     MaterialLookup<TextureTransformChannelMap> texture_transform_channels;
   };
   template <typename T>
-  using LightLookup = PairedVector<T, const gltf::LightPunctual>;
+  using LightLookup = PairedVector<T, const gltf::imp_proto::LightPunctual>;
   struct LightChannelSet {
-    TypedSpan<const gltf::AnimationChannel> channels;
+    TypedSpan<const gltf::imp_proto::AnimationChannel> channels;
     LightLookup<ChannelId> color_channel;
     LightLookup<ChannelId> intensity_channel;
     LightLookup<ChannelId> range_channel;
@@ -139,10 +139,11 @@ struct GltfLookup {
 
   NodeLookup<Flags<NodeFlags>> self_flags;
   NodeLookup<NodeId> parents;
-  PairedVector<ChannelSet, const imp::gltf::Animation> channel_sets;
-  PairedVector<MaterialChannelSet, const imp::gltf::Animation>
+  PairedVector<ChannelSet, const imp::gltf::imp_proto::Animation> channel_sets;
+  PairedVector<MaterialChannelSet, const imp::gltf::imp_proto::Animation>
       material_channel_sets;
-  PairedVector<LightChannelSet, const imp::gltf::Animation> light_channel_sets;
+  PairedVector<LightChannelSet, const imp::gltf::imp_proto::Animation>
+      light_channel_sets;
   NodeLookup<PreciseTransform> local_transforms;
   NodeLookup<BoneId> bones;
   TypedVector<BoneEntry> bone_entries;
@@ -152,14 +153,15 @@ struct GltfLookup {
   std::vector<NodeId> export_roots;
 
   // Type-safe view into our gltf data.
-  TypedSpan<const gltf::Node> nodes;
-  TypedSpan<const gltf::Accessor> accessors;
-  TypedSpan<const gltf::Animation> animations;
-  TypedSpan<const gltf::Material> materials;
-  TypedSpan<const gltf::LightPunctual> lights;
+  TypedSpan<const gltf::imp_proto::Node> nodes;
+  TypedSpan<const gltf::imp_proto::Accessor> accessors;
+  TypedSpan<const gltf::imp_proto::Animation> animations;
+  TypedSpan<const gltf::imp_proto::Material> materials;
+  TypedSpan<const gltf::imp_proto::LightPunctual> lights;
 };
 
-OptionalError BuildGltfLookup(const gltf::Gltf& gltf, const gltf::Scene& scene,
+OptionalError BuildGltfLookup(const gltf::imp_proto::Gltf& gltf,
+                              const gltf::imp_proto::Scene& scene,
                               const loader::LoaderOptions& options,
                               GltfLookup* out_lookup);
 

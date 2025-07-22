@@ -27,6 +27,7 @@
 #include <backend/DriverEnums.h>
 #include <backend/TargetBufferInfo.h>
 
+#include <mutex>
 #include "filament/libs/utils/include/utils/BitmaskEnum.h"
 #include "filament/libs/utils/include/utils/bitset.h"
 #include "filament/libs/utils/include/utils/compiler.h"
@@ -254,6 +255,7 @@ public:
     using FeatureLevel = filament::backend::FeatureLevel;
     using StereoscopicType = filament::backend::StereoscopicType;
     using ShaderStage = filament::backend::ShaderStage;
+    using ShaderStageFlags = filament::backend::ShaderStageFlags;
 
     enum class VariableQualifier : uint8_t {
         OUT
@@ -304,7 +306,7 @@ public:
 
     //! Add a parameter array to this material.
     MaterialBuilder& parameter(const char* name, size_t size, UniformType type,
-            ParameterPrecision precision = ParameterPrecision::DEFAULT) noexcept;
+            ParameterPrecision precision = ParameterPrecision::DEFAULT);
 
     //! Add a constant parameter to this material.
     template<typename T>
@@ -322,11 +324,11 @@ public:
      */
     MaterialBuilder& parameter(const char* name, SamplerType samplerType,
             SamplerFormat format = SamplerFormat::FLOAT,
-            ParameterPrecision precision = ParameterPrecision::DEFAULT,
-            bool multisample = false,
-            const char* transformName = "") noexcept;
+            ParameterPrecision precision = ParameterPrecision::DEFAULT, bool unfilterable = false,
+            bool multisample = false, const char* transformName = "",
+            ShaderStageFlags stages = ShaderStageFlags::ALL_SHADER_STAGE_FLAGS);
 
-    MaterialBuilder& buffer(filament::BufferInterfaceBlock bib) noexcept;
+    MaterialBuilder& buffer(filament::BufferInterfaceBlock bib);
 
     //! Custom variables (all float4).
     MaterialBuilder& variable(Variable v, const char* name) noexcept;
@@ -603,7 +605,7 @@ public:
      * extension will be derived from the shader stage. For example, mymaterial_0x0e.frag,
      * mymaterial_0x18.vert, etc.
      */
-    MaterialBuilder& saveRawVariants(bool saveVariants) noexcept;
+    MaterialBuilder& saveRawVariants(bool saveRawVariants) noexcept;
 
     //! If true, will include debugging information in generated SPIRV.
     MaterialBuilder& generateDebugInfo(bool generateDebugInfo) noexcept;
@@ -616,7 +618,7 @@ public:
 
     //! Add a new fragment shader output variable. Only valid for materials in the POST_PROCESS domain.
     MaterialBuilder& output(VariableQualifier qualifier, OutputTarget target, Precision precision,
-            OutputType type, const char* name, int location = -1) noexcept;
+            OutputType type, const char* name, int location = -1);
 
     MaterialBuilder& enableFramebufferFetch() noexcept;
 
@@ -635,7 +637,7 @@ public:
      * Build the material. If you are using the Filament engine with this library, you should use
      * the job system provided by Engine.
      */
-    Package build(utils::JobSystem& jobSystem) noexcept;
+    Package build(utils::JobSystem& jobSystem);
 
 public:
     // The methods and types below are for internal use
@@ -645,27 +647,51 @@ public:
      * Add a subpass parameter to this material.
      */
     MaterialBuilder& subpass(SubpassType subpassType,
-            SamplerFormat format, ParameterPrecision precision, const char* name) noexcept;
+            SamplerFormat format, ParameterPrecision precision, const char* name);
     MaterialBuilder& subpass(SubpassType subpassType,
-            SamplerFormat format, const char* name) noexcept;
+            SamplerFormat format, const char* name);
     MaterialBuilder& subpass(SubpassType subpassType,
-            ParameterPrecision precision, const char* name) noexcept;
-    MaterialBuilder& subpass(SubpassType subpassType, const char* name) noexcept;
+            ParameterPrecision precision, const char* name);
+    MaterialBuilder& subpass(SubpassType subpassType, const char* name);
 
     struct Parameter {
         Parameter() noexcept: parameterType(INVALID) {}
 
         // Sampler
-        Parameter(const char* paramName, SamplerType t, SamplerFormat f, ParameterPrecision p, bool ms, const char* tn)
-                : name(paramName), size(1), precision(p), samplerType(t), format(f), parameterType(SAMPLER), multisample(ms), transformName(tn) { }
+        Parameter(const char* paramName, SamplerType t, SamplerFormat f, ParameterPrecision p,
+                bool unfilterable, bool ms, const char* tn, ShaderStageFlags s)
+            : name(paramName),
+              size(1),
+              precision(p),
+              samplerType(t),
+              format(f),
+              unfilterable(unfilterable),
+              multisample(ms),
+              transformName(tn),
+              stages(s),
+              parameterType(SAMPLER) {}
 
         // Uniform
         Parameter(const char* paramName, UniformType t, size_t typeSize, ParameterPrecision p)
-                : name(paramName), size(typeSize), uniformType(t), precision(p), parameterType(UNIFORM) { }
+            : name(paramName),
+              size(typeSize),
+              uniformType(t),
+              precision(p),
+              format{ 0 },
+              unfilterable(false),
+              multisample(false),
+              parameterType(UNIFORM) {}
 
         // Subpass
         Parameter(const char* paramName, SubpassType t, SamplerFormat f, ParameterPrecision p)
-                : name(paramName), size(1), precision(p), subpassType(t), format(f), parameterType(SUBPASS) { }
+            : name(paramName),
+              size(1),
+              precision(p),
+              subpassType(t),
+              format(f),
+              unfilterable(false),
+              multisample(false),
+              parameterType(SUBPASS) {}
 
         utils::CString name;
         size_t size;
@@ -674,8 +700,10 @@ public:
         SamplerType samplerType;
         SubpassType subpassType;
         SamplerFormat format;
+        bool unfilterable;
         bool multisample;
         utils::CString transformName;
+        ShaderStageFlags stages;
         enum {
             INVALID,
             UNIFORM,
@@ -809,7 +837,7 @@ private:
     // Multiple calls to findProperties accumulate the property sets across fragment
     // and vertex shaders in mProperties.
     bool findProperties(filament::backend::ShaderStage type,
-            MaterialBuilder::PropertyList& allProperties,
+            MaterialBuilder::PropertyList const& allProperties,
             CodeGenParams const& semanticCodeGenParams) noexcept;
 
     bool runSemanticAnalysis(MaterialInfo* inOutInfo,

@@ -16,11 +16,8 @@ syntax = "proto3";
 
 package imp;
 
-import "google/protobuf/any.proto";
-import "core/math/math.proto";
-import "core/ncsb/node_handle_message.proto";
 import "core/proto/imp.proto";
-import "core/scene_handles/scene_handles.proto";
+import "core/recipes/language/recipe_types.proto";
 
 // NodeId is a unique identifier for a node.
 message NodeId {
@@ -43,58 +40,7 @@ message SocketConnection {
 // ExecutableNodeConnection specifies a connection to an ExecutableNode.
 message ExecutableNodeConnection {
   NodeId node_id = 1 [(imp.optional_type) = ABSL_OPTIONAL];
-}
-
-// LiteralArray represents a list of literals.
-message LiteralArray {
-  repeated Literal values = 1;
-}
-
-// LiteralTuple represents a tuple of literals. This is functionally the same as
-// a LiteralArray, but is handled as a different type in the interpreter.
-message LiteralTuple {
-  repeated Literal values = 1;
-}
-
-// LiteralMap represents a map of literals.
-message LiteralMap {
-  map<string, Literal> values = 1;
-}
-
-// TODO: Create more scalable way to introduce Impress types into
-// Recipe Literals.
-// RecipeRayHit represents an imp::RayHit.
-message RecipeRayHit {
-  float distance = 1;
-  NodeHandleMessage node = 2;
-  Float3 world_point = 3;
-  Quatf world_orientation = 4;
-  Float3 world_normal = 5 [(imp.optional_type) = ABSL_OPTIONAL];
-}
-
-// Literal represents a constant value.
-message Literal {
-  oneof value {
-    int32 int_value = 1;
-    float float_value = 2;
-    double double_value = 3;
-    bool bool_value = 4;
-    string string_value = 5;
-    Float2 float2_value = 6;
-    Float3 float3_value = 7;
-    Float4 float4_value = 8;
-    Quatf quatf_value = 9;
-    Mat3f mat3f_value = 10;
-    Mat4f mat4f_value = 11;
-    NodeHandleMessage node_value = 12;
-    google.protobuf.Any proto_value = 13;
-    Box box_value = 14;
-    NodeSceneHandle node_scene_value = 15;
-    LiteralArray array_value = 16;
-    LiteralTuple tuple_value = 17;
-    LiteralMap map_value = 18;
-    RecipeRayHit ray_hit_value = 19;
-  }
+  optional string socket_name = 2;
 }
 
 // ValueConnection specifies a connection to a value.
@@ -105,39 +51,6 @@ message ValueConnection {
     SocketConnection socket_connection = 1;
     Literal literal_value = 2;
   }
-}
-
-// VariableDeclaration specifies the declaration of a Recipe variable.
-// Variables can only be one of the following types and can be initialized with
-// a Literal.
-message VariableDeclaration {
-  enum Type {
-    UNKNOWN_VARIABLE_TYPE = 0;
-
-    INT = 1;
-    FLOAT = 2;
-    DOUBLE = 3;
-    BOOL = 4;
-    STRING = 5;
-    FLOAT2 = 6;
-    FLOAT3 = 7;
-    FLOAT4 = 8;
-    QUATF = 9;
-    MAT3F = 10;
-    MAT4F = 11;
-    NODE = 12;
-    PROTO = 13;
-    BOX = 14;
-    NODE_SCENE = 15;
-    ARRAY = 16;
-    TUPLE = 17;
-    MAP = 18;
-    RAY_HIT = 19;
-  }
-
-  string name = 1;
-  Type type = 2;
-  Literal init_value = 3 [(imp.optional_type) = ABSL_OPTIONAL];
 }
 
 // Identifier can be used to reference a Recipe variable.
@@ -193,8 +106,9 @@ message BinaryExpression {
     LESS_THAN_OR_EQUAL = 10;    // '<='
 
     // Logical Operators
-    AND = 11;  // '&&'
-    OR = 12;   // '||'
+    AND = 11;  // '&&' and '&'
+    OR = 12;   // '||' and '|'
+    XOR = 18;  // '^'
 
     // Vector Operators
     DOT = 14;
@@ -252,6 +166,13 @@ message BranchStatement {
   ExecutableNodeConnection false_next_node = 3;
 }
 
+message SwitchStatement {
+  ValueConnection selection = 1;
+  // TODO support types other than integer for the keys of cases
+  map<int32, ExecutableNodeConnection> cases = 2;
+  ExecutableNodeConnection default_next_node = 3;
+}
+
 // VariableDeclarationStatement is intended for declaring variables dynamically
 // during graph execution. Please note that variables declared during graph
 // execution are considered temporary and will go out of scope when the graph
@@ -287,6 +208,18 @@ message WhileStatement {
 // of their stored indices.
 message SequenceStatement {
   repeated ExecutableNodeConnection next_nodes = 1;
+}
+
+// CustomStatement contians:
+//   - Multiple input ValueConnections/ExectuableNodeConnections identified by
+//   their socket names.
+//   - Multiple output values/ExecutableNodeConnections identified by their
+//   socket names.
+//   - A string name that is used to identify the custom statement type.
+message CustomStatement {
+  string name = 1;
+  map<string, ValueConnection> args = 2;
+  map<string, ExecutableNodeConnection> out_connections = 3;
 }
 
 // EventTrigger fires an event with the given name and associated arguments out
@@ -334,6 +267,8 @@ message ExecutableNode {
     EventTrigger event = 7;
     AsyncCallStatement async_call = 8;
     WhileStatement while_loop = 9;
+    SwitchStatement switch_case = 10;
+    CustomStatement custom = 11;
   }
 }
 

@@ -41,7 +41,6 @@ namespace {
 
 using ProjectionType = CameraState::ProjectionType;
 
-// Matches the default value used by Unity.
 // Represents half the height of a viewbox that is 10x10x30.
 // This viewbox represents the bounds of the orthographic projection.
 constexpr float kDefaultOrthographicScale = 5;

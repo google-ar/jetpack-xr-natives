@@ -271,6 +271,7 @@ class Smooth {
   T Get() const { return position_; }
   T GetTarget() const { return target_; }
   bool IsAtTarget() const { return !!(flags_ & SmoothFlags::AtTarget); }
+  void SetParameters(const SmoothParameters& params) { params_ = params; }
 
  protected:
   enum class SmoothFlags : uint8_t {

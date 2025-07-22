@@ -24,6 +24,7 @@
 
 #include <geometry/TangentSpaceMesh.h>
 #include "filament/libs/utils/include/utils/Log.h"
+#include "filament/libs/utils/include/utils/Panic.h"
 #include "filament/libs/utils/include/utils/StructureOfArrays.h"
 
 #include <cstring>

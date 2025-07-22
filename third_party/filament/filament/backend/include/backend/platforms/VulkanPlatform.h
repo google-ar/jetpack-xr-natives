@@ -27,8 +27,11 @@
 #include "filament/libs/utils/include/utils/Hash.h"
 #include "filament/libs/utils/include/utils/PrivateImplementation.h"
 
+#include <cstddef>
+#include <functional>
 #include <tuple>
 #include <unordered_set>
+#include <string>
 
 #include <stddef.h>
 #include <stdint.h>
@@ -104,10 +107,6 @@ public:
 
         // Semaphore to be signaled once the image is available.
         VkSemaphore imageReadySemaphore = VK_NULL_HANDLE;
-
-        // A function called right before vkQueueSubmit. After this call, the image must be 
-        // available. This pointer can be null if imageReadySemaphore is not VK_NULL_HANDLE.
-        std::function<void(SwapChainPtr handle)> explicitImageReadyWait = nullptr;
     };
 
     VulkanPlatform();
@@ -299,6 +298,16 @@ public:
 
     struct ExternalImageMetadata {
         /**
+         * The Filament texture format.
+         */
+        TextureFormat filamentFormat;
+
+        /**
+         * The Filament texture usage.
+         */
+        TextureUsage filamentUsage;
+
+        /**
          * The width of the external image
          */
         uint32_t width;
@@ -307,11 +316,6 @@ public:
          * The height of the external image
          */
         uint32_t height;
-
-        /**
-         * The layerCount of the external image
-         */
-        uint32_t layerCount;
 
         /**
          * The layer count of the external image
@@ -327,11 +331,6 @@ public:
          * The format of the external image
          */
         VkFormat format;
-
-        /**
-         * An external buffer can be protected. This tells you if it is.
-         */
-        bool isProtected;
 
         /**
          * The type of external format (opaque int) if used.
@@ -352,21 +351,61 @@ public:
          * Heap information
          */
         uint32_t memoryTypeBits;
+
+        /**
+         * Ycbcr conversion components
+         */
+        VkComponentMapping ycbcrConversionComponents;
+
+        /**
+         * Ycbcr model
+         */
+        VkSamplerYcbcrModelConversion ycbcrModel;
+
+        /**
+         * Ycbcr range
+         */
+        VkSamplerYcbcrRange ycbcrRange;
+
+        /**
+         * Ycbcr x chroma offset
+         */
+        VkChromaLocation xChromaOffset;
+
+        /**
+         * Ycbcr y chroma offset
+         */
+        VkChromaLocation yChromaOffset;
     };
-    virtual ExternalImageMetadata getExternalImageMetadata(ExternalImageHandleRef externalImage);
 
-    using ImageData = std::pair<VkImage, VkDeviceMemory>;
-    virtual ImageData createExternalImageData(ExternalImageHandleRef externalImage,
-            const ExternalImageMetadata& metadata, uint32_t memoryTypeIndex,
-            VkImageUsageFlags usage);
 
-    virtual VkSampler createExternalSampler(SamplerYcbcrConversion chroma,
-            SamplerParams sampler,
-            uint32_t internalFormat);
+    // Note that the image metadata might change per-frame, hence we need a method for extracting
+    // it.
+    virtual ExternalImageMetadata extractExternalImageMetadata(ExternalImageHandleRef image) const {
+        return {};
+    }
 
-    virtual VkImageView createExternalImageView(SamplerYcbcrConversion chroma,
-            uint32_t internalFormat, VkImage image, VkImageSubresourceRange range,
-            VkImageViewType viewType, VkComponentMapping swizzle);
+    struct ImageData {
+        struct Bundle {
+            VkImage image = VK_NULL_HANDLE;
+            VkDeviceMemory memory = VK_NULL_HANDLE;
+
+            inline bool valid() const noexcept {
+                return image != VK_NULL_HANDLE;
+            }
+        };
+        // It's possible for the external image to also have a known VK format. We need to create an
+        // image for that in case we are not looking to use an external "sampler" with this image.
+        Bundle internal;
+
+        // If we get a externalFormat in the metadata, then we should create an image with
+        // VK_FORMAT_UNDEFINED
+        Bundle external;
+    };
+
+    virtual ImageData createVkImageFromExternal(ExternalImageHandleRef image) const {
+        return {};
+    }
 
 protected:
     virtual ExtensionSet getSwapchainInstanceExtensions() const;
@@ -378,20 +417,6 @@ protected:
 private:
     // Platform dependent helper methods
     static ExtensionSet getSwapchainInstanceExtensionsImpl();
-
-    static ExternalImageMetadata getExternalImageMetadataImpl(ExternalImageHandleRef externalImage,
-            VkDevice device);
-
-    static ImageData createExternalImageDataImpl(ExternalImageHandleRef externalImage,
-            VkDevice device, const ExternalImageMetadata& metadata, uint32_t memoryTypeIndex,
-            VkImageUsageFlags usage);
-    static VkSampler createExternalSamplerImpl(VkDevice device,
-            SamplerYcbcrConversion chroma, SamplerParams sampler,
-            uint32_t internalFormat);
-    static VkImageView createExternalImageViewImpl(VkDevice device,
-            SamplerYcbcrConversion chroma, uint32_t internalFormat, VkImage image,
-            VkImageSubresourceRange range, VkImageViewType viewType,
-            VkComponentMapping swizzle);
 
     // Platform dependent helper methods
     static SurfaceBundle createVkSurfaceKHRImpl(void* nativeWindow, VkInstance instance,

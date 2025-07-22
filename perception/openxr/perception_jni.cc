@@ -48,6 +48,22 @@ static jlong NativeCreateAnchor(JNIEnv* env, jobject pose,
   return CreateJavaLongFromCreateAnchorResult(result, anchor);
 }
 
+static jlongArray NativeGetTrackableObjects(JNIEnv* env,
+                                            jlong monotonic_time_ns) {
+  androidx::xr::openxr::OpenXrManager& xr_manager =
+      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+  std::vector<XrTrackableANDROID> trackables =
+      xr_manager.GetTrackableObjects(monotonic_time_ns);
+  jlongArray trackables_array = env->NewLongArray(trackables.size());
+  jlong* array_elements =
+      env->GetLongArrayElements(trackables_array, /*isCopy=*/JNI_FALSE);
+  for (int i = 0; i < trackables.size(); i++) {
+    array_elements[i] = static_cast<jlong>(trackables[i]);
+  }
+  env->ReleaseLongArrayElements(trackables_array, array_elements, /*mode=*/0);
+  return trackables_array;
+}
+
 static jlongArray NativeGetPlanes(JNIEnv* env) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
@@ -67,16 +83,18 @@ static jint NativeGetPlaneType(JNIEnv* env, jlong plane_id,
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   uint32_t vertex_count = 0;
+  std::vector<XrVector2f> vertices;  // needs same lifetime as plane
   XrTrackablePlaneANDROID plane = {
       .type = XR_TYPE_TRACKABLE_PLANE_ANDROID,
       .vertexCapacityInput = 0,
       .vertexCountOutput = &vertex_count,
       .vertices = nullptr,
   };
+
   if (!xr_manager.GetPlaneState(
           static_cast<XrTrackableANDROID>(plane_id),
           XrReferenceSpaceType::XR_REFERENCE_SPACE_TYPE_UNBOUNDED_ANDROID,
-          static_cast<int64_t>(monotonic_time_ns), plane)) {
+          static_cast<int64_t>(monotonic_time_ns), plane, vertices)) {
     return -1;
   }
 
@@ -172,6 +190,12 @@ Java_androidx_xr_runtime_openxr_OpenXrPerceptionManager_nativeCreateAnchor(
 }
 
 JNIEXPORT jlongArray JNICALL
+Java_androidx_xr_runtime_openxr_OpenXrPerceptionManager_nativeGetAugmentedObjects(
+    JNIEnv* env, jclass /*clazz*/, jlong monotonic_time_ns) {
+  return NativeGetTrackableObjects(env, monotonic_time_ns);
+}
+
+JNIEXPORT jlongArray JNICALL
 Java_androidx_xr_openxr_OpenXrPerceptionManager_nativeGetPlanes(
     JNIEnv* env, jclass /*clazz*/) {
   return NativeGetPlanes(env);
@@ -250,4 +274,32 @@ Java_androidx_xr_runtime_openxr_OpenXrPerceptionManager_nativeUnpersistAnchor(
     JNIEnv* env, jclass /*clazz*/, jobject uuid) {
   return NativeUnpersistAnchor(env, uuid);
 }
+
+JNIEXPORT jobjectArray JNICALL
+Java_androidx_xr_runtime_openxr_OpenXrPerceptionManager_nativeGetDepthImagesDataBuffers(
+    JNIEnv* env, jclass /*clazz*/, jlong monotonic_time_ns) {
+  androidx::xr::openxr::OpenXrManager& xr_manager =
+      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+
+  std::vector<androidx::xr::openxr::OpenXrManager::DepthImageBuffer>
+      depth_image_buffers;
+
+  if (!xr_manager.GetAllDepthImages(static_cast<int64_t>(monotonic_time_ns),
+                                    depth_image_buffers)) {
+    return nullptr;
+  }
+
+  jobjectArray depth_images_array =
+      env->NewObjectArray(depth_image_buffers.size(),
+                          env->FindClass("java/nio/ByteBuffer"), nullptr);
+
+  for (int i = 0; i < depth_image_buffers.size(); ++i) {
+    jobject new_buffer = env->NewDirectByteBuffer(
+        const_cast<void*>(depth_image_buffers[i].buffer),
+        depth_image_buffers[i].buffer_size);
+    env->SetObjectArrayElement(depth_images_array, i, new_buffer);
+  }
+  return depth_images_array;
+}
+
 }  // extern "C"

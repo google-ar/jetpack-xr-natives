@@ -28,9 +28,9 @@
 #include "core/loader/provider/details/provider_details_common.h"
 #include "core/loader/provider/schemas/loaded_model_generated.h"
 
-namespace imp::gltf {
+namespace imp::gltf::imp_proto {
 class Gltf;
-}  // namespace imp::gltf
+}  // namespace imp::gltf::imp_proto
 
 namespace imp::loader::details::provider_gltf {
 
@@ -40,7 +40,7 @@ absl::Status ResolveResources(
     absl::string_view directory,
     tsl::robin_map<std::string, BufferAccess>& resources,
     tsl::robin_map<std::string, std::string>& missing_resource_name_from_path,
-    imp::gltf::Gltf& gltf, std::vector<BufferAccess>& owned);
+    imp::gltf::imp_proto::Gltf& gltf, std::vector<BufferAccess>& owned);
 
 }  // namespace imp::loader::details::provider_gltf
 

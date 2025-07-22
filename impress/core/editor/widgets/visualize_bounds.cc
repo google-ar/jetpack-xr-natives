@@ -32,6 +32,9 @@
 #include "core/view/framework/assets/gltf_scene.h"
 #include "core/view/framework/camera/camera_manager.h"
 #include "core/view/framework/collision/box_collider.h"
+#include "core/view/framework/collision/capsule_collider.h"
+#include "core/view/framework/collision/cone_collider.h"
+#include "core/view/framework/collision/cylinder_collider.h"
 #include "core/view/framework/collision/sphere_collider.h"
 
 namespace imp::editor {
@@ -85,7 +88,10 @@ VisualizeBounds::VisualizeBounds(BaseView& view) : view_(view) {
 
 bool VisualizeBounds::HasCollider(NodeHandle node) const {
   return node->GetComponent<BoxCollider>() ||
-         node->GetComponent<SphereCollider>();
+         node->GetComponent<SphereCollider>() ||
+         node->GetComponent<CapsuleCollider>() ||
+         node->GetComponent<CylinderCollider>() ||
+         node->GetComponent<ConeCollider>();
 }
 
 void VisualizeBounds::DrawImGui() { DrawBounds(); }

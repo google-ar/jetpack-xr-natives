@@ -68,7 +68,7 @@ public class View {
 
   public static View createView(
       @Nullable String nativeLibrary, @Nullable String identifier, Context context) {
-    return createView(nativeLibrary, null, context, null);
+    return createView(nativeLibrary, identifier, context, null);
   }
 
   /**

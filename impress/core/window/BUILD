@@ -19,9 +19,11 @@
 # unopinionated way to create and interact with a filament engine.  impel/viewer uses
 # filament host and applies certain universal opinions, like a default IBL, and a set of
 load("@com_google_sandboxed_api//sandboxed_api/bazel:embed_data.bzl", "sapi_cc_embed_data")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load("@third_party//filament:filament.bzl", "by_backend")
 load("//build_tools:assets.bzl", "imp_assets")
-load("//build_tools:imp.bzl", "if_android", "if_dev_runtime", "if_emscripten", "imp_copts", "imp_defines", "imp_google3_copts")
+load("//build_tools:imp.bzl", "if_android", "if_apple", "if_dev_runtime", "if_emscripten", "imp_copts", "imp_defines", "imp_google3_copts")
 load("//build_tools:imp_image_based_lighting.bzl", "imp_image_based_lighting")
 
 package(
@@ -136,11 +138,13 @@ cc_library(
     deps = [
         ":window_rotation",
         "//core:config",
+        "//core/async:executor",
         "//core/async:executor_helpers",
         "//core/async:simple_executor",
         "//core/async:thread_pool_executor",
         "//core/common",
         "//core/common:filament_engine_helpers",
+        "//core/common:invocable",
         "//core/common:log",
         "//core/common:pass_key",
         "//core/common:robin_map",
@@ -168,6 +172,8 @@ cc_library(
         "@third_party//filament/filament/backend:pixel_buffer_descriptor",
         "@third_party//filament/libs:utils_hdrs",
     ] + if_android([
+        "@third_party//filament/filament/backend:backend_hdrs",
+    ]) + if_apple([
         "@third_party//filament/filament/backend:backend_hdrs",
     ]) + by_backend(
         vulkan = [

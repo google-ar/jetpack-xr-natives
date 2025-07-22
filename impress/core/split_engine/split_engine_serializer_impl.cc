@@ -14,6 +14,9 @@
 
 #include "core/split_engine/split_engine_serializer_impl.h"
 
+#include <sys/types.h>
+
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -27,6 +30,7 @@
 #include <vector>
 
 #include "absl/algorithm/container.h"
+#include "absl/base/nullability.h"
 #include "core/common/log.h"
 #include "absl/strings/string_view.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
@@ -60,6 +64,7 @@
 #include "core/math/vec.h"
 #include "core/model/mesh/base_mesh_builder.h"
 #include "core/ncsb/node_handle.h"
+#include "core/split_engine/android/split_engine_android_bridge.h"
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/image_based_lighting_helpers.h"
 #include "core/split_engine/split_engine_mesh_serializer.h"
@@ -107,13 +112,12 @@ static constexpr Box kDefaultBox;
 // That being said, it still makes sense not to serialize the placeholder
 // material anyways.
 //
-// TODO: We should fix GenericMaterial to not use remote
+// TODO: (broken link) - We should fix GenericMaterial to not use remote
 // materials in local mode.
-#if IMP_USE_LOCAL_SPLIT_ENGINE_MATERIALS
+// TODO: (broken link) - Find a better way to check the placeholder material.
 bool IsPlaceholderSplitEngineMaterial(const filament::Material* material) {
   return strcmp(material->getName(), "Split Engine Placeholder") == 0;
 }
-#endif
 
 template <typename T>
 void CreateCommand(flatbuffers::FlatBufferBuilder& fbb,
@@ -166,9 +170,10 @@ static_assert(
 
 }  // namespace
 
-// TODO Add more using statements (esp. android_xr::schemas) to
+// TODO: (broken link) - Add more using statements (esp. android_xr::schemas) to
 // shorten code and make it more readable.
 using android_xr::schemas::ColliderData;
+using android_xr::schemas::CommandTypes;
 using filament::Box;
 using filament::IndexBuffer;
 using filament::VertexBuffer;
@@ -184,17 +189,15 @@ class SplitEngineSerializerImpl::RenderableBuilder
 
   RenderableBuilder& Geometry(size_t index,
                               filament::backend::PrimitiveType type,
-                              filament::VertexBuffer* vertices,
-                              filament::IndexBuffer* indices, size_t offset,
-                              size_t minIndex, size_t maxIndex,
+                              VertexBuffer* vertices, IndexBuffer* indices,
+                              size_t offset, size_t minIndex, size_t maxIndex,
                               size_t count) noexcept override {
     return Geometry(index, type, vertices, indices, offset, count);
   }
   RenderableBuilder& Geometry(size_t index,
                               filament::backend::PrimitiveType type,
-                              filament::VertexBuffer* vertices,
-                              filament::IndexBuffer* indices, size_t offset,
-                              size_t count) noexcept override {
+                              VertexBuffer* vertices, IndexBuffer* indices,
+                              size_t offset, size_t count) noexcept override {
     GeometryUpdateInfo geometry_update_info;
     geometry_update_info.vertex_buffer_id = GetId(vertices);
     geometry_update_info.index_buffer_id = GetId(indices);
@@ -205,10 +208,10 @@ class SplitEngineSerializerImpl::RenderableBuilder
 
     return *this;
   }
-  RenderableBuilder& Geometry(
-      size_t index, filament::backend::PrimitiveType type,
-      filament::VertexBuffer* vertices,
-      filament::IndexBuffer* indices) noexcept override {
+  RenderableBuilder& Geometry(size_t index,
+                              filament::backend::PrimitiveType type,
+                              VertexBuffer* vertices,
+                              IndexBuffer* indices) noexcept override {
     return Geometry(index, type, vertices, indices, 0,
                     indices->getIndexCount());
   }
@@ -350,9 +353,13 @@ class SplitEngineSerializerImpl::RenderableBuilder
   }
   filament::RenderableManager::Builder::Result Build(
       filament::Engine& engine, utils::Entity entity) override {
-    serializer_.add_renderables_[entity] = std::move(add_renderable_info_);
-    serializer_.renderable_updates_[entity] =
-        std::move(update_renderable_info_);
+    Batch<CommandTypes::AddRenderables>& add_batch =
+        serializer_.GetOrCreateBatch<CommandTypes::AddRenderables>({entity});
+    add_batch.data[entity] = std::move(add_renderable_info_);
+
+    Batch<CommandTypes::UpdateRenderables>& update_batch =
+        serializer_.GetOrCreateBatch<CommandTypes::UpdateRenderables>({entity});
+    update_batch.data[entity] = std::move(update_renderable_info_);
 
     return filament::RenderableManager::Builder::Result::Success;
   }
@@ -387,11 +394,13 @@ class SplitEngineSerializerImpl::RenderableBuilder
 };
 
 SplitEngineSerializerImpl::SplitEngineSerializerImpl(
-    BaseView& view, std::unique_ptr<SplitEngineBridgeSender> bridge_sender,
+    BaseView& view, std::unique_ptr<SplitEngineAndroidBridge> bridge,
+    std::unique_ptr<SplitEngineBridgeSender> bridge_sender,
     std::unique_ptr<SplitEngineBridgeSender> one_shot_bridge_sender,
     size_t bridge_buffer_size_bytes)
     : Updater(view),
       view_(view),
+      bridge_(std::move(bridge)),
       bridge_sender_(std::move(bridge_sender)),
       one_shot_bridge_sender_(std::move(one_shot_bridge_sender)),
       bridge_buffer_size_bytes_(bridge_buffer_size_bytes) {
@@ -401,16 +410,18 @@ SplitEngineSerializerImpl::SplitEngineSerializerImpl(
 void SplitEngineSerializerImpl::SetSpy(BaseRenderableManager& spy) {}
 
 filament::RenderableManager::Instance SplitEngineSerializerImpl::GetInstance(
-    utils::Entity e) const {
+    utils::Entity entity) const {
   return 0;
 }
 
-bool SplitEngineSerializerImpl::HasComponent(utils::Entity e) const {
+bool SplitEngineSerializerImpl::HasComponent(utils::Entity entity) const {
   return false;
 }
 
-void SplitEngineSerializerImpl::Destroy(utils::Entity e) {
-  remove_renderables_.insert(e);
+void SplitEngineSerializerImpl::Destroy(utils::Entity entity) {
+  Batch<CommandTypes::RemoveRenderables>& batch =
+      GetOrCreateBatch<CommandTypes::RemoveRenderables>({entity});
+  batch.data.insert(entity);
 }
 
 size_t SplitEngineSerializerImpl::GetPrimitiveCount(
@@ -431,23 +442,32 @@ void SplitEngineSerializerImpl::SetMaterialInstanceAt(
     filament::RenderableManager::Instance instance, size_t primitiveIndex,
     const filament::MaterialInstance* material_instance) {
   utils::Entity entity = GetEntity(instance);
-  renderable_updates_[entity].primitives[primitiveIndex].material_instance_id =
-      GetId(material_instance);
+  const ResourceId material_instance_id = GetId(material_instance);
+  Batch<CommandTypes::UpdateRenderables>& batch =
+      GetOrCreateBatch<CommandTypes::UpdateRenderables>({entity},
+                                                        {material_instance_id});
+  batch.data[entity].primitives[primitiveIndex].material_instance_id =
+      material_instance_id;
 }
 void SplitEngineSerializerImpl::SetGeometryAt(
     filament::RenderableManager::Instance instance, size_t primitiveIndex,
     filament::backend::PrimitiveType type, VertexBuffer* vertices,
     IndexBuffer* indices, size_t offset, size_t count) {
+  const ResourceId vertex_buffer_id = GetId(vertices);
+  const ResourceId index_buffer_id = GetId(indices);
   GeometryUpdateInfo geometry_update_info;
-  geometry_update_info.vertex_buffer_id = GetId(vertices);
-  geometry_update_info.index_buffer_id = GetId(indices);
+  geometry_update_info.vertex_buffer_id = vertex_buffer_id;
+  geometry_update_info.index_buffer_id = index_buffer_id;
   geometry_update_info.offset = offset;
   geometry_update_info.count = count;
   geometry_update_info.primitive_type = static_cast<uint8_t>(type);
 
   utils::Entity entity = GetEntity(instance);
-  renderable_updates_[entity].primitives[primitiveIndex].geometry =
-      geometry_update_info;
+
+  Batch<CommandTypes::UpdateRenderables>& batch =
+      GetOrCreateBatch<CommandTypes::UpdateRenderables>(
+          {entity}, {vertex_buffer_id, index_buffer_id});
+  batch.data[entity].primitives[primitiveIndex].geometry = geometry_update_info;
 }
 void SplitEngineSerializerImpl::SetBonesInternal(
     filament::RenderableManager::Instance instance,
@@ -464,67 +484,89 @@ void SplitEngineSerializerImpl::SetBonesInternal(
     IMP_LOG(imp::FATAL) << "Nonzero offset is not supported.";
   }
 
-  flatbuffers::FlatBufferBuilder* fbb = GetFlatBufferBuilderFor(
-      android_xr::schemas::CommandTypes::UpdateRenderables);
   utils::Entity entity = GetEntity(instance);
-  renderable_updates_[entity].bones = android_xr::schemas::CreateBones(
+  Batch<CommandTypes::UpdateRenderables>& batch =
+      GetOrCreateBatch<CommandTypes::UpdateRenderables>({entity});
+  flatbuffers::FlatBufferBuilder* fbb = GetFlatBufferBuilderFor(batch);
+  batch.data[entity].bones = android_xr::schemas::CreateBones(
       *fbb, fbb->CreateVectorOfNativeStructs<android_xr::schemas::Mat4f>(
                 transforms, boneCount, Pack));
 }
+
 void SplitEngineSerializerImpl::SetAxisAlignedBoundingBox(
     filament::RenderableManager::Instance instance, const Box& aabb) {
   utils::Entity entity = GetEntity(instance);
-  renderable_updates_[entity].bounds = aabb;
+  Batch<CommandTypes::UpdateRenderables>& batch =
+      GetOrCreateBatch<CommandTypes::UpdateRenderables>({entity});
+  batch.data[entity].bounds = aabb;
 }
+
 void SplitEngineSerializerImpl::SetPriority(
     filament::RenderableManager::Instance instance, uint8_t priority) {
   utils::Entity entity = GetEntity(instance);
-  renderable_updates_[entity].priority = priority;
+  Batch<CommandTypes::UpdateRenderables>& batch =
+      GetOrCreateBatch<CommandTypes::UpdateRenderables>({entity});
+  batch.data[entity].priority = priority;
 }
+
 void SplitEngineSerializerImpl::SetChannel(
     filament::RenderableManager::Instance instance, uint8_t channel) {
   IMP_LOG(imp::WARNING) << kTag << "SetChannel not implemented.";
 }
+
 uint8_t SplitEngineSerializerImpl::GetLayerMask(
     filament::RenderableManager::Instance instance) const {
   return 0;
 }
+
 void SplitEngineSerializerImpl::SetLayerMask(
     filament::RenderableManager::Instance instance, uint8_t select,
     uint8_t values) {
   utils::Entity entity = GetEntity(instance);
-  renderable_updates_[entity].layer_mask = LayerMask{select, values};
+  Batch<CommandTypes::UpdateRenderables>& batch =
+      GetOrCreateBatch<CommandTypes::UpdateRenderables>({entity});
+  batch.data[entity].layer_mask = LayerMask{select, values};
 }
+
 void SplitEngineSerializerImpl::SetBlendOrderAt(
     filament::RenderableManager::Instance instance, size_t primitiveIndex,
     uint16_t order) {
   utils::Entity entity = GetEntity(instance);
-  renderable_updates_[entity].primitives[primitiveIndex].blend_order = order;
+  Batch<CommandTypes::UpdateRenderables>& batch =
+      GetOrCreateBatch<CommandTypes::UpdateRenderables>({entity});
+  batch.data[entity].primitives[primitiveIndex].blend_order = order;
 }
+
 void SplitEngineSerializerImpl::SetGlobalBlendOrderEnabledAt(
     filament::RenderableManager::Instance instance, size_t primitiveIndex,
     bool enabled) {
   utils::Entity entity = GetEntity(instance);
-  renderable_updates_[entity]
-      .primitives[primitiveIndex]
-      .global_blend_order_enabled = enabled;
+  Batch<CommandTypes::UpdateRenderables>& batch =
+      GetOrCreateBatch<CommandTypes::UpdateRenderables>({entity});
+  batch.data[entity].primitives[primitiveIndex].global_blend_order_enabled =
+      enabled;
 }
+
 bool SplitEngineSerializerImpl::IsShadowCaster(
     filament::RenderableManager::Instance instance) const {
   return false;
 }
+
 void SplitEngineSerializerImpl::SetCastShadows(
     filament::RenderableManager::Instance instance, bool enable) {
   IMP_LOG(imp::WARNING) << kTag << "SetCastShadows not implemented.";
 }
+
 bool SplitEngineSerializerImpl::IsShadowReceiver(
     filament::RenderableManager::Instance instance) const {
   return false;
 }
+
 void SplitEngineSerializerImpl::SetReceiveShadows(
     filament::RenderableManager::Instance instance, bool enable) {
   IMP_LOG(imp::WARNING) << kTag << "SetReceiveShadows not implemented.";
 }
+
 void SplitEngineSerializerImpl::SetFogEnabled(
     filament::RenderableManager::Instance instance, bool enable) {
   IMP_LOG(imp::WARNING) << kTag << "SetFogEnabled not implemented.";
@@ -534,15 +576,17 @@ size_t SplitEngineSerializerImpl::GetMorphTargetCount(
     filament::RenderableManager::Instance instance) const {
   return 0;
 }
+
 void SplitEngineSerializerImpl::SetMorphWeights(
     filament::RenderableManager::Instance instance, float const* weights,
     size_t count, size_t offset) {
-  flatbuffers::FlatBufferBuilder* fbb = GetFlatBufferBuilderFor(
-      android_xr::schemas::CommandTypes::UpdateRenderables);
   utils::Entity entity = GetEntity(instance);
-  renderable_updates_[entity].morph_weights =
-      android_xr::schemas::CreateMorphWeights(
-          *fbb, fbb->CreateVector(weights, count), offset);
+  Batch<CommandTypes::UpdateRenderables>& batch =
+      GetOrCreateBatch<CommandTypes::UpdateRenderables>({entity});
+  flatbuffers::FlatBufferBuilder* fbb = GetFlatBufferBuilderFor(batch);
+
+  batch.data[entity].morph_weights = android_xr::schemas::CreateMorphWeights(
+      *fbb, fbb->CreateVector(weights, count), offset);
 }
 
 std::unique_ptr<BaseRenderableManager::Builder>
@@ -553,8 +597,8 @@ SplitEngineSerializerImpl::NewBuilder(size_t count) {
 // Copied from loaded_model_builder.cc
 flatbuffers::Offset<android_xr::schemas::BoundsInfo> CreateBoundsInfo(
     flatbuffers::FlatBufferBuilder& fbb, const Box& bounds) {
-  const auto center = bounds.center;
-  const auto half_extent = bounds.halfExtent;
+  const float3 center = bounds.center;
+  const float3 half_extent = bounds.halfExtent;
   android_xr::schemas::Box box(Pack(center), Pack(half_extent));
 
   return android_xr::schemas::CreateBoundsInfo(fbb, &box);
@@ -601,7 +645,7 @@ void SplitEngineSerializerImpl::AddTexture(
   flatbuffers::Offset<android_xr::schemas::Texture> offset =
       split_engine_texture_serializer.SerializeTexture(texture, *builder);
 
-  std::vector<flatbuffers::Offset<android_xr::schemas::Texture>> texture_vector;
+  VectorOffset<android_xr::schemas::Texture> texture_vector;
   texture_vector.push_back(offset);
   CreateCommand(*builder, android_xr::schemas::CreateAddTextures(
                               *builder, builder->CreateVector(texture_vector)));
@@ -611,7 +655,12 @@ void SplitEngineSerializerImpl::AddTexture(
 }
 
 void SplitEngineSerializerImpl::RemoveTexture(filament::Texture& texture) {
-  textures_to_remove_.push_back(GetId(&texture));
+  const ResourceId texture_id = GetId(&texture);
+  Batch<CommandTypes::RemoveTextures>& batch =
+      GetOrCreateEndOfFrameBatch<CommandTypes::RemoveTextures>(
+          RemoveResourceChannel::kTexture);
+  batch.data.push_back(texture_id);
+  RemoveId(texture_id);
 }
 
 void SplitEngineSerializerImpl::SerializeMesh(
@@ -734,206 +783,172 @@ void SplitEngineSerializerImpl::SerializeImageBasedLightingAsset(
 
 void SplitEngineSerializerImpl::RemoveImageBasedLightingAsset(
     filament::Texture& reflection_texture) {
-  image_based_lighting_assets_to_remove_.push_back(GetId(&reflection_texture));
+  const ResourceId ibl_id = GetId(&reflection_texture);
+  Batch<CommandTypes::RemoveImageBasedLightingAssets>& batch =
+      GetOrCreateEndOfFrameBatch<CommandTypes::RemoveImageBasedLightingAssets>(
+          RemoveResourceChannel::kTexture);
+  batch.data.push_back(ibl_id);
+  RemoveId(ibl_id);
 }
 
 void SplitEngineSerializerImpl::SetPreferredEnvironmentIblAsset(
     filament::Texture& reflection_texture, float intensity,
     const float3& tint) {
-  preferred_environment_ibl_asset_id_ = EnvironmentLightParams{
-      .image_based_lighting_asset_id = GetId(&reflection_texture),
-      .intensity = intensity,
-      .tint = tint};
+  const ResourceId ibl_id = GetId(&reflection_texture);
+  Batch<CommandTypes::SetPreferredEnvironmentIblAsset>& batch =
+      GetOrCreateBatch<CommandTypes::SetPreferredEnvironmentIblAsset>({},
+                                                                      {ibl_id});
+  batch.data = EnvironmentLightParams{.image_based_lighting_asset_id = ibl_id,
+                                      .intensity = intensity,
+                                      .tint = tint};
 }
 
 void SplitEngineSerializerImpl::ClearPreferredEnvironmentIblAsset() {
   // Setting the image based lighting asset id to 0 indicates to clear any
   // previously-set preferred environment IBL asset.
-  preferred_environment_ibl_asset_id_ = EnvironmentLightParams{
+  Batch<CommandTypes::SetPreferredEnvironmentIblAsset>& batch =
+      GetOrCreateBatch<CommandTypes::SetPreferredEnvironmentIblAsset>();
+  batch.data = EnvironmentLightParams{
       .image_based_lighting_asset_id = 0, .intensity = 0, .tint = {0, 0, 0}};
 }
 
 void SplitEngineSerializerImpl::RemoveMorphTargetBuffer(
     filament::MorphTargetBuffer* morph_target_buffer) {
-  morph_target_buffers_to_remove_.push_back(GetId(morph_target_buffer));
+  const ResourceId buffer_id = GetId(morph_target_buffer);
+  Batch<CommandTypes::RemoveMorphTargetBuffers>& batch =
+      GetOrCreateEndOfFrameBatch<CommandTypes::RemoveMorphTargetBuffers>(
+          RemoveResourceChannel::kMesh);
+  batch.data.push_back(buffer_id);
+  RemoveId(buffer_id);
 }
 
 void SplitEngineSerializerImpl::RemoveVertexBuffer(
-    filament::VertexBuffer* vertex_buffer) {
-  vertex_buffers_to_remove_.push_back(GetId(vertex_buffer));
+    VertexBuffer* vertex_buffer) {
+  const ResourceId buffer_id = GetId(vertex_buffer);
+  Batch<CommandTypes::RemoveMeshData>& batch =
+      GetOrCreateEndOfFrameBatch<CommandTypes::RemoveMeshData>(
+          RemoveResourceChannel::kMesh);
+  batch.data.vertex_buffers.push_back(buffer_id);
+  RemoveId(buffer_id);
 }
 
-void SplitEngineSerializerImpl::RemoveIndexBuffer(
-    filament::IndexBuffer* index_buffer) {
-  index_buffers_to_remove_.push_back(GetId(index_buffer));
+void SplitEngineSerializerImpl::RemoveIndexBuffer(IndexBuffer* index_buffer) {
+  const ResourceId buffer_id = GetId(index_buffer);
+  Batch<CommandTypes::RemoveMeshData>& batch =
+      GetOrCreateEndOfFrameBatch<CommandTypes::RemoveMeshData>(
+          RemoveResourceChannel::kMesh);
+  batch.data.index_buffers.push_back(buffer_id);
+  RemoveId(buffer_id);
 }
 
 flatbuffers::FlatBufferBuilder*
-SplitEngineSerializerImpl::GetFlatBufferBuilderFor(
-    android_xr::schemas::CommandTypes command_type) {
-  switch (command_type) {
-    case android_xr::schemas::CommandTypes::AddMeshData:
-      // Because mesh data can be significantly larger than other
-      // types of data, they should be added via a one-use buffer.
-      IMP_LOG(imp::FATAL) << "Command for FlatBufferBuilder for AddMeshData unsupported "
-                 << "via shared allocator.";
-      return nullptr;
-    case android_xr::schemas::CommandTypes::AddMorphTargetBuffers:
-      // Because morph target data can be significantly larger than other
-      // types of data, they should be added via a one-use buffer.
-      IMP_LOG(imp::FATAL) << "Command for FlatBufferBuilder for AddMorphTargetBuffers "
-                    "unsupported via shared allocator.";
-      return nullptr;
-    case android_xr::schemas::CommandTypes::AddMaterials:
-      if (!materials_builder_) {
-        materials_builder_ = CreateFlatBufferBuilder();
-      }
-      return materials_builder_.get();
-    case android_xr::schemas::CommandTypes::UpdateRenderables:
-      if (!renderable_updates_builder_) {
-        renderable_updates_builder_ = CreateFlatBufferBuilder();
-      }
-      return renderable_updates_builder_.get();
-    case android_xr::schemas::CommandTypes::AddTextures:
-      // Because textures can be significantly larger than other
-      // types of data, they should be added via
-      // OpenFlatBufferBuilderForAddTexture, which uses a one-use buffer.
-      IMP_LOG(imp::FATAL) << "Command for FlatBufferBuilder for AddTexture unsupported "
-                 << "via shared allocator.";
-      return nullptr;
-    case android_xr::schemas::CommandTypes::AddImageBasedLightingAssets:
-      // Because IBL asset data can be significantly larger than other
-      // types of data, they should be added via a one-use buffer.
-      IMP_LOG(imp::FATAL)
-          << "Command for FlatBufferBuilder for AddImageBasedLightingAssets "
-             "unsupported via shared allocator.";
-      return nullptr;
-    default:
-      return nullptr;
+SplitEngineSerializerImpl::GetFlatBufferBuilderFor(CommandBatchBase& batch) {
+  // Return existing or create new FlatBufferBuilder.
+  if (fbb_.contains(&batch)) {
+    return fbb_[&batch].get();
   }
+
+  return fbb_.emplace(&batch, CreateFlatBufferBuilder()).first->second.get();
+}
+
+SplitEngineAndroidBridge& SplitEngineSerializerImpl::GetBridge() {
+  return *bridge_;
 }
 
 void SplitEngineSerializerImpl::AddMaterial(const filament::Material* material,
                                             const BufferAccess& data) {
-  flatbuffers::FlatBufferBuilder* fbb =
-      GetFlatBufferBuilderFor(android_xr::schemas::CommandTypes::AddMaterials);
-#if IMP_USE_LOCAL_SPLIT_ENGINE_MATERIALS
-  if (!IsPlaceholderSplitEngineMaterial(material)) {
-    materials_to_add_.push_back(android_xr::schemas::CreateMaterial(
-        *fbb, GetId(material), fbb->CreateVector(data.Data(), data.Size())));
+  if (IsPlaceholderSplitEngineMaterial(material) ||
+      !view_.AreSplitEngineMaterialsInLocalMode()) {
+    return;
   }
-#else
-  materials_to_add_.push_back(
-      android_xr::schemas::CreateMaterial(*fbb, GetId(material)));
-#endif
+
+  const ResourceId material_id = GetId(material);
+  Batch<CommandTypes::AddMaterials>& batch =
+      GetOrCreateBatch<CommandTypes::AddMaterials>({}, {material_id});
+  flatbuffers::FlatBufferBuilder* fbb = GetFlatBufferBuilderFor(batch);
+  batch.data.push_back(android_xr::schemas::CreateMaterial(
+      *fbb, material_id, fbb->CreateVector(data.Data(), data.Size())));
 }
 
 void SplitEngineSerializerImpl::RemoveMaterial(
     const filament::Material* material) {
-  materials_to_remove_.push_back(GetId(material));
+  if (IsPlaceholderSplitEngineMaterial(material) ||
+      !view_.AreSplitEngineMaterialsInLocalMode()) {
+    return;
+  }
+  const ResourceId material_id = GetId(material);
+  Batch<CommandTypes::RemoveMaterials>& batch =
+      GetOrCreateEndOfFrameBatch<CommandTypes::RemoveMaterials>(
+          RemoveResourceChannel::kMaterial);
+  batch.data.push_back(material_id);
+  RemoveId(material_id);
 }
 
 void SplitEngineSerializerImpl::AddMaterialInstance(
     const filament::Material* material,
     const filament::MaterialInstance* instance) {
-#if IMP_USE_LOCAL_SPLIT_ENGINE_MATERIALS
-  if (IsPlaceholderSplitEngineMaterial(material)) return;
-
-  if (material_instances_to_duplicate_.find(GetId(instance)) !=
-      material_instances_to_duplicate_.end()) {
-    // Do nothing - this will be handled as part of the duplicates command.
+  if (IsPlaceholderSplitEngineMaterial(material) ||
+      !view_.AreSplitEngineMaterialsInLocalMode()) {
     return;
   }
-  material_instances_to_add_[GetId(instance)] = GetId(material);
-#endif
+
+  const ResourceId material_id = GetId(material);
+  const ResourceId instance_id = GetId(instance);
+  Batch<CommandTypes::AddMaterialInstances>& batch =
+      GetOrCreateBatch<CommandTypes::AddMaterialInstances>(
+          {}, {material_id, instance_id});
+  batch.data.insert({instance_id, material_id});
 }
 
-SplitEngineSerializerImpl::FlatBufferBuilderPtr&
-SplitEngineSerializerImpl::GetMaterialUpdateBuilder(
-    MaterialUpdateBuilderType type) {
-  // If current builder is null or for a different type of update, create a new
-  // builder and return it.
-  if (material_update_commands_.empty() ||
-      current_material_update_builder_type_ != type) {
-    // First commit the current builder, which creates a Command.
-    CommitCurrentMaterialUpdateBuilder();
-    // Set the new builder type and create a new builder for subsequent data.
-    current_material_update_builder_type_ = type;
-    return material_update_commands_.emplace_back(CreateFlatBufferBuilder());
-  }
-  // Return the current builder as it is of a matching type.
-  return material_update_commands_.back();
+template <>
+void SplitEngineSerializerImpl::Batch<CommandTypes::SetMaterialParameters>::
+    Serialize(flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
+
+  IMP_LOG(imp::INFO) << kTag << "material parameters: updating " << data.size()
+             << " materials";
+  VectorOffset<android_xr::schemas::MaterialParameters> params(data.size());
+  absl::c_transform(data, params.data(), [&fbb](const auto& entry) {
+    return android_xr::schemas::CreateMaterialParameters(
+        fbb, entry.first,
+        fbb.CreateVector(entry.second.params.data(),
+                         entry.second.params.size()),
+        fbb.CreateVector(entry.second.texture_params.data(),
+                         entry.second.texture_params.size()));
+  });
+  CreateCommand(fbb, android_xr::schemas::CreateSetMaterialParameters(
+                         fbb, fbb.CreateVector(params)));
 }
 
-void SplitEngineSerializerImpl::CommitCurrentMaterialUpdateBuilder() {
-  if (material_update_commands_.empty()) return;
+template <>
+void SplitEngineSerializerImpl::
+    Batch<CommandTypes::SetBuiltInMaterialParameters>::Serialize(
+        flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
 
-  FlatBufferBuilderPtr& fbb = material_update_commands_.back();
-  switch (current_material_update_builder_type_) {
-    case MaterialUpdateBuilderType::kMaterialParameters:
-      CommitMaterialParameters(fbb);
-      break;
-    case MaterialUpdateBuilderType::kBuiltInMaterialParameters:
-      CommitBuiltInMaterialParameters(fbb);
-      break;
-    case MaterialUpdateBuilderType::kMaterialDuplicates:
-      CommitMaterialDuplicates(fbb);
-      break;
-  }
+  IMP_LOG(imp::INFO) << kTag << "built-in material parameters: updating " << data.size()
+             << " materials";
+  CreateCommand(fbb, android_xr::schemas::CreateSetBuiltInMaterialParameters(
+                         fbb, fbb.CreateVector(data)));
 }
 
-void SplitEngineSerializerImpl::CommitMaterialParameters(
-    FlatBufferBuilderPtr& fbb) {
-  if (material_params_.empty()) return;
-
-  IMP_LOG(imp::INFO) << kTag << "material parameters: updating "
-             << material_params_.size() << " materials";
-  std::vector<flatbuffers::Offset<android_xr::schemas::MaterialParameters>>
-      parameters(material_params_.size());
-  absl::c_transform(
-      material_params_, parameters.data(), [&fbb](const auto& entry) {
-        return android_xr::schemas::CreateMaterialParameters(
-            *fbb, entry.first,
-            fbb->CreateVector(entry.second.params.data(),
-                              entry.second.params.size()),
-            fbb->CreateVector(entry.second.texture_params.data(),
-                              entry.second.texture_params.size()));
-      });
-  CreateCommand(*fbb, android_xr::schemas::CreateSetMaterialParameters(
-                          *fbb, fbb->CreateVector(parameters)));
-  material_params_.clear();
-}
-
-void SplitEngineSerializerImpl::CommitBuiltInMaterialParameters(
-    FlatBufferBuilderPtr& fbb) {
-  if (built_in_material_parameters_.empty()) return;
-
-  IMP_LOG(imp::INFO) << kTag << "built-in material parameters: updating "
-             << built_in_material_parameters_.size() << " materials";
-  CreateCommand(*fbb,
-                android_xr::schemas::CreateSetBuiltInMaterialParameters(
-                    *fbb, fbb->CreateVector(built_in_material_parameters_)));
-  built_in_material_parameters_.clear();
-}
-
-void SplitEngineSerializerImpl::CommitMaterialDuplicates(
-    FlatBufferBuilderPtr& fbb) {
-  if (material_instances_to_duplicate_.empty()) return;
+template <>
+void SplitEngineSerializerImpl::
+    Batch<CommandTypes::DuplicateMaterialInstances>::Serialize(
+        flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
 
   IMP_LOG(imp::INFO) << kTag << "material duplicates: ";
   std::vector<
       flatbuffers::Offset<android_xr::schemas::DuplicateMaterialInstance>>
-      duplicates(material_instances_to_duplicate_.size());
-  absl::c_transform(
-      material_instances_to_duplicate_, duplicates.data(),
-      [&fbb](const auto& entry) {
-        IMP_LOG(imp::INFO) << kTag << kIndent << entry.first << " -> " << entry.second;
-        return android_xr::schemas::CreateDuplicateMaterialInstance(
-            *fbb, entry.first, entry.second);
-      });
-  CreateCommand(*fbb, android_xr::schemas::CreateDuplicateMaterialInstances(
-                          *fbb, fbb->CreateVector(duplicates)));
-  material_instances_to_duplicate_.clear();
+      duplicates(data.size());
+  absl::c_transform(data, duplicates.data(), [&fbb](const auto& entry) {
+    IMP_LOG(imp::INFO) << kTag << kIndent << entry.first << " -> " << entry.second;
+    return android_xr::schemas::CreateDuplicateMaterialInstance(
+        fbb, entry.first, entry.second);
+  });
+  CreateCommand(fbb, android_xr::schemas::CreateDuplicateMaterialInstances(
+                         fbb, fbb.CreateVector(duplicates)));
 }
 
 flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> AddMaterialParam(
@@ -1086,21 +1101,25 @@ flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> AddMaterialParam(
 void SplitEngineSerializerImpl::SetMaterialParameter(
     const filament::MaterialInstance* material, absl::string_view name,
     const MaterialParamValue& value) {
-  FlatBufferBuilderPtr& fbb =
-      GetMaterialUpdateBuilder(MaterialUpdateBuilderType::kMaterialParameters);
-  MaterialParameters& parameters = material_params_[GetId(material)];
-  parameters.params.push_back(AddMaterialParam(*fbb, name, value));
+  const ResourceId material_id = GetId(material);
+  Batch<CommandTypes::SetMaterialParameters>& batch =
+      GetOrCreateBatch<CommandTypes::SetMaterialParameters>({}, {material_id});
+  flatbuffers::FlatBufferBuilder* fbb = GetFlatBufferBuilderFor(batch);
+
+  batch.data[material_id].params.push_back(AddMaterialParam(*fbb, name, value));
 }
 
 void SplitEngineSerializerImpl::SetMaterialParameter(
     const filament::MaterialInstance* material, absl::string_view name,
     const filament::Texture* texture, const filament::TextureSampler& sampler) {
-  FlatBufferBuilderPtr& fbb =
-      GetMaterialUpdateBuilder(MaterialUpdateBuilderType::kMaterialParameters);
-  MaterialParameters& parameters = material_params_[GetId(material)];
+  const ResourceId material_id = GetId(material);
+  Batch<CommandTypes::SetMaterialParameters>& batch =
+      GetOrCreateBatch<CommandTypes::SetMaterialParameters>({}, {material_id});
+  flatbuffers::FlatBufferBuilder* fbb = GetFlatBufferBuilderFor(batch);
+
   flatbuffers::Offset<android_xr::schemas::TextureSampler> sampler_offset =
       CreateTextureSampler<SplitEngineTextureSamplerCreator>(*fbb, sampler);
-  parameters.texture_params.push_back(
+  batch.data[material_id].texture_params.push_back(
       android_xr::schemas::CreateMaterialTextureParameter(
           *fbb, fbb->CreateString(std::string(name)), GetId(texture),
           sampler_offset));
@@ -1118,73 +1137,88 @@ void SplitEngineSerializerImpl::SetBuiltInMaterialParameters(
     const filament::MaterialInstance* material,
     android_xr::schemas::BuiltInMaterialParameters type,
     SerializeBuiltInMaterialParametersFunc serialize_func) {
-  FlatBufferBuilderPtr& fbb = GetMaterialUpdateBuilder(
-      MaterialUpdateBuilderType::kBuiltInMaterialParameters);
-  built_in_material_parameters_.push_back(
+  const ResourceId material_id = GetId(material);
+  Batch<CommandTypes::SetBuiltInMaterialParameters>& batch =
+      GetOrCreateBatch<CommandTypes::SetBuiltInMaterialParameters>(
+          {}, {material_id});
+  flatbuffers::FlatBufferBuilder* fbb = GetFlatBufferBuilderFor(batch);
+
+  batch.data.push_back(
       android_xr::schemas::CreateBuiltInMaterialInstanceParameters(
-          *fbb, GetId(material), type, serialize_func(*fbb)));
+          *fbb, material_id, type, serialize_func(*fbb)));
 }
 
 void SplitEngineSerializerImpl::DuplicateMaterialInstance(
     const filament::MaterialInstance* instance,
     const filament::MaterialInstance* copy) {
-  // Prior to duplicating, all existing material parameter updates need to be
-  // serialized to a Command. This maintains ordering between duplicating and
-  // setting parameters. Duplicates don't need the builder return value but
-  // calling GetMaterialUpdateBuilder() will commit the current builder if
-  // needed.
-  GetMaterialUpdateBuilder(MaterialUpdateBuilderType::kMaterialDuplicates);
-  material_instances_to_duplicate_[GetId(copy)] = GetId(instance);
+  const ResourceId instance_id = GetId(instance);
+  const ResourceId copy_id = GetId(copy);
+  Batch<CommandTypes::DuplicateMaterialInstances>& batch =
+      GetOrCreateBatch<CommandTypes::DuplicateMaterialInstances>(
+          {}, {copy_id, instance_id});
+  batch.data.insert({copy_id, instance_id});
 }
 
 void SplitEngineSerializerImpl::RemoveMaterialInstance(
     const filament::MaterialInstance* instance) {
-  material_instances_to_remove_.push_back(GetId(instance));
+  const ResourceId instance_id = GetId(instance);
+  Batch<CommandTypes::RemoveMaterialInstances>& batch =
+      GetOrCreateEndOfFrameBatch<CommandTypes::RemoveMaterialInstances>(
+          RemoveResourceChannel::kMaterialInstance);
+  batch.data.push_back(instance_id);
+  RemoveId(instance_id);
 }
 
 void SplitEngineSerializerImpl::CreateNode(utils::Entity entity) {
-  add_nodes_.insert(entity);
+  Batch<CommandTypes::AddNodes>& batch =
+      GetOrCreateBatch<CommandTypes::AddNodes>({entity});
+  batch.data.insert(entity);
 }
 
 void SplitEngineSerializerImpl::DestroyNode(utils::Entity entity) {
-  remove_nodes_.insert(entity);
-
-  // Discard any pending updates related to this node as they are no longer
-  // needed. Sending them shouldn't be harmful, but it is unnecessary.
-  node_updates_.erase(entity);
-  add_renderables_.erase(entity);
-  user_id_assignments_.erase(entity);
-  renderable_updates_.erase(entity);
-  remove_renderables_.erase(entity);
-  collider_add_or_updates_.erase(entity);
-  collider_removals_.erase(entity);
+  Batch<CommandTypes::RemoveNodes>& batch =
+      GetOrCreateBatch<CommandTypes::RemoveNodes>({entity});
+  batch.data.insert(entity);
 }
 
 void SplitEngineSerializerImpl::SetEnabled(utils::Entity entity, bool enabled) {
-  node_updates_[entity].enabled = enabled;
+  Batch<CommandTypes::UpdateNodes>& batch =
+      GetOrCreateBatch<CommandTypes::UpdateNodes>({entity});
+  batch.data[entity].enabled = enabled;
 }
 
 void SplitEngineSerializerImpl::SetName(utils::Entity entity,
                                         absl::string_view name) {
-  node_updates_[entity].name = name;
+  Batch<CommandTypes::UpdateNodes>& batch =
+      GetOrCreateBatch<CommandTypes::UpdateNodes>({entity});
+  batch.data[entity].name = std::string(name);
 }
 
 void SplitEngineSerializerImpl::SetParent(utils::Entity entity,
                                           utils::Entity parent) {
-  node_updates_[entity].parent = parent;
+  Batch<CommandTypes::UpdateNodes>& batch =
+      GetOrCreateBatch<CommandTypes::UpdateNodes>({entity});
+  batch.data[entity].parent = parent;
 }
+
 void SplitEngineSerializerImpl::SetLocalTransform(utils::Entity entity,
                                                   const mat4f& transform) {
-  node_updates_[entity].transform = transform;
+  Batch<CommandTypes::UpdateNodes>& batch =
+      GetOrCreateBatch<CommandTypes::UpdateNodes>({entity});
+  batch.data[entity].transform = transform;
 }
 void SplitEngineSerializerImpl::SetLocalTransform(utils::Entity entity,
                                                   const mat4& transform) {
-  node_updates_[entity].transform = transform;
+  Batch<CommandTypes::UpdateNodes>& batch =
+      GetOrCreateBatch<CommandTypes::UpdateNodes>({entity});
+  batch.data[entity].transform = transform;
 }
 
 void SplitEngineSerializerImpl::AssignUserId(utils::Entity entity,
                                              uint32_t user_id) {
-  user_id_assignments_[entity] = user_id;
+  Batch<CommandTypes::AssignUserIdToNodes>& batch =
+      GetOrCreateBatch<CommandTypes::AssignUserIdToNodes>({entity});
+  batch.data[entity] = user_id;
 }
 
 std::unique_ptr<BaseTextureBuilder>
@@ -1210,680 +1244,638 @@ SplitEngineSerializerImpl::CreateAndroidExternalTextureSurface(
 
 void SplitEngineSerializerImpl::SetBoxCollider(utils::Entity entity,
                                                const Box& box, bool enabled) {
-  collider_add_or_updates_[entity] = AddOrUpdateColliderInfo{box, enabled};
+  Batch<CommandTypes::AddOrUpdateColliders>& batch =
+      GetOrCreateBatch<CommandTypes::AddOrUpdateColliders>({entity});
+  batch.data[entity] = AddOrUpdateColliderInfo{box, enabled};
 }
 
 void SplitEngineSerializerImpl::SetMeshCollider(utils::Entity entity,
                                                 bool enabled) {
-  collider_add_or_updates_[entity] =
-      AddOrUpdateColliderInfo{MeshCollider(), enabled};
+  Batch<CommandTypes::AddOrUpdateColliders>& batch =
+      GetOrCreateBatch<CommandTypes::AddOrUpdateColliders>({entity});
+  batch.data[entity] = AddOrUpdateColliderInfo{MeshCollider(), enabled};
 }
 
 void SplitEngineSerializerImpl::SetSphereCollider(utils::Entity entity,
                                                   const Sphere& sphere,
                                                   bool enabled) {
-  collider_add_or_updates_[entity] = AddOrUpdateColliderInfo{sphere, enabled};
+  Batch<CommandTypes::AddOrUpdateColliders>& batch =
+      GetOrCreateBatch<CommandTypes::AddOrUpdateColliders>({entity});
+  batch.data[entity] = AddOrUpdateColliderInfo{sphere, enabled};
 }
 
 void SplitEngineSerializerImpl::SetCapsuleCollider(utils::Entity entity,
                                                    const Capsule& capsule,
                                                    bool enabled) {
-  collider_add_or_updates_[entity] = AddOrUpdateColliderInfo{capsule, enabled};
+  Batch<CommandTypes::AddOrUpdateColliders>& batch =
+      GetOrCreateBatch<CommandTypes::AddOrUpdateColliders>({entity});
+  batch.data[entity] = AddOrUpdateColliderInfo{capsule, enabled};
 }
 
 void SplitEngineSerializerImpl::ClearCollider(
     utils::Entity entity,
     split_engine::SplitEngineSerializer::ColliderType collider_type) {
-  // Remove the data from the collider_add_or_updates as the add/update data is
-  // no longer valid.
-  collider_add_or_updates_.erase(entity);
-  collider_removals_[entity] = GetColliderType(collider_type);
+  Batch<CommandTypes::RemoveColliders>& batch =
+      GetOrCreateBatch<CommandTypes::RemoveColliders>({entity});
+  batch.data[entity] = GetColliderType(collider_type);
 }
 
-void SplitEngineSerializerImpl::SerializeAddOrUpdateColliders(
-    std::vector<FlatBufferBuilderPtr>& command_queue) {
-  if (collider_add_or_updates_.empty()) return;
+template <>
+void SplitEngineSerializerImpl::Batch<CommandTypes::AddOrUpdateColliders>::
+    Serialize(flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
 
-  command_queue.push_back(CreateFlatBufferBuilder());
-  flatbuffers::FlatBufferBuilder& fbb = *command_queue.back();
-  std::vector<flatbuffers::Offset<android_xr::schemas::AddOrUpdateCollider>>
-      collider_add_or_updates(collider_add_or_updates_.size());
-  absl::c_transform(
-      collider_add_or_updates_, collider_add_or_updates.data(),
-      [&fbb](const auto& entry) {
-        const AddOrUpdateColliderInfo& collider_update = entry.second;
+  VectorOffset<android_xr::schemas::AddOrUpdateCollider> add_or_updates(
+      data.size());
+  absl::c_transform(data, add_or_updates.data(), [&fbb](const auto& entry) {
+    const AddOrUpdateColliderInfo& collider_update = entry.second;
 
-        struct Visitor {
-          flatbuffers::FlatBufferBuilder& fbb;
-          const uint32_t entity_id;
-          const android_xr::schemas::Bool* enabled;
-          flatbuffers::Offset<android_xr::schemas::AddOrUpdateCollider>
-          operator()(const Box& value) {
-            const android_xr::schemas::Float3 center(
-                value.center.x, value.center.y, value.center.z);
-            const android_xr::schemas::Float3 half_extent(
-                value.halfExtent.x, value.halfExtent.y, value.halfExtent.z);
-            return android_xr::schemas::CreateAddOrUpdateCollider(
-                fbb, entity_id, ColliderData::BoxCollider,
-                android_xr::schemas::CreateBoxCollider(fbb, &center,
-                                                       &half_extent)
-                    .Union(),
-                enabled);
-          }
-          flatbuffers::Offset<android_xr::schemas::AddOrUpdateCollider>
-          operator()(const MeshCollider& value) {
-            return android_xr::schemas::CreateAddOrUpdateCollider(
-                fbb, entity_id, ColliderData::MeshCollider,
-                android_xr::schemas::CreateMeshCollider(fbb).Union(), enabled);
-          }
-          flatbuffers::Offset<android_xr::schemas::AddOrUpdateCollider>
-          operator()(const Sphere& value) {
-            const android_xr::schemas::Float3 center(
-                value.center.x, value.center.y, value.center.z);
-            const android_xr::schemas::Float radius(value.radius);
-            return android_xr::schemas::CreateAddOrUpdateCollider(
-                fbb, entity_id, ColliderData::SphereCollider,
-                android_xr::schemas::CreateSphereCollider(fbb, &center, &radius)
-                    .Union(),
-                enabled);
-          }
-          flatbuffers::Offset<android_xr::schemas::AddOrUpdateCollider>
-          operator()(const Capsule& value) {
-            const android_xr::schemas::Float3 center(
-                value.center.x, value.center.y, value.center.z);
-            const android_xr::schemas::Float height(value.height);
-            const android_xr::schemas::Float radius(value.radius);
-            return android_xr::schemas::CreateAddOrUpdateCollider(
-                fbb, entity_id, ColliderData::CapsuleCollider,
-                android_xr::schemas::CreateCapsuleCollider(fbb, &center,
-                                                           &height, &radius)
-                    .Union(),
-                enabled);
-          }
-        };
-        return std::visit(Visitor{fbb, entry.first.getId(),
-                                  collider_update.enabled.has_value()
-                                      ? &collider_update.enabled.value()
-                                      : nullptr},
-                          collider_update.collider);
-      });
+    struct Visitor {
+      flatbuffers::FlatBufferBuilder& fbb;
+      const uint32_t entity_id;
+      const android_xr::schemas::Bool* enabled;
+      flatbuffers::Offset<android_xr::schemas::AddOrUpdateCollider> operator()(
+          const Box& value) {
+        const android_xr::schemas::Float3 center(value.center.x, value.center.y,
+                                                 value.center.z);
+        const android_xr::schemas::Float3 half_extent(
+            value.halfExtent.x, value.halfExtent.y, value.halfExtent.z);
+        return android_xr::schemas::CreateAddOrUpdateCollider(
+            fbb, entity_id, ColliderData::BoxCollider,
+            android_xr::schemas::CreateBoxCollider(fbb, &center, &half_extent)
+                .Union(),
+            enabled);
+      }
+      flatbuffers::Offset<android_xr::schemas::AddOrUpdateCollider> operator()(
+          const MeshCollider& value) {
+        return android_xr::schemas::CreateAddOrUpdateCollider(
+            fbb, entity_id, ColliderData::MeshCollider,
+            android_xr::schemas::CreateMeshCollider(fbb).Union(), enabled);
+      }
+      flatbuffers::Offset<android_xr::schemas::AddOrUpdateCollider> operator()(
+          const Sphere& value) {
+        const android_xr::schemas::Float3 center(value.center.x, value.center.y,
+                                                 value.center.z);
+        const android_xr::schemas::Float radius(value.radius);
+        return android_xr::schemas::CreateAddOrUpdateCollider(
+            fbb, entity_id, ColliderData::SphereCollider,
+            android_xr::schemas::CreateSphereCollider(fbb, &center, &radius)
+                .Union(),
+            enabled);
+      }
+      flatbuffers::Offset<android_xr::schemas::AddOrUpdateCollider> operator()(
+          const Capsule& value) {
+        const android_xr::schemas::Float3 center(value.center.x, value.center.y,
+                                                 value.center.z);
+        const android_xr::schemas::Float height(value.height);
+        const android_xr::schemas::Float radius(value.radius);
+        return android_xr::schemas::CreateAddOrUpdateCollider(
+            fbb, entity_id, ColliderData::CapsuleCollider,
+            android_xr::schemas::CreateCapsuleCollider(fbb, &center, &height,
+                                                       &radius)
+                .Union(),
+            enabled);
+      }
+    };
+    return std::visit(Visitor{fbb, entry.first.getId(),
+                              collider_update.enabled.has_value()
+                                  ? &collider_update.enabled.value()
+                                  : nullptr},
+                      collider_update.collider);
+  });
   CreateCommand(fbb, android_xr::schemas::CreateAddOrUpdateColliders(
-                         fbb, fbb.CreateVector(collider_add_or_updates)));
-  collider_add_or_updates_.clear();
+                         fbb, fbb.CreateVector(add_or_updates)));
 }
 
-void SplitEngineSerializerImpl::SerializeRemoveColliders(
-    std::vector<FlatBufferBuilderPtr>& command_queue) {
-  if (collider_removals_.empty()) return;
+template <>
+void SplitEngineSerializerImpl::Batch<CommandTypes::RemoveColliders>::Serialize(
+    flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
 
-  command_queue.push_back(CreateFlatBufferBuilder());
-  flatbuffers::FlatBufferBuilder& fbb = *command_queue.back();
-  std::vector<flatbuffers::Offset<android_xr::schemas::RemoveCollider>>
-      collider_removals(collider_removals_.size());
-  absl::c_transform(collider_removals_, collider_removals.data(),
-                    [&fbb](const auto& entry) {
-                      return android_xr::schemas::CreateRemoveCollider(
-                          fbb, entry.first.getId(), entry.second);
-                    });
+  VectorOffset<android_xr::schemas::RemoveCollider> removals(data.size());
+  absl::c_transform(data, removals.data(), [&fbb](const auto& entry) {
+    return android_xr::schemas::CreateRemoveCollider(fbb, entry.first.getId(),
+                                                     entry.second);
+  });
 
   CreateCommand(fbb, android_xr::schemas::CreateRemoveColliders(
-                         fbb, fbb.CreateVector(collider_removals)));
-  collider_removals_.clear();
+                         fbb, fbb.CreateVector(removals)));
 }
 
-void SplitEngineSerializerImpl::SerializeRemoveMorphTargetBuffers(
-    std::vector<FlatBufferBuilderPtr>& command_queue) {
-  if (morph_target_buffers_to_remove_.empty()) return;
+template <>
+void SplitEngineSerializerImpl::Batch<CommandTypes::RemoveMorphTargetBuffers>::
+    Serialize(flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
 
-  command_queue.push_back(CreateFlatBufferBuilder());
-  flatbuffers::FlatBufferBuilder& fbb = *command_queue.back();
-  CreateCommand(
-      fbb, android_xr::schemas::CreateRemoveMorphTargetBuffers(
-               fbb, fbb.CreateVector(morph_target_buffers_to_remove_.data(),
-                                     morph_target_buffers_to_remove_.size())));
-  morph_target_buffers_to_remove_.clear();
+  CreateCommand(fbb, android_xr::schemas::CreateRemoveMorphTargetBuffers(
+                         fbb, fbb.CreateVector(data.data(), data.size())));
 }
 
-void SplitEngineSerializerImpl::SerializeRemoveMeshData(
-    std::vector<FlatBufferBuilderPtr>& command_queue) {
-  if (vertex_buffers_to_remove_.empty() && index_buffers_to_remove_.empty()) {
-    return;
-  }
-  command_queue.push_back(CreateFlatBufferBuilder());
-  flatbuffers::FlatBufferBuilder& fbb = *command_queue.back();
+template <>
+void SplitEngineSerializerImpl::Batch<CommandTypes::RemoveMeshData>::Serialize(
+    flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.vertex_buffers.empty() && data.index_buffers.empty()) return;
+
   CreateCommand(fbb, android_xr::schemas::CreateRemoveMeshData(
                          fbb,
-                         fbb.CreateVector(vertex_buffers_to_remove_.data(),
-                                          vertex_buffers_to_remove_.size()),
-                         fbb.CreateVector(index_buffers_to_remove_.data(),
-                                          index_buffers_to_remove_.size())));
-  vertex_buffers_to_remove_.clear();
-  index_buffers_to_remove_.clear();
+                         fbb.CreateVector(data.vertex_buffers.data(),
+                                          data.vertex_buffers.size()),
+                         fbb.CreateVector(data.index_buffers.data(),
+                                          data.index_buffers.size())));
 }
 
-void SplitEngineSerializerImpl::SerializeRemoveImageBasedLightingAssets(
-    std::vector<FlatBufferBuilderPtr>& command_queue) {
-  if (image_based_lighting_assets_to_remove_.empty()) return;
+template <>
+void SplitEngineSerializerImpl::
+    Batch<CommandTypes::RemoveImageBasedLightingAssets>::Serialize(
+        flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
 
-  IMP_LOG(imp::INFO) << kTag << "remove IBLs: count: "
-             << image_based_lighting_assets_to_remove_.size();
-  command_queue.push_back(CreateFlatBufferBuilder());
-  flatbuffers::FlatBufferBuilder& fbb = *command_queue.back();
+  IMP_LOG(imp::INFO) << kTag << "remove IBLs: count: " << data.size();
 
-  CreateCommand(
-      fbb, android_xr::schemas::CreateRemoveImageBasedLightingAssets(
-               fbb, fbb.CreateVector(image_based_lighting_assets_to_remove_)));
-  image_based_lighting_assets_to_remove_.clear();
+  CreateCommand(fbb, android_xr::schemas::CreateRemoveImageBasedLightingAssets(
+                         fbb, fbb.CreateVector(data)));
 }
 
-void SplitEngineSerializerImpl::SerializeSetPreferredEnvironmentIblAsset(
-    std::vector<FlatBufferBuilderPtr>& command_queue) {
-  if (!preferred_environment_ibl_asset_id_.has_value()) return;
+template <>
+void SplitEngineSerializerImpl::
+    Batch<CommandTypes::SetPreferredEnvironmentIblAsset>::Serialize(
+        flatbuffers::FlatBufferBuilder& fbb) {
+  if (!data.has_value()) return;
 
-  IMP_LOG(imp::INFO)
-      << kTag << "set preferred IBL: "
-      << preferred_environment_ibl_asset_id_->image_based_lighting_asset_id;
-  command_queue.push_back(CreateFlatBufferBuilder());
-  flatbuffers::FlatBufferBuilder& fbb = *command_queue.back();
-  const EnvironmentLightParams& params = *preferred_environment_ibl_asset_id_;
-  const android_xr::schemas::Float3 tint = Pack(params.tint);
+  IMP_LOG(imp::INFO) << kTag
+             << "set preferred IBL: " << data->image_based_lighting_asset_id;
+  const android_xr::schemas::Float3 tint = Pack(data->tint);
   CreateCommand(fbb, android_xr::schemas::CreateSetPreferredEnvironmentIblAsset(
-                         fbb, params.image_based_lighting_asset_id,
-                         params.intensity, &tint));
-  preferred_environment_ibl_asset_id_ = std::nullopt;
+                         fbb, data->image_based_lighting_asset_id,
+                         data->intensity, &tint));
 }
 
-void SplitEngineSerializerImpl::SerializeAddMaterials(
-    std::vector<FlatBufferBuilderPtr>& command_queue) {
-  if (!materials_builder_) return;
-
-  IMP_LOG(imp::INFO) << kTag << "materials: " << materials_to_add_.size()
-             << " new materials";
-  CreateCommand(*materials_builder_,
-                android_xr::schemas::CreateAddMaterials(
-                    *materials_builder_,
-                    materials_builder_->CreateVector(materials_to_add_)));
-  command_queue.push_back(std::move(materials_builder_));
-  materials_to_add_.clear();
+template <>
+void SplitEngineSerializerImpl::Batch<CommandTypes::AddMaterials>::Serialize(
+    flatbuffers::FlatBufferBuilder& fbb) {
+  IMP_LOG(imp::INFO) << kTag << "materials: " << data.size() << " new materials";
+  CreateCommand(fbb, android_xr::schemas::CreateAddMaterials(
+                         fbb, fbb.CreateVector(data)));
 }
 
-void SplitEngineSerializerImpl::SerializeRemoveMaterials(
-    std::vector<FlatBufferBuilderPtr>& command_queue) {
-  if (materials_to_remove_.empty()) return;
+template <>
+void SplitEngineSerializerImpl::Batch<CommandTypes::RemoveMaterials>::Serialize(
+    flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
 
   IMP_LOG(imp::INFO) << kTag << "destroy materials: ";
-  for (auto id : materials_to_remove_) {
+  for (auto id : data) {
     IMP_LOG(imp::INFO) << kTag << kIndent << id;
   }
-  command_queue.push_back(CreateFlatBufferBuilder());
-  flatbuffers::FlatBufferBuilder& fbb = *command_queue.back();
   CreateCommand(fbb, android_xr::schemas::CreateRemoveMaterials(
-                         fbb, fbb.CreateVector(materials_to_remove_.data(),
-                                               materials_to_remove_.size())));
-  materials_to_remove_.clear();
+                         fbb, fbb.CreateVector(data.data(), data.size())));
 }
 
-void SplitEngineSerializerImpl::SerializeAddMaterialInstances(
-    std::vector<FlatBufferBuilderPtr>& command_queue) {
-  if (material_instances_to_add_.empty()) return;
+template <>
+void SplitEngineSerializerImpl::Batch<CommandTypes::AddMaterialInstances>::
+    Serialize(flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
 
   IMP_LOG(imp::INFO) << kTag << "material instances: ";
-  command_queue.push_back(CreateFlatBufferBuilder());
-
-  flatbuffers::FlatBufferBuilder& fbb = *command_queue.back();
-  std::vector<flatbuffers::Offset<android_xr::schemas::MaterialInstance>>
-      instances(material_instances_to_add_.size());
-  absl::c_transform(
-      material_instances_to_add_, instances.data(), [&fbb](const auto& entry) {
-        IMP_LOG(imp::INFO) << kTag << kIndent << entry.first << " -> " << entry.second;
-        return android_xr::schemas::CreateMaterialInstance(fbb, entry.first,
-                                                           entry.second);
-      });
+  VectorOffset<android_xr::schemas::MaterialInstance> instances(data.size());
+  absl::c_transform(data, instances.data(), [&fbb](const auto& entry) {
+    IMP_LOG(imp::INFO) << kTag << kIndent << entry.first << " -> " << entry.second;
+    return android_xr::schemas::CreateMaterialInstance(fbb, entry.first,
+                                                       entry.second);
+  });
   CreateCommand(fbb,
                 android_xr::schemas::CreateAddMaterialInstances(
                     fbb, fbb.CreateVector(instances.data(), instances.size())));
-  material_instances_to_add_.clear();
 }
 
-void SplitEngineSerializerImpl::SerializeRemoveMaterialInstances(
-    std::vector<FlatBufferBuilderPtr>& command_queue) {
-  if (material_instances_to_remove_.empty()) return;
+template <>
+void SplitEngineSerializerImpl::Batch<CommandTypes::RemoveMaterialInstances>::
+    Serialize(flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
 
   IMP_LOG(imp::INFO) << kTag << "destroy material instances: ";
-  for (auto id : material_instances_to_remove_) {
+  for (auto id : data) {
     IMP_LOG(imp::INFO) << kTag << kIndent << id;
   }
-  command_queue.push_back(CreateFlatBufferBuilder());
-  flatbuffers::FlatBufferBuilder& fbb = *command_queue.back();
-  CreateCommand(
-      fbb, android_xr::schemas::CreateRemoveMaterialInstances(
-               fbb, fbb.CreateVector(material_instances_to_remove_.data(),
-                                     material_instances_to_remove_.size())));
-  material_instances_to_remove_.clear();
+  CreateCommand(fbb, android_xr::schemas::CreateRemoveMaterialInstances(
+                         fbb, fbb.CreateVector(data.data(), data.size())));
 }
 
-void SplitEngineSerializerImpl::SerializeRemoveTextures(
-    std::vector<FlatBufferBuilderPtr>& command_queue) {
-  if (textures_to_remove_.empty()) return;
+template <>
+void SplitEngineSerializerImpl::Batch<CommandTypes::RemoveTextures>::Serialize(
+    flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
 
   IMP_LOG(imp::INFO) << kTag << "destroy textures: ";
-  for (auto id : textures_to_remove_) {
+  for (const auto id : data) {
     IMP_LOG(imp::INFO) << kTag << kIndent << id;
   }
-  command_queue.push_back(CreateFlatBufferBuilder());
-  flatbuffers::FlatBufferBuilder& fbb = *command_queue.back();
+
   CreateCommand(fbb, android_xr::schemas::CreateRemoveTextures(
-                         fbb, fbb.CreateVector(textures_to_remove_.data(),
-                                               textures_to_remove_.size())));
-  textures_to_remove_.clear();
+                         fbb, fbb.CreateVector(data.data(), data.size())));
 }
 
-void SplitEngineSerializerImpl::SerializeAddNodes(
-    std::vector<FlatBufferBuilderPtr>& command_queue) {
-  if (add_nodes_.empty()) return;
+template <>
+void SplitEngineSerializerImpl::Batch<CommandTypes::AddNodes>::Serialize(
+    flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
 
   IMP_LOG(imp::INFO) << kTag << "adding nodes:";
-  command_queue.push_back(CreateFlatBufferBuilder());
-  flatbuffers::FlatBufferBuilder& fbb = *command_queue.back();
-  std::vector<flatbuffers::Offset<android_xr::schemas::AddNode>>
-      add_nodes_offset(add_nodes_.size());
-  absl::c_transform(
-      add_nodes_, add_nodes_offset.data(), [&fbb](const utils::Entity& entry) {
-        return android_xr::schemas::CreateAddNode(fbb, entry.getId());
-      });
+  VectorOffset<android_xr::schemas::AddNode> offset(data.size());
+  absl::c_transform(data, offset.data(), [&fbb](const utils::Entity& entry) {
+    return android_xr::schemas::CreateAddNode(fbb, entry.getId());
+  });
   CreateCommand(fbb, android_xr::schemas::CreateAddNodes(
-                         fbb, fbb.CreateVector(add_nodes_offset.data(),
-                                               add_nodes_offset.size())));
-  add_nodes_.clear();
+                         fbb, fbb.CreateVector(offset.data(), offset.size())));
 }
 
-void SplitEngineSerializerImpl::SerializeRemoveNodes(
-    std::vector<FlatBufferBuilderPtr>& command_queue) {
-  if (remove_nodes_.empty()) return;
+template <>
+void SplitEngineSerializerImpl::Batch<CommandTypes::RemoveNodes>::Serialize(
+    flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
 
   IMP_LOG(imp::INFO) << kTag << "removing nodes:";
-  for (const utils::Entity& entity : remove_nodes_) {
+  for (const utils::Entity& entity : data) {
     IMP_LOG(imp::INFO) << kTag << kIndent << entity.getId();
   }
-  command_queue.push_back(CreateFlatBufferBuilder());
-  flatbuffers::FlatBufferBuilder& fbb = *command_queue.back();
-  std::vector<flatbuffers::Offset<android_xr::schemas::RemoveNode>>
-      remove_nodes_offset(remove_nodes_.size());
-  absl::c_transform(remove_nodes_, remove_nodes_offset.data(),
-                    [&fbb](const utils::Entity& entry) {
-                      return android_xr::schemas::CreateRemoveNode(
-                          fbb, entry.getId());
-                    });
+  VectorOffset<android_xr::schemas::RemoveNode> offset(data.size());
+  absl::c_transform(data, offset.data(), [&fbb](const utils::Entity& entry) {
+    return android_xr::schemas::CreateRemoveNode(fbb, entry.getId());
+  });
   CreateCommand(fbb, android_xr::schemas::CreateRemoveNodes(
-                         fbb, fbb.CreateVector(remove_nodes_offset.data(),
-                                               remove_nodes_offset.size())));
-  remove_nodes_.clear();
+                         fbb, fbb.CreateVector(offset.data(), offset.size())));
 }
 
-void SplitEngineSerializerImpl::SerializeAssignUserIdToNodes(
-    std::vector<FlatBufferBuilderPtr>& command_queue) {
-  if (user_id_assignments_.empty()) return;
+template <>
+void SplitEngineSerializerImpl::Batch<CommandTypes::AssignUserIdToNodes>::
+    Serialize(flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
 
   IMP_LOG(imp::INFO) << kTag << "assigning user ids:";
-  command_queue.push_back(CreateFlatBufferBuilder());
-  flatbuffers::FlatBufferBuilder& fbb = *command_queue.back();
-  std::vector<flatbuffers::Offset<android_xr::schemas::AssignUserIdToNode>>
-      user_id_assignments_offset(user_id_assignments_.size());
-  absl::c_transform(user_id_assignments_, user_id_assignments_offset.data(),
-                    [&fbb](const auto& entry) {
-                      return android_xr::schemas::CreateAssignUserIdToNode(
-                          fbb, entry.first.getId(), entry.second);
-                    });
-  CreateCommand(fbb,
-                android_xr::schemas::CreateAssignUserIdToNodes(
-                    fbb, fbb.CreateVector(user_id_assignments_offset.data(),
-                                          user_id_assignments_offset.size())));
-  user_id_assignments_.clear();
+  VectorOffset<android_xr::schemas::AssignUserIdToNode> offset(data.size());
+  absl::c_transform(data, offset.data(), [&fbb](const auto& entry) {
+    return android_xr::schemas::CreateAssignUserIdToNode(
+        fbb, entry.first.getId(), entry.second);
+  });
+  CreateCommand(fbb, android_xr::schemas::CreateAssignUserIdToNodes(
+                         fbb, fbb.CreateVector(offset.data(), offset.size())));
 }
 
-void SplitEngineSerializerImpl::SerializeUpdateNodes(
-    std::vector<FlatBufferBuilderPtr>& command_queue) {
-  if (node_updates_.empty()) return;
+template <>
+void SplitEngineSerializerImpl::Batch<CommandTypes::UpdateNodes>::Serialize(
+    flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
 
   IMP_LOG(imp::INFO) << kTag << "updating nodes:";
-  command_queue.push_back(CreateFlatBufferBuilder());
-  flatbuffers::FlatBufferBuilder& fbb = *command_queue.back();
-  std::vector<flatbuffers::Offset<android_xr::schemas::UpdateNode>>
-      node_updates(node_updates_.size());
-  absl::c_transform(
-      node_updates_, node_updates.data(), [&fbb](const auto& entry) {
-        const UpdateNodeInfo& update = entry.second;
+  VectorOffset<android_xr::schemas::UpdateNode> node_updates(data.size());
+  absl::c_transform(data, node_updates.data(), [&fbb](const auto& entry) {
+    const UpdateNodeInfo& update = entry.second;
 
-        // Process the name of the node.
-        flatbuffers::Offset<flatbuffers::String> name;
-        if (update.name.has_value()) {
-          name = fbb.CreateString(*update.name);
+    // Process the name of the node.
+    flatbuffers::Offset<flatbuffers::String> name;
+    if (update.name.has_value()) {
+      name = fbb.CreateString(*update.name);
+    }
+
+    flatbuffers::Offset<android_xr::schemas::Transform> transform;
+    if (update.transform.has_value()) {
+      struct Visitor {
+        flatbuffers::FlatBufferBuilder& fbb;
+        flatbuffers::Offset<android_xr::schemas::Transform> operator()(
+            const mat4f& value) {
+          return android_xr::schemas::CreateTransform(
+              fbb, android_xr::schemas::TransformData::Mat4f,
+              fbb.CreateStruct(flatbuffers::Pack(value)).Union());
         }
-
-        flatbuffers::Offset<android_xr::schemas::Transform> transform;
-        if (update.transform.has_value()) {
-          struct Visitor {
-            flatbuffers::FlatBufferBuilder& fbb;
-            flatbuffers::Offset<android_xr::schemas::Transform> operator()(
-                const mat4f& value) {
-              return android_xr::schemas::CreateTransform(
-                  fbb, android_xr::schemas::TransformData::Mat4f,
-                  fbb.CreateStruct(flatbuffers::Pack(value)).Union());
-            }
-            flatbuffers::Offset<android_xr::schemas::Transform> operator()(
-                const mat4& value) {
-              return android_xr::schemas::CreateTransform(
-                  fbb, android_xr::schemas::TransformData::Mat4,
-                  fbb.CreateStruct(flatbuffers::Pack(value)).Union());
-            }
-          };
-          transform = std::visit(Visitor{fbb}, *update.transform);
+        flatbuffers::Offset<android_xr::schemas::Transform> operator()(
+            const mat4& value) {
+          return android_xr::schemas::CreateTransform(
+              fbb, android_xr::schemas::TransformData::Mat4,
+              fbb.CreateStruct(flatbuffers::Pack(value)).Union());
         }
+      };
+      transform = std::visit(Visitor{fbb}, *update.transform);
+    }
 
-        flatbuffers::Offset<android_xr::schemas::Parent> parent;
-        if (update.parent.has_value()) {
-          parent =
-              android_xr::schemas::CreateParent(fbb, update.parent->getId());
-        }
+    flatbuffers::Offset<android_xr::schemas::Parent> parent;
+    if (update.parent.has_value()) {
+      parent = android_xr::schemas::CreateParent(fbb, update.parent->getId());
+    }
 
-        NodeHandle node = NodeHandle(entry.first);
-        IMP_LOG(imp::INFO) << kTag << kIndent << ToString(node);
-        return android_xr::schemas::CreateUpdateNode(
-            fbb, entry.first.getId(), name, PointerFromOptional(update.enabled),
-            transform, parent);
-      });
+    NodeHandle node = NodeHandle(entry.first);
+    IMP_LOG(imp::INFO) << kTag << kIndent << ToString(node);
+    return android_xr::schemas::CreateUpdateNode(
+        fbb, entry.first.getId(), name, PointerFromOptional(update.enabled),
+        transform, parent);
+  });
   CreateCommand(fbb, android_xr::schemas::CreateUpdateNodes(
                          fbb, fbb.CreateVector(node_updates.data(),
                                                node_updates.size())));
-  node_updates_.clear();
 }
 
-void SplitEngineSerializerImpl::SerializeAddRenderables(
-    std::vector<FlatBufferBuilderPtr>& command_queue) {
-  if (add_renderables_.empty()) return;
+template <>
+void SplitEngineSerializerImpl::Batch<CommandTypes::AddRenderables>::Serialize(
+    flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
 
   IMP_LOG(imp::INFO) << kTag << "adding renderables:";
-  command_queue.push_back(CreateFlatBufferBuilder());
-  flatbuffers::FlatBufferBuilder& fbb = *command_queue.back();
-  std::vector<flatbuffers::Offset<android_xr::schemas::AddRenderable>>
-      add_renderables_offset(add_renderables_.size());
-  absl::c_transform(
-      add_renderables_, add_renderables_offset.data(),
-      [&fbb](const auto& entry) {
-        const AddRenderableInfo& add = entry.second;
+  VectorOffset<android_xr::schemas::AddRenderable> offset(data.size());
+  absl::c_transform(data, offset.data(), [&fbb](const auto& entry) {
+    const AddRenderableInfo& add = entry.second;
 
-        flatbuffers::Offset<android_xr::schemas::MorphTargetData>
-            morph_target_data;
-        if (add.morph_target_data.has_value()) {
-          VectorOffset<android_xr::schemas::MorphTargetInfo> morph_target_info(
-              add.morph_target_data->morph_target_info.size());
-          absl::c_transform(add.morph_target_data->morph_target_info,
-                            morph_target_info.data(),
-                            [&fbb](const MorphTargetInfo& morph_target) {
-                              return android_xr::schemas::CreateMorphTargetInfo(
-                                  fbb, morph_target.morph_target_buffer_offset,
-                                  morph_target.morph_target_buffer_count);
-                            });
-          IMP_LOG(imp::INFO) << kTag << kIndent << "morph target size: "
-                     << add.morph_target_data->morph_target_info.size();
-          morph_target_data = android_xr::schemas::CreateMorphTargetData(
-              fbb,
-              PointerFromOptional(
-                  add.morph_target_data->morph_target_buffer_id),
-              fbb.CreateVector(morph_target_info));
-        }
-        flatbuffers::Offset<android_xr::schemas::RenderableFlags>
-            renderable_flags;
-        if (add.renderable_flags.has_value()) {
-          renderable_flags = android_xr::schemas::CreateRenderableFlags(
-              fbb, PointerFromOptional(add.renderable_flags->culling_enabled));
-          IMP_LOG(imp::INFO) << kTag << kIndent << "culling enabled: "
-                     << add.renderable_flags->culling_enabled->value();
-        }
+    flatbuffers::Offset<android_xr::schemas::MorphTargetData> morph_target_data;
+    if (add.morph_target_data.has_value()) {
+      VectorOffset<android_xr::schemas::MorphTargetInfo> morph_target_info(
+          add.morph_target_data->morph_target_info.size());
+      absl::c_transform(add.morph_target_data->morph_target_info,
+                        morph_target_info.data(),
+                        [&fbb](const MorphTargetInfo& morph_target) {
+                          return android_xr::schemas::CreateMorphTargetInfo(
+                              fbb, morph_target.morph_target_buffer_offset,
+                              morph_target.morph_target_buffer_count);
+                        });
+      IMP_LOG(imp::INFO) << kTag << kIndent << "morph target size: "
+                 << add.morph_target_data->morph_target_info.size();
+      morph_target_data = android_xr::schemas::CreateMorphTargetData(
+          fbb,
+          PointerFromOptional(add.morph_target_data->morph_target_buffer_id),
+          fbb.CreateVector(morph_target_info));
+    }
+    flatbuffers::Offset<android_xr::schemas::RenderableFlags> renderable_flags;
+    if (add.renderable_flags.has_value()) {
+      renderable_flags = android_xr::schemas::CreateRenderableFlags(
+          fbb, PointerFromOptional(add.renderable_flags->culling_enabled));
+      IMP_LOG(imp::INFO) << kTag << kIndent << "culling enabled: "
+                 << add.renderable_flags->culling_enabled->value();
+    }
 
-        if (add.skinning_bone_count.has_value()) {
-          IMP_LOG(imp::INFO) << kTag << kIndent << "skinning bone count: "
-                     << add.skinning_bone_count->value();
-        }
+    if (add.skinning_bone_count.has_value()) {
+      IMP_LOG(imp::INFO) << kTag << kIndent
+                 << "skinning bone count: " << add.skinning_bone_count->value();
+    }
 
-        return android_xr::schemas::CreateAddRenderable(
-            fbb, entry.first.getId(), add.primitive_count,
-            PointerFromOptional(add.skinning_bone_count), morph_target_data,
-            renderable_flags);
-      });
+    return android_xr::schemas::CreateAddRenderable(
+        fbb, entry.first.getId(), add.primitive_count,
+        PointerFromOptional(add.skinning_bone_count), morph_target_data,
+        renderable_flags);
+  });
   CreateCommand(fbb, android_xr::schemas::CreateAddRenderables(
-                         fbb, fbb.CreateVector(add_renderables_offset.data(),
-                                               add_renderables_offset.size())));
-  add_renderables_.clear();
+                         fbb, fbb.CreateVector(offset.data(), offset.size())));
 }
 
-void SplitEngineSerializerImpl::SerializeRemoveRenderables(
-    std::vector<FlatBufferBuilderPtr>& command_queue) {
-  if (remove_renderables_.empty()) return;
+template <>
+void SplitEngineSerializerImpl::Batch<CommandTypes::RemoveRenderables>::
+    Serialize(flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
 
   IMP_LOG(imp::INFO) << kTag << "removing renderables: ";
-  command_queue.push_back(CreateFlatBufferBuilder());
-  flatbuffers::FlatBufferBuilder& fbb = *command_queue.back();
-  std::vector<flatbuffers::Offset<android_xr::schemas::RemoveRenderable>>
-      remove_renderables_offset(remove_renderables_.size());
-  absl::c_transform(remove_renderables_, remove_renderables_offset.data(),
-                    [&fbb](const utils::Entity& entry) {
-                      return android_xr::schemas::CreateRemoveRenderable(
-                          fbb, entry.getId());
-                    });
-  CreateCommand(fbb,
-                android_xr::schemas::CreateRemoveRenderables(
-                    fbb, fbb.CreateVector(remove_renderables_offset.data(),
-                                          remove_renderables_offset.size())));
-  remove_renderables_.clear();
+  VectorOffset<android_xr::schemas::RemoveRenderable> offset(data.size());
+  absl::c_transform(data, offset.data(), [&fbb](const utils::Entity& entry) {
+    return android_xr::schemas::CreateRemoveRenderable(fbb, entry.getId());
+  });
+  CreateCommand(fbb, android_xr::schemas::CreateRemoveRenderables(
+                         fbb, fbb.CreateVector(offset.data(), offset.size())));
 }
 
-void SplitEngineSerializerImpl::SerializeUpdateRenderables(
-    std::vector<FlatBufferBuilderPtr>& command_queue) {
-  if (renderable_updates_.empty()) return;
+template <>
+void SplitEngineSerializerImpl::Batch<CommandTypes::UpdateRenderables>::
+    Serialize(flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
 
   IMP_LOG(imp::INFO) << kTag << "update renderables:";
+  VectorOffset<android_xr::schemas::UpdateRenderable> offset(data.size());
+  absl::c_transform(data, offset.data(), [&fbb](const auto& entry) {
+    const UpdateRenderableInfo& update = entry.second;
 
-  flatbuffers::FlatBufferBuilder& fbb = *GetFlatBufferBuilderFor(
-      android_xr::schemas::CommandTypes::UpdateRenderables);
-  std::vector<flatbuffers::Offset<android_xr::schemas::UpdateRenderable>>
-      renderable_updates_offset(renderable_updates_.size());
-  absl::c_transform(
-      renderable_updates_, renderable_updates_offset.data(),
-      [&fbb](const auto& entry) {
-        const UpdateRenderableInfo& update = entry.second;
+    VectorOffset<android_xr::schemas::PrimitiveUpdate> primitives(
+        update.primitives.size());
+    absl::c_transform(
+        update.primitives, primitives.data(), [&fbb](const auto& entry) {
+          IMP_LOG(imp::INFO) << kTag << kIndent << "primitive: " << entry.first;
+          const PrimitiveUpdateInfo& primitive = entry.second;
 
-        VectorOffset<android_xr::schemas::PrimitiveUpdate> primitives(
-            update.primitives.size());
-        absl::c_transform(
-            update.primitives, primitives.data(), [&fbb](const auto& entry) {
-              IMP_LOG(imp::INFO) << kTag << kIndent << "primitive: " << entry.first;
-              const PrimitiveUpdateInfo& primitive = entry.second;
+          flatbuffers::Offset<android_xr::schemas::GeometryUpdate> geometry;
+          if (primitive.geometry.has_value()) {
+            IMP_LOG(imp::INFO) << kTag << kIndent << kIndent
+                       << "geometry: " << primitive.geometry->vertex_buffer_id
+                       << " " << primitive.geometry->index_buffer_id;
+            geometry = android_xr::schemas::CreateGeometryUpdate(
+                fbb, primitive.geometry->vertex_buffer_id,
+                primitive.geometry->index_buffer_id, primitive.geometry->offset,
+                primitive.geometry->count, primitive.geometry->primitive_type);
+          }
 
-              flatbuffers::Offset<android_xr::schemas::GeometryUpdate> geometry;
-              if (primitive.geometry.has_value()) {
-                IMP_LOG(imp::INFO) << kTag << kIndent << kIndent << "geometry: "
-                           << primitive.geometry->vertex_buffer_id << " "
-                           << primitive.geometry->index_buffer_id;
-                geometry = android_xr::schemas::CreateGeometryUpdate(
-                    fbb, primitive.geometry->vertex_buffer_id,
-                    primitive.geometry->index_buffer_id,
-                    primitive.geometry->offset, primitive.geometry->count,
-                    primitive.geometry->primitive_type);
-              }
+          if (primitive.material_instance_id) {
+            IMP_LOG(imp::INFO) << kTag << kIndent << kIndent << "material: "
+                       << primitive.material_instance_id->value();
+          }
 
-              if (primitive.material_instance_id) {
-                IMP_LOG(imp::INFO) << kTag << kIndent << kIndent << "material: "
-                           << primitive.material_instance_id->value();
-              }
+          if (primitive.blend_order) {
+            IMP_LOG(imp::INFO) << kTag << kIndent << kIndent
+                       << "blend_order: " << primitive.blend_order->value();
+          }
 
-              if (primitive.blend_order) {
-                IMP_LOG(imp::INFO) << kTag << kIndent << kIndent
-                           << "blend_order: " << primitive.blend_order->value();
-              }
+          if (primitive.global_blend_order_enabled) {
+            IMP_LOG(imp::INFO) << kTag << kIndent << kIndent
+                       << "global_blend_order_enabled: "
+                       << primitive.global_blend_order_enabled->value();
+          }
 
-              if (primitive.global_blend_order_enabled) {
-                IMP_LOG(imp::INFO) << kTag << kIndent << kIndent
-                           << "global_blend_order_enabled: "
-                           << primitive.global_blend_order_enabled->value();
-              }
+          IMP_LOG(imp::INFO) << kTag << kIndent << kIndent
+                     << "done creating primitive update info";
 
-              IMP_LOG(imp::INFO) << kTag << kIndent << kIndent
-                         << "done creating primitive update info";
+          return android_xr::schemas::CreatePrimitiveUpdate(
+              fbb, entry.first, geometry,
+              PointerFromOptional(primitive.material_instance_id),
+              PointerFromOptional(primitive.blend_order),
+              PointerFromOptional(primitive.global_blend_order_enabled));
+        });
 
-              return android_xr::schemas::CreatePrimitiveUpdate(
-                  fbb, entry.first, geometry,
-                  PointerFromOptional(primitive.material_instance_id),
-                  PointerFromOptional(primitive.blend_order),
-                  PointerFromOptional(primitive.global_blend_order_enabled));
-            });
+    flatbuffers::Offset<android_xr::schemas::BoundsInfo> bounds_info;
+    if (update.bounds) {
+      IMP_LOG(imp::INFO) << kTag << kIndent << "bounds: " << update.bounds->center
+                 << ", " << update.bounds->halfExtent;
+      bounds_info = CreateBoundsInfo(fbb, *update.bounds);
+    }
 
-        flatbuffers::Offset<android_xr::schemas::BoundsInfo> bounds_info;
-        if (update.bounds) {
-          IMP_LOG(imp::INFO) << kTag << kIndent << "bounds: " << update.bounds->center
-                     << ", " << update.bounds->halfExtent;
-          bounds_info = CreateBoundsInfo(fbb, *update.bounds);
-        }
+    flatbuffers::Offset<android_xr::schemas::LayerMask> layer_mask;
+    if (update.layer_mask) {
+      IMP_LOG(imp::INFO) << kTag << kIndent
+                 << "layer_mask: " << update.layer_mask->select << ", "
+                 << update.layer_mask->values;
+      layer_mask = android_xr::schemas::CreateLayerMask(
+          fbb, update.layer_mask->select, update.layer_mask->values);
+    }
 
-        flatbuffers::Offset<android_xr::schemas::LayerMask> layer_mask;
-        if (update.layer_mask) {
-          IMP_LOG(imp::INFO) << kTag << kIndent
-                     << "layer_mask: " << update.layer_mask->select << ", "
-                     << update.layer_mask->values;
-          layer_mask = android_xr::schemas::CreateLayerMask(
-              fbb, update.layer_mask->select, update.layer_mask->values);
-        }
+    if (update.priority) {
+      IMP_LOG(imp::INFO) << kTag << kIndent << "priority: " << update.priority->value();
+    }
 
-        if (update.priority) {
-          IMP_LOG(imp::INFO) << kTag << kIndent
-                     << "priority: " << update.priority->value();
-        }
+    IMP_LOG(imp::INFO) << kTag << kIndent << "renderable for entity "
+               << entry.first.getId();
 
-        IMP_LOG(imp::INFO) << kTag << kIndent << "renderable for entity "
-                   << entry.first.getId();
-
-        return android_xr::schemas::CreateUpdateRenderable(
-            fbb, entry.first.getId(), fbb.CreateVector(primitives), bounds_info,
-            layer_mask, update.bones, update.morph_weights,
-            PointerFromOptional(update.priority));
-      });
-  CreateCommand(fbb,
-                android_xr::schemas::CreateUpdateRenderables(
-                    fbb, fbb.CreateVector(renderable_updates_offset.data(),
-                                          renderable_updates_offset.size())));
-  command_queue.push_back(std::move(renderable_updates_builder_));
-  renderable_updates_.clear();
+    return android_xr::schemas::CreateUpdateRenderable(
+        fbb, entry.first.getId(), fbb.CreateVector(primitives), bounds_info,
+        layer_mask, update.bones, update.morph_weights,
+        PointerFromOptional(update.priority));
+  });
+  CreateCommand(fbb, android_xr::schemas::CreateUpdateRenderables(
+                         fbb, fbb.CreateVector(offset.data(), offset.size())));
 }
 
-void SplitEngineSerializerImpl::SendCommandQueue(
-    std::vector<FlatBufferBuilderPtr>& command_queue) {
-  if (!command_queue.empty()) {
-    SendMessageGroup(command_queue);
-  } else {
-    assert(materials_to_add_.empty());
-    assert(materials_to_remove_.empty());
-    assert(material_instances_to_add_.empty());
-    assert(material_instances_to_remove_.empty());
-    assert(material_params_.empty());
-    assert(built_in_material_parameters_.empty());
-    assert(material_update_commands_.empty());
-    assert(textures_to_remove_.empty());
-    assert(add_nodes_.empty());
-    assert(node_updates_.empty());
-    assert(remove_nodes_.empty());
-    assert(user_id_assignments_.empty());
-    assert(add_renderables_.empty());
-    assert(renderable_updates_.empty());
-    assert(remove_renderables_.empty());
-    assert(image_based_lighting_assets_to_remove_.empty());
-    assert(collider_removals_.empty());
-    assert(collider_add_or_updates_.empty());
-    assert(morph_target_buffers_to_remove_.empty());
-    assert(vertex_buffers_to_remove_.empty());
-    assert(index_buffers_to_remove_.empty());
+void SplitEngineSerializerImpl::StoreAffectedDependenciesBatchIdx(
+    const std::vector<utils::Entity>& entity_dependencies,
+    const std::vector<ResourceId>& resource_dependencies, int batch_idx) {
+  // Store for each entity and resource that the CommandBatch identified by
+  // batch_idx contains the last command that affected this entity or resource.
+  // The next command that affects the same entity or resource will have to be
+  // executed in a later batch.
+  for (const utils::Entity& entity : entity_dependencies) {
+    last_batch_idx_affecting_entity_[entity] = batch_idx;
+  }
+  for (const auto& resource_id : resource_dependencies) {
+    last_batch_idx_affecting_resource_[resource_id] = batch_idx;
   }
 }
 
-void SplitEngineSerializerImpl::SendMessageGroup(
-    std::vector<FlatBufferBuilderPtr>& messages) {
-  assert(!messages.empty());
-  for (auto& message : messages) {
-    bridge_sender_->SendMessage(*message);
+SplitEngineSerializerImpl::CommandBatchBase* /*absl_nullable*/
+SplitEngineSerializerImpl::FindBatch(
+    android_xr::schemas::CommandTypes command,
+    const std::vector<utils::Entity>& entity_dependencies,
+    const std::vector<ResourceId>& resource_dependencies) {
+  // For each dependency, find the last batch that affected it. If no prior
+  // batch affected this dependency, we can add this command to the first batch
+  // we find that has the same type.
+  int last_batch_idx = -1;
+  for (const auto& dependency : entity_dependencies) {
+    auto it = last_batch_idx_affecting_entity_.find(dependency);
+    if (it != last_batch_idx_affecting_entity_.end()) {
+      last_batch_idx = std::max(last_batch_idx, it->second);
+    }
   }
+  for (const auto& dependency : resource_dependencies) {
+    auto it = last_batch_idx_affecting_resource_.find(dependency);
+    if (it != last_batch_idx_affecting_resource_.end()) {
+      last_batch_idx = std::max(last_batch_idx, it->second);
+    }
+  }
+
+  // Check if we already have a batch of this command type that does not disrupt
+  // the dependency chain.
+  // NOTE: Since batch pointers are inserted in the order they are created, we
+  // could use binary search on the index to find the first batch whose index is
+  // greater than the last batch index.
+  auto it = batches_.find(command);
+  if (it != batches_.end()) {
+    for (CommandBatchBase* batch : it->second) {
+      // NOTE: An argument could be made that we should use greater instead of
+      // greater or equal here. The difference is that if we allow for equal,
+      // and the last batch is of the same type, we just append the current
+      // command to the batch. This keeps correct order if the data is stored in
+      // a format that by itself keeps order, like a vector, but order may be
+      // broken if the data structure does not keep order, like a map. In this
+      // case, removing "equal" would create a new batch even if the last batch
+      // is of the same type and enforce order independent of the data type.
+      // We could also add a boolean to each command type that indicates if the
+      // data is stored in order or not and allow for the last batch to be used
+      // or not based on this.
+      if (batch->index >= last_batch_idx) {
+        StoreAffectedDependenciesBatchIdx(entity_dependencies,
+                                          resource_dependencies, batch->index);
+        return batch;
+      }
+    }
+  }
+
+  return nullptr;
+}
+
+SplitEngineSerializerImpl::CommandBatchBase* /*absl_nonnull*/
+SplitEngineSerializerImpl::AddBatch(
+    std::unique_ptr<SplitEngineSerializerImpl::CommandBatchBase> batch,
+    const std::vector<utils::Entity>& entity_dependencies,
+    const std::vector<ResourceId>& resource_dependencies) {
+  batch_queue_.push(std::move(batch));
+  CommandBatchBase* batch_ptr = batch_queue_.back().get();
+  batches_[batch_ptr->type].push_back(batch_ptr);
+  StoreAffectedDependenciesBatchIdx(entity_dependencies, resource_dependencies,
+                                    batch_ptr->index);
+  return batch_ptr;
+}
+
+template <CommandTypes CommandT>
+SplitEngineSerializerImpl::Batch<CommandT>&
+SplitEngineSerializerImpl::GetOrCreateBatch(
+    const std::vector<utils::Entity>& entity_dependencies,
+    const std::vector<ResourceId>& resource_dependencies) {
+  CommandBatchBase* batch =
+      FindBatch(CommandT, entity_dependencies, resource_dependencies);
+
+  if (batch == nullptr) {
+    // The position of the batch in the queue is its index. This is required to
+    // keep dependent batches in order.
+    batch = AddBatch(std::make_unique<Batch<CommandT>>(batch_queue_.size()),
+                     entity_dependencies, resource_dependencies);
+  }
+
+  return *static_cast<Batch<CommandT>*>(batch);
+}
+
+template <CommandTypes CommandT>
+SplitEngineSerializerImpl::Batch<CommandT>&
+SplitEngineSerializerImpl::GetOrCreateEndOfFrameBatch(
+    RemoveResourceChannel channel) {
+  size_t channel_index = static_cast<size_t>(channel);
+  if (!end_of_frame_batches_[channel_index]) {
+    end_of_frame_batches_[channel_index] = std::make_unique<Batch<CommandT>>(0);
+  }
+  return *static_cast<Batch<CommandT>*>(
+      end_of_frame_batches_[channel_index].get());
+}
+
+void SplitEngineSerializerImpl::SendMessage(CommandBatchBase* batch_base) {
+  flatbuffers::FlatBufferBuilder* fbb = GetFlatBufferBuilderFor(*batch_base);
+  batch_base->Serialize(*fbb);
+  bridge_sender_->SendMessage(*fbb);
+}
+
+void SplitEngineSerializerImpl::SendAllBatches() {
+  bool sent_message = false;
+
+  while (!batch_queue_.empty()) {
+    CommandBatchBase* batch = batch_queue_.front().get();
+    SendMessage(batch);
+    sent_message = true;
+    batch_queue_.pop();
+  }
+
+  for (size_t i = 0; i < kRemoveResourceChannelCount; ++i) {
+    if (!end_of_frame_batches_[i]) continue;
+
+    CommandBatchBase* batch = end_of_frame_batches_[i].get();
+    SendMessage(batch);
+    sent_message = true;
+    end_of_frame_batches_[i] = nullptr;
+  }
+
+  if (!sent_message) return;
+
   bridge_sender_->EndMessageGroup();
+
+  // Clean up
+  last_batch_idx_affecting_entity_.clear();
+  last_batch_idx_affecting_resource_.clear();
+  batches_.clear();
+  fbb_.clear();
 }
 
-// Serialization methods must be called in correct order to ensure that the
-// renderer side can handle the commands.
-// TODO: Automatically order commands based on their dependencies,
-//                    as already done for material updates.
-// TODO: Add unit tests for all these methods.
 void SplitEngineSerializerImpl::Update(const FrameTime& frame_time) {
-  // Note that FlatBufferBuilders that get pushed onto this queue not only get
-  // queued for sending but also get queued for destruction right after the
-  // send, because this (local/stack) vector takes ownership of the unique_ptrs.
-  std::vector<FlatBufferBuilderPtr> command_queue;
+  // Check if any message groups are eligible for release.
+  bridge_sender_->ClearReleasedMessageGroups();
+  one_shot_bridge_sender_->ClearReleasedMessageGroups();
 
-  // Start by removing everything that was destroyed or removed this frame.
-  // The order is determined by the order in which the corresponding types of
-  // objects reference each other. i.e. Renderables reference Material
-  // Instances, which reference Materials, which reference Textures, so they
-  // should be removed in that order
-
-  // Remove renderables. This is only written for renderables that are removed
-  // without the node being destroyed, since destroying the node implies the
-  // renderable is destroyed.
-  SerializeRemoveRenderables(command_queue);
-
-  // Remove colliders. This is only written for colliders that are removed
-  // without the node being destroyed, since destroying the node implies the
-  // colliders are destroyed.
-  SerializeRemoveColliders(command_queue);
-
-  // Remove all nodes destroyed this frame.
-  SerializeRemoveNodes(command_queue);
-
-  // Removes assets.
-  SerializeRemoveMaterialInstances(command_queue);
-  SerializeRemoveMaterials(command_queue);
-  SerializeRemoveTextures(command_queue);
-  SerializeRemoveMorphTargetBuffers(command_queue);
-  SerializeRemoveMeshData(command_queue);
-  SerializeRemoveImageBasedLightingAssets(command_queue);
-
-  // Now start adding & updating things from this frame. This also must be done
-  // in the correct order, i.e. a node must be added before a renderable can be
-  // attached to it.
-
-  SerializeSetPreferredEnvironmentIblAsset(command_queue);
-
-  // Add materials before material instances reference them.
-  SerializeAddMaterials(command_queue);
-  SerializeAddMaterialInstances(command_queue);
-
-  // If there are any parameters that have yet to be serialized in commands, do
-  // that now.
-  CommitCurrentMaterialUpdateBuilder();
-
-  // Add all material update commands to the queue. These commands were already
-  // created to maintain ordering.
-  for (FlatBufferBuilderPtr& command_builder : material_update_commands_) {
-    command_queue.push_back(std::move(command_builder));
-  }
-  material_update_commands_.clear();
-
-  SerializeAddNodes(command_queue);
-
-  // Assign user ids before updating nodes so node updates can use the user ids.
-  SerializeAssignUserIdToNodes(command_queue);
-  SerializeUpdateNodes(command_queue);
-
-  SerializeAddRenderables(command_queue);
-  SerializeUpdateRenderables(command_queue);
-
-  SerializeAddOrUpdateColliders(command_queue);
-
-  SendCommandQueue(command_queue);
+  // Send all pending Command batches.
+  SendAllBatches();
 }
 
 }  // namespace imp::split_engine

@@ -58,6 +58,11 @@ constexpr char kStopPropagationNodeConfiguration[] = "stopPropagation";
 constexpr char kEasingTypeNodeConfiguration[] = "easingType";
 constexpr char kEasingDurationNodeConfiguration[] = "easingDuration";
 constexpr char kCasesNodeConfiguration[] = "cases";
+constexpr char kTypeNodeConfiguration[] = "type";
+constexpr char kNumberOfInputFlowsNodeConfiguration[] = "inputFlows";
+constexpr char kIsRandomNodeConfiguration[] = "isRandom";
+constexpr char kIsLoopNodeConfiguration[] = "isLoop";
+constexpr char kMessageNodeConfiguration[] = "message";
 
 // Interactivity::Graph::Variable types
 constexpr char kBoolValueType[] = "bool";
@@ -68,7 +73,6 @@ constexpr char kFloat3ValueType[] = "float3";
 constexpr char kFloat4ValueType[] = "float4";
 constexpr char kMat4fValueType[] = "float4x4";
 constexpr char kStringValueType[] = "string";
-constexpr char kCustomValueType[] = "custom";
 
 // Obtain the field id of the variable field json name provided
 constexpr int GetVariableFieldId(absl::string_view field_name) {
@@ -293,6 +297,21 @@ InteractivityImpl::InteractivityImpl() {
   configuration_id_map_.emplace(
       kCasesNodeConfiguration,
       gltf::Interactivity::Graph::Node::ConfigurationType::CASES);
+  configuration_id_map_.emplace(
+      kTypeNodeConfiguration,
+      gltf::Interactivity::Graph::Node::ConfigurationType::TYPE);
+  configuration_id_map_.emplace(kNumberOfInputFlowsNodeConfiguration,
+                                gltf::Interactivity::Graph::Node::
+                                    ConfigurationType::NUMBER_OF_INPUT_FLOWS);
+  configuration_id_map_.emplace(
+      kIsRandomNodeConfiguration,
+      gltf::Interactivity::Graph::Node::ConfigurationType::IS_RANDOM);
+  configuration_id_map_.emplace(
+      kIsLoopNodeConfiguration,
+      gltf::Interactivity::Graph::Node::ConfigurationType::IS_LOOP);
+  configuration_id_map_.emplace(
+      kMessageNodeConfiguration,
+      gltf::Interactivity::Graph::Node::ConfigurationType::MESSAGE);
 
   value_type_map_.emplace(kBoolValueType,
                           gltf::Interactivity::Graph::ValueType::BOOL);
@@ -549,6 +568,9 @@ absl::StatusOr<bool> InteractivityImpl::OnVisitNodeConfiguration(
         case gltf::Interactivity::Graph::Node::ConfigurationType::NODE_INDEX:
         case gltf::Interactivity::Graph::Node::ConfigurationType::
             NUMBER_OF_OUTPUT_FLOWS:
+        case gltf::Interactivity::Graph::Node::ConfigurationType::TYPE:
+        case gltf::Interactivity::Graph::Node::ConfigurationType::
+            NUMBER_OF_INPUT_FLOWS:
           MP_RETURN_IF_ERROR(OnVisitVariantArrayWithSingleElement<int>(
               configuration.value, field_id, visitor, ptr, token_type));
           break;
@@ -573,11 +595,14 @@ absl::StatusOr<bool> InteractivityImpl::OnVisitNodeConfiguration(
         } break;
         case gltf::Interactivity::Graph::Node::ConfigurationType::POINTER:
         case gltf::Interactivity::Graph::Node::ConfigurationType::EASING_TYPE:
+        case gltf::Interactivity::Graph::Node::ConfigurationType::MESSAGE:
           MP_RETURN_IF_ERROR(OnVisitVariantArrayWithSingleElement<std::string>(
               configuration.value, field_id, visitor, ptr, token_type));
           break;
         case gltf::Interactivity::Graph::Node::ConfigurationType::
             STOP_PROPAGATION:
+        case gltf::Interactivity::Graph::Node::ConfigurationType::IS_RANDOM:
+        case gltf::Interactivity::Graph::Node::ConfigurationType::IS_LOOP:
           MP_RETURN_IF_ERROR(OnVisitVariantArrayWithSingleElement<bool>(
               configuration.value, field_id, visitor, ptr, token_type));
           break;
@@ -595,9 +620,9 @@ absl::StatusOr<bool> InteractivityImpl::OnVisitNodeConfiguration(
         } break;
         default:
           visitor.Unknown(ptr, field_id, token_type);
-          return absl::InternalError(absl::StrFormat(
-              "Unknown Interactivity configuration value type: %d",
-              configuration.type));
+          return absl::InternalError(
+              absl::StrFormat("Unknown Interactivity configuration type id: %d",
+                              configuration.id));
           break;
       }
     }
@@ -618,15 +643,6 @@ absl::StatusOr<bool> InteractivityImpl::OnVisitValueType(
   }
 
   absl::string_view type_string = types_[type_index].signature;
-  if (type_string == kCustomValueType) {
-    if (types_[type_index].extensions.interactivity_string.has_value()) {
-      value_type = gltf::Interactivity::Graph::ValueType::STRING;
-      return true;
-    }
-    return absl::InternalError(
-        absl::StrFormat("Invalid Interactivity custom type."));
-  }
-
   if (auto it = value_type_map_.find(type_string);
       it != value_type_map_.end()) {
     value_type = it->second;

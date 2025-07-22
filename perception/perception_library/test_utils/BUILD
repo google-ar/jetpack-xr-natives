@@ -20,6 +20,7 @@ cc_binary(
     name = "libfake_perception_library_jni.so",
     testonly = 1,
     srcs = ["fake_perception_library_jni.cc"],
+    features = ["-layering_check"],
     linkopts = [
         "-landroid",
         "-lbinder_ndk",

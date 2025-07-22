@@ -29,6 +29,7 @@
 #include <optional>
 #endif
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/hash/hash.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
@@ -71,6 +72,9 @@ inline constexpr absl::string_view kDefaultInputSocketName = "in";
 
 inline constexpr absl::string_view kDefaultArgPrefix = "arg_";
 
+inline constexpr absl::string_view kDefaultAsyncExecutionIdSocketName =
+    "async_execution_id";
+
 // Hash function for NodeId.
 struct NodeIdHash {
   size_t operator()(const NodeId& id) const {
@@ -84,6 +88,9 @@ struct NodeIdEqual {
     return lhs.index == rhs.index;
   }
 };
+
+template <typename T>
+using NodeIdMap = absl::flat_hash_map<NodeId, T, NodeIdHash, NodeIdEqual>;
 
 std::string NodeIdToString(const NodeId& id);
 
@@ -122,6 +129,10 @@ std::optional<double> CoerceToDouble(const Variable& var);
 
 std::optional<float3> CoerceToFloat3(const Variable& var);
 
+std::optional<float4> CoerceToFloat4(const Variable& var);
+
+std::optional<quatf> CoerceToQuatf(const Variable& var);
+
 std::optional<std::string> CoerceToString(const Variable& var);
 
 // Attempts to coerce the variable to a NodeHandle. Returns an invalid
@@ -151,6 +162,14 @@ inline constexpr absl::string_view kElapsedSecondsSocketName =
 inline constexpr absl::string_view kOnTapEventName = "OnTapEvent";
 inline constexpr absl::string_view kTapTargetSocketName = "tap_target";
 inline constexpr absl::string_view kTapPositionSocketName = "tap_position";
+
+inline constexpr absl::string_view kOnHoverBeginEventName = "OnHoverBeginEvent";
+inline constexpr absl::string_view kOnHoverEndEventName = "OnHoverEndEvent";
+inline constexpr absl::string_view kHoverTargetSocketName = "hover_target";
+inline constexpr absl::string_view kHoverControllerIndexSocketName =
+    "controller_index";
+
+inline constexpr absl::string_view kTimeSinceStart = "time_since_start";
 
 inline constexpr absl::string_view kMathPi = "math_pi";
 inline constexpr absl::string_view kMathE = "math_e";

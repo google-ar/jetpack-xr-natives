@@ -42,19 +42,21 @@ getVkTransition(const VulkanLayoutTransition& transition) {
             srcStage = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
             break;
         case VulkanLayout::COLOR_ATTACHMENT:
-            srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT |
-                            VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
+            srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT |
                             VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            srcStage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-                       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            srcStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
             break;
-        case VulkanLayout::READ_WRITE:
+        case VulkanLayout::STAGING:
             srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
             srcStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
             break;
-        case VulkanLayout::READ_ONLY:
+        case VulkanLayout::FRAG_READ:
             srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
             srcStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            break;
+        case VulkanLayout::VERT_READ:
+            srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            srcStage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
             break;
         case VulkanLayout::TRANSFER_SRC:
             srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
@@ -69,7 +71,7 @@ getVkTransition(const VulkanLayoutTransition& transition) {
             srcStage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
             break;
         case VulkanLayout::DEPTH_SAMPLER:
-            srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+            srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
             srcStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
             break;
         case VulkanLayout::COLOR_ATTACHMENT_RESOLVE:
@@ -84,19 +86,21 @@ getVkTransition(const VulkanLayoutTransition& transition) {
 
     switch (transition.newLayout) {
         case VulkanLayout::COLOR_ATTACHMENT:
-            dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT
-                            | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT
+            dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT
                             | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            dstStage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-                       | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            dstStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
             break;
-        case VulkanLayout::READ_WRITE:
+        case VulkanLayout::STAGING:
             dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
             dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
             break;
-        case VulkanLayout::READ_ONLY:
+        case VulkanLayout::FRAG_READ:
             dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+            dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            break;
+        case VulkanLayout::VERT_READ:
+            dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            dstStage = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
             break;
         case VulkanLayout::TRANSFER_SRC:
             dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
@@ -112,10 +116,8 @@ getVkTransition(const VulkanLayoutTransition& transition) {
             dstStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
             break;
         case VulkanLayout::DEPTH_SAMPLER:
-            dstAccessMask =
-                    VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-            dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-                       VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+            dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
             break;
         case VulkanLayout::PRESENT:
         case VulkanLayout::COLOR_ATTACHMENT_RESOLVE:
@@ -138,7 +140,6 @@ bool transitionLayout(VkCommandBuffer cmdbuffer,
     }
     auto [srcAccessMask, dstAccessMask, srcStage, dstStage, oldLayout, newLayout]
             = getVkTransition(transition);
-
     if (oldLayout == newLayout) {
         return false;
     }
@@ -155,7 +156,7 @@ bool transitionLayout(VkCommandBuffer cmdbuffer,
             .image = transition.image,
             .subresourceRange = transition.subresources,
     };
-    vkCmdPipelineBarrier(cmdbuffer, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+   vkCmdPipelineBarrier(cmdbuffer, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
     return true;
 }
 
@@ -184,6 +185,46 @@ bool isVkStencilFormat(VkFormat format) {
     return (getImageAspect(format) & VK_IMAGE_ASPECT_STENCIL_BIT) != 0;
 }
 
+bool isVKYcbcrConversionFormat(VkFormat format) {
+    switch (format) {
+        case VK_FORMAT_G8B8G8R8_422_UNORM:
+        case VK_FORMAT_B8G8R8G8_422_UNORM:
+        case VK_FORMAT_G8_B8_R8_3PLANE_420_UNORM:
+        case VK_FORMAT_G8_B8R8_2PLANE_420_UNORM:
+        case VK_FORMAT_G8_B8_R8_3PLANE_422_UNORM:
+        case VK_FORMAT_G8_B8R8_2PLANE_422_UNORM:
+        case VK_FORMAT_G8_B8_R8_3PLANE_444_UNORM:
+        case VK_FORMAT_G10X6B10X6G10X6R10X6_422_UNORM_4PACK16:
+        case VK_FORMAT_B10X6G10X6R10X6G10X6_422_UNORM_4PACK16:
+        case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_420_UNORM_3PACK16:
+        case VK_FORMAT_G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16:
+        case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_422_UNORM_3PACK16:
+        case VK_FORMAT_G10X6_B10X6R10X6_2PLANE_422_UNORM_3PACK16:
+        case VK_FORMAT_G10X6_B10X6_R10X6_3PLANE_444_UNORM_3PACK16:
+        case VK_FORMAT_G12X4B12X4G12X4R12X4_422_UNORM_4PACK16:
+        case VK_FORMAT_B12X4G12X4R12X4G12X4_422_UNORM_4PACK16:
+        case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_420_UNORM_3PACK16:
+        case VK_FORMAT_G12X4_B12X4R12X4_2PLANE_420_UNORM_3PACK16:
+        case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_422_UNORM_3PACK16:
+        case VK_FORMAT_G12X4_B12X4R12X4_2PLANE_422_UNORM_3PACK16:
+        case VK_FORMAT_G12X4_B12X4_R12X4_3PLANE_444_UNORM_3PACK16:
+        case VK_FORMAT_G16B16G16R16_422_UNORM:
+        case VK_FORMAT_B16G16R16G16_422_UNORM:
+        case VK_FORMAT_G16_B16_R16_3PLANE_420_UNORM:
+        case VK_FORMAT_G16_B16R16_2PLANE_420_UNORM:
+        case VK_FORMAT_G16_B16_R16_3PLANE_422_UNORM:
+        case VK_FORMAT_G16_B16R16_2PLANE_422_UNORM:
+        case VK_FORMAT_G16_B16_R16_3PLANE_444_UNORM:
+        case VK_FORMAT_G8_B8R8_2PLANE_444_UNORM:
+        case VK_FORMAT_G10X6_B10X6R10X6_2PLANE_444_UNORM_3PACK16:
+        case VK_FORMAT_G12X4_B12X4R12X4_2PLANE_444_UNORM_3PACK16:
+        case VK_FORMAT_G16_B16R16_2PLANE_444_UNORM:
+            return true;
+        default:
+            return false;
+    }
+}
+
 static uint32_t mostSignificantBit(uint32_t x) { return 1ul << (31ul - utils::clz(x)); }
 
 uint8_t reduceSampleCount(uint8_t sampleCount, VkSampleCountFlags mask) {
@@ -191,49 +232,6 @@ uint8_t reduceSampleCount(uint8_t sampleCount, VkSampleCountFlags mask) {
         return sampleCount;
     }
     return mostSignificantBit((sampleCount - 1) & mask);
-}
-
-VkSamplerYcbcrModelConversion getYcbcrModelConversion(
-    SamplerYcbcrModelConversion model) {
-    switch (model) {
-    case SamplerYcbcrModelConversion::RGB_IDENTITY:
-        return VK_SAMPLER_YCBCR_MODEL_CONVERSION_RGB_IDENTITY;
-    case SamplerYcbcrModelConversion::YCBCR_IDENTITY:
-        return VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_IDENTITY;
-    case SamplerYcbcrModelConversion::YCBCR_709:
-        return VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_709;
-    case SamplerYcbcrModelConversion::YCBCR_601:
-        return VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_601;
-    case SamplerYcbcrModelConversion::YCBCR_2020:
-        return VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_2020;
-    default:
-        assert_invariant(false &&
-            "Unknown data type, conversion is not supported.");
-    }
-}
-
-VkSamplerYcbcrRange getYcbcrRange(SamplerYcbcrRange range) {
-    switch (range) {
-    case SamplerYcbcrRange::ITU_FULL:
-        return VK_SAMPLER_YCBCR_RANGE_ITU_FULL;
-    case SamplerYcbcrRange::ITU_NARROW:
-        return VK_SAMPLER_YCBCR_RANGE_ITU_NARROW;
-    default:
-        assert_invariant(false &&
-            "Unknown data type, conversion is not supported.");
-    }
-}
-
-VkChromaLocation getChromaLocation(ChromaLocation loc) {
-    switch (loc) {
-    case ChromaLocation::COSITED_EVEN:
-        return VK_CHROMA_LOCATION_COSITED_EVEN;
-    case ChromaLocation::MIDPOINT:
-        return VK_CHROMA_LOCATION_MIDPOINT;
-    default:
-        assert_invariant(false &&
-            "Unknown data type, conversion is not supported.");
-    }
 }
 
 } // namespace filament::backend::fvkutils
@@ -267,8 +265,9 @@ utils::io::ostream& operator<<(utils::io::ostream& out,
         const filament::backend::VulkanLayout& layout) {
     switch (layout) {
         CASE(UNDEFINED)
-        CASE(READ_ONLY)
-        CASE(READ_WRITE)
+        CASE(FRAG_READ)
+        CASE(VERT_READ)
+        CASE(STAGING)
         CASE(TRANSFER_SRC)
         CASE(TRANSFER_DST)
         CASE(DEPTH_ATTACHMENT)

@@ -19,20 +19,19 @@
 #include <utility>
 #include <vector>
 
+#include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "filament/filament/include/filament/Material.h"
 #include "filament/filament/include/filament/MaterialInstance.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
-#include "core/common/registry.h"
 #include "core/common/small_source_location.h"
 #include "core/common/typed_vector.h"
-#include "core/material_library/flatbuffer_utils.h"
+#include "core/material_library/generic_material_constants.h"
 #include "core/material_library/generic_material_parameters.h"
 #include "core/material_library/generic_material_spec.h"
 #include "core/material_library/material_param_value.h"
@@ -41,7 +40,6 @@
 #include "core/math/vec.h"
 #include "core/render/texture.h"
 #include "core/split_engine/android/split_engine_android_bridge.h"
-#include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/materials/builtin/builtin_generic_material.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
 #include "core/split_engine/materials/split_engine_material.h"
@@ -255,11 +253,10 @@ SplitEngineGenericMaterial::Create(BaseView& view,
                     android_xr::schemas::BuiltInMaterialSpec::
                         GenericMaterialSpec,
                     spec_offset.Union());
-        SplitEngineAndroidBridge& bridge =
-            view.GetRegistry().Get<SplitEngineAndroidBridge>()->get();
         return SendRequest<android_xr::schemas::BuiltInMaterialRequest,
-                           absl::Status>(bridge, *fbb,
-                                         built_in_material_request)
+                           absl::Status>(
+                   view.GetSplitEngineSerializer()->GetBridge(), *fbb,
+                   built_in_material_request)
             .Then([&view, placeholder_material =
                               std::move(placeholder_material)]() mutable {
               return absl::WrapUnique(new SplitEngineGenericMaterial(
@@ -281,13 +278,9 @@ SplitEngineGenericMaterial::SplitEngineGenericMaterial(
       placeholder_texture_(
           view.GetTextureFactory().BorrowPlaceholderTexture()) {}
 
-GenericMaterialPtr SplitEngineGenericMaterial::Duplicate() const {
-  SplitEngineSerializer* serializer = view_.GetSplitEngineSerializer();
-  if (!serializer) {
-    IMP_LOG(imp::FATAL)
-        << "Attempt to duplicate a split engine material without a serializer";
-  }
+SplitEngineGenericMaterial::~SplitEngineGenericMaterial() { Cleanup(); }
 
+GenericMaterialPtr SplitEngineGenericMaterial::Duplicate() const {
   if (AreParametersDirty()) {
     // Update the parameters before duplicating the material, otherwise the
     // ordering of the parameter update and duplication commands on the renderer
@@ -300,7 +293,8 @@ GenericMaterialPtr SplitEngineGenericMaterial::Duplicate() const {
       SplitEngineMaterial::GetMaterial()->GetFilamentMaterialInstance();
   filament::MaterialInstance* duplicate_instance =
       filament::MaterialInstance::duplicate(material_instance);
-  serializer->DuplicateMaterialInstance(material_instance, duplicate_instance);
+  view_.GetSplitEngineSerializer()->DuplicateMaterialInstance(
+      material_instance, duplicate_instance);
   auto duplicate = absl::WrapUnique(new SplitEngineGenericMaterial(
       view_, view_.GetMaterialFactory().WrapMaterial(duplicate_instance)));
   duplicate->generic_material_parameters_ = generic_material_parameters_;
@@ -374,7 +368,7 @@ TextureAndSampler SplitEngineGenericMaterial::GetPlaceholderTextureAndSampler()
 }
 
 TextureAndSampler SplitEngineGenericMaterial::GetBaseColorTexture() const {
-  if (!generic_material_parameters_.base_color ||
+  if (!generic_material_parameters_.base_color.has_value() ||
       !generic_material_parameters_.base_color->texture) {
     return GetPlaceholderTextureAndSampler();
   }
@@ -383,16 +377,24 @@ TextureAndSampler SplitEngineGenericMaterial::GetBaseColorTexture() const {
 }
 
 void SplitEngineGenericMaterial::SetBaseColorFactor(const float4& factor) {
-  if (!generic_material_parameters_.base_color) {
+  if (!generic_material_parameters_.base_color.has_value()) {
     generic_material_parameters_.base_color.emplace();
   }
   generic_material_parameters_.base_color->factor = factor;
   MarkParametersDirty();
 }
 
+float4 SplitEngineGenericMaterial::GetBaseColorFactor() const {
+  if (!generic_material_parameters_.base_color.has_value()) {
+    return kDefaultBaseColorFactor;
+  }
+
+  return generic_material_parameters_.base_color->factor;
+}
+
 absl::Status SplitEngineGenericMaterial::SetBaseColorUvTransform(
     const mat3f& uv_transform) {
-  if (!generic_material_parameters_.base_color ||
+  if (!generic_material_parameters_.base_color.has_value() ||
       !generic_material_parameters_.base_color->texture) {
     return absl::UnavailableError("Base color texture is not assigned.");
   }
@@ -403,7 +405,7 @@ absl::Status SplitEngineGenericMaterial::SetBaseColorUvTransform(
 
 TextureAndSampler SplitEngineGenericMaterial::GetMetallicRoughnessTexture()
     const {
-  if (!generic_material_parameters_.metallic_roughness ||
+  if (!generic_material_parameters_.metallic_roughness.has_value() ||
       !generic_material_parameters_.metallic_roughness->texture) {
     return GetPlaceholderTextureAndSampler();
   }
@@ -413,7 +415,7 @@ TextureAndSampler SplitEngineGenericMaterial::GetMetallicRoughnessTexture()
 
 absl::Status SplitEngineGenericMaterial::SetMetallicRoughnessUvTransform(
     const mat3f& uv_transform) {
-  if (!generic_material_parameters_.metallic_roughness ||
+  if (!generic_material_parameters_.metallic_roughness.has_value() ||
       !generic_material_parameters_.metallic_roughness->texture) {
     return absl::UnavailableError(
         "Metallic Roughness texture is not assigned.");
@@ -425,22 +427,37 @@ absl::Status SplitEngineGenericMaterial::SetMetallicRoughnessUvTransform(
 }
 
 void SplitEngineGenericMaterial::SetMetallicFactor(float factor) {
-  if (!generic_material_parameters_.metallic_roughness) {
+  if (!generic_material_parameters_.metallic_roughness.has_value()) {
     generic_material_parameters_.metallic_roughness.emplace();
   }
   generic_material_parameters_.metallic_roughness->metallic_factor = factor;
   MarkParametersDirty();
 }
+
+float SplitEngineGenericMaterial::GetMetallicFactor() const {
+  if (!generic_material_parameters_.metallic_roughness.has_value()) {
+    return kDefaultMetallicFactor;
+  }
+  return generic_material_parameters_.metallic_roughness->metallic_factor;
+}
+
 void SplitEngineGenericMaterial::SetRoughnessFactor(float factor) {
-  if (!generic_material_parameters_.metallic_roughness) {
+  if (!generic_material_parameters_.metallic_roughness.has_value()) {
     generic_material_parameters_.metallic_roughness.emplace();
   }
   generic_material_parameters_.metallic_roughness->roughness_factor = factor;
   MarkParametersDirty();
 }
 
+float SplitEngineGenericMaterial::GetRoughnessFactor() const {
+  if (!generic_material_parameters_.metallic_roughness.has_value()) {
+    return kDefaultRoughnessFactor;
+  }
+  return generic_material_parameters_.metallic_roughness->roughness_factor;
+}
+
 TextureAndSampler SplitEngineGenericMaterial::GetNormalTexture() const {
-  if (!generic_material_parameters_.normal ||
+  if (!generic_material_parameters_.normal.has_value() ||
       !generic_material_parameters_.normal->texture) {
     return GetPlaceholderTextureAndSampler();
   }
@@ -449,7 +466,7 @@ TextureAndSampler SplitEngineGenericMaterial::GetNormalTexture() const {
 
 absl::Status SplitEngineGenericMaterial::SetNormalUvTransform(
     const mat3f& uv_transform) {
-  if (!generic_material_parameters_.normal ||
+  if (!generic_material_parameters_.normal.has_value() ||
       !generic_material_parameters_.normal->texture) {
     return absl::UnavailableError("Normal texture is not assigned.");
   }
@@ -459,16 +476,23 @@ absl::Status SplitEngineGenericMaterial::SetNormalUvTransform(
 }
 
 void SplitEngineGenericMaterial::SetNormalScale(float scale) {
-  if (!generic_material_parameters_.normal) {
+  if (!generic_material_parameters_.normal.has_value()) {
     generic_material_parameters_.normal.emplace();
   }
   generic_material_parameters_.normal->factor = scale;
   MarkParametersDirty();
 }
 
+float SplitEngineGenericMaterial::GetNormalScale() const {
+  if (!generic_material_parameters_.normal.has_value()) {
+    return kDefaultNormalFactor;
+  }
+  return generic_material_parameters_.normal->factor;
+}
+
 TextureAndSampler SplitEngineGenericMaterial::GetAmbientOcclusionTexture()
     const {
-  if (!generic_material_parameters_.ambient_occlusion ||
+  if (!generic_material_parameters_.ambient_occlusion.has_value() ||
       !generic_material_parameters_.ambient_occlusion->texture) {
     return GetPlaceholderTextureAndSampler();
   }
@@ -478,7 +502,7 @@ TextureAndSampler SplitEngineGenericMaterial::GetAmbientOcclusionTexture()
 
 absl::Status SplitEngineGenericMaterial::SetAmbientOcclusionUvTransform(
     const mat3f& uv_transform) {
-  if (!generic_material_parameters_.ambient_occlusion ||
+  if (!generic_material_parameters_.ambient_occlusion.has_value() ||
       !generic_material_parameters_.ambient_occlusion->texture) {
     return absl::UnavailableError("Ambient Occlusion texture is not assigned.");
   }
@@ -489,15 +513,22 @@ absl::Status SplitEngineGenericMaterial::SetAmbientOcclusionUvTransform(
 }
 
 void SplitEngineGenericMaterial::SetAmbientOcclusionStrength(float strength) {
-  if (!generic_material_parameters_.ambient_occlusion) {
+  if (!generic_material_parameters_.ambient_occlusion.has_value()) {
     generic_material_parameters_.ambient_occlusion.emplace();
   }
   generic_material_parameters_.ambient_occlusion->factor = strength;
   MarkParametersDirty();
 }
 
+float SplitEngineGenericMaterial::GetAmbientOcclusionStrength() const {
+  if (!generic_material_parameters_.ambient_occlusion.has_value()) {
+    return kDefaultAmbientOcclusionFactor;
+  }
+  return generic_material_parameters_.ambient_occlusion->factor;
+}
+
 TextureAndSampler SplitEngineGenericMaterial::GetEmissiveTexture() const {
-  if (!generic_material_parameters_.emissive ||
+  if (!generic_material_parameters_.emissive.has_value() ||
       !generic_material_parameters_.emissive->texture) {
     return GetPlaceholderTextureAndSampler();
   }
@@ -506,7 +537,7 @@ TextureAndSampler SplitEngineGenericMaterial::GetEmissiveTexture() const {
 
 absl::Status SplitEngineGenericMaterial::SetEmissiveUvTransform(
     const mat3f& uv_transform) {
-  if (!generic_material_parameters_.emissive ||
+  if (!generic_material_parameters_.emissive.has_value() ||
       !generic_material_parameters_.emissive->texture) {
     return absl::UnavailableError("Emissive texture is not assigned.");
   }
@@ -516,15 +547,22 @@ absl::Status SplitEngineGenericMaterial::SetEmissiveUvTransform(
 }
 
 void SplitEngineGenericMaterial::SetEmissiveFactor(const float3& factor) {
-  if (!generic_material_parameters_.emissive) {
+  if (!generic_material_parameters_.emissive.has_value()) {
     generic_material_parameters_.emissive.emplace();
   }
   generic_material_parameters_.emissive->factor = factor;
   MarkParametersDirty();
 }
 
+float3 SplitEngineGenericMaterial::GetEmissiveFactor() const {
+  if (!generic_material_parameters_.emissive.has_value()) {
+    return kDefaultEmissiveFactor;
+  }
+  return generic_material_parameters_.emissive->factor;
+}
+
 TextureAndSampler SplitEngineGenericMaterial::GetClearcoatTexture() const {
-  if (!generic_material_parameters_.clearcoat ||
+  if (!generic_material_parameters_.clearcoat.has_value() ||
       !generic_material_parameters_.clearcoat->intensity_texture) {
     return GetPlaceholderTextureAndSampler();
   }
@@ -534,7 +572,7 @@ TextureAndSampler SplitEngineGenericMaterial::GetClearcoatTexture() const {
 
 TextureAndSampler SplitEngineGenericMaterial::GetClearcoatNormalTexture()
     const {
-  if (!generic_material_parameters_.clearcoat ||
+  if (!generic_material_parameters_.clearcoat.has_value() ||
       !generic_material_parameters_.clearcoat->normal_texture) {
     return GetPlaceholderTextureAndSampler();
   }
@@ -544,7 +582,7 @@ TextureAndSampler SplitEngineGenericMaterial::GetClearcoatNormalTexture()
 
 TextureAndSampler SplitEngineGenericMaterial::GetClearcoatRoughnessTexture()
     const {
-  if (!generic_material_parameters_.clearcoat ||
+  if (!generic_material_parameters_.clearcoat.has_value() ||
       !generic_material_parameters_.clearcoat->roughness_texture) {
     return GetPlaceholderTextureAndSampler();
   }
@@ -553,7 +591,7 @@ TextureAndSampler SplitEngineGenericMaterial::GetClearcoatRoughnessTexture()
 }
 
 void SplitEngineGenericMaterial::SetClearcoatFactors(const float3& factor) {
-  if (!generic_material_parameters_.clearcoat) {
+  if (!generic_material_parameters_.clearcoat.has_value()) {
     generic_material_parameters_.clearcoat.emplace();
   }
   generic_material_parameters_.clearcoat->factor = factor;
@@ -561,7 +599,7 @@ void SplitEngineGenericMaterial::SetClearcoatFactors(const float3& factor) {
 }
 
 TextureAndSampler SplitEngineGenericMaterial::GetSheenColorTexture() const {
-  if (!generic_material_parameters_.sheen ||
+  if (!generic_material_parameters_.sheen.has_value() ||
       !generic_material_parameters_.sheen->color_texture) {
     return GetPlaceholderTextureAndSampler();
   }
@@ -570,7 +608,7 @@ TextureAndSampler SplitEngineGenericMaterial::GetSheenColorTexture() const {
 }
 
 void SplitEngineGenericMaterial::SetSheenColorFactor(const float3& factor) {
-  if (!generic_material_parameters_.sheen) {
+  if (!generic_material_parameters_.sheen.has_value()) {
     generic_material_parameters_.sheen.emplace();
   }
   generic_material_parameters_.sheen->color_factor = factor;
@@ -578,7 +616,7 @@ void SplitEngineGenericMaterial::SetSheenColorFactor(const float3& factor) {
 }
 
 TextureAndSampler SplitEngineGenericMaterial::GetSheenRoughnessTexture() const {
-  if (!generic_material_parameters_.sheen ||
+  if (!generic_material_parameters_.sheen.has_value() ||
       !generic_material_parameters_.sheen->roughness_texture) {
     return GetPlaceholderTextureAndSampler();
   }
@@ -587,7 +625,7 @@ TextureAndSampler SplitEngineGenericMaterial::GetSheenRoughnessTexture() const {
 }
 
 void SplitEngineGenericMaterial::SetSheenRoughnessFactor(float factor) {
-  if (!generic_material_parameters_.sheen) {
+  if (!generic_material_parameters_.sheen.has_value()) {
     generic_material_parameters_.sheen.emplace();
   }
   generic_material_parameters_.sheen->roughness_factor = factor;
@@ -595,7 +633,7 @@ void SplitEngineGenericMaterial::SetSheenRoughnessFactor(float factor) {
 }
 
 TextureAndSampler SplitEngineGenericMaterial::GetTransmissionTexture() const {
-  if (!generic_material_parameters_.transmission ||
+  if (!generic_material_parameters_.transmission.has_value() ||
       !generic_material_parameters_.transmission->texture) {
     return GetPlaceholderTextureAndSampler();
   }
@@ -605,7 +643,7 @@ TextureAndSampler SplitEngineGenericMaterial::GetTransmissionTexture() const {
 
 absl::Status SplitEngineGenericMaterial::SetTransmissionUvTransform(
     const mat3f& uv_transform) {
-  if (!generic_material_parameters_.transmission ||
+  if (!generic_material_parameters_.transmission.has_value() ||
       !generic_material_parameters_.transmission->texture) {
     return absl::UnavailableError("Transmission texture is not assigned.");
   }
@@ -616,7 +654,7 @@ absl::Status SplitEngineGenericMaterial::SetTransmissionUvTransform(
 }
 
 void SplitEngineGenericMaterial::SetTransmissionFactor(float factor) {
-  if (!generic_material_parameters_.transmission) {
+  if (!generic_material_parameters_.transmission.has_value()) {
     generic_material_parameters_.transmission.emplace();
   }
   generic_material_parameters_.transmission->factor = factor;
@@ -625,7 +663,7 @@ void SplitEngineGenericMaterial::SetTransmissionFactor(float factor) {
 
 void SplitEngineGenericMaterial::SetIndexOfRefraction(
     float index_of_refraction) {
-  if (!generic_material_parameters_.refraction) {
+  if (!generic_material_parameters_.refraction.has_value()) {
     generic_material_parameters_.refraction.emplace();
   }
   generic_material_parameters_.refraction->index_of_refraction =
@@ -634,11 +672,19 @@ void SplitEngineGenericMaterial::SetIndexOfRefraction(
 }
 
 void SplitEngineGenericMaterial::SetAlphaCutoff(float alpha_cutoff) {
-  if (!generic_material_parameters_.masking) {
+  if (!generic_material_parameters_.masking.has_value()) {
     generic_material_parameters_.masking.emplace();
   }
   generic_material_parameters_.masking->alpha_cutoff = alpha_cutoff;
   MarkParametersDirty();
+}
+
+float SplitEngineGenericMaterial::GetAlphaCutoff() const {
+  if (!generic_material_parameters_.masking.has_value()) {
+    return kDefaultAlphaCutoff;
+  }
+
+  return generic_material_parameters_.masking->alpha_cutoff;
 }
 
 }  // namespace imp::split_engine

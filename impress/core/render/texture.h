@@ -84,6 +84,7 @@ class Texture {
   ContentSecurityLevel security_level_;
 
   friend class TextureFactory;
+  friend class TextureDrmTestHelper;
 };
 
 // For now, we only support move semantics and single ownership.

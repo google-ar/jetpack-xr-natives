@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <optional>
 
+#include "absl/base/attributes.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
@@ -32,6 +33,7 @@
 #include "core/render/content_security_level.h"
 #include "core/render/image_asset.h"
 #include "core/render/texture.h"
+#include "core/render/texture_options.h"
 #include "core/view/base_view.h"
 
 namespace imp {
@@ -52,7 +54,9 @@ class TextureFactory {
 
   // Options are parameters to change the appearance of textures created by the
   // TextureFactory.
-  struct Options {
+  struct ABSL_DEPRECATED(
+      "Use TextureGenerationOptions and TextureSamplerOptions instead.")
+      Options {
     // Determines how texture coordinates outside of [0,1] are handled.
     WrapMode wrap_mode = WrapMode::CLAMP_TO_EDGE;
 
@@ -103,7 +107,10 @@ class TextureFactory {
     // metal texture returns.
     std::optional<intptr_t> native_texture_id;
     // Other options of the texture. See TextureFactory::Options for details.
+    ABSL_DEPRECATED("Use TextureCreationSettings::sampler_options instead.")
     std::optional<Options> options;
+    // Sampler options for the texture.
+    std::optional<TextureSamplerOptions> sampler_options;
   };
 
   TextureFactory(BaseView& view);
@@ -140,7 +147,15 @@ class TextureFactory {
   TexturePtr CreateTexture(const ImageAsset& image);
 
   // Create a texture and specify options.
+  ABSL_DEPRECATED(
+      "Use CreateTexture(..., TextureGenerationOptions, TextureSamplerOptions) "
+      "instead.")
   TexturePtr CreateTexture(const ImageAsset& image, Options options);
+
+  // Create a texture and specify options.
+  TexturePtr CreateTexture(const ImageAsset& image,
+                           TextureGenerationOptions generation_options,
+                           TextureSamplerOptions sampler_options);
 
   // Creates an empty texture of specified size and format.
   // TODO: This does not send the texture data to split engine.
@@ -152,8 +167,15 @@ class TextureFactory {
   TexturePtr CreateTexture(int width, int height, Format format, Usage usage);
 
   // Creates an empty texture of specified size, format, usage, and options.
+  ABSL_DEPRECATED("Use CreateTexture(..., TextureSamplerOptions) instead.")
   TexturePtr CreateTexture(
       int width, int height, Format format, Usage usage, Options options,
+      std::optional<absl::string_view> name = std::nullopt);
+
+  // Creates an empty texture of specified size, format, usage, and options.
+  TexturePtr CreateTexture(
+      int width, int height, Format format, Usage usage,
+      TextureSamplerOptions sampler_options,
       std::optional<absl::string_view> name = std::nullopt);
 
   // Creates a Filament texture by importing a native texture.
@@ -179,8 +201,14 @@ class TextureFactory {
   // The textures' upper left will always be at (0, 0).
   // Here's a minimal shader that shows how to sample the texture array:
   // third_party/impress/core/view/framewoxrk/tests/data/texture_array.mat
+  ABSL_DEPRECATED(
+      "Use CreateTexture(..., TextureGenerationOptions, TextureSamplerOptions) "
+      "instead.")
   TexturePtr CreateTexture(absl::Span<const AssetPtr<ImageAsset>> images,
                            Options options);
+  TexturePtr CreateTexture(absl::Span<const AssetPtr<ImageAsset>> images,
+                           TextureGenerationOptions generation_options,
+                           TextureSamplerOptions sampler_options);
   TexturePtr CreateTexture(absl::Span<const AssetPtr<ImageAsset>> images);
 
   // Creates a texture from the given image contents.
@@ -189,9 +217,27 @@ class TextureFactory {
   // asynchronously.
   // TODO: This variant correctly sends the texture data to split
   // engine. The other variants should be updated to do the same.
+  ABSL_DEPRECATED(
+      "Use CreateTexture(..., TextureGenerationOptions, TextureSamplerOptions) "
+      "instead.")
   OwnedTexturePtr CreateTexture(
       image::ImageContents& contents, Options options,
       std::optional<absl::string_view> name = std::nullopt);
+
+  OwnedTexturePtr CreateTexture(
+      image::ImageContents& contents,
+      TextureGenerationOptions generation_options,
+      TextureSamplerOptions sampler_options,
+      std::optional<absl::string_view> name = std::nullopt);
+
+  // Creates a 2D texture with mipmaps from the given image assets
+  // if generated_mipmap_levels in generation_options are not set. The first
+  // image in the span is the base image, and the rest are mipmaps are in the
+  // decreasing resolution order of mipmap levels.
+  OwnedTexturePtr CreateTextureWithMipmaps(
+      absl::Span<const AssetPtr<ImageAsset>> images,
+      TextureGenerationOptions generation_options,
+      TextureSamplerOptions sampler_options);
 
   // Wraps a filament::Texture with an imp::TexturePtr. As imp::TexturePtr is a
   // unique_ptr, this makes it the official owner of the memory.

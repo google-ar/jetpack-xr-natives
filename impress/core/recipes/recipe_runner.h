@@ -17,7 +17,6 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_RECIPES_RECIPE_RUNNER_H_
 #define THIRD_PARTY_IMPRESS_CORE_RECIPES_RECIPE_RUNNER_H_
 
-#include <list>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -28,13 +27,12 @@
 #include "core/common/robin_set.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
-#include "core/ncsb/isf_info.h"
 #include "core/ncsb/node_handle.h"
+#include "core/recipes/language/recipe_async_execution_manager.h"
 #include "core/recipes/language/recipe_runtime_event.h"
 #include "core/recipes/language/recipe_runtime_graph.h"
 #include "core/recipes/language/recipe_scope.h"
 #include "core/recipes/recipe_runner_state.proto.imp.h"
-#include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/utils/frame_time.h"
 
 namespace imp {
@@ -51,11 +49,6 @@ class RecipeRunner : public Component {
     kRunning,
     // The RecipeRunner is ready to start in the next Update().
     kReady,
-  };
-
-  struct ScheduledExecution {
-    std::unique_ptr<RecipeScope> scope;
-    std::list<RecipeRuntimeGraph::AsyncExecutionHandle> async_execution_handles;
   };
 
   absl::Status Setup();
@@ -86,21 +79,28 @@ class RecipeRunner : public Component {
   // TODO: Add support for resetting tap targets.
   void SetTapTargets(absl::Span<NodeHandle> tap_targets);
 
+  void SetHoverTargets(absl::Span<NodeHandle> hover_targets);
+
   // Returns the tap targets.
   //
   // If the tap targets are not set, std::nullopt will be returned.
   std::optional<const std::vector<NodeHandle>> GetTapTargets() const;
 
+  // Returns the hover targets.
+  //
+  // If the hover targets are not set, std::nullopt will be returned.
+  std::optional<const std::vector<NodeHandle>> GetHoverTargets() const;
+
   RecipeRuntimeGraph& GetRuntimeGraph() { return *runtime_graph_; }
 
  private:
   void TriggerEventAndHandleExecutionResult(const RecipeRuntimeEvent& event);
-  void TryResumeScheduledExecution(ScheduledExecution& scheduled_execution);
 
   RecipeRunnerState state_;
   RuntimeState runtime_state_ = RecipeRunner::RuntimeState::kStopped;
 
   std::optional<RobinSet<NodeHandle>> tap_targets_;
+  std::optional<RobinSet<NodeHandle>> hover_targets_;
 
   std::unique_ptr<RecipeRuntimeGraph> runtime_graph_;
   std::unique_ptr<RecipeScope> scope_;
@@ -109,7 +109,11 @@ class RecipeRunner : public Component {
 
   Dispatcher::ScopedConnection tap_event_connection_;
 
-  std::list<ScheduledExecution> scheduled_executions_;
+  Dispatcher::ScopedConnection hover_event_connection_;
+
+  NodeHandle hovered_node_;
+
+  RecipeAsyncExecutionManager async_execution_manager_;
 
  public:
   using IsfInfo = IsfInfo<&RecipeRunner::state_, IsfDependencies<GltfRenderer>>;

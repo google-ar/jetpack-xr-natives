@@ -27,10 +27,11 @@
 
 #include "private/backend/BackendUtils.h"
 
-#include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/Logger.h"
 #include "filament/libs/utils/include/utils/Panic.h"
-#include "filament/libs/utils/include/utils/trap.h"
+#include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/debug.h"
+#include "filament/libs/utils/include/utils/trap.h"
 
 #include "filament/libs/math/include/math/scalar.h"
 
@@ -115,14 +116,14 @@ MetalSwapChain::MetalSwapChain(
       type(SwapChainType::CAMETALLAYER) {
 
     if (!(flags & SwapChain::CONFIG_TRANSPARENT) && !nativeWindow.opaque) {
-        utils::slog.w << "Warning: Filament SwapChain has no CONFIG_TRANSPARENT flag, "
-                         "but the CAMetaLayer(" << (__bridge void*) nativeWindow << ")"
-                         " has .opaque set to NO." << utils::io::endl;
+        LOG(WARNING) << "Warning: Filament SwapChain has no CONFIG_TRANSPARENT flag, but the "
+                        "CAMetaLayer("
+                     << (__bridge void*) nativeWindow << ") has .opaque set to NO.";
     }
     if ((flags & SwapChain::CONFIG_TRANSPARENT) && nativeWindow.opaque) {
-        utils::slog.w << "Warning: Filament SwapChain has the CONFIG_TRANSPARENT flag, "
-                         "but the CAMetaLayer(" << (__bridge void*) nativeWindow << ")"
-                         " has .opaque set to YES." << utils::io::endl;
+        LOG(WARNING) << "Warning: Filament SwapChain has the CONFIG_TRANSPARENT flag, but the "
+                        "CAMetaLayer("
+                     << (__bridge void*) nativeWindow << ") has .opaque set to YES.";
     }
 
     // Needed so we can use the SwapChain as a blit source.
@@ -535,15 +536,6 @@ MetalVertexBuffer::MetalVertexBuffer(MetalContext& context,
 MetalIndexBuffer::MetalIndexBuffer(MetalContext& context, BufferUsage usage, uint8_t elementSize,
         uint32_t indexCount) : HwIndexBuffer(elementSize, indexCount),
         buffer(context, BufferObjectBinding::VERTEX, usage, elementSize * indexCount, true) { }
-
-MetalRenderPrimitive::MetalRenderPrimitive() {
-}
-
-void MetalRenderPrimitive::setBuffers(MetalVertexBufferInfo const* const vbi,
-        MetalVertexBuffer* vertexBuffer, MetalIndexBuffer* indexBuffer) {
-    this->vertexBuffer = vertexBuffer;
-    this->indexBuffer = indexBuffer;
-}
 
 MetalProgram::MetalProgram(MetalContext& context, Program&& program) noexcept
     : HwProgram(program.getName()), mContext(context) {
@@ -1365,7 +1357,31 @@ id<MTLArgumentEncoder> MetalDescriptorSetLayout::getArgumentEncoderSlow(id<MTLDe
                 [arguments addObject:bufferArgument];
                 break;
             }
-            case DescriptorType::SAMPLER:
+            case DescriptorType::SAMPLER_2D_FLOAT:
+            case DescriptorType::SAMPLER_2D_INT:
+            case DescriptorType::SAMPLER_2D_UINT:
+            case DescriptorType::SAMPLER_2D_DEPTH:
+            case DescriptorType::SAMPLER_2D_ARRAY_FLOAT:
+            case DescriptorType::SAMPLER_2D_ARRAY_INT:
+            case DescriptorType::SAMPLER_2D_ARRAY_UINT:
+            case DescriptorType::SAMPLER_2D_ARRAY_DEPTH:
+            case DescriptorType::SAMPLER_CUBE_FLOAT:
+            case DescriptorType::SAMPLER_CUBE_INT:
+            case DescriptorType::SAMPLER_CUBE_UINT:
+            case DescriptorType::SAMPLER_CUBE_DEPTH:
+            case DescriptorType::SAMPLER_CUBE_ARRAY_FLOAT:
+            case DescriptorType::SAMPLER_CUBE_ARRAY_INT:
+            case DescriptorType::SAMPLER_CUBE_ARRAY_UINT:
+            case DescriptorType::SAMPLER_CUBE_ARRAY_DEPTH:
+            case DescriptorType::SAMPLER_3D_FLOAT:
+            case DescriptorType::SAMPLER_3D_INT:
+            case DescriptorType::SAMPLER_3D_UINT:
+            case DescriptorType::SAMPLER_2D_MS_FLOAT:
+            case DescriptorType::SAMPLER_2D_MS_INT:
+            case DescriptorType::SAMPLER_2D_MS_UINT:
+            case DescriptorType::SAMPLER_2D_MS_ARRAY_FLOAT:
+            case DescriptorType::SAMPLER_2D_MS_ARRAY_INT:
+            case DescriptorType::SAMPLER_2D_MS_ARRAY_UINT:
             case DescriptorType::SAMPLER_EXTERNAL: {
                 MTLArgumentDescriptor* textureArgument = [MTLArgumentDescriptor argumentDescriptor];
                 textureArgument.index = binding.binding * 2;
@@ -1390,6 +1406,9 @@ id<MTLArgumentEncoder> MetalDescriptorSetLayout::getArgumentEncoderSlow(id<MTLDe
                 assert_invariant(false);
                 break;
         }
+    }
+    if (arguments.count == 0) {
+        return nil;
     }
     return [device newArgumentEncoderWithArguments:arguments];
 }
@@ -1451,6 +1470,9 @@ id<MTLBuffer> MetalDescriptorSet::finalizeAndGetBuffer(MetalDriver* driver, Shad
 
     id<MTLArgumentEncoder> encoder =
             layout->getArgumentEncoder(context.device, stage, textureTypes);
+    if (!encoder) {
+        return nil;
+    }
 
     {
         ScopedAllocationTimer timer("descriptor_set");
@@ -1481,7 +1503,31 @@ id<MTLBuffer> MetalDescriptorSet::finalizeAndGetBuffer(MetalDriver* driver, Shad
                            atIndex:binding.binding * 2];
                 break;
             }
-            case DescriptorType::SAMPLER:
+            case DescriptorType::SAMPLER_2D_FLOAT:
+            case DescriptorType::SAMPLER_2D_INT:
+            case DescriptorType::SAMPLER_2D_UINT:
+            case DescriptorType::SAMPLER_2D_DEPTH:
+            case DescriptorType::SAMPLER_2D_ARRAY_FLOAT:
+            case DescriptorType::SAMPLER_2D_ARRAY_INT:
+            case DescriptorType::SAMPLER_2D_ARRAY_UINT:
+            case DescriptorType::SAMPLER_2D_ARRAY_DEPTH:
+            case DescriptorType::SAMPLER_CUBE_FLOAT:
+            case DescriptorType::SAMPLER_CUBE_INT:
+            case DescriptorType::SAMPLER_CUBE_UINT:
+            case DescriptorType::SAMPLER_CUBE_DEPTH:
+            case DescriptorType::SAMPLER_CUBE_ARRAY_FLOAT:
+            case DescriptorType::SAMPLER_CUBE_ARRAY_INT:
+            case DescriptorType::SAMPLER_CUBE_ARRAY_UINT:
+            case DescriptorType::SAMPLER_CUBE_ARRAY_DEPTH:
+            case DescriptorType::SAMPLER_3D_FLOAT:
+            case DescriptorType::SAMPLER_3D_INT:
+            case DescriptorType::SAMPLER_3D_UINT:
+            case DescriptorType::SAMPLER_2D_MS_FLOAT:
+            case DescriptorType::SAMPLER_2D_MS_INT:
+            case DescriptorType::SAMPLER_2D_MS_UINT:
+            case DescriptorType::SAMPLER_2D_MS_ARRAY_FLOAT:
+            case DescriptorType::SAMPLER_2D_MS_ARRAY_INT:
+            case DescriptorType::SAMPLER_2D_MS_ARRAY_UINT:
             case DescriptorType::SAMPLER_EXTERNAL: {
                 auto found = textures.find(binding.binding);
                 if (found == textures.end()) {

@@ -19,16 +19,19 @@
 
 #include <sys/types.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <queue>
 #include <string>
 #include <unordered_map>
-#include <utility>
 #include <variant>
 #include <vector>
 
+#include "absl/base/nullability.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/strings/string_view.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/include/filament/Material.h"
@@ -55,6 +58,7 @@
 #include "core/ncsb/update_id.h"
 #include "core/ncsb/update_phase.h"
 #include "core/ncsb/update_system.h"
+#include "core/split_engine/android/split_engine_android_bridge.h"
 #include "core/split_engine/split_engine_mesh_serializer.h"
 #include "core/split_engine/split_engine_texture_serializer.h"
 #if IMP_PLATFORM(ANDROID)
@@ -90,7 +94,7 @@ namespace imp::split_engine {
 // Note that a Cleanup() is not required because the renderer side will clear
 // all data for an app when the bridge is released.
 //
-// TODO: Split the BaseRenderableManager code to a separate class.
+// TODO: (broken link) - Split the BaseRenderableManager code to a separate class.
 class SplitEngineSerializerImpl
     : public SplitEngineSerializer,
       public BaseRenderableManager,
@@ -108,7 +112,8 @@ class SplitEngineSerializerImpl
   // serialized data on a separate channel, allowing optimization of
   // underlying resources for serialization of larger and infrequent data.
   SplitEngineSerializerImpl(
-      BaseView& view, std::unique_ptr<SplitEngineBridgeSender> bridge_sender,
+      BaseView& view, std::unique_ptr<SplitEngineAndroidBridge> bridge,
+      std::unique_ptr<SplitEngineBridgeSender> bridge_sender,
       std::unique_ptr<SplitEngineBridgeSender> one_shot_bridge_sender,
       size_t bridge_buffer_size_bytes);
 
@@ -124,9 +129,9 @@ class SplitEngineSerializerImpl
   void SetSpy(BaseRenderableManager& spy) override;
 
   filament::RenderableManager::Instance GetInstance(
-      utils::Entity e) const override;
-  bool HasComponent(utils::Entity e) const override;
-  void Destroy(utils::Entity e) override;
+      utils::Entity entity) const override;
+  bool HasComponent(utils::Entity entity) const override;
+  void Destroy(utils::Entity entity) override;
   size_t GetPrimitiveCount(
       filament::RenderableManager::Instance instance) const override;
   const Box& GetAxisAlignedBoundingBox(
@@ -173,6 +178,8 @@ class SplitEngineSerializerImpl
 
   std::unique_ptr<BaseRenderableManager::Builder> NewBuilder(
       size_t count) override;
+
+  SplitEngineAndroidBridge& GetBridge() override;
 
   void AddMaterial(const filament::Material* material,
                    const BufferAccess& data) override;
@@ -251,11 +258,6 @@ class SplitEngineSerializerImpl
                         size_t offset) override;
 
  private:
-  // Returns the FlatBufferBuilder for the current frame that corresponds to the
-  // given request type.
-  flatbuffers::FlatBufferBuilder* GetFlatBufferBuilderFor(
-      android_xr::schemas::CommandTypes command_type);
-
   size_t EstimateImageBasedLightingAssetBufferSize(
       const SphericalHarmonics& spherical_harmonics,
       const ImageBasedLightingAssetCubemapImages& cubemap_images);
@@ -266,47 +268,6 @@ class SplitEngineSerializerImpl
 
   using ResourceId = std::uint64_t;
   using FlatBufferBuilderPtr = std::unique_ptr<flatbuffers::FlatBufferBuilder>;
-  using IdAndFlatBufferBuilderPtr = std::pair<ResourceId, FlatBufferBuilderPtr>;
-
-  // The type of data to be accumulated by material updates (see below).
-  enum class MaterialUpdateBuilderType {
-    kMaterialParameters,
-    kBuiltInMaterialParameters,
-    kMaterialDuplicates,
-  };
-
-  // Returns the FlatBufferBuilderPtr for the given type of material update.
-  // If there is no current builder, a new one will be created.
-  // If the current builder is of the same type, it will be returned.
-  // If the current builder is of a different type, it will be committed and a
-  // new builder will be created and returned.
-  //
-  // Explanation: there is no correct "static" ordering between setting material
-  // parameters and duplicating materials.
-  // Originally, it was always set parameters then duplicate, which worked for
-  // the main use-case of duplicating the main glTF generic materials. This
-  // meant that the duplicates would happen after setting the parameters on the
-  // backend so that the duplicate would have all the same parameters.
-  // With KHR_animation_pointer support, though, the material is duplicated and
-  // then NEW PARAMS are set on the duplicate on the same frame on which it was
-  // duplicated. This caused a crash, essentially, because the code tried to set
-  // params on a material instance that didn't exist because the duplicate
-  // command hadn't yet been processed.
-  // This code preserves the app-side sequencing. This allows for a sequence
-  // such as this to occur all on the same frame:
-  //   Create Material 1
-  //   Set Params on 1
-  //   Duplicate 1 -> 2
-  //   Set Params on 2
-  //
-  // The new code basically commits all the params / duplicates whenever the
-  // app switches to a new operation but still preserves that parameters are
-  // accumulated as much as possible rather than creating a command instantly
-  // for every change, i.e. if an app sets many parameters each frame and
-  // doesn't duplicate any materials, only one SetMaterialParameters command is
-  // issued for the frame.
-  FlatBufferBuilderPtr& GetMaterialUpdateBuilder(
-      MaterialUpdateBuilderType type);
 
   // Helper to create a vector of flatbuffers::Offset<T>.
   template <typename T>
@@ -381,8 +342,8 @@ class SplitEngineSerializerImpl
   };
 
   struct GeometryUpdateInfo {
-    uint64_t vertex_buffer_id = 0;
-    uint64_t index_buffer_id = 0;
+    ResourceId vertex_buffer_id = 0;
+    ResourceId index_buffer_id = 0;
     uint32_t offset = 0;
     uint32_t count = 0;
     uint8_t primitive_type = 0;
@@ -412,7 +373,7 @@ class SplitEngineSerializerImpl
   };
 
   struct EnvironmentLightParams {
-    uint64_t image_based_lighting_asset_id;
+    ResourceId image_based_lighting_asset_id;
     float intensity;
     float3 tint;
   };
@@ -423,15 +384,26 @@ class SplitEngineSerializerImpl
     std::optional<android_xr::schemas::Bool> enabled;
   };
 
+  struct RemoveMeshBuffers {
+    std::vector<ResourceId> vertex_buffers;
+    std::vector<ResourceId> index_buffers;
+  };
+
   utils::Entity GetEntity(
       const filament::RenderableManager::Instance& instance) const;
 
   FlatBufferBuilderPtr CreateFlatBufferBuilder();
   FlatBufferBuilderPtr CreateFlatBufferBuilder(size_t size_bytes);
 
-  void SendMessageGroup(std::vector<FlatBufferBuilderPtr>& messages);
-
   BaseView& view_;
+  // Hold the split engine bridge and ensures the lifetime of the bridge is the
+  // lifetime of the serializer.
+  // NOTE: it is critical that the bridge is destroyed after the senders are
+  // destroyed, so the order of these fields is important.
+  std::unique_ptr<SplitEngineAndroidBridge> bridge_;
+
+  // The main bridge sender used for sending messages to the split engine
+  // renderer.
   std::unique_ptr<SplitEngineBridgeSender> bridge_sender_;
 
   // Use an independent sender for larger requests so that we can send them as
@@ -440,109 +412,221 @@ class SplitEngineSerializerImpl
 
   size_t bridge_buffer_size_bytes_;
 
-  // A builder for adding and removing materials and material instances.
-  FlatBufferBuilderPtr materials_builder_;
-  // Vectors to accumulate materials and instances to add this frame.
-  VectorOffset<android_xr::schemas::Material> materials_to_add_;
-  std::unordered_map<ResourceId, ResourceId> material_instances_to_add_;
-  // Vectors to accumulate materials and instances to remove this frame.
-  std::vector<ResourceId> materials_to_remove_;
-  std::vector<ResourceId> material_instances_to_remove_;
+  // A batch is a collection of commands that will be serialized together. All
+  // commands within the same batch need to be of the same type, because the
+  // flatbuffer root is Command.
+  struct CommandBatchBase {
+    // The index of a batch is its place in the execution order. The batch with
+    // index 0 will be executed first.
+    CommandBatchBase(android_xr::schemas::CommandTypes type, int index)
+        : type(type), index(index) {}
+    virtual ~CommandBatchBase() = default;
+    virtual void Serialize(flatbuffers::FlatBufferBuilder& fbb) = 0;
 
-  // Commits the current material update builder to a Command if it is not null.
-  void CommitCurrentMaterialUpdateBuilder();
-  // Commits and clears all accumulated material parameters to a Command.
-  void CommitMaterialParameters(FlatBufferBuilderPtr& fbb);
-  // Commits and clears all accumulated built-in material params to a Command.
-  void CommitBuiltInMaterialParameters(FlatBufferBuilderPtr& fbb);
-  // Commits and clears all accumulated material duplicates to a Command.
-  void CommitMaterialDuplicates(FlatBufferBuilderPtr& fbb);
+    const android_xr::schemas::CommandTypes type;
+    int index = 0;
+  };
 
-  // A list of FlatBufferBuilders for material parameters, built-in material
-  // parameters, and material duplicates. These builders are interleaved in the
-  // order they are requested by the app in order to maintain the relative order
-  // of material parameters and duplicates.
-  std::vector<FlatBufferBuilderPtr> material_update_commands_;
-  MaterialUpdateBuilderType current_material_update_builder_type_ =
-      MaterialUpdateBuilderType::kMaterialParameters;
+  // Each command type requires a different type of data. This struct selects
+  // the correct type for a given command type.
+  template <android_xr::schemas::CommandTypes CommandT>
+  struct DataSelector {};
+  template <>
+  struct DataSelector<android_xr::schemas::CommandTypes::AddRenderables> {
+    using data_type = EntityMap<AddRenderableInfo>;
+  };
+  template <>
+  struct DataSelector<android_xr::schemas::CommandTypes::RemoveRenderables> {
+    using data_type = EntitySet;
+  };
+  template <>
+  struct DataSelector<android_xr::schemas::CommandTypes::UpdateRenderables> {
+    using data_type = EntityMap<UpdateRenderableInfo>;
+  };
+  template <>
+  struct DataSelector<android_xr::schemas::CommandTypes::RemoveMeshData> {
+    using data_type = RemoveMeshBuffers;
+  };
+  template <>
+  struct DataSelector<
+      android_xr::schemas::CommandTypes::RemoveMorphTargetBuffers> {
+    using data_type = std::vector<ResourceId>;
+  };
+  template <>
+  struct DataSelector<
+      android_xr::schemas::CommandTypes::SetPreferredEnvironmentIblAsset> {
+    using data_type = std::optional<EnvironmentLightParams>;
+  };
+  template <>
+  struct DataSelector<
+      android_xr::schemas::CommandTypes::RemoveImageBasedLightingAssets> {
+    using data_type = std::vector<ResourceId>;
+  };
+  template <>
+  struct DataSelector<android_xr::schemas::CommandTypes::AddMaterials> {
+    using data_type = VectorOffset<android_xr::schemas::Material>;
+  };
+  template <>
+  struct DataSelector<
+      android_xr::schemas::CommandTypes::SetMaterialParameters> {
+    using data_type = std::unordered_map<ResourceId, MaterialParameters>;
+  };
+  template <>
+  struct DataSelector<android_xr::schemas::CommandTypes::RemoveMaterials> {
+    using data_type = std::vector<ResourceId>;
+  };
+  template <>
+  struct DataSelector<android_xr::schemas::CommandTypes::AddMaterialInstances> {
+    using data_type = std::unordered_map<ResourceId, ResourceId>;
+  };
+  template <>
+  struct DataSelector<
+      android_xr::schemas::CommandTypes::DuplicateMaterialInstances> {
+    using data_type = std::unordered_map<ResourceId, ResourceId>;
+  };
+  template <>
+  struct DataSelector<
+      android_xr::schemas::CommandTypes::SetBuiltInMaterialParameters> {
+    using data_type =
+        VectorOffset<android_xr::schemas::BuiltInMaterialInstanceParameters>;
+  };
+  template <>
+  struct DataSelector<
+      android_xr::schemas::CommandTypes::RemoveMaterialInstances> {
+    using data_type = std::vector<ResourceId>;
+  };
+  template <>
+  struct DataSelector<android_xr::schemas::CommandTypes::RemoveTextures> {
+    using data_type = std::vector<ResourceId>;
+  };
+  template <>
+  struct DataSelector<android_xr::schemas::CommandTypes::AddNodes> {
+    using data_type = EntitySet;
+  };
+  template <>
+  struct DataSelector<android_xr::schemas::CommandTypes::RemoveNodes> {
+    using data_type = EntitySet;
+  };
+  template <>
+  struct DataSelector<android_xr::schemas::CommandTypes::UpdateNodes> {
+    using data_type = EntityMap<UpdateNodeInfo>;
+  };
+  template <>
+  struct DataSelector<android_xr::schemas::CommandTypes::AssignUserIdToNodes> {
+    using data_type = EntityMap<uint32_t>;
+  };
+  template <>
+  struct DataSelector<android_xr::schemas::CommandTypes::AddOrUpdateColliders> {
+    using data_type = EntityMap<AddOrUpdateColliderInfo>;
+  };
+  template <>
+  struct DataSelector<android_xr::schemas::CommandTypes::RemoveColliders> {
+    using data_type = EntityMap<android_xr::schemas::ColliderType>;
+  };
 
-  // Data for accumulating updates to materials over the course of a frame.
-  std::unordered_map<ResourceId, MaterialParameters> material_params_;
-  std::vector<flatbuffers::Offset<
-      android_xr::schemas::BuiltInMaterialInstanceParameters>>
-      built_in_material_parameters_;
-  std::unordered_map<ResourceId, ResourceId> material_instances_to_duplicate_;
+  template <android_xr::schemas::CommandTypes CommandT>
+  struct Batch : public CommandBatchBase {
+    using T = typename DataSelector<CommandT>::data_type;
 
-  // A list of textures to remove this frame. Note: there is no list of textures
-  // to add because textures are serialized via individual one-off, custom-sized
-  // memory regions. This is done because large assets like textures may exceed
-  // our standard arena size for normal serialized command data.
-  std::vector<ResourceId> textures_to_remove_;
+   public:
+    Batch(int i) : CommandBatchBase(CommandT, i) {}
+    void Serialize(flatbuffers::FlatBufferBuilder& fbb) override;
+    T data;
+  };
 
-  // Node requests for this frame.
-  EntitySet add_nodes_;
-  EntityMap<UpdateNodeInfo> node_updates_;
-  EntitySet remove_nodes_;
-  EntityMap<uint32_t> user_id_assignments_;
+  // Returns the FlatBufferBuilderPtr for the given batch.
+  // If there is no current builder, a new one will be created.
+  // TODO: (broken link) - Use OwnedPtr and BorrowedPtr for CommandBatchBase when
+  // they support implicit upcast and static_cast.
+  flatbuffers::FlatBufferBuilder* /*absl_nonnull*/ GetFlatBufferBuilderFor(
+      CommandBatchBase& batch);
 
-  // Renderable requests for this frame.
-  FlatBufferBuilderPtr renderable_updates_builder_;
-  EntityMap<AddRenderableInfo> add_renderables_;
-  EntityMap<UpdateRenderableInfo> renderable_updates_;
-  EntitySet remove_renderables_;
+  // Note: In the best case scenario we would only create a flatbuffer builder
+  // when we want to send a message to the bridge, in which case we could work
+  // with a local variable instead of storing it. However, since some commands
+  // (like SetMaterialParameters) store their data as a flatbuffer, we have to
+  // create the builder when the command is first called, and store it until the
+  // message is sent.
+  // We do not store the builder as part of the Batch class to emphasize that
+  // the Batch data should be independent of the builder.
+  // The batch pointers are owned by batch_queue_.
+  absl::flat_hash_map<CommandBatchBase* /*absl_nonnull*/,
+                      /*absl_nonnull*/ FlatBufferBuilderPtr>
+      fbb_;
 
-  // Collider requests for this frame.
-  EntityMap<AddOrUpdateColliderInfo> collider_add_or_updates_;
-  EntityMap<android_xr::schemas::ColliderType> collider_removals_;
+  // Stores batches of commands in the order they were created. This ensures
+  // that commands are executed in the general order intended by the app.
+  // NOTE: In theory, we don't need to execute commands in the order they came
+  // in, as long as we run commands affecting the same dependency in the correct
+  // order. However, running commands in this order appears more correct.
+  std::queue</*absl_nonnull*/ std::unique_ptr<CommandBatchBase>> batch_queue_;
 
-  // ImageBasedLightingAsset requests for this frame.
-  std::vector<uint64_t> image_based_lighting_assets_to_remove_;
+  // Queue of batches that are executed at the end of the frame. This is used
+  // for removing resources, as it is unsafe to remove resources while they are
+  // potentially still in use.
+  enum class RemoveResourceChannel : uint8_t {
+    kMesh = 0,
+    kMaterialInstance = 1,
+    kMaterial = 2,
+    kTexture = 3,
+    kCount = 4,
+  };
+  static constexpr size_t kRemoveResourceChannelCount =
+      static_cast<size_t>(RemoveResourceChannel::kCount);
+  std::array<std::unique_ptr<CommandBatchBase>, kRemoveResourceChannelCount>
+      end_of_frame_batches_;
 
-  // Preferred environment IBL asset request for this frame.
-  std::optional<EnvironmentLightParams> preferred_environment_ibl_asset_id_;
+  // This data structure allows for quick lookup of batches by type.
+  absl::flat_hash_map<android_xr::schemas::CommandTypes,
+                      std::vector<CommandBatchBase* /*absl_nonnull*/>>
+      batches_;
 
-  // Morph target buffer ids to remove for this frame.
-  std::vector<uint64_t> morph_target_buffers_to_remove_;
-  // Vertex buffer ids to remove for this frame.
-  std::vector<uint64_t> vertex_buffers_to_remove_;
-  // Index buffer ids to remove for this frame.
-  std::vector<uint64_t> index_buffers_to_remove_;
+  // Stores the index of the last batch that affected a given entity.
+  // This is used to ensure the order of dependent commands.
+  EntityMap<int /*batch_index*/> last_batch_idx_affecting_entity_;
 
-  void SerializeRemoveImageBasedLightingAssets(
-      std::vector<FlatBufferBuilderPtr>& command_queue);
-  void SerializeSetPreferredEnvironmentIblAsset(
-      std::vector<FlatBufferBuilderPtr>& command_queue);
-  void SerializeAddMaterials(std::vector<FlatBufferBuilderPtr>& command_queue);
-  void SerializeRemoveMaterials(
-      std::vector<FlatBufferBuilderPtr>& command_queue);
-  void SerializeAddMaterialInstances(
-      std::vector<FlatBufferBuilderPtr>& command_queue);
-  void SerializeRemoveMaterialInstances(
-      std::vector<FlatBufferBuilderPtr>& command_queue);
-  void SerializeAddNodes(std::vector<FlatBufferBuilderPtr>& command_queue);
-  void SerializeRemoveNodes(std::vector<FlatBufferBuilderPtr>& command_queue);
-  void SerializeAssignUserIdToNodes(
-      std::vector<FlatBufferBuilderPtr>& command_queue);
-  void SerializeUpdateNodes(std::vector<FlatBufferBuilderPtr>& command_queue);
-  void SerializeRemoveRenderables(
-      std::vector<FlatBufferBuilderPtr>& command_queue);
-  void SerializeAddRenderables(
-      std::vector<FlatBufferBuilderPtr>& command_queue);
-  void SerializeUpdateRenderables(
-      std::vector<FlatBufferBuilderPtr>& command_queue);
-  void SerializeRemoveTextures(
-      std::vector<FlatBufferBuilderPtr>& command_queue);
-  void SerializeAddOrUpdateColliders(
-      std::vector<FlatBufferBuilderPtr>& command_queue);
-  void SerializeRemoveColliders(
-      std::vector<FlatBufferBuilderPtr>& command_queue);
-  void SerializeRemoveMorphTargetBuffers(
-      std::vector<FlatBufferBuilderPtr>& command_queue);
-  void SerializeRemoveMeshData(
-      std::vector<FlatBufferBuilderPtr>& command_queue);
-  // When all commands have been serialized, this method will send the commands
-  // to the SplitEngineRenderer and assert if any data structure is not empty.
-  void SendCommandQueue(std::vector<FlatBufferBuilderPtr>& command_queue);
+  // We need to store resource IDs separately, because they do not use the same
+  // ID system as entities. While ID collisions do not break our algorithm, they
+  // do lead to the creation of more batches than necessary.
+  absl::flat_hash_map<ResourceId, int /*batch_index*/>
+      last_batch_idx_affecting_resource_;
+
+  // When a command is added to a batch, we use this helper method to store that
+  // this is the last batch that affected the given entities and resources.
+  void StoreAffectedDependenciesBatchIdx(
+      const std::vector<utils::Entity>& entity_dependencies,
+      const std::vector<ResourceId>& resource_dependencies, int batch_idx);
+
+  // Returns the first batch of the given type that runs after the last batch
+  // that affected the given dependencies. Returns nullptr if no such batch
+  // exists.
+  CommandBatchBase* /*absl_nullable*/ FindBatch(
+      android_xr::schemas::CommandTypes command,
+      const std::vector<utils::Entity>& entity_dependencies = {},
+      const std::vector<ResourceId>& resource_dependencies = {});
+
+  // Adds the given batch to the queue and returns a pointer to it.
+  CommandBatchBase* /*absl_nonnull*/ AddBatch(
+      /*absl_nonnull*/ std::unique_ptr<CommandBatchBase> batch,
+      const std::vector<utils::Entity>& entity_dependencies = {},
+      const std::vector<ResourceId>& resource_dependencies = {});
+
+  // Returns either an existing batch that keeps dependent commands in order, or
+  // a new batch if no such batch exists.
+  template <android_xr::schemas::CommandTypes CommandT>
+  Batch<CommandT>& GetOrCreateBatch(
+      const std::vector<utils::Entity>& entity_dependencies = {},
+      const std::vector<ResourceId>& resource_dependencies = {});
+
+  // Returns a batch for the given command type.
+  template <android_xr::schemas::CommandTypes CommandT>
+  Batch<CommandT>& GetOrCreateEndOfFrameBatch(RemoveResourceChannel channel);
+
+  // Sends a Flatbuffer for the given batch to the bridge.
+  void SendMessage(CommandBatchBase* /*absl_nonnull*/ batch_base);
+
+  // Sends all batches in the queue to the bridge and cleans up.
+  void SendAllBatches();
 };
 
 }  // namespace imp::split_engine

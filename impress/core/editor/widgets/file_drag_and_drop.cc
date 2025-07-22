@@ -19,16 +19,17 @@
 #include <utility>
 
 #include "core/common/log.h"
-#include "absl/strings/cord.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
 #include "dear_imgui/imgui_internal.h"
 #include "filament/libs/math/include/math/TVecHelpers.h"
-#include "core/common/platform_helpers.h"
+#include "core/common/registry.h"
 #include "core/config.h"
 #include "core/editor/editor_utils.h"
 #include "core/editor/file_loader_helper.h"
+#include "core/editor/file_type_loader.h"
+#include "core/editor/file_type_registry.h"
 #include "core/editor/ui/drag_and_drop.h"
 #include "core/math/math.h"
 #include "core/math/quat.h"
@@ -43,7 +44,7 @@
 namespace imp::editor {
 
 namespace {
-
+// Load a node from file and places the node at the cursor location.
 void LoadFileAtCursor(BaseView& view, absl::string_view filename,
                       LoadFileSource source,
                       std::optional<float2> cursor = std::nullopt) {
@@ -59,8 +60,8 @@ void LoadFileAtCursor(BaseView& view, absl::string_view filename,
 
   LoadFile(view, filename, std::move(source), [hit](NodeHandle scene) {
     if (hit.has_value()) {
-      // Place the scene at the orientation and position of the cursor hit
-      // location.
+      // Place the scene at the orientation and
+      // position of the cursor hit location.
       float3 target_center = hit->world_point;
       scene->SetWorldPosition(target_center);
     }
@@ -73,34 +74,33 @@ FileDragAndDrop::FileDragAndDrop(BaseView& view) : view_(view) {
 #if IMP_PLATFORM(DESKTOP) || IMP_PLATFORM(WASM)
   // Handle drag-and-drop from the OS using the SDL DropFileEvent. This code
   // path does not handle ImGui-based drag-and-drop. See below for that path.
+
   view_.GetDispatcher().Connect(
       [this](const DropFileEvent& drop_file_event) {
-        FileType file_type = GetFileTypeFromName(drop_file_event.filename);
-        switch (file_type) {
-          case FileType::kGltf:
-          case FileType::kIsf:
-          case FileType::kIsfJson:
-          case FileType::kIsfTextproto:
-          case FileType::kHdrImage:
-          case FileType::kGSplat:
-            // Note: when dropping from the OS, the cursor location is often
-            // incorrect since the Impress app may not have focus. By default,
-            // LoadFileAtCursor will use the screen center as the "cursor"
-            // location in this case.
-            LoadFileAtCursor(
-                view_, drop_file_event.filename,
-                drop_file_event.data.has_value()
-                    ? LoadFileSource(std::move(*drop_file_event.data))
-                    : LoadFileFromPathSource::kLocalFile);
-            break;
-          case FileType::kTexture:
-            pending_drag_and_drop_payload_ = std::make_pair(
-                DragAndDropType::kTexture,
-                absl::StrCat("file://", drop_file_event.filename));
-            break;
-          default:
-            IMP_LOG(imp::ERROR) << "Unsupported file dropped: "
-                       << drop_file_event.filename;
+        FileTypeRegistry& file_type_registry =
+            view_.GetRegistry().GetOrCreate<FileTypeRegistry>();
+
+        FileTypeLoader* file_type_loader =
+            file_type_registry.GetFileTypeLoaderByPath(
+                drop_file_event.filename);
+
+        if (kFileTypeTexture.PathMatchesFileType(drop_file_event.filename)) {
+          pending_drag_and_drop_payload_ =
+              std::make_pair(DragAndDropType::kTexture,
+                             absl::StrCat("file://", drop_file_event.filename));
+        } else if (file_type_loader != nullptr) {
+          // Note: when dropping from the OS, the cursor location is often
+          // incorrect since the Impress app may not have focus. By default,
+          // LoadFileAtCursor will use the screen center as the "cursor"
+          // location in this case.
+          LoadFileAtCursor(
+              view_, drop_file_event.filename,
+              drop_file_event.data.has_value()
+                  ? LoadFileSource(std::move(*drop_file_event.data))
+                  : LoadFileFromPathSource::kLocalFile);
+        } else {
+          IMP_LOG(imp::ERROR) << "Unsupported file dropped: "
+                     << drop_file_event.filename;
         }
       },
       this);

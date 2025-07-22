@@ -41,6 +41,15 @@ jobject CreateJavaQuaternion(JNIEnv* env, const XrQuaternionf& xr_quaternion);
 // Returns a JVM object of type `androidx.xr.math.Pose` from an `XrPosef`.
 jobject CreateJavaPose(JNIEnv* env, const XrPosef& xr_pose);
 
+// Returns a JVM object of type `androidx.xr.runtime.FieldOfView` from an
+// `XrFovf`.
+jobject CreateJavaFieldOfView(JNIEnv* env, const XrFovf& fov);
+
+// Returns a JVM object array of type `androidx.xr.openxr.ViewCameraState` from
+// an `XrView*` and `uint32_t` array count.
+jobjectArray CreateJavaViewCameraStates(JNIEnv* env, uint32_t view_count,
+                                       XrView* views);
+
 // Returns a JVM object of type `androidx.xr.openxr.PlaneState` from an
 // `XrTrackablePlaneANDROID`.
 jobject CreateJavaPlaneState(JNIEnv* env,
@@ -55,6 +64,11 @@ jobject CreateJavaPlaneLabel(JNIEnv* env,
 // `XrVector2f*` and `uint32_t` array count.
 jobjectArray CreateJavaPlaneVertices(JNIEnv* env, uint32_t vertex_count,
                                      const XrVector2f* vertices);
+
+// Returns a JVM object of type `androidx.xr.openxr.AugmentedObjectState` from
+// an `XrTrackableObjectANDROID`.
+jobject CreateJavaAugmentedObjectState(JNIEnv* env,
+                                     const XrTrackableObjectANDROID& xr_object);
 
 // Returns a JVM object of type `androidx.xr.openxr.AnchorState` from an
 // `XrSpaceLocation`.
@@ -73,6 +87,22 @@ jobject CreateJavaAnchorPersistenceState(
 
 // Returns a JVM object of type `long` from an `XrSpace`.
 jlong CreateJavaAnchorHandle(XrSpace xr_space);
+
+// Returns a JVM object of type `androidx.xr.runtime.openxr.FaceState` from an
+// `XrFaceStateANDROID`.
+jobject CreateJavaFaceState(JNIEnv* env, const XrFaceStateANDROID& xr_face);
+
+// Returns a JVM object of type `androidx.xr.runtime.TrackingState` from an
+// `XrFaceTrackingStateANDROID`.
+jobject CreateJavaTrackingState(
+    JNIEnv* env, const XrFaceTrackingStateANDROID& xr_face_tracking_state);
+
+// Returns a JVM object of type `androidx.xr.math.IntSize2d` from two `int`s.
+jobject CreateJavaIntSize2d(JNIEnv* env, int width, int height);
+
+// Returns a JVM object of type `androidx.xr.runtime.math.FloatSize3d` from
+// an `XrExtent3Df`.
+jobject CreateJavaFloatSize3d(JNIEnv* env, const XrExtent3Df& xr_extent);
 
 }  // namespace androidx::xr::openxr
 

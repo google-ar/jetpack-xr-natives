@@ -41,6 +41,9 @@ btVector3 ToBtVector3(const float3& vec);
 // Convert a Bullet transformation to Impress transformation.
 Transform<float> ToTransform(const btTransform& bt_trans);
 
+// Convert a Bullet vector to Impress vector.
+float3 ToFloat3(const btVector3& vec);
+
 // Convert a Impress transformation to Bullet transformation.
 btTransform ToBtTransform(const float3& translation, const quatf& rotation);
 

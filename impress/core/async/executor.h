@@ -154,6 +154,10 @@ class Executor {
   // next explicit pump/drain.
   virtual bool HasPendingTasks() { return false; }
 
+  // Returns the number of pending tasks waiting to be executed at the
+  // next explicit pump/drain.
+  virtual int GetPendingTaskCount() { return -1; }
+
   // Gets the executor described by type.
   // If no executor is set for the type, nullptr is returned.
   //

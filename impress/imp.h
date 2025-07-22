@@ -78,6 +78,7 @@
 #include "core/render/image_asset.h"
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
+#include "core/render/texture_options.h"
 #include "core/render/texture_registry.h"
 #include "core/resources/resource_definition.h"
 #include "core/scene_handles/scene_handle_status_utils.h"

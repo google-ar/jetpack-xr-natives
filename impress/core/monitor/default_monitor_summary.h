@@ -18,10 +18,8 @@
 #define THIRD_PARTY_IMPRESS_CORE_MONITOR_DEFAULT_MONITOR_SUMMARY_H_
 
 #include <cstdint>
-#include <memory>
 #include <optional>
 
-#include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "core/monitor/monitor.h"
@@ -67,9 +65,9 @@ class DefaultMonitorSummary
 
   // The number of frames between outputting the summary to log.
   // If 0 the summary will not be output.
-  int64_t FramesBetweenLogging() const { return frames_between_output_; }
-  void SetFramesBetweenLogging(int64_t frames_between_output) {
-    frames_between_output_ = frames_between_output;
+  int64_t FramesBetweenLogging() const { return frames_between_logging_; }
+  void SetFramesBetweenLogging(int64_t frames_between_logging) {
+    frames_between_logging_ = frames_between_logging;
   }
 
   // Adds a summary of frames past the deadline.
@@ -79,15 +77,22 @@ class DefaultMonitorSummary
   void SetDisplayPeriod(absl::Duration maximum_display_period,
                         absl::string_view histogram_name);
 
+  // Returns the expected FPS. This is used to report "slow frames".
   absl::Duration GetDisplayPeriod() const { return display_period_; }
 
  private:
   BaseView& view_;
   Monitor& monitor_;
   MonitorSummary summary_;
-  int64_t frames_between_output_ = 3000;
-  int64_t frames_between_sampling_ = 90;
+  int64_t frames_between_logging_ = 3000;
+  // Drives the frequency the value measurements are updated.
+  // These values are counts of assets and buffers which change
+  // slowly if at all.
+  int64_t frames_between_updating_measurements_ = 90;
+  // Expected FPS, used to report "slow frames".
   absl::Duration display_period_;
+  // Uses a histogram to reports the percent of frames slower than the
+  // display_period_.
   std::optional<MonitorSummary::CustomMetricHandle> display_period_metric_;
   ValueMeasurement bufferObjectCount_;
   ValueMeasurement viewCount_;
@@ -105,6 +110,18 @@ class DefaultMonitorSummary
   ValueMeasurement skyboxCount_;
   ValueMeasurement colorGradingCount_;
   ValueMeasurement renderTargetCount_;
+  ValueMeasurement mediaAssetsResident_;
+  ValueMeasurement mediaAssetsDestroyed_;
+  ValueMeasurement mediaAssetsCancelled_;
+  ValueMeasurement materialAssetsResident_;
+  ValueMeasurement materialAssetsDestroyed_;
+  ValueMeasurement materialAssetsCancelled_;
+  ValueMeasurement imageAssetsResident_;
+  ValueMeasurement imageAssetsDestroyed_;
+  ValueMeasurement imageAssetsCancelled_;
+  ValueMeasurement gltfAssetsResident_;
+  ValueMeasurement gltfAssetsDestroyed_;
+  ValueMeasurement gltfAssetsCancelled_;
 };
 }  // namespace imp
 

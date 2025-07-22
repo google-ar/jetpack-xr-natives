@@ -23,6 +23,7 @@
 #include "core/canvas/fonts/android_font_font_holder.h"
 #include "core/canvas/fonts/font_holder.h"
 #include "core/canvas/scoped_canvas.h"
+#include "core/common/jni_helpers.h"
 #include "core/math/vec.h"
 #include "core/view/platforms/android/wrappers/font.h"
 #include "core/view/platforms/android/wrappers/graphics_helpers.h"
@@ -63,8 +64,7 @@ AndroidGlyphSource::AndroidGlyphSource(const Context& context, Method method)
     LOG_MISSING_DEPENDENCY_MESSAGE(ERROR);
     return;
   }
-  class_ =
-      AddJniInfo(static_cast<jclass>(env->NewGlobalRef(local_class_ref.get())));
+  class_ = AddJniInfo(LocalToGlobalRef(std::move(local_class_ref)).release());
   class_path_ = class_path;
 
   jmethodID init =
@@ -76,7 +76,7 @@ AndroidGlyphSource::AndroidGlyphSource(const Context& context, Method method)
     MethodWrapper method_wrapper(context.GetJniEnv());
     JniUniquePtr<jobject> local_self_ref = WrapJni(
         env, env->NewObject(Clazz(), init, method_wrapper.GetEnum(method)));
-    SetSelf(env->NewGlobalRef(local_self_ref.get()));
+    SetSelf(LocalToGlobalRef(std::move(local_self_ref)));
   }
 
   get_glyph_metrics_ =

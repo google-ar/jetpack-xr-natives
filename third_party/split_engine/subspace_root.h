@@ -75,13 +75,13 @@ class SubspaceRoot : public imp::Rememberer {
   // Updates the transform of the Subspace root node.
   absl::Status UpdateSubspaceTransform(const imp::mat4f& transform);
 
-  // Returns the transform from world space to task space.
-  imp::mat4f GetTaskFromWorldTransform() {
+  // Returns the transform from world space to subspace.
+  imp::mat4f GetSubspaceFromWorldTransform() {
     return filament::math::details::matrix::inverse(root_transform_);
   }
 
-  // Returns the transform from task space to world space.
-  imp::mat4f GetWorldFromTaskTransform() { return root_transform_; }
+  // Returns the transform from subspace to world space.
+  imp::mat4f GetWorldFromSubspaceTransform() { return root_transform_; }
 
  private:
   imp::BaseView& view_;

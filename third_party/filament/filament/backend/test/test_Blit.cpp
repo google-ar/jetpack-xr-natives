@@ -19,6 +19,8 @@
 #include "ImageExpectations.h"
 #include "Lifetimes.h"
 #include "Shader.h"
+#include "SharedShaders.h"
+#include "Skip.h"
 #include "TrianglePrimitive.h"
 
 #include "filament/libs/utils/include/utils/Hash.h"
@@ -40,47 +42,13 @@ using namespace filament::backend;
 using namespace filament::math;
 using namespace utils;
 
-struct MaterialParams {
-    float4 color;
-    float4 scale;
-};
-
 class BlitTest : public BackendTest {
 public:
     BlitTest() : mCleanup(getDriverApi()) {}
 
 protected:
-    Shader createShader();
-
     Cleanup mCleanup;
 };
-
-static const char* const triangleVs = R"(#version 450 core
-layout(location = 0) in vec4 mesh_position;
-layout(binding = 0, set = 1) uniform Params { highp vec4 color; highp vec4 scale; } params;
-void main() {
-    gl_Position = vec4((mesh_position.xy + 0.5) * params.scale.xy, params.scale.z, 1.0);
-#if defined(TARGET_VULKAN_ENVIRONMENT)
-    // In Vulkan, clip space is Y-down. In OpenGL and Metal, clip space is Y-up.
-    gl_Position.y = -gl_Position.y;
-#endif
-})";
-
-static const char* const triangleFs = R"(#version 450 core
-precision mediump int; precision highp float;
-layout(location = 0) out vec4 fragColor;
-layout(binding = 0, set = 1) uniform Params { highp vec4 color; highp vec4 scale; } params;
-void main() {
-    fragColor = params.color;
-})";
-
-Shader BlitTest::createShader() {
-    return Shader(getDriverApi(), mCleanup, ShaderConfig{
-            .vertexShader = triangleVs,
-            .fragmentShader = triangleFs,
-            .uniformNames = { "Params" },
-    });
-}
 
 static uint32_t toUintColor(float4 color) {
     color = saturate(color);
@@ -230,16 +198,10 @@ TEST_F(BlitTest, ColorMagnify) {
     }
 
     {
-        ImageExpectations expectations(api);
-
-        {
-            RenderFrame frame(api);
-            EXPECT_IMAGE(dstRenderTargets[0], expectations,
-                    ScreenshotParams(kDstTexWidth, kDstTexHeight, "ColorMagnify", 0x410bdd31));
-            api.commit(swapChain);
-        }
-
-        flushAndWait();
+        RenderFrame frame(api);
+        EXPECT_IMAGE(dstRenderTargets[0], getExpectations(),
+                ScreenshotParams(kDstTexWidth, kDstTexHeight, "ColorMagnify", 0x410bdd31));
+        api.commit(swapChain);
     }
 }
 
@@ -293,17 +255,13 @@ TEST_F(BlitTest, ColorMinify) {
             { 0, 0, kSrcTexWidth >> srcLevel, kSrcTexHeight >> srcLevel },
             SamplerMagFilter::LINEAR);
 
-    {
-        ImageExpectations expectations(api);
-
-        EXPECT_IMAGE(dstRenderTargets[0], expectations,
-                ScreenshotParams(kDstTexWidth, kDstTexHeight, "ColorMinify", 0xf3d9c53f));
-
-        flushAndWait();
-    }
+    EXPECT_IMAGE(dstRenderTargets[0], getExpectations(),
+            ScreenshotParams(kDstTexWidth, kDstTexHeight, "ColorMinify", 0xf3d9c53f));
 }
 
 TEST_F(BlitTest, ColorResolve) {
+    NONFATAL_FAIL_IF(SkipEnvironment(OperatingSystem::APPLE, Backend::VULKAN),
+            "Nothing is drawn, see (broken link)");
     auto& api = getDriverApi();
 
     constexpr int kSrcTexWidth = 256;
@@ -313,7 +271,11 @@ TEST_F(BlitTest, ColorResolve) {
     constexpr auto kColorTexFormat = TextureFormat::RGBA8;
     constexpr int kSampleCount = 4;
 
-    Shader shader = createShader();
+    Shader shader = SharedShaders::makeShader(api, mCleanup, ShaderRequest{
+            .mVertexType = VertexShaderType::Simple,
+            .mFragmentType = FragmentShaderType::SolidColored,
+            .mUniformType = ShaderUniformType::Simple,
+    });
 
     // Create a VertexBuffer, IndexBuffer, and RenderPrimitive.
     TrianglePrimitive const triangle(api);
@@ -340,36 +302,31 @@ TEST_F(BlitTest, ColorResolve) {
             {{ dstColorTexture }}, {}, {}));
 
     // Prep for rendering.
-    RenderPassParams params = {};
-    params.flags.clear = TargetBufferFlags::COLOR;
-    params.flags.discardStart = TargetBufferFlags::ALL;
-    params.flags.discardEnd = TargetBufferFlags::NONE;
-    params.clearColor = float4(1, 1, 0, 1);
+    PipelineState state = getColorWritePipelineState();
+    shader.addProgramToPipelineState(state);
+
+    RenderPassParams params = getClearColorRenderPass();
     params.viewport.width = kSrcTexWidth;
     params.viewport.height = kSrcTexHeight;
 
-    PipelineState state = {};
-    state.program = shader.getProgram();
-    state.pipelineLayout.setLayout[1] = { shader.getDescriptorSetLayout() };
-    state.rasterState.colorWrite = true;
-    state.rasterState.depthWrite = false;
-    state.rasterState.depthFunc = RasterState::DepthFunc::A;
-    state.rasterState.culling = CullingMode::NONE;
-
-    auto ubuffer = mCleanup.add(api.createBufferObject(sizeof(MaterialParams),
+    auto ubuffer = mCleanup.add(api.createBufferObject(sizeof(SimpleMaterialParams),
             BufferObjectBinding::UNIFORM, BufferUsage::STATIC));
     // Draw red triangle into srcRenderTarget.
-    shader.uploadUniform(api, ubuffer, MaterialParams{
-            .color = float4(1, 0, 0, 1),
-            .scale = float4(1, 1, 0.5, 0),
+    shader.uploadUniform(api, ubuffer, SimpleMaterialParams{
+        .color = float4(1, 0, 0, 1),
+        .scaleMinusOne = float4(0, 0, -0.5, 0),
+        .offset = float4(0.5, 0.5, 0, 0),
     });
-    shader.bindUniform<MaterialParams>(api, ubuffer);
+    shader.bindUniform<SimpleMaterialParams>(api, ubuffer);
 
-    // FIXME: on Metal this triangle is not drawn. Can't understand why.
     {
         RenderFrame frame(api);
         api.beginRenderPass(srcRenderTarget, params);
-        api.draw(state, triangle.getRenderPrimitive(), 0, 3, 1);
+        state.primitiveType = PrimitiveType::TRIANGLES;
+        state.vertexBufferInfo = triangle.getVertexBufferInfo();
+        api.bindPipeline(state);
+        api.bindRenderPrimitive(triangle.getRenderPrimitive());
+        api.draw2(0, 3, 1);
         api.endRenderPass();
     }
 
@@ -379,14 +336,8 @@ TEST_F(BlitTest, ColorResolve) {
             srcRenderTarget, { 0, 0, kSrcTexWidth, kSrcTexHeight },
             SamplerMagFilter::NEAREST);
 
-    {
-        ImageExpectations expectations(api);
-
-        EXPECT_IMAGE(dstRenderTarget, expectations,
-                ScreenshotParams(kDstTexWidth, kDstTexHeight, "ColorResolve", 0xebfac2ef));
-
-        flushAndWait();
-    }
+    EXPECT_IMAGE(dstRenderTarget, getExpectations(),
+            ScreenshotParams(kDstTexWidth, kDstTexHeight, "ColorResolve", 531759687));
 }
 
 TEST_F(BlitTest, Blit2DTextureArray) {
@@ -451,17 +402,11 @@ TEST_F(BlitTest, Blit2DTextureArray) {
     }
 
     {
-        ImageExpectations expectations(api);
-
-        {
-            RenderFrame frame(api);
-            EXPECT_IMAGE(dstRenderTarget, expectations,
-                    ScreenshotParams(kDstTexWidth, kDstTexHeight, "Blit2DTextureArray",
-                            0x8de7d55b));
-            api.commit(swapChain);
-        }
-
-        flushAndWait();
+        RenderFrame frame(api);
+        EXPECT_IMAGE(dstRenderTarget, getExpectations(),
+                ScreenshotParams(kDstTexWidth, kDstTexHeight, "Blit2DTextureArray",
+                        0x8de7d55b));
+        api.commit(swapChain);
     }
 }
 
@@ -531,30 +476,25 @@ TEST_F(BlitTest, BlitRegion) {
     }
 
     {
-        ImageExpectations expectations(api);
-
-        {
-            RenderFrame frame(api);
-            // TODO: for some reason, this test has very, very slight (as in one pixel) differences
-            // between OpenGL and Metal. So disable golden checking for now.
-            // EXPECT_IMAGE(dstRenderTarget, expectations, ScreenshotParams(kDstTexWidth,
-            //         kDstTexHeight, "BlitRegion", 0x74fa34ed));
-            api.commit(swapChain);
-        }
-
-        flushAndWait();
+        RenderFrame frame(api);
+        // TODO: for some reason, this test has very, very slight (as in one pixel) differences
+        // between OpenGL and Metal. So disable golden checking for now.
+        // EXPECT_IMAGE(dstRenderTarget, expectations, ScreenshotParams(kDstTexWidth,
+        //         kDstTexHeight, "BlitRegion", 0x74fa34ed));
+        api.commit(swapChain);
     }
 }
 
 TEST_F(BlitTest, BlitRegionToSwapChain) {
+    FAIL_IF(Backend::VULKAN, "Crashes due to not finding color attachment, see (broken link)");
     auto& api = getDriverApi();
     mCleanup.addPostCall([&]() { executeCommands(); });
 
     constexpr int kSrcTexWidth = 1024;
     constexpr int kSrcTexHeight = 1024;
     constexpr auto kSrcTexFormat = TextureFormat::RGBA8;
-    constexpr int kDstTexWidth = 512;
-    constexpr int kDstTexHeight = 512;
+    const uint32_t kDstTexWidth = screenWidth();
+    const uint32_t kDstTexHeight = screenHeight();
     constexpr int kNumLevels = 3;
 
     // Create a SwapChain and make it current.
@@ -595,25 +535,19 @@ TEST_F(BlitTest, BlitRegionToSwapChain) {
     };
 
     {
-        ImageExpectations expectations(api);
-        {
-            {
-                RenderFrame frame(api);
+        RenderFrame frame(api);
 
-                api.blitDEPRECATED(TargetBufferFlags::COLOR0, dstRenderTarget,
-                        dstRect, srcRenderTargets[srcLevel],
-                        srcRect, SamplerMagFilter::LINEAR);
+        api.blitDEPRECATED(TargetBufferFlags::COLOR0, dstRenderTarget,
+                dstRect, srcRenderTargets[srcLevel],
+                srcRect, SamplerMagFilter::LINEAR);
 
-                api.commit(swapChain);
-            }
-
-            // TODO: for some reason, this test has been disabled. It needs to be tested on all
-            // machines.
-            // EXPECT_IMAGE(dstRenderTarget, expectations,
-            //         ScreenshotParams(kDstTexWidth, kDstTexHeight, "BlitRegionToSwapChain", 0x0));
-        }
-        flushAndWait();
+        api.commit(swapChain);
     }
+
+    // TODO: for some reason, this test has been disabled. It needs to be tested on all
+    // machines.
+    // EXPECT_IMAGE(dstRenderTarget, expectations,
+    //         ScreenshotParams(kDstTexWidth, kDstTexHeight, "BlitRegionToSwapChain", 0x0));
 }
 
 } // namespace test

@@ -41,6 +41,38 @@ class FlatbufferArenaAllocator : public flatbuffers::Allocator {
   using LowLevelAllocFunc = void* (*)(size_t size, void* user);
   using LowLevelDeallocFunc = void (*)(void* ptr, void* user);
 
+  enum class GrowthStrategy : uint8_t {
+    // The first block is allocated either via operator new or via the
+    // first_block_alloc function if provided. The first block allocated will be
+    // the only block allocated. Attempting to allocate memory beyond the first
+    // block will result in a CHECK failure.
+    kDontGrowBeyondFirstBlock,
+
+    // The first block is allocated either via operator new or via the
+    // first_block_alloc function if provided. If more memory is needed,
+    // subsequent blocks are allocated via operator new.
+    kUnlimitedGrowth,
+  };
+
+  struct MemoryOptions {
+    // If set, the first block will be allocated via this function instead of
+    // operator new. Allocation of consequent blocks is managed by
+    // `growth_strategy`.
+    LowLevelAllocFunc first_block_alloc = nullptr;
+    // If set, the first block will be deallocated via this function instead of
+    // operator delete.
+    LowLevelDeallocFunc first_block_dealloc = nullptr;
+
+    // User data to be passed to the alloc and dealloc functions.
+    void* user = nullptr;
+
+    // The memory allocation mode for subsequent blocks.
+    GrowthStrategy growth_strategy = GrowthStrategy::kDontGrowBeyondFirstBlock;
+
+    bool operator==(const MemoryOptions& other) const = default;
+    bool operator!=(const MemoryOptions& other) const = default;
+  };
+
   // Allocates a new memory arena. All subsequent calls to allocate() will
   // allocate within this arena.
   // By default, the memory blocks backing the arena are ultimately allocated
@@ -50,18 +82,29 @@ class FlatbufferArenaAllocator : public flatbuffers::Allocator {
   // the latter in DestroyArena (if allow_recycle=false), or when this
   // FlatbufferArenaAllocator object is destructed, whichever comes first.
   // Three important points to note:
-  // 1. This applies to the first block only. If the arena grows to more than
-  //    one block, i.e. if the amount of memory allocated is larger than
+  // 1. This applies to the first block only. If
+  //    `GrowthStrategy::kUnlimitedGrowth` is used and the arena grows to more
+  //    than one block, i.e. if the amount of memory allocated is larger than
   //    block_size, then subsequent blocks will still use operator new.
+  //
+  //    If `GrowthStrategy::kDontGrowBeyondFirstBlock` is used, then attempt to
+  //    allocate memory beyond the `block_size` will result in CHECK failure
+  //
   // 2. If first_block_alloc is provided, then that block (and only that block)
   //    is fully owned by the caller and is never deallocated by this class.
   //    See `allow_recycle` in the DestroyArena function documentation.
+  //
   // 3. The first_block_alloc function might not necessarily be called, if an
   //    appropriate recycled arena is found instead.
-  ArenaHandle CreateArena(size_t block_size,
-                          LowLevelAllocFunc first_block_alloc = nullptr,
-                          LowLevelDeallocFunc first_block_dealloc = nullptr,
-                          void* user = nullptr);
+  ArenaHandle CreateArena(size_t block_size, MemoryOptions memory_options);
+
+  // Creates an arena with default memory options.
+  //
+  // Workaround for https://github.com/llvm/llvm-project/issues/36032
+  //
+  // Cannot use '= {}' in previous declaration: it will cause a compiler error
+  // produced by Clang bug.
+  ArenaHandle CreateArena(size_t block_size);
 
   // Deallocates a memory arena. It is the caller's responsibility to ensure
   // that no memory allocated from within this arena is still alive after this
@@ -113,8 +156,7 @@ class FlatbufferArenaAllocator : public flatbuffers::Allocator {
  private:
   class ArenaAndAllocFunc {
    public:
-    ArenaAndAllocFunc(size_t block_size, LowLevelAllocFunc first_block_alloc,
-                      LowLevelDeallocFunc first_block_dealloc, void* user);
+    ArenaAndAllocFunc(size_t block_size, MemoryOptions memory_options);
     ~ArenaAndAllocFunc();
     ArenaAndAllocFunc(ArenaAndAllocFunc&& other);
     ArenaAndAllocFunc& operator=(ArenaAndAllocFunc&& other);
@@ -122,8 +164,7 @@ class FlatbufferArenaAllocator : public flatbuffers::Allocator {
     zetasql_base::UnsafeArena* Get() { return arena_.get(); }
 
     // Checks if this arena is eligible to be reused.
-    bool IsMatch(size_t block_size, LowLevelAllocFunc first_block_alloc,
-                 LowLevelDeallocFunc first_block_dealloc, void* user);
+    bool IsMatch(size_t block_size, const MemoryOptions& memory_options);
 
     // Mark the arena as being used.
     void SetInUse();
@@ -137,14 +178,16 @@ class FlatbufferArenaAllocator : public flatbuffers::Allocator {
     void Clear();
 
     // AreanaHead is non-null of a non-null first_block_alloc was pass to ctor.
-    void* GetArenaHead() { return first_block_head_; }
+    void* GetArenaHead() const { return first_block_head_; }
+
+    GrowthStrategy GetGrowthStrategy() const {
+      return memory_options_.growth_strategy;
+    }
 
    private:
     std::unique_ptr<zetasql_base::UnsafeArena> arena_;
     void* first_block_head_;
-    LowLevelAllocFunc first_block_alloc_;
-    LowLevelDeallocFunc first_block_dealloc_;
-    void* user_;
+    MemoryOptions memory_options_;
     bool in_use_;
   };
 

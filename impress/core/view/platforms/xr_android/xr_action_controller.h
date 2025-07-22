@@ -26,7 +26,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "absl/types/optional.h"
+#include "core/actions/action_config.h"
 #include "core/actions/input_action_event.h"
 #include "core/math/transform.h"
 #include "core/view/base_view.h"
@@ -46,10 +46,10 @@ namespace imp {
 // OpenXR runtime. XrActionController will then send InputActionEvents,
 // containing the state of every XrAction, to the InputManager every frame.
 //
-// The default configuration is:
-//   - A single action set with name "app".
-//   - "pose", "grip", "menu", and "select" input actions.
-//   - Bindings for the above actions and the OpenXR Khronos Simple Controller.
+// The default configuration is a single action set and bindings for eye,
+// controller, hand controls and mouse. See
+// google3/third_party/impress/core/actions/action_config.h for canonical action
+// names.
 //
 // These default settings provide basic input and haptic support for
 // applications.

@@ -20,6 +20,7 @@
 #include <functional>
 #include <string>
 
+#include "absl/hash/hash.h"
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "core/common/hash.h"
 #include "core/ncsb/base_node.h"
@@ -90,7 +91,8 @@ class NodeHandle {
 
   template <typename H>
   friend H AbslHashValue(H hash, const NodeHandle& handle) {
-    return H::combine(std::move(hash), handle.node_.GetEntity().getId());
+    return H::combine(std::move(hash),
+                      absl::HashOf(handle.node_.GetEntity().getId()));
   }
 
   template <typename Sink>

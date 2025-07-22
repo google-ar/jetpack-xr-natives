@@ -65,42 +65,82 @@ class OpenXrManager {
   };
 
   // Enum representing the configuration state for the plane trackers.
-  enum class PlaneTrackingMode : uint8_t { kDisabled = 0x00, kEnabled = 0x01 };
+  enum class PlaneTrackingMode : uint8_t {
+    kDisabled = 0x00,
+    kHorizontalAndVertical = 0x01
+  };
 
   // Enum representing the configuration state for the hand trackers.
-  enum class HandTrackingMode : uint8_t { kDisabled = 0x00, kEnabled = 0x01 };
+  enum class HandTrackingMode : uint8_t { kDisabled = 0x00, kBoth = 0x01 };
+
+  // Enum representing the configuration state for hand tracking.
+  enum class HeadTrackingMode : uint8_t { kDisabled = 0x00, kLastKnown = 0x01 };
 
   // Enum representing the configuration state for depth estimation.
   enum class DepthEstimationMode : uint8_t {
     kDisabled = 0x00,
-    kEnabled = 0x01
+    kRawOnly = 0x01,
+    kSmoothOnly = 0x02,
+    kSmoothAndRaw = 0x03
   };
 
   // Enum representing the configuration state for anchor persistence.
   enum class AnchorPersistenceMode : uint8_t {
     kDisabled = 0x00,
-    kEnabled = 0x01
+    kLocal = 0x01
   };
 
-  // Enum representing the configuration state for hand tracking.
-  enum class HeadTrackingMode : uint8_t { kDisabled = 0x00, kEnabled = 0x01 };
+  // Enum representing the configuration state for face tracking.
+  enum class FaceTrackingMode : uint8_t { kDisabled = 0x00, kUser = 0x01 };
+
+  // Enum representing the calibration state for face tracking.
+  enum class FaceTrackingCalibrationState : uint8_t {
+    kUnknown = 0x00,
+    kServiceNotReady = 0x01,
+    kNotCalibrated = 0x02,
+    kCalibrated = 0x03,
+  };
+
+  enum class DepthImageBufferOrder : uint8_t {
+    kLeftEyeImage = 0x00,
+    kRightEyeImage = 0x01,
+    kLeftEyeConfidenceImage = 0x02,
+    kRightEyeConfidenceImage = 0x03
+  };
+
+  enum class ObjectTrackingMode : uint8_t { kDisabled = 0x00, kEnabled = 0x01 };
 
   // Struct that contains the configuration settings that can be set at runtime
   // by passing to ConfigureSession().
   struct ConfigSettings {
     PlaneTrackingMode plane_tracking_mode = PlaneTrackingMode::kDisabled;
     HandTrackingMode hand_tracking_mode = HandTrackingMode::kDisabled;
+    HeadTrackingMode head_tracking_mode = HeadTrackingMode::kDisabled;
     DepthEstimationMode depth_estimation_mode = DepthEstimationMode::kDisabled;
     AnchorPersistenceMode anchor_persistence_mode =
         AnchorPersistenceMode::kDisabled;
-    HeadTrackingMode head_tracking_mode = HeadTrackingMode::kDisabled;
+    FaceTrackingMode face_tracking_mode = FaceTrackingMode::kDisabled;
+    ObjectTrackingMode object_tracking_mode = ObjectTrackingMode::kDisabled;
+    std::vector<XrObjectLabelANDROID> object_tracking_labels = {};
+  };
+
+  // Struct that contains a depth image buffer and its size.
+  struct DepthImageBuffer {
+    void const* buffer;
+    int buffer_size;
   };
 
   // Amount of time between calls xrPollEvent on the polling loop.
   const int32_t kNanosPerSecond = 1000000000;
   const timespec kPollingInterval = {0, kNanosPerSecond / 60};
 
-  const int kFloatPerPose = 7;
+  const int kFloatPerPosition = 3;
+  const int kFloatPerQuaternion = 4;
+  const int kFloatPerPose = kFloatPerQuaternion + kFloatPerPosition;
+  const int kFloatPerFov = 4;
+  const int kFaceTrackerStartupWaitMs = 50;
+  const int kFaceTrackerStartupCheckMaxAttempts = 20;
+
   const size_t kHandJointsBufferSize =
       sizeof(int) + XR_HAND_JOINT_COUNT_EXT * kFloatPerPose * sizeof(float);
 
@@ -117,16 +157,20 @@ class OpenXrManager {
   static OpenXrManager& GetOpenXrManager(OpenXrManagerClockInterface* clock);
 
   // Initializes the OpenXrManager. This is broken down into loading OpenXR,
-  // creating an OpenXR instance, and creating a session from that instance,
-  // then starting the polling loop. The instance must be associated with one
-  // activity. This will return true if the instance is already initialized and
-  // will resume polling if paused. The default_reference_space is the reference
-  // space that will be used while querying OpenXR.
+  // creating an OpenXR instance, and creating a session from that instance. The
+  // instance must be associated with one activity. This will return true if the
+  // initialization was successful, or if the instance is already initialized.
+  // If start_polling_loop is set to true, this function will also resume the
+  // session polling loop regardless of previous state. start_polling_thread =
+  // false is ignored if the polling thread is running; clients must call
+  // PauseSession or DeInit to stop the polling thread after this function has
+  // been called with start_polling_thread = true. The default_reference_space
+  // is the reference space that will be used while querying OpenXR.
   // TODO: (broken link) -  Support multiple activities in the OpenXR manager.
   bool Init(JNIEnv* env, jobject activity,
             XrReferenceSpaceType default_reference_space =
-                XR_REFERENCE_SPACE_TYPE_UNBOUNDED_ANDROID)
-      ABSL_LOCKS_EXCLUDED(mutex_);
+                XR_REFERENCE_SPACE_TYPE_UNBOUNDED_ANDROID,
+            bool start_polling_thread = true) ABSL_LOCKS_EXCLUDED(mutex_);
 
   // Destroys the Session and Instance held by the OpenXrManager. Once destroyed
   // it can be reinitialized. If stop_polling_thread is true this will wait for
@@ -139,6 +183,19 @@ class OpenXrManager {
   // session. The polling thread must be recreated with Init().
   bool PauseSession() ABSL_LOCKS_EXCLUDED(mutex_);
 
+  // Returns a vector containing tracked objects from the trackable tracker.
+  std::vector<XrTrackableANDROID> GetTrackableObjects(XrTime time);
+
+  // Gets the OpenXR data associated with the trackable object for the trackable
+  // id at the specified time in the specified reference space. If the time is a
+  // negative number, the current time will be used.
+  // This function is thread safe.
+  // Returns true if successful and populates the object_data. Returns false if
+  // there was an error getting the object data.
+  bool GetTrackableObjectState(
+      XrTrackableANDROID object_id, XrReferenceSpaceType reference_space,
+      XrTime time, XrTrackableObjectANDROID& out_object);
+
   // Returns a vector containing tracked planes from the trackable tracker.
   std::vector<XrTrackableANDROID> GetPlanes();
 
@@ -149,7 +206,8 @@ class OpenXrManager {
   // there was an error getting the plane data.
   bool GetPlaneState(XrTrackableANDROID plane_id,
                      XrReferenceSpaceType reference_space, XrTime time,
-                     XrTrackablePlaneANDROID& out_plane);
+                     XrTrackablePlaneANDROID& out_plane,
+                     std::vector<XrVector2f>& out_vertices);
 
   // Chooses a plane that fits the constraints from the vector of planes
   // provided.  If no suitable plane is found, this will return false and
@@ -175,6 +233,18 @@ class OpenXrManager {
                                           XrTime time,
                                           const XrPosef& relative_pose,
                                           XrSpace* out_anchor_space);
+
+  // Creates a trackable object anchor at a point relative to the center point
+  // of the provided trackable and object. If the object is null this will load
+  // the object from the trackable. This is thread safe. Returns a
+  // CreateAnchorResult enum corresponding to whether the anchor was loaded
+  // successfully and populated in out_anchor_space, or if the function
+  // encountered an error.
+  CreateAnchorResult CreateAnchorForObject(XrTrackableANDROID trackable,
+                                           XrTrackableObjectANDROID* object,
+                                           XrTime time,
+                                           const XrPosef& relative_pose,
+                                           XrSpace* out_anchor_space);
 
   // Returns the OpenXR location data associated with an anchor space at a
   // specified time. May return a location that is invalid or untracked, as
@@ -220,6 +290,15 @@ class OpenXrManager {
   // exactly 2 views and out_views must have size=2. This is expected to be
   // called from the jni thread.
   bool GetStereoViews(XrTime time, std::vector<XrView>* out_views);
+
+  // Gets the left and right views at the provided time in the default
+  // reference space when head tracking is enabled and the values in the VIEW
+  // reference space when head tracking is disabled. Returns true if successful
+  // and populates the out_views. Returns false if there was an error.
+  // This function only works if there are exactly 2 views and out_views must
+  // have size=2. This is expected to be called from the jni thread.
+  bool GetStereoViews(XrTime time, bool is_head_tracking_enabled,
+                      std::vector<XrView>* out_views);
 
   // Returns the current time in XrTime. This is used to get a time to get
   // trackables from the trackable tracker. It can be called from any thread.
@@ -283,11 +362,34 @@ class OpenXrManager {
   // manages the memory of the previous buffer and current buffer.
   std::byte* GetHandDataBuffer(bool is_left_hand, XrTime time);
 
+  // Gets the face tracking state.
+  XrResult GetFaceState(XrTime time, XrFaceStateANDROID* outFaceState,
+                       std::vector<float>& out_blend_shape_values,
+                       std::vector<float>& out_confidence_values);
+
+  // Checks if the face tracker is calibrated.
+  bool IsFaceTrackerCalibrated();
+
   // Gets the smooth depth image from the depth swapchain. This is a public
   // function that is expected to be called from the jni thread.
   bool GetDepthImage(XrTime time, const float** out_smooth_depth_image,
                      int* out_image_width, int* out_image_height)
       ABSL_LOCKS_EXCLUDED(mutex_);
+
+  // Gets the all depth images and confidence images from the depth swapchain
+  // This is a public function that is expected to be called from the jni
+  // thread.
+  bool GetAllDepthImages(XrTime time,
+                         std::vector<DepthImageBuffer>& out_image_buffers)
+      ABSL_LOCKS_EXCLUDED(mutex_);
+
+  // Gets the width of the depth image. This is a public function that is
+  // expected to be called from the jni thread.
+  int GetDepthImageWidth() ABSL_LOCKS_EXCLUDED(mutex_);
+
+  // Gets the height of the depth image. This is a public function that is
+  // expected to be called from the jni thread.
+  int GetDepthImageHeight() ABSL_LOCKS_EXCLUDED(mutex_);
 
   // Waits for the polling thread to finish.
   void JoinPollingThread();
@@ -332,11 +434,11 @@ class OpenXrManager {
   bool GetXrSystem() ABSL_LOCKS_EXCLUDED(mutex_);
 
   // Loads the OpenXR runtime.
-  bool LoadOpenXr() ABSL_LOCKS_EXCLUDED(mutex_);
+  bool LoadOpenXr(jobject activity) ABSL_LOCKS_EXCLUDED(mutex_);
 
   // Creates an OpenXR instance. The OpenXR runtime must first be loaded by
   // calling LoadOpenXr.
-  bool CreateInstance() ABSL_LOCKS_EXCLUDED(mutex_);
+  bool CreateInstance(jobject activity) ABSL_LOCKS_EXCLUDED(mutex_);
 
   // Creates an OpenXR session. An instance must first be created by calling
   // CreateInstance.
@@ -356,10 +458,9 @@ class OpenXrManager {
   // finding planes.
   bool CreateUnboundedReferenceSpace();
 
-  // Creates a view space at origin of the VIEW reference space type if not
-  // already created.
-  XrResult MaybeCreateViewReferenceSpace()
-      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+  // Creates a view space at origin of the VIEW reference space.
+  bool CreateViewReferenceSpace()
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(initialization_mutex_);
 
   // Locates the hand joints and fills in the hand_joints.
   bool LocateHandJoints(bool is_left_hand, XrTime time,
@@ -371,6 +472,14 @@ class OpenXrManager {
   // Fills in the hand data buffer with the hand joints.
   void FillInHandDataBuffer(std::byte* buffer,
                             XrHandJointLocationsEXT hand_joints);
+
+
+  // Fills in the vector3 into the float buffer.
+  void FillVector3IntoFloatBuffer(float* floatBuffer, XrVector3f vector);
+
+  // Fills in the quaternion into the float buffer.
+  void FillQuaternionIntoFloatBuffer(
+      float* floatBuffer, XrQuaternionf quaternion);
 
   // Returns a space representing identity in the provided reference space type.
   XrSpace GetSpaceInReferenceSpace(XrReferenceSpaceType space_type);
@@ -419,8 +528,18 @@ class OpenXrManager {
   XrResult ConfigurePlaneTracking(PlaneTrackingMode mode)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
+  // Initializes or destroys the object tracker depending on the mode.
+  XrResult ConfigureObjectTracking(
+      const ObjectTrackingMode& object_tracking_mode,
+      const std::vector<XrObjectLabelANDROID>& object_tracking_labels)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
   // Initializes or destroys the hand trackers depending on the mode.
   XrResult ConfigureHandTracking(HandTrackingMode mode)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
+  // Initializes or destroys the view space depending on the mode.
+  XrResult ConfigureHeadTracking(HeadTrackingMode mode)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   // Initializes or destroys the depth estimation handlers depending on the
@@ -433,8 +552,8 @@ class OpenXrManager {
   XrResult ConfigureAnchorPersistence(AnchorPersistenceMode mode)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
-  // Initializes or destroys the view space depending on the mode.
-  XrResult ConfigureHeadTracking(HeadTrackingMode mode)
+  // Initializes or destroys the face tracker depending on the mode.
+  XrResult ConfigureFaceTracking(FaceTrackingMode mode)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   // Creates a planes tracker. This is used to search for and keep track of
@@ -447,6 +566,12 @@ class OpenXrManager {
 
   // Creates the left and right hand trackers if they are not already created.
   XrResult MaybeCreateHandTrackers() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
+  // Creates the face tracker if it is not already created.
+  XrResult MaybeCreateFaceTracker() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
+  // Creates the object tracker if it is not already created.
+  XrResult MaybeCreateObjectTracker() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   // Creates persistence_handle_ if it is not already created. Returns
   // XR_SUCCESS if the handle is created or has already been created before.
@@ -462,7 +587,14 @@ class OpenXrManager {
   // This should be called by any functions that expect valid
   // depth_swapchain_handle_. This is a function that is expected to be called
   // from the jni thread before GetDepthImage is called.
-  XrResult CreateDepthSwapchainIfNecessary()
+  XrResult CreateDepthSwapchainIfNecessary(DepthEstimationMode mode)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
+  // Populates the DepthImageBuffer returned by the OpenXR manager. This
+  // function is used by GetAllDepthImages.
+  void PopulateDepthImageBuffer(
+      std::vector<DepthImageBuffer>& out_image_buffers,
+      const float* image_buffers, const uint8_t* confidence_image_buffers)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   XrInstance instance_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
@@ -475,6 +607,8 @@ class OpenXrManager {
   XrSpace unbounded_space_ = XR_NULL_HANDLE;
   XrTrackableTrackerANDROID planes_trackable_tracker_ ABSL_GUARDED_BY(mutex_) =
       XR_NULL_HANDLE;
+  XrTrackableTrackerANDROID object_trackable_tracker_ ABSL_GUARDED_BY(mutex_) =
+      XR_NULL_HANDLE;
   XrHandTrackerEXT left_hand_tracker_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
   XrHandTrackerEXT right_hand_tracker_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
   XrHandJointLocationEXT
@@ -483,6 +617,9 @@ class OpenXrManager {
   XrHandJointLocationEXT
       right_hand_joint_locations_[XR_HAND_JOINT_COUNT_EXT] ABSL_GUARDED_BY(
           mutex_);
+  XrFaceTrackerANDROID face_tracker_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
+  FaceTrackingCalibrationState face_tracker_calibration_state_
+      ABSL_GUARDED_BY(mutex_) = FaceTrackingCalibrationState::kUnknown;
   std::byte* left_hand_joint_poses_buffer_[CACHE_SIZE] ABSL_GUARDED_BY(
       mutex_) = {nullptr};
   std::byte* right_hand_joint_poses_buffer_[CACHE_SIZE] ABSL_GUARDED_BY(
@@ -491,18 +628,28 @@ class OpenXrManager {
   int right_hand_joint_buffer_index_ ABSL_GUARDED_BY(mutex_) = 0;
   XrDeviceAnchorPersistenceANDROID persistence_handle_ ABSL_GUARDED_BY(mutex_) =
       XR_NULL_HANDLE;
-  // absl::uint128 is a substitute for XrUuidExt.
-  absl::flat_hash_map<absl::uint128, XrSpace> persist_anchor_uuid_to_space_map_
-      ABSL_GUARDED_BY(mutex_);
-  XrDepthSwapchainANDROID depth_swapchain_handle_ ABSL_GUARDED_BY(mutex_);
+  XrDepthSwapchainANDROID depth_swapchain_handle_ ABSL_GUARDED_BY(mutex_) =
+      XR_NULL_HANDLE;
   std::vector<XrDepthSwapchainImageANDROID> depth_images_
       ABSL_GUARDED_BY(mutex_);
   XrDepthCameraResolutionANDROID supported_depth_resolution_
       ABSL_GUARDED_BY(mutex_);
+  // The depth image buffer count is dependant on the configuration.
+  int depth_image_buffer_count_ ABSL_GUARDED_BY(mutex_) = 0;
+  int depth_image_width_ ABSL_GUARDED_BY(mutex_) = 0;
+  int depth_image_height_ ABSL_GUARDED_BY(mutex_) = 0;
+  // depth data buffer sizes and element counts are dependent on the depth image
+  // resolution.
+  size_t depth_data_image_buffer_size_ ABSL_GUARDED_BY(mutex_) = 0;
+  size_t depth_data_confidence_image_buffer_size_ ABSL_GUARDED_BY(mutex_) = 0;
+  size_t depth_data_image_num_elements_ ABSL_GUARDED_BY(mutex_) = 0;
 
   std::vector<XrTrackableANDROID> all_plane_trackables_;
   OpenXrState open_xr_state_ ABSL_GUARDED_BY(mutex_) =
       OpenXrState::kUninitialized;
+
+  XrTrackableObjectConfigurationANDROID object_tracking_config_
+      ABSL_GUARDED_BY(mutex_);
 
   OpenXrManagerClockInterface* clock_;
 
@@ -533,13 +680,13 @@ class OpenXrManager {
 
   JNIEnv* java_env_ = nullptr;
   JavaVM* app_vm_ = nullptr;
-  jobject activity_ = {};
 
   // Loaded OpenXR functions.
   PFN_xrVoidFunction convert_time_;
   PFN_xrCreateTrackableTrackerANDROID create_trackable_tracker_;
   PFN_xrGetAllTrackablesANDROID get_all_trackables_;
   PFN_xrGetTrackablePlaneANDROID get_trackable_plane_;
+  PFN_xrGetTrackableObjectANDROID get_trackable_object_;
   PFN_xrDestroyTrackableTrackerANDROID destroy_trackable_tracker_;
   PFN_xrCreateAnchorSpaceANDROID create_anchor_space_;
   PFN_xrShareAnchorANDROID share_anchor_;
@@ -558,6 +705,11 @@ class OpenXrManager {
   PFN_xrCreateHandTrackerEXT create_hand_tracker_;
   PFN_xrDestroyHandTrackerEXT destroy_hand_tracker_;
   PFN_xrLocateHandJointsEXT locate_hand_joints_;
+
+  PFN_xrCreateFaceTrackerANDROID create_face_tracker_;
+  PFN_xrDestroyFaceTrackerANDROID destroy_face_tracker_;
+  PFN_xrGetFaceCalibrationStateANDROID get_face_calibration_state_;
+  PFN_xrGetFaceStateANDROID get_face_state_;
 
   PFN_xrCreateDepthSwapchainANDROID create_depth_swapchain_;
   PFN_xrDestroyDepthSwapchainANDROID destroy_depth_swapchain_;

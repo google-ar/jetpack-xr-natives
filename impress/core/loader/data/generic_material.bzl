@@ -176,6 +176,7 @@ _postprocess_metal_shaders_noop = rule(
         "minimum_ios_version": attr.string(),
         "preserve_text_shaders": attr.bool(),
         "backend_is_metal": attr.bool(),
+        "fast_math": attr.bool(),
     },
 )
 
@@ -228,6 +229,7 @@ def process_and_build_material(
         visibility = None,
         optimization = None,
         enable_metal_postprocessing = None,
+        metal_postprocessing_fast_math = None,
         preserve_text_shaders = None):
     """Preprocesses a material with replacements and includes, and builds it using filamat.
 
@@ -251,6 +253,9 @@ def process_and_build_material(
         enable_metal_postprocessing: Optional. Whether to pre-compile Metal shaders to LLVM bitcode.
            The default (None) allows this rule to decide whether or not to enable precompiling.
            Pass True or Force to force precompilation / force text shaders only.
+        metal_postprocessing_fast_math: Optional. Whether to enable fast math when pre-compiling
+           Metal shaders. The default (None) allows this rule to decide whether or not to enable
+           fast math. Pass True or Force to force fast math.
         preserve_text_shaders: Optional. Whether to preserve MSL text shaders when Metal post-
            processing is enabled. By default, text shaders are removed; pass True to preserve them.
            This flag is ignored if Metal post-processing is disabled.
@@ -304,6 +309,7 @@ def process_and_build_material(
             minimum_ios_version = _METAL_POSTPROCESSING_MINIMUM_IOS_VERSION,
             preserve_text_shaders = preserve_text_shaders,
             backend_is_metal = True,
+            fast_math = metal_postprocessing_fast_math,
         )
     else:
         _emit_single_matc_target(

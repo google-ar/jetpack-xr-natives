@@ -404,9 +404,18 @@ absl::Status FillMorphTargetBuffer(BaseView& view, Engine* engine,
   for (int index = 0; index < info->targets()->size(); index++) {
     const schemas::MorphTargetAttributeInfo* target =
         info->targets()->Get(index);
+    if (target->positions()->size() < vertex_count * sizeof(float3)) {
+      return absl::InternalError(
+          "Failed to create Morph Target Buffer - Invalid positions size");
+    }
     builder.PositionsAt(
         index, reinterpret_cast<const float3*>(target->positions()->Data()),
         vertex_count);
+
+    if (target->tangents()->size() < vertex_count * sizeof(short4)) {
+      return absl::InternalError(
+          "Failed to create Morph Target Buffer - Invalid tangents size");
+    }
     builder.TangentsAt(
         index, reinterpret_cast<const short4*>(target->tangents()->Data()),
         vertex_count);
@@ -488,6 +497,8 @@ Texture* BuildAndFillTexture(BaseView& view, Engine* engine,
       format = Texture::InternalFormat::ETC2_EAC_RGBA8;
     } else if (format == Texture::InternalFormat::ETC2_SRGB8) {
       format = Texture::InternalFormat::ETC2_RGB8;
+    } else if (format == Texture::InternalFormat::SRGB8_ALPHA8_ASTC_4x4) {
+      format = Texture::InternalFormat::RGBA_ASTC_4x4;
     }
   }
 
@@ -516,7 +527,13 @@ Texture* BuildAndFillTexture(BaseView& view, Engine* engine,
     texture_builder.GenerateMipmaps(*engine);
   }
 
-  return texture_builder.Build(*engine);
+  absl::StatusOr<filament::Texture*> texture = texture_builder.Build(*engine);
+  if (!texture.ok()) {
+    IMP_LOG(imp::ERROR) << "Could not create texture.";
+    return nullptr;
+  }
+
+  return *texture;
 }
 
 Material* BuildMaterial(Engine* engine, const BufferAccess& compiled_material) {

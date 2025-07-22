@@ -22,25 +22,20 @@
 #include "absl/strings/string_view.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/MaterialInstance.h"
-#include "filament/filament/include/filament/TextureSampler.h"
 #include "flatbuffers/verifier.h"
 #include "core/assets/asset_ptr.h"
 #include "core/assets/material/material_asset.h"
 #include "core/async/future.h"
-#include "core/lighting/environment_light.h"
 #include "core/material_library/flatbuffer_utils.h"
 #include "core/materials/material.h"
-#include "core/math/mat.h"
-#include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
 #include "core/split_engine/materials/builtin/builtin_water_material_assets.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/material_factory.h"
-#include "core/view/framework/lighting/light_manager.h"
-#include "core/view/view_events.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
 namespace imp::split_engine {
@@ -62,20 +57,22 @@ constexpr absl::string_view kNormalBoundaryParameterName = "normalBoundary";
 }  // namespace
 
 Future<BuiltInMaterialPtr> BuiltInWaterMaterial::Create(
-    BaseView& view, const android_xr::schemas::BuiltInMaterial5cf26af8& spec) {
+    BaseView& view, BridgeId bridge_id,
+    const android_xr::schemas::BuiltInMaterial5cf26af8& spec) {
   Future<AssetPtr<MaterialAsset>> future = view.GetAssetManager().LoadMaterial(
       spec.transparent() ? kBuiltinWaterTransparentMatCmat
                          : kBuiltinWaterMatCmat);
-  return future.Then(
-      [&view](AssetPtr<MaterialAsset> material_asset) -> BuiltInMaterialPtr {
-        return absl::WrapUnique(new BuiltInWaterMaterial(
-            view, view.GetMaterialFactory().CreateMaterial(material_asset)));
-      });
+  return future.Then([&view, bridge_id](AssetPtr<MaterialAsset> material_asset)
+                         -> BuiltInMaterialPtr {
+    return absl::WrapUnique(new BuiltInWaterMaterial(
+        view, bridge_id,
+        view.GetMaterialFactory().CreateMaterial(material_asset)));
+  });
 }
 
-BuiltInWaterMaterial::BuiltInWaterMaterial(BaseView& view,
+BuiltInWaterMaterial::BuiltInWaterMaterial(BaseView& view, BridgeId bridge_id,
                                            OwnedMaterialPtr material)
-    : BuiltInCustomMaterial(std::move(material)), view_(view) {
+    : BuiltInCustomMaterial(bridge_id, std::move(material)), view_(view) {
   // All samplers must have valid textures so set the placeholder texture.
   GetMaterial()->SetParameter(
       kReflectionCubeParameterName,
@@ -90,9 +87,10 @@ BuiltInWaterMaterial::BuiltInWaterMaterial(BaseView& view,
 
 BuiltInMaterialPtr BuiltInWaterMaterial::Duplicate() const {
   return absl::WrapUnique(new BuiltInWaterMaterial(
-      view_, view_.GetMaterialFactory().WrapMaterial(
-                 filament::MaterialInstance::duplicate(
-                     GetMaterial()->GetFilamentMaterialInstance()))));
+      view_, GetBridgeId(),
+      view_.GetMaterialFactory().WrapMaterial(
+          filament::MaterialInstance::duplicate(
+              GetMaterial()->GetFilamentMaterialInstance()))));
 }
 
 absl::Status BuiltInWaterMaterial::SetParameters(
@@ -123,9 +121,9 @@ absl::Status BuiltInWaterMaterial::SetParameters(
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d", schema->reflection_cube()->texture_id()));
     }
-    filament::TextureSampler sampler =
-        ConvertSampler(*schema->reflection_cube()->sampler());
-    GetMaterial()->SetParameter(kReflectionCubeParameterName, texture, sampler);
+    GetMaterial()->SetParameter(
+        kReflectionCubeParameterName, texture,
+        ConvertSampler(schema->reflection_cube()->sampler()));
   }
   if (schema->normal_map()) {
     const BorrowedTexturePtr texture =
@@ -134,9 +132,9 @@ absl::Status BuiltInWaterMaterial::SetParameters(
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d", schema->normal_map()->texture_id()));
     }
-    filament::TextureSampler sampler =
-        ConvertSampler(*schema->normal_map()->sampler());
-    GetMaterial()->SetParameter(kNormalMapParameterName, texture, sampler);
+    GetMaterial()->SetParameter(
+        kNormalMapParameterName, texture,
+        ConvertSampler(schema->normal_map()->sampler()));
   }
   if (schema->normal_tiling()) {
     GetMaterial()->SetParameter(kNormalTilingParameterName,
@@ -154,10 +152,10 @@ absl::Status BuiltInWaterMaterial::SetParameters(
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d", schema->alpha_map()->texture_id()));
     }
-    filament::TextureSampler sampler =
-        ConvertSampler(*schema->alpha_map()->sampler());
     // Opaque water material does not have alpha map.
-    GetMaterial()->TrySetParameter(kAlphaMapParameterName, texture, sampler);
+    GetMaterial()->TrySetParameter(
+        kAlphaMapParameterName, texture,
+        ConvertSampler(schema->alpha_map()->sampler()));
   }
 
   if (schema->alpha_step_multiplier()) {

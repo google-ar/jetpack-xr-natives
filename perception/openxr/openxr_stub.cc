@@ -20,8 +20,8 @@
 #include <cstdint>
 #include <cstring>
 #include <ctime>
+#include <vector>
 
-#include "openxr/openxr.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/strings/string_view.h"
 
@@ -30,8 +30,29 @@ const XrPosef kPose = XrPosef{
     .orientation = XrQuaternionf{0.0f, 1.0f, 0.0f, 1.0f},
     .position = XrVector3f{0.0f, 0.0f, 2.0f},
 };
+const XrPosef kLeftViewPose = XrPosef{
+    .orientation = XrQuaternionf{0.0f, 1.0f, 0.0f, 1.0f},
+    .position = XrVector3f{2.0f, 0.0f, 0.0f},
+};
+const XrPosef kRightViewPose = XrPosef{
+    .orientation = XrQuaternionf{0.0f, 1.0f, 0.0f, 1.0f},
+    .position = XrVector3f{0.0f, 2.0f, 0.0f},
+};
+const XrFovf kLeftViewFov = XrFovf{1.0f, 2.0f, 3.0f, 4.0f};
+const XrFovf kRightViewFov = XrFovf{2.0f, 1.0f, 3.0f, 4.0f};
 
 const XrExtent2Df kExtent2D = XrExtent2Df{1.0f, 2.0f};
+// Depth Map Test Resolution is 80x80
+const int kDepthBufferSize = (80 * 80) * 2;
+
+const std::vector<float> kTestRawDepthData(kDepthBufferSize, 8.0f);
+const std::vector<uint8_t> kTestRawDepthConfidenceData(kDepthBufferSize, 100);
+const std::vector<float> kTestSmoothDepthData(kDepthBufferSize, 10.0f);
+const std::vector<uint8_t> kTestSmoothDepthConfidenceData(kDepthBufferSize,
+                                                          200);
+const XrExtent3Df kExtent3D = XrExtent3Df{1.0f, 2.0f, 3.0f};
+
+const XrObjectLabelANDROID kObjectLabel = XR_OBJECT_LABEL_KEYBOARD_ANDROID;
 
 uint32_t kVertexCapacityInput = 4;
 uint32_t kVertexCountOutput = 4;
@@ -48,6 +69,7 @@ const XrInstance kInstance = XrInstance(1111);
 const XrSystemId kSystemId = XrSystemId(2222);
 const XrSession kSession = XrSession(3333);
 const XrSpace kSpace = XrSpace(4444);
+const XrDepthSwapchainANDROID kDepthSwapchain = XrDepthSwapchainANDROID(5555);
 const XrTime kTime = 1000;
 const XrUuidEXT kUuid = {
     .data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}};
@@ -65,6 +87,8 @@ const XrRaycastHitResultsANDROID kRaycastHitResults = {
     .resultsCountOutput = 1,
     .results = &kRaycastHitResult,
 };
+constexpr XrViewStateFlags kValidViewStateFlags =
+    XR_VIEW_STATE_ORIENTATION_VALID_BIT | XR_VIEW_STATE_POSITION_VALID_BIT;
 const XrSpaceLocationFlags kValidLocationFlags =
     XR_SPACE_LOCATION_ORIENTATION_VALID_BIT |
     XR_SPACE_LOCATION_POSITION_VALID_BIT;
@@ -77,6 +101,7 @@ const XrHandJointLocationEXT kHandJoint = {
 const XrTrackableTrackerANDROID kTrackableTracker =
     XrTrackableTrackerANDROID(1);
 const XrHandTrackerEXT kHandTracker = XrHandTrackerEXT(1);
+const XrFaceTrackerANDROID kFaceTracker = XrFaceTrackerANDROID(1);
 const XrDeviceAnchorPersistenceANDROID kAnchorPersistence =
     XrDeviceAnchorPersistenceANDROID(1);
 
@@ -105,6 +130,9 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrConvertTimespecTimeToTimeKHR(
 XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateTrackableTrackerANDROID(
     XrSession session, const XrTrackableTrackerCreateInfoANDROID* createInfo,
     XrTrackableTrackerANDROID* trackableTracker) {
+  if (session == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
   *trackableTracker = kTrackableTracker;
   return XR_SUCCESS;
 }
@@ -153,9 +181,27 @@ Internal_xrGetTrackablePlaneANDROID(XrTrackableTrackerANDROID trackableTracker,
   return XR_SUCCESS;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL
+Internal_xrGetTrackableObjectANDROID(XrTrackableTrackerANDROID trackableTracker,
+                                     const XrTrackableGetInfoANDROID* getInfo,
+                                     XrTrackableObjectANDROID* objectOutput) {
+  if (!trackableTracker) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+  objectOutput->trackingState =
+      XrTrackingStateANDROID(XR_TRACKING_STATE_TRACKING_ANDROID);
+  objectOutput->centerPose = kPose;
+  objectOutput->extents = kExtent3D;
+  objectOutput->objectLabel = kObjectLabel;
+  return XR_SUCCESS;
+}
+
 XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateAnchorSpaceANDROID(
     XrSession session, const XrAnchorSpaceCreateInfoANDROID* createInfo,
     XrSpace* anchorOutput) {
+  if (session == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
   ++create_anchor_call_counter;
   if (create_anchor_call_counter > kAnchorResourceLimit) {
     return XR_ERROR_LIMIT_REACHED;
@@ -167,6 +213,9 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateAnchorSpaceANDROID(
 XRAPI_ATTR XrResult XRAPI_CALL Internal_xrShareAnchorANDROID(
     XrSession session, const XrAnchorSharingInfoANDROID* sharingInfo,
     XrAnchorSharingTokenANDROID* anchorToken) {
+  if (session == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
   return XR_SUCCESS;
 }
 
@@ -174,6 +223,9 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateDeviceAnchorPersistenceANDROID(
     XrSession session,
     const XrDeviceAnchorPersistenceCreateInfoANDROID* createInfo,
     XrDeviceAnchorPersistenceANDROID* outHandle) {
+  if (session == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
   *outHandle = kAnchorPersistence;
   anchor_persistence_handle_created = true;
   return XR_SUCCESS;
@@ -220,7 +272,7 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreatePersistedAnchorSpaceANDROID(
   }
   if (createInfo != nullptr &&
       memcmp(createInfo->anchorId.data, kZeroUuid.data, XR_UUID_SIZE) == 0) {
-    return XR_ERROR_PERSIST_UUID_NOT_FOUND_EXT;
+    return XR_ERROR_ANCHOR_ID_NOT_FOUND_ANDROID;
   }
   ++create_anchor_call_counter;
   if (create_anchor_call_counter > kAnchorResourceLimit) {
@@ -251,7 +303,7 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrUnpersistAnchorANDROID(
     XrDeviceAnchorPersistenceANDROID handle, const XrUuidEXT* anchorId) {
     if (anchorId != nullptr &&
         memcmp(anchorId->data, kZeroUuid.data, XR_UUID_SIZE) == 0) {
-      return XR_ERROR_PERSIST_UUID_NOT_FOUND_EXT;
+      return XR_ERROR_ANCHOR_ID_NOT_FOUND_ANDROID;
     }
   if (!anchor_persistence_handle_created) {
     return XR_ERROR_HANDLE_INVALID;
@@ -262,6 +314,9 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrUnpersistAnchorANDROID(
 XRAPI_ATTR XrResult XRAPI_CALL Internal_xrRaycastANDROID(
     XrSession session, const XrRaycastInfoANDROID* rayInfo,
     XrRaycastHitResultsANDROID* outHitResults) {
+  if (session == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
   *outHitResults = kRaycastHitResults;
 
   return XR_SUCCESS;
@@ -270,6 +325,9 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrRaycastANDROID(
 XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateHandTrackerEXT(
     XrSession session, const XrHandTrackerCreateInfoEXT* createInfo,
     XrHandTrackerEXT* handTracker) {
+  if (session == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
   *handTracker = kHandTracker;
   return XR_SUCCESS;
 }
@@ -302,13 +360,121 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrLocateHandJointsEXT(
   return XR_SUCCESS;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateFaceTrackerANDROID(
+    XrSession session, const XrFaceTrackerCreateInfoANDROID* createInfo,
+    XrFaceTrackerANDROID* faceTracker) {
+  if (session == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+  *faceTracker = kFaceTracker;
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrDestroyFaceTrackerANDROID(
+    XrFaceTrackerANDROID faceTracker) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrGetFaceStateANDROID(
+    XrFaceTrackerANDROID faceTracker, const XrFaceStateGetInfoANDROID *getInfo,
+    XrFaceStateANDROID* faceState) {
+  if (!faceTracker) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+
+  faceState->type = XR_TYPE_FACE_STATE_ANDROID;
+  faceState->next = nullptr;
+  faceState->faceTrackingState = XR_FACE_TRACKING_STATE_TRACKING_ANDROID;
+  faceState->isValid = true;
+  faceState->parametersCapacityInput = XR_FACE_PARAMETER_COUNT_ANDROID;
+  faceState->parametersCountOutput = XR_FACE_PARAMETER_COUNT_ANDROID;
+  faceState->regionConfidencesCapacityInput =
+      XR_FACE_REGION_CONFIDENCE_COUNT_ANDROID;
+  faceState->regionConfidencesCountOutput =
+      XR_FACE_REGION_CONFIDENCE_COUNT_ANDROID;
+  for (int i = 0; i < XR_FACE_PARAMETER_COUNT_ANDROID; ++i) {
+    faceState->parameters[i] = (float)i / XR_FACE_PARAMETER_COUNT_ANDROID;
+  }
+  for (int i = 0; i < XR_FACE_REGION_CONFIDENCE_COUNT_ANDROID; ++i) {
+    faceState->regionConfidences[i] = (float)i /
+      XR_FACE_REGION_CONFIDENCE_COUNT_ANDROID;
+  }
+
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrGetFaceCalibrationStateANDROID(
+    XrFaceTrackerANDROID faceTracker, XrBool32* outIsCalibrated) {
+  if (!faceTracker) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+  return XR_SUCCESS;
+}
+
 XRAPI_ATTR XrResult XRAPI_CALL Internal_xrEnumerateDepthResolutionsANDROID(
     XrSession session, uint32_t resolutionCapacityInput,
     uint32_t* resolutionCountOutput,
     XrDepthCameraResolutionANDROID* resolutions) {
-  // Returning this temporarily to test different configuration results while
-  // Depth APIs are unused.
-  return XR_ERROR_PERMISSION_INSUFFICIENT;
+  if (session == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+  if (resolutionCapacityInput == 0 && resolutions == nullptr) {
+    *resolutionCountOutput = 1;
+    return XR_SUCCESS;
+  }
+
+  *resolutionCountOutput = 1;
+  resolutions[0] = XR_DEPTH_CAMERA_RESOLUTION_80x80_ANDROID;
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateDepthSwapchainANDROID(
+    XrSession session, const XrDepthSwapchainCreateInfoANDROID* createInfo,
+    XrDepthSwapchainANDROID* swapchain) {
+  if (session == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+  *swapchain = kDepthSwapchain;
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL
+Internal_xrDestroyDepthSwapchainANDROID(XrDepthSwapchainANDROID swapchain) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrEnumerateDepthSwapchainImagesANDROID(
+    XrDepthSwapchainANDROID swapchain, uint32_t imageCapacityInput,
+    uint32_t* imageCountOutput, XrDepthSwapchainImageANDROID* images) {
+  if (imageCapacityInput == 0 && images == nullptr) {
+    *imageCountOutput = 1;
+    return XR_SUCCESS;
+  }
+  *imageCountOutput = 1;
+
+  images[0].type = XR_TYPE_DEPTH_SWAPCHAIN_IMAGE_ANDROID;
+  images[0].rawDepthImage = kTestRawDepthData.data();
+  images[0].rawDepthConfidenceImage = kTestRawDepthConfidenceData.data();
+  images[0].smoothDepthImage = kTestSmoothDepthData.data();
+  images[0].smoothDepthConfidenceImage = kTestSmoothDepthConfidenceData.data();
+
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrAcquireDepthSwapchainImagesANDROID(
+    XrDepthSwapchainANDROID swapchain,
+    const XrDepthAcquireInfoANDROID* acquireInfo,
+    XrDepthAcquireResultANDROID* acquireResult) {
+  acquireResult->type = XR_TYPE_DEPTH_ACQUIRE_RESULT_ANDROID;
+  acquireResult->acquiredIndex = 0;
+  acquireResult->exposureTimestamp = kTime;
+  acquireResult->views[0].type = XR_TYPE_DEPTH_VIEW_ANDROID;
+  acquireResult->views[0].fov = kLeftViewFov;
+  acquireResult->views[0].pose = kLeftViewPose;
+  acquireResult->views[1].type = XR_TYPE_DEPTH_VIEW_ANDROID;
+  acquireResult->views[1].fov = kRightViewFov;
+  acquireResult->views[1].pose = kRightViewPose;
+  return XR_SUCCESS;
 }
 
 }  // extern "C"
@@ -330,6 +496,8 @@ const auto kXrFunctions = new absl::flat_hash_map<absl::string_view,
      ToXrVoidFunction(Internal_xrGetAllTrackablesANDROID)},
     {"xrGetTrackablePlaneANDROID",
      ToXrVoidFunction(Internal_xrGetTrackablePlaneANDROID)},
+    {"xrGetTrackableObjectANDROID",
+     ToXrVoidFunction(Internal_xrGetTrackableObjectANDROID)},
     {"xrDestroyTrackableTrackerANDROID",
      ToXrVoidFunction(Internal_xrDestroyTrackableTrackerANDROID)},
     {"xrCreateAnchorSpaceANDROID",
@@ -357,6 +525,21 @@ const auto kXrFunctions = new absl::flat_hash_map<absl::string_view,
     {"xrLocateHandJointsEXT", ToXrVoidFunction(Internal_xrLocateHandJointsEXT)},
     {"xrEnumerateDepthResolutionsANDROID",
      ToXrVoidFunction(Internal_xrEnumerateDepthResolutionsANDROID)},
+    {"xrCreateFaceTrackerANDROID",
+     ToXrVoidFunction(Internal_xrCreateFaceTrackerANDROID)},
+    {"xrDestroyFaceTrackerANDROID",
+     ToXrVoidFunction(Internal_xrDestroyFaceTrackerANDROID)},
+    {"xrGetFaceStateANDROID", ToXrVoidFunction(Internal_xrGetFaceStateANDROID)},
+    {"xrGetFaceCalibrationStateANDROID",
+     ToXrVoidFunction(Internal_xrGetFaceCalibrationStateANDROID)},
+    {"xrCreateDepthSwapchainANDROID",
+     ToXrVoidFunction(Internal_xrCreateDepthSwapchainANDROID)},
+    {"xrDestroyDepthSwapchainANDROID",
+     ToXrVoidFunction(Internal_xrDestroyDepthSwapchainANDROID)},
+    {"xrEnumerateDepthSwapchainImagesANDROID",
+     ToXrVoidFunction(Internal_xrEnumerateDepthSwapchainImagesANDROID)},
+    {"xrAcquireDepthSwapchainImagesANDROID",
+     ToXrVoidFunction(Internal_xrAcquireDepthSwapchainImagesANDROID)},
 });
 
 }  // namespace
@@ -402,14 +585,23 @@ xrCreateSession(XrInstance instance, const XrSessionCreateInfo* createInfo,
 
 XRAPI_ATTR XrResult XRAPI_CALL
 xrBeginSession(XrSession session, const XrSessionBeginInfo* beginInfo) {
+  if (session == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
   return XR_SUCCESS;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrEndSession(XrSession session) {
+  if (session == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
   return XR_SUCCESS;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL xrDestroySession(XrSession session) {
+  if (session == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
   return XR_SUCCESS;
 }
 
@@ -435,6 +627,15 @@ XRAPI_ATTR XrResult XRAPI_CALL
 xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo,
               XrViewState* viewState, uint32_t viewCapacityInput,
               uint32_t* viewCountOutput, XrView* views) {
+  if (session == XR_NULL_HANDLE || views == nullptr) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+  views[0].pose = kLeftViewPose;
+  views[1].pose = kRightViewPose;
+  views[0].fov = kLeftViewFov;
+  views[1].fov = kRightViewFov;
+  *viewCountOutput = 2;
+  viewState->viewStateFlags = kValidViewStateFlags;
   return XR_SUCCESS;
 }
 
@@ -446,6 +647,9 @@ XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(XrInstance instance,
 XRAPI_ATTR XrResult XRAPI_CALL xrCreateReferenceSpace(
     XrSession session, const XrReferenceSpaceCreateInfo* createInfo,
     XrSpace* space) {
+  if (session == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
   *space = kSpace;
   return XR_SUCCESS;
 }

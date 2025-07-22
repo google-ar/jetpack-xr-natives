@@ -18,10 +18,17 @@
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_SPLIT_ENGINE_BRIDGE_SENDER_H_
 
 #include <cstddef>
+#include <functional>
 #include <memory>
 
+#include "absl/base/const_init.h"
+#include "absl/base/thread_annotations.h"
+#include "absl/container/flat_hash_map.h"
+#include "absl/container/flat_hash_set.h"
+#include "absl/status/status.h"
+#include "absl/synchronization/mutex.h"
 #include "flatbuffers/flatbuffer_builder.h"
-#include "core/split_engine/flatbuffer_arena_allocator.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 
 namespace imp::split_engine {
 
@@ -46,6 +53,12 @@ class SplitEngineBridgeSender {
   // True if we're between a BeginMessageGroup/EndMessageGroup pair.
   virtual bool IsMessageGroupActive() const = 0;
 
+  // Clears any message groups that have been released via ReleaseMessageGroup.
+  // This should be called once per frame to ensure that any message groups
+  // marked for release are actually released. This is a no-op if there are no
+  // released message groups.
+  virtual void ClearReleasedMessageGroups() = 0;
+
   // Creates a new flatbuffer builder that is backed by a buffer of the
   // specified size. It is the responsibility of the caller to ensure that the
   // the current message group has sufficient space to contain the builder.
@@ -55,6 +68,32 @@ class SplitEngineBridgeSender {
   // valid for the lifetime of the SplitEngineBridgeSender.
   virtual std::unique_ptr<flatbuffers::FlatBufferBuilder>
   CreateFlatBufferBuilder(size_t size_bytes) = 0;
+
+  // Below is a set of static methods for use by the SplitEngineBridgeSender
+  // to track active message groups across the bridge.
+  // They are all thread-safe as the underlying data structure is guarded by
+  // a mutex.
+
+  // Creates a new, empty set of active message groups for the client.
+  static absl::Status ConnectClient(ClientId client_id);
+
+  // Removes the active message groups for the client.
+  static absl::Status DisconnectClient(ClientId client_id);
+
+  // Marks the given message group as processing for the given client.
+  // This message group will not be released until the client signals via
+  // ReleaseMessageGroup.
+  static absl::Status EnqueueMessageGroup(ClientId client_id,
+                                          MessageGroupId message_group_id);
+  // Releases the given message group for the given client, meaning it can be
+  // reclaimed for reuse by the client.
+  static absl::Status ReleaseMessageGroup(ClientId client_id,
+                                          MessageGroupId message_group_id);
+  // Executes the given function with the set of active message groups for the
+  // given client. Can return an error if the client is not found.
+  static absl::Status WithActiveMessageGroups(
+      ClientId client_id,
+      std::function<void(const absl::flat_hash_set<MessageGroupId>&)> fn);
 };
 
 }  // namespace imp::split_engine

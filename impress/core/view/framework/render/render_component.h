@@ -26,6 +26,7 @@
 #include "filament/filament/include/filament/RenderableManager.h"
 #include "core/async/future.h"
 #include "core/common/owned_or_borrowed_ptr.h"
+#include "core/geometry/shapes/box.h"
 #include "core/model/mesh/mesh.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/isf_info.h"
@@ -177,6 +178,9 @@ class ABSL_DEPRECATED(
   // Updates the AABB for this RenderComponent with the union of all AABBs for
   // the meshes.
   void UpdateRenderableAabb();
+
+  // Gets the AABB for this RenderComponent.
+  const Box& GetRenderableAabb() const;
 
   // Sets the shadow mode that this node can cast onto other nodes.
   // Shadow casting and shadow receiving do not impact each other. For instance,

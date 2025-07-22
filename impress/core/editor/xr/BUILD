@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:assets.bzl", "imp_assets")
 load("//build_tools:imp_material.bzl", "imp_material")
 
@@ -29,12 +30,11 @@ cc_library(
     ],
     hdrs = ["xr_editor_ui.h"],
     deps = [
-        ":xr_grab_handle",
-        "//core/common:log",
         "//core/editor/components:world_space_editor_ui",
+        "//core/editor/layout:editor_panel_ids",
         "//core/math",
         "//core/ncsb",
-        "//core/view/framework",
+        "//core/view/utils:string_map",
     ],
     alwayslink = 1,
 )
@@ -54,6 +54,7 @@ cc_library(
         "//core/collision:ray",
         "//core/common:registry",
         "//core/editor",
+        "//core/input",
         "//core/materials",
         "//core/math",
         "//core/ncsb",

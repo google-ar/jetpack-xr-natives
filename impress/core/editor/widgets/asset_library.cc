@@ -131,11 +131,10 @@ void AssetLibrary::DrawImGui() {
 
   // TODO: (broken link) -  Child window w/ constraints should apply to all tabs
   // so this BeginChild(...) block should move into LayoutComposer.
-  ImGuiIO& io = ImGui::GetIO();
-
   if (ImGui::BeginChild(
           "##Asset Library (Child)",
-          ImVec2(io.DisplaySize.x, kAssetLibraryPanelHeight), false,
+          ImVec2(ImGui::GetContentRegionAvail().x, kAssetLibraryPanelHeight),
+          false,
           ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse)) {
     directory_ui_->DrawDirectoriesHeader();
 
@@ -157,7 +156,7 @@ void AssetLibrary::DrawImGui() {
             "Directory", num_entries_per_row,
             ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY |
                 ImGuiTableFlags_Sortable,
-            ImVec2(ImGui::GetContentRegionAvail().x -
+            ImVec2(ImGui::GetContentRegionAvail().x - 1 -
                        (ImGui::GetStyle().WindowPadding.x * 2.0f),
                    ImGui::GetContentRegionAvail().y - kTableBorderWidth))) {
       IMP_LOG(imp::ERROR) << "BeginTable() failed";

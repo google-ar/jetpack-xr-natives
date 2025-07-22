@@ -29,8 +29,8 @@ namespace imp::loader::details::provider_gltf {
 /// with curve data, and creating the matrix operations that drive the
 /// animation.
 
-OptionalError GetInverseBindPoses(const imp::gltf::Gltf& gltf,
-                                  const imp::gltf::Skin& skin,
+OptionalError GetInverseBindPoses(const imp::gltf::imp_proto::Gltf& gltf,
+                                  const imp::gltf::imp_proto::Skin& skin,
                                   model::SampledJointLookup<mat4f>* out_poses);
 
 }  // namespace imp::loader::details::provider_gltf

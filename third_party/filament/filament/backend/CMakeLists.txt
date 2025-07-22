@@ -177,17 +177,57 @@ endif()
 if (FILAMENT_SUPPORTS_VULKAN)
     list(APPEND SRCS
             include/backend/platforms/VulkanPlatform.h
+            src/vulkan/VulkanAsyncHandles.h
+            src/vulkan/VulkanBlitter.cpp
+            src/vulkan/VulkanBlitter.h
+            src/vulkan/VulkanBuffer.h
+            src/vulkan/VulkanBufferCache.h
+            src/vulkan/VulkanBufferCache.cpp
+            src/vulkan/VulkanBufferProxy.h
+            src/vulkan/VulkanBufferProxy.cpp
+            src/vulkan/VulkanCommands.cpp
+            src/vulkan/VulkanCommands.h
+            src/vulkan/VulkanConstants.h
+            src/vulkan/VulkanContext.cpp
+            src/vulkan/VulkanContext.h
             src/vulkan/VulkanDescriptorSetCache.cpp
             src/vulkan/VulkanDescriptorSetCache.h
             src/vulkan/VulkanDescriptorSetLayoutCache.cpp
             src/vulkan/VulkanDescriptorSetLayoutCache.h
+            src/vulkan/VulkanDriver.cpp
+            src/vulkan/VulkanDriver.h
+            src/vulkan/VulkanDriverFactory.h
+            src/vulkan/VulkanExternalImageManager.cpp
+            src/vulkan/VulkanExternalImageManager.h
+            src/vulkan/VulkanFboCache.cpp
+            src/vulkan/VulkanFboCache.h
+            src/vulkan/VulkanHandles.cpp
+            src/vulkan/VulkanHandles.h
+            src/vulkan/VulkanMemory.cpp
+            src/vulkan/VulkanMemory.h
+            src/vulkan/VulkanPipelineCache.cpp
+            src/vulkan/VulkanPipelineCache.h
             src/vulkan/VulkanPipelineLayoutCache.cpp
             src/vulkan/VulkanPipelineLayoutCache.h
+            src/vulkan/VulkanQueryManager.cpp
+            src/vulkan/VulkanQueryManager.h
+            src/vulkan/VulkanReadPixels.cpp
+            src/vulkan/VulkanReadPixels.h
+            src/vulkan/VulkanSamplerCache.cpp
+            src/vulkan/VulkanSamplerCache.h
+            src/vulkan/VulkanStagePool.cpp
+            src/vulkan/VulkanStagePool.h
+            src/vulkan/VulkanSwapChain.cpp
+            src/vulkan/VulkanSwapChain.h
+            src/vulkan/VulkanTexture.cpp
+            src/vulkan/VulkanTexture.h
+            src/vulkan/VulkanYcbcrConversionCache.cpp
+            src/vulkan/VulkanYcbcrConversionCache.h
+            src/vulkan/memory/Resource.cpp
+            src/vulkan/memory/Resource.h
             src/vulkan/memory/ResourceManager.cpp
             src/vulkan/memory/ResourceManager.h
             src/vulkan/memory/ResourcePointer.h
-            src/vulkan/memory/Resource.cpp
-            src/vulkan/memory/Resource.h
             src/vulkan/platform/VulkanPlatform.cpp
             src/vulkan/platform/VulkanPlatformSwapChainImpl.cpp
             src/vulkan/platform/VulkanPlatformSwapChainImpl.h
@@ -195,44 +235,11 @@ if (FILAMENT_SUPPORTS_VULKAN)
             src/vulkan/utils/Conversion.h
             src/vulkan/utils/Definitions.h
             src/vulkan/utils/Helper.h
-            src/vulkan/utils/Image.h
             src/vulkan/utils/Image.cpp
-            src/vulkan/utils/Spirv.h
+            src/vulkan/utils/Image.h
             src/vulkan/utils/Spirv.cpp
+            src/vulkan/utils/Spirv.h
             src/vulkan/utils/StaticVector.h
-            src/vulkan/VulkanAsyncHandles.h
-            src/vulkan/VulkanBlitter.cpp
-            src/vulkan/VulkanBlitter.h
-            src/vulkan/VulkanBuffer.cpp
-            src/vulkan/VulkanBuffer.h
-            src/vulkan/VulkanCommands.cpp
-            src/vulkan/VulkanCommands.h
-            src/vulkan/VulkanConstants.h
-            src/vulkan/VulkanContext.cpp
-            src/vulkan/VulkanContext.h
-            src/vulkan/VulkanDriver.cpp
-            src/vulkan/VulkanDriver.h
-            src/vulkan/VulkanDriverFactory.h
-            src/vulkan/VulkanFboCache.cpp
-            src/vulkan/VulkanFboCache.h
-            src/vulkan/VulkanHandles.cpp
-            src/vulkan/VulkanHandles.h
-            src/vulkan/VulkanMemory.h
-            src/vulkan/VulkanMemory.cpp
-            src/vulkan/VulkanPipelineCache.cpp
-            src/vulkan/VulkanPipelineCache.h
-            src/vulkan/VulkanQueryManager.cpp
-            src/vulkan/VulkanQueryManager.h
-            src/vulkan/VulkanSamplerCache.cpp
-            src/vulkan/VulkanSamplerCache.h
-            src/vulkan/VulkanStagePool.cpp
-            src/vulkan/VulkanStagePool.h
-            src/vulkan/VulkanSwapChain.cpp
-            src/vulkan/VulkanSwapChain.h
-            src/vulkan/VulkanReadPixels.cpp
-            src/vulkan/VulkanReadPixels.h
-            src/vulkan/VulkanTexture.cpp
-            src/vulkan/VulkanTexture.h
     )
     if (LINUX OR WIN32)
         list(APPEND SRCS src/vulkan/platform/VulkanPlatformLinuxWindows.cpp)
@@ -250,9 +257,40 @@ if (FILAMENT_SUPPORTS_WEBGPU)
     list(APPEND SRCS
             include/backend/platforms/WebGPUPlatform.h
             src/webgpu/platform/WebGPUPlatform.cpp
+            src/webgpu/SpdMipmapGenerator/SpdMipmapGenerator.cpp
+            src/webgpu/WebGPUBufferBase.cpp
+            src/webgpu/WebGPUBufferBase.h
+            src/webgpu/WebGPUBufferObject.cpp
+            src/webgpu/WebGPUBufferObject.h
             src/webgpu/WebGPUConstants.h
+            src/webgpu/WebGPUDescriptorSet.cpp
+            src/webgpu/WebGPUDescriptorSet.h
+            src/webgpu/WebGPUDescriptorSetLayout.cpp
+            src/webgpu/WebGPUDescriptorSetLayout.h
             src/webgpu/WebGPUDriver.cpp
             src/webgpu/WebGPUDriver.h
+            src/webgpu/WebGPUFence.cpp
+            src/webgpu/WebGPUFence.h
+            src/webgpu/WebGPUIndexBuffer.cpp
+            src/webgpu/WebGPUIndexBuffer.h
+            src/webgpu/WebGPUPipelineCreation.cpp
+            src/webgpu/WebGPUPipelineCreation.h
+            src/webgpu/WebGPUProgram.cpp
+            src/webgpu/WebGPUProgram.h
+            src/webgpu/WebGPURenderPassMipmapGenerator.cpp
+            src/webgpu/WebGPURenderPassMipmapGenerator.h
+            src/webgpu/WebGPURenderPrimitive.h
+            src/webgpu/WebGPURenderTarget.cpp
+            src/webgpu/WebGPURenderTarget.h
+            src/webgpu/WebGPUStrings.h
+            src/webgpu/WebGPUSwapChain.cpp
+            src/webgpu/WebGPUSwapChain.h
+            src/webgpu/WebGPUTexture.cpp
+            src/webgpu/WebGPUTexture.h
+            src/webgpu/WebGPUVertexBuffer.cpp
+            src/webgpu/WebGPUVertexBuffer.h
+            src/webgpu/WebGPUVertexBufferInfo.cpp
+            src/webgpu/WebGPUVertexBufferInfo.h
     )
     if (WIN32)
         list(APPEND SRCS src/webgpu/platform/WebGPUPlatformWindows.cpp)
@@ -280,12 +318,6 @@ if (ANDROID)
 endif()
 
 # ==================================================================================================
-# Definitions
-# ==================================================================================================
-# "2" corresponds to SYSTRACE_TAG_FILEMENT (See: utils/Systrace.h)
-add_definitions(-DSYSTRACE_TAG=2 )
-
-# ==================================================================================================
 # Includes & target definition
 # ==================================================================================================
 # specify where our headers are
@@ -301,6 +333,11 @@ target_include_directories(${TARGET} PUBLIC ${PUBLIC_HDR_DIR})
 
 # add this subproject to the Filament folder
 set_target_properties(${TARGET} PROPERTIES FOLDER Filament)
+
+# we need to export the headers properly for backend.lib on windows
+if (WIN32 AND FILAMENT_SUPPORTS_WEBGPU)
+    target_compile_definitions(${TARGET} PRIVATE "WGPU_IMPLEMENTATION")
+endif()
 
 # ==================================================================================================
 # Expose a header-only target to minimize dependencies.
@@ -370,6 +407,10 @@ endif()
 
 target_link_libraries(${TARGET} PUBLIC math)
 target_link_libraries(${TARGET} PUBLIC utils)
+
+if (FILAMENT_USE_ABSEIL_LOGGING)
+    target_link_libraries(${TARGET} PRIVATE absl::log)
+endif()
 
 # Android, iOS, and WebGL do not use bluegl.
 if(FILAMENT_SUPPORTS_OPENGL AND NOT IOS AND NOT ANDROID AND NOT WEBGL)
@@ -466,10 +507,19 @@ if (FILAMENT_SUPPORTS_WEBGPU)
     target_compile_definitions(${TARGET} PRIVATE $<$<BOOL:${FILAMENT_WEBGPU_IMMEDIATE_ERROR_HANDLING}>:FILAMENT_WEBGPU_IMMEDIATE_ERROR_HANDLING>)
 endif()
 
+# ==================================================================================================
+# Linker flags
+# ==================================================================================================
+
 target_link_libraries(${TARGET} PRIVATE
-        ${OSMESA_LINKER_FLAGS}
         $<$<AND:$<PLATFORM_ID:Linux>,$<CONFIG:Release>>:${LINUX_LINKER_OPTIMIZATION_FLAGS}>
 )
+
+if (LINUX AND FILAMENT_SUPPORTS_WEBGPU)
+    # Unclear why this needs to be explicit while other linux libs do not, but it is necessary for
+    # WebGPU to build on linux.
+    target_link_libraries(${TARGET} PRIVATE -lxcb)
+endif()
 
 # ==================================================================================================
 # Installation
@@ -496,7 +546,10 @@ if (APPLE OR LINUX)
         test/Arguments.cpp
         test/ImageExpectations.cpp
         test/Lifetimes.cpp
+        test/PlatformRunner.cpp
         test/Shader.cpp
+        test/SharedShaders.cpp
+        test/Skip.cpp
         test/test_FeedbackLoops.cpp
         test/test_Blit.cpp
         test/test_MissingRequiredAttributes.cpp
@@ -520,6 +573,9 @@ if (APPLE OR LINUX)
         filamat
         SPIRV
         spirv-cross-glsl)
+    # Create input/output directories for test result images.
+    file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/images/actual_images)
+    file(COPY test/expected_images DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/images)
 endif()
 
 # TODO: Disabling IOS test due to breakage wrt glslang update

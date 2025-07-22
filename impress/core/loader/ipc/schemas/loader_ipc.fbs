@@ -33,6 +33,8 @@ table Start {
   // Specifies if the glTF being loaded should have its baked shadow planes
   // removed if there's any.
   remove_shadow_planes: bool;
+  // Specifies the compression type to use for textures.
+  compression_type: int32;
 }
 
 table TryLoad {

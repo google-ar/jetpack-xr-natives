@@ -17,8 +17,6 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_EDITOR_CONSTANTS_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_EDITOR_CONSTANTS_H_
 
-#include <string_view>
-
 #include "absl/strings/string_view.h"
 #include "core/editor/layout/layout_config.proto.imp.h"
 
@@ -38,6 +36,13 @@ static constexpr LayoutConfig kDefaultDesktopLayoutConfig{
     .layout_type = LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT,
     .initial_tabbed_window_state = {
         .pin_state = LayoutConfig::WindowPinState::PINNED_TO_BOTTOM_DEFAULT,
+        .expanded_state = LayoutConfig::WindowExpandedState::COLLAPSED_DEFAULT,
+        .max_window_height_multiplier = 1.0f}};
+
+static constexpr LayoutConfig kDefaultXrLayoutConfig{
+    .layout_type = LayoutConfig::LayoutType::MULTIPLE_WINDOWS_WORLD_LAYOUT,
+    .initial_tabbed_window_state = {
+        .pin_state = LayoutConfig::WindowPinState::PINNED_TO_TOP,
         .expanded_state = LayoutConfig::WindowExpandedState::COLLAPSED_DEFAULT,
         .max_window_height_multiplier = 1.0f}};
 

@@ -302,6 +302,12 @@ void GltfAnimator::PlayAnim(int32_t anim_index,
   absl::Duration start_duration =
       clamp(absl::Seconds(options.start_time_seconds), absl::ZeroDuration(),
             anim->Duration());
+  float speed_multiplier =
+      options.speed_multiplier ? options.speed_multiplier : 1.0f;
+  speed_multiplier *= (options.end_time_seconds &&
+                       options.start_time_seconds > *options.end_time_seconds)
+                          ? -1.0f
+                          : 1.0f;
 
   auto channel = GetPlaybackChannel(channel_id);
   if (channel) {
@@ -329,26 +335,41 @@ void GltfAnimator::PlayAnim(int32_t anim_index,
           absl::Seconds(options.blend_time_seconds), absl::ZeroDuration()});
     } else {
       channel->blend_anim.reset();
+      PlaybackEndedEvent ev;
+      ev.cause = PlaybackEndedEvent::STOPPED;
+      ev.animation_index = channel->anim_playback.anim_index;
+      GetView()
+          .GetComponentManager()
+          .GetComponentSystem<GltfAnimator>()
+          .SendOrQueuePlaybackEndedEvent(ev, GetNode());
     }
 
-    channel->anim_playback = GltfAnimPlayback{
-        anim_index,
-        anim,
-        anim->CreateCursor(),
-        anim->FirstT() + start_duration,
-        options.speed_multiplier ? options.speed_multiplier : 1.0f,
-        options.looping,
-        0};
+    channel->anim_playback =
+        GltfAnimPlayback{anim_index,
+                         anim,
+                         anim->CreateCursor(),
+                         anim->FirstT() + start_duration,
+                         anim->FirstT() + start_duration,
+                         options.end_time_seconds.has_value()
+                             ? std::optional<absl::Duration>(
+                                   absl::Seconds(*options.end_time_seconds))
+                             : std::nullopt,
+                         speed_multiplier,
+                         options.looping,
+                         0};
     channel->active = true;
     channel->persist = options.persist_channel;
   } else {
     PlaybackChannel new_channel{
         .anim_playback =
-            GltfAnimPlayback{
-                anim_index, anim, anim->CreateCursor(),
-                anim->FirstT() + start_duration,
-                options.speed_multiplier ? options.speed_multiplier : 1.0f,
-                options.looping, 0},
+            GltfAnimPlayback{anim_index, anim, anim->CreateCursor(),
+                             anim->FirstT() + start_duration,
+                             anim->FirstT() + start_duration,
+                             options.end_time_seconds.has_value()
+                                 ? std::optional<absl::Duration>(
+                                       absl::Seconds(*options.end_time_seconds))
+                                 : std::nullopt,
+                             speed_multiplier, options.looping, 0},
         .blend_anim = {},
         .active = true,
         .persist = options.persist_channel};
@@ -567,7 +588,11 @@ bool GltfAnimator::AdvanceAnimationPlayback(
 
   bool animation_ended = false;
   bool crossed_endpoint =
-      playback.anim->SanitizeT(playback.looping, &playback.t);
+      playback.end_time.has_value()
+          ? playback.anim->SanitizeT(playback.looping, &playback.t,
+                                     playback.start_time, *playback.end_time)
+          : playback.anim->SanitizeT(playback.looping, &playback.t,
+                                     playback.start_time);
 
   if (crossed_endpoint) {
     if (playback.looping) {
@@ -882,7 +907,14 @@ void GltfAnimator::AdvanceBlendAnimation(GltfAnimator::PlaybackChannel& channel,
     }
   }
 
-  blend_out_anim.anim->SanitizeT(blend_out_anim.looping, &blend_out_anim.t);
+  if (blend_out_anim.end_time.has_value()) {
+    blend_out_anim.anim->SanitizeT(blend_out_anim.looping, &blend_out_anim.t,
+                                   blend_out_anim.start_time,
+                                   *blend_out_anim.end_time);
+  } else {
+    blend_out_anim.anim->SanitizeT(blend_out_anim.looping, &blend_out_anim.t,
+                                   blend_out_anim.start_time);
+  }
 
   if (channel.blend_anim->elapsed_seconds >=
       channel.blend_anim->blend_time_seconds) {

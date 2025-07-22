@@ -16,6 +16,7 @@
 
 #include "core/view/framework/gestures/double_tap_gesture.h"
 #include "core/view/framework/gestures/drag_gesture.h"
+#include "core/view/framework/gestures/hover_gesture.h"
 #include "core/view/framework/gestures/multi_drag_gesture.h"
 #include "core/view/framework/gestures/pinch_gesture.h"
 #include "core/view/framework/gestures/tap_gesture.h"
@@ -36,6 +37,7 @@ GestureManager::GestureManager(Dispatcher* dispatcher)
   AddGestureRecognizer<DragGesture>();
   AddGestureRecognizer<DoubleTapGesture>();
   AddGestureRecognizer<TapGesture>();
+  AddGestureRecognizer<HoverGesture>();
 }
 
 void GestureManager::OnPointerHitEvent(const PointerHitEvent& hit_event) {

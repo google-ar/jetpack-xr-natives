@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_ASYNC_FUTURE_COMMON_H_
 
 #include <cstdint>
+#include <optional>
 
 #include "absl/types/optional.h"
 #include "absl/types/variant.h"
@@ -88,16 +89,37 @@ struct FutureScheduleOptions {
   // Controls which executor the functor is run on. Defaults to foreground.
   ExecutorTypeOrExecutor executor = Executor::Type::kForeground;
 
-  // Controls how future's run the functor passed into Future<T>::Schedule.
-  // Defaults to always scheduling the functor on the executor.
+  // Controls how a future future runs the functor passed into
+  // Future<T>::Schedule. Defaults to always scheduling the functor on the
+  // executor.
   FutureExecutorMode executor_mode = FutureExecutorMode::kScheduleAlways;
 
-  // The priority of the task passed into Future<T>::Schedule.
+  // The priority of this future, which is only used when the future is
+  // scheduled. Whether or not the future is scheduled depends on the executor
+  // mode.
+  //
+  // The value here is the "self priority" of the future. The actual priority
+  // used for this future - the "active priority" - is calculated as the maximum
+  // value across (1) the active priorities of its direct children*, if any, and
+  // (2) its own self priority, if specified. To mark the future as having an
+  // unspecified self priority, which is also the default, use std::nullopt.
+  //
+  // *In terms of priority, there are three cases where a future is considered a
+  // child of another future:
+  // 1. A future returned by Then() is considered a child of the future that
+  //    Then() was called on.
+  // 2. A future with a lambda that returns an inner future is considered a
+  //    child of the inner future.
+  // 3. The future returned by Combine(), Merge(), or variants thereof is
+  //    considered a child of all of the Futures passed in.
+  //
   // Note: If a FutureGroup is specified, this value will be overridden by the
   // task priority of the provided FutureGroup.
-  int task_priority = kNormalTaskPriority;
+  std::optional<int> task_priority = std::nullopt;
 
   // The FutureGroup to assign the scheduled Future to.
+  // TODO Reevaluate the need for FutureGroup, given that we now
+  // have task priorities that bubble up.
   std::optional<FutureGroup> future_group = std::nullopt;
 };
 
@@ -106,18 +128,48 @@ struct FutureThenOptions {
   // Controls which executor the functor is run on. Defaults to foreground.
   ExecutorTypeOrExecutor executor = Executor::Type::kForeground;
 
-  // Controls how future's run the functor passed into Future<T>::Then. Defaults
-  // to always scheduling the functor on the executor if the current executor
-  // isn't the target executor. Otherwise, calls the functor immediately.
+  // Controls how a future runs the functor passed into Future<T>::Then.
+  // Defaults to always scheduling the functor on the executor if the current
+  // executor isn't the target executor. Otherwise, calls the functor
+  // immediately.
+  //
+  // Be aware that because of this default behavior, if a future is scheduled
+  // with Then and runs on the current executor, it will run immediately, and
+  // potentially before futures that have been scheduled with higher
+  // task_priority values. This is because task_priority is only considered when
+  // the future is scheduled.
+  //
+  // If you want ensure a Then future runs according to task_priority (note that
+  // task age also matters), set this to kScheduleAlways.
   FutureExecutorMode executor_mode =
       FutureExecutorMode::kScheduleIfNotOnExecutorThread;
 
-  // The priority of the task passed into Future<T>::Then.
+  // The priority of this future, which is only used when the future is
+  // scheduled. Whether or not the future is scheduled depends on the executor
+  // mode.
+  //
+  // The value here is the "self priority" of the future. The actual priority
+  // used for this future - the "active priority" - is calculated as the maximum
+  // value across (1) the active priorities of its direct children*, if any, and
+  // (2) its own self priority, if specified. To mark the future as having an
+  // unspecified self priority, which is also the default, use std::nullopt.
+  //
+  // *In terms of priority, there are three cases where a future is considered a
+  // child of another future:
+  // 1. A future returned by Then() is considered a child of the future that
+  //    Then() was called on.
+  // 2. A future with a lambda that returns an inner future is considered a
+  //    child of the inner future.
+  // 3. The future returned by Combine(), Merge(), or variants thereof is
+  //    considered a child of all of the Futures passed in.
+  //
   // Note: If a FutureGroup is specified, this value will be overridden by the
   // task priority of the provided FutureGroup.
-  int task_priority = kNormalTaskPriority;
+  std::optional<int> task_priority = std::nullopt;
 
   // The FutureGroup to assign the Future to.
+  // TODO Reevaluate the need for FutureGroup, given that we now
+  // have task priorities that bubble up.
   std::optional<FutureGroup> future_group = std::nullopt;
 };
 
@@ -140,7 +192,7 @@ class WeakFuture {
   // Returns the Future referenced by the WeakFuture, creating a hard reference
   // to it.
   //
-  // If the referenced future has alerady been destroyed, then returns nullopt.
+  // If the referenced future has already been destroyed, then returns nullopt.
   //
   // Similar to std::weak_ptr::lock
   absl::optional<Future<T>> Lock() const {

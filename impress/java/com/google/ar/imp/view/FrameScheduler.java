@@ -19,6 +19,7 @@ package com.google.ar.imp.view;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
+import androidx.annotation.Nullable;
 import androidx.concurrent.futures.ResolvableFuture;
 import com.google.common.util.concurrent.ListenableFuture;
 import java.util.concurrent.Callable;
@@ -117,8 +118,12 @@ public abstract class FrameScheduler {
     private final HandlerThread thread;
     private final Handler handler;
 
-    public BackgroundFrameThread() {
-      thread = new HandlerThread("impressThread");
+    public BackgroundFrameThread(@Nullable String threadName) {
+      if (threadName == null || threadName.isEmpty()) {
+        threadName = "impressThread";
+      }
+
+      thread = new HandlerThread(threadName);
       thread.start();
 
       handler = new Handler(thread.getLooper());
@@ -137,18 +142,32 @@ public abstract class FrameScheduler {
 
   /** Abstract factory allows an override of the FrameScheduler */
   public interface Factory {
-    public abstract FrameScheduler create(ThreadMode threadMode);
+    public default FrameScheduler create(ThreadMode threadMode) {
+      return create(threadMode, null);
+    }
+
+    /**
+     * Creates a FrameScheduler.
+     *
+     * @param threadMode The thread mode for the frame scheduler.
+     * @param threadName The name of the thread. Only used in background mode.
+     */
+    public abstract FrameScheduler create(ThreadMode threadMode, @Nullable String threadName);
   }
 
   protected FrameThread frameThread;
 
   protected FrameScheduler(ThreadMode threadMode) {
+    this(threadMode, null);
+  }
+
+  protected FrameScheduler(ThreadMode threadMode, @Nullable String threadName) {
     switch (threadMode) {
       case MAIN_DEFAULT:
         frameThread = new MainFrameThread();
         break;
       case BACKGROUND:
-        frameThread = new BackgroundFrameThread();
+        frameThread = new BackgroundFrameThread(threadName);
         break;
     }
   }

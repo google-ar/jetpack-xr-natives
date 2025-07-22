@@ -14,22 +14,22 @@
 
 #include "core/editor/widget_ui_system.h"
 
-#include <algorithm>
-#include <iterator>
+#include <cstdint>
 #include <memory>
-#include <optional>
-#include <string>
 #include <utility>
 #include <vector>
 
-#include "absl/memory/memory.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "dear_imgui/imgui.h"
 #include "core/common/type_traits.h"
-#include "core/editor/layout/editor_panel_ids.h"
+#include "core/editor/components/spatial_ui_canvas.h"
+#include "core/editor/components/world_space_editor_ui.h"
 #include "core/editor/layout/layout_composer.h"
 #include "core/editor/widget.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
+#include "core/ncsb/path_manager.h"
 #include "core/ncsb/system.h"
 #include "core/view/base_view.h"
 #include "core/view/view_events.h"
@@ -61,6 +61,26 @@ WidgetUiSystem::WidgetUiSystem(BaseView* view, bool enabled,
         if (layout_composer_) {
           // Widgets are drawn and draw functions are flushed.
           layout_composer_->DrawLayout();
+
+          NodeHandle world_ui = GetView().GetPathManager().Find(
+              absl::StrCat("//", WorldSpaceEditorUi::kWorldUiName));
+          if (world_ui && world_ui->GetComponent<WorldSpaceEditorUi>()) {
+            absl::Span<const LayoutComposer::SubWindowInfo> window_info =
+                layout_composer_->GetSubWindowInfo();
+            uint8_t window_count = 0;
+            for (const auto& window_info : window_info) {
+              SpatialUiCanvas::SpatialUiCanvasSettings settings = {
+                  .name = window_info.label,
+                  .content_position = {window_info.window_position.x,
+                                       window_info.window_position.y},
+                  .content_size = {window_info.window_size.x,
+                                   window_info.window_size.y}};
+              window_count++;
+              world_ui->GetComponent<WorldSpaceEditorUi>()
+                  ->UpdateSpatialUiCanvas(settings)
+                  .KeptBy(world_ui);
+            }
+          }
         }
 
         ProcessPendingRemoves();

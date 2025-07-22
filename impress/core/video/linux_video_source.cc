@@ -37,12 +37,12 @@
 #include "core/common/small_source_location.h"
 #include "core/math/vec.h"
 #include "core/media/media_asset.h"
+#include "core/media/media_color_space.h"
 #include "core/media/media_source.h"
 #include "core/media/media_type.h"
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
 #include "core/resources/resource_manager.h"
-#include "core/video/video_color_space.h"
 #include "core/video/video_source.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
@@ -86,7 +86,7 @@ class LinuxVideoSource : public VideoSource {
   absl::StatusOr<int> GetLoopCount() const override;
   media::MediaSource::State GetState() const override;
   uint2 GetVideoSize() const override;
-  VideoColorSpace GetColorSpace() const override;
+  MediaColorSpace GetColorSpace() const override;
   MediaStereoMode GetStereoMode() const override;
   void SetOnPlaybackCompleteCallback(std::function<void()> callback) override;
   void SetOnSeekCompleteCallback(std::function<void()> callback) override;
@@ -488,8 +488,8 @@ uint2 LinuxVideoSource::GetVideoSize() const {
   return {video_metadata_.width, video_metadata_.height};
 }
 
-VideoColorSpace LinuxVideoSource::GetColorSpace() const {
-  return VideoColorSpace();
+MediaColorSpace LinuxVideoSource::GetColorSpace() const {
+  return MediaColorSpace();
 }
 
 MediaStereoMode LinuxVideoSource::GetStereoMode() const {

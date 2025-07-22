@@ -30,6 +30,30 @@
 
 namespace imp::split_engine {
 
+// Helper class for creating android_xr::schemas::TextureSampler.
+class SplitEngineTextureSamplerCreator {
+ public:
+  using TextureSampler = android_xr::schemas::TextureSampler;
+  static constexpr auto CreateTextureSampler =
+      android_xr::schemas::CreateTextureSampler;
+
+  using MinFilter = android_xr::schemas::MinFilter;
+  using MagFilter = android_xr::schemas::MagFilter;
+  using WrapMode = android_xr::schemas::WrapMode;
+  using CompareMode = android_xr::schemas::CompareMode;
+  using CompareFunc = android_xr::schemas::CompareFunc;
+};
+
+// Writes a flatbuffer table for android_xr::schemas::BuiltInTextureParameter
+// for the given imp::Texture. The texture sampler from the imp::Texture is
+// used unless the optional sampler is provided. If the texture id is not
+// provided, it will use the texture address as the id.
+flatbuffers::Offset<android_xr::schemas::BuiltInTextureParameter>
+CreateBuiltInTextureParameter(
+    flatbuffers::FlatBufferBuilder& fbb, imp::OwnedOrBorrowedTexturePtr texture,
+    std::optional<uint64_t> texture_id = std::nullopt,
+    std::optional<filament::TextureSampler> sampler = std::nullopt);
+
 // Helper class for creating BuiltInTextureParameters. This is introduced to
 // support both local and remote mode of split engine.
 class BuiltInTextureParameterCreator {

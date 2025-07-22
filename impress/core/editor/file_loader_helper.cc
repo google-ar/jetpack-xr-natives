@@ -14,16 +14,14 @@
 
 #include "core/editor/file_loader_helper.h"
 
-#include <functional>
 #include <string>
 #include <utility>
 #include <variant>
 #include <vector>
 
+#include "absl/log/check.h"
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
-#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_split.h"
@@ -35,12 +33,13 @@
 #include "core/common/buffer_access.h"
 #include "core/common/file_helpers.h"
 #include "core/common/invocable.h"
-#include "core/common/platform_helpers.h"
 #include "core/common/registry.h"
 #include "core/config.h"
 #include "core/editor/editor.h"
 #include "core/editor/editor_touch.h"
 #include "core/editor/events.h"
+#include "core/editor/file_type_loader.h"
+#include "core/editor/file_type_registry.h"
 #include "core/editor/widgets/asset_library.h"
 #include "core/lighting/environment_light.h"
 #include "core/lighting/environment_light_factory.h"
@@ -64,39 +63,10 @@ namespace imp::editor {
 namespace {
 
 static constexpr absl::string_view kFileSuffix = "file://";
-static constexpr absl::string_view kExtensionGltf = ".gltf";
-static constexpr absl::string_view kExtensionGlb = ".glb";
-static constexpr absl::string_view kExtensionIsf = ".isf";
-static constexpr absl::string_view kExtensionTextproto = ".textproto";
-static constexpr absl::string_view kExtensionExr = ".exr";
-static constexpr absl::string_view kExtensionHdr = ".hdr";
-static constexpr absl::string_view kExtensionTexturePng = ".png";
-static constexpr absl::string_view kExtensionTextureJpg = ".jpg";
-static constexpr absl::string_view kExtensionPly = ".ply";
-
 static constexpr float kDefaultIndirectIntensity = 220.0f;
 
 }  // namespace
 
-FileType GetFileTypeFromName(absl::string_view filename) {
-  if (absl::EndsWith(filename, kExtensionGltf) ||
-      absl::EndsWith(filename, kExtensionGlb)) {
-    return FileType::kGltf;
-  } else if (absl::EndsWith(filename, kExtensionIsf)) {
-    return FileType::kIsf;
-  } else if (absl::EndsWith(filename, kExtensionTextproto)) {
-    return FileType::kIsfTextproto;
-  } else if (absl::EndsWith(filename, kExtensionExr) ||
-             absl::EndsWith(filename, kExtensionHdr)) {
-    return FileType::kHdrImage;
-  } else if (absl::EndsWith(filename, kExtensionTexturePng) ||
-             absl::EndsWith(filename, kExtensionTextureJpg)) {
-    return FileType::kTexture;
-  } else if (absl::EndsWith(filename, kExtensionPly)) {
-    return FileType::kGSplat;
-  }
-  return FileType::kUnsupported;
-}
 
 // Adds the file to the AssetLibrary if it is not already present.
 //
@@ -146,7 +116,7 @@ void BeginLoadingNode(Editor& editor, BaseView& view) {
 
 void EndLoadingNode(Editor& editor, BaseView& view, absl::string_view path,
                     NodeHandle node, Invocable<void(NodeHandle)> placement_func,
-                    Invocable<void(NodeHandle)> post_loaded_func = {}) {
+                    Invocable<void(NodeHandle)> post_loaded_func) {
   EditorTouch(node);
 
   if (node->GetName().empty()) {
@@ -169,18 +139,20 @@ void EndLoadingNode(Editor& editor, BaseView& view, absl::string_view path,
   editor.GetDispatcher().Send(editor::ModelLoadedEvent(node));
 }
 
-Future<absl::Status> LoadGltf(Editor& editor, BaseView& view,
-                              absl::string_view path,
-                              Invocable<void(NodeHandle)> placement_func) {
-  BeginLoadingNode(editor, view);
+Future<absl::Status> GltfFileLoader::LoadNode(
+    absl::string_view path, Invocable<void(NodeHandle)> placement_func) {
+  Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
 
-  return view.GetAssetManager()
+  BeginLoadingNode(editor, GetView());
+
+  return GetView()
+      .GetAssetManager()
       .LoadModel(path, editor.GetGltfLoadOptions())
-      .Then([&editor, &view, path = std::string(path),
+      .Then([this, &editor, path = std::string(path),
              placement_func =
                  std::move(placement_func)](NodeHandle node) mutable {
         EndLoadingNode(
-            editor, view, path, node, std::move(placement_func),
+            editor, GetView(), path, node, std::move(placement_func),
             [](NodeHandle node) {
               auto gltf_renderer = node->GetComponent<GltfRenderer>();
               auto gltf_scene = node->GetComponent<GltfScene>();
@@ -211,63 +183,66 @@ Future<absl::Status> LoadGltf(Editor& editor, BaseView& view,
       });
 }
 
-Future<absl::Status> LoadIsf(Editor& editor, BaseView& view,
-                             absl::string_view path,
-                             Invocable<void(NodeHandle)> placement_func) {
-  BeginLoadingNode(editor, view);
+Future<absl::Status> IsfFileLoader::LoadNode(
+    absl::string_view path, Invocable<void(NodeHandle)> placement_func) {
+  Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
 
-  return view.GetSceneSystem()
+  BeginLoadingNode(editor, GetView());
+  return GetView()
+      .GetSceneSystem()
       .LoadScene(path, {.metadata_mode = SceneSystem::MetadataMode::kInclude})
-      .Then([&editor, &view, path = std::string(path),
+      .Then([&editor, this, path = std::string(path),
              placement_func =
                  std::move(placement_func)](NodeHandle node) mutable {
-        EndLoadingNode(editor, view, path, node, std::move(placement_func));
+        EndLoadingNode(editor, GetView(), path, node,
+                       std::move(placement_func));
       });
 }
 
+Future<absl::Status> TextProtoFileLoader::LoadNode(
+    absl::string_view path, Invocable<void(NodeHandle)> placement_func) {
 #if IMP_RUNTIME(DEV)
-Future<absl::Status> LoadTextproto(Editor& editor, BaseView& view,
-                                   absl::string_view path,
-                                   Invocable<void(NodeHandle)> placement_func) {
-  BeginLoadingNode(editor, view);
+  Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
 
-  return view.GetAssetManager()
+  BeginLoadingNode(editor, GetView());
+
+  return GetView()
+      .GetAssetManager()
       .LoadResource(path)
-      .Then([&view, path](resources::Resource resource) -> Future<NodeHandle> {
-        return view.GetSceneSystem().LoadSceneFromTextproto(
+      .Then([this, path](resources::Resource resource) -> Future<NodeHandle> {
+        return GetView().GetSceneSystem().LoadSceneFromTextproto(
             resource, path,
             {.metadata_mode = SceneSystem::MetadataMode::kInclude});
       })
-      .Then([&editor, &view, path = std::string(path),
+      .Then([&editor, this, path = std::string(path),
              placement_func =
                  std::move(placement_func)](NodeHandle node) mutable {
-        EndLoadingNode(editor, view, path, node, std::move(placement_func));
+        EndLoadingNode(editor, GetView(), path, node,
+                       std::move(placement_func));
       });
+#else
+  return Future<absl::Status>(
+      absl::InternalError("Textproto loading is only supported in dev mode."));
+#endif  // IMP_RUNTIME(DEV)
 }
-#endif
 
-Future<absl::Status> LoadIbl(BaseView& view, absl::string_view path) {
+Future<absl::Status> IblFileLoader::LoadNode(
+    absl::string_view path, Invocable<void(NodeHandle)> placement_func) {
   IblPrefilterLoader runtime_ibl_loader = IblPrefilterLoader();
 
-  return view.GetAssetManager()
+  return GetView()
+      .GetAssetManager()
       .LoadAsset<ImageBasedLightingAsset>(path, runtime_ibl_loader)
-      .Then([&view](AssetPtr<ImageBasedLightingAsset> ibl_asset) {
+      .Then([this](AssetPtr<ImageBasedLightingAsset> ibl_asset) {
         // Create the EnvironmentLight from the asset.
         EnvironmentLightPtr environment_light_ptr =
-            view.GetEnvironmentLightFactory().CreateEnvironmentLight(
+            GetView().GetEnvironmentLightFactory().CreateEnvironmentLight(
                 ibl_asset, kDefaultIndirectIntensity);
 
         // Assign the EnvironmentLight to the LightManager.
-        view.GetLightManager().SetEnvironmentLight(
+        GetView().GetLightManager().SetEnvironmentLight(
             std::move(environment_light_ptr));
       });
-}
-
-Future<absl::Status> LoadGSplat(Editor& editor, BaseView& view,
-                                absl::string_view path,
-                                Invocable<void(NodeHandle)> placement_func) {
-  return imp::Future<absl::Status>(
-      absl::UnimplementedError("GSplat loading is not supported yet."));
 }
 
 Future<absl::Status> LoadFile(BaseView& view, absl::string_view path,
@@ -277,34 +252,16 @@ Future<absl::Status> LoadFile(BaseView& view, absl::string_view path,
 
   absl::string_view file_name = RemoveDirectoryAndExtensionFromFilename(path);
   absl::string_view extension = GetExtensionFromFilename(path).substr(1);
-  FileType file_type = GetFileTypeFromName(path);
 
   Future<std::string> added_asset = AddFileToAssetLibraryIfNeeded(
       editor, view, path, file_name, extension, std::move(source));
 
   return added_asset.Then(
-      [&editor, &view, file_type, placement_func = std::move(placement_func)](
+      [&view, placement_func = std::move(placement_func)](
           const std::string& path) mutable -> Future<absl::Status> {
-        switch (file_type) {
-          case FileType::kGltf:
-            return LoadGltf(editor, view, path, std::move(placement_func));
-          case FileType::kIsf:
-            return LoadIsf(editor, view, path, std::move(placement_func));
-          case FileType::kIsfTextproto:
-#if IMP_RUNTIME(DEV)
-            return LoadTextproto(editor, view, path, std::move(placement_func));
-#else
-            return Future<absl::Status>(absl::InternalError(
-                "Textproto loading is only supported in dev mode."));
-#endif
-          case FileType::kHdrImage:
-            return LoadIbl(view, path);
-          case FileType::kGSplat:
-            return LoadGSplat(editor, view, path, std::move(placement_func));
-          default:
-            return Future<absl::Status>(absl::InternalError(
-                absl::StrFormat("Unsupported file type: %s", path)));
-        }
+        FileTypeRegistry& file_type_registry =
+            *view.GetRegistry().Get<FileTypeRegistry>();
+        return file_type_registry.LoadNode(path, std::move(placement_func));
       });
 }
 

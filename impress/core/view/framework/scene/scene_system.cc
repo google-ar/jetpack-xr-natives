@@ -64,6 +64,9 @@
 #include "core/view/framework/assets/proto_asset.h"
 #include "core/view/framework/camera/camera_component.h"
 #include "core/view/framework/collision/box_collider.h"
+#include "core/view/framework/collision/capsule_collider.h"
+#include "core/view/framework/collision/cone_collider.h"
+#include "core/view/framework/collision/cylinder_collider.h"
 #include "core/view/framework/collision/mesh_collider.h"
 #include "core/view/framework/collision/sphere_collider.h"
 #include "core/view/framework/lighting/light_component.h"
@@ -1061,6 +1064,9 @@ void SceneSystem::RegisterDefaultComponentsIsfInfo() {
   RegisterComponentIsfInfo<CameraComponent>();
   RegisterComponentIsfInfo<BoxCollider>();
   RegisterComponentIsfInfo<SphereCollider>();
+  RegisterComponentIsfInfo<CapsuleCollider>();
+  RegisterComponentIsfInfo<CylinderCollider>();
+  RegisterComponentIsfInfo<ConeCollider>();
   RegisterComponentIsfInfo<MeshCollider>();
 }
 

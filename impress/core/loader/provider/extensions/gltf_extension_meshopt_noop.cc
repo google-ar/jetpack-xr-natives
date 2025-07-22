@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "core/common/buffer_access.h"
 #include "core/loader/provider/extensions/gltf_extension_meshopt.h"
+#include "core/loader/provider/gltf/gltf.proto.imp.h"
 
 namespace imp::loader::extensions {
 
-absl::StatusOr<BufferAccess> ResolveMeshOpt(imp::gltf::Gltf* gltf) {
+absl::StatusOr<BufferAccess> ResolveMeshOpt(imp::gltf::imp_proto::Gltf* gltf) {
   for (auto& buffer_view : gltf->buffer_views) {
     if (buffer_view.extensions.meshopt_compression) {
       return absl::InternalError(

@@ -22,6 +22,7 @@
 #include <gltfio/NodeManager.h>
 
 #include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/SingleInstanceComponentManager.h"
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "filament/libs/utils/include/utils/Slice.h"

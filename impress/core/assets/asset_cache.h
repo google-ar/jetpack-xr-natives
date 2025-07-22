@@ -17,8 +17,12 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_ASSET_CACHE_H_
 #define THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_ASSET_CACHE_H_
 
+#include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/hash/hash.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -27,7 +31,6 @@
 #include "core/assets/base_asset_cache.h"
 #include "core/async/future.h"
 #include "core/common/ref_counter.h"
-#include "robin_map/include/tsl/robin_map.h"
 
 namespace imp {
 
@@ -53,7 +56,7 @@ class AssetCache : public BaseAssetCache {
     // Check if the asset is already loaded or loading.
     auto asset_itr = assets_.find(key);
     if (asset_itr != assets_.end()) {
-      AssetHolder& asset_holder = asset_itr.value();
+      AssetHolder& asset_holder = asset_itr->second;
 
       // The asset was already loaded, but failed. Remove the cache entry so it
       // can be tried again.
@@ -86,7 +89,7 @@ class AssetCache : public BaseAssetCache {
         assets_
             .emplace(key, AssetHolder{std::make_unique<RefCounter>(),
                                       raw_asset_future})
-            .first.value();
+            .first->second;
 
     return ToAssetFuture(asset_holder.raw_asset_future,
                          asset_holder.ref_counter.get());
@@ -96,15 +99,16 @@ class AssetCache : public BaseAssetCache {
     size_t key = absl::Hash<absl::string_view>()(asset_url);
     auto found = assets_.find(key);
     if (found != assets_.end()) {
-      AssetHolder& asset_holder = found.value();
+      AssetHolder& asset_holder = found->second;
       // Does nothing if the future is already ready.
       asset_holder.raw_asset_future.Cancel();
+      cancelled_count_++;
     }
   }
 
   void Clear() override {
     for (auto itr = assets_.begin(); itr != assets_.end(); itr++) {
-      ClearAssetHolder(itr.value());
+      ClearAssetHolder(itr->second);
     }
     assets_.clear();
     for (AssetHolder& asset_holder : unnamed_assets_) {
@@ -116,11 +120,11 @@ class AssetCache : public BaseAssetCache {
   void ClearUnused() override {
     auto itr = assets_.begin();
     while (itr != assets_.end()) {
-      if (ClearAssetHolderIfUnused(itr.value())) {
-        itr = assets_.erase(itr);
+      auto copy_itr = itr++;
+      if (ClearAssetHolderIfUnused(copy_itr->second)) {
+        assets_.erase(copy_itr);
         continue;
       }
-      itr++;
     }
     auto itr1 = unnamed_assets_.begin();
     while (itr1 != unnamed_assets_.end()) {
@@ -135,6 +139,11 @@ class AssetCache : public BaseAssetCache {
   int GetAssetCount() const override {
     return assets_.size() + unnamed_assets_.size();
   }
+  // Returns the number of assets that have been destroyed.
+  int64_t GetDestroyedCount() const { return destroyed_count_; }
+
+  // Returns the number of loads were cancelled before completion.
+  int64_t GetCancelledCount() const { return cancelled_count_; }
 
  private:
   struct AssetHolder {
@@ -156,8 +165,10 @@ class AssetCache : public BaseAssetCache {
       // engine and potentially causing a double-deletion when filament tries
       // to free asset resources.
       absl::StatusOr<std::unique_ptr<T>> asset = raw_asset_future.Move();
+      destroyed_count_++;
     } else {
       raw_asset_future.Cancel();
+      cancelled_count_++;
     }
   }
 
@@ -178,12 +189,14 @@ class AssetCache : public BaseAssetCache {
           // Move the asset out of the future to guarantee that it is
           // destroyed.
           absl::StatusOr<std::unique_ptr<T>> asset = raw_asset_future.Move();
+          destroyed_count_++;
           return true;
         }
       } else {
         // The asset is currently in the process of loading, but nothing is
         // referencing it anymore so remove it.
         asset_holder.raw_asset_future.Cancel();
+        cancelled_count_++;
         return true;
       }
     }
@@ -200,11 +213,15 @@ class AssetCache : public BaseAssetCache {
 
   // Contains assets that are currently loading as well as fully loaded
   // assets.
-  tsl::robin_map<size_t, AssetHolder> assets_;
+  absl::flat_hash_map<size_t, AssetHolder> assets_;
   // Assets that come with no cache key.
   // They are here just because we need asset cache to do the memory management.
   // They are not supposed to be retrieved from this cache.
   std::vector<AssetHolder> unnamed_assets_;
+
+  // The number of assets that have been released from the cache.
+  int64_t destroyed_count_ = 0;
+  int64_t cancelled_count_ = 0;
 };
 
 }  // namespace imp

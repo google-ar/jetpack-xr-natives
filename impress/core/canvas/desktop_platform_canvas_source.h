@@ -45,8 +45,6 @@ namespace imp {
 // TODO: Add desktop support for controlling fonts.
 class DesktopPlatformCanvasSource : public PlatformCanvasSource {
  public:
-  explicit DesktopPlatformCanvasSource(BaseView& view);
-
   bool IsFeatureSupported(ScopedCanvas::Feature feature) override;
 
   Texture* GetTexture() override;
@@ -79,10 +77,12 @@ class DesktopPlatformCanvasSource : public PlatformCanvasSource {
       const ScopedCanvas::TextOptions& text_options) override;
 
   std::unique_ptr<ScopedCanvas> StartDrawing(
-      uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) override;
+      BaseView& view, uint2 pixel_size,
+      ScopedCanvas::DrawMode draw_mode) override;
 
   std::unique_ptr<ScopedCanvas> StartDrawing(
-      uint2 pixel_size, ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
+      BaseView& view, uint2 pixel_size,
+      ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
       ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) override;
 
  private:
@@ -135,7 +135,6 @@ class DesktopPlatformCanvasSource : public PlatformCanvasSource {
       absl::string_view text, const ScopedCanvas::TextOptions& text_options,
       bool draw_stroke_only);
 
-  BaseView& view_;
   DesktopFontHolder font_holder_;
   OwnedTexturePtr texture_;
   uint2 pixel_size_;

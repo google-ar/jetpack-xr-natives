@@ -33,6 +33,7 @@
 #include "absl/debugging/leak_check.h"
 #include "third_party/fontconfig/fontconfig/fontconfig.h"
 #include "third_party/skia/HEAD/include/ports/SkFontMgr_fontconfig.h"
+#include "third_party/skia/HEAD/include/ports/SkFontScanner_FreeType.h"
 #endif
 
 namespace imp {
@@ -71,7 +72,7 @@ sk_sp<SkFontMgr> CreateFallbackFontManager() {
           config, reinterpret_cast<const FcChar8*>(fontFilePath.c_str()));
     }
     FcConfigBuildFonts(config);
-    font_mgr = SkFontMgr_New_FontConfig(config);
+    font_mgr = SkFontMgr_New_FontConfig(config, SkFontScanner_Make_FreeType());
   }
   return font_mgr;
 #else
@@ -118,7 +119,7 @@ sk_sp<SkFontMgr> DesktopFontHolder::GetFontMgr() {
   // Check to see if we are in a testing environment. Forge doesn't supply us
   // with a FontConfig so we need to use the fallback font manager.
   if (getenv("TEST_TMPDIR") == nullptr) {
-    font_mgr = SkFontMgr_New_FontConfig(nullptr);
+    font_mgr = SkFontMgr_New_FontConfig(nullptr, SkFontScanner_Make_FreeType());
   }
   if (font_mgr == nullptr) {
     IMP_LOG(imp::ERROR) << "FontConfig not found on system, creating fallback.";

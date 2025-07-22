@@ -31,6 +31,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "filament/filament/include/filament/Material.h"
 #include "filament/libs/filabridge/include/filament/MaterialEnums.h"
 #include "filament/libs/math/include/math/TVecHelpers.h"
@@ -54,6 +55,8 @@
 #include "core/model/mesh/vertex_format.h"
 #include "core/ncsb/component_system.h"
 #include "core/text/glyph_atlas.h"
+#include "core/text/glyph_atlas_old.h"
+#include "core/text/glyph_emulator.h"
 #include "core/text/text_renderer_assets.h"
 #include "core/text/text_renderer_state.proto.imp.h"
 #include "core/view/base_view.h"
@@ -144,6 +147,14 @@ GlyphAtlas::TextureSize GetAtlasTextureSize(
   }
 }
 
+void InitMeshDataIndices(MeshData& mesh_data) {
+  absl::Span<uint16_t> indices = mesh_data.Indices<uint16_t>();
+  for (int i = 0; i < indices.length(); i++) {
+    indices[i] = (i / kQuadIndices.size()) * kQuadVertices.size() +
+                 kQuadIndices[i % kQuadIndices.size()];
+  }
+}
+
 }  // namespace
 
 TextRenderer::System::System(BaseView* view)
@@ -177,6 +188,7 @@ TextRenderer::System::AllocSubMesh(int size) {
               size * kQuadVertices.size(), size * kQuadIndices.size()};
 
           MeshData mesh_data = MeshData(kMeshDescription);
+          InitMeshDataIndices(mesh_data);
 
           OwnedMeshPtr mesh = view.GetMeshFactory().CreateByCopyingMeshData(
               MeshFactory::PrimitiveType::TRIANGLES, mesh_data, Box(),
@@ -215,16 +227,20 @@ Future<absl::Status> TextRenderer::SetupImpl(
   ViewConfig view_config = GetView().GetConfig();
   std::optional<ViewConfig::GlyphAtlasTextureSize> texture_size =
       view_config.glyph_atlas_texture_size;
-  if (texture_size.has_value()) {
-    glyph_atlas_ = &GetView().GetRegistry().GetOrCreate<GlyphAtlas>(
-        GetView(),
-        GlyphAtlas::Config{.texture_size = GetAtlasTextureSize(*texture_size)});
-  } else {
-    glyph_atlas_ = &GetView().GetRegistry().GetOrCreate<GlyphAtlas>(GetView());
-  }
+  glyph_atlas_ = &GetView().GetRegistry().GetOrRegister<GlyphAtlas>(
+      [this, texture_size = texture_size] {
+        if (texture_size.has_value()) {
+          return std::make_unique<GlyphAtlasOld>(
+              GetView(), GlyphAtlas::Config{.texture_size = GetAtlasTextureSize(
+                                                *texture_size)});
+
+        } else {
+          return std::make_unique<GlyphAtlasOld>(GetView());
+        }
+      });
 
   // TODO (broken link) Ensure that the color space here is correct
-  GlyphAtlas::TextOptions options = {
+  GlyphEmulator::TextOptions options = {
       .font_params = state_.font_params,
       .font_size_pixels = state_.font_size_pixels,
       .stroke_width_pixels = state_.stroke_width_pixels,
@@ -250,11 +266,16 @@ Future<absl::Status> TextRenderer::SetupImpl(
         glyph_atlas_->GetCombinedCharacterGroups(state_.text, options);
   }
 
+  Future<GlyphEmulator::SuperSampleInfo> super_sample_info_future =
+      glyph_atlas_->GetSuperSampleInfo();
+
   return text_material_future
-      .Merge(glyphs_future, font_info_future, combined_character_indices_future)
+      .Merge(glyphs_future, font_info_future, combined_character_indices_future,
+             super_sample_info_future)
       .Then([this](std::tuple<MaterialPtr, std::vector<GlyphAtlas::Glyph>,
                               ScopedCanvas::FontInfo,
-                              std::vector<ScopedCanvas::GlyphGroup>>
+                              std::vector<ScopedCanvas::GlyphGroup>,
+                              GlyphEmulator::SuperSampleInfo>
                        result) -> absl::Status {
         font_info_ = std::get<2>(result);
 
@@ -290,7 +311,7 @@ Future<absl::Status> TextRenderer::SetupImpl(
         text_material->SetParameter(kGlyphAtlasParam,
                                     glyph_atlas_->GetTexture());
         text_material->SetParameter(kShouldSuperSampleParam,
-                                    glyph_atlas_->ShouldSuperSample());
+                                    std::get<4>(result).should_super_sample);
         renderer_->SetMaterial(std::move(text_material));
 
         return absl::OkStatus();
@@ -377,6 +398,7 @@ void TextRenderer::RecalculateMesh() {
         glyphs_.size() * kQuadVertices.size() * stroke_multiplier,
         glyphs_.size() * kQuadIndices.size() * stroke_multiplier};
     MeshDataPtr mesh_data = std::make_unique<MeshData>(kMeshDescription);
+    InitMeshDataIndices(*mesh_data);
 
     Box box = AddGlyphsToTextMesh(*mesh_data, 0);
 
@@ -635,14 +657,6 @@ void TextRenderer::RenderGlyphPass(int vertex_offset, int index_offset,
       mesh_data.VertexAttributeAt<float2>(vertex_offset + glyph_vert_index,
                                           VertexAttribute::UV0) =
           vertex_uv_coords;
-    }
-
-    for (int i = 0; i < kQuadIndices.size(); ++i) {
-      // Assign the indices offset for the correct glyph in the mesh.
-      mesh_data.IndexAt<uint16_t>(index_offset + i +
-                                  (glyph_index * kQuadIndices.size())) =
-          vertex_offset + kQuadIndices[i] +
-          (glyph_index * kQuadVertices.size());
     }
   }
 }

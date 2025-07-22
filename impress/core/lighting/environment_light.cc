@@ -61,7 +61,7 @@ EnvironmentLight::EnvironmentLight(
         out_coefficients.data());
     irradiance_sh_ibl_asset_ = irradiance_sh_ibl_asset;
   } else {
-    IMP_LOG(imp::WARNING)
+    IMP_LOG(imp::INFO)
         << "Spherical harmonics data not found in irradiance_sh_ibl_asset. If "
            "this is not intended, please make sure the image based lighting "
            "asset is not excluding spherical harmonics data.";

@@ -29,6 +29,7 @@
 #include "core/async/executor.h"
 #include "core/async/future_common.h"
 #include "core/async/task.h"
+#include "core/async/task_priority.h"
 #include "core/common/holdable.h"
 #include "core/common/invocable.h"
 
@@ -624,14 +625,14 @@ void FutureImpl::BubbleUpPriority(std::optional<int> changed_priority) {
 }
 
 bool FutureImpl::RefreshActivePriority(std::optional<int> changed_priority) {
-  int priority = self_priority_;
+  std::optional<int> max_child_priority = std::nullopt;
 
   if (changed_priority && *changed_priority >= task_priority_) {
     // changed_priority indicates that the priority is being refreshed because
     // of the priority of a child future changing to the value passed in.
     // If that is the same or higher than the current priority, then we can use
     // that value instead of fully recalculating the priority from the children.
-    priority = *changed_priority;
+    max_child_priority = *changed_priority;
   } else {
     for (const auto& relationship : relationships_) {
       switch (relationship.index()) {
@@ -641,30 +642,44 @@ bool FutureImpl::RefreshActivePriority(std::optional<int> changed_priority) {
               std::get<std::weak_ptr<FutureImpl>>(relationship);
           if (std::shared_ptr<FutureImpl> child = weak_child.lock()) {
             absl::MutexLock lock(&child->mu_);
-            // If this child is in the process of returning a result, i.e. it's
-            // been cancelled, then don't count it.
-            if (!child->HasResultOrIsExecutingResultProducer() &&
-                !child->pending_result_status_.has_value()) {
-              priority = std::max(priority, child->task_priority_);
+            if (child->HasResultOrIsExecutingResultProducer() ||
+                child->pending_result_status_.has_value()) {
+              // If this child is in the process of returning a result, i.e.
+              // it's been cancelled, then don't count it.
+              continue;
+            }
+            if (!max_child_priority.has_value()) {
+              max_child_priority = child->task_priority_;
+            } else {
+              max_child_priority =
+                  std::max(*max_child_priority, child->task_priority_);
             }
           }
           break;
         }
         case 1: {
+          /* A child future from a Combine. */
           const CombineChild& combine_child =
               std::get<CombineChild>(relationship);
           if (std::shared_ptr<FutureImpl> child = combine_child.child.lock()) {
             absl::MutexLock lock(&child->mu_);
-            // If this child is in the process of returning a result, i.e. it's
-            // been cancelled, then don't count it.
-            if (!child->HasResultOrIsExecutingResultProducer() &&
-                !child->pending_result_status_.has_value()) {
-              priority = std::max(priority, child->task_priority_);
+            if (child->HasResultOrIsExecutingResultProducer() ||
+                child->pending_result_status_.has_value()) {
+              // If this child is in the process of returning a result, i.e.
+              // it's been cancelled, then don't count it.
+              continue;
+            }
+            if (!max_child_priority.has_value()) {
+              max_child_priority = child->task_priority_;
+            } else {
+              max_child_priority =
+                  std::max(*max_child_priority, child->task_priority_);
             }
           }
           break;
         }
         case 2: {
+          /* A nested child future. */
           const NestedChild& nested_child = std::get<NestedChild>(relationship);
           if (std::shared_ptr<FutureImpl> child = nested_child.child.lock()) {
             absl::MutexLock lock(&child->mu_);
@@ -672,8 +687,14 @@ bool FutureImpl::RefreshActivePriority(std::optional<int> changed_priority) {
             // producer has already run to assign the nested future. If the
             // nested future has been cleared (i.e. it's been cancelled), that
             // means the priority should no longer be counted.
-            if (child->nested_future_) {
-              priority = std::max(priority, child->task_priority_);
+            if (!child->nested_future_) {
+              continue;
+            }
+            if (!max_child_priority.has_value()) {
+              max_child_priority = child->task_priority_;
+            } else {
+              max_child_priority =
+                  std::max(*max_child_priority, child->task_priority_);
             }
           }
           break;
@@ -684,18 +705,33 @@ bool FutureImpl::RefreshActivePriority(std::optional<int> changed_priority) {
     }
   }
 
-  if (priority == task_priority_) {
+  // If the future has no specified/self priority and no children, then
+  // the active priority defaults to kNormalTaskPriority.
+  //
+  // Otherwise, the active priority is the maximum value across (1) the active
+  // priorities of its direct children, if any, and (2) its own self priority,
+  // if specified.
+  int new_task_priority = kNormalTaskPriority;
+  if (self_priority_.has_value() && max_child_priority.has_value()) {
+    new_task_priority = std::max(*self_priority_, *max_child_priority);
+  } else if (self_priority_.has_value()) {
+    new_task_priority = *self_priority_;
+  } else if (max_child_priority.has_value()) {
+    new_task_priority = *max_child_priority;
+  }
+
+  if (new_task_priority == task_priority_) {
     return false;
   }
 
-  task_priority_ = priority;
+  task_priority_ = new_task_priority;
 
   if (extant_task_id_ == kInvalidTaskId || producer_executor_ == nullptr) {
     return true;
   }
 
   absl::Status status =
-      producer_executor_->UpdateTaskPriority(extant_task_id_, priority);
+      producer_executor_->UpdateTaskPriority(extant_task_id_, task_priority_);
   // Not found is expected if the task has already completed.
   if (!status.ok() && status.code() != absl::StatusCode::kNotFound) {
     IMP_LOG(imp::FATAL) << "Error updating Executor task priority: " << status;
@@ -704,7 +740,7 @@ bool FutureImpl::RefreshActivePriority(std::optional<int> changed_priority) {
   return true;
 }
 
-void FutureImpl::UpdatePriority(int priority) {
+void FutureImpl::UpdatePriority(std::optional<int> priority) {
   std::vector<std::shared_ptr<FutureImplWrapper>> to_bubble;
   int changed_priority_to_bubble;
   {
@@ -738,7 +774,7 @@ int FutureImpl::GetActivePriority() {
   return task_priority_;
 }
 
-int FutureImpl::GetSelfPriority() {
+std::optional<int> FutureImpl::GetSelfPriority() {
   absl::MutexLock lock(&mu_);
   return self_priority_;
 }

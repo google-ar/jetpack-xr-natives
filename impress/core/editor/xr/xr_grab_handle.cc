@@ -14,7 +14,6 @@
 
 #include "core/editor/xr/xr_grab_handle.h"
 
-#include <cmath>
 #include <optional>
 #include <utility>
 
@@ -28,6 +27,7 @@
 #include "core/common/registry.h"
 #include "core/editor/editor.h"
 #include "core/editor/xr/xr_grab_handle_assets.h"
+#include "core/input/pointer_event.h"
 #include "core/materials/material.h"
 #include "core/math/math.h"
 #include "core/math/quat.h"
@@ -41,6 +41,7 @@
 #include "core/view/framework/camera/camera_manager.h"
 #include "core/view/framework/collision/box_collider.h"
 #include "core/view/framework/collision/collision_manager.h"
+#include "core/view/framework/input/pointer_input_handler.h"
 #include "core/view/framework/render/mesh_factory.h"
 #include "core/view/framework/render/mesh_renderer.h"
 #include "core/view/utils/frame_time.h"
@@ -55,6 +56,8 @@ constexpr float4 kHoveredColor = {0.19f, 0.41f, 0.69f, 1.0f};
 // Lighter blue
 constexpr float4 kGrabbedColor = {0.2f, 0.9f, 0.9f, 1.0f};
 
+constexpr float kGrabHandleSize = 0.1f;
+
 void XrGrabHandle::Setup(float distance_from_camera,
                          float initial_horizontal_offset_degrees,
                          float initial_vertical_offset_degrees) {
@@ -62,7 +65,7 @@ void XrGrabHandle::Setup(float distance_from_camera,
   // Create a quad to act as a grab handle.
   mesh_renderer_ = GetNode()->AddComponent<MeshRenderer>();
   mesh_renderer_->SetMesh(
-      GetView().GetMeshFactory().CreateRegularPolygon(10, 0.1f));
+      GetView().GetMeshFactory().CreateRegularPolygon(10, kGrabHandleSize));
   direction_vector_ = QuatFromEuler({initial_vertical_offset_degrees,
                                      -initial_horizontal_offset_degrees, 0}) *
                       kForward;
@@ -72,7 +75,8 @@ void XrGrabHandle::Setup(float distance_from_camera,
       .Then([this](AssetPtr<MaterialAsset> material_asset) {
         // Add a box collider to the quad to catch raycasts.
         GetNode()->AddComponent<BoxCollider>(
-            Box{{0.0f, 0.0f, 0.005f}, {0.1f, 0.1f, 0.01f}});
+            Box{{0.0f, 0.0f, 0.005f},
+                float3{kGrabHandleSize, kGrabHandleSize, 0.01f}});
         MaterialPtr material =
             GetView().GetMaterialFactory().CreateMaterial(material_asset);
         mesh_renderer_->SetMaterial(std::move(material));
@@ -90,6 +94,11 @@ void XrGrabHandle::Setup(float distance_from_camera,
         editor_dispatcher.Connect(
             [this](const ControllerHitEvent& event) mutable {
               HandleControllerHitEvent(event);
+            },
+            this);
+        editor_dispatcher.Connect(
+            [this](const PointerHitEvent& event) mutable {
+              HandlePointerHitEvent(event);
             },
             this);
       })
@@ -165,6 +174,41 @@ void XrGrabHandle::UpdateGrabHandleState(imp::ControllerHitEvent event,
   direction_vector_ = normalize(
       hit_world_point -
       GetView().GetCameraManager().GetCamera()->GetNode()->GetWorldPosition());
+}
+
+void XrGrabHandle::HandlePointerHitEvent(imp::PointerHitEvent event) {
+  if (event.GetHitNode() == GetNode()) {
+    PointerEvent pointer_event = event.event;
+    switch (pointer_event.Type()) {
+      case PointerEventType::kMove:
+      case PointerEventType::kHover: {
+        if (grab_state_ == XrGrabHandle::XrGrabHandleState::kNotHovered) {
+          grab_state_ = XrGrabHandle::XrGrabHandleState::kHovered;
+        }
+        break;
+      }
+      case imp::PointerEventType::kDown: {
+        grab_state_ = XrGrabHandle::XrGrabHandleState::kGrabbed;
+        break;
+      }
+      case imp::PointerEventType::kUp: {
+        grab_state_ = XrGrabHandle::XrGrabHandleState::kHovered;
+        break;
+      }
+      default:
+        break;
+    }
+    if (grab_state_ == XrGrabHandle::XrGrabHandleState::kGrabbed) {
+      direction_vector_ = normalize(event.GetTruncatedRayHit()->world_point -
+                                    GetView()
+                                        .GetCameraManager()
+                                        .GetCamera()
+                                        ->GetNode()
+                                        ->GetWorldPosition());
+    }
+  } else {
+    grab_state_ = XrGrabHandle::XrGrabHandleState::kNotHovered;
+  }
 }
 
 float4 XrGrabHandle::GetGrabHandleMaterialColor(

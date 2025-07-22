@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "imp_defines", "imp_google3_copts")
 load(
     "//core/proto:imp_cc_proto_library.bzl",
@@ -56,7 +57,9 @@ cc_library(
         "//core/editor:widget",
         "//core/editor:widget_layout_info",
         "//core/math",
+        "//core/view/utils:string_map",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
         "@dear_imgui",
     ],
     alwayslink = 1,

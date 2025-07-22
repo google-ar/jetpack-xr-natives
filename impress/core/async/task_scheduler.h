@@ -32,6 +32,7 @@
 #include "core/async/task_priority.h"
 #include "core/common/invocable.h"
 #include "core/common/robin_map.h"
+#include "core/common/robin_set.h"
 namespace imp {
 
 // Default rate at which to increase the effective numeric Task priority by 1.
@@ -41,15 +42,13 @@ namespace imp {
 // with a task priority of 10.
 constexpr absl::Duration kDefaultTaskAgeRate = absl::Milliseconds(100);
 
-/*
- * A priority-based Task scheduler that supports rescheduling Tasks with
- * updated priority values. TaskScheduler also boosts the priority of Tasks that
- * have been scheduled earlier. See
- * TaskSchedulerOptions::task_age_period_milliseconds.
- *
- * NOTE: This class is thread-unsafe. Every access must be locked if
- * TaskScheduler is reachable from multiple threads. (broken link)
- */
+// A priority-based Task scheduler that supports rescheduling Tasks with
+// updated priority values. TaskScheduler also boosts the priority of Tasks that
+// have been scheduled earlier. See
+// TaskSchedulerOptions::task_age_period_milliseconds.
+//
+// NOTE: This class is thread-unsafe. Every access must be locked if
+// TaskScheduler is reachable from multiple threads. (broken link)
 class TaskScheduler {
  public:
   struct TaskSchedulerOptions {
@@ -68,77 +67,107 @@ class TaskScheduler {
                     .task_age_rate = kDefaultTaskAgeRate});
 
   // Push an Invocable to the TaskScheduler along with an associated priority.
-  // Returns a TaskId representing the extant task.
-  // If the Invocable does not contain a functor, returns kInvalidTaskId.
-  TaskId PushTask(Invocable<void()> invocable,
-                  int priority = kNormalTaskPriority);
+  // Returns a TaskId that can be used to identify the Task. Returns a
+  // InvalidArgumentError if the provided Invocable is invalid.
+  absl::StatusOr<TaskId> PushTask(Invocable<void()> invocable,
+                                  int priority = kNormalTaskPriority);
 
+  // Same as PushTask, but uses a reserved TaskId. Returns an OkStatus if the
+  // Task is successfully pushed. Returns an InvalidArgumentError if the
+  // provided Invocable is invalid, or if the reserved TaskId has already been
+  // used.
+  absl::Status PushWithReservedTaskId(TaskId task_id,
+                                      Invocable<void()> invocable,
+                                      int priority);
+
+  // Reserves a TaskId for later use in PushWithReservedTaskId(). It is
+  // guaranteed that PushTask() will not return a TaskId that was reserved by
+  // this method.
   [[nodiscard]] TaskId ReserveTaskId();
-  void PushWithReservedTaskId(TaskId task_id, Invocable<void()> invocable,
-                              int priority);
 
-  // Pops and returns the Invocable of the next scheduled Task.
-  [[nodiscard]] Invocable<void()> PopTask();
+  // Pops and returns the Invocable of the next scheduled Task. Returns a
+  // FailedPreconditionError if there are no valid Tasks in the TaskScheduler.
+  [[nodiscard]] absl::StatusOr<Invocable<void()>> PopTask();
 
-  // Reschedules a Task with an updated Priority. Returns a kNotFound error if
-  // the Task has already been completed, or if the TaskId does not resolve to a
-  // Task. Note: Internally, this does not reset the age of the Task, so it is
-  // possible for a low priority Task to be scheduled first if it has remained
-  // unscheduled for sufficiently long.
+  // Reschedules a Task with an updated task priority. Returns a NotFoundError
+  // if the Task has already been completed, or if the TaskId does not resolve
+  // to a Task.
+  // Note: Internally, this does not reset the age of the Task, so it
+  // is possible for a low priority Task to be scheduled first if it has
+  // remained unscheduled for sufficiently long.
   absl::Status RescheduleTask(TaskId task_id, int task_priority);
 
   // Returns the priority of a Task pushed to this TaskScheduler. Returns a
-  // kNotFound error if the Task has already been completed, or if the TaskId
+  // NotFoundError if the Task has already been completed, or if the TaskId
   // does not resolve to a Task.
   absl::StatusOr<int> GetTaskPriority(TaskId task_id);
 
-  // Returns true if there are no Tasks in the TaskScheduler.
+  // Returns the number of valid Tasks currently scheduled.
+  int GetTaskCount() const;
+
+  // Returns true if there are no valid Tasks in the TaskScheduler.
   bool IsEmpty() const;
 
-  // Clears all Tasks in the TaskScheduler.
+  // Clears the TaskScheduler of all Tasks and reserved memory. After this
+  // call, all extant TaskIds will become invalid and IsEmpty() will return
+  // true.
   void Clear();
 
  private:
   // Pushes a Task to the TaskScheduler.
-  void PushTaskInternal(absl::Nonnull<Task*> task);
+  void PushTaskInternal(Task* /*absl_nonnull*/ task);
+
   // Pops the next Task to be scheduled.
-  std::unique_ptr<Task> PopTaskInternal();
+  absl::StatusOr<std::unique_ptr<Task>> PopTaskInternal();
 
   // Stores Tasks and allows random access to Tasks by TaskId. Tasks are
   // stored with RegisterTask(), assigned a unique TaskId, and moved out of the
   // TaskRegistry ReleaseTask().
   class TaskRegistry {
    public:
-    // Stores a Task and returns a TaskId representing the extant Task.
-    absl::Nonnull<Task*> RegisterTask(
+    // Constructs and stores a Task, returning a pointer to the Task, which
+    // cannot be null. Returns InvalidArgumentError if a Task with the same
+    // TaskId already exists, or if the provided Invocable is invalid.
+    absl::StatusOr<Task* /*absl_nonnull*/> RegisterTask(
         imp::Invocable<void()> invocable, int priority = kNormalTaskPriority,
         absl::Time creation_time = absl::Now(),
         std::optional<TaskId> reserved_task_id = std::nullopt);
+
     // Moves the Task out of the TaskRegistry and releases the memory back
     // to the TaskRegistry.
     std::unique_ptr<Task> ReleaseTask(TaskId task_id);
+
     // Returns the Task associated with the TaskId. If the TaskId cannot be
-    // resolved, returns a kNotFound error.
-    absl::StatusOr<absl::Nonnull<Task*>> GetTask(TaskId task_id);
+    // resolved, returns a NotFoundError.
+    absl::StatusOr<Task* /*absl_nonnull*/> GetTask(TaskId task_id);
+
     // Marks that original_task_id refers to the Task with TaskId
     // rescheduled_task_id. Further calls to GetTask(original_task_id) will
     // return the Task referenced by rescheduled_task_id.
     void SetOriginalAndRescheduledTask(TaskId original_task_id,
                                        TaskId rescheduled_task_id);
+
+    // Clears the TaskRegistry of all Tasks and reserved memory. After this
+    // call, all extant TaskIds will become invalid. This does not reset the
+    // counter for the next TaskId.
     void Clear();
-    int GetNextTaskId(bool increment = false);
+
+    // Marks a TaskId as reserved, returns it, and increments the next TaskId.
+    int ReserveTaskId();
 
    private:
     // Pointer-stable Task storage, using TaskId::id as a key.
     imp::RobinMap<int, std::unique_ptr<Task>> task_map_;
     // For TaskIds A and B, if original_index_to_rescheduled_index_[A] = B
-    // then the Task from GetTask(A) will be the same as the Task from
-    // GetTask(B).
+    // then the Task from GetTask(A) will return the same Task* as GetTask(B).
     imp::RobinMap<int, int> original_task_id_to_rescheduled_task_id_;
     // For TaskIds B and A, if rescheduled_index_to_original_index_[B] = A
-    // then the Task from GetTask(A) will be the same as the Task from
-    // GetTask(B).
+    // then the Task from GetTask(A) will return the same Task* as GetTask(B).
     imp::RobinMap<int, int> rescheduled_task_id_to_original_task_id_;
+    // A set of TaskIds that have been reserved by ReserveTaskId(). This is used
+    // to ensure that PushWithReservedTaskId() can not be called twice, for
+    // example.
+    imp::RobinSet<int> reserved_task_ids_;
     // The underlying numeric id to assign to the next TaskId.
     int next_task_id_ = 0;
   };
@@ -146,17 +175,17 @@ class TaskScheduler {
   // A FIFO queue for all Tasks of the same priority.
   class TaskPriorityGroup {
    public:
-    TaskPriorityGroup(int priority, absl::Nonnull<Task*> first_task)
+    TaskPriorityGroup(int priority, Task* /*absl_nonnull*/ first_task)
         : priority_(priority), tasks_({first_task}) {};
 
     // Pushes a Task in FIFO order.
-    void PushBack(absl::Nonnull<Task*> task);
+    void PushBack(Task* /*absl_nonnull*/ task);
 
     // Pops the next Task in FIFO order.
     void PopFront();
 
     // Returns the next Task in FIFO order.
-    absl::Nonnull<Task*> Front();
+    Task* /*absl_nonnull*/ Front();
 
     int GetPriority() const;
     bool IsEmpty() const;
@@ -177,8 +206,9 @@ class TaskScheduler {
     absl::Duration task_age_rate;
   };
 
-  // Pops and returns the next Task, which may be marked as deleted.
-  absl::Nonnull<Task*> PopCandidateTask();
+  // Pops and returns the next Task, which may be marked as deleted. Returns a
+  // FailedPreconditionError if there are no valid Tasks in the TaskScheduler.
+  absl::StatusOr<Task* /*absl_nonnull*/> PopCandidateTask();
 
   // At what rate to increase the effective Task priority by 1.
   absl::Duration task_age_rate_;

@@ -52,10 +52,10 @@
 namespace imp {
 namespace {
 
-using ::imp::gltf::Image;
-using ::imp::gltf::Material;
-using ::imp::gltf::Primitive;
-using ::imp::gltf::Texture;
+using ::imp::gltf::imp_proto::Image;
+using ::imp::gltf::imp_proto::Material;
+using ::imp::gltf::imp_proto::Primitive;
+using ::imp::gltf::imp_proto::Texture;
 using MinFilter = schemas::MinFilter;
 using MagFilter = schemas::MagFilter;
 using WrapMode = schemas::WrapMode;
@@ -127,7 +127,8 @@ GenericMaterialSpec GetGenericMaterialSpecFromMaterial(
                                    GetLightingModel(material), is_double_sided);
 }
 
-filament::math::mat3f ComputeUvMatrix(imp::gltf::TextureTransform* xform) {
+filament::math::mat3f ComputeUvMatrix(
+    imp::gltf::imp_proto::TextureTransform* xform) {
   float2 offset(0);
   float2 scale(1);
   float rotation(0);
@@ -159,55 +160,56 @@ flatbuffers::Offset<schemas::BoundsInfo> CreateBoundsInfo(
 }
 
 filament::TextureSampler::MinFilter ConvertMinFilter(
-    imp::gltf::Sampler::MinMagFilter filter) {
+    imp::gltf::imp_proto::Sampler::MinMagFilter filter) {
   switch (filter) {
-    case gltf::Sampler::NEAREST:
+    case gltf::imp_proto::Sampler::NEAREST:
       return filament::TextureSampler::MinFilter::NEAREST;
-    case gltf::Sampler::LINEAR:
+    case gltf::imp_proto::Sampler::LINEAR:
       return filament::TextureSampler::MinFilter::LINEAR;
-    case gltf::Sampler::NEAREST_MIPMAP_NEAREST:
+    case gltf::imp_proto::Sampler::NEAREST_MIPMAP_NEAREST:
       return filament::TextureSampler::MinFilter::NEAREST_MIPMAP_NEAREST;
-    case gltf::Sampler::LINEAR_MIPMAP_NEAREST:
+    case gltf::imp_proto::Sampler::LINEAR_MIPMAP_NEAREST:
       return filament::TextureSampler::MinFilter::LINEAR_MIPMAP_NEAREST;
-    case gltf::Sampler::NEAREST_MIPMAP_LINEAR:
+    case gltf::imp_proto::Sampler::NEAREST_MIPMAP_LINEAR:
       return filament::TextureSampler::MinFilter::NEAREST_MIPMAP_NEAREST;
     default:
-    case gltf::Sampler::LINEAR_MIPMAP_LINEAR:
+    case gltf::imp_proto::Sampler::LINEAR_MIPMAP_LINEAR:
       return filament::TextureSampler::MinFilter::LINEAR_MIPMAP_LINEAR;
       break;
   }
 }
 
 filament::TextureSampler::MagFilter ConvertMagFilter(
-    imp::gltf::Sampler::MinMagFilter filter) {
+    imp::gltf::imp_proto::Sampler::MinMagFilter filter) {
   switch (filter) {
-    case imp::gltf::Sampler::NEAREST:
+    case imp::gltf::imp_proto::Sampler::NEAREST:
       return filament::TextureSampler::MagFilter::NEAREST;
     default:
-    case imp::gltf::Sampler::LINEAR:
+    case imp::gltf::imp_proto::Sampler::LINEAR:
       return filament::TextureSampler::MagFilter::LINEAR;
   }
 }
 
 filament::TextureSampler::WrapMode ConvertWrapMode(
-    imp::gltf::Sampler::WrapMode wrap_mode) {
+    imp::gltf::imp_proto::Sampler::WrapMode wrap_mode) {
   switch (wrap_mode) {
-    case imp::gltf::Sampler::CLAMP_TO_EDGE:
+    case imp::gltf::imp_proto::Sampler::CLAMP_TO_EDGE:
       return filament::TextureSampler::WrapMode::CLAMP_TO_EDGE;
-    case imp::gltf::Sampler::REPEAT:
+    case imp::gltf::imp_proto::Sampler::REPEAT:
     default:
       return filament::TextureSampler::WrapMode::REPEAT;
-    case imp::gltf::Sampler::MIRRORED_REPEAT:
+    case imp::gltf::imp_proto::Sampler::MIRRORED_REPEAT:
       return filament::TextureSampler::WrapMode::MIRRORED_REPEAT;
   }
 }
 
-filament::TextureSampler ConvertSampler(const gltf::Sampler& sampler) {
-  filament::TextureSampler result(ConvertMinFilter(sampler.min_filter),
-                                  ConvertMagFilter(sampler.mag_filter),
-                                  ConvertWrapMode(sampler.wrap_s),
-                                  ConvertWrapMode(sampler.wrap_t),
-                                  ConvertWrapMode(imp::gltf::Sampler::REPEAT));
+filament::TextureSampler ConvertSampler(
+    const gltf::imp_proto::Sampler& sampler) {
+  filament::TextureSampler result(
+      ConvertMinFilter(sampler.min_filter),
+      ConvertMagFilter(sampler.mag_filter), ConvertWrapMode(sampler.wrap_s),
+      ConvertWrapMode(sampler.wrap_t),
+      ConvertWrapMode(imp::gltf::imp_proto::Sampler::REPEAT));
   result.setCompareMode(filament::TextureSampler::CompareMode::NONE,
                         filament::TextureSampler::CompareFunc::LE);
   result.setAnisotropy(0);
@@ -242,7 +244,7 @@ CreateGenericMaterialTextureParameter(
   // overrides the one set on the texture itself.
   int tex_coord = tex_info.tex_coord;
   if (tex_info.extensions.xform) {
-    const std::unique_ptr<gltf::TextureTransform>& xform =
+    const std::unique_ptr<gltf::imp_proto::TextureTransform>& xform =
         tex_info.extensions.xform;
     if (xform->tex_coord) {
       tex_coord = xform->tex_coord.value();
@@ -263,7 +265,7 @@ CreateGenericMaterialTextureParameter(
   }
 
   // Get the sampler index for the texture.
-  gltf::Sampler sampler;
+  gltf::imp_proto::Sampler sampler;
   uint16_t sampler_index = texture.sampler ? *texture.sampler : -1;
   if (sampler_index >= 0 && sampler_index < gltf_model.GetSamplerCount()) {
     sampler = gltf_model.GetSampler(sampler_index);
@@ -279,7 +281,7 @@ CreateGenericMaterialTextureParameter(
 absl::Status CreateGenericMaterialSchemas(
     loader::details::LoadedModelBuilder& builder,
     const loader::details::provider_gltf::GltfModel& model,
-    const std::vector<imp::gltf::Primitive>& primitives,
+    const std::vector<imp::gltf::imp_proto::Primitive>& primitives,
     const loader::details::provider_gltf::GltfPrimitiveVector<
         loader::details::provider_gltf::ProcessedPrimitive>&
         processed_primitives,
@@ -300,7 +302,7 @@ absl::Status CreateGenericMaterialSchemas(
 
       // -1 is the Default material. Access the default material by passing
       // absl::nullopt into GetMaterial.
-      const gltf::Material& m = model.GetMaterial(
+      const gltf::imp_proto::Material& m = model.GetMaterial(
           material_index == -1 ? absl::nullopt
                                : absl::optional<uint32_t>(material_index));
 
@@ -445,7 +447,7 @@ absl::Status CreateGenericMaterialSchemas(
 
         // KHR_materials_sheen
         if (m.extensions.sheen) {
-          const std::unique_ptr<gltf::MaterialSheen>& sheen_info =
+          const std::unique_ptr<gltf::imp_proto::MaterialSheen>& sheen_info =
               m.extensions.sheen;
 
           generic_material_parameters.sheen.emplace();

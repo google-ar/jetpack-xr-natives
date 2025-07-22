@@ -85,7 +85,9 @@ public final class ImpXrRenderer {
     // Supports both ThreadMode.MAIN_DEFAULT and ThreadMode.BACKGROUND
     FrameScheduler frameScheduler =
         new ContinuousFrameScheduler.Factory()
-            .create(ImpApi.getThreadMode(setupParams.getThreadMode()));
+            .create(
+                ImpApi.getThreadMode(setupParams.getThreadMode()),
+                setupParams.getBackgroundThreadName());
 
     // ImpXrApi creates the View internally, and also provides Xr specific Jni calls.
     ImpXrApi xrApi;

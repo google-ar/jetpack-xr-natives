@@ -84,12 +84,14 @@ final class ImpXrApi {
                     intFromFoveationLevel(setupParams.getFoveationLevel()),
                     setupParams.getUseQuadViews(),
                     setupParams.getUseVarjoFoveatedRendering(),
+                    setupParams.getMsaaSampleCount(),
                     setupParams.getOpenxrReferenceSpaceType(),
                     setupParams.getUseEyeGazeInteraction(),
                     setupParams.getUseAndroidDepthTexture(),
                     setupParams.getUseXrActionDefaults(),
                     setupParams.getUseFbColorSpace(),
-                    setupParams.getEnableAndroidSystemExtensions()));
+                    setupParams.getEnableAndroidSystemExtensions(),
+                    setupParams.getSwapchainSizeMultiplier()));
 
     // Calls XrSessionHost::Setup, which sets up Impress with the custom XrPlatform.
     // This doesn't actually initialize OpenXR yet. That happens in onWindowAttached.
@@ -157,12 +159,14 @@ final class ImpXrApi {
       int foveationLevel,
       boolean useQuadViews,
       boolean useVarjoFoveatedRendering,
+      int msaaSampleCount,
       long openXrReferenceSpaceType,
       boolean useEyeGazeInteraction,
       boolean useAndroidDepthTexture,
       boolean useXrActionDefaults,
       boolean useFbColorSpace,
-      boolean enableAndroidSystemExtensions);
+      boolean enableAndroidSystemExtensions,
+      float swapchainSizeMultiplier);
 
   private static native void nSetup(Object context, long viewHostHandle);
 

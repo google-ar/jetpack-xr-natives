@@ -26,12 +26,15 @@
 #include <cstdlib>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/split_engine/android/split_engine_android_bridge.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client_mock.h"
+#include "core/split_engine/flatbuffer_arena_allocator.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_bridge_sender.h"
 #include "core/split_engine/split_engine_test_bridge_serializer.h"
@@ -51,7 +54,7 @@ namespace imp::split_engine {
 class TestSplitEngineAndroidBridge : public SplitEngineAndroidBridge {
  public:
   TestSplitEngineAndroidBridge(
-      BridgeId bridge_id,
+      SplitEngineSharedMemoryBridgeClient& bridge_client,
       SplitEngineTestBridgeSerializer& split_engine_test_bridge_serializer);
 
   jobject CreateExternalTextureSurface(
@@ -70,31 +73,68 @@ class TestSplitEngineAndroidBridge : public SplitEngineAndroidBridge {
       override;
 
  private:
-  BridgeId bridge_id_;
-  MockSplitEngineSharedMemoryBridgeClient bridge_client_;
+  SplitEngineSharedMemoryBridgeClient& bridge_client_;
   SplitEngineTestBridgeSerializer& split_engine_test_bridge_serializer_;
+};
+
+// Manages a shared memory bridge buffer.
+class TestSplitEngineBridgeBuffer {
+ public:
+  TestSplitEngineBridgeBuffer(size_t buffer_size_bytes);
+  TestSplitEngineBridgeBuffer(TestSplitEngineBridgeBuffer&& other);
+  TestSplitEngineBridgeBuffer(const TestSplitEngineBridgeBuffer&) = delete;
+  TestSplitEngineBridgeBuffer& operator=(const TestSplitEngineBridgeBuffer&) =
+      delete;
+
+  ~TestSplitEngineBridgeBuffer();
+
+  void* Data() { return mmapped_ptr_; }
+  bool IsValidBlock(const uint8_t* data, size_t data_size_in_bytes) {
+    return data >= Data() &&
+           (data + data_size_in_bytes) <=
+               (static_cast<const uint8_t*>(Data()) + size_in_bytes_);
+  }
+
+ private:
+  int shared_memory_region_fd_ = 0;
+  void* mmapped_ptr_ = nullptr;
+  size_t size_in_bytes_ = 0;
 };
 
 // A SplitEngineBridgeSender for use in unit tests. This sender pulls the test
 // bridge from the registry and sends the messages using the test bridge's
 // SendCommand method.
-class TestSplitEngineSender : public SplitEngineBridgeSender {
+//
+// It uses shared memory for writing to be as close to the real world as
+// possible.
+class TestSplitEngineBridgeSender : public SplitEngineBridgeSender {
  public:
-  TestSplitEngineSender(BaseView& view);
+  TestSplitEngineBridgeSender(TestSplitEngineAndroidBridge& bridge,
+                              bool recycle_buffers);
   void BeginMessageGroup(size_t size_bytes) override;
   void EndMessageGroup() override;
-  bool IsMessageGroupActive() const override;
-
+  bool IsMessageGroupActive() const override {
+    return active_message_group_id_.has_value();
+  }
   std::unique_ptr<flatbuffers::FlatBufferBuilder> CreateFlatBufferBuilder(
       size_t size_bytes) override;
 
   void SendMessage(const flatbuffers::FlatBufferBuilder& fbb) override;
-  void SetEnabled(bool enabled);
+
+  void ClearReleasedMessageGroups() override;
+
+  void* CreateSharedMemoryBuffer(size_t size_in_bytes);
+  void DestroySharedMemoryBuffer(void*);
 
  private:
-  BaseView& view_;
-  bool message_group_active_ = false;
-  bool enabled_ = true;
+  TestSplitEngineAndroidBridge& test_bridge_;
+  bool recycle_buffers_;
+
+  std::optional<MessageGroupId> active_message_group_id_ = std::nullopt;
+  absl::flat_hash_map<void*, std::unique_ptr<TestSplitEngineBridgeBuffer>>
+      bridge_buffers_;
+  TestSplitEngineBridgeBuffer* active_bridge_buffer_;
+  FlatbufferArenaAllocator arena_allocator_;
 };
 
 }  // namespace imp::split_engine

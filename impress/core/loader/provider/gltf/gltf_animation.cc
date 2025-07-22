@@ -28,7 +28,7 @@ namespace imp::loader::details::provider_gltf {
 namespace {
 
 using ::filament::math::mat4f;
-using ::imp::gltf::Skin;
+using ::imp::gltf::imp_proto::Skin;
 
 // LINT.IfChange(matrix_op)
 // LINT.ThenChange(
@@ -39,7 +39,7 @@ using ::imp::gltf::Skin;
 }  // namespace
 
 OptionalError GetInverseBindPoses(
-    const imp::gltf::Gltf& gltf, const Skin& skin,
+    const imp::gltf::imp_proto::Gltf& gltf, const Skin& skin,
     model::ModelData::SampledJointLookup<mat4f>* out_poses) {
   if (!skin.inverse_bind_matrices) {
     return Error("Invalid asset; missing bind matrices");
@@ -49,7 +49,7 @@ OptionalError GetInverseBindPoses(
                    AccessorReader::Create(gltf, *skin.inverse_bind_matrices));
 
   if (reader.GetType() != "MAT4" ||
-      reader.GetComponentType() != imp::gltf::ComponentType::FLOAT ||
+      reader.GetComponentType() != imp::gltf::imp_proto::ComponentType::FLOAT ||
       reader.GetStride() != sizeof(mat4f)) {
     return Error("Invalid asset; expected bind matrices to be mat4f");
   }

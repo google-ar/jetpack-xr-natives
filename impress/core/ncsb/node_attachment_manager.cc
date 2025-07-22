@@ -114,6 +114,17 @@ void NodeAttachmentManager::Destroy(NodeHandle node) noexcept {
   // this work is done here instead of in the destructor.
   node_controller->PreDestroyed();
 
+  // Remembered objects are destroyed in the NodeController::PreDestroyed.
+  // It's possible that the node was destroyed when ClearRemembered was running.
+  // In that case, we don't need to do anything so can return early here.
+  if (!node) {
+    return;
+  }
+
+  // It's possible that the index changed while PreDestroyed was running if a
+  // different node was destroyed.
+  index = node_controller->GetIndex();
+
   utils::Entity entity = node_controller->GetEntity();
 
   EntitiesToControllersMap& entities_to_controllers =

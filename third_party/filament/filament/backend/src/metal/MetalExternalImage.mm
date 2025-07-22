@@ -20,14 +20,14 @@
 #include "MetalEnums.h"
 #include "MetalUtils.h"
 
+#include "filament/libs/utils/include/utils/Logger.h"
 #include "filament/libs/utils/include/utils/Panic.h"
-#include "filament/libs/utils/include/utils/Log.h"
 #include "filament/libs/utils/include/utils/trap.h"
 
 #define NSERROR_CHECK(message)                                                                     \
     if (error) {                                                                                   \
         auto description = [error.localizedDescription cStringUsingEncoding:NSUTF8StringEncoding]; \
-        utils::slog.e << description << utils::io::endl;                                           \
+        LOG(ERROR) << description;                                                                 \
     }                                                                                              \
     FILAMENT_CHECK_POSTCONDITION(error == nil) << message;
 

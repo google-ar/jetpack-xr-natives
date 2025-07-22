@@ -63,8 +63,8 @@ constexpr absl::string_view kMetallicRoughnessTexture =
 constexpr absl::string_view kTextureTransform = "KHR_texture_transform";
 constexpr absl::string_view kOffset = "offset";
 
-using ::imp::gltf::Animation;
-using ::imp::gltf::AnimationChannel;
+using ::imp::gltf::imp_proto::Animation;
+using ::imp::gltf::imp_proto::AnimationChannel;
 using MaterialChannelSet = GltfLookup::MaterialChannelSet;
 using TextureTransformChannelSet = GltfLookup::TextureTransformChannelSet;
 
@@ -116,8 +116,8 @@ void AssignChannelIdToTexture(absl::string_view texture_name,
 }
 }  // namespace
 
-OptionalError AnimationPointerNodesLookup(const imp::gltf::Gltf &gltf,
-                                          GltfLookup &lookup) {
+OptionalError AnimationPointerNodesLookup(
+    const imp::gltf::imp_proto::Gltf &gltf, GltfLookup &lookup) {
   GltfLookup::ChannelSet default_channel_set;
   default_channel_set.translation_channels.Pair(gltf.nodes);
   default_channel_set.rotation_channels.Pair(gltf.nodes);
@@ -180,8 +180,8 @@ OptionalError AnimationPointerNodesLookup(const imp::gltf::Gltf &gltf,
   return NoError();
 }
 
-OptionalError AnimationPointerMaterialsLookup(const imp::gltf::Gltf &gltf,
-                                              GltfLookup &lookup) {
+OptionalError AnimationPointerMaterialsLookup(
+    const imp::gltf::imp_proto::Gltf &gltf, GltfLookup &lookup) {
   GltfLookup::MaterialChannelSet default_material_channels_set;
   default_material_channels_set.base_color_factor_channel.Pair(gltf.materials);
   default_material_channels_set.metallic_factor_channel.Pair(gltf.materials);
@@ -294,11 +294,11 @@ OptionalError AnimationPointerMaterialsLookup(const imp::gltf::Gltf &gltf,
   return NoError();
 }
 
-OptionalError AnimationPointerLightsLookup(const imp::gltf::Gltf &gltf,
-                                           GltfLookup &lookup) {
+OptionalError AnimationPointerLightsLookup(
+    const imp::gltf::imp_proto::Gltf &gltf, GltfLookup &lookup) {
   if (gltf.extensions.lights_punctual.has_value()) {
     lookup.lights.Set(gltf.extensions.lights_punctual->lights);
-    const std::vector<::imp::gltf::LightPunctual> &lights =
+    const std::vector<::imp::gltf::imp_proto::LightPunctual> &lights =
         gltf.extensions.lights_punctual->lights;
     GltfLookup::LightChannelSet default_light_channel_set;
     default_light_channel_set.color_channel.Pair(lights);

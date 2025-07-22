@@ -53,6 +53,7 @@ namespace imp {
 // if there is no valid mass value provided.
 static constexpr float kSimulatedMinimalMass = 0.01f;
 static constexpr float kDefaultFriction = 0.5f;
+static constexpr float kSimulatedMinimumVelocity = 0.001f;
 
 absl::Status RigidBody::Setup(float mass, RigidBodyState::MotionMode mode,
                               physics::CollidableType collidable_type) {
@@ -88,11 +89,16 @@ absl::Status RigidBody::Setup() {
   }
 }
 
+absl::Status RigidBody::SetupWithState(const RigidBodyState& state) {
+  state_ = state;
+  return Setup();
+}
+
 absl::Status RigidBody::InitializeNonMovable() {
   transform_prev_ = GetNode()->GetWorldTrs();
 
   btRigidBody::btRigidBodyConstructionInfo rb_info(
-      0.0f, nullptr, collidable_.GetCollidableShape(), btVector3(0, 0, 0));
+      0.0f, nullptr, collidable_.GetBtCollisionShape(), btVector3(0, 0, 0));
 
   rigid_body_ = std::make_unique<btRigidBody>(rb_info);
   rigid_body_->setActivationState(DISABLE_DEACTIVATION);
@@ -104,12 +110,9 @@ absl::Status RigidBody::InitializeNonMovable() {
   return absl::OkStatus();
 }
 
-absl::Status RigidBody::InitializeDirected(const btTransform& transform) {
+absl::Status RigidBody::InitializeDirected(const btTransform& bt_transform) {
   size_t directed_mass = state_.mass;
-  auto result = InitializeSimulated(transform);
-  if (!result.ok()) {
-    return result;
-  }
+  MP_RETURN_IF_ERROR(InitializeSimulated(bt_transform));
 
   SwitchToDirectedInternally();
   state_.mass = directed_mass;
@@ -117,9 +120,11 @@ absl::Status RigidBody::InitializeDirected(const btTransform& transform) {
   return absl::OkStatus();
 }
 
-absl::Status RigidBody::InitializeSimulated(const btTransform& transform) {
+absl::Status RigidBody::InitializeSimulated(const btTransform& bt_transform) {
   // Remove old btRigidBody object if already exists.
   Cleanup();
+
+  transform_prev_ = GetNode()->GetWorldTrs();
 
   if (AlmostEqual(state_.mass, 0.0f)) {
     state_.mass = kSimulatedMinimalMass;
@@ -127,17 +132,24 @@ absl::Status RigidBody::InitializeSimulated(const btTransform& transform) {
   btScalar bt_mass(state_.mass);
   btVector3 local_inertia(0, 0, 0);
   // TODO: Add test for local_inertia.
-  collidable_.GetCollidableShape()->calculateLocalInertia(bt_mass,
-                                                          local_inertia);
+  collidable_.GetBtCollisionShape()->calculateLocalInertia(bt_mass,
+                                                           local_inertia);
 
-  motion_state_ = std::make_unique<btDefaultMotionState>(transform);
+  motion_state_ = std::make_unique<btDefaultMotionState>(bt_transform);
   btRigidBody::btRigidBodyConstructionInfo rb_info(
-      bt_mass, motion_state_.get(), collidable_.GetCollidableShape(),
+      bt_mass, motion_state_.get(), collidable_.GetBtCollisionShape(),
       local_inertia);
 
   rigid_body_ = std::make_unique<btRigidBody>(rb_info);
   SetFrictionInternal(state_.friction);
   SetRestitution(state_.restitution);
+
+  if (length(state_.linear_velocity) > kSimulatedMinimumVelocity) {
+    SetLinearVelocity(state_.linear_velocity);
+  }
+  if (length(state_.angular_velocity) > kSimulatedMinimumVelocity) {
+    SetAngularVelocity(state_.angular_velocity);
+  }
 
   // Without DISABLE_DEACTIVATION, object gets deactivated if it is not moving.
   // Disables this performance optimization for now.
@@ -145,6 +157,14 @@ absl::Status RigidBody::InitializeSimulated(const btTransform& transform) {
 
   if (state_.gravity.has_value()) {
     SetCustomGravity(*state_.gravity);
+  }
+
+  if (state_.linear_factor.has_value()) {
+    SetLinearFactor(*state_.linear_factor);
+  }
+
+  if (state_.angular_factor.has_value()) {
+    SetAngularFactor(*state_.angular_factor);
   }
 
   if (IsActive()) {
@@ -160,11 +180,9 @@ void RigidBody::SwitchToDirectedInternally() {
 void RigidBody::SetAsSimulated(bool simulated) {
   if (simulated) {
     if (!rigid_body_->isStaticOrKinematicObject()) return;
-    btTransform transform = ToBtTransform(
-        GetNode()->GetWorldPosition() + collidable_.GetCollidableCenter(),
-        GetNode()->GetWorldRotation());
+    btTransform bt_transform = collidable_.GetNodeBtTransform();
     // Make a fresh simulated object.
-    auto status = InitializeSimulated(transform);
+    auto status = InitializeSimulated(bt_transform);
     state_.motion_mode = RigidBodyState::SIMULATED;
   } else {
     SwitchToDirectedInternally();
@@ -179,8 +197,8 @@ void RigidBody::SetMass(float mass) {
     state_.mass = kSimulatedMinimalMass;
   }
   btVector3 local_inertia(0, 0, 0);
-  collidable_.GetCollidableShape()->calculateLocalInertia(state_.mass,
-                                                          local_inertia);
+  collidable_.GetBtCollisionShape()->calculateLocalInertia(state_.mass,
+                                                           local_inertia);
   rigid_body_->setMassProps(state_.mass, local_inertia);
 }
 
@@ -197,6 +215,42 @@ void RigidBody::SetFrictionInternal(absl::optional<float> friction) {
 void RigidBody::SetRestitution(float restitution) {
   rigid_body_->setRestitution(restitution);
   state_.restitution = restitution;
+}
+
+void RigidBody::SetLinearVelocity(float3 velocity) {
+  state_.linear_velocity = velocity;
+  rigid_body_->setLinearVelocity(ToBtVector3(velocity));
+}
+
+void RigidBody::SetLinearFactor(const float3& linear_factor) {
+  state_.linear_factor = linear_factor;
+  rigid_body_->setLinearFactor(ToBtVector3(linear_factor));
+}
+
+float3 RigidBody::GetLinearFactor() {
+  return ToVec3<float>(rigid_body_->getLinearFactor());
+}
+
+void RigidBody::SetAngularVelocity(float3 angular_velocity) {
+  state_.angular_velocity = angular_velocity;
+  rigid_body_->setAngularVelocity(ToBtVector3(angular_velocity));
+}
+
+float3 RigidBody::GetLinearVelocity() {
+  return ToVec3<float>(rigid_body_->getLinearVelocity());
+}
+
+float3 RigidBody::GetAngularVelocity() {
+  return ToVec3<float>(rigid_body_->getAngularVelocity());
+}
+
+void RigidBody::SetAngularFactor(float3 angular_factor) {
+  state_.angular_factor = angular_factor;
+  rigid_body_->setAngularFactor(ToBtVector3(angular_factor));
+}
+
+float3 RigidBody::GetAngularFactor() {
+  return ToVec3<float>(rigid_body_->getAngularFactor());
 }
 
 void RigidBody::SetCustomGravity(float3 gravity) {
@@ -241,6 +295,18 @@ void RigidBody::OnIsfStateChanged() {
     SetCustomGravity(*state_.gravity);
   } else {
     UseWorldGravity();
+  }
+
+  if (state_.linear_factor.has_value()) {
+    SetLinearFactor(*state_.linear_factor);
+  } else {
+    rigid_body_->setLinearFactor(btVector3(1, 1, 1));
+  }
+
+  if (state_.angular_factor.has_value()) {
+    SetAngularFactor(*state_.angular_factor);
+  } else {
+    rigid_body_->setAngularFactor(btVector3(1, 1, 1));
   }
 
   SetMass(state_.mass);
@@ -298,9 +364,7 @@ void RigidBody::Update(const FrameTime& frame_time) {
     return;
   }
 
-  btTransform bt_transform = ToBtTransform(
-      GetNode()->GetWorldPosition() + collidable_.GetCollidableCenter(),
-      GetNode()->GetWorldRotation());
+  btTransform bt_transform = collidable_.GetNodeBtTransform();
 
   if (state_.motion_mode == RigidBodyState::SIMULATED) {
     if (!AlmostEqual(transform_prev_, GetNode()->GetWorldTrs())) {
@@ -322,9 +386,11 @@ void RigidBody::Update(const FrameTime& frame_time) {
         btTransform bt_trans;
         rigid_body_->getMotionState()->getWorldTransform(bt_trans);
         Transform<float> transform = ToTransform(bt_trans);
-        transform.translation -= collidable_.GetCollidableCenter();
         transform.scale =
-            ToVec3<float>(collidable_.GetCollidableShape()->getLocalScaling());
+            ToVec3<float>(collidable_.GetBtCollisionShape()->getLocalScaling());
+        float3 center_offset =
+            transform.rotation * collidable_.GetCollidableCenter();
+        transform.translation -= center_offset * transform.scale;
         GetNode()->SetWorldTrs(transform.AsMat4());
       }
     }
@@ -338,11 +404,13 @@ void RigidBody::Update(const FrameTime& frame_time) {
   }
 
   transform_prev_ = GetNode()->GetWorldTrs();
+  state_.linear_velocity = GetLinearVelocity();
+  state_.angular_velocity = GetAngularVelocity();
 
 #if IMP_RUNTIME(DEV)
   btTransform current_bt_transform;
   rigid_body_->getMotionState()->getWorldTransform(current_bt_transform);
-  // collidable_.Visualize(current_bt_transform);
+  collidable_.Visualize(current_bt_transform);
 #endif
 }
 

@@ -16,6 +16,7 @@
 
 #include <jni.h>
 
+#include <cstddef>
 #include <utility>
 #include <vector>
 
@@ -31,6 +32,15 @@
 #include "core/common/typed_vector.h"
 
 namespace imp {
+
+bool JavaExceptionPrintClear(JNIEnv* env) {
+  if (env->ExceptionCheck()) {
+    env->ExceptionDescribe();
+    env->ExceptionClear();
+    return true;
+  }
+  return false;
+}
 
 JniObjectArray::JniObjectArray(JNIEnv* env, size_t length, jclass element_class,
                                jobject initial_element)
@@ -69,9 +79,18 @@ jstring ToString(JNIEnv* env, absl::string_view view) {
   return env->NewStringUTF(null_terminated_string.data());
 }
 
+JniUniquePtr<jstring> ToJniString(JNIEnv* env, const std::string& str) {
+  return WrapJni(env, ToString(env, str));
+}
+
+JniUniquePtr<jstring> ToJniString(JNIEnv* env, absl::string_view view) {
+  return WrapJni(env, ToString(env, view));
+}
+
 jobjectArray ToStringArray(JNIEnv* env, std::vector<absl::string_view> views) {
-  JniObjectArray strings(env, views.size(), env->FindClass("java/lang/String"),
-                         env->NewStringUTF(""));
+  JniObjectArray strings(env, views.size(),
+                         WrapJni(env, env->FindClass("java/lang/String")).get(),
+                         ToJniString(env, absl::string_view()).get());
   for (int view_index = 0; view_index < views.size(); view_index++) {
     jstring java_string = ToString(env, views[view_index]);
     if (java_string == nullptr) {
@@ -183,6 +202,11 @@ JniUniquePtr<jintArray> CreateJniIntArray(JNIEnv* env, size_t length) {
   return WrapJni(env, result);
 }
 
+JniUniquePtr<jlongArray> CreateJniLongArray(JNIEnv* env, size_t length) {
+  jlongArray result = env->NewLongArray(length);
+  return WrapJni(env, result);
+}
+
 JniUniquePtr<jfloatArray> CreateJniFloatArray(JNIEnv* env, size_t length) {
   jfloatArray result = env->NewFloatArray(length);
   return WrapJni(env, result);
@@ -191,6 +215,11 @@ JniUniquePtr<jfloatArray> CreateJniFloatArray(JNIEnv* env, size_t length) {
 JniUniquePtr<jbooleanArray> CreateJniBooleanArray(JNIEnv* env, size_t length) {
   jbooleanArray result = env->NewBooleanArray(length);
   return WrapJni(env, result);
+}
+
+JniUniquePtr<jstring> CreateJniString(JNIEnv* env, const std::string& str) {
+  jstring java_string = env->NewStringUTF(str.c_str());
+  return WrapJni(env, java_string);
 }
 
 JniUniquePtr<jobjectArray> CreateJniObjectArray(JNIEnv* env, size_t length,
@@ -219,10 +248,11 @@ void DeleteRef(JNIEnv* env, jobject object) {
 }
 
 void android::DumpLocalReferenceTable(JNIEnv* env) {
-  jclass vm_class = env->FindClass("dalvik/system/VMDebug");
+  JniUniquePtr<jclass> vm_class =
+      WrapJni(env, env->FindClass("dalvik/system/VMDebug"));
   jmethodID dump_mid =
-      env->GetStaticMethodID(vm_class, "dumpReferenceTables", "()V");
-  env->CallStaticVoidMethod(vm_class, dump_mid);
+      env->GetStaticMethodID(vm_class.get(), "dumpReferenceTables", "()V");
+  env->CallStaticVoidMethod(vm_class.get(), dump_mid);
 }
 
 }  // namespace imp

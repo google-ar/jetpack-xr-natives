@@ -25,11 +25,13 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "core/common/invocable.h"
 #include "core/ncsb/node.h"
 #include "core/ncsb/system.h"
 #include "core/recipes/language/base_recipe_system.h"
-#include "core/recipes/language/recipe_graph.proto.imp.h"
+#include "core/recipes/language/recipe_custom_statement.h"
 #include "core/recipes/language/recipe_scope.h"
+#include "core/recipes/language/recipe_types.proto.imp.h"
 #include "core/recipes/language/recipe_utils.h"
 #include "core/recipes/language/registered_function.h"
 #include "core/view/base_view.h"
@@ -97,14 +99,22 @@ class RecipeSystem : public BaseRecipeSystem {
   // RecipeScope to have root_scope_ as the root.
   RecipeScope& GetRootScope() { return root_scope_; }
 
+  std::unique_ptr<RecipeCustomStatement> CreateCustomStatement(
+      absl::string_view name) const;
+
  protected:
   void RegisterFunctionImpl(
       absl::string_view name,
       std::unique_ptr<recipe::RegisteredFunction> function) override;
 
+  void RegisterCustomStatementTypeImpl(
+      absl::string_view name,
+      Invocable<std::unique_ptr<RecipeCustomStatement>()> creation_fn) override;
+
  private:
   StringMap<std::unique_ptr<recipe::RegisteredFunction>> registered_functions_;
-
+  StringMap<Invocable<std::unique_ptr<RecipeCustomStatement>()>>
+      custom_statement_creators_;
   RecipeScope root_scope_;
 };
 

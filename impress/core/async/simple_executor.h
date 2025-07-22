@@ -74,6 +74,8 @@ class SimpleExecutor : public Executor {
 
   bool HasPendingTasks() override;
 
+  int GetPendingTaskCount() override;
+
   // Returns the number of tasks performed
   size_t DrainWithTimeout(absl::Duration timeout) override;
 

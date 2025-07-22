@@ -25,16 +25,14 @@
 #include "core/common/small_source_location.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
+#include "core/media/media_color_space.h"
 #include "core/render/android/android_defines.h"
 #include "core/render/content_security_level.h"
-#include "core/video/video_color_space.h"
 #include "core/view/platforms/android/wrappers/surface.h"
 
 namespace imp {
 class Texture;
 using BorrowedTexturePtr = BorrowedPtr<Texture>;
-
-using SurfaceColorSpace = video::VideoColorSpace;
 }  // namespace imp
 
 namespace imp {
@@ -55,7 +53,7 @@ class PlatformAndroidExternalTextureSurface {
   // Creates an external texture for each view.
   virtual RobinMap<SurfaceViewType, Texture*> GetTextures() = 0;
 
-  virtual absl::StatusOr<SurfaceColorSpace> GetSurfaceColorSpace() const = 0;
+  virtual absl::StatusOr<MediaColorSpace> GetMediaColorSpace() const = 0;
 
   // Borrows a single external texture for the primary view.
   BorrowedTexturePtr BorrowTexture(

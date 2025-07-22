@@ -17,14 +17,24 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_MATERIALS_BUILTIN_BUILTIN_JXR_MEDIA_MATERIAL_H_
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_MATERIALS_BUILTIN_BUILTIN_JXR_MEDIA_MATERIAL_H_
 
+#include <stdbool.h>
+#include <sys/types.h>
+
+#include <cstdint>
+#include <optional>
+
 #include "absl/status/status.h"
 #include "flatbuffers/verifier.h"
 #include "core/async/future.h"
-#include "core/material_library/material_param_value.h"
 #include "core/materials/material.h"
+#include "core/media/media_color_space.h"
+#include "core/ncsb/dispatcher/dispatcher.h"
+#include "core/ncsb/update_system.h"
+#include "core/render/display_color_space.h"
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
@@ -37,7 +47,8 @@ class BuiltInJxrMediaMaterial : public split_engine::BuiltInCustomMaterial {
  public:
   // Creates a built-in 3D texture material based on the given spec.
   static Future<split_engine::BuiltInMaterialPtr> Create(
-      BaseView& view, const android_xr::schemas::BuiltInMaterial1b616c8a& spec);
+      BaseView& view, BridgeId bridge_id,
+      const android_xr::schemas::BuiltInMaterial1b616c8a& spec);
 
   split_engine::BuiltInMaterialPtr Duplicate() const override;
 
@@ -46,10 +57,29 @@ class BuiltInJxrMediaMaterial : public split_engine::BuiltInCustomMaterial {
       const android_xr::schemas::BuiltInMaterialInstanceParameters& parameters,
       const TextureBorrower& texture_borrower) override;
 
+  DisplayColorSpace GetRequiredDisplayColorSpace() const override;
+
  private:
-  BuiltInJxrMediaMaterial(BaseView& view, OwnedMaterialPtr material);
+  BuiltInJxrMediaMaterial(BaseView& view, BridgeId bridge_id,
+                          OwnedMaterialPtr material);
+
+  // Sets the color correction mode of the material.
+  void SetColorCorrectionMode(bool enable_color_correction);
+
+  // Sets up the color correction parameters of the material based on the
+  // color correction mode.
+  absl::Status SetupColorCorrectionParameters(
+      const android_xr::schemas::BuiltInMaterial1b616c8aParameters*
+          xr_media_parameters);
+
+  void EnableColorCorrection();
 
   BaseView& view_;
+  Dispatcher::ScopedConnection post_frame_update_connection_;
+  bool post_frame_update_connected_ = false;
+  std::optional<TextureId> primary_media_texture_id_;
+  ColorCorrectionMode color_correction_mode_ =
+      ColorCorrectionMode::kSystemBestEffort;
 };
 
 }  // namespace imp::split_engine

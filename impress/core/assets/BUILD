@@ -36,11 +36,11 @@ cc_library(
     deps = [
         "//core/async:future",
         "//core/common:ref_counter",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/hash",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:optional",
-        "@robin_map",
     ],
     alwayslink = 1,
 )

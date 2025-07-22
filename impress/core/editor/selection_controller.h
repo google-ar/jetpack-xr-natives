@@ -49,6 +49,10 @@ struct SelectionController {
   // NodeSelectionChangedEvent with the provided node as the target. If the node
   // is already selected, no event will be sent.
   virtual void TrySelectNode(NodeHandle node_to_select) = 0;
+
+  // Disables selecting the model on ModelLoadedEvents. Enabled by default.
+  virtual void DisableSelectModelWhenLoaded(
+      bool disable_select_model_on_load) = 0;
 };
 }  // namespace imp::editor
 

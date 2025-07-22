@@ -43,11 +43,11 @@ constexpr absl::string_view kScale = "scale";
 constexpr absl::string_view kWeights = "weights";
 constexpr absl::string_view kPointer = "pointer";
 
-using ::imp::gltf::Animation;
-using ::imp::gltf::AnimationChannel;
-using ::imp::gltf::Node;
-using ::imp::gltf::Scene;
-using ::imp::gltf::Skin;
+using ::imp::gltf::imp_proto::Animation;
+using ::imp::gltf::imp_proto::AnimationChannel;
+using ::imp::gltf::imp_proto::Node;
+using ::imp::gltf::imp_proto::Scene;
+using ::imp::gltf::imp_proto::Skin;
 
 bool IsAnimated(const GltfLookup &lookup, NodeId node) {
   const ChannelId kNilChannel = {};
@@ -143,7 +143,7 @@ OptionalError BuildExports(GltfLookup *out_lookup) {
   return NoError();
 }
 
-OptionalError BuildGltfAnimationLookup(const imp::gltf::Gltf &gltf,
+OptionalError BuildGltfAnimationLookup(const imp::gltf::imp_proto::Gltf &gltf,
                                        GltfLookup &lookup) {
   GltfLookup::ChannelSet default_channel_set;
   default_channel_set.translation_channels.Pair(gltf.nodes);
@@ -194,7 +194,8 @@ OptionalError BuildGltfAnimationLookup(const imp::gltf::Gltf &gltf,
 
 }  // namespace
 
-OptionalError BuildGltfLookup(const imp::gltf::Gltf &gltf, const Scene &scene,
+OptionalError BuildGltfLookup(const imp::gltf::imp_proto::Gltf &gltf,
+                              const Scene &scene,
                               const loader::LoaderOptions &options,
                               GltfLookup *out_lookup) {
   GltfLookup &lookup = *out_lookup;

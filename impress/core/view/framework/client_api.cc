@@ -14,11 +14,13 @@
 
 #include "core/view/framework/client_api.h"
 
+#include <cassert>
 #include <string>
 #include <utility>
 
 #include "core/common/log.h"
 #include "core/common/platform_helpers.h"
+#include "core/common/trace.h"
 #include "core/view/utils/string_map.h"
 
 namespace imp {
@@ -47,6 +49,8 @@ StringMap<CreateViewForIdentifierFn>& GetStoredCreateViewForIdentifierFn() {
 bool SetCreateViewFn(CreateViewFn create_view_fn) {
   assert(create_view_fn);
 
+  IMP_TRACE_INIT();
+
   CreateViewFn& stored_create_view_fn = GetStoredCreateViewFn();
   if (stored_create_view_fn) {
     IMP_LOG(imp::FATAL) << "Cannot call client_api::SetCreateViewFn more than once.";
@@ -60,6 +64,8 @@ bool SetCreateViewFn(CreateViewFn create_view_fn) {
 bool SetCreateViewFn(absl::string_view identifier,
                      CreateViewForIdentifierFn create_view_for_identifier_fn) {
   assert(create_view_for_identifier_fn);
+
+  IMP_TRACE_INIT();
 
   StringMap<CreateViewForIdentifierFn>& stored_create_view_for_identifier_fns =
       GetStoredCreateViewForIdentifierFn();

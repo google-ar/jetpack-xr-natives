@@ -1,0 +1,110 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import "google/protobuf/any.proto";
+import "core/math/math.proto";
+import "core/ncsb/node_handle_message.proto";
+import "core/proto/imp.proto";
+import "core/scene_handles/scene_handles.proto";
+
+// LiteralArray represents a list of literals.
+message LiteralArray {
+  repeated Literal values = 1;
+}
+
+// LiteralTuple represents a tuple of literals. This is functionally the same as
+// a LiteralArray, but is handled as a different type in the interpreter.
+message LiteralTuple {
+  repeated Literal values = 1;
+}
+
+// LiteralMap represents a map of literals.
+message LiteralMap {
+  map<string, Literal> values = 1;
+}
+
+// TODO: Create more scalable way to introduce Impress types into
+// Recipe Literals.
+// RecipeRayHit represents an imp::RayHit.
+message RecipeRayHit {
+  float distance = 1;
+  NodeHandleMessage node = 2;
+  Float3 world_point = 3;
+  Quatf world_orientation = 4;
+  Float3 world_normal = 5 [(imp.optional_type) = ABSL_OPTIONAL];
+}
+
+// Literal represents a constant value.
+message Literal {
+  oneof value {
+    int32 int_value = 1;
+    float float_value = 2;
+    double double_value = 3;
+    bool bool_value = 4;
+    string string_value = 5;
+    Float2 float2_value = 6;
+    Float3 float3_value = 7;
+    Float4 float4_value = 8;
+    Quatf quatf_value = 9;
+    Mat2f mat2f_value = 10;
+    Mat3f mat3f_value = 11;
+    Mat4f mat4f_value = 12;
+    NodeHandleMessage node_value = 13;
+    google.protobuf.Any proto_value = 14;
+    Box box_value = 15;
+    NodeSceneHandle node_scene_value = 16;
+    LiteralArray array_value = 17;
+    LiteralTuple tuple_value = 18;
+    LiteralMap map_value = 19;
+    RecipeRayHit ray_hit_value = 20;
+  }
+}
+
+// VariableDeclaration specifies the declaration of a Recipe variable.
+// Variables can only be one of the following types and can be initialized with
+// a Literal.
+message VariableDeclaration {
+  enum Type {
+    UNKNOWN_VARIABLE_TYPE = 0;
+
+    INT = 1;
+    FLOAT = 2;
+    DOUBLE = 3;
+    BOOL = 4;
+    STRING = 5;
+    FLOAT2 = 6;
+    FLOAT3 = 7;
+    FLOAT4 = 8;
+    QUATF = 9;
+    MAT2F = 10;
+    MAT3F = 11;
+    MAT4F = 12;
+    NODE = 13;
+    PROTO = 14;
+    BOX = 15;
+    NODE_SCENE = 16;
+    ARRAY = 17;
+    TUPLE = 18;
+    MAP = 19;
+    RAY_HIT = 20;
+  }
+
+  string name = 1;
+  Type type = 2;
+  Literal init_value = 3 [(imp.optional_type) = ABSL_OPTIONAL];
+}

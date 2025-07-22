@@ -29,7 +29,6 @@
 #include "core/math/mat.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
-#include "core/render/texture.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 #include "split_engine/schemas/split_engine_primitive_generated.h"
@@ -64,29 +63,6 @@ std::vector<uint8_t> SerializeResponse(
           response_offset.Union());
   return SerializeTable(fbb, response);
 }
-
-class SplitEngineTextureSamplerCreator {
- public:
-  using TextureSampler = android_xr::schemas::TextureSampler;
-  static constexpr auto CreateTextureSampler =
-      android_xr::schemas::CreateTextureSampler;
-
-  using MinFilter = android_xr::schemas::MinFilter;
-  using MagFilter = android_xr::schemas::MagFilter;
-  using WrapMode = android_xr::schemas::WrapMode;
-  using CompareMode = android_xr::schemas::CompareMode;
-  using CompareFunc = android_xr::schemas::CompareFunc;
-};
-
-// Writes a flatbuffer table for android_xr::schemas::BuiltInTextureParameter
-// for the given imp::Texture. The texture sampler from the imp::Texture is
-// used unless the optional sampler is provided. If the texture id is not
-// provided, it will use the texture address as the id.
-flatbuffers::Offset<android_xr::schemas::BuiltInTextureParameter>
-CreateBuiltInTextureParameter(
-    flatbuffers::FlatBufferBuilder &fbb, imp::OwnedOrBorrowedTexturePtr texture,
-    std::optional<uint64_t> texture_id = std::nullopt,
-    std::optional<filament::TextureSampler> sampler = std::nullopt);
 
 // Math struct helpers.
 android_xr::schemas::Bool Pack(const bool &obj);

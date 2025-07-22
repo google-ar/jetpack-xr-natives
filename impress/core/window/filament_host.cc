@@ -218,7 +218,8 @@ OptionalError FilamentHost::Setup(Engine::Backend backend,
           backend, platform,
           shared_gl_context ? shared_gl_context : shared_gl_context_,
           state_->ShouldUseSharedGlContext(), GetEngineConfig(),
-          state_->GetMaximumEngineFeatureLevel(), state_->ShouldStartPaused()));
+          state_->GetMaximumEngineFeatureLevel(), state_->ShouldStartPaused(),
+          {}, state_->ShouldPreinitializeMetalPlatform()));
 
   shared_state.RegisterHost(this);
   renderer_ = engine_->createRenderer();
@@ -417,6 +418,8 @@ absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
     return result;
   }
 
+  MP_RETURN_IF_ERROR(PreBeginRender());
+
   {
     IMP_TRACE_NAME("FilamentHost::FilamentRenderPass");
     ScopedDurationMeasurement filament_frame_duration(GetMonitor(),
@@ -462,10 +465,6 @@ absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
       }
       if (!has_rendered_since_last_state_change_) {
         has_rendered_since_last_state_change_ = true;
-        if (!should_render_frame) {
-          IMP_LOG(imp::INFO)
-              << "Note: ignored beginFrame() result due to updated view state";
-        }
       }
     }
   }

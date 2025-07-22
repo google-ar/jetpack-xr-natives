@@ -13,6 +13,7 @@
 # limitations under the License.
 
 load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:assets.bzl", "imp_assets")
 load("//build_tools:imp.bzl", "if_dev_runtime", "if_non_android", "imp_copts", "imp_defines", "imp_google3_copts")
 load("//build_tools:imp_gltf_materials_package.bzl", "imp_gltf_materials_package")
@@ -274,7 +275,6 @@ cc_library(
         "//core/actions:controller_input_handler",
         "//core/actions:input_action_event",
         "//core/common:log",
-        "//core/common:platform_helpers",
         "//core/common:robin_map",
         "//core/common:trace",
         "//core/math",
@@ -285,7 +285,6 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:optional",
         "@mediapipe//mediapipe/framework/port:status",
         "@robin_map",

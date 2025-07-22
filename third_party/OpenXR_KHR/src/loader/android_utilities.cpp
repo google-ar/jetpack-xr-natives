@@ -16,8 +16,7 @@
 #include <openxr/openxr.h>
 
 #include <dlfcn.h>
-#include <sstream>
-#include <vector>
+#include <string>
 #include <android/log.h>
 
 #define LOG_TAG "OpenXR-Loader"
@@ -263,10 +262,32 @@ static int populateFunctions(wrap::android::content::Context const &context, boo
 #endif  // XRLOADER_DISABLE_EXCEPTION_HANDLING
 
 /// Get cursor for active runtime, parameterized by whether or not we use the system broker
-static bool getActiveRuntimeCursor(wrap::android::content::Context const &context, jni::Array<std::string> const &projection,
+static bool getActiveRuntimeCursor(wrap::android::content::Context &context, jni::Array<std::string> const &projection,
                                    bool systemBroker, Cursor &cursor) {
     auto uri = active_runtime::makeContentUri(systemBroker, XR_VERSION_MAJOR(XR_CURRENT_API_VERSION), ABI);
     ALOGI("getActiveRuntimeCursor: Querying URI: %s", uri.toString().c_str());
+
+    auto pm = context.getPackageManager();
+    if (pm.isNull()) {
+        ALOGE("PackageManager is null.");
+        return false;
+    }
+    auto provider = pm.resolveContentProvider(uri.getAuthority(), 0);
+    if (provider.isNull()) {
+        ALOGW("No provider found for URI: %s", uri.toString().c_str());
+        return false;
+    }
+    std::string providerPackageName = provider.getPackageName();
+    if (systemBroker) {
+        int signatureResult = pm.checkSignatures(
+                providerPackageName, "android");
+        if (signatureResult !=
+            wrap::android::content::pm::PackageManager::SIGNATURE_MATCH) {
+            ALOGW("System broker provider %s has invalid signature, ignoring.",
+                    providerPackageName.c_str());
+            return false;
+        }
+    }
 
     ANDROID_UTILITIES_TRY { cursor = context.getContentResolver().query(uri, projection); }
     ANDROID_UTILITIES_CATCH_FALLBACK({
@@ -289,7 +310,7 @@ static bool getActiveRuntimeCursor(wrap::android::content::Context const &contex
     return true;
 }
 
-int getActiveRuntimeVirtualManifest(wrap::android::content::Context const &context, Json::Value &virtualManifest) {
+int getActiveRuntimeVirtualManifest(wrap::android::content::Context &context, Json::Value &virtualManifest) {
     jni::Array<std::string> projection = makeArray({active_runtime::Columns::PACKAGE_NAME, active_runtime::Columns::NATIVE_LIB_DIR,
                                                     active_runtime::Columns::SO_FILENAME, active_runtime::Columns::HAS_FUNCTIONS});
 

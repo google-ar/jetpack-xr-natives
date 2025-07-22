@@ -28,7 +28,7 @@ namespace imp::animation {
 
 // Convert an animation from a loaded gltf file into a flabuffer representation.
 absl::StatusOr<FlatBufferAccess<schemas::GltfAnimation>> GetAnimation(
-    const imp::gltf::Gltf& gltf,
+    const imp::gltf::imp_proto::Gltf& gltf,
     const imp::loader::details::provider_gltf::GltfLookup& lookup,
     imp::loader::details::provider_gltf::AnimationId animation);
 

@@ -112,6 +112,55 @@ InteractivityModelCreatorExtensionImpl::DeserializeInteractivityData(
     model::ModelData::InteractivityData::GraphData& graph_data =
         interactivity_data.graphs.back();
 
+    graph_data.types.reserve(graph->types()->size());
+    for (const schemas::InteractivityGraphTypeData* type : *graph->types()) {
+      model::ModelData::InteractivityData::TypeData type_data;
+
+      switch (type->type()) {
+        case schemas::InteractivityVariableType::BOOL:
+          type_data.type = model::ModelData::InteractivityData::ValueType::BOOL;
+          break;
+        case schemas::InteractivityVariableType::INT:
+          type_data.type = model::ModelData::InteractivityData::ValueType::INT;
+          break;
+        case schemas::InteractivityVariableType::FLOAT:
+          type_data.type =
+              model::ModelData::InteractivityData::ValueType::FLOAT;
+          break;
+        case schemas::InteractivityVariableType::FLOAT2:
+          type_data.type =
+              model::ModelData::InteractivityData::ValueType::FLOAT2;
+          break;
+        case schemas::InteractivityVariableType::FLOAT3:
+          type_data.type =
+              model::ModelData::InteractivityData::ValueType::FLOAT3;
+          break;
+        case schemas::InteractivityVariableType::FLOAT4:
+          type_data.type =
+              model::ModelData::InteractivityData::ValueType::FLOAT4;
+          break;
+        case schemas::InteractivityVariableType::MAT2F:
+          type_data.type =
+              model::ModelData::InteractivityData::ValueType::MAT2F;
+          break;
+        case schemas::InteractivityVariableType::MAT3F:
+          type_data.type =
+              model::ModelData::InteractivityData::ValueType::MAT3F;
+          break;
+        case schemas::InteractivityVariableType::MAT4F:
+          type_data.type =
+              model::ModelData::InteractivityData::ValueType::MAT4F;
+          break;
+        default:
+          // TODO: Add support for passing custom types through
+          // loader.
+          return absl::InternalError(absl::StrFormat(
+              "Invalid interactivity graph type: %d", type->type()));
+      }
+
+      graph_data.types.push_back(std::move(type_data));
+    }
+
     graph_data.nodes.reserve(graph->nodes()->size());
     for (const schemas::InteractivityNode* node : *graph->nodes()) {
       std::vector<model::ModelData::InteractivityData::NodeData::FlowData>
@@ -133,23 +182,6 @@ InteractivityModelCreatorExtensionImpl::DeserializeInteractivityData(
            *node->configuration()) {
         model::ModelData::InteractivityData::NodeData::ConfigurationData
             configuration_data;
-        switch (config->type()) {
-          case schemas::InteractivityVariableType::BOOL:
-            configuration_data.value_type =
-                model::ModelData::InteractivityData::ValueType::BOOL;
-            break;
-          case schemas::InteractivityVariableType::INT:
-            configuration_data.value_type =
-                model::ModelData::InteractivityData::ValueType::INT;
-            break;
-          case schemas::InteractivityVariableType::FLOAT:
-            configuration_data.value_type =
-                model::ModelData::InteractivityData::ValueType::FLOAT;
-            break;
-          case schemas::InteractivityVariableType::NIL:
-            // Do nothing, as a nil type is indicated.
-            break;
-        }
 
         switch (config->id()) {
           case schemas::InteractivityNodeConfigurationType::
@@ -189,6 +221,27 @@ InteractivityModelCreatorExtensionImpl::DeserializeInteractivityData(
             configuration_data.id = model::ModelData::InteractivityData::
                 NodeData::ConfigurationType::CASES;
             break;
+          case schemas::InteractivityNodeConfigurationType::TYPE:
+            configuration_data.id = model::ModelData::InteractivityData::
+                NodeData::ConfigurationType::TYPE;
+            break;
+          case schemas::InteractivityNodeConfigurationType::
+              NUMBER_OF_INPUT_FLOWS:
+            configuration_data.id = model::ModelData::InteractivityData::
+                NodeData::ConfigurationType::NUMBER_OF_INPUT_FLOWS;
+            break;
+          case schemas::InteractivityNodeConfigurationType::IS_RANDOM:
+            configuration_data.id = model::ModelData::InteractivityData::
+                NodeData::ConfigurationType::IS_RANDOM;
+            break;
+          case schemas::InteractivityNodeConfigurationType::IS_LOOP:
+            configuration_data.id = model::ModelData::InteractivityData::
+                NodeData::ConfigurationType::IS_LOOP;
+            break;
+          case schemas::InteractivityNodeConfigurationType::MESSAGE:
+            configuration_data.id = model::ModelData::InteractivityData::
+                NodeData::ConfigurationType::MESSAGE;
+            break;
         }
 
         // Second switch statement to reduce the amount of duplicated code
@@ -196,8 +249,11 @@ InteractivityModelCreatorExtensionImpl::DeserializeInteractivityData(
         switch (config->id()) {
           case schemas::InteractivityNodeConfigurationType::
               NUMBER_OF_OUTPUT_FLOWS:
+          case schemas::InteractivityNodeConfigurationType::
+              NUMBER_OF_INPUT_FLOWS:
           case schemas::InteractivityNodeConfigurationType::EVENT:
           case schemas::InteractivityNodeConfigurationType::NODE_INDEX:
+          case schemas::InteractivityNodeConfigurationType::TYPE:
             if (!config->value_as_Int()) {
               return absl::InternalError(absl::StrFormat(
                   "Interactivity node configuration indicates an int value is "
@@ -209,6 +265,7 @@ InteractivityModelCreatorExtensionImpl::DeserializeInteractivityData(
           case schemas::InteractivityNodeConfigurationType::VARIABLE:
           case schemas::InteractivityNodeConfigurationType::POINTER:
           case schemas::InteractivityNodeConfigurationType::EASING_TYPE:
+          case schemas::InteractivityNodeConfigurationType::MESSAGE:
             if (!config->value_as_String() ||
                 !config->value_as_String()->value()) {
               return absl::InternalError(absl::StrFormat(
@@ -220,6 +277,8 @@ InteractivityModelCreatorExtensionImpl::DeserializeInteractivityData(
                 config->value_as_String()->value()->str();
             break;
           case schemas::InteractivityNodeConfigurationType::STOP_PROPAGATION:
+          case schemas::InteractivityNodeConfigurationType::IS_RANDOM:
+          case schemas::InteractivityNodeConfigurationType::IS_LOOP:
             if (!config->value_as_Bool()) {
               return absl::InternalError(absl::StrFormat(
                   "Interactivity node configuration indicates an bool value "
@@ -284,7 +343,8 @@ InteractivityModelCreatorExtensionImpl::DeserializeInteractivityData(
       }
 
       graph_data.nodes.push_back({
-          .type = (*graph->declarations())[node->declaration()]->op()->str(),
+          .type =
+              (*graph->declarations())[node->declaration()] -> op() -> str(),
           .index = static_cast<int>(node->index()),
           .flows = std::move(flows),
           .configuration = std::move(configurations),

@@ -25,7 +25,7 @@ namespace imp::loader::extensions {
 
 // Resolves any BufferViews with the EXT_meshopt_compression extension. Returns
 // a BufferAccess containing decoded data pointed to by the (modified) gltf.
-absl::StatusOr<BufferAccess> ResolveMeshOpt(imp::gltf::Gltf* gltf);
+absl::StatusOr<BufferAccess> ResolveMeshOpt(imp::gltf::imp_proto::Gltf* gltf);
 
 }  // namespace imp::loader::extensions
 

@@ -26,6 +26,7 @@
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
@@ -36,7 +37,7 @@ class BuiltInTextureExternalMaterial : public BuiltInCustomMaterial {
  public:
   // Creates a built-in water material based on the given spec.
   static Future<BuiltInMaterialPtr> Create(
-      BaseView& view,
+      BaseView& view, BridgeId bridge_id,
       const android_xr::schemas::BuiltInMaterialTextureExternal& spec);
 
   BuiltInMaterialPtr Duplicate() const override;
@@ -47,7 +48,7 @@ class BuiltInTextureExternalMaterial : public BuiltInCustomMaterial {
       const TextureBorrower& texture_borrower) override;
 
  private:
-  explicit BuiltInTextureExternalMaterial(BaseView& view,
+  explicit BuiltInTextureExternalMaterial(BaseView& view, BridgeId bridge_id,
                                           OwnedMaterialPtr material);
 
   BaseView& view_;

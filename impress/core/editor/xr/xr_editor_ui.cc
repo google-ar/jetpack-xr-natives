@@ -14,40 +14,23 @@
 
 #include "core/editor/xr/xr_editor_ui.h"
 
-#include "core/common/log.h"
 #include "core/editor/components/world_space_editor_ui.h"
-#include "core/editor/xr/xr_grab_handle.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node_handle.h"
-#include "core/view/framework/input/pointer_input_handler.h"
 
 namespace imp::editor {
 void XrEditorUi::Setup(const SetupOptions& options) {
-#if !IMP_RUNTIME(DEV)
-  IMP_LOG(imp::FATAL) << "The XrEditorUi requires --define=IMP_DEV_RUNTIME=1.";
-#endif
-  imp::NodeHandle grab_handle_node = GetView().CreateNode();
-  grab_handle_node->SetName("Grab Handle");
-  grab_handle_node->SetParent(GetNode());
-  xr_editor_grab_handle_ = grab_handle_node->AddComponent<XrGrabHandle>(
-      /*radius=*/options.distance_from_camera,
-      /*initial_horizontal_offset_degrees=*/options.horizontal_offset_degrees,
-      /*initial_vertical_offset_degrees=*/options.vertical_offset_degrees);
-
   // Create a world-space Editor.
-  editor_node_ = GetView().CreateNode();
-  editor_node_->SetName("World Space Editor UI");
+  editor_node_ = GetNode()->CreateChildNode();
   editor_node_
-      ->AddComponent<imp::editor::WorldSpaceEditorUi>(options.editor_resolution)
-      .Then([this, grab_handle_node, editor_scale = options.editor_scale](
+      ->AddComponent<imp::editor::WorldSpaceEditorUi>(
+          options.editor_resolution, options.editor_panel_settings)
+      .Then([this, editor_scale = options.editor_scale](
                 imp::ComponentHandle<imp::editor::WorldSpaceEditorUi>
                     world_space_editor_ui) {
         world_space_editor_ui_ = world_space_editor_ui;
         editor_node_->SetLocalScale(editor_scale);
-        editor_node_->SetParent(grab_handle_node);
-        // Position the Editor panel just below the grab handle.
-        editor_node_->SetLocalPosition({0.0f, -1.1f, 0.0f});
       })
       .KeptBy(this);
 }

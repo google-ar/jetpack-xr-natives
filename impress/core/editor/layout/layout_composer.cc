@@ -20,6 +20,7 @@
 
 #include "absl/strings/match.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "dear_imgui/imgui.h"
 #include "dear_imgui/imgui_internal.h"
 #include "core/common/invocable.h"
@@ -40,6 +41,8 @@ constexpr int32_t kDetailsItemWidth = 200;
 constexpr int32_t kToolbarWidth = 200;
 constexpr int32_t kSceneItemWidth = 200;
 constexpr int32_t kBottomPanelHeight = 300;
+constexpr int32_t kFixedItemWidth = 200;
+constexpr int32_t kFixedTabWidth = 500;
 // White
 constexpr ImColor kCursorDefaultColor = ImColor(1.0f, 1.0f, 1.0f, 1.0f);
 // Grey
@@ -103,9 +106,16 @@ void LayoutComposer::DrawWidget(const WidgetLayoutInfo& layout_info,
         widget->GetName(), [widget]() { widget->DrawImGui(); },
         ImGuiTabItemFlags_Leading);
   } else if (layout_info.panel_id == panel_ids::kMenuBar) {
-    DrawAsMenuInMenuBar(widget->GetName(), [widget]() { widget->DrawImGui(); });
+    if (layout_config_.layout_type ==
+        LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT) {
+      DrawAsMenuInMenuBar(widget->GetName(),
+                          [widget]() { widget->DrawImGui(); });
+    }
   } else if (layout_info.panel_id == panel_ids::kToolBar) {
-    DrawInToolbar([widget]() { widget->DrawImGui(); });
+    if (layout_config_.layout_type ==
+        LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT) {
+      DrawInToolbar([widget]() { widget->DrawImGui(); });
+    }
   } else {
     DrawAfterLayout([widget]() { widget->DrawImGui(); });
   }
@@ -166,7 +176,30 @@ void LayoutComposer::DrawAsStandaloneTab(absl::string_view tab_label,
           ImGui::SetItemAllowOverlap();
           if (tabbed_window_state_.expanded_state ==
               LayoutConfig::WindowExpandedState::EXPANDED) {
-            draw_function();
+            ImVec2 safe_display_size = GetSafeDisplaySize();
+            float max_window_height =
+                safe_display_size.y *
+                layout_config_.initial_tabbed_window_state
+                    .max_window_height_multiplier.value_or(1.0f);
+            ImGuiStyle& style = ImGui::GetStyle();
+            ImGui::SetNextWindowSizeConstraints(
+                ImVec2(0, 0),
+                ImVec2(safe_display_size.x - style.WindowPadding.x * 2,
+                       max_window_height - ImGui::GetCursorPosY() -
+                           style.WindowPadding.y * 2));
+
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,
+                                ImVec2(0.0f, 0.0f));
+            if (ImGui::BeginChild(
+                    GenerateUniqueImGuiLabel("##tab_content_child", this)
+                        .c_str(),
+                    ImVec2(0, 0),
+                    ImGuiChildFlags_AutoResizeY |
+                        ImGuiChildFlags_AlwaysUseWindowPadding)) {
+              draw_function();
+            }
+            ImGui::EndChild();
+            ImGui::PopStyleVar();
           }
           ImGui::EndTabItem();
         }
@@ -276,6 +309,36 @@ void LayoutComposer::DrawDetailsSectionContents() {
   }
 }
 
+void LayoutComposer::DrawWindowForWorldLayout(
+    absl::string_view window_label, imp::Invocable<void()> draw_function) {
+  ImVec2 safe_display_size = GetSafeDisplaySize();
+  ImVec4 safe_display_bounds = GetSafeDisplayBounds();
+
+  ImVec2 window_size = ImVec2(safe_display_size.x, safe_display_size.y);
+  ImGui::SetNextWindowSize(window_size, ImGuiCond_FirstUseEver);
+  ImGui::SetNextWindowBgAlpha(kWindowAlpha);
+  // Anchor the window next to last window on its left.
+  ImGui::SetNextWindowPos(
+      {safe_display_bounds.x + window_x_offset_for_world_layout_,
+       window_y_offset_},
+      ImGuiCond_Always);
+  // Without explicitly setting collapsed to false, the panel defaults to
+  // collapsed on XR.
+  ImGui::SetNextWindowCollapsed(false, ImGuiCond_Appearing);
+
+  if (ImGui::Begin(window_label.data(), nullptr,
+                   ImGuiWindowFlags_AlwaysAutoResize |
+                       ImGuiWindowFlags_HorizontalScrollbar |
+                       ImGuiWindowFlags_NoFocusOnAppearing)) {
+    ImGui::PushItemWidth(kFixedItemWidth);
+    draw_function();
+    window_x_offset_for_world_layout_ += ImGui::GetWindowWidth();
+    UpdateSubWindowRegistration(window_label);
+    ImGui::PopItemWidth();
+  }
+  ImGui::End();
+}
+
 void LayoutComposer::DrawStandaloneSceneWindow() {
   ImVec2 safe_display_size = GetSafeDisplaySize();
   ImVec4 safe_display_bounds = GetSafeDisplayBounds();
@@ -311,6 +374,15 @@ void LayoutComposer::DrawSceneSectionContents() {
 void LayoutComposer::DrawTabbedWindow() {
   ImVec2 safe_display_size = GetSafeDisplaySize();
   ImVec4 safe_display_bounds = GetSafeDisplayBounds();
+  float window_width = safe_display_size.x;
+  if (layout_config_.layout_type.value() ==
+      LayoutConfig::LayoutType::MULTIPLE_WINDOWS_WORLD_LAYOUT) {
+    // Put the window next to the last window on its left.
+    safe_display_bounds.x += window_x_offset_for_world_layout_;
+    // The tabbed window is fixed width for world layout.
+    safe_display_bounds.z = safe_display_bounds.x + kFixedTabWidth;
+    window_width = kFixedTabWidth;
+  }
 
   ImGui::SetNextWindowBgAlpha(kWindowAlpha);
 
@@ -331,14 +403,15 @@ void LayoutComposer::DrawTabbedWindow() {
       safe_display_size.y * layout_config_.initial_tabbed_window_state
                                 .max_window_height_multiplier.value_or(1.0f);
 
-  ImGui::SetNextWindowSizeConstraints(
-      ImVec2(safe_display_size.x, 0),
-      ImVec2(safe_display_size.x, max_window_height));
+  ImGui::SetNextWindowSizeConstraints(ImVec2(window_width, 0),
+                                      ImVec2(window_width, max_window_height));
   if (ImGui::Begin(
           kTabbedWindowLabel.data(), nullptr,
           ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoFocusOnAppearing |
               ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar |
-              ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBackground)) {
+              ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBackground |
+              ImGuiWindowFlags_NoScrollbar |
+              ImGuiWindowFlags_NoScrollWithMouse)) {
     // Draw tabs.
     ImGui::BeginGroup();
     ImGui::BeginTabBar(kTabBarLabel.data(),
@@ -346,6 +419,7 @@ void LayoutComposer::DrawTabbedWindow() {
     for (auto& draw_function : tab_item_draw_functions_) {
       draw_function();
     }
+    UpdateSubWindowRegistration(kTabBarLabel);
 
     // The tab buttons are colored differently to indicate they are not tabs.
     ImGui::PushStyleColor(ImGuiCol_Tab, kTabButtonDefaultColor);
@@ -405,8 +479,7 @@ void LayoutComposer::DrawTabbedWindow() {
     ImGui::EndGroup();
 
     ImGui::SetNextWindowSizeConstraints(
-        ImVec2(safe_display_size.x, 0),
-        ImVec2(safe_display_size.x, max_window_height));
+        ImVec2(window_width, 0), ImVec2(window_width, max_window_height));
     ImVec2 auto_fit_size =
         ImGui::CalcWindowNextAutoFitSize(ImGui::GetCurrentWindow());
 
@@ -528,6 +601,14 @@ void LayoutComposer::DrawLayout() {
           ImGuiTabItemFlags_Leading, /*draw_before_previous_tabs=*/true);
       break;
     }
+    case LayoutConfig::LayoutType::MULTIPLE_WINDOWS_WORLD_LAYOUT: {
+      window_x_offset_for_world_layout_ = 0;
+      DrawWindowForWorldLayout(kSceneWindowLabel,
+                               [this]() { DrawSceneSectionContents(); });
+      DrawWindowForWorldLayout(kDetailsWindowLabel,
+                               [this]() { DrawDetailsSectionContents(); });
+      break;
+    }
     default:
     case LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT: {
       DrawStandaloneDetailsWindow();
@@ -551,6 +632,32 @@ void LayoutComposer::DrawLayout() {
   menu_draw_functions_.clear();
   toolbar_draw_functions_.clear();
   draw_after_functions_.clear();
+}
+
+absl::Span<const LayoutComposer::SubWindowInfo>
+LayoutComposer::GetSubWindowInfo() {
+  sub_window_info_.clear();
+  for (const auto& [label, info] : sub_window_info_map_) {
+    sub_window_info_.push_back(info);
+  }
+  return sub_window_info_;
+}
+
+void LayoutComposer::UpdateSubWindowRegistration(absl::string_view label) {
+  if (layout_config_.layout_type.value() !=
+      LayoutConfig::LayoutType::MULTIPLE_WINDOWS_WORLD_LAYOUT) {
+    return;
+  }
+
+  if (sub_window_info_map_.contains(label)) {
+    sub_window_info_map_[label.data()].window_size = ImGui::GetWindowSize();
+    sub_window_info_map_[label.data()].window_position = ImGui::GetWindowPos();
+  } else {
+    sub_window_info_map_[label.data()] = {
+        .label = label.data(),
+        .window_size = ImGui::GetWindowSize(),
+        .window_position = ImGui::GetWindowPos()};
+  }
 }
 
 ImVec2 LayoutComposer::GetSafeDisplaySize() const {

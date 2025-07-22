@@ -30,31 +30,65 @@
 #include "core/common/robin_map.h"
 #include "core/math/mat.h"
 #include "core/render/android/android_defines.h"
-#include "core/view/platforms/android/ndkwrappers/hardware_buffer_helper.h"
+#include "mediapipe/framework/port/status_macros.h"
 
 namespace imp::android {
 
-constexpr uint32_t kQCAuxiliaryViewMask = 0x02;
+constexpr uint32_t kQCLeftViewMask = 0x01;
+constexpr uint32_t kQCRightViewMask = 0x02;
 
 std::unique_ptr<ImageAPIProvider> Image::api_provider = nullptr;
 
 Image::Image(AImage* aimage, AHardwareBuffer* ahardware_buffer)
-    : aimage_(aimage), ahardware_buffer_(ahardware_buffer) {}
+    : aimage_(aimage),
+      ahardware_buffer_(ahardware_buffer),
+      is_multiview_(false),
+      is_left_primary_(true) {}
 
 absl::StatusOr<std::unique_ptr<Image>> Image::Create(AImage& aimage) {
   AHardwareBuffer* ahardware_buffer = nullptr;
   if (AImage_getHardwareBuffer(&aimage, &ahardware_buffer) != AMEDIA_OK) {
     return absl::InternalError("Unable to get hardware buffer from AImage");
   }
+  if (ahardware_buffer == nullptr) {
+    return absl::InternalError("Image hardware buffer is null.");
+  }
 
-  return absl::WrapUnique<Image>(new Image(&aimage, ahardware_buffer));
+  auto image = absl::WrapUnique<Image>(new Image(&aimage, ahardware_buffer));
+  MP_RETURN_IF_ERROR(image->UpdateMultivewInfoUsingImageAPIProvider());
+  return image;
+}
+
+absl::Status Image::UpdateMultivewInfoUsingImageAPIProvider() {
+  ImageAPIProvider* api_provider = GetImageAPIProvider().get();
+  if (api_provider == nullptr) {
+    return absl::InternalError("ImageAPIProvider is not set.");
+  }
+
+  uint32_t base_view_mask = 0;
+  MP_RETURN_IF_ERROR(api_provider->GetBaseView(ahardware_buffer_, base_view_mask));
+
+  uint32_t auxiliary_view_mask = 0;
+  MP_RETURN_IF_ERROR(api_provider->GetAuxiliaryViewInfo(ahardware_buffer_,
+                                                     auxiliary_view_mask));
+
+  is_multiview_ = false;
+  if (base_view_mask != auxiliary_view_mask) {
+    MP_RETURN_IF_ERROR(api_provider->GetAuxiliaryBuffer(
+        ahardware_buffer_,
+        base_view_mask == kQCLeftViewMask ? kQCRightViewMask : kQCLeftViewMask,
+        auxiliary_view_ahardware_buffer_));
+    is_multiview_ = (auxiliary_view_ahardware_buffer_ != nullptr);
+  }
+  is_left_primary_ = base_view_mask == kQCLeftViewMask;
+  return absl::OkStatus();
 }
 
 Image::~Image() {
   // Deleting the native image triggers the return of the buffer to the buffer
   // queue.
-  if (auxiliary_view_buffer_holder_ != nullptr) {
-    AHardwareBuffer_release(auxiliary_view_buffer_holder_);
+  if (auxiliary_view_ahardware_buffer_ != nullptr) {
+    AHardwareBuffer_release(auxiliary_view_ahardware_buffer_);
   }
   AImage_delete(aimage_);
 }
@@ -86,8 +120,8 @@ const AHardwareBuffer* Image::GetHardwareBuffer() const {
 const ADataSpace Image::GetBufferDataSpace() const {
   ImageAPIProvider* api_provider = GetImageAPIProvider().get();
   if (api_provider == nullptr) {
-    IMP_LOG(imp::ERROR) << "ImageAPIProvider is not set. Falling back to using dlsym.";
-    return AHardwareBufferHelper::GetDataSpace(ahardware_buffer_);
+    IMP_LOG(imp::ERROR) << "ImageAPIProvider is not set. Returning ADATASPACE_UNKNOWN.";
+    return ADATASPACE_UNKNOWN;
   }
 
   int32_t data_space = 0;  // ADATASPACE_UNKNOWN
@@ -95,55 +129,28 @@ const ADataSpace Image::GetBufferDataSpace() const {
           api_provider->GetBufferDataSpace(ahardware_buffer_, data_space);
       !status.ok()) {
     IMP_LOG(imp::ERROR) << "Unable to get buffer data space from ImageAPIProvider: "
-               << status << ". Falling back to using dlsym.";
-    return AHardwareBufferHelper::GetDataSpace(ahardware_buffer_);
+               << status << ". Returning ADATASPACE_UNKNOWN.";
+    return ADATASPACE_UNKNOWN;
   }
   return static_cast<ADataSpace>(data_space);
 }
 
 std::unique_ptr<RobinMap<SurfaceViewType, const AHardwareBuffer*>>
 Image::GetViewHardwareBuffers() const {
-  ImageAPIProvider* api_provider = GetImageAPIProvider().get();
-  if (api_provider == nullptr) {
-    IMP_LOG(imp::ERROR) << "ImageAPIProvider is not set. Falling back to using dlsym.";
-    return AHardwareBufferHelper::GetAvailableViews(ahardware_buffer_);
-  }
-
-  uint32_t view_masks = 0;
-  if (absl::Status status =
-          api_provider->GetAuxiliaryViewInfo(ahardware_buffer_, view_masks);
-      !status.ok()) {
-    IMP_LOG(imp::ERROR) << "Unable to get auxiliary view info from ImageAPIProvider: "
-               << status << ". Falling back to using dlsym.";
-    return AHardwareBufferHelper::GetAvailableViews(ahardware_buffer_);
-  }
-
   std::unique_ptr<RobinMap<SurfaceViewType, const AHardwareBuffer*>>
       view_hardware_buffers = absl::WrapUnique(
           new RobinMap<SurfaceViewType, const AHardwareBuffer*>());
   *view_hardware_buffers = {{SurfaceViewType::kPrimaryView, ahardware_buffer_}};
-  if (!(view_masks & kQCAuxiliaryViewMask)) {
-    return view_hardware_buffers;
-  }
-
-  // Retrieve the auxiliary view hardware buffer.
-  AHardwareBuffer* auxiliary_buffer = nullptr;
-  if (absl::Status status = api_provider->GetAuxiliaryBuffer(
-          ahardware_buffer_, kQCAuxiliaryViewMask, auxiliary_buffer);
-      !status.ok()) {
-    IMP_LOG(imp::ERROR) << "Unable to get auxiliary view hardware buffer: " << status;
-    return view_hardware_buffers;
-  }
-
-  if (auxiliary_buffer) {
+  if (auxiliary_view_ahardware_buffer_ != nullptr) {
     (*view_hardware_buffers)[SurfaceViewType::kAuxiliaryView] =
-        auxiliary_buffer;
-  } else {
-    IMP_LOG(imp::ERROR) << "Auxiliary view hardware buffer was expected but is not "
-                  "available.";
+        auxiliary_view_ahardware_buffer_;
   }
   return view_hardware_buffers;
 }
+
+bool Image::IsMultiview() const { return is_multiview_; }
+
+bool Image::IsLeftPrimary() const { return is_left_primary_; }
 
 absl::StatusOr<mat4f> Image::GetTransformMatrix() const {
   float matrix[16];

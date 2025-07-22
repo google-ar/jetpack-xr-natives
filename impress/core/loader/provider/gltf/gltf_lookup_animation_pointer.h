@@ -23,14 +23,14 @@
 
 namespace imp::loader::details::provider_gltf {
 
-OptionalError AnimationPointerNodesLookup(const imp::gltf::Gltf &gltf,
-                                          GltfLookup &lookup);
+OptionalError AnimationPointerNodesLookup(
+    const imp::gltf::imp_proto::Gltf &gltf, GltfLookup &lookup);
 
-OptionalError AnimationPointerMaterialsLookup(const imp::gltf::Gltf &gltf,
-                                              GltfLookup &lookup);
+OptionalError AnimationPointerMaterialsLookup(
+    const imp::gltf::imp_proto::Gltf &gltf, GltfLookup &lookup);
 
-OptionalError AnimationPointerLightsLookup(const imp::gltf::Gltf &gltf,
-                                           GltfLookup &lookup);
+OptionalError AnimationPointerLightsLookup(
+    const imp::gltf::imp_proto::Gltf &gltf, GltfLookup &lookup);
 
 }  // namespace imp::loader::details::provider_gltf
 

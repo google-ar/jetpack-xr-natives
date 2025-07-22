@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "absl/container/inlined_vector.h"
+#include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/types/span.h"
@@ -34,6 +35,7 @@
 #include "core/common/small_source_location.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
+#include "core/media/media_color_space.h"
 #include "core/render/android/android_defines.h"
 #include "core/render/android/platform_android_external_texture_surface.h"
 #include "core/render/content_security_level.h"
@@ -77,8 +79,9 @@ SplitEnginePlatformAndroidExternalTextureSurface::
   split_engine_texture_ids.push_back(static_cast<TextureId>(security_level_));
 
   // Set the bridge and create the external texture surface.
-  SplitEngineAndroidBridge& bridge =
-      view_.GetRegistry().Get<SplitEngineAndroidBridge>()->get();
+  SplitEngineSerializer* serializer = view_.GetSplitEngineSerializer();
+  
+  SplitEngineAndroidBridge& bridge = serializer->GetBridge();
 
   jobject surface_object =
       bridge.CreateExternalTextureSurface(split_engine_texture_ids);
@@ -157,8 +160,11 @@ android::Surface* SplitEnginePlatformAndroidExternalTextureSurface::GetSurface()
 absl::Status
 SplitEnginePlatformAndroidExternalTextureSurface::SetDefaultBufferSize(
     int2 size) const {
-  SplitEngineAndroidBridge& bridge =
-      view_.GetRegistry().Get<SplitEngineAndroidBridge>()->get();
+  SplitEngineSerializer* serializer = view_.GetSplitEngineSerializer();
+  if (!serializer) {
+    return absl::FailedPreconditionError("SplitEngineSerializer is null.");
+  }
+  SplitEngineAndroidBridge& bridge = serializer->GetBridge();
   for (const auto& [surface_view_type, split_engine_texture_id] :
        split_engine_texture_ids_) {
     if (!bridge.SetExternalTextureSurfaceSize(split_engine_texture_id, size.x,
@@ -183,10 +189,10 @@ SplitEnginePlatformAndroidExternalTextureSurface::GetContentSecurityLevel()
   return surface_->GetContentSecurityLevel();
 }
 
-absl::StatusOr<SurfaceColorSpace>
-SplitEnginePlatformAndroidExternalTextureSurface::GetSurfaceColorSpace() const {
+absl::StatusOr<MediaColorSpace>
+SplitEnginePlatformAndroidExternalTextureSurface::GetMediaColorSpace() const {
   return absl::UnimplementedError(
-      "GetSurfaceColorSpace is not implemented for "
+      "GetMediaColorSpace is not implemented for "
       "SplitEnginePlatformAndroidExternalTextureSurface.");
 }
 

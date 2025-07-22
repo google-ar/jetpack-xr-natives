@@ -28,6 +28,10 @@ btVector3 ToBtVector3(const float3& vec) {
   return btVector3(vec.x, vec.y, vec.z);
 }
 
+float3 ToFloat3(const btVector3& vec) {
+  return float3(vec.x(), vec.y(), vec.z());
+}
+
 Transform<float> ToTransform(const btTransform& bt_trans) {
   Transform<float> transform;
   btQuaternion bt_quat = bt_trans.getRotation();

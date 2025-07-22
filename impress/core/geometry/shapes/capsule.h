@@ -23,7 +23,7 @@
 namespace imp {
 
 // Represents a capsule, which is a cylinder with two hemispheres at each end.
-// The cylinder's center line is parallel to the z-axis, from center-height/2 to
+// The cylinder's center line is parallel to the Y-axis, from center-height/2 to
 // center+height/2.
 struct Capsule {
   float3 center;

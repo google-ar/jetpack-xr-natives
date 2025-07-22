@@ -178,13 +178,13 @@ absl::StatusOr<flatbuffers::Offset<void>> Serialize(
 }
 
 absl::StatusOr<absl::Span<const float>> GetTimeData(
-    const imp::gltf::Gltf& gltf, const AnimationSampler sampler) {
+    const imp::gltf::imp_proto::Gltf& gltf, const AnimationSampler sampler) {
   // Fetch and verify the input accessor.
   if (!sampler.input) return absl::InternalError("No input");
   MP_ASSIGN_OR_RETURN(AccessorReader reader,
                    AccessorReader::Create(gltf, *sampler.input));
 
-  if (reader.GetComponentType() != imp::gltf::ComponentType::FLOAT ||
+  if (reader.GetComponentType() != imp::gltf::imp_proto::ComponentType::FLOAT ||
       reader.GetStride() != sizeof(float)) {
     return absl::InternalError("Invalid time data");
   }

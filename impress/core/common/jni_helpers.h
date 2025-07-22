@@ -19,10 +19,13 @@
 
 #include <jni.h>
 
+#include <cstddef>
 #include <string>
 #include <type_traits>
 #include <vector>
 
+#include "absl/base/attributes.h"
+#include "absl/log/check.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
@@ -111,9 +114,17 @@ class JniObjectArray {
   jobjectArray array_;
 };
 
+// Returns false if there is no pending exception on the calling thread.
+// Otherwise, logs and clears the exception, and returns true.
+// cf.
+// (broken link)
+bool JavaExceptionPrintClear(JNIEnv* env);
+
 // Helper function to convert C++ strings to jstring.
+ABSL_DEPRECATED("Use ToJniString instead")
 jstring ToString(JNIEnv* env, const std::string& str);
 // Helper function to convert absl::string_view to jstring.
+ABSL_DEPRECATED("Use ToJniString instead")
 jstring ToString(JNIEnv* env, absl::string_view view);
 // Helper function to convert string views into string arrays.
 jobjectArray ToStringArray(JNIEnv* env, std::vector<absl::string_view> views);
@@ -156,7 +167,9 @@ class JniDeleter {
  public:
   JniDeleter(JNIEnv* env) : env_(env) {}
   void operator()(T p) { DeleteRef(env_, p); }
+  JNIEnv* env() { return env_; }
 
+ private:
   JNIEnv* env_;
 };
 
@@ -181,16 +194,33 @@ JniUniquePtr<T> WrapJni(JNIEnv* env, T jni_object) {
   return JniUniquePtr<T>(jni_object, details::JniDeleter<T>(env));
 }
 
+JniUniquePtr<jstring> ToJniString(JNIEnv* env, const std::string& str);
+JniUniquePtr<jstring> ToJniString(JNIEnv* env, absl::string_view view);
+
 JniUniquePtr<jclass> FindClass(JNIEnv* env, const char* class_path);
 
+ABSL_DEPRECATED("Use FindClass with an explicit path instead")
 JniUniquePtr<jclass> GetObjectClass(JNIEnv* env, jobject object);
 
 JniUniquePtr<jbyteArray> CreateJniByteArray(JNIEnv* env, size_t length);
 JniUniquePtr<jintArray> CreateJniIntArray(JNIEnv* env, size_t length);
+JniUniquePtr<jlongArray> CreateJniLongArray(JNIEnv* env, size_t length);
 JniUniquePtr<jfloatArray> CreateJniFloatArray(JNIEnv* env, size_t length);
 JniUniquePtr<jbooleanArray> CreateJniBooleanArray(JNIEnv* env, size_t length);
 JniUniquePtr<jobjectArray> CreateJniObjectArray(JNIEnv* env, size_t length,
                                                 jclass clazz, jobject initial);
+JniUniquePtr<jstring> CreateJniString(JNIEnv* env, const std::string& str);
+
+template <typename T>
+JniUniquePtr<T> LocalToGlobalRef(JniUniquePtr<T> local_ref) {
+  JNIEnv* env = local_ref.get_deleter().env();
+  jobject global_ref = env->NewGlobalRef(local_ref.get());
+  return WrapJni(env, static_cast<T>(global_ref));
+}
+
+// The key point of this function is to create a global ref and then release
+// the local ref immediately.
+JniUniquePtr<jbyteArray> CreateByteArrayGlobalRef(JNIEnv* env, size_t length);
 
 // Helper to get a JniType (variant) value.
 template <typename T>
@@ -246,6 +276,9 @@ class JavaWrapper {
 
   // Wraps an existing java object in a global reference, ensures the reference
   // is freed when the wrapper is destroyed.
+  ABSL_DEPRECATED(
+      "Use ctor JavaWrapper(JNIEnv*, JniUniquePtr<jobject>, const char*) "
+      "instead")
   JavaWrapper(JNIEnv* env, jobject object) : context_(env) {
     JniUniquePtr<jclass> local_class_ref =
         GetObjectClass(context_.GetJniEnv(), object);
@@ -254,6 +287,27 @@ class JavaWrapper {
 
     SetSelf(env->NewGlobalRef(object));
   }
+
+  ABSL_DEPRECATED(
+      "Use ctor JavaWrapper(JNIEnv*, JniUniquePtr<jobject>, const char*) "
+      "instead")
+  JavaWrapper(JNIEnv* env, jobject object, const char* class_path)
+      : JavaWrapper(env, object) {
+    class_path_ = class_path;
+
+    JniUniquePtr<jclass> local_class_ref = FindClass(env, class_path);
+
+    
+  }
+
+  // The benefit of this ctor is that the ownership of the passed reference is
+  // explicitly tracked by the smart pointer. Concretely, the reference will be
+  // released after this ctor returns. This makes it impossible to forget to
+  // release the reference.
+  //
+  // This ctor is the preferred way to initialize a JavaWrapper object.
+  JavaWrapper(JNIEnv* env, JniUniquePtr<jobject> object, const char* class_path)
+      : JavaWrapper(env, object.get(), class_path) {}
 
   JavaWrapper(JNIEnv* env) : context_(env) {}
 
@@ -495,7 +549,15 @@ class JavaWrapper {
 
   // Setter for descendant classes to use when setting up a JavaWrapper with an
   // already-constructed jobject.
-  void SetSelf(jobject self) { self_ = AddJniInfo(self); }
+  void SetSelf(jobject self) {
+    if (Self() != nullptr) {
+      DeleteRef(Env(), Self());
+    }
+
+    self_ = AddJniInfo(self);
+  }
+
+  void SetSelf(JniUniquePtr<jobject> self) { SetSelf(self.release()); }
 
  protected:
   std::string class_path_;

@@ -64,6 +64,31 @@ void InitializeBasisTranscoder() {
 // Maps basisu enums to filament enums between compatible formats.
 template <typename T>
 T ToCompressedFilamentEnum(basisu::texture_format format) {
+  // Important note regarding handling of sRGB formats:
+  //
+  // It is possible to detect if the ktx texture is sRGB or linear by checking
+  // the transfer function like this:
+  //
+  // bool is_srgb = false;
+  // if (basic_data_format_descriptor_block.header.transfer_function ==
+  //   basist::KTX2_KHR_DF_TRANSFER_SRGB) {
+  //   is_srgb = true;
+  // }
+  //
+  // We could use this to detect if the texture should be interpreted as sRGB
+  // and then pick an appropriate texture format.
+  //
+  // However, this code instead just automatically assumes that the texture is
+  // sRGB. This is intentional. This is because different graphics drivers treat
+  // textures that aren't tagged as sRGB differently. Many automatically assume
+  // the texture is sRGB and convert it to linear even if it isn't tagged as
+  // sRGB, but some do not. This means that if we used a non-sRGB texture
+  // format, then there is inconsistent behavior across devices.
+  //
+  // Instead, we assume that the texture is sRGB, if a linear texture is truly
+  // needed then conversion can be done in the shader. This isn't ideal, but is
+  // the unfortunate reality due to inconsistent graphics drivers.
+
   switch (format) {
     case basisu::texture_format::cETC1:   // ETC1
     case basisu::texture_format::cETC1S:  // ETC1 (subset: diff colors only, no
@@ -83,7 +108,7 @@ T ToCompressedFilamentEnum(basisu::texture_format format) {
                                         // BC1/DXT1 block)
       return T::DXT5_RGBA;
     case basisu::texture_format::cASTC4x4:  // LDR only
-      return T::RGBA_ASTC_4x4;
+      return T::SRGB8_ALPHA8_ASTC_4x4;
     case basisu::texture_format::cETC2_R11_EAC:
       return T::EAC_R11;
     case basisu::texture_format::cETC2_RG11_EAC:

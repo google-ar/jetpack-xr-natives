@@ -24,6 +24,7 @@
 #include "core/geometry/geometry_helper.h"
 #include "core/geometry/shapes/box.h"
 #include "core/geometry/shapes/line_segment.h"
+#include "core/math/almost_equal.h"
 #include "core/math/vec.h"
 
 namespace imp {
@@ -45,7 +46,7 @@ float3 ClosestPointOnLineSegmentToRay(const LineSegment& line, const Ray& ray) {
   Ray ray_with_point = Ray(line.line_start, direction / tmax);
 
   std::optional<float> distance_from_line_start =
-      ClosestPointOnRayToLine(ray_with_point, ray);
+      collision::ClosestPointOnRayToLine(ray_with_point, ray);
 
   if (!distance_from_line_start.has_value()) {
     return norm(ray.origin - line.line_start) < norm(ray.origin - line.line_end)
@@ -98,20 +99,43 @@ float3 ClosestPointOnBoxToRay(const Box& box, const Ray& ray) {
 
   LineSegment edges[12] = {
       LineSegment(points[0], points[1]), LineSegment(points[1], points[2]),
-      LineSegment(points[2], points[3]), LineSegment(points[3], points[1]),
+      LineSegment(points[2], points[3]), LineSegment(points[3], points[0]),
       LineSegment(points[4], points[5]), LineSegment(points[5], points[6]),
       LineSegment(points[6], points[7]), LineSegment(points[7], points[4]),
       LineSegment(points[0], points[4]), LineSegment(points[1], points[5]),
       LineSegment(points[2], points[6]), LineSegment(points[3], points[7]),
   };
 
-  float distance = std::numeric_limits<float>::max();
+  float min_distance = std::numeric_limits<float>::max();
   float3 closest_point;
+  // If C is the closest point on the box to the ray. C1 is C's projection on
+  // the ray. This value is t, where C1 = t * ray.direction + ray.origin.
+  float closest_point_projected_on_ray = std::numeric_limits<float>::max();
+
   for (auto& edge : edges) {
+    // "point" is the closest point on the edge to the ray.
     float3 point = ClosestPointOnLineSegmentToRay(edge, ray);
-    if (DistanceFromPointToLine(point, ray) < distance) {
-      distance = DistanceFromPointToLine(point, ray);
+    // The distance from the ray to the "point" on the edge.
+    float distance = DistanceFromPointToLine(point, ray);
+    // If C is the closest point on the edge to the ray. C1 is C's projection on
+    // the ray. This value is t, where C1 = t * ray.direction + ray.origin.
+    float projected_distance = abs(dot(point - ray.origin, ray.direction));
+
+    if (RoughlyEqual((distance - min_distance), 0.0f)) {
+      // When the new point is at the same distance as the previous closest
+      // point, we only update the closest point if it moves the point
+      // projection on the ray closer to the ray origin.
+      if (projected_distance < closest_point_projected_on_ray) {
+        min_distance = distance;
+        closest_point = point;
+        closest_point_projected_on_ray = projected_distance;
+      }
+    } else if (distance < min_distance) {
+      // The new point is at a closer distance to the ray than the previous
+      // closest point.
+      min_distance = distance;
       closest_point = point;
+      closest_point_projected_on_ray = projected_distance;
     }
   }
 

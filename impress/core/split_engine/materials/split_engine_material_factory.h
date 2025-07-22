@@ -19,10 +19,12 @@
 
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 #include "core/async/future.h"
 #include "core/material_library/material_package.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
@@ -37,13 +39,20 @@ class SplitEngineMaterialFactory {
   // Handles a request to create a built-in material on the remote renderer.
   // Note: this variant cannot create generic materials, only custom builtins.
   static Future<BuiltInMaterialPtr> HandleCreateRequest(
-      BaseView& view, const android_xr::schemas::BuiltInMaterialRequest& spec);
+      BaseView& view, BridgeId bridge_id,
+      const android_xr::schemas::BuiltInMaterialRequest& request);
 
   // Handles a request to create a built-in material on the remote renderer.
   // Note: this variant can also create generic materials and is called by
   // SplitEngineRendererImpl to handle requests from the app side.
   Future<BuiltInMaterialPtr> HandleCreateRequest(
-      const android_xr::schemas::BuiltInMaterialRequest& spec);
+      BridgeId bridge_id,
+      const android_xr::schemas::BuiltInMaterialRequest& request);
+
+  // Creates a custom material with default params. Used for testing and
+  // preloading.
+  std::vector<Future<BuiltInMaterialPtr>>
+  CreateBuiltInCustomMaterialWithDefaultParams();
 
   // Creates a material factory that can create built-in materials.
   SplitEngineMaterialFactory(BaseView& view);

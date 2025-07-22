@@ -15,24 +15,40 @@
 #include "core/ncsb/groups_manager.h"
 
 #include <cstddef>
-#include <functional>
 #include <string>
+#include <utility>
+#include <variant>
 
 #include "core/common/log.h"
 #include "absl/strings/string_view.h"
 #include "filament/filament/include/filament/Scene.h"
 #include "core/common/hash.h"
-#include "core/common/platform_helpers.h"
+#include "core/common/owned_or_borrowed_ptr.h"
+#include "core/common/owned_or_unowned_memory.h"
+#include "core/common/owned_ptr.h"
+#include "core/lighting/environment_light.h"
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
 
 namespace imp {
+namespace {
+using AutomatedLightingMode = GroupsManager::AutomatedLightingMode;
+}
 
 GroupsManager::GroupsManager(BaseView* view, filament::Scene* main_scene)
     : view_(view) {
   groups_.insert_or_assign(kMainGroupHash, Group{.scene = main_scene});
   hashes_to_names_.insert_or_assign(kMainGroupHash,
                                     std::string(kMainGroupName));
+}
+
+GroupsManager::Group* GroupsManager::CreateGroup(absl::string_view group_name,
+                                                 HashValue group_hash) {
+  filament::Scene* scene = BaseView::GetSharedEngine()->createScene();
+  groups_.insert_or_assign(group_hash, Group{.scene = scene});
+  hashes_to_names_.insert_or_assign(group_hash, std::string(group_name));
+  view_->GetDispatcher().Send(GroupCreatedEvent(group_name));
+  return &groups_[group_hash];
 }
 
 void GroupsManager::AddNodeToGroup(absl::string_view group_name,
@@ -42,12 +58,8 @@ void GroupsManager::AddNodeToGroup(absl::string_view group_name,
   if (itr != groups_.end()) {
     group = &itr->second;
   } else {
-    filament::Scene* scene = BaseView::GetSharedEngine()->createScene();
-    auto emplace_result =
-        groups_.insert_or_assign(group_hash, Group{.scene = scene});
-    hashes_to_names_.insert_or_assign(group_hash, std::string(group_name));
-    group = &emplace_result.first->second;
-    view_->GetDispatcher().Send(GroupCreatedEvent(group_name));
+    CreateGroup(group_name, group_hash);
+    group = &groups_[group_hash];
   }
 
   group->num_nodes_in_layer++;
@@ -60,6 +72,14 @@ void GroupsManager::AddNodeToGroup(absl::string_view group_name,
   }
 }
 
+void GroupsManager::DestroyGroup(HashValue group_hash) {
+  Group& group = groups_[group_hash];
+  BaseView::GetSharedEngine()->destroy(group.scene);
+  view_->GetDispatcher().Send(GroupDestroyedEvent(GetGroupName(group_hash)));
+  groups_.erase(group_hash);
+  hashes_to_names_.erase(group_hash);
+}
+
 void GroupsManager::RemoveNodeFromGroup(HashValue group_hash, NodeHandle node) {
   auto itr = groups_.find(group_hash);
   if (itr == groups_.end()) {
@@ -70,12 +90,19 @@ void GroupsManager::RemoveNodeFromGroup(HashValue group_hash, NodeHandle node) {
   Group& group = itr->second;
   group.num_nodes_in_layer--;
   group.scene->remove(node.GetEntity());
-  if (group.num_nodes_in_layer == 0 && group_hash != kMainGroupHash) {
-    BaseView::GetSharedEngine()->destroy(group.scene);
-    view_->GetDispatcher().Send(GroupDestroyedEvent(GetGroupName(group_hash)));
-    groups_.erase(group_hash);
-    hashes_to_names_.erase(group_hash);
+  if (group.num_nodes_in_layer == 0 && group_hash != kMainGroupHash &&
+      !GroupHasEnvironmentLight(group)) {
+    DestroyGroup(group_hash);
   }
+}
+
+bool GroupsManager::GroupHasEnvironmentLight(GroupsManager::Group& group) {
+  AutomatedLightingMode* lighting =
+      std::get_if<AutomatedLightingMode>(&group.environment_light);
+  if (lighting && *lighting == AutomatedLightingMode::kNoEnvironmentLight) {
+    return false;
+  }
+  return true;
 }
 
 void GroupsManager::SetNodeActiveInGroup(HashValue group_hash, NodeHandle node,
@@ -123,5 +150,177 @@ absl::string_view GroupsManager::GetGroupName(HashValue group_hash) {
 
   return itr->second;
 }
+
+void GroupsManager::SetGroupEnvironmentLight(
+    absl::string_view group_name, EnvironmentLightHolder environment_light) {
+  AutomatedLightingMode* input_auto_light =
+      std::get_if<AutomatedLightingMode>(&environment_light);
+  if (input_auto_light &&
+      *input_auto_light ==
+          AutomatedLightingMode::kUseMainGroupEnvironmentLight &&
+      group_name == kMainGroupName) {
+    IMP_LOG(imp::WARNING) << "Setting Main group to use Main group environment light "
+                    "does nothing.";
+    return;
+  }
+
+  bool has_no_env_light =
+      input_auto_light &&
+      *input_auto_light == AutomatedLightingMode::kNoEnvironmentLight;
+
+  HashValue group_hash = Hash(group_name);
+  auto itr = groups_.find(group_hash);
+  Group* group = nullptr;
+  if (itr != groups_.end()) {
+    group = &itr->second;
+    // If removing environment light from the empty group, destroy the group.
+    if (has_no_env_light && group->num_nodes_in_layer == 0 &&
+        group_hash != kMainGroupHash) {
+      DestroyGroup(group_hash);
+      return;
+    }
+  } else {
+    // If the group doesn't exist and the environment light is not
+    // kNoEnvironmentLight, it will be created.
+    if (has_no_env_light) {
+      return;
+    }
+    group = CreateGroup(group_name, group_hash);
+  }
+
+  AutomatedLightingMode* current_auto_light =
+      std::get_if<AutomatedLightingMode>(&(group->environment_light));
+  if (current_auto_light && input_auto_light &&
+      *current_auto_light == *input_auto_light) {
+    // Return early if the environment light is unchanged.
+    return;
+  }
+
+  group->environment_light = std::move(environment_light);
+
+  ProcessGroupEnvironmentLightChange(*group);
+
+  if (group_name == kMainGroupName) {
+    // Notify all groups using the main group's lighting that the main group's
+    // lighting status has changed.
+    for (auto& [group_hash, group] : groups_) {
+      if (group_hash == kMainGroupHash) {
+        continue;
+      }
+      AutomatedLightingMode* auto_light =
+          std::get_if<AutomatedLightingMode>(&group.environment_light);
+      if (auto_light && *auto_light == GroupsManager::AutomatedLightingMode::
+                                           kUseMainGroupEnvironmentLight) {
+        ProcessGroupEnvironmentLightChange(group);
+      }
+    }
+  }
+}
+
+BorrowedPtr<EnvironmentLight> GroupsManager::GetEnvironmentLight(
+    absl::string_view group_name) {
+  HashValue group_hash = Hash(group_name);
+  auto itr = groups_.find(group_hash);
+  if (itr == groups_.end()) {
+    return BorrowedPtr<EnvironmentLight>();
+  }
+
+  EnvironmentLightHolder& effective_light =
+      GetEffectiveEnvironmentLight(itr->second);
+
+  if (OwnedOrBorrowedPtr<EnvironmentLight>* light =
+          std::get_if<OwnedOrBorrowedPtr<EnvironmentLight>>(&effective_light);
+      light) {
+    return light->Borrow();
+  }
+
+  return BorrowedPtr<EnvironmentLight>();
+}
+
+EnvironmentLight* GroupsManager::GetRawEnvironmentLight(
+    absl::string_view group_name) {
+  HashValue group_hash = Hash(group_name);
+  auto itr = groups_.find(group_hash);
+  if (itr == groups_.end()) {
+    return nullptr;
+  }
+
+  EnvironmentLightHolder& effective_light =
+      GetEffectiveEnvironmentLight(itr->second);
+
+  if (OwnedOrUnownedMemory<EnvironmentLight>* light =
+          std::get_if<OwnedOrUnownedMemory<EnvironmentLight>>(&effective_light);
+      light) {
+    return light->Get();
+  }
+
+  return nullptr;
+}
+
+GroupsManager::EnvironmentLightHolder&
+GroupsManager::GetEffectiveEnvironmentLight(GroupsManager::Group& group) {
+  EnvironmentLightHolder* effective_light = &group.environment_light;
+  if (AutomatedLightingMode* auto_light =
+          std::get_if<AutomatedLightingMode>(effective_light);
+      auto_light) {
+    if (*auto_light == AutomatedLightingMode::kUseMainGroupEnvironmentLight) {
+      effective_light = &groups_[kMainGroupHash].environment_light;
+    }
+  }
+  return *effective_light;
+}
+
+void GroupsManager::ProcessGroupEnvironmentLightChange(
+    GroupsManager::Group& group) {
+  EnvironmentLightHolder& effective_light = GetEffectiveEnvironmentLight(group);
+
+  // Sync the environment light to Filament.
+  if (OwnedOrUnownedMemory<EnvironmentLight>* raw_environment_light =
+          std::get_if<OwnedOrUnownedMemory<EnvironmentLight>>(&effective_light);
+      raw_environment_light) {
+    group.scene->setIndirectLight(
+        raw_environment_light->Get()->GetIndirectLight());
+  } else if (OwnedOrBorrowedPtr<EnvironmentLight>* environment_light =
+                 std::get_if<OwnedOrBorrowedPtr<EnvironmentLight>>(
+                     &effective_light);
+             environment_light) {
+    group.scene->setIndirectLight(
+        environment_light->Borrow()->GetIndirectLight());
+  } else {
+    group.scene->setIndirectLight(nullptr);
+  }
+}
+
+// BorrowedPtr<EnvironmentLight>
+// GroupsManager::EnvironmentLightHolder::GetEnvironmentLight() {
+//   // OwnedOrBorrowedPtr<EnvironmentLight>* result =
+//   // std::get_if<OwnedOrBorrowedPtr<EnvironmentLight>>(&environment_light_);
+
+//   if (std::holds_alternative<OwnedOrBorrowedPtr<EnvironmentLight>>(
+//           environment_light_)) {
+//     return std::get<OwnedOrBorrowedPtr<EnvironmentLight>>(environment_light_)
+//         .Borrow();
+//   }
+//   return BorrowedPtr<EnvironmentLight>();
+// }
+
+// EnvironmentLight*
+// GroupsManager::EnvironmentLightHolder::GetRawEnvironmentLight() {
+//   if (std::holds_alternative<OwnedOrUnownedMemory<EnvironmentLight>>(
+//           environment_light_)) {
+//     return
+//     std::get<OwnedOrUnownedMemory<EnvironmentLight>>(environment_light_)
+//         .Get();
+//   }
+//   return nullptr;
+// }
+
+// AutomatedLightingMode*
+// GroupsManager::EnvironmentLightHolder::GetAutomatedLightingMode() {
+//   if (std::holds_alternative<AutomatedLightingMode>(environment_light_)) {
+//     return &std::get<AutomatedLightingMode>(environment_light_);
+//   }
+//   return nullptr;
+// }
 
 }  // namespace imp

@@ -33,10 +33,26 @@ message SphereColliderState {
 }
 
 // Serialized data for ColliderComponent.
+message CylinderColliderState {
+  Float3 base = 1;
+  float radius = 2;
+  float height = 3;
+  int32 mask = 4;
+}
+
+// Serialized data for ColliderComponent.
 message CapsuleColliderState {
   Float3 center = 1;
   float height = 2;
   float radius = 3;
+  int32 mask = 4;
+}
+
+// Serialized data for ColliderComponent.
+message ConeColliderState {
+  Float3 base = 1;
+  float radius = 2;
+  float height = 3;
   int32 mask = 4;
 }
 

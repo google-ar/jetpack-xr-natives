@@ -82,12 +82,12 @@
 
 namespace imp::loader::details::provider_gltf {
 namespace {
-using ::imp::gltf::Accessor;
-using ::imp::gltf::Animation;
-using ::imp::gltf::Gltf;
-using ::imp::gltf::Material;
-using ::imp::gltf::Primitive;
-using ::imp::gltf::Scene;
+using ::imp::gltf::imp_proto::Accessor;
+using ::imp::gltf::imp_proto::Animation;
+using ::imp::gltf::imp_proto::Gltf;
+using ::imp::gltf::imp_proto::Material;
+using ::imp::gltf::imp_proto::Primitive;
+using ::imp::gltf::imp_proto::Scene;
 using WeakSkinId = imp::TypedId<model::ModelData::SkinData, int>;
 
 class ProtoGltfProvider : public GltfProvider {
@@ -195,13 +195,13 @@ OptionalError GetPartInfosFromNode(
 
     if (primitive.mode) {
       switch (*primitive.mode) {
-        case imp::gltf::Primitive::LINES:
+        case imp::gltf::imp_proto::Primitive::LINES:
           primitive_type = PrimitiveType::LINES;
           break;
-        case imp::gltf::Primitive::POINTS:
+        case imp::gltf::imp_proto::Primitive::POINTS:
           primitive_type = PrimitiveType::POINTS;
           break;
-        case imp::gltf::Primitive::TRIANGLES:
+        case imp::gltf::imp_proto::Primitive::TRIANGLES:
           primitive_type = PrimitiveType::TRIANGLES;
           break;
         default:
@@ -375,8 +375,9 @@ OptionalError MergeBoundsFromPrimitive(
 // Accumulates joint bounds for the skin, and stores them in out_bounds.
 // out_bounds is expected to be large enough to store bounds for each joint,
 // and to be uninitialized.
-OptionalError GetSkinBounds(gltf::Gltf const& gltf, const GltfLookup& lookup,
-                            gltf::Node const& node,
+OptionalError GetSkinBounds(gltf::imp_proto::Gltf const& gltf,
+                            const GltfLookup& lookup,
+                            gltf::imp_proto::Node const& node,
                             absl::Span<filament::Aabb> out_bounds,
                             BitVector& out_sampled_bone_in_use) {
   if (!node.mesh) {
@@ -475,7 +476,7 @@ OptionalError GetSkinBounds(gltf::Gltf const& gltf, const GltfLookup& lookup,
 }
 
 absl::Status GetSkinInfoFromNode(
-    const imp::gltf::Gltf& gltf, const GltfLookup& lookup,
+    const imp::gltf::imp_proto::Gltf& gltf, const GltfLookup& lookup,
     /*const PendingSkeleton& skeleton, */ NodeId node_id,
     std::vector<WeakSkinId>& skin_remap,
     LoadedModelBuilder* builder, /*PendingSkins* skins,*/
@@ -652,7 +653,7 @@ absl::Status GetSkinInfoFromNode(
 
 OptionalError ProtoGltfProvider::TryParseGltf(LoaderState* state_ptr) {
   auto parsed = std::make_unique<ParsedGltf>();
-  std::optional<imp::gltf::Gltf> gltf;
+  std::optional<imp::gltf::imp_proto::Gltf> gltf;
   MP_RETURN_IF_ERROR(
       provider_gltf::TryParseGltf(state_ptr->primary_resource_, gltf));
   parsed->gltf = std::move(gltf.value());
@@ -670,18 +671,19 @@ bool ProtoGltfProvider::IsParsed() { return parsed_gltf_ != nullptr; }
 bool ProtoGltfProvider::HasPendingResources(LoaderState* state_ptr) {
   const auto& gltf = parsed_gltf_->gltf;
   return absl::c_any_of(gltf.buffers,
-                        [](const imp::gltf::Buffer& buffer) {
+                        [](const imp::gltf::imp_proto::Buffer& buffer) {
                           return !buffer.uri.empty() && buffer.access.empty();
                         }) ||
          absl::c_any_of(gltf.images,
-                        [](const imp::gltf::Image& image) {
+                        [](const imp::gltf::imp_proto::Image& image) {
                           return !image.uri.empty() && image.access.empty();
                         }) ||
          (gltf.extensions.audio_extension &&
-          absl::c_any_of(gltf.extensions.audio_extension->audio,
-                         [](const imp::gltf::AudioExtension::Audio& audio) {
-                           return !audio.uri.empty() && audio.access.empty();
-                         }));
+          absl::c_any_of(
+              gltf.extensions.audio_extension->audio,
+              [](const imp::gltf::imp_proto::AudioExtension::Audio& audio) {
+                return !audio.uri.empty() && audio.access.empty();
+              }));
 }
 
 OptionalError AddMissingAttributes(
@@ -897,7 +899,7 @@ OptionalError AddMissingAttributes(
 
 absl::StatusOr<FlatBufferAccess<schemas::LoadedModel>>
 ProtoGltfProvider::TryLoadGltf(LoaderState* state_ptr) {
-  imp::gltf::Gltf& gltf = parsed_gltf_->gltf;
+  imp::gltf::imp_proto::Gltf& gltf = parsed_gltf_->gltf;
   GltfModel model(&gltf);
 
   // Re-create the builder on each attempt.
@@ -1275,7 +1277,7 @@ absl::Status ResolveResources(
     absl::string_view directory,
     tsl::robin_map<std::string, BufferAccess>& resources,
     tsl::robin_map<std::string, std::string>& missing_resource_name_from_path,
-    imp::gltf::Gltf& gltf, std::vector<BufferAccess>& owned) {
+    imp::gltf::imp_proto::Gltf& gltf, std::vector<BufferAccess>& owned) {
   // Resolve buffer URIs.
   for (auto& buffer : gltf.buffers) {
     MP_RETURN_IF_ERROR(ResolveResource(directory, resources,

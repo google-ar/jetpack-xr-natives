@@ -17,7 +17,8 @@
 #include "BackendTest.h"
 
 #include "Lifetimes.h"
-#include "ShaderGenerator.h"
+#include "Shader.h"
+#include "SharedShaders.h"
 #include "TrianglePrimitive.h"
 
 namespace {
@@ -26,7 +27,7 @@ namespace {
 // Shaders
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-std::string vertex (R"(#version 450 core
+std::string vertex(R"(#version 450 core
 
 layout(location = 0) in vec4 mesh_position;
 
@@ -44,16 +45,6 @@ void main() {
     indices = mesh_bone_indices;
     weights = mesh_bone_weights;
 }
-)");
-
-std::string fragment (R"(#version 450 core
-
-layout(location = 0) out vec4 fragColor;
-
-void main() {
-    fragColor = vec4(1.0);
-}
-
 )");
 
 }
@@ -78,27 +69,21 @@ TEST_F(BackendTest, MissingRequiredAttributes) {
         api.makeCurrent(swapChain, swapChain);
 
         // Create a program.
-        ShaderGenerator shaderGen(vertex, fragment, sBackend, sIsMobilePlatform);
-        Program p = shaderGen.getProgram(api);
-        auto program = cleanup.add(api.createProgram(std::move(p)));
+        Shader shader(api, cleanup, ShaderConfig{
+                .vertexShader = vertex,
+                .fragmentShader = SharedShaders::getFragmentShaderText(FragmentShaderType::White,
+                        ShaderUniformType::None),
+        });
 
         auto defaultRenderTarget = cleanup.add(api.createDefaultRenderTarget(0));
 
         TrianglePrimitive triangle(api);
 
-        RenderPassParams params = {};
-        fullViewport(params);
-        params.flags.clear = TargetBufferFlags::COLOR;
-        params.clearColor = {0.f, 1.f, 0.f, 1.f};
-        params.flags.discardStart = TargetBufferFlags::ALL;
-        params.flags.discardEnd = TargetBufferFlags::NONE;
+        PipelineState state = getColorWritePipelineState();
+        shader.addProgramToPipelineState(state);
 
-        PipelineState state;
-        state.program = program;
-        state.rasterState.colorWrite = true;
-        state.rasterState.depthWrite = false;
-        state.rasterState.depthFunc = RasterState::DepthFunc::A;
-        state.rasterState.culling = CullingMode::NONE;
+        RenderPassParams params = getClearColorRenderPass();
+        params.viewport = getFullViewport();
 
         api.startCapture(0);
 
@@ -107,7 +92,11 @@ TEST_F(BackendTest, MissingRequiredAttributes) {
 
         // Render a triangle.
         api.beginRenderPass(defaultRenderTarget, params);
-        api.draw(state, triangle.getRenderPrimitive(), 0, 3, 1);
+        state.primitiveType = PrimitiveType::TRIANGLES;
+        state.vertexBufferInfo = triangle.getVertexBufferInfo();
+        api.bindPipeline(state);
+        api.bindRenderPrimitive(triangle.getRenderPrimitive());
+        api.draw2(0, 3, 1);
         api.endRenderPass();
 
         api.flush();

@@ -14,6 +14,7 @@
 
 # Impel helps internal devs make performant, high quality AR apps.
 
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 load(
     "//build_tools:imp.bzl",
     "imp_copts",
@@ -169,6 +170,18 @@ config_setting(
     name = "imp_android_external_texture_surface_uses_image_reader",
     define_values = {
         "IMP_ANDROID_EXTERNAL_TEXTURE_SURFACE_USES_IMAGE_READER": "1",
+    },
+)
+
+bool_flag(
+    name = "imp_trace_use_perfetto",
+    build_setting_default = False,
+)
+
+config_setting(
+    name = "imp_perfetto_enabled",
+    flag_values = {
+        ":imp_trace_use_perfetto": "True",
     },
 )
 

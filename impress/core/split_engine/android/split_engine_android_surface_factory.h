@@ -22,12 +22,12 @@
 #include <memory>
 #include <vector>
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "core/common/robin_map.h"
 #include "core/math/vec.h"
-#include "core/render/android/android_defines.h"
+#include "core/media/media_color_space.h"
 #include "core/render/android/android_external_texture_surface.h"
-#include "core/render/texture.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 
@@ -50,13 +50,24 @@ class SplitEngineSurfaceFactory {
   void Clear(BridgeId bridge_id);
 
  private:
-  // Storage for external texture surfaces and filament texture objects.
-  struct ExternalTextureSurface {
-    std::unique_ptr<AndroidExternalTextureSurface> platform_surface;
-    RobinMap<SurfaceViewType, BorrowedTexturePtr> textures;
-  };
+  // Returns the color space of the given surface by primary texture ID.
+  MediaColorSpace GetSourceColorSpace(BridgeId bridge_id,
+                                      TextureId surface_texture_id);
+  jobject GetSurface(BridgeId bridge_id, TextureId surface_texture_id);
 
-  RobinMap<BridgeId, RobinMap<TextureId, ExternalTextureSurface>>
+  // Releases a surface texture given the primary texture ID of the surface and
+  // the texture ID of the texture to release.
+  void ReleaseTexture(BridgeId bridge_id, TextureId surface_texture_id,
+                      TextureId texture_id);
+
+  // Storage for external texture surfaces.
+  struct SurfaceData {
+    std::unique_ptr<AndroidExternalTextureSurface> surface;
+    // The set of texture IDs associated with the surface that are in-use.
+    // The surface can be destroyed once the last texture is released.
+    absl::flat_hash_set<TextureId> in_use_texture_ids;
+  };
+  RobinMap<BridgeId, RobinMap<TextureId, SurfaceData>>
       external_texture_surfaces_;
 };
 

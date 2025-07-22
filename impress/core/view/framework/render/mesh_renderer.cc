@@ -362,6 +362,10 @@ void MeshRenderer::UpdateRenderableAabb() {
   GetRenderableManager().SetAxisAlignedBoundingBox(GetInstance(), aabb);
 }
 
+const Box& MeshRenderer::GetRenderableAabb() const {
+  return GetRenderableManager().GetAxisAlignedBoundingBox(GetInstance());
+}
+
 void MeshRenderer::ApplyAllMeshPropertyChanges() {
   for (size_t i = 0; i < primitives_.size(); i++) {
     if (!primitives_[i].raw_mesh &&

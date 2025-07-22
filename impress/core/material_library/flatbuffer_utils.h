@@ -17,6 +17,8 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_SCHEMA_HELPERS_H_
 #define THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_SCHEMA_HELPERS_H_
 
+#include <optional>
+
 #include "filament/filament/include/filament/TextureSampler.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
@@ -31,23 +33,26 @@ namespace imp {
 // Note: this is a template so that it can be used with both the Impress and
 // Split Engine schemas. The split engine schemas are also verified to match.
 template <typename SamplerSchema>
-filament::TextureSampler ConvertSampler(const SamplerSchema& schema) {
+std::optional<filament::TextureSampler> ConvertSampler(
+    const SamplerSchema* schema) {
+  if (schema == nullptr) return std::nullopt;
+
   filament::TextureSampler sampler;
   sampler.setMagFilter(
-      static_cast<filament::TextureSampler::MagFilter>(schema.mag_filter()));
+      static_cast<filament::TextureSampler::MagFilter>(schema->mag_filter()));
   sampler.setMinFilter(
-      static_cast<filament::TextureSampler::MinFilter>(schema.min_filter()));
+      static_cast<filament::TextureSampler::MinFilter>(schema->min_filter()));
   sampler.setWrapModeS(
-      static_cast<filament::TextureSampler::WrapMode>(schema.wrap_mode_s()));
+      static_cast<filament::TextureSampler::WrapMode>(schema->wrap_mode_s()));
   sampler.setWrapModeT(
-      static_cast<filament::TextureSampler::WrapMode>(schema.wrap_mode_t()));
+      static_cast<filament::TextureSampler::WrapMode>(schema->wrap_mode_t()));
   sampler.setWrapModeR(
-      static_cast<filament::TextureSampler::WrapMode>(schema.wrap_mode_r()));
-  sampler.setCompareMode(
-      static_cast<filament::TextureSampler::CompareMode>(schema.compare_mode()),
-      static_cast<filament::TextureSampler::CompareFunc>(
-          schema.compare_func()));
-  sampler.setAnisotropy(schema.anisotropy_log2());
+      static_cast<filament::TextureSampler::WrapMode>(schema->wrap_mode_r()));
+  sampler.setCompareMode(static_cast<filament::TextureSampler::CompareMode>(
+                             schema->compare_mode()),
+                         static_cast<filament::TextureSampler::CompareFunc>(
+                             schema->compare_func()));
+  sampler.setAnisotropy(schema->anisotropy_log2());
   return sampler;
 }
 

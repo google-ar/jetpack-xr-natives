@@ -22,9 +22,11 @@
 #include <unistd.h>
 
 #include <cstring>
+#include <memory>
 #include <utility>
 
 #include "core/common/log.h"
+#include "absl/status/statusor.h"
 #include "filament/libs/utils/include/utils/ashmem.h"
 #include "core/common/platform_helpers.h"
 #include "core/common/trace.h"
@@ -51,11 +53,13 @@ BridgeBuffer::BridgeBuffer(SplitEngineSharedMemoryBridgeClient& bridge,
     IMP_LOG(imp::FATAL) << "Failed to mmap RenderingBridgeAssetBuffer";
   }
 
-  handle_ = bridge.RegisterBuffer(shared_memory_region_fd_, size_in_bytes_);
-  if (handle_ == nullptr) {
-    IMP_LOG(imp::FATAL) << "Failed to register bridge buffer - NOTE: THIS IS USUALLY "
-                  "NOT THE REAL ISSUE, SCROLL UP IN THE LOGS!";
+  absl::StatusOr<
+      std::unique_ptr<SplitEngineSharedMemoryBridgeClient::BufferHandle>>
+      handle = bridge.RegisterBuffer(shared_memory_region_fd_, size_in_bytes_);
+  if (!handle.ok()) {
+    IMP_LOG(imp::FATAL) << "Failed to register bridge buffer: " << handle.status();
   }
+  handle_ = *std::move(handle);
 }
 
 BridgeBuffer::BridgeBuffer(BridgeBuffer&& other)

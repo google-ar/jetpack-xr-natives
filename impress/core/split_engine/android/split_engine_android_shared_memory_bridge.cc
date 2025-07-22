@@ -20,6 +20,8 @@
 #include <functional>
 #include <vector>
 
+#include "core/common/log.h"
+#include "absl/status/statusor.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 
@@ -27,16 +29,23 @@ namespace imp::split_engine {
 
 jobject SplitEngineAndroidSharedMemoryBridge::CreateExternalTextureSurface(
     const std::vector<TextureId>& texture_ids) {
-  return split_engine_shared_memory_bridge_client_
-      ->CreateExternalTextureSurface(texture_ids);
+  // TODO: Improve error codes returned for split engine.
+  absl::StatusOr<jobject> external_texture_surface =
+      split_engine_shared_memory_bridge_client_->CreateExternalTextureSurface(
+          texture_ids);
+  if (!external_texture_surface.ok()) {
+    IMP_LOG(imp::ERROR) << "Failed to create external texture surface with status: "
+               << external_texture_surface.status().message();
+    return nullptr;
+  }
+  return *external_texture_surface;
 }
 
 bool SplitEngineAndroidSharedMemoryBridge::SetExternalTextureSurfaceSize(
     uint64_t texture_id, int32_t width, int32_t height) {
-  if (SplitEngineSharedMemoryBridgeClient::Result result =
-          split_engine_shared_memory_bridge_client_
-              ->SetExternalTextureSurfaceSize(texture_id, width, height);
-      !result.is_ok()) {
+  if (!split_engine_shared_memory_bridge_client_
+           ->SetExternalTextureSurfaceSize(texture_id, width, height)
+           .ok()) {
     // TODO: Improve error codes returned for split engine.
     return false;
   }
@@ -47,10 +56,8 @@ bool SplitEngineAndroidSharedMemoryBridge::SetExternalTextureSurfaceSize(
 bool SplitEngineAndroidSharedMemoryBridge::SendRequest(
     const std::vector<uint8_t>& data,
     std::function<void(const std::vector<uint8_t>&)> callback) {
-  if (SplitEngineSharedMemoryBridgeClient::Result result =
-          split_engine_shared_memory_bridge_client_->SendRequest(data,
-                                                                 callback);
-      !result.is_ok()) {
+  if (!split_engine_shared_memory_bridge_client_->SendRequest(data, callback)
+           .ok()) {
     return false;
   }
   return true;

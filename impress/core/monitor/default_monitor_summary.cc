@@ -22,9 +22,14 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "filament/filament/include/filament/Engine.h"
+#include "core/assets/material/material_asset.h"
+#include "core/media/media_asset.h"
 #include "core/monitor/monitor_summary.h"
 #include "core/monitor/value_measurement.h"
+#include "core/render/image_asset.h"
 #include "core/view/base_view.h"
+#include "core/view/framework/assets/asset_manager.h"
+#include "core/view/framework/assets/gltf_asset.h"
 #include "core/view/utils/frame_time.h"
 
 namespace imp {
@@ -45,6 +50,21 @@ constexpr absl::string_view kTextureCount = "textures: ";
 constexpr absl::string_view kSkyboxCount = "skyboxes: ";
 constexpr absl::string_view kColorGradingCount = "color gradings: ";
 constexpr absl::string_view kRenderTargetCount = "render targets: ";
+constexpr absl::string_view kMediaAssetsResident = "media assets resident: ";
+constexpr absl::string_view kMediaAssetsDestroyed = "media assets destroyed: ";
+constexpr absl::string_view kMediaAssetsCancelled = "media assets cancelled: ";
+constexpr absl::string_view kMaterialAssetsResident =
+    "material assets resident: ";
+constexpr absl::string_view kMaterialAssetsDestroyed =
+    "material assets destroyed: ";
+constexpr absl::string_view kMaterialAssetsCancelled =
+    "material assets cancelled: ";
+constexpr absl::string_view kImageAssetsResident = "image assets resident: ";
+constexpr absl::string_view kImageAssetsDestroyed = "image assets destroyed: ";
+constexpr absl::string_view kImageAssetsCancelled = "image assets cancelled: ";
+constexpr absl::string_view kGltfAssetsResident = "gltf assets resident: ";
+constexpr absl::string_view kGltfAssetsDestroyed = "gltf assets destroyed: ";
+constexpr absl::string_view kGltfAssetsCancelled = "gltf assets cancelled: ";
 }  // namespace
 
 DefaultMonitorSummary::DefaultMonitorSummary(BaseView& view)
@@ -69,7 +89,22 @@ DefaultMonitorSummary::DefaultMonitorSummary(BaseView& view)
       textureCount_(ValueMeasurement(monitor_, kTextureCount)),
       skyboxCount_(ValueMeasurement(monitor_, kSkyboxCount)),
       colorGradingCount_(ValueMeasurement(monitor_, kColorGradingCount)),
-      renderTargetCount_(ValueMeasurement(monitor_, kRenderTargetCount)) {
+      renderTargetCount_(ValueMeasurement(monitor_, kRenderTargetCount)),
+      mediaAssetsResident_(ValueMeasurement(monitor_, kMediaAssetsResident)),
+      mediaAssetsDestroyed_(ValueMeasurement(monitor_, kMediaAssetsDestroyed)),
+      mediaAssetsCancelled_(ValueMeasurement(monitor_, kMediaAssetsCancelled)),
+      materialAssetsResident_(
+          ValueMeasurement(monitor_, kMaterialAssetsResident)),
+      materialAssetsDestroyed_(
+          ValueMeasurement(monitor_, kMaterialAssetsDestroyed)),
+      materialAssetsCancelled_(
+          ValueMeasurement(monitor_, kMaterialAssetsCancelled)),
+      imageAssetsResident_(ValueMeasurement(monitor_, kImageAssetsResident)),
+      imageAssetsDestroyed_(ValueMeasurement(monitor_, kImageAssetsDestroyed)),
+      imageAssetsCancelled_(ValueMeasurement(monitor_, kImageAssetsCancelled)),
+      gltfAssetsResident_(ValueMeasurement(monitor_, kGltfAssetsResident)),
+      gltfAssetsDestroyed_(ValueMeasurement(monitor_, kGltfAssetsDestroyed)),
+      gltfAssetsCancelled_(ValueMeasurement(monitor_, kGltfAssetsCancelled)) {
   summary_.AddMetric<SampleAgeMetric>("avg sample age: ");
 
   summary_.AddMetric<ValueMetric>(kBufferObjectCount, kBufferObjectCount);
@@ -89,49 +124,94 @@ DefaultMonitorSummary::DefaultMonitorSummary(BaseView& view)
   summary_.AddMetric<ValueMetric>(kSkyboxCount, kSkyboxCount);
   summary_.AddMetric<ValueMetric>(kColorGradingCount, kColorGradingCount);
   summary_.AddMetric<ValueMetric>(kRenderTargetCount, kRenderTargetCount);
+  summary_.AddMetric<ValueMetric>(kMediaAssetsResident, kMediaAssetsResident);
+  summary_.AddMetric<ValueMetric>(kMediaAssetsDestroyed, kMediaAssetsDestroyed);
+  summary_.AddMetric<ValueMetric>(kMediaAssetsCancelled, kMediaAssetsCancelled);
+  summary_.AddMetric<ValueMetric>(kMaterialAssetsResident,
+                                  kMaterialAssetsResident);
+  summary_.AddMetric<ValueMetric>(kMaterialAssetsDestroyed,
+                                  kMaterialAssetsDestroyed);
+  summary_.AddMetric<ValueMetric>(kMaterialAssetsCancelled,
+                                  kMaterialAssetsCancelled);
+  summary_.AddMetric<ValueMetric>(kImageAssetsResident, kImageAssetsResident);
+  summary_.AddMetric<ValueMetric>(kImageAssetsDestroyed, kImageAssetsDestroyed);
+  summary_.AddMetric<ValueMetric>(kImageAssetsCancelled, kImageAssetsCancelled);
+  summary_.AddMetric<ValueMetric>(kGltfAssetsResident, kGltfAssetsResident);
+  summary_.AddMetric<ValueMetric>(kGltfAssetsDestroyed, kGltfAssetsDestroyed);
+  summary_.AddMetric<ValueMetric>(kGltfAssetsCancelled, kGltfAssetsCancelled);
 }
 
 void DefaultMonitorSummary::Update(const FrameTime& frame_time) {
   static int64_t frame_count = 0;
   ++frame_count;
 
-  if (frames_between_sampling_ &&
-      (frame_count % frames_between_sampling_ == 0)) {
+  // Collect measurements periodically.  This is not done every frame.  Buffer
+  // and asset counts change slowly (if at all) so there is no need to collect
+  // this too frequently. Note the rate for collection is not the same as the
+  // rate for printing
+  if (frames_between_updating_measurements_ &&
+      (frame_count % frames_between_updating_measurements_ == 0)) {
     filament::Engine* engine = view_.GetSharedEngine();
-    if (!engine) {
-      return;
+    if (engine) {
+      bufferObjectCount_.SetValue(
+          static_cast<int64_t>(engine->getBufferObjectCount()));
+      viewCount_.SetValue(static_cast<int64_t>(engine->getViewCount()));
+      sceneCount_.SetValue(static_cast<int64_t>(engine->getSceneCount()));
+      swapChainCount_.SetValue(
+          static_cast<int64_t>(engine->getSwapChainCount()));
+      streamCount_.SetValue(static_cast<int64_t>(engine->getStreamCount()));
+      indexBufferCount_.SetValue(
+          static_cast<int64_t>(engine->getIndexBufferCount()));
+      skinningBufferCount_.SetValue(
+          static_cast<int64_t>(engine->getSkinningBufferCount()));
+      morphTargetBufferCount_.SetValue(
+          static_cast<int64_t>(engine->getMorphTargetBufferCount()));
+      instanceBufferCount_.SetValue(
+          static_cast<int64_t>(engine->getInstanceBufferCount()));
+      vertexBufferCount_.SetValue(
+          static_cast<int64_t>(engine->getVertexBufferCount()));
+      indirectLightCount_.SetValue(
+          static_cast<int64_t>(engine->getIndirectLightCount()));
+      materialCount_.SetValue(static_cast<int64_t>(engine->getMaterialCount()));
+      textureCount_.SetValue(static_cast<int64_t>(engine->getTextureCount()));
+      skyboxCount_.SetValue(static_cast<int64_t>(engine->getSkyboxeCount()));
+      colorGradingCount_.SetValue(
+          static_cast<int64_t>(engine->getColorGradingCount()));
+      renderTargetCount_.SetValue(
+          static_cast<int64_t>(engine->getRenderTargetCount()));
     }
-    bufferObjectCount_.SetValue(
-        static_cast<int64_t>(engine->getBufferObjectCount()));
-    viewCount_.SetValue(static_cast<int64_t>(engine->getViewCount()));
-    sceneCount_.SetValue(static_cast<int64_t>(engine->getSceneCount()));
-    swapChainCount_.SetValue(static_cast<int64_t>(engine->getSwapChainCount()));
-    streamCount_.SetValue(static_cast<int64_t>(engine->getStreamCount()));
-    indexBufferCount_.SetValue(
-        static_cast<int64_t>(engine->getIndexBufferCount()));
-    skinningBufferCount_.SetValue(
-        static_cast<int64_t>(engine->getSkinningBufferCount()));
-    morphTargetBufferCount_.SetValue(
-        static_cast<int64_t>(engine->getMorphTargetBufferCount()));
-    instanceBufferCount_.SetValue(
-        static_cast<int64_t>(engine->getInstanceBufferCount()));
-    vertexBufferCount_.SetValue(
-        static_cast<int64_t>(engine->getVertexBufferCount()));
-    indirectLightCount_.SetValue(
-        static_cast<int64_t>(engine->getIndirectLightCount()));
-    materialCount_.SetValue(static_cast<int64_t>(engine->getMaterialCount()));
-    textureCount_.SetValue(static_cast<int64_t>(engine->getTextureCount()));
-    skyboxCount_.SetValue(static_cast<int64_t>(engine->getSkyboxeCount()));
-    colorGradingCount_.SetValue(
-        static_cast<int64_t>(engine->getColorGradingCount()));
-    renderTargetCount_.SetValue(
-        static_cast<int64_t>(engine->getRenderTargetCount()));
+    AssetManager& asset_manager = view_.GetAssetManager();
+    mediaAssetsResident_.SetValue(
+        asset_manager.GetResidentCount<::imp::media::MediaAsset>());
+    mediaAssetsDestroyed_.SetValue(
+        asset_manager.GetDestroyedCount<::imp::media::MediaAsset>());
+    mediaAssetsCancelled_.SetValue(
+        asset_manager.GetCancelledCount<::imp::media::MediaAsset>());
+    materialAssetsResident_.SetValue(
+        asset_manager.GetResidentCount<::imp::MaterialAsset>());
+    materialAssetsDestroyed_.SetValue(
+        asset_manager.GetDestroyedCount<::imp::MaterialAsset>());
+    materialAssetsCancelled_.SetValue(
+        asset_manager.GetCancelledCount<::imp::MaterialAsset>());
+    imageAssetsResident_.SetValue(
+        asset_manager.GetResidentCount<::imp::ImageAsset>());
+    imageAssetsDestroyed_.SetValue(
+        asset_manager.GetDestroyedCount<::imp::ImageAsset>());
+    imageAssetsCancelled_.SetValue(
+        asset_manager.GetCancelledCount<::imp::ImageAsset>());
+    gltfAssetsResident_.SetValue(
+        asset_manager.GetResidentCount<::imp::GltfAsset>());
+    gltfAssetsDestroyed_.SetValue(
+        asset_manager.GetDestroyedCount<::imp::GltfAsset>());
+    gltfAssetsCancelled_.SetValue(
+        asset_manager.GetCancelledCount<::imp::GltfAsset>());
   }
 
   summary_.Update();
 
-  // log everything every frames_between_output_ frames
-  if (frames_between_output_ && (frame_count % frames_between_output_ == 0)) {
+  // log everything every frames_between_output_ frames.  The frequency for
+  // printing is independent of the frequency for sampling.
+  if (frames_between_logging_ && (frame_count % frames_between_logging_ == 0)) {
     // output to log from string, for portability.
     IMP_LOG(imp::INFO) << absl::StrCat(summary_);
   }

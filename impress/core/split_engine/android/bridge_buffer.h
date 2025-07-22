@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_ANDROID_BRIDGEBUFFER_H_
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
@@ -38,6 +39,12 @@ class BridgeBuffer {
   void* Data() { return mmapped_ptr_; }
   const SplitEngineSharedMemoryBridgeClient::BufferHandle& Handle() {
     return *handle_;
+  }
+
+  bool IsValidBlock(const uint8_t* data, size_t data_size_in_bytes) {
+    return data >= Data() &&
+           (data + data_size_in_bytes) <=
+               (static_cast<const uint8_t*>(Data()) + size_in_bytes_);
   }
 
  private:

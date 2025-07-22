@@ -22,8 +22,8 @@
 
 #include "core/common/platform_helpers.h"
 #include "core/media/media_asset.h"
+#include "core/media/media_color_space.h"
 #include "core/render/texture_factory.h"
-#include "core/video/video_color_space.h"
 #include "core/video/video_source.h"
 
 #import <AVFoundation/AVFoundation.h>
@@ -81,7 +81,7 @@ class IOSVideoSource : public VideoSource {
 
   uint2 GetVideoSize() const override;
 
-  VideoColorSpace GetColorSpace() const override;
+  MediaColorSpace GetColorSpace() const override;
   MediaStereoMode GetStereoMode() const override;
 
   void SetOnPlaybackCompleteCallback(std::function<void()> callback) override;
@@ -369,7 +369,7 @@ uint2 IOSVideoSource::GetVideoSize() const {
   return {size.width, size.height};
 }
 
-VideoColorSpace IOSVideoSource::GetColorSpace() const { return VideoColorSpace(); }
+MediaColorSpace IOSVideoSource::GetColorSpace() const { return MediaColorSpace(); }
 
 MediaStereoMode IOSVideoSource::GetStereoMode() const {
   // TODO: Implement stereo mode retrieval for iOSVideoSource.

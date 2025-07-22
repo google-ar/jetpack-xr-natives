@@ -457,20 +457,13 @@ GltfAssetLoader::LoadInProgress::CreateGltfAsset(
 
   if (collider_mode ==
       GltfState::ColliderMode::GLTF_COLLIDER_MESH_COLLISION_ACCELERATOR) {
-    // TODO: Passing the std::unique_ptr<GltfAsset> through a
-    // background future can cause it to be destroyed on the background thread
-    // during cancellation if timing is unlucky. In that case, this can crash
-    // because the GltfAsset will destroy filament materials that are only safe
-    // to destroy from the foreground. It's also not really safe to access the
-    // Registry from a background thread.
     gltf_asset_future = gltf_asset_future.Then(
         [view](std::unique_ptr<GltfAsset> gltf_asset) {
           gltf_asset->BuildMeshCollisionAccelerators(
-              &view->GetRegistry().GetOrCreate<CollisionAcceleratorProvider>());
+              view->GetRegistry().GetOrCreate<CollisionAcceleratorProvider>());
           return gltf_asset;
         },
-        {.executor = Executor::Type::kBackground,
-         .future_group = future_group});
+        {.future_group = future_group});
   }
 
   return gltf_asset_future;

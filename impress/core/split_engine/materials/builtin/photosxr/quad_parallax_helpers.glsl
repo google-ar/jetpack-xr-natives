@@ -16,7 +16,6 @@ precision highp float;
 
 struct QuadParallaxParams {
     vec2 uv;
-    vec3 original_pos;
     float window_pop_dz;
     vec3 moved_window_pos;
     vec3 camera_pos;
@@ -50,19 +49,11 @@ vec2 quadParallaxUv(QuadParallaxParams p) {
     //          +z                 |    camera_pos
 
     float media_dz = p.max_media_inset * p.parallax_amount;
+    float media_scale = mix(1., p.extra_zoom_after_parallax, p.parallax_amount);
 
-    // media_scale is the size of the media plane relative to the original plane.
-    // It scales with the depth of the media plane, with a little bit of
-    // extra zoom to emphasize the parallax effect.
-    float camera_dz = abs(getPosition().z - p.camera_pos.z);
-    float media_scale = (camera_dz + media_dz) / camera_dz;
-    media_scale = media_scale * mix(1., p.extra_zoom_after_parallax, p.parallax_amount);
-
-    // Compute the view direction in uv space. To go from model space to uv
-    // space, just flip the y axis as the vertices are already set at 0 and
-    // 1 of xy axis in model space.
+    // Compute the view direction in uv space. When flipUV: false, the x and y axes
+    // of the uv space are aligned with the x and y axes of the model space.
     vec3 view_direction_in_uv_space = normalize(p.moved_window_pos - p.camera_pos);
-    view_direction_in_uv_space.y = -view_direction_in_uv_space.y;
 
     // Compute how much to laterally scale/translate the backing media.
     vec2 media_lateral_offset = view_direction_in_uv_space.xy / abs(view_direction_in_uv_space.z) * abs(media_dz + p.window_pop_dz);

@@ -23,6 +23,7 @@
 #include "core/async/future.h"
 #include "core/common/robin_map.h"
 #include "core/math/vec.h"
+#include "core/media/media_color_space.h"
 #include "core/media/media_type.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_handle.h"
@@ -30,7 +31,6 @@
 #include "core/ncsb/node_handle.h"
 #include "core/render/android/android_defines.h"
 #include "core/render/texture.h"
-#include "core/video/video_color_space.h"
 #include "core/video/video_controller.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/render/mesh_renderer.h"
@@ -85,7 +85,7 @@ class XrMediaViewer : public Component {
   XrMediaViewerState state_;
   bool is_spatial_;
 
-  video::VideoColorSpace video_color_space_;
+  MediaColorSpace media_color_space_;
 
  public:
   using IsfInfo = IsfInfo<&XrMediaViewer::state_>;

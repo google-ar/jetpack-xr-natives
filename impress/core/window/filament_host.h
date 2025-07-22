@@ -23,6 +23,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <thread>  // NOLINT: Need to use threads available in bazel.
 #include <utility>
@@ -41,6 +42,7 @@
 #include "filament/filament/include/filament/View.h"
 #include "core/common/buffer_access.h"
 #include "core/common/enum_flags.h"
+#include "core/common/invocable.h"
 #include "core/common/optional_error.h"
 #include "core/common/pass_key.h"
 // TODO: Remove config.h and fix breaks.
@@ -253,6 +255,8 @@ class FilamentHost {
     virtual bool ShouldUseSharedGlContext() const { return true; }
 
     virtual bool ShouldUseSystemFrameScheduledHandler() const { return false; }
+
+    virtual bool ShouldPreinitializeMetalPlatform() const { return false; }
   };
 
   // Dev mode is optionally installed and operates via this abstract interface.
@@ -371,6 +375,10 @@ class FilamentHost {
       FrameScheduledCallback&& frame_scheduled_callback = {});
   void SetFrameCompletedCallback(
       FrameCompletedCallback&& frame_completed_callback = {});
+
+  // Called right before rendering begins. Override this if you need something
+  // to happen as late as possible in the frame loop before rendering begins.
+  virtual absl::Status PreBeginRender() { return absl::OkStatus(); }
 
   absl::StatusOr<RenderResult> RenderNextFrame(absl::Duration previous_vsync,
                                                absl::Duration next_vsync);

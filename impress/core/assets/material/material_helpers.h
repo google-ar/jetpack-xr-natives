@@ -24,6 +24,24 @@
 
 namespace imp::material_helpers {
 
+// Contains Filament variant masks at different priorities.
+struct FilamentVariantMask {
+  filament::UserVariantFilterMask high_priority_mask = 0;
+  filament::UserVariantFilterMask low_priority_mask = 0;
+};
+
+// Converts the MaterialPreCompileVariants to Filament variant mask.
+FilamentVariantMask GetMaterialVariantMask(
+    const imp::MaterialPreCompileVariants& material_pre_compile_variants);
+
+// Changes the default setting for high priority mask during precompilation.
+//
+// If unmodified the default setting is to EXCLUDE all variants.
+// Adding bits here will cause variants to be compiled asynchronously for every
+// material which doesn't explicitly exclude them.
+void SetDefaultHighPriorityVariants(
+    filament::UserVariantFilterMask high_priority_mask);
+
 // Precompiles the filament::Material with the specified
 // `MaterialPreCompileOptions`. Please note that this does not speed up shader
 // compilation and it is only moving the workload up front.

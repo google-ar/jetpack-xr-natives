@@ -22,6 +22,7 @@
 #include <webgpu/webgpu_cpp.h>
 
 #include <cstdint>
+#include <vector>
 
 namespace filament::backend {
 
@@ -38,6 +39,12 @@ public:
 
     [[nodiscard]] wgpu::Instance& getInstance() noexcept { return mInstance; }
 
+    // TODO consider that this functionality is not WebGPU-specific, and thus could be
+    //      placed in a generic place and even reused across backends. Alternatively,
+    //      a 3rd party library could be considered. However, this was a simple and
+    //      quick change and works for now.
+    // gets the size (height and width) of the surface/window
+    [[nodiscard]] wgpu::Extent2D getSurfaceExtent(void* nativeWindow) const;
     // either returns a valid surface or panics
     [[nodiscard]] wgpu::Surface createSurface(void* nativeWindow, uint64_t flags);
     // either returns a valid adapter or panics
@@ -50,6 +57,10 @@ protected:
             const Platform::DriverConfig& driverConfig) noexcept override;
 
 private:
+    // returns adapter request option variations applicable for the particular
+    // platform
+    [[nodiscard]] static std::vector<wgpu::RequestAdapterOptions> getAdapterOptions();
+
     // we may consider having the driver own this in the future
     wgpu::Instance mInstance;
 };

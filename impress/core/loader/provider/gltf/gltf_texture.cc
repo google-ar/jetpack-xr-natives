@@ -48,10 +48,10 @@
 namespace imp::loader::details::provider_gltf {
 namespace {
 
-using ::imp::gltf::Image;
-using ::imp::gltf::Material;
-using ::imp::gltf::Primitive;
-using ::imp::gltf::Texture;
+using ::imp::gltf::imp_proto::Image;
+using ::imp::gltf::imp_proto::Material;
+using ::imp::gltf::imp_proto::Primitive;
+using ::imp::gltf::imp_proto::Texture;
 using MinFilter = schemas::MinFilter;
 using MagFilter = schemas::MagFilter;
 using WrapMode = schemas::WrapMode;
@@ -151,10 +151,8 @@ absl::Status AddTexture(
   if (is_basis_compressed) {
     if ((reinterpret_cast<std::uintptr_t>(encoded_image_contents.Data()) % 4) !=
         0) {
-      IMP_LOG(imp::WARNING)
-          << "Creating a copy of KTX2 file bytes because its memory was not 4 "
-             "byte aligned.";
-
+      // Creating a copy of KTX2 file bytes because its memory was not 4 byte
+      // aligned.
       encoded_image_contents = image::EncodedImageContents::Clone(
           encoded_image_contents.Data(), encoded_image_contents.Size());
     }
@@ -184,7 +182,7 @@ absl::Status AddTexture(
 
 absl::Status ProcessTextureInfoFromNode(
     LoadedModelBuilder& builder, const GltfModel& model,
-    const std::vector<imp::gltf::Primitive>& primitives,
+    const std::vector<imp::gltf::imp_proto::Primitive>& primitives,
     const GltfPrimitiveVector<ProcessedPrimitive>& processed_primitives,
     const Gltf2AttributeMask& mask,
     LoaderOptions::TextureTranscodeCompressionType compression_type,
@@ -272,7 +270,7 @@ absl::Status ProcessTextureInfoFromNode(
 
         // KHR_materials_sheen
         if (m.extensions.sheen) {
-          const std::unique_ptr<gltf::MaterialSheen>& sheen_info =
+          const std::unique_ptr<gltf::imp_proto::MaterialSheen>& sheen_info =
               m.extensions.sheen;
 
           MP_RETURN_IF_ERROR(AddTexture(builder, model, kSheenColorIndex,
@@ -302,7 +300,8 @@ absl::Status ProcessTextureInfoFromNode(
   return absl::OkStatus();
 }
 
-absl::StatusOr<uint16_t> GetTextureLookupIndex(const gltf::Texture& texture) {
+absl::StatusOr<uint16_t> GetTextureLookupIndex(
+    const gltf::imp_proto::Texture& texture) {
   if (texture.extensions.basisu != nullptr) {
     return *texture.extensions.basisu->source;
   } else if (texture.extensions.webp != nullptr) {

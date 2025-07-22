@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load("//build_tools:assets.bzl", "imp_assets")
 load("//build_tools:imp.bzl", "if_android", "if_desktop", "if_dev_runtime", "if_emscripten", "if_ios", "if_linux", "if_macos", "imp_google3_copts")
 load(
@@ -27,22 +29,6 @@ package(
 )
 
 licenses(["notice"])
-
-cc_library(
-    name = "video_color_space",
-    srcs = ["video_color_space.cc"],
-    hdrs = ["video_color_space.h"],
-    copts = imp_google3_copts(),
-    deps = [
-        "//core:config",
-        "//core/math",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/strings:string_view",
-    ],
-    alwayslink = 1,
-)
 
 cc_library(
     name = "video",
@@ -100,7 +86,6 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
-        ":video_color_space",
         "//core:config",
         "//core/async:future",
         "//core/common:context",
@@ -109,6 +94,7 @@ cc_library(
         "//core/common:small_source_location",
         "//core/math",
         "//core/media",
+        "//core/media:media_color_space",
         "//core/media:media_type",
         "//core/render",
         "//core/render/android:definitions",
@@ -136,7 +122,6 @@ cc_library(
     ]),
     copts = imp_google3_copts(),
     deps = [
-        ":video_color_space",
         ":video_source",
         "//core:config",
         "//core/assets",
@@ -145,6 +130,7 @@ cc_library(
         "//core/math",
         "//core/media",
         "//core/media:android_media",
+        "//core/media:media_color_space",
         "//core/media:media_type",
         "//core/render",
         "//core/render/android:android_external_texture_surface",
@@ -194,7 +180,6 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
-        ":video_color_space",
         ":video_source",
         "//core/async:future",
         "//core/common:log",
@@ -204,6 +189,7 @@ cc_library(
         "//core/media",
         "//core/media:android_exoplayer_media",
         "//core/media:android_exoplayer_media_jni",
+        "//core/media:media_color_space",
         "//core/media:media_type",
         "//core/render",
         "//core/render:content_security_level",
@@ -232,11 +218,11 @@ objc_library(
         "ios_video_source.mm",
     ],
     deps = [
-        ":video_color_space",
         ":video_source",
         "//core/common",
         "//core/common:log",
         "//core/media",
+        "//core/media:media_color_space",
         "//core/render",
         "//third_party/apple_frameworks:AVFoundation",
         "//third_party/apple_frameworks:CoreMedia",
@@ -258,7 +244,6 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
-        ":video_color_space",
         ":video_source",
         "//core/assets",
         "//core/async:executor",
@@ -268,6 +253,7 @@ cc_library(
         "//core/common:small_source_location",
         "//core/math",
         "//core/media",
+        "//core/media:media_color_space",
         "//core/media:media_type",
         "//core/render",
         "//core/resources",
@@ -296,10 +282,10 @@ objc_library(
         "macos_video_source.mm",
     ],
     deps = [
-        ":video_color_space",
         ":video_source",
         "//core/async:future",
         "//core/media",
+        "//core/media:media_color_space",
         "//core/render",
         "//core/view:base_view",
         "//third_party/apple_frameworks:AVFoundation",
@@ -321,12 +307,12 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
-        ":video_color_space",
         ":video_source",
         "//core/async:future",
         "//core/common:small_source_location",
         "//core/math",
         "//core/media",
+        "//core/media:media_color_space",
         "//core/media:media_type",
         "//core/render",
         "//core/view:base_view",
@@ -346,12 +332,12 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
-        ":video_color_space",
         ":video_source",
         "//core/async:future",
         "//core/common:small_source_location",
         "//core/math",
         "//core/media",
+        "//core/media:media_color_space",
         "//core/media:media_type",
         "//core/render",
         "//core/view:base_view",
@@ -529,7 +515,6 @@ cc_library(
     ] + if_dev_runtime(["video_controller_widget_helper.h"]),
     copts = imp_google3_copts(),
     deps = [
-        ":video_color_space",
         ":video_controller_proto_cc",
         ":video_source",
         "//core:config",
@@ -540,6 +525,7 @@ cc_library(
         "//core/common:small_source_location",
         "//core/math",
         "//core/media",
+        "//core/media:media_color_space",
         "//core/media:media_type",
         "//core/ncsb",
         "//core/render",

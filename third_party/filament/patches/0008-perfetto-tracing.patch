@@ -1,0 +1,29 @@
+diff --git a/libs/utils/include/private/utils/android/Tracing.h b/libs/utils/include/private/utils/android/Tracing.h
+index 3b25edc19..9ad8a8bf3 100644
+--- a/libs/utils/include/private/utils/android/Tracing.h
++++ b/libs/utils/include/private/utils/android/Tracing.h
+@@ -17,7 +17,8 @@
+ #ifndef TNT_UTILS_ANDROID_FILAMENT_TRACING_H
+ #define TNT_UTILS_ANDROID_FILAMENT_TRACING_H
+ 
+-#include <perfetto/perfetto.h>
++#include "third_party/perfetto/include/perfetto/tracing/track_event.h"
++#include "third_party/perfetto/include/perfetto/tracing/track_event_category_registry.h"
+ 
+ #include <stdint.h>
+ 
+diff --git a/libs/utils/src/android/Tracing.cpp b/libs/utils/src/android/Tracing.cpp
+index 40d54113d..646dc8b49 100644
+--- a/libs/utils/src/android/Tracing.cpp
++++ b/libs/utils/src/android/Tracing.cpp
+@@ -17,7 +17,9 @@
+ #include "filament/libs/utils/include/utils/compiler.h"
+ #include <private/utils/Tracing.h>
+ 
+-#include <perfetto/perfetto.h>
++#include "third_party/perfetto/include/perfetto/tracing/backend_type.h"
++#include "third_party/perfetto/include/perfetto/tracing/tracing.h"
++#include "third_party/perfetto/include/perfetto/tracing/track_event.h"
+ 
+ PERFETTO_TRACK_EVENT_STATIC_STORAGE_IN_NAMESPACE(tracing);
+

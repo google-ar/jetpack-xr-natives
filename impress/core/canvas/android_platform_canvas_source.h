@@ -17,13 +17,23 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_CANVAS_ANDROID_PLATFORM_CANVAS_H_
 #define THIRD_PARTY_IMPRESS_CORE_CANVAS_ANDROID_PLATFORM_CANVAS_H_
 
+#include <memory>
+#include <vector>
+
+#include "absl/status/status.h"
+#include "absl/strings/string_view.h"
+#include "core/async/future.h"
 #include "core/canvas/android_glyph_source.h"
 #include "core/canvas/platform_canvas_source.h"
+#include "core/canvas/scoped_canvas.h"
 #include "core/common/context.h"
+#include "core/common/small_source_location.h"
 #include "core/geometry/shapes/rect.h"
 #include "core/math/vec.h"
+#include "core/render/texture.h"
 #include "core/view/base_view.h"
 #include "core/view/platforms/android/wrappers/canvas.h"
+#include "core/view/platforms/android/wrappers/paint.h"
 #include "core/view/platforms/android/wrappers/picture.h"
 #include "core/view/platforms/android/wrappers/surface.h"
 #include "core/view/platforms/android/wrappers/surface_texture.h"
@@ -33,7 +43,7 @@ namespace imp {
 // Implementation of CanvasSource for Android.
 class AndroidPlatformCanvasSource : public PlatformCanvasSource {
  public:
-  explicit AndroidPlatformCanvasSource(BaseView& view);
+  explicit AndroidPlatformCanvasSource(Context context);
 
   bool IsFeatureSupported(ScopedCanvas::Feature feature) override;
 
@@ -55,6 +65,12 @@ class AndroidPlatformCanvasSource : public PlatformCanvasSource {
       absl::string_view text,
       const ScopedCanvas::TextOptions& text_options) override;
 
+  // TODO: This function behaves incorrectly for characters outside
+  // of the basic multilingual plane (BMP) (e.g. 𨭎). Paint.getTextWidths()
+  // returns one entry for each UTF-16 codepoint, NOT for each Unicode
+  // codepoint. Since Android supports glyphs, which do properly interpret the
+  // Unicode codepoints, we don't ever rely on GetTextWidths() code anywhere in
+  // production. That said, the behavior of this function is still incorrect.
   std::vector<float> GetTextWidths(
       absl::string_view text,
       const ScopedCanvas::TextOptions& text_options) override;
@@ -67,10 +83,12 @@ class AndroidPlatformCanvasSource : public PlatformCanvasSource {
       const ScopedCanvas::TextOptions& text_options) override;
 
   std::unique_ptr<ScopedCanvas> StartDrawing(
-      uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) override;
+      BaseView& view, uint2 pixel_size,
+      ScopedCanvas::DrawMode draw_mode) override;
 
   std::unique_ptr<ScopedCanvas> StartDrawing(
-      uint2 pixel_size, ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
+      BaseView& view, uint2 pixel_size,
+      ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
       ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) override;
 
  private:
@@ -103,8 +121,7 @@ class AndroidPlatformCanvasSource : public PlatformCanvasSource {
     bool did_texture_change_;
   };
 
-  BaseView& view_;
-  const Context& context_;
+  Context context_;
 
   android::SurfaceTexture surface_texture_;
   android::Surface surface_;

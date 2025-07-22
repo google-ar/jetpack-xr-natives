@@ -29,12 +29,20 @@
 #include <memory>
 #include <vector>
 
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "core/split_engine/android/extensions/split_engine_bridge.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 
 namespace imp::split_engine {
 
-// An NDK specific implementation of the `SplitEngineSharedMemoryBridgeClient`.
+// The version of the Split Engine client for non-AndroidXR environments.
+//
+// Note: SplitEngineSharedMemoryBridgeClientNdk is never actually used by its
+// base class - the only reason it is a subclass is to signal method parity
+// between SplitEngineBridge and SplitEngineSharedMemoryBridgeClientNdk which
+// communicate via a 1:1 API across the JNI boundary.
 class SplitEngineSharedMemoryBridgeClientNdk
     : public SplitEngineSharedMemoryBridgeClient {
  public:
@@ -44,26 +52,35 @@ class SplitEngineSharedMemoryBridgeClientNdk
   SplitEngineSharedMemoryBridgeClientNdk(
       const ndk::SpAIBinder& bridge_service_handle, JNIEnv* jni_env);
 
-  std::unique_ptr<BufferHandle> RegisterBuffer(
-      int fd, size_t buffer_size_bytes) override;
+  // Note: GetClientId and GenerateMessageGroupId are only used by the client
+  // "front end", i.e. SplitEngineBridge. Both of these are unimplemented and
+  // should never be called.
+  ClientId GetClientId() const override;
+  MessageGroupId GenerateMessageGroupId() override;
 
-  Result ProcessRegion(const BufferHandle& buffer_handle, size_t offset_bytes,
-                       size_t region_length_bytes) override;
+  // Registers a message group callback to be invoked when the message group is
+  // complete.
+  void RegisterMessageGroupCallback(
+      std::unique_ptr<SplitEngineMessageGroupCallback> callback);
 
-  jobject CreateExternalTextureSurface(
+  absl::StatusOr<
+      std::unique_ptr<SplitEngineSharedMemoryBridgeClient::BufferHandle>>
+  RegisterBuffer(int fd, size_t buffer_size_bytes) override;
+
+  absl::Status ProcessRegion(
+      const SplitEngineSharedMemoryBridgeClient::BufferHandle& buffer_handle,
+      int offset_bytes, int region_length_bytes) override;
+
+  absl::StatusOr<jobject> CreateExternalTextureSurface(
       const std::vector<TextureId>& in_texture_ids) override;
 
-  Result SetExternalTextureSurfaceSize(TextureId in_texture_id, int32_t width,
-                                       int32_t height) override;
+  absl::Status SetExternalTextureSurfaceSize(TextureId in_texture_id,
+                                             int32_t width,
+                                             int32_t height) override;
 
-  Result SendRequest(
+  absl::Status SendRequest(
       const std::vector<uint8_t>& data,
       std::function<void(const std::vector<uint8_t>&)> callback) override;
-
-  void RegisterReverseBridgeMessageHandler(
-      std::function<void(int)> handler) override;
-
-  void Initialize(WorkScheduler work_scheduler) override;
 
   ndk::SpAIBinder GetBridgeHandle() const { return bridge_handle_; };
 
@@ -89,6 +106,9 @@ class SplitEngineSharedMemoryBridgeClientNdk
   // constructor, which is the IBinder referring to the receiving service.
   ndk::SpAIBinder bridge_handle_;
   JavaVM* java_vm_;
+  std::unique_ptr<SplitEngineMessageGroupCallback>
+      release_message_group_callback_;
+  int next_message_group_id_ = 0;
 };
 
 }  // namespace imp::split_engine

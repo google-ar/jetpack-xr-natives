@@ -20,6 +20,7 @@
 #include <variant>
 #include <vector>
 
+#include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "flatbuffers/buffer.h"
@@ -38,6 +39,7 @@
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
 #include "core/split_engine/materials/placeholder_material_asset.h"
 #include "core/split_engine/materials/split_engine_material_factory.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
@@ -80,7 +82,10 @@ SplitEngineMaterial::RequestBuiltInMaterial(
     const android_xr::schemas::BuiltInMaterialRequest* schema =
         flatbuffers::GetRoot<android_xr::schemas::BuiltInMaterialRequest>(
             data.data());
-    return SplitEngineMaterialFactory::HandleCreateRequest(view, *schema)
+    // Local mode does not use the bridge, so we can use a fake bridge ID.
+    const BridgeId fake_bridge_id = 1;
+    return SplitEngineMaterialFactory::HandleCreateRequest(view, fake_bridge_id,
+                                                           *schema)
         .Then([](BuiltInMaterialPtr material) {
           return PlaceholderOrBuiltInMaterialPtr(std::move(material));
         });
@@ -96,11 +101,10 @@ SplitEngineMaterial::RequestBuiltInMaterial(
                     SplitEngineSerializer::GetId(
                         placeholder_material->GetFilamentMaterialInstance()),
                     material_type, spec);
-        SplitEngineAndroidBridge& bridge =
-            view.GetRegistry().Get<SplitEngineAndroidBridge>()->get();
         return SendRequest<android_xr::schemas::BuiltInMaterialRequest,
-                           absl::Status>(bridge, *fbb,
-                                         built_in_material_request)
+                           absl::Status>(
+                   view.GetSplitEngineSerializer()->GetBridge(), *fbb,
+                   built_in_material_request)
             .Then([placeholder_material =
                        std::move(placeholder_material)]() mutable {
               return PlaceholderOrBuiltInMaterialPtr(
@@ -118,9 +122,20 @@ SplitEngineMaterial::SplitEngineMaterial(
       material_(std::move(material)) {}
 
 SplitEngineMaterial::~SplitEngineMaterial() {
+  // Subclasses should override and call Cleanup().
+  
+  // In case of programmer error, call Cleanup() anyway.
+  if (!cleanup_called_) {
+    Cleanup();
+  }
+}
+
+void SplitEngineMaterial::Cleanup() {
   SplitEngineMaterialUpdater& updater =
       view_.GetRegistry().GetOrCreate<SplitEngineMaterialUpdater>(view_);
   updater.RemoveMaterial(this);
+  material_ = {};
+  cleanup_called_ = true;
 }
 
 BorrowedMaterialPtr SplitEngineMaterial::GetMaterial(

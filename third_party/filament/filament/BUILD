@@ -54,7 +54,7 @@ cc_library(
         "generated/shaders.c",
     ],
     hdrs = [],
-    copts = filament_copts(False),
+    copts = filament_copts(),
     data = [],
     includes = ["generated"],
     linkstatic = 1,
@@ -86,6 +86,7 @@ cc_library(
     for platform, api, material_api, enable_fl0, enable_multiview, metal_precompile_mode in [
         ("mobile", "opengl", "opengl", True, False, None),
         ("mobile", "opengl", "opengl", False, True, None),
+        ("mobile", "opengl", "opengl", True, True, None),
         ("mobile", "opengl", "opengl", False, False, None),
         ("mobile", "vulkan", "vulkan", False, False, None),
         ("mobile", "vulkan", "vulkan", False, True, None),
@@ -104,7 +105,7 @@ cc_library(
             "%s/%s/%s/%s/%s/generated/resources/materials.c" % (platform, api, fl0, multiview, precompile),
         ],
         hdrs = [],
-        copts = filament_copts(False),
+        copts = filament_copts(),
         data = [],
         includes = [
             "%s/%s/%s/%s/%s" % (platform, api, fl0, multiview, precompile),
@@ -119,6 +120,7 @@ cc_library(
     for platform, api, fl0, multiview, precompile in [
         ("mobile", "opengl", "yesFL0", "noMV", "noMPC"),
         ("mobile", "opengl", "noFL0", "yesMV", "noMPC"),
+        ("mobile", "opengl", "yesFL0", "yesMV", "noMPC"),
         ("mobile", "opengl", "noFL0", "noMV", "noMPC"),
         ("mobile", "metal", "noFL0", "noMV", "noMPC"),
         ("mobile", "metal", "noFL0", "noMV", "yesMPC"),
@@ -205,6 +207,7 @@ cc_library(
             "@third_party//filament/libs:math_hdrs",
             "@third_party//filament/libs:utils",
             "@third_party//filament/libs:utils_hdrs",
+            "@third_party//filament/libs:utils_private_hdrs",
         ] + if_matdbg(["@third_party//filament/libs:matdbg"]) + if_fgviewer(["@third_party//filament/libs:fgviewer"]) + extra_deps,
         alwayslink = 1,
     )
@@ -276,11 +279,19 @@ cc_library(
             [
                 "@third_party//filament/filament/backend:backend_opengl",
                 "@third_party//filament/libs:filaflat",
-                ":generated_mobile_opengl_yesFL0_noMV_noMPC_materials",
-            ],
+            ] + if_multiview(
+                [
+                    ":generated_mobile_opengl_yesFL0_yesMV_noMPC_materials",
+                ],
+                [
+                    ":generated_mobile_opengl_yesFL0_noMV_noMPC_materials",
+                ],
+            ),
             [],
             [],
-            ["FILAMENT_ENABLE_FEATURE_LEVEL_0=1"],
+            if_multiview(
+                ["FILAMENT_ENABLE_MULTIVIEW=1"],
+            ) + ["FILAMENT_ENABLE_FEATURE_LEVEL_0=1"],
             False,
             False,
         ),

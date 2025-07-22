@@ -79,6 +79,7 @@ cc_library(
         "utils/include/utils/Invocable.h",
         "utils/include/utils/JobSystem.h",
         "utils/include/utils/Log.h",
+        "utils/include/utils/Logger.h",
         "utils/include/utils/Mutex.h",
         "utils/include/utils/NameComponentManager.h",
         "utils/include/utils/Panic.h",
@@ -93,7 +94,6 @@ cc_library(
         "utils/include/utils/Slice.h",
         "utils/include/utils/StaticString.h",
         "utils/include/utils/StructureOfArrays.h",
-        "utils/include/utils/Systrace.h",
         "utils/include/utils/ThermalManager.h",
         "utils/include/utils/ThreadUtils.h",
         "utils/include/utils/WorkStealingDequeue.h",
@@ -130,6 +130,7 @@ cc_library(
     copts = filament_copts(),
     defines = filament_defines(),
     textual_hdrs = [
+        "utils/include/utils/Systrace.h",
         "utils/include/utils/Zip2Iterator.h",
     ] + if_android([
         "utils/include/utils/android/Systrace.h",
@@ -139,6 +140,44 @@ cc_library(
     deps = ["@robin_map"],
     alwayslink = 1,
 )
+
+cc_library(
+    name = "utils_private_hdrs",
+    hdrs = [
+        "utils/include/private/utils/Tracing.h",
+    ],
+    copts = filament_copts(),
+    defines = filament_defines(),
+    includes = ["utils/include"],
+    textual_hdrs = [] + if_android([
+        "utils/include/private/utils/android/Tracing.h",
+    ]) + if_apple([
+        "utils/include/private/utils/darwin/Tracing.h",
+    ]),
+    deps = [
+        ":utils_hdrs",
+        # Disable perfetto due to size.
+        # "//third_party/perfetto:libperfetto_client_experimental",
+    ],
+    alwayslink = 1,
+)
+
+# cc_library(
+#     name = "utils_private",
+#     srcs = [
+#     ] + if_android([
+#         "utils/src/android/Tracing.cpp",
+#     ]) + if_apple([
+#         "utils/src/darwin/Tracing.cpp",
+#     ]),
+#     copts = filament_copts(),
+#     defines = filament_defines(),
+#     linkstatic = 1,
+#     deps = [
+#         ":utils_private_hdrs",
+#         "//third_party/perfetto:libperfetto_client_experimental",
+#     ],
+# )
 
 objc_library(
     name = "utils_path",
@@ -162,6 +201,8 @@ cc_library(
         "utils/src/CyclicBarrier.cpp",
         "utils/src/EntityManager.cpp",
         "utils/src/EntityManagerImpl.h",
+        "utils/src/FixedCapacityVectorBase.cpp",
+        "utils/src/Invocable.cpp",
         "utils/src/JobSystem.cpp",
         "utils/src/Log.cpp",
         "utils/src/NameComponentManager.cpp",
@@ -201,6 +242,7 @@ cc_library(
     linkstatic = 1,
     deps = [
         ":utils_hdrs",
+        ":utils_private_hdrs",
         "@robin_map",
     ] + if_apple([":utils_path"]),
     alwayslink = 1,
@@ -220,8 +262,6 @@ cc_library(
     deps = [
         ":math_hdrs",
         ":utils_hdrs",
-        "@robin_map",
-        "@third_party//filament/filament/backend:backend_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
     ],
     alwayslink = 1,
@@ -241,9 +281,7 @@ cc_library(
     ]),
     deps = [
         ":filabridge_hdrs",
-        ":math_hdrs",
         ":utils_hdrs",
-        "@robin_map",
         "@third_party//filament/filament/backend:driver_enums",
     ],
     alwayslink = 1,
@@ -782,7 +820,7 @@ cc_library(
         "generated/resources/filagui_resources.c",
     ],
     hdrs = [],
-    copts = filament_copts(False),
+    copts = filament_copts(),
     data = [],
     includes = ["generated"],
     linkstatic = 1,
@@ -911,13 +949,14 @@ cc_library(
     ],
     linkstatic = 1,
     deps = [
+        ":filabridge_hdrs",
         ":filamat",
         ":geometry",
         ":math_hdrs",
         ":uberz",
         ":utils_hdrs",
+        ":utils_private_hdrs",
         "//third_party/cgltf",
-        "//third_party/hat_trie",
         "@meshoptimizer",
         "@robin_map",
         "@stblib//:stb_image",
@@ -955,7 +994,7 @@ cc_library(
         "generated/resources/matdbg_resources.c",
     ],
     hdrs = [],
-    copts = filament_copts(False),
+    copts = filament_copts(),
     data = [],
     includes = ["generated"],
     linkstatic = 1,
@@ -1054,7 +1093,7 @@ cc_library(
         "generated/resources/fgviewer_resources.c",
     ],
     hdrs = [],
-    copts = filament_copts(False),
+    copts = filament_copts(),
     data = [],
     includes = ["generated"],
     linkstatic = 1,
@@ -1135,7 +1174,7 @@ cc_library(
         "generated/resources/iblprefilter_materials.c",
     ],
     hdrs = [],
-    copts = filament_copts(False),
+    copts = filament_copts(),
     data = [],
     includes = ["generated"],
     linkstatic = 1,
@@ -1165,6 +1204,7 @@ cc_library(
         ":generated_iblprefilter_materials",
         ":math_hdrs",
         ":utils_hdrs",
+        ":utils_private_hdrs",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
     ],

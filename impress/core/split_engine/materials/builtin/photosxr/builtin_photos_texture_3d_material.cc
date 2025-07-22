@@ -14,14 +14,17 @@
 
 #include "core/split_engine/materials/builtin/photosxr/builtin_photos_texture_3d_material.h"
 
+#include <sys/types.h>
+
 #include <utility>
 
+#include "core/common/log.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/string_view.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/MaterialInstance.h"
-#include "filament/filament/include/filament/TextureSampler.h"
 #include "flatbuffers/verifier.h"
 #include "core/assets/asset_ptr.h"
 #include "core/assets/material/material_asset.h"
@@ -29,38 +32,36 @@
 #include "core/material_library/flatbuffer_utils.h"
 #include "core/materials/material.h"
 #include "core/math/vec.h"
+#include "core/render/android/platform_android_external_texture_surface.h"
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
 #include "core/split_engine/materials/builtin/photosxr/builtin_photos_texture_3d_material_assets.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/material_factory.h"
+#include "core/view/view_events.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
 namespace imp::split_engine {
 
 Future<BuiltInMaterialPtr> BuiltInPhotosTexture3dMaterial::Create(
-    BaseView& view, const android_xr::schemas::BuiltInMaterialD1750064& spec) {
+    BaseView& view, BridgeId bridge_id,
+    const android_xr::schemas::BuiltInMaterialD1750064& spec) {
   return view.GetAssetManager()
       .LoadMaterial(kBuiltinPhotosTexture3dMatCmat)
-      .Then([&view](
+      .Then([&view, bridge_id](
                 AssetPtr<MaterialAsset> material_asset) -> BuiltInMaterialPtr {
         return absl::WrapUnique(new BuiltInPhotosTexture3dMaterial(
-            view, view.GetMaterialFactory().CreateMaterial(material_asset)));
+            view, bridge_id,
+            view.GetMaterialFactory().CreateMaterial(material_asset)));
       });
 }
 
-BuiltInMaterialPtr BuiltInPhotosTexture3dMaterial::Duplicate() const {
-  return absl::WrapUnique(new BuiltInPhotosTexture3dMaterial(
-      view_, view_.GetMaterialFactory().WrapMaterial(
-                 filament::MaterialInstance::duplicate(
-                     GetMaterial()->GetFilamentMaterialInstance()))));
-}
-
 BuiltInPhotosTexture3dMaterial::BuiltInPhotosTexture3dMaterial(
-    BaseView& view, OwnedMaterialPtr material)
-    : BuiltInCustomMaterial(std::move(material)), view_(view) {
+    BaseView& view, BridgeId bridge_id, OwnedMaterialPtr material)
+    : BuiltInCustomMaterial(bridge_id, std::move(material)), view_(view) {
   // All samplers must have valid textures so set the placeholder texture.
   GetMaterial()->SetParameter(
       "imageTexture", view.GetTextureFactory().BorrowPlaceholderTexture());
@@ -76,6 +77,24 @@ BuiltInPhotosTexture3dMaterial::BuiltInPhotosTexture3dMaterial(
 
   // Set the default tint color to white.
   GetMaterial()->SetParameter("tintColor", imp::float3(1.0f, 1.0f, 1.0f));
+
+  // Listens for the post frame update event to update the color space
+  // parameters.
+  post_frame_update_connection_ = view_.GetDispatcher().Connect(
+      [this](const imp::ViewPostFrameUpdateEvent& event) {
+        // TODO: Support HDR images as well, currently it supports
+        // HDR only for the videos.
+        UpdateColorSpaceParameters(
+            view_, show_video_ ? video_texture_id_ : image_texture_id_);
+      });
+}
+
+BuiltInMaterialPtr BuiltInPhotosTexture3dMaterial::Duplicate() const {
+  return absl::WrapUnique(new BuiltInPhotosTexture3dMaterial(
+      view_, GetBridgeId(),
+      view_.GetMaterialFactory().WrapMaterial(
+          filament::MaterialInstance::duplicate(
+              GetMaterial()->GetFilamentMaterialInstance()))));
 }
 
 absl::Status BuiltInPhotosTexture3dMaterial::SetParameters(
@@ -105,9 +124,11 @@ absl::Status BuiltInPhotosTexture3dMaterial::SetParameters(
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d", p->image_texture()->texture_id()));
     }
-    filament::TextureSampler sampler =
-        ConvertSampler(*p->image_texture()->sampler());
-    GetMaterial()->SetParameter("imageTexture", texture, sampler);
+    GetMaterial()->SetParameter("imageTexture", texture,
+                                ConvertSampler(p->image_texture()->sampler()));
+
+    // Store the texture id for later color space update.
+    image_texture_id_ = p->image_texture()->texture_id();
   }
 
   if (p->video_texture()) {
@@ -117,9 +138,11 @@ absl::Status BuiltInPhotosTexture3dMaterial::SetParameters(
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d", p->video_texture()->texture_id()));
     }
-    filament::TextureSampler sampler =
-        ConvertSampler(*p->video_texture()->sampler());
-    GetMaterial()->SetParameter("videoTexture", texture, sampler);
+    GetMaterial()->SetParameter("videoTexture", texture,
+                                ConvertSampler(p->video_texture()->sampler()));
+
+    // Store the texture id for later color space update.
+    video_texture_id_ = p->video_texture()->texture_id();
   }
 
   if (p->auxiliary_video_texture()) {
@@ -129,9 +152,9 @@ absl::Status BuiltInPhotosTexture3dMaterial::SetParameters(
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d", p->auxiliary_video_texture()->texture_id()));
     }
-    filament::TextureSampler sampler =
-        ConvertSampler(*p->auxiliary_video_texture()->sampler());
-    GetMaterial()->SetParameter("auxiliaryVideoTexture", texture, sampler);
+    GetMaterial()->SetParameter(
+        "auxiliaryVideoTexture", texture,
+        ConvertSampler(p->auxiliary_video_texture()->sampler()));
   }
 
   if (p->thumbnail_texture()) {
@@ -141,9 +164,9 @@ absl::Status BuiltInPhotosTexture3dMaterial::SetParameters(
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d", p->thumbnail_texture()->texture_id()));
     }
-    filament::TextureSampler sampler =
-        ConvertSampler(*p->thumbnail_texture()->sampler());
-    GetMaterial()->SetParameter("thumbnailTexture", texture, sampler);
+    GetMaterial()->SetParameter(
+        "thumbnailTexture", texture,
+        ConvertSampler(p->thumbnail_texture()->sampler()));
   }
 
   if (p->blur_texture()) {
@@ -153,13 +176,13 @@ absl::Status BuiltInPhotosTexture3dMaterial::SetParameters(
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d", p->blur_texture()->texture_id()));
     }
-    filament::TextureSampler sampler =
-        ConvertSampler(*p->blur_texture()->sampler());
-    GetMaterial()->SetParameter("blurTexture", texture, sampler);
+    GetMaterial()->SetParameter("blurTexture", texture,
+                                ConvertSampler(p->blur_texture()->sampler()));
   }
 
   if (p->show_video()) {
     GetMaterial()->SetParameter("showVideo", p->show_video()->value());
+    show_video_ = p->show_video()->value();
   }
 
   if (p->thumbnail_mix()) {
@@ -219,18 +242,21 @@ absl::Status BuiltInPhotosTexture3dMaterial::SetParameters(
   }
 
   if (p->edge_fade_amount()) {
-    GetMaterial()->SetParameter("edgeFadeAmount",
-                                p->edge_fade_amount()->value());
+    // Edge fade amount
+    fade_params_[0] = p->edge_fade_amount()->value();
+    GetMaterial()->SetParameter("fadeParams", fade_params_);
   }
 
   if (p->window_edge_fade_thickness()) {
-    GetMaterial()->SetParameter("windowEdgeFadeThickness",
-                                p->window_edge_fade_thickness()->value());
+    // Window edge fade thickness
+    fade_params_[1] = p->window_edge_fade_thickness()->value();
+    GetMaterial()->SetParameter("fadeParams", fade_params_);
   }
 
   if (p->inset_media_edge_fade_thickness()) {
-    GetMaterial()->SetParameter("insetMediaEdgeFadeThickness",
-                                p->inset_media_edge_fade_thickness()->value());
+    // Inset media edge fade thickness
+    fade_params_[2] = p->inset_media_edge_fade_thickness()->value();
+    GetMaterial()->SetParameter("fadeParams", fade_params_);
   }
 
   if (p->corner_radius()) {
@@ -243,13 +269,15 @@ absl::Status BuiltInPhotosTexture3dMaterial::SetParameters(
   }
 
   if (p->blur_center_clear_amount()) {
-    GetMaterial()->SetParameter("blurCenterClearAmount",
-                                p->blur_center_clear_amount()->value());
+    // Blur center clear amount
+    blur_params_[0] = p->blur_center_clear_amount()->value();
+    GetMaterial()->SetParameter("blurParams", blur_params_);
   }
 
   if (p->blur_center_edge_fade_thickness()) {
-    GetMaterial()->SetParameter("blurCenterEdgeFadeThickness",
-                                p->blur_center_edge_fade_thickness()->value());
+    // Blur center edge fade thickness
+    blur_params_[1] = p->blur_center_edge_fade_thickness()->value();
+    GetMaterial()->SetParameter("blurParams", blur_params_);
   }
 
   if (p->blur_center_mask_flip()) {

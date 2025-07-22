@@ -16,8 +16,8 @@
 
 #include "absl/memory/memory.h"
 #include "core/canvas/async_canvas_source.h"
+#include "core/common/context.h"
 #include "core/config.h"
-#include "core/view/base_view.h"
 #if IMP_PLATFORM(WASM)
 #include "core/canvas/wasm_async_canvas_source.h"
 #else
@@ -29,12 +29,12 @@ namespace imp {
 
 namespace AsyncCanvasSourceFactory {
 
-std::unique_ptr<AsyncCanvasSource> Create(BaseView& view) {
+std::unique_ptr<AsyncCanvasSource> Create(Context context) {
 #if IMP_PLATFORM(WASM)
-  return std::make_unique<WasmAsyncCanvasSource>(view);
+  return std::make_unique<WasmAsyncCanvasSource>();
 #else
   return absl::make_unique<AsyncCanvasSourceWrapper>(
-      CanvasSource::Create(view));
+      CanvasSource::Create(context));
 #endif
 };
 

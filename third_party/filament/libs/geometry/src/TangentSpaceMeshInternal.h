@@ -23,6 +23,7 @@
 #include "filament/libs/math/include/math/norm.h"
 #include "filament/libs/math/include/math/quat.h"
 
+#include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/Panic.h"
 
 #include <unordered_map>

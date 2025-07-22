@@ -23,24 +23,6 @@ namespace android_xr.schemas;
 // Client->Service requests.
 //
 
-// A "message group" is an arbitrary logical grouping of messages, all
-// sharing a single backing memory buffer.
-table BeginMessageGroup {
-}
-
-table EndMessageGroup {
-}
-
-union MessageGroupTypes {
-  BeginMessageGroup = 1,
-  EndMessageGroup = 2,
-}
-
-table MessageGroup {
-  group_id: uint64 (id: 0);
-  message_group: MessageGroupTypes (id: 2);
-}
-
 // Adds any number of vertex and index buffers which can later be referenced by
 // Renderables to use for rendering geometry.
 // LINT.IfChange
@@ -286,6 +268,28 @@ table Command {
 // LINT.ThenChange(//depot/google3/third_party/impress/core/split_engine/flatbuffer_size_calculator.cc)
 
 root_type Command;
+
+// A "message group" is an arbitrary logical grouping of Command messages.
+// The client may use this to group commands for more efficient processing on
+// the service side. A common use-case is to group all Commands for a single
+// frame into a single message group.
+table BeginMessageGroup {
+}
+
+table EndMessageGroup {
+}
+
+union MessageGroupOperationTypes {
+  BeginMessageGroup = 1,
+  EndMessageGroup = 2,
+}
+
+table MessageGroupOperation {
+  group_id: uint64 (id: 0);
+  operation: MessageGroupOperationTypes (id: 2);
+}
+
+root_type MessageGroupOperation;
 
 // A request is an async message sent across the Split Engine bridge through the
 // SendRequest API.

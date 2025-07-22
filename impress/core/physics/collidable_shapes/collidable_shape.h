@@ -24,6 +24,9 @@
 #include "bullet/src/LinearMath/btTransform.h"
 #include "core/config.h"
 #include "core/geometry/shapes/box.h"
+#include "core/geometry/shapes/capsule.h"
+#include "core/geometry/shapes/cone.h"
+#include "core/geometry/shapes/cylinder.h"
 #include "core/geometry/shapes/sphere.h"
 #include "core/math/vec.h"
 
@@ -33,15 +36,16 @@ namespace imp {
 // Bullet collision shapes of different types.
 class CollidableShape {
  public:
-  using CollisionShape = absl::optional<std::variant<Sphere, Box>>;
+  using CollisionShape =
+      absl::optional<std::variant<Sphere, Box, Capsule, Cylinder, Cone>>;
 
   virtual ~CollidableShape() = default;
 
-  // Finds a Bullet collision shape that matches the Impress collider's shape.
-  virtual btTransform AddBtCollisionShape() = 0;
+  // Creates a Bullet collision shape that matches the Impress collider's shape.
+  virtual void CreateBtCollisionShape() = 0;
 
   // Gets the shape of the Bullet collision shape for tests.
-  virtual btCollisionShape* GetCollidableShape() const = 0;
+  virtual btCollisionShape* GetBtCollisionShape() const = 0;
 
   // Gets the center of the Bullet collision shape.
   virtual float3 GetCollidableCenter() const = 0;
@@ -52,14 +56,14 @@ class CollidableShape {
   // Takes the transformation of the instance of btCollisionObject (e.g.
   // btRigidBody, btGhostObject) in subclass as the input.
   virtual CollisionShape GetCollisionShape(
-      const btTransform& transform) const = 0;
+      const btTransform& bt_trans) const = 0;
 
   virtual void ApplyScalingToBulletCollider() = 0;
 
 #if IMP_RUNTIME(DEV)
   // Takes the transformation of the instance of btCollisionObject (e.g.
   // btRigidBody, btGhostObject) in subclass as the input.
-  virtual void Visualize(const btTransform& transform) const = 0;
+  virtual void Visualize(const btTransform& bt_trans) const = 0;
 #endif
 };
 

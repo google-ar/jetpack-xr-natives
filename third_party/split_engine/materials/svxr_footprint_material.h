@@ -35,6 +35,8 @@ class SVXRFootprintMaterial : public imp::split_engine::SplitEngineMaterial {
   static imp::Future<std::unique_ptr<SVXRFootprintMaterial>> Create(
       imp::BaseView& view);
 
+  ~SVXRFootprintMaterial() override;
+
   void SetPrimaryTouchPoint(imp::float3 primary_touch_point);
   void SetTouchControl(imp::float2 touch_control);
   void SetTouchResponse(imp::float4 touch_response);

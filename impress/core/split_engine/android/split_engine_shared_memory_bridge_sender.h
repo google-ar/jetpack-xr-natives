@@ -24,12 +24,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 
+#include "absl/container/flat_hash_map.h"
+#include "absl/status/statusor.h"
 #include "flatbuffers/flatbuffer_builder.h"
-#include "core/common/platform_helpers.h"
 #include "core/common/robin_map.h"
 #include "core/split_engine/android/bridge_buffer.h"
-#include "core/split_engine/android/message_group_id_mapper.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/flatbuffer_arena_allocator.h"
 #include "core/split_engine/shared/split_engine_defines.h"
@@ -45,9 +46,7 @@ class SplitEngineSharedMemoryBridgeSender
     : public imp::split_engine::SplitEngineBridgeSender {
  public:
   SplitEngineSharedMemoryBridgeSender(
-      SplitEngineSharedMemoryBridgeClient& bridge,
-      std::unique_ptr<MessageGroupIdMapper> message_group_id_mapper,
-      bool recycle_buffers);
+      SplitEngineSharedMemoryBridgeClient& bridge, bool recycle_buffers);
 
   SplitEngineSharedMemoryBridgeSender(
       const SplitEngineSharedMemoryBridgeSender&) = delete;
@@ -69,11 +68,7 @@ class SplitEngineSharedMemoryBridgeSender
   std::unique_ptr<flatbuffers::FlatBufferBuilder> CreateFlatBufferBuilder(
       size_t size_bytes) override;
 
-  // Callback received when a message group is finished processing on the
-  // service side. Not to be confused with EndMessageGroup, which marks the end
-  // of building a message group before sending it to the service in the first
-  // place.
-  void OnMessageGroupComplete(MessageGroupId group_id);
+  void ClearReleasedMessageGroups() override;
 
   void* CreateSharedMemoryBuffer(size_t size_in_bytes);
   void DestroySharedMemoryBuffer(void*);
@@ -81,12 +76,13 @@ class SplitEngineSharedMemoryBridgeSender
  private:
   SplitEngineSharedMemoryBridgeClient& bridge_;
   const ndk::SpAIBinder bridge_handle_;
-  std::unique_ptr<MessageGroupIdMapper> message_group_id_mapper_;
   bool recycle_buffers_;
-  bool message_group_active_;
+  std::optional<MessageGroupId> active_message_group_id_;
   imp::RobinMap<void*, std::unique_ptr<BridgeBuffer>> bridge_buffers_;
   BridgeBuffer* active_bridge_buffer_;
   FlatbufferArenaAllocator arena_allocator_;
+  absl::flat_hash_map<MessageGroupId, FlatbufferArenaAllocator::ArenaHandle>
+      arena_handles_;
 };
 
 }  // namespace imp::split_engine

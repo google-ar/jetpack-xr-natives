@@ -30,6 +30,7 @@
 #include "core/common/small_source_location.h"
 #include "core/config.h"
 #include "core/math/vec.h"
+#include "core/media/media_color_space.h"
 #include "core/media/media_source.h"
 #include "core/media/media_type.h"
 #include "core/ncsb/component.h"
@@ -40,7 +41,6 @@
 #include "core/ncsb/isf_info.h"
 #include "core/render/android/android_defines.h"
 #include "core/render/texture.h"
-#include "core/video/video_color_space.h"
 #include "core/video/video_controller_state.proto.imp.h"
 #include "core/video/video_source.h"
 #include "core/video/video_source_factory.h"
@@ -153,11 +153,11 @@ class VideoController : public Component {
   MediaStereoMode GetMediaStereoMode() const;
 
   // Returns the color space of the video. This is queried from ExoPlayer.
-  video::VideoColorSpace GetVideoColorSpace() const;
+  MediaColorSpace GetVideoColorSpace() const;
 
   // Returns the color space of the surface. This is queried from the
   // AHardwareBuffer.
-  video::VideoColorSpace GetSourceColorSpace() const;
+  MediaColorSpace GetSourceColorSpace() const;
 
   // Starts playback of the video, or resumes from the point it was
   // previously paused. Returns an error if the action fails or if the
@@ -254,7 +254,7 @@ class VideoController : public Component {
 
   MediaStereoMode media_stereo_mode_ = MediaStereoMode::kUnknown;
 
-  video::VideoColorSpace video_color_space_;
+  MediaColorSpace media_color_space_;
 
   absl::Status OnVideoLoaded(std::unique_ptr<video::VideoSource> source);
 

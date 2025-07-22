@@ -60,9 +60,9 @@
 namespace imp::loader::details::provider_gltf {
 namespace {
 
-using ::imp::gltf::Accessor;
-using ::imp::gltf::Gltf;
-using ::imp::gltf::Primitive;
+using ::imp::gltf::imp_proto::Accessor;
+using ::imp::gltf::imp_proto::Gltf;
+using ::imp::gltf::imp_proto::Primitive;
 
 // Stores a mapping of Gltf2Attribute to AccessorId's in an array.
 class AttributeLookup {
@@ -200,7 +200,8 @@ OptionalError GetAccessorsFromPrimitives(
   return NoError();
 }
 
-OptionalError GetAccessorBounds(const gltf::Gltf& gltf, AccessorId accessor_id,
+OptionalError GetAccessorBounds(const gltf::imp_proto::Gltf& gltf,
+                                AccessorId accessor_id,
                                 filament::Box* out_bounds) {
   auto accessor_index = static_cast<int>(accessor_id);
   if (accessor_index < 0 || accessor_index >= gltf.accessors.size()) {
@@ -224,16 +225,16 @@ OptionalError GetAccessorBounds(const gltf::Gltf& gltf, AccessorId accessor_id,
     if (accessor.normalized) {
       float inverse_bounds_scale;
       switch (accessor.component_type) {
-        case gltf::ComponentType::BYTE:
+        case gltf::imp_proto::ComponentType::BYTE:
           inverse_bounds_scale = INT8_MAX;
           break;
-        case gltf::ComponentType::UNSIGNED_BYTE:
+        case gltf::imp_proto::ComponentType::UNSIGNED_BYTE:
           inverse_bounds_scale = UINT8_MAX;
           break;
-        case gltf::ComponentType::SHORT:
+        case gltf::imp_proto::ComponentType::SHORT:
           inverse_bounds_scale = INT16_MAX;
           break;
-        case gltf::ComponentType::UNSIGNED_SHORT:
+        case gltf::imp_proto::ComponentType::UNSIGNED_SHORT:
           inverse_bounds_scale = UINT16_MAX;
           break;
         default:
@@ -263,7 +264,7 @@ OptionalError GetAccessorBounds(const gltf::Gltf& gltf, AccessorId accessor_id,
 }
 
 OptionalError GetAttributeInfo(
-    const gltf::Gltf& gltf, const Gltf2Attribute attribute,
+    const gltf::imp_proto::Gltf& gltf, const Gltf2Attribute attribute,
     AccessorId attribute_accessor,
     std::optional<schemas::VertexAttributeInfo>* out_attribute_info) {
   int accessor_index = static_cast<int>(attribute_accessor);
@@ -394,7 +395,7 @@ void LimitJointIndices(DenseDataAccess& joints_data,
 }
 
 absl::StatusOr<BufferAccess> GenerateOrientationsFromNormalsAndTexcoords(
-    const gltf::Gltf& gltf, const DenseDataAccess& positions,
+    const gltf::imp_proto::Gltf& gltf, const DenseDataAccess& positions,
     const DenseDataAccess& normals, const DenseDataAccess& texcoords,
     const absl::optional<DenseDataAccess>& indices_data) {
   // The SurfaceOrientation builder will not accept strided data when building
@@ -469,7 +470,7 @@ BufferAccess ConvertFloat4ToShort4Buffer(const uint8_t* input_ptr,
 // TODO: Add tests for AppendMorphTargetVertexBufferBlock to ensure
 // normal and tangent values are processed as expected.
 OptionalError AppendMorphTargetAttributes(
-    const gltf::Gltf& gltf, const AttributeLookup& attribute_lookup,
+    const gltf::imp_proto::Gltf& gltf, const AttributeLookup& attribute_lookup,
     const std::vector<PrimitiveTarget> targets,
     const absl::optional<DenseDataAccess>& indices_data,
     AccessorId normal_map_texcoord_id,
@@ -661,7 +662,7 @@ float4 GetWeightsForVertexAsFloat4(DenseDataAndType& weights,
 }
 
 OptionalError PackJointsAndSkinningWeights(
-    const gltf::Gltf& gltf, const AttributeLookup& attribute_lookup,
+    const gltf::imp_proto::Gltf& gltf, const AttributeLookup& attribute_lookup,
     std::vector<float2>* out_bone_indices_and_weights) {
   int num_weight_attributes =
       GetJointsAndWeightsAttributesCount(attribute_lookup);
@@ -754,7 +755,7 @@ OptionalError PackJointsAndSkinningWeights(
 }
 
 absl::StatusOr<DenseDataAndType> CreateBufferForAttribute(
-    const gltf::Gltf& gltf, Gltf2Attribute attribute,
+    const gltf::imp_proto::Gltf& gltf, Gltf2Attribute attribute,
     AccessorId attribute_accessor) {
   MP_ASSIGN_OR_RETURN(AccessorReader reader,
                    AccessorReader::Create(gltf, attribute_accessor));
@@ -811,7 +812,7 @@ absl::StatusOr<DenseDataAndType> CreateBufferForAttribute(
 }
 
 OptionalError GetVertexBufferInfoFromAttributeLookup(
-    const gltf::Gltf& gltf, const AttributeLookup& attribute_lookup,
+    const gltf::imp_proto::Gltf& gltf, const AttributeLookup& attribute_lookup,
     const absl::optional<DenseDataAccess>& indices_data,
     AccessorId normal_map_texcoord_id, uint16_t sampled_joint_count,
     bool advanced_skinning,
@@ -952,7 +953,8 @@ OptionalError GetVertexBufferInfoFromAttributeLookup(
 }  // namespace
 
 OptionalError ProcessPrimitives(
-    const gltf::Gltf& gltf, const std::vector<gltf::Primitive>& primitives,
+    const gltf::imp_proto::Gltf& gltf,
+    const std::vector<gltf::imp_proto::Primitive>& primitives,
     const filament::math::mat4& transform, uint16_t sampled_joint_count,
     LoadedModelBuilder* builder,
     GltfPrimitiveVector<ProcessedPrimitive>* out_processed_primitives,
@@ -980,7 +982,8 @@ OptionalError ProcessPrimitives(
     AccessorId normal_map_texcoord_id;
     const Primitive& primitive = primitives[i];
     if (primitive.material) {
-      const gltf::Material& material = gltf.materials[*primitive.material];
+      const gltf::imp_proto::Material& material =
+          gltf.materials[*primitive.material];
       // If the normal texture is specified, try finding its texcoord
       // specification.
       if (material.normal_texture.index) {

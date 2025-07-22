@@ -29,6 +29,7 @@
 #include "core/assets/gltf/gltf_audio_extension.h"
 #include "core/async/future.h"
 #include "core/common/filament_helpers.h"
+#include "core/common/invocable.h"
 #include "core/common/registry.h"
 #include "core/common/type_traits.h"
 #include "core/math/almost_equal.h"
@@ -41,6 +42,7 @@
 #include "core/ncsb/path_manager.h"
 #include "core/proto/any.proto.imp.h"
 #include "core/recipes/language/functions/math/math.h"
+#include "core/recipes/language/recipe_custom_statement.h"
 #include "core/recipes/language/recipe_scope.h"
 #include "core/recipes/language/recipe_utils.h"
 #include "core/recipes/language/registered_function.h"
@@ -359,20 +361,46 @@ RecipeSystem::RecipeSystem(BaseView& view) {
     return view.GetCameraManager().GetCamera()->GetNode();
   });
 
+  // TODO: Remove this function when deprecating KHR_behavior.
+  RegisterFunction("DebugLog",
+                   [](std::string message) { output::Recipe("%s", message); });
+
   recipe::RegisterMathAngleFunctions(this);
   recipe::RegisterMathArithmeticFunctions(this);
   recipe::RegisterMathBitWiseFunctions(this);
   recipe::RegisterMathConstants(this);
   recipe::RegisterMathExponentialFunctions(this);
+  recipe::RegisterMathHyperbolicFunctions(this);
+  recipe::RegisterMathMatrixFunctions(this);
   recipe::RegisterMathUtilityFunctions(this);
   recipe::RegisterMathVectorFunctions(this);
-  recipe::RegisterMathHyperbolicFunctions(this);
+}
+
+std::unique_ptr<RecipeCustomStatement> RecipeSystem::CreateCustomStatement(
+    absl::string_view name) const {
+  auto it = custom_statement_creators_.find(name);
+  if (it == custom_statement_creators_.end()) {
+    return {};
+  }
+  return it->second();
 }
 
 void RecipeSystem::RegisterFunctionImpl(
     absl::string_view name,
     std::unique_ptr<recipe::RegisteredFunction> function) {
   registered_functions_[std::string(name)] = std::move(function);
+}
+
+void RecipeSystem::RegisterCustomStatementTypeImpl(
+    absl::string_view name,
+    Invocable<std::unique_ptr<RecipeCustomStatement>()> creation_fn) {
+  auto [_, inserted] = custom_statement_creators_.insert(
+      {std::string(name), std::move(creation_fn)});
+
+  if (!inserted) {
+    IMP_LOG(imp::WARNING) << "Custom statement " << name
+                 << " already registered. Overwriting.";
+  }
 }
 
 }  // namespace imp

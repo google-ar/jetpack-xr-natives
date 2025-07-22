@@ -228,8 +228,10 @@ void RecipeEditorGraphBuilder::PopulateNode(
   graph_node.type_name = "Call Expression";
   graph_node.content = node.name;
 
+  int i = 0;
   for (const ValueConnection& connection : node.args) {
-    PopulateValueConnection(connection, graph_node);
+    PopulateValueConnection(connection, graph_node,
+                            absl::StrFormat("Arg%d", i++));
   }
 }
 

@@ -29,6 +29,7 @@
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
 #include "core/split_engine/materials/builtin/builtin_texture_external_material_assets.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/material_factory.h"
@@ -44,26 +45,28 @@ static constexpr absl::string_view kTextureParameter = "texture";
 }  // namespace
 
 Future<BuiltInMaterialPtr> BuiltInTextureExternalMaterial::Create(
-    BaseView& view,
+    BaseView& view, BridgeId bridge_id,
     const android_xr::schemas::BuiltInMaterialTextureExternal& spec) {
   Future<AssetPtr<MaterialAsset>> future = view.GetAssetManager().LoadMaterial(
       split_engine::kBuiltinTextureExternalMatCmat);
-  return future.Then(
-      [&view](AssetPtr<MaterialAsset> material_asset) -> BuiltInMaterialPtr {
-        return absl::WrapUnique(new BuiltInTextureExternalMaterial(
-            view, view.GetMaterialFactory().CreateMaterial(material_asset)));
-      });
+  return future.Then([&view, bridge_id](AssetPtr<MaterialAsset> material_asset)
+                         -> BuiltInMaterialPtr {
+    return absl::WrapUnique(new BuiltInTextureExternalMaterial(
+        view, bridge_id,
+        view.GetMaterialFactory().CreateMaterial(material_asset)));
+  });
 }
 
 BuiltInTextureExternalMaterial::BuiltInTextureExternalMaterial(
-    BaseView& view, OwnedMaterialPtr material)
-    : BuiltInCustomMaterial(std::move(material)), view_(view) {}
+    BaseView& view, BridgeId bridge_id, OwnedMaterialPtr material)
+    : BuiltInCustomMaterial(bridge_id, std::move(material)), view_(view) {}
 
 BuiltInMaterialPtr BuiltInTextureExternalMaterial::Duplicate() const {
   return absl::WrapUnique(new BuiltInTextureExternalMaterial(
-      view_, view_.GetMaterialFactory().WrapMaterial(
-                 filament::MaterialInstance::duplicate(
-                     GetMaterial()->GetFilamentMaterialInstance()))));
+      view_, GetBridgeId(),
+      view_.GetMaterialFactory().WrapMaterial(
+          filament::MaterialInstance::duplicate(
+              GetMaterial()->GetFilamentMaterialInstance()))));
 }
 
 absl::Status BuiltInTextureExternalMaterial::SetParameters(
@@ -93,9 +96,8 @@ absl::Status BuiltInTextureExternalMaterial::SetParameters(
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d", schema->texture()->texture_id()));
     }
-    filament::TextureSampler sampler =
-        ConvertSampler(*schema->texture()->sampler());
-    GetMaterial()->SetParameter(kTextureParameter, texture, sampler);
+    GetMaterial()->SetParameter(kTextureParameter, texture,
+                                ConvertSampler(schema->texture()->sampler()));
   }
   return absl::OkStatus();
 }

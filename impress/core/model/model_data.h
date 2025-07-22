@@ -136,6 +136,7 @@ class ModelData {
   using InteractivityNodeConfigurationId =
       ::imp::model::InteractivityNodeConfigurationId;
   using InteractivityNodeFlowId = ::imp::model::InteractivityNodeFlowId;
+  using InteractivityTypeId = ::imp::model::InteractivityTypeId;
 
   using InteractivityDeclarationId = ::imp::model::InteractivityDeclarationId;
 

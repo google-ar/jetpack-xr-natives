@@ -17,6 +17,7 @@
 #include <jni.h>
 
 #include <string>
+#include <utility>
 
 #include "absl/strings/string_view.h"
 #include "core/common/jni_helpers.h"
@@ -29,25 +30,28 @@ Typeface::Typeface(JNIEnv* env, absl::string_view family_name, jint style)
 
   auto create_method_handle = GetStaticMethodHandle(
       "create", "(Ljava/lang/String;I)Landroid/graphics/Typeface;");
-  jstring family_name_string = nullptr;
-  if (!family_name.empty()) {
-    family_name_string = ToString(Env(), family_name);
-  }
+  JniUniquePtr<jstring> family_name_string = ToJniString(Env(), family_name);
 
-  SetSelf(Env()->NewGlobalRef(
-      CallStaticObjectMethod(create_method_handle, family_name_string, style)));
+  JniUniquePtr<jobject> typeface =
+      WrapJni(Env(), CallStaticObjectMethod(create_method_handle,
+                                            family_name_string.get(), style));
+  SetSelf(LocalToGlobalRef(std::move(typeface)));
 }
 
 Typeface::Typeface(JNIEnv* env, jint style)
     : JavaWrapper(env, "android/graphics/Typeface") {
   auto default_field_handle =
       GetStaticFieldHandle("DEFAULT", "Landroid/graphics/Typeface;");
-  jobject default_typeface = GetStaticObjectField(default_field_handle);
+  JniUniquePtr<jobject> default_typeface =
+      WrapJni(Env(), GetStaticObjectField(default_field_handle));
 
   auto create_method_handle = GetStaticMethodHandle(
       "create", "(Landroid/graphics/Typeface;I)Landroid/graphics/Typeface;");
-  SetSelf(Env()->NewGlobalRef(
-      CallStaticObjectMethod(create_method_handle, default_typeface, style)));
+
+  JniUniquePtr<jobject> typeface =
+      WrapJni(Env(), CallStaticObjectMethod(create_method_handle,
+                                            default_typeface.get(), style));
+  SetSelf(LocalToGlobalRef(std::move(typeface)));
 }
 
 Typeface::Typeface(JNIEnv* env, jobject j_typeface)

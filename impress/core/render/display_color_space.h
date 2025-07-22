@@ -15,7 +15,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_RENDER_DISPLAY_COLOR_SPACE_H_
 #define THIRD_PARTY_IMPRESS_CORE_RENDER_DISPLAY_COLOR_SPACE_H_
 
-#include "core/render/android/platform_android_external_texture_surface.h"
+#include "core/media/media_color_space.h"
 
 namespace imp {
 enum class DisplayColorSpace {
@@ -23,8 +23,8 @@ enum class DisplayColorSpace {
   kP3,     // Display P3
 };
 
-DisplayColorSpace SurfaceColorSpaceToDisplayColorSpace(
-    SurfaceColorSpace surface_color_space);
+DisplayColorSpace MediaColorSpaceToDisplayColorSpace(
+    MediaColorSpace media_color_space);
 
 }  // namespace imp
 

@@ -46,12 +46,6 @@ TextureExternalMaterial::Create(imp::BaseView& view) {
           });
 }
 
-void TextureExternalMaterial::SetTexture(
-    imp::OwnedOrBorrowedTexturePtr texture) {
-  texture_ = std::move(texture);
-  MarkParametersDirty();
-}
-
 TextureExternalMaterial::TextureExternalMaterial(
     imp::BaseView& view,
     imp::split_engine::PlaceholderOrBuiltInMaterialPtr material)
@@ -59,6 +53,8 @@ TextureExternalMaterial::TextureExternalMaterial(
                           android_xr::schemas::BuiltInMaterialParameters::
                               BuiltInMaterialTextureExternalParameters,
                           std::move(material)) {}
+
+TextureExternalMaterial::~TextureExternalMaterial() { Cleanup(); }
 
 flatbuffers::Offset<void> TextureExternalMaterial::SerializeParameters(
     flatbuffers::FlatBufferBuilder& fbb,
@@ -74,4 +70,11 @@ flatbuffers::Offset<void> TextureExternalMaterial::SerializeParameters(
              fbb, texture_parameter)
       .Union();
 }
+
+void TextureExternalMaterial::SetTexture(
+    imp::OwnedOrBorrowedTexturePtr texture) {
+  texture_ = std::move(texture);
+  MarkParametersDirty();
+}
+
 }  // namespace android_xr

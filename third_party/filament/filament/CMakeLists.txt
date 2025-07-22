@@ -265,6 +265,13 @@ set(MATERIAL_SRCS
         src/materials/vsmMipmap.mat
 )
 
+if (NOT FILAMENT_DISABLE_GTAO)
+    list(APPEND MATERIAL_SRCS
+        src/materials/ssao/gtao.mat
+        src/materials/ssao/gtaoBentNormals.mat
+    )
+endif()
+
 set(MATERIAL_FL0_SRCS
         src/materials/defaultMaterial.mat
         src/materials/skybox.mat
@@ -314,12 +321,14 @@ if (FILAMENT_FORCE_PROFILING_MODE)
     add_definitions(-DFILAMENT_FORCE_PROFILING_MODE)
 endif()
 
+if (FILAMENT_DISABLE_GTAO)
+    add_definitions(-DFILAMENT_DISABLE_GTAO)
+endif()
+
 # ==================================================================================================
 # Definitions
 # ==================================================================================================
 
-# "2" corresponds to SYSTRACE_TAG_FILEMENT (See: utils/Systrace.h)
-add_definitions(-DSYSTRACE_TAG=2)
 add_definitions(-DFILAMENT_DFG_LUT_SIZE=${DFG_LUT_SIZE})
 add_definitions(
     -DFILAMENT_PER_RENDER_PASS_ARENA_SIZE_IN_MB=${FILAMENT_PER_RENDER_PASS_ARENA_SIZE_IN_MB}
@@ -463,6 +472,30 @@ add_custom_command(
         APPEND
 )
 
+if (NOT FILAMENT_DISABLE_GTAO)
+    add_custom_command(
+            OUTPUT "${MATERIAL_DIR}/gtao.filamat"
+            DEPENDS src/materials/ssao/ssaoUtils.fs
+            DEPENDS src/materials/ssao/ssct.fs
+            DEPENDS src/materials/utils/depthUtils.fs
+            DEPENDS src/materials/utils/geometry.fs
+            DEPENDS src/materials/ssao/gtaoImpl.fs
+            DEPENDS src/materials/ssao/ssctImpl.fs
+            APPEND
+    )
+
+    add_custom_command(
+            OUTPUT "${MATERIAL_DIR}/gtaoBentNormals.filamat"
+            DEPENDS src/materials/ssao/ssaoUtils.fs
+            DEPENDS src/materials/ssao/ssct.fs
+            DEPENDS src/materials/utils/depthUtils.fs
+            DEPENDS src/materials/utils/geometry.fs
+            DEPENDS src/materials/ssao/gtaoImpl.fs
+            DEPENDS src/materials/ssao/ssctImpl.fs
+            APPEND
+    )
+endif()
+
 add_custom_command(
         OUTPUT "${MATERIAL_DIR}/bilateralBlur.filamat"
         DEPENDS src/materials/ssao/ssaoUtils.fs
@@ -567,6 +600,10 @@ target_link_libraries(${TARGET} PUBLIC utils)
 target_link_libraries(${TARGET} PUBLIC filaflat)
 target_link_libraries(${TARGET} PUBLIC filabridge)
 target_link_libraries(${TARGET} PUBLIC ibl-lite)
+
+if (FILAMENT_USE_ABSEIL_LOGGING)
+    target_link_libraries(${TARGET} PUBLIC absl::log)
+endif()
 
 if (FILAMENT_ENABLE_FGVIEWER)
     target_link_libraries(${TARGET} PUBLIC fgviewer)

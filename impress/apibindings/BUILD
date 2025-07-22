@@ -28,52 +28,109 @@ package(
     ],
 )
 
-cc_library(
-    name = "impress_api_view",
+filegroup(
+    name = "impress_jni_srcs",
     srcs = [
-        "impress_api_view.cc",
+        "create_view.cc",
+        "impress_api.cc",
     ],
+)
+
+# A list of the common dependencies between the production and test versions of the Impress JNI
+# library.
+_IMPRESS_JNI_COMMON_DEPS = [
+    ":asset_animator",
+    ":asset_loader",
+    ":jni_conversion_utils",
+    ":stereo_surface",
+    "//core/common:log",
+    "@com_google_absl//absl/log:check",
+    "@com_google_absl//absl/status",
+    "@com_google_absl//absl/status:statusor",
+    "@com_google_absl//absl/strings:cord",
+    "@com_google_absl//absl/strings:string_view",
+    "@third_party//filament/filament:filament_hdrs",
+    "@third_party//filament/libs:utils_hdrs",
+    "//:api",
+    "//core/common:buffer_access",
+    "//core/common:jni_helpers",
+    "//core/input",
+    "//core/material_library:fbs",
+    "//core/material_library:generic_material_spec",
+    "//core/math",
+    "//core/media:media_color_space",
+    "//core/media:media_type",
+    "//core/ncsb",
+    "//core/render:content_security_level",
+    "//core/view/platforms/android/jni_helpers:exception_helper",
+    "//core/view/platforms/android/wrappers:graphics",
+    ":impress_api_view_header",
+] + if_non_android(["@bazel_tools//tools/jdk:jni"])
+
+# A list of the common dependencies between the production and test versions of the Impress API
+# View.
+_IMPRESS_API_VIEW_COMMON_DEPS = [
+    ":asset_animator",
+    ":asset_loader",
+    ":asset_ptr_map",
+    ":bindings_material",
+    ":bindings_object",
+    ":bindings_texture",
+    ":stereo_surface",
+    "@com_google_absl//absl/container:flat_hash_map",
+    "@com_google_absl//absl/container:flat_hash_set",
+    "//core/common:log",
+    "@com_google_absl//absl/log:check",
+    "@com_google_absl//absl/status",
+    "@com_google_absl//absl/status:statusor",
+    "@com_google_absl//absl/strings:string_view",
+    "@third_party//filament/filament:filament_hdrs",
+    "//:api",
+    "//:impl_full",
+    "//:platform_android",
+    "//core/common:jni_helpers",
+    "//core/material_library:generic_material_parameters",
+    "//core/material_library:generic_material_spec",
+    "//core/math",
+    "//core/media:media_color_space",
+    "//core/media:media_type",
+    "//core/render:content_security_level",
+    "//core/render/android:platform_android_external_texture_surface",
+    "//core/split_engine/materials:split_engine_generic_material",
+    "//core/view/framework:framework_proto_cc",
+    "//core/view/platforms/android/wrappers:graphics",
+    "//core/view/utils:frame_time",
+    "@third_party//split_engine/materials:water_reflection_material",
+    "@mediapipe//mediapipe/framework/port:status",
+]
+
+cc_library(
+    name = "impress_api_view_header",
     hdrs = ["impress_api_view.h"],
     copts = imp_google3_copts(),
     linkstatic = True,
-    deps = [
-        ":asset_animator",
-        ":asset_loader",
-        ":asset_ptr_map",
-        ":bindings_material",
-        ":bindings_object",
-        ":bindings_texture",
-        ":stereo_surface",
-        "//:api",
-        "//:impl_full",
-        "//:platform_android",
+    deps = _IMPRESS_API_VIEW_COMMON_DEPS,
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "impress_api_view",
+    srcs = ["impress_api_view.cc"],
+    copts = imp_google3_copts(),
+    linkstatic = True,
+    deps = _IMPRESS_API_VIEW_COMMON_DEPS + [
+        ":impress_api_view_header",
         "//core/assets",
         "//core/async:future",
-        "//core/common:jni_helpers",
-        "//core/common:log",
         "//core/lighting:environment_light",
         "//core/lighting:image_based_lighting_asset",
-        "//core/math",
-        "//core/media:media_type",
         "//core/ncsb",
         "//core/render",
-        "//core/render/android:platform_android_external_texture_surface",
         "//core/split_engine:split_engine_serializer",
         "//core/split_engine/materials:split_engine_material",
         "//core/view/framework",
-        "//core/view/framework:framework_proto_cc",
-        "//core/view/platforms/android/wrappers:graphics",
-        "//core/view/utils:frame_time",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/strings:string_view",
-        "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/libs:utils_hdrs",
-        "@third_party//split_engine/materials:water_reflection_material",
     ],
     alwayslink = 1,
 )
@@ -125,32 +182,23 @@ cc_library(
 
 cc_library(
     name = "impress_jni",
-    srcs = [
-        "create_view.cc",
-        "impress_api.cc",
-    ],
+    srcs = [":impress_jni_srcs"],
     copts = imp_google3_copts(),
     linkstatic = True,
-    deps = [
-        ":asset_animator",
-        ":asset_loader",
-        ":impress_api_view",
-        ":stereo_surface",
-        "//:api",
-        "//core/common:buffer_access",
-        "//core/common:jni_helpers",
-        "//core/common:log",
-        "//core/input",
-        "//core/media:media_type",
-        "//core/ncsb",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings:cord",
-        "@com_google_absl//absl/strings:string_view",
-        "@third_party//filament/filament:filament_hdrs",
-        "@third_party//filament/libs:utils_hdrs",
-    ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
+    deps = _IMPRESS_JNI_COMMON_DEPS + [":impress_api_view"],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "test_impress_jni",
+    testonly = True,
+    srcs = [":impress_jni_srcs"],
+    copts = imp_google3_copts(),
+    linkstatic = True,
+    deps = _IMPRESS_JNI_COMMON_DEPS + [
+        ":impress_api_test_helper",
+        ":test_impress_api_view",
+    ],
     alwayslink = 1,
 )
 
@@ -163,6 +211,7 @@ cc_library(
         "//core/async:future",
         "//core/common:log",
         "//core/math",
+        "//core/media:media_color_space",
         "//core/media:media_type",
         "//core/ncsb",
         "//core/render",
@@ -219,9 +268,25 @@ cc_library(
     alwayslink = 1,
 )
 
-# Native JNI library for the Impress API Bindings.
-# Note: This rule will be stripped away in the OSS repo, because android_jni_library is not
-# supported in Bazel.
+cc_library(
+    name = "jni_conversion_utils",
+    srcs = ["jni_conversion_utils.cc"],
+    hdrs = ["jni_conversion_utils.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        "//core/common:jni_helpers",
+        "//core/material_library:fbs",
+        "//core/material_library:generic_material_spec",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
+        "@third_party//filament/filament:filament_hdrs",
+    ] + if_non_android([
+        "@bazel_tools//tools/jdk:jni",
+    ]),
+    alwayslink = 1,
+)
 
 # Native JNI library for the Impress API Bindings. See THIRD_PARTY_NOTICES.txt for license info.
 # Example build command:

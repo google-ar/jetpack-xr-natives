@@ -30,6 +30,7 @@
 #include "core/config.h"
 #include "core/math/vec.h"
 #include "core/text/text_helpers.h"
+#include "core/view/base_view.h"
 
 namespace imp {
 
@@ -105,16 +106,17 @@ Future<ScopedCanvas::FontInfo> AsyncCanvasSourceWrapper::GetFontInfo(
 };
 
 std::unique_ptr<AsyncScopedCanvas> AsyncCanvasSourceWrapper::StartDrawing(
-    uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) {
+    BaseView& view, uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) {
   return absl::WrapUnique(new AsyncScopedCanvasWrapper(
-      source_->StartDrawing(pixel_size, draw_mode)));
+      source_->StartDrawing(view, pixel_size, draw_mode)));
 }
 
 std::unique_ptr<AsyncScopedCanvas> AsyncCanvasSourceWrapper::StartDrawing(
-    uint2 pixel_size, ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
+    BaseView& view, uint2 pixel_size,
+    ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
     ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) {
   return absl::WrapUnique(new AsyncScopedCanvasWrapper(source_->StartDrawing(
-      pixel_size, std::move(on_texture_changed_fn), draw_mode, loc)));
+      view, pixel_size, std::move(on_texture_changed_fn), draw_mode, loc)));
 }
 
 ScopedCanvas::TextMetrics AsyncCanvasSourceWrapper::MeasureGlyphSync(

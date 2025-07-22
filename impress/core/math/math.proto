@@ -114,6 +114,38 @@ message Box {
   Float3 halfExtent = 2;
 }
 
+// Represents a 2x2 matrix of floats, convertible to ::imp::mat2f.
+message Mat2f {
+  option (imp.native_type) = "::imp::mat2f";
+  option (imp.native_include) =
+      "core/math/mat_proto_message.h";
+  option (imp.no_codegen) = true;
+
+  // A 2x2 matrix of floats.
+  //
+  // The floats are arranged in column major order:
+  //   00 02
+  //   01 03
+  Float2 m0 = 1;
+  Float2 m1 = 2;
+}
+
+// Represents a 2x2 matrix of doubles, convertible to ::imp::mat2.
+message Mat2 {
+  option (imp.native_type) = "::imp::mat2";
+  option (imp.native_include) =
+      "core/math/mat_proto_message.h";
+  option (imp.no_codegen) = true;
+
+  // A 2x2 matrix of doubles.
+  //
+  // The doubles are arranged in column major order:
+  //   00 02
+  //   01 03
+  Double2 m0 = 1;
+  Double2 m1 = 2;
+}
+
 // Represents a 3x3 matrix of floats, convertible to ::imp::mat3f.
 message Mat3f {
   option (imp.native_type) = "::imp::mat3f";

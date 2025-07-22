@@ -52,9 +52,11 @@ class Collidable {
   bool IsMovable() const { return is_movable_; }
 
   // Returns a Bullet collision shape.
-  btCollisionShape* GetCollidableShape();
+  btCollisionShape* GetBtCollisionShape() const;
 
-  float3 GetCollidableCenter();
+  // Returns the position of the center of the Bullet collision shape in local
+  // coordinate system.
+  float3 GetCollidableCenter() const;
 
   physics::CollidableType GetCollidableType() const { return type_; }
 
@@ -65,7 +67,8 @@ class Collidable {
   // btRigidBody, btGhostObject) in subclass as the input.
   CollisionShape GetCollisionShape(const btTransform& transform) const;
 
-  void ApplyScalingToBulletCollider();
+  btTransform GetNodeBtTransform() const;
+  void ApplyScalingToBulletCollider() const;
 
 #if IMP_RUNTIME(DEV)
   // Takes the transformation of the instance of btCollisionObject (e.g.
@@ -77,6 +80,7 @@ class Collidable {
   std::unique_ptr<CollidableShape> collidable_shape_;
   bool is_movable_ = true;
   physics::CollidableType type_;
+  NodeHandle node_;
 };
 
 }  // namespace imp

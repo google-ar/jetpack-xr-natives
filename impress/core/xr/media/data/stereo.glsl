@@ -40,12 +40,14 @@ vec4 sRGBToLinear(vec4 color) {
 // Calculate new stereo UVs using the given UVs and stereo encoding.
 // encodingType values match the constants provides above.
 // isLeftEye is true if the left eye is being rendered.
-float2 CalculateStereoUvs(float2 originalUvs, int encodingType, bool isLeftEye) {
-  float2 newUvs = float2(originalUvs.x, originalUvs.y);
-  float eyeUvOffset = isLeftEye ? 0.0 : 0.5;
+highp float2 CalculateStereoUvs(highp float2 originalUvs, int encodingType, bool isLeftEye) {
+  highp float2 newUvs = float2(originalUvs.x, originalUvs.y);
   if (encodingType == kLeftRight) {
+    highp float eyeUvOffset = isLeftEye ? 0.0 : 0.5;
     newUvs.x = (newUvs.x * 0.5) + eyeUvOffset;
   } else if (encodingType == kTopBottom) {
+    // The [top, bottom] halves should be routed to the [left, right] eyes.
+    highp float eyeUvOffset = isLeftEye ? 0.5 : 0.0;
     newUvs.y = (newUvs.y * 0.5) + eyeUvOffset;
   }
   return newUvs;

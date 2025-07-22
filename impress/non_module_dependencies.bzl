@@ -309,8 +309,8 @@ def non_module_dependencies():
         build_file = "//:bazel/build_files/SDL2.BUILD",
         patch_args = ["-p1"],
         patches = [
-            "@third_party//:bazel/patches/SDL2.patch",
-            "@third_party//:bazel/patches/SDL2_config.patch",
+            "@third_party//:SDL2.patch",
+            "//:bazel/patches/SDL2_config.patch",
         ],
         sha256 = "a0b77c453274401dd88325ceeae8ce2b41402514081e677209057936e30f44a6",
         strip_prefix = "libsdl-org-SDL-e9fc66a",

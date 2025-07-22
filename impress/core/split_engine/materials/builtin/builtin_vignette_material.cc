@@ -28,6 +28,7 @@
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
 #include "core/split_engine/materials/builtin/builtin_vignette_material_assets.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/material_factory.h"
@@ -36,25 +37,29 @@
 namespace imp::split_engine {
 
 Future<BuiltInMaterialPtr> BuiltInVignetteMaterial::Create(
-    BaseView& view, const android_xr::schemas::BuiltInMaterialE3ca0ab9& spec) {
+    BaseView& view, BridgeId bridge_id,
+    const android_xr::schemas::BuiltInMaterialE3ca0ab9& spec) {
   Future<AssetPtr<MaterialAsset>> future = view.GetAssetManager().LoadMaterial(
       split_engine::kBuiltinVignetteMatCmat);
-  return future.Then(
-      [&view](AssetPtr<MaterialAsset> material_asset) -> BuiltInMaterialPtr {
-        return absl::WrapUnique(new BuiltInVignetteMaterial(
-            view, view.GetMaterialFactory().CreateMaterial(material_asset)));
-      });
+  return future.Then([&view, bridge_id](AssetPtr<MaterialAsset> material_asset)
+                         -> BuiltInMaterialPtr {
+    return absl::WrapUnique(new BuiltInVignetteMaterial(
+        view, bridge_id,
+        view.GetMaterialFactory().CreateMaterial(material_asset)));
+  });
 }
 
 BuiltInVignetteMaterial::BuiltInVignetteMaterial(BaseView& view,
+                                                 BridgeId bridge_id,
                                                  OwnedMaterialPtr material)
-    : BuiltInCustomMaterial(std::move(material)), view_(view) {}
+    : BuiltInCustomMaterial(bridge_id, std::move(material)), view_(view) {}
 
 BuiltInMaterialPtr BuiltInVignetteMaterial::Duplicate() const {
   return absl::WrapUnique(new BuiltInVignetteMaterial(
-      view_, view_.GetMaterialFactory().WrapMaterial(
-                 filament::MaterialInstance::duplicate(
-                     GetMaterial()->GetFilamentMaterialInstance()))));
+      view_, GetBridgeId(),
+      view_.GetMaterialFactory().WrapMaterial(
+          filament::MaterialInstance::duplicate(
+              GetMaterial()->GetFilamentMaterialInstance()))));
 }
 
 absl::Status BuiltInVignetteMaterial::SetParameters(

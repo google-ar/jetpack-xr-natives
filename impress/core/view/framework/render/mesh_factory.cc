@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -343,6 +344,13 @@ class ProceduralMeshBuilder {
 
     // Calculate the tangent using the bitangent and normal.
     tangent = cross(bitangent, normal);
+    float tangent_norm = norm(tangent);
+    if (tangent_norm > std::numeric_limits<float>::epsilon()) {
+      tangent /= tangent_norm;
+    } else {
+      bitangent = kBack;
+      tangent = normalize(cross(bitangent, normal));
+    }
 
     // Calculate the tangents from the three direction vectors.
     space_data->tangents =
@@ -1034,9 +1042,8 @@ MeshPtr MeshFactory::CreateCapsule(CreateCapsuleSettings settings,
   float3 center = settings.center;
   float height = settings.height;
 
-  // Cap the height so it can never be smaller than the diameter.
-  // Preserves the definition of a capsule, and also aligns it
-  // with the behavior in similar engines like Unity.
+  // Cap the height so it can never be smaller than the diameter so that it
+  // preserves the definition of a capsule.
   if (height < diameter) {
     height = diameter;
   }
@@ -1341,6 +1348,8 @@ MeshPtr MeshFactory::CreateQuad(CreateQuadSettings settings,
   UVScaler scaler{settings.flip_uv,
                   (-scalerExtent * settings.size) + settings.center,
                   (scalerExtent * settings.size) + settings.center};
+  const quatf quad_packed_tangent_frame =
+      mat3f::packTangentFrame({kRight, kUp, kBack});
   for (int i = 0; i < mesh_data->GetDescription().vertex_count; ++i) {
     float3 vertex = {(kQuadPositions[i].xy * settings.size) + settings.center,
                      settings.z};
@@ -1348,7 +1357,7 @@ MeshPtr MeshFactory::CreateQuad(CreateQuadSettings settings,
     mesh_data->VertexAttributeAt<float2>(i, VertexAttribute::UV0) =
         scaler.UVFromPos(vertex);
     mesh_data->VertexAttributeAt<quatf>(i, VertexAttribute::TANGENTS) =
-        kIdentityQuatf;
+        quad_packed_tangent_frame;
     if (settings.color) {
       mesh_data->VertexAttributeAt<float4>(i, VertexAttribute::COLOR) =
           *settings.color;

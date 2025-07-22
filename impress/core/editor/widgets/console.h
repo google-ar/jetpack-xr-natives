@@ -17,11 +17,13 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_CONSOLE_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_CONSOLE_H_
 
-#include <map>
+#include <cstddef>
 #include <string>
 #include <vector>
 
+#include "absl/base/thread_annotations.h"
 #include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
 #include "core/common/platform_helpers.h"
 #include "core/common/rememberer.h"
 #include "core/editor/widget.h"
@@ -59,12 +61,17 @@ class Console : public Widget, public imp::Rememberer {
   BaseView& view_;
   // Stores a list of all of the logs; it is used to easily keep track of their
   // ordering.
-  std::vector<ConsoleLog> all_logs_ = {};
+  absl::Mutex logs_mutex_;
+  std::vector<ConsoleLog> all_logs_ ABSL_GUARDED_BY(logs_mutex_) = {};
+  // The all_logs_ vector acts as a circular buffer, so this is the index of the
+  // first log in the buffer. When max logs are reached, early logs are
+  // overwritten.
+  size_t log_start_index_ ABSL_GUARDED_BY(logs_mutex_) = 0;
   // Stores the count of each type of log to use for setting the ListBox size.
-  tsl::robin_map<output::OutputKind, int> log_count_ = {
-      {output::OutputKind::kInfo, 0},
-      {output::OutputKind::kWarning, 0},
-      {output::OutputKind::kError, 0}};
+  tsl::robin_map<output::OutputKind, int> log_count_
+      ABSL_GUARDED_BY(logs_mutex_) = {{output::OutputKind::kInfo, 0},
+                                      {output::OutputKind::kWarning, 0},
+                                      {output::OutputKind::kError, 0}};
   // Current selected log in the console.
   int selected_item_index_ = 0;
   // Impress textures for the icons.

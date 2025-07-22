@@ -18,8 +18,8 @@
 
 #include "MetalContext.h"
 
+#include "filament/libs/utils/include/utils/Logger.h"
 #include "filament/libs/utils/include/utils/Panic.h"
-#include "filament/libs/utils/include/utils/Log.h"
 #include "filament/libs/utils/include/utils/trap.h"
 
 #include <thread>
@@ -77,8 +77,7 @@ void MetalBufferPool::releaseBuffer(MetalBufferPoolEntry const *stage) noexcept 
 
     auto iter = mUsedStages.find(stage);
     if (iter == mUsedStages.end()) {
-        utils::slog.e << "Unknown Metal buffer: " << stage->capacity << " bytes"
-                << utils::io::endl;
+        LOG(ERROR) << "Unknown Metal buffer: " << stage->capacity << " bytes";
         return;
     }
     stage->lastAccessed = mCurrentFrame;

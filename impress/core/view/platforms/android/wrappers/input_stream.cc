@@ -31,6 +31,7 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "core/async/future_interrupter.h"
+#include "core/common/jni_helpers.h"
 #include "core/monitor/profiling_clock.h"
 #include "core/resources/download_progress_info.h"
 
@@ -38,15 +39,6 @@ namespace imp {
 namespace {
 constexpr absl::Duration kProgressUpdateIntervalLimit = absl::Milliseconds(16);
 constexpr int kMaxZeroLengthReads = 5;
-
-bool ExceptionPrintClear(JNIEnv* env) {
-  if (env->ExceptionCheck()) {
-    env->ExceptionDescribe();
-    env->ExceptionClear();
-    return true;
-  }
-  return false;
-}
 }  // namespace
 
 int InputStream::ReadChunk(
@@ -59,20 +51,20 @@ int InputStream::ReadChunk(
     amount_to_read = kBufferSize;
   }
   // IMP_LOG(imp::ERROR) << "Impress: amount_to_read: " << amount_to_read;
-  jint size = CallIntMethod(read_, GetByteArray(), 0, amount_to_read);
+  jint size = CallIntMethod(read_, chunk_byte_array_.get(), 0, amount_to_read);
   if (env->ExceptionCheck()) {
     // TODO: Handle read errors.
     return -1;
   }
   if (size > 0) {
-    receive_chunk(GetByteArray(), size);
+    receive_chunk(chunk_byte_array_.get(), size);
   }
   // IMP_LOG(imp::ERROR) << "Impress: return size" << size;
   return size;
 }
 
 absl::StatusOr<absl::Cord> InputStream::BlockingReadFromJavaInputStream(
-    JNIEnv* env, std::string string_uri, size_t content_length,
+    JNIEnv* env, const std::string& string_uri, size_t content_length,
     std::shared_ptr<resources::DownloadProgressInfo> download_progress_info,
     std::vector<FutureInterrupter> interrupters) {
   for (const FutureInterrupter& interrupter : interrupters) {
@@ -125,7 +117,7 @@ absl::StatusOr<absl::Cord> InputStream::BlockingReadFromJavaInputStream(
       last_progress_update_time = current_time;
     }
 
-    if (ExceptionPrintClear(env)) {
+    if (JavaExceptionPrintClear(env)) {
       // TODO: Handle read errors.
       return absl::InternalError("Failed to read from InputStream");
     }

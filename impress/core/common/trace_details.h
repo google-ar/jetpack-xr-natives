@@ -112,12 +112,12 @@ BuildTraceBlockStorage(const absl::string_view function_name,
       ::imp::trace::details::NullTerminatedName<                        \
           kImpressTraceFunctionName.size()>(kImpressTraceFunctionName); \
   (void)kImpressTraceFunctionNameStorage;                               \
-  SYSTRACE_NAME(kImpressTraceFunctionNameStorage.data())
+  IMP_TRACE_PRIVATE_IMPL(kImpressTraceFunctionNameStorage.data())
 
 #define IMP_TRACE_PRIVATE_TEMPLATED(types...) \
   IMP_TRACE_PRIVATE_NAME_TEMPLATED(IMP_FUNCTION_NAME(), types)
 
-#define IMP_TRACE_PRIVATE_NAME(name) SYSTRACE_NAME(name)
+#define IMP_TRACE_PRIVATE_NAME(name) IMP_TRACE_PRIVATE_IMPL(name)
 
 #define IMP_TRACE_PRIVATE_NAME_TEMPLATED(name, types...)                    \
   static constexpr absl::string_view kImpressTraceName = name;              \
@@ -130,7 +130,7 @@ BuildTraceBlockStorage(const absl::string_view function_name,
                                          kImpressTraceTemplateArgs.size()>( \
           kImpressTraceName, kImpressTraceTemplateArgs);                    \
   (void)kImpressTraceNameStorage;                                           \
-  SYSTRACE_NAME(kImpressTraceNameStorage.data())
+  IMP_TRACE_PRIVATE_IMPL(kImpressTraceNameStorage.data())
 
 #define IMP_TRACE_PRIVATE_BLOCK(block_context)                               \
   constexpr size_t IMP_TRACE_SMASH(kImpressTraceBlockLine, __LINE__) =       \
@@ -152,6 +152,7 @@ BuildTraceBlockStorage(const absl::string_view function_name,
           IMP_TRACE_SMASH(kImpressTraceBlockLine, __LINE__)>(                \
           kImpressTraceFunctionName, block_context);                         \
   /* Emit a trace event using the generated string storage. */               \
-  SYSTRACE_NAME(IMP_TRACE_SMASH(kImpressTraceBlockNameStorage, __LINE__).data())
+  IMP_TRACE_PRIVATE_IMPL(                                                    \
+      IMP_TRACE_SMASH(kImpressTraceBlockNameStorage, __LINE__).data())
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_COMMON_TRACE_DETAILS_H_

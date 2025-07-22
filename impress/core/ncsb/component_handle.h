@@ -89,6 +89,12 @@ class ComponentHandle {
     sink.Append(ToString(component));
   }
 
+  // Necessary for absl hashing
+  template <typename H>
+  friend H AbslHashValue(H hash, const ComponentHandle<T>& handle) {
+    return H::combine(std::move(hash), absl::HashOf(handle.component_));
+  }
+
  private:
   void DCheckIsValid() const;
 

@@ -29,7 +29,6 @@
 
 namespace imp::editor {
 
-// TODO: unify the previewer file->load code in here.
 class FileDragAndDrop : public Widget, public Rememberer {
  public:
   explicit FileDragAndDrop(BaseView& view);

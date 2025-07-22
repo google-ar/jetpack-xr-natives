@@ -56,6 +56,8 @@ SVXRPlaneMaterial::SVXRPlaneMaterial(
                               BuiltInMaterialbd7fe08cParameters,
                           std::move(material)) {}
 
+SVXRPlaneMaterial::~SVXRPlaneMaterial() { Cleanup(); }
+
 flatbuffers::Offset<void> SVXRPlaneMaterial::SerializeParameters(
     flatbuffers::FlatBufferBuilder& fbb,
     imp::split_engine::BuiltInTextureParameterCreator&

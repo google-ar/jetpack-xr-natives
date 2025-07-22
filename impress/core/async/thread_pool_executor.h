@@ -73,6 +73,10 @@ class ThreadPoolExecutor : public Executor {
   // automatically run tasks.
   bool IsPumpingRequired() override;
 
+  // Returns the number of pending tasks waiting to be executed at the
+  // next explicit pump/drain.
+  int GetPendingTaskCount() override;
+
  private:
 #if IMP_THREADS(GOOGLE3)
   class WorkerThread : public Thread {

@@ -59,6 +59,7 @@ class RecipeEditor : public Widget, public imp::Rememberer {
   void DrawGraph();
   void DrawRecipeVariables();
   void DrawSearchBar();
+  void DrawCreateNodePopup();
 
   void DrawNode(const RecipeEditorGraph::Node& node);
   void DrawLink(const RecipeEditorGraph::Link& link);
@@ -79,6 +80,9 @@ class RecipeEditor : public Widget, public imp::Rememberer {
 
   std::string search_buffer_;
   bool search_selection_changed_ = false;
+  // According to ImGui documentation, OpenPopup should only be called once, not
+  // on every frame. So we achieve this through create_node_popup_open_.
+  bool create_node_popup_open_ = false;
   size_t search_result_index_ = 0;
   std::vector<RecipeEditorGraph::NodeId> search_results_;
 };

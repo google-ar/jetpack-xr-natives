@@ -49,6 +49,8 @@ class ViewState : public window::FilamentHost::State {
 
   bool ShouldUseSystemFrameScheduledHandler() const override;
 
+  bool ShouldPreinitializeMetalPlatform() const override;
+
  protected:
   using RenderResult = window::FilamentHost::RenderResult;
   using RenderResultFlags = window::FilamentHost::RenderResultFlags;

@@ -24,6 +24,10 @@ namespace android_xr.schemas;
 
 // LINT.IfChange
 
+// LINT.IfChange(khronos_pbr_material_spec_conversion_schema)
+
+// LINT.IfChange(generic_material_spec_jni_conversion_schema)
+
 // These enums are used to determine which material to load from the material
 // library.
 enum GenericMaterialLightingModel : uint8 {
@@ -50,6 +54,9 @@ enum GenericMaterialDepthClearMaterial : uint8  {
   Enabled = 1,
 }
 
+// LINT.ThenChange(//depot/google3/third_party/impress/java/com/google/ar/imp/apibindings/KhronosPbrMaterialSpec.java:khronos_pbr_material_spec_conversion_bindings)
+// LINT.ThenChange(//depot/google3/third_party/impress/apibindings/jni_conversion_utils.cc:generic_material_spec_jni_conversion_bindings)
+
 // This table is used to determine which material to load from the material
 // library.
 table GenericMaterialSpec {
@@ -62,6 +69,7 @@ table GenericMaterialSpec {
 root_type GenericMaterialSpec;
 
 // LINT.IfChange(texture_sampler_conversion_schema)
+// LINT.IfChange(texture_sampler_jni_conversion_schema)
 
 // These enums are used to determine how to sample textures in materials.
 enum WrapMode : uint8 {
@@ -101,6 +109,7 @@ enum CompareFunc : uint8 {
 }
 
 // LINT.ThenChange(//depot/google3/third_party/impress/java/com/google/ar/imp/apibindings/TextureSampler.java:texture_sampler_conversion_bindings)
+// LINT.ThenChange(//depot/google3/third_party/impress/apibindings/jni_conversion_utils.cc:texture_sampler_jni_conversion_bindings)
 
 table TextureSampler {
   min_filter : MinFilter (id: 0);
@@ -452,6 +461,7 @@ enum BuiltInMaterial1b616c8aShapeType : uint8 {
 
 table BuiltInMaterial1b616c8a {
   shape: BuiltInMaterial1b616c8aShapeType (id: 0);
+  use_super_sampling: Bool (id: 1);
 }
 
 enum BuiltInMaterial1b616c8aStereoType : uint8 {
@@ -465,10 +475,77 @@ enum BuiltInMaterial1b616c8aStereoType : uint8 {
   INTERLEAVED_RIGHT_PRIMARY_WITH_DEPTH = 7,
 }
 
+enum ColorStandard : int {
+  // Default value when the color standard is not specified.
+  UNSPECIFIED = 0,
+  BT709 = 1,
+  BT601_PAL = 2,
+  BT2020 = 6,
+  BT601_525 = 0xf0,
+  DISPLAY_P3 = 0xf1,
+  DCI_P3 = 0xf2,
+  ADOBE_RGB = 0xf3,
+}
+
+enum ColorTransfer : int {
+  // Default value when the color transfer is not specified.
+  UNSPECIFIED = 0,
+  LINEAR = 1,
+  SRGB = 2,
+  SDR = 3,
+  GAMMA_2_2 = 10,
+  ST2084 = 6,
+  HLG = 7,
+}
+
+enum ColorRange : int {
+  // Default value when the color range is not specified.
+  UNSPECIFIED = 0,
+  FULL = 1,
+  LIMITED = 2,
+  EXTENDED = 3,
+}
+
+// Color space parameters for JXR media content.
+// These parameters (color standard, color transfer, and color range) should be
+// set if accurate color correction is required. If any field is UNSPECIFIED,
+// these parameters are ignored, and the backend falls back to a best-effort
+// color correction mode.
+//
+// The max_luminance field corresponds to the Max Content Light Level (MaxCLL)
+// metadata of the content. It specifies the maximum peak luminance, in nits.
+// Max luminance should be between 1 and 65535; a value of 0 is acceptable, and
+// indicates that this information is not available. In this case, the backend
+// will use the default max luminance value of the transfer function, for
+// example, 10000 nits for ST2084, 1000 nits for HLG, etc. If your content is
+// professionally mastered and has a lower max luminance, like 500 nits, using
+// the default max luminance value results in your content being rendered on the
+// screen darker than intended.
+//
+// In best-effort mode (when any of the color space parameters are UNSPECIFIED),
+// the backend attempts to use ADataSpace metadata from the content buffer.
+// This metadata is not always available and does not include max content light
+// level (MaxCLL). If metadata is absent, the backend assumes sRGB content
+// (BT.709 color space, sRGB transfer, full range), which implicitly has a
+// standard peak luminance assumption.
+//
+// For optimal color correction of non-sRGB content, it is highly recommended to
+// specify accurate color space parameters, including the correct max content
+// light level (MaxCLL), when available from the content metadata. Specifically,
+// for HDR videos, you can extract this information from the container using
+// ExoPlayer.
+table BuiltInMaterial1b616c8aMediaColorSpaceParameter {
+  color_standard: ColorStandard (id: 0);
+  color_transfer: ColorTransfer (id: 1);
+  color_range: ColorRange (id: 2);
+  max_luminance: int (id: 3);
+}
+
 table BuiltInMaterial1b616c8aParameters {
   primary_texture: BuiltInTextureParameter (id: 0);
   auxiliary_texture: BuiltInTextureParameter (id: 1);
   stereo_type: BuiltInMaterial1b616c8aStereoType (id: 2);
+  media_color_space: BuiltInMaterial1b616c8aMediaColorSpaceParameter (id: 6);
   primary_alpha_mask: BuiltInTextureParameter (id: 3);
   auxiliary_alpha_mask: BuiltInTextureParameter (id: 4);
   feather_radius: Float2 (id: 5);

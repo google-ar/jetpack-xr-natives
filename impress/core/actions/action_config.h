@@ -18,6 +18,13 @@
 #define THIRD_PARTY_IMPRESS_CORE_ACTIONS_ACTION_CONFIG_H_
 #include "absl/strings/string_view.h"
 namespace imp {
+
+/*
+ * Commonly used action set names, primarily based on the OpenXR spec.
+ * https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#input-action-creation
+ */
+inline constexpr absl::string_view kDefaultActionSetName = "app";
+
 /*
  * Commonly used input action names, primarily based on the OpenXR spec.
  *
@@ -50,12 +57,15 @@ inline constexpr absl::string_view kDefaultSelectActionName = "select";
  * https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#semantic-path-user
  * Eye subaction path:
  * https://registry.khronos.org/OpenXR/specs/1.1/html/xrspec.html#XR_EXT_eye_gaze_interaction
+ * Mouse subaction path:
+ * https://developer.android.com/develop/xr/openxr/extensions/XR_ANDROID_mouse_interaction
  */
 inline constexpr absl::string_view kDefaultLeftHandSubactionPath =
     "/user/hand/left";
 inline constexpr absl::string_view kDefaultRightHandSubactionPath =
     "/user/hand/right";
 inline constexpr absl::string_view kDefaultEyeSubactionPath = "/user/eyes_ext";
+inline constexpr absl::string_view kDefaultMouseSubactionPath = "/user/mouse";
 
 /*
  * Matches XR_EXT_hand_interaction action names.
@@ -68,6 +78,20 @@ inline constexpr absl::string_view kDefaultEyeSubactionPath = "/user/eyes_ext";
 inline constexpr absl::string_view kDefaultPinchPoseActionName = "pinch_pose";
 inline constexpr absl::string_view kDefaultPinchGestureActionName =
     "pinch_gesture";
+
+/*
+ * Controller input action names.
+ */
+inline constexpr absl::string_view kSecondaryActionName = "secondary";
+inline constexpr absl::string_view kTertiaryActionName = "tertiary";
+inline constexpr absl::string_view kThumbStickClickActionName =
+    "thumb_stick_click";
+inline constexpr absl::string_view kThumbStickXActionName = "thumb_stick_x";
+inline constexpr absl::string_view kThumbStickYActionName = "thumb_stick_y";
+inline constexpr absl::string_view kSqueezeActionName = "squeeze";
+
+// The haptic/output action is specific to OpenXR.
+inline constexpr absl::string_view kDefaultHapticActionName = "haptic";
 
 /*
  * Other commonly used input action names.

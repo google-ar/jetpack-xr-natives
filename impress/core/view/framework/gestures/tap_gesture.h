@@ -17,9 +17,20 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_GESTURES_TAP_GESTURE_H_
 #define THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_GESTURES_TAP_GESTURE_H_
 
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <optional>
 #include <vector>
 
+#include "absl/time/time.h"
+#include "absl/types/optional.h"
+#include "absl/types/span.h"
+#include "core/input/pointer_event.h"
 #include "core/math/vec.h"
+#include "core/ncsb/dispatcher/dispatcher.h"
+#include "core/view/framework/collision/ray_hit.h"
 #include "core/view/framework/gestures/gesture.h"
 #include "core/view/framework/gestures/gesture_pointer_utils.h"
 #include "core/view/framework/input/pointer_input_handler.h"
@@ -46,11 +57,24 @@ class TapGesture : public Gesture {
           type(type),
           target(target),
           position(position),
+          ray_hits(std::nullopt),
+          pointer_count(pointer_count),
+          all_intersecting_nodes(all_intersecting_nodes) {}
+
+    TapEvent(Id id, PointerEventType type, NodeHandle target, float2 position,
+             std::optional<std::vector<RayHit>> ray_hits, int pointer_count,
+             std::vector<NodeHandle> all_intersecting_nodes)
+        : Event(id),
+          type(type),
+          target(target),
+          position(position),
+          ray_hits(ray_hits),
           pointer_count(pointer_count),
           all_intersecting_nodes(all_intersecting_nodes) {}
     PointerEventType type;
     NodeHandle target;  // Invalid if nothing was targeted.
     float2 position;
+    std::optional<std::vector<RayHit>> ray_hits;
     int pointer_count;
     std::vector<NodeHandle> all_intersecting_nodes;
   };

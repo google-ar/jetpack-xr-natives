@@ -95,6 +95,22 @@ class PhysicsManager : public UpdateSystem::Updater<PhysicsManager> {
   // simulation.
   size_t GetNumberOfObjects() const;
 
+  // Sets the play state of the physics simulation. True to play, false to
+  // pause. The simulation is playing by default.
+  void PlaySimulation(bool play);
+
+  // Sets a custom step speed for the physics simulation. < 1.0f
+  // will slow down the simulation, > 1.0f will speed it up. 1.0f is the
+  // default.
+  void SetSimulationStepSpeed(float speed);
+
+  // Returns the current step speed for the physics simulation.
+  float GetSimulationStepSpeed() const;
+
+  // Advances the simulation over some duration. This will have no effect if the
+  // simulation is playing.
+  void FastForwardSimulation(float duration);
+
  private:
   // Sends collision events to collided nodes.
   void ProcessCollisions();
@@ -110,6 +126,8 @@ class PhysicsManager : public UpdateSystem::Updater<PhysicsManager> {
   btSequentialImpulseConstraintSolver solver_;
   btDiscreteDynamicsWorld world_;
   RobinMap<btCollisionObject*, NodeHandle> rigid_body_map_;
+  bool play_simulation_;
+  float simulation_step_speed_;
 };
 }  // namespace imp
 

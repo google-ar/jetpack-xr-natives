@@ -20,12 +20,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include "absl/base/thread_annotations.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
 #include "absl/types/span.h"
@@ -209,6 +212,7 @@ class GltfAsset {
       GltfAsset::LoadOptions options);
 
   GltfAsset();
+  ~GltfAsset();
 
   // GltfAsset is not copyable.
   GltfAsset(const GltfAsset&) = delete;
@@ -230,7 +234,7 @@ class GltfAsset {
   const GenericMaterialListing& GetSharedMaterials() const;
 
   void BuildMeshCollisionAccelerators(
-      CollisionAcceleratorProvider* collision_accelerator_provider);
+      CollisionAcceleratorProvider& collision_accelerator_provider);
 
  private:
   GltfAsset(std::unique_ptr<model::ModelData> model_data,
@@ -238,13 +242,20 @@ class GltfAsset {
             AnimLookup<std::string>&& animation_names,
             StringMap<AnimId>&& animation_name_lookup,
             GenericMaterialListing&& shared_materials);
+  void BuildMeshCollisionAcceleratorsInternal(
+      CollisionAcceleratorProvider& collision_accelerator_provider);
 
+  absl::Mutex mesh_data_availability_mutex_;
+  std::optional<Future<absl::Status>> mesh_collision_creation_future_;
   std::unique_ptr<model::ModelData> model_data_;
   TypedVector<GltfAnimDataPtr> animations_;
   AnimLookup<std::string> animation_names_;
   StringMap<AnimId> animation_name_lookup_;
   GenericMaterialListing shared_materials_;
-  MeshCollisionAcceleratorPool mesh_collision_accelerators_;
+  mutable absl::Mutex mesh_collision_accelerators_mutex_
+      ABSL_ACQUIRED_AFTER(mesh_data_availability_mutex_);
+  MeshCollisionAcceleratorPool mesh_collision_accelerators_
+      ABSL_GUARDED_BY(mesh_collision_accelerators_mutex_);
 };
 
 }  // namespace imp

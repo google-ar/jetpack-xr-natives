@@ -54,8 +54,6 @@ imp_cc_proto_library = rule(
     fragments = ["cpp"],
     attrs = {
         "_cc_lib": attr.label(default = "@com_google_impress//core/proto:proto_common"),
-        "_cc_toolchain": attr.label(default =
-                                        "@bazel_tools//tools/cpp:current_cc_toolchain"),
         "_code_generator": attr.label(
             cfg = "exec",
             default = "@com_google_impress//core/proto:proto-gen-imp-cc",
@@ -102,7 +100,6 @@ def _bin_dir(ctx):
 
 def _compile_and_link(ctx, headers):
     cc_toolchain = find_cpp_toolchain(ctx)
-    cc_toolchain = ctx.attr._cc_toolchain[cc_common.CcToolchainInfo]
     feature_configuration = cc_common.configure_features(
         ctx = ctx,
         cc_toolchain = cc_toolchain,

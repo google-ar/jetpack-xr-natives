@@ -65,6 +65,7 @@ bzl_library(
         "//build_tools/platforms/desktop:imp_desktop_app_bzl",
         "//build_tools/platforms/split_engine:imp_split_engine_app_bzl",
         "//build_tools/platforms/xr:imp_xr_app_bzl",
+        "//devtools/build_cleaner/skylark:build_defs_lib",
         "//mobile/build:build_defs",
     ],
 )

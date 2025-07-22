@@ -17,6 +17,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "core/math/math.h"
 #include "core/math/vec.h"
 #include "core/recipes/language/base_recipe_system.h"
 #include "core/recipes/language/functions/math/math.h"
@@ -29,15 +30,21 @@ namespace {
 absl::StatusOr<Variable> Rad(const recipe::Variable& value) {
   switch (value.index()) {
     case Literal::kValue_FloatValue:
-      return std::get<float>(value) * (float)M_PI / 180.0f;
+      return ToRadians(std::get<float>(value));
     case Literal::kValue_DoubleValue:
-      return std::get<double>(value) * M_PI / 180.0f;
+      return ToRadians(std::get<double>(value));
     case Literal::kValue_Float2Value:
-      return std::get<float2>(value) * (float)M_PI / 180.0f;
+      return TransformVector(ToRadians, std::get<float2>(value));
     case Literal::kValue_Float3Value:
-      return std::get<float3>(value) * (float)M_PI / 180.0f;
+      return TransformVector(ToRadians, std::get<float3>(value));
     case Literal::kValue_Float4Value:
-      return std::get<float4>(value) * (float)M_PI / 180.0f;
+      return TransformVector(ToRadians, std::get<float4>(value));
+    case Literal::kValue_Mat2fValue:
+      return TransformMatrix(ToRadians, std::get<mat2f>(value));
+    case Literal::kValue_Mat3fValue:
+      return TransformMatrix(ToRadians, std::get<mat3f>(value));
+    case Literal::kValue_Mat4fValue:
+      return TransformMatrix(ToRadians, std::get<mat4f>(value));
     default:
       return absl::InvalidArgumentError(
           "input must be a floating-point type or a floatN type.");
@@ -47,15 +54,21 @@ absl::StatusOr<Variable> Rad(const recipe::Variable& value) {
 absl::StatusOr<Variable> Deg(const recipe::Variable& value) {
   switch (value.index()) {
     case Literal::kValue_FloatValue:
-      return std::get<float>(value) * 180.0f / (float)M_PI;
+      return ToDegrees(std::get<float>(value));
     case Literal::kValue_DoubleValue:
-      return std::get<double>(value) * 180.0f / M_PI;
+      return ToDegrees(std::get<double>(value));
     case Literal::kValue_Float2Value:
-      return std::get<float2>(value) * 180.0f / (float)M_PI;
+      return TransformVector(ToDegrees, std::get<float2>(value));
     case Literal::kValue_Float3Value:
-      return std::get<float3>(value) * 180.0f / (float)M_PI;
+      return TransformVector(ToDegrees, std::get<float3>(value));
     case Literal::kValue_Float4Value:
-      return std::get<float4>(value) * 180.0f / (float)M_PI;
+      return TransformVector(ToDegrees, std::get<float4>(value));
+    case Literal::kValue_Mat2fValue:
+      return TransformMatrix(ToDegrees, std::get<mat2f>(value));
+    case Literal::kValue_Mat3fValue:
+      return TransformMatrix(ToDegrees, std::get<mat3f>(value));
+    case Literal::kValue_Mat4fValue:
+      return TransformMatrix(ToDegrees, std::get<mat4f>(value));
     default:
       return absl::InvalidArgumentError(
           "input must be a floating-point type or a floatN type.");
@@ -94,6 +107,47 @@ absl::StatusOr<Variable> Atan2(const recipe::Variable& y,
                     std::atan2(value_y.v[1], value_x.v[1]),
                     std::atan2(value_y.v[2], value_x.v[2]),
                     std::atan2(value_y.v[3], value_x.v[3]));
+    }
+    case Literal::kValue_Mat2fValue: {
+      mat2f value_y = std::get<mat2f>(y);
+      mat2f value_x = std::get<mat2f>(x);
+      return mat2f(std::atan2(value_y[0][0], value_x[0][0]),
+                   std::atan2(value_y[0][1], value_x[0][1]),
+                   std::atan2(value_y[1][0], value_x[1][0]),
+                   std::atan2(value_y[1][1], value_x[1][1]));
+    }
+    case Literal::kValue_Mat3fValue: {
+      mat3f value_y = std::get<mat3f>(y);
+      mat3f value_x = std::get<mat3f>(x);
+      return mat3f(std::atan2(value_y[0][0], value_x[0][0]),
+                   std::atan2(value_y[0][1], value_x[0][1]),
+                   std::atan2(value_y[0][2], value_x[0][2]),
+                   std::atan2(value_y[1][0], value_x[1][0]),
+                   std::atan2(value_y[1][1], value_x[1][1]),
+                   std::atan2(value_y[1][2], value_x[1][2]),
+                   std::atan2(value_y[2][0], value_x[2][0]),
+                   std::atan2(value_y[2][1], value_x[2][1]),
+                   std::atan2(value_y[2][2], value_x[2][2]));
+    }
+    case Literal::kValue_Mat4fValue: {
+      mat4f value_y = std::get<mat4f>(y);
+      mat4f value_x = std::get<mat4f>(x);
+      return mat4f(std::atan2(value_y[0][0], value_x[0][0]),
+                   std::atan2(value_y[0][1], value_x[0][1]),
+                   std::atan2(value_y[0][2], value_x[0][2]),
+                   std::atan2(value_y[0][3], value_x[0][3]),
+                   std::atan2(value_y[1][0], value_x[1][0]),
+                   std::atan2(value_y[1][1], value_x[1][1]),
+                   std::atan2(value_y[1][2], value_x[1][2]),
+                   std::atan2(value_y[1][3], value_x[1][3]),
+                   std::atan2(value_y[2][0], value_x[2][0]),
+                   std::atan2(value_y[2][1], value_x[2][1]),
+                   std::atan2(value_y[2][2], value_x[2][2]),
+                   std::atan2(value_y[2][3], value_x[2][3]),
+                   std::atan2(value_y[3][0], value_x[3][0]),
+                   std::atan2(value_y[3][1], value_x[3][1]),
+                   std::atan2(value_y[3][2], value_x[3][2]),
+                   std::atan2(value_y[3][3], value_x[3][3]));
     }
     default:
       return absl::InvalidArgumentError(

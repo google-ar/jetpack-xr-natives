@@ -58,19 +58,19 @@ OptionalError GetAttributeType(absl::string_view type, const int component_type,
   using ET = schemas::AttributeType;
   if (type == "VEC2") {
     switch (component_type) {
-      case imp::gltf::ComponentType::BYTE:
+      case imp::gltf::imp_proto::ComponentType::BYTE:
         *out_type = ET::BYTE2;
         break;
-      case imp::gltf::ComponentType::UNSIGNED_BYTE:
+      case imp::gltf::imp_proto::ComponentType::UNSIGNED_BYTE:
         *out_type = ET::UBYTE2;
         break;
-      case imp::gltf::ComponentType::SHORT:
+      case imp::gltf::imp_proto::ComponentType::SHORT:
         *out_type = ET::SHORT2;
         break;
-      case imp::gltf::ComponentType::UNSIGNED_SHORT:
+      case imp::gltf::imp_proto::ComponentType::UNSIGNED_SHORT:
         *out_type = ET::USHORT2;
         break;
-      case imp::gltf::ComponentType::FLOAT:
+      case imp::gltf::imp_proto::ComponentType::FLOAT:
         *out_type = ET::FLOAT2;
         break;
       default:
@@ -78,19 +78,19 @@ OptionalError GetAttributeType(absl::string_view type, const int component_type,
     }
   } else if (type == "VEC3") {
     switch (component_type) {
-      case imp::gltf::ComponentType::BYTE:
+      case imp::gltf::imp_proto::ComponentType::BYTE:
         *out_type = ET::BYTE3;
         break;
-      case imp::gltf::ComponentType::UNSIGNED_BYTE:
+      case imp::gltf::imp_proto::ComponentType::UNSIGNED_BYTE:
         *out_type = ET::UBYTE3;
         break;
-      case imp::gltf::ComponentType::SHORT:
+      case imp::gltf::imp_proto::ComponentType::SHORT:
         *out_type = ET::SHORT3;
         break;
-      case imp::gltf::ComponentType::UNSIGNED_SHORT:
+      case imp::gltf::imp_proto::ComponentType::UNSIGNED_SHORT:
         *out_type = ET::USHORT3;
         break;
-      case imp::gltf::ComponentType::FLOAT:
+      case imp::gltf::imp_proto::ComponentType::FLOAT:
         *out_type = ET::FLOAT3;
         break;
       default:
@@ -98,19 +98,19 @@ OptionalError GetAttributeType(absl::string_view type, const int component_type,
     }
   } else if (type == "VEC4") {
     switch (component_type) {
-      case imp::gltf::ComponentType::BYTE:
+      case imp::gltf::imp_proto::ComponentType::BYTE:
         *out_type = ET::BYTE4;
         break;
-      case imp::gltf::ComponentType::UNSIGNED_BYTE:
+      case imp::gltf::imp_proto::ComponentType::UNSIGNED_BYTE:
         *out_type = ET::UBYTE4;
         break;
-      case imp::gltf::ComponentType::SHORT:
+      case imp::gltf::imp_proto::ComponentType::SHORT:
         *out_type = ET::SHORT4;
         break;
-      case imp::gltf::ComponentType::UNSIGNED_SHORT:
+      case imp::gltf::imp_proto::ComponentType::UNSIGNED_SHORT:
         *out_type = ET::USHORT4;
         break;
-      case imp::gltf::ComponentType::FLOAT:
+      case imp::gltf::imp_proto::ComponentType::FLOAT:
         *out_type = ET::FLOAT4;
         break;
       default:
@@ -118,22 +118,22 @@ OptionalError GetAttributeType(absl::string_view type, const int component_type,
     }
   } else if (type == "SCALAR") {
     switch (component_type) {
-      case imp::gltf::ComponentType::BYTE:
+      case imp::gltf::imp_proto::ComponentType::BYTE:
         *out_type = ET::BYTE;
         break;
-      case imp::gltf::ComponentType::UNSIGNED_BYTE:
+      case imp::gltf::imp_proto::ComponentType::UNSIGNED_BYTE:
         *out_type = ET::UBYTE;
         break;
-      case imp::gltf::ComponentType::SHORT:
+      case imp::gltf::imp_proto::ComponentType::SHORT:
         *out_type = ET::SHORT;
         break;
-      case imp::gltf::ComponentType::UNSIGNED_SHORT:
+      case imp::gltf::imp_proto::ComponentType::UNSIGNED_SHORT:
         *out_type = ET::USHORT;
         break;
-      case imp::gltf::ComponentType::UNSIGNED_INT:
+      case imp::gltf::imp_proto::ComponentType::UNSIGNED_INT:
         *out_type = ET::UINT;
         break;
-      case imp::gltf::ComponentType::FLOAT:
+      case imp::gltf::imp_proto::ComponentType::FLOAT:
         *out_type = ET::FLOAT;
         break;
       default:

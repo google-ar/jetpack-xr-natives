@@ -40,7 +40,8 @@ class BuiltInYouTubeStereoPlayerMaterial : public BuiltInCustomMaterial {
  public:
   // Creates a built-in YouTubeVR stereo player material.
   static Future<BuiltInMaterialPtr> Create(
-      BaseView& view, const android_xr::schemas::BuiltInMaterialEb117dd9& spec);
+      BaseView& view, BridgeId bridge_id,
+      const android_xr::schemas::BuiltInMaterialEb117dd9& spec);
 
   BuiltInMaterialPtr Duplicate() const override;
 
@@ -54,10 +55,9 @@ class BuiltInYouTubeStereoPlayerMaterial : public BuiltInCustomMaterial {
     return DisplayColorSpace::kP3;
   }
 
-  void UpdateColorSpaceParameters();
-
  private:
-  BuiltInYouTubeStereoPlayerMaterial(BaseView& view, OwnedMaterialPtr material);
+  BuiltInYouTubeStereoPlayerMaterial(BaseView& view, BridgeId bridge_id,
+                                     OwnedMaterialPtr material);
 
   BaseView& view_;
   Dispatcher::ScopedConnection post_frame_update_connection_;

@@ -23,8 +23,10 @@
 #include "core/material_library/material_param_value.h"
 #include "core/materials/material.h"
 #include "core/ncsb/update_system.h"
+#include "core/render/texture.h"
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
@@ -35,7 +37,8 @@ class BuiltInSVXRFootprintMaterial : public BuiltInCustomMaterial {
  public:
   // Creates a built-in scene viewer footprint material based on the given spec.
   static Future<BuiltInMaterialPtr> Create(
-      BaseView& view, const android_xr::schemas::BuiltInMaterial0d0cb9aa& spec);
+      BaseView& view, BridgeId bridge_id,
+      const android_xr::schemas::BuiltInMaterial0d0cb9aa& spec);
 
   BuiltInMaterialPtr Duplicate() const override;
 
@@ -45,7 +48,8 @@ class BuiltInSVXRFootprintMaterial : public BuiltInCustomMaterial {
       const TextureBorrower& texture_borrower) override;
 
  private:
-  BuiltInSVXRFootprintMaterial(BaseView& view, OwnedMaterialPtr material);
+  BuiltInSVXRFootprintMaterial(BaseView& view, BridgeId bridge_id,
+                               OwnedMaterialPtr material);
 
   BaseView& view_;
 };

@@ -22,12 +22,17 @@
 #include "absl/strings/string_view.h"
 #include "core/async/future.h"
 #include "core/image/image_contents.h"
+#include "core/image/wasm_texture_contents.h"
 #include "core/resources/resource_manager.h"
 
 namespace imp::image::details {
 
 // Decodes an image using available web apis.
 Future<std::unique_ptr<ImageContents>> WasmDecodeImage(
+    absl::string_view name, resources::Resource resource);
+
+// Decodes an image to a texture using available web apis.
+Future<WasmTextureContents> WasmDecodeImageToTexture(
     absl::string_view name, resources::Resource resource);
 
 }  // namespace imp::image::details

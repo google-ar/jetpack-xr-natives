@@ -16,6 +16,7 @@
 #include <openxr/openxr.h>
 
 #include <cstdint>
+#include <vector>
 
 #include "openxr/jobject_converter.h"
 #include "openxr/jobject_creator.h"
@@ -37,6 +38,7 @@ static jobject NativeGetPlaneState(JNIEnv* env, jlong plane_id,
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   uint32_t vertex_count = 0;
+  std::vector<XrVector2f> vertices;  // needs same lifetime as plane
   XrTrackablePlaneANDROID plane = {
       .type = XR_TYPE_TRACKABLE_PLANE_ANDROID,
       .trackingState = XR_TRACKING_STATE_PAUSED_ANDROID,
@@ -45,9 +47,9 @@ static jobject NativeGetPlaneState(JNIEnv* env, jlong plane_id,
       .vertices = nullptr,
   };
   if (!xr_manager.GetPlaneState(
-          static_cast<XrTrackableANDROID>(plane_id),
-          XrReferenceSpaceType::XR_REFERENCE_SPACE_TYPE_UNBOUNDED_ANDROID,
-          static_cast<int64_t>(monotonic_time_ns), plane)) {
+    static_cast<XrTrackableANDROID>(plane_id),
+    XrReferenceSpaceType::XR_REFERENCE_SPACE_TYPE_UNBOUNDED_ANDROID,
+    static_cast<int64_t>(monotonic_time_ns), plane, vertices)) {
     return nullptr;
   }
 

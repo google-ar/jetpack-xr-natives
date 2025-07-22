@@ -68,6 +68,8 @@ WaterReflectionMaterial::WaterReflectionMaterial(
                               BuiltInMaterial5cf26af8Parameters,
                           std::move(material)) {}
 
+WaterReflectionMaterial::~WaterReflectionMaterial() { Cleanup(); }
+
 flatbuffers::Offset<void> WaterReflectionMaterial::SerializeParameters(
     flatbuffers::FlatBufferBuilder& fbb,
     imp::split_engine::BuiltInTextureParameterCreator&

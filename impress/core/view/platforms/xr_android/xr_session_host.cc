@@ -14,6 +14,12 @@
 
 #include "core/view/platforms/xr_android/xr_session_host.h"
 
+#if IMP_MATERIAL_API(OPENGL) && IMP_PLATFORM(ANDROID)
+#include <GLES2/gl2.h>
+#include <GLES2/gl2ext.h>  // NOLINT
+#include <GLES3/gl31.h>
+#endif  // IMP_MATERIAL_API(OPENGL) && IMP_PLATFORM(ANDROID)
+
 #include <jni.h>
 #include <stdlib.h>
 #include <sys/syscall.h>
@@ -186,12 +192,14 @@ XrSessionHost::XrSessionHost(std::unique_ptr<BaseView> view,
       is_enhanced_stereoscopic_rendering_enabled_(
           options.use_enhanced_stereoscopic_rendering),
       use_max_swapchain_size_(options.use_max_swapchain_size),
+      swapchain_size_multiplier_(options.swapchain_size_multiplier),
       current_foveation_level_(options.foveation_level),
       view_configuration_type_(
           options.use_quad_views ? XR_VIEW_CONFIGURATION_TYPE_PRIMARY_QUAD_VARJO
                                  : XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO),
       is_varjo_foveated_rendering_enabled_(
           options.use_quad_views && options.use_varjo_foveated_rendering),
+      msaa_sample_count_(options.msaa_sample_count),
       eye_tracking_enabled_(options.use_eye_gaze_interaction),
       is_android_depth_texture_enabled_(options.use_android_depth_texture),
       display_enabled_duration_(GetView()->GetMonitor(),
@@ -216,6 +224,28 @@ XrSessionHost::~XrSessionHost() {
   if (!status.ok()) {
     IMP_LOG(imp::ERROR) << "Error calling xrDestroyInstance `" << status << "`";
   }
+}
+
+absl::Status XrSessionHost::PreBeginRender() {
+  // Set current swap chain according to the ContentSecurityLevel setting.
+  switch (content_security_level_) {
+    case ContentSecurityLevel::kProtected: {
+      if (!swap_chain_protected_) {
+        // Lazily create the protected swap chain if needed since the emulator
+        // does not support protected buffers.
+        MP_ASSIGN_OR_RETURN(
+            swap_chain_protected_,
+            AddSwapChain(this,
+                         filament::SwapChain::CONFIG_TRANSPARENT |
+                             filament::SwapChain::CONFIG_PROTECTED_CONTENT));
+      }
+      MP_RETURN_IF_ERROR(SetActiveSwapChain(swap_chain_protected_));
+    } break;
+    default:
+      MP_RETURN_IF_ERROR(SetActiveSwapChain(swap_chain_standard_));
+  }
+
+  return absl::OkStatus();
 }
 
 absl::Status XrSessionHost::Setup(JNIEnv* env, JavaVM* vm, jobject context) {
@@ -514,24 +544,6 @@ absl::Status XrSessionHost::AdvanceFrame() {
     }
   }
 
-  // Set current swap chain according to the ContentSecurityLevel setting.
-  switch (content_security_level_) {
-    case ContentSecurityLevel::kProtected: {
-      if (!swap_chain_protected_) {
-        // Lazily create the protected swap chain if needed since the emulator
-        // does not support protected buffers.
-        MP_ASSIGN_OR_RETURN(
-            swap_chain_protected_,
-            AddSwapChain(this,
-                         filament::SwapChain::CONFIG_TRANSPARENT |
-                             filament::SwapChain::CONFIG_PROTECTED_CONTENT));
-      }
-      MP_RETURN_IF_ERROR(SetActiveSwapChain(swap_chain_protected_));
-    } break;
-    default:
-      MP_RETURN_IF_ERROR(SetActiveSwapChain(swap_chain_standard_));
-  }
-
   // Store the latest views. This is only needed so that
   // XrSessionHost::PerformRender can access the views to render the left &
   // right eyes. PerformRender is guaranteed to be called on the Impress thread
@@ -653,8 +665,48 @@ absl::Status XrSessionHost::EnsureSupportedExtensions(
   return absl::OkStatus();
 }
 
-absl::StatusOr<XrInstance> XrSessionHost::CreateInstance(
-    JNIEnv* env, JavaVM* vm, jobject context) const {
+std::vector<const char*> XrSessionHost::FilterUnsupportedExtensions(
+    const absl::Span<const char* const>& extensions) {
+  std::vector<XrExtensionProperties> extension_properties;
+  uint32_t propertyCount;
+
+  bool ok = xrEnumerateInstanceExtensionProperties(nullptr, 0, &propertyCount,
+                                                   nullptr) == XR_SUCCESS;
+  if (!ok) {
+    return {};
+  }
+
+  extension_properties.resize(
+      propertyCount,
+      XrExtensionProperties{XR_TYPE_EXTENSION_PROPERTIES, nullptr});
+
+  ok = xrEnumerateInstanceExtensionProperties(
+           nullptr, propertyCount, &propertyCount,
+           extension_properties.data()) == XR_SUCCESS;
+
+  if (!ok) {
+    return {};
+  }
+
+  RobinSet<std::string> provided_extensions;
+  for (uint32_t i = 0; i < propertyCount; ++i) {
+    provided_extensions.insert(extension_properties[i].extensionName);
+  }
+
+  std::vector<const char*> filtered_extensions;
+
+  for (const char* extension : extensions) {
+    if (provided_extensions.contains(std::string(extension))) {
+      filtered_extensions.push_back(extension);
+    }
+  }
+
+  return filtered_extensions;
+}
+
+absl::StatusOr<XrInstance> XrSessionHost::CreateInstance(JNIEnv* env,
+                                                         JavaVM* vm,
+                                                         jobject context) {
   IMP_TRACE();
 
   XrInstance instance;
@@ -740,6 +792,12 @@ absl::StatusOr<XrInstance> XrSessionHost::CreateInstance(
     IMP_LOG(imp::FATAL) << all_supported;
   }
 
+  const auto& optional_extensions_to_load =
+      FilterUnsupportedExtensions(GetOptionalExtensionsToLoad());
+
+  extensions.insert(extensions.end(), optional_extensions_to_load.begin(),
+                    optional_extensions_to_load.end());
+
   XrInstanceCreateInfo create_info = {
       .type = XR_TYPE_INSTANCE_CREATE_INFO,
       .next = next,
@@ -765,6 +823,9 @@ absl::StatusOr<XrInstance> XrSessionHost::CreateInstance(
   if (instance == XR_NULL_SYSTEM_ID) {
     return absl::InternalError("XrInstance is NULL.");
   }
+
+  enabled_extensions_.insert(extensions.begin(), extensions.end());
+
   return instance;
 }
 
@@ -1093,6 +1154,11 @@ void XrSessionHost::SetEyeTrackingEnabled(bool enabled) {
   eye_tracking_enabled_ = enabled;
 }
 
+void XrSessionHost::SetEnvironmentBlendMode(
+    XrEnvironmentBlendMode xr_environment_blend_mode) {
+  environment_blend_mode_ = xr_environment_blend_mode;
+}
+
 absl::Status XrSessionHost::SetShownState(ShownState new_state) {
   if (new_state == shown_state_) {
     return absl::OkStatus();
@@ -1149,6 +1215,59 @@ absl::Status XrSessionHost::SetColorSpace(XrColorSpaceFB color_space) {
   xrSetColorSpaceFB_ptr(session_, color_space);
 
   return absl::OkStatus();
+}
+
+uint32_t imp::XrSessionHost::GetFenceFd() const {
+  uint32_t fenceFd = -1;
+  // TODO: Implement this for Vulkan.
+#if IMP_MATERIAL_API(OPENGL) && IMP_PLATFORM(ANDROID)
+  EGLDisplay display = eglGetCurrentDisplay();
+  if (display == EGL_NO_DISPLAY) {
+    IMP_LOG(imp::ERROR) << "eglGetCurrentDisplay failed: %d" << eglGetError();
+    return fenceFd;
+  }
+  glFlush();
+  EGLSyncKHR sync = EGL_NO_SYNC_KHR;
+  PFNEGLCREATESYNCKHRPROC eglCreateSyncKHR_ext =
+      (PFNEGLCREATESYNCKHRPROC)eglGetProcAddress("eglCreateSyncKHR");
+  if (eglCreateSyncKHR_ext) {
+    sync =
+        eglCreateSyncKHR_ext(display, EGL_SYNC_NATIVE_FENCE_ANDROID, nullptr);
+  } else {
+    IMP_LOG(imp::ERROR) << "eglCreateSyncKHR not available on this platform.";
+    return fenceFd;
+  }
+  if (sync == EGL_NO_SYNC_KHR) {
+    IMP_LOG(imp::ERROR) << "eglCreateSyncKHR failed: %d" << eglGetError();
+    return fenceFd;
+  }
+  PFNEGLDUPNATIVEFENCEFDANDROIDPROC eglDupNativeFenceFDANDROID_ext =
+      (PFNEGLDUPNATIVEFENCEFDANDROIDPROC)eglGetProcAddress(
+          "eglDupNativeFenceFDANDROID");
+  if (eglDupNativeFenceFDANDROID_ext) {
+    fenceFd = eglDupNativeFenceFDANDROID_ext(display, sync);
+  } else {
+    IMP_LOG(imp::ERROR) << "eglDupNativeFenceFDANDROID not available.";
+    return fenceFd;
+  }
+
+  PFNEGLDESTROYSYNCKHRPROC eglDestroySyncKHR_ext =
+      (PFNEGLDESTROYSYNCKHRPROC)eglGetProcAddress("eglDestroySyncKHR");
+  if (eglDestroySyncKHR_ext) {
+    eglDestroySyncKHR_ext(display, sync);
+  } else {
+    IMP_LOG(imp::ERROR) << "eglDestroySyncKHR not available.";
+    return fenceFd;
+  }
+
+  if (fenceFd == EGL_NO_NATIVE_FENCE_FD_ANDROID) {
+    IMP_LOG(imp::ERROR) << "eglDupNativeFenceFDANDROID failed: %d" << eglGetError();
+    return fenceFd;
+  }
+
+  return fenceFd;
+#endif  // IMP_MATERIAL_API(OPENGL) && IMP_PLATFORM(ANDROID)
+  return fenceFd;
 }
 
 absl::Status XrSessionHost::SetDisplayState(XrHelpers::DisplayState new_state) {
@@ -1477,11 +1596,40 @@ absl::Status XrSessionHost::EndFrame(XrSwapchain swapchain,
   };
   layers.push_back(reinterpret_cast<XrCompositionLayerBaseHeader*>(&layer));
 
+  // Add non-projection composition layers.
+  for (auto& [layer, weight] : composition_layers_) {
+    layers.push_back(layer);
+  }
+
+  // Sort layers based on weight
+  // Layers towards the end of the array are drawn on top of layers towards the
+  // beginning of the array.
+  std::sort(
+      layers.begin(), layers.end(),
+      [&layer, this](XrCompositionLayerBaseHeader* a,
+                     XrCompositionLayerBaseHeader* b) {
+        int a_weight;
+        int b_weight;
+        // If the layer is our projection layer, treat it's weight as 0;
+        if (a == reinterpret_cast<XrCompositionLayerBaseHeader*>(&layer)) {
+          a_weight = 0;
+        } else {
+          a_weight = composition_layers_[a];
+        }
+        if (b == reinterpret_cast<XrCompositionLayerBaseHeader*>(&layer)) {
+          b_weight = 0;
+        } else {
+          b_weight = composition_layers_[b];
+        }
+        // Using > so that smaller weights are drawn later
+        return a_weight > b_weight;
+      });
+
   XrFrameEndInfo frame_end_info{
       .type = XR_TYPE_FRAME_END_INFO,
       .next = nullptr,
       .displayTime = frame_info.display_time,
-      .environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE,
+      .environmentBlendMode = environment_blend_mode_,
       .layerCount = static_cast<uint32_t>(layers.size()),
       .layers = layers.data(),
   };
@@ -1518,6 +1666,23 @@ absl::Status XrSessionHost::BeginAndDiscardFrame(XrTime predictedDisplayTime) {
     GetEngine()->destroy(fence);
   }
 
+  // When the XrSession is initializing we need to call xrEndFrame to ensure
+  // that the session can be synchronized. (See
+  // https://registry.khronos.org/OpenXR/specs/1.1-khr/html/xrspec.html#session-lifecycle).
+  //
+  // However, once we are in the visible or focused states, we no longer need to
+  // call xrEndFrame if we are not rendering any layers once we've called
+  // xrEndFrame at least once with no layers to inform the XR runtime we have
+  // nothing to render.
+  bool skip_end_frame = session_state_ == XR_SESSION_STATE_VISIBLE ||
+                        session_state_ == XR_SESSION_STATE_FOCUSED;
+
+  // Since the last frame succeeded we have just entered a non-visible state, so
+  // don't skip calling xrEndFrame.
+  if (did_last_advance_frame_succeed_) {
+    skip_end_frame = false;
+  }
+
   did_last_advance_frame_succeed_ = false;
 
   // Even when discarding the frame, still ensure that the foreground executor
@@ -1535,16 +1700,23 @@ absl::Status XrSessionHost::BeginAndDiscardFrame(XrTime predictedDisplayTime) {
 
   MP_RETURN_IF_ERROR(BeginFrame());
 
-  XrFrameEndInfo frame_end_info{
-      .type = XR_TYPE_FRAME_END_INFO,
-      .next = nullptr,
-      .displayTime = predictedDisplayTime,
-      .environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE,
-      .layerCount = 0,
-      .layers = nullptr,
-  };
+  absl::Status result = absl::OkStatus();
+  if (skip_end_frame) {
+    imp::output::Xr("Discard xrEndFrame skipped.");
+  } else {
+    XrFrameEndInfo frame_end_info{
+        .type = XR_TYPE_FRAME_END_INFO,
+        .next = nullptr,
+        .displayTime = predictedDisplayTime,
+        .environmentBlendMode = environment_blend_mode_,
+        .layerCount = 0,
+        .layers = nullptr,
+    };
 
-  absl::Status result = ToStatus(xrEndFrame(session_, &frame_end_info));
+    imp::output::Xr("Discard xrEndFrame called.");
+    result = ToStatus(xrEndFrame(session_, &frame_end_info));
+  }
+
   {
     SYSTRACE_CONTEXT();
     SYSTRACE_ASYNC_END("Impress Frame", predictedDisplayTime);
@@ -1655,13 +1827,15 @@ XrSessionHost::GetActiveViewConfigs() const {
 uint32_t XrSessionHost::GetViewWidth(
     const XrViewConfigurationView& view_config) {
   return use_max_swapchain_size_ ? view_config.maxImageRectWidth
-                                 : view_config.recommendedImageRectWidth;
+                                 : view_config.recommendedImageRectWidth *
+                                       swapchain_size_multiplier_;
 }
 
 uint32_t XrSessionHost::GetViewHeight(
     const XrViewConfigurationView& view_config) {
   return use_max_swapchain_size_ ? view_config.maxImageRectHeight
-                                 : view_config.recommendedImageRectHeight;
+                                 : view_config.recommendedImageRectHeight *
+                                       swapchain_size_multiplier_;
 }
 
 uint2 XrSessionHost::CalculateDisplaySize(
@@ -1741,6 +1915,8 @@ XrFoveationLevelFB XrSessionHost::GetCurrentFoveationLevel() {
   return current_foveation_level_;
 }
 
+int XrSessionHost::GetMsaaSampleCount() const { return msaa_sample_count_; }
+
 filament::Engine::Config XrSessionHost::GetEngineConfig() {
   filament::Engine::Config engine_config =
       window::FilamentHost::GetEngineConfig();
@@ -1771,6 +1947,10 @@ absl::Span<const char* const>& XrSessionHost::GetExtensionsToLoad() {
   return extensions_to_load;
 }
 
+absl::Span<const char* const>& XrSessionHost::GetOptionalExtensionsToLoad() {
+  static absl::Span<const char* const> extensions_to_load;
+  return extensions_to_load;
+}
 std::optional<XrSystemProperties> XrSessionHost::GetSystemProperties() const {
   XrSystemProperties system_properties{.type = XR_TYPE_SYSTEM_PROPERTIES,
                                        .next = XR_NULL_HANDLE};
@@ -1779,6 +1959,24 @@ std::optional<XrSystemProperties> XrSessionHost::GetSystemProperties() const {
     return std::nullopt;
   }
   return system_properties;
+}
+
+RobinSet<std::string> XrSessionHost::GetEnabledExtensions() const {
+  return enabled_extensions_;
+}
+
+void XrSessionHost::AddCompositionLayer(XrCompositionLayerBaseHeader* layer,
+                                        int weight) {
+  composition_layers_[layer] = weight;
+}
+
+void XrSessionHost::RemoveCompositionLayer(
+    XrCompositionLayerBaseHeader* layer) {
+  auto it = composition_layers_.find(layer);
+  if (it == composition_layers_.end()) {
+    return;
+  }
+  composition_layers_.erase(it);
 }
 
 }  // namespace imp

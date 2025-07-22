@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:assets.bzl", "imp_assets")
 load(
     "//build_tools:imp.bzl",
@@ -136,6 +137,7 @@ cc_library(
         "//core/common:owned_ptr",
         "//core/common:pass_key",
         "//core/common:registry",
+        "//core/common:rememberer",
         "//core/common:robin_map",
         "//core/common:small_source_location",
         "//core/common:status_helpers",

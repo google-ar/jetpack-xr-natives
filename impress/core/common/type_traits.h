@@ -17,6 +17,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_COMMON_TYPE_TRAITS_H_
 #define THIRD_PARTY_IMPRESS_CORE_COMMON_TYPE_TRAITS_H_
 
+#include <cstddef>
 #include <string_view>
 #include <type_traits>
 
@@ -109,8 +110,8 @@ inline constexpr std::string_view TryRemoveTemplateArgs(
 // Note: This function uses std::string_view rather than absl::string_view,
 // because the former has constexpr versions of e.g. find_last_of.
 inline constexpr std::string_view RemoveFunctionArgs(std::string_view pretty) {
-  int counter = 1;
-  size_t cursor = pretty.size() - 1;
+  int counter = 0;
+  size_t cursor = pretty.size();
   do {
     size_t next_cursor = pretty.find_last_of("()", cursor - 1);
     if (next_cursor == std::string_view::npos) return "ERROR";

@@ -145,7 +145,7 @@ message TextRendererState {
   //
   // LINT.IfChange(font_size_pixels)
   // The default value is 150.
-  // LINT.ThenChange(//depot/google3/core/text/glyph_atlas.h:font_size_pixels)
+  // LINT.ThenChange(//depot/google3/core/text/glyph_emulator.h:font_size_pixels)
   optional float font_size_pixels = 3;
 
   // Specifies the color used to render the text.

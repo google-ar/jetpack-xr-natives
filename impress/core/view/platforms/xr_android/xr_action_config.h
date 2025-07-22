@@ -22,11 +22,6 @@
 #include "core/view/platforms/xr_android/xr_action_params.proto.imp.h"
 namespace imp {
 
-inline constexpr absl::string_view kDefaultActionSetName = "app";
-
-// The haptic/output action is specific to OpenXR.
-inline constexpr absl::string_view kDefaultHapticActionName = "haptic";
-
 class XrActionConfig {
  public:
   // Creates parameters for a default "app" action set.

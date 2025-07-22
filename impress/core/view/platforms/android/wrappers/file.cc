@@ -17,24 +17,28 @@
 #include <jni.h>
 
 #include <string>
+#include <utility>
 
 #include "core/common/jni_helpers.h"
 
 namespace imp::android {
 
-File::File(JNIEnv* env, jobject file) : JavaWrapper(env, file) {
+File::File(JNIEnv* env, JniUniquePtr<jobject> file)
+    : JavaWrapper(env, std::move(file), "java/io/File") {
   get_path_ = GetMethodHandle("getPath", "()Ljava/lang/String;");
   get_name_ = GetMethodHandle("getName", "()Ljava/lang/String;");
 }
 
 std::string File::GetPath() {
-  jobject path = CallObjectMethod(get_path_);
-  return GetString(Env(), static_cast<jstring>(path));
+  JniUniquePtr<jstring> path =
+      WrapJni(Env(), static_cast<jstring>(CallObjectMethod(get_path_)));
+  return GetString(Env(), path.get());
 }
 
 std::string File::GetName() {
-  jobject name = CallObjectMethod(get_name_);
-  return GetString(Env(), static_cast<jstring>(name));
+  JniUniquePtr<jstring> name =
+      WrapJni(Env(), static_cast<jstring>(CallObjectMethod(get_name_)));
+  return GetString(Env(), name.get());
 }
 
 }  // namespace imp::android

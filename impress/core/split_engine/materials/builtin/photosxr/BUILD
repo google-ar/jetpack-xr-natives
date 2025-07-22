@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:assets.bzl", "imp_assets")
 load(
     "//build_tools:imp.bzl",
@@ -38,15 +39,20 @@ cc_library(
         "//core/assets",
         "//core/assets/material:material_asset",
         "//core/async:future",
+        "//core/common:log",
         "//core/material_library:flatbuffer_utils",
-        "//core/material_library:material_param_value",
         "//core/materials",
         "//core/math",
         "//core/ncsb",
         "//core/render",
+        "//core/render:display_color_space",
+        "//core/render/android:platform_android_external_texture_surface",
+        "//core/split_engine:split_engine_renderer",
+        "//core/split_engine:split_engine_shared",
         "//core/split_engine/materials/builtin:builtin_custom_material",
         "//core/split_engine/materials/builtin:builtin_material",
         "//core/view:base_view",
+        "//core/view:view_events",
         "//core/view/framework",
         "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/memory",
@@ -78,5 +84,7 @@ imp_material(
         ":sdf_fade.glsl",
         ":spatialize_animation.glsl",
         "//core/materials:color_conversion_helpers.glsl",
+        "//core/materials:super_sample.glsl",
+        "//core/xr/media/data:dataspace_support.glsl",
     ],
 )

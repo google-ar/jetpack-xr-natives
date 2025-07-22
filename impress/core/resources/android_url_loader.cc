@@ -15,15 +15,22 @@
 #include "core/resources/android_url_loader.h"
 
 #include <cassert>
+#include <cstdio>
+#include <memory>
 #include <optional>
+#include <string>
+#include <utility>
 #include <vector>
 
+#include "absl/memory/memory.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/cord.h"
+#include "absl/strings/cord_buffer.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
-#include "core/async/executor.h"
-#include "core/async/future_group.h"
-#include "core/async/future_interrupter.h"
-#include "core/common/context.h"
+#include "absl/strings/string_view.h"
 
 #if IMP_PLATFORM(ANDROID)
 #include <android/asset_manager.h>
@@ -32,18 +39,11 @@
 
 #include <jni.h>
 
-#include <cstdio>
-#include <memory>
-#include <string>
-
-#include "absl/memory/memory.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/cord.h"
-#include "absl/strings/cord_buffer.h"
-#include "absl/strings/match.h"
-#include "absl/strings/string_view.h"
+#include "core/async/executor.h"
 #include "core/async/future.h"
+#include "core/async/future_group.h"
+#include "core/async/future_interrupter.h"
+#include "core/common/context.h"
 #include "core/common/jni_helpers.h"
 #include "core/config.h"
 #include "core/resources/url_loader.h"
@@ -74,19 +74,6 @@ constexpr absl::string_view kAndroidResourcePrefix = "android.resource://";
 // Prefix for URLs Android content URIs.
 constexpr absl::string_view kContentPrefix = "content://";
 
-// Returns false if there is no pending exception on the calling thread.
-// Otherwise, logs and clears the exception, and returns true.
-// cf.
-// (broken link)
-bool ExceptionPrintClear(JNIEnv* env) {
-  if (env->ExceptionCheck()) {
-    env->ExceptionDescribe();
-    env->ExceptionClear();
-    return true;
-  }
-  return false;
-}
-
 // Loads a raw file from the Android storage by path.
 // Note: path needs to be FileDescriptor-based, i.e. /proc/self/fd/...
 Future<absl::Cord> LoadRawFile(absl::string_view path) {
@@ -111,9 +98,10 @@ Future<absl::Cord> LoadRawFile(absl::string_view path) {
 // Java wrapper for java.net.URLConnection
 class URLConnection : public JavaWrapper {
  public:
-  URLConnection(JNIEnv* env, jobject java_url_connection)
-      : JavaWrapper(env, "java/net/URLConnection") {
-    SetSelf(java_url_connection);
+  URLConnection(JNIEnv* env, JniUniquePtr<jobject> java_url_connection,
+                const char* class_path = "java/net/URLConnection")
+      : JavaWrapper(env, class_path) {
+    SetSelf(java_url_connection.release());
     get_input_stream_ =
         GetMethodHandle("getInputStream", "()Ljava/io/InputStream;");
 #if IMP_PLATFORM(ANDROID_API24)
@@ -129,11 +117,12 @@ class URLConnection : public JavaWrapper {
   }
 
   std::unique_ptr<InputStream> GetInputStream() {
-    jobject input_stream = CallObjectMethod(get_input_stream_);
-    if (ExceptionPrintClear(Env()) || !input_stream) {
+    JniUniquePtr<jobject> input_stream =
+        WrapJni(Env(), CallObjectMethod(get_input_stream_));
+    if (JavaExceptionPrintClear(Env()) || !input_stream) {
       return absl::WrapUnique<InputStream>(nullptr);
     }
-    return std::make_unique<InputStream>(Env(), input_stream);
+    return std::make_unique<InputStream>(Env(), std::move(input_stream));
   }
 
   size_t GetContentLength() {
@@ -152,11 +141,16 @@ class URLConnection : public JavaWrapper {
   }
 
   void SetRequestProperty(const std::string& key, const std::string& value) {
-    jstring key_string = Env()->NewStringUTF(key.data());
-    jstring value_string = Env()->NewStringUTF(value.data());
-    CallVoidMethod(set_request_property_, key_string, value_string);
-    Env()->DeleteLocalRef(key_string);
-    Env()->DeleteLocalRef(value_string);
+    JniUniquePtr<jstring> key_string = ToJniString(Env(), key);
+    if (JavaExceptionPrintClear(Env())) {
+      return;
+    }
+    JniUniquePtr<jstring> value_string = ToJniString(Env(), value);
+    if (JavaExceptionPrintClear(Env())) {
+      return;
+    }
+    CallVoidMethod(set_request_property_, key_string.get(), value_string.get());
+    JavaExceptionPrintClear(Env());
   }
 
  private:
@@ -165,29 +159,51 @@ class URLConnection : public JavaWrapper {
   JniHandle set_request_property_;
 };
 
+class HttpUrlConnection : public URLConnection {
+ public:
+  HttpUrlConnection(JNIEnv* env, JniUniquePtr<jobject> java_url_connection)
+      : URLConnection(env, std::move(java_url_connection),
+                      "java/net/HttpURLConnection") {
+    disconnect_ = GetMethodHandle("disconnect", "()V");
+  }
+
+  ~HttpUrlConnection() { Disconnect(); }
+
+  void Disconnect() { CallVoidMethod(disconnect_); }
+
+ private:
+  JniHandle disconnect_;
+};
+
 // Java wrapper for java.net.URL
 class URL : public JavaWrapper {
  public:
-  URL(JNIEnv* env, jstring url)
-      : JavaWrapper(env, "java/net/URL", "(Ljava/lang/String;)V", url) {
+  URL(JNIEnv* env, const std::string& url)
+      : JavaWrapper(env, "java/net/URL", "(Ljava/lang/String;)V",
+                    WrapJni(env, ToString(env, url)).get()),
+        use_http_(absl::StartsWith(url, "http")) {
     open_connection_ =
         GetMethodHandle("openConnection", "()Ljava/net/URLConnection;");
     assert(open_connection_);
   }
 
-  URL(JNIEnv* env, const std::string& url)
-      : URL(env, env->NewStringUTF(url.data())) {}
-
   std::unique_ptr<URLConnection> OpenConnection() {
-    jobject connection = CallObjectMethod(open_connection_);
-    if (ExceptionPrintClear(Env()) || !connection) {
+    JniUniquePtr<jobject> connection =
+        WrapJni(Env(), CallObjectMethod(open_connection_));
+    if (JavaExceptionPrintClear(Env()) || !connection) {
       return absl::WrapUnique<URLConnection>(nullptr);
     }
-    return std::make_unique<URLConnection>(Env(), connection);
+
+    if (use_http_) {
+      return std::make_unique<HttpUrlConnection>(Env(), std::move(connection));
+    } else {
+      return std::make_unique<URLConnection>(Env(), std::move(connection));
+    }
   }
 
  private:
   JniHandle open_connection_;
+  bool use_http_;
 };
 
 #if IMP_PLATFORM(ANDROID) || IMP_PLATFORM(ROBOLECTRIC)
@@ -200,10 +216,18 @@ class AndroidUri : public JavaWrapper {
         GetStaticMethodHandle("parse", "(Ljava/lang/String;)Landroid/net/Uri;");
     assert(parse);
 
-    jobject uri =
-        CallStaticObjectMethod(parse, env->NewStringUTF(string_uri.data()));
+    JniUniquePtr<jstring> jni_uri = CreateJniString(env, string_uri);
+    if (JavaExceptionPrintClear(Env())) {
+      return;
+    }
+
+    JniUniquePtr<jobject> uri =
+        WrapJni(env, CallStaticObjectMethod(parse, jni_uri.get()));
+    if (JavaExceptionPrintClear(Env()) || !uri) {
+      return;
+    }
     if (uri) {
-      SetSelf(Env()->NewGlobalRef(uri));
+      SetSelf(LocalToGlobalRef(std::move(uri)));
     }
   }
 };
@@ -211,21 +235,23 @@ class AndroidUri : public JavaWrapper {
 // Java wrapper for android.content.ContentResolver
 class ContentResolver : public JavaWrapper {
  public:
-  ContentResolver(JNIEnv* env, jobject content_resolver)
-      : JavaWrapper(env, content_resolver) {
+  ContentResolver(JNIEnv* env, JniUniquePtr<jobject> content_resolver)
+      : JavaWrapper(env, std::move(content_resolver),
+                    "android/content/ContentResolver") {
     open_input_stream_ = GetMethodHandle(
         "openInputStream", "(Landroid/net/Uri;)Ljava/io/InputStream;");
     assert(open_input_stream_);
   }
 
   std::unique_ptr<InputStream> OpenInputStream(jobject uri) {
-    jobject input_stream = CallObjectMethod(open_input_stream_, uri);
-    if (ExceptionPrintClear(Env()) || !input_stream) {
+    JniUniquePtr<jobject> input_stream =
+        WrapJni(Env(), CallObjectMethod(open_input_stream_, uri));
+    if (JavaExceptionPrintClear(Env()) || !input_stream) {
       // Failed to find that resource.
       return absl::WrapUnique<InputStream>(nullptr);
     }
 
-    return std::make_unique<InputStream>(Env(), input_stream);
+    return std::make_unique<InputStream>(Env(), std::move(input_stream));
   }
 
  private:
@@ -321,7 +347,7 @@ Future<absl::Cord> AndroidUrlLoader::LoadAndroidResource(
   // using Robolectric for testing, we'll use its class loader.
   JNIEnv* env = context_.GetJniEnv();
   auto android_uri = std::make_shared<AndroidUri>(env, std::string(string_uri));
-  if (ExceptionPrintClear(env) || !android_uri->WeakReference()) {
+  if (JavaExceptionPrintClear(env) || !android_uri->WeakReference()) {
     // Note: This code path is near-impossible to trigger for coverage.
     // Uri.parse() does no validation; the only thing it will throw on is
     // a null string, which won't happen since we need to have at least
@@ -333,8 +359,8 @@ Future<absl::Cord> AndroidUrlLoader::LoadAndroidResource(
   imp::android::ActivityContext activity_context(env,
                                                  context_.GetActivityContext());
   auto content_resolver = std::make_shared<ContentResolver>(
-      env, activity_context.GetContentResolver());
-  if (ExceptionPrintClear(env) || !content_resolver->WeakReference()) {
+      env, WrapJni(env, activity_context.GetContentResolver()));
+  if (JavaExceptionPrintClear(env) || !content_resolver->WeakReference()) {
     return Future<absl::Cord>(absl::InternalError(
         absl::StrFormat("Failed to create ContentResolver")));
   }

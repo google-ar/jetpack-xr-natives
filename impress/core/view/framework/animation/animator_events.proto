@@ -27,7 +27,14 @@ message PlaybackStartedEvent {
   int32 animation_index = 1;
 }
 
-// Event sent when the GltfAnimator finishes playing.
+// Event sent when the GltfAnimator finishes playing or is manually interrupted
+// for any reason before the animation naturally finishes.
+//
+// NOTE: If a new animation playback is started on the GltfAnimator with the
+// same animation index as another animation that is currently running, then
+// this event will be fired for the previously running animation playback before
+// the `PlaybackStartedEvent` for the new animation playback is fired.
+//
 // Sent to the node that the animator is attached to and can bubble.
 message PlaybackEndedEvent {
   option (imp.is_event) = true;

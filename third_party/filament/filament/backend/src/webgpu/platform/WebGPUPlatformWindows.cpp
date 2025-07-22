@@ -20,13 +20,56 @@
 
 #include <webgpu/webgpu_cpp.h>
 
+#include <array>
 #include <cstdint>
+#include <vector>
+
+#include <Windows.h>
 
 /**
  * Windows OS specific implementation aspects of the WebGPU backend
  */
 
 namespace filament::backend {
+
+std::vector<wgpu::RequestAdapterOptions> WebGPUPlatform::getAdapterOptions() {
+    constexpr std::array powerPreferences = {
+        wgpu::PowerPreference::HighPerformance,
+        wgpu::PowerPreference::LowPower };
+    constexpr std::array backendTypes = {
+        wgpu::BackendType::Vulkan,
+        wgpu::BackendType::OpenGL,
+        wgpu::BackendType::OpenGLES,
+        wgpu::BackendType::D3D12,
+        wgpu::BackendType::D3D11 };
+    constexpr std::array forceFallbackAdapters = { false, true };
+    constexpr size_t totalCombinations =
+            powerPreferences.size() * backendTypes.size() * forceFallbackAdapters.size();
+    std::vector<wgpu::RequestAdapterOptions> requests;
+    requests.reserve(totalCombinations);
+    for (auto powerPreference: powerPreferences) {
+        for (auto backendType: backendTypes) {
+            for (auto forceFallbackAdapter: forceFallbackAdapters) {
+                requests.emplace_back(
+                        wgpu::RequestAdapterOptions{
+                            .powerPreference = powerPreference,
+                            .forceFallbackAdapter = forceFallbackAdapter,
+                            .backendType = backendType });
+            }
+        }
+    }
+    return requests;
+}
+
+wgpu::Extent2D WebGPUPlatform::getSurfaceExtent(void* nativeWindow) const {
+    HWND window = static_cast<HWND>(nativeWindow);
+    RECT windowRect;
+    GetWindowRect(window, &windowRect);
+    return wgpu::Extent2D{
+        .width = static_cast<uint32_t>(windowRect.right - windowRect.left),
+        .height = static_cast<uint32_t>(windowRect.bottom - windowRect.top)
+    };
+}
 
 wgpu::Surface WebGPUPlatform::createSurface(void* nativeWindow, uint64_t /*flags*/) {
     // TODO verify this is necessary for Dawn implementation as well:
@@ -41,12 +84,12 @@ wgpu::Surface WebGPUPlatform::createSurface(void* nativeWindow, uint64_t /*flags
     wgpu::SurfaceSourceWindowsHWND surfaceSourceWin{};
     surfaceSourceWin.hinstance = GetModuleHandle(nullptr);
     surfaceSourceWin.hwnd = nativeWindow;
-    wgpu::SurfaceDescriptor surfaceDescriptor{
+    const wgpu::SurfaceDescriptor surfaceDescriptor{
         .nextInChain = &surfaceSourceWin,
         .label = "windows_surface"
     };
     wgpu::Surface surface = mInstance.CreateSurface(&surfaceDescriptor);
-    FILAMENT_CHECK_POSTCONDITION(surface != nullptr) << "Unable to create Windows-backed surface.";
+    FILAMENT_CHECK_POSTCONDITION(surface.Get() != nullptr) << "Unable to create Windows-backed surface.";
     return surface;
 }
 

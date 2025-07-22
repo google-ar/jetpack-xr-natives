@@ -307,9 +307,24 @@ class AssetManager {
   // referenced anywhere. This is done automatically once per frame.
   void ClearUnused();
 
-  // Returns the number of assets (both in-flight and finished loading) held by
-  // the AssetManager.
+  // Returns the total number of assets of all types(both in-flight and finished
+  // loading) held by the AssetManager.
   int GetAssetCount() const;
+
+  // Returns the total number of assets of a specific type held by the
+  // AssetManager.  Includes assets that are currently loading.
+  template <typename AssetT>
+  int GetResidentCount() const;
+
+  // Returns the count of asset loads which were cancelled before completion for
+  // a specific type of asset.
+  template <typename AssetT>
+  int GetCancelledCount() const;
+
+  // Returns the count of assets of a specific type that have been released from
+  // the cache.
+  template <typename AssetT>
+  int GetDestroyedCount() const;
 
   // Immediately cancels loading for the asset passed in for any asset type. If
   // the asset isn't currently loading (either it's cached or not started), then
@@ -345,6 +360,9 @@ class AssetManager {
 #endif
 
  private:
+  template <typename AssetT>
+  AssetCache<AssetT>* GetAssetCache() const;
+
   // Implementation details shared by all versions of LoadAsset.
   // Fn should be a functor with the signature Future<resources::Resource>().
   template <typename AssetT, typename Fn, typename... Args>
@@ -504,7 +522,41 @@ Future<AssetPtr<AssetT>> AssetManager::LoadAssetImpl(
   // cache is needed for memory management.
   return cache->Store(asset_cache_key, asset_future);
 }
+template <typename AssetT>
+AssetCache<AssetT>* AssetManager::GetAssetCache() const {
+  auto itr = caches_.find(type_traits::kTypeHash<AssetT>);
+  if (itr == caches_.end()) {
+    return nullptr;
+  }
+  return static_cast<AssetCache<AssetT>*>(itr.value().get());
+}
 
+template <typename AssetT>
+int AssetManager::GetResidentCount() const {
+  AssetCache<AssetT>* cache = GetAssetCache<AssetT>();
+  if (cache == nullptr) {
+    return 0;
+  }
+  return cache->GetAssetCount();
+}
+
+template <typename AssetT>
+int AssetManager::GetCancelledCount() const {
+  AssetCache<AssetT>* cache = GetAssetCache<AssetT>();
+  if (cache == nullptr) {
+    return 0;
+  }
+  return cache->GetCancelledCount();
+}
+
+template <typename AssetT>
+int AssetManager::GetDestroyedCount() const {
+  AssetCache<AssetT>* cache = GetAssetCache<AssetT>();
+  if (cache == nullptr) {
+    return 0;
+  }
+  return cache->GetDestroyedCount();
+}
 }  // namespace imp
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_ASSETS_ASSET_MANAGER_H_

@@ -53,7 +53,9 @@ LoadAndApplyEnvironmentLightFromInputStreamHandler::HandleMessage(
         "Expected an java input stream as platform args."));
   }
   auto input_stream = std::make_unique<InputStream>(
-      view_.GetContext().GetJniEnv(), reinterpret_cast<jobject>(args[0]));
+      view_.GetContext().GetJniEnv(),
+      WrapJni(view_.GetContext().GetJniEnv(),
+              reinterpret_cast<jobject>(args[0])));
 
   Future<AssetPtr<ImageBasedLightingAsset>> load_ibl_future =
       view_.GetAssetManager().LoadAsset<ImageBasedLightingAsset>(

@@ -35,6 +35,7 @@
 #include "core/common/small_source_location.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
+#include "core/media/media_color_space.h"
 #include "core/ncsb/update_phase.h"
 #include "core/ncsb/update_system.h"
 #include "core/render/android/android_defines.h"
@@ -103,7 +104,7 @@ class ImageReaderAndroidExternalTextureSurface
 
   absl::StatusOr<mat4f> GetTransformMatrix() const override;
 
-  absl::StatusOr<SurfaceColorSpace> GetSurfaceColorSpace() const override;
+  absl::StatusOr<MediaColorSpace> GetMediaColorSpace() const override;
 
  protected:
   BorrowedTexturePtr BorrowTextureImpl(SmallSourceLocation loc) override;

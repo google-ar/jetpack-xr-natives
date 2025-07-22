@@ -53,23 +53,10 @@ ToFilamentShadowSamplingQuality(
 
 }  // namespace
 
-#if IMP_PLATFORM(WASM)
-const MaterialPreCompileOptions& MaterialAsset::kDefaultPreCompileOptions =
-    *new MaterialPreCompileOptions{};
-#else
 // Specifies which material variants to precompile and if the loading needs to
 // wait for the high priority variants' compilation.
 const MaterialPreCompileOptions& MaterialAsset::kDefaultPreCompileOptions =
-    *new MaterialPreCompileOptions{
-        .variants =
-            MaterialPreCompileVariants{
-                .directional_lighting = MaterialPreCompileVariants::
-                    VariantPreCompileMode::HIGH_PRIORITY,
-                .shadow_receiver = MaterialPreCompileVariants::
-                    VariantPreCompileMode::HIGH_PRIORITY},
-
-        .wait_for_high_priority_variants = false};
-#endif
+    *new MaterialPreCompileOptions{};
 
 filament::Material* MaterialAsset::BuildMaterial(
     filament::Engine& engine, const uint8_t* data, size_t size,

@@ -50,7 +50,7 @@ class TestSplitEngineSharedMemoryBridgeServiceImpl
                                                Executor* executor);
 
   // Note: the change from protected to public is so the test can call directly.
-  absl::Status HandleMessage(
+  absl::Status HandleCommand(
       BridgeId bridge_id, flatbuffers::Verifier& verifier,
       const uint8_t* message,
       SplitEngineRenderer::OnFinishedCallback on_finished) override;

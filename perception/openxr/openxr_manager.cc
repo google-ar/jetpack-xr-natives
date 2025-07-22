@@ -22,15 +22,16 @@
 #include <sys/types.h>
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
 #include <memory>
-#include <thread>
 #include <vector>
 
+#include "openxr/openxr.h"
 #include "absl/base/no_destructor.h"
 #include "absl/log/log.h"
 #include "absl/numeric/int128.h"
@@ -46,7 +47,7 @@ constexpr char kApplicationName[] = "JetpackXrCore";
 // TODO: (broken link) - Change this from a global list to something more
 // flexible. Also split up between "required" and "optional" extensions, and
 // check against xrEnumerateInstanceExtensionProperties()
-std::array<const char *, 10> kExtensions = {
+std::array<const char *, 12> kExtensions = {
     XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME,
     XR_MND_HEADLESS_EXTENSION_NAME,
     XR_KHR_CONVERT_TIMESPEC_TIME_EXTENSION_NAME,
@@ -57,6 +58,8 @@ std::array<const char *, 10> kExtensions = {
     XR_ANDROID_RAYCAST_EXTENSION_NAME,
     XR_ANDROID_DEPTH_TEXTURE_EXTENSION_NAME,
     XR_EXT_HAND_TRACKING_EXTENSION_NAME,
+    XR_ANDROID_FACE_TRACKING_EXTENSION_NAME,
+    XR_ANDROID_TRACKABLES_OBJECT_EXTENSION_NAME,
 };
 
 constexpr XrPosef kIdentityPose = {
@@ -70,6 +73,14 @@ constexpr XrSpaceLocationFlags kPoseValidFlags =
 
 constexpr XrViewStateFlags kViewStateValidFlags =
     XR_VIEW_STATE_ORIENTATION_VALID_BIT | XR_VIEW_STATE_POSITION_VALID_BIT;
+
+constexpr XrDepthSwapchainCreateFlagsANDROID kDepthSwapchainRawOnlyFlags =
+    XR_DEPTH_SWAPCHAIN_CREATE_RAW_DEPTH_IMAGE_BIT_ANDROID |
+    XR_DEPTH_SWAPCHAIN_CREATE_RAW_CONFIDENCE_IMAGE_BIT_ANDROID;
+
+constexpr XrDepthSwapchainCreateFlagsANDROID kDepthSwapchainSmoothOnlyFlags =
+    XR_DEPTH_SWAPCHAIN_CREATE_SMOOTH_DEPTH_IMAGE_BIT_ANDROID |
+    XR_DEPTH_SWAPCHAIN_CREATE_SMOOTH_CONFIDENCE_IMAGE_BIT_ANDROID;
 
 // Maps the XrViewConfigurationType to the number of views for that view type.
 const int kViewTypeStereoViewCount = 2;
@@ -214,6 +225,9 @@ bool OpenXrManager::InitExtensionFunctions() {
   XR_RETURN_IF_FAILED(
       xrGetInstanceProcAddr(instance_, "xrGetTrackablePlaneANDROID",
                             (PFN_xrVoidFunction *)(&get_trackable_plane_)));
+  XR_RETURN_IF_FAILED(
+      xrGetInstanceProcAddr(instance_, "xrGetTrackableObjectANDROID",
+                            (PFN_xrVoidFunction *)(&get_trackable_object_)));
   XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
       instance_, "xrDestroyTrackableTrackerANDROID",
       (PFN_xrVoidFunction *)(&destroy_trackable_tracker_)));
@@ -279,6 +293,21 @@ bool OpenXrManager::InitExtensionFunctions() {
   XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
       instance_, "xrLocateHandJointsEXT",
       reinterpret_cast<PFN_xrVoidFunction *>(&locate_hand_joints_)));
+
+  // Face functions.
+  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+      instance_, "xrCreateFaceTrackerANDROID",
+      reinterpret_cast<PFN_xrVoidFunction *>(&create_face_tracker_)));
+  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+      instance_, "xrDestroyFaceTrackerANDROID",
+      reinterpret_cast<PFN_xrVoidFunction *>(&destroy_face_tracker_)));
+  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+      instance_, "xrGetFaceCalibrationStateANDROID",
+      reinterpret_cast<PFN_xrVoidFunction *>(&get_face_calibration_state_)));
+  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+      instance_, "xrGetFaceStateANDROID",
+      reinterpret_cast<PFN_xrVoidFunction *>(&get_face_state_)));
+
   return true;
 }
 
@@ -312,17 +341,16 @@ bool OpenXrManager::CreateUnboundedReferenceSpace() {
   return true;
 }
 
-XrResult OpenXrManager::MaybeCreateViewReferenceSpace() {
-    if (view_space_ != XR_NULL_HANDLE) {
-      return XR_SUCCESS;
-    }
-
-    XrReferenceSpaceCreateInfo createInfo = {
-        .type = XR_TYPE_REFERENCE_SPACE_CREATE_INFO,
-        .referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW,
-        .poseInReferenceSpace = kIdentityPose,
-    };
-    return xrCreateReferenceSpace(session_, &createInfo, &view_space_);
+bool OpenXrManager::CreateViewReferenceSpace() {
+  XrReferenceSpaceCreateInfo createInfo = {
+      .type = XR_TYPE_REFERENCE_SPACE_CREATE_INFO,
+      .referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW,
+      .poseInReferenceSpace = kIdentityPose,
+  };
+  absl::MutexLock lock(&mutex_);
+  XR_RETURN_IF_FAILED(
+      xrCreateReferenceSpace(session_, &createInfo, &view_space_));
+  return true;
 }
 
 bool OpenXrManager::LocateHandJoints(bool is_left_hand, XrTime time,
@@ -399,14 +427,27 @@ void OpenXrManager::FillInHandDataBuffer(std::byte *buffer,
   float *floatBuffer = (float *)(buffer + sizeof(int));
   for (int i = 0; i < XR_HAND_JOINT_COUNT_EXT; ++i) {
     const XrHandJointLocationEXT &joint = hand_joints.jointLocations[i];
-    floatBuffer[i * kFloatPerPose + 0] = joint.pose.orientation.x;
-    floatBuffer[i * kFloatPerPose + 1] = joint.pose.orientation.y;
-    floatBuffer[i * kFloatPerPose + 2] = joint.pose.orientation.z;
-    floatBuffer[i * kFloatPerPose + 3] = joint.pose.orientation.w;
-    floatBuffer[i * kFloatPerPose + 4] = joint.pose.position.x;
-    floatBuffer[i * kFloatPerPose + 5] = joint.pose.position.y;
-    floatBuffer[i * kFloatPerPose + 6] = joint.pose.position.z;
+    FillQuaternionIntoFloatBuffer(&floatBuffer[i * kFloatPerPose],
+                                  joint.pose.orientation);
+    FillVector3IntoFloatBuffer(
+        &floatBuffer[i * kFloatPerPose + kFloatPerQuaternion],
+        joint.pose.position);
   }
+}
+
+void OpenXrManager::FillVector3IntoFloatBuffer(float *floatBuffer,
+                                               XrVector3f vector) {
+  floatBuffer[0] = vector.x;
+  floatBuffer[1] = vector.y;
+  floatBuffer[2] = vector.z;
+}
+
+void OpenXrManager::FillQuaternionIntoFloatBuffer(float *floatBuffer,
+                                                  XrQuaternionf quaternion) {
+  floatBuffer[0] = quaternion.x;
+  floatBuffer[1] = quaternion.y;
+  floatBuffer[2] = quaternion.z;
+  floatBuffer[3] = quaternion.w;
 }
 
 // TODO: (broken link) - Update this to dynamically create a space for a reference
@@ -546,31 +587,24 @@ bool OpenXrManager::UnpersistAnchor(const XrUuidEXT &anchor_uuid) {
 
 OpenXrManager::CreateAnchorResult OpenXrManager::LocatePersistedAnchorSpace(
     const XrUuidEXT &anchor_uuid, XrSpace *out_anchor_space) {
-  absl::uint128 anchor_uuid_uint128 = UuidToUint128(anchor_uuid);
   XrSpace anchor_space = XR_NULL_HANDLE;
   XrResult xr_result;
   {
     absl::MutexLock lock(&mutex_);
-    auto iter = persist_anchor_uuid_to_space_map_.find(anchor_uuid_uint128);
-    if (iter != persist_anchor_uuid_to_space_map_.end()) {
-      anchor_space = iter->second;
-    } else {
-      if (XR_FAILED(CreatePersistenceHandleIfNecessary())) {
-        return CreateAnchorResult::kErrorRuntimeFailure;
-      }
-      XrPersistedAnchorSpaceCreateInfoANDROID create_info = {
-          .type = XR_TYPE_PERSISTED_ANCHOR_SPACE_CREATE_INFO_ANDROID,
-          .next = nullptr,
-          .anchorId = anchor_uuid,
-      };
-      XrResult xr_result = create_persisted_anchor_space_(
-          persistence_handle_, &create_info, &anchor_space);
-      if (XR_FAILED(xr_result)) {
-        LOG(ERROR) << "Failed to create persisted anchor space with: "
-                   << XrEnumStr(xr_result);
-        return MapAnchorCreateResult(xr_result);
-      }
-      persist_anchor_uuid_to_space_map_[anchor_uuid_uint128] = anchor_space;
+    if (XR_FAILED(CreatePersistenceHandleIfNecessary())) {
+      return CreateAnchorResult::kErrorRuntimeFailure;
+    }
+    XrPersistedAnchorSpaceCreateInfoANDROID create_info = {
+        .type = XR_TYPE_PERSISTED_ANCHOR_SPACE_CREATE_INFO_ANDROID,
+        .next = nullptr,
+        .anchorId = anchor_uuid,
+    };
+    XrResult xr_result = create_persisted_anchor_space_(
+        persistence_handle_, &create_info, &anchor_space);
+    if (XR_FAILED(xr_result)) {
+      LOG(ERROR) << "Failed to create persisted anchor space with: "
+                  << XrEnumStr(xr_result);
+      return MapAnchorCreateResult(xr_result);
     }
   }
 
@@ -615,11 +649,18 @@ std::byte *OpenXrManager::GetHandDataBuffer(bool is_left_hand, XrTime time) {
   return buffer;
 }
 
+bool OpenXrManager::IsFaceTrackerCalibrated() {
+  absl::MutexLock lock(&mutex_);
+  return face_tracker_calibration_state_ ==
+         FaceTrackingCalibrationState::kCalibrated;
+}
+
 bool OpenXrManager::GetDepthImage(XrTime time,
                                   const float **out_smooth_depth_image,
                                   int *out_image_width, int *out_image_height) {
   absl::MutexLock lock(&mutex_);
-  if (XR_FAILED(CreateDepthSwapchainIfNecessary())) {
+  if (XR_FAILED(
+          CreateDepthSwapchainIfNecessary(DepthEstimationMode::kSmoothOnly))) {
     LOG(ERROR) << "Failed to create depth swapchain.";
     return false;
   }
@@ -655,8 +696,95 @@ bool OpenXrManager::GetDepthImage(XrTime time,
   return true;
 }
 
+bool OpenXrManager::GetAllDepthImages(
+    XrTime time, std::vector<DepthImageBuffer> &out_image_buffers) {
+  absl::MutexLock lock(&mutex_);
+
+  if (depth_image_buffer_count_ == 0) {
+    LOG(ERROR) << "Depth image buffer count is 0.";
+    return false;
+  }
+
+  out_image_buffers.resize(depth_image_buffer_count_);
+
+  XrDepthAcquireInfoANDROID acquire_info = {
+      .type = XR_TYPE_DEPTH_ACQUIRE_INFO_ANDROID,
+      .space = GetSpaceInDefaultReferenceSpace(),
+      .displayTime = time,
+  };
+  XrDepthAcquireResultANDROID acquire_result = {
+      .type = XR_TYPE_DEPTH_ACQUIRE_RESULT_ANDROID,
+  };
+
+  XR_RETURN_IF_FAILED(acquire_depth_swapchain_images_(
+      depth_swapchain_handle_, &acquire_info, &acquire_result));
+
+  if (acquire_result.acquiredIndex >= depth_images_.size()) {
+    LOG(ERROR) << "acquiredIndex: " << acquire_result.acquiredIndex
+               << " is greater than swapchain_size_: " << depth_images_.size();
+    return false;
+  }
+
+  const XrDepthSwapchainImageANDROID &acquired_depth_image =
+      depth_images_[acquire_result.acquiredIndex];
+
+  if (config_settings_.depth_estimation_mode == DepthEstimationMode::kRawOnly) {
+    PopulateDepthImageBuffer(out_image_buffers,
+                             acquired_depth_image.rawDepthImage,
+                             acquired_depth_image.rawDepthConfidenceImage);
+  } else if (config_settings_.depth_estimation_mode ==
+             DepthEstimationMode::kSmoothOnly) {
+    PopulateDepthImageBuffer(out_image_buffers,
+                             acquired_depth_image.smoothDepthImage,
+                             acquired_depth_image.smoothDepthConfidenceImage);
+  } else {
+    LOG(ERROR) << "Unsupported depth estimation mode.";
+    return false;
+  }
+  return true;
+}
+
+void OpenXrManager::PopulateDepthImageBuffer(
+    std::vector<DepthImageBuffer> &out_image_buffers,
+    const float *image_buffers, const uint8_t *confidence_image_buffers) {
+  auto &left_eye_image = out_image_buffers[static_cast<int>(
+      OpenXrManager::DepthImageBufferOrder::kLeftEyeImage)];
+  auto &right_eye_image = out_image_buffers[static_cast<int>(
+      OpenXrManager::DepthImageBufferOrder::kRightEyeImage)];
+  auto &left_eye_confidence_image = out_image_buffers[static_cast<int>(
+      OpenXrManager::DepthImageBufferOrder::kLeftEyeConfidenceImage)];
+  auto &right_eye_confidence_image = out_image_buffers[static_cast<int>(
+      OpenXrManager::DepthImageBufferOrder::kRightEyeConfidenceImage)];
+
+  left_eye_image.buffer = image_buffers;
+  left_eye_image.buffer_size = depth_data_image_buffer_size_;
+
+  right_eye_image.buffer = image_buffers + depth_data_image_num_elements_;
+  right_eye_image.buffer_size = depth_data_image_buffer_size_;
+
+  left_eye_confidence_image.buffer = confidence_image_buffers;
+  left_eye_confidence_image.buffer_size =
+      depth_data_confidence_image_buffer_size_;
+
+  right_eye_confidence_image.buffer =
+      confidence_image_buffers + depth_data_image_num_elements_;
+  right_eye_confidence_image.buffer_size =
+      depth_data_confidence_image_buffer_size_;
+}
+
+int OpenXrManager::GetDepthImageWidth() {
+  absl::MutexLock lock(&mutex_);
+  return depth_image_width_;
+}
+
+int OpenXrManager::GetDepthImageHeight() {
+  absl::MutexLock lock(&mutex_);
+  return depth_image_height_;
+}
+
 bool OpenXrManager::Init(JNIEnv *env, jobject activity,
-                         XrReferenceSpaceType default_reference_space) {
+                         XrReferenceSpaceType default_reference_space,
+                         bool start_polling_thread) {
   java_env_ = env;
   java_env_->GetJavaVM(&app_vm_);
   absl::MutexLock state_lock(&initialization_mutex_);
@@ -667,23 +795,25 @@ bool OpenXrManager::Init(JNIEnv *env, jobject activity,
       LOG(INFO) << "Returning existing OpenXR session.";
       return true;
     } else if (open_xr_state_ == OpenXrState::kPaused) {
-      LOG(INFO) << "Resuming an existing OpenXR session.";
-      StartPollingThread();
+      LOG(INFO)
+          << "Returning an existing OpenXR session, and resuming if requested.";
+      if (start_polling_thread) {
+        StartPollingThread();
+      }
       return true;
     }
     open_xr_state_ = OpenXrState::kInitializing;
-    activity_ = java_env_->NewGlobalRef(activity);
     default_reference_space_ = default_reference_space;
   }
 
   // Load OpenXR.
-  if (!LoadOpenXr()) {
+  if (!LoadOpenXr(activity)) {
     DeInitWithLockHeld();
     return false;
   }
 
   // Create an OpenXR instance.
-  if (!CreateInstance()) {
+  if (!CreateInstance(activity)) {
     DeInitWithLockHeld();
     return false;
   }
@@ -714,10 +844,15 @@ bool OpenXrManager::Init(JNIEnv *env, jobject activity,
     return false;
   }
 
+  if (!CreateViewReferenceSpace()) {
+    DeInitWithLockHeld();
+    return false;
+  }
+
   // TODO: Temporarily enabling some features by default until
   // session configuration is fully implemented.
   if (XR_FAILED(ConfigureSession(ConfigSettings{
-          .anchor_persistence_mode = AnchorPersistenceMode::kEnabled,
+          .anchor_persistence_mode = AnchorPersistenceMode::kLocal,
       }))) {
     DeInitWithLockHeld();
     return false;
@@ -725,7 +860,11 @@ bool OpenXrManager::Init(JNIEnv *env, jobject activity,
 
   {
     absl::MutexLock lock(&mutex_);
-    StartPollingThread();
+    if (start_polling_thread) {
+      StartPollingThread();
+    } else {
+      open_xr_state_ = OpenXrState::kPaused;
+    }
   }
   return true;
 }
@@ -743,28 +882,38 @@ void OpenXrManager::DeInitWithLockHeld(bool stop_polling_thread) {
       return;
     }
     open_xr_state_ = OpenXrState::kUninitializing;
-
+    
     XrResult session_result = xrDestroySession(session_);
     if (XR_FAILED(session_result)) {
       LOG(ERROR) << "Failed to destroy session with error: "
                  << XrEnumStr(session_result);
     }
-
+    
     XrResult instance_result = xrDestroyInstance(instance_);
     if (XR_FAILED(instance_result)) {
       LOG(ERROR) << "Failed to destroy instance with error: "
                  << XrEnumStr(instance_result);
     }
-    // Destroy trackable tracker.
+    // Destroy planes tracker.
     if (planes_trackable_tracker_ != XR_NULL_HANDLE) {
       XrResult result = destroy_trackable_tracker_(planes_trackable_tracker_);
       planes_trackable_tracker_ = XR_NULL_HANDLE;
       if (XR_FAILED(result)) {
-        LOG(ERROR) << "Failed to destroy trackable tracker with error: "
+        LOG(ERROR) << "Failed to destroy planes tracker with error: "
                    << XrEnumStr(result);
       }
     }
-
+    
+    // Destroy object tracker.
+    if (object_trackable_tracker_ != XR_NULL_HANDLE) {
+      XrResult result = destroy_trackable_tracker_(object_trackable_tracker_);
+      object_trackable_tracker_ = XR_NULL_HANDLE;
+      if (XR_FAILED(result)) {
+        LOG(ERROR) << "Failed to destroy object tracker with error: "
+                   << XrEnumStr(result);
+      }
+    }
+    
     // Destroy hand trackers.
     if (left_hand_tracker_ != XR_NULL_HANDLE) {
       XrResult result = destroy_hand_tracker_(left_hand_tracker_);
@@ -782,7 +931,17 @@ void OpenXrManager::DeInitWithLockHeld(bool stop_polling_thread) {
                    << XrEnumStr(result);
       }
     }
-
+    
+    // Destroy face tracker.
+    if (face_tracker_ != XR_NULL_HANDLE) {
+      XrResult result = destroy_face_tracker_(face_tracker_);
+      face_tracker_ = XR_NULL_HANDLE;
+      if (XR_FAILED(result)) {
+        LOG(ERROR) << "Failed to destroy face tracker with error: "
+                   << XrEnumStr(result);
+      }
+    }
+    
     // Destroy the persistence handle.
     if (persistence_handle_ != XR_NULL_HANDLE) {
       XrResult result = destroy_device_anchor_persistence_(persistence_handle_);
@@ -792,7 +951,7 @@ void OpenXrManager::DeInitWithLockHeld(bool stop_polling_thread) {
                    << XrEnumStr(result);
       }
     }
-
+    
     // Destroy the depth.
     if (depth_swapchain_handle_ != XR_NULL_HANDLE) {
       XrResult destroy_depth_result =
@@ -803,7 +962,7 @@ void OpenXrManager::DeInitWithLockHeld(bool stop_polling_thread) {
                    << XrEnumStr(destroy_depth_result);
       }
     }
-
+    
     // Destroy view space.
     if (view_space_ != XR_NULL_HANDLE) {
       XrResult destroy_view_space_result = xrDestroySpace(view_space_);
@@ -813,14 +972,13 @@ void OpenXrManager::DeInitWithLockHeld(bool stop_polling_thread) {
                    << XrEnumStr(destroy_view_space_result);
       }
     }
-
+    
     instance_ = XR_NULL_HANDLE;
     system_id_ = XR_NULL_SYSTEM_ID;
     session_ = XR_NULL_HANDLE;
     stop_polling_ = true;
     planes_trackable_tracker_ = XR_NULL_HANDLE;
-    persist_anchor_uuid_to_space_map_.clear();
-    java_env_->DeleteGlobalRef(activity_);
+    face_tracker_calibration_state_ = FaceTrackingCalibrationState::kUnknown;
   }
   if (stop_polling_thread) {
     JoinPollingThread();
@@ -849,7 +1007,7 @@ bool OpenXrManager::PauseSession() {
   return true;
 }
 
-bool OpenXrManager::LoadOpenXr() {
+bool OpenXrManager::LoadOpenXr(jobject activity) {
   PFN_xrInitializeLoaderKHR initialize_loader = nullptr;
 
   // Gets a function pointer to the OpenXR loader.
@@ -866,7 +1024,7 @@ bool OpenXrManager::LoadOpenXr() {
     loader_init_info_android = {
         .type = XR_TYPE_LOADER_INIT_INFO_ANDROID_KHR,
         .applicationVM = app_vm_,
-        .applicationContext = activity_,
+        .applicationContext = activity,
     };
   }
 
@@ -878,14 +1036,14 @@ bool OpenXrManager::LoadOpenXr() {
   return true;
 }
 
-bool OpenXrManager::CreateInstance() {
+bool OpenXrManager::CreateInstance(jobject activity) {
   XrInstanceCreateInfoAndroidKHR create_info_android;
   {
     absl::MutexLock lock(&mutex_);
     create_info_android = {
         .type = XR_TYPE_INSTANCE_CREATE_INFO_ANDROID_KHR,
         .applicationVM = app_vm_,
-        .applicationActivity = activity_,
+        .applicationActivity = activity,
     };
   }
 
@@ -963,8 +1121,9 @@ XrResult OpenXrManager::ConfigureSession(
     result = ConfigureFeatures(new_config_settings);
     if (XR_FAILED(result)) {
       AbortConfigureSession();
+    } else {
+      config_settings_ = new_config_settings;
     }
-    config_settings_ = new_config_settings;
     return result;
   }
 }
@@ -976,20 +1135,28 @@ XrResult OpenXrManager::ConfigureFeatures(
   XR_RETURN_RESULT_IF_FAILED(
       ConfigureHandTracking(new_config_settings.hand_tracking_mode));
   XR_RETURN_RESULT_IF_FAILED(
+      ConfigureHeadTracking(new_config_settings.head_tracking_mode));
+  XR_RETURN_RESULT_IF_FAILED(
       ConfigureDepthEstimation(new_config_settings.depth_estimation_mode));
   XR_RETURN_RESULT_IF_FAILED(
       ConfigureAnchorPersistence(new_config_settings.anchor_persistence_mode));
   XR_RETURN_RESULT_IF_FAILED(
-      ConfigureHeadTracking(new_config_settings.head_tracking_mode));
+      ConfigureFaceTracking(new_config_settings.face_tracking_mode));
+  XR_RETURN_RESULT_IF_FAILED(
+      ConfigureObjectTracking(new_config_settings.object_tracking_mode,
+                              new_config_settings.object_tracking_labels));
   return XR_SUCCESS;
 }
 
 void OpenXrManager::AbortConfigureSession() {
   ConfigurePlaneTracking(config_settings_.plane_tracking_mode);
   ConfigureHandTracking(config_settings_.hand_tracking_mode);
+  ConfigureHeadTracking(config_settings_.head_tracking_mode);
   ConfigureDepthEstimation(config_settings_.depth_estimation_mode);
   ConfigureAnchorPersistence(config_settings_.anchor_persistence_mode);
-  ConfigureHeadTracking(config_settings_.head_tracking_mode);
+  ConfigureFaceTracking(config_settings_.face_tracking_mode);
+  ConfigureObjectTracking(config_settings_.object_tracking_mode,
+                          config_settings_.object_tracking_labels);
 }
 
 XrResult OpenXrManager::ConfigurePlaneTracking(PlaneTrackingMode mode) {
@@ -1003,9 +1170,40 @@ XrResult OpenXrManager::ConfigurePlaneTracking(PlaneTrackingMode mode) {
       return XR_SUCCESS;
       break;
     }
-    case PlaneTrackingMode::kEnabled: {
+    case PlaneTrackingMode::kHorizontalAndVertical: {
       return MaybeCreatePlanesTracker();
       break;
+    }
+  }
+}
+
+XrResult OpenXrManager::ConfigureObjectTracking(
+    const ObjectTrackingMode &object_tracking_mode,
+    const std::vector<XrObjectLabelANDROID> &object_tracking_labels) {
+  if (object_trackable_tracker_ != XR_NULL_HANDLE) {
+    XR_RETURN_RESULT_IF_FAILED(
+        destroy_trackable_tracker_(object_trackable_tracker_));
+    object_trackable_tracker_ = XR_NULL_HANDLE;
+  }
+
+  switch (object_tracking_mode) {
+    case ObjectTrackingMode::kDisabled: {
+      object_tracking_config_ = {
+          .type = XR_TYPE_TRACKABLE_OBJECT_CONFIGURATION_ANDROID,
+          .next = nullptr,
+          .labelCount = 0,
+          .activeLabels = nullptr,
+      };
+      return XR_SUCCESS;
+    }
+    case ObjectTrackingMode::kEnabled: {
+      object_tracking_config_ = {
+        .type = XR_TYPE_TRACKABLE_OBJECT_CONFIGURATION_ANDROID,
+        .next = nullptr,
+        .labelCount = (uint32_t)object_tracking_labels.size(),
+        .activeLabels = object_tracking_labels.data(),
+      };
+      return MaybeCreateObjectTracker();
     }
   }
 }
@@ -1024,11 +1222,16 @@ XrResult OpenXrManager::ConfigureHandTracking(HandTrackingMode mode) {
       return XR_SUCCESS;
       break;
     }
-    case HandTrackingMode::kEnabled: {
+    case HandTrackingMode::kBoth: {
       return MaybeCreateHandTrackers();
       break;
     }
   }
+}
+
+// TODO: (broken link) - Implement head tracking configuration.
+XrResult OpenXrManager::ConfigureHeadTracking(HeadTrackingMode mode) {
+  return XR_SUCCESS;
 }
 
 XrResult OpenXrManager::ConfigureDepthEstimation(DepthEstimationMode mode) {
@@ -1042,8 +1245,20 @@ XrResult OpenXrManager::ConfigureDepthEstimation(DepthEstimationMode mode) {
       return XR_SUCCESS;
       break;
     };
-    case DepthEstimationMode::kEnabled: {
-      return CreateDepthSwapchainIfNecessary();
+    case DepthEstimationMode::kRawOnly: {
+      depth_image_buffer_count_ = 4;
+      return CreateDepthSwapchainIfNecessary(mode);
+      break;
+    };
+    case DepthEstimationMode::kSmoothOnly: {
+      depth_image_buffer_count_ = 4;
+      return CreateDepthSwapchainIfNecessary(mode);
+      break;
+    };
+    case DepthEstimationMode::kSmoothAndRaw: {
+      LOG(ERROR) << "OpenXR does not support both raw and smooth"
+                 << "depth images at the same time.";
+      return XR_ERROR_RUNTIME_FAILURE;
       break;
     };
   }
@@ -1060,25 +1275,25 @@ XrResult OpenXrManager::ConfigureAnchorPersistence(AnchorPersistenceMode mode) {
       return XR_SUCCESS;
       break;
     };
-    case AnchorPersistenceMode::kEnabled: {
+    case AnchorPersistenceMode::kLocal: {
       return CreatePersistenceHandleIfNecessary();
       break;
     };
   }
 }
 
-XrResult OpenXrManager::ConfigureHeadTracking(HeadTrackingMode mode) {
+XrResult OpenXrManager::ConfigureFaceTracking(FaceTrackingMode mode) {
   switch (mode) {
-    case HeadTrackingMode::kDisabled: {
-      if (view_space_ != XR_NULL_HANDLE) {
-        XR_RETURN_RESULT_IF_FAILED(xrDestroySpace(view_space_));
-        view_space_ = XR_NULL_HANDLE;
+    case FaceTrackingMode::kDisabled: {
+      if (face_tracker_ != XR_NULL_HANDLE) {
+        XR_RETURN_RESULT_IF_FAILED(destroy_face_tracker_(face_tracker_));
+        face_tracker_ = XR_NULL_HANDLE;
       }
       return XR_SUCCESS;
       break;
     };
-    case HeadTrackingMode::kEnabled: {
-      return MaybeCreateViewReferenceSpace();
+    case FaceTrackingMode::kUser: {
+      return MaybeCreateFaceTracker();
       break;
     };
   }
@@ -1091,8 +1306,24 @@ XrResult OpenXrManager::MaybeCreatePlanesTracker() {
   XrTrackableTrackerCreateInfoANDROID createInfo = {
       .type = XR_TYPE_TRACKABLE_TRACKER_CREATE_INFO_ANDROID,
       .trackableType = XR_TRACKABLE_TYPE_PLANE_ANDROID};
+  XR_RETURN_RESULT_IF_FAILED(create_trackable_tracker_(
+      session_, &createInfo, &planes_trackable_tracker_));
+  return XR_SUCCESS;
+}
+
+XrResult OpenXrManager::MaybeCreateObjectTracker() {
+  if (object_trackable_tracker_ != XR_NULL_HANDLE) {
+    return XR_SUCCESS;
+  }
+  XrTrackableTrackerCreateInfoANDROID createInfo = {
+      .type = XR_TYPE_TRACKABLE_TRACKER_CREATE_INFO_ANDROID,
+      .trackableType = XR_TRACKABLE_TYPE_OBJECT_ANDROID};
+
+  if (object_tracking_config_.labelCount != UINT32_MAX) {
+    createInfo.next = &object_tracking_config_;
+  }
   return create_trackable_tracker_(session_, &createInfo,
-                                   &planes_trackable_tracker_);
+                                   &object_trackable_tracker_);
 }
 
 XrResult OpenXrManager::MaybeCreateHandTrackers() {
@@ -1115,8 +1346,69 @@ XrResult OpenXrManager::MaybeCreateHandTrackers() {
         .hand = XR_HAND_RIGHT_EXT,
         .handJointSet = XR_HAND_JOINT_SET_DEFAULT_EXT,
     };
-    return create_hand_tracker_(session_, &right_hand_tracker_create_info,
-                                &right_hand_tracker_);
+    XR_RETURN_RESULT_IF_FAILED(create_hand_tracker_(
+        session_, &right_hand_tracker_create_info, &right_hand_tracker_));
+  }
+  return XR_SUCCESS;
+}
+
+XrResult OpenXrManager::MaybeCreateFaceTracker() {
+  if (face_tracker_ == XR_NULL_HANDLE) {
+    XrFaceTrackerCreateInfoANDROID face_tracker_create_info = {
+        .type = XR_TYPE_FACE_TRACKER_CREATE_INFO_ANDROID,
+        .next = nullptr,
+    };
+    XR_RETURN_RESULT_IF_FAILED(create_face_tracker_(
+        session_, &face_tracker_create_info, &face_tracker_));
+  }
+
+  XrBool32 isCalibrated = face_tracker_calibration_state_ >
+                          FaceTrackingCalibrationState::kServiceNotReady;
+  XrResult result = get_face_calibration_state_(face_tracker_, &isCalibrated);
+  int attempts = 0;
+  while (XR_FAILED(result) && attempts < kFaceTrackerStartupCheckMaxAttempts) {
+    face_tracker_calibration_state_ =
+        FaceTrackingCalibrationState::kServiceNotReady;
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(kFaceTrackerStartupWaitMs));
+    result = get_face_calibration_state_(face_tracker_, &isCalibrated);
+    attempts++;
+  }
+  face_tracker_calibration_state_ =
+      isCalibrated ? FaceTrackingCalibrationState::kCalibrated
+                   : FaceTrackingCalibrationState::kNotCalibrated;
+  return XR_SUCCESS;
+}
+
+XrResult OpenXrManager::GetFaceState(XrTime time,
+                                     XrFaceStateANDROID *outFaceState,
+                                     std::vector<float> &out_blend_shape_values,
+                                     std::vector<float> &out_confidence_values)
+    {
+  absl::MutexLock lock(&mutex_);
+  XrFaceStateGetInfoANDROID getInfo = {
+      .type = XR_TYPE_FACE_STATE_GET_INFO_ANDROID,
+      .next = nullptr,
+      .time = time};
+
+  out_blend_shape_values.resize(XR_FACE_PARAMETER_COUNT_ANDROID);
+  out_confidence_values.resize(XR_FACE_REGION_CONFIDENCE_COUNT_ANDROID);
+
+  *outFaceState = {
+      .type = XR_TYPE_FACE_STATE_ANDROID,
+      .next = nullptr,
+      .parametersCapacityInput = XR_FACE_PARAMETER_COUNT_ANDROID,
+      .parametersCountOutput = XR_FACE_PARAMETER_COUNT_ANDROID,
+      .parameters = out_blend_shape_values.data(),
+      .regionConfidencesCapacityInput = XR_FACE_REGION_CONFIDENCE_COUNT_ANDROID,
+      .regionConfidencesCountOutput = XR_FACE_REGION_CONFIDENCE_COUNT_ANDROID,
+      .regionConfidences = out_confidence_values.data(),
+  };
+
+  XrResult result = get_face_state_(face_tracker_, &getInfo, outFaceState);
+  if (XR_FAILED(result)) {
+    LOG(ERROR) << "Failed to get face state with error: " << XrEnumStr(result);
+    return result;
   }
   return XR_SUCCESS;
 }
@@ -1129,22 +1421,45 @@ XrResult OpenXrManager::CreatePersistenceHandleIfNecessary() {
       .type = XR_TYPE_DEVICE_ANCHOR_PERSISTENCE_CREATE_INFO_ANDROID,
       .next = nullptr,
   };
-  return create_device_anchor_persistence_(session_, &create_info,
-                                           &persistence_handle_);
+  XR_RETURN_RESULT_IF_FAILED(create_device_anchor_persistence_(
+      session_, &create_info, &persistence_handle_));
+  return XR_SUCCESS;
 }
 
-XrResult OpenXrManager::CreateDepthSwapchainIfNecessary() {
-  if (depth_swapchain_handle_ != XR_NULL_HANDLE) {
+XrResult OpenXrManager::CreateDepthSwapchainIfNecessary(
+    DepthEstimationMode mode) {
+  if (config_settings_.depth_estimation_mode != mode &&
+      depth_swapchain_handle_ != XR_NULL_HANDLE) {
+    XR_RETURN_RESULT_IF_FAILED(
+        destroy_depth_swapchain_(depth_swapchain_handle_));
+    depth_swapchain_handle_ = XR_NULL_HANDLE;
+  } else if (depth_swapchain_handle_ != XR_NULL_HANDLE) {
     return XR_SUCCESS;
   }
-
+  XrDepthSwapchainCreateFlagsANDROID depthSwapchainFlags =
+      mode == DepthEstimationMode::kRawOnly ? kDepthSwapchainRawOnlyFlags
+                                            : kDepthSwapchainSmoothOnlyFlags;
+  std::vector<XrDepthCameraResolutionANDROID> supported_depth_resolutions_;
   uint32_t supported_resolution_count = 0;
   XR_RETURN_RESULT_IF_FAILED(enumerate_depth_resolutions_(
-      session_, 1, &supported_resolution_count, &supported_depth_resolution_));
+      /*session=*/session_, /*resolutionCapacityInput=*/0,
+      /*resolutionCountOutput=*/&supported_resolution_count,
+      /*resolutions=*/nullptr));
+
   if (supported_resolution_count == 0) {
     LOG(ERROR) << "No supported depth resolutions found.";
     return XR_ERROR_RUNTIME_FAILURE;
   }
+
+  supported_depth_resolutions_.resize(supported_resolution_count);
+
+  XR_RETURN_RESULT_IF_FAILED(enumerate_depth_resolutions_(
+      /*session=*/session_,
+      /*resolutionCapacityInput=*/supported_resolution_count,
+      /*resolutionCountOutput=*/&supported_resolution_count,
+      /*resolutions=*/supported_depth_resolutions_.data()));
+
+  supported_depth_resolution_ = supported_depth_resolutions_[0];
 
   LOG(INFO) << "Supported depth resolution: "
             << XrDepthCameraResolutionEnumStr(supported_depth_resolution_);
@@ -1153,36 +1468,128 @@ XrResult OpenXrManager::CreateDepthSwapchainIfNecessary() {
       .type = XR_TYPE_DEPTH_SWAPCHAIN_CREATE_INFO_ANDROID,
       .next = nullptr,
       .resolution = supported_depth_resolution_,
-      .createFlags =
-          XR_DEPTH_SWAPCHAIN_CREATE_SMOOTH_DEPTH_IMAGE_BIT_ANDROID |
-          XR_DEPTH_SWAPCHAIN_CREATE_SMOOTH_CONFIDENCE_IMAGE_BIT_ANDROID |
-          XR_DEPTH_SWAPCHAIN_CREATE_RAW_DEPTH_IMAGE_BIT_ANDROID |
-          XR_DEPTH_SWAPCHAIN_CREATE_RAW_CONFIDENCE_IMAGE_BIT_ANDROID,
-  };
-  XR_RETURN_RESULT_IF_FAILED(create_depth_swapchain_(session_, &create_info,
-                                                     &depth_swapchain_handle_));
+      .createFlags = depthSwapchainFlags};
+  XR_RETURN_RESULT_IF_FAILED(
+      create_depth_swapchain_(/*session=*/session_,
+                              /*createInfo=*/&create_info,
+                              /*swapchain=*/&depth_swapchain_handle_));
 
   uint32_t swapchain_size = 0;
   XR_RETURN_RESULT_IF_FAILED(enumerate_depth_swapchain_images_(
-      depth_swapchain_handle_, 0, &swapchain_size, nullptr));
+      /*depthSwapchain=*/depth_swapchain_handle_,
+      /*depthImageCapacityInput=*/0, /*depthImageCountOutput=*/&swapchain_size,
+      /*depthImages=*/nullptr));
   LOG(INFO) << "Depth texture swapchain has size = " << swapchain_size;
 
   depth_images_.resize(swapchain_size);
   for (uint32_t i = 0; i < swapchain_size; ++i) {
     depth_images_[i] = {.type = XR_TYPE_DEPTH_SWAPCHAIN_IMAGE_ANDROID};
   }
-  XR_RETURN_RESULT_IF_FAILED(
-      enumerate_depth_swapchain_images_(depth_swapchain_handle_, swapchain_size,
-                                        &swapchain_size, depth_images_.data()));
+  XR_RETURN_RESULT_IF_FAILED(enumerate_depth_swapchain_images_(
+      /*depthSwapchain=*/depth_swapchain_handle_,
+      /*depthImageCapacityInput*/ swapchain_size,
+      /*depthImageCountOutput*/ &swapchain_size,
+      /*depthImages*/ depth_images_.data()));
 
   LOG(INFO) << "Depth swapchain created successfully.";
+
+  if (!GetDepthCameraImageWidthAndHeight(supported_depth_resolution_,
+                                         &depth_image_width_,
+                                         &depth_image_height_)) {
+    LOG(ERROR) << "Failed to get depth image width and height.";
+    return XR_ERROR_RUNTIME_FAILURE;
+  }
+
+  depth_data_image_num_elements_ = depth_image_width_ * depth_image_height_;
+  depth_data_image_buffer_size_ =
+      sizeof(float) * depth_image_width_ * depth_image_height_;
+  depth_data_confidence_image_buffer_size_ =
+      sizeof(uint8_t) * depth_image_width_ * depth_image_height_;
+
   return XR_SUCCESS;
+}
+
+std::vector<XrTrackableANDROID> OpenXrManager::GetTrackableObjects(
+    XrTime time) {
+  uint32_t trackableCountOutput = 0;
+
+  // Query the number of trackables
+  XrResult result;
+  {
+    absl::MutexLock lock(&mutex_);
+    if (object_trackable_tracker_ == XR_NULL_HANDLE) {
+      LOG(ERROR) << "Object trackable tracker is null";
+      return {};
+    }
+    result = get_all_trackables_(object_trackable_tracker_, 0,
+                                 &trackableCountOutput, nullptr);
+  }
+
+  if (result != XR_SUCCESS) {
+    LOG(ERROR) << "Unable to query trackables with error: "
+               << XrEnumStr(result);
+    return {};
+  }
+
+  if (trackableCountOutput == 0) {
+    return {};
+  }
+
+  std::vector<XrTrackableANDROID> all_objects;
+  all_objects.resize(trackableCountOutput);
+
+  // Fetch the actual trackable handles in the appropriately resized array.
+  {
+    absl::MutexLock lock(&mutex_);
+    result = get_all_trackables_(object_trackable_tracker_,
+                                 trackableCountOutput, &trackableCountOutput,
+                                 all_objects.data());
+  }
+
+  if (result != XR_SUCCESS) {
+    LOG(ERROR) << "Unable to get trackables with error: " << XrEnumStr(result);
+    return {};
+  }
+
+  return all_objects;
+}
+
+bool OpenXrManager::GetTrackableObjectState(XrTrackableANDROID object_id,
+                                  XrReferenceSpaceType reference_space_type,
+                                  XrTime time,
+                                  XrTrackableObjectANDROID &out_object) {
+  XrSpace base_space = GetSpaceInReferenceSpace(reference_space_type);
+  if (base_space == XR_NULL_HANDLE) {
+    return false;
+  }
+  XrTrackableGetInfoANDROID object_get_info = {
+      .type = XR_TYPE_TRACKABLE_GET_INFO_ANDROID,
+      .trackable = object_id,
+      .baseSpace = base_space,
+      .time = time,
+  };
+
+  out_object.type = XR_TYPE_TRACKABLE_OBJECT_ANDROID;
+  out_object.next = nullptr;
+
+  XrResult result;
+  {
+    absl::ReaderMutexLock lock(&mutex_);
+    result = get_trackable_object_(object_trackable_tracker_, &object_get_info,
+                                  &out_object);
+  }
+  if (XR_FAILED(result)) {
+    LOG(ERROR) << "Failed to get trackable object state with error: "
+               << XrEnumStr(result);
+    return false;
+  }
+  return true;
 }
 
 std::vector<XrTrackableANDROID> OpenXrManager::GetPlanes() {
   uint32_t trackableCountOutput = 0;
 
-  // Query the number of trackables available.
+  // Query the number of trackables
   XrResult result;
   {
     absl::MutexLock lock(&mutex_);
@@ -1219,7 +1626,8 @@ std::vector<XrTrackableANDROID> OpenXrManager::GetPlanes() {
 bool OpenXrManager::GetPlaneState(XrTrackableANDROID plane_id,
                                   XrReferenceSpaceType reference_space_type,
                                   XrTime time,
-                                  XrTrackablePlaneANDROID &out_plane) {
+                                  XrTrackablePlaneANDROID &out_plane,
+                                  std::vector<XrVector2f> &out_vertices) {
   XrSpace base_space = GetSpaceInReferenceSpace(reference_space_type);
   if (base_space == XR_NULL_HANDLE) {
     return false;
@@ -1242,11 +1650,9 @@ bool OpenXrManager::GetPlaneState(XrTrackableANDROID plane_id,
                << XrEnumStr(result);
     return false;
   }
-
   out_plane.vertexCapacityInput = *out_plane.vertexCountOutput;
-  std::vector<XrVector2f> vertices;
-  vertices.resize(*out_plane.vertexCountOutput);
-  out_plane.vertices = vertices.data();
+  out_vertices.resize(*out_plane.vertexCountOutput);
+  out_plane.vertices = out_vertices.data();
   {
     absl::ReaderMutexLock lock(&mutex_);
     result = get_trackable_plane_(planes_trackable_tracker_, &plane_get_info,
@@ -1351,6 +1757,7 @@ OpenXrManager::CreateAnchorResult OpenXrManager::CreateAnchorForPlane(
   // If the provided plane is null, we will retrieve the plane from the
   // trackable.
   uint32_t vertex_count = 0;
+  std::vector<XrVector2f> vertices;  // needs same lifetime as retrieved_plane
   XrTrackablePlaneANDROID retrieved_plane = {
       .type = XR_TYPE_TRACKABLE_PLANE_ANDROID,
       .vertexCapacityInput = 0,
@@ -1358,7 +1765,7 @@ OpenXrManager::CreateAnchorResult OpenXrManager::CreateAnchorForPlane(
       .vertices = nullptr,
   };
   if (plane == nullptr && !GetPlaneState(trackable, default_reference_space_,
-                                         time, retrieved_plane)) {
+                                         time, retrieved_plane, vertices)) {
     LOG(ERROR) << "Failed to get plane for trackable during anchor creation.";
     return CreateAnchorResult::kErrorRuntimeFailure;
   }
@@ -1384,6 +1791,53 @@ OpenXrManager::CreateAnchorResult OpenXrManager::CreateAnchorForPlane(
                                      out_anchor_space);
     if (XR_FAILED(xr_result)) {
       LOG(ERROR) << "Failed to create anchor for plane with: "
+                 << XrEnumStr(xr_result);
+    }
+  }
+  return MapAnchorCreateResult(xr_result);
+}
+
+OpenXrManager::CreateAnchorResult OpenXrManager::CreateAnchorForObject(
+    XrTrackableANDROID trackable, XrTrackableObjectANDROID *object, XrTime time,
+    const XrPosef &relative_pose, XrSpace *out_anchor_space) {
+  if (trackable == XR_NULL_TRACKABLE_ANDROID) {
+    LOG(ERROR) << "Cannot create anchor for null trackable.";
+    return CreateAnchorResult::kErrorRuntimeFailure;
+  }
+
+  // If the provided object is null, we will retrieve the object from the
+  // trackable.
+  XrTrackableObjectANDROID retrieved_object = {
+      .type = XR_TYPE_TRACKABLE_OBJECT_ANDROID,
+  };
+  if (object == nullptr &&
+      !GetTrackableObjectState(trackable, default_reference_space_, time,
+                               retrieved_object)) {
+    LOG(ERROR) << "Failed to get object for trackable during anchor creation.";
+    return CreateAnchorResult::kErrorRuntimeFailure;
+  }
+
+  // We are creating the anchor relative to the center pose of the object as we
+  // currently see it. If further tracking on the object shows the center
+  // pose in a different place, the anchor position will NOT update to the
+  // new center pose.
+  XrAnchorSpaceCreateInfoANDROID trackableAnchorCreateInfo = {
+      .type = XR_TYPE_ANCHOR_SPACE_CREATE_INFO_ANDROID,
+      .space = GetSpaceInDefaultReferenceSpace(),
+      .time = time,
+      .pose = MultiplyPoses(
+          object == nullptr ? retrieved_object.centerPose : object->centerPose,
+          relative_pose),
+      .trackable = trackable,
+  };
+
+  XrResult xr_result;
+  {
+    absl::ReaderMutexLock lock(&mutex_);
+    xr_result = create_anchor_space_(session_, &trackableAnchorCreateInfo,
+                                     out_anchor_space);
+    if (XR_FAILED(xr_result)) {
+      LOG(ERROR) << "Failed to create anchor for objectwith: "
                  << XrEnumStr(xr_result);
     }
   }
@@ -1443,12 +1897,6 @@ bool OpenXrManager::DestroyAnchor(XrSpace anchor_space) {
 }
 
 bool OpenXrManager::GetHeadPose(XrTime time, XrPosef *out_pose) {
-  {
-    absl::MutexLock lock(&mutex_);
-    if (XR_FAILED(MaybeCreateViewReferenceSpace())) {
-      return false;
-    }
-  }
   XrSpaceLocation space_location = {.type = XR_TYPE_SPACE_LOCATION,
                                     .next = nullptr,
                                     .locationFlags = 0,
@@ -1470,11 +1918,20 @@ bool OpenXrManager::GetHeadPose(XrTime time, XrPosef *out_pose) {
 
 bool OpenXrManager::GetStereoViews(XrTime time,
                                    std::vector<XrView> *out_views) {
+  return GetStereoViews(time, /*is_head_tracking_enabled=*/true, out_views);
+}
+
+bool OpenXrManager::GetStereoViews(XrTime time, bool is_head_tracking_enabled,
+                                   std::vector<XrView> *out_views) {
   if (out_views == nullptr || out_views->size() != kViewTypeStereoViewCount) {
     LOG(ERROR) << "GetStereoViews expected out_views to be of size "
                << kViewTypeStereoViewCount << " but got " << out_views->size();
     return false;
   }
+
+  XrSpace space = is_head_tracking_enabled
+                      ? GetSpaceInDefaultReferenceSpace()
+                      : GetSpaceInReferenceSpace(XR_REFERENCE_SPACE_TYPE_VIEW);
 
   XrViewState view_state{.type = XR_TYPE_VIEW_STATE, .next = nullptr};
   const XrViewLocateInfo view_locate_info = {
@@ -1482,7 +1939,7 @@ bool OpenXrManager::GetStereoViews(XrTime time,
       .next = nullptr,
       .viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
       .displayTime = time,
-      .space = GetSpaceInDefaultReferenceSpace()};
+      .space = space};
   uint32_t view_count;
   {
     absl::MutexLock lock(&mutex_);

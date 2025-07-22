@@ -217,6 +217,12 @@ def if_imp_use_local_split_engine_materials(a, otherwise = []):
         "//conditions:default": otherwise,
     })
 
+def if_imp_perfetto_enabled(enabled, disabled):
+    return select({
+        clean_dep("@com_google_impress//core:imp_perfetto_enabled"): enabled,
+        "//conditions:default": disabled,
+    })
+
 # Whether the target we're compiling for should pack-in generic materials for glTF loading.
 # We pack-in on desktop platforms, on the iOS Simulator (which can't hit gstatic), or if requested
 # on the command line via --define=IMP_EMBED_ASSETS=1
@@ -301,6 +307,9 @@ def imp_defines():
         ["IMP_ENABLE_RECIPE_EXPERIMENTAL"],
     ) + if_imp_use_local_split_engine_materials(
         ["IMP_USE_LOCAL_SPLIT_ENGINE_MATERIALS"],
+    ) + if_imp_perfetto_enabled(
+        enabled = ["IMP_TRACE_USE_PERFETTO=1"],
+        disabled = ["IMP_TRACE_USE_PERFETTO=0"],
     )
     return out_defines
 

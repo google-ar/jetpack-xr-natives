@@ -43,6 +43,8 @@ cc_library(
         "//core/common:registry",
         "//core/math",
         "//core/model",
+        "//core/recipes/language:recipe_async_execution_manager",
+        "//core/recipes/language:recipe_execution_context",
         "//core/recipes/language:recipe_graph_cc",
         "//core/recipes/language:recipe_runtime_event",
         "//core/recipes/language:recipe_runtime_graph",

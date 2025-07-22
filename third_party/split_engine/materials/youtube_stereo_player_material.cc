@@ -56,6 +56,8 @@ YouTubeStereoPlayerMaterial::YouTubeStereoPlayerMaterial(
                               BuiltInMaterialEb117dd9Parameters,
                           std::move(material)) {}
 
+YouTubeStereoPlayerMaterial::~YouTubeStereoPlayerMaterial() { Cleanup(); }
+
 flatbuffers::Offset<void> YouTubeStereoPlayerMaterial::SerializeParameters(
     flatbuffers::FlatBufferBuilder& fbb,
     imp::split_engine::BuiltInTextureParameterCreator&

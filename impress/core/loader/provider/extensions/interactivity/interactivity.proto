@@ -60,6 +60,7 @@ message Interactivity {
     }
 
     message Node {
+      // TODO: Remove unused configuration types.
       enum ConfigurationType {
         UNKNOWN = 0;
         VARIABLE = 1;
@@ -71,6 +72,11 @@ message Interactivity {
         EASING_TYPE = 7;
         EASING_DURATION = 8;
         CASES = 9;
+        TYPE = 10;
+        NUMBER_OF_INPUT_FLOWS = 11;
+        IS_RANDOM = 12;
+        IS_LOOP = 13;
+        MESSAGE = 14;
       }
 
       message Flow {
@@ -84,13 +90,12 @@ message Interactivity {
         }
 
         ConfigurationType id = 1;
-        ValueType type = 2;
         oneof value {
-          sint32 value_int = 3;
-          string value_string = 4;
-          bool value_bool = 5;
-          float value_float = 6;
-          IntArray value_int_array = 7;
+          sint32 value_int = 2;
+          string value_string = 3;
+          bool value_bool = 4;
+          float value_float = 5;
+          IntArray value_int_array = 6;
         }
       }
 
@@ -113,15 +118,7 @@ message Interactivity {
     }
 
     message Type {
-      message InteractivityString {}
-      message Extensions {
-        InteractivityString interactivity_string = 1 [
-          json_name = "AMZN_interactivity_string",
-          (imp.optional_type) = ABSL_OPTIONAL
-        ];
-      }
       string signature = 1;
-      Extensions extensions = 2;
     }
 
     repeated Node nodes = 1;

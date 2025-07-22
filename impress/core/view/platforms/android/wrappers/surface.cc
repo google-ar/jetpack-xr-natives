@@ -26,25 +26,12 @@
 #include "absl/strings/str_cat.h"
 #include "core/common/context.h"
 #include "core/common/jni_helpers.h"
-#include "core/config.h"
 #include "core/render/content_security_level.h"
 #include "core/view/platforms/android/wrappers/canvas.h"
 #include "core/view/platforms/android/wrappers/surface_texture.h"
 #include "mediapipe/framework/port/status_macros.h"
 
-#if IMP_PLATFORM(ANDROID)
-#include <android/hardware_buffer.h>
-#include <android/native_window.h>
-#include <android/native_window_jni.h>
-#include <errno.h>
-
-#include <cstdint>
-#endif
-
 namespace imp::android {
-
-FPANativeWindow_setUsage Surface::ANativeWindow_setUsage_ = nullptr;
-FPANativeWindow_release Surface::ANativeWindow_release_ = nullptr;
 
 Surface::Surface(const Context& context, jobject j_surface)
     : JavaWrapper(context.GetJniEnv(), j_surface) {
@@ -97,36 +84,6 @@ Surface::Surface(const Context& context, SurfaceTexture& surface_texture,
 
 absl::Status Surface::Initialize() {
   InitializeJniHandles();
-
-#if IMP_PLATFORM(ANDROID)
-  if (security_level_ == ContentSecurityLevel::kProtected) {
-    // Load the necessary runtime symbols.
-    if (LoadRuntimeLibraries() != absl::OkStatus() ||
-        Surface::LoadRuntimeLibraries() != absl::OkStatus()) {
-      return absl::InternalError(
-          "Cannot load the required runtime symbols. Can not support protected "
-          "content.");
-    }
-
-    // Get the native window.
-    ANativeWindow* nativeWindow =
-        ANativeWindow_fromSurface(Env(), WeakReference());
-    if (nativeWindow == nullptr) {
-      return absl::InternalError("Failed to get native window.");
-    }
-
-    // Set the protected usage flag.
-    uint64_t usage = AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE |  // default
-                     AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT |   // default
-                     AHARDWAREBUFFER_USAGE_PROTECTED_CONTENT;
-    if (-ENOENT == ANativeWindow_setUsage_(nativeWindow, usage)) {
-      return absl::InternalError("Failed to set protected usage flag.");
-    }
-
-    // Release the native window.
-    ANativeWindow_release_(nativeWindow);
-  }
-#endif
   return absl::OkStatus();
 }
 
@@ -136,39 +93,6 @@ Canvas Surface::LockHardwareCanvas() {
 
 void Surface::UnlockCanvasAndPost(Canvas& canvas) {
   CallVoidMethod(unlock_canvas_and_post_, canvas.WeakReference());
-}
-
-absl::Status Surface::LoadRuntimeLibraries() {
-  // Static initializers are guaranteed to be evaluated only once.
-  static absl::Status initialized = [] {
-    // Closes the library if an error occurred. Used as the deleter for
-    // unique_ptr.
-    auto library_deleter = [](void* library) { dlclose(library); };
-
-    // Load native window library which is used by the media NDK.
-    std::unique_ptr<void, decltype(library_deleter)> libnativewindow(
-        dlopen("libnativewindow.so", RTLD_NOW), library_deleter);
-    if (!libnativewindow) {
-      return absl::InternalError(
-          absl::StrCat("Unable to open libnativewindow.so: ", dlerror()));
-    }
-
-    ANativeWindow_setUsage_ = reinterpret_cast<FPANativeWindow_setUsage>(
-        dlsym(libnativewindow.get(), "ANativeWindow_setUsage"));
-    if (!ANativeWindow_setUsage_) {
-      return absl::InternalError("Unable to load ANativeWindow_setUsage");
-    }
-
-    ANativeWindow_release_ = reinterpret_cast<FPANativeWindow_release>(
-        dlsym(libnativewindow.get(), "ANativeWindow_release"));
-    if (!ANativeWindow_release_) {
-      return absl::InternalError("Unable to load ANativeWindow_release");
-    }
-
-    libnativewindow.release();
-    return absl::OkStatus();
-  }();
-  return initialized;
 }
 
 ContentSecurityLevel Surface::GetContentSecurityLevel() const {

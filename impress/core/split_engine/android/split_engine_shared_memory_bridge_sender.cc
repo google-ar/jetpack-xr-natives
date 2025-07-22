@@ -18,20 +18,26 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <map>
 #include <memory>
 #include <utility>
+#include <variant>
+#include <vector>
 
-#include "absl/functional/bind_front.h"
+#include "absl/base/const_init.h"
+#include "absl/container/flat_hash_set.h"
+#include "absl/log/check.h"
 #include "core/common/log.h"
+#include "absl/status/status.h"
+#include "absl/synchronization/mutex.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
-#include "core/common/platform_helpers.h"
 #include "core/split_engine/android/bridge_buffer.h"
-#include "core/split_engine/android/message_group_id_mapper.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/flatbuffer_arena_allocator.h"
 #include "core/split_engine/flatbuffer_size_calculator.h"
 #include "core/split_engine/shared/split_engine_defines.h"
+#include "core/split_engine/split_engine_bridge_sender.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
 
 namespace imp::split_engine {
@@ -46,18 +52,6 @@ void* AllocateSharedMemoryBuffer(size_t size_in_bytes, void* user) {
 void DeallocateSharedMemoryBuffer(void* ptr, void* user) {
   reinterpret_cast<SplitEngineSharedMemoryBridgeSender*>(user)
       ->DestroySharedMemoryBuffer(ptr);
-}
-
-template <typename T>
-void CreateMessageGroup(flatbuffers::FlatBufferBuilder& fbb,
-                        MessageGroupId message_group_id,
-                        flatbuffers::Offset<T> command_offset) {
-  flatbuffers::Offset<android_xr::schemas::MessageGroup> message_group =
-      android_xr::schemas::CreateMessageGroup(
-          fbb, message_group_id,
-          android_xr::schemas::MessageGroupTypesTraits<T>::enum_value,
-          command_offset.Union());
-  fbb.Finish(message_group);
 }
 
 size_t GetBeginMessageSize() {
@@ -83,16 +77,10 @@ size_t GetEndMessageSize() {
 }  // namespace
 
 SplitEngineSharedMemoryBridgeSender::SplitEngineSharedMemoryBridgeSender(
-    SplitEngineSharedMemoryBridgeClient& bridge,
-    std::unique_ptr<MessageGroupIdMapper> message_group_id_mapper,
-    bool recycle_buffers)
+    SplitEngineSharedMemoryBridgeClient& bridge, bool recycle_buffers)
     : bridge_(bridge),
-      message_group_id_mapper_(std::move(message_group_id_mapper)),
       recycle_buffers_(recycle_buffers),
-      message_group_active_(false) {
-  bridge_.RegisterReverseBridgeMessageHandler(absl::bind_front(
-      &SplitEngineSharedMemoryBridgeSender::OnMessageGroupComplete, this));
-}
+      active_message_group_id_(std::nullopt) {}
 
 void* SplitEngineSharedMemoryBridgeSender::CreateSharedMemoryBuffer(
     size_t size_in_bytes) {
@@ -112,14 +100,14 @@ void SplitEngineSharedMemoryBridgeSender::DestroySharedMemoryBuffer(
 
 void SplitEngineSharedMemoryBridgeSender::SendMessage(
     const flatbuffers::FlatBufferBuilder& builder) {
-  assert(builder.GetBufferPointer() > active_bridge_buffer_->Data());
-  int offset =
+  
+  const int offset =
       builder.GetBufferPointer() - (uint8_t*)active_bridge_buffer_->Data();
 
-  SplitEngineSharedMemoryBridgeClient::Result process_result =
+  absl::Status process_result =
       bridge_.ProcessRegion(active_bridge_buffer_->Handle(), offset,
-                            builder.GetSize());
-  if (!process_result.is_ok()) {
+                            static_cast<int>(builder.GetSize()));
+  if (!process_result.ok()) {
     IMP_LOG(imp::FATAL) << "Failed to queue buffer to rendering bridge: "
                << process_result.message();
   }
@@ -130,7 +118,7 @@ void SplitEngineSharedMemoryBridgeSender::BeginMessageGroup(size_t size_bytes) {
   FlatbufferArenaAllocator::ArenaHandle arena_handle =
       arena_allocator_.CreateArena(
           GetBeginMessageSize() + size_bytes + GetEndMessageSize(),
-          AllocateSharedMemoryBuffer, DeallocateSharedMemoryBuffer, this);
+          {AllocateSharedMemoryBuffer, DeallocateSharedMemoryBuffer, this});
 
   // Step 2: Remember which BridgeBuffer object this ArenaHandle is associated
   // with.
@@ -142,14 +130,27 @@ void SplitEngineSharedMemoryBridgeSender::BeginMessageGroup(size_t size_bytes) {
   // Step 3: Send a `BeginMessageGroup` message with the arena handle.
   flatbuffers::FlatBufferBuilder fbb(GetBeginMessageSize(), &arena_allocator_);
 
-  MessageGroupId msg_group_id =
-      message_group_id_mapper_->GetMessageGroupId(arena_handle);
+  MessageGroupId message_group_id = bridge_.GenerateMessageGroupId();
+  arena_handles_.emplace(message_group_id, arena_handle);
 
-  CreateMessageGroup(fbb, msg_group_id,
-                     android_xr::schemas::CreateBeginMessageGroup(fbb));
+  if (absl::Status enqueue_result =
+          SplitEngineBridgeSender::EnqueueMessageGroup(bridge_.GetClientId(),
+                                                       message_group_id);
+      !enqueue_result.ok()) {
+    IMP_LOG(imp::FATAL) << "EnqueueMessageGroupTransaction failed: "
+               << enqueue_result.ToString();
+  }
+
+  flatbuffers::Offset<android_xr::schemas::MessageGroupOperation> operation =
+      android_xr::schemas::CreateMessageGroupOperation(
+          fbb, message_group_id,
+          android_xr::schemas::MessageGroupOperationTypes::BeginMessageGroup,
+          android_xr::schemas::CreateBeginMessageGroup(fbb).Union());
+  fbb.Finish(operation);
+
   SendMessage(fbb);
 
-  message_group_active_ = true;
+  active_message_group_id_ = message_group_id;
 }
 
 std::unique_ptr<flatbuffers::FlatBufferBuilder>
@@ -160,33 +161,56 @@ SplitEngineSharedMemoryBridgeSender::CreateFlatBufferBuilder(
 }
 
 void SplitEngineSharedMemoryBridgeSender::EndMessageGroup() {
-  message_group_active_ = false;
+  
+  MessageGroupId message_group_id = *active_message_group_id_;
+  active_message_group_id_ = std::nullopt;
 
+  // Verify that the active arena is the one we expect.
   auto arena_handle = arena_allocator_.GetActiveArena();
+  
+
   flatbuffers::FlatBufferBuilder fbb(GetBeginMessageSize(), &arena_allocator_);
 
-  MessageGroupId msg_group_id =
-      message_group_id_mapper_->GetMessageGroupId(arena_handle);
-  CreateMessageGroup(fbb, msg_group_id,
-                     android_xr::schemas::CreateEndMessageGroup(fbb));
+  flatbuffers::Offset<android_xr::schemas::MessageGroupOperation> operation =
+      android_xr::schemas::CreateMessageGroupOperation(
+          fbb, message_group_id,
+          android_xr::schemas::MessageGroupOperationTypes::EndMessageGroup,
+          android_xr::schemas::CreateEndMessageGroup(fbb).Union());
+  fbb.Finish(operation);
+
   arena_allocator_.CloseActiveArena();
+
   SendMessage(fbb);
 }
 
 bool SplitEngineSharedMemoryBridgeSender::IsMessageGroupActive() const {
-  return message_group_active_;
+  return active_message_group_id_.has_value();
 }
 
-void SplitEngineSharedMemoryBridgeSender::OnMessageGroupComplete(
-    MessageGroupId group_id) {
-  // All messages are delivered to all senders, and filtered for messages of
-  // interest.
-  if (!message_group_id_mapper_->IsMessageGroupIdValid(group_id)) {
-    // Not a message for this sender's messages. Ignore.
-    return;
+void SplitEngineSharedMemoryBridgeSender::ClearReleasedMessageGroups() {
+  // Get the set of active message groups from the bridge.
+  absl::Status status = SplitEngineBridgeSender::WithActiveMessageGroups(
+      bridge_.GetClientId(),
+      [this](const absl::flat_hash_set<MessageGroupId>& active_message_groups) {
+        // Iterate through all the active arenas and check if they are released.
+        for (auto it = arena_handles_.begin(), end = arena_handles_.end();
+             it != end;) {
+          // Note: this is the advised pattern for erasing an item from a map
+          // while iterating through it based on the documentation of
+          // flat_hash_map.
+          auto it_copy = it++;
+          if (active_message_groups.contains(it_copy->first)) {
+            // The message group is still active.
+            continue;
+          }
+          arena_allocator_.DestroyArena(it_copy->second, recycle_buffers_);
+          arena_handles_.erase(it_copy);
+        }
+      });
+  if (!status.ok()) {
+    IMP_LOG(imp::ERROR) << "Failed to clear released message groups: "
+               << status.ToString();
   }
-  auto arena_handle = message_group_id_mapper_->GetArenaHandle(group_id);
-  arena_allocator_.DestroyArena(arena_handle, recycle_buffers_);
 }
 
 }  // namespace imp::split_engine

@@ -31,12 +31,12 @@
 #include "core/materials/material.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
+#include "core/media/media_color_space.h"
 #include "core/media/media_type.h"
 #include "core/ncsb/component_handle.h"
 #include "core/render/android/android_defines.h"
 #include "core/render/image_asset.h"
 #include "core/render/texture.h"
-#include "core/video/video_color_space.h"
 #include "core/video/video_controller.h"
 #include "core/video/video_controller_state.proto.imp.h"
 #include "core/view/base_view.h"
@@ -167,22 +167,20 @@ void XrMediaViewer::UpdateMaterialVideoColorSpaceParameters() {
   material->TrySetParameter(kIsVideoParameter, true);
 
   // If the color space information is unknown, set it to default values.
-  video::VideoColorSpace video_color_space = video_color_space_;
-  if (video_color_space.GetStandard() ==
-      video::VideoColorSpace::Standard::kUnknown) {
-    video_color_space.SetStandard(video::VideoColorSpace::Standard::kBT709);
+  MediaColorSpace media_color_space = media_color_space_;
+  if (media_color_space.GetStandard() == MediaColorSpace::Standard::kUnknown) {
+    media_color_space.SetStandard(MediaColorSpace::Standard::kBT709);
   }
-  if (video_color_space.GetTransfer() ==
-      video::VideoColorSpace::Transfer::kUnknown) {
-    video_color_space.SetTransfer(video::VideoColorSpace::Transfer::kGamma_2_2);
+  if (media_color_space.GetTransfer() == MediaColorSpace::Transfer::kUnknown) {
+    media_color_space.SetTransfer(MediaColorSpace::Transfer::kGamma_2_2);
   }
-  if (video_color_space.GetRange() == video::VideoColorSpace::Range::kUnknown) {
-    video_color_space.SetRange(video::VideoColorSpace::Range::kLimited);
+  if (media_color_space.GetRange() == MediaColorSpace::Range::kUnknown) {
+    media_color_space.SetRange(MediaColorSpace::Range::kLimited);
   }
 
   // Set the color space parameters.
   if (absl::StatusOr<imp::mat3f> color_transform_matrix_sRGB =
-          video_color_space.GetColorTransformMatrixSRGB();
+          media_color_space.GetColorTransformMatrixSRGB();
       color_transform_matrix_sRGB.ok()) {
     material->TrySetParameter(kColorTransformMatrixSRGBParameter,
                               *color_transform_matrix_sRGB);
@@ -191,7 +189,7 @@ void XrMediaViewer::UpdateMaterialVideoColorSpaceParameters() {
                               kIdentityMat3f);
   }
   if (absl::StatusOr<imp::mat3f> color_transform_matrix_display_p3 =
-          video_color_space.GetColorTransformMatrixDisplayP3();
+          media_color_space.GetColorTransformMatrixDisplayP3();
       color_transform_matrix_display_p3.ok()) {
     material->TrySetParameter(kColorTransformMatrixDisplayP3Parameter,
                               *color_transform_matrix_display_p3);
@@ -202,9 +200,9 @@ void XrMediaViewer::UpdateMaterialVideoColorSpaceParameters() {
 
   // Set the transfer function.
   material->TrySetParameter(kTransferFunctionParameter,
-                            static_cast<int>(video_color_space.GetTransfer()));
+                            static_cast<int>(media_color_space.GetTransfer()));
 
-  int maxContentLightLevel = video_color_space.GetMaxContentLightLevel();
+  int maxContentLightLevel = media_color_space.GetMaxContentLightLevel();
   material->TrySetParameter(kMaxContentLightLevelParameter,
                             maxContentLightLevel);
 }
@@ -474,13 +472,13 @@ absl::StatusOr<absl::string_view> XrMediaViewer::GetMaterialAssetUrl() {
 void XrMediaViewer::Update(const FrameTime& frame_time) {
   if (GetCurrentMediaType() != MediaType::kVideo) return;
 
-  video::VideoColorSpace surface_color_space =
+  MediaColorSpace media_color_space =
       GetVideoController()->GetSourceColorSpace();
-  if (video_color_space_ != surface_color_space) {
-    IMP_LOG(imp::INFO) << "New video color space detected: Previous: "
-              << video_color_space_.ToString()
-              << "; New: " << surface_color_space.ToString();
-    video_color_space_ = surface_color_space;
+  if (media_color_space_ != media_color_space) {
+    IMP_LOG(imp::INFO) << "New media color space detected: Previous: "
+              << media_color_space_.ToString()
+              << "; New: " << media_color_space.ToString();
+    media_color_space_ = media_color_space;
     UpdateMaterialVideoColorSpaceParameters();
   }
 }

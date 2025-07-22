@@ -429,7 +429,7 @@ const char* JsonReader::Visit(const char* ptr, int field_id,
       // We need to handle bool specially because the &vector<bool> leads to an
       // error for taking the address of a temporary object.
       // See https://en.cppreference.com/w/cpp/container/vector_bool
-      bool bool_value;
+      bool bool_value = false;
       Visit<field_type>(ptr_, 0, &bool_value, static_cast<T*>(nullptr),
                         token_type);
       field->emplace_back(bool_value);

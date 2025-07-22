@@ -21,11 +21,11 @@
 #include "flatbuffers/verifier.h"
 #include "core/async/future.h"
 #include "core/materials/material.h"
-#include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/update_system.h"
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
@@ -36,7 +36,8 @@ class BuiltInWaterMaterial : public BuiltInCustomMaterial {
  public:
   // Creates a built-in water material based on the given spec.
   static Future<BuiltInMaterialPtr> Create(
-      BaseView& view, const android_xr::schemas::BuiltInMaterial5cf26af8& spec);
+      BaseView& view, BridgeId bridge_id,
+      const android_xr::schemas::BuiltInMaterial5cf26af8& spec);
 
   BuiltInMaterialPtr Duplicate() const override;
 
@@ -46,7 +47,8 @@ class BuiltInWaterMaterial : public BuiltInCustomMaterial {
       const TextureBorrower& texture_borrower) override;
 
  private:
-  BuiltInWaterMaterial(BaseView& view, OwnedMaterialPtr material);
+  BuiltInWaterMaterial(BaseView& view, BridgeId bridge_id,
+                       OwnedMaterialPtr material);
 
   BaseView& view_;
 };

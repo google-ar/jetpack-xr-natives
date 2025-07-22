@@ -40,6 +40,8 @@
 #include "filament/filament/include/filament/SwapChain.h"
 #include "filament/filament/include/filament/View.h"
 #include "core/common/invocable.h"
+#include "core/common/robin_map.h"
+#include "core/common/robin_set.h"
 #include "core/config.h"
 #include "core/math/vec.h"
 #include "core/monitor/default_monitor_summary.h"
@@ -84,11 +86,13 @@ class XrSessionHost : public ViewHost {
     XrFoveationLevelFB foveation_level = XR_FOVEATION_LEVEL_NONE_FB;
     bool use_quad_views = false;
     bool use_varjo_foveated_rendering = false;
+    int msaa_sample_count = 0;
     XrReferenceSpaceType reference_space_type = XR_REFERENCE_SPACE_TYPE_STAGE;
     bool use_eye_gaze_interaction = false;
     bool use_android_depth_texture = false;
     bool use_fb_color_space = false;
     bool enable_android_system_extensions = false;
+    float swapchain_size_multiplier = 1.0f;
   };
 
   // Metrics for performance monitoring.
@@ -97,8 +101,8 @@ class XrSessionHost : public ViewHost {
         metrics;
   };
 
-  explicit XrSessionHost(std::unique_ptr<imp::BaseView> view,
-                         XrSessionHostOptions options);
+  XrSessionHost(std::unique_ptr<imp::BaseView> view,
+                XrSessionHostOptions options);
   ~XrSessionHost() override;
 
   // Sets up the host, which will create the filament Engine with an XrPlatform
@@ -160,6 +164,11 @@ class XrSessionHost : public ViewHost {
   absl::Status EndFrame(XrSwapchain swapchain,
                         XrSwapchain depth_swapchain = XR_NULL_HANDLE);
 
+  // Called right before frame work begins. Used in XrSessionHost to choose the
+  // protected (or standard) swap chain after all scene work for this frame has
+  // been completed, and we may or may not have protected content in view.
+  absl::Status PreBeginRender();
+
   // Overrides normal rendering to render into both eyes.
   void PerformRender(filament::View* view) override;
 
@@ -191,6 +200,9 @@ class XrSessionHost : public ViewHost {
 
   // Sets the color space for the session.
   absl::Status SetColorSpace(XrColorSpaceFB color_space);
+
+  // Returns the fence fd representing a GPU fence.
+  uint32_t GetFenceFd() const;
 
 #if IMP_RUNTIME(DEV)
   std::unique_ptr<imp::editor::EditorPlugin> CreateEditorPlugin() override;
@@ -232,6 +244,12 @@ class XrSessionHost : public ViewHost {
   void SetEyeTrackingEnabled(bool enabled);
 
   XrFoveationLevelFB GetCurrentFoveationLevel();
+
+  void SetEnvironmentBlendMode(
+      XrEnvironmentBlendMode xr_environment_blend_mode);
+
+  // Returns the number of samples per pixel for the color and depth textures.
+  int GetMsaaSampleCount() const;
 
   absl::Status SetDisplayState(XrHelpers::DisplayState new_state);
 
@@ -293,7 +311,24 @@ class XrSessionHost : public ViewHost {
   // before the session host is created.
   static absl::Span<const char* const>& GetExtensionsToLoad();
 
+  // Gets a reference to a list of optional extensions to load, provided by an
+  // app. Returns a reference so that an app can set the list of extensions to
+  // load before the session host is created. Static so it can be called
+  // before the session host is created.
+  static absl::Span<const char* const>& GetOptionalExtensionsToLoad();
+
   std::optional<XrSystemProperties> GetSystemProperties() const;
+
+  // Get all enabled extensions.
+  RobinSet<std::string> GetEnabledExtensions() const;
+
+  // Add OpenXr layer that should be submitted to XrEndFrame, plus a weight
+  // Negative weights are drawn in front of the impress-rendered projection
+  // layer, and positive weights are drawn behind.  A weight of 0 is
+  // indeterminate compared to the projection layer.
+  void AddCompositionLayer(XrCompositionLayerBaseHeader* layer, int weight);
+
+  void RemoveCompositionLayer(XrCompositionLayerBaseHeader* layer);
 
  private:
   enum class LocateSpaceStatus { kUnableToObtainPose, kObtainedPose };
@@ -320,7 +355,7 @@ class XrSessionHost : public ViewHost {
   };
 
   absl::StatusOr<XrInstance> CreateInstance(JNIEnv* env, JavaVM* vm,
-                                            jobject context) const;
+                                            jobject context);
 
   absl::StatusOr<XrSystemId> ObtainSystemId() const;
 
@@ -379,6 +414,10 @@ class XrSessionHost : public ViewHost {
   absl::Status EnsureSupportedExtensions(
       const std::vector<const char*>& required_extensions) const;
 
+  // Takes a list of extensions and filters out any that are not supported.
+  static std::vector<const char*> FilterUnsupportedExtensions(
+      const absl::Span<const char* const>& extensions);
+
   // Tracks if the XrSession is currently running.
   // The session is considered to be running after a successful call to
   // xrBeginSession and before calling xrEndSession.
@@ -409,7 +448,10 @@ class XrSessionHost : public ViewHost {
   bool is_enhanced_stereoscopic_rendering_enabled_ = false;
   bool is_enhanced_stereoscopic_rendering_initialized_ = false;
   bool use_max_swapchain_size_ = false;
+  float swapchain_size_multiplier_ = 1.0f;
   XrFoveationLevelFB current_foveation_level_ = XR_FOVEATION_LEVEL_NONE_FB;
+  XrEnvironmentBlendMode environment_blend_mode_ =
+      XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
   std::vector<XrCompositionLayerDepthInfoKHR> layer_depth_infos_;
 
   std::vector<XrViewConfigurationView> view_configs_;
@@ -467,6 +509,7 @@ class XrSessionHost : public ViewHost {
 
   XrViewConfigurationType view_configuration_type_;
   bool is_varjo_foveated_rendering_enabled_ = false;
+  int msaa_sample_count_ = 0;
   bool eye_tracking_enabled_ = false;
   bool ipd_eye_calibration_enabled_ = false;
   // Whether the current frame should render with varjo foveation. Should only
@@ -483,6 +526,15 @@ class XrSessionHost : public ViewHost {
 
   // Whether the Android system extensions are enabled.
   bool is_android_system_extensions_enabled_ = false;
+
+  // All enabled extensions
+  RobinSet<std::string> enabled_extensions_;
+
+  // OpenXr layers that should be submitted to XrEndFrame, plus their weights
+  // Negative weights are drawn in front of the impress-rendered projection
+  // layer, and positive weights are drawn behind.  A weight of 0 is
+  // indeterminate compared to the projection layer.
+  RobinMap<XrCompositionLayerBaseHeader*, int> composition_layers_;
 };
 
 }  // namespace imp

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <android/binder_auto_utils.h>
+#include <android/binder_ibinder_jni.h>
 #include <jni.h>
 
 #include <cassert>
@@ -21,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/time/time.h"
@@ -32,29 +35,25 @@
 #include "core/common/platform_helpers.h"
 #include "core/common/registry.h"
 #include "core/math/transform.h"
-#include "core/view/framework/camera/camera_manager.h"
-
-#if __ANDROID_API__ >= 34
-#include <android/binder_auto_utils.h>
-#include <android/binder_ibinder_jni.h>
-
-#include "core/split_engine/android/split_engine_shared_memory_bridge_client_ndk.h"
-#include "core/split_engine/android/split_engine_shared_memory_bridge_service.h"
-#endif
-
-#include "core/split_engine/android/message_group_id_mapper_impl.h"
+#include "core/split_engine/android/extensions/split_engine_bridge.h"
 #include "core/split_engine/android/split_engine_android_bridge.h"
 #include "core/split_engine/android/split_engine_android_shared_memory_bridge.h"
+#include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_sender.h"
 #include "core/split_engine/android/view/view_update_params.h"
 #include "core/split_engine/split_engine_bridge_sender.h"
 #include "core/split_engine/split_engine_serializer_impl.h"
 #include "core/view/base_view.h"
+#include "core/view/framework/camera/camera_manager.h"
 #include "core/view/framework/render/renderable_manager_wrapper.h"
 #include "core/view/platforms/xr_android/openxr_includes.h"
 #include "core/view/platforms/xr_android/xr_helpers.h"
 #include "core/view/view_host.h"
 #include "core/window/filament_host.h"
+
+#if __ANDROID_API__ >= 34
+#include "core/split_engine/android/split_engine_shared_memory_bridge_service.h"
+#endif
 
 // TODO: Refactor SplitEngineActivity to use existing View.java
 //  class and aggregation like ImpXrRenderer.
@@ -65,10 +64,6 @@
 #define JNI_METHOD_SERVICE(return_type, method_name) \
   IMP_JNI return_type JNICALL                        \
       Java_com_google_ar_imp_app_splitengine_SplitEngineSharedMemoryBridgeService_##method_name  // NOLINT
-
-#define JNI_METHOD_PROVIDER(return_type, method_name) \
-  IMP_JNI return_type JNICALL                         \
-      Java_com_google_ar_imp_view_splitengine_SplitEngineBridgeServiceProvider_##method_name  // NOLINT
 
 using ::imp::GetThreadId;
 using ::imp::GetThreadNiceness;
@@ -88,40 +83,6 @@ constexpr auto ToJava = &SplitEngineBridgeServiceAllowlist<T>::ToJava;
 
 template <class T>
 constexpr auto FromJava = &SplitEngineBridgeServiceAllowlist<T>::FromJava;
-
-class SplitEngineBridge : public imp::JavaWrapper {
- public:
-  SplitEngineBridge(JNIEnv* env, jobject split_engine_bridge)
-      : JavaWrapper(env, split_engine_bridge) {
-    native_handle_ = GetFieldHandle("mNativeHandle", "J");
-    assert(native_handle_);
-  }
-
-  SplitEngineBridge(
-      JNIEnv* env,
-      std::unique_ptr<imp::split_engine::SplitEngineAndroidSharedMemoryBridge>
-          split_engine_shared_memory_bridge)
-      : JavaWrapper(env,
-                    // TODO: Change this back to the new path:
-                    // com/android/extensions/xr/splitengine/SplitEngineBridge
-                    // once the JNI issue is resolved.
-                    "androidx/xr/extensions/splitengine/SplitEngineBridge",
-                    "()V") {
-    native_handle_ = GetFieldHandle("mNativeHandle", "J");
-    assert(native_handle_);
-    Env()->SetLongField(
-        Self(), ToFieldID(native_handle_),
-        reinterpret_cast<jlong>(split_engine_shared_memory_bridge.release()));
-  }
-
-  imp::split_engine::SplitEngineAndroidSharedMemoryBridge* GetBridge() {
-    jlong handle = Env()->GetLongField(Self(), ToFieldID(native_handle_));
-    return FromJava<imp::split_engine::SplitEngineAndroidSharedMemoryBridge>(
-        handle);
-  };
-
-  imp::JniHandle native_handle_;
-};
 
 // This method is used to convert a ViewProjection into an XrView. The XrView
 // contains the pose and FOV of the view for a single eye.
@@ -167,6 +128,7 @@ void UpdateCamera(imp::ViewHost* view_host,
   imp::SetEyeModelMatrixOnCamera(view_host->GetEngine(), &view->getCamera(),
                                  xr_views);
 }
+
 }  // namespace
 
 extern "C" {
@@ -181,27 +143,23 @@ JNI_METHOD_ACTIVITY(void, nSetup)
   auto view_host = FromJava<imp::ViewHost>(view_host_handle);
 
   imp::BaseView* view = view_host->GetView();
-
-  // SplitEngineBridge is used to extract the native pointer to a
-  // SplitEngineAndroidSharedMemoryBridge, which was allocated by XROS or on the
-  // phone. The ownership of this memory is transferred to Impress to manage.
-  SplitEngineBridge bridge_wrapper(env, split_engine_bridge);
+  std::unique_ptr<imp::split_engine::SplitEngineSharedMemoryBridgeClient>
+      bridge_client = std::make_unique<imp::split_engine::SplitEngineBridge>(
+          env, split_engine_bridge);
 
   std::unique_ptr<imp::split_engine::SplitEngineAndroidSharedMemoryBridge>
-      bridge(bridge_wrapper.GetBridge());
-  bridge_wrapper.Release();
+      bridge = std::make_unique<
+          imp::split_engine::SplitEngineAndroidSharedMemoryBridge>(
+          std::move(bridge_client));
 
   auto bridge_sender =
       std::make_unique<imp::split_engine::SplitEngineSharedMemoryBridgeSender>(
           bridge->GetSplitEngineSharedMemoryBridgeClient(),
-          std::make_unique<imp::split_engine::MessageIdMapperImpl>(
-              /*map_to_high_word=*/false),
           /*recycle_buffers=*/true);
+
   auto bridge_one_shot_sender =
       std::make_unique<imp::split_engine::SplitEngineSharedMemoryBridgeSender>(
           bridge->GetSplitEngineSharedMemoryBridgeClient(),
-          std::make_unique<imp::split_engine::MessageIdMapperImpl>(
-              /*map_to_high_word=*/true),
           /*recycle_buffers=*/false);
 
   view->SetRenderableManager(
@@ -209,27 +167,13 @@ JNI_METHOD_ACTIVITY(void, nSetup)
 
   auto split_engine_serializer =
       std::make_unique<imp::split_engine::SplitEngineSerializerImpl>(
-          *view, std::move(bridge_sender), std::move(bridge_one_shot_sender),
-          bridge_buffer_size_bytes);
+          *view, std::move(bridge), std::move(bridge_sender),
+          std::move(bridge_one_shot_sender), bridge_buffer_size_bytes);
 
   view->SetSplitEngineSerializer(std::move(split_engine_serializer));
 
-  imp::split_engine::SplitEngineAndroidBridge* bridge_ptr = bridge.get();
-  view->GetRegistry().Register<imp::split_engine::SplitEngineAndroidBridge>(
-      std::move(bridge));
-
   THROW_IF_ERROR(env, view_host->Setup(filament::Engine::Backend::NOOP));
   THROW_IF_ERROR(env, view_host->CreateSwapChain(nullptr));
-
-  imp::Executor* foreground_executor = imp::Executor::ForegroundExecutor();
-  if (!foreground_executor) {
-    IMP_LOG(imp::FATAL) << "Failed to get the foreground executor!";
-  }
-  bridge_ptr->GetSplitEngineSharedMemoryBridgeClient().Initialize(
-      [foreground_executor](std::function<void()> work_item) {
-        if (!work_item) return;
-        foreground_executor->Schedule(work_item);
-      });
 }
 
 JNI_METHOD_ACTIVITY(jlong, nRenderNextFrame)
@@ -263,6 +207,8 @@ JNI_METHOD_SERVICE(jobject, nCreateServiceBinder)
 #if __ANDROID_API__ >= 34
   auto view = reinterpret_cast<imp::BaseView*>(viewHandle);
   auto executor = reinterpret_cast<imp::Executor*>(executorHandle);
+  
+  
 
   static imp::split_engine::SplitEngineSharedMemoryBridgeService
       splitEngineSharedMemoryBridgeService(*view, executor);
@@ -276,33 +222,4 @@ JNI_METHOD_SERVICE(jobject, nCreateServiceBinder)
   return nullptr;
 }
 // LINT.ThenChange(//depot/google3/third_party/impress/java/com/google/ar/imp/app/splitengine/SplitEngineSharedMemoryBridgeService.java:service)
-
-// LINT.IfChange(provider)
-// This method is called by the phone version of the split engine renderer, and
-// is used to create a SplitEngineBridge outside of XROS, primarily as a
-// development tool.
-JNI_METHOD_PROVIDER(jobject, nCreateBridge)
-(JNIEnv* env, jclass /*clazz*/, jobject serviceBinder) {
-#if __ANDROID_API__ >= 34
-  ndk::SpAIBinder native_binder =
-      ndk::SpAIBinder(AIBinder_fromJavaBinder(env, serviceBinder));
-  auto client = std::make_unique<
-      imp::split_engine::SplitEngineSharedMemoryBridgeClientNdk>(native_binder,
-                                                                 env);
-
-  // This pointer is passed up to the Java layer, and will be passed back to
-  // Impress to take ownership of.
-  auto bridge =
-      std::make_unique<imp::split_engine::SplitEngineAndroidSharedMemoryBridge>(
-          std::move(client));
-  SplitEngineBridge bridge_wrapper(env, std::move(bridge));
-  return bridge_wrapper.Release();
-#else
-  THROW_IF_ERROR(
-      env, absl::FailedPreconditionError("Android API must be 34 or greater."));
-  return nullptr;
-#endif
-}
-// LINT.ThenChange(//depot/google3/third_party/impress/java/com/google/ar/imp/view/splitengine/SplitEngineBridgeServiceProvider.java:provider)
-
 }  // extern "C"

@@ -177,6 +177,7 @@ void SceneComponentDeserializer::RegisterComponentIsfInfo() {
   using ComponentIsfInfo = typename T::IsfInfo;
   using ComponentStateT = typename ComponentIsfInfo::StateT;
   using ComponentDependenciesT = typename ComponentIsfInfo::DependenciesT;
+  using ComponentDependentsT = typename ComponentIsfInfo::DependentsT;
 
   // If the component is already registered, return early.
   auto [itr, was_inserted] =
@@ -210,6 +211,12 @@ void SceneComponentDeserializer::RegisterComponentIsfInfo() {
     if constexpr (!std::is_void_v<ComponentDependenciesT>) {
       for (HashValue dep_type_hash : ComponentDependenciesT::kDependencies) {
         deps.insert(dep_type_hash);
+      }
+    }
+
+    if constexpr (!std::is_void_v<ComponentDependentsT>) {
+      for (HashValue dependent_type_hash : ComponentDependentsT::kDependents) {
+        deps_[dependent_type_hash].insert(ComponentIsfInfo::kTypeUrlHash);
       }
     }
 

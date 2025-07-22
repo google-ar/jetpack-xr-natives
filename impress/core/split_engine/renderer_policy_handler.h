@@ -61,6 +61,14 @@ class RendererPolicyHandler {
   // be higher than the requested priority for some special trusted apps.
   virtual absl::StatusOr<uint8_t> GetMediatedRenderablePriority(
       uint8_t priority) = 0;
+
+  // Used by Split Engine to determine whether to allow raw binary precompiled
+  // materials to be added to the scene. If you're unsure whether or not your
+  // app needs these materials, then this method should probably just return
+  // `false`. These materials are not allowed in production.
+  virtual absl::Status AreBinaryPrecompiledMaterialsAllowed() {
+    return absl::OkStatus();
+  };
 };
 
 }  // namespace imp::split_engine

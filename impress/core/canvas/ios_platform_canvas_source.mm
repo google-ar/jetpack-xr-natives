@@ -106,8 +106,8 @@ class IosPlatformCanvasSource::IosScopedCanvas : public ScopedCanvas {
   bool did_texture_change_;
 };
 
-IosPlatformCanvasSource::IosPlatformCanvasSource(BaseView& view)
-    : platform_pod_(std::make_unique<PlatformPod>()), view_(view) {
+IosPlatformCanvasSource::IosPlatformCanvasSource()
+    : platform_pod_(std::make_unique<PlatformPod>()) {
   pixels_per_dp_ = [UIScreen mainScreen].scale;
 }
 
@@ -361,10 +361,10 @@ ScopedCanvas::FontInfo IosPlatformCanvasSource::GetFontInfo(
 }
 
 std::unique_ptr<ScopedCanvas> IosPlatformCanvasSource::StartDrawing(
-    uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) {
+    BaseView& view, uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) {
   bool did_texture_change = false;
   if (!texture_) {
-    texture_ = view_.GetTextureFactory().CreateExternalTexture(pixel_size);
+    texture_ = view.GetTextureFactory().CreateExternalTexture(pixel_size);
     did_texture_change = true;
   }
 
@@ -372,11 +372,11 @@ std::unique_ptr<ScopedCanvas> IosPlatformCanvasSource::StartDrawing(
 }
 
 std::unique_ptr<ScopedCanvas> IosPlatformCanvasSource::StartDrawing(
-    uint2 pixel_size, ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
+    BaseView& view, uint2 pixel_size, ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
     ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) {
   bool did_texture_change = false;
   if (!texture_) {
-    texture_ = view_.GetTextureFactory().CreateExternalTexture(pixel_size);
+    texture_ = view.GetTextureFactory().CreateExternalTexture(pixel_size);
     did_texture_change = true;
 
     // On iOS the texture is only created once, so no need to give an opportunity for the caller to

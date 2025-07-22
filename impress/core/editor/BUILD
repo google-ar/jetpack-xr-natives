@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 # Impress Editor.
 load("//build_tools:assets.bzl", "imp_assets")
 load("//build_tools:imp.bzl", "if_desktop", "if_emscripten", "imp_defines", "imp_google3_copts")
@@ -74,6 +76,7 @@ cc_library(
         ":editor_plugin",
         ":editor_style",
         ":events",
+        ":file_type_registry",
         ":selection_controller",
         ":widget",
         ":widget_layout_info",
@@ -87,6 +90,7 @@ cc_library(
         "//core/common:platform_helpers",
         "//core/common:registry",
         "//core/common:robin_map",
+        "//core/editor:file_loader_helper",
         "//core/editor/components:camera_rotate",
         "//core/editor/components:camera_translate",
         "//core/editor/components:camera_zoom",
@@ -107,6 +111,7 @@ cc_library(
         "//core/editor/widgets:hierarchy",
         "//core/editor/widgets:materials_widget",
         "//core/editor/widgets:node_details",
+        "//core/editor/widgets:settings_widget",
         "//core/editor/widgets:toggle_camera",
         "//core/editor/widgets:transform",
         "//core/editor/widgets:vertex_select_widget",
@@ -266,14 +271,14 @@ cc_library(
         ":widget_layout_info",
         "//core/common:hash",
         "//core/common:type_traits",
+        "//core/editor/components:world_space_editor_ui",
         "//core/editor/layout",
-        "//core/editor/layout:editor_panel_ids",
         "//core/ncsb",
         "//core/view:base_view",
         "//core/view:view_events",
         "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/memory",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
         "@dear_imgui",
     ],
     alwayslink = 1,
@@ -349,6 +354,52 @@ cc_library(
 )
 
 cc_library(
+    name = "file_type",
+    srcs = ["file_type.cc"],
+    hdrs = ["file_type.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        "@com_google_absl//absl/strings",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "file_type_loader",
+    srcs = [],
+    hdrs = ["file_type_loader.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        "//core/async:future",
+        "//core/common:invocable",
+        "//core/view:base_view",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "file_type_registry",
+    srcs = ["file_type_registry.cc"],
+    hdrs = ["file_type_registry.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        ":file_type",
+        ":file_type_loader",
+        "//core/async:future",
+        "//core/common:invocable",
+        "//core/ncsb",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "file_loader_helper",
     srcs = ["file_loader_helper.cc"],
     hdrs = ["file_loader_helper.h"],
@@ -357,6 +408,8 @@ cc_library(
         ":editor",
         ":editor_touch",
         ":events",
+        ":file_type_loader",
+        ":file_type_registry",
         "//core:config",
         "//core/assets",
         "//core/assets/gltf:gltf_behavior_extension",
@@ -364,7 +417,6 @@ cc_library(
         "//core/common",
         "//core/common:buffer_access",
         "//core/common:invocable",
-        "//core/common:platform_helpers",
         "//core/common:registry",
         "//core/editor/widgets:asset_library",
         "//core/lighting:environment_light",
@@ -375,8 +427,9 @@ cc_library(
         "//core/resources",
         "//core/view:base_view",
         "//core/view/framework",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/strings:str_format",

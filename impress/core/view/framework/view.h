@@ -89,6 +89,13 @@ class View : public BaseView {
                                    std::unique_ptr<Context> context);
 
   // Creates a view using the app-defined imp::client_api::CreateView function
+  // called with a provided identifier, associates it with the given context,
+  // and applies the ViewConfig to the View.
+  static std::unique_ptr<View> CreateClient(std::unique_ptr<Context> context,
+                                            const std::string& identifier,
+                                            const ViewConfig& config);
+
+  // Creates a view using the app-defined imp::client_api::CreateView function
   // called with a provided identifier and associates it with the given context.
   static std::unique_ptr<View> CreateClient(std::unique_ptr<Context> context,
                                             const std::string& identifier);

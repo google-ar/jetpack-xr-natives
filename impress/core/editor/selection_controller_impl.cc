@@ -63,6 +63,9 @@ SelectionControllerImpl::SelectionControllerImpl(BaseView* view)
   // Handle when a model is loaded.
   editor_dispatcher.Connect(
       [this, &path_manager](const editor::ModelLoadedEvent& event) mutable {
+        if (disable_select_model_on_load_) {
+          return;
+        }
         if (event.model->GetComponent<GltfRenderer>()) {
           // If a glTF was loaded, try to pass the first Collider in it we find
           // to get consistent behavior as if it was tapped.

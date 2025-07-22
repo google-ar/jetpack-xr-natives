@@ -18,19 +18,18 @@
 #define THIRD_PARTY_IMPRESS_CORE_PHYSICS_TRIGGER_VOLUME_H_
 
 #include <memory>
-#include <variant>
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
-#include "absl/types/optional.h"
 #include "bullet/src/BulletCollision/CollisionDispatch/btGhostObject.h"
-#include "core/geometry/shapes/box.h"
-#include "core/geometry/shapes/sphere.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/isf_info.h"
 #include "core/physics/collidable.h"
 #include "core/physics/physics_manager.h"
 #include "core/view/framework/collision/box_collider.h"
+#include "core/view/framework/collision/capsule_collider.h"
+#include "core/view/framework/collision/cone_collider.h"
+#include "core/view/framework/collision/cylinder_collider.h"
 #include "core/view/framework/collision/sphere_collider.h"
 #include "core/view/utils/frame_time.h"
 // TODO: Hide Bullet headers
@@ -62,7 +61,7 @@ class TriggerVolume : public Component {
 
   // Returns the position and size (but not orientation) of the collision shape,
   // for testing the alignment between Impress and Bullet colliders.
-  absl::optional<std::variant<Sphere, Box>> GetCollisionShape() const;
+  Collidable::CollisionShape GetCollisionShape() const;
 
  private:
   std::unique_ptr<btGhostObject> trigger_volume_;
@@ -72,9 +71,10 @@ class TriggerVolume : public Component {
   static constexpr absl::string_view kType = "imp.Physics.TriggerVolume";
 
  public:
-  using IsfInfo =
-      StatelessIsfInfo<TriggerVolume, kType,
-                       IsfDependencies<SphereCollider, BoxCollider>>;
+  using IsfInfo = StatelessIsfInfo<
+      TriggerVolume, kType,
+      IsfDependencies<SphereCollider, BoxCollider, CapsuleCollider,
+                      CylinderCollider, ConeCollider>>;
 };
 
 }  // namespace imp

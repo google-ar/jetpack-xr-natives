@@ -20,28 +20,26 @@ float sRGBToLinear(float color) {
   return color <= 0.04045 ? color / 12.92 : pow((color + 0.055) / 1.055, 2.4);
 }
 
-vec4 sRGBToLinear(vec4 color) {
-    return vec4(
+vec3 sRGBToLinear(vec3 color) {
+    return vec3(
         sRGBToLinear(color.r),
         sRGBToLinear(color.g),
-        sRGBToLinear(color.b),
-        sRGBToLinear(color.a));
+        sRGBToLinear(color.b));
 }
 
-vec4 colorCorrected(vec4 color, bool is_video, bool enable_color_conversion, float gamma_to_srgb) {
+vec3 sRGBToLinear(
+    vec3 color, bool enable_color_conversion, float gamma_to_srgb) {
 
     // Apply an gamma correction if needed to convert the color to sRGB.
     if (gamma_to_srgb != 1.0) {
-      color.xyz = pow(color.xyz, vec3(gamma_to_srgb));
+      color = pow(color, vec3(gamma_to_srgb));
     }
+    // Both images and videos are not linearized, so degamma here assuming that
+    // the inputs are in sRGB/BT709
+    color = sRGBToLinear(color);
 
-    // Filament textures benefit from automatic hardware conversion from sRGB to
-    // linear, but videos use external textures and need to be converted manually.
-    if (is_video) {
-      color = sRGBToLinear(color);
-    }
     if (enable_color_conversion) {
-      color.xyz = applyGlobalMaterialConversionMatrix(color.xyz);
+      color = applyGlobalMaterialConversionMatrix(color);
     }
 
     return color;

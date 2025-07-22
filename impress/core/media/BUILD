@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "if_non_android", "imp_google3_copts")
 
 package(
@@ -22,6 +23,23 @@ package(
 )
 
 licenses(["notice"])
+
+cc_library(
+    name = "media_color_space",
+    srcs = ["media_color_space.cc"],
+    hdrs = ["media_color_space.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        "//core:config",
+        "//core/math",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/strings:string_view",
+    ],
+    alwayslink = 1,
+)
 
 cc_library(
     name = "media",
@@ -112,11 +130,11 @@ cc_library(
     deps = [
         ":android_exoplayer_media_jni",
         ":media",
+        ":media_color_space",
         ":media_type",
         "//core/async:future",
         "//core/common:context",
         "//core/common:jni_helpers",
-        "//core/video:video_color_space",
         "//core/view:base_view",
         "//core/view/platforms/android/wrappers:graphics",
         "@com_google_absl//absl/status",
@@ -127,6 +145,7 @@ cc_library(
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:variant",
+        "@mediapipe//mediapipe/framework/port:status",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )

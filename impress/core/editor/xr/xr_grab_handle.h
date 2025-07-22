@@ -17,12 +17,11 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_XR_XR_GRAB_HANDLE_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_XR_XR_GRAB_HANDLE_H_
 
-#include <string>
-
 #include "core/actions/controller_events.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_handle.h"
+#include "core/view/framework/input/pointer_input_handler.h"
 #include "core/view/framework/render/mesh_renderer.h"
 namespace imp::editor {
 // XrGrabHandle is a component that allows the attached Node to be
@@ -42,7 +41,9 @@ class XrGrabHandle : public imp::Component {
   void Update(const imp::FrameTime& frame_time);
 
  private:
-  // TODO Support raycasts derived from a mouse.
+  // Tracks grab state by monitoring per-frame PointerHitEvents (for mouse
+  // inputs)
+  void HandlePointerHitEvent(imp::PointerHitEvent event);
   // Tracks grab state by monitoring per-frame ControllerHitEvents.
   void HandleControllerHitEvent(imp::ControllerHitEvent event);
   // Called per-ControllerHitEvent to update the position of the Node with the

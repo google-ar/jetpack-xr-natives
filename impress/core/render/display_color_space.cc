@@ -14,28 +14,27 @@
 
 #include "core/render/display_color_space.h"
 
-// TODO: Find a better place for SurfaceColorSpace
-#include "core/render/android/platform_android_external_texture_surface.h"
+#include "core/media/media_color_space.h"
 
 namespace imp {
 
 // Helper function to find the target color space from the source color space.
-DisplayColorSpace SurfaceColorSpaceToDisplayColorSpace(
-    SurfaceColorSpace surface_color_space) {
-  switch (surface_color_space.GetStandard()) {
+DisplayColorSpace MediaColorSpaceToDisplayColorSpace(
+    MediaColorSpace media_color_space) {
+  switch (media_color_space.GetStandard()) {
     // This is equivalent to sRGB
-    case SurfaceColorSpace::Standard::kBT709:
+    case MediaColorSpace::Standard::kBT709:
     // Those have smaller gamuts than sRGB
-    case SurfaceColorSpace::Standard::kBT601_PAL:
-    case SurfaceColorSpace::Standard::kBT601_525:
+    case MediaColorSpace::Standard::kBT601_PAL:
+    case MediaColorSpace::Standard::kBT601_525:
       return DisplayColorSpace::kBT709;
 
     // P3
-    case SurfaceColorSpace::Standard::kDisplayP3:
-    case SurfaceColorSpace::Standard::kDCI_P3:
+    case MediaColorSpace::Standard::kDisplayP3:
+    case MediaColorSpace::Standard::kDCI_P3:
     // Those have wider gamuts than sRGB
-    case SurfaceColorSpace::Standard::kBT2020:
-    case SurfaceColorSpace::Standard::kAdobeRGB:
+    case MediaColorSpace::Standard::kBT2020:
+    case MediaColorSpace::Standard::kAdobeRGB:
       return DisplayColorSpace::kP3;
 
     // Default to sRGB.

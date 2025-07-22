@@ -34,6 +34,7 @@
 #include "core/math/vec.h"
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
+#include "core/render/texture_options.h"
 #include "core/render/texture_registry.h"
 #include "core/render_passes/on_demand_texture_pipeline_render_params.proto.imp.h"
 #include "core/render_passes/texture_config.proto.imp.h"
@@ -186,8 +187,10 @@ OnDemandTexturePipelineRenderer::CreateRuntimePass(
         render_region_size.x, render_region_size.y, depth_format,
         filament::Texture::Usage::DEPTH_ATTACHMENT |
             filament::Texture::Usage::SAMPLEABLE,
-        {.mag_filter = TextureFactory::MagFilter::NEAREST,
-         .min_filter = TextureFactory::MinFilter::NEAREST});
+        TextureSamplerOptions{
+            .mag_filter = TextureSamplerOptions::MagFilter::NEAREST,
+            .min_filter = TextureSamplerOptions::MinFilter::NEAREST,
+        });
 
     depth_texture_registration.emplace(
         view_->GetTextureRegistry().RegisterTexture(texture_proto.name,

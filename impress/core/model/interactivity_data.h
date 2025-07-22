@@ -37,6 +37,8 @@ struct InteractivityData {
     FLOAT2,
     FLOAT3,
     FLOAT4,
+    MAT2F,
+    MAT3F,
     MAT4F,
     STRING,
   };
@@ -44,7 +46,8 @@ struct InteractivityData {
   struct VariableData {
     std::string id;
     ValueType type;
-    std::variant<bool, int, float, float2, float3, float4, mat4f, std::string>
+    std::variant<bool, int, float, float2, float3, float4, mat2f, mat3f, mat4f,
+                 std::string>
         value;
   };
   struct NodeData {
@@ -58,6 +61,11 @@ struct InteractivityData {
       EASING_TYPE,
       EASING_DURATION,
       CASES,
+      TYPE,
+      NUMBER_OF_INPUT_FLOWS,
+      IS_RANDOM,
+      IS_LOOP,
+      MESSAGE,
     };
 
     struct FlowData {
@@ -66,12 +74,12 @@ struct InteractivityData {
       std::string socket;
     };
 
-    // TODO  Possibly add some of the Configuration value types
-    // as enums rather than raw strings?
+    using ConfigurationValue =
+        std::variant<int, std::string, bool, float, std::vector<int>>;
+
     struct ConfigurationData {
       ConfigurationType id;
-      std::optional<ValueType> value_type;
-      std::variant<int, std::string, bool, float, std::vector<int>> value;
+      ConfigurationValue value;
     };
 
     using ValueData = absl::variant<VariableData, FlowData>;
@@ -89,7 +97,7 @@ struct InteractivityData {
   };
 
   struct TypeData {
-    std::string signature;
+    ValueType type;
   };
 
   struct DeclarationData {

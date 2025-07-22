@@ -141,9 +141,13 @@ OptionalError LoaderService::HandleStart(const schemas::Start* request,
                                                    request->data()->Data()),
                                                request->data()->Length())),
           LoaderOptions{
+              .compression_type =
+                  static_cast<LoaderOptions::TextureTranscodeCompressionType>(
+                      request->compression_type()),
               .use_lite_materials = request->use_lite_materials(),
               .exclude_excess_nodes = request->exclude_excess_nodes(),
-              .remove_shadow_planes = request->remove_shadow_planes()}));
+              .remove_shadow_planes = request->remove_shadow_planes(),
+          }));
 
   flatbuffers::FlatBufferBuilder builder;
   auto offset = schemas::CreateStartResponse(builder);

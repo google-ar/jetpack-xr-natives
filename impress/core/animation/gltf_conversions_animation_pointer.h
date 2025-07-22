@@ -30,14 +30,15 @@ namespace imp::animation {
 using imp::loader::details::provider_gltf::LightPunctualId;
 
 OptionalError SerializeMaterialAnimation(
-    const imp::gltf::Gltf& gltf, const GltfLookup& lookup, MaterialId material,
-    AnimationId animation, flatbuffers::FlatBufferBuilder* fbb,
+    const imp::gltf::imp_proto::Gltf& gltf, const GltfLookup& lookup,
+    MaterialId material, AnimationId animation,
+    flatbuffers::FlatBufferBuilder* fbb,
     absl::optional<flatbuffers::Offset<animation::schemas::MaterialAnimation>>*
         out_offset,
     absl::optional<Domain>* out_domain);
 
 OptionalError SerializeLightPunctualAnimation(
-    const imp::gltf::Gltf& gltf, const GltfLookup& lookup,
+    const imp::gltf::imp_proto::Gltf& gltf, const GltfLookup& lookup,
     LightPunctualId light, AnimationId animation,
     flatbuffers::FlatBufferBuilder* fbb,
     absl::optional<
@@ -46,7 +47,7 @@ OptionalError SerializeLightPunctualAnimation(
     absl::optional<Domain>* out_domain);
 
 OptionalError GetLightAnimation(
-    const imp::gltf::Gltf& gltf, const GltfLookup& lookup,
+    const imp::gltf::imp_proto::Gltf& gltf, const GltfLookup& lookup,
     imp::loader::details::provider_gltf::AnimationId animation,
     flatbuffers::FlatBufferBuilder* fbb,
     std::vector<

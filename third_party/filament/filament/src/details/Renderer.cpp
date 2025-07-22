@@ -50,13 +50,14 @@
 #include "filament/libs/math/include/math/vec3.h"
 #include "filament/libs/math/include/math/mat4.h"
 
-#include "filament/libs/utils/include/utils/compiler.h"
+#include <private/utils/Tracing.h>
+
 #include "filament/libs/utils/include/utils/JobSystem.h"
-#include "filament/libs/utils/include/utils/Log.h"
-#include "filament/libs/utils/include/utils/ostream.h"
+#include "filament/libs/utils/include/utils/Logger.h"
 #include "filament/libs/utils/include/utils/Panic.h"
-#include "filament/libs/utils/include/utils/Systrace.h"
+#include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/debug.h"
+#include "filament/libs/utils/include/utils/ostream.h"
 
 #include <chrono>
 #include <limits>
@@ -154,14 +155,10 @@ FRenderer::FRenderer(FEngine& engine) :
 FRenderer::~FRenderer() noexcept {
     // There shouldn't be any resource left when we get here, but if there is, make sure
     // to free what we can (it would probably mean something when wrong).
-#ifndef NDEBUG
     size_t const wm = getCommandsHighWatermark();
     size_t const wmpct = wm / (mEngine.getPerFrameCommandsSize() / 100);
-    slog.d << "Renderer: Commands High watermark "
-    << wm / 1024 << " KiB (" << wmpct << "%), "
-    << wm / sizeof(Command) << " commands, " << sizeof(Command) << " bytes/command"
-    << io::endl;
-#endif
+    DLOG(INFO) << "Renderer: Commands High watermark " << wm / 1024 << " KiB (" << wmpct << "%), "
+               << wm / sizeof(Command) << " commands, " << sizeof(Command) << " bytes/command";
 }
 
 void FRenderer::terminate(FEngine& engine) {
@@ -243,7 +240,7 @@ void FRenderer::setVsyncTime(uint64_t const steadyClockTimeNano) noexcept {
 }
 
 void FRenderer::skipFrame(uint64_t vsyncSteadyClockTimeNano) {
-    SYSTRACE_CALL();
+    FILAMENT_TRACING_CALL(FILAMENT_TRACING_CATEGORY_FILAMENT);
 
     FILAMENT_CHECK_PRECONDITION(!mSwapChain) <<
             "skipFrame() can't be called between beginFrame() and endFrame()";
@@ -278,7 +275,7 @@ void FRenderer::skipFrame(uint64_t vsyncSteadyClockTimeNano) {
 bool FRenderer::beginFrame(FSwapChain* swapChain, uint64_t vsyncSteadyClockTimeNano) {
     assert_invariant(swapChain);
 
-    SYSTRACE_CALL();
+    FILAMENT_TRACING_CALL(FILAMENT_TRACING_CATEGORY_FILAMENT);
 
 #if 0 && defined(__ANDROID__)
     char scratch[PROP_VALUE_MAX + 1];
@@ -309,7 +306,7 @@ bool FRenderer::beginFrame(FSwapChain* swapChain, uint64_t vsyncSteadyClockTimeN
     mFrameId++;
     mViewRenderedCount = 0;
 
-    SYSTRACE_FRAME_ID(mFrameId);
+    FILAMENT_TRACING_FRAME_ID(FILAMENT_TRACING_CATEGORY_FILAMENT, mFrameId);
 
     FEngine& engine = mEngine;
     FEngine::DriverApi& driver = engine.getDriverApi();
@@ -391,7 +388,7 @@ bool FRenderer::beginFrame(FSwapChain* swapChain, uint64_t vsyncSteadyClockTimeN
 }
 
 void FRenderer::endFrame() {
-    SYSTRACE_CALL();
+    FILAMENT_TRACING_CALL(FILAMENT_TRACING_CATEGORY_FILAMENT);
 
     if (UTILS_UNLIKELY(mBeginFrameInternal)) {
         mBeginFrameInternal();
@@ -446,11 +443,12 @@ void FRenderer::endFrame() {
 
 void FRenderer::readPixels(uint32_t const xoffset, uint32_t const yoffset, uint32_t const width, uint32_t const height,
         PixelBufferDescriptor&& buffer) {
-#ifndef NDEBUG
+
     const bool withinFrame = mSwapChain != nullptr;
-    FILAMENT_CHECK_PRECONDITION(withinFrame) << "readPixels() on a SwapChain must be called after"
-                                                " beginFrame() and before endFrame().";
-#endif
+    FILAMENT_CHECK_PRECONDITION(withinFrame)
+            << "readPixels() on a SwapChain must be called after "
+               "beginFrame() and before endFrame().";
+
     RendererUtils::readPixels(mEngine.getDriverApi(), mRenderTargetHandle,
             xoffset, yoffset, width, height, std::move(buffer));
 }
@@ -461,10 +459,9 @@ void FRenderer::readPixels(FRenderTarget* renderTarget,
 
     // TODO: change the following to an assert when client call sites have addressed the issue.
     if (!renderTarget->supportsReadPixels()) {
-        slog.w << "readPixels() must be called with a renderTarget with COLOR0 created with "
-                         "TextureUsage::BLIT_SRC.  This precondition will be asserted in a later "
-                         "release of Filament."
-                      << io::endl;
+        LOG(WARNING) << "readPixels() must be called with a renderTarget with COLOR0 created with "
+                        "TextureUsage::BLIT_SRC. This precondition will be asserted in a later "
+                        "release of Filament.";
     }
 
     RendererUtils::readPixels(mEngine.getDriverApi(), renderTarget->getHwHandle(),
@@ -473,7 +470,7 @@ void FRenderer::readPixels(FRenderTarget* renderTarget,
 
 void FRenderer::copyFrame(FSwapChain* dstSwapChain, filament::Viewport const& dstViewport,
         filament::Viewport const& srcViewport, CopyFrameFlag const flags) {
-    SYSTRACE_CALL();
+    FILAMENT_TRACING_CALL(FILAMENT_TRACING_CATEGORY_FILAMENT);
 
     assert_invariant(mSwapChain);
     assert_invariant(dstSwapChain);
@@ -520,7 +517,7 @@ void FRenderer::copyFrame(FSwapChain* dstSwapChain, filament::Viewport const& ds
 }
 
 void FRenderer::renderStandaloneView(FView const* view) {
-    SYSTRACE_CALL();
+    FILAMENT_TRACING_CALL(FILAMENT_TRACING_CATEGORY_FILAMENT);
 
     using namespace std::chrono;
 
@@ -558,7 +555,7 @@ void FRenderer::renderStandaloneView(FView const* view) {
 }
 
 void FRenderer::render(FView const* view) {
-    SYSTRACE_CALL();
+    FILAMENT_TRACING_CALL(FILAMENT_TRACING_CATEGORY_FILAMENT);
 
     if (UTILS_UNLIKELY(mBeginFrameInternal)) {
         // this should not happen, the user should not call render() if we returned false from
@@ -824,6 +821,9 @@ void FRenderer::renderJob(RootArenaScope& rootArenaScope, FView& view) {
     variant.setDirectionalLighting(view.hasDirectionalLighting());
     variant.setDynamicLighting(view.hasDynamicLighting());
     variant.setFog(view.hasFog());
+    // The VSM bit has a different meaning for STANDARD_VARIANT (as opposed to DEPTH_VARIANT),
+    // In the STANDARD_VARIANT case, we are *using* the shadow-map, and the VSM only decides which
+    // type of sampler is used (samplerShadow or sampler2D).
     variant.setVsm(view.hasShadowing() && view.getShadowType() != ShadowType::PCF);
     variant.setStereo(view.hasStereo());
 
@@ -841,7 +841,11 @@ void FRenderer::renderJob(RootArenaScope& rootArenaScope, FView& view) {
 
     if (view.needsShadowMap()) {
         Variant shadowVariant(Variant::DEPTH_VARIANT);
+        // The VSM bit has a different meaning for DEPTH_VARIANT (as opposed to STANDARD_VARIANT),
+        // In the DEPTH_VARIANT case, we are *generating* the shadow-map, and some computations
+        // are handled differently. In addition, the color buffer is used.
         shadowVariant.setVsm(view.getShadowType() == ShadowType::VSM);
+
         auto shadows = view.renderShadowMaps(engine, fg, cameraInfo, mShaderUserTime,
                 RenderPassBuilder{ commandArena }
                     .renderFlags(renderFlags)
@@ -970,7 +974,7 @@ void FRenderer::renderJob(RootArenaScope& rootArenaScope, FView& view) {
                 // this descriptor-set is also used for ssr/picking/structure and these could be stale
                 // it would be better to use a separate desriptor-set for those two cases so that we don't
                 // have to do this
-                view.unbindSamplers(driver);
+                view.unbindSamplers(engine);
                 view.commitUniformsAndSamplers(driver);
             });
 
@@ -1364,6 +1368,7 @@ void FRenderer::renderJob(RootArenaScope& rootArenaScope, FView& view) {
             xvp.left = xvp.bottom = 0;
             svp = xvp;
         }
+
         if (scaled) {
             mightNeedFinalBlit = false;
             auto viewport = DEBUG_DYNAMIC_SCALING ? xvp : vp;
@@ -1385,46 +1390,64 @@ void FRenderer::renderJob(RootArenaScope& rootArenaScope, FView& view) {
                         SamplerMagFilter::NEAREST, SamplerMinFilter::NEAREST);
     }
 
-    // We need to do special processing when rendering directly into the swap-chain, that is when
-    // the viewRenderTarget is the default render target (mRenderTarget) and we're rendering into
-    // it.
-    // * This is because the default render target is not multi-sampled, so we need an
-    //   intermediate buffer when MSAA is enabled.
-    // * We also need an extra buffer for blending the result to the framebuffer if the view
-    //   is translucent AND we've not already done it as part of upscaling.
-    // * And we can't use the default rendertarget if MRT is required (e.g. with color grading
-    //   as a subpass)
-    // * And we also can't use the default rendertarget if frame history is needed (e.g. with
-    //   screen-space reflections)
-    // * And we also can't use the default rendertarget with refractions, which need to reuse
-    //   the rendertarget due to how the clear flags work.
-    // * We also need an extra blit if we haven't yet handled "xvp"
-    //   TODO: in that specific scenario it would be better to just not use xvp
-    // The intermediate buffer is accomplished with a "fake" opaqueBlit (i.e. blit) operation.
+    if (UTILS_UNLIKELY((input == postProcessInput && viewRenderTarget == mRenderTargetHandle) &&
+            view.isStencilBufferEnabled())) {
+        // FIXME: I think this check is incomplete, if we're rendering into a custom rendertarget
+        //        we need to check that it (not the swapchain) has a stencil buffer.
+        assert_invariant(mSwapChain);
+        FILAMENT_CHECK_PRECONDITION(mSwapChain->hasStencilBuffer())
+                << "View has stencil buffer enabled, but SwapChain does not have "
+                   "SwapChain::CONFIG_HAS_STENCIL_BUFFER flag set.";
+    }
 
-    const bool outputIsSwapChain =
-            (input == postProcessInput) && (viewRenderTarget == mRenderTargetHandle);
+    /*
+     * Here we're ready to present the output of the framegraph, which is held in `input`.
+     * The presentation itself happens by forwarding `input` to the render target, which can
+     * either be the SwapChain's or the View's custom render target. This is done below with
+     * `forwardResource()`.
+     *
+     * There are however a few situations where `input` cannot be forwarded in this manner, and
+     * an intermediate buffer is needed instead.
+     *
+     * 1. Blending is needed (blendModeTranslucent)
+     * 2. Dimensions don't match, e.g.: because we have guard bands (xvp != svp)
+     * 3. MRT is needed (colorGradingConfig.asSubpass)
+     * 4. Frame history is needed (hasScreenSpaceRefraction)
+     * 5. Refraction is used because how clear flags work (ssReflectionsOptions.enabled)
+     * 6. `input` and the render target are not compatible:
+     *      - MSAA doesn't match. Note: auto-resolve could work if the SwapChain was configured
+     *        this way.
+     *
+     * One complication is that post-processing passes handle some of these issues automatically:
+     * - each post-processing pass will create an intermediate buffer, which takes care of
+     *      - MSAA (because of auto-resolve)
+     *      - MRT is needed
+     *      - Frame history is needed
+     *      - Refraction
+     * - the upscaling pass takes care of all the above plus blending and dimensions mismatch.
+     *
+     * TODO: we could make this work with custom render targets because we can access the texture
+     *       for those and it could behave just like a regular resource. This would lift
+     *       some (but not all) of those limitations. For instance we could use MRTs.
+     */
+
     if (mightNeedFinalBlit) {
+        assert_invariant(!scaled);
+        // Determine if our `input` is in fact the output of the color pass, in which case
+        // many of the caveat above apply.
+        bool const inputIsColorPass = (input == postProcessInput);
         if (blendModeTranslucent ||
             xvp != svp ||
-            (outputIsSwapChain &&
+            (inputIsColorPass &&
                     (msaaSampleCount > 1 ||
                     colorGradingConfig.asSubpass ||
                     hasScreenSpaceRefraction ||
                     ssReflectionsOptions.enabled))) {
-            assert_invariant(!scaled);
             input = ppm.blit(fg, blendModeTranslucent, input, xvp, {
                             .width = vp.width, .height = vp.height,
                             .format = colorGradingConfig.ldrFormat },
                     SamplerMagFilter::NEAREST, SamplerMinFilter::NEAREST);
         }
-    }
-
-    if (UTILS_UNLIKELY(outputIsSwapChain && view.isStencilBufferEnabled())) {
-        assert_invariant(mSwapChain);
-        FILAMENT_CHECK_PRECONDITION(mSwapChain->hasStencilBuffer())
-                << "View has stencil buffer enabled, but SwapChain does not have "
-                   "SwapChain::CONFIG_HAS_STENCIL_BUFFER flag set.";
     }
 
     if (UTILS_UNLIKELY(engine.debug.shadowmap.display_shadow_texture)) {
@@ -1453,7 +1476,9 @@ void FRenderer::renderJob(RootArenaScope& rootArenaScope, FView& view) {
     }
 #endif
 
-    //fg.export_graphviz(slog.d, view.getName());
+    //utils::io::sstream graphviz;
+    //fg.export_graphviz(graphviz, view.getName());
+    //DLOG(INFO) << graphviz.c_str();
 
     fg.execute(driver);
 

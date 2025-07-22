@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "if_non_android")
 load("//build_tools:imp_app.bzl", "imp_app")
 
@@ -58,19 +59,20 @@ cc_library(
         "//:platform_android",
         "//core/async:executor",
         "//core/common:buffer_access",
-        "//core/common:context",
         "//core/common:enum_flags",
         "//core/common:jni_helpers",
+        "//core/common:log",
         "//core/common:platform_helpers",
         "//core/common:registry",
-        "//core/common:trace",
         "//core/math",
         "//core/split_engine:split_engine_bridge_sender",
         "//core/split_engine:split_engine_serializer_impl",
-        "//core/split_engine/android:message_group_id_mapper_impl",
         "//core/split_engine/android:split_engine_android_bridge",
         "//core/split_engine/android:split_engine_android_shared_memory_bridge",
+        "//core/split_engine/android:split_engine_shared_memory_bridge_client",
         "//core/split_engine/android:split_engine_shared_memory_bridge_sender",
+        "//core/split_engine/android/extensions:split_engine_bridge",
+        "//core/split_engine/android/extensions:split_engine_bridge_jni",
         "//core/view:base_view",
         "//core/view:view_host",
         "//core/view/framework",
@@ -78,12 +80,11 @@ cc_library(
         "//core/view/platforms/xr_android:xr_helpers",
         "//core/window:filament_host",
         "//core/xr:openxr_loader_lib",
-        "@third_party//OpenXR_KHR:openxr_headers_androidxr",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/time",
         "@third_party//filament",
         "@third_party//filament/filament:filament_hdrs",
-        "@third_party//filament/filament/backend:virtual_machine_env",
     ],
     alwayslink = 1,
 )

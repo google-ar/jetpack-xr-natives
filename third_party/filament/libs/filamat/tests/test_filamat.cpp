@@ -26,6 +26,7 @@
 #include <filamat/MaterialBuilder.h>
 
 #include "filament/libs/utils/include/utils/JobSystem.h"
+#include "filament/libs/utils/include/utils/Panic.h"
 
 #include <memory>
 

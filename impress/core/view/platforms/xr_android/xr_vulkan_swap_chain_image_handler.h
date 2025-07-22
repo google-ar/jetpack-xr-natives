@@ -35,8 +35,9 @@ namespace imp {
 // format, and foveation flag needed by the `XrSwapChain` on the Vulkan thread.
 class XrVulkanSwapChainImageHandler {
  public:
-  static constexpr int64_t kImageFormat = VK_FORMAT_R8G8B8A8_SRGB;
-  static constexpr VkFormat kVkDepthFormat = VK_FORMAT_D24_UNORM_S8_UINT;
+  static constexpr VkFormat kVkImageFormat = VK_FORMAT_R8G8B8A8_SRGB;
+  static constexpr int64_t kImageFormat = kVkImageFormat;
+  static constexpr VkFormat kVkDepthFormat = VK_FORMAT_D32_SFLOAT;
   static constexpr int32_t kDepthFormat = kVkDepthFormat;
   static constexpr XrStructureType kImageType =
       XR_TYPE_SWAPCHAIN_IMAGE_VULKAN_KHR;

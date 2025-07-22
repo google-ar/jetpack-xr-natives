@@ -23,6 +23,7 @@
 #include <private/filament/SamplerInterfaceBlock.h>
 
 #include "ShaderMinifier.h"
+#include "SpirvRemapWrapper.h"
 
 #include <spirv-tools/optimizer.hpp>
 
@@ -114,14 +115,20 @@ private:
      * Retrieve an optimizer instance tuned for the given optimization level and shader configuration.
      */
     using OptimizerPtr = std::shared_ptr<spvtools::Optimizer>;
+
     static OptimizerPtr createOptimizer(
             MaterialBuilder::Optimization optimization,
             Config const& config);
 
+    static OptimizerPtr createEmptyOptimizer();
+
     static void registerSizePasses(spvtools::Optimizer& optimizer, Config const& config);
+
     static void registerPerformancePasses(spvtools::Optimizer& optimizer, Config const& config);
 
-    void optimizeSpirv(OptimizerPtr optimizer, SpirvBlob& spirv) const;
+    static void optimizeSpirv(OptimizerPtr optimizer, SpirvBlob &spirv);
+
+    static void rebindImageSamplerForWGSL(std::vector<uint32_t>& spirv);
 
     void fixupClipDistance(SpirvBlob& spirv, GLSLPostProcessor::Config const& config) const;
 

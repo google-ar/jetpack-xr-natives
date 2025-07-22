@@ -111,6 +111,7 @@ RefCounter::Ref::~Ref() noexcept {
   DecrementCount();
   if (tracked_refs_) {
     DeleteTrackedRefsIfNeeded(tracked_refs_);
+    tracked_refs_ = nullptr;
   }
 }
 
@@ -151,12 +152,16 @@ RefCounter::RefCounter() noexcept : tracked_refs_(new TrackedRefs()) {}
 
 RefCounter::~RefCounter() noexcept {
   if (tracked_refs_) {
+    
+
     tracked_refs_->is_destroyed = true;
 
     // If there are no outstanding Ref objects, then the TrackedRefs object can
     // be deleted. Otherwise, this will be deleted when the last Ref object
     // goes out of scope.
     DeleteTrackedRefsIfNeeded(tracked_refs_);
+
+    tracked_refs_ = nullptr;
   }
 }
 

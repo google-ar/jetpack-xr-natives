@@ -277,7 +277,7 @@ final class ImpExoPlayer {
   }
 
   @UsedByNative("android_exoplayer.h")
-  public float getMaxContentLightLevel() {
+  public int getMaxContentLightLevel() {
     Format format = player.getVideoFormat();
     if (format != null && format.colorInfo != null && format.colorInfo.hdrStaticInfo != null) {
       byte[] hdrStaticInfo = format.colorInfo.hdrStaticInfo;
@@ -285,9 +285,9 @@ final class ImpExoPlayer {
         ByteBuffer buffer = ByteBuffer.wrap(hdrStaticInfo);
         buffer.order(ByteOrder.LITTLE_ENDIAN);
         buffer.position(23);
-        return (float) buffer.getShort();
+        return buffer.getShort();
       }
     }
-    return -1;
+    return 0;
   }
 }

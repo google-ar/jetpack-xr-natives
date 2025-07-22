@@ -33,9 +33,9 @@ public final class ContinuousFrameScheduler extends FrameScheduler {
   /** Factory method for the ContinuousFrameScheduler */
   public static class Factory implements FrameScheduler.Factory {
     @Override
-    public FrameScheduler create(ThreadMode threadMode) {
+    public FrameScheduler create(ThreadMode threadMode, String threadName) {
       if (instance == null) {
-        instance = new ContinuousFrameScheduler(threadMode);
+        instance = new ContinuousFrameScheduler(threadMode, threadName);
       }
       return instance;
     }
@@ -62,7 +62,11 @@ public final class ContinuousFrameScheduler extends FrameScheduler {
   @Nullable private FrameAdvancer frameAdvancer;
 
   ContinuousFrameScheduler(ThreadMode threadMode) {
-    super(threadMode);
+    this(threadMode, null);
+  }
+
+  ContinuousFrameScheduler(ThreadMode threadMode, String threadName) {
+    super(threadMode, threadName);
     handler = new ContinuousFrameHandler(this, getLooper());
     frameAdvancer = null;
     state = State.STOPPED;

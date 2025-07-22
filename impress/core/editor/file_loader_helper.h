@@ -17,33 +17,21 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_FILE_LOADER_HELPER_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_FILE_LOADER_HELPER_H_
 
+#include <memory>
 #include <variant>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
-#include "absl/types/optional.h"
 #include "core/async/future.h"
 #include "core/common/invocable.h"
+#include "core/editor/editor.h"
+#include "core/editor/file_type_loader.h"
 #include "core/ncsb/node_handle.h"
 #include "core/view/base_view.h"
 
 namespace imp::editor {
-
-// An enum representation of various asset types used by the editor.
-enum class FileType {
-  kUnsupported,
-  kGltf,
-  kIsf,
-  kIsfJson,
-  kIsfTextproto,
-  kHdrImage,
-  kTexture,
-  kGSplat,
-};
-
-// Returns the file type by looking at the extension of the given filename.
-FileType GetFileTypeFromName(absl::string_view filename);
 
 // Indicates how to load a file from a path when not getting the data directly
 // from a Cord.
@@ -77,6 +65,52 @@ Future<absl::Status> LoadFile(BaseView& view, absl::string_view path,
                               LoadFileSource source,
                               Invocable<void(NodeHandle)> placement_func = {});
 
+// Sends events to notify the editor that a node is being loaded.
+void BeginLoadingNode(Editor& editor, BaseView& view);
+// Sends events to notify the editor that a node has finished being loaded.
+void EndLoadingNode(Editor& editor, BaseView& view, absl::string_view path,
+                    NodeHandle node, Invocable<void(NodeHandle)> placement_func,
+                    Invocable<void(NodeHandle)> post_loaded_func = {});
+
+// Implementation of FileTypeLoader for glTF files.
+class GltfFileLoader : public FileTypeLoader {
+ public:
+  GltfFileLoader(BaseView& view) : FileTypeLoader(view) {}
+
+  Future<absl::Status> LoadNode(
+      absl::string_view path,
+      Invocable<void(NodeHandle)> placement_func) override;
+};
+
+// File Loader for binary ISF files.
+class IsfFileLoader : public FileTypeLoader {
+ public:
+  IsfFileLoader(BaseView& view) : FileTypeLoader(view) {}
+
+  Future<absl::Status> LoadNode(
+      absl::string_view path,
+      Invocable<void(NodeHandle)> placement_func) override;
+};
+
+// File Loader for text  ISF files.
+class TextProtoFileLoader : public FileTypeLoader {
+ public:
+  TextProtoFileLoader(BaseView& view) : FileTypeLoader(view) {}
+
+  Future<absl::Status> LoadNode(
+      absl::string_view path,
+      Invocable<void(NodeHandle)> placement_func) override;
+};
+
+// File Loader for ImageBasedLighting assets.
+class IblFileLoader : public FileTypeLoader {
+ public:
+  IblFileLoader(BaseView& view) : FileTypeLoader(view) {}
+
+  Future<absl::Status> LoadNode(
+      absl::string_view path,
+      Invocable<void(NodeHandle)> placement_func) override;
+};
 }  // namespace imp::editor
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_EDITOR_FILE_LOADER_HELPER_H_

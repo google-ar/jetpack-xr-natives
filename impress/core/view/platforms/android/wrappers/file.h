@@ -28,7 +28,7 @@ namespace imp::android {
 // JNI wrapper for the Java IO File class.
 class File : public JavaWrapper {
  public:
-  File(JNIEnv* env, jobject file);
+  File(JNIEnv* env, JniUniquePtr<jobject> file);
 
   std::string GetPath();
   std::string GetName();

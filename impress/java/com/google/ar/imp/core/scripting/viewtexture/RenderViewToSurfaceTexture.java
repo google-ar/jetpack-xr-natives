@@ -22,11 +22,13 @@ import android.graphics.PixelFormat;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
 import android.util.DisplayMetrics;
+import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.View;
 import android.view.WindowManager;
 import com.google.android.filament.proguard.UsedByNative;
+import java.util.ArrayList;
 
 // LINT.IfChange(android_view_renderer)
 
@@ -154,13 +156,49 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
   }
 
   @UsedByNative("android_view_renderer.cc")
-  public void dispatchGenericMotionEventToView(MotionEvent motionEvent) {
+  public void dispatchGenericMotionEventToView(MotionEvent originalMotionEvent) {
+    MotionEvent motionEvent = createMouseEventWith(originalMotionEvent);
     view.dispatchGenericMotionEvent(motionEvent);
+    motionEvent.recycle();
   }
 
   @UsedByNative("android_view_renderer.cc")
-  public void dispatchTouchEventToView(MotionEvent motionEvent) {
+  public void dispatchTouchEventToView(MotionEvent originalMotionEvent) {
+    MotionEvent motionEvent = createMouseEventWith(originalMotionEvent);
     view.dispatchTouchEvent(motionEvent);
+    motionEvent.recycle();
+  }
+
+  private MotionEvent createMouseEventWith(MotionEvent motionEvent) {
+    int pointerCount = motionEvent.getPointerCount();
+    ArrayList<MotionEvent.PointerProperties> pointerProperties = new ArrayList<>();
+    ArrayList<MotionEvent.PointerCoords> pointerCoords = new ArrayList<>();
+    for (int i = 0; i < pointerCount; i++) {
+      MotionEvent.PointerProperties properties = new MotionEvent.PointerProperties();
+      motionEvent.getPointerProperties(i, properties);
+      properties.toolType = MotionEvent.TOOL_TYPE_MOUSE;
+      pointerProperties.add(properties);
+
+      MotionEvent.PointerCoords coords = new MotionEvent.PointerCoords();
+      motionEvent.getPointerCoords(i, coords);
+      pointerCoords.add(coords);
+    }
+
+    return MotionEvent.obtain(
+        motionEvent.getDownTime(),
+        motionEvent.getEventTime(),
+        motionEvent.getAction(),
+        pointerCount,
+        pointerProperties.toArray(new MotionEvent.PointerProperties[pointerCount]),
+        pointerCoords.toArray(new MotionEvent.PointerCoords[pointerCount]),
+        motionEvent.getMetaState(),
+        motionEvent.getButtonState(),
+        motionEvent.getXPrecision(),
+        motionEvent.getYPrecision(),
+        motionEvent.getDeviceId(),
+        motionEvent.getEdgeFlags(),
+        InputDevice.SOURCE_MOUSE,
+        motionEvent.getFlags());
   }
 
   private static native void nSetRenderViewSurfaceDimensions(

@@ -14,26 +14,25 @@
 
 #include "core/view/framework/lighting/light_manager.h"
 
+#include <grp.h>
+
 #include <memory>
-#include <string>
 #include <utility>
-#include <vector>
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
-#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
-#include "absl/types/optional.h"
-#include "filament/filament/include/filament/IndirectLight.h"
-#include "filament/filament/include/filament/Scene.h"
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
-#include "core/common/platform_helpers.h"
+#include "core/common/owned_or_unowned_memory.h"
+#include "core/common/owned_ptr.h"
 #include "core/lighting/environment_light.h"
 #include "core/lighting/environment_light_factory.h"
 #include "core/lighting/image_based_lighting_asset.h"
 #include "core/math/vec.h"
+#include "core/ncsb/component.h"
 #include "core/ncsb/component_handle.h"
+#include "core/ncsb/groups_manager.h"
 #include "core/ncsb/node_handle.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
@@ -50,9 +49,11 @@ constexpr float3 kDefaultDirectionalLightWorldUp = {0.0f, 0.0f, -1.0f};
 
 constexpr absl::string_view kDefaultLightNodeName = "light";
 
+using AutomatedLightingMode = GroupsManager::AutomatedLightingMode;
+using EnvironmentLightHolder = GroupsManager::EnvironmentLightHolder;
 }  // namespace
 
-LightManager::LightManager(BaseView* view) : view_(view) {}
+LightManager::LightManager(BaseView& view) : view_(view) {}
 
 const AssetDefinition& LightManager::GetDefaultLightingResource() {
   return kDefaultIblZip;
@@ -67,45 +68,98 @@ float LightManager::GetDefaultDirectionalLightIntensity() const {
 
 void LightManager::SetEnvironmentLight(EnvironmentLightPtr environment_light,
                                        absl::string_view group_name) {
-  auto it = environment_lighting_map_.find(group_name);
-  if (it == environment_lighting_map_.end()) {
-    IMP_LOG(imp::ERROR) << "Failed to set EnvironmentLight for group " << group_name
-               << ": Group does not exist";
-    return;
+  GroupsManager& groups_manager = view_.GetGroupsManager();
+
+  EnvironmentLightHolder environment_light_holder(
+      AutomatedLightingMode::kNoEnvironmentLight);
+  if (environment_light) {
+    environment_light_holder = EnvironmentLightHolder(
+        OwnedOrUnownedMemory<EnvironmentLight>(std::move(environment_light)));
   }
-
-  it.value().Set(std::move(environment_light));
-
-  UpdateEnvironmentLight(it.value().Get(), group_name);
+  groups_manager.SetGroupEnvironmentLight(group_name,
+                                          std::move(environment_light_holder));
 }
 
 void LightManager::SetEnvironmentLight(EnvironmentLight* environment_light,
                                        absl::string_view group_name) {
-  environment_lighting_map_[std::string(group_name)].Set(environment_light);
+  GroupsManager& groups_manager = view_.GetGroupsManager();
 
-  UpdateEnvironmentLight(environment_light, group_name);
+  EnvironmentLightHolder environment_light_holder(
+      AutomatedLightingMode::kNoEnvironmentLight);
+  if (environment_light) {
+    environment_light_holder = EnvironmentLightHolder(
+        OwnedOrUnownedMemory<EnvironmentLight>(std::move(environment_light)));
+  }
+  groups_manager.SetGroupEnvironmentLight(group_name,
+                                          std::move(environment_light_holder));
+}
+
+void LightManager::SetEnvironmentLight(
+    OwnedPtr<EnvironmentLight> environment_light,
+    absl::string_view group_name) {
+  GroupsManager& groups_manager = view_.GetGroupsManager();
+
+  EnvironmentLightHolder environment_light_holder(
+      AutomatedLightingMode::kNoEnvironmentLight);
+  if (environment_light) {
+    environment_light_holder =
+        EnvironmentLightHolder(std::move(environment_light));
+  }
+  groups_manager.SetGroupEnvironmentLight(group_name,
+                                          std::move(environment_light_holder));
+}
+
+void LightManager::SetEnvironmentLight(
+    BorrowedPtr<EnvironmentLight> environment_light,
+    absl::string_view group_name) {
+  GroupsManager& groups_manager = view_.GetGroupsManager();
+
+  EnvironmentLightHolder environment_light_holder(
+      AutomatedLightingMode::kNoEnvironmentLight);
+  if (environment_light) {
+    environment_light_holder =
+        EnvironmentLightHolder(std::move(environment_light));
+  }
+  groups_manager.SetGroupEnvironmentLight(group_name,
+                                          std::move(environment_light_holder));
+}
+
+void LightManager::MirrorMainGroupEnvironmentLightToGroup(
+    absl::string_view group_name) {
+  if (group_name == GroupsManager::kMainGroupName) {
+    return;
+  }
+  view_.GetGroupsManager().SetGroupEnvironmentLight(
+      group_name, EnvironmentLightHolder(
+                      AutomatedLightingMode::kUseMainGroupEnvironmentLight));
+}
+
+void LightManager::ClearEnvironmentLight(absl::string_view group_name) {
+  view_.GetGroupsManager().SetGroupEnvironmentLight(
+      group_name,
+      EnvironmentLightHolder(AutomatedLightingMode::kNoEnvironmentLight));
+}
+
+BorrowedPtr<EnvironmentLight> LightManager::GetGroupEnvironmentLight(
+    absl::string_view group_name) {
+  return view_.GetGroupsManager().GetEnvironmentLight(group_name);
 }
 
 EnvironmentLight* LightManager::GetEnvironmentLight(
     absl::string_view group_name) {
-  auto it = environment_lighting_map_.find(group_name);
-  if (it == environment_lighting_map_.end()) {
-    return nullptr;
-  }
-
-  return it.value().Get();
+  return view_.GetGroupsManager().GetRawEnvironmentLight(group_name);
 }
 
 Future<absl::Status> LightManager::SetupDefaultLighting() {
   if (!default_ibl_) {
-    default_ibl_ = view_->GetAssetManager().LoadImageBasedLighting(
+    default_ibl_ = view_.GetAssetManager().LoadImageBasedLighting(
         GetDefaultLightingResource());
   }
 
   return default_ibl_->Then(
       [this](AssetPtr<ImageBasedLightingAsset> ibl_asset) {
         SetEnvironmentLight(
-            view_->GetEnvironmentLightFactory().CreateEnvironmentLight(
+            view_.GetEnvironmentLightFactory().CreateEnvironmentLight(
                 ibl_asset, kDefaultEnvironmentLightIntensity));
 
         SetupDefaultDirectionalLight();
@@ -143,29 +197,11 @@ void LightManager::Setup() {
   if (is_default_load_enabled_) {
     default_lighting_status_ = SetupDefaultLighting();
   }
-
-  // Creates GroupLighting for main group manually as the GroupCreatedEvent for
-  // main group gets sent out before LightManager::Setup().
-  environment_lighting_map_[std::string(
-      view_->GetGroupsManager().kMainGroupName)] =
-      OwnedOrUnownedEnvironmentLight();
-
-  group_created_event_connection_ = view_->GetDispatcher().Connect(
-      [this](const GroupsManager::GroupCreatedEvent& event) {
-        auto it = environment_lighting_map_.find(event.group_name);
-        if (it != environment_lighting_map_.end()) {
-          UpdateEnvironmentLight(it.value().Get(), event.group_name);
-        } else {
-          environment_lighting_map_[event.group_name] =
-              OwnedOrUnownedEnvironmentLight();
-        }
-      });
 }
 
 void LightManager::Cleanup() {
   default_ibl_.reset();
   default_lighting_status_.reset();
-  environment_lighting_map_.clear();
 }
 
 void LightManager::EnsureLighting() {
@@ -180,7 +216,7 @@ void LightManager::SetupDefaultDirectionalLight() {
                               ? default_directional_light_->GetNode()
                               : NodeHandle();
   if (!light_node) {
-    light_node = view_->CreateNode();
+    light_node = view_.CreateNode();
   }
 
   light_node->SetName(kDefaultLightNodeName);
@@ -198,33 +234,9 @@ void LightManager::SetupDefaultDirectionalLight() {
   default_directional_light_->SetIntensity(kDefaultDirectionalLightIntensity);
 }
 
-void LightManager::UpdateEnvironmentLight(EnvironmentLight* environment_light,
-                                          absl::string_view group_name) {
-  filament::Scene* scene = view_->GetGroupsManager().GetScene(group_name);
-  if (!scene) {
-    return;
-  }
-
-  if (environment_light) {
-    scene->setIndirectLight(environment_light->GetIndirectLight());
-  } else {
-    scene->setIndirectLight(nullptr);
-  }
-}
-
 void LightManager::ApplyMainGroupLighting(absl::string_view group_name) {
-  if (GetDefaultLightingStatus() ==
-      EnvironmentLightingStatus::kLoadInProgress) {
-    default_lighting_status_
-        ->Then([this, group = std::string(group_name)]() {
-          AddDefaultDirectionalLightToGroup(group);
-          SetEnvironmentLight(GetEnvironmentLight(), group);
-        })
-        .KeptBy(view_);
-  } else {
-    AddDefaultDirectionalLightToGroup(group_name);
-    SetEnvironmentLight(GetEnvironmentLight(), group_name);
-  }
+  MirrorMainGroupEnvironmentLightToGroup(group_name);
+  AddDefaultDirectionalLightToGroup(group_name);
 }
 
 void LightManager::AddDefaultDirectionalLightToGroup(

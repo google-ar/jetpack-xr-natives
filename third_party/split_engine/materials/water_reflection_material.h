@@ -37,6 +37,8 @@ class WaterReflectionMaterial : public imp::split_engine::SplitEngineMaterial {
   static imp::Future<std::unique_ptr<WaterReflectionMaterial>> Create(
       imp::BaseView& view, bool transparent = true);
 
+  ~WaterReflectionMaterial() override;
+
   void SetReflectionCube(imp::OwnedOrBorrowedTexturePtr reflection_cube);
   void SetNormalMap(imp::OwnedOrBorrowedTexturePtr normal_map);
   void SetNormalTiling(float normal_tiling);

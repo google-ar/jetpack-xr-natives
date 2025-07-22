@@ -30,6 +30,8 @@
 #include "core/canvas/scoped_canvas.h"
 #include "core/common/small_source_location.h"
 #include "core/math/vec.h"
+#include "core/text/text_helpers.h"
+#include "core/view/base_view.h"
 
 namespace imp {
 
@@ -37,7 +39,7 @@ namespace imp {
 // AsyncCanvasSource interface by wrapping return values as Futures.
 class AsyncCanvasSourceWrapper : public AsyncCanvasSource {
  public:
-  AsyncCanvasSourceWrapper(std::unique_ptr<CanvasSource> source)
+  explicit AsyncCanvasSourceWrapper(std::unique_ptr<CanvasSource> source)
       : source_(std::move(source)) {}
 
   bool IsFeatureSupported(ScopedCanvas::Feature feature) override;
@@ -70,11 +72,13 @@ class AsyncCanvasSourceWrapper : public AsyncCanvasSource {
       const ScopedCanvas::TextOptions& text_options) override;
 
   std::unique_ptr<AsyncScopedCanvas> StartDrawing(
-      uint2 pixel_size, ScopedCanvas::DrawMode draw_mode =
-                            ScopedCanvas::DrawMode::kClear) override;
+      BaseView& view, uint2 pixel_size,
+      ScopedCanvas::DrawMode draw_mode =
+          ScopedCanvas::DrawMode::kClear) override;
 
   std::unique_ptr<AsyncScopedCanvas> StartDrawing(
-      uint2 pixel_size, ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
+      BaseView& view, uint2 pixel_size,
+      ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
       ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) override;
 
  private:

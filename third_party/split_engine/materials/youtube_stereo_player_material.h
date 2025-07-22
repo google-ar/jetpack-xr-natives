@@ -37,6 +37,8 @@ class YouTubeStereoPlayerMaterial
   static imp::Future<std::unique_ptr<YouTubeStereoPlayerMaterial>> Create(
       imp::BaseView& view);
 
+  ~YouTubeStereoPlayerMaterial() override;
+
   // Defines which eye the material should be rendered for. The same material
   // is used for rendering each eye, and both eyes.
   enum class EyeMode {

@@ -31,6 +31,7 @@
 #include "core/math/vec.h"
 #include "split_engine/schemas/split_engine_data_generated.h"
 #include "split_engine/schemas/split_engine_primitive_generated.h"
+#include "mediapipe/framework/port/status_macros.h"
 
 namespace imp::split_engine {
 
@@ -123,6 +124,9 @@ absl::StatusOr<CubemapLevelImageContents> UnpackCubemapLevelImageContents(
   }
   const android_xr::schemas::CubemapLevel* cubemap_level_schema =
       cubemap_level_image_contents->cubemap_level();
+  if (!cubemap_level_schema->face_offsets()) {
+    return absl::InvalidArgumentError("face_offsets was null.");
+  }
   const android_xr::schemas::FaceOffsets* face_offsets_schema =
       cubemap_level_schema->face_offsets();
   filament::Texture::FaceOffsets face_offsets;
@@ -147,11 +151,12 @@ absl::StatusOr<CubemapLevelImageContents> UnpackCubemapLevelImageContents(
   }
   std::vector<uint8_t> memory(stitched_face_image_schema.memory()->begin(),
                               stitched_face_image_schema.memory()->end());
-  std::unique_ptr<image::ImageContents> stitched_face_image =
-      image::ImageContents::CreatePreStitchedImage(
-          stitched_face_image_schema.width(),
-          stitched_face_image_schema.height(), std::move(memory))
-          .value();
+
+  MP_ASSIGN_OR_RETURN(std::unique_ptr<image::ImageContents> stitched_face_image,
+                   image::ImageContents::CreatePreStitchedImage(
+                       stitched_face_image_schema.width(),
+                       stitched_face_image_schema.height(), std::move(memory)));
+
   return CubemapLevelImageContents{
       .cubemap_level = cubemap_level,
       .stitched_face_image = std::move(stitched_face_image)};

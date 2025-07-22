@@ -27,6 +27,7 @@
 #include "core/common/small_source_location.h"
 #include "core/math/vec.h"
 #include "core/render/texture.h"
+#include "core/view/base_view.h"
 
 namespace imp {
 
@@ -67,7 +68,7 @@ struct PlatformCanvasSource {
       const ScopedCanvas::TextOptions& text_options) = 0;
 
   virtual std::unique_ptr<ScopedCanvas> StartDrawing(
-      uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) = 0;
+      BaseView& view, uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) = 0;
 
   // *EXPERIMENTAL*
   //
@@ -96,7 +97,8 @@ struct PlatformCanvasSource {
   // NOTE: The Draw functions called on the returned ScopedCanvas don't actually
   // apply to the texture until the ScopedCanvas is destroyed.
   virtual std::unique_ptr<ScopedCanvas> StartDrawing(
-      uint2 pixel_size, ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
+      BaseView& view, uint2 pixel_size,
+      ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
       ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) = 0;
 };
 

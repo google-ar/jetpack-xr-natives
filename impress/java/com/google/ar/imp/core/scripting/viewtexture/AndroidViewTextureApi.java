@@ -17,6 +17,7 @@
 package com.google.ar.imp.core.scripting.viewtexture;
 
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
+import static java.lang.Math.max;
 
 import android.view.View;
 import androidx.annotation.Nullable;
@@ -24,6 +25,7 @@ import com.google.ar.imp.core.AndroidViewRenderer.CreateSurfaceTextureQuadReques
 import com.google.ar.imp.core.AndroidViewRenderer.GetAttachedViewRequest;
 import com.google.ar.imp.core.AndroidViewRenderer.InputForwardingMode;
 import com.google.ar.imp.core.AndroidViewRenderer.UpdateSurfaceTextureQuadColliderRequest;
+import com.google.ar.imp.core.AndroidViewRenderer.ViewSize;
 import com.google.ar.imp.core.scripting.ApiBridge;
 import com.google.ar.imp.core.scripting.ApiRequest;
 import com.google.ar.imp.core.scripting.Node;
@@ -48,10 +50,11 @@ public final class AndroidViewTextureApi {
    * Sets up a node to hold a quad with the given view rendered continuously to texture. This also
    * sets AndroidViewRenderer's input forwarding mode to be INPUT_FORWARDING_MODE_DEFAULT, which
    * means it forwards PointerHitEvent as touch events. The material is set to the default unlit
-   * texture external material. The blend priority is set to the default blend priority.
+   * texture external material. The blend priority is set to the default blend priority. The aspect
+   * ratio of the view is preserved and the view is scaled to fit in a 1x1 meter rectangle.
    */
   public ListenableFuture<Void> attachViewToNode(Node node, View view) {
-    return attachViewToNode(node, view, 0, 0);
+    return attachViewToNode(node, view, null);
   }
 
   /**
@@ -63,8 +66,38 @@ public final class AndroidViewTextureApi {
    * <p>The width and height correspond to the size of the surface texture the view is rendered to.
    */
   public ListenableFuture<Void> attachViewToNode(Node node, View view, int width, int height) {
+    float metersPerPixel = 1f / max(width, height);
+    return attachViewToNode(node, view, width, height, metersPerPixel);
+  }
+
+  /**
+   * Sets up a node to hold a quad with the given view rendered continuously to texture. This also
+   * sets AndroidViewRenderer's input forwarding mode to be INPUT_FORWARDING_MODE_DEFAULT, which
+   * means it forwards PointerHitEvent as touch events. The material is set to the default unlit
+   * texture external material. The blend priority is set to the default blend priority.
+   */
+  public ListenableFuture<Void> attachViewToNode(
+      Node node, View view, @Nullable Float metersPerPixel) {
+    return attachViewToNode(node, view, 0, 0, metersPerPixel);
+  }
+
+  /**
+   * Sets up a node to hold a quad with the given view rendered continuously to texture. This also
+   * sets AndroidViewRenderer's input forwarding mode to be INPUT_FORWARDING_MODE_DEFAULT, which
+   * means it forwards PointerHitEvent as touch events. The material is set to the default unlit
+   * texture external material. The blend priority is set to the default blend priority.
+   *
+   * <p>The width and height correspond to the size of the surface texture the view is rendered to.
+   */
+  public ListenableFuture<Void> attachViewToNode(
+      Node node, View view, int width, int height, @Nullable Float metersPerPixel) {
     return attachViewToNode(
-        node, view, width, height, InputForwardingMode.INPUT_FORWARDING_MODE_DEFAULT);
+        node,
+        view,
+        width,
+        height,
+        metersPerPixel,
+        InputForwardingMode.INPUT_FORWARDING_MODE_DEFAULT);
   }
 
   /**
@@ -73,8 +106,13 @@ public final class AndroidViewTextureApi {
    * default blend priority.
    */
   public ListenableFuture<Void> attachViewToNode(
-      Node node, View view, int width, int height, InputForwardingMode inputForwardingMode) {
-    return attachViewToNode(node, view, width, height, inputForwardingMode, null);
+      Node node,
+      View view,
+      int width,
+      int height,
+      @Nullable Float metersPerPixel,
+      InputForwardingMode inputForwardingMode) {
+    return attachViewToNode(node, view, width, height, metersPerPixel, inputForwardingMode, null);
   }
 
   /**
@@ -88,10 +126,29 @@ public final class AndroidViewTextureApi {
       int height,
       InputForwardingMode inputForwardingMode,
       @Nullable MaterialDefinition material) {
-    return attachViewToNode(node, view, width, height, inputForwardingMode, material, null);
+    return attachViewToNode(node, view, width, height, null, inputForwardingMode, material, null);
   }
 
-  /** Sets up a node to hold a quad with the given view rendered continuously to texture. */
+  /**
+   * Sets up a node to hold a quad with the given view rendered continuously to texture. The blend
+   * priority is set to the default blend priority.
+   */
+  public ListenableFuture<Void> attachViewToNode(
+      Node node,
+      View view,
+      int width,
+      int height,
+      @Nullable Float metersPerPixel,
+      InputForwardingMode inputForwardingMode,
+      @Nullable MaterialDefinition material) {
+    return attachViewToNode(
+        node, view, width, height, metersPerPixel, inputForwardingMode, material, null);
+  }
+
+  /**
+   * Sets up a node to hold a quad with the given view rendered continuously to texture. The blend
+   * priority is set to the default blend priority.
+   */
   public ListenableFuture<Void> attachViewToNode(
       Node node,
       View view,
@@ -100,12 +157,29 @@ public final class AndroidViewTextureApi {
       InputForwardingMode inputForwardingMode,
       @Nullable MaterialDefinition material,
       @Nullable Integer blendPriority) {
+    return attachViewToNode(
+        node, view, width, height, null, inputForwardingMode, material, blendPriority);
+  }
+
+  /** Sets up a node to hold a quad with the given view rendered continuously to texture. */
+  public ListenableFuture<Void> attachViewToNode(
+      Node node,
+      View view,
+      int width,
+      int height,
+      @Nullable Float metersPerPixel,
+      InputForwardingMode inputForwardingMode,
+      @Nullable MaterialDefinition material,
+      @Nullable Integer blendPriority) {
     CreateSurfaceTextureQuadRequest.Builder request =
         CreateSurfaceTextureQuadRequest.newBuilder()
             .setTarget(node.getNodeHandle())
-            .setInputForwardingMode(inputForwardingMode)
-            .setWidth(width)
-            .setHeight(height);
+            .setInputForwardingMode(inputForwardingMode);
+    ViewSize.Builder viewSizeBuilder = ViewSize.newBuilder().setWidth(width).setHeight(height);
+    if (metersPerPixel != null) {
+      viewSizeBuilder.setMetersPerPixel(metersPerPixel);
+    }
+    request.setViewSize(viewSizeBuilder.build());
     if (material != null) {
       request.setMaterial(material);
     }
@@ -134,11 +208,11 @@ public final class AndroidViewTextureApi {
    *
    * <p>Note: this is a convenience helper for backwards compatibility.
    */
-  public ListenableFuture<Node> createAndroidViewNode(View view) {
+  public ListenableFuture<Node> createAndroidViewNode(View view, float metersPerPixel) {
     ScriptApi scriptApi = new ScriptApi(apiBridge);
     Node node = scriptApi.createNode();
     return Futures.transform(
-        attachViewToNode(node, view), (emptyMessage) -> node, directExecutor());
+        attachViewToNode(node, view, metersPerPixel), (emptyMessage) -> node, directExecutor());
   }
 
   // Gets the View that this Node is attached-to/rendering.

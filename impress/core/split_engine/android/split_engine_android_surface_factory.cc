@@ -16,7 +16,6 @@
 
 #include <jni.h>
 
-#include <cstdint>
 #include <functional>
 #include <memory>
 #include <utility>
@@ -26,12 +25,14 @@
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
 #include "absl/types/span.h"
 #include "core/common/invocable.h"
 #include "core/common/registry.h"
 #include "core/common/robin_map.h"
 #include "core/config.h"
 #include "core/math/vec.h"
+#include "core/media/media_color_space.h"
 #include "core/render/android/android_defines.h"
 #include "core/render/android/android_external_texture_surface.h"
 #include "core/render/android/platform_android_external_texture_surface.h"
@@ -118,33 +119,35 @@ jobject SplitEngineSurfaceFactory::CreateExternalTextureSurface(
     return nullptr;
   }
 
-  // Construct Android ExternalTextureSurface
-  ExternalTextureSurface external_texture_surface;
-  external_texture_surface.platform_surface = *std::move(platform_surface);
-  external_texture_surface.textures = textures;
-  std::function<SurfaceColorSpace()> get_source_color_space_fn =
-      [surface_ptr = external_texture_surface.platform_surface.get()]() {
-        absl::StatusOr<SurfaceColorSpace> surface_color_space =
-            surface_ptr->GetSurfaceColorSpace();
-        if (!surface_color_space.ok()) {
-          IMP_LOG(imp::ERROR) << "Failed to get the surface color space";
-          // Fall back to the default color space.
-          return SurfaceColorSpace();
-        }
-        return *surface_color_space;
+  // Construct an entry to contain the Android ExternalTextureSurface unique
+  // pointer and the set of texture IDs that are in use. This entry will be
+  // moved into the map of surfaces and destroyed when the last texture is
+  // released.
+  SurfaceData surface_data;
+  surface_data.surface = *std::move(platform_surface);
+  surface_data.in_use_texture_ids.insert(texture_ids.begin(),
+                                         texture_ids.end());
+  TextureId surface_texture_id = texture_ids[0];
+  std::function<MediaColorSpace()> get_source_color_space_fn =
+      [this, bridge_id, surface_texture_id]() {
+        return GetSourceColorSpace(bridge_id, surface_texture_id);
       };
+  std::function<void*()> get_surface_fn = [this, bridge_id,
+                                           surface_texture_id]() {
+    return static_cast<void*>(GetSurface(bridge_id, surface_texture_id));
+  };
 
   // Create a map of textures for each bridge.
   if (!external_texture_surfaces_.contains(bridge_id)) {
     external_texture_surfaces_.insert(
-        {bridge_id, RobinMap<TextureId, ExternalTextureSurface>()});
+        {bridge_id, RobinMap<TextureId, SurfaceData>()});
   }
-  RobinMap<TextureId, ExternalTextureSurface>& bridge_textures =
+  RobinMap<TextureId, SurfaceData>& bridge_textures =
       external_texture_surfaces_.at(bridge_id);
   // Associate the external texture surface with the primary texture id on the
   // bridge. This ID represents the primary view in a single view configuration
   // or the left view in a multiview configuration.
-  bridge_textures.insert({texture_ids[0], std::move(external_texture_surface)});
+  bridge_textures.insert({texture_ids[0], std::move(surface_data)});
 
   // Extract the texture pointers.
 #if IMP_PLATFORM(ANDROID) && \
@@ -178,16 +181,83 @@ jobject SplitEngineSurfaceFactory::CreateExternalTextureSurface(
         .get()
         .SetTextureExternal(
             bridge_id, texture_ids[i], texture_ptrs[i].WithNewLocation(),
-            content_security_level, get_source_color_space_fn,
-            /* release_fn= */ [this, bridge_id, texture_ids, i]() {
-              if (i == 0) {
-                RobinMap<uint64_t, ExternalTextureSurface>& bridge_textures =
-                    external_texture_surfaces_.at(bridge_id);
-                bridge_textures.erase(texture_ids[i]);
-              }
+            get_source_color_space_fn, get_surface_fn,
+            /* release_fn= */
+            [this, bridge_id, surface_texture_id,
+             texture_id = texture_ids[i]]() {
+              ReleaseTexture(bridge_id, surface_texture_id, texture_id);
             });
   }
   return surface_reference;
+}
+
+MediaColorSpace SplitEngineSurfaceFactory::GetSourceColorSpace(
+    BridgeId bridge_id, TextureId surface_texture_id) {
+  // The bridge may have already been destroyed.
+  auto it_bridge = external_texture_surfaces_.find(bridge_id);
+  if (it_bridge == external_texture_surfaces_.end()) {
+    return MediaColorSpace();
+  }
+
+  // The surface may have already been released (this is an error but should not
+  // crash).
+  auto it_surface = it_bridge->second.find(surface_texture_id);
+  if (it_surface == it_bridge->second.end()) {
+    IMP_LOG(imp::ERROR) << "Failed to find surface data for texture: "
+               << surface_texture_id;
+    return MediaColorSpace();
+  }
+
+  absl::StatusOr<MediaColorSpace> media_color_space =
+      it_surface->second.surface->GetMediaColorSpace();
+  if (!media_color_space.ok()) {
+    IMP_LOG(imp::ERROR) << "Failed to get the surface color space";
+    // Fall back to the default color space.
+    return MediaColorSpace();
+  }
+  return *media_color_space;
+}
+
+jobject SplitEngineSurfaceFactory::GetSurface(BridgeId bridge_id,
+                                              TextureId surface_texture_id) {
+  // The bridge may have already been destroyed.
+  auto it_bridge = external_texture_surfaces_.find(bridge_id);
+  if (it_bridge == external_texture_surfaces_.end()) {
+    return nullptr;
+  }
+
+  // The surface may have already been released (this is an error but should not
+  // crash).
+  auto it_surface = it_bridge->second.find(surface_texture_id);
+  if (it_surface == it_bridge->second.end()) {
+    IMP_LOG(imp::ERROR) << "Failed to find surface data for texture: "
+               << surface_texture_id;
+    return nullptr;
+  }
+
+  return it_surface->second.surface->GetSurface()->WeakReference();
+}
+
+void SplitEngineSurfaceFactory::ReleaseTexture(BridgeId bridge_id,
+                                               TextureId surface_texture_id,
+                                               TextureId texture_id) {
+  // The bridge may have already been destroyed.
+  if (!external_texture_surfaces_.contains(bridge_id)) return;
+
+  // The surface may have already been released.
+  RobinMap<TextureId, SurfaceData>& bridge_textures =
+      external_texture_surfaces_.at(bridge_id);
+  if (!bridge_textures.contains(surface_texture_id)) {
+    IMP_LOG(imp::ERROR) << "Failed to find surface data for texture: " << texture_id;
+    return;
+  }
+
+  auto& surface_data = bridge_textures.at(surface_texture_id);
+  surface_data.in_use_texture_ids.erase(texture_id);
+  if (surface_data.in_use_texture_ids.empty()) {
+    // If this is the last texture, release the surface.
+    bridge_textures.erase(surface_texture_id);
+  }
 }
 
 absl::Status SplitEngineSurfaceFactory::SetExternalTextureSurfaceSize(
@@ -197,14 +267,14 @@ absl::Status SplitEngineSurfaceFactory::SetExternalTextureSurfaceSize(
     return absl::NotFoundError(
         absl::StrFormat("Bridge not found: %d", bridge_id));
   }
-  const RobinMap<TextureId, ExternalTextureSurface>& bridge_textures =
+  const RobinMap<TextureId, SurfaceData>& bridge_textures =
       bridge_textures_it->second;
   auto texture_it = bridge_textures.find(texture_id);
   if (texture_it == bridge_textures.end()) {
     return absl::NotFoundError(
         absl::StrFormat("Texture not found: %d", texture_id));
   }
-  return texture_it->second.platform_surface->SetDefaultBufferSize(size);
+  return texture_it->second.surface->SetDefaultBufferSize(size);
 }
 
 void SplitEngineSurfaceFactory::Clear(BridgeId bridge_id) {

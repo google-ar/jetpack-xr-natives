@@ -127,6 +127,7 @@ imp_extensions(
         "basis",
         "behavior",
         "webp",
+        "mesh_features",
     ],
 )
 

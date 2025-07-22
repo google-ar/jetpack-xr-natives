@@ -42,14 +42,19 @@ TaskScheduler::TaskScheduler(TaskSchedulerOptions options)
 bool TaskScheduler::TaskPriorityGroupLessThan::operator()(
     TaskScheduler::TaskPriorityGroup* group_1,
     TaskScheduler::TaskPriorityGroup* group_2) {
-  Task* task_1 = group_1->Front();
-  Task* task_2 = group_2->Front();
-  int age_offset = floor(
+  const Task* task_1 = group_1->Front();
+  const Task* task_2 = group_2->Front();
+  const int age_offset = floor(
       (task_1->GetCreationTime() - task_2->GetCreationTime()) / task_age_rate);
   return task_1->GetPriority() < (task_2->GetPriority() + age_offset);
 }
 
-absl::Nonnull<Task*> TaskScheduler::PopCandidateTask() {
+absl::StatusOr<Task* /*absl_nonnull*/> TaskScheduler::PopCandidateTask() {
+  if (task_priority_groups_.empty()) {
+    // There are no valid or invalid Tasks in the TaskScheduler.
+    return absl::FailedPreconditionError("No tasks are available.");
+  }
+
   // Check the next TaskPriorityGroup on the priority queue.
   TaskPriorityGroup* task_priority_group = task_priority_groups_.top();
 
@@ -66,14 +71,15 @@ absl::Nonnull<Task*> TaskScheduler::PopCandidateTask() {
   return task_ptr;
 }
 
-void TaskScheduler::PushTaskInternal(absl::Nonnull<Task*> task) {
+void TaskScheduler::PushTaskInternal(Task* /*absl_nonnull*/ task) {
   current_valid_tasks_++;
-  int task_priority = task->GetPriority();
+  const int task_priority = task->GetPriority();
 
   // If we already have a TaskPriorityGroup for this task priority, then push
   // the Task to that TaskPriorityGroup.
   if (priority_to_task_priority_group_[task_priority] != nullptr) {
-    bool was_empty = priority_to_task_priority_group_[task_priority]->IsEmpty();
+    const bool was_empty =
+        priority_to_task_priority_group_[task_priority]->IsEmpty();
     priority_to_task_priority_group_[task_priority]->PushBack(task);
     if (!was_empty) {
       // Because there exists an earlier Task of the same priority, we don't
@@ -96,16 +102,16 @@ void TaskScheduler::PushTaskInternal(absl::Nonnull<Task*> task) {
   }
 }
 
-std::unique_ptr<Task> TaskScheduler::PopTaskInternal() {
+absl::StatusOr<std::unique_ptr<Task>> TaskScheduler::PopTaskInternal() {
   if (IsEmpty()) {
-    IMP_LOG(imp::FATAL) << "MoveNextTask() called with no tasks scheduled.";
+    return absl::FailedPreconditionError("No valid tasks are available.");
   }
   current_valid_tasks_--;
 
   // Pop until we find the first valid Task.
   Task* next_task = nullptr;
   while (next_task == nullptr) {
-    Task* candidate_task = PopCandidateTask();
+    MP_ASSIGN_OR_RETURN(Task * candidate_task, PopCandidateTask());
     // Delete the task if it's invalid.
     if (!(*candidate_task)) {
       task_registry_.ReleaseTask(candidate_task->GetId());
@@ -116,6 +122,33 @@ std::unique_ptr<Task> TaskScheduler::PopTaskInternal() {
 
   // Return the underlying Task.
   return task_registry_.ReleaseTask(next_task->GetId());
+}
+
+absl::StatusOr<int> TaskScheduler::GetTaskPriority(TaskId task_id) {
+  MP_ASSIGN_OR_RETURN(const Task* task_ptr, task_registry_.GetTask(task_id));
+  return task_ptr->GetPriority();
+}
+
+absl::StatusOr<TaskId> TaskScheduler::PushTask(Invocable<void()> invocable,
+                                               int priority) {
+  MP_ASSIGN_OR_RETURN(Task * task_ptr,
+                   task_registry_.RegisterTask(std::move(invocable), priority));
+  PushTaskInternal(task_ptr);
+  return task_ptr->GetId();
+}
+
+absl::Status TaskScheduler::PushWithReservedTaskId(TaskId reserved_task_id,
+                                                   Invocable<void()> invocable,
+                                                   int priority) {
+  MP_ASSIGN_OR_RETURN(Task * task_ptr,
+                   task_registry_.RegisterTask(std::move(invocable), priority,
+                                               absl::Now(), reserved_task_id));
+  PushTaskInternal(task_ptr);
+  return absl::OkStatus();
+}
+
+TaskId TaskScheduler::ReserveTaskId() {
+  return TaskId(task_registry_.ReserveTaskId());
 }
 
 absl::Status TaskScheduler::RescheduleTask(TaskId task_id, int task_priority) {
@@ -134,8 +167,10 @@ absl::Status TaskScheduler::RescheduleTask(TaskId task_id, int task_priority) {
   // exists in TaskRegistry and TaskPriorityGroup, but it will be deleted when
   // it next appears in PopCandidateTask().
   Invocable<void()> invocable = task_ptr->MoveInvocable();
-  Task* new_task = task_registry_.RegisterTask(
-      std::move(invocable), task_priority, task_ptr->GetCreationTime());
+  MP_ASSIGN_OR_RETURN(Task * new_task, task_registry_.RegisterTask(
+                                        std::move(invocable), task_priority,
+                                        task_ptr->GetCreationTime()));
+
   PushTaskInternal(new_task);
   current_valid_tasks_--;
 
@@ -144,39 +179,14 @@ absl::Status TaskScheduler::RescheduleTask(TaskId task_id, int task_priority) {
   return absl::OkStatus();
 }
 
-absl::StatusOr<int> TaskScheduler::GetTaskPriority(TaskId task_id) {
-  MP_ASSIGN_OR_RETURN(Task * task_ptr, task_registry_.GetTask(task_id));
-  return task_ptr->GetPriority();
-}
-
-TaskId TaskScheduler::PushTask(Invocable<void()> invocable, int priority) {
-  if (!invocable) {
-    return kInvalidTaskId;
-  }
-  Task* task = task_registry_.RegisterTask(std::move(invocable), priority);
-  PushTaskInternal(task);
-  return task->GetId();
-}
-
-TaskId TaskScheduler::ReserveTaskId() {
-  return TaskId(task_registry_.GetNextTaskId(/*increment=*/true));
-}
-
-void TaskScheduler::PushWithReservedTaskId(TaskId reserved_task_id,
-                                           Invocable<void()> invocable,
-                                           int priority) {
-  // Same as a regular push, except we use the reserved TaskId instead of
-  // picking a new one.
-  Task* task = task_registry_.RegisterTask(std::move(invocable), priority,
-                                           absl::Now(), reserved_task_id);
-  PushTaskInternal(task);
-}
-
-Invocable<void()> TaskScheduler::PopTask() {
-  return PopTaskInternal()->MoveInvocable();
+absl::StatusOr<Invocable<void()>> TaskScheduler::PopTask() {
+  MP_ASSIGN_OR_RETURN(std::unique_ptr<Task> task, PopTaskInternal());
+  return task->MoveInvocable();
 }
 
 bool TaskScheduler::IsEmpty() const { return current_valid_tasks_ == 0; }
+
+int TaskScheduler::GetTaskCount() const { return current_valid_tasks_; }
 
 void TaskScheduler::Clear() {
   // Create a map of task priority to TaskPriorityGroup.
@@ -193,13 +203,13 @@ void TaskScheduler::Clear() {
   current_valid_tasks_ = 0;
 }
 
-void TaskScheduler::TaskPriorityGroup::PushBack(absl::Nonnull<Task*> task) {
+void TaskScheduler::TaskPriorityGroup::PushBack(Task* /*absl_nonnull*/ task) {
   tasks_.push(task);
 }
 
 void TaskScheduler::TaskPriorityGroup::PopFront() { tasks_.pop(); }
 
-absl::Nonnull<Task*> TaskScheduler::TaskPriorityGroup::Front() {
+Task* /*absl_nonnull*/ TaskScheduler::TaskPriorityGroup::Front() {
   return tasks_.front();
 }
 
@@ -209,19 +219,38 @@ bool TaskScheduler::TaskPriorityGroup::IsEmpty() const {
   return tasks_.empty();
 }
 
-absl::Nonnull<Task*> TaskScheduler::TaskRegistry::RegisterTask(
+absl::StatusOr<Task*> TaskScheduler::TaskRegistry::RegisterTask(
     imp::Invocable<void()> invocable, int priority, absl::Time creation_time,
     std::optional<TaskId> reserved_task_id) {
-  TaskId task_id = reserved_task_id.value_or(TaskId(next_task_id_++));
-  auto result = task_map_.insert(
-      {task_id.id, std::make_unique<Task>(std::move(invocable), priority,
-                                          task_id, creation_time)});
-  return result.first.value().get();
+  if (!invocable) {
+    return absl::InvalidArgumentError("Invocable is invalid.");
+  }
+  TaskId task_id;
+  // If using a reserved TaskId, ensure that it has been marked as reserved. If
+  // it hasn't been marked as reserved, either we have already used it, or it
+  // was never marked as reserved in the first place.
+  if (reserved_task_id.has_value()) {
+    if (reserved_task_ids_.erase(reserved_task_id->id) == 0) {
+      return absl::InvalidArgumentError(
+          "TaskId was not reserved, or has already been used.");
+    }
+    task_id = *reserved_task_id;
+  } else {
+    task_id = TaskId(next_task_id_++);
+  }
+  const auto& [it, inserted] = task_map_.try_emplace(
+      task_id.id, std::make_unique<Task>(std::move(invocable), priority,
+                                         task_id, creation_time));
+  if (!inserted) {
+    return absl::InvalidArgumentError("Task with this TaskId already exists.");
+  }
+  // Return the raw pointer to the Task.
+  return it->second.get();
 }
 
 std::unique_ptr<Task> TaskScheduler::TaskRegistry::ReleaseTask(TaskId task_id) {
   // Find and remove the Task from the task map.
-  auto task_iter = task_map_.find(task_id.id);
+  const auto& task_iter = task_map_.find(task_id.id);
   if (task_iter == task_map_.end()) {
     return nullptr;
   }
@@ -231,7 +260,7 @@ std::unique_ptr<Task> TaskScheduler::TaskRegistry::ReleaseTask(TaskId task_id) {
   // case, we need to delete the corresponding entry in
   // original_task_id_to_rescheduled_task_id_ so that this Task can no longer be
   // referenced.
-  auto original_task_id_iter =
+  const auto& original_task_id_iter =
       rescheduled_task_id_to_original_task_id_.find(task_id.id);
   if (original_task_id_iter != rescheduled_task_id_to_original_task_id_.end()) {
     int original_task_id = original_task_id_iter->second;
@@ -244,20 +273,26 @@ std::unique_ptr<Task> TaskScheduler::TaskRegistry::ReleaseTask(TaskId task_id) {
   return task;
 }
 
-absl::StatusOr<absl::Nonnull<Task*>> TaskScheduler::TaskRegistry::GetTask(
+absl::StatusOr<Task* /*absl_nonnull*/> TaskScheduler::TaskRegistry::GetTask(
     TaskId task_id) {
   int resolved_task_id = task_id.id;
   // Attempt to resolve this TaskId to a rescheduled TaskId.
-  auto rescheduled_task_id_iter =
+  const auto& rescheduled_task_id_iter =
       original_task_id_to_rescheduled_task_id_.find(task_id.id);
   if (rescheduled_task_id_iter !=
       original_task_id_to_rescheduled_task_id_.end()) {
     resolved_task_id = rescheduled_task_id_iter->second;
   }
-  auto task_iter = task_map_.find(resolved_task_id);
+  const auto& task_iter = task_map_.find(resolved_task_id);
   if (task_iter != task_map_.end()) {
     Task* task = task_iter->second.get();
     
+    // If the Task is invalid, the Task has been rescheduled and the rescheduled
+    // Task has already completed, leaving just the original invalid Task in the
+    // TaskRegistry.
+    if (!(*task)) {
+      return absl::NotFoundError("Task has completed.");
+    }
     return task_iter->second.get();
   }
   return absl::NotFoundError(
@@ -268,7 +303,7 @@ void TaskScheduler::TaskRegistry::SetOriginalAndRescheduledTask(
     TaskId original_task_id, TaskId rescheduled_task_id) {
   // If the original_task_id has already been rescheduled, we want to first
   // clean up the existing references before setting new ones.
-  auto old_rescheduled_task_id_iter =
+  const auto& old_rescheduled_task_id_iter =
       original_task_id_to_rescheduled_task_id_.find(original_task_id.id);
   if (old_rescheduled_task_id_iter !=
       original_task_id_to_rescheduled_task_id_.end()) {
@@ -287,14 +322,13 @@ void TaskScheduler::TaskRegistry::Clear() {
   task_map_.clear();
   rescheduled_task_id_to_original_task_id_.clear();
   original_task_id_to_rescheduled_task_id_.clear();
+  reserved_task_ids_.clear();
   // Do not clear next_task_id_.
 }
 
-int TaskScheduler::TaskRegistry::GetNextTaskId(bool increment) {
-  if (increment) {
-    return next_task_id_++;
-  }
-  return next_task_id_;
+int TaskScheduler::TaskRegistry::ReserveTaskId() {
+  const auto& [it, inserted] = reserved_task_ids_.insert(next_task_id_++);
+  return it.key();
 }
 
 }  // namespace imp

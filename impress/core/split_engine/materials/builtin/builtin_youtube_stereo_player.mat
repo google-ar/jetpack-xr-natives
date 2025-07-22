@@ -29,7 +29,7 @@ material {
     {
       name : enableColorCorrection,
       type : bool,
-      default : false
+      default : true
     }
   ],
   parameters: [
@@ -71,6 +71,7 @@ material {
       type: float3x3
     },
     {
+      // When unset, it defaults to linear.
       name: transferFunction,
       type: int,
       default: 0

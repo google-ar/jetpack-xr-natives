@@ -75,7 +75,9 @@ void ComponentManager::DetachAll() {
       pool->RemoveAll();
     }
   });
+}
 
+void ComponentManager::DestroyPools() {
   component_pools_list_view_.clear();
   component_pools_.clear();
   cleanup_graph_ = {};

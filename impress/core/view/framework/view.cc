@@ -87,7 +87,7 @@ View::View(ViewConfig config)
       display_layer_manager_(*this),
       asset_manager_(nullptr),
       camera_manager_(this),
-      light_manager_(this),
+      light_manager_(*this),
       gesture_manager_(&dispatcher_),
       input_manager_(std::make_unique<PointerInputHandler>(this)),
       collision_manager_(this),
@@ -122,6 +122,25 @@ std::unique_ptr<View> View::CreateClient(std::unique_ptr<Context> context,
   // this method.
   std::unique_ptr<View> result = imp::client_api::CreateView(identifier);
   result->context_ = std::move(context);
+  return result;
+}
+
+// This method needs to duplicate the logic of CreateClient above as the View
+// constructor may already have a custom ViewConfig passed in via CreateView.
+// TODO: Having two ways of setting ViewConfig isn't great and
+// creates confusion, so we should figure out a way to set the ViewConfig
+// that works for everyone.
+std::unique_ptr<View> View::CreateClient(std::unique_ptr<Context> context,
+                                         const std::string& identifier,
+                                         const ViewConfig& config) {
+  IMP_TRACE();
+  // TODO: Look at removing the methods View::Create and
+  // View::CreateClient.
+  // Pass the context through the ViewHost directly instead of doing it through
+  // this method.
+  std::unique_ptr<View> result = imp::client_api::CreateView(identifier);
+  result->context_ = std::move(context);
+  result->view_config_ = config;
   return result;
 }
 
@@ -432,11 +451,26 @@ void View::OnHostCleanup() {
   Cleanup();
 
   light_manager_.Cleanup();
+
+  // Removes all components from all nodes in cleanup order.
   component_manager_.DetachAll();
+
+  // Destroys all nodes.
   node_attachment_manager_.Cleanup();
+
   ClearRemembered();
 
   GetRegistry().Clear();
+
+  // Destroys all component pools.
+  //
+  // This is done after the registry is destroyed to ensure that
+  // ComponentHandle::IsValid will correctly return false without crashing if
+  // done from within a Registry objects destructor. At that point, the
+  // components will have all been removed, but it should still be possible to
+  // check if the ComponentHandle is valid.
+  component_manager_.DestroyPools();
+
   asset_manager_->Cleanup();
 }
 

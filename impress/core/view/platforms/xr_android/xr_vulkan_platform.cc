@@ -112,6 +112,15 @@ void XrVulkanPlatform::setVulkanSharedContext(
   vulkan_shared_context_ = context;
 }
 
+XrVulkanPlatform::Customization XrVulkanPlatform::getCustomization()
+    const noexcept {
+  return {
+      .isSRGBSwapChainSupported = true,
+      .flushAndWaitOnWindowResize = true,
+      .transitionSwapChainImageLayoutForPresent = false,
+  };
+}
+
 XrVulkanPlatform::SwapChainBundle XrVulkanPlatform::getSwapChainBundle(
     SwapChainPtr handle) noexcept {
   auto* swap_chain = static_cast<XrSwapChain*>(handle);
@@ -128,7 +137,7 @@ XrVulkanPlatform::SwapChainBundle XrVulkanPlatform::getSwapChainBundle(
     colors.push_back(xr_sc_image.image);
   }
   XrVulkanPlatform::SwapChainBundle bundle;
-  bundle.depthFormat = VK_FORMAT_D24_UNORM_S8_UINT;
+  bundle.depthFormat = XrVulkanSwapChainImageHandler::kVkDepthFormat;
   VkImage depth_image = swap_chain->GetSwapchainImageHandler()
                             .GetSwapchainLayers()
                             ->depth.images.front()
@@ -138,7 +147,7 @@ XrVulkanPlatform::SwapChainBundle XrVulkanPlatform::getSwapChainBundle(
   
   bundle.depth = depth_image;
   bundle.colors = colors;
-  bundle.colorFormat = VK_FORMAT_R8G8B8A8_SRGB;
+  bundle.colorFormat = XrVulkanSwapChainImageHandler::kVkImageFormat;
   bundle.layerCount = swap_chain->GetHost()->IsMultiviewStereo()
                           ? swap_chain->GetHost()->GetLogicalEyeCount()
                           : 1;
@@ -345,12 +354,8 @@ VkDevice XrVulkanPlatform::createVulkanLogicalDevice(
       VK_KHR_MAINTENANCE2_EXTENSION_NAME,
       VK_KHR_MAINTENANCE3_EXTENSION_NAME,
       VK_KHR_MULTIVIEW_EXTENSION_NAME,
+      VK_KHR_IMAGE_FORMAT_LIST_EXTENSION_NAME,
   };
-
-  // The Platform class requests at most 5 device extensions, so that's a max
-  // of 6.
-  static constexpr uint32_t MAX_DEVICE_EXTENSION_COUNT = 5;
-  const char* ppEnabledExtensions[MAX_DEVICE_EXTENSION_COUNT];
 
   uint32_t deviceExtensionCount = 0;
   // Identify supported physical device extensions
@@ -396,10 +401,8 @@ VkDevice XrVulkanPlatform::createVulkanLogicalDevice(
       .multiviewGeometryShader = VK_FALSE,
       .multiviewTessellationShader = VK_FALSE};
 
-  uint32_t enabledExtensionCount = 0;
-
+  std::vector<const char*> enabledExtensions;
   for (auto const& extensionProperties : availableDeviceExtensions) {
-    assert_invariant(enabledExtensionCount < MAX_DEVICE_EXTENSION_COUNT);
     utils::CString name{extensionProperties.extensionName};
     // To workaround an Adreno bug where the extension name could be of 0
     // length.
@@ -408,8 +411,7 @@ VkDevice XrVulkanPlatform::createVulkanLogicalDevice(
     }
 
     if (TARGET_EXTS.find(name) != TARGET_EXTS.end()) {
-      ppEnabledExtensions[enabledExtensionCount++] =
-          extensionProperties.extensionName;
+      enabledExtensions.push_back(extensionProperties.extensionName);
 
       if (name == VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME) {
         portability.pNext = pNext;
@@ -456,8 +458,9 @@ VkDevice XrVulkanPlatform::createVulkanLogicalDevice(
   };
 
   deviceCreateInfo.pEnabledFeatures = &enabledFeatures;
-  deviceCreateInfo.enabledExtensionCount = enabledExtensionCount;
-  deviceCreateInfo.ppEnabledExtensionNames = ppEnabledExtensions;
+  deviceCreateInfo.enabledExtensionCount =
+      static_cast<uint32_t>(enabledExtensions.size());
+  deviceCreateInfo.ppEnabledExtensionNames = enabledExtensions.data();
 
   VkDevice device;
   XrVulkanDeviceCreateInfoKHR vulkanDeviceCreateInfo = {

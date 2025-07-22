@@ -16,6 +16,7 @@
 
 #include "TangentSpaceMeshWrapper.h"
 
+#include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/Panic.h"
 
 #include <memory>

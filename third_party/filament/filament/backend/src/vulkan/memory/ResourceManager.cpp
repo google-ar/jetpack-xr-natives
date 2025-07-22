@@ -17,6 +17,7 @@
 #include "vulkan/memory/ResourceManager.h"
 #include "vulkan/VulkanHandles.h"
 
+#include "filament/libs/utils/include/utils/Logger.h"
 #include "filament/libs/utils/include/utils/Panic.h"
 
 namespace filament::backend::fvkmemory {
@@ -31,6 +32,8 @@ ResourceManager::ResourceManager(size_t arenaSize, bool disableUseAfterFreeCheck
     : mHandleAllocatorImpl("Handles", arenaSize, disableUseAfterFreeCheck, disablePoolHandleTags) {}
 
 void ResourceManager::gc() noexcept {
+    FVK_SYSTRACE_CONTEXT();
+    FVK_SYSTRACE_START("ResourceManager::gc");
     auto destroyAll = [this](GcList& list) {
         for (auto const& [type, id]: list) {
             destroyWithType(type, id);
@@ -49,6 +52,7 @@ void ResourceManager::gc() noexcept {
     GcList gcs;
     std::swap(gcs, mGcList);
     destroyAll(gcs);
+    FVK_SYSTRACE_END();
 }
 
 void ResourceManager::terminate() noexcept {
@@ -73,6 +77,9 @@ void ResourceManager::destroyWithType(ResourceType type, HandleId id) {
             break;
         case ResourceType::SWAP_CHAIN:
             destruct<VulkanSwapChain>(Handle<VulkanSwapChain>(id));
+            break;
+        case ResourceType::STAGE_SEGMENT:
+            destruct<VulkanStage::Segment>(Handle<VulkanStage::Segment>(id));
             break;
         case ResourceType::RENDER_PRIMITIVE:
             destruct<VulkanRenderPrimitive>(Handle<VulkanRenderPrimitive>(id));
@@ -101,6 +108,9 @@ void ResourceManager::destroyWithType(ResourceType type, HandleId id) {
         case ResourceType::FENCE:
             destruct<VulkanFence>(Handle<VulkanFence>(id));
             break;
+        case ResourceType::VULKAN_BUFFER:
+            destruct<VulkanBuffer>(Handle<VulkanBuffer>(id));
+            break;
         case ResourceType::UNDEFINED_TYPE:
             break;
     }
@@ -118,11 +128,11 @@ void ResourceManager::traceConstruction(ResourceType type, HandleId id) {
 
 void ResourceManager::print() const noexcept {
 #if FVK_ENABLED(FVK_DEBUG_RESOURCE_LEAK)
-    utils::slog.e << "-------------------" << utils::io::endl;
+    LOG(ERROR) << "-------------------";
     for (size_t i = 0; i < (size_t) ResourceType::UNDEFINED_TYPE; ++i) {
-        utils::slog.e <<"    " << getTypeStr((ResourceType) i) << "=" << COUNTER[i] << utils::io::endl;
+        LOG(ERROR) << "    " << getTypeStr((ResourceType) i) << "=" << COUNTER[i];
     }
-    utils::slog.e << "+++++++++++++++++++" << utils::io::endl;
+    LOG(ERROR) << "+++++++++++++++++++";
 #endif
 }
 

@@ -14,6 +14,8 @@
 
 #include <jni.h>
 
+#include <array>
+#include <cassert>
 #include <cstdint>
 #include <limits>
 #include <string>
@@ -52,22 +54,15 @@ imp::mat4f ToImpMat4(JNIEnv* env,
   // IEEE 754 spec, aka IEC 559.
   static_assert(sizeof(float) == sizeof(jfloat));
   static_assert(std::numeric_limits<float>::is_iec559);
-
-  // The matrix is stored in row major order in the incoming float array.
-  float matrix[16];
-  jfloat* mat4_row_major =
-      env->GetFloatArrayElements(mat4_container.get(), nullptr);
-  for (int i = 0; i < 16; ++i) {
-    matrix[i] = mat4_row_major[i];
-  }
-  env->ReleaseFloatArrayElements(mat4_container.get(), mat4_row_major,
-                                 JNI_ABORT);
-  // The Java Mat4f is row-major but imp::mat4f is column-major. This transpose
-  // looks accidental but it's load-bearing. (broken link)
-  return imp::mat4f(matrix[0], matrix[1], matrix[2], matrix[3],
-                    matrix[4], matrix[5], matrix[6], matrix[7],
-                    matrix[8], matrix[9], matrix[10], matrix[11],
-                    matrix[12], matrix[12], matrix[14], matrix[15]);
+  jsize data_size = env->GetArrayLength(mat4_container.get());
+  // We are expecting a 4x4 matrix.
+  assert(data_size == 16);
+  std::array<float, 16> matrix;
+  env->GetFloatArrayRegion(mat4_container.get(), 0, data_size, matrix.data());
+  return imp::mat4f(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4],
+                    matrix[5], matrix[6], matrix[7], matrix[8], matrix[9],
+                    matrix[10], matrix[11], matrix[12], matrix[13], matrix[14],
+                    matrix[15]);
 }
 
 }  // namespace

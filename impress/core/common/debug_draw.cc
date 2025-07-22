@@ -104,6 +104,8 @@ constexpr int kSphereStackCount = 6;
 constexpr int kSphereSectorCount = 10;
 constexpr int kCapsuleStackCount = 6;  // must be even
 constexpr int kCapsuleSectorCount = 10;
+constexpr int kCylinderSectorCount = 10;
+constexpr int kConeSectorCount = 10;
 
 filament::Box CalculateBounds(const PositionBuffer& positions) {
   filament::Box bb = NilBounds();
@@ -820,6 +822,86 @@ void Local::CapsuleLines(const filament::math::float3& center, float height,
     // Draw lines from the last ring to the bottom
     geometry.indices.emplace_back(last_ring_offset + j);
     geometry.indices.emplace_back(last_vertex);
+  }
+
+  UserDefined(std::move(geometry));
+}
+
+void Local::CylinderLines(const filament::math::float3& base, float radius,
+                          float height, const Color& color) {
+  Geometry geometry;
+  geometry.type = filament::backend::PrimitiveType::LINES;
+
+  // 2 rings
+  const size_t vertex_count = 2 * kCylinderSectorCount;
+  geometry.positions.resize(vertex_count);
+  geometry.colors.resize(vertex_count, color);
+  const float sector_angle = 2.0 * M_PI / kCylinderSectorCount;
+  const int ring_offset = kCylinderSectorCount;
+
+  for (int j = 0; j < kCylinderSectorCount; ++j) {
+    // the 2 rings are height apart
+    geometry.positions[j] = geometry.positions[ring_offset + j] =
+        filament::math::float3{radius * std::sin(sector_angle * j), 0.0f,
+                               radius * std::cos(sector_angle * j)} +
+        base;
+    geometry.positions[ring_offset + j].y += height;
+  }
+
+  for (int j = 0; j < kCylinderSectorCount; ++j) {
+    // Draw the first ring
+    geometry.indices.emplace_back(j);
+    geometry.indices.emplace_back(j + 1);
+  }
+  geometry.indices.back() = 0;
+
+  for (int j = 0; j < kCylinderSectorCount; ++j) {
+    // Draw the second ring
+    geometry.indices.emplace_back(ring_offset + j);
+    geometry.indices.emplace_back(ring_offset + j + 1);
+  }
+  geometry.indices.back() = ring_offset;
+
+  for (int j = 0; j < kCylinderSectorCount; ++j) {
+    // Draw the lines between the two rings
+    geometry.indices.emplace_back(j);
+    geometry.indices.emplace_back(ring_offset + j);
+  }
+
+  UserDefined(std::move(geometry));
+}
+
+void Local::ConeLines(const filament::math::float3& base, float radius,
+                      float height, const Color& color) {
+  Geometry geometry;
+  geometry.type = filament::backend::PrimitiveType::LINES;
+
+  // base ring + tip
+  const size_t vertex_count = kConeSectorCount + 1;
+  geometry.positions.resize(vertex_count);
+  geometry.colors.resize(vertex_count, color);
+  const float sector_angle = 2.0 * M_PI / kConeSectorCount;
+  const int tip_offset = kConeSectorCount;
+
+  for (int j = 0; j < kConeSectorCount; ++j) {
+    geometry.positions[j] =
+        filament::math::float3{radius * std::sin(sector_angle * j), 0.0f,
+                               radius * std::cos(sector_angle * j)} +
+        base;
+  }
+  geometry.positions[tip_offset] = base + height * kUp;
+
+  for (int j = 0; j < kConeSectorCount; ++j) {
+    // Draw the base ring
+    geometry.indices.emplace_back(j);
+    geometry.indices.emplace_back(j + 1);
+  }
+  geometry.indices.back() = 0;
+
+  for (int j = 0; j < kConeSectorCount; ++j) {
+    // Draw the lines between the tip and the base ring
+    geometry.indices.emplace_back(tip_offset);
+    geometry.indices.emplace_back(j);
   }
 
   UserDefined(std::move(geometry));

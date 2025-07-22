@@ -19,6 +19,7 @@
 #include "core/common/log.h"
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "core/common/jni_helpers.h"
+#include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
 #include "split_engine/input/split_engine_input_event.h"
 #include "split_engine/input/split_engine_input_event_hit_info.h"
@@ -274,9 +275,11 @@ JNI_METHOD_ACTIVITY(void, nSplitEngineInputEventSetHitNodeHitPosition)
   if (!event->hit_node) {
     return;
   }
-  event->hit_node->hit_position.x = x;
-  event->hit_node->hit_position.y = y;
-  event->hit_node->hit_position.z = z;
+  // Hit positions are sent from Spaceflinger relative to the task space.
+  // This makes them relative to the subspace they will be handled by.
+  imp::float4 hit_position(x, y, z, 1.0f);
+  event->hit_node->hit_position =
+      (event->hit_node->transform * hit_position).xyz;
 }
 
 JNI_METHOD_ACTIVITY(void, nSplitEngineInputEventSetHitNodeTransform)

@@ -20,13 +20,13 @@ import android.content.Context;
 import android.os.IBinder;
 import android.util.Log;
 import androidx.annotation.Nullable;
-import androidx.xr.extensions.splitengine.SplitEngineBridge;
 import com.android.extensions.xr.XrExtensions;
 import com.google.ar.imp.view.ChoreographerFrameScheduler;
 import com.google.ar.imp.view.FrameScheduler;
 import com.google.ar.imp.view.ImpApiScuba;
 import com.google.ar.imp.view.View;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.imp.splitengine.extensions.IRendererConnection;
 import java.util.concurrent.ExecutionException;
 
 /**
@@ -132,8 +132,8 @@ public class ImpSplitEngineRenderer implements ImpApiScuba {
     return splitEngineApi.getView();
   }
 
-  public SplitEngineBridge getBridge() {
-    return splitEngineApi.getBridge();
+  public IRendererConnection getRendererConnection() {
+    return splitEngineApi.getRendererConnection();
   }
 
   /**
@@ -159,6 +159,10 @@ public class ImpSplitEngineRenderer implements ImpApiScuba {
 
   /** Destroys the renderer and Impress view. */
   public void destroy() {
+    // Stop the frame loop if it's not already stopped to avoid the client keep sending commands.
+    if (isActive) {
+      stopFrameLoop();
+    }
     ListenableFuture<Void> future =
         frameScheduler.submitOnFrameThread(
             () -> {

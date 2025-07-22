@@ -39,6 +39,8 @@ namespace audio {
 
 // Prefix for URLs that reference an asset on the Android filesystem.
 constexpr absl::string_view kFilePrefix = "file://";
+constexpr absl::string_view kHttpPrefix = "http://";
+constexpr absl::string_view kHttpsPrefix = "https://";
 
 class AndroidAudioSource : public media::AndroidMediaSource<AudioSource> {
  public:
@@ -57,7 +59,7 @@ Future<std::unique_ptr<AudioSource>> CreateAndroidAudioSource(
   return android_media_source_ptr->Load(media_asset.Get())
       .Then([android_media_source =
                  std::move(android_media_source)](absl::Status status) mutable
-            -> absl::StatusOr<std::unique_ptr<AudioSource>> {
+                -> absl::StatusOr<std::unique_ptr<AudioSource>> {
         MP_RETURN_IF_ERROR(status);
         return std::move(android_media_source);
       });
@@ -70,7 +72,7 @@ Future<std::unique_ptr<AudioSource>> CreateAndroidAudioSource(
   return android_media_source_ptr->Load(asset_url).Then(
       [android_media_source =
            std::move(android_media_source)](absl::Status status) mutable
-      -> absl::StatusOr<std::unique_ptr<AudioSource>> {
+          -> absl::StatusOr<std::unique_ptr<AudioSource>> {
         MP_RETURN_IF_ERROR(status);
         return std::move(android_media_source);
       });
@@ -85,8 +87,11 @@ Future<std::unique_ptr<AudioSource>> CreateAudioSource(
         absl::InvalidArgumentError("Empty asset_url cannot be loaded!"));
   }
 
+  bool is_file_url = absl::StartsWith(asset_url, kFilePrefix);
+  bool is_http_or_https_url = absl::StartsWith(asset_url, kHttpPrefix) ||
+                              absl::StartsWith(asset_url, kHttpsPrefix);
   // Load the audio asset directly if its a local file.
-  if (absl::StartsWith(asset_url, kFilePrefix)) {
+  if (is_file_url || !is_http_or_https_url) {
     return view.GetAssetManager().LoadMedia(asset_url).Then(
         [&view](const AssetPtr<media::MediaAsset>& media_asset) mutable {
           IMP_TRACE_BLOCK("Then");

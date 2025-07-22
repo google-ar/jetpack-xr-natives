@@ -42,13 +42,20 @@
 #include "core/async/future.h"
 #include "core/lighting/environment_light.h"
 #include "core/lighting/image_based_lighting_asset.h"
+#include "core/material_library/generic_material_parameters.h"
+#include "core/material_library/generic_material_spec.h"
+#include "core/math/mat.h"
 #include "core/math/vec.h"
+#include "core/media/media_color_space.h"
 #include "core/media/media_type.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node_handle.h"
 #include "core/render/android/platform_android_external_texture_surface.h"
+#include "core/render/content_security_level.h"
 #include "core/render/image_asset.h"
 #include "core/render/texture.h"
+#include "core/render/texture_options.h"
+#include "core/split_engine/materials/split_engine_generic_material.h"
 #include "core/split_engine/materials/split_engine_material.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/framework/animation/gltf_animator.h"
@@ -60,6 +67,7 @@
 #include "core/view/platforms/android/wrappers/surface.h"
 #include "core/view/utils/frame_time.h"
 #include "split_engine/materials/water_reflection_material.h"
+#include "mediapipe/framework/port/status_macros.h"
 
 // TODO: (broken link) - Add unit tests for this with
 //                     google3/third_party/impress/testing/view_fixture.h
@@ -72,9 +80,8 @@ Future<OwnedTexturePtr> LoadTextureFromPath(TextureFactory& texture_factory,
                                             absl::string_view path,
                                             filament::TextureSampler sampler) {
   return asset_manager.LoadImage(asset_ptr_map.GetAssetString(path))
-      .Then([sampler, &texture_factory =
-                          texture_factory](imp::AssetPtr<imp::ImageAsset> image)
-                -> absl::StatusOr<OwnedTexturePtr> {
+      .Then([sampler, &texture_factory = texture_factory](
+                AssetPtr<ImageAsset> image) -> absl::StatusOr<OwnedTexturePtr> {
         // Uploads the texture to the system.
         // TODO: There is an ABI compatibility issue with the
         // TextureFactory::Options struct. Note that the remote renderer might
@@ -82,26 +89,30 @@ Future<OwnedTexturePtr> LoadTextureFromPath(TextureFactory& texture_factory,
         // compiled against, so we need to be careful about the enum values we
         // use here.
         OwnedTexturePtr texture = texture_factory.CreateTexture(
-            *image, imp::TextureFactory::Options{
-                        // TextureFactory uses a single dimension wrap mode
-                        // whereas Filament uses separate wrap modes for
-                        // each dimension. We use the same wrap mode (S) for
-                        // both dimensions.
-                        .wrap_mode = sampler.getWrapModeS(),
-                        .mag_filter = sampler.getMagFilter(),
-                        .min_filter = sampler.getMinFilter(),
-                        .anisotropy = sampler.getAnisotropy()});
+            *image, imp::TextureGenerationOptions{},
+            imp::TextureSamplerOptions{
+                // TextureFactory uses a single dimension wrap mode
+                // whereas Filament uses separate wrap modes for
+                // each dimension. We use the same wrap mode (S) for
+                // both dimensions.
+                .wrap_mode = sampler.getWrapModeS(),
+                .mag_filter = sampler.getMagFilter(),
+                .min_filter = sampler.getMinFilter(),
+                .anisotropy = sampler.getAnisotropy()});
         return texture;
       });
 }
 
-ComponentHandle<StereoSurface> GetStereoSurface(int32_t node_id) {
-  imp::NodeHandle node(utils::Entity::import(node_id));
-  // TODO: (broken link) - Replace CHECK's with an error-reporting mechanism that
-  //                     the Java side can handle.
-  
-  auto result = node->GetComponent<imp::StereoSurface>();
-  
+absl::StatusOr<ComponentHandle<StereoSurface>> GetStereoSurface(
+    int32_t node_id) {
+  NodeHandle node(utils::Entity::import(node_id));
+  if (!node.IsValid()) {
+    return absl::InvalidArgumentError("Node is not valid.");
+  }
+  auto result = node->GetComponent<StereoSurface>();
+  if (!result.IsValid()) {
+    return absl::InvalidArgumentError("Node is not a StereoSurface.");
+  }
   return result;
 }
 }  // namespace
@@ -254,61 +265,89 @@ absl::Status ImpressApiView::DestroyImpressNode(int32_t node) {
   return absl::InvalidArgumentError("Node is not valid.");
 }
 
-int32_t ImpressApiView::CreateStereoSurfaceEntity(
-    imp::MediaStereoMode stereo_mode) {
+absl::StatusOr<int32_t> ImpressApiView::CreateStereoSurfaceEntity(
+    MediaStereoMode stereo_mode, ContentSecurityLevel content_security_level,
+    bool use_super_sampling) {
   NodeHandle node = CreateNode();
-  absl::StatusOr<imp::ComponentHandle<imp::StereoSurface>> status =
-      node->AddComponent<imp::StereoSurface>(stereo_mode);
-  // TODO: (broken link) - Replace CHECK's with an error-reporting mechanism that
-  //                     the Java side can handle.
-  
-  
+  absl::StatusOr<ComponentHandle<StereoSurface>> status =
+      node->AddComponent<StereoSurface>(stereo_mode, content_security_level,
+                                        use_super_sampling);
+  if (!status.ok()) {
+    return status.status();
+  }
+  if (!status->IsValid()) {
+    return absl::InternalError("Node is not valid.");
+  }
   return node.GetEntity().getId();
 }
 
-// TODO: (broken link) - Update this to return absl::Status
-void ImpressApiView::SetStereoSurfaceEntityCanvasShape(
-    int32_t node_id, imp::StereoSurface::CanvasShape canvas_shape) {
-  ComponentHandle<StereoSurface> stereo_surface = GetStereoSurface(node_id);
-  stereo_surface->SetCanvasShape(canvas_shape);
+absl::Status ImpressApiView::SetStereoSurfaceEntityCanvasShape(
+    int32_t node_id, StereoSurface::CanvasShape canvas_shape) {
+  MP_ASSIGN_OR_RETURN(ComponentHandle<StereoSurface> stereo_surface,
+                   GetStereoSurface(node_id));
+  return stereo_surface->SetCanvasShape(canvas_shape);
 }
 
-android::Surface* ImpressApiView::GetSurfaceFromStereoSurfaceEntity(
-    int32_t node_id) {
-  ComponentHandle<StereoSurface> stereo_surface = GetStereoSurface(node_id);
-  return stereo_surface->GetSurface();
+absl::StatusOr<android::Surface*>
+ImpressApiView::GetSurfaceFromStereoSurfaceEntity(int32_t node_id) {
+  absl::StatusOr<ComponentHandle<StereoSurface>> result =
+      GetStereoSurface(node_id);
+  if (!result.ok()) {
+    return result.status();
+  }
+  return (*result)->GetSurface();
 }
 
-void ImpressApiView::SetFeatherRadiusForStereoSurfaceEntity(
-    int32_t node_id, const imp::float2& feather_radius) {
-  ComponentHandle<StereoSurface> stereo_surface = GetStereoSurface(node_id);
+absl::Status ImpressApiView::SetFeatherRadiusForStereoSurfaceEntity(
+    int32_t node_id, const float2& feather_radius) {
+  MP_ASSIGN_OR_RETURN(ComponentHandle<StereoSurface> stereo_surface,
+                   GetStereoSurface(node_id));
   stereo_surface->SetFeatherRadius(feather_radius);
+  return absl::OkStatus();
 }
 
-void ImpressApiView::SetStereoModeForStereoSurfaceEntity(
-    int32_t node_id, imp::MediaStereoMode stereo_mode) {
-  ComponentHandle<StereoSurface> stereo_surface = GetStereoSurface(node_id);
+absl::Status ImpressApiView::SetStereoModeForStereoSurfaceEntity(
+    int32_t node_id, MediaStereoMode stereo_mode) {
+  MP_ASSIGN_OR_RETURN(ComponentHandle<StereoSurface> stereo_surface,
+                   GetStereoSurface(node_id));
   stereo_surface->SetStereoMode(stereo_mode);
+  return absl::OkStatus();
 }
 
-void ImpressApiView::SetPrimaryAlphaMaskForStereoSurfaceEntity(
+absl::Status ImpressApiView::SetPrimaryAlphaMaskForStereoSurfaceEntity(
     int32_t node_id, int64_t alpha_mask_token) {
   OwnedOrBorrowedTexturePtr alpha_mask;
-  if (alpha_mask_token != -1) {
+  // If the alpha mask token is kUnSetAlphaMaskToken, then the alpha mask is
+  // removed.
+  if (alpha_mask_token != kUnSetAlphaMaskToken) {
     alpha_mask = FromJava<BindingsTexture>(alpha_mask_token)->GetTexture();
   }
-  ComponentHandle<StereoSurface> stereo_surface = GetStereoSurface(node_id);
+  MP_ASSIGN_OR_RETURN(ComponentHandle<StereoSurface> stereo_surface,
+                   GetStereoSurface(node_id));
   stereo_surface->SetPrimaryAlphaMask(std::move(alpha_mask));
+  return absl::OkStatus();
 }
 
-void ImpressApiView::SetAuxiliaryAlphaMaskForStereoSurfaceEntity(
+absl::Status ImpressApiView::SetAuxiliaryAlphaMaskForStereoSurfaceEntity(
     int32_t node_id, int64_t alpha_mask_token) {
   OwnedOrBorrowedTexturePtr alpha_mask;
-  if (alpha_mask_token != -1) {
+  // If the alpha mask token is kUnSetAlphaMaskToken, then the alpha mask is
+  // removed.
+  if (alpha_mask_token != kUnSetAlphaMaskToken) {
     alpha_mask = FromJava<BindingsTexture>(alpha_mask_token)->GetTexture();
   }
-  ComponentHandle<StereoSurface> stereo_surface = GetStereoSurface(node_id);
+  MP_ASSIGN_OR_RETURN(ComponentHandle<StereoSurface> stereo_surface,
+                   GetStereoSurface(node_id));
   stereo_surface->SetAuxiliaryAlphaMask(std::move(alpha_mask));
+  return absl::OkStatus();
+}
+
+absl::Status ImpressApiView::SetContentColorMetadataForStereoSurfaceEntity(
+    int32_t node_id, MediaColorSpace color_space) {
+  MP_ASSIGN_OR_RETURN(ComponentHandle<StereoSurface> stereo_surface,
+                   GetStereoSurface(node_id));
+  stereo_surface->SetContentColorMetadata(color_space);
+  return absl::OkStatus();
 }
 
 void ImpressApiView::LoadTexture(absl::string_view path,
@@ -341,16 +380,16 @@ void ImpressApiView::LoadTexture(absl::string_view path,
 }
 
 absl::StatusOr<std::intptr_t> ImpressApiView::BorrowReflectionTexture() {
-  const imp::EnvironmentLight* environment_light =
+  const EnvironmentLight* environment_light =
       GetLightManager().GetEnvironmentLight();
   if (!environment_light) return absl::NotFoundError("No environment light.");
 
-  std::optional<imp::AssetPtr<imp::ImageBasedLightingAsset>> ibl_asset =
+  std::optional<AssetPtr<ImageBasedLightingAsset>> ibl_asset =
       environment_light->GetReflectionIblAsset();
   if (!ibl_asset.has_value())
     return absl::NotFoundError("No reflection texture.");
 
-  imp::BorrowedTexturePtr reflections_texture =
+  BorrowedTexturePtr reflections_texture =
       (*ibl_asset)->BorrowReflectionTexture();
   // This transfers the ownership of the BindingsTexture object to
   // Java. At this point, Java is responsible for managing the lifecycle
@@ -376,7 +415,7 @@ absl::StatusOr<std::intptr_t> ImpressApiView::GetReflectionTextureFromIbl(
     return absl::NotFoundError("IBL asset is not cached.");
   }
 
-  imp::BorrowedTexturePtr reflections_texture =
+  BorrowedTexturePtr reflections_texture =
       ibl_asset_ptr.value()->BorrowSkyboxCubemap();
   // This transfers the ownership of the BindingsTexture object to
   // Java. At this point, Java is responsible for managing the lifecycle
@@ -397,9 +436,10 @@ void ImpressApiView::CreateWaterMaterial(
     std::unique_ptr<AssetLoader> asset_loader, bool is_alpha_map_version) {
   android_xr::WaterReflectionMaterial::Create(*this, is_alpha_map_version)
       .Then([this, asset_loader = std::move(asset_loader)](
-                std::unique_ptr<android_xr::WaterReflectionMaterial>
+                absl::StatusOr<
+                    std::unique_ptr<android_xr::WaterReflectionMaterial>>
                     material) mutable {
-        if (material) {
+        if (material.ok() && *material) {
           // This transfers the ownership of the BindingsMaterial object to
           // Java. At this point, Java is responsible for managing the lifecycle
           // of the material object. The Java side will call the
@@ -410,7 +450,7 @@ void ImpressApiView::CreateWaterMaterial(
           // should be responsible for tracking bindings resources and
           // individually disposing them.
           std::intptr_t material_token =
-              ToJava(new BindingsMaterial(std::move(material)));
+              ToJava(new BindingsMaterial(*std::move(material)));
           bindings_material_set_.insert(material_token);
           asset_loader->OnSuccess(material_token);
         } else {
@@ -428,10 +468,10 @@ void ImpressApiView::DestroyNativeObject(std::intptr_t handle) {
       FromJava<BindingsObject>(handle));
 }
 
-absl::Status ImpressApiView::SetReflectionCubeOnWaterMaterial(
-    std::intptr_t water_material, std::intptr_t reflection_cube) {
+absl::Status ImpressApiView::SetReflectionMapOnWaterMaterial(
+    std::intptr_t water_material, std::intptr_t reflection_map) {
   return SetWaterMaterialTextureParameter(
-      water_material, reflection_cube,
+      water_material, reflection_map,
       [](android_xr::WaterReflectionMaterial* material,
          BorrowedTexturePtr borrowed_texture) {
         material->SetReflectionCube(borrowed_texture);
@@ -450,30 +490,32 @@ absl::Status ImpressApiView::SetNormalMapOnWaterMaterial(
 
 absl::Status ImpressApiView::SetNormalTilingOnWaterMaterial(
     std::intptr_t water_material, float normal_tiling) {
-  return SetWaterMaterialValueParameter(
-      water_material, normal_tiling,
-      [](android_xr::WaterReflectionMaterial* material, float normal_tiling) {
-        material->SetNormalTiling(normal_tiling);
-      });
+  MP_ASSIGN_OR_RETURN(
+      android_xr::WaterReflectionMaterial * material,
+      GetMaterialFromBindingsMaterial<android_xr::WaterReflectionMaterial>(
+          water_material));
+  material->SetNormalTiling(normal_tiling);
+  return absl::OkStatus();
 }
 
 absl::Status ImpressApiView::SetNormalSpeedOnWaterMaterial(
     std::intptr_t water_material, float normal_speed) {
-  return SetWaterMaterialValueParameter(
-      water_material, normal_speed,
-      [](android_xr::WaterReflectionMaterial* material, float normal_speed) {
-        material->SetNormalSpeed(normal_speed);
-      });
+  MP_ASSIGN_OR_RETURN(
+      android_xr::WaterReflectionMaterial * material,
+      GetMaterialFromBindingsMaterial<android_xr::WaterReflectionMaterial>(
+          water_material));
+  material->SetNormalSpeed(normal_speed);
+  return absl::OkStatus();
 }
 
 absl::Status ImpressApiView::SetAlphaStepMultiplierOnWaterMaterial(
     std::intptr_t water_material, float alpha_step_multiplier) {
-  return SetWaterMaterialValueParameter(
-      water_material, alpha_step_multiplier,
-      [](android_xr::WaterReflectionMaterial* material,
-         float alpha_step_multiplier) {
-        material->SetAlphaStepMultiplier(alpha_step_multiplier);
-      });
+  MP_ASSIGN_OR_RETURN(
+      android_xr::WaterReflectionMaterial * material,
+      GetMaterialFromBindingsMaterial<android_xr::WaterReflectionMaterial>(
+          water_material));
+  material->SetAlphaStepMultiplier(alpha_step_multiplier);
+  return absl::OkStatus();
 }
 
 absl::Status ImpressApiView::SetAlphaMapOnWaterMaterial(
@@ -488,20 +530,391 @@ absl::Status ImpressApiView::SetAlphaMapOnWaterMaterial(
 
 absl::Status ImpressApiView::SetNormalZOnWaterMaterial(
     std::intptr_t water_material, float normal_z) {
-  return SetWaterMaterialValueParameter(
-      water_material, normal_z,
-      [](android_xr::WaterReflectionMaterial* material, float normal_z) {
-        material->SetNormalZ(normal_z);
-      });
+  MP_ASSIGN_OR_RETURN(
+      android_xr::WaterReflectionMaterial * material,
+      GetMaterialFromBindingsMaterial<android_xr::WaterReflectionMaterial>(
+          water_material));
+  material->SetNormalZ(normal_z);
+  return absl::OkStatus();
 }
 
 absl::Status ImpressApiView::SetNormalBoundaryOnWaterMaterial(
     std::intptr_t water_material, float normal_boundary) {
-  return SetWaterMaterialValueParameter(
-      water_material, normal_boundary,
-      [](android_xr::WaterReflectionMaterial* material, float normal_boundary) {
-        material->SetNormalBoundary(normal_boundary);
+  MP_ASSIGN_OR_RETURN(
+      android_xr::WaterReflectionMaterial * material,
+      GetMaterialFromBindingsMaterial<android_xr::WaterReflectionMaterial>(
+          water_material));
+  material->SetNormalBoundary(normal_boundary);
+  return absl::OkStatus();
+}
+
+void ImpressApiView::CreateGenericMaterial(
+    std::unique_ptr<AssetLoader> asset_loader,
+    GenericMaterialSpec generic_material_spec) {
+  split_engine::SplitEngineGenericMaterial::Create(*this, generic_material_spec)
+      .Then([this, asset_loader = std::move(asset_loader)](
+                absl::StatusOr<
+                    std::unique_ptr<split_engine::SplitEngineGenericMaterial>>
+                    generic_material) {
+        if (generic_material.ok() && *generic_material) {
+          // This transfers the ownership of the BindingsMaterial object to
+          // Java. At this point, Java is responsible for managing the lifecycle
+          // of the material object. The Java side will call the
+          // DestroyNativeObject method when it is done with the material.
+          // TODO: This contract is broken since the
+          // DisposeAllResources method will flush resources that might still
+          // be in use by the Java side without it being aware. The Java side
+          // should be responsible for tracking bindings resources and
+          // individually disposing them.
+          std::intptr_t material_token =
+              ToJava(new BindingsMaterial(*std::move(generic_material)));
+          bindings_material_set_.insert(material_token);
+          asset_loader->OnSuccess(material_token);
+        } else {
+          asset_loader->OnFailure(
+              "Failed to create the built-in generic material.");
+        }
+      })
+      .KeptBy(this);
+}
+
+absl::Status ImpressApiView::SetBaseColorTextureOnGenericMaterial(
+    std::intptr_t generic_material, std::intptr_t base_color_texture) {
+  return SetGenericMaterialTextureParameter(
+      generic_material, base_color_texture,
+      [](split_engine::SplitEngineGenericMaterial* material,
+         imp::GenericMaterialTextureParameter texture_parameter,
+         imp::TextureBorrower texture_borrower) {
+        imp::GenericMaterialParameters material_parameters;
+        material_parameters.base_color.emplace();
+        material_parameters.base_color->texture = texture_parameter;
+        return material->AssignTexturesAndParams(material_parameters,
+                                                 texture_borrower);
       });
+}
+
+absl::Status ImpressApiView::SetBaseColorUvTransformOnGenericMaterial(
+    std::intptr_t generic_material, const mat3f& uv_transform) {
+  MP_ASSIGN_OR_RETURN(
+      split_engine::SplitEngineGenericMaterial * material,
+      GetMaterialFromBindingsMaterial<split_engine::SplitEngineGenericMaterial>(
+          generic_material));
+  return material->SetBaseColorUvTransform(uv_transform);
+}
+
+absl::Status ImpressApiView::SetBaseColorFactorsOnGenericMaterial(
+    std::intptr_t generic_material, const float4& factors) {
+  MP_ASSIGN_OR_RETURN(
+      split_engine::SplitEngineGenericMaterial * material,
+      GetMaterialFromBindingsMaterial<split_engine::SplitEngineGenericMaterial>(
+          generic_material));
+  material->SetBaseColorFactor(factors);
+  return absl::OkStatus();
+}
+
+absl::Status ImpressApiView::SetMetallicRoughnessTextureOnGenericMaterial(
+    std::intptr_t generic_material, std::intptr_t metallic_roughness_texture) {
+  return SetGenericMaterialTextureParameter(
+      generic_material, metallic_roughness_texture,
+      [](split_engine::SplitEngineGenericMaterial* material,
+         imp::GenericMaterialTextureParameter texture_parameter,
+         imp::TextureBorrower texture_borrower) {
+        imp::GenericMaterialParameters material_parameters;
+        material_parameters.metallic_roughness.emplace();
+        material_parameters.metallic_roughness->texture = texture_parameter;
+        return material->AssignTexturesAndParams(material_parameters,
+                                                 texture_borrower);
+      });
+}
+
+absl::Status ImpressApiView::SetMetallicRoughnessUvTransformOnGenericMaterial(
+    std::intptr_t generic_material, const mat3f& uv_transform) {
+  MP_ASSIGN_OR_RETURN(
+      split_engine::SplitEngineGenericMaterial * material,
+      GetMaterialFromBindingsMaterial<split_engine::SplitEngineGenericMaterial>(
+          generic_material));
+  return material->SetMetallicRoughnessUvTransform(uv_transform);
+}
+
+absl::Status ImpressApiView::SetMetallicFactorOnGenericMaterial(
+    std::intptr_t generic_material, float factor) {
+  MP_ASSIGN_OR_RETURN(
+      split_engine::SplitEngineGenericMaterial * material,
+      GetMaterialFromBindingsMaterial<split_engine::SplitEngineGenericMaterial>(
+          generic_material));
+  material->SetMetallicFactor(factor);
+  return absl::OkStatus();
+}
+
+absl::Status ImpressApiView::SetRoughnessFactorOnGenericMaterial(
+    std::intptr_t generic_material, float factor) {
+  MP_ASSIGN_OR_RETURN(
+      split_engine::SplitEngineGenericMaterial * material,
+      GetMaterialFromBindingsMaterial<split_engine::SplitEngineGenericMaterial>(
+          generic_material));
+  material->SetRoughnessFactor(factor);
+  return absl::OkStatus();
+}
+
+absl::Status ImpressApiView::SetNormalTextureOnGenericMaterial(
+    std::intptr_t generic_material, std::intptr_t normal_texture) {
+  return SetGenericMaterialTextureParameter(
+      generic_material, normal_texture,
+      [](split_engine::SplitEngineGenericMaterial* material,
+         imp::GenericMaterialTextureParameter texture_parameter,
+         imp::TextureBorrower texture_borrower) {
+        imp::GenericMaterialParameters material_parameters;
+        material_parameters.normal.emplace();
+        material_parameters.normal->texture = texture_parameter;
+        return material->AssignTexturesAndParams(material_parameters,
+                                                 texture_borrower);
+      });
+}
+
+absl::Status ImpressApiView::SetNormalUvTransformOnGenericMaterial(
+    std::intptr_t generic_material, const mat3f& uv_transform) {
+  MP_ASSIGN_OR_RETURN(
+      split_engine::SplitEngineGenericMaterial * material,
+      GetMaterialFromBindingsMaterial<split_engine::SplitEngineGenericMaterial>(
+          generic_material));
+  return material->SetNormalUvTransform(uv_transform);
+}
+
+absl::Status ImpressApiView::SetNormalFactorOnGenericMaterial(
+    std::intptr_t generic_material, float factor) {
+  MP_ASSIGN_OR_RETURN(
+      split_engine::SplitEngineGenericMaterial * material,
+      GetMaterialFromBindingsMaterial<split_engine::SplitEngineGenericMaterial>(
+          generic_material));
+  material->SetNormalScale(factor);
+  return absl::OkStatus();
+}
+
+absl::Status ImpressApiView::SetAmbientOcclusionTextureOnGenericMaterial(
+    std::intptr_t generic_material, std::intptr_t ambient_occlusion_texture) {
+  return SetGenericMaterialTextureParameter(
+      generic_material, ambient_occlusion_texture,
+      [](split_engine::SplitEngineGenericMaterial* material,
+         imp::GenericMaterialTextureParameter texture_parameter,
+         imp::TextureBorrower texture_borrower) {
+        imp::GenericMaterialParameters material_parameters;
+        material_parameters.ambient_occlusion.emplace();
+        material_parameters.ambient_occlusion->texture = texture_parameter;
+        return material->AssignTexturesAndParams(material_parameters,
+                                                 texture_borrower);
+      });
+}
+
+absl::Status ImpressApiView::SetAmbientOcclusionUvTransformOnGenericMaterial(
+    std::intptr_t generic_material, const mat3f& uv_transform) {
+  MP_ASSIGN_OR_RETURN(
+      split_engine::SplitEngineGenericMaterial * material,
+      GetMaterialFromBindingsMaterial<split_engine::SplitEngineGenericMaterial>(
+          generic_material));
+  return material->SetAmbientOcclusionUvTransform(uv_transform);
+}
+
+absl::Status ImpressApiView::SetAmbientOcclusionFactorOnGenericMaterial(
+    std::intptr_t generic_material, float factor) {
+  MP_ASSIGN_OR_RETURN(
+      split_engine::SplitEngineGenericMaterial * material,
+      GetMaterialFromBindingsMaterial<split_engine::SplitEngineGenericMaterial>(
+          generic_material));
+  material->SetAmbientOcclusionStrength(factor);
+  return absl::OkStatus();
+}
+
+absl::Status ImpressApiView::SetEmissiveTextureOnGenericMaterial(
+    std::intptr_t generic_material, std::intptr_t emissive_texture) {
+  return SetGenericMaterialTextureParameter(
+      generic_material, emissive_texture,
+      [](split_engine::SplitEngineGenericMaterial* material,
+         imp::GenericMaterialTextureParameter texture_parameter,
+         imp::TextureBorrower texture_borrower) {
+        imp::GenericMaterialParameters material_parameters;
+        material_parameters.emissive.emplace();
+        material_parameters.emissive->texture = texture_parameter;
+        return material->AssignTexturesAndParams(material_parameters,
+                                                 texture_borrower);
+      });
+}
+
+absl::Status ImpressApiView::SetEmissiveUvTransformOnGenericMaterial(
+    std::intptr_t generic_material, const mat3f& uv_transform) {
+  MP_ASSIGN_OR_RETURN(
+      split_engine::SplitEngineGenericMaterial * material,
+      GetMaterialFromBindingsMaterial<split_engine::SplitEngineGenericMaterial>(
+          generic_material));
+  return material->SetEmissiveUvTransform(uv_transform);
+}
+
+absl::Status ImpressApiView::SetEmissiveFactorsOnGenericMaterial(
+    std::intptr_t generic_material, const float3& factors) {
+  MP_ASSIGN_OR_RETURN(
+      split_engine::SplitEngineGenericMaterial * material,
+      GetMaterialFromBindingsMaterial<split_engine::SplitEngineGenericMaterial>(
+          generic_material));
+  material->SetEmissiveFactor(factors);
+  return absl::OkStatus();
+}
+
+absl::Status ImpressApiView::SetClearcoatTextureOnGenericMaterial(
+    std::intptr_t generic_material, std::intptr_t clearcoat_texture) {
+  return SetGenericMaterialTextureParameter(
+      generic_material, clearcoat_texture,
+      [](split_engine::SplitEngineGenericMaterial* material,
+         imp::GenericMaterialTextureParameter texture_parameter,
+         imp::TextureBorrower texture_borrower) {
+        imp::GenericMaterialParameters material_parameters;
+        material_parameters.clearcoat.emplace();
+        material_parameters.clearcoat->intensity_texture = texture_parameter;
+        return material->AssignTexturesAndParams(material_parameters,
+                                                 texture_borrower);
+      });
+}
+
+absl::Status ImpressApiView::SetClearcoatNormalTextureOnGenericMaterial(
+    std::intptr_t generic_material, std::intptr_t clearcoat_normal_texture) {
+  return SetGenericMaterialTextureParameter(
+      generic_material, clearcoat_normal_texture,
+      [](split_engine::SplitEngineGenericMaterial* material,
+         imp::GenericMaterialTextureParameter texture_parameter,
+         imp::TextureBorrower texture_borrower) {
+        imp::GenericMaterialParameters material_parameters;
+        material_parameters.clearcoat.emplace();
+        material_parameters.clearcoat->normal_texture = texture_parameter;
+        return material->AssignTexturesAndParams(material_parameters,
+                                                 texture_borrower);
+      });
+}
+
+absl::Status ImpressApiView::SetClearcoatRoughnessTextureOnGenericMaterial(
+    std::intptr_t generic_material, std::intptr_t clearcoat_roughness_texture) {
+  return SetGenericMaterialTextureParameter(
+      generic_material, clearcoat_roughness_texture,
+      [](split_engine::SplitEngineGenericMaterial* material,
+         imp::GenericMaterialTextureParameter texture_parameter,
+         imp::TextureBorrower texture_borrower) {
+        imp::GenericMaterialParameters material_parameters;
+        material_parameters.clearcoat.emplace();
+        material_parameters.clearcoat->roughness_texture = texture_parameter;
+        return material->AssignTexturesAndParams(material_parameters,
+                                                 texture_borrower);
+      });
+}
+
+absl::Status ImpressApiView::SetClearcoatFactorsOnGenericMaterial(
+    std::intptr_t generic_material, const float3& factor) {
+  MP_ASSIGN_OR_RETURN(
+      split_engine::SplitEngineGenericMaterial * material,
+      GetMaterialFromBindingsMaterial<split_engine::SplitEngineGenericMaterial>(
+          generic_material));
+  material->SetClearcoatFactors(factor);
+  return absl::OkStatus();
+}
+
+absl::Status ImpressApiView::SetSheenColorTextureOnGenericMaterial(
+    std::intptr_t generic_material, std::intptr_t sheen_color_texture) {
+  return SetGenericMaterialTextureParameter(
+      generic_material, sheen_color_texture,
+      [](split_engine::SplitEngineGenericMaterial* material,
+         imp::GenericMaterialTextureParameter texture_parameter,
+         imp::TextureBorrower texture_borrower) {
+        imp::GenericMaterialParameters material_parameters;
+        material_parameters.sheen.emplace();
+        material_parameters.sheen->color_texture = texture_parameter;
+        return material->AssignTexturesAndParams(material_parameters,
+                                                 texture_borrower);
+      });
+}
+
+absl::Status ImpressApiView::SetSheenColorFactorsOnGenericMaterial(
+    std::intptr_t generic_material, const float3& factors) {
+  MP_ASSIGN_OR_RETURN(
+      split_engine::SplitEngineGenericMaterial * material,
+      GetMaterialFromBindingsMaterial<split_engine::SplitEngineGenericMaterial>(
+          generic_material));
+  material->SetSheenColorFactor(factors);
+  return absl::OkStatus();
+}
+
+absl::Status ImpressApiView::SetSheenRoughnessTextureOnGenericMaterial(
+    std::intptr_t generic_material, std::intptr_t sheen_roughness_texture) {
+  return SetGenericMaterialTextureParameter(
+      generic_material, sheen_roughness_texture,
+      [](split_engine::SplitEngineGenericMaterial* material,
+         imp::GenericMaterialTextureParameter texture_parameter,
+         imp::TextureBorrower texture_borrower) {
+        imp::GenericMaterialParameters material_parameters;
+        material_parameters.sheen.emplace();
+        material_parameters.sheen->roughness_texture = texture_parameter;
+        return material->AssignTexturesAndParams(material_parameters,
+                                                 texture_borrower);
+      });
+}
+
+absl::Status ImpressApiView::SetSheenRoughnessFactorOnGenericMaterial(
+    std::intptr_t generic_material, float factor) {
+  MP_ASSIGN_OR_RETURN(
+      split_engine::SplitEngineGenericMaterial * material,
+      GetMaterialFromBindingsMaterial<split_engine::SplitEngineGenericMaterial>(
+          generic_material));
+  material->SetSheenRoughnessFactor(factor);
+  return absl::OkStatus();
+}
+
+absl::Status ImpressApiView::SetTransmissionTextureOnGenericMaterial(
+    std::intptr_t generic_material, std::intptr_t transmission_texture) {
+  return SetGenericMaterialTextureParameter(
+      generic_material, transmission_texture,
+      [](split_engine::SplitEngineGenericMaterial* material,
+         imp::GenericMaterialTextureParameter texture_parameter,
+         imp::TextureBorrower texture_borrower) {
+        imp::GenericMaterialParameters material_parameters;
+        material_parameters.transmission.emplace();
+        material_parameters.transmission->texture = texture_parameter;
+        return material->AssignTexturesAndParams(material_parameters,
+                                                 texture_borrower);
+      });
+}
+
+absl::Status ImpressApiView::SetTransmissionUvTransformOnGenericMaterial(
+    std::intptr_t generic_material, const mat3f& uv_transform) {
+  MP_ASSIGN_OR_RETURN(
+      split_engine::SplitEngineGenericMaterial * material,
+      GetMaterialFromBindingsMaterial<split_engine::SplitEngineGenericMaterial>(
+          generic_material));
+  return material->SetTransmissionUvTransform(uv_transform);
+}
+
+absl::Status ImpressApiView::SetTransmissionFactorOnGenericMaterial(
+    std::intptr_t generic_material, float factor) {
+  MP_ASSIGN_OR_RETURN(
+      split_engine::SplitEngineGenericMaterial * material,
+      GetMaterialFromBindingsMaterial<split_engine::SplitEngineGenericMaterial>(
+          generic_material));
+  material->SetTransmissionFactor(factor);
+  return absl::OkStatus();
+}
+
+absl::Status ImpressApiView::SetIndexOfRefractionOnGenericMaterial(
+    std::intptr_t generic_material, float index_of_refraction) {
+  MP_ASSIGN_OR_RETURN(
+      split_engine::SplitEngineGenericMaterial * material,
+      GetMaterialFromBindingsMaterial<split_engine::SplitEngineGenericMaterial>(
+          generic_material));
+  material->SetIndexOfRefraction(index_of_refraction);
+  return absl::OkStatus();
+}
+
+absl::Status ImpressApiView::SetAlphaCutoffOnGenericMaterial(
+    std::intptr_t generic_material, float alpha_cutoff) {
+  MP_ASSIGN_OR_RETURN(
+      split_engine::SplitEngineGenericMaterial * material,
+      GetMaterialFromBindingsMaterial<split_engine::SplitEngineGenericMaterial>(
+          generic_material));
+  material->SetAlphaCutoff(alpha_cutoff);
+  return absl::OkStatus();
 }
 
 absl::Status ImpressApiView::SetMaterialOverride(int32_t node_id,
@@ -542,8 +955,7 @@ absl::Status ImpressApiView::SetEnvironmentLight(std::intptr_t ibl_token) {
   if (!ibl_asset_ptr.ok()) {
     return absl::NotFoundError("IBL asset is not cached.");
   }
-  imp::split_engine::SplitEngineSerializer* serializer =
-      GetSplitEngineSerializer();
+  split_engine::SplitEngineSerializer* serializer = GetSplitEngineSerializer();
   if (serializer == nullptr) {
     return absl::InternalError("SplitEngineSerializer is not available.");
   }
@@ -553,13 +965,12 @@ absl::Status ImpressApiView::SetEnvironmentLight(std::intptr_t ibl_token) {
   GetLightManager().SetEnvironmentLight(
       GetEnvironmentLightFactory().CreateEnvironmentLight(
           ibl_asset_ptr.value(),
-          imp::LightManager::kDefaultEnvironmentLightIntensity));
+          LightManager::kDefaultEnvironmentLightIntensity));
   return absl::OkStatus();
 }
 
 absl::Status ImpressApiView::ClearEnvironmentLight() {
-  imp::split_engine::SplitEngineSerializer* serializer =
-      GetSplitEngineSerializer();
+  split_engine::SplitEngineSerializer* serializer = GetSplitEngineSerializer();
   if (serializer == nullptr) {
     return absl::InternalError("SplitEngineSerializer is not available.");
   }
@@ -624,6 +1035,22 @@ void ImpressApiView::Update(const FrameTime& frame_time) {
       ++it;
     }
   }
+}
+
+absl::StatusOr<BorrowedTexturePtr> ImpressApiView::BorrowTexture(
+    std::intptr_t texture_handle) {
+  BindingsTexture* bindings_texture = FromJava<BindingsTexture>(texture_handle);
+  if (!bindings_texture) {
+    return absl::InvalidArgumentError("Provided texture handle is not valid.");
+  }
+
+  BorrowedTexturePtr borrowed_texture = bindings_texture->GetTexture();
+  if (!borrowed_texture) {
+    return absl::InvalidArgumentError(
+        "Texture associated with handle is not valid.");
+  }
+
+  return borrowed_texture;
 }
 
 }  // namespace imp

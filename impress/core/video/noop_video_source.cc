@@ -24,11 +24,11 @@
 #include "core/common/small_source_location.h"
 #include "core/math/vec.h"
 #include "core/media/media_asset.h"
+#include "core/media/media_color_space.h"
 #include "core/media/media_source.h"
 #include "core/media/media_type.h"
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
-#include "core/video/video_color_space.h"
 #include "core/video/video_source.h"
 #include "core/view/base_view.h"
 
@@ -88,7 +88,7 @@ class NoopVideoSource : public VideoSource {
 
   uint2 GetVideoSize() const override;
 
-  VideoColorSpace GetColorSpace() const override;
+  MediaColorSpace GetColorSpace() const override;
   MediaStereoMode GetStereoMode() const override;
 
   void SetOnPlaybackCompleteCallback(std::function<void()> callback) override;
@@ -169,8 +169,8 @@ VideoSource::State NoopVideoSource::GetState() const { return state_; }
 
 uint2 NoopVideoSource::GetVideoSize() const { return {0, 0}; }
 
-VideoColorSpace NoopVideoSource::GetColorSpace() const {
-  return VideoColorSpace();
+MediaColorSpace NoopVideoSource::GetColorSpace() const {
+  return MediaColorSpace();
 }
 
 MediaStereoMode NoopVideoSource::GetStereoMode() const {

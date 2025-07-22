@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "common/arguments.h"
+
 #include <SDL.h>
 
 #include <filament/Camera.h>
@@ -45,7 +47,7 @@
 using namespace filament;
 
 namespace {
-    static constexpr Engine::Backend kBackend = Engine::Backend::OPENGL;
+    Engine::Backend kBackend = Engine::Backend::NOOP;
     static constexpr int kWidth = 640;
     static constexpr int kHeight = 480;
     static constexpr double kFieldOfViewDeg = 60.0;
@@ -94,6 +96,7 @@ int main(int argc, char *argv[]) {
     // ---- initialize ----
     FILAMENT_CHECK_POSTCONDITION(SDL_Init(SDL_INIT_EVENTS) == 0) << "SDL_Init Failure";
 
+    kBackend = samples::parseArgumentsForBackend(argc, argv);
     std::vector<Window> windows = { Window(), Window() };
     uint32_t windowFlags = SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI
                            | SDL_WINDOW_RESIZABLE;
@@ -205,7 +208,13 @@ void setup_window(Window& w, Engine* engine) {
     void* nativeSwapChain = nativeWindow;
 #if defined(__APPLE__)
     void* metalLayer = nullptr;
+
+#if defined(FILAMENT_SUPPORTS_WEBGPU)
+    if (kBackend == filament::Engine::Backend::METAL || kBackend == filament::Engine::Backend::VULKAN
+        || kBackend == filament::Engine::Backend::WEBGPU) {
+#else
     if (kBackend == filament::Engine::Backend::METAL || kBackend == filament::Engine::Backend::VULKAN) {
+#endif
         metalLayer = setUpMetalLayer(nativeWindow);
         // The swap chain on both native Metal and MoltenVK is a CAMetalLayer.
         nativeSwapChain = metalLayer;

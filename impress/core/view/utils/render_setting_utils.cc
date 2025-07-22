@@ -49,8 +49,6 @@ void ConfigureViewRenderSettingsWithOverrides(
     target->setFogOptions(source->getFogOptions());
     target->setFrustumCullingEnabled(source->isFrustumCullingEnabled());
     target->setGuardBandOptions(source->getGuardBandOptions());
-    target->setMultiSampleAntiAliasingOptions(
-        source->getMultiSampleAntiAliasingOptions());
     target->setPostProcessingEnabled(source->isPostProcessingEnabled());
     target->setRenderQuality(source->getRenderQuality());
     target->setScreenSpaceReflectionsOptions(
@@ -64,6 +62,14 @@ void ConfigureViewRenderSettingsWithOverrides(
     target->setVignetteOptions(source->getVignetteOptions());
     target->setVsmShadowOptions(source->getVsmShadowOptions());
     // (broken link) end
+
+    // Don't set the MSAA options if we're overriding the current settings
+    // because setting them at this point might fire asserts that wouldn't fire
+    // with the overrides.
+    if (override_settings == nullptr) {
+      target->setMultiSampleAntiAliasingOptions(
+          source->getMultiSampleAntiAliasingOptions());
+    }
 
     for (uint32_t i = 0; i <= kMaxMaterialGlobalIndex; ++i) {
       target->setMaterialGlobal(i, source->getMaterialGlobal(i));
@@ -87,6 +93,20 @@ void ConfigureViewRenderSettingsWithOverrides(
             : filament::View::AntiAliasing::FXAA;
     target->setAntiAliasing(anti_aliasing);
   }
+
+  target->setMultiSampleAntiAliasingOptions({
+      .enabled =
+          override_settings->multi_sample_anti_aliasing_options.enabled
+              .value_or(target->getMultiSampleAntiAliasingOptions().enabled),
+      .sampleCount = static_cast<uint8_t>(
+          override_settings->multi_sample_anti_aliasing_options.sample_count
+              .value_or(
+                  target->getMultiSampleAntiAliasingOptions().sampleCount)),
+      .customResolve =
+          override_settings->multi_sample_anti_aliasing_options.custom_resolve
+              .value_or(
+                  target->getMultiSampleAntiAliasingOptions().customResolve),
+  });
 
   if (override_settings->dithering.has_value()) {
     filament::View::Dithering dithering =

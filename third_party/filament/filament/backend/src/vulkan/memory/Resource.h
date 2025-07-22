@@ -49,7 +49,9 @@ enum class ResourceType : uint8_t {
     DESCRIPTOR_SET_LAYOUT = 11,
     DESCRIPTOR_SET = 12,
     FENCE = 13,
-    UNDEFINED_TYPE = 14,    // Must be the last enum because we use it for iterating over the enums.
+    VULKAN_BUFFER = 14,
+    STAGE_SEGMENT = 15,
+    UNDEFINED_TYPE = 16,    // Must be the last enum because we use it for iterating over the enums.
 };
 
 template<typename D>
@@ -68,6 +70,8 @@ struct Resource {
           mCount(0),
           restype(ResourceType::UNDEFINED_TYPE),
           mHandleConsideredDestroyed(false) {}
+
+    uint32_t getCount() const { return mCount; }
 
 private:
     inline void inc() noexcept {

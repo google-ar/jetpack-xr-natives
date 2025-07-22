@@ -85,11 +85,11 @@ void ComponentPoolWithUpdater<T>::Update(const FrameTime& frame_time) noexcept {
   // ComponentSystemWithUpdater to receive updates even when the component has
   // no Update function.
   if constexpr (component_traits::kHasUpdateFunc<T>) {
+    IMP_TRACE_NAME_TEMPLATED("Update", T);
     if constexpr (T::kUpdateMode == T::UpdateMode::kAlwaysUpdate) {
       ComponentPool<T>::ForEach([&frame_time,
                                  &is_editor_playing_or_component_exempted,
                                  this](T* component) {
-        IMP_TRACE_NAME_TEMPLATED("Update", T);
         if (!this->Pending(component->GetEntity())) {
 #if IMP_RUNTIME(DEV)
           if (!is_editor_playing_or_component_exempted &&
@@ -104,7 +104,6 @@ void ComponentPoolWithUpdater<T>::Update(const FrameTime& frame_time) noexcept {
       ComponentPool<T>::ForEach(
           [&frame_time,
            &is_editor_playing_or_component_exempted](T* component) {
-            IMP_TRACE_NAME_TEMPLATED("Update", T);
             if (component->IsActive()) {
 #if IMP_RUNTIME(DEV)
               if (!is_editor_playing_or_component_exempted &&

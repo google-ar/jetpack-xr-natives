@@ -41,7 +41,7 @@
 
 namespace imp::animation {
 
-using imp::gltf::AnimationSampler;
+using imp::gltf::imp_proto::AnimationSampler;
 using imp::loader::details::provider_gltf::AnimationId;
 using imp::loader::details::provider_gltf::ChannelId;
 using imp::loader::details::provider_gltf::GltfLookup;
@@ -116,8 +116,8 @@ inline int ValueChannelCount<schemas::ChannelFloat2>() {
 
 /// Parses and returns a span of floating point time data for |sampler.input|,
 /// or NullOpt if the GLTF referred to an invalid accessor.
-absl::StatusOr<absl::Span<const float>> GetTimeData(const imp::gltf::Gltf& gltf,
-                                                    AnimationSampler sampler);
+absl::StatusOr<absl::Span<const float>> GetTimeData(
+    const imp::gltf::imp_proto::Gltf& gltf, AnimationSampler sampler);
 
 template <typename ValueType>
 flatbuffers::Offset<flatbuffers::Vector<const ValueType*>> CreateVector(
@@ -176,7 +176,7 @@ absl::Status ValidateKeyframeData(absl::Span<const float> time_data,
                                   absl::Span<const float> value_data);
 
 template <typename T>
-OptionalError AddChannel(const imp::gltf::Gltf& gltf,
+OptionalError AddChannel(const imp::gltf::imp_proto::Gltf& gltf,
                          const AnimationSampler sampler,
                          flatbuffers::FlatBufferBuilder* fbb, T* out_type,
                          flatbuffers::Offset<void>* out_union,
@@ -188,10 +188,11 @@ OptionalError AddChannel(const imp::gltf::Gltf& gltf,
   loader::details::DenseDataAccess dense_data_storage;
 
   // According to the spec, vector animations must be 3d floating point values.
-  if (reader.GetComponentType() != imp::gltf::ComponentType::FLOAT ||
+  if (reader.GetComponentType() != imp::gltf::imp_proto::ComponentType::FLOAT ||
       reader.GetType() != ExpectedLayoutType<T>()) {
     // Special case: support normalized SHORT4 orientations.
-    if (reader.GetComponentType() == imp::gltf::ComponentType::SHORT &&
+    if (reader.GetComponentType() ==
+            imp::gltf::imp_proto::ComponentType::SHORT &&
         reader.GetType() == "VEC4") {
       MP_ASSIGN_OR_RETURN(dense_data_storage, reader.GetPackedFloatData());
     } else {

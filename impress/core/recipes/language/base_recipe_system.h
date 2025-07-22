@@ -32,8 +32,10 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "core/async/future.h"
-#include "core/recipes/language/recipe_graph.proto.imp.h"
+#include "core/common/invocable.h"
+#include "core/recipes/language/recipe_custom_statement.h"
 #include "core/recipes/language/recipe_traits.h"
+#include "core/recipes/language/recipe_types.proto.imp.h"
 #include "core/recipes/language/recipe_utils.h"
 #include "core/recipes/language/registered_function.h"
 #include "core/view/utils/string_map.h"
@@ -56,6 +58,13 @@ class BaseRecipeSystem {
 
   template <typename Fn>
   void RegisterFunction(recipe::RegisteredFunction::Builder& builder, Fn fn);
+
+  // Registers a RecipeCustomStatement type.
+  //
+  // T must be derived from RecipeCustomStatement and has T::kName.
+  // Internally, T::kName is used for identifying the custom statement type.
+  template <typename T>
+  void RegisterCustomStatementType();
 
  protected:
   // Registers a function that takes a vector of Variable.
@@ -145,6 +154,10 @@ class BaseRecipeSystem {
   template <typename Fn>
   std::unique_ptr<recipe::RegisteredFunction> MakeRecipeFunction(
       recipe::RegisteredFunction::Builder& builder, Fn fn);
+
+  virtual void RegisterCustomStatementTypeImpl(
+      absl::string_view name,
+      Invocable<std::unique_ptr<RecipeCustomStatement>()> creation_fn) = 0;
 };
 
 template <typename Fn>
@@ -224,6 +237,18 @@ auto BaseRecipeSystem::ArgsToTupleElementHelper(recipe::Args& args,
       auto coerced_float3 = recipe::CoerceToFloat3(variable);
       if (coerced_float3 != std::nullopt) {
         return coerced_float3.value();
+      }
+    }
+    if constexpr (std::is_same_v<ElementT, float4>) {
+      auto coerced_float4 = recipe::CoerceToFloat4(variable);
+      if (coerced_float4 != std::nullopt) {
+        return coerced_float4.value();
+      }
+    }
+    if constexpr (std::is_same_v<ElementT, quatf>) {
+      auto coerced_quatf = recipe::CoerceToQuatf(variable);
+      if (coerced_quatf != std::nullopt) {
+        return coerced_quatf.value();
       }
     }
     if constexpr (std::is_same_v<ElementT, double>) {
@@ -418,6 +443,13 @@ BaseRecipeSystem::MakeRecipeFunction(
         }
       }
     }
+  });
+}
+
+template <typename T>
+void BaseRecipeSystem::RegisterCustomStatementType() {
+  RegisterCustomStatementTypeImpl(T::kName, []() {
+    return std::unique_ptr<RecipeCustomStatement>(std::make_unique<T>());
   });
 }
 

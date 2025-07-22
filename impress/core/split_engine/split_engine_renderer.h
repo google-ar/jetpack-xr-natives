@@ -21,16 +21,19 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "flatbuffers/verifier.h"
 #include "core/async/future.h"
 #include "core/common/invocable.h"
+#include "core/media/media_color_space.h"
 #include "core/render/android/platform_android_external_texture_surface.h"
 #include "core/render/content_security_level.h"
 #include "core/render/display_color_space.h"
 #include "core/render/texture.h"
+#include "core/split_engine/materials/builtin/builtin_material.h"
 #include "core/split_engine/renderer_policy_handler.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
@@ -38,20 +41,29 @@
 
 namespace imp::split_engine {
 
+// The SplitEngineRenderer is responsible for creating and managing the
+// schema-defined 3D content for a given app (identified by its BridgeId).
 class SplitEngineRenderer {
  public:
   virtual ~SplitEngineRenderer() = default;
 
   using OnFinishedCallback = Invocable<void()>;
 
-  // on_finished_callback is invoked when SplitEngineRenderer is completely
+  // Handles a Command schema message from the app with the given bridge id.
+  // The verifier is used to validate the command.
+  // The on_finished_callback is invoked when SplitEngineRenderer is completely
   // finished processing the command, including any asynchronous GPU uploads
   // of the data buffers contained within `command`.
-  // The memory backing the message must remain alive until then.
-  virtual absl::Status HandleMessage(
+  // The caller must ensure memory backing the message must remain alive until
+  // the on_finished_callback is invoked.
+  virtual absl::Status HandleCommand(
       BridgeId bridge_id, flatbuffers::Verifier& verifier,
       const android_xr::schemas::Command& command,
       OnFinishedCallback on_finished) = 0;
+  // Handles an android_xr::schemas::Request sent from the app, for example to
+  // create a built-in material.
+  virtual Future<absl::Status> HandleRequest(
+      BridgeId bridge_id, const android_xr::schemas::Request& request) = 0;
 
   virtual absl::Status AddMeshData(
       const android_xr::schemas::AddMeshData& command,
@@ -115,6 +127,8 @@ class SplitEngineRenderer {
   virtual Future<absl::Status> CreateBuiltInMaterial(
       BridgeId bridge_id,
       const android_xr::schemas::BuiltInMaterialRequest& request) = 0;
+  virtual Future<std::vector<BuiltInMaterialPtr>>
+  PreloadBuiltInCustomMaterials() = 0;
 
   virtual absl::Status AddImageBasedLightingAssets(
       const android_xr::schemas::AddImageBasedLightingAssets& command) = 0;
@@ -136,13 +150,13 @@ class SplitEngineRenderer {
   // TextureId, at which point the release_fn will be invoked.
   virtual void SetTextureExternal(
       BridgeId bridge_id, TextureId texture_id, BorrowedTexturePtr texture,
-      ContentSecurityLevel content_security_level,
-      std::function<SurfaceColorSpace()> get_source_color_space_fn,
+      std::function<MediaColorSpace()> get_source_color_space_fn,
+      std::function<void*()> get_surface_fn,
       imp::Invocable<void()> release_fn) = 0;
   // Returns the color space for the given texture. This is only for the
   // specific Textures that are backed by an Android Surface.
-  virtual SurfaceColorSpace GetTextureColorSpace(
-      TextureId texture_id) const = 0;
+  virtual MediaColorSpace GetTextureColorSpace(BridgeId bridge_id,
+                                               TextureId texture_id) const = 0;
   // Returns the maximum content security level among all external textures.
   // If bridge_id is provided, only the content security level for the given
   // bridge id will be considered.
@@ -153,6 +167,12 @@ class SplitEngineRenderer {
   // bridge id will be considered.
   virtual DisplayColorSpace GetRequiredDisplayColorSpace(
       std::optional<BridgeId> bridge_id) = 0;
+
+  // Iterates over all active surfaces and invoke the provided function.
+  // If bridge_id is provided, only the surfaces for the given bridge id will
+  // be considered.
+  virtual void ForEachActiveSurface(std::optional<BridgeId> bridge_id,
+                                    std::function<void(void*)> fn) = 0;
 
   // Adds permission grants for the application, identified with its BridgeId.
   virtual void AddAppPermission(BridgeId bridge_id,

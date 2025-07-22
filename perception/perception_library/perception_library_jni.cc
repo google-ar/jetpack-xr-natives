@@ -185,6 +185,7 @@ static jobject GetPlaneData(JNIEnv* env, jlong plane_id,
   // We are ignoring the vertex count for now but creating it here as it
   // cannot be null in the XrTrackablePlaneANDROID.
   uint32_t vertex_count = 0;
+  std::vector<XrVector2f> vertices;  // needs same lifetime as plane_data
   XrTrackablePlaneANDROID plane_data = {
       .type = XR_TYPE_TRACKABLE_PLANE_ANDROID,
       .vertexCapacityInput = 0,
@@ -194,7 +195,7 @@ static jobject GetPlaneData(JNIEnv* env, jlong plane_id,
   if (!xr_manager.GetPlaneState(
           static_cast<XrTrackableANDROID>(plane_id),
           static_cast<XrReferenceSpaceType>(reference_space_type), xr_time,
-          plane_data)) {
+          plane_data, vertices)) {
     return nullptr;
   }
   jobject plane_data_java = vr::realitycore::CreatePlaneData(env, plane_data);

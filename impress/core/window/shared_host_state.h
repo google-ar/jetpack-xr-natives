@@ -18,8 +18,10 @@
 #define THIRD_PARTY_IMPRESS_CORE_WINDOW_SHARED_HOST_STATE_H_
 
 #include <functional>
+#include <string>
 #include <vector>
 
+#include "absl/status/statusor.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "core/async/executor_helpers.h"
 #include "core/async/thread_pool_executor.h"
@@ -53,7 +55,8 @@ class SharedHostState {
       const filament::backend::FeatureLevel featureLevel =
           filament::backend::FeatureLevel::FEATURE_LEVEL_1,
       bool pause_rendering_thread = false,
-      SharedContextDeleter shared_context_deleter = {});
+      SharedContextDeleter shared_context_deleter = {},
+      bool preinitialize_metal_platform = false);
 
   // Registers a new host.
   //
@@ -72,6 +75,11 @@ class SharedHostState {
   Executor* GetBackgroundExecutor();
   void* GetSharedGlContext() { return shared_gl_context_; }
   void RequestSynchronousShutdown();
+
+  // Returns the OpenGL vendor string or an error.
+  absl::StatusOr<std::string> GetVendorString();
+  // Returns the OpenGL renderer string or an error.
+  absl::StatusOr<std::string> GetRendererString();
 
 #if IMP_PLATFORM(ANDROID)
   // Registers an external image handle with the Filament platform.

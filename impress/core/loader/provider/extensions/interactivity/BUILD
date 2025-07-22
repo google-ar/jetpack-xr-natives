@@ -16,6 +16,7 @@ load(
     "@com_github_google_flatbuffers//:build_defs.bzl",
     "flatbuffer_cc_library",
 )
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "IMP_FLATBUFFER_INCLUDE_PATHS", "IMP_FLATC_ARGS", "imp_copts", "imp_linkopts")
 load(
     "//core/proto:imp_cc_proto_library.bzl",
@@ -130,6 +131,7 @@ cc_library(
         "//core/common:fbs",
         "//core/common:fbs_deps",  # build_cleaner: keep
         "//core/common:flatbuffer_helpers",
+        "//core/common:log",
         "//core/common:typed_ids",
         "//core/math",
         "//core/math:flatbuffer_support",

@@ -59,6 +59,9 @@ def _emit_matedit_action(ctx):
     if ctx.attr.script_verbose:
         args.add("--verbosity", "1")
 
+    if ctx.attr.fast_math:
+        args.add("--fast-math")
+
     apple_support.run(
         actions = ctx.actions,
         apple_fragment = ctx.fragments.apple,
@@ -108,6 +111,7 @@ _postprocess_metal_shaders_rule = rule(
             "minimum_macos_version": attr.string(),
             "emit_line_tables": attr.bool(),
             "record_sources": attr.bool(),
+            "fast_math": attr.bool(),
             "preserve_text_shaders": attr.bool(),
             "allow_warnings": attr.bool(default = True),
             "matedit_tool": attr.label(

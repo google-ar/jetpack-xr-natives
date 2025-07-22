@@ -64,10 +64,10 @@ TestSplitEngineSharedMemoryBridgeServiceImpl::
                                                  Executor* executor)
     : SplitEngineSharedMemoryBridgeServiceImpl(view, executor) {}
 
-absl::Status TestSplitEngineSharedMemoryBridgeServiceImpl::HandleMessage(
+absl::Status TestSplitEngineSharedMemoryBridgeServiceImpl::HandleCommand(
     BridgeId bridge_id, flatbuffers::Verifier& verifier, const uint8_t* message,
     SplitEngineRenderer::OnFinishedCallback on_finished) {
-  return SplitEngineSharedMemoryBridgeServiceImpl::HandleMessage(
+  return SplitEngineSharedMemoryBridgeServiceImpl::HandleCommand(
       bridge_id, verifier, message, std::move(on_finished));
 }
 
@@ -91,7 +91,7 @@ absl::Status SplitEngineTestBridgeSerializer::SendCommand(
   };
   flatbuffers::Verifier verifier(data_storage_ptr->data(),
                                  data_storage_ptr->size());
-  return bridge_service_.HandleMessage(
+  return bridge_service_.HandleCommand(
       bridge_id, verifier, data_storage_ptr->data(), std::move(on_finished));
 }
 

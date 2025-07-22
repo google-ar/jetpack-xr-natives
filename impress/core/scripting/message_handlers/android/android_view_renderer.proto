@@ -34,6 +34,19 @@ enum InputForwardingMode {
   INPUT_FORWARDING_MODE_DEFAULT = 1;
 }
 
+// The size of the virtual display that the View will be rendered to.
+message ViewSize {
+  // The width of the virtual display that the View will be rendered to.
+  int32 width = 1;
+
+  // The height of the virtual display that the View will be rendered to.
+  int32 height = 2;
+
+  // The meters per pixel of the virtual display that the View will be rendered
+  // to.
+  optional float meters_per_pixel = 3;
+}
+
 // Create a node that renders an Android View to texture on a quad.
 message CreateSurfaceTextureQuadRequest {
   // The node on which to attach the view quad.
@@ -42,19 +55,15 @@ message CreateSurfaceTextureQuadRequest {
   // Specifies how inputs are forwarded to Android View
   InputForwardingMode input_forwarding_mode = 2;
 
-  // The width of the virtual display that the View will be rendered to.
-  int32 width = 3;
-
-  // The height of the virtual display that the View will be rendered to.
-  int32 height = 4;
+  // The size of the virtual display that the View will be rendered to.
+  ViewSize view_size = 3;
 
   // The material to use for the quad. If not specified, a default material
   // will be used.
-  MaterialDefinition material = 5 [(imp.optional_type) = ABSL_OPTIONAL];
-
+  MaterialDefinition material = 4 [(imp.optional_type) = ABSL_OPTIONAL];
   // The blend priority for the quad. If not specified, a default priority
   // will be used.
-  uint32 blend_priority = 6 [(imp.optional_type) = ABSL_OPTIONAL];
+  uint32 blend_priority = 5 [(imp.optional_type) = ABSL_OPTIONAL];
 }
 
 // Request to get the jobject of the View that this node is attached to, if any.

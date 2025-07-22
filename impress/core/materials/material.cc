@@ -15,11 +15,9 @@
 #include "core/materials/material.h"
 
 #include <memory>
-#include <new>
 #include <optional>
 #include <string>
 #include <utility>
-#include <variant>
 
 #include "absl/memory/memory.h"
 #include "absl/strings/string_view.h"
@@ -31,6 +29,7 @@
 #include "core/assets/asset_ptr.h"
 #include "core/assets/material/material_asset.h"
 #include "core/common/owned_or_borrowed_ptr.h"
+#include "core/common/owned_ptr.h"
 #include "core/render/texture.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
@@ -187,4 +186,5 @@ imp::StringMap<const filament::Texture*> Material::GetUnownedFilamentTextures()
   }
   return result;
 }
+
 }  // namespace imp

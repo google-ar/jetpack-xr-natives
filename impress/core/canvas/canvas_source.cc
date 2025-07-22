@@ -30,6 +30,7 @@
 #include "core/common/small_source_location.h"
 #include "core/config.h"
 #include "core/math/vec.h"
+#include "core/view/base_view.h"
 
 #if IMP_PLATFORM(ANDROID)
 #include "core/canvas/android_platform_canvas_source.h"
@@ -43,20 +44,17 @@
 
 namespace imp {
 
-std::unique_ptr<CanvasSource> CanvasSource::Create(BaseView& view) {
+std::unique_ptr<CanvasSource> CanvasSource::Create(Context context) {
   // Instantiate the correct platform implementation.
 #if IMP_PLATFORM(ANDROID)
-  auto platform_source = std::make_unique<AndroidPlatformCanvasSource>(view);
+  auto platform_source = std::make_unique<AndroidPlatformCanvasSource>(context);
 #elif IMP_PLATFORM(IOS)
-  auto platform_source = std::make_unique<IosPlatformCanvasSource>(view);
+  auto platform_source = std::make_unique<IosPlatformCanvasSource>();
 #elif IMP_PLATFORM(WASM)
-  auto platform_source = std::make_unique<WasmPlatformCanvasSource>(view);
+  auto platform_source = std::make_unique<WasmPlatformCanvasSource>();
 #else
-  auto platform_source = std::make_unique<DesktopPlatformCanvasSource>(view);
+  auto platform_source = std::make_unique<DesktopPlatformCanvasSource>();
 #endif
-
-  // Texture should not be created until the first call to StartDrawing.
-  assert(platform_source->GetTexture() == nullptr);
 
   return absl::WrapUnique(new CanvasSource(std::move(platform_source)));
 }
@@ -114,25 +112,26 @@ ScopedCanvas::FontInfo CanvasSource::GetFontInfo(
 }
 
 std::unique_ptr<ScopedCanvas> CanvasSource::StartDrawing(
-    uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) {
+    BaseView& view, uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) {
   if (Executor::CurrentExecutor() != Executor::ForegroundExecutor()) {
     IMP_LOG(imp::FATAL) << "StartDrawing may not be called on the foreground executor.";
   }
   absl::MutexLock lock(&platform_source_mutex_);
   std::unique_ptr<ScopedCanvas> scoped_canvas =
-      platform_source_->StartDrawing(pixel_size, draw_mode);
+      platform_source_->StartDrawing(view, pixel_size, draw_mode);
   return scoped_canvas;
 }
 
 std::unique_ptr<ScopedCanvas> CanvasSource::StartDrawing(
-    uint2 pixel_size, ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
+    BaseView& view, uint2 pixel_size,
+    ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
     ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) {
   if (Executor::CurrentExecutor() != Executor::ForegroundExecutor()) {
     IMP_LOG(imp::FATAL) << "StartDrawing may not be called on the foreground executor.";
   }
   absl::MutexLock lock(&platform_source_mutex_);
   std::unique_ptr<ScopedCanvas> scoped_canvas = platform_source_->StartDrawing(
-      pixel_size, std::move(on_texture_changed_fn), draw_mode, loc);
+      view, pixel_size, std::move(on_texture_changed_fn), draw_mode, loc);
   return scoped_canvas;
 }
 

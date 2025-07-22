@@ -284,7 +284,7 @@ class FutureImpl {
   // Updates the self priority of this future, and then updates the active
   // priority of this future and bubbles up the priority of any children that
   // should have their priority bubbled up to by calling BubbleUpPriority.
-  void UpdatePriority(int priority) ABSL_LOCKS_EXCLUDED(mu_);
+  void UpdatePriority(std::optional<int> priority) ABSL_LOCKS_EXCLUDED(mu_);
 
   // Refreshes the active priority of this future and bubbles up the priority
   // of any children that should have their priority bubbled up to.
@@ -296,7 +296,7 @@ class FutureImpl {
 
   int GetActivePriority() ABSL_LOCKS_EXCLUDED(mu_);
 
-  int GetSelfPriority() ABSL_LOCKS_EXCLUDED(mu_);
+  std::optional<int> GetSelfPriority() ABSL_LOCKS_EXCLUDED(mu_);
 
   int GetDepth() const;
 
@@ -396,7 +396,7 @@ class FutureImpl {
   FutureExecutorMode future_executor_mode_ ABSL_GUARDED_BY(mu_) =
       FutureExecutorMode::kScheduleIfNotOnExecutorThread;
 
-  int self_priority_ ABSL_GUARDED_BY(mu_) = kNormalTaskPriority;
+  std::optional<int> self_priority_ ABSL_GUARDED_BY(mu_) = std::nullopt;
   int task_priority_ ABSL_GUARDED_BY(mu_) = kNormalTaskPriority;
   TaskId extant_task_id_ ABSL_GUARDED_BY(mu_) = kInvalidTaskId;
 

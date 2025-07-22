@@ -260,6 +260,10 @@ filament::VertexBuffer* BuildVertexBuffer(
     const android_xr::schemas::VertexBufferInfo& info,
     loader::details::InflightCreation* inflight_creation,
     std::optional<uint8_t> vertex_access_flags) {
+  if (!info.blocks()) {
+    IMP_LOG(imp::ERROR) << "No blocks";
+    return nullptr;
+  }
   const size_t block_count = info.blocks()->size();
   if (!block_count || block_count > kMaxAttributeCount) {
     // We need at least one block, and at most one block per attribute, so the
@@ -297,9 +301,13 @@ filament::VertexBuffer* BuildVertexBuffer(
                  << " , buffer size: " << buffer_size;
       return nullptr;
     }
+    if ((stride & 0x3u) != 0) {
+      IMP_LOG(imp::ERROR) << "Stride is not 4-byte aligned, stride=" << stride;
+      return nullptr;
+    }
 
     // Each block must have at least one attribute.
-    if (!block_info->attributes()->size()) {
+    if (!block_info->attributes() || !block_info->attributes()->size()) {
       IMP_LOG(imp::ERROR) << "Attributes out of range";
       return nullptr;
     }
@@ -316,6 +324,11 @@ filament::VertexBuffer* BuildVertexBuffer(
       // will clobber the first.
       const uint8_t attrib_int =
           static_cast<uint8_t>(attribute_info->attribute());
+      if (attrib_int >= kMaxAttributeCount) {
+        IMP_LOG(imp::ERROR) << "Attribute out of range";
+        return nullptr;
+      }
+
       if (found_attributes[attrib_int]) {
         IMP_LOG(imp::ERROR) << "Duplicate attribute";
         return nullptr;
@@ -338,6 +351,12 @@ filament::VertexBuffer* BuildVertexBuffer(
         IMP_LOG(imp::ERROR) << "Offset out of range";
         return nullptr;
       }
+      // Offset must be 4-byte aligned.
+      if ((attribute_info->offset() & 0x3u) != 0) {
+        IMP_LOG(imp::ERROR) << "Offset is not 4-byte aligned, offset="
+                   << attribute_info->offset();
+        return nullptr;
+      }
 
       if (buffer_size <
           (actual_stride * (vertex_count - 1)) + attribute_type_size) {
@@ -357,6 +376,10 @@ filament::VertexBuffer* BuildVertexBuffer(
   for (size_t block_index = 0; block_index < block_count; block_index++) {
     const android_xr::schemas::VertexBlockInfo* block_info =
         info.blocks()->Get(block_index);
+    if (!block_info->buffer()) {
+      IMP_LOG(imp::ERROR) << "No buffer";
+      return nullptr;
+    }
     builder.BufferAt(
         engine, block_index,
         inflight_creation->MakeDescriptor(block_info->buffer()->data(),
@@ -545,9 +568,18 @@ filament::MorphTargetBuffer* BuildMorphTargetBuffer(
   for (int index = 0; index < info.targets()->size(); index++) {
     const android_xr::schemas::MorphTargetAttributeInfo* target =
         info.targets()->Get(index);
+    if (target->positions()->size() < vertex_count * sizeof(float3)) {
+      IMP_LOG(imp::ERROR) << "Invalid positions size";
+      return nullptr;
+    }
     builder.PositionsAt(
         index, reinterpret_cast<const float3*>(target->positions()->Data()),
         vertex_count);
+
+    if (target->tangents()->size() < vertex_count * sizeof(short4)) {
+      IMP_LOG(imp::ERROR) << "Invalid tangents size";
+      return nullptr;
+    }
     builder.TangentsAt(
         index, reinterpret_cast<const short4*>(target->tangents()->Data()),
         vertex_count);

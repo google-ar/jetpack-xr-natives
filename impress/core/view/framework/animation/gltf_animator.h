@@ -270,6 +270,8 @@ class GltfAnimator : public Component {
     const animation::GltfAnimation* anim;
     animation::GltfAnimation::Cursor cursor;
     absl::Duration t;
+    absl::Duration start_time;
+    std::optional<absl::Duration> end_time;
     float speed_multiplier;
     uint32_t looping : 1;
     uint32_t loop_count : 31;

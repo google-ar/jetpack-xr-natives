@@ -12,12 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+# Placeholder: load py_test
+
 load("//build_tools:imp.bzl", "if_dev_runtime", "imp_google3_copts")
 load(
     "//core/proto:imp_cc_proto_library.bzl",
     "imp_cc_proto_library",
 )
-# Placeholder: load py_test
 
 package(
     default_visibility = ["//visibility:public"],
@@ -136,6 +139,9 @@ cc_library(
         "//core/common:holdable",
         "//core/common:invocable",
         "//core/common:log",
+        "//core/common:owned_or_borrowed_ptr",
+        "//core/common:owned_or_unowned_memory",
+        "//core/common:owned_ptr",
         "//core/common:rememberer",
         "//core/common:robin_map",
         "//core/common:template_helpers",
@@ -143,6 +149,7 @@ cc_library(
         "//core/common:type_traits",
         "//core/geometry/shapes",
         "//core/graph:dependency_graph",
+        "//core/lighting:environment_light",
         "//core/math",
         "//core/proto:any_imp_proto",
         "//core/proto:proto_common",

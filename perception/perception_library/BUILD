@@ -19,6 +19,7 @@ licenses(["notice"])
 cc_library(
     name = "perception_library_jni",
     srcs = ["perception_library_jni.cc"],
+    features = ["-layering_check"],
     local_defines = [
         "XR_USE_PLATFORM_ANDROID",
         "XR_EXTENSION_PROTOTYPES",

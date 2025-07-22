@@ -20,7 +20,6 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "filament/filament/include/filament/MaterialInstance.h"
-#include "filament/filament/include/filament/TextureSampler.h"
 #include "flatbuffers/verifier.h"
 #include "core/assets/asset_ptr.h"
 #include "core/assets/material/material_asset.h"
@@ -32,6 +31,7 @@
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
 #include "core/split_engine/materials/builtin/builtin_svxr_plane_material_assets.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/material_factory.h"
@@ -40,26 +40,30 @@
 namespace imp::split_engine {
 
 Future<BuiltInMaterialPtr> BuiltInSVXRPlaneMaterial::Create(
-    BaseView& view, const android_xr::schemas::BuiltInMaterialbd7fe08c& spec) {
+    BaseView& view, BridgeId bridge_id,
+    const android_xr::schemas::BuiltInMaterialbd7fe08c& spec) {
   return view.GetAssetManager()
       .LoadMaterial(kBuiltinSvxrPlaneMatCmat)
-      .Then([&view](
+      .Then([&view, bridge_id](
                 AssetPtr<MaterialAsset> material_asset) -> BuiltInMaterialPtr {
         return absl::WrapUnique(new BuiltInSVXRPlaneMaterial(
-            view, view.GetMaterialFactory().CreateMaterial(material_asset)));
+            view, bridge_id,
+            view.GetMaterialFactory().CreateMaterial(material_asset)));
       });
 }
 
 BuiltInMaterialPtr BuiltInSVXRPlaneMaterial::Duplicate() const {
   return absl::WrapUnique(new BuiltInSVXRPlaneMaterial(
-      view_, view_.GetMaterialFactory().WrapMaterial(
-                 filament::MaterialInstance::duplicate(
-                     GetMaterial()->GetFilamentMaterialInstance()))));
+      view_, GetBridgeId(),
+      view_.GetMaterialFactory().WrapMaterial(
+          filament::MaterialInstance::duplicate(
+              GetMaterial()->GetFilamentMaterialInstance()))));
 }
 
 BuiltInSVXRPlaneMaterial::BuiltInSVXRPlaneMaterial(BaseView& view,
+                                                   BridgeId bridge_id,
                                                    OwnedMaterialPtr material)
-    : BuiltInCustomMaterial(std::move(material)), view_(view) {}
+    : BuiltInCustomMaterial(bridge_id, std::move(material)), view_(view) {}
 
 absl::Status BuiltInSVXRPlaneMaterial::SetParameters(
     flatbuffers::Verifier& verifier,
@@ -93,8 +97,8 @@ absl::Status BuiltInSVXRPlaneMaterial::SetParameters(
       return absl::NotFoundError(
           absl::StrFormat("Texture not found: %d", dot_pattern->texture_id()));
     }
-    filament::TextureSampler sampler = ConvertSampler(*dot_pattern->sampler());
-    GetMaterial()->SetParameter("dot_pattern", texture, sampler);
+    GetMaterial()->SetParameter("dot_pattern", texture,
+                                ConvertSampler(dot_pattern->sampler()));
   }
   if (auto* plane_control = svxr_plane_material_parameters->plane_control()) {
     GetMaterial()->SetParameter("plane_control", UnPack(*plane_control));

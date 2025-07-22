@@ -54,6 +54,8 @@ class SplitEngineGenericMaterial : public SplitEngineMaterial,
   static Future<std::unique_ptr<SplitEngineGenericMaterial>> Create(
       BaseView& view, const GenericMaterialSpec& spec);
 
+  ~SplitEngineGenericMaterial() override;
+
   GenericMaterialPtr Duplicate() const override;
 
   absl::Status AssignTexturesAndParams(
@@ -72,34 +74,49 @@ class SplitEngineGenericMaterial : public SplitEngineMaterial,
   TextureAndSampler GetBaseColorTexture() const override;
   absl::Status SetBaseColorUvTransform(const mat3f& uv_transform) override;
   void SetBaseColorFactor(const float4& factor) override;
+  float4 GetBaseColorFactor() const override;
+
   TextureAndSampler GetMetallicRoughnessTexture() const override;
   absl::Status SetMetallicRoughnessUvTransform(
       const mat3f& uv_transform) override;
   void SetMetallicFactor(float factor) override;
+  float GetMetallicFactor() const override;
   void SetRoughnessFactor(float factor) override;
+  float GetRoughnessFactor() const override;
+
   TextureAndSampler GetNormalTexture() const override;
   absl::Status SetNormalUvTransform(const mat3f& uv_transform) override;
   void SetNormalScale(float scale) override;
+  float GetNormalScale() const override;
+
   TextureAndSampler GetAmbientOcclusionTexture() const override;
   absl::Status SetAmbientOcclusionUvTransform(
       const mat3f& uv_transform) override;
   void SetAmbientOcclusionStrength(float strength) override;
+  float GetAmbientOcclusionStrength() const override;
+
   TextureAndSampler GetEmissiveTexture() const override;
   absl::Status SetEmissiveUvTransform(const mat3f& uv_transform) override;
   void SetEmissiveFactor(const float3& factor) override;
+  float3 GetEmissiveFactor() const override;
+
   TextureAndSampler GetClearcoatTexture() const override;
   TextureAndSampler GetClearcoatNormalTexture() const override;
   TextureAndSampler GetClearcoatRoughnessTexture() const override;
   void SetClearcoatFactors(const float3& factor) override;
+
   TextureAndSampler GetSheenColorTexture() const override;
   void SetSheenColorFactor(const float3& factor) override;
   TextureAndSampler GetSheenRoughnessTexture() const override;
   void SetSheenRoughnessFactor(float factor) override;
+
   TextureAndSampler GetTransmissionTexture() const override;
   absl::Status SetTransmissionUvTransform(const mat3f& uv_transform) override;
   void SetTransmissionFactor(float factor) override;
   void SetIndexOfRefraction(float index_of_refraction) override;
+
   void SetAlphaCutoff(float alpha_cutoff) override;
+  float GetAlphaCutoff() const override;
 
  protected:
   BorrowedMaterialPtr GetMaterialInternal(

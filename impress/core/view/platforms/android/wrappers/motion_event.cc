@@ -14,9 +14,13 @@
 
 #include "core/view/platforms/android/wrappers/motion_event.h"
 
+#include <jni.h>
+
+#include <utility>
+
 #include "core/common/log.h"
 #include "absl/status/statusor.h"
-#include "core/common/platform_helpers.h"
+#include "core/common/jni_helpers.h"
 #include "core/input/pointer_event.h"
 
 namespace imp::android {
@@ -44,9 +48,11 @@ MotionEvent::MotionEvent(JNIEnv* env, float2 surface_coordinates, Action action)
   obtain_ =
       GetStaticMethodHandle("obtain", "(JJIFFI)Landroid/view/MotionEvent;");
 
-  SetSelf(Env()->NewGlobalRef(
-      CallStaticObjectMethod(obtain_, 0, 0, action_value, surface_coordinates.x,
-                             surface_coordinates.y, 0)));
+  JniUniquePtr<jobject> motion_event =
+      WrapJni(Env(), CallStaticObjectMethod(obtain_, 0, 0, action_value,
+                                            surface_coordinates.x,
+                                            surface_coordinates.y, 0));
+  SetSelf(LocalToGlobalRef(std::move(motion_event)));
 }
 
 MotionEvent::MotionEvent(JNIEnv* env, float2 surface_coordinates,
@@ -62,9 +68,11 @@ MotionEvent::MotionEvent(JNIEnv* env, float2 surface_coordinates,
   obtain_ =
       GetStaticMethodHandle("obtain", "(JJIFFI)Landroid/view/MotionEvent;");
 
-  SetSelf(Env()->NewGlobalRef(
-      CallStaticObjectMethod(obtain_, 0, 0, action_value, surface_coordinates.x,
-                             surface_coordinates.y, 0)));
+  JniUniquePtr<jobject> motion_event =
+      WrapJni(Env(), CallStaticObjectMethod(obtain_, 0, 0, action_value,
+                                            surface_coordinates.x,
+                                            surface_coordinates.y, 0));
+  SetSelf(LocalToGlobalRef(std::move(motion_event)));
 }
 
 }  // namespace imp::android

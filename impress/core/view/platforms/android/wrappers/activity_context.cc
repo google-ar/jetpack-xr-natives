@@ -16,6 +16,8 @@
 
 #include <jni.h>
 
+#include <utility>
+
 #include "absl/strings/string_view.h"
 #include "core/common/jni_helpers.h"
 #include "core/config.h"
@@ -28,7 +30,7 @@
 namespace imp::android {
 
 ActivityContext::ActivityContext(JNIEnv* env, jobject context)
-    : JavaWrapper(env, context) {
+    : JavaWrapper(env, context, "android/content/Context") {
   get_files_dir_ = GetMethodHandle("getFilesDir", "()Ljava/io/File;");
   get_external_files_dir_ = GetMethodHandle(
       "getExternalFilesDir", "(Ljava/lang/String;)Ljava/io/File;");
@@ -41,19 +43,22 @@ ActivityContext::ActivityContext(JNIEnv* env, jobject context)
 }
 
 File ActivityContext::GetFilesDir() {
-  jobject files_dir = CallObjectMethod(get_files_dir_);
-  return File(Env(), files_dir);
+  JniUniquePtr<jobject> files_dir =
+      WrapJni(Env(), CallObjectMethod(get_files_dir_));
+  return File(Env(), std::move(files_dir));
 }
 
 File ActivityContext::GetExternalFilesDir(absl::string_view type) {
-  jobject files_dir =
-      CallObjectMethod(get_external_files_dir_, ToString(Env(), type));
-  return File(Env(), files_dir);
+  JniUniquePtr<jobject> files_dir =
+      WrapJni(Env(), CallObjectMethod(get_external_files_dir_,
+                                      ToJniString(Env(), type).get()));
+  return File(Env(), std::move(files_dir));
 }
 
 File ActivityContext::GetCacheDir() {
-  jobject cache_dir = CallObjectMethod(get_cache_dir_);
-  return File(Env(), cache_dir);
+  JniUniquePtr<jobject> cache_dir =
+      WrapJni(Env(), CallObjectMethod(get_cache_dir_));
+  return File(Env(), std::move(cache_dir));
 }
 
 #if IMP_PLATFORM(ANDROID)

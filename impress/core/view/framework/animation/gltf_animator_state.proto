@@ -53,6 +53,10 @@ message GltfAnimatorState {
     // animation asset, before multiplying by speed_multiplier.
     float start_time_seconds = 3;
 
+    // The time (in seconds) to stop playing the animation at (if this is not
+    // set then animation play until completes)
+    optional float end_time_seconds = 7;
+
     // Duration (in seconds) to blend from the previous animation that was
     // playing on the same playback channel. This is in terms of real time,
     // after multiplying by speed_multiplier.

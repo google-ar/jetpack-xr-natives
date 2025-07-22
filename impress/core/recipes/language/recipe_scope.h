@@ -22,7 +22,7 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
-#include "core/recipes/language/recipe_graph.proto.imp.h"
+#include "core/recipes/language/recipe_types.proto.imp.h"
 #include "core/recipes/language/recipe_utils.h"
 
 namespace imp {

@@ -28,6 +28,7 @@
 #include "core/config.h"
 #include "core/geometry/shapes/box.h"
 #include "core/math/vec.h"
+#include "core/model/mesh/mesh_data.h"
 #include "core/model/mesh/mesh_description.h"
 #include "core/model/mesh/mesh_index_data.h"
 #include "core/model/mesh/mesh_vertex_and_index_data.h"
@@ -38,6 +39,7 @@
 #include "core/physics/collidable_shapes/collidable_shape.h"
 #include "core/physics/physics_helper.h"
 #include "core/view/framework/assets/gltf_mesh.h"
+#include "core/view/framework/render/mesh_renderer.h"
 #if IMP_RUNTIME(DEV)
 #include "core/common/debug_draw.h"
 #endif
@@ -45,10 +47,9 @@
 namespace imp {
 namespace {
 
-float3 GetVertexWorldPosition(MeshVertexAndIndexData mesh, size_t index,
+float3 GetVertexWorldPosition(MeshVertexData* vertex_data,
+                              MeshIndexData* index_data, size_t index,
                               NodeHandle node) {
-  MeshVertexData* vertex_data = mesh.vertex_data;
-  MeshIndexData* index_data = mesh.index_data;
   uint32_t id = index_data->GetDescription().index_type ==
                         MeshDescription::IndexType::USHORT
                     ? index_data->IndexAt<uint16_t>(index)
@@ -61,22 +62,33 @@ float3 GetVertexWorldPosition(MeshVertexAndIndexData mesh, size_t index,
 ConvexHullMeshCollidableShape::ConvexHullMeshCollidableShape(NodeHandle node)
     : node_(node) {}
 
-btTransform ConvexHullMeshCollidableShape::AddBtCollisionShape() {
+void ConvexHullMeshCollidableShape::PushVertices(MeshVertexData* vertex_data,
+                                                 MeshIndexData* index_data) {
+  MeshDescription index_description = index_data->GetDescription();
+  int index_count = index_description.index_count;
+  for (size_t i = 0; i < index_count; i++) {
+    float3 p0 = GetVertexWorldPosition(vertex_data, index_data, i, node_);
+    vertices_.push_back(ToBtVector3(p0));
+  }
+}
+
+void ConvexHullMeshCollidableShape::CreateBtCollisionShape() {
   ComponentHandle<GltfMesh> mesh = node_->GetComponent<GltfMesh>();
-  mesh_data_ = mesh->GetMeshData();
-
-  size_t num_vertices = 0;
-  for (const MeshVertexAndIndexData& data : mesh_data_) {
-    MeshDescription index_description = data.index_data->GetDescription();
-    num_vertices += index_description.index_count / 3 * 3;
-    for (size_t i = 0; i < index_description.index_count / 3; i++) {
-      float3 p0 = GetVertexWorldPosition(data, i * 3, node_);
-      float3 p1 = GetVertexWorldPosition(data, i * 3 + 1, node_);
-      float3 p2 = GetVertexWorldPosition(data, i * 3 + 2, node_);
-
-      vertices_.push_back(ToBtVector3(p0));
-      vertices_.push_back(ToBtVector3(p1));
-      vertices_.push_back(ToBtVector3(p2));
+  if (mesh.IsValid()) {
+    mesh_data_ = mesh->GetMeshData();
+    for (const MeshVertexAndIndexData& data : mesh_data_) {
+      PushVertices(data.vertex_data, data.index_data);
+    }
+  } else {
+    ComponentHandle<MeshRenderer> mesh_renderer =
+        node_->GetComponent<MeshRenderer>();
+    if (mesh_renderer.IsValid()) {
+      for (size_t i = 0; i < mesh_renderer->GetPrimitiveCount(); ++i) {
+        MeshData* mesh_data = mesh_renderer->GetMesh(i)->GetMeshData();
+        MeshVertexData* vertex_data = mesh_data->GetVertexData();
+        MeshIndexData* index_data = mesh_data->GetIndexData();
+        PushVertices(vertex_data, index_data);
+      }
     }
   }
 
@@ -91,14 +103,9 @@ btTransform ConvexHullMeshCollidableShape::AddBtCollisionShape() {
   convex_hull_shape_ = std::make_unique<btConvexHullShape>(
       &hull_vertices->getX(), hull.numVertices(), sizeof(btVector3));
   collidable_shape_ = convex_hull_shape_.get();
-
-  btTransform transform;
-  transform.setIdentity();
-
-  return transform;
 }
 
-btCollisionShape* ConvexHullMeshCollidableShape::GetCollidableShape() const {
+btCollisionShape* ConvexHullMeshCollidableShape::GetBtCollisionShape() const {
   return collidable_shape_;
 }
 
@@ -109,14 +116,14 @@ float3 ConvexHullMeshCollidableShape::GetCollidableCenter() const {
 
 CollidableShape::CollisionShape
 ConvexHullMeshCollidableShape::GetCollisionShape(
-    const btTransform& transform) const {
+    const btTransform& bt_trans) const {
   // TODO: Implement this.
   return Box();
 }
 
 #if IMP_RUNTIME(DEV)
 void ConvexHullMeshCollidableShape::Visualize(
-    const btTransform& transform) const {
+    const btTransform& bt_trans) const {
   for (size_t i = 0; i < convex_hull_shape_->getNumEdges(); i++) {
     btVector3 v0;
     btVector3 v1;

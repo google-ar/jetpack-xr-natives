@@ -19,6 +19,7 @@
 #include <utility>
 
 #include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
 #include "dear_imgui/imgui.h"
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
@@ -48,6 +49,10 @@ const ImVec2 kLogImageSize = ImVec2(20.0f, 20.0f);
 const ImVec2 kLogSettingsSelectableSize = ImVec2(50.0f, 20.0f);
 // Different color for 'Filter By' to differentiate from clickable buttons.
 const ImVec4 kFilterByColor = {1.0f, 1.0f, 1.0f, 0.6f};
+// Maximum number of logs to store in the console. This is to prevent the
+// console from growing indefinitely. After this number, the oldest logs will be
+// overwritten.
+const int kMaxLogs = 10000;
 
 Console::Console(BaseView& view) : view_(view) {
   // TODO: Console log frequently crashes in split engine mode.
@@ -92,9 +97,26 @@ void Console::HandleLog(void* context, output::OutputKind kind,
   // Treat Fatal and Max errors are normal errors in the console.
   if (kind == output::OutputKind::kFatal || kind == output::OutputKind::kMax)
     kind = output::OutputKind::kError;
-  console_ui_widget->all_logs_.push_back(ConsoleLog{std::string(log), kind});
-  console_ui_widget->new_log_added_ = true;
-  console_ui_widget->log_count_[kind]++;
+  {
+    absl::MutexLock lock(&console_ui_widget->logs_mutex_);
+    if (console_ui_widget->all_logs_.size() > kMaxLogs) {
+      console_ui_widget
+          ->log_count_[console_ui_widget
+                           ->all_logs_[console_ui_widget->log_start_index_]
+                           .output_kind]--;
+      console_ui_widget->all_logs_[console_ui_widget->log_start_index_] =
+          ConsoleLog{std::string(log), kind};
+      console_ui_widget->log_start_index_++;
+      if (console_ui_widget->log_start_index_ >= kMaxLogs) {
+        console_ui_widget->log_start_index_ = 0;
+      }
+    } else {
+      console_ui_widget->all_logs_.push_back(
+          ConsoleLog{std::string(log), kind});
+    }
+    console_ui_widget->log_count_[kind]++;
+    console_ui_widget->new_log_added_ = true;
+  }
 }
 
 void Console::DrawLogSettings() {
@@ -128,7 +150,7 @@ void Console::DrawLogSettings() {
     filter_by_ = output::OutputKind::kError;
   }
   ImVec2 clear_button_size = ImGui::CalcTextSize(kConsoleClearLabel.data());
-  ImGui::SameLine(ImGui::GetIO().DisplaySize.x - clear_button_size.x -
+  ImGui::SameLine(ImGui::GetContentRegionAvail().x - clear_button_size.x -
                   ImGui::GetStyle().WindowPadding.x * 2.0f);
   if (ImGui::Selectable(kConsoleClearLabel.data(), false, 0,
                         clear_button_size)) {
@@ -141,30 +163,41 @@ void Console::DrawLogs() {
   ImVec2 rect_max = ImGui::GetItemRectMax();
   ImGui::PushItemWidth(rect_max.x);
   bool list_box_header = ImGui::BeginListBox("##log-list");
-  for (int i = 0; i < all_logs_.size(); ++i) {
-    if (filter_log_ && all_logs_.at(i).output_kind != filter_by_) {
-      continue;
+  {
+    absl::MutexLock lock(&logs_mutex_);
+    int i = log_start_index_;
+    while (true) {
+      if (!filter_log_ || all_logs_.at(i).output_kind == filter_by_) {
+        switch (all_logs_.at(i).output_kind) {
+          case output::OutputKind::kInfo:
+            if (info_icon_) {
+              ImGui::Image(info_icon_->GetTexture(), kLogImageSize);
+            }
+            break;
+          case output::OutputKind::kWarning:
+            if (warning_icon_) {
+              ImGui::Image(warning_icon_->GetTexture(), kLogImageSize);
+            }
+            break;
+          case output::OutputKind::kError:
+          default:
+            if (error_icon_) {
+              ImGui::Image(error_icon_->GetTexture(), kLogImageSize);
+            }
+            break;
+        }
+        ImGui::SameLine();
+        ImGui::TextWrapped(all_logs_[i].message.c_str());
+      }
+
+      i++;
+      if (i >= all_logs_.size()) {
+        i = 0;
+      }
+      if (i == log_start_index_) {
+        break;
+      }
     }
-    switch (all_logs_.at(i).output_kind) {
-      case output::OutputKind::kInfo:
-        if (info_icon_) {
-          ImGui::Image(info_icon_->GetTexture(), kLogImageSize);
-        }
-        break;
-      case output::OutputKind::kWarning:
-        if (warning_icon_) {
-          ImGui::Image(warning_icon_->GetTexture(), kLogImageSize);
-        }
-        break;
-      case output::OutputKind::kError:
-      default:
-        if (error_icon_) {
-          ImGui::Image(error_icon_->GetTexture(), kLogImageSize);
-        }
-        break;
-    }
-    ImGui::SameLine();
-    ImGui::TextWrapped(all_logs_[i].message.c_str());
   }
   if (list_box_header) {
     if (new_log_added_) {
@@ -176,6 +209,7 @@ void Console::DrawLogs() {
 }
 
 void Console::ClearLogs() {
+  absl::MutexLock lock(&logs_mutex_);
   all_logs_.clear();
   log_count_[output::OutputKind::kInfo] = 0;
   log_count_[output::OutputKind::kWarning] = 0;

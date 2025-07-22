@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:assets.bzl", "imp_assets")
 
 # IMGUI UI Widgets for Impress Editor.
@@ -167,7 +168,9 @@ cc_library(
         "//core/render",
         "//core/view:base_view",
         "//core/view/framework",
+        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/synchronization",
         "@dear_imgui",
         "@robin_map",
     ],
@@ -208,10 +211,12 @@ cc_library(
     deps = [
         "//core:config",
         "//core/common:log",
-        "//core/common:platform_helpers",
+        "//core/common:registry",
         "//core/common:rememberer",
         "//core/editor:editor_utils",
         "//core/editor:file_loader_helper",
+        "//core/editor:file_type_loader",
+        "//core/editor:file_type_registry",
         "//core/editor:widget",
         "//core/editor/ui:drag_and_drop",
         "//core/math",
@@ -220,7 +225,6 @@ cc_library(
         "//core/view:view_events",
         "//core/view/framework",
         "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:cord",
         "@dear_imgui",
         "@third_party//filament/libs:math_hdrs",
     ],
@@ -256,6 +260,32 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@dear_imgui",
         "@third_party//filament/libs:utils_hdrs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "settings_widget",
+    srcs = [
+        "settings_widget.cc",
+    ],
+    hdrs = [
+        "settings_widget.h",
+        "settings_widget_constants.h",
+    ],
+    copts = imp_test_copts(),
+    deps = [
+        ":asset_library",
+        "//core:config",
+        "//core/common:registry",
+        "//core/editor",
+        "//core/editor:events",
+        "//core/editor:widget",
+        "//core/ncsb",
+        "//core/view:base_view",
+        "@com_google_absl//absl/strings:string_view",
+        "@dear_imgui",
+        "@third_party//filament/filament:filament_hdrs",
     ],
     alwayslink = 1,
 )
@@ -391,6 +421,7 @@ cc_library(
     linkopts = imp_linkopts(),
     deps = [
         ":transform_widget_aspect_state_imp_cc_proto",
+        "//core/collision:collision_helpers",
         "//core/collision:ray",
         "//core/common:registry",
         "//core/editor",
@@ -398,7 +429,6 @@ cc_library(
         "//core/editor:events",
         "//core/editor:events_cc_proto",
         "//core/editor:node_value_command",
-        "//core/geometry",
         "//core/math",
         "//core/ncsb",
         "//core/scene_handles:scene_handle_status_utils",

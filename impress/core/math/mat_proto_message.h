@@ -25,11 +25,118 @@
 #include "core/math/vec.h"
 #include "core/proto/proto_common.h"
 
-// Visitors for ::imp::mat3f|mat3|mat4f|mat4
-// Custom code to serialize/deserialize mat3f|mat3|mat4f|mat4 directly to/from
-// a proto. Due to the way the matrices store data, codegen cannot
-// auto-generate this code, so instead it's written manually.
+// Visitors for ::imp::mat2f|mat2|mat3f|mat3|mat4f|mat4
+// Custom code to serialize/deserialize mat2f|mat2|mat3f|mat3|mat4f|mat4
+// directly to/from a proto. Due to the way the matrices store data, codegen
+// cannot auto-generate this code, so instead it's written manually.
 namespace imp {
+
+template <>
+struct proto::ProtoMessage<mat2f> : public mat2f {
+  static constexpr std::size_t kFieldsCount = 2;
+  static constexpr int kFieldIds[] = {1, 2};
+  static constexpr absl::string_view kFieldEditorControlTypes[] = {"{}", "{}"};
+  static constexpr absl::string_view kFieldNames[] = {"m0", "m1"};
+  static constexpr imp::HashValue kFieldNameHashes[] = {
+      imp::Hash(kFieldNames[0]),
+      imp::Hash(kFieldNames[1]),
+  };
+  static constexpr absl::string_view kFieldJsonNames[] = {"m0", "m1"};
+  static constexpr imp::HashValue kFieldJsonNameHashes[] = {
+      imp::Hash(kFieldJsonNames[0]),
+      imp::Hash(kFieldJsonNames[1]),
+  };
+
+  template <typename Visitor, typename Cursor, typename... Args>
+  Cursor Visit(Visitor& v, Cursor cursor, mat2f* other, Args... args) {
+    auto& self = *this;
+    cursor = v.template Visit<TYPE_MESSAGE>(
+        cursor, 1, &self[0],
+        other ? &(*other)[0] : static_cast<float2*>(nullptr),
+        std::forward<Args>(args)...);
+    cursor = v.template Visit<TYPE_MESSAGE>(
+        cursor, 2, &self[1],
+        other ? &(*other)[1] : static_cast<float2*>(nullptr),
+        std::forward<Args>(args)...);
+    return cursor;
+  }
+
+  template <typename Visitor, typename Cursor, typename... Args>
+  Cursor VisitField(int field_id, Visitor& v, Cursor cursor, mat2f* other,
+                    Args... args) {
+    auto& self = *this;
+
+    switch (field_id) {
+      case 1:
+        return v.template Visit<TYPE_MESSAGE>(
+            cursor, 1, &self[0],
+            other ? &(*other)[0] : static_cast<float2*>(nullptr),
+            std::forward<Args>(args)...);
+      case 2:
+        return v.template Visit<TYPE_MESSAGE>(
+            cursor, 2, &self[1],
+            other ? &(*other)[1] : static_cast<float2*>(nullptr),
+            std::forward<Args>(args)...);
+        break;
+      default:
+        return v.Unknown(cursor, field_id, std::forward<Args>(args)...);
+        break;
+    }
+  }
+};
+
+template <>
+struct proto::ProtoMessage<mat2> : public mat2 {
+  static constexpr std::size_t kFieldsCount = 2;
+  static constexpr int kFieldIds[] = {1, 2};
+  static constexpr absl::string_view kFieldEditorControlTypes[] = {"{}", "{}"};
+  static constexpr absl::string_view kFieldNames[] = {"m0", "m1"};
+  static constexpr imp::HashValue kFieldNameHashes[] = {
+      imp::Hash(kFieldNames[0]),
+      imp::Hash(kFieldNames[1]),
+  };
+  static constexpr absl::string_view kFieldJsonNames[] = {"m0", "m1"};
+  static constexpr imp::HashValue kFieldJsonNameHashes[] = {
+      imp::Hash(kFieldJsonNames[0]),
+      imp::Hash(kFieldJsonNames[1]),
+  };
+
+  template <typename Visitor, typename Cursor, typename... Args>
+  Cursor Visit(Visitor& v, Cursor cursor, mat2* other, Args... args) {
+    auto& self = *this;
+    cursor = v.template Visit<TYPE_MESSAGE>(
+        cursor, 1, &self[0],
+        other ? &(*other)[0] : static_cast<double2*>(nullptr),
+        std::forward<Args>(args)...);
+    cursor = v.template Visit<TYPE_MESSAGE>(
+        cursor, 2, &self[1],
+        other ? &(*other)[1] : static_cast<double2*>(nullptr),
+        std::forward<Args>(args)...);
+    return cursor;
+  }
+
+  template <typename Visitor, typename Cursor, typename... Args>
+  Cursor VisitField(int field_id, Visitor& v, Cursor cursor, mat2* other,
+                    Args... args) {
+    auto& self = *this;
+
+    switch (field_id) {
+      case 1:
+        return v.template Visit<TYPE_MESSAGE>(
+            cursor, 1, &self[0],
+            other ? &(*other)[0] : static_cast<double2*>(nullptr),
+            std::forward<Args>(args)...);
+      case 2:
+        return v.template Visit<TYPE_MESSAGE>(
+            cursor, 2, &self[1],
+            other ? &(*other)[1] : static_cast<double2*>(nullptr),
+            std::forward<Args>(args)...);
+      default:
+        return v.Unknown(cursor, field_id, std::forward<Args>(args)...);
+        break;
+    }
+  }
+};
 
 template <>
 struct proto::ProtoMessage<mat3f> : public mat3f {

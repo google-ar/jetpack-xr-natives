@@ -14,10 +14,19 @@
 
 #include "core/view/framework/gestures/tap_gesture.h"
 
+#include <optional>
+#include <variant>
+#include <vector>
+
+#include "absl/types/optional.h"
 #include "core/input/input_manager.h"
 #include "core/input/pointer_event.h"
 #include "core/math/quat.h"
+#include "core/ncsb/dispatcher/dispatcher.h"
+#include "core/view/framework/collision/ray_hit.h"
+#include "core/view/framework/gestures/gesture.h"
 #include "core/view/framework/gestures/gesture_pointer_utils.h"
+#include "core/view/framework/input/pointer_input_handler.h"
 
 namespace imp {
 
@@ -90,10 +99,18 @@ bool TapGesture::TryStart(const PointerHitEvent& pointer_hit) {
   if (!max_down_count_ || down_count_) {
     return false;
   }
+
+  std::optional<std::vector<RayHit>> event_ray_hits;
+  if (std::holds_alternative<std::vector<std::vector<RayHit>>>(
+          pointer_hit.hits)) {
+    event_ray_hits =
+        std::get<std::vector<std::vector<RayHit>>>(pointer_hit.hits)[0];
+  }
+
   GetDispatcher().Send(
       GetTargetNode(),
       TapGesture::TapEvent(GetId(), event_type, GetTargetNode(),
-                           start_position_, max_down_count_,
+                           start_position_, event_ray_hits, max_down_count_,
                            GetAllIntersectingNodes()));
   Finish(pointer_hit);
   // If we return true here, the state will be reset to Started, but this

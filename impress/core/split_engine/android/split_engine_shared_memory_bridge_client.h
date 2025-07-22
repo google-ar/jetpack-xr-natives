@@ -23,10 +23,10 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <string>
-#include <string_view>
 #include <vector>
 
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 
 namespace imp::split_engine {
@@ -39,66 +39,43 @@ class SplitEngineSharedMemoryBridgeClient {
  public:
   virtual ~SplitEngineSharedMemoryBridgeClient() = default;
 
-  using WorkItem = std::function<void()>;
-  using WorkScheduler = std::function<void(WorkItem)>;
-
   // An interface for a handle to a shared memory buffer.
   class BufferHandle {
    public:
     virtual ~BufferHandle() = default;
   };
 
-  // A self contained result class.
-  class Result {
-   public:
-    explicit Result(bool is_ok) : is_ok_(is_ok), message_("") {}
-    Result(bool is_ok, std::string message)
-        : is_ok_(is_ok), message_(message) {}
+  // Returns the unique id for this client.
+  virtual ClientId GetClientId() const = 0;
 
-    bool is_ok() const { return is_ok_; }
-    std::string_view message() const { return message_; };
-
-   private:
-    const bool is_ok_;
-    const std::string message_;
-  };
+  // Generates a message group id for a new message group.
+  // TODO: (broken link) - remove this entirely and use memory addresses.
+  virtual MessageGroupId GenerateMessageGroupId() = 0;
 
   // Registers a shared memory buffer file descriptor with the bridge and
   // returns a handle to the shared memory buffer.
-  virtual std::unique_ptr<BufferHandle> RegisterBuffer(
+  virtual absl::StatusOr<std::unique_ptr<BufferHandle>> RegisterBuffer(
       int fd, size_t buffer_size_bytes) = 0;
 
   // Processes a region of a registered buffer specified by offset and bytes.
-  virtual Result ProcessRegion(const BufferHandle& buffer_handle,
-                               size_t offset_bytes,
-                               size_t region_length_bytes) = 0;
+  virtual absl::Status ProcessRegion(const BufferHandle& buffer_handle,
+                                     int offset_bytes,
+                                     int region_length_bytes) = 0;
 
   // Creates a texture surface bound to the given external texture id.
-  virtual jobject CreateExternalTextureSurface(
+  virtual absl::StatusOr<jobject> CreateExternalTextureSurface(
       const std::vector<TextureId>& in_texture_ids) = 0;
 
   // Sets the size of an external texture surface bound to the given texture id.
-  virtual Result SetExternalTextureSurfaceSize(TextureId in_texture_id,
-                                               int32_t width,
-                                               int32_t height) = 0;
+  virtual absl::Status SetExternalTextureSurfaceSize(TextureId in_texture_id,
+                                                     int32_t width,
+                                                     int32_t height) = 0;
 
   // Sends a flatbuffer request to the backend with a handler for a flatbuffer
   // response.
-  virtual Result SendRequest(
+  virtual absl::Status SendRequest(
       const std::vector<uint8_t>& data,
       std::function<void(const std::vector<uint8_t>&)> callback) = 0;
-
-  // See ISplitEngineSharedMemoryReverseBridge.aidl for explanation of why the
-  // handler's signature is void(int).
-  virtual void RegisterReverseBridgeMessageHandler(
-      std::function<void(int)> handler) = 0;
-
-  // Initializes the bridge client, and pass a lambda which can be used to
-  // schedule work on the client's executor.
-  //
-  // It allows the client to initialize internal state that is not possible
-  // earlier in the lifecycle.
-  virtual void Initialize(WorkScheduler work_scheduler) = 0;
 };
 
 }  // namespace imp::split_engine

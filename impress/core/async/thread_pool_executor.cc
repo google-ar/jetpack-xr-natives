@@ -30,6 +30,7 @@
 #include "core/common/invocable.h"
 #include "core/common/platform_helpers.h"
 #include "core/config.h"
+#include "mediapipe/framework/port/status_macros.h"
 
 
 #if IMP_PLATFORM(IOS)
@@ -177,10 +178,14 @@ std::optional<Invocable<void()>> ThreadPoolExecutor::WaitForTask() {
 
   if (finished_) return {};
 
-  Invocable<void()> callback = task_scheduler_->PopTask();
+  absl::StatusOr<Invocable<void()>> status_or_callback =
+      task_scheduler_->PopTask();
+  if (!status_or_callback.ok()) {
+    return {};
+  }
 
   callback_counter_++;
-  return callback;
+  return *std::move(status_or_callback);
 }
 
 bool ThreadPoolExecutor::ProcessNextRequest() {
@@ -216,7 +221,9 @@ TaskId ThreadPoolExecutor::ScheduleInvocable(Invocable<void()> invocable,
   TaskId task_id;
   {
     absl::MutexLock lock(&mu_);
-    task_id = task_scheduler_->PushTask(std::move(invocable), task_priority);
+    MP_ASSIGN_OR_RETURN(
+        task_id, task_scheduler_->PushTask(std::move(invocable), task_priority),
+        kInvalidTaskId);
   }
   condvar_.Signal();
   return task_id;
@@ -238,8 +245,11 @@ bool ThreadPoolExecutor::ScheduleWithReservedTaskId(
     if (finished_) {
       return false;
     }
-    task_scheduler_->PushWithReservedTaskId(reserved_task_id,
-                                            std::move(function), task_priority);
+    const absl::Status push_status = task_scheduler_->PushWithReservedTaskId(
+        reserved_task_id, std::move(function), task_priority);
+    if (!push_status.ok()) {
+      return false;
+    }
   }
   condvar_.Signal();
   return true;
@@ -270,7 +280,12 @@ void ThreadPoolExecutor::Shutdown() {
       return;
     }
     while (!task_scheduler_->IsEmpty()) {
-      tasks.push_back(task_scheduler_->PopTask());
+      absl::StatusOr<imp::Invocable<void()>> status_or_task =
+          task_scheduler_->PopTask();
+      if (!status_or_task.ok()) {
+        return;
+      }
+      tasks.push_back(*std::move(status_or_task));
     }
     finished_ = true;
     condvar_.SignalAll();
@@ -326,6 +341,14 @@ void ThreadPoolExecutor::WaitUntilDrained() {
   while (!task_scheduler_->IsEmpty() || callback_counter_ != 0) {
     wait_condvar_.Wait(&mu_);
   }
+}
+
+int ThreadPoolExecutor::GetPendingTaskCount() {
+  absl::MutexLock lock(&mu_);
+  if (finished_) {
+    return 0;
+  }
+  return task_scheduler_->GetTaskCount();
 }
 
 bool ThreadPoolExecutor::IsPumpingRequired() { return false; }

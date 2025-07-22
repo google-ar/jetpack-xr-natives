@@ -36,6 +36,9 @@
 #include "core/physics/rigid_body_state.proto.imp.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/framework/collision/box_collider.h"
+#include "core/view/framework/collision/capsule_collider.h"
+#include "core/view/framework/collision/cone_collider.h"
+#include "core/view/framework/collision/cylinder_collider.h"
 #include "core/view/framework/collision/mesh_collider.h"
 #include "core/view/framework/collision/sphere_collider.h"
 #include "core/view/utils/frame_time.h"
@@ -55,6 +58,7 @@ class RigidBody : public Component {
       float mass,
       RigidBodyState::MotionMode mode = RigidBodyState::DIRECTED_DEFAULT,
       physics::CollidableType collidable_type = physics::AUTOMATIC_DEFAULT);
+  absl::Status SetupWithState(const RigidBodyState& state);
 
   // Align the rigid body's property with backend.
   void Update(const FrameTime& frame_time);
@@ -71,6 +75,33 @@ class RigidBody : public Component {
   // Sets up coefficient of restitution. O means no bounce (plastic), 1 means
   // perfect bounce(elastic).
   void SetRestitution(float restitution);
+
+  // Set's the rigid body's linear velocity. This will take effect on the next
+  // frame.
+  void SetLinearVelocity(float3 velocity);
+
+  // Set's the rigid body's linear factor - how much it will move on x, y, z
+  // axis. Can be used for freezing the object on one axis.
+  void SetLinearFactor(const float3& linear_factor);
+
+  // Get's the rigid body's current linear factor.
+  float3 GetLinearFactor();
+
+  // Set's the rigid body's angular velocity. This will take effect on the next
+  // frame.
+  void SetAngularVelocity(float3 angular_velocity);
+
+  // Get's the rigid body's current linear velocity.
+  float3 GetLinearVelocity();
+
+  // Get's the rigid body's current angular velocity.
+  float3 GetAngularVelocity();
+
+  // Set's the rigid body's angular factor.
+  void SetAngularFactor(float3 angular_factor);
+
+  // Get's the rigid body's current angular factor.
+  float3 GetAngularFactor();
 
   // Sets the gravity that the object is subject to.
   void SetCustomGravity(float3 gravity);
@@ -119,8 +150,8 @@ class RigidBody : public Component {
   Collidable::CollisionShape GetCollisionShape() const;
 
  private:
-  absl::Status InitializeDirected(const btTransform& transform);
-  absl::Status InitializeSimulated(const btTransform& transform);
+  absl::Status InitializeDirected(const btTransform& bt_transform);
+  absl::Status InitializeSimulated(const btTransform& bt_transform);
   absl::Status InitializeNonMovable();
 
   // Creates a directed object from existing simulated objects.
@@ -142,8 +173,10 @@ class RigidBody : public Component {
 
  public:
   using IsfInfo =
-      IsfInfo<&RigidBody::state_, IsfDependencies<SphereCollider, BoxCollider,
-                                                  MeshCollider, GltfRenderer>>;
+      IsfInfo<&RigidBody::state_,
+              IsfDependencies<SphereCollider, BoxCollider, CapsuleCollider,
+                              CylinderCollider, ConeCollider, MeshCollider,
+                              GltfRenderer>>;
 };
 
 }  // namespace imp

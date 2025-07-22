@@ -21,7 +21,10 @@
 
 #include <string_view>
 
+#include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/Log.h"
+#include "filament/libs/utils/include/utils/Panic.h"
 
 using namespace utils;
 using namespace std::literals;

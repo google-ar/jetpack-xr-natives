@@ -22,9 +22,9 @@ import android.os.StrictMode;
 import android.os.StrictMode.ThreadPolicy;
 import android.util.Log;
 import androidx.annotation.Nullable;
-import androidx.xr.extensions.splitengine.SplitEngineBridge;
 import com.android.extensions.xr.XrExtensions;
 import com.google.ar.imp.view.View;
+import com.google.imp.splitengine.extensions.IRendererConnection;
 import java.util.concurrent.Executor;
 
 /** Provides a JNI API for running Impress in Split Engine mode. */
@@ -42,7 +42,7 @@ public final class ImpSplitEngineApi {
   private static volatile boolean libraryLoaded = false;
 
   private final Context context;
-  private SplitEngineBridge mBridge;
+  private IRendererConnection mConnection;
   private final int mBridgeBufferSizeKb;
   private View mView;
   private volatile Boolean isViewSetup = false;
@@ -119,9 +119,9 @@ public final class ImpSplitEngineApi {
     return this.mView;
   }
 
-  /** Returns the bridge associated with this Split Engine API. */
-  public SplitEngineBridge getBridge() {
-    return this.mBridge;
+  /** Returns the renderer connection associated with this Split Engine API. */
+  public IRendererConnection getRendererConnection() {
+    return this.mConnection;
   }
 
   /** Initializes the Split Engine bridge service. */
@@ -135,16 +135,16 @@ public final class ImpSplitEngineApi {
     loadLibrary(nativeLibrary);
 
     Log.i(TAG, "Initializing bridge service provider.");
-    SplitEngineBridgeServiceProvider bridgeServiceProvider =
-        new SplitEngineBridgeServiceProvider(frameSchedulerExecutor);
-    bridgeServiceProvider.initializeService(context, serviceBinder, xrExtensions);
+    RendererConnectionServiceProvider bridgeServiceProvider =
+        new RendererConnectionServiceProvider(frameSchedulerExecutor, xrExtensions);
+    bridgeServiceProvider.initializeService(context, serviceBinder);
 
     // This will immediately happen via directExecutor on XROS, but will be delayed on the
     // phone.
     bridgeServiceProvider.onBridgeReady(
         (bridge) -> {
-          mBridge = bridge;
-          nSetup(this.mView.getViewHostHandle(), mBridge, 1024 * mBridgeBufferSizeKb);
+          mConnection = bridge;
+          nSetup(this.mView.getViewHostHandle(), mConnection, 1024 * mBridgeBufferSizeKb);
           isViewSetup = true;
         });
   }
@@ -192,7 +192,7 @@ public final class ImpSplitEngineApi {
 
   // LINT.IfChange(api)
   private static native void nSetup(
-      long viewHandle, SplitEngineBridge bridge, int bridgeBufferSizeBytes);
+      long viewHandle, IRendererConnection bridge, int bridgeBufferSizeBytes);
 
   private static native long nRenderNextFrame(
       long viewHandle, long lastFrameTimeNanos, long frameTimeNanos, long cameraUpdateParamsHandle);

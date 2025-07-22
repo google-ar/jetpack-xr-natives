@@ -17,7 +17,8 @@
 #include "BackendTest.h"
 
 #include "Lifetimes.h"
-#include "ShaderGenerator.h"
+#include "Shader.h"
+#include "SharedShaders.h"
 #include "TrianglePrimitive.h"
 
 namespace {
@@ -25,21 +26,6 @@ namespace {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Shaders
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-
-std::string vertex (R"(#version 450 core
-
-layout(location = 0) in vec4 mesh_position;
-
-layout(location = 0) out uvec4 indices;
-
-void main() {
-    gl_Position = vec4(mesh_position.xy, 0.0, 1.0);
-#if defined(TARGET_VULKAN_ENVIRONMENT)
-    // In Vulkan, clip space is Y-down. In OpenGL and Metal, clip space is Y-up.
-    gl_Position.y = -gl_Position.y;
-#endif
-}
-)");
 
 std::string fragment (R"(#version 450 core
 
@@ -71,10 +57,12 @@ TEST_F(BackendTest, MRT) {
         auto swapChain = cleanup.add(createSwapChain());
         api.makeCurrent(swapChain, swapChain);
 
-        // Create a program.
-        ShaderGenerator shaderGen(vertex, fragment, sBackend, sIsMobilePlatform);
-        Program p = shaderGen.getProgram(api);
-        auto program = cleanup.add(api.createProgram(std::move(p)));
+        Shader shader(api, cleanup, ShaderConfig{
+                .vertexShader = SharedShaders::getVertexShaderText(VertexShaderType::Noop,
+                        ShaderUniformType::None),
+                .fragmentShader = fragment,
+                .uniforms = {}
+        });
 
         TrianglePrimitive triangle(api);
 
@@ -87,46 +75,38 @@ TEST_F(BackendTest, MRT) {
                     1,                                  // levels
                     TextureFormat::RGBA8,               // format
                     1,                                  // samples
-                    512,                                // width
-                    512,                                // height
+                    screenWidth(),                      // width
+                    screenHeight(),                     // height
                     1,                                  // depth
-                    usage));                             // usage
+                    usage));                            // usage
         Handle<HwTexture> textureB = cleanup.add(api.createTexture(
                     SamplerType::SAMPLER_2D,            // target
                     1,                                  // levels
                     TextureFormat::RGBA8,               // format
                     1,                                  // samples
-                    512,                                // width
-                    512,                                // height
+                    screenWidth(),                      // width
+                    screenHeight(),                     // height
                     1,                                  // depth
-                    usage));                             // usage
+                    usage));                            // usage
 
         // Create a RenderTarget with two attachments.
         Handle<HwRenderTarget> renderTarget = cleanup.add(api.createRenderTarget(
                 TargetBufferFlags::COLOR0 | TargetBufferFlags::COLOR1,
                 // The width and height must match the width and height of the respective mip
                 // level (at least for OpenGL).
-                512,                                       // width
-                512,                                       // height
-                1,                                         // samples
-                0,                                         // layerCount
-                {{textureA },{textureB }},                 // color
-                {},                                        // depth
-                {}));                                       // stencil
+                screenWidth(),                          // width
+                screenHeight(),                         // height
+                1,                                      // samples
+                0,                                      // layerCount
+                {{textureA },{textureB }},              // color
+                {},                                     // depth
+                {}));                                   // stencil
 
-        RenderPassParams params = {};
-        fullViewport(params);
-        params.flags.clear = TargetBufferFlags::COLOR;
-        params.clearColor = {0.f, 1.f, 0.f, 1.f};
-        params.flags.discardStart = TargetBufferFlags::ALL;
-        params.flags.discardEnd = TargetBufferFlags::NONE;
+        PipelineState state = getColorWritePipelineState();
+        shader.addProgramToPipelineState(state);
 
-        PipelineState state;
-        state.program = program;
-        state.rasterState.colorWrite = true;
-        state.rasterState.depthWrite = false;
-        state.rasterState.depthFunc = RasterState::DepthFunc::A;
-        state.rasterState.culling = CullingMode::NONE;
+        RenderPassParams params = getClearColorRenderPass();
+        params.viewport = getFullViewport();
 
         api.startCapture(0);
 
@@ -135,7 +115,11 @@ TEST_F(BackendTest, MRT) {
 
         // Draw a triangle.
         api.beginRenderPass(renderTarget, params);
-        api.draw(state, triangle.getRenderPrimitive(), 0, 3, 1);
+        state.primitiveType = PrimitiveType::TRIANGLES;
+        state.vertexBufferInfo = triangle.getVertexBufferInfo();
+        api.bindPipeline(state);
+        api.bindRenderPrimitive(triangle.getRenderPrimitive());
+        api.draw2(0, 3, 1);
         api.endRenderPass();
 
         api.flush();

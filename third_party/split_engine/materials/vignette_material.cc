@@ -59,6 +59,8 @@ VignetteMaterial::VignetteMaterial(
                               BuiltInMaterialE3ca0ab9Parameters,
                           std::move(material)) {}
 
+VignetteMaterial::~VignetteMaterial() { Cleanup(); }
+
 void VignetteMaterial::SetColor(const imp::float4& color) {
   color_ = color;
   MarkParametersDirty();

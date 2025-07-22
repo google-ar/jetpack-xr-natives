@@ -35,7 +35,7 @@ namespace imp::loader::details::provider_gltf {
 // pixel data / samplers, and adds them to the model builder.
 absl::Status ProcessTextureInfoFromNode(
     LoadedModelBuilder& model_builder, const GltfModel& model,
-    const std::vector<imp::gltf::Primitive>& primitives,
+    const std::vector<imp::gltf::imp_proto::Primitive>& primitives,
     const GltfPrimitiveVector<ProcessedPrimitive>& processed_primitives,
     const Gltf2AttributeMask& mask,
     LoaderOptions::TextureTranscodeCompressionType compression_type,
@@ -44,7 +44,8 @@ absl::Status ProcessTextureInfoFromNode(
 // Returns the lookup index for the texture in the Impress LoadedModel.
 // Note: this index is not the same as the TextureId in the Impress LoadedModel.
 // In order to get the TextureId, call LoadedModelBuilder::GetTexture(lookup).
-absl::StatusOr<uint16_t> GetTextureLookupIndex(const gltf::Texture& texture);
+absl::StatusOr<uint16_t> GetTextureLookupIndex(
+    const gltf::imp_proto::Texture& texture);
 
 }  // namespace imp::loader::details::provider_gltf
 

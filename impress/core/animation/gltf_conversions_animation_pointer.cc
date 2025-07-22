@@ -51,9 +51,9 @@ using TextureTransformChannelSet = GltfLookup::TextureTransformChannelSet;
 
 template <typename T>
 OptionalError FillChannelOfParameter(
-    const imp::gltf::Gltf& gltf,
+    const imp::gltf::imp_proto::Gltf& gltf,
     const std::vector<AnimationSampler>& animation_samplers,
-    TypedSpan<const imp::gltf::AnimationChannel>& animation_channels,
+    TypedSpan<const imp::gltf::imp_proto::AnimationChannel>& animation_channels,
     absl::optional<Domain>& material_parameter_domain,
     flatbuffers::FlatBufferBuilder* fbb, T& type,
     flatbuffers::Offset<void>& offset, ChannelId channel) {
@@ -68,8 +68,8 @@ OptionalError FillChannelOfParameter(
 }
 
 OptionalError SerializeTextureTransformAnimation(
-    const imp::gltf::Gltf& gltf,
-    TypedSpan<const imp::gltf::AnimationChannel>& animation_channels,
+    const imp::gltf::imp_proto::Gltf& gltf,
+    TypedSpan<const imp::gltf::imp_proto::AnimationChannel>& animation_channels,
     const std::vector<AnimationSampler>& animation_samplers,
     TextureTransformChannelSet& texture_transform_channels,
     TexturableParameters target_texturable_parameter,
@@ -134,8 +134,8 @@ OptionalError SerializeTextureTransformAnimation(
 }
 
 OptionalError GetTextureTransformAnimation(
-    const imp::gltf::Gltf& gltf,
-    TypedSpan<const imp::gltf::AnimationChannel>& animation_channels,
+    const imp::gltf::imp_proto::Gltf& gltf,
+    TypedSpan<const imp::gltf::imp_proto::AnimationChannel>& animation_channels,
     const std::vector<AnimationSampler>& animation_samplers,
     TextureTransformChannelMap& texture_transforms,
     flatbuffers::FlatBufferBuilder* fbb,
@@ -186,8 +186,9 @@ OptionalError GetTextureTransformAnimation(
 }  // namespace
 
 OptionalError SerializeMaterialAnimation(
-    const imp::gltf::Gltf& gltf, const GltfLookup& lookup, MaterialId material,
-    AnimationId animation, flatbuffers::FlatBufferBuilder* fbb,
+    const imp::gltf::imp_proto::Gltf& gltf, const GltfLookup& lookup,
+    MaterialId material, AnimationId animation,
+    flatbuffers::FlatBufferBuilder* fbb,
     absl::optional<flatbuffers::Offset<animation::schemas::MaterialAnimation>>*
         out_offset,
     absl::optional<Domain>* out_domain) {
@@ -213,7 +214,7 @@ OptionalError SerializeMaterialAnimation(
   const TextureTransformChannelMap& texture_transforms =
       material_channel_set.texture_transform_channels[material];
 
-  TypedSpan<const imp::gltf::AnimationChannel> animation_channels(
+  TypedSpan<const imp::gltf::imp_proto::AnimationChannel> animation_channels(
       lookup.animations[animation].channels);
   const std::vector<AnimationSampler>& animation_samplers =
       lookup.animations[animation].samplers;
@@ -315,7 +316,7 @@ OptionalError SerializeMaterialAnimation(
 }
 
 OptionalError SerializeLightPunctualAnimation(
-    const imp::gltf::Gltf& gltf, const GltfLookup& lookup,
+    const imp::gltf::imp_proto::Gltf& gltf, const GltfLookup& lookup,
     LightPunctualId light, AnimationId animation,
     flatbuffers::FlatBufferBuilder* fbb,
     absl::optional<
@@ -331,7 +332,7 @@ OptionalError SerializeLightPunctualAnimation(
       light_channel_set.spot_inner_cone_angle_channel[light];
   ChannelId outer_cone_angle_channel =
       light_channel_set.spot_outer_cone_angle_channel[light];
-  TypedSpan<const imp::gltf::AnimationChannel> animation_channels(
+  TypedSpan<const imp::gltf::imp_proto::AnimationChannel> animation_channels(
       lookup.animations[animation].channels);
   const std::vector<AnimationSampler>& animation_samplers =
       lookup.animations[animation].samplers;
@@ -412,7 +413,7 @@ OptionalError SerializeLightPunctualAnimation(
 }
 
 OptionalError GetLightAnimation(
-    const imp::gltf::Gltf& gltf, const GltfLookup& lookup,
+    const imp::gltf::imp_proto::Gltf& gltf, const GltfLookup& lookup,
     imp::loader::details::provider_gltf::AnimationId animation,
     flatbuffers::FlatBufferBuilder* fbb,
     std::vector<
@@ -427,7 +428,7 @@ OptionalError GetLightAnimation(
   GltfLookup::LightLookup<Flags<ScratchFlags>> light_scratch_flags;
   light_scratch_flags.Pair(gltf.extensions.lights_punctual->lights);
 
-  for (const imp::gltf::AnimationChannel& c :
+  for (const imp::gltf::imp_proto::AnimationChannel& c :
        lookup.animations[animation].channels) {
     if (c.target.path != kPointer) {
       continue;

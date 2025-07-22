@@ -159,7 +159,7 @@ class LoadedModelBuilder {
   using MaterialOffsets =
       PairedVector<MaterialOffset, MaterialId::ReferredType>;
 
-  using AnimationId = TypedId<imp::gltf::Animation, int16_t>;
+  using AnimationId = TypedId<imp::gltf::imp_proto::Animation, int16_t>;
   using AnimationOffset = Offset<schemas::GltfAnimationInfo>;
   using AnimationOffsets =
       PairedVector<AnimationOffset, AnimationId::ReferredType>;

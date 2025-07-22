@@ -278,8 +278,10 @@ class BaseView : public Rememberer,
 
   // Indicates if 'local mode' is enabled, using client-provided materials (raw
   // or builtin) instead of baked-in backend materials. This allows for rapid
-  // material iteration and supports split-engine Vanilla Android, where a
-  // backend renderer is absent.
+  // material iteration and supports split-engine Vanilla Android, where the
+  // split engine backend renderer is absent.
+
+  // Note that this should be only used in the split engine frontend.
   virtual bool AreSplitEngineMaterialsInLocalMode() const = 0;
 
   // Enables or disables precise translation mode that uses doubles instead of

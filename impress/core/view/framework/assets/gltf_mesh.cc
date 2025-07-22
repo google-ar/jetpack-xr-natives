@@ -540,6 +540,11 @@ bool GltfMesh::IsSkinned() const {
   return !model_data.Skins().empty() && skin_id;
 }
 
+uint64_t GltfMesh::GetOriginalGltfIndex() const {
+  const ModelData& model_data = owner_->GetGltfAsset()->GetModelData();
+  return model_data.Entities()[self_].original_index;
+}
+
 const std::vector<mat4f>& GltfMesh::GetInstanceTransforms() const {
   return instance_transforms_;
 }

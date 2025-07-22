@@ -41,25 +41,25 @@ namespace imp {
 namespace loader {
 namespace extensions {
 
-size_t GetComponentSize(imp::gltf::ComponentType component_type) {
+size_t GetComponentSize(imp::gltf::imp_proto::ComponentType component_type) {
   switch (component_type) {
-    case imp::gltf::BYTE:
-    case imp::gltf::UNSIGNED_BYTE:
+    case imp::gltf::imp_proto::BYTE:
+    case imp::gltf::imp_proto::UNSIGNED_BYTE:
       return 1;
-    case imp::gltf::SHORT:
-    case imp::gltf::UNSIGNED_SHORT:
+    case imp::gltf::imp_proto::SHORT:
+    case imp::gltf::imp_proto::UNSIGNED_SHORT:
       return 2;
-    case imp::gltf::UNSIGNED_INT:
-    case imp::gltf::FLOAT:
+    case imp::gltf::imp_proto::UNSIGNED_INT:
+    case imp::gltf::imp_proto::FLOAT:
       return 4;
     default:
       return 0;
   }
 }
 
-OptionalError ResolveDracoIndices(imp::gltf::Gltf* gltf,
+OptionalError ResolveDracoIndices(imp::gltf::imp_proto::Gltf* gltf,
                                   const draco::Mesh& mesh,
-                                  const imp::gltf::Primitive& prim,
+                                  const imp::gltf::imp_proto::Primitive& prim,
                                   std::vector<BufferAccess>& decoded_buffers) {
   auto& accessor = gltf->accessors[*prim.indices];
   int component_size = GetComponentSize(accessor.component_type);
@@ -104,7 +104,7 @@ OptionalError ResolveDracoIndices(imp::gltf::Gltf* gltf,
   auto& decoded_view = gltf->buffer_views.back();
   decoded_view.buffer = gltf->buffers.size() - 1;
   decoded_view.byte_length = mesh.num_faces() * 3 * component_size;
-  decoded_view.target = imp::gltf::BufferView::ARRAY_BUFFER_TARGET;
+  decoded_view.target = imp::gltf::imp_proto::BufferView::ARRAY_BUFFER_TARGET;
 
   accessor.buffer_view = gltf->buffer_views.size() - 1;
   accessor.count = mesh.num_faces() * 3;
@@ -131,8 +131,9 @@ OptionalError CopyDracoAttribute(const draco::Mesh& mesh,
 }
 
 OptionalError ResolveDracoAttribute(
-    imp::gltf::Gltf* gltf, const draco::Mesh& mesh, const std::string& attr,
-    uint32_t id, const imp::gltf::Primitive& prim,
+    imp::gltf::imp_proto::Gltf* gltf, const draco::Mesh& mesh,
+    const std::string& attr, uint32_t id,
+    const imp::gltf::imp_proto::Primitive& prim,
     std::vector<BufferAccess>& decoded_buffers) {
   const auto* draco_attr = mesh.GetAttributeByUniqueId(id);
   if (!draco_attr) {
@@ -147,21 +148,21 @@ OptionalError ResolveDracoAttribute(
                      GetComponentSize(component_type);
   auto* decoded = reinterpret_cast<char*>(
       BufferAccess::Create(decoded_size, &decoded_buffers.emplace_back()));
-  auto copy = [](imp::gltf::ComponentType component_type,
+  auto copy = [](imp::gltf::imp_proto::ComponentType component_type,
                  const draco::Mesh& mesh, const draco::PointAttribute& attr,
                  char* output) -> OptionalError {
     switch (component_type) {
-      case imp::gltf::BYTE:
+      case imp::gltf::imp_proto::BYTE:
         return CopyDracoAttribute<int8_t>(mesh, attr, output);
-      case imp::gltf::UNSIGNED_BYTE:
+      case imp::gltf::imp_proto::UNSIGNED_BYTE:
         return CopyDracoAttribute<uint8_t>(mesh, attr, output);
-      case imp::gltf::SHORT:
+      case imp::gltf::imp_proto::SHORT:
         return CopyDracoAttribute<int16_t>(mesh, attr, output);
-      case imp::gltf::UNSIGNED_SHORT:
+      case imp::gltf::imp_proto::UNSIGNED_SHORT:
         return CopyDracoAttribute<uint16_t>(mesh, attr, output);
-      case imp::gltf::FLOAT:
+      case imp::gltf::imp_proto::FLOAT:
         return CopyDracoAttribute<float>(mesh, attr, output);
-      case imp::gltf::UNSIGNED_INT:
+      case imp::gltf::imp_proto::UNSIGNED_INT:
         return CopyDracoAttribute<uint32_t>(mesh, attr, output);
       default:
         return Error("invalid component type");
@@ -180,9 +181,10 @@ OptionalError ResolveDracoAttribute(
   view.byte_length = decoded_size;
   view.byte_offset = draco_attr->byte_offset();
   view.byte_stride = draco_attr->byte_stride();
-  view.target = prim.indices
-                    ? imp::gltf::BufferView::ELEMENT_ARRAY_BUFFER_TARGET
-                    : imp::gltf::BufferView::ARRAY_BUFFER_TARGET;
+  view.target =
+      prim.indices
+          ? imp::gltf::imp_proto::BufferView::ELEMENT_ARRAY_BUFFER_TARGET
+          : imp::gltf::imp_proto::BufferView::ARRAY_BUFFER_TARGET;
 
   gltf->accessors[prim_attr->second].buffer_view =
       gltf->buffer_views.size() - 1;
@@ -191,7 +193,8 @@ OptionalError ResolveDracoAttribute(
   return NoError();
 }
 
-absl::StatusOr<std::vector<BufferAccess>> ResolveDraco(imp::gltf::Gltf* gltf) {
+absl::StatusOr<std::vector<BufferAccess>> ResolveDraco(
+    imp::gltf::imp_proto::Gltf* gltf) {
   std::vector<BufferAccess> decoded_buffers;
   // Stores whether a buffer_view has already been draco-decoded.
   std::vector<bool> draco_buffer_view_decoded(gltf->buffer_views.size(), false);

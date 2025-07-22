@@ -24,6 +24,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/status/statusor.h"
@@ -37,10 +38,10 @@ namespace imp {
 // Java Wrapper for java.io.InputStream
 class InputStream : public JavaWrapper {
  public:
-  InputStream(JNIEnv* env, jobject java_input_stream)
-      : JavaWrapper(env, java_input_stream),
+  InputStream(JNIEnv* env, JniUniquePtr<jobject> java_input_stream)
+      : JavaWrapper(env, std::move(java_input_stream), "java/io/InputStream"),
         chunk_byte_array_(
-            WrapJni(env, env->NewGlobalRef(env->NewByteArray(kBufferSize)))) {
+            LocalToGlobalRef(CreateJniByteArray(env, kBufferSize))) {
     read_ = GetMethodHandle("read", "([BII)I");
     assert(read_);
     close_ = GetMethodHandle("close", "()V");
@@ -64,20 +65,17 @@ class InputStream : public JavaWrapper {
   // progress on each successful chunk read. (this is for native code only,
   // otherwise those two parameters should take trivial value)
   absl::StatusOr<absl::Cord> BlockingReadFromJavaInputStream(
-      JNIEnv* env, std::string string_uri, size_t content_length,
+      JNIEnv* env, const std::string& string_uri, size_t content_length,
       std::shared_ptr<resources::DownloadProgressInfo> download_progress_info,
       std::vector<FutureInterrupter> interrupters);
 
  private:
-  jbyteArray GetByteArray() {
-    return static_cast<jbyteArray>(chunk_byte_array_.get());
-  }
-  const size_t kBufferSize = 16 * 1024;
+  static constexpr size_t kBufferSize = 16384;
 
   JniHandle read_;
   JniHandle close_;
   JniHandle available_;
-  JniUniquePtr<jobject> chunk_byte_array_;
+  JniUniquePtr<jbyteArray> chunk_byte_array_;
 };
 
 }  // namespace imp

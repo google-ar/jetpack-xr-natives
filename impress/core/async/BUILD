@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "if_android", "if_emscripten", "imp_copts", "imp_google3_copts")
 
 package(
@@ -179,6 +180,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/types:optional",
+        "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament/libs:utils",
     ] + if_android([
     ]) + if_emscripten(

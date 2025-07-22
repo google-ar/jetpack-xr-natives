@@ -27,10 +27,11 @@
 #include "core/common/context.h"
 #include "core/common/jni_helpers.h"
 #include "core/media/android/android_exoplayer_listener.h"
+#include "core/media/media_color_space.h"
 #include "core/media/media_source.h"
 #include "core/media/media_type.h"
-#include "core/video/video_color_space.h"
 #include "core/view/platforms/android/wrappers/surface.h"
+#include "mediapipe/framework/port/status_macros.h"
 
 namespace imp::media {
 
@@ -74,7 +75,7 @@ class AndroidExoPlayer : public JavaWrapper {
     get_luma_bitdepth_ = GetMethodHandle("getLumaBitDepth", "()I");
     get_chroma_bitdepth_ = GetMethodHandle("getChromaBitDepth", "()I");
     get_max_content_light_level_ =
-        GetMethodHandle("getMaxContentLightLevel", "()F");
+        GetMethodHandle("getMaxContentLightLevel", "()I");
 
     buffering_state_ = GetStaticFieldHandle("IMP_STATE_BUFFERING", "I");
     buffering_done_state_ =
@@ -207,18 +208,26 @@ class AndroidExoPlayer : public JavaWrapper {
     return static_cast<MediaStereoMode>(result);
   }
 
-  absl::StatusOr<video::VideoColorSpace> GetColorSpace() {
-    video::VideoColorSpace color_space;
-    color_space.SetStandard(static_cast<video::VideoColorSpace::Standard>(
-        CallIntMethod(get_color_standard_)));
-    color_space.SetTransfer(static_cast<video::VideoColorSpace::Transfer>(
-        CallIntMethod(get_color_transfer_)));
-    color_space.SetRange(static_cast<video::VideoColorSpace::Range>(
-        CallIntMethod(get_color_range_)));
+  absl::StatusOr<MediaColorSpace> GetColorSpace() {
+    MP_ASSIGN_OR_RETURN(
+        MediaColorSpace::Standard standard,
+        MediaColorSpace::ToColorStandard(CallIntMethod(get_color_standard_)));
+
+    MP_ASSIGN_OR_RETURN(
+        MediaColorSpace::Transfer transfer,
+        MediaColorSpace::ToColorTransfer(CallIntMethod(get_color_transfer_)));
+
+    MP_ASSIGN_OR_RETURN(
+        MediaColorSpace::Range range,
+        MediaColorSpace::ToColorRange(CallIntMethod(get_color_range_)));
+    MP_ASSIGN_OR_RETURN(uint16_t max_content_light_level,
+                     MediaColorSpace::ToMaxContentLightLevel(
+                         CallIntMethod(get_max_content_light_level_)));
+
+    MediaColorSpace color_space(standard, transfer, range,
+                                max_content_light_level);
     color_space.SetLumaBitDepth(CallIntMethod(get_luma_bitdepth_));
     color_space.SetChromaBitDepth(CallIntMethod(get_chroma_bitdepth_));
-    color_space.SetMaxContentLightLevel(
-        CallFloatMethod(get_max_content_light_level_));
     return color_space;
   }
 

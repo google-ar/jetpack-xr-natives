@@ -15,6 +15,7 @@
 # Monitor implements Performance Monitoring for the Impress library
 # See (broken link)
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "imp_google3_copts")
 
 package(
@@ -177,11 +178,14 @@ cc_library(
     deps = [
         ":monitor",
         ":monitor_summary",
+        "//core/assets/material:material_asset",
         "//core/common:log",
+        "//core/media",
         "//core/ncsb",
+        "//core/render",
         "//core/view:base_view",
+        "//core/view/framework",
         "//core/view/utils:frame_time",
-        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/time",

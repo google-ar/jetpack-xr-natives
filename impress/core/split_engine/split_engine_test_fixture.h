@@ -38,6 +38,7 @@
 #include "core/common/invocable.h"
 #include "core/lighting/environment_light.h"
 #include "core/split_engine/android/split_engine_android_bridge.h"
+#include "core/split_engine/android/split_engine_shared_memory_bridge_client_mock.h"
 #include "core/split_engine/renderer_policy_handler_mock.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_renderer.h"
@@ -86,51 +87,74 @@ using ::testing::TestWithParam;
 //
 // Note: the test must be parameterized with the schema version string or the
 // RunOnSerializerView method will fail to compile.
-template <typename ViewT = View>
+template <typename RendererViewT = View>
 class SplitEngineTestFixture
-    : public testing::GenericScubaViewFixture<ViewT,
+    : public testing::GenericScubaViewFixture<RendererViewT,
                                               TestWithParam<std::string>> {
  public:
+  // Note: These IDs are unique identifiers for the bridge on the client side
+  // and service side, respectively. The client ID is used to identify message
+  // groups and the bridge ID is used to identify the app context in the
+  // renderer. Using the same values for now to avoid confusion, however they
+  // could be different.
   static constexpr BridgeId kBridgeId = 123;
+  static constexpr ClientId kClientId = 123;
+
+  class SerializerView : public View {
+   public:
+    SerializerView() {
+      // Disable default load to wait for the serializer to become available.
+      GetLightManager().DisableDefaultLoad();
+    }
+  };
+
+  using SerializerTestView = testing::GenericTestView<SerializerView>;
 
   // Class to hold the serializer-side imp::View and its associated objects.
-  class SerializerView {
+  class SerializerViewHolder {
    public:
-    SerializerView(
+    SerializerViewHolder(
         SplitEngineTestBridgeSerializer& split_engine_test_bridge_serializer) {
-      // TODO: (broken link) - figure out how to pass the concrete unit test to
-      // the sender so we can autogenerate the name.
-      auto sender =
-          std::make_unique<TestSplitEngineSender>(*serializer_view_.GetView());
+      ON_CALL(bridge_client_, GetClientId).WillByDefault(Return(kClientId));
+      ON_CALL(bridge_client_, GenerateMessageGroupId)
+          .WillByDefault(::testing::InvokeWithoutArgs([]() {
+            static int32_t message_group_id = 0;
+            return ++message_group_id;
+          }));
+
+      auto bridge = std::make_unique<TestSplitEngineAndroidBridge>(
+          bridge_client_, split_engine_test_bridge_serializer);
+
+      auto sender = std::make_unique<TestSplitEngineBridgeSender>(
+          *bridge,
+          /*recycle_buffers=*/true);
       sender_ = sender.get();
-      auto sender_one_shot =
-          std::make_unique<TestSplitEngineSender>(*serializer_view_.GetView());
+      auto sender_one_shot = std::make_unique<TestSplitEngineBridgeSender>(
+          *bridge,
+          /*recycle_buffers=*/false);
       sender_one_shot_ = sender_one_shot.get();
       auto split_engine_serializer_impl =
           std::make_unique<split_engine::SplitEngineSerializerImpl>(
-              *serializer_view_.GetView(), std::move(sender),
-              std::move(sender_one_shot), 1024);
+              *serializer_view_.GetView(), std::move(bridge), std::move(sender),
+              std::move(sender_one_shot),
+              // default shared memory size is ~10MB, same as in
+              // ImpSplitEngineApi
+              1024 * 10000);
       split_engine_serializer_ = split_engine_serializer_impl.get();
 
       serializer_view_.GetView()->SetSplitEngineSerializer(
           std::move(split_engine_serializer_impl));
-
-      auto bridge = std::make_unique<TestSplitEngineAndroidBridge>(
-          kBridgeId, split_engine_test_bridge_serializer);
-      serializer_view_.GetView()
-          ->GetRegistry()
-          .Register<imp::split_engine::SplitEngineAndroidBridge>(
-              std::move(bridge));
     }
 
-    testing::GenericTestView<View>& GetView() { return serializer_view_; }
+    SerializerTestView& GetView() { return serializer_view_; }
 
     SplitEngineSerializer* split_engine_serializer_;
 
-    TestSplitEngineSender* sender_;
-    TestSplitEngineSender* sender_one_shot_;
+    MockSplitEngineSharedMemoryBridgeClient bridge_client_;
+    TestSplitEngineBridgeSender* sender_;
+    TestSplitEngineBridgeSender* sender_one_shot_;
 
-    testing::GenericTestView<View> serializer_view_;
+    SerializerTestView serializer_view_;
   };
 
   // To run Split Engine tests, we need to run the serializer-side view on a
@@ -155,14 +179,13 @@ class SplitEngineTestFixture
     // on the serializer view shouldn't use the renderer view (i.e. GetFuture
     // must be called on the serializer view for assets loaded on the serializer
     // view, not the renderer view).
-    void RunOnSerializerView(
-        Invocable<void(testing::GenericTestView<ViewT>&)> task,
-        bool advance = true) {
+    void RunOnSerializerView(Invocable<void(SerializerTestView&)> task,
+                             bool advance = true) {
       absl::Notification notification;
       {
         absl::MutexLock lock(&mutex_);
         next_task_ = [task = std::move(task), &notification,
-                      advance](testing::GenericTestView<ViewT>& view) {
+                      advance](SerializerTestView& view) {
           task(view);
           if (advance) {
             // Advance so that the serializer sends its messages to the
@@ -201,16 +224,23 @@ class SplitEngineTestFixture
     // The main loop for the serializer view thread.
     void Run() override {
       while (true) {
-        {
-          absl::MutexLock lock(&mutex_);
-          if (!running_) break;
-        }
+        // This mutex protects both `running_` and `next_task_` here.
+        // RunOnSerializerView will wait for task to complete, so there is
+        // always just one task and it's okay to lock mutex here for the
+        // duration of the task.
+        absl::MutexLock lock(&mutex_);
+        if (!running_) break;
         if (next_task_) {
           if (!serializer_view_) {
-            serializer_view_ = std::make_unique<SerializerView>(
+            serializer_view_ = std::make_unique<SerializerViewHolder>(
                 split_engine_test_bridge_serializer_);
           }
           next_task_(serializer_view_->GetView());
+          // Formally speaking, this thread can yield execution here and if no
+          // mutex is held, then race might happen:
+          // 1. Main thread writes to `next_task_` new value and yields.
+          // 2. This thread resumes and overwrites the value with empty.
+          // 3. Task that was submitted from main thread is never executed.
           next_task_ = {};
         }
       }
@@ -220,9 +250,10 @@ class SplitEngineTestFixture
     }
 
    private:
-    std::unique_ptr<SerializerView> serializer_view_;
+    std::unique_ptr<SerializerViewHolder> serializer_view_;
     absl::Mutex mutex_;
-    Invocable<void(testing::GenericTestView<View>&)> next_task_;
+    Invocable<void(SerializerTestView&)> next_task_ ABSL_GUARDED_BY(mutex_);
+
     absl::Notification shutdown_notification_;
     bool running_ ABSL_GUARDED_BY(mutex_) = true;
 
@@ -231,7 +262,8 @@ class SplitEngineTestFixture
   };
 
   SplitEngineTestFixture()
-      : testing::GenericScubaViewFixture<ViewT, TestWithParam<std::string>>(
+      : testing::GenericScubaViewFixture<RendererViewT,
+                                         TestWithParam<std::string>>(
             "third_party/impress/core/split_engine/scuba_goldens") {}
 
  protected:
@@ -256,7 +288,17 @@ class SplitEngineTestFixture
     ON_CALL(*mock_renderer_policy_handler_, ClearUserId(_))
         .WillByDefault(Return(absl::OkStatus()));
     ON_CALL(*mock_renderer_policy_handler_, SetPreferredEnvironmentLight(_))
-        .WillByDefault(Return(absl::OkStatus()));
+        .WillByDefault([view = this->GetView()](
+                           BorrowedEnvironmentLightPtr environment_light) {
+          // Default light is not loaded on renderer view automatically.
+          if (environment_light) {
+            view->GetLightManager().SetEnvironmentLight(&*environment_light);
+            // In turn, we need to make sure that the default directional light
+            // is created.
+            view->GetLightManager().GetOrCreateDefaultDirectionalLight();
+          }
+          return absl::OkStatus();
+        });
     ON_CALL(*mock_renderer_policy_handler_, GetMediatedRenderablePriority(_))
         .WillByDefault([](uint8_t priority) { return priority; });
 
@@ -275,6 +317,20 @@ class SplitEngineTestFixture
         *this, *split_engine_test_bridge_serializer_);
 
     serializer_view_thread_->Start();
+
+    RunOnSerializerView([](SerializerTestView& view) {
+      // Load default lighting manually.
+      view.GetView()->GetLightManager().EnsureLighting();
+
+      // Should be either kLoadInProgress or kReady.
+      EXPECT_NE(view.GetView()->GetLightManager().GetDefaultLightingStatus(),
+                LightManager::EnvironmentLightingStatus::kUnloaded);
+
+      while (view.GetView()->GetLightManager().GetDefaultLightingStatus() !=
+             LightManager::EnvironmentLightingStatus::kReady) {
+        view.DrainAllExecutors();
+      }
+    });
   }
 
   void TearDown() override {
@@ -289,14 +345,12 @@ class SplitEngineTestFixture
   // Note: this method must be called from a TestT with a GetParam() method that
   // returns the schema version via TEST_P, meaning the test needs to both use
   // SplitEngineTestFixture and TEST_P with schema version strings.
-  void RunOnSerializerView(
-      Invocable<void(testing::GenericTestView<ViewT>&)> task) {
+  void RunOnSerializerView(Invocable<void(SerializerTestView&)> task) {
     // First, run the task on the serializer view mediated by the test bridge
     // serializer. If the schema version is current, the task will be run and
     // the messages will be captured. Otherwise, the task will be skipped.
     serializer_view_thread_->RunOnSerializerView(
-        [this, task = std::move(task)](
-            testing::GenericTestView<ViewT>& view) mutable {
+        [this, task = std::move(task)](SerializerTestView& view) mutable {
           split_engine_test_bridge_serializer_->RunAndCaptureTask(
               *this,
               [this, task = std::move(task), &view]() mutable { task(view); });
@@ -308,7 +362,7 @@ class SplitEngineTestFixture
     // the SplitEngineTestBridgeSerializer captures all messages (so none are
     // sent after the snapshot is taken).
     serializer_view_thread_->RunOnSerializerView(
-        [this](testing::GenericTestView<ViewT>& view) {
+        [this](SerializerTestView& view) {
           split_engine_test_bridge_serializer_->TakeSnapshot();
         },
         /*advance=*/false);

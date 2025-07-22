@@ -30,6 +30,7 @@
 #include "core/common/small_source_location.h"
 #include "core/math/vec.h"
 #include "core/text/text_helpers.h"
+#include "core/view/base_view.h"
 
 namespace imp {
 
@@ -149,7 +150,7 @@ class AsyncCanvasSource {
   // NOTE: The Draw functions called on the returned ScopedCanvas don't actually
   // apply to the texture until the ScopedCanvas is destroyed.
   virtual std::unique_ptr<AsyncScopedCanvas> StartDrawing(
-      uint2 pixel_size,
+      BaseView& view, uint2 pixel_size,
       ScopedCanvas::DrawMode draw_mode = ScopedCanvas::DrawMode::kClear) = 0;
 
   // *EXPERIMENTAL*
@@ -179,7 +180,8 @@ class AsyncCanvasSource {
   // NOTE: The Draw functions called on the returned ScopedCanvas don't actually
   // apply to the texture until the ScopedCanvas is destroyed.
   virtual std::unique_ptr<AsyncScopedCanvas> StartDrawing(
-      uint2 pixel_size, ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
+      BaseView& view, uint2 pixel_size,
+      ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
       ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) = 0;
 };
 

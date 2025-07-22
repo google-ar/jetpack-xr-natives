@@ -16,14 +16,13 @@
 
 package com.google.ar.imp.apibindings;
 
-import android.content.res.Resources.NotFoundException;
-import android.util.Log;
 import android.view.Surface;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.concurrent.futures.CallbackToFutureAdapter;
 import com.google.ar.imp.view.View;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
 
 // TODO: (broken link) - Add unit tests for this class.
 
@@ -37,6 +36,7 @@ public final class ImpressApiImpl implements ImpressApi {
    * This is mostly here to throw on unsupported values. The int cast works as long as
    * ImpressApi.StereoMode is in sync with imp::MediaStereoMode.
    */
+  @CanIgnoreReturnValue
   private int validateStereoMode(@StereoMode int stereoMode) {
     switch (stereoMode) {
       case StereoMode.MONO:
@@ -49,6 +49,89 @@ public final class ImpressApiImpl implements ImpressApi {
         throw new IllegalArgumentException(
             "Unspported value for ImpressApi.StereoMode: " + stereoMode);
     }
+  }
+
+  /*
+   * This is mostly here to throw on unsupported values. The int cast works as long as
+   * ImpressApi.ContentSecurityLevel is in sync with imp::ContentSecurityLevel.
+   */
+  @CanIgnoreReturnValue
+  private int validateContentSecurityLevel(@ContentSecurityLevel int contentSecurityLevel) {
+    switch (contentSecurityLevel) {
+      case ContentSecurityLevel.NONE:
+      case ContentSecurityLevel.PROTECTED:
+        return contentSecurityLevel;
+      default:
+        throw new IllegalArgumentException(
+            "Unspported value for ImpressApi.ContentSecurityLevel: " + contentSecurityLevel);
+    }
+  }
+
+  /*
+   * This is mostly here to throw on unsupported values. The int cast works as long as
+   * ImpressApi.ColorSpace is in sync with the native counterpart.
+   */
+  @CanIgnoreReturnValue
+  private int validateColorSpace(@ColorSpace int colorSpace) {
+    switch (colorSpace) {
+      case ColorSpace.BT709:
+      case ColorSpace.BT601_PAL:
+      case ColorSpace.BT2020:
+      case ColorSpace.BT601_525:
+      case ColorSpace.DISPLAY_P3:
+      case ColorSpace.DCI_P3:
+      case ColorSpace.ADOBE_RGB:
+        return colorSpace;
+      default:
+        throw new IllegalArgumentException(
+            "Unsupported value for ImpressApi.ColorSpace: " + colorSpace);
+    }
+  }
+
+  /*
+   * This is mostly here to throw on unsupported values. The int cast works as long as
+   * ImpressApi.ColorTransfer is in sync with the native counterpart.
+   */
+  @CanIgnoreReturnValue
+  private int validateColorTransfer(@ColorTransfer int colorTransfer) {
+    switch (colorTransfer) {
+      case ColorTransfer.LINEAR:
+      case ColorTransfer.SRGB:
+      case ColorTransfer.SDR:
+      case ColorTransfer.GAMMA_2_2:
+      case ColorTransfer.ST2084:
+      case ColorTransfer.HLG:
+        return colorTransfer;
+      default:
+        throw new IllegalArgumentException(
+            "Unsupported value for ImpressApi.ColorTransfer: " + colorTransfer);
+    }
+  }
+
+  /*
+   * This is mostly here to throw on unsupported values. The int cast works as long as
+   * ImpressApi.ColorRange is in sync with the native counterpart.
+   */
+  @CanIgnoreReturnValue
+  private int validateColorRange(@ColorRange int colorRange) {
+    switch (colorRange) {
+      case ColorRange.FULL:
+      case ColorRange.LIMITED:
+        return colorRange;
+      default:
+        throw new IllegalArgumentException(
+            "Unsupported value for ImpressApi.ColorRange: " + colorRange);
+    }
+  }
+
+  @CanIgnoreReturnValue
+  private int validateMaxLuminance(int maxLuminance) {
+    if (maxLuminance < 0 || maxLuminance > 65535) {
+      throw new IllegalArgumentException(
+          "maxLuminance must be either 0 (unknown) or greater than 0 and smaller than 65536: "
+              + maxLuminance);
+    }
+    return maxLuminance;
   }
 
   @Override
@@ -69,14 +152,7 @@ public final class ImpressApiImpl implements ImpressApi {
 
   @Override
   public void releaseImageBasedLightingAsset(long iblToken) {
-    Status<?> status = nReleaseImageBasedLightingAsset(view.getNativeHandle(), iblToken);
-    if (status instanceof Status.Error.NotFound notFound) {
-      throw new IllegalStateException(
-          "Could not release image based lighting asset with token: "
-              + iblToken
-              + " with error: "
-              + notFound.getDetails());
-    }
+    nReleaseImageBasedLightingAsset(view.getNativeHandle(), iblToken);
   }
 
   @Override
@@ -214,66 +290,23 @@ public final class ImpressApiImpl implements ImpressApi {
 
   @Override
   public void releaseGltfAsset(long gltfToken) {
-    Status<?> status = nReleaseGltfAsset(view.getNativeHandle(), gltfToken);
-    if (status instanceof Status.Error.NotFound notFound) {
-      throw new IllegalStateException(
-          "Could not release asset with token: "
-              + gltfToken
-              + " with error: "
-              + notFound.getDetails());
-    }
+    nReleaseGltfAsset(view.getNativeHandle(), gltfToken);
   }
 
   @Override
   public int instanceGltfModel(long gltfToken) {
-    Log.i(TAG, "Instantiating model with token: " + gltfToken);
-    // TODO: (broken link) - Re-establish Collider when an Interactable/Movable/etc Component is
-    //                     attached
-    Status<?> status =
-        nInstanceGltfModel(view.getNativeHandle(), gltfToken, /* enableCollider= */ false);
-    if (status instanceof Status.Error.InvalidArgument invalidArgument) {
-      throw new IllegalStateException(
-          "Could not instance model with token: "
-              + gltfToken
-              + " with error: "
-              + invalidArgument.getDetails());
-    }
-    return ((Status.SuccessWithIntValue) status).getData();
+    return nInstanceGltfModel(view.getNativeHandle(), gltfToken, /* enableCollider= */ false);
   }
 
   @Override
   public int instanceGltfModel(long gltfToken, boolean enableCollider) {
-    Log.i(
-        TAG,
-        "Instantiating model with token: "
-            + gltfToken
-            + " with enablecollider parameter set to: "
-            + enableCollider);
-    Status<?> status = nInstanceGltfModel(view.getNativeHandle(), gltfToken, enableCollider);
-    if (status instanceof Status.Error.InvalidArgument invalidArgument) {
-      throw new IllegalStateException(
-          "Instantiating model with token: "
-              + gltfToken
-              + " with enablecollider parameter set to: "
-              + enableCollider
-              + " failed with error: "
-              + invalidArgument.getDetails());
-    }
-    return ((Status.SuccessWithIntValue) status).getData();
+    return nInstanceGltfModel(view.getNativeHandle(), gltfToken, enableCollider);
   }
 
   // TODO: Add support for toggling the collider on StereoSurface.
   @Override
   public void setGltfModelColliderEnabled(int impressNode, boolean enableCollider) {
-    Status<?> status =
-        nSetGltfModelColliderEnabled(view.getNativeHandle(), impressNode, enableCollider);
-    if (status instanceof Status.Error.InvalidArgument invalidArgument) {
-      throw new IllegalStateException(
-          "Could not set collider enabled for model with impress node: "
-              + impressNode
-              + " with error: "
-              + invalidArgument.getDetails());
-    }
+    nSetGltfModelColliderEnabled(view.getNativeHandle(), impressNode, enableCollider);
   }
 
   /**
@@ -334,15 +367,7 @@ public final class ImpressApiImpl implements ImpressApi {
    */
   @Override
   public void stopGltfModelAnimation(int impressNode) {
-
-    Status<?> status = nStopGltfModelAnimation(view.getNativeHandle(), impressNode);
-    if (status instanceof Status.Error.InvalidArgument invalidArgument) {
-      throw new IllegalStateException(
-          "Could not stop animation of model with id: "
-              + impressNode
-              + " with error: "
-              + invalidArgument.getDetails());
-    }
+    nStopGltfModelAnimation(view.getNativeHandle(), impressNode);
   }
 
   @Override
@@ -352,34 +377,43 @@ public final class ImpressApiImpl implements ImpressApi {
 
   @Override
   public void destroyImpressNode(int impressNode) {
-    Status<?> status = nDestroyImpressNode(view.getNativeHandle(), impressNode);
-    if (status instanceof Status.Error.InvalidArgument invalidArgument) {
-      throw new IllegalStateException(
-          "Could not destroy impress node with id: "
-              + impressNode
-              + " with error: "
-              + invalidArgument.getDetails());
-    }
+    nDestroyImpressNode(view.getNativeHandle(), impressNode);
   }
 
   @Override
   public void setImpressNodeParent(int impressNodeChild, int impressNodeParent) {
-    Status<?> status =
-        nSetImpressNodeParent(view.getNativeHandle(), impressNodeChild, impressNodeParent);
-    if (status instanceof Status.Error.InvalidArgument invalidArgument) {
-      throw new IllegalStateException(
-          "Could not set impress node with id: "
-              + impressNodeParent
-              + " as parent of impress node with id: "
-              + impressNodeChild
-              + " with error: "
-              + invalidArgument.getDetails());
-    }
+    nSetImpressNodeParent(view.getNativeHandle(), impressNodeChild, impressNodeParent);
   }
 
   @Override
   public int createStereoSurface(@StereoMode int stereoMode) {
-    return nCreateStereoSurfaceEntity(view.getNativeHandle(), validateStereoMode(stereoMode));
+    return nCreateStereoSurfaceEntity(
+        view.getNativeHandle(),
+        validateStereoMode(stereoMode),
+        ContentSecurityLevel.NONE,
+        /* useSuperSampling= */ false);
+  }
+
+  @Override
+  public int createStereoSurface(
+      @StereoMode int stereoMode, @ContentSecurityLevel int contentSecurityLevel) {
+    return nCreateStereoSurfaceEntity(
+        view.getNativeHandle(),
+        validateStereoMode(stereoMode),
+        validateContentSecurityLevel(contentSecurityLevel),
+        /* useSuperSampling= */ false);
+  }
+
+  @Override
+  public int createStereoSurface(
+      @StereoMode int stereoMode,
+      @ContentSecurityLevel int contentSecurityLevel,
+      boolean useSuperSampling) {
+    return nCreateStereoSurfaceEntity(
+        view.getNativeHandle(),
+        validateStereoMode(stereoMode),
+        validateContentSecurityLevel(contentSecurityLevel),
+        useSuperSampling);
   }
 
   @Override
@@ -401,6 +435,27 @@ public final class ImpressApiImpl implements ImpressApi {
   public void setStereoModeForStereoSurface(int panelImpressNode, @StereoMode int stereoMode) {
     nSetStereoModeForStereoSurfaceEntity(
         view.getNativeHandle(), panelImpressNode, validateStereoMode(stereoMode));
+  }
+
+  @Override
+  public void setContentColorMetadataForStereoSurface(
+      int stereoSurfaceNode,
+      @ColorSpace int colorSpace,
+      @ColorTransfer int colorTransfer,
+      @ColorRange int colorRange,
+      int maxLuminance) {
+    nSetContentColorMetadataForStereoSurfaceEntity(
+        view.getNativeHandle(),
+        stereoSurfaceNode,
+        validateColorSpace(colorSpace),
+        validateColorTransfer(colorTransfer),
+        validateColorRange(colorRange),
+        validateMaxLuminance(maxLuminance));
+  }
+
+  @Override
+  public void resetContentColorMetadataForStereoSurface(int stereoSurfaceNode) {
+    nResetContentColorMetadataForStereoSurfaceEntity(view.getNativeHandle(), stereoSurfaceNode);
   }
 
   @Override
@@ -477,26 +532,20 @@ public final class ImpressApiImpl implements ImpressApi {
   @Override
   @NonNull
   public Texture borrowReflectionTexture() {
-    Status<?> status = nBorrowReflectionTexture(view.getNativeHandle());
-    if (status instanceof Status.Error.NotFound notFound) {
-      throw new IllegalStateException("No reflection texture with error: " + notFound.getDetails());
-    }
+    long textureHandle = nBorrowReflectionTexture(view.getNativeHandle());
     return new Texture.Builder()
         .setImpressApi(ImpressApiImpl.this)
-        .setNativeTexture(((Status.SuccessWithLongValue) status).getData())
+        .setNativeTexture(textureHandle)
         .build();
   }
 
   @Override
   @NonNull
   public Texture getReflectionTextureFromIbl(long iblToken) {
-    Status<?> status = nGetReflectionTextureFromIbl(view.getNativeHandle(), iblToken);
-    if (status instanceof Status.Error.NotFound notFound) {
-      throw new NotFoundException("No reflection texture with error: " + notFound.getDetails());
-    }
+    long textureHandle = nGetReflectionTextureFromIbl(view.getNativeHandle(), iblToken);
     return new Texture.Builder()
         .setImpressApi(ImpressApiImpl.this)
-        .setNativeTexture(((Status.SuccessWithLongValue) status).getData())
+        .setNativeTexture(textureHandle)
         .build();
   }
 
@@ -539,92 +588,45 @@ public final class ImpressApiImpl implements ImpressApi {
   }
 
   @Override
-  public void setReflectionCubeOnWaterMaterial(long nativeWaterMaterial, long reflectionCube) {
-    Status<?> status =
-        nSetReflectionCubeOnWaterMaterial(
-            view.getNativeHandle(), nativeWaterMaterial, reflectionCube);
-    if (status instanceof Status.Error.InvalidArgument invalidArgument) {
-      throw new IllegalStateException(
-          "Could not set reflection cube on water material with error: "
-              + invalidArgument.getDetails());
-    }
+  public void setReflectionMapOnWaterMaterial(long nativeWaterMaterial, long reflectionMap) {
+    nSetReflectionMapOnWaterMaterial(view.getNativeHandle(), nativeWaterMaterial, reflectionMap);
   }
 
   @Override
   public void setNormalMapOnWaterMaterial(long nativeWaterMaterial, long normalMap) {
-    Status<?> status =
-        nSetNormalMapOnWaterMaterial(view.getNativeHandle(), nativeWaterMaterial, normalMap);
-    if (status instanceof Status.Error.InvalidArgument invalidArgument) {
-      throw new IllegalStateException(
-          "Could not set normal map on water material with error: " + invalidArgument.getDetails());
-    }
+    nSetNormalMapOnWaterMaterial(view.getNativeHandle(), nativeWaterMaterial, normalMap);
   }
 
   @Override
   public void setNormalTilingOnWaterMaterial(long nativeWaterMaterial, float normalTiling) {
-    Status<?> status =
-        nSetNormalTilingOnWaterMaterial(view.getNativeHandle(), nativeWaterMaterial, normalTiling);
-    if (status instanceof Status.Error.InvalidArgument invalidArgument) {
-      throw new IllegalStateException(
-          "Could not set normal tiling on water material with error: "
-              + invalidArgument.getDetails());
-    }
+    nSetNormalTilingOnWaterMaterial(view.getNativeHandle(), nativeWaterMaterial, normalTiling);
   }
 
   @Override
   public void setNormalSpeedOnWaterMaterial(long nativeWaterMaterial, float normalSpeed) {
-    Status<?> status =
-        nSetNormalSpeedOnWaterMaterial(view.getNativeHandle(), nativeWaterMaterial, normalSpeed);
-    if (status instanceof Status.Error.InvalidArgument invalidArgument) {
-      throw new IllegalStateException(
-          "Could not set normal speed on water material with error: "
-              + invalidArgument.getDetails());
-    }
+    nSetNormalSpeedOnWaterMaterial(view.getNativeHandle(), nativeWaterMaterial, normalSpeed);
   }
 
   @Override
   public void setAlphaStepMultiplierOnWaterMaterial(
       long nativeWaterMaterial, float alphaStepMultiplier) {
-    Status<?> status =
-        nSetAlphaStepMultiplierOnWaterMaterial(
-            view.getNativeHandle(), nativeWaterMaterial, alphaStepMultiplier);
-    if (status instanceof Status.Error.InvalidArgument invalidArgument) {
-      throw new IllegalStateException(
-          "Could not set alpha step multiplier on water material with error: "
-              + invalidArgument.getDetails());
-    }
+    nSetAlphaStepMultiplierOnWaterMaterial(
+        view.getNativeHandle(), nativeWaterMaterial, alphaStepMultiplier);
   }
 
   @Override
   public void setAlphaMapOnWaterMaterial(long nativeWaterMaterial, long alphaMap) {
-    Status<?> status =
-        nSetAlphaMapOnWaterMaterial(view.getNativeHandle(), nativeWaterMaterial, alphaMap);
-    if (status instanceof Status.Error.InvalidArgument invalidArgument) {
-      throw new IllegalStateException(
-          "Could not set alpha map on water material with error: " + invalidArgument.getDetails());
-    }
+    nSetAlphaMapOnWaterMaterial(view.getNativeHandle(), nativeWaterMaterial, alphaMap);
   }
 
   @Override
   public void setNormalZOnWaterMaterial(long nativeWaterMaterial, float normalZ) {
-    Status<?> status =
-        nSetNormalZOnWaterMaterial(view.getNativeHandle(), nativeWaterMaterial, normalZ);
-    if (status instanceof Status.Error.InvalidArgument invalidArgument) {
-      throw new IllegalStateException(
-          "Could not set normal z on water material with error: " + invalidArgument.getDetails());
-    }
+    nSetNormalZOnWaterMaterial(view.getNativeHandle(), nativeWaterMaterial, normalZ);
   }
 
   @Override
   public void setNormalBoundaryOnWaterMaterial(long nativeWaterMaterial, float normalBoundary) {
-    Status<?> status =
-        nSetNormalBoundaryOnWaterMaterial(
-            view.getNativeHandle(), nativeWaterMaterial, normalBoundary);
-    if (status instanceof Status.Error.InvalidArgument invalidArgument) {
-      throw new IllegalStateException(
-          "Could not set normal boundary on water material with error: "
-              + invalidArgument.getDetails());
-    }
+    nSetNormalBoundaryOnWaterMaterial(view.getNativeHandle(), nativeWaterMaterial, normalBoundary);
   }
 
   @Override
@@ -640,66 +642,325 @@ public final class ImpressApiImpl implements ImpressApi {
   }
 
   @Override
+  public ListenableFuture<KhronosPbrMaterial> createKhronosPbrMaterial(
+      KhronosPbrMaterialSpec spec) {
+    return CallbackToFutureAdapter.getFuture(
+        completer -> {
+          // TODO: (broken link) - Add a cancellationListener to the completer here when the loading
+          //                     APIs support cancellation.
+          nCreateGenericMaterial(
+              view.getNativeHandle(),
+              // The underlying C++ code will hold a reference to this (anoynomous) IAssetLoader
+              // until the load is complete.
+              // TODO: Revisit the way C++ --> Java code is called back for the
+              // IAssetLoader (proguard)
+              new IAssetLoader() {
+
+                @Override
+                public void onSuccess(long value) {
+                  KhronosPbrMaterial khronosPbrMaterial =
+                      new KhronosPbrMaterial.Builder()
+                          .setImpressApi(ImpressApiImpl.this)
+                          .setNativeMaterial(value)
+                          .build();
+                  completer.set(khronosPbrMaterial);
+                }
+
+                @Override
+                public void onFailure(@NonNull String message) {
+                  // TODO: (broken link) - Publish a more precisely typed Exception interface for
+                  // this.
+                  // Alternatively we could return null here and have some means of also
+                  // surfacing
+                  // an error message to the application.
+                  completer.setException(new Exception(message));
+                }
+              },
+              spec.getLightingModel().getValue(),
+              spec.getBlendMode().getValue(),
+              spec.getDoubleSidedMode().getValue());
+          return "CreateKhronosPbrMaterial Operation";
+        });
+  }
+
+  @Override
+  public void setBaseColorTextureOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial, long baseColorTexture) {
+    nSetBaseColorTextureOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, baseColorTexture);
+  }
+
+  @Override
+  public void setBaseColorUvTransformOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial,
+      float ux,
+      float uy,
+      float uz,
+      float vx,
+      float vy,
+      float vz,
+      float wx,
+      float wy,
+      float wz) {
+    nSetBaseColorUvTransformOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, ux, uy, uz, vx, vy, vz, wx, wy, wz);
+  }
+
+  @Override
+  public void setBaseColorFactorsOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial, float x, float y, float z, float w) {
+    nSetBaseColorFactorsOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, x, y, z, w);
+  }
+
+  @Override
+  public void setMetallicRoughnessTextureOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial, long metallicRoughnessTexture) {
+    nSetMetallicRoughnessTextureOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, metallicRoughnessTexture);
+  }
+
+  @Override
+  public void setMetallicRoughnessUvTransformOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial,
+      float ux,
+      float uy,
+      float uz,
+      float vx,
+      float vy,
+      float vz,
+      float wx,
+      float wy,
+      float wz) {
+    nSetMetallicRoughnessUvTransformOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, ux, uy, uz, vx, vy, vz, wx, wy, wz);
+  }
+
+  @Override
+  public void setMetallicFactorOnKhronosPbrMaterial(long nativeKhronosPbrMaterial, float factor) {
+    nSetMetallicFactorOnGenericMaterial(view.getNativeHandle(), nativeKhronosPbrMaterial, factor);
+  }
+
+  @Override
+  public void setRoughnessFactorOnKhronosPbrMaterial(long nativeKhronosPbrMaterial, float factor) {
+    nSetRoughnessFactorOnGenericMaterial(view.getNativeHandle(), nativeKhronosPbrMaterial, factor);
+  }
+
+  @Override
+  public void setNormalTextureOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial, long normalTexture) {
+    nSetNormalTextureOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, normalTexture);
+  }
+
+  @Override
+  public void setNormalUvTransformOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial,
+      float ux,
+      float uy,
+      float uz,
+      float vx,
+      float vy,
+      float vz,
+      float wx,
+      float wy,
+      float wz) {
+    nSetNormalUvTransformOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, ux, uy, uz, vx, vy, vz, wx, wy, wz);
+  }
+
+  @Override
+  public void setNormalFactorOnKhronosPbrMaterial(long nativeKhronosPbrMaterial, float factor) {
+    nSetNormalFactorOnGenericMaterial(view.getNativeHandle(), nativeKhronosPbrMaterial, factor);
+  }
+
+  @Override
+  public void setAmbientOcclusionTextureOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial, long ambientOcclusionTexture) {
+    nSetAmbientOcclusionTextureOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, ambientOcclusionTexture);
+  }
+
+  @Override
+  public void setAmbientOcclusionUvTransformOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial,
+      float ux,
+      float uy,
+      float uz,
+      float vx,
+      float vy,
+      float vz,
+      float wx,
+      float wy,
+      float wz) {
+    nSetAmbientOcclusionUvTransformOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, ux, uy, uz, vx, vy, vz, wx, wy, wz);
+  }
+
+  @Override
+  public void setAmbientOcclusionFactorOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial, float factor) {
+    nSetAmbientOcclusionFactorOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, factor);
+  }
+
+  @Override
+  public void setEmissiveTextureOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial, long emissiveTexture) {
+    nSetEmissiveTextureOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, emissiveTexture);
+  }
+
+  @Override
+  public void setEmissiveUvTransformOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial,
+      float ux,
+      float uy,
+      float uz,
+      float vx,
+      float vy,
+      float vz,
+      float wx,
+      float wy,
+      float wz) {
+    nSetEmissiveUvTransformOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, ux, uy, uz, vx, vy, vz, wx, wy, wz);
+  }
+
+  @Override
+  public void setEmissiveFactorsOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial, float x, float y, float z) {
+    nSetEmissiveFactorsOnGenericMaterial(view.getNativeHandle(), nativeKhronosPbrMaterial, x, y, z);
+  }
+
+  @Override
+  public void setClearcoatTextureOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial, long clearcoatTexture) {
+    nSetClearcoatTextureOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, clearcoatTexture);
+  }
+
+  @Override
+  public void setClearcoatNormalTextureOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial, long clearcoatNormalTexture) {
+    nSetClearcoatNormalTextureOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, clearcoatNormalTexture);
+  }
+
+  @Override
+  public void setClearcoatRoughnessTextureOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial, long clearcoatRoughnessTexture) {
+    nSetClearcoatRoughnessTextureOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, clearcoatRoughnessTexture);
+  }
+
+  @Override
+  public void setClearcoatFactorsOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial, float intensity, float roughness, float normal) {
+    nSetClearcoatFactorsOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, intensity, roughness, normal);
+  }
+
+  @Override
+  public void setSheenColorTextureOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial, long sheenColorTexture) {
+    nSetSheenColorTextureOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, sheenColorTexture);
+  }
+
+  @Override
+  public void setSheenColorFactorsOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial, float x, float y, float z) {
+    nSetSheenColorFactorsOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, x, y, z);
+  }
+
+  @Override
+  public void setSheenRoughnessTextureOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial, long sheenRoughnessTexture) {
+    nSetSheenRoughnessTextureOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, sheenRoughnessTexture);
+  }
+
+  @Override
+  public void setSheenRoughnessFactorOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial, float factor) {
+    nSetSheenRoughnessFactorOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, factor);
+  }
+
+  @Override
+  public void setTransmissionTextureOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial, long transmissionTexture) {
+    nSetTransmissionTextureOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, transmissionTexture);
+  }
+
+  @Override
+  public void setTransmissionUvTransformOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial,
+      float ux,
+      float uy,
+      float uz,
+      float vx,
+      float vy,
+      float vz,
+      float wx,
+      float wy,
+      float wz) {
+    nSetTransmissionUvTransformOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, ux, uy, uz, vx, vy, vz, wx, wy, wz);
+  }
+
+  @Override
+  public void setTransmissionFactorOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial, float factor) {
+    nSetTransmissionFactorOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, factor);
+  }
+
+  @Override
+  public void setIndexOfRefractionOnKhronosPbrMaterial(
+      long nativeKhronosPbrMaterial, float indexOfRefraction) {
+    nSetIndexOfRefractionOnGenericMaterial(
+        view.getNativeHandle(), nativeKhronosPbrMaterial, indexOfRefraction);
+  }
+
+  @Override
+  public void setAlphaCutoffOnKhronosPbrMaterial(long nativeKhronosPbrMaterial, float alphaCutoff) {
+    nSetAlphaCutoffOnGenericMaterial(view.getNativeHandle(), nativeKhronosPbrMaterial, alphaCutoff);
+  }
+
+  @Override
   public void destroyNativeObject(long nativeHandle) {
     nDestroyNativeObject(view.getNativeHandle(), nativeHandle);
   }
 
   @Override
   public void setMaterialOverride(int impressNode, long nativeMaterial, @NonNull String meshName) {
-    Status<?> status =
-        nSetMaterialOverride(view.getNativeHandle(), impressNode, nativeMaterial, meshName);
-    if (status instanceof Status.Error.Internal internal) {
-      throw new InternalError(
-          "Could not set material override with error: " + internal.getDetails());
-    } else if (status instanceof Status.Error.InvalidArgument invalidArgument) {
-      throw new IllegalStateException(
-          "Provided material is not valid with error: " + invalidArgument.getDetails());
-    } else if (status instanceof Status.Error.NotFound notFound) {
-      throw new NotFoundException(
-          "Did not find with the provided name with error: " + notFound.getDetails());
-    }
+    nSetMaterialOverride(view.getNativeHandle(), impressNode, nativeMaterial, meshName);
   }
 
   @Override
   public void setPreferredEnvironmentLight(long iblToken) {
-    Log.i(TAG, "Setting IBL asset preference with token: " + iblToken);
-    Status<?> status = nSetEnvironmentLight(view.getNativeHandle(), iblToken);
-    String baseMessage =
-        "Could not set IBL asset preference with token: " + iblToken + " with error: ";
-    if (status instanceof Status.Error.NotFound notFound) {
-      throw new NotFoundException(baseMessage + notFound.getDetails());
-    } else if (status instanceof Status.Error.Internal internal) {
-      throw new InternalError(baseMessage + internal.getDetails());
-    }
+    nSetEnvironmentLight(view.getNativeHandle(), iblToken);
   }
 
   @Override
   public void clearPreferredEnvironmentIblAsset() {
-    Log.i(TAG, "Clearing skybox preference");
-    Status<?> status = nClearEnvironmentLight(view.getNativeHandle());
-    if (status instanceof Status.Error.Internal internal) {
-      throw new InternalError(
-          "Could not clear skybox preference with error: " + internal.getDetails());
-    }
+    nClearEnvironmentLight(view.getNativeHandle());
   }
 
   @Override
   public void disposeAllResources() {
-    Log.i(TAG, "Disposing of the resources associated with the Impress Split Engine instance.");
-    Status<?> status = nDisposeAllResources(view.getNativeHandle());
-    if (status instanceof Status.Error.Internal internal) {
-      throw new InternalError(
-          "Could not dispose resources associated with the Impress Split Engine instance with"
-              + " error: "
-              + internal.getDetails());
-    }
+    nDisposeAllResources(view.getNativeHandle());
   }
 
   // LINT.IfChange(api)
   // returns the bridge handle after it's been initialized.
   private static native void nSetup(long view);
 
-  private static native Status<?> nReleaseImageBasedLightingAsset(long view, long assetToken);
+  private static native void nReleaseImageBasedLightingAsset(long view, long assetToken);
 
   private static native void nLoadImageBasedLightingAssetFromPath(
       long view, IAssetLoader assetLoader, String path);
@@ -713,27 +974,27 @@ public final class ImpressApiImpl implements ImpressApi {
   private static native void nLoadGltfAssetFromByteArray(
       long view, IAssetLoader assetLoader, byte[] data, String key);
 
-  private static native Status<?> nReleaseGltfAsset(long view, long gltfToken);
+  private static native void nReleaseGltfAsset(long view, long gltfToken);
 
-  private static native Status<?> nInstanceGltfModel(
-      long view, long gltfToken, boolean enableCollider);
+  private static native int nInstanceGltfModel(long view, long gltfToken, boolean enableCollider);
 
-  private static native Status<?> nSetGltfModelColliderEnabled(
+  private static native void nSetGltfModelColliderEnabled(
       long view, long gltfToken, boolean enableCollider);
 
   private static native void nAnimateGltfModel(
       long view, int impressNode, String animationName, boolean loop, IAssetAnimator assetAnimator);
 
-  private static native Status<?> nStopGltfModelAnimation(long view, int impressNode);
+  private static native void nStopGltfModelAnimation(long view, int impressNode);
 
   private static native int nCreateImpressNode(long view);
 
-  private static native Status<?> nDestroyImpressNode(long view, int impressNode);
+  private static native void nDestroyImpressNode(long view, int impressNode);
 
-  private static native Status<?> nSetImpressNodeParent(
+  private static native void nSetImpressNodeParent(
       long view, int impressNodeChild, int impressNodeParent);
 
-  private static native int nCreateStereoSurfaceEntity(long view, int stereoMode);
+  private static native int nCreateStereoSurfaceEntity(
+      long view, int stereoMode, int contentSecurityLevel, boolean useSuperSampling);
 
   private static native void nSetStereoSurfaceEntityCanvasShapeQuad(
       long view, int impressNode, float width, float height);
@@ -751,6 +1012,17 @@ public final class ImpressApiImpl implements ImpressApi {
 
   private static native void nSetStereoModeForStereoSurfaceEntity(
       long view, int panelImpressNode, int stereoMode);
+
+  private static native void nSetContentColorMetadataForStereoSurfaceEntity(
+      long view,
+      int stereoSurfaceNode,
+      int colorSpace,
+      int colorTransfer,
+      int colorRange,
+      int maxLuminance);
+
+  private static native void nResetContentColorMetadataForStereoSurfaceEntity(
+      long view, int stereoSurfaceNode);
 
   private static native void nSetPrimaryAlphaMaskForStereoSurfaceEntity(
       long view, int panelImpressNode, long alphaMask);
@@ -771,53 +1043,203 @@ public final class ImpressApiImpl implements ImpressApi {
       int compareFunc,
       int anisotropyLog2);
 
-  private static native Status<?> nBorrowReflectionTexture(long view);
+  private static native long nBorrowReflectionTexture(long view);
 
-  private static native Status<?> nGetReflectionTextureFromIbl(long view, long iblToken);
+  private static native long nGetReflectionTextureFromIbl(long view, long iblToken);
 
   private static native void nCreateWaterMaterial(
       long view, IAssetLoader assetLoader, boolean isAlphaMapVersion);
 
-  private static native Status<?> nSetReflectionCubeOnWaterMaterial(
-      long view, long nativeWaterMaterial, long reflectionCube);
+  private static native void nSetReflectionMapOnWaterMaterial(
+      long view, long nativeWaterMaterial, long reflectionMap);
 
-  private static native Status<?> nSetNormalMapOnWaterMaterial(
+  private static native void nSetNormalMapOnWaterMaterial(
       long view, long nativeWaterMaterial, long normalMap);
 
-  private static native Status<?> nSetNormalTilingOnWaterMaterial(
+  private static native void nSetNormalTilingOnWaterMaterial(
       long view, long nativeWaterMaterial, float normalTiling);
 
-  private static native Status<?> nSetNormalSpeedOnWaterMaterial(
+  private static native void nSetNormalSpeedOnWaterMaterial(
       long view, long nativeWaterMaterial, float normalSpeed);
 
-  private static native Status<?> nSetAlphaStepUOnWaterMaterial(
+  private static native void nSetAlphaStepUOnWaterMaterial(
       long view, long nativeWaterMaterial, float x, float y, float z, float w);
 
-  private static native Status<?> nSetAlphaStepVOnWaterMaterial(
+  private static native void nSetAlphaStepVOnWaterMaterial(
       long view, long nativeWaterMaterial, float x, float y, float z, float w);
 
-  private static native Status<?> nSetAlphaStepMultiplierOnWaterMaterial(
+  private static native void nSetAlphaStepMultiplierOnWaterMaterial(
       long view, long nativeWaterMaterial, float alphaStepMultiplier);
 
-  private static native Status<?> nSetAlphaMapOnWaterMaterial(
+  private static native void nSetAlphaMapOnWaterMaterial(
       long view, long nativeWaterMaterial, long alphaMap);
 
-  private static native Status<?> nSetNormalZOnWaterMaterial(
+  private static native void nSetNormalZOnWaterMaterial(
       long view, long nativeWaterMaterial, float normalZ);
 
-  private static native Status<?> nSetNormalBoundaryOnWaterMaterial(
+  private static native void nSetNormalBoundaryOnWaterMaterial(
       long view, long nativeWaterMaterial, float normalBoundary);
+
+  private native void nCreateGenericMaterial(
+      long view, IAssetLoader assetLoader, int lightingModel, int blendMode, int doubleSidedMode);
+
+  private native void nSetBaseColorTextureOnGenericMaterial(
+      long view, long nativeGenericMaterial, long baseColorTexture);
+
+  private native void nSetBaseColorUvTransformOnGenericMaterial(
+      long view,
+      long nativeGenericMaterial,
+      float ux,
+      float uy,
+      float uz,
+      float vx,
+      float vy,
+      float vz,
+      float wx,
+      float wy,
+      float wz);
+
+  private native void nSetBaseColorFactorsOnGenericMaterial(
+      long view, long nativeGenericMaterial, float x, float y, float z, float w);
+
+  private native void nSetMetallicRoughnessTextureOnGenericMaterial(
+      long view, long nativeGenericMaterial, long metallicRoughnessTexture);
+
+  private native void nSetMetallicRoughnessUvTransformOnGenericMaterial(
+      long view,
+      long nativeGenericMaterial,
+      float ux,
+      float uy,
+      float uz,
+      float vx,
+      float vy,
+      float vz,
+      float wx,
+      float wy,
+      float wz);
+
+  private native void nSetMetallicFactorOnGenericMaterial(
+      long view, long nativeGenericMaterial, float factor);
+
+  private native void nSetRoughnessFactorOnGenericMaterial(
+      long view, long nativeGenericMaterial, float factor);
+
+  private native void nSetNormalTextureOnGenericMaterial(
+      long view, long nativeGenericMaterial, long normalTexture);
+
+  private native void nSetNormalUvTransformOnGenericMaterial(
+      long view,
+      long nativeGenericMaterial,
+      float ux,
+      float uy,
+      float uz,
+      float vx,
+      float vy,
+      float vz,
+      float wx,
+      float wy,
+      float wz);
+
+  private native void nSetNormalFactorOnGenericMaterial(
+      long view, long nativeGenericMaterial, float factor);
+
+  private native void nSetAmbientOcclusionTextureOnGenericMaterial(
+      long view, long nativeGenericMaterial, long ambientOcclusionTexture);
+
+  private native void nSetAmbientOcclusionUvTransformOnGenericMaterial(
+      long view,
+      long nativeGenericMaterial,
+      float ux,
+      float uy,
+      float uz,
+      float vx,
+      float vy,
+      float vz,
+      float wx,
+      float wy,
+      float wz);
+
+  private native void nSetAmbientOcclusionFactorOnGenericMaterial(
+      long view, long nativeGenericMaterial, float factor);
+
+  private native void nSetEmissiveTextureOnGenericMaterial(
+      long view, long nativeGenericMaterial, long emissiveTexture);
+
+  private native void nSetEmissiveUvTransformOnGenericMaterial(
+      long view,
+      long nativeGenericMaterial,
+      float ux,
+      float uy,
+      float uz,
+      float vx,
+      float vy,
+      float vz,
+      float wx,
+      float wy,
+      float wz);
+
+  private native void nSetEmissiveFactorsOnGenericMaterial(
+      long view, long nativeGenericMaterial, float x, float y, float z);
+
+  private native void nSetClearcoatTextureOnGenericMaterial(
+      long view, long nativeGenericMaterial, long clearcoatTexture);
+
+  private native void nSetClearcoatNormalTextureOnGenericMaterial(
+      long view, long nativeGenericMaterial, long clearcoatNormalTexture);
+
+  private native void nSetClearcoatRoughnessTextureOnGenericMaterial(
+      long view, long nativeGenericMaterial, long clearcoatRoughnessTexture);
+
+  private native void nSetClearcoatFactorsOnGenericMaterial(
+      long view, long nativeGenericMaterial, float intensity, float roughness, float normal);
+
+  private native void nSetSheenColorTextureOnGenericMaterial(
+      long view, long nativeGenericMaterial, long sheenColorTexture);
+
+  private native void nSetSheenColorFactorsOnGenericMaterial(
+      long view, long nativeGenericMaterial, float x, float y, float z);
+
+  private native void nSetSheenRoughnessTextureOnGenericMaterial(
+      long view, long nativeGenericMaterial, long sheenRoughnessTexture);
+
+  private native void nSetSheenRoughnessFactorOnGenericMaterial(
+      long view, long nativeGenericMaterial, float factor);
+
+  private native void nSetTransmissionTextureOnGenericMaterial(
+      long view, long nativeGenericMaterial, long transmissionTexture);
+
+  private native void nSetTransmissionUvTransformOnGenericMaterial(
+      long view,
+      long nativeGenericMaterial,
+      float ux,
+      float uy,
+      float uz,
+      float vx,
+      float vy,
+      float vz,
+      float wx,
+      float wy,
+      float wz);
+
+  private native void nSetTransmissionFactorOnGenericMaterial(
+      long view, long nativeGenericMaterial, float factor);
+
+  private native void nSetIndexOfRefractionOnGenericMaterial(
+      long view, long nativeGenericMaterial, float indexOfRefraction);
+
+  private native void nSetAlphaCutoffOnGenericMaterial(
+      long view, long nativeGenericMaterial, float alphaCutoff);
 
   private static native void nDestroyNativeObject(long view, long nativeHandle);
 
-  private static native Status<?> nSetMaterialOverride(
+  private static native void nSetMaterialOverride(
       long view, int impressNode, long nativeMaterial, String meshName);
 
-  private static native Status<?> nSetEnvironmentLight(long view, long iblToken);
+  private static native void nSetEnvironmentLight(long view, long iblToken);
 
-  private static native Status<?> nClearEnvironmentLight(long view);
+  private static native void nClearEnvironmentLight(long view);
 
-  private static native Status<?> nDisposeAllResources(long view);
+  private static native void nDisposeAllResources(long view);
 
   // LINT.ThenChange(//depot/google3/third_party/impress/apibindings/impress_api.cc:api)
 }

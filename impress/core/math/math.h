@@ -121,15 +121,36 @@ inline constexpr T sign(T x) noexcept {
   return x < T(0) ? T(-1) : T(1);
 }
 
+// Returns only the fractional part of a float. Together with the truncate
+// function, it can split a number between the whole part and the fractional
+// part.
+template <typename T>
+inline constexpr T fraction(T v) noexcept {
+  return v - std::floor(v);
+}
+
 // Applies the given unary function to each element of the given TVec
 // Returns a TVec containing the transformed results.
 template <template <typename T> class ImpType, typename T,
           typename Fn = T (*)(T), EnableIfVector<ImpType<T>> = 0>
-constexpr ImpType<T> TransformVector(Fn f, ImpType<T> v) {
+constexpr ImpType<T> TransformVector(Fn fn, ImpType<T> vec) {
   for (int i = 0; i < ImpType<T>::SIZE; ++i) {
-    v[i] = f(v[i]);
+    vec[i] = fn(vec[i]);
   }
-  return v;
+  return vec;
+}
+
+// Applies the given unary function to each element of the given TMatNN
+// Returns a TMatNN containing the transformed results.
+template <template <typename T> class ImpType, typename T,
+          typename Fn = T (*)(T), EnableIfMatrix<ImpType<T>> = 0>
+constexpr ImpType<T> TransformMatrix(Fn fn, ImpType<T> matrix) {
+  for (int i = 0; i < ImpType<T>::NUM_COLS; ++i) {
+    for (int j = 0; j < ImpType<T>::NUM_ROWS; ++j) {
+      matrix[i][j] = fn(matrix[i][j]);
+    }
+  }
+  return matrix;
 }
 
 // Linearly interpolates between trs1 and trs2 for the parameter x by performing

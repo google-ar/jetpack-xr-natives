@@ -26,10 +26,7 @@
 #include "core/math/mat.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
-#include "core/render/texture.h"
-#include "core/split_engine/split_engine_serializer.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
-#include "split_engine/schemas/split_engine_material_generated.h"
 #include "split_engine/schemas/split_engine_primitive_generated.h"
 
 namespace imp::split_engine {
@@ -109,21 +106,6 @@ android_xr::schemas::ErrorCode StatusToErrorCode(absl::Status status) {
     default:
       return android_xr::schemas::ErrorCode::UNKNOWN_ERROR;
   }
-}
-
-flatbuffers::Offset<android_xr::schemas::BuiltInTextureParameter>
-CreateBuiltInTextureParameter(flatbuffers::FlatBufferBuilder& fbb,
-                              imp::OwnedOrBorrowedTexturePtr texture,
-                              std::optional<uint64_t> texture_id,
-                              std::optional<filament::TextureSampler> sampler) {
-  return android_xr::schemas::CreateBuiltInTextureParameter(
-      fbb,
-      texture_id.value_or(imp::split_engine::SplitEngineSerializer::GetId(
-          texture ? texture->GetTexture() : nullptr)),
-      imp::CreateTextureSampler<
-          imp::split_engine::SplitEngineTextureSamplerCreator>(
-          fbb, sampler.value_or(texture ? texture->GetSampler()
-                                        : filament::TextureSampler())));
 }
 
 android_xr::schemas::Bool Pack(const bool& obj) {

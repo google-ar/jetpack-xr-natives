@@ -52,7 +52,7 @@ Future<absl::Status> AndroidViewRequestHandler::HandleMessage(
   }
   return message.target
       ->AddComponent<AndroidViewRenderer>(
-          reinterpret_cast<jobject>(args[0]), message.width, message.height,
+          reinterpret_cast<jobject>(args[0]), message.view_size,
           message.input_forwarding_mode, message.material,
           message.blend_priority)
       .Then([](ComponentHandle<AndroidViewRenderer> component) {

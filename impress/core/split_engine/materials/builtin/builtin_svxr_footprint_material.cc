@@ -30,6 +30,7 @@
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
 #include "core/split_engine/materials/builtin/builtin_svxr_footprint_material_assets.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/material_factory.h"
@@ -38,26 +39,29 @@
 namespace imp::split_engine {
 
 Future<BuiltInMaterialPtr> BuiltInSVXRFootprintMaterial::Create(
-    BaseView& view, const android_xr::schemas::BuiltInMaterial0d0cb9aa& spec) {
+    BaseView& view, BridgeId bridge_id,
+    const android_xr::schemas::BuiltInMaterial0d0cb9aa& spec) {
   return view.GetAssetManager()
       .LoadMaterial(kBuiltinSvxrFootprintMatCmat)
-      .Then([&view](
+      .Then([&view, bridge_id](
                 AssetPtr<MaterialAsset> material_asset) -> BuiltInMaterialPtr {
         return absl::WrapUnique(new BuiltInSVXRFootprintMaterial(
-            view, view.GetMaterialFactory().CreateMaterial(material_asset)));
+            view, bridge_id,
+            view.GetMaterialFactory().CreateMaterial(material_asset)));
       });
 }
 
 BuiltInMaterialPtr BuiltInSVXRFootprintMaterial::Duplicate() const {
   return absl::WrapUnique(new BuiltInSVXRFootprintMaterial(
-      view_, view_.GetMaterialFactory().WrapMaterial(
-                 filament::MaterialInstance::duplicate(
-                     GetMaterial()->GetFilamentMaterialInstance()))));
+      view_, GetBridgeId(),
+      view_.GetMaterialFactory().WrapMaterial(
+          filament::MaterialInstance::duplicate(
+              GetMaterial()->GetFilamentMaterialInstance()))));
 }
 
 BuiltInSVXRFootprintMaterial::BuiltInSVXRFootprintMaterial(
-    BaseView& view, OwnedMaterialPtr material)
-    : BuiltInCustomMaterial(std::move(material)), view_(view) {}
+    BaseView& view, BridgeId bridge_id, OwnedMaterialPtr material)
+    : BuiltInCustomMaterial(bridge_id, std::move(material)), view_(view) {}
 
 absl::Status BuiltInSVXRFootprintMaterial::SetParameters(
     flatbuffers::Verifier& verifier,
