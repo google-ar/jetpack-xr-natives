@@ -43,16 +43,12 @@ final class ImpXrApi {
   private final View view;
 
   private static int intFromFoveationLevel(SetupParams.FoveationLevel level) {
-    switch (level) {
-      case LOW:
-        return 1;
-      case MEDIUM:
-        return 2;
-      case HIGH:
-        return 3;
-      default:
-        return 0;
-    }
+    return switch (level) {
+      case LOW -> 1;
+      case MEDIUM -> 2;
+      case HIGH -> 3;
+      default -> 0;
+    };
   }
 
   /** Initialize Impress for OpenXR. */
@@ -83,6 +79,7 @@ final class ImpXrApi {
                     setupParams.getUseMaxSwapchainSize(),
                     intFromFoveationLevel(setupParams.getFoveationLevel()),
                     setupParams.getUseQuadViews(),
+                    setupParams.getUseMonoView(),
                     setupParams.getUseVarjoFoveatedRendering(),
                     setupParams.getMsaaSampleCount(),
                     setupParams.getOpenxrReferenceSpaceType(),
@@ -158,6 +155,7 @@ final class ImpXrApi {
       boolean useMaxSwapchainSize,
       int foveationLevel,
       boolean useQuadViews,
+      boolean useMonoView,
       boolean useVarjoFoveatedRendering,
       int msaaSampleCount,
       long openXrReferenceSpaceType,

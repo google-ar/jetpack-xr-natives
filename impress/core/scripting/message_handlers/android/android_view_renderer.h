@@ -96,6 +96,10 @@ class AndroidViewRenderer : public Component {
       absl::optional<uint32_t> blend_priority = std::nullopt);
   void Cleanup();
 
+  // Returns the material used to render the Android View.
+  // Returns nullptr if the material is not yet loaded.
+  BorrowedMaterialPtr GetMaterial();
+
   // Updates the collider of the Android View.
   void UpdateCollider(const imp::Box& collider);
 

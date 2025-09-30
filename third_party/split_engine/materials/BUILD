@@ -165,6 +165,7 @@ cc_library(
         "@com_google_impress//core/split_engine/materials:builtin_texture_parameter_creator",
         "@com_google_impress//core/split_engine/materials:split_engine_material",
         "@com_google_impress//core/view:base_view",
+        "@third_party//filament/filament:filament_hdrs",
         "@third_party//split_engine:fbs",
     ],
     alwayslink = 1,

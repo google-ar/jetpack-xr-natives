@@ -553,55 +553,54 @@ void EditorImpl::InitializeWidgetUiSystem() {
   BaseView& view = GetView();
 
   widget_ui_system_.AddWidget<Hierarchy>(
-      WidgetLayoutInfo(panel_ids::kSceneWindow), view);
+      WidgetLayoutInfo(PanelId::kSceneWindow), view);
   if (GetCameraConfiguration() ==
       EditorPlugin::CameraConfiguration::kEditorAndAppCameraDefault) {
     widget_ui_system_.AddWidget<ToggleCamera>(
-        WidgetLayoutInfo(panel_ids::kSceneWindow), view);
+        WidgetLayoutInfo(PanelId::kToolBar), view);
   }
   event_injector_ = widget_ui_system_.AddWidget<EventInjector>(
-      WidgetLayoutInfo(panel_ids::kSceneWindow), view);
-  widget_ui_system_.AddWidget<FilamentViewSettingsWidget>(
-      WidgetLayoutInfo(panel_ids::kSceneWindow), view);
+      WidgetLayoutInfo(PanelId::kSceneWindow), view);
 
   widget_ui_system_.AddWidget<NodeDetails>(
-      WidgetLayoutInfo(panel_ids::kDetailsWindow), view);
+      WidgetLayoutInfo(PanelId::kDetailsWindow), view);
   widget_ui_system_.AddWidget<Transform>(
-      WidgetLayoutInfo(panel_ids::kDetailsWindow), view);
+      WidgetLayoutInfo(PanelId::kDetailsWindow), view);
   widget_ui_system_.AddWidget<MaterialsWidget>(
-      WidgetLayoutInfo(panel_ids::kDetailsWindow), view);
+      WidgetLayoutInfo(PanelId::kDetailsWindow), view);
   widget_ui_system_.AddWidget<ComponentUi>(
-      WidgetLayoutInfo(panel_ids::kDetailsWindow), view,
+      WidgetLayoutInfo(PanelId::kDetailsWindow), view,
       /*component_widgets_panel_id=*/
-      WidgetLayoutInfo(panel_ids::kDetailsWindow));
+      WidgetLayoutInfo(PanelId::kDetailsWindow));
 
-  widget_ui_system_.AddWidget<Console>(WidgetLayoutInfo(panel_ids::kTabBar),
+  widget_ui_system_.AddWidget<Console>(WidgetLayoutInfo(PanelId::kTabBar),
                                        view);
   widget_ui_system_.AddWidget<PerformanceWindow>(
-      WidgetLayoutInfo(panel_ids::kTabBar), view);
+      WidgetLayoutInfo(PanelId::kTabBar), view);
   widget_ui_system_.AddWidget<EnvironmentLightEditor>(
-      WidgetLayoutInfo(panel_ids::kTabBar), view);
+      WidgetLayoutInfo(PanelId::kTabBar), view);
+  widget_ui_system_.AddWidget<FilamentViewSettingsWidget>(
+      WidgetLayoutInfo(PanelId::kTabBar), view);
 #if IMP_PLATFORM(DESKTOP) || IMP_PLATFORM(WASM)
-  
   asset_library_ = widget_ui_system_.AddWidget<AssetLibrary>(
-      WidgetLayoutInfo(panel_ids::kTabBar), view);
+      WidgetLayoutInfo(PanelId::kTabBar), view);
   widget_ui_system_.AddWidget<SettingsWidget>(
-      WidgetLayoutInfo(panel_ids::kMenuBar), GetView());
+      WidgetLayoutInfo(PanelId::kMenuBar), GetView());
 #endif
 
   widget_ui_system_.AddWidget<VisualizeBounds>(
-      WidgetLayoutInfo(panel_ids::kFreeform), view);
+      WidgetLayoutInfo(PanelId::kFreeform), view);
   widget_ui_system_.AddWidget<VisualizeColliders>(
-      WidgetLayoutInfo(panel_ids::kFreeform), view);
+      WidgetLayoutInfo(PanelId::kFreeform), view);
   widget_ui_system_.AddWidget<VisualizeOrigins>(
-      WidgetLayoutInfo(panel_ids::kFreeform), view);
+      WidgetLayoutInfo(PanelId::kFreeform), view);
   widget_ui_system_.AddWidget<FileDragAndDrop>(
-      WidgetLayoutInfo(panel_ids::kFreeform), view);
+      WidgetLayoutInfo(PanelId::kFreeform), view);
 
   // Edit mode is only available in the Impress sandbox.
   if (is_sandbox_) {
     widget_ui_system_.AddWidget<EditorModeToggle>(
-        WidgetLayoutInfo(panel_ids::kToolBar), view);
+        WidgetLayoutInfo(PanelId::kToolBar), view);
   }
 }
 
@@ -746,7 +745,7 @@ void EditorImpl::RegisterEditorSettingChangedEventHandler() {
         if (event.vertex_selection_enabled.has_value()) {
           if (*event.vertex_selection_enabled) {
             widget_ui_system_.AddWidget<VertexSelectWidget>(
-                WidgetLayoutInfo(panel_ids::kFreeform), GetView(), dispatcher_,
+                WidgetLayoutInfo(PanelId::kFreeform), GetView(), dispatcher_,
                 editor_root_node_);
           } else {
             widget_ui_system_.RemoveWidget<VertexSelectWidget>();

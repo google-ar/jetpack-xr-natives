@@ -145,16 +145,20 @@ class RecipeTypeMatcher {
   }
 
   template <typename ActualT>
-  void ExplainTypeMismatch(::testing::MatchResultListener* listener,
-                           const ExpectedT& expected,
-                           const ActualT& actual) const {
+  void ExplainTypeMismatch(::testing::MatchResultListener* listener) const {
     *listener << "Expected type " << typeid(ExpectedT).name()
               << " but got type " << typeid(ActualT).name();
   }
 
   template <typename ActualT>
+  void ExplainLiteralMismatch(::testing::MatchResultListener* listener,
+                              const ActualT& actual) const {
+    *listener << "Expected Literal value " << recipe::ToString(expected_)
+              << " but got value " << recipe::ToString(actual);
+  }
+
+  template <typename ActualT>
   void ExplainValueMismatch(::testing::MatchResultListener* listener,
-                            const ExpectedT& expected,
                             const ActualT& actual) const {
     *listener << "Expected value " << expected_ << " but got value " << actual;
   }
@@ -166,10 +170,10 @@ class RecipeTypeMatcher {
                   kIsAnyOf<ActualT, int, float, bool, double> ||
                   kIsAnyOf<ExpectedT, int, float, bool, double>) {
       if constexpr (!std::is_same_v<ActualT, ExpectedT>) {
-        ExplainTypeMismatch(listener, expected_, actual);
+        ExplainTypeMismatch<ActualT>(listener);
         return false;
       } else if (!AlmostEqual(actual, expected_)) {
-        ExplainValueMismatch(listener, expected_, actual);
+        ExplainValueMismatch(listener, actual);
         return false;
       } else {
         return true;
@@ -177,18 +181,17 @@ class RecipeTypeMatcher {
     } else if constexpr (kIsImpRecipeType<ActualT> ||
                          kIsImpRecipeType<ExpectedT>) {
       if constexpr (!std::is_same_v<ActualT, ExpectedT>) {
-        ExplainTypeMismatch(listener, expected_, actual);
+        ExplainTypeMismatch<ActualT>(listener);
         return false;
       } else if (recipe::ToString(actual) != recipe::ToString(expected_)) {
-        ExplainValueMismatch(listener, recipe::ToString(expected_),
-                             recipe::ToString(actual));
+        ExplainLiteralMismatch(listener, actual);
         return false;
       } else {
         return true;
       }
     } else {
       if (actual != expected_) {
-        ExplainValueMismatch(listener, expected_, actual);
+        ExplainValueMismatch(listener, actual);
         return false;
       }
       return true;

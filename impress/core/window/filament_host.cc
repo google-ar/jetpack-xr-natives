@@ -129,6 +129,12 @@ absl::StatusOr<const filament::SwapChain*> FilamentHost::AddSwapChain(
     // postprocessing.
     flags |= filament::SwapChain::CONFIG_SRGB_COLORSPACE;
   }
+  if (state_->ShouldUseSrgbSwapChain()) {
+    flags |= filament::SwapChain::CONFIG_SRGB_COLORSPACE;
+  }
+  if (state_->ShouldUseStencilSwapChain()) {
+    flags |= filament::SwapChain::CONFIG_HAS_STENCIL_BUFFER;
+  }
   filament::SwapChain* swap_chain =
       engine_->createSwapChain(native_window, flags);
   swap_chains_.insert(swap_chain);
@@ -268,6 +274,8 @@ OptionalError FilamentHost::InternalSetup() {
       filament::backend::FeatureLevel::FEATURE_LEVEL_1;
   render_view_.Get()->setPostProcessingEnabled(isAtLeastFeatureLevel1);
   render_view_.Get()->setShadowingEnabled(isAtLeastFeatureLevel1);
+  render_view_.Get()->setStencilBufferEnabled(
+      state_->ShouldUseStencilSwapChain());
   if (owns_filament_) {
     render_view_.Get()->setScene(scene_);
   }

@@ -78,6 +78,7 @@ void SplitEngineSubspaceManagerImpl::CreateSubspace(
           LOG(ERROR) << "Subspace not found";
           return absl::NotFoundError("Subspace not found");
         }
+        it->second.SetSubspaceName(app_name);
         auto event = OnSubspaceCreatedEvent{app_name, it->second, subspace_id};
         view_.GetDispatcher().Send(event);
         return absl::OkStatus();

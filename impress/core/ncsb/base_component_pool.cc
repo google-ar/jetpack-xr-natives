@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <utility>
 
+#include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "absl/types/optional.h"
 #include "filament/libs/utils/include/utils/Entity.h"
@@ -26,39 +27,108 @@
 #include "core/common/holdable.h"
 #include "core/common/invocable.h"
 #include "core/common/rememberer.h"
+#include "core/common/vector_helpers.h"
 #include "core/ncsb/component.h"
 #include "core/view/base_view.h"
 
 namespace imp {
 
-BaseComponentPool::ComponentVector::ComponentVector(BaseComponentPool* pool)
+BaseComponentPool::ComponentStore::ComponentStore(BaseComponentPool* pool)
     : pool_(pool) {}
 
-bool BaseComponentPool::ComponentVector::Empty() const {
-  return components_.empty();
+bool BaseComponentPool::ComponentStore::Has(utils::Entity entity) const {
+  return entities_to_indices_.count(entity) > 0;
 }
 
-utils::Entity BaseComponentPool::ComponentVector::SwapAndPop(
-    ComponentIndex instance) {
-  utils::Entity swapped_entity;
-  ComponentIndex last_instance = components_.size() - 1;
-  if (instance != last_instance) {
-    ComponentPtr& last_component = components_.at(last_instance);
-    swapped_entity = last_component->GetEntity();
-    std::swap(components_.at(instance), last_component);
+BaseComponentPool::ComponentIndex BaseComponentPool::ComponentStore::GetIndex(
+    utils::Entity entity) const {
+  return entities_to_indices_.at(entity);
+}
+
+bool BaseComponentPool::ComponentStore::Empty() const {
+  return components_.size() <= free_indices_count_;
+}
+
+size_t BaseComponentPool::ComponentStore::GetComponentCount() const {
+  return components_.size() - free_indices_count_;
+}
+
+utils::Entity BaseComponentPool::ComponentStore::BackEntity() const {
+  return components_.back()->GetEntity();
+}
+
+void BaseComponentPool::ComponentStore::Remove(utils::Entity entity) {
+  auto itr = entities_to_indices_.find(entity);
+  if (itr == entities_to_indices_.end()) {
+    return;
+  }
+
+  ComponentIndex index = itr->second;
+
+  // Remove from the map first.
+  entities_to_indices_.erase(itr);
+
+  ComponentIndex last_index = components_.size() - 1;
+
+  // Special case for removing a component while in the midst of iterating over
+  // the components. In this case, we can't swap and pop because it can cause
+  // the iteration to skip over components. Instead we track the free indices
+  // so we can densify the vector later.
+  if (iterating_depth_ > 0) {
+    components_[index].reset();
+    ++free_indices_count_;
+    
+    return;
+  }
+
+  // Swap and pop the last component to ensure the vector of components stays
+  // dense.
+  if (index != last_index) {
+    ComponentPtr& last_component = components_.at(last_index);
+    utils::Entity swapped_entity = last_component->GetEntity();
+    std::swap(components_.at(index), last_component);
+    entities_to_indices_[swapped_entity] = index;
   }
 
   components_.pop_back();
-  return swapped_entity;
 }
 
-Component& BaseComponentPool::ComponentVector::AtRaw(ComponentIndex instance) {
-  return *components_.at(instance);
+Component& BaseComponentPool::ComponentStore::AtRaw(ComponentIndex index) {
+  return *components_[index];
 }
 
-const Component& BaseComponentPool::ComponentVector::AtRaw(
-    ComponentIndex instance) const {
-  return *components_.at(instance);
+const Component& BaseComponentPool::ComponentStore::AtRaw(
+    ComponentIndex index) const {
+  return *components_[index];
+}
+
+Component* BaseComponentPool::ComponentStore::TryGetRaw(utils::Entity entity) {
+  auto itr = entities_to_indices_.find(entity);
+  if (itr == entities_to_indices_.end()) {
+    return nullptr;
+  }
+
+  return components_[itr->second].get();
+}
+
+void BaseComponentPool::ComponentStore::TryDensifyComponentsVector() {
+  // If we are in the middle of iterating, we can't densify the vector.
+  if (iterating_depth_ > 0) {
+    return;
+  }
+
+  // If there are no free indices, we don't need to densify.
+  if (free_indices_count_ == 0) {
+    return;
+  }
+
+  CompactVector(components_, [this](size_t new_index) {
+    // When a component's index is change within the vector, the entity to
+    // index map needs to be updated to accurately reflect the new index.
+    entities_to_indices_[components_[new_index]->GetEntity()] = new_index;
+  });
+
+  free_indices_count_ = 0;
 }
 
 BaseComponentPool::BaseComponentPool(BaseView& view)
@@ -70,12 +140,12 @@ BaseComponentPool::~BaseComponentPool() {
 }
 
 bool BaseComponentPool::Has(utils::Entity entity) const noexcept {
-  return entities_to_instances_.count(entity) > 0;
+  return components_.Has(entity);
 }
 
 BaseComponentPool::ComponentIndex BaseComponentPool::Get(
     utils::Entity entity) const noexcept {
-  return entities_to_instances_.at(entity);
+  return components_.GetIndex(entity);
 }
 
 Component* BaseComponentPool::Add(utils::Entity entity) noexcept {
@@ -87,10 +157,7 @@ Component* BaseComponentPool::Add(utils::Entity entity) noexcept {
     BeforeFirstAdded();
   }
 
-  ComponentIndex instance = EmplaceBack();
-  entities_to_instances_[entity] = instance;
-
-  return &GetRawComponent(instance);
+  return Emplace(entity);
 }
 
 void BaseComponentPool::PostSetup(utils::Entity entity,
@@ -109,12 +176,7 @@ Component& BaseComponentPool::GetRawComponent(
 
 Component* BaseComponentPool::TryGetRawComponentFromEntity(
     utils::Entity entity) noexcept {
-  auto itr = entities_to_instances_.find(entity);
-  if (itr == entities_to_instances_.end()) {
-    return nullptr;
-  }
-
-  return &components_.AtRaw(itr->second);
+  return components_.TryGetRaw(entity);
 }
 
 utils::Entity BaseComponentPool::GetEntity(
@@ -123,45 +185,28 @@ utils::Entity BaseComponentPool::GetEntity(
 }
 
 size_t BaseComponentPool::GetComponentCount() const noexcept {
-  return entities_to_instances_.size();
+  return components_.GetComponentCount();
 }
 
 void BaseComponentPool::Remove(utils::Entity entity) noexcept {
   CancelPending(entity);
   Forget(entity);
 
-  auto itr = entities_to_instances_.find(entity);
-  if (itr == entities_to_instances_.end()) {
-    // Couldn't find instance...
+  // CancelPending or Forget may have removed the component already.
+  Component* component = components_.TryGetRaw(entity);
+  if (component == nullptr) {
     return;
   }
 
-  ComponentIndex instance = itr->second;
-  Component& component = GetRawComponent(instance);
-
-  BeforeRemove(component);
+  BeforeRemove(*component);
 
   // Disable the component so that OnActiveStatusChange is called before Cleanup
   // (unless the component was already inactive).
-  component.SetEnabled(false);
+  component->SetEnabled(false);
 
-  Cleanup(instance);
+  Cleanup(*component);
 
-  // It's possible that the Instance changed during Cleanup if another component
-  // of this type was removed. Find it again.
-  itr = entities_to_instances_.find(entity);
-  if (itr == entities_to_instances_.end()) {
-    return;
-  }
-  instance = itr->second;
-
-  // Actually remove it now.
-  entities_to_instances_.erase(itr);
-  if (utils::Entity swapped_entity = components_.SwapAndPop(instance)) {
-    // In this case, another entity was swapped and now uses instance, so we
-    // must update the entities_to_instances_ map.
-    entities_to_instances_[swapped_entity] = instance;
-  }
+  components_.Remove(entity);
 
   if (components_.Empty()) {
     AfterLastRemoved();
@@ -169,8 +214,8 @@ void BaseComponentPool::Remove(utils::Entity entity) noexcept {
 }
 
 void BaseComponentPool::RemoveAll() noexcept {
-  while (!entities_to_instances_.empty()) {
-    Remove(entities_to_instances_.begin()->first);
+  while (!components_.Empty()) {
+    Remove(components_.BackEntity());
   }
 }
 

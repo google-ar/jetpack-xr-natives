@@ -286,6 +286,14 @@ void AndroidViewRenderer::UpdateCollider(const imp::Box& collider) {
   renderer_node_->GetComponent<BoxCollider>()->SetBox(collider);
 }
 
+BorrowedMaterialPtr AndroidViewRenderer::GetMaterial() {
+  return std::holds_alternative<OwnedMaterialPtr>(material_)
+             ? std::get<OwnedMaterialPtr>(material_).Borrow()
+             : std::get<std::unique_ptr<android_xr::TextureExternalMaterial>>(
+                   material_)
+                   ->GetMaterial();
+}
+
 Future<AndroidViewRenderer::TextureMaterialVariant>
 AndroidViewRenderer::LoadMaterial(
     absl::optional<imp::MaterialDefinition> material_definition) {
@@ -461,10 +469,26 @@ void AndroidViewRenderer::ForwardControllerInputs(
   float2 surface_coordinates =
       GetSurfaceCoordinatesFromWorldPoint(event.GetHit()->world_point);
   auto select_button_state =
-      event.GetInputActionState<bool>(kDefaultSelectActionName);
+      event.GetInputActionStateVariant(kDefaultSelectActionName);
 
-  bool is_select = select_button_state.current_state;
-  bool select_changed = select_button_state.has_changed_since_last_sync;
+  // Using this visitor to allow "select" to be defined as either a bool action
+  // (ie for a button) or a float action (ie for a trigger).
+  bool is_select = std::visit(
+      [](auto&& state) {
+        if constexpr (std::is_same_v<decltype(state.current_state), bool>) {
+          return state.current_state;
+        } else if constexpr (std::is_same_v<decltype(state.current_state),
+                                            float>) {
+          return state.current_state >= .95f;
+        } else {
+          return false;
+        }
+      },
+      select_button_state);
+
+  bool select_changed =
+      std::visit([](auto&& state) { return state.has_changed_since_last_sync; },
+                 select_button_state);
 
   // If we are tap down, tap up, or moving, send a touch event.
   if (is_select || select_changed) {

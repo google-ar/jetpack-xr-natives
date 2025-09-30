@@ -18,7 +18,10 @@
 #define THIRD_PARTY_ARCORE_AR_IMP_CORE_EDITOR_WIDGETS_TOGGLE_CAMERA_H
 
 #include "absl/strings/string_view.h"
+#include "core/assets/asset_ptr.h"
+#include "core/common/rememberer.h"
 #include "core/editor/widget.h"
+#include "core/render/texture_asset.h"
 #include "core/view/base_view.h"
 
 namespace imp::editor {
@@ -33,6 +36,8 @@ class ToggleCamera : public Widget {
 
  private:
   BaseView& view_;
+  Rememberer rememberer_;
+  AssetPtr<imp::TextureAsset> switch_camera_icon_;
 };
 
 }  // namespace imp::editor

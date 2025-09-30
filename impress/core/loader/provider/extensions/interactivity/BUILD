@@ -131,7 +131,6 @@ cc_library(
         "//core/common:fbs",
         "//core/common:fbs_deps",  # build_cleaner: keep
         "//core/common:flatbuffer_helpers",
-        "//core/common:log",
         "//core/common:typed_ids",
         "//core/math",
         "//core/math:flatbuffer_support",
@@ -142,6 +141,7 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/types:variant",
+        "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
     ],
     alwayslink = 1,

@@ -51,6 +51,13 @@ class RecipeRunner : public Component {
     kReady,
   };
 
+  // Event sent to the impress scene node when Update() is called.
+  struct RecipeUpdateEvent : public Event {
+   public:
+    RecipeUpdateEvent(absl::Duration frame_time) : frame_time(frame_time) {}
+    absl::Duration frame_time;
+  };
+
   absl::Status Setup();
 
   void Update(const FrameTime& frame_time);

@@ -110,6 +110,13 @@ class OpenXrManager {
 
   enum class ObjectTrackingMode : uint8_t { kDisabled = 0x00, kEnabled = 0x01 };
 
+  enum class EyeTrackingMode : uint8_t {
+    kDisabled = 0x00,
+    kCoarse = 0x01,
+    kFine = 0x02,
+    kCoarseAndFine = 0x03
+  };
+
   // Struct that contains the configuration settings that can be set at runtime
   // by passing to ConfigureSession().
   struct ConfigSettings {
@@ -121,6 +128,7 @@ class OpenXrManager {
         AnchorPersistenceMode::kDisabled;
     FaceTrackingMode face_tracking_mode = FaceTrackingMode::kDisabled;
     ObjectTrackingMode object_tracking_mode = ObjectTrackingMode::kDisabled;
+    EyeTrackingMode eye_tracking_mode = EyeTrackingMode::kDisabled;
     std::vector<XrObjectLabelANDROID> object_tracking_labels = {};
   };
 
@@ -370,6 +378,10 @@ class OpenXrManager {
   // Checks if the face tracker is calibrated.
   bool IsFaceTrackerCalibrated();
 
+  // Gets eye tracking info.
+  XrResult GetEyesInfo(XrTime time, XrEyesANDROID* out_eyes,
+                       bool is_fine_tracking_mode);
+
   // Gets the smooth depth image from the depth swapchain. This is a public
   // function that is expected to be called from the jni thread.
   bool GetDepthImage(XrTime time, const float** out_smooth_depth_image,
@@ -556,6 +568,10 @@ class OpenXrManager {
   XrResult ConfigureFaceTracking(FaceTrackingMode mode)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
+  // Initializes or destroys the eye tracking depending on the mode.
+  XrResult ConfigureEyeTracking(EyeTrackingMode mode)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
   // Creates a planes tracker. This is used to search for and keep track of
   // the plane trackables. This will be called when the session becomes in
   // focus or whenever planes are queried if it does not already exist. It
@@ -572,6 +588,9 @@ class OpenXrManager {
 
   // Creates the object tracker if it is not already created.
   XrResult MaybeCreateObjectTracker() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
+  // Creates the eye tracker if it is not already created.
+  XrResult MaybeCreateEyeTracker() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   // Creates persistence_handle_ if it is not already created. Returns
   // XR_SUCCESS if the handle is created or has already been created before.
@@ -618,6 +637,7 @@ class OpenXrManager {
       right_hand_joint_locations_[XR_HAND_JOINT_COUNT_EXT] ABSL_GUARDED_BY(
           mutex_);
   XrFaceTrackerANDROID face_tracker_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
+  XrEyeTrackerANDROID eye_tracker_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
   FaceTrackingCalibrationState face_tracker_calibration_state_
       ABSL_GUARDED_BY(mutex_) = FaceTrackingCalibrationState::kUnknown;
   std::byte* left_hand_joint_poses_buffer_[CACHE_SIZE] ABSL_GUARDED_BY(
@@ -716,6 +736,11 @@ class OpenXrManager {
   PFN_xrEnumerateDepthSwapchainImagesANDROID enumerate_depth_swapchain_images_;
   PFN_xrEnumerateDepthResolutionsANDROID enumerate_depth_resolutions_;
   PFN_xrAcquireDepthSwapchainImagesANDROID acquire_depth_swapchain_images_;
+
+  PFN_xrCreateEyeTrackerANDROID create_eye_tracker_;
+  PFN_xrDestroyEyeTrackerANDROID destroy_eye_tracker_;
+  PFN_xrGetFineTrackingEyesInfoANDROID get_fine_tracking_eyes_info_;
+  PFN_xrGetCoarseTrackingEyesInfoANDROID get_coarse_tracking_eyes_info_;
 };
 }  // namespace androidx::xr::openxr
 #endif  // JETPACK_XR_NATIVES_OPENXR_OPENXR_MANAGER_H_

@@ -147,14 +147,27 @@ void XrOpenGLSwapChainImageHandler::BindTexturesToFbo(uint32_t fbo,
 
   // Bind the textures to the fbo.
   if (host_->IsMultiviewStereo()) {
-    glFramebufferTextureMultiviewOVR(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                                     color_texture, /*level=*/0,
-                                     /*baseViewIndex=*/0,
-                                     /*numViews=*/host_->GetLogicalEyeCount());
-    glFramebufferTextureMultiviewOVR(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-                                     depth_texture, /*level=*/0,
-                                     /*baseViewIndex=*/0,
-                                     /*numViews=*/host_->GetLogicalEyeCount());
+    if (host_->GetMsaaSampleCount() > 0) {
+      glFramebufferTextureMultisampleMultiviewOVR(
+          GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, color_texture, /*level=*/0,
+          /*samples=*/host_->GetMsaaSampleCount(),
+          /*baseViewIndex=*/0,
+          /*numViews=*/host_->GetLogicalEyeCount());
+      glFramebufferTextureMultisampleMultiviewOVR(
+          GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depth_texture, /*level=*/0,
+          /*samples=*/host_->GetMsaaSampleCount(),
+          /*baseViewIndex=*/0,
+          /*numViews=*/host_->GetLogicalEyeCount());
+    } else {
+      glFramebufferTextureMultiviewOVR(
+          GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, color_texture, /*level=*/0,
+          /*baseViewIndex=*/0,
+          /*numViews=*/host_->GetLogicalEyeCount());
+      glFramebufferTextureMultiviewOVR(
+          GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depth_texture, /*level=*/0,
+          /*baseViewIndex=*/0,
+          /*numViews=*/host_->GetLogicalEyeCount());
+    }
   } else {
     glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                            GL_TEXTURE_2D, color_texture, 0);

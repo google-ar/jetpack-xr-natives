@@ -35,9 +35,11 @@
 #include "core/material_library/generic_material_parameters.h"
 #include "core/material_library/generic_material_spec.h"
 #include "core/material_library/material_param_value.h"
+#include "core/material_library/schemas/generic_material_generated.h"
 #include "core/materials/material.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
+#include "core/model/entity_data.h"
 #include "core/render/texture.h"
 #include "core/split_engine/android/split_engine_android_bridge.h"
 #include "core/split_engine/materials/builtin/builtin_generic_material.h"
@@ -60,15 +62,6 @@ void RewriteTextureId(
   if (!texture_parameter) return;
   texture_parameter->texture_id = SplitEngineSerializer::GetId(
       texture_borrower(texture_parameter->texture_id)->GetTexture());
-}
-
-// TODO: Remove this once we fully migrate to TextureBorrower.
-void RewriteTextureId(
-    std::optional<GenericMaterialTextureParameter>& texture_parameter,
-    const TextureProvider& texture_provider) {
-  if (!texture_parameter) return;
-  texture_parameter->texture_id = SplitEngineSerializer::GetId(
-      texture_provider(texture_parameter->texture_id));
 }
 
 // Rewrites the texture IDs from indexes into the loaded model texture listing
@@ -108,39 +101,6 @@ GenericMaterialParameters RewriteTextureIds(
   }
   if (parameters.transmission) {
     RewriteTextureId(remapped.transmission->texture, texture_borrower);
-  }
-  return remapped;
-}
-
-GenericMaterialParameters RewriteTextureIds(
-    const GenericMaterialParameters& parameters,
-    const TextureProvider& texture_provider) {
-  GenericMaterialParameters remapped = parameters;
-  if (parameters.base_color) {
-    RewriteTextureId(remapped.base_color->texture, texture_provider);
-  }
-  if (parameters.metallic_roughness) {
-    RewriteTextureId(remapped.metallic_roughness->texture, texture_provider);
-  }
-  if (parameters.normal) {
-    RewriteTextureId(remapped.normal->texture, texture_provider);
-  }
-  if (parameters.ambient_occlusion) {
-    RewriteTextureId(remapped.ambient_occlusion->texture, texture_provider);
-  }
-  if (parameters.emissive) {
-    RewriteTextureId(remapped.emissive->texture, texture_provider);
-  }
-  if (parameters.clearcoat) {
-    RewriteTextureId(remapped.clearcoat->intensity_texture, texture_provider);
-    RewriteTextureId(remapped.clearcoat->normal_texture, texture_provider);
-    RewriteTextureId(remapped.clearcoat->roughness_texture, texture_provider);
-  }
-  if (parameters.sheen) {
-    RewriteTextureId(remapped.sheen->color_texture, texture_provider);
-  }
-  if (parameters.transmission) {
-    RewriteTextureId(remapped.transmission->texture, texture_provider);
   }
   return remapped;
 }
@@ -237,6 +197,13 @@ class GenericMaterialSpecCreator {
 Future<std::unique_ptr<SplitEngineGenericMaterial>>
 SplitEngineGenericMaterial::Create(BaseView& view,
                                    const GenericMaterialSpec& spec) {
+  if (spec.GetDepthClearMaterial() ==
+      schemas::GenericMaterialDepthClearMaterial::Enabled) {
+    return Future<std::unique_ptr<SplitEngineGenericMaterial>>(
+        absl::UnimplementedError(
+            "GenericMaterialSpec::schema::GenericMaterialDepthClearMaterial is "
+            "not supported in Split Engine."));
+  }
   auto fbb = std::make_unique<flatbuffers::FlatBufferBuilder>();
   flatbuffers::Offset<android_xr::schemas::GenericMaterialSpec> spec_offset =
       CreateGenericMaterialSpec(*fbb, spec);
@@ -313,17 +280,6 @@ absl::Status SplitEngineGenericMaterial::AssignTexturesAndParams(
   return absl::OkStatus();
 }
 
-absl::Status SplitEngineGenericMaterial::AssignTexturesAndParams(
-    const GenericMaterialParameters& generic_material_parameters,
-    const TextureProvider& texture_provider) {
-  // Rewrite the texture references to be split engine IDs.
-  generic_material_parameters_ =
-      RewriteTextureIds(generic_material_parameters, texture_provider);
-
-  MarkParametersDirty();
-  return absl::OkStatus();
-}
-
 flatbuffers::Offset<void> SplitEngineGenericMaterial::SerializeParameters(
     flatbuffers::FlatBufferBuilder& fbb,
     BuiltInTextureParameterCreator& texture_parameter_creator) const {
@@ -337,11 +293,12 @@ absl::string_view SplitEngineGenericMaterial::GetName() const {
 }
 
 // TODO: (broken link) - Remove these methods once MaterialConfig is removed.
-std::vector<MaterialParameter> SplitEngineGenericMaterial::GetParameters()
-    const {
+std::vector<model::MaterialParameter>
+SplitEngineGenericMaterial::GetParameters() const {
   return {};
 }
-TypedVector<MaterialTexture> SplitEngineGenericMaterial::GetTextures() const {
+TypedVector<model::MaterialTexture> SplitEngineGenericMaterial::GetTextures()
+    const {
   return {};
 }
 StringMap<int> SplitEngineGenericMaterial::GetSamplerIndexLookup() const {
@@ -669,6 +626,13 @@ void SplitEngineGenericMaterial::SetIndexOfRefraction(
   generic_material_parameters_.refraction->index_of_refraction =
       index_of_refraction;
   MarkParametersDirty();
+}
+
+std::optional<TextureAndSampler>
+SplitEngineGenericMaterial::GetFeatureIdTexture(int index) const {
+  // TODO: Add support for feature id textures to
+  // SplitEngineGenericMaterial.
+  return std::nullopt;
 }
 
 void SplitEngineGenericMaterial::SetAlphaCutoff(float alpha_cutoff) {

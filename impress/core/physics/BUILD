@@ -57,15 +57,20 @@ cc_library(
 
 cc_library(
     name = "collidable_shape",
+    srcs = [
+        "collidable_shapes/collidable_shape.cc",
+    ],
     hdrs = [
         "collidable_shapes/collidable_shape.h",
     ],
     copts = imp_google3_copts(),
     defines = imp_defines(),
     deps = [
+        ":physics_helper",
         "//core:config",
         "//core/geometry/shapes",
         "//core/math",
+        "//core/ncsb",
         "@bullet//:BulletCollision",  # build_cleaner: keep
         "@bullet//:BulletDynamics",  # build_cleaner: keep
         "@bullet//:LinearMath",
@@ -209,6 +214,40 @@ cc_library(
 )
 
 cc_library(
+    name = "compound_collidable_shape",
+    srcs = [
+        "collidable_shapes/compound_collidable_shape.cc",
+    ],
+    hdrs = [
+        "collidable_shapes/collidable_shape_properties.h",
+        "collidable_shapes/compound_collidable_shape.h",
+    ],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":box_collidable_shape",
+        ":capsule_collidable_shape",
+        ":collidable_shape",
+        ":cone_collidable_shape",
+        ":cylinder_collidable_shape",
+        ":physics_helper",
+        ":physics_proto_cc",
+        ":sphere_collidable_shape",
+        "//core:config",
+        "//core/geometry/shapes",
+        "//core/math",
+        "//core/ncsb",
+        "//core/view/framework",
+        "@bullet//:BulletCollision",  # build_cleaner: keep
+        "@bullet//:BulletDynamics",  # build_cleaner: keep
+        "@bullet//:LinearMath",
+        "@com_google_absl//absl/log:check",
+        "@com_google_impress//core/common:log",
+    ] + if_dev_runtime(["//core/common:debug_draw"]),
+    alwayslink = 1,
+)
+
+cc_library(
     name = "convex_hull_mesh_collidable_shape",
     srcs = [
         "collidable_shapes/convex_hull_mesh_collidable_shape.cc",
@@ -288,12 +327,16 @@ cc_library(
     name = "physics",
     srcs = [
         "collidable.cc",
+        "constraints/base_constraint.cc",
+        "constraints/point2point_constraint.cc",
         "physics_manager.cc",
         "rigid_body.cc",
         "trigger_volume.cc",
     ],
     hdrs = [
         "collidable.h",
+        "constraints/base_constraint.h",
+        "constraints/point2point_constraint.h",
         "physics_manager.h",
         "rigid_body.h",
         "trigger_volume.h",
@@ -304,6 +347,7 @@ cc_library(
         ":box_collidable_shape",
         ":capsule_collidable_shape",
         ":collidable_shape",
+        ":compound_collidable_shape",
         ":cone_collidable_shape",
         ":convex_hull_mesh_collidable_shape",
         ":cylinder_collidable_shape",
@@ -312,13 +356,15 @@ cc_library(
         ":sphere_collidable_shape",
         ":static_mesh_collidable_shape",
         "//core:config",
-        "//core/common:log",
+        "//core/collision:ray",
+        "//core/common:owned_ptr",
         "//core/common:platform_helpers",
         "//core/common:registry",
         "//core/common:robin_map",
         "//core/geometry/shapes",
         "//core/math",
         "//core/ncsb",
+        "//core/scene_handles:scene_handles_imp_cc_proto",
         "//core/view:base_view",
         "//core/view/framework",
         "//core/view/framework:framework_proto_cc",
@@ -326,11 +372,14 @@ cc_library(
         "@bullet//:BulletCollision",  # build_cleaner: keep
         "@bullet//:BulletDynamics",  # build_cleaner: keep
         "@bullet//:LinearMath",
+        "@com_google_absl//absl/debugging:stacktrace",
+        "@com_google_absl//absl/debugging:symbolize",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/types:optional",
+        "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
     ] + if_dev_runtime(["//core/common:debug_draw"]),
     alwayslink = 1,
@@ -339,12 +388,15 @@ cc_library(
 proto_library(
     name = "physics_proto",
     srcs = [
+        "collidable_shapes/collidable_shape_properties_state.proto",
         "collidable_type.proto",
+        "constraints/point2point_constraint_state.proto",
         "rigid_body_state.proto",
     ],
     deps = [
         "//core/math:math_proto",
         "//core/proto:imp_proto",
+        "//core/scene_handles:scene_handles_proto",
     ],
 )
 
@@ -369,4 +421,48 @@ imp_assets(
 imp_material(
     name = "solid_color",
     src = ":solid_color.mat",
+)
+
+cc_library(
+    name = "constraint",
+    srcs = [
+        "constraints/base_constraint.cc",
+        "constraints/point2point_constraint.cc",
+    ],
+    hdrs = [
+        "constraints/base_constraint.h",
+        "constraints/point2point_constraint.h",
+    ],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":collidable_shape",
+        ":physics",
+        ":physics_helper",
+        ":physics_proto_cc",
+        "//core:config",
+        "//core/collision:ray",
+        "//core/common:owned_ptr",
+        "//core/common:platform_helpers",
+        "//core/common:registry",
+        "//core/common:robin_map",
+        "//core/geometry/shapes",
+        "//core/math",
+        "//core/ncsb",
+        "//core/view:base_view",
+        "//core/view/framework",
+        "//core/view/utils:frame_time",
+        "@bullet//:BulletCollision",  # build_cleaner: keep
+        "@bullet//:BulletDynamics",  # build_cleaner: keep
+        "@bullet//:LinearMath",
+        "@com_google_absl//absl/debugging:stacktrace",
+        "@com_google_absl//absl/debugging:symbolize",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/types:optional",
+        "@com_google_impress//core/common:log",
+        "@mediapipe//mediapipe/framework/port:status",
+    ] + if_dev_runtime(["//core/common:debug_draw"]),
+    alwayslink = 1,
 )

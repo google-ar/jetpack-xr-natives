@@ -75,7 +75,9 @@ class SplitEngineMessageGroupCallback : public JavaWrapper {
   // existing callback.
   explicit SplitEngineMessageGroupCallback(JNIEnv* env,
                                            jobject message_group_callback)
-      : JavaWrapper(env, message_group_callback),
+      : JavaWrapper(
+            env, message_group_callback,
+            "com/google/imp/splitengine/extensions/MessageGroupCallback"),
         // TODO: (broken link) - use long (J) instead of int (I).
         on_message_group_complete_(
             JavaWrapper::GetMethodHandle("onMessageGroupComplete", "(I)V")) {}

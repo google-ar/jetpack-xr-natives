@@ -25,8 +25,7 @@
 #include "core/async/future.h"
 #include "core/common/platform_helpers.h"
 #include "core/editor/widgets/icons/texture_assets.h"
-#include "core/render/image_asset.h"
-#include "core/render/texture_factory.h"
+#include "core/render/texture_asset.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 
@@ -38,15 +37,12 @@ constexpr absl::string_view kConsoleAllLabel = "All";
 constexpr absl::string_view kConsoleInfoLabel = "Info";
 constexpr absl::string_view kConsoleWarningLabel = "Warning";
 constexpr absl::string_view kConsoleErrorLabel = "Error";
-// Window alpha value. Used to help differentiate where the console is.
-constexpr float kWindowAlpha = .9f;
+constexpr absl::string_view kConsoleListBoxLabel = "##log-list";
 // This is the y position of the scroll value when a new log has been added.
 constexpr float kAutoScrollValue = 1.0f;
 // Size of the image shown next to the logs. This helps to differentiate the
 // type of log.
 const ImVec2 kLogImageSize = ImVec2(20.0f, 20.0f);
-// Size of the setting selectables for the console.
-const ImVec2 kLogSettingsSelectableSize = ImVec2(50.0f, 20.0f);
 // Different color for 'Filter By' to differentiate from clickable buttons.
 const ImVec4 kFilterByColor = {1.0f, 1.0f, 1.0f, 0.6f};
 // Maximum number of logs to store in the console. This is to prevent the
@@ -61,21 +57,18 @@ Console::Console(BaseView& view) : view_(view) {
     output::Configure(true);
   }
   // Load the images for the log icons.
-  Future<AssetPtr<imp::ImageAsset>> info_icon_future =
-      view_.GetAssetManager().LoadImage(texture_data::kInfoPng);
-  Future<AssetPtr<imp::ImageAsset>> warning_icon_future =
-      view_.GetAssetManager().LoadImage(texture_data::kWarningPng);
-  Future<AssetPtr<imp::ImageAsset>> error_icon_future =
-      view_.GetAssetManager().LoadImage(texture_data::kErrorPng);
+  Future<AssetPtr<imp::TextureAsset>> info_icon_future =
+      view_.GetAssetManager().LoadTexture(texture_data::kInfoPng);
+  Future<AssetPtr<imp::TextureAsset>> warning_icon_future =
+      view_.GetAssetManager().LoadTexture(texture_data::kWarningPng);
+  Future<AssetPtr<imp::TextureAsset>> error_icon_future =
+      view_.GetAssetManager().LoadTexture(texture_data::kErrorPng);
   info_icon_future.Merge(warning_icon_future, error_icon_future)
-      .Then([this](
-                std::tuple<AssetPtr<imp::ImageAsset>, AssetPtr<imp::ImageAsset>,
-                           AssetPtr<imp::ImageAsset>>
-                    tuple) mutable {
-        auto [info_icon, warning_icon, error_icon] = std::move(tuple);
-        info_icon_ = view_.GetTextureFactory().CreateTexture(*info_icon);
-        warning_icon_ = view_.GetTextureFactory().CreateTexture(*warning_icon);
-        error_icon_ = view_.GetTextureFactory().CreateTexture(*error_icon);
+      .Then([this](std::tuple<AssetPtr<imp::TextureAsset>,
+                              AssetPtr<imp::TextureAsset>,
+                              AssetPtr<imp::TextureAsset>>
+                       tuple) mutable {
+        std::tie(info_icon_, warning_icon_, error_icon_) = std::move(tuple);
       })
       .KeptBy(&view_);
 }
@@ -162,27 +155,41 @@ void Console::DrawLogSettings() {
 void Console::DrawLogs() {
   ImVec2 rect_max = ImGui::GetItemRectMax();
   ImGui::PushItemWidth(rect_max.x);
-  bool list_box_header = ImGui::BeginListBox("##log-list");
+
+  bool is_docking_layout =
+      ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_DockingEnable;
+  ImVec2 list_box_size =
+      is_docking_layout
+          ? ImVec2(-1.0f,
+                   -1.0f)  // Negative values means to fill the available space.
+          : ImVec2(0.0f, 0.0f);
+  bool list_box_header =
+      ImGui::BeginListBox(kConsoleListBoxLabel.data(), list_box_size);
   {
     absl::MutexLock lock(&logs_mutex_);
+    if (all_logs_.empty()) {
+      ImGui::Text("No logs to display.");
+      ImGui::EndListBox();
+      return;
+    }
     int i = log_start_index_;
     while (true) {
       if (!filter_log_ || all_logs_.at(i).output_kind == filter_by_) {
         switch (all_logs_.at(i).output_kind) {
           case output::OutputKind::kInfo:
             if (info_icon_) {
-              ImGui::Image(info_icon_->GetTexture(), kLogImageSize);
+              ImGui::Image(info_icon_->GetFilamentTexture(), kLogImageSize);
             }
             break;
           case output::OutputKind::kWarning:
             if (warning_icon_) {
-              ImGui::Image(warning_icon_->GetTexture(), kLogImageSize);
+              ImGui::Image(warning_icon_->GetFilamentTexture(), kLogImageSize);
             }
             break;
           case output::OutputKind::kError:
           default:
             if (error_icon_) {
-              ImGui::Image(error_icon_->GetTexture(), kLogImageSize);
+              ImGui::Image(error_icon_->GetFilamentTexture(), kLogImageSize);
             }
             break;
         }
@@ -211,6 +218,7 @@ void Console::DrawLogs() {
 void Console::ClearLogs() {
   absl::MutexLock lock(&logs_mutex_);
   all_logs_.clear();
+  log_start_index_ = 0;
   log_count_[output::OutputKind::kInfo] = 0;
   log_count_[output::OutputKind::kWarning] = 0;
   log_count_[output::OutputKind::kError] = 0;

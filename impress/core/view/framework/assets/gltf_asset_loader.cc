@@ -31,7 +31,6 @@
 #include "core/async/executor.h"
 #include "core/async/future.h"
 #include "core/async/future_common.h"
-#include "core/async/future_group.h"
 #include "core/collision/collision_accelerator_provider.h"
 #include "core/common/registry.h"
 #include "core/common/trace.h"
@@ -76,8 +75,7 @@ Future<std::unique_ptr<GltfAsset>> GltfAssetLoader::Load(
       material_package = itr->second.get();
     } else {
       Future<resources::Resource> materials_zip =
-          view->GetAssetManager().LoadResource(*options.materials_url_override,
-                                               options.future_group);
+          view->GetAssetManager().LoadResource(*options.materials_url_override);
       material_package =
           custom_material_packages_
               .emplace(*options.materials_url_override,
@@ -90,8 +88,7 @@ Future<std::unique_ptr<GltfAsset>> GltfAssetLoader::Load(
     if (!lite_material_package_) {
       lite_material_package_ = std::make_unique<MaterialPackage>(
           view->GetAssetManager().LoadResource(
-              materials::kCompiledImpDefaultLiteGltfMaterialsZip,
-              options.future_group),
+              materials::kCompiledImpDefaultLiteGltfMaterialsZip),
           GltfAsset::kDefaultMaterialPreCompileOptions);
     }
     material_package = lite_material_package_.get();
@@ -99,8 +96,7 @@ Future<std::unique_ptr<GltfAsset>> GltfAssetLoader::Load(
     if (!material_package_) {
       material_package_ = std::make_unique<MaterialPackage>(
           view->GetAssetManager().LoadResource(
-              materials::kCompiledImpDefaultGltfMaterialsZip,
-              options.future_group),
+              materials::kCompiledImpDefaultGltfMaterialsZip),
           GltfAsset::kDefaultMaterialPreCompileOptions);
     }
     material_package = material_package_.get();
@@ -149,28 +145,23 @@ Future<std::unique_ptr<GltfAsset>> GltfAssetLoader::Load(
           [clock](const absl::StatusOr<Resource>& status_or_shaders) {
             return clock->TimeNow();
           },
-          {.executor = Executor::Type::kImmediate,
-           .future_group = options.future_group});
+          {.executor = Executor::Type::kImmediate});
 
   Future<loader::GetLoaderFn> get_loader_future;
   if (kUseSandboxedLoader && sandboxed_gltf_loader_creator_) {
-    get_loader_future =
-        sandboxed_gltf_loader_creator_->Create(*view, options.future_group);
+    get_loader_future = sandboxed_gltf_loader_creator_->Create(*view);
   } else {
     get_loader_future.Return(&loader::CreateLoaderInProcess);
   }
 
-  LoadAssetFn load_missing_asset =
-      [view, query_string,
-       future_group = options.future_group](absl::string_view asset) {
-        std::string asset_with_query_string = std::string(asset) + query_string;
-        return Future<resources::Resource>::Schedule(
-            [view, asset_with_query_string, future_group]() {
-              return view->GetAssetManager().LoadResource(
-                  asset_with_query_string, future_group);
-            },
-            {.future_group = future_group});
-      };
+  LoadAssetFn load_missing_asset = [view,
+                                    query_string](absl::string_view asset) {
+    std::string asset_with_query_string = std::string(asset) + query_string;
+    return Future<resources::Resource>::Schedule(
+        [view, asset_with_query_string]() {
+          return view->GetAssetManager().LoadResource(asset_with_query_string);
+        });
+  };
 
   loader::LoaderOptions loader_options;
   loader_options.compression_type = transcode_compression_type;
@@ -187,36 +178,34 @@ Future<std::unique_ptr<GltfAsset>> GltfAssetLoader::Load(
   }
 
   return get_loader_future.Merge(resource_future)
-      .Then(
-          [view, id, material_package, load_event, clock, loader_options](
-              std::tuple<loader::GetLoaderFn, Resource> tuple) mutable
-              -> absl::StatusOr<
-                  std::shared_ptr<GltfAssetLoader::LoadInProgress>> {
-            IMP_TRACE_BLOCK("Then");
-            auto [get_loader_fn, resource] = std::move(tuple);
+      .Then([view, id, material_package, load_event, clock, loader_options](
+                std::tuple<loader::GetLoaderFn, Resource> tuple) mutable
+                -> absl::StatusOr<
+                    std::shared_ptr<GltfAssetLoader::LoadInProgress>> {
+        IMP_TRACE_BLOCK("Then");
+        auto [get_loader_fn, resource] = std::move(tuple);
 
-            load_event->end_download_model_time = clock->TimeNow();
-            load_event->num_bytes_downloaded += resource.GetData().Size();
+        load_event->end_download_model_time = clock->TimeNow();
+        load_event->num_bytes_downloaded += resource.GetData().Size();
 
-            absl::StatusOr<std::unique_ptr<loader::Loader>> loader =
-                get_loader_fn(*view, id, resource.GetData(), material_package,
-                              std::move(loader_options));
-            MP_RETURN_IF_ERROR(loader.status());
+        absl::StatusOr<std::unique_ptr<loader::Loader>> loader =
+            get_loader_fn(*view, id, resource.GetData(), material_package,
+                          std::move(loader_options));
+        MP_RETURN_IF_ERROR(loader.status());
 
-            return std::make_shared<GltfAssetLoader::LoadInProgress>(
-                view->GetContext(), *std::move(loader), std::move(resource));
-          },
-          {.future_group = options.future_group})
+        return std::make_shared<GltfAssetLoader::LoadInProgress>(
+            view->GetContext(), *std::move(loader), std::move(resource));
+      })
       // On a background thread, call loader.Load.
       .Then(
-          [load_missing_asset, future_group = options.future_group, clock](
+          [load_missing_asset, clock](
               std::shared_ptr<GltfAssetLoader::LoadInProgress> load_in_progress)
               -> Future<std::shared_ptr<GltfAssetLoader::LoadInProgress>> {
             IMP_TRACE_BLOCK("Then");
             load_in_progress->start_parse_time_ = clock->TimeNow();
             Future<absl::Status> load_in_progress_future =
                 load_in_progress->Load(load_missing_asset, clock,
-                                       load_in_progress, future_group);
+                                       load_in_progress);
             return load_in_progress_future.Then(
                 [load_in_progress]()
                     -> StatusOr<
@@ -224,37 +213,34 @@ Future<std::unique_ptr<GltfAsset>> GltfAssetLoader::Load(
                   MP_RETURN_IF_ERROR(load_in_progress->LoadAnimations());
                   return std::move(load_in_progress);
                 },
-                {.executor = Executor::Type::kBackground,
-                 .future_group = future_group});
+                {.executor = Executor::Type::kBackground});
           },
-          {.executor = Executor::Type::kBackground,
-           .future_group = options.future_group})
+          {
+              .executor = Executor::Type::kBackground,
+          })
       // On the foreground thread, call loader.CreateGltfAsset.
-      .Then(
-          [view, load_event, future_group = options.future_group,
-           collider_mode = options.collider_mode](
-              std::shared_ptr<GltfAssetLoader::LoadInProgress>
-                  load_in_progress) {
-            // Copy loading information over from the GltfAssetLoader. This is
-            // done here so that we only access the load_event from a single
-            // thread.
-            IMP_TRACE_BLOCK("Then");
-            load_event->start_parse_time = load_in_progress->start_parse_time_;
-            load_event->start_download_deps_time =
-                load_in_progress->start_download_deps_time_;
-            load_event->end_download_deps_time =
-                load_in_progress->end_download_deps_time_;
-            {
-              absl::ReaderMutexLock lock(
-                  &load_in_progress->num_bytes_downloaded_mutex_);
-              load_event->num_bytes_downloaded +=
-                  load_in_progress->num_bytes_downloaded_;
-            }
+      .Then([view, load_event, collider_mode = options.collider_mode](
+                std::shared_ptr<GltfAssetLoader::LoadInProgress>
+                    load_in_progress) {
+        // Copy loading information over from the GltfAssetLoader. This is
+        // done here so that we only access the load_event from a single
+        // thread.
+        IMP_TRACE_BLOCK("Then");
+        load_event->start_parse_time = load_in_progress->start_parse_time_;
+        load_event->start_download_deps_time =
+            load_in_progress->start_download_deps_time_;
+        load_event->end_download_deps_time =
+            load_in_progress->end_download_deps_time_;
+        {
+          absl::ReaderMutexLock lock(
+              &load_in_progress->num_bytes_downloaded_mutex_);
+          load_event->num_bytes_downloaded +=
+              load_in_progress->num_bytes_downloaded_;
+        }
 
-            return load_in_progress->CreateGltfAsset(
-                view, load_in_progress, future_group, collider_mode);
-          },
-          {.future_group = options.future_group})
+        return load_in_progress->CreateGltfAsset(view, load_in_progress,
+                                                 collider_mode);
+      })
       .Merge(end_download_materials_time_future)
       .Then(
           [load_event, clock, view](
@@ -282,8 +268,7 @@ Future<std::unique_ptr<GltfAsset>> GltfAssetLoader::Load(
             view->GetDispatcher().Send(*load_event);
 
             return std::move(loaded_asset);
-          },
-          {.future_group = options.future_group});
+          });
 }
 
 void GltfAssetLoader::SetSandboxedGltfLoader(
@@ -301,13 +286,10 @@ GltfAssetLoader::LoadInProgress::LoadInProgress(
 
 Future<absl::Status> GltfAssetLoader::LoadInProgress::LoadHelper(
     GltfAssetLoader::LoadAssetFn load_missing_asset,
-    std::shared_ptr<LoadInProgress> load_in_progress,
-    std::optional<FutureGroup> future_group) {
+    std::shared_ptr<LoadInProgress> load_in_progress) {
   std::vector<std::string> missing_assets;
-  return loader_->TryLoad(
-                    &missing_assets, [load_in_progress]() {}, future_group)
-      .Then([this, load_missing_asset, missing_assets, load_in_progress,
-             future_group](
+  return loader_->TryLoad(&missing_assets, [load_in_progress]() {})
+      .Then([this, load_missing_asset, missing_assets, load_in_progress](
                 absl::Status missing_assets_status) -> Future<absl::Status> {
         // No missing resources means everything loaded successfully
         if (missing_assets_status.ok() && missing_assets.empty()) {
@@ -342,26 +324,24 @@ Future<absl::Status> GltfAssetLoader::LoadInProgress::LoadHelper(
         }
 
         return Future<absl::Status>::CombineList(missing_assets_futures)
-            .Then([this, load_missing_asset, load_in_progress, future_group]() {
+            .Then([this, load_missing_asset, load_in_progress]() {
               // If missing_assets status is ok then we should continue,
               // otherwise we let the error status bubble up because the
               // load actually failed.
-              return LoadHelper(load_missing_asset, load_in_progress,
-                                future_group);
+              return LoadHelper(load_missing_asset, load_in_progress);
             });
       });
 }
 
 Future<absl::Status> GltfAssetLoader::LoadInProgress::Load(
     GltfAssetLoader::LoadAssetFn load_missing_asset, mediapipe::Clock* clock,
-    std::shared_ptr<LoadInProgress>& load_in_progress,
-    std::optional<FutureGroup> future_group) {
+    std::shared_ptr<LoadInProgress>& load_in_progress) {
   Future<absl::Status> assets_loaded_future;
   start_download_deps_time_ = clock->TimeNow();
   assets_loaded_future =
-      LoadHelper(load_missing_asset, load_in_progress, future_group)
-          .Then(
-              [this, clock]() { end_download_deps_time_ = clock->TimeNow(); });
+      LoadHelper(load_missing_asset, load_in_progress).Then([this, clock]() {
+        end_download_deps_time_ = clock->TimeNow();
+      });
   return assets_loaded_future;
 }
 
@@ -380,7 +360,6 @@ absl::Status GltfAssetLoader::LoadInProgress::LoadAnimations() {
 Future<std::unique_ptr<GltfAsset>>
 GltfAssetLoader::LoadInProgress::CreateGltfAsset(
     BaseView* view, std::shared_ptr<LoadInProgress>& load_in_progress,
-    std::optional<FutureGroup> future_group,
     GltfState::ColliderMode collider_mode) {
   window::FilamentHost* filament_host = view->GetHost();
   IMP_TRACE();
@@ -402,68 +381,63 @@ GltfAssetLoader::LoadInProgress::CreateGltfAsset(
   // can't get cleaned up with the std::shared_ptr.
   // TODO: Explore refactoring loader API to remove this.
   Future<std::unique_ptr<GltfAsset>> gltf_asset_future =
-      loader_
-          ->CreateModel(
-              filament_host->GetEngine(), [load_in_progress]() {}, future_group)
-          .Then(
-              [load_in_progress](
-                  absl::StatusOr<std::unique_ptr<ModelData>> model_data)
-                  -> absl::StatusOr<std::unique_ptr<GltfAsset>> {
-                IMP_TRACE_BLOCK("Then");
-                if (!model_data.ok()) {
-                  // When loading is cancelled, it's possible that the callback
-                  // passed into CreateModel will never be called because
-                  // loading never finishes and the resources aren't all
-                  // uploaded to filament. When this happens, there is a
-                  // circular reference between load_in_progress and loader_
-                  // that causes a memory leak. Explicitly remove the callback
-                  // to clean up the circular reference and prevent the leak.
-                  load_in_progress->loader_->RemoveWhenFullyLoadedCallback();
-                  return model_data.status();
-                }
+      loader_->CreateModel(filament_host->GetEngine(), [load_in_progress]() {})
+          .Then([load_in_progress](
+                    absl::StatusOr<std::unique_ptr<ModelData>> model_data)
+                    -> absl::StatusOr<std::unique_ptr<GltfAsset>> {
+            IMP_TRACE_BLOCK("Then");
+            if (!model_data.ok()) {
+              // When loading is cancelled, it's possible that the callback
+              // passed into CreateModel will never be called because
+              // loading never finishes and the resources aren't all
+              // uploaded to filament. When this happens, there is a
+              // circular reference between load_in_progress and loader_
+              // that causes a memory leak. Explicitly remove the callback
+              // to clean up the circular reference and prevent the leak.
+              load_in_progress->loader_->RemoveWhenFullyLoadedCallback();
+              return model_data.status();
+            }
 
-                const auto animation_names =
-                    load_in_progress->loader_->GetAnimationNames();
-                auto builder = GltfAsset::Builder(animation_names.size());
+            const auto animation_names =
+                load_in_progress->loader_->GetAnimationNames();
+            auto builder = GltfAsset::Builder(animation_names.size());
 
-                GenericMaterialListing shared_materials;
-                shared_materials.reserve((*model_data)->Materials().size());
+            GenericMaterialListing shared_materials;
+            shared_materials.reserve((*model_data)->Materials().size());
 
-                for (const GenericMaterialPtr& generic_material :
-                     (*model_data)->Materials()) {
-                  shared_materials.emplace_back(generic_material->Duplicate());
-                }
+            for (const GenericMaterialPtr& generic_material :
+                 (*model_data)->Materials()) {
+              shared_materials.emplace_back(generic_material->Duplicate());
+            }
 
-                builder.SharedMaterials(std::move(shared_materials));
+            builder.SharedMaterials(std::move(shared_materials));
 
-                builder.Model(*std::move(model_data));
+            builder.Model(*std::move(model_data));
 
-                for (auto& animation_name : animation_names) {
-                  size_t animation_index =
-                      &animation_name - &animation_names.front();
+            for (auto& animation_name : animation_names) {
+              size_t animation_index =
+                  &animation_name - &animation_names.front();
 
-                  if (animation_index <
-                      load_in_progress->loaded_animations_.size()) {
-                    builder.Animation(
-                        animation_index, animation_name,
-                        std::move(load_in_progress
-                                      ->loaded_animations_[animation_index]));
-                  }
-                }
+              if (animation_index <
+                  load_in_progress->loaded_animations_.size()) {
+                builder.Animation(
+                    animation_index, animation_name,
+                    std::move(
+                        load_in_progress->loaded_animations_[animation_index]));
+              }
+            }
 
-                return builder.Build();
-              },
-              {.future_group = future_group});
+            return builder.Build();
+          });
 
   if (collider_mode ==
       GltfState::ColliderMode::GLTF_COLLIDER_MESH_COLLISION_ACCELERATOR) {
-    gltf_asset_future = gltf_asset_future.Then(
-        [view](std::unique_ptr<GltfAsset> gltf_asset) {
+    gltf_asset_future =
+        gltf_asset_future.Then([view](std::unique_ptr<GltfAsset> gltf_asset) {
           gltf_asset->BuildMeshCollisionAccelerators(
               view->GetRegistry().GetOrCreate<CollisionAcceleratorProvider>());
           return gltf_asset;
-        },
-        {.future_group = future_group});
+        });
   }
 
   return gltf_asset_future;

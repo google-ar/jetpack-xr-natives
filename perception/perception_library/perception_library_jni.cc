@@ -21,6 +21,7 @@
 #include <openxr/openxr.h>
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include "absl/base/casts.h"
@@ -28,13 +29,18 @@
 #include "openxr/openxr_manager.h"
 #include "perception_library/jni_utils.h"
 
-static jstring StringFromJNI(JNIEnv* env) {
+extern "C" {
+JNIEXPORT jstring JNICALL
+Java_androidx_xr_scenecore_impl_perception_PerceptionLibrary_stringFromJNI(
+    JNIEnv* env, jobject /* this */) {
   std::string connection_string = "Connected to JNI";
   return env->NewStringUTF(connection_string.c_str());
 }
 
-static jboolean CreateOpenXrSession(JNIEnv* env, jobject activity,
-                                    jint reference_space_type) {
+JNIEXPORT jboolean JNICALL
+Java_androidx_xr_scenecore_impl_perception_Session_createOpenXrSession(
+    JNIEnv* env, jobject /* this */, jobject activity,
+    jint reference_space_type) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
 
@@ -49,8 +55,10 @@ static jboolean CreateOpenXrSession(JNIEnv* env, jobject activity,
   return result;
 }
 
-static jobject GetAnchor(JNIEnv* env, jfloat min_width, jfloat min_height,
-                         jint type, jint label) {
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_scenecore_impl_perception_Session_getAnchor(
+    JNIEnv* env, jobject /* this */, jfloat min_width, jfloat min_height,
+    jint type, jint label) {
 #ifdef __ANDROID__
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
@@ -85,7 +93,9 @@ static jobject GetAnchor(JNIEnv* env, jfloat min_width, jfloat min_height,
   return nullptr;
 }
 
-static jboolean DetachAnchor(JNIEnv* env, jlong anchor_id) {
+JNIEXPORT jboolean JNICALL
+Java_androidx_xr_scenecore_impl_perception_Anchor_detachAnchor(
+    JNIEnv* env, jobject /* this */, jlong anchor_id) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
 
@@ -101,7 +111,9 @@ static jboolean DetachAnchor(JNIEnv* env, jlong anchor_id) {
   return true;
 }
 
-static jbyteArray PersistAnchor(JNIEnv* env, jlong anchor_id) {
+JNIEXPORT jbyteArray JNICALL
+Java_androidx_xr_scenecore_impl_perception_Anchor_persistAnchor(
+    JNIEnv* env, jobject /* this */, jlong anchor_id) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   XrUuidEXT xr_uuid;
@@ -115,7 +127,9 @@ static jbyteArray PersistAnchor(JNIEnv* env, jlong anchor_id) {
   return result;
 }
 
-static jobject GetCurrentHeadPose(JNIEnv* env) {
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_scenecore_impl_perception_Session_getCurrentHeadPose(
+    JNIEnv* env, jobject /* this */) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
 
@@ -133,7 +147,9 @@ static jobject GetCurrentHeadPose(JNIEnv* env) {
   return pose;
 }
 
-static jobject GetCurrentStereoViews(JNIEnv* env) {
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_scenecore_impl_perception_Session_getCurrentStereoViews(
+    JNIEnv* env, jobject /* this */) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   std::vector<XrView> xr_views;
@@ -160,7 +176,9 @@ static jobject GetCurrentStereoViews(JNIEnv* env) {
   return view_pair;
 }
 
-static jobject GetPlanes(JNIEnv* env) {
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_scenecore_impl_perception_Session_getPlanes(
+    JNIEnv* env, jobject /* this */) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
 
@@ -175,9 +193,10 @@ static jobject GetPlanes(JNIEnv* env) {
   return plane_list;
 }
 
-static jobject GetPlaneData(JNIEnv* env, jlong plane_id,
-                            jint reference_space_type,
-                            jlong monotonic_time_ns) {
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_scenecore_impl_perception_Plane_getPlaneData(
+    JNIEnv* env, jobject /* this */, jlong plane_id, jint reference_space_type,
+    jlong monotonic_time_ns) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   XrTime xr_time = xr_manager.GetXrTimeFromNanoseconds(monotonic_time_ns);
@@ -207,8 +226,10 @@ static jobject GetPlaneData(JNIEnv* env, jlong plane_id,
   return plane_data_java;
 }
 
-static jobject CreateAnchorOnPlane(JNIEnv* env, jlong plane_id, jobject pose,
-                                   jlong monotonic_time_ns) {
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_scenecore_impl_perception_Plane_createAnchorOnPlane(
+    JNIEnv* env, jobject /* this */, jlong plane_id, jobject pose,
+    jlong monotonic_time_ns) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
 
@@ -246,7 +267,9 @@ static jobject CreateAnchorOnPlane(JNIEnv* env, jlong plane_id, jobject pose,
   return nullptr;
 }
 
-static jobject GetPersistState(JNIEnv* env, jlong high_bits, jlong low_bits) {
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_scenecore_impl_perception_Anchor_getPersistState(
+    JNIEnv* env, jobject /* this */, jlong high_bits, jlong low_bits) {
   const XrUuidEXT xr_uuid =
       vr::realitycore::ConvertLongsToUuid(high_bits, low_bits);
   androidx::xr::openxr::OpenXrManager& xr_manager =
@@ -260,7 +283,9 @@ static jobject GetPersistState(JNIEnv* env, jlong high_bits, jlong low_bits) {
       env, state);
 }
 
-static jboolean UnpersistAnchor(JNIEnv* env, jlong high_bits, jlong low_bits) {
+JNIEXPORT jboolean JNICALL
+Java_androidx_xr_scenecore_impl_perception_Session_unpersistAnchor(
+    JNIEnv* env, jobject /* this */, jlong high_bits, jlong low_bits) {
   const XrUuidEXT xr_uuid =
       vr::realitycore::ConvertLongsToUuid(high_bits, low_bits);
   androidx::xr::openxr::OpenXrManager& xr_manager =
@@ -268,8 +293,9 @@ static jboolean UnpersistAnchor(JNIEnv* env, jlong high_bits, jlong low_bits) {
   return xr_manager.UnpersistAnchor(xr_uuid);
 }
 
-static jobject CreatePersistedAnchor(JNIEnv* env, jlong highBits,
-                                     jlong lowBits) {
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_scenecore_impl_perception_Session_createPersistedAnchor(
+    JNIEnv* env, jobject /* this */, jlong highBits, jlong lowBits) {
   const XrUuidEXT xr_uuid =
       vr::realitycore::ConvertLongsToUuid(highBits, lowBits);
   XrSpace anchor_id = XR_NULL_HANDLE;
@@ -303,204 +329,19 @@ static jobject CreatePersistedAnchor(JNIEnv* env, jlong highBits,
   return nullptr;
 }
 
-static jlong GetNativeSession(JNIEnv* env) {
+JNIEXPORT jlong JNICALL
+Java_androidx_xr_scenecore_impl_perception_Session_getNativeSession(
+    JNIEnv* env, jobject /* this */) {
   XrSession session =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager().GetXrSession();
   return *reinterpret_cast<jlong*>(&session);
 }
 
-static jlong GetNativeInstance(JNIEnv* env) {
-  XrInstance instance =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager().GetXrInstance();
-  return *reinterpret_cast<jlong*>(&instance);
-}
-
-extern "C" {
-JNIEXPORT jstring JNICALL
-Java_com_google_vr_realitycore_runtime_androidxr_perception_PerceptionLibrary_stringFromJNI(
-    JNIEnv* env, jobject /* this */) {
-  return StringFromJNI(env);
-}
-
-JNIEXPORT jstring JNICALL
-Java_androidx_xr_scenecore_impl_perception_PerceptionLibrary_stringFromJNI(
-    JNIEnv* env, jobject /* this */) {
-  return StringFromJNI(env);
-}
-
-JNIEXPORT jboolean JNICALL
-Java_com_google_vr_realitycore_runtime_androidxr_perception_Session_createOpenXrSession(
-    JNIEnv* env, jobject /* this */, jobject activity,
-    jint reference_space_type) {
-  return CreateOpenXrSession(env, activity, reference_space_type);
-}
-
-JNIEXPORT jboolean JNICALL
-Java_androidx_xr_scenecore_impl_perception_Session_createOpenXrSession(
-    JNIEnv* env, jobject /* this */, jobject activity,
-    jint reference_space_type) {
-  return CreateOpenXrSession(env, activity, reference_space_type);
-}
-
-JNIEXPORT jobject JNICALL
-Java_com_google_vr_realitycore_runtime_androidxr_perception_Session_getAnchor(
-    JNIEnv* env, jobject /* this */, jfloat min_width, jfloat min_height,
-    jint type, jint label) {
-  return GetAnchor(env, min_width, min_height, type, label);
-}
-
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_scenecore_impl_perception_Session_getAnchor(
-    JNIEnv* env, jobject /* this */, jfloat min_width, jfloat min_height,
-    jint type, jint label) {
-  return GetAnchor(env, min_width, min_height, type, label);
-}
-
-JNIEXPORT jboolean JNICALL
-Java_com_google_vr_realitycore_runtime_androidxr_perception_Anchor_detachAnchor(
-    JNIEnv* env, jobject /* this */, jlong anchor_id) {
-  return DetachAnchor(env, anchor_id);
-}
-
-JNIEXPORT jboolean JNICALL
-Java_androidx_xr_scenecore_impl_perception_Anchor_detachAnchor(
-    JNIEnv* env, jobject /* this */, jlong anchor_id) {
-  return DetachAnchor(env, anchor_id);
-}
-
-JNIEXPORT jbyteArray JNICALL
-Java_com_google_vr_realitycore_runtime_androidxr_perception_Anchor_persistAnchor(
-    JNIEnv* env, jobject /* this */, jlong anchor_id) {
-  return PersistAnchor(env, anchor_id);
-}
-
-JNIEXPORT jbyteArray JNICALL
-Java_androidx_xr_scenecore_impl_perception_Anchor_persistAnchor(
-    JNIEnv* env, jobject /* this */, jlong anchor_id) {
-  return PersistAnchor(env, anchor_id);
-}
-
-JNIEXPORT jobject JNICALL
-Java_com_google_vr_realitycore_runtime_androidxr_perception_Session_getCurrentHeadPose(
-    JNIEnv* env, jobject /* this */) {
-  return GetCurrentHeadPose(env);
-}
-
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_scenecore_impl_perception_Session_getCurrentHeadPose(
-    JNIEnv* env, jobject /* this */) {
-  return GetCurrentHeadPose(env);
-}
-
-JNIEXPORT jobject JNICALL
-Java_com_google_vr_realitycore_runtime_androidxr_perception_Session_getCurrentStereoViews(
-    JNIEnv* env, jobject /* this */) {
-  return GetCurrentStereoViews(env);
-}
-
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_scenecore_impl_perception_Session_getCurrentStereoViews(
-    JNIEnv* env, jobject /* this */) {
-  return GetCurrentStereoViews(env);
-}
-
-JNIEXPORT jobject JNICALL
-Java_com_google_vr_realitycore_runtime_androidxr_perception_Session_getPlanes(
-    JNIEnv* env, jobject /* this */) {
-  return GetPlanes(env);
-}
-
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_scenecore_impl_perception_Session_getPlanes(
-    JNIEnv* env, jobject /* this */) {
-  return GetPlanes(env);
-}
-
-JNIEXPORT jobject JNICALL
-Java_com_google_vr_realitycore_runtime_androidxr_perception_Plane_getPlaneData(
-    JNIEnv* env, jobject /* this */, jlong plane_id, jint reference_space_type,
-    jlong monotonic_time_ns) {
-  return GetPlaneData(env, plane_id, reference_space_type, monotonic_time_ns);
-}
-
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_scenecore_impl_perception_Plane_getPlaneData(
-    JNIEnv* env, jobject /* this */, jlong plane_id, jint reference_space_type,
-    jlong monotonic_time_ns) {
-  return GetPlaneData(env, plane_id, reference_space_type, monotonic_time_ns);
-}
-
-JNIEXPORT jobject JNICALL
-Java_com_google_vr_realitycore_runtime_androidxr_perception_Plane_createAnchorOnPlane(
-    JNIEnv* env, jobject /* this */, jlong plane_id, jobject pose,
-    jlong monotonic_time_ns) {
-  return CreateAnchorOnPlane(env, plane_id, pose, monotonic_time_ns);
-}
-
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_scenecore_impl_perception_Plane_createAnchorOnPlane(
-    JNIEnv* env, jobject /* this */, jlong plane_id, jobject pose,
-    jlong monotonic_time_ns) {
-  return CreateAnchorOnPlane(env, plane_id, pose, monotonic_time_ns);
-}
-
-JNIEXPORT jobject JNICALL
-Java_com_google_vr_realitycore_runtime_androidxr_perception_Anchor_getPersistState(
-    JNIEnv* env, jobject /* this */, jlong high_bits, jlong low_bits) {
-  return GetPersistState(env, high_bits, low_bits);
-}
-
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_scenecore_impl_perception_Anchor_getPersistState(
-    JNIEnv* env, jobject /* this */, jlong high_bits, jlong low_bits) {
-  return GetPersistState(env, high_bits, low_bits);
-}
-
-JNIEXPORT jboolean JNICALL
-Java_com_google_vr_realitycore_runtime_androidxr_perception_Session_unpersistAnchor(
-    JNIEnv* env, jobject /* this */, jlong high_bits, jlong low_bits) {
-  return UnpersistAnchor(env, high_bits, low_bits);
-}
-
-JNIEXPORT jboolean JNICALL
-Java_androidx_xr_scenecore_impl_perception_Session_unpersistAnchor(
-    JNIEnv* env, jobject /* this */, jlong high_bits, jlong low_bits) {
-  return UnpersistAnchor(env, high_bits, low_bits);
-}
-
-JNIEXPORT jobject JNICALL
-Java_com_google_vr_realitycore_runtime_androidxr_perception_Session_createPersistedAnchor(
-    JNIEnv* env, jobject /* this */, jlong highBits, jlong lowBits) {
-  return CreatePersistedAnchor(env, highBits, lowBits);
-}
-
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_scenecore_impl_perception_Session_createPersistedAnchor(
-    JNIEnv* env, jobject /* this */, jlong highBits, jlong lowBits) {
-  return CreatePersistedAnchor(env, highBits, lowBits);
-}
-
-JNIEXPORT jlong JNICALL
-Java_com_google_vr_realitycore_runtime_androidxr_perception_Session_getNativeSession(
-    JNIEnv* env, jobject /* this */) {
-  return GetNativeSession(env);
-}
-
-JNIEXPORT jlong JNICALL
-Java_androidx_xr_scenecore_impl_perception_Session_getNativeSession(
-    JNIEnv* env, jobject /* this */) {
-  return GetNativeSession(env);
-}
-
-JNIEXPORT jlong JNICALL
-Java_com_google_vr_realitycore_runtime_androidxr_perception_Session_getNativeInstance(
-    JNIEnv* env, jobject /* this */) {
-  return GetNativeInstance(env);
-}
-
 JNIEXPORT jlong JNICALL
 Java_androidx_xr_scenecore_impl_perception_Session_getNativeInstance(
     JNIEnv* env, jobject /* this */) {
-  return GetNativeInstance(env);
+  XrInstance instance =
+      androidx::xr::openxr::OpenXrManager::GetOpenXrManager().GetXrInstance();
+  return *reinterpret_cast<jlong*>(&instance);
 }
 }  // extern "C"

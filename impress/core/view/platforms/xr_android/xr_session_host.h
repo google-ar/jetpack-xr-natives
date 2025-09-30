@@ -85,6 +85,7 @@ class XrSessionHost : public ViewHost {
     bool use_max_swapchain_size = false;
     XrFoveationLevelFB foveation_level = XR_FOVEATION_LEVEL_NONE_FB;
     bool use_quad_views = false;
+    bool use_mono_view = false;
     bool use_varjo_foveated_rendering = false;
     int msaa_sample_count = 0;
     XrReferenceSpaceType reference_space_type = XR_REFERENCE_SPACE_TYPE_STAGE;
@@ -177,6 +178,9 @@ class XrSessionHost : public ViewHost {
 
   // Renders the left and right eyes with two separate Filament render calls.
   void PerformNaiveStereoscopicRender(filament::View* view);
+
+  // Renders only the left eye.
+  void PerformMonoRender(filament::View* view);
 
   // Returns the stereoscopic type of the session.
   filament::Engine::StereoscopicType GetStereoscopicType() const;

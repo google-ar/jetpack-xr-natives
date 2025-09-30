@@ -41,12 +41,15 @@ class MeshCollider : public Component,
   absl::Status Setup();
   absl::Status Setup(MeshColliderState::ColliderMode mode);
   absl::Status SetupWithState();
+  void Cleanup();
 
   absl::optional<RayHit> Intersect(const Ray& world_ray);
   absl::optional<DoubleRayHit> IntersectPrecise(const DoubleRay& world_ray);
 
   void Visualize(VisualizationStyle visualization_style =
                      VisualizationStyle::kNotSelected) const;
+
+  void OnActiveStatusChanged(bool is_active);
 
  private:
   friend class ColliderMaskHelpers<MeshCollider>;

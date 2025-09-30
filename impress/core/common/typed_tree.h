@@ -17,13 +17,16 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_COMMON_TYPED_TREE_H_
 #define THIRD_PARTY_IMPRESS_CORE_COMMON_TYPED_TREE_H_
 
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+
 #include "absl/container/inlined_vector.h"
 #include "absl/status/status.h"
 #include "core/common/data_helpers.h"
 #include "core/common/paired_span.h"
 #include "core/common/paired_vector.h"
 #include "core/common/typed_id.h"
-#include "core/common/typed_vector.h"
 
 namespace imp {
 
@@ -69,9 +72,6 @@ class TypedDagTools {
   template <typename ChildCountType, typename Visitor>
   static void VisitParentThenChildren(Lookup<ChildCountType> child_counts,
                                       Visitor&& v) {
-    using T = typename I::ReferredType;
-    using ValueType = typename I::ValueType;
-    using ParentId = TypedParentId<T, ValueType>;
     VisitParentThenChildrenStack stack;
     size_t size = child_counts.size();
     size_t cursor = 0;

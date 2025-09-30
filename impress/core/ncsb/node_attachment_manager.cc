@@ -22,6 +22,7 @@
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "filament/libs/utils/include/utils/EntityManager.h"
+#include "core/common/vector_helpers.h"
 #include "core/ncsb/node_controller.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
@@ -131,16 +132,25 @@ void NodeAttachmentManager::Destroy(NodeHandle node) noexcept {
       GetEntitiesToControllersMap();
   entities_to_controllers.erase(entity);
 
-  std::size_t last_index = node_controllers_.size() - 1;
-  // To prevent the node_controllers_ vector from having gaps, we swap the
-  // node_controllers_ the node to the last index, and then remove the last
-  // index.
-  if (index != last_index) {
-    std::swap(node_controllers_[index], node_controllers_[last_index]);
-    // Update the index of the node that was swapped in.
-    node_controllers_[index]->SetIndex(index);
+  // Special case for removing a node while in the midst of iterating over
+  // the nodes. In this case, we can't swap and pop because it can cause
+  // the iteration to skip over nodes. Instead we leave a gap in the vector and
+  // compact it after iteration ends.
+  if (iterating_depth_ > 0) {
+    node_controllers_[index].reset();
+    needs_compaction_ = true;
+  } else {
+    std::size_t last_index = node_controllers_.size() - 1;
+    // To prevent the node_controllers_ vector from having gaps, we swap the
+    // node_controllers_ the node to the last index, and then remove the last
+    // index.
+    if (index != last_index) {
+      std::swap(node_controllers_[index], node_controllers_[last_index]);
+      // Update the index of the node that was swapped in.
+      node_controllers_[index]->SetIndex(index);
+    }
+    node_controllers_.pop_back();
   }
-  node_controllers_.pop_back();
 
   // Ensure filament components are removed from the entity before we destroy
   // it. If we don't do this, filament should eventually clean up the components
@@ -150,12 +160,6 @@ void NodeAttachmentManager::Destroy(NodeHandle node) noexcept {
 
   // Destroys the actual entity in filament's entity manager.
   utils::EntityManager::get().destroy(entity);
-
-  // Ensure the entity is destroyed in the split engine serializer.
-  if (split_engine::SplitEngineSerializer* serializer =
-          view_->GetSplitEngineSerializer()) {
-    serializer->DestroyNode(entity);
-  }
 }
 
 std::size_t NodeAttachmentManager::GetCount() const {
@@ -192,6 +196,26 @@ void NodeAttachmentManager::Cleanup() {
 
   // Destroy all node controllers.
   node_controllers_.clear();
+}
+
+void NodeAttachmentManager::TryCompactingNodeControllers() {
+  if (iterating_depth_ > 0) {
+    // If we are iterating, don't compact the vector.
+    return;
+  }
+
+  if (!needs_compaction_) {
+    // No need to compact the vector.
+    return;
+  }
+
+  CompactVector(node_controllers_, [this](size_t new_index) {
+    // When a node controller's index is changed within the vector, the index
+    // the controller is associated with must be updated.
+    node_controllers_[new_index]->SetIndex(new_index);
+  });
+
+  needs_compaction_ = false;
 }
 
 }  // namespace imp::imp_internal

@@ -16,9 +16,9 @@
 # See (broken link) for documentation, user guide and examples.
 
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("@com_google_protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("@rules_cc//cc:defs.bzl", "cc_proto_library")
 load("//build_tools:imp.bzl", "if_dev_runtime", "imp_copts")
 load(
     "//core/proto:imp_cc_proto_library.bzl",
@@ -185,7 +185,6 @@ cc_library(
         ":proto_common",
         ":proto_writer",
         "//core/common:hash",
-        "//core/common:log",
         "//core/common:robin_map",
         "//core/common:type_traits",
         "//core/view/utils:string_map",
@@ -194,6 +193,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/types:optional",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -231,7 +231,6 @@ cc_library(
         ":proto_reader",
         ":proto_writer",
         "//core/common:hash",
-        "//core/common:log",
         "//core/common:platform_helpers",
         "//core/view/utils:string_map",
         "@com_google_absl//absl/memory",
@@ -239,6 +238,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/types:optional",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -295,7 +295,6 @@ cc_library(
         ":any_imp_proto",
         ":proto_common",
         ":proto_reader",
-        "//core/common:log",
         "//core/view/utils:string_map",
         "//third_party/jsoncpp:json_compat",
         "//third_party/protobuf/util:json_util",
@@ -304,6 +303,7 @@ cc_library(
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:optional",
+        "@com_google_impress//core/common:log",
         "@jsoncpp",
         "@mediapipe//mediapipe/framework/port:gtest",
     ],

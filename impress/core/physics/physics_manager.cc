@@ -78,6 +78,15 @@ void PhysicsManager::AddRigidBody(btRigidBody& body, NodeHandle node) {
 }
 
 void PhysicsManager::RemoveRigidBody(btRigidBody& body) {
+  // Remove all constraints that are attached to the rigid body first.
+  if (constraint_dependency_map_.contains(&body)) {
+    for (btTypedConstraint* const& constraint :
+         constraint_dependency_map_[&body]) {
+      world_.removeConstraint(constraint);
+      active_constraints_map_.erase(constraint);
+    }
+    constraint_dependency_map_.erase(&body);
+  }
   world_.removeRigidBody(&body);
   rigid_body_map_.erase(&body);
 }
@@ -91,6 +100,28 @@ void PhysicsManager::AddTriggerVolume(btCollisionObject& body,
 void PhysicsManager::RemoveTriggerVolume(btCollisionObject& body) {
   world_.removeCollisionObject(&body);
   rigid_body_map_.erase(&body);
+}
+
+void PhysicsManager::AddConstraint(btTypedConstraint& constraint) {
+  // TODO: (broken link) -: Maybe we should expose
+  // disableCollisionsBetweenLinkedBodies as a parameter.
+  world_.addConstraint(&constraint, true);
+  constraint_dependency_map_[&constraint.getRigidBodyA()].insert(&constraint);
+  constraint_dependency_map_[&constraint.getRigidBodyB()].insert(&constraint);
+  active_constraints_map_.insert(&constraint);
+}
+
+void PhysicsManager::RemoveConstraint(btTypedConstraint& constraint) {
+  if (active_constraints_map_.contains(&constraint)) {
+    world_.removeConstraint(&constraint);
+    constraint_dependency_map_[&constraint.getRigidBodyA()].erase(&constraint);
+    constraint_dependency_map_[&constraint.getRigidBodyB()].erase(&constraint);
+    active_constraints_map_.erase(&constraint);
+  }
+}
+
+bool PhysicsManager::IsConstraintActive(btTypedConstraint& constraint) const {
+  return active_constraints_map_.contains(&constraint);
 }
 
 void PhysicsManager::SetWorldGravity(float3 gravity) {

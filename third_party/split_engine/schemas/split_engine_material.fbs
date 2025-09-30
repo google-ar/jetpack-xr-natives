@@ -24,8 +24,6 @@ namespace android_xr.schemas;
 
 // LINT.IfChange
 
-// LINT.IfChange(khronos_pbr_material_spec_conversion_schema)
-
 // LINT.IfChange(generic_material_spec_jni_conversion_schema)
 
 // These enums are used to determine which material to load from the material
@@ -53,8 +51,6 @@ enum GenericMaterialDepthClearMaterial : uint8  {
   Disabled = 0,
   Enabled = 1,
 }
-
-// LINT.ThenChange(//depot/google3/third_party/impress/java/com/google/ar/imp/apibindings/KhronosPbrMaterialSpec.java:khronos_pbr_material_spec_conversion_bindings)
 // LINT.ThenChange(//depot/google3/third_party/impress/apibindings/jni_conversion_utils.cc:generic_material_spec_jni_conversion_bindings)
 
 // This table is used to determine which material to load from the material
@@ -68,7 +64,6 @@ table GenericMaterialSpec {
 
 root_type GenericMaterialSpec;
 
-// LINT.IfChange(texture_sampler_conversion_schema)
 // LINT.IfChange(texture_sampler_jni_conversion_schema)
 
 // These enums are used to determine how to sample textures in materials.
@@ -108,7 +103,6 @@ enum CompareFunc : uint8 {
   N = 7,
 }
 
-// LINT.ThenChange(//depot/google3/third_party/impress/java/com/google/ar/imp/apibindings/TextureSampler.java:texture_sampler_conversion_bindings)
 // LINT.ThenChange(//depot/google3/third_party/impress/apibindings/jni_conversion_utils.cc:texture_sampler_jni_conversion_bindings)
 
 table TextureSampler {

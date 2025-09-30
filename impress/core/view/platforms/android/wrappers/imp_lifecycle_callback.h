@@ -17,6 +17,8 @@
 #ifndef THIRD_PARTY_ARCORE_AR_IMP_CORE_VIEW_PLATFORMS_ANDROID_MESSAGE_HANDLERS_ANDROID_IMP_LIFECYCLE_CALLBACK_H
 #define THIRD_PARTY_ARCORE_AR_IMP_CORE_VIEW_PLATFORMS_ANDROID_MESSAGE_HANDLERS_ANDROID_IMP_LIFECYCLE_CALLBACK_H
 
+#include <jni.h>
+
 #include "core/common/jni_helpers.h"
 #include "core/view/base_view.h"
 
@@ -25,7 +27,14 @@ namespace imp {
 // JNI wrapper for lifecycle callbacks interface.
 class ImpLifeCycleCallback : public JavaWrapper {
  public:
-  explicit ImpLifeCycleCallback(BaseView& view, jobject callback);
+  // Creates a new callback wrapper. The `callback` object _must_ implement the
+  // ImpLifeCycleCallback interface:
+  //     (broken link)
+  //
+  // This constructor will perform an IsInstanceOf check at runtime, and will
+  // intentionally crash if the callback does not implement that interface, or
+  // if the Java interface was accidentally removed/renamed by ProGuard.
+  explicit ImpLifeCycleCallback(BaseView& view, JniUniquePtr<jobject> callback);
 
   void OnEditorEnabled(bool enabled);
 

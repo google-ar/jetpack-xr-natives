@@ -140,7 +140,11 @@ class LightManager {
   // constructor of imp::View for it to work properly.
   void DisableDefaultLoad();
 
-  bool IsDefaultLoadEnabled() const { return is_default_load_enabled_; }
+  // Disables default IBL, but still sets up the default directional light. This
+  // needs to be called in the constructor of imp::View for it to work properly.
+  void DisableDefaultIblLoad();
+
+  bool IsDefaultLoadEnabled() const;
 
   // Applies the main group lighting to the specified group.
   //
@@ -165,7 +169,12 @@ class LightManager {
 
   ComponentHandle<LightComponent> default_directional_light_;
 
-  bool is_default_load_enabled_ = true;
+  enum class DefaultLoadOption {
+    kDisabled,
+    kDirectionalLightOnly,
+    kEnabled,
+  };
+  DefaultLoadOption default_load_option_ = DefaultLoadOption::kEnabled;
 };
 
 }  // namespace imp

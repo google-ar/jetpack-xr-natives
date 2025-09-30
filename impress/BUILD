@@ -76,6 +76,7 @@ cc_library(
     deps = [
         "//core:config",
         "//core/assets",
+        "//core/assets/material:material_asset",
         "//core/async:executor",
         "//core/async:future",
         "//core/async:future_status_utils",
@@ -196,6 +197,17 @@ cc_library(
     deps = [
         ":api",
         "//core/view/platforms/desktop",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "platform_desktop_split_engine",
+    copts = imp_google3_copts(),
+    linkstatic = True,
+    deps = [
+        ":api",
+        "//core/view/platforms/desktop_split_engine:desktop_split_engine_serializer",
     ],
     alwayslink = 1,
 )

@@ -35,6 +35,8 @@ union InteractivityValue {
   Float2,
   Float3,
   Float4,
+  Mat2f,
+  Mat3f,
   Mat4f,
   String,
 }
@@ -73,6 +75,7 @@ enum InteractivityNodeConfigurationType : uint8 {
   IS_RANDOM,
   IS_LOOP,
   MESSAGE,
+  INITIAL_INDEX,
 }
 
 table InteractivityNodeConfiguration {

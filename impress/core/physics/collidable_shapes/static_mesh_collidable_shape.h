@@ -57,7 +57,6 @@ class StaticMeshCollidableShape : public CollidableShape {
 #endif
 
  private:
-  NodeHandle node_;
   btTriangleMesh triangle_mesh_;
   std::unique_ptr<btCollisionShape> collidable_shape_;
 

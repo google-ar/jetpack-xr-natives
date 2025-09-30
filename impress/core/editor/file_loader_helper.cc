@@ -29,6 +29,7 @@
 #include "absl/types/optional.h"
 #include "core/assets/asset_ptr.h"
 #include "core/assets/gltf/gltf_behavior_extension.h"
+#include "core/assets/gltf/gltf_interactivity_extension.h"
 #include "core/async/future.h"
 #include "core/common/buffer_access.h"
 #include "core/common/file_helpers.h"
@@ -163,11 +164,12 @@ Future<absl::Status> GltfFileLoader::LoadNode(
 
               gltf_scene->CreateAllNodes();
 
-              if (!node->GetComponent<GltfBehaviorExtension>()) {
+              if (!node->GetComponent<GltfBehaviorExtension>() &&
+                  !node->GetComponent<GltfInteractivityExtension>()) {
                 // Start animation by default unless it contains
-                // the KHR_behavior extension which may be controlling the
-                // animation. If it is an ISF, we should assume that the
-                // animations are set as needed.
+                // the KHR_behavior or KHR_interactivity extension which may be
+                // controlling the animation. If it is an ISF, we should assume
+                // that the animations are set as needed.
                 AssetPtr<GltfAsset> gltf_asset = gltf_renderer->GetGltfAsset();
                 if (gltf_asset && gltf_asset->AnimationCount() != 0) {
                   GltfAnimator::PlayCommand play_command;

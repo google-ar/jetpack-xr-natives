@@ -27,14 +27,15 @@
 #include "absl/strings/cord.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "core/assets/asset_ptr.h"
 #include "core/assets/base_asset_cache.h"
+#include "core/assets/material/material_asset.h"
 #include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/executor.h"
 #include "core/async/future.h"
-#include "core/async/future_group.h"
 #include "core/common/string_helpers.h"
 #include "core/common/trace.h"
 #include "core/config.h"
@@ -42,14 +43,16 @@
 #include "core/loader/loader_creator.h"
 #include "core/ncsb/component_handle.h"
 #include "core/render/image_asset.h"
+#include "core/render/texture_asset.h"
+#include "core/render/texture_options.h"
 #include "core/resources/resource_manager.h"
 #include "core/resources/url_loader.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/gltf_asset.h"
 #include "core/view/framework/assets/gltf_asset_loader.h"
 #include "core/view/framework/assets/gltf_renderer.h"
-#include "core/view/framework/assets/material_asset.h"
 #include "core/view/utils/asset.h"
+#include "core/view/utils/proto/cache_config.proto.imp.h"
 
 #if IMP_PLATFORM(ANDROID)
 #include "core/common/registry.h"
@@ -134,8 +137,11 @@ std::string GenerateMaterialConstantsCacheKey(
 
 using resources::Resource;
 
-AssetManager::AssetManager(BaseView* view)
-    : view_(view), resource_manager_(view->GetContext()) {}
+AssetManager::AssetManager(BaseView* view,
+                           std::optional<CacheConfig> cache_config)
+    : view_(view),
+      resource_manager_(view->GetContext()),
+      cache_config_(cache_config) {}
 
 void AssetManager::SetDefaultLoadOptions(GltfAsset::LoadOptions load_options) {
   default_load_options_ = std::move(load_options);
@@ -274,6 +280,77 @@ Future<AssetPtr<MaterialAsset>> AssetManager::LoadMaterial(
   return LoadAsset<MaterialAsset>(asset_url);
 }
 
+Future<AssetPtr<TextureAsset>> AssetManager::LoadTexture(
+    const AssetDefinition& asset_definition, TextureGenerationOptions options) {
+  if (IsDataUri(asset_definition.GetUrl())) {
+    if (IsSupportedDataUri(asset_definition.GetUrl())) {
+      return LoadTexture(ExtractDataFromImageUri(asset_definition.GetUrl()),
+                         asset_definition.GetUrl(), options);
+    }
+    return Future<AssetPtr<TextureAsset>>(
+        absl::InternalError("Data URI is not supported"));
+  }
+  return LoadAsset<TextureAsset>(
+      asset_definition,
+      absl::string_view(
+          absl::StrFormat("%s_%v", asset_definition.GetUrl(), options)),
+      options);
+}
+
+Future<AssetPtr<TextureAsset>> AssetManager::LoadTexture(
+    absl::string_view asset_url, TextureGenerationOptions options) {
+  if (IsDataUri(asset_url)) {
+    if (IsSupportedDataUri(asset_url)) {
+      return LoadTexture(ExtractDataFromImageUri(asset_url), asset_url,
+                         options);
+    }
+    return Future<AssetPtr<TextureAsset>>(
+        absl::InternalError("Data URI is not supported"));
+  }
+  return LoadAsset<TextureAsset>(
+      asset_url,
+      absl::string_view(absl::StrFormat("%s_%v", asset_url, options)), options);
+}
+
+Future<AssetPtr<TextureAsset>> AssetManager::LoadTexture(
+    absl::Cord contents, absl::string_view asset_url,
+    TextureGenerationOptions options) {
+  std::optional<absl::string_view> flattened_string = contents.TryFlat();
+  if (flattened_string) {
+    return LoadAsset<TextureAsset>(std::move(contents),
+                                   absl::StrFormat("%s_%v", asset_url, options),
+                                   options);
+  } else {
+    return Future<absl::Cord>::Schedule(
+               [contents = std::move(contents)]() mutable {
+                 contents.Flatten();
+                 return std::move(contents);
+               },
+               Executor::Type::kBackground)
+        .Then([this, url = std::string(asset_url),
+               options](absl::Cord resource_cord) {
+          return LoadAsset<TextureAsset>(std::move(resource_cord),
+                                         absl::StrFormat("%s_%v", url, options),
+                                         options);
+        });
+  }
+}
+
+Future<AssetPtr<TextureAsset>> AssetManager::LoadTexture(
+    const AssetDefinition& asset_definition) {
+  return LoadTexture(asset_definition, TextureGenerationOptions{});
+}
+
+Future<AssetPtr<TextureAsset>> AssetManager::LoadTexture(
+    absl::Cord contents, absl::string_view asset_url) {
+  return LoadTexture(contents, asset_url, TextureGenerationOptions{});
+}
+
+Future<AssetPtr<TextureAsset>> AssetManager::LoadTexture(
+    absl::string_view asset_url) {
+  return LoadTexture(asset_url, TextureGenerationOptions{});
+}
+
 Future<AssetPtr<ImageAsset>> AssetManager::LoadImage(
     const AssetDefinition& asset_definition) {
   if (IsDataUri(asset_definition.GetUrl())) {
@@ -376,17 +453,16 @@ int AssetManager::GetAssetCount() const {
 }
 
 Future<Resource> AssetManager::LoadResource(
-    const AssetDefinition& asset_definition,
-    std::optional<FutureGroup> future_group) {
-  return resource_manager_.Load(asset_definition, future_group);
+    const AssetDefinition& asset_definition) {
+  return resource_manager_.Load(asset_definition);
 }
 
 Future<resources::Resource> AssetManager::LoadResource(
-    absl::string_view asset_url, std::optional<FutureGroup> future_group) {
+    absl::string_view asset_url) {
   if (asset_url.empty()) {
     return Future<Resource>(absl::InternalError("Asset url is empty."));
   }
-  return resource_manager_.Load(asset_url, future_group);
+  return resource_manager_.Load(asset_url);
 }
 
 void AssetManager::SetUrlLoader(

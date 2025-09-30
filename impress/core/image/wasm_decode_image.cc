@@ -101,58 +101,116 @@ class WasmImageContents : public ImageContents {
   uint32_t height_;
 };
 
-// LINT.IfChange
-const int kDecodeImageToImageData = 0;
-const int kDecodeImageToTexture = 1;
-// LINT.ThenChange(//depot/google3/third_party/impress/javascript/core/wasm/decode_image/wasm_decode_image.ts)
+class WasmDecodeImageManager {
+ public:
+  Future<std::unique_ptr<ImageContents>> DecodeImage(
+      absl::string_view name, resources::Resource resource);
+  Future<WasmTextureContents> DecodeImageToTexture(
+      absl::string_view name, resources::Resource resource,
+      filament::backend::TextureFormat format);
 
-using IdsToImageFutures =
-    absl::flat_hash_map<uint16_t, WeakFuture<std::unique_ptr<ImageContents>>>;
+  void OnDecodeImage(uint future_id, intptr_t image, int width, int height);
+  void OnDecodeTexture(uint future_id, GLuint texture, int width, int height);
+  void OnDecodeError(uint future_id, int decodeTarget, emscripten::val error);
 
-IdsToImageFutures& GetIdsToImageFutures() {
-  static absl::NoDestructor<IdsToImageFutures> ids_to_image_futures;
-  return *ids_to_image_futures;
+ private:
+  // LINT.IfChange
+  static const int kDecodeImageToImageData = 0;
+  static const int kDecodeImageToTexture = 1;
+  // LINT.ThenChange(//depot/google3/third_party/impress/javascript/core/wasm/decode_image/wasm_decode_image.ts)
+
+  uint GetNextFutureID() { return unique_future_id_.GetNext(); }
+
+  GLuint FilamentTextureFormatToGLEnum(
+      filament::backend::TextureFormat format) {
+    switch (format) {
+      case filament::backend::TextureFormat::SRGB8_A8:
+        return GL_SRGB8_ALPHA8;
+      case filament::backend::TextureFormat::RGBA8:
+        return GL_RGBA8;
+      case filament::backend::TextureFormat::RGB8:
+        return GL_RGB8;
+      case filament::backend::TextureFormat::R8:
+        return GL_R8;
+      case filament::backend::TextureFormat::RG8:
+        return GL_RG8;
+      case filament::backend::TextureFormat::DEPTH24:
+      case filament::backend::TextureFormat::DEPTH32F:
+      default:
+        IMP_LOG(imp::ERROR) << "Unhandled texture format type, using SRGB8_A8 instead.";
+        return GL_SRGB8_ALPHA8;
+    }
+  }
+
+  absl::flat_hash_map<uint16_t, WeakFuture<std::unique_ptr<ImageContents>>>
+      image_futures_;
+  absl::flat_hash_map<uint16_t, WeakFuture<WasmTextureContents>>
+      texture_futures_;
+  base::SequenceNumber unique_future_id_;
+};
+
+Future<std::unique_ptr<ImageContents>> WasmDecodeImageManager::DecodeImage(
+    absl::string_view name, resources::Resource resource) {
+  uint future_id = GetNextFutureID();
+  Future<std::unique_ptr<ImageContents>> image_future;
+  image_futures_.insert(std::make_pair(future_id, image_future));
+  MAIN_THREAD_EM_ASM(
+      { Module['wasmDecodeImageManager'].decodeImage($0, $1, $2); }, future_id,
+      resource.GetData().Data(), resource.GetData().Size());
+  return image_future;
 }
 
-using IdsToTextureFutures =
-    absl::flat_hash_map<uint16_t, WeakFuture<WasmTextureContents>>;
-
-// TODO Add JsWrapper class to manage image and texture futures.
-IdsToTextureFutures& GetIdsToTextureFutures() {
-  static absl::NoDestructor<IdsToTextureFutures> ids_to_texture_futures;
-  return *ids_to_texture_futures;
+Future<WasmTextureContents> WasmDecodeImageManager::DecodeImageToTexture(
+    absl::string_view name, resources::Resource resource,
+    filament::backend::TextureFormat format) {
+  uint future_id = GetNextFutureID();
+  Future<WasmTextureContents> texture_future;
+  texture_futures_.insert(std::make_pair(future_id, texture_future));
+  GLuint texture;
+  glGenTextures(1, &texture);
+  GLuint texture_format = FilamentTextureFormatToGLEnum(format);
+  MAIN_THREAD_EM_ASM(
+      {
+        Module['wasmDecodeImageManager'].decodeImageToTexture(
+            $0, $1, $2, GL.textures[$3], $3, $4);
+      },
+      future_id, resource.GetData().Data(), resource.GetData().Size(), texture,
+      texture_format);
+  return texture_future;
 }
 
-void OnDecodeImage(uint future_id, intptr_t image, int width, int height) {
-  if (!GetIdsToImageFutures().contains(future_id)) {
+void WasmDecodeImageManager::OnDecodeImage(uint future_id, intptr_t image,
+                                           int width, int height) {
+  if (!image_futures_.contains(future_id)) {
     IMP_LOG(imp::ERROR) << "Future ID not found when resolving onDecodeImage";
     return;
   }
   absl::optional<Future<std::unique_ptr<ImageContents>>> image_future =
-      GetIdsToImageFutures().at(future_id).Lock();
-  GetIdsToImageFutures().erase(future_id);
+      image_futures_.at(future_id).Lock();
+  image_futures_.erase(future_id);
 
   if (image_future.has_value()) {
     image_future->Return(std::make_unique<WasmImageContents>(
         reinterpret_cast<uint8_t*>(image), width, height));
   }
 }
-
-void OnDecodeTexture(uint future_id, GLuint texture, int width, int height) {
-  if (!GetIdsToTextureFutures().contains(future_id)) {
+void WasmDecodeImageManager::OnDecodeTexture(uint future_id, GLuint texture,
+                                             int width, int height) {
+  if (!texture_futures_.contains(future_id)) {
     IMP_LOG(imp::ERROR) << "Future ID not found when resolving onDecodeTexture";
     return;
   }
   absl::optional<Future<WasmTextureContents>> texture_future =
-      GetIdsToTextureFutures().at(future_id).Lock();
-  GetIdsToTextureFutures().erase(future_id);
+      texture_futures_.at(future_id).Lock();
+  texture_futures_.erase(future_id);
   if (texture_future.has_value()) {
     texture_future->Return(WasmTextureContents(texture, width, height));
   }
 }
-
-void OnDecodeError(uint future_id, int decodeTarget, emscripten::val error) {
-  if (!GetIdsToImageFutures().contains(future_id)) {
+void WasmDecodeImageManager::OnDecodeError(uint future_id, int decodeTarget,
+                                           emscripten::val error) {
+  if (!image_futures_.contains(future_id) &&
+      !texture_futures_.contains(future_id)) {
     IMP_LOG(imp::ERROR) << "Future ID not found when resolving "
                << (decodeTarget == kDecodeImageToImageData ? "decodeImage"
                                                            : "decodeTexture")
@@ -162,8 +220,8 @@ void OnDecodeError(uint future_id, int decodeTarget, emscripten::val error) {
   switch (decodeTarget) {
     case kDecodeImageToImageData: {
       absl::optional<Future<std::unique_ptr<ImageContents>>> image_future =
-          GetIdsToImageFutures().at(future_id).Lock();
-      GetIdsToImageFutures().erase(future_id);
+          image_futures_.at(future_id).Lock();
+      image_futures_.erase(future_id);
       if (image_future.has_value()) {
         image_future->Return(absl::InternalError(error.as<std::string>()));
       }
@@ -171,8 +229,8 @@ void OnDecodeError(uint future_id, int decodeTarget, emscripten::val error) {
     }
     case kDecodeImageToTexture: {
       absl::optional<Future<WasmTextureContents>> texture_future =
-          GetIdsToTextureFutures().at(future_id).Lock();
-      GetIdsToTextureFutures().erase(future_id);
+          texture_futures_.at(future_id).Lock();
+      texture_futures_.erase(future_id);
       if (texture_future.has_value()) {
         texture_future->Return(absl::InternalError(error.as<std::string>()));
       }
@@ -185,44 +243,42 @@ void OnDecodeError(uint future_id, int decodeTarget, emscripten::val error) {
   }
 }
 
+WasmDecodeImageManager* GetDecodeImageManager() {
+  static absl::NoDestructor<WasmDecodeImageManager> decode_image_manager;
+  return decode_image_manager.get();
+}
+
+void OnDecodeImage(uint future_id, intptr_t image, int width, int height) {
+  return GetDecodeImageManager()->OnDecodeImage(future_id, image, width,
+                                                height);
+}
+
+void OnDecodeTexture(uint future_id, GLuint texture, int width, int height) {
+  return GetDecodeImageManager()->OnDecodeTexture(future_id, texture, width,
+                                                  height);
+}
+
+void OnDecodeError(uint future_id, int decodeTarget, emscripten::val error) {
+  return GetDecodeImageManager()->OnDecodeError(future_id, decodeTarget, error);
+}
+
 EMSCRIPTEN_BINDINGS(decode_image_bindings) {
   emscripten::function("onDecodeImage", imp::image::details::OnDecodeImage,
                        emscripten::allow_raw_pointers());
   emscripten::function("onDecodeTexture", imp::image::details::OnDecodeTexture);
   emscripten::function("onDecodeError", imp::image::details::OnDecodeError);
 };
-
-uint GetNextFutureID() {
-  static base::SequenceNumber unique_future_id;
-  return unique_future_id.GetNext();
-}
 }  // namespace
 
 Future<std::unique_ptr<ImageContents>> WasmDecodeImage(
     absl::string_view name, resources::Resource resource) {
-  uint future_id = GetNextFutureID();
-  Future<std::unique_ptr<ImageContents>> image_future;
-  GetIdsToImageFutures().insert(std::make_pair(future_id, image_future));
-  MAIN_THREAD_EM_ASM(
-      { Module['wasmDecodeImageManager'].decodeImage($0, $1, $2); }, future_id,
-      resource.GetData().Data(), resource.GetData().Size());
-  return image_future;
+  return GetDecodeImageManager()->DecodeImage(name, resource);
 }
 
 Future<WasmTextureContents> WasmDecodeImageToTexture(
-    absl::string_view name, resources::Resource resource) {
-  uint future_id = GetNextFutureID();
-  Future<WasmTextureContents> texture_future;
-  GetIdsToTextureFutures().insert(std::make_pair(future_id, texture_future));
-  GLuint texture;
-  glGenTextures(1, &texture);
-  MAIN_THREAD_EM_ASM(
-      {
-        Module['wasmDecodeImageManager'].decodeImageToTexture(
-            $0, $1, $2, GL.textures[$3], $3);
-      },
-      future_id, resource.GetData().Data(), resource.GetData().Size(), texture);
-  return texture_future;
+    absl::string_view name, resources::Resource resource,
+    filament::backend::TextureFormat format) {
+  return GetDecodeImageManager()->DecodeImageToTexture(name, resource, format);
 }
 
 }  // namespace imp::image::details

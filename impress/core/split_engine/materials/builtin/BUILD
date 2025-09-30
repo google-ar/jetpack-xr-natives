@@ -57,7 +57,7 @@ cc_library(
     defines = imp_defines(),
     deps = [
         ":builtin_material",
-        "//core/common:log",
+        "//core:config",
         "//core/common:registry",
         "//core/common:small_source_location",
         "//core/materials",
@@ -69,6 +69,7 @@ cc_library(
         "//core/view:base_view",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:string_view",
+        "@com_google_impress//core/common:log",
         "@third_party//filament",
         "@third_party//split_engine:fbs_deps",  # buildcleaner: keep
     ],
@@ -123,7 +124,6 @@ cc_library(
         "//core/assets/material:material_asset",
         "//core/assets/material:material_load_options_proto_cc",
         "//core/async:future",
-        "//core/common:log",
         "//core/material_library:flatbuffer_utils",
         "//core/materials",
         "//core/math",
@@ -145,6 +145,7 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/types:variant",
+        "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
     ],
     alwayslink = 1,

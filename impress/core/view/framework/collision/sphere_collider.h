@@ -26,6 +26,7 @@
 #include "core/math/vec.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/isf_info.h"
+#include "core/ncsb/node_handle.h"
 #include "core/view/framework/collision/collider_state.proto.imp.h"
 #include "core/view/framework/collision/ray_hit.h"
 
@@ -56,6 +57,11 @@ class SphereCollider : public Component,
   absl::optional<RayHit> Intersect(const Ray& ray);
   absl::optional<DoubleRayHit> IntersectPrecise(const DoubleRay& ray);
 
+  // Sets the node that should be considered the "hit" node when this collider
+  // collides with a ray.
+  void SetHitNode(NodeHandle hit_node);
+  NodeHandle GetHitNode() const;
+
   void OnActiveStatusChanged(bool is_active);
 
  private:
@@ -63,6 +69,7 @@ class SphereCollider : public Component,
   friend class ColliderMaskHelpers<SphereCollider>;
   SphereColliderState state_;
   Flags<CollisionMask> collision_flags_;
+  NodeHandle hit_node_;
 
  public:
   using IsfInfo = IsfInfo<&SphereCollider::state_>;

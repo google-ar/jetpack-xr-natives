@@ -23,7 +23,6 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "core/async/future.h"
-#include "core/async/future_group.h"
 #include "core/common/buffer_access.h"
 #include "core/common/invocable.h"
 #include "core/loader/loader.h"
@@ -45,9 +44,7 @@ struct LoaderCreator {
 
   // Returns a Future to a function that returns the loader.
   // This allows background setup to happen in parallel with other tasks.
-  virtual Future<GetLoaderFn> Create(
-      BaseView& view,
-      std::optional<FutureGroup> future_group = std::nullopt) = 0;
+  virtual Future<GetLoaderFn> Create(BaseView& view) = 0;
 };
 
 }  // namespace imp::loader

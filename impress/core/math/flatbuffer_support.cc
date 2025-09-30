@@ -72,6 +72,18 @@ imp::quatf UnPack(const imp::schemas::Quatf &obj) {
   return imp::quatf(obj.w(), obj.x(), obj.y(), obj.z());
 }
 
+imp::schemas::Mat2f Pack(const imp::mat2f& obj) {
+  const imp::float2& c0 = obj[0];
+  const imp::float2& c1 = obj[1];
+  return imp::schemas::Mat2f(c0[0], c0[1],  //
+                             c1[0], c1[1]);
+}
+
+imp::mat2f UnPack(const imp::schemas::Mat2f& obj) {
+  return imp::mat2f(obj.m00(), obj.m01(),  //
+                    obj.m10(), obj.m11());
+}
+
 imp::schemas::Mat3f Pack(const imp::mat3f &obj) {
   const imp::float3 &c0 = obj[0];
   const imp::float3 &c1 = obj[1];

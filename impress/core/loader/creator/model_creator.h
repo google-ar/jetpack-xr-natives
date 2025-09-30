@@ -31,7 +31,6 @@
 #include "filament/filament/include/filament/Material.h"
 #include "filament/filament/include/filament/Texture.h"
 #include "core/async/future.h"
-#include "core/async/future_group.h"
 #include "core/common/typed_set_vector.h"
 #include "core/common/typed_vector.h"
 #include "core/image/image_contents.h"
@@ -42,6 +41,7 @@
 #include "core/material_library/material_param_value.h"
 #include "core/model/model_data.h"
 #include "core/model/skeleton_data.h"
+#include "core/render/texture.h"
 #include "core/view/base_view.h"
 
 namespace imp::loader::details {
@@ -57,7 +57,6 @@ class ModelCreator {
       BaseView& view, const schemas::LoadedModel* model,
       MaterialPackage* material_package,
       std::vector<std::unique_ptr<image::ImageContents>> images,
-      std::optional<FutureGroup> future_group = std::nullopt,
       std::optional<absl::string_view> name = std::nullopt);
 
   absl::StatusOr<std::unique_ptr<model::ModelData>> CreateModelData(
@@ -74,14 +73,12 @@ class ModelCreator {
       BaseView& view, const schemas::LoadedModel* model,
       MaterialPackage* material_package,
       std::vector<std::unique_ptr<image::ImageContents>> images,
-      std::optional<FutureGroup> future_group = std::nullopt,
       std::optional<absl::string_view> name = std::nullopt);
 
   Future<absl::Status> CreateModelResources(
       BaseView& view, MaterialPackage* material_package,
       const schemas::LoadedModel* model,
       std::vector<std::unique_ptr<image::ImageContents>> images,
-      std::optional<FutureGroup> future_group = std::nullopt,
       std::optional<absl::string_view> name = std::nullopt);
 
   filament::Engine* const engine_;
@@ -91,9 +88,10 @@ class ModelCreator {
   TypedVector<filament::VertexBuffer*> vertex_buffers_;
   TypedVector<filament::IndexBuffer*> index_buffers_;
   TypedVector<filament::MorphTargetBuffer*> morph_target_buffers_;
-  TypedVector<filament::Texture*> textures_;
+  TypedVector<OwnedTexturePtr> textures_;
   TypedVector<GenericMaterialPtr> materials_;
-  absl::flat_hash_map<uint16_t, MaterialId> material_id_lookup_;
+  absl::flat_hash_map<uint16_t, model::ModelData::MaterialId>
+      material_id_lookup_;
   TypedVector<model::ModelData::SkinningBufferData> skinning_buffers_;
   model::ModelData::MeshVertexDataLookup stored_vertex_data_;
   model::ModelData::MeshIndexDataLookup stored_index_data_;

@@ -24,6 +24,18 @@ package(
 
 licenses(["notice"])
 
+cc_library(
+    name = "desktop_hooks",
+    srcs = ["desktop_hooks.cc"],
+    hdrs = ["desktop_hooks.h"],
+    deps = [
+        "//core/async:executor",
+        "//core/view:base_view",
+        "@com_google_impress//core/common:log",
+    ],
+    alwayslink = 1,
+)
+
 # An incomplete library which is combined via .bzl with a provider of the client API.
 cc_library(
     name = "desktop",
@@ -32,14 +44,20 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
-        "//core/common:log",
+        ":desktop_hooks",
+        "//core/async:executor",
+        "//core/common:context",
+        "//core/input",
         "//core/view:view_host",
         "//core/view/framework",
+        "//core/view/utils:device",
         "//core/window:sdl_venue",
         "@com_google_absl//absl/debugging:failure_signal_handler",
         "@com_google_absl//absl/debugging:symbolize",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament",
     ],

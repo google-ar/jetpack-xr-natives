@@ -95,6 +95,8 @@ struct BaseRenderableManager {
       filament::RenderableManager::Instance instance) const = 0;
   virtual void SetReceiveShadows(filament::RenderableManager::Instance instance,
                                  bool enable) = 0;
+  virtual bool GetFogEnabled(
+      filament::RenderableManager::Instance instance) const = 0;
   virtual void SetFogEnabled(filament::RenderableManager::Instance instance,
                              bool enable) = 0;
   virtual size_t GetMorphTargetCount(

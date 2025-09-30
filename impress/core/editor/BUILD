@@ -76,6 +76,7 @@ cc_library(
         ":editor_plugin",
         ":editor_style",
         ":events",
+        ":file_loader_helper",
         ":file_type_registry",
         ":selection_controller",
         ":widget",
@@ -86,11 +87,9 @@ cc_library(
         "//core/assets/gltf:gltf_behavior_extension",
         "//core/assets/gltf:gltf_interactivity_extension",
         "//core/async:future",
-        "//core/common:log",
         "//core/common:platform_helpers",
         "//core/common:registry",
         "//core/common:robin_map",
-        "//core/editor:file_loader_helper",
         "//core/editor/components:camera_rotate",
         "//core/editor/components:camera_translate",
         "//core/editor/components:camera_zoom",
@@ -134,6 +133,7 @@ cc_library(
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_impress//core/common:log",
     ] + if_desktop([
     ]) + if_emscripten([
     ]),
@@ -250,10 +250,7 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     defines = imp_defines(),
-    deps = [
-        "//core/editor/layout:editor_panel_ids",
-        "@com_google_absl//absl/strings",
-    ],
+    deps = ["//core/editor/layout:editor_panel_ids"],
     alwayslink = 1,
 )
 
@@ -294,11 +291,8 @@ cc_library(
     deps = [
         ":editor_style",
         "//core/common:bit_flag",
-        "//core/common:invocable",
-        "//core/common:log",
         "//core/common:platform_helpers",
         "//core/common:template_helpers",
-        "//core/common:type_traits",
         "//core/editor/layout:editor_control_flags",
         "//core/editor/layout:helpers",
         "//core/editor/ui:drag_and_drop",
@@ -318,6 +312,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_impress//core/common:log",
         "@dear_imgui",
     ],
     alwayslink = 1,
@@ -413,6 +408,7 @@ cc_library(
         "//core:config",
         "//core/assets",
         "//core/assets/gltf:gltf_behavior_extension",
+        "//core/assets/gltf:gltf_interactivity_extension",
         "//core/async:future",
         "//core/common",
         "//core/common:buffer_access",
@@ -528,8 +524,8 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         "//core/common:invocable",
-        "//core/common:log",
         "@com_google_absl//absl/status",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )

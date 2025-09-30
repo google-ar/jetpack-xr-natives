@@ -167,7 +167,7 @@ class JniDeleter {
  public:
   JniDeleter(JNIEnv* env) : env_(env) {}
   void operator()(T p) { DeleteRef(env_, p); }
-  JNIEnv* env() { return env_; }
+  JNIEnv* env() const { return env_; }
 
  private:
   JNIEnv* env_;
@@ -194,6 +194,12 @@ JniUniquePtr<T> WrapJni(JNIEnv* env, T jni_object) {
   return JniUniquePtr<T>(jni_object, details::JniDeleter<T>(env));
 }
 
+// Creates a smart pointer with a cloned local reference to the given object.
+template <typename T>
+JniUniquePtr<T> CloneRef(JNIEnv* env, T ref) {
+  return WrapJni(env, static_cast<T>(env->NewLocalRef(ref)));
+}
+
 JniUniquePtr<jstring> ToJniString(JNIEnv* env, const std::string& str);
 JniUniquePtr<jstring> ToJniString(JNIEnv* env, absl::string_view view);
 
@@ -211,11 +217,21 @@ JniUniquePtr<jobjectArray> CreateJniObjectArray(JNIEnv* env, size_t length,
                                                 jclass clazz, jobject initial);
 JniUniquePtr<jstring> CreateJniString(JNIEnv* env, const std::string& str);
 
+// Takes a local reference, creates and returns a global reference to the same
+// object. Then releases the given local reference.
 template <typename T>
 JniUniquePtr<T> LocalToGlobalRef(JniUniquePtr<T> local_ref) {
   JNIEnv* env = local_ref.get_deleter().env();
   jobject global_ref = env->NewGlobalRef(local_ref.get());
   return WrapJni(env, static_cast<T>(global_ref));
+}
+
+// Takes local or global reference, creates and returns a new local reference.
+template <typename T>
+JniUniquePtr<T> CloneRef(const JniUniquePtr<T>& ref) {
+  JNIEnv* env = ref.get_deleter().env();
+  jobject new_ref = env->NewLocalRef(ref.get());
+  return WrapJni(env, static_cast<T>(new_ref));
 }
 
 // The key point of this function is to create a global ref and then release
@@ -251,6 +267,7 @@ class JavaWrapper {
           env, env->NewObject(Clazz(), init, std::forward<Args>(init_args)...));
       self_ = AddJniInfo(env->NewGlobalRef(local_self_ref.get()));
     }
+    JavaExceptionPrintClear(env);
   }
 
   template <class... Args>
@@ -269,6 +286,7 @@ class JavaWrapper {
           env, env->NewObject(Clazz(), init, std::forward<Args>(init_args)...));
       self_ = AddJniInfo(env->NewGlobalRef(local_self_ref.get()));
     }
+    JavaExceptionPrintClear(env);
   }
 
   JavaWrapper(JNIEnv* env, const char* class_path)
@@ -286,6 +304,7 @@ class JavaWrapper {
         static_cast<jclass>(env->NewGlobalRef(local_class_ref.get())));
 
     SetSelf(env->NewGlobalRef(object));
+    JavaExceptionPrintClear(env);
   }
 
   ABSL_DEPRECATED(
@@ -297,7 +316,13 @@ class JavaWrapper {
 
     JniUniquePtr<jclass> local_class_ref = FindClass(env, class_path);
 
-    
+    if (local_class_ref == nullptr) {
+      IMP_LOG(imp::FATAL) << "type passed to JavaWrapper::ctor is not found, perhaps it"
+                 << " was proguarded away. class_path=" << class_path
+                 << ", object's type=" << GetObjectClassName(env, object);
+    } else {
+      
+    }
   }
 
   // The benefit of this ctor is that the ownership of the passed reference is
@@ -558,6 +583,9 @@ class JavaWrapper {
   }
 
   void SetSelf(JniUniquePtr<jobject> self) { SetSelf(self.release()); }
+
+ private:
+  static std::string GetObjectClassName(JNIEnv* env, jobject object);
 
  protected:
   std::string class_path_;

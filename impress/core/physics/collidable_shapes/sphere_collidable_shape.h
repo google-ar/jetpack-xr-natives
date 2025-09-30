@@ -49,16 +49,11 @@ class SphereCollidableShape : public CollidableShape {
 #endif
 
  private:
-  // Since btSphereShape takes a scaler scale, this function forces the three
-  // dimensions of the scale of an Impress sphere collider to be the same.
-  void EnforceEvenScaleForSphere();
-
-  NodeHandle node_;
   std::unique_ptr<btCollisionShape> collidable_shape_;
   // Local offset of the center of the sphere in Impress.
   float3 collidable_center_;
 
-  float3 scale_prev_ = float3(1.0f);
+  float3 scale_ = float3(1.0f);
 };
 
 }  // namespace imp

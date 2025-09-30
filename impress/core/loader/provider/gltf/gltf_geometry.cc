@@ -46,6 +46,7 @@
 #include "core/common/robin_set.h"
 #include "core/common/schemas/render_generated.h"
 #include "core/loader/provider/details/loaded_model_builder.h"
+#include "core/loader/provider/extensions/gltf_extension_mesh_features.h"
 #include "core/loader/provider/gltf/accessor_reader.h"
 #include "core/loader/provider/gltf/dense_data_access.h"
 #include "core/loader/provider/gltf/gltf.proto.imp.h"
@@ -1110,10 +1111,14 @@ OptionalError ProcessPrimitives(
       }
     }
 
+    std::vector<gltf::imp_proto::Primitive::FeatureIdTexture>
+        feature_id_textures = extensions::ResolveMeshFeatures(primitive);
+
     out_processed_primitives->push_back(ProcessedPrimitive{
         std::move(vertex_blocks), vertex_count, index_buffer,
         TransformBounds(primitive_bounds, transform), skinning_buffer_id,
-        morph_target_index, morph_target_count, std::move(required_materials)});
+        morph_target_index, morph_target_count, std::move(feature_id_textures),
+        std::move(required_materials)});
   }
 
   std::vector<LoadedModelBuilder::MorphTargetBlock> morph_target_attributes;

@@ -26,82 +26,13 @@
 #include "absl/algorithm/container.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/backend/include/backend/PixelBufferDescriptor.h"
-#include "filament/filament/include/filament/Texture.h"
 
 namespace imp::image {
 namespace {
-
 constexpr size_t kFacesPerCube = 6;
 
 using ::filament::backend::PixelBufferDescriptor;
-
-class StitchedImageContents : public ImageContents {
- public:
-  StitchedImageContents(int width, int height, int channels,
-                        std::vector<uint8_t>&& memory)
-      : width_(width),
-        height_(height),
-        channels_(channels),
-        memory_(std::make_shared<std::vector<uint8_t>>(std::move(memory))) {
-    assert(memory_->size() == GetSize());
-  }
-
-  uint32_t GetWidth() const override { return static_cast<uint32_t>(width_); }
-  uint32_t GetStride() const override {
-    return static_cast<uint32_t>(width_ * channels_);
-  }
-  uint32_t GetHeight() const override { return static_cast<uint32_t>(height_); }
-  std::size_t GetSize() const override { return width_ * height_ * channels_; }
-  uint8_t* GetData() override { return memory_->data(); }
-  bool HasAlpha() const override { return channels_ == 4; }
-  filament::backend::PixelBufferDescriptor CreatePixelBufferDescriptor(
-      std::function<void()> callback, bool is_r11_g11_b10) override;
-  filament::backend::TextureFormat GetTextureFormat() const override {
-    return HasAlpha() ? filament::Texture::InternalFormat::SRGB8_A8
-                      : filament::Texture::InternalFormat::SRGB8;
-  }
-
- private:
-  int width_;
-  int height_;
-  int channels_;
-  std::shared_ptr<std::vector<uint8_t>> memory_;
-};
-
-filament::backend::PixelBufferDescriptor
-StitchedImageContents::CreatePixelBufferDescriptor(
-    std::function<void()> callback, bool is_r11_g11_b10) {
-  // Packet whose lifetime begins when a Texture's byte buffer data is queued
-  // for consumption by the render thread, and ends when the data is consumed.
-  struct TextureUpload {
-    std::shared_ptr<std::vector<uint8_t>> memory;
-    std::function<void()> callback;
-  };
-  TextureUpload* texture_upload = new TextureUpload{memory_, callback};
-
-  return PixelBufferDescriptor(
-      texture_upload->memory->data(), texture_upload->memory->size(),
-      (!HasAlpha() || is_r11_g11_b10)
-          ? PixelBufferDescriptor::PixelDataFormat::RGB
-          : PixelBufferDescriptor::PixelDataFormat::RGBA,
-      is_r11_g11_b10
-          ? PixelBufferDescriptor::PixelDataType::UINT_10F_11F_11F_REV
-          : PixelBufferDescriptor::PixelDataType::UBYTE,
-      [](void* buffer, size_t size, void* user) {
-        auto* texture_upload = reinterpret_cast<TextureUpload*>(user);
-        // Sanity checks.
-        assert(buffer == texture_upload->memory->data());
-        assert(size == texture_upload->memory->size());
-        if (texture_upload->callback) {
-          texture_upload->callback();
-        }
-        delete texture_upload;
-      },
-      texture_upload);
-}
-
 }  // namespace
 
 absl::Status ImageContents::CreateStitched(
@@ -166,5 +97,37 @@ ImageContents::CreatePreStitchedImage(int width, int height,
   }
   return std::make_unique<StitchedImageContents>(
       width, height, static_cast<int>(channels), std::move(memory));
+}
+
+filament::backend::PixelBufferDescriptor
+StitchedImageContents::CreatePixelBufferDescriptor(
+    std::function<void()> callback, bool is_r11_g11_b10) {
+  // Packet whose lifetime begins when a Texture's byte buffer data is queued
+  // for consumption by the render thread, and ends when the data is consumed.
+  struct TextureUpload {
+    std::shared_ptr<std::vector<uint8_t>> memory;
+    std::function<void()> callback;
+  };
+  TextureUpload* texture_upload = new TextureUpload{memory_, callback};
+
+  return PixelBufferDescriptor(
+      texture_upload->memory->data(), texture_upload->memory->size(),
+      (!HasAlpha() || is_r11_g11_b10)
+          ? PixelBufferDescriptor::PixelDataFormat::RGB
+          : PixelBufferDescriptor::PixelDataFormat::RGBA,
+      is_r11_g11_b10
+          ? PixelBufferDescriptor::PixelDataType::UINT_10F_11F_11F_REV
+          : PixelBufferDescriptor::PixelDataType::UBYTE,
+      [](void* buffer, size_t size, void* user) {
+        auto* texture_upload = reinterpret_cast<TextureUpload*>(user);
+        // Sanity checks.
+        assert(buffer == texture_upload->memory->data());
+        assert(size == texture_upload->memory->size());
+        if (texture_upload->callback) {
+          texture_upload->callback();
+        }
+        delete texture_upload;
+      },
+      texture_upload);
 }
 }  // namespace imp::image

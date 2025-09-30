@@ -57,6 +57,22 @@ message ConeColliderState {
 }
 
 // Serialized data for ColliderComponent.
+// To use this ColliderComponent, create separate child Nodes with one of the
+// following components:
+//   - SphereCollider
+//   - BoxCollider
+//   - CapsuleCollider
+//   - CylinderCollider
+//   - ConeCollider
+// Arrange the child Nodes at the desired offsets from the parent Node to form
+// a CompoundShape.
+// Finally, create the CompoundCollider in the parent Node.
+message CompoundColliderState {
+  Float3 center = 1;
+  int32 mask = 2;
+}
+
+// Serialized data for ColliderComponent.
 message MeshColliderState {
   // Determine how to handle meshes without mesh data available on CPU.
   enum ColliderMode {

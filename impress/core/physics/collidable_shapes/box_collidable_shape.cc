@@ -32,7 +32,8 @@
 #endif
 
 namespace imp {
-BoxCollidableShape::BoxCollidableShape(NodeHandle node) : node_(node) {}
+BoxCollidableShape::BoxCollidableShape(NodeHandle node)
+    : CollidableShape(node) {}
 
 void BoxCollidableShape::CreateBtCollisionShape() {
   auto collider = node_->GetComponent<BoxCollider>();
@@ -64,7 +65,7 @@ void BoxCollidableShape::ApplyScalingToBulletCollider() {
   if (scale.x > 0 && scale.y > 0 && scale.z > 0) {
     collidable_shape_->setLocalScaling(ToBtVector3(scale));
   }
-  scale_prev_ = scale;
+  scale_ = scale;
 }
 
 #if IMP_RUNTIME(DEV)

@@ -130,7 +130,6 @@ cc_library(
         "//core/async:future",
         "//core/collision:ray",
         "//core/common",
-        "//core/common:log",
         "//core/common:robin_map",
         "//core/common:tuple_helpers",
         "//core/math",
@@ -140,6 +139,7 @@ cc_library(
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/libs:math_hdrs",
     ] + select({

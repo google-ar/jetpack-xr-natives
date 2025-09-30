@@ -21,18 +21,10 @@
 #include "openxr/jobject_creator.h"
 #include "openxr/openxr_manager.h"
 
-inline jlong CreateJavaLongFromCreateAnchorResult(
-    androidx::xr::openxr::OpenXrManager::CreateAnchorResult result,
-    XrSpace xr_space) {
-  if (result !=
-      androidx::xr::openxr::OpenXrManager::CreateAnchorResult::kSuccess) {
-    return static_cast<jlong>(result);
-  }
-  return androidx::xr::openxr::CreateJavaAnchorHandle(xr_space);
-}
-
-static jobject NativeGetAugmentedObjectState(JNIEnv* env, jlong object_id,
-                                             jlong monotonic_time_ns) {
+extern "C" {
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrAugmentedObject_nativeGetAugmentedObjectState(
+    JNIEnv* env, jclass /*clazz*/, jlong object_id, jlong monotonic_time_ns) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   XrTrackableObjectANDROID object;
@@ -46,9 +38,10 @@ static jobject NativeGetAugmentedObjectState(JNIEnv* env, jlong object_id,
   return androidx::xr::openxr::CreateJavaAugmentedObjectState(env, object);
 }
 
-static jlong NativeCreateAnchorForObject(JNIEnv* env, jlong object_id,
-                                        jobject pose,
-                                        jlong monotonic_time_ns) {
+JNIEXPORT jlong JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrAugmentedObject_nativeCreateAnchorForObject(
+    JNIEnv* env, jclass /*clazz*/, jlong object_id, jobject pose,
+    jlong monotonic_time_ns) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
 
@@ -59,34 +52,11 @@ static jlong NativeCreateAnchorForObject(JNIEnv* env, jlong object_id,
                                        /*object=*/nullptr,
                                        static_cast<int64_t>(monotonic_time_ns),
                                        xr_pose, &anchor);
-  return CreateJavaLongFromCreateAnchorResult(result, anchor);
-}
-
-extern "C" {
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_openxr_OpenXrAugmentedObject_nativeGetAugmentedObjectState(
-    JNIEnv* env, jclass /*clazz*/, jlong object_id, jlong monotonic_time_ns) {
-  return NativeGetAugmentedObjectState(env, object_id, monotonic_time_ns);
-}
-
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrAugmentedObject_nativeGetAugmentedObjectState(
-    JNIEnv* env, jclass /*clazz*/, jlong object_id, jlong monotonic_time_ns) {
-  return NativeGetAugmentedObjectState(env, object_id, monotonic_time_ns);
-}
-
-JNIEXPORT jlong JNICALL
-Java_androidx_xr_openxr_OpenXrAugmentedObject_nativeCreateAnchorForObject(
-    JNIEnv* env, jclass /*clazz*/, jlong object_id, jobject pose,
-    jlong monotonic_time_ns) {
-  return NativeCreateAnchorForObject(env, object_id, pose, monotonic_time_ns);
-}
-
-JNIEXPORT jlong JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrAugmentedObject_nativeCreateAnchorForObject(
-    JNIEnv* env, jclass /*clazz*/, jlong object_id, jobject pose,
-    jlong monotonic_time_ns) {
-  return NativeCreateAnchorForObject(env, object_id, pose, monotonic_time_ns);
+  if (result !=
+      androidx::xr::openxr::OpenXrManager::CreateAnchorResult::kSuccess) {
+    return static_cast<jlong>(result);
+  }
+  return androidx::xr::openxr::CreateJavaAnchorHandle(anchor);
 }
 
 }  // extern "C"

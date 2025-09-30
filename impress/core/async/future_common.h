@@ -23,8 +23,6 @@
 #include "absl/types/optional.h"
 #include "absl/types/variant.h"
 #include "core/async/executor.h"
-#include "core/async/future_group.h"
-#include "core/async/task_priority.h"
 
 namespace imp {
 
@@ -112,15 +110,7 @@ struct FutureScheduleOptions {
   //    child of the inner future.
   // 3. The future returned by Combine(), Merge(), or variants thereof is
   //    considered a child of all of the Futures passed in.
-  //
-  // Note: If a FutureGroup is specified, this value will be overridden by the
-  // task priority of the provided FutureGroup.
   std::optional<int> task_priority = std::nullopt;
-
-  // The FutureGroup to assign the scheduled Future to.
-  // TODO Reevaluate the need for FutureGroup, given that we now
-  // have task priorities that bubble up.
-  std::optional<FutureGroup> future_group = std::nullopt;
 };
 
 // Options used to configure calls to Future<T>::Then.
@@ -162,15 +152,7 @@ struct FutureThenOptions {
   //    child of the inner future.
   // 3. The future returned by Combine(), Merge(), or variants thereof is
   //    considered a child of all of the Futures passed in.
-  //
-  // Note: If a FutureGroup is specified, this value will be overridden by the
-  // task priority of the provided FutureGroup.
   std::optional<int> task_priority = std::nullopt;
-
-  // The FutureGroup to assign the Future to.
-  // TODO Reevaluate the need for FutureGroup, given that we now
-  // have task priorities that bubble up.
-  std::optional<FutureGroup> future_group = std::nullopt;
 };
 
 // Forward declaration of Future.

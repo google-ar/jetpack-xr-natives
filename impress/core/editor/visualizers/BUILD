@@ -45,7 +45,6 @@ cc_library(
     deps = [
         ":camera_visualizer_assets",
         "//core/common:invocable",
-        "//core/common:log",
         "//core/common:platform_helpers",
         "//core/common:registry",
         "//core/common:robin_map",
@@ -58,6 +57,7 @@ cc_library(
         "//core/view/utils:frame_time",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_impress//core/common:log",
         "@third_party//filament/libs:math_hdrs",
     ],
     alwayslink = 1,
@@ -93,7 +93,6 @@ cc_library(
         "//core/assets",
         "//core/async:future",
         "//core/common:hash",
-        "//core/common:log",
         "//core/common:registry",
         "//core/editor",
         "//core/math",
@@ -113,6 +112,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )

@@ -38,7 +38,6 @@
 #include "core/async/executor.h"
 #include "core/async/future.h"
 #include "core/async/future_common.h"
-#include "core/async/future_group.h"
 #include "core/common/buffer_access.h"
 #include "core/common/file_helpers.h"
 #include "core/common/robin_map.h"
@@ -61,8 +60,7 @@ class CurlUrlLoader : public UrlLoader {
  public:
   CurlUrlLoader();
 
-  Future<absl::Cord> LoadUrl(const std::string& url,
-                             std::optional<FutureGroup> future_group) override;
+  Future<absl::Cord> LoadUrl(const std::string& url) override;
 
  private:
   // Url to load queued from the foreground thread which will then be consumed &
@@ -95,7 +93,7 @@ class CurlUrlLoader : public UrlLoader {
 
   absl::StatusOr<absl::Cord> LoadPath(const std::string& path);
 
-  void ScheduleUrlConsumer(std::optional<FutureGroup> future_group);
+  void ScheduleUrlConsumer();
 
   // Called from background executor.
   static void ConsumeUrls(std::shared_ptr<DownloadInfo> download_info);
@@ -129,8 +127,7 @@ static size_t WriteCurlChunk(void* buffer, size_t size, size_t nmemb,
   return nmemb;
 }
 
-Future<absl::Cord> CurlUrlLoader::LoadUrl(
-    const std::string& url, std::optional<FutureGroup> future_group) {
+Future<absl::Cord> CurlUrlLoader::LoadUrl(const std::string& url) {
   constexpr auto kFileUriPrefix = absl::string_view{"file://"};
   if (absl::StartsWith(url, kFileUriPrefix)) {
     return Future<absl::Cord>(LoadPath(url.substr(kFileUriPrefix.size())));
@@ -151,14 +148,13 @@ Future<absl::Cord> CurlUrlLoader::LoadUrl(
   }
 
   if (!was_running) {
-    ScheduleUrlConsumer(future_group);
+    ScheduleUrlConsumer();
   }
 
   return result;
 }
 
-void CurlUrlLoader::ScheduleUrlConsumer(
-    std::optional<FutureGroup> future_group) {
+void CurlUrlLoader::ScheduleUrlConsumer() {
   // TODO (broken link) Schedule future with correct future group if there are
   // in-flight requests going on.
   consume_urls_future = Future<absl::Status>::Schedule(
@@ -166,7 +162,7 @@ void CurlUrlLoader::ScheduleUrlConsumer(
         ConsumeUrls(download_info);
         return absl::OkStatus();
       },
-      {.executor = Executor::Type::kBackground, .future_group = future_group});
+      {.executor = Executor::Type::kBackground});
 }
 
 // TODO: Implement a way to add headers to the request.

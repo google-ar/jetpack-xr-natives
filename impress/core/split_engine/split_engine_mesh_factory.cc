@@ -431,16 +431,15 @@ MeshVertexDataPtr CreateMeshVertexData(
 
   VertexFormat vertex_format;
   const size_t block_count = vertex_buffer.blocks()->size();
-  // The following for loop is based on the assumption that only the last
-  // attribute in a block has data.
   for (size_t block_index = 0; block_index < block_count; block_index++) {
-    const android_xr::schemas::VertexAttributeInfo* attribute_info =
-        *(vertex_buffer.blocks()->Get(block_index))->attributes()->rbegin();
-    VertexAttribute vertex_attr =
-        static_cast<VertexAttribute>(attribute_info->attribute());
-    AttributeType attribute_type =
-        static_cast<AttributeType>(attribute_info->type());
-    vertex_format.AppendAttribute({vertex_attr, attribute_type});
+    for (const android_xr::schemas::VertexAttributeInfo* attribute_info :
+         *vertex_buffer.blocks()->Get(block_index)->attributes()) {
+      VertexAttribute vertex_attr =
+          static_cast<VertexAttribute>(attribute_info->attribute());
+      AttributeType attribute_type =
+          static_cast<AttributeType>(attribute_info->type());
+      vertex_format.AppendAttribute({vertex_attr, attribute_type});
+    }
   }
 
   // If no required data is available, create only empty MeshData to save
@@ -469,43 +468,47 @@ MeshVertexDataPtr CreateMeshVertexData(
   for (size_t block_index = 0; block_index < block_count; block_index++) {
     const android_xr::schemas::VertexBlockInfo* block_info =
         vertex_buffer.blocks()->Get(block_index);
+    const uint8_t* buffer_data = block_info->buffer()->data();
+    const size_t stride = block_info->stride();
 
-    // Get attributes data.
-    const android_xr::schemas::VertexAttributeInfo* attribute_info =
-        *(vertex_buffer.blocks()->Get(block_index))->attributes()->rbegin();
-    VertexAttribute vertex_attr =
-        static_cast<VertexAttribute>(attribute_info->attribute());
+    for (const android_xr::schemas::VertexAttributeInfo* attribute_info :
+         *block_info->attributes()) {
+      VertexAttribute vertex_attr =
+          static_cast<VertexAttribute>(attribute_info->attribute());
 
-    bool vertex_attr_required =
-        vertex_attr == VertexAttribute::POSITION &&
-        vertex_access_flags &
-            loader::LoaderOptions::VertexAccessFlags::kPosition;
-    vertex_attr_required |=
-        vertex_attr == VertexAttribute::TANGENTS &&
-        vertex_access_flags &
-            loader::LoaderOptions::VertexAccessFlags::kTangent;
-    // If skin data is available, it must be loaded for get correct positions
-    // of vertices.
-    vertex_attr_required |=
-        vertex_attr == VertexAttribute::BONE_INDICES &&
-        vertex_access_flags &
-            loader::LoaderOptions::VertexAccessFlags::kPosition;
-    vertex_attr_required |=
-        vertex_attr == VertexAttribute::BONE_WEIGHTS &&
-        vertex_access_flags &
-            loader::LoaderOptions::VertexAccessFlags::kPosition;
+      bool vertex_attr_required =
+          vertex_attr == VertexAttribute::POSITION &&
+          vertex_access_flags &
+              loader::LoaderOptions::VertexAccessFlags::kPosition;
+      vertex_attr_required |=
+          vertex_attr == VertexAttribute::TANGENTS &&
+          vertex_access_flags &
+              loader::LoaderOptions::VertexAccessFlags::kTangent;
+      // If skin data is available, it must be loaded for get correct positions
+      // of vertices.
+      vertex_attr_required |=
+          vertex_attr == VertexAttribute::BONE_INDICES &&
+          vertex_access_flags &
+              loader::LoaderOptions::VertexAccessFlags::kPosition;
+      vertex_attr_required |=
+          vertex_attr == VertexAttribute::BONE_WEIGHTS &&
+          vertex_access_flags &
+              loader::LoaderOptions::VertexAccessFlags::kPosition;
 
-    if (vertex_attr_required) {
-      AttributeType attribute_type =
-          static_cast<AttributeType>(attribute_info->type());
-      const size_t attribute_type_size =
-          loader::details::GetAttributeTypeSize(attribute_type);
+      if (vertex_attr_required) {
+        AttributeType attribute_type =
+            static_cast<AttributeType>(attribute_info->type());
+        const size_t attribute_type_size =
+            loader::details::GetAttributeTypeSize(attribute_type);
+        const size_t offset = attribute_info->offset();
+        const size_t current_stride =
+            stride == 0 ? attribute_type_size : stride;
 
-      for (size_t j = 0; j < vertex_count; j++) {
-        loader::details::ApplyVertexAttribute(
-            attribute_type, j, vertex_attr, vertex_data.get(),
-            block_info->buffer()->data() + (attribute_type_size * j) +
-                attribute_info->offset());
+        for (size_t j = 0; j < vertex_count; j++) {
+          loader::details::ApplyVertexAttribute(
+              attribute_type, j, vertex_attr, vertex_data.get(),
+              buffer_data + (current_stride * j) + offset);
+        }
       }
     }
   }

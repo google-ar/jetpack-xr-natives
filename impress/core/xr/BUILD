@@ -46,6 +46,7 @@ cc_library(
     deps = [
         "//core/math",
         "//core/ncsb",
+        "//core/view/platforms/xr_android:openxr_includes",
     ],
     alwayslink = 1,
 )

@@ -20,6 +20,7 @@ syntax = "proto3";
 package imp;
 
 import "core/proto/imp.proto";
+import "core/view/utils/proto/cache_config.proto";
 import "core/view/utils/proto/render_settings.proto";
 
 // option cc_api_version = 2;
@@ -73,4 +74,6 @@ message ViewConfig {
   // which is 2048x2048.
   GlyphAtlasTextureSize glyph_atlas_texture_size = 7
       [(imp.optional_type) = ABSL_OPTIONAL];
+
+  CacheConfig cache_config = 9 [(imp.optional_type) = ABSL_OPTIONAL];
 }

@@ -18,7 +18,6 @@
 #include "absl/strings/string_view.h"
 #include "core/split_engine/split_engine_renderer.h"
 #include "core/split_engine/split_engine_renderer_impl.h"
-#include "core/view/platforms/xr_android/xr_color_space_helper.h"
 #include "imp.h"
 
 namespace imp {

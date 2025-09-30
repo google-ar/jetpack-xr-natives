@@ -27,16 +27,20 @@
 #include "core/math/mat.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component.h"
+#include "core/ncsb/dispatcher/event.h"
 #include "core/ncsb/isf_info.h"
+#include "core/ncsb/node_handle.h"
 #include "core/ncsb/update_id.h"
 #include "core/ncsb/update_phase.h"
 #include "core/physics/collidable.h"
+#include "core/physics/collidable_shapes/collidable_shape_properties.h"
 #include "core/physics/collidable_type.proto.imp.h"
 #include "core/physics/physics_manager.h"
 #include "core/physics/rigid_body_state.proto.imp.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/framework/collision/box_collider.h"
 #include "core/view/framework/collision/capsule_collider.h"
+#include "core/view/framework/collision/compound_collider.h"
 #include "core/view/framework/collision/cone_collider.h"
 #include "core/view/framework/collision/cylinder_collider.h"
 #include "core/view/framework/collision/mesh_collider.h"
@@ -160,6 +164,9 @@ class RigidBody : public Component {
   // Sets the friction, uses default value if not provided.
   void SetFrictionInternal(absl::optional<float> friction);
 
+  // Use this for multiple cleanups during object's lifetime.
+  void CleanupInternal();
+
   PhysicsManager* physics_manager_;
   Collidable collidable_;
   std::unique_ptr<btRigidBody> rigid_body_;
@@ -172,11 +179,11 @@ class RigidBody : public Component {
   mat4f transform_prev_;
 
  public:
-  using IsfInfo =
-      IsfInfo<&RigidBody::state_,
-              IsfDependencies<SphereCollider, BoxCollider, CapsuleCollider,
-                              CylinderCollider, ConeCollider, MeshCollider,
-                              GltfRenderer>>;
+  using IsfInfo = IsfInfo<
+      &RigidBody::state_,
+      IsfDependencies<SphereCollider, BoxCollider, CapsuleCollider,
+                      CylinderCollider, ConeCollider, CompoundCollider,
+                      CollidableShapeProperties, MeshCollider, GltfRenderer>>;
 };
 
 }  // namespace imp

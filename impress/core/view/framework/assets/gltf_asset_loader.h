@@ -32,7 +32,6 @@
 #include "absl/time/time.h"
 #include "core/async/future.h"
 #include "core/async/future_common.h"
-#include "core/async/future_group.h"
 #include "core/common/context.h"
 #include "core/loader/loader.h"
 #include "core/loader/loader_creator.h"
@@ -89,15 +88,13 @@ class GltfAssetLoader {
     // Loads the resource data, should be called on a background thread.
     Future<absl::Status> Load(
         LoadAssetFn load_missing_asset, mediapipe::Clock* clock,
-        std::shared_ptr<LoadInProgress>& load_in_progress,
-        std::optional<FutureGroup> future_group = std::nullopt);
+        std::shared_ptr<LoadInProgress>& load_in_progress);
 
     // Creates the actual GltfAsset.
     // This must be called on the main thread, and Load must have already been
     // called.
     Future<std::unique_ptr<GltfAsset>> CreateGltfAsset(
         BaseView* view, std::shared_ptr<LoadInProgress>& load_in_progress,
-        std::optional<FutureGroup> future_group = std::nullopt,
         GltfState::ColliderMode collider_mode =
             GltfState::ColliderMode::GLTF_COLLIDER_BOUNDS_PER_MESH_DEFAULT);
 
@@ -119,8 +116,7 @@ class GltfAssetLoader {
 
     Future<absl::Status> LoadHelper(
         GltfAssetLoader::LoadAssetFn load_missing_asset,
-        std::shared_ptr<LoadInProgress> load_in_progress,
-        std::optional<FutureGroup> future_group);
+        std::shared_ptr<LoadInProgress> load_in_progress);
   };
 
   std::unique_ptr<loader::LoaderCreator> sandboxed_gltf_loader_creator_;

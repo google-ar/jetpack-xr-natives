@@ -18,15 +18,14 @@
 #include <utility>
 
 #include "dear_imgui/imgui.h"
+#include "filament/filament/include/filament/Texture.h"
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
 #include "core/common/registry.h"
 #include "core/editor/editor.h"
 #include "core/editor/editor_info.h"
 #include "core/editor/widgets/icons/texture_assets.h"
-#include "core/render/image_asset.h"
-#include "core/render/texture.h"
-#include "core/render/texture_factory.h"
+#include "core/render/texture_asset.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 
@@ -39,32 +38,27 @@ constexpr ImVec2 kButtonSize(24, 24);
 
 EditorModeToggle::EditorModeToggle(BaseView& view) : view_(view) {
   // Load all the icons.
-  Future<AssetPtr<ImageAsset>> play_icon_future =
-      view_.GetAssetManager().LoadImage(texture_data::kPlayPng);
-  Future<AssetPtr<ImageAsset>> stop_icon_future =
-      view_.GetAssetManager().LoadImage(texture_data::kStopPng);
-  Future<AssetPtr<ImageAsset>> pause_icon_future =
-      view_.GetAssetManager().LoadImage(texture_data::kPausePng);
-  Future<AssetPtr<ImageAsset>> resume_icon_future =
-      view_.GetAssetManager().LoadImage(texture_data::kResumePng);
-  Future<AssetPtr<ImageAsset>> step_icon_future =
-      view_.GetAssetManager().LoadImage(texture_data::kStepPng);
+  Future<AssetPtr<TextureAsset>> play_icon_future =
+      view_.GetAssetManager().LoadTexture(texture_data::kPlayPng);
+  Future<AssetPtr<TextureAsset>> stop_icon_future =
+      view_.GetAssetManager().LoadTexture(texture_data::kStopPng);
+  Future<AssetPtr<TextureAsset>> pause_icon_future =
+      view_.GetAssetManager().LoadTexture(texture_data::kPausePng);
+  Future<AssetPtr<TextureAsset>> resume_icon_future =
+      view_.GetAssetManager().LoadTexture(texture_data::kResumePng);
+  Future<AssetPtr<TextureAsset>> step_icon_future =
+      view_.GetAssetManager().LoadTexture(texture_data::kStepPng);
 
   play_icon_future
       .Merge(stop_icon_future, pause_icon_future, resume_icon_future,
              step_icon_future)
-      .Then([this](
-                std::tuple<AssetPtr<imp::ImageAsset>, AssetPtr<imp::ImageAsset>,
-                           AssetPtr<imp::ImageAsset>, AssetPtr<imp::ImageAsset>,
-                           AssetPtr<imp::ImageAsset>>
-                    tuple) mutable {
-        auto [play_icon, stop_icon, pause_icon, resume_icon, step_icon] =
-            std::move(tuple);
-        play_icon_ = view_.GetTextureFactory().CreateTexture(*play_icon);
-        stop_icon_ = view_.GetTextureFactory().CreateTexture(*stop_icon);
-        pause_icon_ = view_.GetTextureFactory().CreateTexture(*pause_icon);
-        resume_icon_ = view_.GetTextureFactory().CreateTexture(*resume_icon);
-        step_icon_ = view_.GetTextureFactory().CreateTexture(*step_icon);
+      .Then([this](std::tuple<
+                   AssetPtr<imp::TextureAsset>, AssetPtr<imp::TextureAsset>,
+                   AssetPtr<imp::TextureAsset>, AssetPtr<imp::TextureAsset>,
+                   AssetPtr<imp::TextureAsset>>
+                       tuple) mutable {
+        std::tie(play_icon_, stop_icon_, pause_icon_, resume_icon_,
+                 step_icon_) = std::move(tuple);
       })
       .KeptBy(&rememberer_);
 }
@@ -85,13 +79,16 @@ void EditorModeToggle::DrawImGui() {
     ImGui::BeginDisabled();
   }
 
+  // To keep the buttons on the same line with button from the previous widget.
+  ImGui::SameLine();
+
   // First button in the toolbar: Play / Stop button.
   if (editor.GetRunMode() == EditorInfo::RunMode::kPlayMode) {
-    if (ImGui::ImageButton(stop_icon_->GetTexture(), kButtonSize)) {
+    if (ImGui::ImageButton(stop_icon_->GetFilamentTexture(), kButtonSize)) {
       editor.SetInEditMode(true);
     }
   } else {
-    if (ImGui::ImageButton(play_icon_->GetTexture(), kButtonSize)) {
+    if (ImGui::ImageButton(play_icon_->GetFilamentTexture(), kButtonSize)) {
       editor.SetInEditMode(false);
     }
   }
@@ -99,10 +96,11 @@ void EditorModeToggle::DrawImGui() {
   ImGui::SameLine();
 
   // Second button in the toolbar: Pause / Resume button.
-  Texture* second_button_texture =
-      editor.IsPaused() ? resume_icon_.get() : pause_icon_.get();
+  filament::Texture* second_button_texture =
+      editor.IsPaused() ? resume_icon_->GetFilamentTexture()
+                        : pause_icon_->GetFilamentTexture();
 
-  if (ImGui::ImageButton(second_button_texture->GetTexture(), kButtonSize)) {
+  if (ImGui::ImageButton(second_button_texture, kButtonSize)) {
     editor.SetPaused(!editor.IsPaused());
   }
 
@@ -112,7 +110,7 @@ void EditorModeToggle::DrawImGui() {
   bool disabled = editor.GetRunMode() != EditorInfo::RunMode::kPlayMode ||
                   !editor.IsPaused();
   if (disabled) ImGui::BeginDisabled();
-  if (ImGui::ImageButton(step_icon_->GetTexture(), kButtonSize)) {
+  if (ImGui::ImageButton(step_icon_->GetFilamentTexture(), kButtonSize)) {
     editor.StepNextFrame();
   }
   if (disabled) ImGui::EndDisabled();

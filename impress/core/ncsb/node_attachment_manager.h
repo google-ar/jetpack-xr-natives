@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_NCSB_NODE_ATTACHMENT_MANAGER_H_
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -103,33 +104,69 @@ class NodeAttachmentManager {
 
   static EntitiesToControllersMap& GetEntitiesToControllersMap();
 
+  void TryCompactingNodeControllers();
+
   BaseView* view_;
   std::vector<std::unique_ptr<NodeController>> node_controllers_;
+
+  // Used to track when we are in the middle of iterating over nodes.
+  //
+  // This is used to handle the case where a nodes is destroyed during
+  // iteration. Normally, we swap and pop the removed node's controller to keep
+  // the vector compact but that can cause the iteration to skip over
+  // nodes.
+  //
+  // If iterating, we don't compact the vector until after iteration ends.
+  //
+  // This is an integer instead of a bool because we can have nested
+  // iterations.
+  uint32_t iterating_depth_ = 0;
+
+  // Used to track if the node_controllers_ vector needs to be compacted.
+  //
+  // This is only used when nodes are removed during iteration, which leads to
+  // the vector temporarily having gaps in it.
+  bool needs_compaction_ = false;
 };
 
 template <typename Fn>
 void NodeAttachmentManager::ForEach(Fn&& fn) {
+  iterating_depth_++;
+
   // Iterate using indices so that it is safe to create/destroy nodes during
   // iteration.
-  // TODO: Ensure it ForEachNode doesn't iterate over the same node
-  // multiple times or skip nodes when destroying during iteration.
   for (std::size_t i = 0; i < node_controllers_.size(); ++i) {
-    fn(node_controllers_[i]->GetNode());
+    // If the controller is null, it is implied that the node was destroyed
+    // during iteration. After iteration ends, the vector will be compacted.
+    NodeController* node_controller = node_controllers_[i].get();
+    if (node_controller) {
+      fn(node_controller->GetNode());
+    }
   }
+
+  iterating_depth_--;
+
+  TryCompactingNodeControllers();
 }
 
 template <typename Fn>
 void NodeAttachmentManager::ForEach(Fn&& fn, NodeFlag filter) {
+  iterating_depth_++;
+
   // Iterate using indices so that it is safe to create/destroy nodes during
   // iteration.
-  // TODO: Ensure it ForEachNode doesn't iterate over the same node
-  // multiple times or skip nodes when destroying during iteration.
   for (std::size_t i = 0; i < node_controllers_.size(); ++i) {
+    // If the controller is null, it is implied that the node was destroyed
+    // during iteration. After iteration ends, the vector will be compacted.
     NodeController* node_controller = node_controllers_[i].get();
-    if ((node_controller->GetFlags() & filter) == filter) {
+    if (node_controller && (node_controller->GetFlags() & filter) == filter) {
       fn(node_controller->GetNode());
     }
   }
+
+  iterating_depth_--;
+
+  TryCompactingNodeControllers();
 }
 
 }  // namespace imp::imp_internal

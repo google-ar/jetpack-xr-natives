@@ -84,6 +84,7 @@ cc_library(
     linkstatic = True,
     deps = [
         ":extension_basis",
+        "//core/common:optional_error",
     ],
     alwayslink = 1,
 )

@@ -27,6 +27,7 @@
 #include "core/monitor/monitor_summary.h"
 #include "core/monitor/value_measurement.h"
 #include "core/render/image_asset.h"
+#include "core/render/texture_asset.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/gltf_asset.h"
@@ -34,6 +35,7 @@
 
 namespace imp {
 namespace {
+constexpr absl::string_view kNodeCount = "nodes: ";
 constexpr absl::string_view kBufferObjectCount = "buffer objects: ";
 constexpr absl::string_view kViewCount = "views: ";
 constexpr absl::string_view kSceneCount = "scenes: ";
@@ -65,6 +67,12 @@ constexpr absl::string_view kImageAssetsCancelled = "image assets cancelled: ";
 constexpr absl::string_view kGltfAssetsResident = "gltf assets resident: ";
 constexpr absl::string_view kGltfAssetsDestroyed = "gltf assets destroyed: ";
 constexpr absl::string_view kGltfAssetsCancelled = "gltf assets cancelled: ";
+constexpr absl::string_view kTextureAssetsResident =
+    "texture assets resident: ";
+constexpr absl::string_view kTextureAssetsDestroyed =
+    "texture assets destroyed: ";
+constexpr absl::string_view kTextureAssetsCancelled =
+    "texture assets cancelled: ";
 }  // namespace
 
 DefaultMonitorSummary::DefaultMonitorSummary(BaseView& view)
@@ -73,6 +81,7 @@ DefaultMonitorSummary::DefaultMonitorSummary(BaseView& view)
       monitor_(*view.GetMonitor()),
       summary_(monitor_),
       display_period_(absl::ZeroDuration()),
+      nodeCount_(ValueMeasurement(monitor_, kNodeCount)),
       bufferObjectCount_(ValueMeasurement(monitor_, kBufferObjectCount)),
       viewCount_(ValueMeasurement(monitor_, kViewCount)),
       sceneCount_(ValueMeasurement(monitor_, kSceneCount)),
@@ -104,9 +113,16 @@ DefaultMonitorSummary::DefaultMonitorSummary(BaseView& view)
       imageAssetsCancelled_(ValueMeasurement(monitor_, kImageAssetsCancelled)),
       gltfAssetsResident_(ValueMeasurement(monitor_, kGltfAssetsResident)),
       gltfAssetsDestroyed_(ValueMeasurement(monitor_, kGltfAssetsDestroyed)),
-      gltfAssetsCancelled_(ValueMeasurement(monitor_, kGltfAssetsCancelled)) {
+      gltfAssetsCancelled_(ValueMeasurement(monitor_, kGltfAssetsCancelled)),
+      textureAssetsResident_(
+          ValueMeasurement(monitor_, kTextureAssetsResident)),
+      textureAssetsDestroyed_(
+          ValueMeasurement(monitor_, kTextureAssetsDestroyed)),
+      textureAssetsCancelled_(
+          ValueMeasurement(monitor_, kTextureAssetsCancelled)) {
   summary_.AddMetric<SampleAgeMetric>("avg sample age: ");
 
+  summary_.AddMetric<ValueMetric>(kNodeCount, kNodeCount);
   summary_.AddMetric<ValueMetric>(kBufferObjectCount, kBufferObjectCount);
   summary_.AddMetric<ValueMetric>(kViewCount, kViewCount);
   summary_.AddMetric<ValueMetric>(kSceneCount, kSceneCount);
@@ -139,6 +155,12 @@ DefaultMonitorSummary::DefaultMonitorSummary(BaseView& view)
   summary_.AddMetric<ValueMetric>(kGltfAssetsResident, kGltfAssetsResident);
   summary_.AddMetric<ValueMetric>(kGltfAssetsDestroyed, kGltfAssetsDestroyed);
   summary_.AddMetric<ValueMetric>(kGltfAssetsCancelled, kGltfAssetsCancelled);
+  summary_.AddMetric<ValueMetric>(kTextureAssetsResident,
+                                  kTextureAssetsResident);
+  summary_.AddMetric<ValueMetric>(kTextureAssetsDestroyed,
+                                  kTextureAssetsDestroyed);
+  summary_.AddMetric<ValueMetric>(kTextureAssetsCancelled,
+                                  kTextureAssetsCancelled);
 }
 
 void DefaultMonitorSummary::Update(const FrameTime& frame_time) {
@@ -151,6 +173,7 @@ void DefaultMonitorSummary::Update(const FrameTime& frame_time) {
   // rate for printing
   if (frames_between_updating_measurements_ &&
       (frame_count % frames_between_updating_measurements_ == 0)) {
+    nodeCount_.SetValue(static_cast<int64_t>(view_.GetNodeCount()));
     filament::Engine* engine = view_.GetSharedEngine();
     if (engine) {
       bufferObjectCount_.SetValue(
@@ -205,6 +228,12 @@ void DefaultMonitorSummary::Update(const FrameTime& frame_time) {
         asset_manager.GetDestroyedCount<::imp::GltfAsset>());
     gltfAssetsCancelled_.SetValue(
         asset_manager.GetCancelledCount<::imp::GltfAsset>());
+    textureAssetsResident_.SetValue(
+        asset_manager.GetResidentCount<::imp::TextureAsset>());
+    textureAssetsDestroyed_.SetValue(
+        asset_manager.GetDestroyedCount<::imp::TextureAsset>());
+    textureAssetsCancelled_.SetValue(
+        asset_manager.GetCancelledCount<::imp::TextureAsset>());
   }
 
   summary_.Update();

@@ -26,8 +26,19 @@
 #include "openxr/jobject_creator.h"
 #include "openxr/openxr_manager.h"
 
-static jobject NativeGetAnchorState(JNIEnv* env, jlong native_ptr,
-                                    jlong monotonic_time_ns) {
+extern "C" {
+JNIEXPORT bool JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrAnchor_nativeDestroyAnchor(
+    JNIEnv* env, jclass /*clazz*/, jlong native_ptr, jlong monotonic_time_ns) {
+  androidx::xr::openxr::OpenXrManager& xr_manager =
+      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+  XrSpace xr_space = androidx::xr::openxr::ConvertToXrSpace(native_ptr);
+  return xr_manager.DestroyAnchor(xr_space);
+}
+
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrAnchor_nativeGetAnchorState(
+    JNIEnv* env, jclass /*clazz*/, jlong native_ptr, jlong monotonic_time_ns) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   XrSpace anchor_space = androidx::xr::openxr::ConvertToXrSpace(native_ptr);
@@ -42,7 +53,9 @@ static jobject NativeGetAnchorState(JNIEnv* env, jlong native_ptr,
   return androidx::xr::openxr::CreateJavaAnchorState(env, anchor_location);
 }
 
-static jobject NativeGetAnchorToken(JNIEnv* env, jlong native_ptr) {
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrAnchor_nativeGetAnchorToken(
+    JNIEnv* env, jclass /*clazz*/, jlong native_ptr) {
 #ifdef __ANDROID__
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
@@ -67,7 +80,9 @@ static jobject NativeGetAnchorToken(JNIEnv* env, jlong native_ptr) {
   return nullptr;
 }
 
-static jbyteArray NativePersistAnchor(JNIEnv* env, jlong native_ptr) {
+JNIEXPORT jbyteArray JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrAnchor_nativePersistAnchor(
+    JNIEnv* env, jclass /*clazz*/, jlong native_ptr) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   XrSpace anchor_space = androidx::xr::openxr::ConvertToXrSpace(native_ptr);
@@ -82,7 +97,9 @@ static jbyteArray NativePersistAnchor(JNIEnv* env, jlong native_ptr) {
   return result;
 }
 
-static jobject NativeGetPersistenceState(JNIEnv* env, jobject uuid) {
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrAnchor_nativeGetPersistenceState(
+    JNIEnv* env, jclass /*clazz*/, jobject uuid) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   XrUuidEXT xr_uuid = androidx::xr::openxr::ConvertToXrUuid(env, uuid);
@@ -92,75 +109,5 @@ static jobject NativeGetPersistenceState(JNIEnv* env, jobject uuid) {
     return nullptr;
   }
   return androidx::xr::openxr::CreateJavaAnchorPersistenceState(env, state);
-}
-
-static bool NativeDestroyAnchor(JNIEnv* env, jlong native_ptr,
-                                jlong monotonic_time_ns) {
-  androidx::xr::openxr::OpenXrManager& xr_manager =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
-  XrSpace xr_space = androidx::xr::openxr::ConvertToXrSpace(native_ptr);
-  return xr_manager.DestroyAnchor(xr_space);
-}
-
-extern "C" {
-JNIEXPORT bool JNICALL Java_androidx_xr_openxr_OpenXrAnchor_nativeDestroyAnchor(
-    JNIEnv* env, jclass /*clazz*/, jlong native_ptr, jlong monotonic_time_ns) {
-  return NativeDestroyAnchor(env, native_ptr, monotonic_time_ns);
-}
-JNIEXPORT bool JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrAnchor_nativeDestroyAnchor(
-    JNIEnv* env, jclass /*clazz*/, jlong native_ptr, jlong monotonic_time_ns) {
-  return NativeDestroyAnchor(env, native_ptr, monotonic_time_ns);
-}
-
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_openxr_OpenXrAnchor_nativeGetAnchorState(
-    JNIEnv* env, jclass /*clazz*/, jlong native_ptr, jlong monotonic_time_ns) {
-  return NativeGetAnchorState(env, native_ptr, monotonic_time_ns);
-}
-
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrAnchor_nativeGetAnchorState(
-    JNIEnv* env, jclass /*clazz*/, jlong native_ptr, jlong monotonic_time_ns) {
-  return NativeGetAnchorState(env, native_ptr, monotonic_time_ns);
-}
-
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_openxr_OpenXrAnchor_nativeGetAnchorToken(JNIEnv* env,
-                                                          jclass /*clazz*/,
-                                                          jlong native_ptr) {
-  return NativeGetAnchorToken(env, native_ptr);
-}
-
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrAnchor_nativeGetAnchorToken(
-    JNIEnv* env, jclass /*clazz*/, jlong native_ptr) {
-  return NativeGetAnchorToken(env, native_ptr);
-}
-
-JNIEXPORT jbyteArray JNICALL
-Java_androidx_xr_openxr_OpenXrAnchor_nativePersistAnchor(JNIEnv* env,
-                                                         jclass /*clazz*/,
-                                                         jlong native_ptr) {
-  return NativePersistAnchor(env, native_ptr);
-}
-
-JNIEXPORT jbyteArray JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrAnchor_nativePersistAnchor(
-    JNIEnv* env, jclass /*clazz*/, jlong native_ptr) {
-  return NativePersistAnchor(env, native_ptr);
-}
-
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_openxr_OpenXrAnchor_nativeGetPersistenceState(JNIEnv* env,
-                                                               jclass /*clazz*/,
-                                                               jobject uuid) {
-  return NativeGetPersistenceState(env, uuid);
-}
-
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrAnchor_nativeGetPersistenceState(
-    JNIEnv* env, jclass /*clazz*/, jobject uuid) {
-  return NativeGetPersistenceState(env, uuid);
 }
 }  // extern "C"

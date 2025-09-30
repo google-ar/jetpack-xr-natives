@@ -293,14 +293,7 @@ typedef enum XrResult {
     XR_ERROR_SPACE_GROUP_NOT_FOUND_META = -1000572002,
     XR_ERROR_ANCHOR_NOT_OWNED_BY_CALLER_ANDROID = -1000701000,
     XR_ERROR_DEPTH_NOT_AVAILABLE_ANDROID = -1000702000,
-    XR_ERROR_EARTH_TRACKER_NOT_RUNNING_ANDROIDX1 = -1000721001,
-    XR_ERROR_GEOSPATIAL_COORDINATES_INVALID_ANDROIDX1 = -1000721002,
-    XR_SURFACE_ANCHOR_LOCATION_UNSUPPORTED_ANDROIDX1 = -1000721000,
-    XR_ERROR_KEYLESS_AUTH_NOT_SETUP_ANDROIDX1 = -1000722000,
-    XR_KEYLESS_AUTH_FAILED_ANDROIDX1 = -1000722001,
-    XR_ERROR_GOOGLE_CLOUD_AUTH_ERROR_ANDROIDX1 = -1000722002,
-    XR_GOOGLE_CLOUD_QUOTA_EXCEEDED_ANDROIDX1 = -1000722003,
-    XR_GOOGLE_CLOUD_UNREACHABLE_ANDROIDX1 = -1000722004,
+    XR_ERROR_IMAGE_FORMAT_UNSUPPORTED_ANDROID = -1000709000,
     XR_ERROR_SPATIAL_CAPABILITY_UNSUPPORTED_EXT = -1000740001,
     XR_ERROR_SPATIAL_ENTITY_ID_INVALID_EXT = -1000740002,
     XR_ERROR_SPATIAL_BUFFER_ID_INVALID_EXT = -1000740003,
@@ -309,6 +302,15 @@ typedef enum XrResult {
     XR_ERROR_SPATIAL_COMPONENT_NOT_ENABLED_EXT = -1000740006,
     XR_ERROR_SPATIAL_PERSISTENCE_STORE_UNSUPPORTED_EXT = -1000763001,
     XR_ERROR_SPATIAL_PERSISTENCE_STORE_INCOMPATIBLE_EXT = -1000781001,
+    XR_ERROR_KEYLESS_AUTH_NOT_SETUP_ANDROIDX1 = -1000787000,
+    XR_KEYLESS_AUTH_FAILED_ANDROIDX1 = -1000787001,
+    XR_ERROR_GOOGLE_CLOUD_AUTH_ERROR_ANDROIDX1 = -1000787002,
+    XR_GOOGLE_CLOUD_QUOTA_EXCEEDED_ANDROIDX1 = -1000787003,
+    XR_GOOGLE_CLOUD_UNREACHABLE_ANDROIDX1 = -1000787004,
+    XR_ERROR_EARTH_TRACKER_NOT_RUNNING_ANDROIDX1 = -1000789001,
+    XR_ERROR_GEOSPATIAL_COORDINATES_INVALID_ANDROIDX1 = -1000789002,
+    XR_SURFACE_ANCHOR_LOCATION_UNSUPPORTED_ANDROIDX1 = -1000789000,
+    XR_ERROR_SPATIAL_ANCHOR_ATTACHABLE_COMPONENT_NOT_FOUND_ANDROID = -1000790001,
     XR_ERROR_EXTENSION_DEPENDENCY_NOT_ENABLED_KHR = XR_ERROR_EXTENSION_DEPENDENCY_NOT_ENABLED,
     XR_ERROR_PERMISSION_INSUFFICIENT_KHR = XR_ERROR_PERMISSION_INSUFFICIENT,
     XR_RESULT_MAX_ENUM = 0x7FFFFFFF
@@ -835,6 +837,13 @@ typedef enum XrStructureType {
     XR_TYPE_SYSTEM_QR_CODE_TRACKING_PROPERTIES_ANDROID = 1000708000,
     XR_TYPE_TRACKABLE_QR_CODE_CONFIGURATION_ANDROID = 1000708001,
     XR_TYPE_TRACKABLE_QR_CODE_ANDROID = 1000708002,
+    XR_TYPE_SYSTEM_IMAGE_TRACKING_PROPERTIES_ANDROID = 1000709000,
+    XR_TYPE_TRACKABLE_IMAGE_DATABASE_ENTRY_ANDROID = 1000709001,
+    XR_TYPE_TRACKABLE_IMAGE_DATABASE_CREATE_INFO_ANDROID = 1000709002,
+    XR_TYPE_CREATE_TRACKABLE_IMAGE_DATABASE_COMPLETION_ANDROID = 1000709003,
+    XR_TYPE_TRACKABLE_IMAGE_CONFIGURATION_ANDROID = 1000709004,
+    XR_TYPE_TRACKABLE_IMAGE_ANDROID = 1000709005,
+    XR_TYPE_EVENT_DATA_IMAGE_TRACKING_LOST_ANDROID = 1000709006,
     XR_TYPE_OCCUPANCY_GRID_ANDROIDX = 1000715000,
     XR_TYPE_PLANE_TRACKABLE_TRACKER_CREATE_INFO_ANDROIDX = 1000715001,
     XR_TYPE_BODY_TRACKER_CREATE_INFO_ANDROIDX = 1000716000,
@@ -866,16 +875,10 @@ typedef enum XrStructureType {
     XR_TYPE_EYE_CALIBRATION_CREATE_INFO_ANDROIDSYS = 1000720002,
     XR_TYPE_RX_LENS_OPTICAL_DESCRIPTION_ANDROIDSYS = 1000720003,
     XR_TYPE_RX_LENS_ENTRY_ANDROIDSYS = 1000720004,
-    XR_TYPE_SYSTEM_GEOSPATIAL_PROPERTIES_ANDROIDX1 = 1000721000,
-    XR_TYPE_EARTH_TRACKER_CREATE_INFO_ANDROIDX1 = 1000721001,
-    XR_TYPE_EVENT_DATA_EARTH_TRACKER_STATE_CHANGED_ANDROIDX1 = 1000721002,
-    XR_TYPE_GEOSPATIAL_ANCHOR_SPACE_CREATE_INFO_ANDROIDX1 = 1000721003,
-    XR_TYPE_GEOSPATIAL_POSE_LOCATE_INFO_ANDROIDX1 = 1000721004,
-    XR_TYPE_GEOSPATIAL_POSE_RESULT_ANDROIDX1 = 1000721005,
-    XR_TYPE_POSE_FROM_GEOSPATIAL_POSE_LOCATE_INFO_ANDROIDX1 = 1000721006,
-    XR_TYPE_SURFACE_ANCHOR_SPACE_CREATE_INFO_ANDROIDX1 = 1000721007,
-    XR_TYPE_SURFACE_ANCHOR_SPACE_CREATE_COMPLETION_ANDROIDX1 = 1000721008,
-    XR_TYPE_VPS_AVAILABILITY_CHECK_COMPLETION_ANDROIDX1 = 1000721009,
+    XR_TYPE_SYSTEM_ADVANCED_LIGHT_ESTIMATION_PROPERTIES_ANDROIDX1 = 1000721000,
+    XR_TYPE_ADVANCED_LIGHT_ESTIMATOR_CREATE_INFO_ANDROIDX1 = 1000721001,
+    XR_TYPE_LIGHTING_CUBEMAP_DATA_ANDROIDX1 = 1000721002,
+    XR_TYPE_POINT_LIGHTS_ANDROIDX1 = 1000721003,
     XR_TYPE_INSTANCE_CREATE_INFO_BACKGROUND_TRACKING_ANDROIDSYS = 1000725000,
     XR_TYPE_SHARED_ANCHOR_SPACE_CREATE_INFO_ANDROIDSYS = 1000726000,
     XR_TYPE_TRACKABLE_SHOEBOX_ANDROIDSYS = 1000728000,
@@ -934,11 +937,32 @@ typedef enum XrStructureType {
     XR_TYPE_FIT_TRACKER_INSERT_CHANGE_ANDROIDSYS = 1000782004,
     XR_TYPE_FIT_TRACKER_MOUNT_ANDROIDSYS = 1000782005,
     XR_TYPE_FIT_TRACKER_FIT_DATA_ANDROIDSYS = 1000782006,
-    XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_OBJECT_TRACKING_ANDROIDX1 = 1000785000,
-    XR_TYPE_SPATIAL_COMPONENT_OBJECT_SEMANTIC_LABEL_LIST_ANDROIDX1 = 1000785001,
-    XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_DEPTH_RAYCAST_ANDROIDX1 = 1000786000,
-    XR_TYPE_SPATIAL_BOUNDS_RAYCAST_ANDROIDX1 = 1000786001,
-    XR_TYPE_SPATIAL_COMPONENT_RAYCAST_RESULT_LIST_ANDROIDX1 = 1000786002,
+    XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_OBJECT_TRACKING_ANDROID = 1000785000,
+    XR_TYPE_SPATIAL_COMPONENT_OBJECT_SEMANTIC_LABEL_LIST_ANDROID = 1000785001,
+    XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_DEPTH_RAYCAST_ANDROID = 1000786000,
+    XR_TYPE_SPATIAL_BOUNDS_RAYCAST_ANDROID = 1000786001,
+    XR_TYPE_SPATIAL_COMPONENT_RAYCAST_RESULT_LIST_ANDROID = 1000786002,
+    XR_TYPE_SYSTEM_GEOSPATIAL_PROPERTIES_ANDROIDX1 = 1000789000,
+    XR_TYPE_EARTH_TRACKER_CREATE_INFO_ANDROIDX1 = 1000789001,
+    XR_TYPE_EVENT_DATA_EARTH_TRACKER_STATE_CHANGED_ANDROIDX1 = 1000789002,
+    XR_TYPE_GEOSPATIAL_ANCHOR_CREATE_INFO_ANDROIDX1 = 1000789003,
+    XR_TYPE_GEOSPATIAL_POSE_LOCATE_INFO_ANDROIDX1 = 1000789004,
+    XR_TYPE_GEOSPATIAL_POSE_RESULT_ANDROIDX1 = 1000789005,
+    XR_TYPE_POSE_FROM_GEOSPATIAL_POSE_LOCATE_INFO_ANDROIDX1 = 1000789006,
+    XR_TYPE_SURFACE_ANCHOR_CREATE_INFO_ANDROIDX1 = 1000789007,
+    XR_TYPE_SURFACE_ANCHOR_CREATE_COMPLETION_ANDROIDX1 = 1000789008,
+    XR_TYPE_VPS_AVAILABILITY_CHECK_COMPLETION_ANDROIDX1 = 1000789009,
+    XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_STREETSCAPE_GEOMETRY_ANDROIDX1 = 1000789010,
+    XR_TYPE_SPATIAL_COMPONENT_STREETSCAPE_GEOMETRY_METADATA_LIST_ANDROIDX1 = 1000789011,
+    XR_TYPE_SPATIAL_ANCHOR_PARENT_ANDROID = 1000790000,
+    XR_TYPE_APERTURE_INFO_KHRX1 = 1000665000,
+    XR_TYPE_APERTURE_SPACE_CREATE_INFO_KHRX1 = 1000665001,
+    XR_TYPE_APERTURE_CREATE_INFO_KHRX1 = 1000665002,
+    XR_TYPE_APERTURE_BOUNDS_KHRX1 = 1000665003,
+    XR_TYPE_APERTURE_BOUNDS_GET_INFO_KHRX1 = 1000665004,
+    XR_TYPE_SYSTEM_APERTURE_PROPERTIES_KHRX1 = 1000665005,
+    XR_TYPE_APERTURE_STATE_KHRX1 = 1000665006,
+    XR_TYPE_APERTURE_STATE_GET_INFO_KHRX1 = 1000665007,
     XR_TYPE_GRAPHICS_BINDING_VULKAN2_KHR = XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR,
     XR_TYPE_SWAPCHAIN_IMAGE_VULKAN2_KHR = XR_TYPE_SWAPCHAIN_IMAGE_VULKAN_KHR,
     XR_TYPE_GRAPHICS_REQUIREMENTS_VULKAN2_KHR = XR_TYPE_GRAPHICS_REQUIREMENTS_VULKAN_KHR,
@@ -1063,18 +1087,20 @@ typedef enum XrObjectType {
     XR_OBJECT_TYPE_LIGHT_ESTIMATOR_ANDROID = 1000700000,
     XR_OBJECT_TYPE_DEPTH_SWAPCHAIN_ANDROID = 1000702001,
     XR_OBJECT_TYPE_HAND_MESH_TRACKER_ANDROID = 1000703000,
+    XR_OBJECT_TYPE_TRACKABLE_IMAGE_DATABASE_ANDROID = 1000709000,
     XR_OBJECT_TYPE_BODY_TRACKER_ANDROIDX = 1000716000,
     XR_OBJECT_TYPE_BODY_TRACKER_ANDROIDSYS = 1000717000,
     XR_OBJECT_TYPE_SCENE_MESHING_TRACKER_ANDROID = 1000718000,
     XR_OBJECT_TYPE_SCENE_MESH_SNAPSHOT_ANDROID = 1000718001,
     XR_OBJECT_TYPE_IPD_CALIBRATION_TRACKER_ANDROIDSYS = 1000719000,
     XR_OBJECT_TYPE_EYE_CALIBRATION_ANDROIDSYS = 1000720000,
-    XR_OBJECT_TYPE_EARTH_TRACKER_ANDROIDX1 = 1000721000,
     XR_OBJECT_TYPE_SPATIAL_ENTITY_EXT = 1000740000,
     XR_OBJECT_TYPE_SPATIAL_CONTEXT_EXT = 1000740001,
     XR_OBJECT_TYPE_SPATIAL_SNAPSHOT_EXT = 1000740002,
     XR_OBJECT_TYPE_SPATIAL_PERSISTENCE_CONTEXT_EXT = 1000763000,
     XR_OBJECT_TYPE_FIT_TRACKER_ANDROIDSYS = 1000782000,
+    XR_OBJECT_TYPE_EARTH_TRACKER_ANDROIDX1 = 1000789000,
+    XR_OBJECT_TYPE_APERTURE_KHRX1 = 1000665000,
     XR_OBJECT_TYPE_MAX_ENUM = 0x7FFFFFFF
 } XrObjectType;
 typedef XrFlags64 XrInstanceCreateFlags;
@@ -9015,6 +9041,7 @@ typedef enum XrTrackableTypeANDROID {
     XR_TRACKABLE_TYPE_OBJECT_ANDROID = 1000466000,
     XR_TRACKABLE_TYPE_MARKER_ANDROID = 1000707000,
     XR_TRACKABLE_TYPE_QR_CODE_ANDROID = 1000708000,
+    XR_TRACKABLE_TYPE_IMAGE_ANDROID = 1000709000,
     XR_TRACKABLE_TYPE_SHOEBOX_ANDROIDSYS = 1000728000,
     XR_TRACKABLE_TYPE_MAX_ENUM_ANDROID = 0x7FFFFFFF
 } XrTrackableTypeANDROID;
@@ -10429,6 +10456,112 @@ typedef struct XrSpaceGroupUuidFilterInfoMETA {
 
 
 
+// XR_KHRX1_aperture_core is a preprocessor guard. Do not pass it to API calls.
+#define XR_KHRX1_aperture_core 1
+XR_DEFINE_HANDLE(XrApertureKHRX1)
+#define XR_KHRX1_aperture_core_SPEC_VERSION 1
+#define XR_KHRX1_APERTURE_CORE_EXTENSION_NAME "XR_KHRX1_aperture_core"
+
+typedef enum XrApertureTypeKHRX1 {
+    XR_APERTURE_TYPE_IMMERSIVE_KHRX1 = 0,
+    XR_APERTURE_TYPE_PANEL_KHRX1 = 1,
+    XR_APERTURE_TYPE_VOLUME_KHRX1 = 2,
+    XR_APERTURE_TYPE_KHRX1_MAX_ENUM = 0x7FFFFFFF
+} XrApertureTypeKHRX1;
+typedef struct XrApertureCreateInfoKHRX1 {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+     XrApertureTypeKHRX1        apertureType;
+     XrVector3f                 suggestedBounds;
+} XrApertureCreateInfoKHRX1;
+
+typedef struct XrApertureSpaceCreateInfoKHRX1 {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+     XrApertureKHRX1            aperture;
+     XrPosef                    poseInApertureSpace;
+} XrApertureSpaceCreateInfoKHRX1;
+
+typedef struct XrApertureInfoKHRX1 {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+     XrApertureKHRX1            aperture;
+} XrApertureInfoKHRX1;
+
+// XrSystemAperturePropertiesKHRX1 extends XrSystemProperties
+typedef struct XrSystemAperturePropertiesKHRX1 {
+    XrStructureType              type;
+     const void* XR_MAY_ALIAS    next;
+     XrBool32                    aperturesSupported;
+} XrSystemAperturePropertiesKHRX1;
+
+typedef struct XrApertureBoundsKHRX1 {
+    XrStructureType        type;
+     void* XR_MAY_ALIAS    next;
+     XrVector3f            bounds;
+} XrApertureBoundsKHRX1;
+
+typedef struct XrApertureBoundsGetInfoKHRX1 {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+} XrApertureBoundsGetInfoKHRX1;
+
+typedef struct XrApertureStateKHRX1 {
+    XrStructureType        type;
+     void* XR_MAY_ALIAS    next;
+     XrBool32              isVisible;
+     XrBool32              isInteractable;
+} XrApertureStateKHRX1;
+
+typedef struct XrApertureStateGetInfoKHRX1 {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+} XrApertureStateGetInfoKHRX1;
+
+typedef XrResult (XRAPI_PTR *PFN_xrCreateApertureKHRX1)(XrSession session, const XrApertureCreateInfoKHRX1* createInfo, XrApertureKHRX1* aperture);
+typedef XrResult (XRAPI_PTR *PFN_xrDestroyApertureKHRX1)(XrApertureKHRX1 aperture);
+typedef XrResult (XRAPI_PTR *PFN_xrCreateApertureSpaceKHRX1)(XrSession session, const XrApertureSpaceCreateInfoKHRX1* createInfo, XrSpace* space);
+typedef XrResult (XRAPI_PTR *PFN_xrRequestShowApertureKHRX1)(XrSession session, XrApertureInfoKHRX1* aperture);
+typedef XrResult (XRAPI_PTR *PFN_xrRequestHideApertureKHRX1)(XrSession session, XrApertureInfoKHRX1* aperture);
+typedef XrResult (XRAPI_PTR *PFN_xrGetApertureBoundsKHRX1)(XrApertureKHRX1 aperture, const XrApertureBoundsGetInfoKHRX1* getInfo, XrApertureBoundsKHRX1* bounds);
+typedef XrResult (XRAPI_PTR *PFN_xrGetApertureStateKHRX1)(XrApertureKHRX1 aperture, const XrApertureStateGetInfoKHRX1* getInfo, XrApertureStateKHRX1* state);
+
+#ifndef XR_NO_PROTOTYPES
+#ifdef XR_EXTENSION_PROTOTYPES
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateApertureKHRX1(
+    XrSession                                   session,
+    const XrApertureCreateInfoKHRX1*            createInfo,
+    XrApertureKHRX1*                            aperture);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrDestroyApertureKHRX1(
+    XrApertureKHRX1                             aperture);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateApertureSpaceKHRX1(
+    XrSession                                   session,
+    const XrApertureSpaceCreateInfoKHRX1*       createInfo,
+    XrSpace*                                    space);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrRequestShowApertureKHRX1(
+    XrSession                                   session,
+    XrApertureInfoKHRX1*                        aperture);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrRequestHideApertureKHRX1(
+    XrSession                                   session,
+    XrApertureInfoKHRX1*                        aperture);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetApertureBoundsKHRX1(
+    XrApertureKHRX1                             aperture,
+    const XrApertureBoundsGetInfoKHRX1*         getInfo,
+    XrApertureBoundsKHRX1*                      bounds);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetApertureStateKHRX1(
+    XrApertureKHRX1                             aperture,
+    const XrApertureStateGetInfoKHRX1*          getInfo,
+    XrApertureStateKHRX1*                       state);
+#endif /* XR_EXTENSION_PROTOTYPES */
+#endif /* !XR_NO_PROTOTYPES */
+
+
 // XR_ANDROID_light_estimation is a preprocessor guard. Do not pass it to API calls.
 #define XR_ANDROID_light_estimation 1
 XR_DEFINE_HANDLE(XrLightEstimatorANDROID)
@@ -10834,6 +10967,120 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetTrackableQrCodeANDROID(
     XrTrackableTrackerANDROID                   tracker,
     const XrTrackableGetInfoANDROID*            getInfo,
     XrTrackableQrCodeANDROID*                   qrCodeOutput);
+#endif /* XR_EXTENSION_PROTOTYPES */
+#endif /* !XR_NO_PROTOTYPES */
+
+
+// XR_ANDROID_trackables_image is a preprocessor guard. Do not pass it to API calls.
+#define XR_ANDROID_trackables_image 1
+XR_DEFINE_HANDLE(XrTrackableImageDatabaseANDROID)
+#define XR_ANDROID_trackables_image_SPEC_VERSION 1
+#define XR_ANDROID_TRACKABLES_IMAGE_EXTENSION_NAME "XR_ANDROID_trackables_image"
+
+typedef enum XrTrackableImageTrackingModeANDROID {
+    XR_TRACKABLE_IMAGE_TRACKING_MODE_DYNAMIC_ANDROID = 1,
+    XR_TRACKABLE_IMAGE_TRACKING_MODE_STATIC_ANDROID = 2,
+    XR_TRACKABLE_IMAGE_TRACKING_MODE_MAX_ENUM_ANDROID = 0x7FFFFFFF
+} XrTrackableImageTrackingModeANDROID;
+
+typedef enum XrTrackableImageFormatANDROID {
+    XR_TRACKABLE_IMAGE_FORMAT_R8G8B8A8_ANDROID = 1,
+    XR_TRACKABLE_IMAGE_FORMAT_MAX_ENUM_ANDROID = 0x7FFFFFFF
+} XrTrackableImageFormatANDROID;
+// XrSystemImageTrackingPropertiesANDROID extends XrSystemProperties
+typedef struct XrSystemImageTrackingPropertiesANDROID {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+    XrBool32                    supportsImageTracking;
+    XrBool32                    supportsPhysicalSizeEstimation;
+    uint32_t                    maxTrackedImageCount;
+    uint32_t                    maxLoadedImageCount;
+} XrSystemImageTrackingPropertiesANDROID;
+
+typedef struct XrTrackableImageDatabaseEntryANDROID {
+    XrStructureType                        type;
+    const void* XR_MAY_ALIAS               next;
+    XrTrackableImageTrackingModeANDROID    trackingMode;
+    float                                  physicalWidth;
+    uint32_t                               imageWidth;
+    uint32_t                               imageHeight;
+    XrTrackableImageFormatANDROID          format;
+    uint32_t                               bufferSize;
+    const uint8_t*                         buffer;
+} XrTrackableImageDatabaseEntryANDROID;
+
+typedef struct XrTrackableImageDatabaseCreateInfoANDROID {
+    XrStructureType                                type;
+    const void* XR_MAY_ALIAS                       next;
+    uint32_t                                       entryCount;
+    const XrTrackableImageDatabaseEntryANDROID*    entries;
+} XrTrackableImageDatabaseCreateInfoANDROID;
+
+typedef struct XrCreateTrackableImageDatabaseCompletionANDROID {
+    XrStructureType                    type;
+    void* XR_MAY_ALIAS                 next;
+    XrResult                           futureResult;
+    XrTrackableImageDatabaseANDROID    database;
+} XrCreateTrackableImageDatabaseCompletionANDROID;
+
+typedef struct XrTrackableImageConfigurationANDROID {
+    XrStructureType                           type;
+    const void* XR_MAY_ALIAS                  next;
+    uint32_t                                  databaseCount;
+    const XrTrackableImageDatabaseANDROID*    databases;
+} XrTrackableImageConfigurationANDROID;
+
+typedef struct XrTrackableImageANDROID {
+    XrStructureType                    type;
+    const void* XR_MAY_ALIAS           next;
+    XrTrackingStateANDROID             trackingState;
+    XrTime                             lastUpdatedTime;
+    XrTrackableImageDatabaseANDROID    database;
+    uint32_t                           databaseEntryIndex;
+    XrPosef                            centerPose;
+    XrExtent2Df                        extents;
+} XrTrackableImageANDROID;
+
+typedef struct XrEventDataImageTrackingLostANDROID {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+    XrTime                      time;
+} XrEventDataImageTrackingLostANDROID;
+
+typedef XrResult (XRAPI_PTR *PFN_xrCreateTrackableImageDatabaseAsyncANDROID)(XrSession session, const XrTrackableImageDatabaseCreateInfoANDROID* createInfo, XrFutureEXT* future);
+typedef XrResult (XRAPI_PTR *PFN_xrCreateTrackableImageDatabaseCompleteANDROID)(XrSession session, XrFutureEXT future, XrCreateTrackableImageDatabaseCompletionANDROID* completion);
+typedef XrResult (XRAPI_PTR *PFN_xrDestroyTrackableImageDatabaseANDROID)(XrTrackableImageDatabaseANDROID database);
+typedef XrResult (XRAPI_PTR *PFN_xrAddTrackableImageDatabaseANDROID)(XrTrackableTrackerANDROID tracker, XrTrackableImageDatabaseANDROID database);
+typedef XrResult (XRAPI_PTR *PFN_xrRemoveTrackableImageDatabaseANDROID)(XrTrackableTrackerANDROID tracker, XrTrackableImageDatabaseANDROID database);
+typedef XrResult (XRAPI_PTR *PFN_xrGetTrackableImageANDROID)(XrTrackableTrackerANDROID tracker, const XrTrackableGetInfoANDROID* getInfo, XrTrackableImageANDROID* trackable);
+
+#ifndef XR_NO_PROTOTYPES
+#ifdef XR_EXTENSION_PROTOTYPES
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateTrackableImageDatabaseAsyncANDROID(
+    XrSession                                   session,
+    const XrTrackableImageDatabaseCreateInfoANDROID* createInfo,
+    XrFutureEXT*                                future);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateTrackableImageDatabaseCompleteANDROID(
+    XrSession                                   session,
+    XrFutureEXT                                 future,
+    XrCreateTrackableImageDatabaseCompletionANDROID* completion);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrDestroyTrackableImageDatabaseANDROID(
+    XrTrackableImageDatabaseANDROID             database);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrAddTrackableImageDatabaseANDROID(
+    XrTrackableTrackerANDROID                   tracker,
+    XrTrackableImageDatabaseANDROID             database);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrRemoveTrackableImageDatabaseANDROID(
+    XrTrackableTrackerANDROID                   tracker,
+    XrTrackableImageDatabaseANDROID             database);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetTrackableImageANDROID(
+    XrTrackableTrackerANDROID                   tracker,
+    const XrTrackableGetInfoANDROID*            getInfo,
+    XrTrackableImageANDROID*                    trackable);
 #endif /* XR_EXTENSION_PROTOTYPES */
 #endif /* !XR_NO_PROTOTYPES */
 
@@ -11484,235 +11731,71 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLoadRxInsertANDROIDSYS(
 #endif /* !XR_NO_PROTOTYPES */
 
 
-// XR_ANDROIDX1_geospatial is a preprocessor guard. Do not pass it to API calls.
-#define XR_ANDROIDX1_geospatial 1
-XR_DEFINE_HANDLE(XrEarthTrackerANDROIDX1)
-#define XR_ANDROIDX1_geospatial_SPEC_VERSION 1
-#define XR_ANDROIDX1_GEOSPATIAL_EXTENSION_NAME "XR_ANDROIDX1_geospatial"
+// XR_ANDROIDX1_advanced_light_estimation is a preprocessor guard. Do not pass it to API calls.
+#define XR_ANDROIDX1_advanced_light_estimation 1
+#define XR_ANDROIDX1_advanced_light_estimation_SPEC_VERSION 1
+#define XR_ANDROIDX1_ADVANCED_LIGHT_ESTIMATION_EXTENSION_NAME "XR_ANDROIDX1_advanced_light_estimation"
 
-typedef enum XrEarthTrackerStateANDROIDX1 {
-    XR_EARTH_TRACKER_STATE_STOPPED_ANDROIDX1 = 1,
-    XR_EARTH_TRACKER_STATE_RUNNING_ANDROIDX1 = 2,
-    XR_EARTH_TRACKER_STATE_INITIALIZATION_FAILED_ANDROIDX1 = 3,
-    XR_EARTH_TRACKER_STATE_ANDROIDX1_MAX_ENUM = 0x7FFFFFFF
-} XrEarthTrackerStateANDROIDX1;
-
-typedef enum XrSurfaceAnchorTypeANDROIDX1 {
-    XR_SURFACE_ANCHOR_TYPE_TERRAIN_ANDROIDX1 = 1,
-    XR_SURFACE_ANCHOR_TYPE_ROOFTOP_ANDROIDX1 = 2,
-    XR_SURFACE_ANCHOR_TYPE_ANDROIDX1_MAX_ENUM = 0x7FFFFFFF
-} XrSurfaceAnchorTypeANDROIDX1;
-
-typedef enum XrVPSAvailabilityANDROIDX1 {
-    XR_VPS_AVAILABILITY_UNAVAILABLE_ANDROIDX1 = 1,
-    XR_VPS_AVAILABILITY_AVAILABLE_ANDROIDX1 = 2,
-    XR_VPSAVAILABILITY_ANDROIDX1_MAX_ENUM = 0x7FFFFFFF
-} XrVPSAvailabilityANDROIDX1;
-typedef XrFlags64 XrGeospatialPoseFlagsANDROIDX1;
-
-// Flag bits for XrGeospatialPoseFlagsANDROIDX1
-static const XrGeospatialPoseFlagsANDROIDX1 XR_GEOSPATIAL_POSE_ORIENTATION_VALID_BIT_ANDROIDX1 = 0x00000001;
-static const XrGeospatialPoseFlagsANDROIDX1 XR_GEOSPATIAL_POSE_POSITION_VALID_BIT_ANDROIDX1 = 0x00000002;
-
-// XrSystemGeospatialPropertiesANDROIDX1 extends XrSystemProperties
-typedef struct XrSystemGeospatialPropertiesANDROIDX1 {
+typedef enum XrLightingCubemapResolutionANDROIDX1 {
+    XR_LIGHTING_CUBEMAP_RESOLUTION_32x32_ANDROIDX1 = 0,
+    XR_LIGHTING_CUBEMAP_RESOLUTION_ANDROIDX1_MAX_ENUM = 0x7FFFFFFF
+} XrLightingCubemapResolutionANDROIDX1;
+// XrSystemAdvancedLightEstimationPropertiesANDROIDX1 extends XrSystemProperties
+typedef struct XrSystemAdvancedLightEstimationPropertiesANDROIDX1 {
     XrStructureType       type;
     void* XR_MAY_ALIAS    next;
-    XrBool32              supportsGeospatial;
-    uint32_t              maxSurfaceAnchorCount;
-} XrSystemGeospatialPropertiesANDROIDX1;
+    XrBool32              supportsAdvancedLightEstimation;
+    uint32_t              maxPointLightCount;
+} XrSystemAdvancedLightEstimationPropertiesANDROIDX1;
 
-typedef struct XrEarthTrackerCreateInfoANDROIDX1 {
-    XrStructureType             type;
-    const void* XR_MAY_ALIAS    next;
-    XrBool32                    shouldTrackPlanes;
-} XrEarthTrackerCreateInfoANDROIDX1;
+typedef struct XrAdvancedLightEstimatorCreateInfoANDROIDX1 {
+    XrStructureType                               type;
+    const void* XR_MAY_ALIAS                      next;
+    const XrLightingCubemapResolutionANDROIDX1    cubemapResolution;
+} XrAdvancedLightEstimatorCreateInfoANDROIDX1;
 
-typedef struct XrEventDataEarthTrackerStateChangedANDROIDX1 {
-    XrStructureType                 type;
-    const void* XR_MAY_ALIAS        next;
-    XrEarthTrackerANDROIDX1         earthTracker;
-    XrEarthTrackerStateANDROIDX1    state;
-    XrResult                        initializationResult;
-    XrTime                          time;
-} XrEventDataEarthTrackerStateChangedANDROIDX1;
+// XrLightingCubemapDataANDROIDX1 extends XrLightEstimateANDROID
+typedef struct XrLightingCubemapDataANDROIDX1 {
+    XrStructureType                type;
+    void* XR_MAY_ALIAS             next;
+    XrLightEstimateStateANDROID    state;
+    const uint32_t                 facePixelCount;
+    XrColor3f*                     rightImageBuffer;
+    XrColor3f*                     leftImageBuffer;
+    XrColor3f*                     topImageBuffer;
+    XrColor3f*                     bottomImageBuffer;
+    XrColor3f*                     frontImageBuffer;
+    XrColor3f*                     backImageBuffer;
+    XrQuaternionf                  rotation;
+    XrTime                         centerExposureTime;
+} XrLightingCubemapDataANDROIDX1;
 
-typedef struct XrGeospatialPoseANDROIDX1 {
-    XrQuaternionf    eastUpSouthOrientation;
-    double           latitude;
-    double           longitude;
-    double           altitude;
-} XrGeospatialPoseANDROIDX1;
+typedef struct XrPointLightDataANDROIDX1 {
+    XrVector3f    position;
+    XrColor3f     color;
+    float         intensity;
+} XrPointLightDataANDROIDX1;
 
-typedef struct XrGeospatialAnchorSpaceCreateInfoANDROIDX1 {
-    XrStructureType                  type;
-    const void* XR_MAY_ALIAS         next;
-    const XrEarthTrackerANDROIDX1    earthTracker;
-    XrGeospatialPoseANDROIDX1        geospatialPose;
-} XrGeospatialAnchorSpaceCreateInfoANDROIDX1;
+// XrPointLightsANDROIDX1 extends XrLightEstimateANDROID
+typedef struct XrPointLightsANDROIDX1 {
+    XrStructureType                type;
+    void* XR_MAY_ALIAS             next;
+    XrLightEstimateStateANDROID    state;
+    const uint32_t                 lightCapacityInput;
+    uint32_t                       lightCountOutput;
+    XrPointLightDataANDROIDX1*     lights;
+} XrPointLightsANDROIDX1;
 
-typedef struct XrGeospatialPoseLocateInfoANDROIDX1 {
-    XrStructureType             type;
-    const void* XR_MAY_ALIAS    next;
-    XrSpace                     space;
-    XrTime                      time;
-    XrPosef                     pose;
-} XrGeospatialPoseLocateInfoANDROIDX1;
-
-typedef struct XrGeospatialPoseResultANDROIDX1 {
-    XrStructureType                   type;
-    void* XR_MAY_ALIAS                next;
-    XrGeospatialPoseFlagsANDROIDX1    poseFlags;
-    XrGeospatialPoseANDROIDX1         geospatialPose;
-    double                            horizontalAccuracy;
-    double                            verticalAccuracy;
-    double                            orientationYawAccuracy;
-} XrGeospatialPoseResultANDROIDX1;
-
-typedef struct XrPoseFromGeospatialPoseLocateInfoANDROIDX1 {
-    XrStructureType              type;
-    const void* XR_MAY_ALIAS     next;
-    XrSpace                      space;
-    XrTime                       time;
-    XrGeospatialPoseANDROIDX1    geospatialPose;
-} XrPoseFromGeospatialPoseLocateInfoANDROIDX1;
-
-typedef struct XrSurfaceAnchorSpaceCreateInfoANDROIDX1 {
-    XrStructureType                  type;
-    const void* XR_MAY_ALIAS         next;
-    const XrEarthTrackerANDROIDX1    earthTracker;
-    XrSurfaceAnchorTypeANDROIDX1     surfaceAnchorType;
-    XrQuaternionf                    eastUpSouthOrientation;
-    double                           latitude;
-    double                           longitude;
-    double                           altitudeRelativeToSurface;
-} XrSurfaceAnchorSpaceCreateInfoANDROIDX1;
-
-typedef struct XrSurfaceAnchorSpaceCreateCompletionANDROIDX1 {
-    XrStructureType       type;
-    void* XR_MAY_ALIAS    next;
-    XrResult              futureResult;
-    XrSpace               anchor;
-} XrSurfaceAnchorSpaceCreateCompletionANDROIDX1;
-
-typedef struct XrVPSAvailabilityCheckCompletionANDROIDX1 {
-    XrStructureType               type;
-    void* XR_MAY_ALIAS            next;
-    XrResult                      futureResult;
-    XrVPSAvailabilityANDROIDX1    availability;
-} XrVPSAvailabilityCheckCompletionANDROIDX1;
-
-typedef XrResult (XRAPI_PTR *PFN_xrCreateEarthTrackerANDROIDX1)(XrSession session, const XrEarthTrackerCreateInfoANDROIDX1* createInfo, XrEarthTrackerANDROIDX1* earthTrackerOutput);
-typedef XrResult (XRAPI_PTR *PFN_xrDestroyEarthTrackerANDROIDX1)(XrEarthTrackerANDROIDX1 earthTracker);
-typedef XrResult (XRAPI_PTR *PFN_xrLocateGeospatialPoseANDROIDX1)(XrEarthTrackerANDROIDX1 earthTracker, const XrGeospatialPoseLocateInfoANDROIDX1* getInfo, XrGeospatialPoseResultANDROIDX1* geospatialPoseResult);
-typedef XrResult (XRAPI_PTR *PFN_xrLocatePoseFromGeospatialPoseANDROIDX1)(XrEarthTrackerANDROIDX1 earthTracker, const XrPoseFromGeospatialPoseLocateInfoANDROIDX1* getInfo, XrSpaceLocation* location);
-typedef XrResult (XRAPI_PTR *PFN_xrCreateGeospatialAnchorSpaceANDROIDX1)(XrSession session, const XrGeospatialAnchorSpaceCreateInfoANDROIDX1* createInfo, XrSpace* anchorOutput);
-typedef XrResult (XRAPI_PTR *PFN_xrCreateSurfaceAnchorSpaceAsyncANDROIDX1)(XrSession session, const XrSurfaceAnchorSpaceCreateInfoANDROIDX1* createInfo, XrFutureEXT* future);
-typedef XrResult (XRAPI_PTR *PFN_xrCreateSurfaceAnchorSpaceCompleteANDROIDX1)(XrSession session, XrFutureEXT future, XrSurfaceAnchorSpaceCreateCompletionANDROIDX1* completion);
-typedef XrResult (XRAPI_PTR *PFN_xrCheckVpsAvailabilityAsyncANDROIDX1)(XrSession session, double latitude, double longitude, XrFutureEXT* future);
-typedef XrResult (XRAPI_PTR *PFN_xrCheckVpsAvailabilityCompleteANDROIDX1)(XrSession session, XrFutureEXT future, XrVPSAvailabilityCheckCompletionANDROIDX1* completion);
+typedef XrResult (XRAPI_PTR *PFN_xrEnumerateLightingCubemapResolutionsANDROIDX1)(XrInstance instance, XrSystemId systemId, uint32_t resolutionCapacityInput, uint32_t* resolutionCountOutput, XrLightingCubemapResolutionANDROIDX1* resolutions);
 
 #ifndef XR_NO_PROTOTYPES
 #ifdef XR_EXTENSION_PROTOTYPES
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateEarthTrackerANDROIDX1(
-    XrSession                                   session,
-    const XrEarthTrackerCreateInfoANDROIDX1*    createInfo,
-    XrEarthTrackerANDROIDX1*                    earthTrackerOutput);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrDestroyEarthTrackerANDROIDX1(
-    XrEarthTrackerANDROIDX1                     earthTracker);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrLocateGeospatialPoseANDROIDX1(
-    XrEarthTrackerANDROIDX1                     earthTracker,
-    const XrGeospatialPoseLocateInfoANDROIDX1*  getInfo,
-    XrGeospatialPoseResultANDROIDX1*            geospatialPoseResult);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrLocatePoseFromGeospatialPoseANDROIDX1(
-    XrEarthTrackerANDROIDX1                     earthTracker,
-    const XrPoseFromGeospatialPoseLocateInfoANDROIDX1* getInfo,
-    XrSpaceLocation*                            location);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateGeospatialAnchorSpaceANDROIDX1(
-    XrSession                                   session,
-    const XrGeospatialAnchorSpaceCreateInfoANDROIDX1* createInfo,
-    XrSpace*                                    anchorOutput);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateSurfaceAnchorSpaceAsyncANDROIDX1(
-    XrSession                                   session,
-    const XrSurfaceAnchorSpaceCreateInfoANDROIDX1* createInfo,
-    XrFutureEXT*                                future);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateSurfaceAnchorSpaceCompleteANDROIDX1(
-    XrSession                                   session,
-    XrFutureEXT                                 future,
-    XrSurfaceAnchorSpaceCreateCompletionANDROIDX1* completion);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrCheckVpsAvailabilityAsyncANDROIDX1(
-    XrSession                                   session,
-    double                                      latitude,
-    double                                      longitude,
-    XrFutureEXT*                                future);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrCheckVpsAvailabilityCompleteANDROIDX1(
-    XrSession                                   session,
-    XrFutureEXT                                 future,
-    XrVPSAvailabilityCheckCompletionANDROIDX1*  completion);
-#endif /* XR_EXTENSION_PROTOTYPES */
-#endif /* !XR_NO_PROTOTYPES */
-
-
-// XR_ANDROIDX1_google_cloud_auth is a preprocessor guard. Do not pass it to API calls.
-#define XR_ANDROIDX1_google_cloud_auth 1
-#define XR_ANDROIDX1_google_cloud_auth_SPEC_VERSION 1
-#define XR_ANDROIDX1_GOOGLE_CLOUD_AUTH_EXTENSION_NAME "XR_ANDROIDX1_google_cloud_auth"
-typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudApiKeyANDROIDX1)(XrSession session, const char* apiKey);
-typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudAuthTokenANDROIDX1)(XrSession session, const char* authToken);
-typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudKeylessAuthAsyncANDROIDX1)(XrSession session, XrFutureEXT* future);
-typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudKeylessAuthCompleteANDROIDX1)(XrSession session, XrFutureEXT future, XrFutureCompletionEXT* completion);
-
-#ifndef XR_NO_PROTOTYPES
-#ifdef XR_EXTENSION_PROTOTYPES
-XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudApiKeyANDROIDX1(
-    XrSession                                   session,
-    const char*                                 apiKey);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudAuthTokenANDROIDX1(
-    XrSession                                   session,
-    const char*                                 authToken);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudKeylessAuthAsyncANDROIDX1(
-    XrSession                                   session,
-    XrFutureEXT*                                future);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudKeylessAuthCompleteANDROIDX1(
-    XrSession                                   session,
-    XrFutureEXT                                 future,
-    XrFutureCompletionEXT*                      completion);
-#endif /* XR_EXTENSION_PROTOTYPES */
-#endif /* !XR_NO_PROTOTYPES */
-
-
-// XR_ANDROIDX1_google_cloud_auth_internal is a preprocessor guard. Do not pass it to API calls.
-#define XR_ANDROIDX1_google_cloud_auth_internal 1
-#define XR_ANDROIDX1_google_cloud_auth_internal_SPEC_VERSION 1
-#define XR_ANDROIDX1_GOOGLE_CLOUD_AUTH_INTERNAL_EXTENSION_NAME "XR_ANDROIDX1_google_cloud_auth_internal"
-typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudTraceContextANDROIDX1)(XrSession session, XrBool32 enabled);
-typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudApiClientBuildVersionNameANDROIDX1)(XrSession session, const char* versionName);
-typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudARCoreDomainNameANDROIDX1)(XrSession session, const char* domainName);
-
-#ifndef XR_NO_PROTOTYPES
-#ifdef XR_EXTENSION_PROTOTYPES
-XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudTraceContextANDROIDX1(
-    XrSession                                   session,
-    XrBool32                                    enabled);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudApiClientBuildVersionNameANDROIDX1(
-    XrSession                                   session,
-    const char*                                 versionName);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudARCoreDomainNameANDROIDX1(
-    XrSession                                   session,
-    const char*                                 domainName);
+XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateLightingCubemapResolutionsANDROIDX1(
+    XrInstance                                  instance,
+    XrSystemId                                  systemId,
+    uint32_t                                    resolutionCapacityInput,
+    uint32_t*                                   resolutionCountOutput,
+    XrLightingCubemapResolutionANDROIDX1*       resolutions);
 #endif /* XR_EXTENSION_PROTOTYPES */
 #endif /* !XR_NO_PROTOTYPES */
 
@@ -11903,8 +11986,9 @@ typedef enum XrSpatialCapabilityEXT {
     XR_SPATIAL_CAPABILITY_MARKER_TRACKING_ARUCO_MARKER_EXT = 1000743002,
     XR_SPATIAL_CAPABILITY_MARKER_TRACKING_APRIL_TAG_EXT = 1000743003,
     XR_SPATIAL_CAPABILITY_ANCHOR_EXT = 1000762000,
-    XR_SPATIAL_CAPABILITY_OBJECT_TRACKING_ANDROIDX1 = 1000785000,
-    XR_SPATIAL_CAPABILITY_DEPTH_RAYCAST_ANDROIDX1 = 1000786000,
+    XR_SPATIAL_CAPABILITY_OBJECT_TRACKING_ANDROID = 1000785000,
+    XR_SPATIAL_CAPABILITY_DEPTH_RAYCAST_ANDROID = 1000786000,
+    XR_SPATIAL_CAPABILITY_STREETSCAPE_GEOMETRY_ANDROIDX1 = 1000789000,
     XR_SPATIAL_CAPABILITY_MAX_ENUM_EXT = 0x7FFFFFFF
 } XrSpatialCapabilityEXT;
 
@@ -11926,8 +12010,9 @@ typedef enum XrSpatialComponentTypeEXT {
     XR_SPATIAL_COMPONENT_TYPE_MARKER_EXT = 1000743000,
     XR_SPATIAL_COMPONENT_TYPE_ANCHOR_EXT = 1000762000,
     XR_SPATIAL_COMPONENT_TYPE_PERSISTENCE_EXT = 1000763000,
-    XR_SPATIAL_COMPONENT_TYPE_OBJECT_SEMANTIC_LABEL_ANDROIDX1 = 1000785000,
-    XR_SPATIAL_COMPONENT_TYPE_RAYCAST_RESULT_ANDROIDX1 = 1000786000,
+    XR_SPATIAL_COMPONENT_TYPE_OBJECT_SEMANTIC_LABEL_ANDROID = 1000785000,
+    XR_SPATIAL_COMPONENT_TYPE_RAYCAST_RESULT_ANDROID = 1000786000,
+    XR_SPATIAL_COMPONENT_TYPE_STREETSCAPE_GEOMETRY_METADATA_ANDROIDX1 = 1000789000,
     XR_SPATIAL_COMPONENT_TYPE_MAX_ENUM_EXT = 0x7FFFFFFF
 } XrSpatialComponentTypeEXT;
 
@@ -12739,57 +12824,57 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetFitTrackerFitDataANDROIDSYS(
 #endif /* !XR_NO_PROTOTYPES */
 
 
-// XR_ANDROIDX1_spatial_object_tracking is a preprocessor guard. Do not pass it to API calls.
-#define XR_ANDROIDX1_spatial_object_tracking 1
-#define XR_ANDROIDX1_spatial_object_tracking_SPEC_VERSION 1
-#define XR_ANDROIDX1_SPATIAL_OBJECT_TRACKING_EXTENSION_NAME "XR_ANDROIDX1_spatial_object_tracking"
+// XR_ANDROID_spatial_object_tracking is a preprocessor guard. Do not pass it to API calls.
+#define XR_ANDROID_spatial_object_tracking 1
+#define XR_ANDROID_spatial_object_tracking_SPEC_VERSION 1
+#define XR_ANDROID_SPATIAL_OBJECT_TRACKING_EXTENSION_NAME "XR_ANDROID_spatial_object_tracking"
 
-typedef enum XrSpatialObjectSemanticLabelANDROIDX1 {
-    XR_SPATIAL_OBJECT_SEMANTIC_LABEL_UNCATEGORIZED_ANDROIDX1 = 0,
-    XR_SPATIAL_OBJECT_SEMANTIC_LABEL_KEYBOARD_ANDROIDX1 = 1,
-    XR_SPATIAL_OBJECT_SEMANTIC_LABEL_MOUSE_ANDROIDX1 = 2,
-    XR_SPATIAL_OBJECT_SEMANTIC_LABEL_LAPTOP_ANDROIDX1 = 3,
-    XR_SPATIAL_OBJECT_SEMANTIC_LABEL_ANDROIDX1_MAX_ENUM = 0x7FFFFFFF
-} XrSpatialObjectSemanticLabelANDROIDX1;
-typedef struct XrSpatialCapabilityConfigurationObjectTrackingANDROIDX1 {
-    XrStructureType                                 type;
-    const void* XR_MAY_ALIAS                        next;
-    XrSpatialCapabilityEXT                          capability;
-    uint32_t                                        enabledComponentCount;
-    const XrSpatialComponentTypeEXT*                enabledComponents;
-    uint32_t                                        activeSemanticLabelCount;
-    const XrSpatialObjectSemanticLabelANDROIDX1*    activeSemanticLabels;
-} XrSpatialCapabilityConfigurationObjectTrackingANDROIDX1;
+typedef enum XrSpatialObjectSemanticLabelANDROID {
+    XR_SPATIAL_OBJECT_SEMANTIC_LABEL_UNCATEGORIZED_ANDROID = 0,
+    XR_SPATIAL_OBJECT_SEMANTIC_LABEL_KEYBOARD_ANDROID = 1,
+    XR_SPATIAL_OBJECT_SEMANTIC_LABEL_MOUSE_ANDROID = 2,
+    XR_SPATIAL_OBJECT_SEMANTIC_LABEL_LAPTOP_BASE_ANDROID = 3,
+    XR_SPATIAL_OBJECT_SEMANTIC_LABEL_MAX_ENUM_ANDROID = 0x7FFFFFFF
+} XrSpatialObjectSemanticLabelANDROID;
+typedef struct XrSpatialCapabilityConfigurationObjectTrackingANDROID {
+    XrStructureType                               type;
+    const void* XR_MAY_ALIAS                      next;
+    XrSpatialCapabilityEXT                        capability;
+    uint32_t                                      enabledComponentCount;
+    const XrSpatialComponentTypeEXT*              enabledComponents;
+    uint32_t                                      activeSemanticLabelCount;
+    const XrSpatialObjectSemanticLabelANDROID*    activeSemanticLabels;
+} XrSpatialCapabilityConfigurationObjectTrackingANDROID;
 
-// XrSpatialComponentObjectSemanticLabelListANDROIDX1 extends XrSpatialComponentDataQueryResultEXT
-typedef struct XrSpatialComponentObjectSemanticLabelListANDROIDX1 {
-    XrStructureType                           type;
-    void* XR_MAY_ALIAS                        next;
-    uint32_t                                  semanticLabelCount;
-    XrSpatialObjectSemanticLabelANDROIDX1*    semanticLabels;
-} XrSpatialComponentObjectSemanticLabelListANDROIDX1;
+// XrSpatialComponentObjectSemanticLabelListANDROID extends XrSpatialComponentDataQueryResultEXT
+typedef struct XrSpatialComponentObjectSemanticLabelListANDROID {
+    XrStructureType                         type;
+    void* XR_MAY_ALIAS                      next;
+    uint32_t                                semanticLabelCount;
+    XrSpatialObjectSemanticLabelANDROID*    semanticLabels;
+} XrSpatialComponentObjectSemanticLabelListANDROID;
 
 
 
-// XR_ANDROIDX1_spatial_discovery_raycast is a preprocessor guard. Do not pass it to API calls.
-#define XR_ANDROIDX1_spatial_discovery_raycast 1
-#define XR_ANDROIDX1_spatial_discovery_raycast_SPEC_VERSION 1
-#define XR_ANDROIDX1_SPATIAL_DISCOVERY_RAYCAST_EXTENSION_NAME "XR_ANDROIDX1_spatial_discovery_raycast"
-typedef struct XrSpatialRaycastResultANDROIDX1 {
+// XR_ANDROID_spatial_discovery_raycast is a preprocessor guard. Do not pass it to API calls.
+#define XR_ANDROID_spatial_discovery_raycast 1
+#define XR_ANDROID_spatial_discovery_raycast_SPEC_VERSION 1
+#define XR_ANDROID_SPATIAL_DISCOVERY_RAYCAST_EXTENSION_NAME "XR_ANDROID_spatial_discovery_raycast"
+typedef struct XrSpatialRaycastResultANDROID {
     XrPosef    hitPose;
     float      distanceSquared;
-} XrSpatialRaycastResultANDROIDX1;
+} XrSpatialRaycastResultANDROID;
 
-typedef struct XrSpatialCapabilityConfigurationDepthRaycastANDROIDX1 {
+typedef struct XrSpatialCapabilityConfigurationDepthRaycastANDROID {
     XrStructureType                     type;
     const void* XR_MAY_ALIAS            next;
     XrSpatialCapabilityEXT              capability;
     uint32_t                            enabledComponentCount;
     const XrSpatialComponentTypeEXT*    enabledComponents;
-} XrSpatialCapabilityConfigurationDepthRaycastANDROIDX1;
+} XrSpatialCapabilityConfigurationDepthRaycastANDROID;
 
-// XrSpatialBoundsRaycastANDROIDX1 extends XrSpatialDiscoverySnapshotCreateInfoEXT
-typedef struct XrSpatialBoundsRaycastANDROIDX1 {
+// XrSpatialBoundsRaycastANDROID extends XrSpatialDiscoverySnapshotCreateInfoEXT
+typedef struct XrSpatialBoundsRaycastANDROID {
     XrStructureType             type;
     const void* XR_MAY_ALIAS    next;
     XrSpace                     space;
@@ -12797,16 +12882,310 @@ typedef struct XrSpatialBoundsRaycastANDROIDX1 {
     XrVector3f                  origin;
     XrVector3f                  direction;
     float                       maxDistance;
-} XrSpatialBoundsRaycastANDROIDX1;
+} XrSpatialBoundsRaycastANDROID;
 
-// XrSpatialComponentRaycastResultListANDROIDX1 extends XrSpatialComponentDataQueryResultEXT
-typedef struct XrSpatialComponentRaycastResultListANDROIDX1 {
+// XrSpatialComponentRaycastResultListANDROID extends XrSpatialComponentDataQueryResultEXT
+typedef struct XrSpatialComponentRaycastResultListANDROID {
+    XrStructureType                   type;
+    void* XR_MAY_ALIAS                next;
+    uint32_t                          raycastResultCount;
+    XrSpatialRaycastResultANDROID*    raycastResults;
+} XrSpatialComponentRaycastResultListANDROID;
+
+
+
+// XR_ANDROIDX1_google_cloud_auth is a preprocessor guard. Do not pass it to API calls.
+#define XR_ANDROIDX1_google_cloud_auth 1
+#define XR_ANDROIDX1_google_cloud_auth_SPEC_VERSION 1
+#define XR_ANDROIDX1_GOOGLE_CLOUD_AUTH_EXTENSION_NAME "XR_ANDROIDX1_google_cloud_auth"
+typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudApiKeyANDROIDX1)(XrSession session, const char* apiKey);
+typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudAuthTokenANDROIDX1)(XrSession session, const char* authToken);
+typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudKeylessAuthAsyncANDROIDX1)(XrSession session, XrFutureEXT* future);
+typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudKeylessAuthCompleteANDROIDX1)(XrSession session, XrFutureEXT future, XrFutureCompletionEXT* completion);
+
+#ifndef XR_NO_PROTOTYPES
+#ifdef XR_EXTENSION_PROTOTYPES
+XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudApiKeyANDROIDX1(
+    XrSession                                   session,
+    const char*                                 apiKey);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudAuthTokenANDROIDX1(
+    XrSession                                   session,
+    const char*                                 authToken);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudKeylessAuthAsyncANDROIDX1(
+    XrSession                                   session,
+    XrFutureEXT*                                future);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudKeylessAuthCompleteANDROIDX1(
+    XrSession                                   session,
+    XrFutureEXT                                 future,
+    XrFutureCompletionEXT*                      completion);
+#endif /* XR_EXTENSION_PROTOTYPES */
+#endif /* !XR_NO_PROTOTYPES */
+
+
+// XR_ANDROIDX1_google_cloud_auth_internal is a preprocessor guard. Do not pass it to API calls.
+#define XR_ANDROIDX1_google_cloud_auth_internal 1
+#define XR_ANDROIDX1_google_cloud_auth_internal_SPEC_VERSION 1
+#define XR_ANDROIDX1_GOOGLE_CLOUD_AUTH_INTERNAL_EXTENSION_NAME "XR_ANDROIDX1_google_cloud_auth_internal"
+typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudTraceContextANDROIDX1)(XrSession session, XrBool32 enabled);
+typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudApiClientBuildVersionNameANDROIDX1)(XrSession session, const char* versionName);
+typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudARCoreDomainNameANDROIDX1)(XrSession session, const char* domainName);
+
+#ifndef XR_NO_PROTOTYPES
+#ifdef XR_EXTENSION_PROTOTYPES
+XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudTraceContextANDROIDX1(
+    XrSession                                   session,
+    XrBool32                                    enabled);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudApiClientBuildVersionNameANDROIDX1(
+    XrSession                                   session,
+    const char*                                 versionName);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudARCoreDomainNameANDROIDX1(
+    XrSession                                   session,
+    const char*                                 domainName);
+#endif /* XR_EXTENSION_PROTOTYPES */
+#endif /* !XR_NO_PROTOTYPES */
+
+
+// XR_ANDROIDX1_geospatial is a preprocessor guard. Do not pass it to API calls.
+#define XR_ANDROIDX1_geospatial 1
+XR_DEFINE_HANDLE(XrEarthTrackerANDROIDX1)
+#define XR_ANDROIDX1_geospatial_SPEC_VERSION 1
+#define XR_ANDROIDX1_GEOSPATIAL_EXTENSION_NAME "XR_ANDROIDX1_geospatial"
+
+typedef enum XrEarthTrackerStateANDROIDX1 {
+    XR_EARTH_TRACKER_STATE_STOPPED_ANDROIDX1 = 1,
+    XR_EARTH_TRACKER_STATE_RUNNING_ANDROIDX1 = 2,
+    XR_EARTH_TRACKER_STATE_INITIALIZATION_FAILED_ANDROIDX1 = 3,
+    XR_EARTH_TRACKER_STATE_ANDROIDX1_MAX_ENUM = 0x7FFFFFFF
+} XrEarthTrackerStateANDROIDX1;
+
+typedef enum XrSurfaceAnchorTypeANDROIDX1 {
+    XR_SURFACE_ANCHOR_TYPE_TERRAIN_ANDROIDX1 = 1,
+    XR_SURFACE_ANCHOR_TYPE_ROOFTOP_ANDROIDX1 = 2,
+    XR_SURFACE_ANCHOR_TYPE_ANDROIDX1_MAX_ENUM = 0x7FFFFFFF
+} XrSurfaceAnchorTypeANDROIDX1;
+
+typedef enum XrVPSAvailabilityANDROIDX1 {
+    XR_VPS_AVAILABILITY_UNAVAILABLE_ANDROIDX1 = 1,
+    XR_VPS_AVAILABILITY_AVAILABLE_ANDROIDX1 = 2,
+    XR_VPSAVAILABILITY_ANDROIDX1_MAX_ENUM = 0x7FFFFFFF
+} XrVPSAvailabilityANDROIDX1;
+
+typedef enum XrStreetscapeGeometrySemanticLabelANDROIDX1 {
+    XR_STREETSCAPE_GEOMETRY_SEMANTIC_LABEL_TERRAIN_ANDROIDX1 = 1,
+    XR_STREETSCAPE_GEOMETRY_SEMANTIC_LABEL_BUILDING_ANDROIDX1 = 2,
+    XR_STREETSCAPE_GEOMETRY_SEMANTIC_LABEL_ANDROIDX1_MAX_ENUM = 0x7FFFFFFF
+} XrStreetscapeGeometrySemanticLabelANDROIDX1;
+
+typedef enum XrStreetscapeGeometryQualityANDROIDX1 {
+    XR_STREETSCAPE_GEOMETRY_QUALITY_NONE_ANDROIDX1 = 0,
+    XR_STREETSCAPE_GEOMETRY_QUALITY_BUILDING_LOD1_ANDROIDX1 = 1,
+    XR_STREETSCAPE_GEOMETRY_QUALITY_BUILDING_LOD2_ANDROIDX1 = 2,
+    XR_STREETSCAPE_GEOMETRY_QUALITY_ANDROIDX1_MAX_ENUM = 0x7FFFFFFF
+} XrStreetscapeGeometryQualityANDROIDX1;
+typedef XrFlags64 XrGeospatialPoseFlagsANDROIDX1;
+
+// Flag bits for XrGeospatialPoseFlagsANDROIDX1
+static const XrGeospatialPoseFlagsANDROIDX1 XR_GEOSPATIAL_POSE_ORIENTATION_VALID_BIT_ANDROIDX1 = 0x00000001;
+static const XrGeospatialPoseFlagsANDROIDX1 XR_GEOSPATIAL_POSE_POSITION_VALID_BIT_ANDROIDX1 = 0x00000002;
+
+// XrSystemGeospatialPropertiesANDROIDX1 extends XrSystemProperties
+typedef struct XrSystemGeospatialPropertiesANDROIDX1 {
+    XrStructureType       type;
+    void* XR_MAY_ALIAS    next;
+    XrBool32              supportsGeospatial;
+    uint32_t              maxSurfaceAnchorCount;
+} XrSystemGeospatialPropertiesANDROIDX1;
+
+typedef struct XrEarthTrackerCreateInfoANDROIDX1 {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+    XrBool32                    shouldTrackPlanes;
+} XrEarthTrackerCreateInfoANDROIDX1;
+
+typedef struct XrEventDataEarthTrackerStateChangedANDROIDX1 {
+    XrStructureType                 type;
+    const void* XR_MAY_ALIAS        next;
+    XrEarthTrackerANDROIDX1         earthTracker;
+    XrEarthTrackerStateANDROIDX1    state;
+    XrResult                        initializationResult;
+    XrTime                          time;
+} XrEventDataEarthTrackerStateChangedANDROIDX1;
+
+typedef struct XrGeospatialPoseANDROIDX1 {
+    XrQuaternionf    eastUpSouthOrientation;
+    double           latitude;
+    double           longitude;
+    double           altitude;
+} XrGeospatialPoseANDROIDX1;
+
+typedef struct XrGeospatialAnchorCreateInfoANDROIDX1 {
+    XrStructureType                  type;
+    const void* XR_MAY_ALIAS         next;
+    const XrEarthTrackerANDROIDX1    earthTracker;
+    XrGeospatialPoseANDROIDX1        geospatialPose;
+} XrGeospatialAnchorCreateInfoANDROIDX1;
+
+typedef struct XrGeospatialPoseLocateInfoANDROIDX1 {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+    XrSpace                     space;
+    XrTime                      time;
+    XrPosef                     pose;
+} XrGeospatialPoseLocateInfoANDROIDX1;
+
+typedef struct XrGeospatialPoseResultANDROIDX1 {
+    XrStructureType                   type;
+    void* XR_MAY_ALIAS                next;
+    XrGeospatialPoseFlagsANDROIDX1    poseFlags;
+    XrGeospatialPoseANDROIDX1         geospatialPose;
+    double                            horizontalAccuracy;
+    double                            verticalAccuracy;
+    double                            orientationYawAccuracy;
+} XrGeospatialPoseResultANDROIDX1;
+
+typedef struct XrPoseFromGeospatialPoseLocateInfoANDROIDX1 {
+    XrStructureType              type;
+    const void* XR_MAY_ALIAS     next;
+    XrSpace                      space;
+    XrTime                       time;
+    XrGeospatialPoseANDROIDX1    geospatialPose;
+} XrPoseFromGeospatialPoseLocateInfoANDROIDX1;
+
+typedef struct XrSurfaceAnchorCreateInfoANDROIDX1 {
+    XrStructureType                  type;
+    const void* XR_MAY_ALIAS         next;
+    const XrEarthTrackerANDROIDX1    earthTracker;
+    XrSurfaceAnchorTypeANDROIDX1     surfaceAnchorType;
+    XrQuaternionf                    eastUpSouthOrientation;
+    double                           latitude;
+    double                           longitude;
+    double                           altitudeRelativeToSurface;
+} XrSurfaceAnchorCreateInfoANDROIDX1;
+
+typedef struct XrSurfaceAnchorCreateCompletionANDROIDX1 {
+    XrStructureType         type;
+    void* XR_MAY_ALIAS      next;
+    XrResult                futureResult;
+    XrSpatialEntityIdEXT    anchorEntityId;
+    XrSpatialEntityEXT      anchorEntity;
+} XrSurfaceAnchorCreateCompletionANDROIDX1;
+
+typedef struct XrVPSAvailabilityCheckCompletionANDROIDX1 {
+    XrStructureType               type;
+    void* XR_MAY_ALIAS            next;
+    XrResult                      futureResult;
+    XrVPSAvailabilityANDROIDX1    availability;
+} XrVPSAvailabilityCheckCompletionANDROIDX1;
+
+typedef struct XrSpatialCapabilityConfigurationStreetscapeGeometryANDROIDX1 {
     XrStructureType                     type;
-    void* XR_MAY_ALIAS                  next;
-    uint32_t                            raycastResultCount;
-    XrSpatialRaycastResultANDROIDX1*    raycastResults;
-} XrSpatialComponentRaycastResultListANDROIDX1;
+    const void* XR_MAY_ALIAS            next;
+    XrSpatialCapabilityEXT              capability;
+    uint32_t                            enabledComponentCount;
+    const XrSpatialComponentTypeEXT*    enabledComponents;
+} XrSpatialCapabilityConfigurationStreetscapeGeometryANDROIDX1;
 
+typedef struct XrSpatialStreetscapeGeometryMetadataANDROIDX1 {
+    XrStreetscapeGeometrySemanticLabelANDROIDX1    semanticLabel;
+    XrStreetscapeGeometryQualityANDROIDX1          quality;
+} XrSpatialStreetscapeGeometryMetadataANDROIDX1;
+
+// XrSpatialComponentStreetscapeGeometryMetadataListANDROIDX1 extends XrSpatialComponentDataQueryResultEXT
+typedef struct XrSpatialComponentStreetscapeGeometryMetadataListANDROIDX1 {
+    XrStructureType                                   type;
+    void* XR_MAY_ALIAS                                next;
+    uint32_t                                          metadataCount;
+    XrSpatialStreetscapeGeometryMetadataANDROIDX1*    metadatas;
+} XrSpatialComponentStreetscapeGeometryMetadataListANDROIDX1;
+
+typedef XrResult (XRAPI_PTR *PFN_xrCreateEarthTrackerANDROIDX1)(XrSession session, const XrEarthTrackerCreateInfoANDROIDX1* createInfo, XrEarthTrackerANDROIDX1* earthTrackerOutput);
+typedef XrResult (XRAPI_PTR *PFN_xrDestroyEarthTrackerANDROIDX1)(XrEarthTrackerANDROIDX1 earthTracker);
+typedef XrResult (XRAPI_PTR *PFN_xrLocateGeospatialPoseANDROIDX1)(XrEarthTrackerANDROIDX1 earthTracker, const XrGeospatialPoseLocateInfoANDROIDX1* getInfo, XrGeospatialPoseResultANDROIDX1* geospatialPoseResult);
+typedef XrResult (XRAPI_PTR *PFN_xrLocatePoseFromGeospatialPoseANDROIDX1)(XrEarthTrackerANDROIDX1 earthTracker, const XrPoseFromGeospatialPoseLocateInfoANDROIDX1* getInfo, XrSpaceLocation* location);
+typedef XrResult (XRAPI_PTR *PFN_xrCreateGeospatialAnchorANDROIDX1)(XrSpatialContextEXT spatialContext, const XrGeospatialAnchorCreateInfoANDROIDX1* createInfo, XrSpatialEntityIdEXT* anchorEntityId, XrSpatialEntityEXT* anchorEntity);
+typedef XrResult (XRAPI_PTR *PFN_xrCreateSurfaceAnchorAsyncANDROIDX1)(XrSpatialContextEXT spatialContext, const XrSurfaceAnchorCreateInfoANDROIDX1* createInfo, XrFutureEXT* future);
+typedef XrResult (XRAPI_PTR *PFN_xrCreateSurfaceAnchorCompleteANDROIDX1)(XrSpatialContextEXT spatialContext, XrFutureEXT future, XrSurfaceAnchorCreateCompletionANDROIDX1* completion);
+typedef XrResult (XRAPI_PTR *PFN_xrCheckVpsAvailabilityAsyncANDROIDX1)(XrSession session, double latitude, double longitude, XrFutureEXT* future);
+typedef XrResult (XRAPI_PTR *PFN_xrCheckVpsAvailabilityCompleteANDROIDX1)(XrSession session, XrFutureEXT future, XrVPSAvailabilityCheckCompletionANDROIDX1* completion);
+
+#ifndef XR_NO_PROTOTYPES
+#ifdef XR_EXTENSION_PROTOTYPES
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateEarthTrackerANDROIDX1(
+    XrSession                                   session,
+    const XrEarthTrackerCreateInfoANDROIDX1*    createInfo,
+    XrEarthTrackerANDROIDX1*                    earthTrackerOutput);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrDestroyEarthTrackerANDROIDX1(
+    XrEarthTrackerANDROIDX1                     earthTracker);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrLocateGeospatialPoseANDROIDX1(
+    XrEarthTrackerANDROIDX1                     earthTracker,
+    const XrGeospatialPoseLocateInfoANDROIDX1*  getInfo,
+    XrGeospatialPoseResultANDROIDX1*            geospatialPoseResult);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrLocatePoseFromGeospatialPoseANDROIDX1(
+    XrEarthTrackerANDROIDX1                     earthTracker,
+    const XrPoseFromGeospatialPoseLocateInfoANDROIDX1* getInfo,
+    XrSpaceLocation*                            location);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateGeospatialAnchorANDROIDX1(
+    XrSpatialContextEXT                         spatialContext,
+    const XrGeospatialAnchorCreateInfoANDROIDX1* createInfo,
+    XrSpatialEntityIdEXT*                       anchorEntityId,
+    XrSpatialEntityEXT*                         anchorEntity);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateSurfaceAnchorAsyncANDROIDX1(
+    XrSpatialContextEXT                         spatialContext,
+    const XrSurfaceAnchorCreateInfoANDROIDX1*   createInfo,
+    XrFutureEXT*                                future);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateSurfaceAnchorCompleteANDROIDX1(
+    XrSpatialContextEXT                         spatialContext,
+    XrFutureEXT                                 future,
+    XrSurfaceAnchorCreateCompletionANDROIDX1*   completion);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCheckVpsAvailabilityAsyncANDROIDX1(
+    XrSession                                   session,
+    double                                      latitude,
+    double                                      longitude,
+    XrFutureEXT*                                future);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCheckVpsAvailabilityCompleteANDROIDX1(
+    XrSession                                   session,
+    XrFutureEXT                                 future,
+    XrVPSAvailabilityCheckCompletionANDROIDX1*  completion);
+#endif /* XR_EXTENSION_PROTOTYPES */
+#endif /* !XR_NO_PROTOTYPES */
+
+
+// XR_ANDROID_spatial_entity_bound_anchor is a preprocessor guard. Do not pass it to API calls.
+#define XR_ANDROID_spatial_entity_bound_anchor 1
+#define XR_ANDROID_spatial_entity_bound_anchor_SPEC_VERSION 1
+#define XR_ANDROID_SPATIAL_ENTITY_BOUND_ANCHOR_EXTENSION_NAME "XR_ANDROID_spatial_entity_bound_anchor"
+// XrSpatialAnchorParentANDROID extends XrSpatialAnchorCreateInfoEXT
+typedef struct XrSpatialAnchorParentANDROID {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+    XrSpatialEntityIdEXT        parentId;
+} XrSpatialAnchorParentANDROID;
+
+typedef XrResult (XRAPI_PTR *PFN_xrEnumerateSpatialAnchorAttachableComponentsANDROID)(XrInstance instance, XrSystemId systemId, uint32_t attachableComponentCapacityInput, uint32_t* attachableComponentCountOutput, XrSpatialComponentTypeEXT* attachableComponents);
+
+#ifndef XR_NO_PROTOTYPES
+#ifdef XR_EXTENSION_PROTOTYPES
+XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSpatialAnchorAttachableComponentsANDROID(
+    XrInstance                                  instance,
+    XrSystemId                                  systemId,
+    uint32_t                                    attachableComponentCapacityInput,
+    uint32_t*                                   attachableComponentCountOutput,
+    XrSpatialComponentTypeEXT*                  attachableComponents);
+#endif /* XR_EXTENSION_PROTOTYPES */
+#endif /* !XR_NO_PROTOTYPES */
 
 #ifdef __cplusplus
 }

@@ -19,13 +19,18 @@
 #include <cstdint>
 #include <memory>
 #include <utility>
+#include <vector>
 
 #include "core/common/log.h"
+#include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
+#include "absl/types/span.h"
 #include "filament/filament/include/filament/RenderableManager.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/small_source_location.h"
 #include "core/geometry/shapes/box.h"
 #include "core/materials/material.h"
+#include "core/math/mat.h"
 #include "core/model/mesh/mesh.h"
 #include "core/model/model_data.h"
 #include "core/ncsb/node.h"
@@ -50,16 +55,50 @@ static constexpr uint16_t kMaxBlendOrder = 0x7FFF;
 void MeshRenderer::Cleanup() { GetRenderableManager().Destroy(GetEntity()); }
 
 void MeshRenderer::Setup(size_t primitive_count) {
-  Setup(FrustumCullingMode::kEnabled, primitive_count);
+  Setup({
+      .primitive_count = primitive_count,
+      .culling_mode = FrustumCullingMode::kEnabled,
+      .num_bones = 0,
+  });
 }
 
 void MeshRenderer::Setup(FrustumCullingMode culling_mode,
                          size_t primitive_count) {
-  BuildRenderables(culling_mode, primitive_count);
+  Setup({
+      .primitive_count = primitive_count,
+      .culling_mode = culling_mode,
+      .num_bones = 0,
+  });
+}
+
+void MeshRenderer::Setup(const SetupOptions& options) {
+  BuildRenderables(options);
 
   // Do not display until the component is "awake"
   GetRenderableManager().SetLayerMask(GetInstance(), 0xff, 0);
 }
+
+absl::Status MeshRenderer::UpdateBoneTransformsInRange(
+    absl::Span<const imp::mat4f> new_bones, uint8_t first_bone_index) {
+  if (GetBoneCount() == 0) {
+    return absl::UnavailableError("Boneless renderable!");
+  }
+  if (first_bone_index + new_bones.size() > GetBoneCount()) {
+    return absl::OutOfRangeError(absl::StrCat(
+        "Renderable has too few bones! Renderable has bones with size ",
+        GetBoneCount(), " but first_bone_index + new_bones.size() is ",
+        first_bone_index + new_bones.size()));
+  }
+  std::copy(new_bones.begin(), new_bones.end(),
+            bones_.begin() + first_bone_index);
+
+  GetRenderableManager().SetBones(GetInstance(), bones_.data(), GetBoneCount());
+
+  UpdateRenderableAabb();
+  return absl::OkStatus();
+}
+
+uint8_t MeshRenderer::GetBoneCount() const { return bones_.size(); }
 
 bool MeshRenderer::IsOwnedOrBorrowedPtrType(
     const HeldPtrType& held_ptr_type) const {
@@ -67,8 +106,11 @@ bool MeshRenderer::IsOwnedOrBorrowedPtrType(
          held_ptr_type == HeldPtrType::kOwnedPointer;
 }
 
-void MeshRenderer::BuildRenderables(FrustumCullingMode culling_mode,
-                                    size_t primitive_count) {
+void MeshRenderer::BuildRenderables(const SetupOptions& options) {
+  size_t primitive_count = options.primitive_count;
+  FrustumCullingMode culling_mode = options.culling_mode;
+  uint8_t num_bones = options.num_bones;
+
   std::unique_ptr<BaseRenderableManager::Builder> builder =
       GetRenderableManager().NewBuilder(primitive_count);
 
@@ -80,6 +122,19 @@ void MeshRenderer::BuildRenderables(FrustumCullingMode culling_mode,
     case FrustumCullingMode::kDisabled:
       builder->Culling(false);
       break;
+  }
+
+  if (num_bones > 0) {
+    bones_.resize(num_bones);
+
+    std::fill(bones_.begin(), bones_.end(), kIdentityMat4f);
+
+    builder->EnableSkinningBuffers(false);
+    // The Filament `Skinning` function takes a size_t for the number of bones,
+    // but the docstring states
+    // - "@param boneCount ... the number of bone transforms (up to 255)"
+    // so making the public API a uint8_t enforces this limit at compile time.
+    builder->Skinning(static_cast<size_t>(num_bones), bones_.data());
   }
 
   builder->Priority(priority_);
@@ -357,6 +412,15 @@ void MeshRenderer::UpdateRenderableAabb() {
         }
       }
     }
+  }
+
+  if (GetBoneCount() > 0) {
+    Box combined_aabb = aabb;
+    for (const imp::mat4f& bone_transformation : bones_) {
+      combined_aabb = combined_aabb.unionSelf(Box::transform(
+          bone_transformation.upperLeft(), bone_transformation[3].xyz, aabb));
+    }
+    aabb = combined_aabb;
   }
 
   GetRenderableManager().SetAxisAlignedBoundingBox(GetInstance(), aabb);

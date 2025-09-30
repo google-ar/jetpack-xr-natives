@@ -75,7 +75,7 @@ class ImpressApiView : public View {
   template <typename SetterFn>
   absl::Status SetGenericMaterialTextureParameter(
       std::intptr_t generic_material, std::intptr_t texture,
-      SetterFn setter_fn);
+      std::optional<filament::TextureSampler> sampler, SetterFn setter_fn);
 
   // Returns the Split Engine material subtype from a bindings material handle.
   template <typename SplitEngineMaterialT>
@@ -173,7 +173,7 @@ class ImpressApiView : public View {
       int32_t node_id, MediaColorSpace color_space = {});
 
   // Loads a texture from the assets folder or a remote texture from a URL.
-  void LoadTexture(absl::string_view path, filament::TextureSampler sampler,
+  void LoadTexture(absl::string_view path,
                    std::unique_ptr<AssetLoader> asset_loader);
 
   // Borrows the reflection texture from the currently set environment IBL.
@@ -194,12 +194,14 @@ class ImpressApiView : public View {
   // TODO: Refactor API bindings layer to be more modular so that
   // water material specific methods are not added to the ImpressApiView.
   // Sets the reflection map for the water material.
-  absl::Status SetReflectionMapOnWaterMaterial(std::intptr_t water_material,
-                                               std::intptr_t reflection_map);
+  absl::Status SetReflectionMapOnWaterMaterial(
+      std::intptr_t water_material, std::intptr_t reflection_map,
+      std::optional<filament::TextureSampler> sampler);
 
   // Sets the normal map for the water material.
-  absl::Status SetNormalMapOnWaterMaterial(std::intptr_t water_material,
-                                           std::intptr_t normal_map);
+  absl::Status SetNormalMapOnWaterMaterial(
+      std::intptr_t water_material, std::intptr_t normal_map,
+      std::optional<filament::TextureSampler> sampler);
 
   // Sets the normal tiling for the water material.
   absl::Status SetNormalTilingOnWaterMaterial(std::intptr_t water_material,
@@ -214,8 +216,9 @@ class ImpressApiView : public View {
       std::intptr_t water_material, float alpha_step_multiplier);
 
   // Sets the alpha map for the water material.
-  absl::Status SetAlphaMapOnWaterMaterial(std::intptr_t water_material,
-                                          std::intptr_t alpha_map);
+  absl::Status SetAlphaMapOnWaterMaterial(
+      std::intptr_t water_material, std::intptr_t alpha_map,
+      std::optional<filament::TextureSampler> sampler);
 
   // Sets the normal z for the water material.
   absl::Status SetNormalZOnWaterMaterial(std::intptr_t water_material,
@@ -233,7 +236,8 @@ class ImpressApiView : public View {
   // Sets the base color texture for the generic material. This texture defines
   // the albedo or diffuse color of the material.
   absl::Status SetBaseColorTextureOnGenericMaterial(
-      std::intptr_t generic_material, std::intptr_t base_color_texture);
+      std::intptr_t generic_material, std::intptr_t base_color_texture,
+      std::optional<filament::TextureSampler> sampler);
 
   // Sets the UV transformation matrix for the base color texture. This allows
   // for scaling, rotating, and translating the texture coordinates.
@@ -248,7 +252,8 @@ class ImpressApiView : public View {
   // Sets the metallic-roughness texture for the generic material. This texture
   // defines the metallic and roughness properties of the material.
   absl::Status SetMetallicRoughnessTextureOnGenericMaterial(
-      std::intptr_t generic_material, std::intptr_t metallic_roughness_texture);
+      std::intptr_t generic_material, std::intptr_t metallic_roughness_texture,
+      std::optional<filament::TextureSampler> sampler);
 
   // Sets the UV transformation matrix for the metallic-roughness texture.
   // Controls how the metallic-roughness texture is mapped onto the surface.
@@ -267,8 +272,9 @@ class ImpressApiView : public View {
 
   // Sets the normal map texture for the generic material. This texture perturbs
   // the surface normals, creating detailed surface features.
-  absl::Status SetNormalTextureOnGenericMaterial(std::intptr_t generic_material,
-                                                 std::intptr_t normal_texture);
+  absl::Status SetNormalTextureOnGenericMaterial(
+      std::intptr_t generic_material, std::intptr_t normal_texture,
+      std::optional<filament::TextureSampler> sampler);
 
   // Sets the UV transformation matrix for the normal map texture. Adjusts the
   // mapping of the normal map texture.
@@ -283,7 +289,8 @@ class ImpressApiView : public View {
   // Sets the ambient occlusion texture for the generic material. Simulates the
   // occlusion of ambient light by surface details.
   absl::Status SetAmbientOcclusionTextureOnGenericMaterial(
-      std::intptr_t generic_material, std::intptr_t ambient_occlusion_texture);
+      std::intptr_t generic_material, std::intptr_t ambient_occlusion_texture,
+      std::optional<filament::TextureSampler> sampler);
 
   // Sets the UV transformation matrix for the ambient occlusion texture.
   // Controls the mapping of the ambient occlusion texture.
@@ -297,7 +304,8 @@ class ImpressApiView : public View {
   // Sets the emissive texture for the generic material. Defines the light
   // emitted by the material.
   absl::Status SetEmissiveTextureOnGenericMaterial(
-      std::intptr_t generic_material, std::intptr_t emissive_texture);
+      std::intptr_t generic_material, std::intptr_t emissive_texture,
+      std::optional<filament::TextureSampler> sampler);
 
   // Sets the UV transformation matrix for the emissive texture.
   absl::Status SetEmissiveUvTransformOnGenericMaterial(
@@ -311,18 +319,20 @@ class ImpressApiView : public View {
   // Sets the clearcoat texture for the generic material. Adds a clearcoat layer
   // to the material, affecting reflections.
   absl::Status SetClearcoatTextureOnGenericMaterial(
-      std::intptr_t generic_material, std::intptr_t clearcoat_texture);
+      std::intptr_t generic_material, std::intptr_t clearcoat_texture,
+      std::optional<filament::TextureSampler> sampler);
 
   // Sets the clearcoat normal texture for the generic material. Perturbs the
   // normals of the clearcoat layer.
   absl::Status SetClearcoatNormalTextureOnGenericMaterial(
-      std::intptr_t generic_material, std::intptr_t clearcoat_normal_texture);
+      std::intptr_t generic_material, std::intptr_t clearcoat_normal_texture,
+      std::optional<filament::TextureSampler> sampler);
 
   // Sets the clearcoat roughness texture for the generic material. Controls the
   // roughness of the clearcoat layer.
   absl::Status SetClearcoatRoughnessTextureOnGenericMaterial(
-      std::intptr_t generic_material,
-      std::intptr_t clearcoat_roughness_texture);
+      std::intptr_t generic_material, std::intptr_t clearcoat_roughness_texture,
+      std::optional<filament::TextureSampler> sampler);
 
   // Sets the clearcoat factors for the generic material. Multiplies the
   // clearcoat texture or defines a uniform clearcoat color:
@@ -332,7 +342,8 @@ class ImpressApiView : public View {
   // Sets the sheen color texture for the generic material. Defines the color of
   // the sheen effect, visible at grazing angles.
   absl::Status SetSheenColorTextureOnGenericMaterial(
-      std::intptr_t generic_material, std::intptr_t sheen_color_texture);
+      std::intptr_t generic_material, std::intptr_t sheen_color_texture,
+      std::optional<filament::TextureSampler> sampler);
 
   // Sets the sheen color factors for the generic material. Multiplies the sheen
   // color texture or defines a uniform sheen color.
@@ -342,7 +353,8 @@ class ImpressApiView : public View {
   // Sets the sheen roughness texture for the generic material. Controls the
   // roughness of the sheen effect.
   absl::Status SetSheenRoughnessTextureOnGenericMaterial(
-      std::intptr_t generic_material, std::intptr_t sheen_roughness_texture);
+      std::intptr_t generic_material, std::intptr_t sheen_roughness_texture,
+      std::optional<filament::TextureSampler> sampler);
 
   // Sets the sheen roughness factor for the generic material. Controls the
   // roughness of the sheen effect.
@@ -352,7 +364,8 @@ class ImpressApiView : public View {
   // Sets the transmission texture for the generic material. Defines the
   // transmission of light through the material.
   absl::Status SetTransmissionTextureOnGenericMaterial(
-      std::intptr_t generic_material, std::intptr_t transmission_texture);
+      std::intptr_t generic_material, std::intptr_t transmission_texture,
+      std::optional<filament::TextureSampler> sampler);
 
   // Sets the UV transformation matrix for the transmission texture.
   absl::Status SetTransmissionUvTransformOnGenericMaterial(
@@ -428,13 +441,16 @@ absl::Status ImpressApiView::SetWaterMaterialTextureParameter(
           water_material));
   MP_ASSIGN_OR_RETURN(BorrowedTexturePtr borrowed_texture, BorrowTexture(texture));
 
-  setter_fn(water_material_ptr, borrowed_texture);
+  // (void) is required in case setter_fn is [[nodiscard]], which is flagged as
+  // an error in Bazel builds.
+  (void)setter_fn(water_material_ptr, borrowed_texture);
   return absl::OkStatus();
 }
 
 template <typename SetterFn>
 absl::Status ImpressApiView::SetGenericMaterialTextureParameter(
-    std::intptr_t generic_material, std::intptr_t texture, SetterFn setter_fn) {
+    std::intptr_t generic_material, std::intptr_t texture,
+    std::optional<filament::TextureSampler> sampler, SetterFn setter_fn) {
   MP_ASSIGN_OR_RETURN(
       split_engine::SplitEngineGenericMaterial * generic_material_ptr,
       GetMaterialFromBindingsMaterial<split_engine::SplitEngineGenericMaterial>(
@@ -446,7 +462,12 @@ absl::Status ImpressApiView::SetGenericMaterialTextureParameter(
   // always 1.
   uint64_t texture_id = 1;
   texture_parameter_payload.texture_id = texture_id;
-  std::ignore = setter_fn(
+  if (sampler.has_value()) {
+    texture_parameter_payload.sampler = *sampler;
+  }
+  // (void) is required in case setter_fn is [[nodiscard]], which is flagged as
+  // an error in Bazel builds.
+  (void)setter_fn(
       generic_material_ptr, texture_parameter_payload,
       imp::TextureBorrower([expected_texture_id = texture_id,
                             borrowed_texture = std::move(borrowed_texture)](

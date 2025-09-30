@@ -14,8 +14,6 @@
 
 #include "core/physics/collidable_shapes/capsule_collidable_shape.h"
 
-#include <cmath>
-#include <limits>
 #include <memory>
 
 #include "absl/log/check.h"
@@ -25,7 +23,6 @@
 #include "bullet/src/LinearMath/btTransform.h"
 #include "core/config.h"
 #include "core/geometry/shapes/capsule.h"
-#include "core/math/almost_equal.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
 #include "core/physics/collidable_shapes/collidable_shape.h"
@@ -36,7 +33,8 @@
 #endif
 
 namespace imp {
-CapsuleCollidableShape::CapsuleCollidableShape(NodeHandle node) : node_(node) {}
+CapsuleCollidableShape::CapsuleCollidableShape(NodeHandle node)
+    : CollidableShape(node) {}
 
 void CapsuleCollidableShape::CreateBtCollisionShape() {
   auto collider = node_->GetComponent<CapsuleCollider>();
@@ -66,11 +64,13 @@ CollidableShape::CollisionShape CapsuleCollidableShape::GetCollisionShape(
 
 void CapsuleCollidableShape::ApplyScalingToBulletCollider() {
   const float3 scale = node_->GetWorldScale();
-  if (scale.x > 0 && scale.y > 0 && scale.z > 0) {
-    EnforceEvenScaleForCapsule();
+  if (scale.x > 0 && scale.y > 0 && scale.z > 0 &&
+      UpdatedEvenScale(scale_, scale)) {
+    node_->SetWorldScale(scale_);
+    collidable_shape_->setLocalScaling(ToBtVector3(scale_));
     return;
   }
-  scale_prev_ = scale;
+  scale_ = scale;
 }
 
 #if IMP_RUNTIME(DEV)
@@ -91,29 +91,5 @@ void CapsuleCollidableShape::Visualize(const btTransform& bt_trans) const {
   }
 }
 #endif
-
-void CapsuleCollidableShape::EnforceEvenScaleForCapsule() {
-  const float3 capsule_scale = node_->GetWorldScale();
-  const bool x_changed = !RoughlyEqual(capsule_scale.x, scale_prev_.x);
-  const bool y_changed = !RoughlyEqual(capsule_scale.y, scale_prev_.y);
-  const bool z_changed = !RoughlyEqual(capsule_scale.z, scale_prev_.z);
-
-  if (!x_changed && !y_changed && !z_changed) {
-    return;
-  }
-  float new_scale = std::numeric_limits<float>::min();
-  if (x_changed) {
-    new_scale = fmax(capsule_scale.x, new_scale);
-  }
-  if (y_changed) {
-    new_scale = fmax(capsule_scale.y, new_scale);
-  }
-  if (z_changed) {
-    new_scale = fmax(capsule_scale.z, new_scale);
-  }
-  node_->SetWorldScale(new_scale);
-  collidable_shape_->setLocalScaling(ToBtVector3(new_scale));
-  scale_prev_ = new_scale;
-}
 
 }  // namespace imp

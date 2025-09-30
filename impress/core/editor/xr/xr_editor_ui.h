@@ -50,14 +50,16 @@ class XrEditorUi : public imp::Component {
     //   - z(vertical_offset_degrees)
     StringMap<float3> editor_panel_settings;
   };
-  void Setup(
-      const SetupOptions& options = SetupOptions{
-          .editor_scale = 2.0f,
-          .editor_resolution = {2000, 800},
-          .editor_panel_settings = {
-              {panel_ids::kSceneWindow.data(), float3{3.0f, -55.0f, 0.0f}},
-              {panel_ids::kDetailsWindow.data(), float3{3.0f, -30.0f, -10.0f}},
-              {panel_ids::kTabBar.data(), float3{3.0f, -55.0f, 20.0f}}}});
+  void Setup(const SetupOptions& options = SetupOptions{
+                 .editor_scale = 2.0f,
+                 .editor_resolution = {2000, 800},
+                 .editor_panel_settings = {
+                     {PanelIdToString(PanelId::kSceneWindow),
+                      float3{3.0f, -55.0f, 0.0f}},
+                     {PanelIdToString(PanelId::kDetailsWindow),
+                      float3{3.0f, -30.0f, -10.0f}},
+                     {PanelIdToString(PanelId::kTabBar),
+                      float3{3.0f, -55.0f, 20.0f}}}});
 
  private:
   imp::NodeHandle editor_node_;

@@ -94,6 +94,7 @@ class DefaultMonitorSummary
   // Uses a histogram to reports the percent of frames slower than the
   // display_period_.
   std::optional<MonitorSummary::CustomMetricHandle> display_period_metric_;
+  ValueMeasurement nodeCount_;
   ValueMeasurement bufferObjectCount_;
   ValueMeasurement viewCount_;
   ValueMeasurement sceneCount_;
@@ -122,6 +123,9 @@ class DefaultMonitorSummary
   ValueMeasurement gltfAssetsResident_;
   ValueMeasurement gltfAssetsDestroyed_;
   ValueMeasurement gltfAssetsCancelled_;
+  ValueMeasurement textureAssetsResident_;
+  ValueMeasurement textureAssetsDestroyed_;
+  ValueMeasurement textureAssetsCancelled_;
 };
 }  // namespace imp
 

@@ -58,7 +58,6 @@ cc_library(
     linkstatic = True,
     deps = [
         ":scene_handle_interface",
-        "//core/common:log",
         "//core/ncsb",
         "//core/proto:proto_common",
         "//core/view/framework",
@@ -66,6 +65,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:variant",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -85,7 +85,6 @@ cc_library(
         ":scene_handle_interface",
         "//core/common",
         "//core/common:hash",
-        "//core/common:log",
         "//core/common:type_traits",
         "//core/ncsb",
         "//core/proto:proto_common",
@@ -94,6 +93,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:variant",
+        "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
     ],
     alwayslink = 1,

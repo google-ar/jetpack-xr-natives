@@ -23,7 +23,6 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "core/async/future.h"
-#include "core/async/future_group.h"
 #include "core/common/buffer_access.h"
 #include "core/loader/loader.h"
 #include "core/loader/loader_creator.h"
@@ -64,8 +63,7 @@ struct LoaderInSandboxCreator : public LoaderCreator {
   // process. The reason this is split across a future function and a create
   // method is so the creation of the isolated process can be done in parallel
   // with other work (such as loading an asset).
-  Future<GetLoaderFn> Create(BaseView& view,
-                             std::optional<FutureGroup> future_group) override;
+  Future<GetLoaderFn> Create(BaseView& view) override;
 };
 
 }  // namespace imp::loader

@@ -36,7 +36,6 @@ enum class MediaShapeType : int {
 // The stereo mode of a media asset. The enum values are defined to match
 // the values returned by media3. Please see here for more information:
 // third_party/java_src/android_libs/media/libraries/common/src/main/java/androidx/media3/common/C.java
-// LINT.IfChange
 enum class MediaStereoMode : int {
   // Unknown stereo mode.
   kUnknown = -1,
@@ -57,10 +56,6 @@ enum class MediaStereoMode : int {
   // Interleaved stereo media asset with right view as primary including depth.
   kInterleavedRightPrimaryWithDepth = 7,
 };
-// LINT.ThenChange(
-//     //depot/google3/third_party/impress/java/com/google/ar/imp/apibindings/ImpressApi.java,
-//     //depot/google3/third_party/impress/java/com/google/ar/imp/apibindings/ImpressApiImpl.java
-// )
 
 bool HasImageExtension(absl::string_view url);
 

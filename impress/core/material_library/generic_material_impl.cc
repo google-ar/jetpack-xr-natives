@@ -17,6 +17,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -44,6 +45,7 @@
 #include "core/materials/material.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
+#include "core/model/entity_data.h"
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
 #include "core/split_engine/split_engine_serializer.h"
@@ -149,11 +151,12 @@ GenericMaterialPtr GenericMaterialImpl::Duplicate() const {
 
 absl::string_view GenericMaterialImpl::GetName() const { return name_; }
 
-std::vector<MaterialParameter> GenericMaterialImpl::GetParameters() const {
+std::vector<model::MaterialParameter> GenericMaterialImpl::GetParameters()
+    const {
   return parameters_;
 }
 
-TypedVector<MaterialTexture> GenericMaterialImpl::GetTextures() const {
+TypedVector<model::MaterialTexture> GenericMaterialImpl::GetTextures() const {
   return material_textures_;
 }
 
@@ -354,6 +357,21 @@ void GenericMaterialImpl::SetIndexOfRefraction(float index_of_refraction) {
   ApplyMaterialParameter(kIndexOfRefraction, index_of_refraction);
 }
 
+std::optional<TextureAndSampler> GenericMaterialImpl::GetFeatureIdTexture(
+    int index) const {
+  if (index < 0 || index >= kFeatureIdTextureNames.size()) {
+    return std::nullopt;
+  }
+
+  const absl::string_view feature_id_texture_name =
+      kFeatureIdTextureNames[index];
+  if (auto it = texture_lookup_.find(feature_id_texture_name);
+      it != texture_lookup_.end()) {
+    return it->second;
+  }
+  return std::nullopt;
+}
+
 void GenericMaterialImpl::SetAlphaCutoff(float alpha_cutoff) {
   if (material_->GetFilamentMaterialInstance()
           ->getMaterial()
@@ -376,7 +394,7 @@ void GenericMaterialImpl::ApplyMaterialParameter(absl::string_view name,
                         : parameter_info_.max_available_samplers;
   material_->GetFilamentMaterialInstance()->setParameter(
       name.data(), name.size(), v.data(), mat_size);
-  parameters_.emplace_back(MaterialParameter(name, v));
+  parameters_.emplace_back(model::MaterialParameter(name, v));
 }
 
 absl::Status GenericMaterialImpl::ApplyMaterialTextureParameter(
@@ -399,8 +417,10 @@ absl::Status GenericMaterialImpl::ApplyMaterialTextureParameter(
       return absl::NotFoundError(absl::StrFormat("Texture not found: %d",
                                                  texture_parameter.texture_id));
     }
-    // Recreate the borrow with a new location to ensure accurate stack traces.
-    material_->SetParameter(sampler_name, texture.WithNewLocation(),
+    // Pass the borrowed texture directly to the material so the location is
+    // within the given TextureBorrower. This ensures that stack traces don't
+    // always point to this function.
+    material_->SetParameter(sampler_name, std::move(texture),
                             texture_parameter.sampler);
 
     texture_lookup_.insert_or_assign<TextureAndSampler>(
@@ -413,12 +433,12 @@ absl::Status GenericMaterialImpl::ApplyMaterialTextureParameter(
 
       // TODO: (broken link) - Remove all of this once MaterialConfig is removed.
       parameters_.emplace_back(
-          MaterialParameter{texture_channel_name, sampler_index});
+          model::MaterialParameter(texture_channel_name, sampler_index));
       sampler_index_lookup_[texture_channel_name.data()] = sampler_index;
     }
     // Capture texture configuration.
     // TODO: (broken link) - Remove all of this once MaterialConfig is removed.
-    parameters_.emplace_back(MaterialParameter(
+    parameters_.emplace_back(model::MaterialParameter(
         sampler_name,
         TextureAndSampler(texture->GetTexture(), texture_parameter.sampler)));
   } else {
@@ -430,68 +450,8 @@ absl::Status GenericMaterialImpl::ApplyMaterialTextureParameter(
       material_->SetParameter(texture_channel_name, sampler_fallback_index);
 
       // TODO: (broken link) - Remove all of this once MaterialConfig is removed.
-      parameters_.emplace_back(
-          MaterialParameter{texture_channel_name, sampler_fallback_index});
-      sampler_index_lookup_[texture_channel_name.data()] =
-          sampler_fallback_index;
-    }
-  }
-  return absl::OkStatus();
-}
-
-absl::Status GenericMaterialImpl::ApplyMaterialTextureParameter(
-    const TextureProvider& texture_provider, uint16_t sampler_index,
-    absl::string_view texture_channel_name,
-    const GenericMaterialTextureParameter& texture_parameter,
-    FallbackSampler fallback_sample) {
-  if (sampler_index >= kAssignableSamplers.size()) {
-    return absl::InvalidArgumentError(
-        absl::StrFormat("Sampler index %d is out of range [0, %d)",
-                        sampler_index, kAssignableSamplers.size() - 1));
-  }
-  absl::string_view sampler_name = kAssignableSamplers[sampler_index];
-
-  filament::MaterialInstance* material_instance =
-      material_->GetFilamentMaterialInstance();
-  // Verify sampler is valid.
-  if (IsValidSampler(sampler_name)) {
-    const filament::Texture* texture =
-        texture_provider(texture_parameter.texture_id);
-    if (!texture) {
-      return absl::NotFoundError(absl::StrFormat("Texture not found: %d",
-                                                 texture_parameter.texture_id));
-    }
-    material_instance->setParameter(sampler_name.data(), sampler_name.size(),
-                                    texture, texture_parameter.sampler);
-
-    texture_lookup_.insert_or_assign<TextureAndSampler>(
-        texture_channel_name,
-        {texture, texture_parameter.sampler, texture_parameter.uv_transform});
-
-    if (!texture_channel_name.empty()) {
-      material_->SetParameter(texture_channel_name,
-                              static_cast<int32_t>(sampler_index));
-
-      // TODO: (broken link) - Remove all of this once MaterialConfig is removed.
-      parameters_.emplace_back(
-          MaterialParameter{texture_channel_name, sampler_index});
-      sampler_index_lookup_[texture_channel_name.data()] = sampler_index;
-    }
-    // Capture texture configuration.
-    // TODO: (broken link) - Remove all of this once MaterialConfig is removed.
-    parameters_.emplace_back(MaterialParameter(
-        sampler_name, TextureAndSampler(texture, texture_parameter.sampler)));
-  } else {
-    // Use a fallback sampler (if specified) if the sampler is invalid.
-    // This can happen if too many samplers are requested.
-    if (!texture_channel_name.empty()) {
-      const auto sampler_fallback_index =
-          GetFallbackSampleIndex(fallback_sample);
-      material_->SetParameter(texture_channel_name, sampler_fallback_index);
-
-      // TODO: (broken link) - Remove all of this once MaterialConfig is removed.
-      parameters_.emplace_back(
-          MaterialParameter{texture_channel_name, sampler_fallback_index});
+      parameters_.emplace_back(model::MaterialParameter{
+          texture_channel_name, sampler_fallback_index});
       sampler_index_lookup_[texture_channel_name.data()] =
           sampler_fallback_index;
     }
@@ -525,42 +485,6 @@ absl::Status GenericMaterialImpl::AssignTexture(
 
   MP_RETURN_IF_ERROR(ApplyMaterialTextureParameter(
       texture_borrower, sampler_index, texture_channel_name, *texture_parameter,
-      fallback_sample));
-
-  // If this texture uses UV1, set the bitflag.
-  if (texture_parameter->uses_uv1) {
-    samplers_uv_bitflags_ |= 1 << sampler_index;
-  }
-
-  return absl::OkStatus();
-}
-
-absl::Status GenericMaterialImpl::AssignTexture(
-    const TextureProvider& texture_provider,
-    absl::string_view texture_channel_name,
-    const absl::optional<GenericMaterialTextureParameter>& texture_parameter,
-    FallbackSampler fallback_sample) {
-  if (!texture_parameter) {
-    // Some parameters are optional.
-    AssignFallbackSampler(texture_channel_name, fallback_sample);
-    return absl::OkStatus();
-  }
-
-  int sampler_index;
-  auto it = sampler_index_lookup_.find(texture_channel_name);
-  if (it != sampler_index_lookup_.end()) {
-    // This texture has already been assigned to a sampler.
-    sampler_index = it->second;
-    samplers_uv_matrices_[sampler_index] = texture_parameter->uv_transform;
-  } else {
-    // Assign the texture to the next available sampler.
-    sampler_index = next_available_assignable_sampler_index_;
-    next_available_assignable_sampler_index_++;
-    samplers_uv_matrices_.push_back(texture_parameter->uv_transform);
-  }
-
-  MP_RETURN_IF_ERROR(ApplyMaterialTextureParameter(
-      texture_provider, sampler_index, texture_channel_name, *texture_parameter,
       fallback_sample));
 
   // If this texture uses UV1, set the bitflag.
@@ -607,7 +531,7 @@ void GenericMaterialImpl::AssignFallbackSampler(
     absl::string_view index_parameter_name, FallbackSampler fallback_sample) {
   ApplyMaterialParameter(index_parameter_name,
                          GetFallbackSampleIndex(fallback_sample));
-  parameters_.push_back(MaterialParameter(
+  parameters_.push_back(model::MaterialParameter(
       index_parameter_name, GetFallbackSampleIndex(fallback_sample)));
 }
 
@@ -619,7 +543,7 @@ void GenericMaterialImpl::AssignPlaceholderTexture(
       sampler_name.data(), sampler_name.size(),
       placeholder_texture_->GetTexture(), placeholder_sampler_);
   // TODO: (broken link) - Remove all of this once MaterialConfig is removed.
-  parameters_.push_back(MaterialParameter(
+  parameters_.push_back(model::MaterialParameter(
       sampler_name, TextureAndSampler(placeholder_texture_->GetTexture(),
                                       placeholder_sampler_)));
 }
@@ -704,10 +628,10 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
     MP_RETURN_IF_ERROR(
         AssignTexture(texture_borrower, kBaseColorIndex,
                       generic_material_parameters.base_color->texture));
-    ApplyMaterialParameter(kBaseColorFactor,
-                           generic_material_parameters.base_color->factor);
+    SetBaseColorFactor(generic_material_parameters.base_color->factor);
   } else {
     AssignFallbackSampler(kBaseColorIndex);
+    SetBaseColorFactor(kDefaultBaseColorFactor);
   }
 
   if (material_->GetFilamentMaterialInstance()->getMaterial()->getShading() ==
@@ -716,21 +640,20 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
       MP_RETURN_IF_ERROR(AssignTexture(
           texture_borrower, kMetallicRoughnessIndex,
           generic_material_parameters.metallic_roughness->texture));
-      ApplyMaterialParameter(
-          kMetallicFactor,
+      SetMetallicFactor(
           generic_material_parameters.metallic_roughness->metallic_factor);
-      ApplyMaterialParameter(
-          kRoughnessFactor,
+      SetRoughnessFactor(
           generic_material_parameters.metallic_roughness->roughness_factor);
     } else {
       AssignFallbackSampler(kMetallicRoughnessIndex);
+      SetMetallicFactor(kDefaultMetallicFactor);
+      SetRoughnessFactor(kDefaultRoughnessFactor);
     }
     if (generic_material_parameters.normal) {
       MP_RETURN_IF_ERROR(AssignTexture(texture_borrower, kNormalIndex,
                                     generic_material_parameters.normal->texture,
                                     FallbackSampler::kNormal));
-      ApplyMaterialParameter(kNormalScale,
-                             generic_material_parameters.normal->factor);
+      SetNormalScale(generic_material_parameters.normal->factor);
     } else {
       AssignFallbackSampler(kNormalIndex, FallbackSampler::kNormal);
     }
@@ -739,8 +662,8 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
       MP_RETURN_IF_ERROR(AssignTexture(
           texture_borrower, kAoIndex,
           generic_material_parameters.ambient_occlusion->texture));
-      ApplyMaterialParameter(
-          kAoStrength, generic_material_parameters.ambient_occlusion->factor);
+      SetAmbientOcclusionStrength(
+          generic_material_parameters.ambient_occlusion->factor);
     } else {
       AssignFallbackSampler(kAoIndex);
     }
@@ -749,8 +672,7 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
       MP_RETURN_IF_ERROR(
           AssignTexture(texture_borrower, kEmissiveIndex,
                         generic_material_parameters.emissive->texture));
-      ApplyMaterialParameter(kEmissiveFactor,
-                             generic_material_parameters.emissive->factor);
+      SetEmissiveFactor(generic_material_parameters.emissive->factor);
     } else {
       AssignFallbackSampler(kEmissiveIndex);
     }
@@ -766,8 +688,7 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
           AssignTexture(texture_borrower, kClearcoatNormalIndex,
                         generic_material_parameters.clearcoat->normal_texture,
                         FallbackSampler::kNormal));
-      ApplyMaterialParameter(kClearcoatRoughnessNormalFactors,
-                             generic_material_parameters.clearcoat->factor);
+      SetClearcoatFactors(generic_material_parameters.clearcoat->factor);
     } else {
       AssignFallbackSampler(kClearcoatIndex);
       AssignFallbackSampler(kClearcoatRoughnessIndex);
@@ -778,143 +699,9 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
       MP_RETURN_IF_ERROR(
           AssignTexture(texture_borrower, kSheenColorIndex,
                         generic_material_parameters.sheen->color_texture));
-      ApplyMaterialParameter(kSheenColorFactor,
-                             generic_material_parameters.sheen->color_factor);
-      MP_RETURN_IF_ERROR(
-          AssignTexture(texture_borrower, kSheenRoughnessIndex,
-                        generic_material_parameters.sheen->roughness_texture));
-      ApplyMaterialParameter(
-          kSheenRoughnessFactor,
-          generic_material_parameters.sheen->roughness_factor);
-    } else {
-      AssignFallbackSampler(kSheenColorIndex);
-      AssignFallbackSampler(kSheenRoughnessIndex);
-    }
-
-    if (generic_material_parameters.transmission) {
-      MP_RETURN_IF_ERROR(
-          AssignTexture(texture_borrower, kTransmissionIndex,
-                        generic_material_parameters.transmission->texture));
-      ApplyMaterialParameter(kTransmissionFactor,
-                             generic_material_parameters.transmission->factor);
-    } else {
-      AssignFallbackSampler(kTransmissionIndex);
-    }
-
-    if (generic_material_parameters.refraction) {
-      ApplyMaterialParameter(
-          kIndexOfRefraction,
-          generic_material_parameters.refraction->index_of_refraction);
-    } else {
-      ApplyMaterialParameter(kIndexOfRefraction, kDefaultIndexOfRefraction);
-    }
-  }
-
-  ApplyMaterialParameter(kSamplersUvBitflags, samplers_uv_bitflags_);
-  ApplyMaterialParameter(kSamplersUvMatrices, std::move(samplers_uv_matrices_));
-  if (material_->GetFilamentMaterialInstance()
-          ->getMaterial()
-          ->getBlendingMode() == filament::Material::BlendingMode::MASKED) {
-    if (generic_material_parameters.masking) {
-      material_->GetFilamentMaterialInstance()->setMaskThreshold(
-          generic_material_parameters.masking->alpha_cutoff);
-    } else {
-      material_->GetFilamentMaterialInstance()->setMaskThreshold(
-          kDefaultAlphaCutoff);
-    }
-  }
-
-  // If any texture sampler slots are unused, assign the placeholder texture.
-  AssignPlaceholderTexturesToUnusedSamplers();
-
-  return absl::OkStatus();
-}
-
-absl::Status GenericMaterialImpl::AssignTexturesAndParams(
-    const GenericMaterialParameters& generic_material_parameters,
-    const TextureProvider& texture_provider) {
-  if (parameter_info_.sampler_parameters.empty()) {
-    // This is the depth material, it doesn't need any parameters set.
-    return absl::OkStatus();
-  }
-  if (generic_material_parameters.base_color) {
-    MP_RETURN_IF_ERROR(
-        AssignTexture(texture_provider, kBaseColorIndex,
-                      generic_material_parameters.base_color->texture));
-    SetBaseColorFactor(generic_material_parameters.base_color->factor);
-  } else {
-    AssignFallbackSampler(kBaseColorIndex);
-    SetBaseColorFactor(kDefaultBaseColorFactor);
-  }
-
-  if (material_->GetFilamentMaterialInstance()->getMaterial()->getShading() ==
-      filament::Material::Shading::LIT) {
-    if (generic_material_parameters.metallic_roughness) {
-      MP_RETURN_IF_ERROR(AssignTexture(
-          texture_provider, kMetallicRoughnessIndex,
-          generic_material_parameters.metallic_roughness->texture));
-      SetMetallicFactor(
-          generic_material_parameters.metallic_roughness->metallic_factor);
-      SetRoughnessFactor(
-          generic_material_parameters.metallic_roughness->roughness_factor);
-    } else {
-      AssignFallbackSampler(kMetallicRoughnessIndex);
-      SetMetallicFactor(kDefaultMetallicFactor);
-      SetRoughnessFactor(kDefaultRoughnessFactor);
-    }
-    if (generic_material_parameters.normal) {
-      MP_RETURN_IF_ERROR(AssignTexture(texture_provider, kNormalIndex,
-                                    generic_material_parameters.normal->texture,
-                                    FallbackSampler::kNormal));
-      SetNormalScale(generic_material_parameters.normal->factor);
-    } else {
-      AssignFallbackSampler(kNormalIndex, FallbackSampler::kNormal);
-    }
-
-    if (generic_material_parameters.ambient_occlusion) {
-      MP_RETURN_IF_ERROR(AssignTexture(
-          texture_provider, kAoIndex,
-          generic_material_parameters.ambient_occlusion->texture));
-      SetAmbientOcclusionStrength(
-          generic_material_parameters.ambient_occlusion->factor);
-    } else {
-      AssignFallbackSampler(kAoIndex);
-    }
-
-    if (generic_material_parameters.emissive) {
-      MP_RETURN_IF_ERROR(
-          AssignTexture(texture_provider, kEmissiveIndex,
-                        generic_material_parameters.emissive->texture));
-      SetEmissiveFactor(generic_material_parameters.emissive->factor);
-    } else {
-      AssignFallbackSampler(kEmissiveIndex);
-    }
-
-    if (generic_material_parameters.clearcoat) {
-      MP_RETURN_IF_ERROR(AssignTexture(
-          texture_provider, kClearcoatIndex,
-          generic_material_parameters.clearcoat->intensity_texture));
-      MP_RETURN_IF_ERROR(AssignTexture(
-          texture_provider, kClearcoatRoughnessIndex,
-          generic_material_parameters.clearcoat->roughness_texture));
-      MP_RETURN_IF_ERROR(
-          AssignTexture(texture_provider, kClearcoatNormalIndex,
-                        generic_material_parameters.clearcoat->normal_texture,
-                        FallbackSampler::kNormal));
-      SetClearcoatFactors(generic_material_parameters.clearcoat->factor);
-    } else {
-      AssignFallbackSampler(kClearcoatIndex);
-      AssignFallbackSampler(kClearcoatRoughnessIndex);
-      AssignFallbackSampler(kClearcoatNormalIndex, FallbackSampler::kNormal);
-    }
-
-    if (generic_material_parameters.sheen) {
-      MP_RETURN_IF_ERROR(
-          AssignTexture(texture_provider, kSheenColorIndex,
-                        generic_material_parameters.sheen->color_texture));
       SetSheenColorFactor(generic_material_parameters.sheen->color_factor);
       MP_RETURN_IF_ERROR(
-          AssignTexture(texture_provider, kSheenRoughnessIndex,
+          AssignTexture(texture_borrower, kSheenRoughnessIndex,
                         generic_material_parameters.sheen->roughness_texture));
       SetSheenRoughnessFactor(
           generic_material_parameters.sheen->roughness_factor);
@@ -925,7 +712,7 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
 
     if (generic_material_parameters.transmission) {
       MP_RETURN_IF_ERROR(
-          AssignTexture(texture_provider, kTransmissionIndex,
+          AssignTexture(texture_borrower, kTransmissionIndex,
                         generic_material_parameters.transmission->texture));
       SetTransmissionFactor(generic_material_parameters.transmission->factor);
     } else {
@@ -937,6 +724,22 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
           generic_material_parameters.refraction->index_of_refraction);
     } else {
       SetIndexOfRefraction(kDefaultIndexOfRefraction);
+    }
+  }
+
+  if (generic_material_parameters.feature_id_textures.has_value()) {
+    int feature_id_index = 0;
+    for (const GenericMaterialTextureParameter& feature_id_texture :
+         *generic_material_parameters.feature_id_textures) {
+      const BorrowedTexturePtr texture =
+          texture_borrower(feature_id_texture.texture_id);
+      texture_lookup_.insert_or_assign<TextureAndSampler>(
+          kFeatureIdTextureNames[feature_id_index++],
+          {texture->GetTexture(), feature_id_texture.sampler,
+           feature_id_texture.uv_transform});
+      if (feature_id_index == kFeatureIdTextureNames.size()) {
+        break;
+      }
     }
   }
 

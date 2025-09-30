@@ -44,8 +44,7 @@ class IosUrlLoader : public UrlLoader {
   IosUrlLoader();
   ~IosUrlLoader() override;
 
-  Future<absl::Cord> LoadUrl(const std::string &url,
-                             std::optional<FutureGroup> future_group) override;
+  Future<absl::Cord> LoadUrl(const std::string &url) override;
 
   void Shutdown() override;
 
@@ -309,8 +308,7 @@ bool IosUrlLoader::TryAddData(const std::string &string_url, size_t downloaded_s
   return true;
 }
 
-Future<absl::Cord> IosUrlLoader::LoadUrl(const std::string &url,
-                                         std::optional<FutureGroup> future_group) {
+Future<absl::Cord> IosUrlLoader::LoadUrl(const std::string &url) {
   @autoreleasepool {
     // Use the NSUrlSession API to create an async task to download the url.
     // When complete, return the result through the previously declared future.
@@ -344,7 +342,7 @@ Future<absl::Cord> IosUrlLoader::LoadUrl(const std::string &url,
             }
             return cord;
           },
-          {.executor = Executor::Type::kBackground, .future_group = future_group});
+          {.executor = Executor::Type::kBackground});
     }
 
     NSMutableURLRequest *request =

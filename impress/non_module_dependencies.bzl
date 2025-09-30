@@ -256,9 +256,9 @@ def non_module_dependencies():
     http_archive(
         name = "dear_imgui",
         build_file = "//:bazel/build_files/dear_imgui.BUILD",
-        sha256 = "04943919721e874ac75a2f45e6eb6c0224395034667bf508923388afda5a50bf",
-        strip_prefix = "imgui-1.90.9",
-        url = "https://github.com/ocornut/imgui/archive/refs/tags/v1.90.9.tar.gz",
+        sha256 = "b08a569eedcf2bf25e763e034754fdbe37dfcb035072310781c92fa6e6504bf7",
+        strip_prefix = "imgui-1.91.0-docking",
+        url = "https://github.com/ocornut/imgui/archive/refs/tags/v1.91.0-docking.tar.gz",
     )
 
     # Not in Bazel Central Registry as of 12/2024.

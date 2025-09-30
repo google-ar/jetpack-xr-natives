@@ -33,7 +33,6 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
-        "//core/common:log",
         "//core/common:platform_helpers",
         "//core/model",
         "//core/recipes/language:recipe_graph_cc",
@@ -42,6 +41,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
+        "@com_google_impress//core/common:log",
         "@robin_map",
     ],
     alwayslink = 1,

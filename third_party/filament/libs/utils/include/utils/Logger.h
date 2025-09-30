@@ -36,8 +36,8 @@
 
 #if defined(FILAMENT_USE_ABSEIL_LOGGING)
 
-#include <absl/base/log_severity.h>
-#include <absl/log/log.h>
+#include "absl/base/log_severity.h"
+#include "core/common/log.h"
 
 namespace utils {
 using absl::LogSeverity;

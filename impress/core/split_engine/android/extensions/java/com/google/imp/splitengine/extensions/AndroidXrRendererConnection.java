@@ -54,14 +54,10 @@ public final class AndroidXrRendererConnection implements IRendererConnection {
   }
 
   @Override
-  public void processRegion(IBufferHandle bufferHandle, int offsetBytes, int regionLengthBytes) {
-    try {
-      mLibrarySystemRendererConnection.processRegion(
-          ((BufferHandle) bufferHandle).getLibraryBufferHandle(), offsetBytes, regionLengthBytes);
-    } catch (RemoteException e) {
-      Log.e(TAG, "Failed to process region", e);
-      return;
-    }
+  public void processRegion(IBufferHandle bufferHandle, int offsetBytes, int regionLengthBytes)
+      throws RemoteException {
+    mLibrarySystemRendererConnection.processRegion(
+        ((BufferHandle) bufferHandle).getLibraryBufferHandle(), offsetBytes, regionLengthBytes);
   }
 
   @Nullable

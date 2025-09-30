@@ -26,7 +26,7 @@ enum NodeFlags : NodeFlag {
   // No flags set.
   kInvalid = 0,
   // All possible flags set.
-  kAll = ~static_cast<BitFlag>(0),
+  kAllFlags = ~static_cast<BitFlag>(0),
   // See Node::IsEnabled()
   kIsEnabled = 1 << 0,
   // See Node::IsActive()

@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -34,6 +35,7 @@
 #include "core/math/vec.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/view/base_view.h"
+#include "core/view/utils/proto/render_settings.proto.imp.h"
 #include "core/view/view_events.h"
 #include "core/view/view_host.h"
 #include "core/window/filament_host.h"
@@ -289,6 +291,20 @@ bool ViewState::ShouldUseSystemFrameScheduledHandler() const {
 
 bool ViewState::ShouldPreinitializeMetalPlatform() const {
   return view_->GetConfig().should_preinitialize_metal_platform.value_or(false);
+}
+
+bool ViewState::ShouldUseSrgbSwapChain() const {
+  const std::optional<render_settings::ViewRenderSettings>& render_settings =
+      view_->GetConfig().main_view_render_settings;
+  return render_settings.has_value() &&
+         render_settings->use_srgb_swapchain.value_or(false);
+}
+
+bool ViewState::ShouldUseStencilSwapChain() const {
+  const std::optional<render_settings::ViewRenderSettings>& render_settings =
+      view_->GetConfig().main_view_render_settings;
+  return render_settings.has_value() &&
+         render_settings->use_stencil_swapchain.value_or(false);
 }
 
 }  // namespace imp

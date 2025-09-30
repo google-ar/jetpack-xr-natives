@@ -122,7 +122,7 @@ absl::Status RigidBody::InitializeDirected(const btTransform& bt_transform) {
 
 absl::Status RigidBody::InitializeSimulated(const btTransform& bt_transform) {
   // Remove old btRigidBody object if already exists.
-  Cleanup();
+  CleanupInternal();
 
   transform_prev_ = GetNode()->GetWorldTrs();
 
@@ -139,6 +139,7 @@ absl::Status RigidBody::InitializeSimulated(const btTransform& bt_transform) {
   btRigidBody::btRigidBodyConstructionInfo rb_info(
       bt_mass, motion_state_.get(), collidable_.GetBtCollisionShape(),
       local_inertia);
+  // TODO: (broken link) - Add linear and angular damping parameters to the state
 
   rigid_body_ = std::make_unique<btRigidBody>(rb_info);
   SetFrictionInternal(state_.friction);
@@ -175,10 +176,14 @@ absl::Status RigidBody::InitializeSimulated(const btTransform& bt_transform) {
 
 void RigidBody::SwitchToDirectedInternally() {
   rigid_body_->setMassProps(0, btVector3(0, 0, 0));
+  rigid_body_->updateInertiaTensor();
+  rigid_body_->setCollisionFlags(rigid_body_->getCollisionFlags() |
+                                 btCollisionObject::CF_KINEMATIC_OBJECT);
 }
 
 void RigidBody::SetAsSimulated(bool simulated) {
   if (simulated) {
+    // If the object is already simulated (bullet dynamics), do nothing.
     if (!rigid_body_->isStaticOrKinematicObject()) return;
     btTransform bt_transform = collidable_.GetNodeBtTransform();
     // Make a fresh simulated object.
@@ -200,6 +205,7 @@ void RigidBody::SetMass(float mass) {
   collidable_.GetBtCollisionShape()->calculateLocalInertia(state_.mass,
                                                            local_inertia);
   rigid_body_->setMassProps(state_.mass, local_inertia);
+  rigid_body_->updateInertiaTensor();
 }
 
 void RigidBody::SetFriction(float friction) { SetFrictionInternal(friction); }
@@ -342,11 +348,13 @@ void RigidBody::OnActiveStatusChanged(bool is_active) {
       physics_manager_->AddRigidBody(*rigid_body_, GetNode());
     }
   } else {
-    Cleanup();
+    CleanupInternal();
   }
 }
 
-void RigidBody::Cleanup() {
+void RigidBody::Cleanup() { CleanupInternal(); }
+
+void RigidBody::CleanupInternal() {
   if (rigid_body_) {
     physics_manager_->RemoveRigidBody(*rigid_body_);
   }
@@ -419,5 +427,4 @@ Collidable::CollisionShape RigidBody::GetCollisionShape() const {
   rigid_body_->getMotionState()->getWorldTransform(bt_trans);
   return collidable_.GetCollisionShape(bt_trans);
 }
-
 }  // namespace imp

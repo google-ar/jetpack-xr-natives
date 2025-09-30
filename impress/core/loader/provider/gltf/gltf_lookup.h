@@ -37,7 +37,7 @@
 
 namespace imp::loader::details::provider_gltf {
 
-enum class NodeFlags : uint16_t {
+enum class NodeGltfFlags : uint16_t {
   kHasMesh = (1 << 0),
   kIsMeshOrSkinRootAncestor = (1 << 1),
   kIsAnimated = (1 << 2),
@@ -137,7 +137,7 @@ struct GltfLookup {
   using ExportId =
       TypedIdWithSentinel<ExportEntry, uint32_t, kMaxValue<uint32_t>>;
 
-  NodeLookup<Flags<NodeFlags>> self_flags;
+  NodeLookup<Flags<NodeGltfFlags>> self_flags;
   NodeLookup<NodeId> parents;
   PairedVector<ChannelSet, const imp::gltf::imp_proto::Animation> channel_sets;
   PairedVector<MaterialChannelSet, const imp::gltf::imp_proto::Animation>

@@ -22,6 +22,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "core/math/vec.h"
 #include "core/recipes/language/recipe_utils.h"
 
 namespace imp {
@@ -33,10 +34,14 @@ namespace internal {
 template <typename InputT, typename = void>
 struct IsAbsAvailable : std::false_type {};
 
+// TODO: Look into allowing this expression to support matNf types
+// as well
 template <typename InputT>
 struct IsAbsAvailable<InputT,
                       std::void_t<decltype(abs(std::declval<InputT>()))>>
-    : std::integral_constant<bool, std::is_signed_v<InputT>> {};
+    : std::integral_constant<bool,
+                             std::is_signed_v<InputT> ||
+                                 kIsAnyOf<InputT, float2, float3, float4>> {};
 
 template <typename InputT, typename = void>
 struct IsSqrtAvailable : std::false_type {};
@@ -59,48 +64,48 @@ template <typename InputT, typename = void>
 struct IsSinAvailable : std::false_type {};
 
 template <typename InputT>
-struct IsSinAvailable<InputT,
-                      std::void_t<decltype(sin(std::declval<InputT>()))>>
+struct IsSinAvailable<
+    InputT, std::void_t<decltype(recipe::Sin(std::declval<InputT>()))>>
     : std::true_type {};
 
 template <typename InputT, typename = void>
 struct IsCosAvailable : std::false_type {};
 
 template <typename InputT>
-struct IsCosAvailable<InputT,
-                      std::void_t<decltype(cos(std::declval<InputT>()))>>
+struct IsCosAvailable<
+    InputT, std::void_t<decltype(recipe::Cos(std::declval<InputT>()))>>
     : std::true_type {};
 
 template <typename InputT, typename = void>
 struct IsTanAvailable : std::false_type {};
 
 template <typename InputT>
-struct IsTanAvailable<InputT,
-                      std::void_t<decltype(tan(std::declval<InputT>()))>>
+struct IsTanAvailable<
+    InputT, std::void_t<decltype(recipe::Tan(std::declval<InputT>()))>>
     : std::true_type {};
 
 template <typename InputT, typename = void>
 struct IsAsinAvailable : std::false_type {};
 
 template <typename InputT>
-struct IsAsinAvailable<InputT,
-                       std::void_t<decltype(asin(std::declval<InputT>()))>>
+struct IsAsinAvailable<
+    InputT, std::void_t<decltype(recipe::Asin(std::declval<InputT>()))>>
     : std::true_type {};
 
 template <typename InputT, typename = void>
 struct IsAcosAvailable : std::false_type {};
 
 template <typename InputT>
-struct IsAcosAvailable<InputT,
-                       std::void_t<decltype(acos(std::declval<InputT>()))>>
+struct IsAcosAvailable<
+    InputT, std::void_t<decltype(recipe::Acos(std::declval<InputT>()))>>
     : std::true_type {};
 
 template <typename InputT, typename = void>
 struct IsAtanAvailable : std::false_type {};
 
 template <typename InputT>
-struct IsAtanAvailable<InputT,
-                       std::void_t<decltype(atan(std::declval<InputT>()))>>
+struct IsAtanAvailable<
+    InputT, std::void_t<decltype(recipe::Atan(std::declval<InputT>()))>>
     : std::true_type {};
 
 template <typename InputT, typename = void>
@@ -174,9 +179,9 @@ template <typename LeftT, typename RightT, typename = void>
 struct IsModAvailable : std::false_type {};
 
 template <typename LeftT, typename RightT>
-struct IsModAvailable<LeftT, RightT,
-                      std::void_t<decltype(std::fmod(std::declval<LeftT>(),
-                                                     std::declval<RightT>()))>>
+struct IsModAvailable<
+    LeftT, RightT,
+    std::void_t<decltype(fmod(std::declval<LeftT>(), std::declval<RightT>()))>>
     : std::true_type {};
 
 template <typename LeftT, typename RightT, typename = void>
@@ -231,6 +236,24 @@ template <typename LeftT, typename RightT>
 struct IsLessThanOrEqualAvailable<
     LeftT, RightT,
     std::void_t<decltype(std::declval<LeftT>() <= std::declval<RightT>())>>
+    : std::true_type {};
+
+template <typename LeftT, typename RightT, typename = void>
+struct IsMinAvailable : std::false_type {};
+
+template <typename LeftT, typename RightT>
+struct IsMinAvailable<LeftT, RightT,
+                      std::void_t<decltype(recipe::Min(
+                          std::declval<LeftT>(), std::declval<RightT>()))>>
+    : std::true_type {};
+
+template <typename LeftT, typename RightT, typename = void>
+struct IsMaxAvailable : std::false_type {};
+
+template <typename LeftT, typename RightT>
+struct IsMaxAvailable<LeftT, RightT,
+                      std::void_t<decltype(recipe::Max(
+                          std::declval<LeftT>(), std::declval<RightT>()))>>
     : std::true_type {};
 
 template <typename LeftT, typename RightT, typename = void>
@@ -442,6 +465,12 @@ constexpr bool kIsLessThanOrEqualAvailable =
     internal::IsLessThanOrEqualAvailable<LeftT, RightT>::value;
 
 template <typename LeftT, typename RightT>
+constexpr bool kIsMinAvailable = internal::IsMinAvailable<LeftT, RightT>::value;
+
+template <typename LeftT, typename RightT>
+constexpr bool kIsMaxAvailable = internal::IsMaxAvailable<LeftT, RightT>::value;
+
+template <typename LeftT, typename RightT>
 constexpr bool kIsAndAvailable = internal::IsAndAvailable<LeftT, RightT>::value;
 
 template <typename LeftT, typename RightT>
@@ -497,6 +526,11 @@ struct FunctorUnpacker {
   explicit FunctorUnpacker(Ret (Fn::*)(Args...));
   explicit FunctorUnpacker(Ret (Fn::*)(Args...) const);
 };
+
+// This template deduction guide is necessary to suppress a warning
+template <typename Fn, typename Ret, typename... Args>
+FunctorUnpacker(Ret (Fn::*)(Args...))
+    -> FunctorUnpacker<Ret, std::tuple<Args...>>;
 
 }  // namespace recipe_traits
 

@@ -18,6 +18,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -92,6 +93,9 @@ void AssetPtrMap::LoadGltfAsset(absl::Cord data, absl::string_view key,
 }
 
 absl::Status AssetPtrMap::ReleaseGltfAsset(std::intptr_t gltf_token) {
+  // TODO: Removing the asset from the map breaks the logic in
+  // DestroyGltfAssetsAndInstances which uses the map to find all nodes that
+  // need to be destroyed.
   if (gltf_asset_map_.find(gltf_token) != gltf_asset_map_.end()) {
     gltf_asset_map_.erase(gltf_token);
     return absl::OkStatus();
@@ -118,14 +122,26 @@ AssetPtrMap::GetStoredIblAsset(std::intptr_t ibl_token) {
 }
 
 void AssetPtrMap::DestroyGltfAssetsAndInstances() {
+  // Collect all nodes that need to be destroyed.
+  // It isn't safe to destroy them within the ForEach callback because it can
+  // invalidate the iteration leading to skipped nodes.
+  //
+  // TODO: Address this API pitfall with ForEach.
+  std::vector<NodeHandle> nodes_to_destroy;
+
   for (auto& [gltf_token, asset_ptr] : gltf_asset_map_) {
     view_.GetComponentManager().ForEach<GltfRenderer>(
-        [this, asset_ptr](const GltfRenderer* gltf_renderer) {
+        [asset_ptr, &nodes_to_destroy](const GltfRenderer* gltf_renderer) {
           if (gltf_renderer->GetGltfAsset() == asset_ptr) {
-            view_.DestroyNode(gltf_renderer->GetNode());
+            nodes_to_destroy.push_back(gltf_renderer->GetNode());
           }
         });
   }
+
+  for (const auto& node : nodes_to_destroy) {
+    view_.DestroyNode(node);
+  }
+
   gltf_asset_map_.clear();
 }
 

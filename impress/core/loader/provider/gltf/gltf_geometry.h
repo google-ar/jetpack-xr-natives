@@ -44,6 +44,8 @@ struct ProcessedPrimitive {
       Box in_root_bounds,
       LoadedModelBuilder::SkinningBufferId in_skinning_buffer,
       uint32_t in_morph_target_offset, uint32_t in_morph_target_count,
+      std::vector<gltf::imp_proto::Primitive::FeatureIdTexture>
+          in_feature_id_textures,
       RobinSet<int> in_required_materials)
       : vertex_blocks(std::move(in_vertex_blocks)),
         vertex_count(in_vertex_count),
@@ -52,6 +54,7 @@ struct ProcessedPrimitive {
         skinning_buffer(in_skinning_buffer),
         morph_target_offset(in_morph_target_offset),
         morph_target_count(in_morph_target_count),
+        feature_id_textures(std::move(in_feature_id_textures)),
         required_materials(std::move(in_required_materials)) {}
 
   std::vector<LoadedModelBuilder::VertexBlock> vertex_blocks;
@@ -61,6 +64,7 @@ struct ProcessedPrimitive {
   LoadedModelBuilder::SkinningBufferId skinning_buffer;
   uint32_t morph_target_offset;
   uint32_t morph_target_count;
+  std::vector<gltf::imp_proto::Primitive::FeatureIdTexture> feature_id_textures;
 
   // Represents the materials that may be required to render this primitive
   // by their index within the glTF file. This is used later on to know

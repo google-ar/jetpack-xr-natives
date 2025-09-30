@@ -56,9 +56,6 @@ class SplitEngineAndroidSharedMemoryBridge : public SplitEngineAndroidBridge {
       const std::vector<uint8_t>& data,
       std::function<void(const std::vector<uint8_t>&)> callback) override;
 
-  SplitEngineSharedMemoryBridgeClient& GetSplitEngineSharedMemoryBridgeClient()
-      override;
-
  private:
   std::unique_ptr<SplitEngineSharedMemoryBridgeClient>
       split_engine_shared_memory_bridge_client_;

@@ -22,6 +22,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "absl/strings/cord.h"
@@ -30,6 +31,7 @@
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/MorphTargetBuffer.h"
 #include "filament/filament/include/filament/RenderableManager.h"
+#include "filament/filament/include/filament/TextureSampler.h"
 #include "core/common/data_helpers.h"
 #include "core/common/enum_flags.h"
 #include "core/common/paired_vector.h"
@@ -38,7 +40,6 @@
 #include "core/common/typed_tree.h"
 #include "core/common/typed_vector.h"
 #include "core/loader/provider/schemas/loaded_model_generated.h"
-#include "core/material_library/generic_material.h"
 #include "core/material_library/material_param_value.h"
 #include "core/math/math.h"
 #include "core/model/mesh/mesh_index_data.h"
@@ -46,6 +47,7 @@
 #include "core/model/shared_data.h"
 #include "core/model/skeleton_data.h"
 #include "core/model/skin_data.h"
+#include "core/render/texture.h"
 #include "core/view/utils/string_map.h"
 
 namespace imp::model {
@@ -65,6 +67,51 @@ using IndexBufferId =
     TypedIdWithSentinel<filament::IndexBuffer*, uint16_t, kMaxValue<uint16_t>>;
 using MorphTargetBufferId = TypedIdWithSentinel<filament::MorphTargetBuffer*,
                                                 uint16_t, kMaxValue<uint16_t>>;
+
+using SamplerId = TypedIdWithSentinel<filament::TextureSampler, uint16_t,
+                                      kMaxValue<uint16_t>>;
+using TextureId =
+    TypedIdWithSentinel<OwnedTexturePtr, uint16_t, kMaxValue<uint16_t>>;
+
+template <typename T>
+using SamplerLookup = PairedVector<T, SamplerId::ReferredType>;
+template <typename T>
+using TextureLookup = PairedVector<T, TextureId::ReferredType>;
+
+struct MaterialTexture {
+  MaterialTexture(TextureId in_texture, SamplerId in_sampler)
+      : texture(in_texture), sampler(in_sampler) {}
+
+  TextureId texture;
+  SamplerId sampler;
+};
+
+using MaterialTextureId =
+    TypedIdWithSentinel<MaterialTexture, uint16_t, kMaxValue<uint16_t>>;
+
+struct MaterialParameter {
+  using ParamVariant =
+      std::variant<float, float2, float3, float4,  //
+                   int, int2, int3, int4,          //
+                   bool, bool2, bool3, bool4,      //
+                   mat3f, std::vector<mat3f>, TextureAndSampler>;
+
+  MaterialParameter(absl::string_view in_name, ParamVariant in_value)
+      : name(in_name), value(std::move(in_value)) {}
+
+  std::string name;
+  ParamVariant value;
+
+  inline bool operator==(const MaterialParameter& other) const {
+    return name == other.name && value == other.value;
+  }
+};
+
+using MaterialParameterId =
+    TypedIdWithSentinel<MaterialParameter, uint16_t, kMaxValue<uint16_t>>;
+
+using MaterialId =
+    TypedIdWithSentinel<GenericMaterialPtr, uint16_t, kMaxValue<uint16_t>>;
 
 using MaterialId =
     TypedIdWithSentinel<GenericMaterialPtr, uint16_t, kMaxValue<uint16_t>>;

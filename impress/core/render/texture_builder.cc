@@ -170,6 +170,8 @@ filament::Texture* TextureBuilder::Build(filament::Engine& engine) {
   }
 
   if (!texture_.ok()) {
+    IMP_LOG(imp::ERROR) << "Failed to create texture, \"" << name_
+               << "\": " << texture_.status().ToString();
     return nullptr;
   }
 

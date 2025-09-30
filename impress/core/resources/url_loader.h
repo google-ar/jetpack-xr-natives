@@ -27,7 +27,6 @@
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
 #include "core/async/future.h"
-#include "core/async/future_group.h"
 #include "core/async/future_interrupter.h"
 #include "core/resources/download_progress_info.h"
 
@@ -60,8 +59,8 @@ class UrlLoader {
       : download_progress_info_(std::make_shared<DownloadProgressInfo>()) {}
   virtual ~UrlLoader() = default;
 
-  virtual Future<absl::Cord> LoadUrl(
-      const std::string& url, std::optional<FutureGroup> future_group) = 0;
+  // TODO Use absl::string_view instead of std::string.
+  virtual Future<absl::Cord> LoadUrl(const std::string& url) = 0;
 
   // Obtains the current cumulative progress of all downloads. Returns 0 if
   // there are no downloads at all.  download_baseline establishes 0%.

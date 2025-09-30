@@ -41,6 +41,7 @@
 #include "core/recipes/language/recipe_utils.h"
 #include "core/recipes/recipe_event.h"
 #include "core/recipes/recipe_runner_state.proto.imp.h"
+#include "core/view/framework/collision/ray_hit.h"
 #include "core/view/framework/gestures/hover_gesture.h"
 #include "core/view/framework/gestures/tap_gesture.h"
 #include "core/view/framework/input/pointer_input_handler.h"
@@ -55,44 +56,6 @@ namespace imp {
 
 using AsyncExecution = RecipeAsyncExecutionManager::AsyncExecution;
 using RuntimeState = RecipeRunner::RuntimeState;
-
-namespace {
-
-NodeHandle GetTapTarget(
-    const TapGesture::TapEvent& tap_event,
-    const std::optional<RobinSet<NodeHandle>>& tap_targets) {
-  NodeHandle tap_target;
-
-  for (NodeHandle node : tap_event.all_intersecting_nodes) {
-    // all_intersecting_nodes are already sorted by distance. We can just
-    // grab the first one.
-    if (!tap_targets) {
-      // If tap_targets is not set, we trigger the OnTapEvent with the
-      // closest node.
-      tap_target = node;
-      break;
-    }
-
-    NodeHandle current_node = node;
-    // Check if the node is one of the tap targets.
-    // If not, go up the node hierarchy until we find one.
-    while (current_node) {
-      if (tap_targets->contains(current_node)) {
-        tap_target = current_node;
-        break;
-      }
-      current_node = current_node->GetParent();
-    }
-
-    if (tap_target) {
-      break;
-    }
-  }
-
-  return tap_target;
-}
-
-}  // namespace
 
 absl::Status RecipeRunner::Setup() {
   MP_ASSIGN_OR_RETURN(runtime_graph_, RecipeRuntimeGraph::CreateRuntimeGraph(
@@ -149,6 +112,11 @@ void RecipeRunner::Update(const FrameTime& frame_time) {
     // Events are also sent to the Dispatcher.
     GetView().GetDispatcher().Send(RecipeEvent(event.name, event.arguments));
   }
+
+  // Send a custom update event to this node
+  RecipeRunner::RecipeUpdateEvent recipe_update_event(
+      frame_time.GetDeltaTime());
+  Send(recipe_update_event);
 
   // Triggers the OnUpdateEvent if a `OnUpdateEvent` Recipe Event node exists in
   // the RecipeRuntimeGraph.
@@ -250,31 +218,46 @@ absl::Status RecipeRunner::Start() {
   MP_RETURN_IF_ERROR(scope_->DeclareVariable(time_since_start_declaration));
 
   // Starts listening to tap events.
-  tap_event_connection_ =
-      Connect([this](const TapGesture::TapEvent& tap_event) {
-        if (tap_event.type != PointerEventType::kUp) {
-          return;
-        }
+  tap_event_connection_ = Connect([this](
+                                      const TapGesture::TapEvent& tap_event) {
+    if (!tap_targets_.has_value() || tap_event.type != PointerEventType::kUp ||
+        !tap_event.ray_hits.has_value()) {
+      return;
+    }
 
-        // TODO: Add support for sending tap events to all valid
-        // tap targets.
-        NodeHandle tap_target = GetTapTarget(tap_event, tap_targets_);
+    RayHit tap_ray_hit;
+    for (const RayHit& ray_hit : *tap_event.ray_hits) {
+      if (tap_targets_->contains(ray_hit.node)) {
+        tap_ray_hit = ray_hit;
+        break;
+      }
+    }
 
-        if (!tap_target) {
-          output::Recipe(
-              "Failed to generate OnTapEvent. No valid tap target found.");
-          return;
-        }
+    if (!tap_ray_hit.node.IsValid()) {
+      output::Recipe(
+          "Failed to generate OnTapEvent. No valid tap target found.");
+      return;
+    }
 
-        RecipeRuntimeEvent on_tap_event{
-            .name = std::string(recipe::kOnTapEventName)};
-        on_tap_event.arguments[std::string(recipe::kTapTargetSocketName)] =
-            tap_target;
-        on_tap_event.arguments[std::string(recipe::kTapPositionSocketName)] =
-            tap_event.position;
+    RecipeRayHit recipe_ray_hit{
+        .distance = tap_ray_hit.distance,
+        .node = tap_ray_hit.node,
+        .world_point = tap_ray_hit.world_point,
+        .world_orientation = tap_ray_hit.world_orientation,
+        .world_normal = tap_ray_hit.world_normal};
 
-        runtime_event_queue_.push_back(std::move(on_tap_event));
-      });
+    RecipeRuntimeEvent on_tap_event{.name =
+                                        std::string(recipe::kOnTapEventName)};
+    on_tap_event.arguments[std::string(recipe::kTapTargetSocketName)] =
+        tap_ray_hit.node;
+    on_tap_event.arguments[std::string(recipe::kControllerIndexSocketName)] = 0;
+    on_tap_event.arguments[std::string(recipe::kTapPositionSocketName)] =
+        tap_event.position;
+    on_tap_event.arguments[std::string(recipe::kTapRayHitSocketName)] =
+        recipe_ray_hit;
+
+    runtime_event_queue_.push_back(std::move(on_tap_event));
+  });
 
   hover_event_connection_ =
       Connect([this](const HoverGesture::HoverEvent& hover_event) {
@@ -285,7 +268,7 @@ absl::Status RecipeRunner::Start() {
         const std::string target_socket_name =
             std::string(recipe::kHoverTargetSocketName);
         const std::string controller_index_socket_name =
-            std::string(recipe::kHoverControllerIndexSocketName);
+            std::string(recipe::kControllerIndexSocketName);
 
         NodeHandle hover_target;
         for (const NodeHandle& hit_node : hover_event.all_intersecting_nodes) {

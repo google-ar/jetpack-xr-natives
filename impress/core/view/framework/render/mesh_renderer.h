@@ -23,17 +23,16 @@
 
 #include "absl/base/attributes.h"
 #include "absl/status/status.h"
+#include "absl/types/span.h"
 #include "filament/filament/include/filament/RenderableManager.h"
-#include "core/async/future.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/small_source_location.h"
 #include "core/geometry/shapes/box.h"
 #include "core/materials/material.h"
+#include "core/math/mat.h"
 #include "core/model/mesh/mesh.h"
 #include "core/ncsb/component.h"
 #include "core/render/base_renderable_manager.h"
-#include "core/view/framework/render/material.h"
-#include "core/view/framework/render/material_definition.proto.imp.h"
 
 namespace imp {
 
@@ -85,6 +84,15 @@ class MeshRenderer : public Component {
 
   void Cleanup();
 
+  // num_bones is the number of skinning bones for the entire renderable. It is
+  // shared across primitives, and the bones will be initialized to the identity
+  // matrix.const SetupOptions& options
+  struct SetupOptions {
+    size_t primitive_count = 1;
+    FrustumCullingMode culling_mode = FrustumCullingMode::kEnabled;
+    uint8_t num_bones = 0;
+  };
+
   // Creates a RenderableManager::Instance with |primitive_count| primitives and
   // the FrustumCulling mode set to kEnabled.
   void Setup(size_t primitive_count = 1);
@@ -94,6 +102,31 @@ class MeshRenderer : public Component {
   // TODO: Remove and replace with a SetCulling method after
   // filament exposes setCulling in the class filament::RenderableManager.
   void Setup(FrustumCullingMode culling_mode, size_t primitive_count = 1);
+
+  // Creates a RenderableManager::Instance with:
+  // - |SetupOptions.primitive_count| primitives
+  // - |SetupOptions.culling_mode| culling mode
+  // - |SetupOptions.num_bones| bones
+  // If |SetupOptions.num_bones| is zero, then skinning is disabled.
+  // If |SetupOptions.num_bones| is non-zero, the mesh must have bone weights
+  // and indices baked into its geometry as vertex attributes.
+  void Setup(const SetupOptions& options);
+
+  uint8_t GetBoneCount() const;
+
+  // Sets the bone transforms for the specified MeshRenderer. Allows updating a
+  // subset of the bones in the range:
+  // - [first_bone_index, first_bone_index + new_bones.size()].
+  // Note: skinning must be enabled at `mesh_render` build time, with the
+  // `SetupOptions::num_bones`. Transforms are expected to be in the local space
+  // of the renderable.
+  // Returns:
+  // - UnavailableError if the MeshRenderer was not created with bones.
+  // - OutOfRangeError if the requested update is too large, or ends past the
+  //   end of the bones array.
+  // - OkStatus otherwise.
+  absl::Status UpdateBoneTransformsInRange(
+      absl::Span<const imp::mat4f> new_bones, uint8_t first_bone_index = 0);
 
   void OnActiveStatusChanged(bool is_active);
 
@@ -281,14 +314,14 @@ class MeshRenderer : public Component {
 
   bool IsOwnedOrBorrowedPtrType(const HeldPtrType& held_ptr_type) const;
 
-  void BuildRenderables(FrustumCullingMode culling_mode,
-                        size_t primitive_count);
+  void BuildRenderables(const SetupOptions& options);
   BaseRenderableManager& GetRenderableManager() const;
   filament::RenderableManager::Instance GetInstance() const;
 
   bool IsWithinCount(size_t primitive_index) const;
   void SetRenderableGeometry(Mesh& mesh, size_t primitive_index);
 
+  std::vector<imp::mat4f> bones_;
   std::vector<PrimitiveData> primitives_;
   uint8_t layer_mask_;
 

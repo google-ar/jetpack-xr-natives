@@ -81,9 +81,8 @@ bool TestSplitEngineAndroidBridge::SendRequest(
       .ok();
 }
 
-SplitEngineSharedMemoryBridgeClient&
-TestSplitEngineAndroidBridge::GetSplitEngineSharedMemoryBridgeClient() {
-  return bridge_client_;
+MessageGroupId TestSplitEngineAndroidBridge::GenerateMessageGroupId() {
+  return bridge_client_.GenerateMessageGroupId();
 }
 
 TestSplitEngineBridgeBuffer::TestSplitEngineBridgeBuffer(
@@ -188,9 +187,7 @@ void TestSplitEngineBridgeSender::BeginMessageGroup(size_t size_bytes) {
   // Step 3: Send a `BeginMessageGroup` message with the arena handle.
   flatbuffers::FlatBufferBuilder fbb(GetBeginMessageSize(), &arena_allocator_);
 
-  MessageGroupId message_group_id =
-      test_bridge_.GetSplitEngineSharedMemoryBridgeClient()
-          .GenerateMessageGroupId();
+  MessageGroupId message_group_id = test_bridge_.GenerateMessageGroupId();
 
   flatbuffers::Offset<android_xr::schemas::MessageGroupOperation>
       message_group = android_xr::schemas::CreateMessageGroupOperation(
@@ -254,6 +251,11 @@ void TestSplitEngineBridgeSender::SendMessage(
 
 void TestSplitEngineBridgeSender::ClearReleasedMessageGroups() {
   // Do nothing since data is copied out of the arenas.
+}
+
+absl::StatusOr<size_t> TestSplitEngineBridgeSender::GetActiveMessageGroupCount()
+    const {
+  return 0;
 }
 
 }  // namespace imp::split_engine

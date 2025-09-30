@@ -30,7 +30,6 @@
 #include "filament/filament/include/filament/Engine.h"
 #include "core/animation/gltf_animation.h"
 #include "core/async/future.h"
-#include "core/async/future_group.h"
 #include "core/common/context.h"
 #include "core/common/flatbuffer_helpers.h"
 #include "core/image/image_contents.h"
@@ -56,15 +55,13 @@ class Creator {
   // Instantiation.
   Future<std::unique_ptr<model::ModelData>> CreateModel(
       filament::Engine* engine, LoaderOptions loader_options = {},
-      std::optional<FutureGroup> future_group = std::nullopt,
       std::optional<absl::string_view> name = std::nullopt);
   absl::StatusOr<std::unique_ptr<animation::GltfAnimation>> CreateAnimation(
       absl::string_view name);
   absl::StatusOr<std::unique_ptr<animation::GltfAnimation>> CreateAnimation(
       size_t animation_index);
-  Future<absl::Status> LoadImages(
-      const imp::Context& context, std::function<void()> callback,
-      std::optional<FutureGroup> future_group = std::nullopt);
+  Future<absl::Status> LoadImages(const imp::Context& context,
+                                  std::function<void()> callback);
 
   // Queries.
   std::vector<absl::string_view> GetAnimationNames() const;

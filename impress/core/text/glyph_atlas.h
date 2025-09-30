@@ -168,7 +168,8 @@ class GlyphAtlas {
   // Get the super sample info based on the View, when it's ready.
   //
   // See also GlyphEmulator::GetSuperSampleInfo().
-  virtual Future<GlyphEmulator::SuperSampleInfo> GetSuperSampleInfo() const = 0;
+  virtual Future<GlyphEmulator::SuperSampleInfo> GetSuperSampleInfo(
+      bool force_off) const = 0;
 
   // Provides the percentage of the atlas that is currently occupied
   //

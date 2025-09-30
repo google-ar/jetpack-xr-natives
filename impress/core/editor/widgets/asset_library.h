@@ -23,6 +23,7 @@
 
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
+#include "core/common/invocable.h"
 #include "core/common/rememberer.h"
 #include "core/editor/ui/directory_ui.h"
 #include "core/editor/ui/drag_and_drop.h"
@@ -88,6 +89,8 @@ class AssetLibrary : public editor::Widget, public imp::Rememberer {
 
     std::string saved_data;
     std::string saved_extension;
+
+    Invocable<void(absl::string_view)> on_save_callback;
   };
 
   void DrawTypeFilter();

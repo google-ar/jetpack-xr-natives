@@ -43,6 +43,7 @@
 #include "core/material_library/generic_material_constants.h"
 #include "core/material_library/material_param_value.h"
 #include "core/material_library/schemas/generic_material_generated.h"
+#include "core/model/entity_data.h"
 #include "mediapipe/framework/port/status_macros.h"
 
 namespace imp::loader::details::provider_gltf {
@@ -191,7 +192,7 @@ absl::Status ProcessTextureInfoFromNode(
     return Error("Mesh contains no geometry.");
   }
 
-  RobinMap<int, TextureId> lookup_index_to_texture_id;
+  RobinMap<int, model::TextureId> lookup_index_to_texture_id;
 
   // Parameter look up keys.
   const std::string kColorsKey = "COLOR_0";
@@ -200,6 +201,22 @@ absl::Status ProcessTextureInfoFromNode(
     size_t primitive_index = &primitive - &primitives.front();
     const ProcessedPrimitive& processed_primitive =
         processed_primitives[primitive_index];
+    int feature_id_texture_index = 0;
+    for (const auto& texture_index : processed_primitive.feature_id_textures) {
+      MP_RETURN_IF_ERROR(AddTexture(
+          builder, model, kFeatureIdTextureNames[feature_id_texture_index],
+          &texture_index, compression_type, TextureInfoFlags::IsLookup));
+      feature_id_texture_index++;
+      if (feature_id_texture_index >= kFeatureIdTextureNames.size()) {
+        IMP_LOG(imp::WARNING) << "glTF contains "
+                     << processed_primitive.feature_id_textures.size()
+                     << " feature id textures, which is more than the "
+                        "currently max supported "
+                     << kFeatureIdTextureNames.size()
+                     << " feature id textures.";
+        break;
+      }
+    }
     for (auto material_index : processed_primitive.required_materials) {
       LoadedModelBuilder::MaterialId material =
           builder.GetMaterial(material_index);

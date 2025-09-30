@@ -20,6 +20,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "absl/algorithm/container.h"
@@ -502,6 +503,8 @@ Texture* BuildAndFillTexture(BaseView& view, Engine* engine,
     }
   }
 
+  // TODO: (broken link) - Call TextureFactory::CreateTexture() instead of
+  // building the texture manually and return an OwnedTexturePtr.
   int32_t image_levels = 1;
   TextureBuilder texture_builder(view);
   if (name.has_value()) {

@@ -21,6 +21,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <optional>
 
@@ -181,8 +182,22 @@ absl::Status AccessorReader::FillValues(DenseDataAccess& out_data,
         *out_data.At<T>(i) = T(0);
       }
     } else {
+      // Check for alignment before the loop.
+      const bool is_aligned =
+          (reinterpret_cast<uintptr_t>(base_) % alignof(T) == 0) &&
+          (stride_ % alignof(T) == 0);
       for (size_t i = 0; i < count_; ++i) {
-        *out_data.At<T>(i) = *reinterpret_cast<const T*>(base_ + (i * stride_));
+        if (is_aligned) {
+          *out_data.At<T>(i) =
+              *reinterpret_cast<const T*>(base_ + (i * stride_));
+        } else {
+          // Use std::memcpy instead of reinterpret_cast to avoid memory
+          // alignment issues, when buffer is loaded from 32-bit device.
+          const uint8_t* src_ptr = base_ + (i * stride_);
+          T temp_value;
+          std::memcpy(&temp_value, src_ptr, sizeof(T));
+          *out_data.At<T>(i) = temp_value;
+        }
       }
     }
     MP_RETURN_IF_ERROR(ApplySparseValues<T>(out_data, RetrievalMode::kReplace));

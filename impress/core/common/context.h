@@ -19,13 +19,10 @@
 
 #include <jni.h>
 
-#include <memory>
 #include <string>
 #include <vector>
 
-#include "absl/types/span.h"
 #include "core/common/jni_context.h"
-#include "core/config.h"
 
 namespace imp {
 
@@ -37,7 +34,7 @@ namespace imp {
 class Context {
  public:
   Context(JavaVM* jvm, jobject activity_context,
-          jobject fragment_host = nullptr);
+          jobject fragment_host = nullptr, jobject executor = nullptr);
   // The default constructor is included for Android temporarily to allow
   // incremental development of components depending on Context.
   Context();
@@ -67,8 +64,14 @@ class Context {
   // If GetJniEnv is called on a const Context, it will not create a new JNIEnv.
   // If a JNIEnv has never been used on this thread, it will return nullptr.
   JNIEnv* TryGetJniEnv() const { return jni_.TryGetJniEnv(); }
+
+  // TODO: refactor these to return JniUniquePtr<jobject>.
   jobject GetActivityContext() const { return activity_context_; }
   jobject GetFragmentHost() const { return fragment_host_; }
+  jobject GetExecutor() const { return executor_; }
+
+  void SetExecutor(jobject executor);
+
   const std::vector<std::string>& GetArguments() const { return arguments_; }
   void* GetOwningUIView() const { return owning_ui_view_; }
 
@@ -76,6 +79,7 @@ class Context {
   imp::JniContext jni_;
   jobject activity_context_;
   jobject fragment_host_;
+  jobject executor_;
   std::vector<std::string> arguments_;
   void* owning_ui_view_;
 };

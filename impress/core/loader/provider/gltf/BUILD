@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@com_google_protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("@rules_cc//cc:defs.bzl", "cc_proto_library")
 load("//build_tools:imp.bzl", "imp_copts", "imp_defines")
 load(
     "//core/proto:imp_cc_proto_library.bzl",
@@ -102,7 +102,6 @@ cc_library(
         "//core/common:bit_vector",
         "//core/common:fbs",
         "//core/common:fbs_deps",  # build_cleaner: keep
-        "//core/common:log",
         "//core/common:robin_map",
         "//core/common:typed_ids",
         "//core/common:typed_set_vector",
@@ -117,6 +116,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:optional",
+        "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
         "@robin_map",
     ],
@@ -176,7 +176,6 @@ cc_library(
         "//core/common:buffer_access",
         "//core/common:fbs",
         "//core/common:fbs_deps",  # build_cleaner: keep
-        "//core/common:log",
         "//core/common:platform_helpers",
         "//core/common:typed_ids",
         "//core/loader:loader_details",
@@ -188,6 +187,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
+        "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament/libs:math_hdrs",
     ],
@@ -218,13 +218,13 @@ cc_library(
         "//core/common:data_helpers",
         "//core/common:fbs",
         "//core/common:filament_helpers",
-        "//core/common:log",
         "//core/common:robin_map",
         "//core/geometry/shapes",
         "//core/image",
         "//core/loader:loader_options",
         "//core/loader/provider:loaded_model_builder",
         "//core/loader/provider/extensions:extension_basis",
+        "//core/loader/provider/extensions:extension_mesh_features",
         "//core/loader/provider/extensions/behavior:behavior_imp_cc_proto",
         "//core/loader/provider/extensions/interactivity:interactivity_imp_cc_proto",
         "//core/material_library:fbs",
@@ -241,6 +241,7 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:variant",
+        "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/libs:filabridge_hdrs",
@@ -275,7 +276,6 @@ cc_library(
         "//core/common:fbs",
         "//core/common:filament_helpers",
         "//core/common:flatbuffer_helpers",
-        "//core/common:log",
         "//core/common:typed_ids",
         "//core/common:typed_set_vector",
         "//core/loader/provider:details",
@@ -297,6 +297,7 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
         "@robin_map",
         "@third_party//filament/libs:filabridge_hdrs",

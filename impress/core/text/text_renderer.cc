@@ -42,6 +42,7 @@
 #include "core/common/filament_helpers.h"
 #include "core/common/invocable.h"
 #include "core/common/registry.h"
+#include "core/config.h"
 #include "core/geometry/geometry_helper.h"
 #include "core/geometry/shapes/rect.h"
 #include "core/materials/material.h"
@@ -55,7 +56,7 @@
 #include "core/model/mesh/vertex_format.h"
 #include "core/ncsb/component_system.h"
 #include "core/text/glyph_atlas.h"
-#include "core/text/glyph_atlas_old.h"
+#include "core/text/glyph_atlas_new.h"
 #include "core/text/glyph_emulator.h"
 #include "core/text/text_renderer_assets.h"
 #include "core/text/text_renderer_state.proto.imp.h"
@@ -217,12 +218,6 @@ Future<absl::Status> TextRenderer::SetupImpl(
   if (layout_provider.has_value()) {
     text_layout_provider_ = std::move(*layout_provider);
   }
-  // Load the material.
-  Future<MaterialPtr> text_material_future =
-      GetView().GetMaterialFactory().LoadMaterial(
-          state_.material.has_value()
-              ? *state_.material
-              : text_renderer_assets::kTextMaterialCmat.GetUrl());
 
   ViewConfig view_config = GetView().GetConfig();
   std::optional<ViewConfig::GlyphAtlasTextureSize> texture_size =
@@ -230,15 +225,21 @@ Future<absl::Status> TextRenderer::SetupImpl(
   glyph_atlas_ = &GetView().GetRegistry().GetOrRegister<GlyphAtlas>(
       [this, texture_size = texture_size] {
         if (texture_size.has_value()) {
-          return std::make_unique<GlyphAtlasOld>(
+          return std::make_unique<GlyphAtlasNew>(
               GetView(), GlyphAtlas::Config{.texture_size = GetAtlasTextureSize(
                                                 *texture_size)});
 
         } else {
-          return std::make_unique<GlyphAtlasOld>(GetView());
+          return std::make_unique<GlyphAtlasNew>(GetView());
         }
       });
 
+  return UpdateMeshesAndMaterials();
+}
+
+void TextRenderer::Cleanup() { GetView().DestroyNode(root_); }
+
+Future<absl::Status> TextRenderer::UpdateMeshesAndMaterials() {
   // TODO (broken link) Ensure that the color space here is correct
   GlyphEmulator::TextOptions options = {
       .font_params = state_.font_params,
@@ -246,10 +247,25 @@ Future<absl::Status> TextRenderer::SetupImpl(
       .stroke_width_pixels = state_.stroke_width_pixels,
       .color = GetTextColor(),
       .stroke_color = GetStrokeColor(),
+      .force_non_separable =
+          state_.force_non_separable && !text_layout_provider_.has_value(),
   };
   if (state_.text_tracking.has_value()) {
     options.text_tracking = *state_.text_tracking;
+    // If we render an unseparated string with non-zero text tracking, scuba
+    // test output becomes nondeterministic.
+    if (options.text_tracking != 0.0f) {
+      options.force_non_separable = false;
+    }
   }
+  force_non_separable_ = options.force_non_separable;
+
+  // Load the material.
+  Future<MaterialPtr> text_material_future =
+      GetView().GetMaterialFactory().LoadMaterial(
+          state_.material.has_value()
+              ? *state_.material
+              : text_renderer_assets::kTextMaterialCmat.GetUrl());
 
   Future<ScopedCanvas::FontInfo> font_info_future =
       glyph_atlas_->GetFontInfo(options);
@@ -267,7 +283,7 @@ Future<absl::Status> TextRenderer::SetupImpl(
   }
 
   Future<GlyphEmulator::SuperSampleInfo> super_sample_info_future =
-      glyph_atlas_->GetSuperSampleInfo();
+      glyph_atlas_->GetSuperSampleInfo(options.force_non_separable);
 
   return text_material_future
       .Merge(glyphs_future, font_info_future, combined_character_indices_future,
@@ -284,7 +300,7 @@ Future<absl::Status> TextRenderer::SetupImpl(
         glyphs_ = std::move(glyphs);
         if (glyphs_.empty()) {
           return absl::InvalidArgumentError(
-              "Unable to create TextRenderer with empty glyphs for text: " +
+              "Unable to update text geometry with empty glyphs for text: " +
               state_.text);
         }
 
@@ -292,18 +308,19 @@ Future<absl::Status> TextRenderer::SetupImpl(
                              ->getMaterial()
                              ->getVertexDomain();
 
-        root_ = GetView().CreateNode();
-        root_->SetParent(GetNode());
+        // Create the root node if it doesn't exist.
+        if (!root_) {
+          root_ = GetView().CreateNode();
+          root_->SetParent(GetNode());
+          renderer_ = root_->AddComponent<MeshRenderer>();
+        }
 
         if (text_layout_provider_.has_value()) {
           root_->SetEnabled(text_layout_provider_->should_render());
           glyph_groups_ = std::get<3>(result);
         }
 
-        // Create the render component and assign the mesh to it.
-        renderer_ = root_->AddComponent<MeshRenderer>();
-
-        RecalculateMesh();
+        RecalculateMesh(/*force_regenerate_mesh=*/true);
 
         // Assign the texture to the material, and assign the material to
         // the render component.
@@ -318,7 +335,9 @@ Future<absl::Status> TextRenderer::SetupImpl(
       });
 }
 
-void TextRenderer::Cleanup() { GetView().DestroyNode(root_); }
+Future<absl::Status> TextRenderer::OnIsfStateChanged() {
+  return UpdateMeshesAndMaterials();
+}
 
 void TextRenderer::ApplyColorsToMaterial(imp::Material& material) {
   float opacity = GetOpacityMultiplier();
@@ -364,12 +383,19 @@ void TextRenderer::Update(const FrameTime& frame_time) {
   }
 }
 
-void TextRenderer::RecalculateMesh() {
+void TextRenderer::RecalculateMesh(bool force_regenerate_mesh) {
   // Without stroke, there's only one pass where the regular fill glyph is
   // drawn, and with glyphs, all stroke glyphs are drawn first in one pass,
   // followed by the regular fill glyphs, hence needing double the quads.
   const int stroke_multiplier = HasStroke() ? 2 : 1;
   if (state_.batch) {
+    // When force_regenerate_mesh is true, it means it is possible that the
+    // text has been changed. Therefore the vertex
+    // count and the mesh data will need to be recalculated.
+    if (shared_mesh_handle_ && force_regenerate_mesh) {
+      shared_mesh_handle_.reset();
+    }
+
     if (!shared_mesh_handle_) {
       shared_mesh_handle_ =
           GetView()
@@ -384,7 +410,7 @@ void TextRenderer::RecalculateMesh() {
                                   shared_mesh_handle_->GetOffset());
 
     Mesh* existing_mesh = renderer_->GetMesh();
-    if (existing_mesh && existing_mesh->IsSubmesh()) {
+    if (existing_mesh && existing_mesh->IsSubmesh() && !force_regenerate_mesh) {
       existing_mesh->AssignAabb(box);
     } else {
       renderer_->SetMesh(GetView().GetMeshFactory().CreateSubMesh(
@@ -403,10 +429,15 @@ void TextRenderer::RecalculateMesh() {
     Box box = AddGlyphsToTextMesh(*mesh_data, 0);
 
     Mesh* existing_mesh = renderer_->GetMesh();
-    if (existing_mesh && !existing_mesh->IsSubmesh()) {
+    if (existing_mesh && !existing_mesh->IsSubmesh() &&
+        !force_regenerate_mesh) {
       existing_mesh->AssignAabb(box);
       existing_mesh->UpdateMeshData(std::move(mesh_data));
     } else {
+      // When `force_regenerate_mesh` is true, the text geometry has potentially
+      // changed, requiring a full recalculation of vertex counts and mesh data.
+      // Since updating mesh data with a different vertex count is not
+      // supported, a new mesh must be created.
       renderer_->SetMesh(GetView().GetMeshFactory().CreateByMovingMeshData(
           MeshFactory::PrimitiveType::TRIANGLES, std::move(mesh_data), box,
           MeshFactory::MeshDataStorageMode::kDiscardMeshData, kDebugName));
@@ -760,6 +791,15 @@ float TextRenderer::GetVerticalPivot(TextRendererState::VerticalPivot pivot,
 float TextRenderer::GetHorizontalPivot(TextRendererState::HorizontalPivot pivot,
                                        float min, float max,
                                        float typographic_width) const {
+#if IMP_PLATFORM(DESKTOP)
+  // TODO: On desktop, the typographic pivots are not supported.
+  // Remove this once they are.
+  if (pivot == TextRendererState::HORIZONTAL_PIVOT_TYPOGRAPHIC_LEFT) {
+    pivot = TextRendererState::HORIZONTAL_PIVOT_LEFT;
+  } else if (pivot == TextRendererState::HORIZONTAL_PIVOT_TYPOGRAPHIC_RIGHT) {
+    pivot = TextRendererState::HORIZONTAL_PIVOT_RIGHT;
+  }
+#endif  // IMP_PLATFORM(DESKTOP)
   switch (pivot) {
     case TextRendererState::HORIZONTAL_PIVOT_TYPOGRAPHIC_LEFT:
       return 0;

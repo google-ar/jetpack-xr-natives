@@ -20,6 +20,7 @@
 #include <memory>
 #include <type_traits>
 
+#include "filament/libs/utils/include/utils/Entity.h"
 #include "core/common/trace.h"
 #include "core/config.h"
 #include "core/ncsb/base_component_pool.h"
@@ -56,15 +57,15 @@ class ComponentPool : public BaseComponentPool {
 #endif  // IMP_RUNTIME(DEV)
 
  protected:
-  ComponentIndex EmplaceBack() noexcept override;
-  void Cleanup(ComponentIndex instance) noexcept override;
+  Component* Emplace(utils::Entity) noexcept override;
+  void Cleanup(Component& component) noexcept override;
 };
 
 template <typename T>
 ComponentPool<T>::ComponentPool(BaseView& view) : BaseComponentPool(view) {}
 
 template <typename T>
-void ComponentPool<T>::Cleanup(ComponentIndex instance) noexcept {
+void ComponentPool<T>::Cleanup(Component& component) noexcept {
 #if IMP_RUNTIME(DEV)
   if constexpr (!component_traits::kShouldRunInEditMode<T>) {
     if (editor::IsInEditMode(GetView().GetRegistry())) {
@@ -75,7 +76,7 @@ void ComponentPool<T>::Cleanup(ComponentIndex instance) noexcept {
 
   IMP_TRACE_TEMPLATED(T);
 
-  GetComponents().template At<T>(instance).Cleanup();
+  static_cast<T&>(component).Cleanup();
 }
 
 template <typename T>
@@ -98,8 +99,8 @@ void ComponentPool<T>::NotifyActive(Component* component,
 }
 
 template <typename T>
-BaseComponentPool::ComponentIndex ComponentPool<T>::EmplaceBack() noexcept {
-  return GetComponents().template EmplaceBack<T>();
+Component* ComponentPool<T>::Emplace(utils::Entity entity) noexcept {
+  return GetComponents().template Emplace<T>(entity);
 }
 
 template <typename T>

@@ -16,19 +16,22 @@
 
 #include <jni.h>
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <functional>
 #include <memory>
-#include <utility>
+#include <optional>
+#include <string>
 #include <vector>
 
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "core/async/executor.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "core/common/jni_helpers.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/shared/split_engine_defines.h"
@@ -36,6 +39,9 @@
 namespace imp::split_engine {
 namespace {
 using BufferHandle = SplitEngineSharedMemoryBridgeClient::BufferHandle;
+
+constexpr int kMaxRetries = 5;
+constexpr int kRetryDelayMs = 50;
 
 JniUniquePtr<jlongArray> ToLongArray(
     JNIEnv* env, const std::vector<TextureId>& in_texture_ids) {
@@ -63,10 +69,15 @@ class SplitEngineBufferHandle : public BufferHandle {
   JniUniquePtr<jobject> handle_;
 };
 
-// FatalIfJavaExceptionOccurred should be called after a Java method call. If a
-// Java exception occurred, it will log a fatal error message and crash the
-// process.
-void FatalIfJavaExceptionOccurred(JNIEnv& env) {
+// FatalIfUnspecifiedExceptionOccurred should be called after a Java method
+// call. If an unspecified Java exception occurred, it will log a fatal error
+// message and crash the process. If an allowed exception is provided (e.g.
+// DeadObjectException), the function will return the error message, if the
+// exception occurs. the method will return std::nullopt if no exception
+// occurred.
+std::optional<std::string> FatalIfUnspecifiedExceptionOccurred(
+    JNIEnv& env,
+    std::optional<std::string> allowed_exception_class = std::nullopt) {
   if (env.ExceptionCheck()) {
     jthrowable e = env.ExceptionOccurred();
     env.ExceptionClear();
@@ -74,9 +85,16 @@ void FatalIfJavaExceptionOccurred(JNIEnv& env) {
     jmethodID getMessage =
         env.GetMethodID(clazz, "getMessage", "()Ljava/lang/String;");
     jstring message = (jstring)env.CallObjectMethod(e, getMessage);
+    if (allowed_exception_class.has_value()) {
+      jclass exception_class = env.FindClass(allowed_exception_class->c_str());
+      if (env.IsInstanceOf(e, exception_class)) {
+        return env.GetStringUTFChars(message, nullptr);
+      }
+    }
     IMP_LOG(imp::FATAL) << "SplitEngineBridge operation failed, System exception: "
                << env.GetStringUTFChars(message, NULL);
   }
+  return std::nullopt;
 }
 
 }  // namespace
@@ -88,7 +106,7 @@ absl::StatusOr<std::unique_ptr<BufferHandle>> SplitEngineBridge::RegisterBuffer(
   jobject buffer_handle =
       JavaWrapper::CallObjectMethod(register_buffer_, static_cast<jint>(fd),
                                     static_cast<jint>(buffer_size_bytes));
-  FatalIfJavaExceptionOccurred(*Env());
+  FatalIfUnspecifiedExceptionOccurred(*Env());
   return std::make_unique<SplitEngineBufferHandle>(Env(), buffer_handle);
 }
 
@@ -97,30 +115,49 @@ absl::Status SplitEngineBridge::ProcessRegion(const BufferHandle& buffer_handle,
                                               int region_length_bytes) {
   jobject token = static_cast<const SplitEngineBufferHandle*>(&buffer_handle)
                       ->handle_.get();
-  JavaWrapper::CallVoidMethod(process_region_, token,
-                              static_cast<jint>(offset_bytes),
-                              static_cast<jint>(region_length_bytes));
-  FatalIfJavaExceptionOccurred(*Env());
+  std::optional<std::string> exception_message = std::nullopt;
+  int retry_count = 0;
+  do {
+    JavaWrapper::CallVoidMethod(process_region_, token,
+                                static_cast<jint>(offset_bytes),
+                                static_cast<jint>(region_length_bytes));
+    exception_message = FatalIfUnspecifiedExceptionOccurred(
+        *Env(), "android/os/DeadObjectException");
+    if (exception_message) {
+      if (retry_count < kMaxRetries) {
+        int delay_ms = kRetryDelayMs * (std::pow(++retry_count, 2));
+        IMP_LOG(imp::ERROR)
+            << "SplitEngineBridge processRegion operation failed, retrying in "
+            << delay_ms << "ms";
+        absl::SleepFor(absl::Milliseconds(delay_ms));
+      } else {
+        IMP_LOG(imp::FATAL)
+            << "SplitEngineBridge processRegion operation failed, retry limit "
+               "reached, aborting - Exception: "
+            << *exception_message;
+      }
+    }
+  } while (exception_message);
   return absl::OkStatus();
-};
+}
 
 absl::StatusOr<jobject> SplitEngineBridge::CreateExternalTextureSurface(
     const std::vector<TextureId>& in_texture_ids) {
   jobject surface =
       JavaWrapper::CallObjectMethod(create_external_texture_surface_,
                                     ToLongArray(Env(), in_texture_ids).get());
-  FatalIfJavaExceptionOccurred(*Env());
+  FatalIfUnspecifiedExceptionOccurred(*Env());
   return surface;
-};
+}
 
 absl::Status SplitEngineBridge::SetExternalTextureSurfaceSize(
     TextureId in_texture_id, int32_t width, int32_t height) {
   JavaWrapper::CallVoidMethod(
       set_external_texture_surface_size_, static_cast<jlong>(in_texture_id),
       static_cast<jint>(width), static_cast<jint>(height));
-  FatalIfJavaExceptionOccurred(*Env());
+  FatalIfUnspecifiedExceptionOccurred(*Env());
   return absl::OkStatus();
-};
+}
 
 absl::Status SplitEngineBridge::SendRequest(
     const std::vector<uint8_t>& data,
@@ -132,8 +169,8 @@ absl::Status SplitEngineBridge::SendRequest(
   auto data_array = ToByteArray(Env(), data);
   JavaWrapper::CallVoidMethod(send_request_, data_array.release(),
                               request_callback->Release());
-  FatalIfJavaExceptionOccurred(*Env());
+  FatalIfUnspecifiedExceptionOccurred(*Env());
   return absl::OkStatus();
-};
+}
 
 }  // namespace imp::split_engine

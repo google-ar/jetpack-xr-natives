@@ -30,15 +30,15 @@ android_library(
     javacopts = [
         "-Xep:AndroidJdkLibsChecker:OFF",
     ],
-    tags = ["included_in_archive=//java/com/google/ar/imp/apibindings:impress_no_native_lib_aar"],
+    tags = ["included_in_archive=//apibindings:impress_no_native_lib_aar"],
     deps = [
         "//core/split_engine/android/extensions/java/com/google/imp/splitengine/extensions:extensions_java",  # unuseddeps: keep
         "//java/com/google/ar/imp/view",
         "//java/com/google/ar/imp/view:frame_scheduler",
         "//java/com/google/ar/imp/view:imp_api_scuba",
-        "@com_google_impress//java/com/google/vr/androidxr/extensions:platform_extensions_jar",
         "@maven//:androidx_annotation_annotation",
         "@maven//:androidx_concurrent_concurrent_futures",
+        "@maven//:com_android_extensions_xr_extensions_xr",
         "@maven//:com_google_guava_guava",
     ],
 )

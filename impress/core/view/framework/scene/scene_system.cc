@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -706,6 +707,18 @@ Future<absl::Status> SceneSystem::ApplyData(
       child->SetParent(node);
     }
 
+    if (load_scene_info->metadata_mode == MetadataMode::kInclude) {
+      auto child_metadata = child->GetOrAddComponent<SceneMetadata>();
+      if (child_metadata) {
+        // If is_base is false but IsChildOfBase is already true, then that
+        // means that this node *is* the child of a base file, but a derived
+        // file is modifying the child. In this case, we want to keep the
+        // IsChildOfBase flag true.
+        child_metadata->SetChildOfBase(is_base ||
+                                       child_metadata->IsChildOfBase());
+      }
+    }
+
     result = result.Combine(CreateSceneHierarchy(
         child_data, child, load_scene_info, load_scene_visitor, is_base));
   }
@@ -886,6 +899,15 @@ absl::StatusOr<SceneSystem::SaveResult> SceneSystem::SaveImpl(
     }
   }
 
+  // If the node has metadata and it is not from a base, then make sure
+  // to include it as authored content.
+  //
+  // Otherwise we may erroneously skip over nodes where nothing was changed but
+  // the name.
+  if (scene_metadata && !scene_metadata->IsFromBase()) {
+    save_result = SaveResult::kIncludesAuthoredContent;
+  }
+
   // Save the node's name.
   if (!is_root_node || data->base.empty()) {
     data->name = std::string(node->GetName());
@@ -896,11 +918,13 @@ absl::StatusOr<SceneSystem::SaveResult> SceneSystem::SaveImpl(
   // content.
   if ((scene_metadata && mode == SaveMode::kAuthoredContent) ||
       mode == SaveMode::kFull) {
-    if (mode == SaveMode::kAuthoredContent) {
+    // If this is a derived node that is not a child of a base, save the base
+    // URL. If it's a child of a base, then the child's base url will be saved
+    // in the base isf that the child originates from.
+    if (mode == SaveMode::kAuthoredContent && scene_metadata &&
+        !scene_metadata->GetBaseUrl().empty() &&
+        !scene_metadata->IsChildOfBase()) {
       data->base = scene_metadata->GetBaseUrl();
-    }
-
-    if (!data->base.empty()) {
       save_result = SaveResult::kIncludesAuthoredContent;
     }
 

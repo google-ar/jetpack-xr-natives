@@ -33,6 +33,7 @@
 #include "core/model/mesh/mesh.h"
 #include "core/model/mesh/mesh_data.h"
 #include "core/ncsb/component_handle.h"
+#include "core/split_engine/split_engine_serializer.h"
 #include "core/view/framework/collision/collider_state.proto.imp.h"
 #include "core/view/framework/collision/ray_hit.h"
 #include "core/view/framework/render/mesh_renderer.h"
@@ -44,6 +45,10 @@ absl::Status MeshCollider::Setup() {
   if (!mesh_renderer_)
     return absl::FailedPreconditionError(
         "The node has no mesh renderer component.");
+  if (split_engine::SplitEngineSerializer* serializer =
+          GetView().GetSplitEngineSerializer()) {
+    serializer->SetMeshCollider(GetEntity(), IsActive());
+  }
   return absl::OkStatus();
 }
 
@@ -53,6 +58,15 @@ absl::Status MeshCollider::Setup(MeshColliderState::ColliderMode mode) {
 }
 
 absl::Status MeshCollider::SetupWithState() { return Setup(); }
+
+void MeshCollider::Cleanup() {
+  if (split_engine::SplitEngineSerializer* serializer =
+          GetView().GetSplitEngineSerializer()) {
+    serializer->ClearCollider(
+        GetEntity(),
+        split_engine::SplitEngineSerializer::ColliderType::kMeshCollider);
+  }
+}
 
 absl::optional<RayHit> MeshCollider::Intersect(const Ray& world_ray) {
   if (!IsActive()) {
@@ -207,6 +221,13 @@ void MeshCollider::Visualize(VisualizationStyle visualization_style) const {
     } else {
       debug_draw::Local(GetNode().GetEntity()).BoxLines(mesh->GetAabb(), color);
     }
+  }
+}
+
+void MeshCollider::OnActiveStatusChanged(bool is_active) {
+  if (split_engine::SplitEngineSerializer* serializer =
+          GetView().GetSplitEngineSerializer()) {
+    serializer->SetMeshCollider(GetEntity(), is_active);
   }
 }
 

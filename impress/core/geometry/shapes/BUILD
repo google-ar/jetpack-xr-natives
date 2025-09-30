@@ -33,6 +33,7 @@ cc_library(
         "box.h",
         "capsule.h",
         "circle.h",
+        "compound_shape.h",
         "cone.h",
         "cylinder.h",
         "line.h",

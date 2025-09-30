@@ -110,7 +110,7 @@ namespace imp {
 
 namespace {
 
-std::array<const char*, 17> kOpenXRExtensionsCore = {
+std::array<const char*, 19> kOpenXRExtensionsCore = {
     XR_KHR_ANDROID_THREAD_SETTINGS_EXTENSION_NAME,        //
     XR_KHR_GRAPHICS_ENABLE_EXTENSION_NAME,                //
     XR_EXT_HAND_TRACKING_EXTENSION_NAME,                  //
@@ -128,6 +128,8 @@ std::array<const char*, 17> kOpenXRExtensionsCore = {
     XR_ANDROID_UNBOUNDED_REFERENCE_SPACE_EXTENSION_NAME,  //
     XR_EXT_LOCAL_FLOOR_EXTENSION_NAME,                    //
     XR_FB_HAND_TRACKING_MESH_EXTENSION_NAME,              //
+    XR_KHR_VISIBILITY_MASK_EXTENSION_NAME,                //
+    XR_ANDROID_SCENE_MESHING_EXTENSION_NAME,              //
 };
 
 std::array<const char*, 2> kOpenXRExtensionsFbFoveation = {
@@ -195,8 +197,10 @@ XrSessionHost::XrSessionHost(std::unique_ptr<BaseView> view,
       swapchain_size_multiplier_(options.swapchain_size_multiplier),
       current_foveation_level_(options.foveation_level),
       view_configuration_type_(
-          options.use_quad_views ? XR_VIEW_CONFIGURATION_TYPE_PRIMARY_QUAD_VARJO
-                                 : XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO),
+          options.use_mono_view ? XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO
+          : options.use_quad_views
+              ? XR_VIEW_CONFIGURATION_TYPE_PRIMARY_QUAD_VARJO
+              : XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO),
       is_varjo_foveated_rendering_enabled_(
           options.use_quad_views && options.use_varjo_foveated_rendering),
       msaa_sample_count_(options.msaa_sample_count),
@@ -1058,11 +1062,23 @@ absl::Status XrSessionHost::PollEvents() {
         imp::output::Xr("Xr space change pending.");
         GetView()->GetDispatcher().Send(OpenXrSpaceChangePendingEvent{});
         break;
+      case XR_TYPE_EVENT_DATA_VISIBILITY_MASK_CHANGED_KHR: {
+        imp::output::Xr("Xr visibility mask changed.");
+        const auto& visibility_mask_changed =
+            *reinterpret_cast<const XrEventDataVisibilityMaskChangedKHR*>(
+                *event);
+        GetView()->GetDispatcher().Send(OpenXrVisibilityMaskChangedEvent(
+            visibility_mask_changed.viewIndex));
+        break;
+      }
       default: {
         imp::output::Xr("Ignoring event type %i", (*event)->type);
         break;
       }
     }
+    // Send the event as an OpenXrGenericEvent.
+    GetView()->GetDispatcher().Send(OpenXrGenericEvent(
+        reinterpret_cast<const XrEventDataBuffer&>(*event.value())));
   }
 
   return absl::OkStatus();
@@ -1726,6 +1742,12 @@ absl::Status XrSessionHost::BeginAndDiscardFrame(XrTime predictedDisplayTime) {
 
 void XrSessionHost::PerformRender(filament::View* view) {
   IMP_TRACE();
+
+  if (view_configuration_type_ == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
+    PerformMonoRender(view);
+    return;
+  }
+
   if (is_enhanced_stereoscopic_rendering_enabled_) {
     PerformEnhancedStereoscopicRender(view);
   } else {
@@ -1771,6 +1793,19 @@ void XrSessionHost::PerformEnhancedStereoscopicRender(filament::View* view) {
   renderer_->render(view);
 }
 
+void XrSessionHost::PerformMonoRender(filament::View* view) {
+  
+
+  // Only render the left eye under the mono view configuration.
+  UpdateCameraFromXrView(latest_views_[0]);
+
+  uint32_t view_width = GetViewWidth(GetActiveViewConfigs()->at(0));
+  uint32_t view_height = GetViewHeight(GetActiveViewConfigs()->at(0));
+
+  view->setViewport(filament::Viewport{0, 0, view_width, view_height});
+  renderer_->render(view);
+}
+
 filament::Engine::StereoscopicType XrSessionHost::GetStereoscopicType() const {
   if (!is_enhanced_stereoscopic_rendering_enabled_) {
     return filament::Engine::StereoscopicType::NONE;
@@ -1787,10 +1822,14 @@ bool XrSessionHost::IsMultiviewStereo() const {
 }
 
 uint32_t XrSessionHost::GetLogicalEyeCount() const {
-  return view_configuration_type_ ==
-                 XR_VIEW_CONFIGURATION_TYPE_PRIMARY_QUAD_VARJO
-             ? 4
-             : 2;
+  switch (view_configuration_type_) {
+    case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_QUAD_VARJO:
+      return 4;
+    case XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO:
+      return 1;
+    default:
+      return 2;
+  }
 }
 
 void XrSessionHost::UpdateCameraFromXrView(const XrView& view) {

@@ -34,11 +34,16 @@
 #include "core/materials/material.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
+#include "core/model/entity_data.h"
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
 #include "core/split_engine/materials/split_engine_material.h"
 #include "core/view/base_view.h"
 #include "core/view/utils/string_map.h"
+
+namespace imp::model {
+struct MaterialTexture;
+}  // namespace imp::model
 
 namespace imp::split_engine {
 
@@ -51,6 +56,8 @@ class SplitEngineGenericMaterial : public SplitEngineMaterial,
                                    public GenericMaterial {
  public:
   // Creates a generic material on the remote renderer.
+  // Please note that schema::GenericMaterialDepthClearMaterial is NOT
+  // supported in Split Engine.
   static Future<std::unique_ptr<SplitEngineGenericMaterial>> Create(
       BaseView& view, const GenericMaterialSpec& spec);
 
@@ -61,18 +68,34 @@ class SplitEngineGenericMaterial : public SplitEngineMaterial,
   absl::Status AssignTexturesAndParams(
       const GenericMaterialParameters& generic_material_parameters,
       const TextureBorrower& texture_borrower) override;
-  // TODO: Remove this once we fully migrate to TextureBorrower.
-  absl::Status AssignTexturesAndParams(
-      const GenericMaterialParameters& generic_material_parameters,
-      const TextureProvider& texture_provider) override;
 
   absl::string_view GetName() const override;
-  std::vector<MaterialParameter> GetParameters() const override;
-  TypedVector<MaterialTexture> GetTextures() const override;
+  std::vector<model::MaterialParameter> GetParameters() const override;
+  TypedVector<model::MaterialTexture> GetTextures() const override;
   StringMap<int> GetSamplerIndexLookup() const override;
 
   TextureAndSampler GetBaseColorTexture() const override;
   absl::Status SetBaseColorUvTransform(const mat3f& uv_transform) override;
+  // Note: If you are using GenericMaterial on non glTF models (e.g., a simple
+  // quad with color), you should set the vertex color to white before calling
+  // `SetBaseColorFactor`. This is because GenericMaterial *requires* that
+  // mesh has vertex color attributes. See
+  // google3/third_party/impress/core/loader/data/generic_material_unlit.mat.template.glsl
+  // Vertex color can be set via QuadSettings.
+  // For example:
+  // imp::CreateQuadSettings quad_settings{
+  //     .color = kWhite,
+  //     // your other settings
+  //     .size = {1.0f, 1.0f}
+  // };
+  // auto render_component =
+  //     quad_video_node_->AddComponent<imp::MeshRenderer>();
+  // render_component->SetMesh(
+  //     GetView().GetMeshFactory().CreatePanel(quad_settings));
+  // imp::split_engine::SplitEngineGenericMaterial::Create(...)
+  //     .Then([](std::unique_ptr<SplitEngineGenericMaterial> material) {
+  //   material->SetBaseColorFactor(your_color);
+  // });
   void SetBaseColorFactor(const float4& factor) override;
   float4 GetBaseColorFactor() const override;
 
@@ -114,6 +137,9 @@ class SplitEngineGenericMaterial : public SplitEngineMaterial,
   absl::Status SetTransmissionUvTransform(const mat3f& uv_transform) override;
   void SetTransmissionFactor(float factor) override;
   void SetIndexOfRefraction(float index_of_refraction) override;
+
+  std::optional<TextureAndSampler> GetFeatureIdTexture(
+      int index) const override;
 
   void SetAlphaCutoff(float alpha_cutoff) override;
   float GetAlphaCutoff() const override;

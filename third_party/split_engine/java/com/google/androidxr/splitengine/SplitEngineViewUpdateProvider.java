@@ -19,14 +19,14 @@ package com.google.androidxr.splitengine;
 import android.app.Activity;
 import android.util.DisplayMetrics;
 import androidx.annotation.Nullable;
+import androidx.xr.scenecore.impl.JxrPlatformAdapterAxr;
+import androidx.xr.scenecore.impl.perception.Fov;
+import androidx.xr.scenecore.impl.perception.Pose;
+import androidx.xr.scenecore.impl.perception.ViewProjection;
+import androidx.xr.scenecore.impl.perception.ViewProjections;
 import com.android.extensions.xr.node.Node;
 import com.google.ar.imp.view.splitengine.ImpSplitEngine;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.google.vr.realitycore.runtime.androidxr.JxrPlatformAdapterAxr;
-import com.google.vr.realitycore.runtime.androidxr.perception.Fov;
-import com.google.vr.realitycore.runtime.androidxr.perception.Pose;
-import com.google.vr.realitycore.runtime.androidxr.perception.ViewProjection;
-import com.google.vr.realitycore.runtime.androidxr.perception.ViewProjections;
 import java.util.concurrent.Executors;
 
 /**
@@ -35,6 +35,7 @@ import java.util.concurrent.Executors;
  * from the headless OpenXR Session held by JXRCore. Additionally, this class provides the screen
  * size of the device by querying the window manager.
  */
+@SuppressWarnings("RestrictTo")
 public class SplitEngineViewUpdateProvider implements ImpSplitEngine.SplitEngineViewParamsProvider {
 
   private static final String TAG = SplitEngineViewUpdateProvider.class.getSimpleName();

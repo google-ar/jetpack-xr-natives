@@ -34,7 +34,6 @@
 #include "core/animation/gltf_animation.h"
 #include "core/animation/schemas/gltf_animation_generated.h"
 #include "core/async/future.h"
-#include "core/async/future_group.h"
 #include "core/common/filament_engine_helpers.h"
 #include "core/common/optional_error.h"
 #include "core/common/trace.h"
@@ -76,7 +75,6 @@ Creator::~Creator() {
 
 Future<std::unique_ptr<model::ModelData>> Creator::CreateModel(
     Engine *engine, LoaderOptions options,
-    std::optional<FutureGroup> future_group,
     std::optional<absl::string_view> name) {
   IMP_TRACE();
   model_creator_ = std::make_unique<ModelCreator>(engine, options);
@@ -87,14 +85,12 @@ Future<std::unique_ptr<model::ModelData>> Creator::CreateModel(
   }
 
   Future<absl::Status> load_all_future = model_creator_->LoadAll(
-      view_, model, material_package_, std::move(images_), future_group, name);
+      view_, model, material_package_, std::move(images_), name);
 
-  return load_all_future.Then(
-      [this]() {
-        IMP_TRACE_BLOCK("Then");
-        return model_creator_->CreateModelData(&view_);
-      },
-      {.future_group = future_group});
+  return load_all_future.Then([this]() {
+    IMP_TRACE_BLOCK("Then");
+    return model_creator_->CreateModelData(&view_);
+  });
 }
 
 absl::StatusOr<std::unique_ptr<animation::GltfAnimation>>
@@ -162,9 +158,8 @@ void Creator::RemoveWhenFullyLoadedCallback() {
   model_creator_->RemoveWhenFullyLoadedCallback();
 }
 
-Future<absl::Status> Creator::LoadImages(
-    const imp::Context &context, std::function<void()> callback,
-    std::optional<FutureGroup> future_group) {
+Future<absl::Status> Creator::LoadImages(const imp::Context& context,
+                                         std::function<void()> callback) {
   const schemas::LoadedModel *model = *access_;
   // Load textures.
   if (model->textures()->size() != model->images()->size()) {
@@ -180,11 +175,9 @@ Future<absl::Status> Creator::LoadImages(
     auto image_info = model->images()->Get(i);
     load_images_futures.push_back(
         LoadImage(context, texture_info, image_type, image_info, callback)
-            .Then(
-                [this, i](std::unique_ptr<image::ImageContents> image) {
-                  images_[i] = std::move(image);
-                },
-                {.future_group = future_group}));
+            .Then([this, i](std::unique_ptr<image::ImageContents> image) {
+              images_[i] = std::move(image);
+            }));
   }
   return Future<absl::Status>::CombineList(load_images_futures);
 }

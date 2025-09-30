@@ -3,6 +3,7 @@ load(
     "filament_copts",
     "filament_defines",
     "filament_generate_materials",
+    "filament_get_internal_material_targets",
     "if_android",
     "if_apple",
     "if_fgviewer",
@@ -102,7 +103,8 @@ cc_library(
     cc_library(
         name = "generated_%s_%s_%s_%s_%s_materials" % (platform, api, fl0, multiview, precompile),
         srcs = [
-            "%s/%s/%s/%s/%s/generated/resources/materials.c" % (platform, api, fl0, multiview, precompile),
+            "%s/%s/%s/%s/%s/generated/resources/%s.c" % (platform, api, fl0, multiview, precompile, target)
+            for target in filament_get_internal_material_targets()
         ],
         hdrs = [],
         copts = filament_copts(),
@@ -113,7 +115,8 @@ cc_library(
         ],
         linkstatic = 1,
         textual_hdrs = [
-            "%s/%s/%s/%s/%s/generated/resources/materials.h" % (platform, api, fl0, multiview, precompile),
+            "%s/%s/%s/%s/%s/generated/resources/%s.h" % (platform, api, fl0, multiview, precompile, target)
+            for target in filament_get_internal_material_targets()
         ],
         alwayslink = 1,
     )
@@ -165,6 +168,7 @@ cc_library(
             "src/details/*.cpp",
             "src/fg/*.cpp",
             "src/ds/*.cpp",
+            "src/materials/**/*.cpp",
         ]),
         copts = filament_copts() + [
             "-Wno-bool-operation",  # TODO: Remove this.
@@ -188,7 +192,7 @@ cc_library(
             "src/fg/*.h",
             "src/fg/details/*.h",
             "src/ds/*.h",
-            "src/materials/fsr/*.h",
+            "src/materials/**/*.h",
         ]),
         deps = [
             ":filament_hdrs",

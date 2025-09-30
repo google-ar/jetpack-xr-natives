@@ -19,6 +19,7 @@
 #include <utility>
 
 #include "absl/memory/memory.h"
+#include "filament/filament/include/filament/TextureSampler.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
@@ -77,12 +78,13 @@ flatbuffers::Offset<void> WaterReflectionMaterial::SerializeParameters(
   flatbuffers::Offset<android_xr::schemas::BuiltInTextureParameter>
       reflection_cube;
   if (reflection_cube_) {
-    reflection_cube =
-        texture_parameter_creator.Create(fbb, reflection_cube_.Borrow());
+    reflection_cube = texture_parameter_creator.Create(
+        fbb, reflection_cube_->first.Borrow(), reflection_cube_->second);
   }
   flatbuffers::Offset<android_xr::schemas::BuiltInTextureParameter> normal_map;
   if (normal_map_) {
-    normal_map = texture_parameter_creator.Create(fbb, normal_map_.Borrow());
+    normal_map = texture_parameter_creator.Create(
+        fbb, normal_map_->first.Borrow(), normal_map_->second);
   }
   android_xr::schemas::Float normal_tiling =
       imp::split_engine::Pack(normal_tiling_.value_or(kDefaultNormalTiling));
@@ -90,7 +92,8 @@ flatbuffers::Offset<void> WaterReflectionMaterial::SerializeParameters(
       imp::split_engine::Pack(normal_speed_.value_or(kDefaultNormalSpeed));
   flatbuffers::Offset<android_xr::schemas::BuiltInTextureParameter> alpha_map;
   if (alpha_map_) {
-    alpha_map = texture_parameter_creator.Create(fbb, alpha_map_.Borrow());
+    alpha_map = texture_parameter_creator.Create(
+        fbb, alpha_map_->first.Borrow(), alpha_map_->second);
   }
 
   android_xr::schemas::Float alpha_step_multiplier = imp::split_engine::Pack(
@@ -109,14 +112,17 @@ flatbuffers::Offset<void> WaterReflectionMaterial::SerializeParameters(
 }
 
 void WaterReflectionMaterial::SetReflectionCube(
-    imp::OwnedOrBorrowedTexturePtr reflection_cube) {
-  reflection_cube_ = std::move(reflection_cube);
+    imp::OwnedOrBorrowedTexturePtr reflection_cube,
+    std::optional<filament::TextureSampler> sampler) {
+  reflection_cube_ =
+      std::make_pair(std::move(reflection_cube), std::move(sampler));
   MarkParametersDirty();
 }
 
 void WaterReflectionMaterial::SetNormalMap(
-    imp::OwnedOrBorrowedTexturePtr normal_map) {
-  normal_map_ = std::move(normal_map);
+    imp::OwnedOrBorrowedTexturePtr normal_map,
+    std::optional<filament::TextureSampler> sampler) {
+  normal_map_ = std::make_pair(std::move(normal_map), std::move(sampler));
   MarkParametersDirty();
 }
 
@@ -131,8 +137,9 @@ void WaterReflectionMaterial::SetNormalSpeed(float normal_speed) {
 }
 
 void WaterReflectionMaterial::SetAlphaMap(
-    imp::OwnedOrBorrowedTexturePtr alpha_map) {
-  alpha_map_ = std::move(alpha_map);
+    imp::OwnedOrBorrowedTexturePtr alpha_map,
+    std::optional<filament::TextureSampler> sampler) {
+  alpha_map_ = std::make_pair(std::move(alpha_map), std::move(sampler));
   MarkParametersDirty();
 }
 

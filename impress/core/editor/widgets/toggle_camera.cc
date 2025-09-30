@@ -14,24 +14,37 @@
 
 #include "core/editor/widgets/toggle_camera.h"
 
-#include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
+#include "core/assets/asset_ptr.h"
+#include "core/async/future.h"
 #include "core/common/registry.h"
 #include "core/editor/editor.h"
 #include "core/editor/events.h"
+#include "core/editor/widgets/icons/texture_assets.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
+#include "core/render/texture_asset.h"
 #include "core/view/base_view.h"
+#include "core/view/framework/assets/asset_manager.h"
 
 namespace imp::editor {
 
 namespace {
-constexpr absl::string_view kSwitchCameraButtonLabel = "Switch camera";
+constexpr ImVec2 kButtonSize(24, 24);
+}  // namespace
+
+ToggleCamera::ToggleCamera(BaseView& view) : view_(view) {
+  view_.GetAssetManager()
+      .LoadTexture(texture_data::kCameraSwitchPng)
+      .Then([this](AssetPtr<imp::TextureAsset> switch_camera_icon) mutable {
+        switch_camera_icon_ = switch_camera_icon;
+      })
+      .KeptBy(&rememberer_);
 }
 
-ToggleCamera::ToggleCamera(BaseView& view) : view_(view) {}
-
 void ToggleCamera::DrawImGui() {
-  if (ImGui::Button(kSwitchCameraButtonLabel.data())) {
+  if (switch_camera_icon_ &&
+      ImGui::ImageButton(switch_camera_icon_->GetFilamentTexture(),
+                         kButtonSize)) {
     Editor& editor = view_.GetRegistry().Get<Editor>()->get();
     editor.GetDispatcher().Send(ToggleCameraEvent());
   }

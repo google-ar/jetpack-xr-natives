@@ -130,20 +130,22 @@ bool ContainsRtl(absl::string_view text) {
   return false;
 }
 
-std::vector<Chunk> GetChunks(absl::string_view text) {
+std::vector<Chunk> GetChunks(absl::string_view text, bool force_non_separable) {
   std::vector<Chunk> chunks;
 
   // Skia doesn't support rendering mixed direction text, so don't combine
   // mixed direction text into a single chunk for Desktop.
   // TODO: (broken link) - Fixed mixed direction text rendering on Desktop.
+  if (
 #if !IMP_PLATFORM(DESKTOP)
-  if (IsMixedRtl(text)) {
+      IsMixedRtl(text) ||
+#endif
+      force_non_separable) {
     chunks.push_back(Chunk{.chunk_text = std::string(text),
                            .codepoint_count = 1,
                            .is_separable = false});
     return chunks;
   }
-#endif
   // Split up the text into runs of separable and non-separable texts. For the
   // sections that are non-separable, treat and render it as if it were a
   // single glyph chunk.

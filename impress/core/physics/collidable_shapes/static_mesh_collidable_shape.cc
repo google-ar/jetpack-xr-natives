@@ -60,7 +60,7 @@ float3 GetVertexWorldPosition(MeshVertexData* vertex_data,
 }  // namespace
 
 StaticMeshCollidableShape::StaticMeshCollidableShape(NodeHandle node)
-    : node_(node) {}
+    : CollidableShape(node) {}
 
 void StaticMeshCollidableShape::PushTriangles(MeshVertexData* vertex_data,
                                               MeshIndexData* index_data) {

@@ -25,7 +25,6 @@
 #include "absl/status/statusor.h"
 #include "core/common/robin_map.h"
 #include "core/recipes/language/recipe_graph.proto.imp.h"
-#include "core/recipes/language/recipe_runtime_graph.h"
 #include "core/recipes/language/recipe_utils.h"
 #include "core/view/utils/string_map.h"
 
@@ -51,7 +50,7 @@ struct RecipeEditorGraph {
   };
 
   struct Node {
-    const RecipeNode* recipe_node;
+    RecipeNode* recipe_node;
     NodeId id;
     std::string type_name;
     std::string name;
@@ -72,7 +71,7 @@ struct RecipeEditorGraph {
   };
 
   static absl::StatusOr<std::unique_ptr<RecipeEditorGraph>> Create(
-      RecipeRuntimeGraph& recipe_runtime_graph);
+      RecipeGraph& recipe_graph);
 
   RobinMap<NodeId, Node> nodes;
   std::vector<Link> links;

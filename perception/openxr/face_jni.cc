@@ -21,7 +21,10 @@
 #include "openxr/jobject_creator.h"
 #include "openxr/openxr_manager.h"
 
-static jobject NativeGetFaceState(JNIEnv* env, jlong monotonic_time_ns) {
+extern "C" {
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrFace_nativeGetFaceState(
+    JNIEnv* env, jclass /*clazz*/, jlong monotonic_time_ns) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   XrFaceStateANDROID face_state;
@@ -33,12 +36,5 @@ static jobject NativeGetFaceState(JNIEnv* env, jlong monotonic_time_ns) {
     return nullptr;
   }
   return androidx::xr::openxr::CreateJavaFaceState(env, face_state);
-}
-
-extern "C" {
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrFace_nativeGetFaceState(
-    JNIEnv* env, jclass /*clazz*/, jlong monotonic_time_ns) {
-  return NativeGetFaceState(env, monotonic_time_ns);
 }
 }  // extern "C"

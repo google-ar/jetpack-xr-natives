@@ -25,6 +25,7 @@
 #include "core/geometry/shapes/box.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/isf_info.h"
+#include "core/ncsb/node_handle.h"
 #include "core/view/framework/collision/collider_state.proto.imp.h"
 #include "core/view/framework/collision/ray_hit.h"
 
@@ -53,6 +54,11 @@ class BoxCollider : public Component, public ColliderMaskHelpers<BoxCollider> {
   absl::optional<RayHit> Intersect(const Ray& ray);
   absl::optional<DoubleRayHit> IntersectPrecise(const DoubleRay& ray);
 
+  // Sets the node that should be considered the "hit" node when this collider
+  // collides with a ray.
+  void SetHitNode(NodeHandle hit_node);
+  NodeHandle GetHitNode() const;
+
   void OnActiveStatusChanged(bool is_active);
 
  private:
@@ -60,6 +66,7 @@ class BoxCollider : public Component, public ColliderMaskHelpers<BoxCollider> {
   friend class ColliderMaskHelpers<BoxCollider>;
   BoxColliderState state_;
   Flags<CollisionMask> collision_flags_;
+  NodeHandle hit_node_;
 
  public:
   using IsfInfo = IsfInfo<&BoxCollider::state_>;

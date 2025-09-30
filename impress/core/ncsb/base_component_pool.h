@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_NCSB_BASE_COMPONENT_POOL_H_
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -142,25 +143,47 @@ class BaseComponentPool {
   // Data structure used to actually store component memory.
   //
   // Guarantees pointer stability of components.
-  class ComponentVector {
+  class ComponentStore {
    public:
-    explicit ComponentVector(BaseComponentPool* pool);
+    explicit ComponentStore(BaseComponentPool* pool);
 
+    bool Has(utils::Entity entity) const;
+
+    ComponentIndex GetIndex(utils::Entity entity) const;
+
+    // Returns true if there are no components in the store.
     bool Empty() const;
+
+    // Returns the number of components in the store.
+    size_t GetComponentCount() const;
+
+    // Returns the entity of the last component in the store.
+    utils::Entity BackEntity() const;
 
     // Adds a new component of type T to the vector.
     // InstanceId can change when SwapAndPop is called.
     // Pointer is guaranteed to be stable.
     template <typename T>
-    ComponentIndex EmplaceBack();
+    T* Emplace(utils::Entity entity);
 
-    utils::Entity SwapAndPop(ComponentIndex instance);
+    // Removes the component with the given entity from the store.
+    void Remove(utils::Entity entity);
 
-    Component& AtRaw(ComponentIndex instance);
-    const Component& AtRaw(ComponentIndex instance) const;
+    // Access the raw component at the given index.
+    //
+    // Note 1: When components are removed, it may change the index of the
+    // remaining components.
+    //
+    // Note 2: While iterating over components, if a component is removed there
+    // may be a gap in the indices. The indices are compacted again after
+    // iteration ends.
+    Component& AtRaw(ComponentIndex index);
+    const Component& AtRaw(ComponentIndex index) const;
+
+    Component* TryGetRaw(utils::Entity entity);
 
     template <typename T>
-    T& At(ComponentIndex instance);
+    T& At(ComponentIndex index);
 
     template <typename T, typename Fn>
     void ForEach(Fn fn);
@@ -169,6 +192,8 @@ class BaseComponentPool {
     void UpdateEach(Fn fn);
 
    private:
+    void TryDensifyComponentsVector();
+
     // Unique Pointer with custom deleter to store components in a type-erased
     // pointer stable way. The custom deleter is used so that components are not
     // required to have virtual destructors.
@@ -180,20 +205,44 @@ class BaseComponentPool {
     // the end already) and remove it from the end.
     std::vector<ComponentPtr> components_;
 
+    absl::flat_hash_map<utils::Entity, ComponentIndex, EntityHasher>
+        entities_to_indices_;
+
+    // Used to track when we are in the middle of iterating over components.
+    //
+    // This is used to handle the case where a component is removed during
+    // iteration. Normally, we swap and pop the removed component to keep the
+    // vector compact but that can cause the iteration to skip over components.
+    //
+    // If iterating, we don't compact the vector until after iteration ends.
+    //
+    // This is an integer instead of a bool because we can have nested
+    // iterations.
+    uint32_t iterating_depth_ = 0;
+
+    // The number of indices in the components vector that are empty.
+    //
+    // This is only used when components are removed during iteration, which
+    // leads to the vector temporarily having gaps in it.
+    //
+    // This is used to determine if the vector needs to be compacted, and to
+    // ensure that GetComponentCount and Empty work correctly while iterating.
+    uint32_t free_indices_count_ = 0;
+
     BaseComponentPool* pool_;
   };
 
-  ComponentVector& GetComponents() { return components_; }
+  ComponentStore& GetComponents() { return components_; }
 
   BaseView& GetView() { return view_; }
 
   void Forget(utils::Entity e);
 
-  // Adds a new component and returns it's instance id.
-  virtual ComponentIndex EmplaceBack() noexcept = 0;
+  // Adds a new component and returns a pointer to it.
+  virtual Component* Emplace(utils::Entity entity) noexcept = 0;
 
   // Calls Cleanup on the component with the instance id passed in.
-  virtual void Cleanup(ComponentIndex instance) noexcept = 0;
+  virtual void Cleanup(Component& component) noexcept = 0;
 
   // Called if there are no entries in the pool.
   virtual void BeforeFirstAdded() noexcept {}
@@ -210,49 +259,72 @@ class BaseComponentPool {
 
  private:
   BaseView& view_;
-  ComponentVector components_;
-  absl::flat_hash_map<utils::Entity, ComponentIndex, EntityHasher>
-      entities_to_instances_;
+  ComponentStore components_;
   absl::flat_hash_map<utils::Entity, Rememberer, EntityHasher> rememberers_;
   absl::flat_hash_map<utils::Entity, WeakFuture<absl::Status>, EntityHasher>
       weak_setup_futures_;
 };
 
 template <typename T>
-BaseComponentPool::ComponentIndex
-BaseComponentPool::ComponentVector::EmplaceBack() {
+T* BaseComponentPool::ComponentStore::Emplace(utils::Entity entity) {
   components_.push_back(ComponentPtr(
       new T(), +[](Component* raw_component) {
         T* component = static_cast<T*>(raw_component);
         delete component;
       }));
-  return components_.size() - 1;
+
+  entities_to_indices_[entity] = components_.size() - 1;
+
+  return static_cast<T*>(components_.back().get());
 }
 
 template <typename T>
-T& BaseComponentPool::ComponentVector::At(
-    BaseComponentPool::ComponentIndex instance) {
-  return static_cast<T&>(AtRaw(instance));
+T& BaseComponentPool::ComponentStore::At(
+    BaseComponentPool::ComponentIndex index) {
+  return static_cast<T&>(AtRaw(index));
 }
 
 template <typename T, typename Fn>
-void BaseComponentPool::ComponentVector::ForEach(Fn fn) {
-  // Iterate using indices so that it is save to add/remove components during
+void BaseComponentPool::ComponentStore::ForEach(Fn fn) {
+  ++iterating_depth_;
+
+  // Iterate using indices so that it is safe to add/remove components during
   // iteration.
   for (ComponentIndex i = 0; i < components_.size(); i++) {
-    if (!pool_->Pending(pool_->GetEntity(i))) {
-      fn(static_cast<T*>(components_.at(i).get()));
+    T* component = static_cast<T*>(components_[i].get());
+
+    // If the component is null, it is implied that it was removed during
+    // iteration. After iteration ends, the vector will be compacted.
+    if (!component) {
+      continue;
+    }
+
+    if (!pool_->Pending(component->GetEntity())) {
+      fn(component);
     }
   }
+
+  --iterating_depth_;
+
+  TryDensifyComponentsVector();
 }
 
 template <typename T, typename Fn>
-void BaseComponentPool::ComponentVector::UpdateEach(Fn fn) {
-  // Iterate using indices so that it is save to add/remove components during
+void BaseComponentPool::ComponentStore::UpdateEach(Fn fn) {
+  ++iterating_depth_;
+
+  // Iterate using indices so that it is safe to add/remove components during
   // iteration.
   for (ComponentIndex i = 0; i < components_.size(); i++) {
-    if (!pool_->Pending(pool_->GetEntity(i))) {
-      T* component = static_cast<T*>(components_.at(i).get());
+    T* component = static_cast<T*>(components_[i].get());
+
+    // If the component is null, it is implied that it was removed during
+    // iteration. After iteration ends, the vector will be compacted.
+    if (!component) {
+      continue;
+    }
+
+    if (!pool_->Pending(component->GetEntity())) {
 #if IMP_RUNTIME(DEV)
       // Skip components that should not be updated in editor draft/pause mode.
       if constexpr (!component_traits::kShouldRunInEditMode<T>) {
@@ -271,6 +343,10 @@ void BaseComponentPool::ComponentVector::UpdateEach(Fn fn) {
       }
     }
   }
+
+  --iterating_depth_;
+
+  TryDensifyComponentsVector();
 }
 
 }  // namespace imp

@@ -60,12 +60,12 @@
 #include "core/loader/provider/gltf/dense_data_access.h"
 #include "core/loader/provider/schemas/loaded_model_generated.h"
 #include "core/material_library/generic_material_spec.h"
-#include "core/material_library/material_param_value.h"
 #include "core/material_library/schemas/generic_material_generated.h"
 #include "core/math/flatbuffer_support.h"
 #include "core/math/mat.h"
 #include "core/math/transform.h"
 #include "core/math/vec.h"
+#include "core/model/entity_data.h"
 #include "core/model/model_data.h"
 #include "core/model/skeleton_data.h"
 #include "mediapipe/framework/port/status_macros.h"
@@ -312,7 +312,7 @@ absl::Span<const uint8_t> GetImageDataSpan(
   return {};
 }
 
-TextureId LoadedModelBuilder::AddTexture(
+model::TextureId LoadedModelBuilder::AddTexture(
     uint16_t lookup_index, absl::string_view image_name,
     schemas::TextureInfoFlags texture_info_flags, ImageData image_data) {
   auto it = absl::c_find_if(textures_, [image_name, &image_data = image_data](
@@ -343,7 +343,7 @@ LoadedModelBuilder::TextureId LoadedModelBuilder::GetTexture(
   return itr->second;
 }
 
-MaterialId LoadedModelBuilder::AddMaterial(
+model::MaterialId LoadedModelBuilder::AddMaterial(
     uint16_t lookup_index,
     flatbuffers::Offset<schemas::MaterialInfo> material_offset) {
   MaterialId material_id =

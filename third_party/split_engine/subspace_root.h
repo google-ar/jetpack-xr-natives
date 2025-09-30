@@ -18,6 +18,7 @@
 #define THIRD_PARTY_SPLIT_ENGINE_SUBSPACE_ROOT_H_
 #include <cstdint>
 #include <optional>
+#include <string>
 
 #include "absl/status/status.h"
 #include "core/common/rememberer.h"
@@ -44,6 +45,10 @@ class SubspaceRoot : public imp::Rememberer {
     subspace_root_->SetLocalTrs(root_transform_);
     subspace_root_->AddComponent<Tag>();
   };
+
+  void SetSubspaceName(std::string name) {
+    subspace_root_->SetName(name + "_app_side_subspace_root");
+  }
 
   ~SubspaceRoot() {
     if (subspace_anchor_) {

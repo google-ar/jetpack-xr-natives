@@ -21,15 +21,16 @@
 #include <cstdint>
 #include <memory>
 
-#include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
+#include "core/split_engine/android/buffer_handle_factory.h"
 
 namespace imp::split_engine {
 
 // Manages a shared memory bridge buffer.
 class BridgeBuffer {
+  using BufferHandle = BufferHandleFactory::BufferHandle;
+
  public:
-  BridgeBuffer(SplitEngineSharedMemoryBridgeClient& bridge,
-               size_t buffer_size_bytes);
+  BridgeBuffer(BufferHandleFactory& handle_factory, size_t buffer_size_bytes);
   BridgeBuffer(BridgeBuffer&& other);
   BridgeBuffer(const BridgeBuffer&) = delete;
   BridgeBuffer& operator=(const BridgeBuffer&) = delete;
@@ -37,18 +38,19 @@ class BridgeBuffer {
   ~BridgeBuffer();
 
   void* Data() { return mmapped_ptr_; }
-  const SplitEngineSharedMemoryBridgeClient::BufferHandle& Handle() {
-    return *handle_;
+  template <typename T>
+  const T* DataAs() const {
+    return reinterpret_cast<const T*>(mmapped_ptr_);
   }
+  const BufferHandle& GetHandle() const { return *handle_; }
 
-  bool IsValidBlock(const uint8_t* data, size_t data_size_in_bytes) {
-    return data >= Data() &&
-           (data + data_size_in_bytes) <=
-               (static_cast<const uint8_t*>(Data()) + size_in_bytes_);
+  bool IsValidBlock(const uint8_t* data, size_t data_size_in_bytes) const {
+    return data >= DataAs<uint8_t>() &&
+           (data + data_size_in_bytes) <= (DataAs<uint8_t>() + size_in_bytes_);
   }
 
  private:
-  std::unique_ptr<SplitEngineSharedMemoryBridgeClient::BufferHandle> handle_;
+  std::unique_ptr<BufferHandle> handle_;
 
   int shared_memory_region_fd_;
   void* mmapped_ptr_;

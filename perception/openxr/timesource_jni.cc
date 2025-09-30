@@ -16,22 +16,12 @@
 
 #include "openxr/openxr_manager.h"
 
-static jlong NativeGetXrTimeNow(JNIEnv* env) {
+extern "C" {
+JNIEXPORT jlong JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrTimeSource_nativeGetXrTimeNow(
+    JNIEnv* env, jobject /*clazz*/) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   return xr_manager.GetXrTimeNow();
-}
-
-extern "C" {
-JNIEXPORT jlong JNICALL
-Java_androidx_xr_openxr_OpenXrTimeSource_nativeGetXrTimeNow(JNIEnv* env,
-                                                            jobject /*clazz*/) {
-  return NativeGetXrTimeNow(env);
-}
-
-JNIEXPORT jlong JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrTimeSource_nativeGetXrTimeNow(
-    JNIEnv* env, jobject /*clazz*/) {
-  return NativeGetXrTimeNow(env);
 }
 }  // extern "C"

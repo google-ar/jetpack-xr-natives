@@ -25,7 +25,6 @@
 #include "absl/types/optional.h"
 #include "filament/filament/include/filament/Color.h"
 #include "filament/filament/include/filament/Engine.h"
-#include "filament/filament/include/filament/MaterialInstance.h"
 #include "core/common/filament_helpers.h"
 #include "core/common/paired_span.h"
 #include "core/common/typed_set_vector.h"
@@ -38,6 +37,7 @@
 #include "core/model/interactivity_data.h"
 #include "core/model/skeleton_data.h"
 #include "core/model/skin_data.h"
+#include "core/render/texture.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
 
@@ -53,7 +53,7 @@ ModelData::ModelData(
     SkeletonData skeleton, TypedVector<filament::VertexBuffer*> vertex_buffers,
     TypedVector<filament::IndexBuffer*> index_buffers,
     TypedVector<filament::MorphTargetBuffer*> morph_target_buffers,
-    TypedVector<filament::Texture*> textures,
+    TypedVector<OwnedTexturePtr> textures,
     TypedVector<GenericMaterialPtr> materials,
     absl::flat_hash_map<uint16_t, MaterialId> material_id_lookup,
     TypedVector<SkinningBufferData> skinning_buffers,
@@ -114,9 +114,6 @@ ModelData::~ModelData() {
     }
     engine_->destroy(morph_target_buffer);
   }
-  for (auto* texture : textures_) {
-    engine_->destroy(texture);
-  }
 }
 
 filament::Box ModelData::GetAxisAlignedBounds() const {
@@ -150,7 +147,7 @@ const TypedSetVector<EntityData>& ModelData::Entities() const {
   return entities_;
 }
 
-const TypedVector<filament::Texture*>& ModelData::Textures() const {
+const TypedVector<OwnedTexturePtr>& ModelData::Textures() const {
   return textures_;
 }
 

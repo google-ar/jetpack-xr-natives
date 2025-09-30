@@ -73,7 +73,7 @@ bool ContainsRtl(absl::string_view text);
 // Returns the chunks of adjacent codepoints within text that have the same
 // separability requirement. This is expected to be used on platforms that
 // don't support glyphs (WASM/Desktop).
-std::vector<Chunk> GetChunks(absl::string_view text);
+std::vector<Chunk> GetChunks(absl::string_view text, bool force_non_separable);
 
 #if !IMP_PLATFORM(DESKTOP)
 

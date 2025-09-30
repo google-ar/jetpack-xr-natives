@@ -32,7 +32,7 @@ namespace imp {
 // Enabled if T is a vector type.
 template <AlmostEqualKind kKind, typename T, EnableIfVector<T> = 0>
 bool AlmostEqual(T const& lhs, T const& rhs) {
-  for (int i = 0; i < T::SIZE; ++i) {
+  for (size_t i = 0; i < T::SIZE; ++i) {
     if (!internal::AlmostEqualHelper<kKind>(lhs[i], rhs[i])) {
       return false;
     }
@@ -43,8 +43,8 @@ bool AlmostEqual(T const& lhs, T const& rhs) {
 // Enabled if T is a matrix.
 template <AlmostEqualKind kKind, typename T, EnableIfMatrix<T> = 0>
 bool AlmostEqual(const T& lhs, const T& rhs) {
-  for (int i = 0; i < T::NUM_ROWS; ++i) {
-    for (int j = 0; j < T::NUM_COLS; ++j) {
+  for (size_t i = 0; i < T::NUM_ROWS; ++i) {
+    for (size_t j = 0; j < T::NUM_COLS; ++j) {
       if (!internal::AlmostEqualHelper<kKind>(lhs[i][j], rhs[i][j])) {
         return false;
       }

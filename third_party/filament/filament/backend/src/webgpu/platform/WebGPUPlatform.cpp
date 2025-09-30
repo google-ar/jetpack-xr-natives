@@ -61,7 +61,9 @@ constexpr std::array REQUIRED_FEATURES = {
     // Qualcomm 500 and 600 GPUs do not support this so it is not part of core webgpu spec. To
     // support such devices, we will either need Filament to not attempt this, or find another
     // workaround. https://github.com/gpuweb/gpuweb/issues/2648
-    wgpu::FeatureName::RG11B10UfloatRenderable
+    wgpu::FeatureName::RG11B10UfloatRenderable,
+    // necessary for blit conversions of formats like RGBA32Float...
+    wgpu::FeatureName::Float32Filterable,
 };
 
 constexpr std::array OPTIONAL_FEATURES = {
@@ -96,6 +98,7 @@ constexpr void forEachLimitToValidate(std::function<bool(LimitToValidate const)>
     for (auto limit = static_cast<uint8_t>(LimitToValidate::begin) + 1;
             limit < static_cast<uint8_t>(LimitToValidate::end); limit++) {
         auto castedLimit = static_cast<LimitToValidate>(limit);
+#ifndef NDEBUG
         bool castedToValidValue = false;
         switch (castedLimit) {
             case LimitToValidate::begin:
@@ -112,6 +115,7 @@ constexpr void forEachLimitToValidate(std::function<bool(LimitToValidate const)>
         assert_invariant(castedToValidValue &&
                          "LimitToValidate enum values are not sequentially incremented by 1? "
                          "Compilers normally do this by default; which compiler was used here?");
+#endif
         if (func(castedLimit)) {
             break;
         }
@@ -486,7 +490,8 @@ struct AdapterDetailsHash final {
     for (size_t i = 0; i < futures.size(); i++) {
         wgpu::RequestAdapterOptions const& options = requests[i];
         wgpu::Future& future = futures[i];
-        wgpu::WaitStatus status = instance.WaitAny(future, REQUEST_ADAPTER_TIMEOUT_NANOSECONDS);
+        wgpu::WaitStatus status =
+                instance.WaitAny(future, FILAMENT_WEBGPU_REQUEST_ADAPTER_TIMEOUT_NANOSECONDS);
         FILAMENT_CHECK_POSTCONDITION(status != wgpu::WaitStatus::TimedOut)
                 << "Timed out requesting a WebGPU adapter with options "
                 << adapterOptionsToString(options);
@@ -658,7 +663,7 @@ wgpu::Device WebGPUPlatform::requestDevice(wgpu::Adapter const& adapter) {
                         assert_invariant(status == wgpu::RequestDeviceStatus::Success);
                         device = readyDevice;
                     }),
-            REQUEST_DEVICE_TIMEOUT_NANOSECONDS);
+            FILAMENT_WEBGPU_REQUEST_DEVICE_TIMEOUT_NANOSECONDS);
     FILAMENT_CHECK_POSTCONDITION(status != wgpu::WaitStatus::TimedOut)
             << "Failed to request a WebGPU device due to a timeout.";
     FILAMENT_CHECK_POSTCONDITION(status != wgpu::WaitStatus::Error)

@@ -28,6 +28,7 @@
 #include "core/physics/physics_manager.h"
 #include "core/view/framework/collision/box_collider.h"
 #include "core/view/framework/collision/capsule_collider.h"
+#include "core/view/framework/collision/compound_collider.h"
 #include "core/view/framework/collision/cone_collider.h"
 #include "core/view/framework/collision/cylinder_collider.h"
 #include "core/view/framework/collision/sphere_collider.h"
@@ -74,7 +75,7 @@ class TriggerVolume : public Component {
   using IsfInfo = StatelessIsfInfo<
       TriggerVolume, kType,
       IsfDependencies<SphereCollider, BoxCollider, CapsuleCollider,
-                      CylinderCollider, ConeCollider>>;
+                      CylinderCollider, ConeCollider, CompoundCollider>>;
 };
 
 }  // namespace imp

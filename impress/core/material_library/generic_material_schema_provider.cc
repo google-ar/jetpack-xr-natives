@@ -18,7 +18,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/common/log.h"
@@ -47,6 +49,7 @@
 #include "core/material_library/schemas/generic_material_generated.h"
 #include "core/math/flatbuffer_support.h"
 #include "core/math/math.h"
+#include "core/model/entity_data.h"
 #include "mediapipe/framework/port/status_macros.h"
 
 namespace imp {
@@ -257,8 +260,8 @@ CreateGenericMaterialTextureParameter(
     uses_uv1 = true;
   }
 
-  TextureId texture_id = builder.GetTexture(texture_lookup_index);
-  if (texture_id == TextureId{}) {
+  model::TextureId texture_id = builder.GetTexture(texture_lookup_index);
+  if (texture_id == model::TextureId{}) {
     return absl::NotFoundError(absl::StrFormat(
         "Gltf requested an invalid texture index: %d for texture %s",
         texture_lookup_index, texture.name));
@@ -298,7 +301,7 @@ absl::Status CreateGenericMaterialSchemas(
     const loader::details::provider_gltf::ProcessedPrimitive&
         processed_primitive = processed_primitives[primitive_index];
     for (auto material_index : processed_primitive.required_materials) {
-      if (builder.GetMaterial(material_index) != MaterialId{}) continue;
+      if (builder.GetMaterial(material_index) != model::MaterialId{}) continue;
 
       // -1 is the Default material. Access the default material by passing
       // absl::nullopt into GetMaterial.
@@ -497,6 +500,25 @@ absl::Status CreateGenericMaterialSchemas(
                 m.extensions.transmission->transmission_factor.value_or(0.0f);
           }
         }
+      }
+
+      // EXT_mesh_features
+      if (!processed_primitive.feature_id_textures.empty()) {
+        std::vector<GenericMaterialTextureParameter> feature_ids;
+        feature_ids.reserve(processed_primitive.feature_id_textures.size());
+        for (const auto& feature_id_texture :
+             processed_primitive.feature_id_textures) {
+          std::optional<GenericMaterialTextureParameter>
+              feature_id_texture_parameter;
+          MP_ASSIGN_OR_RETURN(feature_id_texture_parameter,
+                           CreateGenericMaterialTextureParameter(
+                               builder, model, feature_id_texture));
+          if (feature_id_texture_parameter.has_value()) {
+            feature_ids.emplace_back(*feature_id_texture_parameter);
+          }
+        }
+        generic_material_parameters.feature_id_textures =
+            std::move(feature_ids);
       }
 
       if (m.alpha_cutoff.has_value()) {

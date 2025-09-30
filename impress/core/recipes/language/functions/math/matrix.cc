@@ -21,7 +21,7 @@
 #include "core/math/mat.h"
 #include "core/recipes/language/base_recipe_system.h"
 #include "core/recipes/language/functions/math/math.h"
-#include "core/recipes/language/recipe_graph.proto.imp.h"
+#include "core/recipes/language/recipe_types.proto.imp.h"
 #include "core/recipes/language/recipe_utils.h"
 
 namespace imp::recipe {
@@ -80,6 +80,19 @@ absl::StatusOr<float> Determinant(const recipe::Variable& value) {
   }
 }
 
+absl::StatusOr<recipe::Variable> InvertMatrix(const recipe::Variable& matrix) {
+  switch (matrix.index()) {
+    case Literal::kValue_Mat2fValue:
+      return inverse(std::get<mat2f>(matrix));
+    case Literal::kValue_Mat3fValue:
+      return inverse(std::get<mat3f>(matrix));
+    case Literal::kValue_Mat4fValue:
+      return inverse(std::get<mat4f>(matrix));
+    default:
+      return absl::InvalidArgumentError("input must be a matNf type.");
+  }
+}
+
 absl::StatusOr<recipe::Variable> Transpose(const recipe::Variable& value) {
   switch (value.index()) {
     case Literal::kValue_Mat2fValue:
@@ -122,6 +135,12 @@ void RegisterMathMatrixFunctions(BaseRecipeSystem* recipe_system) {
   recipe_system->RegisterFunction(
       "Determinant", [](recipe::Variable value) -> absl::StatusOr<float> {
         return Determinant(value);
+      });
+
+  recipe_system->RegisterFunction(
+      "InvertMatrix",
+      [](recipe::Variable matrix) -> absl::StatusOr<recipe::Variable> {
+        return InvertMatrix(matrix);
       });
 
   recipe_system->RegisterFunction(

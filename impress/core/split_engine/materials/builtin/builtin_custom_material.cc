@@ -25,6 +25,7 @@
 #include "absl/strings/string_view.h"
 #include "core/common/registry.h"
 #include "core/common/small_source_location.h"
+#include "core/config.h"
 #include "core/materials/material.h"
 #include "core/math/mat.h"
 #include "core/media/media_color_space.h"
@@ -90,6 +91,16 @@ void BuiltInCustomMaterial::UpdateColorSpaceParameters(
           source_texture_color_space.value().GetMaxContentLightLevel();
     }
   }
+
+#if IMP_PLATFORM(ANDROID)
+  if (transfer_function == static_cast<int>(MediaColorSpace::Transfer::kSDR)) {
+    // The default behavior on the vast majority of Android devices is to use
+    // SRGB instead of SMPTE170M for SurfaceView composition.
+    // See:
+    // (broken link)/
+    transfer_function = static_cast<int>(MediaColorSpace::Transfer::kSRGB);
+  }
+#endif
 
   GetMaterial()->SetParameter(kColorConversionMatrixParameter,
                               color_transform_matrix);

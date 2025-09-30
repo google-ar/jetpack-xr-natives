@@ -34,9 +34,19 @@ void SceneMetadata::SetBaseUrl(absl::string_view base_url) {
 
 absl::string_view SceneMetadata::GetBaseUrl() const { return base_url_; }
 
+bool SceneMetadata::IsFromBase() const {
+  return !base_url_.empty() || is_child_of_base_;
+}
+
 void SceneMetadata::SetBaseDisabled(bool disabled) {
   is_base_disabled_ = disabled;
 }
+
+void SceneMetadata::SetChildOfBase(bool is_child_of_base) {
+  is_child_of_base_ = is_child_of_base;
+}
+
+bool SceneMetadata::IsChildOfBase() const { return is_child_of_base_; }
 
 void SceneMetadata::SetBaseLocalPosition(float3 position) {
   base_local_position_ = position;

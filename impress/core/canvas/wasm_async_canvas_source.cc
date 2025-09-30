@@ -157,7 +157,8 @@ Future<ScopedCanvas::TextMetrics> WasmAsyncCanvasSource::MeasureGlyph(
   // TODO Don't measure the same text multiple times.
   std::string text =
       std::string(absl::get<absl::string_view>(glyph_to_measure.glyph));
-  std::vector<Chunk> typographical_chunks = GetChunks(text);
+  std::vector<Chunk> typographical_chunks =
+      GetChunks(text, text_options.force_non_separable);
   Future<float> typographical_width_future = Future<float>(0.0f);
 
   // Because measuring the typographical width incurs extra work, by default

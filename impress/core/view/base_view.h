@@ -110,8 +110,8 @@ class BaseView : public Rememberer,
 
   // Iterate over a subset of all Nodes in this view. Only nodes that meet all
   // flags will be included.
-  // i.e. ForEachNode(fn, NodeFlags::kIsEnabled | NodeFlags::kIsRoot) will only
-  // include enabled root nodes.
+  // i.e. ForEachNode(fn, NodeFlags::kIsEnabled | NodeFlags::kIsRoot)
+  // will only include enabled root nodes.
   virtual void ForEachNode(std::function<void(NodeHandle)>&& fn,
                            NodeFlag filter) = 0;
 

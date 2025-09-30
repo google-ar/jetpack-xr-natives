@@ -39,7 +39,6 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         "//core:config",
-        "//core/common:log",
         "//core/common:registry",
         "//core/editor",
         "//core/editor:editor_plugin",
@@ -49,6 +48,7 @@ cc_library(
         "//core/ncsb",
         "//core/view/framework",
         "@com_google_absl//absl/status",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -64,7 +64,6 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         "//core/collision:ray",
-        "//core/common:log",
         "//core/common:registry",
         "//core/editor",
         "//core/editor:editor_plugin",
@@ -72,6 +71,7 @@ cc_library(
         "//core/math",
         "//core/ncsb",
         "//core/view/framework",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -87,7 +87,6 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         "//core:config",
-        "//core/common:log",
         "//core/common:registry",
         "//core/editor",
         "//core/editor:editor_plugin",
@@ -96,6 +95,7 @@ cc_library(
         "//core/math",
         "//core/ncsb",
         "//core/view/framework",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -164,7 +164,6 @@ cc_library(
         "//core/actions:controller_events",
         "//core/async:future",
         "//core/common:debug_draw",
-        "//core/common:log",
         "//core/common:registry",
         "//core/editor",
         "//core/editor/xr:xr_grab_handle",
@@ -182,6 +181,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:optional",
+        "@com_google_impress//core/common:log",
         "@dear_imgui",
         "@third_party//filament/filament:filament_hdrs",
     ],

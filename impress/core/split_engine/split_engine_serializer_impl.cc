@@ -31,6 +31,7 @@
 
 #include "absl/algorithm/container.h"
 #include "absl/base/nullability.h"
+#include "absl/container/flat_hash_set.h"
 #include "core/common/log.h"
 #include "absl/strings/string_view.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
@@ -40,6 +41,7 @@
 #include "filament/filament/include/filament/MorphTargetBuffer.h"
 #include "filament/filament/include/filament/Texture.h"
 #include "filament/filament/include/filament/TextureSampler.h"
+#include "filament/filament/include/filament/TransformManager.h"
 #include "filament/filament/include/filament/VertexBuffer.h"
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
@@ -67,6 +69,8 @@
 #include "core/split_engine/android/split_engine_android_bridge.h"
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/image_based_lighting_helpers.h"
+#include "core/split_engine/materials/builtin_texture_parameter_creator.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_mesh_serializer.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/split_engine/split_engine_texture_serializer.h"
@@ -567,6 +571,11 @@ void SplitEngineSerializerImpl::SetReceiveShadows(
   IMP_LOG(imp::WARNING) << kTag << "SetReceiveShadows not implemented.";
 }
 
+bool SplitEngineSerializerImpl::GetFogEnabled(
+    filament::RenderableManager::Instance instance) const {
+  return false;
+}
+
 void SplitEngineSerializerImpl::SetFogEnabled(
     filament::RenderableManager::Instance instance, bool enable) {
   IMP_LOG(imp::WARNING) << kTag << "SetFogEnabled not implemented.";
@@ -853,6 +862,13 @@ SplitEngineSerializerImpl::GetFlatBufferBuilderFor(CommandBatchBase& batch) {
 
 SplitEngineAndroidBridge& SplitEngineSerializerImpl::GetBridge() {
   return *bridge_;
+}
+
+bool SplitEngineSerializerImpl::ReadyForNextFrame() const {
+  const absl::StatusOr<size_t> in_flight_frame_count =
+      bridge_sender_->GetActiveMessageGroupCount();
+  return in_flight_frame_count.ok() &&
+         *in_flight_frame_count < kMaxInFlightFrames;
 }
 
 void SplitEngineSerializerImpl::AddMaterial(const filament::Material* material,
@@ -1175,9 +1191,49 @@ void SplitEngineSerializerImpl::CreateNode(utils::Entity entity) {
   batch.data.insert(entity);
 }
 
+void FillVectorWithChildren(filament::TransformManager& tm,
+                            utils::Entity entity,
+                            std::vector<utils::Entity>& out_entities) {
+  filament::TransformManager::Instance ti = tm.getInstance(entity);
+
+  if (!ti) {
+    return;
+  }
+
+  std::size_t child_count = tm.getChildCount(ti);
+
+  if (child_count == 0) {
+    return;
+  }
+
+  out_entities.reserve(out_entities.size() + child_count);
+
+  std::vector<utils::Entity> children(child_count);
+  tm.getChildren(ti, children.data(), children.size());
+
+  for (utils::Entity child : children) {
+    FillVectorWithChildren(tm, child, out_entities);
+  }
+
+  out_entities.insert(out_entities.end(), children.begin(), children.end());
+}
+
 void SplitEngineSerializerImpl::DestroyNode(utils::Entity entity) {
+  // When we get a RemoveNodes command, we need to add the given Entity's
+  // children as its dependencies as well. For example, when Child Entity was a
+  // child of Parent Entity:
+  // (1) RemoveNodes(StandaloneEntity)
+  // (2) UpdateRenderables(ChildEntity)
+  // (3) RemoveNodes(ParentEntity)
+  // (1) and (3) shouldn't be batched together.
+  filament::TransformManager& tm =
+      view_.GetSharedEngine()->getTransformManager();
+  std::vector<utils::Entity> dependencies;
+  FillVectorWithChildren(tm, entity, dependencies);
+  dependencies.push_back(entity);
+
   Batch<CommandTypes::RemoveNodes>& batch =
-      GetOrCreateBatch<CommandTypes::RemoveNodes>({entity});
+      GetOrCreateBatch<CommandTypes::RemoveNodes>(dependencies);
   batch.data.insert(entity);
 }
 
@@ -1197,7 +1253,7 @@ void SplitEngineSerializerImpl::SetName(utils::Entity entity,
 void SplitEngineSerializerImpl::SetParent(utils::Entity entity,
                                           utils::Entity parent) {
   Batch<CommandTypes::UpdateNodes>& batch =
-      GetOrCreateBatch<CommandTypes::UpdateNodes>({entity});
+      GetOrCreateBatch<CommandTypes::UpdateNodes>({entity, parent});
   batch.data[entity].parent = parent;
 }
 
@@ -1483,6 +1539,7 @@ void SplitEngineSerializerImpl::Batch<CommandTypes::AddNodes>::Serialize(
   IMP_LOG(imp::INFO) << kTag << "adding nodes:";
   VectorOffset<android_xr::schemas::AddNode> offset(data.size());
   absl::c_transform(data, offset.data(), [&fbb](const utils::Entity& entry) {
+    IMP_LOG(imp::INFO) << kTag << kIndent << entry.getId();
     return android_xr::schemas::CreateAddNode(fbb, entry.getId());
   });
   CreateCommand(fbb, android_xr::schemas::CreateAddNodes(
@@ -1495,11 +1552,9 @@ void SplitEngineSerializerImpl::Batch<CommandTypes::RemoveNodes>::Serialize(
   if (data.empty()) return;
 
   IMP_LOG(imp::INFO) << kTag << "removing nodes:";
-  for (const utils::Entity& entity : data) {
-    IMP_LOG(imp::INFO) << kTag << kIndent << entity.getId();
-  }
   VectorOffset<android_xr::schemas::RemoveNode> offset(data.size());
   absl::c_transform(data, offset.data(), [&fbb](const utils::Entity& entry) {
+    IMP_LOG(imp::INFO) << kTag << kIndent << entry.getId();
     return android_xr::schemas::CreateRemoveNode(fbb, entry.getId());
   });
   CreateCommand(fbb, android_xr::schemas::CreateRemoveNodes(
@@ -1514,6 +1569,8 @@ void SplitEngineSerializerImpl::Batch<CommandTypes::AssignUserIdToNodes>::
   IMP_LOG(imp::INFO) << kTag << "assigning user ids:";
   VectorOffset<android_xr::schemas::AssignUserIdToNode> offset(data.size());
   absl::c_transform(data, offset.data(), [&fbb](const auto& entry) {
+    IMP_LOG(imp::INFO) << kTag << kIndent << entry.first.getId() << " -> "
+               << entry.second;
     return android_xr::schemas::CreateAssignUserIdToNode(
         fbb, entry.first.getId(), entry.second);
   });
@@ -1530,7 +1587,7 @@ void SplitEngineSerializerImpl::Batch<CommandTypes::UpdateNodes>::Serialize(
   VectorOffset<android_xr::schemas::UpdateNode> node_updates(data.size());
   absl::c_transform(data, node_updates.data(), [&fbb](const auto& entry) {
     const UpdateNodeInfo& update = entry.second;
-
+    IMP_LOG(imp::INFO) << kTag << kIndent << entry.first.getId();
     // Process the name of the node.
     flatbuffers::Offset<flatbuffers::String> name;
     if (update.name.has_value()) {
@@ -1582,6 +1639,7 @@ void SplitEngineSerializerImpl::Batch<CommandTypes::AddRenderables>::Serialize(
   VectorOffset<android_xr::schemas::AddRenderable> offset(data.size());
   absl::c_transform(data, offset.data(), [&fbb](const auto& entry) {
     const AddRenderableInfo& add = entry.second;
+    IMP_LOG(imp::INFO) << kTag << kIndent << entry.first.getId();
 
     flatbuffers::Offset<android_xr::schemas::MorphTargetData> morph_target_data;
     if (add.morph_target_data.has_value()) {
@@ -1631,6 +1689,7 @@ void SplitEngineSerializerImpl::Batch<CommandTypes::RemoveRenderables>::
   IMP_LOG(imp::INFO) << kTag << "removing renderables: ";
   VectorOffset<android_xr::schemas::RemoveRenderable> offset(data.size());
   absl::c_transform(data, offset.data(), [&fbb](const utils::Entity& entry) {
+    IMP_LOG(imp::INFO) << kTag << kIndent << entry.getId();
     return android_xr::schemas::CreateRemoveRenderable(fbb, entry.getId());
   });
   CreateCommand(fbb, android_xr::schemas::CreateRemoveRenderables(
@@ -1646,6 +1705,7 @@ void SplitEngineSerializerImpl::Batch<CommandTypes::UpdateRenderables>::
   VectorOffset<android_xr::schemas::UpdateRenderable> offset(data.size());
   absl::c_transform(data, offset.data(), [&fbb](const auto& entry) {
     const UpdateRenderableInfo& update = entry.second;
+    IMP_LOG(imp::INFO) << kTag << kIndent << entry.first.getId();
 
     VectorOffset<android_xr::schemas::PrimitiveUpdate> primitives(
         update.primitives.size());

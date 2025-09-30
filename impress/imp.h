@@ -32,6 +32,7 @@
 
 // IWYU pragma: begin_exports
 #include "core/assets/asset_ptr.h"
+#include "core/assets/material/material_asset.h"
 #include "core/async/executor.h"
 #include "core/async/future.h"
 #include "core/async/future_status_utils.h"
@@ -77,6 +78,7 @@
 #include "core/ncsb/update_system.h"
 #include "core/render/image_asset.h"
 #include "core/render/texture.h"
+#include "core/render/texture_asset.h"
 #include "core/render/texture_factory.h"
 #include "core/render/texture_options.h"
 #include "core/render/texture_registry.h"
@@ -93,7 +95,6 @@
 #include "core/view/framework/assets/gltf_mesh.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/framework/assets/gltf_scene.h"
-#include "core/view/framework/assets/material_asset.h"
 #include "core/view/framework/assets/material_factory.h"
 #include "core/view/framework/assets/proto_asset.h"
 #include "core/view/framework/camera/camera_component.h"

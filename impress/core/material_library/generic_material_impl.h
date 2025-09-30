@@ -40,6 +40,7 @@
 #include "core/materials/material.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
+#include "core/model/entity_data.h"
 #include "core/render/texture.h"
 #include "core/view/base_view.h"
 #include "core/view/utils/string_map.h"
@@ -72,18 +73,34 @@ class GenericMaterialImpl : public GenericMaterial {
   absl::Status AssignTexturesAndParams(
       const GenericMaterialParameters& generic_material_parameters,
       const TextureBorrower& texture_borrower) override;
-  // TODO: Remove this once we fully migrate to TextureBorrower.
-  absl::Status AssignTexturesAndParams(
-      const GenericMaterialParameters& generic_material_parameters,
-      const TextureProvider& texture_provider) override;
 
   absl::string_view GetName() const override;
-  std::vector<MaterialParameter> GetParameters() const override;
-  TypedVector<MaterialTexture> GetTextures() const override;
+  std::vector<model::MaterialParameter> GetParameters() const override;
+  TypedVector<model::MaterialTexture> GetTextures() const override;
   StringMap<int> GetSamplerIndexLookup() const override;
 
   TextureAndSampler GetBaseColorTexture() const override;
   absl::Status SetBaseColorUvTransform(const mat3f& uv_transform) override;
+  // Note: If you are using GenericMaterial on non glTF models (e.g., a simple
+  // quad with color), you should set the vertex color to white before calling
+  // `SetBaseColorFactor`. This is because GenericMaterial *requires* that
+  // mesh has vertex color attributes. See
+  // google3/third_party/impress/core/loader/data/generic_material_unlit.mat.template.glsl
+  // Vertex color can be set via QuadSettings.
+  // For example:
+  // imp::CreateQuadSettings quad_settings{
+  //     .color = kWhite,
+  //     // your other settings
+  //     .size = {1.0f, 1.0f}
+  // };
+  // auto render_component =
+  //     quad_video_node_->AddComponent<imp::MeshRenderer>();
+  // render_component->SetMesh(
+  //     GetView().GetMeshFactory().CreatePanel(quad_settings));
+  // imp::GenericMaterialImpl::Create(...)
+  //     .Then([](GenericMaterialPtr material) {
+  //   material->SetBaseColorFactor(your_color);
+  // });
   void SetBaseColorFactor(const float4& factor) override;
   float4 GetBaseColorFactor() const override;
 
@@ -123,6 +140,9 @@ class GenericMaterialImpl : public GenericMaterial {
   absl::Status SetTransmissionUvTransform(const mat3f& uv_transform) override;
   void SetTransmissionFactor(float factor) override;
   void SetIndexOfRefraction(float index_of_refraction) override;
+
+  std::optional<TextureAndSampler> GetFeatureIdTexture(
+      int index) const override;
 
   void SetAlphaCutoff(float alpha_cutoff) override;
   float GetAlphaCutoff() const override;
@@ -167,12 +187,6 @@ class GenericMaterialImpl : public GenericMaterial {
       absl::string_view texture_channel_name,
       const GenericMaterialTextureParameter& texture_parameter,
       FallbackSampler fallback_sample);
-  // TODO: Remove this once we fully migrate to TextureBorrower.
-  absl::Status ApplyMaterialTextureParameter(
-      const TextureProvider& texture_provider, uint16_t sampler_index,
-      absl::string_view texture_channel_name,
-      const GenericMaterialTextureParameter& texture_parameter,
-      FallbackSampler fallback_sample);
 
   // Assigns the texture for the given texture channel (i.e. kBaseColorIndex) to
   // the next available sampler in the material.
@@ -188,12 +202,6 @@ class GenericMaterialImpl : public GenericMaterial {
   // placeholder texture to any unused samplers.
   absl::Status AssignTexture(
       const TextureBorrower& texture_borrower,
-      absl::string_view texture_channel_name,
-      const absl::optional<GenericMaterialTextureParameter>& texture_parameter,
-      FallbackSampler fallback_sample = FallbackSampler::kWhite);
-  // TODO: Remove this once we fully migrate to TextureBorrower.
-  absl::Status AssignTexture(
-      const TextureProvider& texture_provider,
       absl::string_view texture_channel_name,
       const absl::optional<GenericMaterialTextureParameter>& texture_parameter,
       FallbackSampler fallback_sample = FallbackSampler::kWhite);
@@ -235,8 +243,8 @@ class GenericMaterialImpl : public GenericMaterial {
 
   // TODO (broken link) - Remove name_, parameters_, material_textures_, and
   // sampler_index_lookup_ once MaterialConfig is removed.
-  std::vector<MaterialParameter> parameters_;
-  TypedVector<MaterialTexture> material_textures_;
+  std::vector<model::MaterialParameter> parameters_;
+  TypedVector<model::MaterialTexture> material_textures_;
   StringMap<int> sampler_index_lookup_;
 
   // New system for storing texture data for easy retrieval, i.e. can get the
@@ -252,7 +260,7 @@ template <typename T>
 void GenericMaterialImpl::ApplyMaterialParameter(absl::string_view name,
                                                  const T& value) {
   material_->GetFilamentMaterialInstance()->setParameter(name.data(), value);
-  parameters_.emplace_back(MaterialParameter{name, value});
+  parameters_.emplace_back(model::MaterialParameter(name, value));
 }
 
 template <>

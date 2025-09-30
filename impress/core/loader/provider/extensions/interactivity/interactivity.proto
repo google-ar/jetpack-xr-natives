@@ -32,8 +32,10 @@ message Interactivity {
       FLOAT2 = 4;
       FLOAT3 = 5;
       FLOAT4 = 6;
-      MAT4F = 7;
-      STRING = 8;
+      MAT2F = 7;
+      MAT3F = 8;
+      MAT4F = 9;
+      STRING = 10;
     }
 
     // TODO  Add the rest of the data types defined in the glTF
@@ -48,8 +50,10 @@ message Interactivity {
         Float2 value_float2 = 6;
         Float3 value_float3 = 7;
         Float4 value_float4 = 8;
-        Mat4f value_mat4f = 9;
-        string value_string = 10;
+        Mat2f value_mat2f = 9;
+        Mat3f value_mat3f = 10;
+        Mat4f value_mat4f = 11;
+        string value_string = 12;
       }
     }
 
@@ -77,10 +81,11 @@ message Interactivity {
         IS_RANDOM = 12;
         IS_LOOP = 13;
         MESSAGE = 14;
+        INITIAL_INDEX = 15;
       }
 
       message Flow {
-        uint32 node = 1;
+        optional uint32 node = 1;
         string socket = 2;
       }
 

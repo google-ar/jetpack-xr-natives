@@ -14,11 +14,14 @@
 
 #include "core/assets/gltf/gltf_behavior_extension.h"
 
+#include <cstdint>
 #include <memory>
+#include <stack>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_set.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -33,10 +36,12 @@
 #include "core/assets/gltf/behavior/node_converters.h"
 #include "core/async/future.h"
 #include "core/common/registry.h"
+#include "core/common/robin_map.h"
 #include "core/math/arrays.proto.imp.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
 #include "core/model/model_data.h"
+#include "core/model/shared_data.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/component_system.h"
 #include "core/ncsb/node_handle.h"
@@ -92,6 +97,53 @@ void WorldAnimateToFunction(NodeHandle root, NodeHandle node,
   play_future.KeptBy(node);
 }
 
+std::vector<int> GetTapNodes(const ModelData& model_data,
+                             ComponentHandle<GltfScene>& gltf_scene,
+                             gltf::behavior::ConvertedGraph& converted_graph) {
+  const auto& entities = model_data.Entities();
+  RobinMap<NodeHandle, model::EntityId> node_to_entity_id_map;
+  for (const auto entity_id : entities.Ids<model::EntityId>()) {
+    NodeHandle node =
+        gltf_scene->GetNodeFromBone(model_data.Entities()[entity_id].bone);
+    if (!node.IsValid()) {
+      continue;
+    }
+    node_to_entity_id_map.insert({node, entity_id});
+  }
+
+  if (node_to_entity_id_map.empty()) {
+    return std::vector<int>{};
+  }
+
+  std::stack<NodeHandle> node_stack;
+  for (int index : converted_graph.GetTapNodeIndices()) {
+    node_stack.push(gltf_scene->GetOrCreateNodeFromGltfNodeIndex(index));
+  }
+
+  std::vector<int> tap_node_gltf_indices;
+  absl::flat_hash_set<NodeHandle> visited;
+  while (!node_stack.empty()) {
+    NodeHandle current_node = node_stack.top();
+    node_stack.pop();
+
+    if (!node_to_entity_id_map.contains(current_node) ||
+        visited.find(current_node) != visited.end()) {
+      continue;
+    }
+
+    visited.emplace(current_node);
+
+    uint64_t gltf_index =
+        entities[node_to_entity_id_map.at(current_node)].original_index;
+    tap_node_gltf_indices.push_back(static_cast<int>(gltf_index));
+    for (const NodeHandle& child : current_node->GetChildren()) {
+      node_stack.push(child);
+    }
+  }
+
+  return tap_node_gltf_indices;
+}
+
 }  // namespace
 
 Future<absl::Status> GltfBehaviorExtension::SetupInternal(
@@ -105,6 +157,11 @@ Future<absl::Status> GltfBehaviorExtension::SetupInternal(
   if (!model_data.Behavior()) {
     return Future<absl::Status>(absl::FailedPreconditionError(
         "No behavior extension information found."));
+  }
+
+  if (!gltf_renderer->GetModelRoot().IsValid()) {
+    return Future<absl::Status>(
+        absl::InvalidArgumentError("Invalid Model Root Node Handle."));
   }
 
   const BehaviorData& behavior_data = *model_data.Behavior();
@@ -163,7 +220,9 @@ Future<absl::Status> GltfBehaviorExtension::SetupInternal(
 
   recipe_runner_ = *add_result;
 
-  tap_node_gltf_indices_ = converted_graph.GetTapNodeIndices();
+  ComponentHandle<GltfScene> gltf_scene =
+      gltf_renderer->GetNode()->GetComponent<GltfScene>();
+  tap_node_gltf_indices_ = GetTapNodes(model_data, gltf_scene, converted_graph);
 
   return Future<absl::Status>(absl::OkStatus());
 }

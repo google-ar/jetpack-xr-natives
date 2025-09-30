@@ -23,6 +23,7 @@
 #include "core/common/log.h"
 #include "absl/strings/string_view.h"
 #include "core/common/bit_vector.h"
+#include "core/common/enum_flags.h"
 #include "core/common/optional_error.h"
 #include "core/common/typed_set_vector.h"
 #include "core/common/typed_tree.h"
@@ -124,7 +125,7 @@ OptionalError BuildExports(GltfLookup *out_lookup) {
       [&lookup](ExportedBoneId self, ExportedBoneParentId parent) {
         auto bone = self.CastTo<GltfLookup::BoneId>();
         auto node = lookup.bone_entries[self].node;
-        if (lookup.self_flags[node] & NodeFlags::kExportMask) {
+        if (lookup.self_flags[node] & NodeGltfFlags::kExportMask) {
           lookup.exports[node] =
               lookup.export_entries.Append<GltfLookup::ExportId>(bone, node, 0);
 
@@ -218,13 +219,13 @@ OptionalError BuildGltfLookup(const imp::gltf::imp_proto::Gltf &gltf,
     for (auto node_index : skin.joints) {
       auto node = NodeId::At(node_index);
       if (!lookup.nodes.IsValid(node)) return Error("Invalid joints");
-      lookup.self_flags[node] |= NodeFlags::kIsSampledBySkins;
+      lookup.self_flags[node] |= NodeGltfFlags::kIsSampledBySkins;
     }
     if (skin.skeleton) {
       auto skeleton_node = NodeId::At(*skin.skeleton);
       if (!lookup.nodes.IsValid(skeleton_node))
         return Error("Invalid skeleton");
-      lookup.self_flags[skeleton_node] |= NodeFlags::kIsSkinRoot;
+      lookup.self_flags[skeleton_node] |= NodeGltfFlags::kIsSkinRoot;
     }
   }
 
@@ -252,52 +253,52 @@ OptionalError BuildGltfLookup(const imp::gltf::imp_proto::Gltf &gltf,
         }
 
         if (IsAnimated(lookup, child_node)) {
-          lookup.self_flags[node] |= NodeFlags::kIsParentOfAnimated;
+          lookup.self_flags[node] |= NodeGltfFlags::kIsParentOfAnimated;
         }
         work_stack.push_back(static_cast<int>(child_node));
         lookup.parents[child_node] = node;
       }
     }
     if (lookup.nodes[node].mesh.has_value()) {
-      lookup.self_flags[node] |= NodeFlags::kHasMesh;
+      lookup.self_flags[node] |= NodeGltfFlags::kHasMesh;
     }
     if (lookup.nodes[node].skin.has_value()) {
-      lookup.self_flags[node] |= NodeFlags::kHasSkin;
+      lookup.self_flags[node] |= NodeGltfFlags::kHasSkin;
     }
     if (!lookup.nodes[node].name.empty() &&
         lookup.nodes[node].children.empty()) {
-      lookup.self_flags[node] |= NodeFlags::kIsNamedLeaf;
+      lookup.self_flags[node] |= NodeGltfFlags::kIsNamedLeaf;
     }
     if (IsAnimated(lookup, node)) {
-      lookup.self_flags[node] |= NodeFlags::kIsAnimated;
+      lookup.self_flags[node] |= NodeGltfFlags::kIsAnimated;
     }
     if (lookup.nodes[node].extensions.lights_punctual &&
         lookup.nodes[node].extensions.lights_punctual->light.has_value()) {
-      lookup.self_flags[node] |= NodeFlags::kHasLightPunctual;
+      lookup.self_flags[node] |= NodeGltfFlags::kHasLightPunctual;
     }
     if (lookup.nodes[node].extensions.audio_extension &&
         lookup.nodes[node].extensions.audio_extension->emitter.has_value()) {
-      lookup.self_flags[node] |= NodeFlags::kHasAudioEmitter;
+      lookup.self_flags[node] |= NodeGltfFlags::kHasAudioEmitter;
     }
 
     if (lookup.nodes[node].extensions.khr_visibility) {
-      lookup.self_flags[node] |= NodeFlags::kHasKhrVisibility;
+      lookup.self_flags[node] |= NodeGltfFlags::kHasKhrVisibility;
     }
 
     if (lookup.nodes[node].extensions.khr_node_visibility) {
-      lookup.self_flags[node] |= NodeFlags::kHasKhrNodeVisibility;
+      lookup.self_flags[node] |= NodeGltfFlags::kHasKhrNodeVisibility;
     }
 
     if (lookup.nodes[node].extensions.khr_node_selectability) {
-      lookup.self_flags[node] |= NodeFlags::kHasKhrNodeSelectability;
+      lookup.self_flags[node] |= NodeGltfFlags::kHasKhrNodeSelectability;
     }
 
     if (lookup.nodes[node].extensions.khr_node_hoverability) {
-      lookup.self_flags[node] |= NodeFlags::kHasKhrNodeHoverability;
+      lookup.self_flags[node] |= NodeGltfFlags::kHasKhrNodeHoverability;
     }
 
     if (!options.exclude_excess_nodes ||
-        lookup.self_flags[node] & NodeFlags::kBoneMask) {
+        lookup.self_flags[node] & NodeGltfFlags::kBoneMask) {
       lookup.bones[node] = lookup.bone_entries.Append<GltfLookup::BoneId>(
           GltfLookup::BoneEntry{node, {}});
       if (NodeId bone_parent = GetBoneParent(lookup, node)) {
@@ -318,9 +319,9 @@ OptionalError BuildGltfLookup(const imp::gltf::imp_proto::Gltf &gltf,
     // If a node has a mesh or a skin, then propagate the
     // IsMeshOrSkinRootAncestor to all of its parents (stop once we find they're
     // all set).
-    if (lookup.self_flags[node] & NodeFlags::kShouldBubble) {
+    if (lookup.self_flags[node] & NodeGltfFlags::kShouldBubble) {
       auto parent = lookup.parents[node];
-      auto self_flags = ToFlags(NodeFlags::kIsMeshOrSkinRootAncestor);
+      auto self_flags = ToFlags(NodeGltfFlags::kIsMeshOrSkinRootAncestor);
       while (parent &&
              ((lookup.self_flags[parent] & self_flags) != self_flags)) {
         lookup.self_flags[parent] |= self_flags;

@@ -19,8 +19,10 @@
 
 #include <memory>
 #include <optional>
+#include <utility>
 
 #include "absl/base/attributes.h"
+#include "filament/filament/include/filament/TextureSampler.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/render/texture.h"
@@ -34,16 +36,23 @@ namespace android_xr {
 // normal map and tiling parameters. This uses a Split Engine Built-in material.
 class WaterReflectionMaterial : public imp::split_engine::SplitEngineMaterial {
  public:
+  // TODO: Use the unified TextureAndSampler once it is compatible.
+  using TextureAndSampler = std::pair<imp::OwnedOrBorrowedTexturePtr,
+                                      std::optional<filament::TextureSampler>>;
+
   static imp::Future<std::unique_ptr<WaterReflectionMaterial>> Create(
       imp::BaseView& view, bool transparent = true);
 
   ~WaterReflectionMaterial() override;
 
-  void SetReflectionCube(imp::OwnedOrBorrowedTexturePtr reflection_cube);
-  void SetNormalMap(imp::OwnedOrBorrowedTexturePtr normal_map);
+  void SetReflectionCube(imp::OwnedOrBorrowedTexturePtr reflection_cube,
+                         std::optional<filament::TextureSampler> sampler = std::nullopt);
+  void SetNormalMap(imp::OwnedOrBorrowedTexturePtr normal_map,
+                    std::optional<filament::TextureSampler> sampler = std::nullopt);
   void SetNormalTiling(float normal_tiling);
   void SetNormalSpeed(float normal_speed);
-  void SetAlphaMap(imp::OwnedOrBorrowedTexturePtr alpha_map);
+  void SetAlphaMap(imp::OwnedOrBorrowedTexturePtr alpha_map,
+                   std::optional<filament::TextureSampler> sampler = std::nullopt);
   void SetAlphaStepMultiplier(float alpha_step_multiplier);
   void SetNormalZ(float normal_z);
   void SetNormalBoundary(float normal_boundary);
@@ -64,11 +73,11 @@ class WaterReflectionMaterial : public imp::split_engine::SplitEngineMaterial {
       imp::BaseView& view,
       imp::split_engine::PlaceholderOrBuiltInMaterialPtr material);
 
-  imp::OwnedOrBorrowedTexturePtr reflection_cube_;
-  imp::OwnedOrBorrowedTexturePtr normal_map_;
+  std::optional<TextureAndSampler> reflection_cube_;
+  std::optional<TextureAndSampler> normal_map_;
   std::optional<float> normal_tiling_;
   std::optional<float> normal_speed_;
-  imp::OwnedOrBorrowedTexturePtr alpha_map_;
+  std::optional<TextureAndSampler> alpha_map_;
   std::optional<float> alpha_step_multiplier_;
   std::optional<float> normal_z_;
   std::optional<float> normal_boundary_;

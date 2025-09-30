@@ -83,6 +83,8 @@ class RenderableManagerWrapper : public BaseRenderableManager {
       filament::RenderableManager::Instance instance) const override;
   void SetReceiveShadows(filament::RenderableManager::Instance instance,
                          bool enable) override;
+  bool GetFogEnabled(
+      filament::RenderableManager::Instance instance) const override;
   void SetFogEnabled(filament::RenderableManager::Instance instance,
                      bool enable) override;
   size_t GetMorphTargetCount(

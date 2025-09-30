@@ -109,13 +109,13 @@ cc_library(
     deps = [
         ":line_renderer_proto_cc",
         "//:api",
-        "//core/common:log",
         "//core/geometry/shapes",
         "//core/math",
         "//core/model/mesh:mesh_data",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )

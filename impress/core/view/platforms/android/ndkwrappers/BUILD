@@ -53,7 +53,6 @@ cc_library(
         "@mediapipe//mediapipe/framework/port:status",
     ] + select({
         ":mvhevc_on_android": [
-            "//core/common:log",
             "//core/common:robin_map",
             "//core/math",
             "//core/render/android:definitions",
@@ -61,6 +60,7 @@ cc_library(
             "@com_google_absl//absl/status",
             "@com_google_absl//absl/status:statusor",
             "@com_google_absl//absl/strings",
+            "@com_google_impress//core/common:log",
         ],
         "//conditions:default": [],
     }),
@@ -97,7 +97,7 @@ cc_library(
         ],
         "//conditions:default": [],
     }) + [
-        "//core/common:log",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )

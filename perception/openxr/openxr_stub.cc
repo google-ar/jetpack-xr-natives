@@ -102,6 +102,7 @@ const XrTrackableTrackerANDROID kTrackableTracker =
     XrTrackableTrackerANDROID(1);
 const XrHandTrackerEXT kHandTracker = XrHandTrackerEXT(1);
 const XrFaceTrackerANDROID kFaceTracker = XrFaceTrackerANDROID(1);
+const XrEyeTrackerANDROID kEyeTracker = XrEyeTrackerANDROID(1);
 const XrDeviceAnchorPersistenceANDROID kAnchorPersistence =
     XrDeviceAnchorPersistenceANDROID(1);
 
@@ -411,6 +412,77 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrGetFaceCalibrationStateANDROID(
   return XR_SUCCESS;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateEyeTrackerANDROID(
+    XrSession session, const XrEyeTrackerCreateInfoANDROID* createInfo,
+    XrEyeTrackerANDROID* eyeTracker) {
+  if (session == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+  *eyeTracker = kEyeTracker;
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL
+Internal_xrDestroyEyeTrackerANDROID(XrEyeTrackerANDROID eyeTracker) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrGetCoarseTrackingEyesInfoANDROID(
+    XrEyeTrackerANDROID eyeTracker, const XrEyesGetInfoANDROID* getInfo,
+    XrEyesANDROID* outEyes) {
+  if (!eyeTracker) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+  outEyes->type = XR_TYPE_EYES_ANDROID;
+  outEyes->next = nullptr;
+  outEyes->eyes[XR_EYE_INDEX_LEFT_ANDROID] = {
+      .eyeState = XR_EYE_STATE_GAZING_ANDROID,
+      .eyePose =
+          {
+              .orientation = {0.1f, 0.1f, 0.1f, 0.1f},
+              .position = {0.2f, 0.2f, 0.2f},
+          },
+  };
+  outEyes->eyes[XR_EYE_INDEX_RIGHT_ANDROID] = {
+      .eyeState = XR_EYE_STATE_GAZING_ANDROID,
+      .eyePose =
+          {
+              .orientation = {0.3f, 0.3f, 0.3f, 0.3f},
+              .position = {0.4f, 0.4f, 0.4f},
+          },
+  };
+  outEyes->mode = XR_EYE_TRACKING_MODE_BOTH_ANDROID;
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrGetFineTrackingEyesInfoANDROID(
+    XrEyeTrackerANDROID eyeTracker, const XrEyesGetInfoANDROID* getInfo,
+    XrEyesANDROID* outEyes) {
+  if (!eyeTracker) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+  outEyes->type = XR_TYPE_EYES_ANDROID;
+  outEyes->next = nullptr;
+  outEyes->eyes[XR_EYE_INDEX_LEFT_ANDROID] = {
+      .eyeState = XR_EYE_STATE_GAZING_ANDROID,
+      .eyePose =
+          {
+              .orientation = {0.11111f, 0.11111f, 0.11111f, 0.11111f},
+              .position = {0.22222f, 0.22222f, 0.22222f},
+          },
+  };
+  outEyes->eyes[XR_EYE_INDEX_RIGHT_ANDROID] = {
+      .eyeState = XR_EYE_STATE_GAZING_ANDROID,
+      .eyePose =
+          {
+              .orientation = {0.33333f, 0.33333f, 0.33333f, 0.33333f},
+              .position = {0.44444f, 0.44444f, 0.44444f},
+          },
+  };
+  outEyes->mode = XR_EYE_TRACKING_MODE_BOTH_ANDROID;
+  return XR_SUCCESS;
+}
+
 XRAPI_ATTR XrResult XRAPI_CALL Internal_xrEnumerateDepthResolutionsANDROID(
     XrSession session, uint32_t resolutionCapacityInput,
     uint32_t* resolutionCountOutput,
@@ -540,6 +612,14 @@ const auto kXrFunctions = new absl::flat_hash_map<absl::string_view,
      ToXrVoidFunction(Internal_xrEnumerateDepthSwapchainImagesANDROID)},
     {"xrAcquireDepthSwapchainImagesANDROID",
      ToXrVoidFunction(Internal_xrAcquireDepthSwapchainImagesANDROID)},
+    {"xrCreateEyeTrackerANDROID",
+     ToXrVoidFunction(Internal_xrCreateEyeTrackerANDROID)},
+    {"xrDestroyEyeTrackerANDROID",
+     ToXrVoidFunction(Internal_xrDestroyEyeTrackerANDROID)},
+    {"xrGetCoarseTrackingEyesInfoANDROID",
+     ToXrVoidFunction(Internal_xrGetCoarseTrackingEyesInfoANDROID)},
+    {"xrGetFineTrackingEyesInfoANDROID",
+     ToXrVoidFunction(Internal_xrGetFineTrackingEyesInfoANDROID)},
 });
 
 }  // namespace

@@ -6,7 +6,7 @@ Impress includes the building blocks of a 3D/XR experience including both render
 
 To build the Impress .jar:
 ```
-bazel build //java/com/google/ar/imp/apibindings:impress_no_native_lib_jar
+bazel build //apibindings:impress_no_native_lib_jar
 ```
 
 To build the Impress .so:

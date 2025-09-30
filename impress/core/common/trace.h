@@ -21,6 +21,10 @@
 
 #include "core/config.h"
 
+// IMP_TRACE_USE_PERFETTO can be defined by adding:
+//   --//third_party/impress/core:imp_trace_use_perfetto=True
+// to your `blaze build`. Note that Perfetto does not support WASM; see
+// (broken link) for details.
 #if IMP_TRACE_USE_PERFETTO
 
 #include "third_party/perfetto/include/perfetto/tracing/backend_type.h"

@@ -21,6 +21,7 @@ load(
     "if_non_android",
     "imp_copts",
     "imp_defines",
+    "imp_test_copts",
 )
 
 package(
@@ -54,6 +55,23 @@ cc_library(
 )
 
 cc_library(
+    name = "split_engine_android_bridge_mock",
+    testonly = True,
+    hdrs = [
+        "split_engine_android_bridge_mock.h",
+    ],
+    copts = imp_test_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":split_engine_android_bridge",
+        ":split_engine_shared_memory_bridge_client",
+        "//core/split_engine:split_engine_shared",
+        "@mediapipe//mediapipe/framework/port:gtest",
+    ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
+    alwayslink = 1,
+)
+
+cc_library(
     name = "split_engine_android_shared_memory_bridge",
     srcs = ["split_engine_android_shared_memory_bridge.cc"],
     hdrs = [
@@ -62,10 +80,10 @@ cc_library(
     deps = [
         ":split_engine_android_bridge",
         ":split_engine_shared_memory_bridge_client",
-        "//core/common:log",
         "//core/split_engine:split_engine_shared",
         "@com_google_absl//absl/status:statusor",
-    ],
+        "@com_google_impress//core/common:log",
+    ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )
 
@@ -84,6 +102,7 @@ cc_library(
         "notap",
     ],
     deps = [
+        ":buffer_handle_factory",
         "//core/math",
         "//core/split_engine:split_engine_shared",
         "@com_google_absl//absl/status",
@@ -101,6 +120,7 @@ cc_library(
     copts = imp_copts(),
     defines = imp_defines(),
     deps = [
+        ":buffer_handle_factory",
         ":split_engine_shared_memory_bridge_client",
         "//core/split_engine:split_engine_shared",
         "@com_google_absl//absl/status",
@@ -132,7 +152,6 @@ cc_library(
     ],
     deps = [
         ":split_engine_shared_memory_bridge_client",
-        "//core/common:log",
         "//core/common:trace",
         "//core/split_engine:split_engine_bridge_sender",
         "//core/split_engine:split_engine_shared",
@@ -142,6 +161,52 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/synchronization",
+        "@com_google_impress//core/common:log",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "split_engine_shared_memory_bridge_sender_base",
+    srcs = ["split_engine_shared_memory_bridge_sender_base.cc"],
+    hdrs = ["split_engine_shared_memory_bridge_sender_base.h"],
+    copts = imp_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":bridge_buffer",
+        ":buffer_handle_factory",
+        "//core/common:robin_map",
+        "//core/split_engine:flatbuffer_allocator",
+        "//core/split_engine:flatbuffer_size_calculator",
+        "//core/split_engine:split_engine_bridge_sender",
+        "//core/split_engine:split_engine_shared",
+        "@com_github_google_flatbuffers//:flatbuffers",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_impress//core/common:log",
+        "@mediapipe//mediapipe/framework/port:status",
+        "@third_party//split_engine:fbs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "bridge_buffer",
+    srcs = [
+        "bridge_buffer.cc",
+    ],
+    hdrs = [
+        "bridge_buffer.h",
+    ],
+    copts = imp_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":buffer_handle_factory",
+        "//core/common:trace",
+        "@com_google_impress//core/common:log",
+        "@third_party//filament/libs:utils_hdrs",
     ],
     alwayslink = 1,
 )
@@ -150,11 +215,9 @@ cc_library(
 cc_library(
     name = "split_engine_shared_memory_bridge_sender",
     srcs = [
-        "bridge_buffer.cc",
         "split_engine_shared_memory_bridge_sender.cc",
     ],
     hdrs = [
-        "bridge_buffer.h",
         "split_engine_shared_memory_bridge_sender.h",
     ],
     copts = imp_copts(),
@@ -166,24 +229,16 @@ cc_library(
         "notap",
     ],
     deps = [
+        ":bridge_buffer",
+        ":buffer_handle_factory",
         ":split_engine_shared_memory_bridge_client",
-        "//core/common:log",
-        "//core/common:platform_helpers",
-        "//core/common:robin_map",
-        "//core/common:trace",
+        ":split_engine_shared_memory_bridge_sender_base",
         "//core/split_engine:flatbuffer_allocator",
-        "//core/split_engine:flatbuffer_size_calculator",
-        "//core/split_engine:split_engine_bridge_sender",
         "//core/split_engine:split_engine_shared",
         "@com_github_google_flatbuffers//:flatbuffers",
-        "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/synchronization",
-        "@third_party//filament/libs:utils_hdrs",
+        "@com_google_impress//core/common:log",
         "@third_party//split_engine:fbs",  # buildcleaner: keep
         "@third_party//split_engine:fbs_deps",  # buildcleaner: keep
     ],
@@ -205,7 +260,6 @@ cc_library(
         ":split_engine_shared_memory_bridge_service_impl",
         "//core/async:executor",
         "//core/common:enum_flags",
-        "//core/common:log",
         "//core/common:registry",
         "//core/common:trace",
         "//core/split_engine:split_engine_renderer",
@@ -215,6 +269,7 @@ cc_library(
         "//core/view:base_view",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -232,7 +287,6 @@ cc_library(
     deps = [
         "//core:config",
         "//core/common:invocable",
-        "//core/common:log",
         "//core/common:registry",
         "//core/common:robin_map",
         "//core/math",
@@ -252,6 +306,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]) + if_android([
         "//core/view/platforms/xr_android:xr",
     ]),
@@ -266,7 +321,6 @@ cc_library(
     defines = imp_defines(),
     deps = [
         ":split_engine_android_bridge",
-        "//core/common:log",
         "//core/common:registry",
         "//core/common:robin_map",
         "//core/common:small_source_location",
@@ -288,7 +342,17 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
         "@third_party//split_engine:fbs",
     ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "buffer_handle_factory",
+    srcs = ["buffer_handle_factory.cc"],
+    hdrs = ["buffer_handle_factory.h"],
+    copts = imp_copts(),
+    defines = imp_defines(),
     alwayslink = 1,
 )

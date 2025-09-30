@@ -27,6 +27,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "core/split_engine/android/buffer_handle_factory.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 
 namespace imp::split_engine {
@@ -37,13 +38,9 @@ namespace imp::split_engine {
 // objects (eg: absl::Status or flat buffer builder).
 class SplitEngineSharedMemoryBridgeClient {
  public:
-  virtual ~SplitEngineSharedMemoryBridgeClient() = default;
+  using BufferHandle = BufferHandleFactory::BufferHandle;
 
-  // An interface for a handle to a shared memory buffer.
-  class BufferHandle {
-   public:
-    virtual ~BufferHandle() = default;
-  };
+  virtual ~SplitEngineSharedMemoryBridgeClient() = default;
 
   // Returns the unique id for this client.
   virtual ClientId GetClientId() const = 0;

@@ -31,7 +31,6 @@
 #include "filament/filament/include/filament/Engine.h"
 #include "core/animation/gltf_animation.h"
 #include "core/async/future.h"
-#include "core/async/future_group.h"
 #include "core/common/buffer_access.h"
 #include "core/loader/loader_options.h"
 #include "core/model/model_data.h"
@@ -70,27 +69,19 @@ class Loader {
   // future can manage the lifetime of the object until it is finished. See the
   // following for additional information.
   // (broken link)
-  virtual Future<absl::Status> Load(
-      std::function<void()>&& callback,
-      std::optional<FutureGroup> future_group = std::nullopt) = 0;
+  virtual Future<absl::Status> Load(std::function<void()>&& callback) = 0;
   // Iterative load mechanism.  Will attempt to load given the currently loaded
   // resources; any missing assets which are required to load will have their
   // paths appear in out_missing_resource_paths.
   virtual Future<absl::Status> TryLoad(
       std::vector<std::string>* out_missing_resource_paths,
-      std::function<void()>&& callback,
-      std::optional<FutureGroup> future_group = std::nullopt) = 0;
+      std::function<void()>&& callback) = 0;
 
   // Instantiation.
   virtual Future<std::unique_ptr<model::ModelData>> CreateModel(
-      filament::Engine* engine, std::optional<FutureGroup> future_group) = 0;
+      filament::Engine* engine) = 0;
   virtual Future<std::unique_ptr<model::ModelData>> CreateModel(
-      filament::Engine* engine, std::function<void()>&& callback,
-      std::optional<FutureGroup> future_group) = 0;
-  Future<std::unique_ptr<model::ModelData>> CreateModel(
-      filament::Engine* engine);
-  Future<std::unique_ptr<model::ModelData>> CreateModel(
-      filament::Engine* engine, std::function<void()>&& callback);
+      filament::Engine* engine, std::function<void()>&& callback) = 0;
 
   virtual void WhenFullyLoaded(std::function<void()>&& callback) = 0;
   virtual void RemoveWhenFullyLoadedCallback() = 0;

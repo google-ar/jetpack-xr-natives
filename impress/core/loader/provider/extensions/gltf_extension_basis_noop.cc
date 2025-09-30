@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "core/common/optional_error.h"
 #include "core/loader/provider/extensions/gltf_extension_basis.h"
 
 namespace imp {

@@ -139,14 +139,19 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
       int oldTop,
       int oldRight,
       int oldBottom) {
-    if (virtualDisplayWidth != view.getWidth() || virtualDisplayHeight != view.getHeight()) {
-      final DisplayMetrics metrics = context.getResources().getDisplayMetrics();
-      virtualDisplay.resize(view.getWidth(), view.getHeight(), metrics.densityDpi);
-      virtualDisplayWidth = view.getWidth();
-      virtualDisplayHeight = view.getHeight();
-      nSetRenderViewSurfaceDimensions(
-          nativeAndroidViewRenderer, virtualDisplayWidth, virtualDisplayHeight);
+    // Avoid resizing the virtual display if the dimensions are unchanged or zero. Resizing to a
+    // zero sized view causes a fatal exception, and can happen during initialization.
+    if (view.getWidth() == 0
+        || view.getHeight() == 0
+        || (virtualDisplayWidth == view.getWidth() && virtualDisplayHeight == view.getHeight())) {
+      return;
     }
+    final DisplayMetrics metrics = context.getResources().getDisplayMetrics();
+    virtualDisplay.resize(view.getWidth(), view.getHeight(), metrics.densityDpi);
+    virtualDisplayWidth = view.getWidth();
+    virtualDisplayHeight = view.getHeight();
+    nSetRenderViewSurfaceDimensions(
+        nativeAndroidViewRenderer, virtualDisplayWidth, virtualDisplayHeight);
   }
 
   @UsedByNative("android_view_renderer.cc")

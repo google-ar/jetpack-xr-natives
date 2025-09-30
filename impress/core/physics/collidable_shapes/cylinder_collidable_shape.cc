@@ -14,8 +14,6 @@
 
 #include "core/physics/collidable_shapes/cylinder_collidable_shape.h"
 
-#include <cmath>
-#include <limits>
 #include <memory>
 
 #include "absl/log/check.h"
@@ -26,7 +24,6 @@
 #include "bullet/src/LinearMath/btVector3.h"
 #include "core/config.h"
 #include "core/geometry/shapes/cylinder.h"
-#include "core/math/almost_equal.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
 #include "core/physics/collidable_shapes/collidable_shape.h"
@@ -38,7 +35,7 @@
 
 namespace imp {
 CylinderCollidableShape::CylinderCollidableShape(NodeHandle node)
-    : node_(node) {}
+    : CollidableShape(node) {}
 
 void CylinderCollidableShape::CreateBtCollisionShape() {
   auto collider = node_->GetComponent<CylinderCollider>();
@@ -75,11 +72,13 @@ CollidableShape::CollisionShape CylinderCollidableShape::GetCollisionShape(
 
 void CylinderCollidableShape::ApplyScalingToBulletCollider() {
   const float3 scale = node_->GetWorldScale();
-  if (scale.x > 0 && scale.y > 0 && scale.z > 0) {
-    EnforceEvenScaleForCylinder();
+  if (scale.x > 0 && scale.y > 0 && scale.z > 0 &&
+      UpdatedEvenScale(scale_, scale)) {
+    node_->SetWorldScale(scale_);
+    collidable_shape_->setLocalScaling(ToBtVector3(scale_));
     return;
   }
-  scale_prev_ = scale;
+  scale_ = scale;
 }
 
 #if IMP_RUNTIME(DEV)
@@ -106,29 +105,5 @@ void CylinderCollidableShape::Visualize(const btTransform& bt_trans) const {
   }
 }
 #endif
-
-void CylinderCollidableShape::EnforceEvenScaleForCylinder() {
-  const float3 cylinder_scale = node_->GetWorldScale();
-  const bool x_changed = !RoughlyEqual(cylinder_scale.x, scale_prev_.x);
-  const bool y_changed = !RoughlyEqual(cylinder_scale.y, scale_prev_.y);
-  const bool z_changed = !RoughlyEqual(cylinder_scale.z, scale_prev_.z);
-
-  if (!x_changed && !y_changed && !z_changed) {
-    return;
-  }
-  float new_scale = std::numeric_limits<float>::min();
-  if (x_changed) {
-    new_scale = fmax(cylinder_scale.x, new_scale);
-  }
-  if (y_changed) {
-    new_scale = fmax(cylinder_scale.y, new_scale);
-  }
-  if (z_changed) {
-    new_scale = fmax(cylinder_scale.z, new_scale);
-  }
-  node_->SetWorldScale(new_scale);
-  collidable_shape_->setLocalScaling(ToBtVector3(new_scale));
-  scale_prev_ = new_scale;
-}
 
 }  // namespace imp

@@ -122,6 +122,7 @@ cc_library(
         "//core/common:trace",
         "//core/math",
         "//core/ncsb",
+        "//core/view/utils:render_settings_proto_cc_imp",
         "//core/window:filament_host",
         "//core/window:window_rotation",
         "@com_google_absl//absl/status",

@@ -19,7 +19,6 @@
 
 #include <optional>
 #include <string>
-#include <vector>
 
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
@@ -29,7 +28,6 @@
 #include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
 #include "core/view/base_view.h"
-#include "core/view/framework/render/material.h"
 
 namespace imp::editor {
 
@@ -38,7 +36,7 @@ class Hierarchy : public Widget, public imp::Rememberer {
  public:
   Hierarchy(BaseView& view, absl::string_view filter = "");
   // Do not show a header for this widget.
-  absl::string_view GetName() const override { return "##Hierarchy"; }
+  absl::string_view GetName() const override { return "Nodes"; }
   void DrawImGui() override;
   ImGuiTreeNodeFlags GetTreeNodeFlags() const override;
 

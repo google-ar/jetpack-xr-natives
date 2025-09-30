@@ -37,7 +37,6 @@ cc_library(
     deps = [
         "//core/assets",
         "//core/assets/material:material_asset",
-        "//core/common:log",
         "//core/common:owned_or_borrowed_ptr",
         "//core/common:owned_or_unowned_memory",
         "//core/common:owned_ptr",
@@ -51,6 +50,7 @@ cc_library(
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/libs:math_hdrs",
     ],

@@ -166,8 +166,6 @@ Future<absl::Status> LightManager::SetupDefaultLighting() {
       });
 }
 
-void LightManager::DisableDefaultLoad() { is_default_load_enabled_ = false; }
-
 LightManager::EnvironmentLightingStatus LightManager::GetDefaultLightingStatus()
     const {
   if (!default_lighting_status_) {
@@ -177,6 +175,18 @@ LightManager::EnvironmentLightingStatus LightManager::GetDefaultLightingStatus()
   return default_lighting_status_->Ready()
              ? EnvironmentLightingStatus::kReady
              : EnvironmentLightingStatus::kLoadInProgress;
+}
+
+void LightManager::DisableDefaultLoad() {
+  default_load_option_ = DefaultLoadOption::kDisabled;
+}
+
+void LightManager::DisableDefaultIblLoad() {
+  default_load_option_ = DefaultLoadOption::kDirectionalLightOnly;
+}
+
+bool LightManager::IsDefaultLoadEnabled() const {
+  return default_load_option_ != DefaultLoadOption::kDisabled;
 }
 
 ComponentHandle<LightComponent> LightManager::GetDefaultDirectionalLight()
@@ -194,8 +204,21 @@ LightManager::GetOrCreateDefaultDirectionalLight() {
 }
 
 void LightManager::Setup() {
-  if (is_default_load_enabled_) {
-    default_lighting_status_ = SetupDefaultLighting();
+  switch (default_load_option_) {
+    case DefaultLoadOption::kDisabled:
+      // Nothing to do.
+      break;
+    case DefaultLoadOption::kDirectionalLightOnly:
+      SetupDefaultDirectionalLight();
+      break;
+    case DefaultLoadOption::kEnabled:
+      default_lighting_status_ = SetupDefaultLighting();
+      break;
+    default:
+      // This should never happen.
+      IMP_LOG(imp::FATAL) << "Unknown default load option: "
+                 << static_cast<int>(default_load_option_);
+      break;
   }
 }
 

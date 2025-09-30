@@ -17,14 +17,11 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_NODE_DETAILS_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_NODE_DETAILS_H_
 
-#include <memory>
-#include <string>
-#include <utility>
-
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "core/common/rememberer.h"
 #include "core/editor/command_manager.h"
+#include "core/editor/editor_constants.h"
 #include "core/editor/widget.h"
 #include "core/ncsb/node_handle.h"
 #include "core/view/base_view.h"
@@ -36,7 +33,7 @@ class NodeDetails : public editor::Widget, public imp::Rememberer {
  public:
   explicit NodeDetails(BaseView& base_view);
   void DrawImGui() override;
-  absl::string_view GetName() const override { return "Node"; }
+  absl::string_view GetName() const override { return kNodeWidgetHeaderName; }
   bool HasContent() const override;
 
  private:

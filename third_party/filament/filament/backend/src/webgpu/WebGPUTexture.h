@@ -47,11 +47,14 @@ public:
 
     [[nodiscard]] wgpu::Texture const& getTexture() const { return mTexture; }
 
+    [[nodiscard]] wgpu::Texture const& getMsaaSidecarTexture(uint8_t sampleCount) const;
+
     [[nodiscard]] wgpu::TextureView const& getDefaultTextureView() const {
         return mDefaultTextureView;
     }
 
-    [[nodiscard]] wgpu::TextureView getOrMakeTextureView(uint8_t mipLevel, uint32_t arrayLayer);
+    [[nodiscard]] wgpu::TextureView makeAttachmentTextureView(uint8_t mipLevel, uint32_t arrayLayer,
+            uint32_t layerCount);
 
     [[nodiscard]] wgpu::TextureViewDimension getViewDimension() const { return mDimension; }
     [[nodiscard]] wgpu::TextureFormat getViewFormat() const { return mViewFormat; }
@@ -62,8 +65,33 @@ public:
         return mMipmapGenerationStrategy;
     }
 
-    [[nodiscard]] static wgpu::TextureFormat fToWGPUTextureFormat(
-            filament::backend::TextureFormat const& fFormat);
+    /**
+     * Creates the MSAA sidecar texture if it has not already been created.
+     * If the sidecar already exists with a different number of samples this will panic
+     * (at the time of writing this WebGPU only supports MSAA with 4 samples. If this changes, then
+     * multiple sidecars with different number of samples could be supported if needed, but that
+     * level of complexity is not warranted at this time).
+     * Additionally, if samples is <= 1 this will panic as well, as that is not an MSAA texture.
+     * @param samples The number of samples the texture will have
+     */
+    void createMsaaSidecarTextureIfNotAlreadyCreated(uint8_t samples, wgpu::Device const&);
+
+    /**
+     * @param samples The number of samples the underlying texture supports
+     * @param mipLevel The mip level into the underyling texture for which this view will reference
+     * (this view will only have one mip level)
+     * @param arrayLayer The layer into the underyling texture for which this view will reference
+     * (this view will only have one layer)
+     * @return A texture view for the MSAA sidecar texture
+     */
+    wgpu::TextureView makeMsaaSidecarTextureViewIfTextureSidecarExists(uint8_t samples,
+            uint8_t mipLevel, uint32_t arrayLayer) const;
+
+    /**
+     * @return nullptr if a MSAA sidecar texture is not appliable, otherwise a view to one
+     */
+    [[nodiscard]] wgpu::TextureView makeMsaaSidecarTextureView(wgpu::Texture const&,
+            uint8_t mipLevel, uint32_t arrayLayer) const;
 
     /**
      * @param format a required texture format (can be a view to a different underlying texture
@@ -96,10 +124,15 @@ private:
     uint32_t mDefaultMipLevel = 0;
     uint32_t mDefaultBaseArrayLayer = 0;
     wgpu::TextureView mDefaultTextureView = nullptr;
+    // At the time of writing this, WebGPU only supported 4 samples in a multi-sampled texture.
+    // If that has changed, then consider updating the implementation to have a map of msaa textures
+    // by sampleCount or something like that.
+    // For now that complexity and cost is not warranted due to WebGPU's restrictions.
+    wgpu::Texture mMsaaSidecarTexture = nullptr;
 
     [[nodiscard]] wgpu::TextureView makeTextureView(const uint8_t& baseLevel,
             const uint8_t& levelCount, const uint32_t& baseArrayLayer,
-            const uint32_t& arrayLayerCount, SamplerType samplerType) const noexcept;
+            const uint32_t& arrayLayerCount, wgpu::TextureViewDimension dimension) const noexcept;
 };
 
 }// namespace filament::backend

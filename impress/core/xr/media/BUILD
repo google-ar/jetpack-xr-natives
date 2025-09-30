@@ -72,7 +72,6 @@ cc_library(
         "//core:config",
         "//core/assets",
         "//core/async:future",
-        "//core/common:log",
         "//core/common:robin_map",
         "//core/materials",
         "//core/math",
@@ -90,6 +89,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:string_view",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )

@@ -23,15 +23,22 @@
 #include "core/collision/collision_helpers.h"
 #include "core/collision/ray.h"
 #include "core/common/debug_draw.h"
+#include "core/config.h"
 #include "core/geometry/shapes/cylinder.h"
 #include "core/math/mat.h"
 #include "core/math/math.h"
-#include "core/math/quat.h"
 #include "core/math/vec.h"
+#include "core/ncsb/node.h"
+#include "core/ncsb/node_handle.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/framework/collision/collision_manager.h"
 #include "core/view/framework/collision/collision_system.h"
 #include "core/view/framework/collision/ray_hit.h"
+
+#if IMP_RUNTIME(DEV)
+#include "core/ncsb/path_manager.h"
+#include "core/view/framework/collision/compound_collider.h"
+#endif
 
 namespace imp {
 using split_engine::SplitEngineSerializer;
@@ -57,12 +64,31 @@ void CylinderCollider::SetCylinder(float3 base, float radius, float height) {
   state_.base = base;
   state_.radius = radius;
   state_.height = height;
+  hit_node_ = GetNode();
 
   if (SplitEngineSerializer* serializer =
           GetView().GetSplitEngineSerializer()) {
     // TODO: Re-enable this once the bug is fixed.
     // serializer->SetCylinderCollider(GetEntity(), GetCylinder(), IsActive());
   }
+}
+
+void CylinderCollider::SetHitNode(NodeHandle hit_node) {
+  hit_node_ = hit_node;
+};
+
+NodeHandle CylinderCollider::GetHitNode() const {
+#if IMP_RUNTIME(DEV)
+  if (editor::IsInEditMode(GetView().GetRegistry())) {
+    if (auto compound_collider =
+            GetView()
+                .GetPathManager()
+                .GetComponentFromAncestorOrSelf<CompoundCollider>(GetNode())) {
+      return compound_collider->GetNode();
+    }
+  }
+#endif
+  return hit_node_;
 }
 
 absl::optional<RayHit> CylinderCollider::Intersect(const Ray& world_ray) {
@@ -83,7 +109,8 @@ absl::optional<RayHit> CylinderCollider::Intersect(const Ray& world_ray) {
   return RayHit(
       intersection->distance, quatf{0.0f},
       // Transform the collision point back into world space.
-      GetNode()->WorldFromLocalPoint(intersection->collision_point), GetNode(),
+      GetNode()->WorldFromLocalPoint(intersection->collision_point),
+      GetHitNode(),
       TransformedSurfaceNormal(intersection->normal, world_from_local));
 }
 
@@ -107,7 +134,7 @@ absl::optional<DoubleRayHit> CylinderCollider::IntersectPrecise(
       intersection->distance, quat{0.0f},
       // Transform the collision point back into world space.
       GetNode()->WorldFromLocalPointPrecise(intersection->collision_point),
-      GetNode(),
+      GetHitNode(),
       TransformedSurfaceNormal(intersection->normal, world_from_local));
 }
 

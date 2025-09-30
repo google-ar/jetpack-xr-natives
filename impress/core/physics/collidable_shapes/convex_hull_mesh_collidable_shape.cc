@@ -60,7 +60,7 @@ float3 GetVertexWorldPosition(MeshVertexData* vertex_data,
 }  // namespace
 
 ConvexHullMeshCollidableShape::ConvexHullMeshCollidableShape(NodeHandle node)
-    : node_(node) {}
+    : CollidableShape(node) {}
 
 void ConvexHullMeshCollidableShape::PushVertices(MeshVertexData* vertex_data,
                                                  MeshIndexData* index_data) {

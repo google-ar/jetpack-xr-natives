@@ -19,6 +19,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <variant>
 #include <vector>
 
@@ -63,6 +64,7 @@ constexpr char kNumberOfInputFlowsNodeConfiguration[] = "inputFlows";
 constexpr char kIsRandomNodeConfiguration[] = "isRandom";
 constexpr char kIsLoopNodeConfiguration[] = "isLoop";
 constexpr char kMessageNodeConfiguration[] = "message";
+constexpr char kInitialIndexNodeConfiguration[] = "initialIndex";
 
 // Interactivity::Graph::Variable types
 constexpr char kBoolValueType[] = "bool";
@@ -71,6 +73,8 @@ constexpr char kFloatValueType[] = "float";
 constexpr char kFloat2ValueType[] = "float2";
 constexpr char kFloat3ValueType[] = "float3";
 constexpr char kFloat4ValueType[] = "float4";
+constexpr char kMat2fValueType[] = "float2x2";
+constexpr char kMat3fValueType[] = "float3x3";
 constexpr char kMat4fValueType[] = "float4x4";
 constexpr char kStringValueType[] = "string";
 
@@ -113,25 +117,46 @@ constexpr int kVariableNameFieldId = GetVariableFieldId("id");
 constexpr int kTypeArrayFieldId = GetInteractivityFieldId("types");
 constexpr int kVariableArrayFieldId = GetInteractivityFieldId("variables");
 
-template <typename Variant>
+template <typename VariantType, typename Variant>
 absl::Status ConvertFloatArray(const std::vector<float>& values,
                                Variant& variant) {
-  if (values.size() == 2) {
-    variant.template emplace<float2>(float2{values[0], values[1]});
-    return absl::OkStatus();
-  } else if (values.size() == 3) {
-    variant.template emplace<float3>(float3{values[0], values[1], values[2]});
-    return absl::OkStatus();
-  } else if (values.size() == 4) {
-    variant.template emplace<float4>(
-        float4{values[0], values[1], values[2], values[3]});
-    return absl::OkStatus();
-  } else if (values.size() == 16) {
-    variant.template emplace<mat4f>(
-        mat4f{values[0], values[1], values[2], values[3], values[4], values[5],
-              values[6], values[7], values[8], values[9], values[10],
-              values[11], values[12], values[13], values[14], values[15]});
-    return absl::OkStatus();
+  if constexpr (std::is_same_v<VariantType, float2>) {
+    if (values.size() == 2) {
+      variant.template emplace<float2>(float2{values[0], values[1]});
+      return absl::OkStatus();
+    }
+  } else if constexpr (std::is_same_v<VariantType, float3>) {
+    if (values.size() == 3) {
+      variant.template emplace<float3>(float3{values[0], values[1], values[2]});
+      return absl::OkStatus();
+    }
+  } else if constexpr (std::is_same_v<VariantType, float4>) {
+    if (values.size() == 4) {
+      variant.template emplace<float4>(
+          float4{values[0], values[1], values[2], values[3]});
+      return absl::OkStatus();
+    }
+  } else if constexpr (std::is_same_v<VariantType, mat2f>) {
+    if (values.size() == 4) {
+      variant.template emplace<mat2f>(
+          mat2f{values[0], values[1], values[2], values[3]});
+      return absl::OkStatus();
+    }
+  } else if constexpr (std::is_same_v<VariantType, mat3f>) {
+    if (values.size() == 9) {
+      variant.template emplace<mat3f>(mat3f{values[0], values[1], values[2],
+                                            values[3], values[4], values[5],
+                                            values[6], values[7], values[8]});
+      return absl::OkStatus();
+    }
+  } else if constexpr (std::is_same_v<VariantType, mat4f>) {
+    if (values.size() == 16) {
+      variant.template emplace<mat4f>(mat4f{
+          values[0], values[1], values[2], values[3], values[4], values[5],
+          values[6], values[7], values[8], values[9], values[10], values[11],
+          values[12], values[13], values[14], values[15]});
+      return absl::OkStatus();
+    }
   }
 
   return absl::InternalError(
@@ -200,7 +225,7 @@ absl::Status VisitImpType(Variant& variant, int field_id,
   visitor.Visit<proto::TYPE_FLOAT, proto::RepeatedMergeStrategy::kOverwrite>(
       ptr, field_id, &float_vector, static_cast<std::vector<float>*>(nullptr),
       token_type);
-  MP_RETURN_IF_ERROR(ConvertFloatArray(float_vector, variant));
+  MP_RETURN_IF_ERROR(ConvertFloatArray<VariantType>(float_vector, variant));
 
   if (!std::get_if<VariantType>(&variant)) {
     return absl::InternalError(
@@ -312,6 +337,9 @@ InteractivityImpl::InteractivityImpl() {
   configuration_id_map_.emplace(
       kMessageNodeConfiguration,
       gltf::Interactivity::Graph::Node::ConfigurationType::MESSAGE);
+  configuration_id_map_.emplace(
+      kInitialIndexNodeConfiguration,
+      gltf::Interactivity::Graph::Node::ConfigurationType::INITIAL_INDEX);
 
   value_type_map_.emplace(kBoolValueType,
                           gltf::Interactivity::Graph::ValueType::BOOL);
@@ -325,6 +353,10 @@ InteractivityImpl::InteractivityImpl() {
                           gltf::Interactivity::Graph::ValueType::FLOAT3);
   value_type_map_.emplace(kFloat4ValueType,
                           gltf::Interactivity::Graph::ValueType::FLOAT4);
+  value_type_map_.emplace(kMat2fValueType,
+                          gltf::Interactivity::Graph::ValueType::MAT2F);
+  value_type_map_.emplace(kMat3fValueType,
+                          gltf::Interactivity::Graph::ValueType::MAT3F);
   value_type_map_.emplace(kMat4fValueType,
                           gltf::Interactivity::Graph::ValueType::MAT4F);
   value_type_map_.emplace(kStringValueType,
@@ -512,6 +544,14 @@ absl::StatusOr<bool> InteractivityImpl::OnVisitVariable(
           MP_RETURN_IF_ERROR(VisitImpType<float4>(variable.value, field_id,
                                                visitor, ptr, token_type));
           break;
+        case imp::gltf::Interactivity::Graph::ValueType::MAT2F:
+          MP_RETURN_IF_ERROR(VisitImpType<mat2f>(variable.value, field_id, visitor,
+                                              ptr, token_type));
+          break;
+        case imp::gltf::Interactivity::Graph::ValueType::MAT3F:
+          MP_RETURN_IF_ERROR(VisitImpType<mat3f>(variable.value, field_id, visitor,
+                                              ptr, token_type));
+          break;
         case imp::gltf::Interactivity::Graph::ValueType::MAT4F:
           MP_RETURN_IF_ERROR(VisitImpType<mat4f>(variable.value, field_id, visitor,
                                               ptr, token_type));
@@ -571,6 +611,7 @@ absl::StatusOr<bool> InteractivityImpl::OnVisitNodeConfiguration(
         case gltf::Interactivity::Graph::Node::ConfigurationType::TYPE:
         case gltf::Interactivity::Graph::Node::ConfigurationType::
             NUMBER_OF_INPUT_FLOWS:
+        case gltf::Interactivity::Graph::Node::ConfigurationType::INITIAL_INDEX:
           MP_RETURN_IF_ERROR(OnVisitVariantArrayWithSingleElement<int>(
               configuration.value, field_id, visitor, ptr, token_type));
           break;

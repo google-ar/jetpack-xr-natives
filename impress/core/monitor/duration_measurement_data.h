@@ -77,8 +77,8 @@ class DurationMeasurementData : public MeasurementData {
     enable_percentiles_ = enable_percentiles;
   }
 
-  const bool GetEnableAverages() const { return enable_averages_; }
-  const bool GetEnablePercentiles() const { return enable_percentiles_; }
+  bool GetEnableAverages() const { return enable_averages_; }
+  bool GetEnablePercentiles() const { return enable_percentiles_; }
   uint64_t GetSampleCount() const;
 
   absl::Duration GetTotalDuration() const;

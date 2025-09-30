@@ -19,29 +19,14 @@
 #include "apibindings/impress_api_test_context.h"
 #include "core/common/jni_helpers.h"
 
-#define JNI_METHOD_G3(return_type, method_name) \
-  IMP_JNI return_type JNICALL                   \
-      Java_com_google_ar_imp_apibindings_testing_ImpressApiTestHelper_##method_name  // NOLINT
-
 #define JNI_METHOD_AOSP(return_type, method_name) \
   IMP_JNI return_type JNICALL                     \
       Java_androidx_xr_scenecore_impl_impress_ImpressApiTestHelper_##method_name  // NOLINT
 
 extern "C" {
 
-// TODO: Make helper path needed for JNI marshaling tests work
-// cross repo.
-JNI_METHOD_G3(void, nativeResetTestState)
-(JNIEnv* env, jclass /*clazz*/) { imp::ImpressApiTestContext::Get().Reset(); }
-
 JNI_METHOD_AOSP(void, nativeResetTestState)
 (JNIEnv* env, jclass /*clazz*/) { imp::ImpressApiTestContext::Get().Reset(); }
-
-JNI_METHOD_G3(void, nativeSetExpectedLoadGltfPath)
-(JNIEnv* env, jclass /*clazz*/, jstring path) {
-  imp::ImpressApiTestContext& context = imp::ImpressApiTestContext::Get();
-  context.expected_gltf_path = imp::GetString(env, path);
-}
 
 JNI_METHOD_AOSP(void, nativeSetExpectedLoadGltfPath)
 (JNIEnv* env, jclass /*clazz*/, jstring path) {
@@ -49,24 +34,11 @@ JNI_METHOD_AOSP(void, nativeSetExpectedLoadGltfPath)
   context.expected_gltf_path = imp::GetString(env, path);
 }
 
-JNI_METHOD_G3(void, nativeSetLoadGltfAssetSuccess)
-(JNIEnv* env, jclass /*clazz*/, jlong token) {
-  imp::ImpressApiTestContext& context = imp::ImpressApiTestContext::Get();
-  context.gltf_asset_loader_success_token = token;
-  context.gltf_asset_loader_failure_message.clear();
-}
-
 JNI_METHOD_AOSP(void, nativeSetLoadGltfAssetSuccess)
 (JNIEnv* env, jclass /*clazz*/, jlong token) {
   imp::ImpressApiTestContext& context = imp::ImpressApiTestContext::Get();
   context.gltf_asset_loader_success_token = token;
   context.gltf_asset_loader_failure_message.clear();
-}
-
-JNI_METHOD_G3(void, nativeSetLoadGltfAssetFailure)
-(JNIEnv* env, jclass /*clazz*/, jstring message) {
-  imp::ImpressApiTestContext& context = imp::ImpressApiTestContext::Get();
-  context.gltf_asset_loader_failure_message = imp::GetString(env, message);
 }
 
 JNI_METHOD_AOSP(void, nativeSetLoadGltfAssetFailure)

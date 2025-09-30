@@ -28,7 +28,6 @@
 #include "filament/filament/include/filament/Engine.h"
 #include "core/animation/gltf_animation.h"
 #include "core/async/future.h"
-#include "core/async/future_group.h"
 #include "core/common/buffer_access.h"
 #include "core/common/file_helpers.h"
 #include "core/common/flatbuffer_helpers.h"
@@ -82,23 +81,19 @@ class LoaderInProcess : public Loader {
 
   // Fire-and-forget load mechanism.  Will fail to resolve missing resources in
   // contexts without filesystem access.
-  Future<absl::Status> Load(std::function<void()> &&callback,
-                            std::optional<FutureGroup> future_group) override;
+  Future<absl::Status> Load(std::function<void()>&& callback) override;
   // Iterative load mechanism.  Will attempt to load given the currently loaded
   // resources; any missing assets which are required to load will have their
   // paths appear in out_missing_resource_paths.
   Future<absl::Status> TryLoad(
-      std::vector<std::string> *out_missing_resource_paths,
-      std::function<void()> &&callback,
-      std::optional<FutureGroup> future_group) override;
+      std::vector<std::string>* out_missing_resource_paths,
+      std::function<void()>&& callback) override;
 
   // Instantiation.
   Future<std::unique_ptr<model::ModelData>> CreateModel(
-      filament::Engine *engine,
-      std::optional<FutureGroup> future_group) override;
+      filament::Engine* engine) override;
   Future<std::unique_ptr<model::ModelData>> CreateModel(
-      filament::Engine *engine, std::function<void()> &&callback,
-      std::optional<FutureGroup> future_group) override;
+      filament::Engine* engine, std::function<void()>&& callback) override;
   void WhenFullyLoaded(std::function<void()> &&callback) override;
   void RemoveWhenFullyLoadedCallback() override;
 
@@ -170,20 +165,19 @@ LoaderInProcess::LoaderInProcess(
       loader_options_(std::move(options)) {}
 
 Future<std::unique_ptr<model::ModelData>> LoaderInProcess::CreateModel(
-    filament::Engine *engine, std::optional<FutureGroup> future_group) {
+    filament::Engine* engine) {
   if (!Loaded()) {
     return Future<std::unique_ptr<model::ModelData>>(
         absl::FailedPreconditionError("Not Loaded"));
   }
 
-  return creator_->CreateModel(engine, loader_options_, future_group, name_);
+  return creator_->CreateModel(engine, loader_options_, name_);
 }
 
 Future<std::unique_ptr<model::ModelData>> LoaderInProcess::CreateModel(
-    filament::Engine *engine, std::function<void()> &&callback,
-    std::optional<FutureGroup> future_group) {
+    filament::Engine* engine, std::function<void()>&& callback) {
   Future<std::unique_ptr<model::ModelData>> create_model_future =
-      CreateModel(engine, future_group);
+      CreateModel(engine);
   creator_->WhenFullyLoaded(std::move(callback));
   return create_model_future;
 }
@@ -255,8 +249,7 @@ absl::Status LoaderInProcess::Flush(filament::Engine *engine) {
   return creator_->BlockUntilLoaded(engine);
 }
 
-Future<absl::Status> LoaderInProcess::Load(
-    std::function<void()> &&callback, std::optional<FutureGroup> future_group) {
+Future<absl::Status> LoaderInProcess::Load(std::function<void()>&& callback) {
   absl::Status provider_status = provider_->Load();
   if (!provider_status.ok()) {
     return Future<absl::Status>(provider_status);
@@ -265,12 +258,12 @@ Future<absl::Status> LoaderInProcess::Load(
   if (!creator_status.ok()) {
     return Future<absl::Status>(creator_status);
   }
-  return creator_->LoadImages(context_, std::move(callback), future_group);
+  return creator_->LoadImages(context_, std::move(callback));
 }
 
 Future<absl::Status> LoaderInProcess::TryLoad(
-    std::vector<std::string> *out_missing_resource_paths,
-    std::function<void()> &&callback, std::optional<FutureGroup> future_group) {
+    std::vector<std::string>* out_missing_resource_paths,
+    std::function<void()>&& callback) {
   out_missing_resource_paths->clear();
   if (Loaded()) {
     return Future<absl::Status>(absl::InternalError("already loaded"));
@@ -288,7 +281,7 @@ Future<absl::Status> LoaderInProcess::TryLoad(
     if (!creator_status.ok()) {
       return Future<absl::Status>(creator_status);
     }
-    return creator_->LoadImages(context_, std::move(callback), future_group);
+    return creator_->LoadImages(context_, std::move(callback));
   }
 
   return Future<absl::Status>(absl::OkStatus());

@@ -20,6 +20,7 @@
 #include <memory>
 
 #include "absl/strings/string_view.h"
+#include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "core/async/future.h"
 #include "core/image/image_contents.h"
 #include "core/image/wasm_texture_contents.h"
@@ -33,7 +34,9 @@ Future<std::unique_ptr<ImageContents>> WasmDecodeImage(
 
 // Decodes an image to a texture using available web apis.
 Future<WasmTextureContents> WasmDecodeImageToTexture(
-    absl::string_view name, resources::Resource resource);
+    absl::string_view name, resources::Resource resource,
+    filament::backend::TextureFormat format =
+        filament::backend::TextureFormat::SRGB8_A8);
 
 }  // namespace imp::image::details
 

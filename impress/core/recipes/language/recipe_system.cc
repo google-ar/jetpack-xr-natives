@@ -321,8 +321,6 @@ RecipeSystem::RecipeSystem(BaseView& view) {
     variables["scale"] = scale;
     return variables;
   });
-  RegisterFunction("InvertMatrix",
-                   [](mat4f matrix) { return inverse(matrix); });
 
   RegisterFunction(
       "PlayGltfAudio",
@@ -374,6 +372,7 @@ RecipeSystem::RecipeSystem(BaseView& view) {
   recipe::RegisterMathMatrixFunctions(this);
   recipe::RegisterMathUtilityFunctions(this);
   recipe::RegisterMathVectorFunctions(this);
+  recipe::RegisterMathQuaternionFunctions(this);
 }
 
 std::unique_ptr<RecipeCustomStatement> RecipeSystem::CreateCustomStatement(

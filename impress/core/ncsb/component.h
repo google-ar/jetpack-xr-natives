@@ -392,9 +392,9 @@ class Component {
   // This is intentionally not a scoped enumeration so that it works with
   // the BitFlag API.
   enum StatusFlags : BitFlag {
-    kInitialFlags = 0,
-    kIsEnabled = 1 << 0,
-    kIsActive = 1 << 1
+    kComponentInitialFlags = 0,
+    kComponentIsEnabled = 1 << 0,
+    kComponentIsActive = 1 << 1
   };
 
   Dispatcher& GetDispatcher() const;

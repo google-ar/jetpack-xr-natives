@@ -137,7 +137,7 @@ absl::Status DefaultDevModeExtension::Setup(FilamentHost* host) {
   io.KeyMap[ImGuiKey_DownArrow] = static_cast<int>(VirtualKeyCode::VK_DOWN);
   io.KeyMap[ImGuiKey_PageUp] = static_cast<int>(VirtualKeyCode::VK_PAGEUP);
   io.KeyMap[ImGuiKey_PageDown] = static_cast<int>(VirtualKeyCode::VK_PAGEDOWN);
-  io.KeyMap[ImGuiKey_LeftArrow] = static_cast<int>(VirtualKeyCode::VK_LEFT);
+  io.KeyMap[ImGuiKey_Delete] = static_cast<int>(VirtualKeyCode::VK_DELETE);
   io.KeyMap[ImGuiKey_Backspace] =
       static_cast<int>(VirtualKeyCode::VK_BACKSPACE);
   io.KeyMap[ImGuiKey_Space] = static_cast<int>(VirtualKeyCode::VK_SPACE);

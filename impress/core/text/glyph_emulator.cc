@@ -59,10 +59,6 @@ bool RectContainsPoint(const Rect& rect, const float2& point) {
 }
 #endif
 
-constexpr uint8_t kPadding = 8;
-constexpr uint8_t kHalfPadding = kPadding / 2;
-constexpr float4 kStrokeIdentifierColor = float4(1.0f, 0.0f, 0.0f, 1.0f);
-constexpr float4 kFillIdentifierColor = float4(1.0f, 1.0f, 0.0f, 1.0f);
 #if IMP_PLATFORM(WASM)
 constexpr float kSuperSampleThreshold = 2.0f;
 #endif
@@ -103,8 +99,10 @@ void GetGlyphsForChunk(const Chunk& chunk,
     out_glyphs.push_back(
         GlyphEmulator::Glyph{.glyph = std::string(chunk.chunk_text),
                              .advance_width = advance_widths[0],
-                             .is_emoji = ContainsEmoji(chunk.chunk_text),
+                             .is_emoji = canvas_options.force_non_separable ||
+                                         ContainsEmoji(chunk.chunk_text),
                              .contains_non_separable_script =
+                                 canvas_options.force_non_separable ||
                                  ContainsNonSeparableScript(chunk.chunk_text)});
     return;
   }
@@ -197,18 +195,17 @@ Future<ScopedCanvas::TextMetrics> GlyphEmulator::GetTextMetrics(
     float2 subpixel_render_ratio) {
   return canvas_source_.PrepareFont(text, options)
       .Then(
-          [this, text = std::string(text), options = options,
-           subpixel_render_ratio]() {
-            AsyncCanvasSource::GlyphToMeasure glyph_to_measure({.glyph = text});
-            return canvas_source_.MeasureGlyph(glyph_to_measure, options)
-                .Then(
-                    [subpixel_render_ratio](ScopedCanvas::TextMetrics metrics) {
-                      metrics.size /= subpixel_render_ratio;
-                      metrics.typographical_width /= subpixel_render_ratio.x;
-                      metrics.origin /= subpixel_render_ratio;
-                      return metrics;
-                    },
-                    Executor::Type::kCurrent);
+          [this, text = std::string(text), options]() {
+            return canvas_source_.MeasureGlyph(
+                AsyncCanvasSource::GlyphToMeasure({text}), options);
+          },
+          Executor::Type::kCurrent)
+      .Then(
+          [subpixel_render_ratio](ScopedCanvas::TextMetrics metrics) {
+            metrics.size /= subpixel_render_ratio;
+            metrics.typographical_width /= subpixel_render_ratio.x;
+            metrics.origin /= subpixel_render_ratio;
+            return metrics;
           },
           Executor::Type::kCurrent);
 }
@@ -216,11 +213,8 @@ Future<ScopedCanvas::TextMetrics> GlyphEmulator::GetTextMetrics(
 Future<ScopedCanvas::FontInfo> GlyphEmulator::GetFontInfo(
     const ScopedCanvas::TextOptions& options) {
   return canvas_source_.PrepareFont(" ", options)
-      .Then(
-          [this, options = options]() {
-            return canvas_source_.GetFontInfo(options);
-          },
-          Executor::Type::kCurrent);
+      .Then([this, options]() { return canvas_source_.GetFontInfo(options); },
+            Executor::Type::kCurrent);
 }
 
 Future<std::unique_ptr<std::vector<GlyphEmulator::Glyph>>>
@@ -232,15 +226,12 @@ GlyphEmulator::GetGlyphs(absl::string_view text,
   }
 
   return canvas_source_.PrepareFont(text, options)
+      .Then([this, text = std::string(text),
+             options]() { return BreakIntoGlyphs(text, options); },
+            Executor::Type::kCurrent)
       .Then(
-          [this, text = std::string(text), options = options]() {
-            return BreakIntoGlyphs(text, options)
-                .Then(
-                    [this,
-                     options](std::unique_ptr<std::vector<Glyph>> glyphs) {
-                      return MeasureGlyphs(std::move(glyphs), options);
-                    },
-                    Executor::Type::kCurrent);
+          [this, options](std::unique_ptr<std::vector<Glyph>> glyphs) {
+            return MeasureGlyphs(std::move(glyphs), options);
           },
           Executor::Type::kCurrent);
 }
@@ -265,7 +256,7 @@ GlyphEmulator::BreakIntoGlyphs(
     }
     return canvas_source_.GetTextGlyphs(text, canvas_options)
         .Then(
-            [font_holder_name](
+            [font_holder_name = std::string(font_holder_name)](
                 std::unique_ptr<std::vector<ScopedCanvas::GlyphAdvance>>
                     canvas_glyph_advances) {
               auto glyphs = std::make_unique<std::vector<Glyph>>();
@@ -273,11 +264,10 @@ GlyphEmulator::BreakIntoGlyphs(
               for (ScopedCanvas::GlyphAdvance& canvas_glyph_advance :
                    *canvas_glyph_advances) {
                 absl::string_view font = "";
-                if (!font_holder_name.empty()) {
-                  font = font_holder_name;
-                }
                 if (canvas_glyph_advance.fallback_font) {
                   font = canvas_glyph_advance.fallback_font->GetFontName();
+                } else if (!font_holder_name.empty()) {
+                  font = font_holder_name;
                 }
                 glyphs->push_back(GlyphEmulator::Glyph{
                     .glyph = GlyphKey{.glyph_id = canvas_glyph_advance.glyph,
@@ -291,59 +281,60 @@ GlyphEmulator::BreakIntoGlyphs(
               return glyphs;
             },
             Executor::Type::kCurrent);
-  } else {
-    // A string or string_view is really just an array of bytes. A byte is only
-    // big enough to represent ASCII characters. Standardized across google,
-    // strings in C++ and protos are encoded as UTF8 to support localization,
-    // ligatures, and accented characters. In UTF8, a character is a variable
-    // number of bytes (1-4). If it's 1 byte, it's ASCII.
-    //
-    // Learn more at (broken link).
-
-    // Determines how the text needs to be laid out by getting the width of each
-    // character within the string. This isn't the same as the width of the
-    // character itself, since the layout width is impacted by adjacent
-    // characters.
-    //
-    // Note, using characters as glyphs is NOT correct in all cases. For
-    // example, in arabic the correct glyph for a character is determined by
-    // adjacent characters. The best way to handle this is to correctly convert
-    // the text string into glyphs from the font, and then draw each individual
-    // glyph as a separate entry in the atlas.
-    //
-    // As an intermediate solution, for texts that are rendered RTL or contain
-    // non-separable texts, we will try to separate them on separable characters
-    // and render each portion as a single glyph. This means that if the entire
-    // text is non-separable, then we will render the entire text as a single
-    // chunk.
-    //
-    // However, The Android PositionedGlyphs API that is required to implement
-    // this on Android isn't available until API level 31 which we cannot rely
-    // on.
-    //
-    // TODO: Add support for atlasing individual glyphs for text
-    // with accents/ligatures when running on Desktop.
-    std::vector<Chunk> chunks = GetChunks(text);
-    auto widths = canvas_source_.GetTextWidths(chunks, canvas_options);
-    bool contains_rtl = ContainsRtl(text);
-    return widths.Then(
-        [chunks = std::move(chunks), contains_rtl,
-         canvas_options](std::vector<std::vector<float>> widths) {
-          auto glyphs = std::make_unique<std::vector<Glyph>>();
-          for (int i = 0; i < chunks.size(); i++) {
-            GetGlyphsForChunk(chunks[i], widths[i], canvas_options, *glyphs);
-          }
-
-          // Because we tokenize the text and try to split it on separable
-          // delimiters, if the text was rtl then we need to reverse the order
-          // of the tokens if it is rtl.
-          if (contains_rtl) {
-            absl::c_reverse(*glyphs);
-          }
-          return glyphs;
-        },
-        Executor::Type::kCurrent);
   }
+
+  // A string or string_view is really just an array of bytes. A byte is only
+  // big enough to represent ASCII characters. Standardized across google,
+  // strings in C++ and protos are encoded as UTF8 to support localization,
+  // ligatures, and accented characters. In UTF8, a character is a variable
+  // number of bytes (1-4). If it's 1 byte, it's ASCII.
+  //
+  // Learn more at (broken link).
+
+  // Determines how the text needs to be laid out by getting the width of each
+  // character within the string. This isn't the same as the width of the
+  // character itself, since the layout width is impacted by adjacent
+  // characters.
+  //
+  // Note, using characters as glyphs is NOT correct in all cases. For
+  // example, in arabic the correct glyph for a character is determined by
+  // adjacent characters. The best way to handle this is to correctly convert
+  // the text string into glyphs from the font, and then draw each individual
+  // glyph as a separate entry in the atlas.
+  //
+  // As an intermediate solution, for texts that are rendered RTL or contain
+  // non-separable texts, we will try to separate them on separable characters
+  // and render each portion as a single glyph. This means that if the entire
+  // text is non-separable, then we will render the entire text as a single
+  // chunk.
+  //
+  // However, The Android PositionedGlyphs API that is required to implement
+  // this on Android isn't available until API level 31 which we cannot rely
+  // on.
+  //
+  // TODO: Add support for atlasing individual glyphs for text
+  // with accents/ligatures when running on Desktop.
+  std::vector<Chunk> chunks =
+      GetChunks(text, canvas_options.force_non_separable);
+  auto widths = canvas_source_.GetTextWidths(chunks, canvas_options);
+  bool contains_rtl = ContainsRtl(text);
+  return widths.Then(
+      [chunks = std::move(chunks), contains_rtl,
+       canvas_options](std::vector<std::vector<float>> widths) {
+        auto glyphs = std::make_unique<std::vector<Glyph>>();
+        for (int i = 0; i < chunks.size(); i++) {
+          GetGlyphsForChunk(chunks[i], widths[i], canvas_options, *glyphs);
+        }
+
+        // Because we tokenize the text and try to split it on separable
+        // delimiters, if the text was rtl then we need to reverse the order
+        // of the tokens if it is rtl.
+        if (contains_rtl) {
+          absl::c_reverse(*glyphs);
+        }
+        return glyphs;
+      },
+      Executor::Type::kCurrent);
 }
 
 Future<std::unique_ptr<std::vector<GlyphEmulator::Glyph>>>
@@ -426,13 +417,15 @@ GlyphEmulator::CanvasOptionsFromGlyphEmulatorOptions(
   canvas_options.should_measure_typographical_width =
       options.should_measure_typographical_width;
   canvas_options.render_scale = subpixel_render_ratio.x;
+  canvas_options.force_non_separable = options.force_non_separable;
   return canvas_options;
 }
 
 GlyphEmulator::SuperSampleInfo GlyphEmulator::GetSuperSampleInfo(
-    float2 physical_pixel_ratio) {
+    float2 physical_pixel_ratio, bool force_off) {
 #if IMP_PLATFORM(WASM)
-  bool should_super_sample = physical_pixel_ratio.x < kSuperSampleThreshold;
+  bool should_super_sample =
+      !force_off && physical_pixel_ratio.x < kSuperSampleThreshold;
   float2 subpixel_render_ratio =
       should_super_sample ? float2{kSuperSampleThreshold, 1.0f} : float2{1.0f};
   return SuperSampleInfo{

@@ -41,7 +41,6 @@ cc_library(
         ":definitions",
         ":platform_android_external_texture_surface",
         "//core:config",
-        "//core/common:log",
         "//core/common:robin_map",
         "//core/common:small_source_location",
         "//core/math",
@@ -58,6 +57,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
     ] + if_android_external_texture_surface_uses_image_reader(
         [
@@ -98,7 +98,6 @@ cc_library(
         ":definitions",
         ":platform_android_external_texture_surface",
         "//core:config",
-        "//core/common:log",
         "//core/common:robin_map",
         "//core/common:small_source_location",
         "//core/math",
@@ -113,6 +112,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
     ],
     alwayslink = 1,
@@ -135,7 +135,6 @@ cc_library(
     deps = [
         ":definitions",
         ":platform_android_external_texture_surface",
-        "//core/common:log",
         "//core/common:registry",
         "//core/common:robin_map",
         "//core/common:small_source_location",
@@ -158,6 +157,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament/filament:filament_hdrs",
     ],

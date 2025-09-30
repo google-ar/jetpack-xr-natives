@@ -21,14 +21,11 @@
 #include <string>
 #include <vector>
 
-#include "absl/status/status.h"
 #include "absl/strings/string_view.h"
-#include "core/common/bit_flag.h"
 #include "core/common/hash.h"
 #include "core/common/robin_map.h"
 #include "core/common/robin_set.h"
 #include "core/math/quat.h"
-#include "core/math/transform.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component.h"
 
@@ -52,6 +49,18 @@ class SceneMetadata : public Component {
   void SetBaseUrl(absl::string_view base_url);
 
   absl::string_view GetBaseUrl() const;
+
+  // Returns true if the node originates from a base Isf file.
+  //
+  // It could be that this node has a direct base (in which case GetBaseUrl will
+  // not be empty) or it could be that this node is a originating within a base
+  // Isf file.
+  bool IsFromBase() const;
+
+  void SetChildOfBase(bool is_child_of_base);
+
+  // Returns true if this node originated from a child within a base Isf file.
+  bool IsChildOfBase() const;
 
   void SetBaseDisabled(bool disabled);
   void SetBaseLocalPosition(float3 position);
@@ -79,6 +88,9 @@ class SceneMetadata : public Component {
  private:
   // The base URL for this node within the Isf file.
   std::string base_url_;
+
+  // True if this node originated from a child within a base Isf file.
+  bool is_child_of_base_ = false;
 
   // The last state merge state of all bases when there are multiple.
   std::optional<bool> is_base_disabled_;

@@ -18,10 +18,16 @@
 
 #include "absl/debugging/failure_signal_handler.h"
 #include "absl/debugging/symbolize.h"
+#include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
+#include "core/async/executor.h"
+#include "core/common/context.h"
+#include "core/input/input_manager.h"
 #include "core/view/framework/view.h"
+#include "core/view/platforms/desktop/desktop_hooks.h"
+#include "core/view/utils/device.h"
 #include "core/view/view_host.h"
 #include "core/window/sdl_venue.h"
 #include "mediapipe/framework/port/status_macros.h"
@@ -30,19 +36,20 @@ namespace imp {
 namespace desktop {
 namespace {
 
-using window::FilamentHost;
-
-absl::Status PresentHost(FilamentHost* host, InputManager* inputManager,
+absl::Status PresentHost(ViewHost* host, InputManager* inputManager,
                          Device* device) {
   // TODO: Refactor so that host->setup is called after
   // the DPI values are set on View::Device for consistency with other platforms
   MP_RETURN_IF_ERROR(host->Setup());
+  
+  imp::desktop_api::PostHostSetup(*host->GetView(),
+                                  *Executor::ForegroundExecutor());
   MP_RETURN_IF_ERROR(window::SdlVenue(host, inputManager, device));
   return absl::OkStatus();
 }
 
-absl::Status PresentHostAndCleanup(FilamentHost* host,
-                                   InputManager* inputManager, Device* device) {
+absl::Status PresentHostAndCleanup(ViewHost* host, InputManager* inputManager,
+                                   Device* device) {
   if (auto status = PresentHost(host, inputManager, device); !status.ok()) {
     if (auto cleanup_status = host->Cleanup(); !cleanup_status.ok()) {
       return absl::InternalError(absl::StrFormat(

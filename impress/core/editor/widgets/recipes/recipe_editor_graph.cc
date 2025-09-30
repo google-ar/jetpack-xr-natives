@@ -29,7 +29,6 @@
 #include "core/common/robin_map.h"
 #include "core/editor/widgets/recipes/editor_constants.h"
 #include "core/recipes/language/recipe_graph.proto.imp.h"
-#include "core/recipes/language/recipe_runtime_graph.h"
 #include "core/recipes/language/recipe_utils.h"
 
 namespace imp::editor {
@@ -42,12 +41,11 @@ class RecipeEditorGraphBuilder {
  public:
   RecipeEditorGraphBuilder() { graph_ = std::make_unique<RecipeEditorGraph>(); }
 
-  void AddNode(const RecipeNode& node);
+  void AddNode(RecipeNode& node);
 
   void PopulateNode(const RecipeNode& node);
 
-  std::unique_ptr<RecipeEditorGraph> Build(
-      RecipeRuntimeGraph& recipe_runtime_graph);
+  std::unique_ptr<RecipeEditorGraph> Build();
 
  private:
   struct ValueConnectionVisitor {
@@ -107,7 +105,7 @@ class RecipeEditorGraphBuilder {
   std::vector<RecipeEditorGraph::NodeId> entry_point_node_ids_;
 };
 
-void RecipeEditorGraphBuilder::AddNode(const RecipeNode& node) {
+void RecipeEditorGraphBuilder::AddNode(RecipeNode& node) {
   RecipeEditorGraph::NodeId node_id = GetNodeId(node);
   nodes_.emplace(node_id,
                  RecipeEditorGraph::Node{
@@ -197,6 +195,11 @@ void RecipeEditorGraphBuilder::PopulateNode(
     const Identifier& node, RecipeEditorGraph::Node& graph_node) {
   graph_node.type_name = "Identifier";
   graph_node.content = node.name;
+  RecipeEditorGraph::PinId output_pin_id =
+      GetOrCreateSocket(graph_node, recipe::kDefaultOutputSocketName,
+                        RecipeEditorGraph::ConnectionType::Value,
+                        RecipeEditorGraph::SocketKind::Output);
+  graph_node.out_flows.push_back(output_pin_id);
 }
 
 template <>
@@ -206,9 +209,15 @@ void RecipeEditorGraphBuilder::PopulateNode(
 
   graph_node.content =
       proto::EnumMetaData<BinaryExpression::BinaryOps>::GetName(node.op);
-
+  // TODO: Populate the field names dynamically instead of
+  // hardcoding strings.
   PopulateValueConnection(node.left, graph_node, "Left");
   PopulateValueConnection(node.right, graph_node, "Right");
+  RecipeEditorGraph::PinId output_pin_id =
+      GetOrCreateSocket(graph_node, recipe::kDefaultOutputSocketName,
+                        RecipeEditorGraph::ConnectionType::Value,
+                        RecipeEditorGraph::SocketKind::Output);
+  graph_node.out_flows.push_back(output_pin_id);
 }
 
 template <>
@@ -220,6 +229,12 @@ void RecipeEditorGraphBuilder::PopulateNode(
       proto::EnumMetaData<UnaryExpression::UnaryOps>::GetName(node.op);
 
   PopulateValueConnection(node.input, graph_node, "Value");
+  GetOrCreateSocket(graph_node, "Value",
+                    RecipeEditorGraph::ConnectionType::Value,
+                    RecipeEditorGraph::SocketKind::Input);
+  GetOrCreateSocket(graph_node, recipe::kDefaultOutputSocketName,
+                    RecipeEditorGraph::ConnectionType::Value,
+                    RecipeEditorGraph::SocketKind::Output);
 }
 
 template <>
@@ -233,6 +248,16 @@ void RecipeEditorGraphBuilder::PopulateNode(
     PopulateValueConnection(connection, graph_node,
                             absl::StrFormat("Arg%d", i++));
   }
+  RecipeEditorGraph::PinId input_pin_id =
+      GetOrCreateSocket(graph_node, absl::StrFormat("Arg%d", i),
+                        RecipeEditorGraph::ConnectionType::Value,
+                        RecipeEditorGraph::SocketKind::Input);
+  RecipeEditorGraph::PinId output_pin_id =
+      GetOrCreateSocket(graph_node, recipe::kDefaultOutputSocketName,
+                        RecipeEditorGraph::ConnectionType::Value,
+                        RecipeEditorGraph::SocketKind::Output);
+  graph_node.in_flows.push_back(input_pin_id);
+  graph_node.out_flows.push_back(output_pin_id);
 }
 
 template <>
@@ -241,11 +266,22 @@ void RecipeEditorGraphBuilder::PopulateNode(
   graph_node.type_name = "Call Statement";
   graph_node.content = node.expression.name;
 
+  // Create flow pins first to establish a consistent layout.
+  GetOrCreateSocket(graph_node, "In", RecipeEditorGraph::ConnectionType::Flow,
+                    RecipeEditorGraph::SocketKind::Input);
+  PopulateExecutableConnection(node.next_node, "Next", "In", graph_node);
+
+  // Then, populate value arguments.
+  int i = 0;
   for (const ValueConnection& connection : node.expression.args) {
-    PopulateValueConnection(connection, graph_node);
+    PopulateValueConnection(connection, graph_node,
+                            absl::StrFormat("Arg%d", i++));
   }
 
-  PopulateExecutableConnection(node.next_node, "Next", "In", graph_node);
+  // Add one extra empty value input socket for new connections.
+  GetOrCreateSocket(graph_node, absl::StrFormat("Arg%d", i),
+                    RecipeEditorGraph::ConnectionType::Value,
+                    RecipeEditorGraph::SocketKind::Input);
 }
 
 template <>
@@ -405,16 +441,16 @@ RecipeEditorGraph::NodeId RecipeEditorGraphBuilder::GetNodeId(
 
 RecipeEditorGraph::PinId RecipeEditorGraphBuilder::CreatePinId(
     const RecipeEditorGraph::Node& node) {
+  // We add + 1 to avoid PinId 0 which is considered as an invalid id.
   return RecipeEditorGraph::PinId(node.id * kMaxSocketsPerNode +
-                                  node.sockets.size());
+                                  node.sockets.size() + 1);
 }
 
 RecipeEditorGraph::LinkId RecipeEditorGraphBuilder::CreateLinkId() {
   return RecipeEditorGraph::LinkId(graph_->links.size());
 }
 
-std::unique_ptr<RecipeEditorGraph> RecipeEditorGraphBuilder::Build(
-    RecipeRuntimeGraph& recipe_runtime_graph) {
+std::unique_ptr<RecipeEditorGraph> RecipeEditorGraphBuilder::Build() {
   for (const auto& [id, node] : nodes_) {
     graph_->node_lookup[node.recipe_node->id] = id;
   }
@@ -428,11 +464,10 @@ std::unique_ptr<RecipeEditorGraph> RecipeEditorGraphBuilder::Build(
 }  // namespace
 
 absl::StatusOr<std::unique_ptr<RecipeEditorGraph>> RecipeEditorGraph::Create(
-    RecipeRuntimeGraph& recipe_runtime_graph) {
+    RecipeGraph& recipe_graph) {
   RecipeEditorGraphBuilder builder;
-  const RecipeGraph& recipe_graph = recipe_runtime_graph.GetRecipeGraph();
 
-  for (const RecipeNode& node : recipe_graph.recipe_nodes) {
+  for (RecipeNode& node : recipe_graph.recipe_nodes) {
     builder.AddNode(node);
   }
 
@@ -440,21 +475,7 @@ absl::StatusOr<std::unique_ptr<RecipeEditorGraph>> RecipeEditorGraph::Create(
     builder.PopulateNode(node);
   }
 
-  std::unique_ptr<RecipeEditorGraph> recipe_editor_graph =
-      builder.Build(recipe_runtime_graph);
-
-  recipe_runtime_graph.SetSocketValueListener(
-      [editor_graph = recipe_editor_graph.get()](
-          const imp::NodeId& recipe_node_id,
-          const recipe::Variables& return_values) {
-        auto it = editor_graph->node_lookup.find(recipe_node_id);
-        if (it == editor_graph->node_lookup.end()) {
-          IMP_LOG(imp::WARNING) << "Recipe node not found in graph: "
-                       << recipe_node_id.index;
-        } else {
-          editor_graph->nodes[it->second].return_values = return_values;
-        }
-      });
+  std::unique_ptr<RecipeEditorGraph> recipe_editor_graph = builder.Build();
 
   return recipe_editor_graph;
 }

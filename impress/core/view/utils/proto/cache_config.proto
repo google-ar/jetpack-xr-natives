@@ -1,0 +1,40 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import "core/proto/imp.proto";
+
+// option cc_api_version = 2;
+option java_package = "com.google.ar.imp.core";
+
+message CacheConfig {
+  // Frequency to remove unused assets.
+  optional float cache_cleanup_interval_seconds = 1;
+  // The number of unused assets to retain in memory. If not set, this number
+  // defaults to 0. If set this applies to all asset types.
+  optional int32 default_assets_retained = 2;
+  // Overrides default_assets_retained for image assets.
+  optional int32 image_assets_retained = 3;
+  // Overrides default_assets_retained for material assets.
+  optional int32 material_assets_retained = 4;
+  // Overrides default_assets_retained for media assets.
+  optional int32 media_assets_retained = 5;
+  // Overrides default_assets_retained for model assets.
+  optional int32 model_assets_retained = 6;
+  // Overrides default_assets_retained for texture assets.
+  optional int32 texture_assets_retained = 7;
+}

@@ -23,11 +23,11 @@
 
 #include <jni.h>
 
-#include <array>
 #include <cstdint>
 
 #include "filament/filament/backend/include/backend/Platform.h"
 #include "filament/filament/backend/include/backend/platforms/VulkanPlatformAndroid.h"
+#include "filament/libs/bluevk/include/vulkan/vulkan_core.h"
 #include "core/config.h"
 #include "core/view/platforms/xr_android/openxr_includes.h"
 
@@ -40,6 +40,11 @@ using XrPlatformBase = filament::backend::VulkanPlatformAndroid;
 class XrVulkanPlatform : public XrPlatformBase {
  public:
   XrVulkanPlatform();
+
+  filament::backend::Driver* createDriver(
+      void* sharedContext,
+      const Platform::DriverConfig& driverConfig) noexcept override;
+
   void bindVulkanInstance(VkInstance instance);
   XrGraphicsBindingVulkan2KHR GetGraphicsBinding();
   void setXrInstance(XrInstance instance);

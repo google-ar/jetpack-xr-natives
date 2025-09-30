@@ -49,17 +49,11 @@ class CylinderCollidableShape : public CollidableShape {
 #endif
 
  private:
-  // Since btCylinderShape does not support non-uniform scaling, this function
-  // forces the three dimensions of the scale of an Impress cylinder collider to
-  // be the same.
-  void EnforceEvenScaleForCylinder();
-
-  NodeHandle node_;
   std::unique_ptr<btCollisionShape> collidable_shape_;
   // Local offset of the center of the cylinder in Impress.
   float3 collidable_center_;
 
-  float3 scale_prev_ = float3(1.0f);
+  float3 scale_ = float3(1.0f);
 };
 
 }  // namespace imp

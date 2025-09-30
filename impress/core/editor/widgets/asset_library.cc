@@ -54,6 +54,7 @@
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/render/material_definition.proto.imp.h"
+#include "core/view/framework/scene/scene_reference.h"
 #include "core/view/framework/scene/scene_system.h"
 #include "core/view/utils/string_map.h"
 
@@ -129,11 +130,14 @@ void AssetLibrary::DrawImGui() {
     return;
   }
 
-  // TODO: (broken link) -  Child window w/ constraints should apply to all tabs
-  // so this BeginChild(...) block should move into LayoutComposer.
+  bool is_docking_layout =
+      ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_DockingEnable;
+
   if (ImGui::BeginChild(
           "##Asset Library (Child)",
-          ImVec2(ImGui::GetContentRegionAvail().x, kAssetLibraryPanelHeight),
+          ImVec2(ImGui::GetContentRegionAvail().x,
+                 is_docking_layout ? /*unlimited height*/ -1
+                                   : kAssetLibraryPanelHeight),
           false,
           ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollWithMouse)) {
     directory_ui_->DrawDirectoriesHeader();
@@ -282,12 +286,17 @@ void AssetLibrary::HandleDragAndDropNewResource() {
       std::string saved_data;
       proto::ToTextproto(&(*node_data), &saved_data);
 
+      auto on_save_callback = [isf](absl::string_view saved_file_path) {
+        isf->AddComponent<SceneReference>(saved_file_path);
+      };
+
       pending_new_resource_.emplace(PendingResource{
           .type = std::string(kIsfExt).substr(1, kIsfExt.length()),
           .data = std::move(isf_data),
           .name = std::string(isf->GetName()),
           .saved_data = std::move(saved_data),
-          .saved_extension = ".textproto"});
+          .saved_extension = ".textproto",
+          .on_save_callback = std::move(on_save_callback)});
     }
 
     // Iterate over all registered message types and accept a drop.
@@ -329,9 +338,22 @@ void AssetLibrary::HandleDragAndDropNewResource() {
                          &pending_new_resource_->name,
                          ImGuiInputTextFlags_EnterReturnsTrue) ||
         ImGui::Button(editor::GenerateUniqueImGuiLabel("Save", this).c_str())) {
-      AddResource(*pending_new_resource_);
-      pending_new_resource_.reset();
-      ImGui::CloseCurrentPopup();
+      if (absl::StrContains(pending_new_resource_->name, ' ')) {
+        ImGui::OpenPopup("Invalid Filename");
+      } else {
+        AddResource(*pending_new_resource_);
+        pending_new_resource_.reset();
+        ImGui::CloseCurrentPopup();
+      }
+    }
+
+    if (ImGui::BeginPopupModal("Invalid Filename", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize)) {
+      ImGui::Text("Filename cannot contain whitespaces.");
+      if (ImGui::Button("OK")) {
+        ImGui::CloseCurrentPopup();
+      }
+      ImGui::EndPopup();
     }
     ImGui::EndPopup();
   } else {
@@ -478,6 +500,10 @@ std::string AssetLibrary::AddResource(
 
   if (saving_to_disk_enabled_) {
     directory_ui_->SaveInDirectory(saved_name, data_to_save);
+  }
+
+  if (pending_resource.on_save_callback) {
+    pending_resource.on_save_callback(resource_path);
   }
 
   return resource_path;

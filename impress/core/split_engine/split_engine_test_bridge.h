@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/statusor.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/split_engine/android/split_engine_android_bridge.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
@@ -69,8 +70,7 @@ class TestSplitEngineAndroidBridge : public SplitEngineAndroidBridge {
       const std::vector<uint8_t>& data,
       std::function<void(const std::vector<uint8_t>&)> callback) override;
 
-  SplitEngineSharedMemoryBridgeClient& GetSplitEngineSharedMemoryBridgeClient()
-      override;
+  MessageGroupId GenerateMessageGroupId();
 
  private:
   SplitEngineSharedMemoryBridgeClient& bridge_client_;
@@ -122,6 +122,8 @@ class TestSplitEngineBridgeSender : public SplitEngineBridgeSender {
   void SendMessage(const flatbuffers::FlatBufferBuilder& fbb) override;
 
   void ClearReleasedMessageGroups() override;
+
+  absl::StatusOr<size_t> GetActiveMessageGroupCount() const override;
 
   void* CreateSharedMemoryBuffer(size_t size_in_bytes);
   void DestroySharedMemoryBuffer(void*);

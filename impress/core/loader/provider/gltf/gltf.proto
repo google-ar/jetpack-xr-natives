@@ -285,7 +285,7 @@ message Primitive {
   message FeatureIdTexture {
     optional uint32 index = 1 [(imp.optional_type) = ABSL_OPTIONAL];
     int32 tex_coord = 2;
-    int32 channels = 3;
+    repeated int32 channels = 3;
     TextureInfoExtensions extensions = 4;
   }
   message FeatureIdAttribute {

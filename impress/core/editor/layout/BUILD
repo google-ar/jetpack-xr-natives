@@ -33,9 +33,6 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     defines = imp_defines(),
-    deps = [
-        "@com_google_absl//absl/strings",
-    ],
     alwayslink = 1,
 )
 
@@ -50,16 +47,37 @@ cc_library(
     copts = imp_google3_copts(),
     defines = imp_defines(),
     deps = [
+        ":docking_manager",
         ":editor_panel_ids",
         ":helpers",
         ":layout_config_imp_cc_proto",
+        "//core:config",
         "//core/common:invocable",
+        "//core/editor:editor_constants",
         "//core/editor:widget",
         "//core/editor:widget_layout_info",
         "//core/math",
         "//core/view/utils:string_map",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
+        "@dear_imgui",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "docking_manager",
+    srcs = [
+        "docking_manager.cc",
+    ],
+    hdrs = [
+        "docking_manager.h",
+    ],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":editor_panel_ids",
+        "@com_google_absl//absl/strings:string_view",
         "@dear_imgui",
     ],
     alwayslink = 1,

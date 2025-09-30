@@ -474,6 +474,14 @@ struct StatelessIsfInfo {
       return SaveIsfStateResult::kFailed;
     }
 
+    // If there are base sources, then this component is coming from a base,
+    // which means we should report the result as empty. Since there is no
+    // serialized state, the delta between this component and the base is always
+    // empty.
+    if (!base_component_sources.empty()) {
+      return SaveIsfStateResult::kEmpty;
+    }
+
     return SaveIsfStateResult::kSuccess;
   }
 

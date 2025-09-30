@@ -82,6 +82,11 @@ public class SplitEngineSubspaceManager {
   private SubspaceNode createSubspace(
       int subspaceId, String subspaceName, int existingRootEntityId) {
     SubspaceNode subspaceNode = createSubspace(subspaceId);
+    try (NodeTransaction transaction = xrExtensions.createNodeTransaction()) {
+      transaction
+          .setName(subspaceNode.getSubspaceNode(), subspaceName + "_system_side_subspace_root")
+          .apply();
+    }
     nRegisterSubspace(subspaceManagerNativeHandle, subspaceId, existingRootEntityId);
     nCreateSubspace(subspaceManagerNativeHandle, subspaceId, subspaceName);
     return subspaceNode;

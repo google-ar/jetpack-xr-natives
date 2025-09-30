@@ -47,7 +47,6 @@ cc_library(
         "//core/common:hash",
         "//core/common:invocable",
         "//core/common:jni_helpers",
-        "//core/common:log",
         "//core/common:rememberer",
         "//core/math",
         "//core/ncsb",
@@ -62,6 +61,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
     ] + if_android([
         "//core/scripting/web:web_view_android",
@@ -102,9 +102,9 @@ cc_library(
     deps = [
         ":scripting",
         "//core/common",
-        "//core/common:log",
         "//core/view:base_view",
         "//javascript/core:imp_web_js_embed",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -120,11 +120,11 @@ cc_library(
     deps = [
         ":message_helpers",
         "//core/async:future",
-        "//core/common:log",
         "//core/proto:any_imp_proto",
         "//core/view/scripting",
         "//core/view/utils:string_map",
         "@com_google_absl//absl/types:optional",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -209,7 +209,6 @@ cc_library(
         "//core/common:context",
         "//core/common:hash",
         "//core/common:invocable",
-        "//core/common:log",
         "//core/common:platform_helpers",
         "//core/common:registry",
         "//core/common:rememberer",
@@ -243,6 +242,7 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:optional",
+        "@com_google_impress//core/common:log",
     ] + if_dev_runtime(
         [
             "//core/editor:events",

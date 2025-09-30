@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <memory>
 #include <optional>
+#include <type_traits>
 #include <utility>
 
 #include "absl/strings/cord.h"
@@ -28,23 +29,25 @@
 #include "core/assets/asset_cache.h"
 #include "core/assets/asset_ptr.h"
 #include "core/assets/base_asset_cache.h"
+#include "core/assets/material/material_asset.h"
 #include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
-#include "core/async/future_group.h"
 #include "core/common/hash.h"
 #include "core/config.h"
 #include "core/lighting/image_based_lighting_asset.h"
 #include "core/loader/loader_creator.h"
 #include "core/media/media_asset.h"
 #include "core/render/image_asset.h"
+#include "core/render/texture_asset.h"
+#include "core/render/texture_options.h"
 #include "core/resources/resource_manager.h"
 #include "core/resources/url_loader.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/gltf_asset.h"
 #include "core/view/framework/assets/gltf_asset_loader.h"
-#include "core/view/framework/assets/material_asset.h"
 #include "core/view/framework/assets/proto_asset.h"
 #include "core/view/utils/asset.h"
+#include "core/view/utils/proto/cache_config.proto.imp.h"
 #include "robin_map/include/tsl/robin_map.h"
 
 #if IMP_PLATFORM(ANDROID)
@@ -114,7 +117,8 @@ using ::imp::media::MediaAsset;
 // See impel/resources/resources.bzl for reference.
 class AssetManager {
  public:
-  explicit AssetManager(BaseView* view);
+  explicit AssetManager(BaseView* view,
+                        std::optional<CacheConfig> cache_config = std::nullopt);
 
   // LoadModel and LoadGltfAsset will use the asset managers default load
   // options if none are provided.
@@ -183,6 +187,32 @@ class AssetManager {
       absl::string_view asset_url,
       std::optional<MaterialPreCompileOptions> material_pre_compile_options =
           std::nullopt);
+
+  // Loads a TextureAsset and caches it in the AssetManager.
+  //
+  // TextureAssets can be used with the TextureFactory to create textures that
+  // can be rendered with a material. Unlike LoadImage, LoadTexture will
+  // directly decode the contents of the image into a texture which is faster,
+  // but with the drawback that the pixels are inaccessible and immutable.
+  //
+  // This is a convenience method for AssetManager::LoadAsset<TextureAsset>.
+  //
+  // WARNING: This new API is still under development and there may be bugs with
+  // texture loading. Use at your own risk.
+  Future<AssetPtr<TextureAsset>> LoadTexture(
+      const AssetDefinition& asset_definition);
+  Future<AssetPtr<TextureAsset>> LoadTexture(absl::string_view asset_url);
+  Future<AssetPtr<TextureAsset>> LoadTexture(absl::Cord contents,
+                                             absl::string_view asset_url);
+
+  Future<AssetPtr<TextureAsset>> LoadTexture(
+      const AssetDefinition& asset_definition,
+      TextureGenerationOptions options);
+  Future<AssetPtr<TextureAsset>> LoadTexture(absl::string_view asset_url,
+                                             TextureGenerationOptions options);
+  Future<AssetPtr<TextureAsset>> LoadTexture(absl::Cord contents,
+                                             absl::string_view asset_url,
+                                             TextureGenerationOptions options);
 
   // Loads an ImageAsset and caches it in the AssetManager.
   //
@@ -282,11 +312,8 @@ class AssetManager {
 
   // Asynchronously loads a raw resource.
   Future<resources::Resource> LoadResource(
-      const AssetDefinition& asset_definition,
-      std::optional<FutureGroup> future_group = std::nullopt);
-  Future<resources::Resource> LoadResource(
-      absl::string_view asset_url,
-      std::optional<FutureGroup> future_group = std::nullopt);
+      const AssetDefinition& asset_definition);
+  Future<resources::Resource> LoadResource(absl::string_view asset_url);
 
   // Returns the loading progress of pending downloads as a fraction, with
   // download_baseline establishing 0%.
@@ -310,6 +337,13 @@ class AssetManager {
   // Returns the total number of assets of all types(both in-flight and finished
   // loading) held by the AssetManager.
   int GetAssetCount() const;
+
+  // Keeps fixed number of assets in cache after use.
+  template <typename AssetT>
+  void SetLruCacheCapacity(int lru_cache_size);
+
+  template <typename AssetT>
+  int GetLruCacheCapacity();
 
   // Returns the total number of assets of a specific type held by the
   // AssetManager.  Includes assets that are currently loading.
@@ -361,6 +395,9 @@ class AssetManager {
 
  private:
   template <typename AssetT>
+  AssetCache<AssetT>* GetOrCreateAssetCache();
+
+  template <typename AssetT>
   AssetCache<AssetT>* GetAssetCache() const;
 
   // Implementation details shared by all versions of LoadAsset.
@@ -370,6 +407,9 @@ class AssetManager {
                                          absl::string_view asset_url,
                                          absl::string_view asset_cache_key,
                                          Args&&... args);
+
+  template <typename AssetT>
+  int GetAssetsRetainedFromCacheConfig() const;
 
   // The view that owns the AssetManager.
   BaseView* view_;
@@ -384,6 +424,7 @@ class AssetManager {
 
   // Used to assist with the loading of GltfAssets.
   GltfAsset::LoadOptions default_load_options_;
+  std::optional<CacheConfig> cache_config_;
   GltfAssetLoader gltf_asset_loader_;
 };
 
@@ -492,15 +533,7 @@ Future<AssetPtr<AssetT>> AssetManager::LoadAssetImpl(
     Fn load_resource_fn, absl::string_view asset_url,
     absl::string_view asset_cache_key, Args&&... args) {
   // Find or create the asset cache.
-  AssetCache<AssetT>* cache = nullptr;
-  auto itr = caches_.find(type_traits::kTypeHash<AssetT>);
-  if (itr != caches_.end()) {
-    cache = static_cast<AssetCache<AssetT>*>(itr.value().get());
-  } else {
-    auto unique_cache = std::make_unique<AssetCache<AssetT>>();
-    cache = unique_cache.get();
-    caches_[type_traits::kTypeHash<AssetT>] = std::move(unique_cache);
-  }
+  AssetCache<AssetT>* cache = GetOrCreateAssetCache<AssetT>();
 
   // Attempt to retrieve the asset.
   // If the asset has finished loading, this will be a ready future containing
@@ -522,6 +555,23 @@ Future<AssetPtr<AssetT>> AssetManager::LoadAssetImpl(
   // cache is needed for memory management.
   return cache->Store(asset_cache_key, asset_future);
 }
+
+template <typename AssetT>
+AssetCache<AssetT>* AssetManager::GetOrCreateAssetCache() {
+  AssetCache<AssetT>* cache = nullptr;
+  auto itr = caches_.find(type_traits::kTypeHash<AssetT>);
+  if (itr != caches_.end()) {
+    cache = static_cast<AssetCache<AssetT>*>(itr.value().get());
+  } else {
+    int assets_retained = GetAssetsRetainedFromCacheConfig<AssetT>();
+    auto unique_cache = std::make_unique<AssetCache<AssetT>>();
+    cache = unique_cache.get();
+    cache->SetLruCacheCapacity(assets_retained);
+    caches_[type_traits::kTypeHash<AssetT>] = std::move(unique_cache);
+  }
+  return cache;
+}
+
 template <typename AssetT>
 AssetCache<AssetT>* AssetManager::GetAssetCache() const {
   auto itr = caches_.find(type_traits::kTypeHash<AssetT>);
@@ -529,6 +579,17 @@ AssetCache<AssetT>* AssetManager::GetAssetCache() const {
     return nullptr;
   }
   return static_cast<AssetCache<AssetT>*>(itr.value().get());
+}
+
+template <typename AssetT>
+void AssetManager::SetLruCacheCapacity(int lru_cache_size) {
+  AssetCache<AssetT>* cache = GetOrCreateAssetCache<AssetT>();
+  return cache->SetLruCacheCapacity(lru_cache_size);
+}
+
+template <typename AssetT>
+int AssetManager::GetLruCacheCapacity() {
+  return GetOrCreateAssetCache<AssetT>()->GetLruCacheCapacity();
 }
 
 template <typename AssetT>
@@ -557,6 +618,39 @@ int AssetManager::GetDestroyedCount() const {
   }
   return cache->GetDestroyedCount();
 }
+
+template <typename AssetT>
+int AssetManager::GetAssetsRetainedFromCacheConfig() const {
+  if (!cache_config_.has_value()) {
+    return 0;
+  }
+  int default_assets_retained =
+      cache_config_->default_assets_retained.value_or(0);
+
+  if constexpr (std::is_same_v<AssetT, ImageAsset>) {
+    return cache_config_->image_assets_retained.value_or(
+        default_assets_retained);
+  }
+  if constexpr (std::is_same_v<AssetT, MaterialAsset>) {
+    return cache_config_->material_assets_retained.value_or(
+        default_assets_retained);
+  }
+  if constexpr (std::is_same_v<AssetT, MediaAsset>) {
+    return cache_config_->media_assets_retained.value_or(
+        default_assets_retained);
+  }
+  if constexpr (std::is_same_v<AssetT, GltfAsset>) {
+    return cache_config_->model_assets_retained.value_or(
+        default_assets_retained);
+  }
+  if constexpr (std::is_same_v<AssetT, TextureAsset>) {
+    return cache_config_->texture_assets_retained.value_or(
+        default_assets_retained);
+  }
+
+  return default_assets_retained;
+}
+
 }  // namespace imp
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_ASSETS_ASSET_MANAGER_H_

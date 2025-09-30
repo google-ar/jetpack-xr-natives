@@ -76,4 +76,8 @@ message PlaybackUpdatedEvent {
 
   // The index of the animation in the glTF asset.
   int32 animation_index = 1;
+
+  // The delta between the current animation playback time and the previous
+  // animation playback time the animation was updated to.
+  float delta_playback_seconds = 2;
 }

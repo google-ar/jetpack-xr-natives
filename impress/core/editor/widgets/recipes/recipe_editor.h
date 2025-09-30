@@ -31,7 +31,6 @@
 #include "core/editor/widgets/recipes/recipe_editor_graph.h"
 #include "core/ncsb/component_handle.h"
 #include "core/recipes/language/recipe_graph.proto.imp.h"
-#include "core/recipes/language/recipe_runtime_graph.h"
 #include "core/recipes/recipe_runner.h"
 #include "core/view/base_view.h"
 
@@ -49,7 +48,20 @@ class RecipeEditor : public Widget, public imp::Rememberer {
   bool HasContent() const override;
 
  private:
-  absl::Status LoadRecipeGraph(RecipeRuntimeGraph& graph);
+  void DeleteNode(RecipeEditorGraph::NodeId node_id);
+  absl::Status LoadRecipeEditorGraph();
+  void UpdateRecipeGraph(const RecipeNode& new_node);
+  void CreateBinaryExpressionNode(const BinaryExpression::BinaryOps& binary_op,
+                                  imp::editor::RecipeEditorGraph& graph);
+  template <typename T>
+  void CreateGenericValueNode(const char* name,
+                              imp::editor::RecipeEditorGraph& graph,
+                              T expression);
+  template <typename T>
+  void CreateGenericExecutableNode(const char* name,
+                                   imp::editor::RecipeEditorGraph& graph,
+                                   T statement);
+  void CreateEventNode(const char* name, imp::editor::RecipeEditorGraph& graph);
   void ClearCurrentGraph();
   void DrawWindow();
 
@@ -59,7 +71,13 @@ class RecipeEditor : public Widget, public imp::Rememberer {
   void DrawGraph();
   void DrawRecipeVariables();
   void DrawSearchBar();
+  void DrawNodeInspector();
   void DrawCreateNodePopup();
+
+  absl::Status UpdateNodeConnections(RecipeEditorGraph::NodeId start_node_id,
+                                     RecipeEditorGraph::NodeId end_node_id,
+                                     absl::string_view start_socket_name,
+                                     absl::string_view end_socket_name);
 
   void DrawNode(const RecipeEditorGraph::Node& node);
   void DrawLink(const RecipeEditorGraph::Link& link);
@@ -75,10 +93,10 @@ class RecipeEditor : public Widget, public imp::Rememberer {
   bool first_frame_ = true;
   std::unique_ptr<RecipeEditorGraph> graph_;
   ax::NodeEditor::EditorContext* context_ = nullptr;
-  Future<absl::Status> graph_loading_future_;
   ComponentHandle<RecipeRunner> recipe_runner_;
-
+  Future<absl::Status> graph_loading_future_;
   std::string search_buffer_;
+  std::string create_node_search_buffer_;
   bool search_selection_changed_ = false;
   // According to ImGui documentation, OpenPopup should only be called once, not
   // on every frame. So we achieve this through create_node_popup_open_.

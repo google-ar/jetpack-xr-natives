@@ -139,6 +139,9 @@ class FilamentHost {
   // Subclasses of the state object implement app-specific behavior.
   class State {
    public:
+    constexpr static uint2 kDefaultDesktopDimensions = {1024, 768};
+    constexpr static uint2 kDefaultMobileDimensions = {540, 960};
+
     State() = default;
     virtual ~State() = default;
 
@@ -211,9 +214,9 @@ class FilamentHost {
     // Called at setup time; the desired dimensions for our window.
     virtual uint2 DesiredDimensions(FilamentHost* host) {
 #if IMP_PLATFORM(DESKTOP)
-      return {1024, 768};
+      return kDefaultDesktopDimensions;
 #else
-      return {540, 960};
+      return kDefaultMobileDimensions;
 #endif
     }
     // Called at setup time; the desired near/far planes for our window.
@@ -257,6 +260,10 @@ class FilamentHost {
     virtual bool ShouldUseSystemFrameScheduledHandler() const { return false; }
 
     virtual bool ShouldPreinitializeMetalPlatform() const { return false; }
+
+    virtual bool ShouldUseSrgbSwapChain() const { return false; }
+
+    virtual bool ShouldUseStencilSwapChain() const { return false; }
   };
 
   // Dev mode is optionally installed and operates via this abstract interface.

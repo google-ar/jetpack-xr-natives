@@ -1,0 +1,133 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp.split_engine;
+
+import "google/rpc/status.proto";
+
+// SplitEngineDesktopBridge gRPC service.
+//
+// Defines the way to communicate between the "serializer" and "renderer"
+// in single machine desktop environment.
+//
+// Reuses ideas from ISplitEngineSharedMemoryBridge.aidl.
+service SplitEngineDesktopBridge {
+  // InitializeBridge -  logical connection establishment.
+  //
+  // Client uses this call to acquire a bridge id that will be used in all
+  // subsequent calls, to capture server policies (heartbeat interval) and UDS
+  // path for file descriptor transfer.
+  //
+  rpc InitializeBridge(InitializeBridgeRequest)
+      returns (InitializeBridgeResponse) {}
+
+  // Heartbeat - Application-level health check.
+  //
+  // Client shall send a heartbeat according to the interval specified in the
+  // InitializeBridgeResponse. If the server does not receive a heartbeat from a
+  // client for a certain period of time, it will consider the client to be
+  // dead and all requests from the client with that bridge id will fail.
+  //
+  rpc Heartbeat(HeartbeatRequest) returns (google.rpc.Status) {}
+
+  // RegisterBuffer - mimic AIDL RegisterBuffer call.
+  // See ISplitEngineSharedMemoryBridge.aidl.
+  rpc RegisterBuffer(RegisterBufferRequest) returns (RegisterBufferResponse) {}
+
+  // ProcessRegion - mimic AIDL ProcessRegion call.
+  // See ISplitEngineSharedMemoryBridge.aidl.
+  rpc ProcessRegion(ProcessRegionRequest) returns (google.rpc.Status) {}
+
+  // SendRequest - mimic AIDL SendRequest call.
+  // See ISplitEngineSharedMemoryBridge.aidl.
+  rpc SendRequest(SendRequestRequest) returns (SendRequestResponse) {}
+
+  // ReadMessageGroupCompletions - server side streaming gRPC call.
+  //
+  // Client asks the server to stream back message group completions for a given
+  // bridge. Server sends replies as long as the renderer completes message
+  // groups.
+  //
+  // ┌--------┐                      ┌--------┐
+  // | Client |                      | Server |
+  // └----┬---┘                      └---┬----┘
+  //      | MGC_Request                  |
+  //      ├----------------------------->|
+  //      |                              |
+  //     ...                            ...
+  //      |                 MGC_Response |<- Message Group Processed by renderer
+  //      |<-----------------------------┤
+  //      |                 MGC_Response |<- Message Group Processed by renderer
+  //      |<-----------------------------┤
+  //      |                 MGC_Response |<- Message Group Processed by renderer
+  //      |<-----------------------------┤
+  //      |                 MGC_Response |<- Message Group Processed by renderer
+  //      |<-----------------------------┤
+  //      |                 MGC_Response |<- Message Group Processed by renderer
+  //      |<-----------------------------┤
+  //     ...                            ...
+  rpc ReadMessageGroupCompletions(MessageGroupCompletionRequest)
+      returns (stream MessageGroupCompletionResponse) {
+    // Deadline is not set, because stream will be alive as long as the client
+    // is alive.
+  }
+}
+
+message InitializeBridgeRequest {}
+message InitializeBridgeResponse {
+  uint64 bridge_id = 1;
+  string fd_receiver = 2;
+  uint64 heartbeat_interval_ms = 3;
+}
+
+message HeartbeatRequest {
+  uint64 bridge_id = 1;
+}
+message HeartbeatResponse {}
+
+message RegisterBufferRequest {
+  uint64 bridge_id = 1;
+  int32 file_descriptor = 2;
+  uint64 size_bytes = 3;
+}
+
+message RegisterBufferResponse {
+  uint64 buffer_id = 1;
+}
+
+message ProcessRegionRequest {
+  uint64 bridge_id = 1;
+  uint64 buffer_id = 2;
+  uint64 offset_bytes = 3;
+  uint64 region_length_bytes = 4;
+}
+
+message SendRequestRequest {
+  uint64 bridge_id = 1;
+  bytes data = 2;
+}
+
+message SendRequestResponse {
+  bytes data = 1;
+}
+
+message MessageGroupCompletionRequest {
+  uint64 bridge_id = 1;
+}
+
+message MessageGroupCompletionResponse {
+  uint64 message_group_id = 1;
+}

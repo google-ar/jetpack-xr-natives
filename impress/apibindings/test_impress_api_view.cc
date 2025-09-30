@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "absl/log/check.h"
@@ -197,7 +198,6 @@ absl::Status ImpressApiView::SetContentColorMetadataForStereoSurfaceEntity(
 }
 
 void ImpressApiView::LoadTexture(absl::string_view path,
-                                 filament::TextureSampler sampler,
                                  std::unique_ptr<AssetLoader> asset_loader) {
   IMP_LOG(imp::ERROR)
       << "ImpressApiView::LoadTexture needs to be implemented for tests.";
@@ -228,14 +228,16 @@ void ImpressApiView::DestroyNativeObject(std::intptr_t handle) {
 }
 
 absl::Status ImpressApiView::SetReflectionMapOnWaterMaterial(
-    std::intptr_t water_material, std::intptr_t reflection_map) {
+    std::intptr_t water_material, std::intptr_t reflection_map,
+    std::optional<filament::TextureSampler> sampler) {
   return absl::UnimplementedError(
       "ImpressApiView::SetReflectionMapOnWaterMaterial needs to be "
       "implemented for tests.");
 }
 
 absl::Status ImpressApiView::SetNormalMapOnWaterMaterial(
-    std::intptr_t water_material, std::intptr_t normal_map) {
+    std::intptr_t water_material, std::intptr_t normal_map,
+    std::optional<filament::TextureSampler> sampler) {
   return absl::UnimplementedError(
       "ImpressApiView::SetNormalMapOnWaterMaterial needs to be "
       "implemented for tests.");
@@ -263,7 +265,8 @@ absl::Status ImpressApiView::SetAlphaStepMultiplierOnWaterMaterial(
 }
 
 absl::Status ImpressApiView::SetAlphaMapOnWaterMaterial(
-    std::intptr_t water_material, std::intptr_t alpha_map) {
+    std::intptr_t water_material, std::intptr_t alpha_map,
+    std::optional<filament::TextureSampler> sampler) {
   return absl::UnimplementedError(
       "ImpressApiView::SetAlphaMapOnWaterMaterial needs to be "
       "implemented for tests.");
@@ -291,7 +294,8 @@ void ImpressApiView::CreateGenericMaterial(
 }
 
 absl::Status ImpressApiView::SetBaseColorTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t base_color_texture) {
+    std::intptr_t generic_material, std::intptr_t base_color_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return absl::UnimplementedError(
       "ImpressApiView::SetBaseColorTextureOnGenericMaterial needs to be "
       "implemented for tests.");
@@ -312,7 +316,8 @@ absl::Status ImpressApiView::SetBaseColorFactorsOnGenericMaterial(
 }
 
 absl::Status ImpressApiView::SetMetallicRoughnessTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t metallic_roughness_texture) {
+    std::intptr_t generic_material, std::intptr_t metallic_roughness_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return absl::UnimplementedError(
       "ImpressApiView::SetMetallicRoughnessTextureOnGenericMaterial needs to "
       "be "
@@ -342,7 +347,8 @@ absl::Status ImpressApiView::SetRoughnessFactorOnGenericMaterial(
 }
 
 absl::Status ImpressApiView::SetNormalTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t normal_texture) {
+    std::intptr_t generic_material, std::intptr_t normal_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return absl::UnimplementedError(
       "ImpressApiView::SetNormalTextureOnGenericMaterial needs to be "
       "implemented for tests.");
@@ -363,7 +369,8 @@ absl::Status ImpressApiView::SetNormalFactorOnGenericMaterial(
 }
 
 absl::Status ImpressApiView::SetAmbientOcclusionTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t ambient_occlusion_texture) {
+    std::intptr_t generic_material, std::intptr_t ambient_occlusion_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return absl::UnimplementedError(
       "ImpressApiView::SetAmbientOcclusionTextureOnGenericMaterial needs to be "
       "implemented for tests.");
@@ -385,7 +392,8 @@ absl::Status ImpressApiView::SetAmbientOcclusionFactorOnGenericMaterial(
 }
 
 absl::Status ImpressApiView::SetEmissiveTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t emissive_texture) {
+    std::intptr_t generic_material, std::intptr_t emissive_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return absl::UnimplementedError(
       "ImpressApiView::SetEmissiveTextureOnGenericMaterial needs to be "
       "implemented for tests.");
@@ -406,21 +414,24 @@ absl::Status ImpressApiView::SetEmissiveFactorsOnGenericMaterial(
 }
 
 absl::Status ImpressApiView::SetClearcoatTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t clearcoat_texture) {
+    std::intptr_t generic_material, std::intptr_t clearcoat_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return absl::UnimplementedError(
       "ImpressApiView::SetClearcoatTextureOnGenericMaterial needs to be "
       "implemented for tests.");
 }
 
 absl::Status ImpressApiView::SetClearcoatNormalTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t clearcoat_normal_texture) {
+    std::intptr_t generic_material, std::intptr_t clearcoat_normal_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return absl::UnimplementedError(
       "ImpressApiView::SetClearcoatNormalTextureOnGenericMaterial needs to be "
       "implemented for tests.");
 }
 
 absl::Status ImpressApiView::SetClearcoatRoughnessTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t clearcoat_roughness_texture) {
+    std::intptr_t generic_material, std::intptr_t clearcoat_roughness_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return absl::UnimplementedError(
       "ImpressApiView::SetClearcoatRoughnessTextureOnGenericMaterial needs to "
       "be "
@@ -435,7 +446,8 @@ absl::Status ImpressApiView::SetClearcoatFactorsOnGenericMaterial(
 }
 
 absl::Status ImpressApiView::SetSheenColorTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t sheen_color_texture) {
+    std::intptr_t generic_material, std::intptr_t sheen_color_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return absl::UnimplementedError(
       "ImpressApiView::SetSheenColorTextureOnGenericMaterial needs to be "
       "implemented for tests.");
@@ -449,7 +461,8 @@ absl::Status ImpressApiView::SetSheenColorFactorsOnGenericMaterial(
 }
 
 absl::Status ImpressApiView::SetSheenRoughnessTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t sheen_roughness_texture) {
+    std::intptr_t generic_material, std::intptr_t sheen_roughness_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return absl::UnimplementedError(
       "ImpressApiView::SetSheenRoughnessTextureOnGenericMaterial needs to be "
       "implemented for tests.");
@@ -463,7 +476,8 @@ absl::Status ImpressApiView::SetSheenRoughnessFactorOnGenericMaterial(
 }
 
 absl::Status ImpressApiView::SetTransmissionTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t transmission_texture) {
+    std::intptr_t generic_material, std::intptr_t transmission_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return absl::UnimplementedError(
       "ImpressApiView::SetTransmissionTextureOnGenericMaterial needs to be "
       "implemented for tests.");

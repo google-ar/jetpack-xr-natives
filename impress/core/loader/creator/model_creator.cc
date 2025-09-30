@@ -49,7 +49,6 @@
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/vector.h"
 #include "core/async/future.h"
-#include "core/async/future_group.h"
 #include "core/common/bit_vector.h"
 #include "core/common/data_helpers.h"
 #include "core/common/enum_flags.h"
@@ -59,6 +58,7 @@
 #include "core/common/robin_map.h"
 #include "core/common/schemas/math_generated.h"
 #include "core/common/schemas/render_generated.h"
+#include "core/common/small_source_location.h"
 #include "core/common/trace.h"
 #include "core/common/typed_id.h"
 #include "core/common/typed_set_vector.h"
@@ -86,6 +86,8 @@
 #include "core/model/mesh/mesh_builder.h"
 #include "core/model/model_data.h"
 #include "core/model/skeleton_data.h"
+#include "core/render/texture.h"
+#include "core/render/texture_factory.h"
 #include "core/view/base_view.h"
 #include "mediapipe/framework/port/status_macros.h"
 
@@ -290,7 +292,7 @@ Future<absl::Status> CreateModelResources(
     TypedVector<filament::VertexBuffer*>* out_vertex_buffers,
     TypedVector<filament::IndexBuffer*>* out_index_buffers,
     TypedVector<filament::MorphTargetBuffer*>* out_morph_target_buffers,
-    TypedVector<filament::Texture*>* out_textures,
+    TypedVector<OwnedTexturePtr>* out_textures,
     TypedVector<GenericMaterialPtr>* out_materials,
     MeshVertexDataLookup* stored_vertex_data,
     MeshIndexDataLookup* stored_index_data,
@@ -389,14 +391,10 @@ Future<absl::Status> CreateModelResources(
     if (!texture)
       return Future<absl::Status>(
           absl::InternalError("Failed to create Texture"));
-    out_textures->emplace_back(texture);
+    imp::OwnedTexturePtr owned_texture(
+        view.GetTextureFactory().WrapTexture(texture));
+    out_textures->emplace_back(std::move(owned_texture));
   }
-
-  // Convert the textures to a normal vector.
-  std::vector<const filament::Texture*> textures;
-  textures.reserve(out_textures->size());
-  absl::c_transform(*out_textures, std::back_inserter(textures),
-                    [](const Texture* texture) { return texture; });
 
   // Create generic materials.
   std::vector<imp::Future<absl::Status>> combined_futures;
@@ -409,14 +407,23 @@ Future<absl::Status> CreateModelResources(
        ++material_index) {
     const schemas::MaterialInfo* material_schema =
         model->materials()->Get(material_index);
-    // Create a texture provider that can be used to look up textures by index.
+
+    // The material Create() call is async and TextureBorrower is moved into the
+    // lambda, so each material needs its own vector of borrowed textures since
+    // this code shouldn't assume how out_textures' lifetime is managed.
+    std::vector<BorrowedTexturePtr> textures;
+    textures.reserve(out_textures->size());
+    absl::c_transform(
+        *out_textures, std::back_inserter(textures),
+        [](const OwnedTexturePtr& texture) { return texture.Borrow(); });
+    // Create a texture borrower that can be used to look up textures by index.
     // Intentionally copy the vector into each provider so that the provider
     // can outlive the original vector and make no assumptions about the Future
     // internals.
-    TextureProvider texture_provider =
-        [textures =
-             textures](uint64_t texture_index) -> const filament::Texture* {
-      if (texture_index >= textures.size()) return nullptr;
+    TextureBorrower texture_borrower =
+        [textures = std::move(textures)](
+            uint64_t texture_index) -> BorrowedTexturePtr {
+      if (texture_index >= textures.size()) return {};
       return textures[texture_index];
     };
     combined_futures.push_back(
@@ -430,10 +437,10 @@ Future<absl::Status> CreateModelResources(
                    generic_material_parameters =
                        GenericMaterialParameters::FromFlatbuffer(
                            material_schema->material()->params()),
-                   texture_provider = std::move(texture_provider)](
+                   texture_borrower = std::move(texture_borrower)](
                       GenericMaterialPtr generic_material) -> absl::Status {
               MP_RETURN_IF_ERROR(generic_material->AssignTexturesAndParams(
-                  generic_material_parameters, texture_provider));
+                  generic_material_parameters, texture_borrower));
               materials_by_index->emplace(material_index,
                                           std::move(generic_material));
               return absl::OkStatus();
@@ -696,30 +703,25 @@ ModelCreator::~ModelCreator() {
   for (filament::IndexBuffer* index_buffer : index_buffers_) {
     engine_->destroy(index_buffer);
   }
-  for (filament::Texture* texture : textures_) {
-    engine_->destroy(texture);
-  }
 }
 
 Future<absl::Status> ModelCreator::LoadAll(
     BaseView& view, const schemas::LoadedModel* model,
     MaterialPackage* material_package,
     std::vector<std::unique_ptr<image::ImageContents>> images,
-    std::optional<FutureGroup> future_group,
     std::optional<absl::string_view> name) {
   return LoadAllInternal(view, model, material_package, std::move(images),
-                         future_group, name);
+                         name);
 }
 
 Future<absl::Status> ModelCreator::LoadAllInternal(
     BaseView& view, const schemas::LoadedModel* model,
     MaterialPackage* material_package,
     std::vector<std::unique_ptr<image::ImageContents>> images,
-    std::optional<FutureGroup> future_group,
     std::optional<absl::string_view> name) {
   IMP_TRACE();
   return CreateModelResources(view, material_package, model, std::move(images),
-                              future_group, name)
+                              name)
       .Then(
           [this, model]() -> absl::Status {
             IMP_TRACE_BLOCK("Then");
@@ -869,8 +871,7 @@ Future<absl::Status> ModelCreator::LoadAllInternal(
             MP_RETURN_IF_ERROR(optional_features::VerifyEntityData(entities_));
 
             return absl::OkStatus();
-          },
-          {.future_group = future_group});
+          });
 }
 
 absl::Status ModelCreator::TryComplete() {
@@ -897,7 +898,6 @@ Future<absl::Status> ModelCreator::CreateModelResources(
     BaseView& view, MaterialPackage* material_package,
     const schemas::LoadedModel* model,
     std::vector<std::unique_ptr<image::ImageContents>> images,
-    std::optional<FutureGroup> future_group,
     std::optional<absl::string_view> name) {
   IMP_TRACE();
   // Immediately start unzipping raw material data on a background thread.
@@ -909,7 +909,7 @@ Future<absl::Status> ModelCreator::CreateModelResources(
 
   // Loader already has the correct material package.
   return material_package
-      ->GetOrLoadMaterials(view, engine_, requested_materials, future_group)
+      ->GetOrLoadMaterials(view, engine_, requested_materials)
       .Then(
           [this, &view, model, name = std::optional<std::string>(name),
            images = std::move(images)](const MaterialPackage::MaterialCache&
@@ -922,8 +922,7 @@ Future<absl::Status> ModelCreator::CreateModelResources(
                 &stored_index_data_, &material_config_info_,
                 &inflight_creation_, materials_by_params, material_id_lookup_,
                 name);
-          },
-          {.future_group = future_group});
+          });
 }
 
 absl::StatusOr<std::unique_ptr<model::ModelData>> ModelCreator::CreateModelData(

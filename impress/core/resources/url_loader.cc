@@ -15,11 +15,15 @@
 #include "core/resources/url_loader.h"
 
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
 
+#include "absl/status/status.h"
+#include "absl/strings/cord.h"
 #include "absl/synchronization/mutex.h"
+#include "core/async/future.h"
 #include "core/async/future_interrupter.h"
 
 namespace imp {

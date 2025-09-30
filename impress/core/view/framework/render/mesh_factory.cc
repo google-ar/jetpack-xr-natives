@@ -33,6 +33,7 @@
 #include "core/common/robin_map.h"
 #include "core/common/typed_vector.h"
 #include "core/geometry/shapes/box.h"
+#include "core/loader/loader_options.h"
 #include "core/math/aabb_helpers.h"
 #include "core/math/mat.h"
 #include "core/math/quat.h"
@@ -2090,6 +2091,10 @@ MeshPtr MeshFactory::CreateByMovingMeshData(
   MeshDescription description = mesh_data->GetDescription();
   BaseVertexBufferBuilder& vertex_buffer_builder =
       mesh_builder.CreateVertexBufferBuilder();
+  vertex_buffer_builder.VertexAccessFlags(
+      data_mode == MeshDataStorageMode::kStoreMeshData
+          ? loader::LoaderOptions::VertexAccessFlags::kPosition
+          : loader::LoaderOptions::VertexAccessFlags::kNone);
   FillVertexBuffer(view_, engine, description, vertex_buffer_builder,
                    data_mode == MeshDataStorageMode::kStoreMeshData
                        ? mesh_data->CopyVertexData()
@@ -2098,6 +2103,8 @@ MeshPtr MeshFactory::CreateByMovingMeshData(
 
   BaseIndexBufferBuilder& index_buffer_builder =
       mesh_builder.CreateIndexBufferBuilder();
+  index_buffer_builder.StoreIndexData(data_mode ==
+                                      MeshDataStorageMode::kStoreMeshData);
   FillIndexBuffer(view_, engine, description, index_buffer_builder,
                   data_mode == MeshDataStorageMode::kStoreMeshData
                       ? mesh_data->CopyIndexData()

@@ -27,11 +27,14 @@
 #include "filament/filament/include/filament/Stream.h"
 #include "filament/filament/include/filament/Texture.h"
 #include "filament/filament/include/filament/TextureSampler.h"
+#include "core/assets/asset_ptr.h"
 #include "core/common/invocable.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/owned_ptr.h"
+#include "core/common/small_source_location.h"
 #include "core/math/vec.h"
 #include "core/render/content_security_level.h"
+#include "core/render/texture_asset.h"
 #include "core/view/base_view.h"
 
 namespace imp {
@@ -76,9 +79,15 @@ class Texture {
           const filament::TextureSampler& sampler,
           ContentSecurityLevel security_level = ContentSecurityLevel::kNone);
 
+  Texture(BaseView& view, filament::Stream* stream,
+          AssetPtr<TextureAsset> texture_asset,
+          const filament::TextureSampler& sampler,
+          ContentSecurityLevel security_level = ContentSecurityLevel::kNone);
+
   BaseView& view_;
   filament::Stream* stream_;
   filament::Texture* texture_;
+  AssetPtr<TextureAsset> texture_asset_;
   filament::TextureSampler sampler_;
   std::string name_;
   ContentSecurityLevel security_level_;
@@ -96,9 +105,9 @@ using TexturePtr ABSL_DEPRECATED(
 using OwnedTexturePtr = OwnedPtr<Texture>;
 using BorrowedTexturePtr = BorrowedPtr<Texture>;
 using OwnedOrBorrowedTexturePtr = OwnedOrBorrowedPtr<Texture>;
-// TODO: Pull this out to a separate header and have it with
-// TextureProvider.
+// TODO: (broken link) - Add SmallSourceLocation parameter.
 using TextureBorrower = Invocable<BorrowedTexturePtr(uint64_t)>;
+
 }  // namespace imp
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_RENDER_TEXTURE_H_

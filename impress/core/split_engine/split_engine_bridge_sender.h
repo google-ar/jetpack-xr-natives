@@ -21,12 +21,9 @@
 #include <functional>
 #include <memory>
 
-#include "absl/base/const_init.h"
-#include "absl/base/thread_annotations.h"
-#include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
-#include "absl/synchronization/mutex.h"
+#include "absl/status/statusor.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 
@@ -36,6 +33,16 @@ namespace imp::split_engine {
 class SplitEngineBridgeSender {
  public:
   virtual ~SplitEngineBridgeSender() = default;
+
+  // TODO - food for thought:
+  // 1. There's CreateFlatBufferBuilder() that creates a new FlatBufferBuilder
+  //    that shall be used to build a message.
+  // 2. There's SendMessage() that accepts _a_ FlatBufferBuilder that may not
+  //    have come from CreateFlatBufferBuilder().
+  //
+  // Implementation will CHECK-crash now if the underlying buffer is not part of
+  // the shared memory. There should be typesafe way to enforce this without
+  // crashing.
 
   // Sends a message using the default active message group.
   virtual void SendMessage(const flatbuffers::FlatBufferBuilder& message) = 0;
@@ -52,6 +59,13 @@ class SplitEngineBridgeSender {
 
   // True if we're between a BeginMessageGroup/EndMessageGroup pair.
   virtual bool IsMessageGroupActive() const = 0;
+
+  // Returns the total number of message groups that remote side has not
+  // released yet. 'Total' means that the result is not restricted to the
+  // particular sender, but rather the total number of message groups that
+  // were sent by every sender and have not been released yet by the remote
+  // side.
+  virtual absl::StatusOr<size_t> GetActiveMessageGroupCount() const = 0;
 
   // Clears any message groups that have been released via ReleaseMessageGroup.
   // This should be called once per frame to ensure that any message groups

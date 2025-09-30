@@ -21,8 +21,10 @@
 #include "filament/filament/include/filament/Stream.h"
 #include "filament/filament/include/filament/Texture.h"
 #include "filament/filament/include/filament/TextureSampler.h"
+#include "core/assets/asset_ptr.h"
 #include "core/math/vec.h"
 #include "core/render/content_security_level.h"
+#include "core/render/texture_asset.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
 
@@ -38,6 +40,18 @@ Texture::Texture(BaseView& view, filament::Stream* stream,
       sampler_(sampler),
       security_level_(security_level) {}
 
+Texture::Texture(BaseView& view, filament::Stream* stream,
+                 AssetPtr<TextureAsset> texture_asset,
+                 const filament::TextureSampler& sampler,
+                 ContentSecurityLevel security_level)
+    : view_(view),
+      stream_(stream),
+      texture_(texture_asset->GetFilamentTexture()),
+      texture_asset_(texture_asset),
+      sampler_(sampler),
+      name_(texture_asset->GetName()),
+      security_level_(security_level) {}
+
 Texture::~Texture() {
   // Ensure filament resources are destroyed over split engine.
   if (split_engine::SplitEngineSerializer* serializer =
@@ -49,7 +63,7 @@ Texture::~Texture() {
     if (stream_ && engine->isValid(stream_)) {
       engine->destroy(stream_);
     }
-    if (texture_ && engine->isValid(texture_)) {
+    if (!texture_asset_ && texture_ && engine->isValid(texture_)) {
       engine->destroy(texture_);
     }
   }

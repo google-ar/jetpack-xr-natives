@@ -23,7 +23,8 @@
 namespace imp {
 
 AssetAnimator::AssetAnimator(JNIEnv* env, jobject j_asset_animator)
-    : JavaWrapper(env, j_asset_animator) {
+    : JavaWrapper(env, j_asset_animator,
+                  "androidx/xr/scenecore/impl/impress/AssetAnimator") {
   on_complete_ = GetMethodHandle("onComplete", "()V");
   on_failure_ = GetMethodHandle("onFailure", "(Ljava/lang/String;)V");
 }

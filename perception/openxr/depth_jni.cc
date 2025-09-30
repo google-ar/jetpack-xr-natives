@@ -23,7 +23,7 @@
 extern "C" {
 
 JNIEXPORT jobject JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrDepthMap_nativeGetDepthImageWidthAndHeight(
+Java_androidx_xr_arcore_openxr_OpenXrDepthMap_nativeGetDepthImageWidthAndHeight(
     JNIEnv* env, jclass /*clazz*/) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();

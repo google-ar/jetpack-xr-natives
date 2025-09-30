@@ -31,7 +31,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "core/async/future.h"
-#include "core/async/future_group.h"
 #include "core/common/buffer_access.h"
 #include "core/common/context.h"
 #include "core/common/robin_set.h"
@@ -140,13 +139,11 @@ class ResourceManager final {
   // on the background executor.  The resource is loaded from the packaged
   // location if applicable, or from the url if the packaged resource is
   // unavailable or undefined (i.e. the src is nullptr).
-  Future<Resource> Load(const ResourceDefinition& resource_definition,
-                        std::optional<FutureGroup> future_group = std::nullopt);
+  Future<Resource> Load(const ResourceDefinition& resource_definition);
 
   // Loads the given URI into memory on a thread based on the background
   // executor.
-  Future<Resource> Load(absl::string_view resource_url,
-                        std::optional<FutureGroup> future_group = std::nullopt);
+  Future<Resource> Load(absl::string_view resource_url);
 
   // Returns the loading progress of pending downloads as a fraction, with
   // download_baseline establishing 0%.
@@ -222,9 +219,7 @@ class ResourceManager final {
   Future<Resource> Load(
       const std::function<absl::StatusOr<absl::Cord>()>& load_fn);
 
-  Future<absl::Cord> GetContentFuture(
-      absl::string_view resource_url,
-      std::optional<FutureGroup> future_group = std::nullopt);
+  Future<absl::Cord> GetContentFuture(absl::string_view resource_url);
 
   // Maps the identifier of a ResourceDefinition to its file bytes.
   static StringMap<absl::string_view>& EmbeddedResourceIdentifierToFileBytes();

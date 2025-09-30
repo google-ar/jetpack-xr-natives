@@ -63,9 +63,4 @@ bool SplitEngineAndroidSharedMemoryBridge::SendRequest(
   return true;
 }
 
-SplitEngineSharedMemoryBridgeClient&
-SplitEngineAndroidSharedMemoryBridge::GetSplitEngineSharedMemoryBridgeClient() {
-  return *split_engine_shared_memory_bridge_client_;
-}
-
 }  // namespace imp::split_engine

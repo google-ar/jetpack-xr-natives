@@ -12,12 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load(
-    "//build_tools:imp.bzl",
-    "if_non_android",
-    "imp_default_jni_linkopts",
-    "imp_google3_copts",
-)
+load("@com_google_impress//build_tools:imp.bzl", "if_non_android", "imp_default_jni_linkopts", "imp_google3_copts")
+load("//build_tools/single_jar:single_jar.bzl", "single_jar")
 
 # TODO: (broken link) - Add unit tests, including MSAN.
 
@@ -43,7 +39,7 @@ _IMPRESS_JNI_COMMON_DEPS = [
     ":asset_loader",
     ":jni_conversion_utils",
     ":stereo_surface",
-    "//core/common:log",
+    "@com_google_impress//core/common:log",
     "@com_google_absl//absl/log:check",
     "@com_google_absl//absl/status",
     "@com_google_absl//absl/status:statusor",
@@ -79,7 +75,7 @@ _IMPRESS_API_VIEW_COMMON_DEPS = [
     ":stereo_surface",
     "@com_google_absl//absl/container:flat_hash_map",
     "@com_google_absl//absl/container:flat_hash_set",
-    "//core/common:log",
+    "@com_google_impress//core/common:log",
     "@com_google_absl//absl/log:check",
     "@com_google_absl//absl/status",
     "@com_google_absl//absl/status:statusor",
@@ -209,7 +205,6 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         "//core/async:future",
-        "//core/common:log",
         "//core/math",
         "//core/media:media_color_space",
         "//core/media:media_type",
@@ -224,6 +219,7 @@ cc_library(
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
         "@third_party//split_engine/materials:jxr_media_material",
     ],
@@ -286,6 +282,33 @@ cc_library(
         "@bazel_tools//tools/jdk:jni",
     ]),
     alwayslink = 1,
+)
+
+# Generates a .jar containing Impress Java API bindings, Split Engine code, and Impress Java
+# platform code. See THIRD_PARTY_NOTICES.txt for license info.
+# Note: This JAR calls native code provided by the //apibindings:impress_api_jni
+# target (.so) which must be available at runtime when using this .jar.
+single_jar(
+    name = "impress_no_native_lib_jar",
+    # These .jar targets are the implicit outputs of android_library targets and, in Bazel,
+    # kt_android_library targets.
+    # TODO Modify single_jar to consume plain targets instead of implicitly-generated
+    # .jar targets.
+    # LINT.IfChange(jar_deps)
+    jars = [
+        "//java/com/google/ar/imp/view:libview.jar",
+        "//java/com/google/ar/imp/view/splitengine:libsplitengine.jar",
+        "//java/com/google/ar/imp/view/input:libinput_manager.jar",
+        "//java/com/google/ar/imp/view:libimp_api_scuba.jar",
+        "//java/com/google/ar/imp/view:libframe_scheduler.jar",
+        "//java/com/google/ar/imp/view:libchoreographer_holder.jar",
+        "@third_party//split_engine/java/com/google/androidxr/splitengine:libsplit_engine_subspace_manager.jar",
+        "//core/split_engine/android/extensions/java/com/google/imp/splitengine/extensions:libextensions_java.jar",
+        "@third_party//split_engine/java/com/google/androidxr/splitengine:libsubspace_node.jar",
+        "@third_party//split_engine/java/com/google/androidxr/splitengine:libsplit_engine_input_event.jar",
+        "@third_party//split_engine/java/com/google/androidxr/splitengine:libscene_leash_node_factory.jar",
+    ],
+    # LINT.ThenChange(//depot/google3/third_party/impress/apibindings:must_depend_jar)
 )
 
 # Native JNI library for the Impress API Bindings. See THIRD_PARTY_NOTICES.txt for license info.

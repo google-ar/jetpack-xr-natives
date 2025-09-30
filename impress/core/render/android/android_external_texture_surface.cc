@@ -68,8 +68,15 @@ absl::Status AndroidExternalTextureSurface::CreatePlatformSurface(
         security_level_, view_types);
   } else {
 #if defined(IMP_ANDROID_EXTERNAL_TEXTURE_SURFACE_USES_IMAGE_READER)
-    if (security_level_ == ContentSecurityLevel::kNone &&
-        view_types.size() == 1) {
+    bool use_surface_texture = security_level_ == ContentSecurityLevel::kNone &&
+                               view_types.size() == 1;
+
+#if IMP_MATERIAL_API(VULKAN)
+    // SurfaceTexture is not supported for Vulkan, so always use ImageReader.
+    use_surface_texture = false;
+#endif  // IMP_MATERIAL_API(VULKAN)
+
+    if (use_surface_texture) {
       MP_ASSIGN_OR_RETURN(platform_surface_,
                        DefaultPlatformAndroidExternalTextureSurface::Create(
                            view, security_level_, view_types));
@@ -78,7 +85,13 @@ absl::Status AndroidExternalTextureSurface::CreatePlatformSurface(
                        ImageReaderAndroidExternalTextureSurface::Create(
                            view, security_level_, view_types));
     }
-#else   // Use SurfaceTexture (default) version.
+#else  // Use SurfaceTexture (default) version.
+
+#if IMP_MATERIAL_API(VULKAN)
+    return absl::InternalError(
+        "SurfaceTexture is not supported for Vulkan. Please use ImageReader "
+        "instead.");
+#else
     // TODO: The SurfaceTexture code path only supports L3 DRM.
     // We need to add support for L1 DRM before fully enabling this code
     // path for secure video playback.
@@ -91,6 +104,8 @@ absl::Status AndroidExternalTextureSurface::CreatePlatformSurface(
     MP_ASSIGN_OR_RETURN(platform_surface_,
                      DefaultPlatformAndroidExternalTextureSurface::Create(
                          view, security_level_, view_types));
+#endif  // IMP_MATERIAL_API(VULKAN)
+
 #endif  // IMP_ANDROID_EXTERNAL_TEXTURE_SURFACE_USES_IMAGE_READER
   }
 #endif  // IMP_PLATFORM(ANDROID)

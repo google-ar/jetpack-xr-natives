@@ -49,17 +49,11 @@ class CapsuleCollidableShape : public CollidableShape {
 #endif
 
  private:
-  // Since btCapsuleShape does not support non-uniform scaling, this function
-  // forces the three dimensions of the scale of an Impress capsule collider to
-  // be the same.
-  void EnforceEvenScaleForCapsule();
-
-  NodeHandle node_;
   std::unique_ptr<btCollisionShape> collidable_shape_;
   // Local offset of the center of the capsule in Impress.
   float3 collidable_center_;
 
-  float3 scale_prev_ = float3(1.0f);
+  float3 scale_ = float3(1.0f);
 };
 
 }  // namespace imp

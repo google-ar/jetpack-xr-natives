@@ -18,9 +18,10 @@
 #define THIRD_PARTY_ARCORE_AR_IMP_CORE_EDITOR_WIDGETS_EDITOR_MODE_TOGGLE_H
 
 #include "absl/strings/string_view.h"
+#include "core/assets/asset_ptr.h"
 #include "core/common/rememberer.h"
 #include "core/editor/widget.h"
-#include "core/render/texture.h"
+#include "core/render/texture_asset.h"
 #include "core/view/base_view.h"
 
 namespace imp::editor {
@@ -38,11 +39,11 @@ class EditorModeToggle : public Widget {
   imp::Rememberer rememberer_;
 
   // Impress textures for the icons.
-  imp::TexturePtr play_icon_;
-  imp::TexturePtr stop_icon_;
-  imp::TexturePtr pause_icon_;
-  imp::TexturePtr resume_icon_;
-  imp::TexturePtr step_icon_;
+  imp::AssetPtr<TextureAsset> play_icon_;
+  imp::AssetPtr<TextureAsset> stop_icon_;
+  imp::AssetPtr<TextureAsset> pause_icon_;
+  imp::AssetPtr<TextureAsset> resume_icon_;
+  imp::AssetPtr<TextureAsset> step_icon_;
 };
 
 }  // namespace imp::editor

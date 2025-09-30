@@ -14,9 +14,6 @@
 
 #include "core/split_engine/android/bridge_buffer.h"
 
-#include <android/binder_auto_utils.h>
-#include <asm-generic/mman-common.h>
-#include <linux/mman.h>
 #include <stdio.h>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -26,15 +23,13 @@
 #include <utility>
 
 #include "core/common/log.h"
-#include "absl/status/statusor.h"
 #include "filament/libs/utils/include/utils/ashmem.h"
-#include "core/common/platform_helpers.h"
 #include "core/common/trace.h"
-#include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
+#include "core/split_engine/android/buffer_handle_factory.h"
 
 namespace imp::split_engine {
 
-BridgeBuffer::BridgeBuffer(SplitEngineSharedMemoryBridgeClient& bridge,
+BridgeBuffer::BridgeBuffer(BufferHandleFactory& handle_factory,
                            size_t buffer_size_bytes)
     : shared_memory_region_fd_(0),
       mmapped_ptr_(nullptr),
@@ -53,13 +48,7 @@ BridgeBuffer::BridgeBuffer(SplitEngineSharedMemoryBridgeClient& bridge,
     IMP_LOG(imp::FATAL) << "Failed to mmap RenderingBridgeAssetBuffer";
   }
 
-  absl::StatusOr<
-      std::unique_ptr<SplitEngineSharedMemoryBridgeClient::BufferHandle>>
-      handle = bridge.RegisterBuffer(shared_memory_region_fd_, size_in_bytes_);
-  if (!handle.ok()) {
-    IMP_LOG(imp::FATAL) << "Failed to register bridge buffer: " << handle.status();
-  }
-  handle_ = *std::move(handle);
+  handle_ = handle_factory.Create(shared_memory_region_fd_, size_in_bytes_);
 }
 
 BridgeBuffer::BridgeBuffer(BridgeBuffer&& other)

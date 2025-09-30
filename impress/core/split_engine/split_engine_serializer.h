@@ -78,6 +78,11 @@ class SplitEngineSerializer {
   // Returns the bridge that this serializer uses to serialize data.
   virtual SplitEngineAndroidBridge& GetBridge() = 0;
 
+  // Returns true if the serializer is ready for the next frame, i.e. if the
+  // number of in-flight frames is less than the maximum number of allowed
+  // in-flight frames.
+  virtual bool ReadyForNextFrame() const = 0;
+
   // Adds a material via material (used for ID) and raw binary material data.
   // TODO: Due to how Filament material versioning works, we need
   // to refactor this API. Our design proposal is that we support two kinds of

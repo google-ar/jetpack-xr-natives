@@ -51,7 +51,7 @@ class FuzzerState {
 
   ~FuzzerState() {
     {
-      absl::MutexLock lock(&lock_);
+      absl::MutexLock lock(lock_);
       quit_ = true;
     }
     response_thread_.join();
@@ -62,7 +62,7 @@ class FuzzerState {
   int RemoteFd() { return socket_.RemoteFd(); }
 
   void PushResponse() {
-    absl::MutexLock lock(&lock_);
+    absl::MutexLock lock(lock_);
     const std::vector<uint8_t> response =
         stream_.ConsumeBytes<unsigned char>(stream_.remaining_bytes());
     responses_.push_back(response);
@@ -71,7 +71,7 @@ class FuzzerState {
  private:
   void ResponseThreadWorker() {
     while (true) {
-      absl::MutexLock lock(&lock_);
+      absl::MutexLock lock(lock_);
       auto cond = [this]() ABSL_EXCLUSIVE_LOCKS_REQUIRED(&lock_) {
         return quit_ || !responses_.empty();
       };

@@ -24,7 +24,6 @@
 #include "filament/filament/include/filament/Material.h"
 #include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
-#include "core/async/future_group.h"
 #include "core/common/robin_map.h"
 #include "core/material_library/generic_material_spec.h"
 #include "core/resources/resource_manager.h"
@@ -53,8 +52,7 @@ class MaterialPackage {
   // file, reusing the materials if they've already been loaded in the past.
   Future<MaterialCache> GetOrLoadMaterials(
       BaseView& view, filament::Engine* engine,
-      absl::flat_hash_set<GenericMaterialSpec> requested_materials,
-      std::optional<FutureGroup> future_group = std::nullopt);
+      absl::flat_hash_set<GenericMaterialSpec> requested_materials);
 
   // Returns the future to the actual zip file. This is used for tracking
   // metrics for how long it takes to download the materials.

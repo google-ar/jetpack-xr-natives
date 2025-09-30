@@ -49,17 +49,11 @@ class ConeCollidableShape : public CollidableShape {
 #endif
 
  private:
-  // Since btConeShape does not support non-uniform scaling, this function
-  // forces the three dimensions of the scale of an Impress cone collider to
-  // be the same.
-  void EnforceEvenScaleForCone();
-
-  NodeHandle node_;
   std::unique_ptr<btCollisionShape> collidable_shape_;
   // Local offset of the center of the cone in Impress.
   float3 collidable_center_;
 
-  float3 scale_prev_ = float3(1.0f);
+  float3 scale_ = float3(1.0f);
 };
 
 }  // namespace imp

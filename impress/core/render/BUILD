@@ -13,7 +13,7 @@
 # limitations under the License.
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("//build_tools:imp.bzl", "if_android", "imp_copts", "imp_defines", "imp_google3_copts", "imp_test_copts")
+load("//build_tools:imp.bzl", "if_android", "if_emscripten", "imp_copts", "imp_defines", "imp_google3_copts", "imp_test_copts")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -30,6 +30,7 @@ cc_library(
         "image_asset.cc",
         "image_helpers.cc",
         "texture.cc",
+        "texture_asset.cc",
         "texture_factory.cc",
         "texture_registry.cc",
     ],
@@ -37,6 +38,7 @@ cc_library(
         "image_asset.h",
         "image_helpers.h",
         "texture.h",
+        "texture_asset.h",
         "texture_factory.h",
         "texture_options.h",
         "texture_registry.h",
@@ -47,13 +49,13 @@ cc_library(
         ":content_security_level",
         ":safe_filament_texture_builder",
         ":texture_builder",
+        "//core:config",
         "//core/assets",
         "//core/async:executor",
         "//core/async:future",
         "//core/common",
         "//core/common:context",
         "//core/common:invocable",
-        "//core/common:log",
         "//core/common:owned_or_borrowed_ptr",
         "//core/common:owned_ptr",
         "//core/common:small_source_location",
@@ -71,10 +73,14 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
         "@third_party//filament/filament/backend:pixel_buffer_descriptor",
-    ],
+    ] + if_emscripten([
+        "//core/image:wasm_decode_image",
+        "//core/image:wasm_texture_contents",
+    ]),
     alwayslink = 1,
 )
 
@@ -147,13 +153,13 @@ cc_library(
     deps = [
         ":base_texture_builder",
         ":safe_filament_texture_builder",
-        "//core/common:log",
         "//core/image",
         "//core/view:base_view",
         "@com_google_absl//absl/base:nullability",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:string_view",
+        "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
         "@third_party//filament/filament/backend:pixel_buffer_descriptor",
@@ -178,12 +184,12 @@ cc_library(
     linkstatic = True,
     deps = [
         "//core/common",
-        "//core/common:log",
         "//core/common:platform_helpers",
         "//core/common:string_helpers",
         "//core/ncsb",
         "//core/view:base_view",
         "@com_google_absl//absl/strings",
+        "@com_google_impress//core/common:log",
         "@third_party//filament/filament/backend:platform",
     ] + if_android([
         "//core/view/platforms/android/wrappers:activity_context",

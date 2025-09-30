@@ -17,19 +17,16 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGET_LAYOUT_INFO_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGET_LAYOUT_INFO_H_
 
-#include <string>
-
-#include "absl/strings/string_view.h"
 #include "core/editor/layout/editor_panel_ids.h"
 
 namespace imp::editor {
 
 // Determines where in the layout a widget should be drawn.
 struct WidgetLayoutInfo {
-  explicit WidgetLayoutInfo() : panel_id(panel_ids::kFreeform) {}
-  explicit WidgetLayoutInfo(absl::string_view panel_id) : panel_id(panel_id) {}
+  explicit WidgetLayoutInfo() : panel_id(PanelId::kFreeform) {}
+  explicit WidgetLayoutInfo(PanelId panel_id) : panel_id(panel_id) {}
 
-  std::string panel_id;
+  PanelId panel_id;
 };
 
 }  // namespace imp::editor

@@ -54,6 +54,12 @@ bool IsValidVariable(const gltf::Interactivity::Graph::Variable& variable) {
     case imp::gltf::Interactivity::Graph::ValueType::FLOAT4:
       return std::holds_alternative<float4>(variable.value);
       break;
+    case imp::gltf::Interactivity::Graph::ValueType::MAT2F:
+      return std::holds_alternative<mat2f>(variable.value);
+      break;
+    case imp::gltf::Interactivity::Graph::ValueType::MAT3F:
+      return std::holds_alternative<mat3f>(variable.value);
+      break;
     case imp::gltf::Interactivity::Graph::ValueType::MAT4F:
       return std::holds_alternative<mat4f>(variable.value);
       break;
@@ -66,7 +72,7 @@ bool IsValidVariable(const gltf::Interactivity::Graph::Variable& variable) {
 }
 
 bool IsValidFlow(const gltf::Interactivity::Graph::Node::Flow& flow) {
-  return !flow.socket.empty() && flow.node >= 0;
+  return !flow.socket.empty() && flow.node.has_value();
 }
 
 template <>
@@ -97,6 +103,19 @@ float3 GetDefaultValue<float3>() {
 template <>
 float4 GetDefaultValue<float4>() {
   return float4(std::numeric_limits<float>::quiet_NaN());
+}
+
+template <>
+mat2f GetDefaultValue<mat2f>() {
+  return mat2f(float2(std::numeric_limits<float>::quiet_NaN()),
+               float2(std::numeric_limits<float>::quiet_NaN()));
+}
+
+template <>
+mat3f GetDefaultValue<mat3f>() {
+  return mat3f(float3(std::numeric_limits<float>::quiet_NaN()),
+               float3(std::numeric_limits<float>::quiet_NaN()),
+               float3(std::numeric_limits<float>::quiet_NaN()));
 }
 
 template <>
@@ -131,6 +150,12 @@ void SetToDefaultValue(gltf::Interactivity::Graph::Variable& variable) {
       break;
     case imp::gltf::Interactivity::Graph::ValueType::FLOAT4:
       variable.value = GetDefaultValue<float4>();
+      break;
+    case imp::gltf::Interactivity::Graph::ValueType::MAT2F:
+      variable.value = GetDefaultValue<mat2f>();
+      break;
+    case imp::gltf::Interactivity::Graph::ValueType::MAT3F:
+      variable.value = GetDefaultValue<mat3f>();
       break;
     case imp::gltf::Interactivity::Graph::ValueType::MAT4F:
       variable.value = GetDefaultValue<mat4f>();

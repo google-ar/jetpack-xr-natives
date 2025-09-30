@@ -14,10 +14,19 @@
 
 #include "core/view/platforms/android/wrappers/imp_lifecycle_callback.h"
 
+#include <jni.h>
+
+#include <utility>
+
+#include "core/common/jni_helpers.h"
+#include "core/view/base_view.h"
+
 namespace imp {
 
-ImpLifeCycleCallback::ImpLifeCycleCallback(BaseView& view, jobject callback)
-    : JavaWrapper(view.GetContext().GetJniEnv(), callback) {
+ImpLifeCycleCallback::ImpLifeCycleCallback(BaseView& view,
+                                           JniUniquePtr<jobject> callback)
+    : JavaWrapper(view.GetContext().GetJniEnv(), std::move(callback),
+                  "com/google/ar/imp/view/ImpApi$ImpLifeCycleCallback") {
   on_editor_enabled_ = GetMethodHandle("onEditorEnabled", "(Z)V");
 }
 

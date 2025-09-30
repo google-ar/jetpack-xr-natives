@@ -26,6 +26,7 @@ import androidx.annotation.VisibleForTesting;
 import com.google.ar.imp.core.scripting.ScriptEndpoint;
 import com.google.ar.imp.core.web.FragmentHost;
 import com.google.ar.imp.view.input.InputManager;
+import java.util.concurrent.Executor;
 
 /**
  * JNI bindings for the native imp::View type. Thicker than the normal view API, because we do not
@@ -62,13 +63,26 @@ public class View {
     this.inputManager = new InputManager(viewHostHandle);
   }
 
-  public static View createView(@Nullable String nativeLibrary, Context context) {
-    return createView(nativeLibrary, null, context, null);
+  public static View createView(
+      @Nullable String nativeLibrary, Context context, Executor callbackExecutor) {
+    return createView(nativeLibrary, null, context, null, callbackExecutor, null);
   }
 
   public static View createView(
-      @Nullable String nativeLibrary, @Nullable String identifier, Context context) {
-    return createView(nativeLibrary, identifier, context, null);
+      @Nullable String nativeLibrary,
+      @Nullable String identifier,
+      Context context,
+      Executor callbackExecutor) {
+    return createView(nativeLibrary, identifier, context, null, callbackExecutor, null);
+  }
+
+  public static View createView(
+      @Nullable String nativeLibrary,
+      @Nullable String identifier,
+      Context context,
+      @Nullable FragmentHost host,
+      Executor callbackExecutor) {
+    return createView(nativeLibrary, identifier, context, host, callbackExecutor, null);
   }
 
   /**
@@ -81,7 +95,13 @@ public class View {
       @Nullable String nativeLibrary,
       @Nullable String identifier,
       Context context,
-      @Nullable FragmentHost host) {
+      @Nullable FragmentHost host,
+      Executor callbackExecutor,
+      // `viewRenderSettingsBytes` is a serialized `imp.render_settings.ViewRenderSettings` proto.
+      // A `byte[]` is used instead of the proto message to avoid a dependency on
+      // `com.google.protobuf`,
+      // which would break `//third_party/impress/apibindings:impress_no_native_lib_aar`.
+      @Nullable byte[] viewRenderSettingsBytes) {
     if (nativeLibrary == null || nativeLibrary.isEmpty()) {
       nativeLibrary = DEFAULT_LIBRARY_NAME;
     }
@@ -93,14 +113,19 @@ public class View {
     } catch (UnsatisfiedLinkError e) {
       throw new IllegalStateException("Could not load native library \"" + nativeLibrary + "\"", e);
     }
-    return new View(nCreateView(context, identifier, host), context, nativeLibrary);
+    return new View(
+        nCreateView(context, identifier, host, callbackExecutor, viewRenderSettingsBytes),
+        context,
+        nativeLibrary);
   }
 
   public static View createViewWithPreloadedLibrary(
       @Nullable String nativeLibraryName,
       @Nullable String identifier,
       Context context,
-      @Nullable FragmentHost host) {
+      @Nullable FragmentHost host,
+      Executor callbackExecutor,
+      @Nullable byte[] viewRenderSettingsBytes) {
     if (nativeLibraryName == null || nativeLibraryName.isEmpty()) {
       nativeLibraryName = DEFAULT_LIBRARY_NAME;
     }
@@ -108,7 +133,10 @@ public class View {
       identifier = DEFAULT_VIEW_IDENTIFIER;
     }
 
-    return new View(nCreateView(context, identifier, host), context, nativeLibraryName);
+    return new View(
+        nCreateView(context, identifier, host, callbackExecutor, viewRenderSettingsBytes),
+        context,
+        nativeLibraryName);
   }
 
   // Similar to View.createView, except this allows a custom subclass of imp::ViewHost to be
@@ -283,6 +311,16 @@ public class View {
     nStaticRenderForTest(viewHostHandle);
   }
 
+  
+  public Boolean shouldUseSrgbSwapChain() {
+    return nShouldUseSrgbSwapChain(viewHostHandle);
+  }
+
+  
+  public Boolean shouldUseStencilSwapChain() {
+    return nShouldUseStencilSwapChain(viewHostHandle);
+  }
+
   public void drainAllExecutorsForTest() {
     nDrainAllExecutorsForTest(viewHostHandle);
   }
@@ -331,7 +369,12 @@ public class View {
   }
 
   // LINT.IfChange(api)
-  protected static native long nCreateView(Object context, String identifier, Object fragmentHost);
+  protected static native long nCreateView(
+      Object context,
+      String identifier,
+      Object fragmentHost,
+      Object callbackExecutor,
+      byte[] viewRenderSettings);
 
   protected static native long nCreateViewWithoutHost(Object context, String identifier);
 
@@ -389,6 +432,10 @@ public class View {
   private static native void nSetScriptEndpoint(long viewHostHandle, Object scriptEndpoint);
 
   private static native void nStaticRenderForTest(long viewHostHandle);
+
+  private static native boolean nShouldUseSrgbSwapChain(long viewHostHandle);
+
+  private static native boolean nShouldUseStencilSwapChain(long viewHostHandle);
 
   private static native void nDrainAllExecutorsForTest(long viewHostHandle);
 

@@ -31,7 +31,6 @@
 #include "core/animation/gltf_animation.h"
 #include "core/async/executor.h"
 #include "core/async/future.h"
-#include "core/async/future_group.h"
 #include "core/common/buffer_access.h"
 #include "core/common/file_helpers.h"
 #include "core/common/flatbuffer_helpers.h"
@@ -42,6 +41,7 @@
 #include "core/loader/ipc/loader_client.h"
 #include "core/loader/ipc/loader_client_base.h"
 #include "core/loader/loader.h"
+#include "core/loader/loader_creator.h"
 #include "core/loader/loader_options.h"
 #include "core/loader/provider/extensions/verification.h"
 #include "core/loader/provider/schemas/loaded_model_generated.h"
@@ -85,23 +85,19 @@ class LoaderInSandbox : public Loader {
   absl::Status Flush(filament::Engine *engine) override;
   // Fire-and-forget load mechanism.  Will fail to resolve missing resources in
   // contexts without filesystem access.
-  Future<absl::Status> Load(std::function<void()> &&callback,
-                            std::optional<FutureGroup> future_group) override;
+  Future<absl::Status> Load(std::function<void()>&& callback) override;
   // Iterative load mechanism.  Will attempt to load given the currently loaded
   // resources; any missing assets which are required to load will have their
   // paths appear in out_missing_resource_paths.
   Future<absl::Status> TryLoad(
-      std::vector<std::string> *out_missing_resource_paths,
-      std::function<void()> &&callback,
-      std::optional<FutureGroup> future_group) override;
+      std::vector<std::string>* out_missing_resource_paths,
+      std::function<void()>&& callback) override;
 
   // Instantiation.
   Future<std::unique_ptr<model::ModelData>> CreateModel(
-      filament::Engine *engine,
-      std::optional<FutureGroup> future_group) override;
+      filament::Engine* engine) override;
   Future<std::unique_ptr<model::ModelData>> CreateModel(
-      filament::Engine *engine, std::function<void()> &&callback,
-      std::optional<FutureGroup> future_group) override;
+      filament::Engine* engine, std::function<void()>&& callback) override;
   void WhenFullyLoaded(std::function<void()> &&callback) override;
   void RemoveWhenFullyLoadedCallback() override;
   absl::StatusOr<std::unique_ptr<animation::GltfAnimation>> CreateAnimation(
@@ -153,20 +149,19 @@ LoaderInSandbox::LoaderInSandbox(
       loader_options_(std::move(options)) {}
 
 Future<std::unique_ptr<model::ModelData>> LoaderInSandbox::CreateModel(
-    filament::Engine *engine, std::optional<FutureGroup> future_group) {
+    filament::Engine* engine) {
   if (!Loaded()) {
     return Future<std::unique_ptr<model::ModelData>>(
         absl::FailedPreconditionError("Not Loaded"));
   }
 
-  return creator_->CreateModel(engine, loader_options_, future_group, name_);
+  return creator_->CreateModel(engine, loader_options_, name_);
 }
 
 Future<std::unique_ptr<model::ModelData>> LoaderInSandbox::CreateModel(
-    filament::Engine *engine, std::function<void()> &&callback,
-    std::optional<FutureGroup> future_group) {
+    filament::Engine* engine, std::function<void()>&& callback) {
   Future<std::unique_ptr<model::ModelData>> create_model_future =
-      CreateModel(engine, future_group);
+      CreateModel(engine);
   creator_->WhenFullyLoaded(std::move(callback));
   return create_model_future;
 }
@@ -241,8 +236,7 @@ absl::Status LoaderInSandbox::Flush(filament::Engine *engine) {
   return creator_->BlockUntilLoaded(engine);
 }
 
-Future<absl::Status> LoaderInSandbox::Load(
-    std::function<void()> &&callback, std::optional<FutureGroup> future_group) {
+Future<absl::Status> LoaderInSandbox::Load(std::function<void()>&& callback) {
   if (Loaded()) {
     return Future<absl::Status>(absl::InternalError("Already loaded"));
   }
@@ -266,12 +260,12 @@ Future<absl::Status> LoaderInSandbox::Load(
     return Future<absl::Status>(creator_status);
   }
 
-  return creator_->LoadImages(context_, std::move(callback), future_group);
+  return creator_->LoadImages(context_, std::move(callback));
 }
 
 Future<absl::Status> LoaderInSandbox::TryLoad(
-    std::vector<std::string> *out_missing_resource_paths,
-    std::function<void()> &&callback, std::optional<FutureGroup> future_group) {
+    std::vector<std::string>* out_missing_resource_paths,
+    std::function<void()>&& callback) {
   out_missing_resource_paths->clear();
   if (Loaded()) {
     return Future<absl::Status>(absl::InternalError("Already loaded"));
@@ -297,7 +291,7 @@ Future<absl::Status> LoaderInSandbox::TryLoad(
     if (!creator_status.ok()) {
       return Future<absl::Status>(creator_status);
     }
-    return creator_->LoadImages(context_, std::move(callback), future_group);
+    return creator_->LoadImages(context_, std::move(callback));
   }
 
   return Future<absl::Status>(absl::OkStatus());
@@ -314,7 +308,7 @@ absl::Status LoaderInSandbox::CreateCreator() {
 }
 
 Future<IsolatedProcessClient> CreateIsolatedProcessClient(
-    const Context &context, std::optional<FutureGroup> future_group) {
+    const Context& context) {
   // Instantiates the java side loader that will launch the Android isolated
   // process.
   auto isolated_process_client =
@@ -324,7 +318,7 @@ Future<IsolatedProcessClient> CreateIsolatedProcessClient(
   return Future<IsolatedProcessClient>::Schedule(
       [&context,
        isolated_process_client = std::move(isolated_process_client)]() mutable
-      -> absl::StatusOr<IsolatedProcessClient> {
+          -> absl::StatusOr<IsolatedProcessClient> {
         // Launches the isolated process and connects to it.
         if (!isolated_process_client->ConnectToLoaderService(context)) {
           return absl::InternalError("Unable to connect to loader service.");
@@ -332,7 +326,7 @@ Future<IsolatedProcessClient> CreateIsolatedProcessClient(
 
         return std::move(isolated_process_client);
       },
-      {.executor = Executor::Type::kBackground, .future_group = future_group});
+      {.executor = Executor::Type::kBackground});
 }
 
 absl::StatusOr<std::unique_ptr<Loader>> CreateSandboxLoader(
@@ -383,9 +377,8 @@ LoaderInSandboxCreator::CreateWithOwnedMaterialPackage(
                              std::move(owned_material_package));
 }
 
-Future<GetLoaderFn> LoaderInSandboxCreator::Create(
-    BaseView &view, std::optional<FutureGroup> future_group) {
-  return CreateIsolatedProcessClient(view.GetContext(), future_group)
+Future<GetLoaderFn> LoaderInSandboxCreator::Create(BaseView& view) {
+  return CreateIsolatedProcessClient(view.GetContext())
       .Then(
           [](IsolatedProcessClient java_loader_client) -> GetLoaderFn {
             return [java_loader_client = std::move(java_loader_client)](
@@ -397,8 +390,7 @@ Future<GetLoaderFn> LoaderInSandboxCreator::Create(
                                          material_package, options,
                                          std::move(java_loader_client));
             };
-          },
-          {.future_group = future_group});
+          });
 }
 
 }  // namespace imp::loader

@@ -25,10 +25,12 @@
 #include "core/config.h"
 #include "core/geometry/shapes/box.h"
 #include "core/geometry/shapes/capsule.h"
+#include "core/geometry/shapes/compound_shape.h"
 #include "core/geometry/shapes/cone.h"
 #include "core/geometry/shapes/cylinder.h"
 #include "core/geometry/shapes/sphere.h"
 #include "core/math/vec.h"
+#include "core/ncsb/node_handle.h"
 
 namespace imp {
 
@@ -36,9 +38,10 @@ namespace imp {
 // Bullet collision shapes of different types.
 class CollidableShape {
  public:
-  using CollisionShape =
-      absl::optional<std::variant<Sphere, Box, Capsule, Cylinder, Cone>>;
+  using CollisionShape = absl::optional<
+      std::variant<Sphere, Box, Capsule, Cylinder, Cone, CompoundShape>>;
 
+  CollidableShape(NodeHandle node);
   virtual ~CollidableShape() = default;
 
   // Creates a Bullet collision shape that matches the Impress collider's shape.
@@ -60,11 +63,27 @@ class CollidableShape {
 
   virtual void ApplyScalingToBulletCollider() = 0;
 
+  // Retrieves the node that owns this collidable shape.
+  NodeHandle GetNode() const;
+
+  // Retrieves the most up-to-date btTransform of the node associated with this
+  // collidable shape
+  btTransform GetNodeBtTransform();
+
 #if IMP_RUNTIME(DEV)
   // Takes the transformation of the instance of btCollisionObject (e.g.
   // btRigidBody, btGhostObject) in subclass as the input.
   virtual void Visualize(const btTransform& bt_trans) const = 0;
 #endif
+
+ protected:
+  // Since most Bullet collision shapes do not support non-uniform scaling, this
+  // utility function can be used to compute the maximum scale of the three
+  // dimensions and update the prev_scale arg if changed.
+  static bool UpdatedEvenScale(float3& prev_scale, const float3& new_scale);
+
+ protected:
+  NodeHandle node_;
 };
 
 }  // namespace imp

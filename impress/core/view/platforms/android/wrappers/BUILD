@@ -32,7 +32,7 @@ cc_library(
     deps = [
         "//core/common:jni_helpers",
         "//core/view:base_view",
-    ],
+    ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )
 
@@ -51,12 +51,12 @@ cc_library(
         "//core/common",
         "//core/common:context",
         "//core/common:jni_helpers",
-        "//core/common:log",
         "//core/math",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_impress//core/common:log",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )
@@ -96,7 +96,6 @@ cc_library(
         "//core/common",
         "//core/common:context",
         "//core/common:jni_helpers",
-        "//core/common:log",
         "//core/geometry/shapes",
         "//core/math",
         "//core/render:content_security_level",
@@ -104,6 +103,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
@@ -115,11 +115,11 @@ cc_library(
     hdrs = ["motion_event.h"],
     deps = [
         "//core/common:jni_helpers",
-        "//core/common:log",
         "//core/common:platform_helpers",
         "//core/input",
         "//core/math",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_impress//core/common:log",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )
@@ -159,7 +159,6 @@ cc_library(
         "//core:config",
         "//core/async:future_interrupter",
         "//core/common:jni_helpers",
-        "//core/common:log",
         "//core/monitor:profiling_clock",
         "//core/resources:download_progress_info",
         "@com_google_absl//absl/status",
@@ -169,6 +168,7 @@ cc_library(
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )

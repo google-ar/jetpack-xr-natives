@@ -282,13 +282,16 @@ class EditorFieldControl {
                    editor::EditorControlFlags::kDisplayLabel)) {
         absl::StrAppend(&text, ": ", name);
       }
-      ImGui::Text(text.c_str());
+      ImGui::Text("%s", text.c_str());
       return false;
     }
 
     ImGui::PushID(val);
 
     bool result = false;
+
+    bool should_display_label = CheckBit(
+        editor_control_flags, editor::EditorControlFlags::kDisplayLabel);
 
     ImGui::PushMultiItemsWidths(VecT::SIZE, ImGui::CalcItemWidth());
     for (int i = 0; i < VecT::SIZE; ++i) {
@@ -307,14 +310,17 @@ class EditorFieldControl {
 
       ImGui::PopID();
 
-      ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
+      // Don't call SameLine if it is the last element in the vector and we
+      // aren't displaying the label after the vector.
+      if (i < VecT::SIZE - 1 || should_display_label) {
+        ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
+      }
     }
 
-    if (CheckBit(editor_control_flags,
-                 editor::EditorControlFlags::kDisplayLabel)) {
+    if (should_display_label) {
       std::string label =
           editor::GenerateUniqueImGuiLabel(name, val, editor_control_flags);
-      ImGui::Text(name.c_str());
+      ImGui::Text("%s", name.c_str());
     }
 
     ImGui::PopID();
@@ -462,6 +468,8 @@ class EditorFieldControl {
     EditingElementMode mode =
         BeginEditingElement(val, base, editor_control_flags);
 
+    ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
+
     result |= ImGui::ColorEdit4(
         editor::GenerateUniqueImGuiLabel(name, val, editor_control_flags)
             .c_str(),
@@ -485,6 +493,25 @@ class EditorFieldControl {
     if (ImGui::BeginDragDropTarget()) {
       std::optional<std::string> payload =
           AcceptDragAndDropPayload(editor::DragAndDropType::kMaterial);
+      if (payload.has_value()) {
+        *val = *payload;
+        return true;
+      }
+      ImGui::EndDragDropTarget();
+    }
+    return edited;
+  }
+
+  // Specialization for string fields that accept scene assets.
+  static absl::StatusOr<bool> ShowControl(
+      const std::string& name, EditorControlScene& control, std::string* val,
+      std::string* base,
+      editor::EditorControlFlags editor_control_flags =
+          editor::EditorControlFlags::kDefault) {
+    bool edited = ShowDefaultControl(name, val, base, editor_control_flags);
+    if (ImGui::BeginDragDropTarget()) {
+      std::optional<std::string> payload =
+          AcceptDragAndDropPayload(editor::DragAndDropType::kNodeAsset);
       if (payload.has_value()) {
         *val = *payload;
         return true;
@@ -550,7 +577,7 @@ class EditorFieldControl {
       const std::string& name, Box* val, Box* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
-    ImGui::Text(name.c_str());
+    ImGui::Text("%s", name.c_str());
     ImGui::Indent();
 
     bool result = ShowDefaultControl("center", &val->center,
@@ -765,7 +792,7 @@ class EditorFieldControl {
     cursor.x += padding.x;
     cursor.y += padding.y;
     ImGui::SetCursorPos(cursor);
-    ImGui::Text(label.c_str());
+    ImGui::Text("%s", label.c_str());
     ImGui::SetCursorPos(final_cursor);
 
     // Clear the scene handle. It can't be cleared if the base is set, because
@@ -794,7 +821,7 @@ class EditorFieldControl {
 
     ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x + padding.x);
 
-    ImGui::Text(name.c_str());
+    ImGui::Text("%s", name.c_str());
 
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padding.y);
 

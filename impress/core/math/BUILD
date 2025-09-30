@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@com_google_protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("@rules_cc//cc:defs.bzl", "cc_proto_library")
 load("//build_tools:imp.bzl", "imp_google3_copts")
 load("//core/proto:imp_cc_proto_library.bzl", "imp_cc_proto_library")
 
@@ -46,10 +46,10 @@ cc_library(
     copts = imp_google3_copts(),
     linkstatic = True,
     deps = [
-        "//core/common:log",
         "//core/common:string_helpers",
         "//core/common:type_helpers",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/libs:math_hdrs",
         "@third_party//filament/libs:math_io",

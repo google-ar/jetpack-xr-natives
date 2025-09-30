@@ -25,16 +25,17 @@
 #include "core/ncsb/node_handle.h"
 #include "core/physics/collidable_shapes/box_collidable_shape.h"
 #include "core/physics/collidable_shapes/capsule_collidable_shape.h"
+#include "core/physics/collidable_shapes/compound_collidable_shape.h"
 #include "core/physics/collidable_shapes/cone_collidable_shape.h"
 #include "core/physics/collidable_shapes/convex_hull_mesh_collidable_shape.h"
 #include "core/physics/collidable_shapes/cylinder_collidable_shape.h"
 #include "core/physics/collidable_shapes/sphere_collidable_shape.h"
 #include "core/physics/collidable_shapes/static_mesh_collidable_shape.h"
 #include "core/physics/collidable_type.proto.imp.h"
-#include "core/physics/physics_helper.h"
 #include "core/view/framework/assets/gltf_mesh.h"
 #include "core/view/framework/collision/box_collider.h"
 #include "core/view/framework/collision/capsule_collider.h"
+#include "core/view/framework/collision/compound_collider.h"
 #include "core/view/framework/collision/cone_collider.h"
 #include "core/view/framework/collision/cylinder_collider.h"
 #include "core/view/framework/collision/sphere_collider.h"
@@ -63,6 +64,9 @@ absl::Status Collidable::Create(btTransform& start_transform, NodeHandle node,
       type_ = physics::CollidableType::PRIMITIVE;
     } else if (auto collider = node_->GetComponent<CapsuleCollider>()) {
       collidable_shape_ = std::make_unique<CapsuleCollidableShape>(node_);
+      type_ = physics::CollidableType::PRIMITIVE;
+    } else if (auto collider = node_->GetComponent<CompoundCollider>()) {
+      collidable_shape_ = std::make_unique<CompoundCollidableShape>(node_);
       type_ = physics::CollidableType::PRIMITIVE;
     } else {
       if (type_ == physics::CollidableType::PRIMITIVE) {
@@ -137,12 +141,8 @@ void Collidable::ApplyScalingToBulletCollider() const {
 }
 
 btTransform Collidable::GetNodeBtTransform() const {
-  ApplyScalingToBulletCollider();
-  float3 center_offset =
-      node_->GetWorldRotation() * collidable_shape_->GetCollidableCenter();
-  return ToBtTransform(
-      node_->GetWorldPosition() + center_offset * node_->GetWorldScale(),
-      node_->GetWorldRotation());
+  collidable_shape_->ApplyScalingToBulletCollider();
+  return collidable_shape_->GetNodeBtTransform();
 }
 
 }  // namespace imp

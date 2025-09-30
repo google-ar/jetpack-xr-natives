@@ -49,7 +49,6 @@
 #include "core/view/framework/assets/gltf_asset.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/framework/assets/gltf_scene.h"
-#include "core/view/framework/render/material.h"
 #include "core/view/utils/frame_time.h"
 
 namespace imp {
@@ -231,14 +230,40 @@ class GltfAnimator : public Component {
   // is looping.
   bool IsLooping(PlaybackChannelId channel_id = kDefaultChannelId) const;
 
-  // Returns the current elapsed animation time, within the original duration.
+  // Set the current playback time for the given channel if an animation is
+  // playing on it.
+  void SetPlaybackTime(absl::Duration playback_time,
+                       PlaybackChannelId channel_id = kDefaultChannelId);
+
+  // Returns the current animation playback time, within the original duration.
   // Options::speed_multiplier affects how this updates compared to real time.
   absl::Duration GetPlaybackTime(
       PlaybackChannelId channel_id = kDefaultChannelId);
 
-  // Get the total original duration for the current animation.
+  // Returns the current elapsed animation time, within the bounds defined
+  // Options::start_time and Options::end_time parameters used in the
+  // PlayCommand used to began the animation playback.
+  // Options::speed_multiplier affects how this updates compared to real time.
+  absl::Duration GetElapsedTime(
+      PlaybackChannelId channel_id = kDefaultChannelId);
+
+  // Returns the starting time of an animation that is currently running (in
+  // terms of the animation's key frame time).
+  absl::Duration GetStartTime(
+      PlaybackChannelId channel_id = kDefaultChannelId) const;
+
+  // Returns the ending time of an animation that is currently running (in terms
+  // of the animation's key frame time).
+  absl::Duration GetEndTime(
+      PlaybackChannelId channel_id = kDefaultChannelId) const;
+
+  // Get the total duration for the current animation playback.
   // Options::speed_multiplier can make the real duration different than the
   // original duration.
+  absl::Duration GetPlaybackDuration(
+      PlaybackChannelId channel_id = kDefaultChannelId);
+
+  // Get the total original duration for the current animation.
   absl::Duration GetAnimationDuration(
       PlaybackChannelId channel_id = kDefaultChannelId);
 
@@ -354,15 +379,24 @@ class GltfAnimator : public Component {
   PlaybackChannelId current_channel_id_ = kDefaultChannelId;
   struct CurrentAnimation {
     size_t index = 0;
+    float start_time = 0.0f;
     float time = 0.0f;
+    float end_time = 0.0f;
     bool loop = true;
     float speed_multiplier = 1.0f;
   };
   std::map<PlaybackChannelId, CurrentAnimation, PlaybackChannelIdComparator>
       current_animations_;
 
-  void Resume(absl::string_view anim_name,
-              const CurrentAnimation& current_animation);
+  void PlayAnimationFromEditorUi(absl::string_view anim_name,
+                                 const CurrentAnimation& current_animation);
+
+  void SetAnimationPlaybackTimeInEditor(absl::string_view anim_name,
+                                        CurrentAnimation& current_animation);
+
+  float GetAnimationFirstT(const CurrentAnimation& current_animation);
+
+  float GetAnimationLastT(const CurrentAnimation& current_animation);
 #endif  // IMP_RUNTIME(DEV)
 };
 

@@ -137,7 +137,8 @@ class GlyphAtlasNew : public GlyphAtlas, public Rememberer {
   // Get the super sample info based on the View, when it's ready.
   //
   // See also GlyphEmulator::GetSuperSampleInfo().
-  Future<GlyphEmulator::SuperSampleInfo> GetSuperSampleInfo() const override;
+  Future<GlyphEmulator::SuperSampleInfo> GetSuperSampleInfo(
+      bool force_off) const override;
 
   // Provides the percentage of the atlas that is currently occupied
   //

@@ -16,6 +16,7 @@
 
 package com.google.imp.splitengine.extensions;
 
+import android.os.RemoteException;
 import android.view.Surface;
 
 /** Interface for a connection to the system renderer. */
@@ -29,7 +30,8 @@ public interface IRendererConnection {
   }
 
   /** Processes a region of a registered buffer specified by offset and bytes. */
-  default void processRegion(IBufferHandle bufferHandle, int offsetBytes, int regionLengthBytes) {
+  default void processRegion(IBufferHandle bufferHandle, int offsetBytes, int regionLengthBytes)
+      throws RemoteException {
     throw new UnsupportedOperationException();
   }
 

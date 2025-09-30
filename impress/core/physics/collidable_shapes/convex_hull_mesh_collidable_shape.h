@@ -57,7 +57,6 @@ class ConvexHullMeshCollidableShape : public CollidableShape {
 #endif
 
  private:
-  NodeHandle node_;
   btAlignedObjectArray<btVector3> vertices_;
   btCollisionShape* collidable_shape_;
   std::unique_ptr<btConvexHullShape> convex_hull_shape_;

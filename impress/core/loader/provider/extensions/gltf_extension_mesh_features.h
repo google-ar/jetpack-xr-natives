@@ -22,8 +22,8 @@
 // This is a partial implementation of support for the EXT_mesh_features
 // extension for glTF 2.0
 // (https://github.com/CesiumGS/glTF/tree/3d-tiles-next/extensions/2.0/Vendor/EXT_mesh_features).
-// Currently only supports loading texture based mesh features. Does not load
-// vertex attribute features or the feature table itself.
+// Currently only supports loading at most 4 texture based mesh features. Does
+// not load vertex attribute features or the feature table itself.
 //
 // If enabled, this extension will add feature id texture TextureIds to the
 // primitives/parts. The pipeline for this data looks like

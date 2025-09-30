@@ -35,13 +35,13 @@
 #include "core/animation/gltf_animation.h"
 #include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
-#include "core/async/future_group.h"
 #include "core/collision/collision_accelerator_provider.h"
 #include "core/collision/mesh_collision_accelerator.h"
 #include "core/common/paired_vector.h"
 #include "core/common/robin_map.h"
 #include "core/common/typed_id.h"
 #include "core/common/typed_vector.h"
+#include "core/material_library/generic_material.h"
 #include "core/material_library/material_param_value.h"
 #include "core/math/mat.h"
 #include "core/model/model_data.h"
@@ -174,9 +174,6 @@ class GltfAsset {
     // will be local to the transform of the node the GltfRenderer is on. The
     // default behavior would be an empty list to not enable instancing.
     std::vector<mat4f> instance_transforms = {};
-
-    // The FutureGroup into which all futures will be added.
-    absl::optional<FutureGroup> future_group = absl::nullopt;
   };
 
   static const MaterialPreCompileOptions& kDefaultMaterialPreCompileOptions;

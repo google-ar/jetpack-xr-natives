@@ -15,10 +15,9 @@
 #include "core/editor/widgets/node_details.h"
 
 #include <cstdint>
-#include <memory>
+#include <cstdlib>
+#include <optional>
 #include <string>
-#include <utility>
-#include <vector>
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
@@ -28,14 +27,14 @@
 #include "dear_imgui/imgui.h"
 #include "dear_imgui/misc/cpp/imgui_stdlib.h"
 #include "core/common/file_helpers.h"
-#include "core/common/platform_helpers.h"
 #include "core/common/registry.h"
 #include "core/config.h"
 #include "core/editor/command_manager.h"
 #include "core/editor/editor.h"
-#include "core/editor/editor_style.h"
+#include "core/editor/editor_field_control.h"
 #include "core/editor/events.h"
 #include "core/editor/events.proto.imp.h"
+#include "core/editor/layout/editor_control_flags.h"
 #include "core/editor/node_value_command.h"
 #include "core/editor/widgets/asset_library.h"
 #include "core/ncsb/component_handle.h"
@@ -75,17 +74,31 @@ NodeDetails::NodeDetails(BaseView& view)
 bool NodeDetails::HasContent() const { return active_node_.IsValid(); }
 
 void NodeDetails::DrawImGui() {
+  auto scene_metadata = active_node_->GetComponent<SceneMetadata>();
+
+  // Only allow changing the name of a node if it is not a child of a base.
+  // If it's a child of a base, then the name is inherited and cannot be changed
+  // since that would make it impossible to save correctly.
+  //
+  // Nodes with a direct base are intentionally allowed to be renamed, since
+  // they can be saved correctly.
+  bool can_change_name = !scene_metadata || !scene_metadata->IsChildOfBase();
   std::string name = std::string(active_node_->GetName());
-  std::string old_name = name;
-  if (ImGui::InputText("name", &name)) {
-    command_manager_.PerformCommand<NodeValueCommand<std::string>>(
-        active_node_, old_name, name,
-        [](NodeHandle target, absl::string_view value) {
-          target->SetName(value);
-        });
+  if (can_change_name) {
+    // Allow changing the name of the node.
+    std::string old_name = name;
+    if (ImGui::InputText("name", &name)) {
+      command_manager_.PerformCommand<NodeValueCommand<std::string>>(
+          active_node_, old_name, name,
+          [](NodeHandle target, absl::string_view value) {
+            target->SetName(value);
+          });
+    }
+  } else {
+    // Just display the name.
+    ImGui::LabelText("name", name.c_str());
   }
 
-  auto scene_metadata = active_node_->GetComponent<SceneMetadata>();
   if (scene_metadata && !scene_metadata->GetBaseUrl().empty()) {
     Editor& editor = view_.GetRegistry().Get<Editor>()->get();
     std::string base = editor.GetAssetLibrary()->RemoveHomeDirectoryFromPath(
@@ -96,7 +109,13 @@ void NodeDetails::DrawImGui() {
   ImGui::PushItemWidth(kDetailsUiWidth);
 
   bool enabled = active_node_->IsEnabled();
-  if (ImGui::Checkbox("enabled", &enabled)) {
+  bool is_base_enabled =
+      !(scene_metadata && scene_metadata->IsBaseDisabled().value_or(false));
+  if (EditorFieldControl::ShowDefaultControl(
+          "enabled", &enabled,
+          scene_metadata && scene_metadata->IsFromBase() ? &is_base_enabled
+                                                         : nullptr,
+          EditorControlFlags::kDefaultWithoutResetUnsetValToBase)) {
     command_manager_.PerformCommand<NodeValueCommand<bool>>(
         active_node_, !enabled, enabled, [this](NodeHandle target, bool value) {
           target->SetEnabled(value);
@@ -120,7 +139,12 @@ void NodeDetails::DrawImGui() {
   if (scene_reference && !scene_reference->GetAssetUrl().empty() &&
       scene_reference->GetAssetUrl() != SceneSystem::kRuntimeNodeDataPath &&
       scene_metadata) {
-    if (ImGui::Button("Save##save-button")) {
+    absl::string_view filename =
+        GetLocalFilenameFromFilename(scene_reference->GetAssetUrl());
+    std::string save_button_label =
+        absl::StrFormat("Save (%s)##save-button", filename);
+
+    if (ImGui::Button(save_button_label.c_str())) {
       absl::Status save_status = Save();
       if (!save_status.ok()) {
         IMP_LOG(imp::ERROR) << "Failed to save scene: " << save_status;
@@ -139,6 +163,15 @@ absl::Status NodeDetails::Save() {
 
   std::string save_full_path =
       absl::StrCat(path_without_extension, kTextprotoExtension);
+
+  // When using "blaze run", the working directory is changed to a temporary
+  // directory which means that relative paths are no longer valid. To ensure
+  // that the file is saved correctly, we use the workspace directory if it is
+  // available.
+  const char* workspace_dir = std::getenv("BUILD_WORKSPACE_DIRECTORY");
+  if (workspace_dir) {
+    save_full_path = absl::StrCat(workspace_dir, "/", save_full_path);
+  }
 
   MP_ASSIGN_OR_RETURN(NodeData data,
                    view_.GetSceneSystem().SaveToData(

@@ -50,6 +50,18 @@ absl::StatusOr<To> TryConvertVariantTo(Variant&& variant) {
                      std::forward<Variant>(variant));
 }
 
+// Helper function to check if a variant holds any of the given types.
+//
+// For example, if you have a variant<bool, int, float, std::string> and want to
+// check if it holds any of int, float and std::string, you can do so with:
+//   if (HoldsAnyOf<int, float, std::string>(variant)) {
+//     // Do something.
+//   }
+template <typename... Types, typename Variant>
+bool HoldsAnyOf(const Variant& v) {
+  return (std::holds_alternative<Types>(v) || ...);
+}
+
 }  // namespace imp
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_COMMON_VARIANT_H_

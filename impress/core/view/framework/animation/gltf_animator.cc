@@ -17,11 +17,9 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
-#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
-#include <variant>
 #include <vector>
 
 #include "core/common/log.h"
@@ -31,7 +29,6 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
-#include "absl/types/span.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "core/animation/gltf_animation.h"
 #include "core/animation/light_punctual_animation.h"
@@ -44,7 +41,6 @@
 #include "core/common/trace.h"
 #include "core/common/typed_id.h"
 #include "core/config.h"
-#include "core/material_library/generic_material_constants.h"
 #include "core/material_library/material_param_value.h"
 #include "core/math/mat.h"
 #include "core/math/math.h"
@@ -64,7 +60,6 @@
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/framework/assets/gltf_scene.h"
 #include "core/view/framework/lighting/light_component.h"
-#include "core/view/framework/render/material.h"
 #include "core/view/utils/frame_time.h"
 #include "mediapipe/framework/port/status_macros.h"
 #if IMP_RUNTIME(DEV)
@@ -97,6 +92,34 @@ class MissingTransformProvider
 
   ComponentHandle<GltfScene> gltf_scene_;
 };
+
+bool SanitizeT(bool loop, absl::Duration* t, absl::Duration start_time,
+               absl::Duration end_time) {
+  const absl::Duration duration = absl::AbsDuration(end_time - start_time);
+  const absl::Duration start_to_t = absl::AbsDuration(*t - start_time);
+  const absl::Duration end_to_t = absl::AbsDuration(*t - end_time);
+  if (loop && end_to_t == absl::ZeroDuration()) {
+    *t = start_time;
+    return true;
+  }
+
+  if (start_to_t <= duration && end_to_t <= duration) {
+    return end_to_t == absl::ZeroDuration();
+  }
+
+  if (loop && duration > absl::ZeroDuration()) {
+    absl::Duration wrapped_duration = (start_to_t % duration);
+    wrapped_duration =
+        end_to_t > duration ? duration - wrapped_duration : wrapped_duration;
+
+    float dir = start_time < end_time ? 1.f : -1.f;
+    *t = start_time + dir * wrapped_duration;
+  } else {
+    *t = start_to_t < end_to_t ? start_time : end_time;
+  }
+
+  return true;
+}
 
 }  // namespace
 
@@ -274,16 +297,16 @@ void GltfAnimator::Restart(PlaybackChannelId channel_id) {
       play_command.options = GltfAnimatorState::AnimOptions();
       Play(play_command, target_gltf_asset_);
     } else {
-      for (auto channel_id : playback_channel_lookup_) {
-        PlaybackChannel& channel = playback_channels_[channel_id.second];
-        channel.anim_playback.t = channel.anim_playback.anim->FirstT();
+      for (auto [_, channel_id] : playback_channel_lookup_) {
+        PlaybackChannel& channel = playback_channels_[channel_id];
+        channel.anim_playback.t = channel.anim_playback.start_time;
       }
       AdvanceAnimationPlayback(absl::ZeroDuration());
     }
   } else {
     auto channel = GetPlaybackChannel(channel_id);
     if (channel) {
-      channel->anim_playback.t = channel->anim_playback.anim->FirstT();
+      channel->anim_playback.t = channel->anim_playback.start_time;
       AdvanceAnimationPlayback(*channel, absl::ZeroDuration(),
                                GetNode()->GetComponent<GltfScene>());
     }
@@ -299,15 +322,15 @@ void GltfAnimator::PlayAnim(int32_t anim_index,
     return;
   }
 
+  absl::Duration first_t = anim->FirstT();
   absl::Duration start_duration =
-      clamp(absl::Seconds(options.start_time_seconds), absl::ZeroDuration(),
-            anim->Duration());
-  float speed_multiplier =
-      options.speed_multiplier ? options.speed_multiplier : 1.0f;
-  speed_multiplier *= (options.end_time_seconds &&
-                       options.start_time_seconds > *options.end_time_seconds)
-                          ? -1.0f
-                          : 1.0f;
+      first_t + absl::Seconds(options.start_time_seconds);
+  std::optional<absl::Duration> end_duration = std::nullopt;
+  if (options.end_time_seconds.has_value()) {
+    end_duration = first_t + absl::Seconds(*options.end_time_seconds);
+  } else {
+    start_duration = clamp(start_duration, first_t, anim->LastT());
+  }
 
   auto channel = GetPlaybackChannel(channel_id);
   if (channel) {
@@ -344,32 +367,26 @@ void GltfAnimator::PlayAnim(int32_t anim_index,
           .SendOrQueuePlaybackEndedEvent(ev, GetNode());
     }
 
-    channel->anim_playback =
-        GltfAnimPlayback{anim_index,
-                         anim,
-                         anim->CreateCursor(),
-                         anim->FirstT() + start_duration,
-                         anim->FirstT() + start_duration,
-                         options.end_time_seconds.has_value()
-                             ? std::optional<absl::Duration>(
-                                   absl::Seconds(*options.end_time_seconds))
-                             : std::nullopt,
-                         speed_multiplier,
-                         options.looping,
-                         0};
+    channel->anim_playback = GltfAnimPlayback{
+        anim_index,
+        anim,
+        anim->CreateCursor(),
+        start_duration,
+        start_duration,
+        end_duration,
+        options.speed_multiplier ? options.speed_multiplier : 1.0f,
+        options.looping,
+        0};
     channel->active = true;
     channel->persist = options.persist_channel;
   } else {
     PlaybackChannel new_channel{
         .anim_playback =
-            GltfAnimPlayback{anim_index, anim, anim->CreateCursor(),
-                             anim->FirstT() + start_duration,
-                             anim->FirstT() + start_duration,
-                             options.end_time_seconds.has_value()
-                                 ? std::optional<absl::Duration>(
-                                       absl::Seconds(*options.end_time_seconds))
-                                 : std::nullopt,
-                             speed_multiplier, options.looping, 0},
+            GltfAnimPlayback{
+                anim_index, anim, anim->CreateCursor(), start_duration,
+                start_duration, end_duration,
+                options.speed_multiplier ? options.speed_multiplier : 1.0f,
+                options.looping, 0},
         .blend_anim = {},
         .active = true,
         .persist = options.persist_channel};
@@ -393,6 +410,18 @@ void GltfAnimator::PlayAnim(int32_t anim_index,
   PlaybackStartedEvent ev;
   ev.animation_index = anim_index;
   GetNode()->Send(ev);
+
+#if IMP_RUNTIME(DEV)
+  current_animations_[channel_id].index = anim_index;
+  current_animations_[channel_id].start_time = options.start_time_seconds;
+  current_animations_[channel_id].time = 0.f;
+  current_animations_[channel_id].end_time =
+      options.end_time_seconds.has_value()
+          ? *options.end_time_seconds
+          : static_cast<float>(absl::ToDoubleSeconds(anim->LastT()));
+  current_animations_[channel_id].loop = options.looping;
+  current_animations_[channel_id].speed_multiplier = options.speed_multiplier;
+#endif  // IMP_RUNTIME(DEV)
 
   AdvanceAnimationPlayback(absl::ZeroDuration());
 }
@@ -451,8 +480,8 @@ bool GltfAnimator::IsPlaying(
   }
 
   if (!channel_id) {
-    for (auto channel_id : playback_channel_lookup_) {
-      if (playback_channels_[channel_id.second].active) {
+    for (auto [_, channel_id] : playback_channel_lookup_) {
+      if (playback_channels_[channel_id].active) {
         return true;
       }
     }
@@ -468,14 +497,23 @@ absl::Duration GltfAnimator::GetNextPlaybackTime(
   if (frame_time_delta == absl::ZeroDuration()) {
     return playback.t;
   }
+
+  float dir =
+      !playback.end_time.has_value() || playback.start_time < *playback.end_time
+          ? 1.f
+          : -1.f;
   absl::Duration next_playback_t =
-      playback.t + frame_time_delta * playback.speed_multiplier;
+      playback.t + dir * frame_time_delta * playback.speed_multiplier;
+
   if (elapsed_time_provider_) {
     absl::StatusOr<absl::Duration> provided_time_or = elapsed_time_provider_();
     if (provided_time_or.ok()) {
       absl::Duration provided_time = provided_time_or.value();
-      provided_time %= playback.anim->Duration();
-      next_playback_t = playback.anim->FirstT() + provided_time;
+      provided_time %=
+          playback.end_time.has_value()
+              ? absl::AbsDuration(*playback.end_time - playback.start_time)
+              : playback.anim->LastT() - playback.start_time;
+      next_playback_t = playback.start_time + provided_time;
     }
   }
   return next_playback_t;
@@ -515,19 +553,34 @@ bool GltfAnimator::AdvanceAnimationPlayback(
     ComponentHandle<GltfScene> gltf_scene) {
   GltfAnimPlayback& playback = channel.anim_playback;
 
+  absl::Duration prev_t = playback.t;
   playback.t = GetNextPlaybackTime(delta_time, playback);
-  float curr_time_seconds =
-      static_cast<float>(absl::ToDoubleSeconds(playback.t));
+  absl::Duration playback_time_delta = playback.t - prev_t;
+  playback_time_delta =
+      playback.end_time.has_value() && playback.start_time > *playback.end_time
+          ? -playback_time_delta
+          : playback_time_delta;
+
+  bool crossed_endpoint =
+      SanitizeT(playback.looping, &playback.t, playback.start_time,
+                playback.end_time.has_value() ? *playback.end_time
+                                              : playback.anim->LastT());
+
+  absl::Duration wrapped_timestamp = playback.t;
+  channel.anim_playback.anim->SanitizeT(true, &wrapped_timestamp);
 
   // Animate all morph target animations.
   animation::GltfAnimation::BoneTargetLookup<std::array<float, 256>>
       morph_target_anims = playback.anim->EvaluateMorphTargetAnimations(
-          curr_time_seconds, &playback.cursor.weights);
+          static_cast<float>(absl::ToDoubleSeconds(wrapped_timestamp)),
+          &playback.cursor.weights);
   const animation::GltfAnimation::BoneTargetSpan& morph_target_anim_targets =
       playback.anim->MorphTargetAnimationTargets();
 
   PlaybackUpdatedEvent ev;
   ev.animation_index = playback.anim_index;
+  ev.delta_playback_seconds =
+      static_cast<float>(absl::ToDoubleSeconds(playback_time_delta));
   std::vector<NodeHandle> updated_event_targets;
 
   for (animation::GltfAnimation::BoneTargetId id :
@@ -556,9 +609,9 @@ bool GltfAnimator::AdvanceAnimationPlayback(
     // Animate all t/r/s animations.
     MissingTransformProvider missing_transform_provider(gltf_scene);
     animation::GltfAnimation::BoneTargetLookup<Trsf> transforms =
-        playback.anim->EvaluateTransform(curr_time_seconds,
-                                         &playback.cursor.trs,
-                                         &missing_transform_provider);
+        playback.anim->EvaluateTransform(
+            static_cast<float>(absl::ToDoubleSeconds(wrapped_timestamp)),
+            &playback.cursor.trs, &missing_transform_provider);
 
     const animation::GltfAnimation::BoneTargetSpan& bone_targets =
         playback.anim->TransformTargets();
@@ -587,13 +640,6 @@ bool GltfAnimator::AdvanceAnimationPlayback(
       ev, std::move(updated_event_targets));
 
   bool animation_ended = false;
-  bool crossed_endpoint =
-      playback.end_time.has_value()
-          ? playback.anim->SanitizeT(playback.looping, &playback.t,
-                                     playback.start_time, *playback.end_time)
-          : playback.anim->SanitizeT(playback.looping, &playback.t,
-                                     playback.start_time);
-
   if (crossed_endpoint) {
     if (playback.looping) {
       // Animation looped.
@@ -850,8 +896,20 @@ void GltfAnimator::AdvanceBlendAnimation(GltfAnimator::PlaybackChannel& channel,
   }
   GltfAnimPlayback& blend_out_anim = channel.blend_anim->blend_out_anim;
 
+  absl::Duration prev_t = blend_out_anim.t;
   blend_out_anim.t = GetNextPlaybackTime(delta_time, blend_out_anim);
+  absl::Duration blend_time_delta = blend_out_anim.t - prev_t;
+  blend_time_delta =
+      blend_out_anim.end_time.has_value() &&
+              blend_out_anim.start_time > *blend_out_anim.end_time
+          ? -blend_time_delta
+          : blend_time_delta;
   channel.blend_anim->elapsed_seconds += delta_time;
+
+  SanitizeT(blend_out_anim.looping, &blend_out_anim.t,
+            blend_out_anim.start_time,
+            blend_out_anim.end_time.has_value() ? *blend_out_anim.end_time
+                                                : blend_out_anim.anim->LastT());
 
   ComponentHandle<GltfScene> gltf_scene = GetNode()->GetComponent<GltfScene>();
   if (!gltf_scene) {
@@ -900,20 +958,13 @@ void GltfAnimator::AdvanceBlendAnimation(GltfAnimator::PlaybackChannel& channel,
     if (NodeHandle node = gltf_scene->GetNodeFromBone(bone)) {
       PlaybackUpdatedEvent ev;
       ev.animation_index = channel.anim_playback.anim_index;
+      ev.delta_playback_seconds =
+          static_cast<float>(absl::ToDoubleSeconds(blend_time_delta));
       GetView()
           .GetComponentManager()
           .GetComponentSystem<GltfAnimator>()
           .SendOrQueuePlaybackUpdatedEvents(ev, {node});
     }
-  }
-
-  if (blend_out_anim.end_time.has_value()) {
-    blend_out_anim.anim->SanitizeT(blend_out_anim.looping, &blend_out_anim.t,
-                                   blend_out_anim.start_time,
-                                   *blend_out_anim.end_time);
-  } else {
-    blend_out_anim.anim->SanitizeT(blend_out_anim.looping, &blend_out_anim.t,
-                                   blend_out_anim.start_time);
   }
 
   if (channel.blend_anim->elapsed_seconds >=
@@ -998,8 +1049,8 @@ void GltfAnimator::ConstrainAnimationTime(ElapsedTimeProvider provider,
 void GltfAnimator::SetSpeedMultiplier(float speed_multiplier,
                                       PlaybackChannelId channel_id) {
   if (IsAllChannelsId(channel_id)) {
-    for (auto channel_id : playback_channel_lookup_) {
-      PlaybackChannel& channel = playback_channels_[channel_id.second];
+    for (auto [_, channel_id] : playback_channel_lookup_) {
+      PlaybackChannel& channel = playback_channels_[channel_id];
       channel.anim_playback.speed_multiplier = speed_multiplier;
     }
   } else if (auto channel = GetPlaybackChannel(channel_id)) {
@@ -1016,8 +1067,8 @@ float GltfAnimator::GetSpeedMultiplier(PlaybackChannelId channel_id) const {
 
 void GltfAnimator::SetLooping(bool looping, PlaybackChannelId channel_id) {
   if (IsAllChannelsId(channel_id)) {
-    for (auto channel_id : playback_channel_lookup_) {
-      PlaybackChannel& channel = playback_channels_[channel_id.second];
+    for (auto [_, channel_id] : playback_channel_lookup_) {
+      PlaybackChannel& channel = playback_channels_[channel_id];
       channel.anim_playback.looping = looping;
     }
   } else if (PlaybackChannel* channel = GetPlaybackChannel(channel_id)) {
@@ -1027,8 +1078,8 @@ void GltfAnimator::SetLooping(bool looping, PlaybackChannelId channel_id) {
 
 bool GltfAnimator::IsLooping(PlaybackChannelId channel_id) const {
   if (IsAllChannelsId(channel_id)) {
-    for (auto channel_id : playback_channel_lookup_) {
-      if (!playback_channels_[channel_id.second].anim_playback.looping) {
+    for (auto [_, channel_id] : playback_channel_lookup_) {
+      if (!playback_channels_[channel_id].anim_playback.looping) {
         return false;
       }
     }
@@ -1040,10 +1091,71 @@ bool GltfAnimator::IsLooping(PlaybackChannelId channel_id) const {
   return false;
 }
 
+void GltfAnimator::SetPlaybackTime(absl::Duration playback_time,
+                                   PlaybackChannelId channel_id) {
+  if (IsAllChannelsId(channel_id)) {
+    for (auto [_, channel_id] : playback_channel_lookup_) {
+      PlaybackChannel& channel = playback_channels_[channel_id];
+      channel.anim_playback.t = playback_time;
+    }
+
+    AdvanceAnimationPlayback(absl::ZeroDuration());
+  } else if (PlaybackChannel* channel = GetPlaybackChannel(channel_id)) {
+    channel->anim_playback.t = playback_time;
+
+    if (AdvanceAnimationPlayback(*channel, absl::ZeroDuration(),
+                                 GetNode()->GetComponent<GltfScene>())) {
+      playback_channel_lookup_.erase(channel_id);
+    }
+  }
+}
+
 absl::Duration GltfAnimator::GetPlaybackTime(PlaybackChannelId channel_id) {
+  absl::Duration playback_time = absl::ZeroDuration();
   if (auto channel = GetPlaybackChannel(channel_id)) {
     GltfAnimPlayback& playback = channel->anim_playback;
-    return playback.t - playback.anim->FirstT();
+    playback_time = playback.t - playback.anim->FirstT();
+    playback.anim->SanitizeT(!playback.end_time.has_value() || playback.looping,
+                             &playback_time);
+  }
+
+  return playback_time;
+}
+
+absl::Duration GltfAnimator::GetElapsedTime(PlaybackChannelId channel_id) {
+  if (auto channel = GetPlaybackChannel(channel_id)) {
+    GltfAnimPlayback& playback = channel->anim_playback;
+    return absl::AbsDuration(playback.t - playback.start_time);
+  }
+  return absl::ZeroDuration();
+}
+
+absl::Duration GltfAnimator::GetPlaybackDuration(PlaybackChannelId channel_id) {
+  if (auto channel = GetPlaybackChannel(channel_id)) {
+    GltfAnimPlayback& playback = channel->anim_playback;
+    absl::Duration end_time = playback.end_time.has_value()
+                                  ? *playback.end_time
+                                  : playback.anim->LastT();
+    return absl::AbsDuration(end_time - playback.start_time);
+  }
+  return absl::ZeroDuration();
+}
+
+absl::Duration GltfAnimator::GetStartTime(PlaybackChannelId channel_id) const {
+  if (auto channel = GetPlaybackChannel(channel_id)) {
+    const GltfAnimPlayback& playback = channel->anim_playback;
+    return playback.start_time;
+  }
+  return absl::ZeroDuration();
+}
+
+absl::Duration GltfAnimator::GetEndTime(PlaybackChannelId channel_id) const {
+  if (auto channel = GetPlaybackChannel(channel_id)) {
+    const GltfAnimPlayback& playback = channel->anim_playback;
+    return playback.end_time.has_value() &&
+                   *playback.end_time < playback.anim->LastT()
+               ? *playback.end_time
+               : playback.anim->LastT();
   }
   return absl::ZeroDuration();
 }
@@ -1112,13 +1224,11 @@ void GltfAnimator::DrawEditorUi() {
       bool selected = false;
       ImGui::Selectable(anim_names[i].c_str(), &selected);
       if (selected) {
-        GltfAnimatorState::AnimOptions options;
-        options.looping = current_animation.loop;
-        options.speed_multiplier = current_animation.speed_multiplier;
-        options.playback_channel = current_channel_id_;
         current_animation.index = i;
+        current_animation.start_time = GetAnimationFirstT(current_animation);
+        current_animation.end_time = GetAnimationLastT(current_animation);
         current_animation.time = 0.0f;
-        Play(anim_names[i], options);
+        PlayAnimationFromEditorUi(anim_names[i], current_animation);
       }
     }
     ImGui::EndCombo();
@@ -1137,7 +1247,8 @@ void GltfAnimator::DrawEditorUi() {
 
   // Play pause stop and loop controls
   if (ImGui::Button("Play")) {
-    Resume(anim_names[current_animation.index], current_animation);
+    SetAnimationPlaybackTimeInEditor(anim_names[current_animation.index],
+                                     current_animation);
   }
 
   ImGui::SameLine();
@@ -1145,7 +1256,7 @@ void GltfAnimator::DrawEditorUi() {
     // Don't overwrite current_animation.time if it's already paused.
     if (IsPlaying()) {
       current_animation.time =
-          absl::ToDoubleSeconds(GetPlaybackTime(current_channel_id_));
+          absl::ToDoubleSeconds(GetElapsedTime(current_channel_id_));
       Stop(current_channel_id_);
     }
   }
@@ -1159,7 +1270,8 @@ void GltfAnimator::DrawEditorUi() {
 
   ImGui::SameLine();
   if (ImGui::Checkbox("Looping", &current_animation.loop)) {
-    Resume(anim_names[current_animation.index], current_animation);
+    SetAnimationPlaybackTimeInEditor(anim_names[current_animation.index],
+                                     current_animation);
   }
 
   // Finer frame controls
@@ -1170,11 +1282,11 @@ void GltfAnimator::DrawEditorUi() {
       std::make_pair(">>", 0.1f),   std::make_pair(">>>", 1.0f)};
   bool first = true;
   float curr_time =
-      IsPlaying() ? absl::ToDoubleSeconds(GetPlaybackTime(current_channel_id_))
-                  : current_animation.time;
-  const animation::GltfAnimation* anim = GetGltfAsset()->GetGltfAnimData(
-      GltfAsset::AnimId::At(current_animation.index));
-  float total_time = absl::ToDoubleSeconds(anim->Duration());
+      IsPlaying(current_channel_id_)
+          ? absl::ToDoubleSeconds(GetElapsedTime(current_channel_id_))
+          : current_animation.time;
+  float total_time =
+      abs(current_animation.end_time - current_animation.start_time);
   for (auto [advance_str, advance_time] : advance_times) {
     if (!first) {
       ImGui::SameLine();
@@ -1183,7 +1295,8 @@ void GltfAnimator::DrawEditorUi() {
     if (ImGui::Button(advance_str.c_str())) {
       current_animation.time =
           std::clamp(curr_time + advance_time, 0.0f, total_time);
-      Resume(anim_names[current_animation.index], current_animation);
+      SetAnimationPlaybackTimeInEditor(anim_names[current_animation.index],
+                                       current_animation);
       Stop(current_channel_id_);
     }
   }
@@ -1192,7 +1305,8 @@ void GltfAnimator::DrawEditorUi() {
   if (ImGui::SliderFloat("Playback Seeker", &curr_time, 0.0f, total_time,
                          "%.2f")) {
     current_animation.time = curr_time;
-    Resume(anim_names[current_animation.index], current_animation);
+    SetAnimationPlaybackTimeInEditor(anim_names[current_animation.index],
+                                     current_animation);
     Stop(current_channel_id_);
   }
   ImGui::Text("Playback: %.02f / %.02f s", curr_time, total_time);
@@ -1209,18 +1323,52 @@ void GltfAnimator::DrawEditorUi() {
       }
     }
     ImGui::EndCombo();
-    Resume(anim_names[current_animation.index], current_animation);
+    SetAnimationPlaybackTimeInEditor(anim_names[current_animation.index],
+                                     current_animation);
   }
 }
 
-void GltfAnimator::Resume(absl::string_view anim_name,
-                          const CurrentAnimation& current_animation) {
+void GltfAnimator::PlayAnimationFromEditorUi(
+    absl::string_view anim_name, const CurrentAnimation& current_animation) {
   GltfAnimatorState::AnimOptions options;
+  options.start_time_seconds = current_animation.start_time;
+  options.end_time_seconds = current_animation.end_time;
   options.looping = current_animation.loop;
   options.speed_multiplier = current_animation.speed_multiplier;
-  options.start_time_seconds = current_animation.time;
   options.playback_channel = current_channel_id_;
   Play(anim_name, options);
+}
+
+void GltfAnimator::SetAnimationPlaybackTimeInEditor(
+    absl::string_view anim_name, CurrentAnimation& current_animation) {
+  float current_time = current_animation.time;
+  PlayAnimationFromEditorUi(anim_name, current_animation);
+  float dir =
+      current_animation.end_time < current_animation.start_time ? -1.f : 1.f;
+  absl::Duration new_playback_time =
+      absl::Seconds(dir * current_time + current_animation.start_time);
+  SetPlaybackTime(new_playback_time, current_channel_id_);
+  current_animation.time = current_time;
+}
+
+float GltfAnimator::GetAnimationFirstT(
+    const CurrentAnimation& current_animation) {
+  const animation::GltfAnimation* anim = GetGltfAsset()->GetGltfAnimData(
+      GltfAsset::AnimId::At(current_animation.index));
+  if (anim) {
+    return static_cast<float>(absl::ToDoubleSeconds(anim->FirstT()));
+  }
+  return 0.f;
+}
+
+float GltfAnimator::GetAnimationLastT(
+    const CurrentAnimation& current_animation) {
+  const animation::GltfAnimation* anim = GetGltfAsset()->GetGltfAnimData(
+      GltfAsset::AnimId::At(current_animation.index));
+  if (anim) {
+    return static_cast<float>(absl::ToDoubleSeconds(anim->LastT()));
+  }
+  return 0.f;
 }
 #endif  // IMP_RUNTIME(DEV)
 

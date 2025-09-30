@@ -259,6 +259,8 @@ def filament_defines():
         # Disable GTAO on g3 due to size increase.
         "FILAMENT_DISABLE_GTAO=1",
         "FILAMENT_RELAXED_CORRECTNESS_ASSERTIONS=1",
+        # Enable Abseil logging in g3.
+        
     ]
     return out_defines
 
@@ -334,7 +336,7 @@ def filament_jni_linkopts():
     return out_linkopts
 
 BUILTIN_MATERIAL_INCLUDES = [
-    "antiAliasing/fxaa.fs",
+    "antiAliasing/fxaa/fxaa.fs",
     "colorGrading/colorGrading.fs",
     "dof/dofUtils.fs",
     "fsr/ffx_a.h",
@@ -353,50 +355,124 @@ BUILTIN_MATERIAL_INCLUDES = [
     "utils/geometry.fs",
 ]
 
-BUILTIN_MATERIAL_NAMES = [
-    "blitArray",
-    "colorGrading/colorGrading",
-    "colorGrading/colorGradingAsSubpass",
-    "colorGrading/customResolveAsSubpass",
-    "debugShadowCascades",
-    "defaultMaterial",
-    "dof/dof",
-    "dof/dofDownsample",
-    "dof/dofCoc",
-    "dof/dofCombine",
-    "dof/dofTiles",
-    "dof/dofTilesSwizzle",
-    "dof/dofDilate",
-    "dof/dofMipmap",
-    "dof/dofMedian",
-    "blitDepth",
-    "blitLow",
-    "bloom/bloomDownsample",
-    "bloom/bloomDownsample2x",
-    "bloom/bloomDownsample9",
-    "bloom/bloomUpsample",
-    "flare/flare",
-    "fsr/fsr_easu",
-    "fsr/fsr_easu_mobile",
-    "fsr/fsr_easu_mobileF",
-    "fsr/fsr_rcas",
-    "resolveDepth",
-    "shadowmap",
-    "sgsr/sgsr1",
-    "ssao/bilateralBlur",
-    "ssao/bilateralBlurBentNormals",
-    "ssao/mipmapDepth",
-    "skybox",
-    # Disable GTAO due to size increase.
-    # "ssao/gtao",
-    # "ssao/gtaoBentNormals",
-    "ssao/sao",
-    "ssao/saoBentNormals",
-    "separableGaussianBlur",
-    "antiAliasing/fxaa",
-    "antiAliasing/taa",
-    "vsmMipmap",
-]
+# Each of the entries represents a material binary target. This target name is also the directory
+# name under `src/materials` that contains the material source files.
+#
+# The `path_prefix` is used to specify a subdirectory under `src/materials` for the material
+# sources. This is used to organize the material source files in a subdirectory while still
+# referencing the material by its base name in the build process.
+
+# For example, the `bloom` set of materials is defined as:
+#{
+#     "bloom": {
+#         "path_prefix": "bloom",
+#         "files": [
+#             "bloomDownsample",
+#             "bloomDownsample2x",
+#             "bloomDownsample9",
+#             "bloomUpsample",
+#         ],
+#     },
+# }
+#
+# This indicates that the material source files are named `bloomDownsample.mat`, `bloomDownsample2x.mat`, etc.
+# And that they are all located in a directory named `src/materials/bloom`.
+BUILTIN_MATERIAL_NAMES = {
+    # This is a set of basic materials that are not separated into post-processing features.
+    # This group is called "materials" for backward compatibility. (But could be renamed to "base")
+    "materials": {
+        "path_prefix": "",
+        "files": [
+            "blitArray",
+            "debugShadowCascades",
+            "defaultMaterial",
+            "blitDepth",
+            "blitLow",
+            "resolveDepth",
+            "shadowmap",
+            "skybox",
+            "separableGaussianBlur",
+            "vsmMipmap",
+        ],
+    },
+    "colorGrading": {
+        "path_prefix": "colorGrading",
+        "files": [
+            "colorGrading",
+            "colorGradingAsSubpass",
+            "customResolveAsSubpass",
+        ],
+    },
+    "dof": {
+        "path_prefix": "dof",
+        "files": [
+            "dof",
+            "dofDownsample",
+            "dofCoc",
+            "dofCombine",
+            "dofTiles",
+            "dofTilesSwizzle",
+            "dofDilate",
+            "dofMipmap",
+            "dofMedian",
+        ],
+    },
+    "bloom": {
+        "path_prefix": "bloom",
+        "files": [
+            "bloomDownsample",
+            "bloomDownsample2x",
+            "bloomDownsample9",
+            "bloomUpsample",
+        ],
+    },
+    "fsr": {
+        "path_prefix": "fsr",
+        "files": [
+            "fsr_easu",
+            "fsr_easu_mobile",
+            "fsr_easu_mobileF",
+            "fsr_rcas",
+        ],
+    },
+    "sgsr": {
+        "path_prefix": "sgsr",
+        "files": [
+            "sgsr1",
+        ],
+    },
+    "ssao": {
+        "path_prefix": "ssao",
+        "files": [
+            "sao",
+            "saoBentNormals",
+            "bilateralBlur",
+            "bilateralBlurBentNormals",
+            "mipmapDepth",
+            # Disable GTAO due to size increase.
+            # "ssao/gtao",
+            # "ssao/gtaoBentNormals",
+        ],
+    },
+    "flare": {
+        "path_prefix": "flare",
+        "files": [
+            "flare",
+        ],
+    },
+    "taa": {
+        "path_prefix": "antiAliasing/taa",
+        "files": [
+            "taa",
+        ],
+    },
+    "fxaa": {
+        "path_prefix": "antiAliasing/fxaa",
+        "files": [
+            "fxaa",
+        ],
+    },
+}
 
 BUILTIN_MATERIAL_NAMES_FL0 = [
     "defaultMaterial",
@@ -407,6 +483,10 @@ BUILTIN_MATERIAL_NAMES_MULTIVIEW = [
     "defaultMaterial",
     "skybox",
 ]
+
+def filament_get_internal_material_targets():
+    """Returns the list of internal material targets"""
+    return BUILTIN_MATERIAL_NAMES.keys()
 
 def _flatten(lists):
     flattened = []
@@ -434,11 +514,14 @@ def _get_material_compilation_steps(output_path, enable_fl0, enable_multiview, m
         base, sep, filename = base_filamat_filename.rpartition("/")
         return base + sep + "matc_" + filename
 
-    def _make_single_step(material_name):
+    def _make_single_step(material_name, prefix_path):
         """Given a material name with no extension (e.g. 'ssao/mipmapDepth'), return a dict describing how to compile it."""
-        src_path = "src/materials/%s.mat" % material_name
-        filamat_out_path = "%s/%s.filamat" % (output_path, material_name)
-        deploy_path = "$$DEPLOY/%s.filamat" % material_name
+
+        # We put the output of matc/cmat in a directory matching its path prefix, if any.
+        material_name_impl = material_name if len(prefix_path) == 0 else prefix_path + "/" + material_name
+        src_path = "src/materials/%s.mat" % material_name_impl
+        filamat_out_path = "%s/%s.filamat" % (output_path, material_name_impl)
+        deploy_path = "$$DEPLOY/%s.filamat" % material_name_impl
         enable_metal_precompile, precompiler_args = _options_for_precompile_mode()
 
         compilation_step = {}
@@ -460,19 +543,22 @@ def _get_material_compilation_steps(output_path, enable_fl0, enable_multiview, m
         if material_name in BUILTIN_MATERIAL_NAMES_FL0 and enable_fl0:
             if enable_metal_precompile:
                 fail("can't use enable_fl0 and enable_metal_precompile simultaneously")
-            compilation_step["outs"].append("%s/%s_fl0.filamat" % (output_path, material_name))
-            compilation_step["deploys"].append("$$DEPLOY/%s_fl0.filamat" % material_name)
+            compilation_step["outs"].append("%s/%s_fl0.filamat" % (output_path, material_name_impl))
+            compilation_step["deploys"].append("$$DEPLOY/%s_fl0.filamat" % material_name_impl)
             compilation_step["cmds"].append("$$MATC $$ESSL1 -a $$API -p $$PLATFORM -PfeatureLevel=0 -o $$DEPLOY/%s_fl0.filamat $(location src/materials/%s.mat)" % (material_name, material_name))
 
         if material_name in BUILTIN_MATERIAL_NAMES_MULTIVIEW and enable_multiview:
             if enable_metal_precompile:
                 fail("can't use enable_multiview and enable_metal_precompile simultaneously")
-            compilation_step["outs"].append("%s/%s_multiview.filamat" % (output_path, material_name))
-            compilation_step["deploys"].append("$$DEPLOY/%s_multiview.filamat" % material_name)
+            compilation_step["outs"].append("%s/%s_multiview.filamat" % (output_path, material_name_impl))
+            compilation_step["deploys"].append("$$DEPLOY/%s_multiview.filamat" % material_name_impl)
             compilation_step["cmds"].append("$$MATC $$ESSL1 -a $$API -p $$PLATFORM -PstereoscopicType=multiview -o $$DEPLOY/%s_multiview.filamat $(location src/materials/%s.mat)" % (material_name, material_name))
         return compilation_step
 
-    return [_make_single_step(material_name) for material_name in BUILTIN_MATERIAL_NAMES]
+    return {
+        k: [_make_single_step(material_name, BUILTIN_MATERIAL_NAMES[k]["path_prefix"]) for material_name in BUILTIN_MATERIAL_NAMES[k]["files"]]
+        for k in BUILTIN_MATERIAL_NAMES
+    }
 
 # This should really be in filament/filament/BUILD but for some reason Blaze
 # doesn't allow macro definitions in build files nor does it allow variables to
@@ -528,57 +614,59 @@ def filament_generate_materials(
     needs_precompile_tools, precompile = _subdir_for_precompile_mode()
     out_path = "%s/%s/%s/%s/%s/generated/resources" % (platform, api, fl0, multiview, precompile)
 
-    compilation_steps = _get_material_compilation_steps(
+    compilation_steps_per_target = _get_material_compilation_steps(
         output_path = out_path,
         enable_fl0 = enable_fl0,
         enable_multiview = enable_multiview,
         metal_precompile_mode = metal_precompile_mode,
     )
-    material_srcs = [step["src"] for step in compilation_steps]
-    material_outs = _flatten([step["outs"] for step in compilation_steps])
-    material_cmds = _flatten([step["cmds"] for step in compilation_steps])
-    material_deploys = _flatten([step["deploys"] for step in compilation_steps])
+    for target, compilation_steps in compilation_steps_per_target.items():
+        material_srcs = [step["src"] for step in compilation_steps]
+        material_outs = _flatten([step["outs"] for step in compilation_steps])
+        material_cmds = _flatten([step["cmds"] for step in compilation_steps])
+        material_deploys = _flatten([step["deploys"] for step in compilation_steps])
 
-    all_srcs = material_srcs + ["src/materials/%s" % name for name in BUILTIN_MATERIAL_INCLUDES]
-    all_outs = material_outs + ["%s/materials.%s" % (out_path, ext) for ext in RESGEN_OUTPUT_EXTENSIONS]
+        all_srcs = material_srcs + ["src/materials/%s" % name for name in BUILTIN_MATERIAL_INCLUDES]
+        all_outs = material_outs + ["%s/%s.%s" % (out_path, target, ext) for ext in RESGEN_OUTPUT_EXTENSIONS]
 
-    cmds = [
-        "MATC=$(location @third_party//filament:matc)",
-        "RESGEN=$(location @third_party//filament:resgen)",
-    ]
-    if needs_precompile_tools:
+        cmds = [
+            "MATC=$(location @third_party//filament:matc)",
+            "RESGEN=$(location @third_party//filament:resgen)",
+        ]
+        if needs_precompile_tools:
+            cmds += [
+                "MATEDIT=$(location @third_party//filament:matedit)",
+                "PRECOMPILE=$(location @third_party//filament/build_tools:compile_metal_shader)",
+            ]
         cmds += [
-            "MATEDIT=$(location @third_party//filament:matedit)",
-            "PRECOMPILE=$(location @third_party//filament/build_tools:compile_metal_shader)",
+            "PLATFORM=%s" % platform,
+            "API=%s" % material_api,
+            "ESSL1=%s" % ("" if enable_fl0 else "-1"),
+            "DEPLOY=`dirname $(location %s/%s.bin)`" % (out_path, target),
+            "OUTPUT_NAME=%s" % target,
         ]
-    cmds += [
-        "PLATFORM=%s" % platform,
-        "API=%s" % material_api,
-        "ESSL1=%s" % ("" if enable_fl0 else "-1"),
-        "DEPLOY=`dirname $(location %s/materials.bin)`" % out_path,
-    ]
-    cmds += material_cmds
-    cmds.append("$$RESGEN -cp materials --deploy=$$DEPLOY " + " ".join(material_deploys))
+        cmds += material_cmds
+        cmds.append("$$RESGEN -cp $$OUTPUT_NAME --deploy=$$DEPLOY " + " ".join(material_deploys))
 
-    tools = [
-        "@third_party//filament:matc",
-        "@third_party//filament:resgen",
-        "@third_party//filament:shader_srcs",
-    ]
-    exec_compatible_with = []
-
-    if needs_precompile_tools:
-        tools += [
-            "@third_party//filament/build_tools:compile_metal_shader",
-            "@third_party//filament:matedit",
+        tools = [
+            "@third_party//filament:matc",
+            "@third_party//filament:resgen",
+            "@third_party//filament:shader_srcs",
         ]
-        exec_compatible_with.append("@platforms//os:macos")
+        exec_compatible_with = []
 
-    native.genrule(
-        name = "generate_%s_%s_%s_%s_%s_materials" % (platform, api, fl0, multiview, precompile),
-        srcs = all_srcs,
-        outs = all_outs,
-        cmd = " && ".join(cmds),
-        tools = tools,
-        exec_compatible_with = exec_compatible_with,
-    )
+        if needs_precompile_tools:
+            tools += [
+                "@third_party//filament/build_tools:compile_metal_shader",
+                "@third_party//filament:matedit",
+            ]
+            exec_compatible_with.append("@platforms//os:macos")
+
+        native.genrule(
+            name = "generate_%s_%s_%s_%s_%s_%s_materials" % (platform, api, fl0, multiview, precompile, target),
+            srcs = all_srcs,
+            outs = all_outs,
+            cmd = " && ".join(cmds),
+            tools = tools,
+            exec_compatible_with = exec_compatible_with,
+        )

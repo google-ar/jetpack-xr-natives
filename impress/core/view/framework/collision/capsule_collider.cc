@@ -14,6 +14,8 @@
 
 #include "core/view/framework/collision/capsule_collider.h"
 
+#include <optional>
+
 #include "core/common/log.h"
 #include "absl/types/optional.h"
 #include "filament/libs/math/include/math/TMatHelpers.h"
@@ -21,16 +23,23 @@
 #include "core/collision/collision_helpers.h"
 #include "core/collision/ray.h"
 #include "core/common/debug_draw.h"
+#include "core/config.h"
 #include "core/geometry/capsule_helper.h"
 #include "core/geometry/shapes/capsule.h"
 #include "core/math/mat.h"
 #include "core/math/math.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
+#include "core/ncsb/node_handle.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/framework/collision/collision_manager.h"
 #include "core/view/framework/collision/collision_system.h"
 #include "core/view/framework/collision/ray_hit.h"
+
+#if IMP_RUNTIME(DEV)
+#include "core/ncsb/path_manager.h"
+#include "core/view/framework/collision/compound_collider.h"
+#endif
 
 namespace imp {
 using split_engine::SplitEngineSerializer;
@@ -54,11 +63,28 @@ void CapsuleCollider::SetCapsule(float3 center, float height, float radius) {
   state_.center = center;
   state_.height = height;
   state_.radius = radius;
+  hit_node_ = GetNode();
 
   if (SplitEngineSerializer* serializer =
           GetView().GetSplitEngineSerializer()) {
     serializer->SetCapsuleCollider(GetEntity(), GetCapsule(), IsActive());
   }
+}
+
+void CapsuleCollider::SetHitNode(NodeHandle hit_node) { hit_node_ = hit_node; };
+
+NodeHandle CapsuleCollider::GetHitNode() const {
+#if IMP_RUNTIME(DEV)
+  if (editor::IsInEditMode(GetView().GetRegistry())) {
+    if (auto compound_collider =
+            GetView()
+                .GetPathManager()
+                .GetComponentFromAncestorOrSelf<CompoundCollider>(GetNode())) {
+      return compound_collider->GetNode();
+    }
+  }
+#endif
+  return hit_node_;
 }
 
 absl::optional<RayHit> CapsuleCollider::Intersect(const Ray& world_ray) {
@@ -81,7 +107,7 @@ absl::optional<RayHit> CapsuleCollider::Intersect(const Ray& world_ray) {
   const float3 world_surface_normal =
       GetNode()->WorldFromLocalVector(result->normal);
   return RayHit(norm(world_collision_point - world_ray.origin), quatf{0.0f},
-                world_collision_point, GetNode(), world_surface_normal);
+                world_collision_point, GetHitNode(), world_surface_normal);
 }
 
 absl::optional<DoubleRayHit> CapsuleCollider::IntersectPrecise(
@@ -105,7 +131,7 @@ absl::optional<DoubleRayHit> CapsuleCollider::IntersectPrecise(
   const double3 world_surface_normal =
       GetNode()->WorldFromLocalVectorPrecise(result->normal);
   return DoubleRayHit(norm(world_collision_point - world_ray.origin),
-                      quat{0.0f}, world_collision_point, GetNode(),
+                      quat{0.0f}, world_collision_point, GetHitNode(),
                       world_surface_normal);
 }
 

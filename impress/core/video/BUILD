@@ -89,7 +89,6 @@ cc_library(
         "//core:config",
         "//core/async:future",
         "//core/common:context",
-        "//core/common:log",
         "//core/common:robin_map",
         "//core/common:small_source_location",
         "//core/math",
@@ -106,6 +105,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
     ] + if_android([
         "//core/media:android_media",
@@ -158,7 +158,6 @@ cc_library(
         ":android_exoplayer_video",
         ":video_source",
         "//core/async:future",
-        "//core/common:log",
         "//core/render/android:android_external_texture_surface",
         "//core/render/android:definitions",
         "//core/resources",
@@ -167,6 +166,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -182,7 +182,6 @@ cc_library(
     deps = [
         ":video_source",
         "//core/async:future",
-        "//core/common:log",
         "//core/common:robin_map",
         "//core/common:small_source_location",
         "//core/math",
@@ -206,6 +205,7 @@ cc_library(
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament/filament:filament_hdrs",
     ],
@@ -220,7 +220,6 @@ objc_library(
     deps = [
         ":video_source",
         "//core/common",
-        "//core/common:log",
         "//core/media",
         "//core/media:media_color_space",
         "//core/render",
@@ -229,6 +228,7 @@ objc_library(
         "//third_party/apple_frameworks:Foundation",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
+        "@com_google_impress//core/common:log",
     ],
 )
 
@@ -249,7 +249,6 @@ cc_library(
         "//core/async:executor",
         "//core/async:future",
         "//core/common",
-        "//core/common:log",
         "//core/common:small_source_location",
         "//core/math",
         "//core/media",
@@ -268,6 +267,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
+        "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
         "@re2",
         "@third_party//filament/filament:filament_hdrs",
@@ -468,7 +468,6 @@ objc_library(
     deps = [
         "//core/async:future",
         "//core/common",
-        "//core/common:log",
         "//core/math",
         "//core/media",
         "//core/window:filament_host",
@@ -478,6 +477,7 @@ objc_library(
         "//third_party/apple_frameworks:Photos",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
+        "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:backend_hdrs",
     ],
@@ -520,7 +520,6 @@ cc_library(
         "//core:config",
         "//core/async:future",
         "//core/common:context",
-        "//core/common:log",
         "//core/common:robin_map",
         "//core/common:small_source_location",
         "//core/math",
@@ -544,6 +543,7 @@ cc_library(
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament/filament:filament_hdrs",
     ] + select({

@@ -20,8 +20,12 @@
 
 #include "openxr/openxr_manager.h"
 
-static jobject NativeGetHandDataBuffer(JNIEnv* env, bool is_left_hand,
-                                       jlong monotonic_time_ns) {
+extern "C" {
+
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrHand_nativeGetHandDataBuffer(
+    JNIEnv* env, jclass /*clazz*/, jboolean is_left_hand,
+    jlong monotonic_time_ns) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
 
@@ -32,21 +36,6 @@ static jobject NativeGetHandDataBuffer(JNIEnv* env, bool is_left_hand,
   }
 
   return env->NewDirectByteBuffer(buffer, xr_manager.kHandJointsBufferSize);
-}
-
-extern "C" {
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_openxr_OpenXrHand_nativeGetHandDataBuffer(
-    JNIEnv* env, jclass /*clazz*/, jboolean is_left_hand,
-    jlong monotonic_time_ns) {
-  return NativeGetHandDataBuffer(env, is_left_hand, monotonic_time_ns);
-}
-
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrHand_nativeGetHandDataBuffer(
-    JNIEnv* env, jclass /*clazz*/, jboolean is_left_hand,
-    jlong monotonic_time_ns) {
-  return NativeGetHandDataBuffer(env, is_left_hand, monotonic_time_ns);
 }
 
 }  // extern "C"

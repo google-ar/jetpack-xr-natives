@@ -125,8 +125,8 @@ class View : public BaseView {
 
   // Iterate over a subset of all Nodes in this view. Only nodes that meet all
   // flags will be included.
-  // i.e. ForEachNode(fn, NodeFlags::kIsEnabled | NodeFlags::kIsRoot) will only
-  // include enabled root nodes.
+  // i.e. ForEachNode(fn, NodeFlags::kIsEnabled | NodeFlags::kIsRoot)
+  // will only include enabled root nodes.
   void ForEachNode(std::function<void(NodeHandle)>&& fn,
                    NodeFlag filter) override;
 
@@ -457,6 +457,7 @@ class View : public BaseView {
   uint2 size_;
   uint4 margins_;
   window::WindowRotation window_rotation_;
+  absl::Duration asset_manager_cache_cleanup_interval_;
   absl::Duration time_since_last_asset_manager_cache_cleanup_ =
       absl::ZeroDuration();
 

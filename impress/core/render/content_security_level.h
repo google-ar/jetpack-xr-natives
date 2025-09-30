@@ -21,15 +21,10 @@ namespace imp {
 
 // The security level of the content being rendered.
 // DRM support requires kProtected.
-// LINT.IfChange
 enum class ContentSecurityLevel : uint8_t {
   kNone = 0,
   kProtected = 1,
 };
-// LINT.ThenChange(
-//     //depot/google3/third_party/impress/java/com/google/ar/imp/apibindings/ImpressApi.java,
-//     //depot/google3/third_party/impress/java/com/google/ar/imp/apibindings/ImpressApiImpl.java
-// )
 
 }  // namespace imp
 

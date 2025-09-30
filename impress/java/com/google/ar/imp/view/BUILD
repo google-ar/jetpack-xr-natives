@@ -125,7 +125,7 @@ android_library(
         ":proguard-rules.pro",
     ],
     tags = [
-        "included_in_archive=//java/com/google/ar/imp/apibindings:impress_no_native_lib_aar",
+        "included_in_archive=//apibindings:impress_no_native_lib_aar",
     ],
     deps = [
         "//java/com/google/ar/imp/core/scripting:script_endpoint",
@@ -195,9 +195,14 @@ android_library(
 proto_library(
     name = "setup_params_proto",
     srcs = ["setup_params.proto"],
+    deps = [
+        "//core/view/utils:render_settings_proto",
+    ],
 )
 
 java_lite_proto_library(
     name = "setup_params_java_proto_lite",
-    deps = [":setup_params_proto"],
+    deps = [
+        ":setup_params_proto",
+    ],
 )

@@ -347,6 +347,52 @@ void SceneComponentDeserializer::RegisterAddComponentUi() {
       return clicked ? editor::FilterableCombo::SelectionStatus::kNotSelected
                      : editor::FilterableCombo::SelectionStatus::kSelected;
     });
+  } else {
+    add_component_ui_.Add(type_traits::kTypeName<T>, [this]() {
+      if (!selected_node_) {
+        IMP_LOG(imp::FATAL) << "Call to show add-component UI without selected node.";
+        return editor::FilterableCombo::SelectionStatus::kNotSelected;
+      }
+
+      // TODO: This type should be greyed-out in the combo.
+      if (selected_node_->GetComponent<T>()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(180, 30, 30, 255));
+        ImGui::Text("Node already has this component type!");
+        ImGui::PopStyleColor();
+        return editor::FilterableCombo::SelectionStatus::kSelected;
+      }
+
+      ImGui::PushStyleColor(ImGuiCol_Button, IM_COL32(30, 90, 30, 255));
+      bool clicked = ImGui::Button("Add");
+      if (clicked) {
+        command_manager_->PerformCommand<editor::NodeValueCommand<bool>>(
+            selected_node_, false, true,
+            [](NodeHandle target, bool value) -> absl::Status {
+              auto scene_metadata = target->GetComponent<SceneMetadata>();
+              if (value) {
+                // TODO: allow async commands.
+                absl::StatusOr<ComponentHandle<T>> result =
+                    editor::AddComponentSync<T>(target);
+                if (scene_metadata) {
+                  scene_metadata->SetComponentAuthored(IsfInfoT::kTypeUrlHash,
+                                                       /*is_authored=*/true);
+                }
+                MP_RETURN_IF_ERROR(result.status());
+              } else {
+                target->RemoveComponent<T>();
+                if (scene_metadata) {
+                  scene_metadata->SetComponentAuthored(IsfInfoT::kTypeUrlHash,
+                                                       /*is_authored=*/false);
+                }
+              }
+
+              return absl::OkStatus();
+            });
+      }
+      ImGui::PopStyleColor();
+      return clicked ? editor::FilterableCombo::SelectionStatus::kNotSelected
+                     : editor::FilterableCombo::SelectionStatus::kSelected;
+    });
   }
 }
 #endif

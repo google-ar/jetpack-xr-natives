@@ -44,12 +44,12 @@ cc_library(
         "//core/collision:collider_helpers",
         "//core/collision:ray",
         "//core/common",
-        "//core/common:log",
         "//core/common:robin_map",
         "//core/ncsb",
         "//core/view/ar:base_ar_component",
         "//core/view/framework",
         "@com_google_absl//absl/types:optional",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )

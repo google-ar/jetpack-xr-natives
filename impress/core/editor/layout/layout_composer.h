@@ -17,6 +17,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_LAYOUT_LAYOUT_COMPOSER_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_LAYOUT_LAYOUT_COMPOSER_H_
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,7 @@
 #include "absl/types/span.h"
 #include "dear_imgui/imgui.h"
 #include "core/common/invocable.h"
+#include "core/editor/layout/docking_manager.h"
 #include "core/editor/layout/layout_config.proto.imp.h"
 #include "core/editor/widget.h"
 #include "core/editor/widget_layout_info.h"
@@ -60,26 +62,27 @@ class LayoutComposer {
   absl::Span<const SubWindowInfo> GetSubWindowInfo();
 
  private:
-  // Draws the given Invocable in the Details section.
-  void DrawInDetailsSection(imp::Invocable<void()> draw_function);
+  struct TabbedWindowInfo {
+    // The label of the tab. This is used to name the dockable window of the
+    // tab.
+    std::string label;
+    imp::Invocable<void()> draw_function;
+  };
+
+  // Helper functions for queuing widgets for docking layout, which is used for
+  // desktop and WASM.
+  void DrawOnDockingLayout(const WidgetLayoutInfo& layout_info, Widget* widget);
+  // Helper functions for queuing widgets for fixed layouts, which are used for
+  // mobile and xr.
+  void DrawOnFixedLayout(const WidgetLayoutInfo& layout_info, Widget* widget);
 
   // Queues the given Invocable to be drawn in the Details section, under a
   // ImGui::CollapsingHeader.
-  void DrawInDetailsSectionAsHeader(
-      absl::string_view header_label, imp::Invocable<void()> draw_function,
-      imp::Invocable<void()> on_close_button_pressed = {},
-      ImGuiTreeNodeFlags additional_flags =
-          ImGuiTreeNodeFlags_CollapsingHeader);
-
-  // Queues the given Invocable to be drawn in the Scene section.
-  void DrawInSceneSection(imp::Invocable<void()> draw_function);
+  void DrawInDetailsSectionAsHeader(Widget* widget);
 
   // Queues the given Invocable to be drawn in the Scene section, under a
   // ImGui::CollapsingHeader.
-  void DrawInSceneSectionAsHeader(
-      absl::string_view header_label, imp::Invocable<void()> draw_function,
-      imp::Invocable<void()> on_close_button_pressed = Invocable<void()>(),
-      ImGuiTreeNodeFlags additional_flags = ImGuiTreeNodeFlags_None);
+  void DrawInSceneSectionAsHeader(Widget* widget);
 
   // Queues the given Invocable to be drawn as its own tab in a central
   // tabbed window.
@@ -87,6 +90,18 @@ class LayoutComposer {
       absl::string_view tab_label, imp::Invocable<void()> draw_function,
       ImGuiTabItemFlags flags = ImGuiTabBarFlags_FittingPolicyScroll,
       bool draw_before_previous_tabs = false);
+
+  void DrawInLeftDock(absl::string_view tab_label,
+                      imp::Invocable<void()> draw_function);
+
+  // Queues the given Invocable to be drawn as its own tab in a dockable tabbed
+  // window.
+  // If `draw_before_previous_tabs` is true, the tab will be drawn as the
+  // first tab of all existing tabs. Otherwise, the tab will be drawn as the
+  // last tab of all existing tabs.
+  void DrawAsDockableTab(absl::string_view tab_label,
+                         imp::Invocable<void()> draw_function,
+                         bool draw_before_previous_tabs = false);
 
   // Queues the given Invocable to be drawn as its own menu in the main menu
   // bar.
@@ -107,16 +122,22 @@ class LayoutComposer {
   void DrawWindowForWorldLayout(absl::string_view window_label,
                                 imp::Invocable<void()> draw_function);
 
-  // Draws a standalone details window.
-  void DrawStandaloneDetailsWindow();
+  // Draws a details window that can be docked to the right of the screen
+  // initially and can be moved around.
+  void DrawDockableDetailsWindow();
   // Draws the details draw functions and a placeholder if none exist.
   void DrawDetailsSectionContents();
-  // Draws a standalone scene window.
-  void DrawStandaloneSceneWindow();
+
+  // Draws a scene window that can be docked to the left of the screen.
+  void DrawDockableSceneWindow();
   // Draws the scene draw functions.
   void DrawSceneSectionContents();
+
   // Draws an individual tab.
   void DrawTabbedWindow();
+  // Draws a tabbed window that can be docked to the bottom of the screen.
+  void DrawDockableTabbedWindow();
+
   // Draws the main menu.
   void DrawMainMenuBar();
   // Draws the toolbar
@@ -141,12 +162,14 @@ class LayoutComposer {
 
   std::vector<imp::Invocable<void()>> details_draw_functions_;
   std::vector<imp::Invocable<void()>> scene_draw_functions_;
-  std::vector<imp::Invocable<void()>> tab_item_draw_functions_;
+  std::vector<TabbedWindowInfo> left_dock_draw_functions_;
+  std::vector<TabbedWindowInfo> tab_item_info_;
   std::vector<imp::Invocable<void()>> menu_draw_functions_;
   std::vector<imp::Invocable<void()>> toolbar_draw_functions_;
   std::vector<imp::Invocable<void()>> draw_after_functions_;
 
   LayoutConfig layout_config_;
+  std::unique_ptr<DockingManager> docking_manager_;
 
   // Layout state
   LayoutConfig::TabbedWindowState tabbed_window_state_;

@@ -17,6 +17,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_GENERIC_MATERIAL_H_
 #define THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_GENERIC_MATERIAL_H_
 
+#include <optional>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -28,6 +29,7 @@
 #include "core/materials/material.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
+#include "core/model/entity_data.h"
 #include "core/render/texture.h"
 #include "core/view/utils/string_map.h"
 
@@ -51,17 +53,11 @@ class GenericMaterial {
       const GenericMaterialParameters& generic_material_parameters,
       const TextureBorrower& texture_borrower) = 0;
 
-  // TODO: Remove this once we fully migrate to TextureBorrower.
-  // Assigns all textures and parameters to the material from the spec schema.
-  virtual absl::Status AssignTexturesAndParams(
-      const GenericMaterialParameters& generic_material_parameters,
-      const TextureProvider& texture_provider) = 0;
-
   // Legacy methods for MaterialConfig.
   // TODO: (broken link) - Remove these methods once MaterialConfig is removed.
   virtual absl::string_view GetName() const = 0;
-  virtual std::vector<MaterialParameter> GetParameters() const = 0;
-  virtual TypedVector<MaterialTexture> GetTextures() const = 0;
+  virtual std::vector<model::MaterialParameter> GetParameters() const = 0;
+  virtual TypedVector<model::MaterialTexture> GetTextures() const = 0;
   virtual StringMap<int> GetSamplerIndexLookup() const = 0;
 
   // Gets the underlying material you can assign to things.
@@ -75,6 +71,26 @@ class GenericMaterial {
   virtual TextureAndSampler GetBaseColorTexture() const = 0;
   // Sets the UV transform for the base color texture.
   virtual absl::Status SetBaseColorUvTransform(const mat3f& uv_transform) = 0;
+  // Note: If you are using GenericMaterial on non glTF models (e.g., a simple
+  // quad with color), you should set the vertex color to white before calling
+  // `SetBaseColorFactor`. This is because GenericMaterial *requires* that
+  // mesh has vertex color attributes. See
+  // google3/third_party/impress/core/loader/data/generic_material_unlit.mat.template.glsl
+  // Vertex color can be set via QuadSettings.
+  // For example:
+  // imp::CreateQuadSettings quad_settings{
+  //     .color = kWhite,
+  //     // your other settings
+  //     .size = {1.0f, 1.0f}
+  // };
+  // auto render_component =
+  //     quad_video_node_->AddComponent<imp::MeshRenderer>();
+  // render_component->SetMesh(
+  //     GetView().GetMeshFactory().CreatePanel(quad_settings));
+  // imp::GenericMaterialImpl::Create(...)
+  //     .Then([](GenericMaterialPtr material) {
+  //   material->SetBaseColorFactor(your_color);
+  // });
   virtual void SetBaseColorFactor(const float4& factor) = 0;
   virtual float4 GetBaseColorFactor() const = 0;
 
@@ -120,6 +136,13 @@ class GenericMaterial {
       const mat3f& uv_transform) = 0;
   virtual void SetTransmissionFactor(float factor) = 0;
   virtual void SetIndexOfRefraction(float index_of_refraction) = 0;
+
+  // If the mesh_features glTF extension is enabled, returns the feature id
+  // texture and sampler for the given index. If the material does not have a
+  // feature id texture at the given index or the mesh_features extension is
+  // disabled, this will return std::nullopt.
+  virtual std::optional<TextureAndSampler> GetFeatureIdTexture(
+      int index) const = 0;
 
   virtual void SetAlphaCutoff(float alpha_cutoff) = 0;
   virtual float GetAlphaCutoff() const = 0;

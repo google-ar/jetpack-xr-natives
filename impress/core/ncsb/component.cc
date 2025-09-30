@@ -58,7 +58,7 @@ Dispatcher& Component::GetDispatcher() const {
 void Component::SetEnabled(bool enabled) {
   bool was_enabled = IsEnabled();
   status_flags_ =
-      SetBitFromBool(status_flags_, StatusFlags::kIsEnabled, enabled);
+      SetBitFromBool(status_flags_, StatusFlags::kComponentIsEnabled, enabled);
   if (GetNode()->IsActive() && was_enabled != enabled) {
     BaseComponentPool& pool = GetBaseComponentPool();
     pool.NotifyActive(this, /*active=*/enabled);
@@ -66,15 +66,16 @@ void Component::SetEnabled(bool enabled) {
 }
 
 bool Component::IsActive() const {
-  return CheckBit(status_flags_, StatusFlags::kIsActive);
+  return CheckBit(status_flags_, StatusFlags::kComponentIsActive);
 }
 
 bool Component::IsEnabled() const {
-  return CheckBit(status_flags_, StatusFlags::kIsEnabled);
+  return CheckBit(status_flags_, StatusFlags::kComponentIsEnabled);
 }
 
 void Component::SetActiveFlagInternal(bool active) {
-  status_flags_ = SetBitFromBool(status_flags_, StatusFlags::kIsActive, active);
+  status_flags_ =
+      SetBitFromBool(status_flags_, StatusFlags::kComponentIsActive, active);
 }
 
 #if IMP_RUNTIME(DEV)

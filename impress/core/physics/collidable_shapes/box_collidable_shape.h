@@ -49,12 +49,11 @@ class BoxCollidableShape : public CollidableShape {
 #endif
 
  private:
-  NodeHandle node_;
   std::unique_ptr<btCollisionShape> collidable_shape_;
   // Local offset of the center of the box in Impress.
   float3 collidable_center_;
 
-  float3 scale_prev_;
+  float3 scale_;
 };
 
 }  // namespace imp

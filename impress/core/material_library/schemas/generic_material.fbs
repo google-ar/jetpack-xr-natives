@@ -273,6 +273,7 @@ table GenericMaterialParameters {
   transmission: GenericMaterialParametersTransmission;
   refraction: GenericMaterialParametersRefraction;
   masking: GenericMaterialParametersMasking;
+  feature_id_textures: [GenericMaterialTextureParameter];
 }
 
 root_type GenericMaterialParameters;

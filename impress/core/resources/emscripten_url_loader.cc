@@ -25,7 +25,6 @@
 #include "absl/strings/string_view.h"
 #include "core/async/future.h"
 #include "core/async/future_common.h"
-#include "core/async/future_group.h"
 #include "core/resources/url_loader.h"
 
 namespace imp {
@@ -34,13 +33,11 @@ namespace {
 
 class EmscriptenUrlLoader : public UrlLoader {
  public:
-  Future<absl::Cord> LoadUrl(const std::string& url,
-                             std::optional<FutureGroup> future_group) override;
+  Future<absl::Cord> LoadUrl(const std::string& url) override;
 };
 
 // TODO: Implement a way to add headers to the request.
-Future<absl::Cord> EmscriptenUrlLoader::LoadUrl(
-    const std::string& url, std::optional<FutureGroup> future_group) {
+Future<absl::Cord> EmscriptenUrlLoader::LoadUrl(const std::string& url) {
   Future<absl::Cord> future;
   WeakFuture<absl::Cord>* weak_future = new WeakFuture<absl::Cord>(future);
   emscripten_async_wget_data(

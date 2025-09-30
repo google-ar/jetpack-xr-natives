@@ -23,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include "core/common/log.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
@@ -66,8 +67,7 @@ namespace {
 
 // In the app-editor case, the app camera needs an initial position.
 constexpr float3 kAppCameraPositionInAppEditorMode = {0, 0, 3};
-constexpr int kAssetManagerUnusedCacheFlushingInvertalSeconds = 4;
-
+constexpr absl::Duration kAssetManagerCacheCleanupInterval = absl::Seconds(4);
 using UpdateStageFlags = window::FilamentHost::UpdateStageFlags;
 
 }  // namespace
@@ -98,7 +98,14 @@ View::View(ViewConfig config)
       frame_time_(absl::Now()),
       device_(),
       size_(),
-      window_rotation_(window::WindowRotation::kRotation0) {}
+      window_rotation_(window::WindowRotation::kRotation0),
+      asset_manager_cache_cleanup_interval_(kAssetManagerCacheCleanupInterval) {
+  if (view_config_.cache_config.has_value() &&
+      view_config_.cache_config->cache_cleanup_interval_seconds.has_value()) {
+    asset_manager_cache_cleanup_interval_ = absl::Seconds(
+        view_config_.cache_config->cache_cleanup_interval_seconds.value());
+  }
+}
 
 View::~View() {
   // Clear out the SplitEngineSerializer before destroying the other members to
@@ -165,6 +172,16 @@ void View::DestroyNode(NodeHandle node) {
   // The order of types can be defined using CleanupDependencies and
   // CleanupDependents.
   GetComponentManager().RemoveAllFromNodes(nodes_to_destroy);
+
+  // Tell the serializer about the nodes being destroyed.
+  // This is done before the nodes are actually destroyed to ensure that the
+  // serializer can access the node's children to determine dependencies
+  // correctly.
+  if (split_engine_serializer_) {
+    for (NodeHandle node_to_destroy : nodes_to_destroy) {
+      split_engine_serializer_->DestroyNode(node_to_destroy.GetEntity());
+    }
+  }
 
   for (NodeHandle node_to_destroy : nodes_to_destroy) {
     node_attachment_manager_.Destroy(node_to_destroy);
@@ -288,7 +305,7 @@ void View::Advance(absl::Duration delta_time) {
 
   time_since_last_asset_manager_cache_cleanup_ += delta_time;
   if (time_since_last_asset_manager_cache_cleanup_ >
-      absl::Seconds(kAssetManagerUnusedCacheFlushingInvertalSeconds)) {
+      asset_manager_cache_cleanup_interval_) {
     GetAssetManager().ClearUnused();
     time_since_last_asset_manager_cache_cleanup_ = absl::ZeroDuration();
   }
@@ -379,7 +396,8 @@ void View::OnHostCreated(window::FilamentHost* host) {
   host_ = host;
 
   // Must be created after the host is assigned.
-  asset_manager_ = std::make_unique<AssetManager>(this);
+  asset_manager_ =
+      std::make_unique<AssetManager>(this, view_config_.cache_config);
 
   //  Request a Histogram with lower bounds of 6 to 68 ms for the total time
   //  between frames.
@@ -503,6 +521,19 @@ void View::OnHostPreUpdate(
     absl::Duration next_vsync, UpdateStageFlags* out_flags,
     absl::optional<absl::Duration>* out_time_until_retry) {
   IMP_TRACE();
+
+  if (split_engine_serializer_ &&
+      !split_engine_serializer_->ReadyForNextFrame()) {
+    // App is only allowed to create a limited amount of split engine buffers to
+    // avoid endless memory overrun. After that, it must re-use a buffer once
+    // the system indicates it has become available. If we can't re-use or
+    // create a buffer, then it implies the system is too far behind and we must
+    // skip the frame. and wait until the system catches up.
+    out_flags->SetFlag(UpdateStageFlags::kSkipFrame);
+    IMP_LOG(imp::ERROR) << "Skipping a frame: The SplitEngineSerializer is not ready.";
+    return;
+  }
+
   // Send the pre frame update event, which gives the receiver of the event
   // an opportunity to indicate this frame should be skipped.
   ViewPreFrameUpdateEvent view_pre_frame_update_event(

@@ -75,6 +75,20 @@ ToVariableData(const schemas::InteractivityVariable* variable) {
           model::ModelData::InteractivityData::ValueType::FLOAT4;
       break;
     }
+    case schemas::InteractivityValue::Mat2f: {
+      const schemas::Mat2f* mat = variable->value_as_Mat2f();
+      variable_data.value = flatbuffers::UnPack(*mat);
+      variable_data.type =
+          model::ModelData::InteractivityData::ValueType::MAT2F;
+      break;
+    }
+    case schemas::InteractivityValue::Mat3f: {
+      const schemas::Mat3f* mat = variable->value_as_Mat3f();
+      variable_data.value = flatbuffers::UnPack(*mat);
+      variable_data.type =
+          model::ModelData::InteractivityData::ValueType::MAT3F;
+      break;
+    }
     case schemas::InteractivityValue::Mat4f: {
       const schemas::Mat4f* mat = variable->value_as_Mat4f();
       variable_data.value = flatbuffers::UnPack(*mat);
@@ -242,6 +256,10 @@ InteractivityModelCreatorExtensionImpl::DeserializeInteractivityData(
             configuration_data.id = model::ModelData::InteractivityData::
                 NodeData::ConfigurationType::MESSAGE;
             break;
+          case schemas::InteractivityNodeConfigurationType::INITIAL_INDEX:
+            configuration_data.id = model::ModelData::InteractivityData::
+                NodeData::ConfigurationType::INITIAL_INDEX;
+            break;
         }
 
         // Second switch statement to reduce the amount of duplicated code
@@ -254,6 +272,7 @@ InteractivityModelCreatorExtensionImpl::DeserializeInteractivityData(
           case schemas::InteractivityNodeConfigurationType::EVENT:
           case schemas::InteractivityNodeConfigurationType::NODE_INDEX:
           case schemas::InteractivityNodeConfigurationType::TYPE:
+          case schemas::InteractivityNodeConfigurationType::INITIAL_INDEX:
             if (!config->value_as_Int()) {
               return absl::InternalError(absl::StrFormat(
                   "Interactivity node configuration indicates an int value is "

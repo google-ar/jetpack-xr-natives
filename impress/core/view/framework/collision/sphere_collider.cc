@@ -21,13 +21,20 @@
 #include "core/collision/collision_helpers.h"
 #include "core/collision/ray.h"
 #include "core/common/debug_draw.h"
+#include "core/config.h"
 #include "core/geometry/shapes/sphere.h"
 #include "core/math/mat.h"
 #include "core/math/math.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
+#include "core/ncsb/node_handle.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/framework/collision/ray_hit.h"
+
+#if IMP_RUNTIME(DEV)
+#include "core/ncsb/path_manager.h"
+#include "core/view/framework/collision/compound_collider.h"
+#endif
 
 namespace imp {
 using split_engine::SplitEngineSerializer;
@@ -58,7 +65,24 @@ void SphereCollider::SetSphere(float3 center, float radius) {
   }
   state_.center = center;
   state_.radius = radius;
+  hit_node_ = GetNode();
   UpdateSplitEngine();
+}
+
+void SphereCollider::SetHitNode(NodeHandle hit_node) { hit_node_ = hit_node; };
+
+NodeHandle SphereCollider::GetHitNode() const {
+#if IMP_RUNTIME(DEV)
+  if (editor::IsInEditMode(GetView().GetRegistry())) {
+    if (auto compound_collider =
+            GetView()
+                .GetPathManager()
+                .GetComponentFromAncestorOrSelf<CompoundCollider>(GetNode())) {
+      return compound_collider->GetNode();
+    }
+  }
+#endif
+  return hit_node_;
 }
 
 absl::optional<RayHit> SphereCollider::Intersect(const Ray& world_ray) {
@@ -78,7 +102,7 @@ absl::optional<RayHit> SphereCollider::Intersect(const Ray& world_ray) {
         GetNode()->WorldFromLocalPoint(collision_point);
     const float3 transformed_surface_normal =
         TransformedSurfaceNormal(local_normal, GetNode()->GetWorldTrs());
-    return RayHit(distance, quatf{0.0f}, world_collision_point, GetNode(),
+    return RayHit(distance, quatf{0.0f}, world_collision_point, GetHitNode(),
                   transformed_surface_normal);
   }
   // No collision (empty).
@@ -103,8 +127,8 @@ absl::optional<DoubleRayHit> SphereCollider::IntersectPrecise(
         GetNode()->WorldFromLocalPointPrecise(collision_point);
     const double3 transformed_surface_normal =
         TransformedSurfaceNormal(local_normal, GetNode()->GetWorldTrsPrecise());
-    return DoubleRayHit(distance, quat{0.0}, world_collision_point, GetNode(),
-                        transformed_surface_normal);
+    return DoubleRayHit(distance, quat{0.0}, world_collision_point,
+                        GetHitNode(), transformed_surface_normal);
   }
   // No collision (empty).
   return {};

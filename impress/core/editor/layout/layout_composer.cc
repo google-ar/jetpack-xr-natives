@@ -15,15 +15,18 @@
 #include "core/editor/layout/layout_composer.h"
 
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <utility>
 
-#include "absl/strings/match.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "dear_imgui/imgui.h"
 #include "dear_imgui/imgui_internal.h"
 #include "core/common/invocable.h"
+#include "core/config.h"
+#include "core/editor/editor_constants.h"
+#include "core/editor/layout/docking_manager.h"
 #include "core/editor/layout/editor_panel_ids.h"
 #include "core/editor/layout/helpers.h"
 #include "core/editor/layout/layout_config.proto.imp.h"
@@ -33,14 +36,12 @@
 #include "core/math/vec.h"
 
 namespace imp::editor {
-
+namespace {
 constexpr float kLerpFactor = 0.5f;
-constexpr float2 kStandaloneSceneWindowRatio = {0.2f, 0.8f};
 constexpr float kWindowAlpha = 0.85f;
 constexpr int32_t kDetailsItemWidth = 200;
 constexpr int32_t kToolbarWidth = 200;
 constexpr int32_t kSceneItemWidth = 200;
-constexpr int32_t kBottomPanelHeight = 300;
 constexpr int32_t kFixedItemWidth = 200;
 constexpr int32_t kFixedTabWidth = 500;
 // White
@@ -57,16 +58,11 @@ constexpr ImVec4 kTabButtonHoverColor = ImVec4(1.0f, 1.0f, 1.0f, 1);
 // Black
 constexpr ImVec4 kTabButtonTextColor = ImVec4(0.0f, 0.0f, 0.0f, 1);
 
-constexpr absl::string_view kDetailsWindowLabel = panel_ids::kDetailsWindow;
-constexpr absl::string_view kSceneWindowLabel = panel_ids::kSceneWindow;
-constexpr absl::string_view kTabBarLabel = panel_ids::kTabBar;
-constexpr absl::string_view kMenuBarLabel = panel_ids::kMenuBar;
-constexpr absl::string_view kToolBarLabel = panel_ids::kToolBar;
-constexpr absl::string_view kTabbedWindowLabel = "Tabbed Window";
 constexpr absl::string_view kHideLabel = "Hide";
 constexpr absl::string_view kShowLabel = "Show";
 constexpr absl::string_view kPinToTopLabel = "Top";
 constexpr absl::string_view kPinToBottomLabel = "Bottom";
+}  // namespace
 
 LayoutComposer::LayoutComposer(LayoutConfig layout_config)
     : layout_config_(layout_config),
@@ -76,79 +72,94 @@ LayoutComposer::LayoutComposer(LayoutConfig layout_config)
     layout_config_.lerp_factor = kLerpFactor;
   }
   layout_config_.lerp_factor = 1;
+
+#if IMP_RUNTIME(DEV)
+  if (layout_config.layout_type ==
+      LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT) {
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+  } else {
+    ImGui::GetIO().ConfigFlags &= ~ImGuiConfigFlags_DockingEnable;
+  }
+#endif
 }
 
 void LayoutComposer::DrawWidget(const WidgetLayoutInfo& layout_info,
                                 Widget* widget) {
-  if (layout_info.panel_id == panel_ids::kDetailsWindow) {
-    if (!widget->GetName().empty() &&
-        !absl::StartsWith(widget->GetName(), "##")) {
-      DrawInDetailsSectionAsHeader(
-          widget->GetName(), [widget]() { widget->DrawImGui(); },
-          widget->OnCloseButton(),
-          ImGuiTreeNodeFlags_OpenOnArrow |
-              ImGuiTreeNodeFlags_OpenOnDoubleClick |
-              widget->GetTreeNodeFlags());
-    } else {
-      DrawInDetailsSection([widget]() { widget->DrawImGui(); });
-    }
-  } else if (layout_info.panel_id == panel_ids::kSceneWindow) {
-    if (!widget->GetName().empty() &&
-        !absl::StartsWith(widget->GetName(), "##")) {
-      DrawInSceneSectionAsHeader(
-          widget->GetName(), [widget]() { widget->DrawImGui(); },
-          widget->OnCloseButton(), widget->GetTreeNodeFlags());
-    } else {
-      DrawInSceneSection([widget]() { widget->DrawImGui(); });
-    }
-  } else if (layout_info.panel_id == panel_ids::kTabBar) {
-    DrawAsStandaloneTab(
-        widget->GetName(), [widget]() { widget->DrawImGui(); },
-        ImGuiTabItemFlags_Leading);
-  } else if (layout_info.panel_id == panel_ids::kMenuBar) {
-    if (layout_config_.layout_type ==
-        LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT) {
-      DrawAsMenuInMenuBar(widget->GetName(),
-                          [widget]() { widget->DrawImGui(); });
-    }
-  } else if (layout_info.panel_id == panel_ids::kToolBar) {
-    if (layout_config_.layout_type ==
-        LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT) {
-      DrawInToolbar([widget]() { widget->DrawImGui(); });
-    }
+  if (layout_config_.layout_type ==
+      LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT) {
+    DrawOnDockingLayout(layout_info, widget);
   } else {
-    DrawAfterLayout([widget]() { widget->DrawImGui(); });
+    DrawOnFixedLayout(layout_info, widget);
   }
 }
 
-void LayoutComposer::DrawInDetailsSection(
-    imp::Invocable<void()> draw_function) {
-  details_draw_functions_.push_back(std::move(draw_function));
+void LayoutComposer::DrawOnDockingLayout(const WidgetLayoutInfo& layout_info,
+                                         Widget* widget) {
+  switch (layout_info.panel_id) {
+    case PanelId::kDetailsWindow:
+      DrawInDetailsSectionAsHeader(widget);
+      break;
+    case PanelId::kSceneWindow:
+      DrawInSceneSectionAsHeader(widget);
+      break;
+    case PanelId::kLeftPanel:
+      DrawInLeftDock(widget->GetName(), [widget]() { widget->DrawImGui(); });
+      break;
+    case PanelId::kTabBar:
+      DrawAsDockableTab(widget->GetName(), [widget]() { widget->DrawImGui(); });
+      break;
+    case PanelId::kMenuBar:
+      DrawAsMenuInMenuBar(widget->GetName(),
+                          [widget]() { widget->DrawImGui(); });
+      break;
+    case PanelId::kToolBar:
+      DrawInToolbar([widget]() { widget->DrawImGui(); });
+      break;
+    default:
+      DrawAfterLayout([widget]() { widget->DrawImGui(); });
+  }
 }
 
-void LayoutComposer::DrawInDetailsSectionAsHeader(
-    absl::string_view header_label, imp::Invocable<void()> draw_function,
-    imp::Invocable<void()> on_close_button_pressed,
-    ImGuiTreeNodeFlags additional_flags) {
-  // Only draw sections that pass the filter.
-  if (!details_filter_.PassFilter(header_label.data())) return;
+void LayoutComposer::DrawOnFixedLayout(const WidgetLayoutInfo& layout_info,
+                                       Widget* widget) {
+  switch (layout_info.panel_id) {
+    case PanelId::kDetailsWindow:
+      DrawInDetailsSectionAsHeader(widget);
+      break;
+    case PanelId::kSceneWindow:
+    case PanelId::kLeftPanel:
+      DrawInSceneSectionAsHeader(widget);
+      break;
+    case PanelId::kTabBar:
+      DrawAsStandaloneTab(
+          widget->GetName(), [widget]() { widget->DrawImGui(); },
+          ImGuiTabItemFlags_Leading);
+      break;
+    case PanelId::kMenuBar:
+    case PanelId::kToolBar:
+      break;
+    default:
+      DrawAfterLayout([widget]() { widget->DrawImGui(); });
+  }
+}
+
+void LayoutComposer::DrawInDetailsSectionAsHeader(Widget* widget) {
+  // Only draw sections that pass the filter, unless it's the node name section.
+  absl::string_view header_label = widget->GetName();
+  if (!details_filter_.PassFilter(header_label.data()) &&
+      (header_label != kNodeWidgetHeaderName)) {
+    return;
+  }
 
   details_draw_functions_.push_back(BuildHeaderDrawFunction(
-      header_label, std::move(draw_function),
-      std::move(on_close_button_pressed), additional_flags));
+      header_label, [widget]() { widget->DrawImGui(); },
+      widget->OnCloseButton(), widget->GetTreeNodeFlags()));
 }
 
-void LayoutComposer::DrawInSceneSection(imp::Invocable<void()> draw_function) {
-  scene_draw_functions_.push_back(std::move(draw_function));
-}
-
-void LayoutComposer::DrawInSceneSectionAsHeader(
-    absl::string_view header_label, imp::Invocable<void()> draw_function,
-    imp::Invocable<void()> on_close_button_pressed,
-    ImGuiTreeNodeFlags additional_flags) {
-  DrawInSceneSection(BuildHeaderDrawFunction(
-      header_label, std::move(draw_function),
-      std::move(on_close_button_pressed), additional_flags));
+void LayoutComposer::DrawInSceneSectionAsHeader(Widget* widget) {
+  scene_draw_functions_.push_back(BuildHeaderDrawFunction(
+      widget->GetName(), [widget]() { widget->DrawImGui(); },
+      widget->OnCloseButton(), widget->GetTreeNodeFlags()));
 }
 
 void LayoutComposer::DrawAsStandaloneTab(absl::string_view tab_label,
@@ -213,10 +224,30 @@ void LayoutComposer::DrawAsStandaloneTab(absl::string_view tab_label,
         }
       };
   if (draw_before_previous_tabs) {
-    tab_item_draw_functions_.insert(tab_item_draw_functions_.begin(),
-                                    std::move(draw_function_final));
+    tab_item_info_.insert(tab_item_info_.begin(),
+                          TabbedWindowInfo{std::string(tab_label),
+                                           std::move(draw_function_final)});
   } else {
-    tab_item_draw_functions_.push_back(std::move(draw_function_final));
+    tab_item_info_.push_back(TabbedWindowInfo{std::string(tab_label),
+                                              std::move(draw_function_final)});
+  }
+}
+
+void LayoutComposer::DrawInLeftDock(absl::string_view tab_label,
+                                    imp::Invocable<void()> draw_function) {
+  left_dock_draw_functions_.push_back(
+      {std::string(tab_label), std::move(draw_function)});
+}
+
+void LayoutComposer::DrawAsDockableTab(absl::string_view tab_label,
+                                       imp::Invocable<void()> draw_function,
+                                       bool draw_before_previous_tabs) {
+  TabbedWindowInfo tab = {std::string(tab_label), std::move(draw_function)};
+
+  if (draw_before_previous_tabs) {
+    tab_item_info_.insert(tab_item_info_.begin(), std::move(tab));
+  } else {
+    tab_item_info_.push_back(std::move(tab));
   }
 }
 
@@ -263,38 +294,22 @@ imp::Invocable<void()> LayoutComposer::BuildHeaderDrawFunction(
   };
 }
 
-void LayoutComposer::DrawStandaloneDetailsWindow() {
-  ImVec2 safe_display_size = GetSafeDisplaySize();
-  ImVec4 safe_display_bounds = GetSafeDisplayBounds();
-
+void LayoutComposer::DrawDockableDetailsWindow() {
   ImGui::SetNextWindowBgAlpha(kWindowAlpha);
   // Without explicitly setting collapsed to false, the panel defaults to
   // collapsed on desktop.
   ImGui::SetNextWindowCollapsed(false, ImGuiCond_Appearing);
-  ImGui::SetNextWindowPos({safe_display_bounds.z, window_y_offset_},
-                          ImGuiCond_Appearing);
-  ImGui::SetNextWindowSizeConstraints(
-      ImVec2(0, 0),
-      ImVec2(safe_display_size.x, safe_display_size.y - kBottomPanelHeight));
-  if (ImGui::Begin(kDetailsWindowLabel.data(), nullptr,
-                   ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove |
-                       ImGuiWindowFlags_NoFocusOnAppearing |
-                       ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
+
+  ImGuiWindowFlags flags = ImGuiWindowFlags_NoFocusOnAppearing |
+                           ImGuiWindowFlags_AlwaysVerticalScrollbar;
+
+  if (ImGui::Begin(PanelIdToString(PanelId::kDetailsWindow).c_str(), nullptr,
+                   flags)) {
     ImGui::PushItemWidth(kDetailsItemWidth);
     DrawDetailsSectionContents();
     ImGui::PopItemWidth();
   }
-  // Adjust the size of the Details window based on the rendered size.
-  ImVec2 auto_fit_size =
-      ImGui::CalcWindowNextAutoFitSize(ImGui::GetCurrentWindow());
-  // Adjust the position of the Details window based on the rendered size.
-  ImGui::SetWindowPos(kDetailsWindowLabel.data(),
-                      // Anchor to the right side of the screen.
-                      LerpImVec2(ImGui::GetWindowPos(),
-                                 ImVec2(safe_display_bounds.z - auto_fit_size.x,
-                                        window_y_offset_),
-                                 *layout_config_.lerp_factor),
-                      ImGuiCond_Always);
+
   ImGui::End();
 }
 
@@ -339,25 +354,16 @@ void LayoutComposer::DrawWindowForWorldLayout(
   ImGui::End();
 }
 
-void LayoutComposer::DrawStandaloneSceneWindow() {
-  ImVec2 safe_display_size = GetSafeDisplaySize();
-  ImVec4 safe_display_bounds = GetSafeDisplayBounds();
-
-  ImVec2 window_size =
-      ImVec2(safe_display_size.x * kStandaloneSceneWindowRatio.x,
-             safe_display_size.y * kStandaloneSceneWindowRatio.y);
-  ImGui::SetNextWindowSize(window_size, ImGuiCond_FirstUseEver);
+void LayoutComposer::DrawDockableSceneWindow() {
   ImGui::SetNextWindowBgAlpha(kWindowAlpha);
-  // Anchor to the left side of the screen.
-  ImGui::SetNextWindowPos({safe_display_bounds.x, window_y_offset_},
-                          ImGuiCond_Always);
   // Without explicitly setting collapsed to false, the panel defaults to
   // collapsed on desktop.
   ImGui::SetNextWindowCollapsed(false, ImGuiCond_Appearing);
-  if (ImGui::Begin(kSceneWindowLabel.data(), nullptr,
-                   ImGuiWindowFlags_AlwaysAutoResize |
-                       ImGuiWindowFlags_HorizontalScrollbar |
-                       ImGuiWindowFlags_NoFocusOnAppearing)) {
+  ImGuiWindowFlags flags = ImGuiWindowFlags_HorizontalScrollbar |
+                           ImGuiWindowFlags_NoFocusOnAppearing;
+
+  if (ImGui::Begin(PanelIdToString(PanelId::kSceneWindow).c_str(), nullptr,
+                   flags)) {
     ImGui::PushItemWidth(kSceneItemWidth);
     DrawSceneSectionContents();
     ImGui::PopItemWidth();
@@ -368,6 +374,32 @@ void LayoutComposer::DrawStandaloneSceneWindow() {
 void LayoutComposer::DrawSceneSectionContents() {
   for (auto& draw_function : scene_draw_functions_) {
     draw_function();
+  }
+}
+
+void LayoutComposer::DrawDockableTabbedWindow() {
+  ImGui::SetNextWindowBgAlpha(kWindowAlpha);
+  ImGuiWindowFlags flags =
+      ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoSavedSettings;
+
+  for (auto& info : tab_item_info_) {
+    ImGui::SetNextWindowDockID(
+        docking_manager_->GetDockId(DockingManager::DockingType::kBottom),
+        ImGuiCond_FirstUseEver);
+    if (ImGui::Begin(info.label.c_str(), nullptr, flags)) {
+      info.draw_function();
+    }
+    ImGui::End();
+  }
+
+  for (auto& info : left_dock_draw_functions_) {
+    ImGui::SetNextWindowDockID(
+        docking_manager_->GetDockId(DockingManager::DockingType::kLeft),
+        ImGuiCond_FirstUseEver);
+    if (ImGui::Begin(info.label.c_str(), nullptr, flags)) {
+      info.draw_function();
+    }
+    ImGui::End();
   }
 }
 
@@ -406,7 +438,7 @@ void LayoutComposer::DrawTabbedWindow() {
   ImGui::SetNextWindowSizeConstraints(ImVec2(window_width, 0),
                                       ImVec2(window_width, max_window_height));
   if (ImGui::Begin(
-          kTabbedWindowLabel.data(), nullptr,
+          PanelIdToString(PanelId::kTabBar).c_str(), nullptr,
           ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoFocusOnAppearing |
               ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoTitleBar |
               ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBackground |
@@ -414,12 +446,12 @@ void LayoutComposer::DrawTabbedWindow() {
               ImGuiWindowFlags_NoScrollWithMouse)) {
     // Draw tabs.
     ImGui::BeginGroup();
-    ImGui::BeginTabBar(kTabBarLabel.data(),
+    ImGui::BeginTabBar(PanelIdToString(PanelId::kTabBar).c_str(),
                        ImGuiTabBarFlags_FittingPolicyResizeDown);
-    for (auto& draw_function : tab_item_draw_functions_) {
-      draw_function();
+    for (auto& info : tab_item_info_) {
+      info.draw_function();
     }
-    UpdateSubWindowRegistration(kTabBarLabel);
+    UpdateSubWindowRegistration(PanelIdToString(PanelId::kTabBar).c_str());
 
     // The tab buttons are colored differently to indicate they are not tabs.
     ImGui::PushStyleColor(ImGuiCol_Tab, kTabButtonDefaultColor);
@@ -582,6 +614,18 @@ void LayoutComposer::DrawLayout() {
   style.DisplaySafeAreaPadding =
       ImVec2(layout_config_.overscan.x, layout_config_.overscan.y);
 
+  if (layout_config_.layout_type ==
+      LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT) {
+    if (!docking_manager_) {
+      docking_manager_ = std::make_unique<DockingManager>();
+    }
+    ImGui::DockSpaceOverViewport(
+        docking_manager_->GetDockableSpaceId(), nullptr,
+        ImGuiDockNodeFlags_PassthruCentralNode  // PassthruCentralNode makes the
+                                                // central node transparent
+    );
+  }
+
   // Draw the menu bar first to know if we should draw all other windows
   // below the menu bar.
   if (!menu_draw_functions_.empty()) {
@@ -594,30 +638,34 @@ void LayoutComposer::DrawLayout() {
   switch (layout_config_.layout_type.value()) {
     case LayoutConfig::LayoutType::SINGLE_TABBED_WINDOW: {
       DrawAsStandaloneTab(
-          kDetailsWindowLabel, [this]() { DrawDetailsSectionContents(); },
-          ImGuiTabItemFlags_Leading, /*draw_before_previous_tabs=*/true);
+          PanelIdToString(PanelId::kDetailsWindow),
+          [this]() { DrawDetailsSectionContents(); }, ImGuiTabItemFlags_Leading,
+          /*draw_before_previous_tabs=*/true);
       DrawAsStandaloneTab(
-          kSceneWindowLabel, [this]() { DrawSceneSectionContents(); },
-          ImGuiTabItemFlags_Leading, /*draw_before_previous_tabs=*/true);
+          PanelIdToString(PanelId::kSceneWindow),
+          [this]() { DrawSceneSectionContents(); }, ImGuiTabItemFlags_Leading,
+          /*draw_before_previous_tabs=*/true);
+      DrawTabbedWindow();
       break;
     }
     case LayoutConfig::LayoutType::MULTIPLE_WINDOWS_WORLD_LAYOUT: {
       window_x_offset_for_world_layout_ = 0;
-      DrawWindowForWorldLayout(kSceneWindowLabel,
+      DrawWindowForWorldLayout(PanelIdToString(PanelId::kSceneWindow),
                                [this]() { DrawSceneSectionContents(); });
-      DrawWindowForWorldLayout(kDetailsWindowLabel,
+      DrawWindowForWorldLayout(PanelIdToString(PanelId::kDetailsWindow),
                                [this]() { DrawDetailsSectionContents(); });
+      DrawTabbedWindow();
       break;
     }
     default:
     case LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT: {
-      DrawStandaloneDetailsWindow();
-      DrawStandaloneSceneWindow();
+      DrawDockableDetailsWindow();
+      DrawDockableSceneWindow();
       DrawToolbar();
+      DrawDockableTabbedWindow();
       break;
     }
   }
-  DrawTabbedWindow();
 
   if (layout_config_.show_cursor) {
     DrawCursor();
@@ -628,7 +676,8 @@ void LayoutComposer::DrawLayout() {
   // Flush the queued draw functions immediately after drawing.
   details_draw_functions_.clear();
   scene_draw_functions_.clear();
-  tab_item_draw_functions_.clear();
+  left_dock_draw_functions_.clear();
+  tab_item_info_.clear();
   menu_draw_functions_.clear();
   toolbar_draw_functions_.clear();
   draw_after_functions_.clear();

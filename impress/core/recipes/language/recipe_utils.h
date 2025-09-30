@@ -162,11 +162,17 @@ inline constexpr absl::string_view kElapsedSecondsSocketName =
 inline constexpr absl::string_view kOnTapEventName = "OnTapEvent";
 inline constexpr absl::string_view kTapTargetSocketName = "tap_target";
 inline constexpr absl::string_view kTapPositionSocketName = "tap_position";
+inline constexpr absl::string_view kTapRayHitSocketName = "tap_ray_hit";
 
 inline constexpr absl::string_view kOnHoverBeginEventName = "OnHoverBeginEvent";
 inline constexpr absl::string_view kOnHoverEndEventName = "OnHoverEndEvent";
 inline constexpr absl::string_view kHoverTargetSocketName = "hover_target";
-inline constexpr absl::string_view kHoverControllerIndexSocketName =
+
+inline constexpr absl::string_view kEventNames[] = {
+    kOnStartEventName, kOnUpdateEventName, kOnTapEventName,
+    kOnHoverBeginEventName, kOnHoverEndEventName};
+
+inline constexpr absl::string_view kControllerIndexSocketName =
     "controller_index";
 
 inline constexpr absl::string_view kTimeSinceStart = "time_since_start";
@@ -175,6 +181,126 @@ inline constexpr absl::string_view kMathPi = "math_pi";
 inline constexpr absl::string_view kMathE = "math_e";
 inline constexpr absl::string_view kMathNan = "math_nan";
 inline constexpr absl::string_view kMathInf = "math_inf";
+
+template <typename T, typename = std::enable_if_t<std::is_arithmetic_v<T>>>
+recipe::Variable Acos(T v) {
+  return acos(v);
+}
+
+template <typename T>
+TVec2<T> Acos(TVec2<T> v) {
+  return TransformVector(acos, v);
+}
+
+template <typename T>
+TVec3<T> Acos(TVec3<T> v) {
+  return TransformVector(acos, v);
+}
+
+template <typename T>
+TVec4<T> Acos(TVec4<T> v) {
+  return TransformVector(acos, v);
+}
+
+template <typename T, typename = std::enable_if_t<std::is_arithmetic_v<T>>>
+recipe::Variable Asin(T v) {
+  return asin(v);
+}
+
+template <typename T>
+TVec2<T> Asin(TVec2<T> v) {
+  return TransformVector(asin, v);
+}
+
+template <typename T>
+TVec3<T> Asin(TVec3<T> v) {
+  return TransformVector(asin, v);
+}
+
+template <typename T>
+TVec4<T> Asin(TVec4<T> v) {
+  return TransformVector(asin, v);
+}
+
+template <typename T, typename = std::enable_if_t<std::is_arithmetic_v<T>>>
+recipe::Variable Atan(T v) {
+  return atan(v);
+}
+
+template <typename T>
+TVec2<T> Atan(TVec2<T> v) {
+  return TransformVector(atan, v);
+}
+
+template <typename T>
+TVec3<T> Atan(TVec3<T> v) {
+  return TransformVector(atan, v);
+}
+
+template <typename T>
+TVec4<T> Atan(TVec4<T> v) {
+  return TransformVector(atan, v);
+}
+
+template <typename T, typename = std::enable_if_t<std::is_arithmetic_v<T>>>
+recipe::Variable Cos(T v) {
+  return cos(v);
+}
+
+template <typename T>
+TVec2<T> Cos(TVec2<T> v) {
+  return TransformVector(cos, v);
+}
+
+template <typename T>
+TVec3<T> Cos(TVec3<T> v) {
+  return TransformVector(cos, v);
+}
+
+template <typename T>
+TVec4<T> Cos(TVec4<T> v) {
+  return TransformVector(cos, v);
+}
+
+template <typename T, typename = std::enable_if_t<std::is_arithmetic_v<T>>>
+recipe::Variable Max(T left, T right) {
+  return std::max(left, right);
+}
+
+template <typename T>
+TVec2<T> Max(TVec2<T> left, TVec2<T> right) {
+  return max(left, right);
+}
+
+template <typename T>
+TVec3<T> Max(TVec3<T> left, TVec3<T> right) {
+  return max(left, right);
+}
+
+template <typename T>
+TVec4<T> Max(TVec4<T> left, TVec4<T> right) {
+  return max(left, right);
+}
+
+template <typename T, typename = std::enable_if_t<std::is_arithmetic_v<T>>>
+recipe::Variable Min(T left, T right) {
+  return std::min(left, right);
+}
+
+template <typename T>
+TVec2<T> Min(TVec2<T> left, TVec2<T> right) {
+  return min(left, right);
+}
+
+template <typename T>
+TVec3<T> Min(TVec3<T> left, TVec3<T> right) {
+  return min(left, right);
+}
+
+template <typename T>
+TVec4<T> Min(TVec4<T> left, TVec4<T> right) {
+  return min(left, right);
+}
 
 // Returns the sign of the input value.
 //    1 if value > 0.
@@ -207,6 +333,46 @@ TVec3<T> Sign(TVec3<T> v) {
 template <typename T>
 TVec4<T> Sign(TVec4<T> v) {
   return TVec4<T>(Sign(v.x), Sign(v.y), Sign(v.z), Sign(v.w));
+}
+
+template <typename T, typename = std::enable_if_t<std::is_arithmetic_v<T>>>
+recipe::Variable Sin(T v) {
+  return sin(v);
+}
+
+template <typename T>
+TVec2<T> Sin(TVec2<T> v) {
+  return TransformVector(sin, v);
+}
+
+template <typename T>
+TVec3<T> Sin(TVec3<T> v) {
+  return TransformVector(sin, v);
+}
+
+template <typename T>
+TVec4<T> Sin(TVec4<T> v) {
+  return TransformVector(sin, v);
+}
+
+template <typename T, typename = std::enable_if_t<std::is_arithmetic_v<T>>>
+recipe::Variable Tan(T v) {
+  return tan(v);
+}
+
+template <typename T>
+TVec2<T> Tan(TVec2<T> v) {
+  return TransformVector(tan, v);
+}
+
+template <typename T>
+TVec3<T> Tan(TVec3<T> v) {
+  return TransformVector(tan, v);
+}
+
+template <typename T>
+TVec4<T> Tan(TVec4<T> v) {
+  return TransformVector(tan, v);
 }
 
 }  // namespace recipe

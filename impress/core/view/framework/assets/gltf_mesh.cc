@@ -428,6 +428,14 @@ GltfMesh::ShadowMode GltfMesh::GetShadowReceivingMode() const {
   return is_shadow_receiver ? ShadowMode::kHardShadows : ShadowMode::kNone;
 }
 
+void GltfMesh::SetFogEnabled(bool enable) {
+  GetRenderableManager().SetFogEnabled(GetInstance(), enable);
+}
+
+bool GltfMesh::GetFogEnabled() const {
+  return GetRenderableManager().GetFogEnabled(GetInstance());
+}
+
 absl::Span<const MeshVertexAndIndexData> GltfMesh::GetMeshData() const {
   return absl::MakeSpan(primitive_mesh_data_);
 }

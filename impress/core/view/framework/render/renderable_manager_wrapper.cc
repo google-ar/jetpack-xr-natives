@@ -176,6 +176,10 @@ void RenderableManagerWrapper::SetReceiveShadows(
   if (spy_) spy_->SetReceiveShadows(instance, enable);
   GetRenderableManager().setReceiveShadows(instance, enable);
 }
+bool RenderableManagerWrapper::GetFogEnabled(
+    filament::RenderableManager::Instance instance) const {
+  return GetRenderableManager().getFogEnabled(instance);
+}
 void RenderableManagerWrapper::SetFogEnabled(
     filament::RenderableManager::Instance instance, bool enable) {
   if (spy_) spy_->SetFogEnabled(instance, enable);

@@ -29,6 +29,7 @@ cc_library(
     ],
     hdrs = [
         "asset_cache.h",
+        "asset_key_pool.h",
         "asset_ptr.h",
         "base_asset_cache.h",
     ],
@@ -37,6 +38,7 @@ cc_library(
         "//core/async:future",
         "//core/common:ref_counter",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/hash",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",

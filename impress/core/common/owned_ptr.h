@@ -159,6 +159,19 @@ class OwnedPtr {
   // outstanding.
   void Reset();
 
+  // Releases the ownership of the managed object.
+  //
+  // The OwnedPtr will no longer track the object and the caller is responsible
+  // for cleaning up the object.
+  //
+  // WARNING: The OwnedPtr will Fatal if any tracked BorrowedPtr<T> objects are
+  // still outstanding.
+  T* Release();
+
+  // Returns the deleter object which would be used for destruction of the
+  // managed object.
+  Deleter& GetDeleter();
+
  private:
   // This is a trick to prevent the Deleter from increasing the memory
   // usage of the OwnedPtr in cases where the Deleter functor is stateless (e.g.
@@ -190,6 +203,8 @@ class OwnedPtr {
     template <typename U, typename E>
     friend class OwnedPtr;
   };
+
+  void AssertSafeToRelinquish();
 
   T* ptr_ = nullptr;
   AdditionalFieldsHolder additional_fields_;
@@ -563,6 +578,17 @@ uint16_t OwnedPtr<T, Deleter>::GetBorrowedCount() const {
 }
 
 template <typename T, typename Deleter>
+T* OwnedPtr<T, Deleter>::Release() {
+  AssertSafeToRelinquish();
+  return std::exchange(ptr_, nullptr);
+}
+
+template <typename T, typename Deleter>
+Deleter& OwnedPtr<T, Deleter>::GetDeleter() {
+  return additional_fields_.GetDeleter();
+}
+
+template <typename T, typename Deleter>
 void OwnedPtr<T, Deleter>::Reset() {
   // If there are any outstanding borrowed objects, then the OwnedPtr can't be
   // safely destroyed because it will cause the borrowed objects to become
@@ -571,62 +597,70 @@ void OwnedPtr<T, Deleter>::Reset() {
   // This will log a fatal error if there are any outstanding borrowed objects,
   // or a log with a different severity if the severity has been overridden.
   if (ptr_) {
-    if (additional_fields_.GetRefCounter().GetCount() > 0) {
-      std::string description;
-      if constexpr (type_traits::kHasGetNameMethod<T>) {
-        static constexpr size_t kMaxNameLength = 256;
-        static constexpr absl::string_view kEllipsis = "...";
-        absl::string_view name = ptr_->GetName();
-        description = absl::StrFormat(
-            "of type %s named %s%s", type_traits::kTypeName<T>,
-            name.length() > kMaxNameLength
-                ? name.substr(0, kMaxNameLength - kEllipsis.length())
-                : name,
-            name.length() > kMaxNameLength ? kEllipsis : "");
-      } else {
-        description = absl::StrFormat("of type %s", type_traits::kTypeName<T>);
-      }
-
-      const RefCounter::TrackedRefs& tracked_refs =
-          additional_fields_.GetRefCounter().GetTrackedRefs();
-      std::string borrowed_locations;
-      if (!tracked_refs.locations_to_counts.empty()) {
-        for (const auto& [loc, counter] : tracked_refs.locations_to_counts) {
-          absl::StrAppendFormat(&borrowed_locations, "  %d from %s:%d\n",
-                                counter, loc.GetFileName(),
-                                loc.GetLineNumber());
-        }
-      }
-
-      std::string log_message = absl::StrFormat(
-          "OwnedPtr %s destroyed with %d outstanding borrowed objects from "
-          "the following locations:\n%s",
-          description, additional_fields_.GetRefCounter().GetCount(),
-          borrowed_locations);
-
-      // It would be cleaner to use IMP_LOG(imp::LEVEL(severity)) instead of a switch
-      // statement, but we can't because it doesn't currently work in the bazel
-      // version of Impress.
-      switch (GetOwnedPtrLogSeverity()) {
-        case absl::LogSeverity::kFatal:
-          IMP_LOG(imp::FATAL) << log_message;
-          break;
-        case absl::LogSeverity::kError:
-          IMP_LOG(imp::ERROR) << log_message;
-          break;
-        case absl::LogSeverity::kWarning:
-          IMP_LOG(imp::WARNING) << log_message;
-          break;
-        case absl::LogSeverity::kInfo:
-          IMP_LOG(imp::INFO) << log_message;
-          break;
-      }
-    }
+    AssertSafeToRelinquish();
 
     // Destroy the object.
     additional_fields_.GetDeleter()(ptr_);
     ptr_ = nullptr;
     additional_fields_ = {};
+  }
+}
+
+template <typename T, typename Deleter>
+void OwnedPtr<T, Deleter>::AssertSafeToRelinquish() {
+  if (ptr_ == nullptr) {
+    return;
+  }
+
+  if (additional_fields_.GetRefCounter().GetCount() > 0) {
+    std::string description;
+    if constexpr (type_traits::kHasGetNameMethod<T>) {
+      static constexpr size_t kMaxNameLength = 256;
+      static constexpr absl::string_view kEllipsis = "...";
+      absl::string_view name = ptr_->GetName();
+      description = absl::StrFormat(
+          "of type %s named %s%s", type_traits::kTypeName<T>,
+          name.length() > kMaxNameLength
+              ? name.substr(0, kMaxNameLength - kEllipsis.length())
+              : name,
+          name.length() > kMaxNameLength ? kEllipsis : "");
+    } else {
+      description = absl::StrFormat("of type %s", type_traits::kTypeName<T>);
+    }
+
+    const RefCounter::TrackedRefs& tracked_refs =
+        additional_fields_.GetRefCounter().GetTrackedRefs();
+    std::string borrowed_locations;
+    if (!tracked_refs.locations_to_counts.empty()) {
+      for (const auto& [loc, counter] : tracked_refs.locations_to_counts) {
+        absl::StrAppendFormat(&borrowed_locations, "  %d from %s:%d\n", counter,
+                              loc.GetFileName(), loc.GetLineNumber());
+      }
+    }
+
+    std::string log_message = absl::StrFormat(
+        "OwnedPtr %s released with %d outstanding borrowed objects from "
+        "the following locations:\n%s",
+        description, additional_fields_.GetRefCounter().GetCount(),
+        borrowed_locations);
+
+    // It would be cleaner to use IMP_LOG(imp::LEVEL(severity)) instead of a switch
+    // statement, but we can't because it doesn't currently work in the bazel
+    // version of Impress.
+    switch (GetOwnedPtrLogSeverity()) {
+      case absl::LogSeverity::kFatal:
+        IMP_LOG(imp::FATAL) << log_message;
+        break;
+      case absl::LogSeverity::kError:
+        IMP_LOG(imp::ERROR) << log_message;
+        break;
+      case absl::LogSeverity::kWarning:
+        IMP_LOG(imp::WARNING) << log_message;
+        break;
+      case absl::LogSeverity::kInfo:
+        IMP_LOG(imp::INFO) << log_message;
+        break;
+    }
   }
 }
 

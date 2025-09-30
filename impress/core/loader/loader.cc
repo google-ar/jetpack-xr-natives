@@ -43,14 +43,4 @@ Loader::GetTextureTranscodeCompressionType(filament::Engine& engine) {
   return TextureTranscodeCompressionType::Unknown;
 }
 
-Future<std::unique_ptr<model::ModelData>> Loader::CreateModel(
-    filament::Engine* engine) {
-  return CreateModel(engine, std::nullopt);
-}
-
-Future<std::unique_ptr<model::ModelData>> Loader::CreateModel(
-    filament::Engine* engine, std::function<void()>&& callback) {
-  return CreateModel(engine, std::move(callback), std::nullopt);
-}
-
 }  // namespace imp::loader

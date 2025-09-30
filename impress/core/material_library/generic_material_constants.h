@@ -17,6 +17,8 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_GENERIC_MATERIAL_CONSTANTS_H_
 #define THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_GENERIC_MATERIAL_CONSTANTS_H_
 
+#include <array>
+
 #include "absl/strings/string_view.h"
 #include "core/math/vec.h"
 
@@ -57,6 +59,13 @@ constexpr const absl::string_view kSamplersUvMatrices = "samplers_uv_matrices";
 constexpr const absl::string_view kEstimatedDepthTexture =
     "estimatedDepthTexture";
 constexpr const absl::string_view kCameraTexture = "cameraTexture";
+constexpr const absl::string_view kFeatureIdTexture0 = "featureIdTexture0";
+constexpr const absl::string_view kFeatureIdTexture1 = "featureIdTexture1";
+constexpr const absl::string_view kFeatureIdTexture2 = "featureIdTexture2";
+constexpr const absl::string_view kFeatureIdTexture3 = "featureIdTexture3";
+constexpr const std::array<absl::string_view, 4> kFeatureIdTextureNames = {
+    kFeatureIdTexture0, kFeatureIdTexture1, kFeatureIdTexture2,
+    kFeatureIdTexture3};
 
 constexpr float4 kDefaultBaseColorFactor = kOne4;
 constexpr float kDefaultMetallicFactor = 1;

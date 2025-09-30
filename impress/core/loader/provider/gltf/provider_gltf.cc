@@ -281,7 +281,7 @@ model::ModelData::RuntimeData PopulateRuntimeData(
 PreciseTransform GetExportTransform(const GltfLookup& lookup, NodeId node) {
   NodeId parent = lookup.parents[node];
   if (!parent || lookup.bones[parent] ||
-      (lookup.self_flags[parent] & NodeFlags::kIsAnimated)) {
+      (lookup.self_flags[parent] & NodeGltfFlags::kIsAnimated)) {
     return lookup.local_transforms[node];
   }
 
@@ -292,7 +292,7 @@ PreciseTransform GetExportTransform(const GltfLookup& lookup, NodeId node) {
 
   std::vector<NodeId> included = {node};
   while (parent && !lookup.bones[parent] &&
-         !(lookup.self_flags[parent] & NodeFlags::kIsAnimated)) {
+         !(lookup.self_flags[parent] & NodeGltfFlags::kIsAnimated)) {
     mat4 grand_parent_from_parent = lookup.local_transforms[parent].AsMat4();
     parent_from_self = grand_parent_from_parent * parent_from_self;
 
@@ -1131,24 +1131,24 @@ ProtoGltfProvider::TryLoadGltf(LoaderState* state_ptr) {
       }
     }
 
-    if (lookup.self_flags[node] & NodeFlags::kHasSkin) {
+    if (lookup.self_flags[node] & NodeGltfFlags::kHasSkin) {
       MP_RETURN_IF_ERROR(GetSkinInfoFromNode(gltf, lookup, node, skin_remap,
                                           builder_.get(), &skin,
                                           &sampled_joint_count));
     }
 
-    if (lookup.self_flags[node] & NodeFlags::kHasLightPunctual) {
+    if (lookup.self_flags[node] & NodeGltfFlags::kHasLightPunctual) {
       auto light_index = *lookup.nodes[node].extensions.lights_punctual->light;
       light_punctual = LoadedModelBuilder::LightPunctualId::At(light_index);
     }
 
-    if (lookup.self_flags[node] & NodeFlags::kHasAudioEmitter) {
+    if (lookup.self_flags[node] & NodeGltfFlags::kHasAudioEmitter) {
       uint16_t audio_emitter_index =
           *lookup.nodes[node].extensions.audio_extension->emitter;
       audio_emitter = model::ModelData::AudioEmitterId::At(audio_emitter_index);
     }
 
-    if (lookup.self_flags[node] & NodeFlags::kHasMesh) {
+    if (lookup.self_flags[node] & NodeGltfFlags::kHasMesh) {
       int mesh = *lookup.nodes[node].mesh;
       Gltf2AttributeMask attribute_mask;
       const std::vector<Primitive>& mesh_primitives =
@@ -1206,31 +1206,31 @@ ProtoGltfProvider::TryLoadGltf(LoaderState* state_ptr) {
       runtime.emplace(PopulateRuntimeData(model, mesh_primitives));
     }
 
-    if (lookup.self_flags[node] & NodeFlags::kHasKhrVisibility) {
+    if (lookup.self_flags[node] & NodeGltfFlags::kHasKhrVisibility) {
       node_visibility = model::ModelData::NodeVisibility{
           .visible = lookup.nodes[node].extensions.khr_visibility->visible};
     }
 
-    if (lookup.self_flags[node] & NodeFlags::kHasKhrNodeVisibility) {
+    if (lookup.self_flags[node] & NodeGltfFlags::kHasKhrNodeVisibility) {
       node_visibility = model::ModelData::NodeVisibility{
           .visible =
               lookup.nodes[node].extensions.khr_node_visibility->visible};
     }
 
-    if (lookup.self_flags[node] & NodeFlags::kHasKhrNodeVisibility &
-        NodeFlags::kHasKhrVisibility) {
+    if (lookup.self_flags[node] & NodeGltfFlags::kHasKhrNodeVisibility &
+        NodeGltfFlags::kHasKhrVisibility) {
       IMP_LOG(imp::WARNING) << "Node " << name
                    << " has both KHR_visibility and KHR_node_visibility "
                       "extensions. KHR_node_visibility will be used.";
     }
 
-    if (lookup.self_flags[node] & NodeFlags::kHasKhrNodeSelectability) {
+    if (lookup.self_flags[node] & NodeGltfFlags::kHasKhrNodeSelectability) {
       node_selectability = model::ModelData::NodeSelectability{
           .selectable =
               lookup.nodes[node].extensions.khr_node_selectability->selectable};
     }
 
-    if (lookup.self_flags[node] & NodeFlags::kHasKhrNodeHoverability) {
+    if (lookup.self_flags[node] & NodeGltfFlags::kHasKhrNodeHoverability) {
       node_hoverability = model::ModelData::NodeHoverability{
           .hoverable =
               lookup.nodes[node].extensions.khr_node_hoverability->hoverable};

@@ -82,8 +82,6 @@ RenderPassBuilder& RenderPassBuilder::customCommand(
 
 RenderPass RenderPassBuilder::build(FEngine const& engine, DriverApi& driver) const {
     assert_invariant(mRenderableSoa);
-    assert_invariant(mScissorViewport.width  <= std::numeric_limits<int32_t>::max());
-    assert_invariant(mScissorViewport.height <= std::numeric_limits<int32_t>::max());
     return RenderPass{ engine, driver, *this };
 }
 
@@ -107,8 +105,7 @@ void RenderPass::DescriptorSetHandleDeleter::operator()(
 RenderPass::RenderPass(FEngine const& engine, DriverApi& driver,
         RenderPassBuilder const& builder) noexcept
         : mRenderableSoa(*builder.mRenderableSoa),
-          mColorPassDescriptorSet(builder.mColorPassDescriptorSet),
-          mScissorViewport(builder.mScissorViewport) {
+          mColorPassDescriptorSet(builder.mColorPassDescriptorSet) {
 
     // compute the number of commands we need
     updateSummedPrimitiveCounts(
@@ -674,7 +671,7 @@ RenderPass::Command* RenderPass::generateCommandsImpl(CommandTypeFlags extraFlag
         cmd.key |= makeField(soaVisibility[i].priority, PRIORITY_MASK, PRIORITY_SHIFT);
         cmd.key |= makeField(soaVisibility[i].channel, CHANNEL_MASK, CHANNEL_SHIFT);
         cmd.info.index = i;
-        cmd.info.hasHybridInstancing = bool(soaInstanceInfo[i].handle);
+        cmd.info.hasHybridInstancing = bool(soaInstanceInfo[i].buffer);
         cmd.info.instanceCount = soaInstanceInfo[i].count;
         cmd.info.hasMorphing = bool(morphing.handle);
         cmd.info.hasSkinning = bool(skinning.handle);
@@ -1070,7 +1067,8 @@ void RenderPass::Executor::execute(FEngine const& engine, DriverApi& driver,
                     // Each material has a per-material descriptor-set layout which encodes the
                     // material's parameters (ubo and samplers)
                     pipeline.pipelineLayout.setLayout[+DescriptorSetBindingPoints::PER_MATERIAL] =
-                            ma->getDescriptorSetLayout().getHandle();
+                            ma->getDescriptorSetLayout(info.materialVariant).getHandle();
+
 
                     if (UTILS_UNLIKELY(ma->getMaterialDomain() == MaterialDomain::POST_PROCESS)) {
                         // It is possible to get a post-process material here (even though it's
@@ -1094,7 +1092,7 @@ void RenderPass::Executor::execute(FEngine const& engine, DriverApi& driver,
                     }
 
                     // Each MaterialInstance has its own descriptor set. This binds it.
-                    mi->use(driver);
+                    mi->use(driver, info.materialVariant);
                 }
 
                 assert_invariant(ma);

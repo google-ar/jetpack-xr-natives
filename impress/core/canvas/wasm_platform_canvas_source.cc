@@ -85,7 +85,10 @@ WasmPlatformCanvasSource::GetCombinedCharacterGroups(
 std::vector<float> WasmPlatformCanvasSource::GetTextWidths(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
   absl::StatusOr<std::vector<std::vector<float>>> result =
-      wrapped_.GetTextWidths(GetChunks(text), text_options).Get();
+      wrapped_
+          .GetTextWidths(GetChunks(text, text_options.force_non_separable),
+                         text_options)
+          .Get();
   if (result.ok() && result->size() == 1) {
     return result.value()[0];
   } else {

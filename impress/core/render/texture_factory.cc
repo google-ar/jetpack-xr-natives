@@ -21,6 +21,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/log/check.h"
 #include "core/common/log.h"
@@ -43,6 +44,7 @@
 #include "core/render/image_asset.h"
 #include "core/render/safe_filament_texture_builder.h"
 #include "core/render/texture.h"
+#include "core/render/texture_asset.h"
 #include "core/render/texture_builder.h"
 #include "core/render/texture_options.h"
 #include "core/view/base_view.h"
@@ -72,7 +74,11 @@ TexturePtr TextureFactory::CreateExternalTexture(
     texture_builder.usage(Usage::DEFAULT | Usage::PROTECTED);
   }
 
-  auto texture = texture_builder.build(*engine);
+  filament::Texture* texture = texture_builder.build(*engine);
+  if (!texture) {
+    IMP_LOG(imp::ERROR) << "Could not create external texture";
+    return {};
+  }
   auto sampler =
       filament::TextureSampler(MagFilter::LINEAR, WrapMode::CLAMP_TO_EDGE);
 
@@ -174,8 +180,25 @@ OwnedTexturePtr TextureFactory::CreateExternalTexture(
     texture_builder.usage(*settings.usage);
   }
   filament::Texture* texture = texture_builder.build(*view_.GetSharedEngine());
+  if (!texture) {
+    IMP_LOG(imp::ERROR) << "Could not create texture";
+    return {};
+  }
   texture->setExternalImage(*engine, handle);
   filament::TextureSampler sampler(MagFilter::LINEAR, WrapMode::CLAMP_TO_EDGE);
+  return absl::WrapUnique(
+      new Texture(view_, /*stream=*/nullptr, texture, sampler));
+}
+
+OwnedTexturePtr TextureFactory::CreateTexture(
+    const AssetPtr<TextureAsset> texture) {
+  return CreateTexture(texture, TextureSamplerOptions{});
+}
+
+OwnedTexturePtr TextureFactory::CreateTexture(
+    const AssetPtr<TextureAsset> texture, TextureSamplerOptions options) {
+  filament::TextureSampler sampler(options.mag_filter, options.wrap_mode);
+
   return absl::WrapUnique(
       new Texture(view_, /*stream=*/nullptr, texture, sampler));
 }
@@ -222,9 +245,10 @@ TexturePtr TextureFactory::CreateTexture(
   if (generation_options.generated_mipmap_levels.has_value()) {
     texture_builder.GenerateMipmaps(*engine);
   }
-  absl::StatusOr<filament::Texture*> texture = texture_builder.Build(*engine);
-  if (!texture.ok()) {
-    IMP_LOG(imp::ERROR) << "Could not create texture.";
+  filament::Texture* texture = texture_builder.Build(*engine);
+  if (!texture) {
+    IMP_LOG(imp::ERROR) << "Could not create texture from image, name: \""
+               << image.GetName() << "\"";
     return {};
   }
 
@@ -235,7 +259,7 @@ TexturePtr TextureFactory::CreateTexture(
 
   // Using `new` to access a non-public constructor, see (broken link).
   TexturePtr result =
-      absl::WrapUnique(new Texture(view_, nullptr, *texture, sampler));
+      absl::WrapUnique(new Texture(view_, nullptr, texture, sampler));
   result->SetName(image.GetName());
   return result;
 }
@@ -257,15 +281,14 @@ TexturePtr TextureFactory::CreateTexture(
   texture_builder.Height(height);
   texture_builder.Levels(1u);
   texture_builder.Name(name_str);
-  absl::StatusOr<filament::Texture*> texture =
-      texture_builder.Build(*view_.GetSharedEngine());
-  if (!texture.ok()) {
-    IMP_LOG(imp::ERROR) << "Could not create texture.";
+  filament::Texture* texture = texture_builder.Build(*view_.GetSharedEngine());
+  if (!texture) {
+    IMP_LOG(imp::ERROR) << "Could not create texture, name: \"" << name_str << "\"";
     return {};
   }
   filament::TextureSampler sampler(MagFilter::LINEAR, WrapMode::CLAMP_TO_EDGE);
 
-  return absl::WrapUnique(new Texture(view_, nullptr, *texture, sampler));
+  return absl::WrapUnique(new Texture(view_, nullptr, texture, sampler));
 }
 
 TexturePtr TextureFactory::CreateTexture(int width, int height,
@@ -517,8 +540,8 @@ OwnedTexturePtr TextureFactory::CreateTexture(
   if (generation_options.generated_mipmap_levels.has_value()) {
     texture_builder.GenerateMipmaps(*engine);
   }
-  absl::StatusOr<filament::Texture*> texture = texture_builder.Build(*engine);
-  if (!texture.ok()) {
+  filament::Texture* texture = texture_builder.Build(*engine);
+  if (!texture) {
     IMP_LOG(imp::ERROR) << "Could not create texture.";
     return {};
   }
@@ -529,7 +552,7 @@ OwnedTexturePtr TextureFactory::CreateTexture(
   sampler.setAnisotropy(sampler_options.anisotropy);
 
   // Using `new` to access a non-public constructor, see (broken link).
-  OwnedTexturePtr result = WrapTexture(*texture);
+  OwnedTexturePtr result = WrapTexture(texture);
 
   if (name.has_value()) {
     result->SetName(*name);
@@ -612,6 +635,14 @@ BorrowedTexturePtr TextureFactory::BorrowPlaceholderTexture(
   return placeholder_texture_.Borrow(loc);
 }
 
+BorrowedTexturePtr TextureFactory::BorrowPlaceholderCubemapTexture(
+    SmallSourceLocation loc) {
+  if (!placeholder_cubemap_texture_) {
+    placeholder_cubemap_texture_ = CreatePlaceholderCubemapTexture();
+  }
+  return placeholder_cubemap_texture_.Borrow(loc);
+}
+
 OwnedTexturePtr TextureFactory::CreatePlaceholderTexture() {
   constexpr uint32_t kPixel = 0xffffffff;
   constexpr int kPlaceholderTextureSize = 2;
@@ -631,6 +662,39 @@ OwnedTexturePtr TextureFactory::CreatePlaceholderTexture() {
 
   return CreateTexture(image_contents, TextureGenerationOptions{},
                        TextureSamplerOptions{}, "PlaceholderTexture");
+}
+
+OwnedTexturePtr TextureFactory::CreatePlaceholderCubemapTexture() {
+  constexpr int kPlaceholderTextureSize = 1;
+  constexpr int kPixelsPerFace =
+      kPlaceholderTextureSize * kPlaceholderTextureSize;
+  constexpr int kChannels = 4;
+  constexpr int kBytesPerFace = kPixelsPerFace * kChannels;
+
+  std::vector<uint8_t> memory(kBytesPerFace * 6, 0xff);
+
+  image::StitchedImageContents image_contents(kPlaceholderTextureSize,
+                                              kPlaceholderTextureSize * 6,
+                                              kChannels, std::move(memory));
+
+  OwnedTexturePtr result =
+      CreateTexture(imp::TextureFactory::TextureCreationSettings{
+          .width = kPlaceholderTextureSize,
+          .height = kPlaceholderTextureSize,
+          .format = filament::Texture::InternalFormat::RGBA8,
+          .sampler_type = filament::Texture::Sampler::SAMPLER_CUBEMAP});
+
+  filament::Engine* engine = view_.GetSharedEngine();
+  filament::Texture::FaceOffsets face_offsets(kBytesPerFace);
+  result->GetTexture()->setImage(
+      *engine, /*level=*/0,
+      image_contents.CreatePixelBufferDescriptor(
+          /*callback=*/nullptr, /*is_r11_g11_b10=*/false),
+      face_offsets);
+
+  result->SetName("PlaceholderCubemapTexture");
+
+  return result;
 }
 
 }  // namespace imp

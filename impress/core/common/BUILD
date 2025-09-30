@@ -114,7 +114,6 @@ cc_library(
         ":filament_engine_helpers",
         ":filament_helpers",
         "//core/collision:collision_flags",
-        "//core/common:log",
         "//core/geometry/shapes",
         "//core/math",
         "//core/model/mesh:mesh_data",
@@ -124,6 +123,7 @@ cc_library(
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
         "@robin_map",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
@@ -161,7 +161,7 @@ cc_library(
     linkstatic = 1,
     deps = [
         ":platform_helpers",
-        "//core/common:log",
+        "@com_google_impress//core/common:log",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )
@@ -177,10 +177,24 @@ cc_library(
         ":context",
         ":typed_ids",
         "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/types:variant",
+    ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "jni_proto_helpers",
+    hdrs = ["jni_proto_helpers.h"],
+    copts = imp_copts(),
+    linkstatic = 1,
+    deps = [
+        ":context",
+        "//core/proto:proto_reader",
+        "@com_google_absl//absl/strings:string_view",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )
@@ -277,12 +291,12 @@ cc_library(
         ":ref_counter",
         ":small_source_location",
         ":type_traits",
-        "//core/common:log",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/base:log_severity",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/synchronization",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -376,9 +390,9 @@ cc_library(
         ":optional_error",
         ":platform_helpers",
         ":robin_map",
-        "//core/common:log",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:cord",
+        "@com_google_impress//core/common:log",
         "@com_google_sandboxed_api//sandboxed_api:embed_file",
     ],
     alwayslink = 1,
@@ -581,8 +595,8 @@ cc_library(
         "@third_party//filament/libs:utils_hdrs",
     ] + select({
         "//core:imp_perfetto_enabled": [
-            "//core/common:log",
             "//third_party/perfetto:libperfetto_client_experimental",
+            "@com_google_impress//core/common:log",
         ],
         "//conditions:default": [],
     }),
@@ -607,7 +621,6 @@ cc_library(
         ":data_helpers",
         ":platform_helpers",
         ":type_traits",
-        "//core/common:log",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/container:inlined_vector",
         "@com_google_absl//absl/hash",
@@ -615,6 +628,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -625,8 +639,8 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         ":typed_ids",
-        "//core/common:log",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
         "@third_party//filament/libs:utils",  # build_cleaner: keep
         "@third_party//filament/libs:utils_hdrs",
     ],
@@ -773,11 +787,11 @@ cc_library(
         ":invocable",
         ":platform_helpers",
         "//core/async:executor",
-        "//core/common:log",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/synchronization",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -802,7 +816,7 @@ cc_library(
     copts = imp_copts(),
     deps = [
         ":platform_helpers",
-        "//core/common:log",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -846,6 +860,14 @@ cc_library(
     alwayslink = 1,
 )
 
+cc_library(
+    name = "vector_helpers",
+    hdrs = ["vector_helpers.h"],
+    copts = imp_copts(),
+    linkstatic = True,
+    alwayslink = 1,
+)
+
 py_test(
     name = "typed_container_nc_test",
     size = "large",
@@ -881,10 +903,10 @@ cc_library(
     defines = imp_defines(),
     deps = [
         ":invocable",
-        "//core/common:log",
         "//core/view/utils:macros",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/memory",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )

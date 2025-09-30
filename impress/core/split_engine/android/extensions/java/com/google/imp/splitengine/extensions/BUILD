@@ -38,11 +38,11 @@ android_library(
         "-Xep:AndroidJdkLibsChecker:OFF",
     ],
     tags = [
-        "included_in_archive=//java/com/google/ar/imp/apibindings:impress_no_native_lib",
-        "included_in_archive=//java/com/google/ar/imp/apibindings:impress_no_native_lib_aar",
+        "included_in_archive=//apibindings:impress_no_native_lib",
+        "included_in_archive=//apibindings:impress_no_native_lib_aar",
     ],
     deps = [
-        "@com_google_impress//java/com/google/vr/androidxr/extensions:platform_extensions_jar",
         "@maven//:androidx_annotation_annotation",
+        "@maven//:com_android_extensions_xr_extensions_xr",
     ],
 )

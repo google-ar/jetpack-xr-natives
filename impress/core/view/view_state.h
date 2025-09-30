@@ -51,6 +51,10 @@ class ViewState : public window::FilamentHost::State {
 
   bool ShouldPreinitializeMetalPlatform() const override;
 
+  bool ShouldUseSrgbSwapChain() const override;
+
+  bool ShouldUseStencilSwapChain() const override;
+
  protected:
   using RenderResult = window::FilamentHost::RenderResult;
   using RenderResultFlags = window::FilamentHost::RenderResultFlags;

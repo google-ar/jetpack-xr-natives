@@ -14,10 +14,10 @@
 
 #include <memory>
 #include <utility>
-#include <vector>
 
 #include "absl/base/call_once.h"
 #include "core/common/log.h"
+#include "absl/strings/string_view.h"
 #include "filament/filament/backend/include/backend/Platform.h"
 #include "filament/filament/backend/include/private/backend/VirtualMachineEnv.h"
 #include "filament/filament/include/filament/Engine.h"
@@ -27,14 +27,16 @@
 #include "core/common/filament_engine_helpers.h"
 #include "core/common/jni_helpers.h"
 #include "core/common/optional_error.h"
-#include "core/common/platform_helpers.h"
 #include "core/common/trace.h"
 #include "core/config.h"
 #include "core/math/vec.h"
+#include "core/proto/proto_reader.h"
 #include "core/render_passes/surface_renderer.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/view.h"
 #include "core/view/platforms/android/wrappers/imp_lifecycle_callback.h"
+#include "core/view/utils/proto/render_settings.proto.imp.h"
+#include "core/view/utils/proto/view_config.proto.imp.h"
 #include "core/view/view_host.h"
 #include "core/window/filament_host.h"
 
@@ -75,12 +77,28 @@ inline T* FromJava(jlong n) {
 
 std::unique_ptr<View> CreateImpressView(JNIEnv* env, jobject context,
                                         jstring identifier,
-                                        jobject fragment_host) {
+                                        jobject fragment_host, jobject executor,
+                                        jbyteArray view_render_settings) {
   IMP_TRACE();
   JavaVM* vm;
   jint status = env->GetJavaVM(&vm);
   if (status != JNI_OK) {
     IMP_LOG(imp::FATAL) << "Failed to get java VM " << status;
+  }
+
+  imp::ViewConfig view_config;
+  if (view_render_settings != nullptr) {
+    jbyte* const buffer =
+        env->GetByteArrayElements(view_render_settings, nullptr);
+    const jsize buffer_size = env->GetArrayLength(view_render_settings);
+
+    imp::render_settings::ViewRenderSettings params;
+    absl::string_view data(reinterpret_cast<const char*>(buffer), buffer_size);
+    imp::proto::ProtoReader proto_reader(data);
+    proto_reader.ParseMsg(&params);
+    view_config.main_view_render_settings = params;
+
+    env->ReleaseByteArrayElements(view_render_settings, buffer, JNI_ABORT);
   }
 
   // We must assign the JavaVM to filament. This is required for certain
@@ -105,8 +123,8 @@ std::unique_ptr<View> CreateImpressView(JNIEnv* env, jobject context,
                   [vm]() { ::filament::VirtualMachineEnv::JNI_OnLoad(vm); });
 
   std::unique_ptr<View> view = imp::View::CreateClient(
-      std::make_unique<Context>(vm, context, fragment_host),
-      imp::GetString(env, identifier));
+      std::make_unique<Context>(vm, context, fragment_host, executor),
+      imp::GetString(env, identifier), view_config);
 
   return view;
 }
@@ -118,9 +136,9 @@ extern "C" {
 
 JNI_METHOD(jlong, nCreateView)
 (JNIEnv* env, jclass /*clazz*/, jobject context, jstring identifier,
- jobject fragment_host) {
-  std::unique_ptr<View> view =
-      CreateImpressView(env, context, identifier, fragment_host);
+ jobject fragment_host, jobject executor, jbyteArray view_render_settings) {
+  std::unique_ptr<View> view = CreateImpressView(
+      env, context, identifier, fragment_host, executor, view_render_settings);
   auto view_host = std::make_unique<ViewHost>(std::move(view));
 
   return ToJava(view_host.release());
@@ -129,7 +147,7 @@ JNI_METHOD(jlong, nCreateView)
 JNI_METHOD(jlong, nCreateViewWithoutHost)
 (JNIEnv* env, jclass /*clazz*/, jobject context, jstring identifier) {
   std::unique_ptr<View> view =
-      CreateImpressView(env, context, identifier, nullptr);
+      CreateImpressView(env, context, identifier, nullptr, nullptr, nullptr);
   return ToJava(static_cast<BaseView*>(view.release()));
 }
 
@@ -153,8 +171,11 @@ JNI_METHOD(void, nSetLifeCycleCallback)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle, jobject callback) {
 #if IMP_PLATFORM(ANDROID)
   auto* view_host = FromJava<ViewHost>(view_host_handle);
+  auto& view = *view_host->GetView();
+
+  auto wrapped_callback = imp::WrapJni(view.GetContext().GetJniEnv(), callback);
   view_host->GetView()->GetRegistry().GetOrCreate<imp::ImpLifeCycleCallback>(
-      *view_host->GetView(), callback);
+      view, std::move(wrapped_callback));
 #else
   ThrowError(env, imp::Error("Not supported"));
 #endif  // IMP_PLATFORM(ANDROID)
@@ -375,6 +396,18 @@ JNI_METHOD(void, nStaticRenderForTest)
   if (!status.ok()) {
     ThrowError(env, imp::Error(std::string(status.message()).c_str()));
   }
+}
+
+JNI_METHOD(jboolean, nShouldUseSrgbSwapChain)
+(JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
+  auto* view_host = FromJava<ViewHost>(view_host_handle);
+  return view_host->GetState()->ShouldUseSrgbSwapChain();
+}
+
+JNI_METHOD(jboolean, nShouldUseStencilSwapChain)
+(JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
+  auto* view_host = FromJava<ViewHost>(view_host_handle);
+  return view_host->GetState()->ShouldUseStencilSwapChain();
 }
 
 // TODO: it would probably take more refactoring but it would be

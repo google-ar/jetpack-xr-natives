@@ -30,7 +30,7 @@ std::string Create2x2MatrixString(T m) {
   return absl::StrFormat(
       "[ % .3f % .3f  ]\n"
       "[ % .3f % .3f  ]\n",
-      a[0], a[1], a[2], a[3]);
+      a[0], a[2], a[1], a[3]);
 }
 
 template <typename T>

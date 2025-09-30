@@ -135,6 +135,10 @@ class GlyphEmulator {
     // the typographical width of text. By default, on wasm measuring the
     // typographical width is disabled.
     bool should_measure_typographical_width = false;
+    // If possible (i.e. if not on a path), disable splitting this text into
+    // individual glyphs when rendering. This may improve legibility at the cost
+    // of increased glyph atlas usage.
+    bool force_non_separable = false;
   };
 
   GlyphEmulator(Context context, AsyncCanvasSource& canvas_source);
@@ -239,13 +243,15 @@ class GlyphEmulator {
       ABSL_LOCKS_EXCLUDED(fonts_mutex_, system_fonts_mutex_);
 
   // On WASM we want to render text at 2x the size and super sample it if the
-  // window.devicePixelRatio property is less than 2.0. Note that we only use
-  // the subpixel render ratio for supersampling in the x direction.
+  // window.devicePixelRatio property is less than 2.0 and if force_off is
+  // false. Note that we only use the subpixel render ratio for supersampling in
+  // the x direction.
   struct SuperSampleInfo {
     bool should_super_sample;
     float2 subpixel_render_ratio;
   };
-  static SuperSampleInfo GetSuperSampleInfo(float2 physical_pixel_ratio);
+  static SuperSampleInfo GetSuperSampleInfo(float2 physical_pixel_ratio,
+                                            bool force_off);
 
   // LINT.IfChange(font_size_pixels)
   static constexpr const int kDefaultFontSizePixels = 150.0f;

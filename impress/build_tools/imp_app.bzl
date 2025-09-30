@@ -70,7 +70,7 @@ def imp_app(
         android_java_deps = [],
         android_native_lib_deps = [],
         android_jni_library_dep = None,
-        multidex = "legacy",
+        multidex = "native",
         imp_impl = Label("@com_google_impress//:impl_full"),
         **_kwargs):
     """Generates Imp View app targets.

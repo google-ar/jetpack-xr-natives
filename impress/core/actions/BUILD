@@ -31,11 +31,11 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
-        "//core/common:log",
         "//core/common:platform_helpers",
         "//core/math",
         "//core/view/utils:string_map",
         "@com_google_absl//absl/strings",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -75,12 +75,12 @@ cc_library(
         ":action_config",
         ":input_action_event",
         "//core/collision:ray",
-        "//core/common:log",
         "//core/math",
         "//core/ncsb",
         "//core/view/framework",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/types:optional",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )

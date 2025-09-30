@@ -151,6 +151,14 @@ absl::Status RecipeScope::DeclareVariable(
   return absl::OkStatus();
 }
 
+bool RecipeScope::HasVariable(absl::string_view name) const {
+  if (variables_.find(name) != variables_.end()) {
+    return true;
+  }
+
+  return parent_scope_ && parent_scope_->HasVariable(name);
+}
+
 #if IMP_ENABLE_RECIPE_EXPERIMENTAL
 absl::Status RecipeScope::OverwriteVariable(
     const VariableDeclaration& variable_declaration) {

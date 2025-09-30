@@ -42,11 +42,11 @@ cc_library(
     linkstatic = 1,
     deps = [
         "//base:types",
-        "//core/common:log",
         "//core/common:platform_helpers",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/types:optional",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -60,8 +60,8 @@ cc_library(
     copts = imp_google3_copts(),
     linkstatic = 1,
     deps = [
-        "//core/common:log",
         "//core/common:platform_helpers",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )

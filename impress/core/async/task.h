@@ -20,6 +20,8 @@
 #include <sys/stat.h>
 
 #include <algorithm>
+#include <cstddef>
+#include <functional>
 #include <utility>
 
 #include "absl/time/clock.h"
@@ -46,6 +48,7 @@ class TaskId {
   bool operator!=(const TaskId& other) const { return !(other == *this); };
 
  private:
+  friend struct std::hash<TaskId>;
   friend class TaskScheduler;
   // An ID used for TaskId equality.
   int id;
@@ -97,5 +100,15 @@ class Task {
   absl::Time creation_time_;
 };
 }  // namespace imp
+
+// Allows TaskId to be used in robin maps.
+namespace std {
+template <>
+struct hash<imp::TaskId> {
+  size_t operator()(const imp::TaskId& id) const {
+    return std::hash<int>()(id.id);
+  }
+};
+}  // namespace std
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_ASYNC_TASK_H_

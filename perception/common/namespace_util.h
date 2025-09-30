@@ -22,49 +22,35 @@
 namespace androidx::xr::common {
 
 enum Package {
-  PACKAGE_OPENXR,
-  PACKAGE_RUNTIME,
+  PACKAGE_ARCORE,
+  PACKAGE_ARCORE_OPENXR,
+  PACKAGE_ARCORE_INTERNAL,
   PACKAGE_MATH,
   PACKAGE_PERCEPTION,
   PACKAGE_CORE,
 };
 
-inline bool IsLegacyNamespace(JNIEnv* env) {
-  static bool* is_legacy_namespace = nullptr;
-  if (is_legacy_namespace == nullptr) {
-    is_legacy_namespace =
-        new bool(env->FindClass("androidx/xr/runtime/math/Pose") == nullptr);
-    // Clear the exception so it is not propagated to the JVM.
-    env->ExceptionClear();
-  }
-  return *is_legacy_namespace;
-}
-
 inline std::string GetJxrFullClassName(JNIEnv* env, Package package,
                                        std::string class_name) {
   std::string package_name;
   switch (package) {
-    case PACKAGE_OPENXR:
-      package_name = IsLegacyNamespace(env) ? "androidx/xr/openxr/"
-                                            : "androidx/xr/runtime/openxr/";
+    case PACKAGE_ARCORE_OPENXR:
+      package_name = "androidx/xr/arcore/openxr/";
       break;
-    case PACKAGE_RUNTIME:
-      package_name = IsLegacyNamespace(env) ? "androidx/xr/runtime/"
-                                            : "androidx/xr/runtime/internal/";
+    case PACKAGE_ARCORE:
+      package_name = "androidx/xr/arcore/";
+      break;
+    case PACKAGE_ARCORE_INTERNAL:
+      package_name = "androidx/xr/arcore/internal/";
       break;
     case PACKAGE_MATH:
-      package_name = IsLegacyNamespace(env) ? "androidx/xr/math/"
-                                            : "androidx/xr/runtime/math/";
+      package_name = "androidx/xr/runtime/math/";
       break;
     case PACKAGE_PERCEPTION:
-      package_name =
-          IsLegacyNamespace(env)
-              ? "com/google/vr/realitycore/runtime/androidxr/perception/"
-              : "androidx/xr/scenecore/impl/perception/";
+      package_name = "androidx/xr/scenecore/impl/perception/";
       break;
     case PACKAGE_CORE:
-      package_name =
-          IsLegacyNamespace(env) ? "androidx/xr/core/" : "androidx/xr/runtime/";
+      package_name = "androidx/xr/runtime/";
       break;
   }
   return package_name + class_name;

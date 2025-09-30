@@ -38,11 +38,11 @@ cc_library(
         "//core/async:executor",
         "//core/async:future",
         "//core/common:enum_flags",
-        "//core/common:log",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/hash",
         "@com_google_absl//absl/status",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )

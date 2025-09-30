@@ -47,9 +47,9 @@ cc_library(
     deps = [
         "//core:config",
         "//core/common",
-        "//core/common:log",
         "//core/math",
         "@com_google_absl//absl/types:optional",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -145,13 +145,29 @@ cc_library(
     alwayslink = 1,
 )
 
+proto_library(
+    name = "cache_config_proto",
+    srcs = [
+        "proto/cache_config.proto",
+    ],
+    deps = [
+        "//core/proto:imp_proto",
+    ],
+)
+
+imp_cc_proto_library(
+    name = "cache_config_proto_cc_imp",
+    proto = ":cache_config_proto",
+    deps = [
+        "//core/proto:imp_cc_proto",
+    ],
+)
+
 cc_library(
     name = "default_view_config",
     hdrs = ["default_view_config.h"],
     copts = imp_google3_copts(),
-    deps = [
-        ":view_config_proto_cc_imp",
-    ],
+    deps = [":view_config_proto_cc_imp"],
     alwayslink = 1,
 )
 
@@ -162,11 +178,11 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         ":frame_time",
-        "//core/common:log",
         "//core/common:platform_helpers",
         "//core/ncsb",
         "//core/view:base_view",
         "//core/view/framework",
+        "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
     ],
     alwayslink = 1,
@@ -178,6 +194,7 @@ proto_library(
         "proto/view_config.proto",
     ],
     deps = [
+        ":cache_config_proto",
         ":render_settings_proto",
         "//core/proto:imp_proto",
     ],
@@ -187,6 +204,7 @@ imp_cc_proto_library(
     name = "view_config_proto_cc_imp",
     proto = ":view_config_proto",
     deps = [
+        ":cache_config_proto_cc_imp",
         ":render_settings_proto_cc_imp",
         "//core/proto:imp_cc_proto",
     ],

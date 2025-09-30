@@ -187,8 +187,16 @@ template <typename TupleT, std::size_t Index>
 auto BaseRecipeSystem::ArgsToTupleElementHelper(recipe::Args& args,
                                                 absl::Status& out_status)
     -> std::tuple_element_t<Index, TupleT> {
+  // It's possible for a default-constructed tuple element, e.g.
+  //   return std::tuple_element_t<Index, TupleT>{}
+  // to return a reference type, which emits a compiler warning for returning a
+  // reference to a local object on the stack. Returning a static,
+  // default-constructed object is a (slightly hacky) workaround to always
+  // return a non-local object.
+  static const std::tuple_element_t<Index, TupleT> kErrorDefault{};
+
   if (!out_status.ok()) {
-    return std::tuple_element_t<Index, TupleT>{};
+    return kErrorDefault;
   }
 
   using ElementT = std::decay_t<std::tuple_element_t<Index, TupleT>>;
@@ -211,7 +219,7 @@ auto BaseRecipeSystem::ArgsToTupleElementHelper(recipe::Args& args,
           absl::StrFormat("Function expected arg %d of type NodeHandle. "
                           "Received invalid Node.",
                           Index));
-      return std::tuple_element_t<Index, TupleT>{};
+      return kErrorDefault;
     }
   } else if (!absl::holds_alternative<ElementT>(variable)) {
     // When the variable is not the correct type, attempt to coerce it.
@@ -264,7 +272,7 @@ auto BaseRecipeSystem::ArgsToTupleElementHelper(recipe::Args& args,
         "Function expected arg %d of type %s. Received: %s", Index,
         type_traits::kTypeName<ElementT>, recipe::ToTypeName(variable)));
 
-    return std::tuple_element_t<Index, TupleT>{};
+    return kErrorDefault;
   } else {
     return absl::get<ElementT>(variable);
   }
@@ -276,7 +284,7 @@ auto BaseRecipeSystem::ArgsToTupleElementHelper(recipe::Args& args,
         absl::StrFormat("Function expected arg %d of type %s.", Index,
                         type_traits::kTypeName<ElementT>));
 
-    return std::tuple_element_t<Index, TupleT>{};
+    return kErrorDefault;
   } else {
     return absl::get<ElementT>(variable);
   }

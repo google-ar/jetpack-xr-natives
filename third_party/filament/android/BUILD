@@ -69,6 +69,7 @@ FILAMENT_HEADLESS_JNI_DEPS = [
     "@third_party//filament/libs:math_hdrs",
     "@third_party//filament/libs:geometry",
     "@third_party//filament/libs:utils_hdrs",
+    "@third_party//filament/libs:generatePrefilterMipmap",
     "@third_party//filament/filament/backend:virtual_machine_env",
 ] + if_linux([
     "@bazel_tools//tools/jdk:jni",

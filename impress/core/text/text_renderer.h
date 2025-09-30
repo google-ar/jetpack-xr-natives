@@ -116,6 +116,8 @@ class TextRenderer : public Component {
 
   void Cleanup();
 
+  Future<absl::Status> OnIsfStateChanged();
+
   TextRendererState GetState() const;
 
   float4 GetTextColor() const;
@@ -204,6 +206,12 @@ class TextRenderer : public Component {
   // Gets the font params to use to render the text.
   const SystemFontParams* GetSystemFontParams() const;
 
+  // Returns true if force_non_separable is actually set. Even if the user
+  // specifies force_non_separable in text options, we may not be able to
+  // respect it based on workarounds, specifically text tracking and text on a
+  // path.
+  bool GetForceNonSeparable() const { return force_non_separable_; }
+
  private:
   struct GlyphVerticesAndVisualBounds {
     std::vector<float3> vertices;
@@ -219,6 +227,9 @@ class TextRenderer : public Component {
   Future<absl::Status> SetupImpl(
       std::optional<TextLayoutProvider> layout_provider);
 
+  // Creates and updates the text geometry and mesh.
+  Future<absl::Status> UpdateMeshesAndMaterials();
+
   void ApplyColorsToMaterial(imp::Material& material);
 
   // Glyph vertices store their screen space coordinates in the xy components
@@ -231,7 +242,7 @@ class TextRenderer : public Component {
   void RenderGlyphPass(int vertex_offset, int index_offset,
                        const std::vector<float3>& glyph_vertices,
                        bool has_stroke, MeshData& mesh_data);
-  void RecalculateMesh();
+  void RecalculateMesh(bool force_regenerate_mesh = false);
 
   float GetVerticalPivot(TextRendererState::VerticalPivot pivot, float min,
                          float max) const;
@@ -271,6 +282,8 @@ class TextRenderer : public Component {
   std::vector<float3> path_;
   float2 text_pivot_;
   bool is_path_changed_;
+  // If true, it means glyphs are not separated to be saved in the glyph atlas.
+  bool force_non_separable_;
 
   GlyphAtlas* glyph_atlas_ = nullptr;
   ScopedCanvas::FontInfo font_info_;

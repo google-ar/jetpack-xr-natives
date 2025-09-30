@@ -45,11 +45,17 @@ vec4 getGlyphSample(highp vec2 uv_neg) {
 vec4 getGlyphColor(highp vec2 uv, vec4 glyph_sample) {
   vec4 color;
   if (uv.y < 0.0) {
+    // When emojis (or unseparable texts that contain emojis) are rendered to
+    // the canvas, we want to sample the colors with a single pass, otherwise if
+    // the color is semi-opaque, we would be applying the color onto itself
+    // twice.
+    if (uv.x < 0.0) {
+      return float4(0.0);
+    }
     // If the y coord is negative, then it is an emoji and we should respect the
     // original color from the atlas. It's in sRGB space so needs to be
     // converted to linear.
-    color = vec4(glyph_sample.rgb, 1.0) * glyph_sample.a;
-    color.rgb = srgbToLinear(color.rgb);
+    color = vec4(srgbToLinear(glyph_sample.rgb), 1.0) * glyph_sample.a;
     color *= materialParams.TextColorFactor.a;
     return color;
   }

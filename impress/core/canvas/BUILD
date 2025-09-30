@@ -139,7 +139,6 @@ cc_library(
         "//core/common:buffer_access",
         "//core/common:context",
         "//core/common:invocable",
-        "//core/common:log",
         "//core/common:platform_helpers",
         "//core/common:resource_helpers",
         "//core/common:small_source_location",
@@ -156,6 +155,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/types:optional",
+        "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
     ] + select({
@@ -263,7 +263,6 @@ cc_library(
         "//core/async:future",
         "//core/canvas/fonts:font_holder",
         "//core/canvas/fonts:font_params_proto_cc",
-        "//core/common:log",
         "//core/common:small_source_location",
         "//core/geometry/shapes",
         "//core/math",
@@ -277,6 +276,7 @@ cc_library(
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/types:variant",
+        "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
     ],
@@ -297,7 +297,6 @@ objc_library(
         ":canvas_interfaces",
         ":constants",
         "//core/canvas/fonts:ios_font_holder",
-        "//core/common:log",
         "//core/geometry/shapes",
         "//core/math",
         "//core/render",
@@ -306,6 +305,7 @@ objc_library(
         "//third_party/apple_frameworks:Foundation",
         "//third_party/apple_frameworks:UIKit",
         "@com_google_absl//absl/memory",
+        "@com_google_impress//core/common:log",
     ],
 )
 

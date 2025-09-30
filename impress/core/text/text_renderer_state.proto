@@ -32,7 +32,7 @@ import "core/proto/imp.proto";
 // share glyphs instead of duplicating them in texture memory and repeatedly
 // re-drawing them.
 //
-// Next ID: 21
+// Next ID: 22
 message TextRendererState {
   // Type used for bottom_pivot and top_pivot. These two fields respectively
   // determine how a pivot.y value of 0 or a pivot.y value of 1 positions text
@@ -233,4 +233,14 @@ message TextRendererState {
   // have a scene with very few TextRenderers, since batching may incur CPU/GPU
   // memory usage and CPU processing overhead.
   bool batch = 20;
+
+  // If possible (i.e. if not on a path, and text_tracking is zero), both
+  // disable splitting this text into individual glyphs and disable
+  // supersampling. This may improve legibility at the cost of increased glyph
+  // atlas usage.
+  //
+  // TODO Allow more explicit control of supersampling. This would
+  // probably involve adding a float2 to control this and moving the assumption
+  // that supersampling only happens at a specific ratio and only on web.
+  bool force_non_separable = 21;
 }

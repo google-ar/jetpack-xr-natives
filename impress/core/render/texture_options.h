@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <optional>
 
+#include "absl/strings/str_format.h"
 #include "filament/filament/include/filament/Texture.h"
 #include "filament/filament/include/filament/TextureSampler.h"
 
@@ -36,6 +37,14 @@ struct TextureGenerationOptions {
 
   // Optional override to the default format in the ImageAsset object.
   std::optional<Format> texture_format_override = {};
+
+  template <typename Sink>
+  friend void AbslStringify(Sink& sink,
+                            const TextureGenerationOptions& options) {
+    absl::Format(&sink, "(%hhu, %hu)",
+                 options.generated_mipmap_levels.value_or(1),
+                 options.texture_format_override.value_or(Format::SRGB8_A8));
+  }
 };
 
 // Sampler options are parameters to change the sampling behavior of textures

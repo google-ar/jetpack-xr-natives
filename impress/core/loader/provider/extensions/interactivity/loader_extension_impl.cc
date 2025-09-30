@@ -108,7 +108,7 @@ using InteractivityGraphTypeDataOffsets =
 
 using InteractivityValue =
     std::variant<absl::monostate, bool, int, float, float2, float3, float4,
-                 mat4f, absl::string_view>;
+                 mat2f, mat3f, mat4f, absl::string_view>;
 using InteractivityConfiguration =
     std::variant<int, absl::string_view, bool, float, std::vector<int>>;
 
@@ -222,6 +222,16 @@ InteractivityVariableOffset CreateInteractivityVariable(
           fbb, id, schemas::InteractivityValue::Float4,
           fbb.CreateStruct(schemas::Float4(flatbuffers::Pack(value))).Union());
     }
+    InteractivityVariableOffset operator()(const mat2f value) {
+      return schemas::CreateInteractivityVariable(
+          fbb, id, schemas::InteractivityValue::Mat2f,
+          fbb.CreateStruct(schemas::Mat2f(flatbuffers::Pack(value))).Union());
+    }
+    InteractivityVariableOffset operator()(const mat3f value) {
+      return schemas::CreateInteractivityVariable(
+          fbb, id, schemas::InteractivityValue::Mat3f,
+          fbb.CreateStruct(schemas::Mat3f(flatbuffers::Pack(value))).Union());
+    }
     InteractivityVariableOffset operator()(const mat4f value) {
       return schemas::CreateInteractivityVariable(
           fbb, id, schemas::InteractivityValue::Mat4f,
@@ -251,8 +261,12 @@ absl::Status CreateInteractivityNodeFlows(
         flows,
     InteractivityNodeFlowOffsets& out_flow_offsets) {
   for (const auto& [socket_name, flow] : flows) {
+    if (!flow.node.has_value()) {
+      continue;
+    }
+
     out_flow_offsets.push_back(
-        CreateInteractivityNodeFlow(fbb, socket_name, flow.node, flow.socket));
+        CreateInteractivityNodeFlow(fbb, socket_name, *flow.node, flow.socket));
   }
 
   return absl::OkStatus();
@@ -442,6 +456,18 @@ absl::Status CreateInteractivityNodeConfigurations(
 
                 std::get<std::string>(configuration.value)));
         break;
+      case imp::gltf::Interactivity::Graph::Node::ConfigurationType::
+          INITIAL_INDEX:
+        if (!std::get_if<int>(&configuration.value)) {
+          return absl::InternalError(
+              absl::StrFormat("Interactivity configuration id %d has no value",
+                              configuration.id));
+        }
+        out_configuration_offsets.push_back(
+            CreateInteractivityNodeConfiguration(
+                fbb, schemas::InteractivityNodeConfigurationType::INITIAL_INDEX,
+                std::get<int>(configuration.value)));
+        break;
       default:
         return absl::InternalError(
             absl::StrFormat("Invalid interactivity configuration id with id %d",
@@ -467,7 +493,7 @@ absl::Status CreateInteractivityNodeValues(
         const gltf::Interactivity::Graph::Node::Flow& flow) {
       return schemas::CreateInteractivityNodeValue(
           fbb, schemas::InteractivityNodeValueType::InteractivityNodeFlow,
-          CreateInteractivityNodeFlow(fbb, socket_name, flow.node, flow.socket)
+          CreateInteractivityNodeFlow(fbb, socket_name, *flow.node, flow.socket)
               .Union());
     }
     InteractivityNodeValueOffset operator()(

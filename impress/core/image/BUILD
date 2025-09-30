@@ -88,8 +88,8 @@ cc_library(
     linkstatic = True,
     deps = [
         ":image",
-        "//core/common:log",
         "@com_google_absl//absl/log:check",
+        "@com_google_impress//core/common:log",
         "@third_party//filament/filament/backend:driver_enums",
         "@third_party//filament/filament/backend:pixel_buffer_descriptor",
     ],
@@ -111,9 +111,9 @@ cc_library(
         "//core:config",
         "//core/common:context",
         "//core/common:jni_helpers",
-        "//core/common:log",
         "//core/view/platforms/android/wrappers:graphics",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_impress//core/common:log",
         "@third_party//filament/filament/backend:driver_enums",
         "@third_party//filament/filament/backend:pixel_buffer_descriptor",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
@@ -198,7 +198,6 @@ cc_library(
         ":wasm_texture_contents",
         "//base:atomic_sequence_num",
         "//core/async:future",
-        "//core/common:log",
         "//core/resources",
         "//javascript/core/wasm/decode_image:decode_image.js.lds",
         "//third_party/emscripten:GL-webgl2-full_es3",
@@ -209,6 +208,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/types:optional",
+        "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
         "@third_party//filament/filament/backend:pixel_buffer_descriptor",
@@ -235,6 +235,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_impress//core/common:log",
         "@stblib//:stb_image",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
@@ -369,10 +370,10 @@ cc_library(
         "//core/async:future",
         "//core/common",
         "//core/common:context",
-        "//core/common:log",
         "//core/resources",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_impress//core/common:log",
     ] + select({
         "//core:android": [
             ":bitmap_factory_decode_image",
@@ -403,3 +404,25 @@ imp_assets(
 # --android_ndk_min_sdk_version=23
 
 # --config=ios_x86_64
+
+cc_library(
+    name = "owned_image_content",
+    hdrs = ["owned_image_content.h"],
+    deps = [
+        ":image",
+        "@third_party//filament/filament/backend:driver_enums",
+        "@third_party//filament/filament/backend:pixel_buffer_descriptor",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "borrowed_image_content",
+    hdrs = ["borrowed_image_content.h"],
+    deps = [
+        ":image",
+        "@third_party//filament/filament/backend:driver_enums",
+        "@third_party//filament/filament/backend:pixel_buffer_descriptor",
+    ],
+    alwayslink = 1,
+)

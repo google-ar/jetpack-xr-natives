@@ -105,6 +105,10 @@ class SplitEngineSerializerImpl
   static constexpr UpdatePhase kUpdatePhase = UpdatePhase::kEnd;
   using UpdateDependencies = UpdateIds<SplitEngineMaterialUpdater>;
 
+  // The maximum number of frames that can be in-flight before we stop sending
+  // frames to the renderer and wait for the system to catch up.
+  static constexpr size_t kMaxInFlightFrames = 10;
+
   // Constructs a SplitEngineSerializerImpl.
   // The bridge_sender is used to send serialized data to the render using
   // a shared channel, which is initialized with a fixed size buffer of
@@ -168,6 +172,8 @@ class SplitEngineSerializerImpl
       filament::RenderableManager::Instance instance) const override;
   void SetReceiveShadows(filament::RenderableManager::Instance instance,
                          bool enable) override;
+  bool GetFogEnabled(
+      filament::RenderableManager::Instance instance) const override;
   void SetFogEnabled(filament::RenderableManager::Instance instance,
                      bool enable) override;
   size_t GetMorphTargetCount(
@@ -180,6 +186,8 @@ class SplitEngineSerializerImpl
       size_t count) override;
 
   SplitEngineAndroidBridge& GetBridge() override;
+
+  bool ReadyForNextFrame() const override;
 
   void AddMaterial(const filament::Material* material,
                    const BufferAccess& data) override;

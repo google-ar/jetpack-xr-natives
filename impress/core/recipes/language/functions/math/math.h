@@ -52,6 +52,8 @@ void RegisterMathUtilityFunctions(BaseRecipeSystem* recipe_system);
 
 void RegisterMathVectorFunctions(BaseRecipeSystem* recipe_system);
 
+void RegisterMathQuaternionFunctions(BaseRecipeSystem* recipe_system);
+
 }  // namespace imp::recipe
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_RECIPES_LANGUAGE_FUNCTIONS_MATH_H_

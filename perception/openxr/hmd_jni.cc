@@ -21,7 +21,10 @@
 #include "openxr/jobject_creator.h"
 #include "openxr/openxr_manager.h"
 
-static jobject NativeGetHeadPose(JNIEnv* env, jlong monotonic_time_ns) {
+extern "C" {
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrDevice_nativeGetHeadPose(
+    JNIEnv* env, jclass /*clazz*/, jlong monotonic_time_ns) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
 
@@ -33,9 +36,10 @@ static jobject NativeGetHeadPose(JNIEnv* env, jlong monotonic_time_ns) {
   return androidx::xr::openxr::CreateJavaPose(env, pose);
 }
 
-static jobjectArray NativeGetViewCameras(JNIEnv* env,
-                                         jboolean is_head_tracking_enabled,
-                                         jlong monotonic_time_ns) {
+JNIEXPORT jobjectArray JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeGetViewCameras(
+    JNIEnv* env, jclass /*clazz*/, jboolean is_head_tracking_enabled,
+    jlong monotonic_time_ns) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
 
@@ -49,32 +53,4 @@ static jobjectArray NativeGetViewCameras(JNIEnv* env,
   return androidx::xr::openxr::CreateJavaViewCameraStates(
       env, /*view_count=*/2, xr_views.data());
 }
-
-extern "C" {
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_openxr_OpenXrDevice_nativeGetHeadPose(
-    JNIEnv* env, jclass /*clazz*/, jlong monotonic_time_ns) {
-  return NativeGetHeadPose(env, monotonic_time_ns);
-}
-
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrDevice_nativeGetHeadPose(
-    JNIEnv* env, jclass /*clazz*/, jlong monotonic_time_ns) {
-  return NativeGetHeadPose(env, monotonic_time_ns);
-}
-
-JNIEXPORT jobjectArray JNICALL
-Java_androidx_xr_openxr_OpenXrPerceptionManager_nativeGetViewCameras(
-    JNIEnv* env, jclass /*clazz*/, jboolean is_head_tracking_enabled,
-    jlong monotonic_time_ns) {
-  return NativeGetViewCameras(env, is_head_tracking_enabled, monotonic_time_ns);
-}
-
-JNIEXPORT jobjectArray JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrPerceptionManager_nativeGetViewCameras(
-    JNIEnv* env, jclass /*clazz*/, jboolean is_head_tracking_enabled,
-    jlong monotonic_time_ns) {
-  return NativeGetViewCameras(env, is_head_tracking_enabled, monotonic_time_ns);
-}
-
 }  // extern "C"

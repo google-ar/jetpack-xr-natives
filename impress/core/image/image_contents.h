@@ -17,18 +17,20 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_IMAGE_IMAGE_CONTENTS_H_
 #define THIRD_PARTY_IMPRESS_CORE_IMAGE_IMAGE_CONTENTS_H_
 
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/backend/include/backend/PixelBufferDescriptor.h"
+#include "filament/filament/include/filament/Texture.h"
 #include "core/common/buffer_access.h"
-#include "core/common/optional_error.h"
 
 namespace imp::image {
 
@@ -94,6 +96,39 @@ class ImageContents {
     result.push_back(CreatePixelBufferDescriptor(callback, is_r11_g11_b10));
     return result;
   }
+};
+
+class StitchedImageContents : public ImageContents {
+ public:
+  StitchedImageContents(int width, int height, int channels,
+                        std::vector<uint8_t>&& memory)
+      : width_(width),
+        height_(height),
+        channels_(channels),
+        memory_(std::make_shared<std::vector<uint8_t>>(std::move(memory))) {
+    assert(memory_->size() == GetSize());
+  }
+
+  uint32_t GetWidth() const override { return static_cast<uint32_t>(width_); }
+  uint32_t GetStride() const override {
+    return static_cast<uint32_t>(width_ * channels_);
+  }
+  uint32_t GetHeight() const override { return static_cast<uint32_t>(height_); }
+  std::size_t GetSize() const override { return width_ * height_ * channels_; }
+  uint8_t* GetData() override { return memory_->data(); }
+  bool HasAlpha() const override { return channels_ == 4; }
+  filament::backend::PixelBufferDescriptor CreatePixelBufferDescriptor(
+      std::function<void()> callback, bool is_r11_g11_b10) override;
+  filament::backend::TextureFormat GetTextureFormat() const override {
+    return HasAlpha() ? filament::Texture::InternalFormat::SRGB8_A8
+                      : filament::Texture::InternalFormat::SRGB8;
+  }
+
+ private:
+  int width_;
+  int height_;
+  int channels_;
+  std::shared_ptr<std::vector<uint8_t>> memory_;
 };
 
 }  // namespace imp::image

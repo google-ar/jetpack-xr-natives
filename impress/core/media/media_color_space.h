@@ -39,7 +39,6 @@ class MediaColorSpace {
   // (broken link)
   // TODO: zakerinasab - Apparently Exoplayer doesn't support BT601-525 and
   // Display-P3. Figure out if this is important.
-  // LINT.IfChange
   enum class Standard : int {
     kUnknown = 0,
     kBT709 = 1,
@@ -51,17 +50,12 @@ class MediaColorSpace {
     kDCI_P3 = 0xf2,
     kAdobeRGB = 0xf3,
   };
-  // LINT.ThenChange(
-  //     //depot/google3/third_party/impress/java/com/google/ar/imp/apibindings/ImpressApi.java,
-  //     //depot/google3/third_party/impress/java/com/google/ar/imp/apibindings/ImpressApiImpl.java
-  // )
 
   // Color transfer of a media asset. The enum values are defined to match
   // the values returned by media3. Please see here for more information:
   // third_party/java_src/android_libs/media/libraries/common/src/main/java/androidx/media3/common/C.java
   // For the enum values (except sRGB and Gamma 2.2), please see here:
   // (broken link)
-  // LINT.IfChange
   enum class Transfer : int {
     kUnknown = 0,
     kLinear = 1,
@@ -71,27 +65,18 @@ class MediaColorSpace {
     kST2084 = 6,
     kHLG = 7,
   };
-  // LINT.ThenChange(
-  //     //depot/google3/third_party/impress/java/com/google/ar/imp/apibindings/ImpressApi.java,
-  //     //depot/google3/third_party/impress/java/com/google/ar/imp/apibindings/ImpressApiImpl.java
-  // )
 
   // Color range of a media asset. The enum values are defined to match
   // the values returned by media3. Please see here for more information:
   // third_party/java_src/android_libs/media/libraries/common/src/main/java/androidx/media3/common/C.java
   // For the enum values, please see here:
   // (broken link)
-  // LINT.IfChange
   enum class Range : int {
     kUnknown = 0,
     kFull = 1,
     kLimited = 2,
     kExtended = 3,
   };
-  // LINT.ThenChange(
-  //     //depot/google3/third_party/impress/java/com/google/ar/imp/apibindings/ImpressApi.java,
-  //     //depot/google3/third_party/impress/java/com/google/ar/imp/apibindings/ImpressApiImpl.java
-  // )
 
   static constexpr uint16_t kMaxContentLightLevelUnknown = 0;
 

@@ -43,6 +43,7 @@ cc_library(
         "//core/async:future",
         "//core/async:future_interrupter",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/synchronization",
@@ -64,6 +65,33 @@ cc_library(
 )
 
 cc_library(
+    name = "android_resource_loader",
+    srcs = [
+        "android_resource_loader.cc",
+    ],
+    hdrs = [
+        "android_resource_loader.h",
+    ],
+    copts = imp_google3_copts(),
+    deps = [
+        ":url_loader",
+        "//core:config",
+        "//core/async:executor",
+        "//core/async:future",
+        "//core/common:context",
+        "//core/common:jni_helpers",
+        "//core/view/platforms/android/wrappers:activity_context",
+        "//core/view/platforms/android/wrappers:input_stream",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/strings:str_format",
+    ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
+    alwayslink = 1,
+)
+
+cc_library(
     name = "android_url_loader",
     srcs = [
         "android_url_loader.cc",
@@ -73,6 +101,7 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
+        ":android_resource_loader",
         ":url_loader",
         "//core:config",
         "//core/async:executor",
@@ -97,9 +126,50 @@ cc_library(
     alwayslink = 1,
 )
 
+cc_library(
+    name = "cronet_url_loader",
+    srcs = [
+        "cronet_url_loader.cc",
+    ],
+    hdrs = [
+        "cronet_url_loader.h",
+    ],
+    copts = imp_google3_copts(),
+    deps = [
+        ":android_resource_loader",
+        ":url_loader",
+        "//core:config",
+        "//core/async:executor",
+        "//core/async:future",
+        "//core/async:future_interrupter",
+        "//core/common",
+        "//core/common:context",
+        "//core/common:jni_helpers",
+        "//core/monitor:profiling_clock",
+        "//core/view/platforms/android/wrappers:activity_context",
+        "//core/view/platforms/android/wrappers:input_stream",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
+    ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
+    alwayslink = 1,
+)
+
 # blaze test :android_url_loader_robo_test --copt="-DROBOLECTRIC_IMP_PLATFORM=1"
 # ((broken link) forces us to explicitly specify the copt in order to expose
 # supported Robolectric android types from activity_context.h.)
+
+# blaze test :cronet_url_loader_robo_test --copt="-DROBOLECTRIC_IMP_PLATFORM=1"
 
 cc_library(
     name = "curl_url_loader",
@@ -117,7 +187,6 @@ cc_library(
         "//core/async:executor",
         "//core/async:future",
         "//core/common",
-        "//core/common:log",
         "//core/common:robin_map",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/memory",
@@ -128,6 +197,7 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/types:optional",
+        "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
     ],
     alwayslink = 1,
@@ -208,7 +278,6 @@ cc_library(
         "//core/async:future",
         "//core/common",
         "//core/common:context",
-        "//core/common:log",
         "//core/common:robin_map",
         "//core/common:trace",
         "//core/view/utils:string_map",
@@ -221,6 +290,7 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
         "@com_google_sandboxed_api//sandboxed_api:embed_file",
         "@mediapipe//mediapipe/framework/port:status",
         "@robin_map",

@@ -137,7 +137,11 @@ cc_library(
     ]) + if_apple([
         "utils/include/utils/darwin/Systrace.h",
     ]),
-    deps = ["@robin_map"],
+    deps = [
+        "@com_google_absl//absl/base:log_severity",
+        "@com_google_impress//core/common:log",
+        "@robin_map",
+    ],
     alwayslink = 1,
 )
 
@@ -484,7 +488,17 @@ cc_library(
         "ibl/src/CubemapUtilsImpl.h",
         "ibl/src/Image.cpp",
     ],
-    copts = filament_copts(),
+    copts = filament_copts() + select({
+        # TODO: Work around clang hanging in the SLP
+        # vectorizer.  The impact should be small as macos x86_64 is
+        # being phased out ((broken link)), and this dependency
+        # currently only affects one package
+        # (//third_party/arcore/ar).
+        "@third_party//filament:macos_x86_64": [
+            "-fno-slp-vectorize",
+        ],
+        "//conditions:default": [],
+    }),
     defines = filament_defines(),
     linkstatic = 1,
     deps = [
@@ -616,6 +630,53 @@ cc_library(
         "@third_party//filament/filament:generated_shaders",
         "@third_party//filament/filament/backend:backend_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "matp",
+    srcs = glob([
+        "filament-matp/src/**/*.cpp",
+        "filament-matp/src/**/*.h",
+    ]),
+    hdrs = glob([
+        "filament-matp/include/filament-matp/**/*.h",
+    ]),
+    linkstatic = 1,
+    strip_include_prefix = "filament-matp/include",
+    deps = [
+        "@third_party//filament/filament/backend:driver_enums",
+        "@third_party//filament/libs:filabridge_hdrs",
+        "@third_party//filament/libs:filamat",
+        "@third_party//filament/libs:math_hdrs",
+        "@third_party//filament/libs:utils",
+        "@third_party//filament/libs:utils_hdrs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "generatePrefilterMipmap",
+    srcs = [
+        "generatePrefilterMipmap/src/generatePrefilterMipmap.cpp",
+    ],
+    hdrs = [
+        "generatePrefilterMipmap/include/filament-generatePrefilterMipmap/generatePrefilterMipmap.h",
+    ],
+    copts = filament_copts(),
+    defines = filament_defines(),
+    includes = [
+        "generatePrefilterMipmap/include",
+    ],
+    linkstatic = 1,
+    deps = [
+        ":math_hdrs",
+        ":utils_hdrs",
+        "@third_party//filament/filament:filament_hdrs",
+        "@third_party//filament/filament/backend:driver_enums",
+        "@third_party//filament/filament/backend:pixel_buffer_descriptor",
+        "@third_party//filament/libs:ibl_hdrs",
     ],
     alwayslink = 1,
 )

@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_RECIPES_LANGUAGE_RECIPE_RUNTIME_GRAPH_H_
 
 #include <memory>
+#include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
@@ -162,7 +163,7 @@ class RecipeRuntimeGraph {
   const RecipeGraph& graph_;
   recipe::NodeIdMap<const RecipeNode*> node_map_;
   recipe::NodeIdMap<std::unique_ptr<RecipeCustomStatement>> custom_statements_;
-  StringMap<const RecipeNode*> event_node_map_;
+  StringMap<std::vector<const RecipeNode*>> event_node_map_;
   Invocable<void(RecipeRuntimeEvent)> runtime_event_listener_;
   Invocable<void(const NodeId& id, const recipe::Variables&)>
       socket_value_listener_;

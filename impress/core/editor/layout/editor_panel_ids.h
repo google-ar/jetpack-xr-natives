@@ -17,23 +17,56 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_LAYOUT_EDITOR_PANELS_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_LAYOUT_EDITOR_PANELS_H_
 
-#include "absl/strings/string_view.h"
+#include <string>
 
 // The list of panels for the editor.
-namespace imp::editor::panel_ids {
+namespace imp::editor {
 
-// Top-left panel that mainly houses the node graph, etc.
-static constexpr absl::string_view kSceneWindow = "Scene";
-// Top right panel that mainly houses component panels.
-static constexpr absl::string_view kDetailsWindow = "Details";
-// The big row of tabs at the bottom of the editor.
-static constexpr absl::string_view kTabBar = "Tab Bar";
-// The menu bar at the top of the editor.
-static constexpr absl::string_view kMenuBar = "Menu Bar";
-// The toolbar in the top center of the editor that houses play/pause, etc.
-static constexpr absl::string_view kToolBar = "Toolbar";
-static constexpr absl::string_view kFreeform = "";
+// Indicate the location of the widget in the editor.
+enum class PanelId {
+  // The Scene panel mainly contains the 3D scene graph / node hierarchy.
+  kSceneWindow,
+  // The Details panel contains the node details and component editor.
+  kDetailsWindow,
+  // The left panel contains the widgets that are pinned to the left side of the
+  // screen, along with the scene window.
+  kLeftPanel,
+  // The right panel contains the widgets that are pinned to the right side of
+  // the screen, along with the details window.
+  kRightPanel,
+  // The menu bar contains the widgets that are pinned to the top of the screen.
+  kMenuBar,
+  // The tool bar is a panel in the top-middle of the screen, that houses
+  // play/pause, etc.
+  kToolBar,
+  // The tab bar contains the widgets that are pinned to the bottom of the
+  // screen.
+  kTabBar,
+  kFreeform,
+};
 
-}  // namespace imp::editor::panel_ids
+inline std::string PanelIdToString(PanelId panel_id) {
+  switch (panel_id) {
+    case PanelId::kSceneWindow:
+      return "Scene";
+    case PanelId::kDetailsWindow:
+      return "Details";
+    case PanelId::kLeftPanel:
+      return "Left Panel";
+    case PanelId::kRightPanel:
+      return "Right Panel";
+    case PanelId::kMenuBar:
+      return "Menu Bar";
+    case PanelId::kToolBar:
+      return "Tool Bar";
+    case PanelId::kTabBar:
+      return "Tab Bar";
+    case PanelId::kFreeform:
+      return "Freeform";
+  }
+  return "Unknown";
+}
+
+}  // namespace imp::editor
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_EDITOR_LAYOUT_EDITOR_PANELS_H_

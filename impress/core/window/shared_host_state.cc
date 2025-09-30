@@ -177,8 +177,11 @@ absl::StatusOr<Engine*> SharedHostState::GetOrCreateEngine(
   // that occur during engine creation can be caught.
   utils::Panic::setPanicHandler(FilamentPanicHandler, nullptr);
 
+  bool using_precreated_platform = false;
 #if IMP_MATERIAL_API(METAL)
-  if (preinitialize_metal_platform) {
+  if (preinitialize_metal_platform &&
+      backend == filament::backend::Backend::METAL) {
+    using_precreated_platform = platform == nullptr;
     filament::backend::PlatformMetal* platform_metal =
         platform == nullptr
             ? (new filament::backend::PlatformMetal())
@@ -207,7 +210,7 @@ absl::StatusOr<Engine*> SharedHostState::GetOrCreateEngine(
   }
 
   backend_ = backend;
-  platform_ = platform;
+  platform_ = using_precreated_platform ? nullptr : platform;
   shared_gl_context_ = shared_gl_context;
   deleter_ = std::move(shared_context_deleter);
   using_external_context_ = using_external_context;

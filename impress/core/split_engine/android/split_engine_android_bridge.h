@@ -30,7 +30,6 @@
 #include "flatbuffers/flatbuffer_builder.h"
 #include "flatbuffers/verifier.h"
 #include "core/async/future.h"
-#include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
@@ -38,6 +37,7 @@
 namespace imp::split_engine {
 
 // Interface for an Android specific Split Engine Bridge.
+// TODO: (broken link) - Remove this once Transport refactoring is merged.
 class SplitEngineAndroidBridge {
  public:
   SplitEngineAndroidBridge() = default;
@@ -47,22 +47,28 @@ class SplitEngineAndroidBridge {
   // that additional texture ids are for stereo rendering.
   // Returns a Java android.view.Surface object backed by the external texture.
   virtual jobject CreateExternalTextureSurface(
-      const std::vector<TextureId>& texture_ids) = 0;
+      const std::vector<TextureId>& texture_ids) {
+    // Default implementation to be used in desktop environment.
+    // This is for pure compilation purposes only. External Texture Surface is
+    // Android specific.
+    return nullptr;
+  };
 
   // Sets the resolution of the external texture surface bound to the given
   // texture id.
   virtual bool SetExternalTextureSurfaceSize(TextureId texture_id,
-                                             int32_t width, int32_t height) = 0;
+                                             int32_t width, int32_t height) {
+    // Default implementation to be used in desktop environment.
+    // This is for pure compilation purposes only. External Texture Surface is
+    // Android specific.
+    return false;
+  };
 
   // Sends a flatbuffer request to the backend with a handler for a flatbuffer
   // response.
   virtual bool SendRequest(
       const std::vector<uint8_t>& data,
       std::function<void(const std::vector<uint8_t>&)> callback) = 0;
-
-  // Returns the SplitEngineSharedMemoryBridgeClient associated with the bridge.
-  virtual SplitEngineSharedMemoryBridgeClient&
-  GetSplitEngineSharedMemoryBridgeClient() = 0;
 };
 
 // Helper method to send a request to the Split Engine backend and return a

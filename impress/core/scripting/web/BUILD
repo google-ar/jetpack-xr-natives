@@ -82,13 +82,13 @@ cc_library(
     deps = [
         ":web_view",
         "//core/common:jni_helpers",
-        "//core/common:log",
         "//core/proto:proto_reader",
         "//core/proto:proto_writer",
         "//core/scripting:message_helpers",
         "//core/scripting/proto:bridge_cc_proto",
         "//core/view:view_host",
         "//core/view/scripting",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -110,13 +110,13 @@ objc_library(
     deps = [
         ":web_view",
         "//core/common:context",
-        "//core/common:log",
         "//core/scripting:message_helpers",
         "//core/scripting/proto:bridge_cc_proto",
         "//core/view/framework",
         "//third_party/apple_frameworks:Foundation",
         "//third_party/apple_frameworks:UIKit",
         "//third_party/apple_frameworks:WebKit",
+        "@com_google_impress//core/common:log",
     ],
 )
 
@@ -150,13 +150,13 @@ cc_library(
         ":wasm_helpers",
         ":web_view",
         "//core/common",
-        "//core/common:log",
         "//core/common:rememberer",
         "//core/scripting:message_helpers",
         "//core/view/framework",
         "//javascript/core:imp_web_bridge_js_embed",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )

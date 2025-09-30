@@ -27,6 +27,7 @@ licenses(["notice"])
 imp_assets(
     name = "texture_assets",
     srcs = [
+        ":camera_switch.png",
         ":error.png",
         ":file.png",
         ":folder.png",

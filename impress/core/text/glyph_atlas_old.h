@@ -48,6 +48,7 @@
 #include "core/math/vec.h"
 #include "core/render/texture.h"
 #include "core/text/glyph_atlas.h"
+#include "core/text/glyph_emulator.h"
 #include "core/text/text_helpers.h"
 #include "core/view/base_view.h"
 #include "core/view/utils/string_map.h"
@@ -207,7 +208,8 @@ class GlyphAtlasOld : public GlyphAtlas, public Rememberer {
   // On WASM we want to render text at 2x the size and super sample it if the
   // window.devicePixelRatio property is less than 2.0. Note that we only use
   // the subpixel render ratio for supersampling in the x direction.
-  Future<GlyphEmulator::SuperSampleInfo> GetSuperSampleInfo() const override;
+  Future<GlyphEmulator::SuperSampleInfo> GetSuperSampleInfo(
+      bool force_off) const override;
 
   // Provides the percentage of the atlas that is currently occupied
   //
@@ -228,7 +230,7 @@ class GlyphAtlasOld : public GlyphAtlas, public Rememberer {
 
  private:
   bool ShouldSuperSample() const;
-  float2 GetSubpixelRenderRatio() const;
+  float2 GetSubpixelRenderRatio(bool force_off) const;
 
   // Represents a font. Every font corresponds to a unique FontId and is used
   // for differentiating between them.

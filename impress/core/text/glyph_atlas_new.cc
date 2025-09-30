@@ -139,7 +139,7 @@ GlyphAtlasNew::GlyphAtlasNew(BaseView& view,
 #if IMP_RUNTIME(DEV)
   if (auto editor = view.GetRegistry().Get<editor::Editor>(); editor.ok()) {
     editor->get().GetWidgetUiSystem().AddWidget<editor::GlyphAtlasVisualizer>(
-        editor::WidgetLayoutInfo(editor::panel_ids::kTabBar), view,
+        editor::WidgetLayoutInfo(editor::PanelId::kTabBar), view,
         editor::GlyphAtlasVisualizer::AtlasDataProvider{
             .get_texture_func = [this]() { return GetTexture(); },
             .get_glyph_info_func =
@@ -210,70 +210,74 @@ void GlyphAtlasNew::AddFont(absl::string_view font_name,
 
 Future<absl::Status> GlyphAtlasNew::PrepareFont(absl::string_view text,
                                                 const TextOptions& options) {
-  return GetSuperSampleInfo().Then(
-      [this, text = std::string(text),
-       options = options](GlyphEmulator::SuperSampleInfo super_sample_info) {
-        absl::StatusOr<ScopedCanvas::TextOptions> canvas_options =
-            glyph_emulator_.CanvasOptionsFromGlyphEmulatorOptions(
-                options, super_sample_info.subpixel_render_ratio);
-        if (!canvas_options.ok()) {
-          return Future<absl::Status>(canvas_options.status());
-        }
-        return glyph_emulator_.PrepareFont(text, *canvas_options);
-      },
-      Executor::Type::kCurrent);
+  return GetSuperSampleInfo(options.force_non_separable)
+      .Then(
+          [this, text = std::string(text), options = options](
+              GlyphEmulator::SuperSampleInfo super_sample_info) {
+            absl::StatusOr<ScopedCanvas::TextOptions> canvas_options =
+                glyph_emulator_.CanvasOptionsFromGlyphEmulatorOptions(
+                    options, super_sample_info.subpixel_render_ratio);
+            if (!canvas_options.ok()) {
+              return Future<absl::Status>(canvas_options.status());
+            }
+            return glyph_emulator_.PrepareFont(text, *canvas_options);
+          },
+          Executor::Type::kCurrent);
 }
 
 Future<std::vector<ScopedCanvas::GlyphGroup>>
 GlyphAtlasNew::GetCombinedCharacterGroups(absl::string_view text,
                                           const TextOptions& options) {
-  return GetSuperSampleInfo().Then(
-      [this, text = std::string(text),
-       options = options](GlyphEmulator::SuperSampleInfo super_sample_info) {
-        absl::StatusOr<ScopedCanvas::TextOptions> canvas_options =
-            glyph_emulator_.CanvasOptionsFromGlyphEmulatorOptions(
-                options, super_sample_info.subpixel_render_ratio);
-        if (!canvas_options.ok()) {
-          return Future<std::vector<ScopedCanvas::GlyphGroup>>(
-              canvas_options.status());
-        }
-        return glyph_emulator_.GetCombinedCharacterGroups(text,
-                                                          *canvas_options);
-      },
-      Executor::Type::kCurrent);
+  return GetSuperSampleInfo(options.force_non_separable)
+      .Then(
+          [this, text = std::string(text), options = options](
+              GlyphEmulator::SuperSampleInfo super_sample_info) {
+            absl::StatusOr<ScopedCanvas::TextOptions> canvas_options =
+                glyph_emulator_.CanvasOptionsFromGlyphEmulatorOptions(
+                    options, super_sample_info.subpixel_render_ratio);
+            if (!canvas_options.ok()) {
+              return Future<std::vector<ScopedCanvas::GlyphGroup>>(
+                  canvas_options.status());
+            }
+            return glyph_emulator_.GetCombinedCharacterGroups(text,
+                                                              *canvas_options);
+          },
+          Executor::Type::kCurrent);
 }
 
 Future<ScopedCanvas::TextMetrics> GlyphAtlasNew::GetTextMetrics(
     absl::string_view text, const TextOptions& options) {
-  return GetSuperSampleInfo().Then(
-      [this, text = std::string(text),
-       options = options](GlyphEmulator::SuperSampleInfo super_sample_info) {
-        absl::StatusOr<ScopedCanvas::TextOptions> canvas_options =
-            glyph_emulator_.CanvasOptionsFromGlyphEmulatorOptions(
-                options, super_sample_info.subpixel_render_ratio);
-        if (!canvas_options.ok()) {
-          return Future<ScopedCanvas::TextMetrics>(canvas_options.status());
-        }
-        return glyph_emulator_.GetTextMetrics(
-            text, *canvas_options, super_sample_info.subpixel_render_ratio);
-      },
-      Executor::Type::kCurrent);
+  return GetSuperSampleInfo(options.force_non_separable)
+      .Then(
+          [this, text = std::string(text), options = options](
+              GlyphEmulator::SuperSampleInfo super_sample_info) {
+            absl::StatusOr<ScopedCanvas::TextOptions> canvas_options =
+                glyph_emulator_.CanvasOptionsFromGlyphEmulatorOptions(
+                    options, super_sample_info.subpixel_render_ratio);
+            if (!canvas_options.ok()) {
+              return Future<ScopedCanvas::TextMetrics>(canvas_options.status());
+            }
+            return glyph_emulator_.GetTextMetrics(
+                text, *canvas_options, super_sample_info.subpixel_render_ratio);
+          },
+          Executor::Type::kCurrent);
 }
 
 Future<ScopedCanvas::FontInfo> GlyphAtlasNew::GetFontInfo(
     const TextOptions& options) {
-  return GetSuperSampleInfo().Then(
-      [this,
-       options = options](GlyphEmulator::SuperSampleInfo super_sample_info) {
-        absl::StatusOr<ScopedCanvas::TextOptions> canvas_options =
-            glyph_emulator_.CanvasOptionsFromGlyphEmulatorOptions(
-                options, super_sample_info.subpixel_render_ratio);
-        if (!canvas_options.ok()) {
-          return Future<ScopedCanvas::FontInfo>(canvas_options.status());
-        }
-        return glyph_emulator_.GetFontInfo(*canvas_options);
-      },
-      Executor::Type::kCurrent);
+  return GetSuperSampleInfo(options.force_non_separable)
+      .Then(
+          [this, options = options](
+              GlyphEmulator::SuperSampleInfo super_sample_info) {
+            absl::StatusOr<ScopedCanvas::TextOptions> canvas_options =
+                glyph_emulator_.CanvasOptionsFromGlyphEmulatorOptions(
+                    options, super_sample_info.subpixel_render_ratio);
+            if (!canvas_options.ok()) {
+              return Future<ScopedCanvas::FontInfo>(canvas_options.status());
+            }
+            return glyph_emulator_.GetFontInfo(*canvas_options);
+          },
+          Executor::Type::kCurrent);
 }
 
 Future<std::vector<GlyphAtlas::Glyph>> GlyphAtlasNew::GetGlyphs(
@@ -294,20 +298,22 @@ Future<std::vector<GlyphAtlas::Glyph>> GlyphAtlasNew::GetGlyphs(
   }
 
   // Convert the text options into the canvas options actually used for drawing.
-  return GetSuperSampleInfo().Then(
-      [this, text = std::string(text),
-       options = options](GlyphEmulator::SuperSampleInfo super_sample_info) {
-        absl::StatusOr<ScopedCanvas::TextOptions> canvas_options =
-            glyph_emulator_.CanvasOptionsFromGlyphEmulatorOptions(
-                options, super_sample_info.subpixel_render_ratio);
-        if (!canvas_options.ok()) {
-          return Future<std::vector<Glyph>>(canvas_options.status());
-        }
+  return GetSuperSampleInfo(options.force_non_separable)
+      .Then(
+          [this, text = std::string(text), options = options](
+              GlyphEmulator::SuperSampleInfo super_sample_info) {
+            absl::StatusOr<ScopedCanvas::TextOptions> canvas_options =
+                glyph_emulator_.CanvasOptionsFromGlyphEmulatorOptions(
+                    options, super_sample_info.subpixel_render_ratio);
+            if (!canvas_options.ok()) {
+              return Future<std::vector<Glyph>>(canvas_options.status());
+            }
 
-        return glyph_emulator_.GetGlyphs(text, *canvas_options)
-            .Then(
-                [this, canvas_options = *canvas_options, super_sample_info](
-                    std::unique_ptr<std::vector<GlyphEmulator::Glyph>> glyphs) {
+            return glyph_emulator_.GetGlyphs(text, *canvas_options)
+                .Then([this, canvas_options = *canvas_options,
+                       super_sample_info](
+                          std::unique_ptr<std::vector<GlyphEmulator::Glyph>>
+                              glyphs) {
                   auto pending_canvas_glyphs =
                       std::make_unique<std::vector<CanvasOptionsGlyphKey>>();
 
@@ -369,8 +375,8 @@ Future<std::vector<GlyphAtlas::Glyph>> GlyphAtlasNew::GetGlyphs(
                       })
                       .Then([glyphs = std::move(result)]() { return glyphs; });
                 });
-      },
-      Executor::Type::kCurrent);
+          },
+          Executor::Type::kCurrent);
 }
 
 const GlyphAtlasNew::GlyphInfo* /*absl_nullable*/ GlyphAtlasNew::GetGlyphInfo(
@@ -709,17 +715,17 @@ void GlyphAtlasNew::PrepareToUpdateTexture() {
   }
 }
 
-Future<GlyphEmulator::SuperSampleInfo> GlyphAtlasNew::GetSuperSampleInfo()
-    const {
+Future<GlyphEmulator::SuperSampleInfo> GlyphAtlasNew::GetSuperSampleInfo(
+    bool force_off) const {
 #if IMP_PLATFORM(WASM)
   if (view_.GetDevice().IsPhysicalPixelRatioAvailable()) {
     return Future<GlyphEmulator::SuperSampleInfo>(
         GlyphEmulator::GetSuperSampleInfo(
-            view_.GetDevice().GetPhysicalPixelRatio()));
+            view_.GetDevice().GetPhysicalPixelRatio(), force_off));
   }
-  return physical_pixel_ratio_available_.Then([this]() {
+  return physical_pixel_ratio_available_.Then([this, force_off]() {
     return GlyphEmulator::GetSuperSampleInfo(
-        view_.GetDevice().GetPhysicalPixelRatio());
+        view_.GetDevice().GetPhysicalPixelRatio(), force_off);
   });
 #else
   return Future<GlyphEmulator::SuperSampleInfo>(GlyphEmulator::SuperSampleInfo{

@@ -59,6 +59,11 @@ class RecipeScope {
   //   type and init value type.
   absl::Status DeclareVariable(const VariableDeclaration& variable_declaration);
 
+  // Returns true if the RecipeScope has variable of a given name.
+  // NOTE: If the given variable is not in the RecipeScope, the method will
+  // check for it in the parent RecipeScope.
+  bool HasVariable(absl::string_view name) const;
+
 #if IMP_ENABLE_RECIPE_EXPERIMENTAL
   // Overwrites an already declare variable with the specified
   // `VariableDeclaration`. This can fail and return an error when:

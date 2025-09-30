@@ -24,7 +24,8 @@
 namespace imp {
 
 AssetLoader::AssetLoader(JNIEnv* env, jobject j_asset_loader)
-    : JavaWrapper(env, j_asset_loader) {
+    : JavaWrapper(env, j_asset_loader,
+                  "androidx/xr/scenecore/impl/impress/AssetLoader") {
   on_success_ = GetMethodHandle("onSuccess", "(J)V");
   on_failure_ = GetMethodHandle("onFailure", "(Ljava/lang/String;)V");
 }

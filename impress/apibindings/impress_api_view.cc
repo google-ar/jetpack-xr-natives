@@ -73,32 +73,25 @@
 //                     google3/third_party/impress/testing/view_fixture.h
 
 namespace imp {
+
+constexpr TextureSamplerOptions kDefaultTextureSamplerOptions = {
+    .wrap_mode = ::filament::TextureSampler::WrapMode::CLAMP_TO_EDGE,
+    .mag_filter = ::filament::TextureSampler::MagFilter::LINEAR,
+    .min_filter = ::filament::TextureSampler::MinFilter::LINEAR,
+    .anisotropy = 0};
+
 namespace {
 Future<OwnedTexturePtr> LoadTextureFromPath(TextureFactory& texture_factory,
                                             AssetManager& asset_manager,
                                             AssetPtrMap& asset_ptr_map,
-                                            absl::string_view path,
-                                            filament::TextureSampler sampler) {
+                                            absl::string_view path) {
   return asset_manager.LoadImage(asset_ptr_map.GetAssetString(path))
-      .Then([sampler, &texture_factory = texture_factory](
+      .Then([&texture_factory = texture_factory](
                 AssetPtr<ImageAsset> image) -> absl::StatusOr<OwnedTexturePtr> {
         // Uploads the texture to the system.
-        // TODO: There is an ABI compatibility issue with the
-        // TextureFactory::Options struct. Note that the remote renderer might
-        // be running a different version of Filament than this process was
-        // compiled against, so we need to be careful about the enum values we
-        // use here.
         OwnedTexturePtr texture = texture_factory.CreateTexture(
             *image, imp::TextureGenerationOptions{},
-            imp::TextureSamplerOptions{
-                // TextureFactory uses a single dimension wrap mode
-                // whereas Filament uses separate wrap modes for
-                // each dimension. We use the same wrap mode (S) for
-                // both dimensions.
-                .wrap_mode = sampler.getWrapModeS(),
-                .mag_filter = sampler.getMagFilter(),
-                .min_filter = sampler.getMinFilter(),
-                .anisotropy = sampler.getAnisotropy()});
+            kDefaultTextureSamplerOptions);
         return texture;
       });
 }
@@ -351,10 +344,9 @@ absl::Status ImpressApiView::SetContentColorMetadataForStereoSurfaceEntity(
 }
 
 void ImpressApiView::LoadTexture(absl::string_view path,
-                                 filament::TextureSampler sampler,
                                  std::unique_ptr<AssetLoader> asset_loader) {
   LoadTextureFromPath(GetTextureFactory(), GetAssetManager(), *asset_ptr_map_,
-                      path, sampler)
+                      path)
       .Then([this, asset_loader = std::move(asset_loader)](
                 absl::StatusOr<OwnedTexturePtr> texture) mutable {
         if (texture.ok() && *texture) {
@@ -469,22 +461,24 @@ void ImpressApiView::DestroyNativeObject(std::intptr_t handle) {
 }
 
 absl::Status ImpressApiView::SetReflectionMapOnWaterMaterial(
-    std::intptr_t water_material, std::intptr_t reflection_map) {
+    std::intptr_t water_material, std::intptr_t reflection_map,
+    std::optional<filament::TextureSampler> sampler) {
   return SetWaterMaterialTextureParameter(
       water_material, reflection_map,
-      [](android_xr::WaterReflectionMaterial* material,
-         BorrowedTexturePtr borrowed_texture) {
-        material->SetReflectionCube(borrowed_texture);
+      [sampler](android_xr::WaterReflectionMaterial* material,
+                BorrowedTexturePtr borrowed_texture) {
+        material->SetReflectionCube(borrowed_texture, sampler);
       });
 }
 
 absl::Status ImpressApiView::SetNormalMapOnWaterMaterial(
-    std::intptr_t water_material, std::intptr_t normal_map) {
+    std::intptr_t water_material, std::intptr_t normal_map,
+    std::optional<filament::TextureSampler> sampler) {
   return SetWaterMaterialTextureParameter(
       water_material, normal_map,
-      [](android_xr::WaterReflectionMaterial* material,
-         BorrowedTexturePtr borrowed_texture) {
-        material->SetNormalMap(borrowed_texture);
+      [sampler](android_xr::WaterReflectionMaterial* material,
+                BorrowedTexturePtr borrowed_texture) {
+        material->SetNormalMap(borrowed_texture, sampler);
       });
 }
 
@@ -519,12 +513,13 @@ absl::Status ImpressApiView::SetAlphaStepMultiplierOnWaterMaterial(
 }
 
 absl::Status ImpressApiView::SetAlphaMapOnWaterMaterial(
-    std::intptr_t water_material, std::intptr_t alpha_map) {
+    std::intptr_t water_material, std::intptr_t alpha_map,
+    std::optional<filament::TextureSampler> sampler) {
   return SetWaterMaterialTextureParameter(
       water_material, alpha_map,
-      [](android_xr::WaterReflectionMaterial* material,
-         BorrowedTexturePtr borrowed_texture) {
-        material->SetAlphaMap(borrowed_texture);
+      [sampler](android_xr::WaterReflectionMaterial* material,
+                BorrowedTexturePtr borrowed_texture) {
+        material->SetAlphaMap(borrowed_texture, sampler);
       });
 }
 
@@ -579,9 +574,10 @@ void ImpressApiView::CreateGenericMaterial(
 }
 
 absl::Status ImpressApiView::SetBaseColorTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t base_color_texture) {
+    std::intptr_t generic_material, std::intptr_t base_color_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return SetGenericMaterialTextureParameter(
-      generic_material, base_color_texture,
+      generic_material, base_color_texture, sampler,
       [](split_engine::SplitEngineGenericMaterial* material,
          imp::GenericMaterialTextureParameter texture_parameter,
          imp::TextureBorrower texture_borrower) {
@@ -613,9 +609,10 @@ absl::Status ImpressApiView::SetBaseColorFactorsOnGenericMaterial(
 }
 
 absl::Status ImpressApiView::SetMetallicRoughnessTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t metallic_roughness_texture) {
+    std::intptr_t generic_material, std::intptr_t metallic_roughness_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return SetGenericMaterialTextureParameter(
-      generic_material, metallic_roughness_texture,
+      generic_material, metallic_roughness_texture, sampler,
       [](split_engine::SplitEngineGenericMaterial* material,
          imp::GenericMaterialTextureParameter texture_parameter,
          imp::TextureBorrower texture_borrower) {
@@ -657,9 +654,10 @@ absl::Status ImpressApiView::SetRoughnessFactorOnGenericMaterial(
 }
 
 absl::Status ImpressApiView::SetNormalTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t normal_texture) {
+    std::intptr_t generic_material, std::intptr_t normal_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return SetGenericMaterialTextureParameter(
-      generic_material, normal_texture,
+      generic_material, normal_texture, sampler,
       [](split_engine::SplitEngineGenericMaterial* material,
          imp::GenericMaterialTextureParameter texture_parameter,
          imp::TextureBorrower texture_borrower) {
@@ -691,9 +689,10 @@ absl::Status ImpressApiView::SetNormalFactorOnGenericMaterial(
 }
 
 absl::Status ImpressApiView::SetAmbientOcclusionTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t ambient_occlusion_texture) {
+    std::intptr_t generic_material, std::intptr_t ambient_occlusion_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return SetGenericMaterialTextureParameter(
-      generic_material, ambient_occlusion_texture,
+      generic_material, ambient_occlusion_texture, sampler,
       [](split_engine::SplitEngineGenericMaterial* material,
          imp::GenericMaterialTextureParameter texture_parameter,
          imp::TextureBorrower texture_borrower) {
@@ -725,9 +724,10 @@ absl::Status ImpressApiView::SetAmbientOcclusionFactorOnGenericMaterial(
 }
 
 absl::Status ImpressApiView::SetEmissiveTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t emissive_texture) {
+    std::intptr_t generic_material, std::intptr_t emissive_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return SetGenericMaterialTextureParameter(
-      generic_material, emissive_texture,
+      generic_material, emissive_texture, sampler,
       [](split_engine::SplitEngineGenericMaterial* material,
          imp::GenericMaterialTextureParameter texture_parameter,
          imp::TextureBorrower texture_borrower) {
@@ -759,9 +759,10 @@ absl::Status ImpressApiView::SetEmissiveFactorsOnGenericMaterial(
 }
 
 absl::Status ImpressApiView::SetClearcoatTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t clearcoat_texture) {
+    std::intptr_t generic_material, std::intptr_t clearcoat_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return SetGenericMaterialTextureParameter(
-      generic_material, clearcoat_texture,
+      generic_material, clearcoat_texture, sampler,
       [](split_engine::SplitEngineGenericMaterial* material,
          imp::GenericMaterialTextureParameter texture_parameter,
          imp::TextureBorrower texture_borrower) {
@@ -774,9 +775,10 @@ absl::Status ImpressApiView::SetClearcoatTextureOnGenericMaterial(
 }
 
 absl::Status ImpressApiView::SetClearcoatNormalTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t clearcoat_normal_texture) {
+    std::intptr_t generic_material, std::intptr_t clearcoat_normal_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return SetGenericMaterialTextureParameter(
-      generic_material, clearcoat_normal_texture,
+      generic_material, clearcoat_normal_texture, sampler,
       [](split_engine::SplitEngineGenericMaterial* material,
          imp::GenericMaterialTextureParameter texture_parameter,
          imp::TextureBorrower texture_borrower) {
@@ -789,9 +791,10 @@ absl::Status ImpressApiView::SetClearcoatNormalTextureOnGenericMaterial(
 }
 
 absl::Status ImpressApiView::SetClearcoatRoughnessTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t clearcoat_roughness_texture) {
+    std::intptr_t generic_material, std::intptr_t clearcoat_roughness_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return SetGenericMaterialTextureParameter(
-      generic_material, clearcoat_roughness_texture,
+      generic_material, clearcoat_roughness_texture, sampler,
       [](split_engine::SplitEngineGenericMaterial* material,
          imp::GenericMaterialTextureParameter texture_parameter,
          imp::TextureBorrower texture_borrower) {
@@ -814,9 +817,10 @@ absl::Status ImpressApiView::SetClearcoatFactorsOnGenericMaterial(
 }
 
 absl::Status ImpressApiView::SetSheenColorTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t sheen_color_texture) {
+    std::intptr_t generic_material, std::intptr_t sheen_color_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return SetGenericMaterialTextureParameter(
-      generic_material, sheen_color_texture,
+      generic_material, sheen_color_texture, sampler,
       [](split_engine::SplitEngineGenericMaterial* material,
          imp::GenericMaterialTextureParameter texture_parameter,
          imp::TextureBorrower texture_borrower) {
@@ -839,9 +843,10 @@ absl::Status ImpressApiView::SetSheenColorFactorsOnGenericMaterial(
 }
 
 absl::Status ImpressApiView::SetSheenRoughnessTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t sheen_roughness_texture) {
+    std::intptr_t generic_material, std::intptr_t sheen_roughness_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return SetGenericMaterialTextureParameter(
-      generic_material, sheen_roughness_texture,
+      generic_material, sheen_roughness_texture, sampler,
       [](split_engine::SplitEngineGenericMaterial* material,
          imp::GenericMaterialTextureParameter texture_parameter,
          imp::TextureBorrower texture_borrower) {
@@ -864,9 +869,10 @@ absl::Status ImpressApiView::SetSheenRoughnessFactorOnGenericMaterial(
 }
 
 absl::Status ImpressApiView::SetTransmissionTextureOnGenericMaterial(
-    std::intptr_t generic_material, std::intptr_t transmission_texture) {
+    std::intptr_t generic_material, std::intptr_t transmission_texture,
+    std::optional<filament::TextureSampler> sampler) {
   return SetGenericMaterialTextureParameter(
-      generic_material, transmission_texture,
+      generic_material, transmission_texture, sampler,
       [](split_engine::SplitEngineGenericMaterial* material,
          imp::GenericMaterialTextureParameter texture_parameter,
          imp::TextureBorrower texture_borrower) {

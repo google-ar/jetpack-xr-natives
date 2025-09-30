@@ -56,6 +56,9 @@ single_version_override(
     patches = ["//:bazel/patches/com_google_protobuf.patch"],
 )
 
+# Adding GRPC 1.71.0 (and not the latest one), because it depends on protobuf 29.0
+# Later versions depends on newer versions and protobuf patches fail to apply.
+bazel_dep(name = "grpc", version = "1.71.0", repo_name = "com_github_grpc_grpc")
 bazel_dep(name = "gflags", version = "2.2.2")
 single_version_override(
     module_name = "gflags",
@@ -115,6 +118,7 @@ maven.install(
         "androidx.lifecycle:lifecycle-runtime-ktx:2.4.0-alpha01",
         "androidx.lifecycle:lifecycle-runtime:2.4.0-alpha01",
         "androidx.lifecycle:lifecycle-viewmodel-ktx:2.4.0-alpha01",
+        "com.android.extensions.xr:extensions-xr:1.0",
         "com.google.errorprone:error_prone_annotations:2.27.1",
         "com.google.flogger:flogger-system-backend:0.6",
         "com.google.flogger:flogger:0.6",

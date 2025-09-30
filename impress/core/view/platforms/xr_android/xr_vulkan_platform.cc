@@ -27,7 +27,10 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "filament/filament/backend/include/backend/Platform.h"
+#include "filament/filament/backend/include/backend/platforms/VulkanPlatform.h"
 #include "filament/filament/include/filament/SwapChain.h"
+#include "filament/libs/bluevk/include/vulkan/vulkan_beta.h"
+#include "filament/libs/bluevk/include/vulkan/vulkan_core.h"
 #include "filament/libs/utils/include/utils/CString.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/Invocable.h"
@@ -78,6 +81,19 @@ uint32_t identifyQueueFamilyIndex(VkPhysicalDevice physical_device,
 }  // namespace
 
 XrVulkanPlatform::XrVulkanPlatform() { bluevk::initialize(); }
+
+filament::backend::Driver* XrVulkanPlatform::createDriver(
+    void* sharedContext, const Platform::DriverConfig& driverConfig) noexcept {
+  // TODO: (broken link) - Remove this once impress supports filament feature
+  // flags
+  Platform::DriverConfig vk_driver_config = driverConfig;
+  vk_driver_config.vulkanEnableStagingBufferBypass = true;
+
+  filament::backend::Driver* driver =
+      XrPlatformBase::createDriver(sharedContext, vk_driver_config);
+
+  return driver;
+}
 
 void XrVulkanPlatform::bindVulkanInstance(VkInstance instance) {
   bluevk::bindInstance(instance);

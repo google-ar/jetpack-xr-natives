@@ -120,13 +120,7 @@ RecipeRuntimeGraph::CreateRuntimeGraph(BaseView& view,
 
     const EventNode* event_node = node.event_node();
     if (event_node) {
-      auto [_, inserted] = runtime_graph->event_node_map_.insert(
-          {event_node->event_name, &node});
-      if (!inserted) {
-        return absl::FailedPreconditionError(
-            absl::StrFormat("Found EventNode with duplicate event name %s",
-                            event_node->event_name));
-      }
+      runtime_graph->event_node_map_[event_node->event_name].push_back(&node);
     }
 
     if (std::holds_alternative<ExecutableNode>(node.node) &&
@@ -342,7 +336,7 @@ absl::StatusOr<Variable> RecipeRuntimeGraph::EvaluateUnaryExpression(
             if constexpr (recipe_traits::kIsSinAvailable<InputT>) {
               using ResultT = decltype(input);
               if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = sin(input);
+                result = recipe::Sin(input);
               }
             }
             break;
@@ -351,7 +345,7 @@ absl::StatusOr<Variable> RecipeRuntimeGraph::EvaluateUnaryExpression(
             if constexpr (recipe_traits::kIsCosAvailable<InputT>) {
               using ResultT = decltype(input);
               if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = cos(input);
+                result = recipe::Cos(input);
               }
             }
             break;
@@ -360,7 +354,7 @@ absl::StatusOr<Variable> RecipeRuntimeGraph::EvaluateUnaryExpression(
             if constexpr (recipe_traits::kIsTanAvailable<InputT>) {
               using ResultT = decltype(input);
               if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = tan(input);
+                result = recipe::Tan(input);
               }
             }
             break;
@@ -369,7 +363,7 @@ absl::StatusOr<Variable> RecipeRuntimeGraph::EvaluateUnaryExpression(
             if constexpr (recipe_traits::kIsAsinAvailable<InputT>) {
               using ResultT = decltype(input);
               if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = asin(input);
+                result = recipe::Asin(input);
               }
             }
             break;
@@ -378,7 +372,7 @@ absl::StatusOr<Variable> RecipeRuntimeGraph::EvaluateUnaryExpression(
             if constexpr (recipe_traits::kIsAcosAvailable<InputT>) {
               using ResultT = decltype(input);
               if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = acos(input);
+                result = recipe::Acos(input);
               }
             }
             break;
@@ -387,7 +381,7 @@ absl::StatusOr<Variable> RecipeRuntimeGraph::EvaluateUnaryExpression(
             if constexpr (recipe_traits::kIsAtanAvailable<InputT>) {
               using ResultT = decltype(input);
               if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = atan(input);
+                result = recipe::Atan(input);
               }
             }
             break;
@@ -527,7 +521,7 @@ absl::StatusOr<Variable> RecipeRuntimeGraph::EvaluateBinaryExpression(
                             std::is_same_v<RightT, int>) {
                 result = left % right;
               } else {
-                result = std::fmod(left, right);
+                result = fmod(left, right);
               }
             }
             break;
@@ -617,22 +611,19 @@ absl::StatusOr<Variable> RecipeRuntimeGraph::EvaluateBinaryExpression(
             break;
           case BinaryExpression::MIN:
             op_name = "min";
-            if constexpr (std::is_same_v<LeftT, RightT> &&
-                          recipe_traits::kIsLessThanAvailable<LeftT, RightT>) {
-              using ResultT = decltype(std::min(left, right));
+            if constexpr (recipe_traits::kIsMinAvailable<LeftT, RightT>) {
+              using ResultT = decltype(recipe::Min(left, right));
               if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = std::min(left, right);
+                result = recipe::Min(left, right);
               }
             }
             break;
           case BinaryExpression::MAX:
             op_name = "max";
-            if constexpr (std::is_same_v<LeftT, RightT> &&
-                          recipe_traits::kIsGreaterThanAvailable<LeftT,
-                                                                 RightT>) {
-              using ResultT = decltype(std::max(left, right));
+            if constexpr (recipe_traits::kIsMaxAvailable<LeftT, RightT>) {
+              using ResultT = decltype(recipe::Max(left, right));
               if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = std::max(left, right);
+                result = recipe::Max(left, right);
               }
             }
             break;
@@ -889,6 +880,10 @@ ExecutionResult RecipeRuntimeGraph::ExecuteLoopStatement(
 
     MP_RETURN_IF_ERROR(ExecuteNode(statement.looped_node, context));
   }
+
+  // Set the "index" socket to the value in "end".
+  MP_RETURN_IF_ERROR(
+      CacheSocketValue(context.scope, node_id, "index", Variable(end)));
 
   return ExecuteNode(statement.completed_node, context);
 }
@@ -1170,7 +1165,7 @@ ExecutionResult RecipeRuntimeGraph::ExecuteCustomStatement(
 ExecutionResult RecipeRuntimeGraph::ExecuteNode(
     const ExecutableNodeConnection& executable_node_connection,
     RecipeExecutionContext context) const {
-  if (!executable_node_connection.node_id) {
+  if (!executable_node_connection.node_id.has_value()) {
     return absl::OkStatus();
   }
 
@@ -1241,12 +1236,16 @@ ExecutionResult RecipeRuntimeGraph::TriggerEvent(
         absl::StrFormat("RecipeEvent %s not found. Skipping.", event.name));
   }
 
-  const RecipeNode& node = *it->second;
-  const EventNode& event_node = *node.event_node();
+  for (const RecipeNode* node : it->second) {
+    const EventNode& event_node = *node->event_node();
 
-  MP_RETURN_IF_ERROR(CacheSocketValues(context.scope, node.id, event.arguments));
+    MP_RETURN_IF_ERROR(
+        CacheSocketValues(context.scope, node->id, event.arguments));
 
-  return ExecuteNode(event_node.next_node, context);
+    MP_RETURN_IF_ERROR(ExecuteNode(event_node.next_node, context));
+  }
+
+  return absl::OkStatus();
 }
 
 ExecutionResult RecipeRuntimeGraph::ResumeExecution(

@@ -401,52 +401,36 @@ GltfAnimation::EvaluateLightParameters(float t,
   return result;
 }
 
-bool GltfAnimation::SanitizeT(bool repeat, absl::Duration* t) const {
-  return SanitizeT(repeat, t, FirstT(), LastT());
-}
-
-bool GltfAnimation::SanitizeT(bool repeat, absl::Duration* t,
-                              absl::Duration start_time) const {
-  return SanitizeT(repeat, t, start_time, LastT());
-}
-
-bool GltfAnimation::SanitizeT(bool repeat, absl::Duration* t,
-                              absl::Duration start_time,
-                              absl::Duration end_time) const {
-  absl::Duration animation_start = FirstT();
-  absl::Duration animation_end = LastT();
-  absl::Duration first_t = clamp(start_time, animation_start, animation_end);
-  absl::Duration last_t = clamp(end_time, animation_start, animation_end);
-  const bool last_before_first = last_t < first_t;
-  if ((last_before_first && *t > first_t) ||
-      (!last_before_first && *t < first_t)) {
-    // Emulate pre-existing behavior: ticking an animator with a time before the
-    // start time (e.g. a negative time) cause the animation to immediately end.
-    return true;
-  }
-
-  if ((last_before_first && *t > last_t) ||
-      (!last_before_first && *t < last_t)) {
-    return false;
-  }
-
-  if (auto duration = last_before_first ? first_t - last_t : last_t - first_t;
-      repeat && duration > absl::ZeroDuration()) {
-    absl::Duration start_t = last_before_first ? last_t : first_t;
-    *t = start_t + ((*t - start_t) % duration);
-  } else {
-    *t = last_t;
-  }
-  return true;
-}
-
 absl::Duration GltfAnimation::FirstT() const {
   return absl::Seconds(access_->first_t());
 }
+
 absl::Duration GltfAnimation::LastT() const {
   return absl::Seconds(access_->last_t());
 }
+
 absl::Duration GltfAnimation::Duration() const { return LastT() - FirstT(); }
+
+void GltfAnimation::SanitizeT(bool repeat, absl::Duration* t) const {
+  const absl::Duration first_t = FirstT();
+  const absl::Duration last_t = LastT();
+  const absl::Duration duration = absl::AbsDuration(last_t - first_t);
+  if (duration == absl::ZeroDuration()) {
+    *t = first_t;
+    return;
+  }
+
+  if (*t >= first_t && *t <= last_t) {
+    return;
+  }
+
+  if (repeat) {
+    *t = (*t % duration) + first_t;
+    *t = *t < absl::ZeroDuration() ? duration + *t : *t;
+  } else {
+    *t = clamp(*t, first_t, last_t);
+  }
+}
 
 GltfAnimation::GltfAnimation(
     BoneTargetSpan trs_targets,

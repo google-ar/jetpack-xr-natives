@@ -78,7 +78,7 @@ public final class ImpSplitEngineApi {
       StrictMode.setThreadPolicy(new ThreadPolicy.Builder(oldPolicy).permitDiskReads().build());
 
       // Create the standard Impress View Jni object.
-      View view = View.createView(nativeLibrary, viewIdentifier, context);
+      View view = View.createView(nativeLibrary, viewIdentifier, context, frameSchedulerExecutor);
       // Create the bridge service.
       ImpSplitEngineApi api = new ImpSplitEngineApi(context, view, bridgeBufferSizeKb);
       api.initBridge(nativeLibrary, frameSchedulerExecutor, serviceBinder, xrExtensions);

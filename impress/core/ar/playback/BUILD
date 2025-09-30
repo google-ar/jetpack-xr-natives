@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("@rules_cc//cc:defs.bzl", "cc_proto_library")
+load("@com_google_protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
 load("//build_tools:imp.bzl", "imp_google3_copts")
 
 # Library for providing tracking info for a video.
@@ -58,7 +58,6 @@ cc_library(
         "//core/ar:ar_session_config",
         "//core/ar:shared",
         "//core/collision:collision_helpers",
-        "//core/common:log",
         "//core/video:video_controller",
         "//core/view:base_view",
         "//third_party/arcore/proto/video:ar_derived_data_cc_proto",
@@ -67,6 +66,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )

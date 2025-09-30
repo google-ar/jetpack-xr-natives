@@ -23,21 +23,10 @@
 #include "openxr/openxr_manager.h"
 #include "common/namespace_util.h"
 
-namespace {
-jlong CreateJavaLongFromCreateAnchorResult(
-    androidx::xr::openxr::OpenXrManager::CreateAnchorResult
-        create_anchor_result,
-    const XrSpace& xr_space) {
-  if (create_anchor_result !=
-      androidx::xr::openxr::OpenXrManager::CreateAnchorResult::kSuccess) {
-    return static_cast<jlong>(create_anchor_result);
-  }
-  return androidx::xr::openxr::CreateJavaAnchorHandle(xr_space);
-}
-}  // namespace
-
-static jlong NativeCreateAnchor(JNIEnv* env, jobject pose,
-                                jlong monotonic_time_ns) {
+extern "C" {
+JNIEXPORT jlong JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeCreateAnchor(
+    JNIEnv* env, jclass /*clazz*/, jobject pose, jlong monotonic_time_ns) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   XrPosef xr_pose = androidx::xr::openxr::ConvertToXrPosef(env, pose);
@@ -45,11 +34,16 @@ static jlong NativeCreateAnchor(JNIEnv* env, jobject pose,
   androidx::xr::openxr::OpenXrManager::CreateAnchorResult result =
       xr_manager.CreateAnchor(static_cast<int64_t>(monotonic_time_ns), xr_pose,
                               &anchor);
-  return CreateJavaLongFromCreateAnchorResult(result, anchor);
+  if (result !=
+      androidx::xr::openxr::OpenXrManager::CreateAnchorResult::kSuccess) {
+    return static_cast<jlong>(result);
+  }
+  return androidx::xr::openxr::CreateJavaAnchorHandle(anchor);
 }
 
-static jlongArray NativeGetTrackableObjects(JNIEnv* env,
-                                            jlong monotonic_time_ns) {
+JNIEXPORT jlongArray JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeGetAugmentedObjects(
+    JNIEnv* env, jclass /*clazz*/, jlong monotonic_time_ns) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   std::vector<XrTrackableANDROID> trackables =
@@ -64,7 +58,9 @@ static jlongArray NativeGetTrackableObjects(JNIEnv* env,
   return trackables_array;
 }
 
-static jlongArray NativeGetPlanes(JNIEnv* env) {
+JNIEXPORT jlongArray JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeGetPlanes(
+    JNIEnv* env, jclass /*clazz*/) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   std::vector<XrTrackableANDROID> trackables = xr_manager.GetPlanes();
@@ -78,8 +74,9 @@ static jlongArray NativeGetPlanes(JNIEnv* env) {
   return trackables_array;
 }
 
-static jint NativeGetPlaneType(JNIEnv* env, jlong plane_id,
-                               jlong monotonic_time_ns) {
+JNIEXPORT jint JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeGetPlaneType(
+    JNIEnv* env, jclass /*clazz*/, jlong plane_id, jlong monotonic_time_ns) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   uint32_t vertex_count = 0;
@@ -101,11 +98,11 @@ static jint NativeGetPlaneType(JNIEnv* env, jlong plane_id,
   return static_cast<uint32_t>(plane.planeType);
 }
 
-static jobjectArray NativeHitTest(JNIEnv* env, jint max_results,
-                                  jfloat origin_x, jfloat origin_y,
-                                  jfloat origin_z, jfloat direction_x,
-                                  jfloat direction_y, jfloat direction_z,
-                                  jlong monotonic_time_ns) {
+JNIEXPORT jobjectArray JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeHitTest(
+    JNIEnv* env, jclass /*clazz*/, jint max_results, jfloat origin_x,
+    jfloat origin_y, jfloat origin_z, jfloat direction_x, jfloat direction_y,
+    jfloat direction_z, jlong monotonic_time_ns) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
 
@@ -130,8 +127,8 @@ static jobjectArray NativeHitTest(JNIEnv* env, jint max_results,
     return nullptr;
   }
 
-  jclass hit_data_class = androidx::xr::common::GetJxrClass(env,
-                            androidx::xr::common::PACKAGE_OPENXR, "HitData");
+  jclass hit_data_class = androidx::xr::common::GetJxrClass(
+      env, androidx::xr::common::PACKAGE_ARCORE_OPENXR, "HitData");
 
   jobjectArray hit_result_array = env->NewObjectArray(
       out_hit_results.resultsCountOutput, hit_data_class, nullptr);
@@ -143,7 +140,9 @@ static jobjectArray NativeHitTest(JNIEnv* env, jint max_results,
   return hit_result_array;
 }
 
-static jobjectArray NativeGetPersistedAnchorUuids(JNIEnv* env) {
+JNIEXPORT jobjectArray JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeGetPersistedAnchorUuids(
+    JNIEnv* env, jclass /*clazz*/) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   std::vector<XrUuidEXT> uuids = xr_manager.GetPersistedAnchorUuids();
@@ -159,124 +158,33 @@ static jobjectArray NativeGetPersistedAnchorUuids(JNIEnv* env) {
   return uuids_array;
 }
 
-static jlong NativeLoadAnchor(JNIEnv* env, jobject uuid) {
+JNIEXPORT jlong JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeLoadAnchor(
+    JNIEnv* env, jclass /*clazz*/, jobject uuid) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   XrUuidEXT xr_uuid = androidx::xr::openxr::ConvertToXrUuid(env, uuid);
   XrSpace anchor;
   androidx::xr::openxr::OpenXrManager::CreateAnchorResult result =
       xr_manager.LocatePersistedAnchorSpace(xr_uuid, &anchor);
-  return CreateJavaLongFromCreateAnchorResult(result, anchor);
+  if (result !=
+      androidx::xr::openxr::OpenXrManager::CreateAnchorResult::kSuccess) {
+    return static_cast<jlong>(result);
+  }
+  return androidx::xr::openxr::CreateJavaAnchorHandle(anchor);
 }
 
-static jboolean NativeUnpersistAnchor(JNIEnv* env, jobject uuid) {
+JNIEXPORT jboolean JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeUnpersistAnchor(
+    JNIEnv* env, jclass /*clazz*/, jobject uuid) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   XrUuidEXT xr_uuid = androidx::xr::openxr::ConvertToXrUuid(env, uuid);
   return xr_manager.UnpersistAnchor(xr_uuid);
 }
 
-extern "C" {
-JNIEXPORT jlong JNICALL
-Java_androidx_xr_openxr_OpenXrPerceptionManager_nativeCreateAnchor(
-    JNIEnv* env, jclass /*clazz*/, jobject pose, jlong monotonic_time_ns) {
-  return NativeCreateAnchor(env, pose, monotonic_time_ns);
-}
-
-JNIEXPORT jlong JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrPerceptionManager_nativeCreateAnchor(
-    JNIEnv* env, jclass /*clazz*/, jobject pose, jlong monotonic_time_ns) {
-  return NativeCreateAnchor(env, pose, monotonic_time_ns);
-}
-
-JNIEXPORT jlongArray JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrPerceptionManager_nativeGetAugmentedObjects(
-    JNIEnv* env, jclass /*clazz*/, jlong monotonic_time_ns) {
-  return NativeGetTrackableObjects(env, monotonic_time_ns);
-}
-
-JNIEXPORT jlongArray JNICALL
-Java_androidx_xr_openxr_OpenXrPerceptionManager_nativeGetPlanes(
-    JNIEnv* env, jclass /*clazz*/) {
-  return NativeGetPlanes(env);
-}
-
-JNIEXPORT jlongArray JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrPerceptionManager_nativeGetPlanes(
-    JNIEnv* env, jclass /*clazz*/) {
-  return NativeGetPlanes(env);
-}
-
-JNIEXPORT jint JNICALL
-Java_androidx_xr_openxr_OpenXrPerceptionManager_nativeGetPlaneType(
-    JNIEnv* env, jclass /*clazz*/, jlong plane_id, jlong monotonic_time_ns) {
-  return NativeGetPlaneType(env, plane_id, monotonic_time_ns);
-}
-
-JNIEXPORT jint JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrPerceptionManager_nativeGetPlaneType(
-    JNIEnv* env, jclass /*clazz*/, jlong plane_id, jlong monotonic_time_ns) {
-  return NativeGetPlaneType(env, plane_id, monotonic_time_ns);
-}
-
 JNIEXPORT jobjectArray JNICALL
-Java_androidx_xr_openxr_OpenXrPerceptionManager_nativeHitTest(
-    JNIEnv* env, jclass /*clazz*/, jint max_results, jfloat origin_x,
-    jfloat origin_y, jfloat origin_z, jfloat direction_x, jfloat direction_y,
-    jfloat direction_z, jlong monotonic_time_ns) {
-  return NativeHitTest(env, max_results, origin_x, origin_y, origin_z,
-                       direction_x, direction_y, direction_z,
-                       monotonic_time_ns);
-}
-
-JNIEXPORT jobjectArray JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrPerceptionManager_nativeHitTest(
-    JNIEnv* env, jclass /*clazz*/, jint max_results, jfloat origin_x,
-    jfloat origin_y, jfloat origin_z, jfloat direction_x, jfloat direction_y,
-    jfloat direction_z, jlong monotonic_time_ns) {
-  return NativeHitTest(env, max_results, origin_x, origin_y, origin_z,
-                       direction_x, direction_y, direction_z,
-                       monotonic_time_ns);
-}
-
-JNIEXPORT jobjectArray JNICALL
-Java_androidx_xr_openxr_OpenXrPerceptionManager_nativeGetPersistedAnchorUuids(
-    JNIEnv* env, jclass /*clazz*/) {
-  return NativeGetPersistedAnchorUuids(env);
-}
-
-JNIEXPORT jobjectArray JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrPerceptionManager_nativeGetPersistedAnchorUuids(
-    JNIEnv* env, jclass /*clazz*/) {
-  return NativeGetPersistedAnchorUuids(env);
-}
-
-JNIEXPORT jlong JNICALL
-Java_androidx_xr_openxr_OpenXrPerceptionManager_nativeLoadAnchor(
-    JNIEnv* env, jclass /*clazz*/, jobject uuid) {
-  return NativeLoadAnchor(env, uuid);
-}
-
-JNIEXPORT jlong JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrPerceptionManager_nativeLoadAnchor(
-    JNIEnv* env, jclass /*clazz*/, jobject uuid) {
-  return NativeLoadAnchor(env, uuid);
-}
-
-JNIEXPORT jboolean JNICALL
-Java_androidx_xr_openxr_OpenXrPerceptionManager_nativeUnpersistAnchor(
-    JNIEnv* env, jclass /*clazz*/, jobject uuid) {
-  return NativeUnpersistAnchor(env, uuid);
-}
-
-JNIEXPORT jboolean JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrPerceptionManager_nativeUnpersistAnchor(
-    JNIEnv* env, jclass /*clazz*/, jobject uuid) {
-  return NativeUnpersistAnchor(env, uuid);
-}
-
-JNIEXPORT jobjectArray JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrPerceptionManager_nativeGetDepthImagesDataBuffers(
+Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeGetDepthImagesDataBuffers(
     JNIEnv* env, jclass /*clazz*/, jlong monotonic_time_ns) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
@@ -302,4 +210,29 @@ Java_androidx_xr_runtime_openxr_OpenXrPerceptionManager_nativeGetDepthImagesData
   return depth_images_array;
 }
 
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeGetCoarseEyesInfo(
+    JNIEnv* env, jclass /*clazz*/, jlong monotonic_time_ns) {
+  androidx::xr::openxr::OpenXrManager& xr_manager =
+      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+  XrEyesANDROID eyes_info;
+  if (XR_FAILED(xr_manager.GetEyesInfo(static_cast<int64_t>(monotonic_time_ns),
+                                       &eyes_info, false))) {
+    return nullptr;
+  }
+  return androidx::xr::openxr::CreateJavaEyesInfo(env, eyes_info);
+}
+
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeGetFineEyesInfo(
+    JNIEnv* env, jclass /*clazz*/, jlong monotonic_time_ns) {
+  androidx::xr::openxr::OpenXrManager& xr_manager =
+      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+  XrEyesANDROID eyes_info;
+  if (XR_FAILED(xr_manager.GetEyesInfo(static_cast<int64_t>(monotonic_time_ns),
+                                       &eyes_info, true))) {
+    return nullptr;
+  }
+  return androidx::xr::openxr::CreateJavaEyesInfo(env, eyes_info);
+}
 }  // extern "C"

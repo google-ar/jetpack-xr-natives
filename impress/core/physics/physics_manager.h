@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_PHYSICS_PHYSICS_MANAGER_H_
 
 #include <cstddef>
+#include <unordered_set>
 
 #include "bullet/src/BulletCollision/BroadphaseCollision/btAxisSweep3.h"
 #include "bullet/src/BulletCollision/CollisionDispatch/btCollisionDispatcher.h"
@@ -27,6 +28,7 @@
 #include "bullet/src/BulletDynamics/Dynamics/btDiscreteDynamicsWorld.h"
 #include "bullet/src/BulletDynamics/Dynamics/btRigidBody.h"
 #include "core/common/robin_map.h"
+#include "core/common/robin_set.h"
 #include "core/math/vec.h"
 #include "core/ncsb/dispatcher/event.h"
 #include "core/ncsb/node_handle.h"
@@ -84,6 +86,16 @@ class PhysicsManager : public UpdateSystem::Updater<PhysicsManager> {
   // Removes the trigger volume from the physics world.
   void RemoveTriggerVolume(btCollisionObject& body);
 
+  // Adds the constraint to the physics world.
+  void AddConstraint(btTypedConstraint& constraint);
+
+  // Removes the constraint from the physics world
+  void RemoveConstraint(btTypedConstraint& constraint);
+
+  // Checks if the constraint is in the physics world.
+  // It can be removed by a RigidBody removal.
+  bool IsConstraintActive(btTypedConstraint& constraint) const;
+
   // Sets the gravity of the physics world. Unit: Newton per kg. Default is (0,
   // -9.80625, 0).
   void SetWorldGravity(float3 gravity);
@@ -126,6 +138,9 @@ class PhysicsManager : public UpdateSystem::Updater<PhysicsManager> {
   btSequentialImpulseConstraintSolver solver_;
   btDiscreteDynamicsWorld world_;
   RobinMap<btCollisionObject*, NodeHandle> rigid_body_map_;
+  RobinMap<btRigidBody*, RobinSet<btTypedConstraint*>>
+      constraint_dependency_map_;
+  RobinSet<btTypedConstraint*> active_constraints_map_;
   bool play_simulation_;
   float simulation_step_speed_;
 };

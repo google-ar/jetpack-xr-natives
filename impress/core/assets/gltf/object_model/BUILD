@@ -36,10 +36,10 @@ cc_library(
     deps = [
         ":property_pointer",
         ":token_parser",
-        "//core/common:log",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )

@@ -98,6 +98,13 @@ struct Bool4 {
   w : bool;
 }
 
+struct Mat2f (native_type:"imp::mat2f") {
+  m00 : float;
+  m01 : float;
+  m10 : float;
+  m11 : float;
+}
+
 struct Mat3f (native_type:"imp::mat3f") {
   m00 : float;
   m01 : float;

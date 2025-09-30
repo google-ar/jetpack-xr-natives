@@ -399,11 +399,12 @@ template <typename M, typename Proto>
 M* DebugJsonWriter::VisitStandardProto(M* m, int field_id, Proto* proto,
                                        Proto* other) {
   std::string msg_json_string;
-  proto2::util::MessageToJsonString(*proto, &msg_json_string);
+  absl::Status status =
+      proto2::util::MessageToJsonString(*proto, &msg_json_string);
 
   Json::Value msg_json;
   Json::Reader reader;
-  if (!reader.parse(msg_json_string, msg_json)) {
+  if (!status.ok() || !reader.parse(msg_json_string, msg_json)) {
     IMP_LOG(imp::FATAL) << "Failed to parse proto to json: " << msg_json_string;
   }
 

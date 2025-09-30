@@ -188,11 +188,7 @@ class GltfAnimation {
   absl::Duration LastT() const;
   absl::Duration Duration() const;
 
-  bool SanitizeT(bool repeat, absl::Duration* t) const;
-  bool SanitizeT(bool repeat, absl::Duration* t,
-                 absl::Duration start_time) const;
-  bool SanitizeT(bool repeat, absl::Duration* t, absl::Duration start_time,
-                 absl::Duration end_time) const;
+  void SanitizeT(bool repeat, absl::Duration* t) const;
 
  private:
   using MaterialParameter = MaterialAnimation::MaterialParameter;

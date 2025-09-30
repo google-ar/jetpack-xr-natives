@@ -23,6 +23,7 @@
 #include "core/editor/layout/layout_composer.h"
 #include "core/editor/layout/layout_config.proto.imp.h"
 #include "core/editor/widget_ui_system.h"
+#include "core/window/filament_host.h"
 #include "testing/imgui_scuba_view_fixture.h"
 
 namespace imp::editor {
@@ -33,7 +34,11 @@ class WidgetScubaViewFixture : public imp::testing::ImGuiScubaViewFixture {
   WidgetScubaViewFixture(
       LayoutConfig layout_config = kDefaultDesktopLayoutConfig)
       : imp::testing::ImGuiScubaViewFixture(
-            "third_party/impress/core/editor/widgets/scuba_goldens"),
+            "third_party/impress/core/editor/widgets/scuba_goldens",
+            /*view_width=*/
+            imp::window::FilamentHost::State::kDefaultDesktopDimensions.x,
+            /*view_height=*/
+            imp::window::FilamentHost::State::kDefaultDesktopDimensions.y),
         widget_ui_system_(view_, true,
                           std::make_unique<LayoutComposer>(layout_config)) {}
 

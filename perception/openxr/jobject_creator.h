@@ -23,9 +23,9 @@
 
 namespace androidx::xr::openxr {
 
-// Returns a JVM object of type `androidx.xr.math.Vector2` from an
+// Returns a JVM object of type `androidx.xr.math.FloatSize2d` from an
 // `XrExtent2Df`.
-jobject CreateJavaVector2(JNIEnv* env, const XrExtent2Df& xr_extent);
+jobject CreateJavaFloatSize2d(JNIEnv* env, const XrExtent2Df& xr_extent);
 
 // Returns a JVM object of type `androidx.xr.math.Vector2` from an
 // `XrVector2f`.
@@ -103,6 +103,23 @@ jobject CreateJavaIntSize2d(JNIEnv* env, int width, int height);
 // Returns a JVM object of type `androidx.xr.runtime.math.FloatSize3d` from
 // an `XrExtent3Df`.
 jobject CreateJavaFloatSize3d(JNIEnv* env, const XrExtent3Df& xr_extent);
+
+// Returns a JVM object of type `androidx.xr.runtime.openxr.EyeState` from an
+// `XrEyeStateANDROID`.
+jobject CreateJavaEyeState(JNIEnv* env, const XrEyeStateANDROID& xr_eye_state);
+
+// Returns a JVM object of type `androidx.xr.runtime.openxr.EyeTrackingMode`
+// from an `XrEyeTrackingModeANDROID`.
+jobject CreateJavaEyeTrackingMode(JNIEnv* env,
+                                  const XrEyeTrackingModeANDROID& xr_mode);
+
+// Returns a JVM object of type `androidx.xr.runtime.openxr.Eye` from an
+// `XrEyeStateANDROID`.
+jobject CreateJavaEye(JNIEnv* env, const XrEyeANDROID& xr_eye);
+
+// Returns a JVM object of type `androidx.xr.runtime.openxr.EyeInfo` from an
+// `XrEyesANDROID`.
+jobject CreateJavaEyesInfo(JNIEnv* env, const XrEyesANDROID& xr_eyes);
 
 }  // namespace androidx::xr::openxr
 

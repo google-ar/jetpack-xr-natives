@@ -21,6 +21,7 @@
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/IndirectLight.h"
 #include "filament/filament/include/filament/Texture.h"
+#include "filament/libs/generatePrefilterMipmap/include/filament-generatePrefilterMipmap/generatePrefilterMipmap.h"
 #include "filament/libs/math/include/math/vec4.h"
 #include "core/ar/ar_hdr_lighting.h"
 #include "core/common/trace.h"
@@ -258,12 +259,12 @@ std::unique_ptr<HdrLighting> DeeplightController::GetHdrLighting(
           .format(filament::Texture::InternalFormat::R11F_G11F_B10F)
           .build(*engine_);
 
-  filament::Texture::PrefilterOptions options;
+  filament::PrefilterOptions options;
   options.mirror = false;
-  cubemap_texture->generatePrefilterMipmap(
-      *engine_, std::move(cubemap_pixel_buffer),
-      filament::Texture::FaceOffsets(kCubemapFaceSize * kCubemapFaceSize *
-                                     sizeof(filament::math::half4)),
+  filament::generatePrefilterMipmap(
+      cubemap_texture, *engine_, std::move(cubemap_pixel_buffer),
+      filament::FaceOffsets(kCubemapFaceSize * kCubemapFaceSize *
+                            sizeof(filament::math::half4)),
       &options);
 
   filament::IndirectLight* indirect_light =

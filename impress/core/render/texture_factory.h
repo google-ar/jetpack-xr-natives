@@ -33,6 +33,7 @@
 #include "core/render/content_security_level.h"
 #include "core/render/image_asset.h"
 #include "core/render/texture.h"
+#include "core/render/texture_asset.h"
 #include "core/render/texture_options.h"
 #include "core/view/base_view.h"
 
@@ -142,6 +143,11 @@ class TextureFactory {
   OwnedTexturePtr CreateExternalTexture(ExternalImageHandle handle,
                                         TextureCreationSettings settings);
 
+  // Loads a texture from the cached texture asset.
+  OwnedTexturePtr CreateTexture(AssetPtr<TextureAsset> texture);
+  OwnedTexturePtr CreateTexture(AssetPtr<TextureAsset> texture,
+                                TextureSamplerOptions options);
+
   // Create a 'normal' texture from the resource.
   // TODO: Refactor to use AssetPtr<ImageAsset>
   TexturePtr CreateTexture(const ImageAsset& image);
@@ -248,12 +254,21 @@ class TextureFactory {
   BorrowedTexturePtr BorrowPlaceholderTexture(
       SmallSourceLocation loc = SmallSourceLocation::Current());
 
+  // Borrows a placeholder cubemap texture for assigning to unused texture
+  // samplers.
+  BorrowedTexturePtr BorrowPlaceholderCubemapTexture(
+      SmallSourceLocation loc = SmallSourceLocation::Current());
+
  private:
   // Creates a singleton placeholder to borrow via BorrowPlaceholderTexture().
   OwnedTexturePtr CreatePlaceholderTexture();
+  // Creates a singleton placeholder cubemap to borrow via
+  // BorrowPlaceholderCubemapTexture().
+  OwnedTexturePtr CreatePlaceholderCubemapTexture();
 
   BaseView& view_;
   OwnedTexturePtr placeholder_texture_;
+  OwnedTexturePtr placeholder_cubemap_texture_;
 };
 
 }  // namespace imp

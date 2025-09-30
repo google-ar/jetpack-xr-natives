@@ -22,7 +22,7 @@
 #include "core/math/vec.h"
 #include "core/recipes/language/base_recipe_system.h"
 #include "core/recipes/language/functions/math/math.h"
-#include "core/recipes/language/recipe_graph.proto.imp.h"
+#include "core/recipes/language/recipe_types.proto.imp.h"
 #include "core/recipes/language/recipe_utils.h"
 
 namespace imp::recipe {
@@ -46,6 +46,39 @@ absl::StatusOr<recipe::Variable> Clamp(const recipe::Variable& value,
     case Literal::kValue_DoubleValue:
       return std::clamp(std::get<double>(value), std::get<double>(min),
                         std::get<double>(max));
+    case Literal::kValue_Float2Value:
+      return clamp(std::get<float2>(value), std::get<float2>(min),
+                   std::get<float2>(max));
+    case Literal::kValue_Float3Value:
+      return clamp(std::get<float3>(value), std::get<float3>(min),
+                   std::get<float3>(max));
+    case Literal::kValue_Float4Value:
+      return clamp(std::get<float4>(value), std::get<float4>(min),
+                   std::get<float4>(max));
+    case Literal::kValue_Mat2fValue: {
+      mat2f result{0.f};
+      for (int i = 0; i < result.size(); ++i) {
+        result[i] = clamp(std::get<mat2f>(value)[i], std::get<mat2f>(min)[i],
+                          std::get<mat2f>(max)[i]);
+      }
+      return result;
+    }
+    case Literal::kValue_Mat3fValue: {
+      mat3f result{0.f};
+      for (int i = 0; i < result.size(); ++i) {
+        result[i] = clamp(std::get<mat3f>(value)[i], std::get<mat3f>(min)[i],
+                          std::get<mat3f>(max)[i]);
+      }
+      return result;
+    }
+    case Literal::kValue_Mat4fValue: {
+      mat4f result{0.f};
+      for (int i = 0; i < result.size(); ++i) {
+        result[i] = clamp(std::get<mat4f>(value)[i], std::get<mat4f>(min)[i],
+                          std::get<mat4f>(max)[i]);
+      }
+      return result;
+    }
     default:
       return absl::InvalidArgumentError(
           "Clamp is not available for given types.");

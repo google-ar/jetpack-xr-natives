@@ -16,20 +16,19 @@
 
 #include <jni.h>
 
+#include <algorithm>
 #include <cstddef>
-#include <utility>
+#include <cstdint>
+#include <memory>
+#include <string>
 #include <vector>
 
+#include "absl/cleanup/cleanup.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/cord_buffer.h"
-#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
-#include "absl/types/variant.h"
 #include "core/common/buffer_access.h"
-#include "core/common/context.h"
 #include "core/common/optional_error.h"
-#include "core/common/typed_id.h"
-#include "core/common/typed_vector.h"
 
 namespace imp {
 
@@ -132,20 +131,28 @@ BufferAccess FromByteArray(JNIEnv* env, jbyteArray byte_array) {
 }
 
 absl::Cord ByteArrayToCord(JNIEnv* env, jbyteArray byte_array) {
-  int offset = 0;
-  int remaining_size = env->GetArrayLength(byte_array);
-  absl::CordBuffer buffer =
-      absl::CordBuffer::CreateWithDefaultLimit(remaining_size);
-  while (remaining_size > 0) {
-    absl::Span<char> data = buffer.available().subspan(offset, remaining_size);
-    env->GetByteArrayRegion(byte_array, offset, data.size(),
-                            reinterpret_cast<jbyte*>(data.data()));
-    buffer.IncreaseLengthBy(data.size());
-    offset += data.size();
-    remaining_size -= data.size();
+  jsize array_len = env->GetArrayLength(byte_array);
+  if (!array_len) {
+    return absl::Cord();
   }
+
   absl::Cord result;
-  result.Append(std::move(buffer));
+  jsize offset = 0;
+  const jsize chunk_size = 4096;
+  std::unique_ptr<jbyte[]> buffer(new jbyte[chunk_size]);
+
+  while (offset < array_len) {
+    jsize to_read = std::min(chunk_size, array_len - offset);
+    env->GetByteArrayRegion(byte_array, offset, to_read, buffer.get());
+
+    if (JavaExceptionPrintClear(env)) {
+      return absl::Cord();
+    }
+
+    result.Append(absl::string_view(reinterpret_cast<const char*>(buffer.get()),
+                                    to_read));
+    offset += to_read;
+  }
   return result;
 }
 
@@ -245,6 +252,22 @@ void DeleteRef(JNIEnv* env, jobject object) {
       env->DeleteWeakGlobalRef(object);
       break;
   }
+}
+
+std::string JavaWrapper::GetObjectClassName(JNIEnv* env, jobject object) {
+  // This is commonly called while an exception is thrown. Temporarily clear the
+  // exception so that JNI calls don't cause a crash.
+  jthrowable exception = env->ExceptionOccurred();
+  env->ExceptionClear();
+  auto exception_cleanup = absl::MakeCleanup([env, exception]() {
+    if (exception) {
+      env->Throw(exception);
+    }
+  });
+
+  JavaWrapper clazz{env, env->GetObjectClass(object), "java/lang/Class"};
+  JniHandle get_name = clazz.GetMethodHandle("getName", "()Ljava/lang/String;");
+  return clazz.CallStringMethod(get_name);
 }
 
 void android::DumpLocalReferenceTable(JNIEnv* env) {

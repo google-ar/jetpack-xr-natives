@@ -35,7 +35,6 @@
 #include "absl/types/optional.h"
 #include "core/async/executor.h"
 #include "core/async/future_common.h"
-#include "core/async/future_group.h"
 #include "core/async/future_impl.h"
 #include "core/async/future_traits.h"
 #include "core/async/task_priority.h"
@@ -329,8 +328,6 @@ class ABSL_MUST_USE_RESULT Future {
 
   friend class WeakFuture<T>;
 
-  friend class FutureGroup;
-
   // Declare function as friend so helper can access impl.
   friend void internal::AddFutureToCombineResult(
       const std::shared_ptr<ImplWrapper>& combine_result,
@@ -458,17 +455,9 @@ auto Future<T>::Then(Fn&& fn, FutureThenOptions then_options) const {
       internal::ResultHolderWithTypeFromStatus<typename ThenFuture::Result>,
       internal::ResultHolderWithTypeFromStatus<Result>)));
 
-  if (then_options.future_group) {
-    then_options.future_group->AddFuture(then.impl_wrapper_->GetImpl());
-  }
-
   // Schedule the result producer to be invoked when this future becomes ready
   // with the result of this future.
   impl_wrapper_->GetImpl()->AddChild(then.impl_wrapper_->GetImpl());
-
-  if (then_options.future_group) {
-    return then;
-  }
 
   if (then_options.task_priority) {
     then.impl_wrapper_->GetImpl()->UpdatePriority(then_options.task_priority);
@@ -610,9 +599,7 @@ Future<T> Future<T>::Schedule(Fn&& fn, FutureScheduleOptions schedule_options) {
       internal::ResultHolderWithTypeFromStatus<typename Future<T>::Result>,
       internal::ResultHolderWithTypeFromStatus<absl::Status>)));
 
-  if (schedule_options.future_group) {
-    schedule_options.future_group->AddFuture(future.impl_wrapper_->GetImpl());
-  } else if (schedule_options.task_priority) {
+  if (schedule_options.task_priority) {
     future.impl_wrapper_->GetImpl()->UpdatePriority(
         schedule_options.task_priority);
   }

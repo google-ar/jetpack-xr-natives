@@ -23,7 +23,9 @@
 #include <vector>
 
 #include "zetasql/base/arena.h"
+#include "absl/types/span.h"
 #include "flatbuffers/allocator.h"
+#include "flatbuffers/base.h"
 
 namespace imp {
 
@@ -33,6 +35,12 @@ namespace imp {
 // The expected usage pattern is that a separate arena is used for every frame
 // and deallocated either at the end of the frame or at some later sync point
 // when all the data for that frame is finished being consumed.
+//
+// FlatbufferBuilder will pass this allocator to underlying structure
+// (vector_downward). vector_downward will call `allocate` when needed.
+//
+// Multiple builders can be active at the same time within one arena.
+//
 class FlatbufferArenaAllocator : public flatbuffers::Allocator {
  public:
   using ArenaHandle = int32_t;
@@ -96,7 +104,8 @@ class FlatbufferArenaAllocator : public flatbuffers::Allocator {
   //
   // 3. The first_block_alloc function might not necessarily be called, if an
   //    appropriate recycled arena is found instead.
-  ArenaHandle CreateArena(size_t block_size, MemoryOptions memory_options);
+  virtual ArenaHandle CreateArena(size_t block_size,
+                                  MemoryOptions memory_options);
 
   // Creates an arena with default memory options.
   //
@@ -193,6 +202,69 @@ class FlatbufferArenaAllocator : public flatbuffers::Allocator {
 
   std::vector<ArenaAndAllocFunc> arenas_;
   ArenaHandle active_arena_ = -1;
+};
+
+// In order to transmit flatbuffers over RPC effectively, we need to prefix them
+// with a size field. This can be achieved by calling
+// FlatbufferBuilder::FinishSizePrefixed instead of FlatbufferBuilder::Finish
+// _EVERYWHERE_. However, this is error prone as it is easy to forget about
+// this. In addition, every implementation of receiving side will have to be
+// updated to use flatbuffers::GetSizePrefixedRoot instead of
+// flatbuffers::GetRoot.
+//
+// flatbuffers::FlatbufferBuilder is using vector_downward to store flatbuffer
+// data. Key difference between vector and vector_downward is that
+// vector_downward grows from the end of the buffer. E.g.:
+// 1. Allocator::allocate():
+//    [ . ][ . ][ . ][ . ][ . ][ . ]
+//      |
+//      └- allocate() returns this pointer.
+//
+// 2. vector_downward::push_small(1)
+//    [ . ][ . ][ . ][ . ][ . ][ 1 ]
+//                               |
+//                               └- FlatbufferBuilder::GetBufferPointer()
+//
+// So, we can utilize the unused space immediately before the flatbuffer to
+// store the size of the flatbuffer. In order to handle the case when the whole
+// buffer is used, `SizePrefixedFlatbufferArenaAllocator` from below reserves
+// few bytes in the beginning of the buffer to handle
+// the case when the whole buffer is used by the flatbuffer builder.
+//
+// 1. SizePrefixedFlatbufferArenaAllocator::allocate():
+//  [ RESERVED ][ . ][ . ][ . ][ . ][ . ]
+//                |
+//                └- allocate() returns this pointer.
+// 2. vector_downward::push_small(2)
+//  [ RESERVED ][ . ][ . ][ . ][ . ][ 2 ]
+//                                    |
+//                                    └- FlatbufferBuilder::GetBufferPointer()
+//
+// 3. SizePrefixedFlatbufferArenaAllocator::PrependSize(1):
+//  [ RESERVED ][ . ][ . ][ . ][ 1 ][ 2 ]
+//                               └-┬--┘
+//                                 └-- PrependSize() returns this span.
+//
+//
+class SizePrefixedFlatbufferArenaAllocator : public FlatbufferArenaAllocator {
+ public:
+  using SizeType = flatbuffers::uoffset_t;
+  // Caller is responsible to ensure that `ptr` points to a memory that was
+  // allocated by this allocator.
+  //
+  // Parameters:
+  //   ptr: a.k.a. FlatbufferBuilder::GetBufferPointer()
+  //   size: a.k.a. FlatbufferBuilder::GetSize()
+  //
+  // Returns:
+  //   A span of size `size + sizeof(SizeType)` containing the size field at the
+  //   beginning and the flatbuffer data afterwards.
+  //
+  absl::Span<const uint8_t> PrependSize(uint8_t* ptr, SizeType size);
+
+  ArenaHandle CreateArena(size_t block_size,
+                          MemoryOptions memory_options) override;
+  uint8_t* allocate(size_t size) override;
 };
 
 }  // namespace imp

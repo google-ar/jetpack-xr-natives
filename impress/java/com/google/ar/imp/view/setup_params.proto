@@ -16,6 +16,8 @@ syntax = "proto2";
 
 package com.google.ar.imp.view;
 
+import "core/view/utils/proto/render_settings.proto";
+
 // option cc_api_version = 2;
 option java_package = "com.google.ar.imp.view";
 option java_multiple_files = true;
@@ -79,6 +81,9 @@ message SetupParams {
   // https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#XR_VARJO_quad_views
   // Note: If use_quad_views is true, foveation_level must be OFF_DEFAULT.
   optional bool use_quad_views = 13 [default = false];
+  // When building for XR, whether or not to render with mono view. It is for
+  // emulator only.
+  optional bool use_mono_view = 26 [default = false];
   // When building for XR, whether or not to use Varjo foveated rendering. In
   // this configuration, the smaller (higher resolution) viewport follows the
   // eye movement, while the larger (lower resolution) viewport is fixed.
@@ -116,4 +121,6 @@ message SetupParams {
   optional float swapchain_size_multiplier = 23 [default = 1.0];
   // The name of the thread that the background frame scheduler will run on.
   optional string background_thread_name = 24 [default = "impressThread"];
+  // The render settings for the main view.
+  optional .imp.render_settings.ViewRenderSettings view_render_settings = 27;
 }

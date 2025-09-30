@@ -164,7 +164,7 @@ GlyphAtlasOld::GlyphAtlasOld(BaseView& view,
 #if IMP_RUNTIME(DEV)
   if (auto editor = view.GetRegistry().Get<editor::Editor>(); editor.ok()) {
     editor->get().GetWidgetUiSystem().AddWidget<editor::GlyphAtlasVisualizer>(
-        editor::WidgetLayoutInfo(editor::panel_ids::kTabBar), view,
+        editor::WidgetLayoutInfo(editor::PanelId::kTabBar), view,
         editor::GlyphAtlasVisualizer::AtlasDataProvider{
             .get_texture_func = [this]() { return GetTexture(); },
             .get_glyph_info_func =
@@ -288,14 +288,18 @@ Future<ScopedCanvas::TextMetrics> GlyphAtlasOld::GetTextMetrics(
                  canvas_options = *canvas_options]() {
                   AsyncCanvasSource::GlyphToMeasure glyph_to_measure(
                       {.glyph = text});
+                  bool disable_supersampling =
+                      canvas_options.force_non_separable;
                   return canvas_source_
                       ->MeasureGlyph(glyph_to_measure, canvas_options)
                       .Then(
-                          [this](ScopedCanvas::TextMetrics metrics) {
-                            metrics.size /= GetSubpixelRenderRatio();
-                            metrics.typographical_width /=
-                                GetSubpixelRenderRatio().x;
-                            metrics.origin /= GetSubpixelRenderRatio();
+                          [this, disable_supersampling](
+                              ScopedCanvas::TextMetrics metrics) {
+                            float2 ratio =
+                                GetSubpixelRenderRatio(disable_supersampling);
+                            metrics.size /= ratio;
+                            metrics.typographical_width /= ratio.x;
+                            metrics.origin /= ratio;
                             return metrics;
                           },
                           Executor::Type::kCurrent);
@@ -514,7 +518,8 @@ GlyphAtlasOld::BreakIntoGlyphs(
     //
     // TODO: Add support for atlasing individual glyphs for text
     // with accents/ligatures when running on Android API 31, iOS, and Desktop.
-    std::vector<Chunk> chunks = GetChunks(text);
+    std::vector<Chunk> chunks =
+        GetChunks(text, canvas_options.force_non_separable);
     auto widths = canvas_source_->GetTextWidths(chunks, canvas_options);
     bool contains_rtl = ContainsRtl(text);
     return widths.Then(
@@ -546,8 +551,10 @@ void GlyphAtlasOld::GetGlyphsForChunk(
     out_glyph_advances.push_back(
         GlyphAdvance{.glyph = std::string(chunk.chunk_text),
                      .width = advance_widths[0],
-                     .is_emoji = ContainsEmoji(chunk.chunk_text),
+                     .is_emoji = canvas_options.force_non_separable ||
+                                 ContainsEmoji(chunk.chunk_text),
                      .contains_non_separable_script =
+                         canvas_options.force_non_separable ||
                          ContainsNonSeparableScript(chunk.chunk_text)});
     return;
   }
@@ -701,8 +708,10 @@ void GlyphAtlasOld::AddGlyphs(
     const float width = glyph_advance.width;
     const GlyphInfo& glyph_info = GetOrAddGlyphInfo(
         std::move(glyph_advance), pending_glyph, measurement_map);
-    Glyph glyph = GlyphInfoToGlyph(glyph_info, width, GetSubpixelRenderRatio(),
-                                   atlas_texture_size_, is_emoji);
+    Glyph glyph = GlyphInfoToGlyph(
+        glyph_info, width,
+        GetSubpixelRenderRatio(canvas_options.force_non_separable),
+        atlas_texture_size_, is_emoji);
     result.push_back(glyph);
   }
 }
@@ -1000,7 +1009,9 @@ GlyphAtlasOld::CanvasOptionsFromGlyphAtlasOptions(const TextOptions& options) {
         canvas_options.text_tracking = options.text_tracking;
         canvas_options.should_measure_typographical_width =
             options.should_measure_typographical_width;
-        canvas_options.render_scale = GetSubpixelRenderRatio().x;
+        canvas_options.render_scale =
+            GetSubpixelRenderRatio(options.force_non_separable).x;
+        canvas_options.force_non_separable = options.force_non_separable;
         return canvas_options;
       },
       Executor::Type::kCurrent);
@@ -1064,17 +1075,17 @@ void GlyphAtlasOld::PrepareToUpdateTexture() {
 }
 
 // Copied from GlyphAtlasNew.
-Future<GlyphEmulator::SuperSampleInfo> GlyphAtlasOld::GetSuperSampleInfo()
-    const {
+Future<GlyphEmulator::SuperSampleInfo> GlyphAtlasOld::GetSuperSampleInfo(
+    bool force_off) const {
 #if IMP_PLATFORM(WASM)
   if (view_.GetDevice().IsPhysicalPixelRatioAvailable()) {
     return Future<GlyphEmulator::SuperSampleInfo>(
         GlyphEmulator::GetSuperSampleInfo(
-            view_.GetDevice().GetPhysicalPixelRatio()));
+            view_.GetDevice().GetPhysicalPixelRatio(), force_off));
   }
-  return physical_pixel_ratio_available_.Then([this]() {
+  return physical_pixel_ratio_available_.Then([this, force_off]() {
     return GlyphEmulator::GetSuperSampleInfo(
-        view_.GetDevice().GetPhysicalPixelRatio());
+        view_.GetDevice().GetPhysicalPixelRatio(), force_off);
   });
 #else
   return Future<GlyphEmulator::SuperSampleInfo>(GlyphEmulator::SuperSampleInfo{
@@ -1092,10 +1103,11 @@ bool GlyphAtlasOld::ShouldSuperSample() const {
   return false;
 }
 
-float2 GlyphAtlasOld::GetSubpixelRenderRatio() const {
+float2 GlyphAtlasOld::GetSubpixelRenderRatio(bool force_off) const {
 #if IMP_PLATFORM(WASM)
-  return ShouldSuperSample() ? float2{kSuperSampleThreshold, 1.0f}
-                             : float2{1.0f};
+  return (!force_off && ShouldSuperSample())
+             ? float2{kSuperSampleThreshold, 1.0f}
+             : float2{1.0f};
 #endif
   return float2{1.0f};
 }

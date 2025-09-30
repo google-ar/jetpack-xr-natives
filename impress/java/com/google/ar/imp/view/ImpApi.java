@@ -67,13 +67,10 @@ public class ImpApi implements ImpApiScuba {
   }
 
   public static FrameScheduler.ThreadMode getThreadMode(SetupParams.ThreadMode threadMode) {
-    switch (threadMode) {
-      case MAIN_DEFAULT:
-        return FrameScheduler.ThreadMode.MAIN_DEFAULT;
-      case BACKGROUND:
-        return FrameScheduler.ThreadMode.BACKGROUND;
-    }
-    throw new IllegalArgumentException("Unknown thread mode: " + threadMode.getNumber());
+    return switch (threadMode) {
+      case MAIN_DEFAULT -> FrameScheduler.ThreadMode.MAIN_DEFAULT;
+      case BACKGROUND -> FrameScheduler.ThreadMode.BACKGROUND;
+    };
   }
 
   /** ImpApi is valid for further calls immediately. */
@@ -104,14 +101,18 @@ public class ImpApi implements ImpApiScuba {
                         setupParams.getCustomNativeLibrary(),
                         setupParams.getViewIdentifier(),
                         context,
-                        host);
+                        host,
+                        frameScheduler.getExecutor(),
+                        setupParams.getViewRenderSettings().toByteArray());
               } else {
                 view =
                     View.createViewWithPreloadedLibrary(
                         setupParams.getCustomNativeLibrary(),
                         setupParams.getViewIdentifier(),
                         context,
-                        host);
+                        host,
+                        frameScheduler.getExecutor(),
+                        setupParams.getViewRenderSettings().toByteArray());
               }
               view.setup(setupParams.getPlatformHandle(), eglContext);
               return view;
@@ -142,7 +143,9 @@ public class ImpApi implements ImpApiScuba {
                 setupParams.getCustomNativeLibrary(),
                 setupParams.getViewIdentifier(),
                 context,
-                host),
+                host,
+                executor,
+                setupParams.getViewRenderSettings().toByteArray()),
         executor);
   }
 
@@ -248,7 +251,7 @@ public class ImpApi implements ImpApiScuba {
       FragmentHost host,
       float desiredSizeScale,
       long swapChainFlags) {
-    View view = View.createView(customNativeLibrary, identifier, context, host);
+    View view = View.createView(customNativeLibrary, identifier, context, host, null);
     return new ImpApi(
         new ImpViewController(
             null, context, androidView, isOpaque, view, desiredSizeScale, swapChainFlags));

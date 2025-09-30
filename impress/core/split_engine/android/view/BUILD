@@ -13,7 +13,7 @@
 # limitations under the License.
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("//build_tools:imp.bzl", "if_non_android")
+load("//build_tools:imp.bzl", "if_android", "if_desktop", "if_non_android")
 load("//build_tools:imp_app.bzl", "imp_app")
 
 package(
@@ -33,10 +33,10 @@ imp_app(
     multidex = "native",
     platforms = [
         "android",
+        "desktop",
     ],
     tags = ["nobuilder"],
     deps = [
-        ":split_engine_jni",
         "//core/common:debug_draw",
         "//core/input",
         "//core/math",
@@ -45,10 +45,11 @@ imp_app(
         "//core/split_engine:split_engine_renderer_impl",
         "//core/view/framework",
         "//core/view/framework:framework_proto_cc",
-        "//core/view/platforms/xr_android:xr_color_space_helper",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:variant",
-    ],
+    ] + if_android([":split_engine_jni"]) + if_desktop([
+        "//core/view/platforms/desktop_split_engine:desktop_split_engine_renderer_hook",
+    ]),
 )
 
 cc_library(
@@ -61,7 +62,6 @@ cc_library(
         "//core/common:buffer_access",
         "//core/common:enum_flags",
         "//core/common:jni_helpers",
-        "//core/common:log",
         "//core/common:platform_helpers",
         "//core/common:registry",
         "//core/math",
@@ -83,6 +83,7 @@ cc_library(
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/time",
+        "@com_google_impress//core/common:log",
         "@third_party//filament",
         "@third_party//filament/filament:filament_hdrs",
     ],

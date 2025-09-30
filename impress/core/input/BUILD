@@ -62,7 +62,6 @@ cc_library(
         "//core/actions:input_action_event",
         "//core/collision:collision_flags",
         "//core/common",
-        "//core/common:log",
         "//core/common:trace",
         "//core/math",
         "//core/ncsb",
@@ -73,6 +72,7 @@ cc_library(
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
         "@robin_map",
         "@third_party//filament/libs:math_hdrs",
@@ -170,7 +170,6 @@ objc_library(
         "//core/async:future",
         "//core/common",
         "//core/common:context",
-        "//core/common:log",
         "//core/ncsb",
         "//core/view:base_view",
         "//core/view:view_events",
@@ -178,6 +177,7 @@ objc_library(
         "//third_party/apple_frameworks:UIKit",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/time",
+        "@com_google_impress//core/common:log",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
 )
 

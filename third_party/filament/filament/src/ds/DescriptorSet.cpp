@@ -73,8 +73,7 @@ DescriptorSet& DescriptorSet::operator=(DescriptorSet&& rhs) noexcept {
 
 void DescriptorSet::terminate(FEngine::DriverApi& driver) noexcept {
     if (mDescriptorSetHandle) {
-        driver.destroyDescriptorSet(mDescriptorSetHandle);
-        mDescriptorSetHandle.clear();
+        driver.destroyDescriptorSet(std::move(mDescriptorSetHandle));
     }
 }
 
@@ -140,6 +139,11 @@ void DescriptorSet::bind(FEngine::DriverApi& driver, DescriptorSetBindingPoints 
     driver.bindDescriptorSet(mDescriptorSetHandle, +set, std::move(dynamicOffsets));
 }
 
+void DescriptorSet::unbind(backend::DriverApi& driver,
+        DescriptorSetBindingPoints set) noexcept {
+    driver.bindDescriptorSet({}, +set, {});
+}
+
 void DescriptorSet::setBuffer(DescriptorSetLayout const& layout,
         backend::descriptor_binding_t const binding,
         backend::Handle<backend::HwBufferObject> boh, uint32_t const offset, uint32_t const size) {
@@ -198,9 +202,40 @@ DescriptorSet DescriptorSet::duplicate(
     return set;
 }
 bool DescriptorSet::isTextureCompatibleWithDescriptor(
-    backend::TextureType t, backend::DescriptorType d) noexcept {
+    backend::TextureType t, backend::SamplerType s, backend::DescriptorType d) noexcept {
     using namespace backend;
 
+    switch (s) {
+        case SamplerType::SAMPLER_2D:
+            if (!is2dTypeDescriptor(d)) {
+                return false;
+            }
+            break;
+        case SamplerType::SAMPLER_2D_ARRAY:
+            if (!is2dArrayTypeDescriptor(d)) {
+                return false;
+            }
+            break;
+        case SamplerType::SAMPLER_CUBEMAP:
+            if (!isCubeTypeDescriptor(d)) {
+                return false;
+            }
+            break;
+        case SamplerType::SAMPLER_CUBEMAP_ARRAY:
+            if (!isCubeArrayTypeDescriptor(d)) {
+                return false;
+            }
+            break;
+        case SamplerType::SAMPLER_3D:
+            if (!is3dTypeDescriptor(d)) {
+                return false;
+            }
+            break;
+        case SamplerType::SAMPLER_EXTERNAL:
+            break;
+    }
+
+    // check that the descriptor type is compatible with the texture format type
     switch (d) {
         case DescriptorType::SAMPLER_2D_FLOAT:
         case DescriptorType::SAMPLER_2D_ARRAY_FLOAT:

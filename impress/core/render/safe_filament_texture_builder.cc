@@ -219,7 +219,11 @@ SafeFilamentTextureBuilder::build(filament::Engine& engine) noexcept {
     return absl::InvalidArgumentError("Imported texture must be SAMPLEABLE");
   }
 
-  return builder_.build(engine);
+  filament::Texture* texture = builder_.build(engine);
+  if (texture == nullptr) {
+    return absl::InternalError("Failed to create texture");
+  }
+  return texture;
 }
 
 }  // namespace imp

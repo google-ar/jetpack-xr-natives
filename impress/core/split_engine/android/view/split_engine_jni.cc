@@ -147,20 +147,20 @@ JNI_METHOD_ACTIVITY(void, nSetup)
       bridge_client = std::make_unique<imp::split_engine::SplitEngineBridge>(
           env, split_engine_bridge);
 
-  std::unique_ptr<imp::split_engine::SplitEngineAndroidSharedMemoryBridge>
-      bridge = std::make_unique<
-          imp::split_engine::SplitEngineAndroidSharedMemoryBridge>(
-          std::move(bridge_client));
-
   auto bridge_sender =
       std::make_unique<imp::split_engine::SplitEngineSharedMemoryBridgeSender>(
-          bridge->GetSplitEngineSharedMemoryBridgeClient(),
+          *bridge_client,
           /*recycle_buffers=*/true);
 
   auto bridge_one_shot_sender =
       std::make_unique<imp::split_engine::SplitEngineSharedMemoryBridgeSender>(
-          bridge->GetSplitEngineSharedMemoryBridgeClient(),
+          *bridge_client,
           /*recycle_buffers=*/false);
+
+  std::unique_ptr<imp::split_engine::SplitEngineAndroidSharedMemoryBridge>
+      bridge = std::make_unique<
+          imp::split_engine::SplitEngineAndroidSharedMemoryBridge>(
+          std::move(bridge_client));
 
   view->SetRenderableManager(
       std::make_unique<imp::RenderableManagerWrapper>(*view));

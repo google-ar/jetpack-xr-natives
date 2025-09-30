@@ -24,10 +24,11 @@
 #include "absl/base/thread_annotations.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
+#include "core/assets/asset_ptr.h"
 #include "core/common/platform_helpers.h"
 #include "core/common/rememberer.h"
 #include "core/editor/widget.h"
-#include "core/render/texture.h"
+#include "core/render/texture_asset.h"
 #include "core/view/base_view.h"
 #include "robin_map/include/tsl/robin_map.h"
 
@@ -75,9 +76,9 @@ class Console : public Widget, public imp::Rememberer {
   // Current selected log in the console.
   int selected_item_index_ = 0;
   // Impress textures for the icons.
-  imp::TexturePtr info_icon_;
-  imp::TexturePtr warning_icon_;
-  imp::TexturePtr error_icon_;
+  imp::AssetPtr<TextureAsset> info_icon_;
+  imp::AssetPtr<TextureAsset> warning_icon_;
+  imp::AssetPtr<TextureAsset> error_icon_;
   // Keep track if a new log has been added in the previous frame. This is used
   // to force the console to scroll down to the new log.
   bool new_log_added_ = false;

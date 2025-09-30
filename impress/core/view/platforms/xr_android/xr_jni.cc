@@ -100,7 +100,7 @@ JNI_METHOD(jlong, nCreateSessionHost)
 (JNIEnv* env, jclass /*clazz*/, jobject context, jlong view_handle,
  jboolean use_composition_layer_depth,
  jboolean use_enhanced_stereoscopic_rendering, jboolean use_max_swapchain_size,
- jint foveation_level, jboolean use_quad_views,
+ jint foveation_level, jboolean use_quad_views, jboolean use_mono_view,
  jboolean use_varjo_foveated_rendering, jint msaa_sample_count,
  jlong openxr_reference_space_type, jboolean use_eye_gaze_interaction,
  jboolean use_android_depth_texture, jboolean use_xr_action_defaults,
@@ -120,6 +120,7 @@ JNI_METHOD(jlong, nCreateSessionHost)
   options.use_max_swapchain_size = use_max_swapchain_size;
   options.foveation_level = XrFoveationLevelFBFromInt(foveation_level);
   options.use_quad_views = use_quad_views;
+  options.use_mono_view = use_mono_view;
   options.use_varjo_foveated_rendering = use_varjo_foveated_rendering;
   options.msaa_sample_count = msaa_sample_count;
   options.reference_space_type =

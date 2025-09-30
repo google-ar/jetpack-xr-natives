@@ -141,6 +141,11 @@ struct ScopedCanvas {
     // direction.
     // TODO (broken link) Support supersampling in the y direction as well.
     float2 render_scale = float2{1.0f};
+
+    // If possible (i.e. if not on a path), disable splitting this text into
+    // individual glyphs when rendering. This may improve legibility at the cost
+    // of increased glyph atlas usage.
+    bool force_non_separable = false;
   };
 
   // Provides information about the font used for drawing text for a particular

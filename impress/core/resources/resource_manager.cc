@@ -34,7 +34,6 @@
 #include "absl/types/span.h"
 #include "core/async/executor.h"
 #include "core/async/future.h"
-#include "core/async/future_group.h"
 #include "core/common/buffer_access.h"
 #include "core/common/context.h"
 #include "core/common/robin_set.h"
@@ -124,7 +123,7 @@ bool ResourceManager::IsRelativeUrl(absl::string_view url) {
 }
 
 Future<absl::Cord> ResourceManager::GetContentFuture(
-    absl::string_view resource_url, std::optional<FutureGroup> future_group) {
+    absl::string_view resource_url) {
   // Check if an override has been set for this resource_url.
   StringMap<Future<absl::Cord>>& resource_to_content_override =
       ResourceToContentOverride();
@@ -152,13 +151,13 @@ Future<absl::Cord> ResourceManager::GetContentFuture(
   if (!real_resource_url.empty() && url_loader_) {
     if (IsRemoteUrl(real_resource_url)) {
       // This was actually a URL and we have a loader.
-      return url_loader_->LoadUrl(std::string(real_resource_url), future_group);
+      return url_loader_->LoadUrl(std::string(real_resource_url));
     }
 
 #if IMP_PLATFORM(WASM)
     // For WASM, a relative path like "/link/to/icon.png" is also supported.
     if (IsRelativeUrl(real_resource_url)) {
-      return url_loader_->LoadUrl(std::string(real_resource_url), future_group);
+      return url_loader_->LoadUrl(std::string(real_resource_url));
     }
 #endif
   }
@@ -169,24 +168,21 @@ Future<absl::Cord> ResourceManager::GetContentFuture(
                       resource_url, real_resource_url)));
 }
 
-Future<Resource> ResourceManager::Load(
-    absl::string_view resource_url, std::optional<FutureGroup> future_group) {
+Future<Resource> ResourceManager::Load(absl::string_view resource_url) {
   IMP_TRACE();
-  return GetContentFuture(resource_url, future_group)
+  return GetContentFuture(resource_url)
       .Then(
           [](absl::Cord data) {
             IMP_TRACE_BLOCK("Then");
             data.Flatten();
             return Resource(std::move(data));
           },
-          {.executor = Executor::Type::kBackground,
-           .future_group = future_group});
+          {.executor = Executor::Type::kBackground});
 }
 
 Future<Resource> ResourceManager::Load(
-    const ResourceDefinition& resource_definition,
-    std::optional<FutureGroup> future_group) {
-  return Load(resource_definition.GetUrl(), future_group);
+    const ResourceDefinition& resource_definition) {
+  return Load(resource_definition.GetUrl());
 }
 
 float ResourceManager::GetUrlLoaderProgress(size_t download_baseline) {

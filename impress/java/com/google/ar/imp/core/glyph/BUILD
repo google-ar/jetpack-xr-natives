@@ -26,6 +26,7 @@ kt_android_library(
         "PathGlyphSource.kt",
         "ShaperGlyphSource.kt",
     ],
+    disable_lint_checks = ["NewApi"],
     deps = [
         "//third_party/java/androidx/graphics/path",
         "@third_party//filament/android:filament_android_no_jni",

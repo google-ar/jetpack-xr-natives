@@ -222,6 +222,12 @@ class GltfMesh : public Component {
   // The default value is ShadowMode::kHardShadows.
   ShadowMode GetShadowReceivingMode() const;
 
+  // Enables/Disables the fog.
+  void SetFogEnabled(bool enable);
+
+  // Returns true if the fog is enabled.
+  bool GetFogEnabled() const;
+
   // Access the vertex and index information of primitives.
   absl::Span<const MeshVertexAndIndexData> GetMeshData() const;
 

@@ -22,13 +22,37 @@
 #include "core/collision/ray.h"
 #include "core/common/debug_draw.h"
 #include "core/common/filament_helpers.h"
+#include "core/config.h"
 #include "core/math/math.h"
+#include "core/ncsb/node_handle.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/framework/collision/ray_hit.h"
+
+#if IMP_RUNTIME(DEV)
+#include "core/ncsb/path_manager.h"
+#include "core/view/framework/collision/compound_collider.h"
+#endif
 
 namespace imp {
 
 BoxCollider::BoxCollider() : collision_flags_(CollisionMask::kColliderBox) {}
+
+void BoxCollider::SetHitNode(NodeHandle hit_node) { hit_node_ = hit_node; };
+
+NodeHandle BoxCollider::GetHitNode() const {
+#if IMP_RUNTIME(DEV)
+  if (editor::IsInEditMode(GetView().GetRegistry())) {
+    if (auto compound_collider =
+            GetView()
+                .GetPathManager()
+                .GetComponentFromAncestorOrSelf<CompoundCollider>(GetNode())) {
+      return compound_collider->GetNode();
+    }
+  }
+#endif
+  return hit_node_;
+}
+
 absl::optional<RayHit> BoxCollider::Intersect(const Ray& world_ray) {
   if (!IsActive()) {
     return {};
@@ -46,7 +70,7 @@ absl::optional<RayHit> BoxCollider::Intersect(const Ray& world_ray) {
         quatf{0.0},
         // Transform the collision point back into world space.
         GetNode()->WorldFromLocalPoint(intersection->collision_point),
-        GetNode(),
+        GetHitNode(),
         TransformedSurfaceNormal(intersection->normal, world_from_local));
   }
   // No collision (empty).
@@ -71,7 +95,7 @@ absl::optional<DoubleRayHit> BoxCollider::IntersectPrecise(
         quat{0.0},
         // Transform the collision point back into world space.
         GetNode()->WorldFromLocalPointPrecise(intersection->collision_point),
-        GetNode(),
+        GetHitNode(),
         TransformedSurfaceNormal(intersection->normal, world_from_local));
   }
   // No collision (empty).
@@ -90,18 +114,21 @@ void BoxCollider::Visualize(VisualizationStyle visualization_style) const {
   debug_draw::Local(GetNode().GetEntity()).BoxLines(GetLocalBox(), color);
 }
 
-void BoxCollider::Setup() { UpdateSplitEngine(); }
+void BoxCollider::Setup() {
+  hit_node_ = GetNode();
+  UpdateSplitEngine();
+}
 
-void BoxCollider::SetupWithState() { Setup(state_.box); }
+void BoxCollider::SetupWithState() { Setup(); }
 
 void BoxCollider::Setup(Box box) {
   state_.box = box;
-  UpdateSplitEngine();
+  Setup();
 }
 
 void BoxCollider::SetBox(Box box) {
   state_.box = box;
-  UpdateSplitEngine();
+  Setup();
 }
 
 void BoxCollider::Cleanup() {

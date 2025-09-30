@@ -43,13 +43,15 @@ struct InteractivityData {
     STRING,
   };
 
+  using VariableValue = std::variant<bool, int, float, float2, float3, float4,
+                                     mat2f, mat3f, mat4f, std::string>;
+
   struct VariableData {
     std::string id;
     ValueType type;
-    std::variant<bool, int, float, float2, float3, float4, mat2f, mat3f, mat4f,
-                 std::string>
-        value;
+    VariableValue value;
   };
+
   struct NodeData {
     enum ConfigurationType {
       VARIABLE,
@@ -66,6 +68,7 @@ struct InteractivityData {
       IS_RANDOM,
       IS_LOOP,
       MESSAGE,
+      INITIAL_INDEX,
     };
 
     struct FlowData {

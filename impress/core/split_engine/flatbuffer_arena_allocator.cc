@@ -17,6 +17,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <utility>
 
@@ -24,6 +25,8 @@
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
+#include "flatbuffers/base.h"
 
 static constexpr absl::string_view kTag = "[FlatbufferArenaAllocator]: ";
 
@@ -173,6 +176,36 @@ void FlatbufferArenaAllocator::deallocate(uint8_t* p, size_t size) {
   // flatbuffers that they have built. But we explicitly want to keep those
   // flatbuffers around until the arena is destroyed. Indeed, that's the whole
   // point of this class.
+}
+
+FlatbufferArenaAllocator::ArenaHandle
+SizePrefixedFlatbufferArenaAllocator::CreateArena(
+    size_t block_size, MemoryOptions memory_options) {
+  return FlatbufferArenaAllocator::CreateArena(
+      block_size  // BeginMessageGroupSize + block_size + EndMessageGroupSize
+          + sizeof(SizeType)  // BeginMessageGroup
+
+          + sizeof(SizeType)  // At least one command if block_size is tailored.
+                              // If not, block_size has vastly enough space for
+                              // multiple commands and their sizes.
+
+          + sizeof(SizeType),  // EndMessageGroup
+      memory_options);
+}
+
+uint8_t* SizePrefixedFlatbufferArenaAllocator::allocate(size_t size) {
+  return FlatbufferArenaAllocator::allocate(size + sizeof(SizeType)) +
+         sizeof(SizeType);
+}
+
+absl::Span<const uint8_t> SizePrefixedFlatbufferArenaAllocator::PrependSize(
+    uint8_t* ptr, SizeType size) {
+  SizeType* size_ptr = reinterpret_cast<SizeType*>(ptr - sizeof(SizeType));
+  // This is the same idea as in
+  // FlatbufferBuilder::FinishSizePrefixed, but without forcing the alignment.
+  *size_ptr = flatbuffers::EndianScalar(size);
+  return absl::MakeSpan(reinterpret_cast<uint8_t*>(size_ptr),
+                        size + sizeof(SizeType));
 }
 
 }  // namespace imp

@@ -42,12 +42,6 @@ namespace imp::editor {
 // The label to use in the UI for nodes that do not have a name set.
 constexpr absl::string_view kUnamedNodeLabel = "<node>";
 
-// Window alpha value. Used to help differentiate where the hierarchy is.
-constexpr float kWindowAlpha = .5f;
-// Percentage of the window size the hierarchy should be. The value is
-// multiplied by window_size.
-constexpr float kHierarchyWindowHeightRatio = .4f;
-
 namespace {
 static constexpr absl::string_view kNodesHeaderLabel = "Nodes";
 #if IMP_PLATFORM(ANDROID) || IMP_PLATFORM(IOS)
@@ -99,49 +93,45 @@ ImGuiTreeNodeFlags Hierarchy::GetTreeNodeFlags() const {
 }
 
 void Hierarchy::DrawImGui() {
+  // Decorate the widget header with a context menu trigger.
+  if (MobileLongPress(kNodesHeaderLabel)) {
+    ImGui::OpenPopup(kNodesHeaderLabel.data());
+  }
+  if (ImGui::BeginPopupContextItem(kNodesHeaderLabel.data())) {
+    if (ImGui::MenuItem("New Node")) {
+      NodeHandle node = view_.CreateNode();
+      EditorTouch(node);
+      Editor& editor = view_.GetRegistry().Get<Editor>()->get();
+      editor.SelectNode(node);
+    }
+    ImGui::EndPopup();
+  }
+  if (ImGui::BeginDragDropTarget()) {
+    NodeHandle node = AcceptDragAndDropPayloadNode();
+    if (node) {
+      node->SetParentKeepWorldTransform(NodeHandle());
+    }
+    ImGui::EndDragDropTarget();
+  }
+
+  // Draw the filter.
   ImGui::Text("Filter:");
   ImGui::SameLine();
   filter_.Draw(
       GenerateUniqueImGuiLabel("filter", this, EditorControlFlags::kNone)
           .c_str());
 
-  // Draw the Header and children for the Nodes section.
-  ImGuiTreeNodeFlags header_flags =
-      ImGuiTreeNodeFlags_CollapsingHeader | ImGuiTreeNodeFlags_DefaultOpen |
-      ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick;
-  if (ImGui::TreeNodeEx(kNodesHeaderLabel.data(), header_flags)) {
-    if (MobileLongPress(kNodesHeaderLabel)) {
-      ImGui::OpenPopup(kNodesHeaderLabel.data());
-    }
-    if (ImGui::BeginPopupContextItem(kNodesHeaderLabel.data())) {
-      if (ImGui::MenuItem("New Node")) {
-        NodeHandle node = view_.CreateNode();
-        EditorTouch(node);
-        Editor& editor = view_.GetRegistry().Get<Editor>()->get();
-        editor.SelectNode(node);
-      }
-      ImGui::EndPopup();
-    }
-
-    if (ImGui::BeginDragDropTarget()) {
-      NodeHandle node = AcceptDragAndDropPayloadNode();
-      if (node) {
-        node->SetParentKeepWorldTransform(NodeHandle());
-      }
-      ImGui::EndDragDropTarget();
-    }
-
-    view_.ForEachNode(
-        [this](NodeHandle node) {
-          std::optional<RobinSet<NodeHandle>> filtered_nodes = std::nullopt;
-          if (filter_.IsActive()) {
-            filtered_nodes.emplace();
-            CollectFilteredNodes(filter_, *filtered_nodes, node);
-          }
-          DrawHierarchy(node, filtered_nodes);
-        },
-        NodeFlags::kIsRoot);
-  }
+  // Draw the Nodes section.
+  view_.ForEachNode(
+      [this](NodeHandle node) {
+        std::optional<RobinSet<NodeHandle>> filtered_nodes = std::nullopt;
+        if (filter_.IsActive()) {
+          filtered_nodes.emplace();
+          CollectFilteredNodes(filter_, *filtered_nodes, node);
+        }
+        DrawHierarchy(node, filtered_nodes);
+      },
+      NodeFlags::kIsRoot);
 }
 
 void Hierarchy::DrawHierarchy(

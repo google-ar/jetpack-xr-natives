@@ -156,7 +156,14 @@ class IndexableSetVector
     static_assert(std::is_same_v<typename I::ReferredType, IdReferredType>,
                   "Incompatible Id types");
 
-    return {{*this, static_cast<typename I::ValueType>(i)}};
+    // Leaving the types implicit in this return (e.g. with an initializer list)
+    // causes the compiler to emit a warning. Explicitly naming the types and
+    // picking `Field<0>` is safe, since the types of different `Field`s are
+    // required by the API to be the same (see docstring above), so `Field<0>`,
+    // `Field<1>`, etc., have the same type, and the values distinguish between
+    // behaviors.
+    return typename T::Proxy{typename Base::template Field<0>{
+        *this, static_cast<typename I::ValueType>(i)}};
   }
 
   template <typename I>
@@ -168,8 +175,15 @@ class IndexableSetVector
     // returns a T::Proxy<is_const=false> and const indexing returns a
     // T::Proxy<is_const=true>.
     auto* non_const_this = const_cast<IndexableSetVector*>(this);
-    return {{*non_const_this,
-             static_cast<uint32_t>(static_cast<typename I::ValueType>(i))}};
+    // Leaving the types implicit in this return (e.g. with an initializer list)
+    // causes the compiler to emit a warning. Explicitly naming the types and
+    // picking `Field<0>` is safe, since the types of different `Field`s are
+    // required by the API to be the same (see docstring above), so `Field<0>`,
+    // `Field<1>`, etc., have the same type, and the values distinguish between
+    // behaviors.
+    return typename T::Proxy{typename Base::template Field<0>{
+        *non_const_this,
+        static_cast<uint32_t>(static_cast<typename I::ValueType>(i))}};
   }
 
   template <typename I>

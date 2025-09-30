@@ -34,7 +34,6 @@
 #include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/executor.h"
 #include "core/async/future.h"
-#include "core/async/future_group.h"
 #include "core/common/buffer_access.h"
 #include "core/common/robin_map.h"
 #include "core/common/zip_helpers.h"
@@ -155,8 +154,7 @@ MaterialPackage::~MaterialPackage() {
 
 Future<MaterialCache> MaterialPackage::GetOrLoadMaterials(
     BaseView& view, filament::Engine* engine,
-    absl::flat_hash_set<GenericMaterialSpec> requested_materials,
-    std::optional<FutureGroup> future_group) {
+    absl::flat_hash_set<GenericMaterialSpec> requested_materials) {
   MaterialCache cache_hits;
 
   // Lazily assign the engine.
@@ -208,8 +206,7 @@ Future<MaterialCache> MaterialPackage::GetOrLoadMaterials(
             return GetMaterialBuffersFromZip(materials_zip_resource,
                                              request_keys);
           },
-          {.executor = Executor::Type::kBackground,
-           .future_group = future_group})
+          {.executor = Executor::Type::kBackground})
       .Then(
           [this, &view, result = std::move(cache_hits)](
               const BufferCache& buffer_by_params) mutable
@@ -263,8 +260,7 @@ Future<MaterialCache> MaterialPackage::GetOrLoadMaterials(
                 .Then([result = std::move(result)]() mutable -> MaterialCache {
                   return result;
                 });
-          },
-          {.future_group = future_group});
+          });
 }
 
 Future<resources::Resource> MaterialPackage::GetMaterialsZipFuture() {
