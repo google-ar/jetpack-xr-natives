@@ -55,7 +55,8 @@ public final class ImpSplitEngineApi {
       @Nullable ImpSplitEngine.ScreenSize screenSize,
       Executor frameSchedulerExecutor,
       IBinder serviceBinder,
-      @Nullable XrExtensions xrExtensions) {
+      @Nullable XrExtensions xrExtensions,
+      @Nullable RendererConnectionServiceProvider rendererConnection) {
     // If no native library name has been specified, use the basic one.
     @Nullable String nativeLibrary = null;
     int bridgeBufferSizeKb = 0;
@@ -81,7 +82,12 @@ public final class ImpSplitEngineApi {
       View view = View.createView(nativeLibrary, viewIdentifier, context, frameSchedulerExecutor);
       // Create the bridge service.
       ImpSplitEngineApi api = new ImpSplitEngineApi(context, view, bridgeBufferSizeKb);
-      api.initBridge(nativeLibrary, frameSchedulerExecutor, serviceBinder, xrExtensions);
+      api.loadLibrary(nativeLibrary);
+      if (rendererConnection == null) {
+        rendererConnection =
+            new DefaultRendererConnectionServiceProvider(frameSchedulerExecutor, xrExtensions);
+      }
+      api.initBridge(rendererConnection, serviceBinder);
 
       if (screenSize != null) {
         view.resize(screenSize.getWidthPixels(), screenSize.getHeightPixels(), 1.0f, 1.0f);
@@ -126,22 +132,12 @@ public final class ImpSplitEngineApi {
 
   /** Initializes the Split Engine bridge service. */
   private void initBridge(
-      String nativeLibrary,
-      Executor frameSchedulerExecutor,
-      IBinder serviceBinder,
-      XrExtensions xrExtensions) {
-    Log.d(TAG, "Initialize the SplitEngineSharedMemoryBridgeService.");
-
-    loadLibrary(nativeLibrary);
-
+      RendererConnectionServiceProvider rendererConnection, IBinder serviceBinder) {
     Log.i(TAG, "Initializing bridge service provider.");
-    RendererConnectionServiceProvider bridgeServiceProvider =
-        new RendererConnectionServiceProvider(frameSchedulerExecutor, xrExtensions);
-    bridgeServiceProvider.initializeService(context, serviceBinder);
+    rendererConnection.initializeService(context, serviceBinder);
 
-    // This will immediately happen via directExecutor on XROS, but will be delayed on the
-    // phone.
-    bridgeServiceProvider.onBridgeReady(
+    // This will immediately happen via directExecutor on XROS, but will be delayed on the phone.
+    rendererConnection.onBridgeReady(
         (bridge) -> {
           mConnection = bridge;
           nSetup(this.mView.getViewHostHandle(), mConnection, 1024 * mBridgeBufferSizeKb);

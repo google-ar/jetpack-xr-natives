@@ -75,26 +75,22 @@ absl::Status HingeConstraint::Setup(NodeHandle connected_node,
 absl::Status HingeConstraint::SetupWithState() { return SetupInternal(); }
 
 absl::Status HingeConstraint::SetupInternal() {
-  state_.is_valid = false;
+  state_.is_ready = true;
   if (InitializeWithNodes(state_.connected_node, GetNode()) !=
       absl::OkStatus()) {
-    // if the connected body is deleted or disabled, disable the constraint.
-    return absl::FailedPreconditionError(
-        "HingeConstraint: Connected body is invalid");
+    state_.is_ready = false;
+  }
+
+  if (!state_.is_ready) {
+    bt_constraint_.reset();
+    return absl::OkStatus();
   }
 
   if (state_.auto_configure) {
-    if (GetRigidBodyB() == nullptr) {
-      state_.connected_pivot =
-          state_.connected_node->LocalFromWorldPoint(kZero3);
-      state_.connected_axis =
-          state_.connected_node->LocalFromWorldVector(kZAxis3f);
-    } else {
-      state_.connected_pivot = ComputePivotAFromB(
-          state_.connected_node, GetNode(), state_.pivot.value_or(kZero3));
-      state_.connected_axis = ComputeAxisAFromB(
-          state_.connected_node, GetNode(), state_.axis.value_or(kZAxis3f));
-    }
+    state_.connected_pivot = ComputePivotAFromB(
+        state_.connected_node, GetNode(), state_.pivot.value_or(kZero3));
+    state_.connected_axis = ComputeAxisAFromB(state_.connected_node, GetNode(),
+                                              state_.axis.value_or(kZAxis3f));
   }
 
   btRigidBody* bt_rigid_body_A =
@@ -126,8 +122,6 @@ absl::Status HingeConstraint::SetupInternal() {
   SetMotorParametersFromState();
 
   AddToPhysicsManager(true);
-
-  state_.is_valid = true;
 
   return absl::OkStatus();
 }

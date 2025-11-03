@@ -216,7 +216,7 @@ def generate_imp_default_gltf_materials_package(name = None):
         blend_modes = ["masked", "opaque", "transparent", "refractive"],
         sided = ["single_sided", "double_sided"],
         features = ["clearcoat", "sheen", "transmission", "ar_occlusion", "depth_clear"],
-        optimization = "size",
+        optimization = "performance",
     )
 
 def generate_imp_default_lite_gltf_materials_package(name = None):
@@ -227,7 +227,7 @@ def generate_imp_default_lite_gltf_materials_package(name = None):
         blend_modes = ["masked", "opaque", "transparent"],
         sided = ["single_sided", "double_sided"],
         features = [],
-        optimization = "size",
+        optimization = "performance",
     )
 
 def generate_imp_default_performance_gltf_materials_package(name = None):

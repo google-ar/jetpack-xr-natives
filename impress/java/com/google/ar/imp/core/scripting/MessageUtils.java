@@ -36,7 +36,13 @@ public final class MessageUtils {
     try {
       return type.cast(type.getMethod("getDefaultInstance").invoke(null));
     } catch (ReflectiveOperationException | ClassCastException e) {
-      throw new IllegalArgumentException("Failed to getDefaultInstance" + type, e);
+      throw new IllegalArgumentException(
+          String.format(
+              "Failed to getDefaultInstance() of type %s. "
+                  + "Ensure that your proguard_specs list includes "
+                  + "\"//third_party/impress/build_tools/platforms/android:proguard.pgcfg\".",
+              type.getName()),
+          e);
     }
   }
 

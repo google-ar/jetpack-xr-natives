@@ -27,14 +27,17 @@
 
 namespace imp {
 
-// Base class for all constraints.
+// Base class for all constraints. This class contains some common methods for
+// constraint management and configuration.
+//
 // A constraint connects two rigid bodies and enforce a set of limits for the
 // movement (translation and rotation) of these rigid bodies. Real life analogy
-// can be a hinge, a slider or a ball joint. This class contains some common
-// methods for constraint management and configuration. The constraint has its
-// own local space (coordinate system), called "frame". To setup the constraint,
-// it requires the transformation from the "frame" to the local space of each
-// rigid body.
+// can be a hinge, a slider or a ball joint.
+//
+// The constraint has its own local space (coordinate system), called "frame".
+// To setup the constraint, it requires the transformation from the "frame" to
+// the local space of each rigid body.
+//
 // The notations A and B are used to refer to the rigid bodies. A is the rigid
 // body that is being constrained and B is the rigid body that is attached to
 // the node that has the constraint component. B can be null, meaning that A is

@@ -18,7 +18,7 @@ def imp_app_resources(name):
     native.genrule(
         name = name + "_launcher",
         srcs = [
-            Label("//java/com/google/ar/imp/app:ic_launcher.png"),
+            Label("@com_google_impress//java/com/google/ar/imp/app:ic_launcher.png"),
         ],
         outs = ["res/drawable/ic_launcher.png"],
         cmd = "cp $< $@",
@@ -26,7 +26,7 @@ def imp_app_resources(name):
     native.genrule(
         name = name + "_styles",
         srcs = [
-            Label("//java/com/google/ar/imp/app:styles.xml"),
+            Label("@com_google_impress//java/com/google/ar/imp/app:styles.xml"),
         ],
         outs = ["res/values/styles.xml"],
         cmd = "cp $< $@",

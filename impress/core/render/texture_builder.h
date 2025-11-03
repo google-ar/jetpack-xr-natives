@@ -64,7 +64,7 @@ class TextureBuilder : public BaseTextureBuilder {
   TextureBuilder& Name(absl::string_view name) override;
   void Finalize(filament::Texture* texture) override;
 
-  filament::Texture* /*absl_nullable*/ Build(filament::Engine& engine);
+  filament::Texture* /*absl_nullable*/  Build(filament::Engine& engine);
 
  protected:
   TextureBuilder& ImageInternal(filament::Engine& engine,
@@ -76,7 +76,7 @@ class TextureBuilder : public BaseTextureBuilder {
   BaseView* view_;
   std::unique_ptr<BaseTextureBuilder> spy_;
   SafeFilamentTextureBuilder builder_;
-  absl::StatusOr<filament::Texture* /*absl_nonnull*/> texture_;
+  absl::StatusOr<filament::Texture* /*absl_nonnull*/ > texture_;
 
   std::string name_;
 };

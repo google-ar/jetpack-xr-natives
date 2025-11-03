@@ -44,10 +44,14 @@
 
 namespace imp {
 
-std::unique_ptr<CanvasSource> CanvasSource::Create(Context context) {
+std::unique_ptr<CanvasSource> CanvasSource::Create(
+    Context context, bool use_hardware_rendering) {
   // Instantiate the correct platform implementation.
 #if IMP_PLATFORM(ANDROID)
-  auto platform_source = std::make_unique<AndroidPlatformCanvasSource>(context);
+  // TODO: Shaper method fails to render text weight properly.
+  // Change to kAuto once this bug is fixed.
+  auto platform_source = std::make_unique<AndroidPlatformCanvasSource>(
+      context, AndroidGlyphSource::Method::kPath, use_hardware_rendering);
 #elif IMP_PLATFORM(IOS)
   auto platform_source = std::make_unique<IosPlatformCanvasSource>();
 #elif IMP_PLATFORM(WASM)
@@ -60,7 +64,7 @@ std::unique_ptr<CanvasSource> CanvasSource::Create(Context context) {
 }
 
 bool CanvasSource::IsFeatureSupported(ScopedCanvas::Feature feature) {
-  absl::MutexLock lock(&platform_source_mutex_);
+  absl::MutexLock lock(platform_source_mutex_);
   return platform_source_->IsFeatureSupported(feature);
 }
 
@@ -70,44 +74,44 @@ CanvasSource::CanvasSource(
 
 Future<absl::Status> CanvasSource::PrepareFont(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
-  absl::MutexLock lock(&platform_source_mutex_);
+  absl::MutexLock lock(platform_source_mutex_);
   return platform_source_->PrepareFont(text, text_options);
 }
 
 ScopedCanvas::TextMetrics CanvasSource::GetTextMetrics(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
-  absl::MutexLock lock(&platform_source_mutex_);
+  absl::MutexLock lock(platform_source_mutex_);
   return platform_source_->GetTextMetrics(text, text_options);
 }
 
 ScopedCanvas::TextMetrics CanvasSource::GetGlyphMetrics(
     ScopedCanvas::GlyphId glyph,
     const ScopedCanvas::TextOptions& text_options) {
-  absl::MutexLock lock(&platform_source_mutex_);
+  absl::MutexLock lock(platform_source_mutex_);
   return platform_source_->GetGlyphMetrics(glyph, text_options);
 }
 
 std::vector<ScopedCanvas::GlyphGroup> CanvasSource::GetCombinedCharacterGroups(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
-  absl::MutexLock lock(&platform_source_mutex_);
+  absl::MutexLock lock(platform_source_mutex_);
   return platform_source_->GetCombinedCharacterGroups(text, text_options);
 }
 
 std::vector<float> CanvasSource::GetTextWidths(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
-  absl::MutexLock lock(&platform_source_mutex_);
+  absl::MutexLock lock(platform_source_mutex_);
   return platform_source_->GetTextWidths(text, text_options);
 }
 
 std::vector<ScopedCanvas::GlyphAdvance> CanvasSource::GetTextGlyphs(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
-  absl::MutexLock lock(&platform_source_mutex_);
+  absl::MutexLock lock(platform_source_mutex_);
   return platform_source_->GetTextGlyphs(text, text_options);
 }
 
 ScopedCanvas::FontInfo CanvasSource::GetFontInfo(
     const ScopedCanvas::TextOptions& text_options) {
-  absl::MutexLock lock(&platform_source_mutex_);
+  absl::MutexLock lock(platform_source_mutex_);
   return platform_source_->GetFontInfo(text_options);
 }
 
@@ -116,7 +120,7 @@ std::unique_ptr<ScopedCanvas> CanvasSource::StartDrawing(
   if (Executor::CurrentExecutor() != Executor::ForegroundExecutor()) {
     IMP_LOG(imp::FATAL) << "StartDrawing may not be called on the foreground executor.";
   }
-  absl::MutexLock lock(&platform_source_mutex_);
+  absl::MutexLock lock(platform_source_mutex_);
   std::unique_ptr<ScopedCanvas> scoped_canvas =
       platform_source_->StartDrawing(view, pixel_size, draw_mode);
   return scoped_canvas;
@@ -129,10 +133,15 @@ std::unique_ptr<ScopedCanvas> CanvasSource::StartDrawing(
   if (Executor::CurrentExecutor() != Executor::ForegroundExecutor()) {
     IMP_LOG(imp::FATAL) << "StartDrawing may not be called on the foreground executor.";
   }
-  absl::MutexLock lock(&platform_source_mutex_);
+  absl::MutexLock lock(platform_source_mutex_);
   std::unique_ptr<ScopedCanvas> scoped_canvas = platform_source_->StartDrawing(
       view, pixel_size, std::move(on_texture_changed_fn), draw_mode, loc);
   return scoped_canvas;
+}
+
+void CanvasSource::ForceReset() {
+  absl::MutexLock lock(platform_source_mutex_);
+  platform_source_->ForceReset();
 }
 
 }  // namespace imp

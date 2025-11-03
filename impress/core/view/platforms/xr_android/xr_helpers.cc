@@ -85,8 +85,12 @@ mat4 GetLocalTranslation(const mat4& model_matrix, const XrPosef& xr_pose) {
 
 Transform<float> GetEyeCenterTransform(const XrView& left_eye_view,
                                        const XrView& right_eye_view) {
+  // TODO: Figure out why each eye orientation values might not be
+  // almost equal and either uncomment the commented code below or even adapt
+  // the fustrum calculation implementation in this file according to the
+  // findings.
   // Assert that the eyes are parallel.
-  
+  // 
 
   // Find the midpoint between the eyes.
   float3 left_position = ToVector3(left_eye_view.pose.position);
@@ -120,8 +124,12 @@ mat4 GetEncompassingProjectionMatrix(const XrView& left_eye_view,
                                      const float far_plane) {
   // Assert that the eyes are symmetrical.
   
+  // TODO: Figure out why each eye orientation values might not be
+  // almost equal and either uncomment the commented code below or even adapt
+  // the fustrum calculation implementation in this file according to the
+  // findings.
   // Assert gaze is parallel.
-  
+  // 
 
   /*
    * For a symmetrical stereoscopic configuration, starting from head space and

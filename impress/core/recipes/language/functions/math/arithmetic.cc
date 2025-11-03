@@ -129,7 +129,8 @@ absl::StatusOr<recipe::Variable> Ceil(const recipe::Variable& value) {
     case Literal::kValue_Mat4fValue:
       return TransformMatrix(std::ceil, std::get<mat4f>(value));
     default:
-      return absl::InvalidArgumentError("input must be an arithmetic type.");
+      return absl::InvalidArgumentError(
+          "input must be a floating-point, floatN or matrix type.");
   }
 }
 

@@ -45,38 +45,33 @@ void UpdateSystem::Update(UpdatePhase phase, const FrameTime& frame_time) {
   // First send the pre components update event.
   // Only send it before the early update phase.
   if (phase == UpdatePhase::kPreDefault) {
-    IMP_TRACE_BLOCK("PreUpdateEvent");
     PreComponentsUpdateEvent pre_components_update_event(frame_time);
     GetView().GetDispatcher().Send(pre_components_update_event);
   }
 
   // Now update the components.
-  {
-    IMP_TRACE_BLOCK("UpdateComponents");
-    UpdateGraph& update_graph = phases_[phase];
-    update_graph.TraverseExtras(
-        [&frame_time, &editor_stopped](BaseUpdater* updater) {
+  UpdateGraph& update_graph = phases_[phase];
+  update_graph.TraverseExtras(
+      [&frame_time, &editor_stopped](BaseUpdater* updater) {
 #if IMP_RUNTIME(DEV)
-          // Editor can stop global updaters early, as all exceptions are for
-          // updaters that are components.
-          if (updater && !updater->ShouldRunInEditMode() && editor_stopped) {
-            return;
-          }
+        // Editor can stop global updaters early, as all exceptions are for
+        // updaters that are components.
+        if (updater && !updater->ShouldRunInEditMode() && editor_stopped) {
+          return;
+        }
 #endif
-          // If the updater is null, that means no updater of the type
-          // represented by update_id has been added to the UpdateSystem. That
-          // can happen here if an updater was added with update
-          // dependencies/dependees that haven't been added.
-          if (updater) {
-            updater->Update(frame_time);
-          }
-        });
-  }
+        // If the updater is null, that means no updater of the type
+        // represented by update_id has been added to the UpdateSystem. That
+        // can happen here if an updater was added with update
+        // dependencies/dependees that haven't been added.
+        if (updater) {
+          updater->Update(frame_time);
+        }
+      });
 
   // Finally, send the post components update event.
   // Only send it after the late update phase.
   if (phase == UpdatePhase::kPostDefault) {
-    IMP_TRACE_BLOCK("PostUpdateEvent");
     PostComponentsUpdateEvent post_components_update_event(frame_time);
     GetView().GetDispatcher().Send(post_components_update_event);
   }

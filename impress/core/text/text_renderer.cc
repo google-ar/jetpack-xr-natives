@@ -233,6 +233,19 @@ Future<absl::Status> TextRenderer::SetupImpl(
         }
       });
 
+  // Update the texture parameter on the material when the texture changes.
+  GetView().GetDispatcher().Connect(
+      [this](const GlyphAtlas::TextureChangedEvent& event) {
+        if (renderer_) {
+          Material* material = renderer_->GetMaterial();
+          if (material) {
+            material->SetParameter(kGlyphAtlasParam,
+                                   glyph_atlas_->GetTexture());
+          }
+        }
+      },
+      this);
+
   return UpdateMeshesAndMaterials();
 }
 

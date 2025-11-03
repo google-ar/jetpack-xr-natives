@@ -49,7 +49,7 @@ bool TaskScheduler::TaskPriorityGroupLessThan::operator()(
   return task_1->GetPriority() < (task_2->GetPriority() + age_offset);
 }
 
-absl::StatusOr<Task* /*absl_nonnull*/> TaskScheduler::PopCandidateTask() {
+absl::StatusOr<Task* /*absl_nonnull*/ > TaskScheduler::PopCandidateTask() {
   if (task_priority_groups_.empty()) {
     // There are no valid or invalid Tasks in the TaskScheduler.
     return absl::FailedPreconditionError("No tasks are available.");
@@ -71,7 +71,7 @@ absl::StatusOr<Task* /*absl_nonnull*/> TaskScheduler::PopCandidateTask() {
   return task_ptr;
 }
 
-void TaskScheduler::PushTaskInternal(Task* /*absl_nonnull*/ task) {
+void TaskScheduler::PushTaskInternal(Task* /*absl_nonnull*/  task) {
   current_valid_tasks_++;
   const int task_priority = task->GetPriority();
 
@@ -203,13 +203,13 @@ void TaskScheduler::Clear() {
   current_valid_tasks_ = 0;
 }
 
-void TaskScheduler::TaskPriorityGroup::PushBack(Task* /*absl_nonnull*/ task) {
+void TaskScheduler::TaskPriorityGroup::PushBack(Task* /*absl_nonnull*/  task) {
   tasks_.push(task);
 }
 
 void TaskScheduler::TaskPriorityGroup::PopFront() { tasks_.pop(); }
 
-Task* /*absl_nonnull*/ TaskScheduler::TaskPriorityGroup::Front() {
+Task* /*absl_nonnull*/  TaskScheduler::TaskPriorityGroup::Front() {
   return tasks_.front();
 }
 
@@ -273,7 +273,7 @@ std::unique_ptr<Task> TaskScheduler::TaskRegistry::ReleaseTask(TaskId task_id) {
   return task;
 }
 
-absl::StatusOr<Task* /*absl_nonnull*/> TaskScheduler::TaskRegistry::GetTask(
+absl::StatusOr<Task* /*absl_nonnull*/ > TaskScheduler::TaskRegistry::GetTask(
     TaskId task_id) {
   int resolved_task_id = task_id.id;
   // Attempt to resolve this TaskId to a rescheduled TaskId.

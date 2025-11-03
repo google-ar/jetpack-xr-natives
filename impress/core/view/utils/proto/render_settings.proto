@@ -305,6 +305,7 @@ message ViewRenderSettings {
       7;
   optional bool use_srgb_swapchain = 8;
   optional bool use_stencil_swapchain = 9;
+  optional bool use_msaa_swapchain = 10;
   // TODO: Add support for the following settings.
   /*  optional bool front_face_winding_inverted = 2;
     optional bool frustum_culling_enabled = 3;

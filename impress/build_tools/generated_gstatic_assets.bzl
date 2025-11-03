@@ -6,9 +6,9 @@ GSTATIC_URL_LOOKUP["ios_gles3"] = {}
 GSTATIC_URL_LOOKUP["ios_metal"] = {}
 GSTATIC_URL_LOOKUP["android"] = {}
 
-GSTATIC_URL_LOOKUP["ios_gles3"]["compiled_imp_default_gltf_materials"] = "https://www.gstatic.com/impress/ios_gles3/compiled_imp_default_gltf_materials/e3057f34a4a2de97e64fde3012756727.zip"
-GSTATIC_URL_LOOKUP["ios_gles3"]["compiled_imp_default_lite_gltf_materials"] = "https://www.gstatic.com/impress/ios_gles3/compiled_imp_default_lite_gltf_materials/1f1d5c78eca9300aec1746c095451e73.zip"
-GSTATIC_URL_LOOKUP["ios_metal"]["compiled_imp_default_gltf_materials"] = "https://www.gstatic.com/impress/ios_metal/compiled_imp_default_gltf_materials/6c54f1798a795201dbadeee5c8784c1c.zip"
-GSTATIC_URL_LOOKUP["ios_metal"]["compiled_imp_default_lite_gltf_materials"] = "https://www.gstatic.com/impress/ios_metal/compiled_imp_default_lite_gltf_materials/726424885395c5333ddc84e75c15bf84.zip"
-GSTATIC_URL_LOOKUP["android"]["compiled_imp_default_gltf_materials"] = "https://www.gstatic.com/impress/android/compiled_imp_default_gltf_materials/07cb4da818757e3ed8054b11d4096269.zip"
-GSTATIC_URL_LOOKUP["android"]["compiled_imp_default_lite_gltf_materials"] = "https://www.gstatic.com/impress/android/compiled_imp_default_lite_gltf_materials/490b8a958ed6ac6aeaeba49c28e8d93a.zip"
+GSTATIC_URL_LOOKUP["ios_gles3"]["compiled_imp_default_gltf_materials"] = "https://www.gstatic.com/impress/ios_gles3/compiled_imp_default_gltf_materials/bc217ccd78f084c4e9ba9d77ae541e3a.zip"
+GSTATIC_URL_LOOKUP["ios_gles3"]["compiled_imp_default_lite_gltf_materials"] = "https://www.gstatic.com/impress/ios_gles3/compiled_imp_default_lite_gltf_materials/a0664119569f79b26c731e2282e7de5d.zip"
+GSTATIC_URL_LOOKUP["ios_metal"]["compiled_imp_default_gltf_materials"] = "https://www.gstatic.com/impress/ios_metal/compiled_imp_default_gltf_materials/c0418ee34be1fd3059e74e6ff5f71977.zip"
+GSTATIC_URL_LOOKUP["ios_metal"]["compiled_imp_default_lite_gltf_materials"] = "https://www.gstatic.com/impress/ios_metal/compiled_imp_default_lite_gltf_materials/b471ec33b7ae5f606cb15c14d421feb5.zip"
+GSTATIC_URL_LOOKUP["android"]["compiled_imp_default_gltf_materials"] = "https://www.gstatic.com/impress/android/compiled_imp_default_gltf_materials/0e47a0f5cad823311413c0d396105658.zip"
+GSTATIC_URL_LOOKUP["android"]["compiled_imp_default_lite_gltf_materials"] = "https://www.gstatic.com/impress/android/compiled_imp_default_lite_gltf_materials/207a4247afbe7ad849e34ec3a4e740b3.zip"

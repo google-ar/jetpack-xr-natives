@@ -197,6 +197,12 @@ WeakFuture<T> make_weak(Future<T> f) {
   return WeakFuture<T>(f);
 }
 
+// A number representing a valid object. Used to check for use-after-free
+// errors. See future_impl.cc.
+constexpr int kValidIntegrityMarker = 0xABCDABCD;
+// A number representing a destructed object.
+constexpr int kDestructedIntegrityMarker = 0xDEADC0DE;
+
 }  // namespace imp
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_ASYNC_FUTURE_COMMON_H_

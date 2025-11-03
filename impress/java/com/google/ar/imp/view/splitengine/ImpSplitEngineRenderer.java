@@ -60,7 +60,16 @@ public class ImpSplitEngineRenderer implements ImpApiScuba {
       Context context,
       @Nullable ImpSplitEngine.SplitEngineSetupParams setupParams,
       @Nullable XrExtensions xrExtensions) {
-    return create(context, setupParams, null, null, xrExtensions);
+    return create(context, setupParams, null, null, xrExtensions, null);
+  }
+
+  public static ImpSplitEngineRenderer create(
+      Context context,
+      RendererConnectionServiceProvider rendererConnection,
+      @Nullable ImpSplitEngine.SplitEngineSetupParams setupParams,
+      @Nullable ImpSplitEngine.SplitEngineViewParamsProvider viewParamsProvider,
+      @Nullable IBinder binder) {
+    return create(context, setupParams, viewParamsProvider, binder, null, rendererConnection);
   }
 
   public static ImpSplitEngineRenderer create(
@@ -68,7 +77,7 @@ public class ImpSplitEngineRenderer implements ImpApiScuba {
       @Nullable ImpSplitEngine.SplitEngineSetupParams setupParams,
       @Nullable IBinder binder,
       @Nullable XrExtensions xrExtensions) {
-    return create(context, setupParams, null, binder, xrExtensions);
+    return create(context, setupParams, null, binder, xrExtensions, null);
   }
 
   public static ImpSplitEngineRenderer create(
@@ -76,7 +85,7 @@ public class ImpSplitEngineRenderer implements ImpApiScuba {
       @Nullable ImpSplitEngine.SplitEngineSetupParams setupParams,
       @Nullable ImpSplitEngine.SplitEngineViewParamsProvider viewParamsProvider,
       @Nullable XrExtensions xrExtensions) {
-    return create(context, setupParams, viewParamsProvider, null, xrExtensions);
+    return create(context, setupParams, viewParamsProvider, null, xrExtensions, null);
   }
 
   public static ImpSplitEngineRenderer create(
@@ -84,7 +93,8 @@ public class ImpSplitEngineRenderer implements ImpApiScuba {
       @Nullable ImpSplitEngine.SplitEngineSetupParams setupParams,
       @Nullable ImpSplitEngine.SplitEngineViewParamsProvider viewParamsProvider,
       @Nullable IBinder serviceBinder,
-      @Nullable XrExtensions xrExtensions) {
+      @Nullable XrExtensions xrExtensions,
+      @Nullable RendererConnectionServiceProvider rendererConnection) {
 
     FrameScheduler frameScheduler =
         new ChoreographerFrameScheduler.Factory().create(FrameScheduler.ThreadMode.MAIN_DEFAULT);
@@ -103,7 +113,8 @@ public class ImpSplitEngineRenderer implements ImpApiScuba {
                     finalScreenSize,
                     frameScheduler.getExecutor(),
                     serviceBinder,
-                    xrExtensions));
+                    xrExtensions,
+                    rendererConnection));
 
     try {
       // Block until ImpSplitEngineApi has been created.

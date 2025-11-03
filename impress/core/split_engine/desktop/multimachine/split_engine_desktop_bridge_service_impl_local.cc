@@ -104,7 +104,7 @@ SplitEngineMMDesktopBridgeServiceImplLocal::SequentialPipeline::
 
   // Clear pending message groups.
   {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     pending_message_groups_.clear();
   }
 
@@ -131,7 +131,7 @@ void SplitEngineMMDesktopBridgeServiceImplLocal::SequentialPipeline::Schedule(
     return absl::OkStatus();
   };
 
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   if (group_id == next_message_group_id_) {
     // Hijack ForegroundExecutor in this scope.
     ExecutorSetup setup(executor_, Executor::Type::kForeground);
@@ -156,7 +156,7 @@ void SplitEngineMMDesktopBridgeServiceImplLocal::SequentialPipeline::
   // `MaybeExecuteNextMessageGroup` is called from the executor.
   
 
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   if (pending_message_groups_.empty()) {
     return;
   }
@@ -191,7 +191,7 @@ absl::Status SplitEngineMMDesktopBridgeServiceImplLocal::CreateBridge(
     MessageGroupCompletionHandler&& message_group_completion_handler) {
   {
     // Create a release function for the bridge and ensure it is unique.
-    absl::MutexLock lock(&bridge_release_message_group_functions_mutex_);
+    absl::MutexLock lock(bridge_release_message_group_functions_mutex_);
     if (!bridge_release_message_group_functions_
              .emplace(bridge_id, std::move(message_group_completion_handler))
              .second) {
@@ -200,12 +200,12 @@ absl::Status SplitEngineMMDesktopBridgeServiceImplLocal::CreateBridge(
   }
 
   {
-    absl::MutexLock lock(&bridge_status_mutex_);
+    absl::MutexLock lock(bridge_status_mutex_);
     bridge_status_.emplace(bridge_id, absl::OkStatus());
   }
 
   {
-    absl::MutexLock lock(&bridge_data_mutex_);
+    absl::MutexLock lock(bridge_data_mutex_);
     bridge_data_.emplace(
         bridge_id,
         std::make_unique<BridgeData>(
@@ -238,17 +238,17 @@ absl::Status SplitEngineMMDesktopBridgeServiceImplLocal::DestroyBridge(
     }
 
     {
-      absl::MutexLock lock(&bridge_release_message_group_functions_mutex_);
+      absl::MutexLock lock(bridge_release_message_group_functions_mutex_);
       bridge_release_message_group_functions_.erase(bridge_id);
     }
 
     {
-      absl::MutexLock lock(&bridge_status_mutex_);
+      absl::MutexLock lock(bridge_status_mutex_);
       bridge_status_.erase(bridge_id);
     }
 
     {
-      absl::MutexLock lock(&bridge_data_mutex_);
+      absl::MutexLock lock(bridge_data_mutex_);
       bridge_data_.erase(bridge_id);
     }
   });
@@ -313,7 +313,7 @@ absl::Status SplitEngineMMDesktopBridgeServiceImplLocal::SendMessageGroupPart(
                    GetBridgeData(bridge_id));
   BridgeData& bridge_data_ref = bridge_data.get();
 
-  absl::MutexLock lock(&bridge_data_ref.mutex);
+  absl::MutexLock lock(bridge_data_ref.mutex);
   auto message_group_data_iterator =
       bridge_data_ref.message_groups.find(group_id);
   if (message_group_data_iterator == bridge_data_ref.message_groups.end()) {
@@ -524,7 +524,7 @@ absl::StatusOr<size_t> SplitEngineMMDesktopBridgeServiceImplLocal::VerifyBuffer(
 void SplitEngineMMDesktopBridgeServiceImplLocal::SetBridgeStatus(
     BridgeId bridge_id, absl::Status status) {
   {
-    absl::MutexLock lock(&bridge_status_mutex_);
+    absl::MutexLock lock(bridge_status_mutex_);
 
     // The bridge may have already been shut down.
     if (!bridge_status_.contains(bridge_id)) {
@@ -544,7 +544,7 @@ void SplitEngineMMDesktopBridgeServiceImplLocal::SetBridgeStatus(
 
 absl::Status SplitEngineMMDesktopBridgeServiceImplLocal::GetBridgeStatus(
     BridgeId bridge_id) {
-  absl::MutexLock lock(&bridge_status_mutex_);
+  absl::MutexLock lock(bridge_status_mutex_);
   auto it = bridge_status_.find(bridge_id);
   if (it == bridge_status_.end()) {
     return absl::NotFoundError(absl::StrCat("Bridge not found: ", bridge_id));
@@ -562,7 +562,7 @@ absl::Status SplitEngineMMDesktopBridgeServiceImplLocal::CloseMessageGroup(
   std::shared_ptr<Buffer> buffer;
   std::shared_ptr<MessageGroupCompletionTracker> tracker;
   {
-    absl::MutexLock lock(&bridge_data_ref.mutex);
+    absl::MutexLock lock(bridge_data_ref.mutex);
     const auto message_group_iterator =
         bridge_data_ref.message_groups.find(group_id);
     if (message_group_iterator == bridge_data_ref.message_groups.end()) {
@@ -591,7 +591,7 @@ absl::Status SplitEngineMMDesktopBridgeServiceImplLocal::CloseMessageGroup(
           IMP_LOG(imp::INFO) << "Message group " << group_id
                      << " was processed by Impress.";
           {
-            absl::MutexLock lock(&bridge_release_message_group_functions_mutex_);
+            absl::MutexLock lock(bridge_release_message_group_functions_mutex_);
             auto it = bridge_release_message_group_functions_.find(bridge_id);
             if (it == bridge_release_message_group_functions_.end()) {
               IMP_LOG(imp::ERROR) << "Bridge " << bridge_id
@@ -713,7 +713,7 @@ void SplitEngineMMDesktopBridgeServiceImplLocal::MessageGroupCompletionTracker::
 absl::StatusOr<std::reference_wrapper<
     SplitEngineMMDesktopBridgeServiceImplLocal::BridgeData>>
 SplitEngineMMDesktopBridgeServiceImplLocal::GetBridgeData(BridgeId bridge_id) {
-  absl::MutexLock lock(&bridge_data_mutex_);
+  absl::MutexLock lock(bridge_data_mutex_);
   auto it = bridge_data_.find(bridge_id);
   if (it == bridge_data_.end()) {
     return absl::NotFoundError(absl::StrCat("Bridge not found: ", bridge_id));

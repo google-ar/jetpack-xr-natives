@@ -146,6 +146,8 @@ cc_library(
         "//core/split_engine/materials/builtin:builtin_vignette_material",
         "//core/split_engine/materials/builtin:builtin_water_material",
         "//core/split_engine/materials/builtin:builtin_youtube_stereo_player_material",
+        "//core/split_engine/materials/builtin/gsplat:builtin_gsplat_background_material",
+        "//core/split_engine/materials/builtin/gsplat:builtin_gsplat_material",
         "//core/split_engine/materials/builtin/photosxr:builtin_photos_texture_3d_material",
         "//core/view:base_view",
         "//core/view/framework",

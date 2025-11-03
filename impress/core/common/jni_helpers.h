@@ -114,6 +114,9 @@ class JniObjectArray {
   jobjectArray array_;
 };
 
+// If an exception has occurred, logs it with via abseil's IMP_LOG(imp::FATAL).
+void AssertNoException(JNIEnv* env);
+
 // Returns false if there is no pending exception on the calling thread.
 // Otherwise, logs and clears the exception, and returns true.
 // cf.

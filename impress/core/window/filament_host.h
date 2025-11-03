@@ -139,7 +139,7 @@ class FilamentHost {
   // Subclasses of the state object implement app-specific behavior.
   class State {
    public:
-    constexpr static uint2 kDefaultDesktopDimensions = {1024, 768};
+    constexpr static uint2 kDefaultDesktopDimensions = {1600, 900};
     constexpr static uint2 kDefaultMobileDimensions = {540, 960};
 
     State() = default;
@@ -264,6 +264,8 @@ class FilamentHost {
     virtual bool ShouldUseSrgbSwapChain() const { return false; }
 
     virtual bool ShouldUseStencilSwapChain() const { return false; }
+
+    virtual bool ShouldUseMsaaSwapChain() const { return false; }
   };
 
   // Dev mode is optionally installed and operates via this abstract interface.

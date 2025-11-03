@@ -35,7 +35,7 @@ class HeapBufferFactory : public BufferFactory {
 
   // Creates a buffer of the given size. Returns an error if the buffer
   // could not be created (either allocation failed or quota was exceeded).
-  absl::StatusOr</*absl_nonnull*/ std::unique_ptr<Buffer>> CreateBuffer(
+  absl::StatusOr</*absl_nonnull*/  std::unique_ptr<Buffer>> CreateBuffer(
       size_t size_in_bytes) noexcept override;
 
  private:

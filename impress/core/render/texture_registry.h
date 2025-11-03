@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_RENDER_TEXTURE_REGISTRY_H_
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 
 #include "absl/base/attributes.h"
@@ -49,7 +50,7 @@ class TextureRegistry {
   class ABSL_MUST_USE_RESULT ScopedTextureRegistration {
    public:
     ScopedTextureRegistration(TextureRegistry& texture_registry,
-                              absl::string_view texture_name);
+                              absl::string_view texture_name, uint32_t id);
     ~ScopedTextureRegistration();
 
     ScopedTextureRegistration(const ScopedTextureRegistration&) = delete;
@@ -67,6 +68,13 @@ class TextureRegistry {
     BorrowedTexturePtr BorrowTexture(
         SmallSourceLocation loc = SmallSourceLocation::Current());
 
+    // Returns the ID associated with this texture in its TextureRegistry at
+    // time of its registration.
+    //
+    // If this value differs from TextureRegistry::GetId(), this indicates that
+    // the texture has changed elsewhere since RegisterTexture() was called.
+    uint32_t GetId() const { return id_; };
+
     // Releases ownership of the texture managed by this object.
     //
     // Prefer using `BorrowTexture` instead unless you are absolutely sure you
@@ -76,6 +84,7 @@ class TextureRegistry {
    private:
     TextureRegistry* texture_registry_;
     std::string texture_name_;
+    uint32_t id_;
   };
 
   explicit TextureRegistry(BaseView* view);
@@ -102,14 +111,24 @@ class TextureRegistry {
       absl::string_view texture_name,
       SmallSourceLocation loc = SmallSourceLocation::Current());
 
+  // Gets the ID of the texture registered by the name passed in. If there is no
+  // texture registered with the given name, returns 0.
+  uint32_t GetId(absl::string_view texture_name);
+
   // Gets the total number of textures that are registered.
   size_t GetTextureCount() const;
 
  private:
+  struct RegisteredTexture {
+    uint32_t id;
+    OwnedTexturePtr texture;
+  };
   void UnregisterTexture(absl::string_view texture_name);
 
   BaseView* view_;
-  StringMap<OwnedTexturePtr> registered_textures_;
+  StringMap<RegisteredTexture> registered_textures_;
+  // Monotonically increasing ID.
+  uint32_t last_id_ = 1;
 
   friend class ScopedTextureRegistration;
 };

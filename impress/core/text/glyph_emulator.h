@@ -231,6 +231,19 @@ class GlyphEmulator {
   Future<ScopedCanvas::FontInfo> GetFontInfo(
       const ScopedCanvas::TextOptions& options);
 
+  // Performs a batch operation to measure the size of the given texts and
+  // the font metrics for the text's text_options. This is effectively a
+  // the same as calling GetTextMetrics and GetFontInfo for each text, but is
+  // more efficient when measuring multiple texts in a WASM context where
+  // each measurement has an overhead cost to it.
+  //
+  // TODO: (broken link) - Consolidate GetTextMetrics and GetFontInfo and this
+  // function to simplify the API.
+  //
+  // This function is thread-safe.
+  Future<std::vector<ScopedCanvas::TextAndFontMetrics>> GetFontAndTextMetrics(
+      std::vector<ScopedCanvas::TextToMeasure> texts);
+
   // Convert GlyphEmulator::TextOptions to ScopedCanvas::TextOptions.
   //
   // In particular, this translates fonts registered with AddFont and scales the

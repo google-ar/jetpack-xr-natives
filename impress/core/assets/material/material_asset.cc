@@ -120,7 +120,7 @@ MaterialAsset::MaterialAsset(
   material_ = BuildMaterial(*view_->GetSharedEngine(), data.Data(), data.Size(),
                             material_pre_compile_options);
   if (auto* serializer = view_->GetSplitEngineSerializer()) {
-    serializer->AddMaterial(material_, data);
+    serializer->AddMaterial(material_, data, material_pre_compile_options);
   }
 }
 

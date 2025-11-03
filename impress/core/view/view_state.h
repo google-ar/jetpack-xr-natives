@@ -55,6 +55,8 @@ class ViewState : public window::FilamentHost::State {
 
   bool ShouldUseStencilSwapChain() const override;
 
+  bool ShouldUseMsaaSwapChain() const override;
+
  protected:
   using RenderResult = window::FilamentHost::RenderResult;
   using RenderResultFlags = window::FilamentHost::RenderResultFlags;

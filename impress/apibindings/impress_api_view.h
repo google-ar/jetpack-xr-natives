@@ -25,7 +25,6 @@
 #include <utility>
 
 #include "absl/container/flat_hash_map.h"
-#include "absl/container/flat_hash_set.h"
 #include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -424,13 +423,20 @@ class ImpressApiView : public View {
   // Disposes all resources associated with the Impress API view.
   absl::Status DisposeAllResources();
 
-  std::unique_ptr<AssetPtrMap> asset_ptr_map_;
+  // Returns the asset pointer map.
+  AssetPtrMap& GetAssetPtrMap() { return *asset_ptr_map_; }
+
+  // Returns the bindings texture map.
+  absl::flat_hash_map<std::intptr_t, OwnedTexturePtr>& GetBindingsTextureMap() {
+    return bindings_texture_map_;
+  }
 
  protected:
   void Setup() override;
   void Update(const FrameTime& frame_time) override;
 
  private:
+  std::unique_ptr<AssetPtrMap> asset_ptr_map_;
   // TODO: (broken link) - Refactor this per-node caching into a custom
   //                     AnimatorController component.
   absl::flat_hash_map<int32_t,

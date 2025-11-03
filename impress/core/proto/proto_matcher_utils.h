@@ -17,6 +17,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_PROTO_PROTO_MATCHER_UTILS_H_
 #define THIRD_PARTY_IMPRESS_CORE_PROTO_PROTO_MATCHER_UTILS_H_
 
+#include <cassert>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -166,7 +167,7 @@ M* DebugJsonWriter::Visit(M* m, int field_id, T* field, T* other) {
       if (!*field) {
         return m;
       }
-      (*current_value_)[GetFieldJsonName<M>(field_id)] = *field;
+      (*current_value_)[std::string(GetFieldJsonName<M>(field_id))] = *field;
     } else {
       current_value_->append(*field);
     }
@@ -174,7 +175,8 @@ M* DebugJsonWriter::Visit(M* m, int field_id, T* field, T* other) {
     static_assert(field_type == FieldType::TYPE_MESSAGE);
     Json::Value* previous_value = current_value_;
     if (field_id) {
-      current_value_ = &((*current_value_)[GetFieldJsonName<M>(field_id)]);
+      current_value_ =
+          &((*current_value_)[std::string(GetFieldJsonName<M>(field_id))]);
     }
     ::imp::proto::Visit(field, this, field);
     current_value_ = previous_value;
@@ -212,7 +214,7 @@ M* DebugJsonWriter::Visit(M* m, int field_id, std::vector<T>* field,
   assert(field_id);
   Json::Value* previous_value = current_value_;
   Json::Value* array_value =
-      &((*current_value_)[GetFieldJsonName<M>(field_id)]);
+      &((*current_value_)[std::string(GetFieldJsonName<M>(field_id))]);
 
   for (int i = 0; i < field->size(); ++i) {
     current_value_ = &(*array_value)[i];
@@ -233,7 +235,8 @@ M* DebugJsonWriter::Visit(M* m, int field_id, std::map<K, V>* field,
   Json::Value* previous_value = current_value_;
   Json::Value* map_value;
   if (field_id) {
-    map_value = &((*current_value_)[GetFieldJsonName<M>(field_id)]);
+    map_value =
+        &((*current_value_)[std::string(GetFieldJsonName<M>(field_id))]);
   } else {
     map_value = &((*current_value_)[current_value_->size()]);
   }
@@ -255,7 +258,7 @@ M* DebugJsonWriter::WriteInt(M* m, int field_id, T& field) {
       return m;
     }
 
-    (*current_value_)[GetFieldJsonName<M>(field_id)] = field;
+    (*current_value_)[std::string(GetFieldJsonName<M>(field_id))] = field;
   } else {
     *current_value_ = field;
   }
@@ -269,7 +272,7 @@ M* DebugJsonWriter::WriteFloat(M* m, int field_id, T& field) {
     if (field == 0.0f) {
       return m;
     }
-    (*current_value_)[GetFieldJsonName<M>(field_id)] = field;
+    (*current_value_)[std::string(GetFieldJsonName<M>(field_id))] = field;
   } else {
     *current_value_ = field;
   }
@@ -283,7 +286,7 @@ M* DebugJsonWriter::Visit(M* m, int field_id, bool* field, bool* other) {
     if (!*field) {
       return m;
     }
-    (*current_value_)[GetFieldJsonName<M>(field_id)] = *field;
+    (*current_value_)[std::string(GetFieldJsonName<M>(field_id))] = *field;
   }
   return m;
 }
@@ -329,10 +332,10 @@ M* DebugJsonWriter::Visit(M* m, int field_id, std::string* field,
     }
   }
   if constexpr (field_type == FieldType::TYPE_BYTES) {
-    (*current_value_)[GetFieldJsonName<M>(field_id)] =
+    (*current_value_)[std::string(GetFieldJsonName<M>(field_id))] =
         absl::Base64Escape(*field);
   } else {
-    (*current_value_)[GetFieldJsonName<M>(field_id)] = *field;
+    (*current_value_)[std::string(GetFieldJsonName<M>(field_id))] = *field;
   }
   return m;
 }
@@ -349,7 +352,8 @@ M* DebugJsonWriter::Visit(M* m, int field_id, absl::string_view* field,
     (*current_value_)[GetFieldJsonName<M>(field_id)] =
         absl::Base64Escape(*field);
   } else {
-    (*current_value_)[GetFieldJsonName<M>(field_id)] = std::string(*field);
+    (*current_value_)[std::string(GetFieldJsonName<M>(field_id))] =
+        std::string(*field);
   }
   return m;
 }
@@ -366,9 +370,11 @@ M* DebugJsonWriter::Visit(M* m, int field_id, absl::Cord* field,
   absl::Cord copy = *field;
   auto view = copy.Flatten();
   if constexpr (field_type == FieldType::TYPE_BYTES) {
-    (*current_value_)[GetFieldJsonName<M>(field_id)] = absl::Base64Escape(view);
+    (*current_value_)[std::string(GetFieldJsonName<M>(field_id))] =
+        absl::Base64Escape(view);
   } else {
-    (*current_value_)[GetFieldJsonName<M>(field_id)] = view;
+    (*current_value_)[std::string(GetFieldJsonName<M>(field_id))] =
+        std::string(view);
   }
   return m;
 }
@@ -380,7 +386,8 @@ M* DebugJsonWriter::Visit(M* m, int field_id,
   static_assert(field_type == FieldType::TYPE_MESSAGE);
   Json::Value* previous_value = current_value_;
   if (field_id) {
-    current_value_ = &((*current_value_)[GetFieldJsonName<M>(field_id)]);
+    current_value_ =
+        &((*current_value_)[std::string(GetFieldJsonName<M>(field_id))]);
   }
 
   StringMap<VisitRegisteredAnyFn>* map = GetVisitRegisteredFnMap();

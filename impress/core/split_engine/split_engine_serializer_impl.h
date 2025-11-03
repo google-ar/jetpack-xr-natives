@@ -41,6 +41,7 @@
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
+#include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
 #include "core/common/buffer_access.h"
 #include "core/common/entity_absl_hasher.h"
@@ -190,8 +191,9 @@ class SplitEngineSerializerImpl
 
   bool ReadyForNextFrame() const override;
 
-  void AddMaterial(const filament::Material* material,
-                   const BufferAccess& data) override;
+  void AddMaterial(
+      const filament::Material* material, const BufferAccess& data,
+      const MaterialPreCompileOptions& material_pre_compile_options) override;
   void RemoveMaterial(const filament::Material* material) override;
   void AddMaterialInstance(const filament::Material* material,
                            const filament::MaterialInstance* instance) override;
@@ -218,7 +220,7 @@ class SplitEngineSerializerImpl
   std::unique_ptr<BaseTextureBuilder> CreateTextureBuilder() override;
   std::unique_ptr<BaseMeshBuilder> CreateMeshBuilder() override;
 #if IMP_PLATFORM(ANDROID)
-  std::unique_ptr<PlatformAndroidExternalTextureSurface>
+  Future<std::unique_ptr<PlatformAndroidExternalTextureSurface>>
   CreateAndroidExternalTextureSurface(
       ContentSecurityLevel security_level,
       absl::Span<const SurfaceViewType> view_types) override;
@@ -548,7 +550,7 @@ class SplitEngineSerializerImpl
   // If there is no current builder, a new one will be created.
   // TODO: (broken link) - Use OwnedPtr and BorrowedPtr for CommandBatchBase when
   // they support implicit upcast and static_cast.
-  flatbuffers::FlatBufferBuilder* /*absl_nonnull*/ GetFlatBufferBuilderFor(
+  flatbuffers::FlatBufferBuilder* /*absl_nonnull*/  GetFlatBufferBuilderFor(
       CommandBatchBase& batch);
 
   // Note: In the best case scenario we would only create a flatbuffer builder
@@ -560,8 +562,8 @@ class SplitEngineSerializerImpl
   // We do not store the builder as part of the Batch class to emphasize that
   // the Batch data should be independent of the builder.
   // The batch pointers are owned by batch_queue_.
-  absl::flat_hash_map<CommandBatchBase* /*absl_nonnull*/,
-                      /*absl_nonnull*/ FlatBufferBuilderPtr>
+  absl::flat_hash_map<CommandBatchBase* /*absl_nonnull*/ ,
+                      /*absl_nonnull*/  FlatBufferBuilderPtr>
       fbb_;
 
   // Stores batches of commands in the order they were created. This ensures
@@ -569,7 +571,7 @@ class SplitEngineSerializerImpl
   // NOTE: In theory, we don't need to execute commands in the order they came
   // in, as long as we run commands affecting the same dependency in the correct
   // order. However, running commands in this order appears more correct.
-  std::queue</*absl_nonnull*/ std::unique_ptr<CommandBatchBase>> batch_queue_;
+  std::queue</*absl_nonnull*/  std::unique_ptr<CommandBatchBase>> batch_queue_;
 
   // Queue of batches that are executed at the end of the frame. This is used
   // for removing resources, as it is unsafe to remove resources while they are
@@ -588,7 +590,7 @@ class SplitEngineSerializerImpl
 
   // This data structure allows for quick lookup of batches by type.
   absl::flat_hash_map<android_xr::schemas::CommandTypes,
-                      std::vector<CommandBatchBase* /*absl_nonnull*/>>
+                      std::vector<CommandBatchBase* /*absl_nonnull*/ >>
       batches_;
 
   // Stores the index of the last batch that affected a given entity.
@@ -610,14 +612,14 @@ class SplitEngineSerializerImpl
   // Returns the first batch of the given type that runs after the last batch
   // that affected the given dependencies. Returns nullptr if no such batch
   // exists.
-  CommandBatchBase* /*absl_nullable*/ FindBatch(
+  CommandBatchBase* /*absl_nullable*/  FindBatch(
       android_xr::schemas::CommandTypes command,
       const std::vector<utils::Entity>& entity_dependencies = {},
       const std::vector<ResourceId>& resource_dependencies = {});
 
   // Adds the given batch to the queue and returns a pointer to it.
-  CommandBatchBase* /*absl_nonnull*/ AddBatch(
-      /*absl_nonnull*/ std::unique_ptr<CommandBatchBase> batch,
+  CommandBatchBase* /*absl_nonnull*/  AddBatch(
+      /*absl_nonnull*/  std::unique_ptr<CommandBatchBase> batch,
       const std::vector<utils::Entity>& entity_dependencies = {},
       const std::vector<ResourceId>& resource_dependencies = {});
 
@@ -633,7 +635,7 @@ class SplitEngineSerializerImpl
   Batch<CommandT>& GetOrCreateEndOfFrameBatch(RemoveResourceChannel channel);
 
   // Sends a Flatbuffer for the given batch to the bridge.
-  void SendMessage(CommandBatchBase* /*absl_nonnull*/ batch_base);
+  void SendMessage(CommandBatchBase* /*absl_nonnull*/  batch_base);
 
   // Sends all batches in the queue to the bridge and cleans up.
   void SendAllBatches();

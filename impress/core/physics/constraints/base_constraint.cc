@@ -116,10 +116,17 @@ void BaseConstraint::CheckIntegrityAndUpdate() {
   // TODO: (broken link) - We should test here also the motion mode of the
   // rigid bodies, because both DIRECTED would break the constraint. Also test
   // for NON_MOVABLE.
-  bool connected_node_valid = GetRigidBodyA() != nullptr;
-  bool owner_node_valid = GetRigidBodyB() != nullptr;
+  RigidBody* rigid_body_a = GetRigidBodyA();
+  RigidBody* rigid_body_b = GetRigidBodyB();
+  bool connected_node_valid = rigid_body_a != nullptr;
+  bool owner_node_valid = rigid_body_b != nullptr;
+  bool connected_node_recreated =
+      rigid_body_a && rigid_body_a->IsBulletRigidBodyRecreated();
+  bool owner_node_recreated =
+      rigid_body_b && rigid_body_b->IsBulletRigidBodyRecreated();
   if (connected_node_valid_prev_ != connected_node_valid ||
-      owner_node_valid_prev_ != owner_node_valid) {
+      owner_node_valid_prev_ != owner_node_valid || connected_node_recreated ||
+      owner_node_recreated) {
     connected_node_valid_prev_ = connected_node_valid;
     owner_node_valid_prev_ = owner_node_valid;
     OnRigidBodiesChanged();

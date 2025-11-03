@@ -103,6 +103,7 @@ AsyncScopedCanvas* GlyphAtlas::GetOrStartDrawing(
   canvas_ = canvas_source_->StartDrawing(view_, atlas_texture_size_, draw_mode);
   if (canvas_->DidTextureChange()) {
     texture_ = canvas_->GetTexture();
+    view_.GetDispatcher().Send(TextureChangedEvent());
   }
 
   return canvas_.get();
@@ -110,7 +111,10 @@ AsyncScopedCanvas* GlyphAtlas::GetOrStartDrawing(
 
 GlyphAtlas::GlyphAtlas(BaseView& view, Config config)
     : GlyphAtlas::GlyphAtlas(
-          view, AsyncCanvasSourceFactory::Create(view.GetContext()), config) {}
+          view,
+          AsyncCanvasSourceFactory::Create(view.GetContext(),
+                                           config.use_hardware_rendering),
+          config) {}
 
 GlyphAtlas::GlyphAtlas(BaseView& view,
                        std::unique_ptr<AsyncCanvasSource> canvas_source,
@@ -125,6 +129,19 @@ GlyphAtlas::GlyphAtlas(BaseView& view,
         EndFrame();
       },
       this);
+
+  // Prevents an issue where the texture can get cleared and needs to be redrawn
+  // when the view is resumed.
+  if (config.force_reset_on_view_resumed) {
+    view.GetDispatcher().Connect(
+        [this](const ViewResumedEvent& event) {
+          absl::MutexLock lock(canvas_mutex_);
+          canvas_source_->ForceReset();
+          texture_status_ = TextureStatus::kHasNewGlyphs;
+        },
+        this);
+  }
+
   if (view.GetDevice().IsPhysicalPixelRatioAvailable()) {
     physical_pixel_ratio_available_.Return(absl::OkStatus());
   } else {
@@ -151,24 +168,31 @@ GlyphAtlas::GlyphAtlas(BaseView& view,
 }
 
 GlyphAtlas::~GlyphAtlas() {
+  ClearRemembered();
   // Wait until destruction-blocking blocks across all threads have been
   // completed.
-  absl::MutexLock lock(&completion_gate_->mutex);
+  absl::MutexLock lock(completion_gate_->mutex);
 
   completion_gate_->complete = true;
 
   {
-    absl::MutexLock lock(&canvas_mutex_);
+    absl::MutexLock lock(canvas_mutex_);
     canvas_.reset();
   }
 }
 
 void GlyphAtlas::EndFrame() {
   IMP_TRACE();
-  canvas_mutex_.Lock();
+  canvas_mutex_.lock();
   if (texture_status_ == TextureStatus::kStable ||
-      texture_status_ == TextureStatus::kPreparingToUpdateTexture || !canvas_) {
-    canvas_mutex_.Unlock();
+      texture_status_ == TextureStatus::kPreparingToUpdateTexture) {
+    canvas_mutex_.unlock();
+    return;
+  }
+
+  if (!canvas_ && canvas_source_->IsFeatureSupported(
+                      ScopedCanvas::Feature::kKeepContents)) {
+    canvas_mutex_.unlock();
     return;
   }
 
@@ -184,24 +208,16 @@ void GlyphAtlas::EndFrame() {
       !canvas_source_->IsFeatureSupported(
           ScopedCanvas::Feature::kKeepContents)) {
     // Unlock the mutex for DrawAllGlyphsToCanvas to hold.
-    canvas_mutex_.Unlock();
+    canvas_mutex_.unlock();
     DrawAllGlyphsToCanvas();
-    canvas_mutex_.Lock();
+    canvas_mutex_.lock();
     texture_status_ = TextureStatus::kReadyToApplyDrawCommands;
   }
 
   if (texture_status_ == TextureStatus::kReadyToApplyDrawCommands) {
-    PrepareToUpdateTexture();
+    UpdateTexture();
   }
-
-  if (texture_status_ == TextureStatus::kReadyToRelease) {
-    texture_status_ = TextureStatus::kStable;
-    for (const auto& future : texture_update_futures_) {
-      future.Return(absl::OkStatus());
-    }
-    canvas_.reset();
-  }
-  canvas_mutex_.Unlock();
+  canvas_mutex_.unlock();
 }
 
 void GlyphAtlas::AddFont(absl::string_view font_name,
@@ -335,35 +351,68 @@ Future<std::vector<GlyphAtlas::Glyph>> GlyphAtlas::GetGlyphs(
                     if (canvas_source_->IsFeatureSupported(
                             ScopedCanvas::Feature::kKeepContents)) {
                       {
-                        absl::MutexLock lock(&canvas_mutex_);
+                        absl::MutexLock lock(canvas_mutex_);
                         GetOrStartDrawing(
                             ScopedCanvas::DrawMode::kKeepContents);
                       }
 
                       // Schedule the glyphs that are newly added to the atlas
                       // to be drawn to the canvas asynchronously.
-                      result_future = DrawGlyphsToCanvasAsync(
-                          std::move(pending_canvas_glyphs));
+                      // To ensure glyphs are always drawn once their space is
+                      // reserved, the ownership of the DrawGlyphsToCanvasAsync
+                      // future is transferred to the GlyphAtlas. This ties the
+                      // future's lifecycle to the atlas itself, rather than the
+                      // calling method.
+                      // This is to avoid the specific situation where the
+                      // caller is destroyed before the future is resolved, thus
+                      // cancelling this future, but the atlas space is still
+                      // reserved as other callers may have made references to
+                      // those glyphs in the meantime, preventing the now
+                      // invalid atlas space from being released.
+                      // TODO: Have the future's lifetime be tied
+                      // to the glyphs's space reservation instead of the atlas
+                      // itself.
+                      DrawGlyphsToCanvasAsync(std::move(pending_canvas_glyphs))
+                          .Then(
+                              [result_future](absl::Status status) {
+                                result_future.Return(status);
+                                return absl::OkStatus();
+                              },
+                              Executor::Type::kCurrent)
+                          .KeptBy(this);
                     } else {
-                      absl::MutexLock lock(&canvas_mutex_);
+                      absl::MutexLock lock(canvas_mutex_);
                       // Set the texture_status_ to kHasNewGlyphs to ensure that
                       // the glyphs will be drawn on the next frame.
                       GetOrStartDrawing(ScopedCanvas::DrawMode::kClear);
                       texture_status_ = TextureStatus::kHasNewGlyphs;
                       result_future.Return(absl::OkStatus());
                     }
-                    absl::MutexLock lock(&canvas_mutex_);
+                    absl::MutexLock lock(canvas_mutex_);
                     synchronous_texture_update =
                         canvas_->SupportsSynchronousTextureUpdate();
                   }
                   return result_future
                       .Then([this, synchronous_texture_update]() {
-                        if (synchronous_texture_update) {
+                        bool canvas_is_null;
+                        {
+                          absl::MutexLock lock(canvas_mutex_);
+                          canvas_is_null = canvas_ == nullptr;
+                          if (canvas_is_null) {
+                            texture_status_ = TextureStatus::kStable;
+                          }
+                        }
+                        if (synchronous_texture_update || canvas_is_null) {
                           // If synchronous_texture_update is true, the texture
                           // is guaranteed to update synchronously on the next
                           // EndFrame after the result_future resolves, so no
                           // need to block this future until the texture is
                           // updated.
+
+                          // If the canvas is null, that means the texture has
+                          // already been updated after the draw, but before
+                          // this code is executed. Theres no more work to do
+                          // so return immediately.
                           return Future<absl::Status>(absl::OkStatus());
                         } else {
                           // Block resolution of the glyphs until the texture
@@ -380,9 +429,9 @@ Future<std::vector<GlyphAtlas::Glyph>> GlyphAtlas::GetGlyphs(
           Executor::Type::kCurrent);
 }
 
-const GlyphAtlas::GlyphInfo* /*absl_nullable*/ GlyphAtlas::GetGlyphInfo(
+const GlyphAtlas::GlyphInfo* /*absl_nullable*/  GlyphAtlas::GetGlyphInfo(
     const CanvasOptionsGlyphKey& glyph_key) {
-  absl::MutexLock glyph_map_lock(&glyph_map_mutex_);
+  absl::MutexLock glyph_map_lock(glyph_map_mutex_);
   // Try to find the already cached main glyph entry for this text.
   auto itr = glyph_map_.find(glyph_key);
   if (itr != glyph_map_.end()) {
@@ -422,24 +471,24 @@ void GlyphAtlas::AddGlyphs(
       pending_glyph.canvas_options.color = kFillIdentifierColor;
     }
     bool needs_render = GetGlyphInfo(pending_glyph) == nullptr;
-    if (needs_render) {
+    const float width = glyph.advance_width;
+    const GlyphInfo* glyph_info = GetOrAddGlyphInfo(glyph, pending_glyph);
+    if (glyph_info != nullptr && needs_render) {
       pending_canvas_glyphs.push_back(pending_glyph);
     }
-    const float width = glyph.advance_width;
-    const GlyphInfo& glyph_info = GetOrAddGlyphInfo(glyph, pending_glyph);
-    Glyph atlas_glyph =
-        GlyphInfoToGlyph(glyph_info, width, subpixel_render_ratio,
-                         atlas_texture_size_, is_emoji);
+    Glyph atlas_glyph = GlyphInfoToGlyph(
+        glyph_info == nullptr ? kEmptyGlyphInfo : *glyph_info, width,
+        subpixel_render_ratio, atlas_texture_size_, is_emoji);
     result.push_back(atlas_glyph);
   }
 }
 
-const GlyphAtlas::GlyphInfo& GlyphAtlas::GetOrAddGlyphInfo(
+const GlyphAtlas::GlyphInfo* GlyphAtlas::GetOrAddGlyphInfo(
     GlyphEmulator::Glyph& glyph, const CanvasOptionsGlyphKey& glyph_key) {
-  const GlyphAtlas::GlyphInfo* /*absl_nullable*/ glyph_info =
+  const GlyphAtlas::GlyphInfo* /*absl_nullable*/  glyph_info =
       GetGlyphInfo(glyph_key);
   if (glyph_info != nullptr) {
-    return *glyph_info;
+    return glyph_info;
   }
 
   // Atlas entry is integer precision with some padding.
@@ -457,27 +506,28 @@ const GlyphAtlas::GlyphInfo& GlyphAtlas::GetOrAddGlyphInfo(
                << ToString(glyph.glyph)
                << "\" with size x=" << atlas_entry_size.x
                << ", y=" << atlas_entry_size.y;
-    return kEmptyGlyphInfo;
+    return nullptr;
   }
 
-  absl::MutexLock glyph_map_lock(&glyph_map_mutex_);
-  return glyph_map_
-      .emplace(glyph_key,
-               GlyphInfo{
-                   .atlas_entry = std::move(*atlas_entry),
-                   .measurements = glyph.metrics,
-                   .fallback_font = std::move(glyph.fallback_font),
+  absl::MutexLock glyph_map_lock(glyph_map_mutex_);
+  return &glyph_map_
+              .emplace(glyph_key,
+                       GlyphInfo{
+                           .atlas_entry = std::move(*atlas_entry),
+                           .measurements = glyph.metrics,
+                           .fallback_font = std::move(glyph.fallback_font),
 #if IMP_RUNTIME(DEV)
-                   .stroke_width = glyph_key.canvas_options.stroke_width_pixels,
+                           .stroke_width =
+                               glyph_key.canvas_options.stroke_width_pixels,
 #endif
-               })
-      .first->second;
+                       })
+              .first->second;
 }
 
 void GlyphAtlas::DrawAllGlyphsToCanvas() {
   ScopedCanvas* canvas;
   {
-    absl::MutexLock lock(&canvas_mutex_);
+    absl::MutexLock lock(canvas_mutex_);
     canvas = GetOrStartDrawing(ScopedCanvas::DrawMode::kClear);
     // TODO : Canvas can may be dirty due to async drawing of
     // glyphs; investigate how to prevent that from happening.
@@ -485,11 +535,11 @@ void GlyphAtlas::DrawAllGlyphsToCanvas() {
                        .half_extent = atlas_texture_size_ / 2.0f});
   }
 
-  absl::MutexLock glyph_map_lock(&glyph_map_mutex_);
+  absl::MutexLock glyph_map_lock(glyph_map_mutex_);
   for (auto& [glyph, glyph_info] : glyph_map_) {
     // Lock inside the loop since we want to allow background threads to
     // access canvas_ in between iterations.
-    absl::MutexLock canvas_lock(&canvas_mutex_);
+    absl::MutexLock canvas_lock(canvas_mutex_);
     // We don't need to check for an invalid canvas here since this function
     // and the releasing of canvas_ both occur synchronously on the foreground
     // thread.
@@ -526,7 +576,7 @@ Future<absl::Status> GlyphAtlas::DrawGlyphsToCanvasAsync(
       .Then([this](std::unique_ptr<std::vector<CanvasOptionsGlyphKey>> glyphs)
                 -> Future<absl::Status> {
         {
-          absl::MutexLock canvas_lock(&canvas_mutex_);
+          absl::MutexLock canvas_lock(canvas_mutex_);
           // This means all the glyphs newly added to the atlas has now been
           // drawn to the canvas, and so the only thing left to do is to release
           // the pixel buffer in the canvas.
@@ -548,10 +598,10 @@ absl::Status GlyphAtlas::DrawGlyphsToCanvas(
     std::vector<CanvasOptionsGlyphKey>& glyphs) {
   while (!glyphs.empty()) {
     const CanvasOptionsGlyphKey& glyph = glyphs.back();
-    absl::MutexLock glyph_map_lock(&glyph_map_mutex_);
+    absl::MutexLock glyph_map_lock(glyph_map_mutex_);
     auto itr = glyph_map_.find(glyph);
     if (itr != glyph_map_.end()) {
-      absl::MutexLock canvas_lock(&canvas_mutex_);
+      absl::MutexLock canvas_lock(canvas_mutex_);
       // As the canvas may be destroyed at any point in this loop due to the
       // async nature of drawing glyphs to the canvas, so we want to check
       // that it's still valid. If it's not, we stop here, and
@@ -570,7 +620,7 @@ absl::Status GlyphAtlas::DrawGlyphsToCanvas(
 
 std::optional<AtlasPacker::ScopedAtlasEntry> GlyphAtlas::TryAddAtlasEntry(
     uint2 atlas_entry_size) {
-  absl::MutexLock lock(&atlas_packer_mutex_);
+  absl::MutexLock lock(atlas_packer_mutex_);
   std::optional<AtlasPacker::ScopedAtlasEntry> atlas_entry =
       atlas_packer_.AddEntry(atlas_entry_size);
 
@@ -584,8 +634,8 @@ std::optional<AtlasPacker::ScopedAtlasEntry> GlyphAtlas::TryAddAtlasEntry(
 }
 
 void GlyphAtlas::ClearUnusedGlyphs() {
-  absl::MutexLock glyph_map_lock(&glyph_map_mutex_);
-  absl::MutexLock canvas_lock(&canvas_mutex_);
+  absl::MutexLock glyph_map_lock(glyph_map_mutex_);
+  absl::MutexLock canvas_lock(canvas_mutex_);
   // Remove each glyph that is unused. Detect if it's unused if the ref
   // counter is at zero.
   for (auto glyph_itr = glyph_map_.begin(); glyph_itr != glyph_map_.end();) {
@@ -616,7 +666,7 @@ void GlyphAtlas::ClearUnusedGlyphs() {
 }
 
 size_t GlyphAtlas::GetNumCachedGlyphs() const {
-  absl::MutexLock glyph_map_lock(&glyph_map_mutex_);
+  absl::MutexLock glyph_map_lock(glyph_map_mutex_);
   return glyph_map_.size();
 }
 
@@ -677,9 +727,9 @@ Texture* GlyphAtlas::GetTexture() {
   return texture_;
 }
 
-void GlyphAtlas::PrepareToUpdateTexture() {
+void GlyphAtlas::UpdateTexture() {
   if (canvas_->SupportsSynchronousTextureUpdate()) {
-    texture_status_ = TextureStatus::kReadyToRelease;
+    UpdateTextureSync();
   } else {
     texture_status_ = TextureStatus::kPreparingToUpdateTexture;
     // If the previous future hasn't resolved yet, cancel it.
@@ -691,7 +741,7 @@ void GlyphAtlas::PrepareToUpdateTexture() {
     // Unlock the mutex so that it is not held when the Then callback is
     // called, regardless of whether it is called synchronously or
     // asynchronously.
-    canvas_mutex_.Unlock();
+    canvas_mutex_.unlock();
     pending_prepare_future_ =
         pending_prepare_future_.Then([this](absl::Status status) {
           if (!status.ok()) {
@@ -703,17 +753,26 @@ void GlyphAtlas::PrepareToUpdateTexture() {
             }
             return;
           }
-          absl::MutexLock lock(&canvas_mutex_);
+          absl::MutexLock lock(canvas_mutex_);
           // If the status is no longer kPreparingToUpdateTexture, new
           // glyphs were likely added while preparing the canvas for
           // release. We'll have to draw those glyphs and reprepare in that
           // case.
           if (texture_status_ == TextureStatus::kPreparingToUpdateTexture) {
-            texture_status_ = TextureStatus::kReadyToRelease;
+            UpdateTextureSync();
           }
         });
-    canvas_mutex_.Lock();
+    canvas_mutex_.lock();
   }
+}
+
+void GlyphAtlas::UpdateTextureSync() {
+  texture_status_ = TextureStatus::kStable;
+  for (const auto& future : texture_update_futures_) {
+    future.Return(absl::OkStatus());
+  }
+  texture_update_futures_.clear();
+  canvas_.reset();
 }
 
 Future<GlyphEmulator::SuperSampleInfo> GlyphAtlas::GetSuperSampleInfo(
@@ -739,7 +798,7 @@ Future<GlyphEmulator::SuperSampleInfo> GlyphAtlas::GetSuperSampleInfo(
 float GlyphAtlas::GetAtlasUtilization() const {
   float utilization;
   {
-    absl::MutexLock lock(&atlas_packer_mutex_);
+    absl::MutexLock lock(atlas_packer_mutex_);
     utilization = atlas_packer_.GetUtilization();
   }
   return utilization;
@@ -753,7 +812,7 @@ GlyphAtlas::GetGlyphAtlasInfoAt(const float2& uv) const {
   float2 texture_point = uv * atlas_texture_size_;
 
   {
-    absl::MutexLock lock(&glyph_map_mutex_);
+    absl::MutexLock lock(glyph_map_mutex_);
     for (auto& [glyph, glyph_info] : glyph_map_) {
       const AtlasPacker::ScopedAtlasEntry& atlas_entry = glyph_info.atlas_entry;
       float2 half_extent =
@@ -788,7 +847,7 @@ std::vector<editor::GlyphAtlasVisualizer::GlyphAtlasInfo>
 GlyphAtlas::GetAllGlyphInfo() const {
   std::vector<editor::GlyphAtlasVisualizer::GlyphAtlasInfo> result;
   {
-    absl::MutexLock lock(&glyph_map_mutex_);
+    absl::MutexLock lock(glyph_map_mutex_);
     for (auto& [glyph, glyph_info] : glyph_map_) {
       const AtlasPacker::ScopedAtlasEntry& atlas_entry = glyph_info.atlas_entry;
       float2 half_extent =

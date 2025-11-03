@@ -115,7 +115,7 @@ class TaskScheduler {
 
  private:
   // Pushes a Task to the TaskScheduler.
-  void PushTaskInternal(Task* /*absl_nonnull*/ task);
+  void PushTaskInternal(Task* /*absl_nonnull*/  task);
 
   // Pops the next Task to be scheduled.
   absl::StatusOr<std::unique_ptr<Task>> PopTaskInternal();
@@ -128,7 +128,7 @@ class TaskScheduler {
     // Constructs and stores a Task, returning a pointer to the Task, which
     // cannot be null. Returns InvalidArgumentError if a Task with the same
     // TaskId already exists, or if the provided Invocable is invalid.
-    absl::StatusOr<Task* /*absl_nonnull*/> RegisterTask(
+    absl::StatusOr<Task* /*absl_nonnull*/ > RegisterTask(
         imp::Invocable<void()> invocable, int priority = kNormalTaskPriority,
         absl::Time creation_time = absl::Now(),
         std::optional<TaskId> reserved_task_id = std::nullopt);
@@ -139,7 +139,7 @@ class TaskScheduler {
 
     // Returns the Task associated with the TaskId. If the TaskId cannot be
     // resolved, returns a NotFoundError.
-    absl::StatusOr<Task* /*absl_nonnull*/> GetTask(TaskId task_id);
+    absl::StatusOr<Task* /*absl_nonnull*/ > GetTask(TaskId task_id);
 
     // Marks that original_task_id refers to the Task with TaskId
     // rescheduled_task_id. Further calls to GetTask(original_task_id) will
@@ -175,17 +175,17 @@ class TaskScheduler {
   // A FIFO queue for all Tasks of the same priority.
   class TaskPriorityGroup {
    public:
-    TaskPriorityGroup(int priority, Task* /*absl_nonnull*/ first_task)
+    TaskPriorityGroup(int priority, Task* /*absl_nonnull*/  first_task)
         : priority_(priority), tasks_({first_task}) {};
 
     // Pushes a Task in FIFO order.
-    void PushBack(Task* /*absl_nonnull*/ task);
+    void PushBack(Task* /*absl_nonnull*/  task);
 
     // Pops the next Task in FIFO order.
     void PopFront();
 
     // Returns the next Task in FIFO order.
-    Task* /*absl_nonnull*/ Front();
+    Task* /*absl_nonnull*/  Front();
 
     int GetPriority() const;
     bool IsEmpty() const;
@@ -208,7 +208,7 @@ class TaskScheduler {
 
   // Pops and returns the next Task, which may be marked as deleted. Returns a
   // FailedPreconditionError if there are no valid Tasks in the TaskScheduler.
-  absl::StatusOr<Task* /*absl_nonnull*/> PopCandidateTask();
+  absl::StatusOr<Task* /*absl_nonnull*/ > PopCandidateTask();
 
   // At what rate to increase the effective Task priority by 1.
   absl::Duration task_age_rate_;

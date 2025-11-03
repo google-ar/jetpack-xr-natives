@@ -35,6 +35,7 @@
 #include "core/common/debug_draw.h"
 #include "core/common/platform_helpers.h"
 #include "core/common/resource_helpers.h"
+#include "core/common/trace.h"
 #include "core/common/typed_vector.h"
 #include "core/input/key_codes.h"
 #include "core/math/vec.h"
@@ -220,6 +221,7 @@ void DefaultDevModeExtension::ApplyTextureRenderTarget(
 }
 
 void DefaultDevModeExtension::OffscreenRender() {
+  IMP_TRACE();
   if (!IsEnabled()) {
     return;
   }
@@ -233,6 +235,7 @@ void DefaultDevModeExtension::OffscreenRender() {
 }
 
 void DefaultDevModeExtension::Render() {
+  IMP_TRACE();
   if (!IsEnabled()) {
     return;
   }

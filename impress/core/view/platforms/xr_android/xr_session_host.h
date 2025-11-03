@@ -289,6 +289,22 @@ class XrSessionHost : public ViewHost {
   // takes ownership of the file descriptor and is responsible for closing it.
   void SetAfterEndFrameCallback(Invocable<void(int /*fence_fd*/)> callback);
 
+  // This notes that the CPU-side calls for rendering a frame have been
+  // completed, and informs xr_session_host that it is safe to create a Sync
+  // object that will signal when all rendering operations for the frame have
+  // been completed by the GPU.
+  //
+  // This sync will be used by SetAfterEndFrameCallback, if used. If not, this
+  // function does not need to be called.
+  //
+  // IMPORTANT: This applies to the current frame. This should be called at
+  // the end of every frame if using SetAfterEndFrameCallback, if a fence is
+  // desired in that call.
+  //
+  // IMPORTANT: It is expected that this is called on the Filament frontend
+  // thread, not the backend thread.
+  void MarkPostRenderAndCreateSync();
+
 #if IMP_MATERIAL_API(VULKAN) && IMP_PLATFORM(ANDROID)
   using XrGraphicsBinding = XrGraphicsBindingVulkan2KHR;
   using XrGraphicsRequirements = XrGraphicsRequirementsVulkan2KHR;
@@ -349,6 +365,15 @@ class XrSessionHost : public ViewHost {
     LocateSpaceStatus status;
   };
 
+  struct FenceCallbackData {
+    XrTime display_time;
+    PlatformType* platform;
+    filament::Engine* engine;
+    filament::Sync* sync;
+    std::unique_ptr<Invocable<void(int /*fence_file_descriptor*/)>>
+        after_end_frame_callback;
+  };
+
   // Used to enqueue frame information to the Filament Render thread to ensure
   // that the view poses & display times are rendered in the correct order.
   struct QueuedFrameInfo {
@@ -357,6 +382,7 @@ class XrSessionHost : public ViewHost {
     bool should_render_varjo_foveation;
     Invocable<void()> before_end_frame_callback;
     Invocable<void(int)> after_end_frame_callback;
+    filament::Sync* sync;
   };
 
   absl::StatusOr<XrInstance> CreateInstance(JNIEnv* env, JavaVM* vm,

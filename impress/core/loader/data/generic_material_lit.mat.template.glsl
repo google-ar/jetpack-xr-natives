@@ -173,8 +173,14 @@ highp vec4 getSample(lowp int samplerIndex) {
       materialParams.metallicFactor * roughnessMetalnessSample.y;
 
     // Ambient Occlusion
+    // The GLTF spec states (in 3.9.3, *occlusion*):
+    // "The texture binding for occlusion maps MAY optionally contain a scalar
+    // strength value that is used to reduce the occlusion effect. When present,
+    // it affects the occlusion value as
+    //   1.0 + strength * (occlusionTexture - 1.0).
+    // https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#additional-textures
     material.ambientOcclusion =
-      getSample(materialParams.aoIndex).x * materialParams.aoStrength;
+      1.0 + materialParams.aoStrength * (getSample(materialParams.aoIndex).r - 1.0);
 
     // Emissive Map
     material.emissive =

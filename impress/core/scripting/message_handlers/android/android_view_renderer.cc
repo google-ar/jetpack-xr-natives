@@ -179,106 +179,103 @@ Future<absl::Status> AndroidViewRenderer::Setup(
 
   android_view_ =
       GetView().GetContext().GetJniEnv()->NewGlobalRef(android_view);
-  absl::StatusOr<std::unique_ptr<AndroidExternalTextureSurface>> surface =
-      AndroidExternalTextureSurface::Create(GetView());
-  if (!surface.ok()) {
-    return Future<absl::Status>(surface.status());
-  }
-  surface_ = std::move(*surface);
-  renderer_wrapper_ = std::make_unique<RenderViewToSurfaceTextureWrapper>(
-      renderer_node_, android_view, view_size, *surface_);
 
-  // Add a collider so we get hit events.
-  renderer_node_->AddComponent<BoxCollider>(kBaseBoxBounds);
+  return AndroidExternalTextureSurface::CreateAsync(GetView()).Then(
+      [this, view_size, input_forwarding_mode, material_definition,
+       blend_priority](std::unique_ptr<AndroidExternalTextureSurface> surface) {
+        surface_ = std::move(surface);
+        renderer_wrapper_ = std::make_unique<RenderViewToSurfaceTextureWrapper>(
+            renderer_node_, android_view_, view_size, *surface_);
 
-  if (input_forwarding_mode ==
-      InputForwardingMode::INPUT_FORWARDING_MODE_DEFAULT) {
-    // TODO: GetNode()->Connect(...) and return kAccept.
-    GetView().GetDispatcher().Connect(
-        [this](const PointerHitEvent& event) {
-          if (event.GetPointerCount() == 0) {
-            return;
-          }
-          if (event.event.Type() == PointerEventType::kHover) {
-            ForwardHoverInputs(event);
-          } else {
-            ForwardTouchInputs(event);
-          }
-        },
-        this);
+        // Add a collider so we get hit events.
+        renderer_node_->AddComponent<BoxCollider>(kBaseBoxBounds);
 
-    GetView().GetDispatcher().Connect(
-        [this](const ControllerHitEvent& event) {
-          ForwardControllerInputs(event);
-        },
-        this);
+        if (input_forwarding_mode ==
+            InputForwardingMode::INPUT_FORWARDING_MODE_DEFAULT) {
+          // TODO: GetNode()->Connect(...) and return kAccept.
+          GetView().GetDispatcher().Connect(
+              [this](const PointerHitEvent& event) {
+                if (event.GetPointerCount() == 0) {
+                  return;
+                }
+                if (event.event.Type() == PointerEventType::kHover) {
+                  ForwardHoverInputs(event);
+                } else {
+                  ForwardTouchInputs(event);
+                }
+              },
+              this);
 
-    GetView().GetDispatcher().Connect(
-        [this](const android_xr::SplitEngineInputEvent& event) {
-          bool is_mouse = event.device_type ==
-                          android_xr::SplitEngineInputEvent::DeviceType::MOUSE;
-          bool is_left_pointer =
-              event.pointer_type ==
-              android_xr::SplitEngineInputEvent::PointerType::LEFT;
-          bool is_right_pointer =
-              event.pointer_type ==
-              android_xr::SplitEngineInputEvent::PointerType::RIGHT;
+          GetView().GetDispatcher().Connect(
+              [this](const ControllerHitEvent& event) {
+                ForwardControllerInputs(event);
+              },
+              this);
 
-          if (!is_mouse && !is_left_pointer && !is_right_pointer) {
-            return;
-          }
-          ForwardSplitEngineInputs(event);
-        },
-        this);
-  }
+          GetView().GetDispatcher().Connect(
+              [this](const android_xr::SplitEngineInputEvent& event) {
+                bool is_mouse =
+                    event.device_type ==
+                    android_xr::SplitEngineInputEvent::DeviceType::MOUSE;
+                bool is_left_pointer =
+                    event.pointer_type ==
+                    android_xr::SplitEngineInputEvent::PointerType::LEFT;
+                bool is_right_pointer =
+                    event.pointer_type ==
+                    android_xr::SplitEngineInputEvent::PointerType::RIGHT;
 
-  // TODO : Have a single place to control local mode.
-  bool local_mode = false;
-#if IMP_USE_LOCAL_SPLIT_ENGINE_MATERIALS
-  local_mode = true;
-#else
-  local_mode = GetView().GetSplitEngineSerializer() == nullptr;
-#endif  // IMP_USE_LOCAL_SPLIT_ENGINE_MATERIALS
-
-  if (!local_mode && material_definition) {
-    return Future<absl::Status>(absl::InvalidArgumentError(
-        "Custom materials are not supported in non local mode."));
-  }
-
-  return LoadMaterial(material_definition)
-      .Then([this](TextureMaterialVariant material) {
-        if (std::holds_alternative<OwnedMaterialPtr>(material)) {
-          // Custom material
-          std::get<OwnedMaterialPtr>(material)->SetParameter(
-              kBaseColorMaterialParam, renderer_wrapper_->BorrowTexture());
-        } else {
-          // Default material
-          std::get<std::unique_ptr<android_xr::TextureExternalMaterial>>(
-              material)
-              ->SetTexture(renderer_wrapper_->BorrowTexture());
+                if (!is_mouse && !is_left_pointer && !is_right_pointer) {
+                  return;
+                }
+                ForwardSplitEngineInputs(event);
+              },
+              this);
         }
-        material_ = std::move(material);
-      })
-      .Then([this, blend_priority]() {
-        PrimitiveShapeRendererState primitive_shape_state;
-        primitive_shape_state.primitive = {
-            .mesh = PrimitiveShapeRendererState::QuadMesh{.size = kOne2,
-                                                          .flip_uv = true}};
-        primitive_shape_state.priority = blend_priority;
-        return renderer_node_->AddComponentWithState<PrimitiveShapeRenderer>(
-            primitive_shape_state);
-      })
-      .Then([this](ComponentHandle<PrimitiveShapeRenderer> quad_renderer)
-                -> Future<absl::Status> {
-        if (std::holds_alternative<OwnedMaterialPtr>(material_)) {
-          return quad_renderer->SetMaterial(
-              std::get<OwnedMaterialPtr>(material_).Borrow());
-        } else {
-          return quad_renderer->SetMaterial(
-              std::get<std::unique_ptr<android_xr::TextureExternalMaterial>>(
-                  material_)
-                  ->GetMaterial());
+
+        if (!GetView().AreSplitEngineMaterialsInLocalMode() &&
+            material_definition) {
+          return Future<absl::Status>(absl::InvalidArgumentError(
+              "Custom materials are not supported in non local mode."));
         }
+
+        return LoadMaterial(material_definition)
+            .Then([this](TextureMaterialVariant material) {
+              if (std::holds_alternative<OwnedMaterialPtr>(material)) {
+                // Custom material
+                std::get<OwnedMaterialPtr>(material)->SetParameter(
+                    kBaseColorMaterialParam,
+                    renderer_wrapper_->BorrowTexture());
+              } else {
+                // Default material
+                std::get<std::unique_ptr<android_xr::TextureExternalMaterial>>(
+                    material)
+                    ->SetTexture(renderer_wrapper_->BorrowTexture());
+              }
+              material_ = std::move(material);
+            })
+            .Then([this, blend_priority]() {
+              PrimitiveShapeRendererState primitive_shape_state;
+              primitive_shape_state.primitive = {
+                  .mesh = PrimitiveShapeRendererState::QuadMesh{
+                      .size = kOne2, .flip_uv = true}};
+              primitive_shape_state.priority = blend_priority;
+              return renderer_node_
+                  ->AddComponentWithState<PrimitiveShapeRenderer>(
+                      primitive_shape_state);
+            })
+            .Then([this](ComponentHandle<PrimitiveShapeRenderer> quad_renderer)
+                      -> Future<absl::Status> {
+              if (std::holds_alternative<OwnedMaterialPtr>(material_)) {
+                return quad_renderer->SetMaterial(
+                    std::get<OwnedMaterialPtr>(material_).Borrow());
+              } else {
+                return quad_renderer->SetMaterial(
+                    std::get<
+                        std::unique_ptr<android_xr::TextureExternalMaterial>>(
+                        material_)
+                        ->GetMaterial());
+              }
+            });
       });
 }
 

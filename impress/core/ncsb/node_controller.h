@@ -35,7 +35,7 @@
 #include "core/config.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
-#include "core/ncsb/component.h"
+#include "core/ncsb/node_handle.h"
 #include "core/view/base_view.h"
 
 namespace imp::imp_internal {
@@ -91,11 +91,11 @@ class NodeController {
   bool IsEditorStaging() const;
 #endif
 
-  BaseView& GetView() const;
+  inline BaseView& GetView() const { return *view_; }
 
-  NodeHandle GetNode() const;
+  inline NodeHandle GetNode() const { return node_; }
 
-  utils::Entity GetEntity() const;
+  inline utils::Entity GetEntity() const { return node_.GetEntity(); }
 
   // Returns the index of this NodeController in the list of NodeControllers
   // stored by the View.

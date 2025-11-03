@@ -37,7 +37,7 @@ class SelectionControllerImpl : public SelectionController, public System {
   explicit SelectionControllerImpl(BaseView* view);
 
   // Returns the currently selected nodes.
-  const absl::flat_hash_set<NodeHandle>& GetSelectedNodes() const override;
+  const absl::flat_hash_set<NodeHandle>& GetSelectedNodes() override;
 
   // Notifies that a node has been selected by sending a
   // NodeSelectionChangedEvent with the provided node as the target.

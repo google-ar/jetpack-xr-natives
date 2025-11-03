@@ -168,7 +168,7 @@ class CustomMaterial : public Material {
   //
   // This is only used for debugging purposes to detect if the filament
   // texture is destroyed while it is in use.
-  StringMap<const filament::Texture*> parameters_to_raw_textures_;
+  StringMap<const Texture*> parameters_to_raw_textures_;
 
   friend class MaterialFactory;
   friend class GenericMaterialImpl;

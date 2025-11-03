@@ -19,7 +19,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <optional>
 #include <type_traits>
 #include <utility>
@@ -32,7 +31,6 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
-#include "filament/filament/include/filament/MaterialInstance.h"
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "core/animation/gltf_animation.h"
 #include "core/assets/asset_ptr.h"
@@ -41,7 +39,6 @@
 #include "core/common/invocable.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/paired_vector.h"
-#include "core/common/platform_helpers.h"
 #include "core/common/robin_map.h"
 #include "core/common/typed_id.h"
 #include "core/geometry/shapes/box.h"
@@ -51,6 +48,7 @@
 #include "core/materials/material.h"
 #include "core/math/math.h"
 #include "core/model/model_data.h"
+#include "core/model/shared_data.h"
 #include "core/model/skeleton_data.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_handle.h"
@@ -64,14 +62,13 @@
 #include "core/view/framework/assets/gltf_state.proto.imp.h"
 #include "core/view/framework/assets/gltf_traits.h"
 #include "core/view/framework/lighting/light_component.h"
-#include "core/view/framework/render/material.h"
 #include "core/view/utils/asset.h"
 #include "core/view/utils/frame_time.h"
 #include "robin_map/include/tsl/robin_map.h"
 
 namespace imp {
 
-// Forward declare friend type
+// Forward declare un-included types
 class GltfMesh;
 
 // Renders & manages the contents of a GltfAsset.
@@ -198,6 +195,11 @@ class GltfRenderer : public Component {
   // Called when the component is deactivated or activated. This turns off or on
   // the render by setting the layer mask of every entity in the model.
   void OnActiveStatusChanged(bool is_active);
+
+  // Returns the cached EntityId from the glTF Model for a given Impress Scene
+  // Node
+  std::optional<model::EntityId> GetEntityIdFromNodeHandle(
+      NodeHandle node) const;
 
   AssetPtr<GltfAsset> GetGltfAsset() const;
 
@@ -328,6 +330,11 @@ class GltfRenderer : public Component {
   }
   Future<absl::Status> GetExtensionFuture() { return extension_setup_future_; }
 
+  const RobinSet<NodeHandle>* GetNodesFromOriginalMeshIndex(
+      int16_t original_mesh_index) const;
+
+  int GetMeshCount() const { return mesh_index_to_nodes_.size(); };
+
  private:
   using Bone = model::BoneData;
   using BoneId = model::BoneId;
@@ -357,6 +364,10 @@ class GltfRenderer : public Component {
   };
   RobinMap<LightPunctualId, ComponentHandle<LightComponent>>
       light_punctual_lookup_;
+
+  // Maps the original mesh index from the glTF file to the set of Impress nodes
+  // that hold that mesh.
+  RobinMap<int16_t, RobinSet<NodeHandle>> mesh_index_to_nodes_;
 
   void InitializeSkinning();
   void UpdateSkinning();
@@ -473,6 +484,9 @@ class GltfRenderer : public Component {
   // The load options used to load this asset. It won't make sense to modify
   // this after Setup.
   GltfAsset::LoadOptions load_options_;
+
+  // Map of Impress Scene Nodes to EntityIds
+  RobinMap<NodeHandle, model::EntityId> node_to_entity_id_map_;
 
   friend class GltfMesh;
 

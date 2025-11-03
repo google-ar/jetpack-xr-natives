@@ -553,6 +553,11 @@ uint64_t GltfMesh::GetOriginalGltfIndex() const {
   return model_data.Entities()[self_].original_index;
 }
 
+int16_t GltfMesh::GetOriginalGltfMeshIndex() const {
+  const ModelData& model_data = owner_->GetGltfAsset()->GetModelData();
+  return model_data.Entities()[self_].original_mesh_index;
+}
+
 const std::vector<mat4f>& GltfMesh::GetInstanceTransforms() const {
   return instance_transforms_;
 }

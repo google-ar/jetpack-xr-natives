@@ -24,12 +24,9 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/variant.h"
 #include "core/assets/asset_ptr.h"
-#include "core/common/robin_map.h"
 #include "core/geometry/shapes/box.h"
 #include "core/math/mat.h"
 #include "core/math/transform.h"
-#include "core/model/entity_data.h"
-#include "core/model/shared_data.h"
 #include "core/model/skeleton_data.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/node_handle.h"
@@ -164,14 +161,6 @@ class GltfScene : public Component {
   template <typename Fn>
   void ForAllNodes(const Fn& fn) const;
 
-  // Returns true if there exists any cached EntityData from the glTF Model for
-  // a given Impress Scene Node.
-  bool HasEntityDataForNodeHandle(NodeHandle node) const;
-
-  // Returns the cached EntityData from the glTF Model for a given Impress Scene
-  // Node.
-  model::EntityData::Proxy GetEntityDataFromNodeHandle(NodeHandle node) const;
-
   // Returns the corresponding glTF Scene Node Index for a Bone from the
   // skeleton in the glTF Model at a given BoneId; will return std::nullopt if
   // the BoneId passed into this method does not exist in the glTF Model's
@@ -214,9 +203,6 @@ class GltfScene : public Component {
 
   // Maps from gltf node index to bone id.
   tsl::robin_map<uint16_t, BoneId> bone_id_lookup_;
-
-  // Maps from node handle to the entity data id.
-  RobinMap<NodeHandle, model::EntityId> node_to_entitiy_id_map_;
 
   friend class GltfRenderer;
 };

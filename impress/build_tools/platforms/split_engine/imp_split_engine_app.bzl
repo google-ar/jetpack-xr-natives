@@ -65,7 +65,7 @@ def imp_split_engine_app(
     if not activity_name:
         activity_name = snakeCaseToCamelCase(name) + "SplitEngineActivity"
 
-    manifest = Label("//java/com/google/ar/imp/app/splitengine:AndroidManifest.xml")
+    manifest = Label("@com_google_impress//java/com/google/ar/imp/app/splitengine:AndroidManifest.xml")
     if override_manifest:
         manifest = override_manifest
 
@@ -74,7 +74,7 @@ def imp_split_engine_app(
         platform_name = "split_engine",
         jni_library = jni_library,
         manifest = manifest,
-        base_generated_activity = Label("//java/com/google/ar/imp/app:basic_imp_split_engine_activity"),
+        base_generated_activity = Label("@com_google_impress//java/com/google/ar/imp/app:basic_imp_split_engine_activity"),
         activity_name = activity_name,
         override_activity = override_activity,
         package = package,

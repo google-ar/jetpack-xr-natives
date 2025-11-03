@@ -25,9 +25,10 @@
 namespace imp::editor {
 namespace {
 // TODO: change the text to "Restore Default Layout" after
-// renaming the function RestoreDefaultVisibility to RestoreDefaultLayout.
-constexpr absl::string_view kRestoreDefaultVisibilityText =
-    "Restore Default Visibility";
+// renaming the function RestoreDefault to RestoreDefaultLayout.
+constexpr absl::string_view kRestoreDefaultText = "Restore Default Visibility";
+constexpr absl::string_view kHideAllText = "Hide All";
+constexpr absl::string_view kShowAllText = "Show All";
 }  // namespace
 
 WindowWidget::WindowWidget(BaseView& view)
@@ -51,21 +52,23 @@ void WindowWidget::DrawImGui() {
   }
 
   ImGui::Separator();
-  if (!are_all_windows_using_initial_visibility) {
-    bool restore_default_visibility = false;
-    if (ImGui::MenuItem(std::string(kRestoreDefaultVisibilityText).c_str(),
-                        nullptr, &restore_default_visibility)) {
-      window_configuration_.RestoreDefaultVisibility();
-    }
-  } else {
-    ImGui::BeginDisabled();
-    ImGui::MenuItem(kRestoreDefaultVisibilityText.data(), nullptr);
-    ImGui::EndDisabled();
+  bool restore_default_visibility = false;
+  if (ImGui::MenuItem(std::string(kRestoreDefaultText).c_str(), nullptr,
+                      &restore_default_visibility)) {
+    window_configuration_.RestoreDefault();
   }
+
+  if (!hide_all_) {
+    bool shown = true;
+    ImGui::MenuItem(std::string(kHideAllText).c_str(), nullptr, &shown);
+    hide_all_ = !shown;
+  } else {
+    bool hidden = true;
+    ImGui::MenuItem(std::string(kShowAllText).c_str(), nullptr, &hidden);
+    hide_all_ = hidden;
+  }
+  window_configuration_.SetHideAllWindows(hide_all_);
 }
 
-void WindowWidget::RestoreDefaultVisibility() {
-  // TODO: restore window position as well.
-  window_configuration_.RestoreDefaultVisibility();
-}
+void WindowWidget::RestoreDefault() { window_configuration_.RestoreDefault(); }
 }  // namespace imp::editor

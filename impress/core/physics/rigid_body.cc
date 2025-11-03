@@ -145,6 +145,7 @@ absl::Status RigidBody::InitializeSimulated(const btTransform& bt_transform) {
   rb_info.m_angularDamping = state_.angular_damping;
 
   rigid_body_ = std::make_unique<btRigidBody>(rb_info);
+  is_bt_rigid_body_recreated_ = true;
   SetFrictionInternal(state_.friction);
   SetRestitution(state_.restitution);
 
@@ -387,6 +388,8 @@ void RigidBody::CleanupInternal() {
 }
 
 void RigidBody::Update(const FrameTime& frame_time) {
+  is_bt_rigid_body_recreated_ = false;
+
   if (!collidable_.IsMovable()) {
     if (!AlmostEqual(GetNode()->GetWorldTrs(), transform_prev_)) {
       GetNode()->SetWorldTrs(transform_prev_);

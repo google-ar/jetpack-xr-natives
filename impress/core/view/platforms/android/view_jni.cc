@@ -410,6 +410,12 @@ JNI_METHOD(jboolean, nShouldUseStencilSwapChain)
   return view_host->GetState()->ShouldUseStencilSwapChain();
 }
 
+JNI_METHOD(jboolean, nShouldUseMsaaSwapChain)
+(JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
+  auto* view_host = FromJava<ViewHost>(view_host_handle);
+  return view_host->GetState()->ShouldUseMsaaSwapChain();
+}
+
 // TODO: it would probably take more refactoring but it would be
 // nice if SetScriptEndpoint could take a ScriptEndpoint interface or
 // something, and the JniWrapper for the jobject is an implementation of the

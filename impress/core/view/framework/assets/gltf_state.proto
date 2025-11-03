@@ -16,11 +16,15 @@ syntax = "proto3";
 
 package imp;
 
+import "core/proto/imp.proto";
+
 // option cc_api_version = 2;
 option java_multiple_files = true;
 option java_package = "com.google.ar.imp.proto";
 
 // Serialized data for GltfRenderer
+// It is possible to override the default load options for GltfAsset with
+// AssetManager::SetDefaultLoadOptions(...).
 message GltfState {
   // Determines which (if any) collider components will be automatically added
   // to the nodes in the glTF scene.
@@ -88,7 +92,7 @@ message GltfState {
   // will be created as a child of the node containing the GltfState.
   // For google3 assets, the path should start from the root of google3, i.e.
   // third_party/arcore/googledata/sceneform/assets/gltf_2p0_sample_assets/DamagedHelmet/glTF-Binary/DamagedHelmet.glb
-  string asset = 1;
+  string asset = 1 [(imp.editor_control) = { read_only: {} }];
 
   // Determines which (if any) collider components will be automatically added
   // to the nodes in the glTF scene.
@@ -96,14 +100,16 @@ message GltfState {
   // If unassigned, then the collider_mode specified by
   // AssetManager::GetDefaultLoadOptions is used. By default, this will be
   // GLTF_COLLIDER_BOUNDS_PER_MESH_DEFAULT.
-  optional ColliderMode collider_mode = 2;
+  optional ColliderMode collider_mode = 2
+      [(imp.editor_control) = { read_only: {} }];
 
   // Contents of a .glb file to load. An id must be passed to the asset field.
-  optional string contents = 3;
+  optional string contents = 3 [(imp.editor_control) = { read_only: {} }];
 
   // When the asset has material variants, specify used material.
   // An number id must be passed to this field.
-  optional int32 material_variant = 4;
+  optional int32 material_variant = 4
+      [(imp.editor_control) = { read_only: {} }];
 
   // Determines whether GltfRenderer will use the shared material instance
   // directly or duplicate it and use the duplicated instance.
@@ -111,5 +117,6 @@ message GltfState {
   // If unassigned, then the material_sharing_mode specified by
   // AssetManager::GetDefaultLoadOptions is used. By default, this will be
   // DUPLICATED_DEFAULT.
-  optional MaterialSharingMode material_sharing_mode = 5;
+  optional MaterialSharingMode material_sharing_mode = 5
+      [(imp.editor_control) = { read_only: {} }];
 }

@@ -91,7 +91,7 @@ class EditorFieldControl {
 
   template <typename ControlT, typename FieldT>
   static absl::StatusOr<bool> ShowControl(
-      const std::string& name, ControlT& control, FieldT* val, FieldT* base,
+      absl::string_view name, ControlT& control, FieldT* val, FieldT* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
     return absl::FailedPreconditionError(absl::StrFormat(
@@ -241,7 +241,7 @@ class EditorFieldControl {
 
   template <typename ScalarT>
   static bool ShowDefaultControlForScalar(
-      ImGuiDataType data_type, const std::string& name, ScalarT* val,
+      ImGuiDataType data_type, absl::string_view name, ScalarT* val,
       ScalarT* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
@@ -257,7 +257,7 @@ class EditorFieldControl {
       if (CheckBit(editor_control_flags,
                    editor::EditorControlFlags::kDisplayLabel)) {
         std::string format = absl::StrCat(type_specifier, ": %s");
-        ImGui::Text(format.c_str(), *val, name.c_str());
+        ImGui::Text(format.c_str(), *val, std::string(name).c_str());
       } else {
         ImGui::Text(type_specifier.c_str(), *val);
       }
@@ -282,7 +282,7 @@ class EditorFieldControl {
   // Default control for math vector fields like float2, float3, float4.
   template <typename VecT>
   static bool ShowDefaultVectorControl(
-      const std::string& name, VecT* val, VecT* base,
+      absl::string_view name, VecT* val, VecT* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
     if (!CheckBit(editor_control_flags,
@@ -337,7 +337,7 @@ class EditorFieldControl {
     if (should_display_label) {
       std::string label =
           editor::GenerateUniqueImGuiLabel(name, val, editor_control_flags);
-      ImGui::Text("%s", name.c_str());
+      ImGui::Text("%s", std::string(name).c_str());
     }
 
     ImGui::PopID();
@@ -347,7 +347,7 @@ class EditorFieldControl {
 
   template <typename FieldT>
   static absl::StatusOr<bool> ShowControl(
-      const std::string& name, EditorControlDisabled& control, FieldT* val,
+      absl::string_view name, EditorControlDisabled& control, FieldT* val,
       FieldT* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
@@ -356,7 +356,7 @@ class EditorFieldControl {
 
   // Full specialization for float slider.
   static absl::StatusOr<bool> ShowControl(
-      const std::string& name, EditorControlSliderFloat& control, float* val,
+      absl::string_view name, EditorControlSliderFloat& control, float* val,
       float* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
@@ -364,7 +364,7 @@ class EditorFieldControl {
                   editor::EditorControlFlags::kIsEditable)) {
       if (CheckBit(editor_control_flags,
                    editor::EditorControlFlags::kDisplayLabel)) {
-        ImGui::Text("%lf: %s", *val, name.c_str());
+        ImGui::Text("%lf: %s", *val, std::string(name).c_str());
       } else {
         ImGui::Text("%lf", *val);
       }
@@ -389,7 +389,7 @@ class EditorFieldControl {
 
   // Full specialization for int slider.
   static absl::StatusOr<bool> ShowControl(
-      const std::string& name, EditorControlSliderInt& control, int32_t* val,
+      absl::string_view name, EditorControlSliderInt& control, int32_t* val,
       int32_t* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
@@ -397,7 +397,7 @@ class EditorFieldControl {
                   editor::EditorControlFlags::kIsEditable)) {
       if (CheckBit(editor_control_flags,
                    editor::EditorControlFlags::kDisplayLabel)) {
-        ImGui::Text("%d: %s", *val, name.c_str());
+        ImGui::Text("%d: %s", *val, std::string(name).c_str());
       } else {
         ImGui::Text("%d", *val);
       }
@@ -419,7 +419,7 @@ class EditorFieldControl {
 
   // Full specialization for float3 colors.
   static absl::StatusOr<bool> ShowControl(
-      const std::string& name, EditorControlColor3& control, float3* val,
+      absl::string_view name, EditorControlColor3& control, float3* val,
       float3* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
@@ -428,7 +428,7 @@ class EditorFieldControl {
       if (CheckBit(editor_control_flags,
                    editor::EditorControlFlags::kDisplayLabel)) {
         ImGui::Text("(%lf, %lf, %lf): %s", val->r, val->g, val->b,
-                    name.c_str());
+                    std::string(name).c_str());
       } else {
         ImGui::Text("(%lf, %lf, %lf)", val->r, val->g, val->b);
       }
@@ -459,7 +459,7 @@ class EditorFieldControl {
 
   // Full specialization for float4 colors.
   static absl::StatusOr<bool> ShowControl(
-      const std::string& name, EditorControlColor4& control, float4* val,
+      absl::string_view name, EditorControlColor4& control, float4* val,
       float4* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
@@ -468,7 +468,7 @@ class EditorFieldControl {
       if (CheckBit(editor_control_flags,
                    editor::EditorControlFlags::kDisplayLabel)) {
         ImGui::Text("(%lf, %lf, %lf, %lf): %s", val->r, val->g, val->b, val->a,
-                    name.c_str());
+                    std::string(name).c_str());
       } else {
         ImGui::Text("(%lf, %lf, %lf, %lf)", val->r, val->g, val->b, val->a);
       }
@@ -502,7 +502,7 @@ class EditorFieldControl {
 
   // Specialization for string fields that accept material assets.
   static absl::StatusOr<bool> ShowControl(
-      const std::string& name, EditorControlMaterial& control, std::string* val,
+      absl::string_view name, EditorControlMaterial& control, std::string* val,
       std::string* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
@@ -521,7 +521,7 @@ class EditorFieldControl {
 
   // Specialization for string fields that accept scene assets.
   static absl::StatusOr<bool> ShowControl(
-      const std::string& name, EditorControlScene& control, std::string* val,
+      absl::string_view name, EditorControlScene& control, std::string* val,
       std::string* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
@@ -540,7 +540,7 @@ class EditorFieldControl {
 
   // Specialization for string fields that accept texture assets.
   static absl::StatusOr<bool> ShowControl(
-      const std::string& name, EditorControlTexture& control, std::string* val,
+      absl::string_view name, EditorControlTexture& control, std::string* val,
       std::string* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
@@ -559,7 +559,7 @@ class EditorFieldControl {
 
   // General handler for unsupported types.
   static bool ShowDefaultControl(
-      const std::string& name, void* val, void* base,
+      absl::string_view name, void* val, void* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
     return false;
@@ -567,7 +567,7 @@ class EditorFieldControl {
 
   // Default control for float2 fields.
   static bool ShowDefaultControl(
-      const std::string& name, float2* val, float2* base,
+      absl::string_view name, float2* val, float2* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
     return ShowDefaultVectorControl(name, val, base, editor_control_flags);
@@ -575,7 +575,7 @@ class EditorFieldControl {
 
   // Default control for float3 fields.
   static bool ShowDefaultControl(
-      const std::string& name, float3* val, float3* base,
+      absl::string_view name, float3* val, float3* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
     return ShowDefaultVectorControl(name, val, base, editor_control_flags);
@@ -583,7 +583,7 @@ class EditorFieldControl {
 
   // Default control for float4 fields.
   static bool ShowDefaultControl(
-      const std::string& name, float4* val, float4* base,
+      absl::string_view name, float4* val, float4* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
     return ShowDefaultVectorControl(name, val, base, editor_control_flags);
@@ -591,10 +591,10 @@ class EditorFieldControl {
 
   // Default control for box fields.
   static bool ShowDefaultControl(
-      const std::string& name, Box* val, Box* base,
+      absl::string_view name, Box* val, Box* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
-    ImGui::Text("%s", name.c_str());
+    ImGui::Text("%s", std::string(name).c_str());
     ImGui::Indent();
 
     bool result = ShowDefaultControl("center", &val->center,
@@ -611,7 +611,7 @@ class EditorFieldControl {
 
   // Default control for uint32 fields.
   static bool ShowDefaultControl(
-      const std::string& name, uint32_t* val, uint32_t* base,
+      absl::string_view name, uint32_t* val, uint32_t* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
     return ShowDefaultControlForScalar(ImGuiDataType_U32, name, val, base,
@@ -620,7 +620,7 @@ class EditorFieldControl {
 
   // Default control for int32 fields.
   static bool ShowDefaultControl(
-      const std::string& name, int32_t* val, int32_t* base,
+      absl::string_view name, int32_t* val, int32_t* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
     return ShowDefaultControlForScalar(ImGuiDataType_S32, name, val, base,
@@ -629,7 +629,7 @@ class EditorFieldControl {
 
   // Default control for float fields.
   static bool ShowDefaultControl(
-      const std::string& name, float* val, float* base,
+      absl::string_view name, float* val, float* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
     return ShowDefaultControlForScalar(ImGuiDataType_Float, name, val, base,
@@ -638,7 +638,7 @@ class EditorFieldControl {
 
   // Default control for double fields.
   static bool ShowDefaultControl(
-      const std::string& name, double* val, double* base,
+      absl::string_view name, double* val, double* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
     return ShowDefaultControlForScalar(ImGuiDataType_Double, name, val, base,
@@ -647,14 +647,14 @@ class EditorFieldControl {
 
   // Default control for string fields.
   static bool ShowDefaultControl(
-      const std::string& name, std::string* val, std::string* base,
+      absl::string_view name, std::string* val, std::string* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
     if (!CheckBit(editor_control_flags,
                   editor::EditorControlFlags::kIsEditable)) {
       if (CheckBit(editor_control_flags,
                    editor::EditorControlFlags::kDisplayLabel)) {
-        ImGui::Text("%s: %s", val->c_str(), name.c_str());
+        ImGui::Text("%s: %s", val->c_str(), std::string(name).c_str());
       } else {
         ImGui::Text("%s", val->c_str());
       }
@@ -675,14 +675,15 @@ class EditorFieldControl {
 
   // Default control for bool fields.
   static bool ShowDefaultControl(
-      const std::string& name, bool* val, bool* base,
+      absl::string_view name, bool* val, bool* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
     if (!CheckBit(editor_control_flags,
                   editor::EditorControlFlags::kIsEditable)) {
       if (CheckBit(editor_control_flags,
                    editor::EditorControlFlags::kDisplayLabel)) {
-        ImGui::Text("%s: %s", *val ? "true" : "false", name.c_str());
+        ImGui::Text("%s: %s", *val ? "true" : "false",
+                    std::string(name).c_str());
       } else {
         ImGui::Text("%s", *val ? "true" : "false");
       }
@@ -702,7 +703,7 @@ class EditorFieldControl {
   }
 
   template <typename E>
-  static bool ShowEnumControl(const std::string& name, E* val, E* base,
+  static bool ShowEnumControl(absl::string_view name, E* val, E* base,
                               editor::EditorControlFlags editor_control_flags =
                                   editor::EditorControlFlags::kDefault) {
     if (!CheckBit(editor_control_flags,
@@ -711,10 +712,12 @@ class EditorFieldControl {
         if (*val == e) {
           if (CheckBit(editor_control_flags,
                        editor::EditorControlFlags::kDisplayLabel)) {
-            ImGui::Text("%s: %s", proto::EnumMetaData<E>::GetName(e).data(),
-                        name.c_str());
+            ImGui::Text("%s: %s",
+                        std::string(proto::EnumMetaData<E>::GetName(e)).c_str(),
+                        std::string(name).c_str());
           } else {
-            ImGui::Text("%s", proto::EnumMetaData<E>::GetName(e).data());
+            ImGui::Text(
+                "%s", std::string(proto::EnumMetaData<E>::GetName(e)).c_str());
           }
           break;
         }
@@ -730,11 +733,12 @@ class EditorFieldControl {
     if (ImGui::BeginCombo(
             editor::GenerateUniqueImGuiLabel(name, val, editor_control_flags)
                 .c_str(),
-            proto::EnumMetaData<E>::GetName(*val).data())) {
+            std::string(proto::EnumMetaData<E>::GetName(*val)).c_str())) {
       for (E e : proto::EnumMetaData<E>::kValues) {
         const bool is_selected = (*val == e);
-        if (ImGui::Selectable(proto::EnumMetaData<E>::GetName(e).data(),
-                              is_selected) &&
+        if (ImGui::Selectable(
+                std::string(proto::EnumMetaData<E>::GetName(e)).c_str(),
+                is_selected) &&
             *val != e) {
           *val = e;
           updated = true;
@@ -752,7 +756,7 @@ class EditorFieldControl {
   }
 
   static bool ShowDefaultControl(
-      const std::string& name, SceneHandleInterface* val,
+      absl::string_view name, SceneHandleInterface* val,
       SceneHandleInterface* base,
       editor::EditorControlFlags editor_control_flags =
           editor::EditorControlFlags::kDefault) {
@@ -838,7 +842,7 @@ class EditorFieldControl {
 
     ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x + padding.x);
 
-    ImGui::Text("%s", name.c_str());
+    ImGui::Text("%s", std::string(name).c_str());
 
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padding.y);
 

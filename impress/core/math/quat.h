@@ -39,23 +39,32 @@ constexpr quatf kIdentityQuatf(1.f, 0.f, 0.f, 0.f);
 template <typename T>
 using TQuaternion = ::filament::math::details::TQuaternion<T>;
 
-// Helper to convert from euler angles to a quaternion.  This uses (x,y,z) as
-// (pitch, yaw, roll), and uses a YXZ rotation order.  YXZ can be thought of as
-// Turn to face the target(y), then look up or down(x), then tilt your head(z).
-// The euler angles are passed in degrees.
+// Converts from euler angles to a quaternion. Uses (x,y,z) as (pitch, yaw,
+// roll), and uses a YXZ rotation order. YXZ can be thought of as Turn to face
+// the target(y), then look up or down(x), then tilt your head(z). The euler
+// angles are passed in degrees.
 quatf QuatFromEuler(const float3& eulers);
 
-// Helper to convert from a quaternion to euler angles. This uses (x,y,z) as
-// (pitch, yaw, roll).
-// The angles are returned in degrees.
+// Converts from a quaternion to euler angles. Uses (x,y,z) as (pitch, yaw,
+// roll). The deconstruction is done using the XZY rotation order, which is NOT
+// the same as the order used by QuatFromEuler. For YXZ (Pitch, then Yaw, then
+// Roll) rotation order, use EulerFromQuatYXZ instead. The angles are returned
+// in degrees.
 //
-// Please note that this method doesn't guarantee non-negative euler angles. Use
-// `EulerFromQuatClamped` if you need non-negative euler angles.
+// Please note that the resulting euler angles are not guaranteed to be
+// positive. Use `EulerFromQuatClamped` if you need non-negative euler angles.
 float3 EulerFromQuat(const quatf& q);
 
-// Helper to convert from a quaternion to euler angles with degrees between 0
-// and 360. This uses (x,y,z) as (pitch, yaw, roll).
-// The angles are returned in degrees.
+// Converts from a quaternion to euler angles. Uses (x,y,z) as (pitch, yaw,
+// roll). The deconstruction is done using the YXZ rotation order, which is the
+// same as the order used by QuatFromEuler. The angles are returned in degrees.
+//
+// Please note that the resulting euler angles are not guaranteed to be
+// positive.
+float3 EulerFromQuatYXZ(const quatf& q);
+
+// Converts from a quaternion to euler angles with degrees between 0 and 360.
+// Uses (x,y,z) as (pitch, yaw, roll). The angles are returned in degrees.
 float3 EulerFromQuatClamped(const quatf& quat);
 
 bool IsYUp(quatf v);

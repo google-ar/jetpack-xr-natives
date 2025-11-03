@@ -1,0 +1,102 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import "core/math/math.proto";
+import "core/proto/imp.proto";
+import "core/scene_handles/scene_handles.proto";
+
+message ConeTwistConstraintState {
+  // The node that holds a rigid body A that is subject to this constraint.
+  NodeSceneHandle connected_node = 1;
+
+  // The pivot of the constraint frame in the connected node(that holds rigid
+  // body A)'s local space.
+  Float3 connected_pivot = 2;
+
+  // The axis of the constraint frame in the connected node(that holds rigid
+  // body A)'s local space.
+  Float3 connected_axis = 3;
+
+  // The up axis of the constraint frame in the connected node(that holds rigid
+  // body A)'s local space. Together withe the axis, it defines the constraint
+  // rotation.
+  Float3 connected_up_axis = 4;
+
+  // Only used when the constraint is between two rigid bodies. Indicates the
+  // pivot/offset of the constraint frame from rigid body (B). Note that rigid
+  // body (B) is attached the same node that owns the constraint.
+  Float3 pivot = 5 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // The rotation for the constraint frame from rigid body (B).
+  Float3 axis = 6 [(imp.optional_type) = ABSL_OPTIONAL];
+  Float3 up_axis = 7 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // if it will calculate the connected pivot and axis based on the transforms
+  // of the two rigid bodies. If there is only one rigid body (the connected
+  // node), the pivot and axiswill be interpreted as the world transform of the
+  // constraint.
+  bool auto_configure = 8;
+
+  // Limits the maximum angle (in degrees, values from 0 to 360) the body can
+  // swing around the first swing axis Typically, it is the Y-axis.
+  float swing_span_one = 9;
+
+  // Limits the maximum angle (in degrees, values from 0 to 360) the body can
+  // swing around the second swing axis Typically, it is the Z-axis.
+  float swing_span_two = 10;
+
+  // how much (in degrees, values from 0 to 360) the connected body is allowed
+  // to twist around the main axis of the constraint Typically, it is the X-axis
+  // in local coordinates.
+  float twist_span = 11;
+
+  // How aggressively the joint resists movement as it nears the swing/twist
+  // limits
+  // Values are from 0 to 1, recommended values are 0.8 to 1.
+  // 0 means completely hard (corrects very aggressively when hitting the
+  // limits, more jittery), 1 means completely soft (corrects very slowly to the
+  // limits)
+  float softness = 12;
+
+  // How quickly the constraint tries to correct positional errors
+  // (i.e., how fast it wants to return to a valid position if the constraint is
+  // violated).
+  // Values are from 0 to 1, with recommended values being around 0.3
+  // 0 means no correction, 1 means hard correction (but jittery)
+  float bias_factor = 13;
+
+  // How much the system relaxes or damps oscillations around the constraint
+  // limits
+  // Values must be greater than 0 and less or equal to 1.
+  // 0 means no damping (very loose), 1 means full damping (correction is
+  // smooth)
+  float relaxation_factor = 14;
+
+  // Whether the motor is enabled.
+  bool motor_enabled = 15;
+
+  // Maximum motor torque impulse (torque x timestep)
+  float max_motor_impulse = 16;
+
+  // The target orientation of the motor.
+  Quatf motor_target = 17;
+
+  // If the constraint is ready (is it functioning, ie it is connected to valid
+  // rigid bodies)
+  bool is_ready = 18 [(imp.editor_control) = { read_only: {} }];
+}

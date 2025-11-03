@@ -436,7 +436,7 @@ absl::StatusOr<LoadedModelBuilder::EntityId> LoadedModelBuilder::AddEntity(
     AudioEmitterId audio_emitter, std::vector<PartData> parts,
     std::optional<filament::Box> bounds, std::optional<RuntimeData> runtime,
     int child_count, absl::string_view name, uint16_t original_index,
-    std::optional<NodeVisibility> node_visibility,
+    int original_mesh_index, std::optional<NodeVisibility> node_visibility,
     std::optional<NodeSelectability> node_selectability,
     std::optional<NodeHoverability> node_hoverability) {
   if (entities_.size() >= entities_.capacity()) {
@@ -454,8 +454,8 @@ absl::StatusOr<LoadedModelBuilder::EntityId> LoadedModelBuilder::AddEntity(
       std::move(morph_target_buffer), std::move(morph_target_weights),
       std::move(light_punctual), audio_emitter, std::move(bounds),
       std::move(runtime), std::string(name), std::move(original_index),
-      std::move(node_visibility), std::move(node_selectability),
-      std::move(node_hoverability));
+      std::move(original_mesh_index), std::move(node_visibility),
+      std::move(node_selectability), std::move(node_hoverability));
 }
 
 absl::Status LoadedModelBuilder::FinishEntities() {
@@ -856,6 +856,7 @@ absl::StatusOr<Offset<schemas::LoadedModel>> LoadedModelBuilder::Serialize() {
             CreateRuntimeInfo(fbb, entity.get<EntityData::Fields::kRuntime>()),
             entity.get<EntityData::Fields::kNumChildren>(),
             uint16_t{entity.get<EntityData::Fields::kOriginalIndex>()},
+            int16_t{entity.get<EntityData::Fields::kOriginalMeshIndex>()},
             CreateNodeVisibility(
                 fbb, entity.get<EntityData::Fields::kNodeVisibility>()),
             CreateNodeSelectability(

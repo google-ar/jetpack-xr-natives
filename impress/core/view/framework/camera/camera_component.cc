@@ -152,10 +152,6 @@ void CameraComponent::Setup() {
         const float2 screen_size = this->GetView().GetSize();
         const float aspect_ratio_new = screen_size.x / screen_size.y;
 
-        const float aspect_ratio_current = this->CalculateAspectRatioFromMatrix(
-            this->GetProjectionMatrixPrecise());
-        if (imp::AlmostEqual(aspect_ratio_new, aspect_ratio_current)) return;
-
         this->UpdateProjection(aspect_ratio_new);
       },
       this);

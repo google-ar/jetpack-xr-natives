@@ -94,7 +94,7 @@ def process_material(name, template_file, incs = [], output = None, replacements
         }),
     )
 
-DEFAULT_OPTIMIZATION_FLAG = "--optimize-size"
+DEFAULT_OPTIMIZATION_FLAG = "-O"
 
 def _optimization_flag_for_optimization(optimization):
     if optimization == "performance":
@@ -285,7 +285,7 @@ def process_and_build_material(
         name = "vulkan_cmat_%s" % name,
         material_source = ":%s" % process_target,
         compiled_material = "vulkan/%s.cmat" % name,
-        api = "all",
+        api = "vulkan",
         variant_filter = variant_filter,
         defines = defines,
         optimization = optimization,

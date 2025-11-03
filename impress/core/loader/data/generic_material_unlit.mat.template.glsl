@@ -96,6 +96,10 @@ fragment {
     prepareMaterial(material);
 
     // Base Color
+    // TODO: Filament doesn't crash when required attributes are
+    // missing: See RenderableManager::Builder::build
+    // This means that if the vertex doesn't have any color set, it will
+    // output all 0. (or some garbage value)
     material.baseColor = getColor();
     material.baseColor *= materialParams.baseColorFactor;
     material.baseColor *= getSample(materialParams.baseColorIndex);

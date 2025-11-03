@@ -246,21 +246,21 @@ int GetFieldIndex(int field_id) {
 }
 
 template <typename T>
-std::string GetFieldJsonName(int field_id) {
+absl::string_view GetFieldJsonName(int field_id) {
   using Fields = FieldsT<T>;
   int field_index = GetFieldIndex<T>(field_id);
   if (field_index >= 0) {
-    return std::string(Fields::kFieldJsonNames[field_index]);
+    return Fields::kFieldJsonNames[field_index];
   }
   return "";
 }
 
 template <typename T>
-std::string GetFieldName(int field_id) {
+absl::string_view GetFieldName(int field_id) {
   using Fields = FieldsT<T>;
   int field_index = GetFieldIndex<T>(field_id);
   if (field_index >= 0) {
-    return std::string(Fields::kFieldNames[field_index]);
+    return Fields::kFieldNames[field_index];
   }
   return "";
 }

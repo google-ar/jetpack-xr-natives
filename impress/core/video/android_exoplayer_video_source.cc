@@ -97,7 +97,7 @@ void AndroidExoPlayerVideoSource::UpdateVideoTexture(
     filament::Texture* texture, absl::Duration frame_delta) {}
 
 uint2 AndroidExoPlayerVideoSource::GetVideoSize() const {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   absl::StatusOr<int> width = exoplayer_->GetVideoWidth();
   absl::StatusOr<int> height = exoplayer_->GetVideoHeight();
   if (!width.ok() || !height.ok()) {
@@ -108,7 +108,7 @@ uint2 AndroidExoPlayerVideoSource::GetVideoSize() const {
 }
 
 MediaColorSpace AndroidExoPlayerVideoSource::GetColorSpace() const {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   absl::StatusOr<MediaColorSpace> color_space = exoplayer_->GetColorSpace();
   if (!color_space.ok()) {
     IMP_LOG(imp::ERROR) << "Unable to get color space.";
@@ -118,7 +118,7 @@ MediaColorSpace AndroidExoPlayerVideoSource::GetColorSpace() const {
 }
 
 MediaStereoMode AndroidExoPlayerVideoSource::GetStereoMode() const {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   absl::StatusOr<MediaStereoMode> stereo_mode = exoplayer_->GetStereoMode();
   if (!stereo_mode.ok()) {
     IMP_LOG(imp::ERROR) << "Unable to get stereo mode.";
@@ -128,13 +128,13 @@ MediaStereoMode AndroidExoPlayerVideoSource::GetStereoMode() const {
 }
 
 void AndroidExoPlayerVideoSource::SetUpExoPlayer() {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   exoplayer_->SetListener(exoplayer_listener_.get());
   exoplayer_->SetVideoSurface(surface_->GetSurface());
 }
 
 absl::Status AndroidExoPlayerVideoSource::Play() {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   bool result = exoplayer_->Play();
   if (!result) {
     // TODO: Retrieve Java error and pipe it here
@@ -145,7 +145,7 @@ absl::Status AndroidExoPlayerVideoSource::Play() {
 }
 
 absl::Status AndroidExoPlayerVideoSource::Pause() {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   bool result = exoplayer_->Pause();
   if (!result) {
     // TODO: Retrieve Java error and pipe it here
@@ -156,7 +156,7 @@ absl::Status AndroidExoPlayerVideoSource::Pause() {
 }
 
 absl::Status AndroidExoPlayerVideoSource::Stop() {
-  absl::ReleasableMutexLock lock(&mu_);
+  absl::ReleasableMutexLock lock(mu_);
   bool result = exoplayer_->Stop();
   if (!result) {
     // TODO: Retrieve Java error and pipe it here
@@ -170,7 +170,7 @@ absl::Status AndroidExoPlayerVideoSource::Stop() {
 }
 
 absl::Status AndroidExoPlayerVideoSource::SetPlaybackSpeed(float speed) {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   bool result = exoplayer_->SetPlaybackSpeed(speed);
   if (!result) {
     // TODO: Retrieve Java error and pipe it here
@@ -182,7 +182,7 @@ absl::Status AndroidExoPlayerVideoSource::SetPlaybackSpeed(float speed) {
 
 absl::Status AndroidExoPlayerVideoSource::SeekTo(
     float seconds, MediaSource::SeekType seek_type) {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   bool result = exoplayer_->SeekTo(seconds * 1000, seek_type);
   if (!result) {
     // TODO: Retrieve Java error and pipe it here
@@ -197,7 +197,7 @@ absl::Status AndroidExoPlayerVideoSource::SetLoopCount(int loop) {
         "ExoPlayer only supports infinite looping or one-time playback");
   }
 
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   // TODO: Retrieve Java error and pipe it here
   bool result = exoplayer_->SetLooping(loop < 0);
   if (!result) {
@@ -207,7 +207,7 @@ absl::Status AndroidExoPlayerVideoSource::SetLoopCount(int loop) {
 }
 
 absl::Status AndroidExoPlayerVideoSource::SetVolume(float volume) {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   bool result = exoplayer_->SetVolume(volume);
   if (!result) {
     // TODO: Retrieve Java error and pipe it here
@@ -218,7 +218,7 @@ absl::Status AndroidExoPlayerVideoSource::SetVolume(float volume) {
 
 absl::StatusOr<absl::Duration> AndroidExoPlayerVideoSource::GetDuration()
     const {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   absl::StatusOr<int> duration_milliseconds = exoplayer_->GetDuration();
   // Returned value is negative if there is an error/exception
   if (!duration_milliseconds.ok()) {
@@ -229,7 +229,7 @@ absl::StatusOr<absl::Duration> AndroidExoPlayerVideoSource::GetDuration()
 
 absl::StatusOr<absl::Duration> AndroidExoPlayerVideoSource::GetPlaybackTime()
     const {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   absl::StatusOr<int> position_milliseconds = exoplayer_->GetCurrentPosition();
   // Returned value is negative if there is an error/exception
   if (!position_milliseconds.ok()) {
@@ -239,7 +239,7 @@ absl::StatusOr<absl::Duration> AndroidExoPlayerVideoSource::GetPlaybackTime()
 }
 
 absl::StatusOr<int> AndroidExoPlayerVideoSource::GetLoopCount() const {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   absl::StatusOr<bool> result = exoplayer_->IsLooping();
   if (!result.ok()) {
     return result.status();
@@ -249,7 +249,7 @@ absl::StatusOr<int> AndroidExoPlayerVideoSource::GetLoopCount() const {
 }
 
 media::MediaSource::State AndroidExoPlayerVideoSource::GetState() const {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   return state_;
 }
 
@@ -270,7 +270,7 @@ void AndroidExoPlayerVideoSource::SetOnBufferingCallback(
 
 void AndroidExoPlayerVideoSource::OnReady() {
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     state_ = MediaSource::State::kReady;
   }
   if (on_ready_callback_) {
@@ -280,7 +280,7 @@ void AndroidExoPlayerVideoSource::OnReady() {
 
 void AndroidExoPlayerVideoSource::OnPlaybackComplete() {
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     state_ = MediaSource::State::kReady;
   }
   if (on_playback_complete_callback_) {
@@ -297,7 +297,7 @@ void AndroidExoPlayerVideoSource::OnSeekComplete() {
 void AndroidExoPlayerVideoSource::OnBuffering(int buffering_state) {
   std::optional<MediaSource::BufferingState> buffering = std::nullopt;
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     if (buffering_state == exoplayer_->BufferingState()) {
       buffering = MediaSource::BufferingState::kBuffering;
     } else if (buffering_state == exoplayer_->BufferingDoneState()) {
@@ -337,7 +337,7 @@ Future<absl::Status> AndroidExoPlayerVideoSource::Load(
   };
 
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     if (!exoplayer_) {
       exoplayer_ =
           std::make_unique<media::AndroidExoPlayer>(view_.GetContext());
@@ -345,7 +345,7 @@ Future<absl::Status> AndroidExoPlayerVideoSource::Load(
   }
 
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     if (drm_license_url.empty() || drm_scheme_uuid.empty()) {
       exoplayer_->SetMediaItem(std::string(url));
     } else {
@@ -367,7 +367,7 @@ Future<absl::Status> AndroidExoPlayerVideoSource::Load(
 }
 
 void AndroidExoPlayerVideoSource::Prepare() {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   exoplayer_->Prepare();
 }
 

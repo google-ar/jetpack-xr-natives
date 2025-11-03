@@ -24,6 +24,7 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "core/common/robin_map.h"
 #include "core/math/vec.h"
 #include "core/media/media_color_space.h"
@@ -42,7 +43,7 @@ class SplitEngineSurfaceFactory {
   // Creates an Android surface, binds an external texture to that surface, and
   // notifies the SplitEngineRenderer of the connection between the given
   // app-side texture_id and the new renderer-side external texture.
-  jobject CreateExternalTextureSurface(
+  absl::StatusOr<jobject> CreateExternalTextureSurface(
       BaseView& view, BridgeId bridge_id,
       const std::vector<TextureId>& in_texture_ids);
   absl::Status SetExternalTextureSurfaceSize(BaseView& view, BridgeId bridge_id,

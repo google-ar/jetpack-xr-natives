@@ -133,6 +133,11 @@ jobject CreateJavaGeospatialPoseResult(
     JNIEnv* env,
     const XrGeospatialPoseResultANDROIDX1& xr_geospatial_pose_result);
 
+// Returns a JVM object of type `androidx.xr.runtime.XrDevice.DisplayBlendMode`
+// from an XrEnvironmentBlendMode.
+jobject CreateJavaDisplayBlendMode(JNIEnv* env,
+                                   const XrEnvironmentBlendMode& xr_blend_mode);
+
 }  // namespace androidx::xr::openxr
 
 #endif  // JETPACK_XR_NATIVES_OPENXR_JOBJECT_CREATOR_H_

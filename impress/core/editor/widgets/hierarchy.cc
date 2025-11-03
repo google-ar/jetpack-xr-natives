@@ -30,6 +30,7 @@
 #include "core/common/robin_set.h"
 #include "core/config.h"
 #include "core/editor/editor.h"
+#include "core/editor/editor_clipboard.h"
 #include "core/editor/editor_touch.h"
 #include "core/editor/events.h"
 #include "core/editor/layout/editor_control_flags.h"
@@ -285,6 +286,40 @@ bool Hierarchy::DrawNode(
 
   bool has_multiple_selection = selected_nodes.size() > 1;
   if (ImGui::BeginPopupContextItem(GetTreeNodeLabelForNode(node).c_str())) {
+    EditorClipboard& editor_clipboard =
+        view_.GetRegistry().GetOrCreate<EditorClipboard>(&view_);
+    if (ImGui::MenuItem("Cut")) {
+      editor.SelectNode(node);
+      editor_clipboard.Cut();
+    }
+    if (ImGui::MenuItem("Copy")) {
+      editor.SelectNode(node);
+      editor_clipboard.Copy();
+    }
+    if (editor_clipboard.HasClipboardNode()) {
+      absl::string_view clipboard_node_name =
+          *editor_clipboard.GetClipboardNodeName();
+      if (clipboard_node_name.empty()) {
+        clipboard_node_name = kUnamedNodeLabel;
+      }
+      if (ImGui::MenuItem(
+              absl::StrFormat("Paste \"%s\"", clipboard_node_name).c_str())) {
+        editor.SelectNode(node);
+        editor_clipboard.Paste();
+      }
+    }
+    if (ImGui::MenuItem("Delete")) {
+      // If the node is selected, delete all selected nodes. Otherwise, delete
+      // the current node.
+      std::vector<NodeHandle> nodes_to_delete =
+          is_node_selected ? std::vector<NodeHandle>(selected_nodes.begin(),
+                                                     selected_nodes.end())
+                           : std::vector<NodeHandle>{node};
+      editor.SelectNode(NodeHandle());
+      for (auto& selected_node : nodes_to_delete) {
+        view_.DestroyNode(selected_node);
+      }
+    }
     if (!has_multiple_selection && ImGui::MenuItem("Add parent node")) {
       NodeHandle parent = view_.CreateNode();
       EditorTouch(parent);
@@ -298,23 +333,8 @@ bool Hierarchy::DrawNode(
       child->SetParentKeepWorldTransform(node);
       editor.SelectNode(child);
     }
-    if (ImGui::MenuItem(
-            absl::StrFormat("Delete node%s", has_multiple_selection ? "s" : "")
-                .c_str())) {
-      // If the node is selected, delete all selected nodes. Otherwise, delete
-      // the current node.
-      std::vector<NodeHandle> nodes_to_delete =
-          is_node_selected ? std::vector<NodeHandle>(selected_nodes.begin(),
-                                                     selected_nodes.end())
-                           : std::vector<NodeHandle>{node};
-
-      editor.SelectNode(NodeHandle());
-      for (auto& selected_node : nodes_to_delete) {
-        view_.DestroyNode(selected_node);
-      }
-    }
     if (HasValidMesh(node, CameraHelperOptions::kIncludeDescendants) &&
-        ImGui::MenuItem("Focus on this node.")) {
+        ImGui::MenuItem("Focus on this node")) {
       Editor& editor = view_.GetRegistry().Get<Editor>()->get();
       editor.GetDispatcher().Send(FocusOnSelectionEvent());
     }

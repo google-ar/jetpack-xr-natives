@@ -22,17 +22,18 @@
 #include <vector>
 
 #include "absl/status/status.h"
-#include "core/common/debug_draw.h"
-#include "core/common/typed_id.h"
-#include "core/common/typed_vector.h"
-#include "core/math/vec.h"
-#include "core/window/clipboard/clipboard_handler.h"
-#include "core/window/filament_host.h"
-#include "core/window/filament_view.h"
 #include "dear_imgui/imgui.h"
 #include "filament/filament/include/filament/RenderTarget.h"
 #include "filament/filament/include/filament/Texture.h"
 #include "filament/libs/filagui/include/filagui/ImGuiHelper.h"
+#include "core/common/debug_draw.h"
+#include "core/common/typed_id.h"
+#include "core/common/typed_vector.h"
+#include "core/math/vec.h"
+#include "core/view/base_view.h"
+#include "core/window/clipboard/clipboard_handler.h"
+#include "core/window/filament_host.h"
+#include "core/window/filament_view.h"
 
 struct ImFont;
 
@@ -50,6 +51,7 @@ class DefaultDevModeExtension : public FilamentHost::DevModeExtension {
   static constexpr FontId kMonoFont = FontId(1);
   // Get a specific font pointer, or NULL for invalid FontId's
 
+  explicit DefaultDevModeExtension(BaseView* view) { view_ = view; }
   ~DefaultDevModeExtension() override = default;
   // Loads packaged fonts into ImGui and sets up its bindings to filament.
   absl::Status Setup(FilamentHost* host) override;
@@ -110,12 +112,13 @@ class DefaultDevModeExtension : public FilamentHost::DevModeExtension {
   std::optional<absl::Duration> last_vsync_;
   filament::Material* custom_debug_draw_material_ = nullptr;
   // The texture currently being rendered to.
-  filament::Texture* render_target_texture_;
-  filament::RenderTarget* render_target_;
+  filament::Texture* render_target_texture_ = nullptr;
+  filament::RenderTarget* render_target_ = nullptr;
   // Saved window sizes so we can properly switch back to screen-space Editor.
   uint2 cached_screen_size_;
   float2 cached_subpixel_ratio_;
   bool is_enabled_ = true;
+  BaseView* view_;
 };
 
 }  // namespace imp::window

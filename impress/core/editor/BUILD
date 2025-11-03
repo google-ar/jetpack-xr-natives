@@ -69,6 +69,7 @@ cc_library(
     deps = [
         ":command",
         ":editor",
+        ":editor_clipboard",
         ":editor_constants",
         ":editor_field_control",
         ":editor_info",
@@ -138,6 +139,38 @@ cc_library(
     ] + if_desktop([
     ]) + if_emscripten([
     ]),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "editor_clipboard",
+    srcs = [
+        "editor_clipboard.cc",
+    ],
+    hdrs = [
+        "editor_clipboard.h",
+    ],
+    copts = imp_google3_copts(),
+    deps = [
+        ":command",
+        ":events",
+        ":selection_controller",
+        "//core/async:future",
+        "//core/common:registry",
+        "//core/common:robin_map",
+        "//core/input",
+        "//core/ncsb",
+        "//core/ncsb:ncsb_proto_cc",
+        "//core/view:base_view",
+        "//core/view/framework",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_impress//core/common:log",
+        "@mediapipe//mediapipe/framework/port:status",
+    ],
     alwayslink = 1,
 )
 
@@ -302,7 +335,6 @@ cc_library(
     deps = [
         ":editor_style",
         "//core/common:bit_flag",
-        "//core/common:platform_helpers",
         "//core/common:template_helpers",
         "//core/editor/layout:editor_control_flags",
         "//core/editor/layout:helpers",

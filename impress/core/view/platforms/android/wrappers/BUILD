@@ -13,7 +13,7 @@
 # limitations under the License.
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("//build_tools:imp.bzl", "if_non_android", "imp_copts")
+load("//build_tools:imp.bzl", "if_non_android", "imp_copts", "imp_google3_copts")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -44,7 +44,7 @@ cc_library(
     hdrs = [
         "surface_texture.h",
     ],
-    copts = imp_copts(),
+    copts = imp_google3_copts(),
     deps = [
         "//core:config",
         "//core/async:future",
@@ -87,7 +87,7 @@ cc_library(
         "surface.h",
         "typeface.h",
     ],
-    copts = imp_copts(),
+    copts = imp_google3_copts(),
     deps = [
         ":file",
         ":surface_texture",

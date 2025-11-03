@@ -17,11 +17,13 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_WINDOW_DEV_MODE_EXTENSION_H_
 #define THIRD_PARTY_IMPRESS_CORE_WINDOW_DEV_MODE_EXTENSION_H_
 
+#include "core/view/base_view.h"
 #include "core/window/filament_host.h"
 
 namespace imp::window {
 
-std::unique_ptr<FilamentHost::DevModeExtension> CreateDefaultDevModeExtension();
+std::unique_ptr<FilamentHost::DevModeExtension> CreateDefaultDevModeExtension(
+    BaseView* view);
 
 }  // namespace imp::window
 

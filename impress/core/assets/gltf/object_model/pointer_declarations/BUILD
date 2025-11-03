@@ -78,6 +78,45 @@ cc_library(
 )
 
 cc_library(
+    name = "skins_pointers",
+    srcs = ["skins.cc"],
+    hdrs = ["skins.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        "//core/assets/gltf/object_model:property_pointer",
+        "//core/assets/gltf/object_model:token_parser",
+        "//core/common:typed_ids",
+        "//core/common:typed_set_vector",
+        "//core/model:model_data_details",
+        "//core/ncsb",
+        "//core/view/framework",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/types:span",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "meshes_pointers",
+    srcs = ["meshes.cc"],
+    hdrs = ["meshes.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        "//core/assets/gltf/object_model:property_pointer",
+        "//core/assets/gltf/object_model:token_parser",
+        "//core/ncsb",
+        "//core/view/framework",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/types:span",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "core_pointers",
     srcs = [
         "core_pointers.cc",
@@ -88,7 +127,9 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         ":materials_pointers",
+        ":meshes_pointers",
         ":nodes_pointers",
+        ":skins_pointers",
         "//core/assets/gltf/object_model:property_pointer",
     ],
     alwayslink = 1,

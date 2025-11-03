@@ -334,6 +334,24 @@ GenericMaterialParameters SplitEngineGenericMaterial::RewriteTextureIds(
     RewriteTextureId(kTransmissionIndex, remapped.transmission->texture,
                      texture_borrower);
   }
+  if (parameters.feature_id_textures) {
+    if (!remapped.feature_id_textures) {
+      remapped.feature_id_textures.emplace();
+    }
+    if (remapped.feature_id_textures->size() !=
+        parameters.feature_id_textures->size()) {
+      remapped.feature_id_textures->reserve(kFeatureIdTextureNames.size());
+    }
+    for (int i = 0; i < parameters.feature_id_textures->size(); ++i) {
+      if (i > kFeatureIdTextureNames.size()) break;
+      std::optional<GenericMaterialTextureParameter> temp_remapped_texture =
+          (*remapped.feature_id_textures)[i];
+      absl::string_view feature_id_index = kFeatureIdTextureNames[i];
+      RewriteTextureId(feature_id_index, temp_remapped_texture,
+                       texture_borrower);
+      (*remapped.feature_id_textures)[i] = *temp_remapped_texture;
+    }
+  }
   return remapped;
 }
 
@@ -643,9 +661,13 @@ void SplitEngineGenericMaterial::SetIndexOfRefraction(
 
 std::optional<TextureAndSampler>
 SplitEngineGenericMaterial::GetFeatureIdTexture(int index) const {
-  // TODO: Add support for feature id textures to
-  // SplitEngineGenericMaterial.
-  return std::nullopt;
+  if (!generic_material_parameters_.feature_id_textures.has_value() ||
+      index >= generic_material_parameters_.feature_id_textures->size() ||
+      index < 0) {
+    return std::nullopt;
+  }
+  return GetTextureAndSampler(
+      generic_material_parameters_.feature_id_textures.value()[index]);
 }
 
 void SplitEngineGenericMaterial::SetAlphaCutoff(float alpha_cutoff) {

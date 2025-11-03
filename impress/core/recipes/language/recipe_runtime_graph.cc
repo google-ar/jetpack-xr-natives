@@ -16,7 +16,6 @@
 
 #include <sys/types.h>
 
-#include <cmath>
 #include <cstddef>
 #include <functional>
 #include <memory>
@@ -38,7 +37,7 @@
 #include "core/async/future.h"
 #include "core/common/invocable.h"
 #include "core/common/registry.h"
-#include "core/common/type_traits.h"
+#include "core/recipes/language/binary_expression.h"
 #include "core/recipes/language/recipe_async_execution_manager.h"
 #include "core/recipes/language/recipe_custom_statement.h"
 #include "core/recipes/language/recipe_execution_context.h"
@@ -46,11 +45,10 @@
 #include "core/recipes/language/recipe_runtime_event.h"
 #include "core/recipes/language/recipe_scope.h"
 #include "core/recipes/language/recipe_system.h"
-#include "core/recipes/language/recipe_traits.h"
 #include "core/recipes/language/recipe_types.proto.imp.h"
 #include "core/recipes/language/recipe_utils.h"
+#include "core/recipes/language/unary_expression.h"
 #include "core/view/base_view.h"
-#include "robin_map/include/tsl/robin_map.h"
 #include "mediapipe/framework/port/status_macros.h"
 
 // TODO Add tests to test caching, e.g. test that values are cached
@@ -165,53 +163,35 @@ absl::Status ExecuteAssignmentOperation(
   }
 #endif
 
-  return std::visit(
-      [&op](auto&& left, auto&& right) -> absl::Status {
-        using LeftT = std::decay_t<decltype(left)>;
-        using RightT = std::decay_t<decltype(right)>;
+  std::optional<BinaryExpression::BinaryOps> binary_op;
+  switch (op) {
+    case AssignmentStatement::AssignmentOps::ADD_ASSIGN:
+      binary_op = BinaryExpression::BinaryOps::ADD;
+      break;
+    case AssignmentStatement::AssignmentOps::SUBTRACT_ASSIGN:
+      binary_op = BinaryExpression::BinaryOps::SUBTRACT;
+      break;
+    case AssignmentStatement::AssignmentOps::MULTIPLY_ASSIGN:
+      binary_op = BinaryExpression::BinaryOps::MULTIPLY;
+      break;
+    case AssignmentStatement::AssignmentOps::DIVIDE_ASSIGN:
+      binary_op = BinaryExpression::BinaryOps::DIVIDE;
+      break;
+    case AssignmentStatement::AssignmentOps::UNKNOWN_ASSIGNMENT_OP:
+      return absl::InvalidArgumentError(
+          "AssignmentStatement must have a valid assignment operation.");
+    case AssignmentStatement::AssignmentOps::ASSIGN:
+      break;
+  }
 
-        switch (op) {
-          case AssignmentStatement::AssignmentOps::ASSIGN:
-            if constexpr (recipe_traits::kIsAssignAvailable<LeftT, RightT>) {
-              left = right;
-            }
-            break;
-          case AssignmentStatement::AssignmentOps::ADD_ASSIGN:
-            if constexpr (recipe_traits::kIsAddAssignAvailable<LeftT, RightT>) {
-              left += right;
-            }
-            break;
-          case AssignmentStatement::AssignmentOps::SUBTRACT_ASSIGN:
-            if constexpr (recipe_traits::kIsSubtractAssignAvailable<LeftT,
-                                                                    RightT>) {
-              left -= right;
-            }
-            break;
-          case AssignmentStatement::AssignmentOps::MULTIPLY_ASSIGN:
-            if constexpr (recipe_traits::kIsMultiplyAssignAvailable<LeftT,
-                                                                    RightT>) {
-              left *= right;
-            }
-            break;
-          case AssignmentStatement::AssignmentOps::DIVIDE_ASSIGN:
-            if constexpr (recipe_traits::kIsDivideAssignAvailable<LeftT,
-                                                                  RightT>) {
-              left /= right;
-            }
-            break;
-          default:
-            return absl::InternalError(absl::StrFormat(
-                "Failed to execute assignment_expression. Left Type: %s "
-                "Operator: %s Right Type: %s",
-                type_traits::kTypeName<LeftT>,
-                proto::EnumMetaData<
-                    AssignmentStatement::AssignmentOps>::GetName(op),
-                type_traits::kTypeName<RightT>));
-        }
+  if (binary_op.has_value()) {
+    MP_ASSIGN_OR_RETURN(target, recipe::EvaluateBinaryExpression(binary_op.value(),
+                                                              target, value));
+  } else {
+    target = value;
+  }
 
-        return absl::OkStatus();
-      },
-      target, value);
+  return absl::OkStatus();
 }
 
 }  // namespace
@@ -282,153 +262,10 @@ ExecutionResult RecipeRuntimeGraph::ExecuteAssignmentStatement(
 
 absl::StatusOr<Variable> RecipeRuntimeGraph::EvaluateUnaryExpression(
     const UnaryExpression& expression, RecipeExecutionContext context) const {
-  MP_ASSIGN_OR_RETURN(Variable previous_result,
+  MP_ASSIGN_OR_RETURN(Variable input,
                    EvaluateValueConnection(expression.input, context));
 
-  if (absl::holds_alternative<absl::monostate>(previous_result)) {
-    return absl::InvalidArgumentError(
-        "Cannot compute unary expression with empty input.");
-  }
-
-  return std::visit(
-      [&expression](auto&& input) -> absl::StatusOr<Variable> {
-        using InputT = std::decay_t<decltype(input)>;
-
-        std::string op_name;
-        Variable result;
-
-        switch (expression.op) {
-          case UnaryExpression::ABSOLUTE:
-            op_name = "abs";
-            if constexpr (recipe_traits::kIsAbsAvailable<InputT>) {
-              using ResultT = decltype(input);
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = abs(input);
-              }
-            }
-            break;
-          case UnaryExpression::SQRT:
-            op_name = "sqrt";
-            if constexpr (recipe_traits::kIsSqrtAvailable<InputT>) {
-              using ResultT = decltype(input);
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = sqrt(input);
-              }
-            }
-            break;
-          case UnaryExpression::LOG:
-            op_name = "log";
-            if constexpr (recipe_traits::kIsLogAvailable<InputT>) {
-              using ResultT = decltype(input);
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = log(input);
-              }
-            }
-            break;
-          case UnaryExpression::SIN:
-            op_name = "sin";
-            if constexpr (recipe_traits::kIsSinAvailable<InputT>) {
-              using ResultT = decltype(input);
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = recipe::Sin(input);
-              }
-            }
-            break;
-          case UnaryExpression::COS:
-            op_name = "cos";
-            if constexpr (recipe_traits::kIsCosAvailable<InputT>) {
-              using ResultT = decltype(input);
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = recipe::Cos(input);
-              }
-            }
-            break;
-          case UnaryExpression::TAN:
-            op_name = "tan";
-            if constexpr (recipe_traits::kIsTanAvailable<InputT>) {
-              using ResultT = decltype(input);
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = recipe::Tan(input);
-              }
-            }
-            break;
-          case UnaryExpression::ASIN:
-            op_name = "asin";
-            if constexpr (recipe_traits::kIsAsinAvailable<InputT>) {
-              using ResultT = decltype(input);
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = recipe::Asin(input);
-              }
-            }
-            break;
-          case UnaryExpression::ACOS:
-            op_name = "acos";
-            if constexpr (recipe_traits::kIsAcosAvailable<InputT>) {
-              using ResultT = decltype(input);
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = recipe::Acos(input);
-              }
-            }
-            break;
-          case UnaryExpression::ATAN:
-            op_name = "atan";
-            if constexpr (recipe_traits::kIsAtanAvailable<InputT>) {
-              using ResultT = decltype(input);
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = recipe::Atan(input);
-              }
-            }
-            break;
-          case UnaryExpression::SIGN:
-            op_name = "sign";
-            if constexpr (recipe_traits::kIsSignAvailable<InputT>) {
-              using ResultT = decltype(input);
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = recipe::Sign(input);
-              }
-            }
-            break;
-          case UnaryExpression::NORMALIZE:
-            op_name = "normalize";
-            if constexpr (recipe_traits::kIsNormalizeAvailable<InputT>) {
-              using ResultT = decltype(input);
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = normalize(input);
-              }
-            }
-            break;
-          case UnaryExpression::NOT:
-            op_name = "not";
-            if constexpr (recipe_traits::kIsNotAvailable<InputT>) {
-              using ResultT = decltype(input);
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = !input;
-              }
-            } else if constexpr (recipe_traits::kIsBitwiseNotAvailable<
-                                     InputT>) {
-              using ResultT = decltype(input);
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = ~input;
-              }
-            }
-            break;
-          default:
-            return absl::NotFoundError("Unknown unary expression operator.");
-            break;
-        }
-
-        if (!absl::holds_alternative<absl::monostate>(result)) {
-          imp::output::Recipe("executed unary_expression %s %s",
-                              type_traits::kTypeName<InputT>, op_name);
-        } else {
-          return absl::InternalError(
-              absl::StrFormat("invalid unary_expression %s %s",
-                              type_traits::kTypeName<InputT>, op_name));
-        }
-
-        return result;
-      },
-      previous_result);
+  return recipe::EvaluateUnaryExpression(expression.op, input);
 }
 
 absl::StatusOr<Variable> RecipeRuntimeGraph::EvaluateBinaryExpression(
@@ -455,191 +292,14 @@ absl::StatusOr<Variable> RecipeRuntimeGraph::EvaluateBinaryExpression(
           "Cannot compute binary expression with empty left or right.");
     }
   }
-#else
-  if (absl::holds_alternative<absl::monostate>(left_result) ||
-      absl::holds_alternative<absl::monostate>(right_result)) {
-    return absl::InvalidArgumentError(
-        "Cannot compute binary expression with empty left or right.");
-  }
 #endif
 
-  return std::visit(
-      [&expression](auto&& left, auto&& right) -> absl::StatusOr<Variable> {
-        using LeftT = std::decay_t<decltype(left)>;
-        using RightT = std::decay_t<decltype(right)>;
+  imp::output::Recipe(
+      "Evaluating binary_expression %s ",
+      proto::EnumMetaData<BinaryExpression::BinaryOps>::GetName(expression.op));
 
-        std::string op_name;
-        Variable result;
-
-        switch (expression.op) {
-          case BinaryExpression::ADD:
-            op_name = "add";
-            if constexpr (recipe_traits::kIsAddAvailable<LeftT, RightT>) {
-              using ResultT = decltype(left + right);
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = left + right;
-              }
-            }
-            break;
-          case BinaryExpression::SUBTRACT:
-            op_name = "subtract";
-            if constexpr (recipe_traits::kIsSubtractAvailable<LeftT, RightT>) {
-              using ResultT = decltype(left - right);
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = left - right;
-              }
-            }
-            break;
-          case BinaryExpression::MULTIPLY:
-            op_name = "multiply";
-            if constexpr (recipe_traits::kIsMultiplyAvailable<LeftT, RightT>) {
-              using ResultT = decltype(left * right);
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = left * right;
-              }
-            }
-            break;
-          case BinaryExpression::DIVIDE:
-            op_name = "divide";
-            if constexpr (recipe_traits::kIsDivideAvailable<LeftT, RightT>) {
-              using ResultT = decltype(left / right);
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = left / right;
-              }
-            }
-            break;
-          case BinaryExpression::MOD:
-            op_name = "mod";
-            if constexpr (recipe_traits::kIsModAvailable<LeftT, RightT>) {
-              if constexpr (std::is_same_v<LeftT, int> &&
-                            std::is_same_v<RightT, int>) {
-                result = left % right;
-              } else {
-                result = fmod(left, right);
-              }
-            }
-            break;
-          case BinaryExpression::EQUALS:
-            op_name = "equals";
-            if constexpr (recipe_traits::kIsEqualsAvailable<LeftT, RightT>) {
-              result = left == right;
-            }
-            break;
-          case BinaryExpression::NOT_EQUALS:
-            op_name = "not_equals";
-            if constexpr (recipe_traits::kIsNotEqualsAvailable<LeftT, RightT>) {
-              result = left != right;
-            }
-            break;
-          case BinaryExpression::GREATER_THAN:
-            op_name = "greater_than";
-            if constexpr (recipe_traits::kIsGreaterThanAvailable<LeftT,
-                                                                 RightT>) {
-              result = left > right;
-            }
-            break;
-          case BinaryExpression::LESS_THAN:
-            op_name = "less_than";
-            if constexpr (recipe_traits::kIsLessThanAvailable<LeftT, RightT>) {
-              result = left < right;
-            }
-            break;
-          case BinaryExpression::GREATER_THAN_OR_EQUAL:
-            op_name = "greater_than_or_equal";
-            if constexpr (recipe_traits::kIsGreaterThanOrEqualAvailable<
-                              LeftT, RightT>) {
-              result = left >= right;
-            }
-            break;
-          case BinaryExpression::LESS_THAN_OR_EQUAL:
-            op_name = "less_than_or_equal";
-            if constexpr (recipe_traits::kIsLessThanOrEqualAvailable<LeftT,
-                                                                     RightT>) {
-              result = left <= right;
-            }
-            break;
-          case BinaryExpression::AND:
-            op_name = "and";
-            if constexpr (recipe_traits::kIsAndAvailable<LeftT, RightT>) {
-              result = left && right;
-            } else if constexpr (recipe_traits::kIsBitwiseAndAvailable<
-                                     LeftT, RightT>) {
-              result = left & right;
-            }
-            break;
-          case BinaryExpression::OR:
-            op_name = "or";
-            if constexpr (recipe_traits::kIsOrAvailable<LeftT, RightT>) {
-              result = left || right;
-            } else if constexpr (recipe_traits::kIsBitwiseOrAvailable<LeftT,
-                                                                      RightT>) {
-              result = left | right;
-            }
-            break;
-          case BinaryExpression::XOR:
-            op_name = "xor";
-            if constexpr (recipe_traits::kIsXorAvailable<LeftT, RightT>) {
-              result = left != right;
-            } else if constexpr (recipe_traits::kIsBitwiseXorAvailable<
-                                     LeftT, RightT>) {
-              result = left ^ right;
-            }
-            break;
-          case BinaryExpression::DOT:
-            op_name = "dot";
-            if constexpr (recipe_traits::kIsDotAvailable<LeftT, RightT>) {
-              using ResultT = decltype(dot(left, right));
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = dot(left, right);
-              }
-            }
-            break;
-          case BinaryExpression::CROSS:
-            op_name = "cross";
-            if constexpr (recipe_traits::kIsCrossAvailable<LeftT, RightT>) {
-              using ResultT = decltype(cross(left, right));
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = cross(left, right);
-              }
-            }
-            break;
-          case BinaryExpression::MIN:
-            op_name = "min";
-            if constexpr (recipe_traits::kIsMinAvailable<LeftT, RightT>) {
-              using ResultT = decltype(recipe::Min(left, right));
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = recipe::Min(left, right);
-              }
-            }
-            break;
-          case BinaryExpression::MAX:
-            op_name = "max";
-            if constexpr (recipe_traits::kIsMaxAvailable<LeftT, RightT>) {
-              using ResultT = decltype(recipe::Max(left, right));
-              if constexpr (std::is_constructible_v<Variable, ResultT>) {
-                result = recipe::Max(left, right);
-              }
-            }
-            break;
-          default:
-            return absl::NotFoundError("Unknown binary expression operator.");
-            break;
-        }
-
-        if (!absl::holds_alternative<absl::monostate>(result)) {
-          imp::output::Recipe("executed binary_expression %s %s %s",
-                              type_traits::kTypeName<LeftT>, op_name,
-                              type_traits::kTypeName<RightT>);
-        } else {
-          return absl::InternalError(
-              absl::StrFormat("invalid binary_expression %s %s %s",
-                              type_traits::kTypeName<LeftT>, op_name,
-                              type_traits::kTypeName<RightT>));
-        }
-
-        return result;
-      },
-      left_result, right_result);
+  return recipe::EvaluateBinaryExpression(expression.op, left_result,
+                                          right_result);
 }
 
 absl::StatusOr<recipe::ReturnValue> RecipeRuntimeGraph::EvaluateCallExpression(

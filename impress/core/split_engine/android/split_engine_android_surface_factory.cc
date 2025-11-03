@@ -44,7 +44,7 @@
 
 // TODO: Remove this once the required unit tests are added.
 namespace imp::split_engine {
-jobject SplitEngineSurfaceFactory::CreateExternalTextureSurface(
+absl::StatusOr<jobject> SplitEngineSurfaceFactory::CreateExternalTextureSurface(
     BaseView& view, BridgeId bridge_id,
     const std::vector<TextureId>& in_texture_ids) {
   
@@ -84,39 +84,35 @@ jobject SplitEngineSurfaceFactory::CreateExternalTextureSurface(
   } else if (texture_ids.size() == 2) {
     view_types = kAndroidExternalTextureSurfaceConfigStereo;
   } else {
-    IMP_LOG(imp::ERROR) << "Unsupported number of texture ids provided: "
-               << texture_ids.size();
-    return nullptr;
+    return absl::InternalError(absl::StrFormat(
+        "Unsupported number of texture ids provided: %d", texture_ids.size()));
   }
   absl::StatusOr<std::unique_ptr<AndroidExternalTextureSurface>>
       platform_surface = AndroidExternalTextureSurface::Create(
           view, content_security_level, view_types);
   if (!platform_surface.ok()) {
-    IMP_LOG(imp::ERROR) << "Failed to create external texture surface: "
-               << platform_surface.status();
-    return nullptr;
+    return platform_surface.status();
   }
 
   jobject surface_reference = (*platform_surface)->GetSurface()->Reference();
   if (!surface_reference) {
-    IMP_LOG(imp::ERROR) << "Failed to create external texture surface: "
-                  "surface_reference is null.";
-    return nullptr;
+    return absl::InternalError(
+        "Failed to create external texture surface: "
+        "surface_reference is null.");
   }
   RobinMap<SurfaceViewType, BorrowedTexturePtr> textures =
       (*platform_surface)->BorrowTextures();
   if (textures.empty()) {
-    IMP_LOG(imp::ERROR) << "No textures created by the external texture surface.";
-    return nullptr;
+    return absl::InternalError(
+        "No textures created by the external texture surface.");
   }
   if (!textures.contains(SurfaceViewType::kPrimaryView)) {
-    IMP_LOG(imp::ERROR) << "No texture created for primary view.";
-    return nullptr;
+    return absl::InternalError("No texture created for primary view.");
   }
   if (textures.size() != texture_ids.size()) {
-    IMP_LOG(imp::ERROR) << "Number of textures created by the external texture surface "
-                  "does not match the number of texture ids provided.";
-    return nullptr;
+    return absl::InternalError(
+        "Number of textures created by the external texture surface does not "
+        "match the number of texture ids provided.");
   }
 
   // Construct an entry to contain the Android ExternalTextureSurface unique

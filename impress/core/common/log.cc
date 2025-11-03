@@ -14,11 +14,8 @@
 
 #include "core/common/log.h"
 
-#include <cstddef>
-
 #include "absl/strings/string_view.h"
 #include "core/common/platform_helpers.h"
-#include "core/scripting/proto/bridge.proto.imp.h"
 
 namespace imp {
 
@@ -36,8 +33,6 @@ void ImpressStreamLogger::SetEnabled(bool enabled) {
 
 bool ImpressStreamLogger::IsEnabled() { return GetEnabledInternal(); }
 
-ImpressStreamLogger::ImpressStreamLogger(scripting::LogLevel level)
-    : kind_(static_cast<output::OutputKind>(static_cast<size_t>(level))) {}
 ImpressStreamLogger::ImpressStreamLogger(output::OutputKind kind)
     : kind_(kind) {}
 ImpressStreamLogger::~ImpressStreamLogger() { Flush(); }

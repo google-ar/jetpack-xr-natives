@@ -14,6 +14,7 @@
 
 #include "core/editor/selection_controller_impl.h"
 
+#include <functional>
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
@@ -177,7 +178,8 @@ SelectionControllerImpl::SelectionControllerImpl(BaseView* view)
 }
 
 const absl::flat_hash_set<NodeHandle>&
-SelectionControllerImpl::GetSelectedNodes() const {
+SelectionControllerImpl::GetSelectedNodes() {
+  absl::erase_if(selected_nodes_, std::logical_not<>());
   return selected_nodes_;
 }
 

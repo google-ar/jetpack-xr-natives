@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
+#include <optional>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -220,6 +221,7 @@ Future<absl::Status> TexturePipelineRenderer::Setup() {
             RuntimePass& runtime_pass = runtime_passes_.at(pass_index);
 
             if (RequiresViewSizeChangedEvent(pass) ||
+                IsRenderTargetStale(pass, runtime_pass) ||
                 !runtime_pass.render_target) {
               resized = true;
               absl::Status status = InitializeTextures(pass, runtime_pass);
@@ -244,6 +246,23 @@ Future<absl::Status> TexturePipelineRenderer::Setup() {
   }
 
   return result;
+}
+
+bool TexturePipelineRenderer::IsRenderTargetStale(
+    const TexturePipelineRendererState::Pass& pass,
+    const RuntimePass& runtime_pass) const {
+  // If we own this texture, i.e. it is not owned by the texture registry, then
+  // it can never be stale.
+  if (!pass.registered_color_texture()) {
+    return false;
+  }
+  if (!runtime_pass.color_texture_registration) {
+    return true;
+  }
+  // If the target of this color pass texture has been recreated in the registry
+  // elsewhere since we last built our RenderTarget, we have to rebuild it.
+  return runtime_pass.color_texture_registration->GetId() !=
+         GetView().GetTextureRegistry().GetId(*pass.registered_color_texture());
 }
 
 void TexturePipelineRenderer::SetPassEnabled(size_t pass_index, bool enabled) {

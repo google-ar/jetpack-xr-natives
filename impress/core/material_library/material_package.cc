@@ -92,15 +92,16 @@ MaterialCache GetMaterialsFromCache(
   return result;
 }
 
-filament::Material* LoadMaterial(BaseView& view, filament::Engine* engine,
-                                 GenericMaterialSpec key,
-                                 const BufferAccess& buffer) {
+filament::Material* LoadMaterial(
+    BaseView& view, filament::Engine* engine, GenericMaterialSpec key,
+    const BufferAccess& buffer,
+    const MaterialPreCompileOptions& material_pre_compile_options) {
   filament::Material* material = filament::Material::Builder()
                                      .package(buffer.Data(), buffer.Size())
                                      .build(*engine);
 
   if (auto* serializer = view.GetSplitEngineSerializer()) {
-    serializer->AddMaterial(material, buffer);
+    serializer->AddMaterial(material, buffer, material_pre_compile_options);
   }
   return material;
 }
@@ -237,7 +238,9 @@ Future<MaterialCache> MaterialPackage::GetOrLoadMaterials(
               }
 
               filament::Material* loaded_material = LoadMaterial(
-                  view, engine_, key_and_buffer.first, key_and_buffer.second);
+                  view, engine_, key_and_buffer.first, key_and_buffer.second,
+                  material_pre_compile_options_.value_or(
+                      MaterialPreCompileOptions()));
 
               // return any loaded material
               result.emplace(key_and_buffer.first, loaded_material);

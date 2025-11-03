@@ -24,12 +24,19 @@
 #include <memory>
 #include <string>
 
-#include "zetasql/base/types.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/types/optional.h"
 #include "core/common/platform_helpers.h"
+#include "core/config.h"
+
+#if IMP_THREADS(GOOGLE3)
 #include "thread/thread.h"
+#elif IMP_THREADS(STDLIB)
+#include <thread>  // NOLINT(build/c++11)
+#else
+#error Invalid thread mode.
+#endif
 
 namespace imp::ipc {
 
@@ -98,6 +105,7 @@ class MessagePipe {
     int fds_[2];
   };
 
+#if IMP_THREADS(GOOGLE3)
   /**
    * Manages the private worker thread used by MessagePipe.  The worker thread
    * blocks by requesting the next message from its pipe.  The NotifyPipe is
@@ -115,6 +123,7 @@ class MessagePipe {
    private:
     MessagePipe* pipe_;
   };
+#endif  // IMP_THREADS(GOOGLE3)
 
   void WorkerThreadMain();
 
@@ -131,9 +140,15 @@ class MessagePipe {
   absl::Mutex lock_;
   std::atomic<bool> closed_ = ATOMIC_FLAG_INIT;
   NotifyPipe close_notifier_;
-  uint32 worker_thread_id_;
+  uint32_t worker_thread_id_;
 
+#if IMP_THREADS(GOOGLE3)
   absl::optional<WorkerThread> worker_thread_;
+#elif IMP_THREADS(STDLIB)
+  absl::optional<std::thread> worker_thread_;
+#else
+#error Invalid thread mode.
+#endif
 
   const OnMessageCallback message_callback_;
   const OnCloseCallback close_callback_;

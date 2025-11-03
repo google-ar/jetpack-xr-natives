@@ -81,6 +81,7 @@ cc_library(
     deps = [
         ":default_dev_mode_extension",
         ":filament_host",
+        "//core/view:base_view",
     ],
     alwayslink = 1,
 )
@@ -101,9 +102,11 @@ cc_library(
         ":imp_dev_resources",
         "//core/common",
         "//core/common:debug_draw",
+        "//core/common:trace",
         "//core/common:typed_ids",
         "//core/input",
         "//core/math",
+        "//core/view:base_view",
         "//core/window/clipboard:clipboard_handler",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
@@ -330,5 +333,9 @@ cc_library(
     name = "loose_headers",
     tags = ["avoid_dep"],
     textual_hdrs = ["dev_mode_extension.h"],
+    deps = [
+        ":filament_host",
+        "//core/view:base_view",
+    ],
     alwayslink = 1,
 )

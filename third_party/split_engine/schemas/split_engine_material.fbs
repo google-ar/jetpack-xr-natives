@@ -332,6 +332,7 @@ table GenericMaterialParameters (requires_api: 1) {
   transmission: GenericMaterialParametersTransmission (id: 7, requires_api: 1);
   refraction: GenericMaterialParametersRefraction (id: 8, requires_api: 1);
   masking: GenericMaterialParametersMasking (id: 9, requires_api: 1);
+  feature_id_textures: [GenericMaterialTextureParameter] (id: 10);
 }
 
 root_type GenericMaterialParameters;
@@ -570,6 +571,67 @@ table BuiltInMaterialbd7fe08cParameters (requires_api: 1) {
   uv_scale: Float2 (id: 5, requires_api: 1);
 }
 
+enum GsplatMode : int {
+  UNSPECIFIED = 0,
+  MAGIC_WINDOW = 1,
+  GSPLAT = 2,
+}
+
+table BuiltInMaterialGsplatSpec {
+  // The material mode is used to select the material to render.
+  material_mode: GsplatMode (id: 0);
+}
+
+table BuiltInMaterialGsplatParameters {
+  // Adjust opacity for each splat.
+  opacity_scale: Float (id: 0);
+  // Clamps the screen size for each splat
+  min_screen_size: Float2 (id: 1);
+  // Clamps the screen size for each splat
+  max_screen_size: Float2 (id: 2);
+  // If material_mode is "magic window",
+  // this contains the dimension of the renderable area (the dimension of the black quad)
+  window_dimension_in_magic_window: Float2 (id: 3);
+  // If material_mode is "magic window", this contains thetransform from World Space to Magic Window Space
+  // This is necessary to calculate a position in Magic Window space for an eye, a splat, etc
+  // Magic Window Space is the world space of magic windows parent node.
+  magic_window_from_user_world_matrix: Mat4f (id: 4);
+  // If true, precomputed_data_texture is used.
+  // If false, position_data_texture, cov3d_data_texture, and color_data_texture
+  //are used instead.
+  is_splat_data_precomputed: Bool (id: 5);
+  // The precomputed data for rendering each splat, packed into an
+  // RGBA32F texture. The format expected is:
+  // R [2x16F] XY Clip Position of Splat Center
+  // G [2x16F] Z Clip Position of Splat Center and Aspect Ratio of Splat
+  // B [2x16F] X Basis Vector of Splat in Screen Space
+  // A [4x8unorm] RGBA Color of Splat - If A == 0 the splat is disabled.
+  precomputed_data_texture: BuiltInTextureParameter (id: 6);
+  // Each texel value corresponds to a 3D position for a splat
+  // The texture format is RGBA16F. The pixel data format is RGBA. The pixel data type is HALF
+  position_data_texture: BuiltInTextureParameter (id: 7);
+  // Texels contain a 3D covariance matrix packed into RGB values.
+  // The texture format is RGBA32UI. The pixel data format is RGB_INTEGER or
+  // RGBA_INTEGER. The pixel data type is UINT
+  cov3d_data_texture: BuiltInTextureParameter (id: 8);
+  // Texels contain a 3D color.
+  // The texture format is RGBA8. The pixel data format is RGBA. The pixel data type is UBYTE
+  color_data_texture: BuiltInTextureParameter (id: 9);
+  // Texel values control rendering order.
+  // The texture format is R32UI. The pixel data format is R_INTEGER. The pixel data type is UINT
+  sorted_indices_texture: BuiltInTextureParameter (id: 10);
+  // If true, assigns random colors to nearby gsplats.
+  // Debugging only: This may be removed in the future.
+  visualize_chunks: Bool (id: 11);
+  splat_scale: Float (id: 12);
+}
+
+table BuiltInMaterialGsplatBackgroundSpec {
+}
+
+table BuiltInMaterialGsplatBackgroundParameters {
+}
+
 table BuiltInMaterialTextureExternal (requires_api: 1) {
 }
 
@@ -588,6 +650,12 @@ union BuiltInMaterialSpec (requires_api: 1) {
   BuiltInMaterial0d0cb9aa = 7 (requires_api: 1),
   BuiltInMaterialTextureExternal = 8 (requires_api: 1),
   BuiltInMaterialbd7fe08c = 9 (requires_api: 1),
+  BuiltInMaterialGsplatSpec = 10,
+  // TEMPORARY: BuiltInMaterialGsplatBackgroundSpec is experimental and will be
+  // replaced by custom materials or another method.  Add new materials above it
+  // in the union.
+  // TODO: b/450582333 - Replace BuiltInMaterialGsplatBackgroundSpec.
+  BuiltInMaterialGsplatBackgroundSpec = 11,
 }
 
 // Request to create a built-in material instance and associate it with a
@@ -611,6 +679,12 @@ union BuiltInMaterialParameters (requires_api: 1) {
   BuiltInMaterial0d0cb9aaParameters = 7 (requires_api: 1),
   BuiltInMaterialTextureExternalParameters = 8 (requires_api: 1),
   BuiltInMaterialbd7fe08cParameters = 9 (requires_api: 1),
+  BuiltInMaterialGsplatParameters = 10,
+  // TEMPORARY: BuiltInMaterialGsplatBackgroundParameters is experimental and will be
+  // replaced by custom materials or another method.  Add new materials above it
+  // in the union.
+  // TODO: b/450582333 - Replace BuiltInMaterialGsplatBackgroundParameters.
+    BuiltInMaterialGsplatBackgroundParameters = 11,
 }
 
 table BuiltInMaterialInstanceParameters (requires_api: 1) {

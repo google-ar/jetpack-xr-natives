@@ -45,6 +45,22 @@ imp_cc_proto_library(
     ],
 )
 
+proto_library(
+    name = "particle_emitter_state_proto",
+    srcs = ["particle_emitter_state.proto"],
+    deps = [
+        ":particle_config_proto",
+    ],
+)
+
+imp_cc_proto_library(
+    name = "particle_emitter_state_proto_cc",
+    proto = ":particle_emitter_state_proto",
+    deps = [
+        ":particle_config_proto_cc",
+    ],
+)
+
 cc_library(
     name = "particle",
     srcs = [
@@ -58,6 +74,7 @@ cc_library(
         "data_layout.h",
         "particle_data.h",
         "particle_data_provider.h",
+        "particle_emitter.h",
         "particle_emitter_info.h",
         "particle_service.h",
         "standard_particle_data_provider.h",
@@ -67,9 +84,11 @@ cc_library(
     linkstatic = True,
     deps = [
         ":particle_config_proto_cc",
+        ":particle_emitter_state_proto_cc",
         "//core/async:future",
         "//core/common:owned_ptr",
         "//core/math",
+        "//core/ncsb",
         "//core/view/utils:frame_time",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/types:optional",

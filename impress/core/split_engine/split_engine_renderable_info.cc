@@ -26,6 +26,7 @@
 #include "filament/filament/include/filament/RenderableManager.h"
 #include "core/materials/material.h"
 #include "core/math/mat.h"
+#include "core/math/math.h"
 #include "core/model/mesh/mesh_index_data.h"
 #include "core/model/mesh/mesh_vertex_and_index_data.h"
 #include "core/model/mesh/mesh_vertex_data.h"
@@ -158,8 +159,17 @@ void SplitEngineRenderableInfo::SetSkinningBoneCount(
   skinning_bone_count_ = skinning_bone_count;
 }
 
+void SplitEngineRenderableInfo::SetRenderableBounds(
+    const imp::Box& renderable_bounds) {
+  renderable_bounds_ = renderable_bounds;
+}
+
 uint32_t SplitEngineRenderableInfo::GetSkinningBoneCount() const noexcept {
   return skinning_bone_count_;
+}
+
+const imp::Box& SplitEngineRenderableInfo::GetRenderableBounds() const {
+  return renderable_bounds_;
 }
 
 BridgeId SplitEngineRenderableInfo::GetBridgeId() const noexcept {

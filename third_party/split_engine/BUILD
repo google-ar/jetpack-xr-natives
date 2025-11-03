@@ -24,6 +24,7 @@ load(
 )
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_license//rules:license_kind.bzl", "license_kind")
+load("@third_party//split_engine/build_tools:gen_max_api_requirement.bzl", "gen_max_api_requirement")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -98,6 +99,12 @@ cc_library(
         "@com_google_absl//absl/strings:string_view",
     ],
     alwayslink = 1,
+)
+
+gen_max_api_requirement(
+    name = "max_api_requirement",
+    srcs = schemas,
+    out = "schemas/max_api_requirement.h",
 )
 
 cc_library(

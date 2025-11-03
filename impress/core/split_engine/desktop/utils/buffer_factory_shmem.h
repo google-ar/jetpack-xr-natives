@@ -31,7 +31,7 @@ class ShmemBufferFactory : public BufferFactory {
  public:
   explicit ShmemBufferFactory(size_t quota_bytes);
 
-  absl::StatusOr</*absl_nonnull*/ std::unique_ptr<Buffer>> CreateBuffer(
+  absl::StatusOr</*absl_nonnull*/  std::unique_ptr<Buffer>> CreateBuffer(
       size_t size_in_bytes) noexcept override;
 
  private:

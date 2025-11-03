@@ -20,7 +20,9 @@
 #include <vector>
 
 #include "core/assets/gltf/object_model/pointer_declarations/materials.h"
+#include "core/assets/gltf/object_model/pointer_declarations/meshes.h"
 #include "core/assets/gltf/object_model/pointer_declarations/nodes.h"
+#include "core/assets/gltf/object_model/pointer_declarations/skins.h"
 #include "core/assets/gltf/object_model/property_pointer.h"
 
 namespace imp::gltf {
@@ -30,6 +32,7 @@ GetCorePointerDeclarations() {
   std::vector<std::unique_ptr<PropertyPointer::PointerDeclaration>>
       declarations;
 
+  // nodes
   declarations.push_back(
       std::make_unique<NodesGlobalMatrixPointerDeclaration>());
   declarations.push_back(std::make_unique<NodesMatrixPointerDeclaration>());
@@ -41,7 +44,11 @@ GetCorePointerDeclarations() {
   declarations.push_back(
       std::make_unique<NodesChildrenLengthPointerDeclaration>());
   declarations.push_back(std::make_unique<NodesParentPointerDeclaration>());
+  declarations.push_back(std::make_unique<NodesMeshPointerDeclaration>());
+  declarations.push_back(
+      std::make_unique<NodesWeightsLengthPointerDeclaration>());
 
+  // materials
   declarations.push_back(
       std::make_unique<MaterialsAlphaCutoffPointerDeclaration>());
   declarations.push_back(
@@ -60,6 +67,16 @@ GetCorePointerDeclarations() {
       std::make_unique<
           MaterialsPbrMetallicRoughnessRoughnessFactorPointerDeclaration>());
   declarations.push_back(std::make_unique<MaterialsLengthPointerDeclaration>());
+
+  // skins
+  declarations.push_back(
+      std::make_unique<SkinsJointsLengthPointerDeclaration>());
+  declarations.push_back(std::make_unique<SkinsJointNodePointerDeclaration>());
+  declarations.push_back(std::make_unique<SkinsSkeletonPointerDeclaration>());
+  declarations.push_back(std::make_unique<SkinsLengthPointerDeclaration>());
+
+  // meshes
+  declarations.push_back(std::make_unique<MeshesLengthPointerDeclaration>());
 
   return declarations;
 }

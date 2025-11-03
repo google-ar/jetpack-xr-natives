@@ -44,6 +44,7 @@ cc_library(
         "//core/actions:action_config",
         "//core/actions:controller_events",
         "//core/assets",
+        "//core/async:executor",
         "//core/async:future",
         "//core/common",
         "//core/common:context",

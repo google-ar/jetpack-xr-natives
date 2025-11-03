@@ -46,24 +46,33 @@ class HingeConstraint : public BaseConstraint, public Component {
   // Update before physics manager to ensure that the constraint is up to date
   // with rigid body states (maybe a rigid body was removed and triggered a
   // constraint removal). We want those changes (removal from physics world) to
-  // take effect in the current frame simulation. Cleanup before rigid bodies to
-  // be sure that there are no constraints depending on rigid bodies.
+  // take effect in the current frame simulation.
   static constexpr UpdatePhase kUpdatePhase = PhysicsManager::kUpdatePhase;
+  static constexpr Component::UpdateMode kUpdateMode =
+      Component::UpdateMode::kAlwaysUpdate;
   using UpdateDependents = UpdateIds<PhysicsManager>;
+  // Cleanup before rigid bodies to be sure that there are no constraints
+  // depending on rigid bodies.
   using CleanupDependents = CleanupIds<RigidBody>;
 
   // Specify the connected node and whether to auto-configure the pivots and
-  // axis.
-  // Constructs a hinge constraint between two rigid bodies if the owner
+  // axis. It will perform one of the following:
+  //
+  // 1. Constructs a hinge constraint between two rigid bodies if the owner
   // node of this component has a RigidBody component.
-  // Or
-  // Constructs a world-locked hinge constraint if the owner node hold
+  //
+  // (or) 2. Constructs a world-locked hinge constraint if the owner node hold
   // of this component doesn't have a RigidBody component.
-  // connected_node: another node that holds one or the only rigid body of this
-  // constraint. auto_configure: If true, set that constraint (pivot and axis)
-  // to respect the current transformation of node(s). If false, set the
-  // constraint to respect the value of `connected_pivot` and `connected_axis`,
-  // which may move the nodes.
+  //
+  // Parameters:
+  //    connected_node:
+  //          - another node that holds one or the only rigid body of this
+  //          constraint.
+  //    auto_configure:
+  //          - If true, set that constraint (pivot and axis) to respect the
+  //          current transformation of node(s).
+  //          - If false, set the constraint to respect the value of
+  //          `connected_pivot` and `connected_axis`, which may move the nodes.
   absl::Status Setup(NodeHandle connected_node, bool auto_configure = true,
                      float3 connected_pivot = float3(0.0f),
                      float3 connected_axis = float3(0.0f, 0.0f, 1.0f),
@@ -88,7 +97,7 @@ class HingeConstraint : public BaseConstraint, public Component {
 
   void OnIsfStateChanged();
 
-  bool IsValid() const { return state_.is_valid; }
+  bool IsReady() const { return state_.is_ready; }
 
   // the limits in degrees of the hinge
   void SetLimits(float lower_limit, float upper_limit);
@@ -132,7 +141,7 @@ class HingeConstraint : public BaseConstraint, public Component {
   std::unique_ptr<btHingeConstraint> bt_constraint_;
 
  public:
-  using IsfInfo = IsfInfo<&HingeConstraint::state_>;
+  using IsfInfo = IsfInfo<&HingeConstraint::state_, IsfDependencies<RigidBody>>;
 };
 }  // namespace imp
 

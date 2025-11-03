@@ -65,6 +65,8 @@
 #include "core/async/future.h"
 #include "core/common/registry.h"
 #include "core/common/robin_map.h"
+#include "core/common/typed_set_vector.h"
+#include "core/common/variant.h"
 #include "core/math/arrays.proto.imp.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
@@ -150,29 +152,31 @@ void WorldAnimateToFunction(NodeHandle root, NodeHandle node,
  * be interacted
  */
 std::vector<int> GetInteractivityNodeIndices(
-    const ComponentHandle<GltfScene>& gltf_scene, const NodeHandle& root_node,
+    const ComponentHandle<GltfRenderer>& gltf_renderer,
     InteractivityType interactivity_type) {
   std::stack<NodeHandle> node_stack;
-  for (const NodeHandle& child : root_node->GetChildren()) {
+  for (const NodeHandle& child : gltf_renderer->GetModelRoot()->GetChildren()) {
     node_stack.push(child);
   }
 
+  const TypedSetVector<model::EntityData>& entities =
+      gltf_renderer->GetGltfAsset()->GetModelData().Entities();
   std::vector<int> interactivity_node_gltf_indices;
   while (!node_stack.empty()) {
     NodeHandle current_node = node_stack.top();
     node_stack.pop();
 
-    if (!gltf_scene->HasEntityDataForNodeHandle(current_node)) {
+    std::optional<model::EntityId> entity_id =
+        gltf_renderer->GetEntityIdFromNodeHandle(current_node);
+    if (!entity_id.has_value()) {
       continue;
     }
 
     bool is_interactivity_node = false;
-    const model::EntityData::Proxy entity_data =
-        gltf_scene->GetEntityDataFromNodeHandle(current_node);
     switch (interactivity_type) {
       case InteractivityType::HOVERABILITY: {
         std::optional<model::NodeHoverability> hoverable =
-            entity_data.node_hoverability;
+            entities[*entity_id].node_hoverability;
         is_interactivity_node = !hoverable.has_value() ||
                                 !hoverable->hoverable.has_value() ||
                                 hoverable->hoverable.value();
@@ -180,7 +184,7 @@ std::vector<int> GetInteractivityNodeIndices(
       }
       case InteractivityType::SELECTABILITY: {
         std::optional<model::NodeSelectability> selectable =
-            entity_data.node_selectability;
+            entities[*entity_id].node_selectability;
         is_interactivity_node = !selectable.has_value() ||
                                 !selectable->selectable.has_value() ||
                                 selectable->selectable.value();
@@ -189,7 +193,7 @@ std::vector<int> GetInteractivityNodeIndices(
     }
 
     if (is_interactivity_node) {
-      uint64_t gltf_index = entity_data.original_index;
+      uint64_t gltf_index = entities[*entity_id].original_index;
       interactivity_node_gltf_indices.push_back(static_cast<int>(gltf_index));
       for (const NodeHandle& child : current_node->GetChildren()) {
         node_stack.push(child);
@@ -230,8 +234,7 @@ Future<absl::Status> GltfInteractivityExtension::SetupInternal(
   // pointer property defined in the KHR_node_hoverability extension on a node
   // is changed
   hover_node_gltf_indicies_ = GetInteractivityNodeIndices(
-      gltf_renderer->GetNode()->GetComponent<GltfScene>(),
-      gltf_renderer->GetModelRoot(), InteractivityType::HOVERABILITY);
+      gltf_renderer, InteractivityType::HOVERABILITY);
 
   // Get a list of glTF node indices that are "selectable" as defined in the
   // KHR_node_selectability spec
@@ -243,8 +246,7 @@ Future<absl::Status> GltfInteractivityExtension::SetupInternal(
   // pointer property defined in the KHR_node_selectability extension on a node
   // is changed
   tap_node_gltf_indices_ = GetInteractivityNodeIndices(
-      gltf_renderer->GetNode()->GetComponent<GltfScene>(),
-      gltf_renderer->GetModelRoot(), InteractivityType::SELECTABILITY);
+      gltf_renderer, InteractivityType::SELECTABILITY);
 
   const InteractivityData& interactivity_data = *model_data.Interactivity();
   // TODO: Support loading non-default graphs.
@@ -259,7 +261,13 @@ Future<absl::Status> GltfInteractivityExtension::SetupInternal(
   RecipeGraph recipe_graph;
 
   // Create node index mapping.
-  gltf::interactivity::ConvertedGraph converted_graph(graph_data);
+  absl::StatusOr<std::unique_ptr<gltf::interactivity::ConvertedGraph>> result =
+      gltf::interactivity::ConvertedGraph::Create(graph_data);
+  if (!result.ok()) {
+    return Future<absl::Status>(
+        absl::InvalidArgumentError("Unable to create ConvertedGraph."));
+  }
+  gltf::interactivity::ConvertedGraph& converted_graph = **result;
 
   // Convert interactivity nodes to recipe nodes
   for (const InteractivityData::NodeData& node_data : graph_data.nodes) {
@@ -671,15 +679,21 @@ GltfInteractivityExtension::System::System(BaseView* view)
           return return_values;
         }
 
-        absl::StatusOr<PropertyPointer::PointerValue> value =
+        absl::StatusOr<PropertyPointer::PointerValue> pointer_value =
             pointer->GetValue(gltf_model);
-        if (!value.ok()) {
+        if (!pointer_value.ok()) {
           // Returns default values if pointer is not valid for the model.
           return return_values;
         }
 
+        absl::StatusOr<recipe::Variable> value =
+            TryConvertVariantTo<recipe::Variable>(pointer_value.value());
+        if (!value.ok()) {
+          return_values["isValid"] = false;
+          return return_values;
+        }
         return_values[std::string(recipe::kDefaultOutputSocketName)] =
-            absl::ConvertVariantTo<recipe::Variable>(value.value());
+            value.value();
         return_values["isValid"] = true;
 
         return return_values;

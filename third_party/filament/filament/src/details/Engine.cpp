@@ -34,6 +34,7 @@
 #include "details/Skybox.h"
 #include "details/Stream.h"
 #include "details/SwapChain.h"
+#include "details/Sync.h"
 #include "details/Texture.h"
 #include "details/VertexBuffer.h"
 #include "details/View.h"
@@ -786,7 +787,8 @@ int FEngine::loop() {
     #endif
     if (portString != nullptr) {
         const int port = atoi(portString);
-        debug.server = new matdbg::DebugServer(mBackend, mDriver->getShaderLanguage(),
+        debug.server = new matdbg::DebugServer(mBackend,
+                mDriver->getShaderLanguages(ShaderLanguage::UNSPECIFIED).front(),
                 matdbg::DbgShaderModel((uint8_t) mDriver->getShaderModel()), port);
 
         // Sometimes the server can fail to spin up (e.g. if the above port is already in use).
@@ -907,8 +909,8 @@ FIndirectLight* FEngine::createIndirectLight(const IndirectLight::Builder& build
 }
 
 FMaterial* FEngine::createMaterial(const Material::Builder& builder,
-        std::unique_ptr<MaterialParser> materialParser) noexcept {
-    return create(mMaterials, builder, std::move(materialParser));
+        MaterialDefinition const& definition) noexcept {
+    return create(mMaterials, builder, definition);
 }
 
 FSkybox* FEngine::createSkybox(const Skybox::Builder& builder) noexcept {
@@ -1007,6 +1009,15 @@ FSwapChain* FEngine::createSwapChain(uint32_t width, uint32_t height, uint64_t f
     FSwapChain* p = mHeapAllocator.make<FSwapChain>(*this, width, height, flags);
     if (UTILS_LIKELY(p)) {
         mSwapChains.insert(p);
+    }
+    return p;
+}
+
+FSync* FEngine::createSync() noexcept {
+    FSync* p = mHeapAllocator.make<FSync>(*this);
+    if (UTILS_LIKELY(p)) {
+        std::lock_guard const guard(mSyncListLock);
+        mSyncs.insert(p);
     }
     return p;
 }
@@ -1201,6 +1212,11 @@ bool FEngine::destroy(const FSwapChain* p) {
 }
 
 UTILS_NOINLINE
+bool FEngine::destroy(const FSync* p) {
+    return terminateAndDestroyLocked(mSyncListLock, p, mSyncs);
+}
+
+UTILS_NOINLINE
 bool FEngine::destroy(const FStream* p) {
     return terminateAndDestroy(p, mStreams);
 }
@@ -1279,6 +1295,10 @@ bool FEngine::isValid(const FVertexBuffer* p) const {
 
 bool FEngine::isValid(const FFence* p) const {
     return isValid(p, mFences);
+}
+
+bool FEngine::isValid(const FSync* p) const {
+    return isValid(p, mSyncs);
 }
 
 bool FEngine::isValid(const FIndexBuffer* p) const {

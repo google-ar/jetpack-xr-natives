@@ -73,11 +73,16 @@ void WindowConfiguration::SetWindowVisibility(absl::string_view window_name,
   }
 }
 
-void WindowConfiguration::RestoreDefaultVisibility() {
+void WindowConfiguration::RestoreDefault() {
   for (auto iter = window_names_.begin(); iter != window_names_.end(); ++iter) {
     WindowInfo* info = window_infos_[*iter].get();
     info->current_visibility = info->initial_visibility;
   }
+  should_restore_default_layout_ = true;
+}
+
+void WindowConfiguration::SetHideAllWindows(bool hide_all) {
+  hide_all_ = hide_all;
 }
 
 }  // namespace imp::editor

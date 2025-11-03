@@ -47,7 +47,7 @@ SplitEngineDesktopBridgeServiceImpl::SplitEngineDesktopBridgeServiceImpl(
           kPulseCheckInterval, kTTL,
           [this](BridgeId bridge_id) {
             impl_.CleanupBridge(bridge_id);
-            absl::MutexLock lock(&bridge_data_mutex_);
+            absl::MutexLock lock(bridge_data_mutex_);
             auto it = bridge_data_.find(bridge_id);
             if (it == bridge_data_.end()) {
               IMP_LOG(imp::WARNING) << "Bridge " << bridge_id << " not found.";
@@ -64,7 +64,7 @@ SplitEngineDesktopBridgeServiceImpl::SplitEngineDesktopBridgeServiceImpl(
   fd_receiver_ = std::make_unique<FileDescriptorReceiver>(
       uds_path_, [this](int fd, const FileDescriptorMetadata& metadata) {
         IMP_LOG(imp::INFO) << "Received file descriptor: " << fd << " " << metadata.size;
-        absl::MutexLock lock(&fd_metadata_mutex_);
+        absl::MutexLock lock(fd_metadata_mutex_);
         fd_metadata_map_[metadata.bridge_id][metadata.fd] = {metadata.bridge_id,
                                                              fd, metadata.size};
       });
@@ -80,7 +80,7 @@ grpc::ServerUnaryReactor* SplitEngineDesktopBridgeServiceImpl::InitializeBridge(
 
   const BridgeId bridge_id = GenerateBridgeId();
   {
-    absl::MutexLock lock(&bridge_data_mutex_);
+    absl::MutexLock lock(bridge_data_mutex_);
     
     bridge_data_.emplace(bridge_id, nullptr);
   }
@@ -90,7 +90,7 @@ grpc::ServerUnaryReactor* SplitEngineDesktopBridgeServiceImpl::InitializeBridge(
   if (auto status = impl_.InitializeBridge(
           bridge_id,
           [bridge_id, this](MessageGroupId message_group_id) {
-            absl::MutexLock lock(&bridge_data_mutex_);
+            absl::MutexLock lock(bridge_data_mutex_);
             auto it = bridge_data_.find(bridge_id);
             if (it == bridge_data_.end()) {
               IMP_LOG(imp::WARNING) << "Bridge " << bridge_id << " not found.";
@@ -129,7 +129,6 @@ grpc::ServerUnaryReactor* SplitEngineDesktopBridgeServiceImpl::Heartbeat(
     grpc::CallbackServerContext* context, const HeartbeatRequest* request,
     google::rpc::Status* response) {
   // TODO: (broken link) - can _this_ client operate on the request->bridge_id()?
-  IMP_LOG(imp::ERROR) << "Heartbeat " << request->bridge_id();
   grpc::ServerUnaryReactor* reactor = context->DefaultReactor();
   const absl::Status status =
       heartbeat_monitor_.Heartbeat(request->bridge_id());
@@ -146,7 +145,7 @@ grpc::ServerUnaryReactor* SplitEngineDesktopBridgeServiceImpl::RegisterBuffer(
   grpc::ServerUnaryReactor* reactor = context->DefaultReactor();
   FileDescriptorMetadata metadata;
   {
-    absl::MutexLock lock(&fd_metadata_mutex_);
+    absl::MutexLock lock(fd_metadata_mutex_);
     auto bridge_it = fd_metadata_map_.find(request->bridge_id());
     if (bridge_it == fd_metadata_map_.end()) {
       reactor->Finish(grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
@@ -241,7 +240,7 @@ SplitEngineDesktopBridgeServiceImpl::ReadMessageGroupCompletions(
     const MessageGroupCompletionRequest* request) {
   const BridgeId bridge_id = request->bridge_id();
 
-  absl::MutexLock lock(&bridge_data_mutex_);
+  absl::MutexLock lock(bridge_data_mutex_);
 
   auto it = bridge_data_.find(bridge_id);
   if (it == bridge_data_.end()) {

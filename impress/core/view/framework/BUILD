@@ -196,7 +196,6 @@ cc_library(
         "//core/resources:url_loader",
         "//core/scene_handles:scene_handle_interface",
         "//core/split_engine:split_engine_serializer",
-        "//core/split_engine/materials:split_engine_custom_material",
         "//core/view:base_view",
         "//core/view:view_events",
         "//core/view/async:future",

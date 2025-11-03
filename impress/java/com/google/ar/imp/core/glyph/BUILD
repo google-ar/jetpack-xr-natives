@@ -26,6 +26,7 @@ kt_android_library(
         "GlyphSource.kt",
         "PathGlyphSource.kt",
         "ShaperGlyphSource.kt",
+        "utils.kt",
     ],
     disable_lint_checks = ["NewApi"],
     deps = [

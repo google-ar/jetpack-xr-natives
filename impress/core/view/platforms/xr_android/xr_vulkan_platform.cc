@@ -78,12 +78,30 @@ uint32_t identifyQueueFamilyIndex(VkPhysicalDevice physical_device,
   return family_index;
 }
 
+VkQueueGlobalPriorityKHR getVkQueueGlobalPriority(
+    filament::backend::Platform::GpuContextPriority priority) {
+  switch (priority) {
+    case filament::backend::Platform::GpuContextPriority::LOW:
+      return VK_QUEUE_GLOBAL_PRIORITY_LOW_KHR;
+    case filament::backend::Platform::GpuContextPriority::MEDIUM:
+      return VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_KHR;
+    case filament::backend::Platform::GpuContextPriority::HIGH:
+      return VK_QUEUE_GLOBAL_PRIORITY_HIGH_KHR;
+    case filament::backend::Platform::GpuContextPriority::REALTIME:
+      return VK_QUEUE_GLOBAL_PRIORITY_REALTIME_KHR;
+    case filament::backend::Platform::GpuContextPriority::DEFAULT:
+      return VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_KHR;
+  }
+}
+
 }  // namespace
 
 XrVulkanPlatform::XrVulkanPlatform() { bluevk::initialize(); }
 
 filament::backend::Driver* XrVulkanPlatform::createDriver(
     void* sharedContext, const Platform::DriverConfig& driverConfig) noexcept {
+  gpu_context_priority_ = driverConfig.gpuContextPriority;
+
   // TODO: (broken link) - Remove this once impress supports filament feature
   // flags
   Platform::DriverConfig vk_driver_config = driverConfig;
@@ -156,7 +174,7 @@ XrVulkanPlatform::SwapChainBundle XrVulkanPlatform::getSwapChainBundle(
   bundle.depthFormat = XrVulkanSwapChainImageHandler::kVkDepthFormat;
   VkImage depth_image = swap_chain->GetSwapchainImageHandler()
                             .GetSwapchainLayers()
-                            ->depth.images.front()
+                            ->active_depth->images.front()
                             .image;
   uint2 display_size =
       swap_chain->GetSwapchainImageHandler().GetSwapchainLayers()->display_size;
@@ -371,6 +389,7 @@ VkDevice XrVulkanPlatform::createVulkanLogicalDevice(
       VK_KHR_MAINTENANCE3_EXTENSION_NAME,
       VK_KHR_MULTIVIEW_EXTENSION_NAME,
       VK_KHR_IMAGE_FORMAT_LIST_EXTENSION_NAME,
+      VK_KHR_GLOBAL_PRIORITY_EXTENSION_NAME,
   };
 
   uint32_t deviceExtensionCount = 0;
@@ -402,6 +421,19 @@ VkDevice XrVulkanPlatform::createVulkanLogicalDevice(
   };
   pNext = &ycbcrConversion;
 
+  const bool requires_gpu_priority =
+      gpu_context_priority_ !=
+      filament::backend::Platform::GpuContextPriority::DEFAULT;
+  VkPhysicalDeviceGlobalPriorityQueryFeaturesKHR globalPriority = {
+      .sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GLOBAL_PRIORITY_QUERY_FEATURES_KHR,
+      .pNext = pNext,
+      .globalPriorityQuery = VK_TRUE,
+  };
+  if (requires_gpu_priority) {
+    pNext = &globalPriority;
+  }
+
   VkPhysicalDevicePortabilitySubsetFeaturesKHR portability = {
       .sType =
           VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PORTABILITY_SUBSET_FEATURES_KHR,
@@ -415,7 +447,8 @@ VkDevice XrVulkanPlatform::createVulkanLogicalDevice(
       .pNext = nullptr,
       .multiview = VK_TRUE,
       .multiviewGeometryShader = VK_FALSE,
-      .multiviewTessellationShader = VK_FALSE};
+      .multiviewTessellationShader = VK_FALSE,
+  };
 
   std::vector<const char*> enabledExtensions;
   for (auto const& extensionProperties : availableDeviceExtensions) {
@@ -443,6 +476,12 @@ VkDevice XrVulkanPlatform::createVulkanLogicalDevice(
   // Do not support the filament debug markers extension.
   vulkan_shared_context_.debugMarkersSupported = false;
 
+  VkDeviceQueueGlobalPriorityCreateInfoKHR queuePriorityCreateInfo = {
+      .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_KHR,
+      .pNext = nullptr,
+      .globalPriority = getVkQueueGlobalPriority(gpu_context_priority_),
+  };
+
   VkDeviceQueueCreateInfo deviceQueueCreateInfo[2] = {};
   const float queuePriority[] = {1.0f};
   VkDeviceCreateInfo deviceCreateInfo = {};
@@ -450,12 +489,16 @@ VkDevice XrVulkanPlatform::createVulkanLogicalDevice(
   deviceQueueCreateInfo[0].queueFamilyIndex = graphicsQueueFamilyIndex;
   deviceQueueCreateInfo[0].queueCount = 1;
   deviceQueueCreateInfo[0].pQueuePriorities = &queuePriority[0];
+  deviceQueueCreateInfo[0].pNext =
+      requires_gpu_priority ? &queuePriorityCreateInfo : nullptr;
 
   deviceQueueCreateInfo[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
   deviceQueueCreateInfo[1].flags = VK_DEVICE_QUEUE_CREATE_PROTECTED_BIT;
   deviceQueueCreateInfo[1].queueFamilyIndex = protectedGraphicsQueueFamilyIndex;
   deviceQueueCreateInfo[1].queueCount = 1;
   deviceQueueCreateInfo[1].pQueuePriorities = &queuePriority[0];
+  deviceQueueCreateInfo[1].pNext =
+      requires_gpu_priority ? &queuePriorityCreateInfo : nullptr;
 
   deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
   deviceCreateInfo.queueCreateInfoCount =

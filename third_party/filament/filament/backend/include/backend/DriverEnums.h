@@ -101,6 +101,16 @@ static constexpr uint64_t SWAP_CHAIN_HAS_STENCIL_BUFFER         = SWAP_CHAIN_CON
  */
 static constexpr uint64_t SWAP_CHAIN_CONFIG_PROTECTED_CONTENT   = 0x40;
 
+/**
+ * Indicates that the SwapChain is configured to use Multi-Sample Anti-Aliasing (MSAA) with the
+ * given sample points within each pixel. Only supported when isMSAASwapChainSupported(4) is
+ * true.
+ *
+ * This is only supported by EGL(Android). Other GL platforms (GLX, WGL, etc) don't support it
+ * because the swapchain MSAA settings must be configured before window creation.
+ */
+static constexpr uint64_t SWAP_CHAIN_CONFIG_MSAA_4_SAMPLES      = 0x80;
+
 static constexpr size_t MAX_VERTEX_ATTRIBUTE_COUNT  = 16;   // This is guaranteed by OpenGL ES.
 static constexpr size_t MAX_SAMPLER_COUNT           = 62;   // Maximum needed at feature level 3.
 static constexpr size_t MAX_VERTEX_BUFFER_COUNT     = 16;   // Max number of bound buffer objects.
@@ -187,6 +197,7 @@ constexpr std::string_view to_string(Backend const backend) noexcept {
  * - The Metal backend can prefer precompiled Metal libraries, while falling back to MSL.
  */
 enum class ShaderLanguage {
+    UNSPECIFIED = -1,
     ESSL1 = 0,
     ESSL3 = 1,
     SPIRV = 2,
@@ -209,6 +220,8 @@ constexpr const char* shaderLanguageToString(ShaderLanguage shaderLanguage) noex
             return "Metal precompiled library";
         case ShaderLanguage::WGSL:
             return "WGSL";
+        case ShaderLanguage::UNSPECIFIED:
+            return "Unspecified";
     }
     return "UNKNOWN";
 }
@@ -546,12 +559,21 @@ constexpr TargetBufferFlags getTargetBufferFlagsAt(size_t index) noexcept {
 }
 
 /**
- * Frequency at which a buffer is expected to be modified and used. This is used as an hint
- * for the driver to make better decisions about managing memory internally.
+ * How the buffer will be used.
  */
 enum class BufferUsage : uint8_t {
-    STATIC,      //!< content modified once, used many times
-    DYNAMIC,     //!< content modified frequently, used many times
+    STATIC              = 0,    //!< (legacy) content modified once, used many times
+    DYNAMIC             = 1,    //!< (legacy) content modified frequently, used many times
+    DYNAMIC_BIT         = 0x1,  //!< buffer can be modified frequently, used many times
+    SHARED_WRITE_BIT    = 0x04, //!< buffer can be memory mapped for write operations
+};
+
+/**
+ * How the buffer will be mapped.
+ */
+enum class MapBufferAccessFlags : uint8_t {
+    WRITE_BIT               = 0x2,  //!< buffer is mapped from writing
+    INVALIDATE_RANGE_BIT    = 0x4,  //!< the mapped range content is lost
 };
 
 /**
@@ -617,6 +639,15 @@ enum class ShaderModel : uint8_t {
 };
 static constexpr size_t SHADER_MODEL_COUNT = 2;
 
+constexpr std::string_view to_string(ShaderModel model) noexcept {
+    switch (model) {
+        case ShaderModel::MOBILE:
+            return "mobile";
+        case ShaderModel::DESKTOP:
+            return "desktop";
+    }
+}
+
 /**
  * Primitive types
  */
@@ -680,6 +711,12 @@ enum class Precision : uint8_t {
     MEDIUM,
     HIGH,
     DEFAULT
+};
+
+union ConstantValue {
+    int32_t i;
+    float f;
+    bool b;
 };
 
 /**
@@ -1666,6 +1703,8 @@ enum class Workaround : uint16_t {
     // prevents these stutters by not precaching depth variants of the default material for those
     // particular browsers.
     DISABLE_DEPTH_PRECACHE_FOR_DEFAULT_MATERIAL,
+    // Emulate an sRGB swapchain in shader code.
+    EMULATE_SRGB_SWAPCHAIN,
 };
 
 using StereoscopicType = backend::Platform::StereoscopicType;
@@ -1682,6 +1721,11 @@ template<> struct utils::EnableBitMaskOperators<filament::backend::TextureUsage>
         : public std::true_type {};
 template<> struct utils::EnableBitMaskOperators<filament::backend::StencilFace>
         : public std::true_type {};
+template<> struct utils::EnableBitMaskOperators<filament::backend::BufferUsage>
+        : public std::true_type {};
+template<> struct utils::EnableBitMaskOperators<filament::backend::MapBufferAccessFlags>
+        : public std::true_type {};
+
 template<> struct utils::EnableIntegerOperators<filament::backend::TextureCubemapFace>
         : public std::true_type {};
 template<> struct utils::EnableIntegerOperators<filament::backend::FeatureLevel>

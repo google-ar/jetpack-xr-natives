@@ -42,6 +42,7 @@
 #include "core/ncsb/dispatcher/connection_owner.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/groups_manager.h"
+#include "core/ncsb/node_controller.h"
 #include "core/ncsb/node_handle.h"
 
 namespace imp {
@@ -90,7 +91,7 @@ class Node final : public BaseNode {
       GroupsManager::kMainGroupName;
 
   // Returns the View that this Node is part of.
-  BaseView& GetView() const;
+  inline BaseView& GetView() const { return node_controller_->GetView(); }
 
   // Returns the name of the node, or the empty string if unnamed.
   absl::string_view GetName() const;
@@ -580,10 +581,19 @@ class Node final : public BaseNode {
   void SetFilamentTransformInternal(
       ::filament::TransformManager::Instance instance, const mat4& transform);
 
-  filament::Engine* GetEngine() const;
-  filament::TransformManager& GetTransformManager() const;
-  ComponentManager& GetComponentManager() const;
-  Dispatcher& GetDispatcher() const;
+  inline filament::Engine* GetEngine() const {
+    return BaseView::GetSharedEngine();
+  }
+
+  inline filament::TransformManager& GetTransformManager() const {
+    return GetEngine()->getTransformManager();
+  }
+
+  inline ComponentManager& GetComponentManager() const {
+    return GetView().GetComponentManager();
+  }
+
+  inline Dispatcher& GetDispatcher() const { return GetView().GetDispatcher(); }
 
   friend class NodeHandle;
 };

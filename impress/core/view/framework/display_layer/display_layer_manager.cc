@@ -23,6 +23,7 @@
 #include "absl/strings/string_view.h"
 #include "filament/filament/include/filament/Renderer.h"
 #include "filament/filament/include/filament/Scene.h"
+#include "core/common/trace.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/groups_manager.h"
 #include "core/view/base_view.h"
@@ -69,6 +70,7 @@ void DisplayLayerManager::RemoveLayer(absl::string_view name) {
 }
 
 void DisplayLayerManager::RenderLayers() {
+  IMP_TRACE();
   for (auto& layer : layers_) {
     if (layer->is_enabled) {
       // use camera and viewport of Main Scene as default

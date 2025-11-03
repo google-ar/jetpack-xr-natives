@@ -71,7 +71,6 @@
 #include <atomic>
 #include <fstream>
 #include <functional>
-#include <iostream>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -295,8 +294,7 @@ MaterialBuilder& MaterialBuilder::variable(Variable v,
 
 MaterialBuilder& MaterialBuilder::parameter(const char* name, size_t size, UniformType type,
         ParameterPrecision precision) {
-    FILAMENT_CHECK_POSTCONDITION(mParameterCount < MAX_PARAMETERS_COUNT) << "Too many parameters";
-    mParameters[mParameterCount++] = { name, type, size, precision };
+    mParameters.emplace_back(name, type, size, precision );
     return *this;
 }
 
@@ -315,16 +313,15 @@ MaterialBuilder& MaterialBuilder::parameter(const char* name, SamplerType sample
             << "multisample samplers only possible with SAMPLER_2D or SAMPLER_2D_ARRAY,"
                " as long as type is not SHADOW";
 
-    FILAMENT_CHECK_POSTCONDITION(mParameterCount < MAX_PARAMETERS_COUNT) << "Too many parameters";
-    mParameters[mParameterCount++] = { name, samplerType, format, precision, filterable,
-        multisample, transformName, stages };
+    mParameters.emplace_back( name, samplerType, format, precision, filterable,
+        multisample, transformName, stages );
     return *this;
 }
 
 template<typename T, typename>
 MaterialBuilder& MaterialBuilder::constant(const char* name, ConstantType const type, T defaultValue) {
     auto result = std::find_if(mConstants.begin(), mConstants.end(), [name](const Constant& c) {
-        return c.name == CString(name);
+        return !strcmp(c.name.c_str(), name);
     });
     FILAMENT_CHECK_POSTCONDITION(result == mConstants.end())
             << "There is already a constant parameter present with the name " << name << ".";
@@ -359,7 +356,7 @@ MaterialBuilder& MaterialBuilder::constant(const char* name, ConstantType const 
         assert_invariant(false);
     }
 
-    mConstants.push_back(constant);
+    mConstants.push_back(std::move(constant));
     return *this;
 }
 template MaterialBuilder& MaterialBuilder::constant<int32_t>(
@@ -641,7 +638,7 @@ MaterialBuilder& MaterialBuilder::shaderDefine(const char* name, const char* val
 }
 
 bool MaterialBuilder::hasSamplerType(SamplerType const samplerType) const noexcept {
-    for (size_t i = 0, c = mParameterCount; i < c; i++) {
+    for (size_t i = 0, c = mParameters.size(); i < c; i++) {
         auto const& param = mParameters[i];
         if (param.isSampler() && param.samplerType == samplerType) {
             return  true;
@@ -668,7 +665,7 @@ void MaterialBuilder::prepareToBuild(MaterialInfo& info) noexcept {
     BufferInterfaceBlock::Builder ibb;
     // sampler bindings start at 1, 0 is the ubo
     uint16_t binding = 1;
-    for (size_t i = 0, c = mParameterCount; i < c; i++) {
+    for (size_t i = 0, c = mParameters.size(); i < c; i++) {
         auto const& param = mParameters[i];
         assert_invariant(!param.isSubpass());
         if (param.isSampler()) {
@@ -1676,7 +1673,7 @@ void MaterialBuilder::writeCommonChunks(ChunkContainer& container, MaterialInfo&
     // User constant parameters
     FixedCapacityVector<MaterialConstant> constantsEntry(mConstants.size());
     std::transform(mConstants.begin(), mConstants.end(), constantsEntry.begin(),
-            [](Constant const& c) { return MaterialConstant(c.name.c_str(), c.type); });
+            [](Constant const& c) { return MaterialConstant(c.name, c.type, c.defaultValue); });
     container.push<MaterialConstantParametersChunk>(std::move(constantsEntry));
 
     FixedCapacityVector<MaterialPushConstant> pushConstantsEntry(mPushConstants.size());

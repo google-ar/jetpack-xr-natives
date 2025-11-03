@@ -40,7 +40,8 @@ namespace imp::gltf {
 class PropertyPointer {
  public:
   // PointerValue is a value of a gltf property.
-  using PointerValue = std::variant<int, float, float2, float3, float4, mat4f>;
+  using PointerValue = std::variant<int, float, float2, float3, float4, mat4f,
+                                    std::vector<float>>;
 
   // PointerDeclaration contains the information needed to parse a pointer path
   // and construct a PropertyPointer.

@@ -21,12 +21,11 @@
 
 #include "absl/strings/string_view.h"
 #include "core/common/platform_helpers.h"
-#include "core/scripting/proto/bridge.proto.imp.h"
 
 namespace imp {
 
 /**
- * Helper class to convert absl logging API calls to impress loggiing API
+ * Helper class to convert absl logging API calls to impress logging API
  * calls.
  *
  * Though absl logging API is preferred, due to issues with Copybara + Bazel +
@@ -42,7 +41,6 @@ class ImpressStreamLogger {
   static void SetEnabled(bool enabled);
   static bool IsEnabled();
 
-  ImpressStreamLogger(scripting::LogLevel level);
   ImpressStreamLogger(output::OutputKind kind);
   ~ImpressStreamLogger();
 

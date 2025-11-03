@@ -6,12 +6,15 @@ load(
     "filament_copts",
     "filament_defines",
     "if_android",
+    "if_android_perfetto",
     "if_apple",
     "if_linux",
     "if_linux_aarch64",
     "if_linux_or_android",
     "if_linux_x86_64",
     "if_macos",
+    "if_macos_aarch64",
+    "if_macos_x86_64",
     "if_vulkan",
     "if_wasm",
     "if_windows",
@@ -66,6 +69,7 @@ cc_library(
     name = "utils_hdrs",
     hdrs = [
         "utils/include/utils/Allocator.h",
+        "utils/include/utils/AsyncJobQueue.h",
         "utils/include/utils/BinaryTreeArray.h",
         "utils/include/utils/BitmaskEnum.h",
         "utils/include/utils/CString.h",
@@ -78,6 +82,8 @@ cc_library(
         "utils/include/utils/FixedCapacityVector.h",
         "utils/include/utils/FixedCircularBuffer.h",
         "utils/include/utils/Hash.h",
+        "utils/include/utils/ImmutableCString.h",
+        "utils/include/utils/InternPool.h",
         "utils/include/utils/Invocable.h",
         "utils/include/utils/JobSystem.h",
         "utils/include/utils/Log.h",
@@ -92,9 +98,11 @@ cc_library(
         "utils/include/utils/QuadTree.h",
         "utils/include/utils/Range.h",
         "utils/include/utils/RangeMap.h",
+        "utils/include/utils/RefCountedMap.h",
         "utils/include/utils/SingleInstanceComponentManager.h",
         "utils/include/utils/Slice.h",
         "utils/include/utils/StaticString.h",
+        "utils/include/utils/Status.h",
         "utils/include/utils/StructureOfArrays.h",
         "utils/include/utils/ThermalManager.h",
         "utils/include/utils/ThreadUtils.h",
@@ -155,16 +163,16 @@ cc_library(
     copts = filament_copts(),
     defines = filament_defines(),
     includes = ["utils/include"],
-    textual_hdrs = [] + if_android([
+    textual_hdrs = [] + if_android_perfetto([
         "utils/include/private/utils/android/Tracing.h",
     ]) + if_apple([
         "utils/include/private/utils/darwin/Tracing.h",
     ]),
     deps = [
         ":utils_hdrs",
-        # Disable perfetto due to size.
-        # "//third_party/perfetto:libperfetto_client_experimental",
-    ],
+    ] + if_android_perfetto([
+        "//third_party/perfetto:libperfetto_client_experimental",
+    ]),
     alwayslink = 1,
 )
 
@@ -201,6 +209,7 @@ cc_library(
         "utils/include/utils/CyclicBarrier.h",
         "utils/include/utils/NameComponentManager.h",
         "utils/src/Allocator.cpp",
+        "utils/src/AsyncJobQueue.cpp",
         "utils/src/CString.cpp",
         "utils/src/CallStack.cpp",
         "utils/src/CountDownLatch.cpp",
@@ -208,6 +217,7 @@ cc_library(
         "utils/src/EntityManager.cpp",
         "utils/src/EntityManagerImpl.h",
         "utils/src/FixedCapacityVectorBase.cpp",
+        "utils/src/ImmutableCString.cpp",
         "utils/src/Invocable.cpp",
         "utils/src/JobSystem.cpp",
         "utils/src/Log.cpp",
@@ -215,6 +225,7 @@ cc_library(
         "utils/src/Panic.cpp",
         "utils/src/Path.cpp",
         "utils/src/Profiler.cpp",
+        "utils/src/Status.cpp",
         "utils/src/ThreadUtils.cpp",
         "utils/src/api_level.cpp",
         "utils/src/architecture.cpp",
@@ -239,6 +250,8 @@ cc_library(
         "utils/src/darwin/Systrace.cpp",
     ]) + if_wasm([
         "utils/src/web/Path.cpp",
+    ]) + if_android_perfetto([
+        "utils/src/android/Tracing.cpp",
     ]),
     copts = filament_copts(),
     defines = filament_defines(),
@@ -250,7 +263,9 @@ cc_library(
         ":utils_hdrs",
         ":utils_private_hdrs",
         "@robin_map",
-    ] + if_apple([":utils_path"]),
+    ] + if_apple([":utils_path"]) + if_android_perfetto([
+        "//third_party/perfetto:libperfetto_client_experimental",
+    ]),
     alwayslink = 1,
 )
 
@@ -718,7 +733,10 @@ cc_library(
         ]) + if_windows([
             "bluegl/src/BlueGLWindows.cpp",
             "bluegl/src/BlueGLCoreWindowsImpl.S",
-        ]) + if_macos([
+        ]) + if_macos_aarch64([
+            "bluegl/src/BlueGLDarwin.cpp",
+            "bluegl/src/BlueGLCoreDarwinAArch64Impl.S",
+        ]) + if_macos_x86_64([
             "bluegl/src/BlueGLDarwin.cpp",
             "bluegl/src/BlueGLCoreDarwinImpl.S",
         ]) + extra_srcs,

@@ -70,6 +70,8 @@ class LayoutComposer {
     window_configuration_ = &window_configuration;
   }
 
+  void ResetDockingLayout() { docking_helper_->Reset(); }
+
  private:
   struct WidgetInfo {
     WidgetInfo(absl::string_view label, imp::Invocable<void()> draw_function)

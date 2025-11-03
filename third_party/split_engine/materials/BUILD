@@ -209,3 +209,49 @@ cc_library(
     ],
     alwayslink = 1,
 )
+
+cc_library(
+    name = "gsplat_material",
+    srcs = ["gsplat_material.cc"],
+    hdrs = ["gsplat_material.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status",
+        "@com_google_impress//core/async:future",
+        "@com_google_impress//core/common:log",
+        "@com_google_impress//core/math",
+        "@com_google_impress//core/media:media_color_space",
+        "@com_google_impress//core/media:media_type",
+        "@com_google_impress//core/render",
+        "@com_google_impress//core/split_engine:flatbuffer_utils",
+        "@com_google_impress//core/split_engine/materials:builtin_texture_parameter_creator",
+        "@com_google_impress//core/split_engine/materials:split_engine_material",
+        "@com_google_impress//core/view:base_view",
+        "@flatbuffers",
+        "@third_party//split_engine:fbs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "gsplat_background_material",
+    srcs = ["gsplat_background_material.cc"],
+    hdrs = ["gsplat_background_material.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        "@com_google_absl//absl/memory",
+        "@com_google_impress//core/async:future",
+        "@com_google_impress//core/math",
+        "@com_google_impress//core/media:media_color_space",
+        "@com_google_impress//core/media:media_type",
+        "@com_google_impress//core/render",
+        "@com_google_impress//core/split_engine:flatbuffer_utils",
+        "@com_google_impress//core/split_engine/materials:builtin_texture_parameter_creator",
+        "@com_google_impress//core/split_engine/materials:split_engine_material",
+        "@com_google_impress//core/view:base_view",
+        "@flatbuffers",
+        "@third_party//split_engine:fbs",
+    ],
+    alwayslink = 1,
+)

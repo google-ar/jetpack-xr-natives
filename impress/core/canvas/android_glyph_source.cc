@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "core/common/log.h"
 #include "absl/strings/string_view.h"
 #include "core/canvas/android_glyph_advance.h"
 #include "core/canvas/fonts/android_font_font_holder.h"
@@ -43,7 +44,7 @@
   IMP_LOG(imp::level)                                                             \
       << "Error resolving symbol in the Impress Android glyph package. " \
          "Likely missing Android Java dependency on "                    \
-         "\"//java/com/google/ar/imp/core/glyph\". " \
+         "\"//third_party/impress/java/com/google/ar/imp/core/glyph\". " \
          "Also ensure that your proguard_specs list includes "           \
          "\"//java/com/google/android/apps/common/"                      \
          "proguard:annotations.pgcfg\"."
@@ -123,6 +124,7 @@ ScopedCanvas::TextMetrics AndroidGlyphSource::GetGlyphMetrics(
       font ? static_cast<jobject>(font->GetPlatformFont()) : nullptr;
   CallVoidMethod(get_glyph_metrics_, glyph_id, font_jobject, stroke_width,
                  paint.WeakReference(), out_bounds_array.get());
+  AssertNoException(Env());
 
   jfloat* out_bounds_array_ptr =
       Env()->GetFloatArrayElements(out_bounds_array.get(), /*isCopy=*/nullptr);
@@ -152,6 +154,7 @@ AndroidGlyphSource::GetCombinedCharacterGroups(absl::string_view text,
   JniUniquePtr<jintArray> indices_array = WrapJni(
       Env(), CallIntArrayMethod(get_combined_character_groups_,
                                 text_jstring.get(), paint.WeakReference()));
+  AssertNoException(Env());
 
   jint* indices_array_ptr =
       Env()->GetIntArrayElements(indices_array.get(), /*isCopy=*/nullptr);
@@ -180,6 +183,8 @@ std::vector<ScopedCanvas::GlyphAdvance> AndroidGlyphSource::GetTextGlyphs(
   JniUniquePtr<jobjectArray> out_jobject_array = WrapJni(
       Env(), static_cast<jobjectArray>(CallObjectMethod(
                  get_text_glyphs_, text_jstring.get(), paint.WeakReference())));
+  AssertNoException(Env());
+
   jsize out_size = Env()->GetArrayLength(out_jobject_array.get());
 
   std::vector<ScopedCanvas::GlyphAdvance> result;
@@ -222,6 +227,7 @@ void AndroidGlyphSource::DrawGlyph(android::Canvas& canvas, int glyph_id,
   CallVoidMethod(draw_glyph_, canvas.WeakReference(), glyph_id, x, y,
                  font_jobject, stroke_width, fillPaint.WeakReference(),
                  strokePaint.WeakReference());
+  AssertNoException(Env());
 }
 
 }  // namespace imp

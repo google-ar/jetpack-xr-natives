@@ -61,6 +61,22 @@ WidgetUiSystem::WidgetUiSystem(BaseView* view, bool enabled,
         if (!enabled_) {
           return;
         }
+
+        bool is_using_window_configuration =
+            layout_composer_ &&
+            layout_composer_->GetLayoutType() ==
+                LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT &&
+            window_configuration_;
+
+        bool should_restore_default_layout =
+            window_configuration_ &&
+            window_configuration_->ShouldRestoreDefaultLayout();
+        if (should_restore_default_layout) {
+          layout_composer_->ResetDockingLayout();
+          window_configuration_->NotifyLayoutRestored();
+          return;
+        }
+
         for (auto& [widget, layout_info] : widgets_) {
           if (pending_removes_.contains(widget.get()) ||
               !widget->HasContent()) {
@@ -68,11 +84,14 @@ WidgetUiSystem::WidgetUiSystem(BaseView* view, bool enabled,
           }
 
           if (layout_composer_) {
-            if (layout_composer_->GetLayoutType() ==
-                    LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT &&
-                window_configuration_ &&
-                !(window_configuration_->IsWindowVisible(widget->GetName()))) {
-              continue;
+            if (is_using_window_configuration) {
+              if (!window_configuration_->IsWindowVisible(widget->GetName())) {
+                continue;
+              }
+              if (window_configuration_->ShouldHideAllWindows() &&
+                  layout_info.panel_id != PanelId::kMenuBar) {
+                continue;
+              }
             }
             // Widgets can queue draw functions here using LayoutComposer.
             layout_composer_->DrawWidget(layout_info, widget.get());

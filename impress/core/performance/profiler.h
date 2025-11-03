@@ -28,9 +28,11 @@ namespace imp {
 // All the data contained in a single sample in the profiler.
 struct ProfileResult {
   absl::string_view name;
-  uint16_t sample_id;  // Int16 to save memory since kMaxSamples is < 16k.
-  int64_t start_time;
-  int64_t end_time;
+  // Int16 to save memory since kMaxFrames is < 16k.
+  uint16_t sample_id;
+  uint16_t sample_end_id;
+  // Int32 to save memory since 32 bits gives 4 full seconds per frame.
+  uint32_t duration_ns;
   std::thread::id thread_id;
 };
 
@@ -76,14 +78,15 @@ class Profiler {
   static void SetPaused(bool paused) { paused_ = paused; }
   // Tells the profiler a new frame has started.
   static void AdvanceFrame();
-  // Returns the profile samples for the current frame.
-  static std::array<ProfileResult, kMaxSamples>& GetCurrentFrameSamples();
   // Returns the profile samples for the frame at the given index.
   static std::array<ProfileResult, kMaxSamples>& GetSamples(int frame_index);
   // Returns the number of samples for the frame at the given index.
   static int GetSampleCount(int frame_index);
-  // Returns the duration of the frame at the given index.
-  static float GetFrameDuration(int frame_index);
+  // Returns the duration of time FilamentHost::RenderNextFrame() took for the
+  // given frame in nanoseconds.
+  static uint32_t GetRenderNextFrameDurationNanos(int frame_index);
+  // Returns the total duration of the given frame in nanoseconds.
+  static uint32_t GetTotalFrameDurationNanos(int frame_index);
   // Sets the end time of the given sample index to the current time.
   static void RecordCurrentFrameSampleEndTime(int sample_index, int64_t id);
   // Returns the main thread id.
@@ -93,17 +96,26 @@ class Profiler {
   static std::thread::id GetCachedThreadId();
   // Is the profiler currently recording samples?
   static bool IsRecording() { return is_recording_; }
+  // Returns true if the frame index has been recorded and is still available.
+  static bool HasFrameRecorded(int frame_index);
 
  private:
+  static int64_t GetCurrentTimeNanos();
+  // Returns the duration of time since the last call to AdvanceFrame() in ns.
+  // uint32 so max it can return is 4s per frame.
+  inline static uint32_t GetCurrentFrameTimeNanos();
   static std::array<std::array<ProfileResult, kMaxSamples>, kMaxFrames>
       samples_;
   static std::array<int, kMaxFrames> sample_counts_;
   static std::atomic<int> sample_index_;
+  static std::array<uint32_t, kMaxFrames> frame_durations_ns_;
   static int frame_index_;
   static std::thread::id main_thread_id_;
   static bool paused_;
   static std::atomic<uint16_t> id_counter_;  // Int16 as kMaxSamples is < 16k.
   static std::atomic<bool> is_recording_;
+  static std::atomic<uint16_t> end_id_counter_;
+  static std::atomic<int64_t> last_frame_start_time_ns_;
 };
 }  // namespace imp
 #endif  // THIRD_PARTY_IMPRESS_CORE_PERFORMANCE_PROFILER_H_

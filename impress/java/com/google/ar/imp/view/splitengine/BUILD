@@ -21,6 +21,7 @@ licenses(["notice"])
 android_library(
     name = "splitengine",
     srcs = [
+        "DefaultRendererConnectionServiceProvider.java",
         "ImpSplitEngine.java",
         "ImpSplitEngineApi.java",
         "ImpSplitEngineRenderer.java",

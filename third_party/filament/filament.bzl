@@ -40,6 +40,18 @@ def if_macos(a, otherwise = []):
         "//conditions:default": otherwise,
     })
 
+def if_macos_aarch64(a, otherwise = []):
+    return select({
+        clean_dep("@third_party//filament:macos_aarch64"): a,
+        "//conditions:default": otherwise,
+    })
+
+def if_macos_x86_64(a, otherwise = []):
+    return select({
+        clean_dep("@third_party//filament:macos_x86_64"): a,
+        "//conditions:default": otherwise,
+    })
+
 def if_ios(a, otherwise = []):
     return select({
         clean_dep("@third_party//filament:ios"): a,
@@ -114,6 +126,12 @@ def if_fgviewer(a, otherwise = []):
 def if_systrace(a, otherwise = []):
     return select({
         clean_dep("@third_party//filament:systrace_enabled"): a,
+        "//conditions:default": otherwise,
+    })
+
+def if_android_perfetto(a, otherwise = []):
+    return select({
+        clean_dep("@third_party//filament:android_perfetto_enabled"): a,
         "//conditions:default": otherwise,
     })
 
@@ -252,10 +270,13 @@ def filament_defines():
     ) + if_systrace(
         ["SYSTRACE_TAG=1"],
         ["SYSTRACE_TAG=0"],
-    ) + if_android([
-        # Disable perfetto on Android due to size increase.
-        "FILAMENT_TRACING_ENABLED=0",
-    ]) + [
+    ) + if_android_perfetto(
+        [
+            "FILAMENT_ENABLE_PERFETTO=1",
+            "FILAMENT_TRACING_ENABLED=1",
+        ],
+        ["FILAMENT_TRACING_ENABLED=0"],
+    ) + [
         # Disable GTAO on g3 due to size increase.
         "FILAMENT_DISABLE_GTAO=1",
         "FILAMENT_RELAXED_CORRECTNESS_ASSERTIONS=1",
@@ -388,6 +409,7 @@ BUILTIN_MATERIAL_NAMES = {
             "defaultMaterial",
             "blitDepth",
             "blitLow",
+            "clearDepth",
             "resolveDepth",
             "shadowmap",
             "skybox",

@@ -31,7 +31,13 @@ class DockingHelper {
 
   // Creates the docking helper and initializes the docking layout.
   DockingHelper();
+
+  // Resets the docking layout.
+  void Reset();
+
+  // Returns the docking space ID.
   ImGuiID GetDockableSpaceId();
+
   // Returns the docking ID of the specified docking place.
   ImGuiID GetDockId(DockingType docking_type);
 

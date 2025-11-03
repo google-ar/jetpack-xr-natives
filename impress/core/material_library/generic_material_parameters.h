@@ -34,34 +34,6 @@
 #include "core/math/vec.h"
 
 namespace imp {
-namespace internal {
-// TODO: Remove these traits once we've aligned
-// GenericMaterialParametersSchema between regular generic materials and split
-// engine generic materials.
-
-// Type trait to check if SchemaCreator::CreateGenericMaterialParameters accepts
-// feature_id_textures.
-template <typename SchemaCreator, typename = void>
-struct has_feature_id_textures : std::false_type {};
-
-template <typename SchemaCreator>
-struct has_feature_id_textures<
-    SchemaCreator,
-    std::void_t<decltype(SchemaCreator::CreateGenericMaterialParameters(
-        std::declval<flatbuffers::FlatBufferBuilder&>(), 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0))>> : std::true_type {};
-
-// Type trait to check if GenericMaterialParametersSchema has the
-// feature_id_textures() member.
-template <typename GenericMaterialParametersSchema, typename = void>
-struct has_feature_id_textures_member : std::false_type {};
-
-template <typename GenericMaterialParametersSchema>
-struct has_feature_id_textures_member<
-    GenericMaterialParametersSchema,
-    std::void_t<decltype(std::declval<GenericMaterialParametersSchema>()
-                             .feature_id_textures())>> : std::true_type {};
-}  // namespace internal
 
 // A single texture parameter for a generic material w/ sampler and uv data.
 struct GenericMaterialTextureParameter {
@@ -336,19 +308,11 @@ GenericMaterialParameters::ToFlatbufferT(
     feature_id_textures_offset =
         builder.CreateVector(feature_id_texture_offsets);
   }
-  // TODO: Remove check once generic material schemas are aligned.
-  if constexpr (internal::has_feature_id_textures<SchemaCreator>::value) {
-    return SchemaCreator::CreateGenericMaterialParameters(
-        builder, base_color_offset, metallic_roughness_offset, normal_offset,
-        ambient_occlusion_offset, emissive_offset, clearcoat_offset,
-        sheen_offset, transmission_offset, refraction_offset, masking_offset,
-        feature_id_textures_offset);
-  } else {
-    return SchemaCreator::CreateGenericMaterialParameters(
-        builder, base_color_offset, metallic_roughness_offset, normal_offset,
-        ambient_occlusion_offset, emissive_offset, clearcoat_offset,
-        sheen_offset, transmission_offset, refraction_offset, masking_offset);
-  }
+  return SchemaCreator::CreateGenericMaterialParameters(
+      builder, base_color_offset, metallic_roughness_offset, normal_offset,
+      ambient_occlusion_offset, emissive_offset, clearcoat_offset, sheen_offset,
+      transmission_offset, refraction_offset, masking_offset,
+      feature_id_textures_offset);
 }
 
 template <typename GenericMaterialTextureParameterSchema>
@@ -538,15 +502,11 @@ GenericMaterialParameters GenericMaterialParameters::FromFlatbuffer(
     parameters.masking.emplace();
     parameters.masking->alpha_cutoff = kDefaultAlphaCutoff;
   }
-  // TODO: Remove check once generic material schemas are aligned.
-  if constexpr (internal::has_feature_id_textures_member<
-                    GenericMaterialParametersSchema>::value) {
-    if (schema.feature_id_textures()) {
-      parameters.feature_id_textures.emplace();
-      for (const auto& feature_id_texture : *schema.feature_id_textures()) {
-        parameters.feature_id_textures->push_back(
-            FromTextureParameterFlatbuffer(*feature_id_texture));
-      }
+  if (schema.feature_id_textures()) {
+    parameters.feature_id_textures.emplace();
+    for (const auto& feature_id_texture : *schema.feature_id_textures()) {
+      parameters.feature_id_textures->push_back(
+          FromTextureParameterFlatbuffer(*feature_id_texture));
     }
   }
   return parameters;

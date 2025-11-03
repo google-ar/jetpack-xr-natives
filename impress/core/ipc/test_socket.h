@@ -81,8 +81,11 @@ class TestSocket {
   // Returns false if the read failed.
   bool ReadExact(uint8_t* data, size_t size) {
     for (size_t offset = 0; offset < size;) {
-      const ssize_t bytes_read =
-          TEMP_FAILURE_RETRY(read(TestFd(), data + offset, size - offset));
+      ssize_t bytes_read;
+      do {
+        bytes_read = read(TestFd(), data + offset, size - offset);
+      } while (bytes_read == -1 && errno == EINTR);
+
       if (bytes_read <= 0) {
         return false;
       }
@@ -107,8 +110,11 @@ class TestSocket {
     size_t offset = 0;
 
     while (offset < size) {
-      const ssize_t bytes_written =
-          TEMP_FAILURE_RETRY(write(TestFd(), data + offset, size - offset));
+      ssize_t bytes_written;
+      do {
+        bytes_written = write(TestFd(), data + offset, size - offset);
+      } while (bytes_written == -1 && errno == EINTR);
+
       if (bytes_written > 0) {
         offset += bytes_written;
       } else {

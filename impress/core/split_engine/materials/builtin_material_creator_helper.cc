@@ -61,6 +61,14 @@ flatbuffers::Offset<void> CreateBuiltInMaterialSpecWithDefaultParameters(
     case android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialbd7fe08c:
       return android_xr::schemas::CreateBuiltInMaterialbd7fe08c(builder)
           .Union();
+    case android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialGsplatSpec:
+      return android_xr::schemas::CreateBuiltInMaterialGsplatSpec(builder)
+          .Union();
+    case android_xr::schemas::BuiltInMaterialSpec::
+        BuiltInMaterialGsplatBackgroundSpec:
+      return android_xr::schemas::CreateBuiltInMaterialGsplatBackgroundSpec(
+                 builder)
+          .Union();
       // Default case is omitted to get free compiler error when new enum
       // value is added.
   }

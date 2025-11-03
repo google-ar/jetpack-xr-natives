@@ -101,7 +101,7 @@ SafeFilamentTextureBuilder::Builder& SafeFilamentTextureBuilder::swizzle(
 }
 
 SafeFilamentTextureBuilder::Builder& SafeFilamentTextureBuilder::name(
-    const char* /*absl_nonnull*/ name, size_t len) noexcept {
+    const char* /*absl_nonnull*/  name, size_t len) noexcept {
   name_ = std::string(name, len);
   builder_.name(name, len);
   return *this;
@@ -128,7 +128,7 @@ SafeFilamentTextureBuilder::Builder& SafeFilamentTextureBuilder::import(
   return *this;
 }
 
-absl::StatusOr<filament::Texture* /*absl_nonnull*/>
+absl::StatusOr<filament::Texture* /*absl_nonnull*/ >
 SafeFilamentTextureBuilder::build(filament::Engine& engine) noexcept {
   // Replication of all checks in filament::Texture::Builder::build
   // without actually panicking

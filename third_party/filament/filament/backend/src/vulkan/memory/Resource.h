@@ -52,7 +52,10 @@ enum class ResourceType : uint8_t {
     VULKAN_BUFFER = 14,
     STAGE_SEGMENT = 15,
     STAGE_IMAGE = 16,
-    UNDEFINED_TYPE = 17,    // Must be the last enum because we use it for iterating over the enums.
+    SYNC = 17,
+    MEMORY_MAPPED_BUFFER = 18,
+    SEMAPHORE = 19,
+    UNDEFINED_TYPE = 20,    // Must be the last enum because we use it for iterating over the enums.
 };
 
 template<typename D>

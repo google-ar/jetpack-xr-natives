@@ -183,6 +183,7 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/types:variant",
+        "@com_google_impress//core/common:log",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )
@@ -846,7 +847,6 @@ cc_library(
     linkstatic = True,
     deps = [
         ":platform_helpers",
-        "//core/scripting/proto:bridge_cc_proto",
         "@com_google_absl//absl/strings:string_view",
     ],
     alwayslink = 1,

@@ -247,6 +247,7 @@ cc_library(
         "//core/common:rememberer",
         "//core/common:robin_map",
         "//core/editor",
+        "//core/editor:editor_clipboard",
         "//core/editor:editor_touch",
         "//core/editor:events",
         "//core/editor:widget",

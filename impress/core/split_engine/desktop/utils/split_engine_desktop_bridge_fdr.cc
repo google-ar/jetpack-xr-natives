@@ -51,7 +51,7 @@ FileDescriptorReceiver::~FileDescriptorReceiver() {
 }
 
 absl::Status FileDescriptorReceiver::Start(uint32_t max_pending_connections) {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   if (server_thread_.joinable()) {
     return absl::AlreadyExistsError("Server already started");
   }
@@ -60,7 +60,7 @@ absl::Status FileDescriptorReceiver::Start(uint32_t max_pending_connections) {
 }
 
 void FileDescriptorReceiver::Stop() {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   if (!server_thread_.joinable()) {
     return;
   }

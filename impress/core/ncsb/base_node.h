@@ -46,7 +46,7 @@ class BaseNode {
   // Returns the filament entity that this Node is wrapping.
   // Do not use this API unless you understand the underlying details of
   // filament.
-  utils::Entity GetEntity() const;
+  inline utils::Entity GetEntity() const { return entity_; }
 
  protected:
   explicit BaseNode(utils::Entity entity);

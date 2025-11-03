@@ -223,6 +223,18 @@ def if_imp_perfetto_enabled(enabled, disabled):
         "//conditions:default": disabled,
     })
 
+def if_imp_disable_future_validation(enabled, disabled):
+    return select({
+        clean_dep("@com_google_impress//core:imp_disable_future_validation"): enabled,
+        "//conditions:default": disabled,
+    })
+
+def if_imp_split_engine_allow_experimental_apis(a, otherwise = []):
+    return select({
+        clean_dep("@com_google_impress//core/split_engine:imp_split_engine_allow_experimental_apis"): a,
+        "//conditions:default": otherwise,
+    })
+
 # Whether the target we're compiling for should pack-in generic materials for glTF loading.
 # We pack-in on desktop platforms, on the iOS Simulator (which can't hit gstatic), or if requested
 # on the command line via --define=IMP_EMBED_ASSETS=1
@@ -310,6 +322,11 @@ def imp_defines():
     ) + if_imp_perfetto_enabled(
         enabled = ["IMP_TRACE_USE_PERFETTO=1"],
         disabled = ["IMP_TRACE_USE_PERFETTO=0"],
+    ) + if_imp_disable_future_validation(
+        enabled = ["IMP_DISABLE_FUTURE_VALIDATION=1"],
+        disabled = ["IMP_DISABLE_FUTURE_VALIDATION=0"],
+    ) + if_imp_split_engine_allow_experimental_apis(
+        ["IMP_SPLIT_ENGINE_ALLOW_EXPERIMENTAL_APIS"],
     )
     return out_defines
 

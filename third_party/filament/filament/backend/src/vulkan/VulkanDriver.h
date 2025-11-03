@@ -28,6 +28,7 @@
 #include "VulkanQueryManager.h"
 #include "VulkanReadPixels.h"
 #include "VulkanSamplerCache.h"
+#include "VulkanSemaphoreManager.h"
 #include "VulkanStagePool.h"
 #include "VulkanYcbcrConversionCache.h"
 #include "vulkan/VulkanDescriptorSetCache.h"
@@ -43,6 +44,7 @@
 #include "DriverBase.h"
 #include "private/backend/Driver.h"
 
+#include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/Allocator.h"
 #include "filament/libs/utils/include/utils/compiler.h"
 
@@ -100,7 +102,8 @@ private:
     Dispatcher getDispatcher() const noexcept final;
 
     ShaderModel getShaderModel() const noexcept final;
-    ShaderLanguage getShaderLanguage() const noexcept final;
+    utils::FixedCapacityVector<ShaderLanguage> getShaderLanguages(
+            ShaderLanguage preferredLanguage) const noexcept final;
 
     template<typename T>
     friend class ConcreteDispatcher;
@@ -139,6 +142,7 @@ private:
 
     VulkanContext& mContext;
 
+    VulkanSemaphoreManager mSemaphoreManager;
     VulkanCommands mCommands;
     VulkanPipelineLayoutCache mPipelineLayoutCache;
     VulkanPipelineCache mPipelineCache;
@@ -187,6 +191,7 @@ private:
     } mAppState;
 
     bool const mIsSRGBSwapChainSupported;
+    bool const mIsMSAASwapChainSupported;
     backend::StereoscopicType const mStereoscopicType;
 };
 

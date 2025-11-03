@@ -40,7 +40,7 @@ struct SelectionController {
   virtual ~SelectionController() = default;
 
   // Returns the currently selected nodes.
-  virtual const absl::flat_hash_set<NodeHandle>& GetSelectedNodes() const = 0;
+  virtual const absl::flat_hash_set<NodeHandle>& GetSelectedNodes() = 0;
 
   // Notifies that a node has been selected by sending a
   // NodeSelectionChangedEvent with the provided node as the target.

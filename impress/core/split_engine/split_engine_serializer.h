@@ -31,6 +31,7 @@
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
+#include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
 #include "core/common/buffer_access.h"
 #include "core/common/invocable.h"
@@ -95,8 +96,9 @@ class SplitEngineSerializer {
   // 2) A "meta-material" in a protobuffer format that the Impress team will
   //    maintain backwards-compatibility for. This material format will be
   //    converted at runtime into a Filament .mat file and then compiled.
-  virtual void AddMaterial(const filament::Material* material,
-                           const BufferAccess& data) = 0;
+  virtual void AddMaterial(
+      const filament::Material* material, const BufferAccess& data,
+      const MaterialPreCompileOptions& material_pre_compile_options) = 0;
   // Removes a previously-added material from the remote renderer.
   virtual void RemoveMaterial(const filament::Material* material) = 0;
   // Creates a material instance from the given material on the remote renderer.
@@ -163,7 +165,7 @@ class SplitEngineSerializer {
   virtual std::unique_ptr<BaseMeshBuilder> CreateMeshBuilder() = 0;
 #if IMP_PLATFORM(ANDROID)
   // Creates a video source surface to connect external android textures.
-  virtual std::unique_ptr<PlatformAndroidExternalTextureSurface>
+  virtual Future<std::unique_ptr<PlatformAndroidExternalTextureSurface>>
   CreateAndroidExternalTextureSurface(
       ContentSecurityLevel security_level,
       absl::Span<const SurfaceViewType> view_types) = 0;

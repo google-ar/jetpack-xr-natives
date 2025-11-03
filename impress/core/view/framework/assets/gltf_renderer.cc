@@ -38,6 +38,7 @@
 #include "core/common/filament_helpers.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/paired_vector.h"
+#include "core/common/robin_set.h"
 #include "core/common/trace.h"
 #include "core/common/typed_id.h"
 #include "core/common/typed_set_vector.h"
@@ -49,7 +50,9 @@
 #include "core/math/mat.h"
 #include "core/math/math.h"
 #include "core/math/vec.h"
+#include "core/model/entity_data.h"
 #include "core/model/model_data.h"
+#include "core/model/shared_data.h"
 #include "core/model/skeleton_data.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/component_id.h"
@@ -152,6 +155,8 @@ void GltfRenderer::Setup(AssetPtr<GltfAsset> gltf_asset,
   } else {
     load_options_ = GetView().GetAssetManager().GetDefaultLoadOptions();
   }
+  state_.collider_mode = load_options_.collider_mode;
+  state_.material_sharing_mode = load_options_.material_sharing_mode;
 
   gltf_asset_ = gltf_asset;
   const auto& data = gltf_asset->GetModelData();
@@ -199,16 +204,17 @@ void GltfRenderer::Setup(AssetPtr<GltfAsset> gltf_asset,
     model::ModelData::LightPunctualId light_punctual =
         entity_data.light_punctual;
     node_entities_[self] = node->GetEntity();
-    scene->node_to_entitiy_id_map_.insert({node, self});
+    node_to_entity_id_map_.insert({node, self});
 
     if (!parts.empty()) {
       // TODO Add collision support for instanced gltfs
+      ComponentHandle<GltfMesh> gltf_mesh;
       if (instanced_rendering) {
-        node->AddComponent<GltfMesh>(GetHandle(this), self.CastTo<ItemId>(),
-                                     instance_info_);
+        gltf_mesh = node->AddComponent<GltfMesh>(
+            GetHandle(this), self.CastTo<ItemId>(), instance_info_);
       } else {
-        auto gltf_mesh = node->AddComponent<GltfMesh>(GetHandle(this),
-                                                      self.CastTo<ItemId>());
+        gltf_mesh = node->AddComponent<GltfMesh>(GetHandle(this),
+                                                 self.CastTo<ItemId>());
 
         if (!GetColliderMode() ||
             GetColliderMode() == GltfState::ColliderMode::
@@ -222,6 +228,13 @@ void GltfRenderer::Setup(AssetPtr<GltfAsset> gltf_asset,
           node->AddComponent<GltfCollider>(
               gltf_mesh, GltfCollider::CollisionMode::kTriangles);
         }
+      }
+
+      int16_t original_mesh_index = gltf_mesh->GetOriginalGltfMeshIndex();
+      if (mesh_index_to_nodes_.contains(original_mesh_index)) {
+        mesh_index_to_nodes_[original_mesh_index].insert(node);
+      } else {
+        mesh_index_to_nodes_[original_mesh_index] = {node};
       }
     }
 
@@ -347,6 +360,17 @@ void GltfRenderer::OnActiveStatusChanged(bool is_active) {
                                       0xff, 1);
     }
   }
+}
+
+std::optional<model::EntityId> GltfRenderer::GetEntityIdFromNodeHandle(
+    NodeHandle node) const {
+  RobinMap<NodeHandle, EntityId>::const_iterator it =
+      node_to_entity_id_map_.find(node);
+  if (it == node_to_entity_id_map_.end()) {
+    return std::nullopt;
+  }
+
+  return it.value();
 }
 
 void GltfRenderer::Update(const FrameTime& frame_time) { UpdateSkinning(); }
@@ -619,6 +643,14 @@ Material* GltfRenderer::GetMaterialOverrideByIndex(
     }
   }
 
+  return nullptr;
+}
+
+const RobinSet<NodeHandle>* GltfRenderer::GetNodesFromOriginalMeshIndex(
+    int16_t original_mesh_index) const {
+  if (mesh_index_to_nodes_.contains(original_mesh_index)) {
+    return &mesh_index_to_nodes_.at(original_mesh_index);
+  }
   return nullptr;
 }
 

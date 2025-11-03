@@ -279,7 +279,8 @@ OptionalError CreateModelEntityGraph(
         LightPunctualId(entity->light_punctual()),
         AudioEmitterId(entity->audio_emitter()), bounds, runtime_data,
         (entity->name() ? entity->name()->str() : ""), entity->original_index(),
-        node_visibility, node_selectability, node_hoverability);
+        entity->original_mesh_index(), node_visibility, node_selectability,
+        node_hoverability);
   }
   return NoError();
 }

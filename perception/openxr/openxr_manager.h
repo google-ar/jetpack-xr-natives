@@ -21,9 +21,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <ctime>
+#include <functional>
+#include <list>
 #include <memory>
 #include <optional>
+#include <string>
 #include <thread>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "absl/base/thread_annotations.h"
@@ -137,7 +142,6 @@ class OpenXrManager {
     kDisabled = 0x00,
     kCoarse = 0x01,
     kFine = 0x02,
-    kCoarseAndFine = 0x03
   };
 
   // Struct that contains the configuration settings that can be set at runtime
@@ -403,8 +407,7 @@ class OpenXrManager {
   bool IsFaceTrackerCalibrated();
 
   // Gets eye tracking info.
-  XrResult GetEyesInfo(XrTime time, XrEyesANDROID* out_eyes,
-                       bool is_fine_tracking_mode);
+  XrResult GetEyesInfo(XrTime time, XrEyesANDROID* out_eyes);
 
   // Gets the smooth depth image from the depth swapchain. This is a public
   // function that is expected to be called from the jni thread.
@@ -448,6 +451,10 @@ class OpenXrManager {
   // Returns the current XrInstance.
   XrInstance GetXrInstance();
 
+  // Returns the [XrEnvironmentBlendMode]s supported by the device.
+  bool GetEnvironmentBlendModes(std::vector<XrEnvironmentBlendMode>* out_modes)
+      ABSL_LOCKS_EXCLUDED(mutex_);
+
   // Makes changes to runtime resources based on the provided configuration
   // settings, including enabling/disabling trackers. This function fails fast
   // and attempts to revert all changes in the event of a failure, returning the
@@ -482,7 +489,7 @@ class OpenXrManager {
   bool GetXrSystem() ABSL_LOCKS_EXCLUDED(mutex_);
 
   // Gets the extensions to be loaded from the required and optional extensions.
-  bool GetEnabledExtensions(std::vector<const char*>& enabled_exts);
+  bool GetEnabledExtensions(std::vector<std::string>& enabled_exts);
 
   // Loads the OpenXR runtime.
   bool LoadOpenXr(jobject activity) ABSL_LOCKS_EXCLUDED(mutex_);
@@ -532,6 +539,9 @@ class OpenXrManager {
   void FillQuaternionIntoFloatBuffer(
       float* floatBuffer, XrQuaternionf quaternion);
 
+  // Destroys all geospatial resources.
+  void CleanupGeospatial() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
   // Returns a space representing identity in the provided reference space type.
   XrSpace GetSpaceInReferenceSpace(XrReferenceSpaceType space_type);
 
@@ -561,6 +571,12 @@ class OpenXrManager {
 
   // Polls OpenXR for events.
   void PollOpenXR() ABSL_LOCKS_EXCLUDED(mutex_);
+
+  // Polls pending futures.
+  void PollFutures() ABSL_LOCKS_EXCLUDED(mutex_);
+
+  // Cancels all pending futures.
+  void CancelPendingFutures() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   // Checks if polling has stopped.
   bool ShouldPoll() const ABSL_LOCKS_EXCLUDED(mutex_);
@@ -662,6 +678,12 @@ class OpenXrManager {
       const float* image_buffers, const uint8_t* confidence_image_buffers)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
+  // Creates the spatial context if it doesn't exist.
+  XrResult MaybeCreateSpatialContextAsync(
+      XrSpatialContextCreateInfoEXT create_info,
+      std::function<void(const XrCreateSpatialContextCompletionEXT&)>
+          callback) ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
   XrInstance instance_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
   XrSystemId system_id_ ABSL_GUARDED_BY(mutex_) = XR_NULL_SYSTEM_ID;
   XrSession session_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
@@ -685,6 +707,8 @@ class OpenXrManager {
   XrFaceTrackerANDROID face_tracker_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
   XrEarthTrackerANDROIDX1 earth_tracker_ ABSL_GUARDED_BY(mutex_) =
       XR_NULL_HANDLE;
+  XrSpatialContextEXT geospatial_anchors_spatial_context_
+      ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
   std::optional<XrEventDataEarthTrackerStateChangedANDROIDX1>
       last_earth_tracker_state_update_ ABSL_GUARDED_BY(mutex_) = std::nullopt;
   XrEyeTrackerANDROID eye_tracker_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
@@ -713,6 +737,9 @@ class OpenXrManager {
   size_t depth_data_image_buffer_size_ ABSL_GUARDED_BY(mutex_) = 0;
   size_t depth_data_confidence_image_buffer_size_ ABSL_GUARDED_BY(mutex_) = 0;
   size_t depth_data_image_num_elements_ ABSL_GUARDED_BY(mutex_) = 0;
+
+  std::list<std::pair<XrFutureEXT, std::function<void(XrFutureEXT)>>>
+      pending_futures_ ABSL_GUARDED_BY(mutex_);
 
   std::vector<XrTrackableANDROID> all_plane_trackables_;
   OpenXrState open_xr_state_ ABSL_GUARDED_BY(mutex_) =
@@ -795,6 +822,31 @@ class OpenXrManager {
   PFN_xrDestroyEyeTrackerANDROID destroy_eye_tracker_;
   PFN_xrGetFineTrackingEyesInfoANDROID get_fine_tracking_eyes_info_;
   PFN_xrGetCoarseTrackingEyesInfoANDROID get_coarse_tracking_eyes_info_;
+
+  PFN_xrCancelFutureEXT cancel_future_;
+  PFN_xrPollFutureEXT poll_future_;
+
+  // Spatial Entities functions.
+  PFN_xrEnumerateSpatialCapabilitiesEXT enumerate_spatial_capabilities_;
+  PFN_xrEnumerateSpatialCapabilityComponentTypesEXT
+      enumerate_spatial_capability_component_types_;
+  PFN_xrEnumerateSpatialCapabilityFeaturesEXT
+      enumerate_spatial_capability_features_;
+  PFN_xrCreateSpatialContextAsyncEXT create_spatial_context_async_;
+  PFN_xrCreateSpatialContextCompleteEXT create_spatial_context_complete_;
+  PFN_xrDestroySpatialContextEXT destroy_spatial_context_;
+  PFN_xrCreateSpatialDiscoverySnapshotAsyncEXT
+      create_spatial_discovery_snapshot_async_;
+  PFN_xrCreateSpatialDiscoverySnapshotCompleteEXT
+      create_spatial_discovery_snapshot_complete_;
+  PFN_xrQuerySpatialComponentDataEXT query_spatial_component_data_;
+  PFN_xrDestroySpatialSnapshotEXT destroy_spatial_snapshot_;
+  PFN_xrCreateSpatialEntityFromIdEXT create_spatial_entity_from_id_;
+  PFN_xrDestroySpatialEntityEXT destroy_spatial_entity_;
+  PFN_xrCreateSpatialUpdateSnapshotEXT create_spatial_update_snapshot_;
+  PFN_xrCreateSpatialAnchorEXT create_spatial_anchor_;
+  PFN_xrCreateSpatialAnchorSpaceFromIdANDROIDX1
+      create_spatial_anchor_space_from_id_;
 };
 }  // namespace androidx::xr::openxr
 #endif  // JETPACK_XR_NATIVES_OPENXR_OPENXR_MANAGER_H_

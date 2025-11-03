@@ -31,6 +31,7 @@ SurfaceTexture::SurfaceTexture(const Context& context)
   attach_to_gl_context_ = GetMethodHandle("attachToGLContext", "(I)V");
   detach_from_gl_context_ = GetMethodHandle("detachFromGLContext", "()V");
   get_transform_matrix_ = GetMethodHandle("getTransformMatrix", "([F)V");
+  release_ = GetMethodHandle("release", "()V");
 #if __ANDROID_API__ >= 33
   get_data_space_ = GetMethodHandle("getDataSpace", "()I");
 #endif  // __ANDROID_API__ >= 33
@@ -46,10 +47,13 @@ SurfaceTexture::SurfaceTexture(const Context& context, uint32_t texture_id,
   update_tex_image_ = GetMethodHandle("updateTexImage", "()V");
   attach_to_gl_context_ = GetMethodHandle("attachToGLContext", "(I)V");
   detach_from_gl_context_ = GetMethodHandle("detachFromGLContext", "()V");
+  release_ = GetMethodHandle("release", "()V");
 #if __ANDROID_API__ >= 33
   get_data_space_ = GetMethodHandle("getDataSpace", "()I");
 #endif  // __ANDROID_API__ >= 33
 }
+
+SurfaceTexture::~SurfaceTexture() { CallVoidMethod(release_); }
 
 absl::Status SurfaceTexture::SetDefaultBufferSize(int2 size) {
   CallVoidMethod(set_default_buffer_size_, size.x, size.y);

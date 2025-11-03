@@ -93,6 +93,8 @@ class XrVulkanPlatform : public XrPlatformBase {
   // Flag to indicate if it's rendering frames using a varjo foveation swapchain
   // or not.
   bool rendering_with_varjo_foveation_ = false;
+  filament::backend::Platform::GpuContextPriority gpu_context_priority_ =
+      filament::backend::Platform::GpuContextPriority::DEFAULT;
 };
 
 }  // namespace imp

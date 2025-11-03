@@ -321,6 +321,11 @@ public class View {
     return nShouldUseStencilSwapChain(viewHostHandle);
   }
 
+  
+  public Boolean shouldUseMsaaSwapChain() {
+    return nShouldUseMsaaSwapChain(viewHostHandle);
+  }
+
   public void drainAllExecutorsForTest() {
     nDrainAllExecutorsForTest(viewHostHandle);
   }
@@ -436,6 +441,8 @@ public class View {
   private static native boolean nShouldUseSrgbSwapChain(long viewHostHandle);
 
   private static native boolean nShouldUseStencilSwapChain(long viewHostHandle);
+
+  private static native boolean nShouldUseMsaaSwapChain(long viewHostHandle);
 
   private static native void nDrainAllExecutorsForTest(long viewHostHandle);
 

@@ -91,6 +91,7 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         ":recipe_graph_cc",
+        ":recipe_types_cc",
         "//core/async:future",
         "//core/common:invocable",
         "//core/geometry/shapes",
@@ -218,6 +219,7 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
+        ":binary_expression",
         ":recipe_async_execution_manager",
         ":recipe_custom_statement",
         ":recipe_execution_context",
@@ -225,9 +227,9 @@ cc_library(
         ":recipe_runtime_event",
         ":recipe_scope",
         ":recipe_system",
-        ":recipe_traits",
         ":recipe_types_cc",
         ":recipe_utils",
+        ":unary_expression",
         "//core/async:future",
         "//core/common:invocable",
         "//core/common:registry",
@@ -244,7 +246,6 @@ cc_library(
         "@com_google_absl//absl/types:variant",
         "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
-        "@robin_map",
     ],
     alwayslink = 1,
 )
@@ -324,6 +325,39 @@ cc_library(
         ":recipe_async_execution_manager",
         ":recipe_scope",
         "//core/view:base_view",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "binary_expression",
+    srcs = ["binary_expression.cc"],
+    hdrs = ["binary_expression.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        ":recipe_graph_cc",
+        ":recipe_traits",
+        ":recipe_utils",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "unary_expression",
+    srcs = ["unary_expression.cc"],
+    hdrs = ["unary_expression.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        ":recipe_graph_cc",
+        ":recipe_traits",
+        ":recipe_utils",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:variant",
     ],
     alwayslink = 1,
 )

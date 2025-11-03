@@ -58,14 +58,14 @@ class AndroidVideoSource : public media::AndroidMediaSource<VideoSource> {
   AndroidVideoSource& operator=(const AndroidVideoSource&) = delete;
 
   absl::StatusOr<Texture*> CreateVideoTexture() override {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     media_player_ptr_->SetSurface(surface_->GetSurface());
     return surface_->GetTexture();
   }
 
   absl::StatusOr<BorrowedTexturePtr> BorrowVideoTextureImpl(
       SmallSourceLocation loc) override {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     media_player_ptr_->SetSurface(surface_->GetSurface());
     return surface_->BorrowTexture(loc);
   }
@@ -74,7 +74,7 @@ class AndroidVideoSource : public media::AndroidMediaSource<VideoSource> {
                           absl::Duration frame_delta) override {}
 
   uint2 GetVideoSize() const override {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     return {media_player_ptr_->GetVideoWidth(),
             media_player_ptr_->GetVideoHeight()};
   }

@@ -87,6 +87,18 @@ public class ImpViewController {
                   if (view.hasSwapChain()) {
                     view.destroySwapChain();
                   }
+
+                  // If running in ThreadMode.BACKGROUND, then there can be a race condition if the
+                  // surface becomes invalid in-between the onNativeWindowChanged callback and when
+                  // createSwapChain is called on the frame thread. For instance, if
+                  // onNativeWindowChanged is called twice in rapid succession, the first call to
+                  // createSwapChain will be called with an invalid surface.
+                  //
+                  // In this case, we simply return early and wait for the next callback.
+                  if (!surface.isValid()) {
+                    return;
+                  }
+
                   view.createSwapChain(surface, uiHelper.getSwapChainFlags() | swapChainFlags);
                 });
           }

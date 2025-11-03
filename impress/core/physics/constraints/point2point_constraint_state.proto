@@ -17,6 +17,7 @@ syntax = "proto3";
 package imp;
 
 import "core/math/math.proto";
+import "core/proto/imp.proto";
 import "core/scene_handles/scene_handles.proto";
 
 message Point2PointConstraintState {
@@ -38,7 +39,7 @@ message Point2PointConstraintState {
   // interpreted as the world position of the constraint.
   bool auto_configure = 4;
 
-  // If the constraint is valid (is it functioning, ie it is connected to valid
-  // rigid bodies)
-  bool is_valid = 5;
+  // If the constraint is ready (is it functioning, ie it is connected to
+  // valid rigid bodies)
+  bool is_ready = 5 [(imp.editor_control) = { read_only: {} }];
 }

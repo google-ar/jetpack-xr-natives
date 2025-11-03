@@ -113,6 +113,7 @@ OptionalError FilamentHost::CreateHeadlessSwapChain(uint32_t width,
 
 absl::StatusOr<const filament::SwapChain*> FilamentHost::AddSwapChain(
     void* native_window, uint64_t flags) {
+  IMP_TRACE();
   if (!engine_) {
     return absl::FailedPreconditionError("No Filament engine has been set.");
   }
@@ -125,6 +126,7 @@ absl::StatusOr<const filament::SwapChain*> FilamentHost::AddSwapChain(
 
 absl::Status FilamentHost::SetActiveSwapChain(
     const filament::SwapChain* swap_chain) {
+  IMP_TRACE();
   if (!swap_chain) {
     swap_chain_ = nullptr;
     return absl::OkStatus();
@@ -405,7 +407,7 @@ void FilamentHost::SetFrameCompletedCallback(
 absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
     absl::Duration previous_vsync, absl::Duration next_vsync) {
   IMP_PROFILE_START_FRAME();
-  IMP_TRACE_NAME("FilamentHost::RenderNextFrame");
+  IMP_TRACE();
 
   RenderResult result;
   if (!owns_filament_) {
@@ -449,10 +451,7 @@ absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
     return result;
   }
 
-  {
-    IMP_TRACE_NAME("FilamentHost::PreBeginRender");
-    MP_RETURN_IF_ERROR(PreBeginRender());
-  };
+  MP_RETURN_IF_ERROR(PreBeginRender());
 
   {
     IMP_TRACE_NAME("FilamentHost::FilamentRenderPass");
@@ -482,61 +481,37 @@ absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
         is_within_filament_render_frame_ = false;
       };
 
-      {
-        IMP_TRACE_NAME("State::OffscreenRender");
-        MP_RETURN_IF_ERROR(state_->OffscreenRender(this, renderer_));
-      }
+      MP_RETURN_IF_ERROR(state_->OffscreenRender(this, renderer_));
 
       if (dev_mode_extension_) {
-        IMP_TRACE_NAME("DevModeExtension::OffscreenRender");
         dev_mode_extension_->OffscreenRender();
       }
-      filament::Camera* camera;
 
-      {
-        IMP_TRACE_NAME("View::GetCamera");
-        camera = &GetView()->getCamera();
-      }
+      filament::Camera* camera = &GetView()->getCamera();
 
       if (editor_camera_override_) {
-        IMP_TRACE_NAME("View::SetCamera");
         GetView()->setCamera(editor_camera_override_);
       }
 
-      {
-        IMP_TRACE_NAME("FilamentHost::PerformRender");
-        PerformRender(render_view_.Get());
-      }
+      PerformRender(render_view_.Get());
 
-      {
-        IMP_TRACE_NAME("View::SetCamera");
-        GetView()->setCamera(camera);
-      }
+      GetView()->setCamera(camera);
 
-      {
-        IMP_TRACE_NAME("State::MultiPassRender");
-        MP_RETURN_IF_ERROR(state_->MultiPassRender());
-      }
+      MP_RETURN_IF_ERROR(state_->MultiPassRender());
 
       if (dev_mode_extension_) {
-        IMP_TRACE_NAME("DevModeExtension::Render");
         dev_mode_extension_->Render();
       }
 
-      {
-        IMP_TRACE_NAME("State::PostRender");
-        MP_RETURN_IF_ERROR(state_->PostRender(this));
-      }
+      MP_RETURN_IF_ERROR(state_->PostRender(this));
 
       {
         IMP_TRACE_NAME("Renderer::EndFrame");
         renderer_->endFrame();
       }
 
-      {
-        IMP_TRACE_NAME("State::SecondaryViewRender");
-        MP_RETURN_IF_ERROR(state_->SecondaryViewRender(this));
-      }
+      MP_RETURN_IF_ERROR(state_->SecondaryViewRender(this));
+
       if (state_->IsAnimating(this)) {
         result.flags |= RenderResultFlags::kIsAnimating;
       }
@@ -553,10 +528,8 @@ absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
     engine_->execute();
   }
 #endif  // IMP_PLATFORM(WASM)
-  {
-    IMP_TRACE_NAME("State::PostFrame");
-    MP_RETURN_IF_ERROR(state_->PostFrame(this));
-  }
+
+  MP_RETURN_IF_ERROR(state_->PostFrame(this));
 
   return result;
 }
@@ -565,23 +538,15 @@ absl::Status FilamentHost::UpdateNextFrame(
     absl::Duration previous_vsync, absl::Duration next_vsync,
     UpdateStageFlags* out_flags,
     absl::optional<absl::Duration>* out_time_until_retry) {
-  IMP_TRACE_NAME("FilamentHost::UpdateNextFrame");
+  IMP_TRACE();
 
-  {
-    IMP_TRACE_NAME("State::PreUpdate");
-    MP_RETURN_IF_ERROR(state_->PreUpdate(this, previous_vsync, next_vsync,
-                                      out_flags, out_time_until_retry));
-  }
+  MP_RETURN_IF_ERROR(state_->PreUpdate(this, previous_vsync, next_vsync, out_flags,
+                                    out_time_until_retry));
 
-  {
-    IMP_TRACE_NAME("State::Update");
-    MP_RETURN_IF_ERROR(
-        state_->Update(this, previous_vsync, next_vsync, *out_flags));
-  }
+  MP_RETURN_IF_ERROR(state_->Update(this, previous_vsync, next_vsync, *out_flags));
 
   if (!out_flags->HasFlag(UpdateStageFlags::kSkipUpdate) &&
       !out_flags->HasFlag(UpdateStageFlags::kSkipFrame)) {
-    IMP_TRACE_NAME("State::PostUpdate");
     MP_RETURN_IF_ERROR(state_->PostUpdate(this));
   }
 
@@ -594,7 +559,7 @@ OptionalError FilamentHost::IsolatedPreRender(
     absl::optional<absl::Duration>* out_time_until_retry,
     Flags<IsolatedPreRenderFlags> isolated_pre_render_flags) {
   CheckOnFrameThread();
-  IMP_TRACE_NAME("FilamentHost::IsolatedPreRender");
+  IMP_TRACE();
   *out_flags = {};
   // We need to send mouse input before beginFrame so that uniform buffer
   // updates generated by mouse input get submitted before render.
@@ -641,7 +606,7 @@ OptionalError FilamentHost::IsolatedPreRender(
 OptionalError FilamentHost::IsolatedPostRender(
     Flags<RenderResultFlags>* out_flags) {
   CheckOnFrameThread();
-  IMP_TRACE_NAME("FilamentHost::IsolatedPostRender");
+  IMP_TRACE();
   *out_flags = {};
 
   MP_RETURN_IF_ERROR(state_->PostRender(this));
@@ -855,7 +820,7 @@ void FilamentHost::CopyFrame(filament::SwapChain* destination_swap_chain,
 }
 
 void FilamentHost::QueueImGuiCommandBlock(DevModeExtension::ImGuiCommand cmd) {
-  if (dev_mode_extension_) {
+  if (dev_mode_extension_ && dev_mode_extension_->IsEnabled()) {
     dev_mode_extension_->QueueImGuiCommandBlock(std::move(cmd));
   }
 }
@@ -951,6 +916,9 @@ uint64_t FilamentHost::UpdateSwapChainFlagsFromState(uint64_t flags) const {
     }
     if (state_->ShouldUseStencilSwapChain()) {
       flags |= filament::SwapChain::CONFIG_HAS_STENCIL_BUFFER;
+    }
+    if (state_->ShouldUseMsaaSwapChain()) {
+      flags |= filament::SwapChain::CONFIG_MSAA_4_SAMPLES;
     }
   }
   return flags;

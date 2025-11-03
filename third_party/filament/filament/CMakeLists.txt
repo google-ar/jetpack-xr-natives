@@ -40,6 +40,7 @@ set(PUBLIC_HDRS
         include/filament/Skybox.h
         include/filament/Stream.h
         include/filament/SwapChain.h
+        include/filament/Sync.h
         include/filament/Texture.h
         include/filament/TextureSampler.h
         include/filament/ToneMapper.h
@@ -83,6 +84,8 @@ set(SRCS
         src/InstanceBuffer.cpp
         src/LightManager.cpp
         src/Material.cpp
+        src/MaterialCache.cpp
+        src/MaterialDefinition.cpp
         src/MaterialInstance.cpp
         src/MaterialInstanceManager.cpp
         src/MaterialParser.cpp
@@ -103,6 +106,7 @@ set(SRCS
         src/Skybox.cpp
         src/Stream.cpp
         src/SwapChain.cpp
+        src/Sync.cpp
         src/Texture.cpp
         src/ToneMapper.cpp
         src/TransformManager.cpp
@@ -132,6 +136,7 @@ set(SRCS
         src/details/Skybox.cpp
         src/details/Stream.cpp
         src/details/SwapChain.cpp
+        src/details/Sync.cpp
         src/details/Texture.cpp
         src/details/VertexBuffer.cpp
         src/details/View.cpp
@@ -172,6 +177,8 @@ set(PRIVATE_HDRS
         src/HwRenderPrimitiveFactory.h
         src/HwVertexBufferInfoFactory.h
         src/Intersections.h
+        src/MaterialCache.h
+        src/MaterialDefinition.h
         src/MaterialParser.h
         src/MaterialInstanceManager.h
         src/PIDController.h
@@ -242,9 +249,10 @@ set(PRIVATE_HDRS
 set(MATERIAL_SRCS
         src/materials/antiAliasing/fxaa/fxaa.mat
         src/materials/antiAliasing/taa/taa.mat
+        src/materials/blitArray.mat
         src/materials/blitDepth.mat
         src/materials/blitLow.mat
-        src/materials/blitArray.mat
+        src/materials/clearDepth.mat
         src/materials/bloom/bloomDownsample.mat
         src/materials/bloom/bloomDownsample2x.mat
         src/materials/bloom/bloomDownsample9.mat

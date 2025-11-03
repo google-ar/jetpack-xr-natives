@@ -59,7 +59,7 @@ config_setting(
 
 # Add this target to the deps of your app's android_binary rule to use the OpenXR module.
 cc_binary(
-    name = "libandroidx.xr.openxr.so",
+    name = "libandroidx.xr.arcore.openxr.so",
     srcs = JNI_SRCS,
     linkopts = [
         "-landroid",
@@ -85,7 +85,7 @@ cc_library(
 )
 
 cc_binary(
-    name = "libandroidx.xr.openxr.test.so",
+    name = "libandroidx.xr.arcore.openxr.test.so",
     testonly = 1,
     srcs = JNI_SRCS,
     linkopts = [

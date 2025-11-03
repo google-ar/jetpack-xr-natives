@@ -49,7 +49,13 @@ namespace imp {
 // This class is thread-safe ((broken link)).
 class CanvasSource {
  public:
-  static std::unique_ptr<CanvasSource> Create(Context context);
+  // Creates a CanvasSource.
+  //
+  // If use_hardware_rendering is true, then the platform canvas will be drawn
+  // to a hardware accelerated canvas when possible. Note that this flag
+  // currently only has any effect on Android.
+  static std::unique_ptr<CanvasSource> Create(
+      Context context, bool use_hardware_rendering = true);
 
   // Note: This is exposed for testing. Real clients should use
   // CanvasSource::Create to create a CanvasSource.
@@ -187,6 +193,17 @@ class CanvasSource {
       ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
       ScopedCanvas::DrawMode draw_mode = ScopedCanvas::DrawMode::kClear,
       SmallSourceLocation loc = SmallSourceLocation::Current());
+
+  // "Resets" the underlying platform canvas. After calling this, it is expected
+  // to call StartDrawing again on the same frame, which will cause the texture
+  // to change.
+  //
+  // This is currently only supported on Android.
+  //
+  // This exists as a workaround for device specific android bugs (i.e. on
+  // Samsung Galaxy S24) where an Android Surface can become corrupted after
+  // backgrounding and resuming. See (broken link) for more details.
+  void ForceReset();
 
  private:
   absl::Mutex platform_source_mutex_;

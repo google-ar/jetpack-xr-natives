@@ -25,8 +25,6 @@ import android.graphics.text.TextRunShaper
 import androidx.annotation.RequiresApi
 import java.io.File
 
-private const val EMOJI = "🀄" // E0.6 standard emoji.
-
 /**
  * ShaperGlyphSource provides an interface around the [TextRunShaper] set of APIs for per-glyph
  * rendering, which is only available on API levels 31 and later.
@@ -37,40 +35,52 @@ internal class ShaperGlyphSource : IGlyphSource {
   private val glyphIdPtr = IntArray(1)
   private val positionPtr = FloatArray(2)
   private val boundingBoxF = RectF()
+  private val fontMetrics = Paint.FontMetrics()
 
   // HACK: No proper way to determine if a glyph is a color emoji using the TextRunShaper API.
-  // Instead, try turning a test emoji into a path; if the path is empty, it indicates that the
-  // device is capable of rendering color emoji. Record the font file used to render color emoji by
-  // shaping that single emoji and reading its font.
-  private val emojiFontFile: File? = run {
-    val paint = Paint()
-    val emojiPath = Path()
-    paint.getTextPath(
-      EMOJI,
-      /*start=*/ 0,
-      /*count=*/ EMOJI.length,
-      /*x=*/ 0f,
-      /*y=*/ 0f,
-      emojiPath,
-    )
-    if (emojiPath.isEmpty) {
-      val glyphs =
-        TextRunShaper.shapeTextRun(
-          EMOJI,
+  // Instead, try turning some test emoji into paths; if the resulting paths are empty, this
+  // indicates they belong to a color emoji fallback font. If the path is not empty, it's either
+  // being rendered as an old-school black and white emoji or a tofu indicating a missing character;
+  // in either case, we know for sure that the font returned is not a color emoji font.
+  //
+  // On Pixel devices, and likely many other OEMs, color emoji can be split across several files.
+  // Specifically, Pixel uses a separate font for country flags.
+  private val emojiFontFiles: Set<File> =
+    mutableSetOf<File>().apply {
+      val paint = Paint()
+      var emojiPath = Path()
+      // These two emoji were introduced specifically as emoji in Unicode Version 6.0.
+      // Swiss flag chosen arbitrarily for neutrality.
+      for (emoji in listOf("🐢", "🇨🇭")) {
+        paint.getTextPath(
+          emoji,
           /*start=*/ 0,
-          /*count=*/ EMOJI.length,
-          /*contextStart=*/ 0,
-          /*contextCount=*/ EMOJI.length,
-          /*xOffset=*/ 0f,
-          /*yOffset=*/ 0f,
-          /*isRtl=*/ false,
-          paint,
+          /*count=*/ emoji.length,
+          /*x=*/ 0f,
+          /*y=*/ 0f,
+          emojiPath,
         )
-      glyphs.getFont(0).file
-    } else {
-      null
+        if (emojiPath.isEmpty) {
+          val glyphs =
+            TextRunShaper.shapeTextRun(
+              emoji,
+              /*start=*/ 0,
+              /*count=*/ emoji.length,
+              /*contextStart=*/ 0,
+              /*contextCount=*/ emoji.length,
+              /*xOffset=*/ 0f,
+              /*yOffset=*/ 0f,
+              /*isRtl=*/ false,
+              paint,
+            )
+          for (i in 0 until glyphs.glyphCount()) {
+            glyphs.getFont(i).file?.let { add(it) }
+          }
+        } else {
+          emojiPath = Path()
+        }
+      }
     }
-  }
 
   override fun getGlyphMetrics(
     glyphId: Int,
@@ -83,9 +93,12 @@ internal class ShaperGlyphSource : IGlyphSource {
     val actualFont = font as Font
 
     val advanceWidth = actualFont.getGlyphBounds(glyphId, paint, boundingBoxF)
+    actualFont.getMetrics(paint, fontMetrics)
+    val fontDescent = maxFontDescent(boundingBoxF, fontMetrics)
+    val fontAscent = maxFontAscent(boundingBoxF, fontMetrics)
 
     val padding =
-      if (emojiFontFile != null && actualFont.file == emojiFontFile) {
+      if (emojiFontFiles.contains(actualFont.file)) {
         0f
       } else {
         // Stroke staddles the font, half in and half out.
@@ -98,9 +111,8 @@ internal class ShaperGlyphSource : IGlyphSource {
     out[2] = boundingBoxF.width() + padding
     out[3] = boundingBoxF.height() + padding
     out[4] = advanceWidth
-    // TODO: Return proper metrics here
-    out[5] = -boundingBoxF.bottom
-    out[6] = boundingBoxF.height() + padding
+    out[5] = -fontDescent
+    out[6] = fontAscent + fontDescent + padding
   }
 
   override fun getTextGlyphs(text: String, paint: Paint): Array<GlyphAdvance> {
@@ -143,7 +155,7 @@ internal class ShaperGlyphSource : IGlyphSource {
             id = glyphs.getGlyphId(i),
             width = nextX - glyphs.getGlyphX(i),
             font = font,
-            isEmoji = emojiFontFile != null && font.file == emojiFontFile,
+            isEmoji = emojiFontFiles.contains(font.file),
           )
         )
       }
@@ -214,10 +226,12 @@ internal class ShaperGlyphSource : IGlyphSource {
     val actualFont = font as Font
 
     actualFont.getGlyphBounds(glyphId, fillPaint, boundingBoxF)
+    actualFont.getMetrics(fillPaint, fontMetrics)
+    val fontAscent = maxFontAscent(boundingBoxF, fontMetrics)
 
     glyphIdPtr[0] = glyphId
     positionPtr[0] = x + (strokeWidth / 2) - boundingBoxF.left
-    positionPtr[1] = y + (strokeWidth / 2) - boundingBoxF.top
+    positionPtr[1] = y + (strokeWidth / 2) + fontAscent
 
     if (strokeWidth > 0f) {
       canvas.drawGlyphs(

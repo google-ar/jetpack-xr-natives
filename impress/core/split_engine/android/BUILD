@@ -139,7 +139,7 @@ cc_library(
     hdrs = [
         "split_engine_shared_memory_bridge_client_ndk.h",
     ],
-    copts = imp_copts(),
+    copts = imp_copts() + if_android(["-Wno-private-header"]),
     defines = imp_defines(),
     linkopts = [
         "-lbinder_ndk",
@@ -256,6 +256,7 @@ cc_library(
     hdrs = [
         "split_engine_shared_memory_bridge_service.h",
     ],
+    copts = if_android(["-Wno-private-header"]),
     deps = [
         ":split_engine_shared_memory_bridge_service_impl",
         "//core/async:executor",
@@ -321,7 +322,8 @@ cc_library(
     defines = imp_defines(),
     deps = [
         ":split_engine_android_bridge",
-        "//core/common:registry",
+        "//core/async:executor",
+        "//core/async:future",
         "//core/common:robin_map",
         "//core/common:small_source_location",
         "//core/math",
@@ -330,20 +332,17 @@ cc_library(
         "//core/render:content_security_level",
         "//core/render/android:definitions",
         "//core/render/android:platform_android_external_texture_surface",
-        "//core/split_engine:flatbuffer_utils",
         "//core/split_engine:split_engine_serializer",
         "//core/split_engine:split_engine_shared",
         "//core/view:base_view",
         "//core/view/platforms/android/wrappers:graphics",
         "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/container:inlined_vector",
         "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/types:span",
         "@com_google_impress//core/common:log",
-        "@flatbuffers",
-        "@third_party//split_engine:fbs",
     ],
     alwayslink = 1,
 )

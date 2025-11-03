@@ -97,5 +97,5 @@ public final class MaterialCompilerService extends Service {
   private static native long nCreate(int fd);
 
   private static native void nClose(long nativeHandle);
-  // LINT.ThenChange(//depot/google3/third_party/impress/core/materialcompiler/material_compiler_service_jni.cc:native_api)
+  // LINT.ThenChange(//depot/google3/third_party/impress/core/materials/compiler/material_compiler_service_jni.cc:native_api)
 }

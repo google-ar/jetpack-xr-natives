@@ -36,6 +36,7 @@
 
 #include "absl/log/check.h"
 #include "core/common/log.h"
+#include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
@@ -44,10 +45,12 @@
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
 #include "absl/types/span.h"
+#include "filament/filament/backend/include/backend/Platform.h"
 #include "filament/filament/include/filament/ColorGrading.h"
 #include "filament/filament/include/filament/ColorSpace.h"
 #include "filament/filament/include/filament/Fence.h"
 #include "filament/filament/include/filament/SwapChain.h"
+#include "filament/filament/include/filament/Sync.h"
 #include "filament/filament/include/filament/View.h"
 #include "filament/filament/include/filament/Viewport.h"
 #include "filament/libs/utils/include/utils/Systrace.h"
@@ -545,7 +548,8 @@ absl::Status XrSessionHost::AdvanceFrame() {
     frame_queue_.push(
         {.display_time = frame_state.predictedDisplayTime,
          .views = locate_views_result.views,
-         .should_render_varjo_foveation = use_varjo_foveation_this_frame_});
+         .should_render_varjo_foveation = use_varjo_foveation_this_frame_,
+         .sync = nullptr});
     if (prev_filament_thread_duration_) {
       filament_thread_timing_->AddSample(*prev_filament_thread_duration_);
       prev_filament_thread_duration_.reset();
@@ -1672,8 +1676,58 @@ absl::Status XrSessionHost::EndFrame(XrSwapchain swapchain,
   filament_thread_duration_ = GetFilamentTimeNow() - filament_begin_timestamp_;
 
   if (frame_info.after_end_frame_callback) {
-    // TODO: Pass fence returned by xrEndFrame.
-    frame_info.after_end_frame_callback(-1);
+    if (frame_info.sync != nullptr) {
+      // TODO: Pass fence returned by xrEndFrame. For now, we will pass in a
+      // fence created by filament as a stop-gap.
+      // The callback needs to be moved to the heap to ensure it still exists
+      // for the sync conversion lambda.
+      using FilamentSync = filament::backend::Platform::Sync;
+      auto after_end_frame_callback = std::make_unique<Invocable<void(int)>>(
+          std::move(frame_info.after_end_frame_callback));
+      auto callback_data = new FenceCallbackData{
+          .display_time = frame_info.display_time,
+          .platform = platform_.get(),
+          .engine = GetEngine(),
+          .sync = frame_info.sync,
+          .after_end_frame_callback = std::move(after_end_frame_callback),
+      };
+      auto invoke_callback_with_fence = [](FilamentSync* sync,
+                                           void* user_data) {
+        // Wrap callback_data in unique_ptr to ensure that it's destroyed at the
+        // end of the callback. Also, cast to the appropriate type.
+        std::unique_ptr<FenceCallbackData> callback_data =
+            absl::WrapUnique(static_cast<FenceCallbackData*>(user_data));
+
+        // This assignment is redundant, but required to avoid a warning about
+        // using an uninitialized value.
+        int file_descriptor = -1;
+
+        // Note: convertSyncToFd is only available on Android, this is just
+        // guarded so that the build doesn't break. It's unexpected for any
+        // other platform to create the sync in the first place, but if one
+        // does, the rest of this code will ensure it's destroyed.
+#if IMP_PLATFORM(ANDROID)
+        if (!callback_data->platform->convertSyncToFd(sync, &file_descriptor)) {
+          IMP_LOG(imp::WARNING)
+              << "Failed to convert sync to file descriptor. Continuing "
+                 "without a sync for this frame.";
+          // It is possible that the file descriptor value has changed, even on
+          // error. We must reset it to the default value.
+          file_descriptor = -1;
+        }
+#endif
+
+        (*callback_data->after_end_frame_callback)(file_descriptor);
+        callback_data->engine->destroy(callback_data->sync);
+      };
+      frame_info.sync->getExternalHandle(
+          /*handler=*/nullptr, invoke_callback_with_fence, callback_data);
+    } else {
+      // The call to create the sync was not invoked, so there's no sync to
+      // get a file descriptor from. Instead, provide -1, which signals not
+      // to wait for a fence.
+      frame_info.after_end_frame_callback(-1);
+    }
   }
 
   return return_value;
@@ -1993,6 +2047,17 @@ void XrSessionHost::SetAfterEndFrameCallback(Invocable<void(int)> callback) {
     return;
   }
   frame_queue_.back().after_end_frame_callback = std::move(callback);
+}
+
+void XrSessionHost::MarkPostRenderAndCreateSync() {
+#if IMP_PLATFORM(ANDROID)
+  absl::MutexLock lock(&frame_queue_mutex_);
+  if (frame_queue_.empty()) {
+    return;
+  }
+
+  frame_queue_.back().sync = GetEngine()->createSync();
+#endif
 }
 
 absl::Span<const char* const>& XrSessionHost::GetExtensionsToLoad() {

@@ -100,6 +100,8 @@ struct PlatformCanvasSource {
       BaseView& view, uint2 pixel_size,
       ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
       ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) = 0;
+
+  virtual void ForceReset() {}
 };
 
 }  // namespace imp

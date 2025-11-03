@@ -35,6 +35,8 @@ class SurfaceTexture : public JavaWrapper {
   SurfaceTexture(const Context& context, uint32_t texture_id,
                  bool is_secure = false);
 
+  ~SurfaceTexture() override;
+
   absl::Status SetDefaultBufferSize(int2 size);
   void UpdateTexImage();
   void UpdateTexImageGLContext();
@@ -47,6 +49,7 @@ class SurfaceTexture : public JavaWrapper {
   JniHandle attach_to_gl_context_;
   JniHandle detach_from_gl_context_;
   JniHandle get_transform_matrix_;
+  JniHandle release_;
   uint32_t texture_id_ = 0;
   bool is_secure_ = false;
   bool is_attached_to_secure_gl_context_ = false;

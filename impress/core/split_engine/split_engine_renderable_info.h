@@ -27,6 +27,7 @@
 #include "core/common/small_source_location.h"
 #include "core/materials/material.h"
 #include "core/math/mat.h"
+#include "core/math/math.h"
 #include "core/model/mesh/mesh_index_data.h"
 #include "core/model/mesh/mesh_vertex_and_index_data.h"
 #include "core/model/mesh/mesh_vertex_data.h"
@@ -61,7 +62,12 @@ class SplitEngineRenderableInfo : public Component {
   void SetIndexBuffer(BorrowedIndexBufferPtr index_buffer);
 
   void SetSkinningBoneCount(uint32_t skinning_bone_count) noexcept;
+
+  void SetRenderableBounds(const imp::Box& renderable_bounds);
+
   uint32_t GetSkinningBoneCount() const noexcept;
+
+  const imp::Box& GetRenderableBounds() const;
 
   BridgeId GetBridgeId() const noexcept;
 
@@ -101,6 +107,8 @@ class SplitEngineRenderableInfo : public Component {
   BorrowedIndexBufferPtr index_buffer_;
 
   uint32_t skinning_bone_count_ = 0;
+
+  imp::Box renderable_bounds_;
 
   // This should always be set, so setting a default to garbage is a hint that
   // something bad is happening.

@@ -99,6 +99,12 @@ constexpr size_t GetBuiltInMaterialParameterSize(
           android_xr::schemas::BuiltInMaterialTextureExternalParameters);
     case android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialbd7fe08c:
       return sizeof(android_xr::schemas::BuiltInMaterialbd7fe08cParameters);
+    case android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialGsplatSpec:
+      return sizeof(android_xr::schemas::BuiltInMaterialGsplatParameters);
+    case android_xr::schemas::BuiltInMaterialSpec::
+        BuiltInMaterialGsplatBackgroundSpec:
+      return sizeof(
+          android_xr::schemas::BuiltInMaterialGsplatBackgroundParameters);
       // default case is omitted to get free compiler error if new enum value is
       // added.
   }

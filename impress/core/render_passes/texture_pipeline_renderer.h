@@ -56,6 +56,8 @@ namespace imp {
 // Each pass can specify a group to control which set of nodes get
 // rendered in which pass.
 class TexturePipelineRenderer : public Component {
+  friend class TexturePipelineRendererTest;
+
  public:
   // PostRenderEvent will be sent out to the owning node of
   // TexturePipelineRenderer in RenderPasses() after the passes are rendered.
@@ -176,6 +178,12 @@ class TexturePipelineRenderer : public Component {
       RuntimePass& runtime_pass);
 
   void RenderPasses(filament::Renderer* filament_renderer);
+
+  // Returns true if the texture that our color target writes to has been since
+  // deleted and recreated elsewhere in the registry. This indicates that we
+  // need to recreate our RenderTarget.
+  bool IsRenderTargetStale(const TexturePipelineRendererState::Pass& pass,
+                           const RuntimePass& runtime_pass) const;
 
   TexturePipelineRendererState state_;
 

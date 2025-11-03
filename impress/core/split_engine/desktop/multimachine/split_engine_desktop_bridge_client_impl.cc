@@ -73,7 +73,7 @@ class SendMessageGroupReactor final
 
   void Start() {
     {
-      absl::MutexLock lock(&status_mutex_);
+      absl::MutexLock lock(status_mutex_);
       
       status_ = ReactorStatus::kStarted;
 
@@ -91,7 +91,7 @@ class SendMessageGroupReactor final
   void AddMessage(absl::Span<const uint8_t> message) {
     
     {
-      absl::MutexLock lock(&messages_mutex_);
+      absl::MutexLock lock(messages_mutex_);
       size_t remaining_bytes = message.size();
       // gRPC has 4MB limit per message (i.e. per one "write").
       // Code below chunks the message into multiple pieces with each piece
@@ -139,7 +139,7 @@ class SendMessageGroupReactor final
     no_more_messages_ = true;
 
     {
-      absl::MutexLock lock(&status_mutex_);
+      absl::MutexLock lock(status_mutex_);
       if (status_ == ReactorStatus::kDead ||
           status_ == ReactorStatus::kTerminating) {
         return;
@@ -158,12 +158,12 @@ class SendMessageGroupReactor final
     }
 
     {
-      absl::MutexLock lock(&status_mutex_);
+      absl::MutexLock lock(status_mutex_);
       
       status_ = ReactorStatus::kStarted;
 
       {
-        absl::MutexLock lock(&messages_mutex_);
+        absl::MutexLock lock(messages_mutex_);
         
         messages_.pop();
       }
@@ -177,7 +177,7 @@ class SendMessageGroupReactor final
     // Server completed the RPC call.
     
     {
-      absl::MutexLock lock(&status_mutex_);
+      absl::MutexLock lock(status_mutex_);
       status_ = ReactorStatus::kDead;
     }
 
@@ -190,14 +190,14 @@ class SendMessageGroupReactor final
     absl::Cleanup cleanup = absl::MakeCleanup(
         [this] { on_message_group_sent_callback_(message_group_id_); });
 
-    absl::MutexLock status_lock(&status_mutex_);
+    absl::MutexLock status_lock(status_mutex_);
     // `kStart` is the only state that can initiate writes.
     if (status_ != ReactorStatus::kStarted) {
       std::move(cleanup).Cancel();
       return;
     }
 
-    absl::MutexLock messages_lock(&messages_mutex_);
+    absl::MutexLock messages_lock(messages_mutex_);
     // Let's see if we have any messages to send.
     if (messages_.empty()) {
       // There are no more messages to send.
@@ -302,7 +302,7 @@ SplitEngineMMDesktopBridgeClientImpl::SplitEngineMMDesktopBridgeClientImpl(
 
             SendMessageGroupReactor* reactor = nullptr;
             {
-              absl::MutexLock lock(&message_group_data_mutex_);
+              absl::MutexLock lock(message_group_data_mutex_);
               auto it = message_group_data_.find(message_group_id);
               
 
@@ -318,7 +318,7 @@ SplitEngineMMDesktopBridgeClientImpl::SplitEngineMMDesktopBridgeClientImpl(
             }
 
             {
-              absl::MutexLock lock(&message_group_data_mutex_);
+              absl::MutexLock lock(message_group_data_mutex_);
               message_group_data_.erase(message_group_id);
             }
           });
@@ -337,7 +337,7 @@ void SplitEngineMMDesktopBridgeClientImpl::Heartbeat(
   };
 
   absl::Mutex mutex;
-  absl::MutexLock lock(&mutex);
+  absl::MutexLock lock(mutex);
   while (!mutex.AwaitWithTimeout(absl::Condition(&stop_heartbeat_),
                                  heartbeat_interval)) {
     auto args = std::make_shared<HeartbeatRequestArgs>();
@@ -364,7 +364,7 @@ absl::Status SplitEngineMMDesktopBridgeClientImpl::SendMessage(
   SendMessageGroupReactor* reactor = nullptr;
   bool start_call = false;
   {
-    absl::MutexLock lock(&message_group_data_mutex_);
+    absl::MutexLock lock(message_group_data_mutex_);
     start_call = message_group_order_.empty();
     auto it = message_group_data_.find(message_group_id);
     if (it == message_group_data_.end()) {
@@ -379,7 +379,7 @@ absl::Status SplitEngineMMDesktopBridgeClientImpl::SendMessage(
                   [this](MessageGroupId message_group_id) {
                     SendMessageGroupReactor* reactor = nullptr;
                     {
-                      absl::MutexLock lock(&message_group_data_mutex_);
+                      absl::MutexLock lock(message_group_data_mutex_);
                       message_group_order_.pop_front();
 
                       if (!message_group_order_.empty()) {
@@ -443,7 +443,7 @@ absl::Status SplitEngineMMDesktopBridgeClientImpl::EndMessageGroup(
   SendMessageGroupReactor* reactor = nullptr;
 
   {
-    absl::MutexLock lock(&message_group_data_mutex_);
+    absl::MutexLock lock(message_group_data_mutex_);
     auto it = message_group_data_.find(message_group_id);
     if (it == message_group_data_.end()) {
       return absl::NotFoundError("Message group not found.");

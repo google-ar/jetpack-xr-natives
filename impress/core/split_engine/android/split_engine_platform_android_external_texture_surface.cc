@@ -24,13 +24,13 @@
 #include <utility>
 #include <vector>
 
-#include "absl/container/inlined_vector.h"
 #include "absl/log/check.h"
 #include "core/common/log.h"
+#include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/types/span.h"
-#include "flatbuffers/flatbuffer_builder.h"
-#include "core/common/registry.h"
+#include "core/async/executor.h"
+#include "core/async/future.h"
 #include "core/common/robin_map.h"
 #include "core/common/small_source_location.h"
 #include "core/math/mat.h"
@@ -42,61 +42,90 @@
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
 #include "core/split_engine/android/split_engine_android_bridge.h"
-#include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
 #include "core/view/platforms/android/wrappers/surface.h"
-#include "split_engine/schemas/split_engine_ipc_generated.h"
 
 // TODO: Remove this once the required unit tests are added.
 namespace imp::split_engine {
 
-SplitEnginePlatformAndroidExternalTextureSurface::
-    SplitEnginePlatformAndroidExternalTextureSurface(
-        BaseView& view, ContentSecurityLevel security_level,
-        absl::Span<const SurfaceViewType> view_types)
-    : view_(view), security_level_(security_level) {
+Future<std::unique_ptr<PlatformAndroidExternalTextureSurface>>
+SplitEnginePlatformAndroidExternalTextureSurface::Create(
+    BaseView& view, ContentSecurityLevel security_level,
+    absl::Span<const SurfaceViewType> view_types) {
+  RobinMap<SurfaceViewType, OwnedTexturePtr> textures;
+  RobinMap<SurfaceViewType, TextureId> external_texture_ids;
   // Create the external textures.
   for (SurfaceViewType view_type : view_types) {
-    textures_[view_type] = view_.GetTextureFactory().CreateExternalTexture(
-        {1, 1}, security_level_);
-    split_engine_texture_ids_[view_type] =
-        SplitEngineSerializer::GetId(textures_[view_type]->GetTexture());
+    textures[view_type] =
+        view.GetTextureFactory().CreateExternalTexture({1, 1}, security_level);
+    external_texture_ids[view_type] =
+        SplitEngineSerializer::GetId(textures[view_type]->GetTexture());
   }
 
   // AIDL bridge only accepts a list of ordered texture IDs. Reserve an extra
   // element to store the security level.
   std::vector<TextureId> split_engine_texture_ids;
   split_engine_texture_ids.reserve(view_types.size() + 1);
-  std::transform(
-      view_types.begin(), view_types.end(),
-      std::back_inserter(split_engine_texture_ids),
-      [this](SurfaceViewType type) { return split_engine_texture_ids_[type]; });
+  std::transform(view_types.begin(), view_types.end(),
+                 std::back_inserter(split_engine_texture_ids),
+                 [&external_texture_ids](SurfaceViewType type) {
+                   return external_texture_ids[type];
+                 });
 
   // For now we append the security level to the list of texture IDs.
   // TODO: Remove this once sendRequest() is implemented.
-  split_engine_texture_ids.push_back(static_cast<TextureId>(security_level_));
+  split_engine_texture_ids.push_back(static_cast<TextureId>(security_level));
 
-  // Set the bridge and create the external texture surface.
-  SplitEngineSerializer* serializer = view_.GetSplitEngineSerializer();
-  
-  SplitEngineAndroidBridge& bridge = serializer->GetBridge();
+  return Future<std::unique_ptr<PlatformAndroidExternalTextureSurface>>::Schedule(
+      [&view, split_engine_texture_ids, textures = std::move(textures),
+       external_texture_ids = std::move(external_texture_ids),
+       security_level]() mutable
+          -> absl::StatusOr<
+              std::unique_ptr<PlatformAndroidExternalTextureSurface>> {
+        // Set the bridge and create the external texture surface.
+        SplitEngineSerializer* serializer = view.GetSplitEngineSerializer();
+        
+        SplitEngineAndroidBridge& bridge = serializer->GetBridge();
 
-  jobject surface_object =
-      bridge.CreateExternalTextureSurface(split_engine_texture_ids);
-  if (!surface_object) {
-    IMP_LOG(imp::FATAL) << "Failed to create Surface: surface_object is null.";
-  }
+        jobject surface_object =
+            bridge.CreateExternalTextureSurface(split_engine_texture_ids);
+        if (!surface_object) {
+          return absl::InternalError(
+              "Failed to create Surface: surface_object is null.");
+        }
 
-  auto surface = android::Surface::Create(view_.GetContext(), surface_object,
-                                          security_level_);
-  if (surface.ok()) {
-    surface_ = *std::move(surface);
-  } else {
-    IMP_LOG(imp::ERROR) << "Failed to create Surface: " << surface.status();
-  }
+        absl::StatusOr<std::unique_ptr<android::Surface>> surface =
+            android::Surface::Create(view.GetContext(), surface_object,
+                                     security_level);
+        if (!surface.ok()) {
+          return surface.status();
+        }
+
+        return absl::WrapUnique(
+            new SplitEnginePlatformAndroidExternalTextureSurface(
+                view, std::move(*surface), std::move(textures), security_level,
+                std::move(external_texture_ids)));
+      },
+      // SplitEngineSharedMemoryBridgeServiceImpl::CreateExternalTextureSurface
+      // is a blocking Binder call on Android that crosses IPC boundary and will
+      // block the main thread if not done from the background thread. This can
+      // result in ANR errors.
+      Executor::Type::kBackground);
 }
+
+SplitEnginePlatformAndroidExternalTextureSurface::
+    SplitEnginePlatformAndroidExternalTextureSurface(
+        BaseView& view, std::unique_ptr<android::Surface> surface,
+        RobinMap<SurfaceViewType, OwnedTexturePtr> textures,
+        ContentSecurityLevel security_level,
+        RobinMap<SurfaceViewType, TextureId> split_engine_texture_ids)
+    : view_(view),
+      surface_(std::move(surface)),
+      textures_(std::move(textures)),
+      security_level_(security_level),
+      split_engine_texture_ids_(std::move(split_engine_texture_ids)) {}
 
 Texture* SplitEnginePlatformAndroidExternalTextureSurface::GetTexture() {
   if (!surface_) {

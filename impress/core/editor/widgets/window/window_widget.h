@@ -27,6 +27,9 @@ namespace imp::editor {
 
 // Shows a list of windows for the Impress editor, and allows users to change
 // the visibility of those windows.
+// TODO: Make it so that only one window widget for Impress View.
+// The goal is to merge the configuration of all the ImGUI windows (from
+// different resources) in one menu.
 class WindowWidget : public editor::Widget {
  public:
   explicit WindowWidget(BaseView& view);
@@ -34,11 +37,12 @@ class WindowWidget : public editor::Widget {
   absl::string_view GetName() const override { return "Window"; }
 
  private:
-  void RestoreDefaultVisibility();
+  void RestoreDefault();
 
   BaseView& view_;
   editor::Editor& editor_;
   WindowConfiguration& window_configuration_;
+  bool hide_all_ = false;
 };
 
 }  // namespace imp::editor

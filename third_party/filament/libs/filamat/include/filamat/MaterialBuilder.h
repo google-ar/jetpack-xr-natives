@@ -254,6 +254,7 @@ public:
     using AttributeType = filament::backend::UniformType;
     using UniformType = filament::backend::UniformType;
     using ConstantType = filament::backend::ConstantType;
+    using ConstantValue = filament::backend::ConstantValue;
     using SamplerType = filament::backend::SamplerType;
     using SubpassType = filament::backend::SubpassType;
     using SamplerFormat = filament::backend::SamplerFormat;
@@ -765,11 +766,7 @@ public:
     struct Constant {
         utils::CString name;
         ConstantType type;
-        union {
-            int32_t i;
-            float f;
-            bool b;
-        } defaultValue;
+        ConstantValue defaultValue;
     };
 
     struct PushConstant {
@@ -805,17 +802,16 @@ public:
     // Returns true if any of the parameter samplers matches the specified type.
     bool hasSamplerType(SamplerType samplerType) const noexcept;
 
-    static constexpr size_t MAX_PARAMETERS_COUNT = 48;
     static constexpr size_t MAX_SUBPASS_COUNT = 1;
     static constexpr size_t MAX_BUFFERS_COUNT = 4;
-    using ParameterList = Parameter[MAX_PARAMETERS_COUNT];
+    using ParameterList = std::vector<Parameter>;
     using SubpassList = Parameter[MAX_SUBPASS_COUNT];
     using BufferList = std::vector<std::unique_ptr<filament::BufferInterfaceBlock>>;
     using ConstantList = std::vector<Constant>;
     using PushConstantList = std::vector<PushConstant>;
 
     // returns the number of parameters declared in this material
-    uint8_t getParameterCount() const noexcept { return mParameterCount; }
+    size_t getParameterCount() const noexcept { return mParameters.size(); }
 
     // returns a list of at least getParameterCount() parameters
     const ParameterList& getParameters() const noexcept { return mParameters; }
@@ -961,7 +957,6 @@ private:
     bool mShadowMultiplier = false;
     bool mTransparentShadow = false;
 
-    uint8_t mParameterCount = 0;
     uint8_t mSubpassCount = 0;
 
     bool mDoubleSided = false;

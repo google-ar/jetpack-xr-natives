@@ -262,7 +262,7 @@ void CustomMaterial::SetParameter(
       sampler_override.value_or(texture->GetSampler()));
 
   parameters_to_raw_textures_.insert_or_assign(std::string(parameter_name),
-                                               texture->GetTexture());
+                                               texture);
   parameters_to_owned_or_borrowed_textures_.erase(parameter_name);
 }
 
@@ -327,7 +327,7 @@ imp::StringMap<const filament::Texture*>
 CustomMaterial::GetUnownedFilamentTextures() const {
   imp::StringMap<const filament::Texture*> result;
   for (auto& pair : parameters_to_raw_textures_) {
-    result.emplace(pair.first, pair.second);
+    result.emplace(pair.first, pair.second->GetTexture());
   }
   return result;
 }

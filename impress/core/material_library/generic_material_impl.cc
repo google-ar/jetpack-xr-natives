@@ -741,6 +741,10 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
          *generic_material_parameters.feature_id_textures) {
       const BorrowedTexturePtr texture =
           texture_borrower(feature_id_texture.texture_id);
+      if (!texture) {
+        return absl::NotFoundError(absl::StrFormat(
+            "feature_id_texture not found: %d", feature_id_texture.texture_id));
+      }
       texture_lookup_.insert_or_assign<TextureAndSampler>(
           kFeatureIdTextureNames[feature_id_index++],
           {texture->GetTexture(), feature_id_texture.sampler,

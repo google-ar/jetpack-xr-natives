@@ -197,6 +197,19 @@ struct ScopedCanvas {
     float font_size_y;
   };
 
+  // A combination of metrics for a specific piece of text and the relevant font
+  // metrics for the text's font.
+  struct TextAndFontMetrics {
+    TextMetrics text_metrics;
+    FontInfo font_info;
+  };
+
+  // The inputs necessary to measure text.
+  struct TextToMeasure {
+    absl::string_view text;
+    ScopedCanvas::TextOptions text_options;
+  };
+
   // EXPERIMENTAL
   //
   // Callback passed into StartDrawing to access the Impress texture that the

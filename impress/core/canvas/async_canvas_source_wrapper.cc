@@ -44,6 +44,21 @@ Future<absl::Status> AsyncCanvasSourceWrapper::PrepareFont(
   return source_->PrepareFont(text, text_options);
 };
 
+Future<std::vector<ScopedCanvas::TextAndFontMetrics>>
+AsyncCanvasSourceWrapper::GetFontAndTextMetrics(
+    std::vector<ScopedCanvas::TextToMeasure> texts) {
+  std::vector<ScopedCanvas::TextAndFontMetrics> text_and_font_metrics;
+  text_and_font_metrics.reserve(texts.size());
+  for (const ScopedCanvas::TextToMeasure& text : texts) {
+    text_and_font_metrics.push_back(ScopedCanvas::TextAndFontMetrics{
+        .text_metrics =
+            MeasureGlyphSync({.glyph = text.text}, text.text_options),
+        .font_info = source_->GetFontInfo(text.text_options)});
+  }
+  return Future<std::vector<ScopedCanvas::TextAndFontMetrics>>(
+      text_and_font_metrics);
+}
+
 Future<ScopedCanvas::TextMetrics> AsyncCanvasSourceWrapper::MeasureGlyph(
     GlyphToMeasure glyph_to_measure, ScopedCanvas::TextOptions text_options) {
   return Future<ScopedCanvas::TextMetrics>(
@@ -118,6 +133,8 @@ std::unique_ptr<AsyncScopedCanvas> AsyncCanvasSourceWrapper::StartDrawing(
   return absl::WrapUnique(new AsyncScopedCanvasWrapper(source_->StartDrawing(
       view, pixel_size, std::move(on_texture_changed_fn), draw_mode, loc)));
 }
+
+void AsyncCanvasSourceWrapper::ForceReset() { source_->ForceReset(); }
 
 ScopedCanvas::TextMetrics AsyncCanvasSourceWrapper::MeasureGlyphSync(
     GlyphToMeasure glyph_to_measure, ScopedCanvas::TextOptions text_options) {

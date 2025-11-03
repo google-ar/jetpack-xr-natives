@@ -68,15 +68,24 @@ class AsyncCanvasSource {
     FontHolder* font_override;
   };
 
+  // Performs a batch operation to measure the size of the given texts and
+  // the font metrics for the text's text_options.
+  virtual Future<std::vector<ScopedCanvas::TextAndFontMetrics>>
+  GetFontAndTextMetrics(std::vector<ScopedCanvas::TextToMeasure> texts) = 0;
+
   // Returns the size in pixels that the given glyph will take up when
   // drawn based on the options passed in. Prefer MeasureGlyphs when there
   // are multiple glyphs to be measured at the same time.
+  // TODO: (broken link) - Consider deprecating this function in favor of
+  // GetFontAndTextMetrics
   virtual Future<ScopedCanvas::TextMetrics> MeasureGlyph(
       GlyphToMeasure glyph_to_measure,
       ScopedCanvas::TextOptions text_options) = 0;
 
   // Returns the size in pixels that the given glyphs will take up when
   // drawn based on the options passed in.
+  // TODO: (broken link) - Consider deprecating this function in favor of
+  // GetFontAndTextMetrics
   virtual Future<std::vector<ScopedCanvas::TextMetrics>> MeasureGlyphs(
       std::vector<GlyphToMeasure> glyphs_to_measure,
       ScopedCanvas::TextOptions text_options) = 0;
@@ -131,6 +140,8 @@ class AsyncCanvasSource {
 
   // Returns information about the font used for drawing text with the given
   // text options. Useful for laying out text.
+  // TODO: (broken link) - Consider deprecating this function in favor of
+  // GetFontAndTextMetrics
   virtual Future<ScopedCanvas::FontInfo> GetFontInfo(
       const ScopedCanvas::TextOptions& text_options) = 0;
 
@@ -183,6 +194,8 @@ class AsyncCanvasSource {
       BaseView& view, uint2 pixel_size,
       ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
       ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) = 0;
+
+  virtual void ForceReset() {}
 };
 
 }  // namespace imp

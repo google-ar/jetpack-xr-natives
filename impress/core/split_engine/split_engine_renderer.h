@@ -192,6 +192,16 @@ class SplitEngineRenderer {
   virtual void SetAppContext(BridgeId bridge_id) = 0;
   // Destroys all Nodes, materials, etc. associated with the given bridge id.
   virtual absl::Status ClearAppContext(BridgeId bridge_id) = 0;
+
+  // Used by Split Engine renderer to determine whether to allow the given API
+  // level. The API level comes from a Split Engine flatbuffer table that the
+  // renderer is deciding whether to process. If incoming messages have
+  // disallowed API levels, the renderer will reject the message from the app
+  // which sent the disallowed request, along with every subsequent API calls.
+  // A special value of kExperimentalApiLevel means that all API levels are
+  // allowed.
+  // The validation is inclusive of the range [1, api_level].
+  virtual void SetValidationApiLevel(int32_t api_level) = 0;
 };
 
 }  // namespace imp::split_engine

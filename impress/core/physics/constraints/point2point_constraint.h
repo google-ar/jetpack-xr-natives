@@ -45,24 +45,32 @@ class Point2PointConstraint : public BaseConstraint, public Component {
  public:
   // Update before physics manager to ensure that the constraint is up to date
   // with rigid body states.
-  // Cleanup before rigid bodies to be sure that there are no constraints
-  // depending on rigid bodies.
   static constexpr UpdatePhase kUpdatePhase = PhysicsManager::kUpdatePhase;
   static constexpr Component::UpdateMode kUpdateMode =
       Component::UpdateMode::kAlwaysUpdate;
   using UpdateDependents = UpdateIds<PhysicsManager>;
+  // Cleanup before rigid bodies to be sure that there are no constraints
+  // depending on rigid bodies.
   using CleanupDependents = CleanupIds<RigidBody>;
 
-  // Specify the connected node and whether to auto-configure the pivots.
-  // Construct a point-to-point constraint between two rigid body if the owner
-  // node of this component has a RigidBody component.
-  // Or
-  // Construct a world-locked point-to-point constraint if the owner node hold
-  // of this component doesn't have a RigidBody component.
-  // connected_node: another node that holds one or the only rigid body of this
-  // constraint. auto_configure: If true, set that constraint to respect the
-  // current transformation of node(s). If false, set the constraint to respect
-  // the value of `connected_pivot`, which may move the nodes.
+  // Specify the connected node and whether to auto-configure the pivots. It
+  // will perform one of the following:
+  //
+  // 1. Construct a point-to-point constraint between two rigid body if the
+  // owner node of this component has a RigidBody component.
+  //
+  // (or) 2. Construct a world-locked point-to-point constraint if the owner
+  // node hold of this component doesn't have a RigidBody component.
+  //
+  // Parameters:
+  //    connected_node:
+  //          - another node that holds one or the only rigid body of this
+  //          constraint.
+  //    auto_configure:
+  //          - If true, set that constraint to respect the current
+  //          transformation of node(s).
+  //          - If false, set the constraint to respect the value of
+  //          `connected_pivot`, which may move the nodes.
   absl::Status Setup(NodeHandle connected_node, bool auto_configure = true,
                      float3 connected_pivot = float3(0.0f),
                      std::optional<float3> pivot = std::nullopt);
@@ -83,7 +91,7 @@ class Point2PointConstraint : public BaseConstraint, public Component {
 
   void OnIsfStateChanged();
 
-  bool IsValid() const { return state_.is_valid; }
+  bool IsReady() const { return state_.is_ready; }
 
  protected:
   void OnRigidBodiesChanged() override;

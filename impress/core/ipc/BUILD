@@ -41,7 +41,7 @@ cc_library(
     copts = imp_copts(),
     linkstatic = 1,
     deps = [
-        "//base:types",
+        "//core:config",
         "//core/common:platform_helpers",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/synchronization",

@@ -29,8 +29,16 @@
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "core/common/platform_helpers.h"
+#include "core/config.h"
+
+#if IMP_THREADS(GOOGLE3)
 #include "thread/thread.h"
 #include "thread/thread_options.h"
+#elif IMP_THREADS(STDLIB)
+#include <thread>  // NOLINT(build/c++11)
+#else
+#error Invalid thread mode.
+#endif
 
 namespace imp::ipc {
 
@@ -60,13 +68,19 @@ MessagePipe::~MessagePipe() {
 }
 
 void MessagePipe::CreateWorkerThread() {
-  absl::MutexLock lock(&lock_);
+  absl::MutexLock lock(lock_);
+#if IMP_THREADS(GOOGLE3)
   worker_thread_.emplace(this);
   worker_thread_->RegisterExitHandler([this]() {
     IMP_LOG(imp::ERROR) << "MessagePipe '" << name_
                << "' worker thread exited abnormally";
   });
   worker_thread_->Start();
+#elif IMP_THREADS(STDLIB)
+  worker_thread_.emplace([this]() { WorkerThreadMain(); });
+#else
+#error Invalid thread mode.
+#endif
   // Block until the worker thread has started.
   auto cond = [this] { return worker_thread_id_ != 0; };
   lock_.Await(absl::Condition(&cond));
@@ -84,11 +98,17 @@ void MessagePipe::Close() {
     return;
   }
 
-  absl::MutexLock lock(&lock_);
+  absl::MutexLock lock(lock_);
   close_notifier_.Notify();
 
   if (worker_thread_) {
+#if IMP_THREADS(GOOGLE3)
     worker_thread_->Join();
+#elif IMP_THREADS(STDLIB)
+    worker_thread_->join();
+#else
+#error Invalid thread mode.
+#endif
     worker_thread_.reset();
   }
 
@@ -113,7 +133,7 @@ bool MessagePipe::IsClosed() { return closed_.load(); }
 
 void MessagePipe::WorkerThreadMain() {
   {
-    absl::MutexLock lock(&lock_);
+    absl::MutexLock lock(lock_);
     worker_thread_id_ = GetThreadId();
   }
   OnMessageResult last_result = OnMessageResult::kKeepAlive;
@@ -169,8 +189,10 @@ bool MessagePipe::ReadInternal(const size_t bytes, uint8_t* data) {
     fds[1].events = POLLIN;
     fds[1].revents = 0;
 
-    const int result =
-        TEMP_FAILURE_RETRY(poll(fds, 2, -1));  // -1 for infinite timeout.
+    int result;
+    do {
+      result = poll(fds, 2, -1);  // -1 for infinite timeout.
+    } while (result == -1 && errno == EINTR);
 
     if (result < 0) {
       IMP_LOG(imp::ERROR) << name_ << " poll failed: " << errno;
@@ -196,8 +218,10 @@ bool MessagePipe::ReadInternal(const size_t bytes, uint8_t* data) {
     // Check if the message pipe fd is ready for reading.
     if (fds[0].revents & POLLIN) {
       const size_t bytes_remaining = data_end - data_current;
-      const ssize_t bytes_read =
-          TEMP_FAILURE_RETRY(read(fd_, data_current, bytes_remaining));
+      ssize_t bytes_read;
+      do {
+        bytes_read = read(fd_, data_current, bytes_remaining);
+      } while (bytes_read == -1 && errno == EINTR);
 
       if (bytes_read == 0) {
         IMP_LOG(imp::ERROR) << name_ << " failed to read " << bytes_remaining << " of "
@@ -230,8 +254,10 @@ bool MessagePipe::WriteInternal(const uint8_t* data, size_t data_size) {
     fds[0].events = POLLOUT;
     fds[0].revents = 0;
 
-    const int result =
-        TEMP_FAILURE_RETRY(poll(fds, 1, -1));  // -1 for infinite timeout.
+    int result;
+    do {
+      result = poll(fds, 1, -1);  // -1 for infinite timeout.
+    } while (result == -1 && errno == EINTR);
 
     if (result < 0) {
       IMP_LOG(imp::ERROR) << name_ << " poll failed: " << errno;
@@ -251,8 +277,10 @@ bool MessagePipe::WriteInternal(const uint8_t* data, size_t data_size) {
     // Check if the message pipe fd is ready for writing.
     if (fds[0].revents & POLLOUT) {
       const size_t bytes_remaining = data_end - data_current;
-      const ssize_t bytes_written =
-          TEMP_FAILURE_RETRY(write(fd_, data_current, bytes_remaining));
+      ssize_t bytes_written;
+      do {
+        bytes_written = write(fd_, data_current, bytes_remaining);
+      } while (bytes_written == -1 && errno == EINTR);
 
       if (bytes_written < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -293,14 +321,19 @@ MessagePipe::NotifyPipe::~NotifyPipe() {
 
 void MessagePipe::NotifyPipe::Notify() {
   const uint8_t kNotifyByte = 1;
-  TEMP_FAILURE_RETRY(write(fds_[kFdSend], &kNotifyByte, sizeof(kNotifyByte)));
+  ssize_t bytes_written;
+  do {
+    bytes_written = write(fds_[kFdSend], &kNotifyByte, sizeof(kNotifyByte));
+  } while (bytes_written == -1 && errno == EINTR);
 }
 
+#if IMP_THREADS(GOOGLE3)
 MessagePipe::WorkerThread::WorkerThread(MessagePipe* pipe)
     : Thread(thread::Options().set_joinable(true).set_nice_priority_level(5),
              kThreadPrefix),
       pipe_(pipe) {}
 
 void MessagePipe::WorkerThread::Run() { pipe_->WorkerThreadMain(); }
+#endif  // IMP_THREADS(GOOGLE3)
 
 }  // namespace imp::ipc

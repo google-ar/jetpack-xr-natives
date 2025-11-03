@@ -368,6 +368,7 @@ class LoadedModelBuilder {
       AudioEmitterId audio_emitter, std::vector<PartData> parts,
       std::optional<filament::Box> bounds, std::optional<RuntimeData> runtime,
       int child_count, absl::string_view name, uint16_t original_index = 0,
+      int original_mesh_index = -1,
       std::optional<NodeVisibility> node_visibility = std::nullopt,
       std::optional<NodeSelectability> node_selectability = std::nullopt,
       std::optional<NodeHoverability> node_hoverability = std::nullopt);

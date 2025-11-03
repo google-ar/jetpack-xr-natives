@@ -13,7 +13,7 @@
 # limitations under the License.
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("//build_tools:imp.bzl", "if_android", "if_desktop", "if_non_android")
+load("//build_tools:imp.bzl", "if_android", "if_desktop", "if_imp_split_engine_allow_experimental_apis", "if_non_android")
 load("//build_tools:imp_app.bzl", "imp_app")
 
 package(
@@ -49,6 +49,8 @@ imp_app(
         "@com_google_absl//absl/types:variant",
     ] + if_android([":split_engine_jni"]) + if_desktop([
         "//core/view/platforms/desktop_split_engine:desktop_split_engine_renderer_hook",
+    ]) + if_imp_split_engine_allow_experimental_apis([
+        "@third_party//split_engine:split_engine_schema_version",
     ]),
 )
 

@@ -25,6 +25,8 @@
 #include <variant>
 #include <vector>
 
+#include "core/recipes/language/recipe_types.proto.imp.h"
+
 #ifdef IMP_ENABLE_RECIPE_EXPERIMENTAL
 #include <optional>
 #endif
@@ -380,15 +382,6 @@ TVec4<T> Tan(TVec4<T> v) {
 
 }  // namespace recipe
 
-inline LiteralArray operator+(const LiteralArray& lhs,
-                              const LiteralArray& rhs) {
-  LiteralArray result = lhs;
-  for (const auto& literal : rhs.values) {
-    result.values.push_back(literal);
-  }
-  return result;
-}
-
 inline LiteralArray& operator+=(LiteralArray& lhs, const LiteralArray& rhs) {
   for (const auto& literal : rhs.values) {
     lhs.values.push_back(literal);
@@ -396,10 +389,24 @@ inline LiteralArray& operator+=(LiteralArray& lhs, const LiteralArray& rhs) {
   return lhs;
 }
 
+inline LiteralArray operator+(const LiteralArray& lhs,
+                              const LiteralArray& rhs) {
+  LiteralArray result = lhs;
+  result += rhs;
+  return result;
+}
+
 template <typename T>
 inline LiteralArray& operator+=(LiteralArray& lhs, const T& rhs) {
   lhs.values.push_back(Literal{.value = rhs});
   return lhs;
+}
+
+template <typename T>
+inline LiteralArray operator+(const LiteralArray& lhs, const T& rhs) {
+  LiteralArray result = lhs;
+  result += rhs;
+  return result;
 }
 
 namespace output {

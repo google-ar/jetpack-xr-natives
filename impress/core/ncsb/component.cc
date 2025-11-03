@@ -78,6 +78,12 @@ void Component::SetActiveFlagInternal(bool active) {
       SetBitFromBool(status_flags_, StatusFlags::kComponentIsActive, active);
 }
 
+void Component::SetRunningAsyncSetupFlagInternal(bool is_running_async_setup) {
+  status_flags_ =
+      SetBitFromBool(status_flags_, StatusFlags::kComponentIsRunningAsyncSetup,
+                     is_running_async_setup);
+}
+
 #if IMP_RUNTIME(DEV)
 bool Component::IsEditorStaging() const { return GetNode()->IsEditorStaging(); }
 #endif

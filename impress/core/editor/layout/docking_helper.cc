@@ -29,7 +29,9 @@ constexpr float kDefaultBottomDockRatio = 0.3f;
 constexpr float kDefaultSideDockRatio = 0.25f;
 constexpr absl::string_view kDockSpaceName = "ImpressEditorDockSpace";
 
-DockingHelper::DockingHelper() {
+DockingHelper::DockingHelper() { Reset(); }
+
+void DockingHelper::Reset() {
   dockspace_id_ = ImGui::GetID(kDockSpaceName.data());
 
   ImGui::DockBuilderRemoveNode(dockspace_id_);  // Clear any previous layout

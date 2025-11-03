@@ -58,7 +58,7 @@ def imp_xr_app(
     if not activity_name:
         activity_name = snakeCaseToCamelCase(name) + "XrActivity"
 
-    manifest = Label("//java/com/google/ar/imp/app:xr/AndroidManifest.xml")
+    manifest = Label("@com_google_impress//java/com/google/ar/imp/app:xr/AndroidManifest.xml")
     if override_manifest:
         manifest = override_manifest
 
@@ -67,7 +67,7 @@ def imp_xr_app(
         platform_name = "xr",
         jni_library = jni_library,
         manifest = manifest,
-        base_generated_activity = Label("//java/com/google/ar/imp/app:basic_imp_xr_activity"),
+        base_generated_activity = Label("@com_google_impress//java/com/google/ar/imp/app:basic_imp_xr_activity"),
         activity_name = activity_name,
         override_activity = override_activity,
         package = package,

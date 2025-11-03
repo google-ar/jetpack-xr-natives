@@ -90,15 +90,13 @@ void ComponentPoolWithUpdater<T>::Update(const FrameTime& frame_time) noexcept {
       ComponentPool<T>::ForEach([&frame_time,
                                  &is_editor_playing_or_component_exempted,
                                  this](T* component) {
-        if (!this->Pending(component->GetEntity())) {
 #if IMP_RUNTIME(DEV)
-          if (!is_editor_playing_or_component_exempted &&
-              !component->IsEditorStaging()) {
-            return;
-          }
-#endif
-          component->Update(frame_time);
+        if (!is_editor_playing_or_component_exempted &&
+            !component->IsEditorStaging()) {
+          return;
         }
+#endif
+        component->Update(frame_time);
       });
     } else {
       ComponentPool<T>::ForEach(

@@ -41,7 +41,7 @@ class ShmemBuffer : public Buffer {
  public:
   using ReleaseFunction = std::function<void()>;
 
-  ShmemBuffer(int fd, size_t size_in_bytes, void* /*absl_nonnull*/ mmapped_ptr,
+  ShmemBuffer(int fd, size_t size_in_bytes, void* /*absl_nonnull*/  mmapped_ptr,
               ReleaseFunction&& release_function)
       : fd_(fd),
         size_in_bytes_(size_in_bytes),
@@ -63,10 +63,10 @@ class ShmemBuffer : public Buffer {
     release_function_();
   }
 
-  const uint8_t* /*absl_nonnull*/ Data() const noexcept override {
+  const uint8_t* /*absl_nonnull*/  Data() const noexcept override {
     return reinterpret_cast<const uint8_t*>(mmapped_ptr_);
   }
-  uint8_t* /*absl_nonnull*/ Data() noexcept override {
+  uint8_t* /*absl_nonnull*/  Data() noexcept override {
     return reinterpret_cast<uint8_t*>(mmapped_ptr_);
   }
   size_t Size() const noexcept override { return size_in_bytes_; }
@@ -83,7 +83,7 @@ class ShmemBuffer : public Buffer {
 ShmemBufferFactory::ShmemBufferFactory(size_t quota_bytes)
     : quota_bytes_(quota_bytes) {}
 
-absl::StatusOr</*absl_nonnull*/ std::unique_ptr<Buffer>>
+absl::StatusOr</*absl_nonnull*/  std::unique_ptr<Buffer>>
 ShmemBufferFactory::CreateBuffer(size_t size_in_bytes) noexcept {
   if (size_in_bytes == 0) {
     return absl::InvalidArgumentError("Buffer size must be positive.");
@@ -94,7 +94,7 @@ ShmemBufferFactory::CreateBuffer(size_t size_in_bytes) noexcept {
 
   // Enforce the quota.
   {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     // Enforce the quota.
     const absl::uint128 used_bytes = used_bytes_;
     const absl::uint128 size_bytes = size_in_bytes;
@@ -124,7 +124,7 @@ ShmemBufferFactory::CreateBuffer(size_t size_in_bytes) noexcept {
                                        [this, size_in_bytes]() {
                                          // Decrement the used bytes when
                                          // ShmemBuffer is destroyed.
-                                         absl::MutexLock lock(&mutex_);
+                                         absl::MutexLock lock(mutex_);
                                          
                                          used_bytes_ -= size_in_bytes;
                                        });

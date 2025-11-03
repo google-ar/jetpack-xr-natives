@@ -74,12 +74,6 @@ class BaseComponentPool {
   // TODO: Refactor internal methods so they are no longer public,
   // and only accessible to the pool and ComponentManager.
 
-  // Returns true is a component for this entity is currently loading async.
-  //
-  // NOTE: Internal implementation detail.
-  // Please do not call outside ComponentManager or ComponentPool.
-  bool Pending(utils::Entity entity) const noexcept;
-
   // If a component is loading async for this entity, cancels the async work.
   //
   // NOTE: Internal implementation detail.
@@ -88,7 +82,7 @@ class BaseComponentPool {
 
   // NOTE: Internal implementation detail.
   // Please do not call outside ComponentManager or ComponentPool.
-  void PostSetup(utils::Entity entity, bool should_enable_component) noexcept;
+  void PostSetup(Component& component, bool should_enable_component) noexcept;
 
   // Called by ComponentManager after calling an async Setup method.
   // This method generates a new future that will remove the component when
@@ -98,7 +92,7 @@ class BaseComponentPool {
   //
   // NOTE: Internal implementation detail.
   // Please do not call outside ComponentManager or ComponentPool.
-  Future<absl::Status> MakeSetupFuture(utils::Entity entity,
+  Future<absl::Status> MakeSetupFuture(Component& component,
                                        Future<absl::Status> future,
                                        bool should_enable_component);
 
@@ -299,7 +293,7 @@ void BaseComponentPool::ComponentStore::ForEach(Fn fn) {
       continue;
     }
 
-    if (!pool_->Pending(component->GetEntity())) {
+    if (!component->IsRunningAsyncSetup()) {
       fn(component);
     }
   }
@@ -324,7 +318,7 @@ void BaseComponentPool::ComponentStore::UpdateEach(Fn fn) {
       continue;
     }
 
-    if (!pool_->Pending(component->GetEntity())) {
+    if (!component->IsRunningAsyncSetup()) {
 #if IMP_RUNTIME(DEV)
       // Skip components that should not be updated in editor draft/pause mode.
       if constexpr (!component_traits::kShouldRunInEditMode<T>) {

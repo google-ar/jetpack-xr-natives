@@ -15,36 +15,20 @@
 #include "core/editor/widgets/performance/frame_time_panel.h"
 
 #include <cmath>
+#include <cstdint>
+#include <vector>
 
-#include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "dear_imgui/imgui.h"
 #include "implot/implot.h"
 #include "core/common/trace.h"
-#include "core/config.h"
 #include "core/editor/widgets/performance/config.h"
 #include "core/editor/widgets/performance/hierarchy_panel.h"
 #include "core/editor/widgets/performance/monitor_panel.h"
-#include "core/monitor/duration_measurement_data.h"
-#include "core/monitor/measurement_data.h"
-#include "core/monitor/monitor.h"
-#include "core/monitor/monitor_helpers.h"
 #include "core/performance/profiler.h"
 #include "core/view/base_view.h"
 
 namespace imp::editor {
-
-namespace {
-
-absl::Duration GetLatestDurationMeasurement(Monitor* monitor,
-                                            absl::string_view measurement_id) {
-  MeasurementData::MeasurementId id = monitor->GetMeasurementId(measurement_id);
-  DurationMeasurementData* data =
-      static_cast<DurationMeasurementData*>(monitor->GetMeasurementData(id));
-  return data->GetLatestSampleDuration();
-}
-
-}  // namespace
 
 FrameTimePanel::FrameTimePanel(BaseView& view, int buffer_size)
     : view_(view), buffer_(buffer_size), view_config_(view.GetConfig()) {}
@@ -55,38 +39,52 @@ void FrameTimePanel::OnStateChanged(MonitorPanel::MonitorState state) {
   state_ = state;
 }
 
-void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
-  IMP_TRACE_NAME("FrameTimePanel::DrawPanel");
-  constexpr float upper_bound = 60;
-  constexpr float lower_bound = 0;
+float FrameTimePanel::GetHighestVisibleFrameTimeMS(int time_span_seconds) {
+  int earliest_visible_frame =
+      Profiler::GetCurrentFrameIndex() -
+      time_span_seconds * details::kNumDisplayValuesPerSecond;
+  float highest_frame_time_ms = 0.0f;
+  for (const auto& frame_time_info : buffer_.data()) {
+    if (frame_time_info.frame_number < earliest_visible_frame) {
+      continue;
+    }
 
-  ImPlotCond plot_cond =
-      state_ == MonitorState::kPaused ? ImPlotCond_None : ImPlotCond_Always;
+    if (frame_time_info.frame_time_ms >= highest_frame_time_ms) {
+      highest_frame_time_ms = frame_time_info.frame_time_ms;
+    }
+  }
+  return highest_frame_time_ms;
+}
+
+void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
+  IMP_TRACE();
+
+  constexpr float lower_bound = 0;
+  float upper_bound = GetHighestVisibleFrameTimeMS(time_span_seconds);
 
   if (ImPlot::BeginPlot("##FrameTimePanel", ImVec2(width, height))) {
-    ImPlot::SetupAxes("Frame number", "Frame time (ms)");
+    ImPlot::SetupAxes("Frame number", "Frame time (ms)", ImPlotAxisFlags_Lock,
+                      ImPlotAxisFlags_Lock);
     ImPlot::SetupAxisLimits(
         ImAxis_X1,
         Profiler::GetCurrentFrameIndex() -
             time_span_seconds * details::kNumDisplayValuesPerSecond,
-        Profiler::GetCurrentFrameIndex(), plot_cond);
-    ImPlot::SetupAxisLimits(ImAxis_Y1, lower_bound, upper_bound);
-    ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, 0, 1000);
+        Profiler::GetCurrentFrameIndex(), ImPlotCond_Always);
+    ImPlot::SetupAxisLimits(ImAxis_Y1, lower_bound, upper_bound,
+                            ImPlotCond_Always);
     ImPlot::SetNextFillStyle(IMPLOT_AUTO_COL, 0.5f);
 
     if (!buffer_.empty()) {
-      ImPlot::PlotBars("Frame time", &buffer_.data()[0].frame_number,
-                       &buffer_.data()[0].frame_time_ms, buffer_.data().size(),
-                       1, 0, buffer_.marker(), sizeof(FrameTimeInfo));
+      ImPlot::PlotShaded("Vsync", &buffer_.data()[0].frame_number,
+                         &buffer_.data()[0].frame_time_ms,
+                         buffer_.data().size(), 0, 0, buffer_.marker(),
+                         sizeof(FrameTimeInfo));
 
-      ImPlot::PlotBars("Filament render time", &buffer_.data()[0].frame_number,
-                       &buffer_.data()[0].render_time_ms, buffer_.data().size(),
-                       1, 0, buffer_.marker(), sizeof(FrameTimeInfo));
-
-      ImPlot::PlotBars("View Advance time", &buffer_.data()[0].frame_number,
-                       &buffer_.data()[0].advance_time_ms,
-                       buffer_.data().size(), 1, 0, buffer_.marker(),
-                       sizeof(FrameTimeInfo));
+      ImPlot::SetNextFillStyle(ImVec4(0.0f, 1.0f, 0.0f, -1.0f), 0.5f);
+      ImPlot::PlotShaded("Frametime", &buffer_.data()[0].frame_number,
+                         &buffer_.data()[0].player_loop_time_ms,
+                         buffer_.data().size(), 0, 0, buffer_.marker(),
+                         sizeof(FrameTimeInfo));
 
       if (ImPlot::IsPlotHovered()) {
         ImDrawList* draw_list = ImPlot::GetPlotDrawList();
@@ -106,9 +104,12 @@ void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
 
     ImPlot::EndPlot();
   }
-#if !IMP_PLATFORM(WASM)
-  if (selected_frame_number_ > 0) ShowHierarchyPanel(selected_frame_number_);
-#endif
+
+  // If the panel is not paused, show the most recent frame recorded.
+  if (state_ != MonitorState::kPaused)
+    selected_frame_number_ = Profiler::GetCurrentFrameIndex() - 1;
+
+  ShowHierarchyPanel(selected_frame_number_);
 }
 
 void FrameTimePanel::ShowHierarchyPanel(int frame_number) {
@@ -132,51 +133,39 @@ void FrameTimePanel::DrawHighlightFrame(int frame_number,
 }
 
 void FrameTimePanel::DrawToolTip(int frame_number) {
-  const FrameTimeInfo& info =
-      buffer_.data()[(frame_number - 1) % buffer_.capacity()];
-  ImVec4 warning_color = ImVec4(1.0f, 0.25f, 0.25f, 1.0f);
+  if (!Profiler::HasFrameRecorded(frame_number)) return;
 
   ImGui::BeginTooltip();
-  ImGui::Text("Elapsed Time:  %.2fms", info.elapsed_time_ms);
-  ImGui::Text("Frame Time: %.2fms", info.frame_time_ms);
-  ImGui::Text("Filament Render Time:   %.2fms", info.render_time_ms);
-  ImGui::Text("Advance Time:  %.2fms", info.advance_time_ms);
+  float frame_time_ms =
+      Profiler::GetTotalFrameDurationNanos(frame_number) / 1000000.0f;
+  float player_loop_time_ms =
+      Profiler::GetRenderNextFrameDurationNanos(frame_number) / 1000000.0f;
 
-  if (info.foreground_executor_time_ms >
-      view_config_.foreground_executor_timeout_ms) {
-    ImGui::TextColored(warning_color, "Foreground Executor Time:  %.2fms",
-                       info.foreground_executor_time_ms);
-  } else {
-    ImGui::Text("Foreground Executor Time:  %.2fms",
-                info.foreground_executor_time_ms);
-  }
+  ImGui::Text("Frame Time (w/ vsync): %.2fms", frame_time_ms);
+  ImGui::Text("Frame Time: %.2fms", player_loop_time_ms);
 
   ImGui::EndTooltip();
 }
 
 void FrameTimePanel::Update(absl::Duration elapsed_time,
                             absl::Duration delta_time) {
-  IMP_TRACE_NAME("FrameTimePanel::Update");
-  // TODO Ensure that all values shown are correct and in sync
-  float view_frame_time = absl::ToDoubleMilliseconds(
-      GetLatestDurationMeasurement(view_.GetMonitor(), kFramePresented));
-  float filament_render_time = absl::ToDoubleMilliseconds(
-      GetLatestDurationMeasurement(view_.GetMonitor(), kFilamentFrameTiming));
-  float view_advance_time = absl::ToDoubleMilliseconds(
-      GetLatestDurationMeasurement(view_.GetMonitor(), kViewAdvance));
-  float foreground_executor_time =
-      absl::ToDoubleMilliseconds(GetLatestDurationMeasurement(
-          view_.GetMonitor(), kForegroundExecutorTiming));
+  IMP_TRACE();
 
-  float elapsed_time_ms = absl::ToDoubleMilliseconds(elapsed_time);
-
-  buffer_.push_back(FrameTimeInfo{
-      .frame_number = static_cast<float>(Profiler::GetCurrentFrameIndex()),
-      .elapsed_time_ms = elapsed_time_ms,
-      .advance_time_ms = view_advance_time,
-      .render_time_ms = filament_render_time,
-      .frame_time_ms = view_frame_time,
-      .foreground_executor_time_ms = foreground_executor_time});
+  // We can't use the current frame index here because that frame is still in
+  // progress and the profiler can't see into the future to know how long it
+  // will take. Instead we record the last frame times.
+  int64_t frame_index = Profiler::GetCurrentFrameIndex() - 1;
+  float frame_time_ms =
+      static_cast<float>(Profiler::GetTotalFrameDurationNanos(frame_index)) /
+      1000000.0f;
+  float player_loop_time_ms =
+      static_cast<float>(
+          Profiler::GetRenderNextFrameDurationNanos(frame_index)) /
+      1000000.0f;
+  buffer_.push_back(
+      FrameTimeInfo{.frame_number = static_cast<float>(frame_index),
+                    .frame_time_ms = frame_time_ms,
+                    .player_loop_time_ms = player_loop_time_ms});
 }
 
 }  // namespace imp::editor

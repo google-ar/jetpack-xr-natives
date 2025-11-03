@@ -19,6 +19,9 @@
 #include "core/split_engine/split_engine_renderer.h"
 #include "core/split_engine/split_engine_renderer_impl.h"
 #include "imp.h"
+#ifdef IMP_SPLIT_ENGINE_ALLOW_EXPERIMENTAL_APIS
+#include "split_engine/schemas/split_engine_schema_version.h"
+#endif  // IMP_SPLIT_ENGINE_ALLOW_EXPERIMENTAL_APIS
 
 namespace imp {
 namespace split_engine {
@@ -39,6 +42,9 @@ void SplitEngineView::Setup() {
   GetCameraManager().GetCamera()->SetFarClip(kFarClip);
 
   auto renderer = std::make_unique<SplitEngineRendererImpl>(*this);
+#ifdef IMP_SPLIT_ENGINE_ALLOW_EXPERIMENTAL_APIS
+  renderer->SetValidationApiLevel(android_xr::kSplitEngineExperimentalApiLevel);
+#endif  // IMP_SPLIT_ENGINE_ALLOW_EXPERIMENTAL_APIS
   GetRegistry().Register<imp::split_engine::SplitEngineRenderer>(
       std::move(renderer));
 }

@@ -210,6 +210,11 @@ table RemoveColliders (requires_api: 1) {
   removes: [RemoveCollider] (id: 0, requires_api: 1);
 }
 
+// TestExperimentalCommand is a command that is not part of the public API.
+// It is only used for testing and benchmarking purposes.
+// It does nothing, and will never do anything.
+table TestExperimentalCommand {}
+
 // The set of all command types that can be sent to the Split Engine service.
 // Commands are one-way messages sent from the client to the service with no
 // response. They contain serialized data that forms the current state of the
@@ -260,6 +265,10 @@ union CommandTypes (requires_api: 1) {
   // Collider requests.
   AddOrUpdateColliders = 24 (requires_api: 1),
   RemoveColliders = 25 (requires_api: 1),
+
+  // TestExperimentalCommand requests. It is not part of the public API and will
+  // always remain experimental.
+  TestExperimentalCommand = 255,
 }
 
 // LINT.IfChange
@@ -292,10 +301,20 @@ table MessageGroupOperation (requires_api: 1) {
 
 root_type MessageGroupOperation;
 
+
+// TestExperimentalRequest is a Request that is not part of the public API.
+// It is only used for testing and benchmarking purposes.
+// It does nothing, and will never do anything.
+table TestExperimentalRequest {}
+
 // A request is an async message sent across the Split Engine bridge through the
 // SendRequest API.
 union RequestTypes (requires_api: 1) {
   BuiltInMaterialRequest = 1 (requires_api: 1),
+
+  // TestExperimentalRequest is not part of the public API and will always
+  // remain experimental.
+  TestExperimentalRequest = 255,
 }
 table Request (requires_api: 1) {
   request: RequestTypes (id: 1, requires_api: 1);
@@ -333,6 +352,9 @@ table ErrorResponse (requires_api: 1) {
 // fulfillment of a request. If the error string is set, the request failed.
 union ResponseTypes (requires_api: 1) {
   ErrorResponse = 1 (requires_api: 1),
+  // NOTE: NO NEW RESPONSES SHOULD BE ADDED TO THIS UNION AT THIS TIME.
+  // Until the split engine renderer is able to validate responses.
+  // TODO: Remove this comment once validation is in place.
 }
 table Response (requires_api: 1) {
   response: ResponseTypes (id: 1, requires_api: 1);

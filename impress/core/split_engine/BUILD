@@ -46,6 +46,13 @@ alias(
     actual = "@third_party//split_engine:fbs_deps",
 )
 
+config_setting(
+    name = "imp_split_engine_allow_experimental_apis",
+    define_values = {
+        "IMP_SPLIT_ENGINE_ALLOW_EXPERIMENTAL_APIS": "1",
+    },
+)
+
 cc_library(
     name = "split_engine_bridge_sender",
     srcs = ["split_engine_bridge_sender.cc"],
@@ -256,6 +263,7 @@ cc_library(
         ":split_engine_mesh_serializer",
         ":split_engine_texture_serializer",
         "//core:config",
+        "//core/assets/material:material_load_options_proto_cc",
         "//core/async:future",
         "//core/common:buffer_access",
         "//core/common:invocable",
@@ -335,6 +343,7 @@ cc_library(
         ":split_engine_texture_builder",
         ":split_engine_texture_serializer",
         "//core:config",
+        "//core/assets/material:material_load_options_proto_cc",
         "//core/async:future",
         "//core/common:buffer_access",
         "//core/common:entity_absl_hasher",
@@ -495,6 +504,7 @@ cc_library(
         ":split_engine_serializer",
         ":split_engine_texture_serializer",
         "//core:config",
+        "//core/assets/material:material_load_options_proto_cc",
         "//core/async:future",
         "//core/common:buffer_access",
         "//core/common:small_source_location",
@@ -831,12 +841,14 @@ cc_library(
     deps = [
         "//core/common:invocable",
         "@com_google_absl//absl/base:nullability",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:string_view",
+        "@com_google_impress//core/common:log",
         "@flatbuffers",
         "@mediapipe//mediapipe/framework/port:status",
     ],

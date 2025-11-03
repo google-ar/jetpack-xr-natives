@@ -98,6 +98,9 @@ const XrHandJointLocationEXT kHandJoint = {
              .position = {.x = 5, .y = 6, .z = 7}},
     .radius = 1,
 };
+const std::vector<XrEnvironmentBlendMode> kBlendModes = {
+    XR_ENVIRONMENT_BLEND_MODE_OPAQUE, XR_ENVIRONMENT_BLEND_MODE_ADDITIVE};
+
 const XrTrackableTrackerANDROID kTrackableTracker =
     XrTrackableTrackerANDROID(1);
 const XrHandTrackerEXT kHandTracker = XrHandTrackerEXT(1);
@@ -589,6 +592,123 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrAcquireDepthSwapchainImagesANDROID(
   return XR_SUCCESS;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCancelFutureEXT(
+    XrInstance instance, const XrFutureCancelInfoEXT* cancelInfo) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrPollFutureEXT(
+    XrInstance instance, const XrFuturePollInfoEXT* pollInfo,
+    XrFuturePollResultEXT* pollResult) {
+  pollResult->state = XR_FUTURE_STATE_READY_EXT;
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrEnumerateSpatialCapabilitiesEXT(
+    XrInstance instance, XrSystemId systemId, uint32_t capabilityCapacityInput,
+    uint32_t* capabilityCountOutput, XrSpatialCapabilityEXT* capabilities) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL
+Internal_xrEnumerateSpatialCapabilityComponentTypesEXT(
+    XrInstance instance, XrSystemId systemId, XrSpatialCapabilityEXT capability,
+    XrSpatialCapabilityComponentTypesEXT* capabilityComponents) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrEnumerateSpatialCapabilityFeaturesEXT(
+    XrInstance instance, XrSystemId systemId, XrSpatialCapabilityEXT capability,
+    uint32_t capabilityFeatureCapacityInput,
+    uint32_t* capabilityFeatureCountOutput,
+    XrSpatialCapabilityFeatureEXT* capabilityFeatures) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateSpatialContextAsyncEXT(
+    XrSession session, const XrSpatialContextCreateInfoEXT* createInfo,
+    XrFutureEXT* future) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateSpatialContextCompleteEXT(
+    XrSession session, XrFutureEXT future,
+    XrCreateSpatialContextCompletionEXT* completion) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL
+Internal_xrDestroySpatialContextEXT(XrSpatialContextEXT spatialContext) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL
+Internal_xrCreateSpatialDiscoverySnapshotAsyncEXT(
+    XrSpatialContextEXT spatialContext,
+    const XrSpatialDiscoverySnapshotCreateInfoEXT* createInfo,
+    XrFutureEXT* future) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL
+Internal_xrCreateSpatialDiscoverySnapshotCompleteEXT(
+    XrSpatialContextEXT spatialContext,
+    const XrCreateSpatialDiscoverySnapshotCompletionInfoEXT*
+        createSnapshotCompletionInfo,
+    XrCreateSpatialDiscoverySnapshotCompletionEXT* completion) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrQuerySpatialComponentDataEXT(
+    XrSpatialSnapshotEXT snapshot,
+    const XrSpatialComponentDataQueryConditionEXT* queryCondition,
+    XrSpatialComponentDataQueryResultEXT* queryResult) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL
+Internal_xrDestroySpatialSnapshotEXT(XrSpatialSnapshotEXT snapshot) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateSpatialEntityFromIdEXT(
+    XrSpatialContextEXT spatialContext,
+    const XrSpatialEntityFromIdCreateInfoEXT* createInfo,
+    XrSpatialEntityEXT* spatialEntity) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL
+Internal_xrDestroySpatialEntityEXT(XrSpatialEntityEXT spatialEntity) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateSpatialUpdateSnapshotEXT(
+    XrSpatialContextEXT spatialContext,
+    const XrSpatialUpdateSnapshotCreateInfoEXT* createInfo,
+    XrSpatialSnapshotEXT* snapshot) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateSpatialAnchorEXT(
+    XrSpatialContextEXT spatialContext,
+    const XrSpatialAnchorCreateInfoEXT* createInfo,
+    XrSpatialEntityIdEXT* anchorEntityId, XrSpatialEntityEXT* anchorEntity) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL
+Internal_xrCreateSpatialAnchorSpaceFromIdANDROIDX1(
+    XrSession session, XrSpatialContextEXT spatialContext,
+    const XrSpatialAnchorSpaceFromIdCreateInfoANDROIDX1* createInfo,
+    XrSpace* anchorSpace) {
+  if (session == XR_NULL_HANDLE || spatialContext == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+  *anchorSpace = kSpace;
+  return XR_SUCCESS;
+}
+
 }  // extern "C"
 
 namespace {
@@ -666,6 +786,38 @@ const auto kXrFunctions = new absl::flat_hash_map<absl::string_view,
      ToXrVoidFunction(Internal_xrGetCoarseTrackingEyesInfoANDROID)},
     {"xrGetFineTrackingEyesInfoANDROID",
      ToXrVoidFunction(Internal_xrGetFineTrackingEyesInfoANDROID)},
+    {"xrCancelFutureEXT", ToXrVoidFunction(Internal_xrCancelFutureEXT)},
+    {"xrPollFutureEXT", ToXrVoidFunction(Internal_xrPollFutureEXT)},
+    {"xrEnumerateSpatialCapabilitiesEXT",
+     ToXrVoidFunction(Internal_xrEnumerateSpatialCapabilitiesEXT)},
+    {"xrEnumerateSpatialCapabilityComponentTypesEXT",
+     ToXrVoidFunction(Internal_xrEnumerateSpatialCapabilityComponentTypesEXT)},
+    {"xrEnumerateSpatialCapabilityFeaturesEXT",
+     ToXrVoidFunction(Internal_xrEnumerateSpatialCapabilityFeaturesEXT)},
+    {"xrCreateSpatialContextAsyncEXT",
+     ToXrVoidFunction(Internal_xrCreateSpatialContextAsyncEXT)},
+    {"xrCreateSpatialContextCompleteEXT",
+     ToXrVoidFunction(Internal_xrCreateSpatialContextCompleteEXT)},
+    {"xrDestroySpatialContextEXT",
+     ToXrVoidFunction(Internal_xrDestroySpatialContextEXT)},
+    {"xrCreateSpatialDiscoverySnapshotAsyncEXT",
+     ToXrVoidFunction(Internal_xrCreateSpatialDiscoverySnapshotAsyncEXT)},
+    {"xrCreateSpatialDiscoverySnapshotCompleteEXT",
+     ToXrVoidFunction(Internal_xrCreateSpatialDiscoverySnapshotCompleteEXT)},
+    {"xrQuerySpatialComponentDataEXT",
+     ToXrVoidFunction(Internal_xrQuerySpatialComponentDataEXT)},
+    {"xrDestroySpatialSnapshotEXT",
+     ToXrVoidFunction(Internal_xrDestroySpatialSnapshotEXT)},
+    {"xrCreateSpatialEntityFromIdEXT",
+     ToXrVoidFunction(Internal_xrCreateSpatialEntityFromIdEXT)},
+    {"xrDestroySpatialEntityEXT",
+     ToXrVoidFunction(Internal_xrDestroySpatialEntityEXT)},
+    {"xrCreateSpatialUpdateSnapshotEXT",
+     ToXrVoidFunction(Internal_xrCreateSpatialUpdateSnapshotEXT)},
+    {"xrCreateSpatialAnchorEXT",
+     ToXrVoidFunction(Internal_xrCreateSpatialAnchorEXT)},
+    {"xrCreateSpatialAnchorSpaceFromIdANDROIDX1",
+     ToXrVoidFunction(Internal_xrCreateSpatialAnchorSpaceFromIdANDROIDX1)},
 });
 
 }  // namespace
@@ -688,6 +840,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
 XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
     const char* layerName, uint32_t propertyCapacityInput,
     uint32_t* propertyCountOutput, XrExtensionProperties* properties) {
+  *propertyCountOutput = 0;
   return XR_SUCCESS;
 }
 
@@ -768,6 +921,26 @@ xrLocateViews(XrSession session, const XrViewLocateInfo* viewLocateInfo,
   views[1].fov = kRightViewFov;
   *viewCountOutput = 2;
   viewState->viewStateFlags = kValidViewStateFlags;
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateEnvironmentBlendModes(
+    XrInstance instance, XrSystemId systemId,
+    XrViewConfigurationType viewConfigurationType,
+    uint32_t environmentBlendModeCapacityInput,
+    uint32_t* environmentBlendModeCountOutput,
+    XrEnvironmentBlendMode* environmentBlendModes) {
+  if (environmentBlendModeCapacityInput == 0) {
+    *environmentBlendModeCountOutput = kBlendModes.size();
+    return XR_SUCCESS;
+  }
+  if (environmentBlendModeCapacityInput < kBlendModes.size()) {
+    return XR_ERROR_SIZE_INSUFFICIENT;
+  }
+  *environmentBlendModeCountOutput = kBlendModes.size();
+  for (int i = 0; i < kBlendModes.size(); ++i) {
+    environmentBlendModes[i] = kBlendModes[i];
+  }
   return XR_SUCCESS;
 }
 

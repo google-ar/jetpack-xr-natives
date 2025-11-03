@@ -16,13 +16,15 @@
 
 #include <memory>
 
+#include "core/view/base_view.h"
 #include "core/window/default_dev_mode_extension.h"
+#include "core/window/filament_host.h"
 
 namespace imp::window {
 
-std::unique_ptr<FilamentHost::DevModeExtension>
-CreateDefaultDevModeExtension() {
-  return std::make_unique<DefaultDevModeExtension>();
+std::unique_ptr<FilamentHost::DevModeExtension> CreateDefaultDevModeExtension(
+    BaseView* view) {
+  return std::make_unique<DefaultDevModeExtension>(view);
 }
 
 }  // namespace imp::window

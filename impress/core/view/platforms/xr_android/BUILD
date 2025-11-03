@@ -354,7 +354,7 @@ imp_gltf_materials_package(
         "transmission",
         "stereo",
     ],
-    optimization = "size",
+    optimization = "performance",
     shading_models = [
         "lit",
         "unlit",

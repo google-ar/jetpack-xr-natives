@@ -211,26 +211,13 @@ Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeGetDepthImagesDataB
 }
 
 JNIEXPORT jobject JNICALL
-Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeGetCoarseEyesInfo(
+Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeGetEyesInfo(
     JNIEnv* env, jclass /*clazz*/, jlong monotonic_time_ns) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   XrEyesANDROID eyes_info;
   if (XR_FAILED(xr_manager.GetEyesInfo(static_cast<int64_t>(monotonic_time_ns),
-                                       &eyes_info, false))) {
-    return nullptr;
-  }
-  return androidx::xr::openxr::CreateJavaEyesInfo(env, eyes_info);
-}
-
-JNIEXPORT jobject JNICALL
-Java_androidx_xr_arcore_openxr_OpenXrPerceptionManager_nativeGetFineEyesInfo(
-    JNIEnv* env, jclass /*clazz*/, jlong monotonic_time_ns) {
-  androidx::xr::openxr::OpenXrManager& xr_manager =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
-  XrEyesANDROID eyes_info;
-  if (XR_FAILED(xr_manager.GetEyesInfo(static_cast<int64_t>(monotonic_time_ns),
-                                       &eyes_info, true))) {
+                                       &eyes_info))) {
     return nullptr;
   }
   return androidx::xr::openxr::CreateJavaEyesInfo(env, eyes_info);

@@ -52,6 +52,7 @@ void Surface::InitializeJniHandles() {
       GetMethodHandle("lockHardwareCanvas", "()Landroid/graphics/Canvas;");
   unlock_canvas_and_post_ =
       GetMethodHandle("unlockCanvasAndPost", "(Landroid/graphics/Canvas;)V");
+  release_ = GetMethodHandle("release", "()V");
 }
 
 absl::StatusOr<std::unique_ptr<Surface>> Surface::Create(
@@ -83,6 +84,8 @@ Surface::Surface(const Context& context, SurfaceTexture& surface_texture,
                   "(Landroid/graphics/SurfaceTexture;)V",
                   surface_texture.WeakReference()),
       security_level_(security_level) {}
+
+Surface::~Surface() { CallVoidMethod(release_); }
 
 absl::Status Surface::Initialize() {
   InitializeJniHandles();

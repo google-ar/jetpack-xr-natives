@@ -46,18 +46,13 @@ class FrameTimePanel : public MonitorPanel {
   struct FrameTimeInfo {
     // The number of frames that has been recorded
     float frame_number;
-    // Stores the total elapsed time of the performance monitor
-    float elapsed_time_ms;
-    // The view advance/update time
-    float advance_time_ms;
-    // The entire time taken by Filament to render the scene
-    float render_time_ms;
-    // The overall frame time
+    // Total time spent in the frame.
     float frame_time_ms;
-    // The time the foreground executor took this frame
-    float foreground_executor_time_ms;
+    // Time spent in FilamentHost::RenderNextFrame() this frame.
+    float player_loop_time_ms;
   };
-
+  // Returns the highest frame time that is visible in the plot.
+  float GetHighestVisibleFrameTimeMS(int time_span_seconds);
   // Draws a grey highlight over the frame being moused over
   void DrawHighlightFrame(int frame_number, ImDrawList* draw_list);
   // Draws a tool tip showing more information on the frame

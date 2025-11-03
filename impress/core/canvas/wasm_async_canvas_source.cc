@@ -145,6 +145,13 @@ Future<absl::Status> WasmAsyncCanvasSource::PrepareFont(
                                         text_style, text_options.size_pixels);
 }
 
+Future<std::vector<ScopedCanvas::TextAndFontMetrics>>
+WasmAsyncCanvasSource::GetFontAndTextMetrics(
+    std::vector<ScopedCanvas::TextToMeasure> texts) {
+  absl::MutexLock lock(&canvas_mutex_);
+  return measuring_scoped_canvas_.GetFontAndTextMetrics(texts);
+}
+
 Future<ScopedCanvas::TextMetrics> WasmAsyncCanvasSource::MeasureGlyph(
     GlyphToMeasure glyph_to_measure, ScopedCanvas::TextOptions text_options) {
   absl::MutexLock lock(&canvas_mutex_);
@@ -442,6 +449,63 @@ Future<absl::Status> WasmAsyncCanvasSource::WasmScopedCanvas::PrepareFont(
 
   return platform_canvas_wrapper_->PrepareFont(
       text, font_family, font_weight, text_style, text_options.size_pixels);
+}
+
+Future<std::vector<ScopedCanvas::TextAndFontMetrics>>
+WasmAsyncCanvasSource::WasmScopedCanvas::GetFontAndTextMetrics(
+    std::vector<ScopedCanvas::TextToMeasure> texts) {
+  for (const ScopedCanvas::TextToMeasure& text : texts) {
+    SetTextOptions(text.text_options);
+
+    // Because measuring the typographical width incurs extra work, by default
+    // don't do the calculations unless the user explicitly requires it.
+    if (text.text_options.should_measure_typographical_width) {
+      // TODO Consolidate emscripten calls to ensure an atomic
+      // operation. This involves marshalling the texts to measure, as well as
+      // making this thread safe by potentially associating a future id with the
+      // group of texts to be measured.
+      platform_canvas_wrapper_->ClearTextToMeasure();
+      std::vector<Chunk> typographical_chunks =
+          GetChunks(text.text, text.text_options.force_non_separable);
+      for (const Chunk& chunk : typographical_chunks) {
+        platform_canvas_wrapper_->AddTextToMeasure(chunk.chunk_text,
+                                                   chunk.is_separable);
+      }
+    }
+    platform_canvas_wrapper_->CollectGetFontAndTextMetricsInputs(text.text);
+  }
+  return platform_canvas_wrapper_->GetFontAndTextMetrics().Then(
+      [texts = std::move(texts)](std::vector<std::vector<float>> measurements)
+          -> std::vector<ScopedCanvas::TextAndFontMetrics> {
+        std::vector<ScopedCanvas::TextAndFontMetrics> text_and_font_metrics;
+        text_and_font_metrics.reserve(measurements.size());
+        for (int i = 0; i < measurements.size(); i++) {
+          if (measurements[i].size() != 9) {
+            IMP_LOG(imp::ERROR) << "Unexpected measurement size "
+                       << measurements[i].size();
+            continue;
+          }
+
+          float size = static_cast<float>(texts[i].text_options.size_pixels);
+          // LINT.IfChange
+          text_and_font_metrics.push_back(ScopedCanvas::TextAndFontMetrics{
+              .text_metrics =
+                  ScopedCanvas::TextMetrics{
+                      .origin = float2{measurements[i][0], measurements[i][1]},
+                      .size = float2{measurements[i][2], measurements[i][3]},
+                      .typographical_width = measurements[i][4],
+                      .font_origin_y = measurements[i][5],
+                      .font_size_y = measurements[i][6],
+                  },
+              .font_info =
+                  ScopedCanvas::FontInfo{measurements[i][7], measurements[i][8],
+                                         // TODO: Supply proper
+                                         // values for these two metrics.
+                                         size, size}});
+          // LINT.ThenChange(//depot/google3/third_party/impress/javascript/core/wasm/canvas/wasm_canvas_renderer.ts)
+        }
+        return text_and_font_metrics;
+      });
 }
 
 Future<std::vector<ScopedCanvas::TextMetrics>>

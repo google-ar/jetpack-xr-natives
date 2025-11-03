@@ -29,9 +29,7 @@
 #include "core/math/mat.h"
 #include "core/math/transform.h"
 #include "core/math/vec.h"
-#include "core/model/entity_data.h"
 #include "core/model/model_data.h"
-#include "core/model/shared_data.h"
 #include "core/model/skeleton_data.h"
 #include "core/ncsb/base_node.h"
 #include "core/ncsb/node.h"
@@ -279,16 +277,6 @@ Box GltfScene::GetLocalBoneBounds() const {
 
 Box GltfScene::GetWorldBoneBounds() const {
   return TransformBounds(GetLocalBoneBounds(), GetNode()->GetWorldTrs());
-}
-
-bool GltfScene::HasEntityDataForNodeHandle(NodeHandle node) const {
-  return node_to_entitiy_id_map_.find(node) != node_to_entitiy_id_map_.end();
-}
-
-model::EntityData::Proxy GltfScene::GetEntityDataFromNodeHandle(
-    NodeHandle node) const {
-  model::EntityId entity_id = node_to_entitiy_id_map_.at(node);
-  return gltf_asset_->GetModelData().Entities()[entity_id];
 }
 
 std::optional<uint16_t> GltfScene::GetGltfNodeIndexFromBoneId(

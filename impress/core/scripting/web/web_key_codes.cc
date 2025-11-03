@@ -14,6 +14,7 @@
 
 #include "core/scripting/web/web_key_codes.h"
 
+#include "absl/strings/string_view.h"
 #include "core/input/key_codes.h"
 #include "core/view/utils/string_map.h"
 
@@ -22,17 +23,30 @@ namespace {
 const imp::StringMap<VirtualKeyCode>& GetVirtualKeyCodeMap() {
   static const imp::StringMap<VirtualKeyCode>* map =
       new imp::StringMap<VirtualKeyCode>{
-          //  the following are common keys on laptop keyboard
+          //  The following are keys defined in imp::VirtualKeyCode
+          {"Tab", VirtualKeyCode::VK_TAB},
+          {"ArrowLeft", VirtualKeyCode::VK_LEFT},
+          {"ArrowRight", VirtualKeyCode::VK_RIGHT},
+          {"ArrowUp", VirtualKeyCode::VK_UP},
+          {"ArrowDown", VirtualKeyCode::VK_DOWN},
+          {"PageUp", VirtualKeyCode::VK_PAGEUP},
+          {"PageDown", VirtualKeyCode::VK_PAGEDOWN},
+          {"Home", VirtualKeyCode::VK_HOME},
+          {"End", VirtualKeyCode::VK_END},
+          {"Insert", VirtualKeyCode::VK_INSERT},
+          {"Delete", VirtualKeyCode::VK_DELETE},
+          {"Backspace", VirtualKeyCode::VK_BACKSPACE},
+          {"Space", VirtualKeyCode::VK_SPACE},
           {"Enter", VirtualKeyCode::VK_RETURN},
           {"Escape", VirtualKeyCode::VK_ESCAPE},
-          {"Backspace", VirtualKeyCode::VK_BACKSPACE},
-          {"Tab", VirtualKeyCode::VK_TAB},
-          {"Space", VirtualKeyCode::VK_SPACE},
-          {"Quote", VirtualKeyCode::VK_QUOTE},
-          {"Comma", VirtualKeyCode::VK_COMMA},
-          {"Minus", VirtualKeyCode::VK_MINUS},
-          {"Period", VirtualKeyCode::VK_PERIOD},
-          {"Slash", VirtualKeyCode::VK_SLASH},
+          {"ControlLeft", VirtualKeyCode::VK_LEFT_CTRL},
+          {"ShiftLeft", VirtualKeyCode::VK_LEFT_SHIFT},
+          {"AltLeft", VirtualKeyCode::VK_LEFT_ALT},
+          {"MetaLeft", VirtualKeyCode::VK_LEFT_SUPER},
+          {"ControlRight", VirtualKeyCode::VK_RIGHT_CTRL},
+          {"ShiftRight", VirtualKeyCode::VK_RIGHT_SHIFT},
+          {"AltRight", VirtualKeyCode::VK_RIGHT_ALT},
+          {"MetaRight", VirtualKeyCode::VK_RIGHT_SUPER},
           {"Digit0", VirtualKeyCode::VK_0},
           {"Digit1", VirtualKeyCode::VK_1},
           {"Digit2", VirtualKeyCode::VK_2},
@@ -43,12 +57,6 @@ const imp::StringMap<VirtualKeyCode>& GetVirtualKeyCodeMap() {
           {"Digit7", VirtualKeyCode::VK_7},
           {"Digit8", VirtualKeyCode::VK_8},
           {"Digit9", VirtualKeyCode::VK_9},
-          {"Semicolon", VirtualKeyCode::VK_SEMICOLON},
-          {"Equal", VirtualKeyCode::VK_EQUALS},
-          {"BracketLeft", VirtualKeyCode::VK_LEFTBRACKET},
-          {"Backslash", VirtualKeyCode::VK_BACKSLASH},
-          {"BracketRight", VirtualKeyCode::VK_RIGHTBRACKET},
-          {"Backquote", VirtualKeyCode::VK_BACKQUOTE},
           {"KeyA", VirtualKeyCode::VK_a},
           {"KeyB", VirtualKeyCode::VK_b},
           {"KeyC", VirtualKeyCode::VK_c},
@@ -75,7 +83,6 @@ const imp::StringMap<VirtualKeyCode>& GetVirtualKeyCodeMap() {
           {"KeyX", VirtualKeyCode::VK_x},
           {"KeyY", VirtualKeyCode::VK_y},
           {"KeyZ", VirtualKeyCode::VK_z},
-          {"Capslock", VirtualKeyCode::VK_CAPSLOCK},
           {"F1", VirtualKeyCode::VK_F1},
           {"F2", VirtualKeyCode::VK_F2},
           {"F3", VirtualKeyCode::VK_F3},
@@ -88,21 +95,41 @@ const imp::StringMap<VirtualKeyCode>& GetVirtualKeyCodeMap() {
           {"F10", VirtualKeyCode::VK_F10},
           {"F11", VirtualKeyCode::VK_F11},
           {"F12", VirtualKeyCode::VK_F12},
-          {"ArrowRight", VirtualKeyCode::VK_RIGHT},
-          {"ArrowLeft", VirtualKeyCode::VK_LEFT},
-          {"ArrowDown", VirtualKeyCode::VK_DOWN},
-          {"ArrowUp", VirtualKeyCode::VK_UP},
-
-          // the following are additional keys on extened keyboards
-          {"Printscreen", VirtualKeyCode::VK_PRINTSCREEN},
+          {"F13", VirtualKeyCode::VK_F13},
+          {"Quote", VirtualKeyCode::VK_QUOTE},
+          {"Comma", VirtualKeyCode::VK_COMMA},
+          {"Minus", VirtualKeyCode::VK_MINUS},
+          {"Period", VirtualKeyCode::VK_PERIOD},
+          {"Slash", VirtualKeyCode::VK_SLASH},
+          {"Semicolon", VirtualKeyCode::VK_SEMICOLON},
+          {"Equal", VirtualKeyCode::VK_EQUALS},
+          {"BracketLeft", VirtualKeyCode::VK_LEFTBRACKET},
+          {"Backslash", VirtualKeyCode::VK_BACKSLASH},
+          {"BracketRight", VirtualKeyCode::VK_RIGHTBRACKET},
+          {"Backquote", VirtualKeyCode::VK_BACKQUOTE},
+          {"Capslock", VirtualKeyCode::VK_CAPSLOCK},
           {"Scrolllock", VirtualKeyCode::VK_SCROLLLOCK},
+          {"NumLock", VirtualKeyCode::VK_NUMLOCK},
+          {"Printscreen", VirtualKeyCode::VK_PRINTSCREEN},
           {"Pause", VirtualKeyCode::VK_PAUSE},
-          {"Insert", VirtualKeyCode::VK_INSERT},
-          {"Home", VirtualKeyCode::VK_HOME},
-          {"PageUp", VirtualKeyCode::VK_PAGEUP},
-          {"Delete", VirtualKeyCode::VK_DELETE},
-          {"End", VirtualKeyCode::VK_END},
-          {"PageDown", VirtualKeyCode::VK_PAGEDOWN}};
+          {"Numpad0", VirtualKeyCode::VK_KEYPAD0},
+          {"Numpad1", VirtualKeyCode::VK_KEYPAD1},
+          {"Numpad2", VirtualKeyCode::VK_KEYPAD2},
+          {"Numpad3", VirtualKeyCode::VK_KEYPAD3},
+          {"Numpad4", VirtualKeyCode::VK_KEYPAD4},
+          {"Numpad5", VirtualKeyCode::VK_KEYPAD5},
+          {"Numpad6", VirtualKeyCode::VK_KEYPAD6},
+          {"Numpad7", VirtualKeyCode::VK_KEYPAD7},
+          {"Numpad8", VirtualKeyCode::VK_KEYPAD8},
+          {"Numpad9", VirtualKeyCode::VK_KEYPAD9},
+          {"NumpadDecimal", VirtualKeyCode::VK_KEYPAD_DECIMAL},
+          {"NumpadDivide", VirtualKeyCode::VK_KEYPAD_DIVIDE},
+          {"NumpadMultiply", VirtualKeyCode::VK_KEYPAD_MULTIPLY},
+          {"NumpadSubtract", VirtualKeyCode::VK_KEYPAD_SUBTRACT},
+          {"NumpadAdd", VirtualKeyCode::VK_KEYPAD_ADD},
+          {"Enter", VirtualKeyCode::VK_KEYPAD_ENTER},
+          {"Equal", VirtualKeyCode::VK_KEYPAD_EQUAL},
+      };
   return *map;
 }
 

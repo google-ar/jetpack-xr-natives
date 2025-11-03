@@ -1,0 +1,75 @@
+/*
+ * Copyright 2025 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+namespace imp.schemas;
+
+// Client->Service requests.
+// This should match the Filament material builder Platform enum.
+enum Platform : uint8 {
+  Desktop,
+  Mobile,
+  All
+}
+
+// This should match the Filament material builder TargetApi enum.
+enum TargetApi : uint8 (bit_flags) {
+  OpenGL,
+  Vulkan,
+  Metal,
+  WebGPU,
+}
+
+table CompileRequest {
+  // The source material to compile.
+  source_material: string (required);
+  // The platform to compile for.
+  platform: Platform;
+  // The target APIs to compile for.
+  target_api: TargetApi;
+}
+
+table CloseRequest {}
+
+union RequestType {
+  CompileRequest,
+  CloseRequest
+}
+
+table Request {
+  request: RequestType;
+}
+
+root_type Request;
+
+// Service->Client responses.
+
+union ResponseType {
+  CompileResponse,
+  ErrorResponse
+}
+
+table Response {
+  response: ResponseType;
+}
+
+table CompileResponse {
+  compiled_material: [ubyte];
+}
+
+table ErrorResponse {
+  message: string;
+}
+
+root_type Response;

@@ -14,8 +14,11 @@
 
 #include <jni.h>
 
+#include <vector>
+
 #include "openxr/openxr.h"
 #include "common/pointer_util.h"
+#include "openxr/jobject_creator.h"
 #include "openxr/openxr_manager.h"
 
 extern "C" {
@@ -138,4 +141,23 @@ Java_androidx_xr_arcore_openxr_OpenXrManager_nativeGetFaceTrackerCalibration(
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
   return xr_manager.IsFaceTrackerCalibrated();
 }
+
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeGetPreferredBlendMode(
+    JNIEnv* env, jclass /*clazz*/) {
+  androidx::xr::openxr::OpenXrManager& xr_manager =
+      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+  std::vector<XrEnvironmentBlendMode> blend_modes;
+
+  xr_manager.GetEnvironmentBlendModes(&blend_modes);
+  // Return the first blend mode that isn't opaque, or nullptr if none.
+  for (auto i = 0u; i < blend_modes.size(); ++i) {
+    if (blend_modes[i] != XR_ENVIRONMENT_BLEND_MODE_OPAQUE) {
+      return androidx::xr::openxr::CreateJavaDisplayBlendMode(env,
+                                                              blend_modes[i]);
+    }
+  }
+  return nullptr;
+}
+
 }  // extern "C"

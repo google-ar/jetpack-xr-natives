@@ -48,6 +48,9 @@ class AsyncCanvasSourceWrapper : public AsyncCanvasSource {
       absl::string_view text,
       const ScopedCanvas::TextOptions& text_options) override;
 
+  Future<std::vector<ScopedCanvas::TextAndFontMetrics>> GetFontAndTextMetrics(
+      std::vector<ScopedCanvas::TextToMeasure> texts) override;
+
   Future<ScopedCanvas::TextMetrics> MeasureGlyph(
       GlyphToMeasure glyph_to_measure,
       ScopedCanvas::TextOptions text_options) override;
@@ -80,6 +83,8 @@ class AsyncCanvasSourceWrapper : public AsyncCanvasSource {
       BaseView& view, uint2 pixel_size,
       ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
       ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) override;
+
+  void ForceReset() override;
 
  private:
   std::unique_ptr<CanvasSource> source_;

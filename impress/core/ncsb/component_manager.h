@@ -357,7 +357,7 @@ auto ComponentManager::SetupWithoutAdd(ComponentHandle<T> comp,
   if (!comp->IsEditorStaging()) {
     if constexpr (!component_traits::kShouldRunInEditMode<T>) {
       if (editor::IsInEditMode(view_->GetRegistry())) {
-        pool.PostSetup(comp.GetEntity(), should_enable_component);
+        pool.PostSetup(*comp, should_enable_component);
 
         if constexpr (std::is_same_v<SetupResultT, void>) {
           return;
@@ -374,7 +374,7 @@ auto ComponentManager::SetupWithoutAdd(ComponentHandle<T> comp,
 
   if constexpr (std::is_same_v<SetupResultT, void>) {
     InvokeSetupVoid<setup_mode>(comp, std::forward<Args>(args)...);
-    pool.PostSetup(comp.GetEntity(), should_enable_component);
+    pool.PostSetup(*comp, should_enable_component);
     return;
   } else if constexpr (std::is_same_v<SetupResultT, absl::Status>) {
     absl::Status status =
@@ -383,13 +383,12 @@ auto ComponentManager::SetupWithoutAdd(ComponentHandle<T> comp,
       pool.Remove(comp.GetEntity());
       return status;
     }
-    pool.PostSetup(comp.GetEntity(), should_enable_component);
+    pool.PostSetup(*comp, should_enable_component);
     return absl::OkStatus();
   } else {
     static_assert(std::is_same_v<SetupResultT, Future<absl::Status>>);
     return pool.MakeSetupFuture(
-        comp.GetEntity(),
-        InvokeSetup<setup_mode>(comp, std::forward<Args>(args)...),
+        *comp, InvokeSetup<setup_mode>(comp, std::forward<Args>(args)...),
         should_enable_component);
   }
 }
@@ -406,7 +405,7 @@ template <typename T>
 ComponentHandle<T> ComponentManager::Get(utils::Entity entity) {
   ComponentPool<T>& pool = GetComponentPool<T>();
   Component* component = pool.TryGetRawComponentFromEntity(entity);
-  if (!component || pool.Pending(entity)) {
+  if (!component || component->IsRunningAsyncSetup()) {
     return ComponentHandle<T>();
   }
 

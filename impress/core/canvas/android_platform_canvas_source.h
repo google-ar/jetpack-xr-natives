@@ -43,7 +43,9 @@ namespace imp {
 // Implementation of CanvasSource for Android.
 class AndroidPlatformCanvasSource : public PlatformCanvasSource {
  public:
-  explicit AndroidPlatformCanvasSource(Context context);
+  AndroidPlatformCanvasSource(Context context,
+                              AndroidGlyphSource::Method glyph_method,
+                              bool use_hardware_rendering = true);
 
   bool IsFeatureSupported(ScopedCanvas::Feature feature) override;
 
@@ -91,6 +93,8 @@ class AndroidPlatformCanvasSource : public PlatformCanvasSource {
       ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
       ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) override;
 
+  void ForceReset() override;
+
  private:
   class AndroidScopedCanvas : public ScopedCanvas {
    public:
@@ -123,8 +127,8 @@ class AndroidPlatformCanvasSource : public PlatformCanvasSource {
 
   Context context_;
 
-  android::SurfaceTexture surface_texture_;
-  android::Surface surface_;
+  std::unique_ptr<android::SurfaceTexture> surface_texture_;
+  std::unique_ptr<android::Surface> surface_;
   android::Paint paint_;
   // Used to render an outstroke for text.
   android::Paint stroke_paint_;
@@ -132,6 +136,7 @@ class AndroidPlatformCanvasSource : public PlatformCanvasSource {
   AndroidGlyphSource glyph_source_;
 
   OwnedTexturePtr texture_;
+  bool use_hardware_rendering_;
 };
 
 }  // namespace imp

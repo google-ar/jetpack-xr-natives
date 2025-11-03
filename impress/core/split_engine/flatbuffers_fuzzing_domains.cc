@@ -449,7 +449,7 @@ uint32_t FlatbuffersTableUntypedDomainImpl::BuildTable(
   // "Out of line fields" shall be added to the builder first, so that we can
   // refer to them in the final table.
   for (const auto& [id, field_corpus] : value) {
-    const reflection::Field* /*absl_nullable*/ field = GetFieldById(id);
+    const reflection::Field* /*absl_nullable*/  field = GetFieldById(id);
     if (field == nullptr) {
       continue;
     }
@@ -462,7 +462,7 @@ uint32_t FlatbuffersTableUntypedDomainImpl::BuildTable(
   // Now it is time to build the final table.
   uint32_t table_start = builder.StartTable();
   for (const auto& [id, field_corpus] : value) {
-    const reflection::Field* /*absl_nullable*/ field = GetFieldById(id);
+    const reflection::Field* /*absl_nullable*/  field = GetFieldById(id);
     if (field == nullptr) {
       continue;
     }

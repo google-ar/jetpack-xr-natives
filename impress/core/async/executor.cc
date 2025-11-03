@@ -93,8 +93,7 @@ bool Executor::ScheduleWithReservedTaskId(TaskId reserved_task_id,
     return ScheduleInvocable(std::move(invocable), task_priority) !=
            kInvalidTaskId;
   }
-  return ScheduleWithReservedTaskId(reserved_task_id, std::move(invocable),
-                                    task_priority);
+  return false;
 }
 
 absl::Status Executor::UpdateTaskPriority(TaskId task_id, int task_priority) {

@@ -24,6 +24,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
+#include "core/async/future.h"
 #include "core/common/robin_map.h"
 #include "core/common/small_source_location.h"
 #include "core/math/mat.h"
@@ -52,7 +53,23 @@ constexpr std::array<SurfaceViewType, 2>
 // own external texture.
 class AndroidExternalTextureSurface {
  public:
+  ABSL_DEPRECATED("Use CreateAsync instead.")
+  // Creates an Android Surface and corresponding external textures. This method
+  // blocks on an Android Binder thread in Split Engine mode, so it should not
+  // be called on the main thread if you want to use Split Engine.
   static absl::StatusOr<std::unique_ptr<AndroidExternalTextureSurface>> Create(
+      BaseView& view,
+      ContentSecurityLevel security_level = ContentSecurityLevel::kNone,
+      absl::Span<const SurfaceViewType> view_types =
+          kAndroidExternalTextureSurfaceConfigMono);
+
+  // Creates an Android Surface and corresponding external textures, which
+  // requires blocking on an Android Binder thread in Split Engine mode, so it
+  // must be async in general. Note: in Split Engine mode, this call
+  // automatically switches to a background thread to make the binder call.
+  // Because of that requirement, all calls to create an
+  // AndroidExternalTextureSurface should use this method instead of Create().
+  static Future<std::unique_ptr<AndroidExternalTextureSurface>> CreateAsync(
       BaseView& view,
       ContentSecurityLevel security_level = ContentSecurityLevel::kNone,
       absl::Span<const SurfaceViewType> view_types =
@@ -95,7 +112,7 @@ class AndroidExternalTextureSurface {
  private:
   AndroidExternalTextureSurface(
       ContentSecurityLevel security_level = ContentSecurityLevel::kNone);
-  absl::Status CreatePlatformSurface(
+  Future<absl::Status> CreatePlatformSurface(
       BaseView& view, absl::Span<const SurfaceViewType> view_types);
 
   std::unique_ptr<PlatformAndroidExternalTextureSurface> platform_surface_;

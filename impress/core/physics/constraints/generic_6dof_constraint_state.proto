@@ -1,0 +1,67 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import "core/math/math.proto";
+import "core/proto/imp.proto";
+import "core/scene_handles/scene_handles.proto";
+
+option java_multiple_files = true;
+option java_outer_classname = "Generic6DofConstraintStateProto";
+
+message Generic6DofConstraintState {
+  // The node that holds a rigid body A that is subject to this constraint.
+  NodeSceneHandle connected_node = 1;
+
+  // The pivot of the constraint frame in the connected node(that holds rigid
+  // body A)'s local space.
+  Float3 connected_pivot = 2;
+
+  // The axis of the constraint frame in the connected node(that holds rigid
+  // body A)'s local space.
+  Float3 connected_axis = 3;
+
+  // The up axis of the constraint frame in the connected node(that holds rigid
+  // body A)'s local space. Together with the axis, it defines the constraint
+  // rotation.
+  Float3 connected_up_axis = 4;
+
+  // Indicates the pivot/offset of the constraint frame from rigid body (B).
+  // Note that rigid body (B) is attached the same node that owns the
+  // constraint.
+  Float3 pivot = 5 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // The rotation for the constraint frame from rigid body (B).
+  Float3 axis = 6 [(imp.optional_type) = ABSL_OPTIONAL];
+  Float3 up_axis = 7 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // if it will calculate the connected pivot and axis based on the transforms
+  // of the two nodes (constraint node and connected node)
+  bool auto_configure = 8;
+
+  // the limits for each linear axes
+  Float3 linear_lower_limit = 9;
+  Float3 linear_upper_limit = 10;
+
+  // the limits for each angular axes
+  Float3 angular_lower_limit = 11;
+  Float3 angular_upper_limit = 12;
+
+  // If the constraint is ready (is it functioning, ie it is connected to valid
+  // rigid bodies)
+  bool is_ready = 13 [(imp.editor_control) = { read_only: {} }];
+}

@@ -395,20 +395,19 @@ jobject CreateJavaFloatSize3d(JNIEnv* env, const XrExtent3Df& xr_extent) {
 }
 
 jobject CreateJavaEyeState(JNIEnv* env, const XrEyeStateANDROID& xr_eye_state) {
-  jclass eye_state_enum = GetJxrClass(env, PACKAGE_ARCORE_RUNTIME, "EyeStatus");
+  jclass eye_state_enum = GetJxrClass(env, PACKAGE_ARCORE_OPENXR, "EyeStatus");
   jclass eye_data_class = GetJxrClass(env, PACKAGE_ARCORE_OPENXR, "EyeDataKt");
   jfieldID eye_state_static_fid = env->GetStaticFieldID(
       eye_state_enum, "Companion",
-      absl::StrFormat("L%s;", GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME,
+      absl::StrFormat("L%s;", GetJxrFullClassName(env, PACKAGE_ARCORE_OPENXR,
                                                   "EyeStatus$Companion"))
           .c_str());
   jmethodID fromOpenXrEyeState = env->GetStaticMethodID(
       eye_data_class, "fromOpenXrEyeState",
       absl::StrFormat(
           "(L%s;I)L%s;",
-          GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME,
-            "EyeStatus$Companion"),
-          GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME, "EyeStatus"))
+          GetJxrFullClassName(env, PACKAGE_ARCORE_OPENXR, "EyeStatus$Companion"),
+          GetJxrFullClassName(env, PACKAGE_ARCORE_OPENXR, "EyeStatus"))
           .c_str());
   jobject eye_state_static_obj =
       env->GetStaticObjectField(eye_state_enum, eye_state_static_fid);
@@ -449,8 +448,7 @@ jobject CreateJavaEye(JNIEnv* env, const XrEyeANDROID& xr_eye) {
   jmethodID eye_constructor = env->GetMethodID(
       eye_class, "<init>",
       absl::StrFormat("(L%s;L%s;)V",
-                      GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME,
-                        "EyeStatus"),
+                      GetJxrFullClassName(env, PACKAGE_ARCORE_OPENXR, "EyeStatus"),
                       GetJxrFullClassName(env, PACKAGE_MATH, "Pose"))
           .c_str());
   return env->NewObject(eye_class, eye_constructor,
@@ -515,4 +513,30 @@ jobject CreateJavaGeospatialPoseResult(
                         xr_geospatial_pose_result.orientationYawAccuracy);
 }
 
+jobject CreateJavaDisplayBlendMode(
+    JNIEnv* env, const XrEnvironmentBlendMode& xr_blend_mode) {
+  jclass blend_mode_ext_cls =
+      GetJxrClass(env, PACKAGE_ARCORE_OPENXR, "OpenXrRuntimeKt");
+  jclass blend_mode_enum =
+      GetJxrClass(env, PACKAGE_CORE, "XrDevice$DisplayBlendMode");
+  jfieldID blend_mode_static_fid = env->GetStaticFieldID(
+      blend_mode_enum, "Companion",
+      absl::StrFormat(
+          "L%s;", GetJxrFullClassName(env, PACKAGE_CORE,
+                                      "XrDevice$DisplayBlendMode$Companion"))
+          .c_str());
+  jmethodID fromOpenXrEnvironmentBlendMode = env->GetStaticMethodID(
+      blend_mode_ext_cls, "fromOpenXrEnvironmentBlendMode",
+      absl::StrFormat(
+          "(L%s;I)L%s;",
+          GetJxrFullClassName(env, PACKAGE_CORE,
+                              "XrDevice$DisplayBlendMode$Companion"),
+          GetJxrFullClassName(env, PACKAGE_CORE, "XrDevice$DisplayBlendMode"))
+          .c_str());
+  jobject blend_mode_static_obj =
+      env->GetStaticObjectField(blend_mode_enum, blend_mode_static_fid);
+  return env->CallStaticObjectMethod(
+      blend_mode_ext_cls, fromOpenXrEnvironmentBlendMode, blend_mode_static_obj,
+      static_cast<uint32_t>(xr_blend_mode));
+}
 }  // namespace androidx::xr::openxr

@@ -42,7 +42,7 @@ class HeapBuffer : public Buffer {
 
   // HeapBuffer takes ownership of the memory allocated by the factory.
   // ReleaseFunction is called in ~HeapBuffer.
-  HeapBuffer(/*absl_nonnull*/ std::unique_ptr<uint8_t[]> data, size_t size_in_bytes,
+  HeapBuffer(/*absl_nonnull*/  std::unique_ptr<uint8_t[]> data, size_t size_in_bytes,
              ReleaseFunction&& release_function)
       : size_in_bytes_(size_in_bytes),
         release_function_(std::move(release_function)),
@@ -53,8 +53,8 @@ class HeapBuffer : public Buffer {
   HeapBuffer(HeapBuffer&&) = delete;
   HeapBuffer& operator=(HeapBuffer&&) = delete;
 
-  uint8_t* /*absl_nonnull*/ Data() noexcept override { return data_.get(); }
-  const uint8_t* /*absl_nonnull*/ Data() const noexcept override {
+  uint8_t* /*absl_nonnull*/  Data() noexcept override { return data_.get(); }
+  const uint8_t* /*absl_nonnull*/  Data() const noexcept override {
     return data_.get();
   }
   size_t Size() const noexcept override { return size_in_bytes_; }
@@ -70,7 +70,7 @@ class HeapBuffer : public Buffer {
 HeapBufferFactory::HeapBufferFactory(size_t quota_bytes)
     : quota_bytes_(quota_bytes) {}
 
-absl::StatusOr</*absl_nonnull*/ std::unique_ptr<Buffer>>
+absl::StatusOr</*absl_nonnull*/  std::unique_ptr<Buffer>>
 HeapBufferFactory::CreateBuffer(size_t size_in_bytes) noexcept {
   if (size_in_bytes == 0) {
     return absl::InvalidArgumentError("Buffer size must be positive.");
@@ -78,7 +78,7 @@ HeapBufferFactory::CreateBuffer(size_t size_in_bytes) noexcept {
 
   uint8_t* data = nullptr;
   {
-    absl::MutexLock lock(&mutex_);
+    absl::MutexLock lock(mutex_);
     // Enforce the quota.
     const absl::uint128 used_bytes = used_bytes_;
     const absl::uint128 size_bytes = size_in_bytes;
@@ -101,7 +101,7 @@ HeapBufferFactory::CreateBuffer(size_t size_in_bytes) noexcept {
                                       size_in_bytes, [this, size_in_bytes]() {
                                         // Decrement the used bytes when
                                         // HeapBuffer is destroyed.
-                                        absl::MutexLock lock(&mutex_);
+                                        absl::MutexLock lock(mutex_);
                                         
                                         used_bytes_ -= size_in_bytes;
                                       });

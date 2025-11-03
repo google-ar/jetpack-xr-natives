@@ -171,6 +171,10 @@ class RigidBody : public Component {
 
   const btRigidBody& GetBtRigidBody() const { return *rigid_body_; }
 
+  bool IsBulletRigidBodyRecreated() const {
+    return is_bt_rigid_body_recreated_;
+  }
+
   void Cleanup();
 
   // Returns the position and size (but not orientation) of the collision shape,
@@ -201,6 +205,7 @@ class RigidBody : public Component {
   // Is temporarily directed by the user, but being a simulated object.
   bool was_directed_while_simulated_ = false;
   mat4f transform_prev_;
+  bool is_bt_rigid_body_recreated_ = false;
 
  public:
   using IsfInfo = IsfInfo<

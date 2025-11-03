@@ -78,6 +78,8 @@ if (FILAMENT_SUPPORTS_OPENGL AND NOT FILAMENT_USE_EXTERNAL_GLES3)
             src/opengl/GLTexture.h
             src/opengl/GLUtils.cpp
             src/opengl/GLUtils.h
+            src/opengl/GLMemoryMappedBuffer.cpp
+            src/opengl/GLMemoryMappedBuffer.h
             src/opengl/OpenGLBlobCache.cpp
             src/opengl/OpenGLBlobCache.h
             src/opengl/OpenGLContext.cpp
@@ -177,6 +179,7 @@ endif()
 if (FILAMENT_SUPPORTS_VULKAN)
     list(APPEND SRCS
             include/backend/platforms/VulkanPlatform.h
+            src/vulkan/VulkanAsyncHandles.cpp
             src/vulkan/VulkanAsyncHandles.h
             src/vulkan/VulkanBlitter.cpp
             src/vulkan/VulkanBlitter.h
@@ -215,6 +218,10 @@ if (FILAMENT_SUPPORTS_VULKAN)
             src/vulkan/VulkanReadPixels.h
             src/vulkan/VulkanSamplerCache.cpp
             src/vulkan/VulkanSamplerCache.h
+            src/vulkan/VulkanSemaphore.cpp
+            src/vulkan/VulkanSemaphore.h
+            src/vulkan/VulkanSemaphoreManager.cpp
+            src/vulkan/VulkanSemaphoreManager.h
             src/vulkan/VulkanStagePool.cpp
             src/vulkan/VulkanStagePool.h
             src/vulkan/VulkanSwapChain.cpp
@@ -295,6 +302,7 @@ if (FILAMENT_SUPPORTS_WEBGPU)
             src/webgpu/WebGPUStrings.h
             src/webgpu/WebGPUSwapChain.cpp
             src/webgpu/WebGPUSwapChain.h
+            src/webgpu/WebGPUSync.h
             src/webgpu/WebGPUTexture.cpp
             src/webgpu/WebGPUTexture.h
             src/webgpu/WebGPUTextureHelpers.h
@@ -565,6 +573,7 @@ if (APPLE OR LINUX)
         test/test_ReadPixels.cpp
         test/test_BufferUpdates.cpp
         test/test_Callbacks.cpp
+        test/test_MemoryMappedBuffer.cpp
         test/test_MRT.cpp
         test/test_PushConstants.cpp
         test/test_LoadImage.cpp

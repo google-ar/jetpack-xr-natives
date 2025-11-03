@@ -59,6 +59,9 @@ class WasmAsyncCanvasSource : public AsyncCanvasSource {
       absl::string_view text,
       const ScopedCanvas::TextOptions& text_options) override;
 
+  Future<std::vector<ScopedCanvas::TextAndFontMetrics>> GetFontAndTextMetrics(
+      std::vector<ScopedCanvas::TextToMeasure> texts) override;
+
   Future<ScopedCanvas::TextMetrics> MeasureGlyph(
       GlyphToMeasure glyph_to_measure,
       ScopedCanvas::TextOptions text_options) override;
@@ -133,6 +136,8 @@ class WasmAsyncCanvasSource : public AsyncCanvasSource {
         const ScopedCanvas::TextOptions& text_options);
     Future<ScopedCanvas::FontInfo> GetFontInfo(
         const ScopedCanvas::TextOptions& text_options);
+    Future<std::vector<ScopedCanvas::TextAndFontMetrics>> GetFontAndTextMetrics(
+        std::vector<ScopedCanvas::TextToMeasure> texts);
 
     WasmAsyncCanvasSource& GetSource() { return source_; }
 

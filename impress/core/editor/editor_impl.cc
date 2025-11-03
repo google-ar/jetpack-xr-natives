@@ -38,6 +38,7 @@
 #include "core/editor/components/camera_zoom.h"
 #include "core/editor/components/grid.h"
 #include "core/editor/editor.h"
+#include "core/editor/editor_clipboard.h"
 #include "core/editor/editor_constants.h"
 #include "core/editor/editor_info.h"
 #include "core/editor/editor_input_handler.h"
@@ -215,6 +216,9 @@ class EditorImpl : public Editor {
 
   // Enables Undo/Redo functionality keyboard triggers.
   void EnableUndoAndRedo(Dispatcher& dispatcher);
+
+  // Enables EditorClipboard functionality (cut/copy/paste).
+  void EnableEditorClipboard(Dispatcher& dispatcher);
 
   // Registers a handler for dealing with changes made through "Settings" menu.
   void RegisterEditorSettingChangedEventHandler();
@@ -417,6 +421,11 @@ void EditorImpl::Initialize() {
   // handles the input.
   EnableUndoAndRedo(app_dispatcher);
   EnableUndoAndRedo(dispatcher_);
+
+  EditorClipboard& editor_clipboard =
+      GetView().GetRegistry().GetOrCreate<EditorClipboard>(&GetView());
+  editor_clipboard.EnableDispatcherEvents(dispatcher_);
+  editor_clipboard.EnableDispatcherEvents(app_dispatcher);
 
   // Allows loading mesh data on CPU.
   // Allows Vertex Selection functionality for meshes loaded on CPU.

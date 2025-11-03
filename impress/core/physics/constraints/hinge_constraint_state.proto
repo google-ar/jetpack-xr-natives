@@ -17,6 +17,7 @@ syntax = "proto3";
 package imp;
 
 import "core/math/math.proto";
+import "core/proto/imp.proto";
 import "core/scene_handles/scene_handles.proto";
 
 message HingeConstraintState {
@@ -47,20 +48,20 @@ message HingeConstraintState {
   // interpreted as the world position of the constraint.
   bool auto_configure = 6;
 
-  // If the constraint is valid (is it functioning, ie it is connected to valid
-  // rigid bodies)
-  bool is_valid = 7;
-
   // The limits of the hinge expressed in degrees around the rotation axis.
-  float lower_limit = 8;
-  float upper_limit = 9;
+  float lower_limit = 7;
+  float upper_limit = 8;
 
   // How aggressively the joint resists movement as it nears the limits
-  float bias_factor = 10;
-  float relaxation_factor = 11;
+  float bias_factor = 9;
+  float relaxation_factor = 10;
 
   // Whether the motor is enabled and its parameters.
-  bool angular_motor_enabled = 12;
-  float angular_motor_velocity = 13;
-  float angular_motor_max_impulse = 14;
+  bool angular_motor_enabled = 11;
+  float angular_motor_velocity = 12;
+  float angular_motor_max_impulse = 13;
+
+  // If the constraint is ready (is it functioning, ie it is connected to
+  // valid rigid bodies)
+  bool is_ready = 14 [(imp.editor_control) = { read_only: {} }];
 }

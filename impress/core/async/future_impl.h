@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "absl/base/thread_annotations.h"
+#include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/synchronization/blocking_counter.h"
@@ -90,6 +91,12 @@ class ResultHolder {
   // It is expected that the caller knows what the real type is.
   template <typename T>
   T MoveAs() {
+#if !IMP_DISABLE_FUTURE_VALIDATION
+    if (has_been_moved_) {
+      IMP_LOG(imp::FATAL) << "Attempt to move a result that has already been moved.";
+    }
+    has_been_moved_ = true;
+#endif
     return std::move(held_result_.Get<T>());
   }
 
@@ -135,11 +142,19 @@ class ResultHolder {
     return retrieve_status_fn_(held_result_);
   }
 
+#if !IMP_DISABLE_FUTURE_VALIDATION
+  // Returns true if MoveAs() has been called on this ResultHolder.
+  bool HasBeenMoved() const { return has_been_moved_; }
+#endif
+
  private:
   using RetrieveStatusFn = const absl::Status& (*)(const ErasedResult&);
 
   ErasedResult held_result_;
   RetrieveStatusFn retrieve_status_fn_;
+#if !IMP_DISABLE_FUTURE_VALIDATION
+  bool has_been_moved_ = false;
+#endif
 };
 
 template <typename T>
@@ -410,6 +425,29 @@ class FutureImpl {
   // Status.
   StatusToResultFn status_to_result_for_result_producer_fn_
       ABSL_GUARDED_BY(mu_);
+
+#if !IMP_DISABLE_FUTURE_VALIDATION
+  // A number used to check for use-after-free errors.
+  int integrity_marker_ = kValidIntegrityMarker;
+#endif
+
+  // Fatals if the integrity marker is either kDestructedIntegrityMarker, or
+  // not kValidIntegrityMarker.
+  //
+  // Note: This is a measure to catch use-after-free errors. The idea is that if
+  // the FutureImpl is stale or destructed memory, integrity_marker_ should
+  // almost certainly not be equal to kValidIntegrityMarker. Furthermore, if
+  // it's equal to kDestructedIntegrityMarker, we are almost certainly seeing a
+  // use-after-frees.
+  // This is not guaranteed to catch all use-after-free errors, because we are
+  // testing against undefined behavior. On the other hand, if this check is
+  // failing, it strongly indicates a memory issue. We have seen crashes in the
+  // past that suggest Futures are used after destruction without immediately
+  // crashing ((broken link)). We want to crash earlier in these cases.
+  void AssertIntegrity() const;
+
+  // Fatals if the result in ResultHolder has already been moved.
+  void AssertResultHasNotBeenMoved() const ABSL_SHARED_LOCKS_REQUIRED(mu_);
 };
 
 // Helpers for accessing status from a StatusOr or Status.

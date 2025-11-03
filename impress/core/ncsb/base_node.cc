@@ -42,6 +42,4 @@ bool BaseNode::operator!=(const BaseNode& other) const {
   return entity_ != other.entity_;
 }
 
-utils::Entity BaseNode::GetEntity() const { return entity_; }
-
 }  // namespace imp

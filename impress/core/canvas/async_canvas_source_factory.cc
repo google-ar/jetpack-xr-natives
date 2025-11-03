@@ -29,12 +29,13 @@ namespace imp {
 
 namespace AsyncCanvasSourceFactory {
 
-std::unique_ptr<AsyncCanvasSource> Create(Context context) {
+std::unique_ptr<AsyncCanvasSource> Create(Context context,
+                                          bool use_hardware_rendering) {
 #if IMP_PLATFORM(WASM)
   return std::make_unique<WasmAsyncCanvasSource>();
 #else
   return absl::make_unique<AsyncCanvasSourceWrapper>(
-      CanvasSource::Create(context));
+      CanvasSource::Create(context, use_hardware_rendering));
 #endif
 };
 

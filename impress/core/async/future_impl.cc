@@ -109,6 +109,7 @@ FutureImpl::FutureImpl(const std::shared_ptr<FutureImplWrapper>& parent_future,
           parent_status_to_result_holder_fn) {}
 
 FutureImpl::~FutureImpl() {
+  AssertIntegrity();
   absl::MutexLock lock(&mu_);
   if (!result_.HasResult()) {
     // Last ditch effort to cancel the future if it isn't ready when being
@@ -119,15 +120,21 @@ FutureImpl::~FutureImpl() {
     // code.
     ReturnInternal(absl::CancelledError("Future is destroyed."));
   }
+#if !IMP_DISABLE_FUTURE_VALIDATION
+  integrity_marker_ = kDestructedIntegrityMarker;
+#endif
 }
 
 bool FutureImpl::Ready() const {
+  AssertIntegrity();
   absl::ReaderMutexLock lock(&mu_);
   return result_.HasResult();
 }
 
 ResultHolder& FutureImpl::Get() {
+  AssertIntegrity();
   absl::ReaderMutexLock lock(&mu_);
+  AssertResultHasNotBeenMoved();
   if (!result_.HasResult()) {
     IMP_LOG(imp::FATAL)
         << "FutureImpl::Get() called before FutureImpl::Return(), Future not "
@@ -137,6 +144,7 @@ ResultHolder& FutureImpl::Get() {
 }
 
 void FutureImpl::OnReady(imp::Invocable<void(ResultHolder&)> fn) {
+  AssertIntegrity();
   // We want to check the value & possibly manipulate callbacks
   // under the lock, but we don't want to run the function
   // under the lock.
@@ -161,8 +169,10 @@ void FutureImpl::OnReady(imp::Invocable<void(ResultHolder&)> fn) {
 }
 
 void FutureImpl::AddChild(std::weak_ptr<FutureImpl> child) {
+  AssertIntegrity();
   {
     absl::MutexLock lock(&mu_);
+    AssertResultHasNotBeenMoved();
     if (!result_.HasResult()) {
       relationships_.emplace_back(child);
       return;
@@ -176,6 +186,7 @@ void FutureImpl::AddChild(std::weak_ptr<FutureImpl> child) {
 
 void FutureImpl::AddKeptForgetter(Invocable<void()> forget_fn,
                                   FutureKeptByMode kept_by_mode) {
+  AssertIntegrity();
   ResultHolder* result_ptr = nullptr;
 
   {
@@ -200,9 +211,11 @@ void FutureImpl::AddCombineChild(
     absl::BlockingCounter* remaining_futures_counter,
     absl::Status* combined_status) {
   ResultHolder* result_ptr = nullptr;
+  AssertIntegrity();
 
   {
     absl::MutexLock lock(&mu_);
+    AssertResultHasNotBeenMoved();
     if (!result_.HasResult()) {
       relationships_.emplace_back(
           CombineChild{.child = child,
@@ -224,6 +237,7 @@ void FutureImpl::AddCombineChild(
 
 void FutureImpl::AddCombineParent(
     const std::shared_ptr<FutureImplWrapper>& parent) {
+  AssertIntegrity();
   int task_priority;
   {
     absl::MutexLock lock(&mu_);
@@ -237,11 +251,13 @@ void FutureImpl::AddCombineParent(
 
 void FutureImpl::AddNestedChild(std::weak_ptr<FutureImpl> child,
                                 RetrieveResultFn retrieve_result_fn) {
+  AssertIntegrity();
   ResultHolder* result_ptr = nullptr;
 
   bool did_add_child = false;
   {
     absl::MutexLock lock(&mu_);
+    AssertResultHasNotBeenMoved();
     if (!result_.HasResult()) {
       relationships_.emplace_back(NestedChild{
           .child = child, .retrieve_result_fn = retrieve_result_fn});
@@ -263,6 +279,7 @@ void FutureImpl::AddNestedChild(std::weak_ptr<FutureImpl> child,
 }
 
 void FutureImpl::DependsOn(Holdable holdable) {
+  AssertIntegrity();
   absl::MutexLock lock(&mu_);
   if (!result_.HasResult()) {
     relationships_.emplace_back(std::move(holdable));
@@ -271,6 +288,7 @@ void FutureImpl::DependsOn(Holdable holdable) {
 
 void FutureImpl::SetNestedFuture(
     const std::shared_ptr<FutureImplWrapper>& nested_future) {
+  AssertIntegrity();
   int task_priority;
   {
     absl::MutexLock lock(&mu_);
@@ -283,16 +301,19 @@ void FutureImpl::SetNestedFuture(
 }
 
 void FutureImpl::Return(ResultHolder value) {
+  AssertIntegrity();
   absl::MutexLock lock(&mu_);
   ReturnInternal(std::move(value));
 }
 
 void FutureImpl::Return(absl::Status status) {
+  AssertIntegrity();
   absl::MutexLock lock(&mu_);
   ReturnInternal(status);
 }
 
 bool FutureImpl::ReturnInternal(ResultHolder result) {
+  AssertIntegrity();
   decltype(relationships_) relationships;
   decltype(nested_future_) nested_future;
 
@@ -607,6 +628,7 @@ FutureImpl::GetPriorityBubbleUpTargets() {
 }
 
 void FutureImpl::BubbleUpPriority(std::optional<int> changed_priority) {
+  AssertIntegrity();
   std::vector<std::shared_ptr<FutureImplWrapper>> to_bubble;
   int changed_priority_to_bubble = 0;
   {
@@ -741,6 +763,7 @@ bool FutureImpl::RefreshActivePriority(std::optional<int> changed_priority) {
 }
 
 void FutureImpl::UpdatePriority(std::optional<int> priority) {
+  AssertIntegrity();
   std::vector<std::shared_ptr<FutureImplWrapper>> to_bubble;
   int changed_priority_to_bubble;
   {
@@ -770,16 +793,19 @@ void FutureImpl::UpdatePriority(std::optional<int> priority) {
 }
 
 int FutureImpl::GetActivePriority() {
+  AssertIntegrity();
   absl::MutexLock lock(&mu_);
   return task_priority_;
 }
 
 std::optional<int> FutureImpl::GetSelfPriority() {
+  AssertIntegrity();
   absl::MutexLock lock(&mu_);
   return self_priority_;
 }
 
 int FutureImpl::GetDepth() const {
+  AssertIntegrity();
   int depth = 0;
   const imp::internal::FutureImpl* curr = this;
   do {
@@ -834,6 +860,26 @@ void AddFutureToCombineResult(
   future_to_combine->GetImpl()->AddCombineChild(
       combine_result->GetImpl(), remaining_futures_counter, combined_status);
   combine_result->GetImpl()->AddCombineParent(future_to_combine);
+}
+
+void FutureImpl::AssertIntegrity() const {
+#if !IMP_DISABLE_FUTURE_VALIDATION
+  if (integrity_marker_ == kDestructedIntegrityMarker) {
+    IMP_LOG(imp::FATAL) << "FutureImpl is marked as destructed.";
+  }
+  if (integrity_marker_ != kValidIntegrityMarker) {
+    IMP_LOG(imp::FATAL) << "FutureImpl has corrupted memory.";
+  }
+#endif
+}
+
+void FutureImpl::AssertResultHasNotBeenMoved() const {
+#if !IMP_DISABLE_FUTURE_VALIDATION
+  if (result_.HasBeenMoved()) {
+    IMP_LOG(imp::FATAL)
+        << "Invalid operation on FutureImpl: Result has already been moved.";
+  }
+#endif
 }
 
 }  // namespace internal

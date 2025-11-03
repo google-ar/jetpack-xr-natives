@@ -207,5 +207,5 @@ public final class MaterialCompilerClient implements ServiceConnection {
   private static native void nClose(long nativeHandle);
 
   private static native void nOnServiceConnected(long nativeHandle, int fd, String errorMessage);
-  // LINT.ThenChange(//depot/google3/third_party/impress/core/materialcompiler/material_compiler_client_jni.cc:native_api)
+  // LINT.ThenChange(//depot/google3/third_party/impress/core/materials/compiler/material_compiler_client_jni.cc:native_api)
 }

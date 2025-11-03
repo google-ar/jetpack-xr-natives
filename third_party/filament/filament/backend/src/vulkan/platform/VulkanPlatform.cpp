@@ -183,7 +183,6 @@ ExtensionSet getInstanceExtensions(ExtensionSet const& externallyRequiredExts = 
     ExtensionSet const TARGET_EXTS = {
         // Request all cross-platform extensions.
         VK_KHR_SURFACE_EXTENSION_NAME,
-        VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
 
         // Request these if available.
 #if FVK_ENABLED(FVK_DEBUG_DEBUG_UTILS)
@@ -202,7 +201,9 @@ ExtensionSet getInstanceExtensions(ExtensionSet const& externallyRequiredExts = 
             fvkutils::enumerate(vkEnumerateInstanceExtensionProperties,
                     static_cast<char const*>(nullptr) /* pLayerName */);
     for (auto const& extension: availableExts) {
-        utils::CString name { extension.extensionName };
+        // The cast is to force the non-literal constructor of CString, which assumes
+        // null-terminated strings.
+        utils::CString name{ (char const*) extension.extensionName };
 
         // To workaround an Adreno bug where the extension name could be of 0 length.
         if (name.size() == 0) {
@@ -236,9 +237,6 @@ ExtensionSet getDeviceExtensions(VkPhysicalDevice device) {
 #if defined(__APPLE__)
         VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME,
 #endif
-        VK_KHR_MAINTENANCE1_EXTENSION_NAME,
-        VK_KHR_MAINTENANCE2_EXTENSION_NAME,
-        VK_KHR_MAINTENANCE3_EXTENSION_NAME,
         VK_KHR_MULTIVIEW_EXTENSION_NAME,
     };
     ExtensionSet exts;
@@ -247,7 +245,9 @@ ExtensionSet getDeviceExtensions(VkPhysicalDevice device) {
             = fvkutils::enumerate(vkEnumerateDeviceExtensionProperties, device,
                     static_cast<const char*>(nullptr) /* pLayerName */);
     for (auto const& extension: extensions) {
-        utils::CString name { extension.extensionName };
+        // The cast is to force the non-literal constructor of CString, which assumes
+        // null-terminated strings.
+        utils::CString name { (char const*) extension.extensionName };
 
         // To workaround an Adreno bug where the extension name could be of 0 length.
         if (name.size() == 0) {
@@ -713,7 +713,7 @@ void VulkanPlatform::terminate() {
 
 // This is the main entry point for context creation.
 Driver* VulkanPlatform::createDriver(void* sharedContext,
-        Platform::DriverConfig const& driverConfig) noexcept {
+        Platform::DriverConfig const& driverConfig) {
     // Load Vulkan entry points.
     FILAMENT_CHECK_POSTCONDITION(bluevk::initialize()) << "BlueVK is unable to load entry points.";
 
@@ -920,6 +920,8 @@ Driver* VulkanPlatform::createDriver(void* sharedContext,
     context.mBlittableDepthStencilFormats =
             findBlittableDepthStencilFormats(mImpl->mPhysicalDevice);
 
+    context.mFenceExportFlags = getFenceExportFlags();
+
     assert_invariant(context.mDepthStencilFormats.size() > 0);
 
 #if FVK_ENABLED(FVK_DEBUG_VALIDATION)
@@ -1002,6 +1004,17 @@ SwapChainPtr VulkanPlatform::createSwapChain(void* nativeWindow, uint64_t flags,
     return swapchain;
 }
 
+Platform::Sync* VulkanPlatform::createSync(VkFence fence,
+        std::shared_ptr<VulkanCmdFence> fenceStatus) noexcept {
+    return new VulkanSync{.fence = fence, .fenceStatus = fenceStatus};
+}
+
+void VulkanPlatform::destroySync(Platform::Sync* sync) noexcept {
+    // Sync must be a VulkanSync*, since it was created by VulkanPlatform's
+    // createSync object.
+    delete sync;
+}
+
 VkInstance VulkanPlatform::getInstance() const noexcept {
     return mImpl->mInstance;
 }
@@ -1036,6 +1049,11 @@ uint32_t VulkanPlatform::getProtectedGraphicsQueueIndex() const noexcept {
 
 VkQueue VulkanPlatform::getProtectedGraphicsQueue() const noexcept {
     return mImpl->mProtectedGraphicsQueue;
+}
+
+VkExternalFenceHandleTypeFlagBits VulkanPlatform::getFenceExportFlags() const noexcept {
+    // By default, fences should not be exportable.
+    return static_cast<VkExternalFenceHandleTypeFlagBits>(0);
 }
 
 ExtensionSet VulkanPlatform::getSwapchainInstanceExtensions() const {

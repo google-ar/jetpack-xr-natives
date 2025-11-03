@@ -35,7 +35,6 @@
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
 #include "core/common/bit_flag.h"
-#include "core/common/platform_helpers.h"
 #include "core/common/template_helpers.h"
 #include "core/editor/editor_field_control.h"
 #include "core/editor/editor_style.h"
@@ -80,6 +79,10 @@ class EditorProtoVisitor {
       return ++field_index;
     }
 
+    if (IsFieldReadonly(field_id)) {
+      ImGui::BeginDisabled();
+    }
+
     if constexpr (field_type == imp::proto::TYPE_MESSAGE &&
                   !EditorFieldControl::is_handled_type<T>::value) {
       // Skip protos that don't use Impress code generation.
@@ -88,7 +91,7 @@ class EditorProtoVisitor {
         // Show a label for the nested field name if specified, indent, and
         // recurse.
         if (CheckBit(editor_control_flags, EditorControlFlags::kDisplayLabel)) {
-          ImGui::Text("%s", proto::GetFieldName<Proto>(field_id).c_str());
+          ImGui::Text("%s", proto::GetFieldName<Proto>(field_id).data());
           if (other) {
             updated_ |= EditorFieldControl::RevertToBasePopup(*field, *other,
                                                               "Message");
@@ -117,6 +120,10 @@ class EditorProtoVisitor {
                                 editor_control_flags);
       }
     }
+
+    if (IsFieldReadonly(field_id)) {
+      ImGui::EndDisabled();
+    }
     return ++field_index;
   }
 
@@ -129,6 +136,10 @@ class EditorProtoVisitor {
                              AssignOptionalFn assign_optional_fn) {
     if (IsFieldDisabled(field_id)) {
       return ++field_index;
+    }
+
+    if (IsFieldReadonly(field_id)) {
+      ImGui::BeginDisabled();
     }
 
     if (!has_value_fn(field) && other && has_value_fn(other)) {
@@ -160,7 +171,7 @@ class EditorProtoVisitor {
 
       ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
 
-      ImGui::Text("%s", proto::GetFieldName<Proto>(field_id).c_str());
+      ImGui::Text("%s", proto::GetFieldName<Proto>(field_id).data());
 
       if (pushed_style) {
         editor::PopBaseIsfElementStyle();
@@ -220,6 +231,9 @@ class EditorProtoVisitor {
       }
     }
 
+    if (IsFieldReadonly(field_id)) {
+      ImGui::EndDisabled();
+    }
     return ++field_index;
   }
 
@@ -259,9 +273,13 @@ class EditorProtoVisitor {
       return ++field_index;
     }
 
+    if (IsFieldReadonly(field_id)) {
+      ImGui::BeginDisabled();
+    }
+
     // Show a label for the vector field name, indent, and recursively visit
     // each element.
-    ImGui::Text("%s", proto::GetFieldName<Proto>(field_id).c_str());
+    ImGui::Text("%s", proto::GetFieldName<Proto>(field_id).data());
     if (other) {
       updated_ |=
           EditorFieldControl::RevertToBasePopup(*field, *other, "Vector");
@@ -364,7 +382,7 @@ class EditorProtoVisitor {
       if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
         ImGui::SetDragDropPayload(payload_type_id.c_str(), &i, sizeof(size_t));
         drag_and_drop_index.emplace(i);
-        ImGui::Text("%s[%zu]", proto::GetFieldName<Proto>(field_id).c_str(), i);
+        ImGui::Text("%s[%zu]", proto::GetFieldName<Proto>(field_id).data(), i);
         ImGui::EndDragDropSource();
       }
 
@@ -440,6 +458,9 @@ class EditorProtoVisitor {
 
     ImGui::Unindent();
 
+    if (IsFieldReadonly(field_id)) {
+      ImGui::EndDisabled();
+    }
     return ++field_index;
   }
 
@@ -450,7 +471,11 @@ class EditorProtoVisitor {
       return ++field_index;
     }
 
-    ImGui::Text("%s", proto::GetFieldName<Proto>(field_id).c_str());
+    if (IsFieldReadonly(field_id)) {
+      ImGui::BeginDisabled();
+    }
+
+    ImGui::Text("%s", proto::GetFieldName<Proto>(field_id).data());
     if (other) {
       updated_ |= EditorFieldControl::RevertToBasePopup(*field, *other, "Map");
     }
@@ -529,6 +554,9 @@ class EditorProtoVisitor {
     }
 
     ImGui::Unindent();
+    if (IsFieldReadonly(field_id)) {
+      ImGui::EndDisabled();
+    }
     return ++field_index;
   }
 
@@ -545,7 +573,7 @@ class EditorProtoVisitor {
       editor::PushBaseIsfElementStyle();
     }
 
-    ImGui::Text("%s:", std::string(field_name).c_str());
+    ImGui::Text("%s:", field_name.data());
     // TODO: Support RevertToBasePopup for variants that contain a
     // unique_ptr. This is a bit tricky because the unique_ptr needs to be
     // deep copied, which we support via a copy assignment operator on the
@@ -577,7 +605,7 @@ class EditorProtoVisitor {
 
     bool field_set = field->index() != 0;
     bool can_unset = field_set && !is_base_set;
-    std::string combo_text =
+    absl::string_view combo_text =
         !field_set
             ? "select type..."
             : proto::GetFieldName<Proto>(variant_field_ids[field->index() - 1]);
@@ -585,12 +613,12 @@ class EditorProtoVisitor {
     if (ImGui::BeginCombo(
             GenerateUniqueImGuiLabel("combo", field, EditorControlFlags::kNone)
                 .c_str(),
-            combo_text.c_str(), ImGuiComboFlags_None)) {
+            combo_text.data(), ImGuiComboFlags_None)) {
       // Next, populate the combo box with all the types in the oneof.
       ForConstexpr<0, std::variant_size_v<T>>(
           [this, can_unset, field, &variant_field_ids](auto i) mutable {
             bool selected = field->index() == i;
-            std::string label_str;
+            absl::string_view label_str;
             // Index 0 is std::monostate (unset), so skip if the field is unset.
             if (i == 0) {
               if (!can_unset) return;
@@ -666,10 +694,12 @@ class EditorProtoVisitor {
   bool ShowControl(
       size_t field_index, int field_id, FieldT* val, FieldT* other,
       EditorControlFlags editor_control_flags = EditorControlFlags::kDefault) {
-    std::string field_name = proto::GetFieldName<Proto>(field_id);
+    absl::string_view field_name = proto::GetFieldName<Proto>(field_id);
     std::optional<EditorControlType> editor_control_type =
         GetEditorControlTypeForField(field_id);
-    if (editor_control_type.has_value()) {
+    if (editor_control_type.has_value() &&
+        !std::holds_alternative<EditorControlReadonly>(
+            editor_control_type->type)) {
       return std::visit(
           [field_name, val, other, editor_control_flags](auto&& control) {
             // TODO: figure out why this is not working.
@@ -697,7 +727,7 @@ class EditorProtoVisitor {
   bool ShowEnumControl(
       size_t field_index, int field_id, E* val, E* base,
       EditorControlFlags editor_control_flags = EditorControlFlags::kDefault) {
-    std::string field_name = proto::GetFieldName<Proto>(field_id);
+    absl::string_view field_name = proto::GetFieldName<Proto>(field_id);
     return EditorFieldControl::ShowEnumControl(field_name, val, base,
                                                editor_control_flags);
   }
@@ -721,6 +751,14 @@ class EditorProtoVisitor {
         GetEditorControlTypeForField(field_id);
     return editor_control_type.has_value() &&
            std::holds_alternative<EditorControlDisabled>(
+               editor_control_type->type);
+  }
+
+  bool IsFieldReadonly(int field_id) {
+    std::optional<EditorControlType> editor_control_type =
+        GetEditorControlTypeForField(field_id);
+    return editor_control_type.has_value() &&
+           std::holds_alternative<EditorControlReadonly>(
                editor_control_type->type);
   }
 

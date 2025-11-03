@@ -94,9 +94,5 @@ cc_library(
     alwayslink = 1,
 )
 
-# Requires --config=android_arm --android_ndk_min_sdk_version=34
-
-filegroup(
-    name = "xr_media_viewer_scuba_goldens",
-    srcs = glob(["scuba_goldens/**/*.png"]),
-)
+# TODO: (broken link) - This test is currently broken.
+#

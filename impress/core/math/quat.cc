@@ -20,8 +20,7 @@
 
 namespace imp {
 
-constexpr float kEpsilon = 1e-10;
-constexpr float kPiOver2 = M_PI * 0.5;
+constexpr float kEpsilon = 1e-6;
 
 quatf QuatFromEuler(const float3& eulers) {
   const quatf X = quatf::fromAxisAngle(kXAxis3f, ToRadians(eulers.x));
@@ -59,6 +58,50 @@ float3 EulerFromQuat(const quatf& q) {
   euler.z = ToDegrees(asin(2 * test));
   euler.x =
       ToDegrees(atan2(2 * q.x * q.w - 2 * q.y * q.z, 1 - 2 * sqx - 2 * sqz));
+  return euler;
+}
+
+float3 EulerFromQuatYXZ(const quatf& q) {
+  float3 euler;
+
+  constexpr float kSingularityThreshold = 1.0f - kEpsilon;
+  float sin_pitch = -2.0f * (q.y * q.z - q.w * q.x);
+
+  // For the singularity (gimbal lock) cases, is it not possible to recover
+  // separate Yaw and Roll angles, and so the final Roll angle represents the
+  // combined rotation of both the Yaw and Roll axes.
+  //
+  // Imagine using `QuatFromEuler` to construct a quaternion `q`. If the
+  // original angles were pitch=90, yaw=20, roll=30, then the final Roll angle
+  // of `EulerFromQuat(q)` will be 30 - 20 = 10 degrees, as a positive Yaw
+  // rotation is the same as a negative Roll rotation when the orientation is
+  // up. On the other hand, if the angles were pitch=-90, yaw=20, roll=30, then
+  // the final Roll will be 30 + 20 = 50 degrees, as a positive Yaw rotation is
+  // the same as a positive Roll rotation when the orientation is down.
+
+  if (sin_pitch > kSingularityThreshold) {  // singularity at north pole
+    euler.z = ToDegrees(-2 * atan2(q.y, q.w));
+    euler.x = 90;
+    euler.y = 0;
+    return euler;
+  }
+
+  if (sin_pitch < -kSingularityThreshold) {  // singularity at south pole
+    euler.z = ToDegrees(2 * atan2(q.y, q.w));
+    euler.x = -90;
+    euler.y = 0;
+    return euler;
+  }
+
+  float sqx = q.x * q.x;
+  float sqy = q.y * q.y;
+  float sqz = q.z * q.z;
+
+  euler.z =
+      ToDegrees(atan2(2 * (q.x * q.y + q.w * q.z), 1 - 2 * sqx - 2 * sqz));
+  euler.x = ToDegrees(asin(sin_pitch));
+  euler.y =
+      ToDegrees(atan2(2 * (q.y * q.w + q.x * q.z), 1 - 2 * sqx - 2 * sqy));
   return euler;
 }
 

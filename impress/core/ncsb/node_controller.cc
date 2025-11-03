@@ -135,12 +135,6 @@ bool NodeController::IsParentEditorStaging() const {
 }
 #endif
 
-BaseView& NodeController::GetView() const { return *view_; }
-
-NodeHandle NodeController::GetNode() const { return node_; }
-
-utils::Entity NodeController::GetEntity() const { return node_.GetEntity(); }
-
 std::size_t NodeController::GetIndex() const { return index_; }
 
 void NodeController::SetIndex(std::size_t index) { index_ = index; }

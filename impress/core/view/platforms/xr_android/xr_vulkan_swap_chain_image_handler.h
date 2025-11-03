@@ -23,6 +23,7 @@
 #include <memory>
 #include <vector>
 
+#include "filament/libs/bluevk/include/vulkan/vulkan_core.h"
 #include "core/math/vec.h"
 #include "core/render/content_security_level.h"
 #include "core/view/platforms/xr_android/openxr_includes.h"
@@ -37,7 +38,7 @@ class XrVulkanSwapChainImageHandler {
  public:
   static constexpr VkFormat kVkImageFormat = VK_FORMAT_R8G8B8A8_SRGB;
   static constexpr int64_t kImageFormat = kVkImageFormat;
-  static constexpr VkFormat kVkDepthFormat = VK_FORMAT_D32_SFLOAT;
+  static constexpr VkFormat kVkDepthFormat = VK_FORMAT_X8_D24_UNORM_PACK32;
   static constexpr int32_t kDepthFormat = kVkDepthFormat;
   static constexpr XrStructureType kImageType =
       XR_TYPE_SWAPCHAIN_IMAGE_VULKAN_KHR;
@@ -61,7 +62,7 @@ class XrVulkanSwapChainImageHandler {
         XR_NULL_HANDLE, {}};
     // Used when varjo foveated rendering is enabled and render gaze is
     // available. If varjo foveated rendering is enabled but render gaze is
-    // not available, the program will fall back to using default_color at
+    // not available, the program will fall back to using `default_color` at
     // runtime.
     imp::XrVulkanSwapChainImageHandler::SwapchainData varjo_foveation_color = {
         XR_NULL_HANDLE, {}};
@@ -72,10 +73,16 @@ class XrVulkanSwapChainImageHandler {
     // depth_swapchain_images_ will remain empty unless
     // XrSessionHost::IsCompositionLayerDepthEnabled is true.
     SwapchainData depth = {XR_NULL_HANDLE, {}};
+    // Used when varjo foveated rendering is enabled and render gaze is
+    // available. If varjo foveated rendering is enabled but render gaze is
+    // not available, the program will fall back to using `depth` at
+    // runtime.
+    SwapchainData varjo_foveation_depth = {XR_NULL_HANDLE, {}};
+    // The active depth swapchain is the one that is currently being used.
+    SwapchainData* active_depth = nullptr;
     // The current display size of the swapchain being used.
     uint2 display_size = {0, 0};
   };
-
   XrVulkanSwapChainImageHandler(XrPlatformType* platform, XrSessionHost* host,
                                 std::unique_ptr<SwapchainLayers> layers,
                                 ContentSecurityLevel);
@@ -93,13 +100,14 @@ class XrVulkanSwapChainImageHandler {
   XrPlatformType* platform_;
   XrSessionHost* host_;
   std::unique_ptr<SwapchainLayers> layers_;
-  ContentSecurityLevel content_security_level_;
 
-  // Creates a depth image for the given vulkan device.
-  void CreateVulkanDepthImage(XrVulkanPlatform* platform);
+  // Create all the needed depth swapchains.
+  void CreateDepthSwapchains();
 
-  VkDevice vulkan_device_;
-  bool is_composition_layer_depth_enabled_;
+  // Create a depth swapchain with the given display size and number of layers.
+  SwapchainData CreateDepthSwapchain(uint2 display_size, uint32_t layers);
 };
+
 }  // namespace imp
+
 #endif  // THIRD_PARTY_IMPRESS_CORE_VIEW_PLATFORMS_XR_ANDROID_XR_VULKAN_SWAP_CHAIN_IMAGE_HANDLER_H_

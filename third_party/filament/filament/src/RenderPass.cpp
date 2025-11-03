@@ -254,7 +254,7 @@ void RenderPass::appendCustomCommand(Command* commands,
 
     assert_invariant((uint64_t(order) << CUSTOM_ORDER_SHIFT) <=  CUSTOM_ORDER_MASK);
 
-    channel = std::min(channel, uint8_t(0x3));
+    channel = std::min(channel, uint8_t(CHANNEL_COUNT - 1));
 
     uint32_t const index = mCustomCommands.size();
     mCustomCommands.push_back(std::move(command));
@@ -670,7 +670,7 @@ RenderPass::Command* RenderPass::generateCommandsImpl(CommandTypeFlags extraFlag
 
         cmd.key |= makeField(soaVisibility[i].priority, PRIORITY_MASK, PRIORITY_SHIFT);
         cmd.key |= makeField(soaVisibility[i].channel, CHANNEL_MASK, CHANNEL_SHIFT);
-        cmd.info.index = i;
+        cmd.info.index = soaInstanceInfo[i].buffer ? soaInstanceInfo[i].buffer->getIndex() : i;
         cmd.info.hasHybridInstancing = bool(soaInstanceInfo[i].buffer);
         cmd.info.instanceCount = soaInstanceInfo[i].count;
         cmd.info.hasMorphing = bool(morphing.handle);
@@ -693,7 +693,7 @@ RenderPass::Command* RenderPass::generateCommandsImpl(CommandTypeFlags extraFlag
         const bool shadowCaster = soaVisibility[i].castShadows & hasShadowing;
         const bool writeDepthForShadowCasters = depthContainsShadowCasters & shadowCaster;
 
-        const Slice<FRenderPrimitive>& primitives = soaPrimitives[i];
+        Slice<const FRenderPrimitive> primitives = soaPrimitives[i];
         /*
          * This is our hot loop. It's written to avoid branches.
          * When modifying this code, always ensure it stays efficient.
@@ -1110,8 +1110,7 @@ void RenderPass::Executor::execute(FEngine const& engine, DriverApi& driver,
 
                 // Bind per-renderable uniform block. There is no need to attempt to skip this command
                 // because the backends already do this.
-                uint32_t const offset = info.hasHybridInstancing ?
-                                      0 : info.index * sizeof(PerRenderableData);
+                uint32_t const offset = info.index * sizeof(PerRenderableData);
 
                 assert_invariant(info.dsh);
                 driver.bindDescriptorSet(info.dsh,

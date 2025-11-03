@@ -160,9 +160,10 @@ Component* BaseComponentPool::Add(utils::Entity entity) noexcept {
   return Emplace(entity);
 }
 
-void BaseComponentPool::PostSetup(utils::Entity entity,
+void BaseComponentPool::PostSetup(Component& component,
                                   bool should_enable_component) noexcept {
-  Component& component = GetRawComponent(Get(entity));
+  
+
   if (should_enable_component) {
     component.SetEnabled(true);
   }
@@ -219,10 +220,6 @@ void BaseComponentPool::RemoveAll() noexcept {
   }
 }
 
-bool BaseComponentPool::Pending(utils::Entity entity) const noexcept {
-  return weak_setup_futures_.find(entity) != weak_setup_futures_.end();
-}
-
 void BaseComponentPool::CancelPending(utils::Entity entity) noexcept {
   auto setup_future_opt = GetSetupFuture(entity);
   if (setup_future_opt) {
@@ -231,21 +228,31 @@ void BaseComponentPool::CancelPending(utils::Entity entity) noexcept {
 }
 
 Future<absl::Status> BaseComponentPool::MakeSetupFuture(
-    utils::Entity entity, Future<absl::Status> future,
+    Component& component, Future<absl::Status> future,
     bool should_enable_component) {
-  assert(Has(entity));
-  assert(weak_setup_futures_.find(entity) == weak_setup_futures_.end());
+  utils::Entity entity = component.GetEntity();
+  
 
-  auto setup_future =
-      future.Then([this, entity, should_enable_component](absl::Status status) {
+  component.SetRunningAsyncSetupFlagInternal(true);
+
+  Component* component_ptr = &component;
+
+  auto setup_future = future.Then(
+      [this, component_ptr, should_enable_component](absl::Status status) {
+        // It's guaranteed that the component_ptr is still valid here. This is
+        // because the first thing Remove does is call CancelPending, which will
+        // cause this lambda to run prior to the component being destroyed if it
+        // hasn't already run. Remove() also internally handles reentrancy.
+        utils::Entity entity = component_ptr->GetEntity();
         weak_setup_futures_.erase(entity);
+        component_ptr->SetRunningAsyncSetupFlagInternal(false);
 
         if (!status.ok()) {
           Remove(entity);
           return status;
         }
 
-        PostSetup(entity, should_enable_component);
+        PostSetup(*component_ptr, should_enable_component);
 
         return status;
       });

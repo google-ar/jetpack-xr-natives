@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "absl/cleanup/cleanup.h"
+#include "core/common/log.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/cord_buffer.h"
 #include "absl/strings/string_view.h"
@@ -31,6 +32,31 @@
 #include "core/common/optional_error.h"
 
 namespace imp {
+
+namespace {
+
+std::string ExceptionToString(JNIEnv* env, jthrowable exception) {
+  JniUniquePtr<jclass> log_class =
+      WrapJni(env, env->FindClass("android/util/Log"));
+  jmethodID get_stack_trace_string_mid =
+      env->GetStaticMethodID(log_class.get(), "getStackTraceString",
+                             "(Ljava/lang/Throwable;)Ljava/lang/String;");
+  JniUniquePtr<jstring> trace_jstring = WrapJni(
+      env, static_cast<jstring>(env->CallStaticObjectMethod(
+               log_class.get(), get_stack_trace_string_mid, exception)));
+  return GetString(env, trace_jstring.get());
+}
+
+}  // namespace
+
+void AssertNoException(JNIEnv* env) {
+  jthrowable exception = env->ExceptionOccurred();
+  if (exception) {
+    JniUniquePtr<jthrowable> wrapped_exception = WrapJni(env, exception);
+    env->ExceptionClear();
+    IMP_LOG(imp::FATAL) << ExceptionToString(env, exception);
+  }
+}
 
 bool JavaExceptionPrintClear(JNIEnv* env) {
   if (env->ExceptionCheck()) {

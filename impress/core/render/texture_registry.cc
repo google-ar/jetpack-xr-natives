@@ -15,6 +15,7 @@
 #include "core/render/texture_registry.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <utility>
 
@@ -27,8 +28,11 @@
 namespace imp {
 
 TextureRegistry::ScopedTextureRegistration::ScopedTextureRegistration(
-    TextureRegistry& texture_registry, absl::string_view texture_name)
-    : texture_registry_(&texture_registry), texture_name_(texture_name) {}
+    TextureRegistry& texture_registry, absl::string_view texture_name,
+    uint32_t id)
+    : texture_registry_(&texture_registry),
+      texture_name_(texture_name),
+      id_(id) {}
 
 TextureRegistry::ScopedTextureRegistration::~ScopedTextureRegistration() {
   if (texture_registry_) {
@@ -63,10 +67,10 @@ OwnedTexturePtr TextureRegistry::ScopedTextureRegistration::Release() {
                << texture_name_;
   }
 
-  OwnedTexturePtr texture =
+  RegisteredTexture registered_texture =
       std::move(texture_registry_->registered_textures_[texture_name_]);
   texture_registry_->UnregisterTexture(texture_name_);
-  return texture;
+  return std::move(registered_texture.texture);
 }
 
 TextureRegistry::ScopedTextureRegistration::ScopedTextureRegistration(
@@ -99,8 +103,10 @@ TextureRegistry::ScopedTextureRegistration TextureRegistry::RegisterTexture(
                << texture_name;
   }
 
-  registered_textures_[std::string(texture_name)] = std::move(texture);
-  return ScopedTextureRegistration(*this, texture_name);
+  uint32_t id = last_id_++;
+  registered_textures_[std::string(texture_name)] =
+      RegisteredTexture{.id = id, .texture = std::move(texture)};
+  return ScopedTextureRegistration(*this, texture_name, id);
 }
 
 TextureRegistry::ScopedTextureRegistration TextureRegistry::RegisterTexture(
@@ -110,8 +116,11 @@ TextureRegistry::ScopedTextureRegistration TextureRegistry::RegisterTexture(
                << texture_name;
   }
 
-  registered_textures_.emplace(std::string(texture_name), std::move(texture));
-  return ScopedTextureRegistration(*this, texture_name);
+  uint32_t id = last_id_++;
+  registered_textures_.emplace(
+      std::string(texture_name),
+      RegisteredTexture{.id = id, .texture = std::move(texture)});
+  return ScopedTextureRegistration(*this, texture_name, id);
 }
 
 Texture* TextureRegistry::GetTexture(absl::string_view texture_name) {
@@ -120,7 +129,7 @@ Texture* TextureRegistry::GetTexture(absl::string_view texture_name) {
     return nullptr;
   }
 
-  return itr.value().operator->();
+  return itr.value().texture.operator->();
 }
 
 BorrowedTexturePtr TextureRegistry::BorrowTexture(
@@ -130,7 +139,16 @@ BorrowedTexturePtr TextureRegistry::BorrowTexture(
     return BorrowedTexturePtr();
   }
 
-  return itr.value().Borrow(loc);
+  return itr.value().texture.Borrow(loc);
+}
+
+uint32_t TextureRegistry::GetId(absl::string_view texture_name) {
+  auto itr = registered_textures_.find(texture_name);
+  if (itr == registered_textures_.end()) {
+    return 0;
+  }
+
+  return itr.value().id;
 }
 
 void TextureRegistry::UnregisterTexture(absl::string_view texture_name) {

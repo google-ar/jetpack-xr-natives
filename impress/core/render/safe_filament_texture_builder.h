@@ -68,12 +68,12 @@ class SafeFilamentTextureBuilder {
   Builder& format(InternalFormat format) noexcept;
   Builder& usage(Usage usage) noexcept;
   Builder& swizzle(Swizzle r, Swizzle g, Swizzle b, Swizzle a) noexcept;
-  Builder& name(const char* /*absl_nonnull*/ name, size_t len) noexcept;
+  Builder& name(const char* /*absl_nonnull*/  name, size_t len) noexcept;
   Builder& name(utils::StaticString const& name) noexcept;
   Builder& external() noexcept;
   Builder& import(intptr_t id) noexcept;
 
-  absl::StatusOr<filament::Texture* /*absl_nonnull*/> build(
+  absl::StatusOr<filament::Texture* /*absl_nonnull*/ > build(
       filament::Engine& engine) noexcept;
 
  private:

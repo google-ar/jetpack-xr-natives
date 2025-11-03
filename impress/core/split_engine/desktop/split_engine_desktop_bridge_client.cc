@@ -129,7 +129,7 @@ absl::Status SplitEngineDesktopBridgeClient::Initialize() {
 
 SplitEngineDesktopBridgeClient::~SplitEngineDesktopBridgeClient() {
   {
-    absl::MutexLock lock(&heartbeat_state_mutex_);
+    absl::MutexLock lock(heartbeat_state_mutex_);
     heartbeat_state_ = HeartbeatState::kStop;
   }
   heartbeat_thread_.join();
@@ -143,7 +143,7 @@ void SplitEngineDesktopBridgeClient::Heartbeat(
     google::rpc::Status response;
   };
 
-  absl::MutexLock lock(&heartbeat_state_mutex_);
+  absl::MutexLock lock(heartbeat_state_mutex_);
   while (!heartbeat_state_mutex_.AwaitWithTimeout(
       absl::Condition(
           // Unary plus in the beginning of the _captureless_ lambda will
@@ -156,7 +156,6 @@ void SplitEngineDesktopBridgeClient::Heartbeat(
       heartbeat_interval)) {
     auto args = std::make_shared<HeartbeatRequestArgs>();
     args->request.set_bridge_id(bridge_id_);
-    IMP_LOG(imp::ERROR) << "heartbeat " << bridge_id_;
     stub_->async()->Heartbeat(
         &args->context, &args->request, &args->response,
         [args](grpc::Status status) { CHECK_OK(status); });

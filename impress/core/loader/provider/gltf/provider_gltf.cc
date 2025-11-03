@@ -1148,8 +1148,9 @@ ProtoGltfProvider::TryLoadGltf(LoaderState* state_ptr) {
       audio_emitter = model::ModelData::AudioEmitterId::At(audio_emitter_index);
     }
 
+    int mesh = -1;
     if (lookup.self_flags[node] & NodeGltfFlags::kHasMesh) {
-      int mesh = *lookup.nodes[node].mesh;
+      mesh = *lookup.nodes[node].mesh;
       Gltf2AttributeMask attribute_mask;
       const std::vector<Primitive>& mesh_primitives =
           gltf.meshes[mesh].primitives;
@@ -1243,7 +1244,7 @@ ProtoGltfProvider::TryLoadGltf(LoaderState* state_ptr) {
             morph_target_buffer, std::move(morph_target_weights),
             light_punctual.CastTo<imp::model::ModelData::LightPunctualId>(),
             audio_emitter, std::move(parts), bounds, runtime,
-            entry_child_counts[entry], name, static_cast<int>(node),
+            entry_child_counts[entry], name, static_cast<int>(node), mesh,
             node_visibility, node_selectability, node_hoverability));
     (void)(entity);
   }

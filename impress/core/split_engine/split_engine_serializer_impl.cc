@@ -49,6 +49,7 @@
 #include "flatbuffers/flatbuffer_builder.h"
 #include "flatbuffers/string.h"
 #include "flatbuffers/vector.h"
+#include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
 #include "core/common/buffer_access.h"
 #include "core/config.h"
@@ -872,8 +873,9 @@ bool SplitEngineSerializerImpl::ReadyForNextFrame() const {
          *in_flight_frame_count < kMaxInFlightFrames;
 }
 
-void SplitEngineSerializerImpl::AddMaterial(const filament::Material* material,
-                                            const BufferAccess& data) {
+void SplitEngineSerializerImpl::AddMaterial(
+    const filament::Material* material, const BufferAccess& data,
+    const MaterialPreCompileOptions& material_pre_compile_options) {
   if (IsPlaceholderSplitEngineMaterial(material) ||
       !view_.AreSplitEngineMaterialsInLocalMode()) {
     return;
@@ -883,8 +885,58 @@ void SplitEngineSerializerImpl::AddMaterial(const filament::Material* material,
   Batch<CommandTypes::AddMaterials>& batch =
       GetOrCreateBatch<CommandTypes::AddMaterials>({}, {material_id});
   flatbuffers::FlatBufferBuilder* fbb = GetFlatBufferBuilderFor(batch);
+
+  std::vector<
+      flatbuffers::Offset<android_xr::schemas::MaterialPrecompileConstant>>
+      constants;
+  constants.reserve(material_pre_compile_options.constants.size());
+  IMP_LOG(imp::INFO) << kTag << kIndent << "material precompile constant size: "
+             << material_pre_compile_options.constants.size();
+
+  for (const auto& constant : material_pre_compile_options.constants) {
+    switch (constant.value.index()) {
+      case MaterialPreCompileConstant::kValue_IntValue:
+        constants.push_back(
+            android_xr::schemas::CreateMaterialPrecompileConstant(
+                *fbb, fbb->CreateString(constant.name),
+                android_xr::schemas::MaterialPrecompileConstantValue::Int,
+                fbb->CreateStruct(Pack(*constant.int_value())).Union()));
+        IMP_LOG(imp::INFO) << kTag << kIndent
+                   << "material precompile constant: " << constant.name
+                   << " int value: " << *constant.int_value();
+        break;
+      case MaterialPreCompileConstant::kValue_FloatValue:
+        constants.push_back(
+            android_xr::schemas::CreateMaterialPrecompileConstant(
+                *fbb, fbb->CreateString(constant.name),
+                android_xr::schemas::MaterialPrecompileConstantValue::Float,
+                fbb->CreateStruct(Pack(*constant.float_value())).Union()));
+        IMP_LOG(imp::INFO) << kTag << kIndent
+                   << "material precompile constant: " << constant.name
+                   << " float value: " << *constant.float_value();
+        break;
+      case MaterialPreCompileConstant::kValue_BoolValue:
+        constants.push_back(
+            android_xr::schemas::CreateMaterialPrecompileConstant(
+                *fbb, fbb->CreateString(constant.name),
+                android_xr::schemas::MaterialPrecompileConstantValue::Bool,
+                fbb->CreateStruct(Pack(*constant.bool_value())).Union()));
+        IMP_LOG(imp::INFO) << kTag << kIndent
+                   << "material precompile constant: " << constant.name
+                   << " boolean value: " << *constant.bool_value();
+        break;
+      case MaterialPreCompileConstant::kValue_Unknown:
+        IMP_LOG(imp::FATAL) << kTag << kIndent << "Unknown material precompile constant";
+        break;
+    }
+  }
+
+  flatbuffers::Offset<android_xr::schemas::MaterialPrecompileOptions> options =
+      android_xr::schemas::CreateMaterialPrecompileOptions(
+          *fbb, fbb->CreateVector(constants));
+
   batch.data.push_back(android_xr::schemas::CreateMaterial(
-      *fbb, material_id, fbb->CreateVector(data.Data(), data.Size())));
+      *fbb, material_id, fbb->CreateVector(data.Data(), data.Size()), options));
 }
 
 void SplitEngineSerializerImpl::RemoveMaterial(
@@ -1296,11 +1348,11 @@ SplitEngineSerializerImpl::CreateMeshBuilder() {
 }
 
 #if IMP_PLATFORM(ANDROID)
-std::unique_ptr<PlatformAndroidExternalTextureSurface>
+Future<std::unique_ptr<PlatformAndroidExternalTextureSurface>>
 SplitEngineSerializerImpl::CreateAndroidExternalTextureSurface(
     ContentSecurityLevel security_level,
     absl::Span<const SurfaceViewType> view_types) {
-  return std::make_unique<SplitEnginePlatformAndroidExternalTextureSurface>(
+  return SplitEnginePlatformAndroidExternalTextureSurface::Create(
       view_, security_level, view_types);
 }
 #endif
@@ -1805,7 +1857,7 @@ void SplitEngineSerializerImpl::StoreAffectedDependenciesBatchIdx(
   }
 }
 
-SplitEngineSerializerImpl::CommandBatchBase* /*absl_nullable*/
+SplitEngineSerializerImpl::CommandBatchBase* /*absl_nullable*/ 
 SplitEngineSerializerImpl::FindBatch(
     android_xr::schemas::CommandTypes command,
     const std::vector<utils::Entity>& entity_dependencies,
@@ -1857,7 +1909,7 @@ SplitEngineSerializerImpl::FindBatch(
   return nullptr;
 }
 
-SplitEngineSerializerImpl::CommandBatchBase* /*absl_nonnull*/
+SplitEngineSerializerImpl::CommandBatchBase* /*absl_nonnull*/ 
 SplitEngineSerializerImpl::AddBatch(
     std::unique_ptr<SplitEngineSerializerImpl::CommandBatchBase> batch,
     const std::vector<utils::Entity>& entity_dependencies,

@@ -29,7 +29,7 @@ FileDescriptorSender::FileDescriptorSender(const std::string_view uds_path)
 
 absl::Status FileDescriptorSender::Send(int fd,
                                         FileDescriptorMetadata& metadata) {
-  absl::MutexLock lock(&mutex_);
+  absl::MutexLock lock(mutex_);
   MP_RETURN_IF_ERROR(Connect());
   MP_RETURN_IF_ERROR(SendImpl(fd, metadata));
   MP_RETURN_IF_ERROR(ReceiveAck());

@@ -42,6 +42,7 @@
 #include "core/config.h"
 #include "core/math/almost_equal.h"
 #include "core/math/vec.h"
+#include "core/ncsb/dispatcher/event.h"
 #include "core/render/texture.h"
 #include "core/text/glyph_emulator.h"
 #include "core/view/base_view.h"
@@ -72,6 +73,11 @@ namespace imp {
 // comments.
 class GlyphAtlas : public Rememberer {
  public:
+  // Event that is sent when the texture changes.
+  // Users of the GlyphAtlas should use this event to update the texture
+  // assignments on their materials.
+  class TextureChangedEvent : public Event {};
+
   // The size of the texture to use for the glyph atlas.
   enum class TextureSize {
     // Uses a 2048x2048 texture for the glyph atlas.
@@ -87,9 +93,26 @@ class GlyphAtlas : public Rememberer {
     // The size of the texture to use for the glyph atlas. The default is a
     // 2048x2048 texture.
     TextureSize texture_size = TextureSize::k2048;
+    // If true, the glyph atlas will use hardware rendering of its canvas
+    // instead of software. This will reduce the amount of work done on the CPU,
+    // but disables the ability to update specific regions of the atlas. Note:
+    // This is currently only used on Android.
+    bool use_hardware_rendering = true;
+    // If true, this will call CanvasSource::ForceReset() and then re-draw all
+    // the glyphs when the view is resumed. This will also cause the texture to
+    // be changed.
+    //
+    // ForceReset only has an effect on Android at the moment. This is a
+    // workaround for device specific android bugs (i.e. on Samsung Galaxy S24)
+    // where an Android Surface can become corrupted after backgrounding and
+    // resuming. See (broken link) for more details.
+    bool force_reset_on_view_resumed = true;
   };
 
-  constexpr static Config kDefaultConfig = {.texture_size = TextureSize::k2048};
+  constexpr static Config kDefaultConfig = {
+      .texture_size = TextureSize::k2048,
+      .use_hardware_rendering = true,
+      .force_reset_on_view_resumed = true};
 
   // Information about a glyph needed to render it and lay it out relative to
   // other glyphs in a string.
@@ -301,7 +324,9 @@ class GlyphAtlas : public Rememberer {
   // Gets the glyph info for the given glyph advance.
   // Note the GlyphAdvance is passed by value as the process of getting the
   // GlyphInfo can be destructive to the GlyphAdvance.
-  const GlyphInfo& GetOrAddGlyphInfo(GlyphEmulator::Glyph& glyph,
+  // Returns nullptr if the glyph info could not be added to the atlas due
+  // to lack of space.
+  const GlyphInfo* GetOrAddGlyphInfo(GlyphEmulator::Glyph& glyph,
                                      const CanvasOptionsGlyphKey& glyph_key)
       ABSL_LOCKS_EXCLUDED(glyph_map_mutex_);
 
@@ -348,7 +373,7 @@ class GlyphAtlas : public Rememberer {
 
   // Gets a cached GlyphInfo by key or a nullptr if the glyph info is not yet
   // added to this atlas.
-  const GlyphInfo* /*absl_nullable*/ GetGlyphInfo(const CanvasOptionsGlyphKey& key);
+  const GlyphInfo* /*absl_nullable*/  GetGlyphInfo(const CanvasOptionsGlyphKey& key);
 
   // Stage 2b of the process of adding glyphs to the atlas described in the
   // GlyphAtlas class documentation described above.
@@ -360,13 +385,19 @@ class GlyphAtlas : public Rememberer {
                  std::vector<CanvasOptionsGlyphKey>& pending_canvas_glyphs,
                  float2 subpixel_render_ratio);
 
-  // Does any preparation work to synchronously update the current texture
-  // based on what has been drawn to the current canvas_.
+  // Updates the current texture based on what has been drawn to the current
+  // canvas_. This may be async in cases where the canvas does not support
+  // synchronous texture updates.
   // This function is not thread-safe since it accesses pending_prepare_future_
   // without acquiring a mutex lock. This is fine because it is only called from
   // EndFrame which is only called from the thread in which the glyph atlas is
   // created.
-  void PrepareToUpdateTexture() ABSL_EXCLUSIVE_LOCKS_REQUIRED(canvas_mutex_);
+  void UpdateTexture() ABSL_EXCLUSIVE_LOCKS_REQUIRED(canvas_mutex_);
+
+  // Updates the current texture based on what has been drawn to the current
+  // canvas_. This assumes any async prep work to update the texture has been
+  // completed.
+  void UpdateTextureSync() ABSL_EXCLUSIVE_LOCKS_REQUIRED(canvas_mutex_);
 
   // Clears all the glyphs in the atlas that are currently unused.
   //
@@ -384,8 +415,8 @@ class GlyphAtlas : public Rememberer {
   GlyphEmulator glyph_emulator_;
 
   mutable absl::Mutex canvas_mutex_;
-  // Created lazily when a glyph is added, and released at the end of each
-  // frame when texture status is kReadyToRelease.
+  // Created lazily when a glyph is added, and released when UpdateTextureSync
+  // is called.
   std::unique_ptr<AsyncScopedCanvas> canvas_ ABSL_GUARDED_BY(canvas_mutex_);
 
   // The currently pending prepare request. This may be a completed future if
@@ -410,10 +441,6 @@ class GlyphAtlas : public Rememberer {
     // to be released. This stage only occurs for canvases that do not support
     // synchronous texture updates.
     kPreparingToUpdateTexture,
-
-    // The canvas_ texture's pixels can be synchronously released, and will
-    // be synchronously released on the next EndFrame.
-    kReadyToRelease,
   };
   TextureStatus texture_status_ ABSL_GUARDED_BY(canvas_mutex_) = kStable;
 

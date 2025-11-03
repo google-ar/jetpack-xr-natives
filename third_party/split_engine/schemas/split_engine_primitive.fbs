@@ -49,7 +49,7 @@ struct Int2 (requires_api: 1) {
   y : int (id: 1, requires_api: 1);
 }
 
-struct Int3 {
+struct Int3 (requires_api: 1) {
   x : int (id: 0, requires_api: 1);
   y : int (id: 1, requires_api: 1);
   z : int (id: 2, requires_api: 1);

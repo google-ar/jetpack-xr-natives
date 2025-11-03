@@ -37,6 +37,8 @@ private class PathWithMetrics(
   val y: Float,
   val width: Float,
   val height: Float,
+  val fontOriginY: Float,
+  val fontSizeY: Float,
   val typographicalWidth: Float,
 )
 
@@ -56,6 +58,7 @@ internal class PathGlyphSource : IGlyphSource {
   // Reusable buffers.
   private val boundingBox = Rect()
   private val boundingBoxF = RectF()
+  private val fontMetrics = Paint.FontMetrics()
 
   override fun getGlyphMetrics(
     glyphId: Int,
@@ -77,9 +80,14 @@ internal class PathGlyphSource : IGlyphSource {
         out[2] = boundingBox.width().toFloat()
         out[3] = boundingBox.height().toFloat()
         out[4] = typographicalWidths.sum()
-        // TODO: Return proper metrics here
-        out[5] = -boundingBox.bottom.toFloat()
-        out[6] = boundingBox.height().toFloat()
+
+        // In some scripts, in particular, emoji, some characters exceed the boundaries of the font
+        // metrics. Expand the font metrics to include the actual bounding box in those cases.
+        paint.getFontMetrics(fontMetrics)
+        val fontDescent = maxFontDescent(boundingBox, fontMetrics)
+        val fontAscent = maxFontAscent(boundingBox, fontMetrics)
+        out[5] = -fontDescent
+        out[6] = fontAscent + fontDescent
       }
       is PathWithMetrics -> {
         val padding = strokeWidth
@@ -91,9 +99,9 @@ internal class PathGlyphSource : IGlyphSource {
         out[3] = glyph.height + padding
         // Typographical width
         out[4] = glyph.typographicalWidth
-        // TODO: Return proper metrics here
-        out[5] = glyph.y
-        out[6] = glyph.height + padding
+        // Font-relative metrics.
+        out[5] = glyph.fontOriginY
+        out[6] = glyph.fontSizeY + padding
       }
       is Blank -> {
         out[0] = 0f
@@ -113,6 +121,13 @@ internal class PathGlyphSource : IGlyphSource {
     require(!text.any { it == '\n' }) { "Text must not contain newlines" }
 
     val glyphBuilders = createGlyphBuilders(text, paint)
+    if (glyphBuilders.isEmpty()) {
+      return arrayOf()
+    }
+    val firstGlyphBuilder = glyphBuilders.first()
+    val lastGlyphBuilder = glyphBuilders.last()
+
+    paint.getFontMetrics(fontMetrics)
 
     val fullPath = Path()
     paint.getTextPath(text, 0, text.length, /* x= */ 0f, /* y= */ 0f, fullPath)
@@ -126,7 +141,12 @@ internal class PathGlyphSource : IGlyphSource {
         PathSegment.Type.Close -> {
           check(closedPath.isNotEmpty())
           val averageX = totalX / closedPath.size
-          val builder = glyphBuilders.first { averageX >= it.x && averageX <= it.x + it.width }
+          val builder =
+            when {
+              averageX <= firstGlyphBuilder.left -> firstGlyphBuilder
+              averageX >= lastGlyphBuilder.right -> lastGlyphBuilder
+              else -> glyphBuilders.first { averageX >= it.left && averageX <= it.right }
+            }
           builder.addClosedPath(closedPath)
           // Reset closed path information.
           totalX = 0f
@@ -166,8 +186,15 @@ internal class PathGlyphSource : IGlyphSource {
           val path = builder.asPath()
           // computeBounds(RectF) locked behind a feature flag?
           @Suppress("Deprecation") path.computeBounds(boundingBoxF, /* exact= */ true)
+
+          // In some scripts, some characters exceed the boundaries of the font metrics. Expand the
+          // font metrics to include the actual bounding box in those cases.
+          val fontDescent = maxFontDescent(boundingBoxF, fontMetrics)
+          val fontAscent = maxFontAscent(boundingBoxF, fontMetrics)
+
           // Offset path such that drawGlyph doesn't need to do it later.
-          path.offset(-boundingBoxF.left, -boundingBoxF.top)
+          path.offset(-boundingBoxF.left, fontAscent)
+
           PathWithMetrics(
             path,
             x = boundingBoxF.left,
@@ -175,6 +202,8 @@ internal class PathGlyphSource : IGlyphSource {
             width = boundingBoxF.width(),
             height = boundingBoxF.height(),
             typographicalWidth = builder.width,
+            fontOriginY = -fontDescent,
+            fontSizeY = fontAscent + fontDescent,
           )
         }
       }
@@ -234,6 +263,7 @@ internal class PathGlyphSource : IGlyphSource {
 
 /** Create glyph builders in order from LEFT to RIGHT. Handles BiDi text. */
 private fun createGlyphBuilders(text: String, paint: Paint): List<GlyphBuilder> {
+  val seed = paint.seed
   val widths = FloatArray(text.length)
   val textWidthCount = paint.getTextWidths(text, widths)
   check(textWidthCount == text.length)
@@ -255,7 +285,7 @@ private fun createGlyphBuilders(text: String, paint: Paint): List<GlyphBuilder> 
         }
         val width = widths[i]
         if (width != 0f) {
-          result.add(GlyphBuilder(position, width, i, glyphEnd - i))
+          result.add(GlyphBuilder(seed, position, width, i, glyphEnd - i))
           position += width
         }
       }
@@ -273,7 +303,7 @@ private fun createGlyphBuilders(text: String, paint: Paint): List<GlyphBuilder> 
         while (i < runLimit && widths[i] == 0f) {
           i++
         }
-        result.add(GlyphBuilder(position, width, glyphStart, i - glyphStart))
+        result.add(GlyphBuilder(seed, position, width, glyphStart, i - glyphStart))
         position += width
       }
     }
@@ -282,8 +312,10 @@ private fun createGlyphBuilders(text: String, paint: Paint): List<GlyphBuilder> 
 }
 
 private class GlyphBuilder(
-  /** X position of the glyph in pixels. */
-  val x: Float,
+  /** Seed used to initialize the hash. See Paint.seed */
+  seed: Int,
+  /** X position of the left side of the glyph in pixels. */
+  val left: Float,
   /** Width of the glyph in pixels. */
   val width: Float,
   /** Position of the starting index in the string. */
@@ -291,7 +323,7 @@ private class GlyphBuilder(
   /** Number of chars in the string. */
   val count: Int,
 ) {
-  var hash = 0
+  var hash = seed
     private set
 
   private val segmentVerbs = mutableListOf<PathSegment.Type>()
@@ -299,6 +331,10 @@ private class GlyphBuilder(
 
   val isEmptyPath: Boolean
     get() = segmentVerbs.isEmpty()
+
+  /** X position of the right side of the glyph in pixels. */
+  val right: Float
+    get() = left + width
 
   fun asString(text: String): String = text.substring(start, start + count)
 
@@ -363,7 +399,7 @@ private class GlyphBuilder(
   }
 
   private fun addX(x: Float) {
-    addValue(x - this.x)
+    addValue(x - left)
   }
 
   private fun addY(y: Float) {
@@ -376,6 +412,15 @@ private class GlyphBuilder(
     hash = hash xor value.getMantissaBits()
   }
 }
+
+/** Return a hash seed for this paint. */
+private val Paint.seed: Int
+  get() =
+    if (typeface !== null) {
+      typeface.hashCode() * HASH_PRIME
+    } else {
+      0
+    } xor textSize.toBits()
 
 /** Return the N most significant mantissa bits of the given float. */
 private fun Float.getMantissaBits(n: Int = 4): Int {

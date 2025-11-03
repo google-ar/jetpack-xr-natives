@@ -27,6 +27,10 @@ package imp;
 // Prevents a field from being editable, i.e. it will not appear in the panel.
 message EditorControlDisabled {}
 
+// Prevents a field from being editable, i.e. it will appear in the panel but
+// grey-out and the user will not be able to edit it.
+message EditorControlReadonly {}
+
 // Displays a floating-point slider with the given min, max, and precision.
 // Precision defaults to 0, which gives the slider integer-step. A value of 2,
 // for example, will give the slider 2 decimal points of precision in the step.
@@ -70,6 +74,7 @@ message EditorControlScene {}
 message EditorControlType {
   oneof type {
     EditorControlDisabled disabled = 1;
+    EditorControlReadonly read_only = 9;
     EditorControlSliderFloat slider_float = 2;
     EditorControlSliderInt slider_int = 3;
     EditorControlColor3 color_picker_3 = 4;

@@ -44,8 +44,6 @@
 namespace imp {
 using TransformInstance = ::filament::TransformManager::Instance;
 
-BaseView& Node::GetView() const { return node_controller_->GetView(); }
-
 absl::string_view Node::GetName() const { return node_controller_->GetName(); }
 
 NodeHandle Node::FindByName(absl::string_view name) {
@@ -462,20 +460,6 @@ double3 Node::LocalFromWorldVectorPrecise(const double3& vector) const {
   mat4 world_trs_inverse = inverse(world_trs);
   return (world_trs_inverse * double4{vector, 0.0}).xyz;
 }
-
-filament::Engine* Node::GetEngine() const {
-  return BaseView::GetSharedEngine();
-}
-
-filament::TransformManager& Node::GetTransformManager() const {
-  return GetEngine()->getTransformManager();
-}
-
-ComponentManager& Node::GetComponentManager() const {
-  return GetView().GetComponentManager();
-}
-
-Dispatcher& Node::GetDispatcher() const { return GetView().GetDispatcher(); }
 
 const mat4f& Node::GetLocalTrs() const {
   auto& tm = GetTransformManager();

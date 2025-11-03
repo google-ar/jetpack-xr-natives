@@ -41,8 +41,8 @@ build --javacopt="-source 17 -target 17"
 build --action_env=CC
 build --action_env=CXX
 build --action_env=PATH
-build --action_env=CXXFLAGS=-std=c++17
-build --action_env=BAZEL_CXXOPTS=-std=c++17
+build --action_env=CXXFLAGS=-std=c++20
+build --action_env=BAZEL_CXXOPTS=-std=c++20
 build --repo_env=CC=clang++
 build --host_linkopt=-fuse-ld=lld
 

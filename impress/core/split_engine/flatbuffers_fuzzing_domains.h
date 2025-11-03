@@ -238,8 +238,8 @@ auto VisitFlatbufferContainerElementField(const reflection::Schema* schema,
 
 // Dynamic to static dispatch visitor pattern.
 template <typename Visitor>
-auto VisitFlatbufferField(const reflection::Schema* /*absl_nonnull*/ schema,
-                          const reflection::Field* /*absl_nonnull*/ field,
+auto VisitFlatbufferField(const reflection::Schema* /*absl_nonnull*/  schema,
+                          const reflection::Field* /*absl_nonnull*/  field,
                           Visitor visitor) {
   auto field_index = field->type()->index();
   switch (field->type()->base_type()) {
@@ -422,8 +422,8 @@ class FlatbuffersEnumDomainImpl
 
 // Forward declaration of the domain factory for flatbuffers fields.
 template <typename T>
-auto GetDefaultDomain(const reflection::Schema* /*absl_nonnull*/ schema,
-                      const reflection::Field* /*absl_nonnull*/ field);
+auto GetDefaultDomain(const reflection::Schema* /*absl_nonnull*/  schema,
+                      const reflection::Field* /*absl_nonnull*/  field);
 
 // Base class for flatbuffers struct and table domain implementations.
 // The corpus type is a map of field ids to field values.
@@ -446,8 +446,8 @@ class FlatbuffersUntypedObjectDomainBase
   using typename FlatbuffersUntypedObjectDomainBase::DomainBase::value_type;
 
   FlatbuffersUntypedObjectDomainBase(
-      const reflection::Schema* /*absl_nonnull*/ schema,
-      const reflection::Object* /*absl_nonnull*/ object)
+      const reflection::Schema* /*absl_nonnull*/  schema,
+      const reflection::Object* /*absl_nonnull*/  object)
       : schema_(schema), object_(object) {}
 
   virtual ~FlatbuffersUntypedObjectDomainBase() = default;
@@ -619,7 +619,7 @@ class FlatbuffersUntypedObjectDomainBase
 
   absl::Status ValidateCorpusValue(const corpus_type& corpus_value) const {
     for (const auto& [id, field_corpus] : corpus_value) {
-      const reflection::Field* /*absl_nullable*/ field = GetFieldById(id);
+      const reflection::Field* /*absl_nullable*/  field = GetFieldById(id);
       if (field == nullptr) {
         return absl::InvalidArgumentError(
             absl::StrCat("Field id ", id, " is not found in the object."));
@@ -666,7 +666,7 @@ class FlatbuffersUntypedObjectDomainBase
       }
 
       // Get information about the field from reflection.
-      const reflection::Field* /*absl_nullable*/ field = GetFieldById(id.value());
+      const reflection::Field* /*absl_nullable*/  field = GetFieldById(id.value());
       if (field == nullptr) {
         return std::nullopt;
       }
@@ -698,7 +698,7 @@ class FlatbuffersUntypedObjectDomainBase
     // corpus value.
     for (const auto& [id, field_corpus] : value) {
       // Get information about the field from reflection.
-      const reflection::Field* /*absl_nullable*/ field = GetFieldById(id);
+      const reflection::Field* /*absl_nullable*/  field = GetFieldById(id);
       if (field == nullptr) {
         continue;
       }
@@ -730,7 +730,7 @@ class FlatbuffersUntypedObjectDomainBase
   Derived& Self() { return static_cast<Derived&>(*this); }
   const Derived& Self() const { return static_cast<const Derived&>(*this); }
 
-  bool IsSupportedField(const reflection::Field* /*absl_nonnull*/ field) const {
+  bool IsSupportedField(const reflection::Field* /*absl_nonnull*/  field) const {
     auto base_type = field->type()->base_type();
     if (flatbuffers::IsScalar(base_type)) return true;
     if (base_type == reflection::BaseType::String) return true;
@@ -754,7 +754,7 @@ class FlatbuffersUntypedObjectDomainBase
     return false;
   }
 
-  const reflection::Field* /*absl_nullable*/ GetFieldById(
+  const reflection::Field* /*absl_nullable*/  GetFieldById(
       typename corpus_type::key_type id) const {
     const auto it =
         absl::c_find_if(*object_->fields(),
@@ -766,7 +766,7 @@ class FlatbuffersUntypedObjectDomainBase
   // The domain is cached, and the same instance is returned for the same
   // field.
   template <typename T>
-  auto& GetCachedDomain(const reflection::Field* /*absl_nonnull*/ field) const {
+  auto& GetCachedDomain(const reflection::Field* /*absl_nonnull*/  field) const {
     using TypedDomainT = decltype(GetDefaultDomain<T>(schema_, field));
     using DomainT = Domain<typename TypedDomainT::value_type>;
     // Do the operation under a lock to prevent race conditions in `const`
@@ -789,7 +789,7 @@ class FlatbuffersUntypedObjectDomainBase
     domain_implementor::PrintMode mode;
 
     template <typename T>
-    void Visit(const reflection::Field* /*absl_nonnull*/ field) const {
+    void Visit(const reflection::Field* /*absl_nonnull*/  field) const {
       auto& domain = derived.template GetCachedDomain<T>(field);
       absl::Format(sink, "%s: ", field->name()->str());
       if constexpr (std::is_same_v<T, FlatbuffersVectorTag<uint8_t>> ||
@@ -873,7 +873,7 @@ class FlatbuffersUntypedObjectDomainBase
         if (!first) {
           absl::Format(out, ", ");
         }
-        const reflection::Field* /*absl_nullable*/ field = derived.GetFieldById(id);
+        const reflection::Field* /*absl_nullable*/  field = derived.GetFieldById(id);
         if (field == nullptr) {
           absl::Format(out, "<unknown field: %d>", id);
         } else {
@@ -893,7 +893,7 @@ class FlatbuffersUntypedObjectDomainBase
     corpus_type& corpus;
 
     template <typename T>
-    void Visit(const reflection::Field* /*absl_nonnull*/ field) {
+    void Visit(const reflection::Field* /*absl_nonnull*/  field) {
       auto& domain = derived.template GetCachedDomain<T>(field);
       corpus[field->id()] = domain.Init(prng);
     }
@@ -906,7 +906,7 @@ class FlatbuffersUntypedObjectDomainBase
     bool only_shrink = false;
 
     template <typename T>
-    void Visit(const reflection::Field* /*absl_nonnull*/ field) const {
+    void Visit(const reflection::Field* /*absl_nonnull*/  field) const {
       if (!derived.IsSupportedField(field)) return;
       if (only_shrink && !corpus.contains(field->id())) return;
 
@@ -931,7 +931,7 @@ class FlatbuffersUntypedObjectDomainBase
     corpus_type& corpus;
 
     template <typename T>
-    void Visit(const reflection::Field* /*absl_nonnull*/ field) {
+    void Visit(const reflection::Field* /*absl_nonnull*/  field) {
       auto& domain = derived.template GetCachedDomain<T>(field);
       if (auto it = corpus.find(field->id()); it != corpus.end()) {
         domain.Mutate(it->second, prng, metadata, only_shrink);
@@ -947,7 +947,7 @@ class FlatbuffersUntypedObjectDomainBase
     std::optional<GenericDomainCorpusType>& corpus;
 
     template <typename T>
-    void Visit(const reflection::Field* /*absl_nonnull*/ field) {
+    void Visit(const reflection::Field* /*absl_nonnull*/  field) {
       auto& domain = derived.template GetCachedDomain<T>(field);
       corpus = domain.ParseCorpus(ir_object);
     }
@@ -959,7 +959,7 @@ class FlatbuffersUntypedObjectDomainBase
     IRObject& ir_object;
 
     template <typename T>
-    void Visit(const reflection::Field* /*absl_nonnull*/ field) {
+    void Visit(const reflection::Field* /*absl_nonnull*/  field) {
       auto& domain = derived.template GetCachedDomain<T>(field);
       ir_object = domain.SerializeCorpus(corpus);
     }
@@ -971,7 +971,7 @@ class FlatbuffersUntypedObjectDomainBase
     absl::Status& status;
 
     template <typename T>
-    void Visit(const reflection::Field* /*absl_nonnull*/ field) {
+    void Visit(const reflection::Field* /*absl_nonnull*/  field) {
       auto& domain = derived.template GetCachedDomain<T>(field);
       status = domain.ValidateCorpusValue(inner_corpus);
     }
@@ -992,8 +992,8 @@ class FlatbuffersStructUntypedDomainImpl
   using typename FlatbuffersStructUntypedDomainImpl::DomainBase::value_type;
 
   explicit FlatbuffersStructUntypedDomainImpl(
-      const reflection::Schema* /*absl_nonnull*/ schema,
-      const reflection::Object* /*absl_nonnull*/ struct_object)
+      const reflection::Schema* /*absl_nonnull*/  schema,
+      const reflection::Object* /*absl_nonnull*/  struct_object)
       : FlatbuffersUntypedObjectDomainBase(schema, struct_object) {}
 
   // Converts the struct pointer to a corpus value.
@@ -1013,7 +1013,7 @@ class FlatbuffersStructUntypedDomainImpl
     corpus_type& out;
 
     template <typename T>
-    void Visit(const reflection::Field* /*absl_nonnull*/ field) const {
+    void Visit(const reflection::Field* /*absl_nonnull*/  field) const {
       [[maybe_unused]]
       reflection::BaseType base_type = field->type()->base_type();
       auto& domain = self.GetCachedDomain<T>(field);
@@ -1074,7 +1074,7 @@ class FlatbuffersStructUntypedDomainImpl
     uint8_t* struct_ptr;
 
     template <typename T>
-    void Visit(const reflection::Field* /*absl_nonnull*/ field) const {
+    void Visit(const reflection::Field* /*absl_nonnull*/  field) const {
       [[maybe_unused]]
       reflection::BaseType base_type = field->type()->base_type();
       auto& domain = self.GetCachedDomain<T>(field);
@@ -1312,8 +1312,8 @@ class FlatbuffersTableUntypedDomainImpl
   using typename FlatbuffersTableUntypedDomainImpl::DomainBase::value_type;
 
   explicit FlatbuffersTableUntypedDomainImpl(
-      const reflection::Schema* /*absl_nonnull*/ schema,
-      const reflection::Object* /*absl_nonnull*/ table_object)
+      const reflection::Schema* /*absl_nonnull*/  schema,
+      const reflection::Object* /*absl_nonnull*/  table_object)
       : FlatbuffersUntypedObjectDomainBase(schema, table_object) {}
 
   // Converts the table pointer to a corpus value.
@@ -1327,7 +1327,7 @@ class FlatbuffersTableUntypedDomainImpl
   // The domain is cached, and the same instance is returned for the same
   // field.
   template <typename T>
-  auto& GetCachedDomain(const reflection::Field* /*absl_nonnull*/ field) const {
+  auto& GetCachedDomain(const reflection::Field* /*absl_nonnull*/  field) const {
     auto get_opt_domain = [this, field]() {
       auto opt_domain = OptionalOf(GetDefaultDomain<T>(schema_, field));
       if (!field->optional()) opt_domain.SetWithoutNull();
@@ -1354,7 +1354,7 @@ class FlatbuffersTableUntypedDomainImpl
     corpus_type& corpus_value;
 
     template <typename T>
-    void Visit(const reflection::Field* /*absl_nonnull*/ field) const {
+    void Visit(const reflection::Field* /*absl_nonnull*/  field) const {
       [[maybe_unused]]
       reflection::BaseType base_type = field->type()->base_type();
       auto& domain = self.GetCachedDomain<T>(field);
@@ -1520,7 +1520,7 @@ class FlatbuffersTableUntypedDomainImpl
     const typename corpus_type::mapped_type& corpus_value;
 
     template <typename T>
-    void Visit(const reflection::Field* /*absl_nonnull*/ field) {
+    void Visit(const reflection::Field* /*absl_nonnull*/  field) {
       if constexpr (std::is_same_v<T, std::string>) {
         auto& domain = self.GetCachedDomain<T>(field);
         auto user_value = domain.GetValue(corpus_value);
@@ -1706,7 +1706,7 @@ class FlatbuffersTableUntypedDomainImpl
     const typename corpus_type::value_type::second_type& corpus_value;
 
     template <typename T>
-    void Visit(const reflection::Field* /*absl_nonnull*/ field) const {
+    void Visit(const reflection::Field* /*absl_nonnull*/  field) const {
       if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T> ||
                     is_flatbuffers_enum_tag_v<T>) {
         auto& domain = self.GetCachedDomain<T>(field);
@@ -1797,8 +1797,8 @@ class FlatbuffersTableUntypedDomainImpl
 
 // Domain factory for flatbuffers fields.
 template <typename T>
-auto GetDefaultDomain(const reflection::Schema* /*absl_nonnull*/ schema,
-                      const reflection::Field* /*absl_nonnull*/ field) {
+auto GetDefaultDomain(const reflection::Schema* /*absl_nonnull*/  schema,
+                      const reflection::Field* /*absl_nonnull*/  field) {
   // Used to satisfy the compiler return type deduction rules.
   auto placeholder = Arbitrary<bool>();
 

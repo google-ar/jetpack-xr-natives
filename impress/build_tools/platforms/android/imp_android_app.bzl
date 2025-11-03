@@ -63,7 +63,7 @@ def imp_android_app(
     if not activity_name:
         activity_name = snakeCaseToCamelCase(name) + "Activity"
 
-    manifest = Label("//java/com/google/ar/imp/app:AndroidManifest.xml")
+    manifest = Label("@com_google_impress//java/com/google/ar/imp/app:AndroidManifest.xml")
     if override_manifest:
         manifest = override_manifest
 
@@ -72,7 +72,7 @@ def imp_android_app(
         platform_name = "android",
         jni_library = jni_library,
         manifest = manifest,
-        base_generated_activity = Label("//java/com/google/ar/imp/app:basic_imp_activity"),
+        base_generated_activity = Label("@com_google_impress//java/com/google/ar/imp/app:basic_imp_activity"),
         activity_name = activity_name,
         override_activity = override_activity,
         package = package,

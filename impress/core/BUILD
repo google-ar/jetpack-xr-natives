@@ -38,7 +38,7 @@ config_setting(
 config_setting(
     name = "emscripten",
     constraint_values = [
-        "@platforms//cpu:wasm32",
+        "@platforms//os:emscripten",
     ],
 )
 
@@ -171,6 +171,13 @@ config_setting(
     name = "imp_android_external_texture_surface_uses_image_reader",
     define_values = {
         "IMP_ANDROID_EXTERNAL_TEXTURE_SURFACE_USES_IMAGE_READER": "1",
+    },
+)
+
+config_setting(
+    name = "imp_disable_future_validation",
+    define_values = {
+        "IMP_DISABLE_FUTURE_VALIDATION": "1",
     },
 )
 

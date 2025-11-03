@@ -98,6 +98,7 @@ table EntityInfo {
   runtime : RuntimeInfo; // optional
   num_children : uint16;
   original_index : uint16; // optional
+  original_mesh_index : int16; // optional
 
   node_visibility : NodeVisibility; // optional
   node_selectability : NodeSelectability; // optional

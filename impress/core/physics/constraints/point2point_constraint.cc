@@ -49,25 +49,20 @@ absl::Status Point2PointConstraint::Setup(NodeHandle connected_node,
 absl::Status Point2PointConstraint::SetupWithState() { return SetupInternal(); }
 
 absl::Status Point2PointConstraint::SetupInternal() {
-  state_.is_valid = true;
+  state_.is_ready = true;
   if (InitializeWithNodes(state_.connected_node, GetNode()) !=
       absl::OkStatus()) {
-    state_.is_valid = false;
+    state_.is_ready = false;
+  }
+
+  if (!state_.is_ready) {
+    bt_constraint_.reset();
+    return absl::OkStatus();
   }
 
   if (state_.auto_configure) {
-    if (GetRigidBodyB() == nullptr) {
-      state_.connected_pivot =
-          state_.connected_node->LocalFromWorldPoint(kZero3);
-    } else {
       state_.connected_pivot = ComputePivotAFromB(
           state_.connected_node, GetNode(), state_.pivot.value_or(kZero3));
-    }
-  }
-
-  if (!state_.is_valid) {
-    bt_constraint_.reset();
-    return absl::OkStatus();
   }
 
   btRigidBody* bt_rigid_body_A =

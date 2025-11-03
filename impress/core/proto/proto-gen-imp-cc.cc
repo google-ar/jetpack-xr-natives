@@ -515,9 +515,9 @@ struct ImpCodeGenerator {
           printed_oneofs[oneof->name()] = fields;
         }
         // Store the field id so we can call the variant visit with the mapping.
-        OneofFieldInfo& fields = printed_oneofs[oneof->name()];
-        fields.field_types[field->index_in_oneof()] = field->type();
-        fields.field_ids[field->index_in_oneof()] = field->number();
+        OneofFieldInfo& oneof_field_info = printed_oneofs[oneof->name()];
+        oneof_field_info.field_types[field->index_in_oneof()] = field->type();
+        oneof_field_info.field_ids[field->index_in_oneof()] = field->number();
 
         std::string ref_other = absl::StrCat(
             "(!other || other->", oneof->name(),
@@ -534,6 +534,25 @@ struct ImpCodeGenerator {
             "index", absl::StrCat(field->index_in_oneof() + 1), "disambiguator",
             disambiguator, "visit_method", visit_method, "field_id",
             absl::StrCat(field->number()), "ref_other", ref_other);
+
+        if (field->index_in_oneof() == oneof->field_count() - 1) {
+          std::string field_types_str =
+              absl::StrFormat("std::integer_sequence<signed,%s>{}",
+                              absl::StrJoin(oneof_field_info.field_types, ","));
+          std::string field_ids_str = absl::StrFormat(
+              "{%s}", absl::StrJoin(oneof_field_info.field_ids, ","));
+          std::string oneof_name_capitalized(oneof->name());
+          oneof_name_capitalized[0] = toupper(oneof_name_capitalized[0]);
+          printer->Print(
+              "if constexpr (kHasVisitVariant$oneof_capitalized$Fn) {\n"
+              "  cursor = v.VisitVariant(cursor, &this->$oneof$, !other ? "
+              "nullptr : &other->$oneof$, \"$oneof$\", $field_types_str$, "
+              "$field_ids_str$, std::forward<Args>(args)...);\n"
+              "}\n",
+              "oneof_capitalized", oneof_name_capitalized, "oneof",
+              oneof->name(), "field_types_str", field_types_str,
+              "field_ids_str", field_ids_str);
+        }
         continue;
       }
       std::string ref = absl::StrCat("&this->", field->name());
@@ -564,23 +583,6 @@ struct ImpCodeGenerator {
             "field_id", absl::StrCat(field->number()), "ref", ref, "ref_other",
             ref_other);
       }
-    }
-    for (const auto& [oneof_name, field_info] : printed_oneofs) {
-      std::string field_types_str =
-          absl::StrFormat("std::integer_sequence<signed,%s>{}",
-                          absl::StrJoin(field_info.field_types, ","));
-      std::string field_ids_str =
-          absl::StrFormat("{%s}", absl::StrJoin(field_info.field_ids, ","));
-      std::string oneof_name_capitalized = oneof_name;
-      oneof_name_capitalized[0] = toupper(oneof_name_capitalized[0]);
-      printer->Print(
-          "if constexpr (kHasVisitVariant$oneof_capitalized$Fn) {\n"
-          "  cursor = v.VisitVariant(cursor, &this->$oneof$, !other ? "
-          "nullptr : &other->$oneof$, \"$oneof$\", $field_types_str$, "
-          "$field_ids_str$, std::forward<Args>(args)...);\n"
-          "}\n",
-          "oneof_capitalized", oneof_name_capitalized, "oneof", oneof_name,
-          "field_types_str", field_types_str, "field_ids_str", field_ids_str);
     }
     printer->Print("return cursor;\n");
     printer->Outdent();
@@ -1669,7 +1671,7 @@ int main(int argc, char* argv[]) {
 // have been properly implemented. The Bazel version of Protobuf is too old
 // for editions and upgrading is nontrivial.
 // LINT.IfChange
-#define SUPPORT_EDITIONS false
+#define SUPPORT_EDITIONS true
 #if SUPPORT_EDITIONS
   response.set_supported_features(
       google::protobuf::compiler::CodeGeneratorResponse::FEATURE_PROTO3_OPTIONAL |

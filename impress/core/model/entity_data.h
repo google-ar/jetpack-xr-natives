@@ -287,8 +287,8 @@ struct EntityData {
       std::vector<PartData>, BoneId, SkinId, MorphTargetBufferId,
       std::vector<float>, LightPunctualId, AudioEmitterId,
       std::optional<filament::Box>, std::optional<RuntimeData>, std::string,
-      uint16_t, std::optional<NodeVisibility>, std::optional<NodeSelectability>,
-      std::optional<NodeHoverability>>;
+      uint16_t, int16_t, std::optional<NodeVisibility>,
+      std::optional<NodeSelectability>, std::optional<NodeHoverability>>;
   // Declare an enum to access fields (e.g. the iterator type in
   // utils::StructureOfArrays uses a tuple style get<>() API).
   enum Fields {
@@ -307,6 +307,7 @@ struct EntityData {
     kRuntime,
     kName,
     kOriginalIndex,
+    kOriginalMeshIndex,
     kNodeVisibility,
     kNodeSelectability,
     kNodeHoverability,
@@ -329,6 +330,7 @@ struct EntityData {
     Field<kRuntime> runtime;
     Field<kName> name;
     Field<kOriginalIndex> original_index;
+    Field<kOriginalMeshIndex> original_mesh_index;
     Field<kNodeVisibility> node_visibility;
     Field<kNodeSelectability> node_selectability;
     Field<kNodeHoverability> node_hoverability;

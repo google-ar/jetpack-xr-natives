@@ -81,15 +81,6 @@ def non_module_dependencies():
         url = "https://github.com/google/mediapipe/archive/refs/tags/v0.10.18.tar.gz",
     )
 
-    # TODO Investigate how we can migrate to the equivalent bazel_dep.
-    http_archive(
-        name = "com_github_google_flatbuffers",
-        sha256 = "acc26a825e3202f753256abee4dd71e9ab40759c2ba5adb6b8ee6bb25e195371",
-        strip_prefix = "google-flatbuffers-fb9afba",
-        type = ".tar.gz",
-        url = "https://api.github.com/repos/google/flatbuffers/tarball/fb9afbafc7dfe226b9db54d4923bfb8839635274",
-    )
-
     # Not in Bazel Central Registry as of 12/2024.
     http_archive(
         name = "smol_v",

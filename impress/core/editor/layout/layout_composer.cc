@@ -324,11 +324,14 @@ void LayoutComposer::DrawDockableDetailsWindow() {
                            ImGuiWindowFlags_AlwaysVerticalScrollbar |
                            ImGuiWindowFlags_HorizontalScrollbar;
 
+  if (window_configuration_ && window_configuration_->ShouldHideAllWindows()) {
+    return;
+  }
+
   if (ImGui::Begin(PanelIdToString(PanelId::kDetailsWindow).c_str(), nullptr,
                    flags)) {
     DrawDetailsSectionContents();
   }
-
   ImGui::End();
 }
 
@@ -381,6 +384,10 @@ void LayoutComposer::DrawDockableSceneWindow() {
   ImGuiWindowFlags flags = ImGuiWindowFlags_HorizontalScrollbar |
                            ImGuiWindowFlags_NoFocusOnAppearing;
 
+  if (window_configuration_ && window_configuration_->ShouldHideAllWindows()) {
+    return;
+  }
+
   if (ImGui::Begin(PanelIdToString(PanelId::kSceneWindow).c_str(), nullptr,
                    flags)) {
     ImGui::PushItemWidth(kSceneItemWidth);
@@ -404,7 +411,7 @@ void LayoutComposer::DrawDockableTabbedWindow() {
   for (auto& info : tab_item_info_) {
     ImGui::SetNextWindowDockID(
         docking_helper_->GetDockId(DockingHelper::DockingType::kBottom),
-        ImGuiCond_FirstUseEver);
+        ImGuiCond_Appearing);
     if (ImGui::Begin(info.label.c_str(), nullptr, flags)) {
       info.draw_function();
     }
@@ -414,7 +421,7 @@ void LayoutComposer::DrawDockableTabbedWindow() {
   for (auto& info : left_dock_draw_functions_) {
     ImGui::SetNextWindowDockID(
         docking_helper_->GetDockId(DockingHelper::DockingType::kLeft),
-        ImGuiCond_FirstUseEver);
+        ImGuiCond_Appearing);
     if (ImGui::Begin(info.label.c_str(), nullptr, flags)) {
       info.draw_function();
     }

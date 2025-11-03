@@ -327,18 +327,12 @@ cc_library(
     name = "physics",
     srcs = [
         "collidable.cc",
-        "constraints/base_constraint.cc",
-        "constraints/hinge_constraint.cc",
-        "constraints/point2point_constraint.cc",
         "physics_manager.cc",
         "rigid_body.cc",
         "trigger_volume.cc",
     ],
     hdrs = [
         "collidable.h",
-        "constraints/base_constraint.h",
-        "constraints/hinge_constraint.h",
-        "constraints/point2point_constraint.h",
         "physics_manager.h",
         "rigid_body.h",
         "trigger_volume.h",
@@ -392,14 +386,11 @@ proto_library(
     srcs = [
         "collidable_shapes/collidable_shape_properties_state.proto",
         "collidable_type.proto",
-        "constraints/hinge_constraint_state.proto",
-        "constraints/point2point_constraint_state.proto",
         "rigid_body_state.proto",
     ],
     deps = [
         "//core/math:math_proto",
         "//core/proto:imp_proto",
-        "//core/scene_handles:scene_handles_proto",
     ],
 )
 
@@ -424,50 +415,4 @@ imp_assets(
 imp_material(
     name = "solid_color",
     src = ":solid_color.mat",
-)
-
-cc_library(
-    name = "constraint",
-    srcs = [
-        "constraints/base_constraint.cc",
-        "constraints/hinge_constraint.cc",
-        "constraints/point2point_constraint.cc",
-    ],
-    hdrs = [
-        "constraints/base_constraint.h",
-        "constraints/hinge_constraint.h",
-        "constraints/point2point_constraint.h",
-    ],
-    copts = imp_google3_copts(),
-    defines = imp_defines(),
-    deps = [
-        ":collidable_shape",
-        ":physics",
-        ":physics_helper",
-        ":physics_proto_cc",
-        "//core:config",
-        "//core/collision:ray",
-        "//core/common:owned_ptr",
-        "//core/common:platform_helpers",
-        "//core/common:registry",
-        "//core/common:robin_map",
-        "//core/geometry/shapes",
-        "//core/math",
-        "//core/ncsb",
-        "//core/view:base_view",
-        "//core/view/framework",
-        "//core/view/utils:frame_time",
-        "@bullet//:BulletCollision",  # build_cleaner: keep
-        "@bullet//:BulletDynamics",  # build_cleaner: keep
-        "@bullet//:LinearMath",
-        "@com_google_absl//absl/debugging:stacktrace",
-        "@com_google_absl//absl/debugging:symbolize",
-        "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/strings:string_view",
-        "@com_google_absl//absl/types:optional",
-        "@com_google_impress//core/common:log",
-        "@mediapipe//mediapipe/framework/port:status",
-    ] + if_dev_runtime(["//core/common:debug_draw"]),
-    alwayslink = 1,
 )

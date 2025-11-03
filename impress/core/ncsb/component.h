@@ -341,6 +341,12 @@ class Component {
   // because GetHash() behaves polymorphically.
   ComponentId GetComponentId() const;
 
+  // Returns true if the component's Setup method returned a future that has
+  // not yet completed.
+  inline bool IsRunningAsyncSetup() const {
+    return CheckBit(status_flags_, StatusFlags::kComponentIsRunningAsyncSetup);
+  }
+
   // Associates the lifetime of the holdable with the component.
   // Part of the Remember protocol, which makes it possible to pass a component
   // into Future::KeptBy or as an owner to Dispatcher::Connect.
@@ -394,12 +400,17 @@ class Component {
   enum StatusFlags : BitFlag {
     kComponentInitialFlags = 0,
     kComponentIsEnabled = 1 << 0,
-    kComponentIsActive = 1 << 1
+    kComponentIsActive = 1 << 1,
+    // This flag is set when the component's Setup method returned a future that
+    // has not yet completed.
+    kComponentIsRunningAsyncSetup = 1 << 2
   };
 
   Dispatcher& GetDispatcher() const;
 
   void SetActiveFlagInternal(bool active);
+
+  void SetRunningAsyncSetupFlagInternal(bool is_running_async_setup);
 
   NodeHandle node_;
   ComponentId component_id_;
@@ -407,6 +418,7 @@ class Component {
 
   template <typename T>
   friend class ComponentPool;
+  friend class BaseComponentPool;
 };
 
 template <typename EventType>

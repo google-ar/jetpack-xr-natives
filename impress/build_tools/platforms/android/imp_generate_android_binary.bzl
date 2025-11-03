@@ -26,7 +26,7 @@ load("@build_bazel_rules_android//android:rules.bzl", "android_binary", "android
 load("@bazel_skylib//rules:build_test.bzl", "build_test")
 
 IMP_ANDROID_DEPS = [
-    Label("//java/com/google/ar/imp/view:surface_view_no_jni"),
+    Label("@com_google_impress//java/com/google/ar/imp/view:surface_view_no_jni"),
     
 ]
 

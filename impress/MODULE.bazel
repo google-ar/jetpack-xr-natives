@@ -20,6 +20,7 @@ module(
 bazel_dep(name = "apple_support", version = "1.15.1", repo_name = "build_bazel_apple_support")
 bazel_dep(name = "aspect_bazel_lib", version = "1.16.3")
 bazel_dep(name = "bazel_skylib", version = "1.7.1")
+bazel_dep(name = "flatbuffers", version = "25.2.10")
 bazel_dep(name = "glog", version = "0.5.0", repo_name = "com_google_glog")
 bazel_dep(name = "googletest", version = "1.15.2", repo_name = "com_google_googletest")
 bazel_dep(name = "jsoncpp", version = "1.9.6")
@@ -82,7 +83,6 @@ use_repo(non_module_repos, "SDL2")
 use_repo(non_module_repos, "basis_universal")
 use_repo(non_module_repos, "boost_beast")
 use_repo(non_module_repos, "civetweb")
-bazel_dep(name = "flatbuffers", version = "25.2.10")
 use_repo(non_module_repos, "com_google_sandboxed_api")
 use_repo(non_module_repos, "com_google_zetasql")
 use_repo(non_module_repos, "dear_imgui")
@@ -119,7 +119,7 @@ maven.install(
         "androidx.lifecycle:lifecycle-runtime:2.4.0-alpha01",
         "androidx.lifecycle:lifecycle-viewmodel-ktx:2.4.0-alpha01",
         "com.android.extensions.xr:extensions-xr:1.0",
-        "com.android.extensions.xr:extensions-xr:1.0",
+        "com.android.extensions.xr:extensions-xr:1.1.0",
         "com.google.errorprone:error_prone_annotations:2.27.1",
         "com.google.flogger:flogger-system-backend:0.6",
         "com.google.flogger:flogger:0.6",
@@ -127,7 +127,7 @@ maven.install(
         "com.google.guava:listenablefuture:1.0",
     ],
     fetch_sources = True,
-    lock_file = "//:maven_install.json",
+    
     repositories = [
         "https://maven.google.com",
         "https://dl.google.com/dl/android/maven2",

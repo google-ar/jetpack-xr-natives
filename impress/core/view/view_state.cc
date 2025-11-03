@@ -88,8 +88,8 @@ OptionalError ViewState::Setup(FilamentHost* filament_host) {
   // If dev mode is set up at compile time, automatically install the default
   // dev mode extensions into the filament host if one already isn't registered.
   if (!host->TryGetExtension()) {
-    MP_RETURN_IF_ERROR(
-        host->RegisterExtension(imp::window::CreateDefaultDevModeExtension()));
+    MP_RETURN_IF_ERROR(host->RegisterExtension(
+        imp::window::CreateDefaultDevModeExtension(view_.get())));
     view_->GetInputManager().AddInterceptor(
         std::make_unique<DevModeInputInterceptor>(view_.get()));
   }
@@ -305,6 +305,13 @@ bool ViewState::ShouldUseStencilSwapChain() const {
       view_->GetConfig().main_view_render_settings;
   return render_settings.has_value() &&
          render_settings->use_stencil_swapchain.value_or(false);
+}
+
+bool ViewState::ShouldUseMsaaSwapChain() const {
+  const std::optional<render_settings::ViewRenderSettings>& render_settings =
+      view_->GetConfig().main_view_render_settings;
+  return render_settings.has_value() &&
+         render_settings->use_msaa_swapchain.value_or(false);
 }
 
 }  // namespace imp

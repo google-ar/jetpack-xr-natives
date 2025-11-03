@@ -24,6 +24,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
+#include "core/async/future.h"
 #include "core/common/robin_map.h"
 #include "core/common/small_source_location.h"
 #include "core/math/mat.h"
@@ -43,7 +44,7 @@ namespace imp::split_engine {
 class SplitEnginePlatformAndroidExternalTextureSurface
     : public PlatformAndroidExternalTextureSurface {
  public:
-  SplitEnginePlatformAndroidExternalTextureSurface(
+  static Future<std::unique_ptr<PlatformAndroidExternalTextureSurface>> Create(
       BaseView& view_, ContentSecurityLevel security_level,
       absl::Span<const SurfaceViewType> view_types);
 
@@ -68,6 +69,12 @@ class SplitEnginePlatformAndroidExternalTextureSurface
       SmallSourceLocation loc) override;
 
  private:
+  SplitEnginePlatformAndroidExternalTextureSurface(
+      BaseView& view, std::unique_ptr<android::Surface> surface,
+      RobinMap<SurfaceViewType, OwnedTexturePtr> textures,
+      ContentSecurityLevel security_level,
+      RobinMap<SurfaceViewType, TextureId> split_engine_texture_ids);
+
   BaseView& view_;
   std::unique_ptr<android::Surface> surface_;
   RobinMap<SurfaceViewType, OwnedTexturePtr> textures_;

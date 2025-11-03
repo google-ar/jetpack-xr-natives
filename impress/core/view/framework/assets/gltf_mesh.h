@@ -241,6 +241,9 @@ class GltfMesh : public Component {
   // Get the original glTF node index this GltfMesh is representing
   uint64_t GetOriginalGltfIndex() const;
 
+  // Get the original glTF mesh index this GltfMesh is representing
+  int16_t GetOriginalGltfMeshIndex() const;
+
   // Update skinned mesh with new skinning data.
   void UpdateSkinnedMesh();
 

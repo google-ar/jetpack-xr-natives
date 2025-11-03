@@ -203,7 +203,7 @@ void LoaderClient::EnsureClosed() {
 
 void LoaderClient::OnMessage(std::unique_ptr<uint8_t[]>&& message,
                              size_t size) {
-  absl::MutexLock lock(&lock_);
+  absl::MutexLock lock(lock_);
   // Wait for the last message to be processed first.
   while (last_message_ != nullptr) {
     has_storage_condition_.Wait(&lock_);
@@ -214,12 +214,12 @@ void LoaderClient::OnMessage(std::unique_ptr<uint8_t[]>&& message,
 }
 
 bool LoaderClient::IsClosed() {
-  absl::MutexLock lock(&lock_);
+  absl::MutexLock lock(lock_);
   return closed_;
 }
 
 void LoaderClient::OnClosed() {
-  absl::MutexLock lock(&lock_);
+  absl::MutexLock lock(lock_);
   closed_ = true;
   message_available_condition_.SignalAll();
 }
@@ -237,7 +237,7 @@ OptionalError LoaderClient::GetResponse(
   // If this fails, the caller did not supply valid output parameters.
   *out_response = FlatBufferAccess<const schemas::Response>{};
   {
-    absl::MutexLock lock(&lock_);
+    absl::MutexLock lock(lock_);
     while (last_message_ == nullptr && !closed_) {
       message_available_condition_.Wait(&lock_);
     }

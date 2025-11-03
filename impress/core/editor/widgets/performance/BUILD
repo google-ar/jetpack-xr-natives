@@ -89,9 +89,7 @@ cc_library(
     deps = [
         ":circular_buffer",
         ":panel",
-        "//core:config",
         "//core/common:trace",
-        "//core/monitor",
         "//core/ncsb",
         "//core/performance:profiler",
         "//core/sprite",

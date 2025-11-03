@@ -74,13 +74,29 @@ class WindowConfiguration {
   void SetWindowVisibility(absl::string_view window_name,
                            WindowVisibility visibility);
 
-  // Restores the default visibility of the windows to the initial visibility.
-  void RestoreDefaultVisibility();
+  // Restores the default visibility and layout of the windows.
+  void RestoreDefault();
+
+  // Hides all the windows.
+  void SetHideAllWindows(bool hide_all);
+
+  // Returns true if all the windows should be hidden.
+  bool ShouldHideAllWindows() const { return hide_all_; }
+
+  // Returns true if the default layout should be restored.
+  bool ShouldRestoreDefaultLayout() const {
+    return should_restore_default_layout_;
+  }
+
+  // Notifies the WindowConfiguration that the default layout has been restored.
+  void NotifyLayoutRestored() { should_restore_default_layout_ = false; }
 
  private:
   std::vector<std::string> window_names_;
   // Keep track of the window names and their initial and current visibilities.
   WindowInfoMap window_infos_;
+  bool should_restore_default_layout_ = false;
+  bool hide_all_ = false;
 };
 
 }  // namespace imp::editor

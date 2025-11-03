@@ -170,7 +170,7 @@ GlyphEmulator::GlyphEmulator(Context context, AsyncCanvasSource& canvas_source)
 
 void GlyphEmulator::AddFont(absl::string_view font_name,
                             std::unique_ptr<FontHolder> font_holder) {
-  absl::MutexLock lock(&fonts_mutex_);
+  absl::MutexLock lock(fonts_mutex_);
   fonts_.emplace(font_name, std::move(font_holder));
 }
 
@@ -215,6 +215,24 @@ Future<ScopedCanvas::FontInfo> GlyphEmulator::GetFontInfo(
   return canvas_source_.PrepareFont(" ", options)
       .Then([this, options]() { return canvas_source_.GetFontInfo(options); },
             Executor::Type::kCurrent);
+}
+
+Future<std::vector<ScopedCanvas::TextAndFontMetrics>>
+GlyphEmulator::GetFontAndTextMetrics(
+    std::vector<ScopedCanvas::TextToMeasure> texts) {
+  std::vector<Future<absl::Status>> prepare_futures;
+  prepare_futures.reserve(texts.size());
+  for (int i = 0; i < texts.size(); ++i) {
+    prepare_futures.push_back(
+        canvas_source_.PrepareFont(texts[i].text, texts[i].text_options));
+  }
+  return Future<absl::Status>::CombineList(prepare_futures)
+      .Then(
+          [this, texts = std::move(texts)]()
+              -> Future<std::vector<ScopedCanvas::TextAndFontMetrics>> {
+            return canvas_source_.GetFontAndTextMetrics(texts);
+          },
+          Executor::Type::kCurrent);
 }
 
 Future<std::unique_ptr<std::vector<GlyphEmulator::Glyph>>>
@@ -377,7 +395,7 @@ GlyphEmulator::CanvasOptionsFromGlyphEmulatorOptions(
   if (std::holds_alternative<std::string>(options.font_params)) {
     absl::string_view font_name = std::get<std::string>(options.font_params);
     if (!font_name.empty()) {
-      absl::MutexLock lock(&fonts_mutex_);
+      absl::MutexLock lock(fonts_mutex_);
       auto font_itr = fonts_.find(font_name);
       if (font_itr != fonts_.end()) {
         font_holder = font_itr.value().get();
@@ -389,7 +407,7 @@ GlyphEmulator::CanvasOptionsFromGlyphEmulatorOptions(
   } else if (std::holds_alternative<SystemFontParams>(options.font_params)) {
     const SystemFontParams font_params =
         std::get<SystemFontParams>(options.font_params);
-    absl::MutexLock lock(&system_fonts_mutex_);
+    absl::MutexLock lock(system_fonts_mutex_);
     auto system_font_iter = system_fonts_.find(font_params);
     if (system_font_iter != system_fonts_.end()) {
       font_holder = system_font_iter->second.get();

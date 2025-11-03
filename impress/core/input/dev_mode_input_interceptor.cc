@@ -260,19 +260,23 @@ void DevModeInputInterceptor::FilterKeyboardEvents(
         ImGuiKey key = static_cast<ImGuiKey>(event.key.code);
         IM_ASSERT(key >= 0 && key < IM_ARRAYSIZE(io.KeysDown));
         io.AddKeyEvent(key, (event.type == KeyboardEventType::kOnDown));
-        if (HasKeyModifier(KeyModifier::SHIFT, event.key.modifiers)) {
+        if (key == ImGuiKey_LeftShift || key == ImGuiKey_RightShift ||
+            HasKeyModifier(KeyModifier::SHIFT, event.key.modifiers)) {
           io.AddKeyEvent(ImGuiMod_Shift,
                          (event.type == KeyboardEventType::kOnDown));
         }
-        if (HasKeyModifier(KeyModifier::CTRL, event.key.modifiers)) {
+        if (key == ImGuiKey_LeftCtrl || key == ImGuiKey_RightCtrl ||
+            HasKeyModifier(KeyModifier::CTRL, event.key.modifiers)) {
           io.AddKeyEvent(ImGuiMod_Ctrl,
                          (event.type == KeyboardEventType::kOnDown));
         }
-        if (HasKeyModifier(KeyModifier::ALT, event.key.modifiers)) {
+        if (key == ImGuiKey_LeftAlt || key == ImGuiKey_RightAlt ||
+            HasKeyModifier(KeyModifier::ALT, event.key.modifiers)) {
           io.AddKeyEvent(ImGuiMod_Alt,
                          (event.type == KeyboardEventType::kOnDown));
         }
-        if (HasKeyModifier(KeyModifier::GUI, event.key.modifiers)) {
+        if (key == ImGuiKey_LeftSuper || key == ImGuiKey_RightSuper ||
+            HasKeyModifier(KeyModifier::GUI, event.key.modifiers)) {
           io.AddKeyEvent(ImGuiMod_Super,
                          (event.type == KeyboardEventType::kOnDown));
         }

@@ -447,19 +447,19 @@ CronetUrlLoader::CronetUrlLoader(
 
 int CronetUrlLoader::AddActiveRequest(
     std::unique_ptr<UrlRequestHandle> request) {
-  absl::MutexLock lock(&active_requests_mutex_);
+  absl::MutexLock lock(active_requests_mutex_);
   int request_id = ++request_id_counter_;
   active_requests_[request_id] = std::move(request);
   return request_id;
 }
 
 void CronetUrlLoader::RemoveActiveRequest(int request_id) {
-  absl::MutexLock lock(&active_requests_mutex_);
+  absl::MutexLock lock(active_requests_mutex_);
   active_requests_.erase(request_id);
 }
 
 UrlRequestHandle* CronetUrlLoader::GetActiveRequest(int request_id) {
-  absl::MutexLock lock(&active_requests_mutex_);
+  absl::MutexLock lock(active_requests_mutex_);
   auto it = active_requests_.find(request_id);
   if (it == active_requests_.end()) {
     return nullptr;

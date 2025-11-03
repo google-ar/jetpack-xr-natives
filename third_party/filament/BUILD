@@ -60,6 +60,14 @@ config_setting(
 )
 
 config_setting(
+    name = "macos_aarch64",
+    constraint_values = [
+        "@platforms//cpu:aarch64",
+        "@platforms//os:macos",
+    ],
+)
+
+config_setting(
     name = "macos_x86_64",
     constraint_values = [
         "@platforms//cpu:x86_64",
@@ -349,6 +357,17 @@ config_setting(
     name = "systrace_enabled",
     define_values = {
         "SYSTRACE": "1",
+    },
+)
+
+# Config setting to use Perfetto (instead of Atrace) for tracing on Android.
+config_setting(
+    name = "android_perfetto_enabled",
+    constraint_values = [
+        "@platforms//os:android",
+    ],
+    define_values = {
+        "FILAMENT_PERFETTO": "1",
     },
 )
 

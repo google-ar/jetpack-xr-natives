@@ -27,8 +27,8 @@ class SplitEngineInputEventTest : public ::testing::Test {
  public:
   // Initializes the given event to arbitrary values for testing.
   //
-  // The `hit_position` in `hit_info` and `secondary_hit_info` will be set,
-  // but none of the other SplitEngineInputEventHitInfo fields.
+  // The `hit_position` in the primary and secondary hit nodes are set.
+  // However, none of the remaining fields in the hit nodes will be set.
   static void InitToTestValues(SplitEngineInputEvent* event) {
     event->dispatch_flag = SplitEngineInputEvent::DispatchFlag::TWO_D;
     event->device_type = SplitEngineInputEvent::DeviceType::CONTROLLER;

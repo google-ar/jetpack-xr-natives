@@ -18,6 +18,7 @@
 
 #include <memory>
 #include <numeric>
+#include <utility>
 #include <vector>
 
 #include "core/common/log.h"
@@ -82,13 +83,14 @@ void ConfigurePaintForStrokeTextOptions(
   paint.SetAntiAlias(true);
 }
 
-AndroidPlatformCanvasSource::AndroidPlatformCanvasSource(Context context)
+AndroidPlatformCanvasSource::AndroidPlatformCanvasSource(
+    Context context, AndroidGlyphSource::Method glyph_method,
+    bool use_hardware_rendering)
     : context_(context),
-      surface_texture_(context_, false),
-      surface_(context_, surface_texture_),
       paint_(context_),
       stroke_paint_(context_),
-      glyph_source_(context_, AndroidGlyphSource::Method::kAuto) {}
+      glyph_source_(context_, glyph_method),
+      use_hardware_rendering_(use_hardware_rendering) {}
 
 bool AndroidPlatformCanvasSource::IsFeatureSupported(
     ScopedCanvas::Feature feature) {
@@ -178,13 +180,17 @@ ScopedCanvas::FontInfo AndroidPlatformCanvasSource::GetFontInfo(
 std::unique_ptr<ScopedCanvas> AndroidPlatformCanvasSource::StartDrawing(
     BaseView& view, uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) {
   bool did_texture_change = false;
-  if (!texture_) {
+  if (!surface_texture_) {
+    surface_texture_ =
+        std::make_unique<android::SurfaceTexture>(context_, false);
+    surface_ = std::make_unique<android::Surface>(context_, *surface_texture_);
+
     texture_ = view.GetTextureFactory().CreateExternalTexture(
-        surface_texture_.WeakReference(), pixel_size);
+        surface_texture_->WeakReference(), pixel_size);
     did_texture_change = true;
   }
 
-  if (absl::Status status = surface_texture_.SetDefaultBufferSize(pixel_size);
+  if (absl::Status status = surface_texture_->SetDefaultBufferSize(pixel_size);
       !status.ok()) {
     IMP_LOG(imp::FATAL) << "Failed to set default buffer size: " << status;
   }
@@ -197,17 +203,21 @@ std::unique_ptr<ScopedCanvas> AndroidPlatformCanvasSource::StartDrawing(
     ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
     ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) {
   bool did_texture_change = false;
-  if (!texture_) {
-    texture_ = view.GetTextureFactory().CreateExternalTexture(
-        surface_texture_.WeakReference(), pixel_size);
+  if (!surface_texture_) {
+    surface_texture_ =
+        std::make_unique<android::SurfaceTexture>(context_, false);
+    surface_ = std::make_unique<android::Surface>(context_, *surface_texture_);
+
+    OwnedTexturePtr texture = view.GetTextureFactory().CreateExternalTexture(
+        surface_texture_->WeakReference(), pixel_size);
     did_texture_change = true;
 
-    // On Android the texture is only created once, so no need to give an
-    // opportunity for the caller to clear references to the old texture.
-    on_texture_changed_fn(texture_.Borrow(loc));
+    on_texture_changed_fn(texture.Borrow(loc));
+
+    texture_ = std::move(texture);
   }
 
-  if (absl::Status status = surface_texture_.SetDefaultBufferSize(pixel_size);
+  if (absl::Status status = surface_texture_->SetDefaultBufferSize(pixel_size);
       !status.ok()) {
     IMP_LOG(imp::FATAL) << "Failed to set default buffer size: " << status;
   }
@@ -230,9 +240,11 @@ AndroidPlatformCanvasSource::AndroidScopedCanvas::AndroidScopedCanvas(
 }
 
 AndroidPlatformCanvasSource::AndroidScopedCanvas::~AndroidScopedCanvas() {
-  android::Canvas canvas = source_.surface_.LockCanvas();
+  android::Canvas canvas = source_.use_hardware_rendering_
+                               ? source_.surface_->LockHardwareCanvas()
+                               : source_.surface_->LockCanvas();
   canvas.DrawPicture(picture_.WeakReference());
-  source_.surface_.UnlockCanvasAndPost(canvas);
+  source_.surface_->UnlockCanvasAndPost(canvas);
 }
 
 Texture* AndroidPlatformCanvasSource::AndroidScopedCanvas::GetTexture() {
@@ -342,6 +354,11 @@ void AndroidPlatformCanvasSource::AndroidScopedCanvas::ClearRect(
     const Rect& rect) {
   source_.paint_.SetColor(kZero4);
   canvas_.DrawRect(rect, source_.paint_);
+}
+
+void AndroidPlatformCanvasSource::ForceReset() {
+  surface_texture_.reset();
+  surface_.reset();
 }
 
 }  // namespace imp

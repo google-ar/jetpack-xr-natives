@@ -36,8 +36,8 @@ class Buffer {
   virtual ~Buffer() = default;
 
   // Accessors to underlying memory.
-  virtual const uint8_t* /*absl_nonnull*/ Data() const noexcept = 0;
-  virtual uint8_t* /*absl_nonnull*/ Data() noexcept = 0;
+  virtual const uint8_t* /*absl_nonnull*/  Data() const noexcept = 0;
+  virtual uint8_t* /*absl_nonnull*/  Data() noexcept = 0;
 
   // Returns the size of the buffer in bytes.
   virtual size_t Size() const noexcept = 0;
@@ -63,7 +63,7 @@ class BufferFactory {
 
   // Creates a buffer of the given size or returns an error explaining why it
   // failed.
-  virtual absl::StatusOr</*absl_nonnull*/ std::unique_ptr<Buffer>> CreateBuffer(
+  virtual absl::StatusOr</*absl_nonnull*/  std::unique_ptr<Buffer>> CreateBuffer(
       size_t size_in_bytes) noexcept = 0;
 };
 

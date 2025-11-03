@@ -35,6 +35,7 @@
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
 #include "core/ncsb/path_manager.h"
+#include "core/view/framework/assets/gltf_mesh.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/framework/assets/gltf_scene.h"
 #include "mediapipe/framework/port/status_macros.h"
@@ -55,6 +56,8 @@ constexpr absl::string_view kGlobalMatrixToken = "globalMatrix";
 constexpr absl::string_view kNodesLengthToken = "nodes.length";
 constexpr absl::string_view kChildrenLengthToken = "children.length";
 constexpr absl::string_view kParentToken = "parent";
+constexpr absl::string_view kMeshToken = "mesh";
+constexpr absl::string_view kWeightsLengthToken = "weights.length";
 
 struct NodeHandles {
   NodeHandle gltf_root;
@@ -278,6 +281,54 @@ absl::Status NodesParentPointerDeclaration::SetValue(
     PointerValue value) const {
   return absl::FailedPreconditionError(
       "Setting parent values is not supported.");
+}
+
+std::vector<TokenParser> NodesMeshPointerDeclaration::GetTokenParsers() const {
+  return {std::string(kNodesToken), GetIntTokenParser(),
+          std::string(kMeshToken)};
+}
+
+absl::StatusOr<PointerValue> NodesMeshPointerDeclaration::GetValue(
+    NodeHandle gltf_model, absl::Span<const ParsedToken> parsed_tokens) const {
+  MP_ASSIGN_OR_RETURN(NodeHandles node_handles,
+                   GetNodeHandles(gltf_model, parsed_tokens));
+  ComponentHandle<GltfMesh> gltf_mesh =
+      node_handles.node->GetComponent<GltfMesh>();
+  if (!gltf_mesh) {
+    return absl::InternalError("No GltfMesh found on the node.");
+  }
+  return static_cast<int>(gltf_mesh->GetOriginalGltfMeshIndex());
+}
+
+absl::Status NodesMeshPointerDeclaration::SetValue(
+    NodeHandle gltf_model, absl::Span<const ParsedToken> parsed_tokens,
+    PointerValue value) const {
+  return absl::FailedPreconditionError("Setting mesh values is not supported.");
+}
+
+std::vector<TokenParser> NodesWeightsLengthPointerDeclaration::GetTokenParsers()
+    const {
+  return {std::string(kNodesToken), GetIntTokenParser(),
+          std::string(kWeightsLengthToken)};
+}
+
+absl::StatusOr<PointerValue> NodesWeightsLengthPointerDeclaration::GetValue(
+    NodeHandle gltf_model, absl::Span<const ParsedToken> parsed_tokens) const {
+  MP_ASSIGN_OR_RETURN(NodeHandles node_handles,
+                   GetNodeHandles(gltf_model, parsed_tokens));
+  ComponentHandle<GltfMesh> gltf_mesh =
+      node_handles.node->GetComponent<GltfMesh>();
+  if (!gltf_mesh) {
+    return absl::InternalError("No GltfMesh found on the node.");
+  }
+  return static_cast<int>(gltf_mesh->GetMorphTargetCount());
+}
+
+absl::Status NodesWeightsLengthPointerDeclaration::SetValue(
+    NodeHandle gltf_model, absl::Span<const ParsedToken> parsed_tokens,
+    PointerValue value) const {
+  return absl::FailedPreconditionError(
+      "Setting weights length values is not supported.");
 }
 
 }  // namespace imp::gltf

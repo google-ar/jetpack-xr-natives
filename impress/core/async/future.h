@@ -355,6 +355,23 @@ class ABSL_MUST_USE_RESULT Future {
   static_assert(internal::future_traits::IsValidFutureTypeV<T>,
                 "Futures cannot be declared as Future<StatusOr<T>>, Instead "
                 "just declare Future<T>");
+
+  // This is a measure to catch use-after-free errors. The idea is that if the
+  // Future is stale or destructed memory, integrity_marker should almost
+  // certainly not be equal to kValidIntegrityMarker. Furthermore, if it's equal
+  // to kDestructedIntegrityMarker, we are almost certainly seeing a
+  // use-after-free.
+  //
+  // This is not guaranteed to catch all use-after-free errors, because we are
+  // testing against undefined behavior. On the other hand, if this check is
+  // failing, it strongly indicates a memory issue. We have seen crashes in the
+  // past that suggest Futures are used after destruction without immediately
+  // crashing ((broken link)). We want to crash earlier in these cases.
+  void AssertIntegrity() const;
+
+#if !IMP_DISABLE_FUTURE_VALIDATION
+  int integrity_marker_ = kValidIntegrityMarker;
+#endif
 };
 
 template <typename T>
@@ -368,31 +385,40 @@ Future<T>::Future(Result result)
           std::make_shared<Impl>(internal::ResultHolder(std::move(result))))) {}
 
 template <typename T>
-Future<T>::~Future() = default;
+Future<T>::~Future() {
+#if !IMP_DISABLE_FUTURE_VALIDATION
+  integrity_marker_ = kDestructedIntegrityMarker;
+#endif
+}
 
 template <typename T>
 bool Future<T>::Ready() const {
+  AssertIntegrity();
   return impl_wrapper_->GetImpl()->Ready();
 }
 
 template <typename T>
 const typename Future<T>::Result& Future<T>::Get() const {
+  AssertIntegrity();
   return impl_wrapper_->GetImpl()->Get().template GetAs<Result>();
 }
 
 template <typename T>
 typename Future<T>::Result Future<T>::Move() const {
+  AssertIntegrity();
   return impl_wrapper_->GetImpl()->Get().template MoveAs<Result>();
 }
 
 template <typename T>
 auto Future<T>::MoveOrGet() {
+  AssertIntegrity();
   return impl_wrapper_->GetImpl()->Get().template MoveOrGetAs<Result>();
 }
 
 template <typename T>
 template <typename Fn>
 auto Future<T>::Then(Fn&& fn, Executor::Type executor_type) const {
+  AssertIntegrity();
   return Then(std::forward<Fn>(fn),
               FutureThenOptions{.executor = executor_type});
 }
@@ -400,6 +426,7 @@ auto Future<T>::Then(Fn&& fn, Executor::Type executor_type) const {
 template <typename T>
 template <typename Fn>
 auto Future<T>::Then(Fn&& fn, FutureThenOptions then_options) const {
+  AssertIntegrity();
   static_assert(
       !internal::future_traits::InvokingRequiresNoParamV<Fn> ||
           internal::future_traits::IsValidThenFnForFutureNoParamsV<Fn, T>,
@@ -475,6 +502,7 @@ auto Future<T>::Then(Fn&& fn, FutureThenOptions then_options) const {
 
 template <typename T>
 void Future<T>::Return(Result result) const {
+  AssertIntegrity();
   // Make a local copy of impl_wrapper so that if Returning results in this
   // future being destroyed it won't be destructed too early.
   std::shared_ptr<Future<T>::ImplWrapper> impl_wrapper = impl_wrapper_;
@@ -483,6 +511,7 @@ void Future<T>::Return(Result result) const {
 
 template <typename T>
 void Future<T>::Cancel() {
+  AssertIntegrity();
   if (!impl_wrapper_->GetImpl()->Ready()) {
     internal::FutureImpl::InvokeResultProducer(
         impl_wrapper_->GetImpl(),
@@ -493,6 +522,7 @@ void Future<T>::Cancel() {
 template <typename T>
 template <typename... Args>
 void Future<T>::DependsOn(Args&&... args) const {
+  AssertIntegrity();
   (impl_wrapper_->GetImpl()->DependsOn(Holdable(std::forward<Args>(args))),
    ...);
 }
@@ -501,6 +531,7 @@ template <typename T>
 template <typename Rememberer>
 void Future<T>::KeptBy(Rememberer rememberer,
                        FutureKeptByMode kept_by_mode) const {
+  AssertIntegrity();
   impl_wrapper_->GetImpl()->AddKeptForgetter(
       rememberer->Remember(Holdable(*this)), kept_by_mode);
 }
@@ -767,6 +798,18 @@ std::optional<int> Future<T>::GetSelfPriority() const {
 template <typename T>
 int Future<T>::GetDepth() const {
   return impl_wrapper_->GetImpl()->GetDepth();
+}
+
+template <typename T>
+void Future<T>::AssertIntegrity() const {
+#if !IMP_DISABLE_FUTURE_VALIDATION
+  if (integrity_marker_ == kDestructedIntegrityMarker) {
+    IMP_LOG(imp::FATAL) << "Future is marked as destructed.";
+  }
+  if (integrity_marker_ != kValidIntegrityMarker) {
+    IMP_LOG(imp::FATAL) << "Future has corrupted memory.";
+  }
+#endif
 }
 
 }  // namespace imp
