@@ -118,4 +118,26 @@ void ParticleData::SetVelocity(float3 velocity) {
   data_provider_.SetFloat(velocity_offset + 2, velocity.z);
 }
 
+float3 ParticleData::GetAcceleration() const {
+  if (data_layout_.GetAcceleration() == kInvalidParticleDataOffset) {
+    IMP_LOG(imp::FATAL) << "ParticleData does not have an acceleration value.";
+  }
+
+  int32_t acceleration_offset = float_offset_ + data_layout_.GetAcceleration();
+  return float3(data_provider_.GetFloat(acceleration_offset + 0),
+                data_provider_.GetFloat(acceleration_offset + 1),
+                data_provider_.GetFloat(acceleration_offset + 2));
+}
+
+void ParticleData::SetAcceleration(float3 acceleration) {
+  if (data_layout_.GetAcceleration() == kInvalidParticleDataOffset) {
+    IMP_LOG(imp::FATAL) << "ParticleData does not have an acceleration value.";
+  }
+
+  int32_t acceleration_offset = float_offset_ + data_layout_.GetAcceleration();
+  data_provider_.SetFloat(acceleration_offset + 0, acceleration.x);
+  data_provider_.SetFloat(acceleration_offset + 1, acceleration.y);
+  data_provider_.SetFloat(acceleration_offset + 2, acceleration.z);
+}
+
 }  // namespace imp

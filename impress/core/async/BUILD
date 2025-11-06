@@ -103,7 +103,9 @@ cc_library(
 
 cc_library(
     name = "future",
-    srcs = ["future_impl.cc"],
+    srcs = [
+        "future_impl.cc",
+    ],
     hdrs = [
         "future.h",
         "future_common.h",

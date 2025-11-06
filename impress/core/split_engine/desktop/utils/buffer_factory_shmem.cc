@@ -94,7 +94,7 @@ ShmemBufferFactory::CreateBuffer(size_t size_in_bytes) noexcept {
 
   // Enforce the quota.
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     // Enforce the quota.
     const absl::uint128 used_bytes = used_bytes_;
     const absl::uint128 size_bytes = size_in_bytes;
@@ -124,7 +124,7 @@ ShmemBufferFactory::CreateBuffer(size_t size_in_bytes) noexcept {
                                        [this, size_in_bytes]() {
                                          // Decrement the used bytes when
                                          // ShmemBuffer is destroyed.
-                                         absl::MutexLock lock(mutex_);
+                                         absl::MutexLock lock(&mutex_);
                                          
                                          used_bytes_ -= size_in_bytes;
                                        });

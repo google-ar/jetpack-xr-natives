@@ -104,6 +104,8 @@ cc_library(
         "canvas_source.cc",
     ] + select({
         "//core:android": [
+            "android_glyph_advance.cc",
+            "android_glyph_advance.h",
             "android_glyph_source.cc",
             "android_glyph_source.h",
             "android_platform_canvas_source.cc",

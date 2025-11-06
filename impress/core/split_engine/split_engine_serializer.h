@@ -23,7 +23,6 @@
 #include <memory>
 
 #include "absl/strings/string_view.h"
-#include "absl/types/span.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/Material.h"
 #include "filament/filament/include/filament/MorphTargetBuffer.h"
@@ -53,6 +52,10 @@
 #include "core/render/android/platform_android_external_texture_surface.h"
 #endif
 #include "core/render/base_texture_builder.h"
+
+namespace imp {
+class Material;
+}  // namespace imp
 
 namespace imp::split_engine {
 
@@ -198,8 +201,13 @@ class SplitEngineSerializer {
   virtual Future<GenericMaterialPtr> CreateGenericMaterial(
       const GenericMaterialSpec& spec) = 0;
 
-  // Sets the parameters for a built-in material. This call requires that the
-  // material has already been created through the Split Engine bridge.
+  // This is used to encapsulate the existence of SplitEngineCustomMaterial from
+  // the MaterialFactory.
+  virtual std::unique_ptr<Material> CreateCustomMaterial(
+      std::unique_ptr<Material> material) = 0;
+
+  // Sets the parameters for a built-in material. This call requires that
+  // the material has already been created through the Split Engine bridge.
   using SerializeBuiltInMaterialParametersFunc =
       imp::Invocable<flatbuffers::Offset<void>(
           flatbuffers::FlatBufferBuilder& builder)>;

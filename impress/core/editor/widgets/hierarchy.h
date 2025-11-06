@@ -20,6 +20,7 @@
 #include <optional>
 #include <string>
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
 #include "core/common/rememberer.h"
@@ -43,18 +44,20 @@ class Hierarchy : public Widget, public imp::Rememberer {
  private:
   // Recursive function for printing out the nodes of the gltf renderer.
   void DrawHierarchy(NodeHandle node,
-                     std::optional<RobinSet<NodeHandle>> filtered_nodes);
+                     std::optional<RobinSet<NodeHandle>> filtered_nodes,
+                     const absl::flat_hash_set<NodeHandle>& selected_nodes);
   // Print the Node as a ImGui tree node.
   bool DrawNode(NodeHandle node,
-                std::optional<RobinSet<NodeHandle>> filtered_nodes);
+                std::optional<RobinSet<NodeHandle>> filtered_nodes,
+                const absl::flat_hash_set<NodeHandle>& selected_nodes);
   // Gets the name of the node + ##<entityId> to display in the tree view.
   std::string GetTreeNodeLabelForNode(NodeHandle node);
   // Returns whether or not a long press happened on the given node.
   bool MobileLongPress(absl::string_view node);
 
   BaseView& view_;
-  NodeHandle active_node_;
-  bool active_node_changed_ = false;
+  bool is_multi_selection_enabled_ = false;
+  bool selected_nodes_changed_ = false;
   float2 inspector_size_;
   float header_height_;
   ImGuiTextFilter filter_;

@@ -27,9 +27,7 @@
 #include "core/math/mat.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component.h"
-#include "core/ncsb/dispatcher/event.h"
 #include "core/ncsb/isf_info.h"
-#include "core/ncsb/node_handle.h"
 #include "core/ncsb/update_id.h"
 #include "core/ncsb/update_phase.h"
 #include "core/physics/collidable.h"
@@ -106,6 +104,32 @@ class RigidBody : public Component {
 
   // Get's the rigid body's current angular factor.
   float3 GetAngularFactor();
+
+  // Sets the linear damping coefficient.
+  //
+  // This simulates drag / air resistance on the linear velocity of the rigid
+  // body, essentially slowing down the velocity over time even without friction
+  // or collisions.
+  //
+  // Clamped between 0 and 1. 0 means no damping, 1 means maximum damping.
+  //
+  // The default value is 0.
+  void SetLinearDamping(float linear_damping);
+
+  float GetLinearDamping() const;
+
+  // Sets the angular damping coefficient.
+  //
+  // This simulates drag / air resistance on the angular velocity of the rigid
+  // body, essentially slowing down the velocity over time even without friction
+  // or collisions.
+  //
+  // Clamped between 0 and 1. 0 means no damping, 1 means maximum damping.
+  //
+  // The default value is 0.
+  void SetAngularDamping(float angular_damping);
+
+  float GetAngularDamping() const;
 
   // Sets the gravity that the object is subject to.
   void SetCustomGravity(float3 gravity);

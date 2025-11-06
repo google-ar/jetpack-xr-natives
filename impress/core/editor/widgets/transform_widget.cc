@@ -19,6 +19,7 @@
 #include "core/editor/events.h"
 #include "core/math/vec.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
+#include "core/ncsb/node_handle.h"
 #include "core/ncsb/update_system.h"
 #include "core/view/utils/frame_time.h"
 
@@ -34,7 +35,12 @@ void TransformWidget::Setup() {
 
   editor_dispatcher.Connect(
       [this](const editor::NodeSelectionChangedEvent& event) mutable {
-        active_model_ = event.selected;
+        // We only support single selection for the transform widget.
+        active_model_ = GetView()
+                            .GetRegistry()
+                            .Get<Editor>()
+                            ->get()
+                            .GetSingleSelectedNode();
         GetNode()->SetEnabled(active_model_ ? true : false);
       },
       this);

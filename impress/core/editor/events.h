@@ -28,16 +28,19 @@ namespace imp::editor {
 // NodeSelectionChangedEvent without needing to depend on SelectionController's
 // implementation.
 class SelectionControllerImpl;
-// Event sent when a node is selected or deselected.
+// Event dispatched when the set of selected nodes changes. Listeners can query
+// the Editor to retrieve the current selection. For example:
+//
+//   editor->GetEventBus()->AddListener<NodeSelectionChangedEvent>(
+//       [editor](const NodeSelectionChangedEvent& event) {
+//         const auto& selected_nodes =
+//             editor->GetSelectionController().GetSelectedNodes();
+//         for (NodeHandle selected_node : selected_nodes) {
+//           // Do something with `selected_node`.
+//         }
+//       });
 struct NodeSelectionChangedEvent : public Event {
- private:
-  explicit NodeSelectionChangedEvent(NodeHandle selected_node,
-                                     NodeHandle deselected_node)
-      : selected(selected_node), deselected(deselected_node) {}
-
  public:
-  NodeHandle selected;
-  NodeHandle deselected;
   friend class SelectionControllerImpl;
 };
 
@@ -78,10 +81,7 @@ struct ToggleCameraEvent : public Event {
 
 // Event sent to tell the editor to move the camera view to focus on
 // the current active node.
-struct FocusOnSelectionEvent : public Event {
-  FocusOnSelectionEvent(NodeHandle node) : node(node) {}
-  NodeHandle node;
-};
+struct FocusOnSelectionEvent : public Event {};
 
 // Event sent to notify the editor being enabled or disabled.
 struct EditorEnabledEvent : public Event {

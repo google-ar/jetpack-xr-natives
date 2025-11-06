@@ -26,8 +26,10 @@
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
 #include "dear_imgui/misc/cpp/imgui_stdlib.h"
+#include "core/common/buffer_access.h"
 #include "core/common/file_helpers.h"
 #include "core/common/registry.h"
+#include "core/common/string_helpers.h"
 #include "core/config.h"
 #include "core/editor/command_manager.h"
 #include "core/editor/editor.h"
@@ -66,7 +68,9 @@ NodeDetails::NodeDetails(BaseView& view)
   Editor& editor = view_.GetRegistry().Get<Editor>()->get();
   editor.GetDispatcher().Connect(
       [this](const editor::NodeSelectionChangedEvent& event) mutable {
-        active_node_ = event.selected;
+        // We only support single selection for the node details widget.
+        active_node_ =
+            view_.GetRegistry().Get<Editor>()->get().GetSingleSelectedNode();
       },
       this);
 }
@@ -145,7 +149,7 @@ void NodeDetails::DrawImGui() {
         absl::StrFormat("Save (%s)##save-button", filename);
 
     if (ImGui::Button(save_button_label.c_str())) {
-      absl::Status save_status = Save();
+      absl::Status save_status = Save(active_node_);
       if (!save_status.ok()) {
         IMP_LOG(imp::ERROR) << "Failed to save scene: " << save_status;
       }
@@ -154,9 +158,9 @@ void NodeDetails::DrawImGui() {
 #endif
 }
 
-absl::Status NodeDetails::Save() {
+absl::Status NodeDetails::Save(NodeHandle target_node) {
 #if IMP_PLATFORM(DESKTOP)
-  auto scene_reference = active_node_->GetComponent<SceneReference>();
+  auto scene_reference = target_node->GetComponent<SceneReference>();
   absl::string_view asset_url_path = scene_reference->GetAssetUrl();
   absl::string_view path_without_extension =
       RemoveExtensionFromFilename(asset_url_path);
@@ -175,13 +179,24 @@ absl::Status NodeDetails::Save() {
 
   MP_ASSIGN_OR_RETURN(NodeData data,
                    view_.GetSceneSystem().SaveToData(
-                       active_node_, SceneSystem::SaveMode::kAuthoredContent));
+                       target_node, SceneSystem::SaveMode::kAuthoredContent));
 
   std::string isf_data;
   proto::SerializeTo(&data, &isf_data);
 
   std::string textproto_data;
   proto::ToTextproto(&data, &textproto_data);
+
+  // If the file already exists, preserve the leading comments and whitespace
+  // from the existing file when saving over it.
+  BufferAccess existing_file;
+  absl::Status existing_file_status =
+      LoadBinary(save_full_path, &existing_file);
+  if (existing_file_status.ok()) {
+    absl::string_view existing_leading_comments_and_whitespace =
+        ExtractLeadingCommentsAndWhitespace(existing_file.StringView());
+    textproto_data.insert(0, existing_leading_comments_and_whitespace);
+  }
 
   // Save the textproto to disk.
   MP_RETURN_IF_ERROR(SaveFile(

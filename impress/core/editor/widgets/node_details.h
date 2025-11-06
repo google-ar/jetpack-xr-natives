@@ -38,7 +38,7 @@ class NodeDetails : public editor::Widget, public imp::Rememberer {
 
  private:
   // Saves the active node to file.
-  absl::Status Save();
+  absl::Status Save(NodeHandle target_node);
 
   BaseView& view_;
   CommandManager& command_manager_;

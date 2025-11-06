@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -30,11 +31,14 @@
 #include "apibindings/stereo_surface.h"
 #include "core/material_library/generic_material_spec.h"
 #include "core/math/mat.h"
+#include "core/math/math.h"
 #include "core/math/vec.h"
 #include "core/media/media_color_space.h"
 #include "core/media/media_type.h"
+#include "core/ncsb/component_handle.h"
 #include "core/render/android/platform_android_external_texture_surface.h"
 #include "core/render/content_security_level.h"
+#include "core/view/framework/assets/gltf_mesh.h"
 #include "core/view/platforms/android/wrappers/surface.h"
 #include "core/view/utils/frame_time.h"
 
@@ -121,6 +125,12 @@ absl::Status ImpressApiView::StopGltfModelAnimation(int32_t node) {
       "implemented for tests.");
 }
 
+absl::StatusOr<imp::Box> ImpressApiView::GetGltfModelLocalBounds(int32_t node) {
+  return absl::UnimplementedError(
+      "ImpressApiView::GetGltfModelLocalBounds needs to be implemented for "
+      "tests.");
+}
+
 int32_t ImpressApiView::CreateImpressNode() {
   IMP_LOG(imp::ERROR)
       << "ImpressApiView::CreateImpressNode needs to be implemented for tests.";
@@ -155,10 +165,24 @@ absl::Status ImpressApiView::SetStereoSurfaceEntityCanvasShape(
       "implemented for tests.");
 }
 
+absl::Status ImpressApiView::SetStereoSurfaceEntityColliderEnabled(
+    int32_t node_id, bool enable_collider) {
+  return absl::UnimplementedError(
+      "ImpressApiView::SetStereoSurfaceEntityColliderEnabled needs to be "
+      "implemented for tests.");
+}
+
 absl::StatusOr<android::Surface*>
 ImpressApiView::GetSurfaceFromStereoSurfaceEntity(int32_t node_id) {
   return absl::UnimplementedError(
       "ImpressApiView::GetSurfaceFromStereoSurfaceEntity needs to be "
+      "implemented for tests.");
+}
+
+absl::Status ImpressApiView::SetSurfaceDimensionsForStereoSurfaceEntity(
+    int32_t node_id, int32_t width, int32_t height) {
+  return absl::UnimplementedError(
+      "ImpressApiView::SetSurfaceDimensionsForStereoSurfaceEntity needs to be "
       "implemented for tests.");
 }
 
@@ -513,9 +537,18 @@ absl::Status ImpressApiView::SetAlphaCutoffOnGenericMaterial(
 
 absl::Status ImpressApiView::SetMaterialOverride(int32_t node_id,
                                                  std::intptr_t material,
-                                                 absl::string_view mesh_name) {
+                                                 absl::string_view node_name,
+                                                 size_t primitive_index) {
   return absl::UnimplementedError(
       "ImpressApiView::SetMaterialOverride needs to be "
+      "implemented for tests.");
+}
+
+absl::Status ImpressApiView::ClearMaterialOverride(int32_t node_id,
+                                                   absl::string_view node_name,
+                                                   size_t primitive_index) {
+  return absl::UnimplementedError(
+      "ImpressApiView::ClearMaterialOverride needs to be "
       "implemented for tests.");
 }
 
@@ -541,6 +574,14 @@ absl::StatusOr<BorrowedTexturePtr> ImpressApiView::BorrowTexture(
     std::intptr_t texture_handle) {
   return absl::UnimplementedError(
       "ImpressApiView::BorrowTexture needs to be "
+      "implemented for tests.");
+}
+
+absl::StatusOr<ComponentHandle<GltfMesh>>
+ImpressApiView::FindGltfMeshByNodeName(int32_t node_id,
+                                       absl::string_view node_name) {
+  return absl::UnimplementedError(
+      "ImpressApiView::FindGltfMeshByNodeName needs to be "
       "implemented for tests.");
 }
 

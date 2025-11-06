@@ -25,6 +25,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/types/span.h"
+#include "filament/filament/include/filament/InstanceBuffer.h"
 #include "filament/filament/include/filament/RenderableManager.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/small_source_location.h"
@@ -52,12 +53,20 @@ static constexpr uint16_t kMaxBlendOrder = 0x7FFF;
 
 }  // namespace
 
-void MeshRenderer::Cleanup() { GetRenderableManager().Destroy(GetEntity()); }
+void MeshRenderer::Cleanup() {
+  GetRenderableManager().Destroy(GetEntity());
+  if (instance_buffer_) {
+    BaseView::GetSharedEngine()->destroy(instance_buffer_);
+    instance_buffer_ = nullptr;
+  }
+}
 
 void MeshRenderer::Setup(size_t primitive_count) {
   Setup({
       .primitive_count = primitive_count,
       .culling_mode = FrustumCullingMode::kEnabled,
+      .num_instances = 1,
+      .instancing_mode = InstancingMode::kGpuIndices,
       .num_bones = 0,
   });
 }
@@ -67,6 +76,8 @@ void MeshRenderer::Setup(FrustumCullingMode culling_mode,
   Setup({
       .primitive_count = primitive_count,
       .culling_mode = culling_mode,
+      .num_instances = 1,
+      .instancing_mode = InstancingMode::kGpuIndices,
       .num_bones = 0,
   });
 }
@@ -76,6 +87,38 @@ void MeshRenderer::Setup(const SetupOptions& options) {
 
   // Do not display until the component is "awake"
   GetRenderableManager().SetLayerMask(GetInstance(), 0xff, 0);
+}
+
+size_t MeshRenderer::GetInstanceCount() const { return num_instances_; }
+
+absl::Status MeshRenderer::UpdateInstanceTransformsInRange(
+    absl::Span<const imp::mat4f> new_instance_transforms,
+    size_t first_instance_index) {
+  if (GetInstanceCount() <= 1) {
+    return absl::UnavailableError("Instancing not enabled on this renderable");
+  }
+  if (instance_transforms_.empty()) {
+    return absl::UnavailableError(
+        "Instance transforms are not enabled, explicit transforms cannot be "
+        "set. Use getInstanceIndex() in your material instead");
+  }
+  if (first_instance_index + new_instance_transforms.size() >
+      GetInstanceCount()) {
+    return absl::OutOfRangeError(
+        absl::StrCat("Renderable has ", GetInstanceCount(),
+                     " instances but first_instance_index + "
+                     "new_instance_transforms.size() is ",
+                     first_instance_index + new_instance_transforms.size()));
+  }
+  std::copy(new_instance_transforms.begin(), new_instance_transforms.end(),
+            instance_transforms_.begin() + first_instance_index);
+
+  instance_buffer_->setLocalTransforms(new_instance_transforms.data(),
+                                       new_instance_transforms.size(),
+                                       first_instance_index);
+
+  UpdateRenderableAabb();
+  return absl::OkStatus();
 }
 
 absl::Status MeshRenderer::UpdateBoneTransformsInRange(
@@ -109,6 +152,8 @@ bool MeshRenderer::IsOwnedOrBorrowedPtrType(
 void MeshRenderer::BuildRenderables(const SetupOptions& options) {
   size_t primitive_count = options.primitive_count;
   FrustumCullingMode culling_mode = options.culling_mode;
+  size_t num_instances = options.num_instances;
+  InstancingMode instancing_mode = options.instancing_mode;
   uint8_t num_bones = options.num_bones;
 
   std::unique_ptr<BaseRenderableManager::Builder> builder =
@@ -122,6 +167,23 @@ void MeshRenderer::BuildRenderables(const SetupOptions& options) {
     case FrustumCullingMode::kDisabled:
       builder->Culling(false);
       break;
+  }
+
+  if (num_instances > 1) {
+    num_instances_ = num_instances;
+    switch (instancing_mode) {
+      case InstancingMode::kCpuTransforms: {
+        filament::InstanceBuffer::Builder buffer_builder(num_instances);
+        instance_transforms_.resize(num_instances, kIdentityMat4f);
+        buffer_builder.localTransforms(instance_transforms_.data());
+        instance_buffer_ = buffer_builder.build(*BaseView::GetSharedEngine());
+        builder->Instances(num_instances, instance_buffer_);
+        break;
+      }
+      case InstancingMode::kGpuIndices:
+        builder->Instances(num_instances);
+        break;
+    }
   }
 
   if (num_bones > 0) {
@@ -419,6 +481,20 @@ void MeshRenderer::UpdateRenderableAabb() {
     for (const imp::mat4f& bone_transformation : bones_) {
       combined_aabb = combined_aabb.unionSelf(Box::transform(
           bone_transformation.upperLeft(), bone_transformation[3].xyz, aabb));
+    }
+    aabb = combined_aabb;
+  }
+
+  if (!instance_transforms_.empty()) {
+    Box bones_aabb = aabb;
+    const imp::mat4f& first_transform = instance_transforms_.front();
+    Box combined_aabb = Box::transform(first_transform.upperLeft(),
+                                       first_transform[3].xyz, bones_aabb);
+    for (int i = 1; i < instance_transforms_.size(); ++i) {
+      const imp::mat4f& instance_transformation = instance_transforms_[i];
+      combined_aabb = combined_aabb.unionSelf(
+          Box::transform(instance_transformation.upperLeft(),
+                         instance_transformation[3].xyz, bones_aabb));
     }
     aabb = combined_aabb;
   }

@@ -28,7 +28,7 @@ namespace imp {
 
 void BaseConstraint::AddToPhysicsManager(bool add) {
   if (add) {
-    if (!added_to_physics_manager_) {
+    if (!added_to_physics_manager_ && GetBtConstraint()) {
       physics_manager_->AddConstraint(*GetBtConstraint());
       added_to_physics_manager_ = true;
     }
@@ -87,12 +87,16 @@ RigidBody* BaseConstraint::GetRigidBodyB() {
 
 float3 BaseConstraint::ComputePivotAFromB(NodeHandle node_a, NodeHandle node_b,
                                           const float3& pivot_in_b) {
-  float3 p = pivot_in_b;
-  if (node_b->GetComponent<RigidBody>()) {
-    p = node_b->WorldFromLocalPoint(p);
-  }
-  p = node_a->LocalFromWorldPoint(p);
-  return p;
+  float3 pivot_in_world = node_b->WorldFromLocalPoint(pivot_in_b);
+  float3 pivot_in_a = node_a->LocalFromWorldPoint(pivot_in_world);
+  return pivot_in_a;
+}
+
+float3 BaseConstraint::ComputeAxisAFromB(NodeHandle node_a, NodeHandle node_b,
+                                         const float3& axis_in_b) {
+  float3 axis_in_world = node_b->WorldFromLocalVector(axis_in_b);
+  float3 axis_in_a = node_a->LocalFromWorldVector(axis_in_world);
+  return axis_in_a;
 }
 
 bool BaseConstraint::IsActiveInWorld() const {

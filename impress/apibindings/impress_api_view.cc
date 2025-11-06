@@ -14,6 +14,7 @@
 
 #include "apibindings/impress_api_view.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -40,11 +41,16 @@
 #include "apibindings/stereo_surface.h"
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
+#include "core/common/owned_ptr.h"
+#include "core/common/small_source_location.h"
+#include "core/common/type_traits.h"
 #include "core/lighting/environment_light.h"
 #include "core/lighting/image_based_lighting_asset.h"
 #include "core/material_library/generic_material_parameters.h"
 #include "core/material_library/generic_material_spec.h"
+#include "core/materials/material.h"
 #include "core/math/mat.h"
+#include "core/math/math.h"
 #include "core/math/vec.h"
 #include "core/media/media_color_space.h"
 #include "core/media/media_type.h"
@@ -242,6 +248,21 @@ absl::Status ImpressApiView::StopGltfModelAnimation(int32_t node) {
   return absl::NotFoundError("Animation is not playing.");
 }
 
+absl::StatusOr<imp::Box> ImpressApiView::GetGltfModelLocalBounds(int32_t node) {
+  NodeHandle node_handle(utils::Entity::import(node));
+  if (!node_handle) {
+    return absl::InvalidArgumentError("Node is not valid.");
+  }
+
+  ComponentHandle<GltfRenderer> gltf_renderer =
+      node_handle->GetComponent<GltfRenderer>();
+  if (!gltf_renderer) {
+    return absl::InvalidArgumentError("Node does not have a GltfRenderer.");
+  }
+
+  return gltf_renderer->GetLocalBounds();
+}
+
 int32_t ImpressApiView::CreateImpressNode() {
   return CreateNode().GetEntity().getId();
 }
@@ -281,6 +302,13 @@ absl::Status ImpressApiView::SetStereoSurfaceEntityCanvasShape(
   return stereo_surface->SetCanvasShape(canvas_shape);
 }
 
+absl::Status ImpressApiView::SetStereoSurfaceEntityColliderEnabled(
+    int32_t node_id, bool enable_collider) {
+  MP_ASSIGN_OR_RETURN(ComponentHandle<StereoSurface> stereo_surface,
+                   GetStereoSurface(node_id));
+  return stereo_surface->SetColliderEnabled(enable_collider);
+}
+
 absl::StatusOr<android::Surface*>
 ImpressApiView::GetSurfaceFromStereoSurfaceEntity(int32_t node_id) {
   absl::StatusOr<ComponentHandle<StereoSurface>> result =
@@ -307,13 +335,21 @@ absl::Status ImpressApiView::SetStereoModeForStereoSurfaceEntity(
   return absl::OkStatus();
 }
 
+absl::Status ImpressApiView::SetSurfaceDimensionsForStereoSurfaceEntity(
+    int32_t node_id, int32_t width, int32_t height) {
+  MP_ASSIGN_OR_RETURN(ComponentHandle<StereoSurface> stereo_surface,
+                   GetStereoSurface(node_id));
+  return stereo_surface->SetSurfaceDimensions(width, height);
+}
+
 absl::Status ImpressApiView::SetPrimaryAlphaMaskForStereoSurfaceEntity(
     int32_t node_id, int64_t alpha_mask_token) {
   OwnedOrBorrowedTexturePtr alpha_mask;
   // If the alpha mask token is kUnSetAlphaMaskToken, then the alpha mask is
   // removed.
   if (alpha_mask_token != kUnSetAlphaMaskToken) {
-    alpha_mask = FromJava<BindingsTexture>(alpha_mask_token)->GetTexture();
+    alpha_mask = FromJava<BindingsTexture>(alpha_mask_token)
+                     ->GetTexture(SmallSourceLocation::Current());
   }
   MP_ASSIGN_OR_RETURN(ComponentHandle<StereoSurface> stereo_surface,
                    GetStereoSurface(node_id));
@@ -327,7 +363,8 @@ absl::Status ImpressApiView::SetAuxiliaryAlphaMaskForStereoSurfaceEntity(
   // If the alpha mask token is kUnSetAlphaMaskToken, then the alpha mask is
   // removed.
   if (alpha_mask_token != kUnSetAlphaMaskToken) {
-    alpha_mask = FromJava<BindingsTexture>(alpha_mask_token)->GetTexture();
+    alpha_mask = FromJava<BindingsTexture>(alpha_mask_token)
+                     ->GetTexture(SmallSourceLocation::Current());
   }
   MP_ASSIGN_OR_RETURN(ComponentHandle<StereoSurface> stereo_surface,
                    GetStereoSurface(node_id));
@@ -350,19 +387,10 @@ void ImpressApiView::LoadTexture(absl::string_view path,
       .Then([this, asset_loader = std::move(asset_loader)](
                 absl::StatusOr<OwnedTexturePtr> texture) mutable {
         if (texture.ok() && *texture) {
-          // This transfers the ownership of the BindingsTexture object
-          // to Java. At this point, Java is responsible for managing
-          // the lifecycle of the texture object. The Java side will
-          // call the DestroyNativeObject method when it is done with
-          // the texture.
-          // TODO: This contract is broken since the
-          // DisposeAllResources method will flush resources that might still
-          // be in use by the Java side without it being aware. The Java side
-          // should be responsible for tracking bindings resources and
-          // individually disposing them.
-          std::intptr_t texture_token =
-              ToJava(new BindingsTexture(*std::move(texture)));
-          bindings_texture_set_.insert(texture_token);
+          auto bindings_texture = new BindingsTexture(
+              texture->Borrow(SmallSourceLocation::Current()));
+          std::intptr_t texture_token = ToJava(bindings_texture);
+          bindings_texture_map_.emplace(texture_token, std::move(*texture));
           asset_loader->OnSuccess(texture_token);
         } else {
           asset_loader->OnFailure("Failed to load texture.");
@@ -383,18 +411,8 @@ absl::StatusOr<std::intptr_t> ImpressApiView::BorrowReflectionTexture() {
 
   BorrowedTexturePtr reflections_texture =
       (*ibl_asset)->BorrowReflectionTexture();
-  // This transfers the ownership of the BindingsTexture object to
-  // Java. At this point, Java is responsible for managing the lifecycle
-  // of the texture object. The Java side will call the
-  // DestroyNativeObject method when it is done with the texture.
-  // TODO: This contract is broken since the
-  // DisposeAllResources method will flush resources that might still
-  // be in use by the Java side without it being aware. The Java side
-  // should be responsible for tracking bindings resources and
-  // individually disposing them.
   std::intptr_t reflections_texture_token =
       ToJava(new BindingsTexture(std::move(reflections_texture)));
-  bindings_texture_set_.insert(reflections_texture_token);
   return reflections_texture_token;
 }
 
@@ -409,18 +427,8 @@ absl::StatusOr<std::intptr_t> ImpressApiView::GetReflectionTextureFromIbl(
 
   BorrowedTexturePtr reflections_texture =
       ibl_asset_ptr.value()->BorrowSkyboxCubemap();
-  // This transfers the ownership of the BindingsTexture object to
-  // Java. At this point, Java is responsible for managing the lifecycle
-  // of the texture object. The Java side will call the
-  // DestroyNativeObject method when it is done with the texture.
-  // TODO: This contract is broken since the
-  // DisposeAllResources method will flush resources that might still
-  // be in use by the Java side without it being aware. The Java side
-  // should be responsible for tracking bindings resources and
-  // individually disposing them.
   std::intptr_t reflections_texture_token =
       ToJava(new BindingsTexture(std::move(reflections_texture)));
-  bindings_texture_set_.insert(reflections_texture_token);
   return reflections_texture_token;
 }
 
@@ -432,18 +440,13 @@ void ImpressApiView::CreateWaterMaterial(
                     std::unique_ptr<android_xr::WaterReflectionMaterial>>
                     material) mutable {
         if (material.ok() && *material) {
-          // This transfers the ownership of the BindingsMaterial object to
-          // Java. At this point, Java is responsible for managing the lifecycle
-          // of the material object. The Java side will call the
-          // DestroyNativeObject method when it is done with the material.
-          // TODO: This contract is broken since the
-          // DisposeAllResources method will flush resources that might still
-          // be in use by the Java side without it being aware. The Java side
-          // should be responsible for tracking bindings resources and
-          // individually disposing them.
-          std::intptr_t material_token =
-              ToJava(new BindingsMaterial(*std::move(material)));
-          bindings_material_set_.insert(material_token);
+          OwnedPtr<android_xr::WaterReflectionMaterial> owned_material_ptr(
+              *std::move(material));
+          std::intptr_t material_token = ToJava(new BindingsMaterial(
+              owned_material_ptr->GetMaterial(SmallSourceLocation::Current()),
+              type_traits::kTypeHash<android_xr::WaterReflectionMaterial>));
+          bindings_material_map_.emplace(material_token,
+                                         std::move(owned_material_ptr));
           asset_loader->OnSuccess(material_token);
         } else {
           asset_loader->OnFailure(
@@ -552,18 +555,14 @@ void ImpressApiView::CreateGenericMaterial(
                     std::unique_ptr<split_engine::SplitEngineGenericMaterial>>
                     generic_material) {
         if (generic_material.ok() && *generic_material) {
-          // This transfers the ownership of the BindingsMaterial object to
-          // Java. At this point, Java is responsible for managing the lifecycle
-          // of the material object. The Java side will call the
-          // DestroyNativeObject method when it is done with the material.
-          // TODO: This contract is broken since the
-          // DisposeAllResources method will flush resources that might still
-          // be in use by the Java side without it being aware. The Java side
-          // should be responsible for tracking bindings resources and
-          // individually disposing them.
-          std::intptr_t material_token =
-              ToJava(new BindingsMaterial(*std::move(generic_material)));
-          bindings_material_set_.insert(material_token);
+          OwnedPtr<split_engine::SplitEngineMaterial> owned_material_ptr(
+              *std::move(generic_material));
+          std::intptr_t material_token = ToJava(new BindingsMaterial(
+              owned_material_ptr->GetMaterial(SmallSourceLocation::Current()),
+              type_traits::kTypeHash<
+                  split_engine::SplitEngineGenericMaterial>));
+          bindings_material_map_.emplace(material_token,
+                                         std::move(owned_material_ptr));
           asset_loader->OnSuccess(material_token);
         } else {
           asset_loader->OnFailure(
@@ -925,33 +924,29 @@ absl::Status ImpressApiView::SetAlphaCutoffOnGenericMaterial(
 
 absl::Status ImpressApiView::SetMaterialOverride(int32_t node_id,
                                                  std::intptr_t material,
-                                                 absl::string_view mesh_name) {
-  NodeHandle model_node(utils::Entity::import(node_id));
-  if (!model_node) {
-    return absl::InvalidArgumentError("Node is not valid.");
-  }
-
+                                                 absl::string_view node_name,
+                                                 size_t primitive_index) {
   BindingsMaterial* bindings_material = FromJava<BindingsMaterial>(material);
   if (!bindings_material) {
     return absl::InvalidArgumentError("Provided material handle is not valid.");
   }
 
-  split_engine::SplitEngineMaterial* mat = bindings_material->GetBaseMaterial();
+  MP_ASSIGN_OR_RETURN(ComponentHandle<GltfMesh> mesh,
+                   FindGltfMeshByNodeName(node_id, node_name));
 
-  if (!mat) {
-    return absl::InternalError("BindingsMaterial contained a null pointer.");
-  }
+  mesh->SetMaterialOverride(
+      bindings_material->GetMaterial(SmallSourceLocation::Current()),
+      primitive_index);
+  return absl::OkStatus();
+}
 
-  NodeHandle mesh_node = model_node->FindByName(mesh_name);
-  if (!mesh_node) {
-    return absl::NotFoundError(
-        absl::StrFormat("No Gltf child node named %s.", mesh_name));
-  }
-  ComponentHandle<GltfMesh> mesh = mesh_node->GetComponent<GltfMesh>();
-  if (!mesh) {
-    return absl::InvalidArgumentError("Child doesn't have a mesh.");
-  }
-  mesh->SetMaterialOverride(mat->GetMaterial());
+absl::Status ImpressApiView::ClearMaterialOverride(int32_t node_id,
+                                                   absl::string_view node_name,
+                                                   size_t primitive_index) {
+  MP_ASSIGN_OR_RETURN(ComponentHandle<GltfMesh> mesh,
+                   FindGltfMeshByNodeName(node_id, node_name));
+  // Clears the material override for that mesh.
+  mesh->SetMaterialOverride(OwnedMaterialPtr{}, primitive_index);
   return absl::OkStatus();
 }
 
@@ -993,16 +988,8 @@ absl::Status ImpressApiView::DisposeAllResources() {
     return status;
   }
   asset_ptr_map_->DestroyGltfAssetsAndInstances();
-  // We destroy bindings materials and textures separately instead of
-  // looping over all bindings objects because the textures are used in the
-  // materials but not the other way around, so we need to destroy the textures
-  // first.
-  for (auto& bindings_material : bindings_material_set_) {
-    DestroyNativeObject(bindings_material);
-  }
-  for (auto& bindings_texture : bindings_texture_set_) {
-    DestroyNativeObject(bindings_texture);
-  }
+  DestroyUnusedMaterials(true);
+  DestroyUnusedTextures(true);
   return absl::OkStatus();
 }
 
@@ -1029,6 +1016,10 @@ void ImpressApiView::Setup() {
 }
 
 void ImpressApiView::Update(const FrameTime& frame_time) {
+  // We continually check if any of the bindings texture and materials are no
+  // longer in use and destroy them if so.
+  DestroyUnusedMaterials(false);
+  DestroyUnusedTextures(false);
   // TODO: (broken link) - Hook into the Impress Animation Event system and drive
   //                     the callback dispatch from there, instead of polling on
   //                     Update.
@@ -1050,13 +1041,73 @@ absl::StatusOr<BorrowedTexturePtr> ImpressApiView::BorrowTexture(
     return absl::InvalidArgumentError("Provided texture handle is not valid.");
   }
 
-  BorrowedTexturePtr borrowed_texture = bindings_texture->GetTexture();
+  BorrowedTexturePtr borrowed_texture =
+      bindings_texture->GetTexture(SmallSourceLocation::Current());
   if (!borrowed_texture) {
     return absl::InvalidArgumentError(
         "Texture associated with handle is not valid.");
   }
 
   return borrowed_texture;
+}
+
+absl::StatusOr<ComponentHandle<GltfMesh>>
+ImpressApiView::FindGltfMeshByNodeName(int32_t node_id,
+                                       absl::string_view node_name) {
+  NodeHandle model_node(utils::Entity::import(node_id));
+  if (!model_node) {
+    return absl::InvalidArgumentError("Node is not valid.");
+  }
+
+  NodeHandle mesh_node = model_node->FindByName(node_name);
+  if (!mesh_node) {
+    return absl::InvalidArgumentError(
+        absl::StrFormat("No Gltf child node named %s.", node_name));
+  }
+
+  ComponentHandle<GltfMesh> mesh = mesh_node->GetComponent<GltfMesh>();
+  if (!mesh) {
+    return absl::InvalidArgumentError("Child doesn't have a mesh.");
+  }
+  return mesh;
+}
+
+void ImpressApiView::DestroyUnusedTextures(bool shutdown) {
+  for (auto it = bindings_texture_map_.begin();
+       it != bindings_texture_map_.end();) {
+    if (shutdown) {
+      // We also destroy the corresponding BindingsTexture object when shutting
+      // down the view.
+      DestroyNativeObject(it->first);
+    }
+    if (it->second.GetBorrowedCount() == 0) {
+      // Erasing the map entry also destroys the OwnedTexturePtr.
+      bindings_texture_map_.erase(it++);
+    } else {
+      ++it;
+    }
+  }
+}
+
+void ImpressApiView::DestroyUnusedMaterials(bool shutdown) {
+  for (auto it = bindings_material_map_.begin();
+       it != bindings_material_map_.end();) {
+    if (shutdown) {
+      // We also destroy the corresponding BindingsMaterial object when shutting
+      // down the view.
+      DestroyNativeObject(it->first);
+    }
+
+    // Looking for when the material is unused. We check for one instead of zero
+    // because the temporary BorrowedMaterialPtr returned by GetMaterial
+    // contributes one to the count.
+    if (it->second->GetMaterial().GetBorrowedCount() == 1) {
+      // Erasing the map entry also destroys the OwnedPtr of the material.
+      bindings_material_map_.erase(it++);
+    } else {
+      ++it;
+    }
+  }
 }
 
 }  // namespace imp

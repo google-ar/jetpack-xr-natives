@@ -34,7 +34,6 @@ private const val EMOJI = "🀄" // E0.6 standard emoji.
 @RequiresApi(31)
 internal class ShaperGlyphSource : IGlyphSource {
   // Reusable buffers.
-  private val paint = Paint().apply { setAntiAlias(true) }
   private val glyphIdPtr = IntArray(1)
   private val positionPtr = FloatArray(2)
   private val boundingBoxF = RectF()
@@ -44,6 +43,7 @@ internal class ShaperGlyphSource : IGlyphSource {
   // device is capable of rendering color emoji. Record the font file used to render color emoji by
   // shaping that single emoji and reading its font.
   private val emojiFontFile: File? = run {
+    val paint = Paint()
     val emojiPath = Path()
     paint.getTextPath(
       EMOJI,
@@ -75,16 +75,12 @@ internal class ShaperGlyphSource : IGlyphSource {
   override fun getGlyphMetrics(
     glyphId: Int,
     font: Any?,
-    fontSize: Int,
     strokeWidth: Float,
-    textTracking: Float,
+    paint: Paint,
     out: FloatArray,
   ) {
     require(out.size == 7)
     val actualFont = font as Font
-
-    paint.textSize = fontSize.toFloat()
-    paint.letterSpacing = textTracking
 
     val advanceWidth = actualFont.getGlyphBounds(glyphId, paint, boundingBoxF)
 
@@ -107,28 +103,14 @@ internal class ShaperGlyphSource : IGlyphSource {
     out[6] = boundingBoxF.height() + padding
   }
 
-  override fun getTextGlyphs(
-    text: String,
-    fontSize: Int,
-    textTracking: Float,
-    outIds: IntArray,
-    outWidths: FloatArray,
-    outFonts: Array<Any?>,
-    outIsEmoji: BooleanArray,
-  ): Int {
+  override fun getTextGlyphs(text: String, paint: Paint): Array<GlyphAdvance> {
     require(!text.any { it == '\n' }) { "Text must not contain newlines" }
-    require(outIds.size >= text.length)
-    require(outWidths.size >= text.length)
-    require(outFonts.size >= text.length)
-    require(outIsEmoji.size >= text.length)
-
-    paint.textSize = fontSize.toFloat()
-    paint.letterSpacing = textTracking
 
     val bidi = BidiRuns.create(text)
+    val result: MutableList<GlyphAdvance> = mutableListOf()
 
-    var outIndex = 0
     var x = 0f
+
     for (run in bidi) {
       val isRtl = bidi.isRtl(run)
       val runStart = bidi.getRunStart(run)
@@ -156,16 +138,67 @@ internal class ShaperGlyphSource : IGlyphSource {
           }
         val font = glyphs.getFont(i)
 
-        outIds[outIndex] = glyphs.getGlyphId(i)
-        outWidths[outIndex] = nextX - glyphs.getGlyphX(i)
-        outFonts[outIndex] = font
-        outIsEmoji[outIndex] = emojiFontFile != null && font.file == emojiFontFile
+        result.add(
+          GlyphAdvance(
+            id = glyphs.getGlyphId(i),
+            width = nextX - glyphs.getGlyphX(i),
+            font = font,
+            isEmoji = emojiFontFile != null && font.file == emojiFontFile,
+          )
+        )
+      }
+      x += glyphs.advance
+    }
+
+    return result.toTypedArray()
+  }
+
+  override fun getCombinedCharacterGroups(text: String, paint: Paint): IntArray {
+    val bidi = BidiRuns.create(text)
+    var outIndex = 0
+    var x = 0f
+    var glyphIdx = 0
+    val result = mutableListOf<Int>()
+
+    for (run in bidi) {
+      val isRtl = bidi.isRtl(run)
+      val runStart = bidi.getRunStart(run)
+      val runLimit = bidi.getRunLimit(run)
+
+      val glyphs =
+        TextRunShaper.shapeTextRun(
+          text,
+          runStart,
+          runLimit - runStart,
+          /*contextStart=*/ 0,
+          /*contextCount=*/ text.length,
+          x,
+          /*yOffset=*/ 0f,
+          isRtl,
+          paint,
+        )
+
+      var prevX = x
+      for (i in 0 until glyphs.glyphCount()) {
+        val nextX =
+          if (i + 1 >= glyphs.glyphCount()) {
+            x + glyphs.advance
+          } else {
+            glyphs.getGlyphX(i + 1)
+          }
+
+        if (i > 0 && prevX < nextX) {
+          glyphIdx++
+        }
+
+        result.add(glyphIdx)
+        prevX = nextX
         outIndex++
       }
       x += glyphs.advance
     }
 
-    return outIndex
+    return result.toIntArray()
   }
 
   override fun drawGlyph(
@@ -174,26 +207,29 @@ internal class ShaperGlyphSource : IGlyphSource {
     x: Float,
     y: Float,
     font: Any?,
-    fontSize: Int,
     strokeWidth: Float,
-    fillColor: Int,
-    strokeColor: Int,
-    textTracking: Float,
+    fillPaint: Paint,
+    strokePaint: Paint,
   ) {
     val actualFont = font as Font
 
-    paint.textSize = fontSize.toFloat()
-    paint.letterSpacing = textTracking
-
-    actualFont.getGlyphBounds(glyphId, paint, boundingBoxF)
+    actualFont.getGlyphBounds(glyphId, fillPaint, boundingBoxF)
 
     glyphIdPtr[0] = glyphId
     positionPtr[0] = x + (strokeWidth / 2) - boundingBoxF.left
     positionPtr[1] = y + (strokeWidth / 2) - boundingBoxF.top
 
-    paint.style = Paint.Style.STROKE
-    paint.color = strokeColor
-    paint.strokeWidth = strokeWidth
+    if (strokeWidth > 0f) {
+      canvas.drawGlyphs(
+        glyphIdPtr,
+        /*glyphIdOffset=*/ 0,
+        positionPtr,
+        /*positionOffset=*/ 0,
+        /*glyphCount=*/ 1,
+        actualFont,
+        strokePaint,
+      )
+    }
     canvas.drawGlyphs(
       glyphIdPtr,
       /*glyphIdOffset=*/ 0,
@@ -201,19 +237,7 @@ internal class ShaperGlyphSource : IGlyphSource {
       /*positionOffset=*/ 0,
       /*glyphCount=*/ 1,
       actualFont,
-      paint,
-    )
-
-    paint.style = Paint.Style.FILL
-    paint.color = fillColor
-    canvas.drawGlyphs(
-      glyphIdPtr,
-      /*glyphIdOffset=*/ 0,
-      positionPtr,
-      /*positionOffset=*/ 0,
-      /*glyphCount=*/ 1,
-      actualFont,
-      paint,
+      fillPaint,
     )
   }
 }

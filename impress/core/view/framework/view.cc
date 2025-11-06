@@ -293,7 +293,7 @@ absl::Span<filament::View*> View::GetFilamentViews() {
 }
 
 void View::Advance(absl::Duration delta_time) {
-  IMP_TRACE();
+  IMP_TRACE_NAME("View::Advance");
 
   DurationMeasurement delta_time_measurement(GetMonitor(), kViewFrameTime);
   delta_time_measurement.AddSample(delta_time);
@@ -313,13 +313,16 @@ void View::Advance(absl::Duration delta_time) {
   update_system_.Update(UpdatePhase::kStart, frame_time_);
 
   if (!imp::client_api::GetIsAppSandboxTarget()) {
-    IMP_TRACE_BLOCK("Update");
+    IMP_TRACE_BLOCK("View::Update");
     Update(frame_time_);
   }
 
   // Note: This no-ops when dev mode is not available.
-  GetHost()->QueueImGuiCommandBlock(
-      [this]() { dispatcher_.Send(ImGuiPreRenderEvent()); });
+  {
+    IMP_TRACE_NAME("View::QueueImGuiCommandBlock");
+    GetHost()->QueueImGuiCommandBlock(
+        [this]() { dispatcher_.Send(ImGuiPreRenderEvent()); });
+  }
 
   // If the background executor must be manually advanced, do it now.
   // Note: By default Impress uses a ThreadPoolExecutor which doesn't need to be

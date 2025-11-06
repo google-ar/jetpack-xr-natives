@@ -52,4 +52,14 @@ message RigidBodyState {
   // The linear factor in bullet controls the percentage of linear velocity
   // applied. Setting linear factor to 0 means the correponding axis is locked.
   Float3 linear_factor = 10 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // Simulates drag / air resistance on the angular velocity of the rigid
+  // body, essentially slowing down the velocity over time even without
+  // friction or collisions. 0 means no damping, 1 means maximum damping.
+  float angular_damping = 11;
+
+  // Simulates drag / air resistance on the linear velocity of the rigid
+  // body, essentially slowing down the velocity over time even without
+  // friction or collisions. 0 means no damping, 1 means maximum damping.
+  float linear_damping = 12;
 }

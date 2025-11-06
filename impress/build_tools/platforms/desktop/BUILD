@@ -25,5 +25,6 @@ bzl_library(
         "//build_tools:imp_bzl",
         "//build_tools/platforms:imp_app_common_bzl",
         "@bazel_tools//tools/build_defs/build_test",
+        "@rules_cc//cc:core_rules",
     ],
 )

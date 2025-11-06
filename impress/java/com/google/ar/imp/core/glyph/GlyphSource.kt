@@ -17,6 +17,7 @@
 package com.google.ar.imp.core.glyph
 
 import android.graphics.Canvas
+import android.graphics.Paint
 import android.os.Build
 import com.google.android.filament.proguard.UsedByNative
 
@@ -25,7 +26,7 @@ import com.google.android.filament.proguard.UsedByNative
  * text by glyphs. See android_glyph_source.h.
  */
 @UsedByNative("android_glyph_source.cc")
-class GlyphSource(method: Method) {
+class GlyphSource @UsedByNative("android_glyph_source.cc") constructor(method: Method) {
   @UsedByNative("android_glyph_source.cc")
   enum class Method {
     AUTO,
@@ -52,14 +53,8 @@ class GlyphSource(method: Method) {
    *   the final two items are set to the width and height.
    */
   @UsedByNative("android_glyph_source.cc")
-  fun getGlyphMetrics(
-    glyphId: Int,
-    font: Any?,
-    fontSize: Int,
-    strokeWidth: Float,
-    textTracking: Float,
-    out: FloatArray,
-  ) = inner.getGlyphMetrics(glyphId, font, fontSize, strokeWidth, textTracking, out)
+  fun getGlyphMetrics(glyphId: Int, font: Any?, strokeWidth: Float, paint: Paint, out: FloatArray) =
+    inner.getGlyphMetrics(glyphId, font, strokeWidth, paint, out)
 
   /**
    * Analogous to GetTextGlyphs.
@@ -67,21 +62,25 @@ class GlyphSource(method: Method) {
    * Out parameters must be arrays of length of text or greater, though only the first N elements
    * will be set, where N is the number of glyphs.
    *
-   * A glyph ID is a function of `fontSize`. Different values of `fontSize` can and will yield
+   * A glyph ID is a function of `paint`. Different configurations of `paint` can and will yield
    * different glyph IDs.
    *
    * @return the number of glyphs
    */
   @UsedByNative("android_glyph_source.cc")
-  fun getTextGlyphs(
-    text: String,
-    fontSize: Int,
-    textTracking: Float,
-    outIds: IntArray,
-    outWidths: FloatArray,
-    outFonts: Array<Any?>,
-    outIsEmoji: BooleanArray,
-  ) = inner.getTextGlyphs(text, fontSize, textTracking, outIds, outWidths, outFonts, outIsEmoji)
+  fun getTextGlyphs(text: String, paint: Paint) = inner.getTextGlyphs(text, paint)
+
+  /**
+   * Analogous to GetCombinedCharacterGroups.
+   *
+   * Out parameter must be array of length of text or greater, though only the first N elements will
+   * be set, where N is the number of glyphs.
+   *
+   * @return the number of glyphs
+   */
+  @UsedByNative("android_glyph_source.cc")
+  fun getCombinedCharacterGroups(text: String, paint: Paint) =
+    inner.getCombinedCharacterGroups(text, paint)
 
   /**
    * Analogous to DrawGlyph.
@@ -96,45 +95,18 @@ class GlyphSource(method: Method) {
     x: Float,
     y: Float,
     font: Any?,
-    fontSize: Int,
     strokeWidth: Float,
-    fillColor: Int,
-    strokeColor: Int,
-    textTracking: Float,
-  ) =
-    inner.drawGlyph(
-      canvas,
-      glyphId,
-      x,
-      y,
-      font,
-      fontSize,
-      strokeWidth,
-      fillColor,
-      strokeColor,
-      textTracking,
-    )
+    fillPaint: Paint,
+    strokePaint: Paint,
+  ) = inner.drawGlyph(canvas, glyphId, x, y, font, strokeWidth, fillPaint, strokePaint)
 }
 
 internal interface IGlyphSource {
-  fun getGlyphMetrics(
-    glyphId: Int,
-    font: Any?,
-    fontSize: Int,
-    strokeWidth: Float,
-    textTracking: Float,
-    out: FloatArray,
-  )
+  fun getGlyphMetrics(glyphId: Int, font: Any?, strokeWidth: Float, paint: Paint, out: FloatArray)
 
-  fun getTextGlyphs(
-    text: String,
-    fontSize: Int,
-    textTracking: Float,
-    outIds: IntArray,
-    outWidths: FloatArray,
-    outFonts: Array<Any?>,
-    outIsEmoji: BooleanArray,
-  ): Int
+  fun getTextGlyphs(text: String, paint: Paint): Array<GlyphAdvance>
+
+  fun getCombinedCharacterGroups(text: String, paint: Paint): IntArray
 
   fun drawGlyph(
     canvas: Canvas,
@@ -142,10 +114,8 @@ internal interface IGlyphSource {
     x: Float,
     y: Float,
     font: Any?,
-    fontSize: Int,
     strokeWidth: Float,
-    fillColor: Int,
-    strokeColor: Int,
-    textTracking: Float,
+    fillPaint: Paint,
+    strokePaint: Paint,
   )
 }

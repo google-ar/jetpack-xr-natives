@@ -46,7 +46,6 @@
 #include <cctype>
 #include <mutex>
 #include <memory>
-#include <string>
 #include <string_view>
 #include <thread>
 #include <utility>
@@ -60,11 +59,16 @@ namespace filament::backend {
 
 using namespace utils;
 
+// How many ticks do we wait in between compiling non-IMMEDIATE programs synchronously?
+constexpr uint32_t NUM_TICKS_BETWEEN_PROGRAMS = 16;
+// How many non-IMMEDIATE synchronous programs are we allowed to compile on the same tick?
+constexpr uint32_t MAX_NUM_SYNCHRONOUS_PROGRAMS_PER_FRAME = 1;
+
 // ------------------------------------------------------------------------------------------------
 
-static std::string to_string(bool const b) { return b ? "true" : "false"; }
-static std::string to_string(int const i) { return std::to_string(i); }
-static std::string to_string(float const f) { return "float(" + std::to_string(f) + ")"; }
+static CString to_string(bool const b) { return CString{ b ? "true" : "false" }; }
+static CString to_string(int const i) { return utils::to_string(i); }
+static CString to_string(float const f) { return "float(" + utils::to_string(f) + ")"; }
 
 static void logCompilationError(ShaderStage shaderType, const char* name, GLuint shaderId,
         Program::ShaderBlob const& sourceCode) noexcept;
@@ -265,6 +269,7 @@ void ShaderCompilerService::terminate() noexcept {
     mCompilerThreadPool.terminate();
 
     mRunAtNextTickOps.clear();
+    mPendingSynchronousPrograms.clear();
 
     // We could have some pending callbacks here, we need to execute them.
     // This is equivalent to calling cancelTickOp() on all active tokens.
@@ -274,6 +279,7 @@ void ShaderCompilerService::terminate() noexcept {
 ShaderCompilerService::program_token_t ShaderCompilerService::createProgram(
         CString const& name, Program&& program) {
     auto& gl = mDriver.getContext();
+    CompilerPriorityQueue const priorityQueue = program.getPriorityQueue();
 
     // Create a token. A callback condition (handle) is internally created upon token creation.
     auto token = std::make_shared<OpenGLProgramToken>(*this, name);
@@ -281,7 +287,33 @@ ShaderCompilerService::program_token_t ShaderCompilerService::createProgram(
         token->attributes = std::move(program.getAttributes());
     }
 
-    // Initiate program compilation.
+    if (mMode == Mode::SYNCHRONOUS) {
+        if (priorityQueue == CompilerPriorityQueue::CRITICAL ||
+                shouldCompileSynchronousProgramThisTick()) {
+            // We should immediately compile this program this frame.
+            compileProgram(token, std::move(program));
+        } else {
+            // We already exceeded the number of non-IMMEDIATE synchronous programs we're allowed to
+            // create this frame. Queue it for a future frame, sorted by priority.
+            auto const pos = std::lower_bound(mPendingSynchronousPrograms.begin(),
+                    mPendingSynchronousPrograms.end(), priorityQueue,
+                    [](PendingSynchronousProgram const& lhs,
+                            CompilerPriorityQueue const priorityQueue) {
+                        return std::get<1>(lhs).getPriorityQueue() < priorityQueue;
+                    });
+            mPendingSynchronousPrograms.emplace(pos, token, std::move(program));
+        }
+    } else {
+        // Truly asynchronous platforms can always begin compiling immediately.
+        compileProgram(token, std::move(program));
+    }
+
+    return token;
+}
+
+void ShaderCompilerService::compileProgram(
+        program_token_t const& token, Program&& program) noexcept {
+    auto& gl = mDriver.getContext();
     CompilerPriorityQueue const priorityQueue = program.getPriorityQueue();
     switch (mMode) {
         case Mode::THREAD_POOL: {
@@ -330,6 +362,8 @@ ShaderCompilerService::program_token_t ShaderCompilerService::createProgram(
         }
 
         case Mode::SYNCHRONOUS:
+            mNumProgramsCreatedSynchronouslyThisTick++;
+            UTILS_FALLTHROUGH;
         case Mode::ASYNCHRONOUS: {
             // Try retrieving the program from the cache first. If no program found,
             // a normal compilation/linking process is performed.
@@ -365,8 +399,6 @@ ShaderCompilerService::program_token_t ShaderCompilerService::createProgram(
             assert_invariant(false);
         }
     }
-
-    return token;
 }
 
 GLuint ShaderCompilerService::getProgram(program_token_t& token) {
@@ -400,6 +432,7 @@ GLuint ShaderCompilerService::getProgram(program_token_t& token) {
         }
     } else {
         token->compiler.cancelTickOp(token);
+        token->compiler.cancelPendingSynchronousProgram(token);
     }
 
     token = nullptr; // This will try submitting a callback handle to the callback manager.
@@ -410,6 +443,9 @@ void ShaderCompilerService::tick() {
         handleCanceledTokensForThreadPool();
     } else {
         executeTickOps();
+    }
+    if (UTILS_UNLIKELY(mMode == Mode::SYNCHRONOUS)) {
+        compilePendingSynchronousPrograms();
     }
 }
 
@@ -487,9 +523,9 @@ void ShaderCompilerService::ensureTokenIsReady(program_token_t const& token) {
             // just log warnings here instead of repeatedly checking compile status. If this turns
             // out to be a real issue later, we would need to consider doing the canonical way.
             if (!isCompileCompleted(token)) {
-                LOG(WARNING)
+                LOG(INFO)
                         << "Shader compilation for OpenGL program " << token->name.c_str_safe()
-                        << " is not completed yet. The following program link may not succeed.";
+                        << " is not completed yet. The following program link may be slow.";
             }
 
             linkProgram(mDriver.getContext(), token);
@@ -497,9 +533,12 @@ void ShaderCompilerService::ensureTokenIsReady(program_token_t const& token) {
         }
 
         case Mode::SYNCHRONOUS: {
-            // We must not have called the TickOp yet until now. Call now to have
-            // `token->gl.program` ready to use.
-            tick();
+            // This program might still be in the queue, so try to compile it now.
+            compilePendingSynchronousProgramNow(token);
+            // If the program was just compiled on the above line, or the program was compiled but
+            // the tick ops weren't yet executed, we must execute them to populate
+            // `token->gl.program`.
+            executeTickOps();
             break;
         }
 
@@ -591,20 +630,79 @@ void ShaderCompilerService::executeTickOps() noexcept {
     FILAMENT_TRACING_VALUE(FILAMENT_TRACING_CATEGORY_FILAMENT, "ShaderCompilerService Jobs", ops.size());
 }
 
+bool ShaderCompilerService::shouldCompileSynchronousProgramThisTick() const noexcept {
+    return mDriver.getDriverConfig().disableAmortizedShaderCompile ||
+            (mNumProgramsCreatedSynchronouslyThisTick < MAX_NUM_SYNCHRONOUS_PROGRAMS_PER_FRAME &&
+                    mNumTicksUntilNextSynchronousProgram == 0);
+}
+
+void ShaderCompilerService::compilePendingSynchronousPrograms() noexcept {
+    if (mDriver.getDriverConfig().disableAmortizedShaderCompile) {
+        return;
+    }
+
+    auto it = mPendingSynchronousPrograms.begin();
+    while (it != mPendingSynchronousPrograms.end() && shouldCompileSynchronousProgramThisTick()) {
+        compileProgram(std::get<0>(*it), std::move(std::get<1>(*it)));
+        it = mPendingSynchronousPrograms.erase(it);
+    }
+    if (mNumProgramsCreatedSynchronouslyThisTick) {
+        mNumTicksUntilNextSynchronousProgram = NUM_TICKS_BETWEEN_PROGRAMS;
+        mNumProgramsCreatedSynchronouslyThisTick = 0u;
+    } else if (mNumTicksUntilNextSynchronousProgram) {
+        mNumTicksUntilNextSynchronousProgram--;
+    }
+}
+
+void ShaderCompilerService::compilePendingSynchronousProgramNow(
+        program_token_t const& token) noexcept {
+    if (mDriver.getDriverConfig().disableAmortizedShaderCompile) {
+        return;
+    }
+
+    auto pos = std::find_if(mPendingSynchronousPrograms.begin(),
+            mPendingSynchronousPrograms.end(), [&](PendingSynchronousProgram const& item) {
+                return std::get<0>(item) == token;
+            });
+    if (pos != mPendingSynchronousPrograms.end()) {
+        compileProgram(std::get<0>(*pos), std::move(std::get<1>(*pos)));
+        mPendingSynchronousPrograms.erase(pos);
+    }
+}
+
+void ShaderCompilerService::cancelPendingSynchronousProgram(program_token_t const& token) noexcept {
+    if (mDriver.getDriverConfig().disableAmortizedShaderCompile) {
+        return;
+    }
+
+    // We do a linear search here, but this is rare, and we know the list is pretty small.
+    auto const pos = std::find_if(mPendingSynchronousPrograms.begin(),
+            mPendingSynchronousPrograms.end(), [&](const auto& item) {
+                return std::get<0>(item) == token;
+            });
+    if (pos != mPendingSynchronousPrograms.end()) {
+        mPendingSynchronousPrograms.erase(pos);
+        return;
+    }
+    FILAMENT_TRACING_CONTEXT(FILAMENT_TRACING_CATEGORY_FILAMENT);
+    FILAMENT_TRACING_VALUE(FILAMENT_TRACING_CATEGORY_FILAMENT,
+            "ShaderCompilerService Pending Programs", mPendingSynchronousPrograms.size());
+}
+
 /* static */ void ShaderCompilerService::compileShaders(OpenGLContext& context,
         Program::ShaderSource shadersSource,
         FixedCapacityVector<Program::SpecializationConstant> const& specializationConstants,
         bool multiview, program_token_t const& token) noexcept {
     FILAMENT_TRACING_CALL(FILAMENT_TRACING_CATEGORY_FILAMENT);
 
-    auto const appendSpecConstantString = +[](std::string& s, Program::SpecializationConstant const& sc) {
-        s += "#define SPIRV_CROSS_CONSTANT_ID_" + std::to_string(sc.id) + ' ';
+    auto const appendSpecConstantString = +[](CString& s, Program::SpecializationConstant const& sc) {
+        s += "#define SPIRV_CROSS_CONSTANT_ID_" + utils::to_string(sc.id) + ' ';
         s += std::visit([](auto&& arg) { return to_string(arg); }, sc.value);
         s += '\n';
         return s;
     };
 
-    std::string specializationConstantString;
+    CString specializationConstantString;
     int32_t numViews = 2;
     for (auto const& sc: specializationConstants) {
         appendSpecConstantString(specializationConstantString, sc);
@@ -667,8 +765,10 @@ void ShaderCompilerService::executeTickOps() noexcept {
             }
 
             std::array<std::string_view, 5> sources = {
-                version, prolog, specializationConstantString, packingFunctions,
-                { body.data(), body.size() - 1 }// null-terminated
+                version, prolog,
+                { specializationConstantString.data(), specializationConstantString.size() },
+                packingFunctions,
+                { body.data(), body.size() - 1 } // null-terminated
             };
 
             // Some of the sources may be zero-length. Remove them as to avoid passing lengths of
@@ -867,16 +967,18 @@ UTILS_NOINLINE
         sourceCode.size() };
     size_t lc = 1;
     size_t start = 0;
-    std::string line;
+    CString line;
     while (true) {
         size_t const end = shader.find('\n', start);
-        if (end == std::string::npos) {
-            line = shader.substr(start);
+        if (end == std::string_view::npos) {
+            auto sv = shader.substr(start);
+            line = { sv.data(), sv.size() };
         } else {
-            line = shader.substr(start, end - start);
+            auto sv = shader.substr(start, end - start);
+            line = { sv.data(), sv.size() };
         }
         LOG(ERROR) << lc++ << ":   " << line.c_str();
-        if (end == std::string::npos) {
+        if (end == std::string_view::npos) {
             break;
         }
         start = end + 1;

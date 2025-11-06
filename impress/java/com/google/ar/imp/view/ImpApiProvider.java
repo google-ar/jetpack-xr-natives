@@ -42,6 +42,15 @@ public interface ImpApiProvider extends ImpApiScubaProvider {
   public ImpApi createImpApiSync(SetupParams setupParams, long eglContext);
 
   /**
+   * Create ImpApi synchronously, which will be ready immediately. This version of the method allows
+   * you to pass in a frame scheduler factory that will be used to create the frame scheduler.
+   *
+   * <p>This is required before any calls to getImpApi().
+   */
+  public ImpApi createImpApiSync(
+      SetupParams setupParams, @Nullable FrameScheduler.Factory frameSchedulerFactory);
+
+  /**
    * Create ImpApi asynchronously. Refer to {@link ImpApi#createAsync()} for more details.
    *
    * <p>This is required before any calls to getImpApi().
@@ -61,6 +70,21 @@ public interface ImpApiProvider extends ImpApiScubaProvider {
       long eglContext,
       Executor executor,
       ImpApi.PostCreatedCallback postCreatedCallback);
+
+  /**
+   * Create ImpApi asynchronously. Refer to {@link ImpApi#createAsync()} for more details. This
+   * version of the method allows you to pass in a parent EGL context that will be used when
+   * creating the Impress render context and a frame scheduler factory that will be used to create
+   * the frame scheduler.
+   *
+   * <p>This is required before any calls to getImpApi().
+   */
+  public ImpApi createImpApiAsync(
+      SetupParams setupParams,
+      long eglContext,
+      Executor executor,
+      ImpApi.PostCreatedCallback postCreatedCallback,
+      @Nullable FrameScheduler.Factory frameSchedulerFactory);
 
   /**
    * This will be available immediately after calling either createImpApi*() methods, but async will

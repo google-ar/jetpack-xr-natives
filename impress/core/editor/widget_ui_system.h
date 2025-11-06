@@ -23,10 +23,12 @@
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
+#include "absl/strings/string_view.h"
 #include "core/common/hash.h"
 #include "core/editor/layout/layout_composer.h"
 #include "core/editor/widget.h"
 #include "core/editor/widget_layout_info.h"
+#include "core/editor/widgets/window/window_configuration.h"
 #include "core/ncsb/system.h"
 #include "core/view/base_view.h"
 
@@ -69,17 +71,20 @@ class WidgetUiSystem : public System {
   // Enables or disables all UI in the system.
   void SetEnabled(bool enabled);
 
-  void SetLayoutComposer(std::unique_ptr<LayoutComposer> layout_composer) {
-    layout_composer_ = std::move(layout_composer);
-  }
+  void SetLayoutComposer(std::unique_ptr<LayoutComposer> layout_composer);
 
  private:
   void ProcessPendingRemoves();
+  void AddWindowConfiguration(absl::string_view name,
+                              const WidgetLayoutInfo& layout_info);
 
   using WidgetEntry = std::pair<std::unique_ptr<Widget>, WidgetLayoutInfo>;
 
   // Handles widget drawing and platform-dependent layout logic.
   std::unique_ptr<LayoutComposer> layout_composer_;
+  // Records the visibility of certain windows in the Impress editor. Currently
+  // only used for the multiple windows layout.
+  WindowConfiguration* window_configuration_ = nullptr;
 
   std::vector<WidgetEntry> widgets_;
   // Keep track of the types of the widgets to remove them from the widgets_
@@ -98,6 +103,8 @@ T* WidgetUiSystem::AddWidget(const WidgetLayoutInfo& layout_info,
   T* widget_ptr = widget.get();
   widgets_.push_back({std::move(widget), layout_info});
   type_hashes_.push_back(type_traits::kTypeHash<T>);
+
+  AddWindowConfiguration(widget_ptr->GetName(), layout_info);
   return widget_ptr;
 }
 

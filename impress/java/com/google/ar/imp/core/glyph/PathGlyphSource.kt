@@ -54,16 +54,14 @@ internal class PathGlyphSource : IGlyphSource {
   private val map = mutableMapOf<Int, Any>()
 
   // Reusable buffers.
-  private val paint = Paint().apply { setAntiAlias(true) }
   private val boundingBox = Rect()
   private val boundingBoxF = RectF()
 
   override fun getGlyphMetrics(
     glyphId: Int,
     font: Any?,
-    fontSize: Int,
     strokeWidth: Float,
-    textTracking: Float,
+    paint: Paint,
     out: FloatArray,
   ) {
     require(out.size == 7)
@@ -71,8 +69,6 @@ internal class PathGlyphSource : IGlyphSource {
     when (glyph) {
       is String -> {
         // Ignore stroke; this is a colored emoji.
-        paint.textSize = fontSize.toFloat()
-        paint.letterSpacing = textTracking
         paint.getTextBounds(glyph, /* index= */ 0, glyph.length, boundingBox)
         val typographicalWidths = FloatArray(glyph.length)
         paint.getTextWidths(glyph, typographicalWidths)
@@ -113,23 +109,8 @@ internal class PathGlyphSource : IGlyphSource {
     }
   }
 
-  override fun getTextGlyphs(
-    text: String,
-    fontSize: Int,
-    textTracking: Float,
-    outIds: IntArray,
-    outWidths: FloatArray,
-    outFonts: Array<Any?>,
-    outIsEmoji: BooleanArray,
-  ): Int {
+  override fun getTextGlyphs(text: String, paint: Paint): Array<GlyphAdvance> {
     require(!text.any { it == '\n' }) { "Text must not contain newlines" }
-    require(outIds.size >= text.length)
-    require(outWidths.size >= text.length)
-    require(outFonts.size >= text.length)
-    require(outIsEmoji.size >= text.length)
-
-    paint.textSize = fontSize.toFloat()
-    paint.letterSpacing = textTracking
 
     val glyphBuilders = createGlyphBuilders(text, paint)
 
@@ -163,7 +144,7 @@ internal class PathGlyphSource : IGlyphSource {
     }
 
     // Add new glyphs to our store and return their ids/positions.
-    var outIndex = 0
+    val result: MutableList<GlyphAdvance> = mutableListOf()
     for (builder in glyphBuilders) {
       val hash: Int
       val isEmoji: Boolean
@@ -198,13 +179,15 @@ internal class PathGlyphSource : IGlyphSource {
         }
       }
 
-      outIds[outIndex] = hash
-      outWidths[outIndex] = builder.width
-      outFonts[outIndex] = null
-      outIsEmoji[outIndex] = isEmoji
-      outIndex++
+      result.add(GlyphAdvance(id = hash, width = builder.width, font = null, isEmoji = isEmoji))
     }
-    return outIndex
+    return result.toTypedArray()
+  }
+
+  override fun getCombinedCharacterGroups(text: String, paint: Paint): IntArray {
+    // The path calculations already handle combined character glyphs by calculating their
+    // centroids, thus this method does not need to be implemented.
+    return IntArray(0)
   }
 
   override fun drawGlyph(
@@ -213,24 +196,20 @@ internal class PathGlyphSource : IGlyphSource {
     x: Float,
     y: Float,
     font: Any?,
-    fontSize: Int,
     strokeWidth: Float,
-    fillColor: Int,
-    strokeColor: Int,
-    textTracking: Float,
+    fillPaint: Paint,
+    strokePaint: Paint,
   ) {
     val glyph = map[glyphId]
     when (glyph) {
       is String -> {
         // Align at top-left.
-        paint.textSize = fontSize.toFloat()
-        paint.letterSpacing = textTracking
-        paint.getTextBounds(glyph, /* index= */ 0, glyph.length, boundingBox)
+        fillPaint.getTextBounds(glyph, /* index= */ 0, glyph.length, boundingBox)
         canvas.drawText(
           glyph,
           x + (strokeWidth / 2) - boundingBox.left,
           y + (strokeWidth / 2) - boundingBox.top,
-          paint,
+          fillPaint,
         )
       }
       is PathWithMetrics -> {
@@ -238,15 +217,10 @@ internal class PathGlyphSource : IGlyphSource {
         val yOffset = y + (strokeWidth / 2)
         glyph.path.offset(xOffset, yOffset)
         try {
-          paint.style = Paint.Style.STROKE
-          paint.color = strokeColor
-          paint.strokeWidth = strokeWidth
-          paint.letterSpacing = textTracking
-          canvas.drawPath(glyph.path, paint)
-
-          paint.style = Paint.Style.FILL
-          paint.color = fillColor
-          canvas.drawPath(glyph.path, paint)
+          if (strokeWidth > 0f) {
+            canvas.drawPath(glyph.path, strokePaint)
+          }
+          canvas.drawPath(glyph.path, fillPaint)
         } finally {
           glyph.path.offset(-xOffset, -yOffset)
         }
@@ -330,7 +304,7 @@ private class GlyphBuilder(
 
   fun asPath(): Path =
     Path().apply {
-      var iter = segmentValues.iterator()
+      val iter = segmentValues.iterator()
       for (type in segmentVerbs) {
         when (type) {
           PathSegment.Type.Move -> moveTo(iter.next(), iter.next())

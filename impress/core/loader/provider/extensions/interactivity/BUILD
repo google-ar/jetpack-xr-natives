@@ -13,7 +13,7 @@
 # limitations under the License.
 
 load(
-    "@com_github_google_flatbuffers//:build_defs.bzl",
+    "@flatbuffers//:build_defs.bzl",
     "flatbuffer_cc_library",
 )
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
@@ -106,8 +106,8 @@ cc_library(
         ":fbs",
         ":fbs_deps",  # build_cleaner: keep
         ":interactivity_imp_cc_proto",
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/status:statusor",
+        "@flatbuffers",
     ],
     alwayslink = 1,
 )
@@ -135,13 +135,13 @@ cc_library(
         "//core/math",
         "//core/math:flatbuffer_support",
         "//core/model",
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/types:variant",
         "@com_google_impress//core/common:log",
+        "@flatbuffers",
         "@mediapipe//mediapipe/framework/port:status",
     ],
     alwayslink = 1,

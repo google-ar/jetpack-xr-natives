@@ -21,6 +21,7 @@
 #include <stdbool.h>
 #include <sys/types.h>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstddef>
@@ -29,6 +30,9 @@
 #include <cstring>
 #include <ctime>
 #include <memory>
+#include <string_view>
+#include <thread>
+#include <unordered_set>
 #include <vector>
 
 #include "openxr/openxr.h"
@@ -47,7 +51,7 @@ constexpr char kApplicationName[] = "JetpackXrCore";
 // TODO: (broken link) - Change this from a global list to something more
 // flexible. Also split up between "required" and "optional" extensions, and
 // check against xrEnumerateInstanceExtensionProperties()
-std::array<const char*, 13> kExtensions = {
+std::array<const char*, 13> kRequiredExtensions = {
     XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME,
     XR_MND_HEADLESS_EXTENSION_NAME,
     XR_KHR_CONVERT_TIMESPEC_TIME_EXTENSION_NAME,
@@ -61,6 +65,10 @@ std::array<const char*, 13> kExtensions = {
     XR_ANDROID_FACE_TRACKING_EXTENSION_NAME,
     XR_ANDROID_TRACKABLES_OBJECT_EXTENSION_NAME,
     XR_ANDROID_EYE_TRACKING_EXTENSION_NAME,
+};
+
+std::array<const char*, 1> kOptionalExtensions = {
+    XR_ANDROIDX1_GEOSPATIAL_EXTENSION_NAME,
 };
 
 constexpr XrPosef kIdentityPose = {
@@ -213,7 +221,7 @@ OpenXrManager &OpenXrManager::GetOpenXrManager(
 }
 
 bool OpenXrManager::InitExtensionFunctions() {
-  absl::MutexLock lock(mutex_);
+  absl::MutexLock lock(&mutex_);
   XR_RETURN_IF_FAILED(
       xrGetInstanceProcAddr(instance_, "xrConvertTimespecTimeToTimeKHR",
                             (PFN_xrVoidFunction *)(&convert_time_)));
@@ -323,6 +331,23 @@ bool OpenXrManager::InitExtensionFunctions() {
       instance_, "xrGetCoarseTrackingEyesInfoANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&get_coarse_tracking_eyes_info_)));
 
+  std::vector<const char*> enabled_exts;
+  GetEnabledExtensions(enabled_exts);
+
+  // Geospatial functions.
+  if (std::find(enabled_exts.begin(), enabled_exts.end(),
+                XR_ANDROIDX1_GEOSPATIAL_EXTENSION_NAME) != enabled_exts.end()) {
+    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+        instance_, "xrCreateEarthTrackerANDROIDX1",
+        reinterpret_cast<PFN_xrVoidFunction*>(&create_earth_tracker_)));
+    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+        instance_, "xrDestroyEarthTrackerANDROIDX1",
+        reinterpret_cast<PFN_xrVoidFunction*>(&destroy_earth_tracker_)));
+    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+        instance_, "xrLocateGeospatialPoseANDROIDX1",
+        reinterpret_cast<PFN_xrVoidFunction*>(&locate_geospatial_pose_)));
+  }
+
   return true;
 }
 
@@ -334,7 +359,7 @@ bool OpenXrManager::CreateStageReferenceSpace() {
   };
 
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     XR_RETURN_IF_FAILED(
         xrCreateReferenceSpace(session_, &createInfo, &stage_space_));
   }
@@ -349,7 +374,7 @@ bool OpenXrManager::CreateUnboundedReferenceSpace() {
   };
 
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     XR_RETURN_IF_FAILED(
         xrCreateReferenceSpace(session_, &createInfo, &unbounded_space_));
   }
@@ -362,7 +387,7 @@ bool OpenXrManager::CreateViewReferenceSpace() {
       .referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW,
       .poseInReferenceSpace = kIdentityPose,
   };
-  absl::MutexLock lock(mutex_);
+  absl::MutexLock lock(&mutex_);
   XR_RETURN_IF_FAILED(
       xrCreateReferenceSpace(session_, &createInfo, &view_space_));
   return true;
@@ -371,7 +396,7 @@ bool OpenXrManager::CreateViewReferenceSpace() {
 bool OpenXrManager::LocateHandJoints(bool is_left_hand, XrTime time,
                                      XrHandJointLocationsEXT *hand_joints) {
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     XrHandTrackerEXT hand_tracker =
         is_left_hand ? left_hand_tracker_ : right_hand_tracker_;
 
@@ -394,7 +419,7 @@ bool OpenXrManager::LocateHandJoints(bool is_left_hand, XrTime time,
 }
 
 std::byte *OpenXrManager::PrepareHandDataBuffer(bool is_left_hand) {
-  absl::MutexLock lock(mutex_);
+  absl::MutexLock lock(&mutex_);
   // clean up the previous buffer.
   if (is_left_hand) {
     if (left_hand_joint_poses_buffer_[left_hand_joint_buffer_index_] !=
@@ -505,7 +530,7 @@ XrTime OpenXrManager::GetXrTimeFromTimespec(
   XrTime xr_time;
   XrResult result;
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     result = reinterpret_cast<PFN_xrConvertTimespecTimeToTimeKHR>(
         convert_time_)(instance_, &timespec_time, &xr_time);
   }
@@ -523,7 +548,7 @@ bool OpenXrManager::PersistAnchor(XrSpace anchor_space,
       .next = nullptr,
       .anchor = anchor_space};
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     if (XR_FAILED(CreatePersistenceHandleIfNecessary())) {
       return false;
     }
@@ -537,7 +562,7 @@ bool OpenXrManager::GetAnchorPersistState(
     const XrUuidEXT &anchor_uuid,
     XrAnchorPersistStateANDROID *out_persist_state) {
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     if (XR_FAILED(CreatePersistenceHandleIfNecessary())) {
       return false;
     }
@@ -554,7 +579,7 @@ std::vector<XrUuidEXT> OpenXrManager::GetPersistedAnchorUuids() {
   // Query the number of anchors available.
   XrResult result;
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     if (XR_FAILED(CreatePersistenceHandleIfNecessary())) {
       return {};
     }
@@ -576,7 +601,7 @@ std::vector<XrUuidEXT> OpenXrManager::GetPersistedAnchorUuids() {
 
   // Fetch the actual uuids in the appropriately resized array.
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     result =
         enumerate_persisted_anchors_(persistence_handle_, uuid_count_output,
                                      &uuid_count_output, uuids.data());
@@ -591,7 +616,7 @@ std::vector<XrUuidEXT> OpenXrManager::GetPersistedAnchorUuids() {
 
 bool OpenXrManager::UnpersistAnchor(const XrUuidEXT &anchor_uuid) {
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     if (XR_FAILED(CreatePersistenceHandleIfNecessary())) {
       return false;
     }
@@ -605,7 +630,7 @@ OpenXrManager::CreateAnchorResult OpenXrManager::LocatePersistedAnchorSpace(
   XrSpace anchor_space = XR_NULL_HANDLE;
   XrResult xr_result;
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     if (XR_FAILED(CreatePersistenceHandleIfNecessary())) {
       return CreateAnchorResult::kErrorRuntimeFailure;
     }
@@ -640,7 +665,7 @@ OpenXrManager::CreateAnchorResult OpenXrManager::LocatePersistedAnchorSpace(
 bool OpenXrManager::HitTest(XrRaycastInfoANDROID *raycast_info,
                             XrRaycastHitResultsANDROID *out_hit_results) {
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     raycast_info->space = GetSpaceInDefaultReferenceSpace();
     raycast_info->trackerCount = 1;
     raycast_info->trackers = &planes_trackable_tracker_;
@@ -665,7 +690,7 @@ std::byte *OpenXrManager::GetHandDataBuffer(bool is_left_hand, XrTime time) {
 }
 
 bool OpenXrManager::IsFaceTrackerCalibrated() {
-  absl::MutexLock lock(mutex_);
+  absl::MutexLock lock(&mutex_);
   return face_tracker_calibration_state_ ==
          FaceTrackingCalibrationState::kCalibrated;
 }
@@ -673,7 +698,7 @@ bool OpenXrManager::IsFaceTrackerCalibrated() {
 bool OpenXrManager::GetDepthImage(XrTime time,
                                   const float **out_smooth_depth_image,
                                   int *out_image_width, int *out_image_height) {
-  absl::MutexLock lock(mutex_);
+  absl::MutexLock lock(&mutex_);
   if (XR_FAILED(
           CreateDepthSwapchainIfNecessary(DepthEstimationMode::kSmoothOnly))) {
     LOG(ERROR) << "Failed to create depth swapchain.";
@@ -713,7 +738,7 @@ bool OpenXrManager::GetDepthImage(XrTime time,
 
 bool OpenXrManager::GetAllDepthImages(
     XrTime time, std::vector<DepthImageBuffer> &out_image_buffers) {
-  absl::MutexLock lock(mutex_);
+  absl::MutexLock lock(&mutex_);
 
   if (depth_image_buffer_count_ == 0) {
     LOG(ERROR) << "Depth image buffer count is 0.";
@@ -788,13 +813,83 @@ void OpenXrManager::PopulateDepthImageBuffer(
 }
 
 int OpenXrManager::GetDepthImageWidth() {
-  absl::MutexLock lock(mutex_);
+  absl::MutexLock lock(&mutex_);
   return depth_image_width_;
 }
 
 int OpenXrManager::GetDepthImageHeight() {
-  absl::MutexLock lock(mutex_);
+  absl::MutexLock lock(&mutex_);
   return depth_image_height_;
+}
+
+OpenXrManager::EarthState OpenXrManager::GetEarthState() {
+  absl::MutexLock lock( &mutex_ );
+  // Geospatial has not been initialized.
+  if (earth_tracker_ == XR_NULL_HANDLE ||
+      !last_earth_tracker_state_update_.has_value() ||
+      last_earth_tracker_state_update_->state ==
+          XR_EARTH_TRACKER_STATE_STOPPED_ANDROIDX1) {
+    return EarthState::kStopped;
+  }
+
+  if (last_earth_tracker_state_update_->state ==
+      XR_EARTH_TRACKER_STATE_RUNNING_ANDROIDX1) {
+    return EarthState::kRunning;
+  }
+
+  // Earth state is initialization failed.
+  switch (last_earth_tracker_state_update_->initializationResult) {
+    case XR_ERROR_PERMISSION_INSUFFICIENT:
+      return EarthState::kErrorNotAuthorized;
+    case XR_ERROR_LIMIT_REACHED:
+      return EarthState::kErrorResourcesExhausted;
+    default:
+      return EarthState::kErrorInternal;
+  }
+
+  return EarthState::kErrorInternal;
+}
+
+OpenXrManager::GeospatialPoseResult OpenXrManager::LocateGeospatialPose(
+    XrTime time, const XrPosef& pose,
+    XrGeospatialPoseResultANDROIDX1* out_geospatial_pose_result) {
+  absl::MutexLock lock(&mutex_);
+  if (earth_tracker_ == XR_NULL_HANDLE) {
+    LOG(ERROR) << "Earth tracker is not initialized.";
+    return GeospatialPoseResult::kErrorIllegalState;
+  }
+
+  XrGeospatialPoseLocateInfoANDROIDX1 locate_info = {
+      .type = XR_TYPE_GEOSPATIAL_POSE_LOCATE_INFO_ANDROIDX1,
+      .next = nullptr,
+      .space = GetSpaceInDefaultReferenceSpace(),
+      .time = time,
+      .pose = pose,
+  };
+
+  *out_geospatial_pose_result = {
+      .type = XR_TYPE_GEOSPATIAL_POSE_RESULT_ANDROIDX1,
+      .next = nullptr,
+  };
+
+  XrResult result = locate_geospatial_pose_(earth_tracker_, &locate_info,
+                                            out_geospatial_pose_result);
+
+  switch (result) {
+    case XR_SUCCESS:
+      if (!(out_geospatial_pose_result->poseFlags &
+                XR_GEOSPATIAL_POSE_ORIENTATION_VALID_BIT_ANDROIDX1 &&
+            out_geospatial_pose_result->poseFlags &
+                XR_GEOSPATIAL_POSE_POSITION_VALID_BIT_ANDROIDX1)) {
+        return GeospatialPoseResult::kErrorNotTracking;
+      }
+
+      return GeospatialPoseResult::kSuccess;
+    case XR_ERROR_GEOSPATIAL_COORDINATES_INVALID_ANDROIDX1:
+      return GeospatialPoseResult::kErrorInvalidArgument;
+    default:
+      return GeospatialPoseResult::kErrorIllegalState;
+  }
 }
 
 bool OpenXrManager::Init(JNIEnv *env, jobject activity,
@@ -802,9 +897,9 @@ bool OpenXrManager::Init(JNIEnv *env, jobject activity,
                          bool start_polling_thread) {
   java_env_ = env;
   java_env_->GetJavaVM(&app_vm_);
-  absl::MutexLock state_lock(initialization_mutex_);
+  absl::MutexLock state_lock(&initialization_mutex_);
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
 
     if (open_xr_state_ == OpenXrState::kResumed) {
       LOG(INFO) << "Returning existing OpenXR session.";
@@ -874,7 +969,7 @@ bool OpenXrManager::Init(JNIEnv *env, jobject activity,
   }
 
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     if (start_polling_thread) {
       StartPollingThread();
     } else {
@@ -891,7 +986,7 @@ void OpenXrManager::DeInit(bool stop_polling_thread) {
 
 void OpenXrManager::DeInitWithLockHeld(bool stop_polling_thread) {
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     if (open_xr_state_ == OpenXrState::kUninitialized ||
         open_xr_state_ == OpenXrState::kUninitializing) {
       return;
@@ -988,6 +1083,17 @@ void OpenXrManager::DeInitWithLockHeld(bool stop_polling_thread) {
       }
     }
 
+    // Destroy the earth tracker.
+    if (earth_tracker_ != XR_NULL_HANDLE) {
+      XrResult destroy_earth_result = destroy_earth_tracker_(earth_tracker_);
+      earth_tracker_ = XR_NULL_HANDLE;
+      last_earth_tracker_state_update_.reset();
+      if (XR_FAILED(destroy_earth_result)) {
+        LOG(ERROR) << "Failed to destroy earth tracker with error: "
+                   << XrEnumStr(destroy_earth_result);
+      }
+    }
+
     // Destroy view space.
     if (view_space_ != XR_NULL_HANDLE) {
       XrResult destroy_view_space_result = xrDestroySpace(view_space_);
@@ -1009,14 +1115,14 @@ void OpenXrManager::DeInitWithLockHeld(bool stop_polling_thread) {
     JoinPollingThread();
   }
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     open_xr_state_ = OpenXrState::kUninitialized;
   }
 }
 
 bool OpenXrManager::PauseSession() {
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     if (open_xr_state_ != OpenXrState::kResumed) {
       LOG(ERROR) << "Attempted to pause the Open XR session when session is "
                     "not in a resumed state. ";
@@ -1026,7 +1132,7 @@ bool OpenXrManager::PauseSession() {
   }
   JoinPollingThread();
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     open_xr_state_ = OpenXrState::kPaused;
   }
   return true;
@@ -1045,7 +1151,7 @@ bool OpenXrManager::LoadOpenXr(jobject activity) {
   }
   XrLoaderInitInfoAndroidKHR loader_init_info_android;
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     loader_init_info_android = {
         .type = XR_TYPE_LOADER_INIT_INFO_ANDROID_KHR,
         .applicationVM = app_vm_,
@@ -1061,10 +1167,47 @@ bool OpenXrManager::LoadOpenXr(jobject activity) {
   return true;
 }
 
+bool OpenXrManager::GetEnabledExtensions(
+    std::vector<const char*>& enabled_exts) {
+  std::vector<XrExtensionProperties> available_ext_props;
+  uint32_t property_count;
+  XR_RETURN_IF_FAILED(xrEnumerateInstanceExtensionProperties(
+      /*layerName=*/nullptr, /*propertyCapacityInput=*/0, &property_count,
+      /*properties=*/nullptr));
+  available_ext_props.resize(property_count);
+  for (auto& prop : available_ext_props) {
+    prop.type = XR_TYPE_EXTENSION_PROPERTIES;
+  }
+  XR_RETURN_IF_FAILED(xrEnumerateInstanceExtensionProperties(
+      /*layerName=*/nullptr, property_count, &property_count,
+      available_ext_props.data()));
+
+  std::unordered_set<std::string_view> available_exts;
+  for (const auto& prop : available_ext_props) {
+    available_exts.insert(prop.extensionName);
+  }
+
+  enabled_exts.clear();
+  enabled_exts.insert(enabled_exts.end(), kRequiredExtensions.begin(),
+                      kRequiredExtensions.end());
+
+  for (const char* optional_ext : kOptionalExtensions) {
+    if (available_exts.count(optional_ext)) {
+      enabled_exts.push_back(optional_ext);
+    }
+  }
+  return true;
+}
+
 bool OpenXrManager::CreateInstance(jobject activity) {
+  std::vector<const char*> enabled_exts;
+  if (!GetEnabledExtensions(enabled_exts)) {
+    return false;
+  }
+
   XrInstanceCreateInfoAndroidKHR create_info_android;
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     create_info_android = {
         .type = XR_TYPE_INSTANCE_CREATE_INFO_ANDROID_KHR,
         .applicationVM = app_vm_,
@@ -1077,21 +1220,19 @@ bool OpenXrManager::CreateInstance(jobject activity) {
       .next = &create_info_android,
       .applicationInfo =
           {
-              // TODO: Revert back to XR_CURRENT_API_VERSION after
-              // the OpenXR loader version mismatch issue is resolved.
               .apiVersion =
-                  XR_MAKE_VERSION(1, 0, 34),  // XR_CURRENT_API_VERSION,
+                  XR_API_VERSION_1_0,
           },
       .enabledApiLayerCount = 0,
       .enabledApiLayerNames = nullptr,
-      .enabledExtensionCount = kExtensions.size(),
-      .enabledExtensionNames = kExtensions.data(),
+      .enabledExtensionCount = static_cast<uint32_t>(enabled_exts.size()),
+      .enabledExtensionNames = enabled_exts.data(),
   };
   strncpy(create_info.applicationInfo.applicationName, kApplicationName,
           XR_MAX_APPLICATION_NAME_SIZE);
 
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     // Create an OpenXR instance.
     XR_RETURN_IF_FAILED(xrCreateInstance(&create_info, &instance_));
   }
@@ -1109,7 +1250,7 @@ bool OpenXrManager::GetXrSystem() {
   };
 
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     XR_RETURN_IF_FAILED(xrGetSystem(instance_, &system_info, &system_id_));
     if (system_id_ == XR_NULL_SYSTEM_ID) {
       LOG(ERROR) << "XrSystemId is null, this should not be possible.";
@@ -1126,7 +1267,7 @@ bool OpenXrManager::CreateSession() {
   }
 
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     XrSessionCreateInfo session_create_info = {
         .type = XR_TYPE_SESSION_CREATE_INFO,
         .systemId = system_id_,
@@ -1141,7 +1282,7 @@ bool OpenXrManager::CreateSession() {
 XrResult OpenXrManager::ConfigureSession(
     const ConfigSettings &new_config_settings) {
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     XrResult result;
     result = ConfigureFeatures(new_config_settings);
     if (XR_FAILED(result)) {
@@ -1171,6 +1312,8 @@ XrResult OpenXrManager::ConfigureFeatures(
       ConfigureObjectTracking(new_config_settings.object_tracking_mode,
                               new_config_settings.object_tracking_labels));
   XR_RETURN_RESULT_IF_FAILED(
+      ConfigureEarthTracking(new_config_settings.geospatial_mode));
+  XR_RETURN_RESULT_IF_FAILED(
       ConfigureEyeTracking(new_config_settings.eye_tracking_mode));
   return XR_SUCCESS;
 }
@@ -1184,6 +1327,7 @@ void OpenXrManager::AbortConfigureSession() {
   ConfigureFaceTracking(config_settings_.face_tracking_mode);
   ConfigureObjectTracking(config_settings_.object_tracking_mode,
                           config_settings_.object_tracking_labels);
+  ConfigureEarthTracking(config_settings_.geospatial_mode);
 }
 
 XrResult OpenXrManager::ConfigurePlaneTracking(PlaneTrackingMode mode) {
@@ -1326,6 +1470,24 @@ XrResult OpenXrManager::ConfigureFaceTracking(FaceTrackingMode mode) {
   }
 }
 
+XrResult OpenXrManager::ConfigureEarthTracking(GeospatialMode mode) {
+  switch (mode) {
+    case GeospatialMode::kDisabled: {
+      if (earth_tracker_ != XR_NULL_HANDLE) {
+        XR_RETURN_RESULT_IF_FAILED(destroy_earth_tracker_(earth_tracker_));
+        earth_tracker_ = XR_NULL_HANDLE;
+        last_earth_tracker_state_update_.reset();
+      }
+      return XR_SUCCESS;
+      break;
+    };
+    case GeospatialMode::kEnabled: {
+      return MaybeCreateEarthTracker();
+      break;
+    };
+  }
+}
+
 XrResult OpenXrManager::ConfigureEyeTracking(EyeTrackingMode mode) {
   if (mode == EyeTrackingMode::kDisabled) {
     if (eye_tracker_ != XR_NULL_HANDLE) {
@@ -1435,7 +1597,7 @@ XrResult OpenXrManager::GetFaceState(XrTime time,
                                      std::vector<float> &out_blend_shape_values,
                                      std::vector<float> &out_confidence_values)
     {
-  absl::MutexLock lock(mutex_);
+  absl::MutexLock lock(&mutex_);
   XrFaceStateGetInfoANDROID getInfo = {
       .type = XR_TYPE_FACE_STATE_GET_INFO_ANDROID,
       .next = nullptr,
@@ -1463,9 +1625,23 @@ XrResult OpenXrManager::GetFaceState(XrTime time,
   return XR_SUCCESS;
 }
 
+XrResult OpenXrManager::MaybeCreateEarthTracker() {
+  if (earth_tracker_ != XR_NULL_HANDLE) {
+    return XR_SUCCESS;
+  }
+  XrEarthTrackerCreateInfoANDROIDX1 create_info = {
+      .type = XR_TYPE_EARTH_TRACKER_CREATE_INFO_ANDROIDX1,
+      .next = nullptr,
+      .shouldTrackPlanes = XR_FALSE,
+  };
+  XR_RETURN_RESULT_IF_FAILED(
+      create_earth_tracker_(session_, &create_info, &earth_tracker_));
+  return XR_SUCCESS;
+}
+
 XrResult OpenXrManager::GetEyesInfo(XrTime time, XrEyesANDROID* out_eyes,
                                     bool is_fine_tracking_mode) {
-  absl::MutexLock lock(mutex_);
+  absl::MutexLock lock(&mutex_);
   XrEyesGetInfoANDROID getInfo = {
       .type = XR_TYPE_EYES_GET_INFO_ANDROID,
       .next = nullptr,
@@ -1587,7 +1763,7 @@ std::vector<XrTrackableANDROID> OpenXrManager::GetTrackableObjects(
   // Query the number of trackables
   XrResult result;
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     if (object_trackable_tracker_ == XR_NULL_HANDLE) {
       LOG(ERROR) << "Object trackable tracker is null";
       return {};
@@ -1611,7 +1787,7 @@ std::vector<XrTrackableANDROID> OpenXrManager::GetTrackableObjects(
 
   // Fetch the actual trackable handles in the appropriately resized array.
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     result = get_all_trackables_(object_trackable_tracker_,
                                  trackableCountOutput, &trackableCountOutput,
                                  all_objects.data());
@@ -1663,7 +1839,7 @@ std::vector<XrTrackableANDROID> OpenXrManager::GetPlanes() {
   // Query the number of trackables
   XrResult result;
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     result = get_all_trackables_(planes_trackable_tracker_, 0,
                                  &trackableCountOutput, nullptr);
   }
@@ -1681,7 +1857,7 @@ std::vector<XrTrackableANDROID> OpenXrManager::GetPlanes() {
 
   // Fetch the actual trackable handles in the appropriately resized array.
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     result = get_all_trackables_(planes_trackable_tracker_,
                                  trackableCountOutput, &trackableCountOutput,
                                  all_plane_trackables_.data());
@@ -2013,7 +2189,7 @@ bool OpenXrManager::GetStereoViews(XrTime time, bool is_head_tracking_enabled,
       .space = space};
   uint32_t view_count;
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     XR_RETURN_IF_FAILED(xrLocateViews(session_, &view_locate_info, &view_state,
                                       kViewTypeStereoViewCount, &view_count,
                                       out_views->data()));
@@ -2046,14 +2222,14 @@ void OpenXrManager::HandleSessionChangedEvent(
               XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO};
 
       {
-        absl::MutexLock lock(mutex_);
+        absl::MutexLock lock(&mutex_);
         xrBeginSession(session_, &beginInfo);
       }
       break;
     }
     case XR_SESSION_STATE_STOPPING: {
       {
-        absl::MutexLock lock(mutex_);
+        absl::MutexLock lock(&mutex_);
         xrEndSession(session_);
       }
       break;
@@ -2096,7 +2272,7 @@ void OpenXrManager::StartPollingThread() {
 }
 
 bool OpenXrManager::ShouldPoll() const {
-  absl::MutexLock lock(mutex_);
+  absl::MutexLock lock(&mutex_);
   return !stop_polling_;
 }
 
@@ -2106,7 +2282,7 @@ void OpenXrManager::PollingLoop() {
     PollOpenXR();
     poll_time = AddTimespecs(poll_time, kPollingInterval);
     {
-      absl::MutexLock lock(mutex_);
+      absl::MutexLock lock(&mutex_);
       clock_->AwaitWithDeadline(&mutex_, &stop_polling_, poll_time);
     }
   }
@@ -2117,7 +2293,7 @@ void OpenXrManager::PollOpenXR() {
     XrEventDataBuffer event = {XR_TYPE_EVENT_DATA_BUFFER};
     XrResult result;
     {
-      absl::MutexLock lock(mutex_);
+      absl::MutexLock lock(&mutex_);
       if (instance_ == XR_NULL_HANDLE) {
         return;
       }
@@ -2141,6 +2317,14 @@ void OpenXrManager::PollOpenXR() {
         const XrEventDataSessionStateChanged &session_state_changed_event =
             *reinterpret_cast<XrEventDataSessionStateChanged *>(&event);
         HandleSessionChangedEvent(session_state_changed_event);
+        break;
+      }
+      case XR_TYPE_EVENT_DATA_EARTH_TRACKER_STATE_CHANGED_ANDROIDX1: {
+        LOG(INFO) << "Received earth tracker state changed event";
+        const auto& earth_event = *reinterpret_cast<
+            const XrEventDataEarthTrackerStateChangedANDROIDX1*>(&event);
+        absl::MutexLock lock(&mutex_);
+        last_earth_tracker_state_update_ = earth_event;
         break;
       }
       case XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING: {
@@ -2167,13 +2351,13 @@ void OpenXrManager::JoinPollingThread() {
 }
 
 XrSession OpenXrManager::GetXrSession() {
-  absl::MutexLock lock(mutex_);
+  absl::MutexLock lock(&mutex_);
 
   return session_;
 }
 
 XrInstance OpenXrManager::GetXrInstance() {
-  absl::MutexLock lock(mutex_);
+  absl::MutexLock lock(&mutex_);
 
   return instance_;
 }

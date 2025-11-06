@@ -56,5 +56,11 @@ std::string SerializeToBase64(const uint8_t* data, uint32_t size);
 // Converts string_b64 to its binary equivalent and writes it into dest.
 bool DeserializeBase64(const std::string& string_b64, std::string* dest);
 
+// Extracts the leading comments and whitespace from a string.
+//
+// Note: This only works for line comments starting with a # character.
+absl::string_view ExtractLeadingCommentsAndWhitespace(
+    absl::string_view content);
+
 }  // namespace imp
 #endif  // THIRD_PARTY_IMPRESS_CORE_COMMON_STRING_HELPERS_H_

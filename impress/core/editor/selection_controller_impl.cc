@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
+#include "core/common/log.h"
 #include "absl/status/status.h"
 #include "core/common/registry.h"
 #include "core/editor/editor.h"
@@ -36,6 +37,77 @@
 #include "core/view/framework/gestures/tap_gesture.h"
 
 namespace imp::editor {
+
+namespace {
+
+float3 GetTargetsCenterPosition(
+    const absl::flat_hash_set<NodeHandle>& targets) {
+  float3 target_position = kZero3;
+  int valid_nodes = 0;
+  // Calculate the center position of the targets.
+  for (const auto& node : targets) {
+    if (!node) {
+      continue;
+    }
+    target_position += node->GetWorldPosition();
+    valid_nodes++;
+  }
+  return valid_nodes > 0 ? target_position / valid_nodes : kZero3;
+}
+
+// Tries to select the node under single selection mode. Returns true if the
+// selected_nodes is updated.
+bool TrySelectNodeUnderSingleSelection(
+    NodeHandle node_to_select,
+    absl::flat_hash_set<NodeHandle>& selected_nodes) {
+  // If the node has already been the only selected node, do nothing.
+  if (selected_nodes.size() == 1 && selected_nodes.contains(node_to_select)) {
+    return false;
+  }
+
+  if (!node_to_select) {
+    if (selected_nodes.empty()) {
+      // If the node is invalid and the selected_nodes is empty, do nothing.
+      return false;
+    }
+
+    // If the node is invalid, deselect all nodes.
+    selected_nodes.clear();
+    return true;
+  }
+
+  selected_nodes.clear();
+  selected_nodes.insert(node_to_select);
+  return true;
+}
+
+// Tries to select the node under multi selection mode. Returns true if the
+// selected_nodes is updated.
+bool TrySelectNodeUnderMultiSelection(
+    NodeHandle node_to_select,
+    absl::flat_hash_set<NodeHandle>& selected_nodes) {
+  if (!node_to_select) {
+    if (selected_nodes.empty()) {
+      // If the node is invalid and the selected_nodes is empty, do nothing.
+      return false;
+    }
+
+    // If the node is invalid, deselect all nodes.
+    selected_nodes.clear();
+    return true;
+  }
+
+  if (selected_nodes.contains(node_to_select)) {
+    // Remove the node from the selection if it's already there.
+    selected_nodes.erase(node_to_select);
+  } else {
+    // Add the node to the selection if it's not already there.
+    selected_nodes.insert(node_to_select);
+  }
+  return true;
+}
+
+}  // namespace
 
 SelectionControllerImpl::SelectionControllerImpl(BaseView* view)
     : System(view) {
@@ -87,41 +159,44 @@ SelectionControllerImpl::SelectionControllerImpl(BaseView* view)
   // Move camera view to frame a selected node.
   editor_dispatcher.Connect(
       [this](const imp::KeyboardEvent& event) {
-        if (!selected_node_.IsValid()) return;
+        if (selected_nodes_.empty()) {
+          return;
+        }
+
         if (event.type == KeyboardEventType::kOnUp &&
             event.key.code == VirtualKeyCode::VK_f) {
-          FocusCameraOnSelection(selected_node_);
+          FocusCameraOnSelection();
         }
       },
       this);
 
   // Catches an event to toggle framing of a selected node.
   editor_dispatcher.Connect(
-      [this](const FocusOnSelectionEvent& event) {
-        FocusCameraOnSelection(event.node);
-      },
+      [this](const FocusOnSelectionEvent& event) { FocusCameraOnSelection(); },
       this);
 }
 
-NodeHandle SelectionControllerImpl::GetSelectedNode() const {
-  return selected_node_;
+const absl::flat_hash_set<NodeHandle>&
+SelectionControllerImpl::GetSelectedNodes() const {
+  return selected_nodes_;
 }
 
-bool SelectionControllerImpl::IsNodeOrAncestorSelected(NodeHandle node) {
-  return selected_node_.IsValid() &&
-         GetView().GetPathManager().IsAncestorOf(selected_node_, node);
-}
+void SelectionControllerImpl::TrySelectNode(
+    NodeHandle node_to_select, Editor::SelectionMode selection_mode) {
+  bool is_selected_nodes_updated =
+      selection_mode == Editor::SelectionMode::kMultipleNodes
+          ? TrySelectNodeUnderMultiSelection(node_to_select, selected_nodes_)
+          : TrySelectNodeUnderSingleSelection(node_to_select, selected_nodes_);
 
-void SelectionControllerImpl::TrySelectNode(NodeHandle node_to_select) {
-  if (selected_node_ == node_to_select) {
+  if (!is_selected_nodes_updated) {
+    // If the selected nodes are not updated, do nothing.
     return;
   }
 
+  // Send a NodeSelectionChangedEvent to notify the selection change.
   Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
   Dispatcher& editor_dispatcher = editor.GetDispatcher();
-  editor_dispatcher.Send(
-      NodeSelectionChangedEvent(node_to_select, selected_node_));
-  selected_node_ = node_to_select;
+  editor_dispatcher.Send(NodeSelectionChangedEvent());
 }
 
 void SelectionControllerImpl::CycleOrUpdateSelection(
@@ -173,14 +248,22 @@ void SelectionControllerImpl::CycleOrUpdateSelection(
   }
   selectable_nodes_ = new_selectable_nodes;
   // TODO: Review this function to make sure the target exists.
-  TrySelectNode(target);
+  TrySelectNode(target, Editor::SelectionMode::kSingleNode);
 }
 
-void SelectionControllerImpl::FocusCameraOnSelection(NodeHandle target) {
+void SelectionControllerImpl::FocusCameraOnSelection() {
+  if (selected_nodes_.empty()) {
+    IMP_LOG(imp::INFO) << "Cannot focus camera on selection because there are no "
+                 "selected nodes.";
+    return;
+  }
+
   ComponentHandle<CameraComponent> editor_camera =
       GetView().GetRegistry().Get<Editor>()->get().GetCamera();
 
-  absl::Status status = MoveIntoView(editor_camera, target,
+  std::vector<NodeHandle> targets(selected_nodes_.begin(),
+                                  selected_nodes_.end());
+  absl::Status status = MoveIntoView(editor_camera, targets,
                                      CameraHelperOptions::kIncludeDescendants);
   // If there was nothing viewable found in the selection,
   // the camera was not moved. Simply exit early from the function.
@@ -189,7 +272,7 @@ void SelectionControllerImpl::FocusCameraOnSelection(NodeHandle target) {
   // Update the pivot.
   float3 cam_position = editor_camera->GetNode()->GetWorldPosition();
   NodeHandle pivot = editor_camera->GetNode()->GetParent();
-  pivot->SetWorldPosition(target->GetWorldPosition());
+  pivot->SetWorldPosition(GetTargetsCenterPosition(selected_nodes_));
   // After setting the pivot, we need to set the editor camera position again.
   editor_camera->GetNode()->SetWorldPosition(cam_position);
 }

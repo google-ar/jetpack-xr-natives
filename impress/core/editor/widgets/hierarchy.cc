@@ -18,7 +18,10 @@
 #include <string>
 #include <vector>
 
+#include "absl/container/flat_hash_set.h"
+#include "absl/log/check.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
 #include "dear_imgui/imgui_internal.h"  // IWYU pragma: keep
@@ -32,10 +35,14 @@
 #include "core/editor/layout/editor_control_flags.h"
 #include "core/editor/layout/helpers.h"
 #include "core/editor/ui/drag_and_drop_node.h"
+#include "core/input/key_codes.h"
+#include "core/input/keyboard_event.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_flag.h"
 #include "core/ncsb/node_handle.h"
+#include "core/ncsb/path_manager.h"
+#include "core/ncsb/scene_metadata.h"
 #include "core/view/framework/camera/camera_helpers.h"
 
 namespace imp::editor {
@@ -78,12 +85,19 @@ Hierarchy::Hierarchy(BaseView& view, absl::string_view filter)
   Editor& editor = view_.GetRegistry().Get<Editor>()->get();
   editor.GetDispatcher().Connect(
       [this](const NodeSelectionChangedEvent& event) mutable {
-        if (event.selected == active_node_) {
+        selected_nodes_changed_ = true;
+      },
+      this);
+
+  editor.GetDispatcher().Connect(
+      [this](const imp::KeyboardEvent& event) {
+        if (HasKeyModifier(KeyModifier::CTRL_OR_GUI, event.key.modifiers)) {
+          is_multi_selection_enabled_ =
+              event.type == KeyboardEventType::kOnDown ? true : false;
           return;
         }
 
-        active_node_changed_ = true;
-        active_node_ = event.selected;
+        is_multi_selection_enabled_ = false;
       },
       this);
 }
@@ -107,9 +121,11 @@ void Hierarchy::DrawImGui() {
     ImGui::EndPopup();
   }
   if (ImGui::BeginDragDropTarget()) {
-    NodeHandle node = AcceptDragAndDropPayloadNode();
-    if (node) {
-      node->SetParentKeepWorldTransform(NodeHandle());
+    std::vector<NodeHandle> nodes = AcceptDragAndDropPayloadNodes();
+    for (NodeHandle& node : nodes) {
+      if (node) {
+        node->SetParentKeepWorldTransform(NodeHandle());
+      }
     }
     ImGui::EndDragDropTarget();
   }
@@ -121,21 +137,24 @@ void Hierarchy::DrawImGui() {
       GenerateUniqueImGuiLabel("filter", this, EditorControlFlags::kNone)
           .c_str());
 
+  const absl::flat_hash_set<NodeHandle>& selected_nodes =
+      view_.GetRegistry().Get<Editor>()->get().GetSelectedNodes();
   // Draw the Nodes section.
   view_.ForEachNode(
-      [this](NodeHandle node) {
+      [this, &selected_nodes](NodeHandle node) {
         std::optional<RobinSet<NodeHandle>> filtered_nodes = std::nullopt;
         if (filter_.IsActive()) {
           filtered_nodes.emplace();
           CollectFilteredNodes(filter_, *filtered_nodes, node);
         }
-        DrawHierarchy(node, filtered_nodes);
+        DrawHierarchy(node, filtered_nodes, selected_nodes);
       },
       NodeFlags::kIsRoot);
 }
 
 void Hierarchy::DrawHierarchy(
-    NodeHandle node, std::optional<RobinSet<NodeHandle>> filtered_nodes) {
+    NodeHandle node, std::optional<RobinSet<NodeHandle>> filtered_nodes,
+    const absl::flat_hash_set<NodeHandle>& selected_nodes) {
   if (filtered_nodes.has_value() && !filtered_nodes->contains(node)) return;
 
   Editor& editor = view_.GetRegistry().Get<Editor>()->get();
@@ -150,14 +169,14 @@ void Hierarchy::DrawHierarchy(
   }
 #endif
 
-  if (!DrawNode(node, filtered_nodes)) {
+  if (!DrawNode(node, filtered_nodes, selected_nodes)) {
     return;
   }
 
   if (node) {
     for (NodeHandle child : node->GetChildren()) {
       // Recurse with the children.
-      DrawHierarchy(child, filtered_nodes);
+      DrawHierarchy(child, filtered_nodes, selected_nodes);
     }
   }
   ImGui::TreePop();
@@ -171,18 +190,20 @@ std::string Hierarchy::GetTreeNodeLabelForNode(NodeHandle node) {
   return absl::StrCat(node_name, "##", node->GetEntity().getId());
 }
 
-bool Hierarchy::DrawNode(NodeHandle node,
-                         std::optional<RobinSet<NodeHandle>> filtered_nodes) {
+bool Hierarchy::DrawNode(
+    NodeHandle node, std::optional<RobinSet<NodeHandle>> filtered_nodes,
+    const absl::flat_hash_set<NodeHandle>& selected_nodes) {
   ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow |
                              ImGuiTreeNodeFlags_OpenOnDoubleClick |
                              ImGuiTreeNodeFlags_SpanAvailWidth;
+  bool is_node_selected = selected_nodes.contains(node);
 
   // Check if the node is currently selected.
-  if (active_node_ == node) {
+  if (is_node_selected) {
     flags |= ImGuiTreeNodeFlags_Selected;
-    if (active_node_changed_) {
+    if (selected_nodes_changed_) {
       ImGui::SetNextItemOpen(true, ImGuiCond_Always);
-      active_node_changed_ = false;
+      selected_nodes_changed_ = false;
     }
   }
 
@@ -243,53 +264,128 @@ bool Hierarchy::DrawNode(NodeHandle node,
   // rest of the UX.
   if (ImGui::IsMouseReleased(0) &&
       ImGui::IsItemHovered(ImGuiHoveredFlags_None) && is_mouse_beyond_arrow) {
-    if (active_node_ == node) {
-      // Deselect
-      active_node_ = NodeHandle();
+    if (is_multi_selection_enabled_) {
+      editor.SelectNode(node, Editor::SelectionMode::kMultipleNodes);
     } else {
-      // Select
-      active_node_ = node;
+      if (is_node_selected && selected_nodes.size() == 1) {
+        // Deselect the node if the current node is the only selected node.
+        // When we have multiple selected nodes and we click on one of them,
+        // we want to deselect the other selected nodes and keep the current
+        // node selected.
+        editor.SelectNode(NodeHandle());
+      } else {
+        editor.SelectNode(node);
+      }
     }
-    editor.SelectNode(active_node_);
   }
 
   if (MobileLongPress(GetTreeNodeLabelForNode(node))) {
     ImGui::OpenPopup(GetTreeNodeLabelForNode(node).c_str());
   }
 
+  bool has_multiple_selection = selected_nodes.size() > 1;
   if (ImGui::BeginPopupContextItem(GetTreeNodeLabelForNode(node).c_str())) {
-    if (ImGui::MenuItem("Add parent node")) {
+    if (!has_multiple_selection && ImGui::MenuItem("Add parent node")) {
       NodeHandle parent = view_.CreateNode();
       EditorTouch(parent);
       parent->SetParentKeepWorldTransform(node->GetParent());
       node->SetParentKeepWorldTransform(parent);
       editor.SelectNode(parent);
     }
-    if (ImGui::MenuItem("Add child node")) {
+    if (!has_multiple_selection && ImGui::MenuItem("Add child node")) {
       NodeHandle child = view_.CreateNode();
       EditorTouch(child);
       child->SetParentKeepWorldTransform(node);
       editor.SelectNode(child);
     }
-    if (ImGui::MenuItem("Delete node")) {
+    if (ImGui::MenuItem(
+            absl::StrFormat("Delete node%s", has_multiple_selection ? "s" : "")
+                .c_str())) {
+      // If the node is selected, delete all selected nodes. Otherwise, delete
+      // the current node.
+      std::vector<NodeHandle> nodes_to_delete =
+          is_node_selected ? std::vector<NodeHandle>(selected_nodes.begin(),
+                                                     selected_nodes.end())
+                           : std::vector<NodeHandle>{node};
+
       editor.SelectNode(NodeHandle());
-      view_.DestroyNode(node);
+      for (auto& selected_node : nodes_to_delete) {
+        view_.DestroyNode(selected_node);
+      }
     }
     if (HasValidMesh(node, CameraHelperOptions::kIncludeDescendants) &&
         ImGui::MenuItem("Focus on this node.")) {
       Editor& editor = view_.GetRegistry().Get<Editor>()->get();
-      editor.GetDispatcher().Send(FocusOnSelectionEvent(node));
+      editor.GetDispatcher().Send(FocusOnSelectionEvent());
     }
     ImGui::EndPopup();
   }
 
-  BeginDragAndDropSource(node);
-  if (ImGui::BeginDragDropTarget()) {
-    NodeHandle child = AcceptDragAndDropPayloadNode();
-    if (child) {
-      child->SetParentKeepWorldTransform(node);
+  if (is_node_selected) {
+    // If the node is selected, start a drag-and-drop operation for all
+    // currently selected nodes.
+    BeginDragAndDropSource(
+        std::vector<NodeHandle>(selected_nodes.begin(), selected_nodes.end()));
+  } else {
+    // Otherwise, start a drag-and-drop operation for the current node only.
+    BeginDragAndDropSource(node);
+  }
+
+  // Peak at the drag & drop payload node to make sure this is a valid drop
+  // target.
+  std::vector<NodeHandle> peeked_drag_and_drop_payload_nodes =
+      GetDragAndDropPayloadNodes();
+
+  if (!peeked_drag_and_drop_payload_nodes.empty()) {
+    bool is_valid_target = true;
+    for (const NodeHandle& peeked_node : peeked_drag_and_drop_payload_nodes) {
+      // The peeked node cannot be an ancestor of the target node, because it
+      // would cause a cycle in the scene graph leading to a crash.
+      bool is_ancestor_of_target =
+          view_.GetPathManager().IsAncestorOf(peeked_node, node);
+
+      // The peeked node cannot be reparented if it is a child of a base isf
+      // file. That is because the Isf inheritance format is an additive merge
+      // that doesn't support doing this, so it can't be saved out and loaded
+      // back in.
+      //
+      // Outside sandbox mode, there will be no SceneMetadata which allows
+      // arbitrary reparenting for debugging purposes.
+      //
+      // Note: This is intentionally checked here instead of when calling
+      // BeginDragAndDropSource because these nodes can still be dragged into
+      // other places (i.e. NodeSceneHandle, the AssetLibrary).
+      auto peeked_metadata = peeked_node->GetComponent<SceneMetadata>();
+      bool is_child_of_base =
+          peeked_metadata && peeked_metadata->IsChildOfBase();
+
+      if (is_ancestor_of_target || is_child_of_base) {
+        is_valid_target = false;
+        break;
+      }
     }
-    ImGui::EndDragDropTarget();
+
+    if (is_valid_target) {
+      // It's a valid drop target.
+      if (ImGui::BeginDragDropTarget()) {
+        // Accept the drag & drop payload node, which clears the payload. Ensure
+        // that the payload is the same as the one we peeked at earlier.
+        std::vector<NodeHandle> drag_and_drop_payload_nodes =
+            AcceptDragAndDropPayloadNodes();
+        if (!drag_and_drop_payload_nodes.empty()) {
+          
+
+          // Reparent each node in the payload.
+          for (auto& drag_and_drop_payload_node : drag_and_drop_payload_nodes) {
+            drag_and_drop_payload_node->SetParentKeepWorldTransform(node);
+          }
+          // Expand the new parent node to show the dropped children.
+          manually_expanded_nodes_.insert(node);
+          manually_collapsed_nodes_.erase(node);
+        }
+        ImGui::EndDragDropTarget();
+      }
+    }
   }
 
   return is_expanded;

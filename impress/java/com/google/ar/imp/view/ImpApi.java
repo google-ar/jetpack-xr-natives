@@ -48,8 +48,6 @@ public class ImpApi implements ImpApiScuba {
   /** Tracks whether {@ link #isReleased} has been called in this API. */
   private boolean released = false;
 
-  static FrameScheduler.Factory frameSchedulerFactory = new ChoreographerFrameScheduler.Factory();
-
   /**
    * Interface for createAsync().
    *
@@ -79,7 +77,17 @@ public class ImpApi implements ImpApiScuba {
       Context context,
       android.view.View androidView,
       @Nullable FragmentHost host) {
-    return createSync(setupParams, context, androidView, host, 0);
+    return createSync(setupParams, context, androidView, host, 0, null);
+  }
+
+  /** ImpApi is valid for further calls immediately. */
+  public static ImpApi createSync(
+      SetupParams setupParams,
+      Context context,
+      android.view.View androidView,
+      @Nullable FragmentHost host,
+      long eglContext) {
+    return createSync(setupParams, context, androidView, host, eglContext, null);
   }
 
   public static ImpApi createSync(
@@ -87,7 +95,11 @@ public class ImpApi implements ImpApiScuba {
       Context context,
       android.view.View androidView,
       @Nullable FragmentHost host,
-      long eglContext) {
+      long eglContext,
+      @Nullable FrameScheduler.Factory frameSchedulerFactory) {
+    if (frameSchedulerFactory == null) {
+      frameSchedulerFactory = new ChoreographerFrameScheduler.Factory();
+    }
     FrameScheduler frameScheduler =
         frameSchedulerFactory.create(getThreadMode(setupParams.getThreadMode()));
 
@@ -173,10 +185,27 @@ public class ImpApi implements ImpApiScuba {
       long eglContext,
       Executor executor,
       PostCreatedCallback postCreatedCallback) {
+    return createAsync(
+        setupParams, context, androidView, host, eglContext, executor, postCreatedCallback, null);
+  }
+
+  public static ImpApi createAsync(
+      SetupParams setupParams,
+      Context context,
+      android.view.View androidView,
+      FragmentHost host,
+      long eglContext,
+      Executor executor,
+      PostCreatedCallback postCreatedCallback,
+      @Nullable FrameScheduler.Factory frameSchedulerFactory) {
     ImpApi impApi = new ImpApi();
 
     // Create the view on the provided executor to isolate file io from the main thread.
     ListenableFuture<View> viewFuture = createViewAsync(setupParams, context, host, executor);
+
+    if (frameSchedulerFactory == null) {
+      frameSchedulerFactory = new ChoreographerFrameScheduler.Factory();
+    }
 
     FrameScheduler frameScheduler =
         frameSchedulerFactory.create(getThreadMode(setupParams.getThreadMode()));
@@ -216,8 +245,23 @@ public class ImpApi implements ImpApiScuba {
       android.view.View androidView,
       FragmentHost host,
       Executor executor) {
+    return createAsync(
+        setupParams, context, androidView, host, executor, (FrameScheduler.Factory) null);
+  }
+
+  public static ListenableFuture<ImpApi> createAsync(
+      SetupParams setupParams,
+      Context context,
+      android.view.View androidView,
+      FragmentHost host,
+      Executor executor,
+      @Nullable FrameScheduler.Factory frameSchedulerFactory) {
     ListenableFuture<View> viewFuture =
         ImpApi.createViewAsync(setupParams, context, host, executor);
+
+    if (frameSchedulerFactory == null) {
+      frameSchedulerFactory = new ChoreographerFrameScheduler.Factory();
+    }
     FrameScheduler frameScheduler =
         frameSchedulerFactory.create(getThreadMode(setupParams.getThreadMode()));
 
@@ -527,13 +571,5 @@ public class ImpApi implements ImpApiScuba {
    */
   public void setupSurfaceRenderer(Surface surface, String visibilityGroup) {
     setupSurfaceRenderer(surface, visibilityGroup, null);
-  }
-
-  /**
-   * Select a factory implementation matching the desired FrameScheduler. This must be called prior
-   * to createAsync. By default, frame scheduling is done by the Choreographer.
-   */
-  public static void setFrameSchedulerFactory(FrameScheduler.Factory factory) {
-    frameSchedulerFactory = factory;
   }
 }

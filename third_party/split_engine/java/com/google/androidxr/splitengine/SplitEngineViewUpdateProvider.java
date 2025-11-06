@@ -19,15 +19,19 @@ package com.google.androidxr.splitengine;
 import android.app.Activity;
 import android.util.DisplayMetrics;
 import androidx.annotation.Nullable;
-import androidx.xr.scenecore.impl.JxrPlatformAdapterAxr;
-import androidx.xr.scenecore.impl.perception.Fov;
-import androidx.xr.scenecore.impl.perception.Pose;
-import androidx.xr.scenecore.impl.perception.ViewProjection;
-import androidx.xr.scenecore.impl.perception.ViewProjections;
+import androidx.xr.arcore.RenderViewpoint;
+import androidx.xr.arcore.openxr.NativeHandleGetter;
+import androidx.xr.arcore.openxr.OpenXrRuntime;
+import androidx.xr.runtime.Config.HeadTrackingMode;
+import androidx.xr.runtime.FieldOfView;
+import androidx.xr.runtime.Session;
+import androidx.xr.runtime.SessionCreateResult;
+import androidx.xr.runtime.SessionCreateSuccess;
+import androidx.xr.runtime.math.Pose;
+import androidx.xr.runtime.math.Quaternion;
+import androidx.xr.runtime.math.Vector3;
 import com.android.extensions.xr.node.Node;
 import com.google.ar.imp.view.splitengine.ImpSplitEngine;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import java.util.concurrent.Executors;
 
 /**
  * Provides the view update parameters for split engine to update the camera. These parameters are
@@ -40,17 +44,42 @@ public class SplitEngineViewUpdateProvider implements ImpSplitEngine.SplitEngine
 
   private static final String TAG = SplitEngineViewUpdateProvider.class.getSimpleName();
   private final Activity activity;
-  private final JxrPlatformAdapterAxr platformAdapterAxr;
+  private final OpenXrRuntime openXrRuntime;
+  private final RenderViewpoint left;
+  private final RenderViewpoint right;
 
   public SplitEngineViewUpdateProvider(Activity activity, Node sceneNode, Node windowLeashNode) {
+    this(createSession(activity), activity, sceneNode, windowLeashNode);
+  }
+
+  public SplitEngineViewUpdateProvider(
+      Session session, Activity activity, Node sceneNode, Node windowLeashNode) {
     this.activity = activity;
-    this.platformAdapterAxr =
-        JxrPlatformAdapterAxr.create(
-            activity,
-            Executors.newSingleThreadScheduledExecutor(
-                new ThreadFactoryBuilder().setNameFormat("axroptimizedapp").build()),
-            sceneNode,
-            windowLeashNode);
+    openXrRuntime =
+        (OpenXrRuntime)
+            session.getRuntimes().stream()
+                .filter(runtime -> runtime instanceof OpenXrRuntime)
+                .findFirst()
+                .get();
+    left = RenderViewpoint.left(session);
+    right = RenderViewpoint.right(session);
+  }
+
+  private static Session createSession(Activity activity) {
+    SessionCreateResult result = Session.create(activity);
+    if (result instanceof SessionCreateSuccess sessionCreateSuccess) {
+      Session session = sessionCreateSuccess.getSession();
+      session.configure(
+          session
+              .getConfig()
+              .copy(
+                  session.getConfig().getPlaneTracking(),
+                  session.getConfig().getHandTracking(),
+                  HeadTrackingMode.LAST_KNOWN));
+      return session;
+    } else {
+      throw new IllegalStateException("Failed to create session.");
+    }
   }
 
   @Override
@@ -67,40 +96,49 @@ public class SplitEngineViewUpdateProvider implements ImpSplitEngine.SplitEngine
   @Override
   @Nullable
   public ImpSplitEngine.ViewUpdateParams getViewUpdateParams() {
-    ViewProjections views = platformAdapterAxr.getStereoViewsInOpenXrUnboundedSpace();
-    if (views == null) {
+    if (left == null || right == null) {
       return null;
     }
-    return createViewUpdateParams(views);
+    return createViewUpdateParams(left, right);
   }
 
   // TODO: traorem - Remove this once SceneViewerXR can use JXR plane APIs directly.
   public long getNativeSession() {
-    return platformAdapterAxr.getNativeSession();
+    return NativeHandleGetter.getXrSessionPointer(openXrRuntime);
   }
 
   // TODO: traorem - Remove this once SceneViewerXR can use JXR plane APIs directly.
   public long getNativeInstance() {
-    return platformAdapterAxr.getNativeInstance();
+    return NativeHandleGetter.getXrInstancePointer(openXrRuntime);
   }
 
-  private ImpSplitEngine.ViewUpdateParams createViewUpdateParams(ViewProjections views) {
+  private ImpSplitEngine.ViewUpdateParams createViewUpdateParams(
+      RenderViewpoint left, RenderViewpoint right) {
     return new ImpSplitEngine.ViewUpdateParams(
-        createViewProjection(views.getLeftEye()), createViewProjection(views.getRightEye()));
+        createViewProjection(left.getState().getValue()),
+        createViewProjection(right.getState().getValue()));
   }
 
-  private ImpSplitEngine.ViewProjection createViewProjection(ViewProjection viewProjection) {
+  private ImpSplitEngine.ViewProjection createViewProjection(RenderViewpoint.State viewProjection) {
     return new ImpSplitEngine.ViewProjection(
-        createFov(viewProjection.getFov()), createPose(viewProjection.getPose()));
+        createFov(viewProjection.getFieldOfView()), createPose(viewProjection.getPose()));
   }
 
-  private ImpSplitEngine.Fov createFov(Fov fov) {
+  private ImpSplitEngine.Fov createFov(FieldOfView fov) {
     return new ImpSplitEngine.Fov(
         fov.getAngleLeft(), fov.getAngleRight(), fov.getAngleUp(), fov.getAngleDown());
   }
 
   private ImpSplitEngine.Pose createPose(Pose pose) {
+    Vector3 translation = pose.getTranslation();
+    Quaternion rotation = pose.getRotation();
     return new ImpSplitEngine.Pose(
-        pose.tx(), pose.ty(), pose.tz(), pose.qx(), pose.qy(), pose.qz(), pose.qw());
+        translation.getX(),
+        translation.getY(),
+        translation.getZ(),
+        rotation.getX(),
+        rotation.getY(),
+        rotation.getZ(),
+        rotation.getW());
   }
 }

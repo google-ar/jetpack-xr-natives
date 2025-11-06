@@ -20,7 +20,7 @@
 #include <vector>
 
 #include "core/assets/gltf/object_model/pointer_declarations/materials.h"
-#include "core/assets/gltf/object_model/pointer_declarations/nodes_transform.h"
+#include "core/assets/gltf/object_model/pointer_declarations/nodes.h"
 #include "core/assets/gltf/object_model/property_pointer.h"
 
 namespace imp::gltf {
@@ -37,6 +37,10 @@ GetCorePointerDeclarations() {
   declarations.push_back(std::make_unique<NodesScalePointerDeclaration>());
   declarations.push_back(
       std::make_unique<NodesTranslationPointerDeclaration>());
+  declarations.push_back(std::make_unique<NodesLengthPointerDeclaration>());
+  declarations.push_back(
+      std::make_unique<NodesChildrenLengthPointerDeclaration>());
+  declarations.push_back(std::make_unique<NodesParentPointerDeclaration>());
 
   declarations.push_back(
       std::make_unique<MaterialsAlphaCutoffPointerDeclaration>());

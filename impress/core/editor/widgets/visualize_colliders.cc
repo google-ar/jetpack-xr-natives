@@ -41,8 +41,10 @@ VisualizeColliders::VisualizeColliders(BaseView& view, bool use_view_dispatcher,
           : view_.GetRegistry().Get<Editor>()->get().GetDispatcher();
   dispatcher.Connect(
       [this](const NodeSelectionChangedEvent& event) mutable {
+        // We only support single selection for the visualize colliders widget.
         // Track which node is assigned in the hierarchy widget.
-        selected_node_ = event.selected;
+        selected_node_ =
+            view_.GetRegistry().Get<Editor>()->get().GetSingleSelectedNode();
       },
       this);
   dispatcher.Connect(

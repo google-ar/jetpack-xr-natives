@@ -186,9 +186,27 @@ class EditorProtoVisitor {
         }
 
         T* base = other && has_value_fn(other) ? get_value_fn(other) : nullptr;
-        Visit<field_type, T>(
-            field_index, field_id, get_value_fn(field), base,
-            EditorControlFlags::kDefaultWithoutResetUnsetValToBase);
+
+        // When handling optional fields with a 'base' value for comparison, we
+        // need to treat primitive and message types differently to comply with
+        // the proto3 spec on field presence (see
+        // (broken link)).
+        //
+        //  - Optional primitive: Setting it to the default value (e.g., 0) is a
+        //    valid state and should not cause it to be reset to "unset".
+        //
+        //  - Optional message: We need to reset its default fields to match
+        //    the base message because the proto3 spec can't distinguish
+        //    between a default-valued and an unset field within that message.
+        //
+        // These flags enforce that distinction.
+        EditorControlFlags editor_control_flags =
+            field_type == imp::proto::TYPE_MESSAGE
+                ? EditorControlFlags::kDefault
+                : EditorControlFlags::kDefaultWithoutResetUnsetValToBase;
+
+        Visit<field_type, T>(field_index, field_id, get_value_fn(field), base,
+                             editor_control_flags);
       }
     }
 

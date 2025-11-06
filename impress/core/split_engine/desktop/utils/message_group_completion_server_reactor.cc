@@ -31,7 +31,7 @@ void MessageGroupCompletionServerReactor::ReportCompletion(
 
     IMP_LOG(imp::INFO) << "Reporting completion: " << response.DebugString();
 
-    absl::MutexLock lock(responses_mutex_);
+    absl::MutexLock lock(&responses_mutex_);
     responses_.push(std::move(response));
   }
 
@@ -39,7 +39,7 @@ void MessageGroupCompletionServerReactor::ReportCompletion(
 }
 
 void MessageGroupCompletionServerReactor::Shutdown(const grpc::Status& status) {
-  absl::MutexLock status_lock(status_mutex_);
+  absl::MutexLock status_lock(&status_mutex_);
   if (status_ == ReactorStatus::kDead ||
       status_ == ReactorStatus::kTerminating) {
     return;
@@ -50,12 +50,12 @@ void MessageGroupCompletionServerReactor::Shutdown(const grpc::Status& status) {
 }
 
 void MessageGroupCompletionServerReactor::OnDone() {
-  absl::MutexLock status_lock(status_mutex_);
+  absl::MutexLock status_lock(&status_mutex_);
   status_ = ReactorStatus::kDead;
 }
 
 void MessageGroupCompletionServerReactor::OnCancel() {
-  absl::MutexLock status_lock(status_mutex_);
+  absl::MutexLock status_lock(&status_mutex_);
   if (status_ == ReactorStatus::kDead ||
       status_ == ReactorStatus::kTerminating) {
     return;
@@ -67,7 +67,7 @@ void MessageGroupCompletionServerReactor::OnCancel() {
 
 void MessageGroupCompletionServerReactor::OnWriteDone(bool ok) {
   {
-    absl::MutexLock status_lock(status_mutex_);
+    absl::MutexLock status_lock(&status_mutex_);
     if (!ok) {
       if (status_ != ReactorStatus::kTerminating &&
           status_ != ReactorStatus::kDead) {
@@ -82,7 +82,7 @@ void MessageGroupCompletionServerReactor::OnWriteDone(bool ok) {
       return;
     }
     {
-      absl::MutexLock events_lock(responses_mutex_);
+      absl::MutexLock events_lock(&responses_mutex_);
       responses_.pop();
     }
 
@@ -93,12 +93,12 @@ void MessageGroupCompletionServerReactor::OnWriteDone(bool ok) {
 }
 
 void MessageGroupCompletionServerReactor::Write() {
-  absl::MutexLock status_lock(status_mutex_);
+  absl::MutexLock status_lock(&status_mutex_);
   if (status_ != ReactorStatus::kIdle) {
     return;
   }
 
-  absl::MutexLock responses_lock(responses_mutex_);
+  absl::MutexLock responses_lock(&responses_mutex_);
   if (responses_.empty()) {
     return;
   }

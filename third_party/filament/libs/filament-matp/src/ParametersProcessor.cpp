@@ -1185,6 +1185,16 @@ static bool processFlipUV(MaterialBuilder& builder, const JsonishValue& value) {
     return true;
 }
 
+static bool processLinearFog(MaterialBuilder& builder, const JsonishValue& value) {
+    builder.linearFog(value.toJsonBool()->getBool());
+    return true;
+}
+
+static bool processShadowFarAttenuation(MaterialBuilder& builder, const JsonishValue& value) {
+    builder.shadowFarAttenuation(value.toJsonBool()->getBool());
+    return true;
+}
+
 static bool processMultiBounceAO(MaterialBuilder& builder, const JsonishValue& value) {
     builder.multiBounceAmbientOcclusion(value.toJsonBool()->getBool());
     return true;
@@ -1350,6 +1360,13 @@ static bool processVariantFilter(MaterialBuilder& builder, const JsonishValue& v
     return true;
 }
 
+static bool processUseDefaultDepthVariant(MaterialBuilder& builder, const JsonishValue& value) {
+    if (value.toJsonBool()->getBool()) {
+        builder.useDefaultDepthVariant();
+    }
+    return true;
+}
+
 ParametersProcessor::ParametersProcessor() {
     using Type = JsonishValue::Type;
     mParameters["name"]                          = { &processName, Type::STRING };
@@ -1397,6 +1414,9 @@ ParametersProcessor::ParametersProcessor() {
     mParameters["featureLevel"]                  = { &processFeatureLevel, Type::NUMBER };
     mParameters["groupSize"]                     = { &processGroupSizes, Type::ARRAY };
     mParameters["stereoscopicType"]              = { &processStereoscopicType, Type::STRING };
+    mParameters["useDefaultDepthVariant"]        = { &processUseDefaultDepthVariant, Type::BOOL };
+    mParameters["linearFog"]                     = { &processLinearFog, Type::BOOL };
+    mParameters["shadowFarAttenuation"]          = { &processShadowFarAttenuation, Type::BOOL };
 }
 
 bool ParametersProcessor::process(MaterialBuilder& builder, const JsonishObject& jsonObject) {

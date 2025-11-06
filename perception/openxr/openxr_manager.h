@@ -22,6 +22,7 @@
 #include <cstdint>
 #include <ctime>
 #include <memory>
+#include <optional>
 #include <thread>
 #include <vector>
 
@@ -110,6 +111,28 @@ class OpenXrManager {
 
   enum class ObjectTrackingMode : uint8_t { kDisabled = 0x00, kEnabled = 0x01 };
 
+  enum class GeospatialMode : uint8_t {
+    kDisabled = 0x00,
+    kEnabled = 0x01,
+  };
+
+  enum class EarthState : int32_t {
+    kRunning = 1,
+    kStopped = 0,
+    kErrorInternal = -1,
+    kErrorNotAuthorized = -2,
+    kErrorResourcesExhausted = -3,
+    kErrorApkVersionTooOld = -4,
+    kErrorAppPreempted = -5
+  };
+
+  enum class GeospatialPoseResult : int32_t {
+    kSuccess = 0,
+    kErrorInvalidArgument = -1,
+    kErrorIllegalState = -2,
+    kErrorNotTracking = -3,
+  };
+
   enum class EyeTrackingMode : uint8_t {
     kDisabled = 0x00,
     kCoarse = 0x01,
@@ -130,6 +153,7 @@ class OpenXrManager {
     ObjectTrackingMode object_tracking_mode = ObjectTrackingMode::kDisabled;
     EyeTrackingMode eye_tracking_mode = EyeTrackingMode::kDisabled;
     std::vector<XrObjectLabelANDROID> object_tracking_labels = {};
+    GeospatialMode geospatial_mode = GeospatialMode::kDisabled;
   };
 
   // Struct that contains a depth image buffer and its size.
@@ -403,6 +427,18 @@ class OpenXrManager {
   // expected to be called from the jni thread.
   int GetDepthImageHeight() ABSL_LOCKS_EXCLUDED(mutex_);
 
+  // Gets the earth state. This is a public function that is expected to be
+  // called from the jni thread.
+  EarthState GetEarthState() ABSL_LOCKS_EXCLUDED(mutex_);
+
+  // Locates a geospatial pose from a local pose. Returns a GeospatialPoseResult
+  // enum corresponding to whether the operation was successful, or what type of
+  // error occurred.
+  GeospatialPoseResult LocateGeospatialPose(
+      XrTime time, const XrPosef& pose,
+      XrGeospatialPoseResultANDROIDX1* out_geospatial_pose_result)
+      ABSL_LOCKS_EXCLUDED(mutex_);
+
   // Waits for the polling thread to finish.
   void JoinPollingThread();
 
@@ -444,6 +480,9 @@ class OpenXrManager {
 
   // Retrieves the XR system ID.
   bool GetXrSystem() ABSL_LOCKS_EXCLUDED(mutex_);
+
+  // Gets the extensions to be loaded from the required and optional extensions.
+  bool GetEnabledExtensions(std::vector<const char*>& enabled_exts);
 
   // Loads the OpenXR runtime.
   bool LoadOpenXr(jobject activity) ABSL_LOCKS_EXCLUDED(mutex_);
@@ -568,6 +607,10 @@ class OpenXrManager {
   XrResult ConfigureFaceTracking(FaceTrackingMode mode)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
+  // Initializes or stops the earth tracker depending on the mode.
+  XrResult ConfigureEarthTracking(GeospatialMode mode)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
   // Initializes or destroys the eye tracking depending on the mode.
   XrResult ConfigureEyeTracking(EyeTrackingMode mode)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
@@ -588,6 +631,9 @@ class OpenXrManager {
 
   // Creates the object tracker if it is not already created.
   XrResult MaybeCreateObjectTracker() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
+  // Creates the earth tracker if it is not already created.
+  XrResult MaybeCreateEarthTracker() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   // Creates the eye tracker if it is not already created.
   XrResult MaybeCreateEyeTracker() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
@@ -637,6 +683,10 @@ class OpenXrManager {
       right_hand_joint_locations_[XR_HAND_JOINT_COUNT_EXT] ABSL_GUARDED_BY(
           mutex_);
   XrFaceTrackerANDROID face_tracker_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
+  XrEarthTrackerANDROIDX1 earth_tracker_ ABSL_GUARDED_BY(mutex_) =
+      XR_NULL_HANDLE;
+  std::optional<XrEventDataEarthTrackerStateChangedANDROIDX1>
+      last_earth_tracker_state_update_ ABSL_GUARDED_BY(mutex_) = std::nullopt;
   XrEyeTrackerANDROID eye_tracker_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
   FaceTrackingCalibrationState face_tracker_calibration_state_
       ABSL_GUARDED_BY(mutex_) = FaceTrackingCalibrationState::kUnknown;
@@ -736,6 +786,10 @@ class OpenXrManager {
   PFN_xrEnumerateDepthSwapchainImagesANDROID enumerate_depth_swapchain_images_;
   PFN_xrEnumerateDepthResolutionsANDROID enumerate_depth_resolutions_;
   PFN_xrAcquireDepthSwapchainImagesANDROID acquire_depth_swapchain_images_;
+
+  PFN_xrCreateEarthTrackerANDROIDX1 create_earth_tracker_;
+  PFN_xrDestroyEarthTrackerANDROIDX1 destroy_earth_tracker_;
+  PFN_xrLocateGeospatialPoseANDROIDX1 locate_geospatial_pose_;
 
   PFN_xrCreateEyeTrackerANDROID create_eye_tracker_;
   PFN_xrDestroyEyeTrackerANDROID destroy_eye_tracker_;

@@ -19,6 +19,7 @@
 
 #include <memory>
 
+#include "core/common/trace.h"
 #include "core/config.h"
 #include "core/ncsb/base_component_pool.h"
 #include "core/ncsb/component_pool_with_updater.h"
@@ -96,9 +97,17 @@ void ComponentSystemPool<T>::Update(const FrameTime& frame_time) noexcept {
   // ComponentPoolWithUpdater already checks this, this method is only called if
   // it actually needs to run.
 
-  system_->PreComponentsUpdated(frame_time);
+  {
+    IMP_TRACE_NAME_TEMPLATED("ComponentSystem::PreComponentsUpdated", T);
+    system_->PreComponentsUpdated(frame_time);
+  }
+
   ComponentPoolWithUpdater<T>::Update(frame_time);
-  system_->PostComponentsUpdated(frame_time);
+
+  {
+    IMP_TRACE_NAME_TEMPLATED("ComponentSystem::PostComponentsUpdated", T);
+    system_->PostComponentsUpdated(frame_time);
+  }
 }
 
 }  // namespace imp

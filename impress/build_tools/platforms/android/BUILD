@@ -18,6 +18,8 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 
 package(default_visibility = ["//visibility:public"])
 
+exports_files(["proguard.pgcfg"])
+
 bzl_library(
     name = "imp_android_app_bzl",
     srcs = ["imp_android_app.bzl"],

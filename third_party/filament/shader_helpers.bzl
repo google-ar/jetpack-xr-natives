@@ -1,6 +1,8 @@
 """Tools to support the generation of generated shader files.
 """
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 def generate_compiled_shaders(
         name,
         srcs):
@@ -27,4 +29,4 @@ def generate_compiled_shaders(
             ),
         )
         generated_outputs.append(out)
-    native.cc_library(name = name, srcs = generated_outputs)
+    cc_library(name = name, srcs = generated_outputs)

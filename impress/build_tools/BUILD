@@ -68,6 +68,7 @@ bzl_library(
         "//build_tools/platforms/xr:imp_xr_app_bzl",
         "//devtools/build_cleaner/skylark:build_defs_lib",
         "//mobile/build:build_defs",
+        "@rules_cc//cc:core_rules",
     ],
 )
 
@@ -135,7 +136,10 @@ bzl_library(
 bzl_library(
     name = "imp_extensions_bzl",
     srcs = ["imp_extensions.bzl"],
-    deps = [":imp_bzl"],
+    deps = [
+        ":imp_bzl",
+        "@rules_cc//cc:core_rules",
+    ],
 )
 
 # Exempts files that aren't referenced by BUILD rules from build_cleaners usage check.

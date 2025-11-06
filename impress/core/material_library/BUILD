@@ -13,7 +13,7 @@
 # limitations under the License.
 
 load(
-    "@com_github_google_flatbuffers//:build_defs.bzl",
+    "@flatbuffers//:build_defs.bzl",
     "flatbuffer_cc_library",
 )
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
@@ -134,7 +134,7 @@ cc_library(
         ":generic_material_constants",
         "//core/common:fbs",
         "//core/math",
-        "@com_github_google_flatbuffers//:flatbuffers",
+        "@flatbuffers",
         "@third_party//filament/filament:filament_hdrs",
     ],
     alwayslink = 1,
@@ -162,13 +162,13 @@ cc_library(
         "//core/math",
         "//core/math:flatbuffer_support",
         "//core/model:model_data_details",
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:variant",
         "@com_google_impress//core/common:log",
+        "@flatbuffers",
         "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament/filament:filament_hdrs",
     ],
@@ -188,8 +188,8 @@ cc_library(
     deps = [
         ":fbs",
         ":fbs_deps",  # buildcleaner: keep
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/strings:str_format",
+        "@flatbuffers",
     ],
     alwayslink = 1,
 )
@@ -253,7 +253,7 @@ cc_library(
         ":fbs_deps",  # buildcleaner: keep
         "//core/loader/provider/gltf:imp_cc_schema",
         "//core/math",
-        "@com_github_google_flatbuffers//:flatbuffers",
+        "@flatbuffers",
         "@third_party//filament/filament:filament_hdrs",
     ],
     alwayslink = 1,

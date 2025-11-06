@@ -14,6 +14,15 @@
 
 #include "core/common/string_helpers.h"
 
+#include <algorithm>
+#include <cctype>
+#include <cstddef>
+#include <string>
+
+#include "absl/strings/ascii.h"
+#include "absl/strings/escaping.h"
+#include "absl/strings/string_view.h"
+
 namespace imp {
 
 std::string ToLower(absl::string_view view) {
@@ -33,6 +42,32 @@ std::string SerializeToBase64(const uint8_t* data, uint32_t size) {
 
 bool DeserializeBase64(const std::string& string_b64, std::string* dest) {
   return absl::Base64Unescape(string_b64, dest);
+}
+
+absl::string_view ExtractLeadingCommentsAndWhitespace(
+    absl::string_view content) {
+  size_t end_of_header = 0;
+  while (end_of_header < content.length()) {
+    const size_t line_end = content.find('\n', end_of_header);
+    const absl::string_view line =
+        line_end == absl::string_view::npos
+            ? content.substr(end_of_header)
+            : content.substr(end_of_header, line_end - end_of_header);
+    const absl::string_view trimmed_line =
+        absl::StripLeadingAsciiWhitespace(line);
+
+    if (!trimmed_line.empty() && trimmed_line[0] != '#') {
+      // This line is not a comment or a whitespace-only line, so we're done.
+      break;
+    }
+
+    if (line_end == absl::string_view::npos) {
+      end_of_header = content.length();
+      break;
+    }
+    end_of_header = line_end + 1;
+  }
+  return content.substr(0, end_of_header);
 }
 
 }  // namespace imp

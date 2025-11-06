@@ -23,7 +23,6 @@
 #include "core/async/future.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_renderer.h"
-#include "split_engine/embedded_schemas/split_engine_material_generated.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
 namespace imp::split_engine {

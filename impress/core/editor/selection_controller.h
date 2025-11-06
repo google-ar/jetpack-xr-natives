@@ -17,6 +17,8 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_SELECTION_CONTROLLER_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_SELECTION_CONTROLLER_H_
 
+#include "absl/container/flat_hash_set.h"
+#include "core/editor/editor.h"
 #include "core/ncsb/node_handle.h"
 
 namespace imp::editor {
@@ -37,18 +39,20 @@ struct SelectionController {
  public:
   virtual ~SelectionController() = default;
 
-  // Returns the currently selected node.
-  // The returned NodeHandle will be invalid if nothing is selected.
-  virtual NodeHandle GetSelectedNode() const = 0;
-
-  // Returns true if the given node is selected or is an ancestor of the
-  // selected node.
-  virtual bool IsNodeOrAncestorSelected(NodeHandle node) = 0;
+  // Returns the currently selected nodes.
+  virtual const absl::flat_hash_set<NodeHandle>& GetSelectedNodes() const = 0;
 
   // Notifies that a node has been selected by sending a
-  // NodeSelectionChangedEvent with the provided node as the target. If the node
-  // is already selected, no event will be sent.
-  virtual void TrySelectNode(NodeHandle node_to_select) = 0;
+  // NodeSelectionChangedEvent with the provided node as the target.
+  // * If `multi_selection_enabled` is true:
+  //     - The node is added to the current selection.
+  //     - If the node is already selected, it is deselected.
+  // * Otherwise:
+  //     - The node becomes the *only* selected node.
+  // When the node is invalid, deselect all nodes.
+  virtual void TrySelectNode(NodeHandle node_to_select,
+                             Editor::SelectionMode selection_mode =
+                                 Editor::SelectionMode::kSingleNode) = 0;
 
   // Disables selecting the model on ModelLoadedEvents. Enabled by default.
   virtual void DisableSelectModelWhenLoaded(

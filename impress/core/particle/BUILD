@@ -14,6 +14,10 @@
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "imp_copts")
+load(
+    "//core/proto:imp_cc_proto_library.bzl",
+    "imp_cc_proto_library",
+)
 
 package(
     default_visibility = ["//visibility:public"],
@@ -23,6 +27,23 @@ package(
 )
 
 licenses(["notice"])
+
+proto_library(
+    name = "particle_config_proto",
+    srcs = ["particle_config.proto"],
+    deps = [
+        "//core/math:math_proto",
+        "//core/proto:imp_proto",
+    ],
+)
+
+imp_cc_proto_library(
+    name = "particle_config_proto_cc",
+    proto = ":particle_config_proto",
+    deps = [
+        "//core/math:math_proto_cc",
+    ],
+)
 
 cc_library(
     name = "particle",
@@ -45,11 +66,13 @@ cc_library(
     copts = imp_copts(),
     linkstatic = True,
     deps = [
+        ":particle_config_proto_cc",
         "//core/async:future",
         "//core/common:owned_ptr",
         "//core/math",
         "//core/view/utils:frame_time",
         "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/types:optional",
         "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,

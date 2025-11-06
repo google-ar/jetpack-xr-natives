@@ -27,7 +27,7 @@ using ::androidx::xr::common::GetJxrClass;
 using ::androidx::xr::common::GetJxrFullClassName;
 
 using ::androidx::xr::common::PACKAGE_ARCORE;
-using ::androidx::xr::common::PACKAGE_ARCORE_INTERNAL;
+using ::androidx::xr::common::PACKAGE_ARCORE_RUNTIME;
 using ::androidx::xr::common::PACKAGE_ARCORE_OPENXR;
 using ::androidx::xr::common::PACKAGE_CORE;
 using ::androidx::xr::common::PACKAGE_MATH;
@@ -195,7 +195,7 @@ jobject CreateJavaPlaneState(JNIEnv* env,
       absl::StrFormat(
           "(L%s;L%s;L%s;L%s;[L%s;J)V",
           GetJxrFullClassName(env, PACKAGE_CORE, "TrackingState"),
-          GetJxrFullClassName(env, PACKAGE_ARCORE_INTERNAL, "Plane$Label"),
+          GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME, "Plane$Label"),
           GetJxrFullClassName(env, PACKAGE_MATH, "Pose"),
           GetJxrFullClassName(env, PACKAGE_MATH, "FloatSize2d"),
           GetJxrFullClassName(env, PACKAGE_MATH, "Vector2"))
@@ -234,19 +234,19 @@ jobject CreateJavaPlaneLabel(JNIEnv* env,
   jclass plane_label_ext_cls =
       GetJxrClass(env, PACKAGE_ARCORE_OPENXR, "OpenXrPlaneKt");
   jclass plane_label_enum =
-      GetJxrClass(env, PACKAGE_ARCORE_INTERNAL, "Plane$Label");
+      GetJxrClass(env, PACKAGE_ARCORE_RUNTIME, "Plane$Label");
   jfieldID plane_label_static_fid = env->GetStaticFieldID(
       plane_label_enum, "Companion",
-      absl::StrFormat("L%s;", GetJxrFullClassName(env, PACKAGE_ARCORE_INTERNAL,
+      absl::StrFormat("L%s;", GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME,
                                                   "Plane$Label$Companion"))
           .c_str());
   jmethodID fromOpenXrLabel = env->GetStaticMethodID(
       plane_label_ext_cls, "fromOpenXrLabel",
       absl::StrFormat(
           "(L%s;I)L%s;",
-          GetJxrFullClassName(env, PACKAGE_ARCORE_INTERNAL,
+          GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME,
                               "Plane$Label$Companion"),
-          GetJxrFullClassName(env, PACKAGE_ARCORE_INTERNAL, "Plane$Label"))
+          GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME, "Plane$Label"))
           .c_str());
 
   jobject plane_label_static_obj =
@@ -322,19 +322,19 @@ jobject CreateJavaAnchorPersistenceState(
   jclass anchor_persistence_state_ext_class =
       GetJxrClass(env, PACKAGE_ARCORE_OPENXR, "OpenXrAnchorKt");
   jclass anchor_persistence_state_enum =
-      GetJxrClass(env, PACKAGE_ARCORE_INTERNAL, "Anchor$PersistenceState");
+      GetJxrClass(env, PACKAGE_ARCORE_RUNTIME, "Anchor$PersistenceState");
   jfieldID anchor_persistence_state_static_fid = env->GetStaticFieldID(
       anchor_persistence_state_enum, "Companion",
       absl::StrFormat("L%s;",
-                      GetJxrFullClassName(env, PACKAGE_ARCORE_INTERNAL,
+                      GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME,
                                           "Anchor$PersistenceState$Companion"))
           .c_str());
   jmethodID fromOpenXrPersistenceState = env->GetStaticMethodID(
       anchor_persistence_state_ext_class, "fromOpenXrPersistenceState",
       absl::StrFormat("(L%s;I)L%s;",
-                      GetJxrFullClassName(env, PACKAGE_ARCORE_INTERNAL,
+                      GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME,
                                           "Anchor$PersistenceState$Companion"),
-                      GetJxrFullClassName(env, PACKAGE_ARCORE_INTERNAL,
+                      GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME,
                                           "Anchor$PersistenceState"))
           .c_str());
 
@@ -395,19 +395,20 @@ jobject CreateJavaFloatSize3d(JNIEnv* env, const XrExtent3Df& xr_extent) {
 }
 
 jobject CreateJavaEyeState(JNIEnv* env, const XrEyeStateANDROID& xr_eye_state) {
-  jclass eye_state_enum = GetJxrClass(env, PACKAGE_ARCORE, "EyeState");
+  jclass eye_state_enum = GetJxrClass(env, PACKAGE_ARCORE_RUNTIME, "EyeStatus");
   jclass eye_data_class = GetJxrClass(env, PACKAGE_ARCORE_OPENXR, "EyeDataKt");
   jfieldID eye_state_static_fid = env->GetStaticFieldID(
       eye_state_enum, "Companion",
-      absl::StrFormat("L%s;", GetJxrFullClassName(env, PACKAGE_ARCORE,
-                                                  "EyeState$Companion"))
+      absl::StrFormat("L%s;", GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME,
+                                                  "EyeStatus$Companion"))
           .c_str());
   jmethodID fromOpenXrEyeState = env->GetStaticMethodID(
       eye_data_class, "fromOpenXrEyeState",
       absl::StrFormat(
           "(L%s;I)L%s;",
-          GetJxrFullClassName(env, PACKAGE_ARCORE, "EyeState$Companion"),
-          GetJxrFullClassName(env, PACKAGE_ARCORE, "EyeState"))
+          GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME,
+            "EyeStatus$Companion"),
+          GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME, "EyeStatus"))
           .c_str());
   jobject eye_state_static_obj =
       env->GetStaticObjectField(eye_state_enum, eye_state_static_fid);
@@ -448,7 +449,8 @@ jobject CreateJavaEye(JNIEnv* env, const XrEyeANDROID& xr_eye) {
   jmethodID eye_constructor = env->GetMethodID(
       eye_class, "<init>",
       absl::StrFormat("(L%s;L%s;)V",
-                      GetJxrFullClassName(env, PACKAGE_ARCORE, "EyeState"),
+                      GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME,
+                        "EyeStatus"),
                       GetJxrFullClassName(env, PACKAGE_MATH, "Pose"))
           .c_str());
   return env->NewObject(eye_class, eye_constructor,
@@ -475,6 +477,42 @@ jobject CreateJavaEyesInfo(JNIEnv* env, const XrEyesANDROID& xr_eyes) {
           .c_str());
   return env->NewObject(eyes_info_class, eyes_info_constructor, eyes_array,
                         eye_tracking_mode);
+}
+
+jobject CreateJavaGeospatialPose(
+    JNIEnv* env, const XrGeospatialPoseANDROIDX1& xr_geospatial_pose) {
+  jclass geospatial_pose_class =
+      GetJxrClass(env, PACKAGE_MATH, "GeospatialPose");
+  jmethodID geospatial_pose_constructor = env->GetMethodID(
+      geospatial_pose_class, "<init>",
+      absl::StrFormat("(DDDL%s;)V",
+                      GetJxrFullClassName(env, PACKAGE_MATH, "Quaternion"))
+          .c_str());
+  jobject quaternion =
+      CreateJavaQuaternion(env, xr_geospatial_pose.eastUpSouthOrientation);
+  return env->NewObject(geospatial_pose_class, geospatial_pose_constructor,
+                        xr_geospatial_pose.latitude,
+                        xr_geospatial_pose.longitude,
+                        xr_geospatial_pose.altitude, quaternion);
+}
+
+jobject CreateJavaGeospatialPoseResult(
+    JNIEnv* env,
+    const XrGeospatialPoseResultANDROIDX1& xr_geospatial_pose_result) {
+  jclass geospatial_pose_result_class =
+      GetJxrClass(env, PACKAGE_ARCORE_RUNTIME, "Earth$GeospatialPoseResult");
+  jmethodID geospatial_pose_result_constructor = env->GetMethodID(
+      geospatial_pose_result_class, "<init>",
+      absl::StrFormat("(L%s;DDD)V",
+                      GetJxrFullClassName(env, PACKAGE_MATH, "GeospatialPose"))
+          .c_str());
+  jobject geospatial_pose =
+      CreateJavaGeospatialPose(env, xr_geospatial_pose_result.geospatialPose);
+  return env->NewObject(geospatial_pose_result_class,
+                        geospatial_pose_result_constructor, geospatial_pose,
+                        xr_geospatial_pose_result.horizontalAccuracy,
+                        xr_geospatial_pose_result.verticalAccuracy,
+                        xr_geospatial_pose_result.orientationYawAccuracy);
 }
 
 }  // namespace androidx::xr::openxr

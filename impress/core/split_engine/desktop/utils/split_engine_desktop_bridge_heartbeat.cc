@@ -41,7 +41,7 @@ absl::Status HeartbeatMonitor::RegisterBridge(BridgeId bridge_id) {
   if (monitor_should_stop_) {
     return absl::FailedPreconditionError("Heartbeat monitor was terminated.");
   }
-  absl::MutexLock lock(heartbeat_mutex_);
+  absl::MutexLock lock(&heartbeat_mutex_);
   if (bridge_heartbeat_map_.contains(bridge_id)) {
     return absl::AlreadyExistsError(
         absl::StrCat("Bridge ", bridge_id, " already registered."));
@@ -54,7 +54,7 @@ absl::Status HeartbeatMonitor::Heartbeat(BridgeId bridge_id) {
   if (monitor_should_stop_) {
     return absl::FailedPreconditionError("Heartbeat monitor was terminated.");
   }
-  absl::MutexLock lock(heartbeat_mutex_);
+  absl::MutexLock lock(&heartbeat_mutex_);
   if (!bridge_heartbeat_map_.contains(bridge_id)) {
     return absl::FailedPreconditionError(
         absl::StrCat("Bridge ", bridge_id, " not registered."));
@@ -69,7 +69,7 @@ void HeartbeatMonitor::TerminateMonitoring() {
   }
 
   {
-    absl::MutexLock lock(heartbeat_mutex_);
+    absl::MutexLock lock(&heartbeat_mutex_);
     monitor_should_stop_ = true;
   }
 
@@ -79,7 +79,7 @@ void HeartbeatMonitor::TerminateMonitoring() {
 }
 
 void HeartbeatMonitor::Monitor() {
-  absl::MutexLock lock(heartbeat_mutex_);
+  absl::MutexLock lock(&heartbeat_mutex_);
   while (!heartbeat_mutex_.AwaitWithTimeout(
       absl::Condition(&monitor_should_stop_), check_interval_)) {
     const absl::Time now = absl::Now();

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "imp_google3_copts")
 load(
     "//third_party/arcore/build_defs:flavored_rules.bzl",

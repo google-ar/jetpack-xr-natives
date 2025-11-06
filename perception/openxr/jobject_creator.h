@@ -121,6 +121,18 @@ jobject CreateJavaEye(JNIEnv* env, const XrEyeANDROID& xr_eye);
 // `XrEyesANDROID`.
 jobject CreateJavaEyesInfo(JNIEnv* env, const XrEyesANDROID& xr_eyes);
 
+// Returns a JVM object of type `androidx.xr.runtime.math.GeospatialPose` from
+// an `XrGeospatialPoseANDROIDX1`.
+jobject CreateJavaGeospatialPose(
+    JNIEnv* env, const XrGeospatialPoseANDROIDX1& xr_geospatial_pose);
+
+// Returns a JVM object of type
+// `androidx.xr.arcore.runtime.GeospatialPoseResult` from an
+// `XrGeospatialPoseResultANDROIDX1`.
+jobject CreateJavaGeospatialPoseResult(
+    JNIEnv* env,
+    const XrGeospatialPoseResultANDROIDX1& xr_geospatial_pose_result);
+
 }  // namespace androidx::xr::openxr
 
 #endif  // JETPACK_XR_NATIVES_OPENXR_JOBJECT_CREATOR_H_

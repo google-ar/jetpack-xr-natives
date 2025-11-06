@@ -201,16 +201,19 @@ highp vec4 getSample(lowp int samplerIndex) {
       getSample(materialParams.sheenRoughnessIndex).a;
 #endif
 
-#if defined(BLEND_MODE_REFRACTIVE)
+#if defined(MATERIAL_HAS_REFRACTION)
     // KHR_materials_ior
     material.ior = materialParams.indexOfRefraction;
+    // TODO: this is the correct default, but this is meant to be a
+    // user-accessible parameter, as a part of KHR_materials_volume
+    material.thickness = 0.0;
 
 #if defined(TRANSMISSION)
     // KHR_materials_transmission
     material.transmission = materialParams.transmissionFactor *
       getSample(materialParams.transmissionIndex).r;
 #endif
-#endif //  defined(BLEND_MODE_REFRACTIVE)
+#endif //  defined(MATERIAL_HAS_REFRACTION)
 
 #if defined(AR_OCCLUSION)
     vec3 backgroundColor = vec3(0.0);

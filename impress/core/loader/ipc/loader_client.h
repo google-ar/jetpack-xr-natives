@@ -97,7 +97,6 @@ class LoaderClient : public LoaderClientBase {
     return NoError();
   }
 
-  MessagePipe pipe_;
   absl::Mutex lock_;
   absl::CondVar message_available_condition_;
   absl::CondVar has_storage_condition_;
@@ -105,6 +104,7 @@ class LoaderClient : public LoaderClientBase {
   bool closed_ = false;
   std::unique_ptr<uint8_t[]> last_message_;
   size_t last_message_size_ = 0;
+  MessagePipe pipe_;
 };
 
 }  // namespace imp::loader::ipc

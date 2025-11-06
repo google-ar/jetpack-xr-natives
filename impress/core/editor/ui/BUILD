@@ -128,9 +128,8 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         ":drag_and_drop",
-        "//core/common:type_traits",
         "//core/ncsb",
-        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
         "@dear_imgui",
         "@third_party//filament/libs:utils_hdrs",
     ],
@@ -171,7 +170,6 @@ cc_library(
         "//core/editor/layout:helpers",
         "//core/math",
         "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
         "@dear_imgui",
     ],
     alwayslink = 1,

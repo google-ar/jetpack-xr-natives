@@ -13,6 +13,7 @@
 # limitations under the License.
 
 load("@com_google_protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "imp_google3_copts")
 
 # Library for providing tracking info for a video.

@@ -249,6 +249,10 @@ T GetJniTypeOrNull(const JniType& variant) {
 
 // Base class for representing Java classes in native code.
 // TODO: Add memory leak test
+// TODO: Set ClassLoader when JNI context is attached. The Java
+// ClassLoader is thread-local, so using a background thread to load a custom
+// Java Class will cause a ClassNotFoundException since it will use the system
+// ClassLoader by default.
 class JavaWrapper {
  public:
   template <class... Args>

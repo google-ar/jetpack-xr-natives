@@ -20,12 +20,14 @@
 #include "absl/debugging/leak_check.h"
 #include "dear_imgui/imgui.h"
 #include "implot/implot.h"
+#include "core/common/trace.h"
 #include "core/config.h"
 #include "core/editor/widgets/performance/config.h"
 #include "core/editor/widgets/performance/frame_time_panel.h"
 #include "core/editor/widgets/performance/monitor_panel.h"
 #include "core/editor/widgets/performance/render_info_panel.h"
 #include "core/ncsb/update_system.h"
+#include "core/performance/profiler.h"
 #include "core/view/base_view.h"
 #include "core/view/utils/frame_time.h"
 #include "core/view/view_events.h"
@@ -52,13 +54,13 @@ PerformanceWindow::PerformanceWindow(BaseView& view) : view_(view) {
     ImPlot::CreateContext();
   }
   time_span_seconds_ = details::kDefaultTimeSpanSeconds;
+  AddPanel(std::make_unique<RenderInfoPanel>(
+      view,
+      details::kNumDisplayValuesPerSecond * details::kMaxTimeSpanSeconds));
   AddPanel(std::make_unique<FrameTimePanel>(
       view,
       details::kNumDisplayValuesPerSecond * details::kMaxTimeSpanSeconds));
 
-  AddPanel(std::make_unique<RenderInfoPanel>(
-      view,
-      details::kNumDisplayValuesPerSecond * details::kMaxTimeSpanSeconds));
   post_frame_connection_ = view.GetDispatcher().Connect(
       [this](const ViewPostRenderEvent&) { OnViewPostRender(); });
 }
@@ -74,6 +76,7 @@ void PerformanceWindow::DrawImGui() { DrawMonitorPanels(); }
 // TODO refactor each monitor panel into its own class for custom
 // plotting now that we're using ImPlot
 void PerformanceWindow::DrawMonitorPanels() {
+  IMP_TRACE_NAME("PerformanceWindow::DrawMonitorPanels");
   ImGui::SliderFloat("Time span", &time_span_seconds_, 1,
                      details::kMaxTimeSpanSeconds, "%.1f s");
   bool clicked = ImGui::Button(
@@ -82,6 +85,8 @@ void PerformanceWindow::DrawMonitorPanels() {
     monitor_state_ = monitor_state_ == MonitorState::kPaused
                          ? MonitorState::kRunning
                          : MonitorState::kPaused;
+    Profiler::SetPaused(monitor_state_ == MonitorState::kPaused ? true : false);
+
     for (auto& monitor_panel : monitor_panels_) {
       monitor_panel->OnStateChanged(monitor_state_);
     }

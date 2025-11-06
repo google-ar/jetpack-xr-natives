@@ -57,7 +57,8 @@ absl::Status TransformWidgetAspect::Setup() {
   Dispatcher& editor_dispatcher = editor_->GetDispatcher();
   editor_dispatcher.Connect(
       [this](const editor::NodeSelectionChangedEvent& event) mutable {
-        active_node_ = event.selected;
+        // We only support single selection for the transform widget.
+        active_node_ = editor_->GetSingleSelectedNode();
       },
       this);
 

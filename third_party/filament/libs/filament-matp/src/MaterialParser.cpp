@@ -27,7 +27,6 @@
 #include "filament/libs/utils/include/utils/Log.h"
 #include "filament/libs/utils/include/utils/JobSystem.h"
 
-#include "DirIncluder.h"
 #include "JsonishLexer.h"
 #include "JsonishParser.h"
 #include "MaterialLexeme.h"
@@ -368,7 +367,7 @@ bool MaterialParser::parseMaterial(const char* buffer, size_t size,
             identifier = lexeme.getStringValue();
             if (mConfigProcessor.find(identifier) == mConfigProcessor.end()) {
                 std::cerr << "Unknown identifier '"
-                          << lexeme.getStringValue()
+                          << identifier
                           << "' at line:" << lexeme.getLine()
                           << " position:" << lexeme.getLinePosition() << std::endl;
                 return false;
@@ -458,11 +457,7 @@ bool MaterialParser::processTemplateSubstitutions(
 }
 
 bool MaterialParser::parse(filamat::MaterialBuilder& builder,
-        const Config& config,
-        Config::Input* input, ssize_t& size, std::unique_ptr<const char[]>& buffer) {
-
-    utils::Path const materialFilePath = utils::Path(input->getName()).getAbsolutePath();
-    assert(materialFilePath.isFile());
+        const Config& config, ssize_t& size, std::unique_ptr<const char[]>& buffer) {
 
     if (builder.getFeatureLevel() > config.getFeatureLevel()) {
         std::cerr << "Material feature level (" << +builder.getFeatureLevel()
@@ -489,18 +484,13 @@ bool MaterialParser::parse(filamat::MaterialBuilder& builder,
             return reflectParameters(builder);
     }
 
-    // Set the root include directory to the directory containing the material file.
-    DirIncluder includer;
-    includer.setIncludeDirectory(materialFilePath.getParent());
-
     builder
             .noSamplerValidation(config.noSamplerValidation())
             .includeEssl1(config.includeEssl1())
-            .includeCallback(includer)
-            .fileName(materialFilePath.getName().c_str())
             .platform(config.getPlatform())
             .targetApi(config.getTargetApi())
             .optimization(config.getOptimizationLevel())
+            .workarounds(config.getWorkarounds())
             .printShaders(config.printShaders())
             .saveRawVariants(config.saveRawVariants())
             .generateDebugInfo(config.isDebug())

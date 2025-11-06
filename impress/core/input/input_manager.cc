@@ -27,7 +27,6 @@
 #include "core/common/trace.h"
 #include "core/input/wheel_event.h"
 #include "core/math/vec.h"
-#include "core/render/texture_factory.h"
 
 namespace imp {
 

@@ -65,15 +65,14 @@ absl::StatusOr<float> GetVectorLength(const recipe::Variable& value) {
   }
 }
 
-float2 Rotate2d(const float2 vector, float angle) {
+float2 Rotate2D(const float2 vector, float angle) {
   auto rotationMatrix =
       mat2f(float2(cos(angle), sin(angle)), float2(-sin(angle), cos(angle)));
   return rotationMatrix * vector;
 }
 
-float3 Rotate3d(const float3 origVector, const float3 axis, float angle) {
-  quatf rotation = quatf::fromAxisAngle(axis, angle);
-  return rotation * origVector;
+float3 Rotate3D(const float3 vector, const float4 rotation) {
+  return quatf(rotation) * vector;
 }
 
 absl::StatusOr<recipe::Variable> Transform(const recipe::Variable& vector,
@@ -126,13 +125,13 @@ void RegisterMathVectorFunctions(BaseRecipeSystem* recipe_system) {
         return GetVectorLength(value);
       });
 
-  recipe_system->RegisterFunction("Rotate2d", [](float2 vector, float angle) {
-    return Rotate2d(vector, angle);
+  recipe_system->RegisterFunction("Rotate2D", [](float2 vector, float angle) {
+    return Rotate2D(vector, angle);
   });
 
-  recipe_system->RegisterFunction("Rotate3d",
-                                  [](float3 vector, float3 axis, float angle) {
-                                    return Rotate3d(vector, axis, angle);
+  recipe_system->RegisterFunction("Rotate3D",
+                                  [](float3 vector, float4 rotation) {
+                                    return Rotate3D(vector, rotation);
                                   });
 
   recipe_system->RegisterFunction(

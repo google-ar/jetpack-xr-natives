@@ -17,7 +17,6 @@
 #include <string>
 #include <vector>
 
-#include "core/common/log.h"
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
 #include "core/common/registry.h"
@@ -52,7 +51,9 @@ MaterialsWidget::MaterialsWidget(BaseView& view) : view_(view) {
   Editor& editor = view_.GetRegistry().Get<Editor>()->get();
   editor.GetDispatcher().Connect(
       [this](const editor::NodeSelectionChangedEvent& event) mutable {
-        active_node_ = event.selected;
+        // We only support single selection for the materials widget.
+        active_node_ =
+            view_.GetRegistry().Get<Editor>()->get().GetSingleSelectedNode();
       },
       this);
 }

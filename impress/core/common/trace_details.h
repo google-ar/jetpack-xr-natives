@@ -133,6 +133,9 @@ BuildTraceBlockStorage(const absl::string_view function_name,
   IMP_TRACE_PRIVATE_IMPL(kImpressTraceNameStorage.data())
 
 #define IMP_TRACE_PRIVATE_BLOCK(block_context)                               \
+  static constexpr absl::string_view kImpressTraceFunctionName =             \
+      IMP_FUNCTION_NAME();                                                   \
+  (void)kImpressTraceFunctionName;                                           \
   constexpr size_t IMP_TRACE_SMASH(kImpressTraceBlockLine, __LINE__) =       \
       __LINE__;                                                              \
   constexpr absl::string_view IMP_TRACE_SMASH(kImpressTraceBlockContextName, \

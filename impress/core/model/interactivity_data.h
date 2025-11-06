@@ -69,6 +69,8 @@ struct InteractivityData {
       IS_LOOP,
       MESSAGE,
       INITIAL_INDEX,
+      VARIABLES,
+      USE_SLERP,
     };
 
     struct FlowData {

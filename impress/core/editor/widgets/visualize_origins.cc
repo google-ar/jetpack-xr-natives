@@ -37,8 +37,10 @@ VisualizeOrigins::VisualizeOrigins(BaseView& view) : view_(view) {
   Dispatcher& editor_dispatcher = editor.GetDispatcher();
   editor_dispatcher.Connect(
       [this](const NodeSelectionChangedEvent& event) mutable {
+        // We only support single selection for the visualize origins widget.
         // Track which node is assigned in the hierarchy widget.
-        selected_node_ = event.selected;
+        selected_node_ =
+            view_.GetRegistry().Get<Editor>()->get().GetSingleSelectedNode();
       },
       this);
   editor_dispatcher.Connect(

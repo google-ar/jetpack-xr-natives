@@ -51,7 +51,7 @@ cc_library(
         ":editor_plugin",
         "//core/ncsb",
         "//core/view/framework",
-        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:flat_hash_set",
     ],
     alwayslink = 1,
 )
@@ -118,6 +118,7 @@ cc_library(
         "//core/editor/widgets:visualize_colliders",
         "//core/editor/widgets:visualize_origins",
         "//core/editor/widgets/performance",
+        "//core/editor/widgets/window:window_widget",
         "//core/input",
         "//core/math",
         "//core/ncsb",
@@ -179,7 +180,9 @@ cc_library(
     copts = imp_google3_copts(),
     defines = imp_defines(),
     deps = [
+        ":editor",
         "//core/ncsb",
+        "@com_google_absl//absl/container:flat_hash_set",
     ],
     alwayslink = 1,
 )
@@ -267,15 +270,20 @@ cc_library(
         ":widget",
         ":widget_layout_info",
         "//core/common:hash",
+        "//core/common:registry",
         "//core/common:type_traits",
         "//core/editor/components:world_space_editor_ui",
         "//core/editor/layout",
+        "//core/editor/layout:editor_panel_ids",
+        "//core/editor/layout:layout_config_imp_cc_proto",
+        "//core/editor/widgets/window:window_configuration",
         "//core/ncsb",
         "//core/view:base_view",
         "//core/view:view_events",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
         "@dear_imgui",
     ],
     alwayslink = 1,
@@ -283,6 +291,9 @@ cc_library(
 
 cc_library(
     name = "editor_field_control",
+    srcs = [
+        "editor_field_control.cc",
+    ],
     hdrs = [
         "editor_field_control.h",
         "editor_proto_visitor.h",

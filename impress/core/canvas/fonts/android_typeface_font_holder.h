@@ -43,6 +43,8 @@ class AndroidTypefaceFontHolder : public FontHolder {
 
   TextStyle GetTextStyle() const override;
 
+  bool IsAndroidTypeface() const override { return true; }
+
  private:
   std::unique_ptr<android::Typeface> typeface_;
   FontWeight font_weight_;

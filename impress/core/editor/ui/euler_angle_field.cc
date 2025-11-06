@@ -16,20 +16,19 @@
 
 #include <string>
 
-#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
 #include "core/editor/layout/editor_control_flags.h"
 #include "core/editor/layout/helpers.h"
 #include "core/math/almost_equal.h"
+#include "core/math/math.h"
 #include "core/math/quat.h"
+#include "core/math/vec.h"
 
 namespace imp::editor {
 
 bool EulerAngleField::DrawFields(absl::string_view label, quatf rotation) {
-  if (!RoughlyEqual(rotation, QuatFromEuler(cached_euler_angles_))) {
-    cached_euler_angles_ = EulerFromQuatClamped(rotation);
-  }
+  UpdateCurrentRotation(rotation);
 
   float3 old_euler_angles = cached_euler_angles_;
   bool fields_modified =
@@ -46,6 +45,12 @@ bool EulerAngleField::DrawFields(absl::string_view label, quatf rotation) {
   }
 
   return fields_modified;
+}
+
+void EulerAngleField::UpdateCurrentRotation(quatf rotation) {
+  if (!RoughlyEqual(rotation, QuatFromEuler(cached_euler_angles_))) {
+    cached_euler_angles_ = EulerFromQuatClamped(rotation);
+  }
 }
 
 float3 EulerAngleField::GetCurrentEulerAngles() const {

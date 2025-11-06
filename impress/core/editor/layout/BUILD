@@ -47,7 +47,7 @@ cc_library(
     copts = imp_google3_copts(),
     defines = imp_defines(),
     deps = [
-        ":docking_manager",
+        ":docking_helper",
         ":editor_panel_ids",
         ":helpers",
         ":layout_config_imp_cc_proto",
@@ -56,6 +56,7 @@ cc_library(
         "//core/editor:editor_constants",
         "//core/editor:widget",
         "//core/editor:widget_layout_info",
+        "//core/editor/widgets/window:window_configuration",
         "//core/math",
         "//core/view/utils:string_map",
         "@com_google_absl//absl/strings",
@@ -66,12 +67,12 @@ cc_library(
 )
 
 cc_library(
-    name = "docking_manager",
+    name = "docking_helper",
     srcs = [
-        "docking_manager.cc",
+        "docking_helper.cc",
     ],
     hdrs = [
-        "docking_manager.h",
+        "docking_helper.h",
     ],
     copts = imp_google3_copts(),
     defines = imp_defines(),

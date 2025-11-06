@@ -18,17 +18,20 @@
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_LAYOUT_LAYOUT_COMPOSER_H_
 
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "dear_imgui/imgui.h"
 #include "core/common/invocable.h"
-#include "core/editor/layout/docking_manager.h"
+#include "core/editor/layout/docking_helper.h"
 #include "core/editor/layout/layout_config.proto.imp.h"
 #include "core/editor/widget.h"
 #include "core/editor/widget_layout_info.h"
+#include "core/editor/widgets/window/window_configuration.h"
 #include "core/view/utils/string_map.h"
 
 namespace imp::editor {
@@ -50,6 +53,8 @@ class LayoutComposer {
 
   virtual ~LayoutComposer() = default;
 
+  std::optional<LayoutConfig::LayoutType> GetLayoutType() const;
+
   virtual void DrawWidget(const WidgetLayoutInfo& layout_info, Widget* widget);
 
   // Draws the platform-dependent Editor UI using all queued Invocables, which
@@ -61,8 +66,15 @@ class LayoutComposer {
   // layout.
   absl::Span<const SubWindowInfo> GetSubWindowInfo();
 
+  void SetWindowConfiguration(WindowConfiguration& window_configuration) {
+    window_configuration_ = &window_configuration;
+  }
+
  private:
-  struct TabbedWindowInfo {
+  struct WidgetInfo {
+    WidgetInfo(absl::string_view label, imp::Invocable<void()> draw_function)
+        : label(label), draw_function(std::move(draw_function)) {}
+
     // The label of the tab. This is used to name the dockable window of the
     // tab.
     std::string label;
@@ -115,7 +127,8 @@ class LayoutComposer {
   void DrawInToolbar(imp::Invocable<void()> draw_function);
 
   // Queues the given Invocable to be drawn at the end after the layout.
-  void DrawAfterLayout(imp::Invocable<void()> draw_function);
+  void DrawAfterLayout(absl::string_view label,
+                       imp::Invocable<void()> draw_function);
 
   // Draws a window for world layout. The window will be drawn from left to
   // right without overlapping.
@@ -162,14 +175,15 @@ class LayoutComposer {
 
   std::vector<imp::Invocable<void()>> details_draw_functions_;
   std::vector<imp::Invocable<void()>> scene_draw_functions_;
-  std::vector<TabbedWindowInfo> left_dock_draw_functions_;
-  std::vector<TabbedWindowInfo> tab_item_info_;
+  std::vector<WidgetInfo> left_dock_draw_functions_;
+  std::vector<WidgetInfo> tab_item_info_;
   std::vector<imp::Invocable<void()>> menu_draw_functions_;
   std::vector<imp::Invocable<void()>> toolbar_draw_functions_;
-  std::vector<imp::Invocable<void()>> draw_after_functions_;
+  std::vector<WidgetInfo> draw_after_functions_;
 
   LayoutConfig layout_config_;
-  std::unique_ptr<DockingManager> docking_manager_;
+  std::unique_ptr<DockingHelper> docking_helper_;
+  WindowConfiguration* window_configuration_;
 
   // Layout state
   LayoutConfig::TabbedWindowState tabbed_window_state_;

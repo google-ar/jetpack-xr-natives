@@ -13,6 +13,8 @@
 # limitations under the License.
 
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load("//build_tools:imp.bzl", "if_dev_runtime", "if_non_android", "imp_google3_copts")
 load("//core/resources:resources.bzl", "imp_resources")
 
@@ -369,6 +371,7 @@ cc_library(
 bzl_library(
     name = "portable_embed_data_bzl",
     srcs = ["portable_embed_data.bzl"],
+    deps = ["@rules_cc//cc:core_rules"],
     # TODO: restore visibility restriction.
     # visibility = ["//visibility:private"],
 )
@@ -382,5 +385,6 @@ bzl_library(
         "//build_tools:imp_bzl",
         "//build_tools:path_tools_bzl",
         "@bazel_skylib//lib:paths",
+        "@rules_cc//cc:core_rules",
     ],
 )

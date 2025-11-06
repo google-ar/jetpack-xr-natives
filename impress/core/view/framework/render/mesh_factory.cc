@@ -70,6 +70,9 @@ const VertexFormat kVertexFormatWithColor = {
     {VertexAttribute::TANGENTS, AttributeType::FLOAT4},
     {VertexAttribute::COLOR, AttributeType::FLOAT4}};
 
+const VertexFormat kVertexFormatPositionOnly = {
+    {VertexAttribute::POSITION, AttributeType::FLOAT3}};
+
 static constexpr float kQuadHalfExtent = 0.5f;
 
 static constexpr float3 kQuadPositions[] = {
@@ -124,7 +127,15 @@ class ProceduralMeshBuilder {
  public:
   // Completes mesh construction and relinquishes ownership of the mesh data.
   std::unique_ptr<imp::MeshData> Build() {
-    FinalizeTangents();
+    if (is_position_only_mesh_) {
+      for (int i = 0; i < uv_coordinates_.size(); i++) {
+        mesh_data_->VertexAttributeAt<float3>(i, VertexAttribute::POSITION) =
+            uv_coordinates_[i].space_data->position;
+      }
+    } else {
+      FinalizeTangents();
+    }
+
     return std::move(mesh_data_);
   }
 
@@ -142,6 +153,8 @@ class ProceduralMeshBuilder {
     uv_coordinates_.reserve(num_vertices);
     smooth_normals_ = is_smooth;
     color_ = color;
+
+    is_position_only_mesh_ = vertex_format == kVertexFormatPositionOnly;
   }
 
   int AddVertex(float3 position, int num_uv0s = 1) {
@@ -304,6 +317,8 @@ class ProceduralMeshBuilder {
   bool smooth_normals_;
 
   std::optional<float4> color_;
+
+  bool is_position_only_mesh_;
 
   // The sum of the face normals at each vertex metadata.
   RobinMap<int, float3> sum_normals_by_vertex_metadata_index_;
@@ -642,8 +657,9 @@ MeshPtr MeshFactory::CreateXYHemisphere(CreateXYHemisphereSettings settings,
   int number_of_longitudes = resolution;
 
   int number_of_faces = number_of_longitudes * (number_of_longitudes - 1) * 2;
-  ProceduralMeshBuilder mesh_builder(number_of_vertices, number_of_faces,
-                                     kVertexFormat);
+  ProceduralMeshBuilder mesh_builder(
+      number_of_vertices, number_of_faces,
+      settings.is_position_only ? kVertexFormatPositionOnly : kVertexFormat);
 
   float3 top_pole_point = center + (kUp * radius);
   mesh_builder.AddVertex(top_pole_point, vertices_at_top_pole);

@@ -102,6 +102,7 @@ const XrTrackableTrackerANDROID kTrackableTracker =
     XrTrackableTrackerANDROID(1);
 const XrHandTrackerEXT kHandTracker = XrHandTrackerEXT(1);
 const XrFaceTrackerANDROID kFaceTracker = XrFaceTrackerANDROID(1);
+const XrEarthTrackerANDROIDX1 kEarthTracker = XrEarthTrackerANDROIDX1(1);
 const XrEyeTrackerANDROID kEyeTracker = XrEyeTrackerANDROID(1);
 const XrDeviceAnchorPersistenceANDROID kAnchorPersistence =
     XrDeviceAnchorPersistenceANDROID(1);
@@ -412,6 +413,45 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrGetFaceCalibrationStateANDROID(
   return XR_SUCCESS;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateEarthTrackerANDROIDX1(
+    XrSession session, const XrEarthTrackerCreateInfoANDROIDX1* createInfo,
+    XrEarthTrackerANDROIDX1* earthTracker) {
+  if (session == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+  *earthTracker = kEarthTracker;
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL
+Internal_xrDestroyEarthTrackerANDROIDX1(XrEarthTrackerANDROIDX1 earthTracker) {
+  if (earthTracker == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrLocateGeospatialPoseANDROIDX1(
+    XrEarthTrackerANDROIDX1 earthTracker,
+    const XrGeospatialPoseLocateInfoANDROIDX1* locateInfo,
+    XrGeospatialPoseResultANDROIDX1* geospatialPose) {
+  if (earthTracker == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+  geospatialPose->type = XR_TYPE_GEOSPATIAL_POSE_RESULT_ANDROIDX1;
+  geospatialPose->poseFlags =
+      XR_GEOSPATIAL_POSE_POSITION_VALID_BIT_ANDROIDX1 |
+      XR_GEOSPATIAL_POSE_ORIENTATION_VALID_BIT_ANDROIDX1;
+  geospatialPose->geospatialPose.latitude = 37.422;
+  geospatialPose->geospatialPose.longitude = -122.084;
+  geospatialPose->geospatialPose.altitude = 10.0;
+  geospatialPose->geospatialPose.eastUpSouthOrientation = {0, 0, 0, 1};
+  geospatialPose->horizontalAccuracy = 1.0;
+  geospatialPose->verticalAccuracy = 2.0;
+  geospatialPose->orientationYawAccuracy = 3.0;
+  return XR_SUCCESS;
+}
+
 XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateEyeTrackerANDROID(
     XrSession session, const XrEyeTrackerCreateInfoANDROID* createInfo,
     XrEyeTrackerANDROID* eyeTracker) {
@@ -604,6 +644,12 @@ const auto kXrFunctions = new absl::flat_hash_map<absl::string_view,
     {"xrGetFaceStateANDROID", ToXrVoidFunction(Internal_xrGetFaceStateANDROID)},
     {"xrGetFaceCalibrationStateANDROID",
      ToXrVoidFunction(Internal_xrGetFaceCalibrationStateANDROID)},
+    {"xrCreateEarthTrackerANDROIDX1",
+     ToXrVoidFunction(Internal_xrCreateEarthTrackerANDROIDX1)},
+    {"xrDestroyEarthTrackerANDROIDX1",
+     ToXrVoidFunction(Internal_xrDestroyEarthTrackerANDROIDX1)},
+    {"xrLocateGeospatialPoseANDROIDX1",
+     ToXrVoidFunction(Internal_xrLocateGeospatialPoseANDROIDX1)},
     {"xrCreateDepthSwapchainANDROID",
      ToXrVoidFunction(Internal_xrCreateDepthSwapchainANDROID)},
     {"xrDestroyDepthSwapchainANDROID",
@@ -636,6 +682,12 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
   // We still return XR_SUCCESS even if the function if we do not have a test
   // implementation for them since the OpenXR manager requires that all
   // function lookups return success.
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
+    const char* layerName, uint32_t propertyCapacityInput,
+    uint32_t* propertyCountOutput, XrExtensionProperties* properties) {
   return XR_SUCCESS;
 }
 

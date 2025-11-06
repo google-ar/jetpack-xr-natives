@@ -22,6 +22,7 @@ kt_android_library(
     name = "glyph",
     srcs = [
         "BidiRuns.kt",
+        "GlyphAdvance.kt",
         "GlyphSource.kt",
         "PathGlyphSource.kt",
         "ShaperGlyphSource.kt",

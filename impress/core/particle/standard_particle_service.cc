@@ -22,6 +22,7 @@
 #include "absl/memory/memory.h"
 #include "core/async/future.h"
 #include "core/common/owned_ptr.h"
+#include "core/particle/particle_config.proto.imp.h"
 #include "core/particle/particle_data.h"
 #include "core/particle/particle_data_provider.h"
 #include "core/particle/particle_emitter_info.h"
@@ -30,15 +31,16 @@
 
 namespace imp {
 
-StandardParticleService::StandardParticleService(/*particle_description*/)
-    : data_layout_(/* particle_description */), data_provider_(1) {}
+StandardParticleService::StandardParticleService(
+    const ParticleConfig& particle_config)
+    : data_layout_(particle_config), data_provider_(1) {}
 
 StandardParticleService::~StandardParticleService() {}
 
 Future<OwnedParticleServicePtr> StandardParticleService::Create(
-    /* particle_description */) {
+    const ParticleConfig& particle_config) {
   OwnedPtr<StandardParticleService> service =
-      absl::WrapUnique(new StandardParticleService(/* particle_description */));
+      absl::WrapUnique(new StandardParticleService(particle_config));
 
   return Future<OwnedParticleServicePtr>(std::move(service));
 }

@@ -433,7 +433,9 @@ std::vector<NodeHandle> FilterNodesViewableByCamera(
         if constexpr (std::is_same_v<type, NodeHandle>) {
           if (view_target) nodes = {view_target};
         } else if constexpr (std::is_same_v<type, std::vector<NodeHandle>>) {
-          if (!view_target.empty()) nodes = view_target;
+          if (!view_target.empty()) {
+            nodes = view_target;
+          }
         } else if constexpr (std::is_same_v<type, absl::string_view>) {
           int num_nodes = camera->GetNode()
                               ->GetView()

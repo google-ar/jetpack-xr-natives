@@ -178,6 +178,9 @@ absl::Status ImageReaderAndroidExternalTextureSurface::SetDefaultBufferSize(
   return absl::InternalError(
       "ImageReaderAndroidExternalTextureSurface::SetDefaultBufferSize is not "
       "supported.");
+
+  // TODO - Try using ANativeWindow_setBuffersGeometry to set the
+  // buffer size.
 };
 
 void ImageReaderAndroidExternalTextureSurface::NewImageAvailable() {

@@ -332,6 +332,12 @@ void SetToDefault(const VariableDeclaration::Type& type, Variable& var) {
   }
 }
 
+std::string GetSocketVariableName(const NodeId& node_id,
+                                  absl::string_view socket_name) {
+  return absl::StrFormat("%s_%s_SOCKET_VALUE", recipe::NodeIdToString(node_id),
+                         socket_name);
+}
+
 #if IMP_ENABLE_RECIPE_EXPERIMENTAL
 
 std::string ToOpsSymbol(const BinaryExpression::BinaryOps& ops) {

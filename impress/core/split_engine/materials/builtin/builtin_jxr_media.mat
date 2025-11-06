@@ -32,6 +32,7 @@ material {
             // - Transfer function application
             // - Color range adjustment
             // - Peak luminance handling (for HDR tonemapping)
+            // TODO : Clean up once it's no longer needed.
             name : enableColorCorrection,
             type : bool,
             default : true

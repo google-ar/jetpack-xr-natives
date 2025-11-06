@@ -653,6 +653,13 @@ XR_ENUM_STR(XrResult);
     _(XR_TYPE_PERFORMANCE_METRICS_COUNTER_ANDROID, 1000465001) \
     _(XR_TYPE_TRACKABLE_OBJECT_ANDROID, 1000466000) \
     _(XR_TYPE_TRACKABLE_OBJECT_CONFIGURATION_ANDROID, 1000466001) \
+    _(XR_TYPE_FIT_TRACKER_CREATE_INFO_ANDROIDSYS, 1000468000) \
+    _(XR_TYPE_FIT_TRACKER_GET_INFO_ANDROIDSYS, 1000468001) \
+    _(XR_TYPE_FIT_TRACKER_RX_INSERT_ANDROIDSYS, 1000468002) \
+    _(XR_TYPE_FIT_TRACKER_COMPARISON_INFO_ANDROIDSYS, 1000468003) \
+    _(XR_TYPE_FIT_TRACKER_INSERT_CHANGE_ANDROIDSYS, 1000468004) \
+    _(XR_TYPE_FIT_TRACKER_MOUNT_ANDROIDSYS, 1000468005) \
+    _(XR_TYPE_FIT_TRACKER_FIT_DATA_ANDROIDSYS, 1000468006) \
     _(XR_TYPE_FUTURE_CANCEL_INFO_EXT, 1000469000) \
     _(XR_TYPE_FUTURE_POLL_INFO_EXT, 1000469001) \
     _(XR_TYPE_FUTURE_COMPLETION_EXT, 1000469002) \
@@ -813,13 +820,6 @@ XR_ENUM_STR(XrResult);
     _(XR_TYPE_PERSIST_SPATIAL_ENTITY_COMPLETION_EXT, 1000781001) \
     _(XR_TYPE_SPATIAL_ENTITY_UNPERSIST_INFO_EXT, 1000781002) \
     _(XR_TYPE_UNPERSIST_SPATIAL_ENTITY_COMPLETION_EXT, 1000781003) \
-    _(XR_TYPE_FIT_TRACKER_CREATE_INFO_ANDROIDSYS, 1000782000) \
-    _(XR_TYPE_FIT_TRACKER_GET_INFO_ANDROIDSYS, 1000782001) \
-    _(XR_TYPE_FIT_TRACKER_RX_INSERT_ANDROIDSYS, 1000782002) \
-    _(XR_TYPE_FIT_TRACKER_COMPARISON_INFO_ANDROIDSYS, 1000782003) \
-    _(XR_TYPE_FIT_TRACKER_INSERT_CHANGE_ANDROIDSYS, 1000782004) \
-    _(XR_TYPE_FIT_TRACKER_MOUNT_ANDROIDSYS, 1000782005) \
-    _(XR_TYPE_FIT_TRACKER_FIT_DATA_ANDROIDSYS, 1000782006) \
     _(XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_OBJECT_TRACKING_ANDROID, 1000785000) \
     _(XR_TYPE_SPATIAL_COMPONENT_OBJECT_SEMANTIC_LABEL_LIST_ANDROID, 1000785001) \
     _(XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_DEPTH_RAYCAST_ANDROID, 1000786000) \
@@ -838,6 +838,8 @@ XR_ENUM_STR(XrResult);
     _(XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_STREETSCAPE_GEOMETRY_ANDROIDX1, 1000789010) \
     _(XR_TYPE_SPATIAL_COMPONENT_STREETSCAPE_GEOMETRY_METADATA_LIST_ANDROIDX1, 1000789011) \
     _(XR_TYPE_SPATIAL_ANCHOR_PARENT_ANDROID, 1000790000) \
+    _(XR_TYPE_SPATIAL_DISCOVERY_NOT_SUBSUMED_FILTER_ANDROIDX1, 1000791001) \
+    _(XR_TYPE_SPATIAL_COMPONENT_SUBSUMED_BY_LIST_ANDROIDX1, 1000791002) \
     _(XR_TYPE_APERTURE_INFO_KHRX1, 1000665000) \
     _(XR_TYPE_APERTURE_SPACE_CREATE_INFO_KHRX1, 1000665001) \
     _(XR_TYPE_APERTURE_CREATE_INFO_KHRX1, 1000665002) \
@@ -846,6 +848,7 @@ XR_ENUM_STR(XrResult);
     _(XR_TYPE_SYSTEM_APERTURE_PROPERTIES_KHRX1, 1000665005) \
     _(XR_TYPE_APERTURE_STATE_KHRX1, 1000665006) \
     _(XR_TYPE_APERTURE_STATE_GET_INFO_KHRX1, 1000665007) \
+    _(XR_TYPE_BATTERY_STATE_DISPLAY_EXT, 1000836000) \
     _(XR_STRUCTURE_TYPE_MAX_ENUM, 0x7FFFFFFF)
 
 #define XR_LIST_ENUM_XrFormFactor(_) \
@@ -948,6 +951,7 @@ XR_ENUM_STR(XrResult);
     _(XR_OBJECT_TYPE_DEVICE_ANCHOR_PERSISTENCE_ANDROID, 1000457000) \
     _(XR_OBJECT_TYPE_FACE_TRACKER_ANDROID, 1000458000) \
     _(XR_OBJECT_TYPE_PASSTHROUGH_LAYER_ANDROID, 1000462000) \
+    _(XR_OBJECT_TYPE_FIT_TRACKER_ANDROIDSYS, 1000468000) \
     _(XR_OBJECT_TYPE_WORLD_MESH_DETECTOR_ML, 1000474000) \
     _(XR_OBJECT_TYPE_FACIAL_EXPRESSION_CLIENT_ML, 1000482000) \
     _(XR_OBJECT_TYPE_LIGHT_ESTIMATOR_ANDROID, 1000700000) \
@@ -964,7 +968,6 @@ XR_ENUM_STR(XrResult);
     _(XR_OBJECT_TYPE_SPATIAL_CONTEXT_EXT, 1000740001) \
     _(XR_OBJECT_TYPE_SPATIAL_SNAPSHOT_EXT, 1000740002) \
     _(XR_OBJECT_TYPE_SPATIAL_PERSISTENCE_CONTEXT_EXT, 1000763000) \
-    _(XR_OBJECT_TYPE_FIT_TRACKER_ANDROIDSYS, 1000782000) \
     _(XR_OBJECT_TYPE_EARTH_TRACKER_ANDROIDX1, 1000789000) \
     _(XR_OBJECT_TYPE_APERTURE_KHRX1, 1000665000) \
     _(XR_OBJECT_TYPE_MAX_ENUM, 0x7FFFFFFF)
@@ -2189,6 +2192,29 @@ XR_ENUM_STR(XrResult);
     _(XR_OBJECT_LABEL_LAPTOP_ANDROID, 3) \
     _(XR_OBJECT_LABEL_MAX_ENUM_ANDROID, 0x7FFFFFFF)
 
+#define XR_LIST_ENUM_XrFitTrackerStatusANDROIDSYS(_) \
+    _(XR_FIT_TRACKER_STATUS_INITIALIZED_ANDROIDSYS, 0) \
+    _(XR_FIT_TRACKER_STATUS_ERROR_ANDROIDSYS, 1) \
+    _(XR_FIT_TRACKER_STATUS_CAMERA_ERROR_ANDROIDSYS, 2) \
+    _(XR_FIT_TRACKER_STATUS_UNDEFINED_ERROR_ANDROIDSYS, 3) \
+    _(XR_FIT_TRACKER_STATUS_MAX_ENUM_ANDROIDSYS, 0x7FFFFFFF)
+
+#define XR_LIST_ENUM_XrFitTrackerRxInsertStatusANDROIDSYS(_) \
+    _(XR_FIT_TRACKER_RX_INSERT_STATUS_NOT_PRESENT_ANDROIDSYS, 0) \
+    _(XR_FIT_TRACKER_RX_INSERT_STATUS_PRESENT_ANDROIDSYS, 1) \
+    _(XR_FIT_TRACKER_RX_INSERT_STATUS_GLASSES_PRESENT_ANDROIDSYS, 2) \
+    _(XR_FIT_TRACKER_RXINSERT_STATUS_MAX_ENUM_ANDROIDSYS, 0x7FFFFFFF)
+
+#define XR_LIST_ENUM_XrFitTrackerRxInsertChangeStatusANDROIDSYS(_) \
+    _(XR_FIT_TRACKER_RX_INSERT_CHANGE_STATUS_NOT_DETECTED_ANDROIDSYS, 0) \
+    _(XR_FIT_TRACKER_RX_INSERT_CHANGE_STATUS_DETECTED_ANDROIDSYS, 1) \
+    _(XR_FIT_TRACKER_RXINSERT_CHANGE_STATUS_MAX_ENUM_ANDROIDSYS, 0x7FFFFFFF)
+
+#define XR_LIST_ENUM_XrFitTrackerHeadMountedStatusANDROIDSYS(_) \
+    _(XR_FIT_TRACKER_HEAD_MOUNTED_STATUS_NOT_DETECTED_ANDROIDSYS, 0) \
+    _(XR_FIT_TRACKER_HEAD_MOUNTED_STATUS_DETECTED_ANDROIDSYS, 1) \
+    _(XR_FIT_TRACKER_HEAD_MOUNTED_STATUS_MAX_ENUM_ANDROIDSYS, 0x7FFFFFFF)
+
 #define XR_LIST_ENUM_XrFutureStateEXT(_) \
     _(XR_FUTURE_STATE_PENDING_EXT, 1) \
     _(XR_FUTURE_STATE_READY_EXT, 2) \
@@ -2498,6 +2524,7 @@ XR_ENUM_STR(XrResult);
     _(XR_SPATIAL_COMPONENT_TYPE_OBJECT_SEMANTIC_LABEL_ANDROID, 1000785000) \
     _(XR_SPATIAL_COMPONENT_TYPE_RAYCAST_RESULT_ANDROID, 1000786000) \
     _(XR_SPATIAL_COMPONENT_TYPE_STREETSCAPE_GEOMETRY_METADATA_ANDROIDX1, 1000789000) \
+    _(XR_SPATIAL_COMPONENT_TYPE_SUBSUMED_BY_ANDROIDX1, 1000791000) \
     _(XR_SPATIAL_COMPONENT_TYPE_MAX_ENUM_EXT, 0x7FFFFFFF)
 
 #define XR_LIST_ENUM_XrSpatialEntityTrackingStateEXT(_) \
@@ -2573,29 +2600,6 @@ XR_ENUM_STR(XrResult);
     _(XR_SPATIAL_PERSISTENCE_STATE_LOADED_EXT, 1) \
     _(XR_SPATIAL_PERSISTENCE_STATE_NOT_FOUND_EXT, 2) \
     _(XR_SPATIAL_PERSISTENCE_STATE_MAX_ENUM_EXT, 0x7FFFFFFF)
-
-#define XR_LIST_ENUM_XrFitTrackerStatusANDROIDSYS(_) \
-    _(XR_FIT_TRACKER_STATUS_INITIALIZED_ANDROIDSYS, 0) \
-    _(XR_FIT_TRACKER_STATUS_ERROR_ANDROIDSYS, 1) \
-    _(XR_FIT_TRACKER_STATUS_CAMERA_ERROR_ANDROIDSYS, 2) \
-    _(XR_FIT_TRACKER_STATUS_UNDEFINED_ERROR_ANDROIDSYS, 3) \
-    _(XR_FIT_TRACKER_STATUS_MAX_ENUM_ANDROIDSYS, 0x7FFFFFFF)
-
-#define XR_LIST_ENUM_XrFitTrackerRxInsertStatusANDROIDSYS(_) \
-    _(XR_FIT_TRACKER_RX_INSERT_STATUS_NOT_PRESENT_ANDROIDSYS, 0) \
-    _(XR_FIT_TRACKER_RX_INSERT_STATUS_PRESENT_ANDROIDSYS, 1) \
-    _(XR_FIT_TRACKER_RX_INSERT_STATUS_GLASSES_PRESENT_ANDROIDSYS, 2) \
-    _(XR_FIT_TRACKER_RXINSERT_STATUS_MAX_ENUM_ANDROIDSYS, 0x7FFFFFFF)
-
-#define XR_LIST_ENUM_XrFitTrackerRxInsertChangeStatusANDROIDSYS(_) \
-    _(XR_FIT_TRACKER_RX_INSERT_CHANGE_STATUS_NOT_DETECTED_ANDROIDSYS, 0) \
-    _(XR_FIT_TRACKER_RX_INSERT_CHANGE_STATUS_DETECTED_ANDROIDSYS, 1) \
-    _(XR_FIT_TRACKER_RXINSERT_CHANGE_STATUS_MAX_ENUM_ANDROIDSYS, 0x7FFFFFFF)
-
-#define XR_LIST_ENUM_XrFitTrackerHeadMountedStatusANDROIDSYS(_) \
-    _(XR_FIT_TRACKER_HEAD_MOUNTED_STATUS_NOT_DETECTED_ANDROIDSYS, 0) \
-    _(XR_FIT_TRACKER_HEAD_MOUNTED_STATUS_DETECTED_ANDROIDSYS, 1) \
-    _(XR_FIT_TRACKER_HEAD_MOUNTED_STATUS_MAX_ENUM_ANDROIDSYS, 0x7FFFFFFF)
 
 #define XR_LIST_ENUM_XrSpatialObjectSemanticLabelANDROID(_) \
     _(XR_SPATIAL_OBJECT_SEMANTIC_LABEL_UNCATEGORIZED_ANDROID, 0) \
@@ -2872,6 +2876,12 @@ XR_ENUM_STR(XrResult);
 #define XR_LIST_BITS_XrGeospatialPoseFlagsANDROIDX1(_) \
     _(XR_GEOSPATIAL_POSE_ORIENTATION_VALID_BIT_ANDROIDX1, 0x00000001) \
     _(XR_GEOSPATIAL_POSE_POSITION_VALID_BIT_ANDROIDX1, 0x00000002) \
+
+#define XR_LIST_BITS_XrBatteryStateDisplayStateFlagsEXT(_) \
+    _(XR_BATTERY_STATE_DISPLAY_STATE_VALID_BIT_EXT, 0x00000001) \
+    _(XR_BATTERY_STATE_DISPLAY_STATE_CHARGING_BIT_EXT, 0x00000002) \
+    _(XR_BATTERY_STATE_DISPLAY_STATE_PLUGGED_IN_BIT_EXT, 0x00000004) \
+    _(XR_BATTERY_STATE_DISPLAY_STATE_NO_BATTERY_BIT_EXT, 0x00000008) \
 
 /// Calls your macro with the name of each member of XrApiLayerProperties, in order.
 #define XR_LIST_STRUCT_XrApiLayerProperties(_) \
@@ -6745,6 +6755,60 @@ XR_ENUM_STR(XrResult);
     _(labelCount) \
     _(activeLabels) \
 
+/// Calls your macro with the name of each member of XrFitTrackerCreateInfoANDROIDSYS, in order.
+#define XR_LIST_STRUCT_XrFitTrackerCreateInfoANDROIDSYS(_) \
+    _(type) \
+    _(next) \
+
+/// Calls your macro with the name of each member of XrFitTrackerGetInfoANDROIDSYS, in order.
+#define XR_LIST_STRUCT_XrFitTrackerGetInfoANDROIDSYS(_) \
+    _(type) \
+    _(next) \
+
+/// Calls your macro with the name of each member of XrFitTrackerRxInsertANDROIDSYS, in order.
+#define XR_LIST_STRUCT_XrFitTrackerRxInsertANDROIDSYS(_) \
+    _(type) \
+    _(next) \
+    _(status) \
+    _(referenceFrameId) \
+    _(rxInsertStatusLeftEye) \
+    _(rxInsertStatusRightEye) \
+
+/// Calls your macro with the name of each member of XrFitTrackerComparisonInfoANDROIDSYS, in order.
+#define XR_LIST_STRUCT_XrFitTrackerComparisonInfoANDROIDSYS(_) \
+    _(type) \
+    _(next) \
+    _(referenceImageA) \
+    _(referenceImageB) \
+
+/// Calls your macro with the name of each member of XrFitTrackerInsertChangeANDROIDSYS, in order.
+#define XR_LIST_STRUCT_XrFitTrackerInsertChangeANDROIDSYS(_) \
+    _(type) \
+    _(next) \
+    _(status) \
+    _(referenceFrameId) \
+    _(rxInsertChangeStatusLeftEye) \
+    _(rxInsertChangeStatusRightEye) \
+
+/// Calls your macro with the name of each member of XrFitTrackerMountANDROIDSYS, in order.
+#define XR_LIST_STRUCT_XrFitTrackerMountANDROIDSYS(_) \
+    _(type) \
+    _(next) \
+    _(status) \
+    _(referenceFrameId) \
+    _(mountStatus) \
+
+/// Calls your macro with the name of each member of XrFitTrackerFitDataANDROIDSYS, in order.
+#define XR_LIST_STRUCT_XrFitTrackerFitDataANDROIDSYS(_) \
+    _(type) \
+    _(next) \
+    _(status) \
+    _(referenceFrameId) \
+    _(eyeImageCenterLeft) \
+    _(eyeImageCenterRight) \
+    _(eyeReliefLeft) \
+    _(eyeReliefRight) \
+
 /// Calls your macro with the name of each member of XrFutureCancelInfoEXT, in order.
 #define XR_LIST_STRUCT_XrFutureCancelInfoEXT(_) \
     _(type) \
@@ -8105,60 +8169,6 @@ XR_ENUM_STR(XrResult);
     _(futureResult) \
     _(unpersistResult) \
 
-/// Calls your macro with the name of each member of XrFitTrackerCreateInfoANDROIDSYS, in order.
-#define XR_LIST_STRUCT_XrFitTrackerCreateInfoANDROIDSYS(_) \
-    _(type) \
-    _(next) \
-
-/// Calls your macro with the name of each member of XrFitTrackerGetInfoANDROIDSYS, in order.
-#define XR_LIST_STRUCT_XrFitTrackerGetInfoANDROIDSYS(_) \
-    _(type) \
-    _(next) \
-
-/// Calls your macro with the name of each member of XrFitTrackerRxInsertANDROIDSYS, in order.
-#define XR_LIST_STRUCT_XrFitTrackerRxInsertANDROIDSYS(_) \
-    _(type) \
-    _(next) \
-    _(status) \
-    _(referenceFrameId) \
-    _(rxInsertStatusLeftEye) \
-    _(rxInsertStatusRightEye) \
-
-/// Calls your macro with the name of each member of XrFitTrackerComparisonInfoANDROIDSYS, in order.
-#define XR_LIST_STRUCT_XrFitTrackerComparisonInfoANDROIDSYS(_) \
-    _(type) \
-    _(next) \
-    _(referenceImageA) \
-    _(referenceImageB) \
-
-/// Calls your macro with the name of each member of XrFitTrackerInsertChangeANDROIDSYS, in order.
-#define XR_LIST_STRUCT_XrFitTrackerInsertChangeANDROIDSYS(_) \
-    _(type) \
-    _(next) \
-    _(status) \
-    _(referenceFrameId) \
-    _(rxInsertChangeStatusLeftEye) \
-    _(rxInsertChangeStatusRightEye) \
-
-/// Calls your macro with the name of each member of XrFitTrackerMountANDROIDSYS, in order.
-#define XR_LIST_STRUCT_XrFitTrackerMountANDROIDSYS(_) \
-    _(type) \
-    _(next) \
-    _(status) \
-    _(referenceFrameId) \
-    _(mountStatus) \
-
-/// Calls your macro with the name of each member of XrFitTrackerFitDataANDROIDSYS, in order.
-#define XR_LIST_STRUCT_XrFitTrackerFitDataANDROIDSYS(_) \
-    _(type) \
-    _(next) \
-    _(status) \
-    _(referenceFrameId) \
-    _(eyeImageCenterLeft) \
-    _(eyeImageCenterRight) \
-    _(eyeReliefLeft) \
-    _(eyeReliefRight) \
-
 /// Calls your macro with the name of each member of XrSpatialCapabilityConfigurationObjectTrackingANDROID, in order.
 #define XR_LIST_STRUCT_XrSpatialCapabilityConfigurationObjectTrackingANDROID(_) \
     _(type) \
@@ -8319,6 +8329,25 @@ XR_ENUM_STR(XrResult);
     _(type) \
     _(next) \
     _(parentId) \
+
+/// Calls your macro with the name of each member of XrSpatialDiscoveryNotSubsumedFilterANDROIDX1, in order.
+#define XR_LIST_STRUCT_XrSpatialDiscoveryNotSubsumedFilterANDROIDX1(_) \
+    _(type) \
+    _(next) \
+
+/// Calls your macro with the name of each member of XrSpatialComponentSubsumedByListANDROIDX1, in order.
+#define XR_LIST_STRUCT_XrSpatialComponentSubsumedByListANDROIDX1(_) \
+    _(type) \
+    _(next) \
+    _(subsumedByCount) \
+    _(subsumedByIds) \
+
+/// Calls your macro with the name of each member of XrBatteryStateDisplayEXT, in order.
+#define XR_LIST_STRUCT_XrBatteryStateDisplayEXT(_) \
+    _(type) \
+    _(next) \
+    _(stateBits) \
+    _(batteryLevel) \
 
 
 
@@ -8759,6 +8788,13 @@ XR_ENUM_STR(XrResult);
     _(XrPerformanceMetricsCounterANDROID, XR_TYPE_PERFORMANCE_METRICS_COUNTER_ANDROID) \
     _(XrTrackableObjectANDROID, XR_TYPE_TRACKABLE_OBJECT_ANDROID) \
     _(XrTrackableObjectConfigurationANDROID, XR_TYPE_TRACKABLE_OBJECT_CONFIGURATION_ANDROID) \
+    _(XrFitTrackerCreateInfoANDROIDSYS, XR_TYPE_FIT_TRACKER_CREATE_INFO_ANDROIDSYS) \
+    _(XrFitTrackerGetInfoANDROIDSYS, XR_TYPE_FIT_TRACKER_GET_INFO_ANDROIDSYS) \
+    _(XrFitTrackerRxInsertANDROIDSYS, XR_TYPE_FIT_TRACKER_RX_INSERT_ANDROIDSYS) \
+    _(XrFitTrackerComparisonInfoANDROIDSYS, XR_TYPE_FIT_TRACKER_COMPARISON_INFO_ANDROIDSYS) \
+    _(XrFitTrackerInsertChangeANDROIDSYS, XR_TYPE_FIT_TRACKER_INSERT_CHANGE_ANDROIDSYS) \
+    _(XrFitTrackerMountANDROIDSYS, XR_TYPE_FIT_TRACKER_MOUNT_ANDROIDSYS) \
+    _(XrFitTrackerFitDataANDROIDSYS, XR_TYPE_FIT_TRACKER_FIT_DATA_ANDROIDSYS) \
     _(XrFutureCancelInfoEXT, XR_TYPE_FUTURE_CANCEL_INFO_EXT) \
     _(XrFuturePollInfoEXT, XR_TYPE_FUTURE_POLL_INFO_EXT) \
     _(XrFuturePollResultEXT, XR_TYPE_FUTURE_POLL_RESULT_EXT) \
@@ -8923,13 +8959,6 @@ XR_ENUM_STR(XrResult);
     _(XrPersistSpatialEntityCompletionEXT, XR_TYPE_PERSIST_SPATIAL_ENTITY_COMPLETION_EXT) \
     _(XrSpatialEntityUnpersistInfoEXT, XR_TYPE_SPATIAL_ENTITY_UNPERSIST_INFO_EXT) \
     _(XrUnpersistSpatialEntityCompletionEXT, XR_TYPE_UNPERSIST_SPATIAL_ENTITY_COMPLETION_EXT) \
-    _(XrFitTrackerCreateInfoANDROIDSYS, XR_TYPE_FIT_TRACKER_CREATE_INFO_ANDROIDSYS) \
-    _(XrFitTrackerGetInfoANDROIDSYS, XR_TYPE_FIT_TRACKER_GET_INFO_ANDROIDSYS) \
-    _(XrFitTrackerRxInsertANDROIDSYS, XR_TYPE_FIT_TRACKER_RX_INSERT_ANDROIDSYS) \
-    _(XrFitTrackerComparisonInfoANDROIDSYS, XR_TYPE_FIT_TRACKER_COMPARISON_INFO_ANDROIDSYS) \
-    _(XrFitTrackerInsertChangeANDROIDSYS, XR_TYPE_FIT_TRACKER_INSERT_CHANGE_ANDROIDSYS) \
-    _(XrFitTrackerMountANDROIDSYS, XR_TYPE_FIT_TRACKER_MOUNT_ANDROIDSYS) \
-    _(XrFitTrackerFitDataANDROIDSYS, XR_TYPE_FIT_TRACKER_FIT_DATA_ANDROIDSYS) \
     _(XrSpatialCapabilityConfigurationObjectTrackingANDROID, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_OBJECT_TRACKING_ANDROID) \
     _(XrSpatialComponentObjectSemanticLabelListANDROID, XR_TYPE_SPATIAL_COMPONENT_OBJECT_SEMANTIC_LABEL_LIST_ANDROID) \
     _(XrSpatialCapabilityConfigurationDepthRaycastANDROID, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_DEPTH_RAYCAST_ANDROID) \
@@ -8948,6 +8977,9 @@ XR_ENUM_STR(XrResult);
     _(XrSpatialCapabilityConfigurationStreetscapeGeometryANDROIDX1, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_STREETSCAPE_GEOMETRY_ANDROIDX1) \
     _(XrSpatialComponentStreetscapeGeometryMetadataListANDROIDX1, XR_TYPE_SPATIAL_COMPONENT_STREETSCAPE_GEOMETRY_METADATA_LIST_ANDROIDX1) \
     _(XrSpatialAnchorParentANDROID, XR_TYPE_SPATIAL_ANCHOR_PARENT_ANDROID) \
+    _(XrSpatialDiscoveryNotSubsumedFilterANDROIDX1, XR_TYPE_SPATIAL_DISCOVERY_NOT_SUBSUMED_FILTER_ANDROIDX1) \
+    _(XrSpatialComponentSubsumedByListANDROIDX1, XR_TYPE_SPATIAL_COMPONENT_SUBSUMED_BY_LIST_ANDROIDX1) \
+    _(XrBatteryStateDisplayEXT, XR_TYPE_BATTERY_STATE_DISPLAY_EXT) \
 
 
 #if defined(XR_USE_GRAPHICS_API_D3D11)
@@ -9313,6 +9345,7 @@ XR_ENUM_STR(XrResult);
     _(XR_ANDROID_performance_metrics, 466) \
     _(XR_ANDROID_trackables_object, 467) \
     _(XR_ANDROID_unbounded_reference_space, 468) \
+    _(XR_ANDROIDSYS_fit_tracking, 469) \
     _(XR_EXT_future, 470) \
     _(XR_EXT_user_presence, 471) \
     _(XR_KHR_locate_spaces, 472) \
@@ -9360,13 +9393,14 @@ XR_ENUM_STR(XrResult);
     _(XR_EXT_spatial_anchor, 763) \
     _(XR_EXT_spatial_persistence, 764) \
     _(XR_EXT_spatial_persistence_operations, 782) \
-    _(XR_ANDROIDSYS_fit_tracking, 783) \
     _(XR_ANDROID_spatial_object_tracking, 786) \
     _(XR_ANDROID_spatial_discovery_raycast, 787) \
     _(XR_ANDROIDX1_google_cloud_auth, 788) \
     _(XR_ANDROIDX1_google_cloud_auth_internal, 789) \
     _(XR_ANDROIDX1_geospatial, 790) \
     _(XR_ANDROID_spatial_entity_bound_anchor, 791) \
+    _(XR_ANDROIDX1_spatial_component_subsumed_by, 792) \
+    _(XR_EXT_battery_state_display, 837) \
 
 
 
@@ -10447,6 +10481,19 @@ XR_ENUM_STR(XrResult);
     _(GetTrackableObjectANDROID, ANDROID_trackables_object) \
 
 
+/// For every function defined by XR_ANDROIDSYS_fit_tracking in this version of the spec,
+/// calls your macro with the function name and extension name.
+/// Trims the leading `xr` from the function name and the leading `XR_` from the feature name,
+/// because it is easy to add back but impossible to remove with the preprocessor.
+#define XR_LIST_FUNCTIONS_XR_ANDROIDSYS_fit_tracking(_) \
+    _(CreateFitTrackerANDROIDSYS, ANDROIDSYS_fit_tracking) \
+    _(DestroyFitTrackerANDROIDSYS, ANDROIDSYS_fit_tracking) \
+    _(GetFitTrackerCurrentRxInsertANDROIDSYS, ANDROIDSYS_fit_tracking) \
+    _(CompareFitTrackerRxInsertsANDROIDSYS, ANDROIDSYS_fit_tracking) \
+    _(GetFitTrackerMountANDROIDSYS, ANDROIDSYS_fit_tracking) \
+    _(GetFitTrackerFitDataANDROIDSYS, ANDROIDSYS_fit_tracking) \
+
+
 /// For every function defined by XR_EXT_future in this version of the spec,
 /// calls your macro with the function name and extension name.
 /// Trims the leading `xr` from the function name and the leading `XR_` from the feature name,
@@ -10775,19 +10822,6 @@ XR_ENUM_STR(XrResult);
     _(PersistSpatialEntityCompleteEXT, EXT_spatial_persistence_operations) \
     _(UnpersistSpatialEntityAsyncEXT, EXT_spatial_persistence_operations) \
     _(UnpersistSpatialEntityCompleteEXT, EXT_spatial_persistence_operations) \
-
-
-/// For every function defined by XR_ANDROIDSYS_fit_tracking in this version of the spec,
-/// calls your macro with the function name and extension name.
-/// Trims the leading `xr` from the function name and the leading `XR_` from the feature name,
-/// because it is easy to add back but impossible to remove with the preprocessor.
-#define XR_LIST_FUNCTIONS_XR_ANDROIDSYS_fit_tracking(_) \
-    _(CreateFitTrackerANDROIDSYS, ANDROIDSYS_fit_tracking) \
-    _(DestroyFitTrackerANDROIDSYS, ANDROIDSYS_fit_tracking) \
-    _(GetFitTrackerCurrentRxInsertANDROIDSYS, ANDROIDSYS_fit_tracking) \
-    _(CompareFitTrackerRxInsertsANDROIDSYS, ANDROIDSYS_fit_tracking) \
-    _(GetFitTrackerMountANDROIDSYS, ANDROIDSYS_fit_tracking) \
-    _(GetFitTrackerFitDataANDROIDSYS, ANDROIDSYS_fit_tracking) \
 
 
 /// For every function defined by XR_ANDROIDX1_google_cloud_auth in this version of the spec,

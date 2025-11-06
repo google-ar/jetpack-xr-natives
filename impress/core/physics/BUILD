@@ -328,6 +328,7 @@ cc_library(
     srcs = [
         "collidable.cc",
         "constraints/base_constraint.cc",
+        "constraints/hinge_constraint.cc",
         "constraints/point2point_constraint.cc",
         "physics_manager.cc",
         "rigid_body.cc",
@@ -336,6 +337,7 @@ cc_library(
     hdrs = [
         "collidable.h",
         "constraints/base_constraint.h",
+        "constraints/hinge_constraint.h",
         "constraints/point2point_constraint.h",
         "physics_manager.h",
         "rigid_body.h",
@@ -390,6 +392,7 @@ proto_library(
     srcs = [
         "collidable_shapes/collidable_shape_properties_state.proto",
         "collidable_type.proto",
+        "constraints/hinge_constraint_state.proto",
         "constraints/point2point_constraint_state.proto",
         "rigid_body_state.proto",
     ],
@@ -427,10 +430,12 @@ cc_library(
     name = "constraint",
     srcs = [
         "constraints/base_constraint.cc",
+        "constraints/hinge_constraint.cc",
         "constraints/point2point_constraint.cc",
     ],
     hdrs = [
         "constraints/base_constraint.h",
+        "constraints/hinge_constraint.h",
         "constraints/point2point_constraint.h",
     ],
     copts = imp_google3_copts(),

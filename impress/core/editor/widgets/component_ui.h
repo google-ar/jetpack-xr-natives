@@ -40,7 +40,7 @@ class ComponentUi : public editor::Widget, public imp::Rememberer {
 
  private:
   // Loops through all components on the active model and updates the UI.
-  void UpdateComponentWidgets();
+  void UpdateComponentWidgets(NodeHandle selected_node);
   // Destroys all component widgets that may exist.
   void DestroyComponentWidgets();
 

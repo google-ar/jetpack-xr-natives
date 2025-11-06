@@ -15,7 +15,7 @@
 # IPC library for loader, used to sandbox loading from untrusted sources.
 
 load(
-    "@com_github_google_flatbuffers//:build_defs.bzl",
+    "@flatbuffers//:build_defs.bzl",
     "flatbuffer_cc_library",
 )
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
@@ -125,11 +125,11 @@ cc_library(
         "//core/loader/provider:fbs",
         "//core/loader/provider:fbs_deps",  # build_cleaner: keep
         "//third_party/arcore/ar/sceneform/converter/data:embedded_generic_opengl_material_data",
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
         "@com_google_impress//core/common:log",
+        "@flatbuffers",
         "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament/libs:utils_hdrs",
     ] + if_android([
@@ -160,12 +160,12 @@ cc_library(
         "//core/loader/provider",
         "//core/loader/provider:fbs",
         "//core/loader/provider:fbs_deps",  # build_cleaner: keep
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/log:globals",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/types:span",
         "@com_google_impress//core/common:log",
+        "@flatbuffers",
         "@mediapipe//mediapipe/framework/port:status",
     ],
     alwayslink = 1,
@@ -189,7 +189,7 @@ cc_library(
         "//core/common",
         "//core/ipc:common",
         "//devtools/build/runtime:get_runfiles_dir",
-        "@com_github_google_flatbuffers//:flatbuffers",
+        "@flatbuffers",
         "@mediapipe//mediapipe/framework/port:gtest",
         "@mediapipe//mediapipe/framework/port:status",
     ],

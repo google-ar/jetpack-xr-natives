@@ -170,6 +170,10 @@ std::array<const char*, 2> kOpenXRExtensionsAndroidSys = {
     XR_ANDROIDSYS_INPUT_TRACING_EXTENSION_NAME,
 };
 
+std::array<const char*, 1> kOpenXRExtensionAndroidXSpatialInteraction = {
+    XR_ANDROIDX_SPATIAL_INTERACTION_EXTENSION_NAME,
+};
+
 absl::Time GetFilamentTimeNow() {
   // A monotonic/profiling clock for internal use only when on filament thread.
   static mediapipe::Clock* filament_clock = new ProfilingClock();
@@ -629,6 +633,15 @@ bool XrSessionHost::IsXrAndroidXOccupancyGridEnabled() const {
   return is_supported.ok();
 }
 
+bool XrSessionHost::IsXrAndroidXSpatialInteractionEnabled() const {
+  std::vector<const char*> extensions;
+  extensions.insert(extensions.end(),
+                    kOpenXRExtensionAndroidXSpatialInteraction.begin(),
+                    kOpenXRExtensionAndroidXSpatialInteraction.end());
+  absl::Status is_supported = EnsureSupportedExtensions(extensions);
+  return is_supported.ok();
+}
+
 bool XrSessionHost::IsXrAndroidDepthTextureEnabled() const {
   return is_android_depth_texture_enabled_;
 }
@@ -771,6 +784,11 @@ absl::StatusOr<XrInstance> XrSessionHost::CreateInstance(JNIEnv* env,
                       kOpenXRExtensionAndroidXOccupancyGrid.begin(),
                       kOpenXRExtensionAndroidXOccupancyGrid.end());
   }
+  if (IsXrAndroidXSpatialInteractionEnabled()) {
+    extensions.insert(extensions.end(),
+                      kOpenXRExtensionAndroidXSpatialInteraction.begin(),
+                      kOpenXRExtensionAndroidXSpatialInteraction.end());
+  }
   if (IsXrEyeGazeInteractionEnabled()) {
     extensions.insert(extensions.end(),
                       kOpenXRExtensionsEyeGazeInteraction.begin(),
@@ -808,10 +826,7 @@ absl::StatusOr<XrInstance> XrSessionHost::CreateInstance(JNIEnv* env,
       .applicationInfo =
           {
               .engineName = "Impress",
-              // TODO: Revert back to XR_CURRENT_API_VERSION after
-              // the OpenXR loader version mismatch issue is resolved
-              // (broken link).
-              .apiVersion = XR_MAKE_VERSION(1, 0, 34),
+              .apiVersion = XR_API_VERSION_1_0,
           },
       .enabledApiLayerCount = 0,
       .enabledApiLayerNames = nullptr,

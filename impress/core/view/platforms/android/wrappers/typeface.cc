@@ -38,6 +38,19 @@ Typeface::Typeface(JNIEnv* env, absl::string_view family_name, jint style)
   SetSelf(LocalToGlobalRef(std::move(typeface)));
 }
 
+Typeface::Typeface(JNIEnv* env, Typeface& family, jint weight, jboolean italic)
+    : JavaWrapper(env, "android/graphics/Typeface") {
+  font_family_name_ = family.GetFontFamilyName();
+
+  auto create_method_handle = GetStaticMethodHandle(
+      "create", "(Landroid/graphics/Typeface;IZ)Landroid/graphics/Typeface;");
+
+  JniUniquePtr<jobject> typeface = WrapJni(
+      Env(), CallStaticObjectMethod(create_method_handle,
+                                    family.WeakReference(), weight, italic));
+  SetSelf(LocalToGlobalRef(std::move(typeface)));
+}
+
 Typeface::Typeface(JNIEnv* env, jint style)
     : JavaWrapper(env, "android/graphics/Typeface") {
   auto default_field_handle =
@@ -57,6 +70,8 @@ Typeface::Typeface(JNIEnv* env, jint style)
 Typeface::Typeface(JNIEnv* env, jobject j_typeface)
     : JavaWrapper(env, j_typeface) {}
 
-absl::string_view Typeface::GetFontFamilyName() { return font_family_name_; }
+absl::string_view Typeface::GetFontFamilyName() const {
+  return font_family_name_;
+}
 
 }  // namespace imp::android

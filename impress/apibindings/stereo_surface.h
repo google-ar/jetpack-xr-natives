@@ -73,8 +73,20 @@ class StereoSurface : public Component {
   // Dynamically updates the shape of the canvas.
   absl::Status SetCanvasShape(const CanvasShape& canvas_shape);
 
+  // Dynamically enables or disables the collider.
+  // The collider shape is determined by the canvas shape.
+  //   - Quad -> BoxCollider
+  //   - Sphere -> SphereCollider
+  //   - Hemisphere -> DoNothing (Not ready yet)
+  // TODO: (broken link) - Support MeshCollider for hemisphere once
+  //   the bug is fixed.
+  absl::Status SetColliderEnabled(bool enable_collider);
+
   // Sets the feather radius for the edges of the quad in UV space.
   void SetFeatherRadius(const float2& feather_radius);
+
+  // This is needed to support android.graphics.Canvas methods.
+  absl::Status SetSurfaceDimensions(int width, int height);
 
   void SetPrimaryAlphaMask(OwnedOrBorrowedTexturePtr alpha_mask);
   void SetAuxiliaryAlphaMask(OwnedOrBorrowedTexturePtr auxiliary_alpha_mask);
@@ -87,6 +99,8 @@ class StereoSurface : public Component {
   void SetContentColorMetadata(MediaColorSpace color_space);
 
  private:
+  enum class ColliderType { kNone, kUnknown, kPanel, kSphere, kMesh };
+
   std::unique_ptr<AndroidExternalTextureSurface> surface_;
   std::unique_ptr<android_xr::JxrMediaMaterial> material_;
   ComponentHandle<MeshRenderer> mesh_renderer_;
@@ -94,6 +108,22 @@ class StereoSurface : public Component {
 
   MediaStereoMode stereo_mode_;
   CanvasShape canvas_shape_;
+  ColliderType collider_type_;
+
+  ColliderType GetColliderTypeByShape(const CanvasShape& canvas_shape);
+  bool GetColliderEnabled() const {
+    return collider_type_ != ColliderType::kNone;
+  }
+  absl::Status UpdateColliderType(ColliderType collider_type);
+  void CleanupColliderType();
+
+  // True if the old workaround of creating a child node for mesh colliders
+  // should be used.
+  // TODO: (broken link) - Determine this value at runtime based on a system image
+  // version check once the system image version API is ready. This is to
+  // avoid crashes on older system images that do not support the MeshCollider
+  // without this workaround.
+  bool use_mesh_collider_workaround_ = true;
 };
 
 }  // namespace imp

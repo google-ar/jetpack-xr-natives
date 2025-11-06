@@ -102,27 +102,7 @@ const imp::StringMap<VirtualKeyCode>& GetVirtualKeyCodeMap() {
           {"PageUp", VirtualKeyCode::VK_PAGEUP},
           {"Delete", VirtualKeyCode::VK_DELETE},
           {"End", VirtualKeyCode::VK_END},
-          {"PageDown", VirtualKeyCode::VK_PAGEDOWN},
-
-          // the following are physical keys that may exist on some keyboards
-          // Should we delete this section?
-          {"Exclaim", VirtualKeyCode::VK_EXCLAIM},
-          {"QuoteDouble", VirtualKeyCode::VK_QUOTEDBL},
-          {"Hash", VirtualKeyCode::VK_HASH},
-          {"Percent", VirtualKeyCode::VK_PERCENT},
-          {"Dollar", VirtualKeyCode::VK_DOLLAR},
-          {"Ampersand", VirtualKeyCode::VK_AMPERSAND},
-          {"ParenLeft", VirtualKeyCode::VK_LEFTPAREN},
-          {"ParenRight", VirtualKeyCode::VK_RIGHTPAREN},
-          {"Asterisk", VirtualKeyCode::VK_ASTERISK},
-          {"Plus", VirtualKeyCode::VK_PLUS},
-          {"Colon", VirtualKeyCode::VK_COLON},
-          {"Less", VirtualKeyCode::VK_LESS},
-          {"Greater", VirtualKeyCode::VK_GREATER},
-          {"Question", VirtualKeyCode::VK_QUESTION},
-          {"At", VirtualKeyCode::VK_AT},
-          {"Caret", VirtualKeyCode::VK_CARET},
-          {"Underscore", VirtualKeyCode::VK_UNDERSCORE}};
+          {"PageDown", VirtualKeyCode::VK_PAGEDOWN}};
   return *map;
 }
 

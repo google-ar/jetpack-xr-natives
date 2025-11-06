@@ -331,7 +331,6 @@ absl::Status CreateGenericMaterialSchemas(
 
       GenericMaterialParameters generic_material_parameters;
       generic_material_parameters.base_color.emplace();
-      generic_material_parameters.base_color->factor = kOne4;
       if (m.pbr_metallic_roughness.base_color_factor.size() == 4) {
         generic_material_parameters.base_color->factor[0] =
             m.pbr_metallic_roughness.base_color_factor[0];
@@ -344,21 +343,27 @@ absl::Status CreateGenericMaterialSchemas(
       }
 
       generic_material_parameters.metallic_roughness.emplace();
-      generic_material_parameters.metallic_roughness->metallic_factor =
-          m.pbr_metallic_roughness.metallic_factor.value_or(1.0f);
-      generic_material_parameters.metallic_roughness->roughness_factor =
-          m.pbr_metallic_roughness.roughness_factor.value_or(1.0f);
+      if (m.pbr_metallic_roughness.metallic_factor.has_value()) {
+        generic_material_parameters.metallic_roughness->metallic_factor =
+            *m.pbr_metallic_roughness.metallic_factor;
+      }
+      if (m.pbr_metallic_roughness.roughness_factor.has_value()) {
+        generic_material_parameters.metallic_roughness->roughness_factor =
+            *m.pbr_metallic_roughness.roughness_factor;
+      }
 
       generic_material_parameters.normal.emplace();
-      generic_material_parameters.normal->factor =
-          m.normal_texture.scale.value_or(1.0f);
+      if (m.normal_texture.scale.has_value()) {
+        generic_material_parameters.normal->factor = *m.normal_texture.scale;
+      }
 
       generic_material_parameters.ambient_occlusion.emplace();
-      generic_material_parameters.ambient_occlusion->factor =
-          m.occlusion_texture.strength.value_or(1.0f);
+      if (m.occlusion_texture.strength.has_value()) {
+        generic_material_parameters.ambient_occlusion->factor =
+            *m.occlusion_texture.strength;
+      }
 
       generic_material_parameters.emissive.emplace();
-      generic_material_parameters.emissive->factor = kZero3;
       if (m.emissive_factor.size() == 3) {
         generic_material_parameters.emissive->factor[0] = m.emissive_factor[0];
         generic_material_parameters.emissive->factor[1] = m.emissive_factor[1];
@@ -377,9 +382,11 @@ absl::Status CreateGenericMaterialSchemas(
           generic_material_parameters.base_color->factor[3] =
               specular_glossiness.diffuse_factor[3];
         }
-        float glossiness_factor = specular_glossiness.glossiness_factor
-                                      ? *specular_glossiness.glossiness_factor
-                                      : 1.0f;
+        // TODO: (broken link) - Remove support for deprecated glossiness feature.
+        float glossiness_factor =
+            specular_glossiness.glossiness_factor.has_value()
+                ? *specular_glossiness.glossiness_factor
+                : 1.0f;
         generic_material_parameters.metallic_roughness->roughness_factor =
             powf(1.0f - glossiness_factor, 2.0f);
       }
@@ -441,10 +448,16 @@ absl::Status CreateGenericMaterialSchemas(
                 CreateGenericMaterialTextureParameter(
                     builder, model, clearcoat.clearcoat_roughness_texture));
 
+            // Note: we have to explicitly use the default value for clearcoat
+            // factor because the default value is a composite of three values
+            // that can be set independently, i.e. clearcoat.clearcoat_factor
+            // could be nullopt but clearcoat.clearcoat_roughness_factor is set.
             generic_material_parameters.clearcoat->factor = {
-                clearcoat.clearcoat_factor.value_or(0.0f),
-                clearcoat.clearcoat_roughness_factor.value_or(0.0f),
-                clearcoat.clearcoat_normal_texture.scale.value_or(1.0f)};
+                clearcoat.clearcoat_factor.value_or(kDefaultClearcoatFactor.x),
+                clearcoat.clearcoat_roughness_factor.value_or(
+                    kDefaultClearcoatFactor.y),
+                clearcoat.clearcoat_normal_texture.scale.value_or(
+                    kDefaultClearcoatFactor.z)};
           }
         }
 
@@ -478,13 +491,11 @@ absl::Status CreateGenericMaterialSchemas(
 
         // KHR_materials_ior
         if (!use_lite_materials) {
-          float ior = kDefaultIndexOfRefraction;
-          if (m.extensions.ior) {
-            ior = m.extensions.ior->ior.value_or(ior);
-          }
-
           generic_material_parameters.refraction.emplace();
-          generic_material_parameters.refraction->index_of_refraction = ior;
+          if (m.extensions.ior && m.extensions.ior->ior.has_value()) {
+            generic_material_parameters.refraction->index_of_refraction =
+                *m.extensions.ior->ior;
+          }
 
           // KHR_materials_transmission
           if (m.extensions.transmission) {
@@ -496,8 +507,10 @@ absl::Status CreateGenericMaterialSchemas(
                     builder, model,
                     m.extensions.transmission->transmission_texture));
 
-            generic_material_parameters.transmission->factor =
-                m.extensions.transmission->transmission_factor.value_or(0.0f);
+            if (m.extensions.transmission->transmission_factor.has_value()) {
+              generic_material_parameters.transmission->factor =
+                  *m.extensions.transmission->transmission_factor;
+            }
           }
         }
       }

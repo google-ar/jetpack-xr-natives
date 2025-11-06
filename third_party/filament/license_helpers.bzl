@@ -2,6 +2,8 @@
 (Filament command line tools have an option to print out 3p licenses).
 """
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 def list_licenses(
         name,
         srcs,
@@ -21,7 +23,7 @@ def list_licenses(
           echo ")%s\\"", >> "$@"
       """ % (delim, delim),
     )
-    native.cc_library(
+    cc_library(
         name = name,
         textual_hdrs = outs,
     )

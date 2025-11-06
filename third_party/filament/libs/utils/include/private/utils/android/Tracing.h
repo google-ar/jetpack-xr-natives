@@ -17,10 +17,12 @@
 #ifndef TNT_UTILS_ANDROID_FILAMENT_TRACING_H
 #define TNT_UTILS_ANDROID_FILAMENT_TRACING_H
 
+#include <stdint.h>
+
+#ifdef FILAMENT_ENABLE_PERFETTO
+
 #include "third_party/perfetto/include/perfetto/tracing/track_event.h"
 #include "third_party/perfetto/include/perfetto/tracing/track_event_category_registry.h"
-
-#include <stdint.h>
 
 PERFETTO_DEFINE_CATEGORIES_IN_NAMESPACE(tracing,
         perfetto::Category(FILAMENT_TRACING_CATEGORY_FILAMENT),
@@ -29,7 +31,9 @@ PERFETTO_DEFINE_CATEGORIES_IN_NAMESPACE(tracing,
 
 PERFETTO_USE_CATEGORIES_FROM_NAMESPACE(tracing);
 
-#if FILAMENT_TRACING_ENABLED == false
+#endif // FILAMENT_ENABLE_PERFETTO
+
+#if FILAMENT_TRACING_ENABLED == false || !defined(FILAMENT_ENABLE_PERFETTO)
 
 #define FILAMENT_TRACING_ENABLE(category)
 #define FILAMENT_TRACING_CONTEXT(category)

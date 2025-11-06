@@ -16,6 +16,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -157,43 +158,62 @@ bool MessagePipe::ReadInternal(const size_t bytes, uint8_t* data) {
   uint8_t* data_current = data;
   uint8_t* data_end = data + bytes;
 
-  fd_set read_fds;
+  struct pollfd fds[2];
 
   while (data_current < data_end) {
-    FD_ZERO(&read_fds);
-    FD_SET(fd_, &read_fds);
-    FD_SET(close_notifier_.GetReceiveFd(), &read_fds);
+    fds[0].fd = fd_;
+    fds[0].events = POLLIN;
+    fds[0].revents = 0;
 
-    const int result = TEMP_FAILURE_RETRY(
-        select(FD_SETSIZE, &read_fds, nullptr, nullptr, nullptr));
-    if (result <= 0) {
-      IMP_LOG(imp::ERROR) << name_ << " select failed";
+    fds[1].fd = close_notifier_.GetReceiveFd();
+    fds[1].events = POLLIN;
+    fds[1].revents = 0;
+
+    const int result =
+        TEMP_FAILURE_RETRY(poll(fds, 2, -1));  // -1 for infinite timeout.
+
+    if (result < 0) {
+      IMP_LOG(imp::ERROR) << name_ << " poll failed: " << errno;
+      return false;
+    } else if (result == 0) {
+      // This case should not be reached with an infinite timeout.
+      IMP_LOG(imp::ERROR) << name_ << " poll timed out (unexpected)";
       return false;
     }
 
-    if (FD_ISSET(close_notifier_.GetReceiveFd(), &read_fds)) {
+    // Check for close notification.
+    if (fds[1].revents & (POLLIN | POLLERR | POLLHUP | POLLNVAL)) {
       IMP_LOG(imp::INFO) << name_ << " read canceled";
       return false;
     }
 
-    const size_t bytes_remaining = data_end - data_current;
-    const ssize_t bytes_read =
-        TEMP_FAILURE_RETRY(read(fd_, data_current, bytes_remaining));
-    if (bytes_read == 0) {
-      IMP_LOG(imp::ERROR) << name_ << " failed to read " << bytes_remaining << " of "
-                 << bytes << " bytes, read " << bytes_read << ", pipe closed";
-      return false;
-    } else if (bytes_read < 0) {
-      if (errno == EAGAIN) {
-        continue;
-      }
-
-      IMP_LOG(imp::ERROR) << name_ << " failed to read " << bytes_remaining << " of "
-                 << bytes << " bytes, errno " << errno << " , pipe closed";
+    // Check for errors on the message pipe fd.
+    if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+      IMP_LOG(imp::ERROR) << name_ << " poll error on pipe fd: " << fds[0].revents;
       return false;
     }
 
-    data_current += bytes_read;
+    // Check if the message pipe fd is ready for reading.
+    if (fds[0].revents & POLLIN) {
+      const size_t bytes_remaining = data_end - data_current;
+      const ssize_t bytes_read =
+          TEMP_FAILURE_RETRY(read(fd_, data_current, bytes_remaining));
+
+      if (bytes_read == 0) {
+        IMP_LOG(imp::ERROR) << name_ << " failed to read " << bytes_remaining << " of "
+                   << bytes << " bytes, read " << bytes_read << ", pipe closed";
+        return false;
+      } else if (bytes_read < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          // Continue to the next poll() iteration if the read would block.
+          continue;
+        }
+        IMP_LOG(imp::ERROR) << name_ << " failed to read " << bytes_remaining << " of "
+                   << bytes << " bytes, errno " << errno << " , pipe closed";
+        return false;
+      }
+      data_current += bytes_read;
+    }
   }
 
   return true;
@@ -203,35 +223,48 @@ bool MessagePipe::WriteInternal(const uint8_t* data, size_t data_size) {
   const uint8_t* data_current = data;
   const uint8_t* data_end = data + data_size;
 
-  fd_set write_fds;
+  struct pollfd fds[1];
 
   while (data_current < data_end) {
-    FD_ZERO(&write_fds);
-    FD_SET(fd_, &write_fds);
+    fds[0].fd = fd_;
+    fds[0].events = POLLOUT;
+    fds[0].revents = 0;
 
-    const int result = TEMP_FAILURE_RETRY(
-        select(FD_SETSIZE, nullptr, &write_fds, nullptr, nullptr));
-    if (result <= 0) {
-      IMP_LOG(imp::ERROR) << "Select failed";
+    const int result =
+        TEMP_FAILURE_RETRY(poll(fds, 1, -1));  // -1 for infinite timeout.
+
+    if (result < 0) {
+      IMP_LOG(imp::ERROR) << name_ << " poll failed: " << errno;
+      return false;
+    } else if (result == 0) {
+      // This case should not be reached with an infinite timeout.
+      IMP_LOG(imp::ERROR) << name_ << " poll timed out (unexpected)";
       return false;
     }
 
-    const size_t bytes_remaining = data_end - data_current;
-    const ssize_t bytes_written =
-        TEMP_FAILURE_RETRY(write(fd_, data_current, bytes_remaining));
-    if (bytes_written == -1) {
-      if (errno == EAGAIN) {
-        continue;
+    // Check for errors on the message pipe fd.
+    if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+      IMP_LOG(imp::ERROR) << name_ << " poll error on pipe fd: " << fds[0].revents;
+      return false;
+    }
+
+    // Check if the message pipe fd is ready for writing.
+    if (fds[0].revents & POLLOUT) {
+      const size_t bytes_remaining = data_end - data_current;
+      const ssize_t bytes_written =
+          TEMP_FAILURE_RETRY(write(fd_, data_current, bytes_remaining));
+
+      if (bytes_written < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          // Continue to the next poll() iteration if the write would block.
+          continue;
+        }
+        IMP_LOG(imp::ERROR) << name_ << " failed to write " << bytes_remaining << " of "
+                   << data_size << " bytes, errno " << errno << ", pipe closed";
+        return false;
       }
-
-      IMP_LOG(imp::ERROR) << name_ << " failed to write " << bytes_remaining << " of "
-                 << data_size << " bytes, wrote " << bytes_written
-                 << ", pipe closed";
-
-      return false;
+      data_current += bytes_written;
     }
-
-    data_current += bytes_written;
   }
 
   return true;

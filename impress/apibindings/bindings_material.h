@@ -17,61 +17,32 @@
 #ifndef THIRD_PARTY_IMPRESS_APIBINDINGS_BINDINGS_MATERIAL_H_
 #define THIRD_PARTY_IMPRESS_APIBINDINGS_BINDINGS_MATERIAL_H_
 
-#include <memory>
-
-#include "absl/log/check.h"
-#include "absl/status/status.h"
 #include "apibindings/bindings_object.h"
 #include "core/common/hash.h"
-#include "core/common/type_traits.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/common/small_source_location.h"
+#include "core/materials/material.h"
 
 namespace imp {
 
-// Wraps a Split Engine material pointer so that a pointer to
-// BindingsMaterial can be released to Java without affecting the ownership of
-// the actual material pointer.
+// Wraps a borrowed material pointer so that this object can be destroyed
+// from Java without affecting the owned pointer of the material.
 class BindingsMaterial : public BindingsObject {
  public:
-  // Constructor.
-  template <typename T>
-  explicit BindingsMaterial(std::unique_ptr<T> material);
+  explicit BindingsMaterial(BorrowedMaterialPtr material, HashValue type_hash);
 
-  // Returns the native pointer of the specific material type that is being
-  // wrapped.
-  template <typename T>
-  absl::StatusOr<T*> GetMaterial();
+  // Returns the borrowed material pointer that BindingsMaterial wraps.
+  BorrowedMaterialPtr GetMaterial(
+      SmallSourceLocation loc = SmallSourceLocation::Current());
 
-  // Returns the native pointer of the SplitEngineMaterial parent type that is
-  // being wrapped.
-  split_engine::SplitEngineMaterial* GetBaseMaterial();
+  // Returns the hash of the type of the material.
+  HashValue GetTypeHash() const { return type_hash_; }
 
  private:
-  // Holds a reference to the material. Here we hold a unique_ptr to the
-  // material rather than the BorrowedPtr itself because we need to be able to
-  // access both the SplitEngineMaterial parent type and the specific material
-  // type (for example the WaterReflectMaterial) that inherit from it.
-  std::unique_ptr<split_engine::SplitEngineMaterial> material_;
+  BorrowedMaterialPtr material_;
   // The hash of the type of the material. This is used to verify that the
   // correct type is being requested.
   HashValue type_hash_;
 };
-
-template <typename T>
-BindingsMaterial::BindingsMaterial(std::unique_ptr<T> material)
-    : material_(std::move(material)) {
-  type_hash_ = type_traits::kTypeHash<T>;
-}
-
-template <typename T>
-absl::StatusOr<T*> BindingsMaterial::GetMaterial() {
-  if (type_hash_ != type_traits::kTypeHash<T>) {
-    return absl::InvalidArgumentError(
-        "Provided material handle is not of the correct type.");
-  }
-
-  return static_cast<T*>(material_.get());
-}
 
 }  // namespace imp
 

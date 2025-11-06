@@ -14,6 +14,9 @@
 
 """Helper functions for building cross platform apps using the Impress Framework."""
 
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_import.bzl", "cc_import")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
     "@com_google_impress//build_tools:imp.bzl",
     "imp_default_jni_binary_name",
@@ -147,7 +150,7 @@ def imp_app(
     # you can avoid making your entire app's library set to alwaysLink by separating
     # out the call to SetCreateViewFn in a separate small library from the rest of the app.
     # TODO: Find a better solution to this.
-    native.cc_library(
+    cc_library(
         name = "lib",
         hdrs = hdrs,
         srcs = srcs,
@@ -172,7 +175,7 @@ def imp_app(
             if not android_jni_library_dep:
                 # Compile the cross-platform C++ code and the android platform code into
                 # an android c++ library.
-                native.cc_binary(
+                cc_binary(
                     name = imp_default_jni_binary_name(),
                     linkopts = imp_default_jni_linkopts() + ["-llog"],
                     deps = [
@@ -180,7 +183,7 @@ def imp_app(
                     ] + [":lib"],
                     linkshared = True,
                 )
-                native.cc_import(
+                cc_import(
                     name = "jni",
                     shared_library = ":" + imp_default_jni_binary_name(),
                 )
@@ -212,7 +215,7 @@ def imp_app(
             # To avoid duplicate target names, this necessitates Xr builds having a different name
             # for the .so than other android builds, which is specified
             # by imp_default_xr_jni_binary_name().
-            native.cc_binary(
+            cc_binary(
                 name = imp_default_xr_jni_binary_name(),
                 linkopts = imp_default_jni_linkopts() + ["-llog"],
                 deps = [
@@ -223,7 +226,7 @@ def imp_app(
                 ],
                 linkshared = True,
             )
-            native.cc_import(
+            cc_import(
                 name = "xr_jni",
                 shared_library = ":" + imp_default_xr_jni_binary_name(),
             )
@@ -258,7 +261,7 @@ def imp_app(
             # To avoid duplicate target names, this necessitates split engine builds having a
             # different name for the .so than other android builds, which is specified
             # by imp_default_xr_jni_binary_name().
-            native.cc_binary(
+            cc_binary(
                 name = imp_default_split_engine_jni_binary_name(),
                 linkopts = imp_default_jni_linkopts() + ["-llog"],
                 deps = [
@@ -269,8 +272,7 @@ def imp_app(
                 ],
                 linkshared = True,
             )
-
-            native.cc_import(
+            cc_import(
                 name = "split_engine_jni",
                 shared_library = ":" + imp_default_split_engine_jni_binary_name(),
             )

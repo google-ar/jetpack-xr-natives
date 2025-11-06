@@ -21,7 +21,6 @@
 #include "bullet/src/BulletDynamics/ConstraintSolver/btTypedConstraint.h"
 #include "bullet/src/BulletDynamics/Dynamics/btRigidBody.h"
 #include "core/math/vec.h"
-#include "core/ncsb/dispatcher/connection_id.h"
 #include "core/ncsb/node_handle.h"
 #include "core/physics/physics_manager.h"
 #include "core/physics/rigid_body.h"
@@ -60,8 +59,12 @@ class BaseConstraint {
 
   virtual void OnRigidBodiesChanged() {}
 
+  // Computes the pivot of the constraint in A's local space.
   static float3 ComputePivotAFromB(NodeHandle node_a, NodeHandle node_b,
                                    const float3& pivot_in_b);
+  // Computes an axis of the constraint in A's local space.
+  static float3 ComputeAxisAFromB(NodeHandle node_a, NodeHandle node_b,
+                                  const float3& axis_in_b);
 
   bool IsActiveInWorld() const;
 

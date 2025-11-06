@@ -30,7 +30,7 @@ message Point2PointConstraintState {
   // Only used when the constraint is between two rigid bodies. Indicates the
   // pivot/offset of the constraint frame from rigid body (B). Note that rigid
   // body (B) is attached the same node that owns the constraint.
-  optional Float3 pivot = 3;
+  Float3 pivot = 3 [(imp.optional_type) = ABSL_OPTIONAL];
 
   // if it will calculate the connected pivot based on the transforms of the
   // two rigid bodies.

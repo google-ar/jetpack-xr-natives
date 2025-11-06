@@ -13,6 +13,7 @@
 # limitations under the License.
 
 load("@com_google_impress//build_tools:imp.bzl", "if_android", "if_non_android")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(default_visibility = ["//visibility:public"])
 

@@ -20,6 +20,7 @@
 
 #include "absl/log/check.h"
 #include "core/common/log.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
@@ -34,6 +35,7 @@
 #include "core/input/pointer_event_processor.h"
 #include "core/material_library/generic_material_spec.h"
 #include "core/math/mat.h"
+#include "core/math/math.h"
 #include "core/math/vec.h"
 #include "core/media/media_color_space.h"
 #include "core/media/media_type.h"
@@ -142,6 +144,7 @@ JNI_METHOD_AOSP(int32_t, nInstanceGltfModel)
   return *result;
 }
 
+// TODO: (broken link) - impress_node is a jint in the Java side.
 JNI_METHOD_AOSP(void, nSetGltfModelColliderEnabled)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong impress_node,
  jboolean enable_collider) {
@@ -165,6 +168,35 @@ JNI_METHOD_AOSP(void, nStopGltfModelAnimation)
   auto view = FromJava<imp::ImpressApiView>(view_handle);
   auto unused = imp::android::ThrowIfError(
       env, view->StopGltfModelAnimation(impress_node));
+}
+
+JNI_METHOD_AOSP(void, nGetGltfModelLocalBounds)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
+ jfloatArray out_center, jfloatArray out_half_extent) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  absl::StatusOr<imp::Box> result = view->GetGltfModelLocalBounds(impress_node);
+  if (!imp::android::ThrowIfError(env, result).ok()) {
+    // Returned value does not matter since an exception was thrown.
+    return;
+  }
+
+  if (out_center == nullptr || env->GetArrayLength(out_center) < 3) {
+    auto unused = imp::android::ThrowIfError(
+        env, absl::InvalidArgumentError(
+                 "out_center must be a non-null float array with a length of "
+                 "at least 3."));
+    return;
+  }
+  if (out_half_extent == nullptr || env->GetArrayLength(out_half_extent) < 3) {
+    auto unused = imp::android::ThrowIfError(
+        env, absl::InvalidArgumentError(
+                 "out_half_extent must be a non-null float array with a length "
+                 "of at least 3."));
+    return;
+  }
+
+  env->SetFloatArrayRegion(out_center, 0, 3, &result->center[0]);
+  env->SetFloatArrayRegion(out_half_extent, 0, 3, &result->halfExtent[0]);
 }
 
 JNI_METHOD_AOSP(jint, nCreateImpressNode)
@@ -252,6 +284,15 @@ JNI_METHOD_AOSP(void, nSetStereoSurfaceEntityCanvasShapeHemisphere)
                node_id, imp::StereoSurface::Hemisphere({radius})));
 }
 
+JNI_METHOD_AOSP(void, nSetStereoSurfaceEntityColliderEnabled)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
+ jboolean enable_collider) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  auto unused = imp::android::ThrowIfError(
+      env,
+      view->SetStereoSurfaceEntityColliderEnabled(node_id, enable_collider));
+}
+
 JNI_METHOD_AOSP(jobject, nGetSurfaceFromStereoSurfaceEntity)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
@@ -265,6 +306,15 @@ JNI_METHOD_AOSP(jobject, nGetSurfaceFromStereoSurfaceEntity)
   // Note that Impress' Android::Surface is a JNI wrapper around the Android
   // Surface class. This returns a (Java-managed) reference as a jobject.
   return (*result)->WeakReference();
+}
+
+JNI_METHOD_AOSP(void, nSetStereoSurfaceEntitySurfaceSize)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id, jint width,
+ jint height) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  auto unused = imp::android::ThrowIfError(
+      env,
+      view->SetSurfaceDimensionsForStereoSurfaceEntity(node_id, width, height));
 }
 
 JNI_METHOD_AOSP(void, nSetFeatherRadiusForStereoSurfaceEntity)
@@ -884,11 +934,21 @@ JNI_METHOD_AOSP(void, nDestroyNativeObject)
 
 JNI_METHOD_AOSP(void, nSetMaterialOverride)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
- jlong material, jstring mesh_name) {
+ jlong material, jstring node_name, jint primitive_index) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
   auto unused = imp::android::ThrowIfError(
       env, view->SetMaterialOverride(impress_node, material,
-                                     imp::GetString(env, mesh_name)));
+                                     imp::GetString(env, node_name),
+                                     primitive_index));
+}
+
+JNI_METHOD_AOSP(void, nClearMaterialOverride)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
+ jstring node_name, jint primitive_index) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  auto unused = imp::android::ThrowIfError(
+      env, view->ClearMaterialOverride(
+               impress_node, imp::GetString(env, node_name), primitive_index));
 }
 
 JNI_METHOD_AOSP(void, nSetEnvironmentLight)

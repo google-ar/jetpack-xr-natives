@@ -80,16 +80,46 @@ class MeshRenderer : public Component {
     kGlobal
   };
 
+  // Determines how instance transforms are handled.
+  enum class InstancingMode {
+    // Use explicit instance transforms supplied on the CPU side. For this mode,
+    // the max number of instances is limited to 64. The instance transforms
+    // will be initialized to the identity matrix, and can be updated with
+    // `UpdateInstanceTransformsInRange`.
+    // Note: in this mode, the AABB of the renderable will be set to the union
+    // of all instance AABBs.
+    kCpuTransforms,
+    // Use instance indices to compute instance transforms on the GPU. The max
+    // number of instances is 32767 but explicit instance transforms cannot be
+    // provided on the CPU side, and must be handled in the material's vertex
+    // shader. For example, the material can set `instanced : true` and use
+    // Filament's `getInstanceIndex()` in order to procedurally compute an
+    // instance position, or use it to perform a texture sample to inform the
+    // instance position, etc.
+    // Note: in this mode, the AABB is computed as if there was only one
+    // instance with an identity transform. You may need to disable frustum
+    // culling in SetupOptions or on the material if you see incorrect culling
+    // behavior, but this will have a performance impact.
+    kGpuIndices,
+  };
+
   MeshRenderer() {}
 
   void Cleanup();
 
-  // num_bones is the number of skinning bones for the entire renderable. It is
-  // shared across primitives, and the bones will be initialized to the identity
-  // matrix.const SetupOptions& options
   struct SetupOptions {
     size_t primitive_count = 1;
     FrustumCullingMode culling_mode = FrustumCullingMode::kEnabled;
+    // The number of instances of the renderable. The max number of instances is
+    // limited by Filament, see `InstancingMode`.
+    size_t num_instances = 1;
+    // The mode to use for instancing. Only used if `num_instances` is greater
+    // than 1. This mode greatly affects the max number of instances that can
+    // be used.
+    InstancingMode instancing_mode = InstancingMode::kGpuIndices;
+    // num_bones is the number of skinning bones for the entire renderable. It
+    // is shared across primitives, and the bones will be initialized to the
+    // identity matrix.
     uint8_t num_bones = 0;
   };
 
@@ -104,13 +134,34 @@ class MeshRenderer : public Component {
   void Setup(FrustumCullingMode culling_mode, size_t primitive_count = 1);
 
   // Creates a RenderableManager::Instance with:
-  // - |SetupOptions.primitive_count| primitives
-  // - |SetupOptions.culling_mode| culling mode
-  // - |SetupOptions.num_bones| bones
+  // If |SetupOptions.num_instances| is 1, then instanced rendering is disabled.
   // If |SetupOptions.num_bones| is zero, then skinning is disabled.
   // If |SetupOptions.num_bones| is non-zero, the mesh must have bone weights
   // and indices baked into its geometry as vertex attributes.
   void Setup(const SetupOptions& options);
+
+  // Returns the number of instances as specified in SetupOptions.
+  //
+  // See SetupOptions for more details for how instancing can be used.
+  size_t GetInstanceCount() const;
+
+  // Sets the instance transforms for the specified MeshRenderer. Allows
+  // updating a subset of the instance transforms in the range:
+  // [first_instance_index, first_instance_index +
+  // new_instance_transforms.size()].
+  // Note: instancing _with instance transforms_ must be enabled at
+  // `mesh_render` build time, with the `SetupOptions::num_instances` being
+  // greater than 1 and `SetupOptions::instancing_mode` is `kCpuTransforms`.
+  // Transforms are expected to be in the local space of the node.
+  // Returns:
+  // - UnavailableError if the MeshRenderer was not created with instancing or
+  //   if the instancing mode is not kCpuTransforms.
+  // - OutOfRangeError if the requested update is too large, or ends past the
+  //   end of the instance transforms array.
+  // - OkStatus otherwise.
+  absl::Status UpdateInstanceTransformsInRange(
+      absl::Span<const imp::mat4f> new_instance_transforms,
+      size_t first_instance_index = 0);
 
   uint8_t GetBoneCount() const;
 
@@ -119,7 +170,7 @@ class MeshRenderer : public Component {
   // - [first_bone_index, first_bone_index + new_bones.size()].
   // Note: skinning must be enabled at `mesh_render` build time, with the
   // `SetupOptions::num_bones`. Transforms are expected to be in the local space
-  // of the renderable.
+  // of the node.
   // Returns:
   // - UnavailableError if the MeshRenderer was not created with bones.
   // - OutOfRangeError if the requested update is too large, or ends past the
@@ -320,6 +371,15 @@ class MeshRenderer : public Component {
 
   bool IsWithinCount(size_t primitive_index) const;
   void SetRenderableGeometry(Mesh& mesh, size_t primitive_index);
+
+  // TODO: (broken link) - Remove this once we can query the instance count from
+  // the RenderableManager.
+  size_t num_instances_ = 1;
+  // These are only used if `instancing_mode` is kCpuTransforms.
+  // TODO: (broken link) - Remove this once we can query the instance transforms
+  // from the InstanceBuffer.
+  std::vector<imp::mat4f> instance_transforms_;
+  filament::InstanceBuffer* instance_buffer_ = nullptr;
 
   std::vector<imp::mat4f> bones_;
   std::vector<PrimitiveData> primitives_;

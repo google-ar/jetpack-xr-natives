@@ -14,6 +14,7 @@
 
 """Helper functions for including various extensions into Impress."""
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@com_google_impress//build_tools:imp.bzl", "imp_copts", "imp_linkopts")
 
 def imp_extensions(
@@ -104,8 +105,7 @@ def imp_extensions(
         deps = deps + [
             "@com_google_impress//core/image:webp_decode_image_noop",
         ]
-
-    native.cc_library(
+    cc_library(
         name = name,
         alwayslink = True,
         copts = imp_copts(),

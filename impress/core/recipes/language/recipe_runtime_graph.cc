@@ -68,17 +68,11 @@ namespace {
 using AsyncExecutionHandle = RecipeAsyncExecutionManager::AsyncExecutionHandle;
 using ExecutionResult = RecipeRuntimeGraph::ExecutionResult;
 
-std::string GetSocketVariableName(const NodeId& node_id,
-                                  absl::string_view socket_name) {
-  return absl::StrFormat("%s_%s_SOCKET_VALUE", recipe::NodeIdToString(node_id),
-                         socket_name);
-}
-
 absl::Status CacheSocketValue(RecipeScope& scope, const NodeId& node_id,
                               absl::string_view socket_name,
                               const Variable& value) {
   std::string socket_variable_name =
-      GetSocketVariableName(node_id, socket_name);
+      recipe::GetSocketVariableName(node_id, socket_name);
 
   std::optional<std::reference_wrapper<Variable>> variable =
       scope.GetVariable(socket_variable_name);
@@ -101,7 +95,7 @@ absl::Status CacheSocketValue(RecipeScope& scope, const NodeId& node_id,
 
 std::optional<Variable> RetrieveCachedSocketValue(
     RecipeScope& scope, const NodeId& node_id, absl::string_view socket_name) {
-  return scope.GetVariable(GetSocketVariableName(node_id, socket_name));
+  return scope.GetVariable(recipe::GetSocketVariableName(node_id, socket_name));
 }
 
 }  // namespace

@@ -32,6 +32,7 @@
 
 #include "filament/libs/utils/include/utils/compiler.h" // UTILS_FALLTHROUGH
 #include "filament/libs/utils/include/utils/Panic.h"    // ASSERT_POSTCONDITION
+#include "filament/libs/utils/include/utils/CString.h"
 
 using namespace bluevk;
 
@@ -285,7 +286,7 @@ VulkanProgram::VulkanProgram(VkDevice device, Program const& builder) noexcept
                 << " error=" << static_cast<int32_t>(result);
 
 #if FVK_ENABLED(FVK_DEBUG_DEBUG_UTILS)
-        std::string name{ builder.getName().c_str(), builder.getName().size() };
+        utils::CString name{ builder.getName().c_str(), builder.getName().size() };
         switch (static_cast<ShaderStage>(i)) {
             case ShaderStage::VERTEX:
                 name += "_vs";

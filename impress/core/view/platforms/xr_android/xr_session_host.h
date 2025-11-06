@@ -239,6 +239,7 @@ class XrSessionHost : public ViewHost {
   // frame.
   bool ShouldRenderVarjoFoveationThisFrame();
   bool IsXrAndroidXOccupancyGridEnabled() const;
+  bool IsXrAndroidXSpatialInteractionEnabled() const;
   bool IsXrAndroidDepthTextureEnabled() const;
   bool IsXrEyeGazeInteractionEnabled() const;
   bool IsXrAndroidSystemExtensionsEnabled() const;

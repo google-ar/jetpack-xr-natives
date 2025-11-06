@@ -72,9 +72,12 @@ constexpr float kDefaultMetallicFactor = 1;
 constexpr float kDefaultRoughnessFactor = 1;
 constexpr float kDefaultNormalFactor = 1;
 constexpr float kDefaultAmbientOcclusionFactor = 1;
-constexpr float3 kDefaultEmissiveFactor = kOne3;
+constexpr float3 kDefaultEmissiveFactor = kZero3;
+// Default clearcoat factor has R (intensity) = 0, G (roughness) = 0, and B
+// (normal) = 1. The normal value comes from the ClearcoatNormalTexture's
+// NormalTextureInfo scale.
 constexpr float3 kDefaultClearcoatFactor = float3(0, 0, 1);
-constexpr float3 kDefaultSheenColorFactor = kOne3;
+constexpr float3 kDefaultSheenColorFactor = kZero3;
 constexpr float kDefaultSheenRoughnessFactor = 0;
 constexpr float kDefaultTransmissionFactor = 0;
 constexpr float kDefaultIndexOfRefraction = 1.5;

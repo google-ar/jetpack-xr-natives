@@ -13,9 +13,10 @@
 # limitations under the License.
 
 load(
-    "@com_github_google_flatbuffers//:build_defs.bzl",
+    "@flatbuffers//:build_defs.bzl",
     "flatbuffer_cc_library",
 )
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:assets.bzl", "imp_assets")
 load("//build_tools:imp.bzl", "IMP_FLATBUFFER_INCLUDE_PATHS", "IMP_FLATC_ARGS", "imp_copts")
 load(
@@ -132,10 +133,10 @@ cc_library(
         "//core/math",
         "//core/math:flatbuffer_support",
         "//core/model",
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/types:span",
+        "@flatbuffers",
         "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament/libs:math_hdrs",
     ],
@@ -267,13 +268,13 @@ cc_library(
         "//core/math",
         "//core/model",
         "//core/model:model_data_details",
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
+        "@flatbuffers",
         "@mediapipe//mediapipe/framework/port:status",
     ],
     alwayslink = 1,
@@ -352,12 +353,12 @@ cc_library(
         "//core/loader/provider/gltf:texturable_parameter",
         "//core/math",
         "//core/model:model_data_details",
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:span",
+        "@flatbuffers",
         "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament/libs:filabridge_hdrs",
     ],

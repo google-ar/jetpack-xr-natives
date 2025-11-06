@@ -25,18 +25,19 @@ package(
 licenses(["notice"])
 
 cc_library(
-    name = "nodes_transform_pointers",
+    name = "nodes_pointers",
     srcs = [
-        "nodes_transform.cc",
+        "nodes.cc",
     ],
     hdrs = [
-        "nodes_transform.h",
+        "nodes.h",
     ],
     copts = imp_google3_copts(),
     deps = [
         "//core/assets/gltf/object_model:property_pointer",
         "//core/assets/gltf/object_model:token_parser",
         "//core/math",
+        "//core/model:model_data_details",
         "//core/ncsb",
         "//core/view/framework",
         "@com_google_absl//absl/status",
@@ -87,7 +88,7 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         ":materials_pointers",
-        ":nodes_transform_pointers",
+        ":nodes_pointers",
         "//core/assets/gltf/object_model:property_pointer",
     ],
     alwayslink = 1,

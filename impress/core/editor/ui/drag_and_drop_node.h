@@ -17,21 +17,28 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_UI_DRAG_AND_DROP_NODE_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_UI_DRAG_AND_DROP_NODE_H_
 
+#include <vector>
+
+#include "absl/types/span.h"
 #include "core/ncsb/node_handle.h"
 
 namespace imp::editor {
 
 // Combo ImGui BeginDragAndDropSource + SetDragAndDropPayload for NodeHandles.
 bool BeginDragAndDropSource(NodeHandle node);
+bool BeginDragAndDropSource(absl::Span<const NodeHandle> nodes);
 
 // Mirror of ImGui::SetDragAndDropPayload for NodeHandles specifically.
 void SetDragAndDropPayload(NodeHandle node);
+void SetDragAndDropPayload(absl::Span<const NodeHandle> nodes);
 
 // Returns the NodeHandle from the current drag and drop payload if one exists.
 NodeHandle GetDragAndDropPayloadNode();
+std::vector<NodeHandle> GetDragAndDropPayloadNodes();
 
 // Mirror of ImGui::AcceptDragAndDropPayload that returns NodeHandles.
 NodeHandle AcceptDragAndDropPayloadNode();
+std::vector<NodeHandle> AcceptDragAndDropPayloadNodes();
 
 }  // namespace imp::editor
 

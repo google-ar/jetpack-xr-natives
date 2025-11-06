@@ -37,6 +37,8 @@ def imp_split_engine_app(
         native_lib_deps,
         multidex,
         nocompress_extensions = None,
+        proguard_generate_mapping = None,
+        proguard_specs = None,
         tags = None):
     """Helper used by the imp_app rule to generate targets specific to Split Engine.
 
@@ -55,6 +57,8 @@ def imp_split_engine_app(
       multidex: Multidex setting passed through to the android_binary rule.
       nocompress_extensions: (Optional) A list of file extensions that should not be
         compressed in the Android apk.
+      proguard_generate_mapping: (Optional) Whether to generate a Proguard mapping file.
+      proguard_specs: (Optional) A list of Proguard specs to use.
       tags: (Optional) tags to use on the android_library rule.
     """
 
@@ -81,6 +85,8 @@ def imp_split_engine_app(
         native_lib_deps = native_lib_deps,
         multidex = multidex,
         nocompress_extensions = nocompress_extensions,
+        proguard_generate_mapping = proguard_generate_mapping,
+        proguard_specs = proguard_specs if proguard_specs else [],
         # Ensure the split_engine targets get built with the correct config and android sdk.
         tags = ["split_engine"] + (tags if tags else []),
     )

@@ -199,6 +199,7 @@ void GltfRenderer::Setup(AssetPtr<GltfAsset> gltf_asset,
     model::ModelData::LightPunctualId light_punctual =
         entity_data.light_punctual;
     node_entities_[self] = node->GetEntity();
+    scene->node_to_entitiy_id_map_.insert({node, self});
 
     if (!parts.empty()) {
       // TODO Add collision support for instanced gltfs

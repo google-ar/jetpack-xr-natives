@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 # Library for providing cross-platform AR tracking.
 load("//build_tools:imp.bzl", "if_android", "if_desktop", "if_dev_runtime", "if_emscripten", "if_ios", "imp_defines", "imp_google3_copts")
 load("//core/proto:imp_cc_proto_library.bzl", "imp_cc_proto_library")

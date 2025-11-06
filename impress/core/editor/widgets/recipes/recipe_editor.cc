@@ -126,13 +126,16 @@ RecipeEditor::RecipeEditor(BaseView& view) : view_(view) {
   Editor& editor = view_.GetRegistry().Get<Editor>()->get();
   editor.GetDispatcher().Connect(
       [this](const editor::NodeSelectionChangedEvent& event) mutable {
-        if (!event.selected) {
+        // We only support single selection for the recipe editor.
+        NodeHandle selected_node =
+            view_.GetRegistry().Get<Editor>()->get().GetSingleSelectedNode();
+        if (!selected_node.IsValid()) {
           recipe_runner_ = ComponentHandle<RecipeRunner>();
           ClearCurrentGraph();
           return;
         }
 
-        recipe_runner_ = event.selected->GetComponent<RecipeRunner>();
+        recipe_runner_ = selected_node->GetComponent<RecipeRunner>();
         if (recipe_runner_) {
           graph_loading_future_ = Future<absl::Status>(LoadRecipeEditorGraph());
         } else {

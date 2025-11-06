@@ -348,6 +348,7 @@ absl::Status TexturePipelineRenderer::InitializeTextures(
           "TexturePipelineRenderer color texture must specify a name.");
     }
 
+    color_texture->SetName(color_texture_proto.name);
     color_texture_registration.emplace(
         GetView().GetTextureRegistry().RegisterTexture(
             color_texture_proto.name, std::move(color_texture)));
@@ -414,6 +415,7 @@ absl::Status TexturePipelineRenderer::InitializeTextures(
           "TexturePipelineRenderer depth texture must specify a name.");
     }
 
+    depth_texture->SetName(texture_proto.name);
     depth_texture_registration.emplace(
         GetView().GetTextureRegistry().RegisterTexture(
             texture_proto.name, std::move(depth_texture)));

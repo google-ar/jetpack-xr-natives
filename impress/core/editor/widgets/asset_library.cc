@@ -361,7 +361,8 @@ void AssetLibrary::HandleDragAndDropNewResource() {
   }
 }
 
-StringMap<AssetLibrary::DynamicResource>& AssetLibrary::GetDynamicResources() {
+StringMap<std::unique_ptr<AssetLibrary::DynamicResource>>&
+AssetLibrary::GetDynamicResources() {
   return dynamic_resources_;
 }
 
@@ -445,12 +446,12 @@ void AssetLibrary::AddResourceAtPath(absl::string_view resource_path,
                                      absl::string_view description) {
   auto [itr, success] = dynamic_resources_.insert_or_assign(
       std::string(resource_path),
-      AssetLibrary::DynamicResource(
+      std::make_unique<AssetLibrary::DynamicResource>(
           std::string(RemoveDirectoryAndExtensionFromFilename(resource_path)),
           std::string(GetExtensionFromFilename(resource_path).substr(1)),
           std::string(data)));
 
-  absl::string_view stored_data = itr->second.data;
+  absl::string_view stored_data = itr->second->data;
   resources::ResourceManager::RegisterResource(resource_path, stored_data,
                                                /* allow_overwrite = */ true);
 }
@@ -473,13 +474,14 @@ std::string AssetLibrary::AddResource(
 
   IMP_LOG(imp::INFO) << "Saving resource " << resource_path;
 
-  std::pair<StringMap<AssetLibrary::DynamicResource>::iterator, bool> result =
-      dynamic_resources_.insert_or_assign(
-          resource_path, AssetLibrary::DynamicResource(pending_resource.name,
-                                                       pending_resource.type,
-                                                       pending_resource.data));
+  std::pair<StringMap<std::unique_ptr<AssetLibrary::DynamicResource>>::iterator,
+            bool>
+      result = dynamic_resources_.insert_or_assign(
+          resource_path, std::make_unique<AssetLibrary::DynamicResource>(
+                             pending_resource.name, pending_resource.type,
+                             pending_resource.data));
 
-  absl::string_view stored_data = result.first->second.data;
+  absl::string_view stored_data = result.first->second->data;
   resources::ResourceManager::RegisterResource(resource_path, stored_data,
                                                /* allow_overwrite = */ true);
 

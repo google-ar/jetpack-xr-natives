@@ -974,9 +974,6 @@ class FlatbuffersUntypedObjectDomainBase
     void Visit(const reflection::Field* /*absl_nonnull*/ field) {
       auto& domain = derived.template GetCachedDomain<T>(field);
       status = domain.ValidateCorpusValue(inner_corpus);
-      if (!status.ok()) {
-        
-      }
     }
   };
 };

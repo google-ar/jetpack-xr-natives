@@ -70,7 +70,7 @@ class AssetLibrary : public editor::Widget, public imp::Rememberer {
   // TODO: for long term, move the concept of "dynamic resources"
   // from AssetLibrary to ResourceManager, then we can have one combined data
   // source for everything that isn't so tied to the editor.
-  StringMap<DynamicResource>& GetDynamicResources();
+  StringMap<std::unique_ptr<DynamicResource>>& GetDynamicResources();
 
   // Toggles autosave of drag-and-dropped files to the app source location.
   void SetSavingToDiskEnabled(bool enabled);
@@ -110,7 +110,18 @@ class AssetLibrary : public editor::Widget, public imp::Rememberer {
   StringSet message_types_;
 
   // Fields used to manage assets created at runtime.
-  StringMap<DynamicResource> dynamic_resources_;
+  //
+  // The DynamicResource is stored as a unique_ptr because it's important that
+  // the resources memory is pointer stable. It must be pointer stable because
+  // when the resource is registered with the ResourceManager it references the
+  // data stored here. If the pointer changes, the ResourceManager may be
+  // pointing to invalid memory.
+  //
+  // TODO: This solution works, but is brittle. It would be less
+  // likely to break if we moved the concept of "dynamic resources" from
+  // AssetLibrary to ResourceManager so that the memory is owned in the same
+  // place that the resource is registered.
+  StringMap<std::unique_ptr<DynamicResource>> dynamic_resources_;
   std::optional<PendingResource> pending_new_resource_;
 
   // Used to filter the assets shown in the library by a string.

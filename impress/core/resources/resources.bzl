@@ -18,18 +18,20 @@ Resource mappings to allow resources to be easily embedded into development buil
 accessed via the imp resource manager from the appropriate local or cloud-hosted
 location."""
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@com_google_impress//build_tools:imp.bzl", "imp_google3_copts")
 load("@com_google_impress//build_tools:path_tools.bzl", "rlocation_path")
 
 def _snakecase(name):
-    return name.replace(".", "_").replace("/", "_").replace("-", "_").replace("+", "_").split("_")
+    return name.replace(".", "_").replace("/", "_").replace("-", "_").replace("+", "_").replace("{", "_").replace("}", "_").split("_")
 
+# len(x) > 0 is to avoid empty strings from splitting.
 def _camelcase(name):
-    return "".join([x[0].capitalize() + x[1:] for x in _snakecase(name)])
+    return "".join([x[0].capitalize() + x[1:] for x in _snakecase(name) if len(x) > 0])
 
 def _upcase(name):
-    return "_".join([x.upper() for x in _snakecase(name)])
+    return "_".join([x.upper() for x in _snakecase(name) if len(x) > 0])
 
 def _resource_identifier(ctx, r):
     return "k{0}".format(_camelcase(paths.basename(rlocation_path(ctx, r))))
@@ -256,7 +258,7 @@ Args:
     )
 
     # Second step: Wrap the generate files in the cc_library like output.
-    native.cc_library(
+    cc_library(
         name = name,
         srcs = [":" + name + "_cc_files"],
         hdrs = [out_header],

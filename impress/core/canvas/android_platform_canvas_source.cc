@@ -14,10 +14,13 @@
 
 #include "core/canvas/android_platform_canvas_source.h"
 
+#include <jni.h>
+
 #include <memory>
 #include <numeric>
 #include <vector>
 
+#include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "core/async/future.h"
@@ -61,7 +64,8 @@ void ConfigurePaintForTextOptions(
       TextAlignmentToPaintAlign(text_options.horizontal_alignment));
   paint.SetColor(text_options.color);
   paint.SetAntiAlias(true);
-  if (text_options.font_holder) {
+  if (text_options.font_holder &&
+      text_options.font_holder->IsAndroidTypeface()) {
     paint.SetTypeface(
         static_cast<jobject>(text_options.font_holder->GetPlatformFont()));
   } else {
@@ -127,16 +131,17 @@ ScopedCanvas::TextMetrics AndroidPlatformCanvasSource::GetTextMetrics(
 ScopedCanvas::TextMetrics AndroidPlatformCanvasSource::GetGlyphMetrics(
     ScopedCanvas::GlyphId glyph,
     const ScopedCanvas::TextOptions& text_options) {
-  return glyph_source_.GetGlyphMetrics(
-      glyph, text_options.font_holder, text_options.size_pixels,
-      text_options.stroke_width_pixels, text_options.text_tracking);
+  ConfigurePaintForTextOptions(paint_, text_options);
+  return glyph_source_.GetGlyphMetrics(glyph, text_options.font_holder,
+                                       text_options.stroke_width_pixels,
+                                       paint_);
 }
 
-// TODO: This is needed to properly support path text in Android.
 std::vector<ScopedCanvas::GlyphGroup>
 AndroidPlatformCanvasSource::GetCombinedCharacterGroups(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
-  return {};
+  ConfigurePaintForTextOptions(paint_, text_options);
+  return glyph_source_.GetCombinedCharacterGroups(text, paint_);
 }
 
 std::vector<float> AndroidPlatformCanvasSource::GetTextWidths(
@@ -153,8 +158,8 @@ std::vector<float> AndroidPlatformCanvasSource::GetTextWidths(
 std::vector<ScopedCanvas::GlyphAdvance>
 AndroidPlatformCanvasSource::GetTextGlyphs(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
-  return glyph_source_.GetTextGlyphs(text, text_options.size_pixels,
-                                     text_options.text_tracking);
+  ConfigurePaintForTextOptions(paint_, text_options);
+  return glyph_source_.GetTextGlyphs(text, paint_);
 }
 
 ScopedCanvas::FontInfo AndroidPlatformCanvasSource::GetFontInfo(
@@ -225,7 +230,7 @@ AndroidPlatformCanvasSource::AndroidScopedCanvas::AndroidScopedCanvas(
 }
 
 AndroidPlatformCanvasSource::AndroidScopedCanvas::~AndroidScopedCanvas() {
-  android::Canvas canvas = source_.surface_.LockHardwareCanvas();
+  android::Canvas canvas = source_.surface_.LockCanvas();
   canvas.DrawPicture(picture_.WeakReference());
   source_.surface_.UnlockCanvasAndPost(canvas);
 }
@@ -324,11 +329,13 @@ void AndroidPlatformCanvasSource::AndroidScopedCanvas::DrawText(
 
 void AndroidPlatformCanvasSource::AndroidScopedCanvas::DrawGlyph(
     GlyphId glyph, float2 pos, const TextOptions& text_options) {
+  if (text_options.stroke_width_pixels > 0.0f) {
+    ConfigurePaintForStrokeTextOptions(source_.stroke_paint_, text_options);
+  }
+  ConfigurePaintForTextOptions(source_.paint_, text_options);
   source_.glyph_source_.DrawGlyph(
       canvas_, glyph, pos.x, pos.y, text_options.font_holder,
-      text_options.size_pixels, text_options.stroke_width_pixels,
-      text_options.color, text_options.stroke_color,
-      text_options.text_tracking);
+      text_options.stroke_width_pixels, source_.paint_, source_.stroke_paint_);
 }
 
 void AndroidPlatformCanvasSource::AndroidScopedCanvas::ClearRect(

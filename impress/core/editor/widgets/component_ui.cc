@@ -47,12 +47,11 @@ ComponentUi::ComponentUi(BaseView& view,
       component_widgets_layout_info_(component_widgets_layout_info) {
   editor_.GetDispatcher().Connect(
       [this](const editor::NodeSelectionChangedEvent& event) mutable {
-        if (event.selected == selected_node_) {
-          return;
-        }
+        // We only support single selection for the component UI.
+        selected_node_ = editor_.GetSingleSelectedNode();
+
         DestroyComponentWidgets();
-        selected_node_ = event.selected;
-        UpdateComponentWidgets();
+        UpdateComponentWidgets(selected_node_);
       },
       this);
 }
@@ -66,21 +65,21 @@ void ComponentUi::DestroyComponentWidgets() {
   component_widgets_.clear();
 }
 
-void ComponentUi::UpdateComponentWidgets() {
-  if (!selected_node_) {
+void ComponentUi::UpdateComponentWidgets(NodeHandle selected_node) {
+  if (!selected_node) {
     return;
   }
 #if IMP_RUNTIME(DEV)
   Editor& editor = view_.GetRegistry().Get<Editor>()->get();
   WidgetUiSystem& widget_ui_system = editor.GetWidgetUiSystem();
 
-  auto scene_metadata = selected_node_->GetComponent<SceneMetadata>();
+  auto scene_metadata = selected_node->GetComponent<SceneMetadata>();
   bool is_in_edit_mode = editor::IsInEditMode(view_.GetRegistry());
 
   // Gather the set of all components that should be visualized on this node.
   absl::flat_hash_set<BaseComponentPool*> component_pools;
   view_.GetComponentManager().ForEachPool(
-      [&component_pools, node = selected_node_](BaseComponentPool* pool) {
+      [&component_pools, node = selected_node](BaseComponentPool* pool) {
         if (pool->Has(node->GetEntity()) && !pool->IsExcludedFromEditor()) {
           component_pools.insert(pool);
         }
@@ -124,10 +123,10 @@ void ComponentUi::UpdateComponentWidgets() {
 
         if (use_fallback_in_edit_mode) {
           component_widget =
-              std::make_unique<FallbackComponentWidget>(selected_node_, pool);
+              std::make_unique<FallbackComponentWidget>(selected_node, pool);
         } else {
           component_widget = view_.GetSceneSystem().CreateComponentWidget(
-              state_type_url_hash.value(), selected_node_,
+              state_type_url_hash.value(), selected_node,
               editor_.GetDispatcher());
         }
 
@@ -140,7 +139,7 @@ void ComponentUi::UpdateComponentWidgets() {
         }
       } else {
         component_widget =
-            std::make_unique<FallbackComponentWidget>(selected_node_, pool);
+            std::make_unique<FallbackComponentWidget>(selected_node, pool);
       }
 
       component_widgets_[pool] = component_widget.get();
@@ -162,7 +161,7 @@ void ComponentUi::UpdateComponentWidgets() {
 bool ComponentUi::HasContent() const { return selected_node_.IsValid(); }
 
 void ComponentUi::DrawImGui() {
-  UpdateComponentWidgets();
+  UpdateComponentWidgets(selected_node_);
 
 #if IMP_RUNTIME(DEV)
   if (selected_node_) {

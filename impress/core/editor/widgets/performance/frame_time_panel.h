@@ -20,6 +20,7 @@
 #include "absl/time/time.h"
 #include "dear_imgui/imgui.h"
 #include "core/editor/widgets/performance/circular_buffer.h"
+#include "core/editor/widgets/performance/hierarchy_panel.h"
 #include "core/editor/widgets/performance/monitor_panel.h"
 #include "core/view/base_view.h"
 #include "core/view/utils/proto/view_config.proto.imp.h"
@@ -36,6 +37,7 @@ class FrameTimePanel : public MonitorPanel {
   void DrawPanel(int width, int height, int time_span_seconds) override;
   void Update(absl::Duration elapsed_time, absl::Duration delta_time) override;
   void OnStateChanged(MonitorState state) override;
+  void ShowHierarchyPanel(int frame_number);
 
  private:
   // An internal class for structuring data for ImPlot to draw. ImPlot can only
@@ -67,7 +69,9 @@ class FrameTimePanel : public MonitorPanel {
   int frame_number_;
   MonitorState state_ = MonitorState::kRunning;
 
+  int selected_frame_number_ = 0;
   ViewConfig view_config_;
+  HierarchyPanel hierarchy_panel_;
 };
 
 }  // namespace imp::editor

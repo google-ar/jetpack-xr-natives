@@ -80,15 +80,8 @@ imp_assets(
 
 cc_library(
     name = "glyph_atlas",
-    srcs = [
-        "glyph_atlas_new.cc",
-        "glyph_atlas_old.cc",
-    ],
-    hdrs = [
-        "glyph_atlas.h",
-        "glyph_atlas_new.h",
-        "glyph_atlas_old.h",
-    ],
+    srcs = ["glyph_atlas.cc"],
+    hdrs = ["glyph_atlas.h"],
     copts = imp_google3_copts(),
     deps = [
         ":glyph_emulator",
@@ -109,6 +102,7 @@ cc_library(
         "//core/common:hash",
         "//core/common:ref_counter",
         "//core/common:rememberer",
+        "//core/common:trace",
         "//core/geometry/shapes",
         "//core/math",
         "//core/ncsb",

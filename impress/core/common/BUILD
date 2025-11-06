@@ -12,14 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@com_google_sandboxed_api//sandboxed_api/bazel:embed_data.bzl", "sapi_cc_embed_data")
+
 # Placeholder: load py_test
 load(
-    "@com_github_google_flatbuffers//:build_defs.bzl",
+    "@flatbuffers//:build_defs.bzl",
     "flatbuffer_cc_library",
 )
-load("@com_google_sandboxed_api//sandboxed_api/bazel:embed_data.bzl", "sapi_cc_embed_data")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("//build_tools:imp.bzl", "IMP_FLATBUFFER_INCLUDE_PATHS", "IMP_FLATC_ARGS", "if_android", "if_non_android", "imp_copts", "imp_defines", "imp_google3_copts")
+load("//build_tools:imp.bzl", "IMP_FLATBUFFER_INCLUDE_PATHS", "IMP_FLATC_ARGS", "if_android", "if_dev_runtime", "if_non_android", "imp_copts", "imp_defines", "imp_google3_copts")
 load("//core/loader/data:generic_material.bzl", "process_and_build_material")
 
 package(
@@ -593,7 +594,10 @@ cc_library(
         "//core:config",
         "@com_google_absl//absl/strings",
         "@third_party//filament/libs:utils_hdrs",
-    ] + select({
+    ] + if_dev_runtime([
+        "//core/performance:profiler",
+        "//core/performance:timer",
+    ]) + select({
         "//core:imp_perfetto_enabled": [
             "//third_party/perfetto:libperfetto_client_experimental",
             "@com_google_impress//core/common:log",
@@ -706,8 +710,8 @@ cc_library(
         ":typed_ids",
         "//core/math",
         "//core/math:flatbuffer_support",
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/types:span",
+        "@flatbuffers",
         "@mediapipe//mediapipe/framework/port:status",
     ],
     alwayslink = 1,

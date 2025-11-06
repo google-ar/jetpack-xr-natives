@@ -15,6 +15,7 @@
 # Impel helps internal devs make performant, high quality AR apps.
 
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
     "//build_tools:imp.bzl",
     "imp_copts",

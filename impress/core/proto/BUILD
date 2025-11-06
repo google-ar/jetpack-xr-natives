@@ -68,7 +68,6 @@ cc_binary(
     name = "proto-gen-imp-cc",
     srcs = ["proto-gen-imp-cc.cc"],
     data = ["@com_google_protobuf//:protoc"],
-    defines = ["IMP_PROTO_GEN_ALWAYS_PRINT_DEFAULT_CONSTRUCTOR=1"],
     deps = [
         ":imp_cc_proto",
         ":imp_editor_cc_proto",
@@ -446,6 +445,7 @@ bzl_library(
         "//build_tools:path_tools_bzl",
         "@bazel_skylib//lib:paths",
         "@bazel_tools//tools/cpp:toolchain_utils",
+        "@rules_cc//cc/common",
     ],
 )
 

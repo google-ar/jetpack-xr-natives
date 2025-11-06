@@ -239,6 +239,10 @@ absl::Status RecipeRunner::Start() {
       return;
     }
 
+    if (!runtime_graph_->HasEvent(recipe::kOnTapEventName)) {
+      return;
+    }
+
     RecipeRayHit recipe_ray_hit{
         .distance = tap_ray_hit.distance,
         .node = tap_ray_hit.node,
@@ -282,7 +286,8 @@ absl::Status RecipeRunner::Start() {
           return;
         }
 
-        if (hovered_node_.IsValid()) {
+        if (hovered_node_.IsValid() &&
+            runtime_graph_->HasEvent(recipe::kOnHoverEndEventName)) {
           RecipeRuntimeEvent on_hover_end_event{
               .name = std::string(recipe::kOnHoverEndEventName)};
           on_hover_end_event.arguments[target_socket_name] = hovered_node_;
@@ -291,7 +296,8 @@ absl::Status RecipeRunner::Start() {
           runtime_event_queue_.push_back(std::move(on_hover_end_event));
         }
 
-        if (hover_target.IsValid()) {
+        if (hover_target.IsValid() &&
+            runtime_graph_->HasEvent(recipe::kOnHoverBeginEventName)) {
           RecipeRuntimeEvent on_hover_begin_event{
               .name = std::string(recipe::kOnHoverBeginEventName)};
           on_hover_begin_event.arguments[target_socket_name] = hover_target;

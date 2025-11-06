@@ -31,6 +31,7 @@
 #include "core/async/executor.h"
 #include "core/async/future.h"
 #include "core/common/enum_flags.h"
+#include "core/common/trace.h"
 #include "core/graph/dependency_graph_helpers.h"
 
 namespace imp {
@@ -252,8 +253,10 @@ void DependencyGraph<T, ExtraT, Hash>::Traverse(Fn fn) {
 template <typename T, typename ExtraT, typename Hash>
 template <typename Fn>
 void DependencyGraph<T, ExtraT, Hash>::TraverseExtras(Fn fn) {
+  IMP_TRACE();
   if constexpr (!std::is_same_v<ExtraT, NoExtra>) {
     if (!sorted_extras_traversal_info_.is_traversing_extras) {
+      IMP_TRACE_NAME("DependencyGraph::TraverseExtras::NonReentrant");
       // Non-reentrant case.
 
       sorted_extras_traversal_info_.is_traversing_extras = true;
@@ -270,6 +273,7 @@ void DependencyGraph<T, ExtraT, Hash>::TraverseExtras(Fn fn) {
 
       sorted_extras_traversal_info_.is_traversing_extras = false;
     } else if (!dirty_flags_.Test(DirtyFlags::kSortedExtras)) {
+      IMP_TRACE_NAME("DependencyGraph::TraverseExtras::Reentrant");
       // Reentrant case & the sorted extras are not dirty, can just use the
       // cached sorted extras.
 
@@ -277,6 +281,7 @@ void DependencyGraph<T, ExtraT, Hash>::TraverseExtras(Fn fn) {
         fn(extra);
       }
     } else {
+      IMP_TRACE_NAME("DependencyGraph::TraverseExtras::ReentrantDirty");
       // Rare reentrant case where the sorted extras are dirty.
 
       // Determine new sorted extras in a local variable without storing
@@ -379,6 +384,7 @@ void DependencyGraph<T, ExtraT, Hash>::RecursiveTraversal(
 template <typename T, typename ExtraT, typename Hash>
 void DependencyGraph<T, ExtraT, Hash>::TopologicalSort(
     IndicesList* out_leaves, TraversalInfoList* out_traversal_list) {
+  IMP_TRACE();
   std::vector<bool> resolved_list(nodes_.size());
   std::vector<bool> seen_list(nodes_.size());
   int resolved_count = 0;
@@ -489,6 +495,7 @@ void DependencyGraph<T, ExtraT, Hash>::UpdateCachedState() {
 
 template <typename T, typename ExtraT, typename Hash>
 void DependencyGraph<T, ExtraT, Hash>::FillSortedExtras(Extras& extras) {
+  IMP_TRACE();
   extras.clear();
   extras.reserve(nodes_.size());
   Traverse([&extras](T node, ExtraT extra) { extras.push_back(extra); });

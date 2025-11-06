@@ -17,8 +17,6 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_UI_EULER_ANGLE_FIELD_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_UI_EULER_ANGLE_FIELD_H_
 
-#include <string>
-
 #include "absl/strings/string_view.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
@@ -32,6 +30,10 @@ class EulerAngleField {
   // Draws the euler angle fields as ImGui::InputFloat3.
   // Returns true if the fields are modified. Returns false otherwise.
   bool DrawFields(absl::string_view label, quatf rotation);
+
+  // Updates the cached euler angles to match the given rotation if they are not
+  // already roughly equal rotations.
+  void UpdateCurrentRotation(quatf rotation);
 
   // Returns the current euler angles.
   float3 GetCurrentEulerAngles() const;

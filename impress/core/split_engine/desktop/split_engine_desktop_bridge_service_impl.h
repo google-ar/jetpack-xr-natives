@@ -92,7 +92,7 @@ class SplitEngineDesktopBridgeServiceImpl final
   // TODO: (broken link) - Depending on the outcome of the task, bridge_id
   // generation might need protection from brute-forcing
   BridgeId GenerateBridgeId() {
-    absl::MutexLock lock(bridge_id_mutex_);
+    absl::MutexLock lock(&bridge_id_mutex_);
     return new_bridge_id++;
   }
 
@@ -100,7 +100,7 @@ class SplitEngineDesktopBridgeServiceImpl final
   BridgeId new_buffer_id ABSL_GUARDED_BY(buffer_id_mutex_) = 1;
 
   BridgeId GetNewBufferId() {
-    absl::MutexLock lock(buffer_id_mutex_);
+    absl::MutexLock lock(&buffer_id_mutex_);
     return new_buffer_id++;
   }
 

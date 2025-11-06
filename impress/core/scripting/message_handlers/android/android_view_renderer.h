@@ -98,7 +98,7 @@ class AndroidViewRenderer : public Component {
 
   // Returns the material used to render the Android View.
   // Returns nullptr if the material is not yet loaded.
-  BorrowedMaterialPtr GetMaterial();
+  BorrowedMaterialPtr GetMaterial() const;
 
   // Updates the collider of the Android View.
   void UpdateCollider(const imp::Box& collider);

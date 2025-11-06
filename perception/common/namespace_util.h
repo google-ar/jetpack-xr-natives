@@ -24,7 +24,7 @@ namespace androidx::xr::common {
 enum Package {
   PACKAGE_ARCORE,
   PACKAGE_ARCORE_OPENXR,
-  PACKAGE_ARCORE_INTERNAL,
+  PACKAGE_ARCORE_RUNTIME,
   PACKAGE_MATH,
   PACKAGE_PERCEPTION,
   PACKAGE_CORE,
@@ -40,8 +40,8 @@ inline std::string GetJxrFullClassName(JNIEnv* env, Package package,
     case PACKAGE_ARCORE:
       package_name = "androidx/xr/arcore/";
       break;
-    case PACKAGE_ARCORE_INTERNAL:
-      package_name = "androidx/xr/arcore/internal/";
+    case PACKAGE_ARCORE_RUNTIME:
+      package_name = "androidx/xr/arcore/runtime/";
       break;
     case PACKAGE_MATH:
       package_name = "androidx/xr/runtime/math/";

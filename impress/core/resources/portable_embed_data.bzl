@@ -14,6 +14,8 @@
 
 """a portable version of cc_embed_data"""
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
 def portable_embed_data(
         name,
         srcs,
@@ -48,7 +50,7 @@ def portable_embed_data(
     )
 
     # Emit a cc_library with the generated files we just created
-    native.cc_library(
+    cc_library(
         name = name,
         srcs = ["%s.cc" % name],
         hdrs = ["%s.h" % name],

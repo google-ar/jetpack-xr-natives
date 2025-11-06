@@ -87,6 +87,9 @@ struct CreateXYHemisphereSettings {
   // and the number of vertices in each edge ring.
   uint8_t resolution = kDefaultSphereResolution;
   std::optional<std::string> name = std::nullopt;
+  // Use a vertex format with only positions. Otherwise meshes may have tangents
+  // and texture coordinates.
+  bool is_position_only = false;
 };
 
 struct CreateCylinderSettings {

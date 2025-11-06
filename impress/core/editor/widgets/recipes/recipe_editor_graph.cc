@@ -286,6 +286,26 @@ void RecipeEditorGraphBuilder::PopulateNode(
 
 template <>
 void RecipeEditorGraphBuilder::PopulateNode(
+    const CustomStatement& node, RecipeEditorGraph::Node& graph_node) {
+  graph_node.type_name = "Custom Statement";
+  graph_node.content = node.name;
+
+  // Create flow pins first to establish a consistent layout.
+  GetOrCreateSocket(graph_node, "In", RecipeEditorGraph::ConnectionType::Flow,
+                    RecipeEditorGraph::SocketKind::Input);
+  for (const auto& [socket_name, connection] : node.out_connections) {
+    PopulateExecutableConnection(connection, socket_name, "In", graph_node);
+  }
+
+  // Then, populate value arguments.
+  for (const auto& [socket_name, connection] : node.args) {
+    PopulateValueConnection(connection, graph_node,
+                            absl::StrFormat("%s", socket_name));
+  }
+}
+
+template <>
+void RecipeEditorGraphBuilder::PopulateNode(
     const AsyncCallStatement& node, RecipeEditorGraph::Node& graph_node) {
   graph_node.type_name = "Async Call Statement";
   graph_node.content = node.expression.name;

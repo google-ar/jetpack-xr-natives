@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "imp_google3_copts")
 
 package(
@@ -73,7 +74,6 @@ cc_library(
         "//core/math",
         "//core/math:arrays_proto_cc",
         "//core/model",
-        "//core/model:model_data_details",
         "//core/ncsb",
         "//core/recipes:recipe_runner",
         "//core/recipes:recipe_runner_proto_cc",
@@ -119,11 +119,11 @@ cc_library(
         "//core/assets/gltf/interactivity/node_converters/flow:flow_node_converters",
         "//core/assets/gltf/interactivity/node_converters/math:math_node_converters",
         "//core/assets/gltf/interactivity/node_converters/pointer:pointer_node_converters",
+        "//core/assets/gltf/interactivity/node_converters/variable:variable_node_converters",
         "//core/assets/gltf/object_model:pointer_parser",
         "//core/assets/gltf/object_model:property_pointer",
         "//core/assets/gltf/object_model/pointer_declarations:core_pointers",
         "//core/async:future",
-        "//core/collision:ray",
         "//core/common:registry",
         "//core/common:robin_map",
         "//core/math",

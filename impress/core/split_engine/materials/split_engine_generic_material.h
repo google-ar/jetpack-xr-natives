@@ -20,6 +20,7 @@
 #include <memory>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "flatbuffers/buffer.h"
@@ -159,10 +160,18 @@ class SplitEngineGenericMaterial : public SplitEngineMaterial,
   TextureAndSampler GetTextureAndSampler(
       const GenericMaterialTextureParameter& texture) const;
   TextureAndSampler GetPlaceholderTextureAndSampler() const;
+  void RewriteTextureId(
+      absl::string_view parameter_name,
+      std::optional<GenericMaterialTextureParameter>& texture_parameter,
+      const TextureBorrower& texture_borrower);
+  GenericMaterialParameters RewriteTextureIds(
+      const GenericMaterialParameters& parameters,
+      const TextureBorrower& texture_borrower);
 
   BaseView& view_;
   GenericMaterialParameters generic_material_parameters_;
   BorrowedTexturePtr placeholder_texture_;
+  absl::flat_hash_map<absl::string_view, BorrowedTexturePtr> borrowed_textures_;
 };
 
 }  // namespace imp::split_engine

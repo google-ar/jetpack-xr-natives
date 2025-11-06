@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "core/common/log.h"
+#include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
@@ -128,31 +129,6 @@ absl::Status DefaultDevModeExtension::Setup(FilamentHost* host) {
   io.MouseDown[0] = false;
   io.MouseDown[1] = false;
   io.MouseDown[2] = false;
-
-  // enable most of the function keys
-  io.KeyMap[ImGuiKey_Tab] = static_cast<int>(VirtualKeyCode::VK_TAB);
-  io.KeyMap[ImGuiKey_LeftArrow] = static_cast<int>(VirtualKeyCode::VK_LEFT);
-  io.KeyMap[ImGuiKey_RightArrow] = static_cast<int>(VirtualKeyCode::VK_RIGHT);
-  io.KeyMap[ImGuiKey_UpArrow] = static_cast<int>(VirtualKeyCode::VK_UP);
-  io.KeyMap[ImGuiKey_DownArrow] = static_cast<int>(VirtualKeyCode::VK_DOWN);
-  io.KeyMap[ImGuiKey_PageUp] = static_cast<int>(VirtualKeyCode::VK_PAGEUP);
-  io.KeyMap[ImGuiKey_PageDown] = static_cast<int>(VirtualKeyCode::VK_PAGEDOWN);
-  io.KeyMap[ImGuiKey_Delete] = static_cast<int>(VirtualKeyCode::VK_DELETE);
-  io.KeyMap[ImGuiKey_Backspace] =
-      static_cast<int>(VirtualKeyCode::VK_BACKSPACE);
-  io.KeyMap[ImGuiKey_Space] = static_cast<int>(VirtualKeyCode::VK_SPACE);
-  io.KeyMap[ImGuiKey_Enter] = static_cast<int>(VirtualKeyCode::VK_RETURN);
-  io.KeyMap[ImGuiKey_Escape] = static_cast<int>(VirtualKeyCode::VK_ESCAPE);
-  // enable keys for shortcuts like copy, paste, etc.
-  io.KeyMap[ImGuiKey_A] = static_cast<int>(VirtualKeyCode::VK_a);
-  io.KeyMap[ImGuiKey_C] = static_cast<int>(VirtualKeyCode::VK_c);
-  io.KeyMap[ImGuiKey_V] = static_cast<int>(VirtualKeyCode::VK_v);
-  io.KeyMap[ImGuiKey_X] = static_cast<int>(VirtualKeyCode::VK_x);
-  // enable hot keys for undo & redo.
-  io.KeyMap[ImGuiKey_Z] = static_cast<int>(VirtualKeyCode::VK_z);
-  io.KeyMap[ImGuiKey_Y] = static_cast<int>(VirtualKeyCode::VK_y);
-  // TODO: Add more keys to ImGuiIO.KeyMap in
-  // default_dev_mode_extension.cc
 
   debug_draw_ = std::make_unique<debug_draw::Fixture>(
       engine, scene, custom_debug_draw_material_);

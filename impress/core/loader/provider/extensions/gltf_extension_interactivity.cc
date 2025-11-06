@@ -65,6 +65,8 @@ constexpr char kIsRandomNodeConfiguration[] = "isRandom";
 constexpr char kIsLoopNodeConfiguration[] = "isLoop";
 constexpr char kMessageNodeConfiguration[] = "message";
 constexpr char kInitialIndexNodeConfiguration[] = "initialIndex";
+constexpr char kVariablesNodeConfiguration[] = "variables";
+constexpr char kUseSlerpNodeConfiguration[] = "useSlerp";
 
 // Interactivity::Graph::Variable types
 constexpr char kBoolValueType[] = "bool";
@@ -340,6 +342,12 @@ InteractivityImpl::InteractivityImpl() {
   configuration_id_map_.emplace(
       kInitialIndexNodeConfiguration,
       gltf::Interactivity::Graph::Node::ConfigurationType::INITIAL_INDEX);
+  configuration_id_map_.emplace(
+      kVariablesNodeConfiguration,
+      gltf::Interactivity::Graph::Node::ConfigurationType::VARIABLES);
+  configuration_id_map_.emplace(
+      kUseSlerpNodeConfiguration,
+      gltf::Interactivity::Graph::Node::ConfigurationType::USE_SLERP);
 
   value_type_map_.emplace(kBoolValueType,
                           gltf::Interactivity::Graph::ValueType::BOOL);
@@ -644,6 +652,7 @@ absl::StatusOr<bool> InteractivityImpl::OnVisitNodeConfiguration(
             STOP_PROPAGATION:
         case gltf::Interactivity::Graph::Node::ConfigurationType::IS_RANDOM:
         case gltf::Interactivity::Graph::Node::ConfigurationType::IS_LOOP:
+        case gltf::Interactivity::Graph::Node::ConfigurationType::USE_SLERP:
           MP_RETURN_IF_ERROR(OnVisitVariantArrayWithSingleElement<bool>(
               configuration.value, field_id, visitor, ptr, token_type));
           break;
@@ -652,6 +661,7 @@ absl::StatusOr<bool> InteractivityImpl::OnVisitNodeConfiguration(
           MP_RETURN_IF_ERROR(OnVisitVariantArrayWithSingleElement<float>(
               configuration.value, field_id, visitor, ptr, token_type));
           break;
+        case gltf::Interactivity::Graph::Node::ConfigurationType::VARIABLES:
         case gltf::Interactivity::Graph::Node::ConfigurationType::CASES: {
           std::vector<int> cases =
               VisitArray<int>(field_id, visitor, ptr, token_type);

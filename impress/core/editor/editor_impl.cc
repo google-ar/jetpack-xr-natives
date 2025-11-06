@@ -21,6 +21,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_set.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -75,6 +76,7 @@
 #include "core/editor/widgets/visualize_bounds.h"
 #include "core/editor/widgets/visualize_colliders.h"
 #include "core/editor/widgets/visualize_origins.h"
+#include "core/editor/widgets/window/window_widget.h"
 #include "core/input/key_codes.h"
 #include "core/input/keyboard_event.h"
 #include "core/input/pointer_event.h"
@@ -155,7 +157,9 @@ class EditorImpl : public Editor {
   // The Editor nodes and environment.
   void AddNode(NodeHandle node) override;
   void RemoveNode(NodeHandle node) override;
-  void SelectNode(NodeHandle node) override;
+  void SelectNode(NodeHandle node, SelectionMode selection_mode) override;
+  const absl::flat_hash_set<NodeHandle>& GetSelectedNodes() override;
+  NodeHandle GetSingleSelectedNode() override;
   void AddSandboxNode(NodeHandle node) override;
   void RemoveSandboxNode(NodeHandle node) override;
   NodeHandle GetEditorRoot() override;
@@ -559,8 +563,6 @@ void EditorImpl::InitializeWidgetUiSystem() {
     widget_ui_system_.AddWidget<ToggleCamera>(
         WidgetLayoutInfo(PanelId::kToolBar), view);
   }
-  event_injector_ = widget_ui_system_.AddWidget<EventInjector>(
-      WidgetLayoutInfo(PanelId::kSceneWindow), view);
 
   widget_ui_system_.AddWidget<NodeDetails>(
       WidgetLayoutInfo(PanelId::kDetailsWindow), view);
@@ -575,17 +577,13 @@ void EditorImpl::InitializeWidgetUiSystem() {
 
   widget_ui_system_.AddWidget<Console>(WidgetLayoutInfo(PanelId::kTabBar),
                                        view);
-  widget_ui_system_.AddWidget<PerformanceWindow>(
-      WidgetLayoutInfo(PanelId::kTabBar), view);
-  widget_ui_system_.AddWidget<EnvironmentLightEditor>(
-      WidgetLayoutInfo(PanelId::kTabBar), view);
-  widget_ui_system_.AddWidget<FilamentViewSettingsWidget>(
-      WidgetLayoutInfo(PanelId::kTabBar), view);
 #if IMP_PLATFORM(DESKTOP) || IMP_PLATFORM(WASM)
   asset_library_ = widget_ui_system_.AddWidget<AssetLibrary>(
       WidgetLayoutInfo(PanelId::kTabBar), view);
   widget_ui_system_.AddWidget<SettingsWidget>(
       WidgetLayoutInfo(PanelId::kMenuBar), GetView());
+  widget_ui_system_.AddWidget<WindowWidget>(WidgetLayoutInfo(PanelId::kMenuBar),
+                                            GetView());
 #endif
 
   widget_ui_system_.AddWidget<VisualizeBounds>(
@@ -596,6 +594,14 @@ void EditorImpl::InitializeWidgetUiSystem() {
       WidgetLayoutInfo(PanelId::kFreeform), view);
   widget_ui_system_.AddWidget<FileDragAndDrop>(
       WidgetLayoutInfo(PanelId::kFreeform), view);
+  widget_ui_system_.AddWidget<PerformanceWindow>(
+      WidgetLayoutInfo(PanelId::kFreeform, /*show_by_default=*/false), view);
+  widget_ui_system_.AddWidget<EnvironmentLightEditor>(
+      WidgetLayoutInfo(PanelId::kFreeform, /*show_by_default=*/false), view);
+  widget_ui_system_.AddWidget<FilamentViewSettingsWidget>(
+      WidgetLayoutInfo(PanelId::kFreeform, /*show_by_default=*/false), view);
+  event_injector_ = widget_ui_system_.AddWidget<EventInjector>(
+      WidgetLayoutInfo(PanelId::kFreeform, /*show_by_default=*/false), view);
 
   // Edit mode is only available in the Impress sandbox.
   if (is_sandbox_) {
@@ -724,7 +730,7 @@ void EditorImpl::EnableEditorToggling(Dispatcher& dispatcher) {
 void EditorImpl::EnableUndoAndRedo(Dispatcher& dispatcher) {
   dispatcher.Connect(
       [this](const imp::KeyboardEvent& event) {
-        if (!enabled_ || event.type != KeyboardEventType::kOnUp) {
+        if (!enabled_ || event.type != KeyboardEventType::kOnDown) {
           return;
         }
         if (event.key.code == VirtualKeyCode::VK_z &&
@@ -825,7 +831,7 @@ void EditorImpl::SetInEditMode(bool in_edit_mode) {
   // nodes to their original state when Stop is pressed.
 
   // Deselect node, they are all getting reset.
-  SelectNode({});
+  SelectNode({}, SelectionMode::kSingleNode);
 
   // Used to gather all the nodes that must be destroyed when switching modes.
   std::vector<NodeHandle> to_destroy;
@@ -1014,8 +1020,25 @@ AssetLibrary* EditorImpl::GetAssetLibrary() { return asset_library_; }
 
 EventInjector& EditorImpl::GetEventInjector() { return *event_injector_; }
 
-void EditorImpl::SelectNode(NodeHandle node) {
-  GetView().GetRegistry().Get<SelectionController>()->get().TrySelectNode(node);
+void EditorImpl::SelectNode(NodeHandle node, SelectionMode selection_mode) {
+  GetView().GetRegistry().Get<SelectionController>()->get().TrySelectNode(
+      node, selection_mode);
+}
+
+const absl::flat_hash_set<NodeHandle>& EditorImpl::GetSelectedNodes() {
+  return GetView()
+      .GetRegistry()
+      .Get<SelectionController>()
+      ->get()
+      .GetSelectedNodes();
+}
+
+NodeHandle EditorImpl::GetSingleSelectedNode() {
+  const absl::flat_hash_set<NodeHandle>& selected_nodes = GetSelectedNodes();
+  if (selected_nodes.size() != 1) {
+    return NodeHandle();
+  }
+  return *selected_nodes.begin();
 }
 
 GltfAsset::LoadOptions EditorImpl::GetGltfLoadOptions() const {

@@ -155,20 +155,19 @@ def non_module_dependencies():
     # Not in Bazel Central Registry as of 12/2024.
     http_archive(
         name = "spirv_tools",
-        patch_args = ["-p1"],
-        patches = ["//:bazel/patches/spirv_tools.patch"],
-        sha256 = "a156215a2d7c6c5b267933ed691877a9a66f07d75970da33ce9ad627a71389d7",
-        strip_prefix = "SPIRV-Tools-2022.4",
-        url = "https://github.com/KhronosGroup/SPIRV-Tools/archive/refs/tags/v2022.4.tar.gz",
+        sha256 = "18c3395282cfc51954b2e4e5eec6ebaa844edc759f3926c55b19b4efa9a008d8",
+        strip_prefix = "KhronosGroup-SPIRV-Tools-257a227",
+        type = ".tar.gz",
+        url = "https://api.github.com/repos/KhronosGroup/SPIRV-Tools/tarball/257a227fbadf8176ea386c7d8fb9b889cbf08640",
     )
 
     # Not in Bazel Central Registry as of 12/2024.
     http_archive(
         name = "spirv_headers",
-        sha256 = "1870d2ffcf695383a510e950821dfef3397ec85bb0a8bf55ba254f0f4f5998e7",
-        strip_prefix = "KhronosGroup-SPIRV-Headers-c214f6f",
+        sha256 = "0e675c9e71e3307f375a7773ebdd64f47b0fd474e2e0763cfb87ec6cfaaf0caf",
+        strip_prefix = "KhronosGroup-SPIRV-Headers-c8ad050",
         type = ".tar.gz",
-        url = "https://api.github.com/repos/KhronosGroup/SPIRV-Headers/tarball/c214f6f2d1a7253bb0e9f195c2dc5b0659dc99ef",
+        url = "https://api.github.com/repos/KhronosGroup/SPIRV-Headers/tarball/c8ad050fcb29e42a2f57d9f59e97488f465c436d",
     )
 
     # Not in Bazel Central Registry as of 12/2024.

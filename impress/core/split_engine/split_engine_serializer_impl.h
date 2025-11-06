@@ -52,6 +52,7 @@
 #include "core/lighting/image_based_lighting_types.h"
 #include "core/material_library/generic_material_spec.h"
 #include "core/material_library/material_param_value.h"
+#include "core/materials/material.h"
 #include "core/math/mat.h"
 #include "core/math/math.h"
 #include "core/model/mesh/base_mesh_builder.h"
@@ -238,6 +239,7 @@ class SplitEngineSerializerImpl
       SplitEngineMeshSerializer& split_engine_mesh_serializer) override;
   Future<GenericMaterialPtr> CreateGenericMaterial(
       const GenericMaterialSpec& spec) override;
+  MaterialPtr CreateCustomMaterial(MaterialPtr material) override;
   void SetBuiltInMaterialParameters(
       const filament::MaterialInstance* material,
       android_xr::schemas::BuiltInMaterialParameters type,

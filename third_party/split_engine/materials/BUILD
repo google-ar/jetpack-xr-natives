@@ -16,6 +16,7 @@ load(
     "@com_google_impress//build_tools:imp.bzl",
     "imp_google3_copts",
 )
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -30,7 +31,6 @@ cc_library(
     hdrs = ["jxr_media_material.h"],
     copts = imp_google3_copts(),
     deps = [
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_impress//core/async:future",
@@ -45,6 +45,7 @@ cc_library(
         "@com_google_impress//core/split_engine/materials:builtin_texture_parameter_creator",
         "@com_google_impress//core/split_engine/materials:split_engine_material",
         "@com_google_impress//core/view:base_view",
+        "@flatbuffers",
     ],
     alwayslink = 1,
 )
@@ -72,7 +73,6 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         ":photos_texture_3d_material_params",
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_impress//:api",
@@ -82,6 +82,7 @@ cc_library(
         "@com_google_impress//core/split_engine/materials:builtin_texture_parameter_creator",
         "@com_google_impress//core/split_engine/materials:split_engine_material",
         "@com_google_impress//core/view:base_view",
+        "@flatbuffers",
         "@third_party//split_engine:fbs",
     ],
     alwayslink = 1,
@@ -93,7 +94,6 @@ cc_library(
     hdrs = ["svxr_footprint_material.h"],
     copts = imp_google3_copts(),
     deps = [
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/memory",
         "@com_google_impress//:api",
         "@com_google_impress//core/async:future",
@@ -102,6 +102,7 @@ cc_library(
         "@com_google_impress//core/split_engine/materials:builtin_texture_parameter_creator",
         "@com_google_impress//core/split_engine/materials:split_engine_material",
         "@com_google_impress//core/view:base_view",
+        "@flatbuffers",
         "@third_party//split_engine:fbs",
     ],
     alwayslink = 1,
@@ -113,7 +114,6 @@ cc_library(
     hdrs = ["svxr_plane_material.h"],
     copts = imp_google3_copts(),
     deps = [
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/memory",
         "@com_google_impress//:api",
         "@com_google_impress//core/async:future",
@@ -122,6 +122,7 @@ cc_library(
         "@com_google_impress//core/split_engine/materials:builtin_texture_parameter_creator",
         "@com_google_impress//core/split_engine/materials:split_engine_material",
         "@com_google_impress//core/view:base_view",
+        "@flatbuffers",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//split_engine:fbs",
     ],
@@ -134,7 +135,6 @@ cc_library(
     hdrs = ["vignette_material.h"],
     copts = imp_google3_copts(),
     deps = [
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/memory",
         "@com_google_impress//:api",
         "@com_google_impress//core/async:future",
@@ -143,6 +143,7 @@ cc_library(
         "@com_google_impress//core/split_engine/materials:builtin_texture_parameter_creator",
         "@com_google_impress//core/split_engine/materials:split_engine_material",
         "@com_google_impress//core/view:base_view",
+        "@flatbuffers",
         "@third_party//split_engine:fbs",
     ],
     alwayslink = 1,
@@ -154,7 +155,6 @@ cc_library(
     hdrs = ["water_reflection_material.h"],
     copts = imp_google3_copts(),
     deps = [
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/memory",
         "@com_google_impress//:api",
@@ -165,6 +165,7 @@ cc_library(
         "@com_google_impress//core/split_engine/materials:builtin_texture_parameter_creator",
         "@com_google_impress//core/split_engine/materials:split_engine_material",
         "@com_google_impress//core/view:base_view",
+        "@flatbuffers",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//split_engine:fbs",
     ],
@@ -177,7 +178,6 @@ cc_library(
     hdrs = ["youtube_stereo_player_material.h"],
     copts = imp_google3_copts(),
     deps = [
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/memory",
         "@com_google_impress//:api",
         "@com_google_impress//core/async:future",
@@ -185,6 +185,7 @@ cc_library(
         "@com_google_impress//core/split_engine/materials:builtin_texture_parameter_creator",
         "@com_google_impress//core/split_engine/materials:split_engine_material",
         "@com_google_impress//core/view:base_view",
+        "@flatbuffers",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//split_engine:fbs",
     ],
@@ -197,13 +198,13 @@ cc_library(
     hdrs = ["texture_external_material.h"],
     copts = imp_google3_copts(),
     deps = [
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/memory",
         "@com_google_impress//core/async:future",
         "@com_google_impress//core/render",
         "@com_google_impress//core/split_engine/materials:builtin_texture_parameter_creator",
         "@com_google_impress//core/split_engine/materials:split_engine_material",
         "@com_google_impress//core/view:base_view",
+        "@flatbuffers",
         "@third_party//split_engine:fbs",
     ],
     alwayslink = 1,

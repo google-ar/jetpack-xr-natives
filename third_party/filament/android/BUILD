@@ -1,4 +1,5 @@
 load("@build_bazel_rules_android//android:rules.bzl", "android_library")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
     "@third_party//filament:filament.bzl",
     "filament_copts",

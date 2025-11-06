@@ -253,32 +253,29 @@ void DevModeInputInterceptor::FilterKeyboardEvents(
     soft_keyboard_controller_->SetKeyboardShown(io.WantTextInput);
   }
 
-  // The special keys need special handling due to event.key.modifiers.
-  bool any_shift = false;
-  bool any_ctrl = false;
-  bool any_alt = false;
-  bool any_super = false;
-
   for (auto& event : keyboard_events) {
     switch (event.type) {
       case KeyboardEventType::kOnDown:
       case KeyboardEventType::kOnUp: {
-        int key = static_cast<int>(event.key.code);
+        ImGuiKey key = static_cast<ImGuiKey>(event.key.code);
         IM_ASSERT(key >= 0 && key < IM_ARRAYSIZE(io.KeysDown));
-        io.KeysDown[key] = (event.type == KeyboardEventType::kOnDown);
+        io.AddKeyEvent(key, (event.type == KeyboardEventType::kOnDown));
         if (HasKeyModifier(KeyModifier::SHIFT, event.key.modifiers)) {
-          any_shift |= (event.type == KeyboardEventType::kOnDown);
+          io.AddKeyEvent(ImGuiMod_Shift,
+                         (event.type == KeyboardEventType::kOnDown));
         }
         if (HasKeyModifier(KeyModifier::CTRL, event.key.modifiers)) {
-          any_ctrl |= (event.type == KeyboardEventType::kOnDown);
+          io.AddKeyEvent(ImGuiMod_Ctrl,
+                         (event.type == KeyboardEventType::kOnDown));
         }
         if (HasKeyModifier(KeyModifier::ALT, event.key.modifiers)) {
-          any_alt |= (event.type == KeyboardEventType::kOnDown);
+          io.AddKeyEvent(ImGuiMod_Alt,
+                         (event.type == KeyboardEventType::kOnDown));
         }
         if (HasKeyModifier(KeyModifier::GUI, event.key.modifiers)) {
-          any_super |= (event.type == KeyboardEventType::kOnDown);
+          io.AddKeyEvent(ImGuiMod_Super,
+                         (event.type == KeyboardEventType::kOnDown));
         }
-
         break;
       }
       case KeyboardEventType::kNone:
@@ -286,11 +283,6 @@ void DevModeInputInterceptor::FilterKeyboardEvents(
         break;
     }
   }
-
-  io.KeyShift = any_shift;
-  io.KeyCtrl = any_ctrl;
-  io.KeyAlt = any_alt;
-  io.KeySuper = any_super;
 
   if (io.WantCaptureKeyboard) {
     keyboard_events.clear();

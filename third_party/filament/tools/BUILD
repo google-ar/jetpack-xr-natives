@@ -1,3 +1,5 @@
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
     "@third_party//filament:filament.bzl",
     "filament_copts",
@@ -42,6 +44,7 @@ cc_binary(
         ":resgen_licenses",
         "@third_party//filament/libs:utils",
         "@third_party//filament/libs:utils_hdrs",
+        "@zstdlib",
     ],
 )
 
@@ -109,6 +112,7 @@ cc_library(
         "@glslang",
         "@glslang//:SPIRV",
         "@smol_v//:smol-v",
+        "@third_party//filament/filament/backend:driver_enums",
         "@third_party//filament/libs:filabridge_hdrs",
         "@third_party//filament/libs:filamat",
         "@third_party//filament/libs:filamat_builtinResource",

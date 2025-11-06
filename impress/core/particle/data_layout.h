@@ -20,6 +20,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "core/particle/particle_config.proto.imp.h"
+
 namespace imp {
 namespace imp_particle {
 
@@ -31,8 +33,7 @@ const int32_t kInvalidParticleDataOffset = -1;
 // to each field value within an array of values.
 class DataLayout {
  public:
-  // TODO: (broken link) - Create ParticleConfig class to fill in data here.
-  DataLayout(/* particle_description */);
+  DataLayout(const ParticleConfig& config);
 
   // Returns the number of float values needed based on the Setup description.
   int GetSize() const;
@@ -44,6 +45,7 @@ class DataLayout {
   int GetScale() const;
   int GetPosition() const;
   int GetVelocity() const;
+  int GetAcceleration() const;
 
  private:
   std::vector<int> offsets_;

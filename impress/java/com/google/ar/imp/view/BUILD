@@ -51,6 +51,7 @@ android_library(
         ":proguard-rules.pro",
     ],
     deps = [
+        ":frame_scheduler",
         ":imp_api",
         ":imp_api_scuba",
         ":input_event_handler",
@@ -70,6 +71,7 @@ android_library(
         ":proguard-rules.pro",
     ],
     deps = [
+        ":frame_scheduler",
         ":imp_api",
         ":imp_api_scuba",
         ":input_event_handler",

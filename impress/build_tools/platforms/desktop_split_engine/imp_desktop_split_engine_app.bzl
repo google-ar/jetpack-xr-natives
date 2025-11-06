@@ -14,6 +14,7 @@
 
 """Helper used by the imp_app rule to generate targets specific to the desktop platform."""
 
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load(
     "@com_google_impress//build_tools:imp.bzl",
     "if_remote_desktop",
@@ -40,7 +41,7 @@ def imp_desktop_split_engine_app(
     """
     for target_type, testonly in (("desktop_split_engine", False), ("desktop_split_engine", True)):
         platform_name = name + "_" + target_type
-        native.cc_binary(
+        cc_binary(
             name = getTargetName(platform_name, testonly = testonly),
             linkopts = if_remote_desktop([
                 # NOTE: This will cause the desktop binary to use the system linker and stop

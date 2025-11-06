@@ -458,6 +458,13 @@ This file contains expansion macros (X Macros) for OpenXR structures.
     _avail(XrPerformanceMetricsCounterANDROID, XR_TYPE_PERFORMANCE_METRICS_COUNTER_ANDROID) \
     _avail(XrTrackableObjectANDROID, XR_TYPE_TRACKABLE_OBJECT_ANDROID) \
     _avail(XrTrackableObjectConfigurationANDROID, XR_TYPE_TRACKABLE_OBJECT_CONFIGURATION_ANDROID) \
+    _avail(XrFitTrackerCreateInfoANDROIDSYS, XR_TYPE_FIT_TRACKER_CREATE_INFO_ANDROIDSYS) \
+    _avail(XrFitTrackerGetInfoANDROIDSYS, XR_TYPE_FIT_TRACKER_GET_INFO_ANDROIDSYS) \
+    _avail(XrFitTrackerRxInsertANDROIDSYS, XR_TYPE_FIT_TRACKER_RX_INSERT_ANDROIDSYS) \
+    _avail(XrFitTrackerComparisonInfoANDROIDSYS, XR_TYPE_FIT_TRACKER_COMPARISON_INFO_ANDROIDSYS) \
+    _avail(XrFitTrackerInsertChangeANDROIDSYS, XR_TYPE_FIT_TRACKER_INSERT_CHANGE_ANDROIDSYS) \
+    _avail(XrFitTrackerMountANDROIDSYS, XR_TYPE_FIT_TRACKER_MOUNT_ANDROIDSYS) \
+    _avail(XrFitTrackerFitDataANDROIDSYS, XR_TYPE_FIT_TRACKER_FIT_DATA_ANDROIDSYS) \
     _avail(XrFutureCancelInfoEXT, XR_TYPE_FUTURE_CANCEL_INFO_EXT) \
     _avail(XrFuturePollInfoEXT, XR_TYPE_FUTURE_POLL_INFO_EXT) \
     _avail(XrFuturePollResultEXT, XR_TYPE_FUTURE_POLL_RESULT_EXT) \
@@ -622,13 +629,6 @@ This file contains expansion macros (X Macros) for OpenXR structures.
     _avail(XrPersistSpatialEntityCompletionEXT, XR_TYPE_PERSIST_SPATIAL_ENTITY_COMPLETION_EXT) \
     _avail(XrSpatialEntityUnpersistInfoEXT, XR_TYPE_SPATIAL_ENTITY_UNPERSIST_INFO_EXT) \
     _avail(XrUnpersistSpatialEntityCompletionEXT, XR_TYPE_UNPERSIST_SPATIAL_ENTITY_COMPLETION_EXT) \
-    _avail(XrFitTrackerCreateInfoANDROIDSYS, XR_TYPE_FIT_TRACKER_CREATE_INFO_ANDROIDSYS) \
-    _avail(XrFitTrackerGetInfoANDROIDSYS, XR_TYPE_FIT_TRACKER_GET_INFO_ANDROIDSYS) \
-    _avail(XrFitTrackerRxInsertANDROIDSYS, XR_TYPE_FIT_TRACKER_RX_INSERT_ANDROIDSYS) \
-    _avail(XrFitTrackerComparisonInfoANDROIDSYS, XR_TYPE_FIT_TRACKER_COMPARISON_INFO_ANDROIDSYS) \
-    _avail(XrFitTrackerInsertChangeANDROIDSYS, XR_TYPE_FIT_TRACKER_INSERT_CHANGE_ANDROIDSYS) \
-    _avail(XrFitTrackerMountANDROIDSYS, XR_TYPE_FIT_TRACKER_MOUNT_ANDROIDSYS) \
-    _avail(XrFitTrackerFitDataANDROIDSYS, XR_TYPE_FIT_TRACKER_FIT_DATA_ANDROIDSYS) \
     _avail(XrSpatialCapabilityConfigurationObjectTrackingANDROID, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_OBJECT_TRACKING_ANDROID) \
     _avail(XrSpatialComponentObjectSemanticLabelListANDROID, XR_TYPE_SPATIAL_COMPONENT_OBJECT_SEMANTIC_LABEL_LIST_ANDROID) \
     _avail(XrSpatialCapabilityConfigurationDepthRaycastANDROID, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_DEPTH_RAYCAST_ANDROID) \
@@ -647,6 +647,9 @@ This file contains expansion macros (X Macros) for OpenXR structures.
     _avail(XrSpatialCapabilityConfigurationStreetscapeGeometryANDROIDX1, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_STREETSCAPE_GEOMETRY_ANDROIDX1) \
     _avail(XrSpatialComponentStreetscapeGeometryMetadataListANDROIDX1, XR_TYPE_SPATIAL_COMPONENT_STREETSCAPE_GEOMETRY_METADATA_LIST_ANDROIDX1) \
     _avail(XrSpatialAnchorParentANDROID, XR_TYPE_SPATIAL_ANCHOR_PARENT_ANDROID) \
+    _avail(XrSpatialDiscoveryNotSubsumedFilterANDROIDX1, XR_TYPE_SPATIAL_DISCOVERY_NOT_SUBSUMED_FILTER_ANDROIDX1) \
+    _avail(XrSpatialComponentSubsumedByListANDROIDX1, XR_TYPE_SPATIAL_COMPONENT_SUBSUMED_BY_LIST_ANDROIDX1) \
+    _avail(XrBatteryStateDisplayEXT, XR_TYPE_BATTERY_STATE_DISPLAY_EXT) \
 
 
 #if defined(XR_USE_GRAPHICS_API_D3D11)

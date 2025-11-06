@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+include "split_engine/schemas/split_engine_attributes.fbs";
 include "split_engine/schemas/split_engine_data.fbs";
 include "split_engine/schemas/split_engine_material.fbs";
 
@@ -26,40 +27,40 @@ namespace android_xr.schemas;
 // Adds any number of vertex and index buffers which can later be referenced by
 // Renderables to use for rendering geometry.
 // LINT.IfChange
-table AddMeshData {
-  vertex_buffers: [VertexBuffer] (id: 0);
-  index_buffers: [IndexBuffer] (id: 1);
+table AddMeshData (requires_api: 1) {
+  vertex_buffers: [VertexBuffer] (id: 0, requires_api: 1);
+  index_buffers: [IndexBuffer] (id: 1, requires_api: 1);
 }
 // LINT.ThenChange(//depot/google3/third_party/impress/core/split_engine/flatbuffer_size_calculator.cc)
 
 // Removes any number of previously-added vertex and index buffers.
 // This will free the memory associated with the buffers. Note: this must be
 // done only after all Renderables referencing the buffers have been removed.
-table RemoveMeshData {
-  vertex_buffer_ids: [uint64] (id: 0);
-  index_buffer_ids: [uint64] (id: 1);
+table RemoveMeshData (requires_api: 1) {
+  vertex_buffer_ids: [uint64] (id: 0, requires_api: 1);
+  index_buffer_ids: [uint64] (id: 1, requires_api: 1);
 }
 
 // Adds any number of morph target buffers which can later be referenced by
 // Renderables to use for doing geometry morphing, aka blend-shapes.
 // LINT.IfChange
-table AddMorphTargetBuffers {
-  morph_target_buffers: [MorphTargetBuffer] (id: 0);
+table AddMorphTargetBuffers (requires_api: 1) {
+  morph_target_buffers: [MorphTargetBuffer] (id: 0, requires_api: 1);
 }
 // LINT.ThenChange(//depot/google3/third_party/impress/core/split_engine/flatbuffer_size_calculator.cc)
 
 // Removes any number of previously-added morph target buffers.
 // This will free the memory associated with the buffers. Note: this must be
 // done only after all Renderables referencing the buffers have been removed.
-table RemoveMorphTargetBuffers {
-  morph_target_buffer_ids: [uint64] (id: 0);
+table RemoveMorphTargetBuffers (requires_api: 1) {
+  morph_target_buffer_ids: [uint64] (id: 0, requires_api: 1);
 }
 
 // Adds any number of textures which can later be referenced by Material
 // texture sampler parameters. Textures contain raw image data.
 // LINT.IfChange
-table AddTextures {
-  textures: [Texture] (id: 0);
+table AddTextures (requires_api: 1) {
+  textures: [Texture] (id: 0, requires_api: 1);
 }
 // LINT.ThenChange(//depot/google3/third_party/impress/core/split_engine/flatbuffer_size_calculator.cc)
 
@@ -67,8 +68,8 @@ table AddTextures {
 // This will free the memory associated with the textures. Note: this must be
 // done only after all Material instances referencing the textures have been
 // removed.
-table RemoveTextures {
-  texture_ids: [uint64] (id: 0);
+table RemoveTextures (requires_api: 1) {
+  texture_ids: [uint64] (id: 0, requires_api: 1);
 }
 
 // The following material-related commands are unsafe except for local
@@ -82,131 +83,131 @@ table RemoveTextures {
 // This API is unsafe except for local development and specialized use cases.
 // AddMaterials commands will most likely be rejected by the backend service.
 // After adding materials, instances can be created using AddMaterialInstances.
-table AddMaterials {
-  materials: [Material] (id: 0);
+table AddMaterials (requires_api: 1) {
+  materials: [Material] (id: 0, requires_api: 1);
 }
 
 // Removes any number of previously-added materials.
 // This will free the memory associated with the materials. Note: this must be
 // done only after all Material instances referencing the materials have been
 // removed.
-table RemoveMaterials {
-  material_ids: [uint64] (id: 0);
+table RemoveMaterials (requires_api: 1) {
+  material_ids: [uint64] (id: 0, requires_api: 1);
 }
 
 // Creates instances of previously-added materials. MaterialInstances can be set
 // on Renderables to specify the shader to use for rendering.
 // To set parameters on material instances, use SetMaterialParameters.
-table AddMaterialInstances {
-  instances: [MaterialInstance] (id: 0);
+table AddMaterialInstances (requires_api: 1) {
+  instances: [MaterialInstance] (id: 0, requires_api: 1);
 }
 
 // Duplicates any number of previously-added material instances.
 // This will create new material instances with the same parameters as currently
 // set on the original instances.
-table DuplicateMaterialInstances {
-  duplicates: [DuplicateMaterialInstance] (id: 0);
+table DuplicateMaterialInstances (requires_api: 1) {
+  duplicates: [DuplicateMaterialInstance] (id: 0, requires_api: 1);
 }
 
 // Removes any number of previously-added material instances.
 // This will free the memory associated with the instances. Note: this must be
 // done only after all Renderables referencing the instances have been removed.
-table RemoveMaterialInstances {
-  instance_ids: [uint64] (id: 0);
+table RemoveMaterialInstances (requires_api: 1) {
+  instance_ids: [uint64] (id: 0, requires_api: 1);
 }
 
 // Sets parameters on any number of previously-added material instances.
-table SetMaterialParameters {
-  parameters: [MaterialParameters] (id: 0);
+table SetMaterialParameters (requires_api: 1) {
+  parameters: [MaterialParameters] (id: 0, requires_api: 1);
 }
 
 // Sets parameters on any number of previously-added built-in material
 // instances. This is the preferred way to set material parameters in production
 // apps, as it ensures backwards compatibility via schema-based material
 // definitions.
-table SetBuiltInMaterialParameters {
-  parameters: [BuiltInMaterialInstanceParameters] (id: 0);
+table SetBuiltInMaterialParameters (requires_api: 1) {
+  parameters: [BuiltInMaterialInstanceParameters] (id: 0, requires_api: 1);
 }
 
 // Adds any number of nodes to the scene graph. Nodes control the scene
 // hierarchy and can be used to control the transform and visibility of
 // Renderables.
-table AddNodes {
-  adds: [AddNode] (id: 0);
+table AddNodes (requires_api: 1) {
+  adds: [AddNode] (id: 0, requires_api: 1);
 }
 
 // Updates settings on any number of previously-added nodes such as transform,
 // parent-child relationships, and to enable / disable.
-table UpdateNodes {
-  updates: [UpdateNode] (id: 0);
+table UpdateNodes (requires_api: 1) {
+  updates: [UpdateNode] (id: 0, requires_api: 1);
 }
 
 // Removes any number of previously-added nodes. Note: removing a parent node
 // will also remove all child nodes.
-table RemoveNodes {
-  removes: [RemoveNode] (id: 0);
+table RemoveNodes (requires_api: 1) {
+  removes: [RemoveNode] (id: 0, requires_api: 1);
 }
 
 // Assigns a user-defined ID to any number of previously-added nodes.
 // This is used for associating nodes with user-defined data that is external to
 // the Split Engine spec.
-table AssignUserIdToNodes {
-  assignments: [AssignUserIdToNode] (id: 0);
+table AssignUserIdToNodes (requires_api: 1) {
+  assignments: [AssignUserIdToNode] (id: 0, requires_api: 1);
 }
 
 // Adds any number of Renderables to the scene graph. Renderables are the
 // "leaf" nodes of the scene graph and represent the actual geometry to be
 // rendered. Renderables can be assigned to meshes, materials, and nodes.
-table AddRenderables {
-  adds: [AddRenderable] (id: 0);
+table AddRenderables (requires_api: 1) {
+  adds: [AddRenderable] (id: 0, requires_api: 1);
 }
 
 // Updates any number of previously-added Renderables. This can be used to
 // change the mesh, material, and many other properties of Renderables.
-table UpdateRenderables {
-  updates: [UpdateRenderable] (id: 0);
+table UpdateRenderables (requires_api: 1) {
+  updates: [UpdateRenderable] (id: 0, requires_api: 1);
 }
 
 // Removes any number of previously-added Renderables. Note: it is critical to
 // remove Renderables before removing Materials, Meshes, etc. used by that
 // renderable.
-table RemoveRenderables {
-  removes: [RemoveRenderable] (id: 0);
+table RemoveRenderables (requires_api: 1) {
+  removes: [RemoveRenderable] (id: 0, requires_api: 1);
 }
 
 // Adds any number of ImageBasedLightingAssets to the scene graph.
 // ImageBasedLightingAssets are used to provide environment lighting and also
 // to provide "skyboxes" for the environment.
 // LINT.IfChange
-table AddImageBasedLightingAssets {
-  image_based_lighting_assets: [ImageBasedLightingAsset] (id: 0);
+table AddImageBasedLightingAssets (requires_api: 1) {
+  image_based_lighting_assets: [ImageBasedLightingAsset] (id: 0, requires_api: 1);
 }
 // LINT.ThenChange(//depot/google3/third_party/impress/core/split_engine/flatbuffer_size_calculator.cc)
 
 // Removes any number of ImageBasedLightingAssets from the scene graph.
 // Note: if the IBL is currently set as the preferred environment, it will be
 // automatically replaced with the default environment.
-table RemoveImageBasedLightingAssets {
-  image_based_lighting_asset_ids: [uint64] (id: 0);
+table RemoveImageBasedLightingAssets (requires_api: 1) {
+  image_based_lighting_asset_ids: [uint64] (id: 0, requires_api: 1);
 }
 
 // Sets the preferred environment for the scene. This can be an
 // ImageBasedLightingAsset or the default environment if the id is 0.
-table SetPreferredEnvironmentIblAsset {
-  image_based_lighting_asset_id: uint64 (id: 0);
-  intensity: float (id: 1);
-  tint: Float3 (id: 2);
+table SetPreferredEnvironmentIblAsset (requires_api: 1) {
+  image_based_lighting_asset_id: uint64 (id: 0, requires_api: 1);
+  intensity: float (id: 1, requires_api: 1);
+  tint: Float3 (id: 2, requires_api: 1);
 }
 
 // Adds or updates the Collider for a Node. This determines how input is routed
 // by the renderer backend. A Node can only have one Collider at a time.
-table AddOrUpdateColliders {
-  addOrUpdates: [AddOrUpdateCollider] (id: 0);
+table AddOrUpdateColliders (requires_api: 1) {
+  colliders: [AddOrUpdateCollider] (id: 0, requires_api: 1);
 }
 
 // Removes the Collider for a Node.
-table RemoveColliders {
-  removes: [RemoveCollider] (id: 0);
+table RemoveColliders (requires_api: 1) {
+  removes: [RemoveCollider] (id: 0, requires_api: 1);
 }
 
 // The set of all command types that can be sent to the Split Engine service.
@@ -214,56 +215,56 @@ table RemoveColliders {
 // response. They contain serialized data that forms the current state of the
 // 3D scene for this particular client. The backend renderer will use this data
 // to render the 3D scene.
-union CommandTypes {
+union CommandTypes (requires_api: 1) {
   // MeshData requests.
-  AddMeshData = 1,
-  RemoveMeshData = 2,
+  AddMeshData = 1 (requires_api: 1),
+  RemoveMeshData = 2 (requires_api: 1),
 
   // MorphTargetBuffer requests.
-  AddMorphTargetBuffers = 3,
-  RemoveMorphTargetBuffers = 4,
+  AddMorphTargetBuffers = 3 (requires_api: 1),
+  RemoveMorphTargetBuffers = 4 (requires_api: 1),
 
   // Texture requests.
-  AddTextures = 5,
-  RemoveTextures = 6,
+  AddTextures = 5 (requires_api: 1),
+  RemoveTextures = 6 (requires_api: 1),
 
   // Material requests.
-  AddMaterials = 7,
-  RemoveMaterials = 8,
+  AddMaterials = 7 (requires_api: 1),
+  RemoveMaterials = 8 (requires_api: 1),
 
   // MaterialInstance requests.
-  AddMaterialInstances = 9,
-  DuplicateMaterialInstances = 10,
-  RemoveMaterialInstances = 11,
+  AddMaterialInstances = 9 (requires_api: 1),
+  DuplicateMaterialInstances = 10 (requires_api: 1),
+  RemoveMaterialInstances = 11 (requires_api: 1),
 
   // MaterialParameter requests.
-  SetMaterialParameters = 12,
-  SetBuiltInMaterialParameters = 13,
+  SetMaterialParameters = 12 (requires_api: 1),
+  SetBuiltInMaterialParameters = 13 (requires_api: 1),
 
   // Node requests.
-  AddNodes = 14,
-  UpdateNodes = 15,
-  RemoveNodes = 16,
-  AssignUserIdToNodes = 17,
+  AddNodes = 14 (requires_api: 1),
+  UpdateNodes = 15 (requires_api: 1),
+  RemoveNodes = 16 (requires_api: 1),
+  AssignUserIdToNodes = 17 (requires_api: 1),
 
   // Renderable requests.
-  AddRenderables = 18,
-  UpdateRenderables = 19,
-  RemoveRenderables = 20,
+  AddRenderables = 18 (requires_api: 1),
+  UpdateRenderables = 19 (requires_api: 1),
+  RemoveRenderables = 20 (requires_api: 1),
 
   // ImageBasedLightingAsset requests.
-  AddImageBasedLightingAssets = 21,
-  RemoveImageBasedLightingAssets = 22,
-  SetPreferredEnvironmentIblAsset = 23,
+  AddImageBasedLightingAssets = 21 (requires_api: 1),
+  RemoveImageBasedLightingAssets = 22 (requires_api: 1),
+  SetPreferredEnvironmentIblAsset = 23 (requires_api: 1),
 
   // Collider requests.
-  AddOrUpdateColliders = 24,
-  RemoveColliders = 25,
+  AddOrUpdateColliders = 24 (requires_api: 1),
+  RemoveColliders = 25 (requires_api: 1),
 }
 
 // LINT.IfChange
-table Command {
-  command: CommandTypes (id: 1);
+table Command (requires_api: 1) {
+  command: CommandTypes (id: 1, requires_api: 1);
 }
 // LINT.ThenChange(//depot/google3/third_party/impress/core/split_engine/flatbuffer_size_calculator.cc)
 
@@ -273,68 +274,68 @@ root_type Command;
 // The client may use this to group commands for more efficient processing on
 // the service side. A common use-case is to group all Commands for a single
 // frame into a single message group.
-table BeginMessageGroup {
+table BeginMessageGroup (requires_api: 1) {
 }
 
-table EndMessageGroup {
+table EndMessageGroup (requires_api: 1) {
 }
 
-union MessageGroupOperationTypes {
-  BeginMessageGroup = 1,
-  EndMessageGroup = 2,
+union MessageGroupOperationTypes (requires_api: 1) {
+  BeginMessageGroup = 1 (requires_api: 1),
+  EndMessageGroup = 2 (requires_api: 1),
 }
 
-table MessageGroupOperation {
-  group_id: uint64 (id: 0);
-  operation: MessageGroupOperationTypes (id: 2);
+table MessageGroupOperation (requires_api: 1) {
+  group_id: uint64 (id: 0, requires_api: 1);
+  operation: MessageGroupOperationTypes (id: 2, requires_api: 1);
 }
 
 root_type MessageGroupOperation;
 
 // A request is an async message sent across the Split Engine bridge through the
 // SendRequest API.
-union RequestTypes {
-  BuiltInMaterialRequest = 1,
+union RequestTypes (requires_api: 1) {
+  BuiltInMaterialRequest = 1 (requires_api: 1),
 }
-table Request {
-  request: RequestTypes (id: 1);
+table Request (requires_api: 1) {
+  request: RequestTypes (id: 1, requires_api: 1);
 }
 
 root_type Request;
 
 // The set of error codes for the API.
 enum ErrorCode : short {
-  UNKNOWN_ERROR = 0,
-  INVALID_ARGUMENT_ERROR = 1,
-  FAILED_PRECONDITION_ERROR = 2,
-  NOT_FOUND_ERROR = 3,
-  ALREADY_EXISTS_ERROR = 4,
-  OUT_OF_RANGE_ERROR = 5,
-  PERMISSION_DENIED_ERROR = 6,
-  INTERNAL_ERROR = 7,
-  UNIMPLEMENTED_ERROR = 8,
-  ABORTED_ERROR = 9,
-  UNAVAILABLE_ERROR = 10,
-  RESOURCE_EXHAUSTED_ERROR = 11,
-  DEADLINE_EXCEEDED_ERROR = 12,
-  DATA_LOSS_ERROR = 13,
-  UNAUTHENTICATED_ERROR = 14,
-  CANCELLED_ERROR = 15,
+  UNKNOWN_ERROR = 0 (requires_api: 1),
+  INVALID_ARGUMENT_ERROR = 1 (requires_api: 1),
+  FAILED_PRECONDITION_ERROR = 2 (requires_api: 1),
+  NOT_FOUND_ERROR = 3 (requires_api: 1),
+  ALREADY_EXISTS_ERROR = 4 (requires_api: 1),
+  OUT_OF_RANGE_ERROR = 5 (requires_api: 1),
+  PERMISSION_DENIED_ERROR = 6 (requires_api: 1),
+  INTERNAL_ERROR = 7 (requires_api: 1),
+  UNIMPLEMENTED_ERROR = 8 (requires_api: 1),
+  ABORTED_ERROR = 9 (requires_api: 1),
+  UNAVAILABLE_ERROR = 10 (requires_api: 1),
+  RESOURCE_EXHAUSTED_ERROR = 11 (requires_api: 1),
+  DEADLINE_EXCEEDED_ERROR = 12 (requires_api: 1),
+  DATA_LOSS_ERROR = 13 (requires_api: 1),
+  UNAUTHENTICATED_ERROR = 14 (requires_api: 1),
+  CANCELLED_ERROR = 15 (requires_api: 1),
 }
 
 // Describes an error that occurred when processing a Request.
-table ErrorResponse {
-  error_code: ErrorCode (id: 0);
-  error_message: string (id: 1);
+table ErrorResponse (requires_api: 1) {
+  error_code: ErrorCode (id: 0, requires_api: 1);
+  error_message: string (id: 1, requires_api: 1);
 }
 
 // A response is sent back from the Split Engine service to the client in
 // fulfillment of a request. If the error string is set, the request failed.
-union ResponseTypes {
-  ErrorResponse = 1,
+union ResponseTypes (requires_api: 1) {
+  ErrorResponse = 1 (requires_api: 1),
 }
-table Response {
-  response: ResponseTypes (id: 1);
+table Response (requires_api: 1) {
+  response: ResponseTypes (id: 1, requires_api: 1);
 }
 
 root_type Response;

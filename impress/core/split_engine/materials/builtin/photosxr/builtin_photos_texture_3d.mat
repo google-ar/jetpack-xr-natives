@@ -16,15 +16,13 @@ material {
   name : "stereo_quad",
   constants : [
     {
+      // Note: even though this is not used in the material, we can't remove
+      // this as xr_color_space_helper expects all the builtin materials to
+      // have this constant.
+      // See: (broken link)
       name : enableColorConversion,
       type : bool,
       default : false
-    },
-    // A flag for enabling color correction + support HDR.
-    {
-      name : enableColorCorrection,
-      type : bool,
-      default : true
     }
   ],
   parameters: [
@@ -237,7 +235,6 @@ vertex {
 fragment {
   #include "spatialize_animation.glsl"
   #include "panorama_helpers.glsl"
-  #include "color_space_helpers.glsl"
   #include "sdf_fade.glsl"
   #include "dataspace_support.glsl"
   #include "super_sample.glsl"
@@ -422,47 +419,30 @@ fragment {
 
     // 6. Apply final color corrections.
 
-    if (materialConstants_enableColorCorrection) {
-      // Bring everything to the linear colorspace (and tone mapped if needed),
-      // before the composition.
-      //
-      // Note: Blending can happen in gamma space, but the resulting color will
-      // appear darker than if we blended in linear space.
-      //
-      // Note: While tonemapping could be done after composition, we are doing
-      // it beforehand for simplicity, keeping the tonemapping logic in
-      // convertColor.
-      vec3 blended_result =
-        blendLayers(
-          convertColor(media, materialParams.colorConversionMatrix),
-          convertColor(thumbnail, materialParams.colorConversionMatrix),
-          convertColor(blur, materialParams.colorConversionMatrix),
-          media_to_blur_edge_fade,
-          blur_mask
-        );
+    // Bring everything to the linear colorspace (and tone mapped if needed),
+    // before the composition.
+    //
+    // Note: Blending can happen in gamma space, but the resulting color will
+    // appear darker than if we blended in linear space.
+    //
+    // Note: While tonemapping could be done after composition, we are doing
+    // it beforehand for simplicity, keeping the tonemapping logic in
+    // convertColor.
+    vec3 blended_result =
+      blendLayers(
+        convertColor(media, materialParams.colorConversionMatrix),
+        convertColor(thumbnail, materialParams.colorConversionMatrix),
+        convertColor(blur, materialParams.colorConversionMatrix),
+        media_to_blur_edge_fade,
+        blur_mask
+      );
 
-      // 7. Now mask the final result with the final mask.
-      // Premultiply alpha AFTER the color is corrected.
-      float alpha = materialParams.opacity * (1. - final_mask);
-      vec4 final_color =
-          vec4(blended_result * materialParams.tintColor, 1.0) * alpha;
+    // 7. Now mask the final result with the final mask.
+    // Premultiply alpha AFTER the color is corrected.
+    float alpha = materialParams.opacity * (1. - final_mask);
+    vec4 final_color =
+        vec4(blended_result * materialParams.tintColor, 1.0) * alpha;
 
-      material.baseColor = final_color;
-    } else {
-      vec3 blended_result =
-        blendLayers(
-          media, thumbnail, blur, media_to_blur_edge_fade, blur_mask);
-
-      float alpha = materialParams.opacity * (1. - final_mask);
-      vec4 final_color =
-          vec4(blended_result * materialParams.tintColor, 1.0) * alpha;
-      final_color.rgb =
-          sRGBToLinear(
-            final_color.rgb,
-            materialConstants_enableColorConversion,
-            materialParams.gammaToSrgb);
-
-      material.baseColor = final_color;
-    }
+    material.baseColor = final_color;
   }
 }

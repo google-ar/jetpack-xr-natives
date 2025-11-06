@@ -14,11 +14,21 @@
 
 #include "apibindings/bindings_material.h"
 
-#include "core/split_engine/materials/split_engine_material.h"
+#include <utility>
+
+#include "apibindings/bindings_object.h"
+#include "core/common/hash.h"
+#include "core/common/small_source_location.h"
+#include "core/materials/material.h"
+
 namespace imp {
 
-split_engine::SplitEngineMaterial* BindingsMaterial::GetBaseMaterial() {
-  return material_.get();
+BindingsMaterial::BindingsMaterial(BorrowedMaterialPtr material,
+                                   HashValue type_hash)
+    : BindingsObject(), material_(std::move(material)), type_hash_(type_hash) {}
+
+BorrowedMaterialPtr BindingsMaterial::GetMaterial(SmallSourceLocation loc) {
+  return material_.WithNewLocation(loc);
 }
 
 }  // namespace imp

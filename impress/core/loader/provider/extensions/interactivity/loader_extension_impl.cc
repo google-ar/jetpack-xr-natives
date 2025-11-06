@@ -468,6 +468,32 @@ absl::Status CreateInteractivityNodeConfigurations(
                 fbb, schemas::InteractivityNodeConfigurationType::INITIAL_INDEX,
                 std::get<int>(configuration.value)));
         break;
+      case imp::gltf::Interactivity::Graph::Node::ConfigurationType::VARIABLES:
+        if (!std::get_if<
+                imp::gltf::Interactivity::Graph::Node::Configuration::IntArray>(
+                &configuration.value)) {
+          return absl::InternalError(
+              absl::StrFormat("Interactivity configuration id %d has no value",
+                              configuration.id));
+        }
+        out_configuration_offsets.push_back(
+            CreateInteractivityNodeConfiguration(
+                fbb, schemas::InteractivityNodeConfigurationType::VARIABLES,
+                std::get<imp::gltf::Interactivity::Graph::Node::Configuration::
+                             IntArray>(configuration.value)
+                    .values));
+        break;
+      case imp::gltf::Interactivity::Graph::Node::ConfigurationType::USE_SLERP:
+        if (!std::get_if<bool>(&configuration.value)) {
+          return absl::InternalError(
+              absl::StrFormat("Interactivity configuration id %d is not a bool",
+                              configuration.id));
+        }
+        out_configuration_offsets.push_back(
+            CreateInteractivityNodeConfiguration(
+                fbb, schemas::InteractivityNodeConfigurationType::USE_SLERP,
+                std::get<bool>(configuration.value)));
+        break;
       default:
         return absl::InternalError(
             absl::StrFormat("Invalid interactivity configuration id with id %d",

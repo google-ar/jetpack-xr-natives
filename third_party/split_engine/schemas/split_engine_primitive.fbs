@@ -12,169 +12,171 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+include "split_engine/schemas/split_engine_attributes.fbs";
+
 namespace android_xr.schemas;
 
 // LINT.IfChange
 
-struct Bool {
-  value : bool (id: 0);
+struct Bool (requires_api: 1) {
+  value : bool (id: 0, requires_api: 1);
 }
 
-struct Bool2 {
-  x : bool (id: 0);
-  y : bool (id: 1);
+struct Bool2 (requires_api: 1) {
+  x : bool (id: 0, requires_api: 1);
+  y : bool (id: 1, requires_api: 1);
 }
 
-struct Bool3 {
-  x : bool (id: 0);
-  y : bool (id: 1);
-  z : bool (id: 2);
+struct Bool3 (requires_api: 1) {
+  x : bool (id: 0, requires_api: 1);
+  y : bool (id: 1, requires_api: 1);
+  z : bool (id: 2, requires_api: 1);
 }
 
-struct Bool4 {
-  x : bool (id: 0);
-  y : bool (id: 1);
-  z : bool (id: 2);
-  w : bool (id: 3);
+struct Bool4 (requires_api: 1) {
+  x : bool (id: 0, requires_api: 1);
+  y : bool (id: 1, requires_api: 1);
+  z : bool (id: 2, requires_api: 1);
+  w : bool (id: 3, requires_api: 1);
 }
 
-struct Int {
-  value : int (id: 0);
+struct Int (requires_api: 1) {
+  value : int (id: 0, requires_api: 1);
 }
 
-struct Int2 {
-  x : int (id: 0);
-  y : int (id: 1);
+struct Int2 (requires_api: 1) {
+  x : int (id: 0, requires_api: 1);
+  y : int (id: 1, requires_api: 1);
 }
 
 struct Int3 {
-  x : int (id: 0);
-  y : int (id: 1);
-  z : int (id: 2);
+  x : int (id: 0, requires_api: 1);
+  y : int (id: 1, requires_api: 1);
+  z : int (id: 2, requires_api: 1);
 }
 
-struct Int4 {
-  x : int (id: 0);
-  y : int (id: 1);
-  z : int (id: 2);
-  w : int (id: 3);
+struct Int4 (requires_api: 1) {
+  x : int (id: 0, requires_api: 1);
+  y : int (id: 1, requires_api: 1);
+  z : int (id: 2, requires_api: 1);
+  w : int (id: 3, requires_api: 1);
 }
 
-struct Float {
-  value : float (id: 0);
+struct Float (requires_api: 1) {
+  value : float (id: 0, requires_api: 1);
 }
 
-struct Float2 {
-  x : float (id: 0);
-  y : float (id: 1);
+struct Float2 (requires_api: 1) {
+  x : float (id: 0, requires_api: 1);
+  y : float (id: 1, requires_api: 1);
 }
 
-struct Float3 {
-  x : float (id: 0);
-  y : float (id: 1);
-  z : float (id: 2);
+struct Float3 (requires_api: 1) {
+  x : float (id: 0, requires_api: 1);
+  y : float (id: 1, requires_api: 1);
+  z : float (id: 2, requires_api: 1);
 }
 
-struct Float4 {
-  x : float (id: 0);
-  y : float (id: 1);
-  z : float (id: 2);
-  w : float (id: 3);
+struct Float4 (requires_api: 1) {
+  x : float (id: 0, requires_api: 1);
+  y : float (id: 1, requires_api: 1);
+  z : float (id: 2, requires_api: 1);
+  w : float (id: 3, requires_api: 1);
 }
 
-struct Quatf {
-  x : float (id: 0);
-  y : float (id: 1);
-  z : float (id: 2);
-  w : float (id: 3);
+struct Quatf (requires_api: 1) {
+  x : float (id: 0, requires_api: 1);
+  y : float (id: 1, requires_api: 1);
+  z : float (id: 2, requires_api: 1);
+  w : float (id: 3, requires_api: 1);
 }
 
-struct Mat3f {
-  m00 : float (id: 0);
-  m01 : float (id: 1);
-  m02 : float (id: 2);
-  m10 : float (id: 3);
-  m11 : float (id: 4);
-  m12 : float (id: 5);
-  m20 : float (id: 6);
-  m21 : float (id: 7);
-  m22 : float (id: 8);
+struct Mat3f (requires_api: 1) {
+  m00 : float (id: 0, requires_api: 1);
+  m01 : float (id: 1, requires_api: 1);
+  m02 : float (id: 2, requires_api: 1);
+  m10 : float (id: 3, requires_api: 1);
+  m11 : float (id: 4, requires_api: 1);
+  m12 : float (id: 5, requires_api: 1);
+  m20 : float (id: 6, requires_api: 1);
+  m21 : float (id: 7, requires_api: 1);
+  m22 : float (id: 8, requires_api: 1);
 }
 
-struct Mat4f {
-  m00 : float (id: 0);
-  m01 : float (id: 1);
-  m02 : float (id: 2);
-  m03 : float (id: 3);
-  m10 : float (id: 4);
-  m11 : float (id: 5);
-  m12 : float (id: 6);
-  m13 : float (id: 7);
-  m20 : float (id: 8);
-  m21 : float (id: 9);
-  m22 : float (id: 10);
-  m23 : float (id: 11);
-  m30 : float (id: 12);
-  m31 : float (id: 13);
-  m32 : float (id: 14);
-  m33 : float (id: 15);
+struct Mat4f (requires_api: 1) {
+  m00 : float (id: 0, requires_api: 1);
+  m01 : float (id: 1, requires_api: 1);
+  m02 : float (id: 2, requires_api: 1);
+  m03 : float (id: 3, requires_api: 1);
+  m10 : float (id: 4, requires_api: 1);
+  m11 : float (id: 5, requires_api: 1);
+  m12 : float (id: 6, requires_api: 1);
+  m13 : float (id: 7, requires_api: 1);
+  m20 : float (id: 8, requires_api: 1);
+  m21 : float (id: 9, requires_api: 1);
+  m22 : float (id: 10, requires_api: 1);
+  m23 : float (id: 11, requires_api: 1);
+  m30 : float (id: 12, requires_api: 1);
+  m31 : float (id: 13, requires_api: 1);
+  m32 : float (id: 14, requires_api: 1);
+  m33 : float (id: 15, requires_api: 1);
 }
 
-struct Mat4 {
-  m00 : double (id: 0);
-  m01 : double (id: 1);
-  m02 : double (id: 2);
-  m03 : double (id: 3);
-  m10 : double (id: 4);
-  m11 : double (id: 5);
-  m12 : double (id: 6);
-  m13 : double (id: 7);
-  m20 : double (id: 8);
-  m21 : double (id: 9);
-  m22 : double (id: 10);
-  m23 : double (id: 11);
-  m30 : double (id: 12);
-  m31 : double (id: 13);
-  m32 : double (id: 14);
-  m33 : double (id: 15);
+struct Mat4 (requires_api: 1) {
+  m00 : double (id: 0, requires_api: 1);
+  m01 : double (id: 1, requires_api: 1);
+  m02 : double (id: 2, requires_api: 1);
+  m03 : double (id: 3, requires_api: 1);
+  m10 : double (id: 4, requires_api: 1);
+  m11 : double (id: 5, requires_api: 1);
+  m12 : double (id: 6, requires_api: 1);
+  m13 : double (id: 7, requires_api: 1);
+  m20 : double (id: 8, requires_api: 1);
+  m21 : double (id: 9, requires_api: 1);
+  m22 : double (id: 10, requires_api: 1);
+  m23 : double (id: 11, requires_api: 1);
+  m30 : double (id: 12, requires_api: 1);
+  m31 : double (id: 13, requires_api: 1);
+  m32 : double (id: 14, requires_api: 1);
+  m33 : double (id: 15, requires_api: 1);
 }
 
-table Mat3fArray {
-  mats : [Mat3f] (required, id: 0);
+table Mat3fArray (requires_api: 1) {
+  mats : [Mat3f] (required, id: 0, requires_api: 1);
 }
 
-table Mat4fArray {
-  mats : [Mat4f] (required, id: 0);
+table Mat4fArray (requires_api: 1) {
+  mats : [Mat4f] (required, id: 0, requires_api: 1);
 }
 
-struct Box {
-  center : Float3 (id: 0);
-  half_extent : Float3 (id: 1);
+struct Box (requires_api: 1) {
+  center : Float3 (id: 0, requires_api: 1);
+  half_extent : Float3 (id: 1, requires_api: 1);
 }
 
 // Wrapper for uint8 to allow for nullable values when used in a table.
-struct UInt8 {
-  value: uint8 (id: 0);
+struct UInt8 (requires_api: 1) {
+  value: uint8 (id: 0, requires_api: 1);
 }
 
 // Wrapper for uint16 to allow for nullable values when used in a table.
-struct UInt16 {
-  value: uint16 (id: 0);
+struct UInt16 (requires_api: 1) {
+  value: uint16 (id: 0, requires_api: 1);
 }
 
 // Wrapper for uint32 to allow for nullable values when used in a table.
-struct UInt32 {
-  value: uint32 (id: 0);
+struct UInt32 (requires_api: 1) {
+  value: uint32 (id: 0, requires_api: 1);
 }
 
 // Wrapper for uint64 to allow for nullable values when used in a table.
-struct UInt64 {
-  value: uint64 (id: 0);
+struct UInt64 (requires_api: 1) {
+  value: uint64 (id: 0, requires_api: 1);
 }
 
 // Wrapper for string to allow for nullable values when used in a table.
-table String {
-  value : string (id: 0);
+table String (requires_api: 1) {
+  value : string (id: 0, requires_api: 1);
 }
 
 // LINT.ThenChange(//depot/google3/third_party/split_engine/schemas/split_engine_schema_version.h)

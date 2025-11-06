@@ -13,6 +13,7 @@
 # limitations under the License.
 
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("//build_tools:assets.bzl", "imp_assets")
 load("//build_tools:imp.bzl", "imp_google3_copts")
 

@@ -129,7 +129,7 @@ absl::Status SplitEngineDesktopBridgeClient::Initialize() {
 
 SplitEngineDesktopBridgeClient::~SplitEngineDesktopBridgeClient() {
   {
-    absl::MutexLock lock(heartbeat_state_mutex_);
+    absl::MutexLock lock(&heartbeat_state_mutex_);
     heartbeat_state_ = HeartbeatState::kStop;
   }
   heartbeat_thread_.join();
@@ -143,7 +143,7 @@ void SplitEngineDesktopBridgeClient::Heartbeat(
     google::rpc::Status response;
   };
 
-  absl::MutexLock lock(heartbeat_state_mutex_);
+  absl::MutexLock lock(&heartbeat_state_mutex_);
   while (!heartbeat_state_mutex_.AwaitWithTimeout(
       absl::Condition(
           // Unary plus in the beginning of the _captureless_ lambda will

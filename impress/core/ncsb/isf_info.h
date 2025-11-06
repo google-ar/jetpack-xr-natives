@@ -82,6 +82,12 @@ enum class SaveIsfStateResult { kSuccess, kEmpty, kFailed };
 // PreSetup phase of loading. Used to implement LoadSceneVisitor.
 class BaseStateVisitor {
  public:
+  BaseStateVisitor() = default;
+  BaseStateVisitor(const BaseStateVisitor&) = default;
+  BaseStateVisitor& operator=(const BaseStateVisitor&) = default;
+  BaseStateVisitor(BaseStateVisitor&&) = default;
+  BaseStateVisitor& operator=(BaseStateVisitor&&) = default;
+
   virtual ~BaseStateVisitor() {}
 
   // Takes a type-erased state for a component, and the node

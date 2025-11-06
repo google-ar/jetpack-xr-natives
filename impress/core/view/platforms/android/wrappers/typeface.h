@@ -29,9 +29,11 @@ namespace imp::android {
 // JNI wrapper for the Android Typeface class.
 class Typeface : public JavaWrapper {
  public:
-  // Constructs a Typeface by calling the method Typeface.create() with
-  // the given family name and style.
+  // Constructs a Typeface by calling the equivalent Typeface.create() method.
   Typeface(JNIEnv* env, absl::string_view family_name, jint style);
+
+  // Constructs a Typeface by calling the equivalent Typeface.create() method.
+  Typeface(JNIEnv* env, Typeface& family, jint weight, jboolean italic);
 
   // Constructs a Typeface by calling the method Typeface.create() with
   // a base template of Typeface.DEFAULT and the given style.
@@ -40,7 +42,7 @@ class Typeface : public JavaWrapper {
   // Constructs a Typeface by wrapping an existing Typeface jobject.
   Typeface(JNIEnv* env, jobject j_typeface);
 
-  absl::string_view GetFontFamilyName();
+  absl::string_view GetFontFamilyName() const;
 
  private:
   std::string font_family_name_;

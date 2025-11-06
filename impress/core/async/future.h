@@ -81,6 +81,11 @@ class ABSL_MUST_USE_RESULT Future {
 
   ~Future();
 
+  Future(const Future&) = default;
+  Future& operator=(const Future&) = default;
+  Future(Future&&) = default;
+  Future& operator=(Future&&) = default;
+
   // Returns true if the result is ready.
   bool Ready() const;
 

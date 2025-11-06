@@ -76,6 +76,8 @@ enum InteractivityNodeConfigurationType : uint8 {
   IS_LOOP,
   MESSAGE,
   INITIAL_INDEX,
+  VARIABLES,
+  USE_SLERP,
 }
 
 table InteractivityNodeConfiguration {

@@ -18,6 +18,8 @@ Blaze rule for building Imp style C++ protobuf library.
 Lifted with variation from //net/proto2/contrib/equals_plugin/build_defs.bzl
 """
 
+load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
+load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@com_google_impress//build_tools:path_tools.bzl", "rlocation_path")
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain", "use_cpp_toolchain")

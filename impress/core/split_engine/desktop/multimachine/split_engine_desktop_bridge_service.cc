@@ -51,7 +51,7 @@ grpc::ServerUnaryReactor* SplitEngineMMDesktopBridgeService::Connect(
   // TODO: (broken link) - limit the number of bridges
   const BridgeId bridge_id = GetNewBridgeId();
   {
-    absl::MutexLock lock(bridge_data_mutex_);
+    absl::MutexLock lock(&bridge_data_mutex_);
     
     if (bridge_data_.contains(bridge_id)) {
       reactor->Finish(
@@ -100,7 +100,7 @@ grpc::ServerUnaryReactor* SplitEngineMMDesktopBridgeService::SendRequest(
   absl::Notification notification;
   grpc::ServerUnaryReactor* reactor = context->DefaultReactor();
   {
-    absl::MutexLock lock(bridge_data_mutex_);
+    absl::MutexLock lock(&bridge_data_mutex_);
     auto it = bridge_data_.find(request->bridge_id());
     if (it == bridge_data_.end()) {
       reactor->Finish(grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
@@ -205,7 +205,7 @@ grpc::ServerWriteReactor<MessageGroupCompletionResponse>*
 SplitEngineMMDesktopBridgeService::ReadMessageGroupCompletions(
     grpc::CallbackServerContext* context,
     const MessageGroupCompletionRequest* request) {
-  absl::MutexLock lock(bridge_data_mutex_);
+  absl::MutexLock lock(&bridge_data_mutex_);
   auto it = bridge_data_.find(request->bridge_id());
   if (it == bridge_data_.end()) {
     auto reactor = new MessageGroupCompletionServerReactor();
@@ -231,7 +231,7 @@ void SplitEngineMMDesktopBridgeService::DestroyBridge(BridgeId bridge_id) {
       !status.ok()) {
     IMP_LOG(imp::ERROR) << "Failed to destroy bridge: " << status;
   }
-  absl::MutexLock lock(bridge_data_mutex_);
+  absl::MutexLock lock(&bridge_data_mutex_);
   auto it = bridge_data_.find(bridge_id);
   if (it == bridge_data_.end()) {
     IMP_LOG(imp::ERROR) << "Bridge " << bridge_id << " not found.";
@@ -244,7 +244,7 @@ void SplitEngineMMDesktopBridgeService::DestroyBridge(BridgeId bridge_id) {
 }
 
 BridgeId SplitEngineMMDesktopBridgeService::GetNewBridgeId() {
-  absl::MutexLock lock(bridge_id_mutex_);
+  absl::MutexLock lock(&bridge_id_mutex_);
   return new_bridge_id++;
 }
 

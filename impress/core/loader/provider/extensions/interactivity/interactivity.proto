@@ -82,6 +82,8 @@ message Interactivity {
         IS_LOOP = 13;
         MESSAGE = 14;
         INITIAL_INDEX = 15;
+        VARIABLES = 16;
+        USE_SLERP = 17;
       }
 
       message Flow {

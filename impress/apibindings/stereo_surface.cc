@@ -23,6 +23,7 @@
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
+#include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "core/async/future.h"
 #include "core/math/vec.h"
@@ -37,6 +38,10 @@
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
 #include "core/view/base_view.h"
+#include "core/view/framework/collision/box_collider.h"
+#include "core/view/framework/collision/collider_state.proto.imp.h"
+#include "core/view/framework/collision/mesh_collider.h"
+#include "core/view/framework/collision/sphere_collider.h"
 #include "core/view/framework/render/mesh_factory.h"
 #include "core/view/framework/render/mesh_renderer.h"
 #include "core/view/platforms/android/wrappers/surface.h"
@@ -49,6 +54,10 @@ constexpr float2 kDefaultFeatherRadius = kZero2;
 // Render priority for the surface is set to 5 to ensure they render after the
 // environment. The environment renders at default priority 4 and panels at 6.
 constexpr int kRenderPriorityBetweenEnvironmentAndPanels = 5;
+// The name of the node created to host the mesh collider as a workaround for
+// older system images.
+static constexpr absl::string_view kMeshColliderWorkaroundNodeName =
+    "MeshColliderWorkaroundNode";
 }  // namespace
 
 absl::Status StereoSurface::Setup(MediaStereoMode stereo_mode,
@@ -128,6 +137,8 @@ void StereoSurface::Cleanup() {
     material_future_.Cancel();
   }
 
+  CleanupColliderType();
+
   // Ensure the render component is destroyed before material_.
   GetNode()->RemoveComponent<MeshRenderer>();
 }
@@ -138,43 +149,61 @@ absl::Status StereoSurface::SetCanvasShape(const CanvasShape& canvas_shape) {
   bool is_different_shape = (canvas_shape.index() != canvas_shape_.index());
   canvas_shape_ = canvas_shape;
 
-  // TODO: (broken link) - Clean this up a bit by using a Visitor.
-  auto q = std::get_if<Quad>(&canvas_shape);
-  if (q != nullptr) {
-    GetNode()->SetLocalScale({q->width, q->height, 0.0f});
+  // std::visit does not offer significant readability or
+  // performance benefits here.
+  auto shape_q = std::get_if<Quad>(&canvas_shape);
+  auto shape_s = std::get_if<Sphere>(&canvas_shape);
+  auto shape_h = std::get_if<Hemisphere>(&canvas_shape);
+  if (shape_q != nullptr) {
+    // Don't set the z scale to 0.0f, as that breaks the collider.
+    GetNode()->SetLocalScale({shape_q->width, shape_q->height, 1.0f});
     if (is_different_shape) {
       mesh_renderer_->SetMesh(
           GetView().GetMeshFactory().CreateQuad({.size = float2(1.0f, 1.0f)}));
     }
-  }
-  auto s = std::get_if<Sphere>(&canvas_shape);
-  if (s != nullptr) {
-    GetNode()->SetLocalScale({s->radius, s->radius, s->radius});
+  } else if (shape_s != nullptr) {
+    GetNode()->SetLocalScale(
+        {shape_s->radius, shape_s->radius, shape_s->radius});
     if (is_different_shape) {
       mesh_renderer_->SetMesh(GetView().GetMeshFactory().CreateSphere(
           {.radius = 1.0f,
            .resolution = 50,
            .flip_uv = true,
-           .flip_face_direction = true}));
+           .flip_face_direction = true},
+          MeshFactory::MeshDataStorageMode::kDiscardMeshData));
     }
-  }
-  auto h = std::get_if<Hemisphere>(&canvas_shape);
-  if (h != nullptr) {
-    GetNode()->SetLocalScale({h->radius, h->radius, h->radius});
+  } else if (shape_h != nullptr) {
+    GetNode()->SetLocalScale(
+        {shape_h->radius, shape_h->radius, shape_h->radius});
     if (is_different_shape) {
       mesh_renderer_->SetMesh(GetView().GetMeshFactory().CreateXYHemisphere(
-          {.radius = 1.0f, .resolution = 50}));
+          {.radius = 1.0f, .resolution = 50},
+          // When not using the workaround, kStoreMeshData is required because
+          // the MeshCollider on the same node directly references the MeshData.
+          // When using the workaround, kDiscardMeshData is used because the
+          // MeshCollider is on a separate child node with its own MeshRenderer
+          // and MeshData.
+          use_mesh_collider_workaround_
+              ? MeshFactory::MeshDataStorageMode::kDiscardMeshData
+              : MeshFactory::MeshDataStorageMode::kStoreMeshData));
     }
-  }
-  auto u = std::get_if<std::monostate>(&canvas_shape);
-  if (u != nullptr) {
+  } else {
     // In practice this should be impossible, since the higher level JXR APIs
     // don't have a value for this; Shape is a required field whenever setting
     // the state.
 
+    CleanupColliderType();
+
     // early return to avoid avoid spuriously enabling the mesh.
     return absl::InvalidArgumentError(
         "monostate CanvasShape is not supported.");
+  }
+
+  // If the collider was enabled, get the collider type based on the canvas
+  // shape and update the collider type.
+  if (GetColliderEnabled()) {
+    auto collider_type = GetColliderTypeByShape(canvas_shape);
+    MP_RETURN_IF_ERROR(UpdateColliderType(collider_type));
   }
 
   // Once we have a canvas shape set and the matieral is ready, we can enable
@@ -184,11 +213,133 @@ absl::Status StereoSurface::SetCanvasShape(const CanvasShape& canvas_shape) {
   return absl::OkStatus();
 }
 
+StereoSurface::ColliderType StereoSurface::GetColliderTypeByShape(
+    const CanvasShape& canvas_shape) {
+  auto shape_q = std::get_if<Quad>(&canvas_shape);
+  if (shape_q != nullptr) {
+    return ColliderType::kPanel;
+  }
+  auto shape_s = std::get_if<Sphere>(&canvas_shape);
+  if (shape_s != nullptr) {
+    return ColliderType::kSphere;
+  }
+  auto shape_h = std::get_if<Hemisphere>(&canvas_shape);
+  if (shape_h != nullptr) {
+    return ColliderType::kMesh;
+  }
+  IMP_LOG(imp::ERROR) << "Collider for monostate CanvasShape is not supported.";
+  return ColliderType::kUnknown;
+}
+
+absl::Status StereoSurface::UpdateColliderType(ColliderType collider_type) {
+  if (collider_type_ == collider_type) {
+    return absl::OkStatus();
+  }
+
+  // Remove the old collider
+  CleanupColliderType();
+
+  // Add the new collider
+  switch (collider_type) {
+    case ColliderType::kPanel:
+      GetNode()->AddComponent<BoxCollider>()->SetBox({{}, {0.5f, 0.5f, 0.0f}});
+      break;
+    case ColliderType::kSphere:
+      GetNode()->AddComponent<SphereCollider>()->SetSphere({{}, 1.0f});
+      break;
+    case ColliderType::kMesh: {
+      auto collider_node = GetNode();
+      if (use_mesh_collider_workaround_) {
+        // Create a new node to host the mesh collider. Because MeshCollider
+        // on old sys-image versions does not support rendering mesh format
+        // created from the MeshFactory.
+        collider_node = GetNode()->CreateChildNode();
+        collider_node->SetName(kMeshColliderWorkaroundNodeName);
+        // MeshRenderer here is only used to hold the mesh data for
+        // MeshCollider, but not to be rendered.
+        auto collider_node_mesh_renderer =
+            collider_node->AddComponent<MeshRenderer>();
+        collider_node_mesh_renderer->SetEnabled(false);
+        collider_node_mesh_renderer->SetMesh(
+            GetView().GetMeshFactory().CreateXYHemisphere(
+                {.radius = 1.0f, .resolution = 50, .is_position_only = true},
+                MeshFactory::MeshDataStorageMode::kStoreMeshData));
+      }
+      MP_RETURN_IF_ERROR(
+          collider_node
+              ->AddComponent<MeshCollider>(MeshColliderState::ColliderMode::
+                                               COLLIDE_WITH_MESH_ONLY_DEFAULT)
+              .status());
+      break;
+    }
+    case ColliderType::kNone:
+      // Attempting to clean up the collider. Do nothing.
+      break;
+    case ColliderType::kUnknown:
+    default:
+      IMP_LOG(imp::WARNING) << "Attempting to add an unknown collider type: "
+                   << static_cast<int>(collider_type);
+      break;
+  }
+
+  collider_type_ = collider_type;
+  return absl::OkStatus();
+}
+
+void StereoSurface::CleanupColliderType() {
+  switch (collider_type_) {
+    case ColliderType::kPanel:
+      GetNode()->RemoveComponent<BoxCollider>();
+      break;
+    case ColliderType::kSphere:
+      GetNode()->RemoveComponent<SphereCollider>();
+      break;
+    case ColliderType::kMesh:
+      if (use_mesh_collider_workaround_) {
+        for (NodeHandle child : GetNode()->GetChildren()) {
+          if (child->GetName() == kMeshColliderWorkaroundNodeName) {
+            GetView().DestroyNode(child);
+          }
+        }
+      } else {
+        GetNode()->RemoveComponent<MeshCollider>();
+      }
+      break;
+    case ColliderType::kNone:
+      // Already cleaned up. Do nothing.
+      break;
+    case ColliderType::kUnknown:
+    default:
+      IMP_LOG(imp::WARNING) << "Attempting to clean up an unknown collider type: "
+                   << static_cast<int>(collider_type_);
+      break;
+  }
+  collider_type_ = ColliderType::kNone;
+}
+
+absl::Status StereoSurface::SetColliderEnabled(bool enable_collider) {
+  if (!enable_collider) {
+    CleanupColliderType();
+    return absl::OkStatus();
+  }
+
+  ColliderType collider_type = GetColliderTypeByShape(canvas_shape_);
+  MP_RETURN_IF_ERROR(UpdateColliderType(collider_type));
+  return absl::OkStatus();
+}
+
 absl::StatusOr<android::Surface*> StereoSurface::GetSurface() {
   if (surface_ == nullptr) {
     return absl::InternalError("Surface is not initialized.");
   }
   return surface_->GetSurface();
+}
+
+absl::Status StereoSurface::SetSurfaceDimensions(int width, int height) {
+  if (surface_ == nullptr) {
+    return absl::InternalError("Surface is not initialized.");
+  }
+  return surface_->SetDefaultBufferSize({width, height});
 }
 
 void StereoSurface::SetStereoMode(MediaStereoMode stereo_mode) {

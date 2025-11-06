@@ -18,7 +18,6 @@
 #define THIRD_PARTY_IMPRESS_CORE_PHYSICS_PHYSICS_MANAGER_H_
 
 #include <cstddef>
-#include <unordered_set>
 
 #include "bullet/src/BulletCollision/BroadphaseCollision/btAxisSweep3.h"
 #include "bullet/src/BulletCollision/CollisionDispatch/btCollisionDispatcher.h"

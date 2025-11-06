@@ -450,11 +450,13 @@ alias(
 bzl_library(
     name = "license_helpers_bzl",
     srcs = ["license_helpers.bzl"],
+    deps = ["@rules_cc//cc:core_rules"],
 )
 
 bzl_library(
     name = "shader_helpers_bzl",
     srcs = ["shader_helpers.bzl"],
+    deps = ["@rules_cc//cc:core_rules"],
 )
 
 bzl_library(

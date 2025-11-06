@@ -19,11 +19,16 @@
 
 #include <jni.h>
 
+#include <vector>
+
+#include "absl/strings/string_view.h"
+#include "core/canvas/fonts/font_holder.h"
 #include "core/canvas/scoped_canvas.h"
 #include "core/common/context.h"
 #include "core/common/jni_helpers.h"
 #include "core/math/vec.h"
 #include "core/view/platforms/android/wrappers/canvas.h"
+#include "core/view/platforms/android/wrappers/paint.h"
 
 namespace imp {
 
@@ -67,26 +72,32 @@ class AndroidGlyphSource : public JavaWrapper {
    * See CanvasSource::GetGlyphMetrics().
    */
   ScopedCanvas::TextMetrics GetGlyphMetrics(int glyph_id, FontHolder* font,
-                                            int size, float stroke_width,
-                                            float text_tracking);
+                                            float stroke_width,
+                                            android::Paint& paint);
 
   /**
    * See CanvasSource::GetTextGlyphs().
    */
   std::vector<ScopedCanvas::GlyphAdvance> GetTextGlyphs(absl::string_view text,
-                                                        int font_size,
-                                                        float text_tracking);
+                                                        android::Paint& paint);
+
+  /**
+   * See CanvasSource::GetCombinedCharacterGroups().
+   */
+  std::vector<ScopedCanvas::GlyphGroup> GetCombinedCharacterGroups(
+      absl::string_view text, android::Paint& paint);
 
   /**
    * See CanvasSource::DrawGlyph().
    */
   void DrawGlyph(android::Canvas& canvas, int glyph_id, float x, float y,
-                 FontHolder* font, int font_size, float stroke_width,
-                 float4 fill_color, float4 stroke_color, float text_tracking);
+                 FontHolder* font, float stroke_width,
+                 android::Paint& fillPaint, android::Paint& strokePaint);
 
  private:
   JniHandle get_glyph_metrics_;
   JniHandle get_text_glyphs_;
+  JniHandle get_combined_character_groups_;
   JniHandle draw_glyph_;
 };
 

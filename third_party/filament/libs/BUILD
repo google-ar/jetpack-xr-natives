@@ -1,3 +1,5 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load(
     "@third_party//filament:filament.bzl",
     "copy_files",
@@ -569,6 +571,7 @@ cc_library(
         linkstatic = 1,
         deps = [
             ":filabridge_hdrs",
+            ":utils",
             ":utils_hdrs",
             "@robin_map",
             "@third_party//filament/filament/backend:driver_enums",

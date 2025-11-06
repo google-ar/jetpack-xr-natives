@@ -19,6 +19,8 @@
 
 #include <vector>
 
+#include "absl/container/flat_hash_set.h"
+#include "core/editor/editor.h"
 #include "core/editor/selection_controller.h"
 #include "core/ncsb/node_handle.h"
 #include "core/ncsb/system.h"
@@ -34,18 +36,19 @@ class SelectionControllerImpl : public SelectionController, public System {
   // dispatcher. See implementation for a more detailed explanation.
   explicit SelectionControllerImpl(BaseView* view);
 
-  // Returns the currently selected ndde.
-  // The returned NodeHandle will be invalid if nothing is selected.
-  NodeHandle GetSelectedNode() const override;
-
-  // Returns true if the given node is selected or is an ancestor of the
-  // selected node.
-  bool IsNodeOrAncestorSelected(NodeHandle node) override;
+  // Returns the currently selected nodes.
+  const absl::flat_hash_set<NodeHandle>& GetSelectedNodes() const override;
 
   // Notifies that a node has been selected by sending a
-  // NodeSelectionChangedEvent with the provided node as the target. If the node
-  // is already selected, no event will be sent.
-  void TrySelectNode(NodeHandle node_to_select) override;
+  // NodeSelectionChangedEvent with the provided node as the target.
+  // * If `multi_selection_enabled` is true:
+  //     - The node is added to the current selection.
+  //     - If the node is already selected, it is deselected.
+  // * Otherwise:
+  //     - The node becomes the *only* selected node.
+  // When the node is invalid, deselect all nodes.
+  void TrySelectNode(NodeHandle node_to_select,
+                     Editor::SelectionMode selection_mode) override;
 
   // Disables selecting the model on ModelLoadedEvents. Enabled by default.
   void DisableSelectModelWhenLoaded(bool disable_select_model_on_load) {
@@ -56,10 +59,10 @@ class SelectionControllerImpl : public SelectionController, public System {
   void CycleOrUpdateSelection(NodeHandle target,
                               std::vector<NodeHandle> intersecting_nodes);
 
-  // Moves the camera to focus and frame it on the current selected node.
-  void FocusCameraOnSelection(NodeHandle target);
+  // Moves the camera to focus and frame it on the current selected nodes.
+  void FocusCameraOnSelection();
 
-  NodeHandle selected_node_;
+  absl::flat_hash_set<NodeHandle> selected_nodes_;
   std::vector<NodeHandle> selectable_nodes_;
   int selected_node_index_ = 0;
   bool disable_select_model_on_load_ = false;

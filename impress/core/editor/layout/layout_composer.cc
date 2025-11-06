@@ -16,9 +16,11 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
+#include "absl/strings/match.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "dear_imgui/imgui.h"
@@ -26,12 +28,13 @@
 #include "core/common/invocable.h"
 #include "core/config.h"
 #include "core/editor/editor_constants.h"
-#include "core/editor/layout/docking_manager.h"
+#include "core/editor/layout/docking_helper.h"
 #include "core/editor/layout/editor_panel_ids.h"
 #include "core/editor/layout/helpers.h"
 #include "core/editor/layout/layout_config.proto.imp.h"
 #include "core/editor/widget.h"
 #include "core/editor/widget_layout_info.h"
+#include "core/editor/widgets/window/window_configuration.h"
 #include "core/math/almost_equal.h"
 #include "core/math/vec.h"
 
@@ -39,7 +42,6 @@ namespace imp::editor {
 namespace {
 constexpr float kLerpFactor = 0.5f;
 constexpr float kWindowAlpha = 0.85f;
-constexpr int32_t kDetailsItemWidth = 200;
 constexpr int32_t kToolbarWidth = 200;
 constexpr int32_t kSceneItemWidth = 200;
 constexpr int32_t kFixedItemWidth = 200;
@@ -62,6 +64,10 @@ constexpr absl::string_view kHideLabel = "Hide";
 constexpr absl::string_view kShowLabel = "Show";
 constexpr absl::string_view kPinToTopLabel = "Top";
 constexpr absl::string_view kPinToBottomLabel = "Bottom";
+
+bool IsLabelVisible(absl::string_view label) {
+  return !absl::StartsWith(label, "##");
+}
 }  // namespace
 
 LayoutComposer::LayoutComposer(LayoutConfig layout_config)
@@ -81,6 +87,10 @@ LayoutComposer::LayoutComposer(LayoutConfig layout_config)
     ImGui::GetIO().ConfigFlags &= ~ImGuiConfigFlags_DockingEnable;
   }
 #endif
+}
+
+std::optional<LayoutConfig::LayoutType> LayoutComposer::GetLayoutType() const {
+  return layout_config_.layout_type;
 }
 
 void LayoutComposer::DrawWidget(const WidgetLayoutInfo& layout_info,
@@ -116,7 +126,7 @@ void LayoutComposer::DrawOnDockingLayout(const WidgetLayoutInfo& layout_info,
       DrawInToolbar([widget]() { widget->DrawImGui(); });
       break;
     default:
-      DrawAfterLayout([widget]() { widget->DrawImGui(); });
+      DrawAfterLayout(widget->GetName(), [widget]() { widget->DrawImGui(); });
   }
 }
 
@@ -139,7 +149,15 @@ void LayoutComposer::DrawOnFixedLayout(const WidgetLayoutInfo& layout_info,
     case PanelId::kToolBar:
       break;
     default:
-      DrawAfterLayout([widget]() { widget->DrawImGui(); });
+      // In fixed layout, all visible freeform widgets are drawn as standalone
+      // tabs.
+      if (IsLabelVisible(widget->GetName())) {
+        DrawAsStandaloneTab(
+            widget->GetName(), [widget]() { widget->DrawImGui(); },
+            ImGuiTabItemFlags_Leading);
+      } else {
+        DrawAfterLayout(widget->GetName(), [widget]() { widget->DrawImGui(); });
+      }
   }
 }
 
@@ -224,12 +242,12 @@ void LayoutComposer::DrawAsStandaloneTab(absl::string_view tab_label,
         }
       };
   if (draw_before_previous_tabs) {
-    tab_item_info_.insert(tab_item_info_.begin(),
-                          TabbedWindowInfo{std::string(tab_label),
-                                           std::move(draw_function_final)});
+    tab_item_info_.insert(
+        tab_item_info_.begin(),
+        WidgetInfo(std::string(tab_label), std::move(draw_function_final)));
   } else {
-    tab_item_info_.push_back(TabbedWindowInfo{std::string(tab_label),
-                                              std::move(draw_function_final)});
+    tab_item_info_.push_back(
+        WidgetInfo{std::string(tab_label), std::move(draw_function_final)});
   }
 }
 
@@ -242,7 +260,7 @@ void LayoutComposer::DrawInLeftDock(absl::string_view tab_label,
 void LayoutComposer::DrawAsDockableTab(absl::string_view tab_label,
                                        imp::Invocable<void()> draw_function,
                                        bool draw_before_previous_tabs) {
-  TabbedWindowInfo tab = {std::string(tab_label), std::move(draw_function)};
+  WidgetInfo tab = {std::string(tab_label), std::move(draw_function)};
 
   if (draw_before_previous_tabs) {
     tab_item_info_.insert(tab_item_info_.begin(), std::move(tab));
@@ -266,8 +284,10 @@ void LayoutComposer::DrawInToolbar(imp::Invocable<void()> draw_function) {
   toolbar_draw_functions_.push_back(std::move(draw_function));
 }
 
-void LayoutComposer::DrawAfterLayout(imp::Invocable<void()> draw_function) {
-  draw_after_functions_.push_back(std::move(draw_function));
+void LayoutComposer::DrawAfterLayout(absl::string_view label,
+                                     imp::Invocable<void()> draw_function) {
+  draw_after_functions_.push_back(
+      WidgetInfo{std::string(label), std::move(draw_function)});
 }
 
 imp::Invocable<void()> LayoutComposer::BuildHeaderDrawFunction(
@@ -301,13 +321,12 @@ void LayoutComposer::DrawDockableDetailsWindow() {
   ImGui::SetNextWindowCollapsed(false, ImGuiCond_Appearing);
 
   ImGuiWindowFlags flags = ImGuiWindowFlags_NoFocusOnAppearing |
-                           ImGuiWindowFlags_AlwaysVerticalScrollbar;
+                           ImGuiWindowFlags_AlwaysVerticalScrollbar |
+                           ImGuiWindowFlags_HorizontalScrollbar;
 
   if (ImGui::Begin(PanelIdToString(PanelId::kDetailsWindow).c_str(), nullptr,
                    flags)) {
-    ImGui::PushItemWidth(kDetailsItemWidth);
     DrawDetailsSectionContents();
-    ImGui::PopItemWidth();
   }
 
   ImGui::End();
@@ -384,7 +403,7 @@ void LayoutComposer::DrawDockableTabbedWindow() {
 
   for (auto& info : tab_item_info_) {
     ImGui::SetNextWindowDockID(
-        docking_manager_->GetDockId(DockingManager::DockingType::kBottom),
+        docking_helper_->GetDockId(DockingHelper::DockingType::kBottom),
         ImGuiCond_FirstUseEver);
     if (ImGui::Begin(info.label.c_str(), nullptr, flags)) {
       info.draw_function();
@@ -394,7 +413,7 @@ void LayoutComposer::DrawDockableTabbedWindow() {
 
   for (auto& info : left_dock_draw_functions_) {
     ImGui::SetNextWindowDockID(
-        docking_manager_->GetDockId(DockingManager::DockingType::kLeft),
+        docking_helper_->GetDockId(DockingHelper::DockingType::kLeft),
         ImGuiCond_FirstUseEver);
     if (ImGui::Begin(info.label.c_str(), nullptr, flags)) {
       info.draw_function();
@@ -592,8 +611,39 @@ void LayoutComposer::DrawToolbar() {
 }
 
 void LayoutComposer::DrawAfterLayout() {
-  for (auto& draw_function : draw_after_functions_) {
-    draw_function();
+  for (auto& [label, draw_function] : draw_after_functions_) {
+    // Freeform windows with invisible labels draw invisible widgets, so we
+    // don't need to draw them in a freeform window.
+    if (label.empty() || !IsLabelVisible(label)) {
+      draw_function();
+      continue;
+    }
+
+    ImVec2 window_size = GetSafeDisplaySize();
+    // Set the freeform window in the middle of the screen, with a size of half
+    // of the screen size in both dimensions.
+    ImGui::SetNextWindowSize(ImVec2(window_size.x * 0.5f, window_size.y * 0.5f),
+                             ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(
+        ImVec2(window_size.x * 0.25f, window_size.y * 0.25f),
+        ImGuiCond_FirstUseEver);
+    if (window_configuration_ &&
+        layout_config_.layout_type ==
+            LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT) {
+      // If the window configuration is available, show a close button for the
+      // window.
+      bool show_draw = window_configuration_->IsWindowVisible(label);
+      ImGui::Begin(label.c_str(), &show_draw);
+      draw_function();
+      ImGui::End();
+      window_configuration_->SetWindowVisibility(
+          label, show_draw ? WindowConfiguration::WindowVisibility::kVisible
+                           : WindowConfiguration::WindowVisibility::kHidden);
+    } else {
+      ImGui::Begin(label.c_str());
+      draw_function();
+      ImGui::End();
+    }
   }
 }
 
@@ -616,11 +666,11 @@ void LayoutComposer::DrawLayout() {
 
   if (layout_config_.layout_type ==
       LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT) {
-    if (!docking_manager_) {
-      docking_manager_ = std::make_unique<DockingManager>();
+    if (!docking_helper_) {
+      docking_helper_ = std::make_unique<DockingHelper>();
     }
     ImGui::DockSpaceOverViewport(
-        docking_manager_->GetDockableSpaceId(), nullptr,
+        docking_helper_->GetDockableSpaceId(), nullptr,
         ImGuiDockNodeFlags_PassthruCentralNode  // PassthruCentralNode makes the
                                                 // central node transparent
     );

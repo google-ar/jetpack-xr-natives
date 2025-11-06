@@ -163,7 +163,7 @@ absl::Status ValidateXrActionSetBindingParams(
             "XrActionBindingParams referenced an action_name that was not "
             "present in the list of XrActionParams.");
       }
-      if (xr_action_binding_params.action_name.empty()) {
+      if (xr_action_binding_params.binding_path.empty()) {
         return absl::InvalidArgumentError(
             "XrActionBindingParams had no binding_path.");
       }

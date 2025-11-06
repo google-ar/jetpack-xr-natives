@@ -56,7 +56,6 @@
 #include "core/model/mesh/vertex_format.h"
 #include "core/ncsb/component_system.h"
 #include "core/text/glyph_atlas.h"
-#include "core/text/glyph_atlas_new.h"
 #include "core/text/glyph_emulator.h"
 #include "core/text/text_renderer_assets.h"
 #include "core/text/text_renderer_state.proto.imp.h"
@@ -225,12 +224,12 @@ Future<absl::Status> TextRenderer::SetupImpl(
   glyph_atlas_ = &GetView().GetRegistry().GetOrRegister<GlyphAtlas>(
       [this, texture_size = texture_size] {
         if (texture_size.has_value()) {
-          return std::make_unique<GlyphAtlasNew>(
+          return std::make_unique<GlyphAtlas>(
               GetView(), GlyphAtlas::Config{.texture_size = GetAtlasTextureSize(
                                                 *texture_size)});
 
         } else {
-          return std::make_unique<GlyphAtlasNew>(GetView());
+          return std::make_unique<GlyphAtlas>(GetView());
         }
       });
 

@@ -21,6 +21,7 @@
 
 #include "core/async/future.h"
 #include "core/particle/data_layout.h"
+#include "core/particle/particle_config.proto.imp.h"
 #include "core/particle/particle_data.h"
 #include "core/particle/particle_data_provider.h"
 #include "core/particle/particle_emitter_info.h"
@@ -44,7 +45,8 @@ class StandardParticleService : public ParticleService {
   // Creates a new StandardParticleService. This implementation of a
   // ParticleService does not require async initialization, the future will be
   // ready immediately upon return.
-  static Future<OwnedParticleServicePtr> Create(/* particle_description */);
+  static Future<OwnedParticleServicePtr> Create(
+      const ParticleConfig& particle_config);
 
   // Performs common maintenance tasks for all active particles.
   void ProcessActiveParticles(const FrameTime& frame_time) override;
@@ -60,7 +62,7 @@ class StandardParticleService : public ParticleService {
   ParticleDataProvider& GetDataProvider() override;
 
  private:
-  StandardParticleService(/* particle_description */);
+  StandardParticleService(const ParticleConfig& particle_config);
 
   DataLayout data_layout_;
   StandardParticleDataProvider data_provider_;

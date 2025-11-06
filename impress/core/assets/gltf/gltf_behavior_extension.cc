@@ -41,7 +41,6 @@
 #include "core/math/quat.h"
 #include "core/math/vec.h"
 #include "core/model/model_data.h"
-#include "core/model/shared_data.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/component_system.h"
 #include "core/ncsb/node_handle.h"
@@ -97,24 +96,8 @@ void WorldAnimateToFunction(NodeHandle root, NodeHandle node,
   play_future.KeptBy(node);
 }
 
-std::vector<int> GetTapNodes(const ModelData& model_data,
-                             ComponentHandle<GltfScene>& gltf_scene,
+std::vector<int> GetTapNodes(ComponentHandle<GltfScene>& gltf_scene,
                              gltf::behavior::ConvertedGraph& converted_graph) {
-  const auto& entities = model_data.Entities();
-  RobinMap<NodeHandle, model::EntityId> node_to_entity_id_map;
-  for (const auto entity_id : entities.Ids<model::EntityId>()) {
-    NodeHandle node =
-        gltf_scene->GetNodeFromBone(model_data.Entities()[entity_id].bone);
-    if (!node.IsValid()) {
-      continue;
-    }
-    node_to_entity_id_map.insert({node, entity_id});
-  }
-
-  if (node_to_entity_id_map.empty()) {
-    return std::vector<int>{};
-  }
-
   std::stack<NodeHandle> node_stack;
   for (int index : converted_graph.GetTapNodeIndices()) {
     node_stack.push(gltf_scene->GetOrCreateNodeFromGltfNodeIndex(index));
@@ -126,15 +109,15 @@ std::vector<int> GetTapNodes(const ModelData& model_data,
     NodeHandle current_node = node_stack.top();
     node_stack.pop();
 
-    if (!node_to_entity_id_map.contains(current_node) ||
-        visited.find(current_node) != visited.end()) {
+    if (visited.find(current_node) != visited.end() ||
+        !gltf_scene->HasEntityDataForNodeHandle(current_node)) {
       continue;
     }
 
     visited.emplace(current_node);
 
     uint64_t gltf_index =
-        entities[node_to_entity_id_map.at(current_node)].original_index;
+        gltf_scene->GetEntityDataFromNodeHandle(current_node).original_index;
     tap_node_gltf_indices.push_back(static_cast<int>(gltf_index));
     for (const NodeHandle& child : current_node->GetChildren()) {
       node_stack.push(child);
@@ -222,7 +205,7 @@ Future<absl::Status> GltfBehaviorExtension::SetupInternal(
 
   ComponentHandle<GltfScene> gltf_scene =
       gltf_renderer->GetNode()->GetComponent<GltfScene>();
-  tap_node_gltf_indices_ = GetTapNodes(model_data, gltf_scene, converted_graph);
+  tap_node_gltf_indices_ = GetTapNodes(gltf_scene, converted_graph);
 
   return Future<absl::Status>(absl::OkStatus());
 }

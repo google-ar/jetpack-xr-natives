@@ -20,12 +20,16 @@
 #include "absl/time/time.h"
 #include "dear_imgui/imgui.h"
 #include "implot/implot.h"
+#include "core/common/trace.h"
+#include "core/config.h"
 #include "core/editor/widgets/performance/config.h"
+#include "core/editor/widgets/performance/hierarchy_panel.h"
 #include "core/editor/widgets/performance/monitor_panel.h"
 #include "core/monitor/duration_measurement_data.h"
 #include "core/monitor/measurement_data.h"
 #include "core/monitor/monitor.h"
 #include "core/monitor/monitor_helpers.h"
+#include "core/performance/profiler.h"
 #include "core/view/base_view.h"
 
 namespace imp::editor {
@@ -43,10 +47,7 @@ absl::Duration GetLatestDurationMeasurement(Monitor* monitor,
 }  // namespace
 
 FrameTimePanel::FrameTimePanel(BaseView& view, int buffer_size)
-    : view_(view),
-      buffer_(buffer_size),
-      frame_number_(0),
-      view_config_(view.GetConfig()) {}
+    : view_(view), buffer_(buffer_size), view_config_(view.GetConfig()) {}
 
 FrameTimePanel::~FrameTimePanel() = default;
 
@@ -55,6 +56,7 @@ void FrameTimePanel::OnStateChanged(MonitorPanel::MonitorState state) {
 }
 
 void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
+  IMP_TRACE_NAME("FrameTimePanel::DrawPanel");
   constexpr float upper_bound = 60;
   constexpr float lower_bound = 0;
 
@@ -65,8 +67,9 @@ void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
     ImPlot::SetupAxes("Frame number", "Frame time (ms)");
     ImPlot::SetupAxisLimits(
         ImAxis_X1,
-        frame_number_ - time_span_seconds * details::kNumDisplayValuesPerSecond,
-        frame_number_, plot_cond);
+        Profiler::GetCurrentFrameIndex() -
+            time_span_seconds * details::kNumDisplayValuesPerSecond,
+        Profiler::GetCurrentFrameIndex(), plot_cond);
     ImPlot::SetupAxisLimits(ImAxis_Y1, lower_bound, upper_bound);
     ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, 0, 1000);
     ImPlot::SetNextFillStyle(IMPLOT_AUTO_COL, 0.5f);
@@ -94,6 +97,8 @@ void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
         DrawHighlightFrame(hovered_frame, draw_list);
 
         if (hovered_frame > 0) {
+          selected_frame_number_ = hovered_frame;
+
           DrawToolTip(hovered_frame);
         }
       }
@@ -101,6 +106,13 @@ void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
 
     ImPlot::EndPlot();
   }
+#if !IMP_PLATFORM(WASM)
+  if (selected_frame_number_ > 0) ShowHierarchyPanel(selected_frame_number_);
+#endif
+}
+
+void FrameTimePanel::ShowHierarchyPanel(int frame_number) {
+  hierarchy_panel_.DrawPanel(frame_number);
 }
 
 void FrameTimePanel::DrawHighlightFrame(int frame_number,
@@ -144,6 +156,7 @@ void FrameTimePanel::DrawToolTip(int frame_number) {
 
 void FrameTimePanel::Update(absl::Duration elapsed_time,
                             absl::Duration delta_time) {
+  IMP_TRACE_NAME("FrameTimePanel::Update");
   // TODO Ensure that all values shown are correct and in sync
   float view_frame_time = absl::ToDoubleMilliseconds(
       GetLatestDurationMeasurement(view_.GetMonitor(), kFramePresented));
@@ -156,14 +169,14 @@ void FrameTimePanel::Update(absl::Duration elapsed_time,
           view_.GetMonitor(), kForegroundExecutorTiming));
 
   float elapsed_time_ms = absl::ToDoubleMilliseconds(elapsed_time);
-  ++frame_number_;
-  buffer_.push_back(
-      FrameTimeInfo{.frame_number = static_cast<float>(frame_number_),
-                    .elapsed_time_ms = elapsed_time_ms,
-                    .advance_time_ms = view_advance_time,
-                    .render_time_ms = filament_render_time,
-                    .frame_time_ms = view_frame_time,
-                    .foreground_executor_time_ms = foreground_executor_time});
+
+  buffer_.push_back(FrameTimeInfo{
+      .frame_number = static_cast<float>(Profiler::GetCurrentFrameIndex()),
+      .elapsed_time_ms = elapsed_time_ms,
+      .advance_time_ms = view_advance_time,
+      .render_time_ms = filament_render_time,
+      .frame_time_ms = view_frame_time,
+      .foreground_executor_time_ms = foreground_executor_time});
 }
 
 }  // namespace imp::editor

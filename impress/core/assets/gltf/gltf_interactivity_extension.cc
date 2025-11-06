@@ -15,7 +15,6 @@
 #include "core/assets/gltf/gltf_interactivity_extension.h"
 
 #include <cstdint>
-#include <limits>
 #include <memory>
 #include <optional>
 #include <stack>
@@ -41,10 +40,14 @@
 #include "core/assets/gltf/interactivity/custom_statements/cancel_delay.h"
 #include "core/assets/gltf/interactivity/custom_statements/do_n.h"
 #include "core/assets/gltf/interactivity/custom_statements/multi_gate.h"
+#include "core/assets/gltf/interactivity/custom_statements/on_hover.h"
+#include "core/assets/gltf/interactivity/custom_statements/on_select.h"
+#include "core/assets/gltf/interactivity/custom_statements/pointer_interpolate.h"
 #include "core/assets/gltf/interactivity/custom_statements/pointer_set.h"
 #include "core/assets/gltf/interactivity/custom_statements/set_delay.h"
 #include "core/assets/gltf/interactivity/custom_statements/throttle.h"
 #include "core/assets/gltf/interactivity/custom_statements/variable_interpolate.h"
+#include "core/assets/gltf/interactivity/custom_statements/variable_set.h"
 #include "core/assets/gltf/interactivity/custom_statements/wait_all.h"
 #include "core/assets/gltf/interactivity/node_converter_constants.h"
 #include "core/assets/gltf/interactivity/node_converters.h"
@@ -55,11 +58,11 @@
 #include "core/assets/gltf/interactivity/node_converters/math/math.h"
 #include "core/assets/gltf/interactivity/node_converters/pointer/pointer.h"
 #include "core/assets/gltf/interactivity/node_converters/utils.h"
+#include "core/assets/gltf/interactivity/node_converters/variable/variable.h"
 #include "core/assets/gltf/object_model/pointer_declarations/core_pointers.h"
 #include "core/assets/gltf/object_model/pointer_parser.h"
 #include "core/assets/gltf/object_model/property_pointer.h"
 #include "core/async/future.h"
-#include "core/collision/ray.h"
 #include "core/common/registry.h"
 #include "core/common/robin_map.h"
 #include "core/math/arrays.proto.imp.h"
@@ -79,11 +82,10 @@
 #include "core/recipes/recipe_runner_state.proto.imp.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/animation/animation.proto.imp.h"
-#include "core/view/framework/assets/gltf_mesh.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/framework/assets/gltf_scene.h"
-#include "core/view/framework/camera/camera_manager.h"
 #include "core/view/framework/scene/scene_system.h"
+#include "core/view/utils/string_map.h"
 
 namespace imp {
 
@@ -148,23 +150,8 @@ void WorldAnimateToFunction(NodeHandle root, NodeHandle node,
  * be interacted
  */
 std::vector<int> GetInteractivityNodeIndices(
-    const ModelData& model_data, const ComponentHandle<GltfScene>& gltf_scene,
-    const NodeHandle& root_node, InteractivityType interactivity_type) {
-  const auto& entities = model_data.Entities();
-  RobinMap<NodeHandle, model::EntityId> node_to_entity_id_map;
-  for (const auto entity_id : entities.Ids<model::EntityId>()) {
-    NodeHandle node =
-        gltf_scene->GetNodeFromBone(model_data.Entities()[entity_id].bone);
-    if (!node.IsValid()) {
-      continue;
-    }
-    node_to_entity_id_map.insert({node, entity_id});
-  }
-
-  if (node_to_entity_id_map.empty()) {
-    return std::vector<int>{};
-  }
-
+    const ComponentHandle<GltfScene>& gltf_scene, const NodeHandle& root_node,
+    InteractivityType interactivity_type) {
   std::stack<NodeHandle> node_stack;
   for (const NodeHandle& child : root_node->GetChildren()) {
     node_stack.push(child);
@@ -175,12 +162,13 @@ std::vector<int> GetInteractivityNodeIndices(
     NodeHandle current_node = node_stack.top();
     node_stack.pop();
 
-    if (!node_to_entity_id_map.contains(current_node)) {
+    if (!gltf_scene->HasEntityDataForNodeHandle(current_node)) {
       continue;
     }
 
-    auto entity_data = entities[node_to_entity_id_map.at(current_node)];
     bool is_interactivity_node = false;
+    const model::EntityData::Proxy entity_data =
+        gltf_scene->GetEntityDataFromNodeHandle(current_node);
     switch (interactivity_type) {
       case InteractivityType::HOVERABILITY: {
         std::optional<model::NodeHoverability> hoverable =
@@ -242,7 +230,7 @@ Future<absl::Status> GltfInteractivityExtension::SetupInternal(
   // pointer property defined in the KHR_node_hoverability extension on a node
   // is changed
   hover_node_gltf_indicies_ = GetInteractivityNodeIndices(
-      model_data, gltf_renderer->GetNode()->GetComponent<GltfScene>(),
+      gltf_renderer->GetNode()->GetComponent<GltfScene>(),
       gltf_renderer->GetModelRoot(), InteractivityType::HOVERABILITY);
 
   // Get a list of glTF node indices that are "selectable" as defined in the
@@ -255,7 +243,7 @@ Future<absl::Status> GltfInteractivityExtension::SetupInternal(
   // pointer property defined in the KHR_node_selectability extension on a node
   // is changed
   tap_node_gltf_indices_ = GetInteractivityNodeIndices(
-      model_data, gltf_renderer->GetNode()->GetComponent<GltfScene>(),
+      gltf_renderer->GetNode()->GetComponent<GltfScene>(),
       gltf_renderer->GetModelRoot(), InteractivityType::SELECTABILITY);
 
   const InteractivityData& interactivity_data = *model_data.Interactivity();
@@ -284,6 +272,22 @@ Future<absl::Status> GltfInteractivityExtension::SetupInternal(
   }
 
   recipe_graph.recipe_nodes = converted_graph.GetRecipeNodes();
+
+  for (const RecipeNode& node : recipe_graph.recipe_nodes) {
+    // Create default socket values as member variables of the graph.
+    std::optional<StringMap<Literal>> default_socket_values =
+        converted_graph.GetDefaultSocketValues(node.id);
+    if (default_socket_values.has_value()) {
+      for (const auto& [socket_name, socket_value] : *default_socket_values) {
+        VariableDeclaration variable_declaration;
+        variable_declaration.name =
+            recipe::GetSocketVariableName(node.id, socket_name);
+        variable_declaration.type = recipe::ToType(socket_value);
+        variable_declaration.init_value = socket_value;
+        recipe_graph.member_declarations.push_back(variable_declaration);
+      }
+    }
+  }
 
   const std::vector<InteractivityData::VariableData>& variables =
       graph_data.variables;
@@ -318,6 +322,30 @@ Future<absl::Status> GltfInteractivityExtension::SetupInternal(
                           kVariableInterpolateMap),
       .type = VariableDeclaration::MAP,
       .init_value = Literal{LiteralMap{.values = {}}}});
+
+  recipe_graph.member_declarations.push_back(VariableDeclaration{
+      .name =
+          std::string(gltf::interactivity::kPointerInterpolateMapValueSocket),
+      .type = VariableDeclaration::MAP,
+      .init_value = Literal{LiteralMap{.values = {}}}});
+
+  // TODO: Look into converting these Stop Propagation Map
+  // variables into constant Literal Nodes
+  recipe_graph.member_declarations.push_back(VariableDeclaration{
+      .name = std::string(gltf::interactivity::kHoverInNodesMap),
+      .type = VariableDeclaration::MAP,
+      .init_value = Literal{converted_graph.GetOnHoverInStopPropagationMap()}});
+
+  recipe_graph.member_declarations.push_back(VariableDeclaration{
+      .name = std::string(gltf::interactivity::kHoverOutNodesMap),
+      .type = VariableDeclaration::MAP,
+      .init_value =
+          Literal{converted_graph.GetOnHoverOutStopPropagationMap()}});
+
+  recipe_graph.member_declarations.push_back(VariableDeclaration{
+      .name = std::string(gltf::interactivity::kSelectNodesMap),
+      .type = VariableDeclaration::MAP,
+      .init_value = Literal{converted_graph.GetTapStopPropagationMap()}});
 
   // Create RecipeRunner that's initially stopped. It will be started when
   // GltfRenderer's Setup finishes.
@@ -449,10 +477,6 @@ GltfInteractivityExtension::System::System(BaseView* view)
   RegisterInteractivityNodeConverter(
       gltf::interactivity::GetTypeCastFloatToIntConverter());
   RegisterInteractivityNodeConverter(
-      gltf::interactivity::GetMathComposeConverter());
-  RegisterInteractivityNodeConverter(
-      gltf::interactivity::GetMathDecomposeConverter());
-  RegisterInteractivityNodeConverter(
       gltf::interactivity::GetMathInverseConverter());
   RegisterInteractivityNodeConverter(
       gltf::interactivity::GetMathMatMulConverter());
@@ -474,6 +498,8 @@ GltfInteractivityExtension::System::System(BaseView* view)
       gltf::interactivity::GetMathNodeConverters());
   RegisterInteractivityNodeConverters(
       gltf::interactivity::GetPointerConverters());
+  RegisterInteractivityNodeConverters(
+      gltf::interactivity::GetVariableNodeConverters());
   // (broken link) end
 
   // TODO: Support more types.
@@ -519,6 +545,10 @@ GltfInteractivityExtension::System::System(BaseView* view)
   recipe_system.RegisterCustomStatementType<
       gltf::interactivity::MultiGateCustomStatement>();
   recipe_system.RegisterCustomStatementType<
+      gltf::interactivity::OnHoverCustomStatement>();
+  recipe_system.RegisterCustomStatementType<
+      gltf::interactivity::OnSelectCustomStatement>();
+  recipe_system.RegisterCustomStatementType<
       gltf::interactivity::SetDelayCustomStatement>();
   recipe_system.RegisterCustomStatementType<
       gltf::interactivity::ThrottleCustomStatement>();
@@ -527,7 +557,11 @@ GltfInteractivityExtension::System::System(BaseView* view)
   recipe_system.RegisterCustomStatementType<
       gltf::interactivity::WaitAllCustomStatement>();
   recipe_system.RegisterCustomStatementType<
+      gltf::interactivity::PointerInterpolateCustomStatement>();
+  recipe_system.RegisterCustomStatementType<
       gltf::interactivity::PointerSetCustomStatement>();
+  recipe_system.RegisterCustomStatementType<
+      gltf::interactivity::VariableSetCustomStatement>();
 
   recipe_system.RegisterFunction(
       gltf::interactivity::kGetNodeByIndexFunctionName,
@@ -598,22 +632,6 @@ GltfInteractivityExtension::System::System(BaseView* view)
       });
 
   recipe_system.RegisterFunction(
-      gltf::interactivity::kGetHoverEventDataFunctionName,
-      [](NodeHandle hovered_node, int controllerIndex) -> recipe::Variables {
-        ComponentHandle<GltfMesh> mesh = hovered_node->GetComponent<GltfMesh>();
-        uint64_t gltf_index =
-            mesh.IsValid() ? mesh->GetOriginalGltfIndex() : -1;
-        const std::string hover_node_index_socket_name =
-            std::string(gltf::interactivity::kHoverNodeIndexOutputValueSocket);
-        const std::string controller_index_socket_name =
-            std::string(gltf::interactivity::kControllerIndexOutputValueSocket);
-        recipe::Variables arguments;
-        arguments[hover_node_index_socket_name] = static_cast<int>(gltf_index);
-        arguments[controller_index_socket_name] = controllerIndex;
-        return arguments;
-      });
-
-  recipe_system.RegisterFunction(
       gltf::interactivity::kPointerGetFunctionName,
       [this](recipe::Args args) -> absl::StatusOr<recipe::Variables> {
         // Arguments:
@@ -637,7 +655,7 @@ GltfInteractivityExtension::System::System(BaseView* view)
         }
         NodeHandle gltf_model = std::get<NodeHandle>(args[0]);
 
-        return_values["value"] = args[1];
+        return_values[std::string(recipe::kDefaultOutputSocketName)] = args[1];
 
         std::string pointer_path;
         // The first two arguments are the default value and the gltf model node
@@ -649,9 +667,8 @@ GltfInteractivityExtension::System::System(BaseView* view)
         std::optional<PropertyPointer> pointer =
             GetPointerParser().TryParse(pointer_path);
         if (!pointer.has_value()) {
-          // Returns error if pointer is invalid.
-          return absl::NotFoundError(
-              absl::StrFormat("Invalid pointer: %s.", pointer_path));
+          // Returns default values if pointer fails to parse.
+          return return_values;
         }
 
         absl::StatusOr<PropertyPointer::PointerValue> value =
@@ -661,49 +678,11 @@ GltfInteractivityExtension::System::System(BaseView* view)
           return return_values;
         }
 
-        return_values["value"] =
+        return_values[std::string(recipe::kDefaultOutputSocketName)] =
             absl::ConvertVariantTo<recipe::Variable>(value.value());
         return_values["isValid"] = true;
 
         return return_values;
-      });
-
-  recipe_system.RegisterFunction(
-      gltf::interactivity::kGetSelectEventDataFunctionName,
-      [&view = GetView()](NodeHandle selected_node, int controllerIndex,
-                          float2 screen_pos,
-                          RecipeRayHit selection_ray_hit) -> recipe::Variables {
-        ComponentHandle<GltfMesh> mesh =
-            selected_node->GetComponent<GltfMesh>();
-        uint64_t gltf_index =
-            mesh.IsValid() ? mesh->GetOriginalGltfIndex() : -1;
-        const std::string selected_node_index_socket_name =
-            std::string(gltf::interactivity::kSelectNodeIndexOutputValueSocket);
-        const std::string controller_index_socket_name =
-            std::string(gltf::interactivity::kControllerIndexOutputValueSocket);
-        const std::string selection_point_socket_name =
-            std::string(gltf::interactivity::kSelectSelectionPointValueSocket);
-        const std::string selection_ray_origin_socket_name = std::string(
-            gltf::interactivity::kSelectSelectionRayOriginValueSocket);
-
-        float3 selection_point{std::numeric_limits<float>::quiet_NaN()};
-        float3 ray_origin{std::numeric_limits<float>::quiet_NaN()};
-        if (selection_ray_hit.node.IsValid()) {
-          selection_point = selection_ray_hit.world_point;
-
-          Ray world_ray =
-              view.GetCameraManager().GetCamera()->WorldRayFromPixelPoint(
-                  screen_pos);
-          ray_origin = world_ray.origin;
-        }
-
-        recipe::Variables arguments;
-        arguments[selected_node_index_socket_name] =
-            static_cast<int>(gltf_index);
-        arguments[controller_index_socket_name] = controllerIndex;
-        arguments[selection_point_socket_name] = selection_point;
-        arguments[selection_ray_origin_socket_name] = ray_origin;
-        return arguments;
       });
 
   recipe_system.RegisterFunction(

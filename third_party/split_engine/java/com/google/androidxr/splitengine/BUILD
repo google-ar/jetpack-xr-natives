@@ -79,7 +79,7 @@ android_library(
         "-Xep:AndroidJdkLibsChecker:OFF",
     ],
     deps = [
-        "//third_party/java/androidx/xr/scenecore",
+        "//third_party/java/androidx/xr/arcore/arcore_openxr",
         "@com_google_impress//java/com/google/ar/imp/view/splitengine",
         "@maven//:androidx_annotation_annotation",
         "@maven//:com_android_extensions_xr_extensions_xr",

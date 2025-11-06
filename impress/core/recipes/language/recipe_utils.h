@@ -112,6 +112,9 @@ absl::string_view ToTypeName(const Literal& literal);
 
 void SetToDefault(const VariableDeclaration::Type& type, Variable& var);
 
+std::string GetSocketVariableName(const NodeId& node_id,
+                                  absl::string_view socket_name);
+
 #if IMP_ENABLE_RECIPE_EXPERIMENTAL
 
 // Returns the symbol associated with for the given binary operator. i.e. "+"

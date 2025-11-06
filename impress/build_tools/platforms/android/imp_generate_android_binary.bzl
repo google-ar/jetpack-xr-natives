@@ -51,6 +51,8 @@ def imp_generate_android_binary(
         multidex,
         jni_binary_name = "",
         nocompress_extensions = None,
+        proguard_generate_mapping = None,
+        proguard_specs = None,
         tags = None):
     """Helper used by the imp_app rule to generate targets for platforms based on android.
 
@@ -73,6 +75,8 @@ def imp_generate_android_binary(
         overidden.
       nocompress_extensions: (Optional) A list of file extensions that should not be compressed in
         the Android apk.
+      proguard_generate_mapping: (Optional) Whether to generate a Proguard mapping file.
+      proguard_specs: (Optional) A list of Proguard specs to use.
       tags: (Optional) tags to use on the android_library rule.
     """
 
@@ -119,6 +123,8 @@ def imp_generate_android_binary(
             resource_files = [resource_files],
             deps = [":" + jni_library] + IMP_ANDROID_DEPS + java_deps + activity_deps + native_lib_deps + RESOURCES_DEPS,
             multidex = multidex,
+            proguard_generate_mapping = proguard_generate_mapping if proguard_generate_mapping else False,
+            proguard_specs = proguard_specs + ["@com_google_impress//build_tools/platforms/android:proguard.pgcfg"] if proguard_specs else [],
         )
 
     # Create an android library around all of the app code.  This is

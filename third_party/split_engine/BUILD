@@ -13,16 +13,16 @@
 # limitations under the License.
 
 load(
-    "@com_github_google_flatbuffers//:build_defs.bzl",
-    "flatbuffer_cc_library",
-    "flatbuffer_library_public",
-)
-load(
     "@com_google_impress//build_tools:imp.bzl",
     "IMP_FLATBUFFER_INCLUDE_PATHS",
     "IMP_FLATC_ARGS",
     "if_non_android",
 )
+load(
+    "@flatbuffers//:build_defs.bzl",
+    "flatbuffer_library_public",
+)
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_license//rules:license_kind.bzl", "license_kind")
 
 package(default_visibility = ["//visibility:public"])
@@ -41,6 +41,7 @@ license_kind(
 )
 
 schemas = [
+    "schemas/split_engine_attributes.fbs",
     "schemas/split_engine_data.fbs",
     "schemas/split_engine_ipc.fbs",
     "schemas/split_engine_material.fbs",
@@ -52,43 +53,32 @@ filegroup(
     srcs = schemas,
 )
 
-flatbuffer_cc_library(
-    name = "fbs",
-    srcs = schemas,
-    flatc_args = IMP_FLATC_ARGS,
-    include_paths = IMP_FLATBUFFER_INCLUDE_PATHS,
-    includes = [],
-    out_prefix = "schemas/",
-)
-
-# Embedded schema is needed for fuzz testing.
 flatbuffer_library_public(
-    name = "fbs_with_embedded_schema_srcs",
+    name = "fbs_srcs",
     srcs = schemas,
     outs = [
         item
         for f in schemas
         for item in (
-            "embedded_schemas/" + f.replace(".fbs", "_generated.h").split("/")[-1],
-            "embedded_schemas/" + f.replace(".fbs", "_bfbs_generated.h").split("/")[-1],
+            "schemas/" + f.replace(".fbs", "_generated.h").split("/")[-1],
+            "schemas/" + f.replace(".fbs", "_bfbs_generated.h").split("/")[-1],
         )
     ],
-    flatc_args = [arg for arg in IMP_FLATC_ARGS if arg != "--keep-prefix"] + [
-        "--bfbs-gen-embed",
-        "--gen-name-strings",
-        "--include-prefix third_party/split_engine/embedded_schemas",
+    flatc_args = IMP_FLATC_ARGS + [
+        "--bfbs-gen-embed",  # Enable embedding of the flatbuffers schema in the binary.
+        "--gen-name-strings",  # Generate fully qualified names for the flatbuffers tables to find them in the embedded schema.
     ],
     include_paths = IMP_FLATBUFFER_INCLUDE_PATHS,
     language_flag = "-c",
-    out_prefix = "embedded_schemas/",
+    out_prefix = "schemas/",
 )
 
 cc_library(
-    name = "fbs_with_embedded_schema",
-    srcs = [":fbs_with_embedded_schema_srcs"],
-    hdrs = [":fbs_with_embedded_schema_srcs"],
+    name = "fbs",
+    srcs = [":fbs_srcs"],
+    hdrs = [":fbs_srcs"],
     deps = [
-        "@com_github_google_flatbuffers//:flatbuffers",
+        "@flatbuffers",
     ],
     alwayslink = 1,
 )

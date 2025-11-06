@@ -84,15 +84,8 @@ OptionalError FilamentHost::CreateSwapChain(void* native_window,
     return Error("Cannot create swap chain with null native_window");
   }
 
-  if (engine_->getActiveFeatureLevel() ==
-      filament::backend::FeatureLevel::FEATURE_LEVEL_0) {
-    // Enable SRGB output for feature level 0 as it does not support full
-    // postprocessing.
-    // TODO: Make this configurable.
-    flags |= filament::SwapChain::CONFIG_SRGB_COLORSPACE;
-  }
+  flags = UpdateSwapChainFlagsFromState(flags);
   swap_chain_ = engine_->createSwapChain(native_window, flags);
-
   if (!swap_chain_) {
     return Error("Filament engine failed to create swap chain.");
   }
@@ -123,23 +116,13 @@ absl::StatusOr<const filament::SwapChain*> FilamentHost::AddSwapChain(
   if (!engine_) {
     return absl::FailedPreconditionError("No Filament engine has been set.");
   }
-  if (engine_->getActiveFeatureLevel() ==
-      filament::backend::FeatureLevel::FEATURE_LEVEL_0) {
-    // Enable SRGB output for feature level 0 as it does not support full
-    // postprocessing.
-    flags |= filament::SwapChain::CONFIG_SRGB_COLORSPACE;
-  }
-  if (state_->ShouldUseSrgbSwapChain()) {
-    flags |= filament::SwapChain::CONFIG_SRGB_COLORSPACE;
-  }
-  if (state_->ShouldUseStencilSwapChain()) {
-    flags |= filament::SwapChain::CONFIG_HAS_STENCIL_BUFFER;
-  }
+  flags = UpdateSwapChainFlagsFromState(flags);
   filament::SwapChain* swap_chain =
       engine_->createSwapChain(native_window, flags);
   swap_chains_.insert(swap_chain);
   return swap_chain;
 }
+
 absl::Status FilamentHost::SetActiveSwapChain(
     const filament::SwapChain* swap_chain) {
   if (!swap_chain) {
@@ -191,6 +174,43 @@ OptionalError FilamentHost::DestroySwapChain() {
 }
 
 bool FilamentHost::HasSwapChain() const { return swap_chain_ != nullptr; }
+
+bool FilamentHost::IsSRGBSwapChainSupported() {
+#if IMP_MATERIAL_API(METAL)
+  // On iOS, Metal universally supports sRGB swapchains, but usage is controlled
+  // at the IMPView level (by setting that format on its CAMetalLayer in
+  // response to State::ShouldUseSrgbSwapChain()), instead of Filament's driver
+  // controlling it. The CONFIG_SRGB_COLORSPACE flag has no effect in Metal.
+  //
+  // For that reason, MetalDriver::isSRGBSwapChainSupported() always returns
+  // false (since the flag is ignored), even though this feature _is_ supported.
+  return true;
+#else
+  return engine_ && filament::SwapChain::isSRGBSwapChainSupported(*engine_);
+#endif
+}
+
+bool FilamentHost::SwapChainWillBeSRGB() {
+  if (!engine_ || !state_) {
+    return false;
+  }
+
+  // FL0 devices can't run post-processing, so they MUST attempt to use
+  // sRGB swapchains if they're available. (See UpdateSwapChainFlagsFromState())
+  const bool is_fl0 = (engine_->getActiveFeatureLevel() ==
+                       filament::backend::FeatureLevel::FEATURE_LEVEL_0);
+  const bool requested_srgb_swapchain =
+      is_fl0 || state_->ShouldUseSrgbSwapChain();
+
+  // Assume that if the driver supports sRGB, and the host app asked for it,
+  // then it's being used.
+  //
+  // This is the only option at present; there's no API to ask the SwapChain
+  // what its creation flags were, or what its texture format is.  Note that
+  // this means it'll incorrectly return `false` if we create a swapchain with
+  // CONFIG_SRGB_COLORSPACE manually set, versus using ShouldUseSrgbSwapChain().
+  return IsSRGBSwapChainSupported() && requested_srgb_swapchain;
+}
 
 OptionalError FilamentHost::Setup(Engine::Platform* platform,
                                   void* shared_gl_context,
@@ -384,6 +404,9 @@ void FilamentHost::SetFrameCompletedCallback(
 
 absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
     absl::Duration previous_vsync, absl::Duration next_vsync) {
+  IMP_PROFILE_START_FRAME();
+  IMP_TRACE_NAME("FilamentHost::RenderNextFrame");
+
   RenderResult result;
   if (!owns_filament_) {
     IMP_LOG(imp::FATAL) << "FilamentHost doesn't own Filament";
@@ -426,7 +449,10 @@ absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
     return result;
   }
 
-  MP_RETURN_IF_ERROR(PreBeginRender());
+  {
+    IMP_TRACE_NAME("FilamentHost::PreBeginRender");
+    MP_RETURN_IF_ERROR(PreBeginRender());
+  };
 
   {
     IMP_TRACE_NAME("FilamentHost::FilamentRenderPass");
@@ -437,7 +463,12 @@ absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
     // resize) we ignore the suggestion and render.
 
     // vsynctime is 0 here because the setVsyncTime api is used instead.
-    bool should_render_frame = renderer_->beginFrame(swap_chain_, 0);
+    bool should_render_frame = false;
+
+    {
+      IMP_TRACE_NAME("Renderer::BeginFrame");
+      should_render_frame = renderer_->beginFrame(swap_chain_, 0);
+    }
 
     // beginFrame consumes the captured vsync timing, so reset it.
     is_vsync_time_captured_since_last_frame_ = false;
@@ -451,23 +482,61 @@ absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
         is_within_filament_render_frame_ = false;
       };
 
-      MP_RETURN_IF_ERROR(state_->OffscreenRender(this, renderer_));
+      {
+        IMP_TRACE_NAME("State::OffscreenRender");
+        MP_RETURN_IF_ERROR(state_->OffscreenRender(this, renderer_));
+      }
+
       if (dev_mode_extension_) {
+        IMP_TRACE_NAME("DevModeExtension::OffscreenRender");
         dev_mode_extension_->OffscreenRender();
       }
-      filament::Camera* camera = &GetView()->getCamera();
+      filament::Camera* camera;
+
+      {
+        IMP_TRACE_NAME("View::GetCamera");
+        camera = &GetView()->getCamera();
+      }
+
       if (editor_camera_override_) {
+        IMP_TRACE_NAME("View::SetCamera");
         GetView()->setCamera(editor_camera_override_);
       }
-      PerformRender(render_view_.Get());
-      GetView()->setCamera(camera);
-      MP_RETURN_IF_ERROR(state_->MultiPassRender());
+
+      {
+        IMP_TRACE_NAME("FilamentHost::PerformRender");
+        PerformRender(render_view_.Get());
+      }
+
+      {
+        IMP_TRACE_NAME("View::SetCamera");
+        GetView()->setCamera(camera);
+      }
+
+      {
+        IMP_TRACE_NAME("State::MultiPassRender");
+        MP_RETURN_IF_ERROR(state_->MultiPassRender());
+      }
+
       if (dev_mode_extension_) {
+        IMP_TRACE_NAME("DevModeExtension::Render");
         dev_mode_extension_->Render();
       }
-      MP_RETURN_IF_ERROR(state_->PostRender(this));
-      renderer_->endFrame();
-      MP_RETURN_IF_ERROR(state_->SecondaryViewRender(this));
+
+      {
+        IMP_TRACE_NAME("State::PostRender");
+        MP_RETURN_IF_ERROR(state_->PostRender(this));
+      }
+
+      {
+        IMP_TRACE_NAME("Renderer::EndFrame");
+        renderer_->endFrame();
+      }
+
+      {
+        IMP_TRACE_NAME("State::SecondaryViewRender");
+        MP_RETURN_IF_ERROR(state_->SecondaryViewRender(this));
+      }
       if (state_->IsAnimating(this)) {
         result.flags |= RenderResultFlags::kIsAnimating;
       }
@@ -480,11 +549,14 @@ absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
 #if IMP_PLATFORM(WASM)
   // The wasm build is single threaded, so no render thread, so pump manually.
   if (engine_) {
+    IMP_TRACE_NAME("Engine::Execute");
     engine_->execute();
   }
 #endif  // IMP_PLATFORM(WASM)
-
-  MP_RETURN_IF_ERROR(state_->PostFrame(this));
+  {
+    IMP_TRACE_NAME("State::PostFrame");
+    MP_RETURN_IF_ERROR(state_->PostFrame(this));
+  }
 
   return result;
 }
@@ -493,14 +565,23 @@ absl::Status FilamentHost::UpdateNextFrame(
     absl::Duration previous_vsync, absl::Duration next_vsync,
     UpdateStageFlags* out_flags,
     absl::optional<absl::Duration>* out_time_until_retry) {
-  IMP_TRACE();
-  MP_RETURN_IF_ERROR(state_->PreUpdate(this, previous_vsync, next_vsync, out_flags,
-                                    out_time_until_retry));
+  IMP_TRACE_NAME("FilamentHost::UpdateNextFrame");
 
-  MP_RETURN_IF_ERROR(state_->Update(this, previous_vsync, next_vsync, *out_flags));
+  {
+    IMP_TRACE_NAME("State::PreUpdate");
+    MP_RETURN_IF_ERROR(state_->PreUpdate(this, previous_vsync, next_vsync,
+                                      out_flags, out_time_until_retry));
+  }
+
+  {
+    IMP_TRACE_NAME("State::Update");
+    MP_RETURN_IF_ERROR(
+        state_->Update(this, previous_vsync, next_vsync, *out_flags));
+  }
 
   if (!out_flags->HasFlag(UpdateStageFlags::kSkipUpdate) &&
       !out_flags->HasFlag(UpdateStageFlags::kSkipFrame)) {
+    IMP_TRACE_NAME("State::PostUpdate");
     MP_RETURN_IF_ERROR(state_->PostUpdate(this));
   }
 
@@ -513,7 +594,7 @@ OptionalError FilamentHost::IsolatedPreRender(
     absl::optional<absl::Duration>* out_time_until_retry,
     Flags<IsolatedPreRenderFlags> isolated_pre_render_flags) {
   CheckOnFrameThread();
-
+  IMP_TRACE_NAME("FilamentHost::IsolatedPreRender");
   *out_flags = {};
   // We need to send mouse input before beginFrame so that uniform buffer
   // updates generated by mouse input get submitted before render.
@@ -560,7 +641,7 @@ OptionalError FilamentHost::IsolatedPreRender(
 OptionalError FilamentHost::IsolatedPostRender(
     Flags<RenderResultFlags>* out_flags) {
   CheckOnFrameThread();
-
+  IMP_TRACE_NAME("FilamentHost::IsolatedPostRender");
   *out_flags = {};
 
   MP_RETURN_IF_ERROR(state_->PostRender(this));
@@ -855,6 +936,24 @@ void FilamentHost::SetCallSkipFrameWhenRenderingSkipped(
     bool call_skip_frame_when_rendering_skipped) {
   call_skip_frame_when_rendering_skipped_ =
       call_skip_frame_when_rendering_skipped;
+}
+
+uint64_t FilamentHost::UpdateSwapChainFlagsFromState(uint64_t flags) const {
+  if (engine_ && engine_->getActiveFeatureLevel() ==
+                     filament::backend::FeatureLevel::FEATURE_LEVEL_0) {
+    // Enable SRGB output for feature level 0 as it does not support full
+    // postprocessing.
+    flags |= filament::SwapChain::CONFIG_SRGB_COLORSPACE;
+  }
+  if (state_) {
+    if (state_->ShouldUseSrgbSwapChain()) {
+      flags |= filament::SwapChain::CONFIG_SRGB_COLORSPACE;
+    }
+    if (state_->ShouldUseStencilSwapChain()) {
+      flags |= filament::SwapChain::CONFIG_HAS_STENCIL_BUFFER;
+    }
+  }
+  return flags;
 }
 
 void FilamentHost::CheckOnFrameThread() const {

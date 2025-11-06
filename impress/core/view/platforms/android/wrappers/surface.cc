@@ -23,11 +23,11 @@
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
 #include "core/common/context.h"
 #include "core/common/jni_helpers.h"
 #include "core/render/content_security_level.h"
 #include "core/view/platforms/android/wrappers/canvas.h"
+#include "core/view/platforms/android/wrappers/rect.h"
 #include "core/view/platforms/android/wrappers/surface_texture.h"
 #include "mediapipe/framework/port/status_macros.h"
 
@@ -46,6 +46,8 @@ Surface::Surface(const Context& context, SurfaceTexture& surface_texture)
 }
 
 void Surface::InitializeJniHandles() {
+  lock_canvas_ = GetMethodHandle(
+      "lockCanvas", "(Landroid/graphics/Rect;)Landroid/graphics/Canvas;");
   lock_hardware_canvas_ =
       GetMethodHandle("lockHardwareCanvas", "()Landroid/graphics/Canvas;");
   unlock_canvas_and_post_ =
@@ -85,6 +87,14 @@ Surface::Surface(const Context& context, SurfaceTexture& surface_texture,
 absl::Status Surface::Initialize() {
   InitializeJniHandles();
   return absl::OkStatus();
+}
+
+Canvas Surface::LockCanvas() {
+  return Canvas(Env(), CallObjectMethod(lock_canvas_, nullptr));
+}
+
+Canvas Surface::LockCanvas(android::Rect& bounds) {
+  return Canvas(Env(), CallObjectMethod(lock_canvas_, bounds.WeakReference()));
 }
 
 Canvas Surface::LockHardwareCanvas() {

@@ -82,6 +82,11 @@ void PhysicsManager::RemoveRigidBody(btRigidBody& body) {
   if (constraint_dependency_map_.contains(&body)) {
     for (btTypedConstraint* const& constraint :
          constraint_dependency_map_[&body]) {
+      if (&constraint->getRigidBodyA() != &body) {
+        constraint_dependency_map_.erase(&constraint->getRigidBodyA());
+      } else if (&constraint->getRigidBodyB() != &body) {
+        constraint_dependency_map_.erase(&constraint->getRigidBodyB());
+      }
       world_.removeConstraint(constraint);
       active_constraints_map_.erase(constraint);
     }
@@ -164,7 +169,12 @@ void PhysicsManager::ProcessCollisions() {
 
     if (HasActiveCollidables(node_0) && HasActiveCollidables(node_1)) {
       node_0->Send(CollisionEvent(node_0, node_1));
-      node_1->Send(CollisionEvent(node_1, node_0));
+      // It's possible for the dispatched events to destroy these nodes.
+      // We should not send events when event.first and event.second
+      // will cause a crash.
+      if (node_0 && node_1) {
+        node_1->Send(CollisionEvent(node_1, node_0));
+      }
     }
   }
 }

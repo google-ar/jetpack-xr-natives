@@ -25,8 +25,14 @@ namespace imp::editor {
 struct WidgetLayoutInfo {
   explicit WidgetLayoutInfo() : panel_id(PanelId::kFreeform) {}
   explicit WidgetLayoutInfo(PanelId panel_id) : panel_id(panel_id) {}
+  WidgetLayoutInfo(PanelId panel_id, bool show_by_default)
+      : panel_id(panel_id), show_by_default(show_by_default) {}
 
   PanelId panel_id;
+  // Whether the widget is visible by default, only works for widgets in
+  // PanelId::kTabBar, PanelId::kLeftPanel, PanelId::kRightPanel,
+  // PanelId::kFreeform.
+  bool show_by_default = true;
 };
 
 }  // namespace imp::editor

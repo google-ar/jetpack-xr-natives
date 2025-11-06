@@ -62,6 +62,19 @@ struct FontHolder {
 
   // Returns the text style of the font in this FontHolder.
   virtual TextStyle GetTextStyle() const = 0;
+
+  // Returns true if this is an Android Typeface object.
+  //
+  // On Android, there are Typefaces and there are Fonts. Typefaces are
+  // specified with Paint.setTypeface(). We pass this Paint object to
+  // TextRunShaper.shapeTextRun(), which returns a list of glyphs that each have
+  // their own Font. Both this Font and the original Paint is then passed to
+  // Canvas.drawGlyphs(), which *ignores* the Typeface on the Paint and uses
+  // only the per-glyph Font.
+  //
+  // This is why there's two implementations of FontHolder used on Android:
+  // AndroidTypefaceFontHolder and AndroidFontFontHolder.
+  virtual bool IsAndroidTypeface() const { return false; }
 };
 
 }  // namespace imp

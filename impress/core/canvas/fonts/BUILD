@@ -173,7 +173,6 @@ cc_library(
         ":font_params_proto_cc",
         "//core/common:context",
         "//core/view/platforms/android/wrappers:graphics",
-        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/strings",
     ],
     alwayslink = 1,

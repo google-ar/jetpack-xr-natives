@@ -17,6 +17,7 @@ load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load(
     "//build_tools:imp.bzl",
     "if_android",
+    "if_dev_runtime",
     "if_ios",
     "if_non_android",
     "imp_copts",
@@ -65,7 +66,6 @@ cc_library(
         "//core/common:trace",
         "//core/math",
         "//core/ncsb",
-        "//core/render",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
@@ -76,7 +76,7 @@ cc_library(
         "@mediapipe//mediapipe/framework/port:status",
         "@robin_map",
         "@third_party//filament/libs:math_hdrs",
-    ],
+    ] + if_dev_runtime(["@dear_imgui"]),
     alwayslink = 1,
 )
 
@@ -194,9 +194,6 @@ proto_library(
     name = "keyboard_event_proto",
     srcs = [
         "keyboard_event.proto",
-    ],
-    deps = [
-        "//core/proto:imp_proto",
     ],
 )
 

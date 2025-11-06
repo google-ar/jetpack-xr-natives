@@ -17,6 +17,7 @@
 #ifndef THIRD_PARTY_IMPRESS_APIBINDINGS_IMPRESS_API_VIEW_H_
 #define THIRD_PARTY_IMPRESS_APIBINDINGS_IMPRESS_API_VIEW_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -37,13 +38,17 @@
 #include "apibindings/bindings_object.h"
 #include "apibindings/bindings_texture.h"
 #include "apibindings/stereo_surface.h"
+#include "core/common/hash.h"
 #include "core/common/jni_helpers.h"
+#include "core/common/owned_ptr.h"
+#include "core/common/type_traits.h"
 #include "core/material_library/generic_material_parameters.h"
 #include "core/material_library/generic_material_spec.h"
 #include "core/media/media_color_space.h"
 #include "core/media/media_type.h"
 #include "core/render/content_security_level.h"
 #include "core/split_engine/materials/split_engine_generic_material.h"
+#include "core/split_engine/materials/split_engine_material.h"
 #include "core/view/platforms/android/wrappers/surface.h"
 #include "imp.h"
 #include "split_engine/materials/water_reflection_material.h"
@@ -124,6 +129,9 @@ class ImpressApiView : public View {
   // Stops the animation of a glTF model or fails if the model is not animating
   // or does not exist.
   absl::Status StopGltfModelAnimation(int32_t node);
+  // Returns the local space unscaled bounds of the glTF model's axis aligned
+  // bounding box.
+  absl::StatusOr<imp::Box> GetGltfModelLocalBounds(int32_t node);
   // Creates an Impress node and returns a corresponding entity ID.
   int32_t CreateImpressNode();
   // Destroys an Impress node using its entity ID.
@@ -144,9 +152,20 @@ class ImpressApiView : public View {
   absl::Status SetStereoSurfaceEntityCanvasShape(
       int32_t node_id, StereoSurface::CanvasShape canvas_shape);
 
+  // Attaches or detaches a collider based on enable_collider and the canvas
+  // shape of the stereo surface.
+  absl::Status SetStereoSurfaceEntityColliderEnabled(int32_t node_id,
+                                                     bool enable_collider);
+
   // Returns the surface associated with a stereo surface entity.
   absl::StatusOr<android::Surface*> GetSurfaceFromStereoSurfaceEntity(
       int32_t node_id);
+
+  // Updates the Surface Dimensions of a stereo surface entity - This is needed
+  // to support android.graphics.Canvas methods on that Surface.
+  absl::Status SetSurfaceDimensionsForStereoSurfaceEntity(int32_t node_id,
+                                                          int32_t width,
+                                                          int32_t height);
 
   // Sets the Left/Right and Top/Bottom feather radius of a surface entity.
   absl::Status SetFeatherRadiusForStereoSurfaceEntity(
@@ -386,9 +405,15 @@ class ImpressApiView : public View {
   absl::Status SetAlphaCutoffOnGenericMaterial(std::intptr_t generic_material,
                                                float alpha_cutoff);
 
-  // Sets the material override for the mesh of a glTF model.
+  // Sets the material override for a node's mesh at a given primitive index.
   absl::Status SetMaterialOverride(int32_t node_id, std::intptr_t material,
-                                   absl::string_view mesh_name);
+                                   absl::string_view node_name,
+                                   size_t primitive_index);
+
+  // Clears the material override for a node's mesh at a given primitive index.
+  absl::Status ClearMaterialOverride(int32_t node_id,
+                                     absl::string_view node_name,
+                                     size_t primitive_index);
 
   // Sets the preferred IBL asset to be used by the system.
   absl::Status SetEnvironmentLight(std::intptr_t ibl_token);
@@ -412,13 +437,19 @@ class ImpressApiView : public View {
                       std::tuple<ComponentHandle<GltfAnimator>,
                                  std::optional<std::unique_ptr<AssetAnimator>>>>
       node_to_anim_ctx_;
-  // We keep track of the bindings materials and textures separately so we can
-  // destroy them in the right order (materials before textures).
-  absl::flat_hash_set<std::intptr_t> bindings_material_set_;
-  absl::flat_hash_set<std::intptr_t> bindings_texture_set_;
+  absl::flat_hash_map<std::intptr_t, OwnedTexturePtr> bindings_texture_map_;
+  absl::flat_hash_map<std::intptr_t,
+                      OwnedPtr<split_engine::SplitEngineMaterial>>
+      bindings_material_map_;
 
   absl::StatusOr<BorrowedTexturePtr> BorrowTexture(
       std::intptr_t texture_handle);
+
+  absl::StatusOr<ComponentHandle<GltfMesh>> FindGltfMeshByNodeName(
+      int32_t node_id, absl::string_view node_name);
+
+  void DestroyUnusedMaterials(bool shutdown);
+  void DestroyUnusedTextures(bool shutdown);
 };
 
 template <class T>
@@ -489,7 +520,23 @@ ImpressApiView::GetMaterialFromBindingsMaterial(std::intptr_t material_handle) {
     return absl::InvalidArgumentError("Provided material handle is not valid.");
   }
 
-  return bindings_material->GetMaterial<SplitEngineMaterialT>();
+  HashValue material_type_hash = bindings_material->GetTypeHash();
+  HashValue expected_type_hash = type_traits::kTypeHash<SplitEngineMaterialT>;
+  if (material_type_hash != expected_type_hash) {
+    return absl::InvalidArgumentError(
+        "Provided material handle is not of the correct type.");
+  }
+
+  split_engine::SplitEngineMaterial* base_material =
+      &(*bindings_material_map_.at(material_handle));
+  SplitEngineMaterialT* derived_material =
+      static_cast<SplitEngineMaterialT*>(base_material);
+  if (!derived_material) {
+    return absl::InvalidArgumentError(
+        "Material type hash matched, but static_cast failed.");
+  }
+
+  return derived_material;
 }
 
 }  // namespace imp

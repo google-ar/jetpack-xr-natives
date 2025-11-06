@@ -14,6 +14,8 @@
 
 #include "core/recipes/language/recipe_system.h"
 
+#include <cmath>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -311,7 +313,52 @@ RecipeSystem::RecipeSystem(BaseView& view) {
     float3 translation;
     quatf rotation;
     float3 scale;
+
+    recipe::Variables invalid;
+    invalid["translation"] = kZero3;
+    invalid["rotation"] = float4(0.f, 0.f, 0.f, 1.f);
+    invalid["scale"] = kOne3;
+    invalid["isValid"] = false;
+
+    // See if the fourth column is invalid
+    float4 last_column{transform[0].w, transform[1].w, transform[2].w,
+                       transform[3].w};
+    if (last_column != float4(0.f, 0.f, 0.f, 1.f)) {
+      return invalid;
+    }
+
+    // Make sure the basis vectors are not infinite, NAN, or zero length
+    float3 x_basis{transform[0].x, transform[0].y, transform[0].z};
+    float3 y_basis{transform[1].x, transform[1].y, transform[1].z};
+    float3 z_basis{transform[2].x, transform[2].y, transform[2].z};
+    float x_basis_length = length(x_basis);
+    float y_basis_length = length(y_basis);
+    float z_basis_length = length(z_basis);
+    if (std::isnan(x_basis_length) || std::isnan(y_basis_length) ||
+        std::isnan(z_basis_length) || AlmostEqual(x_basis_length, 0.f) ||
+        AlmostEqual(y_basis_length, 0.f) || AlmostEqual(z_basis_length, 0.f) ||
+        x_basis_length == std::numeric_limits<float>::infinity() ||
+        y_basis_length == std::numeric_limits<float>::infinity() ||
+        z_basis_length == std::numeric_limits<float>::infinity()) {
+      return invalid;
+    }
+
     imp::Decompose(transform, &translation, &rotation, &scale);
+
+    // Extract the unscaled rotation matrix so we can check the determinant
+    mat3f rotation_matrix;
+    rotation_matrix[0] = x_basis / scale.x;
+    rotation_matrix[1] = y_basis / scale.y;
+    rotation_matrix[2] = z_basis / scale.z;
+
+    float determinant = det(rotation_matrix);
+    if (!AlmostEqual(abs(determinant), 1.f)) {
+      return invalid;
+    }
+
+    if (determinant < 0.f) {
+      scale = -scale;
+    }
 
     float4 rotation_float4 = {rotation.x, rotation.y, rotation.z, rotation.w};
 
@@ -319,6 +366,7 @@ RecipeSystem::RecipeSystem(BaseView& view) {
     variables["translation"] = translation;
     variables["rotation"] = rotation_float4;
     variables["scale"] = scale;
+    variables["isValid"] = true;
     return variables;
   });
 

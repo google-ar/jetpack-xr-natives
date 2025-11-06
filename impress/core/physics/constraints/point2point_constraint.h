@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_PHYSICS_CONSTRAINTS_POINT2POINT_CONSTRAINT_H_
 
 #include <memory>
+#include <optional>
 
 #include "absl/status/status.h"
 #include "bullet/src/BulletDynamics/ConstraintSolver/btPoint2PointConstraint.h"
@@ -47,6 +48,8 @@ class Point2PointConstraint : public BaseConstraint, public Component {
   // Cleanup before rigid bodies to be sure that there are no constraints
   // depending on rigid bodies.
   static constexpr UpdatePhase kUpdatePhase = PhysicsManager::kUpdatePhase;
+  static constexpr Component::UpdateMode kUpdateMode =
+      Component::UpdateMode::kAlwaysUpdate;
   using UpdateDependents = UpdateIds<PhysicsManager>;
   using CleanupDependents = CleanupIds<RigidBody>;
 
@@ -62,7 +65,7 @@ class Point2PointConstraint : public BaseConstraint, public Component {
   // the value of `connected_pivot`, which may move the nodes.
   absl::Status Setup(NodeHandle connected_node, bool auto_configure = true,
                      float3 connected_pivot = float3(0.0f),
-                     float3 pivot = float3(0.0f));
+                     std::optional<float3> pivot = std::nullopt);
 
   // Sets the constraint with the already filled state.
   absl::Status SetupWithState();
@@ -95,7 +98,8 @@ class Point2PointConstraint : public BaseConstraint, public Component {
   std::unique_ptr<btPoint2PointConstraint> bt_constraint_;
 
  public:
-  using IsfInfo = IsfInfo<&Point2PointConstraint::state_>;
+  using IsfInfo =
+      IsfInfo<&Point2PointConstraint::state_, IsfDependencies<RigidBody>>;
 };
 
 }  // namespace imp

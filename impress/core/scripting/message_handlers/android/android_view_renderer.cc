@@ -286,7 +286,7 @@ void AndroidViewRenderer::UpdateCollider(const imp::Box& collider) {
   renderer_node_->GetComponent<BoxCollider>()->SetBox(collider);
 }
 
-BorrowedMaterialPtr AndroidViewRenderer::GetMaterial() {
+BorrowedMaterialPtr AndroidViewRenderer::GetMaterial() const {
   return std::holds_alternative<OwnedMaterialPtr>(material_)
              ? std::get<OwnedMaterialPtr>(material_).Borrow()
              : std::get<std::unique_ptr<android_xr::TextureExternalMaterial>>(

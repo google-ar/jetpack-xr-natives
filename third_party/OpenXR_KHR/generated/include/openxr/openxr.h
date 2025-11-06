@@ -770,6 +770,13 @@ typedef enum XrStructureType {
     XR_TYPE_PERFORMANCE_METRICS_COUNTER_ANDROID = 1000465001,
     XR_TYPE_TRACKABLE_OBJECT_ANDROID = 1000466000,
     XR_TYPE_TRACKABLE_OBJECT_CONFIGURATION_ANDROID = 1000466001,
+    XR_TYPE_FIT_TRACKER_CREATE_INFO_ANDROIDSYS = 1000468000,
+    XR_TYPE_FIT_TRACKER_GET_INFO_ANDROIDSYS = 1000468001,
+    XR_TYPE_FIT_TRACKER_RX_INSERT_ANDROIDSYS = 1000468002,
+    XR_TYPE_FIT_TRACKER_COMPARISON_INFO_ANDROIDSYS = 1000468003,
+    XR_TYPE_FIT_TRACKER_INSERT_CHANGE_ANDROIDSYS = 1000468004,
+    XR_TYPE_FIT_TRACKER_MOUNT_ANDROIDSYS = 1000468005,
+    XR_TYPE_FIT_TRACKER_FIT_DATA_ANDROIDSYS = 1000468006,
     XR_TYPE_FUTURE_CANCEL_INFO_EXT = 1000469000,
     XR_TYPE_FUTURE_POLL_INFO_EXT = 1000469001,
     XR_TYPE_FUTURE_COMPLETION_EXT = 1000469002,
@@ -930,13 +937,6 @@ typedef enum XrStructureType {
     XR_TYPE_PERSIST_SPATIAL_ENTITY_COMPLETION_EXT = 1000781001,
     XR_TYPE_SPATIAL_ENTITY_UNPERSIST_INFO_EXT = 1000781002,
     XR_TYPE_UNPERSIST_SPATIAL_ENTITY_COMPLETION_EXT = 1000781003,
-    XR_TYPE_FIT_TRACKER_CREATE_INFO_ANDROIDSYS = 1000782000,
-    XR_TYPE_FIT_TRACKER_GET_INFO_ANDROIDSYS = 1000782001,
-    XR_TYPE_FIT_TRACKER_RX_INSERT_ANDROIDSYS = 1000782002,
-    XR_TYPE_FIT_TRACKER_COMPARISON_INFO_ANDROIDSYS = 1000782003,
-    XR_TYPE_FIT_TRACKER_INSERT_CHANGE_ANDROIDSYS = 1000782004,
-    XR_TYPE_FIT_TRACKER_MOUNT_ANDROIDSYS = 1000782005,
-    XR_TYPE_FIT_TRACKER_FIT_DATA_ANDROIDSYS = 1000782006,
     XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_OBJECT_TRACKING_ANDROID = 1000785000,
     XR_TYPE_SPATIAL_COMPONENT_OBJECT_SEMANTIC_LABEL_LIST_ANDROID = 1000785001,
     XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_DEPTH_RAYCAST_ANDROID = 1000786000,
@@ -955,6 +955,8 @@ typedef enum XrStructureType {
     XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_STREETSCAPE_GEOMETRY_ANDROIDX1 = 1000789010,
     XR_TYPE_SPATIAL_COMPONENT_STREETSCAPE_GEOMETRY_METADATA_LIST_ANDROIDX1 = 1000789011,
     XR_TYPE_SPATIAL_ANCHOR_PARENT_ANDROID = 1000790000,
+    XR_TYPE_SPATIAL_DISCOVERY_NOT_SUBSUMED_FILTER_ANDROIDX1 = 1000791001,
+    XR_TYPE_SPATIAL_COMPONENT_SUBSUMED_BY_LIST_ANDROIDX1 = 1000791002,
     XR_TYPE_APERTURE_INFO_KHRX1 = 1000665000,
     XR_TYPE_APERTURE_SPACE_CREATE_INFO_KHRX1 = 1000665001,
     XR_TYPE_APERTURE_CREATE_INFO_KHRX1 = 1000665002,
@@ -963,6 +965,7 @@ typedef enum XrStructureType {
     XR_TYPE_SYSTEM_APERTURE_PROPERTIES_KHRX1 = 1000665005,
     XR_TYPE_APERTURE_STATE_KHRX1 = 1000665006,
     XR_TYPE_APERTURE_STATE_GET_INFO_KHRX1 = 1000665007,
+    XR_TYPE_BATTERY_STATE_DISPLAY_EXT = 1000836000,
     XR_TYPE_GRAPHICS_BINDING_VULKAN2_KHR = XR_TYPE_GRAPHICS_BINDING_VULKAN_KHR,
     XR_TYPE_SWAPCHAIN_IMAGE_VULKAN2_KHR = XR_TYPE_SWAPCHAIN_IMAGE_VULKAN_KHR,
     XR_TYPE_GRAPHICS_REQUIREMENTS_VULKAN2_KHR = XR_TYPE_GRAPHICS_REQUIREMENTS_VULKAN_KHR,
@@ -1082,6 +1085,7 @@ typedef enum XrObjectType {
     XR_OBJECT_TYPE_DEVICE_ANCHOR_PERSISTENCE_ANDROID = 1000457000,
     XR_OBJECT_TYPE_FACE_TRACKER_ANDROID = 1000458000,
     XR_OBJECT_TYPE_PASSTHROUGH_LAYER_ANDROID = 1000462000,
+    XR_OBJECT_TYPE_FIT_TRACKER_ANDROIDSYS = 1000468000,
     XR_OBJECT_TYPE_WORLD_MESH_DETECTOR_ML = 1000474000,
     XR_OBJECT_TYPE_FACIAL_EXPRESSION_CLIENT_ML = 1000482000,
     XR_OBJECT_TYPE_LIGHT_ESTIMATOR_ANDROID = 1000700000,
@@ -1098,7 +1102,6 @@ typedef enum XrObjectType {
     XR_OBJECT_TYPE_SPATIAL_CONTEXT_EXT = 1000740001,
     XR_OBJECT_TYPE_SPATIAL_SNAPSHOT_EXT = 1000740002,
     XR_OBJECT_TYPE_SPATIAL_PERSISTENCE_CONTEXT_EXT = 1000763000,
-    XR_OBJECT_TYPE_FIT_TRACKER_ANDROIDSYS = 1000782000,
     XR_OBJECT_TYPE_EARTH_TRACKER_ANDROIDX1 = 1000789000,
     XR_OBJECT_TYPE_APERTURE_KHRX1 = 1000665000,
     XR_OBJECT_TYPE_MAX_ENUM = 0x7FFFFFFF
@@ -9805,6 +9808,132 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetTrackableObjectANDROID(
 #define XR_ANDROID_UNBOUNDED_REFERENCE_SPACE_EXTENSION_NAME "XR_ANDROID_unbounded_reference_space"
 
 
+// XR_ANDROIDSYS_fit_tracking is a preprocessor guard. Do not pass it to API calls.
+#define XR_ANDROIDSYS_fit_tracking 1
+XR_DEFINE_HANDLE(XrFitTrackerANDROIDSYS)
+#define XR_ANDROIDSYS_fit_tracking_SPEC_VERSION 1
+#define XR_ANDROIDSYS_FIT_TRACKING_EXTENSION_NAME "XR_ANDROIDSYS_fit_tracking"
+
+typedef enum XrFitTrackerStatusANDROIDSYS {
+    XR_FIT_TRACKER_STATUS_INITIALIZED_ANDROIDSYS = 0,
+    XR_FIT_TRACKER_STATUS_ERROR_ANDROIDSYS = 1,
+    XR_FIT_TRACKER_STATUS_CAMERA_ERROR_ANDROIDSYS = 2,
+    XR_FIT_TRACKER_STATUS_UNDEFINED_ERROR_ANDROIDSYS = 3,
+    XR_FIT_TRACKER_STATUS_MAX_ENUM_ANDROIDSYS = 0x7FFFFFFF
+} XrFitTrackerStatusANDROIDSYS;
+
+typedef enum XrFitTrackerRxInsertStatusANDROIDSYS {
+    XR_FIT_TRACKER_RX_INSERT_STATUS_NOT_PRESENT_ANDROIDSYS = 0,
+    XR_FIT_TRACKER_RX_INSERT_STATUS_PRESENT_ANDROIDSYS = 1,
+    XR_FIT_TRACKER_RX_INSERT_STATUS_GLASSES_PRESENT_ANDROIDSYS = 2,
+    XR_FIT_TRACKER_RX_INSERT_STATUS_MAX_ENUM_ANDROIDSYS = 0x7FFFFFFF
+} XrFitTrackerRxInsertStatusANDROIDSYS;
+
+typedef enum XrFitTrackerRxInsertChangeStatusANDROIDSYS {
+    XR_FIT_TRACKER_RX_INSERT_CHANGE_STATUS_NOT_DETECTED_ANDROIDSYS = 0,
+    XR_FIT_TRACKER_RX_INSERT_CHANGE_STATUS_DETECTED_ANDROIDSYS = 1,
+    XR_FIT_TRACKER_RX_INSERT_CHANGE_STATUS_MAX_ENUM_ANDROIDSYS = 0x7FFFFFFF
+} XrFitTrackerRxInsertChangeStatusANDROIDSYS;
+
+typedef enum XrFitTrackerHeadMountedStatusANDROIDSYS {
+    XR_FIT_TRACKER_HEAD_MOUNTED_STATUS_NOT_DETECTED_ANDROIDSYS = 0,
+    XR_FIT_TRACKER_HEAD_MOUNTED_STATUS_DETECTED_ANDROIDSYS = 1,
+    XR_FIT_TRACKER_HEAD_MOUNTED_STATUS_MAX_ENUM_ANDROIDSYS = 0x7FFFFFFF
+} XrFitTrackerHeadMountedStatusANDROIDSYS;
+typedef struct XrFitTrackerCreateInfoANDROIDSYS {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+} XrFitTrackerCreateInfoANDROIDSYS;
+
+typedef struct XrFitTrackerGetInfoANDROIDSYS {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+} XrFitTrackerGetInfoANDROIDSYS;
+
+typedef struct XrFitTrackerRxInsertANDROIDSYS {
+    XrStructureType                         type;
+    void* XR_MAY_ALIAS                      next;
+    XrFitTrackerStatusANDROIDSYS            status;
+    int64_t                                 referenceFrameId;
+    XrFitTrackerRxInsertStatusANDROIDSYS    rxInsertStatusLeftEye;
+    XrFitTrackerRxInsertStatusANDROIDSYS    rxInsertStatusRightEye;
+} XrFitTrackerRxInsertANDROIDSYS;
+
+typedef struct XrFitTrackerComparisonInfoANDROIDSYS {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+    int64_t                     referenceImageA;
+    int64_t                     referenceImageB;
+} XrFitTrackerComparisonInfoANDROIDSYS;
+
+typedef struct XrFitTrackerInsertChangeANDROIDSYS {
+    XrStructureType                               type;
+    void* XR_MAY_ALIAS                            next;
+    XrFitTrackerStatusANDROIDSYS                  status;
+    int64_t                                       referenceFrameId;
+    XrFitTrackerRxInsertChangeStatusANDROIDSYS    rxInsertChangeStatusLeftEye;
+    XrFitTrackerRxInsertChangeStatusANDROIDSYS    rxInsertChangeStatusRightEye;
+} XrFitTrackerInsertChangeANDROIDSYS;
+
+typedef struct XrFitTrackerMountANDROIDSYS {
+    XrStructureType                            type;
+    void* XR_MAY_ALIAS                         next;
+    XrFitTrackerStatusANDROIDSYS               status;
+    int64_t                                    referenceFrameId;
+    XrFitTrackerHeadMountedStatusANDROIDSYS    mountStatus;
+} XrFitTrackerMountANDROIDSYS;
+
+typedef struct XrFitTrackerFitDataANDROIDSYS {
+    XrStructureType                 type;
+    void* XR_MAY_ALIAS              next;
+    XrFitTrackerStatusANDROIDSYS    status;
+    int64_t                         referenceFrameId;
+    XrOffset2Di                     eyeImageCenterLeft;
+    XrOffset2Di                     eyeImageCenterRight;
+    float                           eyeReliefLeft;
+    float                           eyeReliefRight;
+} XrFitTrackerFitDataANDROIDSYS;
+
+typedef XrResult (XRAPI_PTR *PFN_xrCreateFitTrackerANDROIDSYS)(XrSession session, const XrFitTrackerCreateInfoANDROIDSYS* createInfo, XrFitTrackerANDROIDSYS* fitTrackerOut);
+typedef XrResult (XRAPI_PTR *PFN_xrDestroyFitTrackerANDROIDSYS)(XrFitTrackerANDROIDSYS fitTracker);
+typedef XrResult (XRAPI_PTR *PFN_xrGetFitTrackerCurrentRxInsertANDROIDSYS)(XrFitTrackerANDROIDSYS fitTracker, const XrFitTrackerGetInfoANDROIDSYS* getInfo, XrFitTrackerRxInsertANDROIDSYS* rxInsertOut);
+typedef XrResult (XRAPI_PTR *PFN_xrCompareFitTrackerRxInsertsANDROIDSYS)(XrFitTrackerANDROIDSYS fitTracker, const XrFitTrackerComparisonInfoANDROIDSYS* comparisonInfo, XrFitTrackerInsertChangeANDROIDSYS* rxInsertChangeOut);
+typedef XrResult (XRAPI_PTR *PFN_xrGetFitTrackerMountANDROIDSYS)(XrFitTrackerANDROIDSYS fitTracker, const XrFitTrackerGetInfoANDROIDSYS* getInfo, XrFitTrackerMountANDROIDSYS* mountOut);
+typedef XrResult (XRAPI_PTR *PFN_xrGetFitTrackerFitDataANDROIDSYS)(XrFitTrackerANDROIDSYS fitTracker, const XrFitTrackerGetInfoANDROIDSYS* getInfo, XrFitTrackerFitDataANDROIDSYS* fitDataOut);
+
+#ifndef XR_NO_PROTOTYPES
+#ifdef XR_EXTENSION_PROTOTYPES
+XRAPI_ATTR XrResult XRAPI_CALL xrCreateFitTrackerANDROIDSYS(
+    XrSession                                   session,
+    const XrFitTrackerCreateInfoANDROIDSYS*     createInfo,
+    XrFitTrackerANDROIDSYS*                     fitTrackerOut);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrDestroyFitTrackerANDROIDSYS(
+    XrFitTrackerANDROIDSYS                      fitTracker);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetFitTrackerCurrentRxInsertANDROIDSYS(
+    XrFitTrackerANDROIDSYS                      fitTracker,
+    const XrFitTrackerGetInfoANDROIDSYS*        getInfo,
+    XrFitTrackerRxInsertANDROIDSYS*             rxInsertOut);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrCompareFitTrackerRxInsertsANDROIDSYS(
+    XrFitTrackerANDROIDSYS                      fitTracker,
+    const XrFitTrackerComparisonInfoANDROIDSYS* comparisonInfo,
+    XrFitTrackerInsertChangeANDROIDSYS*         rxInsertChangeOut);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetFitTrackerMountANDROIDSYS(
+    XrFitTrackerANDROIDSYS                      fitTracker,
+    const XrFitTrackerGetInfoANDROIDSYS*        getInfo,
+    XrFitTrackerMountANDROIDSYS*                mountOut);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetFitTrackerFitDataANDROIDSYS(
+    XrFitTrackerANDROIDSYS                      fitTracker,
+    const XrFitTrackerGetInfoANDROIDSYS*        getInfo,
+    XrFitTrackerFitDataANDROIDSYS*              fitDataOut);
+#endif /* XR_EXTENSION_PROTOTYPES */
+#endif /* !XR_NO_PROTOTYPES */
+
+
 // XR_EXT_future is a preprocessor guard. Do not pass it to API calls.
 #define XR_EXT_future 1
 #define XR_EXT_future_SPEC_VERSION        1
@@ -12013,6 +12142,7 @@ typedef enum XrSpatialComponentTypeEXT {
     XR_SPATIAL_COMPONENT_TYPE_OBJECT_SEMANTIC_LABEL_ANDROID = 1000785000,
     XR_SPATIAL_COMPONENT_TYPE_RAYCAST_RESULT_ANDROID = 1000786000,
     XR_SPATIAL_COMPONENT_TYPE_STREETSCAPE_GEOMETRY_METADATA_ANDROIDX1 = 1000789000,
+    XR_SPATIAL_COMPONENT_TYPE_SUBSUMED_BY_ANDROIDX1 = 1000791000,
     XR_SPATIAL_COMPONENT_TYPE_MAX_ENUM_EXT = 0x7FFFFFFF
 } XrSpatialComponentTypeEXT;
 
@@ -12698,132 +12828,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrUnpersistSpatialEntityCompleteEXT(
 #endif /* !XR_NO_PROTOTYPES */
 
 
-// XR_ANDROIDSYS_fit_tracking is a preprocessor guard. Do not pass it to API calls.
-#define XR_ANDROIDSYS_fit_tracking 1
-XR_DEFINE_HANDLE(XrFitTrackerANDROIDSYS)
-#define XR_ANDROIDSYS_fit_tracking_SPEC_VERSION 1
-#define XR_ANDROIDSYS_FIT_TRACKING_EXTENSION_NAME "XR_ANDROIDSYS_fit_tracking"
-
-typedef enum XrFitTrackerStatusANDROIDSYS {
-    XR_FIT_TRACKER_STATUS_INITIALIZED_ANDROIDSYS = 0,
-    XR_FIT_TRACKER_STATUS_ERROR_ANDROIDSYS = 1,
-    XR_FIT_TRACKER_STATUS_CAMERA_ERROR_ANDROIDSYS = 2,
-    XR_FIT_TRACKER_STATUS_UNDEFINED_ERROR_ANDROIDSYS = 3,
-    XR_FIT_TRACKER_STATUS_MAX_ENUM_ANDROIDSYS = 0x7FFFFFFF
-} XrFitTrackerStatusANDROIDSYS;
-
-typedef enum XrFitTrackerRxInsertStatusANDROIDSYS {
-    XR_FIT_TRACKER_RX_INSERT_STATUS_NOT_PRESENT_ANDROIDSYS = 0,
-    XR_FIT_TRACKER_RX_INSERT_STATUS_PRESENT_ANDROIDSYS = 1,
-    XR_FIT_TRACKER_RX_INSERT_STATUS_GLASSES_PRESENT_ANDROIDSYS = 2,
-    XR_FIT_TRACKER_RX_INSERT_STATUS_MAX_ENUM_ANDROIDSYS = 0x7FFFFFFF
-} XrFitTrackerRxInsertStatusANDROIDSYS;
-
-typedef enum XrFitTrackerRxInsertChangeStatusANDROIDSYS {
-    XR_FIT_TRACKER_RX_INSERT_CHANGE_STATUS_NOT_DETECTED_ANDROIDSYS = 0,
-    XR_FIT_TRACKER_RX_INSERT_CHANGE_STATUS_DETECTED_ANDROIDSYS = 1,
-    XR_FIT_TRACKER_RX_INSERT_CHANGE_STATUS_MAX_ENUM_ANDROIDSYS = 0x7FFFFFFF
-} XrFitTrackerRxInsertChangeStatusANDROIDSYS;
-
-typedef enum XrFitTrackerHeadMountedStatusANDROIDSYS {
-    XR_FIT_TRACKER_HEAD_MOUNTED_STATUS_NOT_DETECTED_ANDROIDSYS = 0,
-    XR_FIT_TRACKER_HEAD_MOUNTED_STATUS_DETECTED_ANDROIDSYS = 1,
-    XR_FIT_TRACKER_HEAD_MOUNTED_STATUS_MAX_ENUM_ANDROIDSYS = 0x7FFFFFFF
-} XrFitTrackerHeadMountedStatusANDROIDSYS;
-typedef struct XrFitTrackerCreateInfoANDROIDSYS {
-    XrStructureType             type;
-    const void* XR_MAY_ALIAS    next;
-} XrFitTrackerCreateInfoANDROIDSYS;
-
-typedef struct XrFitTrackerGetInfoANDROIDSYS {
-    XrStructureType             type;
-    const void* XR_MAY_ALIAS    next;
-} XrFitTrackerGetInfoANDROIDSYS;
-
-typedef struct XrFitTrackerRxInsertANDROIDSYS {
-    XrStructureType                         type;
-    void* XR_MAY_ALIAS                      next;
-    XrFitTrackerStatusANDROIDSYS            status;
-    int64_t                                 referenceFrameId;
-    XrFitTrackerRxInsertStatusANDROIDSYS    rxInsertStatusLeftEye;
-    XrFitTrackerRxInsertStatusANDROIDSYS    rxInsertStatusRightEye;
-} XrFitTrackerRxInsertANDROIDSYS;
-
-typedef struct XrFitTrackerComparisonInfoANDROIDSYS {
-    XrStructureType             type;
-    const void* XR_MAY_ALIAS    next;
-    int64_t                     referenceImageA;
-    int64_t                     referenceImageB;
-} XrFitTrackerComparisonInfoANDROIDSYS;
-
-typedef struct XrFitTrackerInsertChangeANDROIDSYS {
-    XrStructureType                               type;
-    void* XR_MAY_ALIAS                            next;
-    XrFitTrackerStatusANDROIDSYS                  status;
-    int64_t                                       referenceFrameId;
-    XrFitTrackerRxInsertChangeStatusANDROIDSYS    rxInsertChangeStatusLeftEye;
-    XrFitTrackerRxInsertChangeStatusANDROIDSYS    rxInsertChangeStatusRightEye;
-} XrFitTrackerInsertChangeANDROIDSYS;
-
-typedef struct XrFitTrackerMountANDROIDSYS {
-    XrStructureType                            type;
-    void* XR_MAY_ALIAS                         next;
-    XrFitTrackerStatusANDROIDSYS               status;
-    int64_t                                    referenceFrameId;
-    XrFitTrackerHeadMountedStatusANDROIDSYS    mountStatus;
-} XrFitTrackerMountANDROIDSYS;
-
-typedef struct XrFitTrackerFitDataANDROIDSYS {
-    XrStructureType                 type;
-    void* XR_MAY_ALIAS              next;
-    XrFitTrackerStatusANDROIDSYS    status;
-    int64_t                         referenceFrameId;
-    XrOffset2Di                     eyeImageCenterLeft;
-    XrOffset2Di                     eyeImageCenterRight;
-    float                           eyeReliefLeft;
-    float                           eyeReliefRight;
-} XrFitTrackerFitDataANDROIDSYS;
-
-typedef XrResult (XRAPI_PTR *PFN_xrCreateFitTrackerANDROIDSYS)(XrSession session, const XrFitTrackerCreateInfoANDROIDSYS* createInfo, XrFitTrackerANDROIDSYS* fitTrackerOut);
-typedef XrResult (XRAPI_PTR *PFN_xrDestroyFitTrackerANDROIDSYS)(XrFitTrackerANDROIDSYS fitTracker);
-typedef XrResult (XRAPI_PTR *PFN_xrGetFitTrackerCurrentRxInsertANDROIDSYS)(XrFitTrackerANDROIDSYS fitTracker, const XrFitTrackerGetInfoANDROIDSYS* getInfo, XrFitTrackerRxInsertANDROIDSYS* rxInsertOut);
-typedef XrResult (XRAPI_PTR *PFN_xrCompareFitTrackerRxInsertsANDROIDSYS)(XrFitTrackerANDROIDSYS fitTracker, const XrFitTrackerComparisonInfoANDROIDSYS* comparisonInfo, XrFitTrackerInsertChangeANDROIDSYS* rxInsertChangeOut);
-typedef XrResult (XRAPI_PTR *PFN_xrGetFitTrackerMountANDROIDSYS)(XrFitTrackerANDROIDSYS fitTracker, const XrFitTrackerGetInfoANDROIDSYS* getInfo, XrFitTrackerMountANDROIDSYS* mountOut);
-typedef XrResult (XRAPI_PTR *PFN_xrGetFitTrackerFitDataANDROIDSYS)(XrFitTrackerANDROIDSYS fitTracker, const XrFitTrackerGetInfoANDROIDSYS* getInfo, XrFitTrackerFitDataANDROIDSYS* fitDataOut);
-
-#ifndef XR_NO_PROTOTYPES
-#ifdef XR_EXTENSION_PROTOTYPES
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateFitTrackerANDROIDSYS(
-    XrSession                                   session,
-    const XrFitTrackerCreateInfoANDROIDSYS*     createInfo,
-    XrFitTrackerANDROIDSYS*                     fitTrackerOut);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrDestroyFitTrackerANDROIDSYS(
-    XrFitTrackerANDROIDSYS                      fitTracker);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrGetFitTrackerCurrentRxInsertANDROIDSYS(
-    XrFitTrackerANDROIDSYS                      fitTracker,
-    const XrFitTrackerGetInfoANDROIDSYS*        getInfo,
-    XrFitTrackerRxInsertANDROIDSYS*             rxInsertOut);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrCompareFitTrackerRxInsertsANDROIDSYS(
-    XrFitTrackerANDROIDSYS                      fitTracker,
-    const XrFitTrackerComparisonInfoANDROIDSYS* comparisonInfo,
-    XrFitTrackerInsertChangeANDROIDSYS*         rxInsertChangeOut);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrGetFitTrackerMountANDROIDSYS(
-    XrFitTrackerANDROIDSYS                      fitTracker,
-    const XrFitTrackerGetInfoANDROIDSYS*        getInfo,
-    XrFitTrackerMountANDROIDSYS*                mountOut);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrGetFitTrackerFitDataANDROIDSYS(
-    XrFitTrackerANDROIDSYS                      fitTracker,
-    const XrFitTrackerGetInfoANDROIDSYS*        getInfo,
-    XrFitTrackerFitDataANDROIDSYS*              fitDataOut);
-#endif /* XR_EXTENSION_PROTOTYPES */
-#endif /* !XR_NO_PROTOTYPES */
-
-
 // XR_ANDROID_spatial_object_tracking is a preprocessor guard. Do not pass it to API calls.
 #define XR_ANDROID_spatial_object_tracking 1
 #define XR_ANDROID_spatial_object_tracking_SPEC_VERSION 1
@@ -13186,6 +13190,47 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateSpatialAnchorAttachableComponentsANDRO
     XrSpatialComponentTypeEXT*                  attachableComponents);
 #endif /* XR_EXTENSION_PROTOTYPES */
 #endif /* !XR_NO_PROTOTYPES */
+
+
+// XR_ANDROIDX1_spatial_component_subsumed_by is a preprocessor guard. Do not pass it to API calls.
+#define XR_ANDROIDX1_spatial_component_subsumed_by 1
+#define XR_ANDROIDX1_spatial_component_subsumed_by_SPEC_VERSION 1
+#define XR_ANDROIDX1_SPATIAL_COMPONENT_SUBSUMED_BY_EXTENSION_NAME "XR_ANDROIDX1_spatial_component_subsumed_by"
+// XrSpatialDiscoveryNotSubsumedFilterANDROIDX1 extends XrSpatialDiscoverySnapshotCreateInfoEXT
+typedef struct XrSpatialDiscoveryNotSubsumedFilterANDROIDX1 {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+} XrSpatialDiscoveryNotSubsumedFilterANDROIDX1;
+
+// XrSpatialComponentSubsumedByListANDROIDX1 extends XrSpatialComponentDataQueryResultEXT
+typedef struct XrSpatialComponentSubsumedByListANDROIDX1 {
+    XrStructureType          type;
+    void* XR_MAY_ALIAS       next;
+    uint32_t                 subsumedByCount;
+    XrSpatialEntityIdEXT*    subsumedByIds;
+} XrSpatialComponentSubsumedByListANDROIDX1;
+
+
+
+// XR_EXT_battery_state_display is a preprocessor guard. Do not pass it to API calls.
+#define XR_EXT_battery_state_display 1
+#define XR_EXT_battery_state_display_SPEC_VERSION 1
+#define XR_EXT_BATTERY_STATE_DISPLAY_EXTENSION_NAME "XR_EXT_battery_state_display"
+typedef XrFlags64 XrBatteryStateDisplayStateFlagsEXT;
+
+// Flag bits for XrBatteryStateDisplayStateFlagsEXT
+static const XrBatteryStateDisplayStateFlagsEXT XR_BATTERY_STATE_DISPLAY_STATE_VALID_BIT_EXT = 0x00000001;
+static const XrBatteryStateDisplayStateFlagsEXT XR_BATTERY_STATE_DISPLAY_STATE_CHARGING_BIT_EXT = 0x00000002;
+static const XrBatteryStateDisplayStateFlagsEXT XR_BATTERY_STATE_DISPLAY_STATE_PLUGGED_IN_BIT_EXT = 0x00000004;
+static const XrBatteryStateDisplayStateFlagsEXT XR_BATTERY_STATE_DISPLAY_STATE_NO_BATTERY_BIT_EXT = 0x00000008;
+
+typedef struct XrBatteryStateDisplayEXT {
+    XrStructureType                       type;
+    const void* XR_MAY_ALIAS              next;
+    XrBatteryStateDisplayStateFlagsEXT    stateBits;
+    float                                 batteryLevel;
+} XrBatteryStateDisplayEXT;
+
 
 #ifdef __cplusplus
 }

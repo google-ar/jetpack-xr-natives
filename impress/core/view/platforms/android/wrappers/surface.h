@@ -27,6 +27,7 @@
 #include "core/common/jni_helpers.h"
 #include "core/render/content_security_level.h"
 #include "core/view/platforms/android/wrappers/canvas.h"
+#include "core/view/platforms/android/wrappers/rect.h"
 #include "core/view/platforms/android/wrappers/surface_texture.h"
 
 namespace imp::android {
@@ -45,6 +46,13 @@ class Surface : public JavaWrapper {
   Surface(const Context& context, jobject j_surface);
   Surface(const Context& context, SurfaceTexture& surface_texture);
 
+  // Locks the canvas for drawing. The entire surface is marked as dirty, so all
+  // existing content will be cleared. If there's a need to preserve existing
+  // content, use LockCanvas(android::Rect& bounds) to specify the dirty region.
+  Canvas LockCanvas();
+  // Locks the canvas for drawing. The specified region is marked as dirty, so
+  // existing content will be preserved outside of the specified bounds.
+  Canvas LockCanvas(android::Rect& bounds);
   Canvas LockHardwareCanvas();
   void UnlockCanvasAndPost(Canvas& canvas);
   ContentSecurityLevel GetContentSecurityLevel() const;
@@ -58,6 +66,7 @@ class Surface : public JavaWrapper {
   absl::Status Initialize();
   void InitializeJniHandles();
 
+  JniHandle lock_canvas_;
   JniHandle lock_hardware_canvas_;
   JniHandle unlock_canvas_and_post_;
 

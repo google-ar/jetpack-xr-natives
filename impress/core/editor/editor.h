@@ -19,7 +19,7 @@
 
 #include <memory>
 
-#include "absl/base/attributes.h"
+#include "absl/container/flat_hash_set.h"
 #include "core/editor/editor_info.h"
 #include "core/editor/editor_plugin.h"
 #include "core/ncsb/component_handle.h"
@@ -61,9 +61,37 @@ class Editor : public System {
   // Removes a node previously added to the editor with AddNode(node).
   virtual void RemoveNode(NodeHandle node) = 0;
 
+  // Selection mode for the editor.
+  enum class SelectionMode {
+    // In this mode, only a single node can be selected at any time. Selecting
+    // a new node will deselect any previously selected node.
+    kSingleNode,
+    // In this mode, multiple nodes can be selected simultaneously. Subsequent
+    // selections add to the current set of selected nodes.
+    kMultipleNodes,
+  };
+
   // Sends a NodeSelectionChangedEvent in the editor dispatcher for the given
-  // node, if the node isn't already selected.
-  virtual void SelectNode(NodeHandle node) noexcept = 0;
+  // node.
+  // * If `multi_selection_enabled` is true:
+  //     - The node is added to the current selection.
+  //     - If the node is already selected, it is deselected.
+  // * Otherwise:
+  //     - The node becomes the *only* selected node.
+  // When the node is invalid, deselect all nodes.
+  virtual void SelectNode(
+      NodeHandle node,
+      SelectionMode selection_mode = SelectionMode::kSingleNode) noexcept = 0;
+
+  // Returns the selected nodes.
+  virtual const absl::flat_hash_set<NodeHandle>&
+  GetSelectedNodes() noexcept = 0;
+
+  // Returns the single selected node.
+  //
+  // If there are multiple selected nodes, this function will return an invalid
+  // node handle.
+  virtual NodeHandle GetSingleSelectedNode() noexcept = 0;
 
   // Switches to the isometric Editor camera+input mode.
   // A camera separate from the default app camera is spawned and positioned

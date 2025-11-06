@@ -22,11 +22,11 @@
 
 namespace imp {
 
-BindingsTexture::BindingsTexture(OwnedOrBorrowedTexturePtr texture)
+BindingsTexture::BindingsTexture(BorrowedTexturePtr texture)
     : BindingsObject(), texture_(std::move(texture)) {}
 
 BorrowedTexturePtr BindingsTexture::GetTexture(SmallSourceLocation loc) {
-  return texture_.Borrow(loc);
+  return texture_.WithNewLocation(loc);
 }
 
 }  // namespace imp

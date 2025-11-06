@@ -55,6 +55,10 @@ class ParticleData {
   float3 GetVelocity() const;
   void SetVelocity(float3 velocity);
 
+  // Returns the current acceleration value for a particle.
+  float3 GetAcceleration() const;
+  void SetAcceleration(float3 acceleration);
+
  private:
   ParticleDataProvider& data_provider_;
   const DataLayout& data_layout_;

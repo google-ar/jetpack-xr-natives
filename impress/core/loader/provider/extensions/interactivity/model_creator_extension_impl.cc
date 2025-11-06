@@ -260,6 +260,14 @@ InteractivityModelCreatorExtensionImpl::DeserializeInteractivityData(
             configuration_data.id = model::ModelData::InteractivityData::
                 NodeData::ConfigurationType::INITIAL_INDEX;
             break;
+          case schemas::InteractivityNodeConfigurationType::VARIABLES:
+            configuration_data.id = model::ModelData::InteractivityData::
+                NodeData::ConfigurationType::VARIABLES;
+            break;
+          case schemas::InteractivityNodeConfigurationType::USE_SLERP:
+            configuration_data.id = model::ModelData::InteractivityData::
+                NodeData::ConfigurationType::USE_SLERP;
+            break;
         }
 
         // Second switch statement to reduce the amount of duplicated code
@@ -298,6 +306,7 @@ InteractivityModelCreatorExtensionImpl::DeserializeInteractivityData(
           case schemas::InteractivityNodeConfigurationType::STOP_PROPAGATION:
           case schemas::InteractivityNodeConfigurationType::IS_RANDOM:
           case schemas::InteractivityNodeConfigurationType::IS_LOOP:
+          case schemas::InteractivityNodeConfigurationType::USE_SLERP:
             if (!config->value_as_Bool()) {
               return absl::InternalError(absl::StrFormat(
                   "Interactivity node configuration indicates an bool value "
@@ -325,6 +334,19 @@ InteractivityModelCreatorExtensionImpl::DeserializeInteractivityData(
             configuration_data.value =
                 std::vector<int>(config->value_as_IntArray()->values()->begin(),
                                  config->value_as_IntArray()->values()->end());
+            break;
+          case schemas::InteractivityNodeConfigurationType::VARIABLES:
+            const schemas::IntArray* variable_index_array_ptr =
+                config->value_as_IntArray();
+            if (!variable_index_array_ptr) {
+              return absl::InternalError(absl::StrFormat(
+                  "Interactivity node configuration indicates an int array "
+                  "value is needed for id %d, but it's unset",
+                  config->id()));
+            }
+            configuration_data.value =
+                std::vector<int>(variable_index_array_ptr->values()->begin(),
+                                 variable_index_array_ptr->values()->end());
             break;
         }
 

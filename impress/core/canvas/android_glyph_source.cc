@@ -14,25 +14,39 @@
 
 #include "core/canvas/android_glyph_source.h"
 
+#include <jni.h>
+
 #include <memory>
 #include <utility>
 #include <vector>
 
-#include "core/common/log.h"
 #include "absl/strings/string_view.h"
+#include "core/canvas/android_glyph_advance.h"
 #include "core/canvas/fonts/android_font_font_holder.h"
 #include "core/canvas/fonts/font_holder.h"
 #include "core/canvas/scoped_canvas.h"
+#include "core/common/context.h"
 #include "core/common/jni_helpers.h"
 #include "core/math/vec.h"
+#include "core/view/platforms/android/wrappers/canvas.h"
 #include "core/view/platforms/android/wrappers/font.h"
-#include "core/view/platforms/android/wrappers/graphics_helpers.h"
+#include "core/view/platforms/android/wrappers/paint.h"
 
+// TODO: This feature adds a non-trivial amount of space to the
+// binary, but is not critical to Impress's overall functionality. Blaze also
+// doesn't offer a way to automatically pull in a JNI->Java interface's
+// corresponding Java dependency, so clients need to explicitly specify the JVM
+// dependency themselves. At the same time, we don't want to mysteriously crash
+// every single client for missing this dependency, especially if they never
+// even touch the glyph-specific APIs.
 #define LOG_MISSING_DEPENDENCY_MESSAGE(level)                            \
   IMP_LOG(imp::level)                                                             \
-      << "Likely missing Android Java dependency on "                    \
+      << "Error resolving symbol in the Impress Android glyph package. " \
+         "Likely missing Android Java dependency on "                    \
          "\"//java/com/google/ar/imp/core/glyph\". " \
-         "Please adjust your build files accordingly."
+         "Also ensure that your proguard_specs list includes "           \
+         "\"//java/com/google/android/apps/common/"                      \
+         "proguard:annotations.pgcfg\"."
 
 namespace imp {
 
@@ -52,14 +66,6 @@ AndroidGlyphSource::AndroidGlyphSource(const Context& context, Method method)
   JNIEnv* env = context_.GetJniEnv();
   JniUniquePtr<jclass> local_class_ref = FindClass(env, class_path);
   if (env->ExceptionCheck()) {
-    // TODO: This feature adds a non-trivial amount of space to the
-    // binary, but is not critical to Impress's overall functionality. Blaze
-    // also doesn't offer a way to automatically pull in a JNI->Java interface's
-    // corresponding Java dependency, so clients need to explicitly specify the
-    // JVM dependency themselves. At the same time, we don't want to
-    // mysteriously crash every single client for missing this dependency,
-    // especially if they never even touch the glyph-specific APIs.
-    env->ExceptionDescribe();
     env->ExceptionClear();
     LOG_MISSING_DEPENDENCY_MESSAGE(ERROR);
     return;
@@ -70,6 +76,13 @@ AndroidGlyphSource::AndroidGlyphSource(const Context& context, Method method)
   jmethodID init =
       env->GetMethodID(Clazz(), "<init>",
                        "(Lcom/google/ar/imp/core/glyph/GlyphSource$Method;)V");
+  if (env->ExceptionCheck()) {
+    env->ExceptionClear();
+    LOG_MISSING_DEPENDENCY_MESSAGE(ERROR);
+    DeleteRef(env, Clazz());
+    class_ = {};
+    return;
+  }
   AddJniInfo(init);
 
   {
@@ -79,12 +92,19 @@ AndroidGlyphSource::AndroidGlyphSource(const Context& context, Method method)
     SetSelf(LocalToGlobalRef(std::move(local_self_ref)));
   }
 
-  get_glyph_metrics_ =
-      GetMethodHandle("getGlyphMetrics", "(ILjava/lang/Object;IFF[F)V");
-  get_text_glyphs_ = GetMethodHandle(
-      "getTextGlyphs", "(Ljava/lang/String;IF[I[F[Ljava/lang/Object;[Z)I");
-  draw_glyph_ = GetMethodHandle(
-      "drawGlyph", "(Landroid/graphics/Canvas;IFFLjava/lang/Object;IFIIF)V");
+  get_glyph_metrics_ = GetMethodHandle(
+      "getGlyphMetrics", "(ILjava/lang/Object;FLandroid/graphics/Paint;[F)V");
+  get_text_glyphs_ =
+      GetMethodHandle("getTextGlyphs",
+                      "(Ljava/lang/String;Landroid/graphics/Paint;)[Lcom/"
+                      "google/ar/imp/core/glyph/GlyphAdvance;");
+  get_combined_character_groups_ =
+      GetMethodHandle("getCombinedCharacterGroups",
+                      "(Ljava/lang/String;Landroid/graphics/Paint;)[I");
+  draw_glyph_ =
+      GetMethodHandle("drawGlyph",
+                      "(Landroid/graphics/Canvas;IFFLjava/lang/Object;F"
+                      "Landroid/graphics/Paint;Landroid/graphics/Paint;)V");
 }
 
 bool AndroidGlyphSource::IsAvailable() const {
@@ -92,8 +112,7 @@ bool AndroidGlyphSource::IsAvailable() const {
 }
 
 ScopedCanvas::TextMetrics AndroidGlyphSource::GetGlyphMetrics(
-    int glyph_id, FontHolder* font, int font_size, float stroke_width,
-    float text_tracking) {
+    int glyph_id, FontHolder* font, float stroke_width, android::Paint& paint) {
   if (!IsAvailable()) {
     LOG_MISSING_DEPENDENCY_MESSAGE(FATAL);
   }
@@ -102,8 +121,8 @@ ScopedCanvas::TextMetrics AndroidGlyphSource::GetGlyphMetrics(
 
   jobject font_jobject =
       font ? static_cast<jobject>(font->GetPlatformFont()) : nullptr;
-  CallVoidMethod(get_glyph_metrics_, glyph_id, font_jobject, font_size,
-                 stroke_width, text_tracking, out_bounds_array.get());
+  CallVoidMethod(get_glyph_metrics_, glyph_id, font_jobject, stroke_width,
+                 paint.WeakReference(), out_bounds_array.get());
 
   jfloat* out_bounds_array_ptr =
       Env()->GetFloatArrayElements(out_bounds_array.get(), /*isCopy=*/nullptr);
@@ -122,69 +141,78 @@ ScopedCanvas::TextMetrics AndroidGlyphSource::GetGlyphMetrics(
   return metrics;
 }
 
-std::vector<ScopedCanvas::GlyphAdvance> AndroidGlyphSource::GetTextGlyphs(
-    absl::string_view text, int font_size, float text_tracking) {
+std::vector<ScopedCanvas::GlyphGroup>
+AndroidGlyphSource::GetCombinedCharacterGroups(absl::string_view text,
+                                               android::Paint& paint) {
   if (!IsAvailable()) {
     LOG_MISSING_DEPENDENCY_MESSAGE(FATAL);
   }
 
-  JniUniquePtr<jclass> object_clazz = FindClass(Env(), "java/lang/Object");
+  JniUniquePtr<jstring> text_jstring = ToJniString(Env(), text);
+  JniUniquePtr<jintArray> indices_array = WrapJni(
+      Env(), CallIntArrayMethod(get_combined_character_groups_,
+                                text_jstring.get(), paint.WeakReference()));
 
-  JniUniquePtr<jintArray> out_ids_array = CreateJniIntArray(Env(), text.size());
-  JniUniquePtr<jfloatArray> out_widths_array =
-      CreateJniFloatArray(Env(), text.size());
-  JniUniquePtr<jobjectArray> out_fonts_array = CreateJniObjectArray(
-      Env(), text.size(), object_clazz.get(), /*initialElement=*/nullptr);
-  JniUniquePtr<jbooleanArray> out_is_emoji_array =
-      CreateJniBooleanArray(Env(), text.size());
+  jint* indices_array_ptr =
+      Env()->GetIntArrayElements(indices_array.get(), /*isCopy=*/nullptr);
 
-  jint out_size =
-      CallIntMethod(get_text_glyphs_, ToString(Env(), text), font_size,
-                    text_tracking, out_ids_array.get(), out_widths_array.get(),
-                    out_fonts_array.get(), out_is_emoji_array.get());
+  jsize out_size = Env()->GetArrayLength(indices_array.get());
+  std::vector<ScopedCanvas::GlyphGroup> result;
+  result.reserve(out_size);
+  for (int i = 0; i < out_size; ++i) {
+    result.push_back(indices_array_ptr[i]);
+  }
 
-  jint* out_ids_array_ptr =
-      Env()->GetIntArrayElements(out_ids_array.get(), /*isCopy=*/nullptr);
-  jfloat* out_widths_array_ptr =
-      Env()->GetFloatArrayElements(out_widths_array.get(), /*isCopy=*/nullptr);
-  jboolean* out_is_emoji_array_ptr = Env()->GetBooleanArrayElements(
-      out_is_emoji_array.get(), /*isCopy=*/nullptr);
+  Env()->ReleaseIntArrayElements(indices_array.get(), indices_array_ptr,
+                                 /*mode=*/0);
+
+  return result;
+}
+
+std::vector<ScopedCanvas::GlyphAdvance> AndroidGlyphSource::GetTextGlyphs(
+    absl::string_view text, android::Paint& paint) {
+  if (!IsAvailable()) {
+    LOG_MISSING_DEPENDENCY_MESSAGE(FATAL);
+  }
+
+  JniUniquePtr<jstring> text_jstring = ToJniString(Env(), text);
+
+  JniUniquePtr<jobjectArray> out_jobject_array = WrapJni(
+      Env(), static_cast<jobjectArray>(CallObjectMethod(
+                 get_text_glyphs_, text_jstring.get(), paint.WeakReference())));
+  jsize out_size = Env()->GetArrayLength(out_jobject_array.get());
 
   std::vector<ScopedCanvas::GlyphAdvance> result;
   result.reserve(out_size);
   for (int i = 0; i < out_size; i++) {
+    AndroidGlyphAdvance glyph_advance(
+        Env(), Env()->GetObjectArrayElement(out_jobject_array.get(), i));
+
     std::unique_ptr<FontHolder> fallback_font;
     JniUniquePtr<jobject> font_local_ref =
-        WrapJni(Env(), Env()->GetObjectArrayElement(out_fonts_array.get(), i));
+        WrapJni(Env(), glyph_advance.GetFont());
     if (font_local_ref) {
       std::unique_ptr<android::Font> font =
           std::make_unique<android::Font>(Env(), font_local_ref.get());
       fallback_font = std::make_unique<AndroidFontFontHolder>(std::move(font));
     }
+
     result.push_back(ScopedCanvas::GlyphAdvance{
-        .glyph = out_ids_array_ptr[i],
-        .width = out_widths_array_ptr[i],
+        .glyph = glyph_advance.GetId(),
+        .width = glyph_advance.GetWidth(),
         .fallback_font = std::move(fallback_font),
-        .is_emoji = !!out_is_emoji_array_ptr[i],
+        .is_emoji = glyph_advance.IsEmoji(),
     });
   }
-
-  Env()->ReleaseIntArrayElements(out_ids_array.get(), out_ids_array_ptr,
-                                 /*mode=*/0);
-  Env()->ReleaseFloatArrayElements(out_widths_array.get(), out_widths_array_ptr,
-                                   /*mode=*/0);
-  Env()->ReleaseBooleanArrayElements(out_is_emoji_array.get(),
-                                     out_is_emoji_array_ptr,
-                                     /*mode=*/0);
 
   return result;
 }
 
 void AndroidGlyphSource::DrawGlyph(android::Canvas& canvas, int glyph_id,
                                    float x, float y, FontHolder* font,
-                                   int font_size, float stroke_width,
-                                   float4 fill_color, float4 stroke_color,
-                                   float text_tracking) {
+                                   float stroke_width,
+                                   android::Paint& fillPaint,
+                                   android::Paint& strokePaint) {
   if (!IsAvailable()) {
     LOG_MISSING_DEPENDENCY_MESSAGE(FATAL);
   }
@@ -192,9 +220,8 @@ void AndroidGlyphSource::DrawGlyph(android::Canvas& canvas, int glyph_id,
   jobject font_jobject =
       font ? static_cast<jobject>(font->GetPlatformFont()) : nullptr;
   CallVoidMethod(draw_glyph_, canvas.WeakReference(), glyph_id, x, y,
-                 font_jobject, font_size, stroke_width,
-                 android::ToColorInt(fill_color),
-                 android::ToColorInt(stroke_color), text_tracking);
+                 font_jobject, stroke_width, fillPaint.WeakReference(),
+                 strokePaint.WeakReference());
 }
 
 }  // namespace imp

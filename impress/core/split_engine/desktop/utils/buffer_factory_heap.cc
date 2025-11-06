@@ -78,7 +78,7 @@ HeapBufferFactory::CreateBuffer(size_t size_in_bytes) noexcept {
 
   uint8_t* data = nullptr;
   {
-    absl::MutexLock lock(mutex_);
+    absl::MutexLock lock(&mutex_);
     // Enforce the quota.
     const absl::uint128 used_bytes = used_bytes_;
     const absl::uint128 size_bytes = size_in_bytes;
@@ -101,7 +101,7 @@ HeapBufferFactory::CreateBuffer(size_t size_in_bytes) noexcept {
                                       size_in_bytes, [this, size_in_bytes]() {
                                         // Decrement the used bytes when
                                         // HeapBuffer is destroyed.
-                                        absl::MutexLock lock(mutex_);
+                                        absl::MutexLock lock(&mutex_);
                                         
                                         used_bytes_ -= size_in_bytes;
                                       });

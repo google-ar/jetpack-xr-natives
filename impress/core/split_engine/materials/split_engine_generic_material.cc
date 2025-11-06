@@ -56,55 +56,6 @@ namespace imp::split_engine {
 
 namespace {
 
-void RewriteTextureId(
-    std::optional<GenericMaterialTextureParameter>& texture_parameter,
-    const TextureBorrower& texture_borrower) {
-  if (!texture_parameter) return;
-  texture_parameter->texture_id = SplitEngineSerializer::GetId(
-      texture_borrower(texture_parameter->texture_id)->GetTexture());
-}
-
-// Rewrites the texture IDs from indexes into the loaded model texture listing
-// to IDs that can be used to look up textures on the remote renderer.
-//
-// This is necessary because the glTF doesn't exist on the renderer side.
-// Instead, the textures are serialized separately and the IDs are rewritten
-// here to reference the texture pointers. A new TextureBorrower is created by
-// SplitEngineRenderer that maps these IDs back to concrete textures on the
-// backend renderer side.
-GenericMaterialParameters RewriteTextureIds(
-    const GenericMaterialParameters& parameters,
-    const TextureBorrower& texture_borrower) {
-  GenericMaterialParameters remapped = parameters;
-  if (parameters.base_color) {
-    RewriteTextureId(remapped.base_color->texture, texture_borrower);
-  }
-  if (parameters.metallic_roughness) {
-    RewriteTextureId(remapped.metallic_roughness->texture, texture_borrower);
-  }
-  if (parameters.normal) {
-    RewriteTextureId(remapped.normal->texture, texture_borrower);
-  }
-  if (parameters.ambient_occlusion) {
-    RewriteTextureId(remapped.ambient_occlusion->texture, texture_borrower);
-  }
-  if (parameters.emissive) {
-    RewriteTextureId(remapped.emissive->texture, texture_borrower);
-  }
-  if (parameters.clearcoat) {
-    RewriteTextureId(remapped.clearcoat->intensity_texture, texture_borrower);
-    RewriteTextureId(remapped.clearcoat->normal_texture, texture_borrower);
-    RewriteTextureId(remapped.clearcoat->roughness_texture, texture_borrower);
-  }
-  if (parameters.sheen) {
-    RewriteTextureId(remapped.sheen->color_texture, texture_borrower);
-  }
-  if (parameters.transmission) {
-    RewriteTextureId(remapped.transmission->texture, texture_borrower);
-  }
-  return remapped;
-}
-
 // A helper class to convert from Split Engine schema tables to C++ structs.
 //
 // This is part of a system that lets both Impress glTF loader and Split Engine
@@ -322,6 +273,68 @@ TextureAndSampler SplitEngineGenericMaterial::GetPlaceholderTextureAndSampler()
     const {
   // TODO: (broken link) - Use placeholder_texture_.Borrow().
   return {placeholder_texture_->GetTexture(), filament::TextureSampler()};
+}
+
+void SplitEngineGenericMaterial::RewriteTextureId(
+    absl::string_view parameter_name,
+    std::optional<GenericMaterialTextureParameter>& texture_parameter,
+    const TextureBorrower& texture_borrower) {
+  if (!texture_parameter) return;
+
+  BorrowedTexturePtr borrowed = texture_borrower(texture_parameter->texture_id);
+  texture_parameter->texture_id =
+      SplitEngineSerializer::GetId(borrowed->GetTexture());
+  borrowed_textures_[parameter_name] = std::move(borrowed);
+}
+
+// Rewrites the texture IDs from indexes into the loaded model texture listing
+// to IDs that can be used to look up textures on the remote renderer.
+//
+// This is necessary because the glTF doesn't exist on the renderer side.
+// Instead, the textures are serialized separately and the IDs are rewritten
+// here to reference the texture pointers. A new TextureBorrower is created by
+// SplitEngineRenderer that maps these IDs back to concrete textures on the
+// backend renderer side.
+GenericMaterialParameters SplitEngineGenericMaterial::RewriteTextureIds(
+    const GenericMaterialParameters& parameters,
+    const TextureBorrower& texture_borrower) {
+  GenericMaterialParameters remapped = parameters;
+  if (parameters.base_color) {
+    RewriteTextureId(kBaseColorIndex, remapped.base_color->texture,
+                     texture_borrower);
+  }
+  if (parameters.metallic_roughness) {
+    RewriteTextureId(kMetallicRoughnessIndex,
+                     remapped.metallic_roughness->texture, texture_borrower);
+  }
+  if (parameters.normal) {
+    RewriteTextureId(kNormalIndex, remapped.normal->texture, texture_borrower);
+  }
+  if (parameters.ambient_occlusion) {
+    RewriteTextureId(kAoIndex, remapped.ambient_occlusion->texture,
+                     texture_borrower);
+  }
+  if (parameters.emissive) {
+    RewriteTextureId(kEmissiveIndex, remapped.emissive->texture,
+                     texture_borrower);
+  }
+  if (parameters.clearcoat) {
+    RewriteTextureId(kClearcoatIndex, remapped.clearcoat->intensity_texture,
+                     texture_borrower);
+    RewriteTextureId(kClearcoatNormalIndex, remapped.clearcoat->normal_texture,
+                     texture_borrower);
+    RewriteTextureId(kClearcoatRoughnessIndex,
+                     remapped.clearcoat->roughness_texture, texture_borrower);
+  }
+  if (parameters.sheen) {
+    RewriteTextureId(kSheenColorIndex, remapped.sheen->color_texture,
+                     texture_borrower);
+  }
+  if (parameters.transmission) {
+    RewriteTextureId(kTransmissionIndex, remapped.transmission->texture,
+                     texture_borrower);
+  }
+  return remapped;
 }
 
 TextureAndSampler SplitEngineGenericMaterial::GetBaseColorTexture() const {

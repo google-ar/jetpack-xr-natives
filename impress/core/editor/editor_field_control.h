@@ -106,6 +106,10 @@ class EditorFieldControl {
   //
   // If the fields are of a primitive type then the fields are compared using
   // the == operator.
+  //
+  // This is used by BeginEditingElement and EditorProtoVisitor to determine if
+  // a value matches its base for editing content coming from an Isf with a
+  // base.
   template <typename T>
   static bool CompareField(T& val, T& base) {
     constexpr bool kHasFields = proto::HasFields<T>::value;
@@ -128,20 +132,29 @@ class EditorFieldControl {
 
   template <typename T>
   static std::string ElementPopupLabel(T& val,
-                                       absl::string_view extra_label = "") {
+                                       absl::string_view extra_label = "",
+                                       bool use_val_ptr_in_label = true) {
     std::string label_name = absl::StrCat("ElementPopup", extra_label);
-    std::string label = editor::GenerateUniqueImGuiLabel(
-        label_name, &val, editor::EditorControlFlags::kNone);
-    return label;
+
+    if (use_val_ptr_in_label) {
+      std::string label = editor::GenerateUniqueImGuiLabel(
+          label_name, &val, editor::EditorControlFlags::kNone);
+      return label;
+    } else {
+      return absl::StrCat("##", label_name);
+    }
   }
 
   // Helper to show a popup menu to revert a field to its base value.
   template <typename T>
   static bool RevertToBasePopup(T& val, T& base,
-                                absl::string_view extra_label = "") {
+                                absl::string_view extra_label = "",
+                                bool use_val_ptr_in_label = true) {
     bool result = false;
 
-    std::string label = ElementPopupLabel(val, extra_label);
+    std::string label =
+        ElementPopupLabel(val, extra_label, use_val_ptr_in_label);
+
     if (ImGui::BeginPopupContextItem(label.c_str())) {
       if (ImGui::MenuItem("Revert To Base", nullptr, &result, true)) {
         val = base;
@@ -212,11 +225,15 @@ class EditorFieldControl {
   //
   // Returns true if val was edited
   template <typename T>
-  static bool EndEditingElement(EditingElementMode mode, T* val, T* base) {
+  static bool EndEditingElement(
+      EditingElementMode mode, T* val, T* base,
+      absl::string_view revert_to_base_extra_label = "",
+      bool use_val_ptr_in_revert_to_base_label = true) {
     if (mode == EditingElementMode::kMatchesBase) {
       editor::PopBaseIsfElementStyle();
     } else if (base) {
-      return RevertToBasePopup(*val, *base);
+      return RevertToBasePopup(*val, *base, revert_to_base_extra_label,
+                               use_val_ptr_in_revert_to_base_label);
     }
 
     return false;
@@ -835,6 +852,22 @@ class EditorFieldControl {
     return updated;
   }
 };
+
+// Specializations for quaternion and float3 fields to use AlmostEqual for
+// comparison.
+//
+// Notably, ShowDefaultControl overloads for float3 don't actually use this
+// because they intentionally compare each individual float instead of comparing
+// the entire float3.
+//
+// These specializations are used by transform.cc when it calls
+// BeginEditingElement to compare the entire float3 or quatf for the
+// translation, rotation, and scale of the node.
+template <>
+bool EditorFieldControl::CompareField(quatf& val, quatf& base);
+
+template <>
+bool EditorFieldControl::CompareField(float3& val, float3& base);
 
 }  // namespace imp
 

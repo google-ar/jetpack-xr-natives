@@ -425,6 +425,12 @@
       },
       "version": "6.4.0"
     },
+    "com.android.extensions.xr:extensions-xr": {
+      "shasums": {
+        "jar": "2a2bffd00e3bceb47677b6a5f2d9c4ab59d901ef0d00ef751f1953deca39735f"
+      },
+      "version": "1.0.0"
+    },
     "com.google.android:annotations": {
       "shasums": {
         "jar": "ba734e1e84c09d615af6a09d33034b4f0442f8772dec120efb376d86a565ae15",
@@ -2712,6 +2718,7 @@
       "biz.aQute.bnd:biz.aQute.bnd.util:jar:sources",
       "biz.aQute.bnd:biz.aQute.bndlib",
       "biz.aQute.bnd:biz.aQute.bndlib:jar:sources",
+      "com.android.extensions.xr:extensions-xr",
       "com.google.android:annotations",
       "com.google.android:annotations:jar:sources",
       "com.google.api.grpc:proto-google-common-protos",

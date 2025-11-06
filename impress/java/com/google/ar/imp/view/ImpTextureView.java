@@ -50,6 +50,13 @@ public class ImpTextureView extends TextureView implements ImpApiProvider, Input
   }
 
   @Override
+  public ImpApi createImpApiSync(
+      SetupParams setupParams, @Nullable FrameScheduler.Factory frameSchedulerFactory) {
+    impApi = ImpApi.createSync(setupParams, context, this, host, 0, frameSchedulerFactory);
+    return impApi;
+  }
+
+  @Override
   public ImpApi createImpApiSync(SetupParams setupParams, long eglContext) {
     impApi = ImpApi.createSync(setupParams, context, this, host, eglContext);
     return impApi;
@@ -71,6 +78,26 @@ public class ImpTextureView extends TextureView implements ImpApiProvider, Input
     impApi =
         ImpApi.createAsync(
             setupParams, context, this, host, eglContext, executor, postCreatedCallback);
+    return impApi;
+  }
+
+  @Override
+  public ImpApi createImpApiAsync(
+      SetupParams setupParams,
+      long eglContext,
+      Executor executor,
+      ImpApi.PostCreatedCallback postCreatedCallback,
+      @Nullable FrameScheduler.Factory frameSchedulerFactory) {
+    impApi =
+        ImpApi.createAsync(
+            setupParams,
+            context,
+            this,
+            host,
+            eglContext,
+            executor,
+            postCreatedCallback,
+            frameSchedulerFactory);
     return impApi;
   }
 

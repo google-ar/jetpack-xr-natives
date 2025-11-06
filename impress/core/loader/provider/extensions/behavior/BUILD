@@ -73,8 +73,8 @@ cc_library(
         ":behavior_imp_cc_proto",
         "//core/loader/provider:fbs",
         "//core/loader/provider:fbs_deps",  # build_cleaner: keep
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/status:statusor",
+        "@flatbuffers",
     ],
     alwayslink = 1,
 )
@@ -102,12 +102,12 @@ cc_library(
         "//core/math",
         "//core/math:flatbuffer_support",
         "//core/model",
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/types:variant",
+        "@flatbuffers",
         "@mediapipe//mediapipe/framework/port:status",
     ],
     alwayslink = 1,

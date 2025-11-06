@@ -14,7 +14,6 @@
 
 #include "core/view/framework/assets/material_factory.h"
 
-#include <new>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -30,6 +29,7 @@
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
 #include "core/common/trace.h"
+#include "core/materials/custom_material.h"
 #include "core/materials/material.h"
 #include "core/render/image_asset.h"
 #include "core/render/texture.h"
@@ -84,9 +84,15 @@ MaterialPtr MaterialFactory::CreateMaterial(
   if (!material_asset) {
     IMP_LOG(imp::FATAL) << "Cannot create material from invalid material asset";
   }
-  filament::Material* const material = material_asset->GetFilamentMaterial();
-  return absl::WrapUnique(
-      new Material(*view_, material->createInstance(), material_asset));
+
+  MaterialPtr material = absl::WrapUnique(new CustomMaterial(
+      material_asset->GetFilamentMaterial()->createInstance(), material_asset));
+
+  if (auto serializer = view_->GetSplitEngineSerializer()) {
+    return serializer->CreateCustomMaterial(std::move(material));
+  } else {
+    return material;
+  }
 }
 
 MaterialPtr MaterialFactory::CreateMaterial(
@@ -94,12 +100,13 @@ MaterialPtr MaterialFactory::CreateMaterial(
   if (!material) {
     IMP_LOG(imp::FATAL) << "Cannot create material from invalid filament material";
   }
+
   return CreateMaterial(*material);
 }
+
 MaterialPtr MaterialFactory::CreateMaterial(
     const filament::Material& material) {
-  return absl::WrapUnique(new Material(*view_, material.createInstance(),
-                                       imp::AssetPtr<imp::MaterialAsset>()));
+  return WrapMaterial(material.createInstance());
 }
 
 MaterialPtr MaterialFactory::WrapMaterial(
@@ -107,7 +114,15 @@ MaterialPtr MaterialFactory::WrapMaterial(
   if (!material_instance) {
     IMP_LOG(imp::FATAL) << "Cannot create material from invalid filament material";
   }
-  return Material::WrapMaterial(*view_, material_instance);
+
+  MaterialPtr custom_material =
+      absl::WrapUnique(new CustomMaterial(material_instance, {}));
+
+  if (auto serializer = view_->GetSplitEngineSerializer()) {
+    return serializer->CreateCustomMaterial(std::move(custom_material));
+  }
+
+  return custom_material;
 }
 
 Future<absl::Status> MaterialFactory::SetMaterialParameters(

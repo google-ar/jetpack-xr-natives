@@ -341,7 +341,9 @@ class FilamentHost {
   // swap chain with.  The real type is known by Engine::Platform.
   // Automatically sets the swap chain as the active swap chain.
   OptionalError CreateSwapChain(void* native_window, uint64_t flags = 0);
+
   // Creates a headless swap chain for running unit tests or other no-display.
+  // Does not honor requests for sRGB or stencil swap chains.
   OptionalError CreateHeadlessSwapChain(uint32_t width, uint32_t height,
                                         uint64_t flags = 0);
 
@@ -358,6 +360,13 @@ class FilamentHost {
 
   // Returns true if there is any active swap chain.
   bool HasSwapChain() const;
+
+  // Returns true if the platform supports sRGB swapchains.
+  bool IsSRGBSwapChainSupported();
+
+  // Convenience function that returns true if IsSRGBSwapChainSupported() is
+  // true _and_ the host state is requesting an sRGB swapchain.
+  bool SwapChainWillBeSRGB();
 
   // TODO: iOS should call this on display orientation changes.
   OptionalError SetDisplayRotation(window::WindowRotation orientation);
@@ -474,6 +483,10 @@ class FilamentHost {
   // resolving make it non-optional
   void SetCallSkipFrameWhenRenderingSkipped(
       bool call_skip_frame_when_rendering_skipped);
+
+  // Updates flags for a pending call to createSwapChain() based on features
+  // requested by State, if any.
+  uint64_t UpdateSwapChainFlagsFromState(uint64_t flags) const;
 
   // Asserts that the current thread is the frame thread.
   //

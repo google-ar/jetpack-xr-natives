@@ -23,24 +23,18 @@
 
 namespace imp {
 
-// Wraps an owned or borrowed texture pointer so that the ownership of the
-// BindingsTexture pointer can be released to Java without affecting the
-// ownership of the actual texture pointer.
+// Wraps a borrowed texture pointer so that this object can be destroyed
+// from Java without affecting the owned pointer of the texture.
 class BindingsTexture : public BindingsObject {
  public:
-  explicit BindingsTexture(OwnedOrBorrowedTexturePtr texture);
+  explicit BindingsTexture(BorrowedTexturePtr texture);
 
-  // Calls Borrow() on the OwnedOrBorrowedTexturePtr to return a
-  // BorrowedTexturePtr to the texture pointer wrapped by this class.
+  // Returns the borrowed texture pointer that BindingsTexture wraps.
   BorrowedTexturePtr GetTexture(
       SmallSourceLocation loc = SmallSourceLocation::Current());
 
  private:
-  // OwnedOrBorrowedTexturePtr is used so that texture_ can hold both an
-  // OwnedTexturePtr and a BorrowedTexturePtr. A texture pointer is owned when
-  // it is loaded from the application. It is considered owned when it is
-  // received from the system.
-  OwnedOrBorrowedTexturePtr texture_;
+  BorrowedTexturePtr texture_;
 };
 
 }  // namespace imp

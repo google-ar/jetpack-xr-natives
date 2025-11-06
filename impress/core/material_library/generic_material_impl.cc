@@ -17,6 +17,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -31,7 +32,6 @@
 #include "absl/types/optional.h"
 #include "filament/filament/include/filament/Material.h"
 #include "filament/filament/include/filament/MaterialInstance.h"
-#include "filament/filament/include/filament/Texture.h"
 #include "filament/filament/include/filament/TextureSampler.h"
 #include "core/async/future.h"
 #include "core/common/small_source_location.h"
@@ -42,6 +42,7 @@
 #include "core/material_library/generic_material_spec.h"
 #include "core/material_library/material_package.h"
 #include "core/material_library/material_param_value.h"
+#include "core/materials/custom_material.h"
 #include "core/materials/material.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
@@ -120,7 +121,7 @@ GenericMaterialImpl::GenericMaterialImpl(
       parameter_info_(parameter_info),
       placeholder_texture_(view.GetTextureFactory().BorrowPlaceholderTexture()),
       placeholder_sampler_() {
-  material_ = Material::WrapMaterial(view, &material_instance);
+  material_ = OwnedMaterialPtr(new CustomMaterial(&material_instance, {}));
   material_->SetName(name_.c_str());
 }
 
@@ -656,6 +657,7 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
       SetNormalScale(generic_material_parameters.normal->factor);
     } else {
       AssignFallbackSampler(kNormalIndex, FallbackSampler::kNormal);
+      SetNormalScale(kDefaultNormalFactor);
     }
 
     if (generic_material_parameters.ambient_occlusion) {
@@ -666,6 +668,7 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
           generic_material_parameters.ambient_occlusion->factor);
     } else {
       AssignFallbackSampler(kAoIndex);
+      SetAmbientOcclusionStrength(kDefaultAmbientOcclusionFactor);
     }
 
     if (generic_material_parameters.emissive) {
@@ -675,6 +678,7 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
       SetEmissiveFactor(generic_material_parameters.emissive->factor);
     } else {
       AssignFallbackSampler(kEmissiveIndex);
+      SetEmissiveFactor(kDefaultEmissiveFactor);
     }
 
     if (generic_material_parameters.clearcoat) {
@@ -693,6 +697,7 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
       AssignFallbackSampler(kClearcoatIndex);
       AssignFallbackSampler(kClearcoatRoughnessIndex);
       AssignFallbackSampler(kClearcoatNormalIndex, FallbackSampler::kNormal);
+      SetClearcoatFactors(kDefaultClearcoatFactor);
     }
 
     if (generic_material_parameters.sheen) {
@@ -708,6 +713,8 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
     } else {
       AssignFallbackSampler(kSheenColorIndex);
       AssignFallbackSampler(kSheenRoughnessIndex);
+      SetSheenColorFactor(kDefaultSheenColorFactor);
+      SetSheenRoughnessFactor(kDefaultSheenRoughnessFactor);
     }
 
     if (generic_material_parameters.transmission) {
@@ -717,6 +724,7 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
       SetTransmissionFactor(generic_material_parameters.transmission->factor);
     } else {
       AssignFallbackSampler(kTransmissionIndex);
+      SetTransmissionFactor(kDefaultTransmissionFactor);
     }
 
     if (generic_material_parameters.refraction) {

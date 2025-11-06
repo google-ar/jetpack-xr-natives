@@ -36,4 +36,5 @@ message KeyboardEventMessage {
   bool alt_key = 4;
   bool shift_key = 5;
   bool ctrl_key = 6;
+  bool super_key = 7;
 }

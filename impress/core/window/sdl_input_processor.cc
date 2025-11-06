@@ -14,6 +14,7 @@
 
 #include "core/window/sdl_input_processor.h"
 
+#include <cstdint>
 #include <vector>
 
 #include "SDL2/include/SDL_events.h"
@@ -76,48 +77,57 @@ Flags<KeyModifier> GetKeyModifier(uint32_t modifier) {
 // on the web platform (direction is inverted and magnitude is much smaller).
 static constexpr float kMouseWheelWebConsistencyMultiplier = -30.0f;
 
+// The ordering of these values match those of imp::VirtualKeyCode
 VirtualKeyCode GetVirtualKeyCode(int key_code) {
   switch (key_code) {
+    case SDLK_TAB:
+      return VirtualKeyCode::VK_TAB;
+    case SDLK_LEFT:
+      return VirtualKeyCode::VK_LEFT;
+    case SDLK_RIGHT:
+      return VirtualKeyCode::VK_RIGHT;
+    case SDLK_UP:
+      return VirtualKeyCode::VK_UP;
+    case SDLK_DOWN:
+      return VirtualKeyCode::VK_DOWN;
+    case SDLK_PAGEUP:
+      return VirtualKeyCode::VK_PAGEUP;
+    case SDLK_PAGEDOWN:
+      return VirtualKeyCode::VK_PAGEDOWN;
+    case SDLK_HOME:
+      return VirtualKeyCode::VK_HOME;
+    case SDLK_END:
+      return VirtualKeyCode::VK_END;
+    case SDLK_INSERT:
+      return VirtualKeyCode::VK_INSERT;
+    case SDLK_DELETE:
+      return VirtualKeyCode::VK_DELETE;
+    case SDLK_BACKSPACE:
+      return VirtualKeyCode::VK_BACKSPACE;
+    case SDLK_SPACE:
+      return VirtualKeyCode::VK_SPACE;
     case SDLK_RETURN:
       return VirtualKeyCode::VK_RETURN;
     case SDLK_ESCAPE:
       return VirtualKeyCode::VK_ESCAPE;
-    case SDLK_BACKSPACE:
-      return VirtualKeyCode::VK_BACKSPACE;
-    case SDLK_TAB:
-      return VirtualKeyCode::VK_TAB;
-    case SDLK_SPACE:
-      return VirtualKeyCode::VK_SPACE;
-    case SDLK_EXCLAIM:
-      return VirtualKeyCode::VK_EXCLAIM;
-    case SDLK_QUOTEDBL:
-      return VirtualKeyCode::VK_QUOTEDBL;
-    case SDLK_HASH:
-      return VirtualKeyCode::VK_HASH;
-    case SDLK_PERCENT:
-      return VirtualKeyCode::VK_PERCENT;
-    case SDLK_DOLLAR:
-      return VirtualKeyCode::VK_DOLLAR;
-    case SDLK_AMPERSAND:
-      return VirtualKeyCode::VK_AMPERSAND;
-    case SDLK_QUOTE:
-      return VirtualKeyCode::VK_QUOTE;
-    case SDLK_LEFTPAREN:
-      return VirtualKeyCode::VK_LEFTPAREN;
-    case SDLK_RIGHTPAREN:
-      return VirtualKeyCode::VK_RIGHTPAREN;
-    case SDLK_ASTERISK:
-      return VirtualKeyCode::VK_ASTERISK;
-    case SDLK_PLUS:
-      return VirtualKeyCode::VK_PLUS;
-    case SDLK_COMMA:
-      return VirtualKeyCode::VK_COMMA;
-    case SDLK_MINUS:
-      return VirtualKeyCode::VK_MINUS;
-    case SDLK_PERIOD:
-      return VirtualKeyCode::VK_PERIOD;
-    case SDLK_SLASH:
-      return VirtualKeyCode::VK_SLASH;
+    case SDLK_LCTRL:
+      return VirtualKeyCode::VK_LEFT_CTRL;
+    case SDLK_LSHIFT:
+      return VirtualKeyCode::VK_LEFT_SHIFT;
+    case SDLK_LALT:
+      return VirtualKeyCode::VK_LEFT_ALT;
+    case SDLK_LGUI:
+      return VirtualKeyCode::VK_LEFT_SUPER;
+    case SDLK_RCTRL:
+      return VirtualKeyCode::VK_RIGHT_CTRL;
+    case SDLK_RSHIFT:
+      return VirtualKeyCode::VK_RIGHT_SHIFT;
+    case SDLK_RALT:
+      return VirtualKeyCode::VK_RIGHT_ALT;
+    case SDLK_RGUI:
+      return VirtualKeyCode::VK_RIGHT_SUPER;
+    case SDLK_MENU:
+      return VirtualKeyCode::VK_MENU;
     case SDLK_0:
       return VirtualKeyCode::VK_0;
     case SDLK_1:
@@ -138,32 +148,6 @@ VirtualKeyCode GetVirtualKeyCode(int key_code) {
       return VirtualKeyCode::VK_8;
     case SDLK_9:
       return VirtualKeyCode::VK_9;
-    case SDLK_COLON:
-      return VirtualKeyCode::VK_COLON;
-    case SDLK_SEMICOLON:
-      return VirtualKeyCode::VK_SEMICOLON;
-    case SDLK_LESS:
-      return VirtualKeyCode::VK_LESS;
-    case SDLK_EQUALS:
-      return VirtualKeyCode::VK_EQUALS;
-    case SDLK_GREATER:
-      return VirtualKeyCode::VK_GREATER;
-    case SDLK_QUESTION:
-      return VirtualKeyCode::VK_QUESTION;
-    case SDLK_AT:
-      return VirtualKeyCode::VK_AT;
-    case SDLK_LEFTBRACKET:
-      return VirtualKeyCode::VK_LEFTBRACKET;
-    case SDLK_BACKSLASH:
-      return VirtualKeyCode::VK_BACKSLASH;
-    case SDLK_RIGHTBRACKET:
-      return VirtualKeyCode::VK_RIGHTBRACKET;
-    case SDLK_CARET:
-      return VirtualKeyCode::VK_CARET;
-    case SDLK_UNDERSCORE:
-      return VirtualKeyCode::VK_UNDERSCORE;
-    case SDLK_BACKQUOTE:
-      return VirtualKeyCode::VK_BACKQUOTE;
     case SDLK_a:
       return VirtualKeyCode::VK_a;
     case SDLK_b:
@@ -216,8 +200,6 @@ VirtualKeyCode GetVirtualKeyCode(int key_code) {
       return VirtualKeyCode::VK_y;
     case SDLK_z:
       return VirtualKeyCode::VK_z;
-    case SDLK_CAPSLOCK:
-      return VirtualKeyCode::VK_CAPSLOCK;
     case SDLK_F1:
       return VirtualKeyCode::VK_F1;
     case SDLK_F2:
@@ -242,32 +224,74 @@ VirtualKeyCode GetVirtualKeyCode(int key_code) {
       return VirtualKeyCode::VK_F11;
     case SDLK_F12:
       return VirtualKeyCode::VK_F12;
-    case SDLK_PRINTSCREEN:
-      return VirtualKeyCode::VK_PRINTSCREEN;
+    case SDLK_F13:
+      return VirtualKeyCode::VK_F13;
+    case SDLK_QUOTE:
+      return VirtualKeyCode::VK_QUOTE;
+    case SDLK_COMMA:
+      return VirtualKeyCode::VK_COMMA;
+    case SDLK_MINUS:
+      return VirtualKeyCode::VK_MINUS;
+    case SDLK_PERIOD:
+      return VirtualKeyCode::VK_PERIOD;
+    case SDLK_SLASH:
+      return VirtualKeyCode::VK_SLASH;
+    case SDLK_SEMICOLON:
+      return VirtualKeyCode::VK_SEMICOLON;
+    case SDLK_EQUALS:
+      return VirtualKeyCode::VK_EQUALS;
+    case SDLK_LEFTBRACKET:
+      return VirtualKeyCode::VK_LEFTBRACKET;
+    case SDLK_BACKSLASH:
+      return VirtualKeyCode::VK_BACKSLASH;
+    case SDLK_RIGHTBRACKET:
+      return VirtualKeyCode::VK_RIGHTBRACKET;
+    case SDLK_BACKQUOTE:
+      return VirtualKeyCode::VK_BACKQUOTE;
+    case SDLK_CAPSLOCK:
+      return VirtualKeyCode::VK_CAPSLOCK;
     case SDLK_SCROLLLOCK:
       return VirtualKeyCode::VK_SCROLLLOCK;
+    case SDLK_NUMLOCKCLEAR:
+      return VirtualKeyCode::VK_NUMLOCK;
+    case SDLK_PRINTSCREEN:
+      return VirtualKeyCode::VK_PRINTSCREEN;
     case SDLK_PAUSE:
       return VirtualKeyCode::VK_PAUSE;
-    case SDLK_INSERT:
-      return VirtualKeyCode::VK_INSERT;
-    case SDLK_HOME:
-      return VirtualKeyCode::VK_HOME;
-    case SDLK_PAGEUP:
-      return VirtualKeyCode::VK_PAGEUP;
-    case SDLK_DELETE:
-      return VirtualKeyCode::VK_DELETE;
-    case SDLK_END:
-      return VirtualKeyCode::VK_END;
-    case SDLK_PAGEDOWN:
-      return VirtualKeyCode::VK_PAGEDOWN;
-    case SDLK_RIGHT:
-      return VirtualKeyCode::VK_RIGHT;
-    case SDLK_LEFT:
-      return VirtualKeyCode::VK_LEFT;
-    case SDLK_DOWN:
-      return VirtualKeyCode::VK_DOWN;
-    case SDLK_UP:
-      return VirtualKeyCode::VK_UP;
+    case SDLK_KP_0:
+      return VirtualKeyCode::VK_KEYPAD0;
+    case SDLK_KP_1:
+      return VirtualKeyCode::VK_KEYPAD1;
+    case SDLK_KP_2:
+      return VirtualKeyCode::VK_KEYPAD2;
+    case SDLK_KP_3:
+      return VirtualKeyCode::VK_KEYPAD3;
+    case SDLK_KP_4:
+      return VirtualKeyCode::VK_KEYPAD4;
+    case SDLK_KP_5:
+      return VirtualKeyCode::VK_KEYPAD5;
+    case SDLK_KP_6:
+      return VirtualKeyCode::VK_KEYPAD6;
+    case SDLK_KP_7:
+      return VirtualKeyCode::VK_KEYPAD7;
+    case SDLK_KP_8:
+      return VirtualKeyCode::VK_KEYPAD8;
+    case SDLK_KP_9:
+      return VirtualKeyCode::VK_KEYPAD9;
+    case SDLK_KP_DECIMAL:
+      return VirtualKeyCode::VK_KEYPAD_DECIMAL;
+    case SDLK_KP_DIVIDE:
+      return VirtualKeyCode::VK_KEYPAD_DIVIDE;
+    case SDLK_KP_MULTIPLY:
+      return VirtualKeyCode::VK_KEYPAD_MULTIPLY;
+    case SDLK_KP_MINUS:
+      return VirtualKeyCode::VK_KEYPAD_SUBTRACT;
+    case SDLK_KP_PLUS:
+      return VirtualKeyCode::VK_KEYPAD_ADD;
+    case SDLK_KP_ENTER:
+      return VirtualKeyCode::VK_KEYPAD_ENTER;
+    case SDLK_KP_EQUALS:
+      return VirtualKeyCode::VK_KEYPAD_EQUAL;
     default:
       return VirtualKeyCode::VK_UNKNOWN;
   }

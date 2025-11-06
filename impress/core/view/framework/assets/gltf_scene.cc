@@ -16,17 +16,22 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 
 #include "core/common/log.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/variant.h"
 #include "core/common/filament_helpers.h"
+#include "core/common/robin_map.h"
+#include "core/common/typed_set_vector.h"
 #include "core/geometry/shapes/box.h"
 #include "core/math/mat.h"
 #include "core/math/transform.h"
 #include "core/math/vec.h"
+#include "core/model/entity_data.h"
 #include "core/model/model_data.h"
+#include "core/model/shared_data.h"
 #include "core/model/skeleton_data.h"
 #include "core/ncsb/base_node.h"
 #include "core/ncsb/node.h"
@@ -274,6 +279,36 @@ Box GltfScene::GetLocalBoneBounds() const {
 
 Box GltfScene::GetWorldBoneBounds() const {
   return TransformBounds(GetLocalBoneBounds(), GetNode()->GetWorldTrs());
+}
+
+bool GltfScene::HasEntityDataForNodeHandle(NodeHandle node) const {
+  return node_to_entitiy_id_map_.find(node) != node_to_entitiy_id_map_.end();
+}
+
+model::EntityData::Proxy GltfScene::GetEntityDataFromNodeHandle(
+    NodeHandle node) const {
+  model::EntityId entity_id = node_to_entitiy_id_map_.at(node);
+  return gltf_asset_->GetModelData().Entities()[entity_id];
+}
+
+std::optional<uint16_t> GltfScene::GetGltfNodeIndexFromBoneId(
+    BoneId bone_id) const {
+  const model::SkeletonData& skeleton = gltf_asset_->GetModelData().Skeleton();
+
+  if (!skeleton.bones.IsValid(bone_id)) {
+    return std::nullopt;
+  }
+
+  return skeleton.bones[bone_id].node_index;
+}
+
+std::optional<model::BoneId> GltfScene::GetBoneIdFromGltfNodeIndex(
+    uint16_t gltf_node_index) const {
+  auto it = bone_id_lookup_.find(gltf_node_index);
+  if (it != bone_id_lookup_.end()) {
+    return it->second;
+  }
+  return std::nullopt;
 }
 
 bool GltfScene::GetLocalTrsUpdated() {

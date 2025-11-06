@@ -1,3 +1,4 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
     "@third_party//filament:filament.bzl",
     "filament_copts",
@@ -24,11 +25,38 @@ package(
 
 genrule(
     name = "dfg",
-    outs = ["generated/data/dfg.inc"],
+    outs = [
+        "generated/resources/dfg.bin",
+        "generated/resources/dfg.h",
+        "generated/resources/dfg.c",
+        "generated/resources/dfg.S",
+        "generated/resources/dfg.apple.S",
+    ],
     cmd = "$(location @third_party//filament/tools:cmgen) " +
           if_mobile_materials("--size=64 ", "--size=128 ") +
-          "--ibl-dfg-multiscatter --ibl-dfg-cloth --ibl-dfg=$@",
-    tools = ["@third_party//filament/tools:cmgen"],
+          "--ibl-dfg-multiscatter --ibl-dfg-cloth --ibl-dfg=$(@D)/generated/resources/dfg.bin &&" +
+          "$(location @third_party//filament/tools:resgen) -cp dfg --deploy=$(@D)/generated/resources -Z $(@D)/generated/resources/dfg.bin",
+    tools = [
+        "@third_party//filament/tools:cmgen",
+        "@third_party//filament/tools:resgen",
+    ],
+)
+
+cc_library(
+    name = "generated_data",
+    srcs = [
+        "generated/resources/dfg.c",
+    ],
+    hdrs = [],
+    copts = filament_copts(),
+    data = [],
+    includes = ["."],
+    linkstatic = 1,
+    textual_hdrs = [
+        "generated/resources/dfg.h",
+    ],
+    deps = [":dfg"],
+    alwayslink = 1,
 )
 
 genrule(
@@ -61,16 +89,6 @@ cc_library(
     linkstatic = 1,
     textual_hdrs = [
         "generated/shaders.h",
-    ],
-    alwayslink = 1,
-)
-
-cc_library(
-    name = "generated_data",
-    copts = filament_copts(),
-    linkstatic = 1,
-    textual_hdrs = [
-        "generated/data/dfg.inc",
     ],
     alwayslink = 1,
 )
@@ -212,6 +230,7 @@ cc_library(
             "@third_party//filament/libs:utils",
             "@third_party//filament/libs:utils_hdrs",
             "@third_party//filament/libs:utils_private_hdrs",
+            "@zstdlib",
         ] + if_matdbg(["@third_party//filament/libs:matdbg"]) + if_fgviewer(["@third_party//filament/libs:fgviewer"]) + extra_deps,
         alwayslink = 1,
     )

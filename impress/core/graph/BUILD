@@ -38,6 +38,7 @@ cc_library(
         "//core/async:executor",
         "//core/async:future",
         "//core/common:enum_flags",
+        "//core/common:trace",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/hash",

@@ -18,7 +18,6 @@
 #ifndef TNT_MATERIALPARSER_H
 #define TNT_MATERIALPARSER_H
 
-#include <string>
 #include <unordered_map>
 
 #include "Config.h"
@@ -40,10 +39,10 @@ public:
     // Parses a string material so that it can be used in MaterialBuilder.
     // Call MaterialBuilder::init before passing in the builder; call MaterialBuilder::build to
     // create filamat::Package after.
+    // When the input shader has #includes, it has to be resolved before calling into parse.
     bool parse(
             filamat::MaterialBuilder& builder,
-            const Config& config,
-            Config::Input* input, ssize_t& size, std::unique_ptr<const char[]>& buffer);
+            const Config& config, ssize_t& size, std::unique_ptr<const char[]>& buffer);
     // Replaces macro keywords with user specified ones. Must be called before parse.
     bool processTemplateSubstitutions(
             const Config& config, ssize_t& size, std::unique_ptr<const char[]>& buffer);
@@ -82,12 +81,14 @@ private:
     using MaterialConfigProcessor = bool (MaterialParser::*)
             (const MaterialLexeme&, filamat::MaterialBuilder& builder) const;
     // Map used to store Command pattern function pointers.
-    std::unordered_map<std::string, MaterialConfigProcessor> mConfigProcessor;
+    // Using string_view is generally not recommended in a map, but the string keys are program constants,
+    // which guarantees that the strings will outlive lifetime of the map. See MaterialParser.cpp
+    std::unordered_map<std::string_view, MaterialConfigProcessor> mConfigProcessor;
 
     // The same, but for pure JSON syntax
     using MaterialConfigProcessorJSON = bool (MaterialParser::*)
             (const JsonishValue*, filamat::MaterialBuilder& builder) const;
-    std::unordered_map<std::string, MaterialConfigProcessorJSON> mConfigProcessorJSON;
+    std::unordered_map<std::string_view, MaterialConfigProcessorJSON> mConfigProcessorJSON;
 };
 
 } // namespace matp

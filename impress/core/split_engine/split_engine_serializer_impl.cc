@@ -60,6 +60,7 @@
 #include "core/material_library/flatbuffer_utils.h"
 #include "core/material_library/generic_material_spec.h"
 #include "core/material_library/material_param_value.h"
+#include "core/materials/material.h"
 #include "core/math/flatbuffer_support.h"
 #include "core/math/mat.h"
 #include "core/math/math.h"
@@ -70,7 +71,6 @@
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/image_based_lighting_helpers.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
-#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_mesh_serializer.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/split_engine/split_engine_texture_serializer.h"
@@ -86,6 +86,7 @@
 #include "core/split_engine/android/split_engine_platform_android_external_texture_surface.h"
 #endif
 #include "core/split_engine/flatbuffer_size_calculator.h"
+#include "core/split_engine/materials/split_engine_custom_material.h"
 #include "core/split_engine/materials/split_engine_generic_material.h"
 #include "core/split_engine/split_engine_bridge_sender.h"
 #include "core/split_engine/split_engine_mesh_builder.h"
@@ -1147,6 +1148,12 @@ Future<GenericMaterialPtr> SplitEngineSerializerImpl::CreateGenericMaterial(
       .Then([](std::unique_ptr<SplitEngineGenericMaterial> material) {
         return static_cast<GenericMaterialPtr>(std::move(material));
       });
+}
+
+MaterialPtr SplitEngineSerializerImpl::CreateCustomMaterial(
+    MaterialPtr material) {
+  return std::make_unique<split_engine::SplitEngineCustomMaterial>(
+      *this, std::move(material));
 }
 
 void SplitEngineSerializerImpl::SetBuiltInMaterialParameters(

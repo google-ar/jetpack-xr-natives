@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+include "split_engine/schemas/split_engine_attributes.fbs";
 include "split_engine/schemas/split_engine_data.fbs";
 include "split_engine/schemas/split_engine_primitive.fbs";
 
@@ -28,38 +29,38 @@ namespace android_xr.schemas;
 
 // These enums are used to determine which material to load from the material
 // library.
-enum GenericMaterialLightingModel : uint8 {
-  Lit = 0,
-  Unlit = 1,
+enum GenericMaterialLightingModel : uint8 (requires_api: 1) {
+  Lit = 0 (requires_api: 1),
+  Unlit = 1 (requires_api: 1),
 }
 
-enum GenericMaterialBlendMode : uint8 {
-  Opaque = 0,
-  Masked = 1,
-  Transparent = 2,
-  Refractive = 3,
+enum GenericMaterialBlendMode : uint8 (requires_api: 1) {
+  Opaque = 0 (requires_api: 1),
+  Masked = 1 (requires_api: 1),
+  Transparent = 2 (requires_api: 1),
+  Refractive = 3 (requires_api: 1),
 }
 
-enum GenericMaterialDoubleSidedMode : uint8  {
-  SingleSided = 0,
-  DoubleSided = 1,
+enum GenericMaterialDoubleSidedMode : uint8 (requires_api: 1) {
+  SingleSided = 0 (requires_api: 1),
+  DoubleSided = 1 (requires_api: 1),
 }
 
 // If Enabled, a special depth clear material will be loaded instead of a normal
 // generic material.
-enum GenericMaterialDepthClearMaterial : uint8  {
-  Disabled = 0,
-  Enabled = 1,
+enum GenericMaterialDepthClearMaterial : uint8  (requires_api: 1) {
+  Disabled = 0 (requires_api: 1),
+  Enabled = 1 (requires_api: 1),
 }
 // LINT.ThenChange(//depot/google3/third_party/impress/apibindings/jni_conversion_utils.cc:generic_material_spec_jni_conversion_bindings)
 
 // This table is used to determine which material to load from the material
 // library.
-table GenericMaterialSpec {
-  lighting_model: GenericMaterialLightingModel (id: 0);
-  blend_mode: GenericMaterialBlendMode (id: 1);
-  double_sided_mode: GenericMaterialDoubleSidedMode (id: 2);
-  depth_clear_material: GenericMaterialDepthClearMaterial (id: 3);
+table GenericMaterialSpec (requires_api: 1) {
+  lighting_model: GenericMaterialLightingModel (id: 0, requires_api: 1);
+  blend_mode: GenericMaterialBlendMode (id: 1, requires_api: 1);
+  double_sided_mode: GenericMaterialDoubleSidedMode (id: 2, requires_api: 1);
+  depth_clear_material: GenericMaterialDepthClearMaterial (id: 3, requires_api: 1);
 }
 
 root_type GenericMaterialSpec;
@@ -67,178 +68,178 @@ root_type GenericMaterialSpec;
 // LINT.IfChange(texture_sampler_jni_conversion_schema)
 
 // These enums are used to determine how to sample textures in materials.
-enum WrapMode : uint8 {
-  CLAMP_TO_EDGE = 0,
-  REPEAT = 1,
-  MIRRORED_REPEAT = 2,
+enum WrapMode : uint8 (requires_api: 1) {
+  CLAMP_TO_EDGE = 0 (requires_api: 1),
+  REPEAT = 1 (requires_api: 1),
+  MIRRORED_REPEAT = 2 (requires_api: 1),
 }
 
-enum MinFilter : uint8 {
-  NEAREST = 0,
-  LINEAR = 1,
-  NEAREST_MIPMAP_NEAREST = 2,
-  LINEAR_MIPMAP_NEAREST = 3,
-  NEAREST_MIPMAP_LINEAR = 4,
-  LINEAR_MIPMAP_LINEAR = 5
+enum MinFilter : uint8 (requires_api: 1) {
+  NEAREST = 0 (requires_api: 1),
+  LINEAR = 1 (requires_api: 1),
+  NEAREST_MIPMAP_NEAREST = 2 (requires_api: 1),
+  LINEAR_MIPMAP_NEAREST = 3 (requires_api: 1),
+  NEAREST_MIPMAP_LINEAR = 4 (requires_api: 1),
+  LINEAR_MIPMAP_LINEAR = 5 (requires_api: 1),
 }
 
-enum MagFilter : uint8 {
-  NEAREST = 0,
-  LINEAR = 1,
+enum MagFilter : uint8 (requires_api: 1) {
+  NEAREST = 0 (requires_api: 1),
+  LINEAR = 1 (requires_api: 1),
 }
 
-enum CompareMode : uint8 {
-  NONE = 0,
-  COMPARE_TO_TEXTURE = 1
+enum CompareMode : uint8 (requires_api: 1) {
+  NONE = 0 (requires_api: 1),
+  COMPARE_TO_TEXTURE = 1 (requires_api: 1),
 }
 
-enum CompareFunc : uint8 {
-  LE = 0,
-  GE = 1,
-  L = 2,
-  G = 3,
-  E = 4,
-  NE = 5,
-  A = 6,
-  N = 7,
+enum CompareFunc : uint8 (requires_api: 1) {
+  LE = 0 (requires_api: 1),
+  GE = 1 (requires_api: 1),
+  L = 2 (requires_api: 1),
+  G = 3 (requires_api: 1),
+  E = 4 (requires_api: 1),
+  NE = 5 (requires_api: 1),
+  A = 6 (requires_api: 1),
+  N = 7 (requires_api: 1),
 }
 
 // LINT.ThenChange(//depot/google3/third_party/impress/apibindings/jni_conversion_utils.cc:texture_sampler_jni_conversion_bindings)
 
-table TextureSampler {
-  min_filter : MinFilter (id: 0);
-  mag_filter : MagFilter (id: 1);
-  wrap_mode_s : WrapMode (id: 2);
-  wrap_mode_t : WrapMode (id: 3);
-  wrap_mode_r : WrapMode (id: 4);
-  compare_mode : CompareMode (id: 5);
-  compare_func : CompareFunc (id: 6);
-  anisotropy_log2 : uint8 (id: 7);
+table TextureSampler (requires_api: 1) {
+  min_filter : MinFilter (id: 0, requires_api: 1);
+  mag_filter : MagFilter (id: 1, requires_api: 1);
+  wrap_mode_s : WrapMode (id: 2, requires_api: 1);
+  wrap_mode_t : WrapMode (id: 3, requires_api: 1);
+  wrap_mode_r : WrapMode (id: 4, requires_api: 1);
+  compare_mode : CompareMode (id: 5, requires_api: 1);
+  compare_func : CompareFunc (id: 6, requires_api: 1);
+  anisotropy_log2 : uint8 (id: 7, requires_api: 1);
 }
 
 // These tables are used to include various types of parameters in the schema.
 
 // This is the index into the material's texture list.
-struct MaterialTextureId {
-  index : uint16 (id: 0);
+struct MaterialTextureId (requires_api: 1) {
+  index : uint16 (id: 0, requires_api: 1);
 }
 
-struct ExternalSampler {
-  unused : uint8 (id: 0);
+struct ExternalSampler (requires_api: 1) {
+  unused : uint8 (id: 0, requires_api: 1);
 }
 
-struct NilValue {
-  unused : uint8 (id: 0);
+struct NilValue (requires_api: 1) {
+  unused : uint8 (id: 0, requires_api: 1);
 }
 
 // This is a union of all the possible types of parameters.
-union MaterialParamValue {
-  Float = 1,
-  Float2 = 2,
-  Float3 = 3,
-  Float4 = 4,
-  Int = 5,
-  Int2 = 6,
-  Int3 = 7,
-  Int4 = 8,
-  Bool = 9,
-  Bool2 = 10,
-  Bool3 = 11,
-  Bool4 = 12,
-  MaterialTextureId = 13,
-  ExternalSampler = 14,
-  Mat3f = 15,
-  Mat3fArray = 16,
-  Mat4f = 17,
-  Mat4fArray = 18,
-  NilValue = 19,
+union MaterialParamValue (requires_api: 1) {
+  Float = 1 (requires_api: 1),
+  Float2 = 2 (requires_api: 1),
+  Float3 = 3 (requires_api: 1),
+  Float4 = 4 (requires_api: 1),
+  Int = 5 (requires_api: 1),
+  Int2 = 6 (requires_api: 1),
+  Int3 = 7 (requires_api: 1),
+  Int4 = 8 (requires_api: 1),
+  Bool = 9 (requires_api: 1),
+  Bool2 = 10 (requires_api: 1),
+  Bool3 = 11 (requires_api: 1),
+  Bool4 = 12 (requires_api: 1),
+  MaterialTextureId = 13 (requires_api: 1),
+  ExternalSampler = 14 (requires_api: 1),
+  Mat3f = 15 (requires_api: 1),
+  Mat3fArray = 16 (requires_api: 1),
+  Mat4f = 17 (requires_api: 1),
+  Mat4fArray = 18 (requires_api: 1),
+  NilValue = 19 (requires_api: 1),
 }
 
 // Possible types of precompile constant values.
-union MaterialPrecompileConstantValue {
-  Int = 1,
-  Float = 2,
-  Bool = 3,
+union MaterialPrecompileConstantValue (requires_api: 1) {
+  Int = 1 (requires_api: 1),
+  Float = 2 (requires_api: 1),
+  Bool = 3 (requires_api: 1),
 }
 
-table MaterialPrecompileOptions {
-  precompile_constants: [MaterialPrecompileConstant] (id: 0);
+table MaterialPrecompileOptions (requires_api: 1) {
+  precompile_constants: [MaterialPrecompileConstant] (id: 0, requires_api: 1);
 }
 
-table MaterialPrecompileConstant {
-  name: string (id: 0);
-  value: MaterialPrecompileConstantValue (id: 2); // skip 1 ID for union enum field
+table MaterialPrecompileConstant (requires_api: 1) {
+  name: string (id: 0, requires_api: 1);
+  value: MaterialPrecompileConstantValue (id: 2, requires_api: 1); // skip 1 ID for union enum field
 }
 
 // This determines how the image data of a texture should be interpreted.
-enum TextureInfoFlags : ubyte (bit_flags) {
-  IsSrgb = 0,        // (1 << 0)
-  GenerateMips = 1,  // (1 << 1)
-  IsR11G11B10 = 2,   // (1 << 2)
-  IsLookup = 3,      // (1 << 3)
+enum TextureInfoFlags : ubyte (bit_flags, requires_api: 1) {
+  IsSrgb = 0 (requires_api: 1),        // (1 << 0)
+  GenerateMips = 1 (requires_api: 1),  // (1 << 1)
+  IsR11G11B10 = 2 (requires_api: 1),   // (1 << 2)
+  IsLookup = 3 (requires_api: 1),      // (1 << 3)
 }
 
 // This contains the information from a glTF texture definition.
-table TextureInfo {
-  name: string (required, id: 0);
-  flags: TextureInfoFlags (id: 1);
+table TextureInfo (requires_api: 1) {
+  name: string (required, id: 0, requires_api: 1);
+  flags: TextureInfoFlags (id: 1, requires_api: 1);
 }
 
 // Captures a material parameter name and generic value union.
 // This is used to serialize raw material parameters.
-table MaterialParamInfo {
-  name : string (required, id: 0);
-  value : MaterialParamValue (required, id: 2);
+table MaterialParamInfo (requires_api: 1) {
+  name : string (required, id: 0, requires_api: 1);
+  value : MaterialParamValue (required, id: 2, requires_api: 1);
 }
 
-table MaterialParameters {
-  material_id: uint64 (id: 0);
-  params: [MaterialParamInfo] (id: 1);
-  texture_params: [MaterialTextureParameter] (id: 2);
+table MaterialParameters (requires_api: 1) {
+  material_id: uint64 (id: 0, requires_api: 1);
+  params: [MaterialParamInfo] (id: 1, requires_api: 1);
+  texture_params: [MaterialTextureParameter] (id: 2, requires_api: 1);
 }
 
-table MaterialTextureParameter {
-  name: string (id: 0);
-  texture_id: uint64 (id: 1);
-  sampler: TextureSampler (id: 2);
+table MaterialTextureParameter (requires_api: 1) {
+  name: string (id: 0, requires_api: 1);
+  texture_id: uint64 (id: 1, requires_api: 1);
+  sampler: TextureSampler (id: 2, requires_api: 1);
 }
 
-table Material {
-  id: uint64 (id: 0);
-  data: [ubyte] (id: 1);
-  precompile_options: MaterialPrecompileOptions (id: 2);
+table Material (requires_api: 1) {
+  id: uint64 (id: 0, requires_api: 1);
+  data: [ubyte] (id: 1, requires_api: 1);
+  precompile_options: MaterialPrecompileOptions (id: 2, requires_api: 1);
 }
 
-table MaterialInstance {
-  instance_id: uint64 (id: 0);
-  material_id: uint64 (id: 1);
+table MaterialInstance (requires_api: 1) {
+  instance_id: uint64 (id: 0, requires_api: 1);
+  material_id: uint64 (id: 1, requires_api: 1);
 }
 
-table DuplicateMaterialInstance {
-  duplicate_id: uint64 (id: 0);
-  original_id: uint64 (id: 1);
+table DuplicateMaterialInstance (requires_api: 1) {
+  duplicate_id: uint64 (id: 0, requires_api: 1);
+  original_id: uint64 (id: 1, requires_api: 1);
 }
 
 // Defines a texture channel in a generic material.
-table GenericMaterialTextureParameter {
+table GenericMaterialTextureParameter (requires_api: 1) {
   // The index into the loaded model's texture list OR the split-engine ID of
   // the texture.
-  texture: uint64 (id: 0);
+  texture: uint64 (id: 0, requires_api: 1);
   // The sampler settings to use to sample the texture.
-  sampler: TextureSampler (id: 1);
+  sampler: TextureSampler (id: 1, requires_api: 1);
   // The UV transform to apply to the texture.
-  uv_transform: Mat3f (id: 2);
+  uv_transform: Mat3f (id: 2, requires_api: 1);
   // If true, UV1 will be used instead of UV0 to sample the texture.
-  uses_uv1: Bool (id: 3);
+  uses_uv1: Bool (id: 3, requires_api: 1);
 }
 
 // The base color (diffuse channel) of the material. This is the color that
 // will be used to color the surface.
-table GenericMaterialParametersBaseColor {
+table GenericMaterialParametersBaseColor (requires_api: 1) {
   // A texture that contains the base color data.
-  texture: GenericMaterialTextureParameter (id: 0);
+  texture: GenericMaterialTextureParameter (id: 0, requires_api: 1);
   // An optional tint to multiply with the base color.
-  factor: Float4 (id: 1);
+  factor: Float4 (id: 1, requires_api: 1);
 }
 
 // The metallic property defines whether the surface is a metallic (conductor)
@@ -250,254 +251,254 @@ table GenericMaterialParametersBaseColor {
 // The roughness property controls the perceived smoothness of the surface.
 // When roughness is set to 0, the surface is perfectly smooth and highly
 // glossy. The rougher a surface is, the “blurrier” the reflections are.
-table GenericMaterialParametersMetallicRoughness {
+table GenericMaterialParametersMetallicRoughness (requires_api: 1) {
   // A texture that contains the metallic and roughness values.
-  texture: GenericMaterialTextureParameter (id: 0);
+  texture: GenericMaterialTextureParameter (id: 0, requires_api: 1);
   // A multiplier for the metallic property.
-  metallic_factor: Float (id: 1);
+  metallic_factor: Float (id: 1, requires_api: 1);
   // A multiplier for the roughness property.
-  roughness_factor: Float (id: 2);
+  roughness_factor: Float (id: 2, requires_api: 1);
 }
 
 // Normals are used to compute the lighting direction of a surface.
-table GenericMaterialParametersNormal {
+table GenericMaterialParametersNormal (requires_api: 1) {
   // A texture that contains normal vector data instead of color in XYZW format.
-  texture: GenericMaterialTextureParameter (id: 0);
+  texture: GenericMaterialTextureParameter (id: 0, requires_api: 1);
   // The scale of the normal vectors since they are normalized in the texture.
-  factor: Float (id: 1);
+  factor: Float (id: 1, requires_api: 1);
 }
 
 // The ambientOcclusion property defines how much of the ambient light is
 // accessible to a surface point. It is a per-pixel shadowing factor between 0.0
 // (fully shadowed) and 1.0 (fully lit).
-table GenericMaterialParametersAmbientOcclusion {
+table GenericMaterialParametersAmbientOcclusion (requires_api: 1) {
   // A texture that contains the ambient occlusion data.
-  texture: GenericMaterialTextureParameter (id: 0);
+  texture: GenericMaterialTextureParameter (id: 0, requires_api: 1);
   // A multiplier for the ambient occlusion property.
-  factor: Float (id: 1);
+  factor: Float (id: 1, requires_api: 1);
 }
 
 // The emissive property defines the light emitted from the surface.
-table GenericMaterialParametersEmissive {
+table GenericMaterialParametersEmissive (requires_api: 1) {
   // A texture that contains the emissive color data of the material.
-  texture: GenericMaterialTextureParameter (id: 0);
+  texture: GenericMaterialTextureParameter (id: 0, requires_api: 1);
   // A multiplier for the emissive property.
-  factor: Float3 (id: 1);
+  factor: Float3 (id: 1, requires_api: 1);
 }
 
 // Defines the clearcoat parameters in a generic material.
-table GenericMaterialParametersClearcoat {
-  intensity_texture: GenericMaterialTextureParameter (id: 0);
-  normal_texture: GenericMaterialTextureParameter (id: 1);
-  roughness_texture: GenericMaterialTextureParameter (id: 2);
-  factor: Float3 (id: 3);
+table GenericMaterialParametersClearcoat (requires_api: 1) {
+  intensity_texture: GenericMaterialTextureParameter (id: 0, requires_api: 1);
+  normal_texture: GenericMaterialTextureParameter (id: 1, requires_api: 1);
+  roughness_texture: GenericMaterialTextureParameter (id: 2, requires_api: 1);
+  factor: Float3 (id: 3, requires_api: 1);
 }
 
 // Defines the sheen parameters in a generic material.
-table GenericMaterialParametersSheen {
-  color_texture: GenericMaterialTextureParameter (id: 0);
-  color_factor: Float3 (id: 1);
-  roughness_texture: GenericMaterialTextureParameter (id: 2);
-  roughness_factor: Float (id: 3);
+table GenericMaterialParametersSheen (requires_api: 1) {
+  color_texture: GenericMaterialTextureParameter (id: 0, requires_api: 1);
+  color_factor: Float3 (id: 1, requires_api: 1);
+  roughness_texture: GenericMaterialTextureParameter (id: 2, requires_api: 1);
+  roughness_factor: Float (id: 3, requires_api: 1);
 }
 
 // Defines the transmission parameters in a generic material.
-table GenericMaterialParametersTransmission {
-  texture: GenericMaterialTextureParameter (id: 0);
-  factor: Float (id: 1);
+table GenericMaterialParametersTransmission (requires_api: 1) {
+  texture: GenericMaterialTextureParameter (id: 0, requires_api: 1);
+  factor: Float (id: 1, requires_api: 1);
 }
 
 // Defines the refraction parameters in a generic material.
-table GenericMaterialParametersRefraction {
-  index_of_refraction: Float (id: 0);
+table GenericMaterialParametersRefraction (requires_api: 1) {
+  index_of_refraction: Float (id: 0, requires_api: 1);
 }
 
 // Defines the masking parameters in a generic material.
-table GenericMaterialParametersMasking {
-  alpha_cutoff: Float (id: 0);
+table GenericMaterialParametersMasking (requires_api: 1) {
+  alpha_cutoff: Float (id: 0, requires_api: 1);
 }
 
 // Captures all the settings for a generic, physically-based material.
 // This is based on the glTF 2.0 material spec.
 // https://www.khronos.org/registry/glTF/specs/2.0/glTF-2.0.html#material
-table GenericMaterialParameters {
-  base_color: GenericMaterialParametersBaseColor (id: 0);
-  metallic_roughness: GenericMaterialParametersMetallicRoughness (id: 1);
-  normal: GenericMaterialParametersNormal (id: 2);
-  ambient_occlusion: GenericMaterialParametersAmbientOcclusion (id: 3);
-  emissive: GenericMaterialParametersEmissive (id: 4);
-  clearcoat: GenericMaterialParametersClearcoat (id: 5);
-  sheen: GenericMaterialParametersSheen (id: 6);
-  transmission: GenericMaterialParametersTransmission (id: 7);
-  refraction: GenericMaterialParametersRefraction (id: 8);
-  masking: GenericMaterialParametersMasking (id: 9);
+table GenericMaterialParameters (requires_api: 1) {
+  base_color: GenericMaterialParametersBaseColor (id: 0, requires_api: 1);
+  metallic_roughness: GenericMaterialParametersMetallicRoughness (id: 1, requires_api: 1);
+  normal: GenericMaterialParametersNormal (id: 2, requires_api: 1);
+  ambient_occlusion: GenericMaterialParametersAmbientOcclusion (id: 3, requires_api: 1);
+  emissive: GenericMaterialParametersEmissive (id: 4, requires_api: 1);
+  clearcoat: GenericMaterialParametersClearcoat (id: 5, requires_api: 1);
+  sheen: GenericMaterialParametersSheen (id: 6, requires_api: 1);
+  transmission: GenericMaterialParametersTransmission (id: 7, requires_api: 1);
+  refraction: GenericMaterialParametersRefraction (id: 8, requires_api: 1);
+  masking: GenericMaterialParametersMasking (id: 9, requires_api: 1);
 }
 
 root_type GenericMaterialParameters;
 
-table BuiltInTextureParameter {
-  texture_id: uint64 (id: 0);
-  sampler: TextureSampler (id: 1);
+table BuiltInTextureParameter (requires_api: 1) {
+  texture_id: uint64 (id: 0, requires_api: 1);
+  sampler: TextureSampler (id: 1, requires_api: 1);
 }
 
-table BuiltInMaterial5cf26af8 {
-  transparent: bool (id: 0);
+table BuiltInMaterial5cf26af8 (requires_api: 1) {
+  transparent: bool (id: 0, requires_api: 1);
 }
 
-table BuiltInMaterial5cf26af8Parameters {
-  reflection_cube: BuiltInTextureParameter (id: 0);
-  normal_map: BuiltInTextureParameter (id: 1);
-  normal_tiling: Float (id: 2);
-  normal_speed: Float (id: 3);
-  alpha_map: BuiltInTextureParameter (id: 4);
-  alpha_step_multiplier: Float (id: 5);
-  normal_z: Float (id: 6);
-  normal_boundary: Float (id: 7);
+table BuiltInMaterial5cf26af8Parameters (requires_api: 1) {
+  reflection_cube: BuiltInTextureParameter (id: 0, requires_api: 1);
+  normal_map: BuiltInTextureParameter (id: 1, requires_api: 1);
+  normal_tiling: Float (id: 2, requires_api: 1);
+  normal_speed: Float (id: 3, requires_api: 1);
+  alpha_map: BuiltInTextureParameter (id: 4, requires_api: 1);
+  alpha_step_multiplier: Float (id: 5, requires_api: 1);
+  normal_z: Float (id: 6, requires_api: 1);
+  normal_boundary: Float (id: 7, requires_api: 1);
 }
 
-table BuiltInMaterialE3ca0ab9 {
+table BuiltInMaterialE3ca0ab9 (requires_api: 1) {
 }
 
-table BuiltInMaterialE3ca0ab9Parameters {
-  color: Float4 (id: 0);
-  coverage: float (id: 1);
-  feather: float (id: 2);
+table BuiltInMaterialE3ca0ab9Parameters (requires_api: 1) {
+  color: Float4 (id: 0, requires_api: 1);
+  coverage: float (id: 1, requires_api: 1);
+  feather: float (id: 2, requires_api: 1);
 }
 
-table BuiltInMaterialD1750064 {
+table BuiltInMaterialD1750064 (requires_api: 1) {
 }
 
-table BuiltInMaterialD1750064Parameters {
-  image_texture: BuiltInTextureParameter (id: 0);
-  video_texture: BuiltInTextureParameter (id: 1);
-  auxiliary_video_texture: BuiltInTextureParameter (id: 2);
-  thumbnail_texture: BuiltInTextureParameter (id: 3);
-  blur_texture: BuiltInTextureParameter (id: 4);
+table BuiltInMaterialD1750064Parameters (requires_api: 1) {
+  image_texture: BuiltInTextureParameter (id: 0, requires_api: 1);
+  video_texture: BuiltInTextureParameter (id: 1, requires_api: 1);
+  auxiliary_video_texture: BuiltInTextureParameter (id: 2, requires_api: 1);
+  thumbnail_texture: BuiltInTextureParameter (id: 3, requires_api: 1);
+  blur_texture: BuiltInTextureParameter (id: 4, requires_api: 1);
 
-  show_video: Bool (id: 5);
-  thumbnail_mix: Float (id: 6);
-  blur_mix: Float (id: 7);
-  blur_fallback_color: Float3 (id: 8);
+  show_video: Bool (id: 5, requires_api: 1);
+  thumbnail_mix: Float (id: 6, requires_api: 1);
+  blur_mix: Float (id: 7, requires_api: 1);
+  blur_fallback_color: Float3 (id: 8, requires_api: 1);
 
-  is_stereo: Bool (id: 9);
-  is_stereo_using_auxiliary_texture: Bool (id: 10);
-  stereo_axis: Float (id: 11);
-  stereo_disparity_adjustment: Float (id: 12);
+  is_stereo: Bool (id: 9, requires_api: 1);
+  is_stereo_using_auxiliary_texture: Bool (id: 10, requires_api: 1);
+  stereo_axis: Float (id: 11, requires_api: 1);
+  stereo_disparity_adjustment: Float (id: 12, requires_api: 1);
 
-  uv_transform: Mat3f (id: 13);
-  parallax_amount: Float (id: 14);
-  extra_zoom_after_parallax: Float (id: 15);
-  max_window_pop_distance: Float (id: 16);
-  max_media_inset_distance: Float (id: 17);
-  edge_fade_amount: Float (id: 18);
-  window_edge_fade_thickness: Float (id: 19);
-  inset_media_edge_fade_thickness: Float (id: 20);
-  corner_radius: Float (id: 21);
-  curve_params: Float3 (id: 22);
-  blur_center_clear_amount: Float (id: 23);
-  blur_center_edge_fade_thickness: Float (id: 24);
-  blur_center_mask_flip: Bool (id: 25);
+  uv_transform: Mat3f (id: 13, requires_api: 1);
+  parallax_amount: Float (id: 14, requires_api: 1);
+  extra_zoom_after_parallax: Float (id: 15, requires_api: 1);
+  max_window_pop_distance: Float (id: 16, requires_api: 1);
+  max_media_inset_distance: Float (id: 17, requires_api: 1);
+  edge_fade_amount: Float (id: 18, requires_api: 1);
+  window_edge_fade_thickness: Float (id: 19, requires_api: 1);
+  inset_media_edge_fade_thickness: Float (id: 20, requires_api: 1);
+  corner_radius: Float (id: 21, requires_api: 1);
+  curve_params: Float3 (id: 22, requires_api: 1);
+  blur_center_clear_amount: Float (id: 23, requires_api: 1);
+  blur_center_edge_fade_thickness: Float (id: 24, requires_api: 1);
+  blur_center_mask_flip: Bool (id: 25, requires_api: 1);
 
-  noise_in_blur_mix: Float (id: 26);
-  frame_time_seconds: Float (id: 27);
-  time_scale: Float (id: 28);
-  pulse_xy_scale: Float (id: 29);
-  pulse_exponent: Float4 (id: 30);
-  pulse_multiplier: Float4 (id: 31);
-  grain_xy_scale: Float (id: 32);
-  grain_mask_exponent_and_multiplier: Float2 (id: 33);
-  grain_dim_amount: Float (id: 34);
-  grain_exponent_and_multiplier: Float2 (id: 35);
+  noise_in_blur_mix: Float (id: 26, requires_api: 1);
+  frame_time_seconds: Float (id: 27, requires_api: 1);
+  time_scale: Float (id: 28, requires_api: 1);
+  pulse_xy_scale: Float (id: 29, requires_api: 1);
+  pulse_exponent: Float4 (id: 30, requires_api: 1);
+  pulse_multiplier: Float4 (id: 31, requires_api: 1);
+  grain_xy_scale: Float (id: 32, requires_api: 1);
+  grain_mask_exponent_and_multiplier: Float2 (id: 33, requires_api: 1);
+  grain_dim_amount: Float (id: 34, requires_api: 1);
+  grain_exponent_and_multiplier: Float2 (id: 35, requires_api: 1);
 
-  is_pano: Bool (id: 36);
-  pano_fov_degrees: Float3 (id: 37);
-  pano_spherical_amount: Float (id: 38);
-  pano_sphere_radius: Float (id: 39);
-  pano_blur_fade_to_gray_exponent: Float2 (id: 40);
-  pano_blur_fade_to_gray_subtractor: Float2 (id: 41);
-  pano_media_edge_fade_exponent: Float (id: 42);
-  pano_corner_radius_decrease_exponent: Float (id: 43);
+  is_pano: Bool (id: 36, requires_api: 1);
+  pano_fov_degrees: Float3 (id: 37, requires_api: 1);
+  pano_spherical_amount: Float (id: 38, requires_api: 1);
+  pano_sphere_radius: Float (id: 39, requires_api: 1);
+  pano_blur_fade_to_gray_exponent: Float2 (id: 40, requires_api: 1);
+  pano_blur_fade_to_gray_subtractor: Float2 (id: 41, requires_api: 1);
+  pano_media_edge_fade_exponent: Float (id: 42, requires_api: 1);
+  pano_corner_radius_decrease_exponent: Float (id: 43, requires_api: 1);
 
-  gamma_to_srgb: Float (id: 44);
-  tint_color: Float3 (id: 45);
-  opacity: Float (id: 46);
+  gamma_to_srgb: Float (id: 44, requires_api: 1);
+  tint_color: Float3 (id: 45, requires_api: 1);
+  opacity: Float (id: 46, requires_api: 1);
 }
 
 // Match the int to androidx/media3/common/C.java
-enum BuiltInMaterialEb117dd9StereoType : uint8 {
-  MONO = 0,
-  TOP_BOTTOM = 1,
-  LEFT_RIGHT = 2,
+enum BuiltInMaterialEb117dd9StereoType : uint8 (requires_api: 1) {
+  MONO = 0 (requires_api: 1),
+  TOP_BOTTOM = 1 (requires_api: 1),
+  LEFT_RIGHT = 2 (requires_api: 1),
 }
 
-table BuiltInMaterialEb117dd9 {
-  stereo_type: BuiltInMaterialEb117dd9StereoType (id: 0);
+table BuiltInMaterialEb117dd9 (requires_api: 1) {
+  stereo_type: BuiltInMaterialEb117dd9StereoType (id: 0, requires_api: 1);
 }
 
-table BuiltInMaterialEb117dd9Parameters {
-  video_texture: BuiltInTextureParameter (id: 0);
-  flip_vertically: Bool (id: 1);
-  flip_horizontally: Bool (id: 2);
-  is_stereo: Bool (id: 3);
-  is_left_right_stereo: Bool (id: 4);
-  is_visible: Bool (id: 5);
-  should_show_video: Bool (id: 6);
+table BuiltInMaterialEb117dd9Parameters (requires_api: 1) {
+  video_texture: BuiltInTextureParameter (id: 0, requires_api: 1);
+  flip_vertically: Bool (id: 1, requires_api: 1);
+  flip_horizontally: Bool (id: 2, requires_api: 1);
+  is_stereo: Bool (id: 3, requires_api: 1);
+  is_left_right_stereo: Bool (id: 4, requires_api: 1);
+  is_visible: Bool (id: 5, requires_api: 1);
+  should_show_video: Bool (id: 6, requires_api: 1);
   // Indicates which eye the material should be rendered for.
   // 0 = left eye, 1 = right eye, 2 = both eyes.
-  eye_mode: Int (id: 7);
+  eye_mode: Int (id: 7, requires_api: 1);
 }
 
-enum BuiltInMaterial1b616c8aShapeType : uint8 {
-  DEFAULT_FLAT = 0,
-  VR180 = 1,
-  FULL360 = 2,
+enum BuiltInMaterial1b616c8aShapeType : uint8 (requires_api: 1) {
+  DEFAULT_FLAT = 0 (requires_api: 1),
+  VR180 = 1 (requires_api: 1),
+  FULL360 = 2 (requires_api: 1),
 }
 
-table BuiltInMaterial1b616c8a {
-  shape: BuiltInMaterial1b616c8aShapeType (id: 0);
-  use_super_sampling: Bool (id: 1);
+table BuiltInMaterial1b616c8a (requires_api: 1) {
+  shape: BuiltInMaterial1b616c8aShapeType (id: 0, requires_api: 1);
+  use_super_sampling: Bool (id: 1, requires_api: 1);
 }
 
-enum BuiltInMaterial1b616c8aStereoType : uint8 {
-  MONOSCOPIC = 0,
-  TOP_BOTTOM = 1,
-  LEFT_RIGHT = 2,
-  STEREO_MESH = 3,
-  INTERLEAVED_LEFT_PRIMARY = 4,
-  INTERLEAVED_RIGHT_PRIMARY = 5,
-  INTERLEAVED_LEFT_PRIMARY_WITH_DEPTH = 6,
-  INTERLEAVED_RIGHT_PRIMARY_WITH_DEPTH = 7,
+enum BuiltInMaterial1b616c8aStereoType : uint8 (requires_api: 1) {
+  MONOSCOPIC = 0 (requires_api: 1),
+  TOP_BOTTOM = 1 (requires_api: 1),
+  LEFT_RIGHT = 2 (requires_api: 1),
+  STEREO_MESH = 3 (requires_api: 1),
+  INTERLEAVED_LEFT_PRIMARY = 4 (requires_api: 1),
+  INTERLEAVED_RIGHT_PRIMARY = 5 (requires_api: 1),
+  INTERLEAVED_LEFT_PRIMARY_WITH_DEPTH = 6 (requires_api: 1),
+  INTERLEAVED_RIGHT_PRIMARY_WITH_DEPTH = 7 (requires_api: 1),
 }
 
-enum ColorStandard : int {
+enum ColorStandard : int (requires_api: 1) {
   // Default value when the color standard is not specified.
-  UNSPECIFIED = 0,
-  BT709 = 1,
-  BT601_PAL = 2,
-  BT2020 = 6,
-  BT601_525 = 0xf0,
-  DISPLAY_P3 = 0xf1,
-  DCI_P3 = 0xf2,
-  ADOBE_RGB = 0xf3,
+  UNSPECIFIED = 0 (requires_api: 1),
+  BT709 = 1 (requires_api: 1),
+  BT601_PAL = 2 (requires_api: 1),
+  BT2020 = 6 (requires_api: 1),
+  BT601_525 = 0xf0 (requires_api: 1),
+  DISPLAY_P3 = 0xf1 (requires_api: 1),
+  DCI_P3 = 0xf2 (requires_api: 1),
+  ADOBE_RGB = 0xf3 (requires_api: 1),
 }
 
-enum ColorTransfer : int {
+enum ColorTransfer : int (requires_api: 1) {
   // Default value when the color transfer is not specified.
-  UNSPECIFIED = 0,
-  LINEAR = 1,
-  SRGB = 2,
-  SDR = 3,
-  GAMMA_2_2 = 10,
-  ST2084 = 6,
-  HLG = 7,
+  UNSPECIFIED = 0 (requires_api: 1),
+  LINEAR = 1 (requires_api: 1),
+  SRGB = 2 (requires_api: 1),
+  SDR = 3 (requires_api: 1),
+  GAMMA_2_2 = 10 (requires_api: 1),
+  ST2084 = 6 (requires_api: 1),
+  HLG = 7 (requires_api: 1),
 }
 
-enum ColorRange : int {
+enum ColorRange : int (requires_api: 1) {
   // Default value when the color range is not specified.
-  UNSPECIFIED = 0,
-  FULL = 1,
-  LIMITED = 2,
-  EXTENDED = 3,
+  UNSPECIFIED = 0 (requires_api: 1),
+  FULL = 1 (requires_api: 1),
+  LIMITED = 2 (requires_api: 1),
+  EXTENDED = 3 (requires_api: 1),
 }
 
 // Color space parameters for JXR media content.
@@ -528,93 +529,93 @@ enum ColorRange : int {
 // light level (MaxCLL), when available from the content metadata. Specifically,
 // for HDR videos, you can extract this information from the container using
 // ExoPlayer.
-table BuiltInMaterial1b616c8aMediaColorSpaceParameter {
-  color_standard: ColorStandard (id: 0);
-  color_transfer: ColorTransfer (id: 1);
-  color_range: ColorRange (id: 2);
-  max_luminance: int (id: 3);
+table BuiltInMaterial1b616c8aMediaColorSpaceParameter (requires_api: 1) {
+  color_standard: ColorStandard (id: 0, requires_api: 1);
+  color_transfer: ColorTransfer (id: 1, requires_api: 1);
+  color_range: ColorRange (id: 2, requires_api: 1);
+  max_luminance: int (id: 3, requires_api: 1);
 }
 
-table BuiltInMaterial1b616c8aParameters {
-  primary_texture: BuiltInTextureParameter (id: 0);
-  auxiliary_texture: BuiltInTextureParameter (id: 1);
-  stereo_type: BuiltInMaterial1b616c8aStereoType (id: 2);
-  media_color_space: BuiltInMaterial1b616c8aMediaColorSpaceParameter (id: 6);
-  primary_alpha_mask: BuiltInTextureParameter (id: 3);
-  auxiliary_alpha_mask: BuiltInTextureParameter (id: 4);
-  feather_radius: Float2 (id: 5);
+table BuiltInMaterial1b616c8aParameters (requires_api: 1) {
+  primary_texture: BuiltInTextureParameter (id: 0, requires_api: 1);
+  auxiliary_texture: BuiltInTextureParameter (id: 1, requires_api: 1);
+  stereo_type: BuiltInMaterial1b616c8aStereoType (id: 2, requires_api: 1);
+  media_color_space: BuiltInMaterial1b616c8aMediaColorSpaceParameter (id: 6, requires_api: 1);
+  primary_alpha_mask: BuiltInTextureParameter (id: 3, requires_api: 1);
+  auxiliary_alpha_mask: BuiltInTextureParameter (id: 4, requires_api: 1);
+  feather_radius: Float2 (id: 5, requires_api: 1);
 }
 
-table BuiltInMaterial0d0cb9aa {
+table BuiltInMaterial0d0cb9aa (requires_api: 1) {
 }
 
-table BuiltInMaterial0d0cb9aaParameters {
-  primary_touch_point: Float3 (id: 0);
-  touch_control: Float2 (id: 1);
-  touch_response: Float4 (id: 2);
-  secondary_touch_point: Float3 (id: 3);
-  falloff_color: Float4 (id: 4);
-  cutoff_color: Float4 (id: 5);
+table BuiltInMaterial0d0cb9aaParameters (requires_api: 1) {
+  primary_touch_point: Float3 (id: 0, requires_api: 1);
+  touch_control: Float2 (id: 1, requires_api: 1);
+  touch_response: Float4 (id: 2, requires_api: 1);
+  secondary_touch_point: Float3 (id: 3, requires_api: 1);
+  falloff_color: Float4 (id: 4, requires_api: 1);
+  cutoff_color: Float4 (id: 5, requires_api: 1);
 }
 
-table BuiltInMaterialbd7fe08c {
+table BuiltInMaterialbd7fe08c (requires_api: 1) {
 }
 
-table BuiltInMaterialbd7fe08cParameters {
-  highlight_point: Float3 (id: 0);
-  dot_pattern: BuiltInTextureParameter (id: 1);
-  plane_control: Float3 (id: 2);
-  falloff_color: Float4 (id: 3);
-  cutoff_color: Float4 (id: 4);
-  uv_scale: Float2 (id: 5);
+table BuiltInMaterialbd7fe08cParameters (requires_api: 1) {
+  highlight_point: Float3 (id: 0, requires_api: 1);
+  dot_pattern: BuiltInTextureParameter (id: 1, requires_api: 1);
+  plane_control: Float3 (id: 2, requires_api: 1);
+  falloff_color: Float4 (id: 3, requires_api: 1);
+  cutoff_color: Float4 (id: 4, requires_api: 1);
+  uv_scale: Float2 (id: 5, requires_api: 1);
 }
 
-table BuiltInMaterialTextureExternal {
+table BuiltInMaterialTextureExternal (requires_api: 1) {
 }
 
-table BuiltInMaterialTextureExternalParameters {
-  texture: BuiltInTextureParameter (id: 0);
+table BuiltInMaterialTextureExternalParameters (requires_api: 1) {
+  texture: BuiltInTextureParameter (id: 0, requires_api: 1);
 }
 
 // Union of all the built-in materials that are supported by Split Engine.
-union BuiltInMaterialSpec {
-  GenericMaterialSpec = 1,
-  BuiltInMaterial5cf26af8 = 2,
-  BuiltInMaterialE3ca0ab9 = 3,
-  BuiltInMaterialD1750064 = 4,
-  BuiltInMaterialEb117dd9 = 5,
-  BuiltInMaterial1b616c8a = 6,
-  BuiltInMaterial0d0cb9aa = 7,
-  BuiltInMaterialTextureExternal = 8,
-  BuiltInMaterialbd7fe08c = 9,
+union BuiltInMaterialSpec (requires_api: 1) {
+  GenericMaterialSpec = 1 (requires_api: 1),
+  BuiltInMaterial5cf26af8 = 2 (requires_api: 1),
+  BuiltInMaterialE3ca0ab9 = 3 (requires_api: 1),
+  BuiltInMaterialD1750064 = 4 (requires_api: 1),
+  BuiltInMaterialEb117dd9 = 5 (requires_api: 1),
+  BuiltInMaterial1b616c8a = 6 (requires_api: 1),
+  BuiltInMaterial0d0cb9aa = 7 (requires_api: 1),
+  BuiltInMaterialTextureExternal = 8 (requires_api: 1),
+  BuiltInMaterialbd7fe08c = 9 (requires_api: 1),
 }
 
 // Request to create a built-in material instance and associate it with a
 // front-end material instance ID.
-table BuiltInMaterialRequest {
-  material_instance_id: uint64 (id: 0);
-  data: BuiltInMaterialSpec (id: 2);
+table BuiltInMaterialRequest (requires_api: 1) {
+  material_instance_id: uint64 (id: 0, requires_api: 1);
+  data: BuiltInMaterialSpec (id: 2, requires_api: 1);
 }
 
 root_type BuiltInMaterialRequest;
 
 // Each built-in material has a set of parameters that are used to configure the
 // material instance.
-union BuiltInMaterialParameters {
-  GenericMaterialParameters = 1,
-  BuiltInMaterial5cf26af8Parameters = 2,
-  BuiltInMaterialE3ca0ab9Parameters = 3,
-  BuiltInMaterialD1750064Parameters = 4,
-  BuiltInMaterialEb117dd9Parameters = 5,
-  BuiltInMaterial1b616c8aParameters = 6,
-  BuiltInMaterial0d0cb9aaParameters = 7,
-  BuiltInMaterialTextureExternalParameters = 8,
-  BuiltInMaterialbd7fe08cParameters = 9,
+union BuiltInMaterialParameters (requires_api: 1) {
+  GenericMaterialParameters = 1 (requires_api: 1),
+  BuiltInMaterial5cf26af8Parameters = 2 (requires_api: 1),
+  BuiltInMaterialE3ca0ab9Parameters = 3 (requires_api: 1),
+  BuiltInMaterialD1750064Parameters = 4 (requires_api: 1),
+  BuiltInMaterialEb117dd9Parameters = 5 (requires_api: 1),
+  BuiltInMaterial1b616c8aParameters = 6 (requires_api: 1),
+  BuiltInMaterial0d0cb9aaParameters = 7 (requires_api: 1),
+  BuiltInMaterialTextureExternalParameters = 8 (requires_api: 1),
+  BuiltInMaterialbd7fe08cParameters = 9 (requires_api: 1),
 }
 
-table BuiltInMaterialInstanceParameters {
-  material_instance_id: uint64 (id: 0);
-  data: BuiltInMaterialParameters (id: 2);
+table BuiltInMaterialInstanceParameters (requires_api: 1) {
+  material_instance_id: uint64 (id: 0, requires_api: 1);
+  data: BuiltInMaterialParameters (id: 2, requires_api: 1);
 }
 
 root_type BuiltInMaterialInstanceParameters;

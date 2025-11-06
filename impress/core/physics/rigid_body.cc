@@ -14,6 +14,7 @@
 
 #include "core/physics/rigid_body.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 
@@ -139,7 +140,9 @@ absl::Status RigidBody::InitializeSimulated(const btTransform& bt_transform) {
   btRigidBody::btRigidBodyConstructionInfo rb_info(
       bt_mass, motion_state_.get(), collidable_.GetBtCollisionShape(),
       local_inertia);
-  // TODO: (broken link) - Add linear and angular damping parameters to the state
+
+  rb_info.m_linearDamping = state_.linear_damping;
+  rb_info.m_angularDamping = state_.angular_damping;
 
   rigid_body_ = std::make_unique<btRigidBody>(rb_info);
   SetFrictionInternal(state_.friction);
@@ -148,6 +151,7 @@ absl::Status RigidBody::InitializeSimulated(const btTransform& bt_transform) {
   if (length(state_.linear_velocity) > kSimulatedMinimumVelocity) {
     SetLinearVelocity(state_.linear_velocity);
   }
+
   if (length(state_.angular_velocity) > kSimulatedMinimumVelocity) {
     SetAngularVelocity(state_.angular_velocity);
   }
@@ -258,6 +262,28 @@ void RigidBody::SetAngularFactor(float3 angular_factor) {
 float3 RigidBody::GetAngularFactor() {
   return ToVec3<float>(rigid_body_->getAngularFactor());
 }
+
+void RigidBody::SetLinearDamping(float linear_damping) {
+  if (linear_damping < 0.0f || linear_damping > 1.0f) {
+    IMP_LOG(imp::WARNING) << "linear_damping is out of bounds [0.0f, 1.0f]: "
+                 << linear_damping;
+  }
+  state_.linear_damping = std::clamp(linear_damping, 0.0f, 1.0f);
+  rigid_body_->setDamping(state_.linear_damping, state_.angular_damping);
+}
+
+float RigidBody::GetLinearDamping() const { return state_.linear_damping; }
+
+void RigidBody::SetAngularDamping(float angular_damping) {
+  if (angular_damping < 0.0f || angular_damping > 1.0f) {
+    IMP_LOG(imp::WARNING) << "angular_damping is out of bounds [0.0f, 1.0f]: "
+                 << angular_damping;
+  }
+  state_.angular_damping = std::clamp(angular_damping, 0.0f, 1.0f);
+  rigid_body_->setDamping(state_.linear_damping, state_.angular_damping);
+}
+
+float RigidBody::GetAngularDamping() const { return state_.angular_damping; }
 
 void RigidBody::SetCustomGravity(float3 gravity) {
   rigid_body_->setFlags(btRigidBodyFlags::BT_DISABLE_WORLD_GRAVITY);

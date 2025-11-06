@@ -84,7 +84,7 @@ cc_library(
     deps = [
         ":math",
         "//core/common:fbs",
-        "@com_github_google_flatbuffers//:flatbuffers",
+        "@flatbuffers",
     ],
     alwayslink = 1,
 )

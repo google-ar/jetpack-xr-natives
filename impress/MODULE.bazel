@@ -82,7 +82,7 @@ use_repo(non_module_repos, "SDL2")
 use_repo(non_module_repos, "basis_universal")
 use_repo(non_module_repos, "boost_beast")
 use_repo(non_module_repos, "civetweb")
-use_repo(non_module_repos, "com_github_google_flatbuffers")
+bazel_dep(name = "flatbuffers", version = "25.2.10")
 use_repo(non_module_repos, "com_google_sandboxed_api")
 use_repo(non_module_repos, "com_google_zetasql")
 use_repo(non_module_repos, "dear_imgui")
@@ -118,6 +118,7 @@ maven.install(
         "androidx.lifecycle:lifecycle-runtime-ktx:2.4.0-alpha01",
         "androidx.lifecycle:lifecycle-runtime:2.4.0-alpha01",
         "androidx.lifecycle:lifecycle-viewmodel-ktx:2.4.0-alpha01",
+        "com.android.extensions.xr:extensions-xr:1.0",
         "com.android.extensions.xr:extensions-xr:1.0",
         "com.google.errorprone:error_prone_annotations:2.27.1",
         "com.google.flogger:flogger-system-backend:0.6",

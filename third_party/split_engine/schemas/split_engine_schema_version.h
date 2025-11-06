@@ -17,9 +17,23 @@
 #ifndef THIRD_PARTY_SPLIT_ENGINE_SCHEMAS_SPLIT_ENGINE_SCHEMA_VERSION_H_
 #define THIRD_PARTY_SPLIT_ENGINE_SCHEMAS_SPLIT_ENGINE_SCHEMA_VERSION_H_
 
+#include <cstdint>
+#include <limits>
+
 #include "absl/strings/string_view.h"
 
 namespace android_xr {
+
+// This is the API level that is currently in production.
+// This value is used by the split engine renderer as the default value for its
+// api level validation.
+inline constexpr int32_t kSplitEngineProductionApiLevel = 1;
+
+// The split engine experimental API level.
+// This value is used by the split engine renderer to allow the experimental
+// part of the schema to be used.
+inline constexpr int32_t kSplitEngineExperimentalApiLevel =
+    std::numeric_limits<int32_t>::max();
 
 // Note: the last date for changes to the schema for system lock is 2025/03/14.
 //

@@ -61,7 +61,6 @@ cc_library(
         "//core/math:flatbuffer_support",
         "//core/model:model_data_details",
         "//third_party/tinyusdz",
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
@@ -71,6 +70,7 @@ cc_library(
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:span",
         "@com_google_impress//core/common:log",
+        "@flatbuffers",
         "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/libs:geometry",
@@ -101,11 +101,11 @@ cc_library(
         "//core/loader/provider:fbs_deps",  # build_cleaner: keep
         "//core/model",
         "//third_party/tinyusdz",
-        "@com_github_google_flatbuffers//:flatbuffers",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/types:optional",
+        "@flatbuffers",
     ],
     alwayslink = 1,
 )

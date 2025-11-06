@@ -14,10 +14,13 @@
 
 #include "core/scripting/message_handlers/forward_input_handler.h"
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
+#include "absl/status/status.h"
 #include "absl/time/time.h"
+#include "core/async/future.h"
 #include "core/input/input_manager.h"
 #include "core/input/key_codes.h"
 #include "core/input/keyboard_event.h"
@@ -65,6 +68,7 @@ Future<absl::Status> ForwardInputHandler::HandleMessage(
   modifier_flags.Set(KeyModifier::ALT, message.alt_key);
   modifier_flags.Set(KeyModifier::SHIFT, message.shift_key);
   modifier_flags.Set(KeyModifier::CTRL, message.ctrl_key);
+  modifier_flags.Set(KeyModifier::GUI, message.super_key);
   Key key = Key(ToVirtualKeyCode(message.code), modifier_flags);
   absl::Duration elapsed_time = absl::Milliseconds(0.1);
   return Future<absl::Status>(input_manager.ProcessKeyboardInput(
