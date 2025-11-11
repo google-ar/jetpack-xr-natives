@@ -23,30 +23,29 @@ import "core/scene_handles/scene_handles.proto";
 message HingeConstraintState {
   // The node that holds a rigid body A that is subject to this constraint.
   NodeSceneHandle connected_node = 1;
+  // Indicates the pivot/offset of the constraint frame from rigid body (B).
+  // Note that rigid body (B) is attached the same node that owns the
+  // constraint.
+  Float3 pivot = 2;
 
-  // The pivot of the constraint frame in the connected node(that holds rigid
-  // body A)'s local space.
-  Float3 connected_pivot = 2;
-
-  // The axis of the constraint frame in the connected node(that holds rigid
-  // body A)'s local space. It is the axis of the hinge.
-  Float3 connected_axis = 3;
-
-  // Only used when the constraint is between two rigid bodies. Indicates the
-  // pivot/offset of the constraint frame from rigid body (B). Note that rigid
-  // body (B) is attached the same node that owns the constraint.
-  Float3 pivot = 4 [(imp.optional_type) = ABSL_OPTIONAL];
-
-  // Only used when the constraint is between two rigid bodies. Indicates the
-  // axis of the hinge in the local space of rigid body (B). Note that rigid
-  // body (B) is attached the same node that owns the constraint.
-  Float3 axis = 5 [(imp.optional_type) = ABSL_OPTIONAL];
+  // Indicates the axis of the hinge in the local space of rigid body (B). Note
+  // that rigid body (B) is attached the same node that owns the constraint.
+  Float3 axis = 3 [(imp.optional_type) = ABSL_OPTIONAL];
 
   // if it will calculate the connected pivot based on the transforms of the
   // two rigid bodies.
   // If there is only one rigid body (the connected node), the pivot will be
   // interpreted as the world position of the constraint.
-  bool auto_configure = 6;
+  bool auto_configure = 4;
+
+  // The pivot of the constraint frame in the connected node(that holds rigid
+  // body A)'s local space. It is used only when auto_configure is false.
+  Float3 connected_pivot = 5 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // The axis of the constraint frame in the connected node(that holds rigid
+  // body A)'s local space. It is the axis of the hinge and it is used only when
+  // auto_configure is false.
+  Float3 connected_axis = 6 [(imp.optional_type) = ABSL_OPTIONAL];
 
   // The limits of the hinge expressed in degrees around the rotation axis.
   float lower_limit = 7;

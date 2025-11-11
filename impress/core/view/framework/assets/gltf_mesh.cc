@@ -238,20 +238,6 @@ void GltfMesh::Setup(ComponentHandle<GltfRenderer> owner,
 
     builder->Build(*engine, GetEntity());
 
-    const std::vector<float>& morph_target_weights =
-        entity_data.morph_target_weights;
-    if (!morph_target_weights.empty()) {
-      SetMorphTargetWeights(morph_target_weights);
-    } else {
-      filament::RenderableManager::Instance instance = GetInstance();
-      size_t num_morph_targets =
-          GetRenderableManager().GetMorphTargetCount(instance);
-      if (num_morph_targets > 0) {
-        std::vector<float> weights(num_morph_targets, 0.0f);
-        SetMorphTargetWeights(weights);
-      }
-    }
-
     // TODO: Remove split engine check once the bug is fixed.
     if (!IsSkinned() || GetView().GetSplitEngineSerializer()) {
       for (RuntimeMesh& runtime_mesh : runtime_meshes_) {
@@ -324,9 +310,35 @@ size_t GltfMesh::GetMorphTargetCount() const {
   return owner_->GetMorphTargetCount(self_.CastTo<GltfRenderer::EntityId>());
 }
 
+std::vector<float> GltfMesh::GetMorphTargetWeights() const {
+  return owner_->GetMorphTargetWeights(self_.CastTo<GltfRenderer::EntityId>(),
+                                       GetOriginalGltfMeshIndex());
+}
+
+float GltfMesh::GetMorphTargetWeight(size_t index) const {
+  if (index >= GetMorphTargetCount()) {
+    return 0.0f;
+  }
+  std::vector<float> weights = GetMorphTargetWeights();
+  if (index >= weights.size()) {
+    return 0.0f;
+  }
+  return weights[index];
+}
+
 void GltfMesh::SetMorphTargetWeights(const std::vector<float>& weights) {
-  owner_->SetMorphTargetWeights(weights,
-                                self_.CastTo<GltfRenderer::EntityId>());
+  owner_->SetNodeMorphTargetWeights(weights,
+                                    self_.CastTo<GltfRenderer::EntityId>());
+}
+
+void GltfMesh::SetMorphTargetWeight(size_t index, float weight) {
+  if (index >= GetMorphTargetCount()) {
+    IMP_LOG(imp::ERROR) << "Index is out of bounds for morph targets.";
+    return;
+  }
+  std::vector<float> weights = GetMorphTargetWeights();
+  weights[index] = weight;
+  SetMorphTargetWeights(weights);
 }
 
 void GltfMesh::SetBlendOrder(uint16_t blend_order, BlendOrderMode mode,

@@ -203,7 +203,7 @@ class OpenXrManager {
   // been called with start_polling_thread = true. The default_reference_space
   // is the reference space that will be used while querying OpenXR.
   // TODO: (broken link) -  Support multiple activities in the OpenXR manager.
-  bool Init(JNIEnv* env, jobject activity,
+  bool Init(JNIEnv* env, jobject context,
             XrReferenceSpaceType default_reference_space =
                 XR_REFERENCE_SPACE_TYPE_UNBOUNDED_ANDROID,
             bool start_polling_thread = true) ABSL_LOCKS_EXCLUDED(mutex_);
@@ -430,6 +430,9 @@ class OpenXrManager {
   // expected to be called from the jni thread.
   int GetDepthImageHeight() ABSL_LOCKS_EXCLUDED(mutex_);
 
+  // Returns whether or not geospatial APIs are supported on the current system.
+  bool IsGeospatialSupported() ABSL_LOCKS_EXCLUDED(mutex_);
+
   // Gets the earth state. This is a public function that is expected to be
   // called from the jni thread.
   EarthState GetEarthState() ABSL_LOCKS_EXCLUDED(mutex_);
@@ -463,6 +466,12 @@ class OpenXrManager {
   XrResult ConfigureSession(const ConfigSettings& new_config_settings)
       ABSL_LOCKS_EXCLUDED(mutex_);
 
+  // Creates a spatial anchor from a geospatial pose.
+  CreateAnchorResult CreateEarthAnchor(
+      XrTime time, double latitude, double longitude, double altitude,
+      const XrQuaternionf& east_up_south_quaternion, XrSpace* out_anchor_space)
+      ABSL_LOCKS_EXCLUDED(mutex_);
+
  private:
   // Enum values representing whether OpenXR instance and session have started.
   // This is separate from the XrSessionState which handles states of the
@@ -492,11 +501,11 @@ class OpenXrManager {
   bool GetEnabledExtensions(std::vector<std::string>& enabled_exts);
 
   // Loads the OpenXR runtime.
-  bool LoadOpenXr(jobject activity) ABSL_LOCKS_EXCLUDED(mutex_);
+  bool LoadOpenXr(jobject context) ABSL_LOCKS_EXCLUDED(mutex_);
 
   // Creates an OpenXR instance. The OpenXR runtime must first be loaded by
   // calling LoadOpenXr.
-  bool CreateInstance(jobject activity) ABSL_LOCKS_EXCLUDED(mutex_);
+  bool CreateInstance() ABSL_LOCKS_EXCLUDED(mutex_);
 
   // Creates an OpenXR session. An instance must first be created by calling
   // CreateInstance.
@@ -711,6 +720,8 @@ class OpenXrManager {
       ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
   std::optional<XrEventDataEarthTrackerStateChangedANDROIDX1>
       last_earth_tracker_state_update_ ABSL_GUARDED_BY(mutex_) = std::nullopt;
+  absl::flat_hash_map<XrSpace, XrSpatialEntityEXT>
+      geospatial_anchor_space_to_entity_ ABSL_GUARDED_BY(mutex_);
   XrEyeTrackerANDROID eye_tracker_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
   FaceTrackingCalibrationState face_tracker_calibration_state_
       ABSL_GUARDED_BY(mutex_) = FaceTrackingCalibrationState::kUnknown;
@@ -760,6 +771,8 @@ class OpenXrManager {
 
   // An object that contains the current state of the runtime configuration.
   ConfigSettings config_settings_ ABSL_GUARDED_BY(mutex_);
+
+  bool geospatial_exts_loaded_ ABSL_GUARDED_BY(mutex_) = false;
 
   // Mutex to guard variables that are accessible by the polling thread. It must
   // be called after the initialization_mutex_.
@@ -817,6 +830,7 @@ class OpenXrManager {
   PFN_xrCreateEarthTrackerANDROIDX1 create_earth_tracker_;
   PFN_xrDestroyEarthTrackerANDROIDX1 destroy_earth_tracker_;
   PFN_xrLocateGeospatialPoseANDROIDX1 locate_geospatial_pose_;
+  PFN_xrCreateGeospatialAnchorANDROIDX1 create_geospatial_anchor_;
 
   PFN_xrCreateEyeTrackerANDROID create_eye_tracker_;
   PFN_xrDestroyEyeTrackerANDROID destroy_eye_tracker_;

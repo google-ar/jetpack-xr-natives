@@ -41,15 +41,27 @@ enum OptionalType {
   // that functionality is now covered by the optional label in base proto3.
   // Thus the old enum value 1, which was optional, is now DEPRECATED.
 
-  // Generates the field as an std::unique_ptr.
+  // Generates the field as an CopyablePtr.
   //
   // i.e.
-  // std::unique_ptr<Type> field_name;
+  // CopyablePtr<Type> field_name;
   //
   // It is recommended to use this in cases where you need to support a
-  // recursive type. It will also cause the generated C++ type to be move-only,
-  // which can be either desired or not depending on the use case.
+  // recursive type.
   UNIQUE_PTR = 2;
+}
+
+// Used as a field option to configure the type generated for a string field.
+//
+// Impress needs its own custom solution since proto removed the `ctype =
+// STRING_PIECE` option in protobuf 29.
+enum StringType {
+  // Default / unset. Generates the field as a std::string.
+  STRING_TYPE_UNKNOWN = 0;
+  // Generates the field as a string_view.
+  STRING_VIEW = 2;
+  // Generates the field as a absl::Cord.
+  CORD = 3;
 }
 
 // Used as a field option to configure how repeated fields are merged.
@@ -138,9 +150,15 @@ extend google.protobuf.FileOptions {
 
 extend google.protobuf.FieldOptions {
   // The optional_type instructs the impress C++ code generator to use either
-  // absl::optional or std::unique_ptr for fields marked with the optional
+  // absl::optional or CopyablePtr for fields marked with the optional
   // keyword. See the FieldType enum  for details.
   optional OptionalType optional_type = 356368908;
+
+  // The string_type instructs the impress C++ code generator to use either
+  // std::string, string_view, or absl::Cord for string fields. See the
+  // StringType enum for details. Note: this is only supported for string
+  // fields.
+  optional StringType string_type = 516148516;
 
   // An optional type to apply as template parameters to the field.
   // This is only useful for messages that use both native_type and no_codegen

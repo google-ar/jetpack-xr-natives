@@ -15,21 +15,14 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_CPU_HIERARCHY_PANEL_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_CPU_HIERARCHY_PANEL_H_
 
-#include <array>
 #include <cstdint>
-#include <vector>
+#include <thread>  // NOLINT: Need to sort things by thread id.
 
+#include "absl/strings/string_view.h"
+#include "core/editor/widgets/performance/sample_processor.h"
 #include "core/performance/profiler.h"
 
 namespace imp::editor {
-
-struct ProfilerSampleNode {
-  ProfileResult* result;
-  std::vector<ProfilerSampleNode*> children;
-  // uint32 since 32 bits allows for up to 4s of frame time.
-  uint32_t total_time;
-  int calls;
-};
 
 // Panel containing a tree view of performance profiling data.
 // Each node in the tree represents a sample taken across a scope.
@@ -38,22 +31,25 @@ class HierarchyPanel {
   HierarchyPanel();
   ~HierarchyPanel();
 
-  void DrawPanel(int frame_index);
+  void DrawPanel(int frame_index, SampleProcessor& sample_processor);
+
+  absl::string_view GetSelectedSampleName();
 
  private:
   constexpr static int kMaxTreeDepth = 30;
-  // Creates a tree of samples for the given frame index.
-  // Returns nullptr if the frame index is not valid or contains no samples.
-  ProfilerSampleNode* CreateTree(int frame_index);
-  // Draws the tree as a table.
-  void DrawTable(ProfilerSampleNode* root);
+  // The name of the currently selected sample in the hierarchy.
+  absl::string_view selected_sample_name_ = "";
+  // The total duration of the root node for the current tree.
+  // This is used to calculate the percentage of time a sample takes up.
+  // For instances where >1 root nodes are present, their children will show
+  // their frametime percentage relative to their root's duration.
+  int64_t root_duration_ns_ = 0;
   // Draws a node in the tree as a row in the table.
   // Recursively calls itself for child nodes.
   void DrawTreeNode(ProfilerSampleNode* node, int depth, int& row_index);
-  uint32_t frame_duration_;
-  // Pool of nodes to be reused for each frame.
-  // As long as this uses kMaxSamples from the Profiler, we will never run out.
-  std::array<ProfilerSampleNode, Profiler::kMaxSamples> sample_nodes_;
+  const char* current_thread_ = Profiler::kMainThreadName.data();
+  std::thread::id current_thread_id_;
+  bool thread_set_ = false;
 };
 
 }  // namespace imp::editor

@@ -33,7 +33,7 @@ message OtherMessage {
   double dbl = 12;
   bool b = 13;
   string str = 14;
-  string str_view = 15 [ctype = STRING_PIECE];
+  string str_view = 15 [(imp.string_type) = STRING_VIEW];
   bytes data = 16;
 
   repeated int32 repeated_i32 = 19;
@@ -49,7 +49,7 @@ message OtherMessage {
   repeated float repeated_flt = 29;
   repeated double repeated_dbl = 30;
   repeated string repeated_str = 32;
-  repeated string repeated_str_view = 33 [ctype = STRING_PIECE];
+  repeated string repeated_str_view = 33 [(imp.string_type) = STRING_VIEW];
   repeated bytes repeated_data = 34;
 
   optional int32 optional_i32 = 37;
@@ -66,7 +66,7 @@ message OtherMessage {
   optional double optional_dbl = 48;
   optional bool optional_b = 49;
   optional string optional_str = 50;
-  optional string optional_str_view = 51 [ctype = STRING_PIECE];
+  optional string optional_str_view = 51 [(imp.string_type) = STRING_VIEW];
   optional bytes optional_data = 52;
 
   oneof u {
@@ -84,7 +84,7 @@ message OtherMessage {
     double u_dbl = 74;
     bool u_b = 75;
     string u_str = 76;
-    string u_str_view = 77 [ctype = STRING_PIECE];
+    string u_str_view = 77 [(imp.string_type) = STRING_VIEW];
     bytes u_data = 78;
   }
 }
@@ -111,7 +111,7 @@ message FuzzEverything {
   double dbl = 12;
   bool b = 13;
   string str = 14;
-  string str_view = 15 [ctype = STRING_PIECE];
+  string str_view = 15 [(imp.string_type) = STRING_VIEW];
   bytes data = 16;
   NestedEnum enum_ = 17;
   OtherMessage msg = 18;
@@ -129,7 +129,7 @@ message FuzzEverything {
   repeated float repeated_flt = 29;
   repeated double repeated_dbl = 30;
   repeated string repeated_str = 32;
-  repeated string repeated_str_view = 33 [ctype = STRING_PIECE];
+  repeated string repeated_str_view = 33 [(imp.string_type) = STRING_VIEW];
   repeated bytes repeated_data = 34;
   repeated NestedEnum repeated_enum_ = 35;
   repeated OtherMessage repeated_msg = 36;
@@ -149,7 +149,7 @@ message FuzzEverything {
   optional bool optional_b = 49;
   optional string optional_str = 50;
   optional string optional_str_view = 51
-      [ctype = STRING_PIECE, (imp.optional_type) = UNIQUE_PTR];
+      [(imp.string_type) = STRING_VIEW, (imp.optional_type) = UNIQUE_PTR];
   optional bytes optional_data = 52;
   optional NestedEnum optional_enum_ = 53 [(imp.optional_type) = UNIQUE_PTR];
   optional OtherMessage optional_msg = 54 [(imp.optional_type) = UNIQUE_PTR];
@@ -177,7 +177,7 @@ message FuzzEverything {
     double u_dbl = 74;
     bool u_b = 75;
     string u_str = 76;
-    string u_str_view = 77 [ctype = STRING_PIECE];
+    string u_str_view = 77 [(imp.string_type) = STRING_VIEW];
     bytes u_data = 78;
     NestedEnum u_enum_ = 79;
     OtherMessage u_msg = 80;

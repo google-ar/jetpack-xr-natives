@@ -49,6 +49,9 @@ union RequestType {
 
 table Request {
   request: RequestType;
+  // The operation id allows the client to associate a response with the request. 
+  // It must be greater than 0 due to implicit field presence.
+  operation_id: uint64;
 }
 
 root_type Request;
@@ -62,6 +65,9 @@ union ResponseType {
 
 table Response {
   response: ResponseType;
+  // The operation id allows the client to associate the response with a request. 
+  // It must be greater than 0 due to implicit field presence.
+  operation_id: uint64;
 }
 
 table CompileResponse {

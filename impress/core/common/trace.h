@@ -28,10 +28,11 @@
 #define IMP_TRACE_ENABLED 1
 #define IMP_TRACE_IMPL_PROFILER(name) imp::Timer timer##__LINE__(name);
 #define IMP_PROFILE_START_FRAME() imp::Profiler::AdvanceFrame();
-
+#define IMP_PROFILE_REGISTER_THREAD(name) imp::Profiler::SetThreadName(name);
 #else  // IMP_RUNTIME(DEV)
 #define IMP_PROFILE_START_FRAME()
 #define IMP_TRACE_IMPL_PROFILER(name)
+#define IMP_PROFILE_REGISTER_THREAD(name)
 #endif  // IMP_RUNTIME(DEV)
 
 // IMP_TRACE_USE_PERFETTO can be defined by adding:
@@ -73,7 +74,11 @@ PERFETTO_USE_CATEGORIES_FROM_NAMESPACE(imp_perfetto_tracing);
 #define IMP_TRACE_IMPL_SYSTRACE(name) SYSTRACE_NAME(name)
 
 #ifndef IMP_TRACE_ENABLED
-#define IMP_TRACE_ENABLED (defined(SYSTRACE_TAG) && SYSTRACE_TAG)
+#if defined(SYSTRACE_TAG) && SYSTRACE_TAG
+#define IMP_TRACE_ENABLED 1
+#else
+#define IMP_TRACE_ENABLED 0
+#endif
 #endif  // IMP_TRACE_ENABLED
 
 #define IMP_TRACE_IMPL_PERFETTO(name)

@@ -19,6 +19,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -84,7 +85,7 @@ class WidgetUiSystem : public System {
   std::unique_ptr<LayoutComposer> layout_composer_;
   // Records the visibility of certain windows in the Impress editor. Currently
   // only used for the multiple windows layout.
-  WindowConfiguration* window_configuration_ = nullptr;
+  std::optional<WindowConfiguration*> window_configuration_ = std::nullopt;
 
   std::vector<WidgetEntry> widgets_;
   // Keep track of the types of the widgets to remove them from the widgets_

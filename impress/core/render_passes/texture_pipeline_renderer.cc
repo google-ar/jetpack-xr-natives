@@ -281,6 +281,21 @@ bool TexturePipelineRenderer::IsPassEnabled(size_t pass_index) const {
   return runtime_passes_[pass_index].enabled;
 }
 
+absl::Status TexturePipelineRenderer::ResizePassTexture(size_t pass_index,
+                                                        imp::uint2 size) {
+  if (pass_index >= runtime_passes_.size()) {
+    return absl::InvalidArgumentError("Pass index out of bounds");
+  }
+  TexturePipelineRendererState::Pass& pass = state_.passes[pass_index];
+  RuntimePass& runtime_pass = runtime_passes_.at(pass_index);
+  pass.texture_size = size;
+  absl::Status status = InitializeTextures(pass, runtime_pass);
+  if (!status.ok()) {
+    return status;
+  }
+  return absl::OkStatus();
+}
+
 filament::View* TexturePipelineRenderer::GetFilamentView(
     size_t pass_index) const {
   if (pass_index >= runtime_passes_.size()) {

@@ -66,11 +66,14 @@ class LayoutComposer {
   // layout.
   absl::Span<const SubWindowInfo> GetSubWindowInfo();
 
-  void SetWindowConfiguration(WindowConfiguration& window_configuration) {
-    window_configuration_ = &window_configuration;
+  void SetWindowConfiguration(
+      std::optional<WindowConfiguration*> window_configuration) {
+    window_configuration_ = window_configuration;
   }
 
-  void ResetDockingLayout() { docking_helper_->Reset(); }
+  void ResetDockingLayout();
+
+  void SaveLayoutToIniFile();
 
  private:
   struct WidgetInfo {
@@ -185,7 +188,9 @@ class LayoutComposer {
 
   LayoutConfig layout_config_;
   std::unique_ptr<DockingHelper> docking_helper_;
-  WindowConfiguration* window_configuration_;
+  std::optional<WindowConfiguration*> window_configuration_;
+  std::string saved_layout_filename_;
+  bool should_reset_docking_layout_ = false;
 
   // Layout state
   LayoutConfig::TabbedWindowState tabbed_window_state_;

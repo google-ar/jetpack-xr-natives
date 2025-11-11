@@ -42,6 +42,7 @@ android_library(
     deps = [
         "//java/com/google/ar/imp/app:basic_imp_activity",
         "//java/com/google/ar/imp/app/splitengine:split_engine_shared_memory_bridge_service_java",  # buildcleaner: keep # unuseddeps: keep
+        "//java/com/google/ar/imp/materialcompiler:material_compiler_no_jni",  # buildcleaner: keep # unuseddeps: keep
         "//java/com/google/ar/imp/view:surface_view_no_jni",
     ],
 )

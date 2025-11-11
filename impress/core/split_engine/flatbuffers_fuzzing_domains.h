@@ -27,6 +27,7 @@
 #include <variant>
 #include <vector>
 
+#include "testing/fuzzing/domains.h"
 #include "absl/algorithm/container.h"
 #include "absl/base/nullability.h"
 #include "absl/base/thread_annotations.h"
@@ -47,7 +48,6 @@
 #include "flatbuffers/table.h"
 #include "flatbuffers/vector.h"
 #include "flatbuffers/verifier.h"
-#include "third_party/googlefuzztest/domain_core.h"
 #include "third_party/googlefuzztest/internal/domains/arbitrary_impl.h"
 #include "third_party/googlefuzztest/internal/domains/container_of_impl.h"
 #include "third_party/googlefuzztest/internal/domains/domain_base.h"
@@ -1836,7 +1836,7 @@ auto GetDefaultDomain(const reflection::Schema* /*absl_nonnull*/  schema,
     return FlatbuffersUnionDomainImpl{schema, union_type};
   } else if constexpr (is_flatbuffers_vector_tag_v<T>) {
     return VectorOf(GetDefaultDomain<typename T::value_type>(schema, field))
-        .WithMaxSize(std::numeric_limits<flatbuffers::uoffset_t>::max());
+        .WithMaxSize(1000);
   } else {
     return Arbitrary<T>();
   }
@@ -1908,8 +1908,7 @@ class FlatbuffersTableDomainImpl
   std::optional<corpus_type> FromValue(const value_type& value) const {
     auto val = inner_->FromValue((const flatbuffers::Table*)value);
     if (!val.has_value()) return std::nullopt;
-    return std::optional(
-        FlatbuffersTableDomainCorpusType{*val, BuildBuffer(*val)});
+    return std::optional(FlatbuffersTableDomainCorpusType{*val, {}});
   }
 
   // Returns the printer for the table.
@@ -1919,8 +1918,7 @@ class FlatbuffersTableDomainImpl
   std::optional<corpus_type> ParseCorpus(const IRObject& obj) const {
     auto val = inner_->ParseCorpus(obj);
     if (!val.has_value()) return std::nullopt;
-    return std::optional(
-        FlatbuffersTableDomainCorpusType{*val, BuildBuffer(*val)});
+    return std::optional(FlatbuffersTableDomainCorpusType{*val, {}});
   }
 
   // Returns the serialized corpus value.

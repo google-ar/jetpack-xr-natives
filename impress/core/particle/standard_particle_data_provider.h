@@ -33,6 +33,9 @@ class StandardParticleDataProvider : public ParticleDataProvider {
   // satisfied.
   StandardParticleDataProvider(int32_t num_floats);
 
+  // Returns the number of floats managed by the data provider.
+  int32_t GetNumFloats() const override;
+
   // Returns the float value at the given index.
   float GetFloat(int32_t index) const override;
 

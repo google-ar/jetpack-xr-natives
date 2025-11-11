@@ -34,6 +34,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
+#include "core/common/copyable_ptr.h"
 #include "core/common/platform_helpers.h"
 #include "core/proto/any.proto.imp.h"
 #include "core/proto/proto_common.h"
@@ -61,8 +62,7 @@ class JsonWriter {
            absl::optional<T>* other);
 
   template <int field_type, typename M, typename T>
-  M* Visit(M* m, int field_id, std::unique_ptr<T>* field,
-           std::unique_ptr<T>* other);
+  M* Visit(M* m, int field_id, CopyablePtr<T>* field, CopyablePtr<T>* other);
 
   template <int field_type, RepeatedMergeStrategy merge_type, typename M,
             typename T>
@@ -174,8 +174,8 @@ M* JsonWriter::Visit(M* m, int field_id, absl::optional<T>* field,
 }
 
 template <int field_type, typename M, typename T>
-M* JsonWriter::Visit(M* m, int field_id, std::unique_ptr<T>* field,
-                     std::unique_ptr<T>* other) {
+M* JsonWriter::Visit(M* m, int field_id, CopyablePtr<T>* field,
+                     CopyablePtr<T>* other) {
   if (!*field) {
     return m;
   }

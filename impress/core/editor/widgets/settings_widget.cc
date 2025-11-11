@@ -48,6 +48,11 @@ void SettingsWidget::DrawImGui() {
                       &show_all_origins_enabled_)) {
     event.emplace().show_all_origins_enabled = show_all_origins_enabled_;
   }
+  if (ImGui::MenuItem(editor::kShowPhysicsCollidersText.data(), nullptr,
+                      &show_physics_colliders_enabled_)) {
+    event.emplace().show_physics_colliders_enabled =
+        show_physics_colliders_enabled_;
+  }
   if (ImGui::MenuItem(editor::kEnableVertexSelection.data(), nullptr,
                       &vertex_selection_enabled_)) {
     event.emplace().vertex_selection_enabled = vertex_selection_enabled_;
@@ -58,7 +63,6 @@ void SettingsWidget::DrawImGui() {
         load_mesh_data_on_cpu_enabled_;
     bvh_mesh_collision_acceleration_enabled_ = false;
   }
-
   if (ImGui::MenuItem(editor::kEnableBvhMeshCollisionAcceleration.data(),
                       nullptr, &bvh_mesh_collision_acceleration_enabled_)) {
     event.emplace().bvh_mesh_collision_acceleration_enabled =

@@ -24,72 +24,53 @@ message SliderConstraintState {
   // The node that holds a rigid body A that is subject to this constraint.
   NodeSceneHandle connected_node = 1;
 
-  // The pivot of the constraint frame in the connected node(that holds rigid
-  // body A)'s local space.
-  Float3 connected_pivot = 2;
-
-  // The axis of the constraint frame in the connected node(that holds rigid
-  // body A)'s local space.
-  Float3 connected_axis = 3;
-
-  // The up axis of the constraint frame in the connected node(that holds rigid
-  // body A)'s local space. Together withe the axis, it defines the constraint
-  // rotation.
-  Float3 connected_up_axis = 4;
-
-  // Only used when the constraint is between two rigid bodies. Indicates the
-  // pivot/offset of the constraint frame from rigid body (B). Note that rigid
-  // body (B) is attached the same node that owns the constraint.
-  Float3 pivot = 5 [(imp.optional_type) = ABSL_OPTIONAL];
+  // Indicates the pivot/offset of the constraint frame from rigid body (B).
+  // Note that rigid body (B) is attached the same node that owns the
+  // constraint.
+  Float3 pivot = 2;
 
   // The rotation for the constraint frame from rigid body (B).
-  Float3 axis = 6 [(imp.optional_type) = ABSL_OPTIONAL];
-  Float3 up_axis = 7 [(imp.optional_type) = ABSL_OPTIONAL];
+  Float3 axis = 3 [(imp.optional_type) = ABSL_OPTIONAL];
+  Float3 up_axis = 4 [(imp.optional_type) = ABSL_OPTIONAL];
 
   // if it will calculate the connected pivot and axis based on the transforms
   // of the two rigid bodies. If there is only one rigid body (the connected
   // node), the pivot and axiswill be interpreted as the world transform of the
   // constraint.
-  bool auto_configure = 8;
+  bool auto_configure = 5;
 
-  // The limits for the angular movement
-  float angular_lower_limit = 9;
-  float angular_upper_limit = 10;
+  // The pivot of the constraint frame in the connected node(that holds rigid
+  // body A)'s local space. These are used only when auto_configure is false.
+  Float3 connected_pivot = 6 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // The axis of the constraint frame in the connected node(that holds rigid
+  // body A)'s local space.
+  Float3 connected_axis = 7 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // The up axis of the constraint frame in the connected node(that holds rigid
+  // body A)'s local space. Together withe the axis, it defines the constraint
+  // rotation.
+  Float3 connected_up_axis = 8 [(imp.optional_type) = ABSL_OPTIONAL];
 
   // The limits for the linear movement
-  float linear_lower_limit = 11;
-  float linear_upper_limit = 12;
+  float linear_lower_limit = 9;
+  float linear_upper_limit = 10;
 
   // The force and desired velocity for the linear motor
-  float max_linear_motor_force = 13;
-  float max_linear_motor_velocity = 14;
-
-  // The torque and desired velocity for the angular motor
-  float max_angular_motor_force = 15;
-  float max_angular_motor_velocity = 16;
+  float max_linear_motor_force = 11;
+  float max_linear_motor_velocity = 12;
 
   // The parameters for hitting the linear limits
-  float softness_linear_limit = 17;
-  float restitution_linear_limit = 18;
-  float damping_linear_limit = 19;
-
-  // The parameters for hitting the angular limits
-  float softness_angular_limit = 20;
-  float restitution_angular_limit = 21;
-  float damping_angular_limit = 22;
+  float softness_linear_limit = 13;
+  float restitution_linear_limit = 14;
+  float damping_linear_limit = 15;
 
   // The parameters for moving against the constraint axis (on orthogonal axes)
-  float softness_ortho_linear_limit = 23;
-  float restitution_ortho_linear_limit = 24;
-  float damping_ortho_linear_limit = 25;
-
-  // The parameters for rotating against the constraint axis (on orthogonal
-  // axes)
-  float softness_ortho_angular_limit = 26;
-  float restitution_ortho_angular_limit = 27;
-  float damping_ortho_angular_limit = 28;
+  float softness_ortho_linear_limit = 16;
+  float restitution_ortho_linear_limit = 17;
+  float damping_ortho_linear_limit = 18;
 
   // If the constraint is ready (is it functioning, ie it is connected to valid
   // rigid bodies)
-  bool is_ready = 29 [(imp.editor_control) = { read_only: {} }];
+  bool is_ready = 19 [(imp.editor_control) = { read_only: {} }];
 }

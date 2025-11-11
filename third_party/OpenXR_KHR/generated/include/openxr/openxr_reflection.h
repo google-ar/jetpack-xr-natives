@@ -199,11 +199,8 @@ XR_ENUM_STR(XrResult);
     _(XR_ERROR_SPATIAL_COMPONENT_NOT_ENABLED_EXT, -1000740006) \
     _(XR_ERROR_SPATIAL_PERSISTENCE_SCOPE_UNSUPPORTED_EXT, -1000763001) \
     _(XR_ERROR_SPATIAL_PERSISTENCE_SCOPE_INCOMPATIBLE_EXT, -1000781001) \
-    _(XR_ERROR_KEYLESS_AUTH_NOT_SETUP_ANDROIDX1, -1000787000) \
-    _(XR_KEYLESS_AUTH_FAILED_ANDROIDX1, -1000787001) \
-    _(XR_ERROR_GOOGLE_CLOUD_AUTH_ERROR_ANDROIDX1, -1000787002) \
-    _(XR_GOOGLE_CLOUD_QUOTA_EXCEEDED_ANDROIDX1, -1000787003) \
-    _(XR_GOOGLE_CLOUD_UNREACHABLE_ANDROIDX1, -1000787004) \
+    _(XR_ERROR_KEYLESS_AUTH_NOT_SETUP_ANDROIDX2, -1000787000) \
+    _(XR_ERROR_KEYLESS_AUTH_FAILED_ANDROIDX2, -1000787001) \
     _(XR_ERROR_EARTH_TRACKER_NOT_RUNNING_ANDROIDX1, -1000789001) \
     _(XR_ERROR_GEOSPATIAL_COORDINATES_INVALID_ANDROIDX1, -1000789002) \
     _(XR_SURFACE_ANCHOR_LOCATION_UNSUPPORTED_ANDROIDX1, -1000789000) \
@@ -867,6 +864,10 @@ XR_ENUM_STR(XrResult);
     _(XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_DEPTH_RAYCAST_ANDROID, 1000786000) \
     _(XR_TYPE_SPATIAL_BOUNDS_RAYCAST_ANDROID, 1000786001) \
     _(XR_TYPE_SPATIAL_COMPONENT_RAYCAST_RESULT_LIST_ANDROID, 1000786002) \
+    _(XR_TYPE_GOOGLE_CLOUD_AUTH_API_KEY_ANDROIDX2, 1000787000) \
+    _(XR_TYPE_GOOGLE_CLOUD_AUTH_TOKEN_ANDROIDX2, 1000787001) \
+    _(XR_TYPE_GOOGLE_CLOUD_AUTH_KEYLESS_ANDROIDX2, 1000787002) \
+    _(XR_TYPE_GOOGLE_CLOUD_AUTH_ERROR_RESULT_ANDROIDX2, 1000787003) \
     _(XR_TYPE_SYSTEM_GEOSPATIAL_PROPERTIES_ANDROIDX1, 1000789000) \
     _(XR_TYPE_EARTH_TRACKER_CREATE_INFO_ANDROIDX1, 1000789001) \
     _(XR_TYPE_EVENT_DATA_EARTH_TRACKER_STATE_CHANGED_ANDROIDX1, 1000789002) \
@@ -2653,6 +2654,13 @@ XR_ENUM_STR(XrResult);
     _(XR_SPATIAL_OBJECT_SEMANTIC_LABEL_MOUSE_ANDROID, 2) \
     _(XR_SPATIAL_OBJECT_SEMANTIC_LABEL_LAPTOP_BASE_ANDROID, 3) \
     _(XR_SPATIAL_OBJECT_SEMANTIC_LABEL_MAX_ENUM_ANDROID, 0x7FFFFFFF)
+
+#define XR_LIST_ENUM_XrGoogleCloudAuthErrorANDROIDX2(_) \
+    _(XR_GOOGLE_CLOUD_AUTH_ERROR_NONE_ANDROIDX2, 0) \
+    _(XR_GOOGLE_CLOUD_AUTH_ERROR_QUOTA_EXCEEDED_ANDROIDX2, -1) \
+    _(XR_GOOGLE_CLOUD_AUTH_ERROR_UNREACHABLE_ANDROIDX2, -2) \
+    _(XR_GOOGLE_CLOUD_AUTH_ERROR_ANDROIDX2, -3) \
+    _(XR_GOOGLE_CLOUD_AUTH_ERROR_ANDROIDX2_MAX_ENUM, 0x7FFFFFFF)
 
 #define XR_LIST_ENUM_XrEarthTrackerStateANDROIDX1(_) \
     _(XR_EARTH_TRACKER_STATE_STOPPED_ANDROIDX1, 1) \
@@ -8446,6 +8454,34 @@ XR_ENUM_STR(XrResult);
     _(raycastResultCount) \
     _(raycastResults) \
 
+/// Calls your macro with the name of each member of XrGoogleCloudAuthInfoBaseHeaderANDROIDX2, in order.
+#define XR_LIST_STRUCT_XrGoogleCloudAuthInfoBaseHeaderANDROIDX2(_) \
+    _(type) \
+    _(next) \
+
+/// Calls your macro with the name of each member of XrGoogleCloudAuthApiKeyANDROIDX2, in order.
+#define XR_LIST_STRUCT_XrGoogleCloudAuthApiKeyANDROIDX2(_) \
+    _(type) \
+    _(next) \
+    _(apiKey) \
+
+/// Calls your macro with the name of each member of XrGoogleCloudAuthTokenANDROIDX2, in order.
+#define XR_LIST_STRUCT_XrGoogleCloudAuthTokenANDROIDX2(_) \
+    _(type) \
+    _(next) \
+    _(authToken) \
+
+/// Calls your macro with the name of each member of XrGoogleCloudAuthKeylessANDROIDX2, in order.
+#define XR_LIST_STRUCT_XrGoogleCloudAuthKeylessANDROIDX2(_) \
+    _(type) \
+    _(next) \
+
+/// Calls your macro with the name of each member of XrGoogleCloudAuthErrorResultANDROIDX2, in order.
+#define XR_LIST_STRUCT_XrGoogleCloudAuthErrorResultANDROIDX2(_) \
+    _(type) \
+    _(next) \
+    _(error) \
+
 /// Calls your macro with the name of each member of XrGeospatialPoseANDROIDX1, in order.
 #define XR_LIST_STRUCT_XrGeospatialPoseANDROIDX1(_) \
     _(eastUpSouthOrientation) \
@@ -9295,6 +9331,10 @@ XR_ENUM_STR(XrResult);
     _(XrSpatialCapabilityConfigurationDepthRaycastANDROID, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_DEPTH_RAYCAST_ANDROID) \
     _(XrSpatialBoundsRaycastANDROID, XR_TYPE_SPATIAL_BOUNDS_RAYCAST_ANDROID) \
     _(XrSpatialComponentRaycastResultListANDROID, XR_TYPE_SPATIAL_COMPONENT_RAYCAST_RESULT_LIST_ANDROID) \
+    _(XrGoogleCloudAuthApiKeyANDROIDX2, XR_TYPE_GOOGLE_CLOUD_AUTH_API_KEY_ANDROIDX2) \
+    _(XrGoogleCloudAuthTokenANDROIDX2, XR_TYPE_GOOGLE_CLOUD_AUTH_TOKEN_ANDROIDX2) \
+    _(XrGoogleCloudAuthKeylessANDROIDX2, XR_TYPE_GOOGLE_CLOUD_AUTH_KEYLESS_ANDROIDX2) \
+    _(XrGoogleCloudAuthErrorResultANDROIDX2, XR_TYPE_GOOGLE_CLOUD_AUTH_ERROR_RESULT_ANDROIDX2) \
     _(XrSystemGeospatialPropertiesANDROIDX1, XR_TYPE_SYSTEM_GEOSPATIAL_PROPERTIES_ANDROIDX1) \
     _(XrEarthTrackerCreateInfoANDROIDX1, XR_TYPE_EARTH_TRACKER_CREATE_INFO_ANDROIDX1) \
     _(XrEventDataEarthTrackerStateChangedANDROIDX1, XR_TYPE_EVENT_DATA_EARTH_TRACKER_STATE_CHANGED_ANDROIDX1) \
@@ -9722,6 +9762,7 @@ XR_ENUM_STR(XrResult);
     _(XR_ANDROIDSYS_eye_tracking_calibration, 721) \
     _(XR_ANDROID_advanced_light_estimation, 722) \
     _(XR_ANDROIDX1_eye_tracking_calibration_state, 723) \
+    _(XR_ANDROIDX_spatial_interaction_lifecycle, 724) \
     _(XR_ANDROIDSYS_background_tracking, 726) \
     _(XR_ANDROIDSYS_anchor_sharing_import, 727) \
     _(XR_ANDROIDSYS_face_tracking_calibration, 728) \
@@ -9740,8 +9781,7 @@ XR_ENUM_STR(XrResult);
     _(XR_EXT_spatial_persistence_operations, 782) \
     _(XR_ANDROID_spatial_object_tracking, 786) \
     _(XR_ANDROID_spatial_discovery_raycast, 787) \
-    _(XR_ANDROIDX1_google_cloud_auth, 788) \
-    _(XR_ANDROIDX1_google_cloud_auth_internal, 789) \
+    _(XR_ANDROIDX2_google_cloud_auth, 788) \
     _(XR_ANDROIDX1_geospatial, 790) \
     _(XR_ANDROID_spatial_entity_bound_anchor, 791) \
     _(XR_ANDROIDX1_spatial_component_subsumed_by, 792) \
@@ -11130,6 +11170,15 @@ XR_ENUM_STR(XrResult);
     _(GetEyeTrackerCalibrationStateANDROIDX1, ANDROIDX1_eye_tracking_calibration_state) \
 
 
+/// For every function defined by XR_ANDROIDX_spatial_interaction_lifecycle in this version of the spec,
+/// calls your macro with the function name and extension name.
+/// Trims the leading `xr` from the function name and the leading `XR_` from the feature name,
+/// because it is easy to add back but impossible to remove with the preprocessor.
+#define XR_LIST_FUNCTIONS_XR_ANDROIDX_spatial_interaction_lifecycle(_) \
+    _(EnableSpatialInteractionANDROIDX, ANDROIDX_spatial_interaction_lifecycle) \
+    _(DisableSpatialInteractionANDROIDX, ANDROIDX_spatial_interaction_lifecycle) \
+
+
 /// For every function defined by XR_ANDROIDSYS_anchor_sharing_import in this version of the spec,
 /// calls your macro with the function name and extension name.
 /// Trims the leading `xr` from the function name and the leading `XR_` from the feature name,
@@ -11219,25 +11268,13 @@ XR_ENUM_STR(XrResult);
     _(UnpersistSpatialEntityCompleteEXT, EXT_spatial_persistence_operations) \
 
 
-/// For every function defined by XR_ANDROIDX1_google_cloud_auth in this version of the spec,
+/// For every function defined by XR_ANDROIDX2_google_cloud_auth in this version of the spec,
 /// calls your macro with the function name and extension name.
 /// Trims the leading `xr` from the function name and the leading `XR_` from the feature name,
 /// because it is easy to add back but impossible to remove with the preprocessor.
-#define XR_LIST_FUNCTIONS_XR_ANDROIDX1_google_cloud_auth(_) \
-    _(SetGoogleCloudApiKeyANDROIDX1, ANDROIDX1_google_cloud_auth) \
-    _(SetGoogleCloudAuthTokenANDROIDX1, ANDROIDX1_google_cloud_auth) \
-    _(SetGoogleCloudKeylessAuthAsyncANDROIDX1, ANDROIDX1_google_cloud_auth) \
-    _(SetGoogleCloudKeylessAuthCompleteANDROIDX1, ANDROIDX1_google_cloud_auth) \
-
-
-/// For every function defined by XR_ANDROIDX1_google_cloud_auth_internal in this version of the spec,
-/// calls your macro with the function name and extension name.
-/// Trims the leading `xr` from the function name and the leading `XR_` from the feature name,
-/// because it is easy to add back but impossible to remove with the preprocessor.
-#define XR_LIST_FUNCTIONS_XR_ANDROIDX1_google_cloud_auth_internal(_) \
-    _(SetGoogleCloudTraceContextANDROIDX1, ANDROIDX1_google_cloud_auth_internal) \
-    _(SetGoogleCloudApiClientBuildVersionNameANDROIDX1, ANDROIDX1_google_cloud_auth_internal) \
-    _(SetGoogleCloudARCoreDomainNameANDROIDX1, ANDROIDX1_google_cloud_auth_internal) \
+#define XR_LIST_FUNCTIONS_XR_ANDROIDX2_google_cloud_auth(_) \
+    _(SetGoogleCloudAuthAsyncANDROIDX2, ANDROIDX2_google_cloud_auth) \
+    _(SetGoogleCloudAuthCompleteANDROIDX2, ANDROIDX2_google_cloud_auth) \
 
 
 /// For every function defined by XR_ANDROIDX1_geospatial in this version of the spec,

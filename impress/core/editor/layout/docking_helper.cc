@@ -16,9 +16,13 @@
 
 #include <string>
 
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
 #include "dear_imgui/imgui_internal.h"
+#include "core/common/buffer_access.h"
+#include "core/common/file_helpers.h"
+#include "core/editor/editor_constants.h"
 #include "core/editor/layout/editor_panel_ids.h"
 
 namespace imp::editor {
@@ -28,10 +32,39 @@ constexpr float kDefaultBottomDockRatio = 0.3f;
 // width.
 constexpr float kDefaultSideDockRatio = 0.25f;
 constexpr absl::string_view kDockSpaceName = "ImpressEditorDockSpace";
+constexpr absl::string_view kWindowLabelPrefix = "[Window][";
+constexpr absl::string_view kWindowLabelSuffix = "]";
 
-DockingHelper::DockingHelper() { Reset(); }
+DockingHelper::DockingHelper() {
+  Initialize();
 
-void DockingHelper::Reset() {
+  std::string filename = GetRepoDirectory() + std::string(kSavedLayoutIniFile);
+  absl::StatusOr<BufferAccess> file = LoadFile(filename);
+
+  // If the file exists, load the layout from the file.
+  if (file.ok()) {
+    initialized_with_saved_layout_ = true;
+    ImGui::LoadIniSettingsFromMemory(
+        reinterpret_cast<const char*>(file->Data()), file->Size());
+
+    // Parse the window labels from the saved layout file. For example, the
+    // content of the file may look like: [Window][Scene], and the window label
+    // is "Scene".
+    std::string entire_content(file->StringView());
+    auto it = entire_content.find(kWindowLabelPrefix);
+    while (it != std::string::npos) {
+      auto end = entire_content.find(kWindowLabelSuffix,
+                                     it + kWindowLabelPrefix.size());
+      std::string window_label;
+      window_label = entire_content.substr(
+          it + kWindowLabelPrefix.size(), end - it - kWindowLabelPrefix.size());
+      initial_visible_window_labels_.push_back(window_label);
+      it = entire_content.find(kWindowLabelPrefix, end);
+    }
+  }
+}
+
+void DockingHelper::Initialize() {
   dockspace_id_ = ImGui::GetID(kDockSpaceName.data());
 
   ImGui::DockBuilderRemoveNode(dockspace_id_);  // Clear any previous layout

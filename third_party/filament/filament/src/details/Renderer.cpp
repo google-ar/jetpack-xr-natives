@@ -93,7 +93,7 @@ FRenderer::FRenderer(FEngine& engine) :
         mEngine(engine),
         mFrameSkipper(),
         mRenderTargetHandle(engine.getDefaultRenderTarget()),
-        mFrameInfoManager(engine.getDriverApi()),
+        mFrameInfoManager(engine, engine.getDriverApi()),
         mHdrTranslucent(TextureFormat::RGBA16F),
         mHdrQualityMedium(TextureFormat::R11F_G11F_B10F),
         mHdrQualityHigh(TextureFormat::RGB16F),
@@ -184,7 +184,8 @@ void FRenderer::terminate(FEngine& engine) {
         // to initialize themselves, otherwise the engine tries to destroy invalid handles.
         engine.execute();
     }
-    mFrameInfoManager.terminate(driver);
+
+    mFrameInfoManager.terminate(engine);
     mFrameSkipper.terminate(driver);
     mResourceAllocator->terminate();
 }
@@ -391,7 +392,7 @@ bool FRenderer::beginFrame(FSwapChain* swapChain, uint64_t vsyncSteadyClockTimeN
 
         mFrameInfoManager.beginFrame(driver, {
                 .historySize = mFrameRateOptions.history
-        }, mFrameId);
+        }, mFrameId, appVsync);
 
         // ask the engine to do what it needs to (e.g. updates light buffer, materials...)
         engine.prepare();

@@ -24,33 +24,33 @@ message ConeTwistConstraintState {
   // The node that holds a rigid body A that is subject to this constraint.
   NodeSceneHandle connected_node = 1;
 
-  // The pivot of the constraint frame in the connected node(that holds rigid
-  // body A)'s local space.
-  Float3 connected_pivot = 2;
-
-  // The axis of the constraint frame in the connected node(that holds rigid
-  // body A)'s local space.
-  Float3 connected_axis = 3;
-
-  // The up axis of the constraint frame in the connected node(that holds rigid
-  // body A)'s local space. Together withe the axis, it defines the constraint
-  // rotation.
-  Float3 connected_up_axis = 4;
-
-  // Only used when the constraint is between two rigid bodies. Indicates the
-  // pivot/offset of the constraint frame from rigid body (B). Note that rigid
-  // body (B) is attached the same node that owns the constraint.
-  Float3 pivot = 5 [(imp.optional_type) = ABSL_OPTIONAL];
+  // Indicates the pivot/offset of the constraint frame from rigid body (B).
+  // Note that rigid body (B) is attached the same node that owns the
+  // constraint.
+  Float3 pivot = 2;
 
   // The rotation for the constraint frame from rigid body (B).
-  Float3 axis = 6 [(imp.optional_type) = ABSL_OPTIONAL];
-  Float3 up_axis = 7 [(imp.optional_type) = ABSL_OPTIONAL];
+  Float3 axis = 3 [(imp.optional_type) = ABSL_OPTIONAL];
+  Float3 up_axis = 4 [(imp.optional_type) = ABSL_OPTIONAL];
 
   // if it will calculate the connected pivot and axis based on the transforms
   // of the two rigid bodies. If there is only one rigid body (the connected
-  // node), the pivot and axiswill be interpreted as the world transform of the
+  // node), the pivot and axis will be interpreted as the world transform of the
   // constraint.
-  bool auto_configure = 8;
+  bool auto_configure = 5;
+
+  // The pivot of the constraint frame in the connected node(that holds rigid
+  // body A)'s local space. It is used only when auto_configure is false.
+  Float3 connected_pivot = 6 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // The axis of the constraint frame in the connected node(that holds rigid
+  // body A)'s local space. It is used only when auto_configure is false.
+  Float3 connected_axis = 7 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // The up axis of the constraint frame in the connected node(that holds rigid
+  // body A)'s local space. Together withe the axis, it defines the constraint
+  // rotation. It is used only when auto_configure is false.
+  Float3 connected_up_axis = 8 [(imp.optional_type) = ABSL_OPTIONAL];
 
   // Limits the maximum angle (in degrees, values from 0 to 360) the body can
   // swing around the first swing axis Typically, it is the Y-axis.

@@ -204,7 +204,9 @@ cc_library(
     defines = imp_defines(),
     deps = [
         ":buffer_handle_factory",
+        "//core/async:executor",
         "//core/common:trace",
+        "@com_google_absl//absl/log:check",
         "@com_google_impress//core/common:log",
         "@third_party//filament/libs:utils_hdrs",
     ],
@@ -353,5 +355,19 @@ cc_library(
     hdrs = ["buffer_handle_factory.h"],
     copts = imp_copts(),
     defines = imp_defines(),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "shmem_utils",
+    srcs = ["shmem_utils.cc"],
+    hdrs = ["shmem_utils.h"],
+    copts = imp_copts(),
+    defines = imp_defines(),
+    deps = if_android([
+    ]) + [
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+    ],
     alwayslink = 1,
 )

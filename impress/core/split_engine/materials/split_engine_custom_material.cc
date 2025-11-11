@@ -40,10 +40,7 @@ namespace imp::split_engine {
 
 SplitEngineCustomMaterial::SplitEngineCustomMaterial(
     SplitEngineSerializer& serializer, OwnedMaterialPtr material)
-    : serializer_(serializer), material_(std::move(material)) {
-  serializer_.AddMaterialInstance(GetFilamentMaterialInstance()->getMaterial(),
-                                  GetFilamentMaterialInstance());
-}
+    : serializer_(serializer), material_(std::move(material)) {}
 
 SplitEngineCustomMaterial::~SplitEngineCustomMaterial() {
   serializer_.RemoveMaterialInstance(GetFilamentMaterialInstance());

@@ -40,7 +40,8 @@ class MaterialCompilerService {
   ipc::MessagePipe::OnMessageResult OnMessage(
       std::unique_ptr<uint8_t[]> message, size_t size);
 
-  absl::Status HandleCompileRequest(const schemas::CompileRequest* request);
+  absl::Status HandleCompileRequest(uint64_t operation_id,
+                                    const schemas::CompileRequest* request);
 
   absl::StatusOr<std::string> CompileMaterial(
       absl::string_view source_material_string, schemas::Platform platform,
@@ -48,7 +49,8 @@ class MaterialCompilerService {
 
   absl::Status SendResponse(const flatbuffers::FlatBufferBuilder& builder);
 
-  void SendErrorResponse(absl::string_view error_message);
+  void SendErrorResponse(uint64_t operation_id,
+                         absl::string_view error_message);
 
   void Close();
 

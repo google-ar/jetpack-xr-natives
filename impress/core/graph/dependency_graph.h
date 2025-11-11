@@ -342,7 +342,7 @@ DependencyGraph<T, ExtraT, Hash>::ParallelRecursiveTraversal(
   return imp_internal::DependencyGraphHelpers<
              T, ExtraT>::InvokeParallelTraverseFn(fn, traversal_info.node)
       .Then(
-          [=](const absl::Status& status) {
+          [this, fn, index, traversal_info_list](const absl::Status& status) {
             if (!status.ok()) {
               return Future<absl::Status>(status);
             }

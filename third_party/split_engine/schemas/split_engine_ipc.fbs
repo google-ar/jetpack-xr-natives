@@ -311,6 +311,7 @@ table TestExperimentalRequest {}
 // SendRequest API.
 union RequestTypes (requires_api: 1) {
   BuiltInMaterialRequest = 1 (requires_api: 1),
+  AddCustomMaterialRequest = 2,
 
   // TestExperimentalRequest is not part of the public API and will always
   // remain experimental.

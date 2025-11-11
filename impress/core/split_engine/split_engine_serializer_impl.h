@@ -197,6 +197,7 @@ class SplitEngineSerializerImpl
   void RemoveMaterial(const filament::Material* material) override;
   void AddMaterialInstance(const filament::Material* material,
                            const filament::MaterialInstance* instance) override;
+  void AddMaterialInstance(uint64_t material_id, uint64_t instance_id) override;
   void DuplicateMaterialInstance(
       const filament::MaterialInstance* instance,
       const filament::MaterialInstance* copy) override;
@@ -244,7 +245,7 @@ class SplitEngineSerializerImpl
   MaterialPtr CreateCustomMaterial(MaterialPtr material) override;
   void SetBuiltInMaterialParameters(
       const filament::MaterialInstance* material,
-      android_xr::schemas::BuiltInMaterialParameters type,
+      BuiltInMaterialParameters type,
       SerializeBuiltInMaterialParametersFunc serialize_func) override;
   void SerializeImageBasedLightingAsset(
       filament::Texture& reflection_texture,

@@ -29,6 +29,7 @@
 #include "core/async/future.h"
 #include "core/common/small_source_location.h"
 #include "core/materials/material.h"
+#include "core/math/vec.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_id.h"
 #include "core/ncsb/component_system.h"
@@ -102,6 +103,10 @@ class TexturePipelineRenderer : public Component {
   // Returns the enabled state of the given pass. `pass_index` must be less than
   // the number of passes, otherwise this returns false.
   bool IsPassEnabled(size_t pass_index) const;
+
+  // Resizes the texture for the given pass. `pass_index` must be less than the
+  // number of passes, otherwise this returns an error.
+  absl::Status ResizePassTexture(size_t pass_index, imp::uint2 size);
 
   // Returns the Filament view used for the given pass. `pass_index` must be
   // less than the number of passes, otherwise this returns nullptr.

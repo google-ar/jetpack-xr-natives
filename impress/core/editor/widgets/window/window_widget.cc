@@ -18,6 +18,7 @@
 
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
+#include "core/config.h"
 #include "core/editor/editor.h"
 #include "core/editor/widgets/window/window_configuration.h"
 #include "core/view/base_view.h"
@@ -68,6 +69,15 @@ void WindowWidget::DrawImGui() {
     hide_all_ = hidden;
   }
   window_configuration_.SetHideAllWindows(hide_all_);
+
+#if !IMP_PLATFORM(WASM)
+  ImGui::Separator();
+  bool save_layout = false;
+  if (ImGui::MenuItem(std::string("Save Layout").c_str(), nullptr,
+                      &save_layout)) {
+    window_configuration_.SaveLayoutToIniFile();
+  }
+#endif
 }
 
 void WindowWidget::RestoreDefault() { window_configuration_.RestoreDefault(); }

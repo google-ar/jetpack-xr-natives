@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -53,7 +54,7 @@ WidgetUiSystem::WidgetUiSystem(BaseView* view, bool enabled,
           LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT) {
     window_configuration_ =
         &view->GetRegistry().GetOrCreate<WindowConfiguration>();
-    layout_composer_->SetWindowConfiguration(*window_configuration_);
+    layout_composer_->SetWindowConfiguration(window_configuration_);
   }
 
   view->GetDispatcher().Connect(
@@ -70,10 +71,10 @@ WidgetUiSystem::WidgetUiSystem(BaseView* view, bool enabled,
 
         bool should_restore_default_layout =
             window_configuration_ &&
-            window_configuration_->ShouldRestoreDefaultLayout();
+            (*window_configuration_)->ShouldRestoreDefaultLayout();
         if (should_restore_default_layout) {
           layout_composer_->ResetDockingLayout();
-          window_configuration_->NotifyLayoutRestored();
+          (*window_configuration_)->NotifyLayoutRestored();
           return;
         }
 
@@ -85,10 +86,11 @@ WidgetUiSystem::WidgetUiSystem(BaseView* view, bool enabled,
 
           if (layout_composer_) {
             if (is_using_window_configuration) {
-              if (!window_configuration_->IsWindowVisible(widget->GetName())) {
+              if (!(*window_configuration_)
+                       ->IsWindowVisible(widget->GetName())) {
                 continue;
               }
-              if (window_configuration_->ShouldHideAllWindows() &&
+              if ((*window_configuration_)->ShouldHideAllWindows() &&
                   layout_info.panel_id != PanelId::kMenuBar) {
                 continue;
               }
@@ -137,7 +139,7 @@ void WidgetUiSystem::SetLayoutComposer(
     if (new_layout_type != LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT) {
       // Switch to a non-multiple windows layout, so remove the window
       // configuration.
-      window_configuration_ = nullptr;
+      window_configuration_ = std::nullopt;
     } else {
       if (!window_configuration_ && !widgets_.empty()) {
         // Switch to a multiple windows layout, but widgets are already added
@@ -148,6 +150,7 @@ void WidgetUiSystem::SetLayoutComposer(
       window_configuration_ =
           &GetView().GetRegistry().GetOrCreate<WindowConfiguration>();
     }
+    layout_composer->SetWindowConfiguration(window_configuration_);
   }
 
   layout_composer_ = std::move(layout_composer);
@@ -171,7 +174,7 @@ void WidgetUiSystem::ProcessPendingRemoves() {
     if (pending_remove_itr != pending_removes_.end()) {
       pending_removes_.erase(pending_remove_itr);
       if (window_configuration_) {
-        window_configuration_->RemoveWindow(it->first->GetName());
+        (*window_configuration_)->RemoveWindow(it->first->GetName());
       }
       widgets_.erase(it);
       type_hashes_.erase(type_hashes_.begin() + index);
@@ -190,10 +193,10 @@ void WidgetUiSystem::AddWindowConfiguration(
        layout_info.panel_id == PanelId::kLeftPanel ||
        layout_info.panel_id == PanelId::kRightPanel ||
        layout_info.panel_id == PanelId::kFreeform)) {
-    window_configuration_->AddWindow(
-        name, layout_info.show_by_default
-                  ? WindowConfiguration::WindowVisibility::kVisible
-                  : WindowConfiguration::WindowVisibility::kHidden);
+    (*window_configuration_)
+        ->AddWindow(name, layout_info.show_by_default
+                              ? WindowConfiguration::WindowVisibility::kVisible
+                              : WindowConfiguration::WindowVisibility::kHidden);
   }
 }
 

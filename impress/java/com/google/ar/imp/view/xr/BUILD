@@ -22,9 +22,6 @@ android_library(
     name = "imp_xr_api",
     srcs = ["ImpXrApi.java"],
     custom_package = "com.google.ar.imp.view.xr",
-    javacopts = [
-        "-Xep:AndroidJdkLibsChecker:OFF",
-    ],
     manifest = ":AndroidManifest.xml",
     deps = [
         "//java/com/google/ar/imp/view",
@@ -39,9 +36,6 @@ android_library(
     name = "imp_xr_renderer",
     srcs = ["ImpXrRenderer.java"],
     custom_package = "com.google.ar.imp.view.xr",
-    javacopts = [
-        "-Xep:AndroidJdkLibsChecker:OFF",
-    ],
     manifest = ":AndroidManifest.xml",
     deps = [
         ":imp_xr_api",

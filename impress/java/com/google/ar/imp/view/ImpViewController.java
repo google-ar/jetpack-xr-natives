@@ -21,6 +21,7 @@ import static java.lang.Math.min;
 
 import android.content.Context;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.SurfaceView;
@@ -40,6 +41,8 @@ import java.util.concurrent.ExecutionException;
  * <p>ImpApi exposes this API publicly and handles any asynchronicity.
  */
 public class ImpViewController {
+  private static final String TAG = "ImpViewController";
+
   // TODO: replace with MonotonicNonNull
   @Nullable public final UiHelper uiHelper;
   private final View view;
@@ -53,7 +56,8 @@ public class ImpViewController {
       boolean isOpaque,
       View view,
       float desiredSizeScale,
-      long swapChainFlags) {
+      long swapChainFlags,
+      boolean useSynchronousSurfaceChanges) {
     this.androidView = androidView;
 
     Preconditions.checkState(
@@ -82,25 +86,33 @@ public class ImpViewController {
               return;
             }
 
-            frameScheduler.runOnFrameThread(
-                () -> {
-                  if (view.hasSwapChain()) {
-                    view.destroySwapChain();
-                  }
+            ListenableFuture<Void> future =
+                frameScheduler.submitOnFrameThread(
+                    () -> {
+                      if (view.hasSwapChain()) {
+                        view.destroySwapChain();
+                      }
 
-                  // If running in ThreadMode.BACKGROUND, then there can be a race condition if the
-                  // surface becomes invalid in-between the onNativeWindowChanged callback and when
-                  // createSwapChain is called on the frame thread. For instance, if
-                  // onNativeWindowChanged is called twice in rapid succession, the first call to
-                  // createSwapChain will be called with an invalid surface.
-                  //
-                  // In this case, we simply return early and wait for the next callback.
-                  if (!surface.isValid()) {
-                    return;
-                  }
+                      // Ensure the surface is still valid before creating the swap chain.
+                      if (!surface.isValid()) {
+                        return null;
+                      }
 
-                  view.createSwapChain(surface, uiHelper.getSwapChainFlags() | swapChainFlags);
-                });
+                      view.createSwapChain(surface, uiHelper.getSwapChainFlags() | swapChainFlags);
+
+                      return null;
+                    });
+
+            // This must be done synchronously because after this function exits the old swap chain
+            // is released and could potentially cause a crash if it is still used.
+            if (useSynchronousSurfaceChanges) {
+              try {
+                future.get();
+              } catch (InterruptedException | ExecutionException e) {
+                Log.e(TAG, "Failed to re-create swap chain. Exception: ", e);
+                throw new IllegalStateException("Unable to re-create swap chain", e);
+              }
+            }
           }
 
           @Override
@@ -109,13 +121,28 @@ public class ImpViewController {
               return;
             }
 
-            frameScheduler.runOnFrameThread(
-                () -> {
-                  if (view.hasSwapChain()) {
-                    view.destroySwapChain();
-                    view.flushAndWait();
-                  }
-                });
+            ListenableFuture<Void> future =
+                frameScheduler.submitOnFrameThread(
+                    () -> {
+                      if (view.hasSwapChain()) {
+                        view.destroySwapChain();
+                        view.flushAndWait();
+                      }
+
+                      return null;
+                    });
+
+            // This must be done synchronously because after this function exits the old swap chain
+            // is released
+            // and could potentially cause a crash if it is still used.
+            if (useSynchronousSurfaceChanges) {
+              try {
+                future.get();
+              } catch (InterruptedException | ExecutionException e) {
+                Log.e(TAG, "Failed to destroy swap chain. Exception: ", e);
+                throw new IllegalStateException("Unable to destroy swap chain", e);
+              }
+            }
           }
 
           @Override
@@ -145,12 +172,6 @@ public class ImpViewController {
   /** Returns the basic view jni interface. */
   public View getView() {
     return view;
-  }
-
-  // TODO Clean this up.
-  
-  public void setupForTesting(long platformHandle) {
-    view.setup(platformHandle);
   }
 
   public void setDisplayRotation(int rotation) {

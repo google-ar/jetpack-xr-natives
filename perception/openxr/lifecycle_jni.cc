@@ -49,11 +49,11 @@ Java_androidx_xr_arcore_openxr_OpenXrManager_nativeGetPointer(
 
 JNIEXPORT jboolean JNICALL
 Java_androidx_xr_arcore_openxr_OpenXrManager_nativeInit(
-    JNIEnv* env, jclass /*clazz*/, jobject activity,
+    JNIEnv* env, jclass /*clazz*/, jobject context,
     jboolean start_polling_thread) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
-  return xr_manager.Init(env, activity,
+  return xr_manager.Init(env, context,
                          XR_REFERENCE_SPACE_TYPE_UNBOUNDED_ANDROID,
                          start_polling_thread);
 }
@@ -158,6 +158,15 @@ Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeGetPreferredBlendMode(
     }
   }
   return nullptr;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeIsGeospatialSupported(
+    JNIEnv* env, jclass /*clazz*/) {
+  androidx::xr::openxr::OpenXrManager& xr_manager =
+      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+
+  return xr_manager.IsGeospatialSupported();
 }
 
 }  // extern "C"

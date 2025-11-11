@@ -19,10 +19,20 @@
 #include <cstdint>
 #include <vector>
 
+#include "core/common/log.h"
+
 namespace imp {
 
 StandardParticleDataProvider::StandardParticleDataProvider(int32_t num_floats) {
+  if (num_floats < 0) {
+    IMP_LOG(imp::FATAL) << "StandardParticleDataProvider, invalid number of floats!";
+  }
+
   float_data_.resize(num_floats);
+}
+
+int32_t StandardParticleDataProvider::GetNumFloats() const {
+  return float_data_.size();
 }
 
 float StandardParticleDataProvider::GetFloat(int32_t index) const {

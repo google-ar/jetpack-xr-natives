@@ -13,29 +13,137 @@
 // limitations under the License.
 
 material {
-  name : "Gsplat",
-  parameters : [],
-  requires : [],
-  variables : [],
-  vertexDomain : object,
+  name : "GSplat",
+  parameters : [
+        {
+           // A scaling value that is used to control the size of the splats
+           // relative to their covariance-matrix defined scale. Mathematically,
+           // this is the number of standard deviations away from the gaussian
+           // mean we are visualizing.
+           type      : float,
+           name      : splatScale
+        },
+        {
+           // The position of each gaussian in the scene
+           type      : sampler2d,
+           format    : float,
+           precision : high,
+           name      : splatDataPosition
+        },
+        {
+           // The cov3d of each gaussian in the scene
+           type      : sampler2d,
+           format    : uint,
+           precision : high,
+           name      : splatDataCov3d
+        },
+        {
+           // The color of each gaussian in the scene
+           type      : sampler2d,
+           format    : float,
+           precision : high,
+           name      : splatDataColor
+        },
+        {
+           // The order in which to render the splats.
+           type      : sampler2d,
+           format    : uint,
+           precision : high,
+           name      : sortedIndices
+        },
+        {
+           // Debug visualize the splat chunks by overriding the splat colors
+           // with a random color based on the splat's associated chunk index.
+           type      : bool,
+           name      : visualizeChunks
+        }
+  ],
+  variables : [
+         color,
+         uvCoord
+  ],
+  vertexDomain : device,
   shadingModel : unlit,
   blending : transparent,
 }
 
 vertex {
+  #include "gsplat_common.glsl"
+
+  // (broken link)
+  vec3 rand(int i){
+        ivec3 col = i * ivec3(158, 2*156, 3*159);
+        col = col % ivec3(255, 253, 256); // skips some channel values
+        return vec3(col) / 255.0;
+  }
+
   void materialVertex(inout MaterialVertexInputs material) {
-    // This is only placeholder code.
-    material.worldPosition = vec4(0.0, 0.0, 0.0, 1.0);
+    int vertIndex = getVertexIndex();
+    int indicesWidth = textureSize(materialParams_sortedIndices, 0).x;
+    int splatIndex = int(texelFetch(materialParams_sortedIndices, ivec2(vertIndex / 6 % indicesWidth,
+                                                                        vertIndex / 6 / indicesWidth), 0).x);
+    ivec2 sampleCoord = getSampleCoord(splatIndex, 1, materialParams_splatDataPosition);
+
+    // Pull position from splat data.
+    vec4 position = texelFetch(materialParams_splatDataPosition, sampleCoord, 0);
+
+    // Pull cov3d from splat data.
+    uint4 cov3dPacked = texelFetch(materialParams_splatDataCov3d, sampleCoord, 0);
+    mat3 cov3d = unpackCov3d(cov3dPacked.xyz);
+
+    vec4 clipPos;
+    vec2 basisAxisX;
+    float aspectRatio;
+    computeSplatData(position, cov3d, getWorldFromModelMatrix(),
+                     getResolution().x, clipPos, basisAxisX, aspectRatio);
+    if (clipPos.w == 0.0) {
+      material.clipSpaceTransform = mat4(vec4(0), vec4(0), vec4(0), vec4(-2, -2, 0, 1));
+      return;
+    }
+
+    // Pull color from splat data.
+    material.color = texelFetch(materialParams_splatDataColor, sampleCoord, 0);
+    if (materialParams.visualizeChunks)
+    {
+      int chunkIndex = splatIndex / 256;
+      material.color.rgb = rand(chunkIndex);
+    }
+
+    // Compute NDC coordinate for the current vertex of the triangle on the quad
+    // representing this splat.
+    const vec2 quadCoords[6] = vec2[6](
+      // 6 vertices per splat to make a 2 triangle quad.
+      vec2(-1.0,  1.0),  // 0
+      vec2( 1.0,  1.0),  // 1
+      vec2(-1.0, -1.0),  // 2
+      vec2(-1.0, -1.0),  // 3
+      vec2( 1.0,  1.0),  // 4
+      vec2( 1.0, -1.0)   // 5
+    );
+    // Scale the quad to go beyond the first stddev of gaussian distribution.
+    vec2 quadCoord = quadCoords[vertIndex % 6] * materialParams.splatScale;
+    // Compute interpolated UV coordinate used to calculate final color in frag.
+    material.uvCoord.xy = quadCoord * .5;
+    // Rotate and scale the quad coord based on the gaussian cov2d.
+    vec2 basisAxisY = vec2(basisAxisX.y, -basisAxisX.x) * aspectRatio;
+    vec2 clipQuadOffset = (quadCoord.x * basisAxisX + quadCoord.y * basisAxisY) * getResolution().zw;
+    // Apply the offset.
+    clipPos.xy += clipQuadOffset;
+    // Override the clip space position with the newly computed position.
+    material.clipSpaceTransform = mat4(vec4(0), vec4(0), vec4(0), vec4(clipPos.xyz, 1.0));
   }
 }
+
 fragment {
-
-  // Necessary for high res textures.
-  precision highp float;
-
   void material(inout MaterialInputs material) {
-    // This is only placeholder code.
     prepareMaterial(material);
-    material.baseColor = vec4(0.0, 0.0, 0.0, 0.0);
+    float dist2 = dot(variable_uvCoord.xy, variable_uvCoord.xy);
+    float alpha =  min(0.99, variable_color.a * exp(-dist2));
+    // TODO: (broken link) - Measure performance with discard vs just setting opacity to 0
+    if (alpha < 1.0/255.0)
+        discard;
+
+    material.baseColor = vec4(variable_color.xyz * alpha, alpha);
   }
 }
+

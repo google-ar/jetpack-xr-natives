@@ -32,6 +32,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
+#include "core/common/copyable_ptr.h"
 #include "core/proto/any.proto.imp.h"
 #include "core/proto/proto_common.h"
 #include "boost_beast/varint.hpp"
@@ -163,8 +164,8 @@ class ProtoWriter : public Impl {
                absl::optional<T>* other, bool optional = false);
 
   template <int field_type, typename T>
-  Cursor Visit(Cursor ptr, int field_id, std::unique_ptr<T>* field,
-               std::unique_ptr<T>* other, bool optional = false);
+  Cursor Visit(Cursor ptr, int field_id, CopyablePtr<T>* field,
+               CopyablePtr<T>* other, bool optional = false);
 
   template <int field_type, proto::RepeatedMergeStrategy merge_type, typename T>
   Cursor Visit(Cursor ptr, int field_id, std::vector<T>* field,
@@ -263,8 +264,8 @@ typename Impl::Cursor ProtoWriter<Impl>::Visit(Cursor ptr, int field_id,
 template <typename Impl>
 template <int field_type, typename T>
 typename Impl::Cursor ProtoWriter<Impl>::Visit(Cursor ptr, int field_id,
-                                               std::unique_ptr<T>* field,
-                                               std::unique_ptr<T>* other,
+                                               CopyablePtr<T>* field,
+                                               CopyablePtr<T>* other,
                                                bool optional) {
   if (!*field && !optional) {
     return ptr;

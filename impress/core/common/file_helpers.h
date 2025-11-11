@@ -21,6 +21,7 @@
 #include <cstdint>
 #include <string>
 
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "core/common/buffer_access.h"
 #include "core/common/optional_error.h"
@@ -35,6 +36,14 @@ OptionalError SaveFile(absl::string_view filename, const uint8_t* data,
 // Load the binary payload from file `filename` into `access`. Returns an error
 // if `filename` does not exist or cannot be read.
 OptionalError LoadBinary(absl::string_view filename, BufferAccess* access);
+
+// Returns the repo directory. This is the google3 directory where the repo is
+// checked out. It may be the temporary current directory where the executable
+// is, or the directory set by blaze when using "blaze run".
+std::string GetRepoDirectory();
+
+// Load a file with its relative path from the google3 directory.
+absl::StatusOr<BufferAccess> LoadFile(absl::string_view filename);
 
 // Saves the binary payload from `access` into file `filename`.
 // Returns an  error if `filename` cannot be saved.

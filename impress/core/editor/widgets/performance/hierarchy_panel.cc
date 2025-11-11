@@ -15,18 +15,16 @@
 #include "core/editor/widgets/performance/hierarchy_panel.h"
 
 #include <algorithm>
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <map>
-#include <stack>
-#include <utility>
+#include <thread>  // NOLINT: Need to sort things by thread id.
 #include <vector>
 
-#include "core/common/log.h"
+#include "absl/container/btree_map.h"
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
 #include "core/common/trace.h"
+#include "core/editor/widgets/performance/sample_processor.h"
 #include "core/performance/profiler.h"
 
 namespace imp::editor {
@@ -35,78 +33,61 @@ HierarchyPanel::HierarchyPanel() {}
 
 HierarchyPanel::~HierarchyPanel() = default;
 
-ProfilerSampleNode* HierarchyPanel::CreateTree(int frame_index) {
-  IMP_TRACE();
-
-  // Returns 0 if the frame is not currently available or contains no samples.
-  int sample_count = Profiler::GetSampleCount(frame_index);
-  if (sample_count <= 0) {
-    return nullptr;
-  }
-
-  std::array<ProfileResult, Profiler::kMaxSamples>& samples =
-      Profiler::GetSamples(frame_index);
-
-  frame_duration_ = Profiler::GetRenderNextFrameDurationNanos(frame_index);
-
-  ProfilerSampleNode* root = &sample_nodes_[0];
-  // Effectively a call stack. Each sample is added to the stack in the loop.
-  // When a sample does not take place during the start/end time of the sample
-  // at the top of the stack, it gets popped and that repeats until we find a
-  // sample that encapsulates the current sample.
-  std::stack<ProfilerSampleNode*> active_nodes;
-
-  root->result = &samples[0];
-  root->total_time = frame_duration_;
-  root->calls = 1;
-  root->children.clear();
-  active_nodes.push(root);
-  for (size_t i = 1; i < sample_count; ++i) {
-    if (samples[i].thread_id != Profiler::GetMainThreadId()) {
-      continue;
-    }
-
-    // Pop nodes that have ended before the current sample starts
-    while (!active_nodes.empty() && active_nodes.top()->result->sample_end_id <=
-                                        samples[i].sample_end_id) {
-      active_nodes.pop();
-    }
-
-    if (active_nodes.empty()) {
-      // Should not happen if samples are well formed.
-      // This means samples were not added in the order they occurred in or
-      // that the root sample was not actually the true root.
-      // For example if IMP_TRACE() was removed from
-      // FilamentHost::RenderNextFrame() then the child samples would not have
-      // that as a common root and lead to this code path.
-      // Every IMP_TRACE should share the same root.
-      IMP_LOG(imp::WARNING) << "Sample " << samples[i].name
-                   << " does not have a parent sample on frame "
-                   << (frame_index - 1);
-      return nullptr;
-    }
-
-    // Create a new node and add it as a child of the sample atop the stack.
-    ProfilerSampleNode* new_node = &sample_nodes_[i];
-    new_node->result = &samples[i];
-    new_node->total_time = samples[i].duration_ns;
-    new_node->calls = 1;
-    new_node->children.clear();
-    active_nodes.top()->children.push_back(new_node);
-    active_nodes.push(new_node);
-  }
-
-  return root;
+absl::string_view HierarchyPanel::GetSelectedSampleName() {
+  return selected_sample_name_;
 }
 
-void HierarchyPanel::DrawTable(ProfilerSampleNode* root) {
+void HierarchyPanel::DrawPanel(int frame_index,
+                               SampleProcessor& sample_processor) {
   IMP_TRACE();
 
-  // Build Table UI and draw recursively.
-  ImGui::BeginChild("tree_table_child", ImVec2(0, 500), true);
-
+  // Minimum height for the panel no matter how small the window is.
+  constexpr float kMinPanelHeight = 250.0f;
+  // Width of the columns that display details about the sample.
   constexpr float kDetailColumnWidth = 100.0f;
+  // Number of columns to display in the table.
   constexpr int kNumColumns = 4;
+
+  ProcessedFrame& processed_frame =
+      sample_processor.GetProcessedFrame(frame_index);
+
+  if (!thread_set_) {
+    current_thread_id_ = Profiler::GetMainThreadId();
+    thread_set_ = true;
+  }
+
+  absl::string_view it_thread_name;
+
+  // Allow us to switch between threads and see their samples.
+  if (ImGui::BeginCombo("##combo", current_thread_)) {
+    for (auto& it : processed_frame.samples_by_thread_and_name) {
+      it_thread_name = Profiler::GetThreadName(it.first);
+      bool is_selected = (current_thread_ == it_thread_name);
+      if (ImGui::Selectable(it_thread_name.data(), is_selected)) {
+        current_thread_ = it_thread_name.data();
+        current_thread_id_ = it.first;
+      }
+      if (is_selected) {
+        ImGui::SetItemDefaultFocus();
+      }
+    }
+
+    ImGui::EndCombo();
+  }
+
+  bool has_samples =
+      processed_frame.samples_by_thread_and_name.contains(current_thread_id_);
+
+  // Build Table UI and draw recursively.
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+
+  // Hierarchy table takes up the remaining space in the window.
+  // If the window is too small it won't be displayed so we set a min height.
+  const float available_height = ImGui::GetContentRegionAvail().y;
+  const float child_height = std::max(kMinPanelHeight, available_height);
+
+  ImGui::BeginChild("tree_table_child", ImVec2(0, child_height), true);
+
   if (ImGui::BeginTable("tree table", kNumColumns,
                         ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY)) {
     ImGui::TableSetupColumn("Hierarchy", ImGuiTableColumnFlags_WidthStretch,
@@ -120,13 +101,21 @@ void HierarchyPanel::DrawTable(ProfilerSampleNode* root) {
     ImGui::TableSetupScrollFreeze(0, 1);  // Freeze the first row.
     ImGui::TableHeadersRow();             // First row contains the headers.
 
-    if (root) {
+    if (has_samples) {
       // Passed by reference so that we don't have to calculate what the row
       // index should be for each recursive call to DrawTree. As a result we
       // can just increment the value rather than returning the current index
       // from each recursive call as it draws the node's children.
       int row_index = 0;
-      DrawTreeNode(root, 0, row_index);
+      ProcessedThreadSamples& processed_thread_samples =
+          processed_frame.samples_by_thread_and_name[current_thread_id_];
+      ProfilerSampleNode* root;
+      size_t root_count = processed_thread_samples.sample_roots.size();
+      for (size_t i = 0; i < root_count; ++i) {
+        root = processed_thread_samples.sample_roots[i];
+        root_duration_ns_ = root->total_time;
+        DrawTreeNode(root, 0, row_index);
+      }
     } else {
       // If the root is null, we still draw the table/headers.
       // Also add a message to the first column to indicate no samples.
@@ -138,49 +127,56 @@ void HierarchyPanel::DrawTable(ProfilerSampleNode* root) {
     ImGui::EndTable();
   }
   ImGui::EndChild();
-}
-
-void HierarchyPanel::DrawPanel(int frame_index) {
-  IMP_TRACE();
-
-  ProfilerSampleNode* root = CreateTree(frame_index);
-
-  DrawTable(root);
+  ImGui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
 }
 
 void HierarchyPanel::DrawTreeNode(ProfilerSampleNode* node, int depth,
                                   int& row_index) {
   if (depth > kMaxTreeDepth) return;
 
-  ImGuiTreeNodeFlags flag = 0;
+  ImGuiTreeNodeFlags flag = ImGuiTreeNodeFlags_OpenOnArrow;
 
   ProfileResult* result = node->result;
   uint32_t elapsed_time = node->total_time;
 
-  if (node->children.empty()) {
+  ProfilerSampleNode* child = node->first_child;
+
+  if (!child) {
     // No children, don't show a dropdown arrow.
     flag |= ImGuiTreeNodeFlags_Leaf;
   } else {
     // Has children, create groups of the same call and add their frametimes.
-    std::map<absl::string_view, ProfilerSampleNode*> unique_children;
-
+    // Using btree map to ensure consistent ordering of the children.
+    absl::btree_map<absl::string_view, ProfilerSampleNode*> unique_children;
     absl::string_view child_name;
-    for (auto& child : node->children) {
+
+    ProfilerSampleNode* grandchild;
+
+    while (child != nullptr) {
       child_name = child->result->name;
 
       // If this is a new group, add it to the map.
       if (unique_children.find(child_name) == unique_children.end()) {
         unique_children[child_name] = child;
       } else {
-        // If this group exists, increment the call count and add the frametime.
-        unique_children[child_name]->calls += 1;
-        unique_children[child_name]->total_time += child->total_time;
+        // If this group exists, increment the call count and add the
+        // frametime.
+        ProfilerSampleNode* child_node = unique_children[child_name];
+        child_node->calls += 1;
+        child_node->total_time += child->total_time;
 
         // Add child's children to the group's children.
-        for (auto& child_child : child->children) {
-          unique_children[child_name]->children.push_back(child_child);
+        grandchild = child->first_child;
+        while (grandchild != nullptr) {
+          ProfilerSampleNode* next_grandchild = grandchild->next_sibling;
+          // Detach grandchild from its original sibling list before adding.
+          grandchild->next_sibling = nullptr;
+          child_node->AddChild(grandchild);
+          grandchild = next_grandchild;
         }
       }
+
+      child = child->next_sibling;
     }
 
     // Sort grouped children by total frametime used.
@@ -193,18 +189,26 @@ void HierarchyPanel::DrawTreeNode(ProfilerSampleNode* node, int depth,
 
     std::sort(sorted_children.begin(), sorted_children.end(),
               [](const ProfilerSampleNode* a, const ProfilerSampleNode* b) {
-                return a->total_time > b->total_time;
+                return a->total_time < b->total_time;
               });
 
-    // Replace existing children vector with grouped/sorted one.
-    node->children = sorted_children;
+    // Replace existing children with grouped/sorted ones.
+    node->first_child = nullptr;
+    for (size_t i = 0; i < sorted_children.size(); ++i) {
+      node->AddChild(sorted_children[i]);
+    }
   }
 
   // Alternate background colors for each row.
   ImGui::TableNextRow();
-  ImU32 row_color = row_index % 2 == 0
-                        ? ImGui::GetColorU32(ImGuiCol_TableRowBg)
-                        : ImGui::GetColorU32(ImGuiCol_TableRowBgAlt);
+  ImU32 row_color;
+  if (selected_sample_name_ == result->name) {
+    // Highlight color for the selected row
+    row_color = ImGui::GetColorU32(ImGuiCol_HeaderHovered);
+  } else {
+    row_color = row_index % 2 == 0 ? ImGui::GetColorU32(ImGuiCol_TableRowBg)
+                                   : ImGui::GetColorU32(ImGuiCol_TableRowBgAlt);
+  }
   ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, row_color);
   row_index++;
 
@@ -218,14 +222,21 @@ void HierarchyPanel::DrawTreeNode(ProfilerSampleNode* node, int depth,
 
   ImGui::TableSetColumnIndex(3);
   ImGui::Text("%.1f %%", 100.0f * static_cast<float>(elapsed_time) /
-                             static_cast<float>(frame_duration_));
+                             static_cast<float>(root_duration_ns_));
 
   // Recursively draw children.
   ImGui::TableSetColumnIndex(0);
 
-  if (ImGui::TreeNodeEx(result->name.data(), flag)) {
-    for (auto& child : node->children) {
+  bool is_open = ImGui::TreeNodeEx(result->name.data(), flag);
+  if (ImGui::IsItemClicked()) {
+    selected_sample_name_ = result->name;
+  }
+
+  if (is_open) {
+    ProfilerSampleNode* child = node->first_child;
+    while (child != nullptr) {
       DrawTreeNode(child, depth + 1, row_index);
+      child = child->next_sibling;
     }
     ImGui::TreePop();
   }

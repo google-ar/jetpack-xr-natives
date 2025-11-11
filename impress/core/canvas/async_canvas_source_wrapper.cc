@@ -30,6 +30,7 @@
 #include "core/config.h"
 #include "core/math/vec.h"
 #include "core/text/text_helpers.h"
+#include "core/text/text_metrics.proto.h"
 #include "core/view/base_view.h"
 
 namespace imp {
@@ -44,37 +45,35 @@ Future<absl::Status> AsyncCanvasSourceWrapper::PrepareFont(
   return source_->PrepareFont(text, text_options);
 };
 
-Future<std::vector<ScopedCanvas::TextAndFontMetrics>>
+Future<std::vector<TextAndFontMetrics>>
 AsyncCanvasSourceWrapper::GetFontAndTextMetrics(
     std::vector<ScopedCanvas::TextToMeasure> texts) {
-  std::vector<ScopedCanvas::TextAndFontMetrics> text_and_font_metrics;
+  std::vector<TextAndFontMetrics> text_and_font_metrics;
   text_and_font_metrics.reserve(texts.size());
   for (const ScopedCanvas::TextToMeasure& text : texts) {
-    text_and_font_metrics.push_back(ScopedCanvas::TextAndFontMetrics{
-        .text_metrics =
-            MeasureGlyphSync({.glyph = text.text}, text.text_options),
-        .font_info = source_->GetFontInfo(text.text_options)});
+    TextAndFontMetrics metrics;
+    *metrics.mutable_text_metrics() =
+        MeasureGlyphSync({.glyph = text.text}, text.text_options);
+    *metrics.mutable_font_info() = source_->GetFontInfo(text.text_options);
+    text_and_font_metrics.push_back(metrics);
   }
-  return Future<std::vector<ScopedCanvas::TextAndFontMetrics>>(
-      text_and_font_metrics);
+  return Future<std::vector<TextAndFontMetrics>>(text_and_font_metrics);
 }
 
-Future<ScopedCanvas::TextMetrics> AsyncCanvasSourceWrapper::MeasureGlyph(
+Future<TextMetrics> AsyncCanvasSourceWrapper::MeasureGlyph(
     GlyphToMeasure glyph_to_measure, ScopedCanvas::TextOptions text_options) {
-  return Future<ScopedCanvas::TextMetrics>(
-      MeasureGlyphSync(glyph_to_measure, text_options));
+  return Future<TextMetrics>(MeasureGlyphSync(glyph_to_measure, text_options));
 }
 
-Future<std::vector<ScopedCanvas::TextMetrics>>
-AsyncCanvasSourceWrapper::MeasureGlyphs(
+Future<std::vector<TextMetrics>> AsyncCanvasSourceWrapper::MeasureGlyphs(
     std::vector<GlyphToMeasure> glyphs_to_measure,
     ScopedCanvas::TextOptions text_options) {
-  std::vector<ScopedCanvas::TextMetrics> text_metrics;
+  std::vector<TextMetrics> text_metrics;
   text_metrics.reserve(glyphs_to_measure.size());
   for (const GlyphToMeasure& glyph : glyphs_to_measure) {
     text_metrics.push_back(MeasureGlyphSync(glyph, text_options));
   }
-  return Future<std::vector<ScopedCanvas::TextMetrics>>(text_metrics);
+  return Future<std::vector<TextMetrics>>(text_metrics);
 }
 
 Future<std::vector<ScopedCanvas::GlyphGroup>>
@@ -98,7 +97,7 @@ Future<std::vector<std::vector<float>>> AsyncCanvasSourceWrapper::GetTextWidths(
       // sum of the glyph advances on desktop does not correctly sum to the
       // total advance of the string.
       widths.push_back(
-          {source_->GetTextMetrics(chunk.chunk_text, text_options).size.x});
+          {source_->GetTextMetrics(chunk.chunk_text, text_options).size_x()});
 #else
       widths.push_back(source_->GetTextWidths(chunk.chunk_text, text_options));
 #endif
@@ -115,9 +114,9 @@ AsyncCanvasSourceWrapper::GetTextGlyphs(
           source_->GetTextGlyphs(text, text_options)));
 };
 
-Future<ScopedCanvas::FontInfo> AsyncCanvasSourceWrapper::GetFontInfo(
+Future<FontInfo> AsyncCanvasSourceWrapper::GetFontInfo(
     const ScopedCanvas::TextOptions& text_options) {
-  return Future<ScopedCanvas::FontInfo>(source_->GetFontInfo(text_options));
+  return Future<FontInfo>(source_->GetFontInfo(text_options));
 };
 
 std::unique_ptr<AsyncScopedCanvas> AsyncCanvasSourceWrapper::StartDrawing(
@@ -136,7 +135,7 @@ std::unique_ptr<AsyncScopedCanvas> AsyncCanvasSourceWrapper::StartDrawing(
 
 void AsyncCanvasSourceWrapper::ForceReset() { source_->ForceReset(); }
 
-ScopedCanvas::TextMetrics AsyncCanvasSourceWrapper::MeasureGlyphSync(
+TextMetrics AsyncCanvasSourceWrapper::MeasureGlyphSync(
     GlyphToMeasure glyph_to_measure, ScopedCanvas::TextOptions text_options) {
   if (glyph_to_measure.font_override) {
     text_options.font_holder = glyph_to_measure.font_override;

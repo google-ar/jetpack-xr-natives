@@ -260,8 +260,6 @@ cc_library(
     copts = imp_copts(),
     defines = imp_defines(),
     deps = [
-        ":split_engine_mesh_serializer",
-        ":split_engine_texture_serializer",
         "//core:config",
         "//core/assets/material:material_load_options_proto_cc",
         "//core/async:future",
@@ -276,7 +274,6 @@ cc_library(
         "//core/math",
         "//core/model/mesh:base_mesh_builder",
         "//core/render:base_texture_builder",
-        "//core/split_engine/android:split_engine_android_bridge",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
@@ -286,8 +283,6 @@ cc_library(
         "@flatbuffers",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/libs:utils_hdrs",
-        "@third_party//split_engine:fbs",
-        "@third_party//split_engine:fbs_deps",  # buildcleaner: keep
     ] + if_android([
         "//core/render/android:definitions",
         "//core/render/android:platform_android_external_texture_surface",
@@ -352,6 +347,7 @@ cc_library(
         "//core/common:platform_helpers",
         "//core/common:registry",
         "//core/common:robin_map",
+        "//core/common:type_helpers",
         "//core/geometry/shapes",
         "//core/lighting:image_based_lighting_types",
         "//core/loader/provider:fbs",
@@ -371,10 +367,8 @@ cc_library(
         "//core/render:base_texture_builder",
         "//core/split_engine/android:split_engine_android_bridge",
         "//core/split_engine/materials:builtin_texture_parameter_creator",
-        "//core/split_engine/materials:split_engine_custom_material",
         "//core/split_engine/materials:split_engine_generic_material",
         "//core/split_engine/materials:split_engine_material",
-        "//core/split_engine/materials:split_engine_material_factory",
         "//core/view:base_view",
         "//core/view/framework",
         "//core/view/utils:frame_time",
@@ -448,6 +442,7 @@ cc_library(
         ":fbs",
         ":fbs_deps",  # buildcleaner: keep
         "//core/common:fbs",
+        "//core/common:type_helpers",
         "//core/common:typed_ids",
         "//core/loader:loader_details",
         "//core/loader:loader_options",
@@ -622,12 +617,12 @@ cc_library(
     copts = imp_copts(),
     linkstatic = 1,
     deps = [
-        "//core/material_library:flatbuffer_utils",
+        "//core/assets/material:material_load_options_proto_cc",
         "//core/math",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
+        "@com_google_impress//core/common:log",
         "@flatbuffers",
-        "@third_party//filament/filament:filament_hdrs",
         "@third_party//split_engine:fbs",
         "@third_party//split_engine:fbs_deps",  # buildcleaner: keep
     ],
@@ -815,7 +810,7 @@ cc_library(
         "@flatbuffers",
         # TODO: Clean up usages of internal APIs.
         "//third_party/googlefuzztest/internal/domains:core_domains_impl",
-        "//third_party/googlefuzztest:domain_core",
+        "//testing/fuzzing:domains",
     ],
     alwayslink = 1,
 )

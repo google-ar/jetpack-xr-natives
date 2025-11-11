@@ -54,7 +54,6 @@ android_library(
     name = "basic_imp_xr_activity",
     srcs = ["BasicImpXrActivity.java"],
     javacopts = [
-        "-Xep:AndroidJdkLibsChecker:OFF",
         "-Xep:PackageLocation:OFF",
     ],
     manifest = "xr/AndroidManifest.xml",
@@ -68,7 +67,6 @@ android_library(
     name = "basic_imp_split_engine_activity",
     srcs = ["BasicImpSplitEngineActivity.java"],
     javacopts = [
-        "-Xep:AndroidJdkLibsChecker:OFF",
         "-Xep:PackageLocation:OFF",
     ],
     manifest = "//java/com/google/ar/imp/app/splitengine:AndroidManifest.xml",

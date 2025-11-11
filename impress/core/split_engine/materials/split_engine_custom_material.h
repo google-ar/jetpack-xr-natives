@@ -30,6 +30,7 @@
 #include "core/math/mat.h"
 #include "core/math/vec.h"
 #include "core/render/texture.h"
+#include "core/split_engine/materials/split_engine_material.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/utils/string_map.h"
 
@@ -44,6 +45,7 @@ class SplitEngineCustomMaterial : public Material {
  public:
   explicit SplitEngineCustomMaterial(SplitEngineSerializer& serializer,
                                      OwnedMaterialPtr material);
+
   ~SplitEngineCustomMaterial() override;
 
   filament::MaterialInstance* GetFilamentMaterialInstance() override;

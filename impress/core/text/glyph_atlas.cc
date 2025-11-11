@@ -113,7 +113,8 @@ GlyphAtlas::GlyphAtlas(BaseView& view, Config config)
     : GlyphAtlas::GlyphAtlas(
           view,
           AsyncCanvasSourceFactory::Create(view.GetContext(),
-                                           config.use_hardware_rendering),
+                                           config.use_hardware_rendering,
+                                           config.force_auto_method_rendering),
           config) {}
 
 GlyphAtlas::GlyphAtlas(BaseView& view,
@@ -136,7 +137,10 @@ GlyphAtlas::GlyphAtlas(BaseView& view,
     view.GetDispatcher().Connect(
         [this](const ViewResumedEvent& event) {
           absl::MutexLock lock(canvas_mutex_);
-          canvas_source_->ForceReset();
+          // Cannot force reset if there is already an active canvas.
+          if (canvas_ == nullptr) {
+            canvas_source_->ForceReset();
+          }
           texture_status_ = TextureStatus::kHasNewGlyphs;
         },
         this);
@@ -156,7 +160,7 @@ GlyphAtlas::GlyphAtlas(BaseView& view,
 #if IMP_RUNTIME(DEV)
   if (auto editor = view.GetRegistry().Get<editor::Editor>(); editor.ok()) {
     editor->get().GetWidgetUiSystem().AddWidget<editor::GlyphAtlasVisualizer>(
-        editor::WidgetLayoutInfo(editor::PanelId::kTabBar), view,
+        editor::WidgetLayoutInfo(editor::PanelId::kTabBar, false), view,
         editor::GlyphAtlasVisualizer::AtlasDataProvider{
             .get_texture_func = [this]() { return GetTexture(); },
             .get_glyph_info_func =
@@ -227,74 +231,43 @@ void GlyphAtlas::AddFont(absl::string_view font_name,
 
 Future<absl::Status> GlyphAtlas::PrepareFont(absl::string_view text,
                                              const TextOptions& options) {
-  return GetSuperSampleInfo(options.force_non_separable)
-      .Then(
-          [this, text = std::string(text), options = options](
-              GlyphEmulator::SuperSampleInfo super_sample_info) {
-            absl::StatusOr<ScopedCanvas::TextOptions> canvas_options =
-                glyph_emulator_.CanvasOptionsFromGlyphEmulatorOptions(
-                    options, super_sample_info.subpixel_render_ratio);
-            if (!canvas_options.ok()) {
-              return Future<absl::Status>(canvas_options.status());
-            }
-            return glyph_emulator_.PrepareFont(text, *canvas_options);
-          },
-          Executor::Type::kCurrent);
+  absl::StatusOr<ScopedCanvas::TextOptions> canvas_options =
+      glyph_emulator_.CanvasOptionsFromGlyphEmulatorOptions(options);
+  if (!canvas_options.ok()) {
+    return Future<absl::Status>(canvas_options.status());
+  }
+  return glyph_emulator_.PrepareFont(text, *canvas_options);
 }
 
 Future<std::vector<ScopedCanvas::GlyphGroup>>
 GlyphAtlas::GetCombinedCharacterGroups(absl::string_view text,
                                        const TextOptions& options) {
-  return GetSuperSampleInfo(options.force_non_separable)
-      .Then(
-          [this, text = std::string(text), options = options](
-              GlyphEmulator::SuperSampleInfo super_sample_info) {
-            absl::StatusOr<ScopedCanvas::TextOptions> canvas_options =
-                glyph_emulator_.CanvasOptionsFromGlyphEmulatorOptions(
-                    options, super_sample_info.subpixel_render_ratio);
-            if (!canvas_options.ok()) {
-              return Future<std::vector<ScopedCanvas::GlyphGroup>>(
-                  canvas_options.status());
-            }
-            return glyph_emulator_.GetCombinedCharacterGroups(text,
-                                                              *canvas_options);
-          },
-          Executor::Type::kCurrent);
+  absl::StatusOr<ScopedCanvas::TextOptions> canvas_options =
+      glyph_emulator_.CanvasOptionsFromGlyphEmulatorOptions(options);
+  if (!canvas_options.ok()) {
+    return Future<std::vector<ScopedCanvas::GlyphGroup>>(
+        canvas_options.status());
+  }
+  return glyph_emulator_.GetCombinedCharacterGroups(text, *canvas_options);
 }
 
-Future<ScopedCanvas::TextMetrics> GlyphAtlas::GetTextMetrics(
-    absl::string_view text, const TextOptions& options) {
-  return GetSuperSampleInfo(options.force_non_separable)
-      .Then(
-          [this, text = std::string(text), options = options](
-              GlyphEmulator::SuperSampleInfo super_sample_info) {
-            absl::StatusOr<ScopedCanvas::TextOptions> canvas_options =
-                glyph_emulator_.CanvasOptionsFromGlyphEmulatorOptions(
-                    options, super_sample_info.subpixel_render_ratio);
-            if (!canvas_options.ok()) {
-              return Future<ScopedCanvas::TextMetrics>(canvas_options.status());
-            }
-            return glyph_emulator_.GetTextMetrics(
-                text, *canvas_options, super_sample_info.subpixel_render_ratio);
-          },
-          Executor::Type::kCurrent);
+Future<TextMetrics> GlyphAtlas::GetTextMetrics(absl::string_view text,
+                                               const TextOptions& options) {
+  absl::StatusOr<ScopedCanvas::TextOptions> canvas_options =
+      glyph_emulator_.CanvasOptionsFromGlyphEmulatorOptions(options);
+  if (!canvas_options.ok()) {
+    return Future<TextMetrics>(canvas_options.status());
+  }
+  return glyph_emulator_.GetTextMetrics(text, *canvas_options);
 }
 
-Future<ScopedCanvas::FontInfo> GlyphAtlas::GetFontInfo(
-    const TextOptions& options) {
-  return GetSuperSampleInfo(options.force_non_separable)
-      .Then(
-          [this, options = options](
-              GlyphEmulator::SuperSampleInfo super_sample_info) {
-            absl::StatusOr<ScopedCanvas::TextOptions> canvas_options =
-                glyph_emulator_.CanvasOptionsFromGlyphEmulatorOptions(
-                    options, super_sample_info.subpixel_render_ratio);
-            if (!canvas_options.ok()) {
-              return Future<ScopedCanvas::FontInfo>(canvas_options.status());
-            }
-            return glyph_emulator_.GetFontInfo(*canvas_options);
-          },
-          Executor::Type::kCurrent);
+Future<FontInfo> GlyphAtlas::GetFontInfo(const TextOptions& options) {
+  absl::StatusOr<ScopedCanvas::TextOptions> canvas_options =
+      glyph_emulator_.CanvasOptionsFromGlyphEmulatorOptions(options);
+  if (!canvas_options.ok()) {
+    return Future<FontInfo>(canvas_options.status());
+  }
+  return glyph_emulator_.GetFontInfo(*canvas_options);
 }
 
 Future<std::vector<GlyphAtlas::Glyph>> GlyphAtlas::GetGlyphs(
@@ -493,8 +466,8 @@ const GlyphAtlas::GlyphInfo* GlyphAtlas::GetOrAddGlyphInfo(
 
   // Atlas entry is integer precision with some padding.
   uint2 atlas_entry_size = {
-      static_cast<int>(std::ceil(glyph.metrics.size.x)) + kPadding,
-      static_cast<int>(std::ceil(glyph.metrics.font_size_y)) + kPadding};
+      static_cast<int>(std::ceil(glyph.metrics.size_x())) + kPadding,
+      static_cast<int>(std::ceil(glyph.metrics.font_size_y())) + kPadding};
 
   std::optional<AtlasPacker::ScopedAtlasEntry> atlas_entry =
       TryAddAtlasEntry(atlas_entry_size);
@@ -676,14 +649,18 @@ GlyphAtlas::Glyph GlyphAtlas::GlyphInfoToGlyph(const GlyphInfo& glyph_info,
                                                float2 glyph_atlas_size,
                                                bool is_emoji) {
   Glyph glyph{.glyph_ref = glyph_info.ref_counter.Retain()};
-  glyph.actual_origin = glyph_info.measurements.origin / pixel_ratio_scale;
-  glyph.actual_size = glyph_info.measurements.size / pixel_ratio_scale;
+  glyph.actual_origin = float2(glyph_info.measurements.origin_x(),
+                               glyph_info.measurements.origin_y()) /
+                        pixel_ratio_scale;
+  glyph.actual_size = float2(glyph_info.measurements.size_x(),
+                             glyph_info.measurements.size_y()) /
+                      pixel_ratio_scale;
   glyph.atlas_size = (glyph_info.atlas_entry.GetBottomRight() -
                       glyph_info.atlas_entry.GetTopLeft()) /
                      pixel_ratio_scale;
   glyph.advance_width = advance_width / pixel_ratio_scale.x;
-  glyph.atlas_origin = (float2{glyph_info.measurements.origin.x,
-                               glyph_info.measurements.font_origin_y} -
+  glyph.atlas_origin = (float2{glyph_info.measurements.origin_x(),
+                               glyph_info.measurements.font_origin_y()} -
                         float2{kHalfPadding}) /
                        pixel_ratio_scale;
   glyph.uv_top_left = glyph_info.atlas_entry.GetTopLeft() / glyph_atlas_size;
@@ -825,11 +802,11 @@ GlyphAtlas::GetGlyphAtlasInfoAt(const float2& uv) const {
         float half_stroke_width = glyph_info.stroke_width / 2.0f;
         float2 origin =
             float2(atlas_entry.GetTopLeft().x +
-                       glyph_info.measurements.origin.x + half_stroke_width +
+                       glyph_info.measurements.origin_x() + half_stroke_width +
                        kHalfPadding,
                    // +Y is up. Start counting from the bottom of the glyph.
                    atlas_entry.GetBottomRight().y +
-                       glyph_info.measurements.font_origin_y -
+                       glyph_info.measurements.font_origin_y() -
                        half_stroke_width - kHalfPadding) /
             atlas_texture_size_;
         return editor::GlyphAtlasVisualizer::GlyphAtlasInfo{
@@ -858,12 +835,13 @@ GlyphAtlas::GetAllGlyphInfo() const {
       rect.center /= atlas_texture_size_;
       float half_stroke_width = glyph_info.stroke_width / 2.0f;
       float2 origin =
-          float2(atlas_entry.GetTopLeft().x + glyph_info.measurements.origin.x +
-                     half_stroke_width + kHalfPadding,
+          float2(atlas_entry.GetTopLeft().x +
+                     glyph_info.measurements.origin_x() + half_stroke_width +
+                     kHalfPadding,
                  // +Y is up. Start counting from the bottom of the glyph.
                  atlas_entry.GetBottomRight().y +
-                     glyph_info.measurements.font_origin_y - half_stroke_width -
-                     kHalfPadding) /
+                     glyph_info.measurements.font_origin_y() -
+                     half_stroke_width - kHalfPadding) /
           atlas_texture_size_;
       result.push_back(editor::GlyphAtlasVisualizer::GlyphAtlasInfo{
           .glyph = ToString(glyph.glyph),

@@ -29,6 +29,7 @@
 #include "core/math/vec.h"
 #include "core/render/texture.h"
 #include "core/text/text_helpers.h"
+#include "core/text/text_metrics.proto.h"
 #include "core/view/base_view.h"
 
 namespace imp {
@@ -46,9 +47,9 @@ Future<absl::Status> WasmPlatformCanvasSource::PrepareFont(
   return wrapped_.PrepareFont(text, text_options);
 };
 
-ScopedCanvas::TextMetrics WasmPlatformCanvasSource::GetTextMetrics(
+TextMetrics WasmPlatformCanvasSource::GetTextMetrics(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
-  absl::StatusOr<ScopedCanvas::TextMetrics> result =
+  absl::StatusOr<TextMetrics> result =
       wrapped_
           .MeasureGlyph(AsyncCanvasSource::GlyphToMeasure({.glyph = text}),
                         text_options)
@@ -58,11 +59,11 @@ ScopedCanvas::TextMetrics WasmPlatformCanvasSource::GetTextMetrics(
     return result.value();
   } else {
     IMP_LOG(imp::FATAL) << "Failed to measure text widths.";
-    return ScopedCanvas::TextMetrics();
+    return TextMetrics();
   }
 };
 
-ScopedCanvas::TextMetrics WasmPlatformCanvasSource::GetGlyphMetrics(
+TextMetrics WasmPlatformCanvasSource::GetGlyphMetrics(
     ScopedCanvas::GlyphId glyph,
     const ScopedCanvas::TextOptions& text_options) {
   IMP_LOG(imp::FATAL) << "CanvasSource::GetGlyphMetrics is unavailable on WASM.";
@@ -103,16 +104,15 @@ std::vector<ScopedCanvas::GlyphAdvance> WasmPlatformCanvasSource::GetTextGlyphs(
   return {};
 }
 
-ScopedCanvas::FontInfo WasmPlatformCanvasSource::GetFontInfo(
+FontInfo WasmPlatformCanvasSource::GetFontInfo(
     const ScopedCanvas::TextOptions& text_options) {
-  absl::StatusOr<ScopedCanvas::FontInfo> result =
-      wrapped_.GetFontInfo(text_options).Get();
+  absl::StatusOr<FontInfo> result = wrapped_.GetFontInfo(text_options).Get();
 
   if (result.ok()) {
     return result.value();
   } else {
     IMP_LOG(imp::FATAL) << "Failed to get font info.";
-    return ScopedCanvas::FontInfo();
+    return FontInfo();
   }
 }
 

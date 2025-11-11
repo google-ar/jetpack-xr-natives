@@ -27,6 +27,7 @@
 #include "core/common/small_source_location.h"
 #include "core/math/vec.h"
 #include "core/render/texture.h"
+#include "core/text/text_metrics.proto.h"
 #include "core/view/base_view.h"
 
 namespace imp {
@@ -44,11 +45,11 @@ struct PlatformCanvasSource {
       absl::string_view text,
       const ScopedCanvas::TextOptions& text_options) = 0;
 
-  virtual ScopedCanvas::TextMetrics GetTextMetrics(
+  virtual TextMetrics GetTextMetrics(
       absl::string_view text,
       const ScopedCanvas::TextOptions& text_options) = 0;
 
-  virtual ScopedCanvas::TextMetrics GetGlyphMetrics(
+  virtual TextMetrics GetGlyphMetrics(
       ScopedCanvas::GlyphId glyph,
       const ScopedCanvas::TextOptions& text_options) = 0;
 
@@ -64,7 +65,7 @@ struct PlatformCanvasSource {
       absl::string_view text,
       const ScopedCanvas::TextOptions& text_options) = 0;
 
-  virtual ScopedCanvas::FontInfo GetFontInfo(
+  virtual FontInfo GetFontInfo(
       const ScopedCanvas::TextOptions& text_options) = 0;
 
   virtual std::unique_ptr<ScopedCanvas> StartDrawing(

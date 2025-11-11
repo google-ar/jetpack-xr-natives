@@ -27,6 +27,9 @@ class ParticleDataProvider {
   ParticleDataProvider() = default;
   virtual ~ParticleDataProvider() = default;
 
+  // Returns the number of floats managed by the data provider.
+  virtual int32_t GetNumFloats() const = 0;
+
   // Returns the float value at the given index.
   virtual float GetFloat(int32_t index) const = 0;
 

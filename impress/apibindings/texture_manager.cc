@@ -21,10 +21,11 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "filament/filament/include/filament/TextureSampler.h"
-#include "apibindings/asset_loader.h"
 #include "apibindings/asset_ptr_map.h"
+#include "apibindings/base_asset_loader.h"
 #include "apibindings/bindings_texture.h"
 #include "apibindings/impress_api_view.h"
 #include "core/assets/asset_ptr.h"
@@ -41,11 +42,13 @@
 namespace imp {
 
 namespace {
+
 constexpr TextureSamplerOptions kDefaultTextureSamplerOptions = {
     .wrap_mode = ::filament::TextureSampler::WrapMode::CLAMP_TO_EDGE,
     .mag_filter = ::filament::TextureSampler::MagFilter::LINEAR,
     .min_filter = ::filament::TextureSampler::MinFilter::LINEAR,
-    .anisotropy = 0};
+    .anisotropy = 1.0,
+};
 
 Future<OwnedTexturePtr> LoadTextureFromPath(TextureFactory& texture_factory,
                                             AssetManager& asset_manager,
@@ -61,12 +64,30 @@ Future<OwnedTexturePtr> LoadTextureFromPath(TextureFactory& texture_factory,
         return texture;
       });
 }
+
+class TextureManagerImpl : public TextureManager {
+ public:
+  explicit TextureManagerImpl(ImpressApiView& view);
+  ~TextureManagerImpl() override = default;
+
+  void LoadTexture(absl::string_view path,
+                   std::unique_ptr<BaseAssetLoader> asset_loader) override;
+  absl::StatusOr<std::intptr_t> BorrowReflectionTexture() override;
+  absl::StatusOr<std::intptr_t> GetReflectionTextureFromIbl(
+      std::intptr_t ibl_token) override;
+  absl::StatusOr<BorrowedTexturePtr> BorrowTexture(
+      std::intptr_t texture_handle) override;
+
+ private:
+  ImpressApiView& view_;
+};
+
 }  // namespace
 
-TextureManager::TextureManager(ImpressApiView& view) : view_(view) {}
+TextureManagerImpl::TextureManagerImpl(ImpressApiView& view) : view_(view) {}
 
-void TextureManager::LoadTexture(absl::string_view path,
-                                 std::unique_ptr<AssetLoader> asset_loader) {
+void TextureManagerImpl::LoadTexture(
+    absl::string_view path, std::unique_ptr<BaseAssetLoader> asset_loader) {
   LoadTextureFromPath(view_.GetTextureFactory(), view_.GetAssetManager(),
                       view_.GetAssetPtrMap(), path)
       .Then([this, asset_loader = std::move(asset_loader)](
@@ -79,14 +100,14 @@ void TextureManager::LoadTexture(absl::string_view path,
                                                 std::move(*texture));
           asset_loader->OnSuccess(texture_token);
         } else {
-          asset_loader->OnFailure("Failed to load texture with status: " +
-                                  texture.status().ToString());
+          asset_loader->OnFailure(absl::StrFormat("Failed to load texture: %s.",
+                                                  texture.status().message()));
         }
       })
       .KeptBy(&view_);
 }
 
-absl::StatusOr<std::intptr_t> TextureManager::BorrowReflectionTexture() {
+absl::StatusOr<std::intptr_t> TextureManagerImpl::BorrowReflectionTexture() {
   const EnvironmentLight* environment_light =
       view_.GetLightManager().GetEnvironmentLight();
   if (!environment_light) return absl::NotFoundError("No environment light.");
@@ -103,13 +124,14 @@ absl::StatusOr<std::intptr_t> TextureManager::BorrowReflectionTexture() {
   return reflections_texture_token;
 }
 
-absl::StatusOr<std::intptr_t> TextureManager::GetReflectionTextureFromIbl(
+absl::StatusOr<std::intptr_t> TextureManagerImpl::GetReflectionTextureFromIbl(
     std::intptr_t ibl_token) {
   absl::StatusOr<AssetPtr<ImageBasedLightingAsset>> ibl_asset_ptr =
       view_.GetAssetPtrMap().GetStoredIblAsset(ibl_token);
 
   if (!ibl_asset_ptr.ok()) {
-    return absl::NotFoundError("IBL asset is not cached.");
+    return absl::NotFoundError(absl::StrFormat(
+        "IBL asset is not cached: %s.", ibl_asset_ptr.status().message()));
   }
 
   BorrowedTexturePtr reflections_texture =
@@ -119,7 +141,7 @@ absl::StatusOr<std::intptr_t> TextureManager::GetReflectionTextureFromIbl(
   return reflections_texture_token;
 }
 
-absl::StatusOr<BorrowedTexturePtr> TextureManager::BorrowTexture(
+absl::StatusOr<BorrowedTexturePtr> TextureManagerImpl::BorrowTexture(
     std::intptr_t texture_handle) {
   BindingsTexture* bindings_texture =
       view_.FromJava<BindingsTexture>(texture_handle);
@@ -135,6 +157,10 @@ absl::StatusOr<BorrowedTexturePtr> TextureManager::BorrowTexture(
   }
 
   return borrowed_texture;
+}
+
+std::unique_ptr<TextureManager> CreateTextureManager(ImpressApiView& view) {
+  return std::make_unique<TextureManagerImpl>(view);
 }
 
 }  // namespace imp

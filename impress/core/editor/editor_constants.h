@@ -48,6 +48,9 @@ static constexpr LayoutConfig kDefaultXrLayoutConfig{
         .expanded_state = LayoutConfig::WindowExpandedState::COLLAPSED_DEFAULT,
         .max_window_height_multiplier = 1.0f}};
 
+static constexpr absl::string_view kSavedLayoutIniFile =
+    "/third_party/impress/core/editor/layout/saved_layout.ini";
+
 }  // namespace imp::editor
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_EDITOR_EDITOR_CONSTANTS_H_

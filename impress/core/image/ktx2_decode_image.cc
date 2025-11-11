@@ -51,7 +51,7 @@ constexpr uint32_t kDescriptorFormatChannelTypeEtc1sAaa = 15;
 void InitializeBasisTranscoder() {
   ABSL_CONST_INIT static absl::Mutex init_mutex(absl::kConstInit);
   static bool is_transcoder_initialized = false;
-  absl::MutexLock lock(&init_mutex);
+  absl::MutexLock lock(init_mutex);
   if (!is_transcoder_initialized) {
     // Should be called only once globally. Basisu may generate some logging
     // warnings when this is called multiple times but subsequent calls of this

@@ -48,6 +48,7 @@ cc_library(
     copts = imp_copts(),
     deps = [
         ":window_configuration",
+        "//core:config",
         "//core/editor",
         "//core/editor:widget",
         "//core/view:base_view",

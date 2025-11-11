@@ -29,10 +29,10 @@ cc_library(
     ],
     deps = [
         ":jni_utils",
-        "@third_party//OpenXR_KHR:openxr_headers_androidxr",
         "@abseil-cpp//absl/base",
         "@abseil-cpp//absl/log",
         "//openxr:openxr_manager",
+        "@third_party//OpenXR_KHR:openxr_headers_androidxr",
     ],
     alwayslink = 1,
 )
@@ -42,9 +42,9 @@ cc_library(
     srcs = ["jni_utils.cc"],
     hdrs = ["jni_utils.h"],
     deps = [
-        "@third_party//OpenXR_KHR:openxr_headers_androidxr",  # buildcleaner: keep
         "@abseil-cpp//absl/strings:str_format",
         "//common:jni_utils",
+        "@third_party//OpenXR_KHR:openxr_headers_androidxr",  # buildcleaner: keep
     ],
     alwayslink = 1,
 )

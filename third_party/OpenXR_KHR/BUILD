@@ -74,7 +74,7 @@ cc_library(
     ] + OPENXR_ANDROID_LINKOPTS,
     deps = [
         ":openxr_headers_androidxr",
-        "//android-jni-wrappers",
         "@jsoncpp",
+        "@third_party//android-jni-wrappers",
     ],
 )

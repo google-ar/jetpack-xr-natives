@@ -14,6 +14,7 @@
 
 #include <jni.h>
 #include <openxr/openxr.h>
+#include <cstdint>
 
 #include "absl/strings/str_format.h"
 #include "common/namespace_util.h"
@@ -107,5 +108,30 @@ JNIEXPORT jobject JNICALL
 Java_androidx_xr_arcore_openxr_OpenXrEarth_nativeCreateGeospatialPoseFromPose(
     JNIEnv* env, jclass /*clazz*/, jlong monotonic_time_ns, jobject pose) {
   return NativeGetGeospatialPose(env, monotonic_time_ns, pose);
+}
+
+JNIEXPORT jlong JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrEarth_nativeCreateAnchor(
+    JNIEnv* env, jclass /*clazz*/, jdouble latitude, jdouble longitude,
+    jdouble altitude, jobject eastUpSouthQuaternion_obj,
+    jlong monotonic_time_ns) {
+  androidx::xr::openxr::OpenXrManager& xr_manager =
+      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+
+  // Convert eastUpSouthQuaternion_obj to XrQuaternionf
+  XrQuaternionf xr_quaternion = androidx::xr::openxr::ConvertToXrQuaternionf(
+      env, eastUpSouthQuaternion_obj);
+
+  XrSpace anchor;
+  androidx::xr::openxr::OpenXrManager::CreateAnchorResult result =
+      xr_manager.CreateEarthAnchor(static_cast<int64_t>(monotonic_time_ns),
+                                   latitude, longitude, altitude, xr_quaternion,
+                                   &anchor);
+
+  if (result !=
+      androidx::xr::openxr::OpenXrManager::CreateAnchorResult::kSuccess) {
+    return static_cast<jlong>(result);
+  }
+  return androidx::xr::openxr::CreateJavaAnchorHandle(anchor);
 }
 }  // extern "C"

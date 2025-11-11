@@ -1,0 +1,82 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+// A description of key metrics of the given text/glyph. Returned by
+// GetTextMetrics.
+message TextMetrics {
+  // X represents the initial left-offset of the text, Y represents the
+  // descent. The descent, in this instance, is defined as the vertical offset
+  // necessary to properly align a character to the baseline; e.g., lowercase
+  // "g" will have a negative Y value, since it must be moved DOWN to align to
+  // the baseline. These values align to the fill of the text, not the stroke;
+  // a lowercase "g" with a stroke size of 100 pixels will still precisely
+  // have its origin point set neatly at its proper place below the upper half
+  // of the g along the baseline.
+  float origin_x = 1;
+  float origin_y = 2;
+  // Returns the render bounds of the text. X is width, Y is height. This
+  // measurement accounts for the size of the stroke; e.g., a stroke size of
+  // 100 pixels will correspondingly grow the bounds.
+  float size_x = 3;
+  float size_y = 4;
+  // Returns the typographical width of the text. The difference between
+  // render bound width and the typographical width is that the render bounds
+  // measures the pixel size of the text, whereas the typographical bounds
+  // also includes the spacing before and after the text. Semantically,
+  // typographical height should be the same as the font_size_y, so refer to
+  // that instead when needed.
+  // TODO Implement this on Desktop
+  float typographical_width = 5;
+  // This is the origin of the text as when drawn with
+  // TextVerticalAlignment::kAtlas.
+  float font_origin_y = 6;
+  // This is the height of the text as when drawn with
+  // TextVerticalAlignment::kAtlas.
+  float font_size_y = 7;
+}
+
+// Provides information about the font used for drawing text for a particular
+// set of TextOptions when CanvasSource::GetFontOptions is called.
+// Additional information about this can be found here:
+// https://proandroiddev.com/android-and-typography-101-5f06722dd611
+message FontInfo {
+  // Distance in pixels from the baseline to the top of the font. Always
+  // negative.
+  float ascent = 1;
+  // Distance in pixels from the baseline to the bottom of the font. Always
+  // positive.
+  float descent = 2;
+  // Recommended distance between lines when single-spaced.
+  float leading = 3;
+  // Distance between full lines of text when single-spaced.
+  float line_spacing = 4;
+}
+
+// A combination of metrics for a specific piece of text and the relevant font
+// metrics for the text's font. The font_info and glyph_metrics fields can be
+// reused by passing this struct to TextOptions::precomputed_metrics, allowing
+// the glyph_emulator to use these precomputed values instead of re-measuring
+// them.
+message TextAndFontMetrics {
+  // The metrics for the text as a whole.
+  TextMetrics text_metrics = 1;
+  // The font information for the text's font.
+  FontInfo font_info = 2;
+  // The metrics for each glyph in the text.
+  repeated TextMetrics glyph_metrics = 3;
+}

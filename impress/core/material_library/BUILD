@@ -251,6 +251,7 @@ cc_library(
     deps = [
         ":fbs",
         ":fbs_deps",  # buildcleaner: keep
+        "//core/common:type_helpers",
         "//core/loader/provider/gltf:imp_cc_schema",
         "//core/math",
         "@flatbuffers",

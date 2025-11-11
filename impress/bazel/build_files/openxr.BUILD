@@ -44,7 +44,7 @@ cc_library(
     includes = [
         "generated/include/openxr",
     ],
-    strip_include_prefix = "//third_party/OpenXR_KHR/generated/include",
+    strip_include_prefix = "//OpenXR_KHR/generated/include",
 )
 
 cc_library(

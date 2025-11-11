@@ -17,6 +17,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_VIEW_PLATFORMS_ANDROID_NDKWRAPPERS_IMAGE_READER_H_
 #define THIRD_PARTY_IMPRESS_CORE_VIEW_PLATFORMS_ANDROID_NDKWRAPPERS_IMAGE_READER_H_
 
+#include <android/native_window_jni.h>
 #include <jni.h>
 #include <media/NdkImage.h>
 #include <media/NdkImageReader.h>
@@ -59,15 +60,27 @@ class ImageReader {
   // Disable any existing user-defined image callback.
   absl::Status ResetImageListenerCallback();
 
+  // Set the buffer size of the ImageReader.
+  absl::Status SetBufferSize(int2 size);
+
  private:
   // Create ImageReader with the given size, format and usage.
-  ImageReader(int32_t width, int32_t height, int32_t format, uint64_t usage,
+  ImageReader(const BaseView& view, int2 size, int32_t format, uint64_t usage,
               int32_t max_images);
+
+  absl::Status Initialize();
 
   void CallImageListenerCallback();
 
+  const BaseView& view_;
+  int2 size_ = {0, 0};
+  const int32_t format_ = 0;
+  const uint64_t usage_ = 0;
+  const int32_t max_images_ = 0;
+
   AImageReader* reader_ = nullptr;
   AImageReader_ImageListener listener_{nullptr, nullptr};
+  ANativeWindow* native_window_ = nullptr;
 
   jobject surface_;
 

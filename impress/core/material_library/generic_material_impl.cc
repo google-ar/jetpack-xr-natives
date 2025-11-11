@@ -393,8 +393,10 @@ void GenericMaterialImpl::ApplyMaterialParameter(absl::string_view name,
   size_t mat_size = v.size() < parameter_info_.max_available_samplers
                         ? v.size()
                         : parameter_info_.max_available_samplers;
-  material_->GetFilamentMaterialInstance()->setParameter(
-      name.data(), name.size(), v.data(), mat_size);
+  if (!v.empty()) {
+    material_->GetFilamentMaterialInstance()->setParameter(
+        name.data(), name.size(), v.data(), mat_size);
+  }
   parameters_.emplace_back(model::MaterialParameter(name, v));
 }
 

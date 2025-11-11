@@ -78,16 +78,27 @@ absl::Status RigidBody::Setup() {
   MP_RETURN_IF_ERROR(
       collidable_.Create(start_transform, GetNode(), state_.collidable_type));
   state_.collidable_type = collidable_.GetCollidableType();
+
+  absl::Status status = absl::OkStatus();
   if (!collidable_.IsMovable()) {
     state_.motion_mode = RigidBodyState::NONMOVABLE;
-    return InitializeNonMovable();
+    status = InitializeNonMovable();
   }
 
   if (state_.motion_mode == RigidBodyState::SIMULATED) {
-    return InitializeSimulated(start_transform);
+    status = InitializeSimulated(start_transform);
   } else {
-    return InitializeDirected(start_transform);
+    status = InitializeDirected(start_transform);
   }
+
+#if IMP_RUNTIME(DEV)
+  if (status.ok()) {
+    physics_manager_->RegisterCollidableVisualizer(GetNode(),
+                                                   [this]() { Visualize(); });
+  }
+#endif
+
+  return status;
 }
 
 absl::Status RigidBody::SetupWithState(const RigidBodyState& state) {
@@ -122,6 +133,10 @@ absl::Status RigidBody::InitializeDirected(const btTransform& bt_transform) {
 }
 
 absl::Status RigidBody::InitializeSimulated(const btTransform& bt_transform) {
+  if (rigid_body_) {
+    is_bt_rigid_body_recreated_ = true;
+  }
+
   // Remove old btRigidBody object if already exists.
   CleanupInternal();
 
@@ -145,7 +160,6 @@ absl::Status RigidBody::InitializeSimulated(const btTransform& bt_transform) {
   rb_info.m_angularDamping = state_.angular_damping;
 
   rigid_body_ = std::make_unique<btRigidBody>(rb_info);
-  is_bt_rigid_body_recreated_ = true;
   SetFrictionInternal(state_.friction);
   SetRestitution(state_.restitution);
 
@@ -379,7 +393,12 @@ void RigidBody::OnActiveStatusChanged(bool is_active) {
   }
 }
 
-void RigidBody::Cleanup() { CleanupInternal(); }
+void RigidBody::Cleanup() {
+  CleanupInternal();
+#if IMP_RUNTIME(DEV)
+  physics_manager_->UnregisterCollidableVisualizer(GetNode());
+#endif
+}
 
 void RigidBody::CleanupInternal() {
   if (rigid_body_) {
@@ -395,9 +414,6 @@ void RigidBody::Update(const FrameTime& frame_time) {
       GetNode()->SetWorldTrs(transform_prev_);
       IMP_LOG(imp::ERROR) << GetNode()->GetName() << " is static.";
     }
-#if IMP_RUNTIME(DEV)
-    collidable_.Visualize({});
-#endif
     return;
   }
 
@@ -443,12 +459,6 @@ void RigidBody::Update(const FrameTime& frame_time) {
   transform_prev_ = GetNode()->GetWorldTrs();
   state_.linear_velocity = GetLinearVelocity();
   state_.angular_velocity = GetAngularVelocity();
-
-#if IMP_RUNTIME(DEV)
-  btTransform current_bt_transform;
-  rigid_body_->getMotionState()->getWorldTransform(current_bt_transform);
-  collidable_.Visualize(current_bt_transform);
-#endif
 }
 
 Collidable::CollisionShape RigidBody::GetCollisionShape() const {
@@ -456,4 +466,19 @@ Collidable::CollisionShape RigidBody::GetCollisionShape() const {
   rigid_body_->getMotionState()->getWorldTransform(bt_trans);
   return collidable_.GetCollisionShape(bt_trans);
 }
+
+#if IMP_RUNTIME(DEV)
+void RigidBody::Visualize() {
+  if (!rigid_body_) {
+    return;
+  }
+
+  btTransform current_bt_transform;
+  if (collidable_.IsMovable()) {
+    rigid_body_->getMotionState()->getWorldTransform(current_bt_transform);
+  }
+
+  collidable_.Visualize(current_bt_transform);
+}
+#endif
 }  // namespace imp

@@ -18,19 +18,18 @@
 #include <memory>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
-#include "apibindings/asset_loader.h"
+#include "apibindings/base_asset_loader.h"
 #include "core/assets/asset_ptr.h"
 #include "core/lighting/image_based_lighting_asset.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/gltf_asset.h"
-#include "core/view/framework/assets/gltf_renderer.h"
+#include "core/view/utils/asset.h"
 #include "re2/re2.h"
 
 namespace imp {
@@ -38,7 +37,7 @@ namespace imp {
 AssetPtrMap::AssetPtrMap(BaseView& view) : view_(view) {}
 
 void AssetPtrMap::LoadImageBasedLightingAsset(
-    absl::string_view path, std::unique_ptr<AssetLoader> asset_loader) {
+    absl::string_view path, std::unique_ptr<BaseAssetLoader> asset_loader) {
   view_.GetAssetManager()
       .LoadAsset<ImageBasedLightingAsset>(GetAssetString(path))
       .Then([this, asset_loader = std::move(asset_loader)](
@@ -50,7 +49,7 @@ void AssetPtrMap::LoadImageBasedLightingAsset(
 
 void AssetPtrMap::LoadImageBasedLightingAsset(
     absl::Cord data, absl::string_view key,
-    std::unique_ptr<AssetLoader> asset_loader) {
+    std::unique_ptr<BaseAssetLoader> asset_loader) {
   view_.GetAssetManager()
       .LoadAsset<ImageBasedLightingAsset>(data, key)
       .Then([this, asset_loader = std::move(asset_loader)](
@@ -71,7 +70,7 @@ absl::Status AssetPtrMap::ReleaseImageBasedLightingAsset(
 }
 
 void AssetPtrMap::LoadGltfAsset(absl::string_view path,
-                                std::unique_ptr<AssetLoader> asset_loader) {
+                                std::unique_ptr<BaseAssetLoader> asset_loader) {
   view_.GetAssetManager()
       .LoadGltfAsset(GetAssetString(path))
       .Then([this, asset_loader = std::move(asset_loader)](
@@ -82,7 +81,7 @@ void AssetPtrMap::LoadGltfAsset(absl::string_view path,
 }
 
 void AssetPtrMap::LoadGltfAsset(absl::Cord data, absl::string_view key,
-                                std::unique_ptr<AssetLoader> asset_loader) {
+                                std::unique_ptr<BaseAssetLoader> asset_loader) {
   view_.GetAssetManager()
       .LoadGltfAsset(data, key)
       .Then([this, asset_loader = std::move(asset_loader)](
@@ -92,10 +91,18 @@ void AssetPtrMap::LoadGltfAsset(absl::Cord data, absl::string_view key,
       .KeptBy(this);
 }
 
+void AssetPtrMap::LoadGltfAsset(imp::AssetDefinition asset_definition,
+                                std::unique_ptr<BaseAssetLoader> asset_loader) {
+  view_.GetAssetManager()
+      .LoadGltfAsset(asset_definition)
+      .Then([this, asset_loader = std::move(asset_loader)](
+                absl::StatusOr<AssetPtr<GltfAsset>> asset_ptr) mutable {
+        OnGltfAssetLoadingResult(asset_ptr, std::move(asset_loader));
+      })
+      .KeptBy(this);
+}
+
 absl::Status AssetPtrMap::ReleaseGltfAsset(std::intptr_t gltf_token) {
-  // TODO: Removing the asset from the map breaks the logic in
-  // DestroyGltfAssetsAndInstances which uses the map to find all nodes that
-  // need to be destroyed.
   if (gltf_asset_map_.find(gltf_token) != gltf_asset_map_.end()) {
     gltf_asset_map_.erase(gltf_token);
     return absl::OkStatus();
@@ -121,29 +128,7 @@ AssetPtrMap::GetStoredIblAsset(std::intptr_t ibl_token) {
   return asset_ptr->second;
 }
 
-void AssetPtrMap::DestroyGltfAssetsAndInstances() {
-  // Collect all nodes that need to be destroyed.
-  // It isn't safe to destroy them within the ForEach callback because it can
-  // invalidate the iteration leading to skipped nodes.
-  //
-  // TODO: Address this API pitfall with ForEach.
-  std::vector<NodeHandle> nodes_to_destroy;
-
-  for (auto& [gltf_token, asset_ptr] : gltf_asset_map_) {
-    view_.GetComponentManager().ForEach<GltfRenderer>(
-        [asset_ptr, &nodes_to_destroy](const GltfRenderer* gltf_renderer) {
-          if (gltf_renderer->GetGltfAsset() == asset_ptr) {
-            nodes_to_destroy.push_back(gltf_renderer->GetNode());
-          }
-        });
-  }
-
-  for (const auto& node : nodes_to_destroy) {
-    view_.DestroyNode(node);
-  }
-
-  gltf_asset_map_.clear();
-}
+void AssetPtrMap::DestroyGltfAssets() { gltf_asset_map_.clear(); }
 
 absl::Status AssetPtrMap::DisposeIblAssets() {
   imp::split_engine::SplitEngineSerializer* serializer =

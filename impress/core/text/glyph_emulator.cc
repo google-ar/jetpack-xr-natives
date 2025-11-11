@@ -15,6 +15,7 @@
 #include "core/text/glyph_emulator.h"
 
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -48,6 +49,7 @@
 #include "core/config.h"
 #include "core/math/vec.h"
 #include "core/text/text_helpers.h"
+#include "core/text/text_metrics.proto.h"
 
 namespace imp {
 namespace {
@@ -63,7 +65,7 @@ bool RectContainsPoint(const Rect& rect, const float2& point) {
 constexpr float kSuperSampleThreshold = 2.0f;
 #endif
 
-constexpr ScopedCanvas::TextOptions kTextOptions{
+const ScopedCanvas::TextOptions kTextOptions{
     .size_pixels = GlyphEmulator::kDefaultFontSizePixels,
     .horizontal_alignment = TextHorizontalAlignment::kLeftExtent,
     .vertical_alignment = TextVerticalAlignment::kAtlas,
@@ -96,14 +98,14 @@ void GetGlyphsForChunk(const Chunk& chunk,
                        const ScopedCanvas::TextOptions& canvas_options,
                        std::vector<GlyphEmulator::Glyph>& out_glyphs) {
   if (!chunk.is_separable) {
-    out_glyphs.push_back(
-        GlyphEmulator::Glyph{.glyph = std::string(chunk.chunk_text),
-                             .advance_width = advance_widths[0],
-                             .is_emoji = canvas_options.force_non_separable ||
-                                         ContainsEmoji(chunk.chunk_text),
-                             .contains_non_separable_script =
-                                 canvas_options.force_non_separable ||
-                                 ContainsNonSeparableScript(chunk.chunk_text)});
+    out_glyphs.push_back(GlyphEmulator::Glyph{
+        .glyph = std::string(chunk.chunk_text),
+        .advance_width = advance_widths[0] * canvas_options.render_scale.x,
+        .is_emoji = canvas_options.force_non_separable ||
+                    ContainsEmoji(chunk.chunk_text),
+        .contains_non_separable_script =
+            canvas_options.force_non_separable ||
+            ContainsNonSeparableScript(chunk.chunk_text)});
     return;
   }
 
@@ -156,9 +158,10 @@ void GetGlyphsForChunk(const Chunk& chunk,
     std::string utf8_char = chunk.chunk_text.substr(start, si - start);
     start = si;
 
-    out_glyphs.push_back(GlyphEmulator::Glyph{.glyph = std::move(utf8_char),
-                                              .advance_width = advance_width,
-                                              .is_emoji = is_emoji});
+    out_glyphs.push_back(GlyphEmulator::Glyph{
+        .glyph = std::move(utf8_char),
+        .advance_width = advance_width * canvas_options.render_scale.x,
+        .is_emoji = is_emoji});
     i++;
   }
 }
@@ -190,35 +193,25 @@ GlyphEmulator::GetCombinedCharacterGroups(
   }
 }
 
-Future<ScopedCanvas::TextMetrics> GlyphEmulator::GetTextMetrics(
-    absl::string_view text, const ScopedCanvas::TextOptions& options,
-    float2 subpixel_render_ratio) {
+Future<TextMetrics> GlyphEmulator::GetTextMetrics(
+    absl::string_view text, const ScopedCanvas::TextOptions& options) {
   return canvas_source_.PrepareFont(text, options)
       .Then(
           [this, text = std::string(text), options]() {
             return canvas_source_.MeasureGlyph(
                 AsyncCanvasSource::GlyphToMeasure({text}), options);
           },
-          Executor::Type::kCurrent)
-      .Then(
-          [subpixel_render_ratio](ScopedCanvas::TextMetrics metrics) {
-            metrics.size /= subpixel_render_ratio;
-            metrics.typographical_width /= subpixel_render_ratio.x;
-            metrics.origin /= subpixel_render_ratio;
-            return metrics;
-          },
           Executor::Type::kCurrent);
 }
 
-Future<ScopedCanvas::FontInfo> GlyphEmulator::GetFontInfo(
+Future<FontInfo> GlyphEmulator::GetFontInfo(
     const ScopedCanvas::TextOptions& options) {
   return canvas_source_.PrepareFont(" ", options)
       .Then([this, options]() { return canvas_source_.GetFontInfo(options); },
             Executor::Type::kCurrent);
 }
 
-Future<std::vector<ScopedCanvas::TextAndFontMetrics>>
-GlyphEmulator::GetFontAndTextMetrics(
+Future<std::vector<TextAndFontMetrics>> GlyphEmulator::GetFontAndTextMetrics(
     std::vector<ScopedCanvas::TextToMeasure> texts) {
   std::vector<Future<absl::Status>> prepare_futures;
   prepare_futures.reserve(texts.size());
@@ -228,8 +221,8 @@ GlyphEmulator::GetFontAndTextMetrics(
   }
   return Future<absl::Status>::CombineList(prepare_futures)
       .Then(
-          [this, texts = std::move(texts)]()
-              -> Future<std::vector<ScopedCanvas::TextAndFontMetrics>> {
+          [this, texts = std::move(
+                     texts)]() -> Future<std::vector<TextAndFontMetrics>> {
             return canvas_source_.GetFontAndTextMetrics(texts);
           },
           Executor::Type::kCurrent);
@@ -243,15 +236,59 @@ GlyphEmulator::GetGlyphs(absl::string_view text,
         std::make_unique<std::vector<Glyph>>());
   }
 
-  return canvas_source_.PrepareFont(text, options)
-      .Then([this, text = std::string(text),
-             options]() { return BreakIntoGlyphs(text, options); },
-            Executor::Type::kCurrent)
-      .Then(
-          [this, options](std::unique_ptr<std::vector<Glyph>> glyphs) {
-            return MeasureGlyphs(std::move(glyphs), options);
-          },
-          Executor::Type::kCurrent);
+  Future<absl::Status> prepare_font_future =
+      options.precomputed_metrics.has_value()
+          ? Future<absl::Status>(absl::OkStatus())
+          : canvas_source_.PrepareFont(text, options);
+
+  Future<std::unique_ptr<std::vector<Glyph>>> glyphs_future;
+  glyphs_future =
+      prepare_font_future
+          .Then([this, text = std::string(text),
+                 options]() { return BreakIntoGlyphs(text, options); },
+                Executor::Type::kCurrent)
+          .Then(
+              [this,
+               options](std::unique_ptr<std::vector<Glyph>> glyphs) mutable {
+                if (!options.precomputed_metrics.has_value() ||
+                    options.precomputed_metrics->glyph_metrics().size() !=
+                        glyphs->size()) {
+                  if (options.precomputed_metrics.has_value()) {
+                    IMP_LOG(imp::ERROR)
+                        << "Number of precomputed glyph metrics does not "
+                           "match number of glyphs";
+                  }
+                  return MeasureGlyphs(std::move(glyphs), options);
+                }
+                for (int i = 0;
+                     i < options.precomputed_metrics->glyph_metrics().size();
+                     i++) {
+                  Glyph& glyph = (*glyphs)[i];
+                  glyph.metrics =
+                      options.precomputed_metrics->glyph_metrics()[i];
+                }
+                return Future<std::unique_ptr<std::vector<Glyph>>>(
+                    std::move(glyphs));
+              },
+              Executor::Type::kCurrent);
+
+  if (options.render_scale.x > 1.0 || options.render_scale.y > 1.0) {
+    glyphs_future =
+        glyphs_future.Then([render_scale = options.render_scale](
+                               std::unique_ptr<std::vector<Glyph>> glyphs) {
+          for (auto& glyph : *glyphs) {
+            glyph.metrics.set_origin_x(glyph.metrics.origin_x() *
+                                       render_scale.x);
+            glyph.metrics.set_origin_y(glyph.metrics.origin_y() *
+                                       render_scale.y);
+            glyph.metrics.set_size_x(glyph.metrics.size_x() * render_scale.x);
+            glyph.metrics.set_size_y(glyph.metrics.size_y() * render_scale.y);
+          }
+          return glyphs;
+        });
+  }
+
+  return glyphs_future;
 }
 
 Future<std::unique_ptr<std::vector<GlyphEmulator::Glyph>>>
@@ -334,7 +371,40 @@ GlyphEmulator::BreakIntoGlyphs(
   // with accents/ligatures when running on Desktop.
   std::vector<Chunk> chunks =
       GetChunks(text, canvas_options.force_non_separable);
-  auto widths = canvas_source_.GetTextWidths(chunks, canvas_options);
+  Future<std::vector<std::vector<float>>> widths;
+
+  if (canvas_options.precomputed_metrics.has_value()) {
+    // We need to check if the number of precomputed metrics matches the total
+    // glyph count summed across all chunks. If it doesn't match then we would
+    // have an array out of bounds error.
+    size_t chunk_glyph_count = 0;
+    for (const Chunk& chunk : chunks) {
+      chunk_glyph_count += chunk.codepoint_count;
+    }
+    if (canvas_options.precomputed_metrics->glyph_metrics().size() ==
+        chunk_glyph_count) {
+      std::vector<std::vector<float>> chunk_widths;
+      int idx = 0;
+      for (int chunk_idx = 0; chunk_idx < chunks.size(); ++chunk_idx) {
+        const Chunk& chunk = chunks[chunk_idx];
+        chunk_widths.emplace_back(chunk.codepoint_count);
+        for (int i = 0; i < chunk.codepoint_count; ++i) {
+          chunk_widths[chunk_idx][i] =
+              canvas_options.precomputed_metrics->glyph_metrics()[idx++]
+                  .typographical_width();
+        }
+      }
+      widths.Return(chunk_widths);
+    } else {
+      IMP_LOG(imp::ERROR) << "Number of precomputed glyph metrics does not match total "
+                     "number of glyphs in chunks. Expected "
+                  << chunk_glyph_count << " but got "
+                  << canvas_options.precomputed_metrics->glyph_metrics().size();
+      widths = canvas_source_.GetTextWidths(chunks, canvas_options);
+    }
+  } else {
+    widths = canvas_source_.GetTextWidths(chunks, canvas_options);
+  }
   bool contains_rtl = ContainsRtl(text);
   return widths.Then(
       [chunks = std::move(chunks), contains_rtl,
@@ -377,9 +447,10 @@ GlyphEmulator::MeasureGlyphs(std::unique_ptr<std::vector<Glyph>> glyphs,
   return canvas_source_.MeasureGlyphs(glyphs_to_measure, canvas_options)
       .Then(
           [glyphs = std::move(glyphs)](
-              std::vector<ScopedCanvas::TextMetrics> text_metrics) mutable {
+              std::vector<TextMetrics> text_metrics) mutable {
             for (int i = 0; i < text_metrics.size(); i++) {
-              (*glyphs)[i].metrics = text_metrics[i];
+              Glyph& glyph = (*glyphs)[i];
+              glyph.metrics = text_metrics[i];
             }
             return std::move(glyphs);
           },
@@ -388,7 +459,7 @@ GlyphEmulator::MeasureGlyphs(std::unique_ptr<std::vector<Glyph>> glyphs,
 
 absl::StatusOr<ScopedCanvas::TextOptions>
 GlyphEmulator::CanvasOptionsFromGlyphEmulatorOptions(
-    const TextOptions& options, float2 subpixel_render_ratio) {
+    const TextOptions& options, std::optional<float2> subpixel_render_ratio) {
   FontHolder* font_holder = nullptr;
 
   ScopedCanvas::TextOptions canvas_options = kTextOptions;
@@ -434,8 +505,9 @@ GlyphEmulator::CanvasOptionsFromGlyphEmulatorOptions(
   canvas_options.text_tracking = options.text_tracking;
   canvas_options.should_measure_typographical_width =
       options.should_measure_typographical_width;
-  canvas_options.render_scale = subpixel_render_ratio.x;
+  canvas_options.render_scale = subpixel_render_ratio.value_or(float2{1.0f});
   canvas_options.force_non_separable = options.force_non_separable;
+  canvas_options.precomputed_metrics = options.precomputed_metrics;
   return canvas_options;
 }
 

@@ -35,7 +35,7 @@ namespace imp {
 
 namespace {
 
-std::string ExceptionToString(JNIEnv* env, jthrowable exception) {
+std::string ExceptionToString(JNIEnv* env, JniUniquePtr<jthrowable> exception) {
   JniUniquePtr<jclass> log_class =
       WrapJni(env, env->FindClass("android/util/Log"));
   jmethodID get_stack_trace_string_mid =
@@ -43,7 +43,7 @@ std::string ExceptionToString(JNIEnv* env, jthrowable exception) {
                              "(Ljava/lang/Throwable;)Ljava/lang/String;");
   JniUniquePtr<jstring> trace_jstring = WrapJni(
       env, static_cast<jstring>(env->CallStaticObjectMethod(
-               log_class.get(), get_stack_trace_string_mid, exception)));
+               log_class.get(), get_stack_trace_string_mid, exception.get())));
   return GetString(env, trace_jstring.get());
 }
 
@@ -52,9 +52,8 @@ std::string ExceptionToString(JNIEnv* env, jthrowable exception) {
 void AssertNoException(JNIEnv* env) {
   jthrowable exception = env->ExceptionOccurred();
   if (exception) {
-    JniUniquePtr<jthrowable> wrapped_exception = WrapJni(env, exception);
     env->ExceptionClear();
-    IMP_LOG(imp::FATAL) << ExceptionToString(env, exception);
+    IMP_LOG(imp::FATAL) << ExceptionToString(env, WrapJni(env, exception));
   }
 }
 

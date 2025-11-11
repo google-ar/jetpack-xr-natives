@@ -226,7 +226,6 @@ public abstract class FrameScheduler {
   @SuppressWarnings("RestrictTo")
   public <T> ListenableFuture<T> submitOnFrameThread(Callable<T> task) {
     ResolvableFuture<T> future = ResolvableFuture.create();
-
     Runnable runnable =
         () -> {
           try {

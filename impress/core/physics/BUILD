@@ -353,6 +353,7 @@ cc_library(
         ":static_mesh_collidable_shape",
         "//core:config",
         "//core/collision:ray",
+        "//core/common:invocable",
         "//core/common:owned_ptr",
         "//core/common:platform_helpers",
         "//core/common:registry",
@@ -368,6 +369,7 @@ cc_library(
         "@bullet//:BulletCollision",  # build_cleaner: keep
         "@bullet//:BulletDynamics",  # build_cleaner: keep
         "@bullet//:LinearMath",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/debugging:stacktrace",
         "@com_google_absl//absl/debugging:symbolize",
         "@com_google_absl//absl/log:check",

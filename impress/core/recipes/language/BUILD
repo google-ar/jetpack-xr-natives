@@ -94,7 +94,6 @@ cc_library(
         ":recipe_types_cc",
         "//core/async:future",
         "//core/common:invocable",
-        "//core/geometry/shapes",
         "//core/math",
         "//core/ncsb",
         "//core/proto:any_imp_proto",
@@ -108,7 +107,6 @@ cc_library(
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/types:variant",
         "@com_google_impress//core/common:log",
-        "@third_party//filament/filament:filament_hdrs",
     ],
     alwayslink = 1,
 )

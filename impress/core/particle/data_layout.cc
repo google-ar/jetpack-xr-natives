@@ -17,7 +17,7 @@
 #include "core/particle/data_layout.h"
 
 #include "absl/types/optional.h"
-#include "core/particle/particle_config.proto.imp.h"
+#include "core/particle/particle_emitter_state.proto.imp.h"
 
 namespace imp {
 namespace imp_particle {

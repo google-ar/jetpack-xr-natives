@@ -76,7 +76,7 @@ void PerformanceWindow::DrawImGui() { DrawMonitorPanels(); }
 // TODO refactor each monitor panel into its own class for custom
 // plotting now that we're using ImPlot
 void PerformanceWindow::DrawMonitorPanels() {
-  IMP_TRACE_NAME("PerformanceWindow::DrawMonitorPanels");
+  IMP_TRACE();
   ImGui::SliderFloat("Time span", &time_span_seconds_, 1,
                      details::kMaxTimeSpanSeconds, "%.1f s");
   bool clicked = ImGui::Button(

@@ -20,6 +20,7 @@
 #include <jni.h>
 
 #include <cstddef>
+#include <memory>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -32,6 +33,7 @@
 #include "absl/types/variant.h"
 #include "core/common/buffer_access.h"
 #include "core/common/context.h"
+#include "core/common/jni_context.h"
 #include "core/common/optional_error.h"
 #include "core/common/typed_id.h"
 #include "core/common/typed_vector.h"
@@ -168,12 +170,18 @@ namespace details {
 template <typename T>
 class JniDeleter {
  public:
-  JniDeleter(JNIEnv* env) : env_(env) {}
-  void operator()(T p) { DeleteRef(env_, p); }
-  JNIEnv* env() const { return env_; }
+  // `env` shall be JNIEnv of the calling thread.
+  JniDeleter(JNIEnv* env) : context_(env) {}
+
+  // If `p` is local reference, it shall be local to the calling thread.
+  void operator()(T p) { DeleteRef(env(), p); }
+
+  // Returns the JNIEnv of the calling thread which may be different from the
+  // one used to construct the deleter.
+  JNIEnv* env() const { return context_.GetJniEnv(); }
 
  private:
-  JNIEnv* env_;
+  JniContext context_;
 };
 
 }  // namespace details
@@ -564,6 +572,14 @@ class JavaWrapper {
     jmethodID id = ToMethodID(handle);
     return (jintArray)env->CallObjectMethod(Self(), id,
                                             std::forward<Args>(args)...);
+  }
+
+  template <class... Args>
+  jfloatArray CallFloatArrayMethod(JniHandle handle, Args&&... args) {
+    auto env = Env();
+    jmethodID id = ToMethodID(handle);
+    return (jfloatArray)env->CallObjectMethod(Self(), id,
+                                              std::forward<Args>(args)...);
   }
 
   // Helper for adding jni info.

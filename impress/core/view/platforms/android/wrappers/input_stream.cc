@@ -74,7 +74,7 @@ absl::StatusOr<absl::Cord> InputStream::BlockingReadFromJavaInputStream(
   }
 
   if (download_progress_info && content_length > 0) {
-    absl::MutexLock lock(&download_progress_info->download_progress_map_mutex);
+    absl::MutexLock lock(download_progress_info->download_progress_map_mutex);
     download_progress_info->download_progress_map.emplace(
         string_uri, resources::EntryProgressInfo{.downloaded_size = 0,
                                                  .total_size = content_length});
@@ -110,8 +110,7 @@ absl::StatusOr<absl::Cord> InputStream::BlockingReadFromJavaInputStream(
     if (download_progress_info && content_length > 0 &&
         (current_time - last_progress_update_time) >=
             kProgressUpdateIntervalLimit) {
-      absl::MutexLock lock(
-          &download_progress_info->download_progress_map_mutex);
+      absl::MutexLock lock(download_progress_info->download_progress_map_mutex);
       download_progress_info->download_progress_map[string_uri]
           .downloaded_size = current_length;
       last_progress_update_time = current_time;
@@ -140,7 +139,7 @@ absl::StatusOr<absl::Cord> InputStream::BlockingReadFromJavaInputStream(
   // Update the download progress one more time since there may be more chunks
   // read after the last ticking of kProgressUpdateIntervalLimit interval.
   if (download_progress_info) {
-    absl::MutexLock lock(&download_progress_info->download_progress_map_mutex);
+    absl::MutexLock lock(download_progress_info->download_progress_map_mutex);
 
     absl::Time current_time = ProfilingClock::GetMonotonicClockTime();
     download_progress_info->download_progress_map[string_uri].downloaded_size =

@@ -215,7 +215,6 @@ filament::TextureSampler ConvertSampler(
       ConvertWrapMode(imp::gltf::imp_proto::Sampler::REPEAT));
   result.setCompareMode(filament::TextureSampler::CompareMode::NONE,
                         filament::TextureSampler::CompareFunc::LE);
-  result.setAnisotropy(0);
   return result;
 }
 

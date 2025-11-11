@@ -73,10 +73,14 @@ JNI_METHOD(void, nClose)
 
 }  // extern "C"
 
-JavaMaterialCompilerClient::JavaMaterialCompilerClient(const Context& context)
+JavaMaterialCompilerClient::JavaMaterialCompilerClient(
+    const Context& context, absl::string_view native_library_override)
     : JavaWrapper(
           context, "com/google/ar/imp/materialcompiler/MaterialCompilerClient",
-          "(Landroid/content/Context;J)V", context.GetActivityContext(), this),
+          "(Landroid/content/Context;JLjava/lang/String;)V",
+          context.GetActivityContext(),
+          ToJava<JavaMaterialCompilerClient>(this),
+          ToJniString(context.GetJniEnv(), native_library_override).get()),
       activity_context_(context.GetActivityContext()) {
   // Set up method handles.
   start_service_method_ = GetMethodHandle("startService", "()V");

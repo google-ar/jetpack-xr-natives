@@ -591,7 +591,8 @@ absl::Status UsdzConsumer::ExtractEntity(const tinyusdz::Prim &prim,
   // Emit entity
   SkinId skin;
   MorphTargetBufferId morph_target_buffer;
-  std::vector<float> morph_target_weights;
+  std::vector<float> node_morph_target_weights;
+  std::vector<float> mesh_morph_target_weights;
   LightPunctualId light_punctual;
   AudioEmitterId audio_emitter;
   absl::optional<filament::Box> bounds;
@@ -602,9 +603,11 @@ absl::Status UsdzConsumer::ExtractEntity(const tinyusdz::Prim &prim,
     runtime.emplace(RuntimeData::Default());
   }
   MP_RETURN_IF_ERROR(AddEntity(bone, skin, morph_target_buffer,
-                            std::move(morph_target_weights), light_punctual,
-                            audio_emitter, std::move(entity_parts), bounds,
-                            runtime, child_count, prim.element_name())
+                            std::move(node_morph_target_weights),
+                            std::move(mesh_morph_target_weights),
+                            light_punctual, audio_emitter,
+                            std::move(entity_parts), bounds, runtime,
+                            child_count, prim.element_name())
                       .status());
 
   return absl::OkStatus();

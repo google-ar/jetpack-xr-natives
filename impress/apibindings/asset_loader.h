@@ -20,20 +20,22 @@
 #include <jni.h>
 
 #include <cstdint>
+#include <string>
 
+#include "apibindings/base_asset_loader.h"
 #include "core/common/jni_helpers.h"
 
 namespace imp {
 
 // JNI wrapper for the Java AssetLoader class.
-class AssetLoader : public JavaWrapper {
+class AssetLoader : public BaseAssetLoader, public JavaWrapper {
  public:
   AssetLoader(JNIEnv* env, jobject j_asset_loader);
 
   // Native version of the OnSuccess callback from the Java class.
-  void OnSuccess(std::intptr_t value);
+  void OnSuccess(std::intptr_t value) override;
   // Native version of the OnFailure callback from the Java class.
-  void OnFailure(std::string error_message);
+  void OnFailure(std::string error_message) override;
 
  private:
   JniHandle on_success_;

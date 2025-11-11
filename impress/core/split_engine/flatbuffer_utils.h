@@ -23,9 +23,9 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
-#include "filament/filament/include/filament/TextureSampler.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
+#include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/math/mat.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
@@ -103,6 +103,15 @@ template <typename T>
 const T *PointerFromOptional(const std::optional<T> &value) {
   return value.has_value() ? &value.value() : nullptr;
 }
+
+// Packs the proto MaterialPreCompileOptions to the flatbuffer format.
+flatbuffers::Offset<android_xr::schemas::MaterialPrecompileOptions> Pack(
+    flatbuffers::FlatBufferBuilder& fbb,
+    const MaterialPreCompileOptions& options);
+
+// Unpacks the proto MaterialPreCompileOptions from the flatbuffer format.
+MaterialPreCompileOptions UnPack(
+    const android_xr::schemas::MaterialPrecompileOptions& options);
 
 }  // namespace imp::split_engine
 

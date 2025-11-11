@@ -19,19 +19,22 @@
 
 #include <jni.h>
 
+#include <string>
+
+#include "apibindings/base_asset_animator.h"
 #include "core/common/jni_helpers.h"
 
 namespace imp {
 
 // JNI wrapper for the Java AssetAnimator class.
-class AssetAnimator : public JavaWrapper {
+class AssetAnimator : public BaseAssetAnimator, public JavaWrapper {
  public:
   AssetAnimator(JNIEnv* env, jobject j_asset_animator);
 
   // Native version of the OnComplete callback from the Java class.
-  void OnComplete();
+  void OnComplete() override;
   // Native version of the OnFailure callback from the Java class.
-  void OnFailure(std::string error_message);
+  void OnFailure(std::string error_message) override;
 
  private:
   JniHandle on_complete_;

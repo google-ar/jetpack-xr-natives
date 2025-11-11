@@ -126,6 +126,20 @@ class NodesChildrenLengthPointerDeclaration
                         PropertyPointer::PointerValue value) const override;
 };
 
+class NodesChildPointerDeclaration
+    : public PropertyPointer::PointerDeclaration {
+ public:
+  std::vector<TokenParser> GetTokenParsers() const override;
+
+  absl::StatusOr<PropertyPointer::PointerValue> GetValue(
+      NodeHandle gltf_model,
+      absl::Span<const ParsedToken> parsed_tokens) const override;
+
+  absl::Status SetValue(NodeHandle gltf_model,
+                        absl::Span<const ParsedToken> parsed_tokens,
+                        PropertyPointer::PointerValue value) const override;
+};
+
 class NodesParentPointerDeclaration
     : public PropertyPointer::PointerDeclaration {
  public:
@@ -154,6 +168,34 @@ class NodesMeshPointerDeclaration : public PropertyPointer::PointerDeclaration {
 };
 
 class NodesWeightsLengthPointerDeclaration
+    : public PropertyPointer::PointerDeclaration {
+ public:
+  std::vector<TokenParser> GetTokenParsers() const override;
+
+  absl::StatusOr<PropertyPointer::PointerValue> GetValue(
+      NodeHandle gltf_model,
+      absl::Span<const ParsedToken> parsed_tokens) const override;
+
+  absl::Status SetValue(NodeHandle gltf_model,
+                        absl::Span<const ParsedToken> parsed_tokens,
+                        PropertyPointer::PointerValue value) const override;
+};
+
+class NodesWeightsPointerDeclaration
+    : public PropertyPointer::PointerDeclaration {
+ public:
+  std::vector<TokenParser> GetTokenParsers() const override;
+
+  absl::StatusOr<PropertyPointer::PointerValue> GetValue(
+      NodeHandle gltf_model,
+      absl::Span<const ParsedToken> parsed_tokens) const override;
+
+  absl::Status SetValue(NodeHandle gltf_model,
+                        absl::Span<const ParsedToken> parsed_tokens,
+                        PropertyPointer::PointerValue value) const override;
+};
+
+class NodesWeightPointerDeclaration
     : public PropertyPointer::PointerDeclaration {
  public:
   std::vector<TokenParser> GetTokenParsers() const override;

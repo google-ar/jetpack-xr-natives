@@ -289,7 +289,7 @@ OptionalError GetAttributeInfo(
 // tangents, so this will convert quantized data if necessary but will not
 // compact existing float data.
 // Use AccessorReader::GetPackedFloatData() to prepare data before passing in.
-absl::StatusOr<BufferAccess> GetOrientations(const DenseDataAccess& normals,
+absl::StatusOr<BufferAccess> GetOrientations(DenseDataAccess& normals,
                                              DenseDataAccess* tangents) {
   if (normals.GetStride() != sizeof(float3)) {
     return absl::InvalidArgumentError("Normals is not packed.");
@@ -307,6 +307,7 @@ absl::StatusOr<BufferAccess> GetOrientations(const DenseDataAccess& normals,
     }
   }
 
+  normals.AlignData<float3>();
   filament::geometry::SurfaceOrientation* orientation_builder =
       filament::geometry::SurfaceOrientation::Builder()
           .vertexCount(vertex_count)

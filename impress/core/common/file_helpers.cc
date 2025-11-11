@@ -18,10 +18,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <string>
 
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "core/common/buffer_access.h"
@@ -132,6 +135,34 @@ OptionalError SaveFile(absl::string_view filename, const uint8_t* data,
 // Returns an error if `filename` does not exist or cannot be read.
 OptionalError LoadBinary(absl::string_view filename, BufferAccess* access) {
   return LoadAccess(filename, /*binary=*/true, access);
+}
+
+std::string GetRepoDirectory() {
+  std::string repo_directory = "unknown";
+  // Find the repo directory.
+  // If using "blaze run" use the environment variable set by blaze.
+  const char* wd = std::getenv("BUILD_WORKING_DIRECTORY");
+  if (wd) {
+    repo_directory = wd;
+  } else {
+    // Otherwise, get it as the current directory.
+    char cwd[PATH_MAX];
+    if (getcwd(cwd, sizeof(cwd)) != NULL) {
+      repo_directory = cwd;
+    }
+  }
+  return repo_directory;
+}
+
+absl::StatusOr<BufferAccess> LoadFile(absl::string_view filename) {
+  std::string filename_string = GetRepoDirectory();
+  filename_string += filename;
+  BufferAccess access;
+  OptionalError file = LoadAccess(filename, /*binary=*/false, &access);
+  if (file.ok()) {
+    return access;
+  }
+  return absl::NotFoundError(file.message());
 }
 
 // Saves the binary payload from `binary` into file `filename`.

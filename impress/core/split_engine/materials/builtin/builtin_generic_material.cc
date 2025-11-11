@@ -26,7 +26,7 @@
 #include "flatbuffers/verifier.h"
 #include "core/async/future.h"
 #include "core/common/small_source_location.h"
-#include "core/material_library/flatbuffer_utils.h"
+#include "core/common/type_helpers.h"
 #include "core/material_library/generic_material_impl.h"
 #include "core/material_library/generic_material_parameters.h"
 #include "core/material_library/generic_material_spec.h"
@@ -42,11 +42,6 @@
 namespace imp::split_engine {
 
 namespace {
-
-template <typename EnumA, typename EnumB>
-constexpr bool DoEnumsMatch(EnumA enum_a, EnumB enum_b) {
-  return static_cast<size_t>(enum_a) == static_cast<size_t>(enum_b);
-}
 
 // Verify android_xr::schemas::GenericMaterialLightingModel and
 // schemas::GenericMaterialLightingModel enums match.

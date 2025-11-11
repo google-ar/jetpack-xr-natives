@@ -66,37 +66,70 @@ Paint::Paint(const Context& context)
 }
 
 void Paint::SetTextSize(float text_size) {
+  if (last_text_size_.has_value() && *last_text_size_ == text_size) {
+    return;
+  }
   CallVoidMethod(set_text_size_, text_size);
+  last_text_size_ = text_size;
 }
 
 void Paint::SetLetterSpacing(float text_tracking) {
+  if (last_text_tracking_.has_value() &&
+      *last_text_tracking_ == text_tracking) {
+    return;
+  }
   CallVoidMethod(set_letter_spacing_, text_tracking);
+  last_text_tracking_ = text_tracking;
 }
 
 void Paint::SetStrokeWidth(float stroke_width) {
+  if (last_stroke_width_.has_value() && *last_stroke_width_ == stroke_width) {
+    return;
+  }
   CallVoidMethod(set_stroke_width_, stroke_width);
+  last_stroke_width_ = stroke_width;
 }
 
 void Paint::SetStyle(Style style) {
+  if (last_style_.has_value() && *last_style_ == style) {
+    return;
+  }
   StyleWrapper style_wrapper(Env());
   CallVoidMethod(set_style_, style_wrapper.GetEnum(style));
+  last_style_ = style;
 }
 
 void Paint::SetTextAlign(Align align) {
+  if (last_align_.has_value() && *last_align_ == align) {
+    return;
+  }
   AlignWrapper align_wrapper(Env());
   CallVoidMethod(set_text_align_, align_wrapper.GetEnum(align));
+  last_align_ = align;
 }
 
 void Paint::SetColor(float4 color) {
+  if (last_color_.has_value() && *last_color_ == color) {
+    return;
+  }
   CallVoidMethod(set_color_, ToColorInt(color));
+  last_color_ = color;
 }
 
 void Paint::SetTypeface(jobject typeface) {
+  if (last_typeface_.has_value() && *last_typeface_ == typeface) {
+    return;
+  }
   CallObjectMethod(set_typeface_, typeface);
+  last_typeface_ = typeface;
 }
 
 void Paint::SetAntiAlias(bool anti_alias) {
+  if (last_anti_alias_.has_value() && *last_anti_alias_ == anti_alias) {
+    return;
+  }
   CallVoidMethod(set_anti_alias_, anti_alias);
+  last_anti_alias_ = anti_alias;
 }
 
 std::unique_ptr<Rect> Paint::GetTextBounds(absl::string_view text) {

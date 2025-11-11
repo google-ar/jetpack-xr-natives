@@ -19,6 +19,7 @@
 
 #include <cstddef>
 
+#include "absl/container/flat_hash_map.h"
 #include "bullet/src/BulletCollision/BroadphaseCollision/btAxisSweep3.h"
 #include "bullet/src/BulletCollision/CollisionDispatch/btCollisionDispatcher.h"
 #include "bullet/src/BulletCollision/CollisionDispatch/btCollisionObject.h"
@@ -26,8 +27,10 @@
 #include "bullet/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.h"
 #include "bullet/src/BulletDynamics/Dynamics/btDiscreteDynamicsWorld.h"
 #include "bullet/src/BulletDynamics/Dynamics/btRigidBody.h"
+#include "core/common/invocable.h"
 #include "core/common/robin_map.h"
 #include "core/common/robin_set.h"
+#include "core/config.h"
 #include "core/math/vec.h"
 #include "core/ncsb/dispatcher/event.h"
 #include "core/ncsb/node_handle.h"
@@ -122,6 +125,19 @@ class PhysicsManager : public UpdateSystem::Updater<PhysicsManager> {
   // simulation is playing.
   void FastForwardSimulation(float duration);
 
+#if IMP_RUNTIME(DEV)
+  // Registers a visualizer for a collidable. Based on the assumption that one
+  // Node can only have one collidable.
+  void RegisterCollidableVisualizer(NodeHandle node,
+                                    imp::Invocable<void()> visualizer);
+
+  // Unregisters a visualizer for a collidable. Based on the assumption that one
+  // Node can only have one collidable.
+  void UnregisterCollidableVisualizer(NodeHandle node);
+
+  void DrawCollidables();
+#endif
+
  private:
   // Sends collision events to collided nodes.
   void ProcessCollisions();
@@ -142,6 +158,11 @@ class PhysicsManager : public UpdateSystem::Updater<PhysicsManager> {
   RobinSet<btTypedConstraint*> active_constraints_map_;
   bool play_simulation_;
   float simulation_step_speed_;
+
+#if IMP_RUNTIME(DEV)
+  absl::flat_hash_map<NodeHandle, imp::Invocable<void()>>
+      collidable_visualizer_map_;
+#endif
 };
 }  // namespace imp
 

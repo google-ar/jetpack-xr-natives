@@ -19,6 +19,7 @@
 #include <sys/types.h>
 
 #include <cstdint>
+#include <string>
 #include <utility>
 
 #include "core/common/log.h"
@@ -43,9 +44,13 @@ Future<filament::Material*> RuntimeMaterialCompiler::CompileMaterial(
     TargetApi target_api,
     const MaterialPreCompileOptions& material_precompile_options) {
   return Future<FlatBufferAccess<const schemas::CompileResponse>>::Schedule(
-             [this, source_material_string, platform, target_api]() {
-               return native_client_->CompileMaterial(source_material_string,
-                                                      platform, target_api);
+             // Copy the source material string to a std::string since the
+             // lambda may outlives the memory under the source_material_string
+             // parameter.
+             [this, source = std::string(source_material_string), platform,
+              target_api]() {
+               return native_client_->CompileMaterial(source, platform,
+                                                      target_api);
              },
              {.executor = Executor::Type::kBackground})
       .Then(

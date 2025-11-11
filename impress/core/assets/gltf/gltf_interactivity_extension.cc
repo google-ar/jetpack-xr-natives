@@ -31,8 +31,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "absl/types/variant.h"
-#include "core/animation/property_animator.h"
-#include "core/animation/property_animator_state.proto.imp.h"
 #include "core/assets/gltf/interactivity/converted_graph.h"
 #include "core/assets/gltf/interactivity/custom_statements/animation_start.h"
 #include "core/assets/gltf/interactivity/custom_statements/animation_stop.h"
@@ -67,9 +65,6 @@
 #include "core/common/robin_map.h"
 #include "core/common/typed_set_vector.h"
 #include "core/common/variant.h"
-#include "core/math/arrays.proto.imp.h"
-#include "core/math/quat.h"
-#include "core/math/vec.h"
 #include "core/model/entity_data.h"
 #include "core/model/model_data.h"
 #include "core/model/shared_data.h"
@@ -83,7 +78,6 @@
 #include "core/recipes/recipe_runner.h"
 #include "core/recipes/recipe_runner_state.proto.imp.h"
 #include "core/view/base_view.h"
-#include "core/view/framework/animation/animation.proto.imp.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/framework/assets/gltf_scene.h"
 #include "core/view/framework/scene/scene_system.h"
@@ -99,41 +93,6 @@ using PointerParser = gltf::PointerParser;
 namespace {
 
 enum InteractivityType : int { SELECTABILITY = 0, HOVERABILITY = 1 };
-
-// WorldPointerPropertyAnimation stores information of a PropertyAnimation
-// created from a world pointer.
-struct WorldPointerPropertyAnimation {
-  AnimationSampler sampler;
-  std::unique_ptr<PropertyAnimation> animation;
-};
-
-template <typename Fn>
-void WorldAnimateToFunction(NodeHandle root, NodeHandle node,
-                            AnimationSampler sampler, Fn animation_function) {
-  ComponentHandle<PropertyAnimator> property_animator =
-      root->GetOrAddComponent<PropertyAnimator>();
-
-  std::unique_ptr<WorldPointerPropertyAnimation> animation =
-      std::make_unique<WorldPointerPropertyAnimation>();
-  WorldPointerPropertyAnimation* animation_ptr = animation.get();
-  animation->sampler = sampler;
-
-  // Creates PropertyAnimation from the provided sampler and function.
-  absl::StatusOr<std::unique_ptr<PropertyAnimation>> property_animation =
-      property_animator->AddAnimation(&(animation->sampler),
-                                      animation_function);
-  if (!property_animation.ok()) {
-    IMP_LOG(imp::WARNING) << "Gltf_WorldAnimateTo_Translation failed to play: "
-                 << property_animation.status();
-    return;
-  }
-  animation->animation = std::move(*property_animation);
-
-  // Plays the animation.
-  Future<absl::Status> play_future = animation_ptr->animation->PlayAsync();
-  play_future.DependsOn(std::move(animation));
-  play_future.KeptBy(node);
-}
 
 /**
  * Iterates through the entire glTF node tree and returns a list of indices
@@ -580,66 +539,6 @@ GltfInteractivityExtension::System::System(BaseView* view)
       });
 
   recipe_system.RegisterFunction(
-      gltf::interactivity::kWorldAnimateToTranslationRecipeFunctionName,
-      [](NodeHandle root, NodeHandle node, float3 target, float duration) {
-        AnimationSampler sampler{
-            .times_seconds = {0.0f, duration},
-            .values_array =
-                AnimationValues{
-                    .type = Float3Array{.values = {node->GetLocalPosition(),
-                                                   target}}},
-            // TODO: Support other easing modes.
-            .interpolation = InterpolationMode::INTERPOLATION_EASE_IN_OUT_CUBIC,
-        };
-
-        WorldAnimateToFunction(root, node, sampler, [node](float3 value) {
-          if (node) {
-            node->SetLocalPosition(value);
-          }
-        });
-      });
-
-  recipe_system.RegisterFunction(
-      gltf::interactivity::kWorldAnimateToRotationRecipeFunctionName,
-      [](NodeHandle root, NodeHandle node, float4 target, float duration) {
-        AnimationSampler sampler{
-            .times_seconds = {0.0f, duration},
-            .values_array =
-                AnimationValues{
-                    .type = QuatfArray{.values = {node->GetLocalRotation(),
-                                                  quatf(target)}}},
-            // TODO: Support other easing modes.
-            .interpolation = InterpolationMode::INTERPOLATION_EASE_IN_OUT_CUBIC,
-        };
-
-        WorldAnimateToFunction(root, node, sampler, [node](quatf value) {
-          if (node) {
-            node->SetLocalRotation(value);
-          }
-        });
-      });
-
-  recipe_system.RegisterFunction(
-      gltf::interactivity::kWorldAnimateToScaleRecipeFunctionName,
-      [](NodeHandle root, NodeHandle node, float3 target, float duration) {
-        AnimationSampler sampler{
-            .times_seconds = {0.0f, duration},
-            .values_array =
-                AnimationValues{
-                    .type =
-                        Float3Array{.values = {node->GetLocalScale(), target}}},
-            // TODO: Support other easing modes.
-            .interpolation = InterpolationMode::INTERPOLATION_EASE_IN_OUT_CUBIC,
-        };
-
-        WorldAnimateToFunction(root, node, sampler, [node](float3 value) {
-          if (node) {
-            node->SetLocalScale(value);
-          }
-        });
-      });
-
-  recipe_system.RegisterFunction(
       gltf::interactivity::kPointerGetFunctionName,
       [this](recipe::Args args) -> absl::StatusOr<recipe::Variables> {
         // Arguments:
@@ -663,7 +562,7 @@ GltfInteractivityExtension::System::System(BaseView* view)
         }
         NodeHandle gltf_model = std::get<NodeHandle>(args[0]);
 
-        return_values[std::string(recipe::kDefaultOutputSocketName)] = args[1];
+        return_values[recipe::kDefaultOutputSocketName.data()] = args[1];
 
         std::string pointer_path;
         // The first two arguments are the default value and the gltf model node

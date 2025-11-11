@@ -285,7 +285,7 @@ struct EntityData {
   using ArrayType = StructureOfArrays<
       uint16_t, EntityParentId, EntityChildId, EntityChildId,
       std::vector<PartData>, BoneId, SkinId, MorphTargetBufferId,
-      std::vector<float>, LightPunctualId, AudioEmitterId,
+      std::vector<float>, std::vector<float>, LightPunctualId, AudioEmitterId,
       std::optional<filament::Box>, std::optional<RuntimeData>, std::string,
       uint16_t, int16_t, std::optional<NodeVisibility>,
       std::optional<NodeSelectability>, std::optional<NodeHoverability>>;
@@ -300,7 +300,8 @@ struct EntityData {
     kBone,
     kSkin,
     kMorphTargetBuffer,
-    kMorphTargetWeights,
+    kNodeMorphTargetWeights,
+    kMeshMorphTargetWeights,
     kLightPunctual,
     kAudioEmitter,
     kLocalBounds,
@@ -323,7 +324,8 @@ struct EntityData {
     Field<kBone> bone;
     Field<kSkin> skin;
     Field<kMorphTargetBuffer> morph_target_buffer;
-    Field<kMorphTargetWeights> morph_target_weights;
+    Field<kNodeMorphTargetWeights> node_morph_target_weights;
+    Field<kMeshMorphTargetWeights> mesh_morph_target_weights;
     Field<kLightPunctual> light_punctual;
     Field<kAudioEmitter> audio_emitter;
     Field<kLocalBounds> local_bounds;

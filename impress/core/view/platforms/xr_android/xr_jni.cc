@@ -105,7 +105,8 @@ JNI_METHOD(jlong, nCreateSessionHost)
  jlong openxr_reference_space_type, jboolean use_eye_gaze_interaction,
  jboolean use_android_depth_texture, jboolean use_xr_action_defaults,
  jboolean use_fb_color_space, jboolean enable_android_system_extensions,
- jfloat swapchain_size_multiplier) {
+ jfloat swapchain_size_multiplier,
+ jboolean use_global_passthrough_dimming_extensions) {
   context = env->NewGlobalRef(context);
   absl::Status status = InitializeLoader(env, context);
   if (!status.ok()) {
@@ -130,6 +131,8 @@ JNI_METHOD(jlong, nCreateSessionHost)
   options.use_fb_color_space = use_fb_color_space;
   options.enable_android_system_extensions = enable_android_system_extensions;
   options.swapchain_size_multiplier = swapchain_size_multiplier;
+  options.use_global_passthrough_dimming_extensions =
+      use_global_passthrough_dimming_extensions;
 
   auto session_host = std::make_unique<XrSessionHost>(std::move(view), options);
   auto& xr_action_controller =

@@ -17,11 +17,17 @@
 #include <array>
 #include <atomic>
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
+#include <string>
 #include <thread>  // NOLINT: Need to get current thread id.
 
+#include "absl/container/flat_hash_map.h"
+#include "absl/hash/hash.h"
 #include "core/common/log.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
 #include "core/config.h"
 #if IMP_PLATFORM(WASM)
@@ -44,6 +50,8 @@ std::array<std::array<ProfileResult, Profiler::kMaxSamples>,
 std::array<int, Profiler::kMaxFrames> Profiler::sample_counts_;
 std::array<uint32_t, Profiler::kMaxFrames> Profiler::frame_durations_ns_;
 std::atomic<int64_t> Profiler::last_frame_start_time_ns_{0};
+absl::Mutex Profiler::mu_;
+absl::flat_hash_map<std::thread::id, std::string> Profiler::thread_names_;
 
 int64_t Profiler::GetCurrentTimeNanos() {
   // Absl's GetCurrentTimeNanos() is millisecond-accurate in wasm builds.
@@ -92,6 +100,12 @@ SampleIndices Profiler::AddSample(const absl::string_view name) {
 }
 
 void Profiler::AdvanceFrame() {
+  static bool main_thread_set = false;
+  if (!main_thread_set) {
+    SetThreadName(kMainThreadName);
+    main_thread_set = true;
+  }
+
   int sample_index = sample_index_.load(std::memory_order_relaxed);
   sample_counts_[sample_index] = id_counter_.load(std::memory_order_relaxed);
 
@@ -182,5 +196,27 @@ std::thread::id Profiler::GetCachedThreadId() {
 bool Profiler::HasFrameRecorded(int frame_index) {
   return frame_index >= 0 && frame_index > frame_index_ - kMaxFrames &&
          frame_index < frame_index_;
+}
+
+void Profiler::SetThreadName(absl::string_view name) {
+  // Moohan repo only has deprecated MutexLock constructor.
+  // Didn't add nolint in case that changes.
+  absl::MutexLock lock(&mu_);
+  thread_names_[GetCachedThreadId()] = name;
+}
+
+absl::string_view Profiler::GetThreadName(std::thread::id thread_id) {
+  // Moohan repo only has deprecated MutexLock constructor.
+  // Didn't add nolint in case that changes.
+  absl::MutexLock lock(&mu_);
+  auto it = thread_names_.find(thread_id);
+  if (it != thread_names_.end()) {
+    return it->second;
+  }
+
+  // If the thread name is not found, generate a hash and use that as the name.
+  size_t hash = absl::Hash<std::thread::id>()(thread_id);
+  thread_names_.emplace(thread_id, absl::StrFormat("Thread %d", hash));
+  return thread_names_[thread_id];
 }
 }  // namespace imp

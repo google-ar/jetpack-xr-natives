@@ -25,11 +25,12 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "apibindings/asset_loader.h"
+#include "apibindings/base_asset_loader.h"
 #include "core/assets/asset_ptr.h"
 #include "core/lighting/image_based_lighting_asset.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/gltf_asset.h"
+#include "core/view/utils/asset.h"
 #include "imp.h"
 
 namespace imp {
@@ -41,13 +42,14 @@ class AssetPtrMap : public Rememberer {
 
   // Loads an image based lighting asset from the local assets folder or
   // a remote URL, and resolves the AssetLoader when it is ready.
-  void LoadImageBasedLightingAsset(absl::string_view path,
-                                   std::unique_ptr<AssetLoader> asset_loader);
+  void LoadImageBasedLightingAsset(
+      absl::string_view path, std::unique_ptr<BaseAssetLoader> asset_loader);
 
   // Loads an image based lighting asset pointer from a byte array, and resolves
   // the AssetLoader when it is ready.
-  void LoadImageBasedLightingAsset(absl::Cord data, absl::string_view key,
-                                   std::unique_ptr<AssetLoader> asset_loader);
+  void LoadImageBasedLightingAsset(
+      absl::Cord data, absl::string_view key,
+      std::unique_ptr<BaseAssetLoader> asset_loader);
 
   // Releases a previously loaded image based lighting asset from the pointer
   // map.
@@ -56,7 +58,7 @@ class AssetPtrMap : public Rememberer {
   // Loads the asset pointer of a glTF model from the local assets folder or
   // a remote URL, and resolves the AssetLoader when it is ready.
   void LoadGltfAsset(absl::string_view path,
-                     std::unique_ptr<AssetLoader> asset_loader);
+                     std::unique_ptr<BaseAssetLoader> asset_loader);
 
   // Loads the asset pointer of a glTF model from a absl::Cord, and returns a
   // unique identifier for it when it is ready. The data will be managed by the
@@ -64,7 +66,12 @@ class AssetPtrMap : public Rememberer {
   // with the data is destroyed. Resolves the AssetLoader with the unique
   // identifier when it is ready.
   void LoadGltfAsset(absl::Cord data, absl::string_view key,
-                     std::unique_ptr<AssetLoader> asset_loader);
+                     std::unique_ptr<BaseAssetLoader> asset_loader);
+
+  // Loads the asset pointer of a glTF model from an AssetDefinition, and
+  // resolves the AssetLoader when it is ready.
+  void LoadGltfAsset(imp::AssetDefinition asset_definition,
+                     std::unique_ptr<BaseAssetLoader> asset_loader);
 
   // Release a previously loaded glTF asset from the pointer map.
   absl::Status ReleaseGltfAsset(std::intptr_t gltf_token);
@@ -79,9 +86,8 @@ class AssetPtrMap : public Rememberer {
   absl::StatusOr<AssetPtr<ImageBasedLightingAsset>> GetStoredIblAsset(
       std::intptr_t ibl_token);
 
-  // Disposes the glTF models assets and nodes associated with the Impress
-  // view.
-  void DestroyGltfAssetsAndInstances();
+  // Disposes the glTF model assets associated with the Impress view.
+  void DestroyGltfAssets();
 
   // Disposes the image based lighting assets associated with the Impress
   // view.
@@ -104,7 +110,7 @@ class AssetPtrMap : public Rememberer {
       "\\+.~#?&//=]*)";
 
   void OnGltfAssetLoadingResult(absl::StatusOr<AssetPtr<GltfAsset>> asset_ptr,
-                                std::unique_ptr<AssetLoader> asset_loader) {
+                                std::unique_ptr<BaseAssetLoader> asset_loader) {
     if (!asset_ptr.status().ok()) {
       asset_loader->OnFailure(asset_ptr.status().ToString());
       return;
@@ -116,7 +122,7 @@ class AssetPtrMap : public Rememberer {
   }
 
   void OnIblAssetLoadingResult(AssetPtr<ImageBasedLightingAsset> asset_ptr,
-                               std::unique_ptr<AssetLoader> asset_loader) {
+                               std::unique_ptr<BaseAssetLoader> asset_loader) {
     if (!asset_ptr) {
       asset_loader->OnFailure("Failed to load image based lighting asset.");
       return;

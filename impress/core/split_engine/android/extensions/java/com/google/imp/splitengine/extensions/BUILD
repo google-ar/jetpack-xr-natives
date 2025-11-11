@@ -34,9 +34,6 @@ android_library(
         "RequestCallback.java",
     ],
     custom_package = "com.google.imp.splitengine.extensions",
-    javacopts = [
-        "-Xep:AndroidJdkLibsChecker:OFF",
-    ],
     tags = [
         "included_in_archive=//apibindings:impress_no_native_lib",
         "included_in_archive=//apibindings:impress_no_native_lib_aar",

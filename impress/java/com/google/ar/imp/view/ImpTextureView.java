@@ -21,7 +21,6 @@ import android.view.MotionEvent;
 import android.view.TextureView;
 import androidx.annotation.Nullable;
 import com.google.ar.imp.core.web.FragmentHost;
-
 import java.util.concurrent.Executor;
 
 /** A TextureView that wraps a ImpApi. */
@@ -99,12 +98,6 @@ public class ImpTextureView extends TextureView implements ImpApiProvider, Input
             postCreatedCallback,
             frameSchedulerFactory);
     return impApi;
-  }
-
-  // TODO Make more consistent with ImpSurfaceView
-  
-  public void createImpApiForTesting(ImpApi impApi) {
-    this.impApi = impApi;
   }
 
   @Override

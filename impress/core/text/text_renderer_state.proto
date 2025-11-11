@@ -19,6 +19,7 @@ package imp;
 import "core/canvas/fonts/font_params.proto";
 import "core/math/math.proto";
 import "core/proto/imp.proto";
+import "core/text/text_metrics.proto";
 
 // Renders a text string in 3D space.
 //
@@ -32,7 +33,7 @@ import "core/proto/imp.proto";
 // share glyphs instead of duplicating them in texture memory and repeatedly
 // re-drawing them.
 //
-// Next ID: 22
+// Next ID: 23
 message TextRendererState {
   // Type used for bottom_pivot and top_pivot. These two fields respectively
   // determine how a pivot.y value of 0 or a pivot.y value of 1 positions text
@@ -243,4 +244,9 @@ message TextRendererState {
   // probably involve adding a float2 to control this and moving the assumption
   // that supersampling only happens at a specific ratio and only on web.
   bool force_non_separable = 21;
+
+  // If set, when rendering the text the precomputed text metrics will be used
+  // to entirely skip having to do the computation.
+  optional TextAndFontMetrics precomputed_metrics = 22
+      [(imp.is_imported_standard_proto) = true];
 }

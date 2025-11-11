@@ -176,6 +176,7 @@ cc_library(
     deps = [
         ":common",
         ":context",
+        ":jni_context",
         ":typed_ids",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/cleanup",
@@ -912,5 +913,20 @@ cc_library(
         "@com_google_absl//absl/memory",
         "@com_google_impress//core/common:log",
     ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "copyable_ptr",
+    hdrs = ["copyable_ptr.h"],
+    copts = imp_copts(),
+    linkstatic = True,
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "optional_with_default",
+    hdrs = ["optional_with_default.h"],
+    copts = imp_copts(),
     alwayslink = 1,
 )

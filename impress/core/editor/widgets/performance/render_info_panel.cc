@@ -19,10 +19,13 @@
 #include "absl/time/time.h"
 #include "dear_imgui/imgui.h"
 #include "implot/implot.h"
+#include "core/common/trace.h"
 #include "core/editor/widgets/performance/config.h"
+#include "core/editor/widgets/performance/imgui_helper.h"
 #include "core/editor/widgets/performance/monitor_panel.h"
 #include "core/ncsb/base_component_pool.h"
 #include "core/ncsb/component_id.h"
+#include "core/performance/profiler.h"
 #include "core/sprite/sprite_renderer.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/gltf_renderer.h"
@@ -31,46 +34,75 @@ namespace imp::editor {
 
 namespace {
 constexpr int kStartingUpperBound = 100;
-constexpr int kMaxUpperBound = 3000;
-constexpr float kUpperBoundPadding = 1.25f;
 }  // namespace
 
 RenderInfoPanel::RenderInfoPanel(BaseView& view, int buffer_size)
-    : view_(view),
-      buffer_(buffer_size),
-      frame_number_(0),
-      upper_bound_(kStartingUpperBound) {}
+    : view_(view), buffer_(buffer_size), upper_bound_(kStartingUpperBound) {}
 
 RenderInfoPanel::~RenderInfoPanel() = default;
 
-void RenderInfoPanel::DrawPanel(int width, int height, int time_span_seconds) {
-  if (ImPlot::BeginPlot("##RenderInfo", ImVec2(width, height))) {
-    ImPlotCond plot_cond =
-        state_ == MonitorState::kPaused ? ImPlotCond_None : ImPlotCond_Always;
+void RenderInfoPanel::DrawLegend(float width, float height) {
+  ImGui::BeginChild("legend", ImVec2(width, height), true);
+  ImGui::Text("Rendering");
+  ImGui::Separator();
 
-    ImPlot::SetupAxes("Frame number", "Number of renderables");
+  int color_idx = 0;
+
+  ImGuiHelper::DrawLegendItem("Renderables", show_renderables_, color_idx++);
+  if (has_sprites_) {
+    ImGuiHelper::DrawLegendItem("Sprites", show_sprites_, color_idx++);
+  }
+  if (has_gltfs_) {
+    ImGuiHelper::DrawLegendItem("Gltfs", show_gltfs_, color_idx++);
+  }
+
+  ImGui::EndChild();
+}
+
+void RenderInfoPanel::DrawPanel(int width, int height, int time_span_seconds) {
+  IMP_TRACE();
+
+  constexpr float legend_width = 150.0f;
+  DrawLegend(legend_width, height);
+  ImGui::SameLine();  // Place plot to the right of the legend.
+
+  // Provides a border around the plot area since we removed the padding.
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+  ImGui::BeginChild("##RenderInfoChild", ImVec2(width, height), true);
+  ImGui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
+
+  // Remove padding around the plot area
+  ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(0, 0));
+  ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, ImVec2(0.0f, 0.1f));
+
+  if (ImPlot::BeginPlot("##RenderInfo", ImVec2(width, height),
+                        ImPlotFlags_NoLegend | ImPlotFlags_NoFrame)) {
+    ImPlot::SetupAxes(nullptr, nullptr,
+                      ImPlotAxisFlags_Lock | ImPlotAxisFlags_NoTickLabels,
+                      ImPlotAxisFlags_NoTickLabels | ImPlotAxisFlags_AutoFit);
     ImPlot::SetupAxisLimits(
         ImAxis_X1,
-        frame_number_ - time_span_seconds * details::kNumDisplayValuesPerSecond,
-        frame_number_, plot_cond);
+        Profiler::GetCurrentFrameIndex() -
+            time_span_seconds * details::kNumDisplayValuesPerSecond,
+        Profiler::GetCurrentFrameIndex(), ImPlotCond_Always);
 
-    ImPlot::SetupAxisLimits(ImAxis_Y1, 0, upper_bound_ * kUpperBoundPadding);
-    ImPlot::SetupAxisLimitsConstraints(ImAxis_Y1, 0, kMaxUpperBound);
     ImPlot::SetNextFillStyle(IMPLOT_AUTO_COL, 0.5f);
 
     if (!buffer_.empty()) {
-      ImPlot::PlotLine(
-          "Total Filament renderables", &buffer_.data()[0].frame_number,
-          &buffer_.data()[0].num_renderables, buffer_.data().size(), 0,
-          buffer_.marker(), sizeof(RenderInfo));
+      if (show_renderables_) {
+        ImPlot::PlotLine(
+            "Total Filament renderables", &buffer_.data()[0].frame_number,
+            &buffer_.data()[0].num_renderables, buffer_.data().size(), 0,
+            buffer_.marker(), sizeof(RenderInfo));
+      }
 
-      if (has_sprites_) {
+      if (has_sprites_ && show_sprites_) {
         ImPlot::PlotLine("Sprite Renderer", &buffer_.data()[0].frame_number,
                          &buffer_.data()[0].num_sprites, buffer_.data().size(),
                          0, buffer_.marker(), sizeof(RenderInfo));
       }
 
-      if (has_gltfs_) {
+      if (has_gltfs_ && show_gltfs_) {
         ImPlot::PlotLine("Gltf Renderer", &buffer_.data()[0].frame_number,
                          &buffer_.data()[0].num_gltfs, buffer_.data().size(), 0,
                          buffer_.marker(), sizeof(RenderInfo));
@@ -89,9 +121,11 @@ void RenderInfoPanel::DrawPanel(int width, int height, int time_span_seconds) {
         }
       }
     }
-
     ImPlot::EndPlot();
   }
+  ImPlot::PopStyleVar();  // ImPlotStyleVar_FitPadding
+  ImPlot::PopStyleVar();  // ImPlotStyleVar_PlotPadding
+  ImGui::EndChild();
 }
 
 void RenderInfoPanel::DrawHighlightFrame(int frame_number,
@@ -158,11 +192,11 @@ void RenderInfoPanel::Update(absl::Duration elapsed_time,
     num_gltf_renderers = gltf_pool->GetComponentCount();
   }
 
-  ++frame_number_;
-  buffer_.push_back(RenderInfo{.frame_number = frame_number_,
-                               .num_renderables = renderable_count,
-                               .num_sprites = num_sprite_renderers,
-                               .num_gltfs = num_gltf_renderers});
+  buffer_.push_back(RenderInfo{
+      .frame_number = static_cast<int>(Profiler::GetCurrentFrameIndex()),
+      .num_renderables = renderable_count,
+      .num_sprites = num_sprite_renderers,
+      .num_gltfs = num_gltf_renderers});
 }
 
 }  // namespace imp::editor

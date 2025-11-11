@@ -66,14 +66,23 @@ class Point2PointConstraint : public BaseConstraint, public Component {
   //    connected_node:
   //          - another node that holds one or the only rigid body of this
   //          constraint.
+  //
+  //     pivot:
+  //          - the pivot of the constraint frame in the owner node's local
+  //          space.
+  //
   //    auto_configure:
   //          - If true, set that constraint to respect the current
   //          transformation of node(s).
   //          - If false, set the constraint to respect the value of
   //          `connected_pivot`, which may move the nodes.
-  absl::Status Setup(NodeHandle connected_node, bool auto_configure = true,
-                     float3 connected_pivot = float3(0.0f),
-                     std::optional<float3> pivot = std::nullopt);
+  //
+  //     connected_pivot:
+  //          - the pivot of the constraint frame in the connected node's local
+  //          space.
+  absl::Status Setup(NodeHandle connected_node, float3 pivot = kZero3,
+                     bool auto_configure = true,
+                     float3 connected_pivot = kZero3);
 
   // Sets the constraint with the already filled state.
   absl::Status SetupWithState();

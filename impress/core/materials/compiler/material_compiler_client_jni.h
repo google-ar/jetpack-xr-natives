@@ -32,7 +32,9 @@ namespace imp {
 // in Java.
 class JavaMaterialCompilerClient : public JavaWrapper {
  public:
-  explicit JavaMaterialCompilerClient(const Context& context);
+  JavaMaterialCompilerClient(const Context& context,
+                             absl::string_view native_library_override);
+
   ~JavaMaterialCompilerClient() override;
 
   // Starts material compiler service in Android, by creating a new process.

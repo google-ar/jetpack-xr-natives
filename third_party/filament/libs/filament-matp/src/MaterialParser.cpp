@@ -68,8 +68,10 @@ utils::Status MaterialParser::processMaterial(const MaterialLexeme& jsonLexeme,
     JsonishParser parser(jlexer.getLexemes());
     std::unique_ptr<JsonishObject> const json = parser.parse();
 
-    if (json == nullptr) {
-        return utils::Status::internal("JsonishParser error (see above).");
+    // If it fails to parse, json value is always null.
+    if (utils::Status jsonishParseStatus = parser.getParseStatus(); !jsonishParseStatus.isOk() ||
+            json == nullptr) {
+        return jsonishParseStatus;
     }
 
     ParametersProcessor parametersProcessor;
@@ -457,13 +459,6 @@ utils::Status MaterialParser::processTemplateSubstitutions(
 utils::Status MaterialParser::parse(filamat::MaterialBuilder& builder,
         const Config& config, ssize_t& size, std::unique_ptr<const char[]>& buffer) {
 
-    if (builder.getFeatureLevel() > config.getFeatureLevel()) {
-        utils::io::sstream errorMessage;
-        errorMessage << "Material feature level (" << +builder.getFeatureLevel()
-            << ") is higher than maximum allowed (" << +config.getFeatureLevel() << ")";
-        return utils::Status::invalidArgument(errorMessage.c_str());
-    }
-
     // Before attempting an expensive lex, let's find out if we were sent pure JSON.
     utils::Status parsedStatus;
     if (utils::Status validJson = isValidJsonStart(buffer.get(), size_t(size));
@@ -475,6 +470,13 @@ utils::Status MaterialParser::parse(filamat::MaterialBuilder& builder,
 
     if (!parsedStatus.isOk()) {
         return parsedStatus;
+    }
+
+    if (builder.getFeatureLevel() > config.getFeatureLevel()) {
+        utils::io::sstream errorMessage;
+        errorMessage << "Material feature level (" << +builder.getFeatureLevel()
+            << ") is higher than maximum allowed (" << +config.getFeatureLevel() << ")";
+        return utils::Status::invalidArgument(errorMessage.c_str());
     }
 
     switch (config.getReflectionTarget()) {

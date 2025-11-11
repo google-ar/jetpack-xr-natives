@@ -31,6 +31,7 @@
 #include "core/common/small_source_location.h"
 #include "core/math/vec.h"
 #include "core/text/text_helpers.h"
+#include "core/text/text_metrics.proto.h"
 #include "core/view/base_view.h"
 
 namespace imp {
@@ -48,14 +49,14 @@ class AsyncCanvasSourceWrapper : public AsyncCanvasSource {
       absl::string_view text,
       const ScopedCanvas::TextOptions& text_options) override;
 
-  Future<std::vector<ScopedCanvas::TextAndFontMetrics>> GetFontAndTextMetrics(
+  Future<std::vector<TextAndFontMetrics>> GetFontAndTextMetrics(
       std::vector<ScopedCanvas::TextToMeasure> texts) override;
 
-  Future<ScopedCanvas::TextMetrics> MeasureGlyph(
+  Future<TextMetrics> MeasureGlyph(
       GlyphToMeasure glyph_to_measure,
       ScopedCanvas::TextOptions text_options) override;
 
-  Future<std::vector<ScopedCanvas::TextMetrics>> MeasureGlyphs(
+  Future<std::vector<TextMetrics>> MeasureGlyphs(
       std::vector<GlyphToMeasure> glyphs_to_measure,
       ScopedCanvas::TextOptions text_options) override;
 
@@ -71,7 +72,7 @@ class AsyncCanvasSourceWrapper : public AsyncCanvasSource {
   GetTextGlyphs(absl::string_view text,
                 const ScopedCanvas::TextOptions& text_options) override;
 
-  Future<ScopedCanvas::FontInfo> GetFontInfo(
+  Future<FontInfo> GetFontInfo(
       const ScopedCanvas::TextOptions& text_options) override;
 
   std::unique_ptr<AsyncScopedCanvas> StartDrawing(
@@ -89,8 +90,8 @@ class AsyncCanvasSourceWrapper : public AsyncCanvasSource {
  private:
   std::unique_ptr<CanvasSource> source_;
 
-  ScopedCanvas::TextMetrics MeasureGlyphSync(
-      GlyphToMeasure glyph_to_measure, ScopedCanvas::TextOptions text_options);
+  TextMetrics MeasureGlyphSync(GlyphToMeasure glyph_to_measure,
+                               ScopedCanvas::TextOptions text_options);
 };
 
 }  // namespace imp

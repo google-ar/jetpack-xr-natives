@@ -14,7 +14,7 @@
 
 load(
     "@flatbuffers//:build_defs.bzl",
-    "flatbuffer_cc_library",
+    "flatbuffer_library_public",
 )
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
@@ -25,7 +25,6 @@ load(
     "if_non_android",
     "imp_copts",
 )
-load("//third_party/flatbuffers:flatbuffers.bzl", "flatbuffers_library")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -36,19 +35,27 @@ package(
 
 licenses(["notice"])
 
-flatbuffer_cc_library(
-    name = "fbs",
+# Note: this has to use flatbuffer_library_public instead of flatbuffer_library because of how
+# headers are copied in AndroidXR builds. Simply building the :fbs target doesn't output the
+# material_compiler_ipc_generated.h in bazel-bin. The :fbs_srcs target has to be used explicitly.
+flatbuffer_library_public(
+    name = "fbs_srcs",
     srcs = ["schemas/material_compiler_ipc.fbs"],
+    outs = ["schemas/material_compiler_ipc_generated.h"],
     flatc_args = IMP_FLATC_ARGS,
     include_paths = IMP_FLATBUFFER_INCLUDE_PATHS,
-    includes = [
-    ],
+    language_flag = "-c",
     out_prefix = "schemas/",
 )
 
-flatbuffers_library(
-    name = "schemas/material_compiler_ipc_fbs",
-    srcs = ["schemas/material_compiler_ipc.fbs"],
+cc_library(
+    name = "fbs",
+    srcs = [":fbs_srcs"],
+    hdrs = [":fbs_srcs"],
+    deps = [
+        "@flatbuffers",
+    ],
+    alwayslink = 1,
 )
 
 cc_library(
@@ -74,10 +81,13 @@ cc_library(
         "//core/common:flatbuffer_helpers",
         "//core/ipc:common",
         "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/time",
         "@com_google_impress//core/common:log",
         "@flatbuffers",
         "@mediapipe//mediapipe/framework/port:status",
@@ -124,7 +134,8 @@ cc_library(
         "//core/common:context",
         "//core/view:base_view",
         "@com_google_absl//absl/memory",
-        "@com_google_impress//core/common:log",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:string_view",
     ],
     alwayslink = 1,
 )

@@ -129,6 +129,9 @@ class SplitEngineRenderer {
       const android_xr::schemas::BuiltInMaterialRequest& request) = 0;
   virtual Future<std::vector<BuiltInMaterialPtr>>
   PreloadBuiltInCustomMaterials() = 0;
+  virtual Future<absl::Status> CreateCustomMaterial(
+      BridgeId bridge_id,
+      const android_xr::schemas::AddCustomMaterialRequest& request) = 0;
 
   virtual absl::Status AddImageBasedLightingAssets(
       const android_xr::schemas::AddImageBasedLightingAssets& command) = 0;

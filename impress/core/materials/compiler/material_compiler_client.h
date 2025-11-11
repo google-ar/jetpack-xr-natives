@@ -16,11 +16,13 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_MATERIALS_COMPILER_MATERIAL_COMPILER_CLIENT_H_
 #define THIRD_PARTY_IMPRESS_CORE_MATERIALS_COMPILER_MATERIAL_COMPILER_CLIENT_H_
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 
 #include "absl/base/thread_annotations.h"
+#include "absl/container/flat_hash_map.h"
 #include "core/common/log.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -76,17 +78,19 @@ class MaterialCompilerClient {
   absl::Status SendRequest(const flatbuffers::FlatBufferBuilder& builder);
 
   absl::StatusOr<FlatBufferAccess<const schemas::CompileResponse>>
-  GetCompiledMaterialResponse();
+  GetCompiledMaterialResponse(uint64_t operation_id);
 
   ConnectionState connection_state_ = ConnectionState::kConnected;
 
-  // For now, we handle one request at a time.
-  std::unique_ptr<uint8_t[]> last_message_;
-  size_t last_message_size_ = 0;
+  // This is used to track the last operation id sent so the next request has a
+  // unique id.
+  std::atomic<uint64_t> last_operation_id_ = 0;
 
   absl::Mutex lock_;
-  absl::CondVar can_process_new_message_ ABSL_GUARDED_BY(lock_);
-  absl::CondVar processing_message_ ABSL_GUARDED_BY(lock_);
+  absl::flat_hash_map<
+      uint64_t,
+      absl::StatusOr<FlatBufferAccess<const schemas::CompileResponse>>>
+      processed_messages_ ABSL_GUARDED_BY(lock_);
 
   ipc::MessagePipe pipe_;
 };

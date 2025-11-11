@@ -54,7 +54,7 @@ constexpr char kApplicationName[] = "JetpackXrCore";
 // TODO: (broken link) - Change this from a global list to something more
 // flexible. Also split up between "required" and "optional" extensions, and
 // check against xrEnumerateInstanceExtensionProperties()
-const std::array<std::string, 14> kRequiredExtensions = {
+const std::array<std::string, 13> kRequiredExtensions = {
     // (broken link) start
     XR_ANDROID_ANCHOR_SHARING_EXPORT_EXTENSION_NAME,
     XR_ANDROID_DEPTH_TEXTURE_EXTENSION_NAME,
@@ -67,7 +67,6 @@ const std::array<std::string, 14> kRequiredExtensions = {
     XR_ANDROID_UNBOUNDED_REFERENCE_SPACE_EXTENSION_NAME,
     XR_EXT_FUTURE_EXTENSION_NAME,
     XR_EXT_HAND_TRACKING_EXTENSION_NAME,
-    XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME,
     XR_KHR_CONVERT_TIMESPEC_TIME_EXTENSION_NAME,
     XR_MND_HEADLESS_EXTENSION_NAME,
     // (broken link) end
@@ -436,6 +435,11 @@ bool OpenXrManager::InitExtensionFunctions() {
     XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
         instance_, "xrLocateGeospatialPoseANDROIDX1",
         reinterpret_cast<PFN_xrVoidFunction*>(&locate_geospatial_pose_)));
+    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+        instance_, "xrCreateGeospatialAnchorANDROIDX1",
+        reinterpret_cast<PFN_xrVoidFunction*>(&create_geospatial_anchor_)));
+
+    geospatial_exts_loaded_ = true;
   }
 
   return true;
@@ -912,6 +916,22 @@ int OpenXrManager::GetDepthImageHeight() {
   return depth_image_height_;
 }
 
+bool OpenXrManager::IsGeospatialSupported() {
+  absl::MutexLock lock(mutex_);
+  if (!geospatial_exts_loaded_) {
+    return false;
+  }
+
+  XrSystemGeospatialPropertiesANDROIDX1 geospatialSystemProperties{
+      XR_TYPE_SYSTEM_GEOSPATIAL_PROPERTIES_ANDROIDX1};
+  XrSystemProperties systemProperties{.type = XR_TYPE_SYSTEM_PROPERTIES,
+                                      .next = &geospatialSystemProperties};
+  XR_RETURN_IF_FAILED(
+      xrGetSystemProperties(instance_, system_id_, &systemProperties));
+
+  return geospatialSystemProperties.supportsGeospatial;
+}
+
 OpenXrManager::EarthState OpenXrManager::GetEarthState() {
   absl::MutexLock lock( mutex_ );
   // Geospatial has not been initialized.
@@ -987,7 +1007,7 @@ OpenXrManager::GeospatialPoseResult OpenXrManager::LocateGeospatialPose(
   }
 }
 
-bool OpenXrManager::Init(JNIEnv *env, jobject activity,
+bool OpenXrManager::Init(JNIEnv *env, jobject context,
                          XrReferenceSpaceType default_reference_space,
                          bool start_polling_thread) {
   java_env_ = env;
@@ -1012,13 +1032,13 @@ bool OpenXrManager::Init(JNIEnv *env, jobject activity,
   }
 
   // Load OpenXR.
-  if (!LoadOpenXr(activity)) {
+  if (!LoadOpenXr(context)) {
     DeInitWithLockHeld();
     return false;
   }
 
   // Create an OpenXR instance.
-  if (!CreateInstance(activity)) {
+  if (!CreateInstance()) {
     DeInitWithLockHeld();
     return false;
   }
@@ -1199,6 +1219,7 @@ void OpenXrManager::DeInitWithLockHeld(bool stop_polling_thread) {
     stop_polling_ = true;
     planes_trackable_tracker_ = XR_NULL_HANDLE;
     face_tracker_calibration_state_ = FaceTrackingCalibrationState::kUnknown;
+    geospatial_exts_loaded_ = false;
   }
   if (stop_polling_thread) {
     JoinPollingThread();
@@ -1227,7 +1248,7 @@ bool OpenXrManager::PauseSession() {
   return true;
 }
 
-bool OpenXrManager::LoadOpenXr(jobject activity) {
+bool OpenXrManager::LoadOpenXr(jobject context) {
   PFN_xrInitializeLoaderKHR initialize_loader = nullptr;
 
   // Gets a function pointer to the OpenXR loader.
@@ -1244,7 +1265,7 @@ bool OpenXrManager::LoadOpenXr(jobject activity) {
     loader_init_info_android = {
         .type = XR_TYPE_LOADER_INIT_INFO_ANDROID_KHR,
         .applicationVM = app_vm_,
-        .applicationContext = activity,
+        .applicationContext = context,
     };
   }
 
@@ -1288,7 +1309,7 @@ bool OpenXrManager::GetEnabledExtensions(
   return true;
 }
 
-bool OpenXrManager::CreateInstance(jobject activity) {
+bool OpenXrManager::CreateInstance() {
   std::vector<std::string> enabled_exts_str;
   if (!GetEnabledExtensions(enabled_exts_str)) {
     return false;
@@ -1300,19 +1321,8 @@ bool OpenXrManager::CreateInstance(jobject activity) {
     enabled_exts.push_back(ext.c_str());
   }
 
-  XrInstanceCreateInfoAndroidKHR create_info_android;
-  {
-    absl::MutexLock lock(mutex_);
-    create_info_android = {
-        .type = XR_TYPE_INSTANCE_CREATE_INFO_ANDROID_KHR,
-        .applicationVM = app_vm_,
-        .applicationActivity = activity,
-    };
-  }
-
   XrInstanceCreateInfo create_info = {
       .type = XR_TYPE_INSTANCE_CREATE_INFO,
-      .next = &create_info_android,
       .applicationInfo =
           {
               .apiVersion =
@@ -1826,6 +1836,7 @@ void OpenXrManager::CleanupGeospatial() {
     XrResult destroy_earth_result = destroy_earth_tracker_(earth_tracker_);
     earth_tracker_ = XR_NULL_HANDLE;
     last_earth_tracker_state_update_.reset();
+    geospatial_anchor_space_to_entity_.clear();
     if (XR_FAILED(destroy_earth_result)) {
       LOG(ERROR) << "Failed to destroy earth tracker with error: "
                  << XrEnumStr(destroy_earth_result);
@@ -2297,6 +2308,63 @@ OpenXrManager::CreateAnchorResult OpenXrManager::CreateAnchorForObject(
   return MapAnchorCreateResult(xr_result);
 }
 
+OpenXrManager::CreateAnchorResult OpenXrManager::CreateEarthAnchor(
+    XrTime time, double latitude, double longitude, double altitude,
+    const XrQuaternionf& east_up_south_quaternion, XrSpace* out_anchor_space) {
+  if (GetEarthState() != EarthState::kRunning) {
+    return CreateAnchorResult::kErrorRuntimeFailure;
+  }
+  {
+    absl::MutexLock lock(mutex_);
+    XrResult result;
+    XrSpatialEntityIdEXT anchor_entity_id;
+    XrSpatialEntityEXT anchor_entity;
+    XrGeospatialAnchorCreateInfoANDROIDX1 create_info = {
+        .type = XR_TYPE_GEOSPATIAL_ANCHOR_CREATE_INFO_ANDROIDX1,
+        .next = nullptr,
+        .earthTracker = earth_tracker_,
+        .geospatialPose =
+            {
+                .eastUpSouthOrientation = east_up_south_quaternion,
+                .latitude = latitude,
+                .longitude = longitude,
+                .altitude = altitude,
+            },
+    };
+
+    result = create_geospatial_anchor_(geospatial_anchors_spatial_context_,
+                                       &create_info, &anchor_entity_id,
+                                       &anchor_entity);
+
+    if (XR_FAILED(result)) {
+      LOG(ERROR) << "Failed to create geospatial anchor with: "
+                 << XrEnumStr(result);
+      // TODO: Handle more specific error translation.
+      return CreateAnchorResult::kErrorRuntimeFailure;
+    } else {
+      XrSpatialAnchorSpaceFromIdCreateInfoANDROIDX1 space_create_info = {
+          .type = XR_TYPE_SPATIAL_ANCHOR_SPACE_FROM_ID_CREATE_INFO_ANDROIDX1,
+          .next = nullptr,
+          .anchorEntityId = anchor_entity_id,
+      };
+
+      result = create_spatial_anchor_space_from_id_(
+          session_, geospatial_anchors_spatial_context_, &space_create_info,
+          out_anchor_space);
+      if (XR_FAILED(result)) {
+        LOG(ERROR) << "Failed to create spatial anchor space from id with: "
+                   << XrEnumStr(result);
+        destroy_spatial_entity_(anchor_entity);
+        return CreateAnchorResult::kErrorRuntimeFailure;
+      }
+
+      geospatial_anchor_space_to_entity_[*out_anchor_space] = anchor_entity;
+    }
+
+    return MapAnchorCreateResult(result);
+  }
+}
+
 bool OpenXrManager::GetAnchorLocationData(
     XrSpace anchor_space, XrTime time, XrSpaceLocation *out_anchor_location) {
   XR_RETURN_IF_FAILED(xrLocateSpace(anchor_space,
@@ -2345,6 +2413,15 @@ bool OpenXrManager::CreateSemanticAnchor(
 }
 
 bool OpenXrManager::DestroyAnchor(XrSpace anchor_space) {
+  {
+    absl::MutexLock lock(mutex_);
+    auto it = geospatial_anchor_space_to_entity_.find(anchor_space);
+    if (it != geospatial_anchor_space_to_entity_.end()) {
+      destroy_spatial_entity_(it->second);
+      geospatial_anchor_space_to_entity_.erase(it);
+    }
+  }
+
   XR_RETURN_IF_FAILED(xrDestroySpace(anchor_space));
   return true;
 }

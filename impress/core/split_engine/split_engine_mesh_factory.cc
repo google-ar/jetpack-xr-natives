@@ -28,6 +28,7 @@
 #include "filament/filament/include/filament/MorphTargetBuffer.h"
 #include "filament/libs/filabridge/include/filament/MaterialEnums.h"
 #include "core/common/schemas/render_generated.h"
+#include "core/common/type_helpers.h"
 #include "core/common/typed_vector.h"
 #include "core/loader/creator/inflight_creation.h"
 #include "core/loader/creator/model_creator_helper.h"
@@ -56,11 +57,6 @@ static constexpr const size_t kMaxTargetsCount =
 template <typename T>
 inline bool VerifyEnum(T value) {
   return value >= T::MIN && value <= T::MAX;
-}
-
-template <typename EnumA, typename EnumB>
-constexpr bool DoEnumsMatch(EnumA enum_a, EnumB enum_b) {
-  return static_cast<size_t>(enum_a) == static_cast<size_t>(enum_b);
 }
 
 // Verify android_xr::schemas::VertexAttribute and filament::VertexAttribute

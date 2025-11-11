@@ -27,31 +27,31 @@ message Generic6DofConstraintState {
   // The node that holds a rigid body A that is subject to this constraint.
   NodeSceneHandle connected_node = 1;
 
-  // The pivot of the constraint frame in the connected node(that holds rigid
-  // body A)'s local space.
-  Float3 connected_pivot = 2;
-
-  // The axis of the constraint frame in the connected node(that holds rigid
-  // body A)'s local space.
-  Float3 connected_axis = 3;
-
-  // The up axis of the constraint frame in the connected node(that holds rigid
-  // body A)'s local space. Together with the axis, it defines the constraint
-  // rotation.
-  Float3 connected_up_axis = 4;
-
   // Indicates the pivot/offset of the constraint frame from rigid body (B).
   // Note that rigid body (B) is attached the same node that owns the
   // constraint.
-  Float3 pivot = 5 [(imp.optional_type) = ABSL_OPTIONAL];
+  Float3 pivot = 2;
 
   // The rotation for the constraint frame from rigid body (B).
-  Float3 axis = 6 [(imp.optional_type) = ABSL_OPTIONAL];
-  Float3 up_axis = 7 [(imp.optional_type) = ABSL_OPTIONAL];
+  Float3 axis = 3 [(imp.optional_type) = ABSL_OPTIONAL];
+  Float3 up_axis = 4 [(imp.optional_type) = ABSL_OPTIONAL];
 
   // if it will calculate the connected pivot and axis based on the transforms
   // of the two nodes (constraint node and connected node)
-  bool auto_configure = 8;
+  bool auto_configure = 5;
+
+  // The pivot of the constraint frame in the connected node(that holds rigid
+  // body A)'s local space. It is used only when auto_configure is false.
+  Float3 connected_pivot = 6 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // The axis of the constraint frame in the connected node(that holds rigid
+  // body A)'s local space. It is used only when auto_configure is false.
+  Float3 connected_axis = 7 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // The up axis of the constraint frame in the connected node(that holds rigid
+  // body A)'s local space. Together with the axis, it defines the constraint
+  // rotation. It is used only when auto_configure is false.
+  Float3 connected_up_axis = 8 [(imp.optional_type) = ABSL_OPTIONAL];
 
   // the limits for each linear axes
   Float3 linear_lower_limit = 9;

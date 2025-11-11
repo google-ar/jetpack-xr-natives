@@ -18,10 +18,10 @@
 #include <string>
 #include <vector>
 
+#include "absl/algorithm/container.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/log/check.h"
 #include "absl/strings/str_cat.h"
-#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
 #include "dear_imgui/imgui_internal.h"  // IWYU pragma: keep
@@ -52,10 +52,35 @@ constexpr absl::string_view kUnamedNodeLabel = "<node>";
 
 namespace {
 static constexpr absl::string_view kNodesHeaderLabel = "Nodes";
+
+constexpr VirtualKeyCode kMultiSelectKeyCodes[] = {
+    VirtualKeyCode::VK_LEFT_SUPER,
+    VirtualKeyCode::VK_RIGHT_SUPER,
+    VirtualKeyCode::VK_LEFT_CTRL,
+    VirtualKeyCode::VK_RIGHT_CTRL,
+};
+
 #if IMP_PLATFORM(ANDROID) || IMP_PLATFORM(IOS)
 // How long the user has to hold a menu item to open the context menu.
 static constexpr absl::Duration kLongTapThresholdMs = absl::Milliseconds(500);
 #endif
+
+std::string GetPasteLabel(const EditorClipboard& editor_clipboard) {
+  const std::vector<absl::string_view>& clipboard_node_names =
+      editor_clipboard.GetClipboardNodeNames();
+  std::string paste_label_suffix;
+  if (clipboard_node_names.size() == 1) {
+    if (clipboard_node_names.front().empty()) {
+      paste_label_suffix = kUnamedNodeLabel;
+    } else {
+      paste_label_suffix =
+          absl::StrCat("\"", clipboard_node_names.front(), "\"");
+    }
+  } else {
+    paste_label_suffix = absl::StrCat(clipboard_node_names.size(), " nodes");
+  }
+  return absl::StrCat("Paste ", paste_label_suffix);
+}
 
 // Adds all ancestors of the given node to the set of filtered nodes.
 void AddAllAncestors(RobinSet<NodeHandle>& filtered_nodes, NodeHandle node) {
@@ -90,17 +115,27 @@ Hierarchy::Hierarchy(BaseView& view, absl::string_view filter)
       },
       this);
 
-  editor.GetDispatcher().Connect(
-      [this](const imp::KeyboardEvent& event) {
-        if (HasKeyModifier(KeyModifier::CTRL_OR_GUI, event.key.modifiers)) {
-          is_multi_selection_enabled_ =
-              event.type == KeyboardEventType::kOnDown ? true : false;
-          return;
-        }
+  const auto handle_keyboard_event = [this](const imp::KeyboardEvent& event) {
+    // Only handle multi-select keys.
+    if (!absl::c_linear_search(kMultiSelectKeyCodes, event.key.code)) {
+      return;
+    }
+    // We can check if we should multi-select or not, based on whether or not
+    // held_multi_select_keys_ is empty.
+    switch (event.type) {
+      case KeyboardEventType::kOnDown:
+        held_multi_select_keys_.insert(event.key.code);
+        break;
+      case KeyboardEventType::kOnUp:
+        held_multi_select_keys_.erase(event.key.code);
+        break;
+      default:
+        return;
+    }
+  };
 
-        is_multi_selection_enabled_ = false;
-      },
-      this);
+  editor.GetDispatcher().Connect(handle_keyboard_event, this);
+  view_.GetDispatcher().Connect(handle_keyboard_event, this);
 }
 
 ImGuiTreeNodeFlags Hierarchy::GetTreeNodeFlags() const {
@@ -176,6 +211,11 @@ void Hierarchy::DrawHierarchy(
 
   if (node) {
     for (NodeHandle child : node->GetChildren()) {
+      // Because of operations like multi-select -> delete, etc, it's possible
+      // for a child node to be removed in between DrawHierarchy calls.
+      if (!child) {
+        continue;
+      }
       // Recurse with the children.
       DrawHierarchy(child, filtered_nodes, selected_nodes);
     }
@@ -222,8 +262,8 @@ bool Hierarchy::DrawNode(
                            ImGuiCond_Always);
   } else {
     // If the filter is empty, set the expanded state to the set of expanded
-    // nodes controlled by the user. This restores the hierarchy to its original
-    // state if the user deletes the filter.
+    // nodes controlled by the user. This restores the hierarchy to its
+    // original state if the user deletes the filter.
     manually_collapsed_nodes_.clear();
     ImGui::SetNextItemOpen(manually_expanded_nodes_.contains(node),
                            ImGuiCond_Always);
@@ -261,11 +301,11 @@ bool Hierarchy::DrawNode(
   // Use IsMouseReleased && IsItemHovered instead of IsItemClicked becaues
   // IsItemClicked is called on mouse down, but we want the selection to occur
   // on mouse-up. This makes it possible to drag and drop nodes from the
-  // hierarchy panel to the node_details panel, and is more consistent with the
-  // rest of the UX.
+  // hierarchy panel to the node_details panel, and is more consistent with
+  // the rest of the UX.
   if (ImGui::IsMouseReleased(0) &&
       ImGui::IsItemHovered(ImGuiHoveredFlags_None) && is_mouse_beyond_arrow) {
-    if (is_multi_selection_enabled_) {
+    if (!held_multi_select_keys_.empty()) {
       editor.SelectNode(node, Editor::SelectionMode::kMultipleNodes);
     } else {
       if (is_node_selected && selected_nodes.size() == 1) {
@@ -289,36 +329,27 @@ bool Hierarchy::DrawNode(
     EditorClipboard& editor_clipboard =
         view_.GetRegistry().GetOrCreate<EditorClipboard>(&view_);
     if (ImGui::MenuItem("Cut")) {
-      editor.SelectNode(node);
+      if (!is_node_selected) {
+        editor.SelectNode(node);
+      }
       editor_clipboard.Cut();
     }
     if (ImGui::MenuItem("Copy")) {
-      editor.SelectNode(node);
+      if (!is_node_selected) {
+        editor.SelectNode(node);
+      }
       editor_clipboard.Copy();
     }
-    if (editor_clipboard.HasClipboardNode()) {
-      absl::string_view clipboard_node_name =
-          *editor_clipboard.GetClipboardNodeName();
-      if (clipboard_node_name.empty()) {
-        clipboard_node_name = kUnamedNodeLabel;
-      }
-      if (ImGui::MenuItem(
-              absl::StrFormat("Paste \"%s\"", clipboard_node_name).c_str())) {
-        editor.SelectNode(node);
-        editor_clipboard.Paste();
-      }
+    if (!editor_clipboard.IsEmpty() &&
+        ImGui::MenuItem(GetPasteLabel(editor_clipboard).c_str())) {
+      editor.SelectNode(node);
+      editor_clipboard.Paste();
     }
     if (ImGui::MenuItem("Delete")) {
-      // If the node is selected, delete all selected nodes. Otherwise, delete
-      // the current node.
-      std::vector<NodeHandle> nodes_to_delete =
-          is_node_selected ? std::vector<NodeHandle>(selected_nodes.begin(),
-                                                     selected_nodes.end())
-                           : std::vector<NodeHandle>{node};
-      editor.SelectNode(NodeHandle());
-      for (auto& selected_node : nodes_to_delete) {
-        view_.DestroyNode(selected_node);
+      if (!is_node_selected) {
+        editor.SelectNode(node);
       }
+      editor_clipboard.Delete();
     }
     if (!has_multiple_selection && ImGui::MenuItem("Add parent node")) {
       NodeHandle parent = view_.CreateNode();
@@ -388,8 +419,9 @@ bool Hierarchy::DrawNode(
     if (is_valid_target) {
       // It's a valid drop target.
       if (ImGui::BeginDragDropTarget()) {
-        // Accept the drag & drop payload node, which clears the payload. Ensure
-        // that the payload is the same as the one we peeked at earlier.
+        // Accept the drag & drop payload node, which clears the payload.
+        // Ensure that the payload is the same as the one we peeked at
+        // earlier.
         std::vector<NodeHandle> drag_and_drop_payload_nodes =
             AcceptDragAndDropPayloadNodes();
         if (!drag_and_drop_payload_nodes.empty()) {

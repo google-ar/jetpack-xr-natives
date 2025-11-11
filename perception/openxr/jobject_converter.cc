@@ -27,19 +27,6 @@ using ::androidx::xr::common::GetJxrClass;
 using ::androidx::xr::common::GetJxrFullClassName;
 using ::androidx::xr::common::PACKAGE_MATH;
 
-XrQuaternionf ConvertToXrQuaternionf(JNIEnv* env, const jobject& quaternion) {
-  jclass quaternion_cls = GetJxrClass(env, PACKAGE_MATH, "Quaternion");
-  jmethodID x_mid = env->GetMethodID(quaternion_cls, "getX", "()F");
-  jmethodID y_mid = env->GetMethodID(quaternion_cls, "getY", "()F");
-  jmethodID z_mid = env->GetMethodID(quaternion_cls, "getZ", "()F");
-  jmethodID w_mid = env->GetMethodID(quaternion_cls, "getW", "()F");
-  float x = env->CallFloatMethod(quaternion, x_mid);
-  float y = env->CallFloatMethod(quaternion, y_mid);
-  float z = env->CallFloatMethod(quaternion, z_mid);
-  float w = env->CallFloatMethod(quaternion, w_mid);
-  return XrQuaternionf{.x = x, .y = y, .z = z, .w = w};
-}
-
 XrVector3f ConvertToXrVector3f(JNIEnv* env, const jobject& vector3) {
   jclass vector3_cls = GetJxrClass(env, PACKAGE_MATH, "Vector3");
   jmethodID x_mid = env->GetMethodID(vector3_cls, "getX", "()F");
@@ -53,6 +40,19 @@ XrVector3f ConvertToXrVector3f(JNIEnv* env, const jobject& vector3) {
 }  // namespace
 
 namespace androidx::xr::openxr {
+XrQuaternionf ConvertToXrQuaternionf(JNIEnv* env, const jobject& quaternion) {
+  jclass quaternion_cls = GetJxrClass(env, PACKAGE_MATH, "Quaternion");
+  jmethodID x_mid = env->GetMethodID(quaternion_cls, "getX", "()F");
+  jmethodID y_mid = env->GetMethodID(quaternion_cls, "getY", "()F");
+  jmethodID z_mid = env->GetMethodID(quaternion_cls, "getZ", "()F");
+  jmethodID w_mid = env->GetMethodID(quaternion_cls, "getW", "()F");
+  float x = env->CallFloatMethod(quaternion, x_mid);
+  float y = env->CallFloatMethod(quaternion, y_mid);
+  float z = env->CallFloatMethod(quaternion, z_mid);
+  float w = env->CallFloatMethod(quaternion, w_mid);
+  return XrQuaternionf{.x = x, .y = y, .z = z, .w = w};
+}
+
 XrPosef ConvertToXrPosef(JNIEnv* env, const jobject& pose) {
   jclass pose_cls = GetJxrClass(env, PACKAGE_MATH, "Pose");
   jmethodID translation_mid = env->GetMethodID(

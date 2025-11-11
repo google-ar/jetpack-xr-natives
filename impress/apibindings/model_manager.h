@@ -1,11 +1,11 @@
 /*
- * Copyright 2024 Google LLC
+ * Copyright 2025 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,89 +20,77 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <optional>
-#include <tuple>
 
-#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
-#include "apibindings/asset_animator.h"
-#include "apibindings/asset_loader.h"
+#include "apibindings/base_asset_animator.h"
+#include "apibindings/base_asset_loader.h"
 #include "core/math/math.h"
-#include "core/ncsb/component_handle.h"
-#include "core/view/framework/animation/gltf_animator.h"
-#include "core/view/framework/assets/gltf_mesh.h"
 #include "core/view/utils/frame_time.h"
 
 namespace imp {
-
-class ImpressApiView;
 
 // Manages glTF model loading, instantiation, animation, and properties for the
 // Jetpack XR Scene.
 // TODO: Add unit tests for this class.
 class ModelManager {
  public:
-  explicit ModelManager(ImpressApiView& view);
   virtual ~ModelManager() = default;
 
   // Loads the asset pointer of a glTF model from the local assets folder or
   // a remote URL, and resolves the asset loader when it is ready.
   virtual void LoadGltfAsset(absl::string_view path,
-                             std::unique_ptr<AssetLoader> asset_loader);
-  // Loads the asset pointer of a glTF model from a absl::Cord.
+                             std::unique_ptr<BaseAssetLoader> asset_loader) = 0;
+
+  // Loads the asset pointer of an glTF model from a byte array, and returns a
+  // unique identifier for it when it is ready.
   virtual void LoadGltfAsset(absl::Cord data, absl::string_view key,
-                             std::unique_ptr<AssetLoader> asset_loader);
-  // Releases the asset pointer of previously loaded glTF asset.
-  virtual absl::Status ReleaseGltfAsset(std::intptr_t gltf_token);
+                             std::unique_ptr<BaseAssetLoader> asset_loader) = 0;
+
+  // Releases the asset pointer of previously loaded glTF model.
+  virtual absl::Status ReleaseGltfAsset(std::intptr_t gltf_token) = 0;
+
   // Instantiates a glTF model and returns an entity ID.
   virtual absl::StatusOr<int32_t> InstanceGltfModel(std::intptr_t gltf_token,
-                                                    bool enable_collider);
+                                                    bool enable_collider) = 0;
+
   // Attaches or detaches a collider to a glTF model.
   virtual absl::Status SetGltfModelColliderEnabled(int32_t node,
-                                                   bool enable_collider);
+                                                   bool enable_collider) = 0;
+
   // Animates a glTF model.
-  virtual void AnimateGltfModel(int32_t node, absl::string_view animation_name,
-                                bool loop,
-                                std::unique_ptr<AssetAnimator> asset_animator);
+  virtual void AnimateGltfModel(
+      int32_t node, absl::string_view animation_name, bool loop,
+      std::unique_ptr<BaseAssetAnimator> asset_animator) = 0;
+
   // Stops the animation of a glTF model.
-  virtual absl::Status StopGltfModelAnimation(int32_t node);
+  virtual absl::Status StopGltfModelAnimation(int32_t node) = 0;
+
+  // Pause or resume the animation of a glTF model. If `toggle` = true resume
+  // the animation, `toggle` = false pause the animation.
+  virtual absl::Status ToggleGltfModelAnimation(int32_t node, bool toggle) = 0;
+
   // Returns the local space unscaled bounds of the glTF model.
-  virtual absl::StatusOr<imp::Box> GetGltfModelLocalBounds(int32_t node);
+  virtual absl::StatusOr<imp::Box> GetGltfModelLocalBounds(int32_t node) = 0;
 
   // Sets the material override for a node's mesh at a given primitive index.
   virtual absl::Status SetMaterialOverride(int32_t node_id,
                                            std::intptr_t material,
                                            absl::string_view node_name,
-                                           size_t primitive_index);
+                                           size_t primitive_index) = 0;
 
   // Clears the material override for a node's mesh at a given primitive index.
   virtual absl::Status ClearMaterialOverride(int32_t node_id,
                                              absl::string_view node_name,
-                                             size_t primitive_index);
+                                             size_t primitive_index) = 0;
 
   // Called by ImpressApiView::Update() to manage animation callbacks.
-  void Update(const FrameTime& frame_time);
+  virtual void Update(const FrameTime& frame_time) = 0;
 
-  // Disposes all glTF assets and instances.
-  void DisposeGltfAssetsAndInstances();
-
- private:
-  // Returns a glTF mesh component for a subnode of an instance of a glTF asset
-  // in the Jepack XR scene.
-  absl::StatusOr<ComponentHandle<GltfMesh>> FindGltfMeshByNodeName(
-      int32_t node_id, absl::string_view node_name);
-
- protected:
-  ImpressApiView& view_;
-
- private:
-  absl::flat_hash_map<int32_t,
-                      std::tuple<ComponentHandle<GltfAnimator>,
-                                 std::optional<std::unique_ptr<AssetAnimator>>>>
-      node_to_anim_ctx_;
+  // Resets the animation contexts for cleanup purposes.
+  virtual void ResetAnimationContexts() = 0;
 };
 
 }  // namespace imp

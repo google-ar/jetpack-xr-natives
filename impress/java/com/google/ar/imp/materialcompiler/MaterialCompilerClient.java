@@ -32,7 +32,7 @@ public final class MaterialCompilerClient implements ServiceConnection {
   private static final String TAG = MaterialCompilerClient.class.getSimpleName();
   // TODO: Allow override; Also have this in a shared place since it's used in multiple
   // locations.
-  private static final String DEFAULT_LIBRARY_NAME = "imp_view_jni";
+   static final String DEFAULT_LIBRARY_NAME = "imp_view_jni";
 
   private IBinder materialCompilerServiceBinder;
    IMaterialCompilerService materialCompilerService;
@@ -52,12 +52,16 @@ public final class MaterialCompilerClient implements ServiceConnection {
   private final FileDescriptorFactory fileDescriptorFactory;
   private final NativeCallHandler nativeCallHandler;
 
-  public MaterialCompilerClient(Context context, long nativeHandle) {
+  public MaterialCompilerClient(Context context, long nativeHandle, String nativeLibraryOverride) {
     this.context = context;
-    this.resolvedLibraryName = DEFAULT_LIBRARY_NAME;
+    this.resolvedLibraryName = nativeLibraryOverride;
     this.nativeHandle = nativeHandle;
     this.fileDescriptorFactory = new FileDescriptorFactoryImpl();
     this.nativeCallHandler = new NativeCallHandlerImpl();
+  }
+
+  public MaterialCompilerClient(Context context, long nativeHandle) {
+    this(context, nativeHandle, DEFAULT_LIBRARY_NAME);
   }
 
   // Constructor that allows to override ParcelFileDescriptor for testing.
@@ -66,9 +70,10 @@ public final class MaterialCompilerClient implements ServiceConnection {
       Context context,
       long nativeHandle,
       FileDescriptorFactory fileDescriptorFactory,
-      NativeCallHandler nativeCallHandler) {
+      NativeCallHandler nativeCallHandler,
+      String nativeLibraryOverride) {
     this.context = context;
-    this.resolvedLibraryName = DEFAULT_LIBRARY_NAME;
+    this.resolvedLibraryName = nativeLibraryOverride;
     this.nativeHandle = nativeHandle;
     this.fileDescriptorFactory = fileDescriptorFactory;
     this.nativeCallHandler = nativeCallHandler;

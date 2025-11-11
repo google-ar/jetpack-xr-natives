@@ -30,10 +30,10 @@ cc_binary(
     linkshared = 1,
     deps = [
         ":fake_perception_library_state",
-        "@third_party//OpenXR_KHR:openxr_headers_androidxr",
         "@abseil-cpp//absl/base",
         "//common:jni_utils",
         "//perception_library:jni_utils",
+        "@third_party//OpenXR_KHR:openxr_headers_androidxr",
     ],
 )
 
@@ -42,9 +42,9 @@ cc_library(
     testonly = 1,
     hdrs = ["fake_perception_library_state.h"],
     deps = [
-        "@third_party//OpenXR_KHR:openxr_headers_androidxr",
         "@abseil-cpp//absl/base:no_destructor",
         "@abseil-cpp//absl/container:flat_hash_map",
+        "@third_party//OpenXR_KHR:openxr_headers_androidxr",
     ],
     alwayslink = 1,
 )

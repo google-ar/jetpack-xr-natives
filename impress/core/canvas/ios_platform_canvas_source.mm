@@ -132,8 +132,8 @@ Future<absl::Status> IosPlatformCanvasSource::PrepareFont(
   return Future<absl::Status>(absl::OkStatus());
 }
 
-ScopedCanvas::TextMetrics IosPlatformCanvasSource::GetTextMetrics(
-    absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
+TextMetrics IosPlatformCanvasSource::GetTextMetrics(absl::string_view text,
+                                                    const ScopedCanvas::TextOptions& text_options) {
   @autoreleasepool {
     NSDictionary<NSAttributedStringKey, id>* text_attributes =
         GetTextAttributesForTextMetrics(text_options, pixels_per_dp_);
@@ -154,22 +154,24 @@ ScopedCanvas::TextMetrics IosPlatformCanvasSource::GetTextMetrics(
 
     // Stroke_width_pixels is already in pixels, so no need to multiply by pixels_per_dp_.
     float stroke_padding = text_options.stroke_width_pixels;
-    return {
-        // Origin refers to the starting location of the fill, not the stroke.
-        .origin = float2{text_rect.origin.x * pixels_per_dp_, text_rect.origin.y * pixels_per_dp_},
-        // The size includes the stroke.
-        .size = float2{text_rect.size.width * pixels_per_dp_ + stroke_padding,
-                       text_rect.size.height * pixels_per_dp_ + stroke_padding},
-        .typographical_width = static_cast<float>(text_size.width * pixels_per_dp_),
-        // TODO: Return proper metrics here. Though, given that
-        // iOS supports per-glyph rendering, these metrics are never used
-        // anywhere.
-        .font_origin_y = static_cast<float>(text_rect.origin.y * pixels_per_dp_),
-        .font_size_y = static_cast<float>(text_size.height * pixels_per_dp_)};
+    TextMetrics text_metrics;
+    // Origin refers to the starting location of the fill, not the stroke.
+    text_metrics.set_origin_x(text_rect.origin.x * pixels_per_dp_);
+    text_metrics.set_origin_y(text_rect.origin.y * pixels_per_dp_);
+    // The size includes the stroke.
+    text_metrics.set_size_x(text_rect.size.width * pixels_per_dp_ + stroke_padding);
+    text_metrics.set_size_y(text_rect.size.height * pixels_per_dp_ + stroke_padding);
+    text_metrics.set_typographical_width(static_cast<float>(text_size.width * pixels_per_dp_));
+    // TODO: Return proper metrics here. Though, given that
+    // iOS supports per-glyph rendering, these metrics are never used
+    // anywhere.
+    text_metrics.set_font_origin_y(static_cast<float>(text_rect.origin.y * pixels_per_dp_));
+    text_metrics.set_font_size_y(static_cast<float>(text_size.height * pixels_per_dp_));
+    return text_metrics;
   }
 }
 
-ScopedCanvas::TextMetrics IosPlatformCanvasSource::GetGlyphMetrics(
+TextMetrics IosPlatformCanvasSource::GetGlyphMetrics(
     ScopedCanvas::GlyphId glyph, const ScopedCanvas::TextOptions& text_options) {
   UIFont* text_font = FontFromTextOptions(text_options, pixels_per_dp_);
 
@@ -202,15 +204,18 @@ ScopedCanvas::TextMetrics IosPlatformCanvasSource::GetGlyphMetrics(
     font_size_y = text_font_total_line_height * pixels_per_dp_ + stroke_padding;
   }
 
-  return {
-      // The origin is the starting location of the fill, not the stroke.
-      .origin = float2{glyph_rect.origin.x * pixels_per_dp_, glyph_rect.origin.y * pixels_per_dp_},
-      // The size includes the stroke.
-      .size = float2{glyph_rect.size.width * pixels_per_dp_ + stroke_padding,
-                     glyph_rect.size.height * pixels_per_dp_ + stroke_padding},
-      // Font origin is the starting location of the fill, not the stroke.
-      .font_origin_y = font_origin_y,
-      .font_size_y = font_size_y};
+  TextMetrics text_metrics;
+  // Origin refers to the starting location of the fill, not the stroke.
+  text_metrics.set_origin_x(glyph_rect.origin.x * pixels_per_dp_);
+  text_metrics.set_origin_y(glyph_rect.origin.y * pixels_per_dp_);
+  // The size includes the stroke.
+  text_metrics.set_size_x(glyph_rect.size.width * pixels_per_dp_ + stroke_padding);
+  text_metrics.set_size_y(glyph_rect.size.height * pixels_per_dp_ + stroke_padding);
+  text_metrics.set_typographical_width(0.0f);
+  // Font origin is the starting location of the fill, not the stroke.
+  text_metrics.set_font_origin_y(font_origin_y);
+  text_metrics.set_font_size_y(font_size_y);
+  return text_metrics;
 }
 
 std::vector<ScopedCanvas::GlyphGroup> IosPlatformCanvasSource::GetCombinedCharacterGroups(
@@ -350,14 +355,14 @@ std::vector<ScopedCanvas::GlyphAdvance> IosPlatformCanvasSource::GetTextGlyphsIn
   }
 }
 
-ScopedCanvas::FontInfo IosPlatformCanvasSource::GetFontInfo(
-    const ScopedCanvas::TextOptions& text_options) {
+FontInfo IosPlatformCanvasSource::GetFontInfo(const ScopedCanvas::TextOptions& text_options) {
   UIFont* text_font = FontFromTextOptions(text_options, pixels_per_dp_);
-  return ScopedCanvas::FontInfo{
-      .ascent = static_cast<float>(-text_font.ascender) * pixels_per_dp_,
-      .descent = static_cast<float>(-text_font.descender) * pixels_per_dp_,
-      .leading = static_cast<float>(text_font.leading) * pixels_per_dp_,
-      .line_spacing = static_cast<float>(text_font.lineHeight) * pixels_per_dp_};
+  FontInfo font_info;
+  font_info.set_ascent(static_cast<float>(-text_font.ascender) * pixels_per_dp_);
+  font_info.set_descent(static_cast<float>(-text_font.descender) * pixels_per_dp_);
+  font_info.set_leading(static_cast<float>(text_font.leading) * pixels_per_dp_);
+  font_info.set_line_spacing(static_cast<float>(text_font.lineHeight) * pixels_per_dp_);
+  return font_info;
 }
 
 std::unique_ptr<ScopedCanvas> IosPlatformCanvasSource::StartDrawing(

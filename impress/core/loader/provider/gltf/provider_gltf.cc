@@ -1109,7 +1109,8 @@ ProtoGltfProvider::TryLoadGltf(LoaderState* state_ptr) {
     std::optional<filament::Box> bounds;
     std::optional<RuntimeData> runtime;
     absl::string_view name;
-    std::vector<float> morph_target_weights;
+    std::vector<float> node_morph_target_weights;
+    std::vector<float> mesh_morph_target_weights;
     uint16_t sampled_joint_count = 0;
     std::optional<model::ModelData::NodeVisibility> node_visibility;
     std::optional<model::ModelData::NodeSelectability> node_selectability;
@@ -1127,7 +1128,7 @@ ProtoGltfProvider::TryLoadGltf(LoaderState* state_ptr) {
       for (size_t i = 0, count = std::min(lookup.nodes[node].weights.size(),
                                           filament::MAX_MORPH_TARGETS);
            i < count; ++i) {
-        morph_target_weights.push_back(lookup.nodes[node].weights[i]);
+        node_morph_target_weights.push_back(lookup.nodes[node].weights[i]);
       }
     }
 
@@ -1160,8 +1161,8 @@ ProtoGltfProvider::TryLoadGltf(LoaderState* state_ptr) {
       const mat4& mesh_transform =
           bone_root_transforms[bone.CastTo<LoadedModelBuilder::BoneId>()];
 
-      // Assign morph_target_weights from mesh weights if not set already.
-      if (morph_target_weights.empty() && !gltf.meshes[mesh].weights.empty()) {
+      // Assign per mesh morph_target_weights from mesh weights.
+      if (!gltf.meshes[mesh].weights.empty()) {
         if (gltf.meshes[mesh].weights.size() > filament::MAX_MORPH_TARGETS) {
           IMP_LOG(imp::WARNING) << gltf.meshes[mesh].weights.size()
                        << " default weights for morph targets were specified "
@@ -1173,7 +1174,7 @@ ProtoGltfProvider::TryLoadGltf(LoaderState* state_ptr) {
         for (size_t i = 0, count = std::min(gltf.meshes[mesh].weights.size(),
                                             filament::MAX_MORPH_TARGETS);
              i < count; ++i) {
-          morph_target_weights.push_back(gltf.meshes[mesh].weights[i]);
+          mesh_morph_target_weights.push_back(gltf.meshes[mesh].weights[i]);
         }
       }
 
@@ -1241,7 +1242,8 @@ ProtoGltfProvider::TryLoadGltf(LoaderState* state_ptr) {
         LoadedModelBuilder::EntityId entity,
         builder_->AddEntity(
             bone.CastTo<LoadedModelBuilder::BoneId>(), skin,
-            morph_target_buffer, std::move(morph_target_weights),
+            morph_target_buffer, std::move(node_morph_target_weights),
+            std::move(mesh_morph_target_weights),
             light_punctual.CastTo<imp::model::ModelData::LightPunctualId>(),
             audio_emitter, std::move(parts), bounds, runtime,
             entry_child_counts[entry], name, static_cast<int>(node), mesh,

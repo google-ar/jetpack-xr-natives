@@ -132,6 +132,7 @@ cc_library(
         "//core/common",
         "//core/common:bit_flag",
         "//core/common:bit_vector",
+        "//core/common:copyable_ptr",
         "//core/common:entity_absl_hasher",
         "//core/common:enum_indexed_array",
         "//core/common:filament_helpers",

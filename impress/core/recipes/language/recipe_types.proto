@@ -66,12 +66,11 @@ message Literal {
     Mat4f mat4f_value = 12;
     NodeHandleMessage node_value = 13;
     google.protobuf.Any proto_value = 14;
-    Box box_value = 15;
-    NodeSceneHandle node_scene_value = 16;
-    LiteralArray array_value = 17;
-    LiteralTuple tuple_value = 18;
-    LiteralMap map_value = 19;
-    RecipeRayHit ray_hit_value = 20;
+    NodeSceneHandle node_scene_value = 15;
+    LiteralArray array_value = 16;
+    LiteralTuple tuple_value = 17;
+    LiteralMap map_value = 18;
+    RecipeRayHit ray_hit_value = 19;
   }
 }
 
@@ -96,12 +95,11 @@ message VariableDeclaration {
     MAT4F = 12;
     NODE = 13;
     PROTO = 14;
-    BOX = 15;
-    NODE_SCENE = 16;
-    ARRAY = 17;
-    TUPLE = 18;
-    MAP = 19;
-    RAY_HIT = 20;
+    NODE_SCENE = 15;
+    ARRAY = 16;
+    TUPLE = 17;
+    MAP = 18;
+    RAY_HIT = 19;
   }
 
   string name = 1;

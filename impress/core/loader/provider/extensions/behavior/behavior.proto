@@ -38,7 +38,7 @@ message Behavior {
   // TODO  Add the rest of the data types defined in the glTF
   // object model spec + behavior spec.
   message Variable {
-    string id = 1 [ctype = STRING_PIECE];
+    string id = 1 [(imp.string_type) = STRING_VIEW];
     ValueType type = 2;
     oneof value {
       bool value_bool = 3;

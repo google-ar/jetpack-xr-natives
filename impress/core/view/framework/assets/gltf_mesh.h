@@ -159,9 +159,20 @@ class GltfMesh : public Component {
 
   // Returns number of morph targets.
   size_t GetMorphTargetCount() const;
-  // Sets morph target weights.
+
+  // Returns the current morph target weights.
+  std::vector<float> GetMorphTargetWeights() const;
+
+  // Returns a certain morph target's weight.
+  float GetMorphTargetWeight(size_t index) const;
+
+  // Sets morph target weights on the Filament side for real-time rendering.
   // Sparse accessors for morph targets are currently not implemented.
   void SetMorphTargetWeights(const std::vector<float>& weights);
+
+  // Sets an individual morph target's weight on the Filament side for
+  // real-time rendering.
+  void SetMorphTargetWeight(size_t index, float weight);
 
   // Sets the blend order, used to provide a limited amount of control over the
   // draw order of this node. Only works in transparent blend mode.

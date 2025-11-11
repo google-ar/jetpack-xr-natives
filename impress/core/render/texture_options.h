@@ -64,9 +64,9 @@ struct TextureSamplerOptions {
   MinFilter min_filter = MinFilter::LINEAR;
 
   // Adds extra texture samples to improve textures which are displayed at an
-  // oblique angle to the camera. Should be a power-of-two. The default is 0.
-  // The maximum permissible value is 7.
-  float anisotropy = 0;
+  // oblique angle to the camera. Should be a power-of-two. The default is 1.
+  // The maximum permissible value is 128.
+  float anisotropy = 1.0;
 };
 
 }  // namespace imp

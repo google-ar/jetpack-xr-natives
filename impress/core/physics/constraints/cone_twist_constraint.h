@@ -69,6 +69,18 @@ class ConeTwistConstraint : public BaseConstraint, public Component {
   //          - another node that holds one or the only rigid body of this
   //          constraint.
   //
+  //     pivot:
+  //          - the pivot of the constraint frame in the owner node's local
+  //          space.
+  //
+  //     axis:
+  //          - the axis of the constraint in the owner node's local space.
+  //
+  //     up_axis:
+  //          - an axis that is orthogonal to the constraint axis and is used to
+  //          define the rotation (orientation) of the constraint in the local
+  //          3D space of the owner node.
+  //
   //     auto_configure:
   //          - If true, set that constraint (pivot and axis) to respect
   //          the current transformation of node(s).
@@ -91,13 +103,12 @@ class ConeTwistConstraint : public BaseConstraint, public Component {
   //
   // Note: that the axes pairs specified (connected_axis and connected_up_axis,
   // axis and up_axis) must be orthogonal.
-  absl::Status Setup(NodeHandle connected_node, bool auto_configure = true,
+  absl::Status Setup(NodeHandle connected_node, float3 pivot = kZero3,
+                     float3 axis = kZAxis3f, float3 up_axis = kYAxis3f,
+                     bool auto_configure = true,
                      float3 connected_pivot = kZero3,
                      float3 connected_axis = kZAxis3f,
-                     float3 connected_up_axis = kYAxis3f,
-                     std::optional<float3> pivot = std::nullopt,
-                     std::optional<float3> axis = std::nullopt,
-                     std::optional<float3> up_axis = std::nullopt);
+                     float3 connected_up_axis = kYAxis3f);
 
   // Sets the constraint with the already filled state.
   absl::Status SetupWithState();

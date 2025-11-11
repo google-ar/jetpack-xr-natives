@@ -44,10 +44,6 @@
 #include "core/math/mat.h"
 #include "core/math/math.h"
 #include "core/model/mesh/base_mesh_builder.h"
-#include "core/split_engine/android/split_engine_android_bridge.h"
-#include "core/split_engine/split_engine_mesh_serializer.h"
-#include "core/split_engine/split_engine_texture_serializer.h"
-#include "split_engine/schemas/split_engine_material_generated.h"
 #if IMP_PLATFORM(ANDROID)
 #include "core/render/android/android_defines.h"
 #include "core/render/android/platform_android_external_texture_surface.h"
@@ -59,6 +55,29 @@ class Material;
 }  // namespace imp
 
 namespace imp::split_engine {
+
+class SplitEngineMeshSerializer;
+class SplitEngineTextureSerializer;
+class SplitEngineAndroidBridge;
+
+// LINT.IfChange
+enum class BuiltInMaterialParameters : uint8_t {
+  NONE = 0,
+  GenericMaterialParameters = 1,
+  BuiltInMaterial5cf26af8Parameters = 2,
+  BuiltInMaterialE3ca0ab9Parameters = 3,
+  BuiltInMaterialD1750064Parameters = 4,
+  BuiltInMaterialEb117dd9Parameters = 5,
+  BuiltInMaterial1b616c8aParameters = 6,
+  BuiltInMaterial0d0cb9aaParameters = 7,
+  BuiltInMaterialTextureExternalParameters = 8,
+  BuiltInMaterialbd7fe08cParameters = 9,
+  BuiltInMaterialGsplatParameters = 10,
+  BuiltInMaterialGsplatBackgroundParameters = 11,
+  MIN = NONE,
+  MAX = BuiltInMaterialGsplatBackgroundParameters
+};
+// LINT.ThenChange(//depot/google3/third_party/split_engine/schemas/split_engine_material.fbs)
 
 // An interface for serializing the low-level Impress engine state.
 // This interface is available on imp::BaseView via the GetSerializer() method.
@@ -106,6 +125,12 @@ class SplitEngineSerializer {
   virtual void AddMaterialInstance(
       const filament::Material* material,
       const filament::MaterialInstance* instance) = 0;
+  // Creates a material instance from the given material on the remote renderer.
+  // The IDs are used for tracking the material and instance separately.
+  // This is useful for custom materials, when using an imp::Material to track
+  // the material ID.
+  virtual void AddMaterialInstance(uint64_t material_id,
+                                   uint64_t instance_id) = 0;
   // Serializes an already-duplicated material instance.
   // This will cause the instance to be duplicated on the remote renderer to
   // match the duplication that has already occurred here.
@@ -173,7 +198,7 @@ class SplitEngineSerializer {
 
   // ColliderTypes that match the split engine schema.
   // LINT.IfChange
-  enum class ColliderType {
+  enum class ColliderType : uint8_t {
     kBoxCollider,
     kMeshCollider,
     kSphereCollider,
@@ -215,7 +240,7 @@ class SplitEngineSerializer {
           flatbuffers::FlatBufferBuilder& builder)>;
   virtual void SetBuiltInMaterialParameters(
       const filament::MaterialInstance* material,
-      android_xr::schemas::BuiltInMaterialParameters type,
+      BuiltInMaterialParameters type,
       SerializeBuiltInMaterialParametersFunc serialize_func) = 0;
 
   // Serializes an ImageBasedLightingAsset to the remote renderer.

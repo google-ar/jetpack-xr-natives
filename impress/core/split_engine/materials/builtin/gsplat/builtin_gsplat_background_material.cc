@@ -27,7 +27,7 @@
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
-#include "core/split_engine/materials/builtin/gsplat/builtin_gsplat_material_assets.h"
+#include "core/split_engine/materials/builtin/gsplat/gsplat_material_deserializer_assets.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"

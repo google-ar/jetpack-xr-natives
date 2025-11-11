@@ -56,6 +56,11 @@ absl::Status TriggerVolume::Setup() {
       &GetView().GetRegistry().GetOrCreate<PhysicsManager>(GetView());
   physics_manager_->AddTriggerVolume(*trigger_volume_, GetNode());
 
+#if IMP_RUNTIME(DEV)
+  physics_manager_->RegisterCollidableVisualizer(GetNode(),
+                                                 [this]() { Visualize(); });
+#endif
+
   return absl::OkStatus();
 }
 
@@ -63,19 +68,29 @@ void TriggerVolume::Cleanup() {
   if (trigger_volume_) {
     physics_manager_->RemoveTriggerVolume(*trigger_volume_);
   }
+
+#if IMP_RUNTIME(DEV)
+  physics_manager_->UnregisterCollidableVisualizer(GetNode());
+#endif
 }
 
 void TriggerVolume::Update(const FrameTime& frame_time) {
   // Update Bullet collider's transformation.
   trigger_volume_->setWorldTransform(collidable_.GetNodeBtTransform());
-
-#if IMP_RUNTIME(DEV)
-  collidable_.Visualize(trigger_volume_->getWorldTransform());
-#endif
 }
 
 Collidable::CollisionShape TriggerVolume::GetCollisionShape() const {
   return collidable_.GetCollisionShape(trigger_volume_->getWorldTransform());
 }
+
+#if IMP_RUNTIME(DEV)
+void TriggerVolume::Visualize() {
+  if (!trigger_volume_) {
+    return;
+  }
+
+  collidable_.Visualize(collidable_.GetNodeBtTransform());
+}
+#endif
 
 }  // namespace imp

@@ -23,7 +23,6 @@
 #include <cstdlib>
 #include <functional>
 #include <map>
-#include <memory>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -38,6 +37,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "core/common/bit_flag.h"
+#include "core/common/copyable_ptr.h"
 #include "core/common/platform_helpers.h"
 #include "core/common/template_helpers.h"
 #include "core/proto/any.proto.imp.h"
@@ -87,8 +87,8 @@ class TextprotoWriter {
            absl::optional<T>* other, BitFlag flags = 0);
 
   template <int field_type, typename M, typename T>
-  M* Visit(M* m, int field_id, std::unique_ptr<T>* field,
-           std::unique_ptr<T>* other, BitFlag flags = 0);
+  M* Visit(M* m, int field_id, CopyablePtr<T>* field, CopyablePtr<T>* other,
+           BitFlag flags = 0);
 
   template <int field_type, RepeatedMergeStrategy merge_type, typename M,
             typename T>
@@ -343,8 +343,8 @@ M* TextprotoWriter::Visit(M* m, int field_id, absl::optional<T>* field,
 }
 
 template <int field_type, typename M, typename T>
-M* TextprotoWriter::Visit(M* m, int field_id, std::unique_ptr<T>* field,
-                          std::unique_ptr<T>* other, BitFlag flags) {
+M* TextprotoWriter::Visit(M* m, int field_id, CopyablePtr<T>* field,
+                          CopyablePtr<T>* other, BitFlag flags) {
   if (!*field) {
     return m;
   }

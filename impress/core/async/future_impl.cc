@@ -143,31 +143,6 @@ ResultHolder& FutureImpl::Get() {
   return result_;
 }
 
-void FutureImpl::OnReady(imp::Invocable<void(ResultHolder&)> fn) {
-  AssertIntegrity();
-  // We want to check the value & possibly manipulate callbacks
-  // under the lock, but we don't want to run the function
-  // under the lock.
-
-  // Store the result in a pointer to pass into the fn later.
-  // TODO: This is kind of scary, because this pointer is
-  // essentially used to access the ResultHolder stored by FutureImpl from
-  // outside of the lock. In practice, this has never caused a real problem
-  // because the way Future's are actually used we are never accessing the
-  // result of a future from two threads at the same time. The actual semantics
-  // of the API discourage it.
-  ResultHolder* result_ptr = nullptr;
-  {
-    absl::MutexLock lock(&mu_);
-    if (!result_.HasResult()) {
-      relationships_.emplace_back(std::move(fn));
-      return;
-    }
-    result_ptr = &result_;
-  }
-  fn(*result_ptr);
-}
-
 void FutureImpl::AddChild(std::weak_ptr<FutureImpl> child) {
   AssertIntegrity();
   {
@@ -361,9 +336,6 @@ bool FutureImpl::ReturnInternal(ResultHolder result) {
       case 3:
         ResolveKeptForgetter(result_ptr->GetStatus(),
                              std::get<KeptForgetter>(relationship));
-        break;
-      case 4:
-        std::get<Invocable<void(ResultHolder&)>>(relationship)(*result_ptr);
         break;
     }
   }

@@ -26,6 +26,7 @@
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
+#include "core/common/type_helpers.h"
 #include "core/math/vec.h"
 #include "core/media/media_color_space.h"
 #include "core/media/media_type.h"
@@ -42,51 +43,55 @@ namespace android_xr {
 namespace {
 
 template <typename EnumA, typename EnumB>
-constexpr bool DoEnumsMatch(EnumA enum_a, EnumB enum_b) {
+constexpr bool DoEnumsMatchUnsafe(EnumA enum_a, EnumB enum_b) {
   return static_cast<size_t>(enum_a) == static_cast<size_t>(enum_b);
 }
 
 // Verify imp::MediaStereoMode and android_xr::schemas::Texture3dStereoType
 // enums match.
+// Note: have to use unsafe enum matching here since the underlying types
+// are different. imp::MediaStereoMode uses int8_t while
+// android_xr::schemas::Texture3dStereoType uses uint8_t. The flatbuffer type
+// cannot be changed.
 static_assert(
-    DoEnumsMatch(
+    DoEnumsMatchUnsafe(
         imp::MediaStereoMode::kMonoscopic,
         android_xr::schemas::BuiltInMaterial1b616c8aStereoType::MONOSCOPIC),
     "Enum mismatch");
 static_assert(
-    DoEnumsMatch(
+    DoEnumsMatchUnsafe(
         imp::MediaStereoMode::kTopBottom,
         android_xr::schemas::BuiltInMaterial1b616c8aStereoType::TOP_BOTTOM),
     "Enum mismatch");
 static_assert(
-    DoEnumsMatch(
+    DoEnumsMatchUnsafe(
         imp::MediaStereoMode::kLeftRight,
         android_xr::schemas::BuiltInMaterial1b616c8aStereoType::LEFT_RIGHT),
     "Enum mismatch");
 static_assert(
-    DoEnumsMatch(
+    DoEnumsMatchUnsafe(
         imp::MediaStereoMode::kStereoMesh,
         android_xr::schemas::BuiltInMaterial1b616c8aStereoType::STEREO_MESH),
     "Enum mismatch");
 static_assert(
-    DoEnumsMatch(imp::MediaStereoMode::kInterleavedLeftPrimary,
-                 android_xr::schemas::BuiltInMaterial1b616c8aStereoType::
-                     INTERLEAVED_LEFT_PRIMARY),
+    DoEnumsMatchUnsafe(imp::MediaStereoMode::kInterleavedLeftPrimary,
+                       android_xr::schemas::BuiltInMaterial1b616c8aStereoType::
+                           INTERLEAVED_LEFT_PRIMARY),
     "Enum mismatch");
 static_assert(
-    DoEnumsMatch(imp::MediaStereoMode::kInterleavedRightPrimary,
-                 android_xr::schemas::BuiltInMaterial1b616c8aStereoType::
-                     INTERLEAVED_RIGHT_PRIMARY),
+    DoEnumsMatchUnsafe(imp::MediaStereoMode::kInterleavedRightPrimary,
+                       android_xr::schemas::BuiltInMaterial1b616c8aStereoType::
+                           INTERLEAVED_RIGHT_PRIMARY),
     "Enum mismatch");
 static_assert(
-    DoEnumsMatch(imp::MediaStereoMode::kInterleavedLeftPrimaryWithDepth,
-                 android_xr::schemas::BuiltInMaterial1b616c8aStereoType::
-                     INTERLEAVED_LEFT_PRIMARY_WITH_DEPTH),
+    DoEnumsMatchUnsafe(imp::MediaStereoMode::kInterleavedLeftPrimaryWithDepth,
+                       android_xr::schemas::BuiltInMaterial1b616c8aStereoType::
+                           INTERLEAVED_LEFT_PRIMARY_WITH_DEPTH),
     "Enum mismatch");
 static_assert(
-    DoEnumsMatch(imp::MediaStereoMode::kInterleavedRightPrimaryWithDepth,
-                 android_xr::schemas::BuiltInMaterial1b616c8aStereoType::
-                     INTERLEAVED_RIGHT_PRIMARY_WITH_DEPTH),
+    DoEnumsMatchUnsafe(imp::MediaStereoMode::kInterleavedRightPrimaryWithDepth,
+                       android_xr::schemas::BuiltInMaterial1b616c8aStereoType::
+                           INTERLEAVED_RIGHT_PRIMARY_WITH_DEPTH),
     "Enum mismatch");
 
 static_assert(android_xr::schemas::BuiltInMaterial1b616c8aStereoType::MAX ==
@@ -174,17 +179,21 @@ static_assert(android_xr::schemas::ColorRange::MAX ==
 
 // Verify imp::MediaShapeType and
 // android_xr::schemas::BuiltInMaterial1b616c8aShapeType enums match.
+// Note: have to use unsafe enum matching here since the underlying types
+// are different. imp::MediaShapeType uses int8_t while
+// android_xr::schemas::BuiltInMaterial1b616c8aShapeType uses uint8_t. The
+// flatbuffer type cannot be changed.
 static_assert(
-    DoEnumsMatch(
+    DoEnumsMatchUnsafe(
         imp::MediaShapeType::kDefaultFlat,
         android_xr::schemas::BuiltInMaterial1b616c8aShapeType::DEFAULT_FLAT),
     "Enum mismatch");
+static_assert(DoEnumsMatchUnsafe(
+                  imp::MediaShapeType::kVR180,
+                  android_xr::schemas::BuiltInMaterial1b616c8aShapeType::VR180),
+              "Enum mismatch");
 static_assert(
-    DoEnumsMatch(imp::MediaShapeType::kVR180,
-                 android_xr::schemas::BuiltInMaterial1b616c8aShapeType::VR180),
-    "Enum mismatch");
-static_assert(
-    DoEnumsMatch(
+    DoEnumsMatchUnsafe(
         imp::MediaShapeType::kFull360,
         android_xr::schemas::BuiltInMaterial1b616c8aShapeType::FULL360),
     "Enum mismatch");

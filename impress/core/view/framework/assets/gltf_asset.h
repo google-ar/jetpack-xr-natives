@@ -215,9 +215,9 @@ class GltfAsset {
   GltfAsset(const GltfAsset&) = delete;
   GltfAsset& operator=(const GltfAsset& rhs) = delete;
 
-  // GltfAsset is movable.
-  GltfAsset(GltfAsset&& rhs) = default;
-  GltfAsset& operator=(GltfAsset&& rhs) = default;
+  // GltfAsset is not movable.
+  GltfAsset(GltfAsset&& rhs) = delete;
+  GltfAsset& operator=(GltfAsset&& rhs) = delete;
 
   const model::ModelData& GetModelData() const;
   const MeshCollisionAccelerator* GetMeshCollisionAccelerator(

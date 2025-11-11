@@ -52,9 +52,13 @@ class RenderInfoPanel : public MonitorPanel {
   bool has_sprites_ = false;
   bool has_gltfs_ = false;
 
+  void DrawLegend(float width, float height);
+  bool show_renderables_ = true;
+  bool show_sprites_ = true;
+  bool show_gltfs_ = true;
+
   BaseView& view_;
   CircularBuffer<RenderInfo> buffer_;
-  int frame_number_ = 0;
   int upper_bound_ = 0;
   MonitorState state_ = MonitorState::kRunning;
 };

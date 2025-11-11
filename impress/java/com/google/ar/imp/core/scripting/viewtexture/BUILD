@@ -23,7 +23,6 @@ android_library(
     srcs = [
         "RenderViewToSurfaceTexture.java",
     ],
-    javacopts = ["-Xep:AndroidJdkLibsChecker:OFF"],
     manifest = ":AndroidManifest.xml",
     deps = [
         "@third_party//filament/android:filament_android_no_jni",
@@ -35,7 +34,6 @@ android_library(
     srcs = [
         "AndroidViewTextureApi.java",
     ],
-    javacopts = ["-Xep:AndroidJdkLibsChecker:OFF"],
     manifest = ":AndroidManifest.xml",
     deps = [
         ":view_renderer",  # buildcleaner: keep unuseddeps: keep

@@ -14,19 +14,19 @@
 
 #include "core/split_engine/flatbuffer_utils.h"
 
-#include <cstdint>
-#include <optional>
+#include <vector>
 
+#include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
-#include "filament/filament/include/filament/TextureSampler.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
-#include "core/material_library/flatbuffer_utils.h"
+#include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/math/mat.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
+#include "split_engine/schemas/split_engine_material_generated.h"
 #include "split_engine/schemas/split_engine_primitive_generated.h"
 
 namespace imp::split_engine {
@@ -246,6 +246,137 @@ mat4 UnPack(const android_xr::schemas::Mat4& obj) {
               obj.m10(), obj.m11(), obj.m12(), obj.m13(),  //
               obj.m20(), obj.m21(), obj.m22(), obj.m23(),  //
               obj.m30(), obj.m31(), obj.m32(), obj.m33());
+}
+
+flatbuffers::Offset<android_xr::schemas::MaterialPrecompileOptions> Pack(
+    flatbuffers::FlatBufferBuilder& fbb,
+    const MaterialPreCompileOptions& options) {
+  if (options.variants.directional_lighting !=
+          MaterialPreCompileVariants::DEFAULT ||
+      options.variants.dynamic_lighting !=
+          MaterialPreCompileVariants::DEFAULT ||
+      options.variants.shadow_receiver != MaterialPreCompileVariants::DEFAULT ||
+      options.variants.fog != MaterialPreCompileVariants::DEFAULT ||
+      options.variants.skinning != MaterialPreCompileVariants::DEFAULT ||
+      options.variants.ssr != MaterialPreCompileVariants::DEFAULT ||
+      options.variants.ste != MaterialPreCompileVariants::DEFAULT ||
+      options.variants.vsm != MaterialPreCompileVariants::DEFAULT) {
+    IMP_LOG(imp::WARNING) << "variants is not supported.";
+  }
+  if (options.spherical_harmonics_bands.has_value()) {
+    IMP_LOG(imp::WARNING) << "spherical_harmonics_bands is not supported.";
+  }
+  if (options.shadow_sampling_quality !=
+      MaterialPreCompileOptions::ShadowSamplingQuality::
+          SHADOW_SAMPLING_QUALITY_UNSPECIFIED) {
+    IMP_LOG(imp::WARNING) << "shadow_sampling_quality is not supported.";
+  }
+
+  std::vector<
+      flatbuffers::Offset<android_xr::schemas::MaterialPrecompileConstant>>
+      constant_offsets;
+  constant_offsets.reserve(options.constants.size());
+  for (const MaterialPreCompileConstant& constant : options.constants) {
+    flatbuffers::Offset<android_xr::schemas::MaterialPrecompileConstant>
+        constant_offset;
+    switch (constant.value.index()) {
+      case MaterialPreCompileConstant::kValue_Unknown:
+        IMP_LOG(imp::WARNING) << "Received null for the precompile constant "
+                     << constant.name << ", Ignoring.";
+        break;
+      case MaterialPreCompileConstant::kValue_IntValue: {
+        if (!constant.int_value()) {
+          IMP_LOG(imp::WARNING) << "Received null for the precompile constant "
+                       << constant.name << ", Ignoring.";
+          break;
+        }
+        android_xr::schemas::Int int_value{*constant.int_value()};
+        constant_offset =
+            android_xr::schemas::CreateMaterialPrecompileConstantDirect(
+                fbb, constant.name.c_str(),
+                android_xr::schemas::MaterialPrecompileConstantValue::Int,
+                fbb.CreateStruct(int_value).Union());
+        break;
+      }
+      case MaterialPreCompileConstant::kValue_FloatValue: {
+        if (!constant.float_value()) {
+          IMP_LOG(imp::WARNING) << "Received null for the precompile constant "
+                       << constant.name << ", Ignoring.";
+          break;
+        }
+        android_xr::schemas::Float float_value{*constant.float_value()};
+        constant_offset =
+            android_xr::schemas::CreateMaterialPrecompileConstantDirect(
+                fbb, constant.name.c_str(),
+                android_xr::schemas::MaterialPrecompileConstantValue::Float,
+                fbb.CreateStruct(float_value).Union());
+        break;
+      }
+      case MaterialPreCompileConstant::kValue_BoolValue: {
+        if (!constant.bool_value()) {
+          IMP_LOG(imp::WARNING) << "Received null for the precompile constant "
+                       << constant.name << ", Ignoring.";
+          break;
+        }
+        android_xr::schemas::Bool bool_value{*constant.bool_value()};
+        constant_offset =
+            android_xr::schemas::CreateMaterialPrecompileConstantDirect(
+                fbb, constant.name.c_str(),
+                android_xr::schemas::MaterialPrecompileConstantValue::Bool,
+                fbb.CreateStruct(bool_value).Union());
+        break;
+      }
+    }
+    constant_offsets.push_back(constant_offset);
+  }
+  return android_xr::schemas::CreateMaterialPrecompileOptions(
+      fbb, fbb.CreateVector(constant_offsets));
+}
+
+MaterialPreCompileOptions UnPack(
+    const android_xr::schemas::MaterialPrecompileOptions& options) {
+  MaterialPreCompileOptions precompile_options;
+  if (!options.precompile_constants()) {
+    return precompile_options;
+  }
+  for (const android_xr::schemas::MaterialPrecompileConstant* constant :
+       *options.precompile_constants()) {
+    if (!constant->name()) {
+      IMP_LOG(imp::WARNING) << "Received precompile constant with empty name. "
+                   << "Ignoring.";
+      continue;
+    }
+
+    if (constant->value() == nullptr) {
+      IMP_LOG(imp::WARNING) << "Received null for the precompile constant "
+                   << constant->name()->c_str() << ", Ignoring.";
+      continue;
+    }
+
+    MaterialPreCompileConstant precompile_constant;
+    precompile_constant.name = constant->name()->c_str();
+
+    switch (constant->value_type()) {
+      case android_xr::schemas::MaterialPrecompileConstantValue::NONE:
+        IMP_LOG(imp::WARNING) << "Received precompile constant with no value. "
+                     << "Ignoring.";
+        continue;
+      case android_xr::schemas::MaterialPrecompileConstantValue::Int:
+        precompile_constant.value =
+            constant->value_as<android_xr::schemas::Int>()->value();
+        break;
+      case android_xr::schemas::MaterialPrecompileConstantValue::Float:
+        precompile_constant.value =
+            constant->value_as<android_xr::schemas::Float>()->value();
+        break;
+      case android_xr::schemas::MaterialPrecompileConstantValue::Bool:
+        precompile_constant.value =
+            constant->value_as<android_xr::schemas::Bool>()->value();
+        break;
+    }
+    precompile_options.constants.push_back(precompile_constant);
+  }
+  return precompile_options;
 }
 
 }  // namespace imp::split_engine

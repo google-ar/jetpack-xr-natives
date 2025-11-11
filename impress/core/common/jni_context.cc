@@ -146,6 +146,13 @@ JniContext::JniContext(JNIEnv* env) {
     assert(g_jvm.load() != nullptr);
     return;
   }
+
+  // We aren't allowed to call any of the below methods if there's a pending
+  // exception.
+  if (env->ExceptionCheck()) {
+    return;
+  }
+
   JavaVM* vm = nullptr;
   env->GetJavaVM(&vm);
 

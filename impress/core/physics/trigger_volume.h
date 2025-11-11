@@ -22,6 +22,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "bullet/src/BulletCollision/CollisionDispatch/btGhostObject.h"
+#include "core/config.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/isf_info.h"
 #include "core/physics/collidable.h"
@@ -70,6 +71,10 @@ class TriggerVolume : public Component {
   PhysicsManager* physics_manager_;
 
   static constexpr absl::string_view kType = "imp.Physics.TriggerVolume";
+
+#if IMP_RUNTIME(DEV)
+  void Visualize();
+#endif
 
  public:
   using IsfInfo = StatelessIsfInfo<

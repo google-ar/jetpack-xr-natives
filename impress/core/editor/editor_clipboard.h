@@ -19,7 +19,9 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "core/async/future.h"
@@ -34,7 +36,6 @@ namespace imp::editor {
 
 // The EditorClipboard handles clipboard-related editor actions such as copying
 // and pasting nodes.
-// TODO: Support multiple node selection
 class EditorClipboard : public System {
  public:
   EditorClipboard(BaseView* view) : System(view) {}
@@ -65,12 +66,16 @@ class EditorClipboard : public System {
   // TODO: Consider supporting "redo".
   void Paste();
 
-  // Returns whether there is a node on the clipboard.
-  bool HasClipboardNode() const;
+  // Deletes all selected nodes. Supports "undo", but not "redo".
+  // Delete is essentially the inverse of paste: undoing a paste is equivalent
+  // to a delete, and undoing a delete is equivalent to a paste.
+  void Delete();
 
-  // Returns the name of the node on the clipboard, if there is a node on the
-  // clipboard.
-  std::optional<absl::string_view> GetClipboardNodeName() const;
+  // Returns true if the clipboard is empty.
+  bool IsEmpty() const;
+
+  // Returns the names of the nodes on the clipboard.
+  std::vector<absl::string_view> GetClipboardNodeNames() const;
 
  private:
   // A struct holding the data needed to recreate a node from the clipboard.
@@ -78,19 +83,44 @@ class EditorClipboard : public System {
     // Creates a ClipboardNode from a NodeHandle. May fail if the node is
     // invalid, or is missing the required metadata.
     static absl::StatusOr<ClipboardNode> FromNodeHandle(const NodeHandle& node);
+    // Creates a std::vector<ClipboardNode> from a std::vector<NodeHandle>. May
+    // fail if any of the nodes are invalid or missing the required metadata.
+    static absl::StatusOr<std::vector<ClipboardNode>> FromVector(
+        const std::vector<NodeHandle>& nodes);
+
+    // The original parent node of the copied node.
+    NodeHandle parent_node_handle;
+    // The original NodeHandle of the copied node.
+    NodeHandle node_handle;
+    // The serialized data of the node.
     NodeData node_data;
     // Needed to preserve metadata about the original node.
     std::string asset_url;
   };
 
-  // Copies a NodeHandle to the clipboard (overlapping functionality
-  // of both "cut" and "copy").
-  void CopyImpl(const NodeHandle& node_to_copy);
+  // Saves the given clipboard nodes to the clipboard. Returns an error if any
+  // of the nodes are invalid.
+  absl::Status CopyImpl(const std::vector<ClipboardNode>& clipboard_nodes);
 
-  // Adds a NodeHandle to the scene, based on the clipboard_node, and parented
-  // under the given node_parent.
-  Future<NodeHandle> CreateNodeHandleFromClipboardNode(
-      const ClipboardNode& clipboard_node, const NodeHandle& node_parent);
+  // Asynchronously pastes the given clipboard nodes. Returns a future that will
+  // be resolved when all the nodes are pasted. If a node_parent is provided,
+  // the node will be parented to that node. Otherwise, the node will be
+  // parented to the ClipboardNode's original parent.
+  Future<std::vector<NodeHandle>> PasteImpl(
+      const std::vector<ClipboardNode>& clipboard_nodes,
+      const std::optional<NodeHandle>& node_parent = std::nullopt);
+
+  // Deletes the node from the scene for each given ClipboardNode.
+  // Note: this only deletes the corresponding NodeHandle from the scene. A copy
+  // of the NodeData remains in the ClipboardNode.
+  absl::Status DeleteImpl(const std::vector<ClipboardNode>& nodes_to_delete);
+
+  // Deselects all selected nodes and destroys the given NodeHandles.
+  absl::Status DeleteImpl(const std::vector<NodeHandle>& nodes_to_delete);
+
+  // Deselects all selected nodes, ignoring the following
+  // NodeSelectionChangedEvent.
+  void Deselect();
 
   // Discerns clipboard hotkeys and triggers the appropriate clipboard action.
   void HandleKeyboardEvent(const KeyboardEvent& event);
@@ -98,15 +128,13 @@ class EditorClipboard : public System {
   // Listens for node selection changes and updates the paste node parent.
   void HandleNodeSelectionChangedEvent(const NodeSelectionChangedEvent& event);
 
-  // The ClipboardNode currently on the clipboard, if any.
-  std::optional<ClipboardNode> copied_node_;
-  // The parent node to use when pasting a node from the clipboard.
-  NodeHandle paste_node_parent_;
+  // A list of ClipboardNodes to copy.
+  std::vector<ClipboardNode> copied_nodes_;
+  // If set, all pasted nodes will be parented to this node.
+  std::optional<NodeHandle> paste_node_parent_;
   // Whether to ignore the next NodeSelectionChangedEvent. Used to select the
   // pasted node without setting it as the parent of the next pasted node.
   bool ignore_next_selection_changed_event_ = false;
-  // Whether or not a paste is currently pending.
-  bool pending_paste_ = false;
   // Whether or not to ignore dispatcher events.
   bool ignore_keyboard_input_ = false;
 };

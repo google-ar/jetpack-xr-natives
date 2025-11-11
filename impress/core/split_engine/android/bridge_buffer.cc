@@ -22,8 +22,10 @@
 #include <memory>
 #include <utility>
 
+#include "absl/log/check.h"
 #include "core/common/log.h"
 #include "filament/libs/utils/include/utils/ashmem.h"
+#include "core/async/executor.h"
 #include "core/common/trace.h"
 #include "core/split_engine/android/buffer_handle_factory.h"
 
@@ -63,11 +65,18 @@ BridgeBuffer::BridgeBuffer(BridgeBuffer&& other)
 
 BridgeBuffer::~BridgeBuffer() {
   IMP_TRACE();
-  if (mmapped_ptr_ != nullptr) {
-    ::munmap(mmapped_ptr_, size_in_bytes_);
-    mmapped_ptr_ = nullptr;
+  if (mmapped_ptr_ == nullptr) {
+    return;
   }
-  close(shared_memory_region_fd_);
+
+  // munmap is blocking and might be expensive to run on the main thread.
+  
+  Executor::BackgroundExecutor()->Schedule([ptr = mmapped_ptr_,
+                                            size = size_in_bytes_,
+                                            fd = shared_memory_region_fd_]() {
+    ::munmap(ptr, size);
+    close(fd);
+  });
 }
 
 }  // namespace imp::split_engine

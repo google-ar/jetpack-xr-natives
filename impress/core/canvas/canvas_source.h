@@ -30,6 +30,7 @@
 #include "core/common/context.h"
 #include "core/common/small_source_location.h"
 #include "core/math/vec.h"
+#include "core/text/text_metrics.proto.h"
 #include "core/view/base_view.h"
 
 namespace imp {
@@ -55,7 +56,8 @@ class CanvasSource {
   // to a hardware accelerated canvas when possible. Note that this flag
   // currently only has any effect on Android.
   static std::unique_ptr<CanvasSource> Create(
-      Context context, bool use_hardware_rendering = true);
+      Context context, bool use_hardware_rendering = true,
+      bool force_auto_method_rendering = false);
 
   // Note: This is exposed for testing. Real clients should use
   // CanvasSource::Create to create a CanvasSource.
@@ -86,15 +88,14 @@ class CanvasSource {
   // Note that this function ignores the horizontal_alignment and
   // vertical_alignment options. Metrics are always given from the
   // "bottom-left" of the string.
-  ScopedCanvas::TextMetrics GetTextMetrics(
-      absl::string_view text, const ScopedCanvas::TextOptions& text_options)
+  TextMetrics GetTextMetrics(absl::string_view text,
+                             const ScopedCanvas::TextOptions& text_options)
       ABSL_LOCKS_EXCLUDED(platform_source_mutex_);
 
   // Returns the metrics that a given glyph will take up when drawn based on the
   // options passed in.
-  ScopedCanvas::TextMetrics GetGlyphMetrics(
-      ScopedCanvas::GlyphId glyph,
-      const ScopedCanvas::TextOptions& text_options)
+  TextMetrics GetGlyphMetrics(ScopedCanvas::GlyphId glyph,
+                              const ScopedCanvas::TextOptions& text_options)
       ABSL_LOCKS_EXCLUDED(platform_source_mutex_);
 
   // Returns a vector of the groups each glyph belongs to based on their
@@ -137,8 +138,7 @@ class CanvasSource {
 
   // Returns information about the font used for drawing text with the given
   // text options. Useful for laying out text.
-  ScopedCanvas::FontInfo GetFontInfo(
-      const ScopedCanvas::TextOptions& text_options)
+  FontInfo GetFontInfo(const ScopedCanvas::TextOptions& text_options)
       ABSL_LOCKS_EXCLUDED(platform_source_mutex_);
 
   // Provides a Canvas that is used to draw to the texture and access the

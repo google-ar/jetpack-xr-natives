@@ -18,10 +18,12 @@
 #define VR_ANDROID_XR_SPLIT_ENGINE_MATERIALS_SPLIT_ENGINE_MATERIAL_H_
 
 #include <memory>
+#include <string_view>
 #include <variant>
 
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
+#include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
 #include "core/common/robin_set.h"
 #include "core/common/small_source_location.h"
@@ -30,7 +32,6 @@
 #include "core/ncsb/update_system.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
-#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/utils/frame_time.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
@@ -49,6 +50,14 @@ class SplitEngineMaterial {
       BaseView& view, std::unique_ptr<flatbuffers::FlatBufferBuilder> fbb,
       android_xr::schemas::BuiltInMaterialSpec material_type,
       flatbuffers::Offset<void> spec);
+
+  // Request a custom filament material from the backend.
+  // The material source and precompile options must outlive the returned
+  // future.
+  static Future<OwnedMaterialPtr> RequestCustomFilamentMaterial(
+      BaseView& view, std::string_view material_source,
+      const MaterialPreCompileOptions& precompile_options =
+          MaterialAsset::kDefaultPreCompileOptions);
 
   // Creates a Split Engine material with the given parameters schema type and
   // material instance.

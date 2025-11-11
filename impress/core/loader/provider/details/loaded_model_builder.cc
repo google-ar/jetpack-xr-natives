@@ -432,11 +432,13 @@ void LoadedModelBuilder::ReserveEntities(size_t size) {
 
 absl::StatusOr<LoadedModelBuilder::EntityId> LoadedModelBuilder::AddEntity(
     BoneId bone, SkinId skin, MorphTargetBufferId morph_target_buffer,
-    std::vector<float> morph_target_weights, LightPunctualId light_punctual,
-    AudioEmitterId audio_emitter, std::vector<PartData> parts,
-    std::optional<filament::Box> bounds, std::optional<RuntimeData> runtime,
-    int child_count, absl::string_view name, uint16_t original_index,
-    int original_mesh_index, std::optional<NodeVisibility> node_visibility,
+    std::vector<float> node_morph_target_weights,
+    std::vector<float> mesh_morph_target_weights,
+    LightPunctualId light_punctual, AudioEmitterId audio_emitter,
+    std::vector<PartData> parts, std::optional<filament::Box> bounds,
+    std::optional<RuntimeData> runtime, int child_count, absl::string_view name,
+    uint16_t original_index, int original_mesh_index,
+    std::optional<NodeVisibility> node_visibility,
     std::optional<NodeSelectability> node_selectability,
     std::optional<NodeHoverability> node_hoverability) {
   if (entities_.size() >= entities_.capacity()) {
@@ -451,11 +453,12 @@ absl::StatusOr<LoadedModelBuilder::EntityId> LoadedModelBuilder::AddEntity(
   return entities_.Append(
       std::move(child_count), EntityParentId{}, EntityChildId{},
       EntityChildId{}, std::move(parts), std::move(bone), std::move(skin),
-      std::move(morph_target_buffer), std::move(morph_target_weights),
-      std::move(light_punctual), audio_emitter, std::move(bounds),
-      std::move(runtime), std::string(name), std::move(original_index),
-      std::move(original_mesh_index), std::move(node_visibility),
-      std::move(node_selectability), std::move(node_hoverability));
+      std::move(morph_target_buffer), std::move(node_morph_target_weights),
+      std::move(mesh_morph_target_weights), std::move(light_punctual),
+      audio_emitter, std::move(bounds), std::move(runtime), std::string(name),
+      std::move(original_index), std::move(original_mesh_index),
+      std::move(node_visibility), std::move(node_selectability),
+      std::move(node_hoverability));
 }
 
 absl::Status LoadedModelBuilder::FinishEntities() {
@@ -839,15 +842,19 @@ absl::StatusOr<Offset<schemas::LoadedModel>> LoadedModelBuilder::Serialize() {
                   part.morph_target_buffer_count);
             });
 
-        const std::vector<float>& morph_target_weights =
-            entity.get<EntityData::Fields::kMorphTargetWeights>();
+        const std::vector<float>& node_morph_target_weights =
+            entity.get<EntityData::Fields::kNodeMorphTargetWeights>();
+        const std::vector<float>& mesh_morph_target_weights =
+            entity.get<EntityData::Fields::kMeshMorphTargetWeights>();
         return schemas::CreateEntityInfo(
             fbb, fbb.CreateString(entity.get<EntityData::Fields::kName>()),
             uint16_t{entity.get<EntityData::Fields::kBone>()},
             int16_t{entity.get<EntityData::Fields::kSkin>()},
             uint16_t{entity.get<EntityData::Fields::kMorphTargetBuffer>()},
-            fbb.CreateVector(morph_target_weights.data(),
-                             morph_target_weights.size()),
+            fbb.CreateVector(node_morph_target_weights.data(),
+                             node_morph_target_weights.size()),
+            fbb.CreateVector(mesh_morph_target_weights.data(),
+                             mesh_morph_target_weights.size()),
             int16_t{entity.get<EntityData::Fields::kLightPunctual>()},
             uint16_t{entity.get<EntityData::Fields::kAudioEmitter>()},
             fbb.CreateVector(part_offsets),

@@ -17,11 +17,18 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_FRAME_TIME_PANEL_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_FRAME_TIME_PANEL_H_
 
+#include <array>
+#include <thread>  // NOLINT: Need to sort things by thread id.
+#include <vector>
+
+#include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "dear_imgui/imgui.h"
 #include "core/editor/widgets/performance/circular_buffer.h"
 #include "core/editor/widgets/performance/hierarchy_panel.h"
 #include "core/editor/widgets/performance/monitor_panel.h"
+#include "core/editor/widgets/performance/sample_processor.h"
+#include "core/performance/profiler.h"
 #include "core/view/base_view.h"
 #include "core/view/utils/proto/view_config.proto.imp.h"
 
@@ -37,7 +44,6 @@ class FrameTimePanel : public MonitorPanel {
   void DrawPanel(int width, int height, int time_span_seconds) override;
   void Update(absl::Duration elapsed_time, absl::Duration delta_time) override;
   void OnStateChanged(MonitorState state) override;
-  void ShowHierarchyPanel(int frame_number);
 
  private:
   // An internal class for structuring data for ImPlot to draw. ImPlot can only
@@ -51,14 +57,41 @@ class FrameTimePanel : public MonitorPanel {
     // Time spent in FilamentHost::RenderNextFrame() this frame.
     float player_loop_time_ms;
   };
+
+  struct SelectedSampleInfo {
+    // The number of frames that has been recorded
+    float frame_number;
+    // Total time spent in the frame.
+    float frame_time_ms;
+  };
+
+  struct ValidTicks {
+    std::vector<double> values;
+    std::vector<const char*> labels;
+  };
+
+  void DrawLegend(float width, float height);
   // Returns the highest frame time that is visible in the plot.
   float GetHighestVisibleFrameTimeMS(int time_span_seconds);
   // Draws a grey highlight over the frame being moused over
-  void DrawHighlightFrame(int frame_number, ImDrawList* draw_list);
+  void DrawHighlightFrame(int frame_number, ImDrawList* draw_list,
+                          ImU32 color = IM_COL32(128, 128, 128, 64),
+                          float frame_width = 0.5f);
   // Draws a tool tip showing more information on the frame
   void DrawToolTip(int frame_number);
+  // Populates the selected sample buffer with the total time spent in the
+  // selected sample for each frame in the buffer.
+  void PopulateSelectedSampleBuffer(absl::string_view selected_sample_name);
+  void DrawSelectedSamplePlot();
+  ValidTicks GetValidTicks(float upper_bound);
+  void DrawTickLabels(ImDrawList* draw_list, ValidTicks valid_ticks);
+  std::vector<ProfilerSampleNode*>* GetSamples(absl::string_view sample_name,
+                                               int frame_index,
+                                               std::thread::id thread_id);
   BaseView& view_;
   CircularBuffer<FrameTimeInfo> buffer_;
+  std::array<SelectedSampleInfo, Profiler::kMaxFrames> selected_sample_buffer_;
+
   // This is incremented on every frame that is updated on this panel. This is
   // different from the actual frame number Impress is at.
   int frame_number_;
@@ -67,6 +100,11 @@ class FrameTimePanel : public MonitorPanel {
   int selected_frame_number_ = 0;
   ViewConfig view_config_;
   HierarchyPanel hierarchy_panel_;
+  SampleProcessor sample_processor_;
+  absl::string_view selected_sample_name_;
+  bool samples_processed_since_last_update_ = false;
+  bool show_vsync_ = true;
+  bool show_frametime_ = true;
 };
 
 }  // namespace imp::editor

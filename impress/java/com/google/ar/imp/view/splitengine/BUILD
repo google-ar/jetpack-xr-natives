@@ -28,9 +28,6 @@ android_library(
         "RendererConnectionServiceProvider.java",
     ],
     custom_package = "com.google.ar.imp.view.splitengine",
-    javacopts = [
-        "-Xep:AndroidJdkLibsChecker:OFF",
-    ],
     tags = ["included_in_archive=//apibindings:impress_no_native_lib_aar"],
     deps = [
         "//core/split_engine/android/extensions/java/com/google/imp/splitengine/extensions:extensions_java",  # unuseddeps: keep

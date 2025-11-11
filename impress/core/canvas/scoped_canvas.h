@@ -21,6 +21,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 #include "absl/strings/string_view.h"
 #include "core/canvas/constants.h"
@@ -29,6 +30,7 @@
 #include "core/geometry/shapes/rect.h"
 #include "core/math/vec.h"
 #include "core/render/texture.h"
+#include "core/text/text_metrics.proto.h"
 
 namespace imp {
 
@@ -146,62 +148,8 @@ struct ScopedCanvas {
     // individual glyphs when rendering. This may improve legibility at the cost
     // of increased glyph atlas usage.
     bool force_non_separable = false;
-  };
 
-  // Provides information about the font used for drawing text for a particular
-  // set of TextOptions when CanvasSource::GetFontOptions is called.
-  // Additional information about this can be found here:
-  // https://proandroiddev.com/android-and-typography-101-5f06722dd611
-  struct FontInfo {
-    // Distance in pixels from the baseline to the top of the font. Always
-    // negative.
-    float ascent;
-    // Distance in pixels from the baseline to the bottom of the font. Always
-    // positive.
-    float descent;
-    // Recommended distance between lines when single-spaced.
-    float leading;
-    // Distance between full lines of text when single-spaced.
-    float line_spacing;
-  };
-
-  // A description of key metrics of the given text/glyph. Returned by
-  // GetTextMetrics.
-  struct TextMetrics {
-    // X represents the initial left-offset of the text, Y represents the
-    // descent. The descent, in this instance, is defined as the vertical offset
-    // necessary to properly align a character to the baseline; e.g., lowercase
-    // "g" will have a negative Y value, since it must be moved DOWN to align to
-    // the baseline. These values align to the fill of the text, not the stroke;
-    // a lowercase "g" with a stroke size of 100 pixels will still precisely
-    // have its origin point set neatly at its proper place below the upper half
-    // of the g along the baseline.
-    float2 origin;
-    // Returns the render bounds of the text. X is width, Y is height. This
-    // measurement accounts for the size of the stroke; e.g., a stroke size of
-    // 100 pixels will correspondingly grow the bounds.
-    float2 size;
-    // Returns the typographical width of the text. The difference between
-    // render bound width and the typographical width is that the render bounds
-    // measures the pixel size of the text, whereas the typographical bounds
-    // also includes the spacing before and after the text. Semantically,
-    // typographical height should be the same as the font_size_y, so refer to
-    // that instead when needed.
-    // TODO Implement this on Desktop
-    float typographical_width;
-    // This is the origin of the text as when drawn with
-    // TextVerticalAlignment::kAtlas.
-    float font_origin_y;
-    // This is the height of the text as when drawn with
-    // TextVerticalAlignment::kAtlas.
-    float font_size_y;
-  };
-
-  // A combination of metrics for a specific piece of text and the relevant font
-  // metrics for the text's font.
-  struct TextAndFontMetrics {
-    TextMetrics text_metrics;
-    FontInfo font_info;
+    std::optional<TextAndFontMetrics> precomputed_metrics = std::nullopt;
   };
 
   // The inputs necessary to measure text.

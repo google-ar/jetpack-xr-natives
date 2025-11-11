@@ -90,7 +90,8 @@ table EntityInfo {
   bone : uint16;
   skin : int16;
   morph_target_buffer : uint16;
-  morph_target_weights : [float];
+  node_morph_target_weights : [float];
+  mesh_morph_target_weights : [float];
   light_punctual : int16;
   audio_emitter: uint16;
   parts : [PartInfo] (required);

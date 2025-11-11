@@ -1,0 +1,45 @@
+diff --git a/googletest/include/gtest/gtest-printers.h b/googletest/include/gtest/gtest-printers.h
+index 198a7693..e3edaf5a 100644
+--- a/googletest/include/gtest/gtest-printers.h
++++ b/googletest/include/gtest/gtest-printers.h
+@@ -104,6 +104,7 @@
+ #ifndef GOOGLETEST_INCLUDE_GTEST_GTEST_PRINTERS_H_
+ #define GOOGLETEST_INCLUDE_GTEST_GTEST_PRINTERS_H_
+
++#include <compare>
+ #include <functional>
+ #include <memory>
+ #include <ostream>  // NOLINT
+@@ -789,11 +790,11 @@ void PrintTo(const std::shared_ptr<T>& ptr, std::ostream* os) {
+ #if GTEST_INTERNAL_HAS_COMPARE_LIB
+ template <typename T>
+ void PrintOrderingHelper(T ordering, std::ostream* os) {
+-  if (ordering == T::less) {
++  if (std::is_lt(ordering)) {
+     *os << "(less)";
+-  } else if (ordering == T::greater) {
++  } else if (std::is_gt(ordering)) {
+     *os << "(greater)";
+-  } else if (ordering == T::equivalent) {
++  } else if (std::is_eq(ordering)) {
+     *os << "(equivalent)";
+   } else {
+     *os << "(unknown ordering)";
+@@ -801,7 +802,7 @@ void PrintOrderingHelper(T ordering, std::ostream* os) {
+ }
+
+ inline void PrintTo(std::strong_ordering ordering, std::ostream* os) {
+-  if (ordering == std::strong_ordering::equal) {
++  if (std::is_eq(ordering)) {
+     *os << "(equal)";
+   } else {
+     PrintOrderingHelper(ordering, os);
+@@ -809,7 +810,7 @@ inline void PrintTo(std::strong_ordering ordering, std::ostream* os) {
+ }
+
+ inline void PrintTo(std::partial_ordering ordering, std::ostream* os) {
+-  if (ordering == std::partial_ordering::unordered) {
++  if (!std::is_eq(ordering) && !std::is_lt(ordering) && !std::is_gt(ordering)) {
+     *os << "(unordered)";
+   } else {
+     PrintOrderingHelper(ordering, os);

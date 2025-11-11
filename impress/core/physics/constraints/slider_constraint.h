@@ -40,8 +40,8 @@
 namespace imp {
 
 // Implements a slider constraint.
-// The bodies can slide along a common axis, or they can rotate around that
-// axis. Example: a drawer sliding in or out.
+// The bodies can slide along a common axis. Example: a drawer sliding in or
+// out.
 class SliderConstraint : public BaseConstraint, public Component {
  public:
   // Update before physics manager to ensure that the constraint is up to date
@@ -70,6 +70,18 @@ class SliderConstraint : public BaseConstraint, public Component {
   //          - another node that holds one or the only rigid body of this
   //          constraint.
   //
+  //     pivot:
+  //          - the pivot of the constraint frame in the owner node's local
+  //          space.
+  //
+  //     axis:
+  //          - the axis of the slider in the owner node's local space.
+  //
+  //     up_axis:
+  //          - an axis that is orthogonal to the slider axis and is used to
+  //          define the rotation (orientation) of the slider in the local 3D
+  //          space of the owner node.
+  //
   //     auto_configure:
   //          - If true, set that constraint (pivot and axis) to respect the
   //          current transformation of node(s).
@@ -92,13 +104,12 @@ class SliderConstraint : public BaseConstraint, public Component {
   //
   // Note: the axes pairs specified (connected_axis and connected_up_axis, axis
   // and up_axis) must be orthogonal.
-  absl::Status Setup(NodeHandle connected_node, bool auto_configure = true,
+  absl::Status Setup(NodeHandle connected_node, float3 pivot = kZero3,
+                     float3 axis = kZAxis3f, float3 up_axis = kYAxis3f,
+                     bool auto_configure = true,
                      float3 connected_pivot = kZero3,
                      float3 connected_axis = kZAxis3f,
-                     float3 connected_up_axis = kYAxis3f,
-                     std::optional<float3> pivot = std::nullopt,
-                     std::optional<float3> axis = std::nullopt,
-                     std::optional<float3> up_axis = std::nullopt);
+                     float3 connected_up_axis = kYAxis3f);
 
   // Sets the constraint with the already filled state.
   absl::Status SetupWithState();
@@ -119,18 +130,11 @@ class SliderConstraint : public BaseConstraint, public Component {
   // Limits for the movement
   void SetLinearLimits(float lower_limit, float upper_limit);
 
-  // Limits for the rotation
-  void SetAngularLimits(float lower_limit, float upper_limit);
-
   // Enables the motor with desired force or velocity to be reached
   // Use zero values to disable the motor.
   // Since useLinearReferenceFrameA is true, the motor will try to move body B
   // in the direction of A's X-axis.
   void SetPoweredLinearMotor(float max_force, float max_velocity);
-
-  // Enables the motor with desired torque or angular velocity to be reached
-  // Use zero values to disable the motor.
-  void SetPoweredAngularMotor(float max_force, float max_angular_velocity);
 
   // Softness when hitting linear limit
   // softness: 0 to 1, 1 means a very soft limit, like a spring
@@ -143,17 +147,6 @@ class SliderConstraint : public BaseConstraint, public Component {
   // approaching/hitting the limits.
   void SetDampingLinearLimit(float damping);
 
-  // Softness when hitting angular limit
-  // softness: 0 to 1, 1 means a very soft limit, like a spring
-  void SetSoftnessAngularLimit(float softness);
-  // Bounciness when hitting angular limits
-  // restitution: 0 to 1, how much bounce is happening when hitting the limits
-  void SetRestitutionAngularLimit(float restitution);
-  // Damping when hitting angular limits
-  // damping: 0 to 1, it means how much velocity (or energy) is lost when
-  // approaching/hitting the limits.
-  void SetDampingAngularLimit(float damping);
-
   // Softness when hitting the limits on the orthogonal axes (against the
   // constraint axis) softness: 0 to 1, 1 means a very soft limit, like a spring
   void SetSoftnessOrthogonalLinearLimit(float softness);
@@ -165,19 +158,6 @@ class SliderConstraint : public BaseConstraint, public Component {
   // damping: 0 to 1, it means how much velocity (or energy) is lost when
   // approaching/hitting the limits.
   void SetDampingOrthogonalLinearLimit(float damping);
-
-  // Softness when hitting the angular limits on the orthogonal axes (against
-  // the constraint axis) softness: 0 to 1, 1 means a very soft limit, like a
-  // spring
-  void SetSoftnessOrthogonalAngularLimit(float softness);
-  // Bounciness when hitting the angular limits on the orthogonal axes (against
-  // the constraint axis) restitution: 0 to 1, how much bounce is happening when
-  // hitting the limits
-  void SetRestitutionOrthogonalAngularLimit(float restitution);
-  // Damping when hitting the angular limits on the orthogonal axes (against the
-  // constraint axis) damping: 0 to 1, it means how much velocity (or energy) is
-  // lost when approaching/hitting the limits.
-  void SetDampingOrthogonalAngularLimit(float damping);
 
  protected:
   void SetLimitsFromState();

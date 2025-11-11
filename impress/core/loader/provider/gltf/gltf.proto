@@ -24,10 +24,12 @@ import "core/proto/imp.proto";
 option (imp.impress_append_namespace) = true;
 
 message Buffer {
-  string name = 1 [ctype = STRING_PIECE];
-  string uri = 2 [ctype = STRING_PIECE];
+  string name = 1 [(imp.string_type) = STRING_VIEW];
+  //
+  string uri = 2 [(imp.string_type) = STRING_VIEW];
   uint32 byte_length = 3;
-  string access = 4 [ctype = STRING_PIECE, json_name = "*do_not_use*"];
+  string access = 4
+      [(imp.string_type) = STRING_VIEW, json_name = "*do_not_use*"];
 }
 
 message MeshoptCompression {
@@ -52,7 +54,7 @@ message BufferView {
     ELEMENT_ARRAY_BUFFER_TARGET = 34963;
   }
 
-  string name = 1 [ctype = STRING_PIECE];
+  string name = 1 [(imp.string_type) = STRING_VIEW];
   optional uint32 buffer = 2;
   uint32 byte_offset = 3;
   uint32 byte_length = 4;
@@ -89,13 +91,13 @@ message SparseAccessor {
 }
 
 message Accessor {
-  string name = 1 [ctype = STRING_PIECE];
+  string name = 1 [(imp.string_type) = STRING_VIEW];
   optional uint32 buffer_view = 2;
   uint32 byte_offset = 3;
   ComponentType component_type = 4;
   bool normalized = 5;
   uint32 count = 6;
-  string type = 7 [ctype = STRING_PIECE];
+  string type = 7 [(imp.string_type) = STRING_VIEW];
   repeated float max = 8;
   repeated float min = 9;
   SparseAccessor sparse = 10 [(imp.optional_type) = ABSL_OPTIONAL];
@@ -118,7 +120,7 @@ message Sampler {
     REPEAT = 10497;
   }
 
-  string name = 1 [ctype = STRING_PIECE];
+  string name = 1 [(imp.string_type) = STRING_VIEW];
   MinMagFilter mag_filter = 2;
   MinMagFilter min_filter = 3;
   WrapMode wrap_s = 4;
@@ -126,11 +128,12 @@ message Sampler {
 }
 
 message Image {
-  string name = 1 [ctype = STRING_PIECE];
-  string uri = 2 [ctype = STRING_PIECE];
-  string mime_type = 3 [ctype = STRING_PIECE];
+  string name = 1 [(imp.string_type) = STRING_VIEW];
+  string uri = 2 [(imp.string_type) = STRING_VIEW];
+  string mime_type = 3 [(imp.string_type) = STRING_VIEW];
   optional uint32 buffer_view = 4;
-  string access = 5 [ctype = STRING_PIECE, json_name = "*do_not_use*"];
+  string access = 5
+      [(imp.string_type) = STRING_VIEW, json_name = "*do_not_use*"];
 }
 
 message TextureBasisu {
@@ -149,7 +152,7 @@ message TextureExtensions {
 }
 
 message Texture {
-  string name = 1 [ctype = STRING_PIECE];
+  string name = 1 [(imp.string_type) = STRING_VIEW];
   optional uint32 sampler = 2;
   optional uint32 source = 3;
   TextureExtensions extensions = 4;
@@ -256,13 +259,13 @@ message Material {
         [json_name = "GOOG_mask", (imp.optional_type) = ABSL_OPTIONAL];
   }
 
-  string name = 1 [ctype = STRING_PIECE];
+  string name = 1 [(imp.string_type) = STRING_VIEW];
   PbrMetallicRoughness pbr_metallic_roughness = 2;
   NormalTextureInfo normal_texture = 3;
   OcclusionTextureInfo occlusion_texture = 4;
   TextureInfo emissive_texture = 5;
   repeated float emissive_factor = 6;
-  string alpha_mode = 7 [ctype = STRING_PIECE];
+  string alpha_mode = 7 [(imp.string_type) = STRING_VIEW];
   optional float alpha_cutoff = 8;
   bool double_sided = 9;
   MaterialExtensions extensions = 10;
@@ -294,7 +297,7 @@ message Primitive {
   message FeatureId {
     uint32 feature_count = 1 [json_name = "featureCount"];
     optional uint32 null_feature_id = 2 [json_name = "nullFeatureId"];
-    string label = 3 [ctype = STRING_PIECE];
+    string label = 3 [(imp.string_type) = STRING_VIEW];
     optional FeatureIdAttribute attribute = 4
         [(imp.optional_type) = ABSL_OPTIONAL];
     optional FeatureIdTexture texture = 5 [(imp.optional_type) = ABSL_OPTIONAL];
@@ -338,14 +341,14 @@ message Mesh {
   message Extras {
     repeated string target_names = 1 [json_name = "targetNames"];
   }
-  string name = 1 [ctype = STRING_PIECE];
+  string name = 1 [(imp.string_type) = STRING_VIEW];
   repeated Primitive primitives = 2;
   repeated float weights = 3;  // default morph target weights.
   Extras extras = 4 [(imp.optional_type) = ABSL_OPTIONAL];
 }
 
 message Skin {
-  string name = 1 [ctype = STRING_PIECE];
+  string name = 1 [(imp.string_type) = STRING_VIEW];
   optional uint32 inverse_bind_matrices = 2;
   optional uint32 skeleton = 3;
   repeated uint32 joints = 4;
@@ -403,7 +406,7 @@ message Node {
     ];
   }
 
-  string name = 1 [ctype = STRING_PIECE];
+  string name = 1 [(imp.string_type) = STRING_VIEW];
   repeated uint32 children = 2;
   optional uint32 skin = 3;
   optional uint32 mesh = 4;
@@ -425,20 +428,20 @@ message Scene {
         [json_name = "ADBE_audio_emitter", (imp.optional_type) = ABSL_OPTIONAL];
   }
 
-  string name = 1 [ctype = STRING_PIECE];
+  string name = 1 [(imp.string_type) = STRING_VIEW];
   repeated uint32 nodes = 2;
   Extensions extensions = 3;
 }
 
 message AnimationSampler {
   optional uint32 input = 1;
-  string interpolation = 2 [ctype = STRING_PIECE];
+  string interpolation = 2 [(imp.string_type) = STRING_VIEW];
   optional uint32 output = 3;
 }
 
 message AnimationChannel {
   message AnimationPointer {
-    string pointer = 1 [ctype = STRING_PIECE];
+    string pointer = 1 [(imp.string_type) = STRING_VIEW];
   }
 
   message Extensions {
@@ -450,7 +453,7 @@ message AnimationChannel {
 
   message Target {
     optional uint32 node = 1;
-    string path = 2 [ctype = STRING_PIECE];
+    string path = 2 [(imp.string_type) = STRING_VIEW];
     Extensions extensions = 3;
   }
   optional uint32 sampler = 1;
@@ -458,7 +461,7 @@ message AnimationChannel {
 }
 
 message Animation {
-  string name = 1 [ctype = STRING_PIECE];
+  string name = 1 [(imp.string_type) = STRING_VIEW];
   repeated AnimationChannel channels = 2;
   repeated AnimationSampler samplers = 3;
 }
@@ -468,16 +471,16 @@ message LightPunctual {
     optional float inner_cone_angle = 1;
     optional float outer_cone_angle = 2;
   }
-  string name = 1 [ctype = STRING_PIECE];
+  string name = 1 [(imp.string_type) = STRING_VIEW];
   repeated float color = 2;
   optional float intensity = 3;
-  string type = 4 [ctype = STRING_PIECE];
+  string type = 4 [(imp.string_type) = STRING_VIEW];
   optional float range = 5;
   optional Spot spot = 6 [(imp.optional_type) = UNIQUE_PTR];
 }
 
 message MaterialVariant {
-  string name = 1 [ctype = STRING_PIECE];
+  string name = 1 [(imp.string_type) = STRING_VIEW];
 }
 
 // extensions/2.0/KHR_audio/schema/glTF.KHR_audio.schema.json
@@ -489,14 +492,14 @@ message AudioExtension {
       optional float cone_inner_angle = 1;
       optional float cone_outer_angle = 2;
       optional float cone_outer_gain = 3;
-      string distance_model = 4 [ctype = STRING_PIECE];
+      string distance_model = 4 [(imp.string_type) = STRING_VIEW];
       optional float max_distance = 5;
       optional float ref_distance = 6;
       optional float rolloff_factor = 7;
     }
 
-    string name = 1 [ctype = STRING_PIECE];
-    string type = 2 [ctype = STRING_PIECE];
+    string name = 1 [(imp.string_type) = STRING_VIEW];
+    string type = 2 [(imp.string_type) = STRING_VIEW];
     optional float gain = 3;
     repeated uint32 sources = 4;
     optional Positional positional = 5;
@@ -504,7 +507,7 @@ message AudioExtension {
 
   // https://github.com/omigroup/gltf-extensions/blob/main/extensions/2.0/KHR_audio/schema/source.schema.json
   message Source {
-    string name = 1 [ctype = STRING_PIECE];
+    string name = 1 [(imp.string_type) = STRING_VIEW];
     optional bool auto_play = 2;
     optional float gain = 3;
     optional bool loop = 4;
@@ -513,10 +516,11 @@ message AudioExtension {
 
   // https://github.com/omigroup/gltf-extensions/blob/main/extensions/2.0/KHR_audio/schema/audio.schema.json
   message Audio {
-    string uri = 1 [ctype = STRING_PIECE];
-    string mime_type = 2 [ctype = STRING_PIECE];
+    string uri = 1 [(imp.string_type) = STRING_VIEW];
+    string mime_type = 2 [(imp.string_type) = STRING_VIEW];
     optional uint32 buffer_view = 3;
-    string access = 4 [ctype = STRING_PIECE, json_name = "*do_not_use*"];
+    string access = 4
+        [(imp.string_type) = STRING_VIEW, json_name = "*do_not_use*"];
   }
 
   repeated Emitter emitters = 1;
@@ -547,8 +551,8 @@ message Gltf {
     Interactivity interactivity = 5
         [json_name = "KHR_interactivity", (imp.optional_type) = ABSL_OPTIONAL];
   }
-  repeated string extensions_used = 1 [ctype = STRING_PIECE];
-  repeated string extensions_required = 2 [ctype = STRING_PIECE];
+  repeated string extensions_used = 1 [(imp.string_type) = STRING_VIEW];
+  repeated string extensions_required = 2 [(imp.string_type) = STRING_VIEW];
   repeated Accessor accessors = 3;
   repeated Animation animations = 4;
   repeated Buffer buffers = 5;

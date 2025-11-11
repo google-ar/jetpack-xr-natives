@@ -173,8 +173,14 @@ std::array<const char*, 2> kOpenXRExtensionsAndroidSys = {
     XR_ANDROIDSYS_INPUT_TRACING_EXTENSION_NAME,
 };
 
-std::array<const char*, 1> kOpenXRExtensionAndroidXSpatialInteraction = {
+std::array<const char*, 2> kOpenXRExtensionAndroidXSpatialInteraction = {
     XR_ANDROIDX_SPATIAL_INTERACTION_EXTENSION_NAME,
+    XR_ANDROIDX_SPATIAL_INTERACTION_LIFECYCLE_EXTENSION_NAME,
+};
+
+std::array<const char*, 1> kOpenXRExtensionAndroidXGlobalPassthroughDimming = {
+    // TODO: Add official extension once api is finalized.
+    "XR_ANDROIDX1_global_passthrough_dimming",
 };
 
 absl::Time GetFilamentTimeNow() {
@@ -218,7 +224,9 @@ XrSessionHost::XrSessionHost(std::unique_ptr<BaseView> view,
       xr_timing_summary_(*GetView()),
       is_fb_color_space_enabled_(options.use_fb_color_space),
       is_android_system_extensions_enabled_(
-          options.enable_android_system_extensions) {
+          options.enable_android_system_extensions),
+      is_global_passthrough_dimming_extensions_enabled_(
+          options.use_global_passthrough_dimming_extensions) {
   SetupXrTimingSummary(xr_timing_summary_.GetSummary(),
                        xr_performance_state_.metrics);
   if (is_varjo_foveated_rendering_enabled_) {
@@ -542,7 +550,7 @@ absl::Status XrSessionHost::AdvanceFrame() {
   // Enqueue the views and frame time so that the render thread can pop the
   // information from the queue to submit the frame to OpenXr.
   if (display_state_ == XrHelpers::DisplayState::kDisplayEnabled) {
-    absl::MutexLock lock(&frame_queue_mutex_);
+    absl::MutexLock lock(frame_queue_mutex_);
     imp::output::Xr("Adding time %i to queue",
                     frame_state.predictedDisplayTime);
     frame_queue_.push(
@@ -620,7 +628,7 @@ bool XrSessionHost::IsXrFbColorSpaceEnabled() const {
 
 bool XrSessionHost::ShouldRenderVarjoFoveationThisFrame() {
   {
-    absl::MutexLock lock(&frame_queue_mutex_);
+    absl::MutexLock lock(frame_queue_mutex_);
     if (frame_queue_.empty()) {
       return false;
     }
@@ -656,6 +664,10 @@ bool XrSessionHost::IsXrEyeGazeInteractionEnabled() const {
 
 bool XrSessionHost::IsXrAndroidSystemExtensionsEnabled() const {
   return is_android_system_extensions_enabled_;
+}
+
+bool XrSessionHost::IsXrGlobalPassthroughDimmingExtensionsEnabled() const {
+  return is_global_passthrough_dimming_extensions_enabled_;
 }
 
 absl::Status XrSessionHost::EnsureSupportedExtensions(
@@ -810,6 +822,11 @@ absl::StatusOr<XrInstance> XrSessionHost::CreateInstance(JNIEnv* env,
   if (IsXrAndroidSystemExtensionsEnabled()) {
     extensions.insert(extensions.end(), kOpenXRExtensionsAndroidSys.begin(),
                       kOpenXRExtensionsAndroidSys.end());
+  }
+  if (IsXrGlobalPassthroughDimmingExtensionsEnabled()) {
+    extensions.insert(extensions.end(),
+                      kOpenXRExtensionAndroidXGlobalPassthroughDimming.begin(),
+                      kOpenXRExtensionAndroidXGlobalPassthroughDimming.end());
   }
 
   if (absl::Status all_supported = EnsureSupportedExtensions(extensions);
@@ -1541,7 +1558,7 @@ absl::Status XrSessionHost::EndFrame(XrSwapchain swapchain,
 
   QueuedFrameInfo frame_info;
   {
-    absl::MutexLock lock(&frame_queue_mutex_);
+    absl::MutexLock lock(frame_queue_mutex_);
     frame_info = std::move(frame_queue_.front());
     imp::output::Xr("Calling Xr end frame. displayTime=%i, queueSize=%i",
                     frame_info.display_time, frame_queue_.size());
@@ -2034,7 +2051,7 @@ filament::Engine::Config XrSessionHost::GetEngineConfig() {
 };
 
 void XrSessionHost::SetBeforeEndFrameCallback(Invocable<void()> callback) {
-  absl::MutexLock lock(&frame_queue_mutex_);
+  absl::MutexLock lock(frame_queue_mutex_);
   if (frame_queue_.empty()) {
     return;
   }
@@ -2042,7 +2059,7 @@ void XrSessionHost::SetBeforeEndFrameCallback(Invocable<void()> callback) {
 }
 
 void XrSessionHost::SetAfterEndFrameCallback(Invocable<void(int)> callback) {
-  absl::MutexLock lock(&frame_queue_mutex_);
+  absl::MutexLock lock(frame_queue_mutex_);
   if (frame_queue_.empty()) {
     return;
   }

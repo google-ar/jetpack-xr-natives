@@ -31,6 +31,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "absl/types/variant.h"
+#include "core/common/copyable_ptr.h"
 #include "core/common/template_helpers.h"
 #include "core/math/almost_equal.h"
 #include "core/proto/proto_common.h"
@@ -88,8 +89,8 @@ class ProtoDiffer {
                 absl::optional<T>* other);
 
   template <int field_type, typename T>
-  Cursor* Visit(Cursor* cursor, int field_id, std::unique_ptr<T>* field,
-                std::unique_ptr<T>* other);
+  Cursor* Visit(Cursor* cursor, int field_id, CopyablePtr<T>* field,
+                CopyablePtr<T>* other);
 
   template <int field_type, RepeatedMergeStrategy merge_type, typename T>
   Cursor* Visit(Cursor* cursor, int field_id, std::vector<T>* field,
@@ -195,8 +196,8 @@ ProtoDiffer::Cursor* ProtoDiffer::Visit(Cursor* cursor, int field_id,
 
 template <int field_type, typename T>
 ProtoDiffer::Cursor* ProtoDiffer::Visit(Cursor* cursor, int field_id,
-                                        std::unique_ptr<T>* field,
-                                        std::unique_ptr<T>* other) {
+                                        CopyablePtr<T>* field,
+                                        CopyablePtr<T>* other) {
   // We can only diff them if one of them contains a value.
   if (!field->get() || !other->get()) {
     if (field->get() || other->get()) {

@@ -35,6 +35,7 @@
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
 #include "core/common/bit_flag.h"
+#include "core/common/copyable_ptr.h"
 #include "core/common/template_helpers.h"
 #include "core/editor/editor_field_control.h"
 #include "core/editor/editor_style.h"
@@ -127,7 +128,7 @@ class EditorProtoVisitor {
     return ++field_index;
   }
 
-  // Helper for handling the UI for both std::optional and std::unique_ptr.
+  // Helper for handling the UI for both std::optional and CopyablePtr.
   template <int field_type, typename T, typename OptionalT, typename HasValueFn,
             typename GetValueFn, typename AssignOptionalFn>
   Cursor VisitOptionalHelper(Cursor field_index, int field_id, OptionalT* field,
@@ -250,15 +251,15 @@ class EditorProtoVisitor {
         });
   }
 
-  // Handles the case where the field is a std::unique_ptr
+  // Handles the case where the field is a CopyablePtr
   template <int field_type, typename T>
-  Cursor Visit(Cursor field_index, int field_id, std::unique_ptr<T>* field,
-               std::unique_ptr<T>* other) {
+  Cursor Visit(Cursor field_index, int field_id, CopyablePtr<T>* field,
+               CopyablePtr<T>* other) {
     return VisitOptionalHelper<field_type, T>(
         field_index, field_id, field, other,
-        +[](std::unique_ptr<T>* field) { return field->get() != nullptr; },
-        +[](std::unique_ptr<T>* field) { return field->get(); },
-        +[](std::unique_ptr<T>* field, T assignment) {
+        +[](CopyablePtr<T>* field) { return field->get() != nullptr; },
+        +[](CopyablePtr<T>* field) { return field->get(); },
+        +[](CopyablePtr<T>* field, T assignment) {
           field->reset(new T(std::move(assignment)));
         });
   }
@@ -632,7 +633,9 @@ class EditorProtoVisitor {
             ImGui::Selectable(
                 GenerateUniqueImGuiLabel(label_str, field).c_str(), &selected);
             if (selected && field->index() != i) {
-              field->template emplace<i>();
+              using FieldT = typename std::remove_const<
+                  std::decay_t<std::variant_alternative_t<i, T>>>::type;
+              field->template emplace<i>(FieldT{});
               updated_ = true;
             }
           });

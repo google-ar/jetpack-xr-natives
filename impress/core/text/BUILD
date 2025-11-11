@@ -80,12 +80,17 @@ imp_assets(
 
 cc_library(
     name = "glyph_atlas",
-    srcs = ["glyph_atlas.cc"],
-    hdrs = ["glyph_atlas.h"],
+    srcs = [
+        "glyph_atlas.cc",
+    ],
+    hdrs = [
+        "glyph_atlas.h",
+    ],
     copts = imp_google3_copts(),
     deps = [
         ":glyph_emulator",
         ":text_helpers",
+        ":text_metrics_cc_proto",
         "//core:config",
         "//core/async:executor",
         "//core/async:future",
@@ -103,6 +108,7 @@ cc_library(
         "//core/common:ref_counter",
         "//core/common:rememberer",
         "//core/common:trace",
+        "//core/common:typed_ids",
         "//core/geometry/shapes",
         "//core/math",
         "//core/ncsb",
@@ -133,12 +139,75 @@ cc_library(
 )
 
 cc_library(
+    name = "sliced_glyph_atlas",
+    srcs = [
+        "glyph_atlas_slice.cc",
+        "sliced_glyph_atlas.cc",
+    ],
+    hdrs = [
+        "glyph_atlas_slice.h",
+        "sliced_glyph_atlas.h",
+    ],
+    copts = imp_google3_copts(),
+    deps = [
+        ":glyph_emulator",
+        ":text_helpers",
+        ":text_metrics_cc_proto",
+        "//core:config",
+        "//core/async:executor",
+        "//core/async:future",
+        "//core/atlas:atlas_packer",
+        "//core/atlas:shelf_atlas_packer",
+        "//core/canvas:async_canvas_source",
+        "//core/canvas:async_canvas_source_factory",
+        "//core/canvas:canvas_interfaces",
+        "//core/canvas:constants",
+        "//core/canvas/fonts:font_holder",
+        "//core/canvas/fonts:font_params_helper",
+        "//core/canvas/fonts:font_params_proto_cc",
+        "//core/canvas/fonts:system_font_provider",
+        "//core/common:hash",
+        "//core/common:ref_counter",
+        "//core/common:rememberer",
+        "//core/common:trace",
+        "//core/common:typed_ids",
+        "//core/geometry/shapes",
+        "//core/math",
+        "//core/ncsb",
+        "//core/render",
+        "//core/view:base_view",
+        "//core/view:view_events",
+        "//core/view/utils:device",
+        "//core/view/utils:string_map",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/base:nullability",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/types:variant",
+        "@com_google_impress//core/common:log",
+        "@icu//icu4c/source/common:headers",
+    ] + if_dev_runtime([
+        "//core/editor",
+        "//core/editor:widget_ui_system",
+        "//core/editor/layout:editor_panel_ids",
+        "//core/text/editor:sliced_glyph_atlas_visualizer",
+    ]),
+    alwayslink = 1,
+)
+
+cc_library(
     name = "glyph_emulator",
     srcs = ["glyph_emulator.cc"],
     hdrs = ["glyph_emulator.h"],
     copts = imp_google3_copts(),
     deps = [
         ":text_helpers",
+        ":text_metrics_cc_proto",
         "//core:config",
         "//core/async:executor",
         "//core/async:future",
@@ -172,6 +241,7 @@ proto_library(
     name = "text_renderer_proto",
     srcs = ["text_renderer_state.proto"],
     deps = [
+        ":text_metrics_proto",
         "//core/canvas/fonts:font_params_proto",
         "//core/math:math_proto",
         "//core/proto:imp_proto",
@@ -182,8 +252,19 @@ imp_cc_proto_library(
     name = "text_renderer_proto_cc",
     proto = ":text_renderer_proto",
     deps = [
+        ":text_metrics_cc_proto",
         "//core/math:math_proto_cc",
     ],
+)
+
+proto_library(
+    name = "text_metrics_proto",
+    srcs = ["text_metrics.proto"],
+)
+
+cc_proto_library(
+    name = "text_metrics_cc_proto",
+    deps = [":text_metrics_proto"],
 )
 
 cc_library(
@@ -198,6 +279,8 @@ cc_library(
     deps = [
         ":glyph_atlas",
         ":glyph_emulator",
+        ":sliced_glyph_atlas",
+        ":text_metrics_cc_proto",
         ":text_renderer_assets",
         ":text_renderer_proto_cc",
         "//core:config",

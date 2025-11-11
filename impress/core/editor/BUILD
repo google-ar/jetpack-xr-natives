@@ -153,6 +153,7 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         ":command",
+        ":editor",
         ":events",
         ":selection_controller",
         "//core/async:future",
@@ -335,6 +336,7 @@ cc_library(
     deps = [
         ":editor_style",
         "//core/common:bit_flag",
+        "//core/common:copyable_ptr",
         "//core/common:template_helpers",
         "//core/editor/layout:editor_control_flags",
         "//core/editor/layout:helpers",

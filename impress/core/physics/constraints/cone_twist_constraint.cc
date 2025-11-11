@@ -15,7 +15,6 @@
 #include "core/physics/constraints/cone_twist_constraint.h"
 
 #include <memory>
-#include <optional>
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
@@ -31,12 +30,12 @@
 namespace imp {
 
 void ConeTwistConstraint::LoadDefaultStateValues() {
-  state_.connected_pivot = kZero3;
-  state_.connected_axis = kZAxis3f;
-  state_.connected_up_axis = kYAxis3f;
   state_.pivot = kZero3;
   state_.axis = kZAxis3f;
   state_.up_axis = kYAxis3f;
+  state_.connected_pivot = kZero3;
+  state_.connected_axis = kZAxis3f;
+  state_.connected_up_axis = kYAxis3f;
   state_.swing_span_one = BT_LARGE_FLOAT;
   state_.swing_span_two = BT_LARGE_FLOAT;
   state_.twist_span = BT_LARGE_FLOAT;
@@ -54,30 +53,23 @@ absl::Status ConeTwistConstraint::Setup() {
   return SetupInternal();
 }
 
-absl::Status ConeTwistConstraint::Setup(
-    NodeHandle connected_node, bool auto_configure, float3 connected_pivot,
-    float3 connected_axis, float3 connected_up_axis,
-    std::optional<float3> pivot, std::optional<float3> axis,
-    std::optional<float3> up_axis) {
+absl::Status ConeTwistConstraint::Setup(NodeHandle connected_node, float3 pivot,
+                                        float3 axis, float3 up_axis,
+                                        bool auto_configure,
+                                        float3 connected_pivot,
+                                        float3 connected_axis,
+                                        float3 connected_up_axis) {
   LoadDefaultStateValues();
 
   state_.connected_node.AssignSceneHandleForNode(connected_node);
   state_.auto_configure = auto_configure;
+
+  state_.pivot = pivot;
+  state_.axis = axis;
+  state_.up_axis = up_axis;
   state_.connected_pivot = connected_pivot;
   state_.connected_axis = connected_axis;
   state_.connected_up_axis = connected_up_axis;
-  if (pivot.has_value()) {
-    state_.pivot = pivot.value();
-  }
-  if (axis.has_value()) {
-    state_.axis = axis.value();
-  }
-  if (axis.has_value()) {
-    state_.axis = axis.value();
-  }
-  if (up_axis.has_value()) {
-    state_.up_axis = up_axis.value();
-  }
   return SetupInternal();
 }
 
@@ -95,14 +87,12 @@ absl::Status ConeTwistConstraint::SetupInternal() {
     return absl::OkStatus();
   }
 
-  if (state_.auto_configure) {
-    state_.connected_pivot = ComputePivotAFromB(
-        state_.connected_node, GetNode(), state_.pivot.value_or(kZero3));
-    state_.connected_axis = ComputeAxisAFromB(state_.connected_node, GetNode(),
-                                              state_.axis.value_or(kZAxis3f));
-    state_.connected_up_axis = ComputeAxisAFromB(
-        state_.connected_node, GetNode(), state_.up_axis.value_or(kYAxis3f));
-  }
+  float3 axis = state_.axis.value_or(kZAxis3f);
+  float3 up_axis = state_.up_axis.value_or(kYAxis3f);
+
+  float3 connected_pivot;
+  float3 connected_axis;
+  float3 connected_up_axis;
 
   btRigidBody* bt_rigid_body_A =
       const_cast<btRigidBody*>(&GetRigidBodyA()->GetBtRigidBody());
@@ -111,32 +101,51 @@ absl::Status ConeTwistConstraint::SetupInternal() {
           ? nullptr
           : const_cast<btRigidBody*>(&GetRigidBodyB()->GetBtRigidBody());
 
-  if (bt_rigid_body_B == nullptr) {
-    // then we will attach it to the world
-    Transform<float> frame_in_A_t = Transform<float>(
-        mat4::lookTo(state_.connected_axis, state_.connected_pivot,
-                     state_.connected_up_axis));
-    btTransform frame_in_A =
-        ToBtTransform(frame_in_A_t.translation, frame_in_A_t.rotation);
-    bt_constraint_ =
-        std::make_unique<btConeTwistConstraint>(*bt_rigid_body_A, frame_in_A);
+  if (state_.auto_configure || bt_rigid_body_B == nullptr) {
+    connected_pivot =
+        ComputePivotAFromB(state_.connected_node, GetNode(), state_.pivot);
+    connected_axis = ComputeAxisAFromB(state_.connected_node, GetNode(), axis);
+    connected_up_axis =
+        ComputeAxisAFromB(state_.connected_node, GetNode(), up_axis);
   } else {
-    float3 xAxis =
-        normalize(cross(state_.connected_up_axis, state_.connected_axis));
-    mat3f rot = mat3f(xAxis, state_.connected_up_axis, state_.connected_axis);
-    btTransform frame_in_A =
-        ToBtTransform(state_.connected_pivot, rot.toQuaternion());
+    connected_pivot = state_.connected_pivot.value_or(kZero3);
+    connected_axis = state_.connected_axis.value_or(kZAxis3f);
+    connected_up_axis = state_.connected_up_axis.value_or(kYAxis3f);
+  }
 
-    xAxis = normalize(cross(state_.up_axis.value_or(kYAxis3f),
-                            state_.axis.value_or(kZAxis3f)));
-    rot = mat3f(xAxis, state_.up_axis.value_or(kYAxis3f),
-                state_.axis.value_or(kZAxis3f));
-    btTransform frame_in_B =
-        ToBtTransform(state_.pivot.value_or(kZero3), rot.toQuaternion());
+  float3 xAxis = normalize(cross(connected_up_axis, connected_axis));
+  mat3f rot = mat3f(xAxis, connected_up_axis, connected_axis);
+  btTransform frame_in_A = ToBtTransform(connected_pivot, rot.toQuaternion());
+
+  if (bt_rigid_body_B == nullptr) {
+    // btConeTwistConstraint implementation moves the pivot to origin.
+    // So, to have a consistent behavior with the other constraints, we do the
+    // same implementation here: we use the fixed body as the world anchor, and
+    // we follow the two-body implementation.
+    xAxis = normalize(cross(up_axis, axis));
+    rot = mat3f(xAxis, up_axis, axis);
+    Transform<float> t =
+        Transform<float>(GetNode()->GetWorldTrs() * mat4f(rot, state_.pivot));
+
+    btTransform frame_in_B = ToBtTransform(t.translation, t.rotation);
+
+    bt_constraint_ = std::make_unique<btConeTwistConstraint>(
+        *bt_rigid_body_A, btConeTwistConstraint::getFixedBody(), frame_in_A,
+        frame_in_B);
+  } else {
+    xAxis = normalize(cross(up_axis, axis));
+    rot = mat3f(xAxis, up_axis, axis);
+    btTransform frame_in_B = ToBtTransform(state_.pivot, rot.toQuaternion());
 
     bt_constraint_ = std::make_unique<btConeTwistConstraint>(
         *bt_rigid_body_A, *bt_rigid_body_B, frame_in_A, frame_in_B);
   }
+
+  state_.axis = axis;
+  state_.up_axis = up_axis;
+  state_.connected_pivot = connected_pivot;
+  state_.connected_axis = connected_axis;
+  state_.connected_up_axis = connected_up_axis;
 
   SetLimitsFromState();
   SetMotorParametersFromState();

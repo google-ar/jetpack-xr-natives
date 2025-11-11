@@ -18,35 +18,47 @@
 #define THIRD_PARTY_IMPRESS_CORE_PARTICLE_PARTICLE_SERVICE_H_
 
 #include <cstdint>
+#include <list>
 
-#include "core/common/owned_ptr.h"
-#include "core/particle/particle_data.h"
-#include "core/particle/particle_data_provider.h"
-#include "core/particle/particle_emitter_info.h"
-#include "core/view/utils/frame_time.h"
+#include "core/particle/data_layout.h"
+#include "core/particle/particle_emitter_state.proto.imp.h"
+#include "core/particle/particle_instance.h"
+#include "core/particle/standard_particle_data_provider.h"
 
 namespace imp {
 
-// The Particle Service represents the API interface for services that manage
-// the storage of particle state data and their lifecycle management. This
-// interface must be implemented in a derived class to be used by the
-// Particle Emitter.
+// The Particle Service object manages the current state of each particle in
+// an instance of a particle system. It provides facilities to create and
+// destroy particles as needed, and provides a ParticleInstance accessor to
+// allow users to inspect and modify the state of a particle.
+//
+// The ParticleService is owned by a Particle Controller, which implements
+// the visual representation and behavior of each particle in the scene.
+// For example, node based particles will pair each ParticleService particle
+// instance with a scene Node, and keep them in sync each frame.
 class ParticleService {
  public:
-  ParticleService() = default;
-  virtual ~ParticleService() = default;
+  // Initializes the service.
+  ParticleService(const ParticleConfig& particle_config, int32_t max_particles);
 
-  // Performs common maintenance tasks for all active particles.
-  virtual void ProcessActiveParticles(const FrameTime& frame_time) = 0;
+  // Returns a ParticleInstance for the given particle_index. The object can
+  // be used to inspect and modify the state of the particle for any behavior
+  // it was configured to perform. It should not be held beyond the current
+  // frame.
+  ParticleInstance GetParticleInstance(int32_t particle_index);
 
- protected:
-  virtual ParticleData GetDataForParticle(int32_t particle_index) = 0;
-  virtual ParticleEmitterInfo GetEmitterInfo() const = 0;
-  virtual ParticleDataProvider& GetDataProvider() = 0;
+  // Creates a new particle from the pool of available particles.
+  int32_t CreateParticle();
+
+  // Destroys a particle, returning its resources to the pool of available
+  // particles.
+  void DestroyParticle(int32_t particle_index);
+
+ private:
+  imp_particle::DataLayout data_layout_;
+  StandardParticleDataProvider data_provider_;
+  std::list<int32_t> free_particle_indices_;
 };
-
-// OwnedPtr definition for ParticleServices.
-using OwnedParticleServicePtr = OwnedPtr<ParticleService>;
 
 }  // namespace imp
 

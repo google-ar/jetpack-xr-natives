@@ -26,8 +26,9 @@ namespace imp {
 
 namespace AsyncCanvasSourceFactory {
 
-std::unique_ptr<AsyncCanvasSource> Create(Context context,
-                                          bool use_hardware_rendering = true);
+std::unique_ptr<AsyncCanvasSource> Create(
+    Context context, bool use_hardware_rendering = true,
+    bool force_auto_method_rendering = false);
 
 }  // namespace AsyncCanvasSourceFactory
 

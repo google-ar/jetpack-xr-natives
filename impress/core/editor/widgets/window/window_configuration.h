@@ -91,11 +91,21 @@ class WindowConfiguration {
   // Notifies the WindowConfiguration that the default layout has been restored.
   void NotifyLayoutRestored() { should_restore_default_layout_ = false; }
 
+  // Saves the layout to the ini file.
+  void SaveLayoutToIniFile();
+
+  // Returns true if the layout should be saved to the ini file.
+  bool ShouldSaveLayoutToIniFile() const;
+
+  // Notifies the WindowConfiguration that the layout has been saved.
+  void NotifyLayoutSaved();
+
  private:
   std::vector<std::string> window_names_;
   // Keep track of the window names and their initial and current visibilities.
   WindowInfoMap window_infos_;
   bool should_restore_default_layout_ = false;
+  bool should_save_layout_to_ini_file_ = false;
   bool hide_all_ = false;
 };
 

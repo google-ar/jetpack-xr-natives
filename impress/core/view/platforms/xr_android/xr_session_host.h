@@ -94,6 +94,7 @@ class XrSessionHost : public ViewHost {
     bool use_fb_color_space = false;
     bool enable_android_system_extensions = false;
     float swapchain_size_multiplier = 1.0f;
+    bool use_global_passthrough_dimming_extensions = false;
   };
 
   // Metrics for performance monitoring.
@@ -243,6 +244,7 @@ class XrSessionHost : public ViewHost {
   bool IsXrAndroidDepthTextureEnabled() const;
   bool IsXrEyeGazeInteractionEnabled() const;
   bool IsXrAndroidSystemExtensionsEnabled() const;
+  bool IsXrGlobalPassthroughDimmingExtensionsEnabled() const;
 
   void SetFoveationLevel(XrFoveationLevelFB xr_foveation_level_fb);
 
@@ -557,6 +559,9 @@ class XrSessionHost : public ViewHost {
 
   // Whether the Android system extensions are enabled.
   bool is_android_system_extensions_enabled_ = false;
+
+  // Whether the global passthrough dimming extensions are enabled.
+  bool is_global_passthrough_dimming_extensions_enabled_ = false;
 
   // All enabled extensions
   RobinSet<std::string> enabled_extensions_;

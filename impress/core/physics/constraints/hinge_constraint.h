@@ -68,16 +68,33 @@ class HingeConstraint : public BaseConstraint, public Component {
   //    connected_node:
   //          - another node that holds one or the only rigid body of this
   //          constraint.
+  //
+  //     pivot:
+  //          - the pivot of the constraint frame in the owner node's local
+  //          space.
+  //
+  //     axis:
+  //          - the axis of the constraint in the owner node's local space.
+  //
   //    auto_configure:
   //          - If true, set that constraint (pivot and axis) to respect the
   //          current transformation of node(s).
   //          - If false, set the constraint to respect the value of
   //          `connected_pivot` and `connected_axis`, which may move the nodes.
-  absl::Status Setup(NodeHandle connected_node, bool auto_configure = true,
-                     float3 connected_pivot = float3(0.0f),
-                     float3 connected_axis = float3(0.0f, 0.0f, 1.0f),
-                     std::optional<float3> pivot = std::nullopt,
-                     std::optional<float3> axis = std::nullopt);
+  //
+  //     connected_pivot:
+  //          - the pivot of the constraint frame in the connected node's local
+  //          space.
+  //
+  //     connected_axis:
+  //          - the axis of the constraint in the connected node's local space.
+  //
+  // Note: that the axes pairs specified (connected_axis and connected_up_axis,
+  // axis and up_axis) must be orthogonal.
+  absl::Status Setup(NodeHandle connected_node, float3 pivot = kZero3,
+                     float3 axis = kZAxis3f, bool auto_configure = true,
+                     float3 connected_pivot = kZero3,
+                     float3 connected_axis = kZAxis3f);
 
   // Sets the constraint with the already filled state.
   absl::Status SetupWithState();
@@ -99,7 +116,8 @@ class HingeConstraint : public BaseConstraint, public Component {
 
   bool IsReady() const { return state_.is_ready; }
 
-  // the limits in degrees of the hinge
+  // The limits in degrees of the hinge. Zero position represents the initial
+  // position of the bodies.
   void SetLimits(float lower_limit, float upper_limit);
 
   // Error correction speed: how quickly the constraint tries to correct

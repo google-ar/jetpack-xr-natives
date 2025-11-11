@@ -30,6 +30,9 @@ XrUuidEXT ConvertToXrUuid(JNIEnv* env, const jobject& uuid);
 // Returns an 'XrSpace' from a 'long' JVM object.
 XrSpace ConvertToXrSpace(const jlong& space);
 
+// Returns an 'XrQuaternionf' from an 'androidx/xr/math/Quaternion' JVM object.
+XrQuaternionf ConvertToXrQuaternionf(JNIEnv* env, const jobject& quaternion);
+
 }  // namespace androidx::xr::openxr
 
 #endif  // JETPACK_XR_NATIVES_OPENXR_JOBJECT_CONVERTER_H_

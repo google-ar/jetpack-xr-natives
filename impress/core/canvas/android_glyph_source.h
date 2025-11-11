@@ -27,6 +27,7 @@
 #include "core/common/context.h"
 #include "core/common/jni_helpers.h"
 #include "core/math/vec.h"
+#include "core/text/text_metrics.proto.h"
 #include "core/view/platforms/android/wrappers/canvas.h"
 #include "core/view/platforms/android/wrappers/paint.h"
 
@@ -71,9 +72,8 @@ class AndroidGlyphSource : public JavaWrapper {
   /**
    * See CanvasSource::GetGlyphMetrics().
    */
-  ScopedCanvas::TextMetrics GetGlyphMetrics(int glyph_id, FontHolder* font,
-                                            float stroke_width,
-                                            android::Paint& paint);
+  TextMetrics GetGlyphMetrics(int glyph_id, FontHolder* font,
+                              float stroke_width, android::Paint& paint);
 
   /**
    * See CanvasSource::GetTextGlyphs().
@@ -99,6 +99,17 @@ class AndroidGlyphSource : public JavaWrapper {
   JniHandle get_text_glyphs_;
   JniHandle get_combined_character_groups_;
   JniHandle draw_glyph_;
+
+  JniUniquePtr<jclass> glyph_advance_class_;
+  jmethodID glyph_advance_get_id_;
+  jmethodID glyph_advance_get_width_;
+  jmethodID glyph_advance_get_font_;
+  jmethodID glyph_advance_is_emoji_;
+
+  int GlyphAdvanceGetId(jobject object);
+  float GlyphAdvanceGetWidth(jobject object);
+  jobject GlyphAdvanceGetFont(jobject object);
+  bool GlyphAdvanceIsEmoji(jobject object);
 };
 
 }  // namespace imp

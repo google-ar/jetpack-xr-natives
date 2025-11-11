@@ -17,6 +17,7 @@
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "core/common/registry.h"
+#include "core/math/almost_equal.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node_handle.h"
@@ -47,6 +48,10 @@ absl::Status BaseConstraint::InitializeWithNodes(NodeHandle connected_node,
   if (!physics_manager_) {
     BaseView& view = owner_node->GetView();
     physics_manager_ = &view.GetRegistry().GetOrCreate<PhysicsManager>(view);
+  }
+
+  if (owner_node_ != owner_node) {
+    owner_node_transform_prev_ = owner_node->GetWorldTrs();
   }
 
   connected_node_ = connected_node;
@@ -124,12 +129,24 @@ void BaseConstraint::CheckIntegrityAndUpdate() {
       rigid_body_a && rigid_body_a->IsBulletRigidBodyRecreated();
   bool owner_node_recreated =
       rigid_body_b && rigid_body_b->IsBulletRigidBodyRecreated();
+
+  is_bt_constraint_recreated_ = false;
+
   if (connected_node_valid_prev_ != connected_node_valid ||
       owner_node_valid_prev_ != owner_node_valid || connected_node_recreated ||
       owner_node_recreated) {
     connected_node_valid_prev_ = connected_node_valid;
     owner_node_valid_prev_ = owner_node_valid;
+    is_bt_constraint_recreated_ = true;
     OnRigidBodiesChanged();
+  } else if (owner_node_valid == false) {
+    // To check if the owner node was moved in the case of a world attached
+    // constraint.
+    if (!AlmostEqual(owner_node_transform_prev_, owner_node_->GetWorldTrs())) {
+      owner_node_transform_prev_ = owner_node_->GetWorldTrs();
+      is_bt_constraint_recreated_ = true;
+      OnRigidBodiesChanged();
+    }
   }
 }
 

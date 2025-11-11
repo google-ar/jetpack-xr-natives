@@ -34,6 +34,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
+#include "core/common/copyable_ptr.h"
 #include "core/common/platform_helpers.h"
 #include "core/common/robin_map.h"
 #include "core/common/type_traits.h"
@@ -81,8 +82,8 @@ class ProtoReader {
                     absl::optional<T>* other, int wire_type);
 
   template <int field_type, typename T>
-  const char* Visit(const char* ptr, int field_id, std::unique_ptr<T>* field,
-                    std::unique_ptr<T>* other, int wire_type);
+  const char* Visit(const char* ptr, int field_id, CopyablePtr<T>* field,
+                    CopyablePtr<T>* other, int wire_type);
 
   template <int field_type, RepeatedMergeStrategy merge_type, typename T>
   const char* Visit(const char* ptr, int field_id, std::vector<T>* field,
@@ -203,7 +204,7 @@ const char* ProtoReader::Visit(const char* ptr, int field_id,
                                absl::optional<T>* field,
                                absl::optional<T>* other, int wire_type) {
   if (!field->has_value()) {
-    field->emplace();
+    field->emplace(T());
   }
   return Visit<field_type>(ptr, field_id, &(**field), static_cast<T*>(nullptr),
                            wire_type);
@@ -211,10 +212,10 @@ const char* ProtoReader::Visit(const char* ptr, int field_id,
 
 template <int field_type, typename T>
 const char* ProtoReader::Visit(const char* ptr, int field_id,
-                               std::unique_ptr<T>* field,
-                               std::unique_ptr<T>* other, int wire_type) {
+                               CopyablePtr<T>* field, CopyablePtr<T>* other,
+                               int wire_type) {
   if (!*field) {
-    *field = std::make_unique<T>();
+    *field = MakeCopyablePtr<T>();
   }
   return Visit<field_type>(ptr, field_id, field->get(),
                            static_cast<T*>(nullptr), wire_type);

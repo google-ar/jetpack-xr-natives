@@ -71,7 +71,89 @@ public class ImpApi implements ImpApiScuba {
     };
   }
 
+  /** Builder for creating ImpApi. */
+  public static class Builder {
+    private final SetupParams setupParams;
+    private final Context context;
+    private final android.view.View androidView;
+    @Nullable private FragmentHost host = null;
+    private long eglContext = 0;
+    @Nullable private FrameScheduler.Factory frameSchedulerFactory = null;
+
+    public Builder(SetupParams setupParams, Context context, android.view.View androidView) {
+      this.setupParams = setupParams;
+      this.context = context;
+      this.androidView = androidView;
+    }
+
+    /**
+     * Sets the fragment host for hosting a WebView. This is only needed if the client app intends
+     * to embed a webview within the Impress View.
+     */
+    public Builder setFragmentHost(@Nullable FragmentHost host) {
+      this.host = host;
+      return this;
+    }
+
+    /** Sets the EGL context for the Impress View. */
+    public Builder setEglContext(long eglContext) {
+      this.eglContext = eglContext;
+      return this;
+    }
+
+    /**
+     * Sets the factory for creating a frame scheduler for the Impress View. If unset, the default
+     * used is ChoreographerFrameScheduler.Factory.
+     */
+    public Builder setFrameSchedulerFactory(FrameScheduler.Factory frameSchedulerFactory) {
+      this.frameSchedulerFactory = frameSchedulerFactory;
+      return this;
+    }
+
+    /**
+     * Creates an ImpApi synchronously on the frame thread. This call will block the calling thread
+     * until the ImpApi is ready to use.
+     */
+    public ImpApi createSync() {
+      return ImpApi.createSync(
+          setupParams, context, androidView, host, eglContext, frameSchedulerFactory);
+    }
+
+    /**
+     * Creates an ImpApi asynchronously on the provided executor. The postCreatedCallback will be
+     * called on the calling thread when the ImpApi is ready to use.
+     *
+     * <p>The returned ImpApi will no-op any API calls until it is done. First, it loads the library
+     * on the provided Executor. Then, it switches back to the calling thread to setup and call the
+     * postCreatedCallback. After this point, all API should work and need to be called from the
+     * calling thread
+     */
+    public ImpApi createAsync(Executor executor, PostCreatedCallback postCreatedCallback) {
+      return ImpApi.createAsync(
+          setupParams,
+          context,
+          androidView,
+          host,
+          eglContext,
+          executor,
+          postCreatedCallback,
+          frameSchedulerFactory);
+    }
+
+    /**
+     * Creates an ImpApi asynchronously on the provided executor.
+     *
+     * <p>The library is loaded asynchronously on the provided Executor, then switches to the frame
+     * scheduler's Executor to complete the set up of the Impress View.
+     */
+    public ListenableFuture<ImpApi> createAsync(Executor executor) {
+      return ImpApi.createAsync(
+          setupParams, context, androidView, host, executor, frameSchedulerFactory);
+    }
+  }
+
   /** ImpApi is valid for further calls immediately. */
+  @Deprecated // Use the builder instead.
   public static ImpApi createSync(
       SetupParams setupParams,
       Context context,
@@ -81,6 +163,7 @@ public class ImpApi implements ImpApiScuba {
   }
 
   /** ImpApi is valid for further calls immediately. */
+  @Deprecated // Use the builder instead.
   public static ImpApi createSync(
       SetupParams setupParams,
       Context context,
@@ -90,6 +173,8 @@ public class ImpApi implements ImpApiScuba {
     return createSync(setupParams, context, androidView, host, eglContext, null);
   }
 
+  /** ImpApi is valid for further calls immediately. */
+  @Deprecated // Use the builder instead.
   public static ImpApi createSync(
       SetupParams setupParams,
       Context context,
@@ -141,12 +226,14 @@ public class ImpApi implements ImpApiScuba {
               setupParams.getIsOpaque(),
               view,
               setupParams.getDesiredSizeScale(),
-              setupParams.getSwapChainFlags()));
+              setupParams.getSwapChainFlags(),
+              setupParams.getUseSynchronousSurfaceChanges()));
     } catch (InterruptedException | ExecutionException e) {
       throw new IllegalStateException("Unable to initialize Impress API", e);
     }
   }
 
+  @Deprecated // Use the builder instead.
   public static ListenableFuture<View> createViewAsync(
       SetupParams setupParams, Context context, FragmentHost host, Executor executor) {
     return Futures.submit(
@@ -167,6 +254,7 @@ public class ImpApi implements ImpApiScuba {
    * postCreatedCallback. After this point, all API should work and need to be called from the main
    * thread.
    */
+  @Deprecated // Use the builder instead.
   public static ImpApi createAsync(
       SetupParams setupParams,
       Context context,
@@ -177,6 +265,7 @@ public class ImpApi implements ImpApiScuba {
     return createAsync(setupParams, context, androidView, host, 0, executor, postCreatedCallback);
   }
 
+  @Deprecated // Use the builder instead.
   public static ImpApi createAsync(
       SetupParams setupParams,
       Context context,
@@ -189,6 +278,7 @@ public class ImpApi implements ImpApiScuba {
         setupParams, context, androidView, host, eglContext, executor, postCreatedCallback, null);
   }
 
+  @Deprecated // Use the builder instead.
   public static ImpApi createAsync(
       SetupParams setupParams,
       Context context,
@@ -224,7 +314,8 @@ public class ImpApi implements ImpApiScuba {
                     setupParams.getIsOpaque(),
                     view,
                     setupParams.getDesiredSizeScale(),
-                    setupParams.getSwapChainFlags());
+                    setupParams.getSwapChainFlags(),
+                    setupParams.getUseSynchronousSurfaceChanges());
             postCreatedCallback.accept(impApi);
           }
 
@@ -239,6 +330,7 @@ public class ImpApi implements ImpApiScuba {
     return impApi;
   }
 
+  @Deprecated // Use the builder instead.
   public static ListenableFuture<ImpApi> createAsync(
       SetupParams setupParams,
       Context context,
@@ -249,6 +341,7 @@ public class ImpApi implements ImpApiScuba {
         setupParams, context, androidView, host, executor, (FrameScheduler.Factory) null);
   }
 
+  @Deprecated // Use the builder instead.
   public static ListenableFuture<ImpApi> createAsync(
       SetupParams setupParams,
       Context context,
@@ -277,37 +370,14 @@ public class ImpApi implements ImpApiScuba {
                   setupParams.getIsOpaque(),
                   view,
                   setupParams.getDesiredSizeScale(),
-                  setupParams.getSwapChainFlags()));
+                  setupParams.getSwapChainFlags(),
+                  setupParams.getUseSynchronousSurfaceChanges()));
         },
         frameScheduler.getExecutor());
   }
 
-  // The following two functions are only required in a test setting when determining the value of
-  // the platform handle requires ImpViewController to already be instantiated.
-  // TODO Clean this up.
-  
-  public static ImpApi createForTesting(
-      Context context,
-      String customNativeLibrary,
-      @Nullable String identifier,
-      android.view.View androidView,
-      boolean isOpaque,
-      FragmentHost host,
-      float desiredSizeScale,
-      long swapChainFlags) {
-    View view = View.createView(customNativeLibrary, identifier, context, host, null);
-    return new ImpApi(
-        new ImpViewController(
-            null, context, androidView, isOpaque, view, desiredSizeScale, swapChainFlags));
-  }
-
   public void addLifeCycleCallback(ImpLifeCycleCallback callback) {
     getView().setLifeCycleCallback(callback);
-  }
-
-  
-  public void setupForTesting(long platformHandle) {
-    impViewController.setupForTesting(platformHandle);
   }
 
   private ImpApi() {}
@@ -376,6 +446,41 @@ public class ImpApi implements ImpApiScuba {
     }
     if (impViewController != null) {
       impViewController.stopFrameLoop();
+    }
+  }
+
+  /**
+   * Explicitly triggers the resume lifecycle event.
+   *
+   * <p>**IMPORTANT** This is called automatically as part of {@link #startFrameLoop()}, this is
+   * only required to be called explicitly for apps that wish to forego the normal frame loop and
+   * explicitly control when frames are rendered.
+   */
+  public void resume() {
+    if (isReleased()) {
+      Log.w(
+          TAG, "resume() was called on ImpApi after its native resources had been" + " released.");
+      return;
+    }
+    if (impViewController != null) {
+      impViewController.onResume();
+    }
+  }
+
+  /**
+   * Explicitly triggers the pause lifecycle event.
+   *
+   * <p>**IMPORTANT** This is called automatically as part of {@link #stopFrameLoop()}, this is only
+   * required to be called explicitly for apps that wish to forego the normal frame loop and
+   * explicitly control when frames are rendered.
+   */
+  public void pause() {
+    if (isReleased()) {
+      Log.w(TAG, "pause() was called on ImpApi after its native resources had been released.");
+      return;
+    }
+    if (impViewController != null) {
+      impViewController.onPause();
     }
   }
 

@@ -364,10 +364,12 @@ class LoadedModelBuilder {
   // Adds a previously reserved entity using previously added parts.
   absl::StatusOr<EntityId> AddEntity(
       BoneId bone, SkinId skin, MorphTargetBufferId morph_target_buffer,
-      std::vector<float> morph_target_weights, LightPunctualId light_punctual,
-      AudioEmitterId audio_emitter, std::vector<PartData> parts,
-      std::optional<filament::Box> bounds, std::optional<RuntimeData> runtime,
-      int child_count, absl::string_view name, uint16_t original_index = 0,
+      std::vector<float> node_morph_target_weights,
+      std::vector<float> mesh_morph_target_weights,
+      LightPunctualId light_punctual, AudioEmitterId audio_emitter,
+      std::vector<PartData> parts, std::optional<filament::Box> bounds,
+      std::optional<RuntimeData> runtime, int child_count,
+      absl::string_view name, uint16_t original_index = 0,
       int original_mesh_index = -1,
       std::optional<NodeVisibility> node_visibility = std::nullopt,
       std::optional<NodeSelectability> node_selectability = std::nullopt,

@@ -34,10 +34,36 @@
 
 namespace imp::android {
 
-ImageReader::ImageReader(int32_t width, int32_t height, int32_t format,
-                         uint64_t usage, int32_t max_images) {
-  reader_ = nullptr;
-  AImageReader_newWithUsage(width, height, format, usage, max_images, &reader_);
+ImageReader::ImageReader(const BaseView& view, const int2 size, int32_t format,
+                         uint64_t usage, int32_t max_images)
+    : view_(view),
+      size_(size),
+      format_(format),
+      usage_(usage),
+      max_images_(max_images) {}
+
+absl::Status ImageReader::Initialize() {
+  media_status_t status = AImageReader_newWithUsage(
+      size_.x, size_.y, format_, usage_, max_images_, &reader_);
+  if (status != AMEDIA_OK) {
+    return absl::InternalError(
+        absl::StrCat("Failed to create ImageReader. Status: ", status));
+  }
+
+  // Get the Android Surface from the native image reader.
+  status = AImageReader_getWindow(reader_, &native_window_);
+  if (status != AMEDIA_OK) {
+    return absl::InternalError(absl::StrCat(
+        "Failed to get window from ImageReader. Status: ", status));
+  }
+
+  surface_ =
+      ANativeWindow_toSurface(view_.GetContext().GetJniEnv(), native_window_);
+  if (surface_ == nullptr) {
+    return absl::InternalError("Failed to create surface from native window.");
+  }
+
+  return absl::OkStatus();
 }
 
 absl::StatusOr<std::unique_ptr<ImageReader>> ImageReader::Create(
@@ -45,20 +71,9 @@ absl::StatusOr<std::unique_ptr<ImageReader>> ImageReader::Create(
     uint64_t usage, int32_t max_images) {
   // Create image reader.
   std::unique_ptr<ImageReader> image_reader = absl::WrapUnique<ImageReader>(
-      new ImageReader(width, height, format, usage, max_images));
-  if (image_reader->reader_ == nullptr) {
-    return absl::InternalError("ImageReader is not initialized.");
-  }
+      new ImageReader(view, {width, height}, format, usage, max_images));
 
-  // Get the Android Surface from the native image reader.
-  ANativeWindow* native_window;
-  if (AImageReader_getWindow(image_reader->reader_, &native_window) !=
-      AMEDIA_OK) {
-    return absl::InternalError("Failed to get window from ImageReader.");
-  }
-  image_reader->surface_ =
-      ANativeWindow_toSurface(view.GetContext().GetJniEnv(), native_window);
-
+  MP_RETURN_IF_ERROR(image_reader->Initialize());
   return image_reader;
 }
 
@@ -103,6 +118,29 @@ absl::StatusOr<std::unique_ptr<Image>> ImageReader::AcquireLatestImage() {
         "Failed to acquire lateset image from ImageReader.");
   }
   return Image::Create(*aimage);
+}
+
+absl::Status ImageReader::SetBufferSize(const int2 size) {
+  if (size_ == size) {
+    return absl::OkStatus();
+  }
+
+  // Ensure no outstanding images are held
+  {
+    AImage* tmp = nullptr;
+    while (AImageReader_acquireNextImage(reader_, &tmp) == AMEDIA_OK) {
+      AImage_delete(tmp);
+    }
+  }
+
+  int32_t result =
+      ANativeWindow_setBuffersGeometry(native_window_, size.x, size.y, format_);
+
+  if (result == 0) {
+    size_ = size;
+    return absl::OkStatus();
+  }
+  return absl::InternalError("Failed to resize ImageReader.");
 }
 
 }  // namespace imp::android

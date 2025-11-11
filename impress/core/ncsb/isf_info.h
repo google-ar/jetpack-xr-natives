@@ -33,6 +33,7 @@
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "core/async/future.h"
 #include "core/common/bit_flag.h"
+#include "core/common/copyable_ptr.h"
 #include "core/common/hash.h"
 #include "core/common/platform_helpers.h"
 #include "core/common/template_helpers.h"
@@ -568,7 +569,7 @@ struct IsfStateDepsAdder<std::vector<T>> {
 
 // Partial specialization to unwrap unique_ptr proto fields.
 template <typename T>
-struct IsfStateDepsAdder<std::unique_ptr<T>> {
+struct IsfStateDepsAdder<CopyablePtr<T>> {
   static void AddDeps(absl::flat_hash_set<HashValue>& deps,
                       absl::flat_hash_set<HashValue>& visited_types) {
     IsfStateDepsAdder<T>::AddDeps(deps, visited_types);

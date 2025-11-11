@@ -455,6 +455,13 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrLocateGeospatialPoseANDROIDX1(
   return XR_SUCCESS;
 }
 
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateGeospatialAnchorANDROIDX1(
+    XrSpatialContextEXT spatialContext,
+    const XrGeospatialAnchorCreateInfoANDROIDX1* createInfo,
+    XrSpatialEntityIdEXT* anchorEntityId, XrSpatialEntityEXT* anchorEntity) {
+  return XR_SUCCESS;
+}
+
 XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateEyeTrackerANDROID(
     XrSession session, const XrEyeTrackerCreateInfoANDROID* createInfo,
     XrEyeTrackerANDROID* eyeTracker) {
@@ -770,6 +777,8 @@ const auto kXrFunctions = new absl::flat_hash_map<absl::string_view,
      ToXrVoidFunction(Internal_xrDestroyEarthTrackerANDROIDX1)},
     {"xrLocateGeospatialPoseANDROIDX1",
      ToXrVoidFunction(Internal_xrLocateGeospatialPoseANDROIDX1)},
+    {"xrCreateGeospatialAnchorANDROIDX1",
+     ToXrVoidFunction(Internal_xrCreateGeospatialAnchorANDROIDX1)},
     {"xrCreateDepthSwapchainANDROID",
      ToXrVoidFunction(Internal_xrCreateDepthSwapchainANDROID)},
     {"xrDestroyDepthSwapchainANDROID",
@@ -837,10 +846,55 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetInstanceProcAddr(
   return XR_SUCCESS;
 }
 
+const std::vector<XrExtensionProperties> kExtensions = {
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
+     XR_ANDROID_ANCHOR_SHARING_EXPORT_EXTENSION_NAME},
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
+     XR_ANDROID_DEPTH_TEXTURE_EXTENSION_NAME},
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
+     XR_ANDROID_DEVICE_ANCHOR_PERSISTENCE_EXTENSION_NAME},
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
+     XR_ANDROID_EYE_TRACKING_EXTENSION_NAME},
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
+     XR_ANDROID_FACE_TRACKING_EXTENSION_NAME},
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_ANDROID_RAYCAST_EXTENSION_NAME},
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
+     XR_ANDROID_TRACKABLES_EXTENSION_NAME},
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
+     XR_ANDROID_TRACKABLES_OBJECT_EXTENSION_NAME},
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
+     XR_ANDROID_UNBOUNDED_REFERENCE_SPACE_EXTENSION_NAME},
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_EXT_FUTURE_EXTENSION_NAME},
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
+     XR_EXT_HAND_TRACKING_EXTENSION_NAME},
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
+     XR_KHR_CONVERT_TIMESPEC_TIME_EXTENSION_NAME},
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_MND_HEADLESS_EXTENSION_NAME},
+    // Geospatial extensions
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
+     XR_ANDROIDX1_GEOSPATIAL_EXTENSION_NAME},
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
+     XR_ANDROIDX1_SPATIAL_ANCHOR_SPACE_EXTENSION_NAME},
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
+     XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME},
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
+     XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME},
+};
+
 XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
     const char* layerName, uint32_t propertyCapacityInput,
     uint32_t* propertyCountOutput, XrExtensionProperties* properties) {
-  *propertyCountOutput = 0;
+  *propertyCountOutput = kExtensions.size();
+  if (propertyCapacityInput == 0) {
+    return XR_SUCCESS;
+  }
+  if (propertyCapacityInput < kExtensions.size()) {
+    return XR_ERROR_SIZE_INSUFFICIENT;
+  }
+
+  for (int i = 0; i < kExtensions.size(); ++i) {
+    properties[i] = kExtensions[i];
+  }
   return XR_SUCCESS;
 }
 
@@ -858,6 +912,18 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystem(XrInstance instance,
                                            const XrSystemGetInfo* getInfo,
                                            XrSystemId* systemId) {
   *systemId = kSystemId;
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(
+    XrInstance instance, XrSystemId systemId, XrSystemProperties* properties) {
+  if (properties == nullptr) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+  if (properties->next != nullptr) {
+    reinterpret_cast<XrSystemGeospatialPropertiesANDROIDX1*>(properties->next)
+        ->supportsGeospatial = XR_TRUE;
+  }
   return XR_SUCCESS;
 }
 

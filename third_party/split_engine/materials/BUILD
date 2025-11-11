@@ -35,6 +35,7 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_impress//core/async:future",
         "@com_google_impress//core/common:log",
+        "@com_google_impress//core/common:type_helpers",
         "@com_google_impress//core/math",
         "@com_google_impress//core/media:media_color_space",
         "@com_google_impress//core/media:media_type",
@@ -211,18 +212,16 @@ cc_library(
 )
 
 cc_library(
-    name = "gsplat_material",
-    srcs = ["gsplat_material.cc"],
-    hdrs = ["gsplat_material.h"],
+    name = "gsplat_material_serializer",
+    srcs = ["gsplat_material_serializer.cc"],
+    hdrs = ["gsplat_material_serializer.h"],
     copts = imp_google3_copts(),
     deps = [
         "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/status",
+        "@com_google_impress//core/assets",
         "@com_google_impress//core/async:future",
-        "@com_google_impress//core/common:log",
+        "@com_google_impress//core/gsplat:gsplat_asset",
         "@com_google_impress//core/math",
-        "@com_google_impress//core/media:media_color_space",
-        "@com_google_impress//core/media:media_type",
         "@com_google_impress//core/render",
         "@com_google_impress//core/split_engine:flatbuffer_utils",
         "@com_google_impress//core/split_engine/materials:builtin_texture_parameter_creator",

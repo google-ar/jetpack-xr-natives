@@ -86,9 +86,9 @@ cc_library(
         ":builtin_material",
         "//core/async:future",
         "//core/common:small_source_location",
+        "//core/common:type_helpers",
         "//core/material_library:fbs",
         "//core/material_library:fbs_deps",  # buildcleaner: keep
-        "//core/material_library:flatbuffer_utils",
         "//core/material_library:generic_material",
         "//core/material_library:generic_material_parameters",
         "//core/material_library:generic_material_spec",

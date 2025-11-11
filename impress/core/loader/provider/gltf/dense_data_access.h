@@ -18,6 +18,9 @@
 #define THIRD_PARTY_IMPRESS_CORE_LOADER_PROVIDER_GLTF_DENSE_DATA_ACCESS_H_
 
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <memory>
 #include <utility>
 
 #include "absl/log/check.h"
@@ -41,6 +44,23 @@ class DenseDataAccess {
   const T* At(size_t id) const {
     
     return reinterpret_cast<const T*>(flat_data_.Data() + (id * stride_));
+  }
+
+  template <typename T>
+  void AlignData() {
+    // Check for alignment.
+    const bool is_aligned =
+        (reinterpret_cast<uintptr_t>(flat_data_.Data()) % alignof(T) == 0);
+    if (!is_aligned) {
+      // Use std::memcpy instead of reinterpret_cast to avoid memory
+      // alignment issues, when buffer is loaded from 32-bit device.
+      const uint8_t* src_ptr = flat_data_.Data();
+      std::unique_ptr<T[]> temp_value = std::make_unique<T[]>(count_);
+      std::memcpy(temp_value.get(), src_ptr, sizeof(T) * count_);
+      uint32_t size = count_ * sizeof(T);
+      flat_data_ = BufferAccess::Clone(
+          reinterpret_cast<const uint8_t*>(temp_value.get()), size);
+    }
   }
 
   // Return a const raw pointer access to data. This function is used for

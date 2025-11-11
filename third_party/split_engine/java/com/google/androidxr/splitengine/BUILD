@@ -22,9 +22,6 @@ android_library(
         "SplitEngineSubspaceManager.java",
     ],
     custom_package = "com.google.androidxr.splitengine",
-    javacopts = [
-        "-Xep:AndroidJdkLibsChecker:OFF",
-    ],
     tags = ["included_in_archive=//apibindings:impress_no_native_lib_aar"],
     deps = [
         ":scene_leash_node_factory",
@@ -45,9 +42,6 @@ android_library(
         "SubspaceNode.java",
     ],
     custom_package = "com.google.androidxr.splitengine",
-    javacopts = [
-        "-Xep:AndroidJdkLibsChecker:OFF",
-    ],
     tags = ["included_in_archive=//apibindings:impress_no_native_lib_aar"],
     deps = [
         "@maven//:com_android_extensions_xr_extensions_xr",
@@ -60,9 +54,6 @@ android_library(
         "SplitEngineInputEvent.java",
     ],
     custom_package = "com.google.androidxr.splitengine",
-    javacopts = [
-        "-Xep:AndroidJdkLibsChecker:OFF",
-    ],
     deps = [
         "@maven//:androidx_annotation_annotation",
         "@maven//:com_android_extensions_xr_extensions_xr",
@@ -75,15 +66,13 @@ android_library(
         "SplitEngineViewUpdateProvider.java",
     ],
     custom_package = "com.google.androidxr.splitengine",
-    javacopts = [
-        "-Xep:AndroidJdkLibsChecker:OFF",
-    ],
     deps = [
+        "//third_party/java/androidx/xr/arcore",
         "//third_party/java/androidx/xr/arcore/arcore_openxr",
+        "//third_party/java/androidx/xr/runtime",
         "@com_google_impress//java/com/google/ar/imp/view/splitengine",
         "@maven//:androidx_annotation_annotation",
         "@maven//:com_android_extensions_xr_extensions_xr",
-        "@maven//:com_google_guava_guava",
     ],
 )
 
@@ -93,9 +82,6 @@ android_library(
         "SceneLeashNodeFactory.java",
     ],
     custom_package = "com.google.androidxr.splitengine",
-    javacopts = [
-        "-Xep:AndroidJdkLibsChecker:OFF",
-    ],
     deps = [
         "@maven//:com_android_extensions_xr_extensions_xr",
     ],

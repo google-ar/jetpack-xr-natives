@@ -22,7 +22,6 @@ import android.view.MotionEvent;
 import android.view.SurfaceView;
 import androidx.annotation.Nullable;
 import com.google.ar.imp.core.web.FragmentHost;
-
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import java.util.concurrent.Executor;
@@ -126,29 +125,6 @@ public final class ImpSurfaceView extends SurfaceView implements ImpApiProvider,
           return impApi;
         },
         lightweightExecutor);
-  }
-
-  // The following two functions are only required in a test setting when determining the value of
-  // the platform handle requires ImpViewController to already be instantiated.
-  // TODO Clean this up.
-  
-  public ImpApi createImpApiForTesting(SetupParams setupParams) {
-    impApi =
-        ImpApi.createForTesting(
-            context,
-            setupParams.getCustomNativeLibrary(),
-            setupParams.getViewIdentifier(),
-            this,
-            setupParams.getIsOpaque(),
-            host,
-            setupParams.getDesiredSizeScale(),
-            setupParams.getSwapChainFlags());
-    return impApi;
-  }
-
-  
-  public void setupImpApiForTesting(long platformHandle) {
-    impApi.setupForTesting(platformHandle);
   }
 
   @Override

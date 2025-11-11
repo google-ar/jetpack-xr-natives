@@ -27,8 +27,6 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/variant.h"
-#include "filament/filament/include/filament/Box.h"
-#include "core/geometry/shapes/box.h"
 #include "core/math/mat.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
@@ -104,13 +102,6 @@ struct RecipeTypeToStringVisitor {
     } else {
       return "Invalid NodeHandle";
     }
-  }
-
-  std::string operator()(const Box& value) const {
-    return absl::StrFormat(
-        "Center: (%.3f, %.3f, %.3f) HalfExtent: (%.3f, %.3f, %.3f)",
-        value.center[0], value.center[1], value.center[2], value.halfExtent[0],
-        value.halfExtent[1], value.halfExtent[2]);
   }
 
   std::string operator()(const NodeSceneHandle& value) const {
@@ -233,8 +224,6 @@ VariableDeclaration::Type ToType(const Variable& var) {
       return VariableDeclaration::Type::NODE_SCENE;
     case Literal::kValue_ProtoValue:
       return VariableDeclaration::Type::PROTO;
-    case Literal::kValue_BoxValue:
-      return VariableDeclaration::Type::BOX;
     case Literal::kValue_ArrayValue:
       return VariableDeclaration::Type::ARRAY;
     case Literal::kValue_TupleValue:
@@ -310,9 +299,6 @@ void SetToDefault(const VariableDeclaration::Type& type, Variable& var) {
       break;
     case VariableDeclaration::Type::PROTO:
       var.emplace<google::protobuf::imp_proto::Any>();
-      break;
-    case VariableDeclaration::Type::BOX:
-      var.emplace<::filament::Box>();
       break;
     case VariableDeclaration::Type::ARRAY:
       var.emplace<imp::LiteralArray>();
@@ -416,9 +402,6 @@ std::optional<bool> CoerceToBool(const Variable& var) {
   } else if (std::holds_alternative<LiteralMap>(var)) {
     auto map = std::get<LiteralMap>(var);
     return !map.values.empty();
-  } else if (std::holds_alternative<Box>(var)) {
-    auto box = std::get<Box>(var);
-    return box.halfExtent == float3{0, 0, 0};
   } else if (std::holds_alternative<google::protobuf::imp_proto::Any>(var)) {
     return true;
   } else if (std::holds_alternative<RecipeRayHit>(var)) {

@@ -60,7 +60,7 @@ cc_library(
     copts = imp_google3_copts(),
     linkstatic = 1,
     deps = [
-        "//core/common:platform_helpers",
+        "@com_google_absl//absl/time",
         "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,

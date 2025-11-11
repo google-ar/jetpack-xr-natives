@@ -669,6 +669,7 @@ root_type BuiltInMaterialRequest;
 
 // Each built-in material has a set of parameters that are used to configure the
 // material instance.
+//
 union BuiltInMaterialParameters (requires_api: 1) {
   GenericMaterialParameters = 1 (requires_api: 1),
   BuiltInMaterial5cf26af8Parameters = 2 (requires_api: 1),
@@ -693,5 +694,27 @@ table BuiltInMaterialInstanceParameters (requires_api: 1) {
 }
 
 root_type BuiltInMaterialInstanceParameters;
+
+// Spec for a filament material.
+table FilamentMaterialSpec {
+  // The source of the material in the filament "jsonish" text format.
+  source: string (id: 0);
+  // The precompile options for the material.
+  precompile_options: MaterialPrecompileOptions (id: 1);
+}
+
+// Spec for a custom material to be compiled and used by Split Engine.
+union CustomMaterialSpec {
+  FilamentMaterialSpec = 1,
+}
+
+// Request to compile a material, defined by a spec.
+table AddCustomMaterialRequest {
+  // The ID to assign to the material.
+  material_id: uint64 (id: 0);
+  // The spec for the material to be compiled.
+  // Skip id: 1 for spec_type.
+  spec: CustomMaterialSpec (id: 2);
+}
 
 // LINT.ThenChange(//depot/google3/third_party/split_engine/schemas/split_engine_schema_version.h)

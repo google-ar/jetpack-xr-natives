@@ -66,8 +66,6 @@ _IMPRESS_JNI_COMMON_DEPS = [
 # A list of the common dependencies between the production and test versions of the Impress API
 # View.
 _IMPRESS_API_VIEW_COMMON_DEPS = [
-    ":asset_animator",
-    ":asset_loader",
     ":asset_ptr_map",
     ":bindings_material",
     ":bindings_object",
@@ -119,7 +117,19 @@ cc_library(
     copts = imp_google3_copts(),
     linkstatic = True,
     deps = _IMPRESS_API_VIEW_COMMON_DEPS + [
+        ":generic_material_manager",
+        ":generic_material_manager_interface",
         ":impress_api_view_header",
+        ":model_manager",
+        ":model_manager_interface",
+        ":skybox_manager",
+        ":skybox_manager_interface",
+        ":stereo_surface_manager",
+        ":stereo_surface_manager_interface",
+        ":texture_manager",
+        ":texture_manager_interface",
+        ":water_material_manager",
+        ":water_material_manager_interface",
         "//core/assets",
         "//core/async:future",
         "//core/common:small_source_location",
@@ -137,29 +147,45 @@ cc_library(
 )
 
 cc_library(
-    name = "model_manager",
-    srcs = ["model_manager.cc"],
+    name = "model_manager_interface",
     hdrs = ["model_manager.h"],
     copts = imp_google3_copts(),
     linkstatic = True,
     deps = [
-        "impress_api_view_header",
-        ":asset_animator",
-        ":asset_loader",
+        ":base_asset_animator",
+        ":base_asset_loader",
+        "//core/math",
+        "//core/view/utils:frame_time",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/strings:string_view",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "model_manager",
+    srcs = ["model_manager.cc"],
+    copts = imp_google3_copts(),
+    linkstatic = True,
+    deps = [
         ":asset_ptr_map",
+        ":base_asset_animator",
+        ":base_asset_loader",
         ":bindings_material",
+        ":impress_api_view_header",
+        ":model_manager_interface",
         "//core/assets",
         "//core/common:small_source_location",
         "//core/geometry/shapes",
         "//core/materials",
-        "//core/math",
         "//core/ncsb",
         "//core/view/framework",
         "//core/view/framework:framework_proto_cc",
         "//core/view/utils:frame_time",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
@@ -171,29 +197,15 @@ cc_library(
 )
 
 cc_library(
-    name = "test_model_manager",
-    testonly = True,
-    srcs = ["test_model_manager.cc"],
-    hdrs = ["model_manager.h"],
+    name = "skybox_manager_interface",
+    hdrs = ["skybox_manager.h"],
     copts = imp_google3_copts(),
     linkstatic = True,
     deps = [
-        "impress_api_view_header",
-        ":asset_animator",
-        ":asset_loader",
-        ":test_impress_api_view",
-        "//core/geometry/shapes",
-        "//core/math",
-        "//core/ncsb",
-        "//core/view/framework",
-        "//core/view/utils:frame_time",
-        "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/log:check",
+        ":base_asset_loader",
         "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/strings:string_view",
-        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -201,13 +213,13 @@ cc_library(
 cc_library(
     name = "skybox_manager",
     srcs = ["skybox_manager.cc"],
-    hdrs = ["skybox_manager.h"],
     copts = imp_google3_copts(),
     linkstatic = True,
     deps = [
-        ":asset_loader",
         ":asset_ptr_map",
+        ":base_asset_loader",
         ":impress_api_view_header",
+        ":skybox_manager_interface",
         "//core/assets",
         "//core/lighting:image_based_lighting_asset",
         "//core/math",
@@ -216,7 +228,26 @@ cc_library(
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "stereo_surface_manager_interface",
+    hdrs = ["stereo_surface_manager.h"],
+    copts = imp_google3_copts(),
+    linkstatic = True,
+    deps = [
+        "//apibindings:stereo_surface",
+        "//core/math",
+        "//core/media:media_color_space",
+        "//core/media:media_type",
+        "//core/render:content_security_level",
+        "//core/view/platforms/android/wrappers:graphics",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
     ],
     alwayslink = 1,
 )
@@ -224,16 +255,15 @@ cc_library(
 cc_library(
     name = "stereo_surface_manager",
     srcs = ["stereo_surface_manager.cc"],
-    hdrs = ["stereo_surface_manager.h"],
     copts = imp_google3_copts(),
     linkstatic = True,
     deps = [
-        "impress_api_view_header",
         ":bindings_texture",
+        ":impress_api_view_header",
         ":stereo_surface",
+        ":stereo_surface_manager_interface",
         "//core/common:small_source_location",
         "//core/input",
-        "//core/math",
         "//core/media:media_color_space",
         "//core/media:media_type",
         "//core/ncsb",
@@ -249,16 +279,30 @@ cc_library(
 )
 
 cc_library(
-    name = "texture_manager",
-    srcs = ["texture_manager.cc"],
+    name = "texture_manager_interface",
     hdrs = ["texture_manager.h"],
     copts = imp_google3_copts(),
     linkstatic = True,
     deps = [
-        "impress_api_view_header",
-        ":asset_loader",
+        ":base_asset_loader",
+        "//core/render",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:string_view",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "texture_manager",
+    srcs = ["texture_manager.cc"],
+    copts = imp_google3_copts(),
+    linkstatic = True,
+    deps = [
         ":asset_ptr_map",
+        ":base_asset_loader",
         ":bindings_texture",
+        ":impress_api_view_header",
+        ":texture_manager_interface",
         "//core/assets",
         "//core/async:future",
         "//core/common:small_source_location",
@@ -268,8 +312,97 @@ cc_library(
         "//core/view/framework",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",
         "@third_party//filament/filament:filament_hdrs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "generic_material_manager_interface",
+    hdrs = ["generic_material_manager.h"],
+    copts = imp_google3_copts(),
+    linkstatic = True,
+    deps = [
+        ":base_asset_loader",
+        "//core/material_library:generic_material_spec",
+        "//core/math",
+        "@com_google_absl//absl/status",
+        "@third_party//filament/filament:filament_hdrs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "generic_material_manager",
+    srcs = ["generic_material_manager.cc"],
+    copts = imp_google3_copts(),
+    linkstatic = True,
+    deps = [
+        ":base_asset_loader",
+        ":bindings_material",
+        ":generic_material_manager_interface",
+        ":impress_api_view_header",
+        ":texture_manager_interface",
+        "//core/async:future",
+        "//core/common:hash",
+        "//core/common:owned_ptr",
+        "//core/common:small_source_location",
+        "//core/common:type_traits",
+        "//core/material_library:generic_material_parameters",
+        "//core/material_library:generic_material_spec",
+        "//core/math",
+        "//core/render",
+        "//core/split_engine/materials:split_engine_generic_material",
+        "//core/split_engine/materials:split_engine_material",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
+        "@mediapipe//mediapipe/framework/port:status",
+        "@third_party//filament/filament:filament_hdrs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "water_material_manager_interface",
+    hdrs = ["water_material_manager.h"],
+    copts = imp_google3_copts(),
+    linkstatic = True,
+    deps = [
+        ":base_asset_loader",
+        "@com_google_absl//absl/status",
+        "@third_party//filament/filament:filament_hdrs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "water_material_manager",
+    srcs = ["water_material_manager.cc"],
+    copts = imp_google3_copts(),
+    linkstatic = True,
+    deps = [
+        ":base_asset_loader",
+        ":bindings_material",
+        ":impress_api_view_header",
+        ":texture_manager_interface",
+        ":water_material_manager_interface",
+        "//core/async:future",
+        "//core/common:hash",
+        "//core/common:owned_ptr",
+        "//core/common:small_source_location",
+        "//core/common:type_traits",
+        "//core/render",
+        "//core/split_engine/materials:split_engine_material",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
+        "@mediapipe//mediapipe/framework/port:status",
+        "@third_party//filament/filament:filament_hdrs",
+        "@third_party//split_engine/materials:water_reflection_material",
     ],
     alwayslink = 1,
 )
@@ -280,13 +413,14 @@ cc_library(
     hdrs = ["asset_ptr_map.h"],
     copts = imp_google3_copts(),
     deps = [
-        ":asset_loader",
+        ":base_asset_loader",
         "//:api",
         "//core/assets",
         "//core/lighting:image_based_lighting_asset",
         "//core/split_engine:split_engine_serializer",
         "//core/view:base_view",
         "//core/view/framework",
+        "//core/view/utils:asset",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -302,9 +436,18 @@ cc_library(
     srcs = ["asset_loader.cc"],
     hdrs = ["asset_loader.h"],
     copts = imp_google3_copts(),
-    deps = ["//core/common:jni_helpers"] + if_non_android([
+    deps = [
+        ":base_asset_loader",
+        "//core/common:jni_helpers",
+    ] + if_non_android([
         "@bazel_tools//tools/jdk:jni",
     ]),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "base_asset_loader",
+    hdrs = ["base_asset_loader.h"],
     alwayslink = 1,
 )
 
@@ -313,9 +456,18 @@ cc_library(
     srcs = ["asset_animator.cc"],
     hdrs = ["asset_animator.h"],
     copts = imp_google3_copts(),
-    deps = ["//core/common:jni_helpers"] + if_non_android([
+    deps = [
+        ":base_asset_animator",
+        "//core/common:jni_helpers",
+    ] + if_non_android([
         "@bazel_tools//tools/jdk:jni",
     ]),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "base_asset_animator",
+    hdrs = ["base_asset_animator.h"],
     alwayslink = 1,
 )
 
@@ -324,19 +476,42 @@ cc_library(
     srcs = [":impress_jni_srcs"],
     copts = imp_google3_copts(),
     linkstatic = True,
-    deps = _IMPRESS_JNI_COMMON_DEPS + [":impress_api_view"],
+    deps = _IMPRESS_JNI_COMMON_DEPS + [
+        ":generic_material_manager",
+        ":generic_material_manager_interface",
+        ":impress_api_view",
+        ":model_manager",
+        ":model_manager_interface",
+        ":skybox_manager",
+        ":skybox_manager_interface",
+        ":stereo_surface_manager",
+        ":stereo_surface_manager_interface",
+        ":texture_manager",
+        ":texture_manager_interface",
+        ":water_material_manager",
+        ":water_material_manager_interface",
+    ],
     alwayslink = 1,
 )
 
+# TODO: Move API bindings test targets to a testing subdirectory.
 cc_library(
     name = "test_impress_jni",
     testonly = True,
-    srcs = [":impress_jni_srcs"],
+    srcs = ["impress_api.cc"],
     copts = imp_google3_copts(),
     linkstatic = True,
     deps = _IMPRESS_JNI_COMMON_DEPS + [
-        ":impress_api_test_helper",
-        ":test_impress_api_view",
+        ":generic_material_manager_interface",
+        ":impress_api_view",
+        ":model_manager_interface",
+        ":skybox_manager_interface",
+        ":stereo_surface_manager_interface",
+        ":texture_manager_interface",
+        ":water_material_manager_interface",
+        "//apibindings/testing/marshalling:impress_api_test_helper",
+        "//apibindings/testing/marshalling:test_create_view_factory",
+        "//apibindings/testing/marshalling:test_impress_api_view",
     ],
     alwayslink = 1,
 )

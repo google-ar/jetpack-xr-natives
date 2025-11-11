@@ -24,6 +24,7 @@
 #include "bullet/src/BulletDynamics/Dynamics/btDiscreteDynamicsWorld.h"
 #include "bullet/src/BulletDynamics/Dynamics/btRigidBody.h"
 #include "bullet/src/LinearMath/btVector3.h"
+#include "core/config.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
@@ -223,5 +224,22 @@ void PhysicsManager::FastForwardSimulation(float duration) {
     world_.stepSimulation(duration);
   }
 }
+
+#if IMP_RUNTIME(DEV)
+void PhysicsManager::RegisterCollidableVisualizer(
+    NodeHandle node, imp::Invocable<void()> visualizer) {
+  collidable_visualizer_map_[node] = std::move(visualizer);
+}
+
+void PhysicsManager::UnregisterCollidableVisualizer(NodeHandle node) {
+  collidable_visualizer_map_.erase(node);
+}
+
+void PhysicsManager::DrawCollidables() {
+  for (const auto& [node, visualizer] : collidable_visualizer_map_) {
+    visualizer();
+  }
+}
+#endif
 
 }  // namespace imp

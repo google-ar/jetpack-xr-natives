@@ -19,6 +19,7 @@
 #include <memory>
 #include <utility>
 
+#include "absl/strings/string_view.h"
 #include "core/async/future.h"
 #include "core/materials/compiler/material_compiler_client.h"
 #include "core/materials/compiler/material_compiler_client_jni.h"
@@ -27,13 +28,17 @@
 
 namespace imp {
 
+inline constexpr absl::string_view kDefaultNativeLibraryOverride =
+    "imp_view_jni";
+
 // Compiles source material for Android.
 // It internally creates the Java and C++ clients, and compiles materials in an
 // isolated process.
 class AndroidRuntimeMaterialCompiler : public RuntimeMaterialCompiler {
  public:
   static Future<std::unique_ptr<RuntimeMaterialCompiler>> Create(
-      BaseView& view);
+      BaseView& view, absl::string_view native_library_override =
+                          kDefaultNativeLibraryOverride);
 
  private:
   AndroidRuntimeMaterialCompiler(

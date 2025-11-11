@@ -20,6 +20,9 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.os.Build
 import com.google.android.filament.proguard.UsedByNative
+import com.google.common.flogger.GoogleLogger
+
+private val logger = GoogleLogger.forEnclosingClass()
 
 /**
  * Implements a rough subset of functions of CanvasSource and ScopedCanvas specific to rendering
@@ -47,14 +50,14 @@ class GlyphSource @UsedByNative("android_glyph_source.cc") constructor(method: M
     }
 
   /**
-   * Analogous to GetTextOrigin and GetTextSize.
+   * Roughly analogous to GetTextOrigin and GetTextSize.
    *
-   * @param out An array of minimum size 4. The first two items are set to the X and Y origin, while
-   *   the final two items are set to the width and height.
+   * @return a float array of size 8. See android_glyph_source.cc as the reference implementation.
    */
   @UsedByNative("android_glyph_source.cc")
-  fun getGlyphMetrics(glyphId: Int, font: Any?, strokeWidth: Float, paint: Paint, out: FloatArray) =
-    inner.getGlyphMetrics(glyphId, font, strokeWidth, paint, out)
+  fun getGlyphMetrics(glyphId: Int, font: Any?, paint: Paint): FloatArray = withExceptionsLogged {
+    inner.getGlyphMetrics(glyphId, font, paint)
+  }
 
   /**
    * Analogous to GetTextGlyphs.
@@ -68,7 +71,9 @@ class GlyphSource @UsedByNative("android_glyph_source.cc") constructor(method: M
    * @return the number of glyphs
    */
   @UsedByNative("android_glyph_source.cc")
-  fun getTextGlyphs(text: String, paint: Paint) = inner.getTextGlyphs(text, paint)
+  fun getTextGlyphs(text: String, paint: Paint) = withExceptionsLogged {
+    inner.getTextGlyphs(text, paint)
+  }
 
   /**
    * Analogous to GetCombinedCharacterGroups.
@@ -79,8 +84,9 @@ class GlyphSource @UsedByNative("android_glyph_source.cc") constructor(method: M
    * @return the number of glyphs
    */
   @UsedByNative("android_glyph_source.cc")
-  fun getCombinedCharacterGroups(text: String, paint: Paint) =
+  fun getCombinedCharacterGroups(text: String, paint: Paint) = withExceptionsLogged {
     inner.getCombinedCharacterGroups(text, paint)
+  }
 
   /**
    * Analogous to DrawGlyph.
@@ -98,11 +104,13 @@ class GlyphSource @UsedByNative("android_glyph_source.cc") constructor(method: M
     strokeWidth: Float,
     fillPaint: Paint,
     strokePaint: Paint,
-  ) = inner.drawGlyph(canvas, glyphId, x, y, font, strokeWidth, fillPaint, strokePaint)
+  ) = withExceptionsLogged {
+    inner.drawGlyph(canvas, glyphId, x, y, font, strokeWidth, fillPaint, strokePaint)
+  }
 }
 
 internal interface IGlyphSource {
-  fun getGlyphMetrics(glyphId: Int, font: Any?, strokeWidth: Float, paint: Paint, out: FloatArray)
+  fun getGlyphMetrics(glyphId: Int, font: Any?, paint: Paint): FloatArray
 
   fun getTextGlyphs(text: String, paint: Paint): Array<GlyphAdvance>
 
@@ -118,4 +126,13 @@ internal interface IGlyphSource {
     fillPaint: Paint,
     strokePaint: Paint,
   )
+}
+
+private inline fun <T> withExceptionsLogged(body: () -> T): T {
+  try {
+    return body()
+  } catch (e: Throwable) {
+    logger.atSevere().withCause(e).log("Exception in GlyphSource")
+    throw e
+  }
 }

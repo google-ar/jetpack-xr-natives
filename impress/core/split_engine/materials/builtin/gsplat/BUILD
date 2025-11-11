@@ -25,22 +25,25 @@ package(default_visibility = ["//visibility:public"])
 
 # Provides a builtin material type supporting gsplats in split engine.
 cc_library(
-    name = "builtin_gsplat_material",
-    srcs = ["builtin_gsplat_material.cc"],
-    hdrs = ["builtin_gsplat_material.h"],
+    name = "gsplat_material_deserializer",
+    srcs = ["gsplat_material_deserializer.cc"],
+    hdrs = ["gsplat_material_deserializer.h"],
     copts = imp_google3_copts(),
     defines = imp_defines(),
     deps = [
-        ":builtin_gsplat_material_assets",
+        ":gsplat_material_deserializer_assets",
         "//core/assets",
         "//core/assets/material:material_asset",
         "//core/async:future",
+        "//core/material_library:flatbuffer_utils",
         "//core/material_library:material_param_value",
         "//core/materials",
         "//core/ncsb",
         "//core/render",
+        "//core/resources",
         "//core/split_engine:fbs",
         "//core/split_engine:fbs_deps",  # buildcleaner: keep
+        "//core/split_engine:flatbuffer_utils",
         "//core/split_engine:split_engine_renderer",
         "//core/split_engine:split_engine_shared",
         "//core/split_engine/materials/builtin:builtin_custom_material",
@@ -49,7 +52,10 @@ cc_library(
         "//core/view/framework",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/strings:string_view",
         "@flatbuffers",
+        "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//split_engine:fbs",
     ],
@@ -63,7 +69,7 @@ cc_library(
     copts = imp_google3_copts(),
     defines = imp_defines(),
     deps = [
-        ":builtin_gsplat_material_assets",
+        ":gsplat_material_deserializer_assets",
         "//core/assets",
         "//core/assets/material:material_asset",
         "//core/async:future",
@@ -89,10 +95,11 @@ cc_library(
 )
 
 imp_assets(
-    name = "builtin_gsplat_material_assets",
+    name = "gsplat_material_deserializer_assets",
     srcs = [
         ":builtin_gsplat_background_mat",
         ":builtin_gsplat_mat",
+        ":builtin_magic_window_mat",
     ],
     namespace = "imp::split_engine",
 )
@@ -102,8 +109,16 @@ imp_material(
     src = ":builtin_gsplat.mat",
     enable_metal_postprocessing = True,
     includes = [
-        "//core/materials:color_conversion_helpers.glsl",
-        "//core/xr/media/data:dataspace_support.glsl",
+        "gsplat_common.glsl",
+    ],
+)
+
+imp_material(
+    name = "builtin_magic_window_mat",
+    src = ":builtin_magic_window.mat",
+    enable_metal_postprocessing = True,
+    includes = [
+        "gsplat_common.glsl",
     ],
 )
 

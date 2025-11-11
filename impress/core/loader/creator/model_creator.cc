@@ -258,14 +258,26 @@ OptionalError CreateModelEntityGraph(
                   : std::nullopt};
     }
 
-    std::vector<float> morph_target_weights;
-    if (entity->morph_target_weights()) {
+    std::vector<float> node_morph_target_weights;
+    if (entity->node_morph_target_weights()) {
       // Optionally populate dest_weights if there is any morph target
       // data.
-      morph_target_weights.resize(entity->morph_target_weights()->size());
-      std::copy(entity->morph_target_weights()->begin(),
-                entity->morph_target_weights()->end(),
-                morph_target_weights.begin());
+      node_morph_target_weights.resize(
+          entity->node_morph_target_weights()->size());
+      std::copy(entity->node_morph_target_weights()->begin(),
+                entity->node_morph_target_weights()->end(),
+                node_morph_target_weights.begin());
+    }
+
+    std::vector<float> mesh_morph_target_weights;
+    if (entity->mesh_morph_target_weights()) {
+      // Optionally populate dest_weights if there is any per mesh morph target
+      // data.
+      mesh_morph_target_weights.resize(
+          entity->mesh_morph_target_weights()->size());
+      std::copy(entity->mesh_morph_target_weights()->begin(),
+                entity->mesh_morph_target_weights()->end(),
+                mesh_morph_target_weights.begin());
     }
 
     out_entities->push_back(
@@ -275,7 +287,8 @@ OptionalError CreateModelEntityGraph(
         ModelData::EntityChildId(next_siblings.Get(entity_index)),
         std::move(parts), model::BoneId(entity->bone()), SkinId(entity->skin()),
         MorphTargetBufferId(entity->morph_target_buffer()),
-        std::move(morph_target_weights),
+        std::move(node_morph_target_weights),
+        std::move(mesh_morph_target_weights),
         LightPunctualId(entity->light_punctual()),
         AudioEmitterId(entity->audio_emitter()), bounds, runtime_data,
         (entity->name() ? entity->name()->str() : ""), entity->original_index(),

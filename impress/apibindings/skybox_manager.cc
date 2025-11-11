@@ -21,9 +21,10 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
-#include "apibindings/asset_loader.h"
 #include "apibindings/asset_ptr_map.h"
+#include "apibindings/base_asset_loader.h"
 #include "apibindings/impress_api_view.h"
 #include "core/assets/asset_ptr.h"
 #include "core/lighting/image_based_lighting_asset.h"
@@ -33,31 +34,55 @@
 
 namespace imp {
 
-SkyboxManager::SkyboxManager(ImpressApiView& view) : view_(view) {}
+namespace {
 
-void SkyboxManager::LoadImageBasedLightingAsset(
-    absl::string_view path, std::unique_ptr<AssetLoader> asset_loader) {
+class SkyboxManagerImpl : public SkyboxManager {
+ public:
+  explicit SkyboxManagerImpl(ImpressApiView& view);
+  ~SkyboxManagerImpl() override = default;
+
+  void LoadImageBasedLightingAsset(
+      absl::string_view path,
+      std::unique_ptr<BaseAssetLoader> asset_loader) override;
+  void LoadImageBasedLightingAsset(
+      absl::Cord data, absl::string_view key,
+      std::unique_ptr<BaseAssetLoader> asset_loader) override;
+  absl::Status ReleaseImageBasedLightingAsset(std::intptr_t ibl_token) override;
+  absl::Status SetEnvironmentLight(std::intptr_t ibl_token) override;
+  absl::Status ClearEnvironmentLight() override;
+
+ private:
+  ImpressApiView& view_;
+};
+
+}  // namespace
+
+SkyboxManagerImpl::SkyboxManagerImpl(ImpressApiView& view) : view_(view) {}
+
+void SkyboxManagerImpl::LoadImageBasedLightingAsset(
+    absl::string_view path, std::unique_ptr<BaseAssetLoader> asset_loader) {
   view_.GetAssetPtrMap().LoadImageBasedLightingAsset(path,
                                                      std::move(asset_loader));
 }
 
-void SkyboxManager::LoadImageBasedLightingAsset(
+void SkyboxManagerImpl::LoadImageBasedLightingAsset(
     absl::Cord data, absl::string_view key,
-    std::unique_ptr<AssetLoader> asset_loader) {
+    std::unique_ptr<BaseAssetLoader> asset_loader) {
   view_.GetAssetPtrMap().LoadImageBasedLightingAsset(data, key,
                                                      std::move(asset_loader));
 }
 
-absl::Status SkyboxManager::ReleaseImageBasedLightingAsset(
+absl::Status SkyboxManagerImpl::ReleaseImageBasedLightingAsset(
     std::intptr_t ibl_token) {
   return view_.GetAssetPtrMap().ReleaseImageBasedLightingAsset(ibl_token);
 }
 
-absl::Status SkyboxManager::SetEnvironmentLight(std::intptr_t ibl_token) {
+absl::Status SkyboxManagerImpl::SetEnvironmentLight(std::intptr_t ibl_token) {
   absl::StatusOr<AssetPtr<ImageBasedLightingAsset>> ibl_asset_ptr =
       view_.GetAssetPtrMap().GetStoredIblAsset(ibl_token);
   if (!ibl_asset_ptr.ok()) {
-    return absl::NotFoundError("IBL asset is not cached.");
+    return absl::NotFoundError(absl::StrFormat(
+        "IBL asset is not cached: %s.", ibl_asset_ptr.status().message()));
   }
   split_engine::SplitEngineSerializer* serializer =
       view_.GetSplitEngineSerializer();
@@ -74,7 +99,7 @@ absl::Status SkyboxManager::SetEnvironmentLight(std::intptr_t ibl_token) {
   return absl::OkStatus();
 }
 
-absl::Status SkyboxManager::ClearEnvironmentLight() {
+absl::Status SkyboxManagerImpl::ClearEnvironmentLight() {
   split_engine::SplitEngineSerializer* serializer =
       view_.GetSplitEngineSerializer();
   if (serializer == nullptr) {
@@ -84,8 +109,8 @@ absl::Status SkyboxManager::ClearEnvironmentLight() {
   return absl::OkStatus();
 }
 
-absl::Status SkyboxManager::DisposeIblAssets() {
-  return view_.GetAssetPtrMap().DisposeIblAssets();
+std::unique_ptr<SkyboxManager> CreateSkyboxManager(ImpressApiView& view) {
+  return std::make_unique<SkyboxManagerImpl>(view);
 }
 
 }  // namespace imp

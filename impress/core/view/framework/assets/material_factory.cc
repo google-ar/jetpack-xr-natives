@@ -85,14 +85,16 @@ MaterialPtr MaterialFactory::CreateMaterial(
     IMP_LOG(imp::FATAL) << "Cannot create material from invalid material asset";
   }
 
-  MaterialPtr material = absl::WrapUnique(new CustomMaterial(
+  auto material = absl::WrapUnique(new CustomMaterial(
       material_asset->GetFilamentMaterial()->createInstance(), material_asset));
 
   if (auto serializer = view_->GetSplitEngineSerializer()) {
+    serializer->AddMaterialInstance(material_asset->GetFilamentMaterial(),
+                                    material->GetFilamentMaterialInstance());
     return serializer->CreateCustomMaterial(std::move(material));
-  } else {
-    return material;
   }
+
+  return material;
 }
 
 MaterialPtr MaterialFactory::CreateMaterial(
@@ -115,14 +117,15 @@ MaterialPtr MaterialFactory::WrapMaterial(
     IMP_LOG(imp::FATAL) << "Cannot create material from invalid filament material";
   }
 
-  MaterialPtr custom_material =
-      absl::WrapUnique(new CustomMaterial(material_instance, {}));
-
+  auto material = absl::WrapUnique(new CustomMaterial(material_instance, {}));
   if (auto serializer = view_->GetSplitEngineSerializer()) {
-    return serializer->CreateCustomMaterial(std::move(custom_material));
+    serializer->AddMaterialInstance(
+        material->GetFilamentMaterialInstance()->getMaterial(),
+        material->GetFilamentMaterialInstance());
+    return serializer->CreateCustomMaterial(std::move(material));
   }
 
-  return custom_material;
+  return material;
 }
 
 Future<absl::Status> MaterialFactory::SetMaterialParameters(

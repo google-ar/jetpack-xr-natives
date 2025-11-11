@@ -33,15 +33,12 @@ namespace imp {
 absl::Status Point2PointConstraint::Setup() { return SetupInternal(); }
 
 absl::Status Point2PointConstraint::Setup(NodeHandle connected_node,
-                                          bool auto_configure,
-                                          float3 connected_pivot,
-                                          std::optional<float3> pivot) {
-  if (pivot.has_value()) {
-    state_.pivot = pivot.value();
-  }
-  state_.connected_pivot = connected_pivot;
-  state_.auto_configure = auto_configure;
+                                          float3 pivot, bool auto_configure,
+                                          float3 connected_pivot) {
   state_.connected_node.AssignSceneHandleForNode(connected_node);
+  state_.auto_configure = auto_configure;
+  state_.pivot = pivot;
+  state_.connected_pivot = connected_pivot;
 
   return SetupInternal();
 }
@@ -60,10 +57,7 @@ absl::Status Point2PointConstraint::SetupInternal() {
     return absl::OkStatus();
   }
 
-  if (state_.auto_configure) {
-      state_.connected_pivot = ComputePivotAFromB(
-          state_.connected_node, GetNode(), state_.pivot.value_or(kZero3));
-  }
+  float3 connected_pivot;
 
   btRigidBody* bt_rigid_body_A =
       const_cast<btRigidBody*>(&GetRigidBodyA()->GetBtRigidBody());
@@ -72,18 +66,26 @@ absl::Status Point2PointConstraint::SetupInternal() {
           ? nullptr
           : const_cast<btRigidBody*>(&GetRigidBodyB()->GetBtRigidBody());
 
+  if (state_.auto_configure || bt_rigid_body_B == nullptr) {
+    connected_pivot =
+        ComputePivotAFromB(state_.connected_node, GetNode(), state_.pivot);
+  } else {
+    connected_pivot = state_.connected_pivot.value_or(kZero3);
+  }
+
+  btVector3 bt_pivot_in_A = ToBtVector3(connected_pivot);
   if (bt_rigid_body_B == nullptr) {
     // then we will attach it to the world
-    btVector3 bt_pivot_in_A = ToBtVector3(state_.connected_pivot);
     bt_constraint_ = std::make_unique<btPoint2PointConstraint>(*bt_rigid_body_A,
                                                                bt_pivot_in_A);
   } else {
-    btVector3 bt_pivot_in_A = ToBtVector3(state_.connected_pivot);
-    btVector3 bt_pivot_in_B = ToBtVector3(state_.pivot.value_or(kZero3));
+    btVector3 bt_pivot_in_B = ToBtVector3(state_.pivot);
 
     bt_constraint_ = std::make_unique<btPoint2PointConstraint>(
         *bt_rigid_body_A, *bt_rigid_body_B, bt_pivot_in_A, bt_pivot_in_B);
   }
+
+  state_.connected_pivot = connected_pivot;
 
   AddToPhysicsManager(true);
 

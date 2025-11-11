@@ -29,7 +29,8 @@
 #include "core/common/small_source_location.h"
 #include "core/math/vec.h"
 #include "core/render/texture.h"
-#include "imp.h"
+#include "core/text/text_metrics.proto.h"
+#include "core/view/base_view.h"
 
 namespace imp {
 
@@ -49,11 +50,11 @@ class WasmPlatformCanvasSource : public PlatformCanvasSource {
       absl::string_view text,
       const ScopedCanvas::TextOptions& text_options) override;
 
-  ScopedCanvas::TextMetrics GetTextMetrics(
+  TextMetrics GetTextMetrics(
       absl::string_view text,
       const ScopedCanvas::TextOptions& text_options) override;
 
-  ScopedCanvas::TextMetrics GetGlyphMetrics(
+  TextMetrics GetGlyphMetrics(
       ScopedCanvas::GlyphId glyph,
       const ScopedCanvas::TextOptions& text_options) override;
 
@@ -69,8 +70,7 @@ class WasmPlatformCanvasSource : public PlatformCanvasSource {
       absl::string_view text,
       const ScopedCanvas::TextOptions& text_options) override;
 
-  ScopedCanvas::FontInfo GetFontInfo(
-      const ScopedCanvas::TextOptions& text_options) override;
+  FontInfo GetFontInfo(const ScopedCanvas::TextOptions& text_options) override;
 
   std::unique_ptr<ScopedCanvas> StartDrawing(
       BaseView& view, uint2 pixel_size,

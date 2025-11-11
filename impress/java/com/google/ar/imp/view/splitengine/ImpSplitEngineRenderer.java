@@ -98,12 +98,10 @@ public class ImpSplitEngineRenderer implements ImpApiScuba {
 
     FrameScheduler frameScheduler =
         new ChoreographerFrameScheduler.Factory().create(FrameScheduler.ThreadMode.MAIN_DEFAULT);
-
     // ImpSplitEngineApi creates the View internally, and also provides Xr specific Jni calls.
     ImpSplitEngineApi splitEngineApi;
     final ImpSplitEngine.ScreenSize finalScreenSize =
         viewParamsProvider != null ? viewParamsProvider.getScreenSize() : null;
-
     ListenableFuture<ImpSplitEngineApi> apiFuture =
         frameScheduler.submitOnFrameThread(
             () ->
@@ -115,7 +113,6 @@ public class ImpSplitEngineRenderer implements ImpApiScuba {
                     serviceBinder,
                     xrExtensions,
                     rendererConnection));
-
     try {
       // Block until ImpSplitEngineApi has been created.
       splitEngineApi = apiFuture.get();

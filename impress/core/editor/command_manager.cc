@@ -17,6 +17,7 @@
 #include <memory>
 #include <utility>
 
+#include "core/common/log.h"
 #include "absl/status/status.h"
 #include "core/editor/command.h"
 
@@ -58,6 +59,7 @@ void CommandManager::Redo() {
       break;
     } else {
       redo_commands_.pop_back();
+      IMP_LOG(imp::INFO) << "One redo command skipped due to: " << status.ToString();
     }
   }
   is_command_manager_running_ = false;

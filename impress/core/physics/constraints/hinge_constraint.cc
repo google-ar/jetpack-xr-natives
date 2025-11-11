@@ -33,11 +33,12 @@
 namespace imp {
 
 void HingeConstraint::LoadDefaultStateValues() {
-  state_.pivot = float3(0, 0, 0);
-  state_.connected_pivot = float3(0, 0, 0);
-  state_.axis = float3(0, 0, 1);
-  state_.connected_axis = float3(0, 0, 1);
   // low greater then high means no limits/free movement around the axis.
+  state_.pivot = kZero3;
+  state_.axis = kZAxis3f;
+  state_.connected_pivot = kZero3;
+  state_.connected_axis = kZAxis3f;
+  state_.auto_configure = true;
   state_.lower_limit = 1.0f;
   state_.upper_limit = -1.0f;
   state_.bias_factor = 0.3f;
@@ -52,22 +53,18 @@ absl::Status HingeConstraint::Setup() {
   return SetupInternal();
 }
 
-absl::Status HingeConstraint::Setup(NodeHandle connected_node,
-                                    bool auto_configure, float3 connected_pivot,
-                                    float3 connected_axis,
-                                    std::optional<float3> pivot,
-                                    std::optional<float3> axis) {
+absl::Status HingeConstraint::Setup(NodeHandle connected_node, float3 pivot,
+                                    float3 axis, bool auto_configure,
+                                    float3 connected_pivot,
+                                    float3 connected_axis) {
   LoadDefaultStateValues();
+
   state_.connected_node.AssignSceneHandleForNode(connected_node);
+  state_.auto_configure = auto_configure;
+  state_.pivot = pivot;
+  state_.axis = axis;
   state_.connected_pivot = connected_pivot;
   state_.connected_axis = connected_axis;
-  if (pivot.has_value()) {
-    state_.pivot = pivot.value();
-  }
-  if (axis.has_value()) {
-    state_.axis = axis.value();
-  }
-  state_.auto_configure = auto_configure;
 
   return SetupInternal();
 }
@@ -86,12 +83,10 @@ absl::Status HingeConstraint::SetupInternal() {
     return absl::OkStatus();
   }
 
-  if (state_.auto_configure) {
-    state_.connected_pivot = ComputePivotAFromB(
-        state_.connected_node, GetNode(), state_.pivot.value_or(kZero3));
-    state_.connected_axis = ComputeAxisAFromB(state_.connected_node, GetNode(),
-                                              state_.axis.value_or(kZAxis3f));
-  }
+  float3 axis = state_.axis.value_or(kZAxis3f);
+
+  float3 connected_pivot;
+  float3 connected_axis;
 
   btRigidBody* bt_rigid_body_A =
       const_cast<btRigidBody*>(&GetRigidBodyA()->GetBtRigidBody());
@@ -100,23 +95,34 @@ absl::Status HingeConstraint::SetupInternal() {
           ? nullptr
           : const_cast<btRigidBody*>(&GetRigidBodyB()->GetBtRigidBody());
 
+  if (state_.auto_configure || bt_rigid_body_B == nullptr) {
+    connected_pivot =
+        ComputePivotAFromB(state_.connected_node, GetNode(), state_.pivot);
+    connected_axis = ComputeAxisAFromB(state_.connected_node, GetNode(), axis);
+  } else {
+    connected_pivot = state_.connected_pivot.value_or(kZero3);
+    connected_axis = state_.connected_axis.value_or(kZAxis3f);
+  }
+
+  btVector3 bt_pivot_in_A = ToBtVector3(connected_pivot);
+  btVector3 bt_axis_in_A = ToBtVector3(connected_axis);
+
   if (bt_rigid_body_B == nullptr) {
     // then we will attach it to the world
-    btVector3 bt_pivot_in_A = ToBtVector3(state_.connected_pivot);
-    btVector3 bt_axis_in_A = ToBtVector3(state_.connected_axis);
     bt_constraint_ = std::make_unique<btHingeConstraint>(
         *bt_rigid_body_A, bt_pivot_in_A, bt_axis_in_A);
   } else {
-    btVector3 bt_pivot_in_A = ToBtVector3(state_.connected_pivot);
-    btVector3 bt_pivot_in_B = ToBtVector3(state_.pivot.value_or(kZero3));
-
-    btVector3 bt_axis_in_A = ToBtVector3(state_.connected_axis);
-    btVector3 bt_axis_in_B = ToBtVector3(state_.axis.value_or(kZAxis3f));
+    btVector3 bt_pivot_in_B = ToBtVector3(state_.pivot);
+    btVector3 bt_axis_in_B = ToBtVector3(axis);
 
     bt_constraint_ = std::make_unique<btHingeConstraint>(
         *bt_rigid_body_A, *bt_rigid_body_B, bt_pivot_in_A, bt_pivot_in_B,
         bt_axis_in_A, bt_axis_in_B);
   }
+
+  state_.axis = axis;
+  state_.connected_pivot = connected_pivot;
+  state_.connected_axis = connected_axis;
 
   SetLimitsFromState();
   SetMotorParametersFromState();

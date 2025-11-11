@@ -24,6 +24,7 @@
 #include "bullet/src/BulletDynamics/Dynamics/btRigidBody.h"
 #include "bullet/src/LinearMath/btDefaultMotionState.h"
 #include "bullet/src/LinearMath/btTransform.h"
+#include "core/config.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component.h"
@@ -194,6 +195,10 @@ class RigidBody : public Component {
 
   // Use this for multiple cleanups during object's lifetime.
   void CleanupInternal();
+
+#if IMP_RUNTIME(DEV)
+  void Visualize();
+#endif
 
   PhysicsManager* physics_manager_;
   Collidable collidable_;

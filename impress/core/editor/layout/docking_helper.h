@@ -15,6 +15,10 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_LAYOUT_DOCKING_HELPER_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_LAYOUT_DOCKING_HELPER_H_
 
+#include <string>
+#include <vector>
+
+#include "absl/types/span.h"
 #include "dear_imgui/imgui.h"
 
 namespace imp::editor {
@@ -32,8 +36,8 @@ class DockingHelper {
   // Creates the docking helper and initializes the docking layout.
   DockingHelper();
 
-  // Resets the docking layout.
-  void Reset();
+  // Initializes the docking layout from scratch.
+  void Initialize();
 
   // Returns the docking space ID.
   ImGuiID GetDockableSpaceId();
@@ -41,11 +45,23 @@ class DockingHelper {
   // Returns the docking ID of the specified docking place.
   ImGuiID GetDockId(DockingType docking_type);
 
+  // Returns true if the docking layout is initialized with a saved layout.
+  bool IsInitializedWithSavedLayout() const {
+    return initialized_with_saved_layout_;
+  }
+
+  // Returns the initial visible window labels.
+  absl::Span<const std::string> GetInitialVisibleWindowLabels() const {
+    return absl::MakeSpan(initial_visible_window_labels_);
+  }
+
  private:
   ImGuiID dockspace_id_;
   ImGuiID dock_id_left_;
   ImGuiID dock_id_right_;
   ImGuiID dock_id_bottom_;
+  bool initialized_with_saved_layout_ = false;
+  std::vector<std::string> initial_visible_window_labels_;
 };
 
 }  // namespace imp::editor

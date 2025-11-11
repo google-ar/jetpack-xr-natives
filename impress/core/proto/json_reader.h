@@ -23,7 +23,6 @@
 #include <cstdint>
 #include <functional>
 #include <map>
-#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -40,6 +39,7 @@
 #include "absl/strings/numbers.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
+#include "core/common/copyable_ptr.h"
 #include "core/common/hash.h"
 #include "core/proto/any.proto.imp.h"
 #include "core/proto/json_message_visitor.h"
@@ -105,8 +105,8 @@ class JsonReader {
                     absl::optional<T>* other, int token_type);
 
   template <int field_type, typename T>
-  const char* Visit(const char* ptr, int field_id, std::unique_ptr<T>* field,
-                    std::unique_ptr<T>* other, int token_type);
+  const char* Visit(const char* ptr, int field_id, CopyablePtr<T>* field,
+                    CopyablePtr<T>* other, int token_type);
 
   template <int field_type, RepeatedMergeStrategy merge_type, typename T>
   const char* Visit(const char* ptr, int field_id, std::vector<T>* field,
@@ -374,7 +374,7 @@ const char* JsonReader::Visit(const char* ptr, int field_id,
     return ptr_;
   }
   if (!field->has_value()) {
-    field->emplace();
+    field->emplace(T());
   }
   Visit<field_type>(ptr_, field_id, &(**field), static_cast<T*>(nullptr),
                     token_type);
@@ -383,8 +383,8 @@ const char* JsonReader::Visit(const char* ptr, int field_id,
 
 template <int field_type, typename T>
 const char* JsonReader::Visit(const char* ptr, int field_id,
-                              std::unique_ptr<T>* field,
-                              std::unique_ptr<T>* other, int token_type) {
+                              CopyablePtr<T>* field, CopyablePtr<T>* other,
+                              int token_type) {
   if (!status_.ok()) {
     return ptr_;
   }
@@ -394,7 +394,7 @@ const char* JsonReader::Visit(const char* ptr, int field_id,
     return ptr_;
   }
   if (!*field) {
-    *field = std::make_unique<T>();
+    *field = MakeCopyablePtr<T>();
   }
   Visit<field_type>(ptr_, field_id, field->get(), static_cast<T*>(nullptr),
                     token_type);

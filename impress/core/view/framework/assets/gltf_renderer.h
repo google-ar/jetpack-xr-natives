@@ -335,6 +335,26 @@ class GltfRenderer : public Component {
 
   int GetMeshCount() const { return mesh_index_to_nodes_.size(); };
 
+  // Returns the per mesh record of morph target weights.
+  std::vector<float> GetMeshMorphTargetWeights(size_t mesh_index) const;
+
+  // Returns an individual morph target's weight in the per mesh record if it
+  // exists, otherwise returns std::nullopt.
+  std::optional<float> GetMeshMorphTargetWeight(size_t mesh_index,
+                                                size_t target_index) const;
+
+  // Sets the per mesh record of morph target weights and update the real-time
+  // weights on Filament for all nodes that use this mesh if the per node
+  // weights are not set for those nodes.
+  void SetMeshMorphTargetWeights(const std::vector<float>& weights,
+                                 size_t mesh_index);
+
+  // Sets an individual morph target's weight in the per mesh record and update
+  // the real-time weights on Filament for all nodes that use this mesh if the
+  // per node weights are not set for those nodes.
+  absl::Status SetMeshMorphTargetWeight(float weight, size_t mesh_index,
+                                        size_t target_index);
+
  private:
   using Bone = model::BoneData;
   using BoneId = model::BoneId;
@@ -388,6 +408,10 @@ class GltfRenderer : public Component {
   // For compactness, we refer to our children by entity.
   PairedVector<utils::Entity, EntityData> node_entities_;
 
+  PairedVector<std::vector<float>, EntityData> node_morph_target_weights_;
+
+  RobinMap<int, std::vector<float>> mesh_morph_target_weights_;
+
   std::vector<RuntimeSkin> runtime_skins_;
   // Below fields are used to track the transforms of joints in the coordinate
   // space of the root node when calculating skinning. It isn't part of the
@@ -418,12 +442,23 @@ class GltfRenderer : public Component {
   Material* GetMaterialOverride(EntityId entity_id,
                                 size_t primitive_index = 0) const;
 
-  // Sets the value of morph target weights.
+  // Sets the value of morph target weights used for real-time rendering on
+  // Filament.
   void SetMorphTargetWeights(const std::vector<float>& weights,
                              model::ModelData::EntityId entity_id);
 
   // Returns number of morph targets.
   size_t GetMorphTargetCount(model::ModelData::EntityId entity_id) const;
+
+  // Returns the current morph target weights, namely the latest values passed
+  // to Filament.
+  std::vector<float> GetMorphTargetWeights(model::ModelData::EntityId entity_id,
+                                           int original_mesh_index) const;
+
+  // Sets the per node record of morph target weights and update the real-time
+  // weights on Filament.
+  void SetNodeMorphTargetWeights(const std::vector<float>& weights,
+                                 model::ModelData::EntityId entity_id);
 
   void SetMaterialOverrideByIndexInternal(Material* raw_new_material,
                                           size_t material_index);

@@ -15,6 +15,7 @@
 #include "apibindings/stereo_surface_manager.h"
 
 #include <cstdint>
+#include <memory>
 #include <utility>
 
 #include "absl/status/status.h"
@@ -37,6 +38,7 @@
 namespace imp {
 
 namespace {
+
 absl::StatusOr<ComponentHandle<StereoSurface>> GetStereoSurface(
     int32_t node_id) {
   NodeHandle node(utils::Entity::import(node_id));
@@ -49,12 +51,44 @@ absl::StatusOr<ComponentHandle<StereoSurface>> GetStereoSurface(
   }
   return result;
 }
+
 }  // namespace
 
-StereoSurfaceManager::StereoSurfaceManager(ImpressApiView& view)
+class StereoSurfaceManagerImpl : public StereoSurfaceManager {
+ public:
+  explicit StereoSurfaceManagerImpl(ImpressApiView& view);
+  ~StereoSurfaceManagerImpl() override = default;
+
+  absl::StatusOr<int32_t> CreateStereoSurfaceEntity(
+      MediaStereoMode stereo_mode, ContentSecurityLevel content_security_level,
+      bool use_super_sampling) override;
+  absl::Status SetStereoSurfaceEntityCanvasShape(
+      int32_t node_id, StereoSurface::CanvasShape canvas_shape) override;
+  absl::Status SetStereoSurfaceEntityColliderEnabled(
+      int32_t node_id, bool enable_collider) override;
+  absl::StatusOr<android::Surface*> GetSurfaceFromStereoSurfaceEntity(
+      int32_t node_id) override;
+  absl::Status SetSurfaceDimensionsForStereoSurfaceEntity(
+      int32_t node_id, int32_t width, int32_t height) override;
+  absl::Status SetFeatherRadiusForStereoSurfaceEntity(
+      int32_t node_id, const float2& feather_radius) override;
+  absl::Status SetStereoModeForStereoSurfaceEntity(
+      int32_t node_id, MediaStereoMode stereo_mode) override;
+  absl::Status SetPrimaryAlphaMaskForStereoSurfaceEntity(
+      int32_t node_id, int64_t alpha_mask_token) override;
+  absl::Status SetAuxiliaryAlphaMaskForStereoSurfaceEntity(
+      int32_t node_id, int64_t alpha_mask_token) override;
+  absl::Status SetContentColorMetadataForStereoSurfaceEntity(
+      int32_t node_id, MediaColorSpace color_space = {}) override;
+
+ private:
+  ImpressApiView& view_;
+};
+
+StereoSurfaceManagerImpl::StereoSurfaceManagerImpl(ImpressApiView& view)
     : view_(view) {}
 
-absl::StatusOr<int32_t> StereoSurfaceManager::CreateStereoSurfaceEntity(
+absl::StatusOr<int32_t> StereoSurfaceManagerImpl::CreateStereoSurfaceEntity(
     MediaStereoMode stereo_mode, ContentSecurityLevel content_security_level,
     bool use_super_sampling) {
   NodeHandle node = view_.CreateNode();
@@ -70,14 +104,14 @@ absl::StatusOr<int32_t> StereoSurfaceManager::CreateStereoSurfaceEntity(
   return node.GetEntity().getId();
 }
 
-absl::Status StereoSurfaceManager::SetStereoSurfaceEntityCanvasShape(
+absl::Status StereoSurfaceManagerImpl::SetStereoSurfaceEntityCanvasShape(
     int32_t node_id, StereoSurface::CanvasShape canvas_shape) {
   MP_ASSIGN_OR_RETURN(ComponentHandle<StereoSurface> stereo_surface,
                    GetStereoSurface(node_id));
   return stereo_surface->SetCanvasShape(canvas_shape);
 }
 
-absl::Status StereoSurfaceManager::SetStereoSurfaceEntityColliderEnabled(
+absl::Status StereoSurfaceManagerImpl::SetStereoSurfaceEntityColliderEnabled(
     int32_t node_id, bool enable_collider) {
   MP_ASSIGN_OR_RETURN(ComponentHandle<StereoSurface> stereo_surface,
                    GetStereoSurface(node_id));
@@ -85,7 +119,7 @@ absl::Status StereoSurfaceManager::SetStereoSurfaceEntityColliderEnabled(
 }
 
 absl::StatusOr<android::Surface*>
-StereoSurfaceManager::GetSurfaceFromStereoSurfaceEntity(int32_t node_id) {
+StereoSurfaceManagerImpl::GetSurfaceFromStereoSurfaceEntity(int32_t node_id) {
   absl::StatusOr<ComponentHandle<StereoSurface>> result =
       GetStereoSurface(node_id);
   if (!result.ok()) {
@@ -94,14 +128,15 @@ StereoSurfaceManager::GetSurfaceFromStereoSurfaceEntity(int32_t node_id) {
   return (*result)->GetSurface();
 }
 
-absl::Status StereoSurfaceManager::SetSurfaceDimensionsForStereoSurfaceEntity(
+absl::Status
+StereoSurfaceManagerImpl::SetSurfaceDimensionsForStereoSurfaceEntity(
     int32_t node_id, int32_t width, int32_t height) {
   MP_ASSIGN_OR_RETURN(ComponentHandle<StereoSurface> stereo_surface,
                    GetStereoSurface(node_id));
   return stereo_surface->SetSurfaceDimensions(width, height);
 }
 
-absl::Status StereoSurfaceManager::SetFeatherRadiusForStereoSurfaceEntity(
+absl::Status StereoSurfaceManagerImpl::SetFeatherRadiusForStereoSurfaceEntity(
     int32_t node_id, const float2& feather_radius) {
   MP_ASSIGN_OR_RETURN(ComponentHandle<StereoSurface> stereo_surface,
                    GetStereoSurface(node_id));
@@ -109,7 +144,7 @@ absl::Status StereoSurfaceManager::SetFeatherRadiusForStereoSurfaceEntity(
   return absl::OkStatus();
 }
 
-absl::Status StereoSurfaceManager::SetStereoModeForStereoSurfaceEntity(
+absl::Status StereoSurfaceManagerImpl::SetStereoModeForStereoSurfaceEntity(
     int32_t node_id, MediaStereoMode stereo_mode) {
   MP_ASSIGN_OR_RETURN(ComponentHandle<StereoSurface> stereo_surface,
                    GetStereoSurface(node_id));
@@ -117,7 +152,8 @@ absl::Status StereoSurfaceManager::SetStereoModeForStereoSurfaceEntity(
   return absl::OkStatus();
 }
 
-absl::Status StereoSurfaceManager::SetPrimaryAlphaMaskForStereoSurfaceEntity(
+absl::Status
+StereoSurfaceManagerImpl::SetPrimaryAlphaMaskForStereoSurfaceEntity(
     int32_t node_id, int64_t alpha_mask_token) {
   OwnedOrBorrowedTexturePtr alpha_mask;
   // If the alpha mask token is kUnSetAlphaMaskToken, then the alpha mask is
@@ -132,7 +168,8 @@ absl::Status StereoSurfaceManager::SetPrimaryAlphaMaskForStereoSurfaceEntity(
   return absl::OkStatus();
 }
 
-absl::Status StereoSurfaceManager::SetAuxiliaryAlphaMaskForStereoSurfaceEntity(
+absl::Status
+StereoSurfaceManagerImpl::SetAuxiliaryAlphaMaskForStereoSurfaceEntity(
     int32_t node_id, int64_t alpha_mask_token) {
   OwnedOrBorrowedTexturePtr alpha_mask;
   // If the alpha mask token is kUnSetAlphaMaskToken, then the alpha mask is
@@ -148,12 +185,17 @@ absl::Status StereoSurfaceManager::SetAuxiliaryAlphaMaskForStereoSurfaceEntity(
 }
 
 absl::Status
-StereoSurfaceManager::SetContentColorMetadataForStereoSurfaceEntity(
+StereoSurfaceManagerImpl::SetContentColorMetadataForStereoSurfaceEntity(
     int32_t node_id, MediaColorSpace color_space) {
   MP_ASSIGN_OR_RETURN(ComponentHandle<StereoSurface> stereo_surface,
                    GetStereoSurface(node_id));
   stereo_surface->SetContentColorMetadata(color_space);
   return absl::OkStatus();
+}
+
+std::unique_ptr<StereoSurfaceManager> CreateStereoSurfaceManager(
+    ImpressApiView& view) {
+  return std::make_unique<StereoSurfaceManagerImpl>(view);
 }
 
 }  // namespace imp

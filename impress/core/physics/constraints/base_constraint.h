@@ -20,6 +20,7 @@
 #include "absl/status/status.h"
 #include "bullet/src/BulletDynamics/ConstraintSolver/btTypedConstraint.h"
 #include "bullet/src/BulletDynamics/Dynamics/btRigidBody.h"
+#include "core/math/mat.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
 #include "core/physics/physics_manager.h"
@@ -45,6 +46,10 @@ namespace imp {
 class BaseConstraint {
  public:
   virtual ~BaseConstraint() = default;
+
+  bool IsBulletConstraintRecreated() const {
+    return is_bt_constraint_recreated_;
+  }
 
  protected:
   absl::Status InitializeWithNodes(NodeHandle connected_node,
@@ -81,6 +86,10 @@ class BaseConstraint {
   bool connected_node_valid_prev_ = false;
 
   PhysicsManager* physics_manager_;
+
+  mat4f owner_node_transform_prev_;
+
+  bool is_bt_constraint_recreated_ = false;
 };
 }  // namespace imp
 

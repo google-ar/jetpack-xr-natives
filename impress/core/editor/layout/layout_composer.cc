@@ -20,11 +20,13 @@
 #include <string>
 #include <utility>
 
+#include "core/common/log.h"
 #include "absl/strings/match.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "dear_imgui/imgui.h"
 #include "dear_imgui/imgui_internal.h"
+#include "core/common/file_helpers.h"
 #include "core/common/invocable.h"
 #include "core/config.h"
 #include "core/editor/editor_constants.h"
@@ -86,7 +88,11 @@ LayoutComposer::LayoutComposer(LayoutConfig layout_config)
   } else {
     ImGui::GetIO().ConfigFlags &= ~ImGuiConfigFlags_DockingEnable;
   }
+
+  ImGui::GetIO().IniFilename = NULL;
 #endif
+  saved_layout_filename_ =
+      GetRepoDirectory() + std::string(kSavedLayoutIniFile);
 }
 
 std::optional<LayoutConfig::LayoutType> LayoutComposer::GetLayoutType() const {
@@ -324,7 +330,8 @@ void LayoutComposer::DrawDockableDetailsWindow() {
                            ImGuiWindowFlags_AlwaysVerticalScrollbar |
                            ImGuiWindowFlags_HorizontalScrollbar;
 
-  if (window_configuration_ && window_configuration_->ShouldHideAllWindows()) {
+  if (window_configuration_ &&
+      (*window_configuration_)->ShouldHideAllWindows()) {
     return;
   }
 
@@ -384,7 +391,8 @@ void LayoutComposer::DrawDockableSceneWindow() {
   ImGuiWindowFlags flags = ImGuiWindowFlags_HorizontalScrollbar |
                            ImGuiWindowFlags_NoFocusOnAppearing;
 
-  if (window_configuration_ && window_configuration_->ShouldHideAllWindows()) {
+  if (window_configuration_ &&
+      (*window_configuration_)->ShouldHideAllWindows()) {
     return;
   }
 
@@ -405,13 +413,14 @@ void LayoutComposer::DrawSceneSectionContents() {
 
 void LayoutComposer::DrawDockableTabbedWindow() {
   ImGui::SetNextWindowBgAlpha(kWindowAlpha);
-  ImGuiWindowFlags flags =
-      ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoSavedSettings;
+  ImGuiWindowFlags flags = ImGuiWindowFlags_NoFocusOnAppearing;
 
   for (auto& info : tab_item_info_) {
-    ImGui::SetNextWindowDockID(
-        docking_helper_->GetDockId(DockingHelper::DockingType::kBottom),
-        ImGuiCond_Appearing);
+    if (should_reset_docking_layout_) {
+      ImGui::SetNextWindowDockID(
+          docking_helper_->GetDockId(DockingHelper::DockingType::kBottom),
+          ImGuiCond_Always);
+    }
     if (ImGui::Begin(info.label.c_str(), nullptr, flags)) {
       info.draw_function();
     }
@@ -639,13 +648,15 @@ void LayoutComposer::DrawAfterLayout() {
             LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT) {
       // If the window configuration is available, show a close button for the
       // window.
-      bool show_draw = window_configuration_->IsWindowVisible(label);
+      bool show_draw = (*window_configuration_)->IsWindowVisible(label);
       ImGui::Begin(label.c_str(), &show_draw);
       draw_function();
       ImGui::End();
-      window_configuration_->SetWindowVisibility(
-          label, show_draw ? WindowConfiguration::WindowVisibility::kVisible
-                           : WindowConfiguration::WindowVisibility::kHidden);
+      (*window_configuration_)
+          ->SetWindowVisibility(
+              label, show_draw
+                         ? WindowConfiguration::WindowVisibility::kVisible
+                         : WindowConfiguration::WindowVisibility::kHidden);
     } else {
       ImGui::Begin(label.c_str());
       draw_function();
@@ -675,6 +686,16 @@ void LayoutComposer::DrawLayout() {
       LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT) {
     if (!docking_helper_) {
       docking_helper_ = std::make_unique<DockingHelper>();
+      if (!docking_helper_->IsInitializedWithSavedLayout()) {
+        ResetDockingLayout();
+      } else {
+        for (const auto& label :
+             docking_helper_->GetInitialVisibleWindowLabels()) {
+          (*window_configuration_)
+              ->SetWindowVisibility(
+                  label, WindowConfiguration::WindowVisibility::kVisible);
+        }
+      }
     }
     ImGui::DockSpaceOverViewport(
         docking_helper_->GetDockableSpaceId(), nullptr,
@@ -730,6 +751,13 @@ void LayoutComposer::DrawLayout() {
 
   DrawAfterLayout();
 
+  // Save on clicking on "Save Layout" button.
+  if (window_configuration_ &&
+      (*window_configuration_)->ShouldSaveLayoutToIniFile()) {
+    SaveLayoutToIniFile();
+    (*window_configuration_)->NotifyLayoutSaved();
+  }
+
   // Flush the queued draw functions immediately after drawing.
   details_draw_functions_.clear();
   scene_draw_functions_.clear();
@@ -738,6 +766,20 @@ void LayoutComposer::DrawLayout() {
   menu_draw_functions_.clear();
   toolbar_draw_functions_.clear();
   draw_after_functions_.clear();
+
+  should_reset_docking_layout_ = false;
+}
+
+void LayoutComposer::ResetDockingLayout() {
+  docking_helper_->Initialize();
+  should_reset_docking_layout_ = true;
+}
+
+void LayoutComposer::SaveLayoutToIniFile() {
+  ImGui::GetIO().WantSaveIniSettings = true;
+  ImGui::SaveIniSettingsToDisk(saved_layout_filename_.c_str());
+  IMP_LOG(imp::INFO) << "Saved editor layout to " << saved_layout_filename_;
+  ImGui::GetIO().WantSaveIniSettings = false;
 }
 
 absl::Span<const LayoutComposer::SubWindowInfo>

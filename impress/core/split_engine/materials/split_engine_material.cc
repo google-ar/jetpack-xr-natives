@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -27,6 +28,7 @@
 #include "flatbuffers/flatbuffer_builder.h"
 #include "flatbuffers/verifier.h"
 #include "core/assets/asset_ptr.h"
+#include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
 #include "core/common/registry.h"
 #include "core/common/robin_set.h"
@@ -38,6 +40,7 @@
 #include "core/split_engine/materials/builtin/builtin_material.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
 #include "core/split_engine/materials/placeholder_material_asset.h"
+#include "core/split_engine/materials/split_engine_custom_material.h"
 #include "core/split_engine/materials/split_engine_material_factory.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_serializer.h"
@@ -64,14 +67,7 @@ SplitEngineMaterial::RequestBuiltInMaterial(
     BaseView& view, std::unique_ptr<flatbuffers::FlatBufferBuilder> fbb,
     android_xr::schemas::BuiltInMaterialSpec material_type,
     flatbuffers::Offset<void> spec) {
-// TODO : Have a single place to control local mode.
-#if IMP_USE_LOCAL_SPLIT_ENGINE_MATERIALS
-  bool local_mode = true;
-#else
-  bool local_mode = view.GetSplitEngineSerializer() == nullptr;
-#endif
-
-  if (local_mode) {
+  if (view.AreSplitEngineMaterialsInLocalMode()) {
     // Create a built-in material request with ID zero since it will not be
     // used.
     flatbuffers::Offset<android_xr::schemas::BuiltInMaterialRequest>
@@ -109,6 +105,46 @@ SplitEngineMaterial::RequestBuiltInMaterial(
                        std::move(placeholder_material)]() mutable {
               return PlaceholderOrBuiltInMaterialPtr(
                   std::move(placeholder_material));
+            });
+      });
+}
+
+Future<OwnedMaterialPtr> SplitEngineMaterial::RequestCustomFilamentMaterial(
+    BaseView& view, std::string_view material_source,
+    const MaterialPreCompileOptions& precompile_options) {
+  return CreatePlaceholderMaterial(view).Then(
+      [&view, material_source, &precompile_options](
+          OwnedMaterialPtr placeholder_material) -> Future<OwnedMaterialPtr> {
+        SplitEngineSerializer* serializer = view.GetSplitEngineSerializer();
+        if (serializer == nullptr) {
+          return Future<OwnedMaterialPtr>(
+              absl::FailedPreconditionError("SplitEngineSerializer is null."));
+        }
+        OwnedMaterialPtr material_wrapper =
+            OwnedMaterialPtr(new SplitEngineCustomMaterial(
+                *serializer, std::move(placeholder_material)));
+        const uint64_t material_id =
+            SplitEngineSerializer::GetId(material_wrapper.operator->());
+        flatbuffers::FlatBufferBuilder fbb;
+        flatbuffers::Offset<android_xr::schemas::FilamentMaterialSpec>
+            material_spec_offset =
+                android_xr::schemas::CreateFilamentMaterialSpec(
+                    fbb, fbb.CreateString(material_source),
+                    Pack(fbb, precompile_options));
+        flatbuffers::Offset<android_xr::schemas::AddCustomMaterialRequest>
+            request = android_xr::schemas::CreateAddCustomMaterialRequest(
+                fbb, material_id,
+                android_xr::schemas::CustomMaterialSpec::FilamentMaterialSpec,
+                material_spec_offset.Union());
+        return SendRequest<android_xr::schemas::AddCustomMaterialRequest,
+                           absl::Status>(serializer->GetBridge(), fbb, request)
+            .Then([serializer, material_id,
+                   material_wrapper = std::move(material_wrapper)]() mutable {
+              serializer->AddMaterialInstance(
+                  material_id,
+                  SplitEngineSerializer::GetId(
+                      material_wrapper->GetFilamentMaterialInstance()));
+              return Future<OwnedMaterialPtr>(std::move(material_wrapper));
             });
       });
 }
@@ -165,12 +201,7 @@ bool SplitEngineMaterial::AreParametersDirty() const {
 }
 
 void SplitEngineMaterial::UpdateParameters() const {
-// TODO : Have a single place to control local mode.
-#if IMP_USE_LOCAL_SPLIT_ENGINE_MATERIALS
-  bool local_mode = true;
-#else
-  bool local_mode = view_.GetSplitEngineSerializer() == nullptr;
-#endif
+  bool local_mode = view_.AreSplitEngineMaterialsInLocalMode();
   BuiltInTextureParameterCreator texture_parameter_creator(local_mode);
   auto serialize_func = [this, &texture_parameter_creator](
                             flatbuffers::FlatBufferBuilder& fbb) mutable {
@@ -216,7 +247,8 @@ void SplitEngineMaterial::UpdateParameters() const {
       }
     } else {
       view_.GetSplitEngineSerializer()->SetBuiltInMaterialParameters(
-          GetMaterial()->GetFilamentMaterialInstance(), parameters_type_,
+          GetMaterial()->GetFilamentMaterialInstance(),
+          static_cast<BuiltInMaterialParameters>(parameters_type_),
           std::move(serialize_func));
     }
   } else {
@@ -224,7 +256,8 @@ void SplitEngineMaterial::UpdateParameters() const {
     // placeholder material. Serialization of the material parameters happens
     // through the built-in schema to ensure safety & backwards compatibility.
     view_.GetSplitEngineSerializer()->SetBuiltInMaterialParameters(
-        GetMaterial()->GetFilamentMaterialInstance(), parameters_type_,
+        GetMaterial()->GetFilamentMaterialInstance(),
+        static_cast<BuiltInMaterialParameters>(parameters_type_),
         std::move(serialize_func));
   }
 }

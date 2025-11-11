@@ -14,6 +14,7 @@
 
 #include "core/canvas/wasm_async_canvas_source.h"
 
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -45,6 +46,7 @@
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
 #include "core/text/text_helpers.h"
+#include "core/text/text_metrics.proto.h"
 #include "core/view/base_view.h"
 #include "core/view/platforms/wasm/wasm_canvas_manager.h"
 
@@ -145,14 +147,14 @@ Future<absl::Status> WasmAsyncCanvasSource::PrepareFont(
                                         text_style, text_options.size_pixels);
 }
 
-Future<std::vector<ScopedCanvas::TextAndFontMetrics>>
+Future<std::vector<TextAndFontMetrics>>
 WasmAsyncCanvasSource::GetFontAndTextMetrics(
     std::vector<ScopedCanvas::TextToMeasure> texts) {
   absl::MutexLock lock(&canvas_mutex_);
   return measuring_scoped_canvas_.GetFontAndTextMetrics(texts);
 }
 
-Future<ScopedCanvas::TextMetrics> WasmAsyncCanvasSource::MeasureGlyph(
+Future<TextMetrics> WasmAsyncCanvasSource::MeasureGlyph(
     GlyphToMeasure glyph_to_measure, ScopedCanvas::TextOptions text_options) {
   absl::MutexLock lock(&canvas_mutex_);
 
@@ -189,7 +191,7 @@ Future<ScopedCanvas::TextMetrics> WasmAsyncCanvasSource::MeasureGlyph(
                 Executor::Type::kImmediate);
   }
 
-  Future<std::vector<ScopedCanvas::TextMetrics>> measure_text_future =
+  Future<std::vector<TextMetrics>> measure_text_future =
       measuring_scoped_canvas_.MeasureGlyphs(
           {{.chunk_text = text, .codepoint_count = 1, .is_separable = false}},
           text_options);
@@ -198,12 +200,12 @@ Future<ScopedCanvas::TextMetrics> WasmAsyncCanvasSource::MeasureGlyph(
       .Then(
           [should_measure_typographical_width =
                text_options.should_measure_typographical_width](
-              std::tuple<std::vector<ScopedCanvas::TextMetrics>, float> tuple)
-              -> ScopedCanvas::TextMetrics {
+              std::tuple<std::vector<TextMetrics>, float> tuple)
+              -> TextMetrics {
             auto [text_metrics, typographical_width] = tuple;
             if (text_metrics.size() == 1) {
               if (should_measure_typographical_width) {
-                text_metrics[0].typographical_width = typographical_width;
+                text_metrics[0].set_typographical_width(typographical_width);
               }
               return text_metrics[0];
             } else {
@@ -215,8 +217,7 @@ Future<ScopedCanvas::TextMetrics> WasmAsyncCanvasSource::MeasureGlyph(
           Executor::Type::kCurrent);
 }
 
-Future<std::vector<ScopedCanvas::TextMetrics>>
-WasmAsyncCanvasSource::MeasureGlyphs(
+Future<std::vector<TextMetrics>> WasmAsyncCanvasSource::MeasureGlyphs(
     std::vector<GlyphToMeasure> glyphs_to_measure,
     ScopedCanvas::TextOptions text_options) {
   absl::MutexLock lock(&canvas_mutex_);
@@ -247,7 +248,7 @@ WasmAsyncCanvasSource::GetTextGlyphs(
           "CanvasSource::GetTextGlyphs is unavailable on WASM."));
 }
 
-Future<ScopedCanvas::FontInfo> WasmAsyncCanvasSource::GetFontInfo(
+Future<FontInfo> WasmAsyncCanvasSource::GetFontInfo(
     const ScopedCanvas::TextOptions& text_options) {
   absl::MutexLock lock(&canvas_mutex_);
   return measuring_scoped_canvas_.GetFontInfo(text_options);
@@ -423,9 +424,9 @@ void WasmAsyncCanvasSource::WasmScopedCanvas::DrawRoundedRect(
 void WasmAsyncCanvasSource::WasmScopedCanvas::DrawText(
     absl::string_view text, float2 pos, const TextOptions& text_options) {
   SetTextOptions(text_options);
-  platform_canvas_wrapper_->DrawText(text, pos,
-                                     text_options.horizontal_alignment,
-                                     text_options.vertical_alignment);
+  platform_canvas_wrapper_->DrawText(
+      text, pos, text_options.horizontal_alignment,
+      text_options.vertical_alignment, text_options.render_scale.x);
 }
 
 void WasmAsyncCanvasSource::WasmScopedCanvas::DrawGlyph(
@@ -451,7 +452,7 @@ Future<absl::Status> WasmAsyncCanvasSource::WasmScopedCanvas::PrepareFont(
       text, font_family, font_weight, text_style, text_options.size_pixels);
 }
 
-Future<std::vector<ScopedCanvas::TextAndFontMetrics>>
+Future<std::vector<TextAndFontMetrics>>
 WasmAsyncCanvasSource::WasmScopedCanvas::GetFontAndTextMetrics(
     std::vector<ScopedCanvas::TextToMeasure> texts) {
   for (const ScopedCanvas::TextToMeasure& text : texts) {
@@ -475,40 +476,74 @@ WasmAsyncCanvasSource::WasmScopedCanvas::GetFontAndTextMetrics(
     platform_canvas_wrapper_->CollectGetFontAndTextMetricsInputs(text.text);
   }
   return platform_canvas_wrapper_->GetFontAndTextMetrics().Then(
-      [texts = std::move(texts)](std::vector<std::vector<float>> measurements)
-          -> std::vector<ScopedCanvas::TextAndFontMetrics> {
-        std::vector<ScopedCanvas::TextAndFontMetrics> text_and_font_metrics;
-        text_and_font_metrics.reserve(measurements.size());
-        for (int i = 0; i < measurements.size(); i++) {
-          if (measurements[i].size() != 9) {
+      [texts = std::move(texts)](
+          WasmCanvasManager::FlattenedFontAndTextMetricsResults measurements)
+          -> std::vector<TextAndFontMetrics> {
+        const std::vector<std::vector<float>>& text_measurements =
+            measurements.per_text_measurements;
+        const std::vector<std::vector<float>>& glyph_measurements =
+            measurements.per_glyph_measurements;
+        assert(text_measurements.size() == glyph_measurements.size());
+        std::vector<TextAndFontMetrics> text_and_font_metrics;
+        text_and_font_metrics.reserve(text_measurements.size());
+        for (int i = 0; i < text_measurements.size(); i++) {
+          if (text_measurements[i].size() != 9) {
             IMP_LOG(imp::ERROR) << "Unexpected measurement size "
-                       << measurements[i].size();
+                       << text_measurements[i].size();
             continue;
           }
 
-          float size = static_cast<float>(texts[i].text_options.size_pixels);
+          float size_pixels =
+              static_cast<float>(texts[i].text_options.size_pixels);
           // LINT.IfChange
-          text_and_font_metrics.push_back(ScopedCanvas::TextAndFontMetrics{
-              .text_metrics =
-                  ScopedCanvas::TextMetrics{
-                      .origin = float2{measurements[i][0], measurements[i][1]},
-                      .size = float2{measurements[i][2], measurements[i][3]},
-                      .typographical_width = measurements[i][4],
-                      .font_origin_y = measurements[i][5],
-                      .font_size_y = measurements[i][6],
-                  },
-              .font_info =
-                  ScopedCanvas::FontInfo{measurements[i][7], measurements[i][8],
-                                         // TODO: Supply proper
-                                         // values for these two metrics.
-                                         size, size}});
+          TextMetrics text_metrics;
+          text_metrics.set_origin_x(text_measurements[i][0]);
+          text_metrics.set_origin_y(text_measurements[i][1]);
+          text_metrics.set_size_x(text_measurements[i][2]);
+          text_metrics.set_size_y(text_measurements[i][3]);
+          text_metrics.set_typographical_width(text_measurements[i][4]);
+          text_metrics.set_font_origin_y(text_measurements[i][5]);
+          text_metrics.set_font_size_y(text_measurements[i][6]);
+          FontInfo font_info;
+          font_info.set_ascent(text_measurements[i][7]);
+          font_info.set_descent(text_measurements[i][8]);
+          // TODO: Supply proper
+          // values for these two metrics.
+          font_info.set_leading(size_pixels);
+          font_info.set_line_spacing(size_pixels);
+          TextAndFontMetrics metrics;
+          *metrics.mutable_text_metrics() = text_metrics;
+          *metrics.mutable_font_info() = font_info;
+
+          std::vector<TextMetrics> glyph_metrics;
+          if (glyph_measurements[i].size() % 7 == 0) {
+            for (int j = 0; j < glyph_measurements[i].size(); j += 7) {
+              TextMetrics text_metrics;
+              text_metrics.set_origin_x(glyph_measurements[i][j]);
+              text_metrics.set_origin_y(glyph_measurements[i][j + 1]);
+              text_metrics.set_size_x(glyph_measurements[i][j + 2]);
+              text_metrics.set_size_y(glyph_measurements[i][j + 3]);
+              text_metrics.set_typographical_width(
+                  glyph_measurements[i][j + 4]);
+              text_metrics.set_font_origin_y(glyph_measurements[i][j + 5]);
+              text_metrics.set_font_size_y(glyph_measurements[i][j + 6]);
+              glyph_metrics.push_back(text_metrics);
+            }
+            metrics.mutable_glyph_metrics()->Add(glyph_metrics.begin(),
+                                                 glyph_metrics.end());
+          } else {
+            IMP_LOG(imp::ERROR) << "Unexpected glyph measurement size "
+                        << glyph_measurements[i].size();
+          }
+
+          text_and_font_metrics.push_back(metrics);
           // LINT.ThenChange(//depot/google3/third_party/impress/javascript/core/wasm/canvas/wasm_canvas_renderer.ts)
         }
         return text_and_font_metrics;
       });
 }
 
-Future<std::vector<ScopedCanvas::TextMetrics>>
+Future<std::vector<TextMetrics>>
 WasmAsyncCanvasSource::WasmScopedCanvas::MeasureGlyphs(
     std::vector<GlyphToMeasure> glyphs_to_measure, TextOptions text_options) {
   std::vector<Chunk> chunks;
@@ -527,24 +562,26 @@ WasmAsyncCanvasSource::WasmScopedCanvas::MeasureGlyphs(
   return MeasureGlyphs(chunks, text_options);
 }
 
-Future<std::vector<ScopedCanvas::TextMetrics>>
+Future<std::vector<TextMetrics>>
 WasmAsyncCanvasSource::WasmScopedCanvas::MeasureGlyphs(
     std::vector<Chunk> chunks, TextOptions text_options) {
   return MeasureTexts(chunks, text_options, /*only_widths=*/false)
       .Then(
           [](std::vector<std::vector<float>> measurements) {
-            std::vector<ScopedCanvas::TextMetrics> text_metrics;
+            std::vector<TextMetrics> text_metrics;
             text_metrics.reserve(measurements.size());
             for (int i = 0; i < measurements.size(); i++) {
               // LINT.IfChange
               if (measurements[i].size() == 7) {
-                text_metrics.push_back(ScopedCanvas::TextMetrics({
-                    .origin = float2{measurements[i][0], measurements[i][1]},
-                    .size = float2{measurements[i][2], measurements[i][3]},
-                    .typographical_width = measurements[i][4],
-                    .font_origin_y = measurements[i][5],
-                    .font_size_y = measurements[i][6],
-                }));
+                TextMetrics metrics;
+                metrics.set_origin_x(measurements[i][0]);
+                metrics.set_origin_y(measurements[i][1]);
+                metrics.set_size_x(measurements[i][2]);
+                metrics.set_size_y(measurements[i][3]);
+                metrics.set_typographical_width(measurements[i][4]);
+                metrics.set_font_origin_y(measurements[i][5]);
+                metrics.set_font_size_y(measurements[i][6]);
+                text_metrics.push_back(metrics);
               } else {
                 IMP_LOG(imp::ERROR) << "Unexpected measurement size "
                            << measurements[i].size();
@@ -595,8 +632,7 @@ bool WasmAsyncCanvasSource::WasmScopedCanvas::SupportsSynchronousTextureUpdate()
   return platform_canvas_wrapper_->SupportsSynchronousTextureUpdate();
 }
 
-Future<ScopedCanvas::FontInfo>
-WasmAsyncCanvasSource::WasmScopedCanvas::GetFontInfo(
+Future<FontInfo> WasmAsyncCanvasSource::WasmScopedCanvas::GetFontInfo(
     const TextOptions& text_options) {
   SetTextOptions(text_options);
   Future<std::vector<std::vector<float>>> measure_results_future =
@@ -606,10 +642,13 @@ WasmAsyncCanvasSource::WasmScopedCanvas::GetFontInfo(
 
   return measure_results_future.Then(
       [size](std::vector<std::vector<float>> measurements) {
-        return ScopedCanvas::FontInfo{
-            measurements[0][0], measurements[0][1],
-            // TODO: Supply proper values for these two metrics.
-            size, size};
+        FontInfo info;
+        info.set_ascent(measurements[0][0]);
+        info.set_descent(measurements[0][1]);
+        // TODO: Supply proper values for these two metrics.
+        info.set_leading(size);
+        info.set_line_spacing(size);
+        return info;
       });
 }
 
@@ -627,9 +666,9 @@ void WasmAsyncCanvasSource::WasmScopedCanvas::SetTextOptions(
         *static_cast<std::string*>(text_options.font_holder->GetPlatformFont());
   }
 
-  platform_canvas_wrapper_->SetTextOptions(
-      text_options.size_pixels, font_family, font_weight, text_style,
-      text_options.text_tracking, text_options.render_scale.x);
+  platform_canvas_wrapper_->SetTextOptions(text_options.size_pixels,
+                                           font_family, font_weight, text_style,
+                                           text_options.text_tracking);
 }
 
 }  // namespace imp

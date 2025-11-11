@@ -50,3 +50,32 @@ cc_library(
     ],
     alwayslink = 1,
 )
+
+cc_library(
+    name = "sliced_glyph_atlas_visualizer",
+    srcs = [
+        "sliced_glyph_atlas_visualizer.cc",
+    ],
+    hdrs = [
+        "sliced_glyph_atlas_visualizer.h",
+    ],
+    copts = imp_google3_copts(),
+    deps = [
+        "//core:config",
+        "//core/common:invocable",
+        "//core/common:rememberer",
+        "//core/editor:widget",
+        "//core/editor/layout",
+        "//core/geometry/shapes",
+        "//core/math",
+        "//core/render",
+        "//core/view:base_view",
+        "@com_google_absl//absl/debugging:leak_check",
+        "@com_google_absl//absl/strings",
+        "@dear_imgui",
+        "@implot",
+        "@third_party//filament/filament:filament_hdrs",
+        "@third_party//filament/filament/backend:pixel_buffer_descriptor",
+    ],
+    alwayslink = 1,
+)

@@ -123,4 +123,14 @@ message SetupParams {
   optional string background_thread_name = 24 [default = "impressThread"];
   // The render settings for the main view.
   optional .imp.render_settings.ViewRenderSettings view_render_settings = 27;
+  // When building for XR, whether or not to use the global passthrough dimming
+  // extensions.
+  optional bool use_global_passthrough_dimming_extensions = 28
+      [default = false];
+
+  // If true, then when the swapchain needs to be destroyed or re-created, the
+  // operation wil block until it is completed. This is important to ensure that
+  // the android surface used by the swapchain isn't used after it has been
+  // destroyed. This only has an effect when using BACKGROUND thread_mode.
+  optional bool use_synchronous_surface_changes = 29 [default = true];
 }

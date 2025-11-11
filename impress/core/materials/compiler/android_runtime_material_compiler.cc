@@ -18,8 +18,9 @@
 #include <memory>
 #include <utility>
 
-#include "core/common/log.h"
 #include "absl/memory/memory.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "core/async/future.h"
 #include "core/common/context.h"
 #include "core/materials/compiler/material_compiler_client.h"
@@ -30,10 +31,13 @@
 namespace imp {
 
 Future<std::unique_ptr<RuntimeMaterialCompiler>>
-AndroidRuntimeMaterialCompiler::Create(BaseView& view) {
+AndroidRuntimeMaterialCompiler::Create(
+    BaseView& view, absl::string_view native_library_override) {
   const Context& context = view.GetContext();
+
   std::unique_ptr<JavaMaterialCompilerClient> java_material_compiler_client =
-      std::make_unique<JavaMaterialCompilerClient>(context);
+      std::make_unique<JavaMaterialCompilerClient>(context,
+                                                   native_library_override);
 
   return java_material_compiler_client->StartService(context).Then(
       [&view,

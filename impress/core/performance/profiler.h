@@ -18,9 +18,13 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <string>
 #include <thread>  // NOLINT: Need to get current thread id.
 
+#include "absl/base/thread_annotations.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
 #include "core/config.h"
 
 namespace imp {
@@ -54,6 +58,8 @@ struct SampleIndices {
 // main thread only.
 class Profiler {
  public:
+  // Name of the main thread.
+  static constexpr absl::string_view kMainThreadName = "Main Thread";
   // Maximum number of frames that can be stored.
   // Increasing this value will increase the memory footprint of the profiler.
   static constexpr int kMaxFrames = 300;
@@ -98,6 +104,13 @@ class Profiler {
   static bool IsRecording() { return is_recording_; }
   // Returns true if the frame index has been recorded and is still available.
   static bool HasFrameRecorded(int frame_index);
+  // Records a name for the thread executing this function.
+  // Used to identify the thread in the profiler UI.
+  static void SetThreadName(absl::string_view name);
+  // Returns the name of the thread with the given id.
+  // Returns a string representation of the thread id if no name has been set,
+  // in this case an allocation will occur the first time the name is requested.
+  static absl::string_view GetThreadName(std::thread::id thread_id);
 
  private:
   static int64_t GetCurrentTimeNanos();
@@ -116,6 +129,9 @@ class Profiler {
   static std::atomic<bool> is_recording_;
   static std::atomic<uint16_t> end_id_counter_;
   static std::atomic<int64_t> last_frame_start_time_ns_;
+  static absl::flat_hash_map<std::thread::id, std::string> thread_names_
+      ABSL_GUARDED_BY(mu_);
+  static absl::Mutex mu_;
 };
 }  // namespace imp
 #endif  // THIRD_PARTY_IMPRESS_CORE_PERFORMANCE_PROFILER_H_

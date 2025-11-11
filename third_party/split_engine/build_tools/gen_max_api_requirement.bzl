@@ -16,6 +16,7 @@
 
 load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain", "use_cc_toolchain")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
+load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 
 def _snakecase(name):
     return name.replace(".", "_").replace("/", "_").replace("-", "_").replace("+", "_").replace("{", "_").replace("}", "_").split("_")

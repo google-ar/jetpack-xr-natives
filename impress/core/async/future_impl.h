@@ -228,10 +228,6 @@ class FutureImpl {
   // aka FutureImpl is not ready.
   ResultHolder& Get() ABSL_LOCKS_EXCLUDED(mu_);
 
-  // Registers a callback to be executed when the future is ready.
-  // N.B. OnReady callbacks will be called when a Future is cancelled!
-  void OnReady(imp::Invocable<void(ResultHolder&)> fn) ABSL_LOCKS_EXCLUDED(mu_);
-
   // Called through Future::Then, used to add a child future to this future.
   // The child future will be invoked when this future becomes ready.
   void AddChild(std::weak_ptr<FutureImpl> child) ABSL_LOCKS_EXCLUDED(mu_);
@@ -346,9 +342,8 @@ class FutureImpl {
   // This is stored in a variant instead of in separate vectors because in
   // testing it was found that the variant version uses less memory overall,
   // despite the variant increasing the memory of each element.
-  using Relationship =
-      std::variant<std::weak_ptr<FutureImpl>, CombineChild, NestedChild,
-                   KeptForgetter, Invocable<void(ResultHolder&)>, Holdable>;
+  using Relationship = std::variant<std::weak_ptr<FutureImpl>, CombineChild,
+                                    NestedChild, KeptForgetter, Holdable>;
 
   bool ReturnInternal(ResultHolder result) ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
   bool ReturnInternal(absl::Status status) ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);

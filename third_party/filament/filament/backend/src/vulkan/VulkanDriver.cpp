@@ -1156,6 +1156,7 @@ void VulkanDriver::updateStreams(CommandStream* driver) {
 
 void VulkanDriver::destroyFence(Handle<HwFence> fh) {
     auto fence = resource_ptr<VulkanFence>::cast(&mResourceManager, fh);
+    fence->cancel();
     fence.dec();
 }
 
@@ -1164,6 +1165,10 @@ FenceStatus VulkanDriver::getFenceStatus(Handle<HwFence> const fh) {
 }
 
 FenceStatus VulkanDriver::fenceWait(FenceHandle const fh, uint64_t const timeout) {
+    if (!fh) {
+        return FenceStatus::ERROR;
+    }
+
     auto fence = resource_ptr<VulkanFence>::cast(&mResourceManager, fh);
 
     // we have to take into account that the STL's wait_for() actually works with
@@ -1171,13 +1176,18 @@ FenceStatus VulkanDriver::fenceWait(FenceHandle const fh, uint64_t const timeout
     using namespace std::chrono;
     auto const now = steady_clock::now();
     steady_clock::time_point until = steady_clock::time_point::max();
-    if (now <= steady_clock::time_point::max() - nanoseconds(timeout)) {
+
+    using TimeoutType = decltype(timeout);
+    constexpr TimeoutType maxTimeout = std::numeric_limits<TimeoutType>::max();
+    constexpr nanoseconds maxNano = nanoseconds::max();
+    if (timeout < maxNano.count() && timeout < maxTimeout && // Need to account for overflow
+        now <= steady_clock::time_point::max() - nanoseconds(timeout)) {
         until = now + nanoseconds(timeout);
     }
 
-    std::shared_ptr const cmdfence = fence->wait(until);
-    if (!cmdfence) {
-        return FenceStatus::TIMEOUT_EXPIRED;
+    auto const [cmdfence, canceled] = fence->wait(until);
+    if (!cmdfence || canceled) {
+        return canceled ? FenceStatus::ERROR : FenceStatus::TIMEOUT_EXPIRED;
     }
 
     // now we are holding a reference to our VulkanCmdFence, so we know it can't

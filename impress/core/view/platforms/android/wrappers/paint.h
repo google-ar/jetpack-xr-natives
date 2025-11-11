@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_VIEW_PLATFORMS_ANDROID_WRAPPERS_PAINT_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "absl/strings/string_view.h"
@@ -86,6 +87,15 @@ class Paint : public JavaWrapper {
   JniHandle get_font_metrics_;
   JniHandle get_run_advance_;
   JniHandle get_text_widths_;
+
+  std::optional<float> last_text_size_;
+  std::optional<float> last_text_tracking_;
+  std::optional<float> last_stroke_width_;
+  std::optional<Style> last_style_;
+  std::optional<Align> last_align_;
+  std::optional<float4> last_color_;
+  std::optional<jobject> last_typeface_;
+  std::optional<bool> last_anti_alias_;
 };
 
 }  // namespace imp::android

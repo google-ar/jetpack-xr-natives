@@ -55,9 +55,11 @@ constexpr absl::string_view kMatrixToken = "matrix";
 constexpr absl::string_view kGlobalMatrixToken = "globalMatrix";
 constexpr absl::string_view kNodesLengthToken = "nodes.length";
 constexpr absl::string_view kChildrenLengthToken = "children.length";
+constexpr absl::string_view kChildrenToken = "children";
 constexpr absl::string_view kParentToken = "parent";
 constexpr absl::string_view kMeshToken = "mesh";
 constexpr absl::string_view kWeightsLengthToken = "weights.length";
+constexpr absl::string_view kWeightsToken = "weights";
 
 struct NodeHandles {
   NodeHandle gltf_root;
@@ -243,6 +245,65 @@ absl::Status NodesChildrenLengthPointerDeclaration::SetValue(
       "Setting children length values is not supported.");
 }
 
+std::vector<TokenParser> NodesChildPointerDeclaration::GetTokenParsers() const {
+  return {std::string(kNodesToken), GetIntTokenParser(),
+          std::string(kChildrenToken), GetIntTokenParser()};
+}
+
+absl::StatusOr<PointerValue> NodesChildPointerDeclaration::GetValue(
+    NodeHandle gltf_model, absl::Span<const ParsedToken> parsed_tokens) const {
+  if (!std::holds_alternative<int>(parsed_tokens[1])) {
+    return absl::FailedPreconditionError(
+        "The second parsed component is expected to be an int.");
+  }
+  int node_index = std::get<int>(parsed_tokens[1]);
+
+  if (!std::holds_alternative<int>(parsed_tokens[3])) {
+    return absl::FailedPreconditionError(
+        "The fourth parsed component is expected to be an int.");
+  }
+  int child_index = std::get<int>(parsed_tokens[3]);
+
+  ComponentHandle<GltfScene> gltf_scene = gltf_model->GetComponent<GltfScene>();
+  if (!gltf_scene) {
+    return absl::InternalError("No GltfScene found on the glTF model node.");
+  }
+
+  ComponentHandle<GltfRenderer> gltf_renderer =
+      gltf_model->GetComponent<GltfRenderer>();
+  if (!gltf_renderer) {
+    return absl::InternalError("No GltfRenderer found on the glTF model node.");
+  }
+
+  const model::SkeletonData& skeleton =
+      gltf_renderer->GetGltfAsset()->GetModelData().Skeleton();
+
+  std::optional<model::BoneId> bone_id =
+      gltf_scene->GetBoneIdFromGltfNodeIndex(node_index);
+  if (!bone_id.has_value()) {
+    return absl::InternalError("No bone id found.");
+  }
+
+  if (child_index >= skeleton.bones[bone_id.value()].num_children) {
+    return absl::InternalError("Child index is out of bounds.");
+  }
+
+  model::BoneChildId first_child_id =
+      skeleton.bones[bone_id.value()].first_child;
+  model::BoneChildId child_id = first_child_id;
+  for (int i = 0; i < child_index; ++i) {
+    child_id = skeleton.bones[child_id].next_sibling;
+  }
+  return skeleton.bones[child_id].node_index;
+}
+
+absl::Status NodesChildPointerDeclaration::SetValue(
+    NodeHandle gltf_model, absl::Span<const ParsedToken> parsed_tokens,
+    PointerValue value) const {
+  return absl::FailedPreconditionError(
+      "Setting child values is not supported.");
+}
+
 std::vector<TokenParser> NodesParentPointerDeclaration::GetTokenParsers()
     const {
   return {std::string(kNodesToken), GetIntTokenParser(),
@@ -329,6 +390,85 @@ absl::Status NodesWeightsLengthPointerDeclaration::SetValue(
     PointerValue value) const {
   return absl::FailedPreconditionError(
       "Setting weights length values is not supported.");
+}
+
+std::vector<TokenParser> NodesWeightsPointerDeclaration::GetTokenParsers()
+    const {
+  return {std::string(kNodesToken), GetIntTokenParser(),
+          std::string(kWeightsToken)};
+}
+
+absl::StatusOr<PointerValue> NodesWeightsPointerDeclaration::GetValue(
+    NodeHandle gltf_model, absl::Span<const ParsedToken> parsed_tokens) const {
+  MP_ASSIGN_OR_RETURN(NodeHandles node_handles,
+                   GetNodeHandles(gltf_model, parsed_tokens));
+  ComponentHandle<GltfMesh> gltf_mesh =
+      node_handles.node->GetComponent<GltfMesh>();
+  if (!gltf_mesh) {
+    return absl::InternalError("No GltfMesh found on the node.");
+  }
+  return gltf_mesh->GetMorphTargetWeights();
+}
+
+absl::Status NodesWeightsPointerDeclaration::SetValue(
+    NodeHandle gltf_model, absl::Span<const ParsedToken> parsed_tokens,
+    PointerValue value) const {
+  if (!std::holds_alternative<std::vector<float>>(value)) {
+    return absl::FailedPreconditionError(
+        "A std::vector<float> value is expected.");
+  }
+  MP_ASSIGN_OR_RETURN(NodeHandles node_handles,
+                   GetNodeHandles(gltf_model, parsed_tokens));
+  ComponentHandle<GltfMesh> gltf_mesh =
+      node_handles.node->GetComponent<GltfMesh>();
+  if (!gltf_mesh) {
+    return absl::InternalError("No GltfMesh found on the node.");
+  }
+  gltf_mesh->SetMorphTargetWeights(std::get<std::vector<float>>(value));
+  return absl::OkStatus();
+}
+
+std::vector<TokenParser> NodesWeightPointerDeclaration::GetTokenParsers()
+    const {
+  return {std::string(kNodesToken), GetIntTokenParser(),
+          std::string(kWeightsToken), GetIntTokenParser()};
+}
+
+absl::StatusOr<PointerValue> NodesWeightPointerDeclaration::GetValue(
+    NodeHandle gltf_model, absl::Span<const ParsedToken> parsed_tokens) const {
+  MP_ASSIGN_OR_RETURN(NodeHandles node_handles,
+                   GetNodeHandles(gltf_model, parsed_tokens));
+  ComponentHandle<GltfMesh> gltf_mesh =
+      node_handles.node->GetComponent<GltfMesh>();
+  if (!gltf_mesh) {
+    return absl::InternalError("No GltfMesh found on the node.");
+  }
+  int index = std::get<int>(parsed_tokens[3]);
+  if (index >= gltf_mesh->GetMorphTargetCount()) {
+    return absl::InternalError("Index is out of bounds for morph targets.");
+  }
+  return gltf_mesh->GetMorphTargetWeight(index);
+}
+
+absl::Status NodesWeightPointerDeclaration::SetValue(
+    NodeHandle gltf_model, absl::Span<const ParsedToken> parsed_tokens,
+    PointerValue value) const {
+  if (!std::holds_alternative<float>(value)) {
+    return absl::FailedPreconditionError("A float value is expected.");
+  }
+  MP_ASSIGN_OR_RETURN(NodeHandles node_handles,
+                   GetNodeHandles(gltf_model, parsed_tokens));
+  ComponentHandle<GltfMesh> gltf_mesh =
+      node_handles.node->GetComponent<GltfMesh>();
+  if (!gltf_mesh) {
+    return absl::InternalError("No GltfMesh found on the node.");
+  }
+  int index = std::get<int>(parsed_tokens[3]);
+  if (index >= gltf_mesh->GetMorphTargetCount()) {
+    return absl::InternalError("Index is out of bounds for morph targets.");
+  }
+  gltf_mesh->SetMorphTargetWeight(index, std::get<float>(value));
+  return absl::OkStatus();
 }
 
 }  // namespace imp::gltf

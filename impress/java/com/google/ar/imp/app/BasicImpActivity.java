@@ -41,8 +41,16 @@ public class BasicImpActivity extends AppCompatActivity {
   @Override
   public void onResume() {
     super.onResume();
-    if (impApi != null && !isUnderTest) {
-      impApi.startFrameLoop();
+    if (impApi != null) {
+      if (!isUnderTest) {
+        impApi.startFrameLoop();
+      } else {
+        // In end to end tests, we don't want to start the frame loop so that the test can
+        // explicitly control when time advances and frames are rendered. This helps us avoid
+        // flakiness in the tests. In that case, we call resume explicitly to ensure that the normal
+        // lifecycle events are still triggered.
+        impApi.resume();
+      }
     }
   }
 
@@ -50,7 +58,11 @@ public class BasicImpActivity extends AppCompatActivity {
   public void onPause() {
     super.onPause();
     if (impApi != null) {
-      impApi.stopFrameLoop();
+      if (!isUnderTest) {
+        impApi.stopFrameLoop();
+      } else {
+        impApi.pause();
+      }
     }
   }
 

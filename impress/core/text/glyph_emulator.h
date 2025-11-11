@@ -39,6 +39,7 @@
 #include "core/common/context.h"
 #include "core/common/hash.h"
 #include "core/math/vec.h"
+#include "core/text/text_metrics.proto.h"
 #include "core/view/utils/string_map.h"
 
 namespace imp {
@@ -88,7 +89,7 @@ class GlyphEmulator {
     GlyphKeyOrGlyphString glyph;
     // Metrics of the glyph as returned by CanvasSource::GetGlyphMetrics or
     // CanvasSource::GetTextMetrics.
-    ScopedCanvas::TextMetrics metrics;
+    TextMetrics metrics;
     // The width of the glyph within the layout of a string.
     // This is not the same thing as size.x, since the advance_width is
     // dependent on adjacent glyphs in the overall string being rendered.
@@ -139,6 +140,9 @@ class GlyphEmulator {
     // individual glyphs when rendering. This may improve legibility at the cost
     // of increased glyph atlas usage.
     bool force_non_separable = false;
+    // If set, when rendering the text the precomputed text metrics will be used
+    // instead of having the GlyphEmulator do the computation.
+    std::optional<TextAndFontMetrics> precomputed_metrics = std::nullopt;
   };
 
   GlyphEmulator(Context context, AsyncCanvasSource& canvas_source);
@@ -212,12 +216,9 @@ class GlyphEmulator {
   // An error is returned if the options specify an invalid font name, or if
   // GlyphEmulator is being destructed.
   //
-  // To determine the value of subpixel_render_ratio, see GetSuperSampleInfo().
-  //
   // This function is thread-safe.
-  Future<ScopedCanvas::TextMetrics> GetTextMetrics(
-      absl::string_view text, const ScopedCanvas::TextOptions& options,
-      float2 subpixel_render_ratio);
+  Future<TextMetrics> GetTextMetrics(absl::string_view text,
+                                     const ScopedCanvas::TextOptions& options);
 
   // Returns information about the font based on the given text options.
   //
@@ -228,8 +229,7 @@ class GlyphEmulator {
   // The resulting info respects the size of the font.
   //
   // This function is thread-safe.
-  Future<ScopedCanvas::FontInfo> GetFontInfo(
-      const ScopedCanvas::TextOptions& options);
+  Future<FontInfo> GetFontInfo(const ScopedCanvas::TextOptions& options);
 
   // Performs a batch operation to measure the size of the given texts and
   // the font metrics for the text's text_options. This is effectively a
@@ -241,7 +241,7 @@ class GlyphEmulator {
   // function to simplify the API.
   //
   // This function is thread-safe.
-  Future<std::vector<ScopedCanvas::TextAndFontMetrics>> GetFontAndTextMetrics(
+  Future<std::vector<TextAndFontMetrics>> GetFontAndTextMetrics(
       std::vector<ScopedCanvas::TextToMeasure> texts);
 
   // Convert GlyphEmulator::TextOptions to ScopedCanvas::TextOptions.
@@ -251,8 +251,9 @@ class GlyphEmulator {
   //
   // To determine the value of subpixel_render_ratio, see GetSuperSampleInfo().
   absl::StatusOr<ScopedCanvas::TextOptions>
-  CanvasOptionsFromGlyphEmulatorOptions(const TextOptions& options,
-                                        float2 subpixel_render_ratio)
+  CanvasOptionsFromGlyphEmulatorOptions(
+      const TextOptions& options,
+      std::optional<float2> subpixel_render_ratio = std::nullopt)
       ABSL_LOCKS_EXCLUDED(fonts_mutex_, system_fonts_mutex_);
 
   // On WASM we want to render text at 2x the size and super sample it if the

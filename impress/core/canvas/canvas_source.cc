@@ -30,6 +30,7 @@
 #include "core/common/small_source_location.h"
 #include "core/config.h"
 #include "core/math/vec.h"
+#include "core/text/text_metrics.proto.h"
 #include "core/view/base_view.h"
 
 #if IMP_PLATFORM(ANDROID)
@@ -45,13 +46,20 @@
 namespace imp {
 
 std::unique_ptr<CanvasSource> CanvasSource::Create(
-    Context context, bool use_hardware_rendering) {
+    Context context, bool use_hardware_rendering,
+    bool force_auto_method_rendering) {
   // Instantiate the correct platform implementation.
 #if IMP_PLATFORM(ANDROID)
   // TODO: Shaper method fails to render text weight properly.
   // Change to kAuto once this bug is fixed.
+  auto method = AndroidGlyphSource::Method::kPath;
+
+  // Optional configuration option to force the auto method.
+  if (force_auto_method_rendering) {
+    method = AndroidGlyphSource::Method::kAuto;
+  }
   auto platform_source = std::make_unique<AndroidPlatformCanvasSource>(
-      context, AndroidGlyphSource::Method::kPath, use_hardware_rendering);
+      context, method, use_hardware_rendering);
 #elif IMP_PLATFORM(IOS)
   auto platform_source = std::make_unique<IosPlatformCanvasSource>();
 #elif IMP_PLATFORM(WASM)
@@ -78,13 +86,13 @@ Future<absl::Status> CanvasSource::PrepareFont(
   return platform_source_->PrepareFont(text, text_options);
 }
 
-ScopedCanvas::TextMetrics CanvasSource::GetTextMetrics(
+TextMetrics CanvasSource::GetTextMetrics(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
   absl::MutexLock lock(platform_source_mutex_);
   return platform_source_->GetTextMetrics(text, text_options);
 }
 
-ScopedCanvas::TextMetrics CanvasSource::GetGlyphMetrics(
+TextMetrics CanvasSource::GetGlyphMetrics(
     ScopedCanvas::GlyphId glyph,
     const ScopedCanvas::TextOptions& text_options) {
   absl::MutexLock lock(platform_source_mutex_);
@@ -109,7 +117,7 @@ std::vector<ScopedCanvas::GlyphAdvance> CanvasSource::GetTextGlyphs(
   return platform_source_->GetTextGlyphs(text, text_options);
 }
 
-ScopedCanvas::FontInfo CanvasSource::GetFontInfo(
+FontInfo CanvasSource::GetFontInfo(
     const ScopedCanvas::TextOptions& text_options) {
   absl::MutexLock lock(platform_source_mutex_);
   return platform_source_->GetFontInfo(text_options);

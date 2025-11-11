@@ -38,6 +38,7 @@
 #include "core/common/filament_helpers.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/paired_vector.h"
+#include "core/common/robin_map.h"
 #include "core/common/robin_set.h"
 #include "core/common/trace.h"
 #include "core/common/typed_id.h"
@@ -194,8 +195,14 @@ void GltfRenderer::Setup(AssetPtr<GltfAsset> gltf_asset,
         std::move(options->instance_transforms);
   }
 
+  // Temporarily store the per mesh morph target weights. This is used to set
+  // the per mesh morph target weights and potentially update Filament's data
+  // after one round of traversal of all the entities
+  RobinMap<int, std::vector<float>> cache_mesh_morph_target_weights;
+
   // Cache the node for each part in the model.
   node_entities_.resize(data.Entities().size());
+  node_morph_target_weights_.resize(data.Entities().size());
   const TypedSetVector<EntityData>& entities = data.Entities();
   for (auto self : entities.Ids<ModelData::EntityId>()) {
     const auto entity_data = entities[self];
@@ -236,6 +243,32 @@ void GltfRenderer::Setup(AssetPtr<GltfAsset> gltf_asset,
       } else {
         mesh_index_to_nodes_[original_mesh_index] = {node};
       }
+
+      const std::vector<float>& node_morph_target_weights =
+          entity_data.node_morph_target_weights;
+      const std::vector<float>& mesh_morph_target_weights =
+          entity_data.mesh_morph_target_weights;
+      if (!node_morph_target_weights.empty()) {
+        SetNodeMorphTargetWeights(node_morph_target_weights, self);
+      } else if (mesh_morph_target_weights.empty()) {
+        // if both per node and per mesh weights are empty, set the per node
+        // record to all zeros and update the Filament side of the data.
+        BaseRenderableManager& renderable_manager =
+            GetView().GetRenderableManager();
+        filament::RenderableManager::Instance instance =
+            renderable_manager.GetInstance(node->GetEntity());
+        size_t num_morph_targets =
+            renderable_manager.GetMorphTargetCount(instance);
+        if (num_morph_targets > 0) {
+          std::vector<float> weights(num_morph_targets, 0.0f);
+          SetNodeMorphTargetWeights(weights, self);
+        }
+      }
+
+      if (!mesh_morph_target_weights.empty()) {
+        cache_mesh_morph_target_weights[original_mesh_index] =
+            mesh_morph_target_weights;
+      }
     }
 
     if (data.LightsPunctual().IsValid(light_punctual)) {
@@ -249,6 +282,14 @@ void GltfRenderer::Setup(AssetPtr<GltfAsset> gltf_asset,
     if (node_visibility) {
       node->SetEnabled(node_visibility->visible.value_or(true));
     }
+  }
+
+  for (const auto& mesh_index_and_weights : cache_mesh_morph_target_weights) {
+    // This will update the per mesh record of morph target weights. Only the
+    // nodes without a per node record will update the actual Filament side of
+    // the data using the per mesh record.
+    SetMeshMorphTargetWeights(mesh_index_and_weights.second,
+                              mesh_index_and_weights.first);
   }
 
   // TODO Add collision support for instanced gltfs
@@ -654,6 +695,55 @@ const RobinSet<NodeHandle>* GltfRenderer::GetNodesFromOriginalMeshIndex(
   return nullptr;
 }
 
+std::vector<float> GltfRenderer::GetMeshMorphTargetWeights(
+    size_t mesh_index) const {
+  if (mesh_morph_target_weights_.contains(mesh_index)) {
+    return mesh_morph_target_weights_.at(mesh_index);
+  }
+  return {};
+}
+
+std::optional<float> GltfRenderer::GetMeshMorphTargetWeight(
+    size_t mesh_index, size_t target_index) const {
+  std::vector<float> weights = GetMeshMorphTargetWeights(mesh_index);
+  if (target_index < weights.size()) {
+    return weights[target_index];
+  }
+  return std::nullopt;
+}
+
+void GltfRenderer::SetMeshMorphTargetWeights(const std::vector<float>& weights,
+                                             size_t mesh_index) {
+  mesh_morph_target_weights_[mesh_index] = weights;
+  const RobinSet<NodeHandle>* node_handles =
+      GetNodesFromOriginalMeshIndex(mesh_index);
+  if (node_handles == nullptr) {
+    return;
+  }
+  for (const NodeHandle& node_handle : *node_handles) {
+    std::optional<model::ModelData::EntityId> entity_id =
+        GetEntityIdFromNodeHandle(node_handle);
+    if (entity_id.has_value() &&
+        node_morph_target_weights_[entity_id.value()].empty())
+      // If the per node weights are not set for this node handle, set its
+      // real-time weights on Filament to the per mesh weights.
+      SetMorphTargetWeights(weights, entity_id.value());
+  }
+}
+
+absl::Status GltfRenderer::SetMeshMorphTargetWeight(float weight,
+                                                    size_t mesh_index,
+                                                    size_t target_index) {
+  std::vector<float> weights = GetMeshMorphTargetWeights(mesh_index);
+  if (target_index >= weights.size()) {
+    return absl::InvalidArgumentError(
+        "Target index is out of bounds for mesh morph targets.");
+  }
+  weights[target_index] = weight;
+  SetMeshMorphTargetWeights(weights, mesh_index);
+  return absl::OkStatus();
+}
+
 Material* GltfRenderer::GetMaterial(EntityId entity_id,
                                     size_t primitive_index) const {
   Material* material_override = GetMaterialOverride(entity_id, primitive_index);
@@ -1050,6 +1140,31 @@ size_t GltfRenderer::GetMorphTargetCount(EntityId entity_id) const {
   utils::Entity node_id = node_entities_[entity_id];
   return renderable_manager.GetMorphTargetCount(
       renderable_manager.GetInstance(node_id));
+}
+
+std::vector<float> GltfRenderer::GetMorphTargetWeights(
+    EntityId entity_id, int original_mesh_index) const {
+  // Per node weights have a higher priority over per mesh weights. If the per
+  // node weights are set for this node handle, that is the source of truth and
+  // what was passed to Filament, so return them.
+  const std::vector<float>& node_weights =
+      node_morph_target_weights_[entity_id];
+  if (!node_weights.empty()) {
+    return node_weights;
+  }
+  // Otherwise peek into the per mesh weights. If they are set, that is the
+  // source of truth, return them.
+  if (mesh_morph_target_weights_.contains(original_mesh_index)) {
+    return mesh_morph_target_weights_.at(original_mesh_index);
+  }
+  // Neither per node nor per mesh weights are set. Return empty weights.
+  return {};
+}
+
+void GltfRenderer::SetNodeMorphTargetWeights(
+    const std::vector<float>& weights, model::ModelData::EntityId entity_id) {
+  node_morph_target_weights_[entity_id] = weights;
+  SetMorphTargetWeights(weights, entity_id);
 }
 
 GltfState::ColliderMode GltfRenderer::GetColliderMode() const {

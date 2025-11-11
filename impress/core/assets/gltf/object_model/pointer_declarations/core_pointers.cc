@@ -43,10 +43,13 @@ GetCorePointerDeclarations() {
   declarations.push_back(std::make_unique<NodesLengthPointerDeclaration>());
   declarations.push_back(
       std::make_unique<NodesChildrenLengthPointerDeclaration>());
+  declarations.push_back(std::make_unique<NodesChildPointerDeclaration>());
   declarations.push_back(std::make_unique<NodesParentPointerDeclaration>());
   declarations.push_back(std::make_unique<NodesMeshPointerDeclaration>());
   declarations.push_back(
       std::make_unique<NodesWeightsLengthPointerDeclaration>());
+  declarations.push_back(std::make_unique<NodesWeightsPointerDeclaration>());
+  declarations.push_back(std::make_unique<NodesWeightPointerDeclaration>());
 
   // materials
   declarations.push_back(
@@ -77,6 +80,10 @@ GetCorePointerDeclarations() {
 
   // meshes
   declarations.push_back(std::make_unique<MeshesLengthPointerDeclaration>());
+  declarations.push_back(
+      std::make_unique<MeshesWeightsLengthPointerDeclaration>());
+  declarations.push_back(std::make_unique<MeshesWeightsPointerDeclaration>());
+  declarations.push_back(std::make_unique<MeshesWeightPointerDeclaration>());
 
   return declarations;
 }

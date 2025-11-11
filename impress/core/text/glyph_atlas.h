@@ -45,6 +45,7 @@
 #include "core/ncsb/dispatcher/event.h"
 #include "core/render/texture.h"
 #include "core/text/glyph_emulator.h"
+#include "core/text/text_metrics.proto.h"
 #include "core/view/base_view.h"
 
 #if IMP_RUNTIME(DEV)
@@ -107,12 +108,17 @@ class GlyphAtlas : public Rememberer {
     // where an Android Surface can become corrupted after backgrounding and
     // resuming. See (broken link) for more details.
     bool force_reset_on_view_resumed = true;
+    // If true, this will force the glyph atlas to use the auto method for
+    // rendering. This will attempt to use shaper based rendering if supported,
+    // otherwise fallback to path based rendering.
+    bool force_auto_method_rendering = false;
   };
 
   constexpr static Config kDefaultConfig = {
       .texture_size = TextureSize::k2048,
       .use_hardware_rendering = true,
-      .force_reset_on_view_resumed = true};
+      .force_reset_on_view_resumed = true,
+      .force_auto_method_rendering = false};
 
   // Information about a glyph needed to render it and lay it out relative to
   // other glyphs in a string.
@@ -168,11 +174,11 @@ class GlyphAtlas : public Rememberer {
       absl::string_view text, const TextOptions& options);
 
   ABSL_DEPRECATED("GetGlyphEmulator() GlyphEmulator::GetTextMetrics()")
-  Future<ScopedCanvas::TextMetrics> GetTextMetrics(absl::string_view text,
-                                                   const TextOptions& options);
+  Future<TextMetrics> GetTextMetrics(absl::string_view text,
+                                     const TextOptions& options);
 
   ABSL_DEPRECATED("GetGlyphEmulator() GlyphEmulator::GetFontInfo()")
-  Future<ScopedCanvas::FontInfo> GetFontInfo(const TextOptions& options);
+  Future<FontInfo> GetFontInfo(const TextOptions& options);
 
   // For the given text, returns a list of glyphs used to render the text.
   //
@@ -300,7 +306,7 @@ class GlyphAtlas : public Rememberer {
 
     // When drawing the glyph to the atlas it gets drawn relative to the origin
     // which we want to get rid of for some glyphs with massive origin offsets.
-    ScopedCanvas::TextMetrics measurements;
+    TextMetrics measurements;
 
     // If this glyph was not available in the font from CanvasOptionsKey,
     // then this is the fallback font that must be used to draw the glyph.
@@ -459,9 +465,8 @@ class GlyphAtlas : public Rememberer {
   mutable absl::Mutex glyph_map_mutex_ ABSL_ACQUIRED_BEFORE(canvas_mutex_);
   GlyphMap glyph_map_ ABSL_GUARDED_BY(glyph_map_mutex_);
 
-  const ScopedCanvas::TextMetrics kEmptyMeasurements{.origin = {0, 0},
-                                                     .size = {0, 0}};
-  const GlyphAtlas::GlyphInfo kEmptyGlyphInfo{
+  const TextMetrics kEmptyMeasurements;
+  GlyphAtlas::GlyphInfo kEmptyGlyphInfo{
       .atlas_entry = AtlasPacker::ScopedAtlasEntry::Empty(),
       .measurements = kEmptyMeasurements,
       .fallback_font = nullptr};

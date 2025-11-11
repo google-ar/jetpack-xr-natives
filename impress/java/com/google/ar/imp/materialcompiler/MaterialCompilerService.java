@@ -44,7 +44,7 @@ public final class MaterialCompilerService extends Service {
   }
 
   private void create(ParcelFileDescriptor fd, String libraryName) {
-    if (!libraryName.isEmpty()) {
+    if (libraryName != null && !libraryName.isEmpty()) {
       System.loadLibrary(libraryName);
     }
 

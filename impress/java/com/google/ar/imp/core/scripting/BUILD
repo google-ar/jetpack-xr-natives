@@ -31,7 +31,6 @@ android_library(
         "ScriptApi.java",
         "ScriptBridge.java",
     ],
-    javacopts = ["-Xep:AndroidJdkLibsChecker:OFF"],
     deps = [
         ":api_exception",
         ":script_endpoint",
@@ -69,7 +68,6 @@ android_library(
     srcs = [
         "SurfaceRendererApi.java",
     ],
-    javacopts = ["-Xep:AndroidJdkLibsChecker:OFF"],
     deps = [
         ":scripting",
         "//core/math:math_java_proto_lite",

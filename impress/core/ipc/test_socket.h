@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_LOADER_IPC_TEST_SOCKET_H_
 
 #include <errno.h>
+#include <sys/poll.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -26,7 +27,8 @@
 #include <vector>
 
 #include "core/common/log.h"
-#include "core/common/platform_helpers.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 
 namespace imp::ipc {
 
@@ -56,7 +58,8 @@ class TestSocket {
 
   // Reads a packet from the test-side of the stream.
   // Returns an empty vector on failure.
-  std::vector<uint8_t> ReadPacket() {
+  std::vector<uint8_t> ReadPacket(
+      absl::Duration timeout = absl::InfiniteDuration()) {
     constexpr size_t kHeaderSize = sizeof(uint32_t);
     union {
       uint32_t size;
@@ -64,12 +67,12 @@ class TestSocket {
     } packet_size = {};
 
     // Read the header first to determine the packet size.
-    if (!ReadExact(packet_size.data, kHeaderSize)) {
+    if (!ReadExact(packet_size.data, kHeaderSize, timeout)) {
       return {};
     }
 
     std::vector<uint8_t> result(packet_size.size);
-    if (!ReadExact(result.data(), result.size())) {
+    if (!ReadExact(result.data(), result.size(), timeout)) {
       return {};
     }
 
@@ -78,9 +81,37 @@ class TestSocket {
 
   // Read one-shot from the stream, returns any data received.
 
-  // Returns false if the read failed.
-  bool ReadExact(uint8_t* data, size_t size) {
+  // Returns false if the read failed within the given duration, by default
+  // there's no timeout.
+  bool ReadExact(uint8_t* data, size_t size,
+                 absl::Duration timeout = absl::InfiniteDuration()) {
+    absl::Time deadline = absl::Now() + timeout;
     for (size_t offset = 0; offset < size;) {
+      if (timeout != absl::InfiniteDuration()) {
+        absl::Duration remaining_timeout = deadline - absl::Now();
+        if (remaining_timeout <= absl::ZeroDuration()) {
+          IMP_LOG(imp::ERROR) << "ReadExact timed out.";
+          return false;  // Timeout
+        }
+
+        struct pollfd pfd = {TestFd(), POLLIN, 0};
+        int poll_ret =
+            poll(&pfd, 1, absl::ToInt64Milliseconds(remaining_timeout));
+
+        if (poll_ret == 0) {
+          IMP_LOG(imp::ERROR) << "ReadExact timed out during poll.";
+          return false;  // Timeout
+        }
+        if (poll_ret < 0) {
+          if (errno == EINTR) continue;
+          IMP_LOG(imp::ERROR) << "poll failed: " << errno;
+          return false;  // Error
+        }
+        if (!(pfd.revents & POLLIN)) {
+          IMP_LOG(imp::ERROR) << "poll returned unexpected events: " << pfd.revents;
+          return false;  // Error or closed
+        }
+      }
       ssize_t bytes_read;
       do {
         bytes_read = read(TestFd(), data + offset, size - offset);

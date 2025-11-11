@@ -18,6 +18,7 @@
 #include <string>
 
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "core/common/buffer_access.h"
 #include "core/common/jni_context.h"
 #include "core/common/jni_helpers.h"
@@ -170,7 +171,16 @@ absl::StatusOr<std::vector<ZipFile>> GetFilesFromZip(
     }
   }
   if (result.size() != filenames.size()) {
-    return absl::InternalError("Unable to unzip all files.");
+    std::string error_message = "Unable to unzip all files.";
+    absl::StrAppend(&error_message, " Expected: ");
+    for (const auto& filename : filenames) {
+      absl::StrAppend(&error_message, "'", filename, "' ");
+    }
+    absl::StrAppend(&error_message, " Got: ");
+    for (const auto& zip_file : result) {
+      absl::StrAppend(&error_message, "'", zip_file.filename, "' ");
+    }
+    return absl::InternalError(error_message);
   }
   return result;
 }

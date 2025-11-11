@@ -24,6 +24,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <variant>
@@ -52,6 +53,7 @@
 #include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
 #include "core/common/buffer_access.h"
+#include "core/common/type_helpers.h"
 #include "core/config.h"
 #include "core/geometry/shapes/box.h"
 #include "core/geometry/shapes/capsule.h"
@@ -141,38 +143,97 @@ void LogMaterialParam(absl::string_view name, const T& value) {
              << " value: " << value;
 }
 
-constexpr android_xr::schemas::ColliderType GetColliderType(
-    SplitEngineSerializer::ColliderType collider_type) {
-  switch (collider_type) {
-    case SplitEngineSerializer::ColliderType::kBoxCollider:
-      return android_xr::schemas::ColliderType::BoxCollider;
-    case SplitEngineSerializer::ColliderType::kMeshCollider:
-      return android_xr::schemas::ColliderType::MeshCollider;
-    case SplitEngineSerializer::ColliderType::kSphereCollider:
-      return android_xr::schemas::ColliderType::SphereCollider;
-    case SplitEngineSerializer::ColliderType::kCapsuleCollider:
-      return android_xr::schemas::ColliderType::CapsuleCollider;
-  }
-}
-
-constexpr bool DoColliderEnumsMatch(
-    SplitEngineSerializer::ColliderType serizlier_enum,
-    android_xr::schemas::ColliderType renderer_enum) {
-  return GetColliderType(serizlier_enum) == renderer_enum;
-}
-
+// Verify ColliderType enums match.
+static_assert(DoEnumsMatch(SplitEngineSerializer::ColliderType::kBoxCollider,
+                           android_xr::schemas::ColliderType::BoxCollider),
+              "Enum mismatch");
+static_assert(DoEnumsMatch(SplitEngineSerializer::ColliderType::kMeshCollider,
+                           android_xr::schemas::ColliderType::MeshCollider),
+              "Enum mismatch");
+static_assert(DoEnumsMatch(SplitEngineSerializer::ColliderType::kSphereCollider,
+                           android_xr::schemas::ColliderType::SphereCollider),
+              "Enum mismatch");
 static_assert(
-    DoColliderEnumsMatch(SplitEngineSerializer::ColliderType::kBoxCollider,
-                         android_xr::schemas::ColliderType::BoxCollider) &&
-        DoColliderEnumsMatch(SplitEngineSerializer::ColliderType::kMeshCollider,
-                             android_xr::schemas::ColliderType::MeshCollider) &&
-        DoColliderEnumsMatch(
-            SplitEngineSerializer::ColliderType::kSphereCollider,
-            android_xr::schemas::ColliderType::SphereCollider) &&
-        DoColliderEnumsMatch(
-            SplitEngineSerializer::ColliderType::kCapsuleCollider,
-            android_xr::schemas::ColliderType::CapsuleCollider),
-    "Collider enums don't match");
+    DoEnumsMatch(SplitEngineSerializer::ColliderType::kCapsuleCollider,
+                 android_xr::schemas::ColliderType::CapsuleCollider),
+    "Enum mismatch");
+static_assert(android_xr::schemas::ColliderType::MAX ==
+                  android_xr::schemas::ColliderType::CapsuleCollider,
+              "New fields added but assert not updated");
+
+// Verify BuiltInMaterialParameters enums match.
+static_assert(
+    DoEnumsMatch(BuiltInMaterialParameters::NONE,
+                 android_xr::schemas::BuiltInMaterialParameters::NONE),
+    "Enum mismatch");
+static_assert(DoEnumsMatch(BuiltInMaterialParameters::GenericMaterialParameters,
+                           android_xr::schemas::BuiltInMaterialParameters::
+                               GenericMaterialParameters),
+              "Enum mismatch");
+static_assert(
+    DoEnumsMatch(BuiltInMaterialParameters::BuiltInMaterial5cf26af8Parameters,
+                 android_xr::schemas::BuiltInMaterialParameters::
+                     BuiltInMaterial5cf26af8Parameters),
+    "Enum mismatch");
+static_assert(
+    DoEnumsMatch(BuiltInMaterialParameters::BuiltInMaterialE3ca0ab9Parameters,
+                 android_xr::schemas::BuiltInMaterialParameters::
+                     BuiltInMaterialE3ca0ab9Parameters),
+    "Enum mismatch");
+static_assert(
+    DoEnumsMatch(BuiltInMaterialParameters::BuiltInMaterialD1750064Parameters,
+                 android_xr::schemas::BuiltInMaterialParameters::
+                     BuiltInMaterialD1750064Parameters),
+    "Enum mismatch");
+static_assert(
+    DoEnumsMatch(BuiltInMaterialParameters::BuiltInMaterialEb117dd9Parameters,
+                 android_xr::schemas::BuiltInMaterialParameters::
+                     BuiltInMaterialEb117dd9Parameters),
+    "Enum mismatch");
+static_assert(
+    DoEnumsMatch(BuiltInMaterialParameters::BuiltInMaterial1b616c8aParameters,
+                 android_xr::schemas::BuiltInMaterialParameters::
+                     BuiltInMaterial1b616c8aParameters),
+    "Enum mismatch");
+static_assert(
+    DoEnumsMatch(BuiltInMaterialParameters::BuiltInMaterial0d0cb9aaParameters,
+                 android_xr::schemas::BuiltInMaterialParameters::
+                     BuiltInMaterial0d0cb9aaParameters),
+    "Enum mismatch");
+static_assert(
+    DoEnumsMatch(
+        BuiltInMaterialParameters::BuiltInMaterialTextureExternalParameters,
+        android_xr::schemas::BuiltInMaterialParameters::
+            BuiltInMaterialTextureExternalParameters),
+    "Enum mismatch");
+static_assert(
+    DoEnumsMatch(BuiltInMaterialParameters::BuiltInMaterialbd7fe08cParameters,
+                 android_xr::schemas::BuiltInMaterialParameters::
+                     BuiltInMaterialbd7fe08cParameters),
+    "Enum mismatch");
+static_assert(
+    DoEnumsMatch(BuiltInMaterialParameters::BuiltInMaterialGsplatParameters,
+                 android_xr::schemas::BuiltInMaterialParameters::
+                     BuiltInMaterialGsplatParameters),
+    "Enum mismatch");
+static_assert(
+    DoEnumsMatch(
+        BuiltInMaterialParameters::BuiltInMaterialGsplatBackgroundParameters,
+        android_xr::schemas::BuiltInMaterialParameters::
+            BuiltInMaterialGsplatBackgroundParameters),
+    "Enum mismatch");
+
+static_assert(DoEnumsMatch(BuiltInMaterialParameters::MIN,
+                           android_xr::schemas::BuiltInMaterialParameters::MIN),
+              "Enum mismatch");
+static_assert(DoEnumsMatch(BuiltInMaterialParameters::MAX,
+                           android_xr::schemas::BuiltInMaterialParameters::MAX),
+              "Enum mismatch");
+
+static_assert(android_xr::schemas::BuiltInMaterialParameters::MAX ==
+                  android_xr::schemas::BuiltInMaterialParameters::
+                      BuiltInMaterialGsplatBackgroundParameters,
+              "New fields added but assert not updated");
 
 }  // namespace
 
@@ -882,6 +943,7 @@ void SplitEngineSerializerImpl::AddMaterial(
   }
 
   const ResourceId material_id = GetId(material);
+  IMP_LOG(imp::INFO) << kTag << "add material: " << material_id;
   Batch<CommandTypes::AddMaterials>& batch =
       GetOrCreateBatch<CommandTypes::AddMaterials>({}, {material_id});
   flatbuffers::FlatBufferBuilder* fbb = GetFlatBufferBuilderFor(batch);
@@ -946,6 +1008,7 @@ void SplitEngineSerializerImpl::RemoveMaterial(
     return;
   }
   const ResourceId material_id = GetId(material);
+  IMP_LOG(imp::INFO) << kTag << "remove material: " << material_id;
   Batch<CommandTypes::RemoveMaterials>& batch =
       GetOrCreateEndOfFrameBatch<CommandTypes::RemoveMaterials>(
           RemoveResourceChannel::kMaterial);
@@ -960,9 +1023,13 @@ void SplitEngineSerializerImpl::AddMaterialInstance(
       !view_.AreSplitEngineMaterialsInLocalMode()) {
     return;
   }
+  AddMaterialInstance(GetId(material), GetId(instance));
+}
 
-  const ResourceId material_id = GetId(material);
-  const ResourceId instance_id = GetId(instance);
+void SplitEngineSerializerImpl::AddMaterialInstance(uint64_t material_id,
+                                                    uint64_t instance_id) {
+  IMP_LOG(imp::INFO) << kTag << "add material instance: " << instance_id
+            << " (using material id: " << material_id << ")";
   Batch<CommandTypes::AddMaterialInstances>& batch =
       GetOrCreateBatch<CommandTypes::AddMaterialInstances>(
           {}, {material_id, instance_id});
@@ -974,10 +1041,9 @@ void SplitEngineSerializerImpl::Batch<CommandTypes::SetMaterialParameters>::
     Serialize(flatbuffers::FlatBufferBuilder& fbb) {
   if (data.empty()) return;
 
-  IMP_LOG(imp::INFO) << kTag << "material parameters: updating " << data.size()
-             << " materials";
   VectorOffset<android_xr::schemas::MaterialParameters> params(data.size());
   absl::c_transform(data, params.data(), [&fbb](const auto& entry) {
+    IMP_LOG(imp::INFO) << kTag << "update material params for instance: " << entry.first;
     return android_xr::schemas::CreateMaterialParameters(
         fbb, entry.first,
         fbb.CreateVector(entry.second.params.data(),
@@ -995,8 +1061,6 @@ void SplitEngineSerializerImpl::
         flatbuffers::FlatBufferBuilder& fbb) {
   if (data.empty()) return;
 
-  IMP_LOG(imp::INFO) << kTag << "built-in material parameters: updating " << data.size()
-             << " materials";
   CreateCommand(fbb, android_xr::schemas::CreateSetBuiltInMaterialParameters(
                          fbb, fbb.CreateVector(data)));
 }
@@ -1007,12 +1071,12 @@ void SplitEngineSerializerImpl::
         flatbuffers::FlatBufferBuilder& fbb) {
   if (data.empty()) return;
 
-  IMP_LOG(imp::INFO) << kTag << "material duplicates: ";
   std::vector<
       flatbuffers::Offset<android_xr::schemas::DuplicateMaterialInstance>>
       duplicates(data.size());
   absl::c_transform(data, duplicates.data(), [&fbb](const auto& entry) {
-    IMP_LOG(imp::INFO) << kTag << kIndent << entry.first << " -> " << entry.second;
+    IMP_LOG(imp::INFO) << kTag << "duplicate material instance: " << entry.second
+               << " -> " << entry.first;
     return android_xr::schemas::CreateDuplicateMaterialInstance(
         fbb, entry.first, entry.second);
   });
@@ -1209,10 +1273,19 @@ MaterialPtr SplitEngineSerializerImpl::CreateCustomMaterial(
 }
 
 void SplitEngineSerializerImpl::SetBuiltInMaterialParameters(
-    const filament::MaterialInstance* material,
-    android_xr::schemas::BuiltInMaterialParameters type,
+    const filament::MaterialInstance* material, BuiltInMaterialParameters type,
     SerializeBuiltInMaterialParametersFunc serialize_func) {
+  // Note: this cast is safe because the BuiltInMaterialParameters enum is
+  // a copy of the SplitEngineSerializer::BuiltInMaterialParameters enum, which
+  // is also static_asserted to be equivalent.
+  android_xr::schemas::BuiltInMaterialParameters schema_type =
+      static_cast<android_xr::schemas::BuiltInMaterialParameters>(type);
+
   const ResourceId material_id = GetId(material);
+  // Note: have to log this here because the material instance ID is lost after
+  // the parameter values are serialized.
+  IMP_LOG(imp::INFO) << kTag << "update material params for instance (built-in): "
+            << material_id;
   Batch<CommandTypes::SetBuiltInMaterialParameters>& batch =
       GetOrCreateBatch<CommandTypes::SetBuiltInMaterialParameters>(
           {}, {material_id});
@@ -1220,7 +1293,7 @@ void SplitEngineSerializerImpl::SetBuiltInMaterialParameters(
 
   batch.data.push_back(
       android_xr::schemas::CreateBuiltInMaterialInstanceParameters(
-          *fbb, material_id, type, serialize_func(*fbb)));
+          *fbb, material_id, schema_type, serialize_func(*fbb)));
 }
 
 void SplitEngineSerializerImpl::DuplicateMaterialInstance(
@@ -1392,7 +1465,8 @@ void SplitEngineSerializerImpl::ClearCollider(
     split_engine::SplitEngineSerializer::ColliderType collider_type) {
   Batch<CommandTypes::RemoveColliders>& batch =
       GetOrCreateBatch<CommandTypes::RemoveColliders>({entity});
-  batch.data[entity] = GetColliderType(collider_type);
+  batch.data[entity] =
+      static_cast<android_xr::schemas::ColliderType>(collider_type);
 }
 
 template <>
@@ -1694,11 +1768,10 @@ void SplitEngineSerializerImpl::Batch<CommandTypes::AddRenderables>::Serialize(
     flatbuffers::FlatBufferBuilder& fbb) {
   if (data.empty()) return;
 
-  IMP_LOG(imp::INFO) << kTag << "adding renderables:";
   VectorOffset<android_xr::schemas::AddRenderable> offset(data.size());
   absl::c_transform(data, offset.data(), [&fbb](const auto& entry) {
     const AddRenderableInfo& add = entry.second;
-    IMP_LOG(imp::INFO) << kTag << kIndent << entry.first.getId();
+    IMP_LOG(imp::INFO) << kTag << "add renderable " << entry.first.getId() << ":";
 
     flatbuffers::Offset<android_xr::schemas::MorphTargetData> morph_target_data;
     if (add.morph_target_data.has_value()) {
@@ -1745,10 +1818,9 @@ void SplitEngineSerializerImpl::Batch<CommandTypes::RemoveRenderables>::
     Serialize(flatbuffers::FlatBufferBuilder& fbb) {
   if (data.empty()) return;
 
-  IMP_LOG(imp::INFO) << kTag << "removing renderables: ";
   VectorOffset<android_xr::schemas::RemoveRenderable> offset(data.size());
   absl::c_transform(data, offset.data(), [&fbb](const utils::Entity& entry) {
-    IMP_LOG(imp::INFO) << kTag << kIndent << entry.getId();
+    IMP_LOG(imp::INFO) << kTag << "remove renderable: " << entry.getId();
     return android_xr::schemas::CreateRemoveRenderable(fbb, entry.getId());
   });
   CreateCommand(fbb, android_xr::schemas::CreateRemoveRenderables(
@@ -1760,11 +1832,10 @@ void SplitEngineSerializerImpl::Batch<CommandTypes::UpdateRenderables>::
     Serialize(flatbuffers::FlatBufferBuilder& fbb) {
   if (data.empty()) return;
 
-  IMP_LOG(imp::INFO) << kTag << "update renderables:";
   VectorOffset<android_xr::schemas::UpdateRenderable> offset(data.size());
   absl::c_transform(data, offset.data(), [&fbb](const auto& entry) {
     const UpdateRenderableInfo& update = entry.second;
-    IMP_LOG(imp::INFO) << kTag << kIndent << entry.first.getId();
+    IMP_LOG(imp::INFO) << kTag << "update renderable: " << entry.first.getId() << ":";
 
     VectorOffset<android_xr::schemas::PrimitiveUpdate> primitives(
         update.primitives.size());
@@ -1800,9 +1871,6 @@ void SplitEngineSerializerImpl::Batch<CommandTypes::UpdateRenderables>::
                        << primitive.global_blend_order_enabled->value();
           }
 
-          IMP_LOG(imp::INFO) << kTag << kIndent << kIndent
-                     << "done creating primitive update info";
-
           return android_xr::schemas::CreatePrimitiveUpdate(
               fbb, entry.first, geometry,
               PointerFromOptional(primitive.material_instance_id),
@@ -1827,11 +1895,9 @@ void SplitEngineSerializerImpl::Batch<CommandTypes::UpdateRenderables>::
     }
 
     if (update.priority) {
-      IMP_LOG(imp::INFO) << kTag << kIndent << "priority: " << update.priority->value();
+      IMP_LOG(imp::INFO) << kTag << kIndent
+                 << "priority: " << static_cast<int>(update.priority->value());
     }
-
-    IMP_LOG(imp::INFO) << kTag << kIndent << "renderable for entity "
-               << entry.first.getId();
 
     return android_xr::schemas::CreateUpdateRenderable(
         fbb, entry.first.getId(), fbb.CreateVector(primitives), bounds_info,

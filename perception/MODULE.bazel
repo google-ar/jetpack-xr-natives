@@ -24,6 +24,15 @@ bazel_dep(name = "abseil-cpp", version = "20250814.1")
 bazel_dep(name = "bazel_skylib", version = "1.2.1")
 bazel_dep(name = "jsoncpp", version = "1.9.5")
 bazel_dep(name = "rules_cc", version = "0.2.8")
+
+# Set up the Android NDK
+android_ndk_repository_extension = use_extension("@rules_android_ndk//:extension.bzl", "android_ndk_repository_extension")
+android_ndk_repository_extension.configure(api_level = 29)
+use_repo(android_ndk_repository_extension, "androidndk")
+
+register_toolchains("@androidndk//:all")
+
+
 bazel_dep(name = "third_party")
 local_path_override(
     module_name = "third_party",
@@ -36,9 +45,3 @@ local_path_override(
     path = "../impress",
 )
 
-# Set up the Android NDK
-android_ndk_repository_extension = use_extension("@rules_android_ndk//:extension.bzl", "android_ndk_repository_extension")
-android_ndk_repository_extension.configure(api_level = 29)
-use_repo(android_ndk_repository_extension, "androidndk")
-
-register_toolchains("@androidndk//:all")

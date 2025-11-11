@@ -26,6 +26,7 @@
 #include "core/common/rememberer.h"
 #include "core/common/robin_set.h"
 #include "core/editor/widget.h"
+#include "core/input/key_codes.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
 #include "core/view/base_view.h"
@@ -56,7 +57,7 @@ class Hierarchy : public Widget, public imp::Rememberer {
   bool MobileLongPress(absl::string_view node);
 
   BaseView& view_;
-  bool is_multi_selection_enabled_ = false;
+  absl::flat_hash_set<VirtualKeyCode> held_multi_select_keys_;
   bool selected_nodes_changed_ = false;
   float2 inspector_size_;
   float header_height_;

@@ -165,10 +165,24 @@ struct ImpCodeGenerator {
       full_name = AppendProtoNamespaceToPackage(full_name, field->file());
       return absl::StrReplaceAll(full_name, {{".", "::"}});
     } else if (field->cpp_type() == google::protobuf::FieldDescriptor::CPPTYPE_STRING) {
-      if (field->options().ctype() == google::protobuf::FieldOptions::STRING_PIECE) {
+      // Note: in open source protobuf, STRING_PIECE option is not supported.
+      // Instead, we have an Impress-specific STRING_VIEW option that does the
+      // same thing.
+      if (field->options().GetExtension(imp::string_type) ==
+          imp::StringType::STRING_VIEW) {
         return "absl::string_view";
-      } else if (field->options().ctype() == google::protobuf::FieldOptions::CORD) {
+      } else if (field->options().GetExtension(imp::string_type) ==
+                 imp::StringType::CORD) {
         return "absl::Cord";
+      }
+
+      switch (field->cpp_string_type()) {
+        case google::protobuf::FieldDescriptor::CppStringType::kView:
+          return "absl::string_view";
+        case google::protobuf::FieldDescriptor::CppStringType::kCord:
+          return "absl::Cord";
+        case google::protobuf::FieldDescriptor::CppStringType::kString:
+          return "std::string";
       }
       return "std::string";
     } else {
@@ -178,6 +192,16 @@ struct ImpCodeGenerator {
 
   absl::StatusOr<std::pair<std::string, std::string>> FieldInfo(
       const google::protobuf::FieldDescriptor* field) const {
+    // Verify that STRING_VIEW is only used for string fields.
+    if (field->options().GetExtension(imp::string_type) !=
+            imp::StringType::STRING_TYPE_UNKNOWN &&
+        field->cpp_type() != google::protobuf::FieldDescriptor::CPPTYPE_STRING) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "ERROR: field ", field->containing_type()->name(),
+          "::", field->name(),
+          " - imp.string_type is only supported for string fields."));
+    }
+
     std::string type_name;
     std::string default_value;
     if (field->is_map()) {
@@ -203,7 +227,7 @@ struct ImpCodeGenerator {
             " - Impress Proto UNIQUE_PTR fields must be marked with the "
             "optional label or be part of a oneof."));
       }
-      type_name = absl::StrCat("std::unique_ptr<", TypeName(field), ">");
+      type_name = absl::StrCat("::imp::CopyablePtr<", TypeName(field), ">");
     } else if (field->message_type() != nullptr &&
                field->options().GetExtension(imp::optional_type) !=
                    imp::OptionalType::ABSL_OPTIONAL) {
@@ -448,7 +472,7 @@ struct ImpCodeGenerator {
       printer->Print(vars,
                      "$type$* mutable_$field$() {\n"
                      "  if ($name$.index() != $index$) {\n"
-                     "    this->$name$.emplace<$index$>();\n"
+                     "    this->$name$.emplace<$index$>($type${});\n"
                      "  }\n"
                      "  return absl::get_if<$index$>(&this->$name$);\n"
                      "}\n");
@@ -611,10 +635,11 @@ struct ImpCodeGenerator {
       if (oneof != nullptr) {
         printer->Print(
             "  if ($oneof$.index() != $index$) {\n"
-            "    $oneof$.emplace<$index$>();\n"
+            "    $oneof$.emplace<$index$>($type_name${});\n"
             "  }\n",
             "oneof", oneof->name(), "index",
-            absl::StrCat(field->index_in_oneof() + 1));
+            absl::StrCat(field->index_in_oneof() + 1), "type_name",
+            FieldInfo(field)->first);
         field_ref = absl::StrFormat("absl::get_if<%d>(&this->%s)",
                                     field->index_in_oneof() + 1, oneof->name());
         field_ref_other =
@@ -797,250 +822,6 @@ struct ImpCodeGenerator {
     return absl::OkStatus();
   }
 
-  // Copy/move functions differentiate fields on these broad type categories.
-  enum class CopyMoveFieldCategory {
-    kScalar,
-    kUniquePtr,
-    kOneof,
-    kOther,
-  };
-
-  // The type of all functions that print fields for copy/move functions.
-  using PrintCopyMoveFieldFn = std::function<void(
-      google::protobuf::io::Printer* printer, CopyMoveFieldCategory field_category,
-      absl::string_view field_type, absl::string_view field_name)>;
-
-  // Helper to handle looping-through/differentiating fields and handling oneof.
-  void PrintCopyMoveFieldsHelper(google::protobuf::io::Printer* printer,
-                                 const google::protobuf::Descriptor* desc,
-                                 PrintCopyMoveFieldFn print_field_fn) const {
-    absl::flat_hash_set<std::string> oneofs;
-    for (int i = 0; i < desc->field_count(); ++i) {
-      const google::protobuf::FieldDescriptor* field = desc->field(i);
-      const google::protobuf::OneofDescriptor* oneof = field->real_containing_oneof();
-      if (oneof != nullptr) {
-        if (oneofs.find(oneof->name()) != oneofs.end()) {
-          // This field is part of a variant that has already been handled.
-          return;
-        }
-        print_field_fn(printer, CopyMoveFieldCategory::kOneof, "absl::variant",
-                       oneof->name());
-        oneofs.emplace(oneof->name());
-      } else {
-        CopyMoveFieldCategory category = CopyMoveFieldCategory::kOther;
-        if (field->options().GetExtension(imp::optional_type) ==
-            imp::OptionalType::UNIQUE_PTR) {
-          category = CopyMoveFieldCategory::kUniquePtr;
-        } else if (IsScalar(field)) {
-          category = CopyMoveFieldCategory::kScalar;
-        }
-        print_field_fn(printer, category, TypeName(field), field->name());
-      }
-    }
-  }
-
-  // Prints copy-assignment blocks for only the fields that are part of a oneof.
-  // Ex:
-  //   if (other.foo()) {
-  //     *mutable_foo() = *other.foo();
-  //   }
-  //   if (other.bar()) {
-  //     *mutable_bar() = std::make_unique<SomeType>(*other.bar());
-  //   }
-  void PrintOneofCopyAssignmentBlock(google::protobuf::io::Printer* printer,
-                                     const google::protobuf::Descriptor* desc) const {
-    for (int i = 0; i < desc->field_count(); ++i) {
-      const google::protobuf::FieldDescriptor* field = desc->field(i);
-      const google::protobuf::OneofDescriptor* oneof = field->real_containing_oneof();
-      if (oneof != nullptr) {
-        printer->Print("if (other.$field$()) {\n", "field", field->name());
-        printer->Indent();
-        if (field->options().GetExtension(imp::optional_type) ==
-            imp::OptionalType::UNIQUE_PTR) {
-          printer->Print(
-              "*mutable_$field$() = "
-              "std::make_unique<$type$>(*other.$field$()->get());\n",
-              "field", field->name(), "type", TypeName(field));
-        } else {
-          printer->Print("*mutable_$field$() = *other.$field$();\n", "field",
-                         field->name());
-        }
-        printer->Outdent();
-        printer->Print("}\n");
-      }
-    }
-  }
-
-  // Prints the copy-constructor for the given message.
-  // Ex:
-  //   MyMessage(const MyMessage& other) :
-  //     a(other.a),
-  //     b(std::make_unique<SomeType>(*other.b)) {}
-  void PrintCopyConstructor(google::protobuf::io::Printer* printer,
-                            const google::protobuf::Descriptor* desc) const {
-    printer->Print("$name$(const $name$& other) noexcept\n", "name",
-                   desc->name());
-    printer->Indent();
-    bool has_oneof = false;
-    bool is_first_field = true;
-    PrintCopyMoveFieldsHelper(
-        printer, desc,
-        [&has_oneof, &is_first_field](
-            google::protobuf::io::Printer* printer, CopyMoveFieldCategory field_category,
-            absl::string_view field_type, absl::string_view field_name) {
-          switch (field_category) {
-            case CopyMoveFieldCategory::kOneof:
-              // Oneofs can't be copied without per-field logic since one of
-              // the variants of the oneof might be a unique_ptr.
-              // Furthermore, this requires more complex logic than can be
-              // contained in the initializer list.
-              has_oneof = true;
-              return;
-            case CopyMoveFieldCategory::kUniquePtr:
-              printer->Print(
-                  "$next_element_token$$field$(other.$field$ ? "
-                  "std::make_unique<$type$>(*other.$field$) : "
-                  "nullptr)",
-                  "next_element_token", !is_first_field ? ",\n" : ": ", "field",
-                  std::string(field_name), "type", std::string(field_type));
-              break;
-            default:
-              printer->Print("$next_element_token$$field$(other.$field$)",
-                             "next_element_token",
-                             !is_first_field ? ",\n" : ": ", "field",
-                             std::string(field_name));
-          }
-          is_first_field = false;
-        });
-    if (!has_oneof) {
-      printer->Print(" {}\n\n");
-    } else {
-      // Handle the one-ofs in the constructor function body.
-      printer->Print(" {\n");
-      printer->Indent();
-      PrintOneofCopyAssignmentBlock(printer, desc);
-      printer->Outdent();
-      printer->Print("}\n\n");
-    }
-    printer->Outdent();
-  }
-
-  // Prints the copy-assignment operator for the given message.
-  // Ex:
-  //   MyMessage& operator=(const MyMessage& other) {
-  //     a = other.a;
-  //     b = std::make_unique<SomeType>(*other.b);
-  //   }
-  void PrintCopyAssignmentOperator(google::protobuf::io::Printer* printer,
-                                   const google::protobuf::Descriptor* desc) const {
-    printer->Print("$name$& operator=(const $name$& other) noexcept {\n",
-                   "name", desc->name());
-    printer->Indent();
-    bool has_oneof = false;
-    PrintCopyMoveFieldsHelper(
-        printer, desc,
-        [&has_oneof](
-            google::protobuf::io::Printer* printer, CopyMoveFieldCategory field_category,
-            absl::string_view field_type, absl::string_view field_name) {
-          switch (field_category) {
-            case CopyMoveFieldCategory::kOneof:
-              // Oneofs can't be copied without per-field logic since one of
-              // the variants of the oneof might be a unique_ptr.
-              has_oneof = true;
-              return;
-            case CopyMoveFieldCategory::kUniquePtr:
-              printer->Print(
-                  "$field$ = other.$field$ ? "
-                  "std::make_unique<$type$>(*other.$field$) : nullptr;\n",
-                  "field", std::string(field_name), "type",
-                  std::string(field_type));
-              break;
-            default:
-              printer->Print("$field$ = other.$field$;\n", "field",
-                             std::string(field_name));
-          }
-        });
-    if (has_oneof) {
-      PrintOneofCopyAssignmentBlock(printer, desc);
-    }
-    printer->Print("return *this;\n");
-    printer->Outdent();
-    printer->Print("}\n\n");
-  }
-
-  // Prints the move-constructor for the given message.
-  // Ex:
-  //   MyMessage(MyMessage&& other) :
-  //     a(std::exchange(other.a, 0)),
-  //     b(std::move(other.b)) {}
-  void PrintMoveConstructor(google::protobuf::io::Printer* printer,
-                            const google::protobuf::Descriptor* desc) const {
-    printer->Print("$name$($name$&& other) noexcept \n", "name", desc->name());
-    printer->Indent();
-    bool is_first_field = true;
-    PrintCopyMoveFieldsHelper(
-        printer, desc,
-        [&is_first_field](
-            google::protobuf::io::Printer* printer, CopyMoveFieldCategory field_category,
-            absl::string_view field_type, absl::string_view field_name) {
-          switch (field_category) {
-            case CopyMoveFieldCategory::kScalar:
-              printer->Print(
-                  "$next_element_token$$field$(std::exchange(other.$field$, "
-                  "0))",
-                  "next_element_token", !is_first_field ? ",\n" : ": ", "field",
-                  std::string(field_name));
-              break;
-            default:
-              printer->Print(
-                  "$next_element_token$$field$(std::move(other.$field$))",
-                  "next_element_token", !is_first_field ? ",\n" : ": ", "field",
-                  std::string(field_name));
-          }
-          is_first_field = false;
-        });
-    printer->Print(" {}\n\n");
-    printer->Outdent();
-  }
-
-  // Prints the move-assignment operator for the given message.
-  // Ex:
-  //   MyMessage& operator=(MyMessage&& other) {
-  //     a = other.a;
-  //     b = std::move(other.b);
-  //   }
-  void PrintMoveAssignmentOperator(google::protobuf::io::Printer* printer,
-                                   const google::protobuf::Descriptor* desc) const {
-    printer->Print("$name$& operator=($name$&& other) noexcept {\n", "name",
-                   desc->name());
-    printer->Indent();
-    PrintCopyMoveFieldsHelper(
-        printer, desc,
-        [](google::protobuf::io::Printer* printer, CopyMoveFieldCategory field_category,
-           absl::string_view field_type, absl::string_view field_name) {
-          switch (field_category) {
-            case CopyMoveFieldCategory::kScalar:
-              printer->Print("$field$ = other.$field$;\n", "field",
-                             std::string(field_name));
-              break;
-            default:
-              printer->Print("$field$ = std::move(other.$field$);\n", "field",
-                             std::string(field_name));
-          }
-        });
-    printer->Print("return *this;\n");
-    printer->Outdent();
-    printer->Print("}\n\n");
-  }
-
-  void PrintDefaultConstructorAndDestructor(
-      google::protobuf::io::Printer* printer, const google::protobuf::Descriptor* desc) const {
-    // Default constructor.
-    printer->Print("$name$() noexcept = default;\n\n", "name", desc->name());
-    // Print explicit destructor set to default.
-    printer->Print("~$name$() noexcept = default;\n\n", "name", desc->name());
-  }
-
   void PrintAbslStringify(google::protobuf::io::Printer* printer,
                           const google::protobuf::Descriptor* desc) const {
     printer->Print("template <typename Sink>\n");
@@ -1057,48 +838,6 @@ struct ImpCodeGenerator {
     printer->Outdent();
     printer->Print("}\n");
     printer->PrintRaw("\n");
-  }
-
-  // Prints "Rule of 5" functions (copy-constructor, assignment, move, etc.).
-  // See: https://en.cppreference.com/w/cpp/language/rule_of_three.
-  void PrintCopyAndMoveFunctions(google::protobuf::io::Printer* printer,
-                                 const google::protobuf::Descriptor* desc) const {
-    // No need to print copy/move functions if there are no fields.
-    if (desc->field_count() == 0) return;
-
-    // No need to print copy/move functions if there are no unique_ptr fields.
-    bool has_unique_ptr_field = false;
-    for (int i = 0; i < desc->field_count(); ++i) {
-      const google::protobuf::FieldDescriptor* field = desc->field(i);
-      if (field->options().GetExtension(imp::optional_type) ==
-          imp::OptionalType::UNIQUE_PTR) {
-        has_unique_ptr_field = true;
-        break;
-      }
-    }
-
-    bool printed_default_constructors = false;
-#if IMP_PROTO_GEN_ALWAYS_PRINT_DEFAULT_CONSTRUCTOR
-    // Bazel uses a version of c++ std with a bug with variant that causes us
-    // to require a default constructor on messages that are used in variants.
-    // This adds too much binary size to our internal apps, so we toggle this
-    // define in order to get the default constructors in Bazel.
-    PrintDefaultConstructorAndDestructor(printer, desc);
-    printed_default_constructors = true;
-#endif
-
-    if (!has_unique_ptr_field) return;
-
-    if (!printed_default_constructors) {
-      PrintDefaultConstructorAndDestructor(printer, desc);
-      printed_default_constructors = true;
-    }
-
-    // Print "Rule of 5" functions with noexcept to support unique_ptr fields.
-    PrintCopyConstructor(printer, desc);
-    PrintCopyAssignmentOperator(printer, desc);
-    PrintMoveConstructor(printer, desc);
-    PrintMoveAssignmentOperator(printer, desc);
   }
 
   absl::Status PrintMessage(
@@ -1128,8 +867,6 @@ struct ImpCodeGenerator {
           "static constexpr imp::HashValue kTypeUrlHash =\n"
           "    imp::Hash(kTypeUrl);\n\n",
           "name", desc->full_name());
-
-      PrintCopyAndMoveFunctions(printer, desc);
 
       PrintAbslStringify(printer, desc);
 

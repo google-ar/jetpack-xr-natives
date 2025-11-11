@@ -106,6 +106,7 @@ cc_library(
     deps = [
         "//core/assets/gltf/object_model:property_pointer",
         "//core/assets/gltf/object_model:token_parser",
+        "//core/common:robin_map",
         "//core/ncsb",
         "//core/view/framework",
         "@com_google_absl//absl/status",

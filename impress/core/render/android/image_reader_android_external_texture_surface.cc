@@ -92,8 +92,7 @@ absl::Status ImageReaderAndroidExternalTextureSurface::Initialize(
   }
   MP_ASSIGN_OR_RETURN(
       image_reader_,
-      ImageReader::Create(view_, imp::kMaxViewWidth, imp::kMaxViewHeight,
-                          AIMAGE_FORMAT_PRIVATE, usage_flags,
+      ImageReader::Create(view_, 1, 1, AIMAGE_FORMAT_PRIVATE, usage_flags,
                           imp::kImageReaderBufferSize));
 
   MP_RETURN_IF_ERROR(image_reader_->SetImageListenerCallback(
@@ -164,7 +163,6 @@ ImageReaderAndroidExternalTextureSurface::BorrowTexturesImpl(
 
 void ImageReaderAndroidExternalTextureSurface::OnNewImageAvailable(
     void* user_data) {
-  IMP_LOG(imp::INFO) << "New image is available.";
   auto external_surface =
       static_cast<ImageReaderAndroidExternalTextureSurface*>(user_data);
   external_surface->NewImageAvailable();
@@ -172,15 +170,7 @@ void ImageReaderAndroidExternalTextureSurface::OnNewImageAvailable(
 
 absl::Status ImageReaderAndroidExternalTextureSurface::SetDefaultBufferSize(
     int2 size) const {
-  // The ImageReader doesn't directly control buffer size. It can suggest a
-  // size during initialization, but ultimately relies on the image source
-  // (e.g., MediaCodec) to determine the dimensions of the images it delivers.
-  return absl::InternalError(
-      "ImageReaderAndroidExternalTextureSurface::SetDefaultBufferSize is not "
-      "supported.");
-
-  // TODO - Try using ANativeWindow_setBuffersGeometry to set the
-  // buffer size.
+  return image_reader_->SetBufferSize(size);
 };
 
 void ImageReaderAndroidExternalTextureSurface::NewImageAvailable() {

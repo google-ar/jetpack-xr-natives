@@ -42,6 +42,7 @@
 #include "core/math/vec.h"
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
+#include "core/text/text_metrics.proto.h"
 #include "core/view/base_view.h"
 #include "third_party/skia/HEAD/include/core/SkAlphaType.h"
 #include "third_party/skia/HEAD/include/core/SkColor.h"
@@ -99,7 +100,7 @@ Future<absl::Status> DesktopPlatformCanvasSource::PrepareFont(
   return Future<absl::Status>(absl::OkStatus());
 }
 
-ScopedCanvas::TextMetrics DesktopPlatformCanvasSource::GetTextMetrics(
+TextMetrics DesktopPlatformCanvasSource::GetTextMetrics(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
   std::unique_ptr<Paragraph> paragraph =
       CreateParagraph(text, text_options, /*draw_stroke_only=*/false);
@@ -107,21 +108,23 @@ ScopedCanvas::TextMetrics DesktopPlatformCanvasSource::GetTextMetrics(
   paragraph->getLineMetricsAt(0, &metrics);
   // The stroke straddles the font, half in and half out.
   float stroke_padding = text_options.stroke_width_pixels;
-  return {
-      // Origin does not include the stroke width.
-      .origin = float2{0, -metrics.fDescent},
-      // Size does include the stroke width.
-      .size = float2{metrics.fWidth + stroke_padding,
-                     metrics.fHeight + stroke_padding},
-      .typographical_width = 0.0f,
-      // TODO: Return proper metrics here
-      // Font origin does not include the stroke width.
-      .font_origin_y = static_cast<float>(-metrics.fDescent),
-      .font_size_y = static_cast<float>(metrics.fHeight + stroke_padding),
-  };
+  TextMetrics text_metrics;
+  // Origin does not include the stroke width.
+  text_metrics.set_origin_x(0.0f);
+  text_metrics.set_origin_y(-metrics.fDescent);
+  // Size does include the stroke width.
+  text_metrics.set_size_x(metrics.fWidth + stroke_padding);
+  text_metrics.set_size_y(metrics.fHeight + stroke_padding);
+  text_metrics.set_typographical_width(0.0f);
+  // TODO: Return proper metrics here
+  // Font origin does not include the stroke width.
+  text_metrics.set_font_origin_y(static_cast<float>(-metrics.fDescent));
+  text_metrics.set_font_size_y(
+      static_cast<float>(metrics.fHeight + stroke_padding));
+  return text_metrics;
 }
 
-ScopedCanvas::TextMetrics DesktopPlatformCanvasSource::GetGlyphMetrics(
+TextMetrics DesktopPlatformCanvasSource::GetGlyphMetrics(
     ScopedCanvas::GlyphId glyph,
     const ScopedCanvas::TextOptions& text_options) {
   IMP_LOG(imp::FATAL) << "CanvasSource::GetGlyphMetrics is unavailable on Desktop.";
@@ -186,7 +189,7 @@ DesktopPlatformCanvasSource::GetTextGlyphs(
   return {};
 }
 
-ScopedCanvas::FontInfo DesktopPlatformCanvasSource::GetFontInfo(
+FontInfo DesktopPlatformCanvasSource::GetFontInfo(
     const ScopedCanvas::TextOptions& text_options) {
   std::unique_ptr<Paragraph> paragraph =
       CreateParagraph(" ", text_options, /*draw_stroke_only=*/false);
@@ -194,11 +197,12 @@ ScopedCanvas::FontInfo DesktopPlatformCanvasSource::GetFontInfo(
   SkFontMetrics font_metrics;
   font.getMetrics(&font_metrics);
 
-  return ScopedCanvas::FontInfo{
-      .ascent = font_metrics.fAscent,
-      .descent = font_metrics.fDescent,
-      .leading = font_metrics.fLeading,
-      .line_spacing = -font_metrics.fAscent + font_metrics.fDescent};
+  FontInfo font_info;
+  font_info.set_ascent(font_metrics.fAscent);
+  font_info.set_descent(font_metrics.fDescent);
+  font_info.set_leading(font_metrics.fLeading);
+  font_info.set_line_spacing(-font_metrics.fAscent + font_metrics.fDescent);
+  return font_info;
 }
 
 std::unique_ptr<ScopedCanvas> DesktopPlatformCanvasSource::StartDrawing(

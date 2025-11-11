@@ -24,6 +24,7 @@
 #include <utility>
 
 #include "absl/strings/string_view.h"
+#include "core/common/copyable_ptr.h"  // IWYU pragma: keep
 #include "core/common/hash.h"
 #include "core/common/type_traits.h"
 #include "core/proto/proto_traits.h"

@@ -33,6 +33,7 @@
 #include "core/math/vec.h"
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
+#include "core/text/text_metrics.proto.h"
 #include "core/view/base_view.h"
 #include "core/view/platforms/android/wrappers/canvas.h"
 #include "core/view/platforms/android/wrappers/paint.h"
@@ -57,14 +58,19 @@ android::Paint::Align TextAlignmentToPaintAlign(
   }
 }
 
-void ConfigurePaintForTextOptions(
-    android::Paint& paint, const ScopedCanvas::TextOptions& text_options) {
+inline void ConfigurePaintForTextOptionsCommon(
+    android::Paint& paint, const ScopedCanvas::TextOptions& text_options,
+    bool configure_for_glyphs) {
   paint.SetTextSize(text_options.size_pixels);
   paint.SetLetterSpacing(text_options.text_tracking);
-  paint.SetTextAlign(
-      TextAlignmentToPaintAlign(text_options.horizontal_alignment));
-  paint.SetColor(text_options.color);
-  paint.SetAntiAlias(true);
+
+  if (configure_for_glyphs) {
+    paint.SetTextAlign(android::Paint::Align::kLeft);
+  } else {
+    paint.SetTextAlign(
+        TextAlignmentToPaintAlign(text_options.horizontal_alignment));
+  }
+
   if (text_options.font_holder &&
       text_options.font_holder->IsAndroidTypeface()) {
     paint.SetTypeface(
@@ -74,13 +80,19 @@ void ConfigurePaintForTextOptions(
   }
 }
 
+void ConfigurePaintForTextOptions(android::Paint& paint,
+                                  const ScopedCanvas::TextOptions& text_options,
+                                  bool configure_for_glyphs) {
+  ConfigurePaintForTextOptionsCommon(paint, text_options, configure_for_glyphs);
+  paint.SetColor(text_options.color);
+}
+
 void ConfigurePaintForStrokeTextOptions(
-    android::Paint& paint, const ScopedCanvas::TextOptions& text_options) {
-  ConfigurePaintForTextOptions(paint, text_options);
-  paint.SetStyle(android::Paint::Style::kStroke);
+    android::Paint& paint, const ScopedCanvas::TextOptions& text_options,
+    bool configure_for_glyphs) {
+  ConfigurePaintForTextOptionsCommon(paint, text_options, configure_for_glyphs);
   paint.SetStrokeWidth(text_options.stroke_width_pixels);
   paint.SetColor(text_options.stroke_color);
-  paint.SetAntiAlias(true);
 }
 
 AndroidPlatformCanvasSource::AndroidPlatformCanvasSource(
@@ -90,7 +102,11 @@ AndroidPlatformCanvasSource::AndroidPlatformCanvasSource(
       paint_(context_),
       stroke_paint_(context_),
       glyph_source_(context_, glyph_method),
-      use_hardware_rendering_(use_hardware_rendering) {}
+      use_hardware_rendering_(use_hardware_rendering) {
+  paint_.SetAntiAlias(true);
+  stroke_paint_.SetAntiAlias(true);
+  stroke_paint_.SetStyle(android::Paint::Style::kStroke);
+}
 
 bool AndroidPlatformCanvasSource::IsFeatureSupported(
     ScopedCanvas::Feature feature) {
@@ -107,33 +123,39 @@ Future<absl::Status> AndroidPlatformCanvasSource::PrepareFont(
   return Future<absl::Status>(absl::OkStatus());
 }
 
-ScopedCanvas::TextMetrics AndroidPlatformCanvasSource::GetTextMetrics(
+TextMetrics AndroidPlatformCanvasSource::GetTextMetrics(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
-  ConfigurePaintForTextOptions(paint_, text_options);
+  ConfigurePaintForTextOptions(paint_, text_options,
+                               /*configure_for_glyphs=*/false);
   // Even when Paint::SetStrokeWidth is set, Android's paint type ignores stroke
   // when calling measure text. Therefore, we need to manually account for it.
   std::unique_ptr<android::Rect> bounds = paint_.GetTextBounds(text);
   std::vector<float> text_widths = GetTextWidths(text, text_options);
   float typographical_width =
       std::accumulate(text_widths.begin(), text_widths.end(), 0.0f);
-  return ScopedCanvas::TextMetrics{
-      // Origin is for the fill not the stroke.
-      .origin = float2{bounds->GetLeft(), -bounds->GetBottom()},
-      // Size includes the stroke - 1/2 the stroke on either side as it
-      // straddles the fill of the font half in and half out.
-      .size = float2{bounds->GetWidth() + text_options.stroke_width_pixels,
-                     bounds->GetHeight() + text_options.stroke_width_pixels},
-      .typographical_width = typographical_width,
-      // TODO: Return proper metrics here
-      .font_origin_y = static_cast<float>(-bounds->GetBottom()),
-      .font_size_y = bounds->GetHeight() + text_options.stroke_width_pixels,
-  };
+  TextMetrics text_metrics;
+  // Origin is for the fill not the stroke.
+  text_metrics.set_origin_x(bounds->GetLeft());
+  text_metrics.set_origin_y(-bounds->GetBottom());
+  // Size includes the stroke - 1/2 the stroke on either side as it
+  // straddles the fill of the font half in and half out.
+  text_metrics.set_size_x(bounds->GetWidth() +
+                          text_options.stroke_width_pixels);
+  text_metrics.set_size_y(bounds->GetHeight() +
+                          text_options.stroke_width_pixels);
+  text_metrics.set_typographical_width(typographical_width);
+  // TODO: Return proper metrics here
+  text_metrics.set_font_origin_y(static_cast<float>(-bounds->GetBottom()));
+  text_metrics.set_font_size_y(bounds->GetHeight() +
+                               text_options.stroke_width_pixels);
+  return text_metrics;
 }
 
-ScopedCanvas::TextMetrics AndroidPlatformCanvasSource::GetGlyphMetrics(
+TextMetrics AndroidPlatformCanvasSource::GetGlyphMetrics(
     ScopedCanvas::GlyphId glyph,
     const ScopedCanvas::TextOptions& text_options) {
-  ConfigurePaintForTextOptions(paint_, text_options);
+  ConfigurePaintForTextOptions(paint_, text_options,
+                               /*configure_for_glyphs=*/true);
   return glyph_source_.GetGlyphMetrics(glyph, text_options.font_holder,
                                        text_options.stroke_width_pixels,
                                        paint_);
@@ -142,17 +164,20 @@ ScopedCanvas::TextMetrics AndroidPlatformCanvasSource::GetGlyphMetrics(
 std::vector<ScopedCanvas::GlyphGroup>
 AndroidPlatformCanvasSource::GetCombinedCharacterGroups(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
-  ConfigurePaintForTextOptions(paint_, text_options);
+  ConfigurePaintForTextOptions(paint_, text_options,
+                               /*configure_for_glyphs=*/true);
   return glyph_source_.GetCombinedCharacterGroups(text, paint_);
 }
 
 std::vector<float> AndroidPlatformCanvasSource::GetTextWidths(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
   if (text_options.stroke_width_pixels > 0.0f) {
-    ConfigurePaintForStrokeTextOptions(stroke_paint_, text_options);
+    ConfigurePaintForStrokeTextOptions(stroke_paint_, text_options,
+                                       /*configure_for_glyphs=*/false);
     return stroke_paint_.GetTextWidths(text);
   } else {
-    ConfigurePaintForTextOptions(paint_, text_options);
+    ConfigurePaintForTextOptions(paint_, text_options,
+                                 /*configure_for_glyphs=*/false);
     return paint_.GetTextWidths(text);
   }
 }
@@ -160,21 +185,25 @@ std::vector<float> AndroidPlatformCanvasSource::GetTextWidths(
 std::vector<ScopedCanvas::GlyphAdvance>
 AndroidPlatformCanvasSource::GetTextGlyphs(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
-  ConfigurePaintForTextOptions(paint_, text_options);
+  ConfigurePaintForTextOptions(paint_, text_options,
+                               /*configure_for_glyphs=*/true);
   return glyph_source_.GetTextGlyphs(text, paint_);
 }
 
-ScopedCanvas::FontInfo AndroidPlatformCanvasSource::GetFontInfo(
+FontInfo AndroidPlatformCanvasSource::GetFontInfo(
     const ScopedCanvas::TextOptions& text_options) {
-  ConfigurePaintForTextOptions(paint_, text_options);
+  ConfigurePaintForTextOptions(paint_, text_options,
+                               /*configure_for_glyphs=*/false);
 
   std::unique_ptr<android::Paint::FontMetrics> font_metrics =
       paint_.GetFontMetrics();
 
-  return ScopedCanvas::FontInfo{.ascent = paint_.Ascent(),
-                                .descent = paint_.Descent(),
-                                .leading = font_metrics->Leading(),
-                                .line_spacing = paint_.GetFontSpacing()};
+  FontInfo font_info;
+  font_info.set_ascent(paint_.Ascent());
+  font_info.set_descent(paint_.Descent());
+  font_info.set_leading(font_metrics->Leading());
+  font_info.set_line_spacing(paint_.GetFontSpacing());
+  return font_info;
 }
 
 std::unique_ptr<ScopedCanvas> AndroidPlatformCanvasSource::StartDrawing(
@@ -276,7 +305,8 @@ void AndroidPlatformCanvasSource::AndroidScopedCanvas::DrawRoundedRect(
 
 void AndroidPlatformCanvasSource::AndroidScopedCanvas::DrawText(
     absl::string_view text, float2 pos, const TextOptions& text_options) {
-  ConfigurePaintForTextOptions(source_.paint_, text_options);
+  ConfigurePaintForTextOptions(source_.paint_, text_options,
+                               /*configure_for_glyphs=*/false);
 
   // Offset based on the horizontal text alignment if there is stroke.
   float horizontal_offset = 0.0f;
@@ -333,7 +363,8 @@ void AndroidPlatformCanvasSource::AndroidScopedCanvas::DrawText(
 
   if (text_options.stroke_width_pixels > 0 &&
       text_options.stroke_color != kZero4) {
-    ConfigurePaintForStrokeTextOptions(source_.stroke_paint_, text_options);
+    ConfigurePaintForStrokeTextOptions(source_.stroke_paint_, text_options,
+                                       /*configure_for_glyphs=*/false);
     canvas_.DrawText(text, pos, source_.stroke_paint_);
   }
   canvas_.DrawText(text, pos, source_.paint_);
@@ -342,9 +373,11 @@ void AndroidPlatformCanvasSource::AndroidScopedCanvas::DrawText(
 void AndroidPlatformCanvasSource::AndroidScopedCanvas::DrawGlyph(
     GlyphId glyph, float2 pos, const TextOptions& text_options) {
   if (text_options.stroke_width_pixels > 0.0f) {
-    ConfigurePaintForStrokeTextOptions(source_.stroke_paint_, text_options);
+    ConfigurePaintForStrokeTextOptions(source_.stroke_paint_, text_options,
+                                       /*configure_for_glyphs=*/true);
   }
-  ConfigurePaintForTextOptions(source_.paint_, text_options);
+  ConfigurePaintForTextOptions(source_.paint_, text_options,
+                               /*configure_for_glyphs=*/true);
   source_.glyph_source_.DrawGlyph(
       canvas_, glyph, pos.x, pos.y, text_options.font_holder,
       text_options.stroke_width_pixels, source_.paint_, source_.stroke_paint_);

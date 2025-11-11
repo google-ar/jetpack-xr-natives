@@ -24,6 +24,7 @@
 #include "core/canvas/scoped_canvas.h"
 #include "core/geometry/shapes/rect.h"
 #include "core/math/vec.h"
+#include "core/text/text_metrics.proto.h"
 #include "core/view/base_view.h"
 
 namespace imp {
@@ -42,11 +43,11 @@ class IosPlatformCanvasSource : public PlatformCanvasSource {
       absl::string_view text,
       const ScopedCanvas::TextOptions& text_options) override;
 
-  ScopedCanvas::TextMetrics GetTextMetrics(
+  TextMetrics GetTextMetrics(
       absl::string_view text,
       const ScopedCanvas::TextOptions& text_options) override;
 
-  ScopedCanvas::TextMetrics GetGlyphMetrics(
+  TextMetrics GetGlyphMetrics(
       ScopedCanvas::GlyphId glyph,
       const ScopedCanvas::TextOptions& text_options) override;
 
@@ -62,8 +63,7 @@ class IosPlatformCanvasSource : public PlatformCanvasSource {
       absl::string_view text,
       const ScopedCanvas::TextOptions& text_options) override;
 
-  ScopedCanvas::FontInfo GetFontInfo(
-      const ScopedCanvas::TextOptions& text_options) override;
+  FontInfo GetFontInfo(const ScopedCanvas::TextOptions& text_options) override;
 
   std::unique_ptr<ScopedCanvas> StartDrawing(
       BaseView& view, uint2 pixel_size,

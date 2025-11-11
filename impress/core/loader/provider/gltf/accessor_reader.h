@@ -169,9 +169,9 @@ absl::Status AccessorReader::FillValues(DenseDataAccess& out_data,
     if (!base_) {
       MP_RETURN_IF_ERROR(ApplySparseValues<T>(out_data, RetrievalMode::kAdd));
     } else {
+      // This line finally calls kReplace branch and checks for sparse values
+      // there.
       DenseDataAccess dense_data = GetData();
-      MP_RETURN_IF_ERROR(
-          ApplySparseValues<T>(dense_data, RetrievalMode::kReplace));
       for (size_t i = 0; i < count_; ++i) {
         *out_data.At<T>(i) += *dense_data.At<T>(i);
       }

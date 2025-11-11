@@ -313,11 +313,8 @@ typedef enum XrResult {
     XR_ERROR_SPATIAL_COMPONENT_NOT_ENABLED_EXT = -1000740006,
     XR_ERROR_SPATIAL_PERSISTENCE_SCOPE_UNSUPPORTED_EXT = -1000763001,
     XR_ERROR_SPATIAL_PERSISTENCE_SCOPE_INCOMPATIBLE_EXT = -1000781001,
-    XR_ERROR_KEYLESS_AUTH_NOT_SETUP_ANDROIDX1 = -1000787000,
-    XR_KEYLESS_AUTH_FAILED_ANDROIDX1 = -1000787001,
-    XR_ERROR_GOOGLE_CLOUD_AUTH_ERROR_ANDROIDX1 = -1000787002,
-    XR_GOOGLE_CLOUD_QUOTA_EXCEEDED_ANDROIDX1 = -1000787003,
-    XR_GOOGLE_CLOUD_UNREACHABLE_ANDROIDX1 = -1000787004,
+    XR_ERROR_KEYLESS_AUTH_NOT_SETUP_ANDROIDX2 = -1000787000,
+    XR_ERROR_KEYLESS_AUTH_FAILED_ANDROIDX2 = -1000787001,
     XR_ERROR_EARTH_TRACKER_NOT_RUNNING_ANDROIDX1 = -1000789001,
     XR_ERROR_GEOSPATIAL_COORDINATES_INVALID_ANDROIDX1 = -1000789002,
     XR_SURFACE_ANCHOR_LOCATION_UNSUPPORTED_ANDROIDX1 = -1000789000,
@@ -984,6 +981,10 @@ typedef enum XrStructureType {
     XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_DEPTH_RAYCAST_ANDROID = 1000786000,
     XR_TYPE_SPATIAL_BOUNDS_RAYCAST_ANDROID = 1000786001,
     XR_TYPE_SPATIAL_COMPONENT_RAYCAST_RESULT_LIST_ANDROID = 1000786002,
+    XR_TYPE_GOOGLE_CLOUD_AUTH_API_KEY_ANDROIDX2 = 1000787000,
+    XR_TYPE_GOOGLE_CLOUD_AUTH_TOKEN_ANDROIDX2 = 1000787001,
+    XR_TYPE_GOOGLE_CLOUD_AUTH_KEYLESS_ANDROIDX2 = 1000787002,
+    XR_TYPE_GOOGLE_CLOUD_AUTH_ERROR_RESULT_ANDROIDX2 = 1000787003,
     XR_TYPE_SYSTEM_GEOSPATIAL_PROPERTIES_ANDROIDX1 = 1000789000,
     XR_TYPE_EARTH_TRACKER_CREATE_INFO_ANDROIDX1 = 1000789001,
     XR_TYPE_EVENT_DATA_EARTH_TRACKER_STATE_CHANGED_ANDROIDX1 = 1000789002,
@@ -12234,6 +12235,24 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetEyeTrackerCalibrationStateANDROIDX1(
 #endif /* !XR_NO_PROTOTYPES */
 
 
+// XR_ANDROIDX_spatial_interaction_lifecycle is a preprocessor guard. Do not pass it to API calls.
+#define XR_ANDROIDX_spatial_interaction_lifecycle 1
+#define XR_ANDROIDX_spatial_interaction_lifecycle_SPEC_VERSION 1
+#define XR_ANDROIDX_SPATIAL_INTERACTION_LIFECYCLE_EXTENSION_NAME "XR_ANDROIDX_spatial_interaction_lifecycle"
+typedef XrResult (XRAPI_PTR *PFN_xrEnableSpatialInteractionANDROIDX)(XrSession session);
+typedef XrResult (XRAPI_PTR *PFN_xrDisableSpatialInteractionANDROIDX)(XrSession session);
+
+#ifndef XR_NO_PROTOTYPES
+#ifdef XR_EXTENSION_PROTOTYPES
+XRAPI_ATTR XrResult XRAPI_CALL xrEnableSpatialInteractionANDROIDX(
+    XrSession                                   session);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrDisableSpatialInteractionANDROIDX(
+    XrSession                                   session);
+#endif /* XR_EXTENSION_PROTOTYPES */
+#endif /* !XR_NO_PROTOTYPES */
+
+
 // XR_ANDROIDSYS_face_tracking_calibration is a preprocessor guard. Do not pass it to API calls.
 #define XR_ANDROIDSYS_face_tracking_calibration 1
 #define XR_ANDROIDSYS_face_tracking_calibration_SPEC_VERSION 1
@@ -13210,58 +13229,63 @@ typedef struct XrSpatialComponentRaycastResultListANDROID {
 
 
 
-// XR_ANDROIDX1_google_cloud_auth is a preprocessor guard. Do not pass it to API calls.
-#define XR_ANDROIDX1_google_cloud_auth 1
-#define XR_ANDROIDX1_google_cloud_auth_SPEC_VERSION 1
-#define XR_ANDROIDX1_GOOGLE_CLOUD_AUTH_EXTENSION_NAME "XR_ANDROIDX1_google_cloud_auth"
-typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudApiKeyANDROIDX1)(XrSession session, const char* apiKey);
-typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudAuthTokenANDROIDX1)(XrSession session, const char* authToken);
-typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudKeylessAuthAsyncANDROIDX1)(XrSession session, XrFutureEXT* future);
-typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudKeylessAuthCompleteANDROIDX1)(XrSession session, XrFutureEXT future, XrFutureCompletionEXT* completion);
+// XR_ANDROIDX2_google_cloud_auth is a preprocessor guard. Do not pass it to API calls.
+#define XR_ANDROIDX2_google_cloud_auth 1
+#define XR_ANDROIDX2_google_cloud_auth_SPEC_VERSION 1
+#define XR_ANDROIDX2_GOOGLE_CLOUD_AUTH_EXTENSION_NAME "XR_ANDROIDX2_google_cloud_auth"
+
+typedef enum XrGoogleCloudAuthErrorANDROIDX2 {
+    XR_GOOGLE_CLOUD_AUTH_ERROR_NONE_ANDROIDX2 = 0,
+    XR_GOOGLE_CLOUD_AUTH_ERROR_QUOTA_EXCEEDED_ANDROIDX2 = -1,
+    XR_GOOGLE_CLOUD_AUTH_ERROR_UNREACHABLE_ANDROIDX2 = -2,
+    XR_GOOGLE_CLOUD_AUTH_ERROR_ANDROIDX2 = -3,
+    XR_GOOGLE_CLOUD_AUTH_ERROR_ANDROIDX2_MAX_ENUM = 0x7FFFFFFF
+} XrGoogleCloudAuthErrorANDROIDX2;
+typedef struct XrGoogleCloudAuthInfoBaseHeaderANDROIDX2 {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+} XrGoogleCloudAuthInfoBaseHeaderANDROIDX2;
+
+// XrGoogleCloudAuthApiKeyANDROIDX2 extends XrGoogleCloudAuthInfoBaseHeaderANDROIDX2
+typedef struct XrGoogleCloudAuthApiKeyANDROIDX2 {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+    const char*                 apiKey;
+} XrGoogleCloudAuthApiKeyANDROIDX2;
+
+// XrGoogleCloudAuthTokenANDROIDX2 extends XrGoogleCloudAuthInfoBaseHeaderANDROIDX2
+typedef struct XrGoogleCloudAuthTokenANDROIDX2 {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+    const char*                 authToken;
+} XrGoogleCloudAuthTokenANDROIDX2;
+
+// XrGoogleCloudAuthKeylessANDROIDX2 extends XrGoogleCloudAuthInfoBaseHeaderANDROIDX2
+typedef struct XrGoogleCloudAuthKeylessANDROIDX2 {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+} XrGoogleCloudAuthKeylessANDROIDX2;
+
+typedef struct XrGoogleCloudAuthErrorResultANDROIDX2 {
+    XrStructureType                    type;
+    void* XR_MAY_ALIAS                 next;
+    XrGoogleCloudAuthErrorANDROIDX2    error;
+} XrGoogleCloudAuthErrorResultANDROIDX2;
+
+typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudAuthAsyncANDROIDX2)(XrSession session, const XrGoogleCloudAuthInfoBaseHeaderANDROIDX2* authInfo, XrFutureEXT* future);
+typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudAuthCompleteANDROIDX2)(XrSession session, XrFutureEXT future, XrFutureCompletionEXT* completion);
 
 #ifndef XR_NO_PROTOTYPES
 #ifdef XR_EXTENSION_PROTOTYPES
-XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudApiKeyANDROIDX1(
+XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudAuthAsyncANDROIDX2(
     XrSession                                   session,
-    const char*                                 apiKey);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudAuthTokenANDROIDX1(
-    XrSession                                   session,
-    const char*                                 authToken);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudKeylessAuthAsyncANDROIDX1(
-    XrSession                                   session,
+    const XrGoogleCloudAuthInfoBaseHeaderANDROIDX2* authInfo,
     XrFutureEXT*                                future);
 
-XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudKeylessAuthCompleteANDROIDX1(
+XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudAuthCompleteANDROIDX2(
     XrSession                                   session,
     XrFutureEXT                                 future,
     XrFutureCompletionEXT*                      completion);
-#endif /* XR_EXTENSION_PROTOTYPES */
-#endif /* !XR_NO_PROTOTYPES */
-
-
-// XR_ANDROIDX1_google_cloud_auth_internal is a preprocessor guard. Do not pass it to API calls.
-#define XR_ANDROIDX1_google_cloud_auth_internal 1
-#define XR_ANDROIDX1_google_cloud_auth_internal_SPEC_VERSION 1
-#define XR_ANDROIDX1_GOOGLE_CLOUD_AUTH_INTERNAL_EXTENSION_NAME "XR_ANDROIDX1_google_cloud_auth_internal"
-typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudTraceContextANDROIDX1)(XrSession session, XrBool32 enabled);
-typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudApiClientBuildVersionNameANDROIDX1)(XrSession session, const char* versionName);
-typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudARCoreDomainNameANDROIDX1)(XrSession session, const char* domainName);
-
-#ifndef XR_NO_PROTOTYPES
-#ifdef XR_EXTENSION_PROTOTYPES
-XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudTraceContextANDROIDX1(
-    XrSession                                   session,
-    XrBool32                                    enabled);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudApiClientBuildVersionNameANDROIDX1(
-    XrSession                                   session,
-    const char*                                 versionName);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudARCoreDomainNameANDROIDX1(
-    XrSession                                   session,
-    const char*                                 domainName);
 #endif /* XR_EXTENSION_PROTOTYPES */
 #endif /* !XR_NO_PROTOTYPES */
 

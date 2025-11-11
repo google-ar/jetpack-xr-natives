@@ -25,6 +25,7 @@
 
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/debug.h"
+#include "filament/libs/utils/include/utils/AsyncJobQueue.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 
 #include <array>
@@ -56,9 +57,16 @@ struct FrameInfoImpl : public details::FrameInfo {
     time_point endFrame;             // main thread endFrame time
     time_point backendBeginFrame;    // backend thread beginFrame time (makeCurrent time)
     time_point backendEndFrame;      // backend thread endFrame time (present time)
+    time_point gpuFrameComplete;     // the frame is done rendering on the gpu
+    time_point vsync;                // vsync time
+    backend::FenceHandle fence{};    // the fence used for gpuFrameComplete
     std::atomic_bool ready{};        // true once backend thread has populated its data
     explicit FrameInfoImpl(uint32_t const id) noexcept
         : frameId(id) {
+    }
+
+    ~FrameInfoImpl() noexcept {
+        assert_invariant(!fence);
     }
 
     FrameInfoImpl(FrameInfoImpl&& rhs) noexcept : 
@@ -68,6 +76,9 @@ struct FrameInfoImpl : public details::FrameInfo {
         endFrame(rhs.endFrame),
         backendBeginFrame(rhs.backendBeginFrame),
         backendEndFrame(rhs.backendEndFrame),
+        gpuFrameComplete(rhs.gpuFrameComplete),
+        vsync(rhs.vsync),
+        fence(rhs.fence),
         ready(rhs.ready.load())
     {
     }
@@ -79,6 +90,9 @@ struct FrameInfoImpl : public details::FrameInfo {
         endFrame = rhs.endFrame;
         backendBeginFrame = rhs.backendBeginFrame;
         backendEndFrame = rhs.backendEndFrame;
+        gpuFrameComplete = rhs.gpuFrameComplete;
+        vsync = rhs.vsync;
+        fence = rhs.fence;
         ready.store(rhs.ready.load());
         return *this;
     }
@@ -185,6 +199,16 @@ public:
         return operator[](0);
     }
 
+    T const& back() const noexcept {
+        assert_invariant(!empty());
+        return operator[](size() - 1);
+    }
+
+    T& back() noexcept {
+        assert_invariant(!empty());
+        return operator[](size() - 1);
+    }
+
 private:
     using Storage = std::aligned_storage_t<sizeof(T), alignof(T)>;
     Storage mStorage[CAPACITY];
@@ -207,13 +231,16 @@ public:
         uint32_t historySize;
     };
 
-    explicit FrameInfoManager(backend::DriverApi& driver) noexcept;
+    explicit FrameInfoManager(FEngine& engine, backend::DriverApi& driver) noexcept;
 
     ~FrameInfoManager() noexcept;
-    void terminate(backend::DriverApi& driver) noexcept;
+
+    // The command queue must be empty before calling terminate()
+    void terminate(FEngine& engine) noexcept;
 
     // call this immediately after "make current"
-    void beginFrame(backend::DriverApi& driver, Config const& config, uint32_t frameId) noexcept;
+    void beginFrame(backend::DriverApi& driver, Config const& config,
+            uint32_t frameId, std::chrono::steady_clock::time_point vsync) noexcept;
 
     // call this immediately before "swap buffers"
     void endFrame(backend::DriverApi& driver) noexcept;
@@ -237,6 +264,9 @@ private:
     uint32_t mLast = 0;                 // index of oldest query still active
     FrameInfoImpl* pFront = nullptr;    // the most recent slot with a valid frame time
     FrameHistoryQueue mFrameTimeHistory{};
+    utils::AsyncJobQueue mJobQueue;
+    bool const mHasTimerQueries = false;
+    bool const mDisableGpuFrameComplete = false;
 };
 
 

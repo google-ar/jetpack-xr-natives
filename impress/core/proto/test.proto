@@ -164,7 +164,7 @@ message ChildData {
 
 message StringData {
   string str = 1;
-  string view = 2 [ctype = STRING_PIECE];
+  string view = 2 [(imp.string_type) = STRING_VIEW];
 }
 
 message NoCodegen {

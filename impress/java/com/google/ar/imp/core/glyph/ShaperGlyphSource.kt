@@ -36,6 +36,7 @@ internal class ShaperGlyphSource : IGlyphSource {
   private val positionPtr = FloatArray(2)
   private val boundingBoxF = RectF()
   private val fontMetrics = Paint.FontMetrics()
+  private val glyphMetrics = FloatArray(8)
 
   // HACK: No proper way to determine if a glyph is a color emoji using the TextRunShaper API.
   // Instead, try turning some test emoji into paths; if the resulting paths are empty, this
@@ -82,14 +83,7 @@ internal class ShaperGlyphSource : IGlyphSource {
       }
     }
 
-  override fun getGlyphMetrics(
-    glyphId: Int,
-    font: Any?,
-    strokeWidth: Float,
-    paint: Paint,
-    out: FloatArray,
-  ) {
-    require(out.size == 7)
+  override fun getGlyphMetrics(glyphId: Int, font: Any?, paint: Paint): FloatArray {
     val actualFont = font as Font
 
     val advanceWidth = actualFont.getGlyphBounds(glyphId, paint, boundingBoxF)
@@ -97,22 +91,16 @@ internal class ShaperGlyphSource : IGlyphSource {
     val fontDescent = maxFontDescent(boundingBoxF, fontMetrics)
     val fontAscent = maxFontAscent(boundingBoxF, fontMetrics)
 
-    val padding =
-      if (emojiFontFiles.contains(actualFont.file)) {
-        0f
-      } else {
-        // Stroke staddles the font, half in and half out.
-        strokeWidth
-      }
-
     // Origin does not include the stroke width.
-    out[0] = boundingBoxF.left
-    out[1] = -boundingBoxF.bottom
-    out[2] = boundingBoxF.width() + padding
-    out[3] = boundingBoxF.height() + padding
-    out[4] = advanceWidth
-    out[5] = -fontDescent
-    out[6] = fontAscent + fontDescent + padding
+    glyphMetrics[0] = if (emojiFontFiles.contains(actualFont.file)) 0f else 1f
+    glyphMetrics[1] = boundingBoxF.left
+    glyphMetrics[2] = -boundingBoxF.bottom
+    glyphMetrics[3] = boundingBoxF.width()
+    glyphMetrics[4] = boundingBoxF.height()
+    glyphMetrics[5] = advanceWidth
+    glyphMetrics[6] = -fontDescent
+    glyphMetrics[7] = fontAscent + fontDescent
+    return glyphMetrics
   }
 
   override fun getTextGlyphs(text: String, paint: Paint): Array<GlyphAdvance> {

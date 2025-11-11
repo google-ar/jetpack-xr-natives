@@ -38,6 +38,20 @@ constexpr bool kIsAnyOf = IsAnyOf<T, Us...>::value;
 template <typename Left, typename Right>
 using EnableIfSameType = std::enable_if_t<std::is_same_v<Left, Right>, int>;
 
+// Returns true if two given enum values from two different enums match.
+// This is useful for static_asserting that two enums that are meant to match
+// actually do match.
+template <typename EnumA, typename EnumB>
+constexpr bool DoEnumsMatch(EnumA enum_a, EnumB enum_b) {
+  static_assert(std::is_enum_v<EnumA> && std::is_enum_v<EnumB>,
+                "Enums must be enum types");
+  static_assert(std::is_same_v<std::underlying_type_t<EnumA>,
+                               std::underlying_type_t<EnumB>>,
+                "Enums must be the same type");
+  return static_cast<std::underlying_type_t<EnumA>>(enum_a) ==
+         static_cast<std::underlying_type_t<EnumA>>(enum_b);
+}
+
 }  // namespace imp
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_COMMON_TYPE_HELPERS_H_

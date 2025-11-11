@@ -24,8 +24,10 @@
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/time/time.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "flatbuffers/vector.h"
@@ -72,19 +74,21 @@ absl::StatusOr<FlatBufferAccess<const schemas::CompileResponse>>
 MaterialCompilerClient::CompileMaterial(absl::string_view material_string,
                                         schemas::Platform platform,
                                         schemas::TargetApi target_api) {
+  uint64_t operation_id = ++last_operation_id_;
   flatbuffers::FlatBufferBuilder builder;
   auto command_offset = schemas::CreateCompileRequest(
       builder,
       builder.CreateString(material_string.data(), material_string.size()),
       platform, target_api);
-  auto request_offset = schemas::CreateRequest(
-      builder, schemas::RequestType::CompileRequest, command_offset.Union());
+  auto request_offset =
+      schemas::CreateRequest(builder, schemas::RequestType::CompileRequest,
+                             command_offset.Union(), operation_id);
   builder.Finish(request_offset);
 
   MP_RETURN_IF_ERROR(SendRequest(builder));
 
   // This blocks until the processing is done.
-  return GetCompiledMaterialResponse();
+  return GetCompiledMaterialResponse(operation_id);
 }
 
 void MaterialCompilerClient::Close() {
@@ -122,23 +126,69 @@ void MaterialCompilerClient::OnPipeClosed() {
     return;
   }
   connection_state_ = ConnectionState::kClosed;
-
-  // Unblock any waiting threads.
-  processing_message_.SignalAll();
-  can_process_new_message_.SignalAll();
 }
 
 void MaterialCompilerClient::OnMessage(std::unique_ptr<std::uint8_t[]> message,
                                        size_t size) {
   absl::MutexLock lock(lock_);
-  // Wait for the last message to be processed.
-  while (last_message_ != nullptr) {
-    // Releases the lock until it gets the signal.
-    can_process_new_message_.Wait(&lock_);
+  const uint8_t* message_buffer = message.get();
+  flatbuffers::Verifier verifier(message_buffer, size);
+  if (!verifier.VerifyBuffer<schemas::Response>()) {
+    IMP_LOG(imp::ERROR) << "Failed to validate response.";
+    return;
   }
-  last_message_ = std::move(message);
-  last_message_size_ = size;
-  processing_message_.Signal();
+  const schemas::Response* response =
+      flatbuffers::GetRoot<schemas::Response>(message_buffer);
+
+  if (response == nullptr) {
+    IMP_LOG(imp::ERROR) << "Response is null.";
+    return;
+  }
+
+  auto try_emplace_response =
+      [this](uint64_t operation_id,
+             absl::StatusOr<FlatBufferAccess<const schemas::CompileResponse>>
+                 response) {
+        lock_.AssertHeld();
+        auto [_, inserted] =
+            processed_messages_.try_emplace(operation_id, std::move(response));
+        if (!inserted) {
+          IMP_LOG(imp::ERROR) << "Duplicate response for operation id: " << operation_id;
+        }
+      };
+
+  uint64_t operation_id = response->operation_id();
+  if (operation_id == 0) {
+    IMP_LOG(imp::ERROR) << "Operation id must be greater than 0, ignoring the response.";
+    return;
+  }
+
+  switch (response->response_type()) {
+    case schemas::ResponseType::ErrorResponse: {
+      auto error = response->response_as<schemas::ErrorResponse>();
+      if (error && error->message()) {
+        try_emplace_response(operation_id, absl::InvalidArgumentError(
+                                               error->message()->c_str()));
+        return;
+      }
+      try_emplace_response(
+          operation_id, absl::InternalError("Unable to process ErrorResponse"));
+      return;
+    }
+    case schemas::ResponseType::CompileResponse: {
+      try_emplace_response(
+          operation_id, FlatBufferAccess<const schemas::CompileResponse>(
+                            response->response_as<schemas::CompileResponse>(),
+                            BufferAccess{std::move(message), size}));
+      return;
+    }
+    default:
+      try_emplace_response(
+          operation_id,
+          absl::UnimplementedError(absl::StrFormat("Unknown response type: %d",
+                                                   response->response_type())));
+      return;
+  }
 }
 
 absl::Status MaterialCompilerClient::SendRequest(
@@ -146,6 +196,9 @@ absl::Status MaterialCompilerClient::SendRequest(
   if (builder.GetSize() > std::numeric_limits<uint32_t>::max()) {
     return absl::InvalidArgumentError("Request too large");
   }
+  // Lock to avoid sending multiple requests at the same time. This is
+  // needed because the pipe is not thread-safe.
+  absl::MutexLock lock(lock_);
   bool sent = pipe_.Send(builder.GetBufferPointer(),
                          static_cast<uint32_t>(builder.GetSize()));
   if (!sent) {
@@ -155,51 +208,25 @@ absl::Status MaterialCompilerClient::SendRequest(
 }
 
 absl::StatusOr<FlatBufferAccess<const schemas::CompileResponse>>
-MaterialCompilerClient::GetCompiledMaterialResponse() {
-  {
-    absl::MutexLock lock(lock_);
-    if (pipe_.IsClosed()) {
-      return absl::InternalError("Pipe is already closed");
-    }
-
-    while (last_message_ == nullptr) {
-      // Releases the lock until the service responds. OnMessage acquires the
-      // lock, then releases once ready. Then the main thread wakes up and
-      // re-acquires the lock.
-      processing_message_.Wait(&lock_);
-    }
-
-    std::unique_ptr<uint8_t[]> message = std::move(last_message_);
-    size_t message_size = last_message_size_;
-    last_message_size_ = 0;
-    // Signal that now it's available for processing the next messages.
-    can_process_new_message_.Signal();
-
-    const uint8_t* message_buffer = message.get();
-    flatbuffers::Verifier verifier(message_buffer, message_size);
-    if (!verifier.VerifyBuffer<schemas::Response>()) {
-      return absl::InternalError("Failed to validate response.");
-    }
-    const schemas::Response* response =
-        flatbuffers::GetRoot<schemas::Response>(message_buffer);
-
-    // If there is an error, return it as an Error to continue error
-    // propagation.
-    if (response->response_type() == schemas::ResponseType::ErrorResponse) {
-      auto error = response->response_as<schemas::ErrorResponse>();
-      if (error && error->message()) {
-        return absl::InvalidArgumentError(error->message()->c_str());
-      }
-      return absl::InternalError("Unable to process ErrorResponse");
-    }
-
-    if (response->response_type() != schemas::ResponseType::CompileResponse) {
-      return absl::InvalidArgumentError("Not a compile response");
-    }
-
-    return FlatBufferAccess<const schemas::CompileResponse>(
-        response->response_as<schemas::CompileResponse>(),
-        BufferAccess{std::move(message), message_size});
+MaterialCompilerClient::GetCompiledMaterialResponse(uint64_t operation_id) {
+  absl::MutexLock lock(lock_);
+  auto has_response_or_pipe_closed = [this, operation_id]() -> bool {
+    lock_.AssertReaderHeld();
+    return processed_messages_.contains(operation_id) ||
+           connection_state_ != ConnectionState::kConnected;
+  };
+  if (!lock_.AwaitWithTimeout(absl::Condition(&has_response_or_pipe_closed),
+                              absl::Seconds(30))) {
+    return absl::DeadlineExceededError("Timed out waiting for response");
   }
+
+  auto it = processed_messages_.find(operation_id);
+  if (it != processed_messages_.end()) {
+    absl::StatusOr<FlatBufferAccess<const schemas::CompileResponse>> response =
+        std::move(it->second);
+    processed_messages_.erase(it);
+    return response;
+  }
+  return absl::NotFoundError("Operation id not found");
 }
 }  // namespace imp

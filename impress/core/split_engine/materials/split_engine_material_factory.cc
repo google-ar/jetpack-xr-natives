@@ -39,7 +39,7 @@
 #include "core/split_engine/materials/builtin/builtin_water_material.h"
 #include "core/split_engine/materials/builtin/builtin_youtube_stereo_player_material.h"
 #include "core/split_engine/materials/builtin/gsplat/builtin_gsplat_background_material.h"
-#include "core/split_engine/materials/builtin/gsplat/builtin_gsplat_material.h"
+#include "core/split_engine/materials/builtin/gsplat/gsplat_material_deserializer.h"
 #include "core/split_engine/materials/builtin/photosxr/builtin_photos_texture_3d_material.h"
 #include "core/split_engine/materials/builtin_material_creator_helper.h"
 #include "core/split_engine/shared/split_engine_defines.h"
@@ -118,7 +118,7 @@ Future<BuiltInMaterialPtr> SplitEngineMaterialFactory::HandleCreateRequest(
           *request
                .data_as<android_xr::schemas::BuiltInMaterialTextureExternal>());
     case android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialGsplatSpec:
-      return BuiltInGSplatMaterial::Create(
+      return GsplatMaterialDeserializer::Create(
           view, bridge_id,
           *request.data_as<android_xr::schemas::BuiltInMaterialGsplatSpec>());
     case android_xr::schemas::BuiltInMaterialSpec::

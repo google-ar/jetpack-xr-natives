@@ -33,9 +33,6 @@ android_library(
         "MaterialCompilerService.java",
     ],
     exports_manifest = 1,
-    javacopts = [
-        "-Xep:AndroidJdkLibsChecker:OFF",
-    ],
     manifest = "AndroidManifest.xml",
     deps = [
         ":material_compiler_aidl",

@@ -96,7 +96,7 @@ ipc::MessagePipe::OnMessageResult MaterialCompilerService::OnMessage(
 
   auto verifier = flatbuffers::Verifier(message_buf, size);
   if (!verifier.VerifyBuffer<schemas::Request>()) {
-    SendErrorResponse("Failed to validate request flatbuffer");
+    IMP_LOG(imp::ERROR) << "Failed to validate request flatbuffer.";
     // We will keep the pipe alive, basically ignoring the invalid request.
     return ipc::MessagePipe::OnMessageResult::kKeepAlive;
   }
@@ -105,7 +105,7 @@ ipc::MessagePipe::OnMessageResult MaterialCompilerService::OnMessage(
       flatbuffers::GetRoot<schemas::Request>(message_buf);
   // In theory this can't be null if it passes the verifier block above.
   if (request == nullptr) {
-    SendErrorResponse("Request is null");
+    IMP_LOG(imp::ERROR) << "Request is null.";
     return ipc::MessagePipe::OnMessageResult::kKeepAlive;
   }
 
@@ -116,10 +116,13 @@ ipc::MessagePipe::OnMessageResult MaterialCompilerService::OnMessage(
   switch (request->request_type()) {
     case schemas::RequestType::CompileRequest:
       status =
-          HandleCompileRequest(request->request_as<schemas::CompileRequest>());
+          HandleCompileRequest(request->operation_id(),
+                               request->request_as<schemas::CompileRequest>());
       break;
     case schemas::RequestType::CloseRequest:
-      Close();
+      // This will close the pipe on the correct thread, thus there no need to
+      // explicitly call `Close()` here. Actually we shouldn't, as it will close
+      // the pipe on the worker thread.
       result = ipc::MessagePipe::OnMessageResult::kInitiateClose;
       break;
     default:
@@ -128,14 +131,17 @@ ipc::MessagePipe::OnMessageResult MaterialCompilerService::OnMessage(
   }
 
   if (!status.ok()) {
-    SendErrorResponse(status.message());
+    SendErrorResponse(request->operation_id(), status.message());
   }
 
   return result;
 }
 
 absl::Status MaterialCompilerService::HandleCompileRequest(
-    const schemas::CompileRequest* request) {
+    uint64_t operation_id, const schemas::CompileRequest* request) {
+  if (operation_id == 0) {
+    return absl::InvalidArgumentError("Operation id must be greater than 0");
+  }
   if (request == nullptr) {
     return absl::InvalidArgumentError("CompileRequest is null");
   }
@@ -152,7 +158,7 @@ absl::Status MaterialCompilerService::HandleCompileRequest(
                        compiled_shader.size()));
   flatbuffers::Offset<schemas::Response> response_offset =
       schemas::CreateResponse(builder, schemas::ResponseType::CompileResponse,
-                              compile_response.Union());
+                              compile_response.Union(), operation_id);
   builder.Finish(response_offset);
 
   return SendResponse(builder);
@@ -226,14 +232,14 @@ absl::Status MaterialCompilerService::SendResponse(
 }
 
 void MaterialCompilerService::SendErrorResponse(
-    absl::string_view error_message) {
+    uint64_t operation_id, absl::string_view error_message) {
   flatbuffers::FlatBufferBuilder builder;
   flatbuffers::Offset<schemas::ErrorResponse> error_response =
       schemas::CreateErrorResponse(builder,
                                    builder.CreateString(error_message));
   flatbuffers::Offset<schemas::Response> response_offset =
       schemas::CreateResponse(builder, schemas::ResponseType::ErrorResponse,
-                              error_response.Union());
+                              error_response.Union(), operation_id);
   builder.Finish(response_offset);
 
   if (absl::Status status = SendResponse(builder); !status.ok()) {

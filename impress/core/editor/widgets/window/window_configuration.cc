@@ -85,4 +85,16 @@ void WindowConfiguration::SetHideAllWindows(bool hide_all) {
   hide_all_ = hide_all;
 }
 
+void WindowConfiguration::SaveLayoutToIniFile() {
+  should_save_layout_to_ini_file_ = true;
+}
+
+bool WindowConfiguration::ShouldSaveLayoutToIniFile() const {
+  return should_save_layout_to_ini_file_;
+}
+
+void WindowConfiguration::NotifyLayoutSaved() {
+  should_save_layout_to_ini_file_ = false;
+}
+
 }  // namespace imp::editor

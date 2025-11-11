@@ -67,8 +67,8 @@ cc_binary(
     ],
     linkshared = 1,
     deps = JNI_DEPS + [
-        "@third_party//OpenXR_KHR:openxr_loader",
         "//perception_library:perception_library_jni",
+        "@third_party//OpenXR_KHR:openxr_loader",
     ],
 )
 
@@ -104,13 +104,13 @@ cc_library(
     deps = [
         ":openxr_manager_clock",
         ":openxr_manager_utils",
-        "@third_party//OpenXR_KHR:openxr_headers_androidxr",  # build_cleaner: keep
         "@abseil-cpp//absl/base:core_headers",
         "@abseil-cpp//absl/base:no_destructor",
         "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/numeric:int128",
         "@abseil-cpp//absl/synchronization",
+        "@third_party//OpenXR_KHR:openxr_headers_androidxr",  # build_cleaner: keep
     ],
     alwayslink = 1,
 )
@@ -129,10 +129,10 @@ cc_library(
     ],
     defines = DEFINES,
     deps = [
-        "@third_party//OpenXR_KHR:openxr_headers_androidxr",
         "@abseil-cpp//absl/numeric:int128",
         "@abseil-cpp//absl/strings:str_format",
         "//common:jni_utils",
+        "@third_party//OpenXR_KHR:openxr_headers_androidxr",
     ],
     alwayslink = 1,
 )

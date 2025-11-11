@@ -14,19 +14,13 @@
 
 #include "core/material_library/flatbuffer_utils.h"
 
-#include <cstddef>
-
 #include "filament/filament/include/filament/TextureSampler.h"
+#include "core/common/type_helpers.h"
 #include "core/material_library/schemas/generic_material_generated.h"
 
 namespace imp {
 
 namespace {
-
-template <typename EnumA, typename EnumB>
-constexpr bool DoEnumsMatch(EnumA enum_a, EnumB enum_b) {
-  return static_cast<size_t>(enum_a) == static_cast<size_t>(enum_b);
-}
 
 // Verify impress::schemas::MinFilter and filament::TextureSampler::MinFilter
 // enums match.
