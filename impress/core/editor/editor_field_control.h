@@ -31,9 +31,11 @@
 #include "dear_imgui/imgui_internal.h"
 #include "dear_imgui/misc/cpp/imgui_stdlib.h"
 #include "core/common/bit_flag.h"
+#include "core/common/registry.h"
 #include "core/editor/editor_style.h"
 #include "core/editor/layout/editor_control_flags.h"
 #include "core/editor/layout/helpers.h"
+#include "core/editor/selection_controller.h"
 #include "core/editor/ui/drag_and_drop.h"
 #include "core/editor/ui/drag_and_drop_node.h"
 #include "core/geometry/shapes/box.h"
@@ -45,12 +47,14 @@
 #include "core/proto/proto_common.h"
 #include "core/proto/proto_differ.h"
 #include "core/scene_handles/scene_handle_interface.h"
+#include "core/view/base_view.h"
 
 namespace imp {
 
 // Forward declare NodeSceneHandle to avoid a circular dependency.
 // TODO: Add support for GltfNodeSceneHandle in the editor.
 class NodeSceneHandle;
+class BaseView;
 template <typename T>
 class ComponentSceneHandle;
 
@@ -93,7 +97,8 @@ class EditorFieldControl {
   static absl::StatusOr<bool> ShowControl(
       absl::string_view name, ControlT& control, FieldT* val, FieldT* base,
       editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
     return absl::FailedPreconditionError(absl::StrFormat(
         "Cannot use editor control type %s with field of type %s",
         type_traits::kTypeName<ControlT>, type_traits::kTypeName<FieldT>));
@@ -217,18 +222,13 @@ class EditorFieldControl {
     return result;
   }
 
-  // Called just after editing an element within a component state to handle if
-  // the element matches the base value.
-  //
-  // Reverts back to the normal UI style if needed, and shows a popup menu to
-  // revert the element to the base value.
-  //
   // Returns true if val was edited
   template <typename T>
   static bool EndEditingElement(
       EditingElementMode mode, T* val, T* base,
       absl::string_view revert_to_base_extra_label = "",
-      bool use_val_ptr_in_revert_to_base_label = true) {
+      bool use_val_ptr_in_revert_to_base_label = true,
+      BaseView* view = nullptr) {
     if (mode == EditingElementMode::kMatchesBase) {
       editor::PopBaseIsfElementStyle();
     } else if (base) {
@@ -244,7 +244,8 @@ class EditorFieldControl {
       ImGuiDataType data_type, absl::string_view name, ScalarT* val,
       ScalarT* base,
       editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
     if (!CheckBit(editor_control_flags,
                   editor::EditorControlFlags::kIsEditable)) {
       std::string type_specifier;
@@ -274,7 +275,7 @@ class EditorFieldControl {
         ImGui::InputScalar(label.c_str(), data_type, val, nullptr, nullptr,
                            nullptr, ImGuiInputTextFlags_CharsScientific);
 
-    result |= EndEditingElement(mode, val, base);
+    result |= EndEditingElement(mode, val, base, "", true, view);
 
     return result;
   }
@@ -284,7 +285,8 @@ class EditorFieldControl {
   static bool ShowDefaultVectorControl(
       absl::string_view name, VecT* val, VecT* base,
       editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
     if (!CheckBit(editor_control_flags,
                   editor::EditorControlFlags::kIsEditable)) {
       std::string text = "(";
@@ -323,7 +325,8 @@ class EditorFieldControl {
       result |= ImGui::InputFloat("", val_element);
       ImGui::PopItemWidth();
 
-      result |= EndEditingElement(mode, val_element, base_element);
+      result |=
+          EndEditingElement(mode, val_element, base_element, "", true, view);
 
       ImGui::PopID();
 
@@ -350,7 +353,8 @@ class EditorFieldControl {
       absl::string_view name, EditorControlDisabled& control, FieldT* val,
       FieldT* base,
       editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
     return false;
   }
 
@@ -359,7 +363,8 @@ class EditorFieldControl {
       absl::string_view name, EditorControlSliderFloat& control, float* val,
       float* base,
       editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
     if (!CheckBit(editor_control_flags,
                   editor::EditorControlFlags::kIsEditable)) {
       if (CheckBit(editor_control_flags,
@@ -382,7 +387,7 @@ class EditorFieldControl {
         control.logarithmic ? ImGuiSliderFlags_Logarithmic
                             : ImGuiSliderFlags_None);
 
-    result |= EndEditingElement(mode, val, base);
+    result |= EndEditingElement(mode, val, base, "", true, view);
 
     return result;
   }
@@ -392,7 +397,8 @@ class EditorFieldControl {
       absl::string_view name, EditorControlSliderInt& control, int32_t* val,
       int32_t* base,
       editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
     if (!CheckBit(editor_control_flags,
                   editor::EditorControlFlags::kIsEditable)) {
       if (CheckBit(editor_control_flags,
@@ -412,7 +418,7 @@ class EditorFieldControl {
             .c_str(),
         val, control.min, control.max);
 
-    result |= EndEditingElement(mode, val, base);
+    result |= EndEditingElement(mode, val, base, "", true, view);
 
     return result;
   }
@@ -422,7 +428,8 @@ class EditorFieldControl {
       absl::string_view name, EditorControlColor3& control, float3* val,
       float3* base,
       editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
     if (!CheckBit(editor_control_flags,
                   editor::EditorControlFlags::kIsEditable)) {
       if (CheckBit(editor_control_flags,
@@ -440,7 +447,7 @@ class EditorFieldControl {
         SetBitFromBool(vector_control_flags,
                        editor::EditorControlFlags::kDisplayLabel, false));
     bool result =
-        ShowDefaultVectorControl(name, val, base, vector_control_flags);
+        ShowDefaultVectorControl(name, val, base, vector_control_flags, view);
 
     EditingElementMode mode =
         BeginEditingElement(val, base, editor_control_flags);
@@ -452,7 +459,7 @@ class EditorFieldControl {
         ImGuiColorEditFlags_Float | ImGuiColorEditFlags_NoOptions |
             ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_PickerHueBar);
 
-    result |= EndEditingElement(mode, val, base);
+    result |= EndEditingElement(mode, val, base, "", true, view);
 
     return result;
   }
@@ -462,7 +469,8 @@ class EditorFieldControl {
       absl::string_view name, EditorControlColor4& control, float4* val,
       float4* base,
       editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
     if (!CheckBit(editor_control_flags,
                   editor::EditorControlFlags::kIsEditable)) {
       if (CheckBit(editor_control_flags,
@@ -480,7 +488,7 @@ class EditorFieldControl {
         SetBitFromBool(vector_control_flags,
                        editor::EditorControlFlags::kDisplayLabel, false));
     bool result =
-        ShowDefaultVectorControl(name, val, base, vector_control_flags);
+        ShowDefaultVectorControl(name, val, base, vector_control_flags, view);
 
     EditingElementMode mode =
         BeginEditingElement(val, base, editor_control_flags);
@@ -495,7 +503,7 @@ class EditorFieldControl {
             ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_PickerHueBar |
             ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreview);
 
-    result |= EndEditingElement(mode, val, base);
+    result |= EndEditingElement(mode, val, base, "", true, view);
 
     return result;
   }
@@ -504,7 +512,8 @@ class EditorFieldControl {
   static bool ShowDefaultControl(
       absl::string_view name, void* val, void* base,
       editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
     return false;
   }
 
@@ -512,40 +521,47 @@ class EditorFieldControl {
   static bool ShowDefaultControl(
       absl::string_view name, float2* val, float2* base,
       editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
-    return ShowDefaultVectorControl(name, val, base, editor_control_flags);
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
+    return ShowDefaultVectorControl(name, val, base, editor_control_flags,
+                                    view);
   }
 
   // Default control for float3 fields.
   static bool ShowDefaultControl(
       absl::string_view name, float3* val, float3* base,
       editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
-    return ShowDefaultVectorControl(name, val, base, editor_control_flags);
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
+    return ShowDefaultVectorControl(name, val, base, editor_control_flags,
+                                    view);
   }
 
   // Default control for float4 fields.
   static bool ShowDefaultControl(
       absl::string_view name, float4* val, float4* base,
       editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
-    return ShowDefaultVectorControl(name, val, base, editor_control_flags);
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
+    return ShowDefaultVectorControl(name, val, base, editor_control_flags,
+                                    view);
   }
 
   // Default control for box fields.
   static bool ShowDefaultControl(
       absl::string_view name, Box* val, Box* base,
       editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
     ImGui::Text("%s", std::string(name).c_str());
     ImGui::Indent();
 
     bool result = ShowDefaultControl("center", &val->center,
                                      base ? &base->center : nullptr,
-                                     editor_control_flags);
+                                     editor_control_flags, view);
     result |= ShowDefaultControl("half extent", &val->halfExtent,
                                  base ? &base->halfExtent : nullptr,
-                                 editor_control_flags);
+                                 editor_control_flags, view);
 
     ImGui::Unindent();
 
@@ -556,43 +572,48 @@ class EditorFieldControl {
   static bool ShowDefaultControl(
       absl::string_view name, uint32_t* val, uint32_t* base,
       editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
     return ShowDefaultControlForScalar(ImGuiDataType_U32, name, val, base,
-                                       editor_control_flags);
+                                       editor_control_flags, view);
   }
 
   // Default control for int32 fields.
   static bool ShowDefaultControl(
       absl::string_view name, int32_t* val, int32_t* base,
       editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
     return ShowDefaultControlForScalar(ImGuiDataType_S32, name, val, base,
-                                       editor_control_flags);
+                                       editor_control_flags, view);
   }
 
   // Default control for float fields.
   static bool ShowDefaultControl(
       absl::string_view name, float* val, float* base,
       editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
     return ShowDefaultControlForScalar(ImGuiDataType_Float, name, val, base,
-                                       editor_control_flags);
+                                       editor_control_flags, view);
   }
 
   // Default control for double fields.
   static bool ShowDefaultControl(
       absl::string_view name, double* val, double* base,
       editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
     return ShowDefaultControlForScalar(ImGuiDataType_Double, name, val, base,
-                                       editor_control_flags);
+                                       editor_control_flags, view);
   }
 
   // Default control for string fields.
   static bool ShowDefaultControl(
       absl::string_view name, std::string* val, std::string* base,
       editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
     if (!CheckBit(editor_control_flags,
                   editor::EditorControlFlags::kIsEditable)) {
       if (CheckBit(editor_control_flags,
@@ -628,7 +649,7 @@ class EditorFieldControl {
       ImGui::EndDragDropTarget();
     }
 
-    result |= EndEditingElement(mode, val, base);
+    result |= EndEditingElement(mode, val, base, "", true, view);
 
     return result;
   }
@@ -637,7 +658,8 @@ class EditorFieldControl {
   static bool ShowDefaultControl(
       absl::string_view name, bool* val, bool* base,
       editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
     if (!CheckBit(editor_control_flags,
                   editor::EditorControlFlags::kIsEditable)) {
       if (CheckBit(editor_control_flags,
@@ -657,7 +679,7 @@ class EditorFieldControl {
         editor::GenerateUniqueImGuiLabel(name, val, editor_control_flags);
     bool result = ImGui::Checkbox(label.c_str(), val);
 
-    result |= EndEditingElement(mode, val, base);
+    result |= EndEditingElement(mode, val, base, "", true, view);
 
     return result;
   }
@@ -665,7 +687,8 @@ class EditorFieldControl {
   template <typename E>
   static bool ShowEnumControl(absl::string_view name, E* val, E* base,
                               editor::EditorControlFlags editor_control_flags =
-                                  editor::EditorControlFlags::kDefault) {
+                                  editor::EditorControlFlags::kDefault,
+                              BaseView* view = nullptr) {
     if (!CheckBit(editor_control_flags,
                   editor::EditorControlFlags::kIsEditable)) {
       for (E e : proto::EnumMetaData<E>::kValues) {
@@ -710,7 +733,7 @@ class EditorFieldControl {
       ImGui::EndCombo();
     }
 
-    updated |= EndEditingElement(mode, val, base);
+    updated |= EndEditingElement(mode, val, base, "", true, view);
 
     return updated;
   }
@@ -719,7 +742,8 @@ class EditorFieldControl {
       absl::string_view name, SceneHandleInterface* val,
       SceneHandleInterface* base,
       editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
     bool updated = false;
 
     EditingElementMode mode = EditingElementMode::kNormal;
@@ -748,7 +772,14 @@ class EditorFieldControl {
     text_size.y += padding.y * 2.0f;
 
     ImVec2 cursor = ImGui::GetCursorPos();
-    ImGui::Dummy(text_size);
+    ImGui::InvisibleButton("##jump_to_node_button", text_size);
+    if (ImGui::IsItemHovered() &&
+        ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+      view->GetRegistry()
+          .Get<editor::SelectionController>()
+          ->get()
+          .TrySelectNode(scene_node);
+    }
     ImVec2 final_cursor = ImGui::GetCursorPos();
 
     ImVec2 min = ImGui::GetItemRectMin();

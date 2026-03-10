@@ -59,7 +59,8 @@ class CanvasSource {
       Context context, bool use_hardware_rendering = true,
       bool force_auto_method_rendering = false,
       int glyph_cache_size_bytes =
-          PlatformCanvasSource::kDefaultGlyphCacheSizeBytes);
+          PlatformCanvasSource::kDefaultGlyphCacheSizeBytes,
+      bool force_individual_glyph_source_instances = false);
 
   // Note: This is exposed for testing. Real clients should use
   // CanvasSource::Create to create a CanvasSource.

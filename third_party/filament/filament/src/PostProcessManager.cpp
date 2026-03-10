@@ -30,6 +30,7 @@
 #include "materials/colorGrading/colorGrading.h"
 #include "materials/dof/dof.h"
 #include "materials/flare/flare.h"
+#include "materials/fog/fog.h"
 #include "materials/fsr/fsr.h"
 #include "materials/sgsr/sgsr.h"
 #include "materials/ssao/ssao.h"
@@ -65,6 +66,7 @@
 
 #include <private/filament/EngineEnums.h>
 #include <private/filament/UibStructs.h>
+#include <private/filament/Variant.h>
 
 #include <backend/DriverEnums.h>
 #include <backend/DriverApiForward.h>
@@ -126,17 +128,6 @@ constexpr float halton(unsigned int i, unsigned int const b) noexcept {
     return r;
 }
 
-template <typename ValueType>
-void setConstantParameter(FMaterial* const material, std::string_view const name,
-        ValueType value, bool& dirty) noexcept {
-    auto id = material->getSpecializationConstantId(name);
-    if (id.has_value()) {
-        if (material->setConstant(id.value(), value)) {
-            dirty = true;
-        }
-    }
-}
-
 } // anonymous
 
 // ------------------------------------------------------------------------------------------------
@@ -194,12 +185,11 @@ void PostProcessManager::PostProcessMaterial::loadMaterial(FEngine& engine) cons
 
 UTILS_NOINLINE
 FMaterial* PostProcessManager::PostProcessMaterial::getMaterial(FEngine& engine,
-        DriverApi& driver, PostProcessVariant variant) const noexcept {
+        DriverApi& driver, Variant::type_t const variant) const noexcept {
     if (UTILS_UNLIKELY(mSize)) {
         loadMaterial(engine);
     }
-    mMaterial->prepareProgram(driver, Variant{ Variant::type_t(variant) },
-            CompilerPriorityQueue::CRITICAL);
+    mMaterial->prepareProgram(driver, Variant{ variant }, CompilerPriorityQueue::CRITICAL);
     return mMaterial;
 }
 
@@ -327,7 +317,7 @@ void PostProcessManager::init() noexcept {
     mFullScreenQuadVbih = engine.getFullScreenVertexBuffer()->getVertexBufferInfoHandle();
     mPerRenderableDslh = engine.getPerRenderableDescriptorSetLayout().getHandle();
 
-    mDummyPerRenderableDsh = driver.createDescriptorSet(mPerRenderableDslh);
+    mDummyPerRenderableDsh = driver.createDescriptorSet(mPerRenderableDslh, "mDummyPerRenderableDsh");
 
     driver.updateDescriptorSetBuffer(mDummyPerRenderableDsh,
             +PerRenderableBindingPoints::OBJECT_UNIFORMS, engine.getDummyUniformBuffer(), 0,
@@ -368,6 +358,9 @@ void PostProcessManager::init() noexcept {
 
     UTILS_NOUNROLL
     for (auto const& info: sMaterialListFeatureLevel0) {
+        registerPostProcessMaterial(info.name, info);
+    }
+    for (auto const& info: getFogMaterialList()) {
         registerPostProcessMaterial(info.name, info);
     }
 
@@ -473,9 +466,9 @@ void PostProcessManager::unbindAllDescriptorSets(DriverApi& driver) noexcept {
 
 UTILS_NOINLINE
 PipelineState PostProcessManager::getPipelineState(
-        FMaterial const* const ma, PostProcessVariant variant) const noexcept {
+        FMaterial const* const ma, Variant::type_t const variant) const noexcept {
     return {
-            .program = ma->getProgram(Variant{ Variant::type_t(variant) }),
+            .program = ma->getProgram(Variant{ variant }),
             .vertexBufferInfo = mFullScreenQuadVbih,
             .pipelineLayout = {
                     .setLayout = {
@@ -1007,13 +1000,12 @@ FrameGraphId<FrameGraphTexture> PostProcessManager::screenSpaceAmbientOcclusion(
                 auto& material = getPostProcessMaterial(materialName);
 
                 FMaterial* ma = material.getMaterial(mEngine, driver);
-                bool dirty = false;
-                setConstantParameter(ma, "useVisibilityBitmasks", options.gtao.useVisibilityBitmasks, dirty);
-                setConstantParameter(ma, "linearThickness", options.gtao.linearThickness, dirty);
-                if (dirty) {
-                   ma->invalidate();
-                   // TODO: call Material::compile(), we can't do that now because it works only
-                   //       with surface materials
+                {
+                    FMaterial::SpecializationConstantsBuilder maConstants =
+                            ma->getSpecializationConstantsBuilder();
+                    maConstants.set("useVisibilityBitmasks", options.gtao.useVisibilityBitmasks);
+                    maConstants.set("linearThickness", options.gtao.linearThickness);
+                    ma->setSpecializationConstants(std::move(maConstants));
                 }
 
                 ma = material.getMaterial(mEngine, driver);
@@ -2625,37 +2617,59 @@ FrameGraphId<FrameGraphTexture> PostProcessManager::customResolveUncompressPass(
 }
 
 
-void PostProcessManager::clearAncillaryBuffersPrepare(DriverApi& driver) noexcept {
+void PostProcessManager::clearAncillaryBuffersPrepare(DriverApi& driver,
+        Variant::type_t variant) noexcept {
     auto const& material = getPostProcessMaterial("clearDepth");
-    auto ma = material.getMaterial(mEngine, driver, PostProcessVariant::OPAQUE);
+    auto ma = material.getMaterial(mEngine, driver, variant);
     auto [mi, fixedIndex] = mMaterialInstanceManager.getFixedMaterialInstance(ma);
     mFixedMaterialInstanceIndex.clearDepth = fixedIndex;
     mi->commit(driver, getUboManager());
 }
 
 void PostProcessManager::clearAncillaryBuffers(DriverApi& driver,
-        TargetBufferFlags attachments) const noexcept {
+        TargetBufferFlags attachments, Variant::type_t variant) const noexcept {
     // in the future we might allow STENCIL as well
     attachments &= TargetBufferFlags::DEPTH;
     if (none(attachments & TargetBufferFlags::DEPTH)) {
         return;
     }
 
-    bindPostProcessDescriptorSet(driver);
     bindPerRenderableDescriptorSet(driver);
 
     auto const& material = getPostProcessMaterial("clearDepth");
-    FMaterial const* const ma = material.getMaterial(mEngine, driver);
+    FMaterial const* const ma = material.getMaterial(mEngine, driver, variant);
 
     // the UBO has been set and committed in clearAncillaryBuffersPrepare()
     FMaterialInstance const* const mi = mMaterialInstanceManager.getMaterialInstance(ma,
             mFixedMaterialInstanceIndex.clearDepth);
-
     mi->use(driver);
 
-    auto pipeline = getPipelineState(ma);
+    auto pipeline = getPipelineState(ma, variant);
     pipeline.rasterState.depthFunc = RasterState::DepthFunc::A;
 
+    driver.scissor(mi->getScissor());
+    driver.draw(pipeline, mFullScreenQuadRph, 0, 3, 1);
+}
+
+void PostProcessManager::fogPrepare(DriverApi& driver) noexcept {
+    // ensures the material is loaded and material instance created
+    auto const& material = getPostProcessMaterial("fog");
+    FMaterial const* const ma = material.getMaterial(mEngine, driver, PostProcessVariant::OPAQUE);
+    FMaterialInstance const* mi = ma->getDefaultInstance();
+    mi->commit(driver, getUboManager());
+}
+
+void PostProcessManager::fog(DriverApi& driver) noexcept {
+    // note the per-view descriptor set is assumed to be already set
+
+    bindPerRenderableDescriptorSet(driver);
+
+    auto const& material = getPostProcessMaterial("fog");
+    FMaterial const* const ma = material.getMaterial(mEngine, driver);
+    FMaterialInstance const* mi = ma->getDefaultInstance();
+    mi->use(driver);
+
+    auto pipeline = getPipelineState(ma, Variant::NO_VARIANT);
     driver.scissor(mi->getScissor());
     driver.draw(pipeline, mFullScreenQuadRph, 0, 3, 1);
 }
@@ -2913,23 +2927,20 @@ void PostProcessManager::configureTemporalAntiAliasingMaterial(backend::DriverAp
         TemporalAntiAliasingOptions const& taaOptions) noexcept {
 
     FMaterial* const ma = getPostProcessMaterial("taa").getMaterial(mEngine, driver);
-    bool dirty = false;
+    FMaterial::SpecializationConstantsBuilder maConstants = ma->getSpecializationConstantsBuilder();
 
-    setConstantParameter(ma, "upscaling", taaOptions.upscaling > 1.0f, dirty);
-    setConstantParameter(ma, "historyReprojection", taaOptions.historyReprojection, dirty);
-    setConstantParameter(ma, "filterHistory", taaOptions.filterHistory, dirty);
-    setConstantParameter(ma, "filterInput", taaOptions.filterInput, dirty);
-    setConstantParameter(ma, "useYCoCg", taaOptions.useYCoCg, dirty);
-    setConstantParameter(ma, "hdr", taaOptions.hdr, dirty);
-    setConstantParameter(ma, "preventFlickering", taaOptions.preventFlickering, dirty);
-    setConstantParameter(ma, "boxType", int32_t(taaOptions.boxType), dirty);
-    setConstantParameter(ma, "boxClipping", int32_t(taaOptions.boxClipping), dirty);
-    setConstantParameter(ma, "varianceGamma", taaOptions.varianceGamma, dirty);
-    if (dirty) {
-        ma->invalidate();
-        // TODO: call Material::compile(), we can't do that now because it works only
-        //       with surface materials
-    }
+    maConstants.set("upscaling", taaOptions.upscaling > 1.0f);
+    maConstants.set("historyReprojection", taaOptions.historyReprojection);
+    maConstants.set("filterHistory", taaOptions.filterHistory);
+    maConstants.set("filterInput", taaOptions.filterInput);
+    maConstants.set("useYCoCg", taaOptions.useYCoCg);
+    maConstants.set("hdr", taaOptions.hdr);
+    maConstants.set("preventFlickering", taaOptions.preventFlickering);
+    maConstants.set("boxType", int32_t(taaOptions.boxType));
+    maConstants.set("boxClipping", int32_t(taaOptions.boxClipping));
+    maConstants.set("varianceGamma", taaOptions.varianceGamma);
+
+    ma->setSpecializationConstants(std::move(maConstants));
 }
 
 FMaterialInstance* PostProcessManager::configureColorGradingMaterial(backend::DriverApi& driver,
@@ -2937,15 +2948,12 @@ FMaterialInstance* PostProcessManager::configureColorGradingMaterial(backend::Dr
         ColorGradingConfig const& colorGradingConfig, VignetteOptions const& vignetteOptions,
         uint32_t const width, uint32_t const height) noexcept {
     FMaterial* ma = material.getMaterial(mEngine, driver);
-    bool dirty = false;
-
-    setConstantParameter(ma, "isOneDimensional", colorGrading->isOneDimensional(), dirty);
-    setConstantParameter(ma, "isLDR", colorGrading->isLDR(), dirty);
-
-    if (dirty) {
-        ma->invalidate();
-        // TODO: call Material::compile(), we can't do that now because it works only
-        //       with surface materials
+    {
+        FMaterial::SpecializationConstantsBuilder maConstants =
+                ma->getSpecializationConstantsBuilder();
+        maConstants.set("isOneDimensional", colorGrading->isOneDimensional());
+        maConstants.set("isLDR", colorGrading->isLDR());
+        ma->setSpecializationConstants(std::move(maConstants));
     }
 
     PostProcessVariant const variant = colorGradingConfig.translucent

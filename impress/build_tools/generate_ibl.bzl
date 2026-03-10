@@ -81,6 +81,7 @@ def _generate_ibl_impl(ctx):
     ctx.actions.run_shell(
         inputs = [ctx.file.source_image],
         outputs = [ctx.outputs.output_path],
+        mnemonic = "ImpressIblGen",
         command = command,
         tools = [ctx.executable.cmgen, ctx.executable.zip],
     )

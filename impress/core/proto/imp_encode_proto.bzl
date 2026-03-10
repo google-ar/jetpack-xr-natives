@@ -21,6 +21,8 @@ load("@mediapipe//mediapipe/framework:encode_binary_proto.bzl", "encode_binary_p
 
 IMP_DEFAULT_PROTOS = [
     str(Label("@com_google_impress//core/view/framework:framework_proto")),
+    str(Label("@com_google_impress//core/lighting:light_state_proto")),
+    str(Label("@com_google_impress//core/camera:camera_state_proto")),
     str(Label("@com_google_impress//core/ncsb:ncsb_proto")),
     str(Label("@com_google_impress//core/scene_handles:scene_handles_proto")),
 ]

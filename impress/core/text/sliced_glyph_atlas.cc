@@ -52,6 +52,9 @@
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/render/texture.h"
 #include "core/text/glyph_emulator.h"
+#include "core/text/sliced_glyph_atlas_helpers.h"
+#include "core/text/sliced_glyph_texture_manager.h"
+#include "core/text/text_glyphs.h"
 #include "core/text/text_metrics.proto.h"
 #include "core/view/base_view.h"
 #include "core/view/utils/device.h"
@@ -114,7 +117,9 @@ SlicedGlyphAtlas::SlicedGlyphAtlas(BaseView& view, Config config)
           view,
           [&view, &config]() -> std::unique_ptr<AsyncCanvasSource> {
             return AsyncCanvasSourceFactory::Create(
-                view.GetContext(), config.use_hardware_rendering);
+                view.GetContext(), config.use_hardware_rendering,
+                /*force_auto_method_rendering=*/false,
+                config.force_individual_glyph_source_instances);
           },
           config) {}
 
@@ -137,9 +142,16 @@ SlicedGlyphAtlas::SlicedGlyphAtlas(
   slices_ = TypedSpan<Slice>(slice_storage_, slice_count);
   pending_renders_.Resize(slice_count);
 
+  shared_canvas_source_ = canvas_source_factory_fn();
+
+  // Create the composite texture that slices will blit into.
+  composite_texture_ = TextureManager::CreateCompositeTexture(
+      view, atlas_texture_size_, atlas_grid_size_);
+
   // This could be absent if there is only one slice, but on Android would
   // require conditionally swapping materials based on the number of slices.
-  TextureManager::CreateAsync(view, atlas_texture_size_, atlas_grid_size_)
+  TextureManager::CreateAsync(view, atlas_texture_size_, atlas_grid_size_,
+                              composite_texture_.get())
       .Then([this](std::unique_ptr<TextureManager> texture_manager) {
         texture_manager_ = std::move(texture_manager);
         pending_renders_.ForEachBit<SliceId>([this](SliceId slice) {
@@ -232,6 +244,31 @@ void SlicedGlyphAtlas::RenderBlits(filament::Renderer& renderer) {
   if (!texture_manager_) {
     return;
   }
+
+#if IMP_PLATFORM(ANDROID_X86_64) || IMP_PLATFORM(ANDROID_X86_32)
+  // A very specific fix for running on Android emulators.
+  //
+  // The short version is the emulator does not deliver external textures
+  // updates reliably (It may contain an old version of the texture, even after
+  // updateTexImage() has been called). This is an annoyance for the old atlas
+  // (which may return futures a frame or two early before the glyphs are
+  // technically visible) but catastrophic for the sliced atlas (which only
+  // considers the textures when blitting to the composite texture used in
+  // rendering).
+  //
+  // The workaround is that once a surface as been blitted, we continue to blit
+  // it every frame.  This causes the new atlas to render the same way the old
+  // atlas did.
+  for (auto slice : slices_.Ids()) {
+    if (slices_[slice].texture_ != nullptr && !pending_renders_.Get(slice)) {
+      // Has a texture; ensure we won't signal early.
+      if (slices_[slice].texture_blit_futures_.empty()) {
+        pending_renders_.Set(slice, true);
+      }
+    }
+  }
+#endif  // IMP_PLATFORM(ANDROID_X86_64) || IMP_PLATFORM(ANDROID_X86_32)
+
   size_t rendered_count = 0;
   filament::Renderer::ClearOptions previous_clear_options;
   pending_renders_.ForEachBit<SliceId>([&rendered_count, &renderer,
@@ -270,7 +307,10 @@ SlicedGlyphAtlas::~SlicedGlyphAtlas() {
   }
   free(slice_storage_);
 
+  shared_canvas_source_.reset();
+
   texture_manager_.reset();
+  composite_texture_.reset();
 }
 
 void SlicedGlyphAtlas::EndFrame() {
@@ -308,7 +348,7 @@ Future<absl::Status> SlicedGlyphAtlas::PrepareFont(absl::string_view text,
     return Future<absl::Status>(canvas_options.status());
   }
   return glyph_emulator_.PrepareFont(text, *canvas_options,
-                                     *slices_.front().canvas_source_);
+                                     *shared_canvas_source_);
 }
 
 Future<std::vector<ScopedCanvas::GlyphGroup>>
@@ -321,8 +361,8 @@ SlicedGlyphAtlas::GetCombinedCharacterGroups(absl::string_view text,
     return Future<std::vector<ScopedCanvas::GlyphGroup>>(
         canvas_options.status());
   }
-  return glyph_emulator_.GetCombinedCharacterGroups(
-      text, *canvas_options, *slices_.front().canvas_source_);
+  return glyph_emulator_.GetCombinedCharacterGroups(text, *canvas_options,
+                                                    *shared_canvas_source_);
 }
 
 Future<TextMetrics> SlicedGlyphAtlas::GetTextMetrics(
@@ -334,7 +374,7 @@ Future<TextMetrics> SlicedGlyphAtlas::GetTextMetrics(
     return Future<TextMetrics>(canvas_options.status());
   }
   return glyph_emulator_.GetTextMetrics(text, *canvas_options,
-                                        *slices_.front().canvas_source_);
+                                        *shared_canvas_source_);
 }
 
 Future<FontInfo> SlicedGlyphAtlas::GetFontInfo(const TextOptions& options) {
@@ -343,8 +383,39 @@ Future<FontInfo> SlicedGlyphAtlas::GetFontInfo(const TextOptions& options) {
   if (!canvas_options.ok()) {
     return Future<FontInfo>(canvas_options.status());
   }
-  return glyph_emulator_.GetFontInfo(*canvas_options,
-                                     *slices_.front().canvas_source_);
+  return glyph_emulator_.GetFontInfo(*canvas_options, *shared_canvas_source_);
+}
+
+Future<TextGlyphs> SlicedGlyphAtlas::GetTextGlyphs(
+    absl::string_view text, const GlyphEmulator::TextOptions& options) {
+  return GetGlyphs(text, options)
+      .Then([this](std::vector<SlicedGlyphAtlas::Glyph> glyphs) {
+        // The sign bit of the v texture coordinate is used by materials to
+        // detect emoji.
+        constexpr float4 kEmojiScale = float4(1.f, -1.f, 1.f, -1.f);
+        TextGlyphs text_glyphs;
+        text_glyphs.Reserve(glyphs.size());
+        for (const auto& glyph : glyphs) {
+          float2 slice_offset, slice_scale;
+          GetSliceOffsetAndScale(glyph.slice, &slice_offset, &slice_scale);
+          const RefCounter::Ref& glyph_ref = glyph.glyph_ref;
+          float4 atlas_origin_and_size =
+              float4(glyph.atlas_origin, glyph.atlas_size);
+          float4 actual_origin_and_size =
+              float4(glyph.actual_origin, glyph.actual_size);
+          float4 uv_origin_and_size =
+              float4(slice_offset + glyph.uv_top_left * slice_scale,
+                     glyph.uv_size * slice_scale);
+          float advance_width = glyph.advance_width;
+
+          if (glyph.is_emoji) uv_origin_and_size *= kEmojiScale;
+
+          text_glyphs.PushBack(glyph_ref, atlas_origin_and_size,
+                               actual_origin_and_size, uv_origin_and_size,
+                               advance_width);
+        }
+        return text_glyphs;
+      });
 }
 
 Future<std::vector<SlicedGlyphAtlas::Glyph>> SlicedGlyphAtlas::GetGlyphs(
@@ -377,8 +448,7 @@ Future<std::vector<SlicedGlyphAtlas::Glyph>> SlicedGlyphAtlas::GetGlyphs(
             }
 
             return glyph_emulator_
-                .GetGlyphs(text, *canvas_options,
-                           *slices_.front().canvas_source_)
+                .GetGlyphs(text, *canvas_options, *shared_canvas_source_)
                 .Then([this, canvas_options = *canvas_options,
                        super_sample_info](
                           std::unique_ptr<std::vector<GlyphEmulator::Glyph>>
@@ -577,7 +647,7 @@ SlicedGlyphAtlas::GetOrAddGlyphInfo(GlyphEmulator::Glyph& glyph,
       static_cast<int>(std::ceil(glyph.metrics.font_size_y())) + kPadding};
 
   std::optional<SlicedAtlasEntry> atlas_entry =
-      TryAddAtlasEntry(atlas_entry_size, canvas_options_info);
+      TryAddAtlasEntry(atlas_entry_size, canvas_options_info, glyph_key);
 
   // TODO: Add support for automatically expanding to multiple
   // textures if we run out of space.
@@ -610,7 +680,8 @@ SlicedGlyphAtlas::GetOrAddGlyphInfo(GlyphEmulator::Glyph& glyph,
 
 std::optional<SlicedGlyphAtlas::SlicedAtlasEntry>
 SlicedGlyphAtlas::TryAddAtlasEntry(uint2 atlas_entry_size,
-                                   CanvasOptionsInfo& info) {
+                                   CanvasOptionsInfo& info,
+                                   const CanvasOptionsGlyphKey& glyph_key) {
   std::optional<SlicedGlyphAtlas::SlicedAtlasEntry> result = std::nullopt;
 
   // Prefer slices that already contain these options.  This groups glyphs with
@@ -658,13 +729,18 @@ SlicedGlyphAtlas::TryAddAtlasEntry(uint2 atlas_entry_size,
   if (++addition_cursor_ == end_slice) addition_cursor_ = begin_slice;
 
   if (result.has_value()) {
-    info.active_slices.Set(result->slice);
-    ++info.glyph_count[result->slice];
+    if (!(info.glyph_count[result->slice]++))
+      info.active_slices.Set(result->slice);
     return result;
   }
 
   // The atlas was full. Clear unused glyphs and try again.
   ClearUnusedGlyphs();
+
+  // Clearing glyphs can invalidate the info handle; refresh the reference.
+  info = GetCanvasOptionsInfo(
+      CanvasOptionsKey{.canvas_options = glyph_key.canvas_options,
+                       .requires_color_key = glyph_key.requires_color_key});
 
   for (auto& slice : slices_) {
     absl::MutexLock lock(slice.atlas_packer_mutex_);
@@ -674,12 +750,13 @@ SlicedGlyphAtlas::TryAddAtlasEntry(uint2 atlas_entry_size,
     if (atlas_entry) {
       result.emplace(SlicedAtlasEntry{.slice = slices_.IdOf(slice),
                                       .entry = std::move(*atlas_entry)});
+      break;
     }
   }
 
   if (result.has_value()) {
-    info.active_slices.Set(result->slice);
-    ++info.glyph_count[result->slice];
+    if (!(info.glyph_count[result->slice]++))
+      info.active_slices.Set(result->slice);
     return result;
   } else {
     IMP_LOG(imp::ERROR) << "Unable to find space in Glyph Atlas for glyph with size x="
@@ -756,7 +833,7 @@ imp::Texture* SlicedGlyphAtlas::GetTexture() {
   if (atlas_grid_size_.x == 1 && atlas_grid_size_.y == 1) {
     return slices_.front().texture_;
   } else {
-    return texture_manager_->GetCompositeTexture();
+    return composite_texture_.get();
   }
 }
 
@@ -792,9 +869,8 @@ GlyphEmulator& SlicedGlyphAtlas::GetGlyphEmulator() { return glyph_emulator_; }
 
 void SlicedGlyphAtlas::GetSliceOffsetAndScale(SliceId slice, float2* offset,
                                               float2* scale) const {
-  if (texture_manager_) {
-    texture_manager_->GetSliceOffsetAndScale(slice, offset, scale);
-  }
+  return sliced_glyph_atlas::GetGridSliceOffsetAndScale(atlas_grid_size_, slice,
+                                                        offset, scale);
 }
 
 #if IMP_RUNTIME(DEV)

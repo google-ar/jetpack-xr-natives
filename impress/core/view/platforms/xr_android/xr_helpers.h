@@ -170,8 +170,13 @@ void SetCustomEyeProjectionOnCamera(filament::Camera* camera,
                                     std::vector<XrView>& latest_views);
 
 // Set the position of each eye relative to the local transform of the camera.
+//
+// main_camera and pass_camera can be the same object. main_camera and
+// latest_views are used to calculate the eye matrix/ipd parameters for the
+// camera array. pass_camera is where the eye model matrices will be saved.
 void SetEyeModelMatrixOnCamera(filament::Engine* engine,
-                               filament::Camera* camera,
+                               filament::Camera* main_camera,
+                               filament::Camera* pass_camera,
                                std::vector<XrView>& latest_views);
 
 // Extract Xr specific frame timing and reset counters.

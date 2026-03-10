@@ -36,11 +36,7 @@ JavaFileUtilities::JavaFileUtilities(const Context& context)
 JavaFileUtilities::~JavaFileUtilities() = default;
 
 std::string JavaFileUtilities::GetCacheDirectory() {
-  JNIEnv* env = context_.GetJniEnv();
-  JniUniquePtr<jstring> java_cache_dir =
-      WrapJni(env, static_cast<jstring>(CallObjectMethod(
-                       get_cache_directory_method_, activity_context_)));
-  return GetString(env, java_cache_dir.get());
+  return CallStringMethod(get_cache_directory_method_, activity_context_);
 }
 
 }  // namespace imp

@@ -118,6 +118,21 @@ JNI_METHOD_AOSP(void, nativeSetExpectedSetGltfReformAffordanceEnabled)
       enable_affordance;
 }
 
+JNI_METHOD_AOSP(void, nativeSetExpectedAnimateGltfModelNew)
+(JNIEnv* env, jclass /*clazz*/, jint node_id, jstring animation_name,
+ jboolean loop, jfloat speed, jfloat start_time, jint channel_id) {
+  imp::ModelTestContext& context = imp::ModelTestContext::Get();
+  context.animate_gltf_model.expected_node_id = node_id;
+  context.animate_gltf_model.expected_name =
+      imp::GetString(env, animation_name);
+  context.animate_gltf_model.expected_loop = loop;
+  context.animate_gltf_model.expected_speed = speed;
+  context.animate_gltf_model.expected_start_time = start_time;
+  context.animate_gltf_model.expected_channel_id = channel_id;
+}
+
+// TODO: (broken link) - Remove old animation APIs once all clients are migrated
+// to new animation system.
 JNI_METHOD_AOSP(void, nativeSetExpectedAnimateGltfModel)
 (JNIEnv* env, jclass /*clazz*/, jint node_id, jstring animation_name,
  jboolean loop) {
@@ -140,12 +155,32 @@ JNI_METHOD_AOSP(void, nativeSetAnimateGltfModelFailure)
   context.animate_gltf_model.failure_message = imp::GetString(env, message);
 }
 
+JNI_METHOD_AOSP(void, nativeSetExpectedStopGltfModelAnimationNew)
+(JNIEnv* env, jclass /*clazz*/, jint node_id, jint channel_id) {
+  imp::ModelTestContext& context = imp::ModelTestContext::Get();
+  context.stop_gltf_model_animation.expected_node_id = node_id;
+  context.stop_gltf_model_animation.expected_channel_id = channel_id;
+}
+
+// TODO: (broken link) - Remove old animation APIs once all clients are migrated
+// to new animation system.
 JNI_METHOD_AOSP(void, nativeSetExpectedStopGltfModelAnimation)
 (JNIEnv* env, jclass /*clazz*/, jint node_id) {
   imp::ModelTestContext& context = imp::ModelTestContext::Get();
   context.stop_gltf_model_animation.expected_node_id = node_id;
 }
 
+JNI_METHOD_AOSP(void, nativeSetExpectedToggleGltfModelAnimationNew)
+(JNIEnv* env, jclass /*clazz*/, jint node_id, jboolean toggle,
+ jint channel_id) {
+  imp::ModelTestContext& context = imp::ModelTestContext::Get();
+  context.toggle_gltf_model_animation.expected_node_id = node_id;
+  context.toggle_gltf_model_animation.expected_toggle = toggle;
+  context.toggle_gltf_model_animation.expected_channel_id = channel_id;
+}
+
+// TODO: (broken link) - Remove old animation APIs once all clients are migrated
+// to new animation system.
 JNI_METHOD_AOSP(void, nativeSetExpectedToggleGltfModelAnimation)
 (JNIEnv* env, jclass /*clazz*/, jint node_id, jboolean toggle) {
   imp::ModelTestContext& context = imp::ModelTestContext::Get();
@@ -198,6 +233,19 @@ JNI_METHOD_AOSP(void, nativeSetGetGltfModelAnimationNameSuccess)
       imp::GetString(env, name);
 }
 
+JNI_METHOD_AOSP(void, nativeSetExpectedGetGltfModelAnimationDurationSeconds)
+(JNIEnv* env, jclass /*clazz*/, jint node_id, jint index) {
+  imp::ModelTestContext& context = imp::ModelTestContext::Get();
+  context.get_gltf_model_animation_duration_seconds.expected_node_id = node_id;
+  context.get_gltf_model_animation_duration_seconds.expected_index = index;
+}
+
+JNI_METHOD_AOSP(void, nativeSetGetGltfModelAnimationDurationSecondsSuccess)
+(JNIEnv* env, jclass /*clazz*/, jfloat duration) {
+  imp::ModelTestContext& context = imp::ModelTestContext::Get();
+  context.get_gltf_model_animation_duration_seconds.success_duration = duration;
+}
+
 JNI_METHOD_AOSP(void, nativeSetExpectedGetGltfModelLocalBounds)
 (JNIEnv* env, jclass /*clazz*/, jint node_id) {
   imp::ModelTestContext& context = imp::ModelTestContext::Get();
@@ -212,27 +260,6 @@ JNI_METHOD_AOSP(void, nativeSetGetGltfModelLocalBoundsSuccess)
   env->GetFloatArrayRegion(
       half_extents, 0, 3,
       context.get_gltf_model_local_bounds.success_half_extent);
-}
-
-JNI_METHOD_AOSP(void, nativeSetExpectedSetMaterialOverride)
-(JNIEnv* env, jclass /*clazz*/, jint node_id, jlong material_handle,
- jstring node_name, jint primitive_index) {
-  imp::ModelTestContext& context = imp::ModelTestContext::Get();
-  context.set_material_override.expected_node_id = node_id;
-  context.set_material_override.expected_material_handle = material_handle;
-  context.set_material_override.expected_node_name =
-      imp::GetString(env, node_name);
-  context.set_material_override.expected_primitive_index = primitive_index;
-}
-
-JNI_METHOD_AOSP(void, nativeSetExpectedClearMaterialOverride)
-(JNIEnv* env, jclass /*clazz*/, jint node_id, jstring node_name,
- jint primitive_index) {
-  imp::ModelTestContext& context = imp::ModelTestContext::Get();
-  context.clear_material_override.expected_node_id = node_id;
-  context.clear_material_override.expected_node_name =
-      imp::GetString(env, node_name);
-  context.clear_material_override.expected_primitive_index = primitive_index;
 }
 
 // Skybox Operations

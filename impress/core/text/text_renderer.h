@@ -44,6 +44,7 @@
 #include "core/ncsb/update_phase.h"
 #include "core/text/glyph_atlas.h"
 #include "core/text/sliced_glyph_atlas.h"
+#include "core/text/text_glyphs.h"
 #include "core/text/text_metrics.proto.h"
 #include "core/text/text_renderer_state.proto.imp.h"
 #include "core/view/framework/render/mesh_renderer.h"
@@ -228,44 +229,34 @@ class TextRenderer : public Component {
     float center;
   };
 
-  // TODO: Address duplication when SlicedGlyphAtlas is ready.
-  void CalculatePathAtlas();
-  void CalculatePathSlicedAtlas();
+  Future<FontInfo> GetFontInfo(const GlyphEmulator::TextOptions& options);
+  Future<TextGlyphs> GetTextGlyphs(absl::string_view text,
+                                   const GlyphEmulator::TextOptions& options);
+  Future<GlyphEmulator::SuperSampleInfo> GetSuperSampleInfo(
+      bool force_off) const;
+  Future<std::vector<ScopedCanvas::GlyphGroup>> GetCombinedCharacterGroups(
+      absl::string_view text, const GlyphEmulator::TextOptions& options);
+  imp::Texture* GetTexture();
 
   Future<absl::Status> SetupImpl(
       std::optional<TextLayoutProvider> layout_provider);
 
   // Creates and updates the text geometry and mesh.
   Future<absl::Status> UpdateMeshesAndMaterials();
-  // TODO: Address duplication when SlicedGlyphAtlas is ready.
-  Future<absl::Status> UpdateMeshesAndMaterialsFromAtlas();
-  Future<absl::Status> UpdateMeshesAndMaterialsFromSlicedAtlas();
 
   void ApplyColorsToMaterial(imp::Material& material);
 
   // Glyph vertices store their screen space coordinates in the xy components
   // and an optional depth value in the z component.
   void CalculateTextDimensionsAndPivot();
-  void CalculateAtlasTextDimensionsAndPivot();
-  void CalculateSlicedAtlasTextDimensionsAndPivot();
   void OffsetText(std::vector<float3>* glyph_vertices, float2 offset);
   Box AddGlyphsToTextMesh(MeshData& mesh_data, int mesh_data_offset);
   GlyphVerticesAndVisualBounds CalculateGlyphVerticesAndVisualBounds() const;
-  // TODO: Address duplication when SlicedGlyphAtlas is ready.
   GlyphVerticesAndVisualBounds CalculateGlyphVerticesAndVisualBounds(
-      const std::vector<GlyphAtlas::Glyph>& glyphs) const;
-  GlyphVerticesAndVisualBounds CalculateGlyphVerticesAndVisualBounds(
-      const std::vector<SlicedGlyphAtlas::Glyph>& glyphs) const;
-  void RenderGlyphPass(int vertex_offset, int index_offset,
-                       const std::vector<float3>& glyph_vertices,
-                       bool has_stroke, MeshData& mesh_data);
-  // TODO: Address duplication when SlicedGlyphAtlas is ready.
-  void RenderAtlasGlyphPass(int vertex_offset, int index_offset,
-                            const std::vector<float3>& glyph_vertices,
-                            bool has_stroke, MeshData& mesh_data);
-  void RenderSlicedAtlasGlyphPass(int vertex_offset, int index_offset,
-                                  const std::vector<float3>& glyph_vertices,
-                                  bool has_stroke, MeshData& mesh_data);
+      const TextGlyphs& glyphs) const;
+  void RenderTextGlyphPass(int vertex_offset, int index_offset,
+                           const std::vector<float3>& glyph_vertices,
+                           bool has_stroke, MeshData& mesh_data);
 
   void RecalculateMesh(bool force_regenerate_mesh = false);
 
@@ -274,11 +265,8 @@ class TextRenderer : public Component {
   float GetHorizontalPivot(TextRendererState::HorizontalPivot pivot, float min,
                            float max, float typographic_width) const;
 
-  // TODO: Address duplication when SlicedGlyphAtlas is ready.
   std::vector<GlyphPlacement> CalculateGlyphPlacements(
-      const std::vector<GlyphAtlas::Glyph>& glyphs) const;
-  std::vector<GlyphPlacement> CalculateGlyphPlacements(
-      const std::vector<SlicedGlyphAtlas::Glyph>& glyphs) const;
+      const TextGlyphs& glyphs) const;
 
   // Determines how far along the fill bounds of the text the given pos_x is.
   // pos_x is relative to the left edge of the typographic bounds of the text.
@@ -316,9 +304,8 @@ class TextRenderer : public Component {
   GlyphAtlas* glyph_atlas_ = nullptr;
   SlicedGlyphAtlas* sliced_glyph_atlas_ = nullptr;
   FontInfo font_info_;
-  // TODO: Address duplication when SlicedGlyphAtlas is ready.
-  std::vector<GlyphAtlas::Glyph> atlas_glyphs_;
-  std::vector<SlicedGlyphAtlas::Glyph> sliced_atlas_glyphs_;
+
+  std::optional<TextGlyphs> text_glyphs_;
   std::vector<ScopedCanvas::GlyphGroup> glyph_groups_;
 
   NodeHandle root_;

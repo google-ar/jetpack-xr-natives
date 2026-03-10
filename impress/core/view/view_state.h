@@ -58,7 +58,11 @@ class ViewState : public window::FilamentHost::State {
 
   bool ShouldUseMsaaSwapChain() const override;
 
+  bool ShouldUseTransparentSwapChain() const override;
+
   bool ShouldSetPresentationTime() const override;
+
+  filament::Engine::Backend GetPreferredBackend() const override;
 
  protected:
   using RenderResult = window::FilamentHost::RenderResult;

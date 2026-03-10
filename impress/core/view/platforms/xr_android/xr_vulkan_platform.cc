@@ -167,7 +167,7 @@ XrVulkanPlatform::Customization XrVulkanPlatform::getCustomization()
     const noexcept {
   return {
       .isSRGBSwapChainSupported = true,
-      .flushAndWaitOnWindowResize = true,
+      .flushAndWaitOnWindowResize = false,
       .transitionSwapChainImageLayoutForPresent = false,
   };
 }

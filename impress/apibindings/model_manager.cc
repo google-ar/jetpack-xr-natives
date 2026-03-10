@@ -38,6 +38,7 @@
 #include "apibindings/bindings_material.h"
 #include "apibindings/impress_api_view.h"
 #include "apibindings/model_interaction_ux/scene_viewer_component.h"
+#include "core/animation/gltf_animation.h"
 #include "core/assets/asset_ptr.h"
 #include "core/common/small_source_location.h"
 #include "core/geometry/shapes/box.h"
@@ -53,6 +54,11 @@
 #include "mediapipe/framework/port/status_macros.h"
 
 namespace imp {
+
+// The default speed multiplier for the initial playback.
+constexpr float kInitialSpeedMultiplier = 1.0f;
+// The default channel id for old animation APIs.
+constexpr int32_t kDefaultChannelId = 0;
 
 namespace {
 
@@ -73,11 +79,25 @@ class ModelManagerImpl : public ModelManager {
   absl::Status SetGltfReformAffordanceEnabled(int32_t impress_node,
                                               bool enable_affordance,
                                               bool system_movable) override;
+  // TODO: (broken link) - Remove old animation APIs once all clients are migrated
+  // to new animation system.
   void AnimateGltfModel(
       int32_t node, absl::string_view animation_name, bool loop,
       std::unique_ptr<BaseAssetAnimator> asset_animator) override;
+  // TODO: (broken link) - Remove old animation APIs once all clients are migrated
+  // to new animation system.
   absl::Status StopGltfModelAnimation(int32_t node) override;
+  // TODO: (broken link) - Remove old animation APIs once all clients are migrated
+  // to new animation system.
   absl::Status ToggleGltfModelAnimation(int32_t node, bool toggle) override;
+  void AnimateGltfModelNew(
+      int32_t node, absl::string_view animation_name, bool loop, float speed,
+      float start_time, int32_t channel_id,
+      std::unique_ptr<BaseAssetAnimator> asset_animator) override;
+  absl::Status StopGltfModelAnimationNew(int32_t node,
+                                         int32_t channel_id) override;
+  absl::Status ToggleGltfModelAnimationNew(int32_t node, bool toggle,
+                                           int32_t channel_id) override;
   absl::Status SetGltfModelAnimationSpeed(int32_t node, float speed,
                                           int32_t channel_id) override;
   absl::Status SetGltfModelAnimationPlaybackTime(int32_t node,
@@ -86,17 +106,9 @@ class ModelManagerImpl : public ModelManager {
   absl::StatusOr<int32_t> GetGltfModelAnimationCount(int32_t node) override;
   absl::StatusOr<std::string> GetGltfModelAnimationName(int32_t node,
                                                         int32_t index) override;
+  absl::StatusOr<float> GetGltfModelAnimationDurationSeconds(
+      int32_t node, int32_t index) override;
   absl::StatusOr<imp::Box> GetGltfModelLocalBounds(int32_t node) override;
-  // TODO Remove this API once the migration to the new
-  // introspection APIs is complete.
-  absl::Status SetMaterialOverride(int32_t node_id, std::intptr_t material,
-                                   absl::string_view node_name,
-                                   size_t primitive_index) override;
-  // TODO Remove this API once the migration to the new
-  // introspection APIs is complete.
-  absl::Status ClearMaterialOverride(int32_t node_id,
-                                     absl::string_view node_name,
-                                     size_t primitive_index) override;
   absl::Status SetGltfModelNodeMaterialOverride(
       int32_t node_id, std::intptr_t material, size_t primitive_index) override;
   absl::Status ClearGltfModelNodeMaterialOverride(
@@ -112,9 +124,13 @@ class ModelManagerImpl : public ModelManager {
       int32_t node_id, absl::string_view node_name);
 
   ImpressApiView& view_;
+  // Map from node entity ID to a tuple of GltfAnimator component and a map
+  // of channel ID to asset animator callbacks. This is used to play multiple
+  // animations on the same node at the same time on different channels.
   absl::flat_hash_map<
       int32_t, std::tuple<ComponentHandle<GltfAnimator>,
-                          std::optional<std::unique_ptr<BaseAssetAnimator>>>>
+                          absl::flat_hash_map<
+                              int32_t, std::unique_ptr<BaseAssetAnimator>>>>
       node_to_anim_ctx_;
 };
 
@@ -199,6 +215,49 @@ absl::Status ModelManagerImpl::SetGltfReformAffordanceEnabled(
   }
 }
 
+void ModelManagerImpl::AnimateGltfModelNew(
+    int32_t node, absl::string_view animation_name, bool loop, float speed,
+    float start_time, int32_t channel_id,
+    std::unique_ptr<BaseAssetAnimator> asset_animator) {
+  NodeHandle node_handle(utils::Entity::import(node));
+  if (!node_handle) {
+    asset_animator->OnFailure("Node is not valid.");
+    return;
+  }
+  ComponentHandle<GltfAnimator> gltf_animator =
+      node_handle->GetOrAddComponent<GltfAnimator>();
+
+  GltfAnimator::PlayCommand gltf_animation;
+  // If no animation_name was supplied, default to first available animation.
+  if (!animation_name.empty()) {
+    gltf_animation.animation = std::string(animation_name);
+  }
+  gltf_animation.options.looping = loop;
+  gltf_animation.options.start_time_seconds = start_time;
+  gltf_animation.options.playback_channel = {.id = channel_id};
+  // Use 1.0 as the default speed for the initial playback.
+  // The speed will be updated once playback begins, as Impress requires
+  // the animation to be in the playing state before speed is set.
+  gltf_animation.options.speed_multiplier = kInitialSpeedMultiplier;
+
+  absl::Status can_play = gltf_animator->CanPlay(gltf_animation);
+  if (!can_play.ok()) {
+    IMP_LOG(imp::ERROR) << "Cannot play animation: " << can_play.message();
+    asset_animator->OnFailure(
+        absl::StrFormat("Cannot play animation: %s", can_play.message()));
+    return;
+  }
+
+  gltf_animator->Play(gltf_animation);
+  gltf_animator->SetSpeedMultiplier(speed,
+                                    gltf_animation.options.playback_channel);
+  auto& [animator, channel_map] = node_to_anim_ctx_[node];
+  animator = gltf_animator;
+  channel_map[channel_id] = std::move(asset_animator);
+}
+
+// TODO: (broken link) - Remove old animation APIs once all clients are migrated
+// to new animation system.
 void ModelManagerImpl::AnimateGltfModel(
     int32_t node, absl::string_view animation_name, bool loop,
     std::unique_ptr<BaseAssetAnimator> asset_animator) {
@@ -225,11 +284,42 @@ void ModelManagerImpl::AnimateGltfModel(
   }
   gltf_animator->SetSpeedMultiplier(1.0f);
   gltf_animator->Play(gltf_animation);
-  node_to_anim_ctx_[node] = std::make_tuple(
-      gltf_animator, std::optional<std::unique_ptr<BaseAssetAnimator>>(
-                         std::move(asset_animator)));
+  auto& [animator, channel_map] = node_to_anim_ctx_[node];
+  animator = gltf_animator;
+  channel_map[kDefaultChannelId] = std::move(asset_animator);
 }
 
+absl::Status ModelManagerImpl::StopGltfModelAnimationNew(int32_t node,
+                                                         int32_t channel_id) {
+  NodeHandle node_handle(utils::Entity::import(node));
+  if (!node_handle) {
+    return absl::InvalidArgumentError("Node is not valid.");
+  }
+
+  ComponentHandle<GltfAnimator> animator =
+      node_handle->GetComponent<GltfAnimator>();
+  if (!animator) {
+    return absl::NotFoundError("Animation is not playing.");
+  }
+
+  animator->Stop({.id = channel_id});
+
+  // Optionally we could call the callback here, but this method implies
+  // that the animation has been "cancelled,"  rather than completing.
+  auto it = node_to_anim_ctx_.find(node);
+  if (it != node_to_anim_ctx_.end()) {
+    auto& [animator_handle, channel_map] = it->second;
+    channel_map.erase(channel_id);
+    if (channel_map.empty()) {
+      node_to_anim_ctx_.erase(it);
+    }
+  }
+
+  return absl::OkStatus();
+}
+
+// TODO: (broken link) - Remove old animation APIs once all clients are migrated
+// to new animation system.
 absl::Status ModelManagerImpl::StopGltfModelAnimation(int32_t node) {
   NodeHandle node_handle(utils::Entity::import(node));
   if (!node_handle) {
@@ -237,21 +327,44 @@ absl::Status ModelManagerImpl::StopGltfModelAnimation(int32_t node) {
   }
   auto it = node_to_anim_ctx_.find(node);
   if (it != node_to_anim_ctx_.end()) {
-    auto& [animator, callback] = node_to_anim_ctx_[node];
+    auto& [animator, channel_map] = it->second;
     if (animator) {
       // We technically can avoid checking validity here because we don't
       // support attaching and detaching the animation component from the
       // application side, but keeping for correctness.
-      animator->Stop();
+      animator->Stop({.id = kDefaultChannelId});
     }
     // Optionally we could call the callback here, but this method implies
     // that the animation has been "cancelled,"  rather than completing.
-    node_to_anim_ctx_.erase(it);
+    channel_map.erase(kDefaultChannelId);
+    if (channel_map.empty()) {
+      node_to_anim_ctx_.erase(it);
+    }
     return absl::OkStatus();
   }
   return absl::NotFoundError("Animation is not playing.");
 }
 
+absl::Status ModelManagerImpl::ToggleGltfModelAnimationNew(int32_t node,
+                                                           bool toggle,
+                                                           int32_t channel_id) {
+  NodeHandle node_handle(utils::Entity::import(node));
+  if (!node_handle) {
+    return absl::InvalidArgumentError("Node is not valid.");
+  }
+
+  ComponentHandle<GltfAnimator> animator =
+      node_handle->GetComponent<GltfAnimator>();
+  if (!animator) {
+    return absl::NotFoundError("Animation is not playing.");
+  }
+
+  animator->SetPaused(!toggle, {.id = channel_id});
+  return absl::OkStatus();
+}
+
+// TODO: (broken link) - Remove old animation APIs once all clients are migrated
+// to new animation system.
 absl::Status ModelManagerImpl::ToggleGltfModelAnimation(int32_t node,
                                                         bool toggle) {
   NodeHandle node_handle(utils::Entity::import(node));
@@ -260,9 +373,9 @@ absl::Status ModelManagerImpl::ToggleGltfModelAnimation(int32_t node,
   }
   auto it = node_to_anim_ctx_.find(node);
   if (it != node_to_anim_ctx_.end()) {
-    auto& [animator, callback] = node_to_anim_ctx_[node];
+    auto& [animator, channel_map] = it->second;
     if (animator) {
-      animator->SetPaused(!toggle);
+      animator->SetPaused(!toggle, {.id = kDefaultChannelId});
       return absl::OkStatus();
     }
   }
@@ -343,6 +456,33 @@ absl::StatusOr<std::string> ModelManagerImpl::GetGltfModelAnimationName(
   return anim_names[index];
 }
 
+absl::StatusOr<float> ModelManagerImpl::GetGltfModelAnimationDurationSeconds(
+    int32_t node, int32_t index) {
+  NodeHandle node_handle(utils::Entity::import(node));
+  if (!node_handle) {
+    return absl::InvalidArgumentError("Node is not valid.");
+  }
+
+  ComponentHandle<GltfRenderer> gltf_renderer =
+      node_handle->GetComponent<GltfRenderer>();
+  if (!gltf_renderer) {
+    return absl::InvalidArgumentError("Node does not have a GltfRenderer.");
+  }
+
+  AssetPtr<GltfAsset> asset = gltf_renderer->GetGltfAsset();
+  if (index < 0 || index >= asset->AnimationCount()) {
+    return absl::OutOfRangeError("Animation index is out of range.");
+  }
+
+  const animation::GltfAnimation* anim =
+      asset->GetGltfAnimData(GltfAsset::AnimId::At(index));
+  if (anim == nullptr) {
+    return absl::NotFoundError("Animation data not found.");
+  }
+
+  return static_cast<float>(absl::ToDoubleSeconds(anim->Duration()));
+}
+
 absl::StatusOr<imp::Box> ModelManagerImpl::GetGltfModelLocalBounds(
     int32_t node) {
   NodeHandle node_handle(utils::Entity::import(node));
@@ -369,38 +509,6 @@ absl::StatusOr<imp::Box> ModelManagerImpl::GetGltfModelLocalBounds(
     bounds.halfExtent = {0.0f, 0.0f, 0.0f};
   }
   return bounds;
-}
-
-// TODO Remove this API once the migration to the new
-// introspection APIs is complete.
-absl::Status ModelManagerImpl::SetMaterialOverride(int32_t node_id,
-                                                   std::intptr_t material,
-                                                   absl::string_view node_name,
-                                                   size_t primitive_index) {
-  BindingsMaterial* bindings_material =
-      view_.FromJava<BindingsMaterial>(material);
-  if (!bindings_material) {
-    return absl::InvalidArgumentError("Provided material handle is not valid.");
-  }
-
-  MP_ASSIGN_OR_RETURN(ComponentHandle<GltfMesh> mesh,
-                   FindGltfMeshByNodeName(node_id, node_name));
-
-  mesh->SetMaterialOverride(
-      bindings_material->GetMaterial(SmallSourceLocation::Current()),
-      primitive_index);
-  return absl::OkStatus();
-}
-
-// TODO Remove this API once the migration to the new
-// introspection APIs is complete.
-absl::Status ModelManagerImpl::ClearMaterialOverride(
-    int32_t node_id, absl::string_view node_name, size_t primitive_index) {
-  MP_ASSIGN_OR_RETURN(ComponentHandle<GltfMesh> mesh,
-                   FindGltfMeshByNodeName(node_id, node_name));
-  // Clears the material override for that mesh.
-  mesh->SetMaterialOverride(OwnedMaterialPtr{}, primitive_index);
-  return absl::OkStatus();
 }
 
 absl::Status ModelManagerImpl::SetGltfModelNodeMaterialOverride(
@@ -459,9 +567,29 @@ void ModelManagerImpl::Update(const FrameTime& frame_time) {
   //                     the callback dispatch from there, instead of polling on
   //                     Update.
   for (auto it = node_to_anim_ctx_.begin(); it != node_to_anim_ctx_.end();) {
-    auto& [animator, callback] = it->second;
-    if (animator && !animator->IsPlaying() && callback.has_value()) {
-      callback.value()->OnComplete();
+    auto& [animator, channel_map] = it->second;
+    if (!animator) {
+      node_to_anim_ctx_.erase(it++);
+      continue;
+    }
+
+    for (auto channel_it = channel_map.begin();
+         channel_it != channel_map.end();) {
+      GltfAnimator::PlaybackChannelId channel_id;
+      channel_id.id = channel_it->first;
+      if (!animator->IsPlaying(channel_id)) {
+        channel_it->second->OnComplete();
+        if (!animator) {
+          channel_map.clear();
+          break;
+        }
+        channel_map.erase(channel_it++);
+      } else {
+        ++channel_it;
+      }
+    }
+
+    if (channel_map.empty()) {
       node_to_anim_ctx_.erase(it++);
     } else {
       ++it;
@@ -472,29 +600,6 @@ void ModelManagerImpl::Update(const FrameTime& frame_time) {
 void ModelManagerImpl::ResetAnimationContexts() {
   // Clear animation contexts first.
   node_to_anim_ctx_.clear();
-}
-
-// TODO Remove this API once the migration to the new introspection
-// APIs is complete.
-absl::StatusOr<ComponentHandle<GltfMesh>>
-ModelManagerImpl::FindGltfMeshByNodeName(int32_t node_id,
-                                         absl::string_view node_name) {
-  NodeHandle model_node(utils::Entity::import(node_id));
-  if (!model_node) {
-    return absl::InvalidArgumentError("Node is not valid.");
-  }
-
-  NodeHandle mesh_node = model_node->FindByName(node_name);
-  if (!mesh_node) {
-    return absl::InvalidArgumentError(
-        absl::StrFormat("No Gltf child node named %s.", node_name));
-  }
-
-  ComponentHandle<GltfMesh> mesh = mesh_node->GetComponent<GltfMesh>();
-  if (!mesh) {
-    return absl::InvalidArgumentError("Child doesn't have a mesh.");
-  }
-  return mesh;
 }
 
 std::unique_ptr<ModelManager> CreateModelManager(ImpressApiView& view) {

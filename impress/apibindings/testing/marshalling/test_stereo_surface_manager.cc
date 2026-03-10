@@ -111,4 +111,11 @@ TestStereoSurfaceManager::SetContentColorMetadataForStereoSurfaceEntity(
       "unimplemented");
 }
 
+absl::Status TestStereoSurfaceManager::SetSubViewConfigForStereoSurfaceEntity(
+    int32_t node_id, float bottom, float left, float right, float top) {
+  return absl::UnimplementedError(
+      "TestStereoSurfaceManager::SetSubViewConfigForStereoSurfaceEntity "
+      "unimplemented");
+}
+
 }  // namespace imp

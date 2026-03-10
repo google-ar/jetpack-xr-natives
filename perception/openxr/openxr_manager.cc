@@ -19,7 +19,7 @@
 #include <openxr/openxr_platform.h>
 #include <openxr/openxr_reflection.h>
 #include <openxr/public/all_extensions.h>
-#include <openxr/public/xr_androidx2_geospatial_anchor.h>
+#include <openxr/public/xr_android_geospatial_anchor.h>
 #include <openxr/public/xr_androidx2_geospatial_streetscape.h>
 #include <stdbool.h>
 #include <sys/types.h>
@@ -46,6 +46,7 @@
 #include "absl/log/log.h"
 #include "absl/numeric/int128.h"
 #include "absl/synchronization/mutex.h"
+#include "common/openxr_util.h"
 #include "openxr/openxr_manager_clock.h"
 #include "openxr/openxr_manager_utils.h"
 
@@ -86,7 +87,7 @@ const std::array<OpenXrExtension, 7> kOptionalExtensions = {{
     {XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME, {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME,
      {XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME}},
-    {XR_ANDROIDX2_GEOSPATIAL_ANCHOR_EXTENSION_NAME,
+    {XR_ANDROID_GEOSPATIAL_ANCHOR_EXTENSION_NAME,
      {XR_ANDROID_GEOSPATIAL_EXTENSION_NAME, XR_EXT_FUTURE_EXTENSION_NAME,
       XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME,
       XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME}},
@@ -100,7 +101,7 @@ const std::array<OpenXrExtension, 7> kOptionalExtensions = {{
 
 const std::array<std::string, 7> kGeospatialExtensions = {
     XR_ANDROID_GEOSPATIAL_EXTENSION_NAME,
-    XR_ANDROIDX2_GEOSPATIAL_ANCHOR_EXTENSION_NAME,
+    XR_ANDROID_GEOSPATIAL_ANCHOR_EXTENSION_NAME,
     XR_ANDROIDX2_GEOSPATIAL_STREETSCAPE_EXTENSION_NAME,
     XR_ANDROID_SPATIAL_ANCHOR_SPACE_EXTENSION_NAME,
     XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME,
@@ -131,17 +132,6 @@ constexpr XrDepthSwapchainCreateFlagsANDROID kDepthSwapchainSmoothOnlyFlags =
 // Maps the XrViewConfigurationType to the number of views for that view type.
 const int kViewTypeStereoViewCount = 2;
 
-#define XR_ENUM_CASE_STR(name, val) \
-  case name:                        \
-    return #name;
-
-// Returns a string of the enum represented by this XrResult value.
-constexpr const char* XrEnumStr(XrResult e) {
-  switch (e) {
-    XR_LIST_ENUM_XrResult(XR_ENUM_CASE_STR) default : return "Unknown";
-  }
-}
-
 // Returns a string of the enum represented by this XrSessionState value.
 constexpr const char* XrSessionStateEnumStr(XrSessionState e) {
   switch (e) {
@@ -170,30 +160,6 @@ constexpr const char* XrDepthCameraResolutionEnumStr(
         : return "Unknown";
   }
 }
-
-// Returns false and logs an error if the result is not XR_SUCCESS.
-#define XR_RETURN_IF_FAILED(expr)                                     \
-  do {                                                                \
-    const XrResult xr_result = (expr);                                \
-    if (XR_FAILED(xr_result)) {                                       \
-      LOG(ERROR) << #expr << " failed with " << XrEnumStr(xr_result); \
-      return false;                                                   \
-    } else {                                                          \
-      VLOG(3) << #expr << " succeeded!";                              \
-    }                                                                 \
-  } while (false)
-
-// Returns XrResult and logs an error if the result is not XR_SUCCESS.
-#define XR_RETURN_RESULT_IF_FAILED(expr)                              \
-  do {                                                                \
-    const XrResult xr_result = (expr);                                \
-    if (XR_FAILED(xr_result)) {                                       \
-      LOG(ERROR) << #expr << " failed with " << XrEnumStr(xr_result); \
-      return xr_result;                                               \
-    } else {                                                          \
-      VLOG(3) << #expr << " succeeded!";                              \
-    }                                                                 \
-  } while (false)
 
 // Gets the depth image width and height for a given resolution. Returns false
 // if the resolution is not supported.
@@ -242,7 +208,7 @@ OpenXrManager::CreateAnchorResult OpenXrManager::MapAnchorCreateResult(
     case XR_ERROR_GEOSPATIAL_COORDINATES_INVALID_ANDROID:
       return OpenXrManager::CreateAnchorResult::
           kErrorGeospatialCoordinatesInvalid;
-    case XR_ERROR_SURFACE_ANCHOR_LOCATION_UNSUPPORTED_ANDROIDX2:
+    case XR_ERROR_SURFACE_ANCHOR_LOCATION_UNSUPPORTED_ANDROID:
       return OpenXrManager::CreateAnchorResult::
           kErrorSurfaceAnchorLocationUnsupported;
     default:
@@ -486,15 +452,15 @@ bool OpenXrManager::InitExtensionFunctions() {
         instance_, "xrLocateGeospatialPoseANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&locate_geospatial_pose_)));
     XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
-        instance_, "xrCreateGeospatialAnchorANDROIDX2",
+        instance_, "xrCreateGeospatialAnchorANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&create_geospatial_anchor_)));
     XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
-        instance_, "xrCreateSurfaceAnchorAsyncANDROIDX2",
+        instance_, "xrCreateSurfaceAnchorAsyncANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&create_surface_anchor_async_)));
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
-        instance_, "xrCreateSurfaceAnchorCompleteANDROIDX2",
-        reinterpret_cast<PFN_xrVoidFunction*>(
-            &create_surface_anchor_complete_)));
+    XR_RETURN_IF_FAILED(
+        xrGetInstanceProcAddr(instance_, "xrCreateSurfaceAnchorCompleteANDROID",
+                              reinterpret_cast<PFN_xrVoidFunction*>(
+                                  &create_surface_anchor_complete_)));
     XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
         instance_, "xrCheckVpsAvailabilityAsyncANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&check_vps_availability_async_)));
@@ -2005,8 +1971,8 @@ XrResult OpenXrManager::MaybeCreateGeospatialTracker() {
   if (geospatial_tracker_ != XR_NULL_HANDLE) {
     return XR_SUCCESS;
   }
-  XrGeospatialTrackerAnchorTrackingInfoANDROIDX2 anchor_tracking_info = {
-      .type = XR_TYPE_GEOSPATIAL_TRACKER_ANCHOR_TRACKING_INFO_ANDROIDX2,
+  XrGeospatialTrackerAnchorTrackingInfoANDROID anchor_tracking_info = {
+      .type = XR_TYPE_GEOSPATIAL_TRACKER_ANCHOR_TRACKING_INFO_ANDROID,
       .next = nullptr,
       .shouldTrackPlanes = XR_FALSE,
   };
@@ -2545,8 +2511,8 @@ OpenXrManager::CreateAnchorResult OpenXrManager::CreateGeospatialAnchor(
 
     {
       absl::MutexLock lock(mutex_);
-      XrGeospatialAnchorCreateInfoANDROIDX2 create_info = {
-          .type = XR_TYPE_GEOSPATIAL_ANCHOR_CREATE_INFO_ANDROIDX2,
+      XrGeospatialAnchorCreateInfoANDROID create_info = {
+          .type = XR_TYPE_GEOSPATIAL_ANCHOR_CREATE_INFO_ANDROID,
           .next = nullptr,
           .geospatialTracker = geospatial_tracker_,
 
@@ -2574,10 +2540,10 @@ OpenXrManager::CreateAnchorResult OpenXrManager::CreateGeospatialAnchor(
 }
 
 OpenXrManager::CreateAnchorResult OpenXrManager::CreateSurfaceAnchorAsync(
-    XrSurfaceAnchorTypeANDROIDX2 anchor_type, double latitude, double longitude,
+    XrSurfaceAnchorTypeANDROID anchor_type, double latitude, double longitude,
     double altitude_relative_to_surface,
     const XrQuaternionf& east_up_south_quaternion,
-    std::function<void(const XrSurfaceAnchorCreateCompletionANDROIDX2&)>
+    std::function<void(const XrSurfaceAnchorCreateCompletionANDROID&)>
         on_complete,
     std::function<void()> on_cancel) {
   if (GetGeospatialState() != GeospatialState::kRunning) {
@@ -2587,8 +2553,8 @@ OpenXrManager::CreateAnchorResult OpenXrManager::CreateSurfaceAnchorAsync(
   {
     absl::MutexLock lock(mutex_);
 
-    XrSurfaceAnchorCreateInfoANDROIDX2 create_info = {
-        .type = XR_TYPE_SURFACE_ANCHOR_CREATE_INFO_ANDROIDX2,
+    XrSurfaceAnchorCreateInfoANDROID create_info = {
+        .type = XR_TYPE_SURFACE_ANCHOR_CREATE_INFO_ANDROID,
         .next = nullptr,
         .geospatialTracker = geospatial_tracker_,
         .surfaceAnchorType = anchor_type,
@@ -2610,8 +2576,8 @@ OpenXrManager::CreateAnchorResult OpenXrManager::CreateSurfaceAnchorAsync(
     pending_futures_.push_back(
         {future,
          {[this, on_complete](XrFutureEXT future) {
-            XrSurfaceAnchorCreateCompletionANDROIDX2 completion = {
-                .type = XR_TYPE_SURFACE_ANCHOR_CREATE_COMPLETION_ANDROIDX2,
+            XrSurfaceAnchorCreateCompletionANDROID completion = {
+                .type = XR_TYPE_SURFACE_ANCHOR_CREATE_COMPLETION_ANDROID,
                 .next = nullptr,
             };
             XrResult result;

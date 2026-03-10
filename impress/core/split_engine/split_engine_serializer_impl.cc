@@ -38,6 +38,7 @@
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/IndexBuffer.h"
@@ -361,20 +362,22 @@ class SplitEngineSerializerImpl::RenderableBuilder
   }
   RenderableBuilder& Skinning(filament::SkinningBuffer* skinningBuffer,
                               size_t count, size_t offset) noexcept override {
-    IMP_LOG(imp::FATAL) << "skinning(filament::SkinningBuffer*, size_t, size_t) is not "
+    IMP_LOG(imp::FATAL) << kTag
+               << "skinning(filament::SkinningBuffer*, size_t, size_t) is not "
                   "supported.";
     return *this;
   }
   RenderableBuilder& Skinning(size_t boneCount,
                               mat4f const* transforms) noexcept override {
-    IMP_LOG(imp::FATAL) << "skinning(size_t, mat4f*) is not supported.";
+    IMP_LOG(imp::FATAL) << kTag << "skinning(size_t, mat4f*) is not supported.";
 
     return *this;
   }
   RenderableBuilder& Skinning(
       size_t boneCount,
       filament::RenderableManager::Bone const* bones) noexcept override {
-    IMP_LOG(imp::FATAL) << "skinning(size_t, filament::RenderableManager::Bone*) is not "
+    IMP_LOG(imp::FATAL) << kTag
+               << "skinning(size_t, filament::RenderableManager::Bone*) is not "
                   "supported.";
     return *this;
   }
@@ -395,7 +398,8 @@ class SplitEngineSerializerImpl::RenderableBuilder
       size_t primitiveIndex,
       utils::FixedCapacityVector<utils::FixedCapacityVector<float2>>
           indicesAndWeightsVector) noexcept override {
-    IMP_LOG(imp::FATAL) << "boneIndicesAndWeights(size_t, "
+    IMP_LOG(imp::FATAL) << kTag
+               << "boneIndicesAndWeights(size_t, "
                   "utils::FixedCapacityVector<float2>) is not supported.";
 
     return *this;
@@ -569,7 +573,8 @@ void SplitEngineSerializerImpl::SetBonesInternal(
     filament::RenderableManager::Instance instance,
     filament::RenderableManager::Bone const* transforms, size_t boneCount,
     size_t offset) {
-  IMP_LOG(imp::FATAL) << "setBones(entity, filament::RenderableManager::Bone*) is not "
+  IMP_LOG(imp::FATAL) << kTag
+             << "setBones(entity, filament::RenderableManager::Bone*) is not "
                 "supported";
 }
 
@@ -577,7 +582,7 @@ void SplitEngineSerializerImpl::SetBonesInternal(
     filament::RenderableManager::Instance instance, mat4f const* transforms,
     size_t boneCount, size_t offset) {
   if (offset != 0) {
-    IMP_LOG(imp::FATAL) << "Nonzero offset is not supported.";
+    IMP_LOG(imp::FATAL) << kTag << "Nonzero offset is not supported.";
   }
 
   utils::Entity entity = GetEntity(instance);
@@ -770,8 +775,11 @@ void SplitEngineSerializerImpl::SerializeTexture(
     return absl::OkStatus();
   });
 
-  bridge_sender_->SendMessage(*group_id, std::move(builder));
-  bridge_sender_->EndMessageGroup(*group_id);
+  auto status = bridge_sender_->SendMessage(*group_id, std::move(builder));
+  if (!status.ok()) IMP_LOG(imp::FATAL) << kTag << "Failed to send message: " << status;
+
+  status = bridge_sender_->EndMessageGroup(*group_id);
+  if (!status.ok()) IMP_LOG(imp::FATAL) << kTag << "Failed to end group: " << status;
 
   bridge_sender_->Schedule([on_done = std::move(on_done)]() {
     on_done();
@@ -834,8 +842,11 @@ void SplitEngineSerializerImpl::SerializeMeshIndicesAndVertices(
         return absl::OkStatus();
       });
 
-  bridge_sender_->SendMessage(*group_id, std::move(mesh_builder));
-  bridge_sender_->EndMessageGroup(*group_id);
+  auto status = bridge_sender_->SendMessage(*group_id, std::move(mesh_builder));
+  if (!status.ok()) IMP_LOG(imp::FATAL) << kTag << "Failed to send message: " << status;
+
+  status = bridge_sender_->EndMessageGroup(*group_id);
+  if (!status.ok()) IMP_LOG(imp::FATAL) << kTag << "Failed to end group: " << status;
 }
 
 void SplitEngineSerializerImpl::SerializeMeshMorphTargets(
@@ -888,13 +899,16 @@ void SplitEngineSerializerImpl::SerializeMeshMorphTargets(
     return absl::OkStatus();
   });
 
-  bridge_sender_->SendMessage(*group_id,
-                                       std::move(morph_target_buffer_builder));
-  bridge_sender_->EndMessageGroup(*group_id);
+  auto status = bridge_sender_->SendMessage(
+      *group_id, std::move(morph_target_buffer_builder));
+  if (!status.ok()) IMP_LOG(imp::FATAL) << kTag << "Failed to send message: " << status;
+
+  status = bridge_sender_->EndMessageGroup(*group_id);
+  if (!status.ok()) IMP_LOG(imp::FATAL) << kTag << "Failed to end group: " << status;
 }
 
 size_t SplitEngineSerializerImpl::EstimateImageBasedLightingAssetBufferSize(
-    const SphericalHarmonics& spherical_harmonics,
+    const SphericalHarmonics* /*absl_nullable*/  spherical_harmonics,
     const ImageBasedLightingAssetCubemapImages& cubemap_images) {
   FlatbufferSizeCalculator calculator;
 
@@ -904,8 +918,10 @@ size_t SplitEngineSerializerImpl::EstimateImageBasedLightingAssetBufferSize(
         ibl_cubemap_image.stitched_face_image->GetSize();
     calculator.AddCubemapLevelImageContentsAndDependentData(imageBufferSize);
   }
-  calculator.AddFloat3Vector(spherical_harmonics.coefficients.size())
-      .AddSphericalHarmonics();
+  if (spherical_harmonics) {
+    calculator.AddFloat3Vector(spherical_harmonics->coefficients.size())
+        .AddSphericalHarmonics();
+  }
 
   if (cubemap_images.skybox_cubemap_images.has_value()) {
     const size_t imageBufferSize = cubemap_images.skybox_cubemap_images.value()
@@ -926,10 +942,10 @@ size_t SplitEngineSerializerImpl::EstimateImageBasedLightingAssetBufferSize(
 
 void SplitEngineSerializerImpl::SerializeImageBasedLightingAsset(
     filament::Texture& reflection_texture,
-    SphericalHarmonics spherical_harmonics,
+    std::unique_ptr<SphericalHarmonics> /*absl_nullable*/  spherical_harmonics,
     ImageBasedLightingAssetCubemapImages cubemap_images) {
   const size_t kBufferSize = EstimateImageBasedLightingAssetBufferSize(
-      spherical_harmonics, cubemap_images);
+      spherical_harmonics.get(), cubemap_images);
   const ResourceId texture_id = GetId(&reflection_texture);
 
   const absl::StatusOr<MessageGroupId> group_id =
@@ -944,8 +960,8 @@ void SplitEngineSerializerImpl::SerializeImageBasedLightingAsset(
                                 std::move(spherical_harmonics),
                             cubemap_images = std::move(cubemap_images)]() {
     flatbuffers::Offset<android_xr::schemas::ImageBasedLightingAsset> asset =
-        PackImageBasedLightingAsset(*builder, texture_id, spherical_harmonics,
-                                    cubemap_images);
+        PackImageBasedLightingAsset(*builder, texture_id,
+                                    spherical_harmonics.get(), cubemap_images);
 
     CreateCommand(*builder,
                   android_xr::schemas::CreateAddImageBasedLightingAssets(
@@ -954,8 +970,11 @@ void SplitEngineSerializerImpl::SerializeImageBasedLightingAsset(
     return absl::OkStatus();
   });
 
-  bridge_sender_->SendMessage(*group_id, std::move(builder));
-  bridge_sender_->EndMessageGroup(*group_id);
+  auto status = bridge_sender_->SendMessage(*group_id, std::move(builder));
+  if (!status.ok()) IMP_LOG(imp::FATAL) << kTag << "Failed to send message: " << status;
+
+  status = bridge_sender_->EndMessageGroup(*group_id);
+  if (!status.ok()) IMP_LOG(imp::FATAL) << kTag << "Failed to end group: " << status;
 }
 
 void SplitEngineSerializerImpl::RemoveImageBasedLightingAsset(
@@ -1354,9 +1373,9 @@ flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> AddMaterialParam(
     flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
         const loader::details::LoadedModelBuilder::MaterialTextureId&
             raw_value) {
-      IMP_LOG(imp::FATAL)
-          << "SetMaterialParam(TextureId) should never be called. It should "
-             "be converted into a Texture* instead.";
+      IMP_LOG(imp::FATAL) << kTag
+                 << "SetMaterialParam(TextureId) should never be called. It "
+                    "should be converted into a Texture* instead.";
       return android_xr::schemas::CreateMaterialParamInfo(
           fbb, fb_name,
           android_xr::schemas::MaterialParamValue::MaterialTextureId,
@@ -1829,6 +1848,13 @@ void SplitEngineSerializerImpl::SetLocalTransform(utils::Entity entity,
   batch.data[entity].transform = transform;
 }
 
+void SplitEngineSerializerImpl::SetGroups(
+    utils::Entity entity, absl::Span<const absl::string_view> groups) {
+  Batch<CommandTypes::UpdateNodes>& batch =
+      GetOrCreateBatch<CommandTypes::UpdateNodes>({entity});
+  batch.data[entity].groups.emplace().assign(groups.begin(), groups.end());
+}
+
 void SplitEngineSerializerImpl::AssignUserId(utils::Entity entity,
                                              uint32_t user_id) {
   Batch<CommandTypes::AssignUserIdToNodes>& batch =
@@ -2179,11 +2205,18 @@ void SplitEngineSerializerImpl::Batch<CommandTypes::UpdateNodes>::Serialize(
       parent = android_xr::schemas::CreateParent(fbb, update.parent->getId());
     }
 
+    flatbuffers::Offset<
+        flatbuffers::Vector<flatbuffers::Offset<flatbuffers::String>>>
+        groups;
+    if (update.groups.has_value()) {
+      groups = fbb.CreateVectorOfStrings(*update.groups);
+    }
+
     NodeHandle node = NodeHandle(entry.first);
     IMP_LOG(imp::INFO) << kTag << kIndent << ToString(node);
     return android_xr::schemas::CreateUpdateNode(
         fbb, entry.first.getId(), name, PointerFromOptional(update.enabled),
-        transform, parent);
+        transform, parent, groups);
   });
   CreateCommand(fbb, android_xr::schemas::CreateUpdateNodes(
                          fbb, fbb.CreateVector(node_updates.data(),
@@ -2453,8 +2486,9 @@ void SplitEngineSerializerImpl::SendMessage(CommandBatchBase* batch_base) {
   // not require offloading to the background thread.
   batch_base->Serialize(*fbb);
 
-  
+  auto status =
       bridge_sender_->SendMessage(*frame_update_group_id_, std::move(fbb));
+  if (!status.ok()) IMP_LOG(imp::FATAL) << kTag << "Failed to send message: " << status;
 }
 
 void SplitEngineSerializerImpl::SendAllBatches() {
@@ -2477,7 +2511,8 @@ void SplitEngineSerializerImpl::SendAllBatches() {
   // should not be called too.
   if (!frame_update_group_id_.has_value()) return;
 
-  bridge_sender_->EndMessageGroup(*frame_update_group_id_);
+  auto status = bridge_sender_->EndMessageGroup(*frame_update_group_id_);
+  if (!status.ok()) IMP_LOG(imp::FATAL) << kTag << "Failed to end group: " << status;
   frame_update_group_id_ = std::nullopt;
 
   // Clean up

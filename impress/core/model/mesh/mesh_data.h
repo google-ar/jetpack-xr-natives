@@ -55,10 +55,10 @@ class MeshData {
   // Access the vertex data as type T, which must match the size described by
   // the description's VertexFormat.
   template <typename T>
-  T& VertexAt(size_t index);
+  T& VertexAt(size_t index, size_t group_idx = 0);
 
   template <typename T>
-  absl::Span<T> Vertices();
+  absl::Span<T> Vertices(size_t group_idx = 0);
 
   // Access the |attribute| data as type |T| at |index|. |attribute| must exist
   // in the MeshDescription's VertexFormat, and |T| must be the same size as
@@ -74,8 +74,10 @@ class MeshData {
   // offset. Requires a little bit more care to use correctly by getting the
   // attribute offset from the vertex format in the MeshDescription.
   template <typename T>
-  T& VertexAttributeAt(size_t index, size_t attribute_offset);
-
+  T& VertexAttributeAt(size_t index, size_t attribute_offset,
+                       size_t group_idx = 0);
+  template <typename T>
+  T& VertexAttributeAt(size_t index, VertexFormat::AttributeKey key);
   template <typename T>
   absl::Span<T> Indices();
 
@@ -89,12 +91,12 @@ class MeshData {
   //
   // Note, even though this method is const, the returned BufferDescriptor
   // doesn't maintain that const.
-  BufferDescriptor CopyVertexData() const;
+  BufferDescriptor CopyVertexData(size_t group_idx = 0) const;
   BufferDescriptor CopyIndexData() const;
 
   // Moves out the data.  IMPORTANT! The respective buffers in MeshData are
   // empty after these calls.
-  BufferDescriptor MoveVertexData();
+  BufferDescriptor MoveVertexData(size_t group_idx = 0);
   BufferDescriptor MoveIndexData();
 
   // Reduces the size of the buffers to avoid uploading the extra data to the
@@ -116,13 +118,13 @@ class MeshData {
 };
 
 template <typename T>
-absl::Span<T> MeshData::Vertices() {
-  return vertex_data_.Vertices<T>();
+absl::Span<T> MeshData::Vertices(size_t group_idx) {
+  return vertex_data_.Vertices<T>(group_idx);
 }
 
 template <typename T>
-T& MeshData::VertexAt(size_t index) {
-  return vertex_data_.VertexAt<T>(index);
+T& MeshData::VertexAt(size_t index, size_t group_idx) {
+  return vertex_data_.VertexAt<T>(index, group_idx);
 }
 
 template <typename T>
@@ -132,8 +134,14 @@ T& MeshData::VertexAttributeAt(size_t index,
 }
 
 template <typename T>
-T& MeshData::VertexAttributeAt(size_t index, size_t attribute_offset) {
-  return vertex_data_.VertexAttributeAt<T>(index, attribute_offset);
+T& MeshData::VertexAttributeAt(size_t index, size_t attribute_offset,
+                               size_t group_idx) {
+  return vertex_data_.VertexAttributeAt<T>(index, attribute_offset, group_idx);
+}
+
+template <typename T>
+T& MeshData::VertexAttributeAt(size_t index, VertexFormat::AttributeKey key) {
+  return vertex_data_.VertexAttributeAt<T>(index, key);
 }
 
 template <typename T>

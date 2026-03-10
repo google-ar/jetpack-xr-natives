@@ -29,12 +29,15 @@ namespace imp::editor {
 
 class FrameTimePanel;
 
+// Displays a flame graph of all samples for a range of frames.
+// Rendered as a subpanel of the FrameTimePanel.
 class FlameGraph {
  public:
   FlameGraph() = default;
   ~FlameGraph() = default;
 
-  void DrawPanel(int frame_index, SampleProcessor& sample_processor,
+  void DrawPanel(float width, int frame_index,
+                 SampleProcessor& sample_processor,
                  FrameTimePanel& frame_time_panel);
 
  private:

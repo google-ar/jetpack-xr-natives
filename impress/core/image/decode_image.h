@@ -35,10 +35,6 @@ Future<std::unique_ptr<ImageContents>> DecodeImage(
     const imp::Context& context, absl::string_view name,
     imp::resources::Resource resource);
 
-// (broken link) Temporary function to enable erroring out when pink textures are
-// detected.
-void SetFatalOnPinkTexture(bool fatal = true);
-
 }  // namespace imp::image
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_IMAGE_DECODE_IMAGE_H_

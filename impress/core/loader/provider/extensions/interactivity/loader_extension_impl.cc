@@ -545,8 +545,15 @@ absl::Status CreateInteractivityNodeValues(
   };
 
   for (auto& [socket_name, value] : values) {
-    out_value_offsets.push_back(
-        std::visit(Visitor{fbb, socket_name}, value.value));
+    // TODO: Have interactivity parser return errors for null
+    // values instead of checking here.
+    auto offset = std::visit(Visitor{fbb, socket_name}, value.value);
+    if (offset.IsNull()) {
+      return absl::InternalError(absl::StrFormat(
+          "Encountered null offset for Interactivity node value at socket %s",
+          socket_name));
+    }
+    out_value_offsets.push_back(offset);
   }
 
   return absl::OkStatus();

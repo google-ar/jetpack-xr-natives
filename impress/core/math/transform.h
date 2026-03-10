@@ -18,9 +18,11 @@
 #define THIRD_PARTY_IMPRESS_CORE_MATH_TRANSFORM_H_
 
 #include <limits>
+#include <string>
 #include <type_traits>
 
 #include "core/common/log.h"
+#include "absl/strings/str_format.h"
 #include "filament/libs/math/include/math/mat3.h"
 #include "filament/libs/math/include/math/mat4.h"
 #include "filament/libs/math/include/math/quat.h"
@@ -189,6 +191,18 @@ using PreciseTransform = Transform<double, float, float>;
 template <typename T>
 using EnableIfTransform = std::enable_if_t<
     kIsAnyOf<T, Transform<float>, Transform<double>, PreciseTransform>, int>;
+
+template <typename T, EnableIfTransform<T> = 0>
+std::string ToString(const T& transform) {
+  return absl::StrFormat("< translation: %v, rotation: %v, scale: %v >",
+                         transform.translation, transform.rotation,
+                         transform.scale);
+}
+
+template <typename Sink, typename T, EnableIfTransform<T> = 0>
+void AbslStringify(Sink& sink, const T& transform) {
+  sink.Append(ToString(transform));
+}
 
 }  // namespace imp
 

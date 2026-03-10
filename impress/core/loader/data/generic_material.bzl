@@ -133,6 +133,7 @@ def _build_material_impl(ctx):
         tools = [ctx.executable.matc],
         inputs = depset([ctx.file.material_source] + ctx.files.incs, transitive = [ctx.attr.material_source[DefaultInfo].default_runfiles.files]),
         outputs = [ctx.outputs.compiled_material],
+        mnemonic = "ImpressBuildMaterial",
         command = filamat_command,
     )
 
@@ -272,6 +273,7 @@ def process_and_build_material(
         metal = False,
         opengl = True,
         vulkan = False,
+        gl_vulkan = True,
     )
 
     if not is_opengl and force_feature_level_zero:
@@ -305,6 +307,16 @@ def process_and_build_material(
             material_source = ":%s" % process_target,
             compiled_material = "vulkan/%s.cmat" % name,
             api = "vulkan",
+            variant_filter = variant_filter,
+            defines = defines,
+            optimization = optimization,
+        )
+
+        _emit_single_matc_target(
+            name = "gl_vulkan_cmat_%s" % name,
+            material_source = ":%s" % process_target,
+            compiled_material = "gl_vulkan/%s.cmat" % name,
+            api = "all",
             variant_filter = variant_filter,
             defines = defines,
             optimization = optimization,
@@ -361,6 +373,7 @@ def process_and_build_material(
                 metal = ":metal_cmat_%s" % name,
                 opengl = ":opengl_cmat_%s" % name,
                 vulkan = ":vulkan_cmat_%s" % name,
+                gl_vulkan = ":gl_vulkan_cmat_%s" % name,
             ),
             out = "%s.cmat" % name,
             allow_symlink = True,

@@ -17,8 +17,8 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_REQUEST_HANDLERS_ADD_CUSTOM_MATERIAL_HANDLER_H_
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_REQUEST_HANDLERS_ADD_CUSTOM_MATERIAL_HANDLER_H_
 
-#include <functional>
 #include <memory>
+#include <optional>
 
 #include "flatbuffers/detached_buffer.h"
 #include "core/async/future.h"
@@ -26,6 +26,7 @@
 #include "core/split_engine/request_handlers/request_handler.h"
 #include "core/split_engine/split_engine_filament_resource_ptrs.h"
 #include "core/split_engine/split_engine_renderer_context.h"
+#include "core/split_engine/split_engine_shared_context.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
@@ -49,14 +50,12 @@ class AddCustomMaterialHandler : public RequestHandler {
       const android_xr::schemas::Request& request) override;
 
  private:
-  Future<std::reference_wrapper<RuntimeMaterialCompiler>>
-  GetOrCreateMaterialCompiler(BaseView& view);
+  Future<RuntimeMaterialCompiler*> GetOrCreateMaterialCompiler(BaseView& view);
 
   Future<OwnedFilamentMaterialPtr> CreateFilamentMaterial(
       BaseView& view, const android_xr::schemas::FilamentMaterialSpec& spec);
 
-  Future<std::reference_wrapper<RuntimeMaterialCompiler>>
-      material_compiler_future_;
+  std::optional<Future<RuntimeMaterialCompiler*>> material_compiler_future_;
   std::unique_ptr<RuntimeMaterialCompiler> material_compiler_;
 };
 

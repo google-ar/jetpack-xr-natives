@@ -135,8 +135,7 @@ std::unique_ptr<CronetEngine> CronetEngineBuilder::Build() {
     return nullptr;
   }
 
-  JniUniquePtr<jobject> java_cronet_engine =
-      WrapJni(Env(), CallObjectMethod(build_method_));
+  JniUniquePtr<jobject> java_cronet_engine = CallObjectMethod(build_method_);
   if (JavaExceptionPrintClear(Env())) {
     return nullptr;
   }
@@ -199,9 +198,9 @@ std::unique_ptr<UrlRequestBuilder> CronetEngine::NewUrlRequestBuilder(
     return nullptr;
   }
 
-  JniUniquePtr<jobject> result = WrapJni(
-      Env(), CallObjectMethod(new_url_request_builder_method_, jni_url.get(),
-                              cronet_callback.release(), executor.release()));
+  JniUniquePtr<jobject> result =
+      CallObjectMethod(new_url_request_builder_method_, jni_url.get(),
+                       cronet_callback.release(), executor.release());
   if (JavaExceptionPrintClear(Env())) {
     return nullptr;
   }
@@ -238,8 +237,7 @@ void UrlRequestBuilder::AddHeader(const std::string& key,
 }
 
 std::unique_ptr<UrlRequestHandle> UrlRequestBuilder::Build() {
-  JniUniquePtr<jobject> result =
-      WrapJni(Env(), CallObjectMethod(build_method_));
+  JniUniquePtr<jobject> result = CallObjectMethod(build_method_);
   if (JavaExceptionPrintClear(Env())) {
     return nullptr;
   }

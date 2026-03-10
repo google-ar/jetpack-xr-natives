@@ -78,8 +78,7 @@ class URLConnection : public JavaWrapper {
   }
 
   std::unique_ptr<InputStream> GetInputStream() {
-    JniUniquePtr<jobject> input_stream =
-        WrapJni(Env(), CallObjectMethod(get_input_stream_));
+    JniUniquePtr<jobject> input_stream = CallObjectMethod(get_input_stream_);
     if (JavaExceptionPrintClear(Env()) || !input_stream) {
       return absl::WrapUnique<InputStream>(nullptr);
     }
@@ -88,9 +87,9 @@ class URLConnection : public JavaWrapper {
 
   size_t GetContentLength() {
 #if IMP_PLATFORM(ANDROID_API24)
-    jlong content_length = CallLongMethod(get_content_length_);
+    int64_t content_length = CallLongMethod(get_content_length_);
 #else
-    jint content_length = CallIntMethod(get_content_length_);
+    int content_length = CallIntMethod(get_content_length_);
 #endif
     // URLConnection.GetContentLength() may return -1 if the content length is
     // not known. In this case we should use kUnknownContentLength to represent
@@ -149,8 +148,7 @@ class URL : public JavaWrapper {
   }
 
   std::unique_ptr<URLConnection> OpenConnection() {
-    JniUniquePtr<jobject> connection =
-        WrapJni(Env(), CallObjectMethod(open_connection_));
+    JniUniquePtr<jobject> connection = CallObjectMethod(open_connection_);
     if (JavaExceptionPrintClear(Env()) || !connection) {
       return absl::WrapUnique<URLConnection>(nullptr);
     }

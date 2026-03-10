@@ -20,6 +20,7 @@ import android.os.Bundle;
 import androidx.appcompat.app.AppCompatActivity;
 import com.google.ar.imp.view.ImpApiScubaProxyTestView;
 import com.google.ar.imp.view.splitengine.ImpSplitEngineRenderer;
+import com.google.vr.androidxr.extensions.XrExtensionsProvider;
 
 /** Example activity for using Impress with Split Engine mode. */
 public class BasicImpSplitEngineActivity extends AppCompatActivity {
@@ -55,7 +56,8 @@ public class BasicImpSplitEngineActivity extends AppCompatActivity {
     }
 
     splitEngineRenderer =
-        ImpSplitEngineRenderer.create(this, /* setupParams= */ null, /* xrExtensions= */ null);
+        ImpSplitEngineRenderer.create(
+            this, /* setupParams= */ null, XrExtensionsProvider.getXrExtensions());
     if (isUnderTest) {
       // NOTE: DO NOT COPY THIS CODE BLOCK FOR YOUR OWN APPS. This is a hack to support Scuba tests.
       // In order to support Scuba tests, create a placeholder view that can be used by scuba to get

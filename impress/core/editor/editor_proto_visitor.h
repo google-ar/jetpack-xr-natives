@@ -72,7 +72,8 @@ class EditorProtoVisitor {
  public:
   using Cursor = int;
 
-  explicit EditorProtoVisitor(Proto& state) : state_(state) {}
+  explicit EditorProtoVisitor(Proto& state, BaseView* view = nullptr)
+      : state_(state), view_(view) {}
 
   template <int field_type, typename T>
   Cursor Visit(
@@ -116,7 +117,7 @@ class EditorProtoVisitor {
           updated_ |= CreateDragAndDropTargetForField(field);
         }
 
-        EditorProtoVisitor<T> nested_visitor(*field);
+        EditorProtoVisitor<T> nested_visitor(*field, view_);
         ::imp::proto::VisitPaired(field, &nested_visitor, 0, other);
         updated_ |= nested_visitor.AnyFieldEdited();
         if (CheckBit(editor_control_flags, EditorControlFlags::kDisplayLabel)) {
@@ -793,7 +794,7 @@ class EditorProtoVisitor {
         !std::holds_alternative<EditorControlReadonly>(
             editor_control_type->type)) {
       return std::visit(
-          [field_name, val, other, editor_control_flags](auto&& control) {
+          [field_name, val, other, editor_control_flags, this](auto&& control) {
             // TODO: figure out why this is not working.
             // using T = std::decay_t<decltype(control)>;
             // if constexpr (std::is_same_v<T, absl::monostate>) {
@@ -802,7 +803,7 @@ class EditorProtoVisitor {
             //   << field_name;
             // } else {
             absl::StatusOr<bool> result = EditorFieldControl::ShowControl(
-                field_name, control, val, other, editor_control_flags);
+                field_name, control, val, other, editor_control_flags, view_);
             if (!result.ok()) {
               IMP_LOG(imp::FATAL) << result.status();
             }
@@ -811,8 +812,8 @@ class EditorProtoVisitor {
           },
           editor_control_type->type);
     } else {
-      return EditorFieldControl::ShowDefaultControl(field_name, val, other,
-                                                    editor_control_flags);
+      return EditorFieldControl::ShowDefaultControl(
+          field_name, val, other, editor_control_flags, view_);
     }
   }
 
@@ -822,7 +823,7 @@ class EditorProtoVisitor {
       EditorControlFlags editor_control_flags = EditorControlFlags::kDefault) {
     absl::string_view field_name = proto::GetFieldName<Proto>(field_id);
     return EditorFieldControl::ShowEnumControl(field_name, val, base,
-                                               editor_control_flags);
+                                               editor_control_flags, view_);
   }
 
   std::optional<EditorControlType> GetEditorControlTypeForField(int field_id) {
@@ -915,6 +916,7 @@ class EditorProtoVisitor {
   }
 
   Proto& state_;
+  BaseView* view_ = nullptr;
   bool updated_ = false;
 };
 

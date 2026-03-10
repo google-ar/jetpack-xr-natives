@@ -1,0 +1,43 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+material {
+    name : "Debug Bone Weights",
+    shadingModel : unlit,
+    culling : none,
+    variables : [
+        {
+            name : boneWeights,
+            precision : high
+        }
+    ]
+}
+
+vertex {
+    void materialVertex(inout MaterialVertexInputs material) {
+        #if defined(HAS_ATTRIBUTE_BONE_WEIGHTS)
+            material.boneWeights = mesh_bone_weights;
+        #else
+            material.boneWeights = vec4(0.0);
+        #endif
+    }
+}
+
+fragment {
+    void material(inout MaterialInputs material) {
+        prepareMaterial(material);
+        material.baseColor = variable_boneWeights;
+        material.baseColor.a = 1.0;
+    }
+}

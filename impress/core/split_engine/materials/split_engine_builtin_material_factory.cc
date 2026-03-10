@@ -29,6 +29,7 @@
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
 #include "core/material_library/generic_material_spec.h"
+#include "core/material_library/generic_materials.h"
 #include "core/material_library/material_package.h"
 #include "core/split_engine/materials/builtin/builtin_generic_spec_helpers.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
@@ -38,7 +39,6 @@
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/gltf_asset.h"
-#include "core/view/framework/generic_materials.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
 namespace imp::split_engine {

@@ -29,7 +29,7 @@
 
 namespace imp::editor {
 
-constexpr debug_draw::DebugColor kOriginColor = debug_draw::DebugColor::kPink;
+constexpr debug_draw::Color kOriginColor = debug_draw::kPink;
 constexpr float kCrossHalfExtent = 0.05f;
 
 VisualizeOrigins::VisualizeOrigins(BaseView& view) : view_(view) {
@@ -89,13 +89,12 @@ void VisualizeOrigins::DrawOriginForNode(NodeHandle node) {
 
   float size = kCrossHalfExtent * distance;
 
-  auto color = debug_draw::GetColor(kOriginColor);
   debug_draw::Local(node->GetEntity())
-      .Line(float3(-size, 0.0f, 0.0f), float3(size, 0.0f, 0.0f), color);
+      .Line(float3(-size, 0.0f, 0.0f), float3(size, 0.0f, 0.0f), kOriginColor);
   debug_draw::Local(node->GetEntity())
-      .Line(float3(0.0f, -size, 0.0f), float3(0.0f, size, 0.0f), color);
+      .Line(float3(0.0f, -size, 0.0f), float3(0.0f, size, 0.0f), kOriginColor);
   debug_draw::Local(node->GetEntity())
-      .Line(float3(0.0f, 0.0f, -size), float3(0.0f, 0.0f, size), color);
+      .Line(float3(0.0f, 0.0f, -size), float3(0.0f, 0.0f, size), kOriginColor);
 }
 
 void VisualizeOrigins::DrawOriginsForNodeRecursive(NodeHandle node) {

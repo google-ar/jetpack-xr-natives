@@ -27,6 +27,7 @@
 #include "core/assets/asset_ptr.h"
 #include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
+#include "core/common/small_source_location.h"
 #include "core/material_library/flatbuffer_utils.h"
 #include "core/material_library/material_package.h"
 #include "core/materials/material.h"
@@ -130,7 +131,8 @@ absl::Status BuiltInYouTubeStereoPlayerMaterial::SetParameters(
   if (youtube_stereo_player_material_parameters->video_texture()) {
     const BorrowedTexturePtr texture = texture_borrower(
         youtube_stereo_player_material_parameters->video_texture()
-            ->texture_id());
+            ->texture_id(),
+        SmallSourceLocation::Current());
     if (!texture) {
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d",

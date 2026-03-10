@@ -79,8 +79,7 @@ class AndroidUri : public JavaWrapper {
       return;
     }
 
-    JniUniquePtr<jobject> uri =
-        WrapJni(env, CallStaticObjectMethod(parse, jni_uri.get()));
+    JniUniquePtr<jobject> uri = CallStaticObjectMethod(parse, jni_uri.get());
     if (JavaExceptionPrintClear(Env()) || !uri) {
       return;
     }
@@ -103,7 +102,7 @@ class ContentResolver : public JavaWrapper {
 
   std::unique_ptr<InputStream> OpenInputStream(jobject uri) {
     JniUniquePtr<jobject> input_stream =
-        WrapJni(Env(), CallObjectMethod(open_input_stream_, uri));
+        CallObjectMethod(open_input_stream_, uri);
     if (JavaExceptionPrintClear(Env()) || !input_stream) {
       // Failed to find that resource.
       return absl::WrapUnique<InputStream>(nullptr);
@@ -195,7 +194,7 @@ Future<absl::Cord> AndroidResourceLoader::LoadAndroidResource(
   imp::android::ActivityContext activity_context(env,
                                                  context_.GetActivityContext());
   auto content_resolver = std::make_shared<ContentResolver>(
-      env, WrapJni(env, activity_context.GetContentResolver()));
+      env, activity_context.GetContentResolver());
   if (JavaExceptionPrintClear(env) || !content_resolver->WeakReference()) {
     return Future<absl::Cord>(absl::InternalError(
         absl::StrFormat("Failed to create ContentResolver")));

@@ -20,18 +20,22 @@
 #include <cstdint>
 
 #include "absl/status/status.h"
-#include "extensions/sceneviewerxr/ux/footprint.h"
-#include "extensions/sceneviewerxr/ux/input_flag.h"
-#include "extensions/sceneviewerxr/ux/interaction_mode.h"
-#include "extensions/sceneviewerxr/ux/interaction_states/interaction_owner.h"
-#include "extensions/sceneviewerxr/ux/interaction_states/interaction_states.h"
-#include "extensions/sceneviewerxr/ux/state_machine.h"
 #include "core/audio/audio_player.h"
 #include "core/collision/ray.h"
 #include "core/common/enum_flags.h"
 #include "core/common/smooth.h"
 #include "core/math/quat.h"
 #include "core/ncsb/component.h"
+#include "extensions/sceneviewerxr/ux/constants.h"
+#include "extensions/sceneviewerxr/ux/footprint.h"
+#include "extensions/sceneviewerxr/ux/input_flag.h"
+#include "extensions/sceneviewerxr/ux/interaction_mode.h"
+#include "extensions/sceneviewerxr/ux/interaction_states/idle.h"
+#include "extensions/sceneviewerxr/ux/interaction_states/initial.h"
+#include "extensions/sceneviewerxr/ux/interaction_states/interaction_owner.h"
+#include "extensions/sceneviewerxr/ux/interaction_states/interaction_states.h"
+#include "extensions/sceneviewerxr/ux/interaction_states/rotation.h"
+#include "extensions/sceneviewerxr/ux/ui_event_listener.h"
 #include "imp.h"
 #include "split_engine/input/split_engine_input_event.h"
 
@@ -65,6 +69,7 @@ class SceneViewerComponent : public imp::Component,
   imp::NodeHandle GetFootprintNode() override;
   imp::NodeHandle GetModelNode() override;
   imp::NodeHandle GetRigNode() override;
+  imp::ComponentHandle<imp::CameraComponent> GetCamera() override;
   imp::float3 GetHeadPosition() override;
   imp::Smooth<float>& GetModelLogScale() override;
   float GetResetLogScale() override;
@@ -72,6 +77,36 @@ class SceneViewerComponent : public imp::Component,
   void ToggleResetScaleType() override;
   bool IsTalkbackEnabled() override;
   bool IsIdleTimeoutEnabled() override;
+  void SetModelLogScale(imp::SmoothParameters parameters,
+                        float model_log_scale) override;
+  imp::Smooth<imp::float3>& GetRigPosition() override;
+  float GetInitialModelScale() override;
+  void SetInitialModelScale(float initial_model_scale) override;
+  float GetInitialModelDistanceToCamera() override;
+  void SetInitialModelDistanceToCamera(
+      float initial_model_distance_to_camera) override;
+  svxr::ResetScaleType GetResetScaleType() override;
+  void SetResetScaleType(svxr::ResetScaleType reset_scale_type) override;
+  void SetRigPosition(imp::SmoothParameters parameters,
+                      imp::float3 rig_position) override;
+  void SetRigRotation(imp::SmoothParameters parameters,
+                      imp::quatf rig_rotation) override;
+  void SetRigRotationTarget(imp::quatf rig_rotation) override;
+  void CalculateModelScaleLimits() override;
+  void SetModelScale(float model_scale) override;
+  void RequestUpdateRigPositionFromCamera(
+      const imp::SmoothParameters& parameters) override;
+  svxr::UiEventListener* GetUiEventListener() override;
+
+  // Translation State Dependencies
+  std::optional<imp::float3> GetAnchorSnapPosition(
+      imp::float3 footprint_position_local) override;
+  imp::float3 ComputeFootprintPositionFromPlanes(
+      imp::float3 target_position, imp::float3 rig_to_target) override;
+  void PlayDropSound() override;
+  void PlayLiftSound() override;
+  bool IsPassthrough() override;
+
   // LINT.ThenChange(//depot/google3/third_party/impress/extensions/sceneviewerxr/ux/interaction_states_tests/interaction_states_test_fixture.h)
 
  private:
@@ -98,10 +133,6 @@ class SceneViewerComponent : public imp::Component,
     kFootprint,
     kSubspaceRoot,
   };
-  enum class ResetScaleType : uint32_t {
-    kInitialScale,
-    kOneToOne,
-  };
   enum class EnvironmentType : uint32_t {
     kUnknown,
     kPassthrough,
@@ -113,13 +144,13 @@ class SceneViewerComponent : public imp::Component,
     float max;
   };
   static constexpr struct AxisBounds kEnvironmentYBounds =
-      AxisBounds(-2.0f, 5.0f);
+      AxisBounds{-2.0f, 5.0f};
   static constexpr struct AxisBounds kPassthroughYBounds =
-      AxisBounds(-10.0f, 6.0f);
+      AxisBounds{-10.0f, 6.0f};
   static constexpr struct AxisBounds kEnvironmentXZBounds =
-      AxisBounds(.001f, 2.75f);
+      AxisBounds{.001f, 2.75f};
   static constexpr struct AxisBounds kPassthroughXZBounds =
-      AxisBounds(.001f, 10.0f);
+      AxisBounds{.001f, 10.0f};
 
   // Processes SplitEngineInputEventProto for input.
   void HandleInputEvent(const android_xr::SplitEngineInputEvent& event,
@@ -131,12 +162,6 @@ class SceneViewerComponent : public imp::Component,
                            imp::Flags<svxr::InputFlag> input_flags);
 
   // Non-trivial update methods.
-  OptionalInteractionState UpdateTranslation(
-      svxr::interaction_states::Translation& state,
-      const imp::FrameTime& delta_time);
-  OptionalInteractionState UpdateRotation(
-      svxr::interaction_states::Rotation& state,
-      const imp::FrameTime& delta_time);
   OptionalInteractionState UpdateOneHandedScale(
       svxr::interaction_states::OneHandedScale& state,
       const imp::FrameTime& delta_time);
@@ -144,8 +169,8 @@ class SceneViewerComponent : public imp::Component,
       svxr::interaction_states::TwoHandedScale& state,
       const imp::FrameTime& delta_time);
   OptionalInteractionState UpdateScaleReset(
-      svxr::interaction_states::ScaleReset& state,
-      const imp::FrameTime& delta_time);
+      const imp::FrameTime& delta_time,
+      svxr::interaction_states::ScaleReset& state);
   OptionalInteractionState UpdateAccessibilityScale(
       svxr::interaction_states::AccessibilityScale& state,
       const imp::FrameTime& delta_time);
@@ -153,12 +178,6 @@ class SceneViewerComponent : public imp::Component,
   // Input handling methods
   OptionalInteractionState HandleInitializedInput(
       svxr::interaction_states::Initialized& state);
-  OptionalInteractionState HandleTranslationInput(
-      svxr::interaction_states::Translation& state, const imp::Ray& ray,
-      imp::NodeHandle receiver, imp::Flags<svxr::InputFlag> input_flags);
-  OptionalInteractionState HandleRotationInput(
-      svxr::interaction_states::Rotation& state, const imp::Ray& ray,
-      imp::NodeHandle receiver, imp::Flags<svxr::InputFlag> input_flags);
   OptionalInteractionState HandleOneHandedScaleInput(
       svxr::interaction_states::OneHandedScale& state, const imp::Ray& ray,
       imp::NodeHandle receiver, imp::Flags<svxr::InputFlag> input_flags);
@@ -166,6 +185,9 @@ class SceneViewerComponent : public imp::Component,
       svxr::interaction_states::TwoHandedScale& state, const imp::Ray& ray,
       imp::NodeHandle receiver, const imp::float3& hit_position,
       imp::Flags<svxr::InputFlag> input_flags);
+  OptionalInteractionState HandleTranslationInput(
+      svxr::interaction_states::Translation& state, const imp::Ray& ray,
+      imp::NodeHandle receiver, imp::Flags<svxr::InputFlag> input_flags);
   // Observer methods.
   void OnStateChange(const InteractionMachine& machine,
                      const InteractionMachine::State& current_state,
@@ -175,7 +197,6 @@ class SceneViewerComponent : public imp::Component,
   svxr::interaction_states::Idle SetupIdleState();
 
   // Helper methods
-  void SetModelScale(float model_scale);
   void PlaySound();
 
   // State machine for interaction.
@@ -187,7 +208,7 @@ class SceneViewerComponent : public imp::Component,
   // The unit offset from the authored origin to the rig-relative origin.
   imp::float3 model_offset_ = imp::float3(0.0f);
   // The lower/upper bounds for the model scale.
-  AxisBounds model_log_scale_limits_ = AxisBounds(0.0f, 0.0f);
+  AxisBounds model_log_scale_limits_ = AxisBounds{0.0f, 0.0f};
   // A controller for the model scale.
   imp::Smooth<float> model_log_scale_;
   // A controller for the rig position.
@@ -237,7 +258,7 @@ class SceneViewerComponent : public imp::Component,
   // Stores the initial distance between camera-model to be able to reset to it.
   float initial_model_distance_to_camera_ = 0.0f;
   // Stores the type of reset scaling to be performed.
-  ResetScaleType reset_scale_type_ = ResetScaleType::kOneToOne;
+  svxr::ResetScaleType reset_scale_type_ = svxr::ResetScaleType::kOneToOne;
 
   // Stores the type of environment the user is in.
   EnvironmentType environment_type_ = EnvironmentType::kUnknown;
@@ -258,20 +279,12 @@ class SceneViewerComponent : public imp::Component,
   // input event.
   imp::mat4f event_hit_node_transform_;
 
-  // Projects the target position on to each plane, checks for overlap with the
-  // plane geometry, and returns the target position for the footprint.
-  imp::float3 ComputeFootprintPositionFromPlanes(imp::float3 target_position,
-                                                 imp::float3 rig_to_target);
-
   bool FootprintReceivesInput();
   void CreateFootprint(const imp::FrameTime& delta_time);
   imp::float3 GetRigToCameraXz();
   float ConstrainElastically(float value, AxisBounds range, float scale);
-  void RequestUpdateRigPositionFromCamera(
-      const imp::SmoothParameters& parameters);
+
   void ConstrainRigPosition();
-  void CalculateModelScaleLimits();
-  void PlayDropSound();
   void PauseAnimationAndSound();
   void ResumeAnimationAndSound();
 };

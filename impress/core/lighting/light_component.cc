@@ -12,16 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "core/view/framework/lighting/light_component.h"
+#include "core/lighting/light_component.h"
 
 #include <algorithm>
 #include <cstdint>
 
-#include "filament/filament/include/filament/Color.h"
 #include "filament/filament/include/filament/LightManager.h"
+#include "core/camera/camera_manager.h"
+#include "core/lighting/light_state.proto.imp.h"
 #include "core/math/quat.h"
-#include "core/view/framework/camera/camera_manager.h"
-#include "core/view/framework/lighting/light_state.proto.imp.h"
 
 namespace imp {
 using LightInstance = filament::LightManager::Instance;

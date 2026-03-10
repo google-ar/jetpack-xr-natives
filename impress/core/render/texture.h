@@ -135,8 +135,8 @@ using TexturePtr ABSL_DEPRECATED(
 using OwnedTexturePtr = OwnedPtr<Texture>;
 using BorrowedTexturePtr = BorrowedPtr<Texture>;
 using OwnedOrBorrowedTexturePtr = OwnedOrBorrowedPtr<Texture>;
-// TODO: (broken link) - Add SmallSourceLocation parameter.
-using TextureBorrower = Invocable<BorrowedTexturePtr(uint64_t)>;
+using TextureBorrower =
+    Invocable<BorrowedTexturePtr(uint64_t, SmallSourceLocation)>;
 
 }  // namespace imp
 

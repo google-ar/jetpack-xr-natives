@@ -45,7 +45,7 @@ enum class KeyboardEventType : uint8_t {
   kMax,
 };
 // LINT.ThenChange(
-//   //depot/google3/third_party/impress/javascript/core/wasm/view_impl.js:keyboard_event_type
+//   //depot/google3/third_party/impress/javascript/core/wasm/constants.js:keyboard_event_type
 // )
 
 // Represents a keyboard event user interaction.

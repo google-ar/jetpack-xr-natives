@@ -16,7 +16,9 @@
 
 #include <jni.h>
 
+#include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "absl/status/status.h"
@@ -32,6 +34,74 @@ constexpr int kDrawModeTriangles = 0;
 constexpr int kDrawModeTriangleStrip = 1;
 // Not supported, falls back to triangles.
 constexpr int kDrawModeTriangleFan = 2;
+
+namespace {
+absl::StatusOr<std::optional<std::vector<uint32_t>>> ProcessIndices(
+    JNIEnv* env, jobject indices_buffer, int vertex_count, int draw_mode) {
+  std::optional<std::vector<uint32_t>> indices;
+  if (indices_buffer != nullptr) {
+    MP_ASSIGN_OR_RETURN(indices, IntBufferToVector(env, indices_buffer));
+    // Validate the provided index buffer
+    for (uint32_t index : *indices) {
+      if (index >= vertex_count) {
+        return absl::InvalidArgumentError(
+            absl::StrFormat("Index %d is out of bounds, vertex count is %d.",
+                            index, vertex_count));
+      }
+    }
+    if (draw_mode == kDrawModeTriangleFan) {
+      // Convert the Triangle Fan to a Triangle List; Fans aren't supported by
+      // Filament
+      std::vector<uint32_t> fan_indices = *indices;
+      std::vector<uint32_t> list_indices;
+      if (fan_indices.size() >= 3) {
+        list_indices.reserve((fan_indices.size() - 2) * 3);
+        uint32_t center_index = fan_indices[0];
+        for (size_t i = 2; i < fan_indices.size(); ++i) {
+          list_indices.push_back(center_index);
+          list_indices.push_back(fan_indices[i - 1]);
+          list_indices.push_back(fan_indices[i]);
+        }
+      }
+      indices = list_indices;
+    }
+  } else if (draw_mode == kDrawModeTriangleFan) {
+    // Generate a Triangle List index buffer for a Triangle Fan vertex list
+    std::vector<uint32_t> new_indices;
+    if (vertex_count >= 3) {
+      new_indices.reserve((vertex_count - 2) * 3);
+      for (int i = 1; i <= vertex_count - 2; ++i) {
+        new_indices.push_back(0);
+        new_indices.push_back(i);
+        new_indices.push_back(i + 1);
+      }
+    }
+    indices = new_indices;
+  }
+  return indices;
+}
+
+absl::StatusOr<int> ValidateMeshAttributes(
+    const std::vector<float>& positions, const std::vector<float>& texcoords) {
+  if (positions.size() % 3 != 0) {
+    return absl::InvalidArgumentError(
+        "Position buffer size must be divisible by 3.");
+  }
+  if (texcoords.size() % 2 != 0) {
+    return absl::InvalidArgumentError(
+        "Texcoord buffer size must be divisible by 2.");
+  }
+  const int vertex_count = positions.size() / 3;
+  const int tex_coord_count = texcoords.size() / 2;
+  if (vertex_count != tex_coord_count) {
+    return absl::InvalidArgumentError(absl::StrFormat(
+        "Position count (%d) does not match texture coordinate count "
+        "(%d).",
+        vertex_count, tex_coord_count));
+  }
+  return vertex_count;
+}
+}  // namespace
 
 absl::StatusOr<std::vector<float>> FloatBufferToVector(JNIEnv* env,
                                                        jobject floatBuffer) {
@@ -75,7 +145,7 @@ absl::StatusOr<std::vector<uint32_t>> IntBufferToVector(JNIEnv* env,
   }
 }
 
-absl::StatusOr<StereoSurface::CustomMesh> BuildCustomMesh(
+absl::StatusOr<StereoSurface::StereoMesh> BuildStereoMesh(
     JNIEnv* env, jobject left_positions, jobject left_texcoords,
     jobject left_indices, jobject right_positions, jobject right_texcoords,
     jobject right_indices, jint draw_mode) {
@@ -86,7 +156,7 @@ absl::StatusOr<StereoSurface::CustomMesh> BuildCustomMesh(
     return absl::InvalidArgumentError("left_texcoords must be non-null.");
   }
 
-  StereoSurface::CustomMesh mesh;
+  StereoSurface::StereoMesh mesh;
   // Use temporary variables to work around potential static assertion issues
   // when ASSIGN_OR_RETURN is used directly with struct members.
   MP_ASSIGN_OR_RETURN(mesh.left_positions,
@@ -95,16 +165,12 @@ absl::StatusOr<StereoSurface::CustomMesh> BuildCustomMesh(
   MP_ASSIGN_OR_RETURN(mesh.left_texcoords,
                    FloatBufferToVector(env, left_texcoords));
 
-  if (left_indices != nullptr) {
-    MP_ASSIGN_OR_RETURN(mesh.left_indices, IntBufferToVector(env, left_indices));
-    for (uint32_t index : *mesh.left_indices) {
-      if (index >= mesh.left_positions.size() / 3) {
-        return absl::InvalidArgumentError(absl::StrFormat(
-            "Left index %d is out of bounds, vertex count is %d.", index,
-            mesh.left_positions.size() / 3));
-      }
-    }
-  }
+  MP_ASSIGN_OR_RETURN(
+      const int left_vertex_count,
+      ValidateMeshAttributes(mesh.left_positions, mesh.left_texcoords));
+  MP_ASSIGN_OR_RETURN(
+      mesh.left_indices,
+      ProcessIndices(env, left_indices, left_vertex_count, draw_mode));
 
   // Right positions, texcoords, and indices are optional.
   if (right_positions != nullptr && right_texcoords != nullptr) {
@@ -112,17 +178,12 @@ absl::StatusOr<StereoSurface::CustomMesh> BuildCustomMesh(
                      FloatBufferToVector(env, right_positions));
     MP_ASSIGN_OR_RETURN(mesh.right_texcoords,
                      FloatBufferToVector(env, right_texcoords));
-    if (right_indices != nullptr) {
-      MP_ASSIGN_OR_RETURN(mesh.right_indices,
-                       IntBufferToVector(env, right_indices));
-      for (uint32_t index : *mesh.right_indices) {
-        if (index >= mesh.right_positions->size() / 3) {
-          return absl::InvalidArgumentError(absl::StrFormat(
-              "Right index %d is out of bounds, vertex count is %d.", index,
-              mesh.right_positions->size() / 3));
-        }
-      }
-    }
+    MP_ASSIGN_OR_RETURN(
+        const int right_vertex_count,
+        ValidateMeshAttributes(*mesh.right_positions, *mesh.right_texcoords));
+    MP_ASSIGN_OR_RETURN(
+        mesh.right_indices,
+        ProcessIndices(env, right_indices, right_vertex_count, draw_mode));
   }
 
   switch (draw_mode) {

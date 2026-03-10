@@ -315,6 +315,17 @@ config_setting(
 )
 
 config_setting(
+    name = "filament_uses_gl_vulkan_android",
+    constraint_values = [
+        "@platforms//os:android",
+    ],
+    define_values = {
+        "FILAMENT_USES_OPENGL": "1",
+        "FILAMENT_USES_VULKAN": "1",
+    },
+)
+
+config_setting(
     name = "filament_uses_vulkan_android",
     constraint_values = [
         "@platforms//os:android",
@@ -465,6 +476,7 @@ alias(
 alias(
     name = "filament",
     actual = select({
+        ":filament_uses_gl_vulkan_android": "@third_party//filament/filament:filament_gl_vulkan_android",
         ":filament_uses_vulkan_android": "@third_party//filament/filament:filament_vulkan_android",
         ":filament_uses_gles2_android": "@third_party//filament/filament:filament_opengl_android_feature_level_0",
         ":filament_uses_gles3_android": "@third_party//filament/filament:filament_opengl_mobile",

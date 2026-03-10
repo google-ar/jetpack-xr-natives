@@ -14,6 +14,8 @@
 
 #include "core/loader/ipc/java_loader_client_jni.h"
 
+#include "core/common/jni_helpers.h"
+
 using ::imp::loader::ipc::FromJava;
 using ::imp::loader::ipc::LoaderClientBase;
 
@@ -72,12 +74,12 @@ CompletableFuture::CompletableFuture(JNIEnv* env, jobject future)
 }
 
 // Calls the Get() method of the future and converts the return into a bool.
-jboolean CompletableFuture::GetBoolean() {
-  jobject object = CallObjectMethod(get_method_);
-  if (!Boolean::IsInstanceOfBoolean(Env(), object)) {
+bool CompletableFuture::GetBoolean() {
+  JniUniquePtr<jobject> object = CallObjectMethod(get_method_);
+  if (!Boolean::IsInstanceOfBoolean(Env(), object.get())) {
     return false;
   }
-  return Boolean(Env(), object).GetValue();
+  return Boolean(Env(), object.get()).GetValue();
 }
 JavaLoaderClient::JavaLoaderClient() : JavaWrapper(nullptr, nullptr, nullptr) {}
 JavaLoaderClient::JavaLoaderClient(JNIEnv* env, jobject activity_context)
@@ -96,14 +98,14 @@ JavaLoaderClient::~JavaLoaderClient() {
 // service. This should be called from a background thread.
 bool JavaLoaderClient::ConnectToLoaderService(const Context& context) {
   // Gets the handle to LoaderClient's completable future.
-  jobject future = StartLoaderServiceHelper();
+  JniUniquePtr<jobject> future = StartLoaderServiceHelper();
 
   // Creates a native representation of the future.
-  CompletableFuture completable_future(context.GetJniEnv(), future);
+  CompletableFuture completable_future(context.GetJniEnv(), future.get());
 
   // Blocks until the connection is made, which means this method is probably
   // best called from a background thread.
-  jboolean service_connected = completable_future.GetBoolean();
+  bool service_connected = completable_future.GetBoolean();
   return service_connected;
 }
 
@@ -143,7 +145,7 @@ void JavaLoaderClient::SetupMethodHandles() {
 
 // Starts the loader service, returns a java Future that indicates when the
 // service connection has been established.
-jobject JavaLoaderClient::StartLoaderServiceHelper() {
+JniUniquePtr<jobject> JavaLoaderClient::StartLoaderServiceHelper() {
   return CallObjectMethod(start_loader_service_method_);
 }
 

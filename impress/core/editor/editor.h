@@ -20,6 +20,7 @@
 #include <memory>
 
 #include "absl/container/flat_hash_set.h"
+#include "core/camera/camera_component.h"
 #include "core/editor/editor_info.h"
 #include "core/editor/editor_plugin.h"
 #include "core/ncsb/component_handle.h"
@@ -27,7 +28,6 @@
 #include "core/ncsb/node_handle.h"
 #include "core/ncsb/system.h"
 #include "core/view/framework/assets/gltf_asset.h"
-#include "core/view/framework/camera/camera_component.h"
 
 namespace imp::editor {
 
@@ -61,16 +61,6 @@ class Editor : public System {
   // Removes a node previously added to the editor with AddNode(node).
   virtual void RemoveNode(NodeHandle node) = 0;
 
-  // Selection mode for the editor.
-  enum class SelectionMode {
-    // In this mode, only a single node can be selected at any time. Selecting
-    // a new node will deselect any previously selected node.
-    kSingleNode,
-    // In this mode, multiple nodes can be selected simultaneously. Subsequent
-    // selections add to the current set of selected nodes.
-    kMultipleNodes,
-  };
-
   // Sends a NodeSelectionChangedEvent in the editor dispatcher for the given
   // node.
   // * If `multi_selection_enabled` is true:
@@ -80,8 +70,8 @@ class Editor : public System {
   //     - The node becomes the *only* selected node.
   // When the node is invalid, deselect all nodes.
   virtual void SelectNode(
-      NodeHandle node,
-      SelectionMode selection_mode = SelectionMode::kSingleNode) noexcept = 0;
+      NodeHandle node, EditorInfo::SelectionMode selection_mode =
+                           EditorInfo::SelectionMode::kSingleNode) noexcept = 0;
 
   // Returns the selected nodes.
   virtual const absl::flat_hash_set<NodeHandle>&
@@ -123,6 +113,15 @@ class Editor : public System {
   // Outside of Sandbox builds, there is no UI for switching to and from
   // EditMode.
   virtual EditorInfo::RunMode GetRunMode() const = 0;
+
+  // Returns the current DisplayMode.
+  //
+  // Native screen is the default mode. In the editor, there is no UI for
+  // switching to and from NativeScreen/RemoteScreen.
+  virtual EditorInfo::DisplayMode GetDisplayMode() const = 0;
+
+  // Sets the current DisplayMode.
+  virtual void SetDisplayMode(EditorInfo::DisplayMode display_mode) = 0;
 
   // Sets if the Editor is in EditMode.
   //

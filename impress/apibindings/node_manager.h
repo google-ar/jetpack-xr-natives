@@ -31,6 +31,15 @@ class NodeManager {
  public:
   virtual ~NodeManager() = default;
 
+  // Any arbitrary integer is a valid playback channel ID with the one
+  // exception of this special ID `kAllChannels`. This ID is a valid argument to
+  // Stop(), Restart(), SetSpeedMultiplier(), IsLooping(), SetLooping() and
+  // ConstrainAnimationTime() only.
+  // For all other functions that accept a channel ID with type `int32_t`,
+  // including any that do so indirectly via GltfAnimatorState::AnimOptions such
+  // as Play(), this ID may not be used.
+  constexpr static int32_t kAllChannels = -1;
+
   // Creates an Impress node and returns a corresponding entity ID.
   virtual int32_t CreateImpressNode() = 0;
   // Destroys an Impress node using its entity ID.
@@ -54,6 +63,15 @@ class NodeManager {
   // Sets the local transform (TRS) of an Impress node using its entity ID.
   virtual absl::Status SetImpressNodeLocalTransform(
       int32_t node_id, const imp::Transform<float>& transform) = 0;
+  // Returns the transform (TRS) of an Impress node relative to a relative
+  // Impress node.
+  virtual absl::StatusOr<imp::Transform<float>> GetImpressNodeRelativeTransform(
+      int32_t node_id, int32_t relative_node_id) = 0;
+  // Sets the transform (TRS) of an Impress node relative to a relative
+  // Impress node.
+  virtual absl::Status SetImpressNodeRelativeTransform(
+      int32_t node_id, int32_t relative_node_id,
+      const imp::Transform<float>& transform) = 0;
 };
 
 }  // namespace imp

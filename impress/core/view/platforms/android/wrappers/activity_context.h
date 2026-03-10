@@ -44,7 +44,7 @@ class ActivityContext : public JavaWrapper {
 
 #if IMP_PLATFORM(ANDROID) || IMP_PLATFORM(ROBOLECTRIC)
   std::string GetPackageName();
-  jobject GetContentResolver();
+  JniUniquePtr<jobject> GetContentResolver();
 #endif  // IMP_PLATFORM(ANDROID) || IMP_PLATFORM(ROBOLECTRIC)
 
  private:

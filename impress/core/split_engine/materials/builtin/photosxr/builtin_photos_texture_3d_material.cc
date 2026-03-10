@@ -31,6 +31,7 @@
 #include "core/assets/asset_ptr.h"
 #include "core/assets/material/material_asset.h"
 #include "core/async/future.h"
+#include "core/common/small_source_location.h"
 #include "core/material_library/flatbuffer_utils.h"
 #include "core/material_library/material_package.h"
 #include "core/materials/material.h"
@@ -122,8 +123,8 @@ absl::Status BuiltInPhotosTexture3dMaterial::SetParameters(
           .data_as<android_xr::schemas::BuiltInMaterialD1750064Parameters>();
 
   if (p->image_texture()) {
-    const BorrowedTexturePtr texture =
-        texture_borrower(p->image_texture()->texture_id());
+    const BorrowedTexturePtr texture = texture_borrower(
+        p->image_texture()->texture_id(), SmallSourceLocation::Current());
     if (!texture) {
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d", p->image_texture()->texture_id()));
@@ -136,8 +137,8 @@ absl::Status BuiltInPhotosTexture3dMaterial::SetParameters(
   }
 
   if (p->video_texture()) {
-    const BorrowedTexturePtr texture =
-        texture_borrower(p->video_texture()->texture_id());
+    const BorrowedTexturePtr texture = texture_borrower(
+        p->video_texture()->texture_id(), SmallSourceLocation::Current());
     if (!texture) {
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d", p->video_texture()->texture_id()));
@@ -151,7 +152,8 @@ absl::Status BuiltInPhotosTexture3dMaterial::SetParameters(
 
   if (p->auxiliary_video_texture()) {
     const BorrowedTexturePtr texture =
-        texture_borrower(p->auxiliary_video_texture()->texture_id());
+        texture_borrower(p->auxiliary_video_texture()->texture_id(),
+                         SmallSourceLocation::Current());
     if (!texture) {
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d", p->auxiliary_video_texture()->texture_id()));
@@ -162,8 +164,8 @@ absl::Status BuiltInPhotosTexture3dMaterial::SetParameters(
   }
 
   if (p->thumbnail_texture()) {
-    const BorrowedTexturePtr texture =
-        texture_borrower(p->thumbnail_texture()->texture_id());
+    const BorrowedTexturePtr texture = texture_borrower(
+        p->thumbnail_texture()->texture_id(), SmallSourceLocation::Current());
     if (!texture) {
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d", p->thumbnail_texture()->texture_id()));
@@ -174,8 +176,8 @@ absl::Status BuiltInPhotosTexture3dMaterial::SetParameters(
   }
 
   if (p->blur_texture()) {
-    const BorrowedTexturePtr texture =
-        texture_borrower(p->blur_texture()->texture_id());
+    const BorrowedTexturePtr texture = texture_borrower(
+        p->blur_texture()->texture_id(), SmallSourceLocation::Current());
     if (!texture) {
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d", p->blur_texture()->texture_id()));

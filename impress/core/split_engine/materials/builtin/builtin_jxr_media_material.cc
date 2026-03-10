@@ -37,6 +37,7 @@
 #include "core/assets/material/material_asset.h"
 #include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
+#include "core/common/small_source_location.h"
 #include "core/config.h"
 #include "core/material_library/flatbuffer_utils.h"
 #include "core/material_library/material_package.h"
@@ -56,6 +57,7 @@
 #include "core/split_engine/materials/builtin/builtin_jxr_media_material_assets.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
 #include "core/split_engine/materials/builtin/builtin_material_registry.h"
+#include "core/split_engine/materials/builtin/jxr_media_material_utils.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
@@ -108,6 +110,10 @@ static constexpr absl::string_view kMaterialConstantUseSuperSampling =
 
 constexpr absl::string_view kMaterialConstantEnableColorCorrection =
     "enableColorCorrection";
+
+// Parameters used to pass the sub rectangles to the material.
+constexpr absl::string_view kLeftEyeViewRectParameter = "leftEyeViewRect";
+constexpr absl::string_view kRightEyeViewRectParameter = "rightEyeViewRect";
 
 #if IMP_PLATFORM(ANDROID)
 // Use `adb shell setprop jxr.surface_entity.enable_color_correction
@@ -173,6 +179,8 @@ Future<split_engine::BuiltInMaterialPtr> BuiltInJxrMediaMaterial::Create(
       kMaterialConstantEnableColorCorrection;
   enable_color_correction_constant.value = true;
 
+  // The default value of 0 corresponds to kBoth, which is the same behavior as
+  // the legacy V1 JXR Media material.
   MaterialPreCompileConstant render_eye_target_constant;
   render_eye_target_constant.name = kMaterialConstantRenderEyeTarget;
   render_eye_target_constant.value =
@@ -252,6 +260,9 @@ Future<split_engine::BuiltInMaterialPtr> BuiltInJxrMediaMaterial::Create(
   material_pre_compile_options.constants.push_back(
       enable_color_correction_constant);
 
+  // Note that the default value of spec.blending_mode() is 0, which is
+  // TRANSPARENT, which is the default blending mode for the legacy V1 JXR
+  // Media material.
   Future<AssetPtr<MaterialAsset>> future = view.GetAssetManager().LoadMaterial(
       GetMaterialResource(spec.shape(), spec.blending_mode()),
       material_pre_compile_options);
@@ -347,7 +358,8 @@ absl::Status BuiltInJxrMediaMaterial::SetParameters(
   if (xr_media_parameters->primary_texture() &&
       GetMaterial()->HasParameter(kTextureParameter)) {
     const BorrowedTexturePtr texture =
-        texture_borrower(xr_media_parameters->primary_texture()->texture_id());
+        texture_borrower(xr_media_parameters->primary_texture()->texture_id(),
+                         SmallSourceLocation::Current());
     if (!texture) {
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d",
@@ -364,8 +376,9 @@ absl::Status BuiltInJxrMediaMaterial::SetParameters(
   }
   if (xr_media_parameters->auxiliary_texture() &&
       GetMaterial()->HasParameter(kAuxiliaryTextureParameter)) {
-    const BorrowedTexturePtr texture = texture_borrower(
-        xr_media_parameters->auxiliary_texture()->texture_id());
+    const BorrowedTexturePtr texture =
+        texture_borrower(xr_media_parameters->auxiliary_texture()->texture_id(),
+                         SmallSourceLocation::Current());
     if (!texture) {
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d",
@@ -378,7 +391,8 @@ absl::Status BuiltInJxrMediaMaterial::SetParameters(
   if (xr_media_parameters->primary_alpha_mask() &&
       GetMaterial()->HasParameter(kPrimaryAlphaMaskTextureParameter)) {
     const BorrowedTexturePtr texture = texture_borrower(
-        xr_media_parameters->primary_alpha_mask()->texture_id());
+        xr_media_parameters->primary_alpha_mask()->texture_id(),
+        SmallSourceLocation::Current());
     if (!texture) {
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d",
@@ -392,7 +406,8 @@ absl::Status BuiltInJxrMediaMaterial::SetParameters(
   if (xr_media_parameters->auxiliary_alpha_mask() &&
       GetMaterial()->HasParameter(kAuxiliaryAlphaMaskTextureParameter)) {
     const BorrowedTexturePtr texture = texture_borrower(
-        xr_media_parameters->auxiliary_alpha_mask()->texture_id());
+        xr_media_parameters->auxiliary_alpha_mask()->texture_id(),
+        SmallSourceLocation::Current());
     if (!texture) {
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d",
@@ -403,9 +418,21 @@ absl::Status BuiltInJxrMediaMaterial::SetParameters(
         ConvertSampler(xr_media_parameters->auxiliary_alpha_mask()->sampler()));
   }
 
-  GetMaterial()->SetParameter(
-      kStereoTypeParameter,
-      static_cast<int>(xr_media_parameters->stereo_type()));
+  if (GetMaterial()->HasParameter(kStereoTypeParameter)) {
+    int stereo_type = static_cast<int>(xr_media_parameters->stereo_type());
+    GetMaterial()->SetParameter(kStereoTypeParameter, stereo_type);
+    SubviewRects subview_rects;
+    if (!StereoTypeToSubviewRects(stereo_type, subview_rects)) {
+      IMP_LOG(imp::WARNING) << "JXR media material: Stereo type " << stereo_type
+                   << " is not supported. Showing as Monoscopic.";
+    }
+    // Setting the view to the default left and right eye rects - if the
+    // application sends updated rects then they will override these below.
+    GetMaterial()->SetParameter(kLeftEyeViewRectParameter,
+                                subview_rects.left_rect);
+    GetMaterial()->SetParameter(kRightEyeViewRectParameter,
+                                subview_rects.right_rect);
+  }
 
   if (xr_media_parameters->feather_radius()) {
     GetMaterial()->SetParameter(
@@ -419,6 +446,26 @@ absl::Status BuiltInJxrMediaMaterial::SetParameters(
         kCornerRadiusParameter,
         imp::float2(xr_media_parameters->corner_radius()->x(),
                     xr_media_parameters->corner_radius()->y()));
+  }
+
+  if (xr_media_parameters->sub_view_left()) {
+    // This implies that an application is built expecting API level 3 / OTA 2.
+    GetMaterial()->SetParameter(
+        kLeftEyeViewRectParameter,
+        imp::float4(xr_media_parameters->sub_view_left()->x(),
+                    xr_media_parameters->sub_view_left()->y(),
+                    xr_media_parameters->sub_view_left()->z(),
+                    xr_media_parameters->sub_view_left()->w()));
+  }
+
+  if (xr_media_parameters->sub_view_right()) {
+    // This implies that an application is built expecting API level 3 / OTA 2.
+    GetMaterial()->SetParameter(
+        kRightEyeViewRectParameter,
+        imp::float4(xr_media_parameters->sub_view_right()->x(),
+                    xr_media_parameters->sub_view_right()->y(),
+                    xr_media_parameters->sub_view_right()->z(),
+                    xr_media_parameters->sub_view_right()->w()));
   }
 
   return SetupColorCorrectionParameters(xr_media_parameters);

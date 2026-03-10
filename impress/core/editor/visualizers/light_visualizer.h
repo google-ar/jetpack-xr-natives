@@ -20,7 +20,7 @@
 #include "absl/strings/string_view.h"
 #include "core/common/robin_map.h"
 #include "core/editor/visualizers/visualizer.h"
-#include "core/view/framework/lighting/light_state.proto.imp.h"
+#include "core/lighting/light_state.proto.imp.h"
 
 namespace imp::editor {
 

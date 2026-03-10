@@ -17,7 +17,7 @@
 #include <openxr/openxr_platform.h>
 #include <openxr/openxr_platform_defines.h>
 #include <openxr/public/all_extensions.h>
-#include <openxr/public/xr_androidx2_geospatial_anchor.h>
+#include <openxr/public/xr_android_geospatial_anchor.h>
 #include <openxr/public/xr_androidx2_geospatial_streetscape.h>
 
 #include <cstdint>
@@ -493,9 +493,9 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrLocateGeospatialPoseFromPoseANDROID(
   return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateGeospatialAnchorANDROIDX2(
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateGeospatialAnchorANDROID(
     XrSpatialContextEXT spatialContext,
-    const XrGeospatialAnchorCreateInfoANDROIDX2* createInfo,
+    const XrGeospatialAnchorCreateInfoANDROID* createInfo,
     XrSpatialEntityIdEXT* anchorEntityId) {
   ++create_anchor_call_counter;
   if (create_anchor_call_counter > kAnchorResourceLimit) {
@@ -505,21 +505,21 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateGeospatialAnchorANDROIDX2(
   return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateSurfaceAnchorAsyncANDROIDX2(
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateSurfaceAnchorAsyncANDROID(
     XrSpatialContextEXT spatialContext,
-    const XrSurfaceAnchorCreateInfoANDROIDX2* createInfo, XrFutureEXT* future) {
+    const XrSurfaceAnchorCreateInfoANDROID* createInfo, XrFutureEXT* future) {
   *future = (XrFutureEXT)next_future_id++;
   return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateSurfaceAnchorCompleteANDROIDX2(
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateSurfaceAnchorCompleteANDROID(
     XrSpatialContextEXT spatialContext, XrFutureEXT future,
-    XrSurfaceAnchorCreateCompletionANDROIDX2* completion) {
+    XrSurfaceAnchorCreateCompletionANDROID* completion) {
   ++create_anchor_call_counter;
   if (create_anchor_call_counter > kAnchorResourceLimit) {
     return XR_ERROR_LIMIT_REACHED;
   }
-  completion->type = XR_TYPE_SURFACE_ANCHOR_CREATE_COMPLETION_ANDROIDX2;
+  completion->type = XR_TYPE_SURFACE_ANCHOR_CREATE_COMPLETION_ANDROID;
   completion->futureResult = XR_SUCCESS;
   completion->anchorEntityId = kEntityId;
   return XR_SUCCESS;
@@ -871,12 +871,12 @@ const auto kXrFunctions = new absl::flat_hash_map<absl::string_view,
      ToXrVoidFunction(Internal_xrLocateGeospatialPoseFromPoseANDROID)},
     {"xrLocateGeospatialPoseANDROID",
      ToXrVoidFunction(Internal_xrLocateGeospatialPoseANDROID)},
-    {"xrCreateGeospatialAnchorANDROIDX2",
-     ToXrVoidFunction(Internal_xrCreateGeospatialAnchorANDROIDX2)},
-    {"xrCreateSurfaceAnchorAsyncANDROIDX2",
-     ToXrVoidFunction(Internal_xrCreateSurfaceAnchorAsyncANDROIDX2)},
-    {"xrCreateSurfaceAnchorCompleteANDROIDX2",
-     ToXrVoidFunction(Internal_xrCreateSurfaceAnchorCompleteANDROIDX2)},
+    {"xrCreateGeospatialAnchorANDROID",
+     ToXrVoidFunction(Internal_xrCreateGeospatialAnchorANDROID)},
+    {"xrCreateSurfaceAnchorAsyncANDROID",
+     ToXrVoidFunction(Internal_xrCreateSurfaceAnchorAsyncANDROID)},
+    {"xrCreateSurfaceAnchorCompleteANDROID",
+     ToXrVoidFunction(Internal_xrCreateSurfaceAnchorCompleteANDROID)},
     {"xrCreateDepthSwapchainANDROID",
      ToXrVoidFunction(Internal_xrCreateDepthSwapchainANDROID)},
     {"xrDestroyDepthSwapchainANDROID",
@@ -976,7 +976,7 @@ const std::vector<XrExtensionProperties> kExtensions = {
     {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
      XR_ANDROID_GEOSPATIAL_EXTENSION_NAME},
     {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
-     XR_ANDROIDX2_GEOSPATIAL_ANCHOR_EXTENSION_NAME},
+     XR_ANDROID_GEOSPATIAL_ANCHOR_EXTENSION_NAME},
     {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
      XR_ANDROIDX2_GEOSPATIAL_STREETSCAPE_EXTENSION_NAME},
     {XR_TYPE_EXTENSION_PROPERTIES, nullptr,

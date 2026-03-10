@@ -34,6 +34,7 @@
 #include "core/editor/command_manager.h"
 #include "core/editor/editor.h"
 #include "core/editor/editor_field_control.h"
+#include "core/editor/editor_style.h"
 #include "core/editor/events.h"
 #include "core/editor/events.proto.imp.h"
 #include "core/editor/layout/editor_control_flags.h"
@@ -49,18 +50,12 @@
 #include "core/proto/textproto_writer.h"
 #include "core/view/framework/scene/scene_reference.h"
 #include "core/view/framework/scene/scene_system.h"
-#if IMP_PLATFORM(DESKTOP)
-#include "third_party/tinyfiledialogs/tinyfiledialogs.h"
-#endif
 #include "mediapipe/framework/port/status_macros.h"
 
 namespace imp::editor {
 
 static constexpr int32_t kDetailsUiWidth = 50;
 static constexpr absl::string_view kTextprotoExtension = ".textproto";
-static constexpr int32_t kFilterPatternsNum = 1;
-static constexpr char const* kFilterPatterns[kFilterPatternsNum] = {
-    kTextprotoExtension.data()};
 
 NodeDetails::NodeDetails(BaseView& view)
     : view_(view),
@@ -133,7 +128,7 @@ void NodeDetails::DrawImGui() {
   }
   ImGui::SameLine();
   ImGui::PushStyleColor(ImGuiCol_Text,
-                        active_node_->IsActive() ? kGreen300 : kRed500);
+                        active_node_->IsActive() ? kDarkGreen : kDarkRed);
   ImGui::LabelText(active_node_->IsActive() ? "active" : "inactive", "");
   ImGui::PopStyleColor();
   ImGui::PopItemWidth();

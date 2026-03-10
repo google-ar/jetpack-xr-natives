@@ -326,6 +326,8 @@ class MeshRenderer : public Component {
                      BlendOrderMode mode = BlendOrderMode::kLocal,
                      size_t primitive = 0);
 
+  MeshRenderer::FrustumCullingMode GetFrustumCullingMode() const;
+
   // Applies changes of all meshes' AABBs and rendering ranges to this
   // MeshRenderer.
   // Note: SetMesh(...) brings all properties of corresponding mesh up-to-date,
@@ -383,10 +385,11 @@ class MeshRenderer : public Component {
   std::vector<PrimitiveData> primitives_;
   uint8_t layer_mask_;
 
-  // Filament::RenderableManager has no getter for priority or channel, so track
-  // it ourselves.
+  // Filament::RenderableManager has no getter for priority, channel, or culling
+  // mode, so track it ourselves.
   uint8_t priority_ = kDefaultPriority;
   uint8_t channel_ = kDefaultChannel;
+  FrustumCullingMode culling_mode_ = FrustumCullingMode::kEnabled;
 
  public:
   static constexpr bool kRunInEditMode = true;

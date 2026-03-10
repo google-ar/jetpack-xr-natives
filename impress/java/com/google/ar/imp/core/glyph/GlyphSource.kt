@@ -20,7 +20,9 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.os.Build
 import com.google.android.filament.proguard.UsedByNative
+import com.google.android.libraries.performance.primes.flogger.logargs.NonSensitiveLogParameterFactory
 import com.google.common.flogger.GoogleLogger
+import com.google.errorprone.annotations.CompileTimeConstant
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -33,7 +35,11 @@ private val logger = GoogleLogger.forEnclosingClass()
 @UsedByNative("android_glyph_source.cc")
 class GlyphSource
 @UsedByNative("android_glyph_source.cc")
-constructor(method: Method, cacheSizeBytes: Int) {
+constructor(
+  method: Method,
+  cacheSizeBytes: Int,
+  private val forceIndividualGlyphSourceInstances: Boolean = false,
+) {
   @UsedByNative("android_glyph_source.cc")
   enum class Method {
     AUTO,
@@ -75,14 +81,23 @@ constructor(method: Method, cacheSizeBytes: Int) {
     }
   }
 
-  private var impl: IGlyphSource? = lock.withLock { acquireGlyphSource(method, cacheSizeBytes) }
+  private var impl: IGlyphSource? =
+    if (forceIndividualGlyphSourceInstances) {
+      createGlyphSource(method, cacheSizeBytes)
+    } else {
+      lock.withLock { acquireGlyphSource(method, cacheSizeBytes) }
+    }
 
   /** Free resources associated with this GlyphSource. */
   @UsedByNative("android_glyph_source.cc")
   fun dispose() {
-    lock.withLock {
-      releaseGlyphSource()
+    if (forceIndividualGlyphSourceInstances) {
       impl = null
+    } else {
+      lock.withLock {
+        releaseGlyphSource()
+        impl = null
+      }
     }
   }
 
@@ -92,9 +107,8 @@ constructor(method: Method, cacheSizeBytes: Int) {
    * @return a float array of size 8. See android_glyph_source.cc as the reference implementation.
    */
   @UsedByNative("android_glyph_source.cc")
-  fun getGlyphMetrics(glyphId: Int, font: Any?, paint: Paint): FloatArray = withImpl {
-    it.getGlyphMetrics(glyphId, font, paint)
-  }
+  fun getGlyphMetrics(glyphId: Int, font: Any?, paint: Paint): FloatArray =
+    withImpl("getGlyphMetrics") { it.getGlyphMetrics(glyphId, font, paint) }
 
   /**
    * Analogous to GetTextGlyphs.
@@ -108,7 +122,8 @@ constructor(method: Method, cacheSizeBytes: Int) {
    * @return the number of glyphs
    */
   @UsedByNative("android_glyph_source.cc")
-  fun getTextGlyphs(text: String, paint: Paint) = withImpl { it.getTextGlyphs(text, paint) }
+  fun getTextGlyphs(text: String, paint: Paint) =
+    withImpl("getTextGlyphs") { it.getTextGlyphs(text, paint) }
 
   /**
    * Release glyph IDs.
@@ -118,15 +133,16 @@ constructor(method: Method, cacheSizeBytes: Int) {
    * ID.
    */
   @UsedByNative("android_glyph_source.cc")
-  fun releaseTextGlyphs(glyphIds: IntArray) = withImpl {
-    for (glyphId in glyphIds) {
-      it.releaseTextGlyph(glyphId)
+  fun releaseTextGlyphs(glyphIds: IntArray) =
+    withImpl("releaseTextGlyphs") {
+      for (glyphId in glyphIds) {
+        it.releaseTextGlyph(glyphId)
+      }
     }
-  }
 
   /** Release a single glyph ID. */
   @UsedByNative("android_glyph_source.cc")
-  fun releaseTextGlyph(glyphId: Int) = withImpl { it.releaseTextGlyph(glyphId) }
+  fun releaseTextGlyph(glyphId: Int) = withImpl("releaseTextGlyph") { it.releaseTextGlyph(glyphId) }
 
   /**
    * Analogous to GetCombinedCharacterGroups.
@@ -137,9 +153,8 @@ constructor(method: Method, cacheSizeBytes: Int) {
    * @return the number of glyphs
    */
   @UsedByNative("android_glyph_source.cc")
-  fun getCombinedCharacterGroups(text: String, paint: Paint) = withImpl {
-    it.getCombinedCharacterGroups(text, paint)
-  }
+  fun getCombinedCharacterGroups(text: String, paint: Paint) =
+    withImpl("getCombinedCharacterGroups") { it.getCombinedCharacterGroups(text, paint) }
 
   /**
    * Analogous to DrawGlyph.
@@ -157,16 +172,26 @@ constructor(method: Method, cacheSizeBytes: Int) {
     strokeWidth: Float,
     fillPaint: Paint,
     strokePaint: Paint,
-  ) = withImpl { it.drawGlyph(canvas, glyphId, x, y, font, strokeWidth, fillPaint, strokePaint) }
+  ) =
+    withImpl("drawGlyph") {
+      it.drawGlyph(canvas, glyphId, x, y, font, strokeWidth, fillPaint, strokePaint)
+    }
 
-  private inline fun <T> withImpl(body: (IGlyphSource) -> T): T {
+  private inline fun <T> withImpl(@CompileTimeConstant name: String, body: (IGlyphSource) -> T): T {
     lock.withLock {
       val impl = impl
       check(impl !== null) { "Attempted to call method on disposed GlyphSource" }
       try {
         return body(impl)
       } catch (e: Throwable) {
-        logger.atSevere().withCause(e).log("Exception in GlyphSource")
+        logger
+          .atSevere()
+          .withCause(e)
+          .log(
+            "Exception %s in GlyphSource.%s",
+            NonSensitiveLogParameterFactory.fromConstantString(name),
+            NonSensitiveLogParameterFactory.fromClassName(e::class.java),
+          )
         throw e
       }
     }

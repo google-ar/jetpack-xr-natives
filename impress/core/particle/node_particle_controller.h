@@ -19,11 +19,13 @@
 
 #include <cstdint>
 #include <list>
+#include <memory>
 #include <string>
 
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
 #include "core/ncsb/node_handle.h"
+#include "core/particle/custom_particle_behavior.h"
 #include "core/particle/particle_behavior.h"
 #include "core/particle/particle_controller.h"
 #include "core/particle/particle_emitter_info.h"
@@ -41,7 +43,9 @@ class NodeParticleController : public ParticleController {
  public:
   // Creates a new NodeParticleController.
   static Future<OwnedParticleControllerPtr> Create(
-      NodeHandle emitter_node, const ParticleEmitterState& emitter_state);
+      NodeHandle emitter_node, const ParticleEmitterState& emitter_state,
+      std::unique_ptr<CustomParticleBehavior> custom_particle_behavior =
+          std::unique_ptr<CustomParticleBehavior>());
 
   // Updates all active particles in the system, creates and destroys particles
   // as defined by the ParticleEmitterConfig.
@@ -60,9 +64,10 @@ class NodeParticleController : public ParticleController {
   // Initializes the controller using the configuration provided. The emitter
   // node is stored here so particles may be emitted from it using its position
   // and orientation when configured to emit into world space.
-  NodeParticleController(NodeHandle emitter_node,
-                         AssetPtr<GltfAsset> gltf_asset,
-                         const ParticleEmitterState& emitter_state);
+  NodeParticleController(
+      NodeHandle emitter_node, AssetPtr<GltfAsset> gltf_asset,
+      const ParticleEmitterState& emitter_state,
+      std::unique_ptr<CustomParticleBehavior> custom_particle_behavior);
 
   // Synchronizes the scene node with the current state of the particle.
   void SyncNode(const ParticleInstance& particle_instance, NodeHandle node);

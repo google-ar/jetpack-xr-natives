@@ -15,6 +15,7 @@
 material {
   name : "GSplat",
   parameters : [
+        // LINT.IfChange
         {
            // A scaling value that is used to control the size of the splats
            // relative to their covariance-matrix defined scale. Mathematically,
@@ -44,6 +45,10 @@ material {
            precision : high,
            name      : sortedIndices
         }
+        // LINT.ThenChange(
+        //   gsplat_material_deserializer.cc,
+        //   //depot/google3/third_party/split_engine/schemas/split_engine_material.fbs,
+        // )
   ],
   constants : [
         {

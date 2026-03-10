@@ -487,9 +487,20 @@ void SpriteRenderer::UpdateClipSpaceTransform() {
         camera->getProjectionMatrix() * camera->getViewMatrix();
 
     float4 clip_point = clip_from_world * GetNode()->GetWorldPositionPrecise();
+    float3 clip_space_translation;
+    if (clip_point.w < 0.0f) {
+      // If the node is behind the camera (w <= 0), the homogeneous divide by w
+      // will incorrectly flip the geometry in front of the camera. To prevent
+      // this, we force the point sufficiently far behind the camera plane
+      // prior to perspective division, ensuring hardware clipping drops the
+      // geometry correctly.
+      clip_space_translation = float3(clip_point.xy, -1000.0f);
+    } else {
+      clip_space_translation = clip_point.xyz / clip_point.w;
+    }
 
     const mat4f node_trs = Transform<float>(
-                               /*in_translation=*/clip_point.xyz / clip_point.w,
+                               /*in_translation=*/clip_space_translation,
                                /*in_rotation=*/kIdentityQuatf,
                                /*in_scale=*/GetNode()->GetWorldScale())
                                .AsMat4();

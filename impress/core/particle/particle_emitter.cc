@@ -16,10 +16,12 @@
 
 #include "core/particle/particle_emitter.h"
 
+#include <memory>
 #include <utility>
 
 #include "absl/status/status.h"
 #include "core/async/future.h"
+#include "core/particle/custom_particle_behavior.h"
 #include "core/particle/node_particle_controller.h"
 #include "core/particle/particle_controller.h"
 #include "core/particle/particle_emitter_state.proto.imp.h"
@@ -27,10 +29,12 @@
 
 namespace imp {
 
-Future<absl::Status> ParticleEmitter::SetupWithState() {
+Future<absl::Status> ParticleEmitter::SetupWithState(
+    std::unique_ptr<CustomParticleBehavior> custom_particle_behavior) {
   // Create the particle controller based on the defined render type.
   if (state_.renderer == ParticleEmitterState::PARTICLE_RENDERER_NODE) {
-    return NodeParticleController::Create(GetNode(), state_)
+    return NodeParticleController::Create(GetNode(), state_,
+                                          std::move(custom_particle_behavior))
         .Then([this](OwnedParticleControllerPtr controller) {
           controller_ = std::move(controller);
         });

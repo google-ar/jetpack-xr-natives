@@ -19,6 +19,7 @@
 
 #include <cstdint>
 
+#include "absl/base/nullability.h"
 #include "absl/status/statusor.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
@@ -30,7 +31,7 @@ namespace imp::split_engine {
 flatbuffers::Offset<android_xr::schemas::ImageBasedLightingAsset>
 PackImageBasedLightingAsset(
     flatbuffers::FlatBufferBuilder& fbb, uint64_t id,
-    const SphericalHarmonics& spherical_harmonics,
+    const SphericalHarmonics* /*absl_nullable*/  spherical_harmonics,
     const ImageBasedLightingAssetCubemapImages& cubemap_images);
 
 // Unpacks a CubemapLevelImageContents from its flatbuffer equivalent.

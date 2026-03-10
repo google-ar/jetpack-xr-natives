@@ -36,6 +36,20 @@ struct EditorInfo {
     kSwitchingToEditMode
   };
 
+  // Selection mode for the editor.
+  enum class SelectionMode {
+    // In this mode, only a single node can be selected at any time. Selecting
+    // a new node will deselect any previously selected node.
+    kSingleNode,
+    // In this mode, multiple nodes can be selected simultaneously. Subsequent
+    // selections add to the current set of selected nodes.
+    kMultipleNodes,
+  };
+
+  // Indicates whether the editor is being displayed on a native or remote
+  // screen.
+  enum class DisplayMode { kNativeScreen, kRemoteScreen };
+
   virtual ~EditorInfo() = default;
 
   virtual bool IsEnabled() const = 0;
@@ -55,6 +69,9 @@ struct EditorInfo {
   // Outside of Sandbox builds, there is no UI for switching to and from
   // EditMode.
   virtual RunMode GetRunMode() const = 0;
+
+  // Returns the current DisplayMode. Native screen is the default mode.
+  virtual DisplayMode GetDisplayMode() const = 0;
 
   // Returns true if the Editor is paused.
   //

@@ -32,6 +32,8 @@ struct ProfileResult {
   virtual std::thread::id GetThreadId() const = 0;
   virtual uint32_t GetMemoryAllocated() const = 0;
   virtual uint16_t GetAllocationsCount() const = 0;
+  virtual int GetCallstackStartIndex() const = 0;
+  virtual int GetCallstackEndIndex() const = 0;
 };
 
 // All the data contained in a single sample in the profiler.
@@ -54,6 +56,11 @@ struct MainThreadProfileResult final : ProfileResult {
   // Int16 to save memory since 16 bits gives 65k allocations per sample.
   uint16_t allocation_count;
 
+  // Index of first allocation's call stack.
+  int callstack_start_index;
+  // Index of last allocation's call stack.
+  int callstack_end_index;
+
   inline uint64_t GetStartTimeNanos() const override {
     return static_cast<uint64_t>(relative_start_time_ns);
   }
@@ -69,6 +76,12 @@ struct MainThreadProfileResult final : ProfileResult {
   }
   inline uint16_t GetAllocationsCount() const override {
     return allocation_count;
+  }
+  inline int GetCallstackStartIndex() const override {
+    return callstack_start_index;
+  }
+  inline int GetCallstackEndIndex() const override {
+    return callstack_end_index;
   }
   std::thread::id GetThreadId() const override;
 };
@@ -97,6 +110,11 @@ struct WorkerProfileResult final : ProfileResult {
   // Int16 to save memory since 16 bits gives 65k allocations per sample.
   uint16_t allocation_count;
 
+  // Index of first allocation's call stack.
+  int callstack_start_index;
+  // Index of last allocation's call stack.
+  int callstack_end_index;
+
   inline uint64_t GetStartTimeNanos() const override { return start_time_ns; }
   inline uint64_t GetEndTimeNanos() const override { return end_time_ns; }
   inline absl::string_view GetName() const override { return name; }
@@ -106,6 +124,12 @@ struct WorkerProfileResult final : ProfileResult {
   }
   inline uint16_t GetAllocationsCount() const override {
     return allocation_count;
+  }
+  inline int GetCallstackStartIndex() const override {
+    return callstack_start_index;
+  }
+  inline int GetCallstackEndIndex() const override {
+    return callstack_end_index;
   }
   inline std::thread::id GetThreadId() const override { return thread_id; }
 };

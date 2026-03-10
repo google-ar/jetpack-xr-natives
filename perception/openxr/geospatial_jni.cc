@@ -299,10 +299,10 @@ Java_androidx_xr_arcore_openxr_OpenXrGeospatial_nativeCreateSurfaceAnchorAsync(
   XrQuaternionf xr_quaternion =
       ConvertToXrQuaternionf(env, eastUpSouthQuaternion_obj);
 
-  std::function<void(const XrSurfaceAnchorCreateCompletionANDROIDX2&)>
+  std::function<void(const XrSurfaceAnchorCreateCompletionANDROID&)>
       on_complete =
           [jvm, java_callback_global](
-              const XrSurfaceAnchorCreateCompletionANDROIDX2& completion) {
+              const XrSurfaceAnchorCreateCompletionANDROID& completion) {
             JNIEnv* env;
             bool attached = false;
             if (jvm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) ==
@@ -368,9 +368,9 @@ Java_androidx_xr_arcore_openxr_OpenXrGeospatial_nativeCreateSurfaceAnchorAsync(
 
   OpenXrManager::CreateAnchorResult result =
       xr_manager.CreateSurfaceAnchorAsync(
-          static_cast<XrSurfaceAnchorTypeANDROIDX2>(surfaceAnchorType),
-          latitude, longitude, altitudeRelativeToSurface, xr_quaternion,
-          on_complete, on_cancel);
+          static_cast<XrSurfaceAnchorTypeANDROID>(surfaceAnchorType), latitude,
+          longitude, altitudeRelativeToSurface, xr_quaternion, on_complete,
+          on_cancel);
 
   if (result != OpenXrManager::CreateAnchorResult::kSuccess) {
     env->DeleteGlobalRef(java_callback_global);

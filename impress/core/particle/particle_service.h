@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <list>
 
+#include "core/ncsb/node_handle.h"
 #include "core/particle/data_layout.h"
 #include "core/particle/particle_emitter_state.proto.imp.h"
 #include "core/particle/particle_instance.h"
@@ -39,7 +40,8 @@ namespace imp {
 class ParticleService {
  public:
   // Initializes the service.
-  ParticleService(const ParticleConfig& particle_config, int32_t max_particles);
+  ParticleService(const ParticleConfig& particle_config, int32_t max_particles,
+                  NodeHandle emitter_node);
 
   // Returns a ParticleInstance for the given particle_index. The object can
   // be used to inspect and modify the state of the particle for any behavior
@@ -64,6 +66,7 @@ class ParticleService {
   StandardParticleDataProvider data_provider_;
   int32_t max_particles_;
   std::list<int32_t> free_particle_indices_;
+  NodeHandle emitter_node_;
 };
 
 }  // namespace imp

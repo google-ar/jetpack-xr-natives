@@ -60,6 +60,7 @@ sk_sp<SkFontMgr> CreateFallbackFontManager() {
       Noto Sans Khmer
     */
     absl::string_view fonts[] = {
+        "/googlesans_medium.ttf",
         "/googlesans_arabic_medium.ttf",
         "/googlesans_japanese_medium.ttf",
         "/googlesans_myanmar_medium.ttf",

@@ -18,7 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_SELECTION_CONTROLLER_H_
 
 #include "absl/container/flat_hash_set.h"
-#include "core/editor/editor.h"
+#include "core/editor/editor_info.h"
 #include "core/ncsb/node_handle.h"
 
 namespace imp::editor {
@@ -26,7 +26,8 @@ namespace imp::editor {
 // Selection controller APIs. This is an interface that is used to select and
 // deselect nodes in the scene in the editor. It is virtual, so that it can be
 // used within framework code, avoiding a circular dependency between framework
-// and editor code.
+// and editor code. Therefore, it should not depend on either framework or
+// editor.h.
 //
 // Example usage:
 //
@@ -51,8 +52,8 @@ struct SelectionController {
   //     - The node becomes the *only* selected node.
   // When the node is invalid, deselect all nodes.
   virtual void TrySelectNode(NodeHandle node_to_select,
-                             Editor::SelectionMode selection_mode =
-                                 Editor::SelectionMode::kSingleNode) = 0;
+                             EditorInfo::SelectionMode selection_mode =
+                                 EditorInfo::SelectionMode::kSingleNode) = 0;
 
   // Disables selecting the model on ModelLoadedEvents. Enabled by default.
   virtual void DisableSelectModelWhenLoaded(

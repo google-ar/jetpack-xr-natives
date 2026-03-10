@@ -24,6 +24,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "dear_imgui/imgui.h"
+#include "dear_imgui/imgui_internal.h"
 #include "implot/implot.h"
 #include "core/common/trace.h"
 #include "core/editor/widgets/performance/circular_buffer.h"
@@ -33,14 +34,19 @@
 #include "core/editor/widgets/performance/monitor_panel.h"
 #include "core/editor/widgets/performance/sample_processor.h"
 #include "core/editor/widgets/performance/sample_processor_types.h"
+#include "core/performance/memory_stats.h"
 #include "core/performance/profiler.h"
 #include "core/view/base_view.h"
 
 namespace imp::editor {
 
 namespace {
+
+// Width of the legend to the left of the frame time plot.
+constexpr float kLegendWidth = 150.0f;
+
 // Custom Y-axis ticks for common frame rate targets
-static constexpr double kTicks[] = {
+constexpr double kTicks[] = {
     1000.0 / 30.0,   // 30 FPS
     1000.0 / 60.0,   // 60 FPS
     1000.0 / 90.0,   // 90 FPS
@@ -49,17 +55,47 @@ static constexpr double kTicks[] = {
     1000.0 / 240.0   // 240 FPS
 };
 
-static constexpr const char* kTickLabels[] = {
-    "33.3ms (30fps)", "16.7ms (60fps)", "11.1ms (90fps)",
-    "8.1ms (120fps)", "6.9ms (144fps)", "4.2ms (240fps)"};
+constexpr const char* kTickLabels[] = {"33.3ms (30fps)", "16.7ms (60fps)",
+                                       "11.1ms (90fps)", "8.1ms (120fps)",
+                                       "6.9ms (144fps)", "4.2ms (240fps)"};
 
 // How many tick labels to display at once.
 // Running at 30fps you will see the tick labels for 60, 90, and 30fps.
 // At 120 you will see the labels for 120, 144, and 240fps.
-static constexpr int kNumTickLabels = 3;
+constexpr int kNumTickLabels = 3;
 
 // Nanoseconds in a millisecond.
-static constexpr float kNanosPerMs = 1000000.0f;
+constexpr float kNanosPerMs = 1000000.0f;
+
+// Lower bound for the frame time plot.
+constexpr float kLowerFrameBound = 0.0f;
+
+// Width of the option bar items (record call stacks, show call stacks, etc).
+constexpr float kOptionBarItemWidth = 200.0f;
+
+// Padding from the left edge of the plot to the tick label text.
+constexpr float kTickLabelLeftPadding = 20.0f;
+
+// Horizontal margin around the tick label text rectangle.
+constexpr float kTickLabelRectMarginWidth = 4.0f;
+
+// Vertical margin around the tick label text rectangle.
+constexpr float kTickLabelRectMarginHeight = 2.0f;
+
+// Options for showing call stacks in the Options Bar.
+constexpr const char* kCallstackOptions[]{"Hide Callstacks", "Show Callstacks"};
+
+// Width of the splitter between the sample view and the call stack view.
+constexpr float kSplitterWidth = 2.0f;
+
+// Width of the selection area for the splitter.
+constexpr float kSplitterSelectionWidth = 8.0f;
+
+// Minimum width for the callstack panel.
+constexpr float kCallstackPanelMinWidth = 200.0f;
+
+// Minimum width for the sample view.
+constexpr float kSampleViewMinWidth = 500.0f;
 }  // namespace
 
 FrameTimePanel::FrameTimePanel(BaseView& view, int buffer_size)
@@ -104,7 +140,6 @@ void FrameTimePanel::DrawLegend(float width, float height) {
 void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
   IMP_TRACE();
 
-  constexpr float kLegendWidth = 150.0f;
   const int selected_frame_number = ImGuiHelper::GetSelectedFrameNumber();
 
   DrawLegend(kLegendWidth, height);
@@ -114,7 +149,6 @@ void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
   if (ImGui::BeginChild("##FrameTimePanelChild", ImVec2(width, height),
                         ImGuiChildFlags_Borders)) {
-    constexpr float lower_bound = 0;
     const float upper_bound = GetHighestVisibleFrameTimeMS(time_span_seconds);
 
     // Remove padding around the plot area
@@ -130,7 +164,7 @@ void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
           Profiler::GetCurrentFrameIndex() -
               time_span_seconds * details::kNumDisplayValuesPerSecond,
           Profiler::GetCurrentFrameIndex(), ImPlotCond_Always);
-      ImPlot::SetupAxisLimits(ImAxis_Y1, lower_bound, upper_bound,
+      ImPlot::SetupAxisLimits(ImAxis_Y1, kLowerFrameBound, upper_bound,
                               ImPlotCond_Always);
 
       UpdateValidTicks(upper_bound);
@@ -160,10 +194,10 @@ void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
         DrawSelectedSamplePlot();
 
         if (ImPlot::IsPlotHovered()) {
-          ImPlotPoint mouse = ImPlot::GetPlotMousePos();
+          const ImPlotPoint mouse = ImPlot::GetPlotMousePos();
           ImDrawList* draw_list = ImPlot::GetPlotDrawList();
 
-          int hovered_frame = static_cast<int>(std::floor(mouse.x));
+          const int hovered_frame = static_cast<int>(std::floor(mouse.x));
 
           DrawHighlightFrame(hovered_frame, draw_list);
 
@@ -193,10 +227,31 @@ void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
   // Options for changing the view and thread to display samples for.
   DrawOptionsBar(selected_frame_number);
 
+  float content_width = ImGui::GetContentRegionAvail().x;
+  if (show_callstack_) {
+    if (sample_view_width_ < 0) {
+      sample_view_width_ =
+          ImGui::GetContentRegionAvail().x - kCallstackPanelStartingWidth -
+          kSplitterSelectionWidth - ImGui::GetStyle().ItemSpacing.x * 2;
+    }
+    content_width = sample_view_width_;
+  }
+
   if (profiler_details_view_mode_ == ProfilerDetailsViewMode::kHierarchy) {
-    hierarchy_panel_.DrawPanel(selected_frame_number, sample_processor_, *this);
+    hierarchy_panel_.DrawPanel(content_width, selected_frame_number,
+                               sample_processor_, *this);
   } else {
-    flame_graph_.DrawPanel(selected_frame_number, sample_processor_, *this);
+    flame_graph_.DrawPanel(content_width, selected_frame_number,
+                           sample_processor_, *this);
+  }
+
+  if (show_callstack_) {
+    ImGui::SameLine();
+    DrawSplitter();
+    ImGui::SameLine();
+    callstack_panel_.DrawPanel(ImGui::GetContentRegionAvail().x,
+                               selected_frame_number, *this, sample_processor_,
+                               hierarchy_panel_.GetSelectedThreadId());
   }
 }
 
@@ -213,6 +268,51 @@ void FrameTimePanel::DrawOptionsBar(int selected_frame_number) {
                              ProfilerDetailsViewMode::kFlameGraph)) {
     profiler_details_view_mode_ = ProfilerDetailsViewMode::kFlameGraph;
   }
+
+  if (MemoryStats::IsCallstackTrackingSupported()) {
+    ImGui::SameLine();
+    // Allow us to switch between threads and see their samples.
+    ImGui::PushItemWidth(kOptionBarItemWidth);
+
+    ImGui::SameLine();
+    ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x -
+                            kOptionBarItemWidth * 2 -
+                            ImGui::GetStyle().ItemSpacing.x,
+                        0));
+    ImGui::SameLine();
+    ImGui::Combo("##callstack", &show_callstack_, kCallstackOptions, 2);
+
+    ImGui::SameLine();
+    bool record_callstacks = Profiler::IsRecordingCallstacks();
+    if (ImGui::Checkbox("Memory Callstacks", &record_callstacks)) {
+      Profiler::SetRecordingCallstacks(record_callstacks);
+    }
+    ImGui::PopItemWidth();
+  }
+}
+
+void FrameTimePanel::DrawSplitter() {
+  ImGui::BeginChild("##splitter_callstack",
+                    ImVec2(kSplitterSelectionWidth, -1));
+
+  const ImVec2 child_pos = ImGui::GetCursorScreenPos();
+  const float child_height = ImGui::GetContentRegionAvail().y;
+
+  // Make the splitter selection area taller than the visible rectangle.
+  ImVec2 rect_min = child_pos;
+  rect_min.x += kSplitterSelectionWidth / 2.0f - kSplitterWidth / 2.0f;
+  const ImVec2 rect_max =
+      ImVec2(rect_min.x + kSplitterWidth, child_pos.y + child_height);
+  ImGui::GetWindowDrawList()->AddRectFilled(
+      rect_min, rect_max, ImGui::GetColorU32(IM_COL32(255, 255, 255, 150)));
+
+  ImGui::SplitterBehavior(
+      ImRect(child_pos, ImVec2(child_pos.x + kSplitterSelectionWidth,
+                               child_pos.y + child_height)),
+      ImGui::GetID("##splitter"), ImGuiAxis_X, &sample_view_width_,
+      &callstack_panel_width_, kSampleViewMinWidth, kCallstackPanelMinWidth,
+      0.0f);
+  ImGui::EndChild();
 }
 
 void FrameTimePanel::UpdateValidTicks(float upper_bound) {
@@ -227,18 +327,12 @@ void FrameTimePanel::UpdateValidTicks(float upper_bound) {
 
 void FrameTimePanel::DrawTickLabels(ImDrawList* draw_list,
                                     ValidTicks valid_ticks) {
-  constexpr float kTickLabelLeftPadding = 20.0f;
-  constexpr float kTickLabelRectMarginWidth = 4.0f;
-  constexpr float kTickLabelRectMarginHeight = 2.0f;
-  constexpr float kTickLabelTextOffsetX = 2.0f;
-  constexpr float kTickLabelTextOffsetY = 1.0f;
-
   if (valid_ticks.values.empty()) return;
 
   // Manually draw Y-axis tick labels inside the plot
   ImPlot::PushPlotClipRect();
-  float plot_left_x = ImPlot::GetPlotPos().x;
-  size_t num_labels_to_draw =
+  const float plot_left_x = ImPlot::GetPlotPos().x;
+  const size_t num_labels_to_draw =
       std::min(static_cast<size_t>(kNumTickLabels), valid_ticks.labels.size());
 
   for (size_t i = 0; i < num_labels_to_draw; ++i) {
@@ -248,15 +342,15 @@ void FrameTimePanel::DrawTickLabels(ImDrawList* draw_list,
                   kTickLabelLeftPadding;  // Small padding from the left edge
 
     // Add a small background box for contrast.
-    ImVec2 text_size = ImGui::CalcTextSize(valid_ticks.labels[i]);
+    const ImVec2 text_size = ImGui::CalcTextSize(valid_ticks.labels[i]);
     draw_list->AddRectFilled(
         label_pos,
         ImVec2(label_pos.x + text_size.x + kTickLabelRectMarginWidth,
                label_pos.y + text_size.y + kTickLabelRectMarginHeight),
         IM_COL32(0, 0, 0, 100));
 
-    draw_list->AddText(ImVec2(label_pos.x + kTickLabelTextOffsetX,
-                              label_pos.y + kTickLabelTextOffsetY),
+    draw_list->AddText(ImVec2(label_pos.x + kTickLabelRectMarginWidth / 2.0f,
+                              label_pos.y + kTickLabelRectMarginHeight / 2.0f),
                        IM_COL32_WHITE, valid_ticks.labels[i]);
   }
   ImPlot::PopPlotClipRect();
@@ -282,13 +376,13 @@ void FrameTimePanel::PopulateSelectedSampleBuffer() {
     return;
   }
 
-  std::thread::id main_thread_id = Profiler::GetMainThreadId();
+  const std::thread::id main_thread_id = Profiler::GetMainThreadId();
 
-  int end_index = Profiler::GetCurrentFrameIndex() - 1;
-  int start_index = end_index - Profiler::kMaxFrames;
+  const int end_index = Profiler::GetCurrentFrameIndex() - 1;
+  const int start_index = end_index - Profiler::kMaxFrames;
 
   for (size_t i = 0; i < Profiler::kMaxFrames; ++i) {
-    int frame_index = start_index + i;
+    const int frame_index = start_index + i;
 
     selected_sample_buffer_[i].frame_number = static_cast<float>(frame_index);
     selected_sample_buffer_[i].frame_time_ms = 0.0f;
@@ -333,10 +427,10 @@ void FrameTimePanel::DrawHighlightFrame(int frame_number, ImDrawList* draw_list,
                                         ImU32 color, float frame_width) {
   if (!draw_list) return;
 
-  float tool_l = ImPlot::PlotToPixels(frame_number - frame_width, 0).x;
-  float tool_r = ImPlot::PlotToPixels(frame_number + frame_width, 0).x;
-  float tool_t = ImPlot::GetPlotPos().y;
-  float tool_b = tool_t + ImPlot::GetPlotSize().y;
+  const float tool_l = ImPlot::PlotToPixels(frame_number - frame_width, 0).x;
+  const float tool_r = ImPlot::PlotToPixels(frame_number + frame_width, 0).x;
+  const float tool_t = ImPlot::GetPlotPos().y;
+  const float tool_b = tool_t + ImPlot::GetPlotSize().y;
   ImPlot::PushPlotClipRect();
   draw_list->AddRectFilled(ImVec2(tool_l, tool_t), ImVec2(tool_r, tool_b),
                            color);
@@ -377,9 +471,9 @@ void FrameTimePanel::DrawToolTip(int frame_number) {
   if (!Profiler::HasFrameRecorded(frame_number)) return;
 
   ImGui::BeginTooltip();
-  float frame_time_ms =
+  const float frame_time_ms =
       Profiler::GetTotalFrameDurationNanos(frame_number) / kNanosPerMs;
-  float player_loop_time_ms =
+  const float player_loop_time_ms =
       Profiler::GetRenderNextFrameDurationNanos(frame_number) / kNanosPerMs;
 
   ImGui::Text("Frame: %d", frame_number);
@@ -397,13 +491,13 @@ void FrameTimePanel::Update(absl::Duration elapsed_time,
   // We can't use the current frame index here because that frame is still in
   // progress and the profiler can't see into the future to know how long it
   // will take. Instead we record the last frame times.
-  int64_t frame_index = Profiler::GetCurrentFrameIndex() - 1;
+  const int64_t frame_index = Profiler::GetCurrentFrameIndex() - 1;
   sample_processor_.ProcessMainThreadSamples(frame_index);
   samples_processed_since_last_update_ = true;
-  float frame_time_ms =
+  const float frame_time_ms =
       static_cast<float>(Profiler::GetTotalFrameDurationNanos(frame_index)) /
       kNanosPerMs;
-  float player_loop_time_ms =
+  const float player_loop_time_ms =
       static_cast<float>(
           Profiler::GetRenderNextFrameDurationNanos(frame_index)) /
       kNanosPerMs;

@@ -17,12 +17,18 @@ load(
     "flatbuffer_cc_library",
 )
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("//build_tools:assets.bzl", "imp_assets")
 load(
     "//build_tools:imp.bzl",
     "IMP_FLATBUFFER_INCLUDE_PATHS",
     "IMP_FLATC_ARGS",
     "imp_copts",
     "imp_defines",
+    "imp_embed_generic_materials",
+)
+load(
+    "//build_tools:imp_gstatic_urls.bzl",
+    "imp_gstatic_urls",
 )
 
 package(
@@ -33,6 +39,51 @@ package(
 )
 
 licenses(["notice"])
+
+GENERIC_MATERIALS_ZIP = "//core/loader/data:compiled_imp_default_gltf_materials.zip"
+
+GENERIC_LITE_MATERIALS_ZIP = "//core/loader/data:compiled_imp_default_lite_gltf_materials.zip"
+
+imp_assets(
+    name = "generic_materials",
+    srcs = [GENERIC_MATERIALS_ZIP],
+    embed = imp_embed_generic_materials(),
+    namespace = "imp::materials",
+    urls = imp_gstatic_urls(
+        [GENERIC_MATERIALS_ZIP],
+        ["compiled_imp_default_gltf_materials"],
+    ),
+)
+
+imp_assets(
+    name = "generic_lite_materials",
+    srcs = [GENERIC_LITE_MATERIALS_ZIP],
+    embed = imp_embed_generic_materials(),
+    namespace = "imp::materials",
+    urls = imp_gstatic_urls(
+        [GENERIC_LITE_MATERIALS_ZIP],
+        ["compiled_imp_default_lite_gltf_materials"],
+    ),
+)
+
+# Version of generic materials assets that are always embedded regardless of build flags.
+# This is used in tests to embed required assets that would normally be downloaded.
+# See mock_url_loader.h for how this is used.
+imp_assets(
+    name = "generic_materials_always_embedded",
+    srcs = [GENERIC_MATERIALS_ZIP],
+    base_url = "https://www.gstatic.com/ar/core/viewer",
+    embed = True,
+    namespace = "imp::materials_embedded",
+)
+
+imp_assets(
+    name = "generic_lite_materials_always_embedded",
+    srcs = [GENERIC_LITE_MATERIALS_ZIP],
+    base_url = "https://www.gstatic.com/ar/core/viewer",
+    embed = True,
+    namespace = "imp::materials_embedded",
+)
 
 schemas = [
     "schemas/generic_material.fbs",

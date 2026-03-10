@@ -101,6 +101,7 @@ public:
 
     struct GLSwapChain : public HwSwapChain {
         using HwSwapChain::HwSwapChain;
+        TargetBufferFlags attachments{};
         bool rec709 = false;
         struct {
             CallbackHandler* handler = nullptr;
@@ -363,6 +364,8 @@ private:
             bool isDefaultFramebuffer) noexcept;
 
     // Common methods
+    void readPixelsFromBoundFramebuffer(uint32_t x, uint32_t y, uint32_t width, uint32_t height,
+            PixelBufferDescriptor&& p);
     void createTextureCommon(Handle<HwTexture> th, SamplerType target, uint8_t levels,
             TextureFormat format, uint8_t samples, uint32_t width, uint32_t height, uint32_t depth,
             TextureUsage usage, utils::ImmutableCString&& tag);
@@ -407,6 +410,9 @@ private:
     struct {
         DescriptorSetHandle dsh;
         std::array<uint32_t, CONFIG_UNIFORM_BINDING_COUNT> offsets;
+#ifndef NDEBUG
+        utils::ImmutableCString tag;
+#endif
     } mBoundDescriptorSets[MAX_DESCRIPTOR_SET_COUNT] = {};
 
     void clearWithRasterPipe(TargetBufferFlags clearFlags,

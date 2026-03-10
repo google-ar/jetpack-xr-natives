@@ -172,6 +172,21 @@ JNI_METHOD_AOSP(void, nSetGltfReformAffordanceEnabled)
                impress_node, enable_affordance, system_movable));
 }
 
+JNI_METHOD_AOSP(void, nAnimateGltfModelNew)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
+ jstring animation_name, jboolean loop, jfloat speed, jfloat start_time,
+ jint channel_id, jobject j_asset_animator) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  auto asset_animator =
+      std::make_unique<imp::AssetAnimator>(env, j_asset_animator);
+
+  view->GetModelManager().AnimateGltfModelNew(
+      impress_node, imp::GetString(env, animation_name), loop, speed,
+      start_time, channel_id, std::move(asset_animator));
+}
+
+// TODO: (broken link) - Remove old animation APIs once all clients are migrated
+// to new animation system.
 JNI_METHOD_AOSP(void, nAnimateGltfModel)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
  jstring animation_name, jboolean loop, jobject j_asset_animator) {
@@ -183,6 +198,17 @@ JNI_METHOD_AOSP(void, nAnimateGltfModel)
                                            loop, std::move(asset_animator));
 }
 
+JNI_METHOD_AOSP(void, nStopGltfModelAnimationNew)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
+ jint channel_id) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  (void)imp::android::ThrowIfError(
+      env, view->GetModelManager().StopGltfModelAnimationNew(impress_node,
+                                                             channel_id));
+}
+
+// TODO: (broken link) - Remove old animation APIs once all clients are migrated
+// to new animation system.
 JNI_METHOD_AOSP(void, nStopGltfModelAnimation)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
@@ -190,6 +216,17 @@ JNI_METHOD_AOSP(void, nStopGltfModelAnimation)
       env, view->GetModelManager().StopGltfModelAnimation(impress_node));
 }
 
+JNI_METHOD_AOSP(void, nToggleGltfModelAnimationNew)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
+ jboolean toggle, jint channel_id) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  (void)imp::android::ThrowIfError(
+      env, view->GetModelManager().ToggleGltfModelAnimationNew(
+               impress_node, toggle, channel_id));
+}
+
+// TODO: (broken link) - Remove old animation APIs once all clients are migrated
+// to new animation system.
 JNI_METHOD_AOSP(void, nToggleGltfModelAnimation)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
  jboolean toggle) {
@@ -240,6 +277,20 @@ JNI_METHOD_AOSP(jstring, nGetGltfModelAnimationName)
     return nullptr;
   }
   return env->NewStringUTF(result->c_str());
+}
+
+JNI_METHOD_AOSP(jfloat, nGetGltfModelAnimationDurationSeconds)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
+ jint index) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  absl::StatusOr<float> result =
+      view->GetModelManager().GetGltfModelAnimationDurationSeconds(impress_node,
+                                                                   index);
+  if (!imp::android::ThrowIfError(env, result).ok()) {
+    // Returned value does not matter since an exception was thrown.
+    return -1.0f;
+  }
+  return *result;
 }
 
 JNI_METHOD_AOSP(void, nGetGltfModelLocalBounds)
@@ -387,6 +438,47 @@ JNI_METHOD_AOSP(void, nGetImpressNodeLocalTransform)
   env->SetFloatArrayRegion(out_transform, 0, 10, raw_data);
 }
 
+JNI_METHOD_AOSP(void, nSetImpressNodeRelativeTransform)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
+ jint relative_impress_node, jfloat tx, jfloat ty, jfloat tz, jfloat qx,
+ jfloat qy, jfloat qz, jfloat qw, jfloat sx, jfloat sy, jfloat sz) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+
+  imp::Transform<float> transform;
+  transform.translation = {tx, ty, tz};
+  transform.rotation = {qx, qy, qz, qw};
+  transform.scale = {sx, sy, sz};
+
+  (void)imp::android::ThrowIfError(
+      env, view->GetNodeManager().SetImpressNodeRelativeTransform(
+               impress_node, relative_impress_node, transform));
+}
+
+JNI_METHOD_AOSP(void, nGetImpressNodeRelativeTransform)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
+ jint relative_impress_node, jfloatArray out_transform) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+
+  if (out_transform == nullptr || env->GetArrayLength(out_transform) < 10) {
+    (void)imp::android::ThrowIfError(
+        env, absl::InvalidArgumentError("Array not present or too small."));
+    return;
+  }
+
+  absl::StatusOr<imp::Transform<float>> result =
+      view->GetNodeManager().GetImpressNodeRelativeTransform(
+          impress_node, relative_impress_node);
+  if (!imp::android::ThrowIfError(env, result.status()).ok()) return;
+
+  float raw_data[10] = {result->translation.x, result->translation.y,
+                        result->translation.z, result->rotation.x,
+                        result->rotation.y,    result->rotation.z,
+                        result->rotation.w,    result->scale.x,
+                        result->scale.y,       result->scale.z};
+
+  env->SetFloatArrayRegion(out_transform, 0, 10, raw_data);
+}
+
 // TODO: (broken link) - Update this to return Status
 JNI_METHOD_AOSP(jint, nCreateStereoSurfaceEntity)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, int stereo_mode,
@@ -398,25 +490,25 @@ JNI_METHOD_AOSP(jint, nCreateStereoSurfaceEntity)
       stereo_mode >
           static_cast<int>(
               imp::MediaStereoMode::kInterleavedRightPrimaryWithDepth)) {
-    stereo_mode = static_cast<int>(imp::MediaStereoMode::kUnknown);
     IMP_LOG(imp::ERROR) << "Invalid stereo mode provided: " << stereo_mode
                << ". Using kUnknown instead.";
+    stereo_mode = static_cast<int>(imp::MediaStereoMode::kUnknown);
   }
 
   // Validate content security level.
   if (content_security_level !=
       static_cast<int>(imp::ContentSecurityLevel::kProtected)) {
-    content_security_level = static_cast<int>(imp::ContentSecurityLevel::kNone);
     IMP_LOG(imp::ERROR) << "Invalid content security level provided: "
                << content_security_level << ". Using kNone instead.";
+    content_security_level = static_cast<int>(imp::ContentSecurityLevel::kNone);
   }
 
   // Validate blending mode.
   if (blending_mode < static_cast<int>(imp::MediaBlendingMode::kTransparent) ||
       blending_mode > static_cast<int>(imp::MediaBlendingMode::kOpaque)) {
-    blending_mode = static_cast<int>(imp::MediaBlendingMode::kTransparent);
     IMP_LOG(imp::ERROR) << "Invalid blending mode provided: " << blending_mode
                << ". Using kTransparent instead.";
+    blending_mode = static_cast<int>(imp::MediaBlendingMode::kTransparent);
   }
 
   bool use_super_sampling_bool = use_super_sampling == JNI_TRUE;
@@ -468,7 +560,7 @@ JNI_METHOD_AOSP(void, nSetStereoSurfaceEntityCanvasShapeCustomMesh)
  jobject right_positions, jobject right_texcoords, jobject right_indices,
  jint draw_mode) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  absl::StatusOr<imp::StereoSurface::CustomMesh> mesh = imp::BuildCustomMesh(
+  absl::StatusOr<imp::StereoSurface::StereoMesh> mesh = imp::BuildStereoMesh(
       env, left_positions, left_texcoords, left_indices, right_positions,
       right_texcoords, right_indices, draw_mode);
   if (!imp::android::ThrowIfError(env, mesh.status()).ok()) {
@@ -536,9 +628,9 @@ JNI_METHOD_AOSP(void, nSetStereoModeForStereoSurfaceEntity)
       stereo_mode >
           static_cast<int>(
               imp::MediaStereoMode::kInterleavedRightPrimaryWithDepth)) {
-    stereo_mode = static_cast<int>(imp::MediaStereoMode::kUnknown);
     IMP_LOG(imp::ERROR) << "Invalid stereo mode provided: " << stereo_mode
                << ". Using kUnknown instead.";
+    stereo_mode = static_cast<int>(imp::MediaStereoMode::kUnknown);
   }
 
   (void)imp::android::ThrowIfError(
@@ -630,6 +722,18 @@ JNI_METHOD_AOSP(void, nSetAuxiliaryAlphaMaskForStereoSurfaceEntity)
       env, view->GetStereoSurfaceManager()
                .SetAuxiliaryAlphaMaskForStereoSurfaceEntity(node_id,
                                                             alpha_mask_token));
+}
+
+// TODO: Add support for StereoSubViews which would take separate
+// rectangles for the left and right eye.
+JNI_METHOD_AOSP(void, nSetSubViewConfigForStereoSurfaceEntity)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id, jfloat bottom,
+ jfloat left, jfloat right, jfloat top) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  auto unused = imp::android::ThrowIfError(
+      env,
+      view->GetStereoSurfaceManager().SetSubViewConfigForStereoSurfaceEntity(
+          node_id, bottom, left, right, top));
 }
 
 JNI_METHOD_AOSP(void, nLoadTexture)
@@ -1194,29 +1298,6 @@ JNI_METHOD_AOSP(void, nDestroyNativeObject)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong handle) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
   view->DestroyNativeObject(handle);
-}
-
-// TODO Remove this API once the migration to the new introspection
-// APIs is complete.
-JNI_METHOD_AOSP(void, nSetMaterialOverride)
-(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
- jlong material, jstring node_name, jint primitive_index) {
-  auto view = FromJava<imp::ImpressApiView>(view_handle);
-  (void)imp::android::ThrowIfError(
-      env, view->GetModelManager().SetMaterialOverride(
-               impress_node, material, imp::GetString(env, node_name),
-               primitive_index));
-}
-
-// TODO Remove this API once the migration to the new introspection
-// APIs is complete.
-JNI_METHOD_AOSP(void, nClearMaterialOverride)
-(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
- jstring node_name, jint primitive_index) {
-  auto view = FromJava<imp::ImpressApiView>(view_handle);
-  (void)imp::android::ThrowIfError(
-      env, view->GetModelManager().ClearMaterialOverride(
-               impress_node, imp::GetString(env, node_name), primitive_index));
 }
 
 JNI_METHOD_AOSP(void, nSetGltfModelNodeMaterialOverride)

@@ -15,6 +15,9 @@
  */
 #include "core/split_engine/split_engine_external_texture_color_space_store.h"
 
+#include <functional>
+#include <utility>
+
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "core/media/media_color_space.h"
@@ -27,15 +30,19 @@ SplitEngineExternalTextureColorSpaceStore::GetTextureColorSpace(
     BridgeId bridge_id, TextureId texture_id) const {
   auto it = color_spaces_.find({bridge_id, texture_id});
   if (it != color_spaces_.end()) {
-    return it->second;
+    return it->second();
   }
   return absl::NotFoundError("Color space not found for texture");
 }
 
 void SplitEngineExternalTextureColorSpaceStore::SetTextureColorSpace(
     BridgeId bridge_id, TextureId texture_id,
-    const MediaColorSpace& color_space) {
-  color_spaces_[{bridge_id, texture_id}] = color_space;
+    std::function<MediaColorSpace()> get_source_color_space_fn) {
+  // Note that we are storing the function that gets the color space, not the
+  // color space itself. This is because when we initially query the color
+  // space, the buffer may not have been initialized, so the color space is
+  // not yet available.
+  color_spaces_[{bridge_id, texture_id}] = std::move(get_source_color_space_fn);
 }
 
 void SplitEngineExternalTextureColorSpaceStore::RemoveTextureColorSpace(

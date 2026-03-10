@@ -112,6 +112,7 @@ cc_library(
         "@com_google_impress//core/common:log",
         "@flatbuffers",
         "@mediapipe//mediapipe/framework/port:status",
+        "@third_party//filament/filament/backend:platform",
         "@third_party//filament/libs:filamat",
         "@third_party//filament/libs:matp",
         "@third_party//filament/libs:utils_hdrs",

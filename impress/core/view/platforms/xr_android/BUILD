@@ -58,6 +58,7 @@ cc_library(
     defines = imp_defines(),
     deps = [
         "//core:config",
+        "@third_party//OpenXR_KHR:generated_openxr_headers_public",
         "@third_party//OpenXR_KHR:openxr_headers_androidxr",
         "@third_party//filament/filament/backend:platform",
     ] + select({

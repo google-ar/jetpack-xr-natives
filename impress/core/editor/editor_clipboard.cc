@@ -31,7 +31,7 @@
 #include "core/common/registry.h"
 #include "core/common/robin_set.h"
 #include "core/editor/command_manager.h"
-#include "core/editor/editor.h"
+#include "core/editor/editor_info.h"
 #include "core/editor/events.h"
 #include "core/editor/function_command.h"
 #include "core/editor/selection_controller.h"
@@ -411,7 +411,7 @@ Future<std::vector<NodeHandle>> EditorClipboard::PasteImpl(
                   .Get<SelectionController>()
                   ->get()
                   .TrySelectNode(node_handle,
-                                 Editor::SelectionMode::kMultipleNodes);
+                                 EditorInfo::SelectionMode::kMultipleNodes);
               return node_handle;
             }));
   }

@@ -98,11 +98,13 @@ void ConfigurePaintForStrokeTextOptions(
 
 AndroidPlatformCanvasSource::AndroidPlatformCanvasSource(
     Context context, AndroidGlyphSource::Method glyph_method,
-    bool use_hardware_rendering, int glyph_cache_size_bytes)
+    bool use_hardware_rendering, int glyph_cache_size_bytes,
+    bool force_individual_glyph_source_instances)
     : context_(context),
       paint_(context_),
       stroke_paint_(context_),
-      glyph_source_(context_, glyph_method, glyph_cache_size_bytes),
+      glyph_source_(context_, glyph_method, glyph_cache_size_bytes,
+                    force_individual_glyph_source_instances),
       use_hardware_rendering_(use_hardware_rendering) {
   paint_.SetAntiAlias(true);
   stroke_paint_.SetAntiAlias(true);
@@ -216,9 +218,8 @@ std::unique_ptr<ScopedCanvas> AndroidPlatformCanvasSource::StartDrawing(
   bool did_texture_change = false;
 
   bool enable_memory_leak_fix =
-      view.GetConfig()
-          .experimental_feature_flags.surface_texture_memory_leak_fix.value_or(
-              false);
+      *view.GetConfig()
+           .experimental_feature_flags->surface_texture_memory_leak_fix;
 
   if (!surface_texture_) {
     // TODO: (broken link) - why do we pass 0 as textureId?
@@ -246,9 +247,8 @@ std::unique_ptr<ScopedCanvas> AndroidPlatformCanvasSource::StartDrawing(
   bool did_texture_change = false;
   if (!surface_texture_) {
     bool enable_memory_leak_fix =
-        view.GetConfig()
-            .experimental_feature_flags.surface_texture_memory_leak_fix
-            .value_or(false);
+        *view.GetConfig()
+             .experimental_feature_flags->surface_texture_memory_leak_fix;
 
     // TODO: (broken link) - why do we pass 0 as textureId?
     surface_texture_ = std::make_unique<android::SurfaceTexture>(

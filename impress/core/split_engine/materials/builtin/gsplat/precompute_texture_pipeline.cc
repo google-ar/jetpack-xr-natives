@@ -14,24 +14,27 @@
 
 #include "core/split_engine/materials/builtin/gsplat/precompute_texture_pipeline.h"
 
+#include <optional>
 #include <string>
 #include <utility>
 
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
-#include "absl/strings/string_view.h"
 #include "core/assets/asset_ptr.h"
 #include "core/assets/material/material_asset.h"
 #include "core/async/future.h"
 #include "core/common/small_source_location.h"
+#include "core/geometry/shapes/box.h"
 #include "core/materials/material.h"
 #include "core/math/vec.h"
+#include "core/model/mesh/mesh.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node.h"
+#include "core/render/mesh_renderer.h"
 #include "core/render/texture.h"
 #include "core/render_passes/texture_pipeline_renderer.h"
 #include "core/render_passes/texture_pipeline_renderer_state.proto.imp.h"
-#include "core/split_engine/materials/builtin/gsplat/gsplat_material_deserializer_assets.h"
+#include "core/resources/resource_definition.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/material_factory.h"
@@ -44,16 +47,24 @@ namespace imp::split_engine {
 namespace {
 // An offscreen quad for the precompute pass.
 imp::ComponentHandle<imp::MeshRenderer> CreateMeshRenderer(
-    NodeHandle precompute_node, imp::BorrowedMaterialPtr precompute_material) {
+    NodeHandle precompute_node, imp::BorrowedMaterialPtr precompute_material,
+    std::optional<imp::Box> aabb_override) {
   const std::string texture_group_name =
       absl::StrCat(precompute_node.GetEntity().getId());
-  precompute_node->SetName("ParticleRendererDataPrecompute");
   precompute_node->SetGroups({texture_group_name});
+  auto culling_mode = aabb_override
+                          ? imp::MeshRenderer::FrustumCullingMode::kEnabled
+                          : imp::MeshRenderer::FrustumCullingMode::kDisabled;
   imp::ComponentHandle<imp::MeshRenderer> mesh_renderer =
-      precompute_node->AddComponent<imp::MeshRenderer>(
-          imp::MeshRenderer::FrustumCullingMode::kDisabled);
-  mesh_renderer->SetMesh(
-      precompute_node->GetView().GetMeshFactory().CreateQuad());
+      precompute_node->AddComponent<imp::MeshRenderer>(culling_mode);
+
+  imp::OwnedMeshPtr mesh =
+      precompute_node->GetView().GetMeshFactory().CreateQuad();
+  if (aabb_override.has_value()) {
+    mesh->AssignAabb(*aabb_override);
+  }
+  mesh_renderer->SetMesh(std::move(mesh));
+
   mesh_renderer->SetShadowCastingMode(imp::MeshRenderer::ShadowMode::kNone);
   mesh_renderer->SetShadowReceivingMode(imp::MeshRenderer::ShadowMode::kNone);
   mesh_renderer->SetMaterial(std::move(precompute_material));
@@ -95,21 +106,29 @@ CreateTexturePipelineRenderer(NodeHandle precompute_node, uint2 size) {
 }  // namespace
 
 imp::Future<absl::Status> PrecomputeTexturePipeline::Setup() {
+  return absl::UnimplementedError(
+      "PrecomputeTexturePipeline does not support parameterless setup.");
+}
+
+imp::Future<absl::Status> PrecomputeTexturePipeline::Setup(
+    resources::ResourceDefinition precompute_material_definition,
+    std::optional<imp::Box> aabb_override) {
   imp::BaseView& view = GetView();
   imp::NodeHandle precompute_node = GetNode();
 
   return view.GetAssetManager()
-      .LoadMaterial(kBuiltinGsplatDataPrecomputeMatCmat)
+      .LoadMaterial(precompute_material_definition)
       .Then([this](AssetPtr<MaterialAsset> material_asset) -> absl::Status {
         precompute_material_ = OwnedMaterialPtr(
             GetView().GetMaterialFactory().CreateMaterial(material_asset));
         return absl::OkStatus();
       })
-      .Then([this, precompute_node](absl::Status status) mutable {
-        mesh_renderer_ =
-            CreateMeshRenderer(precompute_node, precompute_material_.Borrow());
-        return absl::OkStatus();
-      })
+      .Then(
+          [this, precompute_node, aabb_override](absl::Status status) mutable {
+            mesh_renderer_ = CreateMeshRenderer(
+                precompute_node, precompute_material_.Borrow(), aabb_override);
+            return absl::OkStatus();
+          })
       .Then([this](absl::Status status) mutable {
         return CreateTexturePipelineRenderer(GetNode(), size_)
             .Then([this](ComponentHandle<TexturePipelineRenderer> renderer) {
@@ -123,6 +142,10 @@ void PrecomputeTexturePipeline::Cleanup() {
   // Cleanup components which this class added
   GetNode()->RemoveComponent<imp::MeshRenderer>();
   GetNode()->RemoveComponent<imp::TexturePipelineRenderer>();
+}
+
+void PrecomputeTexturePipeline::OnActiveStatusChanged(bool is_active) {
+  texture_pipeline_renderer_->SetPassEnabled(0, is_active);
 }
 
 BorrowedMaterialPtr PrecomputeTexturePipeline::BorrowMaterial(

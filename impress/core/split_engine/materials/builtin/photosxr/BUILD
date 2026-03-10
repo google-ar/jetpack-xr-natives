@@ -39,6 +39,7 @@ cc_library(
         "//core/assets",
         "//core/assets/material:material_asset",
         "//core/async:future",
+        "//core/common:small_source_location",
         "//core/material_library:flatbuffer_utils",
         "//core/material_library:material_package",
         "//core/materials",

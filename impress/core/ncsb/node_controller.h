@@ -23,7 +23,6 @@
 #include <string>
 #include <vector>
 
-#include "absl/container/flat_hash_set.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "filament/libs/utils/include/utils/Entity.h"
@@ -148,6 +147,10 @@ class NodeController {
 
   void RemoveFromGroupSelf(absl::string_view group_name);
 
+  // Called when the groups change. This is used to notify external systems
+  // (such as the SplitEngineSerializer) that the groups have changed.
+  void OnGroupsChanged();
+
   void UpdateActiveRecursive(bool is_parent_active);
 
   void UpdateActiveSelf(bool is_parent_active);
@@ -170,6 +173,14 @@ class NodeController {
 
   void UpdateInheritedGroupsSelf();
 
+  // Returns the current explicit groups, or Main group if null (Implicit Main).
+  // This internal helper is for read-only access to the storage.
+  const std::vector<HashValue>& GetGroupHashes() const;
+
+  // Returns mutable reference to groups, allocating if necessary (copying
+  // Main).
+  std::vector<HashValue>& MutableGroups();
+
   BaseView* view_;
 
   NodeHandle node_;
@@ -184,8 +195,11 @@ class NodeController {
   // If group_hashes_ is null, then this node is part of the main
   // layer: GroupsManager::kMainSceneName
   //
-  // Otherwise, group_hashes_ contains the hash values for the layers
-  // that this node is part of.
+  // Otherwise, group_hashes_ contains the sorted unique hash values for the
+  // layers that this node is part of.
+  //
+  // This uses a vector for performance (contiguous memory, fast iteration) and
+  // simplicity. It is kept sorted to allow efficient set operations.
   //
   // This would be simpler to implement as a plain set<string>, but this data
   // structure is being used to minimize the impact of layers on memory usage.
@@ -193,7 +207,7 @@ class NodeController {
   // This way, for nodes that are only part of the default main layer, the only
   // memory overhead is a single pointer. for nodes that are part of custom
   // layers, hash values is less memory than a set of strings.
-  std::unique_ptr<absl::flat_hash_set<HashValue>> group_hashes_;
+  std::unique_ptr<std::vector<HashValue>> group_hashes_;
 
   quatf local_rotation_ = kIdentityQuatf;
   float3 local_scale_ = kOne3;

@@ -26,6 +26,7 @@ imp_assets(
     srcs = [
         "Footprint.glb",
         "Footprint_Scalable.glb",
+        "scale_handle.glb",
     ],
     namespace = "imp",
 )

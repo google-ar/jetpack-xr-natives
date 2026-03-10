@@ -124,6 +124,7 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         ":glyph_emulator",
+        ":text_glyphs",
         ":text_helpers",
         ":text_metrics_cc_proto",
         "//core:config",
@@ -192,17 +193,20 @@ cc_library(
     srcs = [
         "glyph_atlas_slice.cc",
         "sliced_glyph_atlas.cc",
+        "sliced_glyph_atlas_helpers.cc",
         "sliced_glyph_texture_manager.cc",
     ],
     hdrs = [
         "glyph_atlas_slice.h",
         "sliced_glyph_atlas.h",
+        "sliced_glyph_atlas_helpers.h",
         "sliced_glyph_texture_manager.h",
     ],
     copts = imp_google3_copts(),
     deps = [
         ":glyph_emulator",
         ":sliced_glyph_atlas_assets",
+        ":text_glyphs",
         ":text_helpers",
         ":text_metrics_cc_proto",
         "//core:config",
@@ -328,6 +332,20 @@ cc_proto_library(
 )
 
 cc_library(
+    name = "text_glyphs",
+    hdrs = ["text_glyphs.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        "//core/common:ref_counter",
+        "//core/common:typed_ids",
+        "//core/common:typed_set_vector",
+        "//core/math",
+        "@com_google_absl//absl/types:span",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "text_renderer",
     srcs = [
         "text_renderer.cc",
@@ -340,6 +358,7 @@ cc_library(
         ":glyph_atlas",
         ":glyph_emulator",
         ":sliced_glyph_atlas",
+        ":text_glyphs",
         ":text_metrics_cc_proto",
         ":text_renderer_assets",
         ":text_renderer_proto_cc",
@@ -358,6 +377,7 @@ cc_library(
         "//core/model/mesh",
         "//core/model/mesh:mesh_data",
         "//core/ncsb",
+        "//core/render",
         "//core/view:base_view",
         "//core/view/framework",
         "//core/view/utils:frame_time",

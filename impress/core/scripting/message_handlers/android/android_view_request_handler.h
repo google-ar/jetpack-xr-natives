@@ -74,6 +74,21 @@ class AndroidViewUpdateColliderRequestHandler
   BaseView& base_view_;
 };
 
+// A message handler for updating the scroll factor of an Android View.
+// The node should be the node returned from a CreateSurfaceTextureQuadRequest.
+class AndroidViewUpdateScrollFactorRequestHandler
+    : public scripting::MessageHandler<UpdateAndroidViewScrollFactorRequest,
+                                       absl::Status> {
+ public:
+  explicit AndroidViewUpdateScrollFactorRequestHandler(BaseView& base_view);
+
+  Future<absl::Status> HandleMessage(
+      const UpdateAndroidViewScrollFactorRequest& message) override;
+
+ private:
+  BaseView& base_view_;
+};
+
 }  // namespace android
 }  // namespace imp
 

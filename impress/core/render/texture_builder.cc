@@ -104,6 +104,16 @@ TextureBuilder& TextureBuilder::Format(
   builder_.format(format);
   return *this;
 }
+
+TextureBuilder& TextureBuilder::Usage(filament::backend::TextureUsage usage) {
+  
+  if (spy_) {
+    spy_->Usage(usage);
+  }
+  builder_.usage(usage);
+  return *this;
+}
+
 TextureBuilder& TextureBuilder::Sampler(
     filament::backend::SamplerType sampler) {
   
@@ -124,6 +134,27 @@ TextureBuilder& TextureBuilder::Name(absl::string_view name) {
 
   name_ = name;
   builder_.name(name_.data(), name_.length());
+  return *this;
+}
+
+TextureBuilder& TextureBuilder::Swizzle(filament::backend::TextureSwizzle r,
+                                        filament::backend::TextureSwizzle g,
+                                        filament::backend::TextureSwizzle b,
+                                        filament::backend::TextureSwizzle a) {
+  
+  if (spy_) {
+    spy_->Swizzle(r, g, b, a);
+  }
+  builder_.swizzle(r, g, b, a);
+  return *this;
+}
+
+TextureBuilder& TextureBuilder::External() {
+  
+  if (spy_) {
+    spy_->External();
+  }
+  builder_.external();
   return *this;
 }
 
@@ -202,6 +233,15 @@ TextureBuilder& TextureBuilder::GenerateMipmaps(filament::Engine& engine) {
 
   // If texture is not okay after build, TextureBuilder::build will return
   // nullptr.
+  return *this;
+}
+
+TextureBuilder& TextureBuilder::Import(intptr_t id) {
+  
+  if (spy_) {
+    spy_->Import(id);
+  }
+  builder_.import(id);
   return *this;
 }
 

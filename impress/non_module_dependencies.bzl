@@ -225,9 +225,9 @@ def non_module_dependencies():
         name = "com_google_zetasql",
         patch_args = ["-p1"],
         patches = ["//:bazel/patches/zetasql.patch"],
-        sha256 = "58510f44dc815648039fd4e45fc40da3d9f0a746cf483e6bbc5171e984eb7e79",
-        strip_prefix = "zetasql-2024.03.1",
-        url = "https://github.com/google/zetasql/archive/refs/tags/2024.03.1.tar.gz",
+        sha256 = "352d4b9f1cc38407fe4b51f48b3cdc7206b790c78c15a36bd2bcd5693b1ae67b",
+        strip_prefix = "googlesql-2024.03.1",
+        url = "https://github.com/google/googlesql/archive/refs/tags/2024.03.1.tar.gz",
     )
 
     # Not in Bazel Central Registry as of 12/2024.

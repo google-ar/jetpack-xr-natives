@@ -14,6 +14,8 @@
 
 #include "core/model/mesh/mesh_gpu_data.h"
 
+#include <cstddef>
+
 #include "core/common/log.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/IndexBuffer.h"
@@ -64,7 +66,11 @@ void MeshGpuData::UploadMeshDataToGpu(MeshDataPtr mesh_data) {
   }
 
   filament::Engine* engine = view_.GetSharedEngine();
-  vertex_buffer_->setBufferAt(*engine, 0, mesh_data->MoveVertexData(), 0);
+  size_t attribute_groups_count =
+      mesh_data->GetDescription().vertex_format.GetAttributeGroupsCount();
+  for (size_t i = 0; i < attribute_groups_count; ++i) {
+    vertex_buffer_->setBufferAt(*engine, i, mesh_data->MoveVertexData(i), 0);
+  }
   index_buffer_->setBuffer(*engine, mesh_data->MoveIndexData(), 0);
 }
 
@@ -79,7 +85,11 @@ void MeshGpuData::UploadMeshDataToGpu(MeshData* mesh_data) {
     return;
   }
   filament::Engine* engine = view_.GetSharedEngine();
-  vertex_buffer_->setBufferAt(*engine, 0, mesh_data->CopyVertexData(), 0);
+  size_t attribute_groups_count =
+      mesh_data->GetDescription().vertex_format.GetAttributeGroupsCount();
+  for (size_t i = 0; i < attribute_groups_count; ++i) {
+    vertex_buffer_->setBufferAt(*engine, i, mesh_data->CopyVertexData(i), 0);
+  }
   index_buffer_->setBuffer(*engine, mesh_data->CopyIndexData(), 0);
 }
 

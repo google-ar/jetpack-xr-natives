@@ -65,6 +65,7 @@ def _create_filewrapper(ctx, package_id):
     ctx.actions.run(
         executable = ctx.executable._filewrapper,
         inputs = ctx.files.srcs,
+        mnemonic = "ImpressFilewrapper",
         outputs = [filewrapper_h, filewrapper_cc],
         arguments = [filewrapper_args],
     )

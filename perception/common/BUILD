@@ -28,3 +28,14 @@ cc_library(
     ],
     alwayslink = 1,
 )
+
+cc_library(
+    name = "openxr_utils",
+    hdrs = ["openxr_util.h"],
+    deps = [
+        "@abseil-cpp//absl/log",
+        "@third_party//OpenXR_KHR:generated_openxr_headers_public",  # build_cleaner: keep
+        "@third_party//OpenXR_KHR:openxr_headers_androidxr",  # build_cleaner: keep
+    ],
+    alwayslink = 1,
+)

@@ -29,8 +29,7 @@ namespace imp::image::details {
 // Universal image loading via stb.  Mobile platforms use system services, this
 // method is for desktop/wasm/test platforms.
 absl::StatusOr<std::unique_ptr<ImageContents>> StbDecodeImage(
-    absl::string_view name, resources::Resource resource,
-    bool fatal_on_pink_texture = false);
+    absl::string_view name, resources::Resource resource);
 
 }  // namespace imp::image::details
 

@@ -37,7 +37,7 @@ public final class MaterialCompilerClient implements ServiceConnection {
   private IBinder materialCompilerServiceBinder;
    IMaterialCompilerService materialCompilerService;
   private final Context context;
-  private final String resolvedLibraryName;
+  private String resolvedLibraryName;
   private final long nativeHandle;
 
   private enum State {
@@ -90,6 +90,20 @@ public final class MaterialCompilerClient implements ServiceConnection {
       state = State.PENDING;
     }
     Intent intent = new Intent(context, MaterialCompilerService.class);
+
+    String packageName = context.getPackageName();
+    // MaterialCompilerService is hosted in SpaceFlinger (See its AndroidManifest). In AndroidXR,
+    // we send the Intent in the SystemUI context, then we need to explicitly target SpaceFlinger's
+    // package. Note that this is only relevant to AndroidXR.
+    // TODO: Find a better way to override the package and the native library names.
+    if (packageName.equals("com.android.systemui")) {
+      packageName = "com.android.spaceflinger";
+      // The name comes from
+      // (broken link)
+      this.resolvedLibraryName = "sysui_jni_soong";
+    }
+    intent.setClassName(packageName, MaterialCompilerService.class.getName());
+
     boolean bindServiceResult =
         context.bindService(
             intent,

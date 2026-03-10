@@ -26,7 +26,6 @@
 #include <functional>
 #include <memory>
 #include <string>
-#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -35,9 +34,9 @@
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/escaping.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_format.h"
-#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "filament/libs/filabridge/include/filament/MaterialEnums.h"
@@ -99,18 +98,16 @@ MaterialCache::MaterialCache(std::unique_ptr<FileUtilities> file_utils)
 // wrong material. If we wanted to use a simpler hash function, we could get the
 // application name from the bridge and store materials in a folder per app to
 // avoid the issue of hash collision across apps.
-MaterialHash MaterialCache::Hash(std::string_view material_source) {
-  uint8_t sha_hash[kHashByteSize];
+MaterialHash MaterialCache::Hash(absl::string_view material_source) {
   const uint8_t* data =
       reinterpret_cast<const uint8_t*>(material_source.data());
-  SHA256(data, material_source.size(), sha_hash);
-  MaterialHash mat_hash;
-  // Copy the hash bytes into the MaterialHash array.
-  std::copy(std::begin(sha_hash), std::end(sha_hash), std::begin(mat_hash));
-  return mat_hash;
+  MaterialHash hash;
+  SHA256(data, material_source.size(), hash.data());
+  return hash;
 }
 
-absl::StatusOr<std::vector<uint8_t>> MaterialCache::Get(MaterialHash hash) {
+absl::StatusOr<std::vector<uint8_t>> MaterialCache::Get(
+    const MaterialHash& hash) {
   LockFile(hash);
 
   // Check if the material is stored as a .cmat file.
@@ -145,7 +142,7 @@ absl::StatusOr<std::vector<uint8_t>> MaterialCache::Get(MaterialHash hash) {
 }
 
 absl::Status MaterialCache::Store(
-    MaterialHash hash, std::vector<uint8_t> compiled_material_bytes) {
+    const MaterialHash& hash, std::vector<uint8_t> compiled_material_bytes) {
   // Make sure that the file is not currently compiled or stored.
   LockFile(hash);
 
@@ -229,11 +226,15 @@ void MaterialCache::DeleteAllStaleCacheEntries() ABSL_LOCKS_EXCLUDED(mutex_) {
   current_cache_size_bytes_ -= deleted_bytes;
 }
 
-std::string MaterialCache::GetFilePath(MaterialHash hash) {
-  // Add the filament version to the file name, so that we recompile the
-  // material if the filament version changes.
-  return absl::StrFormat("%s/%s_%d.cmat", cache_dir_, absl::StrJoin(hash, ""),
-                         filament::MATERIAL_VERSION);
+std::string MaterialCache::GetFilePath(const MaterialHash& hash,
+                                       int material_version) const {
+  // Convert the hash to a hex string to use it as a file name.
+  // NOTE: We use hex to avoid hash collisions (e.g. caused by StrJoin promoting
+  // bytes to decimals), and to avoid path separators like '/' or '.'
+  std::string hash_str = absl::BytesToHexString(absl::string_view(
+      reinterpret_cast<const char*>(hash.data()), hash.size()));
+  return absl::StrFormat("%s/%s_%d.cmat", cache_dir_, hash_str,
+                         material_version);
 }
 
 void MaterialCache::EnsureCapacity(int64_t bytes_needed)
@@ -268,7 +269,8 @@ void MaterialCache::EnsureCapacity(int64_t bytes_needed)
   }
 }
 
-void MaterialCache::LockFile(MaterialHash hash) ABSL_LOCKS_EXCLUDED(mutex_) {
+void MaterialCache::LockFile(const MaterialHash& hash)
+    ABSL_LOCKS_EXCLUDED(mutex_) {
   absl::MutexLock lock(mutex_);
   auto is_file_unlocked = [this, hash]() {
     mutex_.AssertHeld();
@@ -278,7 +280,8 @@ void MaterialCache::LockFile(MaterialHash hash) ABSL_LOCKS_EXCLUDED(mutex_) {
   file_locks_.insert(hash);
 }
 
-void MaterialCache::UnlockFile(MaterialHash hash) ABSL_LOCKS_EXCLUDED(mutex_) {
+void MaterialCache::UnlockFile(const MaterialHash& hash)
+    ABSL_LOCKS_EXCLUDED(mutex_) {
   absl::MutexLock lock(mutex_);
   file_locks_.erase(hash);
 }

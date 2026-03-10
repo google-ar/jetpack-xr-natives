@@ -62,8 +62,9 @@ class MethodWrapper : public JavaEnumWrapper<AndroidGlyphSource::Method> {
             env, "com/google/ar/imp/core/glyph/GlyphSource$Method") {}
 };
 
-AndroidGlyphSource::AndroidGlyphSource(const Context& context, Method method,
-                                       int cache_size_bytes)
+AndroidGlyphSource::AndroidGlyphSource(
+    const Context& context, Method method, int cache_size_bytes,
+    bool force_individual_glyph_source_instances)
     : JavaWrapper(context.GetJniEnv()),
       glyph_advance_class_(WrapJni(Env(), static_cast<jclass>(nullptr))) {
   const char* class_path = "com/google/ar/imp/core/glyph/GlyphSource";
@@ -71,6 +72,12 @@ AndroidGlyphSource::AndroidGlyphSource(const Context& context, Method method,
   // This check should really be available in JavaWrapper, but the variadic
   // argument constructor makes adding any new signatures difficult.
   JNIEnv* env = context_.GetJniEnv();
+  // TODO: Remove this log after we're sure it's not a problem.
+  if (env->ExceptionCheck()) {
+    IMP_LOG(imp::ERROR) << "JNIEnv already has an exception pending prior to FindClass.";
+    env->ExceptionDescribe();
+    env->ExceptionClear();
+  }
   JniUniquePtr<jclass> local_class_ref = FindClass(env, class_path);
   if (env->ExceptionCheck()) {
     env->ExceptionClear();
@@ -80,9 +87,9 @@ AndroidGlyphSource::AndroidGlyphSource(const Context& context, Method method,
   class_ = AddJniInfo(LocalToGlobalRef(std::move(local_class_ref)).release());
   class_path_ = class_path;
 
-  jmethodID init =
-      env->GetMethodID(Clazz(), "<init>",
-                       "(Lcom/google/ar/imp/core/glyph/GlyphSource$Method;I)V");
+  jmethodID init = env->GetMethodID(
+      Clazz(), "<init>",
+      "(Lcom/google/ar/imp/core/glyph/GlyphSource$Method;IZ)V");
   if (env->ExceptionCheck()) {
     env->ExceptionClear();
     LOG_MISSING_DEPENDENCY_MESSAGE(ERROR);
@@ -93,10 +100,12 @@ AndroidGlyphSource::AndroidGlyphSource(const Context& context, Method method,
   AddJniInfo(init);
 
   {
-    MethodWrapper method_wrapper(context.GetJniEnv());
+    jobject method_enum =
+        MethodWrapper(context.GetJniEnv()).GetEnum(method).release();
     JniUniquePtr<jobject> local_self_ref = WrapJni(
-        env, env->NewObject(Clazz(), init, method_wrapper.GetEnum(method),
-                            cache_size_bytes));
+        env, env->NewObject(Clazz(), init, method_enum, cache_size_bytes,
+                            static_cast<jboolean>(
+                                force_individual_glyph_source_instances)));
     SetSelf(LocalToGlobalRef(std::move(local_self_ref)));
   }
 
@@ -152,9 +161,8 @@ TextMetrics AndroidGlyphSource::GetGlyphMetrics(int glyph_id, FontHolder* font,
   jobject font_jobject =
       font ? static_cast<jobject>(font->GetPlatformFont()) : nullptr;
 
-  JniUniquePtr<jfloatArray> out_array =
-      WrapJni(Env(), CallFloatArrayMethod(get_glyph_metrics_, glyph_id,
-                                          font_jobject, paint.WeakReference()));
+  JniUniquePtr<jfloatArray> out_array = CallFloatArrayMethod(
+      get_glyph_metrics_, glyph_id, font_jobject, paint.WeakReference());
   AssertNoException(Env());
   assert(Env()->GetArrayLength(out_array.get()) >= 8);
 
@@ -185,9 +193,9 @@ AndroidGlyphSource::GetCombinedCharacterGroups(absl::string_view text,
   }
 
   JniUniquePtr<jstring> text_jstring = ToJniString(Env(), text);
-  JniUniquePtr<jintArray> indices_array = WrapJni(
-      Env(), CallIntArrayMethod(get_combined_character_groups_,
-                                text_jstring.get(), paint.WeakReference()));
+  JniUniquePtr<jintArray> indices_array =
+      CallIntArrayMethod(get_combined_character_groups_, text_jstring.get(),
+                         paint.WeakReference());
   AssertNoException(Env());
 
   jint* indices_array_ptr =
@@ -216,9 +224,9 @@ std::vector<ScopedCanvas::GlyphAdvance> AndroidGlyphSource::GetTextGlyphs(
 
   JniUniquePtr<jstring> text_jstring = ToJniString(Env(), text);
 
-  JniUniquePtr<jobjectArray> out_jobject_array = WrapJni(
-      Env(), static_cast<jobjectArray>(CallObjectMethod(
-                 get_text_glyphs_, text_jstring.get(), paint.WeakReference())));
+  JniUniquePtr<jobjectArray> out_jobject_array =
+      JniStaticCast<jobjectArray>(CallObjectMethod(
+          get_text_glyphs_, text_jstring.get(), paint.WeakReference()));
   AssertNoException(Env());
 
   jsize out_size = Env()->GetArrayLength(out_jobject_array.get());

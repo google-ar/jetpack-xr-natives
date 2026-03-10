@@ -27,6 +27,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "filament/filament/backend/include/backend/Platform.h"
 #include "filament/libs/filamat/include/filamat/MaterialBuilder.h"
 #include "filament/libs/filamat/include/filamat/Package.h"
 #include "filament/libs/filament-matp/include/filament-matp/Config.h"
@@ -191,6 +192,12 @@ absl::StatusOr<std::string> MaterialCompilerService::CompileMaterial(
   RuntimeMaterialCompilerConfig config(source_material_string, compiler_output);
   config.SetPlatform(UnpackPlatform(platform));
   config.SetTargetApi(UnpackTargetApi(target_api));
+
+  // TODO: This is only relevant to XR or stereo variant. This
+  // should be updated or removed once we implement handling variant filters
+  // and/or if Filament changes the default stereo type to multiview.
+  builder.stereoscopicType(
+      filament::backend::Platform::StereoscopicType::MULTIVIEW);
 
   matp::Config::Input* input = config.getInput();
   if (input == nullptr) {

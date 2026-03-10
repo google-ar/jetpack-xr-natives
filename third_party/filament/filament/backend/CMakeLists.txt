@@ -305,6 +305,8 @@ if (FILAMENT_SUPPORTS_WEBGPU)
             src/webgpu/WebGPUFence.h
             src/webgpu/WebGPUIndexBuffer.cpp
             src/webgpu/WebGPUIndexBuffer.h
+            src/webgpu/WebGPUMemoryMappedBuffer.cpp
+            src/webgpu/WebGPUMemoryMappedBuffer.h
             src/webgpu/WebGPUMsaaTextureResolver.cpp
             src/webgpu/WebGPUMsaaTextureResolver.h
             src/webgpu/WebGPUPipelineCache.cpp
@@ -580,6 +582,7 @@ if (APPLE OR LINUX)
         test/test_Blit.cpp
         test/test_MissingRequiredAttributes.cpp
         test/test_ReadPixels.cpp
+        test/test_ReadTexture.cpp
         test/test_BufferUpdates.cpp
         test/test_Callbacks.cpp
         test/test_JobQueue.cpp

@@ -22,6 +22,7 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.fonts.Font
 import android.graphics.text.TextRunShaper
+import android.util.Log
 import androidx.annotation.RequiresApi
 import java.io.File
 
@@ -104,53 +105,63 @@ internal class ShaperGlyphSource : IGlyphSource {
   }
 
   override fun getTextGlyphs(text: String, paint: Paint): Array<GlyphAdvance> {
-    require(!text.any { it == '\n' }) { "Text must not contain newlines" }
-
-    val bidi = BidiRuns.create(text)
-    val result: MutableList<GlyphAdvance> = mutableListOf()
-
-    var x = 0f
-
-    for (run in bidi) {
-      val isRtl = bidi.isRtl(run)
-      val runStart = bidi.getRunStart(run)
-      val runLimit = bidi.getRunLimit(run)
-
-      val glyphs =
-        TextRunShaper.shapeTextRun(
-          text,
-          runStart,
-          runLimit - runStart,
-          /*contextStart=*/ 0,
-          /*contextCount=*/ text.length,
-          x,
-          /*yOffset=*/ 0f,
-          isRtl,
-          paint,
-        )
-
-      for (i in 0 until glyphs.glyphCount()) {
-        val nextX =
-          if (i + 1 >= glyphs.glyphCount()) {
-            x + glyphs.advance
-          } else {
-            glyphs.getGlyphX(i + 1)
-          }
-        val font = glyphs.getFont(i)
-
-        result.add(
-          GlyphAdvance(
-            id = glyphs.getGlyphId(i),
-            width = nextX - glyphs.getGlyphX(i),
-            font = font,
-            isEmoji = emojiFontFiles.contains(font.file),
-          )
-        )
-      }
-      x += glyphs.advance
+    if (text.any { it == '\n' }) {
+      // TODO: (broken link) - throw exception once we fix in production.
+      Log.e("ShaperGlyphSource", "Text must not contain newlines")
+      return emptyArray()
     }
 
-    return result.toTypedArray()
+    try {
+      val bidi = BidiRuns.create(text)
+      val result: MutableList<GlyphAdvance> = mutableListOf()
+
+      var x = 0f
+
+      for (run in bidi) {
+        val isRtl = bidi.isRtl(run)
+        val runStart = bidi.getRunStart(run)
+        val runLimit = bidi.getRunLimit(run)
+
+        val glyphs =
+          TextRunShaper.shapeTextRun(
+            text,
+            runStart,
+            runLimit - runStart,
+            /*contextStart=*/ 0,
+            /*contextCount=*/ text.length,
+            x,
+            /*yOffset=*/ 0f,
+            isRtl,
+            paint,
+          )
+
+        for (i in 0 until glyphs.glyphCount()) {
+          val nextX =
+            if (i + 1 >= glyphs.glyphCount()) {
+              x + glyphs.advance
+            } else {
+              glyphs.getGlyphX(i + 1)
+            }
+          val font = glyphs.getFont(i)
+
+          result.add(
+            GlyphAdvance(
+              id = glyphs.getGlyphId(i),
+              width = nextX - glyphs.getGlyphX(i),
+              font = font,
+              isEmoji = emojiFontFiles.contains(font.file),
+            )
+          )
+        }
+        x += glyphs.advance
+      }
+
+      return result.toTypedArray()
+    } catch (e: Exception) {
+      // TODO: (broken link) - throw exception once we fix in production.
+      Log.e("ShaperGlyphSource", "Error shaping text: $text", e)
+      return emptyArray()
+    }
   }
 
   override fun releaseTextGlyph(glyphId: Int) {

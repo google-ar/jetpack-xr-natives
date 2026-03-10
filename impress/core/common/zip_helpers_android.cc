@@ -51,9 +51,9 @@ class ByteArrayInputStream : public JavaWrapper {
 
 class ZipEntry : public JavaWrapper {
  public:
-  ZipEntry(JNIEnv* env, jobject java_zip_entry)
+  ZipEntry(JNIEnv* env, JniUniquePtr<jobject> java_zip_entry)
       : JavaWrapper(env, "java/util/zip/ZipEntry") {
-    SetSelf(java_zip_entry);
+    SetSelf(java_zip_entry.release());
 
     get_name_ = GetMethodHandle("getName", "()Ljava/lang/String;");
     get_size_ = GetMethodHandle("getSize", "()J");
@@ -62,7 +62,7 @@ class ZipEntry : public JavaWrapper {
   std::string GetName() { return CallStringMethod(get_name_); }
 
   int64_t GetSize() {
-    jlong size = CallLongMethod(get_size_);
+    int64_t size = CallLongMethod(get_size_);
     return static_cast<int64_t>(size);
   }
 
@@ -85,7 +85,7 @@ class ZipInputStream : public JavaWrapper {
   ~ZipInputStream() override { CallVoidMethod(close_); }
 
   std::unique_ptr<ZipEntry> GetNextEntry() {
-    jobject java_zip_entry = CallObjectMethod(get_next_entry_);
+    JniUniquePtr<jobject> java_zip_entry = CallObjectMethod(get_next_entry_);
     if (Env()->ExceptionCheck()) {
       Env()->ExceptionDescribe();
       Env()->ExceptionClear();
@@ -96,7 +96,7 @@ class ZipInputStream : public JavaWrapper {
       return nullptr;
     }
 
-    return std::make_unique<ZipEntry>(Env(), java_zip_entry);
+    return std::make_unique<ZipEntry>(Env(), std::move(java_zip_entry));
   }
 
   void ReadEntry(uint8_t* out_data, int entry_size) {

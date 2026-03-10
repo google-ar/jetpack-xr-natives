@@ -29,16 +29,8 @@ File::File(JNIEnv* env, JniUniquePtr<jobject> file)
   get_name_ = GetMethodHandle("getName", "()Ljava/lang/String;");
 }
 
-std::string File::GetPath() {
-  JniUniquePtr<jstring> path =
-      WrapJni(Env(), static_cast<jstring>(CallObjectMethod(get_path_)));
-  return GetString(Env(), path.get());
-}
+std::string File::GetPath() { return CallStringMethod(get_path_); }
 
-std::string File::GetName() {
-  JniUniquePtr<jstring> name =
-      WrapJni(Env(), static_cast<jstring>(CallObjectMethod(get_name_)));
-  return GetString(Env(), name.get());
-}
+std::string File::GetName() { return CallStringMethod(get_name_); }
 
 }  // namespace imp::android

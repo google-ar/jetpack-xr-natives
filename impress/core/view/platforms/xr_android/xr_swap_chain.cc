@@ -117,12 +117,17 @@ absl::StatusOr<XrSwapchain> CreateDepthSwapChain(
 
   uint2 display_size = host->GetDisplaySize();
 
+  const int64_t depth_format =
+      host->GetState()->ShouldUseStencilSwapChain()
+          ? XrSwapChain::ImageHandlerType::kDepthStencilFormat
+          : XrSwapChain::ImageHandlerType::kDepthFormat;
+
   XrSwapchainCreateInfo swapchain_create_info = {
       .type = XR_TYPE_SWAPCHAIN_CREATE_INFO,
       .next = nullptr,
       .createFlags = flags,
       .usageFlags = XR_SWAPCHAIN_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-      .format = XrSwapChain::ImageHandlerType::kDepthFormat,
+      .format = depth_format,
       .sampleCount = host->GetViewSampleCount(),
       .width = display_size.x,
       .height = display_size.y,

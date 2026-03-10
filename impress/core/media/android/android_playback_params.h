@@ -17,7 +17,9 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_MEDIA_ANDROID_ANDROID_PLAYBACK_PARAMS_H_
 #define THIRD_PARTY_IMPRESS_CORE_MEDIA_ANDROID_ANDROID_PLAYBACK_PARAMS_H_
 
-#include <cstring>
+#include <jni.h>
+
+#include <utility>
 
 #include "core/common/jni_helpers.h"
 
@@ -25,8 +27,10 @@ namespace imp::media {
 
 class AndroidPlaybackParams : public JavaWrapper {
  public:
-  explicit AndroidPlaybackParams(JNIEnv* env, jobject playback_params)
-      : JavaWrapper(env, playback_params) {
+  explicit AndroidPlaybackParams(JNIEnv* env,
+                                 JniUniquePtr<jobject> playback_params)
+      : JavaWrapper(env, std::move(playback_params),
+                    "android/media/PlaybackParams") {
     set_speed_ =
         GetMethodHandle("setSpeed", "(F)Landroid/media/PlaybackParams;");
   }

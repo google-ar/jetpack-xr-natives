@@ -47,7 +47,8 @@ namespace imp {
 
 std::unique_ptr<CanvasSource> CanvasSource::Create(
     Context context, bool use_hardware_rendering,
-    bool force_auto_method_rendering, int glyph_cache_size_bytes) {
+    bool force_auto_method_rendering, int glyph_cache_size_bytes,
+    bool force_individual_glyph_source_instances) {
   // Instantiate the correct platform implementation.
 #if IMP_PLATFORM(ANDROID)
   // TODO: Shaper method fails to render text weight properly.
@@ -59,7 +60,8 @@ std::unique_ptr<CanvasSource> CanvasSource::Create(
     method = AndroidGlyphSource::Method::kAuto;
   }
   auto platform_source = std::make_unique<AndroidPlatformCanvasSource>(
-      context, method, use_hardware_rendering, glyph_cache_size_bytes);
+      context, method, use_hardware_rendering, glyph_cache_size_bytes,
+      force_individual_glyph_source_instances);
 #elif IMP_PLATFORM(IOS)
   auto platform_source = std::make_unique<IosPlatformCanvasSource>();
 #elif IMP_PLATFORM(WASM)

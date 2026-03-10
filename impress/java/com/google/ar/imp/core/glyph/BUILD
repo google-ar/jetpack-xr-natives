@@ -30,7 +30,9 @@ kt_android_library(
     ],
     disable_lint_checks = ["NewApi"],
     deps = [
+        "//java/com/google/android/libraries/performance/primes/flogger/logargs",
         "//third_party/java/androidx/graphics/path",
+        "//third_party/java/error_prone:annotations",
         "@maven//:com_google_flogger_flogger",
         "@third_party//filament/android:filament_android_no_jni",
     ],

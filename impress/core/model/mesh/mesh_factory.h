@@ -176,21 +176,6 @@ struct CreateQuadSettings {
   std::optional<float4> color = std::nullopt;
 };
 
-// A helper struct for creating a custom mesh.
-struct CreateCustomMeshSettings {
-  // Vertex positions.
-  std::vector<float> positions;
-  // Vertex texture coordinates.
-  std::vector<float> texcoords;
-  // Vertex indices.
-  std::optional<std::vector<uint32_t>> indices;
-  // Draw mode.
-  filament::RenderableManager::PrimitiveType draw_mode;
-  std::optional<std::string> name = std::nullopt;
-  // The color applied to VertexAttribute::COLOR for all vertices of the mesh.
-  std::optional<float4> color = std::nullopt;
-};
-
 // A helper struct for mapping UVs when calling
 // MeshFactory::CreateRegularPolygon.
 struct UVConfig {
@@ -286,14 +271,6 @@ class MeshFactory {
   MeshPtr CreateRegularPolygon(
       size_t side_count, float radius = 1.0f, bool flip_uv = false,
       float z = 0.0f, std::optional<UVConfig> uv_config = std::nullopt,
-      MeshDataStorageMode data_mode = MeshDataStorageMode::kDiscardMeshData);
-
-  // Create a custom mesh with the given settings.
-  // AABB will be calculated according to mesh data.
-  MeshPtr CreateCustomMesh(
-      CreateCustomMeshSettings settings = {},
-      // Specifies if the mesh information should be
-      // stored in memory, which is required for collisions.
       MeshDataStorageMode data_mode = MeshDataStorageMode::kDiscardMeshData);
 
   // Create a mesh with a copy of |mesh_data|. |mesh_data| cannot be destroyed

@@ -42,12 +42,10 @@ namespace imp::editor {
 // The size of the bounds expressed as a ratio from the distance of the camera
 // in meters.
 constexpr float kEmptyNodeBoundsDistanceRatio = 0.0025f;
-constexpr debug_draw::DebugColor kEmptyNodeColor =
-    debug_draw::DebugColor::kLightBlue;
+constexpr debug_draw::Color kEmptyNodeColor = debug_draw::kLightBlue;
 constexpr debug_draw::Color kSelectedNodeColor = {0x81, 0xd4, 0xfa,
                                                   0xff};  // Light Blue 200
-constexpr debug_draw::DebugColor kMeshNodeColor =
-    debug_draw::DebugColor::kLightBlue;
+constexpr debug_draw::Color kMeshNodeColor = debug_draw::kLightBlue;
 
 VisualizeBounds::VisualizeBounds(BaseView& view) : view_(view) {
   Editor& editor = view_.GetRegistry().Get<Editor>()->get();
@@ -129,8 +127,7 @@ void VisualizeBounds::DrawBoundsForNode(NodeHandle node) {
   auto mesh = node->GetComponent<GltfMesh>();
   if (mesh) {
     // Draw a node that contains a mesh using the mesh's real bounds.
-    debug_draw::Color color =
-        is_selected ? kSelectedNodeColor : debug_draw::GetColor(kMeshNodeColor);
+    debug_draw::Color color = is_selected ? kSelectedNodeColor : kMeshNodeColor;
     debug_draw::Local(node->GetEntity())
         .BoxLines(mesh->GetLocalBounds(), color);
   } else if (!is_selected && !HasCollider(node)) {
@@ -153,8 +150,7 @@ void VisualizeBounds::DrawBoundsForNode(NodeHandle node) {
     float3 extent(dist * kEmptyNodeBoundsDistanceRatio / node->GetWorldScale());
 
     Box box{.center = kZero3, .halfExtent = extent};
-    debug_draw::Local(node->GetEntity())
-        .BoxFaces(box, debug_draw::GetColor(kEmptyNodeColor));
+    debug_draw::Local(node->GetEntity()).BoxFaces(box, kEmptyNodeColor);
   }
 }
 

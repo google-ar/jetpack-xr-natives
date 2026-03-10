@@ -67,7 +67,7 @@ typedef struct XrGoogleCloudAuthKeylessANDROID {
     const void* XR_MAY_ALIAS    next;
 } XrGoogleCloudAuthKeylessANDROID;
 
-// XrGoogleCloudAuthErrorResultANDROID extends XrSurfaceAnchorCreateCompletionANDROIDX2,XrVPSAvailabilityCheckCompletionANDROID
+// XrGoogleCloudAuthErrorResultANDROID extends XrSurfaceAnchorCreateCompletionANDROID,XrVPSAvailabilityCheckCompletionANDROID
 typedef struct XrGoogleCloudAuthErrorResultANDROID {
     XrStructureType                  type;
     void* XR_MAY_ALIAS               next;

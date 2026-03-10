@@ -81,6 +81,20 @@ material {
           type : float2,
           name : cornerRadius
         },
+        {
+          // Represents the subRectangle of the media texture to be displayed:
+          // [uMin, vMin, width, height].
+          type : float4,
+          name : leftEyeViewRect,
+          default: [0.0, 0.0, 1.0, 1.0]
+        },
+        {
+          // Represents the subRectangle of the media texture to be displayed:
+          // [uMin, vMin, width, height].
+          type : float4,
+          name : rightEyeViewRect,
+          default: [0.0, 0.0, 1.0, 1.0]
+        },
         // Below three parameters are used for color correction.
         // TODO - (broken link): Move max luminance float conversion out of the
         // material and pass a float instead.
@@ -162,9 +176,9 @@ fragment {
   void material(inout MaterialInputs material) {
     prepareMaterial(material);
     bool isLeftEye = (variable_stereoData.y < 1.0);
+    highp float4 eyeRect = isLeftEye ? materialParams.leftEyeViewRect : materialParams.rightEyeViewRect;
     // Making this a highp slightly sharpens the resulting image.
-    highp vec2 uv =
-        CalculateStereoUvs(getUV0(), materialParams.stereoType, isLeftEye);
+    highp vec2 uv = CalculateStereoUvs(getUV0(), eyeRect);
 
     if (!gl_FrontFacing) {
       uv.x = 1.0 - uv.x;
@@ -183,27 +197,34 @@ fragment {
         color = texture(sampler, uv); \
       }
 
+    #define SAMPLE_ALPHA_TEXTURE(sampler, uv, color) \
+      if ({IS_OPAQUE}) { \
+        color = vec4(0.0, 0.0, 0.0, 1.0); \
+      } else { \
+        SAMPLE_TEXTURE(sampler, uv, color); \
+      }
+
     if (variable_stereoData.x > 0.0 &&
         materialParams.stereoType == kInterleavedLeftPrimary) {
       if (variable_stereoData.y == 0.0) {
         SAMPLE_TEXTURE(materialParams_mediaTexture, media_uv, textureColor);
-        SAMPLE_TEXTURE(materialParams_primaryAlphaMaskTexture, uv, alphaMaskColor);
+        SAMPLE_ALPHA_TEXTURE(materialParams_primaryAlphaMaskTexture, uv, alphaMaskColor);
       } else {
         SAMPLE_TEXTURE(materialParams_mediaAuxiliaryTexture, media_uv, textureColor);
-        SAMPLE_TEXTURE(materialParams_auxiliaryAlphaMaskTexture, uv, alphaMaskColor);
+        SAMPLE_ALPHA_TEXTURE(materialParams_auxiliaryAlphaMaskTexture, uv, alphaMaskColor);
       }
     } else if (variable_stereoData.x > 0.0 &&
                materialParams.stereoType == kInterleavedRightPrimary) {
       if (variable_stereoData.y == 0.0) {
         SAMPLE_TEXTURE(materialParams_mediaAuxiliaryTexture, media_uv, textureColor);
-        SAMPLE_TEXTURE(materialParams_auxiliaryAlphaMaskTexture, uv, alphaMaskColor);
+        SAMPLE_ALPHA_TEXTURE(materialParams_auxiliaryAlphaMaskTexture, uv, alphaMaskColor);
       } else {
         SAMPLE_TEXTURE(materialParams_mediaTexture, media_uv, textureColor);
-        SAMPLE_TEXTURE(materialParams_primaryAlphaMaskTexture, uv, alphaMaskColor);
+        SAMPLE_ALPHA_TEXTURE(materialParams_primaryAlphaMaskTexture, uv, alphaMaskColor);
       }
     } else {
       SAMPLE_TEXTURE(materialParams_mediaTexture, media_uv, textureColor);
-      SAMPLE_TEXTURE(materialParams_primaryAlphaMaskTexture, uv, alphaMaskColor);
+      SAMPLE_ALPHA_TEXTURE(materialParams_primaryAlphaMaskTexture, uv, alphaMaskColor);
     }
 
     textureColor.a *= alphaMaskColor.a;
@@ -211,7 +232,19 @@ fragment {
     // determine feathered alpha based on the UVs
     float alpha =
       getEdgeFeatheredAlpha(
-        alpha_uv, materialParams.featherRadius, materialParams.cornerRadius.xy) * textureColor.a;
+        alpha_uv, materialParams.featherRadius, materialParams.cornerRadius.xy);
+
+    if ({IS_OPAQUE}) {
+      if (alpha == 0.0) {
+        // Discard fragments with zero alpha to cut rounded corners.
+        discard;
+      }
+      alpha = 1.0;
+      // Ignore texture alpha for opaque materials.
+      textureColor.a = 1.0;
+    }
+
+    alpha *= textureColor.a;
 
     if (materialConstants_enableColorCorrection) {
       material.baseColor = vec4(convertColor(textureColor.rgb, materialParams.colorConversionMatrix) * alpha, alpha);

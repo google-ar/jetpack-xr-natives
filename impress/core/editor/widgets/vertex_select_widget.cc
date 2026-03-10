@@ -169,8 +169,7 @@ void VertexSelectWidget::Draw() {
   auto vertex_position = *vertex_position_optional;
 
   auto draw_line = [&](double3 start, double3 end) {
-    debug_draw::Global().Line(
-        start, end, debug_draw::GetColor(debug_draw::DebugColor::kLightGreen));
+    debug_draw::Global().Line(start, end, debug_draw::kLightGreen);
   };
   // The collision triangle.
   draw_line(vertex_position[0], vertex_position[1]);
@@ -178,9 +177,8 @@ void VertexSelectWidget::Draw() {
   draw_line(vertex_position[2], vertex_position[0]);
 
   // The candidate vertex.
-  debug_draw::Global().SphereLines(
-      vertex_position[picked_vertex_id_], kDisplaySphereSizeMeters,
-      debug_draw::GetColor(debug_draw::DebugColor::kRed));
+  debug_draw::Global().SphereLines(vertex_position[picked_vertex_id_],
+                                   kDisplaySphereSizeMeters, debug_draw::kRed);
 }
 
 }  // namespace imp::editor

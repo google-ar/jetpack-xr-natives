@@ -20,11 +20,12 @@
 #include "WebGPURenderTarget.h"
 #include "webgpu/WebGPUBlitter.h"
 #include "webgpu/WebGPUConstants.h"
+#include "webgpu/WebGPUMemoryMappedBuffer.h"
 #include "webgpu/WebGPUMsaaTextureResolver.h"
 #include "webgpu/WebGPUPipelineCache.h"
 #include "webgpu/WebGPUPipelineLayoutCache.h"
-#include "webgpu/WebGPURenderPassMipmapGenerator.h"
 #include "webgpu/WebGPUQueueManager.h"
+#include "webgpu/WebGPURenderPassMipmapGenerator.h"
 #include "webgpu/WebGPUStagePool.h"
 #include "webgpu/utils/AsyncTaskCounter.h"
 #include <backend/platforms/WebGPUPlatform.h>
@@ -74,6 +75,9 @@ private:
     [[nodiscard]] wgpu::Sampler makeSampler(SamplerParams const& params);
     [[nodiscard]] static wgpu::AddressMode fWrapModeToWAddressMode(const filament::backend::SamplerWrapMode& fUsage);
     void setDebugTag(HandleBase::HandleId handleId, utils::ImmutableCString&& tag);
+
+    void readTextureToBuffer(wgpu::Texture srcTexture, uint32_t level, uint32_t layer, uint32_t x,
+            uint32_t y, uint32_t width, uint32_t height, PixelBufferDescriptor&& p);
 
     // The platform (e.g. OS) specific aspects of the WebGPU backend are strictly only
     // handled in the WebGPUPlatform.

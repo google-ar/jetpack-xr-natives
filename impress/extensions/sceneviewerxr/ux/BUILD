@@ -57,39 +57,11 @@ cc_library(
 )
 
 cc_library(
-    name = "gltf_bounds",
-    srcs = ["gltf_bounds.cc"],
-    hdrs = ["gltf_bounds.h"],
-    deps = [
-        "//core/common:filament_helpers",
-        "//core/common:platform_helpers",
-        "//core/common:typed_ids",
-        "//core/geometry/shapes",
-        "//core/math",
-        "//core/model",
-        "//core/model:model_data_details",
-        "//core/ncsb",
-        "//core/view:base_view",
-        "//core/view/framework",
-        "//core/view/framework:framework_proto_cc",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_impress//core/common:log",
-        "@third_party//filament/filament:filament_hdrs",
-        "@third_party//filament/filament/backend:driver_enums",
-        "@third_party//filament/libs:utils_hdrs",
-    ],
-    alwayslink = 1,
-)
-
-cc_library(
     name = "footprint",
     srcs = ["footprint.cc"],
     hdrs = ["footprint.h"],
     copts = imp_google3_copts(),
     deps = [
-        ":gltf_bounds",
         ":interaction_mode",
         ":ramp",
         ":state_machine",
@@ -131,6 +103,15 @@ cc_library(
     deps = [
         "//core/common:smooth",
         "@com_google_absl//absl/time",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "ui_event_listener",
+    hdrs = ["ui_event_listener.h"],
+    deps = [
+        "//core/math",
     ],
     alwayslink = 1,
 )

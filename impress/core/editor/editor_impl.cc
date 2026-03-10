@@ -29,6 +29,8 @@
 #include "core/assets/gltf/gltf_behavior_extension.h"
 #include "core/assets/gltf/gltf_interactivity_extension.h"
 #include "core/async/future.h"
+#include "core/camera/camera_component.h"
+#include "core/camera/camera_manager.h"
 #include "core/common/registry.h"
 #include "core/common/robin_set.h"
 #include "core/config.h"
@@ -94,8 +96,6 @@
 #include "core/view/framework/assets/gltf_asset.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/framework/assets/gltf_state.proto.imp.h"
-#include "core/view/framework/camera/camera_component.h"
-#include "core/view/framework/camera/camera_manager.h"
 #include "core/view/framework/display_layer/display_layer_manager.h"
 #include "core/view/framework/gestures/gesture_manager.h"
 #include "core/view/framework/gestures/tap_gesture.h"
@@ -159,7 +159,8 @@ class EditorImpl : public Editor {
   // The Editor nodes and environment.
   void AddNode(NodeHandle node) override;
   void RemoveNode(NodeHandle node) override;
-  void SelectNode(NodeHandle node, SelectionMode selection_mode) override;
+  void SelectNode(NodeHandle node,
+                  EditorInfo::SelectionMode selection_mode) override;
   const absl::flat_hash_set<NodeHandle>& GetSelectedNodes() override;
   NodeHandle GetSingleSelectedNode() override;
   void AddSandboxNode(NodeHandle node) override;
@@ -179,6 +180,8 @@ class EditorImpl : public Editor {
 
   // Handles simulation state.
   EditorInfo::RunMode GetRunMode() const override;
+  EditorInfo::DisplayMode GetDisplayMode() const override;
+  void SetDisplayMode(EditorInfo::DisplayMode display_mode) override;
   void SetInEditMode(bool in_edit_mode) override;
   bool IsPaused() const override;
   void SetPaused(bool paused) override;
@@ -202,6 +205,7 @@ class EditorImpl : public Editor {
     EditorInfo::RunMode GetRunMode() const override;
     bool IsPaused() const override;
     bool HasFramesToStep() const override;
+    EditorInfo::DisplayMode GetDisplayMode() const override;
 
    private:
     EditorImpl& editor_;
@@ -278,6 +282,9 @@ class EditorImpl : public Editor {
   bool is_sandbox_ = false;
   EditorInfo::RunMode run_mode_ = EditorInfo::RunMode::kPlayMode;
   bool is_paused_ = false;
+  // default to native screen
+  EditorInfo::DisplayMode display_mode_ =
+      EditorInfo::DisplayMode::kNativeScreen;
   bool has_frames_to_step_ = false;
   std::vector<BackupNodeData> backup_node_data_;
   std::vector<NodeHandle> sandbox_nodes_;
@@ -592,16 +599,16 @@ void EditorImpl::InitializeWidgetUiSystem() {
 
   widget_ui_system_.AddWidget<Console>(WidgetLayoutInfo(PanelId::kTabBar),
                                        view);
-#if IMP_PLATFORM(DESKTOP) || IMP_PLATFORM(WASM)
-#endif
-  if (widget_ui_system_.Is2DLargeScreenLayout()) {
-    asset_library_ = widget_ui_system_.AddWidget<AssetLibrary>(
-        WidgetLayoutInfo(PanelId::kTabBar), view);
-    widget_ui_system_.AddWidget<SettingsWidget>(
-        WidgetLayoutInfo(PanelId::kMenuBar), GetView());
-    widget_ui_system_.AddWidget<WindowWidget>(
-        WidgetLayoutInfo(PanelId::kMenuBar), GetView());
-  }
+
+  asset_library_ = widget_ui_system_.AddWidget<AssetLibrary>(
+      WidgetLayoutInfo(PanelId::kTabBar, WidgetPresence::kOnlyIn2DLargeScreen),
+      view);
+  widget_ui_system_.AddWidget<SettingsWidget>(
+      WidgetLayoutInfo(PanelId::kMenuBar, WidgetPresence::kOnlyIn2DLargeScreen),
+      GetView());
+  widget_ui_system_.AddWidget<WindowWidget>(
+      WidgetLayoutInfo(PanelId::kMenuBar, WidgetPresence::kOnlyIn2DLargeScreen),
+      GetView());
 
   widget_ui_system_.AddWidget<VisualizeBounds>(
       WidgetLayoutInfo(PanelId::kFreeform), view);
@@ -612,13 +619,21 @@ void EditorImpl::InitializeWidgetUiSystem() {
   widget_ui_system_.AddWidget<FileDragAndDrop>(
       WidgetLayoutInfo(PanelId::kFreeform), view);
   widget_ui_system_.AddWidget<PerformanceWindow>(
-      WidgetLayoutInfo(PanelId::kFreeform, /*show_by_default=*/false), view);
+      WidgetLayoutInfo(PanelId::kFreeform, WidgetPresence::kAlways,
+                       WidgetVisibility::kHidden),
+      view);
   widget_ui_system_.AddWidget<EnvironmentLightEditor>(
-      WidgetLayoutInfo(PanelId::kFreeform, /*show_by_default=*/false), view);
+      WidgetLayoutInfo(PanelId::kFreeform, WidgetPresence::kAlways,
+                       WidgetVisibility::kHidden),
+      view);
   widget_ui_system_.AddWidget<FilamentViewSettingsWidget>(
-      WidgetLayoutInfo(PanelId::kFreeform, /*show_by_default=*/false), view);
+      WidgetLayoutInfo(PanelId::kFreeform, WidgetPresence::kAlways,
+                       WidgetVisibility::kHidden),
+      view);
   event_injector_ = widget_ui_system_.AddWidget<EventInjector>(
-      WidgetLayoutInfo(PanelId::kFreeform, /*show_by_default=*/false), view);
+      WidgetLayoutInfo(PanelId::kFreeform, WidgetPresence::kAlways,
+                       WidgetVisibility::kHidden),
+      view);
 
   // Edit mode is only available in the Impress sandbox.
   if (is_sandbox_) {
@@ -822,6 +837,14 @@ void EditorImpl::EnableUpdateSystemEventForwarding() {
 
 EditorInfo::RunMode EditorImpl::GetRunMode() const { return run_mode_; }
 
+EditorInfo::DisplayMode EditorImpl::GetDisplayMode() const {
+  return display_mode_;
+}
+
+void EditorImpl::SetDisplayMode(EditorInfo::DisplayMode display_mode) {
+  display_mode_ = display_mode;
+}
+
 void EditorImpl::SetInEditMode(bool in_edit_mode) {
   if (!is_sandbox_) return;
 
@@ -962,7 +985,7 @@ void EditorImpl::SetInEditMode(bool in_edit_mode) {
     NodeHandle current = node;
     while (current) {
       if (roots_to_destroy.contains(current)) {
-        SelectNode(node, SelectionMode::kMultipleNodes);
+        SelectNode(node, EditorInfo::SelectionMode::kMultipleNodes);
         break;
       }
       current = current->GetParent();
@@ -1018,7 +1041,8 @@ void EditorImpl::SetInEditMode(bool in_edit_mode) {
               // would clear the selection of these persistent nodes.
               // The SelectionController lazily cleans up the invalid handles of
               // the destroyed nodes.
-              SelectNode(metadata->GetNode(), SelectionMode::kMultipleNodes);
+              SelectNode(metadata->GetNode(),
+                         EditorInfo::SelectionMode::kMultipleNodes);
               break;
             }
           }
@@ -1121,7 +1145,8 @@ AssetLibrary* EditorImpl::GetAssetLibrary() { return asset_library_; }
 
 EventInjector& EditorImpl::GetEventInjector() { return *event_injector_; }
 
-void EditorImpl::SelectNode(NodeHandle node, SelectionMode selection_mode) {
+void EditorImpl::SelectNode(NodeHandle node,
+                            EditorInfo::SelectionMode selection_mode) {
   GetView().GetRegistry().Get<SelectionController>()->get().TrySelectNode(
       node, selection_mode);
 }
@@ -1181,6 +1206,10 @@ bool EditorImpl::Info::IsPaused() const { return editor_.IsPaused(); }
 
 bool EditorImpl::Info::HasFramesToStep() const {
   return editor_.HasFramesToStep();
+}
+
+EditorInfo::DisplayMode EditorImpl::Info::GetDisplayMode() const {
+  return editor_.GetDisplayMode();
 }
 
 }  // namespace imp::editor

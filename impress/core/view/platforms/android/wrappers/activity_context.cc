@@ -43,28 +43,25 @@ ActivityContext::ActivityContext(JNIEnv* env, jobject context)
 }
 
 File ActivityContext::GetFilesDir() {
-  JniUniquePtr<jobject> files_dir =
-      WrapJni(Env(), CallObjectMethod(get_files_dir_));
+  JniUniquePtr<jobject> files_dir = CallObjectMethod(get_files_dir_);
   return File(Env(), std::move(files_dir));
 }
 
 File ActivityContext::GetExternalFilesDir(absl::string_view type) {
   JniUniquePtr<jobject> files_dir =
-      WrapJni(Env(), CallObjectMethod(get_external_files_dir_,
-                                      ToJniString(Env(), type).get()));
+      CallObjectMethod(get_external_files_dir_, ToJniString(Env(), type).get());
   return File(Env(), std::move(files_dir));
 }
 
 File ActivityContext::GetCacheDir() {
-  JniUniquePtr<jobject> cache_dir =
-      WrapJni(Env(), CallObjectMethod(get_cache_dir_));
+  JniUniquePtr<jobject> cache_dir = CallObjectMethod(get_cache_dir_);
   return File(Env(), std::move(cache_dir));
 }
 
 #if IMP_PLATFORM(ANDROID)
 AAssetManager* ActivityContext::GetAssets() {
-  jobject asset_manager = CallObjectMethod(get_assets_);
-  return AAssetManager_fromJava(Env(), asset_manager);
+  JniUniquePtr<jobject> asset_manager = CallObjectMethod(get_assets_);
+  return AAssetManager_fromJava(Env(), asset_manager.release());
 }
 #endif  // IMP_PLATFORM(ANDROID)
 
@@ -73,7 +70,7 @@ std::string ActivityContext::GetPackageName() {
   return CallStringMethod(get_package_name_);
 }
 
-jobject ActivityContext::GetContentResolver() {
+JniUniquePtr<jobject> ActivityContext::GetContentResolver() {
   return CallObjectMethod(get_content_resolver_);
 }
 #endif  // IMP_PLATFORM(ANDROID) || IMP_PLATFORM(ROBOLECTRIC)

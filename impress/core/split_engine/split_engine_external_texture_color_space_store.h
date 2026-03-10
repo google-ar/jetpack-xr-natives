@@ -17,6 +17,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_SPLIT_ENGINE_EXTERNAL_TEXTURE_COLOR_SPACE_STORE_H_
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_SPLIT_ENGINE_EXTERNAL_TEXTURE_COLOR_SPACE_STORE_H_
 
+#include <functional>
 #include <utility>
 
 #include "absl/container/flat_hash_map.h"
@@ -35,15 +36,17 @@ class SplitEngineExternalTextureColorSpaceStore {
       BridgeId bridge_id, TextureId texture_id) const;
 
   // Sets the color space of the texture for a given bridge id and texture id.
-  void SetTextureColorSpace(BridgeId bridge_id, TextureId texture_id,
-                            const MediaColorSpace& color_space);
+  void SetTextureColorSpace(
+      BridgeId bridge_id, TextureId texture_id,
+      std::function<MediaColorSpace()> get_source_color_space_fn);
 
   // Removes the color space of the texture for a given bridge id and texture
   // id.
   void RemoveTextureColorSpace(BridgeId bridge_id, TextureId texture_id);
 
  private:
-  absl::flat_hash_map<std::pair<BridgeId, TextureId>, MediaColorSpace>
+  absl::flat_hash_map<std::pair<BridgeId, TextureId>,
+                      std::function<MediaColorSpace()>>
       color_spaces_;
 };
 }  // namespace imp::split_engine

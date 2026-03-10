@@ -24,6 +24,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "dear_imgui/imgui.h"
+#include "core/editor/widgets/performance/callstack_panel.h"
 #include "core/editor/widgets/performance/circular_buffer.h"
 #include "core/editor/widgets/performance/flame_graph.h"
 #include "core/editor/widgets/performance/hierarchy_panel.h"
@@ -56,8 +57,15 @@ class FrameTimePanel : public MonitorPanel {
     selected_sample_name_ = selected_sample_name;
     selected_sample_changed_ = true;
   }
+  bool IsCallstackPanelEnabled() const { return show_callstack_ != 0; }
 
  private:
+  // Number of labels to draw next to the vertical line on the plot.
+  static constexpr int kNumFrameValueLabels = 2;
+
+  // Width of the call stack panel when it is first opened.
+  static constexpr float kCallstackPanelStartingWidth = 450.0f;
+
   // An internal class for structuring data for ImPlot to draw. ImPlot can only
   // draw data on axes of the same type, so everything here has to be stored as
   // floats.
@@ -88,31 +96,47 @@ class FrameTimePanel : public MonitorPanel {
 
   enum class ProfilerDetailsViewMode { kHierarchy, kFlameGraph };
 
+  // Draws the legend to the left of the frame time plot.
   void DrawLegend(float width, float height);
+
   // Returns the highest frame time that is visible in the plot.
   float GetHighestVisibleFrameTimeMS(int time_span_seconds);
+
   // Draws a grey highlight over the frame being moused over
   void DrawHighlightFrame(int frame_number, ImDrawList* draw_list,
                           ImU32 color = IM_COL32(128, 128, 128, 64),
                           float frame_width = 0.5f);
+
   // Draws a tool tip showing more information on the frame
   void DrawToolTip(int frame_number);
+
   // Populates the selected sample buffer with the total time spent in the
   // selected sample for each frame in the buffer.
   void PopulateSelectedSampleBuffer();
+
   // Draws a separate plot representing the frame time of the selected sample.
   void DrawSelectedSamplePlot();
+
   // Updates the valid ticks based on the highest frame time in the plot.
   void UpdateValidTicks(float upper_bound);
+
   // Draws the tick labels based on the valid ticks.
   void DrawTickLabels(ImDrawList* draw_list, ValidTicks valid_ticks);
+
   // Draws the options to swap between hierarchy/flame graph views.
   void DrawOptionsBar(int selected_frame_number);
+
+  // Draws the splitter between the sample view and the call stack view.
+  void DrawSplitter();
+
   // Draws a label next to each plot showing its value at the selected frame.
   void DrawSelectedFrameLabels(int frame_number, ImDrawList* draw_list);
+
+  // Returns all samples with a specific name for a given frame and thread.
   std::vector<SampleNode*>* GetSamples(absl::string_view sample_name,
                                        int frame_index,
                                        std::thread::id thread_id);
+
   BaseView& view_;
   CircularBuffer<FrameTimeInfo> buffer_;
   std::array<SelectedSampleInfo, Profiler::kMaxFrames> selected_sample_buffer_;
@@ -124,6 +148,7 @@ class FrameTimePanel : public MonitorPanel {
 
   ViewConfig view_config_;
   HierarchyPanel hierarchy_panel_;
+  CallstackPanel callstack_panel_;
   FlameGraph flame_graph_;
   SampleProcessor sample_processor_;
   absl::string_view selected_sample_name_ = "";
@@ -131,8 +156,10 @@ class FrameTimePanel : public MonitorPanel {
   bool show_vsync_ = true;
   bool show_frametime_ = true;
   bool selected_sample_changed_ = false;
+  int show_callstack_ = 0;
+  float sample_view_width_ = -1.0f;
+  float callstack_panel_width_ = kCallstackPanelStartingWidth;
   ValidTicks valid_ticks_;
-  static constexpr int kNumFrameValueLabels = 2;
   std::array<ImGuiHelper::LabelData, kNumFrameValueLabels> frame_value_data_;
 
   // Which view to display (hierarchy or flame graph)

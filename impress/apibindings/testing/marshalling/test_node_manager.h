@@ -47,6 +47,11 @@ class TestNodeManager : public NodeManager {
       int32_t node_id) override;
   absl::Status SetImpressNodeLocalTransform(
       int32_t node_id, const imp::Transform<float>& transform) override;
+  absl::StatusOr<imp::Transform<float>> GetImpressNodeRelativeTransform(
+      int32_t node_id, int32_t relative_node_id) override;
+  absl::Status SetImpressNodeRelativeTransform(
+      int32_t node_id, int32_t relative_node_id,
+      const imp::Transform<float>& transform) override;
 };
 
 }  // namespace imp

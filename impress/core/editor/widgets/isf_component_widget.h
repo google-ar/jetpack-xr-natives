@@ -80,7 +80,7 @@ template <typename T>
 IsfComponentWidget<T>::IsfComponentWidget(ComponentHandle<T> component,
                                           Dispatcher& editor_dispatcher)
     : StatelessIsfComponentWidget<T>(component),
-      visitor_(IsfInfo::GetState(component)),
+      visitor_(IsfInfo::GetState(component), &component->GetView()),
       editor_dispatcher_(editor_dispatcher) {
   const SceneMetadata::ComponentSource* source =
       StatelessIsfComponentWidget<T>::GetBaseComponentSource();

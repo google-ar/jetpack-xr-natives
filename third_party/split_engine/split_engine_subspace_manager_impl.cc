@@ -18,6 +18,7 @@
 #include <string>
 #include <tuple>
 #include <utility>
+#include <vector>
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
@@ -39,6 +40,21 @@ namespace android_xr {
 SplitEngineSubspaceManagerImpl::SplitEngineSubspaceManagerImpl(
     imp::BaseView& view)
     : view_(view), foreground_executor_(imp::Executor::ForegroundExecutor()) {}
+
+void SplitEngineSubspaceManagerImpl::DestroyAllSubspaces() {
+  // DestroySubspace can be executed synchronously, so we need to copy out the
+  // keys to prevent undefined behavior caused by modifying the map while
+  // iterating.
+  std::vector<uint32_t> subspace_ids;
+  subspace_ids.reserve(subspace_map_.size());
+  for (const auto& [subspace_id, _] : subspace_map_) {
+    subspace_ids.push_back(subspace_id);
+  }
+
+  for (uint32_t subspace_id : subspace_ids) {
+    DestroySubspace(subspace_id);
+  }
+}
 
 void SplitEngineSubspaceManagerImpl::RegisterSubspace(
     uint32_t subspace_id, uint32_t existing_root_entity_id) {

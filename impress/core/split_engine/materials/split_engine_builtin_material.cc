@@ -172,8 +172,9 @@ void SplitEngineBuiltinMaterial::UpdateParameters() const {
     // retrieving the texture.
     TextureBorrower texture_borrower =
         [&texture_parameter_creator](
-            uint64_t texture_id) -> BorrowedTexturePtr {
-      return texture_parameter_creator.Borrow(texture_id);
+            uint64_t texture_id,
+            SmallSourceLocation loc) -> BorrowedTexturePtr {
+      return texture_parameter_creator.Borrow(texture_id, loc);
     };
 
     flatbuffers::FlatBufferBuilder fbb;

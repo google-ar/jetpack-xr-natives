@@ -21,6 +21,7 @@
 #include "core/common/log.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
+#include "core/ncsb/node_handle.h"
 #include "core/particle/data_layout.h"
 #include "core/particle/particle_data_provider.h"
 
@@ -31,11 +32,13 @@ using imp_particle::kInvalidParticleDataOffset;
 
 ParticleInstance::ParticleInstance(ParticleDataProvider& data_provider,
                                    const DataLayout& data_layout,
-                                   int32_t particle_index)
+                                   int32_t particle_index,
+                                   NodeHandle emitter_node)
     : data_provider_(data_provider),
       data_layout_(data_layout),
       particle_index_(particle_index),
-      float_offset_(particle_index * data_layout.GetSize()) {
+      float_offset_(particle_index * data_layout.GetSize()),
+      emitter_node_(emitter_node) {
   // Verify the particle index is valid.
   if (particle_index < 0 ||
       particle_index >= data_provider.GetNumFloats() / data_layout.GetSize()) {
@@ -44,6 +47,8 @@ ParticleInstance::ParticleInstance(ParticleDataProvider& data_provider,
 }
 
 int32_t ParticleInstance::GetParticleIndex() const { return particle_index_; }
+
+NodeHandle ParticleInstance::GetEmitterNode() const { return emitter_node_; }
 
 bool ParticleInstance::HasRemainingLifetimeSeconds() const {
   return data_layout_.GetLifetime() != kInvalidParticleDataOffset;

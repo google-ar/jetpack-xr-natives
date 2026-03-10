@@ -63,6 +63,14 @@ highp float2 CalculateStereoUvs(highp float2 originalUvs, int encodingType, bool
   return newUvs;
 }
 
+// Calculate new stereo UVs using the given UVs and a subview configuration.
+// subViewConfig is a float4(x, y, width, height) containing the subview
+// configuration, which maps 0-1 UVs to the sub-rectangle of the texture
+// corresponding to the current eye.
+highp float2 CalculateStereoUvs(highp float2 originalUvs, highp vec4 subViewConfig) {
+  return originalUvs * subViewConfig.zw + subViewConfig.xy;
+}
+
 // Calculate the alpha value for a given UV position, using a feather radius and
 // a corner radius.
 // The alpha value is 1.0 outside the feather radius, and smoothly transitions

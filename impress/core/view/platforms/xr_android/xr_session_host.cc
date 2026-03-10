@@ -1883,7 +1883,8 @@ absl::Status XrSessionHost::BeginAndDiscardFrame(XrTime predictedDisplayTime) {
   return result;
 }
 
-void XrSessionHost::PerformRender(filament::View* view) {
+void XrSessionHost::PerformRender(filament::View* view,
+                                  ViewHost::RenderPassOptions options) {
   IMP_TRACE();
 
   if (view_configuration_type_ == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
@@ -1892,7 +1893,7 @@ void XrSessionHost::PerformRender(filament::View* view) {
   }
 
   if (is_enhanced_stereoscopic_rendering_enabled_) {
-    PerformEnhancedStereoscopicRender(view);
+    PerformEnhancedStereoscopicRender(view, options);
   } else {
     PerformNaiveStereoscopicRender(view);
   }
@@ -1913,12 +1914,19 @@ void XrSessionHost::PerformNaiveStereoscopicRender(filament::View* view) {
   };
 }
 
-void XrSessionHost::PerformEnhancedStereoscopicRender(filament::View* view) {
+void XrSessionHost::PerformEnhancedStereoscopicRender(
+    filament::View* view, ViewHost::RenderPassOptions options) {
   if (view->isPostProcessingEnabled()) {
     IMP_LOG(imp::FATAL) << "Post Processing is not supported with instanced rendering.";
   }
-  filament::Camera* camera = &view->getCamera();
-  SetCustomEyeProjectionOnCamera(camera, latest_views_);
+
+  filament::Camera* pass_camera = &view->getCamera();
+  filament::Camera* main_camera =
+      GetView()->GetCameraManager().GetCamera()->GetCamera();
+
+  if (options.use_main_view_projection_matrix) {
+    SetCustomEyeProjectionOnCamera(pass_camera, latest_views_);
+  }
 
   if (!is_enhanced_stereoscopic_rendering_initialized_) {
     view->setStereoscopicOptions({.enabled = true});
@@ -1932,7 +1940,8 @@ void XrSessionHost::PerformEnhancedStereoscopicRender(filament::View* view) {
     imp::output::Xr("Instanced rendering is now initialized.");
     is_enhanced_stereoscopic_rendering_initialized_ = true;
   }
-  SetEyeModelMatrixOnCamera(GetEngine(), camera, latest_views_);
+  SetEyeModelMatrixOnCamera(GetEngine(), main_camera, pass_camera,
+                            latest_views_);
   renderer_->render(view);
 }
 
@@ -1959,6 +1968,8 @@ filament::Engine::StereoscopicType XrSessionHost::GetStereoscopicType() const {
   return filament::Engine::StereoscopicType::INSTANCED;
 #endif
 }
+
+bool XrSessionHost::IsInXr() const { return true; }
 
 bool XrSessionHost::IsMultiviewStereo() const {
   return GetStereoscopicType() == filament::Engine::StereoscopicType::MULTIVIEW;

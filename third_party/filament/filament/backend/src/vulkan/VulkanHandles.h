@@ -194,10 +194,20 @@ public:
         return bool(mSets[mCurrentSetIndex].fenceStatus);
     }
 
+    // The current layout used by the descriptor set. This one will match the bindings, including
+    // external samplers data. 
+    // This will not necessarilly be the same as `mLayout`.
+    VkDescriptorSetLayout boundLayout = VK_NULL_HANDLE;
+
     fvkmemory::resource_ptr<VulkanDescriptorSetLayout> getLayout() const { return mLayout; }
 
     fvkutils::UniformBufferBitmask const& dynamicUboMask;
     uint8_t const uniqueDynamicUboCount;
+
+    // Flag to indicate if the current layout needs to be recreated or not.
+    // This should only set to `true` when a external sampler image is bound to the descriptor set.
+    bool isLayoutDirty = false;
+    bool isAnExternalSamplerBound = false;
 
 private:
     friend class VulkanDescriptorSetCache;
@@ -262,6 +272,22 @@ struct VulkanProgram : public HwProgram, fvkmemory::Resource {
     VulkanProgram(VkDevice device, Program const& builder) noexcept;
     ~VulkanProgram();
 
+    /**
+     * Cancels any parallel compilation jobs that have not yet run for this
+     * program.
+     */
+    inline void cancelParallelCompilation() {
+        mParallelCompilationCanceled.store(true, std::memory_order_release);
+    }
+
+    /**
+     * Writes out any queued push constants using the provided VkPipelineLayout.
+     *
+     * @param layout The layout that is to be used along with these push constants,
+     *               in the next draw call.
+     */
+    void flushPushConstants(VkPipelineLayout layout);
+
     inline VkShaderModule getVertexShader() const {
         return mInfo->shaders[0];
     }
@@ -276,9 +302,28 @@ struct VulkanProgram : public HwProgram, fvkmemory::Resource {
         return mInfo->pushConstantDescription.getVkRanges();
     }
 
+    /**
+     * Returns true if parallel compilation is canceled, false if not. Parallel
+     * compilation will be canceled if this program is destroyed before relevant
+     * pipelines are created.
+     *
+     * @return true if parallel compilation should run for this program, false if not
+     */
+    inline bool isParallelCompilationCanceled() const {
+        return mParallelCompilationCanceled.load(std::memory_order_acquire);
+    }
+
     inline void writePushConstant(VkCommandBuffer cmdbuf, VkPipelineLayout layout,
             backend::ShaderStage stage, uint8_t index, backend::PushConstantVariant const& value) {
-        mInfo->pushConstantDescription.write(cmdbuf, layout, stage, index, value);
+        // It's possible that we don't have the layout yet. When external samplers are used, bindPipeline()
+        // in VulkanDriver returns early, without binding a layout. If that happens, the layout is not
+        // set until draw time. Any push constants that are written during that time should be saved for
+        // later, and flushed when the layout is set.
+        if (layout != VK_NULL_HANDLE) {
+            mInfo->pushConstantDescription.write(cmdbuf, layout, stage, index, value);
+        } else {
+            mQueuedPushConstants.push_back({cmdbuf, stage, index, value});
+        }
     }
 
     // TODO: handle compute shaders.
@@ -295,8 +340,17 @@ private:
         PushConstantDescription pushConstantDescription;
     };
 
+    struct PushConstantInfo {
+        VkCommandBuffer cmdbuf;
+        backend::ShaderStage stage;
+        uint8_t index;
+        backend::PushConstantVariant value;
+    };
+
     PipelineInfo* mInfo;
     VkDevice mDevice = VK_NULL_HANDLE;
+    std::atomic<bool> mParallelCompilationCanceled { false };
+    std::vector<PushConstantInfo> mQueuedPushConstants;
 };
 
 // The render target bundles together a set of attachments, each of which can have one of the

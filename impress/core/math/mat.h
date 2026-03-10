@@ -59,4 +59,13 @@ using EnableIfMatrix =
 
 }  // namespace imp
 
+namespace filament::math::details {
+
+template <typename Sink, typename T, ::imp::EnableIfMatrix<T> = 0>
+void AbslStringify(Sink& sink, const T& mat) {
+  sink.Append(::imp::ToString(mat));
+}
+
+}  // namespace filament::math::details
+
 #endif  // THIRD_PARTY_IMPRESS_CORE_MATH_MAT_H_

@@ -177,7 +177,9 @@ XrVulkanSwapChainImageHandler::CreateDepthSwapchain(uint2 display_size,
       .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
       .pNext = nullptr,
       .imageType = VK_IMAGE_TYPE_2D,
-      .format = kVkDepthFormat,
+      .format = host_->GetState()->ShouldUseStencilSwapChain()
+                    ? kVkDepthStencilFormat
+                    : kVkDepthFormat,
       .extent =
           {
               .width = display_size.x,

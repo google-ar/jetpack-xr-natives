@@ -78,4 +78,18 @@ absl::Status TestNodeManager::SetImpressNodeLocalTransform(
       "TestNodeManager::SetImpressNodeLocalTransform unimplemented");
 }
 
+absl::StatusOr<imp::Transform<float>>
+TestNodeManager::GetImpressNodeRelativeTransform(int32_t node_id,
+                                                 int32_t relative_node_id) {
+  return absl::UnimplementedError(
+      "TestNodeManager::GetImpressNodeRelativeTransform unimplemented");
+}
+
+absl::Status TestNodeManager::SetImpressNodeRelativeTransform(
+    int32_t node_id, int32_t relative_node_id,
+    const imp::Transform<float>& transform) {
+  return absl::UnimplementedError(
+      "TestNodeManager::SetImpressNodeRelativeTransform unimplemented");
+}
+
 }  // namespace imp

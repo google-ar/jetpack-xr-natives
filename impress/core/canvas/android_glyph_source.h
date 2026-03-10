@@ -63,7 +63,8 @@ class AndroidGlyphSource : public JavaWrapper {
   };
 
   explicit AndroidGlyphSource(const Context& context, Method method,
-                              int cache_size_bytes);
+                              int cache_size_bytes,
+                              bool force_individual_glyph_source_instances);
 
   ~AndroidGlyphSource() override;
 

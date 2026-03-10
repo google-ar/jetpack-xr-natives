@@ -75,10 +75,18 @@ class SplitEngineTextureBuilder : public BaseTextureBuilder {
   SplitEngineTextureBuilder& Levels(uint8_t levels) override;
   SplitEngineTextureBuilder& Format(
       filament::backend::TextureFormat format) override;
+  SplitEngineTextureBuilder& Usage(
+      filament::backend::TextureUsage usage) override;
   SplitEngineTextureBuilder& Sampler(
       filament::backend::SamplerType sampler) override;
   SplitEngineTextureBuilder& GenerateMipmaps(filament::Engine& engine) override;
   SplitEngineTextureBuilder& Name(absl::string_view name) override;
+  SplitEngineTextureBuilder& Swizzle(
+      filament::backend::TextureSwizzle r, filament::backend::TextureSwizzle g,
+      filament::backend::TextureSwizzle b,
+      filament::backend::TextureSwizzle a) override;
+  SplitEngineTextureBuilder& External() override;
+  SplitEngineTextureBuilder& Import(intptr_t id) override;
 
   void Finalize(filament::Texture* texture) override;
 

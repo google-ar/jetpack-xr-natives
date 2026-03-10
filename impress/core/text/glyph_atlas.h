@@ -45,6 +45,7 @@
 #include "core/ncsb/dispatcher/event.h"
 #include "core/render/texture.h"
 #include "core/text/glyph_emulator.h"
+#include "core/text/text_glyphs.h"
 #include "core/text/text_metrics.proto.h"
 #include "core/view/base_view.h"
 
@@ -112,13 +113,17 @@ class GlyphAtlas : public Rememberer {
     // rendering. This will attempt to use shaper based rendering if supported,
     // otherwise fallback to path based rendering.
     bool force_auto_method_rendering = false;
+    // If true, this will force each canvas source to use its own individual
+    // glyph source instance, rather than sharing a single instance.
+    bool force_individual_glyph_source_instances = false;
   };
 
   constexpr static Config kDefaultConfig = {
       .texture_size = TextureSize::k2048,
       .use_hardware_rendering = true,
       .force_reset_on_view_resumed = true,
-      .force_auto_method_rendering = false};
+      .force_auto_method_rendering = false,
+      .force_individual_glyph_source_instances = false};
 
   // Information about a glyph needed to render it and lay it out relative to
   // other glyphs in a string.
@@ -195,6 +200,10 @@ class GlyphAtlas : public Rememberer {
   // This function is thread-safe.
   Future<std::vector<Glyph>> GetGlyphs(
       absl::string_view text, const GlyphEmulator::TextOptions& options);
+
+  // Converts a GetGlyphs call to a TextGlyphs object.
+  Future<TextGlyphs> GetTextGlyphs(absl::string_view text,
+                                   const GlyphEmulator::TextOptions& options);
 
   // Returns a raw pointer to the Texture that will be used to draw the glyphs.
   // Warning: the Texture* may become invalid if GlyphAtlas recreates the

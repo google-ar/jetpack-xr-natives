@@ -598,12 +598,16 @@ void GltfAnimator::AdvanceAnimationPlayback(absl::Duration delta_time) {
     for (auto channel_id = playback_channel_lookup_.begin();
          channel_id != playback_channel_lookup_.end(); ++channel_id) {
       PlaybackChannel& channel = playback_channels_[channel_id->second];
-      if (!channel.active ||
-          (channel.anim_playback.paused &&
-           // Methods like SetPlaybackTime call AdvanceAnimationPlayback with
-           // zero duration. This check ensures the pose updates during those
-           // calls, even if the animation is paused.
-           delta_time > absl::ZeroDuration())) {
+
+      // If channel.active is false, it means playback on this channel has been
+      // stopped or has finished. In this case, we skip animation updates
+      // for this channel by calling continue.
+      // Note that paused channels are still active: they are handled inside
+      // AdvanceAnimationPlayback by using a zero delta time, to hold the
+      // animation pose at the time it was paused.
+      // TODO: (broken link) - Improve the performance when the animation in
+      // 'paused' state.
+      if (!channel.active) {
         continue;
       }
       bool animation_ended =
@@ -625,6 +629,15 @@ bool GltfAnimator::AdvanceAnimationPlayback(
     PlaybackChannel& channel, absl::Duration delta_time,
     ComponentHandle<GltfScene> gltf_scene) {
   GltfAnimPlayback& playback = channel.anim_playback;
+
+  // TODO: (broken link) - Improve the performance when the animation in
+  // 'paused' state.
+  if (playback.paused) {
+    // To prevent the animated bones from resetting to their rest pose, we still
+    // process the animation but with a delta time of zero. This holds the pose
+    // at the time it was paused.
+    delta_time = absl::ZeroDuration();
+  }
 
   absl::Duration prev_t = playback.t;
   playback.t = GetNextPlaybackTime(delta_time, playback);

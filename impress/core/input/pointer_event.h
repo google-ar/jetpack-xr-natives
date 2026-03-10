@@ -65,7 +65,7 @@ enum class PointerEventType : uint8_t {
 //       InputManager.java
 //   //depot/google3/third_party/impress/java/com/google/ar/imp/core/scripting/viewtexture/\
 //       RenderViewToSurfaceTexture.java
-//   //depot/google3/third_party/impress/javascript/core/wasm/view_impl.js:pointer_event_type
+//   //depot/google3/third_party/impress/javascript/core/wasm/constants.js:pointer_event_type
 // )
 
 // Represents a pointer event user interaction. Each event will contain one or

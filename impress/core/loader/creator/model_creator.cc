@@ -437,7 +437,8 @@ Future<absl::Status> CreateModelResources(
     // internals.
     TextureBorrower texture_borrower =
         [textures = std::move(textures)](
-            uint64_t texture_index) -> BorrowedTexturePtr {
+            uint64_t texture_index,
+            SmallSourceLocation loc) -> BorrowedTexturePtr {
       if (texture_index >= textures.size()) return {};
       return textures[texture_index];
     };

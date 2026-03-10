@@ -23,144 +23,11 @@ package(
     ],
 )
 
-genrule(
-    name = "dfg",
-    outs = [
-        "generated/resources/dfg.bin",
-        "generated/resources/dfg.h",
-        "generated/resources/dfg.c",
-        "generated/resources/dfg.S",
-        "generated/resources/dfg.apple.S",
-    ],
-    cmd = "$(location @third_party//filament/tools:cmgen) " +
-          if_mobile_materials("--size=64 ", "--size=128 ") +
-          "--ibl-dfg-multiscatter --ibl-dfg-cloth --ibl-dfg=$(@D)/generated/resources/dfg.bin &&" +
-          "$(location @third_party//filament/tools:resgen) -cp dfg --deploy=$(@D)/generated/resources -Z $(@D)/generated/resources/dfg.bin",
-    tools = [
-        "@third_party//filament/tools:cmgen",
-        "@third_party//filament/tools:resgen",
-    ],
-)
-
-cc_library(
-    name = "generated_data",
-    srcs = [
-        "generated/resources/dfg.c",
-    ],
-    hdrs = [],
-    copts = filament_copts(),
-    data = [],
-    includes = ["."],
-    linkstatic = 1,
-    textual_hdrs = [
-        "generated/resources/dfg.h",
-    ],
-    deps = [":dfg"],
-    alwayslink = 1,
-)
-
-genrule(
-    name = "generate_shaders",
-    srcs = ["@third_party//filament:shader_srcs"],
-    outs = [
-        "generated/shaders.bin",
-        "generated/shaders.h",
-        "generated/shaders.c",
-        "generated/shaders.S",
-        "generated/shaders.apple.S",
-    ],
-    cmd = "DEPLOY=`dirname $(location generated/shaders.bin)` && " +
-          "$(location @third_party//filament/tools:resgen) " +
-          "-kcp shaders --text --deploy=$$DEPLOY $(SRCS)",
-    tools = [
-        "@third_party//filament/tools:resgen",
-    ],
-)
-
-cc_library(
-    name = "generated_shaders",
-    srcs = [
-        "generated/shaders.c",
-    ],
-    hdrs = [],
-    copts = filament_copts(),
-    data = [],
-    includes = ["generated"],
-    linkstatic = 1,
-    textual_hdrs = [
-        "generated/shaders.h",
-    ],
-    alwayslink = 1,
-)
-
-[
-    filament_generate_materials(
-        api = api,
-        enable_fl0 = enable_fl0,
-        enable_multiview = enable_multiview,
-        material_api = material_api,
-        metal_precompile_mode = metal_precompile_mode,
-        platform = platform,
-    )
-    for platform, api, material_api, enable_fl0, enable_multiview, metal_precompile_mode in [
-        ("mobile", "opengl", "opengl", True, False, None),
-        ("mobile", "opengl", "opengl", False, True, None),
-        ("mobile", "opengl", "opengl", True, True, None),
-        ("mobile", "opengl", "opengl", False, False, None),
-        ("mobile", "vulkan", "vulkan", False, False, None),
-        ("mobile", "vulkan", "vulkan", False, True, None),
-        ("mobile", "metal", "metal", False, False, None),
-        ("mobile", "metal", "metal", False, False, "sim"),
-        ("mobile", "metal", "metal", False, False, "device"),
-        ("desktop", "opengl", "all", False, False, None),
-        ("desktop", "vulkan", "all", False, False, None),
-    ]
-]
-
-[
-    cc_library(
-        name = "generated_%s_%s_%s_%s_%s_materials" % (platform, api, fl0, multiview, precompile),
-        srcs = [
-            "%s/%s/%s/%s/%s/generated/resources/%s.c" % (platform, api, fl0, multiview, precompile, target)
-            for target in filament_get_internal_material_targets()
-        ],
-        hdrs = [],
-        copts = filament_copts(),
-        data = [],
-        includes = [
-            "%s/%s/%s/%s/%s" % (platform, api, fl0, multiview, precompile),
-            "%s/%s/%s/%s/%s/generated" % (platform, api, fl0, multiview, precompile),
-        ],
-        linkstatic = 1,
-        textual_hdrs = [
-            "%s/%s/%s/%s/%s/generated/resources/%s.h" % (platform, api, fl0, multiview, precompile, target)
-            for target in filament_get_internal_material_targets()
-        ],
-        alwayslink = 1,
-    )
-    for platform, api, fl0, multiview, precompile in [
-        ("mobile", "opengl", "yesFL0", "noMV", "noMPC"),
-        ("mobile", "opengl", "noFL0", "yesMV", "noMPC"),
-        ("mobile", "opengl", "yesFL0", "yesMV", "noMPC"),
-        ("mobile", "opengl", "noFL0", "noMV", "noMPC"),
-        ("mobile", "metal", "noFL0", "noMV", "noMPC"),
-        ("mobile", "metal", "noFL0", "noMV", "yesMPC"),
-        ("mobile", "metal", "noFL0", "noMV", "yesMPCSim"),
-        ("mobile", "vulkan", "noFL0", "noMV", "noMPC"),
-        ("mobile", "vulkan", "noFL0", "yesMV", "noMPC"),
-        ("desktop", "opengl", "noFL0", "noMV", "noMPC"),
-        ("desktop", "vulkan", "noFL0", "noMV", "noMPC"),
-    ]
-]
-
 cc_library(
     name = "filament_hdrs",
     copts = filament_copts(),
     defines = filament_defines(),
-    includes = [
-        "include",
-    ],
-    linkstatic = 0,
+    includes = ["include"],
     textual_hdrs = glob([
         "include/filament/*.h",
     ]),
@@ -175,8 +42,8 @@ cc_library(
     alwayslink = 1,
 )
 
-# Does *not* include the JNI bindings;
-# for that, see "filament-jni"
+# Main filament library targets.
+# Does *not* include the JNI bindings; for that, see "filament-jni"
 [
     cc_library(
         name = "filament_%s" % driver,
@@ -188,9 +55,7 @@ cc_library(
             "src/ds/*.cpp",
             "src/materials/**/*.cpp",
         ]),
-        copts = filament_copts() + [
-            "-Wno-bool-operation",  # TODO: Remove this.
-        ],
+        copts = filament_copts(),
         data = extra_data,
         defines = filament_defines() +
                   if_mobile_materials(
@@ -213,8 +78,8 @@ cc_library(
             "src/materials/**/*.h",
         ]),
         deps = [
+            ":_generated_data",
             ":filament_hdrs",
-            ":generated_data",
             "@robin_map",
             "@third_party//filament/filament/backend:backend_hdrs",
             "@third_party//filament/filament/backend:backend_opengl_private_hdrs",
@@ -231,14 +96,18 @@ cc_library(
             "@third_party//filament/libs:utils_hdrs",
             "@third_party//filament/libs:utils_private_hdrs",
             "@zstdlib",
-        ] + if_matdbg(["@third_party//filament/libs:matdbg"]) + if_fgviewer(["@third_party//filament/libs:fgviewer"]) + extra_deps,
+        ] + if_matdbg([
+            "@third_party//filament/libs:matdbg",
+        ]) + if_fgviewer([
+            "@third_party//filament/libs:fgviewer",
+        ]) + extra_deps,
         alwayslink = 1,
     )
     for driver, extra_deps, extra_data, extra_linkopts, extra_defines, linkstatic, alwayslink in [
         (
             "noop",
             [
-                ":generated_desktop_opengl_noFL0_noMV_noMPC_materials",
+                ":_generated_desktop_opengl_noFL0_noMV_noMPC_materials",
                 "@third_party//filament/libs:filaflat",
             ],
             [],
@@ -251,7 +120,7 @@ cc_library(
             # The main filament library, configured to link to OpenGL 4/5 on desktop.
             "opengl_desktop",
             [
-                ":generated_desktop_opengl_noFL0_noMV_noMPC_materials",
+                ":_generated_desktop_opengl_noFL0_noMV_noMPC_materials",
                 "@third_party//filament/libs:filaflat",
             ] + if_apple(
                 [
@@ -281,10 +150,10 @@ cc_library(
                 ],
             ) + if_multiview(
                 [
-                    ":generated_mobile_opengl_noFL0_yesMV_noMPC_materials",
+                    ":_generated_mobile_opengl_noFL0_yesMV_noMPC_materials",
                 ],
                 [
-                    ":generated_mobile_opengl_noFL0_noMV_noMPC_materials",
+                    ":_generated_mobile_opengl_noFL0_noMV_noMPC_materials",
                 ],
             ),
             [],
@@ -292,6 +161,20 @@ cc_library(
             if_multiview(
                 ["FILAMENT_ENABLE_MULTIVIEW=1"],
             ),
+            False,
+            False,
+        ),
+        (
+            # The main filament library, configured to link to OpenGL using EGL in headless mode.
+            "opengl_egl_headless",
+            [
+                ":_generated_mobile_opengl_noFL0_noMV_noMPC_materials",
+                "@third_party//filament/filament/backend:backend_opengl_egl_headless",
+                "@third_party//filament/libs:filaflat",
+            ],
+            [],
+            [],
+            [],
             False,
             False,
         ),
@@ -304,10 +187,10 @@ cc_library(
                 "@third_party//filament/libs:filaflat",
             ] + if_multiview(
                 [
-                    ":generated_mobile_opengl_yesFL0_yesMV_noMPC_materials",
+                    ":_generated_mobile_opengl_yesFL0_yesMV_noMPC_materials",
                 ],
                 [
-                    ":generated_mobile_opengl_yesFL0_noMV_noMPC_materials",
+                    ":_generated_mobile_opengl_yesFL0_noMV_noMPC_materials",
                 ],
             ),
             [],
@@ -330,10 +213,10 @@ cc_library(
                 "@third_party//filament/libs:filaflat",
             ] + if_multiview(
                 [
-                    ":generated_mobile_opengl_yesFL0_yesMV_noMPC_materials",
+                    ":_generated_mobile_opengl_yesFL0_yesMV_noMPC_materials",
                 ],
                 [
-                    ":generated_mobile_opengl_yesFL0_noMV_noMPC_materials",
+                    ":_generated_mobile_opengl_yesFL0_noMV_noMPC_materials",
                 ],
             ),
             [],
@@ -351,7 +234,7 @@ cc_library(
             [
                 "@third_party//filament/filament/backend:backend_opengl",
                 "@third_party//filament/libs:filaflat",
-                ":generated_mobile_opengl_noFL0_noMV_noMPC_materials",
+                ":_generated_mobile_opengl_noFL0_noMV_noMPC_materials",
             ],
             [],
             [],
@@ -366,7 +249,7 @@ cc_library(
             [
                 "@third_party//filament/filament/backend:backend_opengl",
                 "@third_party//filament/libs:filaflat",
-                ":generated_mobile_opengl_yesFL0_noMV_noMPC_materials",
+                ":_generated_mobile_opengl_yesFL0_noMV_noMPC_materials",
             ],
             [],
             [],
@@ -380,7 +263,7 @@ cc_library(
             [
                 "@third_party//filament/filament/backend:backend_opengl_osmesa",
                 "@third_party//filament/libs:filaflat",
-                ":generated_desktop_opengl_noFL0_noMV_noMPC_materials",
+                ":_generated_desktop_opengl_noFL0_noMV_noMPC_materials",
                 "//third_party/mesa:OSMesa",
             ],
             [],
@@ -395,7 +278,7 @@ cc_library(
             [
                 "@third_party//filament/filament/backend:backend_metal",
                 "@third_party//filament/libs:filaflat",
-                ":generated_mobile_metal_noFL0_noMV_noMPC_materials",
+                ":_generated_mobile_metal_noFL0_noMV_noMPC_materials",
             ],
             [],
             [],
@@ -411,10 +294,10 @@ cc_library(
                 "@third_party//filament/libs:filaflat",
             ] + if_ios_simulator(
                 [
-                    ":generated_mobile_metal_noFL0_noMV_yesMPCSim_materials",
+                    ":_generated_mobile_metal_noFL0_noMV_yesMPCSim_materials",
                 ],
                 otherwise = [
-                    ":generated_mobile_metal_noFL0_noMV_yesMPC_materials",
+                    ":_generated_mobile_metal_noFL0_noMV_yesMPC_materials",
                 ],
             ),
             [],
@@ -429,7 +312,7 @@ cc_library(
             [
                 "@third_party//filament/filament/backend:backend_vulkan_swiftshader",
                 "@third_party//filament/libs:filaflat_vulkan",
-                ":generated_desktop_vulkan_noFL0_noMV_noMPC_materials",
+                ":_generated_desktop_vulkan_noFL0_noMV_noMPC_materials",
             ],
             ["//third_party/swiftshader/src:libvk_swiftshader.so"],
             ["-Wl,-rpath=third_party/swiftshader/src"],
@@ -443,7 +326,7 @@ cc_library(
             [
                 "@third_party//filament/filament/backend:backend_vulkan_for_linux",
                 "@third_party//filament/libs:filaflat_vulkan",
-                ":generated_desktop_vulkan_noFL0_noMV_noMPC_materials",
+                ":_generated_desktop_vulkan_noFL0_noMV_noMPC_materials",
             ],
             [],
             [],
@@ -457,7 +340,7 @@ cc_library(
             [
                 "@third_party//filament/filament/backend:backend_vulkan_for_linux_headless",
                 "@third_party//filament/libs:filaflat_vulkan",
-                ":generated_desktop_vulkan_noFL0_noMV_noMPC_materials",
+                ":_generated_desktop_vulkan_noFL0_noMV_noMPC_materials",
             ],
             [],
             [],
@@ -471,7 +354,7 @@ cc_library(
             [
                 "@third_party//filament/filament/backend:backend_vulkan_for_linux_headless_static",
                 "@third_party//filament/libs:filaflat_vulkan",
-                ":generated_desktop_vulkan_noFL0_noMV_noMPC_materials",
+                ":_generated_desktop_vulkan_noFL0_noMV_noMPC_materials",
             ],
             [],
             [],
@@ -490,10 +373,10 @@ cc_library(
                 ],
             ) + if_multiview(
                 [
-                    ":generated_mobile_vulkan_noFL0_yesMV_noMPC_materials",
+                    ":_generated_mobile_vulkan_noFL0_yesMV_noMPC_materials",
                 ],
                 [
-                    ":generated_mobile_vulkan_noFL0_noMV_noMPC_materials",
+                    ":_generated_mobile_vulkan_noFL0_noMV_noMPC_materials",
                 ],
             ),
             [],
@@ -504,18 +387,137 @@ cc_library(
             False,
             False,
         ),
+        (
+            # The main filament library, configured to link to both OpenGL and Vulkan on Android
+            "gl_vulkan_android",
+            [
+                "@third_party//filament/libs:filaflat_vulkan",
+                "@third_party//filament/filament/backend:backend_gl_vulkan",
+                ":_generated_mobile_gl_vulkan_noFL0_noMV_noMPC_materials",
+            ],
+            [],
+            [],
+            [],
+            False,
+            False,
+        ),
     ]
 ]
 
+genrule(
+    name = "_dfg",
+    outs = [
+        "generated/resources/dfg.bin",
+        "generated/resources/dfg.h",
+        "generated/resources/dfg.c",
+        "generated/resources/dfg.S",
+        "generated/resources/dfg.apple.S",
+    ],
+    cmd = "$(location @third_party//filament/tools:cmgen) " +
+          if_mobile_materials("--size=64 ", "--size=128 ") +
+          "--ibl-dfg-multiscatter --ibl-dfg-cloth --ibl-dfg=$(@D)/generated/resources/dfg.bin &&" +
+          "$(location @third_party//filament/tools:resgen) -cp dfg --deploy=$(@D)/generated/resources -Z $(@D)/generated/resources/dfg.bin",
+    tools = [
+        "@third_party//filament/tools:cmgen",
+        "@third_party//filament/tools:resgen",
+    ],
+)
+
 cc_library(
-    name = "filament_sandboxed_vulkan_swiftshader",
-    data = [
-        "//third_party/swiftshader/src:libvk_swiftshader.so",
-        "//third_party/vulkan_loader:libvulkan.so.1",
-    ],
-    linkopts = ["-Wl,-rpath=google3/third_party/swiftshader/src:google3/third_party/vulkan_loader:third_party/vulkan_loader"],
-    deps = [
-        ":filament_vulkan_swiftshader",
-    ],
+    name = "_generated_data",
+    srcs = ["generated/resources/dfg.c"],
+    copts = filament_copts(),
+    includes = ["."],
+    linkstatic = 1,
+    textual_hdrs = ["generated/resources/dfg.h"],
+    deps = [":_dfg"],
     alwayslink = 1,
 )
+
+genrule(
+    name = "_generate_shaders",
+    srcs = ["@third_party//filament:shader_srcs"],
+    outs = [
+        "generated/shaders.bin",
+        "generated/shaders.h",
+        "generated/shaders.c",
+        "generated/shaders.S",
+        "generated/shaders.apple.S",
+    ],
+    cmd = "DEPLOY=`dirname $(location generated/shaders.bin)` && " +
+          "$(location @third_party//filament/tools:resgen) " +
+          "-kcp shaders --text --deploy=$$DEPLOY $(SRCS)",
+    tools = [
+        "@third_party//filament/tools:resgen",
+    ],
+)
+
+cc_library(
+    name = "generated_shaders",
+    srcs = ["generated/shaders.c"],
+    copts = filament_copts(),
+    includes = ["generated"],
+    linkstatic = 1,
+    textual_hdrs = ["generated/shaders.h"],
+    alwayslink = 1,
+)
+
+[
+    filament_generate_materials(
+        api = api,
+        enable_fl0 = enable_fl0,
+        enable_multiview = enable_multiview,
+        material_api = material_api,
+        metal_precompile_mode = metal_precompile_mode,
+        platform = platform,
+    )
+    for platform, api, material_api, enable_fl0, enable_multiview, metal_precompile_mode in [
+        ("mobile", "opengl", "opengl", True, False, None),
+        ("mobile", "opengl", "opengl", False, True, None),
+        ("mobile", "opengl", "opengl", True, True, None),
+        ("mobile", "opengl", "opengl", False, False, None),
+        ("mobile", "vulkan", "vulkan", False, False, None),
+        ("mobile", "vulkan", "vulkan", False, True, None),
+        ("mobile", "metal", "metal", False, False, None),
+        ("mobile", "metal", "metal", False, False, "sim"),
+        ("mobile", "metal", "metal", False, False, "device"),
+        ("mobile", "gl_vulkan", "all", False, False, None),
+        ("desktop", "opengl", "all", False, False, None),
+        ("desktop", "vulkan", "all", False, False, None),
+    ]
+]
+
+[
+    cc_library(
+        name = "_generated_%s_%s_%s_%s_%s_materials" % (platform, api, fl0, multiview, precompile),
+        srcs = [
+            "%s/%s/%s/%s/%s/generated/resources/%s.c" % (platform, api, fl0, multiview, precompile, target)
+            for target in filament_get_internal_material_targets()
+        ],
+        copts = filament_copts(),
+        includes = [
+            "%s/%s/%s/%s/%s" % (platform, api, fl0, multiview, precompile),
+            "%s/%s/%s/%s/%s/generated" % (platform, api, fl0, multiview, precompile),
+        ],
+        linkstatic = 1,
+        textual_hdrs = [
+            "%s/%s/%s/%s/%s/generated/resources/%s.h" % (platform, api, fl0, multiview, precompile, target)
+            for target in filament_get_internal_material_targets()
+        ],
+        alwayslink = 1,
+    )
+    for platform, api, fl0, multiview, precompile in [
+        ("mobile", "opengl", "yesFL0", "noMV", "noMPC"),
+        ("mobile", "opengl", "noFL0", "yesMV", "noMPC"),
+        ("mobile", "opengl", "yesFL0", "yesMV", "noMPC"),
+        ("mobile", "opengl", "noFL0", "noMV", "noMPC"),
+        ("mobile", "metal", "noFL0", "noMV", "noMPC"),
+        ("mobile", "metal", "noFL0", "noMV", "yesMPC"),
+        ("mobile", "metal", "noFL0", "noMV", "yesMPCSim"),
+        ("mobile", "vulkan", "noFL0", "noMV", "noMPC"),
+        ("mobile", "vulkan", "noFL0", "yesMV", "noMPC"),
+        ("mobile", "gl_vulkan", "noFL0", "noMV", "noMPC"),
+        ("desktop", "opengl", "noFL0", "noMV", "noMPC"),
+        ("desktop", "vulkan", "noFL0", "noMV", "noMPC"),
+    ]
+]

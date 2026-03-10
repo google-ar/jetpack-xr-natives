@@ -52,9 +52,6 @@ class JxrMediaMaterial : public imp::split_engine::SplitEngineBuiltinMaterial {
 
   ~JxrMediaMaterial() override;
 
-  // Applies the parameters of this material to another material.
-  void ApplyParametersTo(JxrMediaMaterial& other) const;
-
   flatbuffers::Offset<void> SerializeParameters(
       flatbuffers::FlatBufferBuilder& fbb,
       imp::split_engine::BuiltInTextureParameterCreator&
@@ -72,12 +69,17 @@ class JxrMediaMaterial : public imp::split_engine::SplitEngineBuiltinMaterial {
 
   void SetFeatherRadius(imp::float2 feather_radius);
   void SetCornerRadius(imp::float2 corner_radius);
+  void SetSubViewConfig(imp::float4 sub_view_rect_left,
+                        imp::float4 sub_view_rect_right);
 
  private:
   JxrMediaMaterial(imp::BaseView& view,
                    imp::split_engine::PlaceholderOrBuiltInMaterialPtr material);
 
-  // LINT.IfChange(parameters)
+  // This tracks the "Spatial API level" of the system image; we're depending on
+  // the Serializer reporting the same value as XrExtensions.GetApiLevel().
+  int spatial_api_level_;
+
   imp::OwnedOrBorrowedTexturePtr primary_texture_;
   imp::OwnedOrBorrowedTexturePtr auxiliary_texture_;
   imp::OwnedOrBorrowedTexturePtr primary_alpha_mask_;
@@ -86,7 +88,8 @@ class JxrMediaMaterial : public imp::split_engine::SplitEngineBuiltinMaterial {
   imp::MediaColorSpace color_space_;
   std::optional<android_xr::schemas::Float2> feather_radius_;
   std::optional<android_xr::schemas::Float2> corner_radius_;
-  // LINT.ThenChange(jxr_media_material.cc:parameters)
+  std::optional<android_xr::schemas::Float4> sub_view_rect_left_;
+  std::optional<android_xr::schemas::Float4> sub_view_rect_right_;
 };
 
 }  // namespace android_xr

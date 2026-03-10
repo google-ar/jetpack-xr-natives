@@ -45,20 +45,13 @@ class SlicedGlyphTextureManager {
 
   // Kick off the async creation of the texture manager.
   static Future<std::unique_ptr<SlicedGlyphTextureManager>> CreateAsync(
-      BaseView& view, uint2 atlas_size, uint2 grid_size);
-
-  // Returns the composite texture for use by Text materials.
-  Texture* GetCompositeTexture();
+      BaseView& view, uint2 atlas_size, uint2 grid_size,
+      Texture* composite_texture);
 
   // The size of an individual slice in the composite texture.
   uint2 GetAtlasSize() const { return atlas_size_; }
   // The size of the grid of slices that make up the composite texture.
   uint2 GetGridSize() const { return grid_size_; }
-
-  // Helper method to get the origin (offset) and scale of a given slice's
-  // sub-region within the composite texture.
-  void GetSliceOffsetAndScale(SliceId slice, float2* offset,
-                              float2* scale) const;
 
   // Assigns the source texture to the blitting material.
   void PrepareBlit(SliceId slice, Texture* texture);
@@ -68,17 +61,24 @@ class SlicedGlyphTextureManager {
 
   void OnViewResumed();
 
+  static std::unique_ptr<Texture> CreateCompositeTexture(BaseView& view,
+                                                         uint2 atlas_size,
+                                                         uint2 grid_size);
+
  private:
   SlicedGlyphTextureManager(BaseView& view,
                             AssetPtr<MaterialAsset> blit_material,
-                            uint2 atlas_size, uint2 grid_size);
+                            uint2 atlas_size, uint2 grid_size,
+                            Texture* composite_texture);
 
   uint2 atlas_size_;
   uint2 grid_size_;
 
   filament::Engine& engine_;
 
-  std::unique_ptr<Texture> composite_texture_;
+  // An un-owned pointer to the composite texture. The owner of the texture
+  // manager is responsible for the lifetime of the composite texture.
+  Texture* composite_texture_;
   AssetPtr<MaterialAsset> blit_material_;
 
   filament::Camera* blit_camera_;

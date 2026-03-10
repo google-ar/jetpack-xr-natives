@@ -53,17 +53,16 @@
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/material_factory.h"
-#include "core/view/framework/camera/camera_manager.h"
+#include "core/view/framework/camera/camera_manager.h"  // IWYU pragma: keep
 #include "core/view/framework/collision/collision_manager.h"
 #include "core/view/framework/display_layer/display_layer_manager.h"
 #include "core/view/framework/gestures/gesture_manager.h"
 #include "core/view/framework/input/pointer_input_handler.h"
 #include "core/view/framework/lighting/light_manager.h"
-#include "core/view/framework/render/mesh_factory.h"
+#include "core/view/framework/render/mesh_factory.h"  // IWYU pragma: keep
 #include "core/view/framework/scene/scene_system.h"
 #include "core/view/scripting/script_message_handler.h"
 #include "core/view/scripting/script_message_handler_provider.h"
-#include "core/view/utils/default_view_config.h"
 #include "core/view/utils/device.h"
 #include "core/view/utils/frame_time.h"
 #include "core/view/utils/proto/view_config.proto.imp.h"
@@ -297,7 +296,7 @@ class View : public BaseView {
   ~View() override;
 
  protected:
-  explicit View(ViewConfig view_config = GetDefaultViewConfig());
+  explicit View(ViewConfig view_config = ViewConfig());
 
   // Runs the main loop of View.  This should only be called by ViewState or
   // testing::ViewFixture.

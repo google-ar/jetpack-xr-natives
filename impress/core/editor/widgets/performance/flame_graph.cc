@@ -107,16 +107,17 @@ constexpr float kNanosPerMs = 1000000.0f;
 
 }  // namespace
 
-void FlameGraph::DrawPanel(int frame_index, SampleProcessor& sample_processor,
+void FlameGraph::DrawPanel(float width, int frame_index,
+                           SampleProcessor& sample_processor,
                            FrameTimePanel& frame_time_panel) {
   IMP_TRACE();
   // Minimum height for the panel no matter how small the window is.
   // Flame graph takes up the remaining space in the window.
   // If the window is too small it won't be displayed so we set a min height.
-  const float available_height = ImGui::GetContentRegionAvail().y;
-  const float child_height = std::max(kMinPanelHeight, available_height);
+  const ImVec2 available_size = ImGui::GetContentRegionAvail();
+  const float child_height = std::max(kMinPanelHeight, available_size.y);
 
-  if (ImGui::BeginChild("flame_graph_child", ImVec2(0, child_height),
+  if (ImGui::BeginChild("flame_graph_child", ImVec2(width, child_height),
                         ImGuiChildFlags_Borders,
                         ImGuiWindowFlags_NoScrollWithMouse)) {
     ImDrawList* draw_list = ImGui::GetWindowDrawList();

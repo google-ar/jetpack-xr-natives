@@ -16,18 +16,24 @@
 
 package com.google.imp.splitengine.extensions;
 
+import com.google.android.filament.proguard.UsedByNative;
+
 /** Implementation of the callback for requests. */
+@UsedByNative("split_engine_bridge.cc")
 public final class RequestCallback {
   private final long nativeRequestCallbackHandle;
 
+  @UsedByNative("split_engine_bridge.cc")
   public RequestCallback(long nativeRequestCallbackHandle) {
     this.nativeRequestCallbackHandle = nativeRequestCallbackHandle;
   }
 
+  @UsedByNative("split_engine_bridge.cc")
   long getNativeHandle() {
     return nativeRequestCallbackHandle;
   }
 
+  @UsedByNative("split_engine_bridge.cc")
   public void onResult(byte[] response) {
     nOnResult(nativeRequestCallbackHandle, response);
   }

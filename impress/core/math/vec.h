@@ -125,4 +125,13 @@ float RadiansBetween(const T& lhs, const T& rhs) {
 
 }  // namespace imp
 
+namespace filament::math::details {
+
+template <typename Sink, typename T, ::imp::EnableIfVector<T> = 0>
+void AbslStringify(Sink& sink, const T& vec) {
+  sink.Append(::imp::ToString(vec));
+}
+
+}  // namespace filament::math::details
+
 #endif  // THIRD_PARTY_IMPRESS_CORE_VIEW_MATH_VEC3_H_

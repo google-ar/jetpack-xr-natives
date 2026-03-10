@@ -232,7 +232,7 @@ void FScene::prepare(JobSystem& js,
             sceneData.elementAt<INSTANCES>(index)           = rcm.getInstancesInfo(ri);
             sceneData.elementAt<WORLD_AABB_CENTER>(index)   = worldAABB.center;
             sceneData.elementAt<VISIBLE_MASK>(index)        = 0;
-            sceneData.elementAt<CHANNELS>(index)            = rcm.getChannels(ri);
+            sceneData.elementAt<CHANNELS>(index)            = rcm.getLightChannels(ri);
             sceneData.elementAt<LAYERS>(index)              = rcm.getLayerMask(ri);
             sceneData.elementAt<WORLD_AABB_EXTENT>(index)   = worldAABB.halfExtent;
             //sceneData.elementAt<PRIMITIVES>(index)          = {}; // already initialized, Slice<>
@@ -395,7 +395,7 @@ void FScene::prepareVisibleRenderables(Range<uint32_t> visibleRenderables) noexc
 
         uboData.flagsChannels = PerRenderableData::packFlagsChannels(
                 skinning.skinning,
-                skinning.morphing,
+                static_cast<uint8_t>(skinning.morphType),
                 visibility.screenSpaceContactShadows,
                 sceneData.elementAt<INSTANCES>(i).buffer != nullptr,
                 sceneData.elementAt<CHANNELS>(i));

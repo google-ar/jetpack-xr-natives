@@ -241,7 +241,6 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
-        "@com_google_impress//core/common:log",
         "@stblib//:stb_image",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:driver_enums",

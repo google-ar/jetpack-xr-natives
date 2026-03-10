@@ -31,7 +31,7 @@ namespace imp::android {
 // JNI wrapper for the Android Paint class.
 class Canvas : public JavaWrapper {
  public:
-  Canvas(JNIEnv* env, jobject j_canvas);
+  Canvas(JNIEnv* env, JniUniquePtr<jobject> j_canvas);
 
   void DrawColor(float3 color);
   void DrawColor(float4 color);

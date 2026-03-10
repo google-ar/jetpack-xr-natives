@@ -16,14 +16,16 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "absl/base/no_destructor.h"
 #include "absl/container/fixed_array.h"
-#include "absl/container/flat_hash_set.h"
+#include "absl/container/inlined_vector.h"
 #include "core/common/log.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
@@ -39,6 +41,7 @@
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_flag.h"
 #include "core/ncsb/path_manager.h"
+#include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
 
 namespace imp::imp_internal {
@@ -75,15 +78,8 @@ void NodeController::PreDestroyed() {
     return;
   }
 
-  if (!group_hashes_) {
-    // If group_hashes_, just in the main group.
-    view_->GetGroupsManager().RemoveNodeFromGroup(GroupsManager::kMainGroupHash,
-                                                  node);
-  } else {
-    // Remove from all the groups.
-    for (HashValue group_hash : *group_hashes_) {
-      view_->GetGroupsManager().RemoveNodeFromGroup(group_hash, node);
-    }
+  for (const HashValue& group_hash : GetGroupHashes()) {
+    view_->GetGroupsManager().RemoveNodeFromGroup(group_hash, node);
   }
   view_->GetPathManager().SetRoot(node, false);
 }
@@ -188,27 +184,27 @@ void NodeController::AddToGroup(absl::string_view group_name) {
 }
 
 void NodeController::AddToGroupSelf(absl::string_view group_name) {
-  if (group_name == GroupsManager::kMainGroupName && !group_hashes_) {
-    // If group_hashes_ is unset, then already in the main group.
-    return;
-  }
-
   HashValue group_hash = Hash(group_name);
-  if (!group_hashes_) {
-    group_hashes_ = std::make_unique<absl::flat_hash_set<HashValue>>();
-    group_hashes_->insert(GroupsManager::kMainGroupHash);
-  } else if (group_hashes_->count(group_hash) > 0) {
-    // This node is already present in this group.
+
+  // Special case logic: if the node was previously in zero groups and is added
+  // to the main group, delete group_hashes_ (return to default state).
+  if (group_hash == GroupsManager::kMainGroupHash && group_hashes_ &&
+      group_hashes_->empty()) {
+    // Optimization: If the node is only in the 'Main' group (which is the
+    // default), release the vector storage to save memory.
+    group_hashes_.reset();
+    view_->GetGroupsManager().AddNodeToGroup(group_name, group_hash, GetNode());
+    OnGroupsChanged();
     return;
   }
 
-  view_->GetGroupsManager().AddNodeToGroup(group_name, group_hash, GetNode());
-
-  if (group_hashes_->empty() && group_name == GroupsManager::kMainGroupName) {
-    // If only in the main group, then destroy group_hashes_.
-    group_hashes_.reset();
-  } else {
-    group_hashes_->insert(group_hash);
+  std::vector<HashValue>& hashes = MutableGroups();
+  auto it = std::lower_bound(hashes.begin(), hashes.end(), group_hash);
+  if (it == hashes.end() || *it != group_hash) {
+    // This group is new.
+    hashes.insert(it, group_hash);
+    view_->GetGroupsManager().AddNodeToGroup(group_name, group_hash, GetNode());
+    OnGroupsChanged();
   }
 }
 
@@ -218,29 +214,27 @@ void NodeController::RemoveFromGroup(absl::string_view group_name) {
 }
 
 void NodeController::RemoveFromGroupSelf(absl::string_view group_name) {
-  if (!group_hashes_) {
-    if (group_name == GroupsManager::kMainGroupName) {
-      // Removing from main group. Not in any other group.
-      group_hashes_ = std::make_unique<absl::flat_hash_set<HashValue>>();
-      view_->GetGroupsManager().RemoveNodeFromGroup(
-          GroupsManager::kMainGroupHash, GetNode());
-    }
-    return;
-  }
-
   HashValue group_hash = Hash(group_name);
-  auto itr = group_hashes_->find(group_hash);
-  if (itr == group_hashes_->end()) {
-    // This node isn't in this layer.
+  // Optimization: If implicit main and removing something else, do nothing.
+  if (!group_hashes_ && group_hash != GroupsManager::kMainGroupHash) {
     return;
   }
 
-  view_->GetGroupsManager().RemoveNodeFromGroup(group_hash, GetNode());
-  group_hashes_->erase(itr);
+  std::vector<HashValue>& hashes = MutableGroups();
+  auto it = std::lower_bound(hashes.begin(), hashes.end(), group_hash);
+  if (it == hashes.end() || *it != group_hash) {
+    // This group is not present.
+    return;
+  }
 
-  // If only in the main group, then destroy group_hashes_.
-  if (group_hashes_->size() == 1 &&
-      *group_hashes_->begin() == GroupsManager::kMainGroupHash) {
+  hashes.erase(it);
+  view_->GetGroupsManager().RemoveNodeFromGroup(group_hash, GetNode());
+  OnGroupsChanged();
+
+  // Optimization: If the node is only in the 'Main' group (which is the
+  // default), release the vector storage to save memory.
+  if (group_hashes_ && group_hashes_->size() == 1 &&
+      (*group_hashes_)[0] == GroupsManager::kMainGroupHash) {
     group_hashes_.reset();
   }
 }
@@ -261,46 +255,104 @@ void NodeController::SetGroupsSelf(
     absl::Span<const absl::string_view> group_names, bool is_inherited) {
   flags_ =
       SetBitFromBool(flags_, NodeFlags::kIsGroupsOverridden, !is_inherited);
-  std::vector<std::string> oldgroups = GetGroups();
-  std::vector<std::string> groups_to_remove;
 
-  std::set_difference(oldgroups.begin(), oldgroups.end(), group_names.begin(),
-                      group_names.end(), std::back_inserter(groups_to_remove));
+  // Using absl::InlinedVector<HashValue, kGroupHashInlineCapacity> for
+  // temporary group name hash lists. Since HashValue is usually 4-8 bytes, a
+  // size of 16 fits comfortably on the stack (approx 64-128 bytes), covering
+  // the vast majority of use cases without heap allocation.
+  static constexpr size_t kGroupHashInlineCapacity = 16;
 
-  for (const absl::string_view oldgroup_to_remove : groups_to_remove) {
-    RemoveFromGroupSelf(oldgroup_to_remove);
+  // Prepare new sorted unique hashes.
+  absl::InlinedVector<HashValue, kGroupHashInlineCapacity> new_hashes;
+  new_hashes.reserve(group_names.size());
+  std::transform(group_names.begin(), group_names.end(),
+                 std::back_inserter(new_hashes),
+                 [](absl::string_view name) { return Hash(name); });
+  std::sort(new_hashes.begin(), new_hashes.end());
+  // Standard idiom to remove duplicates from a sorted vector.
+  // std::unique moves duplicates to the end and returns an iterator to the new
+  // logical end; erase then removes the undefined tail.
+  new_hashes.erase(std::unique(new_hashes.begin(), new_hashes.end()),
+                   new_hashes.end());
+
+  const std::vector<HashValue>& old_hashes = GetGroupHashes();
+
+  if (std::equal(new_hashes.begin(), new_hashes.end(), old_hashes.begin(),
+                 old_hashes.end())) {
+    return;
   }
 
-  // AddToGroup already guards against the group being added multiple
-  // times so we can just call it to add all the new groups.
-  for (const absl::string_view newgroup : group_names) {
-    AddToGroupSelf(newgroup);
+  // Compute Diff between old and new.
+  // std::set_difference expects sorted ranges and outputs the elements present
+  // in the first range but not the second.
+  absl::InlinedVector<HashValue, kGroupHashInlineCapacity> to_remove;
+  std::set_difference(old_hashes.begin(), old_hashes.end(), new_hashes.begin(),
+                      new_hashes.end(), std::back_inserter(to_remove));
+
+  absl::InlinedVector<HashValue, kGroupHashInlineCapacity> to_add;
+  std::set_difference(new_hashes.begin(), new_hashes.end(), old_hashes.begin(),
+                      old_hashes.end(), std::back_inserter(to_add));
+
+  // Apply changes.
+  for (const HashValue& h : to_remove) {
+    view_->GetGroupsManager().RemoveNodeFromGroup(h, GetNode());
   }
+
+  // Notify the groups manager of the new groups.
+  // We need names for AddNodeToGroup. Since we only have hashes, we must find
+  // the name.
+  // Assuming group_names is small, linear scan is fine for performance.
+  for (const HashValue& h : to_add) {
+    // Find name corresponding to hash h.
+    std::optional<absl::string_view> name;
+    for (absl::string_view n : group_names) {
+      if (Hash(n) == h) {
+        name = n;
+        break;
+      }
+    }
+
+    if (name.has_value()) {
+      view_->GetGroupsManager().AddNodeToGroup(*name, h, GetNode());
+    } else {
+      IMP_LOG(imp::FATAL) << "Could not find name for group hash during SetGroupsSelf";
+    }
+  }
+
+  if (new_hashes.size() == 1 &&
+      new_hashes[0] == GroupsManager::kMainGroupHash) {
+    // Optimization: If the node is only in the 'Main' group (which is the
+    // default), release the vector storage to save memory.
+    group_hashes_.reset();
+  } else {
+    // Update Storage with the new entries.
+    MutableGroups().assign(new_hashes.begin(), new_hashes.end());
+  }
+
+  OnGroupsChanged();
 }
 
 std::vector<std::string> NodeController::GetGroups() const {
   std::vector<std::string> group_names;
-  if (!group_hashes_) {
-    group_names.push_back(std::string(GroupsManager::kMainGroupName));
-  } else {
-    for (HashValue group_hash : *group_hashes_) {
-      absl::string_view group_name =
-          view_->GetGroupsManager().GetGroupName(group_hash);
-      if (group_name.empty()) {
-        // This should never happen, implies a bug in GroupsManager or
-        // NodeController.
-        IMP_LOG(imp::FATAL) << "Node is part of a  group that doesn't exist.";
-      }
-      group_names.push_back(std::string(group_name));
+  const std::vector<HashValue>& group_hashes = GetGroupHashes();
+  group_names.reserve(group_hashes.size());
+  for (HashValue group_hash : group_hashes) {
+    absl::string_view group_name =
+        view_->GetGroupsManager().GetGroupName(group_hash);
+    if (group_name.empty()) {
+      // Should not happen.
+      IMP_LOG(imp::FATAL) << "Node is part of a group that doesn't exist.";
     }
+    group_names.push_back(std::string(group_name));
   }
-
   return group_names;
 }
 
 bool NodeController::IsInGroup(absl::string_view group_name) const {
-  return group_hashes_ ? group_hashes_->contains(Hash(group_name))
-                       : group_name == GroupsManager::kMainGroupName;
+  HashValue group_hash = Hash(group_name);
+  const std::vector<HashValue>& group_hashes = GetGroupHashes();
+  return std::binary_search(group_hashes.begin(), group_hashes.end(),
+                            group_hash);
 }
 
 bool NodeController::CheckParentActive() {
@@ -347,14 +399,9 @@ void NodeController::UpdateActiveSelf(bool is_parent_active) {
   flags_ = SetBitFromBool(flags_, NodeFlags::kIsActive, active);
 
   if (was_active != active) {
-    if (!group_hashes_) {
-      view_->GetGroupsManager().SetNodeActiveInGroup(
-          GroupsManager::kMainGroupHash, GetNode(), active);
-    } else {
-      for (HashValue group_hash : *group_hashes_) {
-        view_->GetGroupsManager().SetNodeActiveInGroup(group_hash, GetNode(),
-                                                       active);
-      }
+    for (HashValue group_hash : GetGroupHashes()) {
+      view_->GetGroupsManager().SetNodeActiveInGroup(group_hash, GetNode(),
+                                                     active);
     }
   }
 }
@@ -375,6 +422,20 @@ void NodeController::UpdateInheritedGroupsRecursive() {
   }
 }
 
+const std::vector<HashValue>& NodeController::GetGroupHashes() const {
+  static const absl::NoDestructor<std::vector<HashValue>> kMainGroupVector(
+      {GroupsManager::kMainGroupHash});
+  return group_hashes_ ? *group_hashes_ : *kMainGroupVector;
+}
+
+std::vector<HashValue>& NodeController::MutableGroups() {
+  if (!group_hashes_) {
+    group_hashes_ = std::make_unique<std::vector<HashValue>>();
+    group_hashes_->push_back(GroupsManager::kMainGroupHash);
+  }
+  return *group_hashes_;
+}
+
 bool NodeController::DoGroupsMatch(NodeController& other_node_controller) {
   if (!other_node_controller.group_hashes_ && !group_hashes_) {
     // If both nodes have default groups, then they match.
@@ -387,6 +448,7 @@ bool NodeController::DoGroupsMatch(NodeController& other_node_controller) {
   }
 
   // Neither component is default, compare the actual groups.
+  // Vectors are sorted, so direct comparison works.
   return *group_hashes_ == *other_node_controller.group_hashes_;
 }
 
@@ -404,6 +466,18 @@ void NodeController::UpdateInheritedGroupsSelf() {
     SetGroupsSelf(absl::FixedArray<absl::string_view>(parentgroups.begin(),
                                                       parentgroups.end()),
                   true);
+  }
+}
+
+void NodeController::OnGroupsChanged() {
+  if (split_engine::SplitEngineSerializer* serializer =
+          view_->GetSplitEngineSerializer()) {
+    if (serializer->GetApiLevel() ==
+        split_engine::kSplitEngineExperimentalApiLevel) {
+      std::vector<std::string> groups = GetGroups();
+      serializer->SetGroups(GetEntity(), absl::FixedArray<absl::string_view>(
+                                             groups.begin(), groups.end()));
+    }
   }
 }
 

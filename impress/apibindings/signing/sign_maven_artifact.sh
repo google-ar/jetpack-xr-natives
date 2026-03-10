@@ -1,4 +1,4 @@
-# Copyright 2024 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,29 +15,47 @@
 #!/bin/bash
 set -ex
 
-if [ -z "${INPUT_ZIP_FILE}" ]; then
-  echo "Error: INPUT_ZIP_FILE environment variable is not set."
-  exit 1
-fi
+STAGING_DIR="${KOKORO_ARTIFACTS_DIR}/staging"
+mkdir -p "${STAGING_DIR}"
 
-UNSIGNED_DIR="${KOKORO_ARTIFACTS_DIR}/unsigned"
-SIGNED_DIR="${KOKORO_ARTIFACTS_DIR}/signed"
-mkdir -p "${UNSIGNED_DIR}" "${SIGNED_DIR}"
-
-find .
-
-mv "${KOKORO_GFILE_DIR}/${INPUT_ZIP_FILE}" "${UNSIGNED_DIR}/"
-
-# Sign using the tool.
 export PYTHONPATH=$PYTHONPATH:/escalated_sign
 
-python3 /signing-tools/signer.py \
-  --loglevel=debug \
-  --output_dir="${SIGNED_DIR}" \
-  "${UNSIGNED_DIR}"
+for ZIP_PATH in "${KOKORO_GFILE_DIR}"/*.zip; do
+  ZIP_NAME=$(basename "${ZIP_PATH}")
 
-OUTPUT_ZIP_NAME=$(basename "${INPUT_ZIP_FILE}")
-OUTPUT_ZIP="${KOKORO_ARTIFACTS_DIR}/${OUTPUT_ZIP_NAME}"
+  WORK_DIR="${KOKORO_ARTIFACTS_DIR}/work_${ZIP_NAME}"
+  mkdir -p "${WORK_DIR}"
 
-cd "${SIGNED_DIR}"
-zip -rq "${OUTPUT_ZIP}" .
+  unzip "${ZIP_PATH}" -d "${WORK_DIR}"
+
+  find "${WORK_DIR}" -type f \( -name "*.aar" -o -name "*.jar" -o -name "*.pom" \) | while read ARTIFACT_PATH; do
+    ARTIFACT_NAME=$(basename "${ARTIFACT_PATH}")
+    ARTIFACT_DIR=$(dirname "${ARTIFACT_PATH}")
+
+    echo "Signing ${ARTIFACT_NAME}..."
+
+    cp "${ARTIFACT_PATH}" "${STAGING_DIR}/${ARTIFACT_NAME}"
+
+    /escalated_sign/escalated_sign.py \
+      --tool=linux_gpg_sign \
+      --job-dir=/escalated_sign_jobs \
+      -- \
+      --loglevel=debug \
+      "${STAGING_DIR}/${ARTIFACT_NAME}"
+
+    if [ -f "${STAGING_DIR}/${ARTIFACT_NAME}.asc" ]; then
+        mv "${STAGING_DIR}/${ARTIFACT_NAME}.asc" "${ARTIFACT_DIR}/"
+    else
+        echo "Error: Signature not created for ${ARTIFACT_NAME}"
+        exit 1
+    fi
+
+    rm "${STAGING_DIR}/${ARTIFACT_NAME}"
+  done
+
+  cd "${WORK_DIR}"
+  zip -rq "${KOKORO_ARTIFACTS_DIR}/${ZIP_NAME}" .
+  cd -
+
+  rm -rf "${WORK_DIR}"
+done

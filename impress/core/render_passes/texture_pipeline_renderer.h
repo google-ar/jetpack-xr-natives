@@ -173,6 +173,11 @@ class TexturePipelineRenderer : public Component {
     bool rendering_to_subregion = false;
 
     bool use_main_view_settings = false;
+    // If true, the fov and other parameters are automatically set
+    // when in OpenXR.  If false, the developer is responsible for setting the
+    // projection matrix for the pass camera.  The Default is true.
+    bool use_main_view_camera_projection_matrix = true;
+
     std::optional<render_settings::ViewRenderSettings> render_settings;
   };
 

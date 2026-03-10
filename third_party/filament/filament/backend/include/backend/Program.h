@@ -20,6 +20,7 @@
 #include "filament/libs/utils/include/utils/CString.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/Invocable.h"
+#include "filament/libs/utils/include/utils/Slice.h"
 
 #include <backend/DriverEnums.h>
 
@@ -142,10 +143,6 @@ public:
     CompilerPriorityQueue getPriorityQueue() const noexcept { return mPriorityQueue; }
 
     SpecializationConstantsInfo const& getSpecializationConstants() const noexcept {
-        return mSpecializationConstants;
-    }
-
-    SpecializationConstantsInfo& getSpecializationConstants() noexcept {
         return mSpecializationConstants;
     }
 

@@ -28,6 +28,7 @@
 #include "core/assets/asset_ptr.h"
 #include "core/assets/material/material_asset.h"
 #include "core/async/future.h"
+#include "core/common/small_source_location.h"
 #include "core/material_library/flatbuffer_utils.h"
 #include "core/material_library/material_package.h"
 #include "core/materials/material.h"
@@ -120,7 +121,8 @@ absl::Status BuiltInWaterMaterial::SetParameters(
 
   if (schema->reflection_cube()) {
     const BorrowedTexturePtr texture =
-        texture_borrower(schema->reflection_cube()->texture_id());
+        texture_borrower(schema->reflection_cube()->texture_id(),
+                         SmallSourceLocation::Current());
     if (!texture) {
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d", schema->reflection_cube()->texture_id()));
@@ -130,8 +132,8 @@ absl::Status BuiltInWaterMaterial::SetParameters(
         ConvertSampler(schema->reflection_cube()->sampler()));
   }
   if (schema->normal_map()) {
-    const BorrowedTexturePtr texture =
-        texture_borrower(schema->normal_map()->texture_id());
+    const BorrowedTexturePtr texture = texture_borrower(
+        schema->normal_map()->texture_id(), SmallSourceLocation::Current());
     if (!texture) {
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d", schema->normal_map()->texture_id()));
@@ -150,8 +152,8 @@ absl::Status BuiltInWaterMaterial::SetParameters(
   }
 
   if (schema->alpha_map()) {
-    const BorrowedTexturePtr texture =
-        texture_borrower(schema->alpha_map()->texture_id());
+    const BorrowedTexturePtr texture = texture_borrower(
+        schema->alpha_map()->texture_id(), SmallSourceLocation::Current());
     if (!texture) {
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d", schema->alpha_map()->texture_id()));

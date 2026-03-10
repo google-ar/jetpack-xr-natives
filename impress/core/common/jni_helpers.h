@@ -206,6 +206,11 @@ JniUniquePtr<T> WrapJni(JNIEnv* env, T jni_object) {
   return JniUniquePtr<T>(jni_object, details::JniDeleter<T>(env));
 }
 
+template <typename T>
+JniUniquePtr<T> EmptyJniUniquePtr(JNIEnv* env) {
+  return WrapJni(env, static_cast<T>(nullptr));
+}
+
 // Creates a smart pointer with a cloned local reference to the given object.
 template <typename T>
 JniUniquePtr<T> CloneRef(JNIEnv* env, T ref) {
@@ -247,6 +252,12 @@ JniUniquePtr<T> CloneRef(const JniUniquePtr<T>& ref) {
   JNIEnv* env = ref.get_deleter().env();
   jobject new_ref = env->NewLocalRef(ref.get());
   return WrapJni(env, static_cast<T>(new_ref));
+}
+
+template <typename T, typename K>
+JniUniquePtr<T> JniStaticCast(JniUniquePtr<K> object) {
+  JNIEnv* env = object.get_deleter().env();
+  return WrapJni(env, static_cast<T>(object.release()));
 }
 
 // The key point of this function is to create a global ref and then release
@@ -451,139 +462,166 @@ class JavaWrapper {
 
   /* Get a Java value or call a method. */
 
-  jobject GetStaticObjectField(JniHandle handle) {
-    return Env()->GetStaticObjectField(Clazz(), ToFieldID(handle));
+  JniUniquePtr<jobject> GetStaticObjectField(JniHandle handle) {
+    JNIEnv* env = Env();
+    return WrapJni(env, env->GetStaticObjectField(Clazz(), ToFieldID(handle)));
   }
 
-  jobject GetObjectField(JniHandle handle) {
-    return Env()->GetObjectField(Clazz(), ToFieldID(handle));
+  JniUniquePtr<jobject> GetObjectField(JniHandle handle) {
+    JNIEnv* env = Env();
+    return WrapJni(env, env->GetObjectField(Clazz(), ToFieldID(handle)));
   }
 
-  jint GetStaticIntField(JniHandle handle) {
+  int GetStaticIntField(JniHandle handle) {
     return Env()->GetStaticIntField(Clazz(), ToFieldID(handle));
   }
 
   template <class... Args>
   void CallVoidMethod(JniHandle handle, Args&&... args) {
+    JNIEnv* env = Env();
     if (!handle) {
-      ThrowError(Env(), Error("Jni handle is invalid."));
+      ThrowError(env, Error("Jni handle is invalid."));
     }
     jmethodID id = ToMethodID(handle);
-    Env()->CallVoidMethod(Self(), id, std::forward<Args>(args)...);
+    env->CallVoidMethod(Self(), id, std::forward<Args>(args)...);
   }
 
   template <class... Args>
   void CallStaticVoidMethod(JniHandle handle, Args&&... args) {
+    JNIEnv* env = Env();
     if (!handle) {
-      ThrowError(Env(), Error("Jni handle is invalid."));
+      ThrowError(env, Error("Jni handle is invalid."));
     }
     jmethodID id = ToMethodID(handle);
-    Env()->CallStaticVoidMethod(Clazz(), id, std::forward<Args>(args)...);
+    env->CallStaticVoidMethod(Clazz(), id, std::forward<Args>(args)...);
   }
 
   template <class... Args>
-  jlong CallLongMethod(JniHandle handle, Args&&... args) {
+  int64_t CallLongMethod(JniHandle handle, Args&&... args) {
+    JNIEnv* env = Env();
     if (!handle) {
-      ThrowError(Env(), Error("Jni handle is invalid."));
+      ThrowError(env, Error("Jni handle is invalid."));
     }
     jmethodID id = ToMethodID(handle);
-    return Env()->CallLongMethod(Self(), id, std::forward<Args>(args)...);
+    return env->CallLongMethod(Self(), id, std::forward<Args>(args)...);
   }
 
   template <class... Args>
-  jfloat CallFloatMethod(JniHandle handle, Args&&... args) {
+  float CallFloatMethod(JniHandle handle, Args&&... args) {
+    JNIEnv* env = Env();
     if (!handle) {
-      ThrowError(Env(), Error("Jni handle is invalid."));
+      ThrowError(env, Error("Jni handle is invalid."));
     }
     jmethodID id = ToMethodID(handle);
-    return Env()->CallFloatMethod(Self(), id, std::forward<Args>(args)...);
+    return env->CallFloatMethod(Self(), id, std::forward<Args>(args)...);
   }
 
   template <class... Args>
-  jboolean CallBooleanMethod(JniHandle handle, Args&&... args) {
+  bool CallBooleanMethod(JniHandle handle, Args&&... args) {
+    JNIEnv* env = Env();
     if (!handle) {
-      ThrowError(Env(), Error("Jni handle is invalid."));
+      ThrowError(env, Error("Jni handle is invalid."));
     }
     jmethodID id = ToMethodID(handle);
-    return Env()->CallBooleanMethod(Self(), id, std::forward<Args>(args)...);
+    return env->CallBooleanMethod(Self(), id, std::forward<Args>(args)...);
   }
 
   template <class... Args>
-  jint CallIntMethod(JniHandle handle, Args&&... args) {
+  int CallIntMethod(JniHandle handle, Args&&... args) {
+    JNIEnv* env = Env();
     if (!handle) {
-      ThrowError(Env(), Error("Jni handle is invalid."));
+      ThrowError(env, Error("Jni handle is invalid."));
     }
     jmethodID id = ToMethodID(handle);
-    return Env()->CallIntMethod(Self(), id, std::forward<Args>(args)...);
+    return env->CallIntMethod(Self(), id, std::forward<Args>(args)...);
   }
 
   template <class... Args>
-  jint CallStaticIntMethod(JniHandle handle, Args&&... args) {
+  int CallStaticIntMethod(JniHandle handle, Args&&... args) {
+    JNIEnv* env = Env();
     if (!handle) {
-      ThrowError(Env(), Error("Jni handle is invalid."));
+      ThrowError(env, Error("Jni handle is invalid."));
     }
     jmethodID id = ToMethodID(handle);
-    return Env()->CallStaticIntMethod(Clazz(), id, std::forward<Args>(args)...);
+    return env->CallStaticIntMethod(Clazz(), id, std::forward<Args>(args)...);
   }
 
   // Calls a Java method that returns a Java string and converts it to an
   // std::string so the Java string reference can be released.
   template <class... Args>
   std::string CallStringMethod(JniHandle handle, Args&&... args) {
+    JNIEnv* env = Env();
     if (!handle) {
-      ThrowError(Env(), Error("Jni handle is invalid."));
+      ThrowError(env, Error("Jni handle is invalid."));
     }
     jmethodID id = ToMethodID(handle);
     jobject java_string =
-        Env()->CallObjectMethod(Self(), id, std::forward<Args>(args)...);
-    std::string str = GetString(Env(), (jstring)java_string);
-    Env()->DeleteLocalRef(java_string);
+        env->CallObjectMethod(Self(), id, std::forward<Args>(args)...);
+    std::string str = GetString(env, (jstring)java_string);
+    env->DeleteLocalRef(java_string);
     return str;
   }
 
   template <class... Args>
-  jobject CallObjectMethod(JniHandle handle, Args&&... args) {
+  JniUniquePtr<jobject> CallObjectMethod(JniHandle handle, Args&&... args) {
     if (!handle) {
-      ThrowError(Env(), Error("Jni handle is invalid."));
+      return WrapJni(Env(), static_cast<jobject>(nullptr));
     }
     jmethodID id = ToMethodID(handle);
-    return Env()->CallObjectMethod(Self(), id, std::forward<Args>(args)...);
+    return WrapJni(Env(), Env()->CallObjectMethod(Self(), id,
+                                                  std::forward<Args>(args)...));
   }
 
   template <class... Args>
-  jobject CallStaticObjectMethod(JniHandle handle, Args&&... args) {
+  JniUniquePtr<jobject> CallStaticObjectMethod(JniHandle handle,
+                                               Args&&... args) {
+    JNIEnv* env = Env();
     if (!handle) {
-      ThrowError(Env(), Error("Jni handle is invalid."));
+      return WrapJni(env, static_cast<jobject>(nullptr));
     }
     jmethodID id = ToMethodID(handle);
-    return Env()->CallStaticObjectMethod(Clazz(), id,
-                                         std::forward<Args>(args)...);
+    return WrapJni(env, env->CallStaticObjectMethod(
+                            Clazz(), id, std::forward<Args>(args)...));
   }
 
   // Adapted from
   // (broken link)
   template <class... Args>
-  jbyteArray CallByteArrayMethod(JniHandle handle, Args&&... args) {
-    auto env = Env();
+  JniUniquePtr<jbyteArray> CallByteArrayMethod(JniHandle handle,
+                                               Args&&... args) {
+    JNIEnv* env = Env();
+    if (!handle) {
+      return WrapJni(env, static_cast<jbyteArray>(nullptr));
+    }
+
     jmethodID id = ToMethodID(handle);
-    return (jbyteArray)env->CallObjectMethod(Self(), id,
-                                             std::forward<Args>(args)...);
+    return WrapJni(env, static_cast<jbyteArray>(env->CallObjectMethod(
+                            Self(), id, std::forward<Args>(args)...)));
   }
 
   template <class... Args>
-  jintArray CallIntArrayMethod(JniHandle handle, Args&&... args) {
-    auto env = Env();
+  JniUniquePtr<jintArray> CallIntArrayMethod(JniHandle handle, Args&&... args) {
+    JNIEnv* env = Env();
+    if (!handle) {
+      return WrapJni(env, static_cast<jintArray>(nullptr));
+    }
+
     jmethodID id = ToMethodID(handle);
-    return (jintArray)env->CallObjectMethod(Self(), id,
-                                            std::forward<Args>(args)...);
+    return WrapJni(env, static_cast<jintArray>(env->CallObjectMethod(
+                            Self(), id, std::forward<Args>(args)...)));
   }
 
   template <class... Args>
-  jfloatArray CallFloatArrayMethod(JniHandle handle, Args&&... args) {
-    auto env = Env();
+  JniUniquePtr<jfloatArray> CallFloatArrayMethod(JniHandle handle,
+                                                 Args&&... args) {
+    JNIEnv* env = Env();
+    if (!handle) {
+      return WrapJni(env, static_cast<jfloatArray>(nullptr));
+    }
+
     jmethodID id = ToMethodID(handle);
-    return (jfloatArray)env->CallObjectMethod(Self(), id,
-                                              std::forward<Args>(args)...);
+    return WrapJni(env, static_cast<jfloatArray>(env->CallObjectMethod(
+                            Self(), id, std::forward<Args>(args)...)));
   }
 
   // Helper for adding jni info.
@@ -641,10 +679,11 @@ class JavaProtoEnumWrapper : public imp::JavaWrapper {
         Env()->CallIntMethod(enum_value, ToMethodID(ordinal_method_)));
   }
 
-  jobject GetEnum(T message) {
-    return Env()->GetObjectArrayElement(
-        static_cast<jobjectArray>(CallStaticObjectMethod(values_method_)),
-        message);
+  JniUniquePtr<jobject> GetEnum(T message) {
+    return WrapJni(Env(), Env()->GetObjectArrayElement(
+                              static_cast<jobjectArray>(
+                                  CallStaticObjectMethod(values_method_).get()),
+                              static_cast<jsize>(message)));
   }
 
  private:
@@ -670,10 +709,11 @@ class JavaEnumWrapper : public imp::JavaWrapper {
         Env()->CallIntMethod(enum_value, ToMethodID(ordinal_method_)));
   }
 
-  jobject GetEnum(T message) {
-    return Env()->GetObjectArrayElement(
-        static_cast<jobjectArray>(CallStaticObjectMethod(values_method_)),
-        static_cast<jsize>(message));
+  JniUniquePtr<jobject> GetEnum(T message) {
+    return WrapJni(Env(), Env()->GetObjectArrayElement(
+                              static_cast<jobjectArray>(
+                                  CallStaticObjectMethod(values_method_).get()),
+                              static_cast<jsize>(message)));
   }
 
  private:

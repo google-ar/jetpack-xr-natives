@@ -13,18 +13,12 @@
 # limitations under the License.
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("//build_tools:assets.bzl", "imp_assets")
 load(
     "//build_tools:imp.bzl",
     "if_android",
     "if_dev_runtime",
     "imp_defines",
-    "imp_embed_generic_materials",
     "imp_google3_copts",
-)
-load(
-    "//build_tools:imp_gstatic_urls.bzl",
-    "imp_gstatic_urls",
 )
 load(
     "//core/proto:imp_cc_proto_library.bzl",
@@ -40,51 +34,6 @@ package(
 
 licenses(["notice"])
 
-GENERIC_MATERIALS_ZIP = "//core/loader/data:compiled_imp_default_gltf_materials.zip"
-
-GENERIC_LITE_MATERIALS_ZIP = "//core/loader/data:compiled_imp_default_lite_gltf_materials.zip"
-
-imp_assets(
-    name = "generic_materials",
-    srcs = [GENERIC_MATERIALS_ZIP],
-    embed = imp_embed_generic_materials(),
-    namespace = "imp::materials",
-    urls = imp_gstatic_urls(
-        [GENERIC_MATERIALS_ZIP],
-        ["compiled_imp_default_gltf_materials"],
-    ),
-)
-
-imp_assets(
-    name = "generic_lite_materials",
-    srcs = [GENERIC_LITE_MATERIALS_ZIP],
-    embed = imp_embed_generic_materials(),
-    namespace = "imp::materials",
-    urls = imp_gstatic_urls(
-        [GENERIC_LITE_MATERIALS_ZIP],
-        ["compiled_imp_default_lite_gltf_materials"],
-    ),
-)
-
-# Version of generic materials assets that are always embedded regardless of build flags.
-# This is used in tests to embed required assets that would normally be downloaded.
-# See mock_url_loader.h for how this is used.
-imp_assets(
-    name = "generic_materials_always_embedded",
-    srcs = [GENERIC_MATERIALS_ZIP],
-    base_url = "https://www.gstatic.com/ar/core/viewer",
-    embed = True,
-    namespace = "imp::materials_embedded",
-)
-
-imp_assets(
-    name = "generic_lite_materials_always_embedded",
-    srcs = [GENERIC_LITE_MATERIALS_ZIP],
-    base_url = "https://www.gstatic.com/ar/core/viewer",
-    embed = True,
-    namespace = "imp::materials_embedded",
-)
-
 cc_library(
     name = "framework",
     srcs = glob(["**/*.cc"]),
@@ -94,8 +43,6 @@ cc_library(
     linkstatic = True,
     deps = [
         ":framework_proto_cc",
-        ":generic_lite_materials",
-        ":generic_materials",
         "//core:config",
         "//core/animation:fbs",
         "//core/animation:gltf_animation",
@@ -127,6 +74,7 @@ cc_library(
         "//core/common:buffer_access",
         "//core/common:context",
         "//core/common:debug_draw",
+        "//core/common:entity_absl_hasher",
         "//core/common:fbs",
         "//core/common:filament_engine_helpers",
         "//core/common:filament_helpers",
@@ -158,6 +106,8 @@ cc_library(
         "//core/lighting:environment_light",
         "//core/lighting:environment_light_factory",
         "//core/lighting:image_based_lighting_asset",
+        "//core/lighting:light_component",
+        "//core/lighting:light_state_proto_cc_imp",
         "//core/loader",
         "//core/loader:loader_creator",
         "//core/loader:loader_details",
@@ -166,9 +116,11 @@ cc_library(
         "//core/loader/provider:fbs",
         "//core/loader/provider:fbs_deps",  # build_cleaner: keep
         "//core/loader/provider:loaded_model_builder",
+        "//core/material_library:generic_lite_materials",
         "//core/material_library:generic_material",
         "//core/material_library:generic_material_constants",
         "//core/material_library:generic_material_parameters",
+        "//core/material_library:generic_materials",
         "//core/material_library:material_package",
         "//core/material_library:material_param_value",
         "//core/materials",
@@ -208,7 +160,6 @@ cc_library(
         "//core/view/scripting",
         "//core/view/utils:asset",
         "//core/view/utils:cache_config_proto_cc_imp",
-        "//core/view/utils:default_view_config",
         "//core/view/utils:device",
         "//core/view/utils:frame_time",
         "//core/view/utils:macros",
@@ -260,6 +211,42 @@ cc_library(
         "//core/async:future_interrupter",
         "//core/view/platforms/android/wrappers:input_stream",
     ]),
+    alwayslink = 1,
+)
+
+# TODO: Remove this file once all external references are updated.
+cc_library(
+    name = "generic_materials",
+    deps = [
+        "//core/material_library:generic_materials",
+    ],
+    alwayslink = 1,
+)
+
+# TODO: Remove this file once all external references are updated.
+cc_library(
+    name = "generic_materials_always_embedded",
+    deps = [
+        "//core/material_library:generic_materials_always_embedded",
+    ],
+    alwayslink = 1,
+)
+
+# TODO: Remove this file once all external references are updated.
+cc_library(
+    name = "generic_lite_materials",
+    deps = [
+        "//core/material_library:generic_lite_materials",
+    ],
+    alwayslink = 1,
+)
+
+# TODO: Remove this file once all external references are updated.
+cc_library(
+    name = "generic_lite_materials_always_embedded",
+    deps = [
+        "//core/material_library:generic_lite_materials_always_embedded",
+    ],
     alwayslink = 1,
 )
 

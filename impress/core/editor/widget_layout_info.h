@@ -21,18 +21,39 @@
 
 namespace imp::editor {
 
+// Determines whether a widget will be removed when the layout is not 2D large
+// screen.
+// 2D large screen typically refers to the desktop monitor, it is applied to
+// cases such as, desktop app, WASM and Remote Editor (through the browser on a
+// desktop monitor)
+enum class WidgetPresence {
+  // The widget will be present in all layouts.
+  kAlways,
+  // The widget will only be present in 2D large screen layouts.
+  kOnlyIn2DLargeScreen,
+};
+
+// In addition to the layout, this determines whether a widget will be visible
+// or not.
+enum class WidgetVisibility {
+  kHidden,
+  kVisible,
+};
+
 // Determines where in the layout a widget should be drawn.
 struct WidgetLayoutInfo {
   explicit WidgetLayoutInfo() : panel_id(PanelId::kFreeform) {}
-  explicit WidgetLayoutInfo(PanelId panel_id) : panel_id(panel_id) {}
-  WidgetLayoutInfo(PanelId panel_id, bool show_by_default)
-      : panel_id(panel_id), show_by_default(show_by_default) {}
+  WidgetLayoutInfo(PanelId panel_id,
+                   WidgetPresence presence = WidgetPresence::kAlways,
+                   WidgetVisibility visibility = WidgetVisibility::kVisible)
+      : panel_id(panel_id), presence(presence), visibility(visibility) {}
 
   PanelId panel_id;
-  // Whether the widget is visible by default, only works for widgets in
+  WidgetPresence presence = WidgetPresence::kAlways;
+  // Whether the widget will be visible by default, only works for widgets in
   // PanelId::kTabBar, PanelId::kLeftPanel, PanelId::kRightPanel,
   // PanelId::kFreeform.
-  bool show_by_default = true;
+  WidgetVisibility visibility = WidgetVisibility::kVisible;
 };
 
 }  // namespace imp::editor

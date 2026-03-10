@@ -176,25 +176,6 @@ message PrimitiveShapeRendererState {
     optional imp.Float4 color = 5;
   }
 
-  // Defines the parameters for generating a custom mesh primitive.
-  // Defaults are drawn from CreateCustomMeshSettings in mesh_factory.h
-  message CustomMesh {
-    // The vertex positions of the mesh.
-    repeated float positions = 1;
-
-    // The texture coordinates of the mesh.
-    repeated float texcoords = 2;
-
-    // The indices of the mesh.
-    repeated uint32 indices = 3;
-
-    // The draw mode of the mesh, corresponding to imp::Mesh::PrimitiveType.
-    optional int32 draw_mode = 4;
-
-    // The color applied to VertexAttribute::COLOR for all vertices of the mesh.
-    optional imp.Float4 color = 5;
-  }
-
   // Defines a primitive to render.
   message Primitive {
     // Determines what material & material parameters to use when rendering the
@@ -215,7 +196,6 @@ message PrimitiveShapeRendererState {
       CapsuleMesh capsule_mesh = 5;
       CylinderMesh cylinder_mesh = 6;
       ConeMesh cone_mesh = 7;
-      CustomMesh custom_mesh = 8;
     }
   }
 

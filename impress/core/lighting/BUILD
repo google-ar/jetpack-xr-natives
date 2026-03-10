@@ -14,6 +14,7 @@
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "imp_copts", "imp_google3_copts")
+load("//core/proto:imp_cc_proto_library.bzl", "imp_cc_proto_library")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -23,6 +24,40 @@ package(
 )
 
 licenses(["notice"])
+
+cc_library(
+    name = "light_component",
+    srcs = [
+        "light_component.cc",
+    ],
+    hdrs = [
+        "light_component.h",
+    ],
+    copts = imp_copts(),
+    linkstatic = True,
+    deps = [
+        ":light_state_proto_cc_imp",
+        "//core/camera",
+        "//core/math",
+        "//core/ncsb",
+        "@third_party//filament/filament:filament_hdrs",
+    ],
+    alwayslink = 1,
+)
+
+proto_library(
+    name = "light_state_proto",
+    srcs = ["light_state.proto"],
+    deps = [
+        "//core/math:math_proto",
+        "//core/proto:imp_proto",
+    ],
+)
+
+imp_cc_proto_library(
+    name = "light_state_proto_cc_imp",
+    proto = ":light_state_proto",
+)
 
 cc_library(
     name = "image_based_lighting_asset",

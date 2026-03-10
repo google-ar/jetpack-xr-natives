@@ -463,7 +463,11 @@ ImageBasedLightingAsset::SerializeAndConstructImageBasedLightingAsset(
           view.GetSplitEngineSerializer()) {
     // Copy the spherical harmonics and cubemaps so that they can be
     // serialized.
-    SphericalHarmonics spherical_harmonics_copy = *spherical_harmonics;
+    std::unique_ptr<SphericalHarmonics> spherical_harmonics_copy;
+    if (spherical_harmonics) {
+      spherical_harmonics_copy =
+          std::make_unique<SphericalHarmonics>(*spherical_harmonics);
+    }
     MP_ASSIGN_OR_RETURN(ImageBasedLightingAssetCubemapImages cubemap_images_copy,
                      DeepCopyIblCubemaps(cubemap_images));
     auto image_based_lighting_asset = std::make_unique<ImageBasedLightingAsset>(

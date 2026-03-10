@@ -224,12 +224,13 @@ absl::Status GenericMaterialManagerImpl::SetTextureParameter(
   }
   (void)setter_fn(
       generic_material_ptr, texture_parameter_payload,
-      imp::TextureBorrower([expected_texture_id = texture_id,
-                            borrowed_texture = std::move(borrowed_texture)](
-                               uint64_t id) -> BorrowedTexturePtr {
-        
-        return borrowed_texture.WithNewLocation();
-      }));
+      imp::TextureBorrower(
+          [expected_texture_id = texture_id,
+           borrowed_texture = std::move(borrowed_texture)](
+              uint64_t id, SmallSourceLocation loc) -> BorrowedTexturePtr {
+            
+            return borrowed_texture.WithNewLocation(loc);
+          }));
   return absl::OkStatus();
 }
 

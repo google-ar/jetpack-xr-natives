@@ -179,6 +179,7 @@ cc_library(
         ":impress_api_view_header",
         ":model_manager_interface",
         "//apibindings/model_interaction_ux:reform_affordance_ux",
+        "//core/animation:gltf_animation",
         "//core/assets",
         "//core/common:small_source_location",
         "//core/geometry/shapes",
@@ -267,6 +268,7 @@ cc_library(
         ":stereo_surface_manager_interface",
         "//core/common:small_source_location",
         "//core/input",
+        "//core/math",
         "//core/media:media_color_space",
         "//core/media:media_type",
         "//core/ncsb",
@@ -516,6 +518,32 @@ cc_library(
 )
 
 cc_library(
+    name = "mesh_buffer",
+    srcs = ["mesh_buffer.cc"],
+    hdrs = ["mesh_buffer.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        ":impress_api_view_header",
+        "//core/common:owned_ptr",
+        "//core/geometry/shapes",
+        "//core/math",
+        "//core/model/mesh",
+        "//core/model/mesh:mesh_data",
+        "//core/model/mesh:mesh_factory",
+        "//core/window:filament_host",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
+        "@third_party//filament/filament:filament_hdrs",
+        "@third_party//filament/filament/backend:driver_enums",
+        "@third_party//filament/filament/backend:pixel_buffer_descriptor",
+        "@third_party//filament/libs:filabridge_hdrs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "impress_jni",
     srcs = [":impress_jni_srcs"],
     copts = imp_google3_copts(),
@@ -564,24 +592,47 @@ cc_library(
 )
 
 cc_library(
+    name = "media_material_cache",
+    srcs = ["media_material_cache.cc"],
+    hdrs = ["media_material_cache.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        "//core/math",
+        "//core/media:media_color_space",
+        "//core/media:media_type",
+        "//core/render",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/types:span",
+        "@third_party//split_engine/materials:jxr_media_material",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "stereo_surface",
     srcs = ["stereo_surface.cc"],
     hdrs = ["stereo_surface.h"],
     copts = imp_google3_copts(),
     deps = [
+        ":media_material_cache",
+        ":stereo_mesh",
         "//core/async:future",
         "//core/math",
         "//core/media:media_color_space",
         "//core/media:media_type",
+        "//core/model/mesh",
+        "//core/model/mesh:mesh_factory",
         "//core/ncsb",
         "//core/render",
         "//core/render:content_security_level",
+        "//core/render:mesh_renderer",
         "//core/render/android:android_external_texture_surface",
         "//core/render/android:definitions",
         "//core/view:base_view",
         "//core/view/framework",
         "//core/view/framework:framework_proto_cc",
         "//core/view/platforms/android/wrappers:graphics",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
@@ -590,6 +641,25 @@ cc_library(
         "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//split_engine/materials:jxr_media_material",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "stereo_mesh",
+    srcs = ["stereo_mesh.cc"],
+    hdrs = ["stereo_mesh.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        "//core/math",
+        "//core/model/mesh",
+        "//core/model/mesh:mesh_data",
+        "//core/model/mesh:mesh_factory",
+        "//core/view:base_view",
+        "@com_google_absl//absl/base:no_destructor",
+        "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
+        "@third_party//filament/filament:filament_hdrs",
     ],
     alwayslink = 1,
 )

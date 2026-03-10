@@ -242,17 +242,26 @@ JNI_METHOD(void, nSetup)
   auto* view_host = FromJava<ViewHost>(view_host_handle);
   auto* platform = FromJava<filament::backend::Platform>(platform_handle);
 
+  auto backend = view_host->GetState()->GetPreferredBackend();
+  if (backend == filament::Engine::Backend::DEFAULT) {
 #if IMP_MATERIAL_API(OPENGL)
-  THROW_IF_ERROR(env, view_host->Setup(filament::Engine::Backend::OPENGL,
-                                       platform, (void*)egl_context));
+    backend = filament::Engine::Backend::OPENGL;
 #elif IMP_MATERIAL_API(VULKAN)
-  THROW_IF_ERROR(env, view_host->Setup(filament::Engine::Backend::VULKAN,
-                                       platform, nullptr));
+    backend = filament::Engine::Backend::VULKAN;
 #else
-  (void)view_host;
-  (void)platform;
-  ThrowError(env, imp::Error("The backend is not supported on Android"));
+    (void)view_host;
+    (void)platform;
+    ThrowError(env, imp::Error("The backend is not supported on Android"));
+    return;
 #endif
+  }
+
+  void* shared_context = nullptr;
+  if (backend == filament::Engine::Backend::OPENGL) {
+    shared_context = (void*)egl_context;
+  }
+
+  THROW_IF_ERROR(env, view_host->Setup(backend, platform, shared_context));
 }
 
 JNI_METHOD(void, nSetupShared)

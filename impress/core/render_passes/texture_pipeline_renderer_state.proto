@@ -95,7 +95,7 @@ message TexturePipelineRendererState {
     bool resize_with_view = 3;
   }
 
-  // NextID: 14
+  // NextID: 15
   message Pass {
     // Determines which group this pass should render.
     // Must be specified.
@@ -159,6 +159,11 @@ message TexturePipelineRendererState {
     // value before rendering the pass. Ignored if the pass renders to a
     // subregion.
     Float4 clear_color = 13 [(imp.optional_type) = ABSL_OPTIONAL];
+
+    // If true, the fov and other parameters are automatically set
+    // when in OpenXR.  If false, the developer is responsible for setting the
+    // projection matrix for the pass camera.  The Default is true.
+    optional bool use_main_view_camera_projection_matrix = 14;
   }
 
   // List of render passes evaluated in-order.

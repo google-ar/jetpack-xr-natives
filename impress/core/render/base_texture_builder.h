@@ -47,6 +47,7 @@ class BaseTextureBuilder {
   virtual BaseTextureBuilder& Levels(uint8_t levels) = 0;
   virtual BaseTextureBuilder& Format(
       filament::backend::TextureFormat format) = 0;
+  virtual BaseTextureBuilder& Usage(filament::backend::TextureUsage usage) = 0;
   virtual BaseTextureBuilder& Sampler(
       filament::backend::SamplerType sampler) = 0;
 
@@ -65,6 +66,12 @@ class BaseTextureBuilder {
   }
   virtual BaseTextureBuilder& GenerateMipmaps(filament::Engine& engine) = 0;
   virtual BaseTextureBuilder& Name(absl::string_view name) = 0;
+  virtual BaseTextureBuilder& Swizzle(filament::backend::TextureSwizzle r,
+                                      filament::backend::TextureSwizzle g,
+                                      filament::backend::TextureSwizzle b,
+                                      filament::backend::TextureSwizzle a) = 0;
+  virtual BaseTextureBuilder& External() = 0;
+  virtual BaseTextureBuilder& Import(intptr_t id) = 0;
 
   // Designed to be implemented by Split Engine spy.
   virtual void Finalize(filament::Texture* texture) = 0;

@@ -74,6 +74,8 @@ android_library(
     deps = [
         "//java/com/google/ar/imp/view:imp_api_scuba_proxy_test_view_no_jni",
         "//java/com/google/ar/imp/view/splitengine",
+        "//java/com/google/vr/androidxr/extensions:platform_extensions_provider",
         "@maven//:androidx_appcompat_appcompat",
+        "@maven//:com_android_extensions_xr_extensions_xr",  #buildcleaner:keep
     ],
 )

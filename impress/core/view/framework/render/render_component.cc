@@ -134,23 +134,6 @@ CreateConeSettings MapSettings(const RenderComponentState::ConeMesh& mesh) {
   return settings;
 }
 
-CreateCustomMeshSettings MapSettings(
-    const RenderComponentState::CustomMesh& mesh) {
-  CreateCustomMeshSettings settings;
-  settings.positions =
-      std::vector<float>(mesh.positions.begin(), mesh.positions.end());
-  settings.texcoords =
-      std::vector<float>(mesh.texcoords.begin(), mesh.texcoords.end());
-  if (!mesh.indices.empty()) {
-    settings.indices =
-        std::vector<uint32_t>(mesh.indices.begin(), mesh.indices.end());
-  }
-  settings.draw_mode = static_cast<filament::RenderableManager::PrimitiveType>(
-      mesh.draw_mode.value_or(static_cast<int32_t>(
-          filament::RenderableManager::PrimitiveType::TRIANGLES)));
-  return settings;
-}
-
 CreateQuadSettings MapSettings(const RenderComponentState::QuadMesh& mesh) {
   CreateQuadSettings settings;
   if (mesh.size.has_value()) {
@@ -197,9 +180,6 @@ OwnedMeshPtr CreateMeshForPrimitive(
         } else if constexpr (std::is_same_v<ParamT,
                                             RenderComponentState::ConeMesh>) {
           return view.GetMeshFactory().CreateCone(MapSettings(mesh));
-        } else if constexpr (std::is_same_v<ParamT,
-                                            RenderComponentState::CustomMesh>) {
-          return view.GetMeshFactory().CreateCustomMesh(MapSettings(mesh));
         } else if constexpr (std::is_same_v<ParamT,
                                             RenderComponentState::QuadMesh>) {
           CreateQuadSettings settings = MapSettings(mesh);
@@ -445,6 +425,16 @@ Material* RenderComponent::GetMaterial(size_t primitive_index) const {
     }
   }
   return nullptr;
+}
+
+BorrowedMaterialPtr RenderComponent::GetBorrowedMaterial(
+    size_t primitive_index) const {
+  if (IsWithinCount(primitive_index) && primitive_index < primitives_.size() &&
+      IsOwnedOrBorrowedPtrType(
+          primitives_[primitive_index].held_material_type)) {
+    return primitives_[primitive_index].owned_or_borrowed_material.Borrow();
+  }
+  return BorrowedMaterialPtr();
 }
 
 void RenderComponent::SetMesh(Mesh* mesh, size_t primitive_index) {

@@ -166,6 +166,7 @@ cc_library(
         "//core/view/utils:string_map",
         "//core/window:filament_host",
         "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/base:no_destructor",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:fixed_array",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -188,6 +189,7 @@ cc_library(
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/libs:math_hdrs",
         "@third_party//filament/libs:utils_hdrs",
+        "@third_party//split_engine:split_engine_schema_version",
     ] + if_dev_runtime([
         "//core/editor:editor_info",
     ]),

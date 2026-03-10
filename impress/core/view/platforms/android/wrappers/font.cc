@@ -31,12 +31,12 @@ Font::Font(JNIEnv* env, jobject j_font) : JavaWrapper(env, j_font) {
 }
 
 File Font::GetFile() {
-  JniUniquePtr<jobject> file = WrapJni(Env(), CallObjectMethod(get_file_));
+  JniUniquePtr<jobject> file = CallObjectMethod(get_file_);
   return File(Env(), std::move(file));
 }
 
 FontStyle Font::GetStyle() {
-  JniUniquePtr<jobject> style = WrapJni(Env(), CallObjectMethod(get_style_));
+  JniUniquePtr<jobject> style = CallObjectMethod(get_style_);
   return FontStyle(Env(), style.get());
 }
 

@@ -82,4 +82,13 @@ std::string ToString(T v) {
 
 }  // namespace imp
 
+namespace filament::math::details {
+
+template <typename Sink, typename T, ::imp::EnableIfQuaternion<T> = 0>
+void AbslStringify(Sink& sink, const T& quat) {
+  sink.Append(::imp::ToString(quat));
+}
+
+}  // namespace filament::math::details
+
 #endif  // THIRD_PARTY_IMPRESS_CORE_MATH_QUAT_H_

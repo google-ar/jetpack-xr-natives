@@ -48,6 +48,15 @@ cc_library(
 )
 
 cc_library(
+    name = "generated_openxr_headers_public",
+    hdrs = glob(["generated/include/public/*.h"]),
+    includes = [
+        "generated/include/public",
+    ],
+    strip_include_prefix = "//OpenXR_KHR/generated/include",
+)
+
+cc_library(
     name = "openxr_loader",
     srcs = glob([
         "generated/src/**",

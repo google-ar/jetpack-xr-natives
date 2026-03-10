@@ -26,6 +26,7 @@
 #include "core/assets/asset_ptr.h"
 #include "core/assets/material/material_asset.h"
 #include "core/async/future.h"
+#include "core/common/small_source_location.h"
 #include "core/material_library/flatbuffer_utils.h"
 #include "core/material_library/material_package.h"
 #include "core/materials/material.h"
@@ -96,8 +97,8 @@ absl::Status BuiltInSVXRPlaneMaterial::SetParameters(
     GetMaterial()->SetParameter("highlight_point", UnPack(*highlight_point));
   }
   if (auto* dot_pattern = svxr_plane_material_parameters->dot_pattern()) {
-    const BorrowedTexturePtr texture =
-        texture_borrower(dot_pattern->texture_id());
+    const BorrowedTexturePtr texture = texture_borrower(
+        dot_pattern->texture_id(), SmallSourceLocation::Current());
     if (!texture) {
       return absl::NotFoundError(
           absl::StrFormat("Texture not found: %d", dot_pattern->texture_id()));

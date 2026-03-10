@@ -31,13 +31,17 @@ class FrameTimePanel;
 
 // Panel containing a tree view of performance profiling data.
 // Each node in the tree represents a sample taken across a scope.
+// Rendered as a subpanel of the FrameTimePanel.
 class HierarchyPanel {
  public:
   HierarchyPanel() {}
   ~HierarchyPanel() = default;
 
-  void DrawPanel(int frame_index, SampleProcessor& sample_processor,
+  void DrawPanel(float width, int frame_index,
+                 SampleProcessor& sample_processor,
                  FrameTimePanel& frame_time_panel);
+
+  std::thread::id GetSelectedThreadId() const { return current_thread_id_; }
 
  private:
   constexpr static int kMaxTreeDepth = 30;

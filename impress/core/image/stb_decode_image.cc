@@ -19,10 +19,8 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <string>
 
 #include "absl/log/check.h"
-#include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
@@ -129,55 +127,10 @@ filament::backend::TextureFormat StbImageContents::GetTextureFormat() const {
   return HasAlpha() ? filament::Texture::InternalFormat::SRGB8_A8
                     : filament::Texture::InternalFormat::SRGB8;
 }
-
-const char base64_chars[] =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-std::string base64_encode(const uint8_t* data, size_t len) {
-  std::string encoded_string;
-  int i = 0;
-  int j = 0;
-  uint8_t char_array_3[3];
-  uint8_t char_array_4[4];
-
-  for (size_t k = 0; k < len; k++) {
-    char_array_3[i++] = data[k];
-    if (i == 3) {
-      char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
-      char_array_4[1] =
-          ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
-      char_array_4[2] =
-          ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
-      char_array_4[3] = char_array_3[2] & 0x3f;
-
-      for (i = 0; (i < 4); i++) encoded_string += base64_chars[char_array_4[i]];
-      i = 0;
-    }
-  }
-
-  if (i) {
-    for (j = i; j < 3; j++) char_array_3[j] = '\0';
-
-    char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
-    char_array_4[1] =
-        ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
-    char_array_4[2] =
-        ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
-    char_array_4[3] = char_array_3[2] & 0x3f;
-
-    for (j = 0; (j < i + 1); j++)
-      encoded_string += base64_chars[char_array_4[j]];
-
-    while ((i++ < 3)) encoded_string += '=';
-  }
-
-  return encoded_string;
-}
 }  // namespace
 
 absl::StatusOr<std::unique_ptr<ImageContents>> StbDecodeImage(
-    absl::string_view name, resources::Resource resource,
-    bool fatal_on_pink_texture) {
+    absl::string_view name, resources::Resource resource) {
   
   int desired_channels = 4;
   int width;
@@ -192,29 +145,6 @@ absl::StatusOr<std::unique_ptr<ImageContents>> StbDecodeImage(
         absl::StrFormat("Failed to decode image '%.*s' (@%p, %d bytes)",
                         static_cast<int>(name.size()), name.data(),
                         resource.GetData().Data(), resource.GetData().Size()));
-  }
-
-  // (broken link) Trying to detect pink decoding issue by checking if all pixels
-  // are pink.
-  bool all_pixels_pink = true;
-  for (int i = 0; i < width * height * desired_channels;
-       i += desired_channels) {
-    if (image[i] != 255 || image[i + 1] != 0 || image[i + 2] != 255 ||
-        image[i + 3] != 255) {
-      all_pixels_pink = false;
-      break;
-    }
-  }
-  if (all_pixels_pink) {
-    IMP_LOG(imp::ERROR) << "Pink decoding issue detected. All pixels were pink.";
-    if (fatal_on_pink_texture) {
-      IMP_LOG(imp::ERROR) << name;
-      IMP_LOG(imp::ERROR) << "data:image/png;base64,"
-                 << base64_encode(resource.GetData().Data(),
-                                  resource.GetData().Size());
-      IMP_LOG(imp::FATAL) << "IF YOU SEE THIS PLEASE CONTACT FAALAND@ WITH THE TWO "
-                    "PREVIOUS LOG STATEMENTS";
-    }
   }
 
   return std::make_unique<StbImageContents>(width, width * desired_channels,

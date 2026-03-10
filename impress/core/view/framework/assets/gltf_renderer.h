@@ -238,9 +238,17 @@ class GltfRenderer : public Component {
 
   // Returns both the original materials and the current material
   // overrides in the GltfAsset.
-  // TODO: (broken link) - These methods should not return raw material pointers.
-  // They should likely return either BorrowedMaterialPtr or GenericMaterial*.
+  ABSL_DEPRECATED(
+      "Use imp::BorrowedMaterialPtr overload instead. See "
+      "(broken link).")
   std::vector<Material*> GetMaterials() const;
+
+  // Returns both the original materials and the current material
+  // overrides in the GltfAsset, but only if they were added through the
+  // Borrowed or OwnedMaterialPtr overrides. It will not include any materials
+  // added as raw pointers.
+  std::vector<BorrowedMaterialPtr> GetBorrowedMaterials() const;
+
   Material* GetMaterialByIndex(uint16_t material_index) const;
   // Returns the generic material that is actually used by this model by index.
   // If sharing mode is DUPLICATED_DEFAULT, returns the duplicated material for
@@ -249,10 +257,16 @@ class GltfRenderer : public Component {
   absl::StatusOr<GenericMaterial*> GetGenericMaterialByIndex(
       uint16_t material_index) const;
 
-  // Returns the current material overrides in this
-  // GltfRenderer.
-  // TODO (broken link) Return BorrowedMaterialPtr after migration
+  // Returns the current material overrides in this GltfRenderer.
+  ABSL_DEPRECATED(
+      "Use imp::BorrowedMaterialPtr overload instead. See "
+      "(broken link).")
   std::vector<Material*> GetMaterialOverrides() const;
+
+  // Returns the current material overrides in this GltfRenderer, but only if
+  // they were added through the Borrowed or OwnedMaterialPtr overrides. It will
+  // not include any materials added as raw pointers.
+  std::vector<BorrowedMaterialPtr> GetBorrowedMaterialOverrides() const;
 
   // Return a light component according to a light punctual id
   ComponentHandle<LightComponent> GetLightComponentById(
@@ -320,8 +334,17 @@ class GltfRenderer : public Component {
 
   // Returns the overridden material by material index if there is one.
   // Otherwise, returns nullptr;
-  // TODO (broken link) Return BorrowedMaterialPtr after migration
+  ABSL_DEPRECATED(
+      "Use imp::BorrowedMaterialPtr overload instead. See "
+      "(broken link).")
   Material* GetMaterialOverrideByIndex(size_t material_index) const;
+
+  // Returns the overridden material by material index if there is one, and it
+  // was set using the Borrowed or OwnedMaterialPtr overrides.
+  // If the override was set using a raw pointer or no override exists, returns
+  // nullptr.
+  BorrowedMaterialPtr GetBorrowedMaterialOverrideByIndex(
+      size_t material_index) const;
 
   // Returns the node entity and data vector.
   const PairedVector<utils::Entity, model::ModelData::EntityData>&

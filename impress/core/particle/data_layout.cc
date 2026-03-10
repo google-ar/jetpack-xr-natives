@@ -73,7 +73,7 @@ DataLayout::DataLayout(const ParticleConfig& config) {
     particle_data_size_ += 3;
   }
 
-  if (config.billboard.value_or(false)) {
+  if (config.rotation.has_value() || config.billboard.value_or(false)) {
     offsets_[static_cast<int>(AttributeType::kRotation)] = particle_data_size_;
     particle_data_size_ += 4;
   }

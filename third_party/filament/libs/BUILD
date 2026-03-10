@@ -1204,6 +1204,7 @@ cc_library(
         "fgviewer/src/DebugServer.cpp",
         "fgviewer/src/FrameGraphInfo.cpp",
         "fgviewer/src/JsonWriter.cpp",
+        "fgviewer/src/WebSocketHandler.cpp",
     ],
     hdrs = [
         "fgviewer/include/fgviewer/DebugServer.h",
@@ -1218,6 +1219,7 @@ cc_library(
     linkstatic = 1,
     textual_hdrs = [
         "fgviewer/src/ApiHandler.h",
+        "fgviewer/src/WebSocketHandler.h",
         "generated/resources/fgviewer_resources.h",
     ],
     deps = [

@@ -20,8 +20,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
-#include <unordered_map>
+#include <vector>
 
+#include "absl/container/node_hash_map.h"
 #include "absl/status/status.h"
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "core/async/executor.h"
@@ -48,11 +49,7 @@ class SplitEngineSubspaceManagerImpl : public SplitEngineSubspaceManager,
  public:
   explicit SplitEngineSubspaceManagerImpl(imp::BaseView& view);
 
-  void DestroyAllSubspaces() override {
-    for (auto& [subspace_id, subspace_root] : subspace_map_) {
-      DestroySubspace(subspace_id);
-    }
-  }
+  void DestroyAllSubspaces() override;
 
   uint32_t GetNextSubspaceId() override {
     return subspace_id_generator_.GetNextId();
@@ -83,7 +80,8 @@ class SplitEngineSubspaceManagerImpl : public SplitEngineSubspaceManager,
     uint32_t next_id = 1;
   } subspace_id_generator_;
 
-  std::unordered_map<uint32_t, SubspaceRoot> subspace_map_;
+  // SubspaceRoot is not movable, hence using node_hash_map.
+  absl::node_hash_map<uint32_t, SubspaceRoot> subspace_map_;
 
   imp::BaseView& view_;
   imp::Executor* foreground_executor_;

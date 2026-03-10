@@ -41,7 +41,9 @@ class XrVulkanSwapChainImageHandler {
   static constexpr VkFormat kVkImageFormat = VK_FORMAT_R8G8B8A8_SRGB;
   static constexpr int64_t kImageFormat = kVkImageFormat;
   static constexpr VkFormat kVkDepthFormat = VK_FORMAT_X8_D24_UNORM_PACK32;
+  static constexpr VkFormat kVkDepthStencilFormat = VK_FORMAT_D24_UNORM_S8_UINT;
   static constexpr int32_t kDepthFormat = kVkDepthFormat;
+  static constexpr int32_t kDepthStencilFormat = kVkDepthStencilFormat;
   static constexpr XrStructureType kImageType =
       XR_TYPE_SWAPCHAIN_IMAGE_VULKAN_KHR;
   static constexpr int64_t kFoveationFlag =

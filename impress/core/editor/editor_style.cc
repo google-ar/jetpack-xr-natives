@@ -18,15 +18,6 @@
 
 namespace imp::editor {
 
-namespace {
-
-ImVec4 ImLerp(const ImVec4& a, const ImVec4& b, float t) {
-  return ImVec4(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t,
-                a.z + (b.z - a.z) * t, a.w + (b.w - a.w) * t);
-}
-
-}  // namespace
-
 ImVec4 WithAlpha(const ImVec4& color, float alpha) {
   return ImVec4(color.x, color.y, color.z, alpha);
 }
@@ -38,29 +29,44 @@ void SetupEditorImGuiStyle() {
   style.FrameRounding = 3.0f;
   style.WindowRounding = 3.0f;
 
-  colors[ImGuiCol_Text] = kWhite;
-  colors[ImGuiCol_TextDisabled] = kGrey600;
-  colors[ImGuiCol_WindowBg] = WithAlpha(kGrey900, 0.94f);
-  colors[ImGuiCol_ChildBg] = kTransparent;
-  colors[ImGuiCol_Border] = kGrey700;
-  colors[ImGuiCol_BorderShadow] = kTransparent;
-  colors[ImGuiCol_FrameBg] = WithAlpha(kBlue900, 0.8f);
-  colors[ImGuiCol_FrameBgHovered] = WithAlpha(kBlue900, 0.9f);
-  colors[ImGuiCol_FrameBgActive] = kBlue900;
-  colors[ImGuiCol_TitleBg] = kGrey800;
-  colors[ImGuiCol_TitleBgActive] = kGrey900;
-  colors[ImGuiCol_TitleBgCollapsed] = WithAlpha(kGrey900, 0.5f);
-  colors[ImGuiCol_CheckMark] = kWhite;
-  colors[ImGuiCol_Button] = WithAlpha(kBlue700, 0.8f);
-  colors[ImGuiCol_ButtonHovered] = WithAlpha(kBlue700, 0.9f);
-  colors[ImGuiCol_ButtonActive] = kBlue700;
-  colors[ImGuiCol_Header] = WithAlpha(kBlue600, 0.8f);
-  colors[ImGuiCol_HeaderHovered] = WithAlpha(kBlue600, 0.9f);
-  colors[ImGuiCol_HeaderActive] = kBlue600;
-  colors[ImGuiCol_Tab] = WithAlpha(kBlue600, 0.8f);
-  colors[ImGuiCol_TabHovered] = WithAlpha(kBlue600, 0.9f);
-  colors[ImGuiCol_TabSelected] =
-      ImLerp(colors[ImGuiCol_Tab], colors[ImGuiCol_TitleBg], 0.5f);
+  colors[ImGuiCol_Text] = kDarkTextGrey;
+  colors[ImGuiCol_TextDisabled] = kDarkTextGreyAlt;
+  colors[ImGuiCol_WindowBg] = kDarkSurface;
+
+  colors[ImGuiCol_ChildBg] = kCommonTransparent;
+  colors[ImGuiCol_Border] = kDarkOutline;
+  colors[ImGuiCol_BorderShadow] = kCommonTransparent;
+
+  colors[ImGuiCol_FrameBg] = kDarkField;
+  colors[ImGuiCol_FrameBgHovered] = kDarkField;
+  colors[ImGuiCol_FrameBgActive] = kDarkField;
+
+  colors[ImGuiCol_TitleBg] = kDarkSurface;
+  colors[ImGuiCol_TitleBgActive] = kDarkSurface;
+  colors[ImGuiCol_TitleBgCollapsed] = kDarkSurface;
+
+  colors[ImGuiCol_TabHovered] = kDarkLowlight;
+
+  colors[ImGuiCol_Tab] = kDarkTextGreyAlt;
+  colors[ImGuiCol_TabSelected] = kDarkSurface;
+  colors[ImGuiCol_TabSelectedOverline] = kDarkOutline;
+
+  colors[ImGuiCol_TabDimmed] = kDarkTextGreyAlt;
+  colors[ImGuiCol_TabDimmedSelected] = kDarkSurface;
+  colors[ImGuiCol_TabDimmedSelectedOverline] = kDarkTextGreyAlt;
+
+  colors[ImGuiCol_Header] = kDarkSurface;
+  colors[ImGuiCol_HeaderHovered] = kDarkSurface;
+  colors[ImGuiCol_HeaderActive] = kDarkSurface;
+
+  colors[ImGuiCol_CheckMark] = kDarkTextGrey;
+
+  colors[ImGuiCol_Button] = kDarkPrimary;
+  colors[ImGuiCol_ButtonHovered] = kDarkLowlight;
+  colors[ImGuiCol_ButtonActive] = kDarkSelectHighlight;
+
+  colors[ImGuiCol_SliderGrab] = kDarkPrimary;
+  colors[ImGuiCol_SliderGrabActive] = kDarkSelectHighlight;
 }
 
 void PushBaseIsfElementStyle() {

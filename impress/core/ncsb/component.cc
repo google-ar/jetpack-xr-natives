@@ -92,4 +92,13 @@ Invocable<void()> Component::Remember(Holdable holdable) {
   return GetBaseComponentPool().Remember(GetEntity(), std::move(holdable));
 }
 
+void Component::SetRemovingFlagInternal(bool is_removing) {
+  status_flags_ = SetBitFromBool(
+      status_flags_, StatusFlags::kComponentIsBeingRemoved, is_removing);
+}
+
+bool Component::IsRemoving() const {
+  return CheckBit(status_flags_, StatusFlags::kComponentIsBeingRemoved);
+}
+
 }  // namespace imp

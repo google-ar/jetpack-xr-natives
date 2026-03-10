@@ -14,6 +14,8 @@
 
 #include "apibindings/stereo_surface_manager.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <utility>
@@ -26,6 +28,7 @@
 #include "apibindings/stereo_surface.h"
 #include "core/common/small_source_location.h"
 #include "core/input/pointer_event_processor.h"
+#include "core/math/vec.h"
 #include "core/media/media_color_space.h"
 #include "core/media/media_type.h"
 #include "core/ncsb/component_handle.h"
@@ -83,6 +86,10 @@ class StereoSurfaceManagerImpl : public StereoSurfaceManager {
       int32_t node_id, int64_t alpha_mask_token) override;
   absl::Status SetContentColorMetadataForStereoSurfaceEntity(
       int32_t node_id, MediaColorSpace color_space = {}) override;
+  absl::Status SetSubViewConfigForStereoSurfaceEntity(int32_t node_id,
+                                                      float bottom, float left,
+                                                      float right,
+                                                      float top) override;
 
  private:
   ImpressApiView& view_;
@@ -202,6 +209,19 @@ StereoSurfaceManagerImpl::SetContentColorMetadataForStereoSurfaceEntity(
   MP_ASSIGN_OR_RETURN(ComponentHandle<StereoSurface> stereo_surface,
                    GetStereoSurface(node_id));
   stereo_surface->SetContentColorMetadata(color_space);
+  return absl::OkStatus();
+}
+
+absl::Status StereoSurfaceManagerImpl::SetSubViewConfigForStereoSurfaceEntity(
+    int32_t node_id, float bottom, float left, float right, float top) {
+  MP_ASSIGN_OR_RETURN(ComponentHandle<StereoSurface> stereo_surface,
+                   GetStereoSurface(node_id));
+  float offset_x = left;
+  float offset_y = std::min(top, bottom);
+  float width = right - left;
+  float height = std::abs(top - bottom);
+  stereo_surface->SetSubViewRects({offset_x, offset_y, width, height},
+                                  {offset_x, offset_y, width, height});
   return absl::OkStatus();
 }
 

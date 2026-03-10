@@ -207,7 +207,8 @@ VulkanDescriptorSet::~VulkanDescriptorSet() {
 
 VulkanDescriptorSet::VulkanDescriptorSet(fvkmemory::resource_ptr<VulkanDescriptorSetLayout> layout,
         OnRecycle&& onRecycleFn, VkDescriptorSet vkSet)
-    : dynamicUboMask(layout->bitmask.dynamicUbo),
+    : boundLayout(layout->getVkLayout()),
+      dynamicUboMask(layout->bitmask.dynamicUbo),
       uniqueDynamicUboCount(layout->count.dynamicUbo),
       mLayout(layout),
       mCurrentSetIndex(0) {
@@ -385,6 +386,15 @@ VulkanProgram::~VulkanProgram() {
         vkDestroyShaderModule(mDevice, shader, VKALLOC);
     }
     delete mInfo;
+}
+
+void VulkanProgram::flushPushConstants(VkPipelineLayout layout) {
+    // At this point, we really ought to have a VkPipelineLayout.
+    assert_invariant(layout != VK_NULL_HANDLE);
+    for (const auto& c : mQueuedPushConstants) {
+        mInfo->pushConstantDescription.write(c.cmdbuf, layout, c.stage, c.index, c.value);
+    }
+    mQueuedPushConstants.clear();
 }
 
 // Creates a special "default" render target (i.e. associated with the swap chain)

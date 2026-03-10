@@ -47,6 +47,7 @@
 #include "core/render/texture_factory.h"
 #include "core/text/glyph_atlas_slice.h"
 #include "core/text/sliced_glyph_atlas_assets.h"
+#include "core/text/sliced_glyph_atlas_helpers.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 
@@ -72,40 +73,33 @@ static constexpr std::array<float2, 4> kBlitTexCoords = {
 
 Future<std::unique_ptr<SlicedGlyphTextureManager>>
 SlicedGlyphTextureManager::CreateAsync(BaseView& view, uint2 atlas_size,
-                                       uint2 grid_size) {
+                                       uint2 grid_size,
+                                       Texture* composite_texture) {
   return view.GetAssetManager()
       .LoadMaterial(sliced_glyph_atlas_assets::kBlitSliceMaterialCmat)
       .Then(
-          [&view, atlas_size,
-           grid_size](AssetPtr<MaterialAsset> blit_material) {
+          [&view, atlas_size, grid_size,
+           composite_texture](AssetPtr<MaterialAsset> blit_material) {
             return std::unique_ptr<SlicedGlyphTextureManager>(
                 new SlicedGlyphTextureManager(view, blit_material, atlas_size,
-                                              grid_size));
+                                              grid_size, composite_texture));
           },
           Executor::Type::kForeground);
 }
 
-SlicedGlyphTextureManager::SlicedGlyphTextureManager(
-    BaseView& view, AssetPtr<MaterialAsset> blit_material, uint2 atlas_size,
-    uint2 grid_size)
-    : atlas_size_(atlas_size),
-      grid_size_(grid_size),
-      engine_(*view.GetSharedEngine()) {
-  auto& entity_manager = utils::EntityManager::get();
-
-  blit_camera_ = engine_.createCamera(entity_manager.create());
-  blit_camera_->setProjection(filament::Camera::Projection::ORTHO, 0.0,
-                              atlas_size.x, atlas_size.y, 0.0, 0.0, 1.0);
-
+std::unique_ptr<Texture> SlicedGlyphTextureManager::CreateCompositeTexture(
+    BaseView& view, uint2 atlas_size, uint2 grid_size) {
+  filament::Engine& engine = *view.GetSharedEngine();
   uint2 composite_size = atlas_size * grid_size;
   using Format = TextureFactory::Format;
   using Usage = TextureFactory::Usage;
 
   // Create the composite texture that slices will blit into.
-  composite_texture_ = view.GetTextureFactory().CreateTexture(
-      composite_size.x, composite_size.y, Format::RGBA8,
-      Usage::DEFAULT | Usage::COLOR_ATTACHMENT | Usage::BLIT_SRC |
-          Usage::BLIT_DST);
+  std::unique_ptr<Texture> composite_texture =
+      view.GetTextureFactory().CreateTexture(
+          composite_size.x, composite_size.y, Format::RGBA8,
+          Usage::DEFAULT | Usage::COLOR_ATTACHMENT | Usage::BLIT_SRC |
+              Usage::BLIT_DST);
 
   // Create a fractlish checkerboard on checkerboard pattern to initialize the
   // composite texture.
@@ -144,12 +138,30 @@ SlicedGlyphTextureManager::SlicedGlyphTextureManager(
   using PixelBufferDescriptor = filament::Texture::PixelBufferDescriptor;
 
   // Request the texture contents to be set.
-  composite_texture_->GetTexture()->setImage(
-      engine_, 0,
+  composite_texture->GetTexture()->setImage(
+      engine, 0,
       PixelBufferDescriptor(checkerboard_buffer, composite_size_bytes,
                             PixelBufferDescriptor::PixelDataFormat::RGBA,
                             PixelBufferDescriptor::PixelDataType::UBYTE,
                             nullptr, cb, packet));
+
+  return composite_texture;
+}
+
+SlicedGlyphTextureManager::SlicedGlyphTextureManager(
+    BaseView& view, AssetPtr<MaterialAsset> blit_material, uint2 atlas_size,
+    uint2 grid_size, Texture* composite_texture)
+    : atlas_size_(atlas_size),
+      grid_size_(grid_size),
+      engine_(*view.GetSharedEngine()),
+      composite_texture_(composite_texture) {
+  auto& entity_manager = utils::EntityManager::get();
+  uint2 composite_size = atlas_size * grid_size;
+
+  blit_camera_ = engine_.createCamera(entity_manager.create());
+  blit_camera_->setProjection(filament::Camera::Projection::ORTHO, 0.0,
+                              atlas_size.x, atlas_size.y, 0.0, 0.0, 1.0);
+
   filament::LinearToneMapper linear_tone_mapper;
   linear_color_grading_ = filament::ColorGrading::Builder()
                               .toneMapper(&linear_tone_mapper)
@@ -200,7 +212,7 @@ SlicedGlyphTextureManager::SlicedGlyphTextureManager(
 
     blit_scenes_.push_back(engine_.createScene());
 
-    GetSliceOffsetAndScale(slice, &slice_offset, &slice_scale);
+    GetGridSliceOffsetAndScale(grid_size_, slice, &slice_offset, &slice_scale);
     int32_t left = slice_offset.x * composite_size.x;
     int32_t bottom = slice_offset.y * composite_size.y;
     uint32_t width = atlas_size.x;
@@ -242,7 +254,6 @@ SlicedGlyphTextureManager::~SlicedGlyphTextureManager() {
   Entity camera_entity = blit_camera_->getEntity();
   engine_.destroyCameraComponent(camera_entity);
   entity_manager.destroy(camera_entity);
-  composite_texture_.reset();
 
   for (filament::MaterialInstance* material_instance :
        blit_material_instances_) {
@@ -264,21 +275,6 @@ SlicedGlyphTextureManager::~SlicedGlyphTextureManager() {
 void SlicedGlyphTextureManager::RenderSlice(filament::Renderer& renderer,
                                             SliceId slice) {
   renderer.render(blit_views_[slice]);
-}
-
-Texture* SlicedGlyphTextureManager::GetCompositeTexture() {
-  return composite_texture_.get();
-}
-
-void SlicedGlyphTextureManager::GetSliceOffsetAndScale(SliceId slice,
-                                                       float2* offset,
-                                                       float2* scale) const {
-  auto slice_index = static_cast<SliceId::ValueType>(slice);
-  size_t slice_y = slice_index / grid_size_.x;
-  size_t slice_x = slice_index % grid_size_.x;
-  *offset = float2(static_cast<float>(slice_x) / grid_size_.x,
-                   static_cast<float>(slice_y) / grid_size_.y);
-  *scale = float2(1.0f / grid_size_.x, 1.0f / grid_size_.y);
 }
 
 void SlicedGlyphTextureManager::PrepareBlit(SliceId slice, Texture* texture) {

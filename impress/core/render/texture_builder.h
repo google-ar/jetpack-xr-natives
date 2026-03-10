@@ -62,9 +62,16 @@ class TextureBuilder : public BaseTextureBuilder {
   TextureBuilder& Depth(uint32_t depth) override;
   TextureBuilder& Levels(uint8_t levels) override;
   TextureBuilder& Format(filament::backend::TextureFormat format) override;
+  TextureBuilder& Usage(filament::backend::TextureUsage usage) override;
   TextureBuilder& Sampler(filament::backend::SamplerType sampler) override;
   TextureBuilder& GenerateMipmaps(filament::Engine& engine) override;
   TextureBuilder& Name(absl::string_view name) override;
+  TextureBuilder& Swizzle(filament::backend::TextureSwizzle r,
+                          filament::backend::TextureSwizzle g,
+                          filament::backend::TextureSwizzle b,
+                          filament::backend::TextureSwizzle a) override;
+  TextureBuilder& External() override;
+  TextureBuilder& Import(intptr_t id) override;
   void Finalize(filament::Texture* texture) override;
 
   filament::Texture* /*absl_nullable*/  Build(filament::Engine& engine);

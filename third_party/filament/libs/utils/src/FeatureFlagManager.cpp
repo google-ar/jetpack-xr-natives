@@ -115,6 +115,9 @@ FeatureFlagManager::FeatureFlagManager() : mFeatures{{
         { "backend.vulkan.enable_pipeline_cache_prewarming",
           "Enables an experimental approach to parallel shader compilation on Vulkan.",
           &features.backend.vulkan.enable_pipeline_cache_prewarming, false },
+        { "engine.enable_program_cache",
+          "Enable the shader program cache.",
+          &features.engine.enable_program_cache },
         { "backend.vulkan.enable_staging_buffer_bypass",
           "vulkan: enable a staging bypass logic for unified memory architecture.",
           &features.backend.vulkan.enable_staging_buffer_bypass, false },
@@ -139,6 +142,9 @@ FeatureFlagManager::FeatureFlagManager() : mFeatures{{
         { "engine.skip_frame_when_cpu_ahead_of_display",
           "Automatically skip frames when the CPU gets ahead of the display.",
           &features.engine.skip_frame_when_cpu_ahead_of_display },
+        { "material.enable_fog_as_postprocess",
+          "Fog is applied as a separate pass for opaque objects.",
+          &features.material.enable_fog_as_postprocess },
 }} {
     overrideFeatureDefaults({ mFeatures.data(), mFeatures.size() });
 }

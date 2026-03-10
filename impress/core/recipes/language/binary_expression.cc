@@ -20,6 +20,9 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
+#include "core/math/almost_equal.h"
+#include "core/math/quat.h"
+#include "core/math/vec.h"
 #include "core/recipes/language/recipe_graph.proto.imp.h"
 #include "core/recipes/language/recipe_traits.h"
 #include "core/recipes/language/recipe_utils.h"
@@ -72,6 +75,17 @@ struct EvaluateBinaryExpressionVisitor {
         break;
       case BinaryExpression::EQUALS:
         if constexpr (recipe_traits::kIsEqualsAvailable<LeftT, RightT>) {
+          if constexpr (std::is_same_v<LeftT, RightT>) {
+            // Check if AlmostEqual supports this type.
+            // We support float, vectors, quaternions, and matrices.
+            // Variable can hold these types as aliases from imp namespace.
+            if constexpr (std::is_floating_point_v<LeftT>) {
+              return imp::AlmostEqual(left, right);
+            } else if constexpr (imp::kIsAnyOf<LeftT, imp::float2, imp::float3,
+                                               imp::float4, imp::quat>) {
+              return imp::AlmostEqual(left, right);
+            }
+          }
           return left == right;
         }
         break;

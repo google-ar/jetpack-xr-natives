@@ -237,6 +237,10 @@ class BaseView : public Rememberer,
   // turned off in some use cases where it isn't required.
   virtual bool ShouldUseSharedGlContext() const { return true; }
 
+  virtual filament::Engine::Backend GetPreferredBackend() const {
+    return filament::Engine::Backend::DEFAULT;
+  }
+
   // All View subclasses running in a process share a filament Engine
   static filament::Engine* GetSharedEngine();
   static void SetSharedEngine(filament::Engine* engine);

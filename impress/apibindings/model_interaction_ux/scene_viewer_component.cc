@@ -22,7 +22,7 @@
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
-#include "absl/time/time.h"
+#include "core/camera/camera_component.h"
 #include "core/collision/collision_helpers.h"
 #include "core/collision/ray.h"
 #include "core/common/enum_flags.h"
@@ -45,8 +45,14 @@
 #include "extensions/sceneviewerxr/ux/input_flag.h"
 #include "extensions/sceneviewerxr/ux/interaction_mode.h"
 #include "extensions/sceneviewerxr/ux/interaction_states/idle.h"
+#include "extensions/sceneviewerxr/ux/interaction_states/initial.h"
 #include "extensions/sceneviewerxr/ux/interaction_states/interaction_states.h"
+#include "extensions/sceneviewerxr/ux/interaction_states/rotation.h"
+#include "extensions/sceneviewerxr/ux/interaction_states/scale_reset.h"
+#include "extensions/sceneviewerxr/ux/interaction_states/translation.h"
+#include "extensions/sceneviewerxr/ux/ui_event_listener.h"
 #include "split_engine/input/split_engine_input_event.h"
+
 
 namespace imp {
 
@@ -77,13 +83,10 @@ constexpr auto kOneHandedScaleDeadzone = float3(0.05f);
 constexpr auto kOneHandedScaleThrow = 2.0f;
 constexpr auto kOneHandedScaleMultiplier = 1.0f;
 
-constexpr auto kMinimumTranslationDelta = .002f;
 constexpr auto kMinimumRotationDelta = .5f;
-constexpr auto kDistanceRatioDeltaScale = 1.0f;
 
 // If the model is within this distance of the camera it won't be scaled up.
 constexpr auto kMinAllowedModelToCameraDistance = 0.4f;
-constexpr auto kMinAllowedModelToCameraDistanceDuringTranslation = 0.15f;
 constexpr auto kBeginDistanceConstraint =
     kMinAllowedModelToCameraDistance + 1.5f;
 
@@ -153,6 +156,7 @@ void SceneViewerComponent::CreateFootprint(const imp::FrameTime& delta_time) {
         // Listen to input events on the footprint
         auto footprint_node = footprint_->FootprintNode();
         footprint_node->SetEnabled(false);
+        footprint_->OnInteractionMachineInitialized();
         footprint_event_connection_ = footprint_node->Connect(
             [this](const SplitEngineInputEvent& event) {
               event_hit_node_transform_ = event.hit_node->transform;
@@ -272,23 +276,38 @@ bool SceneViewerComponent::FootprintReceivesInput() {
       [](auto& state) -> bool { return true; });
 }
 
-// TODO: Enable input handling for translation.
 void SceneViewerComponent::HandleInputInternal(
     const imp::Ray& ray, imp::NodeHandle receiver, const float3& hit_position,
     imp::Flags<svxr::InputFlag> input_flags) {
   // Update the state machine in response to handling input.
   interaction_machine_.UpdateWithAlternatives(
-      [this](svxr::interaction_states::Initialized& state)
-          -> OptionalInteractionState { return HandleInitializedInput(state); },
-      [this, &hit_position, &ray, &input_flags, &receiver](
-          svxr::interaction_states::Idle& state) -> OptionalInteractionState {
+      [&](svxr::interaction_states::Initialized& state)
+          -> OptionalInteractionState { return HandleInput(state, *this); },
+      [&](svxr::interaction_states::Translation& state)
+          -> OptionalInteractionState {
+        return HandleTranslationInput(state, ray, receiver, input_flags);
+      },
+      [&](svxr::interaction_states::Idle& state) -> OptionalInteractionState {
+        if (footprint_ && (footprint_->IsScaleHandle(receiver) ||
+                           footprint_->IsCloseToScaleHandle(hit_position))) {
+          if (input_flags.Test(InputFlag::kIsDown)) {
+            interaction_data_.SetTransform(
+                InteractionMode::TransformMode::kScale);
+            return svxr::interaction_states::OneHandedScale{
+                .initial_world_space_ray = ray,
+                .current_world_space_ray = ray,
+                .initial_model_log_scale = model_log_scale_.Get(),
+                .is_right = input_flags.Test(InputFlag::kIsRight),
+                .has_scaled = false};
+          }
+        }
         return HandleInput(state, ray, receiver, hit_position, input_flags,
                            *this);
       },
-      [this, &input_flags, &ray,
-       &receiver](svxr::interaction_states::Translation& state)
+      [&](svxr::interaction_states::Rotation& state)
           -> OptionalInteractionState {
-        return HandleTranslationInput(state, ray, receiver, input_flags);
+        return svxr::interaction_states::HandleInput(state, ray, receiver,
+                                                     input_flags, *this);
       },
       [](auto& state) -> OptionalInteractionState { return {}; });
 }
@@ -442,7 +461,7 @@ void SceneViewerComponent::CalculateModelScaleLimits() {
   scale_max = std::max(std::max(scale_min, scale_max), initial_model_scale_);
 
   model_log_scale_limits_ =
-      AxisBounds(std::log(scale_min), std::log(scale_max));
+      AxisBounds{std::log(scale_min), std::log(scale_max)};
 
   // Account for the environment type.
   AxisBounds world_y_bounds =
@@ -475,17 +494,16 @@ void SceneViewerComponent::OnStateChange(
 void SceneViewerComponent::Update(const imp::FrameTime& delta_time) {
   interaction_data_.SetActive(InteractionMode::ActiveMode::kNothing);
 
-  // TODO: Enable input handling for translation.
   interaction_machine_.UpdateWithAlternatives(
-      [this](svxr::interaction_states::Initialized& state)
-          -> OptionalInteractionState {
-        if (!footprint_) return {};
-        return OptionalInteractionState{SetupIdleState()};
-      },
-      [this, &delta_time](svxr::interaction_states::Translation& state)
+      [&](svxr::interaction_states::Translation& state)
           -> OptionalInteractionState {
         interaction_data_.SetActive(InteractionMode::ActiveMode::kInteracting);
-        return UpdateTranslation(state, delta_time);
+        return svxr::interaction_states::Update(delta_time, state, *this);
+      },
+      [&](svxr::interaction_states::Rotation& state)
+          -> OptionalInteractionState {
+        interaction_data_.SetActive(InteractionMode::ActiveMode::kInteracting);
+        return svxr::interaction_states::Update(state, delta_time, *this);
       },
       [](auto& state) -> OptionalInteractionState { return {}; });
   if (footprint_) {
@@ -526,6 +544,9 @@ imp::NodeHandle SceneViewerComponent::GetFootprintNode() {
 }
 imp::NodeHandle SceneViewerComponent::GetModelNode() { return model_node_; }
 imp::NodeHandle SceneViewerComponent::GetRigNode() { return rig_node_; }
+imp::ComponentHandle<imp::CameraComponent> SceneViewerComponent::GetCamera() {
+  return camera_;
+}
 bool SceneViewerComponent::IsTalkbackEnabled() { return false; }
 bool SceneViewerComponent::IsIdleTimeoutEnabled() {
   return idle_timeout_enabled_;
@@ -539,187 +560,32 @@ imp::Smooth<float>& SceneViewerComponent::GetModelLogScale() {
 
 float SceneViewerComponent::GetResetLogScale() { return 0.0f; }
 
+std::optional<imp::float3> SceneViewerComponent::GetAnchorSnapPosition(
+    imp::float3 footprint_position_local) {
+  // TODO: enable snappable planes affordance for JXR.
+  return std::nullopt;
+}
+
+void SceneViewerComponent::PlayDropSound() {
+  if (drop_audio_player_) {
+    if (!drop_audio_player_->Play().ok()) { IMP_LOG(imp::ERROR) << "Failed to play drop audio"; }
+  }
+}
+
+void SceneViewerComponent::PlayLiftSound() {
+  if (lift_audio_player_) {
+    if (!lift_audio_player_->Play().ok()) { IMP_LOG(imp::ERROR) << "Failed to play lift audio"; }
+  }
+}
+
+bool SceneViewerComponent::IsPassthrough() {
+  return environment_type_ == EnvironmentType::kPassthrough;
+}
+
 imp::float3 SceneViewerComponent::ComputeFootprintPositionFromPlanes(
     float3 target_position, float3 rig_to_target) {
   // TODO: enable snappable planes affordance for JXR.
   return imp::kZero3;
-}
-
-// TODO: Enable input handling for translation.
-OptionalInteractionState SceneViewerComponent::UpdateTranslation(
-    svxr::interaction_states::Translation& state,
-    const imp::FrameTime& delta_time) {
-  auto scene_viewer_node = GetNode();
-  state.active_duration += delta_time.GetDeltaTime();
-
-  if (state.is_active) {
-    mat4f initial_ray_from_world =
-        GetRayFromWorldSpace(state.initial_world_space_ray);
-    mat4f current_ray_from_world =
-        GetRayFromWorldSpace(state.current_world_space_ray);
-    float3 initial_ray_relative_hit_position =
-        (initial_ray_from_world * state.initial_world_space_hit_position).xyz;
-    float3 current_world_space_hit_position =
-        (inverse(current_ray_from_world) * initial_ray_relative_hit_position)
-            .xyz;
-
-    float3 origin_delta = state.current_world_space_ray.origin -
-                          state.initial_world_space_ray.origin;
-    float3 target_delta = origin_delta * (state.initial_distance_ratio - 1.f);
-
-    current_world_space_hit_position += target_delta * kDistanceRatioDeltaScale;
-
-    float3 current_world_space_rig_position =
-        current_world_space_hit_position - state.initial_world_space_rig_to_hit;
-    float3 target_position = scene_viewer_node->LocalFromWorldPoint(
-        current_world_space_rig_position);
-
-    float3 footprint_target_position = imp::kZero3;
-    if (environment_type_ == EnvironmentType::kPassthrough) {
-      footprint_target_position = ComputeFootprintPositionFromPlanes(
-          current_world_space_hit_position,
-          state.initial_world_space_rig_to_hit);
-    }
-
-    state.rig_local_position.SetTarget(target_position);
-  }
-
-  // Compare the distance between the camera and the rig.
-  auto world_from_camera = camera_->GetCamera()->getModelMatrix();
-  float3 camera_world_position = (world_from_camera * imp::kZero3).xyz;
-  float3 camera_world_position_xz =
-      (camera_world_position)*float3(1.f, 0.f, 1.f);
-  float3 rig_world_position = (rig_node_->GetWorldTrs() * imp::kZero3).xyz;
-  float3 rig_world_position_xz = (rig_world_position)*float3(1.f, 0.f, 1.f);
-  float3 rig_to_camera_xz = camera_world_position_xz - rig_world_position_xz;
-
-  float current_distance_to_camera = length(rig_to_camera_xz);
-
-  state.rig_local_position.Step(delta_time.GetDeltaSeconds());
-
-  float next_distance_to_camera =
-      length(camera_world_position_xz -
-             state.rig_local_position.Get() * imp::float3(1.f, 0.f, 1.f));
-
-  float footprint_radius = length(footprint_->GetFootprintSize()) * 0.5f;
-  float minimum_distance_to_camera =
-      footprint_radius + kMinAllowedModelToCameraDistanceDuringTranslation +
-      svxr::kFootprintSlop;
-
-  // If camera would be closer than before and closer than minimum distance, we
-  // stop translating.
-  if (next_distance_to_camera < minimum_distance_to_camera &&
-      next_distance_to_camera < current_distance_to_camera) {
-    state.rig_local_position.Setup(svxr::kSmoothSlowResolvingPositionParameters,
-                                   rig_node_->GetLocalPosition());
-    rig_node_->SetLocalPosition(state.rig_local_position.Get());
-  } else {
-    state.rig_local_position.SetParameters(
-        svxr::kSmoothFastResolvingPositionParameters);
-  }
-
-  float delta =
-      distance(rig_node_->GetLocalPosition(), state.rig_local_position.Get());
-  state.cumulative_change_delta += delta;
-  rig_position_.SetTarget(state.rig_local_position.Get());
-
-  // If inactive, check if the targets are reached before returning to idle.
-  if (!state.is_active && state.rig_local_position.IsAtTarget()) {
-    return OptionalInteractionState{SetupIdleState()};
-  }
-
-  return {};
-}
-
-OptionalInteractionState SceneViewerComponent::UpdateRotation(
-    svxr::interaction_states::Rotation& state,
-    const imp::FrameTime& delta_time) {
-  state.active_duration += delta_time.GetDeltaTime();
-  imp::mat4 world_from_camera = camera_->GetCamera()->getModelMatrix();
-  imp::mat4 camera_from_world = inverse(world_from_camera);
-
-  float rotation_turntable_angle = 0.f;
-  float rotation_scaling_delta = 0.f;
-  {
-    // Project the initial and current ray direction into the XZ and YZ planes.
-    float3 initial_direction_world = state.initial_world_space_ray.direction;
-    float3 current_direction_world = state.current_world_space_ray.direction;
-
-    float3 initial_direction =
-        (camera_from_world * float4(initial_direction_world, 0.f)).xyz;
-    float3 current_direction =
-        (camera_from_world * float4(current_direction_world, 0.f)).xyz;
-
-    float3 initial_ray_xz =
-        initial_direction - dot(initial_direction, imp::kUp);
-    float3 current_ray_xz =
-        current_direction - dot(current_direction, imp::kUp);
-    float3 initial_ray_yz =
-        initial_direction - dot(initial_direction, imp::kRight);
-    float3 current_ray_yz =
-        current_direction - dot(current_direction, imp::kRight);
-
-    float dot_xz = dot(initial_ray_xz, current_ray_xz);
-    float dot_yz = dot(initial_ray_yz, current_ray_yz);
-    float determinant_xz = current_ray_xz.x * initial_ray_xz.z -
-                           current_ray_xz.z * initial_ray_xz.x;
-    float determinant_yz = initial_ray_yz.y * current_ray_yz.z -
-                           initial_ray_yz.z * current_ray_yz.y;
-    float angle_xz = atan2(determinant_xz, dot_xz);
-    float angle_yz = atan2(determinant_yz, dot_yz);
-
-    constexpr auto kRotationTurntableAmplificationScale = -1.0f;
-    rotation_turntable_angle = kRotationTurntableAmplificationScale * angle_xz;
-
-    constexpr auto kRotationScaleAmplificationScale = 0.07f;
-    constexpr auto kRotationScalingDeadzoneSize = 0.125f;
-    float adjusted_angle_yz =
-        angle_yz > 0 ? std::max(0.f, angle_yz - kRotationScalingDeadzoneSize)
-                     : std::min(0.f, angle_yz + kRotationScalingDeadzoneSize);
-    rotation_scaling_delta =
-        kRotationScaleAmplificationScale * adjusted_angle_yz;
-  }
-
-  float translation_turntable_angle = 0.f;
-  float translation_scaling_delta = 0.f;
-  {
-    // Project the delta translation into the XY plane.
-    float3 delta_translation_world = state.current_world_space_ray.origin -
-                                     state.initial_world_space_ray.origin;
-    float3 delta_translation =
-        (camera_from_world * float4(delta_translation_world, 0.f)).xyz;
-    float3 delta_translation_xy =
-        delta_translation - dot(delta_translation, imp::kForward);
-
-    constexpr auto kTranslationTurntableAmplificationScale = 4.0f;
-    translation_turntable_angle =
-        kTranslationTurntableAmplificationScale * delta_translation_xy.x;
-
-    constexpr auto kTranslationScaleAmplificationScale = 2.0f;
-    constexpr auto kTranslationScaleDeadzoneSize = 0.1f;
-    float adjusted_delta_translation =
-        delta_translation_xy.y > 0
-            ? std::max(0.f,
-                       delta_translation_xy.y - kTranslationScaleDeadzoneSize)
-            : std::min(0.f,
-                       delta_translation_xy.y + kTranslationScaleDeadzoneSize);
-    translation_scaling_delta =
-        kTranslationScaleAmplificationScale * adjusted_delta_translation;
-  }
-
-  float turntable_angle =
-      rotation_turntable_angle + translation_turntable_angle;
-  state.cumulative_change_delta += turntable_angle;
-
-  if (state.cumulative_change_delta > kMinimumRotationDelta ||
-      state.cumulative_change_delta < -kMinimumRotationDelta) {
-    state.has_rotated = true;
-  }
-
-  auto turntable_rotation = quatf::fromAxisAngle(imp::kUp, turntable_angle);
-  rig_rotation_.SetTarget(state.initial_rig_rotation * turntable_rotation);
-
-  return {};
 }
 
 OptionalInteractionState SceneViewerComponent::UpdateOneHandedScale(
@@ -751,8 +617,6 @@ OptionalInteractionState SceneViewerComponent::UpdateOneHandedScale(
   return {};
 }
 
-// TODO: this is not used, should be removed once
-// the behavior matches SVXR.
 OptionalInteractionState SceneViewerComponent::UpdateTwoHandedScale(
     svxr::interaction_states::TwoHandedScale& state,
     const imp::FrameTime& delta_time) {
@@ -777,138 +641,12 @@ OptionalInteractionState SceneViewerComponent::UpdateTwoHandedScale(
   return {};
 }
 
-// TODO: this is not used, should be removed once
-// the behavior matches SVXR.
 OptionalInteractionState SceneViewerComponent::UpdateScaleReset(
-    svxr::interaction_states::ScaleReset& state,
-    const imp::FrameTime& delta_time) {
-  RequestUpdateRigPositionFromCamera(
-      svxr::kSmoothFastResolvingPositionParameters);
-
-  // Note that since scale is updated after state machines, this state is exited
-  // the frame after reaching unit scale.
-  bool stopping = model_log_scale_.IsAtTarget() &&
-                  model_log_scale_.Get() == state.final_model_log_scale &&
-                  state.minimum_display_duration.IsAtTarget();
-  if (stopping) {
-    interaction_data_.SetTransform(InteractionMode::TransformMode::kNothing);
-    return OptionalInteractionState{SetupIdleState()};
-  }
-  state.minimum_display_duration.Step(delta_time.GetDeltaTime());
-
-  return {};
+    const imp::FrameTime& delta_time,
+    svxr::interaction_states::ScaleReset& state) {
+  return svxr::interaction_states::Update(delta_time, state, *this);
 }
 
-OptionalInteractionState SceneViewerComponent::HandleInitializedInput(
-    svxr::interaction_states::Initialized& state) {
-  if (!footprint_) {
-    // Defer entering Idle until our UX is ready.
-    return {};
-  }
-  return OptionalInteractionState{SetupIdleState()};
-}
-
-OptionalInteractionState SceneViewerComponent::HandleTranslationInput(
-    svxr::interaction_states::Translation& state, const imp::Ray& ray,
-    imp::NodeHandle receiver, imp::Flags<InputFlag> input_flags) {
-  // Check if the system is movable. When it is not, the client
-  // (SceneCore/Compose) is responsible for handling the translation.
-  if (system_movable_) {
-    auto rig_position = rig_node_->GetLocalPosition();
-    // Hit positions are sent from SpF relative to the task space. SplitEngine
-    // converts the hit position to be relative to the subspace they will be
-    // handled by (i.e. the hit node). We convert origin & direction to also be
-    // relative to the subspace before operating on them.
-    auto origin = (event_hit_node_transform_ * float4(ray.origin, 1.0f)).xyz;
-    auto direction = normalize(
-        (event_hit_node_transform_ * float4(ray.direction, 0.0f)).xyz);
-
-    if (input_flags.Test(InputFlag::kIsDownStarting)) {
-      // Calculate the distance between the hit position and the origin along
-      // the ray's direction.
-      origin_to_hit_position_distance_ =
-          dot(event_hit_position_ - origin, direction);
-      // Calculate the pinch point along the ray scaled by the distance to the
-      // hit position.
-      auto pinchPoint = origin + (direction * origin_to_hit_position_distance_);
-
-      // Calculate the offset between the rig and the pinch point when pinch
-      // starts.
-      rig_to_hit_position_offset_ = rig_position - pinchPoint;
-    } else if (input_flags.Test(InputFlag::kIsDown)) {
-      // Calculate the pinch point along the ray scaled by the distance to the
-      // hit position.
-      auto pinchPoint = origin + (direction * origin_to_hit_position_distance_);
-      // Use the pinchPoint and offset to cached when the pinch first started
-      // to determine the new rig position.
-      rig_position = pinchPoint + rig_to_hit_position_offset_;
-
-      rig_position_.SetTarget(rig_position);
-      rig_node_->SetLocalPosition(rig_position);
-    }
-  }
-  return {};
-}
-
-// TODO: this is not used, should be removed once
-// the behavior matches SVXR.
-OptionalInteractionState SceneViewerComponent::HandleRotationInput(
-    svxr::interaction_states::Rotation& state, const imp::Ray& ray,
-    imp::NodeHandle receiver, imp::Flags<InputFlag> input_flags) {
-  if (state.is_right != input_flags.Test(InputFlag::kIsRight)) {
-    // Handle events for pointers which did not initiate rotation.
-    if (input_flags.Test(InputFlag::kIsDownStarting)) {
-      // Start two-handed scale.
-      auto model_scale = model_node_->GetLocalScale().x;
-      constexpr auto kEpsilon = 1e-5f;
-      auto model_log_scale = std::log(std::max(kEpsilon, model_scale));
-
-      auto& ray_right = state.is_right ? state.current_world_space_ray : ray;
-      auto& ray_left = state.is_right ? ray : state.current_world_space_ray;
-      return OptionalInteractionState{svxr::interaction_states::TwoHandedScale{
-          .initial_world_space_ray_right = ray_right,
-          .initial_world_space_ray_left = ray_left,
-          .current_world_space_ray_right = ray_right,
-          .current_world_space_ray_left = ray_left,
-          .initial_model_log_scale = model_log_scale,
-          .was_right_translation =
-              state.is_right ? false : ReceiverInitiatesTranslation(receiver),
-          .was_left_translation =
-              state.is_right ? ReceiverInitiatesTranslation(receiver) : false,
-      }};
-    }
-    // Ignore all other events for the other pointer.
-    return {};
-  }
-
-  if (input_flags.Test(InputFlag::kIsDownStopping)) {
-    if (state.cumulative_change_delta > kMinimumRotationDelta ||
-        state.cumulative_change_delta < -kMinimumRotationDelta) {
-      interaction_data_.SetTransform(InteractionMode::TransformMode::kNothing);
-    } else if (!state.is_rotating_after_two_handed_scale &&
-               ReceiverIsModel(receiver)) {
-      // Toggle select if we are not performing two-handed scale.
-      bool is_footprint_enabled = interaction_data_.ToggleSelect();
-      footprint_->SetColliderEnabled(is_footprint_enabled);
-    }
-  }
-
-  if (!input_flags.Test(InputFlag::kIsDown)) {
-    interaction_data_.SetTransform(InteractionMode::TransformMode::kNothing);
-    return OptionalInteractionState{SetupIdleState()};
-  } else {
-    state.current_world_space_ray = ray;
-  }
-
-  if (state.cumulative_change_delta > kMinimumRotationDelta ||
-      state.cumulative_change_delta < -kMinimumRotationDelta) {
-    interaction_data_.SetTransform(InteractionMode::TransformMode::kRotate);
-  }
-  return {};
-}
-
-// TODO: this is not used, should be removed once
-// the behavior matches SVXR.
 OptionalInteractionState SceneViewerComponent::HandleOneHandedScaleInput(
     svxr::interaction_states::OneHandedScale& state, const imp::Ray& ray,
     imp::NodeHandle receiver, imp::Flags<InputFlag> input_flags) {
@@ -919,15 +657,14 @@ OptionalInteractionState SceneViewerComponent::HandleOneHandedScaleInput(
 
   if (!input_flags.Test(InputFlag::kIsDown)) {
     return OptionalInteractionState{SetupIdleState()};
-  } else if (ReceiverIsModel(receiver)) {
+  } else {
+    // If we are still down, we are potentially scaling.
     interaction_data_.SetTransform(InteractionMode::TransformMode::kScale);
     state.current_world_space_ray = ray;
   }
   return {};
 }
 
-// TODO: this is not used, should be removed once
-// the behavior matches SVXR.
 OptionalInteractionState SceneViewerComponent::HandleTwoHandedScaleInput(
     svxr::interaction_states::TwoHandedScale& state, const imp::Ray& ray,
     imp::NodeHandle receiver, const float3& hit_position,
@@ -960,6 +697,47 @@ OptionalInteractionState SceneViewerComponent::HandleTwoHandedScaleInput(
   return {};
 }
 
+OptionalInteractionState SceneViewerComponent::HandleTranslationInput(
+    svxr::interaction_states::Translation& state, const imp::Ray& ray,
+    imp::NodeHandle receiver, imp::Flags<InputFlag> input_flags) {
+  auto returned_state = HandleInput(state, ray, receiver, input_flags, *this);
+  // Check if the system is movable. When it is not, the client
+  // (SceneCore/Compose) is responsible for handling the translation.
+  if (system_movable_ && !returned_state.has_value()) {
+    auto rig_position = rig_node_->GetLocalPosition();
+    // Hit positions are sent from SpF relative to the task space. SplitEngine
+    // converts the hit position to be relative to the subspace they will be
+    // handled by (i.e. the hit node). We convert origin & direction to also be
+    // relative to the subspace before operating on them.
+    auto origin = (event_hit_node_transform_ * float4(ray.origin, 1.0f)).xyz;
+    auto direction = normalize(
+        (event_hit_node_transform_ * float4(ray.direction, 0.0f)).xyz);
+
+    if (input_flags.Test(InputFlag::kIsDownStarting)) {
+      // Calculate the distance between the hit position and the origin.
+      origin_to_hit_position_distance_ = length(event_hit_position_ - origin);
+      // Calculate the pinch point along the ray scaled by the distance to the
+      // hit position.
+      auto pinchPoint = origin + (direction * origin_to_hit_position_distance_);
+
+      // Calculate the offset between the rig and the pinch point when pinch
+      // starts.
+      rig_to_hit_position_offset_ = rig_position - pinchPoint;
+    } else if (input_flags.Test(InputFlag::kIsDown)) {
+      // Calculate the pinch point along the ray scaled by the distance to the
+      // hit position.
+      auto pinchPoint = origin + (direction * origin_to_hit_position_distance_);
+      // Use the pinchPoint and offset to cached when the pinch first started
+      // to determine the new rig position.
+      rig_position = pinchPoint + rig_to_hit_position_offset_;
+
+      rig_position_.SetTarget(rig_position);
+      rig_node_->SetLocalPosition(rig_position);
+    }
+  }
+  return returned_state;
+}
+
 void SceneViewerComponent::PauseAnimationAndSound() {
   if (animator_ && animator_->IsEnabled()) {
     animator_->SetEnabled(false);
@@ -989,5 +767,53 @@ void SceneViewerComponent::ResumeAnimationAndSound() {
 void SceneViewerComponent::ResetRigPosition() {}
 
 void SceneViewerComponent::ToggleResetScaleType() {}
+
+void SceneViewerComponent::SetModelLogScale(imp::SmoothParameters parameters,
+                                            float model_log_scale) {
+  model_log_scale_.Setup(parameters, model_log_scale);
+}
+
+imp::Smooth<imp::float3>& SceneViewerComponent::GetRigPosition() {
+  return rig_position_;
+}
+
+float SceneViewerComponent::GetInitialModelScale() {
+  return initial_model_scale_;
+}
+void SceneViewerComponent::SetInitialModelScale(float initial_model_scale) {
+  initial_model_scale_ = initial_model_scale;
+}
+
+float SceneViewerComponent::GetInitialModelDistanceToCamera() {
+  return initial_model_distance_to_camera_;
+}
+void SceneViewerComponent::SetInitialModelDistanceToCamera(
+    float initial_model_distance_to_camera) {
+  initial_model_distance_to_camera_ = initial_model_distance_to_camera;
+}
+
+svxr::ResetScaleType SceneViewerComponent::GetResetScaleType() {
+  return reset_scale_type_;
+}
+void SceneViewerComponent::SetResetScaleType(
+    svxr::ResetScaleType reset_scale_type) {
+  reset_scale_type_ = reset_scale_type;
+}
+
+void SceneViewerComponent::SetRigPosition(imp::SmoothParameters parameters,
+                                          imp::float3 rig_position) {
+  rig_position_.Setup(parameters, rig_position);
+}
+void SceneViewerComponent::SetRigRotationTarget(imp::quatf rig_rotation) {
+  rig_rotation_.SetTarget(rig_rotation);
+}
+void SceneViewerComponent::SetRigRotation(imp::SmoothParameters parameters,
+                                          imp::quatf rig_rotation) {
+  rig_rotation_.Setup(parameters, rig_rotation);
+}
+
+svxr::UiEventListener* SceneViewerComponent::GetUiEventListener() {
+  return nullptr;
+}
 
 }  // namespace imp

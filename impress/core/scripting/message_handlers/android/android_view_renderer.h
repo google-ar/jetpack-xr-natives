@@ -104,6 +104,12 @@ class AndroidViewRenderer : public Component {
   // Updates the collider of the Android View.
   void UpdateCollider(const imp::Box& collider);
 
+  // Updates the horizontal and vertical scroll factor for the Android View.
+  // The scroll factor is multiplied with the scroll input and can be used to
+  // adjust the sensitivity and direction of scrolling.
+  void UpdateScrollFactor(float horizontal_scroll_factor,
+                          float vertical_scroll_factor);
+
   // Dispatch motion_event as generic motion events to the Android View.
   void DispatchGenericMotionEventToView(MotionEvent& motion_event);
   // Dispatch motion_event as touch events to the Android View.
@@ -136,6 +142,7 @@ class AndroidViewRenderer : public Component {
   absl::flat_hash_map<ControllerHitEvent::Hand, bool> controller_was_hovering_;
   std::unique_ptr<RenderViewToSurfaceTextureWrapper> renderer_wrapper_;
   TextureMaterialVariant material_;
+  float2 scroll_factor_ = kOne2;
 };
 
 }  // namespace imp::android

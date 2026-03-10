@@ -19,14 +19,11 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <string>
 #include <thread>  // NOLINT: Need to get current thread id.
 #include <vector>
 
-#include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/strings/string_view.h"
-#include "absl/synchronization/mutex.h"
 #include "core/config.h"
 #include "core/performance/memory_stats.h"
 #include "core/performance/profiler_structs.h"
@@ -87,7 +84,7 @@ class Profiler {
   // Sets the end time of the given sample index to the current time.
   static void RecordSampleEndTime(int64_t id);
   // Returns the main thread id.
-  static std::thread::id GetMainThreadId() { return main_thread_id_; }
+  static std::thread::id GetMainThreadId() { return main_thread_id_.load(); }
   // Returns the id of the thread executing this function.
   // Value is cached using thread_local to avoid a lot of system calls.
   static std::thread::id GetCachedThreadId();
@@ -128,6 +125,20 @@ class Profiler {
   GetAllWorkerThreadsSamples(uint64_t start_time, uint64_t end_time);
   // Returns thread ids for all worker threads that have ever recorded samples.
   static std::vector<std::thread::id> GetWorkerThreadIds();
+  // Returns true if memory call stacks are currently being recorded.
+  static bool IsRecordingCallstacks() {
+    if (!MemoryStats::IsCallstackTrackingSupported()) {
+      return false;
+    }
+    return is_recording_callstacks_.load(std::memory_order_relaxed);
+  }
+  // Sets whether memory call stacks are being recorded.
+  static void SetRecordingCallstacks(bool is_recording) {
+    if (!MemoryStats::IsCallstackTrackingSupported()) {
+      return;
+    }
+    is_recording_callstacks_.store(is_recording, std::memory_order_relaxed);
+  }
 
  private:
   // Main thread members:
@@ -136,20 +147,18 @@ class Profiler {
 
   // Returns the duration of time since the last call to AdvanceFrame() in ns.
   // uint32 so max it can return is 4s per frame.
-  static std::thread::id main_thread_id_;
-  static std::array<std::array<MainThreadProfileResult, kMaxSamples>,
-                    kMaxFrames>
-      samples_;
-  static std::array<FrameMetaData, kMaxFrames> frame_metadata_;
-  static int frame_index_;
-  static int sample_index_;
-  static bool paused_;
+  inline static std::atomic<std::thread::id> main_thread_id_;
+  inline static std::atomic<bool> is_recording_callstacks_{false};
+  inline static std::array<FrameMetaData, kMaxFrames> frame_metadata_;
+  inline static int frame_index_ = 0;
+  inline static int sample_index_ = 0;
+  inline static bool paused_ = false;
   // Duplicate of is_recording_ but without thread safety for the main thread.
   // Prevents the need for an atomic load for each main thread AddSample call.
-  static bool is_recording_main_thread_;
-  static uint16_t id_counter_;  // Int16 as kMaxSamples is < 16k.
-  static uint16_t end_id_counter_;
-  static int64_t last_frame_start_time_ns_;
+  inline static bool is_recording_main_thread_ = true;
+  inline static uint16_t id_counter_ = 0;  // Int16 as kMaxSamples is < 16k.
+  inline static uint16_t end_id_counter_ = 0;
+  inline static int64_t last_frame_start_time_ns_ = 0;
   static void RecordMainThreadSampleEndTime(int64_t id);
   static int64_t AddMainThreadSample(absl::string_view name);
 
@@ -158,29 +167,14 @@ class Profiler {
   static int64_t GetCurrentTimeNanos();
 
   // Whether the profiler is recording samples.
-  static std::atomic<bool> is_recording_;
-
-  static absl::Mutex mu_;
-  static absl::flat_hash_map<std::thread::id, std::string> thread_names_
-      ABSL_GUARDED_BY(mu_);
-
-  static absl::Mutex worker_samples_mu_;
-  static std::array<WorkerProfileResult, kMaxWorkerSamples> worker_samples_
-      ABSL_GUARDED_BY(worker_samples_mu_);
-  static uint64_t worker_end_id_counter_ ABSL_GUARDED_BY(worker_samples_mu_);
-  static size_t worker_sample_index_ ABSL_GUARDED_BY(worker_samples_mu_);
-
-  static absl::Mutex worker_thread_ids_mu_;
-  static std::vector<std::thread::id> worker_thread_ids_
-      ABSL_GUARDED_BY(worker_thread_ids_mu_);
+  inline static std::atomic<bool> is_recording_{true};
 
   static void RecordWorkerThreadSampleEndTime(int64_t id);
   static int64_t AddWorkerThreadSample(absl::string_view name);
-  static size_t FindSampleIndexUpperBound(uint64_t end_time)
-      ABSL_SHARED_LOCKS_REQUIRED(worker_samples_mu_);
+  static size_t FindSampleIndexUpperBound(uint64_t end_time);
 
   static bool CheckOnMainThread() {
-    return main_thread_id_ == GetCachedThreadId();
+    return main_thread_id_.load() == GetCachedThreadId();
   }
 };
 }  // namespace imp

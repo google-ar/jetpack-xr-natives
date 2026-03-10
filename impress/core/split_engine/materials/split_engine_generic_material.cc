@@ -312,7 +312,8 @@ void SplitEngineGenericMaterial::RewriteTextureId(
     const TextureBorrower& texture_borrower) {
   if (!texture_parameter) return;
 
-  BorrowedTexturePtr borrowed = texture_borrower(texture_parameter->texture_id);
+  BorrowedTexturePtr borrowed = texture_borrower(
+      texture_parameter->texture_id, SmallSourceLocation::Current());
   texture_parameter->texture_id =
       SplitEngineSerializer::GetId(borrowed->GetTexture());
   borrowed_textures_[parameter_name] = std::move(borrowed);

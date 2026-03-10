@@ -18,7 +18,9 @@
 
 #include <cstdint>
 #include <list>
+#include <memory>
 #include <string>
+#include <utility>
 
 #include "absl/status/status.h"
 #include "core/assets/asset_ptr.h"
@@ -28,7 +30,9 @@
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
+#include "core/particle/custom_particle_behavior.h"
 #include "core/particle/particle_behavior.h"
+#include "core/particle/particle_behavior_result.h"
 #include "core/particle/particle_controller.h"
 #include "core/particle/particle_emitter_info.h"
 #include "core/particle/particle_emitter_state.proto.imp.h"
@@ -45,7 +49,8 @@
 namespace imp {
 
 Future<OwnedParticleControllerPtr> NodeParticleController::Create(
-    NodeHandle emitter_node, const ParticleEmitterState& emitter_state) {
+    NodeHandle emitter_node, const ParticleEmitterState& emitter_state,
+    std::unique_ptr<CustomParticleBehavior> custom_particle_behavior) {
   // Validate the emitter state before creating the controller.
   std::string invalid_reason = ValidateEmitterState(emitter_state);
   if (!invalid_reason.empty()) {
@@ -57,19 +62,24 @@ Future<OwnedParticleControllerPtr> NodeParticleController::Create(
   return emitter_node->GetView()
       .GetAssetManager()
       .LoadGltfAsset(emitter_state.particle_config.gltf_asset.value())
-      .Then([&emitter_state, emitter_node](
-                AssetPtr<GltfAsset> gltf_asset) -> OwnedParticleControllerPtr {
-        return OwnedParticleControllerPtr(new NodeParticleController(
-            emitter_node, gltf_asset, emitter_state));
+      .Then([&emitter_state, emitter_node,
+             custom_particle_behavior = std::move(custom_particle_behavior)](
+                AssetPtr<GltfAsset> gltf_asset) mutable
+                -> OwnedParticleControllerPtr {
+        return OwnedParticleControllerPtr(
+            new NodeParticleController(emitter_node, gltf_asset, emitter_state,
+                                       std::move(custom_particle_behavior)));
       });
 }
 
 NodeParticleController::NodeParticleController(
     NodeHandle emitter_node, AssetPtr<GltfAsset> gltf_asset,
-    const ParticleEmitterState& emitter_state)
+    const ParticleEmitterState& emitter_state,
+    std::unique_ptr<CustomParticleBehavior> custom_particle_behavior)
     : particle_service_(emitter_state.particle_config,
-                        emitter_state.max_particles),
-      particle_behavior_(emitter_node, emitter_state.particle_config),
+                        emitter_state.max_particles, emitter_node),
+      particle_behavior_(emitter_node, emitter_state.particle_config,
+                         std::move(custom_particle_behavior)),
       emitter_node_(emitter_node),
       gltf_asset_(gltf_asset),
       emitter_duration_finite_(emitter_state.duration_in_seconds > 0.0f),
@@ -94,9 +104,9 @@ void NodeParticleController::UpdateParticleSystem(const FrameTime& frame_time) {
         particle_service_.GetParticleInstance(it->particle_index);
 
     // Update particle behaviors.
-    ParticleBehavior::UpdateResult result = particle_behavior_.UpdateParticle(
+    ParticleBehaviorResult result = particle_behavior_.UpdateParticle(
         emitter_info, frame_time.GetDeltaSeconds(), particle_instance);
-    if (result == ParticleBehavior::UpdateResult::kExpired) {
+    if (result == ParticleBehaviorResult::kExpired) {
       // Removes the node from the active particles list.
       it->node->GetView().DestroyNode(it->node);
       particle_service_.DestroyParticle(it->particle_index);

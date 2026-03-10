@@ -144,6 +144,7 @@ cc_library(
         ":split_engine_subspace_manager",
         ":subspace_events",
         ":subspace_root",
+        "@com_google_absl//absl/container:node_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_impress//core/async:executor",

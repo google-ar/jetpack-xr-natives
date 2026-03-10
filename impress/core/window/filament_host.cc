@@ -107,6 +107,7 @@ OptionalError FilamentHost::CreateHeadlessSwapChain(uint32_t width,
   if (swap_chain_) {
     MP_RETURN_IF_ERROR(DestroySwapChain());
   }
+  flags = UpdateSwapChainFlagsFromState(flags);
   swap_chain_ = engine_->createSwapChain(width, height, flags);
   swap_chains_.insert(swap_chain_);
   return NoError();
@@ -218,15 +219,18 @@ bool FilamentHost::SwapChainWillBeSRGB() {
 OptionalError FilamentHost::Setup(Engine::Platform* platform,
                                   void* shared_gl_context,
                                   bool skip_color_grading) {
+  filament::Engine::Backend backend = state_->GetPreferredBackend();
+  if (backend == filament::Engine::Backend::DEFAULT) {
 #if IMP_MATERIAL_API(OPENGL)
-  filament::Engine::Backend backend = filament::Engine::Backend::OPENGL;
+    backend = filament::Engine::Backend::OPENGL;
 #elif IMP_MATERIAL_API(VULKAN)
-  filament::Engine::Backend backend = filament::Engine::Backend::VULKAN;
+    backend = filament::Engine::Backend::VULKAN;
 #elif IMP_MATERIAL_API(METAL)
-  filament::Engine::Backend backend = filament::Engine::Backend::METAL;
+    backend = filament::Engine::Backend::METAL;
 #else
 #error missing Material API declaration
 #endif
+  }
 
   return Setup(backend, platform, shared_gl_context, skip_color_grading);
 }
@@ -703,6 +707,8 @@ bool FilamentHost::IsCleaningUp() {
   return life_cycle_state_ == LifeCycleState::kCleaningUp;
 }
 
+bool FilamentHost::IsInXr() const { return false; }
+
 OptionalError FilamentHost::SetDisplayRotation(
     window::WindowRotation orientation) {
   MP_RETURN_IF_ERROR(state_->SetDisplayRotation(this, orientation));
@@ -879,7 +885,8 @@ void FilamentHost::SetClipboardHandler(
   }
 }
 
-void FilamentHost::PerformRender(filament::View* view) {
+void FilamentHost::PerformRender(filament::View* view,
+                                 RenderPassOptions options) {
   renderer_->render(view);
 }
 
@@ -924,6 +931,9 @@ uint64_t FilamentHost::UpdateSwapChainFlagsFromState(uint64_t flags) const {
     }
     if (state_->ShouldUseMsaaSwapChain()) {
       flags |= filament::SwapChain::CONFIG_MSAA_4_SAMPLES;
+    }
+    if (state_->ShouldUseTransparentSwapChain()) {
+      flags |= filament::SwapChain::CONFIG_TRANSPARENT;
     }
   }
   return flags;

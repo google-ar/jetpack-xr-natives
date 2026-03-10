@@ -286,6 +286,9 @@ class Component {
   // enabled and its node is active.
   bool IsActive() const;
 
+  // Returns if this component is being removed.
+  bool IsRemoving() const;
+
 #if IMP_RUNTIME(DEV)
   // Returns if this component is attached to a node that belongs to background
   // staging of the Editor, which should always still run even when the Editor
@@ -403,7 +406,9 @@ class Component {
     kComponentIsActive = 1 << 1,
     // This flag is set when the component's Setup method returned a future that
     // has not yet completed.
-    kComponentIsRunningAsyncSetup = 1 << 2
+    kComponentIsRunningAsyncSetup = 1 << 2,
+    // This flag is set when the component is being removed.
+    kComponentIsBeingRemoved = 1 << 3
   };
 
   Dispatcher& GetDispatcher() const;
@@ -411,6 +416,8 @@ class Component {
   void SetActiveFlagInternal(bool active);
 
   void SetRunningAsyncSetupFlagInternal(bool is_running_async_setup);
+
+  void SetRemovingFlagInternal(bool is_removing);
 
   NodeHandle node_;
   ComponentId component_id_;

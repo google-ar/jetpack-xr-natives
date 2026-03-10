@@ -30,8 +30,7 @@ namespace physics_debug_draw {
 constexpr float kDebugDrawSphereRadius = 0.05f;
 constexpr float kDebugDrawAxisLength = 1.0f;
 constexpr float kSegmentsPerDegree = 0.5f;
-constexpr debug_draw::Color kDebugDrawDefaultColor =
-    debug_draw::kDebugColors[static_cast<int>(debug_draw::DebugColor::kYellow)];
+constexpr debug_draw::Color kDebugDrawDefaultColor = debug_draw::kYellow;
 
 PhysicsDebugDraw::PhysicsDebugDraw() {
   SetColor(kDebugDrawDefaultColor);

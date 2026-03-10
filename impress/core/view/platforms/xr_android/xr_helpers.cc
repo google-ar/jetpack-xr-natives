@@ -302,16 +302,17 @@ void SetCustomEyeProjectionOnCamera(filament::Camera* camera,
 }
 
 void SetEyeModelMatrixOnCamera(filament::Engine* engine,
-                               filament::Camera* camera,
+                               filament::Camera* main_camera,
+                               filament::Camera* pass_camera,
                                std::vector<XrView>& latest_views) {
   // Camera::getModelMatrix returns the world transform, so we have to get it
   // from the transform manager.
   auto& transform_manager = engine->getTransformManager();
-  mat4 camera_model_matrix = transform_manager.getTransformAccurate(
-      transform_manager.getInstance(camera->getEntity()));
+  mat4 main_camera_model_matrix = transform_manager.getTransformAccurate(
+      transform_manager.getInstance(main_camera->getEntity()));
   for (int i = 0; i < latest_views.size(); ++i) {
-    camera->setEyeModelMatrix(
-        i, GetLocalTransform(camera_model_matrix, latest_views[i].pose));
+    pass_camera->setEyeModelMatrix(
+        i, GetLocalTransform(main_camera_model_matrix, latest_views[i].pose));
   }
 }
 

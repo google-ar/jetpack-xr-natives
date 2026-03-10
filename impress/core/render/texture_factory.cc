@@ -40,10 +40,10 @@
 #include "core/common/small_source_location.h"
 #include "core/image/image_contents.h"
 #include "core/image/inline_image_contents.h"
+#include "core/image/owned_image_content.h"
 #include "core/math/vec.h"
 #include "core/render/content_security_level.h"
 #include "core/render/image_asset.h"
-#include "core/render/safe_filament_texture_builder.h"
 #include "core/render/texture.h"
 #include "core/render/texture_asset.h"
 #include "core/render/texture_builder.h"
@@ -51,6 +51,10 @@
 #include "core/view/base_view.h"
 
 namespace imp {
+namespace {
+constexpr uint32_t kPixelWhite = 0xffffffff;
+constexpr uint32_t kPixelBlack = 0x00000000;
+}  // namespace
 
 TextureFactory::TextureFactory(BaseView& view) : view_(view) {
   assert(view_.GetSharedEngine() != nullptr);
@@ -340,14 +344,21 @@ TexturePtr TextureFactory::CreateTexture(
   std::string name_str =
       name.has_value() ? absl::StrFormat("%s_tex", *name) : "";
 
-  filament::Texture* texture = filament::Texture::Builder{}
-                                   .format(format)
-                                   .width(width)
-                                   .height(height)
-                                   .usage(usage)
-                                   .name(name_str.data(), name_str.length())
-                                   .levels(1u)
-                                   .build(*view_.GetSharedEngine());
+  TextureBuilder texture_builder(view_);
+  texture_builder.Format(format)
+      .Width(width)
+      .Height(height)
+      .Levels(1u)
+      .Name(name_str)
+      .Usage(usage)
+      .Sampler(sampler_options.sampler_type.value_or(
+          filament::Texture::Sampler::SAMPLER_2D));
+
+  filament::Texture* texture = texture_builder.Build(*view_.GetSharedEngine());
+  if (!texture) {
+    IMP_LOG(imp::ERROR) << "Could not create texture, name: \"" << name_str << "\"";
+    return {};
+  }
 
   filament::TextureSampler sampler(sampler_options.min_filter,
                                    sampler_options.mag_filter,
@@ -387,36 +398,35 @@ TexturePtr TextureFactory::CreateTexture(intptr_t id, uint32_t width,
 }
 
 TexturePtr TextureFactory::CreateTexture(TextureCreationSettings settings) {
-  // This place is reachable from Renderer, use SafeFilamentTextureBuilder to
-  // prevent panics.
-  SafeFilamentTextureBuilder texture_builder = SafeFilamentTextureBuilder{}
-                                                   .width(settings.width)
-                                                   .height(settings.height)
-                                                   .format(settings.format);
-
+  TextureBuilder texture_builder(view_);
+  texture_builder.Format(settings.format)
+      .Width(settings.width)
+      .Height(settings.height);
   if (settings.depth) {
-    texture_builder.depth(*settings.depth);
+    texture_builder.Depth(*settings.depth);
   }
 
   if (settings.usage) {
-    texture_builder.usage(*settings.usage);
+    texture_builder.Usage(*settings.usage);
   }
 
   if (settings.levels) {
-    texture_builder.levels(*settings.levels);
+    texture_builder.Levels(*settings.levels);
   }
 
   if (settings.native_texture_id) {
-    texture_builder.import(*settings.native_texture_id);
+    texture_builder.Import(*settings.native_texture_id);
   }
 
-  if (settings.sampler_type) {
-    texture_builder.sampler(*settings.sampler_type);
+  if (settings.sampler_options && settings.sampler_options->sampler_type) {
+    texture_builder.Sampler(settings.sampler_options->sampler_type.value());
+  } else if (settings.sampler_type) {
+    texture_builder.Sampler(*settings.sampler_type);
   }
 
-  absl::StatusOr<filament::Texture*> texture =
-      texture_builder.build(*view_.GetSharedEngine());
-  if (!texture.ok()) {
+  filament::Texture* texture = texture_builder.Build(*view_.GetSharedEngine());
+  if (!texture) {
+    IMP_LOG(imp::ERROR) << "Could not create texture.";
     return {};
   }
 
@@ -436,7 +446,7 @@ TexturePtr TextureFactory::CreateTexture(TextureCreationSettings settings) {
   }
 
   auto texture_ptr =
-      absl::WrapUnique(new Texture(view_, nullptr, *texture, sampler));
+      absl::WrapUnique(new Texture(view_, nullptr, texture, sampler));
   // This version of CreateTexture is not compatible with Split Engine.
   // TODO: (broken link) - remove call to SetSuppressSplitEngineRemoval().
   texture_ptr->SetSuppressSplitEngineRemoval(true);
@@ -684,9 +694,17 @@ TexturePtr TextureFactory::WrapTexture(
 BorrowedTexturePtr TextureFactory::BorrowPlaceholderTexture(
     SmallSourceLocation loc) {
   if (!placeholder_texture_) {
-    placeholder_texture_ = CreatePlaceholderTexture();
+    placeholder_texture_ = CreatePlaceholderTexture(kPixelWhite);
   }
   return placeholder_texture_.Borrow(loc);
+}
+
+BorrowedTexturePtr TextureFactory::BorrowPlaceholderTextureBlack(
+    SmallSourceLocation loc) {
+  if (!placeholder_texture_black_) {
+    placeholder_texture_black_ = CreatePlaceholderTexture(kPixelBlack);
+  }
+  return placeholder_texture_black_.Borrow(loc);
 }
 
 BorrowedTexturePtr TextureFactory::BorrowPlaceholderCubemapTexture(
@@ -705,22 +723,19 @@ BorrowedTexturePtr TextureFactory::BorrowRGBA32FPlaceholderTexture(
   return rgba32f_placeholder_texture_.Borrow(loc);
 }
 
-OwnedTexturePtr TextureFactory::CreatePlaceholderTexture() {
-  constexpr uint32_t kPixel = 0xffffffff;
+OwnedTexturePtr TextureFactory::CreatePlaceholderTexture(const uint32_t pixel) {
   constexpr int kPlaceholderTextureSize = 2;
-  constexpr int kNumPlaceholderTexturePixels =
-      kPlaceholderTextureSize * kPlaceholderTextureSize;
 
-  // Pixels are static to ensure that the memory is not freed when the function
-  // exits, it must live until the data is uploaded to the GPU.
-  static constexpr std::array<uint32_t, kNumPlaceholderTexturePixels>
-      kPlaceholderTexturePixels = {kPixel, kPixel, kPixel, kPixel};
+  std::unique_ptr<std::vector<uint32_t>> kPlaceholderTexturePixels =
+      std::make_unique<std::vector<uint32_t>>(
+          std::vector<uint32_t>{pixel, pixel, pixel, pixel});
 
-  InlineImageContents image_contents(
+  image::OwnedImageContents<uint32_t> image_contents(
       kPlaceholderTextureSize, kPlaceholderTextureSize,
-      reinterpret_cast<const uint8_t*>(kPlaceholderTexturePixels.data()),
-      (sizeof(uint32_t) * kNumPlaceholderTexturePixels),
-      filament::Texture::InternalFormat::RGBA8);
+      std::move(kPlaceholderTexturePixels),
+      filament::backend::TextureFormat::RGBA8,
+      filament::backend::PixelDataFormat::RGBA,
+      filament::backend::PixelDataType::UBYTE);
 
   return CreateTexture(image_contents, TextureGenerationOptions{},
                        TextureSamplerOptions{}, "PlaceholderTexture");

@@ -166,6 +166,13 @@ SplitEngineTextureBuilder& SplitEngineTextureBuilder::Format(
   return *this;
 }
 
+SplitEngineTextureBuilder& SplitEngineTextureBuilder::Usage(
+    filament::backend::TextureUsage usage) {
+  // TODO: Implement this.
+  IMP_LOG(imp::WARNING) << "SplitEngineTextureBuilder::Usage is not implemented.";
+  return *this;
+}
+
 SplitEngineTextureBuilder& SplitEngineTextureBuilder::Sampler(
     filament::backend::SamplerType sampler) {
   
@@ -179,6 +186,21 @@ SplitEngineTextureBuilder& SplitEngineTextureBuilder::Name(
   
 
   // TODO: Implement this.
+  IMP_LOG(imp::WARNING) << "SplitEngineTextureBuilder::Name is not implemented.";
+  return *this;
+}
+
+SplitEngineTextureBuilder& SplitEngineTextureBuilder::Swizzle(
+    filament::backend::TextureSwizzle r, filament::backend::TextureSwizzle g,
+    filament::backend::TextureSwizzle b, filament::backend::TextureSwizzle a) {
+  // TODO: Implement this.
+  IMP_LOG(imp::WARNING) << "SplitEngineTextureBuilder::Swizzle is not implemented.";
+  return *this;
+}
+
+SplitEngineTextureBuilder& SplitEngineTextureBuilder::External() {
+  // TODO: Implement this.
+  IMP_LOG(imp::WARNING) << "SplitEngineTextureBuilder::External is not implemented.";
   return *this;
 }
 
@@ -219,6 +241,11 @@ SplitEngineTextureBuilder& SplitEngineTextureBuilder::GenerateMipmaps(
   
 
   state_.mips = true;
+  return *this;
+}
+
+SplitEngineTextureBuilder& SplitEngineTextureBuilder::Import(intptr_t id) {
+  IMP_LOG(imp::WARNING) << "SplitEngineTextureBuilder::Import is not implemented.";
   return *this;
 }
 

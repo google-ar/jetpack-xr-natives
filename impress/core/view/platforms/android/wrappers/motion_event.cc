@@ -50,9 +50,8 @@ MotionEvent::MotionEvent(JNIEnv* env, float2 surface_coordinates, Action action)
       GetStaticMethodHandle("obtain", "(JJIFFI)Landroid/view/MotionEvent;");
 
   JniUniquePtr<jobject> motion_event =
-      WrapJni(Env(), CallStaticObjectMethod(obtain_, 0, 0, action_value,
-                                            surface_coordinates.x,
-                                            surface_coordinates.y, 0));
+      CallStaticObjectMethod(obtain_, 0, 0, action_value, surface_coordinates.x,
+                             surface_coordinates.y, 0);
   SetSelf(LocalToGlobalRef(std::move(motion_event)));
 }
 
@@ -70,9 +69,8 @@ MotionEvent::MotionEvent(JNIEnv* env, float2 surface_coordinates,
       GetStaticMethodHandle("obtain", "(JJIFFI)Landroid/view/MotionEvent;");
 
   JniUniquePtr<jobject> motion_event =
-      WrapJni(Env(), CallStaticObjectMethod(obtain_, 0, 0, action_value,
-                                            surface_coordinates.x,
-                                            surface_coordinates.y, 0));
+      CallStaticObjectMethod(obtain_, 0, 0, action_value, surface_coordinates.x,
+                             surface_coordinates.y, 0);
   SetSelf(LocalToGlobalRef(std::move(motion_event)));
 }
 
@@ -144,10 +142,9 @@ MotionEvent::MotionEvent(JNIEnv* env, float2 surface_coordinates, Action action,
       "(JJII[Landroid/view/MotionEvent$PointerProperties;[Landroid/view/"
       "MotionEvent$PointerCoords;IIFFIIII)Landroid/view/MotionEvent;");
 
-  JniUniquePtr<jobject> motion_event = WrapJni(
-      Env(), CallStaticObjectMethod(
-                 obtain_, 0, 0, action_value, 1, pointer_properties_array.get(),
-                 pointer_coords_array.get(), 0, 0, 0.f, 0.f, 0, 0, 0, 0));
+  JniUniquePtr<jobject> motion_event = CallStaticObjectMethod(
+      obtain_, 0, 0, action_value, 1, pointer_properties_array.get(),
+      pointer_coords_array.get(), 0, 0, 0.f, 0.f, 0, 0, 0, 0);
   SetSelf(LocalToGlobalRef(std::move(motion_event)));
 }
 

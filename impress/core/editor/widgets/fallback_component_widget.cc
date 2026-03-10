@@ -116,7 +116,7 @@ void FallbackComponentWidget::DrawImGui() {
 
   bool active = component_->IsActive();
 
-  ImGui::PushStyleColor(ImGuiCol_Text, active ? kGreen300 : kRed500);
+  ImGui::PushStyleColor(ImGuiCol_Text, active ? kDarkGreen : kDarkRed);
   ImGui::LabelText(active ? "active" : "inactive", "");
   ImGui::PopStyleColor();
 

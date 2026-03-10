@@ -19,7 +19,6 @@
 
 #include <cstddef>
 #include <memory>
-#include <optional>
 #include <utility>
 #include <vector>
 
@@ -81,13 +80,17 @@ class WidgetUiSystem : public System {
   void AddWindowConfiguration(absl::string_view name,
                               const WidgetLayoutInfo& layout_info);
 
+  bool ShouldDrawWidget(const WidgetLayoutInfo& layout_info,
+                        const Widget& widget) const;
+  void UpdateSpatialUiCanvas();
+
   using WidgetEntry = std::pair<std::unique_ptr<Widget>, WidgetLayoutInfo>;
 
   // Handles widget drawing and platform-dependent layout logic.
   std::unique_ptr<LayoutComposer> layout_composer_;
   // Records the visibility of certain windows in the Impress editor. Currently
   // only used for the multiple windows layout.
-  std::optional<WindowConfiguration*> window_configuration_ = std::nullopt;
+  WindowConfiguration& window_configuration_;
 
   std::vector<WidgetEntry> widgets_;
   // Keep track of the types of the widgets to remove them from the widgets_

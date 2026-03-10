@@ -101,7 +101,7 @@ class AndroidMediaPlayer : public JavaWrapper {
 
   void SetDataSource(const std::string& data_source_string) {
     CallVoidMethod(set_data_source_string_,
-                   ToString(Env(), data_source_string));
+                   ToJniString(Env(), data_source_string).get());
   }
 
   void SetOnCompletionListener(OnCompletionListener* on_completion_listener) {

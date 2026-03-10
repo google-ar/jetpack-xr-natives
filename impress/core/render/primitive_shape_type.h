@@ -25,7 +25,6 @@ enum class PrimitiveShapeType {
   kPanel = 4,
   kCylinder = 5,
   kCone = 6,
-  kCustomMesh = 7
 };
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_RENDER_PRIMITIVE_SHAPE_TYPE_H_

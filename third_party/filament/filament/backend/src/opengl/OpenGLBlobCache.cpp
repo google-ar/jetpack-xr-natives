@@ -23,6 +23,7 @@
 
 #include <private/utils/Tracing.h>
 
+#include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/Logger.h"
 
 namespace filament::backend {
@@ -47,7 +48,9 @@ GLuint OpenGLBlobCache::retrieve(BlobCacheKey* outKey, Platform& platform,
     GLuint programId = 0;
 
 #ifndef FILAMENT_SILENCE_NOT_SUPPORTED_BY_ES2
-    BlobCacheKey key{ program.getCacheId(), program.getSpecializationConstants() };
+    // TODO: Don't copy these spec constants!
+    BlobCacheKey::SpecializationConstants constants(program.getSpecializationConstants());
+    BlobCacheKey key{ program.getCacheId(), std::move(constants) };
 
     // FIXME: use a static buffer to avoid systematic allocation
     // always attempt with 64 KiB

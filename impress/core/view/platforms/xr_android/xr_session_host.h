@@ -156,10 +156,12 @@ class XrSessionHost : public ViewHost {
   absl::Status PreBeginRender();
 
   // Overrides normal rendering to render into both eyes.
-  void PerformRender(filament::View* view) override;
+  void PerformRender(filament::View* view,
+                     ViewHost::RenderPassOptions options) override;
 
   // Renders the left and right eyes with a single Filament render call.
-  void PerformEnhancedStereoscopicRender(filament::View* view);
+  void PerformEnhancedStereoscopicRender(filament::View* view,
+                                         ViewHost::RenderPassOptions options);
 
   // Renders the left and right eyes with two separate Filament render calls.
   void PerformNaiveStereoscopicRender(filament::View* view);
@@ -169,6 +171,8 @@ class XrSessionHost : public ViewHost {
 
   // Returns the stereoscopic type of the session.
   filament::Engine::StereoscopicType GetStereoscopicType() const;
+
+  bool IsInXr() const override;
 
   // Returns true if the session is multiview.
   bool IsMultiviewStereo() const;

@@ -16,6 +16,7 @@
 
 #include "absl/memory/memory.h"
 #include "core/canvas/async_canvas_source.h"
+#include "core/canvas/platform_canvas_source.h"
 #include "core/common/context.h"
 #include "core/config.h"
 #if IMP_PLATFORM(WASM)
@@ -29,14 +30,17 @@ namespace imp {
 
 namespace AsyncCanvasSourceFactory {
 
-std::unique_ptr<AsyncCanvasSource> Create(Context context,
-                                          bool use_hardware_rendering,
-                                          bool force_auto_method_rendering) {
+std::unique_ptr<AsyncCanvasSource> Create(
+    Context context, bool use_hardware_rendering,
+    bool force_auto_method_rendering,
+    bool force_individual_glyph_source_instances) {
 #if IMP_PLATFORM(WASM)
   return std::make_unique<WasmAsyncCanvasSource>();
 #else
   return absl::make_unique<AsyncCanvasSourceWrapper>(CanvasSource::Create(
-      context, use_hardware_rendering, force_auto_method_rendering));
+      context, use_hardware_rendering, force_auto_method_rendering,
+      PlatformCanvasSource::kDefaultGlyphCacheSizeBytes,
+      force_individual_glyph_source_instances));
 #endif
 };
 

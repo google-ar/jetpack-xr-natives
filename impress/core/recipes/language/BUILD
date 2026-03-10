@@ -340,6 +340,7 @@ cc_library(
         ":recipe_graph_cc",
         ":recipe_traits",
         ":recipe_utils",
+        "//core/math",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",

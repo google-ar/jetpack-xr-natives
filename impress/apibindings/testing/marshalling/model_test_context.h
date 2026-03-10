@@ -130,43 +130,63 @@ class ModelTestContext {
     int32_t expected_node_id = kUninitialized32;
     std::string expected_name;
     bool expected_loop = false;
+    int32_t expected_channel_id = kUninitialized32;
+    float expected_speed = 0.0f;
+    float expected_start_time = 0.0f;
     std::string failure_message;
     int32_t actual_node_id = kUninitialized32;
     std::string actual_name;
     bool actual_loop = false;
+    int32_t actual_channel_id = kUninitialized32;
+    float actual_speed = 0.0f;
+    float actual_start_time = 0.0f;
 
     void Reset() {
       expected_node_id = kUninitialized32;
       expected_name.clear();
       expected_loop = false;
+      expected_channel_id = kUninitialized32;
+      expected_speed = 0.0f;
+      expected_start_time = 0.0f;
       failure_message.clear();
       actual_node_id = kUninitialized32;
       actual_name.clear();
       actual_loop = false;
+      actual_channel_id = kUninitialized32;
+      actual_speed = 0.0f;
+      actual_start_time = 0.0f;
     }
   };
 
   struct StopGltfModelAnimationParams {
     int32_t expected_node_id = kUninitialized32;
+    int32_t expected_channel_id = kUninitialized32;
     int32_t actual_node_id = kUninitialized32;
+    int32_t actual_channel_id = kUninitialized32;
 
     void Reset() {
       expected_node_id = kUninitialized32;
+      expected_channel_id = kUninitialized32;
       actual_node_id = kUninitialized32;
+      actual_channel_id = kUninitialized32;
     }
   };
 
   struct ToggleGltfModelAnimationParams {
     int32_t expected_node_id = kUninitialized32;
     bool expected_toggle = false;
+    int32_t expected_channel_id = kUninitialized32;
     int32_t actual_node_id = kUninitialized32;
     bool actual_toggle = false;
+    int32_t actual_channel_id = kUninitialized32;
 
     void Reset() {
       expected_node_id = kUninitialized32;
       expected_toggle = false;
+      expected_channel_id = kUninitialized32;
       actual_node_id = kUninitialized32;
       actual_toggle = false;
+      actual_channel_id = kUninitialized32;
     }
   };
 
@@ -288,6 +308,22 @@ class ModelTestContext {
     }
   };
 
+  struct GetGltfModelAnimationDurationSecondsParams {
+    int32_t expected_node_id = kUninitialized32;
+    int32_t expected_index = kUninitialized32;
+    float success_duration = 0.0f;
+    int32_t actual_node_id = kUninitialized32;
+    int32_t actual_index = kUninitialized32;
+
+    void Reset() {
+      expected_node_id = kUninitialized32;
+      expected_index = kUninitialized32;
+      success_duration = 0.0f;
+      actual_node_id = kUninitialized32;
+      actual_index = kUninitialized32;
+    }
+  };
+
   void Reset() {
     load_gltf_asset_path.Reset();
     load_gltf_asset_bytes.Reset();
@@ -302,6 +338,7 @@ class ModelTestContext {
     set_gltf_model_animation_playback_time.Reset();
     get_gltf_model_animation_count.Reset();
     get_gltf_model_animation_name.Reset();
+    get_gltf_model_animation_duration_seconds.Reset();
     get_gltf_model_local_bounds.Reset();
     set_material_override.Reset();
     clear_material_override.Reset();
@@ -321,6 +358,8 @@ class ModelTestContext {
       set_gltf_model_animation_playback_time;
   GetGltfModelAnimationCountParams get_gltf_model_animation_count;
   GetGltfModelAnimationNameParams get_gltf_model_animation_name;
+  GetGltfModelAnimationDurationSecondsParams
+      get_gltf_model_animation_duration_seconds;
   GetGltfModelLocalBoundsParams get_gltf_model_local_bounds;
   SetMaterialOverrideParams set_material_override;
   ClearMaterialOverrideParams clear_material_override;

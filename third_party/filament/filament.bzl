@@ -162,12 +162,22 @@ def if_profiling_mode(a, otherwise = []):
 #
 # On MacOs, default is opengl.
 # On Linux, default is vulkan.
-def by_backend(opengl = [], metal = [], vulkan = []):
+#
+# gl_vulkan is a special case that selects both opengl and vulkan. It's set to None for backwards
+# compatibility to avoid breaking existing users.
+def by_backend(opengl = [], metal = [], vulkan = [], gl_vulkan = None):
+    """Selects based on backend, with special handling for gl_vulkan on Android."""
+
+    # If gl_vulkan is not specified, default to opengl.
+    if gl_vulkan == None:
+        gl_vulkan = opengl
+
     return select({
         clean_dep("@third_party//filament:filament_uses_gles3_android"): opengl,
         clean_dep("@third_party//filament:filament_uses_gles2_android"): opengl,
         clean_dep("@third_party//filament:android"): opengl,
         clean_dep("@third_party//filament:filament_uses_vulkan_android"): vulkan,
+        clean_dep("@third_party//filament:filament_uses_gl_vulkan_android"): gl_vulkan,
         clean_dep("@third_party//filament:filament_uses_metal_ios"): metal,
         clean_dep("@third_party//filament:filament_uses_opengl_ios"): opengl,
         clean_dep("@third_party//filament:filament_uses_vulkan_linux"): vulkan,
@@ -497,6 +507,12 @@ BUILTIN_MATERIAL_NAMES = {
             "fxaa",
         ],
     },
+    "fog": {
+        "path_prefix": "fog",
+        "files": [
+            "fog",
+        ],
+    },
 }
 
 BUILTIN_MATERIAL_NAMES_FL0 = [
@@ -688,10 +704,11 @@ def filament_generate_materials(
             exec_compatible_with.append("@platforms//os:macos")
 
         native.genrule(
-            name = "generate_%s_%s_%s_%s_%s_%s_materials" % (platform, api, fl0, multiview, precompile, target),
+            name = "_generate_%s_%s_%s_%s_%s_%s_materials" % (platform, api, fl0, multiview, precompile, target),
             srcs = all_srcs,
             outs = all_outs,
             cmd = " && ".join(cmds),
             tools = tools,
             exec_compatible_with = exec_compatible_with,
+            visibility = ["//visibility:private"],
         )

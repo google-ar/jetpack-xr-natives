@@ -17,10 +17,17 @@
 #ifndef THIRD_PARTY_IMPRESS_EXTENSIONS_SCENEVIEWERXR_UX_CONSTANTS_H_
 #define THIRD_PARTY_IMPRESS_EXTENSIONS_SCENEVIEWERXR_UX_CONSTANTS_H_
 
+#include <cstdint>
+
 #include "absl/time/time.h"
 #include "core/common/smooth.h"
 
 namespace svxr {
+
+enum class ResetScaleType : uint32_t {
+  kInitialScale,
+  kOneToOne,
+};
 
 constexpr auto kResetMinDuration = absl::Milliseconds(240);
 // System-defined depth values.

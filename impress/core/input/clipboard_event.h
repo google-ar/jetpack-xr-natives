@@ -24,10 +24,14 @@
 
 namespace imp {
 
+// LINT.IfChange
 enum class ClipboardEventType : uint8_t {
   kCopy = 0,
   kPaste = 1,
 };
+// LINT.ThenChange(
+//   //depot/google3/third_party/impress/javascript/core/wasm/constants.js:clipboard_event_type
+// )
 
 /**
  * A clipboard event is triggered when a copy or paste operation is requested.

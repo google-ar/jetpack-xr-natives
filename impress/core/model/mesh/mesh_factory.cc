@@ -446,26 +446,39 @@ void SetUvsAlongXAxis(ProceduralMeshBuilder& builder, int start_index,
 
 // Produce new instances, which will be wrapped by a Mesh.
 void FillVertexBuffer(BaseView& view, filament::Engine* engine,
-                      const MeshDescription& mesh_description,
-                      BaseVertexBufferBuilder& builder,
-                      filament::VertexBuffer::BufferDescriptor&& buffer,
-                      std::optional<absl::string_view> name) {
-  auto& vertex_builder =
-      builder.BufferCount(1).VertexCount(mesh_description.vertex_count);
+                      MeshData& mesh_data, BaseVertexBufferBuilder& builder,
+                      std::optional<absl::string_view> name,
+                      bool should_copy_buffer) {
+  const MeshDescription& mesh_description = mesh_data.GetDescription();
+  const size_t bufferCount =
+      mesh_description.vertex_format.GetAttributeGroupsCount();
+  auto& vertex_builder = builder.BufferCount(bufferCount)
+                             .VertexCount(mesh_description.vertex_count);
 
   if (name.has_value()) {
     vertex_builder.Name(absl::StrFormat("%s_vb", *name));
   }
 
   const auto& vertex_format = mesh_description.vertex_format;
-  for (size_t i = 0; i < vertex_format.GetNumAttributes(); ++i) {
-    const auto& attribute = vertex_format.GetAttributeAt(i);
-    vertex_builder.Attribute(attribute.attribute, 0, attribute.type,
-                             vertex_format.GetAttributeOffsetAt(i),
-                             vertex_format.GetVertexSize(),
-                             attribute.normalized);
+  for (size_t buffer_idx = 0; buffer_idx < bufferCount; ++buffer_idx) {
+    for (size_t i = 0; i < vertex_format.GetNumAttributes(buffer_idx); ++i) {
+      const auto& attribute = vertex_format.GetAttributeAt(i, buffer_idx);
+      vertex_builder.Attribute(
+          attribute.attribute, buffer_idx, attribute.type,
+          vertex_format.GetAttributeOffsetAt(i, buffer_idx),
+          vertex_format.GetVertexSize(buffer_idx), attribute.normalized);
+    }
   }
-  vertex_builder.BufferAt(*engine, 0, std::move(buffer));
+
+  for (size_t buffer_idx = 0; buffer_idx < bufferCount; ++buffer_idx) {
+    filament::VertexBuffer::BufferDescriptor&& buffer =
+        should_copy_buffer ? mesh_data.CopyVertexData(buffer_idx)
+                           : mesh_data.MoveVertexData(buffer_idx);
+    // BufferAt builds the VertexBuffer, but we need to have all the buffers
+    // assigned before building it, thus this comes in a separate loop from
+    // above.
+    vertex_builder.BufferAt(*engine, buffer_idx, std::move(buffer));
+  }
 }
 
 void FillIndexBuffer(BaseView& view, filament::Engine* engine,
@@ -482,41 +495,6 @@ void FillIndexBuffer(BaseView& view, filament::Engine* engine,
 
   index_builder.Buffer(*engine, std::move(buffer));
 }
-
-void FillVertexData(MeshData* mesh_data, size_t vertex_buffer_offset,
-                    const std::vector<float>& positions,
-                    const std::vector<float>& texcoords,
-                    std::optional<float4> color) {
-  const quatf tangents = mat3f::packTangentFrame({kRight, kUp, kBack});
-  size_t vertex_count = positions.size() / 3;
-  for (size_t i = 0; i < vertex_count; ++i) {
-    mesh_data->VertexAttributeAt<float3>(
-        vertex_buffer_offset + i,
-        imp::VertexFormat::VertexAttribute::POSITION) =
-        float3(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
-    mesh_data->VertexAttributeAt<float2>(
-        vertex_buffer_offset + i, imp::VertexFormat::VertexAttribute::UV0) =
-        float2(texcoords[i * 2], texcoords[i * 2 + 1]);
-    // TODO: Implement a SurfaceEntity.Shape.CustomMesh pathway
-    // without MeshFactory.
-    mesh_data->VertexAttributeAt<quatf>(
-        vertex_buffer_offset + i,
-        imp::VertexFormat::VertexAttribute::TANGENTS) = tangents;
-    if (color) {
-      mesh_data->VertexAttributeAt<float4>(vertex_buffer_offset + i,
-                                           VertexAttribute::COLOR) = *color;
-    }
-  }
-}
-
-void FillIndicesWithRange(MeshData* mesh_data, size_t index_buffer_offset,
-                          size_t vertex_buffer_offset, size_t count) {
-  for (size_t i = 0; i < count; ++i) {
-    mesh_data->IndexAt<uint32_t>(index_buffer_offset + i) =
-        i + vertex_buffer_offset;
-  }
-}
-
 }  // namespace
 
 MeshFactory::MeshFactory(BaseView& view) : view_(view) {}
@@ -2085,70 +2063,6 @@ MeshPtr MeshFactory::CreateRegularPolygon(size_t side_count, float radius,
                                 aabb.GetAabb(), data_mode, std::nullopt);
 }
 
-MeshPtr MeshFactory::CreateCustomMesh(CreateCustomMeshSettings settings,
-                                      MeshDataStorageMode data_mode) {
-  const size_t vertex_count = settings.positions.size() / 3;
-  const size_t texcoord_count = settings.texcoords.size() / 2;
-
-  if (vertex_count == 0) {
-    IMP_LOG(imp::ERROR) << "Custom mesh has no vertices.";
-    return {};
-  }
-
-  if (vertex_count != texcoord_count) {
-    IMP_LOG(imp::ERROR) << "Custom mesh has mismatch between position count ("
-               << vertex_count << ") and texcoord count (" << texcoord_count
-               << ").";
-    return {};
-  }
-
-  if (settings.draw_mode == PrimitiveType::TRIANGLES) {
-    if (settings.indices.has_value()) {
-      if (!settings.indices->empty() && settings.indices->size() % 3 != 0) {
-        IMP_LOG(imp::ERROR) << "Custom mesh with TRIANGLES draw mode must have an "
-                      "index count divisible by 3, but got "
-                   << settings.indices->size();
-        return {};
-      }
-    } else {
-      if (vertex_count % 3 != 0) {
-        IMP_LOG(imp::ERROR) << "Custom mesh with TRIANGLES draw mode and no indices "
-                      "must have a vertex count divisible by 3, but got "
-                   << vertex_count;
-        return {};
-      }
-    }
-  }
-
-  const bool has_indices =
-      settings.indices.has_value() && !settings.indices->empty();
-  const size_t index_count =
-      has_indices ? settings.indices->size() : vertex_count;
-
-  auto mesh_data = std::make_unique<MeshData>(MeshDescription{
-      settings.color.has_value() ? kVertexFormatWithColor : kVertexFormat,
-      MeshDescription::IndexType::UINT, vertex_count, index_count});
-
-  FillVertexData(mesh_data.get(), 0, settings.positions, settings.texcoords,
-                 settings.color);
-  if (has_indices) {
-    for (size_t i = 0; i < settings.indices->size(); ++i) {
-      if (settings.indices->at(i) >= vertex_count) {
-        IMP_LOG(imp::ERROR) << "Custom mesh has an index " << settings.indices->at(i)
-                   << " which is out of bounds, vertex count is "
-                   << vertex_count;
-        return {};
-      }
-      mesh_data->IndexAt<uint32_t>(i) = settings.indices->at(i);
-    }
-  } else {
-    FillIndicesWithRange(mesh_data.get(), 0, 0, vertex_count);
-  }
-
-  return CreateByMovingMeshData(settings.draw_mode, std::move(mesh_data),
-                                std::nullopt, data_mode, settings.name);
-}
-
 MeshPtr MeshFactory::CreateByCopyingMeshData(
     PrimitiveType primitive_type, const MeshData& mesh_data,
     std::optional<Box> aabb, std::optional<absl::string_view> name) {
@@ -2157,8 +2071,9 @@ MeshPtr MeshFactory::CreateByCopyingMeshData(
   MeshBuilder mesh_builder(view_);
   BaseVertexBufferBuilder& vertex_buffer_builder =
       mesh_builder.CreateVertexBufferBuilder();
-  FillVertexBuffer(view_, engine, mesh_data.GetDescription(),
-                   vertex_buffer_builder, mesh_data.CopyVertexData(), name);
+  FillVertexBuffer(view_, engine, const_cast<MeshData&>(mesh_data),
+                   vertex_buffer_builder, name,
+                   /*should_copy_buffer=*/true);
 
   BaseIndexBufferBuilder& index_buffer_builder =
       mesh_builder.CreateIndexBufferBuilder();
@@ -2209,11 +2124,8 @@ MeshPtr MeshFactory::CreateByMovingMeshData(
       data_mode == MeshDataStorageMode::kStoreMeshData
           ? loader::LoaderOptions::VertexAccessFlags::kPosition
           : loader::LoaderOptions::VertexAccessFlags::kNone);
-  FillVertexBuffer(view_, engine, description, vertex_buffer_builder,
-                   data_mode == MeshDataStorageMode::kStoreMeshData
-                       ? mesh_data->CopyVertexData()
-                       : mesh_data->MoveVertexData(),
-                   name);
+  FillVertexBuffer(view_, engine, *mesh_data, vertex_buffer_builder, name,
+                   data_mode == MeshDataStorageMode::kStoreMeshData);
 
   BaseIndexBufferBuilder& index_buffer_builder =
       mesh_builder.CreateIndexBufferBuilder();

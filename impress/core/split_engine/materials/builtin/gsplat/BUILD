@@ -23,6 +23,10 @@ load("//build_tools:imp_material.bzl", "imp_material")
 
 package(default_visibility = ["//visibility:public"])
 
+exports_files(
+    ["gsplat_common.glsl"],
+)
+
 # Provides a builtin material type supporting gsplats in split engine.
 cc_library(
     name = "precompute_texture_pipeline",
@@ -36,12 +40,16 @@ cc_library(
         "//core/assets/material:material_asset",
         "//core/async:future",
         "//core/common:small_source_location",
+        "//core/geometry/shapes",
         "//core/materials",
         "//core/math",
+        "//core/model/mesh",
         "//core/ncsb",
         "//core/render",
+        "//core/render:mesh_renderer",
         "//core/render_passes:texture_pipeline_renderer",
         "//core/render_passes:texture_pipeline_renderer_proto_cc_imp",
+        "//core/resources",
         "//core/view:base_view",
         "//core/view/framework",
         "//core/view/utils:render_settings_proto_cc_imp",

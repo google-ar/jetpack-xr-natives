@@ -185,6 +185,7 @@ inline constexpr absl::string_view kMathPi = "math_pi";
 inline constexpr absl::string_view kMathE = "math_e";
 inline constexpr absl::string_view kMathNan = "math_nan";
 inline constexpr absl::string_view kMathInf = "math_inf";
+inline constexpr absl::string_view kMathTau = "math_tau";
 
 template <typename T, typename = std::enable_if_t<std::is_arithmetic_v<T>>>
 recipe::Variable Acos(T v) {

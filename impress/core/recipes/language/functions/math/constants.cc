@@ -24,6 +24,8 @@ void RegisterMathConstants(BaseRecipeSystem* recipe_system) {
   (void)recipe_system->DeclareGlobalVariable(
       recipe::kMathPi, VariableType::FLOAT, static_cast<float>(M_PI));
   (void)recipe_system->DeclareGlobalVariable(
+      recipe::kMathTau, VariableType::FLOAT, static_cast<float>(2.0 * M_PI));
+  (void)recipe_system->DeclareGlobalVariable(
       recipe::kMathE, VariableType::FLOAT, static_cast<float>(M_E));
   (void)recipe_system->DeclareGlobalVariable(
       recipe::kMathNan, VariableType::FLOAT,

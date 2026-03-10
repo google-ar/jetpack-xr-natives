@@ -24,6 +24,7 @@ import androidx.annotation.Nullable;
 import com.google.ar.imp.core.AndroidViewRenderer.CreateSurfaceTextureQuadRequest;
 import com.google.ar.imp.core.AndroidViewRenderer.GetAttachedViewRequest;
 import com.google.ar.imp.core.AndroidViewRenderer.InputForwardingMode;
+import com.google.ar.imp.core.AndroidViewRenderer.UpdateAndroidViewScrollFactorRequest;
 import com.google.ar.imp.core.AndroidViewRenderer.UpdateSurfaceTextureQuadColliderRequest;
 import com.google.ar.imp.core.AndroidViewRenderer.ViewSize;
 import com.google.ar.imp.core.scripting.ApiBridge;
@@ -315,5 +316,23 @@ public final class AndroidViewTextureApi {
     return apiBridge.sendRequest(
         new ApiRequest<GetAttachedViewRequest>("imp.android.GetAttachedViewRequest", request),
         View.class);
+  }
+
+  /**
+   * Updates the horizontal and vertical scroll factor for the Android View. The scroll factor is
+   * multiplied with the scroll input and can be used to adjust the sensitivity and direction of
+   * scrolling.
+   */
+  public void updateAndroidViewScrollFactor(
+      Node node, float horizontalScrollFactor, float verticalScrollFactor) {
+    UpdateAndroidViewScrollFactorRequest request =
+        UpdateAndroidViewScrollFactorRequest.newBuilder()
+            .setTarget(node.getNodeHandle())
+            .setHorizontalScrollFactor(horizontalScrollFactor)
+            .setVerticalScrollFactor(verticalScrollFactor)
+            .build();
+    apiBridge.sendRequest(
+        new ApiRequest<UpdateAndroidViewScrollFactorRequest>(
+            "imp.android.UpdateAndroidViewScrollFactorRequest", request));
   }
 }

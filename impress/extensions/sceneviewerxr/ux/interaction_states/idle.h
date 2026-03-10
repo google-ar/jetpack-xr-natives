@@ -17,11 +17,12 @@
 #ifndef THIRD_PARTY_IMPRESS_EXTENSIONS_SCENEVIEWERXR_UX_INTERACTION_STATES_IDLE_H_
 #define THIRD_PARTY_IMPRESS_EXTENSIONS_SCENEVIEWERXR_UX_INTERACTION_STATES_IDLE_H_
 
+#include "core/collision/ray.h"
+#include "core/common/enum_flags.h"
+#include "core/view/utils/frame_time.h"
 #include "extensions/sceneviewerxr/ux/input_flag.h"
 #include "extensions/sceneviewerxr/ux/interaction_states/interaction_owner.h"
 #include "extensions/sceneviewerxr/ux/interaction_states/interaction_states.h"
-#include "core/collision/ray.h"
-#include "core/view/utils/frame_time.h"
 
 namespace svxr {
 namespace interaction_states {

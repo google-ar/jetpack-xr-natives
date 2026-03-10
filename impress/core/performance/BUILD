@@ -64,9 +64,12 @@ cc_library(
             "darwin/editor_malloc.cc",
             "darwin/memory_stats.cc",
         ],
-        "@platforms//os:android": [
+        ":android_and_memory_graph": [
             "android/editor_malloc.cc",
             "android/memory_stats.cc",
+        ],
+        "@platforms//os:android": [
+            "default/memory_stats.cc",
         ],
         "@platforms//os:emscripten": [
             "wasm/editor_malloc.cc",
@@ -77,7 +80,7 @@ cc_library(
         ],
     }),
     hdrs = select({
-        "@platforms//os:android": [
+        ":android_and_memory_graph": [
             "android/editor_malloc.h",
             "memory_stats.h",
         ],
@@ -86,7 +89,8 @@ cc_library(
         ],
     }),
     linkopts = select({
-        "@platforms//os:android": imp_malloc_wrap_linkopts(),
+        ":android_and_memory_graph": imp_malloc_wrap_linkopts(),
+        "@platforms//os:android": [],
         "@platforms//os:emscripten": imp_malloc_wrap_linkopts(),
         "//conditions:default": [],
     }),
@@ -94,6 +98,7 @@ cc_library(
         "//core:config",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/debugging:stacktrace",
         "@com_google_absl//absl/hash",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/synchronization",
@@ -106,4 +111,11 @@ config_setting(
     define_values = {
         "IMP_PROFILER_MEMORY_GRAPH": "1",
     },
+)
+
+# TODO: This is a temporary fix, as android/editor_malloc.cc seems to crash on Android XR. See (broken link) for more details.
+config_setting(
+    name = "android_and_memory_graph",
+    constraint_values = ["@platforms//os:android"],
+    define_values = {"IMP_PROFILER_MEMORY_GRAPH": "1"},
 )

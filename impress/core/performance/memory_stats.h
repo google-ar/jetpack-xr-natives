@@ -15,10 +15,26 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_PERFORMANCE_MEMORY_STATS_H_
 #define THIRD_PARTY_IMPRESS_CORE_PERFORMANCE_MEMORY_STATS_H_
 
+#include <array>
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
+#include <thread>  // NOLINT: Need to sort by thread id.
 
 #include "core/config.h"
+
+#if IMP_PLATFORM(MACOS) || IMP_PLATFORM(IOS)
+#define SUPPORT_CALLSTACKS 1
+#else
+#define SUPPORT_CALLSTACKS 0
+#endif
+
+#if IMP_PLATFORM(WASM) || IMP_PLATFORM(MACOS) || IMP_PLATFORM(ANDROID) || \
+    IMP_PLATFORM(IOS)
+#define SUPPORT_MEMORY_TRACKING 1
+#else
+#define SUPPORT_MEMORY_TRACKING 0
+#endif
 
 namespace imp {
 
@@ -29,6 +45,20 @@ namespace imp {
 // the profiler.
 class MemoryStats {
  public:
+// Maximum number of call stacks to store before looping.
+// Memory usage increases with max callstack depth.
+#if SUPPORT_CALLSTACKS
+  static constexpr int kMaxCallstacks = 1024 * 1024;
+#else
+  static constexpr int kMaxCallstacks = 0;
+#endif
+  static constexpr int kMaxCallstackDepth = 16;
+  struct Callstack {
+    std::array<void*, kMaxCallstackDepth> callstack;
+    uint32_t depth;  // 32 bits for alignment, could be a byte otherwise.
+    uint32_t size;
+    std::thread::id thread_id;
+  };
   static MemoryStats& Get() {
     static MemoryStats instance;
     return instance;
@@ -53,8 +83,15 @@ class MemoryStats {
   void ResetMemoryCountersForThisThread();
   // Returns true if memory tracking is supported on the current platform.
   static constexpr bool IsMemoryTrackingSupported() {
-#if IMP_PLATFORM(WASM) || IMP_PLATFORM(MACOS) || IMP_PLATFORM(ANDROID) || \
-    IMP_PLATFORM(IOS)
+#if SUPPORT_MEMORY_TRACKING
+    return true;
+#else
+    return false;
+#endif
+  }
+  // Returns true if memory tracking is supported on the current platform.
+  static constexpr bool IsCallstackTrackingSupported() {
+#if SUPPORT_CALLSTACKS
     return true;
 #else
     return false;
@@ -76,6 +113,28 @@ class MemoryStats {
     return IsMemoryTrackingSupported();
 #endif
   }
+  Callstack& GetCallstack(size_t index) {
+    if (kMaxCallstacks == 0) {
+      static Callstack empty_callstack{};
+      return empty_callstack;
+    }
+    return callstacks_[index % kMaxCallstacks];
+  }
+  bool IsRecordingCallstacks() {
+    if (!IsCallstackTrackingSupported()) {
+      return false;
+    }
+    return record_callstacks_.load(std::memory_order_relaxed);
+  }
+  void SetRecordingCallstacks(bool value) {
+    if (!IsCallstackTrackingSupported()) {
+      return;
+    }
+    return record_callstacks_.store(value, std::memory_order_relaxed);
+  }
+  size_t GetCallstackIndex() {
+    return callstack_index_.load(std::memory_order_relaxed);
+  }
 
  private:
   MemoryStats() = default;
@@ -85,6 +144,9 @@ class MemoryStats {
   std::atomic<size_t> allocated_bytes_total_{0};
   // Thread-safe global counter for tracked allocations count.
   std::atomic<size_t> allocations_count_total_{0};
+  std::array<MemoryStats::Callstack, kMaxCallstacks> callstacks_;
+  std::atomic<size_t> callstack_index_{0};
+  std::atomic<bool> record_callstacks_{false};
 };
 }  // namespace imp
 

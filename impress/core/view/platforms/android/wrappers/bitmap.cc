@@ -14,16 +14,24 @@
 
 #include "core/view/platforms/android/wrappers/bitmap.h"
 
+#include <jni.h>
+
+#include <cassert>
+
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "core/common/jni_helpers.h"
+
 namespace imp::android {
 
 namespace {
 
-absl::StatusOr<BitmapConfig> GetBitmapConfigFromJava(JNIEnv* env,
-                                                     jobject config) {
+absl::StatusOr<BitmapConfig> GetBitmapConfigFromJava(
+    JNIEnv* env, JniUniquePtr<jobject> config) {
   JniUniquePtr<jclass> bitmap_config_class =
       FindClass(env, "android/graphics/Bitmap$Config");
   auto compare_config = [env, bitmap_config_class = bitmap_config_class.get(),
-                         config](const char* name) {
+                         config = config.get()](const char* name) {
     auto reference_config_id = env->GetStaticFieldID(
         bitmap_config_class, name, "Landroid/graphics/Bitmap$Config;");
     auto reference_config =

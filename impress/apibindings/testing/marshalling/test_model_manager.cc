@@ -123,6 +123,36 @@ absl::Status TestModelManager::SetGltfReformAffordanceEnabled(
   return absl::OkStatus();
 }
 
+void TestModelManager::AnimateGltfModelNew(
+    int32_t node, absl::string_view animation_name, bool loop, float speed,
+    float start_time, int32_t channel_id,
+    std::unique_ptr<BaseAssetAnimator> asset_animator) {
+  ModelTestContext& context = ModelTestContext::Get();
+  context.animate_gltf_model.actual_node_id = node;
+  context.animate_gltf_model.actual_name = std::string(animation_name);
+  context.animate_gltf_model.actual_loop = loop;
+  context.animate_gltf_model.actual_channel_id = channel_id;
+  context.animate_gltf_model.actual_speed = speed;
+  context.animate_gltf_model.actual_start_time = start_time;
+
+  
+  
+  
+  
+  
+  
+
+  if (asset_animator != nullptr) {
+    if (!context.animate_gltf_model.failure_message.empty()) {
+      asset_animator->OnFailure(context.animate_gltf_model.failure_message);
+    } else {
+      asset_animator->OnComplete();
+    }
+  }
+}
+
+// TODO: (broken link) - Remove old animation APIs once all clients are migrated
+// to new animation system.
 void TestModelManager::AnimateGltfModel(
     int32_t node, absl::string_view animation_name, bool loop,
     std::unique_ptr<BaseAssetAnimator> asset_animator) {
@@ -144,6 +174,18 @@ void TestModelManager::AnimateGltfModel(
   }
 }
 
+absl::Status TestModelManager::StopGltfModelAnimationNew(int32_t node,
+                                                         int32_t channel_id) {
+  ModelTestContext& context = ModelTestContext::Get();
+  context.stop_gltf_model_animation.actual_node_id = node;
+  context.stop_gltf_model_animation.actual_channel_id = channel_id;
+  
+  
+  return absl::OkStatus();
+}
+
+// TODO: (broken link) - Remove old animation APIs once all clients are migrated
+// to new animation system.
 absl::Status TestModelManager::StopGltfModelAnimation(int32_t node) {
   ModelTestContext& context = ModelTestContext::Get();
   context.stop_gltf_model_animation.actual_node_id = node;
@@ -151,6 +193,21 @@ absl::Status TestModelManager::StopGltfModelAnimation(int32_t node) {
   return absl::OkStatus();
 }
 
+absl::Status TestModelManager::ToggleGltfModelAnimationNew(int32_t node,
+                                                           bool toggle,
+                                                           int32_t channel_id) {
+  ModelTestContext& context = ModelTestContext::Get();
+  context.toggle_gltf_model_animation.actual_node_id = node;
+  context.toggle_gltf_model_animation.actual_toggle = toggle;
+  context.toggle_gltf_model_animation.actual_channel_id = channel_id;
+  
+  
+  
+  return absl::OkStatus();
+}
+
+// TODO: (broken link) - Remove old animation APIs once all clients are migrated
+// to new animation system.
 absl::Status TestModelManager::ToggleGltfModelAnimation(int32_t node,
                                                         bool toggle) {
   ModelTestContext& context = ModelTestContext::Get();
@@ -213,6 +270,18 @@ absl::StatusOr<std::string> TestModelManager::GetGltfModelAnimationName(
   return context.get_gltf_model_animation_name.success_name;
 }
 
+absl::StatusOr<float> TestModelManager::GetGltfModelAnimationDurationSeconds(
+    int32_t node, int32_t index) {
+  ModelTestContext& context = ModelTestContext::Get();
+  context.get_gltf_model_animation_duration_seconds.actual_node_id = node;
+  context.get_gltf_model_animation_duration_seconds.actual_index = index;
+
+  
+  
+
+  return context.get_gltf_model_animation_duration_seconds.success_duration;
+}
+
 absl::StatusOr<imp::Box> TestModelManager::GetGltfModelLocalBounds(
     int32_t node) {
   ModelTestContext& context = ModelTestContext::Get();
@@ -234,48 +303,12 @@ absl::StatusOr<imp::Box> TestModelManager::GetGltfModelLocalBounds(
   return mock_box;
 }
 
-absl::Status TestModelManager::SetMaterialOverride(int32_t node_id,
-                                                   std::intptr_t material,
-                                                   absl::string_view node_name,
-                                                   size_t primitive_index) {
-  ModelTestContext& context = ModelTestContext::Get();
-  context.set_material_override.actual_node_id = node_id;
-  context.set_material_override.actual_material_handle = material;
-  context.set_material_override.actual_node_name = std::string(node_name);
-  context.set_material_override.actual_primitive_index = primitive_index;
-
-  
-  
-  
-  
-
-  return absl::OkStatus();
-}
-
-absl::Status TestModelManager::ClearMaterialOverride(
-    int32_t node_id, absl::string_view node_name, size_t primitive_index) {
-  ModelTestContext& context = ModelTestContext::Get();
-  context.clear_material_override.actual_node_id = node_id;
-  context.clear_material_override.actual_node_name = std::string(node_name);
-  context.clear_material_override.actual_primitive_index = primitive_index;
-
-  
-  
-  
-
-  return absl::OkStatus();
-}
-
-// TODO Remove this API once the migration to the new
-// introspection APIs is complete.
 absl::Status TestModelManager::SetGltfModelNodeMaterialOverride(
     int32_t node_id, std::intptr_t material, size_t primitive_index) {
   return absl::UnimplementedError(
       "TestModelManager::SetGltfModelNodeMaterialOverride unimplemented");
 }
 
-// TODO Remove this API once the migration to the new
-// introspection APIs is complete.
 absl::Status TestModelManager::ClearGltfModelNodeMaterialOverride(
     int32_t node_id, size_t primitive_index) {
   return absl::UnimplementedError(

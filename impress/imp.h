@@ -118,10 +118,13 @@
 #include "core/view/framework/input/desktop_input_handler.h"
 #endif
 #include "filament/libs/utils/include/utils/Systrace.h"
+#include "core/lighting/light_component.h"
+#include "core/lighting/light_state.proto.imp.h"
 #include "core/model/mesh/mesh.h"
 #include "core/render/primitive_shape_renderer.h"
 #include "core/render/primitive_shape_renderer_state.proto.imp.h"
 #include "core/view/framework/animation/animation.proto.imp.h"
+#include "core/view/framework/animation/animator_events.proto.imp.h"
 #include "core/view/framework/animation/gltf_animator_state.proto.imp.h"
 #include "core/view/framework/assets/gltf_state.proto.imp.h"
 #include "core/view/framework/collision/collider_state.proto.imp.h"
@@ -133,6 +136,7 @@
 #include "core/view/framework/render/mesh_factory.h"
 // TODO: When render_component is safe to deprecate, change this.
 #include "core/view/framework/render/render_component.h"
+#include "core/view/framework/render/render_component_state.proto.imp.h"
 #include "core/view/framework/scene/load_scene_visitor.h"
 #include "core/view/framework/scene/scene_system.h"
 #include "core/view/utils/device.h"

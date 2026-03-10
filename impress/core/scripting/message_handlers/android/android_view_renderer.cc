@@ -288,6 +288,11 @@ void AndroidViewRenderer::UpdateCollider(const imp::Box& collider) {
   renderer_node_->GetComponent<BoxCollider>()->SetBox(collider);
 }
 
+void AndroidViewRenderer::UpdateScrollFactor(float horizontal_scroll_factor,
+                                             float vertical_scroll_factor) {
+  scroll_factor_ = {horizontal_scroll_factor, vertical_scroll_factor};
+}
+
 BorrowedMaterialPtr AndroidViewRenderer::GetMaterial() const {
   return std::holds_alternative<OwnedMaterialPtr>(material_)
              ? std::get<OwnedMaterialPtr>(material_).Borrow()
@@ -522,9 +527,12 @@ void AndroidViewRenderer::ForwardControllerInputs(
     imp::float2 surface_coordinates =
         this->GetSurfaceCoordinatesFromWorldPoint(event.GetHit()->world_point);
 
+    float2 scaled_scroll_value = {scroll_value->x * scroll_factor_.x,
+                                  scroll_value->y * scroll_factor_.y};
     MotionEvent motion_event(GetView().GetContext().GetJniEnv(),
                              surface_coordinates, MotionEvent::Action::kScroll,
-                             MotionEvent::ToolType::kUnknown, *scroll_value);
+                             MotionEvent::ToolType::kUnknown,
+                             scaled_scroll_value);
     DispatchGenericMotionEventToView(motion_event);
   }
 }

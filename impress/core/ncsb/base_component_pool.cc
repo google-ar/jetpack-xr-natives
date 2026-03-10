@@ -195,9 +195,11 @@ void BaseComponentPool::Remove(utils::Entity entity) noexcept {
 
   // CancelPending or Forget may have removed the component already.
   Component* component = components_.TryGetRaw(entity);
-  if (component == nullptr) {
+  if (component == nullptr || component->IsRemoving()) {
     return;
   }
+
+  component->SetRemovingFlagInternal(true);
 
   BeforeRemove(*component);
 

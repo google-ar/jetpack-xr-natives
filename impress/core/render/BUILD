@@ -75,6 +75,7 @@ cc_library(
         "//core/image",
         "//core/image:decode_image",
         "//core/image:inline_image_contents",
+        "//core/image:owned_image_content",
         "//core/math",
         "//core/resources",
         "//core/split_engine:split_engine_serializer",

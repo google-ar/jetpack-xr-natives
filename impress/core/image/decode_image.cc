@@ -38,11 +38,6 @@
 #endif
 
 namespace imp::image {
-namespace {
-// (broken link) Trying to debug pink texture issue. This is set explicitly to
-// fatal on pink textures with some debugging information.
-static bool fatal_on_pink_texture = false;
-}  // namespace
 
 Future<std::unique_ptr<ImageContents>> DecodeImage(
     const imp::Context& context, absl::string_view name,
@@ -68,7 +63,7 @@ Future<std::unique_ptr<ImageContents>> DecodeImage(
   return Future<std::unique_ptr<ImageContents>>::Schedule(
       [name = std::string(name), resource]() {
         absl::StatusOr<std::unique_ptr<ImageContents>> image =
-            details::StbDecodeImage(name, resource, fatal_on_pink_texture);
+            details::StbDecodeImage(name, resource);
         if (!image.ok()) {
           absl::StatusOr<std::unique_ptr<ImageContents>> webp_image =
               details::WebpDecodeImage(name, resource);
@@ -92,7 +87,5 @@ Future<std::unique_ptr<ImageContents>> DecodeImage(
   }
   return Future<std::unique_ptr<ImageContents>>(image.status());
 }
-
-void SetFatalOnPinkTexture(bool fatal) { fatal_on_pink_texture = fatal; }
 
 }  // namespace imp::image

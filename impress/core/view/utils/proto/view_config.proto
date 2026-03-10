@@ -15,18 +15,16 @@
 // Defines the proto for render settings
 // For now, it's only intended to be used by SwapChainRenderer
 
-syntax = "proto3";
+edition = "2024";
 
 package imp;
 
-import "core/proto/imp.proto";
 import "core/view/utils/proto/cache_config.proto";
 import "core/view/utils/proto/filament_feature_flag.proto";
 import "core/view/utils/proto/render_settings.proto";
 
 // option cc_api_version = 2;
 option java_package = "com.google.ar.imp.core";
-option java_multiple_files = true;
 
 // Defines temporary flags used for testing code in development.
 message ExperimentalFeatureFlags {
@@ -34,31 +32,37 @@ message ExperimentalFeatureFlags {
   // BUG: b/452459028
   // PLATFORMS: ANDROID
   // ACTION: Clean up by 2026-01-17
-  optional bool glyph_atlas_use_hardware_rendering = 1;
+  bool glyph_atlas_use_hardware_rendering = 1 [default = true];
 
   // OWNERS: eugenecys
   // BUG: b/385221395
   // PLATFORMS: ANDROID
   // ACTION: Clean up by 2026-01-17
-  optional bool glyph_atlas_force_reset_on_view_resumed = 2;
+  bool glyph_atlas_force_reset_on_view_resumed = 2 [default = true];
 
   // OWNERS: eugenecys, exv
   // BUG: b/454131370
   // PLATFORMS: ANDROID
   // ACTION: Clean up by 2026-01-24
-  optional bool glyph_atlas_force_auto_method_rendering = 3;
+  bool glyph_atlas_force_auto_method_rendering = 3 [default = false];
 
   // OWNERS: artyompp
   // BUG: b/469883152
   // PLATFORMS: ANDROID
   // ACTION: Clean up by 2026-02-26
-  optional bool surface_texture_memory_leak_fix = 4;
+  bool surface_texture_memory_leak_fix = 4 [default = false];
 
   // OWNERS: faaland
   // BUG: b/361658541
   // PLATFORMS: IOS
   // ACTION: Clean up by 2026-06-01
-  optional bool enable_set_presentation_time = 5;
+  bool enable_set_presentation_time = 5 [default = false];
+
+  // OWNERS: jagannathnalla
+  // BUG: b/476917931
+  // PLATFORMS: ANDROID
+  // ACTION: Clean up by 2026-03-31
+  bool force_individual_glyph_source_instances = 6 [default = false];
 }
 
 message ViewConfig {
@@ -74,21 +78,24 @@ message ViewConfig {
     DEFAULT_LIGHTING_LOADING_DISABLED = 2;
   }
 
-  render_settings.ViewRenderSettings main_view_render_settings = 1
-      [(imp.optional_type) = ABSL_OPTIONAL];
-  ShaderCachingMode shader_caching_mode = 2;
-  DefaultLightingLoading default_lighting_loading = 3;
+  render_settings.ViewRenderSettings main_view_render_settings = 1;
+  ShaderCachingMode shader_caching_mode = 2
+      [default = SHADER_CACHING_MODE_DISABLED];
+  DefaultLightingLoading default_lighting_loading = 3
+      [default = DEFAULT_LIGHTING_LOADING_ENABLED];
 
-  // The amount of time the foreground executor will pump per frame.
-  optional float foreground_executor_timeout_ms = 4;
+  // The amount of time the foreground executor will pump per frame. The default
+  // is 4ms.
+  float foreground_executor_timeout_ms = 4 [default = 4.0];
 
   // The amount of time the background executor will pump per frame if Impress
-  // is using a background executor that requires explicit pumping.
-  optional float background_executor_timeout_ms = 5;
+  // is using a background executor that requires explicit pumping. The default
+  // is 1ms.
+  float background_executor_timeout_ms = 5 [default = 1.0];
 
   // If true, use the system's own frame scheduled handler instead of providing
   // a callback handler to Filament.
-  optional bool use_system_frame_scheduled_handler = 6;
+  bool use_system_frame_scheduled_handler = 6 [default = false];
 
   // The size of the texture used by the GlyphAtlas.
   enum GlyphAtlasTextureSize {
@@ -104,10 +111,9 @@ message ViewConfig {
 
   // The size of the texture used by the GlyphAtlas. The default is SIZE2048,
   // which is 2048x2048.
-  GlyphAtlasTextureSize glyph_atlas_texture_size = 7
-      [(imp.optional_type) = ABSL_OPTIONAL];
+  GlyphAtlasTextureSize glyph_atlas_texture_size = 7 [default = SIZE2048];
 
-  CacheConfig cache_config = 9 [(imp.optional_type) = ABSL_OPTIONAL];
+  CacheConfig cache_config = 9;
 
   // If true, imp::Future will attempt to synchronously complete all pending
   // work upon cancellation and/or destruction.
@@ -118,12 +124,16 @@ message ViewConfig {
   // after either cancellation or destruction.
   // This behavior only applies to Executors that have implemented
   // imp::Executor::InvokeScheduledTask().
-  optional bool enable_synchronous_future_cancellation = 10;
+  // The flag is enabled by default.
+  bool enable_synchronous_future_cancellation = 10 [default = true];
 
   // Defines calls equivalent to filament::Engine::setFeatureFlag, executed when
   // the Impress View is constructed.
   repeated FilamentFeatureFlag filament_feature_flags = 11;
 
   // Defines temporary flags for impress code in development.
-  optional ExperimentalFeatureFlags experimental_feature_flags = 12;
+  ExperimentalFeatureFlags experimental_feature_flags = 12;
+
+  // If true, the swap chain will be created with an alpha channel.
+  bool use_transparent_swap_chain = 13 [default = false];
 }

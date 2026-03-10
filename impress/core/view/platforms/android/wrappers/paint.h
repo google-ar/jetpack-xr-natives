@@ -39,7 +39,7 @@ class Paint : public JavaWrapper {
 
   class FontMetrics : public JavaWrapper {
    public:
-    FontMetrics(JNIEnv* env, jobject j_font_metrics);
+    FontMetrics(JNIEnv* env, JniUniquePtr<jobject> j_font_metrics);
 
     float Leading();
 

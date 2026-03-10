@@ -110,6 +110,7 @@ cc_library(
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/numeric:int128",
         "@abseil-cpp//absl/synchronization",
+        "//common:openxr_utils",
         "@third_party//OpenXR_KHR:generated_openxr_headers_public",
         "@third_party//OpenXR_KHR:openxr_headers_androidxr",  # build_cleaner: keep
     ],

@@ -15,19 +15,23 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_MATERIALS_BUILTIN_GSPLAT_PRECOMPUTE_TEXTURE_PIPELINE_H_
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_MATERIALS_BUILTIN_GSPLAT_PRECOMPUTE_TEXTURE_PIPELINE_H_
 
+#include <optional>
+
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "core/async/future.h"
 #include "core/common/small_source_location.h"
+#include "core/geometry/shapes/box.h"
 #include "core/materials/material.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/component_id.h"
 #include "core/ncsb/isf_info.h"
+#include "core/render/mesh_renderer.h"
 #include "core/render/texture.h"
 #include "core/render_passes/texture_pipeline_renderer.h"
-#include "core/view/framework/render/mesh_renderer.h"
+#include "core/resources/resource_definition.h"
 
 namespace imp::split_engine {
 
@@ -38,10 +42,15 @@ namespace imp::split_engine {
 // See (broken link) for more details.
 class PrecomputeTexturePipeline : public imp::Component {
  public:
+  // Parameterless setup is not supported.
+  imp::Future<absl::Status> Setup();
   // Setup is asynchronous to load materials.
   // After materials are loaded, this will be completed synchronously.
-  imp::Future<absl::Status> Setup();
+  imp::Future<absl::Status> Setup(
+      resources::ResourceDefinition precompute_material_definition,
+      std::optional<imp::Box> aabb_override = std::nullopt);
   void Cleanup();
+  void OnActiveStatusChanged(bool is_active);
   BorrowedMaterialPtr BorrowMaterial(
       SmallSourceLocation loc = SmallSourceLocation::Current()) const;
   BorrowedTexturePtr BorrowTexture(

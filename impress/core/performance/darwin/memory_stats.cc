@@ -14,8 +14,20 @@
 
 #include "core/performance/memory_stats.h"
 
+#include <execinfo.h>
+
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
+
+#include "absl/debugging/stacktrace.h"
+
+namespace {
+std::thread::id GetCachedThreadId() {
+  thread_local const std::thread::id cached_id = std::this_thread::get_id();
+  return cached_id;
+}
+}  // namespace
 
 namespace imp {
 namespace {
@@ -45,9 +57,33 @@ size_t MemoryStats::GetAllocationsCountTotal() {
 void MemoryStats::IncrementMemoryCounters(size_t size) {
   allocated_bytes_by_thread_ += size;
   allocations_count_by_thread_++;
+
   if (IsMemoryGraphSupported()) {
     allocated_bytes_total_.fetch_add(size, std::memory_order_relaxed);
     allocations_count_total_.fetch_add(1, std::memory_order_relaxed);
+  }
+
+  if (record_callstacks_.load(std::memory_order_relaxed)) {
+    // Since callstack_index is uint32_t it will naturally wrap to 0 so we don't
+    // need to worry about it overflowing. This is why the % is after the fetch.
+    const int index = callstack_index_.fetch_add(1, std::memory_order_relaxed) %
+                      kMaxCallstacks;
+    Callstack& callstack_entry = callstacks_[index];
+
+    // Skip 3 frames, TrackAllocation, IncrementMemoryCounters, and malloc.
+    static constexpr int kSkippedStackFrames = 3;
+    void* stack[kMaxCallstackDepth + kSkippedStackFrames];
+    // MacOS backtrace is orders of magnitude faster than absl::GetStackTrace.
+    const int depth =
+        backtrace(stack, kMaxCallstackDepth + kSkippedStackFrames);
+    const int frames_to_copy =
+        std::max(0, std::min(depth - kSkippedStackFrames, kMaxCallstackDepth));
+    callstack_entry.depth = frames_to_copy;
+    // Copy the relevant stack frames into the callstack entry.
+    memcpy(callstack_entry.callstack.data(), stack + kSkippedStackFrames,
+           frames_to_copy * sizeof(void*));
+    callstack_entry.size = size;
+    callstack_entry.thread_id = GetCachedThreadId();
   }
 }
 
@@ -57,4 +93,5 @@ void MemoryStats::DecrementMemoryCounters(size_t size) {
     allocations_count_total_.fetch_sub(1, std::memory_order_relaxed);
   }
 }
+
 }  // namespace imp

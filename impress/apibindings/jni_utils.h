@@ -37,8 +37,8 @@ absl::StatusOr<std::vector<float>> FloatBufferToVector(JNIEnv* env,
 absl::StatusOr<std::vector<uint32_t>> IntBufferToVector(JNIEnv* env,
                                                         jobject intBuffer);
 
-// Creates a CustomMesh struct from JNI buffers.
-absl::StatusOr<StereoSurface::CustomMesh> BuildCustomMesh(
+// Creates a StereoMesh struct from JNI buffers.
+absl::StatusOr<StereoSurface::StereoMesh> BuildStereoMesh(
     JNIEnv* env, jobject left_positions, jobject left_texcoords,
     jobject left_indices, jobject right_positions, jobject right_texcoords,
     jobject right_indices, jint draw_mode);

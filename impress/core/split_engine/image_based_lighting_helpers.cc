@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/base/nullability.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "filament/filament/include/filament/Texture.h"
@@ -66,7 +67,7 @@ PackCubemapImageLevelContents(
 flatbuffers::Offset<android_xr::schemas::ImageBasedLightingAsset>
 PackImageBasedLightingAsset(
     flatbuffers::FlatBufferBuilder& fbb, std::uint64_t id,
-    const SphericalHarmonics& spherical_harmonics,
+    const SphericalHarmonics* /*absl_nullable*/  spherical_harmonics,
     const ImageBasedLightingAssetCubemapImages& cubemap_images) {
   // Pack IBL cubemap images.
   std::vector<
@@ -79,17 +80,19 @@ PackImageBasedLightingAsset(
         PackCubemapImageLevelContents(fbb, ibl_cubemap_image));
   }
 
-  // Pack spherical harmonics.
-  std::vector<android_xr::schemas::Float3> coefficients;
-  coefficients.reserve(spherical_harmonics.coefficients.size());
-  for (const float3& coefficient : spherical_harmonics.coefficients) {
-    coefficients.push_back({coefficient.x, coefficient.y, coefficient.z});
-  }
   flatbuffers::Offset<android_xr::schemas::SphericalHarmonics>
-      spherical_harmonics_offset =
-          android_xr::schemas::CreateSphericalHarmonics(
-              fbb, fbb.CreateVectorOfStructs(coefficients),
-              spherical_harmonics.num_bands);
+      spherical_harmonics_offset;
+  if (spherical_harmonics != nullptr) {
+    // Pack spherical harmonics.
+    std::vector<android_xr::schemas::Float3> coefficients;
+    coefficients.reserve(spherical_harmonics->coefficients.size());
+    for (const float3& coefficient : spherical_harmonics->coefficients) {
+      coefficients.push_back({coefficient.x, coefficient.y, coefficient.z});
+    }
+    spherical_harmonics_offset = android_xr::schemas::CreateSphericalHarmonics(
+        fbb, fbb.CreateVectorOfStructs(coefficients),
+        spherical_harmonics->num_bands);
+  }
 
   // Pack skybox cubemap images.
   std::optional<
@@ -111,7 +114,9 @@ PackImageBasedLightingAsset(
     ibl_asset_builder.add_skybox_cubemap_level_image_contents(
         skybox_cubemap_images_offset.value());
   }
-  ibl_asset_builder.add_spherical_harmonics(spherical_harmonics_offset);
+  if (!spherical_harmonics_offset.IsNull()) {
+    ibl_asset_builder.add_spherical_harmonics(spherical_harmonics_offset);
+  }
   return ibl_asset_builder.Finish();
 }
 

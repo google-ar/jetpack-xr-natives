@@ -16,22 +16,27 @@
 
 package com.google.imp.splitengine.extensions;
 
+import com.google.android.filament.proguard.UsedByNative;
 import java.util.concurrent.Executor;
 
 /** Implementation of the callback for message groups. */
+@UsedByNative("split_engine_bridge.cc")
 public final class MessageGroupCallback {
   private final long clientId;
   private Executor mExecutor;
 
+  @UsedByNative("split_engine_bridge.cc")
   public MessageGroupCallback(long clientId) {
     this.clientId = clientId;
   }
 
   // TODO: (broken link) - use long instead of int for messageGroupId.
+  @UsedByNative("split_engine_bridge.cc")
   public void onMessageGroupComplete(int messageGroupId) {
     nOnMessageGroupComplete(clientId, messageGroupId);
   }
 
   // TODO: (broken link) - use long instead of int for messageGroupId.
+  @UsedByNative("split_engine_bridge.cc")
   private static native void nOnMessageGroupComplete(long clientId, int messageGroupId);
 }

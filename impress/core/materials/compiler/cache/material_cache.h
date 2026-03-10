@@ -20,14 +20,15 @@
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <string_view>
 #include <vector>
 
 #include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
+#include "filament/libs/filabridge/include/filament/MaterialEnums.h"
 #include "core/async/future.h"
 #include "core/common/context.h"
 #include "core/materials/compiler/cache/file_utilities.h"
@@ -35,8 +36,7 @@
 namespace imp {
 
 // A 256-bit hash.
-constexpr int kHashByteSize = 32;
-using MaterialHash = std::array<uint8_t, kHashByteSize>;
+using MaterialHash = std::array<uint8_t, 32>;
 
 class MaterialCache {
  public:
@@ -48,14 +48,21 @@ class MaterialCache {
 
   // The caller is responsible for hashing, so that the same material only needs
   // to be hashed once for use with Get() and Store().
-  MaterialHash Hash(std::string_view material_source);
+  MaterialHash Hash(absl::string_view material_source);
 
   // Returns the compiled material bytes for the given material hash.
-  absl::StatusOr<std::vector<uint8_t>> Get(MaterialHash hash);
+  absl::StatusOr<std::vector<uint8_t>> Get(const MaterialHash& hash);
 
   // Stores the compiled material bytes for the given material hash.
-  absl::Status Store(MaterialHash hash,
+  absl::Status Store(const MaterialHash& hash,
                      std::vector<uint8_t> compiled_material_bytes);
+
+  // Returns the file path at which the material with the given hash may be
+  // stored. Adds the filament version to the file name, so that we recompile
+  // the material when the filament version changes.
+  std::string GetFilePath(
+      const MaterialHash& hash,
+      int material_version = filament::MATERIAL_VERSION) const;
 
  private:
   explicit MaterialCache(std::unique_ptr<FileUtilities> file_utils);
@@ -71,20 +78,16 @@ class MaterialCache {
   // material version.
   void DeleteAllStaleCacheEntries() ABSL_LOCKS_EXCLUDED(mutex_);
 
-  // Returns the file path at which the material with the given hash may be
-  // stored.
-  std::string GetFilePath(MaterialHash hash);
-
   // Checks if the cache has enough space for the given bytes, and if not,
   // deletes cache entries, least recently used ones first, to make room.
   void EnsureCapacity(int64_t bytes_needed) ABSL_LOCKS_EXCLUDED(mutex_);
 
   // Waits for the file for the given hash to be accessible and then marks it
   // as being in use. Make sure to call UnlockFile when done.
-  void LockFile(MaterialHash hash) ABSL_LOCKS_EXCLUDED(mutex_);
+  void LockFile(const MaterialHash& hash) ABSL_LOCKS_EXCLUDED(mutex_);
 
   // Releases the file for the given hash so that it can be accessed again.
-  void UnlockFile(MaterialHash hash) ABSL_LOCKS_EXCLUDED(mutex_);
+  void UnlockFile(const MaterialHash& hash) ABSL_LOCKS_EXCLUDED(mutex_);
 
   std::unique_ptr<FileUtilities> file_utils_;
   absl::Mutex mutex_;

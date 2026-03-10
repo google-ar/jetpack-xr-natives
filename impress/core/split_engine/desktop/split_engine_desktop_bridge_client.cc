@@ -186,8 +186,14 @@ SplitEngineDesktopBridgeClient::RegisterBuffer(int fd,
                                                size_t buffer_size_bytes) {
   // File descriptor has to be properly transferred between two processes.
   {
-    FileDescriptorMetadata metadata{
-        .bridge_id = bridge_id_, .fd = fd, .size = buffer_size_bytes};
+    FileDescriptorMetadata metadata;
+    // FileDescriptorMetadata may have some padding bytes.
+    // Zeroing them out explicitly to make MSAN happy.
+    memset(&metadata, 0, sizeof(metadata));
+    metadata.bridge_id = bridge_id_;
+    metadata.fd = fd;
+    metadata.size = buffer_size_bytes;
+
     FileDescriptorSender sender(uds_path_);
     MP_RETURN_IF_ERROR(sender.Send(fd, metadata));
   }

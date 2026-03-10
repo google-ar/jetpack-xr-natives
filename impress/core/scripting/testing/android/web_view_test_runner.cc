@@ -14,6 +14,8 @@
 
 #include "core/scripting/testing/web_view_test_runner.h"
 
+#include <jni.h>
+
 #include <memory>
 
 #include "absl/memory/memory.h"
@@ -26,18 +28,17 @@ class TestWebView : public JavaWrapper {
  public:
   explicit TestWebView(const Context& context, WebViewTestRunner* handle)
       : JavaWrapper(context, "com/google/ar/imp/core/web/testing/TestWebView",
-                    "()V") {
-    JniHandle init = GetMethodHandle("init",
-                                     "(Landroid/app/Activity;"
-                                     "J)Landroid/webkit/WebView;");
-    web_view_ = Env()->NewGlobalRef(CallObjectMethod(
-        init, context.GetActivityContext(),
-        (jlong)handle));  // NOLINT define for instrumented testing
+                    "()V"),
+        init_(GetMethodHandle("init",
+                              "(Landroid/app/Activity;"
+                              "J)Landroid/webkit/WebView;")),
+        web_view_(LocalToGlobalRef(CallObjectMethod(
+            init_, context.GetActivityContext(), (jlong)handle))) {
     evaluate_ = GetMethodHandle("evaluateJavaScript", "(Ljava/lang/String;)V");
     run_all_tests_ = GetMethodHandle("runAllTests", "(Ljava/lang/String;)Z");
   }
 
-  jobject GetWebView() { return web_view_; }
+  jobject GetWebView() { return web_view_.get(); }
 
   bool RunAllTests(BufferAccess script) {
     return CallBooleanMethod(run_all_tests_,
@@ -51,12 +52,11 @@ class TestWebView : public JavaWrapper {
   TestWebView(const TestWebView&) = delete;
   TestWebView& operator=(const TestWebView&) = delete;
 
-  ~TestWebView() override { Env()->DeleteGlobalRef(web_view_); }
-
  private:
-  jobject web_view_;
+  JniHandle init_;
   JniHandle evaluate_;
   JniHandle run_all_tests_;
+  JniUniquePtr<jobject> web_view_;
 };
 
 /** Android WebView Test Runner. */

@@ -31,6 +31,8 @@
 #include "core/config.h"
 #include "core/editor/editor.h"
 #include "core/editor/editor_clipboard.h"
+#include "core/editor/editor_info.h"
+#include "core/editor/editor_style.h"
 #include "core/editor/editor_touch.h"
 #include "core/editor/events.h"
 #include "core/editor/layout/editor_control_flags.h"
@@ -110,7 +112,21 @@ Hierarchy::Hierarchy(BaseView& view, absl::string_view filter)
     : view_(view), filter_(std::string(filter).c_str()) {
   Editor& editor = view_.GetRegistry().Get<Editor>()->get();
   editor.GetDispatcher().Connect(
-      [this](const NodeSelectionChangedEvent& event) mutable {
+      [this, &editor](const NodeSelectionChangedEvent& event) mutable {
+        const absl::flat_hash_set<NodeHandle>& selected_nodes =
+            editor.GetSelectedNodes();
+
+        // Go up the tree from each selected node and expand ancestors.
+        for (NodeHandle node : selected_nodes) {
+          NodeHandle parent = node->GetParent();
+
+          while (parent) {
+            manually_expanded_nodes_.insert(parent);
+            manually_collapsed_nodes_.erase(parent);
+            parent = parent->GetParent();
+          }
+        }
+
         selected_nodes_changed_ = true;
       },
       this);
@@ -176,6 +192,9 @@ void Hierarchy::DrawImGui() {
   const absl::flat_hash_set<NodeHandle>& selected_nodes =
       view_.GetRegistry().Get<Editor>()->get().GetSelectedNodes();
   // Draw the Nodes section.
+  ImGui::PushStyleColor(ImGuiCol_Header, kDarkPrimary);
+  ImGui::PushStyleColor(ImGuiCol_HeaderHovered, kDarkLowlight);
+  ImGui::PushStyleColor(ImGuiCol_HeaderActive, kDarkLowlight);
   view_.ForEachNode(
       [this, &selected_nodes](NodeHandle node) {
         std::optional<RobinSet<NodeHandle>> filtered_nodes = std::nullopt;
@@ -186,6 +205,9 @@ void Hierarchy::DrawImGui() {
         DrawHierarchy(node, filtered_nodes, selected_nodes);
       },
       NodeFlags::kIsRoot);
+  ImGui::PopStyleColor();  // ImGuiCol_HeaderActive
+  ImGui::PopStyleColor();  // ImGuiCol_HeaderHovered
+  ImGui::PopStyleColor();  // ImGuiCol_Header
 }
 
 void Hierarchy::DrawHierarchy(
@@ -239,11 +261,13 @@ bool Hierarchy::DrawNode(
                              ImGuiTreeNodeFlags_SpanAvailWidth;
   bool is_node_selected = selected_nodes.contains(node);
 
+  bool should_scroll_to_node = false;
   // Check if the node is currently selected.
   if (is_node_selected) {
     flags |= ImGuiTreeNodeFlags_Selected;
     if (selected_nodes_changed_) {
       ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+      should_scroll_to_node = true;
       selected_nodes_changed_ = false;
     }
   }
@@ -271,6 +295,10 @@ bool Hierarchy::DrawNode(
 
   bool is_expanded =
       ImGui::TreeNodeEx(GetTreeNodeLabelForNode(node).c_str(), flags);
+
+  if (should_scroll_to_node) {
+    ImGui::SetScrollHereY();
+  }
 
   // Update the manually-expanded and manually-collapsed sets accordingly.
   if (filtered_nodes.has_value()) {
@@ -306,7 +334,7 @@ bool Hierarchy::DrawNode(
   if (ImGui::IsMouseReleased(0) &&
       ImGui::IsItemHovered(ImGuiHoveredFlags_None) && is_mouse_beyond_arrow) {
     if (!held_multi_select_keys_.empty()) {
-      editor.SelectNode(node, Editor::SelectionMode::kMultipleNodes);
+      editor.SelectNode(node, EditorInfo::SelectionMode::kMultipleNodes);
     } else {
       if (is_node_selected && selected_nodes.size() == 1) {
         // Deselect the node if the current node is the only selected node.

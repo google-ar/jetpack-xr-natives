@@ -50,6 +50,7 @@
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/render/texture.h"
 #include "core/text/glyph_emulator.h"
+#include "core/text/text_glyphs.h"
 #include "core/view/base_view.h"
 #include "core/view/utils/device.h"
 #include "core/view/view_events.h"
@@ -112,9 +113,10 @@ AsyncScopedCanvas* GlyphAtlas::GetOrStartDrawing(
 GlyphAtlas::GlyphAtlas(BaseView& view, Config config)
     : GlyphAtlas::GlyphAtlas(
           view,
-          AsyncCanvasSourceFactory::Create(view.GetContext(),
-                                           config.use_hardware_rendering,
-                                           config.force_auto_method_rendering),
+          AsyncCanvasSourceFactory::Create(
+              view.GetContext(), config.use_hardware_rendering,
+              config.force_auto_method_rendering,
+              config.force_individual_glyph_source_instances),
           config) {}
 
 GlyphAtlas::GlyphAtlas(BaseView& view,
@@ -160,7 +162,10 @@ GlyphAtlas::GlyphAtlas(BaseView& view,
 #if IMP_RUNTIME(DEV)
   if (auto editor = view.GetRegistry().Get<editor::Editor>(); editor.ok()) {
     editor->get().GetWidgetUiSystem().AddWidget<editor::GlyphAtlasVisualizer>(
-        editor::WidgetLayoutInfo(editor::PanelId::kTabBar, false), view,
+        editor::WidgetLayoutInfo(editor::PanelId::kTabBar,
+                                 editor::WidgetPresence::kOnlyIn2DLargeScreen,
+                                 editor::WidgetVisibility::kHidden),
+        view,
         editor::GlyphAtlasVisualizer::AtlasDataProvider{
             .get_texture_func = [this]() { return GetTexture(); },
             .get_glyph_info_func =
@@ -178,6 +183,11 @@ GlyphAtlas::~GlyphAtlas() {
   absl::MutexLock lock(completion_gate_->mutex);
 
   completion_gate_->complete = true;
+
+  {
+    absl::MutexLock lock(glyph_map_mutex_);
+    glyph_map_.clear();
+  }
 
   {
     absl::MutexLock lock(canvas_mutex_);
@@ -269,6 +279,34 @@ Future<FontInfo> GlyphAtlas::GetFontInfo(const TextOptions& options) {
     return Future<FontInfo>(canvas_options.status());
   }
   return glyph_emulator_.GetFontInfo(*canvas_options, *canvas_source_);
+}
+
+Future<TextGlyphs> GlyphAtlas::GetTextGlyphs(
+    absl::string_view text, const GlyphEmulator::TextOptions& options) {
+  return GetGlyphs(text, options)
+      .Then([](std::vector<GlyphAtlas::Glyph> glyphs) {
+        // The sign bit of the v texture coordinate is used by materials to
+        // detect emoji.
+        constexpr float4 kEmojiScale = float4(1.f, -1.f, 1.f, -1.f);
+        TextGlyphs text_glyphs;
+        text_glyphs.Reserve(glyphs.size());
+        for (const auto& glyph : glyphs) {
+          const RefCounter::Ref& glyph_ref = glyph.glyph_ref;
+          float4 atlas_origin_and_size =
+              float4(glyph.atlas_origin, glyph.atlas_size);
+          float4 actual_origin_and_size =
+              float4(glyph.actual_origin, glyph.actual_size);
+          float4 uv_origin_and_size = float4(glyph.uv_top_left, glyph.uv_size);
+          float advance_width = glyph.advance_width;
+
+          if (glyph.is_emoji) uv_origin_and_size *= kEmojiScale;
+
+          text_glyphs.PushBack(glyph_ref, atlas_origin_and_size,
+                               actual_origin_and_size, uv_origin_and_size,
+                               advance_width);
+        }
+        return text_glyphs;
+      });
 }
 
 Future<std::vector<GlyphAtlas::Glyph>> GlyphAtlas::GetGlyphs(

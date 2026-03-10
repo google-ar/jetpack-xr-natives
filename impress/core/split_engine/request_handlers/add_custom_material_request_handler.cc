@@ -18,8 +18,10 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <utility>
 
+#include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -29,6 +31,7 @@
 #include "filament/filament/include/filament/Material.h"
 #include "flatbuffers/detached_buffer.h"
 #include "core/assets/material/material_load_options.proto.imp.h"
+#include "core/async/executor.h"
 #include "core/async/future.h"
 #include "core/common/trace.h"
 #include "core/config.h"
@@ -38,6 +41,7 @@
 #include "core/split_engine/request_handlers/request_handler_registry.h"
 #include "core/split_engine/split_engine_filament_resource_ptrs.h"
 #include "core/split_engine/split_engine_renderer_context.h"
+#include "core/split_engine/split_engine_shared_context.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
@@ -85,18 +89,28 @@ Future<flatbuffers::DetachedBuffer> AddCustomMaterialHandler::HandleRequest(
       });
 }
 
-Future<std::reference_wrapper<RuntimeMaterialCompiler>>
+Future<RuntimeMaterialCompiler*>
 AddCustomMaterialHandler::GetOrCreateMaterialCompiler(BaseView& view) {
-  if (material_compiler_ == nullptr) {
-    return RuntimeMaterialCompilerCreator::Create(view).Then(
-        [this](std::unique_ptr<RuntimeMaterialCompiler> compiler) {
-          material_compiler_ = std::move(compiler);
-          material_compiler_future_.Return(*material_compiler_);
-          return material_compiler_future_;
-        });
-  } else {
-    return material_compiler_future_;
+  
+
+  // If we are not yet waiting for a compiler to be created, then create one.
+  if (!material_compiler_future_.has_value()) {
+    material_compiler_future_ =
+        RuntimeMaterialCompilerCreator::Create(view).Then(
+            [this](absl::StatusOr<std::unique_ptr<RuntimeMaterialCompiler>>
+                       compiler) -> absl::StatusOr<RuntimeMaterialCompiler*> {
+              if (!compiler.ok()) {
+                // In a failure case, reset the future to indicate that we are
+                // no longer waiting for the compiler to be created.
+                material_compiler_future_ = std::nullopt;
+                return compiler.status();
+              }
+              material_compiler_ = *std::move(compiler);
+              return material_compiler_.get();
+            });
   }
+
+  return material_compiler_future_.value();
 }
 
 Future<OwnedFilamentMaterialPtr>
@@ -124,7 +138,7 @@ AddCustomMaterialHandler::CreateFilamentMaterial(
 #endif
 
   return GetOrCreateMaterialCompiler(view).Then(
-      [&spec, platform, target_api](RuntimeMaterialCompiler& compiler)
+      [&spec, platform, target_api](RuntimeMaterialCompiler* compiler)
           -> Future<OwnedFilamentMaterialPtr> {
         MaterialPreCompileOptions precompile_options;
         if (spec.precompile_options()) {
@@ -132,8 +146,8 @@ AddCustomMaterialHandler::CreateFilamentMaterial(
         }
         absl::Time start = absl::Now();
         return compiler
-            .CompileMaterial(spec.source()->string_view(), platform, target_api,
-                             precompile_options)
+            ->CompileMaterial(spec.source()->string_view(), platform,
+                              target_api, precompile_options)
             .Then([start](filament::Material* material) {
               absl::Duration duration = absl::Now() - start;
               IMP_LOG(imp::INFO) << "Compiled material '" << material->getName()

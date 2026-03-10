@@ -1089,10 +1089,16 @@ UTILS_NOINLINE
 
 /* static */ std::string_view process_countBits(OpenGLContext& context) noexcept {
     using namespace std::literals;
-    if (context.isAtLeastGL<4, 0>() || context.isAtLeastGLES<3, 1>()
-        || context.isES2()) {
+    // bitCount is available in GL 4.0 and GLES 3.1.
+    if (context.isAtLeastGL<4, 0>() || context.isAtLeastGLES<3, 1>()) {
         return ""sv;
     }
+
+    // GLES 2.0 does not support bitwise operations or unsigned integers.
+    if (context.isES2()) {
+        return ""sv;
+    }
+
     return R"(
 // (broken link)
 int bitCount(highp uint value) {

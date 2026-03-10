@@ -76,6 +76,7 @@ cc_library(
 cc_library(
     name = "default_panels",
     srcs = [
+        "callstack_panel.cc",
         "flame_graph.cc",
         "frame_time_panel.cc",
         "hierarchy_panel.cc",
@@ -85,6 +86,7 @@ cc_library(
         "sample_processor.cc",
     ],
     hdrs = [
+        "callstack_panel.h",
         "flame_graph.h",
         "flame_graph_colors.h",
         "frame_time_panel.h",
@@ -101,6 +103,7 @@ cc_library(
         ":panel",
         "//core/common:trace",
         "//core/ncsb",
+        "//core/performance:memory_stats",
         "//core/performance:profiler",
         "//core/sprite",
         "//core/view:base_view",
@@ -109,7 +112,10 @@ cc_library(
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/debugging:symbolize",
         "@com_google_absl//absl/hash",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",

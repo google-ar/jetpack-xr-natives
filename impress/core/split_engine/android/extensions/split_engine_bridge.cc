@@ -24,6 +24,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "absl/log/check.h"
@@ -64,8 +65,9 @@ JniUniquePtr<jbyteArray> ToByteArray(JNIEnv* env,
 
 class SplitEngineBufferHandle : public BufferHandle {
  public:
-  explicit SplitEngineBufferHandle(JNIEnv* env, jobject buffer_handle)
-      : handle_(WrapJni(env, env->NewGlobalRef((buffer_handle)))) {}
+  explicit SplitEngineBufferHandle(JNIEnv* env,
+                                   JniUniquePtr<jobject> buffer_handle)
+      : handle_(LocalToGlobalRef(std::move(buffer_handle))) {}
 
   JniUniquePtr<jobject> handle_;
 };
@@ -86,14 +88,17 @@ std::optional<std::string> FatalIfUnspecifiedExceptionOccurred(
     jmethodID getMessage =
         env.GetMethodID(clazz, "getMessage", "()Ljava/lang/String;");
     jstring message = (jstring)env.CallObjectMethod(e, getMessage);
+    std::string exception_message = GetString(&env, message);
+    env.DeleteLocalRef(message);
+
     if (allowed_exception_class.has_value()) {
       jclass exception_class = env.FindClass(allowed_exception_class->c_str());
       if (env.IsInstanceOf(e, exception_class)) {
-        return env.GetStringUTFChars(message, nullptr);
+        return exception_message;
       }
     }
     IMP_LOG(imp::FATAL) << "SplitEngineBridge operation failed, System exception: "
-               << env.GetStringUTFChars(message, NULL);
+               << exception_message;
   }
   return std::nullopt;
 }
@@ -108,11 +113,12 @@ absl::StatusOr<std::unique_ptr<BufferHandle>> SplitEngineBridge::RegisterBuffer(
 
   // TODO: Refactor aidl to take a int64 instead of int32 for
   // this method.
-  jobject buffer_handle =
-      JavaWrapper::CallObjectMethod(register_buffer_, static_cast<jint>(fd),
-                                    static_cast<jint>(buffer_size_bytes));
+  JniUniquePtr<jobject> buffer_handle =
+      CallObjectMethod(register_buffer_, static_cast<jint>(fd),
+                       static_cast<jint>(buffer_size_bytes));
   FatalIfUnspecifiedExceptionOccurred(*Env());
-  return std::make_unique<SplitEngineBufferHandle>(Env(), buffer_handle);
+  return std::make_unique<SplitEngineBufferHandle>(Env(),
+                                                   std::move(buffer_handle));
 }
 
 absl::Status SplitEngineBridge::ProcessRegion(const BufferHandle& buffer_handle,
@@ -154,11 +160,13 @@ absl::Status SplitEngineBridge::ProcessRegion(const BufferHandle& buffer_handle,
 
 absl::StatusOr<jobject> SplitEngineBridge::CreateExternalTextureSurface(
     const std::vector<TextureId>& in_texture_ids) {
-  jobject surface =
-      JavaWrapper::CallObjectMethod(create_external_texture_surface_,
-                                    ToLongArray(Env(), in_texture_ids).get());
+  JniUniquePtr<jobject> surface =
+      CallObjectMethod(create_external_texture_surface_,
+                       ToLongArray(Env(), in_texture_ids).get());
   FatalIfUnspecifiedExceptionOccurred(*Env());
-  return surface;
+  // TODO: Fix the ownership of the surface object by returning it
+  // as a JniUniquePtr instead.
+  return surface.release();
 }
 
 absl::Status SplitEngineBridge::SetExternalTextureSurfaceSize(

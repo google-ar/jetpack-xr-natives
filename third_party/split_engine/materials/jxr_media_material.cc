@@ -254,8 +254,9 @@ imp::Future<std::unique_ptr<JxrMediaMaterial>> JxrMediaMaterial::Create(
       imp::split_engine::Pack(use_super_sampling);
   builder_.add_use_super_sampling(&use_super_sampling_packed);
 
-  if (view.GetSplitEngineSerializer()->GetApiLevel() ==
-      android_xr::kSplitEngineExperimentalApiLevel) {
+  int api_level = view.GetSplitEngineSerializer()->GetApiLevel();
+
+  if (api_level == android_xr::kSplitEngineExperimentalApiLevel) {
     // We're accessing unreleased features.
     builder_.add_render_eye_target(
         static_cast<
@@ -266,10 +267,11 @@ imp::Future<std::unique_ptr<JxrMediaMaterial>> JxrMediaMaterial::Create(
             blending_mode));
   } else {
     if (render_eye_target != imp::RenderEyeTarget::kBoth) {
-      IMP_LOG(imp::ERROR) << "RenderEyeTarget is not supported on this API level.";
+      IMP_LOG(imp::ERROR) << "RenderEyeTarget is not supported on API level "
+                 << api_level;
     }
     if (blending_mode != imp::MediaBlendingMode::kTransparent) {
-      IMP_LOG(imp::ERROR) << "BlendingMode is not supported on this API level.";
+      IMP_LOG(imp::ERROR) << "BlendingMode is not supported on API level " << api_level;
     }
   }
   auto spec_offset = builder_.Finish();
@@ -285,20 +287,6 @@ imp::Future<std::unique_ptr<JxrMediaMaterial>> JxrMediaMaterial::Create(
           });
 }
 
-void JxrMediaMaterial::ApplyParametersTo(JxrMediaMaterial& other) const {
-  // LINT.IfChange(parameters)
-  other.primary_texture_ = primary_texture_.Borrow();
-  other.auxiliary_texture_ = auxiliary_texture_.Borrow();
-  other.primary_alpha_mask_ = primary_alpha_mask_.Borrow();
-  other.auxiliary_alpha_mask_ = auxiliary_alpha_mask_.Borrow();
-  other.stereo_type_ = stereo_type_;
-  other.color_space_ = color_space_;
-  other.feather_radius_ = feather_radius_;
-  other.corner_radius_ = corner_radius_;
-  other.MarkParametersDirty();
-  // LINT.ThenChange(jxr_media_material.h:parameters)
-}
-
 JxrMediaMaterial::JxrMediaMaterial(
     imp::BaseView& view,
     imp::split_engine::PlaceholderOrBuiltInMaterialPtr material)
@@ -306,7 +294,9 @@ JxrMediaMaterial::JxrMediaMaterial(
           view,
           android_xr::schemas::BuiltInMaterialParameters::
               BuiltInMaterial1b616c8aParameters,
-          std::move(material)) {}
+          std::move(material)) {
+  spatial_api_level_ = view.GetSplitEngineSerializer()->GetApiLevel();
+}
 
 JxrMediaMaterial::~JxrMediaMaterial() { Cleanup(); }
 
@@ -361,7 +351,9 @@ flatbuffers::Offset<void> JxrMediaMaterial::SerializeParameters(
              primary_alpha_mask, auxiliary_alpha_mask,
              imp::split_engine::PointerFromOptional(feather_radius_),
              media_color_space_parameters,
-             imp::split_engine::PointerFromOptional(corner_radius_))
+             imp::split_engine::PointerFromOptional(corner_radius_),
+             imp::split_engine::PointerFromOptional(sub_view_rect_left_),
+             imp::split_engine::PointerFromOptional(sub_view_rect_right_))
       .Union();
 }
 
@@ -408,8 +400,34 @@ void JxrMediaMaterial::SetFeatherRadius(imp::float2 feather_radius) {
 }
 
 void JxrMediaMaterial::SetCornerRadius(imp::float2 corner_radius) {
-  corner_radius_ = imp::split_engine::Pack(corner_radius);
-  MarkParametersDirty();
+  // TODO: (broken link) - Update these checks when the API is released.
+  if (spatial_api_level_ == android_xr::kSplitEngineExperimentalApiLevel) {
+    // We can't send these fields to older API levels
+    corner_radius_ = imp::split_engine::Pack(corner_radius);
+    MarkParametersDirty();
+  } else if (corner_radius.x != 0 || corner_radius.y != 0) {
+    IMP_LOG(imp::ERROR) << "SetCornerRadius: Non-Zero Corner radius is unsupported on "
+                  "API level "
+               << spatial_api_level_;
+  }
+}
+
+void JxrMediaMaterial::SetSubViewConfig(imp::float4 sub_view_rect_left,
+                                        imp::float4 sub_view_rect_right) {
+  constexpr imp::float4 kMonoViewRect = {0.0f, 0.0f, 1.0f, 1.0f};
+  // TODO: (broken link) - Update these checks when the API is released.
+  if (spatial_api_level_ == android_xr::kSplitEngineExperimentalApiLevel) {
+    sub_view_rect_left_ = imp::split_engine::Pack(sub_view_rect_left);
+    sub_view_rect_right_ = imp::split_engine::Pack(sub_view_rect_right);
+    MarkParametersDirty();
+  } else if (sub_view_rect_left != kMonoViewRect ||
+             sub_view_rect_right != kMonoViewRect) {
+    // Older system images should still render correctly because they are
+    // running instances of the material which process stereo_mode directly.
+    IMP_LOG(imp::ERROR) << "SetSubViewConfig: Non-Default sub view rect is unsupported "
+                  "on API level "
+               << spatial_api_level_;
+  }
 }
 
 void JxrMediaMaterial::SetContentColorMetadata(

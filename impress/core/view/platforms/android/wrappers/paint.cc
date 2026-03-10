@@ -17,6 +17,7 @@
 #include <jni.h>
 
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "absl/strings/string_view.h"
@@ -95,7 +96,7 @@ void Paint::SetStyle(Style style) {
     return;
   }
   StyleWrapper style_wrapper(Env());
-  CallVoidMethod(set_style_, style_wrapper.GetEnum(style));
+  CallVoidMethod(set_style_, style_wrapper.GetEnum(style).get());
   last_style_ = style;
 }
 
@@ -104,7 +105,7 @@ void Paint::SetTextAlign(Align align) {
     return;
   }
   AlignWrapper align_wrapper(Env());
-  CallVoidMethod(set_text_align_, align_wrapper.GetEnum(align));
+  CallVoidMethod(set_text_align_, align_wrapper.GetEnum(align).get());
   last_align_ = align;
 }
 
@@ -179,8 +180,10 @@ std::unique_ptr<Paint::FontMetrics> Paint::GetFontMetrics() {
       Env(), CallObjectMethod(get_font_metrics_));
 }
 
-Paint::FontMetrics::FontMetrics(JNIEnv* env, jobject j_font_metrics)
-    : JavaWrapper(env, j_font_metrics) {
+Paint::FontMetrics::FontMetrics(JNIEnv* env,
+                                JniUniquePtr<jobject> j_font_metrics)
+    : JavaWrapper(env, std::move(j_font_metrics),
+                  "android/graphics/Paint$FontMetrics") {
   leading_ = GetFieldHandle("leading", "F");
 }
 

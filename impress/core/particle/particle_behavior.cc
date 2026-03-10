@@ -16,26 +16,34 @@
 
 #include "core/particle/particle_behavior.h"
 
+#include <memory>
+#include <utility>
+
 #include "core/math/mat.h"
 #include "core/math/quat.h"
 #include "core/math/transform.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
+#include "core/particle/custom_particle_behavior.h"
+#include "core/particle/particle_behavior_result.h"
 #include "core/particle/particle_emitter_info.h"
 #include "core/particle/particle_emitter_state.proto.imp.h"
 #include "core/particle/particle_instance.h"
 
 namespace imp {
 
-ParticleBehavior::ParticleBehavior(NodeHandle emitter_node,
-                                   const ParticleConfig& particle_config)
+ParticleBehavior::ParticleBehavior(
+    NodeHandle emitter_node, const ParticleConfig& particle_config,
+    std::unique_ptr<CustomParticleBehavior> custom_particle_behavior)
     : emitter_node_(emitter_node),
+      custom_particle_behavior_(std::move(custom_particle_behavior)),
       default_lifetime_seconds_(
           particle_config.lifetime_in_seconds.value_or(0.0f)),
       default_velocity_(particle_config.velocity.value_or(kZero3)),
       default_acceleration_(particle_config.acceleration.value_or(kZero3)),
-      default_scale_(particle_config.scale.value_or(kOne3)) {}
+      default_scale_(particle_config.scale.value_or(kOne3)),
+      default_rotation_(particle_config.rotation.value_or(kIdentityQuatf)) {}
 
 void ParticleBehavior::SetDefaultValues(ParticleInstance& particle_instance) {
   // Default position of a particle is the emitter node position.
@@ -58,15 +66,25 @@ void ParticleBehavior::SetDefaultValues(ParticleInstance& particle_instance) {
   if (particle_instance.HasScale()) {
     particle_instance.SetScale(default_scale_);
   }
+
+  if (particle_instance.HasRotation()) {
+    particle_instance.SetRotation(default_rotation_);
+  }
+
+  // If a custom callback was provided, call it now.
+  if (custom_particle_behavior_) {
+    custom_particle_behavior_->OnInitialized(particle_instance);
+  }
 }
 
-ParticleBehavior::UpdateResult ParticleBehavior::UpdateParticle(
+ParticleBehaviorResult ParticleBehavior::UpdateParticle(
     const imp_particle::ParticleEmitterInfo& emitter_info, float delta_seconds,
     ParticleInstance& particle_instance) {
   // Lifetime is the most common reason a particle will expire, check it first.
   if (particle_instance.HasRemainingLifetimeSeconds()) {
-    UpdateResult result = UpdateLifetime(delta_seconds, particle_instance);
-    if (result != ParticleBehavior::UpdateResult::kActive) {
+    ParticleBehaviorResult result =
+        UpdateLifetime(delta_seconds, particle_instance);
+    if (result != ParticleBehaviorResult::kActive) {
       return result;
     }
   }
@@ -84,10 +102,19 @@ ParticleBehavior::UpdateResult ParticleBehavior::UpdateParticle(
 
   // TODO: (broken link) - Support alpha behavior.
 
-  return UpdateResult::kActive;
+  // If a custom callback was provided, call it now.
+  if (custom_particle_behavior_) {
+    ParticleBehaviorResult result =
+        custom_particle_behavior_->OnUpdate(particle_instance, delta_seconds);
+    if (result != ParticleBehaviorResult::kActive) {
+      return result;
+    }
+  }
+
+  return ParticleBehaviorResult::kActive;
 }
 
-ParticleBehavior::UpdateResult ParticleBehavior::UpdateLifetime(
+ParticleBehaviorResult ParticleBehavior::UpdateLifetime(
     float delta_seconds, ParticleInstance& particle_instance) {
   // Update the particle's remaining lifetime.
   float seconds = particle_instance.GetRemainingLifetimeSeconds();
@@ -97,10 +124,10 @@ ParticleBehavior::UpdateResult ParticleBehavior::UpdateLifetime(
   // If the lifetime has run out, notify the caller that this particle may now
   // be destroyed.
   if (seconds <= 0.0f) {
-    return ParticleBehavior::UpdateResult::kExpired;
+    return ParticleBehaviorResult::kExpired;
   }
 
-  return ParticleBehavior::UpdateResult::kActive;
+  return ParticleBehaviorResult::kActive;
 }
 
 void ParticleBehavior::UpdateMovement(float delta_seconds,

@@ -163,6 +163,8 @@ void MeshRenderer::BuildRenderables(const SetupOptions& options) {
       break;
   }
 
+  culling_mode_ = culling_mode;
+
   if (num_instances > 1) {
     num_instances_ = num_instances;
     switch (instancing_mode) {
@@ -422,6 +424,12 @@ void MeshRenderer::SetBlendOrder(uint16_t blend_order, BlendOrderMode mode,
   GetRenderableManager().SetBlendOrderAt(instance, primitive, blend_order);
   GetRenderableManager().SetGlobalBlendOrderEnabledAt(
       instance, primitive, mode == BlendOrderMode::kLocal ? false : true);
+}
+
+// TODO: Use filament::RenderableManager::getCulling() here when
+// feature added.
+MeshRenderer::FrustumCullingMode MeshRenderer::GetFrustumCullingMode() const {
+  return culling_mode_;
 }
 
 BaseRenderableManager& MeshRenderer::GetRenderableManager() const {

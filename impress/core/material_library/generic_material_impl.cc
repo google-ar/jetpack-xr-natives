@@ -712,8 +712,8 @@ absl::Status GenericMaterialImpl::ApplyMaterialTextureParameter(
 
   // Verify sampler is valid.
   if (IsValidSampler(sampler_name)) {
-    const BorrowedTexturePtr texture =
-        texture_borrower(texture_parameter.texture_id);
+    const BorrowedTexturePtr texture = texture_borrower(
+        texture_parameter.texture_id, SmallSourceLocation::Current());
     if (!texture) {
       return absl::NotFoundError(absl::StrFormat("Texture not found: %d",
                                                  texture_parameter.texture_id));
@@ -1064,8 +1064,8 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
     int feature_id_index = 0;
     for (const GenericMaterialTextureParameter& feature_id_texture :
          *generic_material_parameters.feature_id_textures) {
-      const BorrowedTexturePtr texture =
-          texture_borrower(feature_id_texture.texture_id);
+      const BorrowedTexturePtr texture = texture_borrower(
+          feature_id_texture.texture_id, SmallSourceLocation::Current());
       if (!texture) {
         return absl::NotFoundError(absl::StrFormat(
             "feature_id_texture not found: %d", feature_id_texture.texture_id));

@@ -39,3 +39,4 @@
 # Prevents the Android Gradle Plugin from issuing a missing class warning.
 -dontwarn com.google.ar.imp.core.scripting.ScriptEndpoint
 -dontwarn com.google.ar.imp.core.web.FragmentHost
+-dontwarn com.google.android.apps.common.proguard.UsedByNative

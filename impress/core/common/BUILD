@@ -695,8 +695,8 @@ cc_library(
     copts = imp_copts(),
     linkstatic = 1,
     deps = [
+        "@com_google_absl//absl/numeric:bits",
         "@com_google_absl//absl/types:span",
-        "@third_party//filament/libs:utils_hdrs",
     ],
     alwayslink = 1,
 )
@@ -942,6 +942,21 @@ cc_library(
     deps = [
         "@com_google_absl//absl/status",
         "@third_party//filament/libs:utils_hdrs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "pool_allocator",
+    hdrs = ["pool_allocator.h"],
+    copts = imp_copts(),
+    linkstatic = True,
+    deps = [
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/hash",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/numeric:bits",
     ],
     alwayslink = 1,
 )

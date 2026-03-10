@@ -221,7 +221,7 @@ backend_metal_srcs = backend_srcs + [
     "src/metal/PlatformMetal.mm",
 ]
 
-backend_vulkan_srcs = backend_srcs + [
+backend_vulkan_only_srcs = [
     "src/vulkan/memory/Resource.cpp",
     "src/vulkan/memory/Resource.h",
     "src/vulkan/memory/ResourceManager.cpp",
@@ -292,7 +292,15 @@ backend_vulkan_srcs = backend_srcs + [
     "src/vulkan/utils/Spirv.h",
     "src/vulkan/utils/Spirv.cpp",
     "src/vulkan/utils/StaticVector.h",
-]
+] + if_android(
+    ["src/vulkan/platform/VulkanPlatformAndroid.cpp"],
+) + if_linux(
+    ["src/vulkan/platform/VulkanPlatformLinux.cpp"],
+) + if_windows(
+    ["src/vulkan/platform/VulkanPlatformWindows.cpp"],
+)
+
+backend_vulkan_srcs = backend_srcs + backend_vulkan_only_srcs
 
 backend_opengl_objc_srcs = backend_opengl_srcs + if_ios(
     [
@@ -445,6 +453,19 @@ backend_opengl_defines = backend_defines + [
     "FILAMENT_SUPPORTS_OPENGL=1",
 ]
 
+backend_vulkan_defines = [
+    "FILAMENT_DRIVER_SUPPORTS_VULKAN",
+    # Needed, otherwise Filament sets this to 1, which is incompatible with Google3
+    "VMA_DYNAMIC_VULKAN_FUNCTIONS=0",
+]
+
+backend_vulkan_deps = [
+    ":backend_vk_hdrs",
+    "@smol_v//:smol-v",
+    "@spirv_headers//:spirv_cpp_headers",
+    "@vulkan_memory_allocator",
+]
+
 backend_deps = [
     ":backend_hdrs",
     ":backend_utils",
@@ -494,6 +515,20 @@ cc_library(
             "@third_party//filament/libs:bluegl",
         ],
     ),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "backend_gl_vulkan",
+    srcs = backend_opengl_srcs + backend_vulkan_only_srcs,
+    copts = filament_copts(),
+    defines = backend_opengl_defines + backend_vulkan_defines,
+    includes = ["src"],
+    linkstatic = True,
+    textual_hdrs = backend_opengl_textual_hdrs,
+    deps = backend_opengl_deps + backend_vulkan_deps + [
+        "@third_party//filament/libs:bluevk",
+    ],
     alwayslink = 1,
 )
 
@@ -556,6 +591,33 @@ egl_backend_deps = [
 ]
 
 cc_library(
+    name = "backend_opengl_egl_headless",
+    srcs = backend_opengl_srcs + [
+        "src/opengl/platforms/PlatformEGL.cpp",
+        "src/opengl/platforms/PlatformEGLHeadless.cpp",
+    ],
+    hdrs = [
+        "include/backend/platforms/PlatformEGL.h",
+        "include/backend/platforms/PlatformEGLHeadless.h",
+    ],
+    copts = filament_copts(),
+    defines = backend_opengl_defines + [
+        "FILAMENT_SUPPORTS_EGL_ON_LINUX=1",
+    ],
+    includes = ["src"],
+    linkstatic = True,
+    textual_hdrs = backend_opengl_textual_hdrs,
+    deps = egl_backend_deps + [
+        "@third_party//filament/libs:bluegl_hdrs",
+        "@third_party//filament/libs:bluegl_linux_egl",
+        "@third_party//gl",
+        "@third_party//gl/native:EGL",
+        "@third_party//gl/native:GL",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "backend_opengl_egl_headless_fl0",
     srcs = backend_opengl_srcs + [
         "src/opengl/platforms/PlatformEGL.cpp",
@@ -588,30 +650,15 @@ cc_library(
 [
     cc_library(
         name = "%s" % lib_name,
-        srcs = backend_vulkan_srcs + if_android(
-            ["src/vulkan/platform/VulkanPlatformAndroid.cpp"],
-        ) + if_linux(
-            ["src/vulkan/platform/VulkanPlatformLinux.cpp"],
-        ) + if_windows(
-            ["src/vulkan/platform/VulkanPlatformWindows.cpp"],
-        ),
+        srcs = backend_vulkan_srcs,
         copts = filament_copts(),
-        defines = backend_defines + [
-            "FILAMENT_DRIVER_SUPPORTS_VULKAN",
-            # Needed, otherwise Filament sets this to 1, which is incompatible with Google3
-            "VMA_DYNAMIC_VULKAN_FUNCTIONS=0",
-        ] + extra_defines,
+        defines = backend_defines + backend_vulkan_defines + extra_defines,
         includes = [
             "src",
         ],
         linkstatic = True,
         textual_hdrs = backend_textual_hdrs,
-        deps = deps + backend_deps + [
-            ":backend_vk_hdrs",
-            "@smol_v//:smol-v",
-            "@spirv_headers//:spirv_cpp_headers",
-            "@vulkan_memory_allocator",
-        ],
+        deps = deps + backend_deps + backend_vulkan_deps,
         alwayslink = 1,
     )
     for lib_name, extra_defines, deps in [

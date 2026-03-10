@@ -33,6 +33,7 @@
 #include "absl/base/nullability.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/include/filament/Material.h"
 #include "filament/filament/include/filament/MorphTargetBuffer.h"
@@ -222,6 +223,8 @@ class SplitEngineSerializerImpl
   void SetParent(utils::Entity entity, utils::Entity parent) override;
   void SetLocalTransform(utils::Entity entity, const mat4f& transform) override;
   void SetLocalTransform(utils::Entity entity, const mat4& transform) override;
+  void SetGroups(utils::Entity entity,
+                 absl::Span<const absl::string_view> groups) override;
   void AssignUserId(utils::Entity entity, uint32_t user_id) override;
   std::unique_ptr<BaseTextureBuilder> CreateTextureBuilder() override;
   std::unique_ptr<BaseMeshBuilder> CreateMeshBuilder() override;
@@ -257,7 +260,7 @@ class SplitEngineSerializerImpl
       SerializeBuiltInMaterialParametersFunc serialize_func) override;
   void SerializeImageBasedLightingAsset(
       filament::Texture& reflection_texture,
-      SphericalHarmonics spherical_harmonics,
+      std::unique_ptr<SphericalHarmonics> /*absl_nullable*/  spherical_harmonics,
       ImageBasedLightingAssetCubemapImages cubemap_images) override;
   void RemoveImageBasedLightingAsset(
       filament::Texture& reflection_texture) override;
@@ -280,7 +283,7 @@ class SplitEngineSerializerImpl
 
  private:
   size_t EstimateImageBasedLightingAssetBufferSize(
-      const SphericalHarmonics& spherical_harmonics,
+      const SphericalHarmonics* /*absl_nullable*/  spherical_harmonics,
       const ImageBasedLightingAssetCubemapImages& cubemap_images);
   void SerializeMeshIndicesAndVertices(
       const SplitEngineMeshSerializer& split_engine_mesh_serializer);
@@ -339,6 +342,7 @@ class SplitEngineSerializerImpl
     std::optional<android_xr::schemas::Bool> enabled;
     std::optional<std::variant<mat4f, mat4>> transform;
     std::optional<utils::Entity> parent;
+    std::optional<std::vector<std::string>> groups;
   };
 
   struct MorphTargetInfo {

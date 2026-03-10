@@ -16,8 +16,6 @@
 
 #include <cstddef>
 
-#include "core/common/log.h"
-#include "core/common/platform_helpers.h"
 #include "core/model/mesh/mesh_description.h"
 #include "core/model/mesh/mesh_index_data.h"
 
@@ -30,17 +28,16 @@ MeshData::MeshData(const MeshDescription& description)
 
 const MeshDescription& MeshData::GetDescription() const { return description_; }
 
-MeshData::BufferDescriptor MeshData::CopyVertexData() const {
-  return vertex_data_.CopyVertexData();
+MeshData::BufferDescriptor MeshData::CopyVertexData(size_t group_idx) const {
+  return vertex_data_.CopyVertexData(group_idx);
 }
 
 MeshData::BufferDescriptor MeshData::CopyIndexData() const {
   return index_data_.CopyIndexData();
 }
 
-MeshData::BufferDescriptor MeshData::MoveVertexData() {
-  description_.vertex_count = 0;
-  return vertex_data_.MoveVertexData();
+MeshData::BufferDescriptor MeshData::MoveVertexData(size_t group_idx) {
+  return vertex_data_.MoveVertexData(group_idx);
 }
 
 MeshData::BufferDescriptor MeshData::MoveIndexData() {

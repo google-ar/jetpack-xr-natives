@@ -19,14 +19,13 @@
 
 #include <stdbool.h>
 
+#include <array>
+#include <bitset>
 #include <memory>
 #include <optional>
 
 #include "absl/status/status.h"
 #include "absl/time/time.h"
-#include "extensions/sceneviewerxr/ux/interaction_mode.h"
-#include "extensions/sceneviewerxr/ux/ramp.h"
-#include "extensions/sceneviewerxr/ux/state_machine.h"
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
 #include "core/math/math.h"
@@ -36,13 +35,18 @@
 #include "core/view/framework/assets/gltf_asset.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/utils/frame_time.h"
+#include "extensions/sceneviewerxr/ux/interaction_mode.h"
+#include "extensions/sceneviewerxr/ux/ramp.h"
+#include "extensions/sceneviewerxr/ux/state_machine.h"
 #include "split_engine/materials/svxr_footprint_material.h"
 
 namespace svxr {
 
 struct FootprintInteractionStates {
   // Initial state.
-  struct Initialized {};
+  struct Initialized {
+    bool is_intialize_complete = false;
+  };
 
   // State for a completely invisible footprint.
   struct Hidden {
@@ -68,6 +72,7 @@ struct FootprintInteractionStates {
     Ramp<imp::float4> fill_cutoff_color;
     bool is_footprint_primary_receiver = false;
     bool is_footprint_secondary_receiver = false;
+    std::bitset<4> scale_handles_visibility;
   };
 
   // State machine type for footprint.
@@ -89,7 +94,8 @@ class Footprint : public imp::Component,
   absl::Status Setup(
       imp::AssetPtr<imp::GltfAsset> footprint_asset,
       std::unique_ptr<android_xr::SVXRFootprintMaterial> edge_material,
-      std::unique_ptr<android_xr::SVXRFootprintMaterial> fill_material);
+      std::unique_ptr<android_xr::SVXRFootprintMaterial> fill_material,
+      imp::AssetPtr<imp::GltfAsset> scale_handle_asset);
   // Cleans up a footprint component.
   void Cleanup();
 
@@ -110,7 +116,7 @@ class Footprint : public imp::Component,
 
   imp::float2 GetFootprintSize();
 
-  void SetColliderEnabled(bool is_enabled);
+  virtual void SetColliderEnabled(bool is_enabled);
 
   enum class SnapMode {
     kNone,
@@ -126,6 +132,9 @@ class Footprint : public imp::Component,
   // Returns true if the footprint is snapped or is in the process of snapping
   // or lifting off a plane.
   bool IsSnappedOrSnapping() const;
+
+  bool IsScaleHandle(imp::NodeHandle node) const;
+  bool IsCloseToScaleHandle(const imp::float3& world_hit_pos) const;
 
  private:
   // Observer method.
@@ -161,8 +170,13 @@ class Footprint : public imp::Component,
   // Holds a snapshot of the model's bounds. This helps us keep the
   // footprint's scaling relatively the same.
   imp::Box initial_model_bounds_;
+  imp::float3 model_space_inner_half_extents_;
 
   SnapMode snap_mode_ = SnapMode::kNone;
+
+  // The nodes containing the scale handles.
+  std::array<imp::NodeHandle, 4> scale_handles_;
+  std::array<imp::NodeHandle, 4> scale_handle_visuals_;
 };
 
 }  // namespace svxr

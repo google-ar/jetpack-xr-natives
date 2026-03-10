@@ -50,39 +50,46 @@ ToTextureParameter(flatbuffers::FlatBufferBuilder& fbb,
 }  // namespace
 
 imp::Future<std::unique_ptr<GsplatMaterialSerializer>>
-GsplatMaterialSerializer::Create(imp::NodeHandle gsplat_node,
-                                 imp::AssetPtr<imp::GSplatAsset> gsplat_asset,
-                                 android_xr::schemas::GsplatMode material_mode,
-                                 bool use_triangles_for_splats) {
+GsplatMaterialSerializer::Create(
+    imp::NodeHandle gsplat_node, imp::AssetPtr<imp::GSplatAsset> gsplat_asset,
+    android_xr::schemas::GsplatMode material_mode,
+    bool use_triangles_for_splats,
+    imp::BorrowedTexturePtr precomputed_data_texture) {
   imp::BaseView& view = gsplat_node->GetView();
   uint32_t gsplat_renderer_entity_id = gsplat_node.GetEntity().getId();
   auto fbb = std::make_unique<flatbuffers::FlatBufferBuilder>();
   auto use_triangles_bool = android_xr::schemas::Bool(use_triangles_for_splats);
+  auto has_precomputed_texture_bool =
+      android_xr::schemas::Bool(precomputed_data_texture != nullptr);
   flatbuffers::Offset<schemas::BuiltInMaterialGsplatSpec> spec_offset =
       schemas::CreateBuiltInMaterialGsplatSpec(
-          *fbb, material_mode, gsplat_renderer_entity_id, &use_triangles_bool);
+          *fbb, material_mode, gsplat_renderer_entity_id, &use_triangles_bool,
+          &has_precomputed_texture_bool);
   return RequestBuiltInMaterial(
              view, std::move(fbb),
              schemas::BuiltInMaterialSpec::BuiltInMaterialGsplatSpec,
              spec_offset.Union())
-      .Then([&view, gsplat_asset](
-                imp::split_engine::PlaceholderOrBuiltInMaterialPtr material) {
+      .Then([&view, gsplat_asset, precomputed_data_texture](
+                imp::split_engine::PlaceholderOrBuiltInMaterialPtr
+                    material) mutable {
         return absl::WrapUnique(new GsplatMaterialSerializer(
-            view, std::move(material), gsplat_asset));
+            view, std::move(material), gsplat_asset, precomputed_data_texture));
       });
 }
 
 GsplatMaterialSerializer::GsplatMaterialSerializer(
     imp::BaseView& view,
     imp::split_engine::PlaceholderOrBuiltInMaterialPtr material,
-    imp::AssetPtr<imp::GSplatAsset> gsplat_asset)
+    imp::AssetPtr<imp::GSplatAsset> gsplat_asset,
+    imp::BorrowedTexturePtr precomputed_data_texture)
     : SplitEngineBuiltinMaterial(
           view,
           android_xr::schemas::BuiltInMaterialParameters::
               BuiltInMaterialGsplatParameters,
           std::move(material)),
       view_(view),
-      gsplat_asset_(gsplat_asset) {
+      gsplat_asset_(gsplat_asset),
+      precomputed_data_texture_(precomputed_data_texture) {
   SetPrecomputeTextures(gsplat_asset);
 }
 
@@ -118,7 +125,6 @@ flatbuffers::Offset<void> GsplatMaterialSerializer::SerializeParameters(
                  magic_window_from_user_world_matrix_),
              precomputed_data_texture, position_data_texture,
              cov3d_data_texture, color_data_texture, sorted_indices_texture,
-             imp::split_engine::PointerFromOptional(visualize_chunks_),
              imp::split_engine::PointerFromOptional(splat_scale_))
       .Union();
 }

@@ -25,6 +25,7 @@
 #include "flatbuffers/verifier.h"
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
+#include "core/common/small_source_location.h"
 #include "core/material_library/flatbuffer_utils.h"
 #include "core/material_library/material_package.h"
 #include "core/materials/material.h"
@@ -95,8 +96,8 @@ absl::Status BuiltInTextureExternalMaterial::SetParameters(
       parameters.data_as<
           android_xr::schemas::BuiltInMaterialTextureExternalParameters>();
   if (schema->texture() && GetMaterial()->HasParameter(kTextureParameter)) {
-    const BorrowedTexturePtr texture =
-        texture_borrower(schema->texture()->texture_id());
+    const BorrowedTexturePtr texture = texture_borrower(
+        schema->texture()->texture_id(), SmallSourceLocation::Current());
     if (!texture) {
       return absl::NotFoundError(absl::StrFormat(
           "Texture not found: %d", schema->texture()->texture_id()));

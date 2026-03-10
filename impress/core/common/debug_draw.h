@@ -90,9 +90,29 @@ static constexpr Color kDebugColors[kDebugColorCount] = {
 };
 
 // Convenience method
-inline Color GetColor(DebugColor color) {
+constexpr Color GetColor(DebugColor color) {
   return kDebugColors[static_cast<size_t>(color)];
 }
+
+// Convenience constants for the most common debug draw colors.
+constexpr Color kRed = GetColor(DebugColor::kRed);
+constexpr Color kPink = GetColor(DebugColor::kPink);
+constexpr Color kPurple = GetColor(DebugColor::kPurple);
+constexpr Color kDeepPurple = GetColor(DebugColor::kDeepPurple);
+constexpr Color kIndigo = GetColor(DebugColor::kIndigo);
+constexpr Color kBlue = GetColor(DebugColor::kBlue);
+constexpr Color kLightBlue = GetColor(DebugColor::kLightBlue);
+constexpr Color kCyan = GetColor(DebugColor::kCyan);
+constexpr Color kTeal = GetColor(DebugColor::kTeal);
+constexpr Color kGreen = GetColor(DebugColor::kGreen);
+constexpr Color kGreenSemiHighlight = GetColor(DebugColor::kGreenSemiHighlight);
+constexpr Color kGreenHighlight = GetColor(DebugColor::kGreenHighlight);
+constexpr Color kLightGreen = GetColor(DebugColor::kLightGreen);
+constexpr Color kLime = GetColor(DebugColor::kLime);
+constexpr Color kYellow = GetColor(DebugColor::kYellow);
+constexpr Color kAmber = GetColor(DebugColor::kAmber);
+constexpr Color kOrange = GetColor(DebugColor::kOrange);
+constexpr Color kDeepOrange = GetColor(DebugColor::kDeepOrange);
 
 // Provides a stable color for a given index.
 inline Color ColorFromIndex(size_t i) {
@@ -102,11 +122,10 @@ inline Color ColorFromIndex(size_t i) {
 inline Color DefaultColorFromVisualizationStyle(
     VisualizationStyle visualization_style) {
   return visualization_style == VisualizationStyle::kSelected
-             ? debug_draw::GetColor(debug_draw::DebugColor::kGreenHighlight)
+             ? kGreenHighlight
              : (visualization_style == VisualizationStyle::kSelectedDescendent
-                    ? debug_draw::GetColor(
-                          debug_draw::DebugColor::kGreenSemiHighlight)
-                    : debug_draw::GetColor(debug_draw::DebugColor::kGreen));
+                    ? kGreenSemiHighlight
+                    : kGreen);
 }
 
 // TODO Move this into a helper class to do the conversion

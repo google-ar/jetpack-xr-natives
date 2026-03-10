@@ -298,33 +298,35 @@ bool ViewState::ShouldUseSharedGlContext() const {
 }
 
 bool ViewState::ShouldUseSystemFrameScheduledHandler() const {
-  return view_->GetConfig().use_system_frame_scheduled_handler.value_or(false);
+  return *view_->GetConfig().use_system_frame_scheduled_handler;
 }
 
 bool ViewState::ShouldUseSrgbSwapChain() const {
-  const std::optional<render_settings::ViewRenderSettings>& render_settings =
-      view_->GetConfig().main_view_render_settings;
-  return render_settings.has_value() &&
-         render_settings->use_srgb_swapchain.value_or(false);
+  return view_->GetConfig()
+      .main_view_render_settings->use_srgb_swapchain.value_or(false);
 }
 
 bool ViewState::ShouldUseStencilSwapChain() const {
-  const std::optional<render_settings::ViewRenderSettings>& render_settings =
-      view_->GetConfig().main_view_render_settings;
-  return render_settings.has_value() &&
-         render_settings->use_stencil_swapchain.value_or(false);
+  return view_->GetConfig()
+      .main_view_render_settings->use_stencil_swapchain.value_or(false);
 }
 
 bool ViewState::ShouldUseMsaaSwapChain() const {
-  const std::optional<render_settings::ViewRenderSettings>& render_settings =
-      view_->GetConfig().main_view_render_settings;
-  return render_settings.has_value() &&
-         render_settings->use_msaa_swapchain.value_or(false);
+  return view_->GetConfig()
+      .main_view_render_settings->use_msaa_swapchain.value_or(false);
+}
+
+bool ViewState::ShouldUseTransparentSwapChain() const {
+  return *view_->GetConfig().use_transparent_swap_chain;
 }
 
 bool ViewState::ShouldSetPresentationTime() const {
-  return view_->GetConfig()
-      .experimental_feature_flags.enable_set_presentation_time.value_or(false);
+  return *view_->GetConfig()
+              .experimental_feature_flags->enable_set_presentation_time;
+}
+
+filament::Engine::Backend ViewState::GetPreferredBackend() const {
+  return view_->GetPreferredBackend();
 }
 
 }  // namespace imp

@@ -100,8 +100,6 @@ class GsplatMaterialDeserializer : public BuiltInCustomMaterial,
       const android_xr::schemas::BuiltInMaterialGsplatParameters&
           serialized_parameters);
 
-  bool ShouldUsePrecomputeComponent() const;
-
   BaseView& view_;
   NodeHandle gsplat_node_;
   android_xr::schemas::GsplatMode material_mode_;

@@ -68,15 +68,36 @@ class ModelManager {
       bool system_movable = true) = 0;
 
   // Animates a glTF model.
+  virtual void AnimateGltfModelNew(
+      int32_t node, absl::string_view animation_name, bool loop, float speed,
+      float start_time, int32_t channel_id,
+      std::unique_ptr<BaseAssetAnimator> asset_animator) = 0;
+
+  // Animates a glTF model.
+  // TODO: (broken link) - Remove old animation APIs once all clients are migrated
+  // to new animation system.
   virtual void AnimateGltfModel(
       int32_t node, absl::string_view animation_name, bool loop,
       std::unique_ptr<BaseAssetAnimator> asset_animator) = 0;
 
   // Stops the animation of a glTF model.
+  virtual absl::Status StopGltfModelAnimationNew(int32_t node,
+                                                 int32_t channel_id) = 0;
+
+  // Stops the animation of a glTF model.
+  // TODO: (broken link) - Remove old animation APIs once all clients are migrated
+  // to new animation system.
   virtual absl::Status StopGltfModelAnimation(int32_t node) = 0;
 
   // Pause or resume the animation of a glTF model. If `toggle` = true resume
   // the animation, `toggle` = false pause the animation.
+  virtual absl::Status ToggleGltfModelAnimationNew(int32_t node, bool toggle,
+                                                   int32_t channel_id) = 0;
+
+  // Pause or resume the animation of a glTF model. If `toggle` = true resume
+  // the animation, `toggle` = false pause the animation.
+  // TODO: (broken link) - Remove old animation APIs once all clients are migrated
+  // to new animation system.
   virtual absl::Status ToggleGltfModelAnimation(int32_t node, bool toggle) = 0;
 
   // Sets the speed of the animation of a glTF model.
@@ -94,23 +115,12 @@ class ModelManager {
   virtual absl::StatusOr<std::string> GetGltfModelAnimationName(
       int32_t node, int32_t index) = 0;
 
+  // Gets the duration of an animation clip by index.
+  virtual absl::StatusOr<float> GetGltfModelAnimationDurationSeconds(
+      int32_t node, int32_t index) = 0;
+
   // Returns the local space unscaled bounds of the glTF model.
   virtual absl::StatusOr<imp::Box> GetGltfModelLocalBounds(int32_t node) = 0;
-
-  // Sets the material override for a node's mesh at a given primitive index.
-  // TODO Remove this API once the migration to the new
-  // introspection APIs is complete.
-  virtual absl::Status SetMaterialOverride(int32_t node_id,
-                                           std::intptr_t material,
-                                           absl::string_view node_name,
-                                           size_t primitive_index) = 0;
-
-  // Clears the material override for a node's mesh at a given primitive index.
-  // TODO Remove this API once the migration to the new
-  // introspection APIs is complete.
-  virtual absl::Status ClearMaterialOverride(int32_t node_id,
-                                             absl::string_view node_name,
-                                             size_t primitive_index) = 0;
 
   // Sets the material override directly on a specific node's mesh at a given
   // primitive index.

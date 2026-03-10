@@ -21,6 +21,7 @@
 
 #include "core/math/quat.h"
 #include "core/math/vec.h"
+#include "core/ncsb/node_handle.h"
 #include "core/particle/data_layout.h"
 #include "core/particle/particle_data_provider.h"
 
@@ -35,12 +36,15 @@ class ParticleInstance {
  public:
   ParticleInstance(ParticleDataProvider& data_provider,
                    const imp_particle::DataLayout& data_layout,
-                   int32_t particle_index);
+                   int32_t particle_index, NodeHandle emitter_node);
 
   // The index of the particle represented. This index is used internally by
   // the ParticleService, and may be reused when a particle expires and its
   // resources are reused by a subsequent particle.
   int32_t GetParticleIndex() const;
+
+  // Retrieves the emitter node that owns this particle.
+  NodeHandle GetEmitterNode() const;
 
   // The amount of time, in seconds, that the particle will remain active.
   bool HasRemainingLifetimeSeconds() const;
@@ -82,6 +86,7 @@ class ParticleInstance {
   const imp_particle::DataLayout& data_layout_;
   int32_t particle_index_ = 0;
   int32_t float_offset_ = 0;
+  NodeHandle emitter_node_;
 };
 
 }  // namespace imp

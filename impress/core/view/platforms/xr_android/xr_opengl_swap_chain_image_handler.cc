@@ -145,6 +145,10 @@ void XrOpenGLSwapChainImageHandler::BindTexturesToFbo(uint32_t fbo,
   // Bind the fbo passed in.
   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
 
+  const GLenum depth_attachment = host_->GetState()->ShouldUseStencilSwapChain()
+                                      ? GL_DEPTH_STENCIL_ATTACHMENT
+                                      : GL_DEPTH_ATTACHMENT;
+
   // Bind the textures to the fbo.
   if (host_->IsMultiviewStereo()) {
     if (host_->GetMsaaSampleCount() > 0) {
@@ -154,7 +158,7 @@ void XrOpenGLSwapChainImageHandler::BindTexturesToFbo(uint32_t fbo,
           /*baseViewIndex=*/0,
           /*numViews=*/host_->GetLogicalEyeCount());
       glFramebufferTextureMultisampleMultiviewOVR(
-          GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depth_texture, /*level=*/0,
+          GL_DRAW_FRAMEBUFFER, depth_attachment, depth_texture, /*level=*/0,
           /*samples=*/host_->GetMsaaSampleCount(),
           /*baseViewIndex=*/0,
           /*numViews=*/host_->GetLogicalEyeCount());
@@ -164,15 +168,15 @@ void XrOpenGLSwapChainImageHandler::BindTexturesToFbo(uint32_t fbo,
           /*baseViewIndex=*/0,
           /*numViews=*/host_->GetLogicalEyeCount());
       glFramebufferTextureMultiviewOVR(
-          GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depth_texture, /*level=*/0,
+          GL_DRAW_FRAMEBUFFER, depth_attachment, depth_texture, /*level=*/0,
           /*baseViewIndex=*/0,
           /*numViews=*/host_->GetLogicalEyeCount());
     }
   } else {
     glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                            GL_TEXTURE_2D, color_texture, 0);
-    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
-                           GL_TEXTURE_2D, depth_texture, 0);
+    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, depth_attachment, GL_TEXTURE_2D,
+                           depth_texture, 0);
   }
   // Restore the previously bound fbo.
   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, previously_bound_fbo);
@@ -219,11 +223,18 @@ uint32_t XrOpenGLSwapChainImageHandler::GetDepthTexture(
     glTexParameteri(texture_target, GL_TEXTURE_PROTECTED_EXT, 1);
   }
 #endif
+
+  const GLenum internal_format = host_->GetState()->ShouldUseStencilSwapChain()
+                                     ? kDepthStencilFormat
+                                     : kDepthFormat;
+
   if (texture_target == GL_TEXTURE_2D_ARRAY) {
-    glTexStorage3D(texture_target, 1, GL_DEPTH_COMPONENT24, width, height,
+    // NOLINTNEXTLINE(misc-include-cleaner)
+    glTexStorage3D(texture_target, 1, internal_format, width, height,
                    host_->GetLogicalEyeCount());
   } else {
-    glTexStorage2D(texture_target, 1, GL_DEPTH_COMPONENT24, width, height);
+    // NOLINTNEXTLINE(misc-include-cleaner)
+    glTexStorage2D(texture_target, 1, internal_format, width, height);
   }
 
   color_to_depth_texture_.insert(std::make_pair(color_texture, depth_texture));

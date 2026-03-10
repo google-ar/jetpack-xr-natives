@@ -20,7 +20,6 @@
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
-#include "core/editor/editor.h"
 #include "core/editor/selection_controller.h"
 #include "core/ncsb/node_handle.h"
 #include "core/ncsb/system.h"
@@ -48,7 +47,7 @@ class SelectionControllerImpl : public SelectionController, public System {
   //     - The node becomes the *only* selected node.
   // When the node is invalid, deselect all nodes.
   void TrySelectNode(NodeHandle node_to_select,
-                     Editor::SelectionMode selection_mode) override;
+                     EditorInfo::SelectionMode selection_mode) override;
 
   // Disables selecting the model on ModelLoadedEvents. Enabled by default.
   void DisableSelectModelWhenLoaded(bool disable_select_model_on_load) {

@@ -16,7 +16,7 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:assets.bzl", "imp_assets")
 
 # IMGUI UI Widgets for Impress Editor.
-load("//build_tools:imp.bzl", "if_desktop", "imp_google3_copts", "imp_linkopts", "imp_test_copts")
+load("//build_tools:imp.bzl", "imp_google3_copts", "imp_linkopts", "imp_test_copts")
 load("//core/proto:imp_cc_proto_library.bzl", "imp_cc_proto_library")
 load("//core/proto:imp_isf_data.bzl", "imp_isf_data")
 
@@ -164,6 +164,7 @@ cc_library(
         "//core/async:future",
         "//core/common:platform_helpers",
         "//core/common:rememberer",
+        "//core/editor:editor_style",
         "//core/editor:widget",
         "//core/editor/widgets/icons:texture_assets",
         "//core/render",
@@ -248,6 +249,8 @@ cc_library(
         "//core/common:robin_map",
         "//core/editor",
         "//core/editor:editor_clipboard",
+        "//core/editor:editor_info",
+        "//core/editor:editor_style",
         "//core/editor:editor_touch",
         "//core/editor:events",
         "//core/editor:widget",
@@ -352,16 +355,13 @@ cc_library(
         "//core/proto:textproto_writer",
         "//core/view:base_view",
         "//core/view/framework",
-        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_impress//core/common:log",
         "@dear_imgui",
         "@mediapipe//mediapipe/framework/port:status",
-    ] + if_desktop([
-        "//third_party/tinyfiledialogs",
-    ]),
+    ],
     alwayslink = 1,
 )
 

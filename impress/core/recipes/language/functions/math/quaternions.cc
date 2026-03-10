@@ -17,6 +17,7 @@
 
 #include "absl/strings/string_view.h"
 #include "core/math/almost_equal.h"
+#include "core/math/mat.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
 #include "core/recipes/language/base_recipe_system.h"
@@ -76,6 +77,33 @@ float4 Float4QuatSlerp(float4 p, float4 q, float t) {
   return float4(result.x, result.y, result.z, result.w);
 }
 
+float4 Float4QuatFromUpForward(float3 up, float3 forward) {
+  float3 r(forward);
+  float3 y(up);
+  float3 s;
+
+  // Check if y and r are collinear.
+  // We use a threshold of 0.999 (similar to filament's dot_tolerance).
+  if (std::abs(dot(y, r)) > 0.999) {
+    // y and r are collinear.
+    // Let s be perpendicular to r.
+    // We can pick an arbitrary axis to cross with r.
+    float3 arbitrary =
+        std::abs(r.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
+    s = normalize(cross(arbitrary, r));
+  } else {
+    s = normalize(cross(y, r));
+  }
+
+  float3 t = cross(r, s);
+
+  // Construct rotation matrix M = [s, t, r] (columns).
+  mat3f M(s, t, r);
+
+  quatf result = M.toQuaternion();
+  return float4(result.x, result.y, result.z, result.w);
+}
+
 }  // namespace
 
 void RegisterMathQuaternionFunctions(BaseRecipeSystem* recipe_system) {
@@ -110,6 +138,11 @@ void RegisterMathQuaternionFunctions(BaseRecipeSystem* recipe_system) {
       [](const float4 a, const float4 b, const float c) -> float4 {
         return Float4QuatSlerp(a, b, c);
       });
+
+  recipe_system->RegisterFunction("Float4QuatFromUpForward",
+                                  [](float3 up, float3 forward) -> float4 {
+                                    return Float4QuatFromUpForward(up, forward);
+                                  });
 }
 
 }  // namespace imp::recipe

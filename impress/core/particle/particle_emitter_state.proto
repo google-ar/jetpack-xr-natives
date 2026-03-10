@@ -23,7 +23,7 @@ import "core/proto/imp.proto";
 
 // Configuration information that describes how a type of particle should be
 // created and emitted by a ParticleEmitter.
-// Next ID: 8
+// Next ID: 9
 message ParticleConfig {
   // The length of time, in seconds, that a particle will remain active.
   optional float lifetime_in_seconds = 1;
@@ -49,6 +49,9 @@ message ParticleConfig {
   // While optional, this field is required for emitters configured with the
   // PARTICLE_RENDERER_NODE renderer.
   optional string gltf_asset = 7;
+
+  // The initial rotation of the particle.
+  Quatf rotation = 8 [(optional_type) = ABSL_OPTIONAL];
 }
 
 // Configuration information that describes how particles should be created and

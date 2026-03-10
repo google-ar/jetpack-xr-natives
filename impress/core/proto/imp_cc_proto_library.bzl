@@ -37,6 +37,7 @@ def _rule(ctx):
     ctx.actions.run(
         executable = ctx.executable._protocol_compiler,
         outputs = headers,
+        mnemonic = "ImpressCcProtoGen",
         inputs = depset(
             direct = [proto_info.direct_descriptor_set],
             transitive = [proto_info.transitive_descriptor_sets],

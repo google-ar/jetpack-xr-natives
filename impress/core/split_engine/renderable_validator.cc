@@ -16,6 +16,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
@@ -42,10 +43,20 @@ absl::Status RenderableValidator::ValidatePrimitiveType(
 
 absl::Status RenderableValidator::ValidateIndexOffsetCount(
     uint32_t offset, uint32_t count, size_t index_count) noexcept {
-  if (offset + count > index_count) {
+  const uint64_t offset_64 = offset;
+  const uint64_t count_64 = count;
+  const uint64_t sum_64 = offset_64 + count_64;
+  // `size_t` is 32 bits on WASM.
+  const uint64_t index_count_64 = index_count;
+
+  const bool valid_arguments =
+      (sum_64 <= std::numeric_limits<uint32_t>::max()) &&
+      (sum_64 <= index_count_64);
+
+  if (!valid_arguments) {
     return absl::InvalidArgumentError(
         absl::StrFormat("Index offset %u and count %u are out of range "
-                        "for index count %ull",
+                        "for index count %u",
                         offset, count, index_count));
   }
 

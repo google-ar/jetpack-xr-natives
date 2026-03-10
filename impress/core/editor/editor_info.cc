@@ -35,6 +35,18 @@ bool IsInEditMode(Registry& registry) {
   return false;
 }
 
+bool IsNativeDisplayMode(Registry& registry) {
+  absl::StatusOr<std::reference_wrapper<EditorInfo>> editor_info =
+      registry.Get<EditorInfo>();
+
+  if (editor_info.ok() && editor_info->get().IsEnabled() &&
+      editor_info->get().GetDisplayMode() ==
+          EditorInfo::DisplayMode::kNativeScreen) {
+    return true;
+  }
+  return false;
+}
+
 bool IsPaused(imp::Registry& registry) {
   absl::StatusOr<std::reference_wrapper<EditorInfo>> editor_info =
       registry.Get<EditorInfo>();

@@ -61,6 +61,7 @@
 
 namespace imp::split_engine {
 namespace {
+// LINT.IfChange
 constexpr char kOpacityScaleParameter[] = "opacityScale";
 constexpr char kMinScreenSizeParameter[] = "minScreenSize";
 constexpr char kMaxScreenSizeParameter[] = "maxScreenSize";
@@ -73,10 +74,15 @@ constexpr char kCov3dDataTexture[] = "splatDataCov3d";
 constexpr char kColorDataTexture[] = "splatDataColor";
 constexpr char kSortedIndicesTexture[] = "sortedIndices";
 constexpr char kSplatScaleParameter[] = "splatScale";
-constexpr char kVisualizeChunksParameter[] = "visualizeChunks";
 constexpr char kUseTrianglesForSplatsParameter[] = "useTrianglesForSplats";
 constexpr char kSplatDataPrecomputed[] = "splatDataPrecomputed";
 constexpr char kMainViewResolution[] = "mainViewResolution";
+// LINT.ThenChange(
+//   builtin_gsplat.mat,
+//   builtin_gsplat_data_precompute.mat,
+//   builtin_magic_window.mat,
+//   //depot/google3/third_party/split_engine/schemas/split_engine_material.fbs,
+// )
 
 // Helper to get the size of the data textures.
 absl::StatusOr<imp::uint2> GetTextureSizeFromFlatbuffer(
@@ -89,8 +95,8 @@ absl::StatusOr<imp::uint2> GetTextureSizeFromFlatbuffer(
     return absl::NotFoundError(
         absl::StrCat("Texture not set yet for ", kPositionDataTexture));
   }
-  const BorrowedTexturePtr texture =
-      texture_borrower(serialized_texture->texture_id());
+  const BorrowedTexturePtr texture = texture_borrower(
+      serialized_texture->texture_id(), SmallSourceLocation::Current());
   if (!texture) {
     return absl::InternalError(absl::StrFormat("Texture not found: %d, %s",
                                                serialized_texture->texture_id(),
@@ -113,8 +119,8 @@ absl::Status SetMaterialParameterFromFlatbuffer(
     return absl::OkStatus();
   }
 
-  const BorrowedTexturePtr texture =
-      texture_borrower(serialized_texture->texture_id());
+  const BorrowedTexturePtr texture = texture_borrower(
+      serialized_texture->texture_id(), SmallSourceLocation::Current());
   if (!texture) {
     return absl::InternalError(absl::StrFormat("Texture not found: %d, %s",
                                                serialized_texture->texture_id(),
@@ -188,20 +194,17 @@ absl::StatusOr<NodeHandle> DeserializeNodeId(BaseView& view,
 Future<ComponentHandle<PrecomputeTexturePipeline>>
 BuildPrecomputeTexturePipeline(NodeHandle gsplat_node,
                                android_xr::schemas::GsplatMode material_mode) {
-  // TODO: Temporarily disable precompute with magic window.
-  if (material_mode == android_xr::schemas::GsplatMode::MAGIC_WINDOW) {
-    Future<ComponentHandle<PrecomputeTexturePipeline>> future;
-    future.Return(ComponentHandle<PrecomputeTexturePipeline>());
-    return future;
-  }
   NodeHandle precompute_node = gsplat_node->CreateChildNode();
+  precompute_node->SetName("BuiltinGSplatPrecomputeTPR");
   // precompute_node is created disabled and will be enabled after the pipeline
   // is created.
   precompute_node->SetEnabled(false);
 
-  return precompute_node->AddComponent<PrecomputeTexturePipeline>().Then(
-      [](ComponentHandle<PrecomputeTexturePipeline> pipeline) mutable
-          -> absl::StatusOr<ComponentHandle<PrecomputeTexturePipeline>> {
+  return precompute_node
+      ->AddComponent<PrecomputeTexturePipeline>(
+          kBuiltinGsplatDataPrecomputeMatCmat)
+      .Then([](ComponentHandle<PrecomputeTexturePipeline> pipeline) mutable
+                -> absl::StatusOr<ComponentHandle<PrecomputeTexturePipeline>> {
         MP_RETURN_IF_ERROR(UpdateMainViewResolution(pipeline->GetView(),
                                                  pipeline->BorrowMaterial()));
         return pipeline;
@@ -232,14 +235,32 @@ Future<BuiltInMaterialPtr> GsplatMaterialDeserializer::Create(
   if (spec.use_triangles_for_splats()) {
     use_triangles = spec.use_triangles_for_splats()->value();
   }
+  bool has_precomputed_texture = false;
+  if (spec.has_precomputed_data_texture()) {
+    has_precomputed_texture = spec.has_precomputed_data_texture()->value();
+  }
+
   return view.GetAssetManager()
       .LoadMaterial(source,
                     MaterialPreCompileOptions{
                         .constants = {{.name = kUseTrianglesForSplatsParameter,
                                        .value = use_triangles}}})
-      .Then([bridge_id, material_mode,
-             gsplat_node_value](AssetPtr<MaterialAsset> material_asset) mutable
+      .Then([bridge_id, material_mode, gsplat_node_value,
+             has_precomputed_texture](
+                AssetPtr<MaterialAsset> material_asset) mutable
                 -> Future<BuiltInMaterialPtr> {
+        // When the spec provides precomputed texture, we create the builtin
+        // material without a PrecomputeTexturePipeline. Otherwise, the pipeline
+        // will be created and used by the builtin material.
+        // TODO: Temporarily disable precompute with magic window.
+        if (has_precomputed_texture ||
+            material_mode == android_xr::schemas::GsplatMode::MAGIC_WINDOW) {
+          return Future<BuiltInMaterialPtr>(Create(
+              gsplat_node_value, bridge_id, material_mode, material_asset,
+              ComponentHandle<PrecomputeTexturePipeline>()));
+        }
+        // TODO: Pass in aabb of the gsplat scene so that the precompute pass
+        // doesn't run if the scene is frustum culled.
         return BuildPrecomputeTexturePipeline(gsplat_node_value, material_mode)
             .Then(
                 [gsplat_node_value, bridge_id, material_mode, material_asset](
@@ -275,7 +296,7 @@ GsplatMaterialDeserializer::GsplatMaterialDeserializer(
 }
 
 GsplatMaterialDeserializer::~GsplatMaterialDeserializer() {
-  if (ShouldUsePrecomputeComponent()) {
+  if (precompute_texture_pipeline_) {
     // Release the pass texture before destroying the pass.
     BorrowedTexturePtr placeholder_texture =
         view_.GetTextureFactory().BorrowRGBA32FPlaceholderTexture();
@@ -317,24 +338,37 @@ absl::Status GsplatMaterialDeserializer::SetParameters(
     MP_RETURN_IF_ERROR(SetMagicWindowMaterialParameters(texture_borrower,
                                                      *serialized_parameters));
   }
+
+  // TODO: (broken link) - Move this into if (precompute_texture_pipeline_)
+  // once fixed, and magic window material no longer relies on these parameters.
   MP_RETURN_IF_ERROR(SetPrecomputedDataParameters(
       texture_borrower, *serialized_parameters, GetPrecomputedDataMaterial()));
 
-  MP_RETURN_IF_ERROR(UpdatePrecomputeTexturePipeline(texture_borrower,
-                                                  *serialized_parameters));
+  if (precompute_texture_pipeline_) {
+    MP_RETURN_IF_ERROR(UpdatePrecomputeTexturePipeline(texture_borrower,
+                                                    *serialized_parameters));
+  } else if (serialized_parameters->precomputed_data_texture()) {
+    MP_RETURN_IF_ERROR(SetMaterialParameterFromFlatbuffer(
+        texture_borrower, GetRenderMaterial(),
+        serialized_parameters->precomputed_data_texture(),
+        kSplatDataPrecomputed));
+  }
+
   return absl::OkStatus();
 }
 
 split_engine::BuiltInMaterialPtr GsplatMaterialDeserializer::Duplicate() const {
   ComponentHandle<PrecomputeTexturePipeline> pipeline;
-  Future<ComponentHandle<PrecomputeTexturePipeline>> pipeline_future =
-      BuildPrecomputeTexturePipeline(gsplat_node_, material_mode_);
-  if (pipeline_future.Ready() && pipeline_future.Get().ok()) {
-    pipeline = pipeline_future.Get().value();
-  } else {
-    pipeline_future.Cancel();
-    // Does not exit if NDEBUG is defined.
-    IMP_LOG(imp::FATAL) << "Failed to duplicate precompute texture pipeline.";
+  if (precompute_texture_pipeline_) {
+    Future<ComponentHandle<PrecomputeTexturePipeline>> pipeline_future =
+        BuildPrecomputeTexturePipeline(gsplat_node_, material_mode_);
+    if (pipeline_future.Ready() && pipeline_future.Get().ok()) {
+      pipeline = pipeline_future.Get().value();
+    } else {
+      pipeline_future.Cancel();
+      // Does not exit if NDEBUG is defined.
+      IMP_LOG(imp::FATAL) << "Failed to duplicate precompute texture pipeline.";
+    }
   }
 
   OwnedMaterialPtr material = view_.GetMaterialFactory().WrapMaterial(
@@ -359,25 +393,6 @@ absl::Status GsplatMaterialDeserializer::SetRenderMaterialParameters(
     render_material->SetParameter(kSplatScaleParameter, UnPack(*splat_scale));
   }
 
-  if (const android_xr::schemas::Float* opacity_scale =
-          serialized_parameters.opacity_scale()) {
-    MP_RETURN_IF_ERROR(HasParameter(render_material, kOpacityScaleParameter));
-    render_material->SetParameter(kOpacityScaleParameter,
-                                  UnPack(*opacity_scale));
-  }
-
-  if (const android_xr::schemas::Float2* min_screen_size =
-          serialized_parameters.min_screen_size()) {
-    MP_RETURN_IF_ERROR(HasParameter(render_material, kMinScreenSizeParameter));
-    render_material->SetParameter(kMinScreenSizeParameter,
-                                  UnPack(*min_screen_size));
-  }
-  if (const android_xr::schemas::Float2* max_screen_size =
-          serialized_parameters.max_screen_size()) {
-    MP_RETURN_IF_ERROR(HasParameter(render_material, kMaxScreenSizeParameter));
-    render_material->SetParameter(kMaxScreenSizeParameter,
-                                  UnPack(*max_screen_size));
-  }
   if (const android_xr::schemas::BuiltInTextureParameter*
           sorted_indices_texture =
               serialized_parameters.sorted_indices_texture()) {
@@ -429,11 +444,30 @@ absl::Status GsplatMaterialDeserializer::SetPrecomputedDataParameters(
       texture_borrower, precompute_material,
       serialized_parameters.color_data_texture(), kColorDataTexture));
 
-  if (const android_xr::schemas::Bool* visualize_chunks =
-          serialized_parameters.visualize_chunks()) {
-    precompute_material->SetParameter(kVisualizeChunksParameter,
-                                      UnPack(*visualize_chunks));
+  const android_xr::schemas::Float2* min_screen_size =
+      serialized_parameters.min_screen_size();
+  if (min_screen_size &&
+      precompute_material->HasParameter(kMinScreenSizeParameter)) {
+    precompute_material->SetParameter(kMinScreenSizeParameter,
+                                      UnPack(*min_screen_size));
   }
+
+  const android_xr::schemas::Float2* max_screen_size =
+      serialized_parameters.max_screen_size();
+  if (max_screen_size &&
+      precompute_material->HasParameter(kMaxScreenSizeParameter)) {
+    precompute_material->SetParameter(kMaxScreenSizeParameter,
+                                      UnPack(*max_screen_size));
+  }
+
+  const android_xr::schemas::Float* opacity_scale =
+      serialized_parameters.opacity_scale();
+  if (opacity_scale &&
+      precompute_material->HasParameter(kOpacityScaleParameter)) {
+    precompute_material->SetParameter(kOpacityScaleParameter,
+                                      UnPack(*opacity_scale));
+  }
+
   return absl::OkStatus();
 }
 
@@ -441,7 +475,7 @@ absl::Status GsplatMaterialDeserializer::UpdatePrecomputeTexturePipeline(
     const TextureBorrower& texture_borrower,
     const android_xr::schemas::BuiltInMaterialGsplatParameters&
         serialized_parameters) {
-  if (!ShouldUsePrecomputeComponent()) {
+  if (!precompute_texture_pipeline_) {
     return absl::OkStatus();
   }
   // Resize the pass texture based on the size provided in data textures.
@@ -470,15 +504,9 @@ absl::Status GsplatMaterialDeserializer::UpdatePrecomputeTexturePipeline(
   return absl::OkStatus();
 }
 
-bool GsplatMaterialDeserializer::ShouldUsePrecomputeComponent() const {
-  // TODO: Return false if the precompute texture is passed via
-  // parameter.
-  return precompute_texture_pipeline_.IsValid();
-}
-
 BorrowedMaterialPtr GsplatMaterialDeserializer::GetPrecomputedDataMaterial(
     SmallSourceLocation loc) const {
-  if (ShouldUsePrecomputeComponent()) {
+  if (precompute_texture_pipeline_) {
     return precompute_texture_pipeline_->BorrowMaterial(loc);
   }
   return GetMaterial(loc);

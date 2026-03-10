@@ -65,6 +65,7 @@ vec3 computeCov2d(vec3 eyePos, mat3 eyeFromModel, mat4 clipFromEye, mat4 eyeFrom
   mat3 cov = transpose(jw) * cov3d * jw;
 
   // Low pass filter to make each splat at least 1px size.
+  // TODO: Remove this logic and update Scuba tests.
   cov[0][0] += 0.3;
   cov[1][1] += 0.3;
   // Only need upper half of matrix since it's diagonal
@@ -72,66 +73,69 @@ vec3 computeCov2d(vec3 eyePos, mat3 eyeFromModel, mat4 clipFromEye, mat4 eyeFrom
 }
 
 // Computes scale and rotation from 2D covariance via eigenvalue/vector decomposition
-void scaleAndRotationFromCov2D(vec3 cov2d, vec2 maxSize, out vec2 basisAxisX, out float aspectRatio) {
+// Will clamp the size of each gSplat to a specifed minimum and maximum size
+void scaleAndRotationFromCov2D(vec3 cov2d, vec2 minSize, vec2 maxSize,
+                               out vec2 basisAxisX, out float aspectRatio) {
   float diag1 = cov2d.x, diag2 = cov2d.z, offDiag = cov2d.y;
   float mid = 0.5 * (diag1 + diag2);
   float radius = length(vec2((diag1 - diag2) / 2.0, offDiag));
-  float lambda1 = mid + radius;
-  float lambda2 = max(mid - radius, 0.1);
-  vec2 diagVec = normalize(vec2(offDiag, lambda1 - diag1));
-  float xSize = min(sqrt(2.0 * lambda1), maxSize.x);
-  float ySize = min(sqrt(2.0 * lambda2), maxSize.y);
-  basisAxisX = xSize * diagVec;
-  aspectRatio = ySize / xSize;
+  float2 lambda = float2(mid + radius, max(mid - radius, 0.1));
+  vec2 diagVec = normalize(vec2(offDiag, lambda.x - diag1));
+  float2 size = min(max(sqrt(2.0 * lambda), minSize), maxSize);
+  basisAxisX = size.x * diagVec;
+  aspectRatio = size.y / size.x;
 }
 
 // computes the clip space position, x-axis basis for quad in NDC space, and
 // aspect ratio from the splat data. The y-axis basis can be computed from the
 // aspect ratio and the x-axis basis.
 // eyeIndex of -1 indicates mono mode.
-void computeSplatData(int eyeIndex, vec4 position, mat3 cov3d, mat4 worldFromModelMatrix,
-                      vec2 resolution, out vec4 clipPos,
-                      out vec2 basisAxisX, out float aspectRatio) {
-    mat4 eyeFromModel;
-    mat4 clipFromEye;
-    mat4 eyeFromClip;
+// minSize and maxSize clamp are used to clamp each gSplat by a minimum and
+// maximum bounds
+void computeSplatData(int eyeIndex, vec4 position, mat3 cov3d,
+                      mat4 worldFromModelMatrix, vec2 resolution, vec2 minSize,
+                      vec2 maxSize, out vec4 clipPos, out vec2 basisAxisX,
+                      out float aspectRatio) {
+  mat4 eyeFromModel;
+  mat4 clipFromEye;
+  mat4 eyeFromClip;
 
-    if (eyeIndex >= 0) {
-      eyeFromModel =
-        getEyeFromViewMatrix(eyeIndex) * getViewFromWorldMatrix() * worldFromModelMatrix;
-      clipFromEye =
-        getClipFromWorldMatrix(eyeIndex) * inverse(getEyeFromViewMatrix(eyeIndex) * getViewFromWorldMatrix());
-      eyeFromClip = inverse(clipFromEye);
-    } else {
-      // When rendering in mono mode, we can use a simpler construction to avoid
-      // an extra matrix multiplication.
-      eyeFromModel = getViewFromWorldMatrix() * worldFromModelMatrix;
-      clipFromEye = getClipFromViewMatrix();
-      eyeFromClip = getViewFromClipMatrix();
-    }
-    vec4 eyePos = eyeFromModel * position;
+  if (eyeIndex >= 0) {
+    eyeFromModel =
+      getEyeFromViewMatrix(eyeIndex) * getViewFromWorldMatrix() * worldFromModelMatrix;
+    clipFromEye =
+      getClipFromWorldMatrix(eyeIndex) * inverse(getEyeFromViewMatrix(eyeIndex) * getViewFromWorldMatrix());
+    eyeFromClip = inverse(clipFromEye);
+  } else {
+    // When rendering in mono mode, we can use a simpler construction to avoid
+    // an extra matrix multiplication.
+    eyeFromModel = getViewFromWorldMatrix() * worldFromModelMatrix;
+    clipFromEye = getClipFromViewMatrix();
+    eyeFromClip = getViewFromClipMatrix();
+  }
+  vec4 eyePos = eyeFromModel * position;
 
-    // TODO : Profile performance and see if reducing divergence by removing this check is worth it.
-    // If behind the camera discard.
-    if (eyePos.z > 0.0)
-    {
-      clipPos = vec4(0.0, 0.0, 0.0, 0.0);
-      basisAxisX = vec2(0.0, 0.0);
-      aspectRatio = 0.0;
-      return;
-    }
+  // TODO : Profile performance and see if reducing divergence by removing this check is worth it.
+  // If behind the camera discard.
+  if (eyePos.z > 0.0)
+  {
+    clipPos = vec4(0.0, 0.0, 0.0, 0.0);
+    basisAxisX = vec2(0.0, 0.0);
+    aspectRatio = 0.0;
+    return;
+  }
 
-    // Compute cov2d from cov3d.
-    vec3 cov2d = computeCov2d(eyePos.xyz, mat3(eyeFromModel), clipFromEye,
-                              eyeFromClip, cov3d, resolution);
-    // Get basis axes for quad in NDC space (which encodes the scale and
-    // rotation) from cov2d.
-    scaleAndRotationFromCov2D(cov2d, resolution * 0.5, basisAxisX, aspectRatio);
-    // Get the center of the quad associated with this splat.
-    clipPos = clipFromEye * eyePos;
-    // perspective divide ahead of time to avoid having to do this later in the
-    // rendering vertex shader.
-    clipPos /= clipPos.w;
+  // Compute cov2d from cov3d.
+  vec3 cov2d = computeCov2d(eyePos.xyz, mat3(eyeFromModel), clipFromEye,
+                            eyeFromClip, cov3d, resolution);
+  // Get basis axes for quad in NDC space (which encodes the scale and
+  // rotation) from cov2d.
+  scaleAndRotationFromCov2D(cov2d, minSize, maxSize, basisAxisX, aspectRatio);
+  // Get the center of the quad associated with this splat.
+  clipPos = clipFromEye * eyePos;
+  // perspective divide ahead of time to avoid having to do this later in the
+  // rendering vertex shader.
+  clipPos /= clipPos.w;
 }
 
 // The clip space convention used by Impress getClip*() functions is what's

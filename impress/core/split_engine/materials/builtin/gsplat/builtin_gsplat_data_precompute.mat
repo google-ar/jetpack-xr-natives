@@ -15,6 +15,19 @@
 material {
   name : "GSplatDataPrecompute",
   parameters : [
+        // LINT.IfChange
+        {
+           // The minimum Screen Size to clamp each Splat to (units are in pixels)
+           // NOTE: this value should be greater than or equal to zero
+           type       : float2,
+           name       : minScreenSize
+        },
+        {
+           // The maximum Screen Size to clamp each Splat to (units are in pixels)
+           // NOTE: this value should be greater than minScreenSize
+           type       : float2,
+           name       : maxScreenSize
+        },
         {
            // The position of each gaussian in the scene
            type      : sampler2d,
@@ -46,7 +59,16 @@ material {
            // with a random color based on the splat's associated chunk index.
            type      : bool,
            name      : visualizeChunks
+        },
+        {
+           // Controls the opacity of the splats' colors.
+           type      : float,
+           name      : opacityScale
         }
+        // LINT.ThenChange(
+        //   gsplat_material_deserializer.cc,
+        //   //depot/google3/third_party/split_engine/schemas/split_engine_material.fbs,
+        // )
   ],
   constants : [
         {
@@ -135,8 +157,9 @@ fragment {
     float aspectRatio;
 
     computeSplatData(eyeIndex, position, cov3d, worldFromModelMatrix,
-                     vec2(materialParams.mainViewResolution), clipPos,
-                     basisAxisX, aspectRatio);
+                     vec2(materialParams.mainViewResolution),
+                     materialParams.minScreenSize, materialParams.maxScreenSize,
+                     clipPos, basisAxisX, aspectRatio);
     // computeSplatData() sets clipPos.w to 0.0 if the splat is behind the
     // camera.
 
@@ -147,6 +170,7 @@ fragment {
       int chunkIndex = splatIndex / 256;
       color.rgb = rand(chunkIndex);
     }
+    color.a *= materialParams.opacityScale;
 
     // If the splat is behind the camera, discard it.
     if (clipPos.w == 0.0) {

@@ -48,7 +48,9 @@ class GsplatMaterialSerializer
   static imp::Future<std::unique_ptr<GsplatMaterialSerializer>> Create(
       imp::NodeHandle gsplat_node, imp::AssetPtr<imp::GSplatAsset> gsplat_asset,
       android_xr::schemas::GsplatMode material_mode,
-      bool use_triangles_for_splats);
+      bool use_triangles_for_splats,
+      imp::BorrowedTexturePtr precomputed_data_texture =
+          imp::BorrowedTexturePtr());
 
   ~GsplatMaterialSerializer() override;
 
@@ -68,7 +70,7 @@ class GsplatMaterialSerializer
   }
 
   void SetMaxScreenSize(imp::float2 max_screen_size) {
-    min_screen_size_ = imp::split_engine::Pack(max_screen_size);
+    max_screen_size_ = imp::split_engine::Pack(max_screen_size);
     MarkParametersDirty();
   }
 
@@ -87,9 +89,8 @@ class GsplatMaterialSerializer
   }
 
   void SetPrecomputedDataTexture(imp::OwnedOrBorrowedTexturePtr texture) {
-    IMP_LOG(imp::FATAL) << "(broken link): Precomputed data texture is not supported yet.";
-    //  precomputed_data_texture_ = std::move(texture);
-    //  MarkParametersDirty();
+    precomputed_data_texture_ = std::move(texture);
+    MarkParametersDirty();
   }
 
   void SetPrecomputeTextures(imp::AssetPtr<imp::GSplatAsset> gsplat_asset) {
@@ -110,16 +111,12 @@ class GsplatMaterialSerializer
     MarkParametersDirty();
   }
 
-  void SetVisualizeChunks(bool visualize_chunks) {
-    visualize_chunks_ = imp::split_engine::Pack(visualize_chunks);
-    MarkParametersDirty();
-  }
-
  private:
   GsplatMaterialSerializer(
       imp::BaseView& view,
       imp::split_engine::PlaceholderOrBuiltInMaterialPtr material,
-      imp::AssetPtr<imp::GSplatAsset> gsplat_asset);
+      imp::AssetPtr<imp::GSplatAsset> gsplat_asset,
+      imp::BorrowedTexturePtr precomputed_data_texture);
   imp::BaseView& view_;
   imp::AssetPtr<imp::GSplatAsset> gsplat_asset_;
 
@@ -141,7 +138,6 @@ class GsplatMaterialSerializer
   // moved here, then later deleted. It is not deleted immediately because the
   // built-in material may still be using it.
   imp::OwnedOrBorrowedTexturePtr condemned_texture_;
-  std::optional<android_xr::schemas::Bool> visualize_chunks_;
   std::optional<android_xr::schemas::Float> splat_scale_;
 };
 

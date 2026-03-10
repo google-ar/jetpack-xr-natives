@@ -396,17 +396,23 @@ if(NOT ANDROID)
     endif()
 endif()
 
-check_c_compiler_flag(-Wundef HAVE_UNDEF)
+# Begin google3
+# disable undef as some headers don't comply
+#check_c_compiler_flag(-Wundef HAVE_UNDEF)
+# End google3
 check_c_compiler_flag(-Wtautological-type-limit-compare HAVE_TAUTOLOGICAL_TYPE_LIMIT)
 check_c_compiler_flag(-Wmissing-braces HAVE_MISSING_BRACES)
 check_c_compiler_flag(-Wunreachable-code HAVE_UNREACHABLE_CODE)
 # check_c_compiler_flag(-Wswitch-default HAVE_SWITCH_DEFAULT)
 # check_c_compiler_flag(-Wswitch-enum HAVE_SWITCH_ENUM)
 
+# Begin google3
+# disable undef as some headers don't comply
 if(HAVE_UNDEF)
-    target_compile_options(
-            openxr_loader PRIVATE -Werror=undef)
+    #target_compile_options(
+    #        openxr_loader PRIVATE -Werror=undef)
 endif()
+# End google3
 if(HAVE_TAUTOLOGICAL_TYPE_LIMIT)
     target_compile_options(
             openxr_loader PRIVATE -Werror=tautological-type-limit-compare)

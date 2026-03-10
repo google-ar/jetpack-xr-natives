@@ -288,6 +288,10 @@ cc_library(
     ]) + if_linux([
         "@third_party//filament/filament/backend:egl_backend_hdrs",
     ]) + by_backend(
+        gl_vulkan = [
+            "@third_party//gl",
+            "@third_party//filament/filament/backend:backend_vk_hdrs",
+        ],
         opengl = [
             "@third_party//gl",
         ],

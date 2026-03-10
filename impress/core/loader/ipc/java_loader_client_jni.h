@@ -62,7 +62,7 @@ class CompletableFuture : public JavaWrapper {
   CompletableFuture(JNIEnv* env, jobject future);
 
   // Calls the Get() method of the future and converts the return into a bool.
-  jboolean GetBoolean();
+  bool GetBoolean();
 
  private:
   imp::JniHandle get_method_;
@@ -92,7 +92,7 @@ class JavaLoaderClient : public JavaWrapper {
 
   // Starts the loader service, returns a java Future that indicates when the
   // service connection has been established.
-  jobject StartLoaderServiceHelper();
+  JniUniquePtr<jobject> StartLoaderServiceHelper();
 
   std::atomic_bool service_connected_ = false;
   jobject activity_context_;

@@ -27,6 +27,7 @@
 #include "core/async/future.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/geometry/shapes/box.h"
+#include "core/materials/material.h"
 #include "core/model/mesh/mesh.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/isf_info.h"
@@ -134,8 +135,15 @@ class ABSL_DEPRECATED(
 
   // Gets the material for the specified primitive if previously set, otherwise
   // returns nullptr.
-  // TODO (broken link) Return a BorrowedMaterialPtr after migration.
+  ABSL_DEPRECATED(
+      "Use imp::BorrowedMaterialPtr overload instead. See "
+      "(broken link).")
   Material* GetMaterial(size_t primitive_index = 0) const;
+
+  // Gets the material for the specified primitive if previously set through
+  // OwnedMaterialPtr or BorrowedMaterialPtr overrides, otherwise returns
+  // nullptr.
+  BorrowedMaterialPtr GetBorrowedMaterial(size_t primitive_index = 0) const;
 
   // Sets a material parameter on the material at the given primitive index.
   Future<absl::Status> SetMaterialParameter(

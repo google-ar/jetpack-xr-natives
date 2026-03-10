@@ -97,8 +97,15 @@ Slice::Slice(uint2 texture_size,
       canvas_source_(std::move(canvas_source)) {}
 
 Slice::~Slice() {
-  absl::MutexLock lock(canvas_mutex_);
-  canvas_.reset();
+  {
+    absl::MutexLock lock(glyph_map_mutex_);
+    glyph_map_.clear();
+  }
+
+  {
+    absl::MutexLock lock(canvas_mutex_);
+    canvas_.reset();
+  }
 }
 
 Slice::EndFrameResult Slice::EndFrame(imp::BaseView& view) {
@@ -361,11 +368,17 @@ void Slice::UpdateTextureSync() {
 
 void Slice::OnBlitCompleted() {
   absl::MutexLock lock(canvas_mutex_);
-  texture_status_ = TextureStatus::kStable;
   for (const auto& future : texture_blit_futures_) {
     future.Return(absl::OkStatus());
   }
   texture_blit_futures_.clear();
+  // Only progress the state forward if we are still in the state that requested
+  // the blit (and populated the blit futures). This prevents stomping out of
+  // e.g. kHasNewGlyphs which can happen if new glyphs are added to the slice
+  // while waiting for the blit to complete.
+  if (texture_status_ == TextureStatus::kReadyToBlit) {
+    texture_status_ = TextureStatus::kStable;
+  }
 }
 
 float Slice::GetAtlasUtilization() const {

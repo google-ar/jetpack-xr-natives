@@ -17,10 +17,11 @@
 #include <backend/Program.h>
 #include <backend/DriverEnums.h>
 
-#include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/CString.h"
-#include "filament/libs/utils/include/utils/ostream.h"
 #include "filament/libs/utils/include/utils/Invocable.h"
+#include "filament/libs/utils/include/utils/Panic.h"
+#include "filament/libs/utils/include/utils/debug.h"
+#include "filament/libs/utils/include/utils/ostream.h"
 
 #include <utility>
 

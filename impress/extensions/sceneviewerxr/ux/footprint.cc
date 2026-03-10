@@ -15,6 +15,7 @@
 #include "extensions/sceneviewerxr/ux/footprint.h"
 
 #include <algorithm>
+#include <bitset>
 #include <cstdlib>
 #include <memory>
 #include <tuple>
@@ -28,12 +29,11 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "filament/filament/include/filament/Box.h"
-#include "extensions/sceneviewerxr/ux/gltf_bounds.h"
-#include "extensions/sceneviewerxr/ux/interaction_mode.h"
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
 #include "core/geometry/shapes/box.h"
 #include "core/math/mat.h"
+#include "core/math/quat.h"
 #include "core/math/transform.h"
 #include "core/math/vec.h"
 #include "core/model/model_data.h"
@@ -43,10 +43,13 @@
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/gltf_asset.h"
 #include "core/view/framework/assets/gltf_collider.h"
+#include "core/view/framework/assets/gltf_mesh.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/framework/assets/gltf_scene.h"
+#include "core/view/framework/collision/box_collider.h"
 #include "core/view/utils/frame_time.h"
 #include "extensions/sceneviewerxr/assets/footprint_assets.h"
+#include "extensions/sceneviewerxr/ux/interaction_mode.h"
 #include "split_engine/materials/svxr_footprint_material.h"
 
 namespace svxr {
@@ -95,6 +98,8 @@ constexpr float kDefaultScale = 0.05f;
 
 #endif  // defined(USE_UX_FOOTPRINT)
 constexpr auto kCornerCount = 4;
+constexpr auto kScaleHandleVisibleDistance = 0.07f;
+constexpr auto kScaleHandleInteractionDistance = 0.035f;
 
 // Used to help buff up the footprint thickness when it is very far away.
 constexpr auto kDistanceBasedYBuffer = 1.5f;
@@ -226,24 +231,30 @@ imp::Future<absl::Status> Footprint::Setup(imp::NodeHandle model_node) {
 #endif  // defined(USE_UX_FOOTPRINT)
   auto edge_material_future = android_xr::SVXRFootprintMaterial::Create(view);
   auto fill_material_future = android_xr::SVXRFootprintMaterial::Create(view);
+  auto scale_handle_future =
+      asset_manager.LoadGltfAsset(imp::kScaleHandleGlb, options);
 
-  return asset_future.Merge(edge_material_future, fill_material_future)
+  return asset_future
+      .Merge(edge_material_future, fill_material_future, scale_handle_future)
       .Then([this](
                 std::tuple<imp::AssetPtr<imp::GltfAsset>,
                            std::unique_ptr<android_xr::SVXRFootprintMaterial>,
-                           std::unique_ptr<android_xr::SVXRFootprintMaterial>>
+                           std::unique_ptr<android_xr::SVXRFootprintMaterial>,
+                           imp::AssetPtr<imp::GltfAsset>>
                     result) mutable -> absl::Status {
-        auto& [gltf_asset, edge_material, fill_material] = result;
+        auto& [gltf_asset, edge_material, fill_material, scale_handle_asset] =
+            result;
 
         return Setup(std::move(gltf_asset), std::move(edge_material),
-                     std::move(fill_material));
+                     std::move(fill_material), std::move(scale_handle_asset));
       });
 }
 
 absl::Status Footprint::Setup(
     imp::AssetPtr<imp::GltfAsset> footprint_asset,
     std::unique_ptr<android_xr::SVXRFootprintMaterial> edge_material,
-    std::unique_ptr<android_xr::SVXRFootprintMaterial> fill_material) {
+    std::unique_ptr<android_xr::SVXRFootprintMaterial> fill_material,
+    imp::AssetPtr<imp::GltfAsset> scale_handle_asset) {
   edge_material_ = std::move(edge_material);
   fill_material_ = std::move(fill_material);
   auto node = GetNode();
@@ -256,9 +267,9 @@ absl::Status Footprint::Setup(
     return absl::InternalError("Expected Skin");
   }
   auto& skin = model_data.Skins().front();
-  if (skin.sampled_joints.size() != 4) {
-    return absl::InternalError(absl::StrFormat("Expected %d bones, not %d", 4,
-                                               skin.sampled_joints.size()));
+  if (skin.sampled_joints.size() != kCornerCount) {
+    return absl::InternalError(absl::StrFormat(
+        "Expected %d bones, not %d", kCornerCount, skin.sampled_joints.size()));
   }
 
   size_t encountered_mesh_index = 0;
@@ -309,7 +320,7 @@ absl::Status Footprint::Setup(
 
   auto local_scale = footprint_node_->GetLocalScale();
   imp::Box local_bounds =
-      footprint_node_->GetOrAddComponent<GltfBounds>()->GetLocalBounds();
+      footprint_node_->GetComponent<imp::GltfRenderer>()->GetLocalBounds();
   auto model_root = model->GetModelRoot();
   auto scale = kFootprintScale * (imp::float3(kDefaultScale) / local_scale);
   model_root->SetLocalPosition(scale * local_bounds.halfExtent *
@@ -336,11 +347,50 @@ absl::Status Footprint::Setup(
       });
 #endif
 
+  for (int corner_index = 0; corner_index < kCornerCount; ++corner_index) {
+    auto handle_node = GetView().CreateNode();
+    handle_node->SetName("ScaleHandle");
+    handle_node->SetParent(footprint_node_);
+
+    auto visual_node = GetView().CreateNode();
+    visual_node->SetName("ScaleHandleVisual");
+    visual_node->SetParent(handle_node);
+
+    auto renderer =
+        visual_node->AddComponent<imp::GltfRenderer>(scale_handle_asset);
+    handle_node->AddComponent<imp::BoxCollider>(renderer->GetLocalBounds());
+
+    // Disable visual initially
+    visual_node->SetEnabled(false);
+
+    scale_handles_[corner_index] = handle_node;
+    scale_handle_visuals_[corner_index] = visual_node;
+
+    // Ensure scene nodes are enabled if needed (on visual)
+    if (auto scene = visual_node->GetComponent<imp::GltfScene>()) {
+      scene->ForAllNodes([](imp::NodeHandle node) {
+        if (auto collider = node->GetComponent<imp::GltfCollider>()) {
+          collider->SetEnabled(true);
+        }
+      });
+    }
+  }
+
   return absl::OkStatus();
 }
 
 void Footprint::OnInteractionMachineInitialized() {
-  UpdateFootBonesAndBounds(GetFootprintSize(), 1);
+  machine_.UpdateWithAlternatives(
+      [this](FootprintInteractionStates::Initialized& state)
+          -> InteractionMachine::OptionalState {
+        state.is_intialize_complete = true;
+        UpdateFootBonesAndBounds(GetFootprintSize(), 1);
+        return {};
+      },
+      [](FootprintInteractionStates::Hidden& state)
+          -> InteractionMachine::OptionalState { return {}; },
+      [](FootprintInteractionStates::Active& state)
+          -> InteractionMachine::OptionalState { return {}; });
 }
 
 void Footprint::OnModelSizeChanged() {
@@ -373,8 +423,10 @@ void Footprint::OnUpdate(const imp::FrameTime& delta_time,
       [this](FootprintInteractionStates::Initialized& state)
           -> InteractionMachine::OptionalState {
         // Defer entering hidden state until async setup completes.
-        if (!footprint_model_) return {};
-        return FootprintInteractionStates::Hidden{};
+        if (footprint_model_ && state.is_intialize_complete) {
+          return FootprintInteractionStates::Hidden{};
+        }
+        return {};
       },
       [delta_time, this,
        &interaction](FootprintInteractionStates::Hidden& state)
@@ -433,6 +485,7 @@ FootprintInteractionStates::Machine::OptionalState Footprint::UpdateHidden(
     next.last_interaction_time = delta_time.GetElapsedTime();
     next.is_footprint_primary_receiver = false;
     next.is_footprint_secondary_receiver = false;
+    next.scale_handles_visibility.reset();
     return next;
   }
   return {};
@@ -598,6 +651,62 @@ FootprintInteractionStates::Machine::OptionalState Footprint::UpdateActive(
     return next;
   }
 
+  // Update handle positions every frame since model_root transform changes
+  if (auto model = footprint_node_->GetComponent<imp::GltfRenderer>()) {
+    auto model_root = model->GetModelRoot();
+    auto model_trs = model_root->GetLocalTrs();
+    for (int corner_index = 0; corner_index < kCornerCount; ++corner_index) {
+      if (!scale_handles_[corner_index]) continue;
+      // 1.0f - kCardInclusionFraction accounts for the visual extent of the
+      // corner card beyond the bone position.
+      constexpr float kVisualExtent = 1.0f - kCardInclusionFraction;
+      auto offset = kCorners[corner_index] *
+                    (model_space_inner_half_extents_ +
+                     imp::float3(kVisualExtent, 0.f, kVisualExtent));
+      auto handle_pos = (model_trs * imp::float4(offset, 1.f)).xyz;
+
+      constexpr float kRotations[] = {
+          M_PI / 2.0f,        // 90 deg  (bottom-right)
+          0.0f,               // 0 deg   (bottom-left)
+          M_PI,               // 180 deg (top-right)
+          3.0f * M_PI / 2.0f  // 270 deg (top-left)
+      };
+
+      auto handle_trs =
+          imp::Transform<float>(scale_handles_[corner_index]->GetLocalTrs());
+      handle_trs.translation = handle_pos;
+      handle_trs.rotation = imp::quatf::fromAxisAngle(
+          imp::float3(0.f, 1.f, 0.f), kRotations[corner_index]);
+      scale_handles_[corner_index]->SetLocalTrs(handle_trs.AsMat4());
+    }
+  }
+
+  // Handle visibility logic
+  std::bitset<kCornerCount> next_visibility;
+  if (state.is_footprint_primary_receiver) {
+    imp::float3 touch_local = state.primary_touch_point;
+    for (int corner_index = 0; corner_index < kCornerCount; ++corner_index) {
+      if (!scale_handles_[corner_index]) continue;
+      if (!scale_handle_visuals_[corner_index]) continue;
+
+      imp::float3 handle_pos = scale_handles_[corner_index]->GetLocalPosition();
+      float dist = length(imp::float2(touch_local.x, touch_local.z) -
+                          imp::float2(handle_pos.x, handle_pos.z));
+      if (dist < kScaleHandleVisibleDistance) {
+        next_visibility[corner_index] = true;
+      }
+    }
+  }
+
+  for (int corner_index = 0; corner_index < kCornerCount; ++corner_index) {
+    if (scale_handle_visuals_[corner_index] &&
+        state.scale_handles_visibility[corner_index] !=
+            next_visibility[corner_index]) {
+      scale_handle_visuals_[corner_index]->SetEnabled(
+          next_visibility[corner_index]);
+    }
+  }
+  state.scale_handles_visibility = next_visibility;
   return {};
 }
 
@@ -686,7 +795,7 @@ imp::float2 Footprint::RetrieveSizeFromModel() {
   }
   if (initial_model_bounds_.isEmpty()) {
     initial_model_bounds_ =
-        model_node_->GetOrAddComponent<GltfBounds>()->GetLocalBounds();
+        model_node_->GetComponent<imp::GltfRenderer>()->GetLocalBounds();
   }
   imp::float3 size =
       model_node_->GetLocalScale() * 2.0f * initial_model_bounds_.halfExtent;
@@ -712,10 +821,12 @@ void Footprint::UpdateFootBonesAndBounds(float2 foot_size,
       (max(actual_half_extents, min_half_extents) - card_inclusion) /
       kDefaultScale;
 
-  for (int i = 0; i < kCornerCount; ++i) {
-    auto offset = kCorners[i] * model_space_inner_half_extents;
+  model_space_inner_half_extents_ = model_space_inner_half_extents;
 
-    auto bone_node = model->GetOrCreateNode(kBoneNames[i]);
+  for (int corner_index = 0; corner_index < kCornerCount; ++corner_index) {
+    auto offset = kCorners[corner_index] * model_space_inner_half_extents;
+
+    auto bone_node = model->GetOrCreateNode(kBoneNames[corner_index]);
     auto bone_trs = imp::Transform<float>(bone_node->GetLocalTrs());
     bone_trs.translation = offset;
     bone_node->SetLocalTrs(bone_trs.AsMat4());
@@ -729,6 +840,35 @@ void Footprint::UpdateFootBonesAndBounds(float2 foot_size,
                           imp::float3(1.0f - kCardInclusionFraction, 0.01f,
                                       1.0f - kCardInclusionFraction)};
   model->SetRenderBounds(new_bounds);
+
+  // Update scale handles
+  // Note: Handle positions are also updated in UpdateActive to track model_root
+  // animation/thickness changes
+  auto model_root = model->GetModelRoot();
+  auto model_trs = model_root->GetLocalTrs();
+  for (int corner_index = 0; corner_index < kCornerCount; ++corner_index) {
+    if (!scale_handles_[corner_index]) continue;
+    auto offset = kCorners[corner_index] * model_space_inner_half_extents;
+    auto handle_pos = (model_trs * imp::float4(offset, 1.f)).xyz;
+
+    auto handle_trs =
+        imp::Transform<float>(scale_handles_[corner_index]->GetLocalTrs());
+    handle_trs.translation = handle_pos;
+    scale_handles_[corner_index]->SetLocalTrs(handle_trs.AsMat4());
+  }
+}
+
+bool Footprint::IsCloseToScaleHandle(const imp::float3& world_hit_pos) const {
+  imp::float3 local_hit = footprint_node_->LocalFromWorldPoint(world_hit_pos);
+  for (const auto& handle : scale_handles_) {
+    if (!handle) continue;
+    imp::float3 handle_pos = handle->GetLocalPosition();
+    float dist = length(imp::float2(local_hit.x, local_hit.z) -
+                        imp::float2(handle_pos.x, handle_pos.z));
+    // Use a tighter threshold for interaction (2.5cm) than visibility
+    if (dist < kScaleHandleInteractionDistance) return true;
+  }
+  return false;
 }
 
 void Footprint::MaintainThickness() {
@@ -737,7 +877,7 @@ void Footprint::MaintainThickness() {
 
   // Ensure footprint height stays the same at far distances.
   imp::Box local_bounds =
-      footprint_node_->GetOrAddComponent<GltfBounds>()->GetLocalBounds();
+      footprint_node_->GetComponent<imp::GltfRenderer>()->GetLocalBounds();
   auto model_root = model->GetModelRoot();
 
   // Make footprint keep same height at any distance.
@@ -761,6 +901,22 @@ void Footprint::MaintainThickness() {
   model_root->SetLocalPosition(y_offset * local_bounds.halfExtent.y *
                                imp::float3(0.f, -1.f, 0.f));
   model_root->SetLocalScale(scale);
+}
+
+bool Footprint::IsScaleHandle(imp::NodeHandle node) const {
+  for (const auto& handle : scale_handles_) {
+    if (!handle) continue;
+    // Check if node is the handle or a child of it (since GltfRenderer might
+    // have subnodes)
+    if (node == handle) return true;
+    auto parent = node->GetParent();
+    while (parent) {
+      if (parent == handle) return true;
+      if (parent->GetName() == "ScaleHandle") return true;
+      parent = parent->GetParent();
+    }
+  }
+  return false;
 }
 
 }  // namespace svxr

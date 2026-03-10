@@ -16,6 +16,8 @@
 
 #include <jni.h>
 
+#include <utility>
+
 #include "core/common/jni_helpers.h"
 #include "core/geometry/shapes/rect.h"
 #include "core/math/vec.h"
@@ -23,7 +25,8 @@
 
 namespace imp::android {
 
-Canvas::Canvas(JNIEnv* env, jobject j_canvas) : JavaWrapper(env, j_canvas) {
+Canvas::Canvas(JNIEnv* env, JniUniquePtr<jobject> j_canvas)
+    : JavaWrapper(env, std::move(j_canvas), "android/graphics/Canvas") {
   JniUniquePtr<jclass> blend_mode_class =
       FindClass(env, "android/graphics/PorterDuff$Mode");
   auto clear_mode_id = env->GetStaticFieldID(

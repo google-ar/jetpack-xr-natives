@@ -586,6 +586,8 @@ table BuiltInMaterial1b616c8aParameters (requires_api: 1) {
   auxiliary_alpha_mask: BuiltInTextureParameter (id: 4, requires_api: 1);
   feather_radius: Float2 (id: 5, requires_api: 1);
   corner_radius: Float2 (id: 7);
+  sub_view_left: Float4 (id: 8);
+  sub_view_right: Float4 (id: 9);
 }
 
 table BuiltInMaterial0d0cb9aa (requires_api: 1) {
@@ -625,8 +627,12 @@ table BuiltInMaterialGsplatSpec {
   gsplat_node_id: uint32 (id: 1);
   // Whether to use 3 vertices per splat (triangle) instead of 6 (quad).
   use_triangles_for_splats: Bool (id: 2);
+  // If true, the precomputed data texture is provided and the deserializer
+  // should not create a precompute texture pipeline.
+  has_precomputed_data_texture: Bool (id: 3);
 }
 
+// LINT.IfChange
 table BuiltInMaterialGsplatParameters {
   // Adjust opacity for each splat.
   opacity_scale: Float (id: 0);
@@ -661,14 +667,19 @@ table BuiltInMaterialGsplatParameters {
   // Texel values control rendering order.
   // The texture format is R32UI. The pixel data format is R_INTEGER. The pixel data type is UINT
   sorted_indices_texture: BuiltInTextureParameter (id: 9);
-  // If true, assigns random colors to nearby gsplats.
-  // Debugging only: This may be removed in the future.
-  visualize_chunks: Bool (id: 10);
+  // If true, assigns random colors to nearby gsplats (Debugging only).
+  visualize_chunks: Bool (id: 10, deprecated);
   // How many std-deviations of the gaussian will be shown. Lower values will
   // clip the gaussian shapes (keeping the aspect ratio).
   // Defaults to 4 std-devs.
   splat_scale: Float (id: 11);
 }
+// LINT.ThenChange(
+//   //depot/google3/third_party/impress/core/split_engine/materials/builtin/gsplat/builtin_gsplat.mat,
+//   //depot/google3/third_party/impress/core/split_engine/materials/builtin/gsplat/builtin_gsplat_data_precompute.mat,
+//   //depot/google3/third_party/impress/core/split_engine/materials/builtin/gsplat/builtin_magic_window.mat,
+//   //depot/google3/third_party/impress/core/split_engine/materials/builtin/gsplat/gsplat_material_deserializer.cc,
+// )
 
 table BuiltInMaterialGsplatBackgroundSpec {
 }

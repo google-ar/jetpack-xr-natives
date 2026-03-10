@@ -49,7 +49,8 @@ class AndroidPlatformCanvasSource : public PlatformCanvasSource {
       Context context, AndroidGlyphSource::Method glyph_method,
       bool use_hardware_rendering = true,
       int glyph_cache_size_bytes =
-          PlatformCanvasSource::kDefaultGlyphCacheSizeBytes);
+          PlatformCanvasSource::kDefaultGlyphCacheSizeBytes,
+      bool force_individual_glyph_source_instances = false);
 
   bool IsFeatureSupported(ScopedCanvas::Feature feature) override;
 

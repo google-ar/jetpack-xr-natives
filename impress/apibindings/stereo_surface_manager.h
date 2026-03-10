@@ -79,6 +79,10 @@ class StereoSurfaceManager {
   // Configures the color space metadata for content on the stereo surface.
   virtual absl::Status SetContentColorMetadataForStereoSurfaceEntity(
       int32_t node_id, MediaColorSpace color_space = {}) = 0;
+
+  // Sets the subview configuration of a stereo surface entity.
+  virtual absl::Status SetSubViewConfigForStereoSurfaceEntity(
+      int32_t node_id, float bottom, float left, float right, float top) = 0;
 };
 
 }  // namespace imp

@@ -268,7 +268,7 @@ VulkanDriver::VulkanDriver(VulkanPlatform* platform, VulkanContext& context,
       mDescriptorSetLayoutCache(mPlatform->getDevice(), &mResourceManager),
       mDescriptorSetCache(mPlatform->getDevice(), &mResourceManager),
       mQueryManager(mPlatform->getDevice()),
-      mExternalImageManager(platform, &mSamplerCache, &mYcbcrConversionCache, &mDescriptorSetCache,
+      mExternalImageManager(&mSamplerCache, &mYcbcrConversionCache, &mDescriptorSetCache,
               &mDescriptorSetLayoutCache),
       mStreamedImageManager(&mExternalImageManager),
       mIsSRGBSwapChainSupported(mPlatform->getCustomization().isSRGBSwapChainSupported),
@@ -466,9 +466,6 @@ void VulkanDriver::beginFrame(int64_t monotonic_clock_ns,
     // This will let us check if any VulkanBuffer is currently in flight or not.
     mCommands.gc();
 
-    if (mAppState.hasExternalSamplers()) {
-        mExternalImageManager.onBeginFrame();
-    }
 }
 
 void VulkanDriver::setFrameScheduledCallback(Handle<HwSwapChain> sch, CallbackHandler* handler,
@@ -514,8 +511,12 @@ void VulkanDriver::updateDescriptorSetTexture(
     if (UTILS_UNLIKELY(mExternalImageManager.isExternallySampledTexture(texture))) {
         mExternalImageManager.bindExternallySampledTexture(set, binding, texture, params);
         mAppState.hasBoundExternalImages = true;
+        set->isAnExternalSamplerBound = true;
+        set->isLayoutDirty = true;
     } else if (bool(texture->getStream())) {
         mStreamedImageManager.bindStreamedTexture(set, binding, texture, params);
+        // TODO: Fix the stream flow!! In this case the binded image doesnt have to be one
+        // with an external sampler.
         mAppState.hasBoundExternalImages = true;
     } else {
         VulkanSamplerCache::Params cacheParams = {
@@ -768,7 +769,7 @@ void VulkanDriver::createTextureExternalImage2R(Handle<HwTexture> th, backend::S
     texture->transitionLayout(&commands, texture->getPrimaryViewRange(), VulkanLayout::FRAG_READ);
 
     if (imgData.external.valid()) {
-        mExternalImageManager.addExternallySampledTexture(texture, externalImage);
+        mExternalImageManager.addExternallySampledTexture(texture, conversion);
     }
 
     texture.inc();
@@ -882,7 +883,8 @@ void VulkanDriver::createProgramR(Handle<HwProgram> ph, Program&& program, utils
             // formats. It seems to be enough, in practicce, to simply run through a list of the types of
             // samplers that *might* appear. As long as the real pipeline is close enough to something that
             // the driver has seen before, we are able to get a cache hit.
-            utils::FixedCapacityVector<VkSampler> externalSamplers (layouts[i]->bitmask.externalSampler.count(), externalSampler);
+            utils::FixedCapacityVector<std::pair<uint64_t, VkSampler>> externalSamplers(
+                    layouts[i]->bitmask.externalSampler.count(), { 0, externalSampler });
             vkLayouts[i] = mDescriptorSetLayoutCache.getVkLayout(
                 layouts[i]->bitmask, layouts[i]->bitmask.externalSampler, externalSamplers);
         }
@@ -901,6 +903,7 @@ void VulkanDriver::destroyProgram(Handle<HwProgram> ph) {
         return;
     }
     auto vprogram = resource_ptr<VulkanProgram>::cast(&mResourceManager, ph);
+    vprogram->cancelParallelCompilation();
     vprogram.dec();
 }
 
@@ -1332,7 +1335,7 @@ void VulkanDriver::destroyDescriptorSet(Handle<HwDescriptorSet> dsh) {
     auto set = resource_ptr<VulkanDescriptorSet>::cast(&mResourceManager, dsh);
     set.dec();
 
-    if (mAppState.hasExternalSamplers()) {
+    if (set->isAnExternalSamplerBound) {
         mExternalImageManager.removeDescriptorSet(set);
     }
 }
@@ -1428,7 +1431,7 @@ void VulkanDriver::updateStreams(CommandStream* driver) {
 
                     if (imgData.external.valid()) {
                         mExternalImageManager.addExternallySampledTexture(newTexture,
-                                externalImage);
+                                conversion);
                         // Cache the AHB backed image. Acquires the image here.
                         s->pushImage(image, newTexture);
                     }
@@ -2211,9 +2214,24 @@ void VulkanDriver::readPixels(Handle<HwRenderTarget> src, uint32_t x, uint32_t y
             [&context = mContext](uint32_t types, VkFlags reqs) {
                 return context.selectMemoryType(types, reqs);
             },
-            [this](PixelBufferDescriptor&& pbd) {
-                scheduleDestroy(std::move(pbd));
-            });
+            [this](PixelBufferDescriptor&& pbd) { scheduleDestroy(std::move(pbd)); });
+}
+
+void VulkanDriver::readTexture(Handle<HwTexture> src, uint8_t level, uint16_t layer, uint32_t x,
+        uint32_t y, uint32_t width, uint32_t height, PixelBufferDescriptor&& pbd) {
+    auto srcTexture = resource_ptr<VulkanTexture>::cast(&mResourceManager, src);
+
+    // Currently, we don't support 3D textures since pbd doesn't support it.
+    assert_invariant(srcTexture->target != SamplerType::SAMPLER_3D);
+
+    endCommandRecording();
+    mReadPixels.run(
+            srcTexture, level, layer, x, y, width, height, mPlatform->getGraphicsQueueFamilyIndex(),
+            std::move(pbd),
+            [&context = mContext](uint32_t types, VkFlags reqs) {
+                return context.selectMemoryType(types, reqs);
+            },
+            [this](PixelBufferDescriptor&& pbd) { scheduleDestroy(std::move(pbd)); });
 }
 
 void VulkanDriver::readBufferSubData(backend::BufferObjectHandle boh,
@@ -2507,16 +2525,24 @@ void VulkanDriver::bindDescriptorSet(
         backend::DescriptorSetOffsetArray&& offsets) {
     if (dsh) {
         auto set = resource_ptr<VulkanDescriptorSet>::cast(&mResourceManager, dsh);
+
+        // If the set has binded texture that requires an immutable sampler,
+        // a new DescriptorSetLayout must be created otherwise use the default layout.
+        if (set->isLayoutDirty) {
+            mExternalImageManager.updateSetAndLayout(set);
+            set->isLayoutDirty = false;
+        }
         mDescriptorSetCache.bind(setIndex, set, std::move(offsets));
 
-        if (mAppState.hasExternalSamplers()) {
+        if (set->isAnExternalSamplerBound) {
             auto const& bindInDrawBundle = mPipelineState.bindInDraw.second;
             // The set index being bound has already been bound or will be bound. If it's already
             // been bound and this set has external samplers, we do the doBindindraw block in
             // draw2() again. Because this set might potentially cause a new pipelineLayout
             // (therefore pipeline) to be bound.
-            if (bindInDrawBundle.descriptorSetMask[setIndex] &&
-                    mExternalImageManager.hasExternalSampler(set)) {
+            if (bindInDrawBundle.descriptorSetMask[setIndex]) {
+                // TODO: Only do bindInDraw if the previous bounded layout at `setIndex` is the
+                // different.
                 mPipelineState.bindInDraw.first = true;
             }
         }
@@ -2532,32 +2558,36 @@ void VulkanDriver::draw2(uint32_t indexOffset, uint32_t indexCount, uint32_t ins
 
     fvkutils::DescriptorSetMask setsWithExternalSamplers = {};
     if (doBindInDraw) {
-        auto& layoutHandles = bundle.dsLayoutHandles;
-        setsWithExternalSamplers = mExternalImageManager.prepareBindSets(layoutHandles,
-                mDescriptorSetCache.getBoundSets());
-
+        // Create the new pipeline layout from the current bounded descriptor sets.
+        // The layout of the descriptor sets at this point should have the final one taking into account
+        // the external samplers.
+        //
+        // The final layouts of the descriptor sets are regenerated as needed at `bindDescriptorSet`.
+        VulkanDescriptorSetCache::DescriptorSetArray const& boundSets = mDescriptorSetCache.getBoundSets();
         VulkanDescriptorSetLayout::DescriptorSetLayoutArray vklayouts;
-        for (size_t i = 0; i < layoutHandles.size(); i++) {
-            if (!layoutHandles[i]) {
+        for (size_t i = 0; i < boundSets.size(); i++) {
+            if (!boundSets[i]) {
                 vklayouts[i] = VK_NULL_HANDLE;
                 continue;
             }
-            if (setsWithExternalSamplers[i]) {
-                vklayouts[i] = layoutHandles[i]->getExternalSamplerVkLayout();
-            } else {
-                vklayouts[i] = layoutHandles[i]->getVkLayout();
-            }
+
+            vklayouts[i] = boundSets[i]->boundLayout;
         }
         auto program =
                 resource_ptr<VulkanProgram>::cast(&mResourceManager, bundle.pipelineState.program);
         VkPipelineLayout const pipelineLayout = mPipelineLayoutCache.getLayout(vklayouts, program);
         if (pipelineLayout != mPipelineState.pipelineLayout) {
             bindPipelineImpl(bundle.pipelineState, pipelineLayout, bundle.descriptorSetMask);
+            // Any push constants received while the layout was null were not written out. They were
+            // added to a list of pending constants, so we'll flush them now.
+            // Further push constant updates after the pipeline is bound will immediately set
+            // the constants because the layout is non-null (see VulkanProgram::writePushConstant).
+            program->flushPushConstants(pipelineLayout);
         }
         mPipelineState.bindInDraw.first = false;
     }
     mDescriptorSetCache.commit(mCurrentRenderPass.commandBuffer, mPipelineState.pipelineLayout,
-            setsWithExternalSamplers, mPipelineState.descriptorSetMask);
+            mPipelineState.descriptorSetMask);
 
     // Finally, make the actual draw call. TODO: support subranges
     uint32_t const firstIndex = indexOffset;

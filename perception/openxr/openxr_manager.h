@@ -18,7 +18,7 @@
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 #include <openxr/public/all_extensions.h>
-#include <openxr/public/xr_androidx2_geospatial_anchor.h>
+#include <openxr/public/xr_android_geospatial_anchor.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -84,9 +84,9 @@ class OpenXrManager {
     kErrorGeospatialCoordinatesInvalid =
         -1000789001,  // XR_ERROR_GEOSPATIAL_COORDINATES_INVALID_ANDROID
 
-    // Provided by XR_ANDROIDX2_geospatial_anchor:
+    // Provided by XR_ANDROID_geospatial_anchor:
     kErrorSurfaceAnchorLocationUnsupported =
-        -1000797000,  // XR_ERROR_SURFACE_ANCHOR_LOCATION_UNSUPPORTED_ANDROIDX2
+        -1000797000,  // XR_ERROR_SURFACE_ANCHOR_LOCATION_UNSUPPORTED_ANDROID
   };
 
   // Enum representing the configuration state for the plane trackers.
@@ -510,10 +510,10 @@ class OpenXrManager {
 
   // Creates a surface anchor asynchronously.
   CreateAnchorResult CreateSurfaceAnchorAsync(
-      XrSurfaceAnchorTypeANDROIDX2 anchor_type, double latitude,
-      double longitude, double altitude_relative_to_surface,
+      XrSurfaceAnchorTypeANDROID anchor_type, double latitude, double longitude,
+      double altitude_relative_to_surface,
       const XrQuaternionf& east_up_south_quaternion,
-      std::function<void(const XrSurfaceAnchorCreateCompletionANDROIDX2&)>
+      std::function<void(const XrSurfaceAnchorCreateCompletionANDROID&)>
           on_complete,
       std::function<void()> on_cancel);
 
@@ -894,9 +894,9 @@ class OpenXrManager {
   PFN_xrDestroyGeospatialTrackerANDROID destroy_geospatial_tracker_;
   PFN_xrLocateGeospatialPoseFromPoseANDROID locate_geospatial_pose_from_pose_;
   PFN_xrLocateGeospatialPoseANDROID locate_geospatial_pose_;
-  PFN_xrCreateGeospatialAnchorANDROIDX2 create_geospatial_anchor_;
-  PFN_xrCreateSurfaceAnchorAsyncANDROIDX2 create_surface_anchor_async_;
-  PFN_xrCreateSurfaceAnchorCompleteANDROIDX2 create_surface_anchor_complete_;
+  PFN_xrCreateGeospatialAnchorANDROID create_geospatial_anchor_;
+  PFN_xrCreateSurfaceAnchorAsyncANDROID create_surface_anchor_async_;
+  PFN_xrCreateSurfaceAnchorCompleteANDROID create_surface_anchor_complete_;
   PFN_xrCheckVpsAvailabilityAsyncANDROID check_vps_availability_async_;
   PFN_xrCheckVpsAvailabilityCompleteANDROID check_vps_availability_complete_;
 

@@ -131,7 +131,7 @@ void UpdateCamera(imp::ViewHost* view_host,
   view_host->GetView()->GetCameraManager().GetCamera()->GetNode()->SetLocalTrs(
       eye_center_transform.AsMat4());
   imp::SetEyeModelMatrixOnCamera(view_host->GetEngine(), &view->getCamera(),
-                                 xr_views);
+                                 &view->getCamera(), xr_views);
 }
 
 }  // namespace

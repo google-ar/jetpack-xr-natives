@@ -19,6 +19,7 @@
 material {
   name : "MagicWindow",
   parameters : [
+        // LINT.IfChange
         {
            // A scaling value that is used to control the size of the splats
            // relative to their covariance-matrix defined scale. Mathematically,
@@ -71,6 +72,10 @@ material {
            type      : float2,
            name      : windowDimensionInMagicWindow
         }
+        // LINT.ThenChange(
+        //   gsplat_material_deserializer.cc,
+        //   //depot/google3/third_party/split_engine/schemas/split_engine_material.fbs,
+        // )
   ],
   constants : [
         {
@@ -141,7 +146,12 @@ vertex {
    int eyeIndex = -1;
 #endif
     computeSplatData(eyeIndex, position, cov3d, getWorldFromModelMatrix(),
-                     getResolution().xy, clipPos, basisAxisX, aspectRatio);
+                     /*resolution=*/getResolution().xy,
+                     /*minSize=*/vec2(0.1, 0.1),
+                     /*maxSize=*/getResolution().xy * 0.5,
+                     clipPos,
+                     basisAxisX,
+                     aspectRatio);
     // computeSplatData() sets clipPos.w to 0.0 if the splat is behind the
     // camera.
     if (clipPos.w == 0.0) {

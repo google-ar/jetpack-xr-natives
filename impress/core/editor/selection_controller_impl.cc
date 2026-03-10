@@ -20,8 +20,10 @@
 #include "absl/container/flat_hash_set.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
+#include "core/camera/camera_component.h"
 #include "core/common/registry.h"
 #include "core/editor/editor.h"
+#include "core/editor/editor_info.h"
 #include "core/editor/events.h"
 #include "core/input/key_codes.h"
 #include "core/input/keyboard_event.h"
@@ -33,7 +35,6 @@
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/gltf_collider.h"
 #include "core/view/framework/assets/gltf_renderer.h"
-#include "core/view/framework/camera/camera_component.h"
 #include "core/view/framework/camera/camera_helpers.h"
 #include "core/view/framework/gestures/tap_gesture.h"
 
@@ -184,9 +185,9 @@ SelectionControllerImpl::GetSelectedNodes() {
 }
 
 void SelectionControllerImpl::TrySelectNode(
-    NodeHandle node_to_select, Editor::SelectionMode selection_mode) {
+    NodeHandle node_to_select, EditorInfo::SelectionMode selection_mode) {
   bool is_selected_nodes_updated =
-      selection_mode == Editor::SelectionMode::kMultipleNodes
+      selection_mode == EditorInfo::SelectionMode::kMultipleNodes
           ? TrySelectNodeUnderMultiSelection(node_to_select, selected_nodes_)
           : TrySelectNodeUnderSingleSelection(node_to_select, selected_nodes_);
 
@@ -250,7 +251,7 @@ void SelectionControllerImpl::CycleOrUpdateSelection(
   }
   selectable_nodes_ = new_selectable_nodes;
   // TODO: Review this function to make sure the target exists.
-  TrySelectNode(target, Editor::SelectionMode::kSingleNode);
+  TrySelectNode(target, EditorInfo::SelectionMode::kSingleNode);
 }
 
 void SelectionControllerImpl::FocusCameraOnSelection() {

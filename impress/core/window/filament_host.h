@@ -271,8 +271,14 @@ class FilamentHost {
 
     virtual bool ShouldUseMsaaSwapChain() const { return false; }
 
+    virtual bool ShouldUseTransparentSwapChain() const { return false; }
+
     // When true, the host will set the presentation time on the renderer.
     virtual bool ShouldSetPresentationTime() const { return false; }
+
+    virtual filament::Engine::Backend GetPreferredBackend() const {
+      return filament::Engine::Backend::DEFAULT;
+    }
   };
 
   // Dev mode is optionally installed and operates via this abstract interface.
@@ -319,6 +325,10 @@ class FilamentHost {
     virtual ImGuiRenderer* GetImGuiRenderer() = 0;
   };
 
+  struct RenderPassOptions {
+    bool use_main_view_projection_matrix = true;
+  };
+
   // Construct with a state object constructed by the caller.  We take over
   // ownership of it, and delete it at destruction time.
   explicit FilamentHost(std::unique_ptr<State>&& state)
@@ -351,6 +361,9 @@ class FilamentHost {
 
   // Lifecycle queries.
   bool IsCleaningUp();
+
+  // Returns true if the session is running in an XR environment.
+  virtual bool IsInXr() const;
 
   // Pass through a void* representing the system resource we want to create a
   // swap chain with.  The real type is known by Engine::Platform.
@@ -483,7 +496,11 @@ class FilamentHost {
   // Can be overridden to perform rendering in a special way. For instance, for
   // OpenXR this can be used to override how rendering occurs so that both the
   // left eye and the right eye are rendered with the correct camera settings.
-  virtual void PerformRender(filament::View* view);
+  virtual void PerformRender(filament::View* view, RenderPassOptions options);
+
+  void PerformRender(filament::View* view) {
+    PerformRender(view, {.use_main_view_projection_matrix = true});
+  }
 
   // Pause or resume the rendering thread.
   void SetPaused(bool paused);

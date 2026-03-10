@@ -95,6 +95,8 @@ cc_library(
         "//core/geometry/shapes",
         "//core/input",
         "//core/lighting:environment_light_factory",
+        "//core/lighting:light_component",
+        "//core/lighting:light_state_proto_cc_imp",
         "//core/materials",
         "//core/math",
         "//core/math:aabb_helpers",

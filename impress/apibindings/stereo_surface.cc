@@ -17,26 +17,33 @@
 #include <sys/types.h>
 
 #include <algorithm>
+#include <array>
 #include <memory>
+#include <optional>
 #include <tuple>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
+#include "apibindings/stereo_mesh.h"
 #include "core/async/future.h"
 #include "core/math/vec.h"
 #include "core/media/media_color_space.h"
 #include "core/media/media_type.h"
+#include "core/model/mesh/mesh.h"
+#include "core/model/mesh/mesh_factory.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
 #include "core/render/android/android_defines.h"
 #include "core/render/android/android_external_texture_surface.h"
 #include "core/render/content_security_level.h"
+#include "core/render/mesh_renderer.h"
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
 #include "core/view/base_view.h"
@@ -44,16 +51,14 @@
 #include "core/view/framework/collision/collider_state.proto.imp.h"
 #include "core/view/framework/collision/mesh_collider.h"
 #include "core/view/framework/collision/sphere_collider.h"
-#include "core/view/framework/render/mesh_factory.h"
-#include "core/view/framework/render/mesh_renderer.h"
 #include "core/view/platforms/android/wrappers/surface.h"
 #include "split_engine/materials/jxr_media_material.h"
 #include "mediapipe/framework/port/status_macros.h"
 
 namespace imp {
 namespace {
-constexpr float2 kDefaultFeatherRadius = kZero2;
 constexpr float2 kDefaultCornerRadius = kZero2;
+constexpr float4 kRectFullView = {0.f, 0.f, 1.f, 1.f};
 // Render priority for the surface is set to 5 to ensure they render after the
 // environment. The environment renders at default priority 4 and panels at 6.
 constexpr int kRenderPriorityBetweenEnvironmentAndPanels = 5;
@@ -61,6 +66,18 @@ constexpr int kRenderPriorityBetweenEnvironmentAndPanels = 5;
 // older system images.
 static constexpr absl::string_view kMeshColliderWorkaroundNodeName =
     "MeshColliderWorkaroundNode";
+constexpr std::array<RenderEyeTarget, 1> kEyeTargetsBoth = {
+    RenderEyeTarget::kBoth};
+constexpr std::array<RenderEyeTarget, 1> kEyeTargetsLeft = {
+    RenderEyeTarget::kLeftOnly};
+constexpr std::array<RenderEyeTarget, 1> kEyeTargetsRight = {
+    RenderEyeTarget::kRightOnly};
+constexpr std::array<RenderEyeTarget, 2> kEyeTargetsLeftRight = {
+    RenderEyeTarget::kLeftOnly, RenderEyeTarget::kRightOnly};
+constexpr std::array<RenderEyeTarget, 3> kEyeTargetsAll = {
+    RenderEyeTarget::kBoth, RenderEyeTarget::kLeftOnly,
+    RenderEyeTarget::kRightOnly};
+
 }  // namespace
 
 absl::Status StereoSurface::Setup(MediaStereoMode stereo_mode,
@@ -101,16 +118,15 @@ absl::Status StereoSurface::Setup(MediaStereoMode stereo_mode,
   mesh_renderer_right_->SetShadowReceivingMode(MeshRenderer::ShadowMode::kNone);
   mesh_renderer_right_->SetPriority(kRenderPriorityBetweenEnvironmentAndPanels);
 
-  material_future_both_ =
-      InitializeMaterial(material_both_, RenderEyeTarget::kBoth);
-
-  material_future_left_ =
-      InitializeMaterial(material_left_, RenderEyeTarget::kLeftOnly);
-  material_future_right_ =
-      InitializeMaterial(material_right_, RenderEyeTarget::kRightOnly);
+  for (RenderEyeTarget eye_target : kEyeTargetsAll) {
+    material_futures_[eye_target] = InitializeMaterial(eye_target);
+  }
 
   per_eye_material_future_ =
-      material_future_left_.Combine(material_future_right_);
+      material_futures_[RenderEyeTarget::kLeftOnly].Combine(
+          material_futures_[RenderEyeTarget::kRightOnly]);
+
+  SetStereoMode(stereo_mode);
   return absl::OkStatus();
 }
 
@@ -124,19 +140,20 @@ StereoSurface::CreateJxrMediaMaterial(RenderEyeTarget eye_target,
 }
 
 Future<absl::Status> StereoSurface::InitializeMaterial(
-    std::unique_ptr<android_xr::JxrMediaMaterial>& material,
     RenderEyeTarget eye_target) {
   return CreateJxrMediaMaterial(eye_target, use_super_sampling_, blending_mode_)
-      .Then([this, &material, stereo_mode = stereo_mode_](
+      .Then([this, eye_target, stereo_mode = stereo_mode_,
+             blending_mode = blending_mode_](
                 std::unique_ptr<android_xr::JxrMediaMaterial> result) {
-        material = std::move(result);
+        material_cache_.Set(eye_target, blending_mode, std::move(result));
 
         // Fetch all textures associated with the surface.
         auto textures = surface_->BorrowTextures();
 
         auto iter = textures.find(SurfaceViewType::kPrimaryView);
         if (iter != textures.end()) {
-          material->SetPrimaryTexture(iter->second);
+          material_cache_.SetPrimaryTexture({eye_target}, blending_mode,
+                                            iter->second);
         }
         if (stereo_mode == MediaStereoMode::kInterleavedLeftPrimary ||
             stereo_mode == MediaStereoMode::kInterleavedRightPrimary ||
@@ -145,17 +162,18 @@ Future<absl::Status> StereoSurface::InitializeMaterial(
           // Check for an (MV_HEVC) auxiliary texture.
           iter = textures.find(SurfaceViewType::kAuxiliaryView);
           if (iter != textures.end()) {
-            material->SetAuxiliaryTexture(iter->second);
+            material_cache_.SetAuxiliaryTexture({eye_target}, blending_mode,
+                                                iter->second);
           }
         }
 
-        material->SetStereoType(stereo_mode);
         // By default, fallback to the best-effort color conversion mode. We
         // switch to the user-specified color conversion mode when the user
         // explicitly sets the color information of the content to be
         // rendered to the surface.
-        material->SetContentColorMetadata(MediaColorSpace());
-        material->SetFeatherRadius(kDefaultFeatherRadius);
+        material_cache_.SetContentColorMetadata({eye_target}, blending_mode,
+                                                MediaColorSpace());
+        material_cache_.SetFeatherRadius({eye_target}, blending_mode, kZero2);
       });
 }
 
@@ -164,26 +182,13 @@ void StereoSurface::Cleanup() {
   auto placeholder_texture =
       GetView().GetTextureFactory().BorrowPlaceholderTexture();
 
-  if (material_future_both_.Ready()) {
-    material_both_->SetPrimaryTexture(placeholder_texture);
-    material_both_->SetAuxiliaryTexture(placeholder_texture);
-    material_both_->SetPrimaryAlphaMask(placeholder_texture);
-    material_both_->SetAuxiliaryAlphaMask(placeholder_texture);
-  } else {
-    material_future_both_.Cancel();
-  }
+  material_cache_.ResetTextures(placeholder_texture);
 
-  if (per_eye_material_future_.Ready()) {
-    material_left_->SetPrimaryTexture(placeholder_texture);
-    material_left_->SetAuxiliaryTexture(placeholder_texture);
-    material_left_->SetPrimaryAlphaMask(placeholder_texture);
-    material_left_->SetAuxiliaryAlphaMask(placeholder_texture);
-    material_right_->SetPrimaryTexture(placeholder_texture);
-    material_right_->SetAuxiliaryTexture(placeholder_texture);
-    material_right_->SetPrimaryAlphaMask(placeholder_texture);
-    material_right_->SetAuxiliaryAlphaMask(placeholder_texture);
-  } else {
-    per_eye_material_future_.Cancel();
+  for (RenderEyeTarget eye_target : kEyeTargetsAll) {
+    auto& material_future = material_futures_[eye_target];
+    if (!material_future.Ready()) {
+      material_future.Cancel();
+    }
   }
 
   CleanupColliderType();
@@ -208,7 +213,7 @@ absl::Status StereoSurface::SetCanvasShape(const CanvasShape& canvas_shape) {
   auto shape_q = std::get_if<Quad>(&canvas_shape);
   auto shape_s = std::get_if<Sphere>(&canvas_shape);
   auto shape_h = std::get_if<Hemisphere>(&canvas_shape);
-  auto shape_mesh = std::get_if<CustomMesh>(&canvas_shape);
+  auto shape_stereo = std::get_if<StereoMesh>(&canvas_shape);
   if (shape_q != nullptr) {
     is_per_eye_ = false;
     // Don't set the z scale to 0.0f, as that breaks the collider.
@@ -247,36 +252,37 @@ absl::Status StereoSurface::SetCanvasShape(const CanvasShape& canvas_shape) {
                   ? MeshFactory::MeshDataStorageMode::kDiscardMeshData
                   : MeshFactory::MeshDataStorageMode::kStoreMeshData));
     }
-  } else if (shape_mesh != nullptr) {
-    is_per_eye_ = shape_mesh->right_positions.has_value() &&
-                  !shape_mesh->right_positions->empty();
+  } else if (shape_stereo != nullptr) {
+    is_per_eye_ = shape_stereo->right_positions.has_value() &&
+                  !shape_stereo->right_positions->empty();
 
-    imp::CreateCustomMeshSettings settings{
-        .positions = shape_mesh->left_positions,
-        .texcoords = shape_mesh->left_texcoords};
+    imp::CreateStereoMeshSettings settings{
+        .positions = shape_stereo->left_positions,
+        .texture_coordinates = shape_stereo->left_texcoords};
 
-    if (shape_mesh->left_indices.has_value() &&
-        !shape_mesh->left_indices->empty()) {
-      settings.indices = shape_mesh->left_indices;
+    if (shape_stereo->left_indices.has_value() &&
+        !shape_stereo->left_indices->empty()) {
+      settings.indices = shape_stereo->left_indices;
     }
 
-    settings.draw_mode = shape_mesh->draw_mode;
+    settings.draw_mode = shape_stereo->draw_mode;
 
     mesh_renderer_left_or_both_->SetMesh(
-        GetView().GetMeshFactory().CreateCustomMesh(
-            settings, MeshFactory::MeshDataStorageMode::kDiscardMeshData));
+        CreateStereoMesh(&GetView(), settings,
+                         MeshFactory::MeshDataStorageMode::kDiscardMeshData));
 
     if (is_per_eye_) {
-      imp::CreateCustomMeshSettings right_settings{
-          .positions = *shape_mesh->right_positions,
-          .texcoords = *shape_mesh->right_texcoords};
-      if (shape_mesh->right_indices.has_value() &&
-          !shape_mesh->right_indices->empty()) {
-        right_settings.indices = shape_mesh->right_indices;
+      imp::CreateStereoMeshSettings right_settings{
+          .positions = *shape_stereo->right_positions,
+          .texture_coordinates = *shape_stereo->right_texcoords};
+      if (shape_stereo->right_indices.has_value() &&
+          !shape_stereo->right_indices->empty()) {
+        right_settings.indices = shape_stereo->right_indices;
       }
       right_settings.draw_mode = settings.draw_mode;
-      mesh_renderer_right_->SetMesh(GetView().GetMeshFactory().CreateCustomMesh(
-          right_settings, MeshFactory::MeshDataStorageMode::kDiscardMeshData));
+      mesh_renderer_right_->SetMesh(
+          CreateStereoMesh(&GetView(), right_settings,
+                           MeshFactory::MeshDataStorageMode::kDiscardMeshData));
     }
   } else {
     // In practice this should be impossible, since the higher level JXR APIs
@@ -312,40 +318,47 @@ absl::Status StereoSurface::SetCanvasShape(const CanvasShape& canvas_shape) {
   // the mesh renderer.
   if (is_per_eye_) {
     per_eye_material_future_
-        .Then([this, corner_radius]() {
-          if (!material_left_ || !material_right_) {
+        .Then([this, corner_radius, blending_mode = blending_mode_]() {
+          auto* material_left =
+              material_cache_.Get(RenderEyeTarget::kLeftOnly, blending_mode);
+          auto* material_right =
+              material_cache_.Get(RenderEyeTarget::kRightOnly, blending_mode);
+          if (!material_left || !material_right) {
             IMP_LOG(imp::ERROR) << "Failed to create per-eye materials.";
             return;
           }
           if (mesh_renderer_left_or_both_) {
             mesh_renderer_left_or_both_->SetMaterial(
-                material_left_->GetMaterial());
+                material_left->GetMaterial());
             mesh_renderer_left_or_both_->SetEnabled(true);
           }
           if (mesh_renderer_right_) {
-            mesh_renderer_right_->SetMaterial(material_right_->GetMaterial());
+            mesh_renderer_right_->SetMaterial(material_right->GetMaterial());
             mesh_renderer_right_->SetEnabled(true);
           }
-          material_left_->SetCornerRadius(corner_radius);
-          material_right_->SetCornerRadius(corner_radius);
+          material_cache_.SetCornerRadius(kEyeTargetsLeftRight, blending_mode,
+                                          corner_radius);
         })
         .KeptBy(this);
   } else {
-    material_future_both_
-        .Then([this, corner_radius]() {
-          if (!material_both_) {
+    material_futures_[RenderEyeTarget::kBoth]
+        .Then([this, corner_radius, blending_mode = blending_mode_]() {
+          auto* material_both =
+              material_cache_.Get(RenderEyeTarget::kBoth, blending_mode);
+          if (!material_both) {
             IMP_LOG(imp::ERROR) << "Failed to create both-eyes material.";
             return;
           }
           if (mesh_renderer_left_or_both_) {
             mesh_renderer_left_or_both_->SetMaterial(
-                material_both_->GetMaterial());
+                material_both->GetMaterial());
             mesh_renderer_left_or_both_->SetEnabled(true);
           }
           if (mesh_renderer_right_) {
             mesh_renderer_right_->SetEnabled(false);
           }
-          material_both_->SetCornerRadius(corner_radius);
+          material_cache_.SetCornerRadius(kEyeTargetsBoth, blending_mode,
+                                          corner_radius);
         })
         .KeptBy(this);
   }
@@ -481,39 +494,73 @@ absl::Status StereoSurface::SetSurfaceDimensions(int width, int height) {
   return surface_->SetDefaultBufferSize({width, height});
 }
 
+// TODO: Remove or deprecate SetStereoMode
+[[deprecated("Marked for removal, see (broken link)")]]
 void StereoSurface::SetStereoMode(MediaStereoMode stereo_mode) {
   stereo_mode_ = stereo_mode;
-  material_future_both_ = material_future_both_.Then(
-      [this, stereo_mode]() { material_both_->SetStereoType(stereo_mode); });
-  per_eye_material_future_ =
-      per_eye_material_future_.Then([this, stereo_mode]() {
-        material_left_->SetStereoType(stereo_mode);
-        material_right_->SetStereoType(stereo_mode);
+  material_futures_[RenderEyeTarget::kBoth] =
+      material_futures_[RenderEyeTarget::kBoth].Then(
+          [this, stereo_mode, blending_mode = blending_mode_]() {
+            material_cache_.SetStereoType(kEyeTargetsBoth, blending_mode,
+                                          stereo_mode);
+          });
+  per_eye_material_future_ = per_eye_material_future_.Then(
+      [this, stereo_mode, blending_mode = blending_mode_]() {
+        material_cache_.SetStereoType(kEyeTargetsLeftRight, blending_mode,
+                                      stereo_mode);
       });
+
+  float4 left_rect = kRectFullView;
+  float4 right_rect = kRectFullView;
+  switch (stereo_mode) {
+    case MediaStereoMode::kLeftRight:
+      left_rect = {0.0f, 0.0f, 0.5f, 1.0f};
+      right_rect = {0.5f, 0.0f, 0.5f, 1.0f};
+      break;
+    case MediaStereoMode::kTopBottom:
+      left_rect = {0.0f, 0.0f, 1.0f, 0.5f};
+      right_rect = {0.0f, 0.5f, 1.0f, 0.5f};
+      break;
+    case MediaStereoMode::kUnknown:
+    case MediaStereoMode::kMonoscopic:
+    case MediaStereoMode::kStereoMesh:
+    case MediaStereoMode::kInterleavedLeftPrimary:
+    case MediaStereoMode::kInterleavedRightPrimary:
+    case MediaStereoMode::kInterleavedLeftPrimaryWithDepth:
+    case MediaStereoMode::kInterleavedRightPrimaryWithDepth:
+      break;
+    default:
+      IMP_LOG(imp::ERROR) << "Unknown stereo mode, using full view rect for both eyes.";
+      break;
+  }
+  SetSubViewRects(left_rect, right_rect);
 }
 
 void StereoSurface::SetPrimaryAlphaMask(OwnedOrBorrowedTexturePtr alpha_mask) {
   BorrowedTexturePtr borrowed_alpha_mask = alpha_mask.Borrow();
-  material_future_both_ =
-      material_future_both_.Then([this, borrowed_alpha_mask]() mutable {
+  material_futures_[RenderEyeTarget::kBoth] =
+      material_futures_[RenderEyeTarget::kBoth].Then(
+          [this, borrowed_alpha_mask,
+           blending_mode = blending_mode_]() mutable {
+            if (!borrowed_alpha_mask) {
+              // TODO: replace with white/black texture from the
+              // TextureFactory
+              borrowed_alpha_mask =
+                  GetView().GetTextureFactory().BorrowPlaceholderTexture();
+            }
+            material_cache_.SetPrimaryAlphaMask(kEyeTargetsBoth, blending_mode,
+                                                std::move(borrowed_alpha_mask));
+          });
+  per_eye_material_future_ = per_eye_material_future_.Then(
+      [this, borrowed_alpha_mask, blending_mode = blending_mode_]() mutable {
         if (!borrowed_alpha_mask) {
           // TODO: replace with white/black texture from the
           // TextureFactory
           borrowed_alpha_mask =
               GetView().GetTextureFactory().BorrowPlaceholderTexture();
         }
-        material_both_->SetPrimaryAlphaMask(std::move(borrowed_alpha_mask));
-      });
-  per_eye_material_future_ =
-      per_eye_material_future_.Then([this, borrowed_alpha_mask]() mutable {
-        if (!borrowed_alpha_mask) {
-          // TODO: replace with white/black texture from the
-          // TextureFactory
-          borrowed_alpha_mask =
-              GetView().GetTextureFactory().BorrowPlaceholderTexture();
-        }
-        material_left_->SetPrimaryAlphaMask(borrowed_alpha_mask);
-        material_right_->SetPrimaryAlphaMask(borrowed_alpha_mask);
+        material_cache_.SetPrimaryAlphaMask(kEyeTargetsLeftRight, blending_mode,
+                                            borrowed_alpha_mask);
       });
 }
 
@@ -521,48 +568,58 @@ void StereoSurface::SetAuxiliaryAlphaMask(
     OwnedOrBorrowedTexturePtr auxiliary_alpha_mask) {
   BorrowedTexturePtr borrowed_auxiliary_alpha_mask =
       auxiliary_alpha_mask.Borrow();
-  material_future_both_ = material_future_both_.Then(
-      [this, borrowed_auxiliary_alpha_mask]() mutable {
+  material_futures_[RenderEyeTarget::kBoth] =
+      material_futures_[RenderEyeTarget::kBoth].Then(
+          [this, borrowed_auxiliary_alpha_mask,
+           blending_mode = blending_mode_]() mutable {
+            if (!borrowed_auxiliary_alpha_mask) {
+              // TODO: replace with a white or black texture from
+              // the TextureFactory
+              borrowed_auxiliary_alpha_mask =
+                  GetView().GetTextureFactory().BorrowPlaceholderTexture();
+            }
+            material_cache_.SetAuxiliaryAlphaMask(
+                kEyeTargetsBoth, blending_mode, borrowed_auxiliary_alpha_mask);
+          });
+  per_eye_material_future_ =
+      per_eye_material_future_.Then([this, borrowed_auxiliary_alpha_mask,
+                                     blending_mode = blending_mode_]() mutable {
         if (!borrowed_auxiliary_alpha_mask) {
           // TODO: replace with a white or black texture from the
           // TextureFactory
           borrowed_auxiliary_alpha_mask =
               GetView().GetTextureFactory().BorrowPlaceholderTexture();
         }
-        material_both_->SetAuxiliaryAlphaMask(borrowed_auxiliary_alpha_mask);
-      });
-  per_eye_material_future_ = per_eye_material_future_.Then(
-      [this, borrowed_auxiliary_alpha_mask]() mutable {
-        if (!borrowed_auxiliary_alpha_mask) {
-          // TODO: replace with a white or black texture from the
-          // TextureFactory
-          borrowed_auxiliary_alpha_mask =
-              GetView().GetTextureFactory().BorrowPlaceholderTexture();
-        }
-        material_left_->SetAuxiliaryAlphaMask(borrowed_auxiliary_alpha_mask);
-        material_right_->SetAuxiliaryAlphaMask(borrowed_auxiliary_alpha_mask);
+        material_cache_.SetAuxiliaryAlphaMask(
+            kEyeTargetsLeftRight, blending_mode, borrowed_auxiliary_alpha_mask);
       });
 }
 
 void StereoSurface::SetContentColorMetadata(MediaColorSpace color_space) {
-  material_future_both_ = material_future_both_.Then([this, color_space]() {
-    material_both_->SetContentColorMetadata(color_space);
-  });
-  per_eye_material_future_ =
-      per_eye_material_future_.Then([this, color_space]() {
-        material_left_->SetContentColorMetadata(color_space);
-        material_right_->SetContentColorMetadata(color_space);
+  material_futures_[RenderEyeTarget::kBoth] =
+      material_futures_[RenderEyeTarget::kBoth].Then(
+          [this, color_space, blending_mode = blending_mode_]() {
+            material_cache_.SetContentColorMetadata(kEyeTargetsBoth,
+                                                    blending_mode, color_space);
+          });
+  per_eye_material_future_ = per_eye_material_future_.Then(
+      [this, color_space, blending_mode = blending_mode_]() {
+        material_cache_.SetContentColorMetadata(kEyeTargetsLeftRight,
+                                                blending_mode, color_space);
       });
 }
 
 void StereoSurface::SetFeatherRadius(const float2& feather_radius) {
-  material_future_both_ = material_future_both_.Then([this, feather_radius]() {
-    material_both_->SetFeatherRadius(feather_radius);
-  });
-  per_eye_material_future_ =
-      per_eye_material_future_.Then([this, feather_radius]() {
-        material_left_->SetFeatherRadius(feather_radius);
-        material_right_->SetFeatherRadius(feather_radius);
+  material_futures_[RenderEyeTarget::kBoth] =
+      material_futures_[RenderEyeTarget::kBoth].Then(
+          [this, feather_radius, blending_mode = blending_mode_]() {
+            material_cache_.SetFeatherRadius(kEyeTargetsBoth, blending_mode,
+                                             feather_radius);
+          });
+  per_eye_material_future_ = per_eye_material_future_.Then(
+      [this, feather_radius, blending_mode = blending_mode_]() {
+        material_cache_.SetFeatherRadius(kEyeTargetsLeftRight, blending_mode,
+                                         feather_radius);
       });
 }
 
@@ -574,65 +631,70 @@ void StereoSurface::SetBlendingMode(MediaBlendingMode blending_mode) {
   RecreateMaterials();
 }
 
+Future<android_xr::JxrMediaMaterial*> StereoSurface::GetOrCreateMaterial(
+    RenderEyeTarget eye_target, bool use_super_sampling,
+    MediaBlendingMode blending_mode) {
+  if (material_cache_.Contains(eye_target, blending_mode)) {
+    return Future<android_xr::JxrMediaMaterial*>(
+        material_cache_.Get(eye_target, blending_mode));
+  }
+
+  return CreateJxrMediaMaterial(eye_target, use_super_sampling, blending_mode)
+      .Then([this, eye_target, blending_mode](
+                std::unique_ptr<android_xr::JxrMediaMaterial> material) {
+        if (!material) {
+          IMP_LOG(imp::ERROR) << "Failed to create material for eye target "
+                     << static_cast<int>(eye_target) << " with blending mode "
+                     << static_cast<int>(blending_mode);
+          return static_cast<android_xr::JxrMediaMaterial*>(nullptr);
+        }
+        return material_cache_.Set(eye_target, blending_mode,
+                                   std::move(material));
+      });
+}
+
 void StereoSurface::RecreateMaterials() {
-  material_future_both_ = material_future_both_.Then(
-      // Capture the current values of the use_super_sampling_ and
-      // blending_mode_ variables, as they may change by the time the lambda is
-      // called.
-      [this, use_super_sampling = use_super_sampling_,
-       blending_mode = blending_mode_]() {
-        return CreateJxrMediaMaterial(RenderEyeTarget::kBoth,
-                                      use_super_sampling, blending_mode)
-            .Then(
-                [this](std::unique_ptr<android_xr::JxrMediaMaterial> material) {
-                  if (!material) {
-                    IMP_LOG(imp::ERROR) << "Failed to recreate both-eyes material";
+  material_futures_[RenderEyeTarget::kBoth] =
+      material_futures_[RenderEyeTarget::kBoth].Then(
+          // Capture the current values of the use_super_sampling_ and
+          // blending_mode_ variables, as they may change by the time the lambda
+          // is called.
+          [this, use_super_sampling = use_super_sampling_,
+           blending_mode = blending_mode_]() {
+            return GetOrCreateMaterial(RenderEyeTarget::kBoth,
+                                       use_super_sampling, blending_mode)
+                .Then([this](android_xr::JxrMediaMaterial* material) {
+                  if (material == nullptr) {
                     return;
                   }
-                  if (material_both_) {
-                    material_both_->ApplyParametersTo(*material);
-                  }
-                  // Note that we must first set the new material on the mesh
-                  // renderer before destroying the old material to avoid error
-                  // from borrowed material ptr.
                   if (mesh_renderer_left_or_both_ && !is_per_eye_) {
                     mesh_renderer_left_or_both_->SetMaterial(
                         material->GetMaterial());
                   }
-                  material_both_ = std::move(material);
                 });
-      });
+          });
 
-  per_eye_material_future_ = per_eye_material_future_.Then(
-      // Capture the current values of the use_super_sampling_ and
-      // blending_mode_ variables, as they may change by the time the lambda is
-      // called.
-      [this, use_super_sampling = use_super_sampling_,
-       blending_mode = blending_mode_]() {
-        auto left_future = CreateJxrMediaMaterial(
-            RenderEyeTarget::kLeftOnly, use_super_sampling, blending_mode);
-        auto right_future = CreateJxrMediaMaterial(
-            RenderEyeTarget::kRightOnly, use_super_sampling, blending_mode);
+  per_eye_material_future_ =
+      per_eye_material_future_.Then(
+          // Capture the current values of the use_super_sampling_ and
+          // blending_mode_ variables, as they may change by the time the lambda
+          // is called.
+          [this, use_super_sampling = use_super_sampling_,
+           blending_mode = blending_mode_]() {
+            auto left_future = GetOrCreateMaterial(
+                RenderEyeTarget::kLeftOnly, use_super_sampling, blending_mode);
+            auto right_future = GetOrCreateMaterial(
+                RenderEyeTarget::kRightOnly, use_super_sampling, blending_mode);
 
-        return left_future.Merge(std::move(right_future))
-            .Then(
-                [this](std::tuple<std::unique_ptr<android_xr::JxrMediaMaterial>,
-                                  std::unique_ptr<android_xr::JxrMediaMaterial>>
-                           materials) {
-                  auto [material_left, material_right] = std::move(materials);
-                  if (!material_left || !material_right) {
-                    IMP_LOG(imp::ERROR) << "Failed to recreate per-eye materials";
+            return left_future.Merge(std::move(right_future))
+                .Then([this](std::tuple<android_xr::JxrMediaMaterial*,
+                                        android_xr::JxrMediaMaterial*>
+                                 materials) {
+                  auto [material_left, material_right] = materials;
+                  if (material_left == nullptr || material_right == nullptr) {
                     return;
                   }
-                  if (material_left_) {
-                    material_left_->ApplyParametersTo(*material_left);
-                  }
-                  if (material_right_) {
-                    material_right_->ApplyParametersTo(*material_right);
-                  }
-                  // Note that we must first set the new material on the mesh
-                  // renderer before destroying the old material to avoid error
-                  // from borrowed material ptr.
+
                   if (is_per_eye_) {
                     if (mesh_renderer_left_or_both_) {
                       mesh_renderer_left_or_both_->SetMaterial(
@@ -643,9 +705,24 @@ void StereoSurface::RecreateMaterials() {
                           material_right->GetMaterial());
                     }
                   }
-                  material_left_ = std::move(material_left);
-                  material_right_ = std::move(material_right);
                 });
+          });
+}
+
+void StereoSurface::SetSubViewRects(const float4& left_rect,
+                                    const float4& right_rect) {
+  material_futures_[RenderEyeTarget::kBoth] =
+      material_futures_[RenderEyeTarget::kBoth].Then(
+          [this, left_rect, right_rect, blending_mode = blending_mode_]() {
+            material_cache_.SetSubViewConfig(kEyeTargetsBoth, blending_mode,
+                                             left_rect, right_rect);
+          });
+  per_eye_material_future_ = per_eye_material_future_.Then(
+      [this, left_rect, right_rect, blending_mode = blending_mode_]() {
+        material_cache_.SetSubViewConfig(kEyeTargetsLeft, blending_mode,
+                                         left_rect, kRectFullView);
+        material_cache_.SetSubViewConfig(kEyeTargetsRight, blending_mode,
+                                         kRectFullView, right_rect);
       });
 }
 

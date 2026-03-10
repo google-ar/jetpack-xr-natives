@@ -98,6 +98,7 @@ class TextureFactory {
     // Number of mip map levels of the texture.
     std::optional<uint8_t> levels;
     // Sampler type of the texture.
+    ABSL_DEPRECATED("Use TextureCreationSettings::sampler_options instead.")
     std::optional<SamplerType> sampler_type;
     // Usage of the texture.
     std::optional<Usage> usage;
@@ -264,8 +265,14 @@ class TextureFactory {
   TexturePtr WrapTexture(filament::Texture* texture,
                          const filament::backend::SamplerParams& params = {});
 
-  // Borrows a placeholder texture for assigning to unused texture samplers.
+  // Borrows a white placeholder texture for assigning to unused texture
+  // samplers.
   BorrowedTexturePtr BorrowPlaceholderTexture(
+      SmallSourceLocation loc = SmallSourceLocation::Current());
+
+  // Borrows a black placeholder texture for assigning to unused texture
+  // samplers.
+  BorrowedTexturePtr BorrowPlaceholderTextureBlack(
       SmallSourceLocation loc = SmallSourceLocation::Current());
 
   // Borrows a placeholder cubemap texture for assigning to unused texture
@@ -279,7 +286,7 @@ class TextureFactory {
 
  private:
   // Creates a singleton placeholder to borrow via BorrowPlaceholderTexture().
-  OwnedTexturePtr CreatePlaceholderTexture();
+  OwnedTexturePtr CreatePlaceholderTexture(uint32_t pixel);
   // Creates a singleton placeholder cubemap to borrow via
   // BorrowPlaceholderCubemapTexture().
   OwnedTexturePtr CreatePlaceholderCubemapTexture();
@@ -288,6 +295,7 @@ class TextureFactory {
 
   BaseView& view_;
   OwnedTexturePtr placeholder_texture_;
+  OwnedTexturePtr placeholder_texture_black_;
   OwnedTexturePtr placeholder_cubemap_texture_;
   OwnedTexturePtr rgba32f_placeholder_texture_;
 };

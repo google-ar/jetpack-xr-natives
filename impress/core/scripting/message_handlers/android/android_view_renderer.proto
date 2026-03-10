@@ -83,3 +83,18 @@ message UpdateSurfaceTextureQuadColliderRequest {
   // The collider to use for the quad.
   imp.Box collider = 2;
 }
+
+// Request to update the horizontal and vertical scroll factor of the Android
+// View for controller stick input scrolling.
+message UpdateAndroidViewScrollFactorRequest {
+  // The node on which the View is attached.
+  imp.NodeHandleMessage target = 1;
+
+  // The horizontal scroll factor, multiplied with the scroll input.
+  // Default is 1.0.
+  float horizontal_scroll_factor = 2;
+
+  // The vertical scroll factor, multiplied with the scroll input.
+  // Default is 1.0.
+  float vertical_scroll_factor = 3;
+}

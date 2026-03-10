@@ -20,10 +20,11 @@
 #include <sys/types.h>
 
 #include <cstdint>
-#include <functional>
 #include <memory>
 
+#include "absl/base/nullability.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/Material.h"
 #include "filament/filament/include/filament/MorphTargetBuffer.h"
@@ -45,6 +46,7 @@
 #include "core/math/mat.h"
 #include "core/math/math.h"
 #include "core/model/mesh/base_mesh_builder.h"
+#include "split_engine/schemas/split_engine_schema_version.h"
 #if IMP_PLATFORM(ANDROID)
 #include "core/render/android/android_defines.h"
 #include "core/render/android/platform_android_external_texture_surface.h"
@@ -56,6 +58,13 @@ class Material;
 }  // namespace imp
 
 namespace imp::split_engine {
+
+// Alias for the production API level to prevent visibility issues for tests
+// that need to access the production API level.
+inline constexpr int32_t kSplitEngineProductionApiLevel =
+    android_xr::kSplitEngineProductionApiLevel;
+inline constexpr int32_t kSplitEngineExperimentalApiLevel =
+    android_xr::kSplitEngineExperimentalApiLevel;
 
 class SplitEngineMeshSerializer;
 class SplitEngineTextureSerializer;
@@ -189,6 +198,9 @@ class SplitEngineSerializer {
   // Sets the local transform (relative to parent) on the remote renderer.
   virtual void SetLocalTransform(utils::Entity entity,
                                  const mat4& transform) = 0;
+  // Sets the groups for a node on the remote renderer.
+  virtual void SetGroups(utils::Entity entity,
+                         absl::Span<const absl::string_view> groups) = 0;
   virtual void AssignUserId(utils::Entity entity, uint32_t user_id) = 0;
   // Creates a texture builder that serializes created textures.
   virtual std::unique_ptr<BaseTextureBuilder> CreateTextureBuilder() = 0;
@@ -259,7 +271,7 @@ class SplitEngineSerializer {
   // Serializes an ImageBasedLightingAsset to the remote renderer.
   virtual void SerializeImageBasedLightingAsset(
       filament::Texture& reflection_texture,
-      SphericalHarmonics spherical_harmonics,
+      std::unique_ptr<SphericalHarmonics> /*absl_nullable*/  spherical_harmonics,
       ImageBasedLightingAssetCubemapImages cubemap_images) = 0;
   virtual void RemoveImageBasedLightingAsset(
       filament::Texture& reflection_texture) = 0;

@@ -24,7 +24,11 @@ import android.graphics.RectF
 import android.util.LruCache
 import androidx.graphics.path.PathIterator
 import androidx.graphics.path.PathSegment
+import com.google.android.libraries.performance.primes.flogger.logargs.NonSensitiveLogParameterFactory
+import com.google.common.flogger.GoogleLogger
 import kotlin.math.max
+
+private val logger = GoogleLogger.forEnclosingClass()
 
 private abstract class ReferenceCounted {
   var referenceCount: Int = 0
@@ -159,7 +163,11 @@ internal class PathGlyphSource(cacheSizeBytes: Int) : IGlyphSource {
   }
 
   override fun getTextGlyphs(text: String, paint: Paint): Array<GlyphAdvance> {
-    require(!text.any { it == '\n' }) { "Text must not contain newlines" }
+    if (text.any { it == '\n' }) {
+      // TODO: (broken link) - throw exception once we fix in production.
+      logger.atSevere().log("Text must not contain newlines")
+      return emptyArray()
+    }
 
     if (text.isEmpty()) {
       return arrayOf()
@@ -207,16 +215,39 @@ internal class PathGlyphSource(cacheSizeBytes: Int) : IGlyphSource {
               throw IllegalStateException(PathBuffer.UNEXPECTED_VERB_MESSAGE)
           }
         }
+      } catch (e: Throwable) {
+        // TODO: (broken link) - throw exception once we fix in production.
+        logger
+          .atSevere()
+          .withCause(e)
+          .log(
+            "Exception %s shaping text string \"%s\"",
+            NonSensitiveLogParameterFactory.fromClassName(e::class.java),
+            text,
+          )
+        return emptyArray()
       } finally {
         tempPath.reset()
         closedPath.clear()
       }
 
       // Convert GlyphBuilders to GlyphAdvances.
-      val tracking = letterSpacing * paint.textSize
-      paint.getFontMetrics(fontMetrics)
-      return Array<GlyphAdvance>(glyphBuilders.size) {
-        glyphBuilders[it].toGlyphAdvance(glyphs, fontMetrics, boundingBoxF, tracking)
+      try {
+        val tracking = letterSpacing * paint.textSize
+        paint.getFontMetrics(fontMetrics)
+        return Array<GlyphAdvance>(glyphBuilders.size) {
+          glyphBuilders[it].toGlyphAdvance(glyphs, fontMetrics, boundingBoxF, tracking)
+        }
+      } catch (e: Throwable) {
+        logger
+          .atSevere()
+          .withCause(e)
+          .log(
+            "Exception %s converting glyph builders to glyph advances in text string \"%s\"",
+            NonSensitiveLogParameterFactory.fromClassName(e::class.java),
+            text,
+          )
+        return emptyArray()
       }
     }
   }

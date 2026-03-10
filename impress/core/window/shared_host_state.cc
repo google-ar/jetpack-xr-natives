@@ -395,7 +395,17 @@ SharedHostState::RegisterExternalImageHandle(const AHardwareBuffer* buffer,
   }
 
   filament::backend::Platform::ExternalImageHandle buffer_handle;
-#if IMP_MATERIAL_API(OPENGL)
+#if IMP_MATERIAL_API(OPENGL) && IMP_MATERIAL_API(VULKAN)
+  if (backend_ == filament::backend::Backend::OPENGL) {
+    buffer_handle =
+        static_cast<filament::backend::PlatformEGLAndroid*>(platform)
+            ->createExternalImage(buffer, sRGB);
+  } else if (backend_ == filament::backend::Backend::VULKAN) {
+    buffer_handle =
+        static_cast<filament::backend::VulkanPlatformAndroid*>(platform)
+            ->createExternalImage(buffer, sRGB);
+  }
+#elif IMP_MATERIAL_API(OPENGL)
   buffer_handle = static_cast<filament::backend::PlatformEGLAndroid*>(platform)
                       ->createExternalImage(buffer, sRGB);
 #elif IMP_MATERIAL_API(VULKAN)
@@ -419,7 +429,25 @@ SharedHostState::ExternalImageMetadata SharedHostState::GetImageMetadata(
   }
 
   ExternalImageMetadata metadata;
-#if IMP_MATERIAL_API(OPENGL)
+#if IMP_MATERIAL_API(OPENGL) && IMP_MATERIAL_API(VULKAN)
+  if (backend_ == filament::backend::Backend::OPENGL) {
+    auto eglExternalImageMetadata =
+        static_cast<filament::backend::PlatformEGLAndroid*>(platform)
+            ->getExternalImageDesc(externalImage);
+    metadata.height = eglExternalImageMetadata.height;
+    metadata.width = eglExternalImageMetadata.width;
+    metadata.format = eglExternalImageMetadata.format;
+    metadata.usage = eglExternalImageMetadata.usage;
+  } else if (backend_ == filament::backend::Backend::VULKAN) {
+    auto fvkExternalImage =
+        static_cast<filament::backend::VulkanPlatformAndroid*>(platform)
+            ->getExternalImageDesc(externalImage);
+    metadata.height = fvkExternalImage.height;
+    metadata.width = fvkExternalImage.width;
+    metadata.format = fvkExternalImage.format;
+    metadata.usage = fvkExternalImage.usage;
+  }
+#elif IMP_MATERIAL_API(OPENGL)
   auto eglExternalImageMetadata =
       static_cast<filament::backend::PlatformEGLAndroid*>(platform)
           ->getExternalImageDesc(externalImage);

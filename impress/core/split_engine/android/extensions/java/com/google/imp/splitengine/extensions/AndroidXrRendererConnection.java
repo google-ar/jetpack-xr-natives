@@ -22,12 +22,14 @@ import android.os.SharedMemory;
 import android.util.Log;
 import android.view.Surface;
 import androidx.annotation.Nullable;
+import com.google.android.filament.proguard.UsedByNative;
 import java.io.IOException;
 
 /**
  * A connection to the Android XR split engine bridge service, providing methods for interacting
  * with shared memory and other rendering-related operations.
  */
+@UsedByNative("split_engine_bridge.cc")
 public final class AndroidXrRendererConnection implements IRendererConnection {
   private static final String TAG = "XrRendererConnection";
 
@@ -35,6 +37,7 @@ public final class AndroidXrRendererConnection implements IRendererConnection {
   private final com.android.extensions.xr.splitengine.SystemRendererConnection
       mLibrarySystemRendererConnection;
 
+  @UsedByNative("split_engine_bridge.cc")
   public AndroidXrRendererConnection(
       @SuppressWarnings("UnnecessarilyFullyQualified")
           com.android.extensions.xr.splitengine.SystemRendererConnection systemRendererConnection) {
@@ -43,6 +46,7 @@ public final class AndroidXrRendererConnection implements IRendererConnection {
 
   @Nullable
   @Override
+  @UsedByNative("split_engine_bridge.cc")
   public IBufferHandle registerBuffer(int fd, int bufferSizeBytes) {
     try {
       ParcelFileDescriptor pfd = ParcelFileDescriptor.fromFd(fd);
@@ -54,6 +58,7 @@ public final class AndroidXrRendererConnection implements IRendererConnection {
   }
 
   @Override
+  @UsedByNative("split_engine_bridge.cc")
   public void processRegion(IBufferHandle bufferHandle, int offsetBytes, int regionLengthBytes)
       throws RemoteException {
     mLibrarySystemRendererConnection.processRegion(
@@ -62,6 +67,7 @@ public final class AndroidXrRendererConnection implements IRendererConnection {
 
   @Nullable
   @Override
+  @UsedByNative("split_engine_bridge.cc")
   public Surface createExternalTextureSurface(long[] textureIds) {
     try {
       return mLibrarySystemRendererConnection.createExternalTextureSurface(textureIds);
@@ -72,6 +78,7 @@ public final class AndroidXrRendererConnection implements IRendererConnection {
   }
 
   @Override
+  @UsedByNative("split_engine_bridge.cc")
   public void setExternalTextureSurfaceSize(long textureId, int width, int height) {
     try {
       mLibrarySystemRendererConnection.setExternalTextureSurfaceSize(textureId, width, height);
@@ -82,6 +89,7 @@ public final class AndroidXrRendererConnection implements IRendererConnection {
   }
 
   @Override
+  @UsedByNative("split_engine_bridge.cc")
   public void sendRequest(byte[] data, RequestCallback callback) {
     try {
       mLibrarySystemRendererConnection.sendRequest(data, callback::onResult);
@@ -92,28 +100,34 @@ public final class AndroidXrRendererConnection implements IRendererConnection {
   }
 
   @Override
+  @UsedByNative("split_engine_bridge.cc")
   public void addMessageGroupCallback(MessageGroupCallback callback) {
     mLibrarySystemRendererConnection.addMessageGroupCallback(callback::onMessageGroupComplete);
   }
 
   @Override
+  @UsedByNative("split_engine_bridge.cc")
   public void close() {
     Log.d(TAG, "Closing connection.");
   }
 
   @SuppressWarnings("UnnecessarilyFullyQualified")
+  @UsedByNative("split_engine_bridge.cc")
   public com.android.extensions.xr.splitengine.SystemRendererConnection getConnectionHandle() {
     return mLibrarySystemRendererConnection;
   }
 
   /** A handle to a buffer instance. */
+  @UsedByNative("split_engine_bridge.cc")
   public static final class BufferHandle implements IBufferHandle {
     private com.android.extensions.xr.splitengine.BufferHandle mBufferHandle = null;
 
+    @UsedByNative("split_engine_bridge.cc")
     public BufferHandle(com.android.extensions.xr.splitengine.BufferHandle bufferHandle) {
       mBufferHandle = bufferHandle;
     }
 
+    @UsedByNative("split_engine_bridge.cc")
     public com.android.extensions.xr.splitengine.BufferHandle getLibraryBufferHandle() {
       return mBufferHandle;
     }

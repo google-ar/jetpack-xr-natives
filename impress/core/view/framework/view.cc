@@ -23,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
@@ -48,13 +49,10 @@
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
-#include "core/view/framework/camera/camera_component.h"
-#include "core/view/framework/camera/camera_manager.h"
 #include "core/view/framework/client_api.h"
 #include "core/view/framework/display_layer/display_layer_manager.h"
 #include "core/view/framework/input/pointer_input_handler.h"
 #include "core/view/framework/render/renderable_manager_wrapper.h"
-#include "core/view/utils/default_view_config.h"
 #include "core/view/utils/frame_time.h"
 #include "core/view/utils/proto/view_config.proto.imp.h"
 #include "core/view/utils/render_setting_utils.h"
@@ -101,8 +99,7 @@ View::View(ViewConfig config)
       size_(),
       window_rotation_(window::WindowRotation::kRotation0),
       asset_manager_cache_cleanup_interval_(kAssetManagerCacheCleanupInterval) {
-  if (view_config_.cache_config.has_value() &&
-      view_config_.cache_config->cache_cleanup_interval_seconds.has_value()) {
+  if (view_config_.cache_config->cache_cleanup_interval_seconds.has_value()) {
     asset_manager_cache_cleanup_interval_ = absl::Seconds(
         view_config_.cache_config->cache_cleanup_interval_seconds.value());
   }
@@ -158,13 +155,15 @@ NodeHandle View::CreateNode() {
 }
 
 void View::DestroyNode(NodeHandle node) {
+  
   if (!node) {
+    // Invalid handle, nothing to do.
     return;
   }
 
   // First, get this node and all of its children sorted depth-first.
-  std::vector<NodeHandle> nodes_to_destroy;
-  nodes_to_destroy = GetPathManager().GetDescendants(node);
+  std::vector<NodeHandle> nodes_to_destroy =
+      GetPathManager().GetDescendants(node);
   nodes_to_destroy.push_back(node);
 
   // Then, remove every component from every node being destroyed.
@@ -172,6 +171,8 @@ void View::DestroyNode(NodeHandle node) {
   //
   // The order of types can be defined using CleanupDependencies and
   // CleanupDependents.
+  //
+  // This call can cause recursive calls to DestroyNode.
   GetComponentManager().RemoveAllFromNodes(nodes_to_destroy);
 
   // Tell the serializer about the nodes being destroyed.
@@ -180,7 +181,12 @@ void View::DestroyNode(NodeHandle node) {
   // correctly.
   if (split_engine_serializer_) {
     for (NodeHandle node_to_destroy : nodes_to_destroy) {
-      split_engine_serializer_->DestroyNode(node_to_destroy.GetEntity());
+      // We may get here after recursive calls to DestroyNode, so it's possible
+      // that the node was already destroyed. If so, don't call the serializer
+      // again. Similar check happens in NodeAttachmentManager::Destroy().
+      if (node_to_destroy) {
+        split_engine_serializer_->DestroyNode(node_to_destroy.GetEntity());
+      }
     }
   }
 
@@ -355,8 +361,7 @@ void View::AdvanceBackgroundExecutor() {
 
   auto start = absl::Now();
   float background_executor_timeout_ms =
-      view_config_.background_executor_timeout_ms.value_or(
-          kBackgroundExecutorTimeoutMs);
+      *view_config_.background_executor_timeout_ms;
   size_t tasks_run = ex->DrainWithTimeout(absl::Microseconds(
       static_cast<int>(background_executor_timeout_ms * 1000)));
 
@@ -377,8 +382,7 @@ void View::AdvanceForegroundExecutor() {
   assert(ex);
   auto start = absl::Now();
   float foreground_executor_timeout_ms =
-      view_config_.foreground_executor_timeout_ms.value_or(
-          kForegroundExecutorTimeoutMs);
+      *view_config_.foreground_executor_timeout_ms;
   size_t tasks_run = ex->DrainWithTimeout(absl::Microseconds(
       static_cast<int>(foreground_executor_timeout_ms * 1000)));
 
@@ -401,7 +405,7 @@ void View::OnHostCreated(window::FilamentHost* host) {
 
   // Must be created after the host is assigned.
   asset_manager_ =
-      std::make_unique<AssetManager>(this, view_config_.cache_config);
+      std::make_unique<AssetManager>(this, *view_config_.cache_config);
 
   //  Request a Histogram with lower bounds of 6 to 68 ms for the total time
   //  between frames.
@@ -623,13 +627,13 @@ void View::SetupSandbox() {
 }
 
 void View::ApplyViewConfig() {
-  if (view_config_.main_view_render_settings.has_value()) {
+  if (view_config_.main_view_render_settings.HasValue()) {
     OverrideViewRenderSettings(GetHost()->GetView(),
                                &(*view_config_.main_view_render_settings),
                                GetSharedEngine());
   }
 
-  switch (view_config_.default_lighting_loading) {
+  switch (*view_config_.default_lighting_loading) {
     case ViewConfig::DefaultLightingLoading::DEFAULT_LIGHTING_LOADING_DISABLED:
       light_manager_.DisableDefaultLoad();
       break;
@@ -639,7 +643,7 @@ void View::ApplyViewConfig() {
       break;
   }
 
-  switch (view_config_.shader_caching_mode) {
+  switch (*view_config_.shader_caching_mode) {
     case ViewConfig::ShaderCachingMode::SHADER_CACHING_MODE_DISABLED:
     case ViewConfig::ShaderCachingMode::SHADER_CACHING_MODE_UNSPECIFIED:
       shader_cache_system_.DisableShaderCaching();
@@ -649,7 +653,7 @@ void View::ApplyViewConfig() {
       break;
   }
 
-  if (view_config_.enable_synchronous_future_cancellation.value_or(true)) {
+  if (*view_config_.enable_synchronous_future_cancellation) {
     FutureFlags::EnableSynchronousFutureCancellation();
   }
 }

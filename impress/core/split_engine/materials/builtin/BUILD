@@ -143,11 +143,13 @@ cc_library(
         ":builtin_jxr_media_material_assets",
         ":builtin_material",
         ":builtin_material_registry",
+        ":jxr_media_material_utils",
         "//core:config",
         "//core/assets",
         "//core/assets/material:material_asset",
         "//core/assets/material:material_load_options_proto_cc",
         "//core/async:future",
+        "//core/common:small_source_location",
         "//core/material_library:flatbuffer_utils",
         "//core/material_library:material_package",
         "//core/materials",
@@ -198,6 +200,7 @@ imp_material(
     replacements = {
         "{BLENDING_MODE}": "transparent",
         "{DEPTH_CULLING}": "false",
+        "{IS_OPAQUE}": "false",
     },
 )
 
@@ -213,7 +216,21 @@ imp_material(
     replacements = {
         "{BLENDING_MODE}": "opaque",
         "{DEPTH_CULLING}": "true",
+        "{IS_OPAQUE}": "true",
     },
+)
+
+cc_library(
+    name = "jxr_media_material_utils",
+    srcs = ["jxr_media_material_utils.cc"],
+    hdrs = ["jxr_media_material_utils.h"],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    deps = [
+        "//core/math",
+        "//core/media:media_type",
+    ],
+    alwayslink = 1,
 )
 
 cc_library(
@@ -277,6 +294,7 @@ cc_library(
         "//core/assets",
         "//core/assets/material:material_asset",
         "//core/async:future",
+        "//core/common:small_source_location",
         "//core/material_library:flatbuffer_utils",
         "//core/material_library:material_package",
         "//core/materials",
@@ -371,6 +389,7 @@ cc_library(
         ":builtin_texture_external_material_assets",
         "//core/assets",
         "//core/async:future",
+        "//core/common:small_source_location",
         "//core/material_library:flatbuffer_utils",
         "//core/material_library:material_package",
         "//core/materials",
@@ -420,6 +439,7 @@ cc_library(
         "//core/assets",
         "//core/assets/material:material_asset",
         "//core/async:future",
+        "//core/common:small_source_location",
         "//core/material_library:flatbuffer_utils",
         "//core/material_library:material_package",
         "//core/materials",
@@ -478,6 +498,7 @@ cc_library(
         "//core/assets",
         "//core/assets/material:material_load_options_proto_cc",
         "//core/async:future",
+        "//core/common:small_source_location",
         "//core/material_library:flatbuffer_utils",
         "//core/material_library:material_package",
         "//core/materials",

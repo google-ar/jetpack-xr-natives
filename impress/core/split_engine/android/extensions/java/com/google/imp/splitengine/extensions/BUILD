@@ -41,5 +41,6 @@ android_library(
     deps = [
         "@maven//:androidx_annotation_annotation",
         "@maven//:com_android_extensions_xr_extensions_xr",
+        "@third_party//filament/android:filament_android_no_jni",
     ],
 )

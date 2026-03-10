@@ -164,15 +164,6 @@ imp_cc_proto_library(
 )
 
 cc_library(
-    name = "default_view_config",
-    srcs = ["default_view_config.cc"],
-    hdrs = ["default_view_config.h"],
-    copts = imp_google3_copts(),
-    deps = [":view_config_proto_cc_imp"],
-    alwayslink = 1,
-)
-
-cc_library(
     name = "render_state_validator",
     srcs = ["render_state_validator.cc"],
     hdrs = ["render_state_validator.h"],
@@ -198,7 +189,6 @@ proto_library(
         ":cache_config_proto",
         ":filament_feature_flag_proto",
         ":render_settings_proto",
-        "//core/proto:imp_proto",
     ],
 )
 

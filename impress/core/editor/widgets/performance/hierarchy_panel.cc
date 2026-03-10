@@ -44,7 +44,7 @@ constexpr int kNumColumns = kShowMemoryColumns ? 6 : 4;
 constexpr float kNanosPerMs = 1000000.0f;
 }  // namespace
 
-void HierarchyPanel::DrawPanel(int frame_index,
+void HierarchyPanel::DrawPanel(float width, int frame_index,
                                SampleProcessor& sample_processor,
                                FrameTimePanel& frame_time_panel) {
   IMP_TRACE();
@@ -64,12 +64,12 @@ void HierarchyPanel::DrawPanel(int frame_index,
 
   // Hierarchy table takes up the remaining space in the window.
   // If the window is too small it won't be displayed so we set a min height.
-  const float available_height = ImGui::GetContentRegionAvail().y;
-  const float child_height = std::max(kMinPanelHeight, available_height);
+  const ImVec2 available_size = ImGui::GetContentRegionAvail();
+  const float child_height = std::max(kMinPanelHeight, available_size.y);
 
   if (ImGui::BeginTable("tree table", kNumColumns,
                         ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY,
-                        ImVec2(0, child_height))) {
+                        ImVec2(width, child_height))) {
     ImGui::TableSetupColumn("Hierarchy", ImGuiTableColumnFlags_WidthStretch,
                             1.0f);
     ImGui::TableSetupColumn("Calls", ImGuiTableColumnFlags_WidthFixed,

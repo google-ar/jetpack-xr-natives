@@ -102,6 +102,7 @@ cc_library(
     data = if_linux([
         "//core/fonts:googlesans_arabic_medium.ttf",
         "//core/fonts:googlesans_japanese_medium.ttf",
+        "//core/fonts:googlesans_medium.ttf",
     ]),
     deps = [
         ":font_holder",

@@ -17,8 +17,13 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_PARTICLE_PARTICLE_BEHAVIOR_H_
 #define THIRD_PARTY_IMPRESS_CORE_PARTICLE_PARTICLE_BEHAVIOR_H_
 
+#include <memory>
+
+#include "core/math/quat.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
+#include "core/particle/custom_particle_behavior.h"
+#include "core/particle/particle_behavior_result.h"
 #include "core/particle/particle_emitter_info.h"
 #include "core/particle/particle_emitter_state.proto.imp.h"
 #include "core/particle/particle_instance.h"
@@ -34,23 +39,12 @@ namespace imp {
 // performs all supported behaviors.
 class ParticleBehavior {
  public:
-  // Results from particle behavior updates. kActive is the general purpose ok
-  // result, meaning the particle is active and will continue processing. Any
-  // other result should be interpreted as a signal for the caller to take a
-  // defined action, such as destroying the particle (kExpired).
-  enum UpdateResult {
-    // The operation was performed successfully, the particle remains active.
-    kActive = 0,
-
-    // The particle has expired, the particle should be destroyed. This may be
-    // the result of a lifetime update when the particle lifetime has elapsed.
-    kExpired,
-  };
-
   // Initializes the object by caching any relevant behavior data, including
   // creating objects, such as curves, needed to update particles over time.
-  ParticleBehavior(NodeHandle emitter_node,
-                   const ParticleConfig& particle_config);
+  ParticleBehavior(
+      NodeHandle emitter_node, const ParticleConfig& particle_config,
+      std::unique_ptr<CustomParticleBehavior> custom_particle_behavior =
+          std::unique_ptr<CustomParticleBehavior>());
 
   // Initializes a ParticleInstance with appropriate default values for all
   // fields used by the particle.
@@ -59,7 +53,7 @@ class ParticleBehavior {
   // Performs all behaviors intrinsic to the particle. Returns kActive if all
   // behaviors were performed and the particle remains active, or one of the
   // other ParticleBehaviorResults if other actions should be taken.
-  UpdateResult UpdateParticle(
+  ParticleBehaviorResult UpdateParticle(
       const imp_particle::ParticleEmitterInfo& emitter_info,
       float delta_seconds, ParticleInstance& particle_instance);
 
@@ -70,20 +64,20 @@ class ParticleBehavior {
   //
   // Callers are required to verify the ParticleInstance has the lifetime field
   // before calling this method.
-  UpdateResult UpdateLifetime(float delta_seconds,
-                              ParticleInstance& particle_instance);
+  ParticleBehaviorResult UpdateLifetime(float delta_seconds,
+                                        ParticleInstance& particle_instance);
 
   // Updates the position and velocity of a particle. Does not return an
-  // UpdateResult because movement does not presently cause a particle to
-  // expire.
+  // ParticleBehaviorResult because movement does not presently cause a particle
+  // to expire.
   //
   // Callers are required to verify the ParticleInstance has the velocity field
   // before calling this method.
   void UpdateMovement(float delta_seconds, ParticleInstance& particle_instance);
 
   // Updates the orientation of a particle to face the camera. Does not return
-  // an UpdateResult because billboard behavior does not presently cause a
-  // particle to expire.
+  // an ParticleBehaviorResult because billboard behavior does not presently
+  // cause a particle to expire.
   //
   // Callers are required to verify the ParticleInstance has the rotation field
   // before calling this method.
@@ -92,10 +86,12 @@ class ParticleBehavior {
 
  private:
   NodeHandle emitter_node_;
+  std::unique_ptr<CustomParticleBehavior> custom_particle_behavior_;
   float default_lifetime_seconds_ = 0.0f;
   float3 default_velocity_ = kZero3;
   float3 default_acceleration_ = kZero3;
   float3 default_scale_ = kOne3;
+  quatf default_rotation_ = kIdentityQuatf;
 };
 
 }  // namespace imp

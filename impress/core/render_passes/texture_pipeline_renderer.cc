@@ -175,6 +175,8 @@ Future<absl::Status> TexturePipelineRenderer::Setup() {
         pass.camera ? pass.camera->GetCamera()
                     : GetView().GetCameraManager().GetCamera()->GetCamera());
     runtime_pass.use_main_view_settings = pass.use_main_view_settings;
+    runtime_pass.use_main_view_camera_projection_matrix =
+        pass.use_main_view_camera_projection_matrix.value_or(true);
     runtime_pass.render_settings = pass.render_settings;
 
     if (!runtime_pass.use_main_view_settings &&
@@ -619,7 +621,10 @@ void TexturePipelineRenderer::RenderPasses(
     GetNode()->Send(pre_pass_event);
 
     // Render the pass.
-    GetView().GetHost()->PerformRender(runtime_pass.view);
+    GetView().GetHost()->PerformRender(
+        runtime_pass.view,
+        {.use_main_view_projection_matrix =
+             runtime_pass.use_main_view_camera_projection_matrix});
 
     // Send the post-pass event.
     PostPassEvent post_pass_event;

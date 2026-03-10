@@ -18,6 +18,7 @@
 
 #include <cstdint>
 
+#include "core/ncsb/node_handle.h"
 #include "core/particle/data_layout.h"
 #include "core/particle/particle_emitter_state.proto.imp.h"
 #include "core/particle/particle_instance.h"
@@ -26,10 +27,11 @@
 namespace imp {
 
 ParticleService::ParticleService(const ParticleConfig& particle_config,
-                                 int32_t max_particles)
+                                 int32_t max_particles, NodeHandle emitter_node)
     : data_layout_(particle_config),
       data_provider_(max_particles * data_layout_.GetSize()),
-      max_particles_(max_particles) {
+      max_particles_(max_particles),
+      emitter_node_(emitter_node) {
   // Initialize the list of free particle indices.
   for (int i = 0; i < max_particles; i++) {
     free_particle_indices_.push_back(i);
@@ -37,7 +39,8 @@ ParticleService::ParticleService(const ParticleConfig& particle_config,
 }
 
 ParticleInstance ParticleService::GetParticleInstance(int32_t particle_index) {
-  return ParticleInstance(data_provider_, data_layout_, particle_index);
+  return ParticleInstance(data_provider_, data_layout_, particle_index,
+                          emitter_node_);
 }
 
 int32_t ParticleService::CreateParticle() {

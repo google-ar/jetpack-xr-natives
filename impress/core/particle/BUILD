@@ -67,9 +67,11 @@ cc_library(
         "standard_particle_data_provider.cc",
     ],
     hdrs = [
+        "custom_particle_behavior.h",
         "data_layout.h",
         "node_particle_controller.h",
         "particle_behavior.h",
+        "particle_behavior_result.h",
         "particle_controller.h",
         "particle_data_provider.h",
         "particle_emitter.h",

@@ -24,6 +24,7 @@
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
 #include "core/common/platform_helpers.h"
+#include "core/editor/editor_style.h"
 #include "core/editor/widgets/icons/texture_assets.h"
 #include "core/render/texture_asset.h"
 #include "core/view/base_view.h"
@@ -115,6 +116,9 @@ void Console::HandleLog(void* context, output::OutputKind kind,
 void Console::DrawLogSettings() {
   ImGui::TextColored(kFilterByColor, "%s", kConsoleFilterLabel);
   ImGui::SameLine();
+  ImGui::PushStyleColor(ImGuiCol_Header, kDarkPrimary);
+  ImGui::PushStyleColor(ImGuiCol_HeaderHovered, kDarkLowlight);
+  ImGui::PushStyleColor(ImGuiCol_HeaderActive, kDarkLowlight);
   ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.5f, 0.5f));
   if (ImGui::Selectable(kConsoleAllLabel.data(), !filter_log_, 0,
                         ImGui::CalcTextSize(kConsoleAllLabel.data()))) {
@@ -150,6 +154,7 @@ void Console::DrawLogSettings() {
     ClearLogs();
   }
   ImGui::PopStyleVar();
+  ImGui::PopStyleColor(3);
 }
 
 void Console::DrawLogs() {

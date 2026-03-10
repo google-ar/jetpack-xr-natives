@@ -96,6 +96,25 @@ config_setting(
 )
 
 cc_library(
+    name = "all_builtin_materials",
+    copts = imp_google3_copts(),
+    deps = [
+        "//core/split_engine/materials/builtin:builtin_generic_material",
+        "//core/split_engine/materials/builtin:builtin_jxr_media_material",
+        "//core/split_engine/materials/builtin:builtin_svxr_footprint_material",
+        "//core/split_engine/materials/builtin:builtin_svxr_plane_material",
+        "//core/split_engine/materials/builtin:builtin_texture_external_material",
+        "//core/split_engine/materials/builtin:builtin_vignette_material",
+        "//core/split_engine/materials/builtin:builtin_water_material",
+        "//core/split_engine/materials/builtin:builtin_youtube_stereo_player_material",
+        "//core/split_engine/materials/builtin/gsplat:gsplat_background_material_deserializer",
+        "//core/split_engine/materials/builtin/gsplat:gsplat_material_deserializer",
+        "//core/split_engine/materials/builtin/photosxr:builtin_photos_texture_3d_material",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "split_engine_builtin_material",
     srcs = ["split_engine_builtin_material.cc"],
     hdrs = ["split_engine_builtin_material.h"],
@@ -126,7 +145,9 @@ cc_library(
         "@com_google_impress//core/common:log",
         "@flatbuffers",
         "@third_party//split_engine:fbs",
-    ],
+    ] + if_imp_use_local_split_engine_materials([
+        ":all_builtin_materials",
+    ]),
     alwayslink = 1,
 )
 
@@ -165,17 +186,7 @@ cc_library(
         "@third_party//split_engine:fbs",
     ] + if_imp_use_local_split_engine_materials([
         # Local mode needs to include all built-in materials on the app side.
-        "//core/split_engine/materials/builtin:builtin_generic_material",
-        "//core/split_engine/materials/builtin:builtin_jxr_media_material",
-        "//core/split_engine/materials/builtin:builtin_svxr_footprint_material",
-        "//core/split_engine/materials/builtin:builtin_svxr_plane_material",
-        "//core/split_engine/materials/builtin:builtin_texture_external_material",
-        "//core/split_engine/materials/builtin:builtin_vignette_material",
-        "//core/split_engine/materials/builtin:builtin_water_material",
-        "//core/split_engine/materials/builtin:builtin_youtube_stereo_player_material",
-        "//core/split_engine/materials/builtin/gsplat:gsplat_background_material_deserializer",
-        "//core/split_engine/materials/builtin/gsplat:gsplat_material_deserializer",
-        "//core/split_engine/materials/builtin/photosxr:builtin_photos_texture_3d_material",
+        ":all_builtin_materials",
     ]),
     alwayslink = 1,
 )
@@ -189,6 +200,7 @@ cc_library(
         ":builtin_material_creator_helper",
         "//core/async:future",
         "//core/material_library:generic_material_spec",
+        "//core/material_library:generic_materials",
         "//core/material_library:material_package",
         "//core/split_engine:split_engine_shared",
         "//core/split_engine/materials/builtin:builtin_generic_spec_helpers",
@@ -196,7 +208,6 @@ cc_library(
         "//core/split_engine/materials/builtin:builtin_material_registry",
         "//core/view:base_view",
         "//core/view/framework",
-        "//core/view/framework:generic_materials",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",

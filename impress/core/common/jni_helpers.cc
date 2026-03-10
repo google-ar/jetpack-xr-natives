@@ -274,6 +274,10 @@ JniUniquePtr<jintArray> CreateJniIntArray(JNIEnv* env,
 }
 
 void DeleteRef(JNIEnv* env, jobject object) {
+  if (object == nullptr) {
+    return;
+  }
+
   switch (env->GetObjectRefType(object)) {
     default:
     case JNIInvalidRefType:

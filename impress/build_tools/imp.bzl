@@ -307,6 +307,7 @@ def imp_defines():
         metal = ["IMP_MATERIAL_API_CONFIG=METAL"],
         opengl = ["IMP_MATERIAL_API_CONFIG=OPENGL"],
         vulkan = ["IMP_MATERIAL_API_CONFIG=VULKAN"],
+        gl_vulkan = ["IMP_MATERIAL_API_CONFIG=GL_VULKAN"],
     ) + if_optimized(
         ["NDEBUG"],
     ) + if_dev_runtime(

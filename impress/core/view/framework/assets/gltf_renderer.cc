@@ -447,6 +447,20 @@ std::vector<Material*> GltfRenderer::GetMaterials() const {
   return return_value;
 }
 
+std::vector<BorrowedMaterialPtr> GltfRenderer::GetBorrowedMaterials() const {
+  std::vector<BorrowedMaterialPtr> return_value;
+  const GenericMaterialListing& materials = GetMaterialsInternal();
+  return_value.reserve(materials.size());
+  for (const auto& material : materials) {
+    if (material) {
+      return_value.push_back(material->GetMaterial());
+    }
+  }
+  auto overrides(GetBorrowedMaterialOverrides());
+  return_value.insert(return_value.end(), overrides.begin(), overrides.end());
+  return return_value;
+}
+
 Material* GltfRenderer::GetMaterialByIndex(uint16_t material_index) const {
   const GenericMaterialListing& materials = GetMaterialsInternal();
   MaterialId material_id =
@@ -514,6 +528,29 @@ std::vector<Material*> GltfRenderer::GetMaterialOverrides() const {
     }
   }
 
+  return return_value;
+}
+
+std::vector<BorrowedMaterialPtr> GltfRenderer::GetBorrowedMaterialOverrides()
+    const {
+  std::vector<BorrowedMaterialPtr> return_value;
+  return_value.reserve(owned_or_borrowed_material_primitive_overrides_.size());
+
+  for (const std::pair<imp::GltfRenderer::GltfPrimitive,
+                       imp::OwnedOrBorrowedPtr<imp::Material>>&
+           material_override :
+       owned_or_borrowed_material_primitive_overrides_) {
+    if (material_override.second.operator->() != nullptr) {
+      return_value.push_back(material_override.second.Borrow());
+    }
+  }
+
+  for (const OwnedOrBorrowedPtr<Material>& material_override :
+       owned_or_borrowed_material_index_overrides_) {
+    if (material_override.operator->() != nullptr) {
+      return_value.push_back(material_override.Borrow());
+    }
+  }
   return return_value;
 }
 
@@ -683,6 +720,19 @@ Material* GltfRenderer::GetMaterialOverrideByIndex(
   }
 
   return nullptr;
+}
+
+BorrowedMaterialPtr GltfRenderer::GetBorrowedMaterialOverrideByIndex(
+    size_t material_index) const {
+  const MaterialId material_id = MaterialId::At(material_index);
+  if (owned_or_borrowed_material_index_overrides_.IsValid(material_id)) {
+    const auto& material =
+        owned_or_borrowed_material_index_overrides_[material_id];
+    if (material.operator->()) {
+      return material.Borrow();
+    }
+  }
+  return BorrowedMaterialPtr();
 }
 
 const RobinSet<NodeHandle>* GltfRenderer::GetNodesFromOriginalMeshIndex(

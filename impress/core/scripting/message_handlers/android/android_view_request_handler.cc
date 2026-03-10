@@ -100,5 +100,26 @@ Future<absl::Status> AndroidViewUpdateColliderRequestHandler::HandleMessage(
   return Future<absl::Status>(absl::OkStatus());
 }
 
+AndroidViewUpdateScrollFactorRequestHandler::
+    AndroidViewUpdateScrollFactorRequestHandler(BaseView& base_view)
+    : base_view_(base_view) {}
+
+Future<absl::Status> AndroidViewUpdateScrollFactorRequestHandler::HandleMessage(
+    const UpdateAndroidViewScrollFactorRequest& message) {
+  if (!message.target) {
+    return Future<absl::Status>(absl::InvalidArgumentError("Invalid node"));
+  }
+  ComponentHandle<AndroidViewRenderer> android_view_renderer =
+      message.target->GetComponent<AndroidViewRenderer>();
+  if (!android_view_renderer) {
+    return Future<absl::Status>(
+        absl::InvalidArgumentError("The given node has no child with an "
+                                   "attached AndroidViewRenderer component."));
+  }
+  android_view_renderer->UpdateScrollFactor(message.horizontal_scroll_factor,
+                                            message.vertical_scroll_factor);
+  return Future<absl::Status>(absl::OkStatus());
+}
+
 }  // namespace android
 }  // namespace imp

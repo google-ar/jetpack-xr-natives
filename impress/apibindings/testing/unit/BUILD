@@ -49,6 +49,11 @@ cc_library(
     alwayslink = 1,
 )
 
+filegroup(
+    name = "mesh_renderer_scuba_goldens",
+    srcs = glob(["mesh_renderer_scuba_goldens/*.png"]),
+)
+
 cc_library(
     name = "mock_asset_animator",
     testonly = True,

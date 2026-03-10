@@ -41,6 +41,7 @@ class XrOpenGLSwapChainImageHandler {
  public:
   static constexpr int64_t kImageFormat = GL_SRGB8_ALPHA8;
   static constexpr int32_t kDepthFormat = GL_DEPTH_COMPONENT24;
+  static constexpr int32_t kDepthStencilFormat = GL_DEPTH24_STENCIL8;
   static constexpr XrStructureType kImageType =
       XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_ES_KHR;
   static constexpr int64_t kFoveationFlag =
