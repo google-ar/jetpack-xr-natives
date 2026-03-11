@@ -27,6 +27,13 @@ licenses(["notice"])
 exports_files(["LICENSE"])
 
 cc_library(
+    name = "generated_openxr_headers_public",
+    hdrs = glob(["generated/include/public/*.h"]),
+    include_prefix = "openxr/public",
+    strip_include_prefix = "//OpenXR_KHR/generated/include/public",
+)
+
+cc_library(
     name = "openxr_headers_androidxr",
     hdrs = glob(["generated/include/openxr/*.h"]),
     includes = [

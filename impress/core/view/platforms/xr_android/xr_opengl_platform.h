@@ -59,6 +59,17 @@ class XrOpenGLPlatform : public XrPlatformBase {
 
   void destroySwapChain(SwapChain* swapChain) noexcept override;
 
+  // TODO: Re-enable once issues are fixed.
+  bool isCompositorTimingSupported() const noexcept override;
+
+  // TODO: Re-enable once issues with getFrameId are fixed.
+  bool setPresentFrameId(SwapChain const* swapchain,
+                         uint64_t frameId) noexcept override;
+  // TODO: Re-enable once issues with getFrameId are fixed.
+  bool queryFrameTimestamps(
+      SwapChain const* swapchain, uint64_t frameId,
+      FrameTimestamps* outFrameTimestamps) const noexcept override;
+
   // Called on Filament's rendering thread to bind the swap chain as the current
   // target being rendered into for the frame.
   bool makeCurrent(ContextType type, Platform::SwapChain* drawSwapChain,

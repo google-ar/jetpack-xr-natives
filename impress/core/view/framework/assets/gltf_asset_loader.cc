@@ -233,7 +233,7 @@ Future<std::unique_ptr<GltfAsset>> GltfAssetLoader::Load(
             load_in_progress->end_download_deps_time_;
         {
           absl::ReaderMutexLock lock(
-              &load_in_progress->num_bytes_downloaded_mutex_);
+              load_in_progress->num_bytes_downloaded_mutex_);
           load_event->num_bytes_downloaded +=
               load_in_progress->num_bytes_downloaded_;
         }
@@ -315,7 +315,7 @@ Future<absl::Status> GltfAssetLoader::LoadInProgress::LoadHelper(
                     // retain a reference to it.
                     missing_asset_resources_.push_back(resource);
                     {
-                      absl::WriterMutexLock lock(&num_bytes_downloaded_mutex_);
+                      absl::WriterMutexLock lock(num_bytes_downloaded_mutex_);
                       num_bytes_downloaded_ += resource.GetData().Size();
                     }
                     return loader_->AddMissingResource(missing_resource,

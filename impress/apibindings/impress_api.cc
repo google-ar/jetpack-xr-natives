@@ -30,6 +30,7 @@
 #include "apibindings/generic_material_manager.h"
 #include "apibindings/impress_api_view.h"
 #include "apibindings/jni_conversion_utils.h"
+#include "apibindings/jni_utils.h"
 #include "apibindings/model_manager.h"
 #include "apibindings/skybox_manager.h"
 #include "apibindings/stereo_surface.h"
@@ -158,6 +159,15 @@ JNI_METHOD_AOSP(void, nSetGltfModelColliderEnabled)
   auto unused = imp::android::ThrowIfError(
       env, view->GetModelManager().SetGltfModelColliderEnabled(
                impress_node, enable_collider));
+}
+
+JNI_METHOD_AOSP(void, nSetGltfReformAffordanceEnabled)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
+ jboolean enable_affordance) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  auto unused = imp::android::ThrowIfError(
+      env, view->GetModelManager().SetGltfReformAffordanceEnabled(
+               impress_node, enable_affordance));
 }
 
 JNI_METHOD_AOSP(void, nAnimateGltfModel)
@@ -301,6 +311,24 @@ JNI_METHOD_AOSP(void, nSetStereoSurfaceEntityCanvasShapeHemisphere)
   auto unused = imp::android::ThrowIfError(
       env, view->GetStereoSurfaceManager().SetStereoSurfaceEntityCanvasShape(
                node_id, imp::StereoSurface::Hemisphere({radius})));
+}
+
+JNI_METHOD_AOSP(void, nSetStereoSurfaceEntityCanvasShapeCustomMesh)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
+ jobject left_positions, jobject left_texcoords, jobject left_indices,
+ jobject right_positions, jobject right_texcoords, jobject right_indices,
+ jint draw_mode) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  absl::StatusOr<imp::StereoSurface::CustomMesh> mesh = imp::BuildCustomMesh(
+      env, left_positions, left_texcoords, left_indices, right_positions,
+      right_texcoords, right_indices, draw_mode);
+  if (!imp::android::ThrowIfError(env, mesh.status()).ok()) {
+    return;
+  }
+
+  auto unused = imp::android::ThrowIfError(
+      env, view->GetStereoSurfaceManager().SetStereoSurfaceEntityCanvasShape(
+               node_id, *mesh));
 }
 
 JNI_METHOD_AOSP(void, nSetStereoSurfaceEntityColliderEnabled)
@@ -1029,8 +1057,7 @@ JNI_METHOD_AOSP(void, nSetEnvironmentLight)
 JNI_METHOD_AOSP(void, nClearEnvironmentLight)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
-      env, view->GetSkyboxManager().ClearEnvironmentLight());
+  view->GetSkyboxManager().ClearEnvironmentLight();
 }
 
 JNI_METHOD_AOSP(void, nDisposeAllResources)

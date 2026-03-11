@@ -89,7 +89,8 @@ final class ImpXrApi {
                     setupParams.getUseFbColorSpace(),
                     setupParams.getEnableAndroidSystemExtensions(),
                     setupParams.getSwapchainSizeMultiplier(),
-                    setupParams.getUseGlobalPassthroughDimmingExtensions()));
+                    setupParams.getUseGlobalPassthroughDimmingExtensions(),
+                    setupParams.getUseEyeTrackingCalibration()));
 
     // Calls XrSessionHost::Setup, which sets up Impress with the custom XrPlatform.
     // This doesn't actually initialize OpenXR yet. That happens in onWindowAttached.
@@ -166,7 +167,8 @@ final class ImpXrApi {
       boolean useFbColorSpace,
       boolean enableAndroidSystemExtensions,
       float swapchainSizeMultiplier,
-      boolean useGlobalPassthroughDimmingExtensions);
+      boolean useGlobalPassthroughDimmingExtensions,
+      boolean useEyeTrackingCalibration);
 
   private static native void nSetup(Object context, long viewHostHandle);
 

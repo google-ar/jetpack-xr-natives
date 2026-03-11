@@ -21,43 +21,49 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
 import android.graphics.RectF
+import android.util.LruCache
 import androidx.graphics.path.PathIterator
 import androidx.graphics.path.PathSegment
 import kotlin.math.max
 
-private const val NULL_GLYPH_MESSAGE = "Attempted to reference a non-existent glyph"
-private const val UNKNOWN_GLYPH_MESSAGE = "Unexpected data type in glyph store"
-private const val UNEXPECTED_VERB_MESSAGE = "Font path contains unexpected verb"
+private abstract class ReferenceCounted {
+  var referenceCount: Int = 0
+}
 
-// These values are identical to the ones defined in PathIterator.
-// https://developer.android.com/reference/android/graphics/PathIterator
-private const val VERB_MOVE = 0
-private const val VERB_LINE = 1
-private const val VERB_QUAD = 2
-private const val VERB_CONIC = 3
-private const val VERB_CUBIC = 4
-private const val VERB_CLOSE = 5
-private const val VERB_DONE = 6
+private class Glyph(val path: Path, val sizeBytes: Int, val metrics: FloatArray) :
+  ReferenceCounted() {}
 
-/** This value is the same prime used in AutoValue's hashing algorithm. */
-private const val HASH_PRIME = 1000003
+private class ReferenceCountedString(val string: String) : ReferenceCounted() {}
 
-/** Value chosen empirically; 1024 is enough for almost all CJK characters. */
-private const val GLYPH_BUILDER_PATH_BUFFER_CAPACITY = 1024
+private class GlyphCache(cacheSizeBytes: Int) {
+  private val glyphs = mutableMapOf<Int, ReferenceCounted>()
+  // Orphaned glyphs which are kept around in case they are reused soon.
+  private val orphanedGlyphs =
+    object : LruCache<Int, Glyph>(cacheSizeBytes) {
+      protected override fun sizeOf(key: Int, value: Glyph) = value.sizeBytes
+    }
 
-/**
- * Initial capacity of the temporary path buffer, used to buffer a single closed path. 512 is more
- * than enough for almost anything.
- */
-private const val CLOSED_PATH_BUFFER_CAPACITY = 512
+  operator fun get(glyphId: Int) = glyphs.get(glyphId)
 
-/** Amount to grow path buffers when they run out. */
-private const val PATH_BUFFER_GROW_AMOUNT = 512
+  fun acquireString(glyphId: Int, string: String) {
+    glyphs.getOrPut(glyphId) { ReferenceCountedString(string) }.referenceCount++
+  }
 
-private class Glyph(val path: Path, val metrics: FloatArray)
+  inline fun acquireGlyph(glyphId: Int, defaultValue: () -> Glyph) {
+    glyphs.getOrPut(glyphId) { orphanedGlyphs.remove(glyphId) ?: defaultValue() }.referenceCount++
+  }
 
-/** Used for whitespace characters. */
-private class Blank(val typographicWidth: Float)
+  fun release(glyphId: Int) {
+    val glyph = glyphs[glyphId] ?: throw IllegalStateException(PathGlyphSource.NULL_GLYPH_MESSAGE)
+
+    if (--glyph.referenceCount <= 0) {
+      glyphs.remove(glyphId)
+      if (glyph is Glyph) {
+        orphanedGlyphs.put(glyphId, glyph)
+      }
+    }
+  }
+}
 
 /**
  * PathGlyphSource provides a workaround for Android API levels 30 and below, in which there are
@@ -65,55 +71,91 @@ private class Blank(val typographicWidth: Float)
  * by splitting the result of [Paint.getTextPath] along the glyph boundaries reported by
  * [Paint.getTextWidths].
  */
-internal class PathGlyphSource : IGlyphSource {
-  // Map of glyph IDs to either Strings, Paths, or the Blank singleton.
-  private val glyphs = mutableMapOf<Int, Any>()
+internal class PathGlyphSource(cacheSizeBytes: Int) : IGlyphSource {
+  companion object {
+    const val NULL_GLYPH_MESSAGE = "Attempted to reference a non-existent glyph"
+    const val UNKNOWN_GLYPH_MESSAGE = "Unexpected data type in glyph store"
+
+    /**
+     * Initial capacity of the temporary path buffer, used to buffer a single closed path. 512 is
+     * more than enough for almost anything.
+     */
+    private const val CLOSED_PATH_BUFFER_CAPACITY = 512
+
+    /**
+     * Upper limit of the number of characters in a string owned by GlyphCache, i.e. a
+     * multi-codepoint emoji.
+     *
+     * 32 is more than enough to handle even the most complex emoji.
+     */
+    private const val MAX_STRING_LENGTH = 32
+
+    /**
+     * Flag which determines if this glyph ID is stored in the cache.
+     *
+     * If set, the glyph ID is actually a single UTF-32 codepoint.
+     */
+    // Internal for testing.
+    internal const val GLYPH_IS_UTF32_MASK = 1 shl 31
+  }
+
+  private val glyphs = GlyphCache(cacheSizeBytes)
 
   // Reusable buffers.
   private val tempPath = Path()
   private val boundingBox = Rect()
   private val boundingBoxF = RectF()
   private val fontMetrics = Paint.FontMetrics()
-  private val emojiGlyphMetrics = FloatArray(8)
-  private val blankGlyphMetrics = floatArrayOf(0f, 0f, 0f, 1f, 1f, 0f, 0f, 1f)
+  private val chars = CharArray(2) // one Unicode codepoint can be at most two UTF-16 codepoints.
+  private val typographicalWidths = FloatArray(MAX_STRING_LENGTH)
+  private val stringGlyphMetrics = FloatArray(8)
   private val closedPath = PathBuffer(CLOSED_PATH_BUFFER_CAPACITY)
 
   override fun getGlyphMetrics(glyphId: Int, font: Any?, paint: Paint): FloatArray {
+    if (glyphId and GLYPH_IS_UTF32_MASK != 0) {
+      val len = Character.toChars(glyphId and GLYPH_IS_UTF32_MASK.inv(), chars, 0)
+      val numWidths =
+        paint.withNoLetterSpacing {
+          paint.getFontMetrics(fontMetrics)
+          paint.getTextBounds(chars, /* index= */ 0, len, boundingBox)
+          paint.getTextWidths(chars, /* index= */ 0, len, typographicalWidths)
+        }
+      setStringGlyphMetrics(numWidths)
+      return stringGlyphMetrics
+    }
+
     val glyph = glyphs[glyphId]
     when (glyph) {
-      is String ->
-        paint.withNoLetterSpacing {
-          // Ignore stroke; this is a colored emoji.
-          paint.getTextBounds(glyph, /* index= */ 0, glyph.length, boundingBox)
-          val typographicalWidths = FloatArray(glyph.length)
-          paint.getTextWidths(glyph, typographicalWidths)
-          emojiGlyphMetrics[1] = boundingBox.left.toFloat()
-          emojiGlyphMetrics[2] = -boundingBox.bottom.toFloat()
-          emojiGlyphMetrics[3] = boundingBox.width().toFloat()
-          emojiGlyphMetrics[4] = boundingBox.height().toFloat()
-          emojiGlyphMetrics[5] = typographicalWidths.sum()
-
-          // In some scripts, in particular, emoji, some characters exceed the boundaries of the
-          // font
-          // metrics. Expand the font metrics to include the actual bounding box in those cases.
-          paint.getFontMetrics(fontMetrics)
-          val fontDescent = maxFontDescent(boundingBox, fontMetrics)
-          val fontAscent = maxFontAscent(boundingBox, fontMetrics)
-          emojiGlyphMetrics[6] = -fontDescent
-          emojiGlyphMetrics[7] = fontAscent + fontDescent
-
-          return emojiGlyphMetrics
-        }
-      is Glyph -> {
-        return glyph.metrics
+      is ReferenceCountedString -> {
+        val numWidths =
+          paint.withNoLetterSpacing {
+            paint.getFontMetrics(fontMetrics)
+            paint.getTextBounds(glyph.string, /* index= */ 0, glyph.string.length, boundingBox)
+            paint.getTextWidths(glyph.string, typographicalWidths)
+          }
+        setStringGlyphMetrics(numWidths)
+        return stringGlyphMetrics
       }
-      is Blank -> {
-        blankGlyphMetrics[5] = glyph.typographicWidth
-        return blankGlyphMetrics
-      }
-      null -> throw IllegalStateException(NULL_GLYPH_MESSAGE)
-      else -> throw IllegalStateException(UNKNOWN_GLYPH_MESSAGE)
+      is Glyph -> return glyph.metrics
+      null -> throw IllegalArgumentException(NULL_GLYPH_MESSAGE)
+      else -> throw IllegalArgumentException(UNKNOWN_GLYPH_MESSAGE)
     }
+  }
+
+  private fun setStringGlyphMetrics(numWidths: Int) {
+    // Ignore stroke; this is either a colored emoji or a blank character.
+    stringGlyphMetrics[1] = boundingBox.left.toFloat()
+    stringGlyphMetrics[2] = -boundingBox.bottom.toFloat()
+    stringGlyphMetrics[3] = boundingBox.width().toFloat()
+    stringGlyphMetrics[4] = boundingBox.height().toFloat()
+    stringGlyphMetrics[5] = typographicalWidths.take(numWidths).sum()
+
+    // In some scripts, in particular, emoji, some characters exceed the boundaries of the font
+    // metrics. Expand the font metrics to include the actual bounding box in those cases.
+    val fontDescent = maxFontDescent(boundingBox, fontMetrics)
+    val fontAscent = maxFontAscent(boundingBox, fontMetrics)
+    stringGlyphMetrics[6] = -fontDescent
+    stringGlyphMetrics[7] = fontAscent + fontDescent
   }
 
   override fun getTextGlyphs(text: String, paint: Paint): Array<GlyphAdvance> {
@@ -161,7 +203,8 @@ internal class PathGlyphSource : IGlyphSource {
               totalX += segment.points.last().x
               closedPath.add(segment)
             }
-            PathSegment.Type.Conic -> throw IllegalStateException(UNEXPECTED_VERB_MESSAGE)
+            PathSegment.Type.Conic ->
+              throw IllegalStateException(PathBuffer.UNEXPECTED_VERB_MESSAGE)
           }
         }
       } finally {
@@ -175,6 +218,12 @@ internal class PathGlyphSource : IGlyphSource {
       return Array<GlyphAdvance>(glyphBuilders.size) {
         glyphBuilders[it].toGlyphAdvance(glyphs, fontMetrics, boundingBoxF, tracking)
       }
+    }
+  }
+
+  override fun releaseTextGlyph(glyphId: Int) {
+    if (glyphId and GLYPH_IS_UTF32_MASK == 0) {
+      glyphs.release(glyphId)
     }
   }
 
@@ -194,14 +243,31 @@ internal class PathGlyphSource : IGlyphSource {
     fillPaint: Paint,
     strokePaint: Paint,
   ) {
+    if (glyphId and GLYPH_IS_UTF32_MASK != 0) {
+      val len = Character.toChars(glyphId and GLYPH_IS_UTF32_MASK.inv(), chars, 0)
+      fillPaint.withNoLetterSpacing {
+        // Align at top-left.
+        fillPaint.getTextBounds(chars, /* index= */ 0, len, boundingBox)
+        canvas.drawText(
+          chars,
+          /*index=*/ 0,
+          /*count=*/ len,
+          x + (strokeWidth / 2) - boundingBox.left,
+          y + (strokeWidth / 2) - boundingBox.top,
+          fillPaint,
+        )
+      }
+      return
+    }
+
     val glyph = glyphs[glyphId]
     when (glyph) {
-      is String ->
+      is ReferenceCountedString ->
         fillPaint.withNoLetterSpacing {
           // Align at top-left.
-          fillPaint.getTextBounds(glyph, /* index= */ 0, glyph.length, boundingBox)
+          fillPaint.getTextBounds(glyph.string, /* index= */ 0, glyph.string.length, boundingBox)
           canvas.drawText(
-            glyph,
+            glyph.string,
             x + (strokeWidth / 2) - boundingBox.left,
             y + (strokeWidth / 2) - boundingBox.top,
             fillPaint,
@@ -219,15 +285,34 @@ internal class PathGlyphSource : IGlyphSource {
           canvas.restore()
         }
       }
-      is Blank -> {}
-      null -> throw IllegalStateException(NULL_GLYPH_MESSAGE)
-      else -> throw IllegalStateException(UNKNOWN_GLYPH_MESSAGE)
+      null -> throw IllegalArgumentException(NULL_GLYPH_MESSAGE)
+      else -> throw IllegalArgumentException(UNKNOWN_GLYPH_MESSAGE)
     }
   }
 }
 
 /** Buffer for Path segments that we're not ready to turn into a real Path yet. */
 private class PathBuffer(capacity: Int) {
+  companion object {
+    const val UNEXPECTED_VERB_MESSAGE = "Font path contains unexpected verb"
+
+    // These values are identical to the ones defined in PathIterator.
+    // https://developer.android.com/reference/android/graphics/PathIterator
+    private const val VERB_MOVE = 0
+    private const val VERB_LINE = 1
+    private const val VERB_QUAD = 2
+    private const val VERB_CONIC = 3
+    private const val VERB_CUBIC = 4
+    private const val VERB_CLOSE = 5
+    private const val VERB_DONE = 6
+
+    /** Amount to grow path buffers when they run out. */
+    private const val PATH_BUFFER_GROW_AMOUNT = 512
+
+    /** This value is the same prime used in AutoValue's hashing algorithm. */
+    const val HASH_PRIME = 1000003
+  }
+
   var verbCount = 0
     private set
 
@@ -237,6 +322,12 @@ private class PathBuffer(capacity: Int) {
   private var hash = 0
   private var size = 0
   private var data = IntArray(capacity)
+
+  // Two floats per point, plus one byte (verb) per point. Internally Path is an SkPath, which
+  // theoretically should let you reserve verbs/points independently, but Android doesn't expose
+  // this.
+  val sizeBytes: Int
+    get() = pointCount * 4 * 2 + pointCount
 
   /**
    * Note that the hash generated by this function is not associative.
@@ -310,7 +401,7 @@ private class PathBuffer(capacity: Int) {
   fun isEmpty() = size == 0
 
   fun toPath(): Path {
-    val path = Path().apply { incReserve(size) }
+    val path = Path().apply { incReserve(pointCount) }
 
     var i = 0
     fun nextVerb() = data[i++]
@@ -423,6 +514,11 @@ private class GlyphBuilder(
   /** String which this glyph corresponds to. */
   val text: String,
 ) {
+  companion object {
+    /** Value chosen empirically; 1024 is enough for almost all CJK characters. */
+    private const val GLYPH_BUILDER_PATH_BUFFER_CAPACITY = 1024
+  }
+
   /** X position of the right side of the glyph in pixels. */
   val right: Float
     get() = left + width
@@ -430,7 +526,7 @@ private class GlyphBuilder(
   val pathBuffer = PathBuffer(GLYPH_BUILDER_PATH_BUFFER_CAPACITY)
 
   fun toGlyphAdvance(
-    map: MutableMap<Int, Any>,
+    glyphs: GlyphCache,
     fontMetrics: Paint.FontMetrics,
     boundingBoxF: RectF,
     tracking: Float,
@@ -440,18 +536,19 @@ private class GlyphBuilder(
 
     if (pathBuffer.isEmpty()) {
       // Either a colored emoji or a blank character such as a space.
-      hash = text.hashCode()
-      if (text.isBlank()) {
-        isEmoji = false
-        map.getOrPut(hash) { Blank(width) }
+      isEmoji = !text.isBlank()
+      if (text.codePointCount(0, text.length) == 1) {
+        hash = text.codePointAt(0) or PathGlyphSource.GLYPH_IS_UTF32_MASK
       } else {
-        isEmoji = true
-        map.getOrPut(hash) { text }
+        hash = text.hashCode() and PathGlyphSource.GLYPH_IS_UTF32_MASK.inv()
+        glyphs.acquireString(hash, text)
       }
     } else {
-      hash = (((seed * HASH_PRIME) xor text.hashCode()) * HASH_PRIME) xor pathBuffer.hashCode()
+      hash =
+        ((((seed * PathBuffer.HASH_PRIME) xor text.hashCode()) * PathBuffer.HASH_PRIME) xor
+          pathBuffer.hashCode()) and PathGlyphSource.GLYPH_IS_UTF32_MASK.inv()
       isEmoji = false
-      map.getOrPut(hash) {
+      glyphs.acquireGlyph(hash) {
         val path = pathBuffer.toPath()
         path.offset(-left, 0f)
 
@@ -468,6 +565,11 @@ private class GlyphBuilder(
 
         Glyph(
           path,
+          // Approximate size in bytes of this object. Include the size of the eight floats. Of
+          // course, there's extra memory being taken up by memory allocations and the Glyph
+          // object
+          // itself, so this is just a very rough approximation.
+          pathBuffer.sizeBytes + 8 * 4,
           floatArrayOf(
             1f, // padding
             boundingBoxF.left, // x
@@ -490,7 +592,7 @@ private class GlyphBuilder(
 private val Paint.seed: Int
   get() =
     if (typeface !== null) {
-      typeface.hashCode() * HASH_PRIME
+      typeface.hashCode() * PathBuffer.HASH_PRIME
     } else {
       0
     } xor textSize.toBits()

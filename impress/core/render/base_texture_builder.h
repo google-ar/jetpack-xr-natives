@@ -20,15 +20,21 @@
 #include <cstdint>
 #include <functional>
 
+#include "absl/base/attributes.h"
 #include "absl/strings/string_view.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/IndexBuffer.h"
 #include "filament/filament/include/filament/Renderer.h"
 #include "filament/filament/include/filament/VertexBuffer.h"
+#include "core/assets/asset_ptr.h"
 #include "core/image/image_contents.h"
 
 namespace imp {
+
+// Forward declaration to avoid circular dependency:
+// `render` <-> `base_texture_builder`.
+class ImageAsset;
 
 // An interface for building a filament::Texture* to support SplitEngine.
 // The main concrete implementation is TextureBuilder.
@@ -37,11 +43,20 @@ class BaseTextureBuilder {
   virtual ~BaseTextureBuilder() = default;
   virtual BaseTextureBuilder& Width(uint32_t width) = 0;
   virtual BaseTextureBuilder& Height(uint32_t height) = 0;
+  virtual BaseTextureBuilder& Depth(uint32_t depth) = 0;
   virtual BaseTextureBuilder& Levels(uint8_t levels) = 0;
   virtual BaseTextureBuilder& Format(
       filament::backend::TextureFormat format) = 0;
   virtual BaseTextureBuilder& Sampler(
       filament::backend::SamplerType sampler) = 0;
+
+  // An `image` will be stored in the texture array at `image_index`.
+  BaseTextureBuilder& Image(filament::Engine& engine,
+                            AssetPtr<ImageAsset> image, int image_index = 0) {
+    return ImageInternal(engine, image, image_index);
+  }
+
+  ABSL_DEPRECATED("Use the AssetPtr<ImageAsset> variant instead.")
   BaseTextureBuilder& Image(filament::Engine& engine,
                             image::ImageContents& image_contents,
                             std::function<void()> callback,
@@ -53,6 +68,9 @@ class BaseTextureBuilder {
   virtual void Finalize(filament::Texture* texture) = 0;
 
  protected:
+  virtual BaseTextureBuilder& ImageInternal(filament::Engine& engine,
+                                            AssetPtr<ImageAsset> images,
+                                            int image_index) = 0;
   virtual BaseTextureBuilder& ImageInternal(
       filament::Engine& engine, image::ImageContents& image_contents,
       std::function<void()> callback, int32_t* out_levels) = 0;

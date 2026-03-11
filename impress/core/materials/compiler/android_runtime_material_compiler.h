@@ -21,6 +21,7 @@
 
 #include "absl/strings/string_view.h"
 #include "core/async/future.h"
+#include "core/materials/compiler/cache/material_cache.h"
 #include "core/materials/compiler/material_compiler_client.h"
 #include "core/materials/compiler/material_compiler_client_jni.h"
 #include "core/materials/compiler/runtime_material_compiler.h"
@@ -43,8 +44,10 @@ class AndroidRuntimeMaterialCompiler : public RuntimeMaterialCompiler {
  private:
   AndroidRuntimeMaterialCompiler(
       BaseView& view, std::unique_ptr<JavaMaterialCompilerClient> java_client,
-      std::unique_ptr<MaterialCompilerClient> native_client)
-      : RuntimeMaterialCompiler(view, std::move(native_client)),
+      std::unique_ptr<MaterialCompilerClient> native_client,
+      std::unique_ptr<MaterialCache> cache)
+      : RuntimeMaterialCompiler(view, std::move(native_client),
+                                std::move(cache)),
         java_client_(std::move(java_client)) {}
 
   std::unique_ptr<JavaMaterialCompilerClient> java_client_;

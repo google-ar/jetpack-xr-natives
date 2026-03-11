@@ -48,10 +48,10 @@ void SettingsWidget::DrawImGui() {
                       &show_all_origins_enabled_)) {
     event.emplace().show_all_origins_enabled = show_all_origins_enabled_;
   }
-  if (ImGui::MenuItem(editor::kShowPhysicsCollidersText.data(), nullptr,
-                      &show_physics_colliders_enabled_)) {
-    event.emplace().show_physics_colliders_enabled =
-        show_physics_colliders_enabled_;
+  if (ImGui::MenuItem(editor::kShowPhysicsVisualizerText.data(), nullptr,
+                      &show_physics_visualizer_enabled_)) {
+    event.emplace().show_physics_visualizer_enabled =
+        show_physics_visualizer_enabled_;
   }
   if (ImGui::MenuItem(editor::kEnableVertexSelection.data(), nullptr,
                       &vertex_selection_enabled_)) {

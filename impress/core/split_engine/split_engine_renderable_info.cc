@@ -31,6 +31,7 @@
 #include "core/model/mesh/mesh_vertex_and_index_data.h"
 #include "core/model/mesh/mesh_vertex_data.h"
 #include "core/model/mesh/vertex_format.h"
+#include "core/ncsb/node.h"
 #include "core/render/base_renderable_manager.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/skinning_helpers.h"
@@ -48,9 +49,10 @@ absl::Status SplitEngineRenderableInfo::Setup(BridgeId bridge_id) {
   BaseRenderableManager& rm = GetView().GetRenderableManager();
   RenderableInstance renderable = rm.GetInstance(GetEntity());
   if (!renderable) {
-    return absl::FailedPreconditionError(
+    return absl::FailedPreconditionError(absl::StrFormat(
         "Cannot add SplitEngineRenderableInfo to a node without a "
-        "renderable.");
+        "renderable: %d",
+        GetNode()->GetEntity().getId()));
   }
 
   size_t primitive_count =
@@ -166,6 +168,14 @@ void SplitEngineRenderableInfo::SetRenderableBounds(
 
 uint32_t SplitEngineRenderableInfo::GetSkinningBoneCount() const noexcept {
   return skinning_bone_count_;
+}
+
+void SplitEngineRenderableInfo::SetChannel(uint8_t channel) {
+  channel_ = channel;
+}
+
+std::optional<uint8_t> SplitEngineRenderableInfo::GetChannel() const {
+  return channel_;
 }
 
 const imp::Box& SplitEngineRenderableInfo::GetRenderableBounds() const {

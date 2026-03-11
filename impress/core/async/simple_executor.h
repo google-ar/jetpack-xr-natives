@@ -64,6 +64,8 @@ class SimpleExecutor : public Executor {
 
   absl::Status UpdateTaskPriority(TaskId task_id, int task_priority) override;
 
+  bool InvokeScheduledTask(TaskId task_id) override;
+
   absl::StatusOr<int> GetTaskPriority(TaskId task_id) override;
 
   bool IsTaskReprioritizingSupported() override { return true; }

@@ -52,6 +52,7 @@
 #include "core/math/vec.h"
 #include "core/monitor/monitor_helpers.h"
 #include "core/monitor/scoped_duration_measurement.h"
+#include "core/view/utils/proto/filament_feature_flag.proto.imp.h"
 #include "core/window/clipboard/clipboard_handler.h"
 #include "core/window/filament_host_input.h"
 #include "core/window/shared_host_state.h"
@@ -246,8 +247,9 @@ OptionalError FilamentHost::Setup(Engine::Backend backend,
           backend, platform,
           shared_gl_context ? shared_gl_context : shared_gl_context_,
           state_->ShouldUseSharedGlContext(), GetEngineConfig(),
-          state_->GetMaximumEngineFeatureLevel(), state_->ShouldStartPaused(),
-          {}, state_->ShouldPreinitializeMetalPlatform()));
+          state_->GetMaximumEngineFeatureLevel(),
+          state_->GetFilamentFeatureFlags(), state_->ShouldStartPaused(), {},
+          state_->ShouldPreinitializeMetalPlatform()));
 
   shared_state.RegisterHost(this);
   renderer_ = engine_->createRenderer();
@@ -286,10 +288,6 @@ OptionalError FilamentHost::InternalSetup() {
   IMP_TRACE();
   life_cycle_state_ = LifeCycleState::kSettingUp;
 
-  if (dev_mode_extension_) {
-    MP_RETURN_IF_ERROR(dev_mode_extension_->Setup(this));
-  }
-
   render_view_.Get()->setVisibleLayers(0x4, 0x4);
   bool isAtLeastFeatureLevel1 =
       engine_->getActiveFeatureLevel() >=
@@ -303,6 +301,10 @@ OptionalError FilamentHost::InternalSetup() {
   }
 
   MP_RETURN_IF_ERROR(state_->Setup(this));
+
+  if (dev_mode_extension_) {
+    MP_RETURN_IF_ERROR(dev_mode_extension_->PostSetup());
+  }
 
   life_cycle_state_ = LifeCycleState::kRunning;
 
@@ -493,7 +495,9 @@ absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
         GetView()->setCamera(editor_camera_override_);
       }
 
-      PerformRender(render_view_.Get());
+      if (should_perform_main_render_) {
+        PerformRender(render_view_.Get());
+      }
 
       GetView()->setCamera(camera);
 
@@ -510,7 +514,9 @@ absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
         renderer_->endFrame();
       }
 
-      MP_RETURN_IF_ERROR(state_->SecondaryViewRender(this));
+      if (should_perform_secondary_view_render_) {
+        MP_RETURN_IF_ERROR(state_->SecondaryViewRender(this));
+      }
 
       if (state_->IsAnimating(this)) {
         result.flags |= RenderResultFlags::kIsAnimating;
@@ -834,7 +840,7 @@ absl::Status FilamentHost::RegisterExtension(
       // Ideal case
       break;
     case LifeCycleState::kSettingUp: {
-      MP_RETURN_IF_ERROR(extension_ptr->Setup(this));
+      MP_RETURN_IF_ERROR(extension_ptr->Setup(*this));
       break;
     }
     case LifeCycleState::kRunning:
@@ -842,7 +848,7 @@ absl::Status FilamentHost::RegisterExtension(
     case LifeCycleState::kPausing:
     case LifeCycleState::kPaused:
     case LifeCycleState::kResuming: {
-      MP_RETURN_IF_ERROR(extension_ptr->Setup(this));
+      MP_RETURN_IF_ERROR(extension_ptr->Setup(*this));
       extension_ptr->UpdateCameraAndViewport(pixel_dimensions_,
                                              subpixel_ratio_);
       break;

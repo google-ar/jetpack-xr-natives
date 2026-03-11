@@ -24,6 +24,7 @@
 #include "absl/strings/string_view.h"
 #include "apibindings/base_asset_loader.h"
 #include "core/render/texture.h"
+#include "core/view/utils/asset.h"
 
 namespace imp {
 
@@ -34,6 +35,10 @@ class TextureManager {
 
   // Loads a texture from the assets folder or a remote texture from a URL.
   virtual void LoadTexture(absl::string_view path,
+                           std::unique_ptr<BaseAssetLoader> asset_loader) = 0;
+
+  // Loads a texture from an asset definition.
+  virtual void LoadTexture(imp::AssetDefinition asset_definition,
                            std::unique_ptr<BaseAssetLoader> asset_loader) = 0;
 
   // Borrows the reflection texture from the currently set environment IBL.

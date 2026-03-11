@@ -14,7 +14,6 @@
 
 #include "core/split_engine/materials/split_engine_custom_material.h"
 
-#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -121,51 +120,23 @@ void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              uint value) {
-  if (value > std::numeric_limits<int>::max()) {
-    IMP_LOG(imp::ERROR) << "uint value " << value << " is out of range";
-    return;
-  }
   serializer_.SetMaterialParameter(GetFilamentMaterialInstance(),
-                                   parameter_name, static_cast<int>(value));
+                                   parameter_name, value);
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              uint2 value) {
-  int2 cast_value;
-  for (int i = 0; i < value.size(); ++i) {
-    if (value[i] > std::numeric_limits<int>::max()) {
-      IMP_LOG(imp::ERROR) << "uint value " << value[i] << " is out of range";
-      return;
-    }
-    cast_value[i] = static_cast<int>(value[i]);
-  }
   serializer_.SetMaterialParameter(GetFilamentMaterialInstance(),
-                                   parameter_name, cast_value);
+                                   parameter_name, value);
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              uint3 value) {
-  int3 cast_value;
-  for (int i = 0; i < value.size(); ++i) {
-    if (value[i] > std::numeric_limits<int>::max()) {
-      IMP_LOG(imp::ERROR) << "uint value " << value[i] << " is out of range";
-      return;
-    }
-    cast_value[i] = static_cast<int>(value[i]);
-  }
   serializer_.SetMaterialParameter(GetFilamentMaterialInstance(),
-                                   parameter_name, cast_value);
+                                   parameter_name, value);
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              uint4 value) {
-  int4 cast_value;
-  for (int i = 0; i < value.size(); ++i) {
-    if (value[i] > std::numeric_limits<int>::max()) {
-      IMP_LOG(imp::ERROR) << "uint value " << value[i] << " is out of range";
-      return;
-    }
-    cast_value[i] = static_cast<int>(value[i]);
-  }
   serializer_.SetMaterialParameter(GetFilamentMaterialInstance(),
-                                   parameter_name, cast_value);
+                                   parameter_name, value);
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              mat3f value) {
@@ -253,26 +224,34 @@ void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              filament::RgbaType type,
                                              filament::math::float4 color) {
-  // TODO: (broken link) - Add support for parameters with RgbaType.
-  IMP_LOG(imp::ERROR) << "RGBA parameters are not supported for " << parameter_name;
+  serializer_.SetMaterialParameter(GetFilamentMaterialInstance(),
+                                   parameter_name,
+                                   filament::Color::toLinear(type, color));
 }
 
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              filament::RgbType type,
                                              filament::math::float3 color) {
-  // TODO: (broken link) - Add support for parameters with RgbaType.
-  IMP_LOG(imp::ERROR) << "RGB parameters are not supported for " << parameter_name;
+  serializer_.SetMaterialParameter(GetFilamentMaterialInstance(),
+                                   parameter_name,
+                                   filament::Color::toLinear(type, color));
 }
 
 void SplitEngineCustomMaterial::SetParameter(
     absl::string_view parameter_name, const imp::Texture* texture,
     std::optional<filament::TextureSampler> sampler_override) {
+  // Unassign a previously assigned owned or borrowed texture if it exists.
+  auto it = parameters_to_owned_or_borrowed_textures_.find(parameter_name);
+  if (it != parameters_to_owned_or_borrowed_textures_.end()) {
+    it->second->OnUnassignedFromMaterial(*this, parameter_name);
+  }
+
   serializer_.SetMaterialParameter(
       GetFilamentMaterialInstance(), parameter_name, texture->GetTexture(),
       sampler_override ? *sampler_override : texture->GetSampler());
 
   parameters_to_raw_textures_.insert_or_assign(std::string(parameter_name),
-                                               texture->GetTexture());
+                                               texture);
   parameters_to_owned_or_borrowed_textures_.erase(parameter_name);
 }
 
@@ -286,26 +265,41 @@ void SplitEngineCustomMaterial::SetParameter(
 void SplitEngineCustomMaterial::SetParameter(
     absl::string_view parameter_name, OwnedTexturePtr texture,
     std::optional<filament::TextureSampler> sampler_override) {
-  serializer_.SetMaterialParameter(
-      GetFilamentMaterialInstance(), parameter_name, texture->GetTexture(),
-      sampler_override ? *sampler_override : texture->GetSampler());
-
-  parameters_to_owned_or_borrowed_textures_.insert_or_assign(
-      std::string(parameter_name),
-      OwnedOrBorrowedPtr<Texture>(std::move(texture)));
-  parameters_to_raw_textures_.erase(parameter_name);
+  SetOwnedOrBorrowedTexture(parameter_name, std::move(texture),
+                            sampler_override);
 }
 
 void SplitEngineCustomMaterial::SetParameter(
     absl::string_view parameter_name, BorrowedTexturePtr texture,
     std::optional<filament::TextureSampler> sampler_override) {
-  serializer_.SetMaterialParameter(
-      GetFilamentMaterialInstance(), parameter_name, texture->GetTexture(),
-      sampler_override ? *sampler_override : texture->GetSampler());
+  SetOwnedOrBorrowedTexture(parameter_name, std::move(texture),
+                            sampler_override);
+}
+
+void SplitEngineCustomMaterial::SetOwnedOrBorrowedTexture(
+    absl::string_view parameter_name, OwnedOrBorrowedTexturePtr texture,
+    std::optional<filament::TextureSampler> sampler_override) {
+  // Unassign a previously assigned owned or borrowed texture if it exists.
+  auto it = parameters_to_owned_or_borrowed_textures_.find(parameter_name);
+  if (it != parameters_to_owned_or_borrowed_textures_.end()) {
+    it->second->OnUnassignedFromMaterial(*this, parameter_name);
+  }
+
+  filament::TextureSampler sampler =
+      sampler_override ? *sampler_override : texture->GetSampler();
+
+  Texture::UpdateTextureFn update_texture_fn =
+      [this, sampler](absl::string_view parameter_name,
+                      filament::Texture* texture) {
+        serializer_.SetMaterialParameter(GetFilamentMaterialInstance(),
+                                         parameter_name, texture, sampler);
+      };
+  update_texture_fn(parameter_name, texture->GetTexture());
+  texture->OnAssignedToMaterial(*this, parameter_name,
+                                std::move(update_texture_fn));
 
   parameters_to_owned_or_borrowed_textures_.insert_or_assign(
-      std::string(parameter_name),
-      OwnedOrBorrowedPtr<Texture>(std::move(texture)));
+      std::string(parameter_name), std::move(texture));
   parameters_to_raw_textures_.erase(parameter_name);
 }
 
@@ -318,6 +312,17 @@ bool SplitEngineCustomMaterial::HasParameter(absl::string_view parameter_name) {
   // NOTE: This means that TrySetParameter will behave the same as SetParameter
   // and crash the app if the parameter does not exist.
   return true;
+}
+
+absl::string_view SplitEngineCustomMaterial::GetParameterTransformName(
+    absl::string_view sampler_name) const {
+#if IMP_USE_LOCAL_SPLIT_ENGINE_MATERIALS
+  return material_->GetParameterTransformName(sampler_name);
+#endif
+
+  // We don't know the mapping between sampler names and transform names
+  // because the material is held on the SplitEngine renderer side.
+  return {};
 }
 
 SplitEngineCustomMaterial::HeldTextureType
@@ -344,7 +349,7 @@ imp::StringMap<const filament::Texture*>
 SplitEngineCustomMaterial::GetUnownedFilamentTextures() const {
   imp::StringMap<const filament::Texture*> result;
   for (auto& pair : parameters_to_raw_textures_) {
-    result.emplace(pair.first, pair.second);
+    result.emplace(pair.first, pair.second->GetTexture());
   }
   return result;
 }

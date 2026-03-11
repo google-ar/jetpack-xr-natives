@@ -21,8 +21,8 @@
 
 #ifdef FILAMENT_ENABLE_PERFETTO
 
-#include "third_party/perfetto/include/perfetto/tracing/track_event.h"
-#include "third_party/perfetto/include/perfetto/tracing/track_event_category_registry.h"
+#include "perfetto/tracing/track_event.h"
+#include "perfetto/tracing/track_event_category_registry.h"
 
 PERFETTO_DEFINE_CATEGORIES_IN_NAMESPACE(tracing,
         perfetto::Category(FILAMENT_TRACING_CATEGORY_FILAMENT),

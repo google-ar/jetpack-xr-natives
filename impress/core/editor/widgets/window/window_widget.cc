@@ -59,14 +59,9 @@ void WindowWidget::DrawImGui() {
     window_configuration_.RestoreDefault();
   }
 
-  if (!hide_all_) {
-    bool shown = true;
-    ImGui::MenuItem(std::string(kHideAllText).c_str(), nullptr, &shown);
-    hide_all_ = !shown;
-  } else {
-    bool hidden = true;
-    ImGui::MenuItem(std::string(kShowAllText).c_str(), nullptr, &hidden);
-    hide_all_ = hidden;
+  const absl::string_view text = hide_all_ ? kShowAllText : kHideAllText;
+  if (ImGui::MenuItem(std::string(text).c_str())) {
+    hide_all_ = !hide_all_;
   }
   window_configuration_.SetHideAllWindows(hide_all_);
 

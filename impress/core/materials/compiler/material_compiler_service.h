@@ -49,8 +49,7 @@ class MaterialCompilerService {
 
   absl::Status SendResponse(const flatbuffers::FlatBufferBuilder& builder);
 
-  void SendErrorResponse(uint64_t operation_id,
-                         absl::string_view error_message);
+  void SendErrorResponse(uint64_t operation_id, absl::Status error_status);
 
   void Close();
 

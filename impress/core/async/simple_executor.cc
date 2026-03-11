@@ -45,7 +45,7 @@ SimpleExecutor::~SimpleExecutor() { Shutdown(); }
 
 TaskId SimpleExecutor::ScheduleInvocable(Invocable<void()> invocable,
                                          int task_priority) {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   if (finished_) {
     return kInvalidTaskId;
   }
@@ -58,7 +58,7 @@ TaskId SimpleExecutor::ScheduleInvocable(Invocable<void()> invocable,
 }
 
 TaskId SimpleExecutor::ReserveTaskId() {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   if (finished_) {
     return kInvalidTaskId;
   }
@@ -68,7 +68,7 @@ TaskId SimpleExecutor::ReserveTaskId() {
 bool SimpleExecutor::ScheduleWithReservedTaskId(TaskId reserved_task_id,
                                                 imp::Invocable<void()> function,
                                                 int task_priority) {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   if (finished_) {
     return false;
   }
@@ -82,15 +82,31 @@ bool SimpleExecutor::ScheduleWithReservedTaskId(TaskId reserved_task_id,
 
 absl::Status SimpleExecutor::UpdateTaskPriority(TaskId task_id,
                                                 int task_priority) {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   if (finished_) {
     return absl::OkStatus();
   }
   return task_scheduler_->RescheduleTask(task_id, task_priority);
 }
 
+bool SimpleExecutor::InvokeScheduledTask(TaskId task_id) {
+  absl::StatusOr<Invocable<void()>> invocable;
+  {
+    absl::MutexLock lock(mu_);
+    if (finished_) {
+      return false;
+    }
+    invocable = task_scheduler_->PopTask(task_id);
+    if (!invocable.ok()) {
+      return false;
+    }
+  }
+  (*invocable)();
+  return true;
+}
+
 absl::StatusOr<int> SimpleExecutor::GetTaskPriority(TaskId task_id) {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   if (finished_) {
     return absl::FailedPreconditionError("Executor is shutdown.");
   }
@@ -99,7 +115,7 @@ absl::StatusOr<int> SimpleExecutor::GetTaskPriority(TaskId task_id) {
 
 void SimpleExecutor::Shutdown() {
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     if (finished_) {
       return;
     }
@@ -131,7 +147,7 @@ size_t SimpleExecutor::PumpInternal(bool drain) {
   }
 
   // It's expected that mu_ is locked prior to calling PumpInternal().
-  mu_.Unlock();
+  mu_.unlock();
   size_t invocables_size = invocables.size();
   for (auto& invocable : invocables) {
     invocable();
@@ -139,7 +155,7 @@ size_t SimpleExecutor::PumpInternal(bool drain) {
   // We want to release any shared pointer ownership here before locking the
   // Executor again.
   invocables.clear();
-  mu_.Lock();
+  mu_.lock();
 
   Executor::SetCurrentExecutor(previous_current_executor);
 
@@ -147,12 +163,12 @@ size_t SimpleExecutor::PumpInternal(bool drain) {
 }
 
 bool SimpleExecutor::Pump(bool drain) {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   return PumpInternal(drain) > 0;
 }
 
 bool SimpleExecutor::HasPendingTasks() {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   if (finished_) {
     return false;
   }
@@ -160,7 +176,7 @@ bool SimpleExecutor::HasPendingTasks() {
 }
 
 int SimpleExecutor::GetPendingTaskCount() {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   if (finished_) {
     return 0;
   }
@@ -170,7 +186,7 @@ int SimpleExecutor::GetPendingTaskCount() {
 size_t SimpleExecutor::DrainWithTimeout(absl::Duration timeout) {
   size_t sum = 0, step = 0;
   auto start = absl::Now();
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   do {
     step = PumpInternal(/*drain = */ false);
     sum += step;
@@ -185,7 +201,7 @@ void SimpleExecutor::PumpLoop() {
     mu_.AssertHeld();
     return !task_scheduler_->IsEmpty() || finished_;
   };
-  absl::MutexLock l(&mu_);
+  absl::MutexLock l(mu_);
   while (!finished_) {
     // Do a little work at a time.
     PumpInternal(false);

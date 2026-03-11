@@ -30,9 +30,9 @@ cc_binary(
     linkshared = 1,
     deps = [
         ":fake_perception_library_state",
-        "@abseil-cpp//absl/base",
         "//common:jni_utils",
         "//perception_library:jni_utils",
+        "@abseil-cpp//absl/base",
         "@third_party//OpenXR_KHR:openxr_headers_androidxr",
     ],
 )

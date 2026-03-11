@@ -148,17 +148,27 @@ class TextureFactory {
   OwnedTexturePtr CreateTexture(AssetPtr<TextureAsset> texture,
                                 TextureSamplerOptions options);
 
+  // Loads a texture from the given image asset.
+  //
+  // Note: this is currently the only variant that can be used via Split Engine.
+  OwnedTexturePtr CreateTexture(AssetPtr<ImageAsset> image,
+                                TextureGenerationOptions generation_options,
+                                TextureSamplerOptions sampler_options);
+
   // Create a 'normal' texture from the resource.
   // TODO: Refactor to use AssetPtr<ImageAsset>
   TexturePtr CreateTexture(const ImageAsset& image);
 
   // Create a texture and specify options.
   ABSL_DEPRECATED(
-      "Use CreateTexture(..., TextureGenerationOptions, TextureSamplerOptions) "
-      "instead.")
+      "Use CreateTexture(AssetPtr<ImageAsset>, TextureGenerationOptions, "
+      "TextureSamplerOptions) instead.")
   TexturePtr CreateTexture(const ImageAsset& image, Options options);
 
   // Create a texture and specify options.
+  ABSL_DEPRECATED(
+      "Use CreateTexture(AssetPtr<ImageAsset>, TextureGenerationOptions, "
+      "TextureSamplerOptions) instead.")
   TexturePtr CreateTexture(const ImageAsset& image,
                            TextureGenerationOptions generation_options,
                            TextureSamplerOptions sampler_options);
@@ -259,16 +269,23 @@ class TextureFactory {
   BorrowedTexturePtr BorrowPlaceholderCubemapTexture(
       SmallSourceLocation loc = SmallSourceLocation::Current());
 
+  // Borrows a placeholder texture for assigning to unused texture samplers.
+  BorrowedTexturePtr BorrowRGBA32FPlaceholderTexture(
+      SmallSourceLocation loc = SmallSourceLocation::Current());
+
  private:
   // Creates a singleton placeholder to borrow via BorrowPlaceholderTexture().
   OwnedTexturePtr CreatePlaceholderTexture();
   // Creates a singleton placeholder cubemap to borrow via
   // BorrowPlaceholderCubemapTexture().
   OwnedTexturePtr CreatePlaceholderCubemapTexture();
+  // Creates a singleton RGBA32F placeholder to borrow.
+  OwnedTexturePtr CreateRGBA32FPlaceholderTexture();
 
   BaseView& view_;
   OwnedTexturePtr placeholder_texture_;
   OwnedTexturePtr placeholder_cubemap_texture_;
+  OwnedTexturePtr rgba32f_placeholder_texture_;
 };
 
 }  // namespace imp

@@ -15,11 +15,14 @@
 #include "core/scripting/scripting_system.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "absl/container/flat_hash_set.h"
+#include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -29,14 +32,17 @@
 #include "core/async/future.h"
 #include "core/common/buffer_access.h"
 #include "core/common/context.h"
+#include "core/common/hash.h"
 #include "core/common/platform_helpers.h"
-#include "core/config.h"
+#include "core/ncsb/dispatcher/event.h"
 #include "core/ncsb/node_handle.h"
 #include "core/proto/any.proto.imp.h"
+#include "core/proto/proto_reader.h"
 #include "core/proto/proto_writer.h"
 #include "core/scripting/base_message_handler.h"
 #include "core/scripting/message_helpers.h"
 #include "core/scripting/proto/bridge.proto.imp.h"
+#include "core/scripting/proto/events.proto.imp.h"
 #include "core/scripting/web/web_view.h"
 #include "core/view/scripting/script_message_handler.h"
 #include "core/view/scripting/script_message_handler_provider.h"
@@ -48,49 +54,48 @@ using scripting::BaseMessageHandler;
 using scripting::MessageToNative;
 using scripting::MessageToScript;
 
+namespace {
+// Returns true if the given message type is in the set of messages that are
+// handled inline by the scripting system instead of delegated to a handler.
+bool IsInlineHandledMessage(absl::string_view message_type) {
+  static const absl::flat_hash_set<absl::string_view> kInlineHandledMessages = {
+      EventListenerAddRequest::kTypeUrl,
+      EventListenerRemoveRequest::kTypeUrl,
+      NodeEvent::kTypeUrl,
+  };
+
+  return kInlineHandledMessages.contains(message_type);
+}
+}  // namespace
+
 ScriptingSystem::ScriptingSystem(const Context& context,
                                  ScriptMessageHandlerProvider* provider,
                                  const WebViewParams& params,
                                  BufferAccess script)
-    : ScriptingSystem(context, provider,
-                      WebView::Create(context, params, std::move(script))) {}
+    : ScriptingSystem(*provider) {
+  web_view_ = WebView::Create(*this, context, params, std::move(script));
+}
 
 ScriptingSystem::ScriptingSystem(
     const Context& context, scripting::ScriptMessageHandlerProvider* provider,
     void* external_web_view, BufferAccess script)
-    : ScriptingSystem(
-          context, provider,
-          WebView::Create(external_web_view, context, std::move(script))) {}
+    : ScriptingSystem(*provider) {
+  web_view_ =
+      WebView::Create(*this, context, external_web_view, std::move(script));
+}
 
-ScriptingSystem::ScriptingSystem(const Context& context,
-                                 ScriptMessageHandlerProvider* provider,
-                                 std::unique_ptr<WebView> web_view)
-    : web_view_(std::move(web_view)), provider_(provider) {
-  if (provider_) {
-    provider_->SetScriptMessageHandler(this);
-  }
-
-  web_view_->SetScriptMessageHandler(this);
-
-#if IMP_RUNTIME(DEV)
-  output::AddExternalLogHandler(web_view_.get(), HandleLog);
-#endif  // IMP_RUNTIME(DEV)
+ScriptingSystem::ScriptingSystem(ScriptMessageHandlerProvider& provider)
+    : provider_(provider) {
+  provider_.SetScriptMessageHandler(this);
 }
 
 ScriptingSystem::~ScriptingSystem() {
   ClearRemembered();
   output::RemoveExternalLogHandler(web_view_.get());
-  if (provider_ != nullptr) {
-    if (provider_->GetScriptMessageHandler() == this) {
-      provider_->SetScriptMessageHandler(nullptr);
-    }
-  }
-  if (web_view_) {
-    web_view_->SetScriptMessageHandler(nullptr);
+  if (provider_.GetScriptMessageHandler() == this) {
+    provider_.SetScriptMessageHandler(nullptr);
   }
 }
-
-void ScriptingSystem::LoadAPI() const { web_view_->LoadInjectionScript(); }
 
 void ScriptingSystem::AddHandler(
     std::unique_ptr<scripting::BaseMessageHandler> handler) {
@@ -113,6 +118,12 @@ void ScriptingSystem::AddHandler(
   // It will override the previously set handler, which arguably has a use
   // case but is more likely a bug.
   for (const auto& type_url : type_urls) {
+    if (IsInlineHandledMessage(type_url)) {
+      IMP_LOG(imp::FATAL)
+          << "Attempting to add a handler for a message type that is already "
+             "being handled natively by the ScriptingSystem.";
+    }
+
     if (registry_.count(type_url) != 0) {
       IMP_LOG(imp::WARNING) << "A MessageHandler for the request type " << type_url
                    << " has already been set. Overriding with the new handler.";
@@ -125,137 +136,236 @@ void ScriptingSystem::AddHandler(
 }
 
 absl::Status ScriptingSystem::SendRegisteredEvent(const Any& event_any,
-                                                  NodeHandle target) {
+                                                  NodeHandle target) const {
   auto event_iter = events_.find(event_any.type_url);
   if (event_iter == events_.end()) {
     return absl::FailedPreconditionError(absl::StrCat(
         "No registered event found for type: ", event_any.type_url));
   }
 
-  if (!provider_) {
-    return absl::FailedPreconditionError(
-        "No ScriptMessageHandlerProvider available.");
-  }
-
-  return event_iter->second(provider_->GetDispatcher(), event_any, target);
+  return event_iter->second(provider_.GetDispatcher(), event_any, target);
 }
 
-// TODO: All platforms should call this method rather than doing
-// their own decoding.
-void ScriptingSystem::HandleMessage(const std::string& message,
+template <typename ResponseHandlerT>
+void SendResponse(int32_t message_id, ResponseHandlerT& response_handler,
+                  absl::Status status = absl::OkStatus()) {
+  MessageToScript message_to_script;
+  message_to_script.message_id = message_id;
+  if (!status.ok()) {
+    message_to_script.error = status.ToString();
+  }
+  response_handler(message_to_script, nullptr);
+}
+
+template <typename Response, typename ResponseHandlerT>
+void SendResponse(int32_t message_id, ResponseHandlerT& response_handler,
+                  absl::StatusOr<Response> response) {
+  MessageToScript message_to_script;
+  message_to_script.message_id = message_id;
+  if (!response.ok()) {
+    message_to_script.error = response.status().ToString();
+  } else {
+    absl::StatusOr<Any> packed_response = proto::PackAny(*response);
+    if (packed_response.ok()) {
+      message_to_script.content = *packed_response;
+    } else {
+      message_to_script.error = packed_response.status().ToString();
+    }
+  }
+  response_handler(message_to_script, nullptr);
+}
+
+void ScriptingSystem::HandleMessage(const MessageToNative& message,
                                     const scripting::PlatformArgs& args,
-                                    scripting::PlatformArgs& out) {
-  MessageToNative message_proto;
-  std::string decoded;
-  if (!DeserializeBase64(message, &decoded)) {
-    IMP_LOG(imp::ERROR) << "Failed to decode base64 string received from JS: "
-               << message;
-    return;
-  }
-
-  if (!ParseFromArray(decoded.c_str(), decoded.length(), &message_proto)) {
-    IMP_LOG(imp::ERROR) << "Failed to parse message from Javascript!";
-    return;
-  }
-
-  // It is safe to ignore the returned future, since it is .KeptBy() this.
-  auto unused = HandleMessage(message_proto, args, out);
-}
-
-Future<MessageToScript> ScriptingSystem::HandleMessage(
-    const MessageToNative& message, const scripting::PlatformArgs& args,
-    scripting::PlatformArgs& out) {
+                                    ResponseHandler response_handler) {
   if (!Executor::ForegroundExecutor() ||
       Executor::CurrentExecutor() != Executor::ForegroundExecutor()) {
     IMP_LOG(imp::FATAL) << "Impress scripting APIs can only be called on the foreground "
                   "thread.";
   }
-  // TODO: Allow messages without id if they are synchronous?
   if (!message.message_id) {
     IMP_LOG(imp::FATAL) << "Received scripting message with no message_id!";
   }
   const Any& content = message.content;
-  auto key = content.type_url;
+  absl::string_view key = content.type_url;
 
-  MessageToScript message_to_script;
-  message_to_script.message_id = message.message_id;
-
-  // First, check if this is a registered event type.
+  // First, check if the message contains a registered event type.
   if (events_.contains(key)) {
-    absl::Status event_status = SendRegisteredEvent(content);
-    if (!event_status.ok()) {
-      message_to_script.error = std::string(event_status.ToString());
+    SendResponse(message.message_id, response_handler,
+                 SendRegisteredEvent(content, NodeHandle()));
+    return;
+  }
+
+  // If this is a NodeEvent, unpack it and send the event on the target node.
+  if (key == NodeEvent::kTypeUrl) {
+    
+    absl::StatusOr<NodeEvent> unpacked_message =
+        proto::UnpackAny<NodeEvent>(content);
+    if (!unpacked_message.ok()) {
+      SendResponse(message.message_id, response_handler,
+                   unpacked_message.status());
+      return;
     }
-    // TODO: Do not call web_view_->PostMessage() here.
-    if (web_view_) {
-      web_view_->PostMessage(message_to_script);
+    if (!events_.contains(unpacked_message->event.type_url)) {
+      SendResponse(message.message_id, response_handler,
+                   absl::FailedPreconditionError(
+                       absl::StrCat("No registered event found for type: ",
+                                    unpacked_message->event.type_url)));
+      return;
     }
-    return Future<MessageToScript>(message_to_script);
+    SendResponse(
+        message.message_id, response_handler,
+        SendRegisteredEvent(unpacked_message->event, unpacked_message->target));
+    return;
+  }
+
+  // Event listener requests are handled inline by the scripting system instead
+  // of being delegated to a handler. This is because the event listener code
+  // relies on storing the response_handler, which is not something that
+  // is exposed by the BaseMessageHandler interface. The response handler is
+  // also a move-only type so there are challenges with adding it to the
+  // MessageHandler interface.
+  if (key == EventListenerAddRequest::kTypeUrl) {
+    
+    absl::StatusOr<EventListenerAddRequest> unpacked_message =
+        proto::UnpackAny<EventListenerAddRequest>(message.content);
+    if (!unpacked_message.ok()) {
+      SendResponse(message.message_id, response_handler,
+                   unpacked_message.status());
+      return;
+    }
+    HandleEventListenerAddRequest(*unpacked_message, message.message_id,
+                                  std::move(response_handler));
+    return;
+  }
+
+  if (key == EventListenerRemoveRequest::kTypeUrl) {
+    
+    absl::StatusOr<EventListenerRemoveRequest> unpacked_message =
+        proto::UnpackAny<EventListenerRemoveRequest>(message.content);
+    if (!unpacked_message.ok()) {
+      SendResponse(message.message_id, response_handler,
+                   unpacked_message.status());
+      return;
+    }
+    HandleEventListenerRemoveRequest(*unpacked_message, message.message_id,
+                                     std::move(response_handler));
+    return;
   }
 
   // Next, check if this is a type with a registered message handler.
   auto iter = registry_.find(key);
   if (iter == registry_.end()) {
-    message_to_script.error = "Unhandled message type!" + std::string(key);
-    // TODO: Do not call web_view_->PostMessage() here.
-    if (web_view_) {
-      web_view_->PostMessage(message_to_script);
-    }
-    return Future<MessageToScript>(message_to_script);
+    SendResponse(
+        message.message_id, response_handler,
+        absl::NotFoundError("Unhandled message type!" + std::string(key)));
+    return;
   }
 
-  Future<MessageToScript> result_future =
-      iter->second->HandleAnyMessage(content, args, out)
-          .Then([this, message, message_to_script](
-                    absl::StatusOr<BaseMessageHandler::OptionalResponse>
-                        optional_response_or) mutable {
-            // The response is either a Status, indicating an error, or
-            // an optional protocol buffer response.
-            if (optional_response_or.ok()) {
-              // If this handler returns a response, add that to the message.
-              if (optional_response_or->has_value()) {
-                message_to_script.content = optional_response_or->value();
-              }
-            } else {
-              message_to_script.error =
-                  std::string(optional_response_or.status().message());
-            }
-            if (web_view_) {
-              // TODO: Do not call web_view_->PostMessage() here.
-              // Instead, each platform should wire up the Future<> response
-              // of HandleMessage as they see fit (sync, async, etc). and call
-              // PostMessage themselves. This will help with the refactor to
-              // make WebView no longer needed for Java scripting.
-              web_view_->PostMessage(message_to_script);
-            }
-            return Future<MessageToScript>(message_to_script);
-          });
-  result_future.KeptBy(this);
-  return result_future;
+  iter->second->HandleAnyMessage(content, args)
+      .Then([message_id = message.message_id,
+             response_handler = std::move(response_handler)](
+                absl::StatusOr<BaseMessageHandler::Response> response) mutable {
+        if (!response.ok()) {
+          SendResponse(message_id, response_handler, response.status());
+          return;
+        }
+        MessageToScript message_to_script;
+        message_to_script.message_id = message_id;
+        void* out = nullptr;
+        // Handle the response value, if any (an empty response is valid).
+        if (response->HasProtoValue()) {
+          // The response is an Any proto for a proto-based response.
+          message_to_script.content = response->ValueAsProto();
+        } else if (response->HasPlatformObjectValue()) {
+          // The response is a void* for a platform-specific response object.
+          out = response->ValueAsPlatformObject();
+        }
+        response_handler(message_to_script, out);
+      })
+      .KeptBy(this);
+}
+
+void ScriptingSystem::HandleEventListenerAddRequest(
+    const EventListenerAddRequest& request, int32_t message_id,
+    ResponseHandler response_handler) {
+  if (!request.target.IsValid() && !request.target.IsDefaultValue()) {
+    SendResponse(
+        message_id, response_handler,
+        absl::InvalidArgumentError("Invalid Node - must be either the default "
+                                   "(empty) NodeHandle() or a valid node."));
+    return;
+  }
+
+  // This class allows us to move the response handler into the event connection
+  // below and still call it at the end of the function to resolve the
+  // original request. The response to the request requires the connection ID,
+  // which is only available after calling Connect() and moving the handler.
+  class ResponseHandlerWrapper {
+   public:
+    explicit ResponseHandlerWrapper(ResponseHandler response_handler)
+        : response_handler_(std::move(response_handler)) {}
+
+    void operator()(const MessageToScript& message_to_script, void* out) {
+      response_handler_(message_to_script, out);
+    }
+
+   private:
+    ResponseHandler response_handler_;
+  };
+
+  std::unique_ptr<ResponseHandlerWrapper> response_handler_wrapper =
+      std::make_unique<ResponseHandlerWrapper>(std::move(response_handler));
+  ResponseHandlerWrapper* response_handler_ptr = response_handler_wrapper.get();
+
+  // Register the event connection. Use this to manage the lifetime of the
+  // connection, since an explicit RemoveEventListenerRequest is required to
+  // disconnect the event.
+  auto& event_type_url = request.event_type_url;
+  Dispatcher::Connection connection = provider_.GetDispatcher().Connect(
+      request.target, imp::Hash(request.event_type_url),
+      [response_handler = std::move(response_handler_wrapper),
+       event_type_url](const Event& event) -> Dispatcher::PropagationResult {
+        google::protobuf::imp_proto::Any any;
+        if (event.ToAny(&any)) {
+          EventListenerMessage event_listener_message;
+          event_listener_message.listener_id = event.GetConnectionId();
+          event_listener_message.event = any;
+          MessageToScript message_to_script;
+          if (proto::PackAny(event_listener_message, &message_to_script.content)
+                  .ok()) {
+            (*response_handler)(message_to_script, nullptr);
+          } else {
+            IMP_LOG(imp::ERROR) << "Unable to pack event to send to script.";
+          }
+        } else {
+          // This could happen if the event is not a proto-based event type.
+          IMP_LOG(imp::ERROR) << "Runtime events are not supported. Event type: "
+                     << event_type_url;
+        }
+        // TODO: Allow script to control event propagation.
+        return imp::Dispatcher::PropagationResult::kAccept;
+      },
+      this);
+
+  // Create the response including the connection ID.
+  absl::StatusOr<EventListenerAddResponse> response =
+      EventListenerAddResponse();
+  response->listener_id = connection.GetId();
+  SendResponse(message_id, *response_handler_ptr, response);
+}
+void ScriptingSystem::HandleEventListenerRemoveRequest(
+    const EventListenerRemoveRequest& request, int32_t message_id,
+    ResponseHandler response_handler) const {
+  Dispatcher& d = provider_.GetDispatcher();
+  d.Disconnect(request.listener_id);
+  MessageToScript message_to_script;
+  message_to_script.message_id = message_id;
+  response_handler(message_to_script, nullptr);
 }
 
 inline scripting::LogLevel OutputKindToLogLevel(imp::output::OutputKind kind) {
   return static_cast<scripting::LogLevel>(static_cast<size_t>(kind));
-}
-
-void ScriptingSystem::HandleLog(void* context, output::OutputKind kind,
-                                absl::string_view log) {
-  auto log_fn = [context, kind, log_str = std::string(log)]() {
-    scripting::WebView* web_view = reinterpret_cast<WebView*>(context);
-    scripting::LogMessage log_message;
-    log_message.level = OutputKindToLogLevel(kind);
-    log_message.log = std::move(log_str);
-    scripting::MessageToScript message_to_script;
-    if (proto::PackAny(log_message, &message_to_script.content).ok()) {
-      web_view->PostMessage(message_to_script);
-    }
-  };
-
-  if (Executor::CurrentExecutor() == Executor::ForegroundExecutor()) {
-    log_fn();
-  } else {
-    Executor::ForegroundExecutor()->Schedule(log_fn);
-  }
 }
 
 // A set of asserts that the OutputKind and LogLevel (proto) enums match.

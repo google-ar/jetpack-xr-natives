@@ -17,18 +17,15 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SCRIPTING_MULTI_MESSAGE_HANDLER_H_
 #define THIRD_PARTY_IMPRESS_CORE_SCRIPTING_MULTI_MESSAGE_HANDLER_H_
 
-#include <iomanip>
-#include <iterator>
 #include <memory>
-#include <tuple>
+#include <vector>
 
 #include "core/common/log.h"
-#include "absl/types/optional.h"
+#include "absl/strings/string_view.h"
 #include "core/async/future.h"
-#include "core/proto/any.proto.imp.h"
 #include "core/scripting/base_message_handler.h"
 #include "core/scripting/message_handler.h"
-#include "core/scripting/message_helpers.h"
+#include "core/view/scripting/script_message_handler.h"
 #include "core/view/utils/string_map.h"
 
 namespace imp::scripting {
@@ -54,9 +51,8 @@ class MultiMessageHandler : public BaseMessageHandler {
   // Expose the base version that only takes message.
   using BaseMessageHandler::HandleAnyMessage;
 
-  Future<OptionalResponse> HandleAnyMessage(const Any& message,
-                                            const PlatformArgs& args,
-                                            PlatformArgs& out) override;
+  Future<Response> HandleAnyMessage(const Any& message,
+                                    const PlatformArgs& args) override;
   std::vector<absl::string_view> GetSupportedRequestTypeUrls() override;
 
  protected:

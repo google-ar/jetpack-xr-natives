@@ -19,6 +19,7 @@
 #include <string>
 #include <utility>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
@@ -26,7 +27,6 @@
 #include "apibindings/base_asset_loader.h"
 #include "core/assets/asset_ptr.h"
 #include "core/lighting/image_based_lighting_asset.h"
-#include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/gltf_asset.h"
 #include "core/view/utils/asset.h"
@@ -41,8 +41,10 @@ void AssetPtrMap::LoadImageBasedLightingAsset(
   view_.GetAssetManager()
       .LoadAsset<ImageBasedLightingAsset>(GetAssetString(path))
       .Then([this, asset_loader = std::move(asset_loader)](
-                AssetPtr<ImageBasedLightingAsset> asset_ptr) mutable {
-        OnIblAssetLoadingResult(asset_ptr, std::move(asset_loader));
+                absl::StatusOr<AssetPtr<ImageBasedLightingAsset>>
+                    asset_ptr) mutable {
+        HandleAssetLoadingResult(asset_ptr, std::move(asset_loader),
+                                 ibl_asset_map_);
       })
       .KeptBy(this);
 }
@@ -53,11 +55,27 @@ void AssetPtrMap::LoadImageBasedLightingAsset(
   view_.GetAssetManager()
       .LoadAsset<ImageBasedLightingAsset>(data, key)
       .Then([this, asset_loader = std::move(asset_loader)](
-                const AssetPtr<ImageBasedLightingAsset>& asset_ptr) mutable {
-        OnIblAssetLoadingResult(asset_ptr, std::move(asset_loader));
+                absl::StatusOr<AssetPtr<ImageBasedLightingAsset>>
+                    asset_ptr) mutable {
+        HandleAssetLoadingResult(asset_ptr, std::move(asset_loader),
+                                 ibl_asset_map_);
       })
       .KeptBy(this);
   ;
+}
+
+void AssetPtrMap::LoadImageBasedLightingAsset(
+    imp::AssetDefinition asset_definition,
+    std::unique_ptr<BaseAssetLoader> asset_loader) {
+  view_.GetAssetManager()
+      .LoadAsset<ImageBasedLightingAsset>(asset_definition)
+      .Then([this, asset_loader = std::move(asset_loader)](
+                absl::StatusOr<AssetPtr<ImageBasedLightingAsset>>
+                    asset_ptr) mutable {
+        HandleAssetLoadingResult(asset_ptr, std::move(asset_loader),
+                                 ibl_asset_map_);
+      })
+      .KeptBy(this);
 }
 
 absl::Status AssetPtrMap::ReleaseImageBasedLightingAsset(
@@ -75,7 +93,8 @@ void AssetPtrMap::LoadGltfAsset(absl::string_view path,
       .LoadGltfAsset(GetAssetString(path))
       .Then([this, asset_loader = std::move(asset_loader)](
                 absl::StatusOr<AssetPtr<GltfAsset>> asset_ptr) mutable {
-        OnGltfAssetLoadingResult(asset_ptr, std::move(asset_loader));
+        HandleAssetLoadingResult(asset_ptr, std::move(asset_loader),
+                                 gltf_asset_map_);
       })
       .KeptBy(this);
 }
@@ -86,7 +105,8 @@ void AssetPtrMap::LoadGltfAsset(absl::Cord data, absl::string_view key,
       .LoadGltfAsset(data, key)
       .Then([this, asset_loader = std::move(asset_loader)](
                 absl::StatusOr<AssetPtr<GltfAsset>> asset_ptr) mutable {
-        OnGltfAssetLoadingResult(asset_ptr, std::move(asset_loader));
+        HandleAssetLoadingResult(asset_ptr, std::move(asset_loader),
+                                 gltf_asset_map_);
       })
       .KeptBy(this);
 }
@@ -97,7 +117,8 @@ void AssetPtrMap::LoadGltfAsset(imp::AssetDefinition asset_definition,
       .LoadGltfAsset(asset_definition)
       .Then([this, asset_loader = std::move(asset_loader)](
                 absl::StatusOr<AssetPtr<GltfAsset>> asset_ptr) mutable {
-        OnGltfAssetLoadingResult(asset_ptr, std::move(asset_loader));
+        HandleAssetLoadingResult(asset_ptr, std::move(asset_loader),
+                                 gltf_asset_map_);
       })
       .KeptBy(this);
 }
@@ -131,12 +152,7 @@ AssetPtrMap::GetStoredIblAsset(std::intptr_t ibl_token) {
 void AssetPtrMap::DestroyGltfAssets() { gltf_asset_map_.clear(); }
 
 absl::Status AssetPtrMap::DisposeIblAssets() {
-  imp::split_engine::SplitEngineSerializer* serializer =
-      view_.GetSplitEngineSerializer();
-  if (serializer == nullptr) {
-    return absl::InternalError("SplitEngineSerializer is not available.");
-  }
-  serializer->ClearPreferredEnvironmentIblAsset();
+  view_.GetLightManager().ClearEnvironmentLight();
   ibl_asset_map_.clear();
   return absl::OkStatus();
 }
@@ -150,6 +166,21 @@ std::string AssetPtrMap::GetAssetString(absl::string_view name) {
   } else {
     return std::string("file:///android_asset/").append(name);
   }
+}
+
+template <typename AssetT>
+void AssetPtrMap::HandleAssetLoadingResult(
+    absl::StatusOr<AssetPtr<AssetT>> asset_ptr,
+    std::unique_ptr<BaseAssetLoader> asset_loader,
+    absl::flat_hash_map<std::intptr_t, AssetPtr<AssetT>>& asset_map) {
+  if (!asset_ptr.ok()) {
+    asset_loader->OnFailure(asset_ptr.status().ToString());
+    return;
+  }
+
+  std::intptr_t token = reinterpret_cast<std::intptr_t>(asset_ptr->Get());
+  asset_map[token] = *asset_ptr;
+  asset_loader->OnSuccess(token);
 }
 
 }  // namespace imp

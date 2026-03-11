@@ -104,7 +104,6 @@ class RecipeSystem : public BaseRecipeSystem {
 
  protected:
   void RegisterFunctionImpl(
-      absl::string_view name,
       std::unique_ptr<recipe::RegisteredFunction> function) override;
 
   void RegisterCustomStatementTypeImpl(

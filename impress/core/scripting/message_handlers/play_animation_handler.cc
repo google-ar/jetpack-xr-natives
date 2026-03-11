@@ -14,8 +14,13 @@
 
 #include "core/scripting/message_handlers/play_animation_handler.h"
 
+#include "absl/status/status.h"
+#include "absl/types/variant.h"
+#include "core/async/future.h"
 #include "core/scripting/proto/api.proto.imp.h"
+#include "core/view/base_view.h"
 #include "core/view/framework/animation/gltf_animator.h"
+#include "core/view/framework/assets/gltf_renderer.h"
 
 namespace imp::scripting {
 
@@ -55,16 +60,8 @@ Future<absl::Status> PlayAnimationHandler::HandleMessage(
 
   auto animator = node->GetOrAddComponent<GltfAnimator>();
 
-  Future<absl::Status> result;
-  auto connection = node->Connect(
-      [result](const PlaybackStartedEvent& ev) {
-        result.Return(absl::OkStatus());
-      },
-      &view_);
-
   animator->Play(message.play_command);
-  return result.Then(
-      [connection](absl::Status) mutable { connection.Disconnect(); });
+  return Future<absl::Status>(absl::OkStatus());
 }
 
 }  // namespace imp::scripting

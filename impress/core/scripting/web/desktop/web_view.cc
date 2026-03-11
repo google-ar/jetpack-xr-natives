@@ -14,18 +14,26 @@
 
 #include "core/scripting/web/desktop/web_view.h"
 
+#include <memory>
+
+#include "core/common/buffer_access.h"
+#include "core/common/context.h"
+#include "core/scripting/web/web_view.h"
+#include "core/view/scripting/script_message_handler.h"
+
 namespace imp::scripting {
 
 // Mock Create function to create a NOOP web view for desktop.
-std::unique_ptr<WebView> WebView::Create(const Context& context,
-                                         const WebViewParams& params,
-                                         BufferAccess injection_script) {
+std::unique_ptr<WebView> WebView::Create(
+    ScriptMessageHandler& script_message_handler, const Context& context,
+    const WebViewParams& params, BufferAccess injection_script) {
   return std::make_unique<DesktopWebView>();
 }
 
 // Mock Create function to create a NOOP web view for desktop.
-std::unique_ptr<WebView> WebView::Create(void* web_view, const Context& context,
-                                         BufferAccess injection_script) {
+std::unique_ptr<WebView> WebView::Create(
+    ScriptMessageHandler& script_message_handler, const Context& context,
+    void* web_view, BufferAccess injection_script) {
   return std::make_unique<DesktopWebView>();
 }
 }  // namespace imp::scripting

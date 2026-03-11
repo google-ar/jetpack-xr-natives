@@ -32,6 +32,7 @@
 #include "filament/filament/include/filament/TransformManager.h"
 #include "filament/libs/utils/include/utils/EntityManager.h"
 #include "core/async/executor.h"
+#include "core/async/future_common.h"
 #include "core/common/invocable.h"
 #include "core/common/trace.h"
 #include "core/math/vec.h"
@@ -646,6 +647,10 @@ void View::ApplyViewConfig() {
     case ViewConfig::ShaderCachingMode::SHADER_CACHING_MODE_ENABLED:
       shader_cache_system_.EnableShaderCaching();
       break;
+  }
+
+  if (view_config_.enable_synchronous_future_cancellation.value_or(false)) {
+    FutureFlags::EnableSynchronousFutureCancellation();
   }
 }
 

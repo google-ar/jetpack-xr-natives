@@ -582,7 +582,7 @@ absl::Status UsdzConsumer::ExtractEntity(const tinyusdz::Prim &prim,
     uint32_t morph_target_count = 0;
     entity_parts.push_back(PartData(
         "", parts_indices_cursor * 3, part_triangle_count * 3, vertex_buffer,
-        parts_index_buffer, material, PrimitiveType::TRIANGLES,
+        parts_index_buffer, material, -1, PrimitiveType::TRIANGLES,
         std::move(materials_variants_mappings), skinning_buffer,
         morph_target_buffer_offset, morph_target_count));
     parts_indices_cursor += part_triangle_count;

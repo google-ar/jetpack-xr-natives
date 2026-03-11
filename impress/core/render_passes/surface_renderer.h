@@ -35,6 +35,8 @@ using surface_renderer::SurfaceRendererSettings;
 // Note: this can be created from Java through view.setupSwapChainRenderer().
 class SurfaceRenderer : public Component {
  public:
+  virtual ~SurfaceRenderer() = default;
+
   struct ViewPortSizeChangedEvent : public Event {
     explicit ViewPortSizeChangedEvent(imp::uint2 new_view_port_size)
         : view_port_size(new_view_port_size) {}
@@ -103,10 +105,11 @@ class SurfaceRenderer : public Component {
   // Returns the display id if specified in SurfaceRendererSettings.
   std::optional<int> GetDisplayId() const;
 
- private:
+ protected:
   // Renders the target group to the target surface.
-  void Render();
+  virtual void Render();
 
+ private:
   ComponentHandle<CameraComponent> FindCameraWithNodeName(
       absl::string_view camera_node_name);
 

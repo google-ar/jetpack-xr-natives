@@ -129,6 +129,15 @@ void RecipeAsyncExecutionManager::DeleteFinishedScopes() {
   active_scope_ = nullptr;
 }
 
+void RecipeAsyncExecutionManager::Reset() {
+  async_executions_count_ = 0;
+  next_async_execution_id_ = 0;
+  active_scope_ = nullptr;
+
+  async_execution_map_.clear();
+  scopes_.clear();
+}
+
 RecipeAsyncExecutionManager::AsyncExecutionId
 RecipeAsyncExecutionManager::GetNextAsyncExecutionID() {
   AsyncExecutionId result_id = next_async_execution_id_;

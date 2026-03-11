@@ -30,7 +30,36 @@ namespace imp {
 struct OpenXrSessionBeginEvent : public Event {};
 struct OpenXrReferenceSpaceCreatedEvent : public Event {};
 struct OpenXrInteractionProfileChangedEvent : public Event {};
-struct OpenXrSpaceChangePendingEvent : public Event {};
+// Event sent when a reference space is pending a change. Note that this event
+// is only available for reference spaces that are explicitly created.
+struct OpenXrSpaceChangePendingEvent : public Event {
+  // Default constructor for backward compatibility; some Impress clients
+  // manually create this event to fake space changes.
+  OpenXrSpaceChangePendingEvent() {};
+  OpenXrSpaceChangePendingEvent(XrReferenceSpaceType reference_space_type,
+                                XrTime change_time, XrBool32 pose_valid,
+                                XrPosef pose_in_previous_space)
+      : reference_space_type(reference_space_type),
+        change_time(change_time),
+        pose_valid(pose_valid),
+        pose_in_previous_space(pose_in_previous_space) {}
+  XrReferenceSpaceType reference_space_type;
+  XrTime change_time;
+  XrBool32 pose_valid;
+  XrPosef pose_in_previous_space;
+};
+
+// Event sent when a reference space change has occurred.
+struct OpenXrSpaceChangedEvent : public Event {
+  OpenXrSpaceChangedEvent(XrReferenceSpaceType reference_space_type,
+                          XrBool32 pose_valid, XrPosef pose_in_previous_space)
+      : reference_space_type(reference_space_type),
+        pose_valid(pose_valid),
+        pose_in_previous_space(pose_in_previous_space) {}
+  XrReferenceSpaceType reference_space_type;
+  XrBool32 pose_valid;
+  XrPosef pose_in_previous_space;
+};
 
 // Event sent after a successful xrWaitFrame if the session is focused. Calls
 // such as xrLocateSpace and xrGetActionState* should only be made while the

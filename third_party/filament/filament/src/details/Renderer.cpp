@@ -221,6 +221,9 @@ std::pair<Handle<HwRenderTarget>, TargetBufferFlags>
     if (!outTarget) {
         outTarget = mRenderTargetHandle;
         outAttachmentMask = TargetBufferFlags::COLOR0 | TargetBufferFlags::DEPTH;
+        if (mSwapChain->hasStencilBuffer()) {
+            outAttachmentMask |= TargetBufferFlags::STENCIL;
+        }
     }
     return { outTarget, outAttachmentMask };
 }
@@ -279,6 +282,8 @@ void FRenderer::skipFrame(uint64_t vsyncSteadyClockTimeNano) {
 
     FEngine& engine = mEngine;
     FEngine::DriverApi& driver = engine.getDriverApi();
+
+    mFrameInfoManager.updateUserHistory(nullptr, driver);
 
     // Gives the backend a chance to execute periodic tasks. This must be called before
     // the frame skipper.
@@ -390,8 +395,9 @@ bool FRenderer::beginFrame(FSwapChain* swapChain, uint64_t vsyncSteadyClockTimeN
         // This need to occur after the backend beginFrame() because some backends need to start
         // a command buffer before creating a fence.
 
-        mFrameInfoManager.beginFrame(driver, {
-                .historySize = mFrameRateOptions.history
+        mFrameInfoManager.updateUserHistory(swapChain, driver);
+        mFrameInfoManager.beginFrame(swapChain, driver, {
+            .historySize = mFrameRateOptions.history
         }, mFrameId, appVsync);
 
         // ask the engine to do what it needs to (e.g. updates light buffer, materials...)
@@ -436,16 +442,17 @@ void FRenderer::endFrame() {
         driver.debugThreading();
     }
 
-    FILAMENT_CHECK_PRECONDITION(engine.isValid(mSwapChain))
+    FILAMENT_CHECK_PRECONDITION(mSwapChain && engine.isValid(mSwapChain))
             << "SwapChain must remain valid until endFrame is called.";
 
-    if (mSwapChain) {
-        mSwapChain->commit(driver);
-        mSwapChain = nullptr;
-    }
+    // mSwapChain cannot be null by construction
+    mSwapChain->commit(driver);
+    mSwapChain = nullptr;
 
     mFrameInfoManager.endFrame(driver);
     mFrameSkipper.submitFrame(driver);
+
+    engine.submitFrame();
 
     driver.endFrame(mFrameId);
 
@@ -564,7 +571,6 @@ void FRenderer::renderStandaloneView(FView const* view) {
 
     if (UTILS_LIKELY(view->getScene())) {
         mPreviousRenderTargets.clear();
-        mFrameId++;
 
         // ask the engine to do what it needs to (e.g. updates light buffer, materials...)
         FEngine& engine = mEngine;
@@ -574,15 +580,16 @@ void FRenderer::renderStandaloneView(FView const* view) {
         driver.beginFrame(
                 steady_clock::now().time_since_epoch().count(),
                 mDisplayInfo.refreshRate == 0.0 ? 0 : int64_t(
-                        1'000'000'000.0 / mDisplayInfo.refreshRate),
-                mFrameId);
+                        1'000'000'000.0 / mDisplayInfo.refreshRate), 0);
 
         // because we don't have a "present" call, we use flush so the driver can submit
         // the command buffer; we do this before driver.endFrame() to mimic what would
         // happen with Renderer::beginFrame/endFrame.
         renderInternal(view, true);
 
-        driver.endFrame(mFrameId);
+        engine.submitFrame();
+
+        driver.endFrame(0);
 
         // engine.flush() has already been called by renderInternal(), but we need an extra one
         // for endFrame() above. This operation in actually not too heavy, it just kicks the

@@ -17,7 +17,7 @@
 #include "core/split_engine/flatbuffers_attributes_validator.h"
 
 #include <cstdint>
-#include <optional>
+#include <cstring>
 #include <string>
 
 #include "flatbuffers/base.h"
@@ -32,7 +32,6 @@
 #include "flatbuffers/reflection_generated.h"
 #include "flatbuffers/table.h"
 #include "flatbuffers/vector.h"
-#include "mediapipe/framework/port/status_macros.h"
 
 namespace imp::split_engine {
 
@@ -40,8 +39,34 @@ absl::Status ApiLevelValidator::operator()(
     const flatbuffers::Vector<
         flatbuffers::Offset<reflection::KeyValue>>* /*absl_nullable*/  attributes)
     const {
-  MP_ASSIGN_OR_RETURN(int32_t api_level, GetAttributeValue<int32_t>(
-                                          kRequiresApiAttrName, attributes));
+  if (attributes == nullptr) {
+    return absl::NotFoundError(
+        absl::StrCat("Attribute '", kRequiresApiAttrName, "' not found."));
+  }
+
+  // Linear search for the requires_api attribute is faster than using the
+  // bsearch lookup for a few attributes.
+  const reflection::KeyValue* requires_api_attr = nullptr;
+  for (const auto* attr : *attributes) {
+    if (std::strncmp(attr->key()->c_str(), kRequiresApiAttrName.data(),
+                     kRequiresApiAttrName.size()) == 0) {
+      requires_api_attr = attr;
+      break;
+    }
+  }
+
+  if (requires_api_attr == nullptr) {
+    return absl::NotFoundError(
+        absl::StrCat("Attribute '", kRequiresApiAttrName, "' not found."));
+  }
+
+  int32_t api_level;
+  if (!absl::SimpleAtoi(requires_api_attr->value()->c_str(), &api_level)) {
+    return absl::InvalidArgumentError(absl::StrCat(
+        "Attribute '", kRequiresApiAttrName,
+        "' has invalid value: ", requires_api_attr->value()->c_str()));
+  }
+
   if (api_level > max_api_level_) {
     return absl::PermissionDeniedError(
         absl::StrCat("Requires API level ", api_level,
@@ -50,38 +75,7 @@ absl::Status ApiLevelValidator::operator()(
   return absl::OkStatus();
 }
 
-// Specialization for bool attributes to handle flag behavior.
-// If the attribute does not have a value it is handled as a flag: true if the
-// attribute is present, false otherwise.
-// If the attribute has a value, it is parsed as a boolean.
-template <>
-absl::StatusOr<bool> GetAttributeValue<bool>(
-    std::string_view attribute_name,
-    const flatbuffers::Vector<
-        flatbuffers::Offset<reflection::KeyValue>>* /*absl_nullable*/  attributes) {
-  if (attributes == nullptr) {
-    return false;
-  }
-  const reflection::KeyValue* attribute =
-      attributes->LookupByKey(attribute_name.data());
-  if (attribute == nullptr) {
-    return false;
-  }
-
-  std::string_view string_value = attribute->value()->string_view();
-  // `0` is the default value for attributes when the value is not specified.
-  if (string_value == "0") {
-    return true;
-  }
-  bool value;
-  if (!absl::SimpleAtob(string_value, &value)) {
-    return absl::InvalidArgumentError(absl::StrCat(
-        "Attribute '", attribute_name, "' has invalid value: ", string_value));
-  }
-  return value;
-}
-
-absl::StatusOr<std::optional<const reflection::Object*>> GetUnionChildObjectDef(
+absl::StatusOr<const reflection::Object* /*absl_nullable*/ > GetUnionChildObjectDef(
     const reflection::Schema* /*absl_nonnull*/  schema,
     const reflection::Field* /*absl_nonnull*/  field,
     const flatbuffers::Table* /*absl_nonnull*/  parent_table,
@@ -97,7 +91,7 @@ absl::StatusOr<std::optional<const reflection::Object*>> GetUnionChildObjectDef(
       parent_table->GetField<uint8_t>(type_field->offset(),
                                       /*defaultval=*/0 /* NONE */);
   if (type_value == 0 /* NONE */) {
-    return std::nullopt;
+    return nullptr;
   }
   auto enumdef = schema->enums()->Get(field->type()->index());
   auto enumval = enumdef->values()->LookupByKey(type_value);

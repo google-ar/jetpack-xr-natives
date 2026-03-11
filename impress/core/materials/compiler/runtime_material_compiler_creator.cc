@@ -17,6 +17,7 @@
 
 #include <memory>
 
+#include "absl/strings/string_view.h"
 #include "core/async/future.h"
 #include "core/config.h"
 #if IMP_PLATFORM(ANDROID)
@@ -29,13 +30,16 @@
 namespace imp {
 
 Future<std::unique_ptr<RuntimeMaterialCompiler>>
-RuntimeMaterialCompilerCreator::Create(BaseView& view) {
+RuntimeMaterialCompilerCreator::Create(
+    BaseView& view, absl::string_view native_library_override) {
 #if IMP_PLATFORM(ANDROID)
+  if (!native_library_override.empty()) {
+    return AndroidRuntimeMaterialCompiler::Create(view,
+                                                  native_library_override);
+  }
   return AndroidRuntimeMaterialCompiler::Create(view);
 #endif
-  Future<std::unique_ptr<RuntimeMaterialCompiler>> immediate_future;
-  immediate_future.Return(DesktopRuntimeMaterialCompiler::Create(view));
-  return immediate_future;
+  return DesktopRuntimeMaterialCompiler::Create(view);
 }
 
 }  // namespace imp

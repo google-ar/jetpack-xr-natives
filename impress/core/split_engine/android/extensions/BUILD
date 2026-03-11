@@ -13,6 +13,10 @@
 # limitations under the License.
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load(
+    "//build_tools:imp.bzl",
+    "if_non_android",
+)
 
 package(
     default_visibility = ["//visibility:public"],
@@ -46,7 +50,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
         "@com_google_impress//core/common:log",
-    ],
+    ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )
 

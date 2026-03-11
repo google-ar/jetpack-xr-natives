@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
@@ -28,6 +29,7 @@
 #include "absl/strings/cord.h"
 #include "absl/strings/cord_buffer.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "core/common/buffer_access.h"
 #include "core/common/optional_error.h"
 
@@ -258,6 +260,17 @@ JniUniquePtr<jobjectArray> CreateJniObjectArray(JNIEnv* env, size_t length,
                                                 jclass clazz, jobject initial) {
   jobjectArray result = env->NewObjectArray(length, clazz, initial);
   return WrapJni(env, result);
+}
+
+JniUniquePtr<jintArray> CreateJniIntArray(JNIEnv* env,
+                                          absl::Span<int> contents) {
+  JniUniquePtr<jintArray> result =
+      WrapJni(env, env->NewIntArray(contents.size()));
+  jint* array_ptr = env->GetIntArrayElements(result.get(), /*isCopy=*/nullptr);
+  static_assert(sizeof(jint) == sizeof(int));
+  std::memcpy(array_ptr, contents.data(), contents.size() * sizeof(int));
+  env->ReleaseIntArrayElements(result.get(), array_ptr, /*mode=*/0);
+  return result;
 }
 
 void DeleteRef(JNIEnv* env, jobject object) {

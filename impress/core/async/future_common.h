@@ -20,6 +20,9 @@
 #include <cstdint>
 #include <optional>
 
+#include "absl/base/no_destructor.h"
+#include "absl/base/thread_annotations.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/types/optional.h"
 #include "absl/types/variant.h"
 #include "core/async/executor.h"
@@ -202,6 +205,37 @@ WeakFuture<T> make_weak(Future<T> f) {
 constexpr int kValidIntegrityMarker = 0xABCDABCD;
 // A number representing a destructed object.
 constexpr int kDestructedIntegrityMarker = 0xDEADC0DE;
+
+// A class that holds global flags that control the behavior of Futures. The
+// values of these flags are set in View::ApplyViewConfig.
+//
+// WARNING: because these flags are static, they apply to all Impress views in a
+// process.
+class FutureFlags {
+ public:
+  FutureFlags() = delete;
+  ~FutureFlags() = delete;
+
+  // Enables synchronous future cancellation for all Impress instances in this
+  // process. This applies to all views in a process, and cannot be disabled
+  // once enabled.
+  static void EnableSynchronousFutureCancellation() {
+    absl::MutexLock lock(*mu_);
+    enable_synchronous_future_cancellation_ = true;
+  }
+
+  // Returns true if synchronous future cancellation is enabled. By default,
+  // this is disabled
+  static bool IsSynchronousFutureCancellationEnabled() {
+    absl::MutexLock lock(*mu_);
+    return enable_synchronous_future_cancellation_;
+  }
+
+ private:
+  static inline absl::NoDestructor<absl::Mutex> mu_;
+  static inline bool enable_synchronous_future_cancellation_
+      ABSL_GUARDED_BY(mu_) = false;
+};
 
 }  // namespace imp
 

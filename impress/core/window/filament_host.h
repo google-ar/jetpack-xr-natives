@@ -51,6 +51,7 @@
 #include "core/config.h"
 #include "core/math/vec.h"
 #include "core/monitor/monitor.h"
+#include "core/view/utils/proto/filament_feature_flag.proto.imp.h"
 #include "core/window/clipboard/clipboard_handler.h"
 #include "core/window/filament_host_input.h"
 #include "core/window/filament_view.h"
@@ -250,6 +251,9 @@ class FilamentHost {
         const {
       return filament::backend::FeatureLevel::FEATURE_LEVEL_1;
     }
+    virtual std::vector<FilamentFeatureFlag> GetFilamentFeatureFlags() const {
+      return {};
+    }
     virtual bool ShouldStartPaused() const { return false; }
 
     // When rendering using OpenGL, determines if a shared Gl context should be
@@ -274,7 +278,9 @@ class FilamentHost {
 
     virtual ~DevModeExtension() = default;
     // Manage any setup related work and acquire a pointer to the host.
-    virtual absl::Status Setup(FilamentHost* host) = 0;
+    virtual absl::Status Setup(FilamentHost& host) = 0;
+    // view is already set up.
+    virtual absl::Status PostSetup() = 0;
     // Dispose any extension specific resources.
     virtual void Cleanup() = 0;
     // Filters legacy MouseInput for FilamentHost.
@@ -500,6 +506,16 @@ class FilamentHost {
   // but incorrect ForegroundExecutor on that thread.
   void CheckOnFrameThread() const;
 
+  // Note that types that inherit from FilamentHost and override RenderNextFrame
+  // will need to implement these.
+  void SetPerformMainRender(bool should_draw) {
+    should_perform_main_render_ = should_draw;
+  }
+
+  void SetPerformSecondaryViewRender(bool should_draw) {
+    should_perform_secondary_view_render_ = should_draw;
+  }
+
  protected:
   enum class LifeCycleState {
     kNone,
@@ -553,6 +569,9 @@ class FilamentHost {
   // This allows us to implement checks that ensure we don't call into APIs that
   // are disallowed during this time.
   bool is_within_filament_render_frame_ = false;
+
+  bool should_perform_main_render_ = true;
+  bool should_perform_secondary_view_render_ = true;
 
   std::thread::id frame_thread_id_;
 };

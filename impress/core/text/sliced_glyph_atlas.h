@@ -21,34 +21,29 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
-#include <string>
 #include <vector>
 
 #include "absl/base/attributes.h"
-#include "absl/base/nullability.h"
-#include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
-#include "absl/synchronization/mutex.h"
+#include "filament/filament/include/filament/Renderer.h"
 #include "core/async/future.h"
 #include "core/atlas/atlas_packer.h"
-#include "core/atlas/shelf_atlas_packer.h"
 #include "core/canvas/async_canvas_source.h"
 #include "core/canvas/async_scoped_canvas.h"
 #include "core/canvas/fonts/font_holder.h"
 #include "core/canvas/scoped_canvas.h"
-#include "core/common/ref_counter.h"
+#include "core/common/bit_vector.h"
+#include "core/common/paired_vector.h"
 #include "core/common/rememberer.h"
-#include "core/common/typed_id.h"
 #include "core/common/typed_span.h"
 #include "core/config.h"
-#include "core/math/almost_equal.h"
 #include "core/math/vec.h"
-#include "core/ncsb/dispatcher/event.h"
 #include "core/render/texture.h"
 #include "core/text/glyph_atlas_slice.h"
 #include "core/text/glyph_emulator.h"
+#include "core/text/sliced_glyph_texture_manager.h"
 #include "core/text/text_metrics.proto.h"
 #include "core/view/base_view.h"
 
@@ -82,6 +77,7 @@ class SlicedGlyphAtlas : public Rememberer {
  public:
   using TextureSize = sliced_glyph_atlas::TextureSize;
   using TextureChangedEvent = sliced_glyph_atlas::TextureChangedEvent;
+  using TextureManager = sliced_glyph_atlas::SlicedGlyphTextureManager;
 
   // Configuration options for the glyph atlas.
   struct Config {
@@ -102,6 +98,10 @@ class SlicedGlyphAtlas : public Rememberer {
     // where an Android Surface can become corrupted after backgrounding and
     // resuming. See (broken link) for more details.
     bool force_reset_on_view_resumed = true;
+    // If true, this will force the glyph atlas to use the auto method for
+    // rendering. This will attempt to use shaper based rendering if supported,
+    // otherwise fallback to path based rendering.
+    bool force_auto_method_rendering = false;
   };
 
   using SliceId = sliced_glyph_atlas::SliceId;
@@ -109,13 +109,15 @@ class SlicedGlyphAtlas : public Rememberer {
   constexpr static Config kDefaultConfig = {
       .texture_size = TextureSize::k2048,
       .use_hardware_rendering = true,
-      .force_reset_on_view_resumed = true};
+      .force_reset_on_view_resumed = true,
+      .force_auto_method_rendering = false};
 
   using Glyph = sliced_glyph_atlas::Glyph;
 
   explicit SlicedGlyphAtlas(BaseView& view, Config config = kDefaultConfig);
   SlicedGlyphAtlas(BaseView& view,
-                   std::unique_ptr<AsyncCanvasSource> canvas_source,
+                   std::function<std::unique_ptr<AsyncCanvasSource>()>
+                       canvas_source_factory_fn,
                    Config config = kDefaultConfig);
   ~SlicedGlyphAtlas();
 
@@ -188,17 +190,20 @@ class SlicedGlyphAtlas : public Rememberer {
   // Returns the backing GlyphEmulator used by this atlas.
   GlyphEmulator& GetGlyphEmulator();
 
+  void GetSliceOffsetAndScale(SliceId slice, float2* offset,
+                              float2* scale) const;
+
 #if IMP_RUNTIME(DEV)
   // Provides information of the glyph stored at the uv coordinate specified.
   //
   // This function is thread-safe.
-  std::optional<editor::SlicedGlyphAtlasVisualizer::SlicedGlyphAtlasInfo>
-  GetSlicedGlyphAtlasInfoAt(const float2& uv) const;
+  std::optional<editor::SlicedGlyphAtlasVisualizer::GlyphInfo> GetGlyphInfoAt(
+      const float2& uv) const;
   // Provides information for all glyphs
   //
   // This function is thread-safe.
-  std::vector<editor::SlicedGlyphAtlasVisualizer::SlicedGlyphAtlasInfo>
-  GetAllGlyphInfo() const;
+  std::vector<editor::SlicedGlyphAtlasVisualizer::GlyphInfo> GetAllGlyphInfo()
+      const;
 #endif
 
  private:
@@ -207,6 +212,17 @@ class SlicedGlyphAtlas : public Rememberer {
   // TextOption and the glyph itself. It's guaranteed that no two glyphs fetched
   // with different CanvasOptionsGlyphKey will look the same when drawn.
   using CanvasOptionsGlyphKey = sliced_glyph_atlas::CanvasOptionsGlyphKey;
+  using CanvasOptionsKey = sliced_glyph_atlas::CanvasOptionsKey;
+
+  struct CanvasOptionsInfo {
+    // Slices that have at least one glyph with these options.
+    PairedBitVector<Slice> active_slices;
+    // The number of glyphs per slice with these options.
+    PairedVector<uint16_t, Slice> glyph_count;
+  };
+
+  using CanvasOptionsMap =
+      absl::flat_hash_map<CanvasOptionsKey, CanvasOptionsInfo>;
 
   // A single glyph may contain a separate atlas entry for the main part of the
   // text and the stroke.
@@ -232,7 +248,8 @@ class SlicedGlyphAtlas : public Rememberer {
   // Note the GlyphAdvance is passed by value as the process of getting the
   // GlyphInfo can be destructive to the GlyphAdvance.
   std::optional<SlicedGlyphInfo> GetOrAddGlyphInfo(
-      GlyphEmulator::Glyph& glyph, const CanvasOptionsGlyphKey& glyph_key);
+      GlyphEmulator::Glyph& glyph, const CanvasOptionsGlyphKey& glyph_key,
+      bool& out_added_new_glyph);
 
   void EndFrame();
   // Converts the internal structure of GlyphInfo used to track glyphs to the
@@ -250,11 +267,13 @@ class SlicedGlyphAtlas : public Rememberer {
   AsyncScopedCanvas* GetOrStartDrawing(ScopedCanvas::DrawMode draw_mode,
                                        SliceId slice);
 
-  std::optional<SlicedAtlasEntry> TryAddAtlasEntry(uint2 atlas_entry_size);
+  std::optional<SlicedAtlasEntry> TryAddAtlasEntry(uint2 atlas_entry_size,
+                                                   CanvasOptionsInfo& info);
 
-  // Gets a cached GlyphInfo by key or a nullptr if the glyph info is not yet
+  // Gets a cached GlyphInfo by key or nullopt if the glyph info is not yet
   // added to this atlas.
-  std::optional<SlicedGlyphInfo> GetGlyphInfo(const CanvasOptionsGlyphKey& key);
+  std::optional<SlicedGlyphInfo> GetGlyphInfo(const CanvasOptionsGlyphKey& key,
+                                              const CanvasOptionsInfo& info);
 
   using PendingCanvasGlyphs = sliced_glyph_atlas::PendingCanvasGlyphs;
 
@@ -268,14 +287,27 @@ class SlicedGlyphAtlas : public Rememberer {
                  PendingCanvasGlyphs& pending_canvas_glyphs,
                  float2 subpixel_render_ratio);
 
+  // Called at PreRender time to blit any newly rendered slices into the
+  // composite texture. The blits are performed by rendering a quad to an
+  // offscreen render target.
+  void RenderBlits(filament::Renderer& renderer);
+
+  CanvasOptionsInfo& GetCanvasOptionsInfo(
+      const CanvasOptionsKey& canvas_options_key);
+
+  void ClearUnusedGlyphs();
+
   BaseView& view_;
 
   // The size of the texture used for the glyph atlas in pixels.
-  float2 atlas_texture_size_ = {2048.0f, 2048.0f};
-  size_t atlas_texture_depth_ = 1;
+  uint2 atlas_texture_size_ = {2048, 2048};
+  uint2 atlas_grid_size_ = {1, 1};
 
-  // CanvasSource is thread-safe.
-  std::unique_ptr<AsyncCanvasSource> canvas_source_;
+  // The holder of the composite texture when there is >1 slice.
+  std::unique_ptr<TextureManager> texture_manager_;
+  // The slices that need to be blitted by the texture manager. Separate so they
+  // can accumulate prior to the texture manager being assigned.
+  PairedBitVector<Slice> pending_renders_;
 
   GlyphEmulator glyph_emulator_;
 
@@ -285,6 +317,12 @@ class SlicedGlyphAtlas : public Rememberer {
 
   // Future that is marked as ready when the physical pixel ratio has been set.
   Future<absl::Status> physical_pixel_ratio_available_;
+
+  mutable absl::Mutex canvas_options_map_mutex_;
+  CanvasOptionsMap canvas_options_map_
+      ABSL_GUARDED_BY(canvas_options_map_mutex_);
+  // The cursor for the next slice to add a glyph to.
+  SliceId addition_cursor_;
 
   const SlicedGlyphAtlas::GlyphInfo kEmptyGlyphInfo{
       .atlas_entry = AtlasPacker::ScopedAtlasEntry::Empty(),

@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -27,11 +28,13 @@
 #include <vector>
 
 #include "absl/algorithm/container.h"
+#include "absl/container/flat_hash_map.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
+#include "filament/filament/include/filament/Renderer.h"
 #include "core/async/executor.h"
 #include "core/async/future.h"
 #include "core/async/future_common.h"
@@ -86,17 +89,21 @@ float2 GetTextureSize(SlicedGlyphAtlas::TextureSize texture_size) {
       return {2048.0f, 4096.0f};
     case SlicedGlyphAtlas::TextureSize::k4096:
       return {4096.0f, 4096.0f};
+    case SlicedGlyphAtlas::TextureSize::k256_256_8_8:
+      return {256.0f, 256.0f};
   }
 }
 
-size_t GetTextureDepth(SlicedGlyphAtlas::TextureSize texture_size) {
+uint2 GetGridSize(SlicedGlyphAtlas::TextureSize texture_size) {
   switch (texture_size) {
     case SlicedGlyphAtlas::TextureSize::k2048:
-      return 1;
+      return {1, 1};
     case SlicedGlyphAtlas::TextureSize::k2048_4096:
-      return 1;
+      return {1, 1};
     case SlicedGlyphAtlas::TextureSize::k4096:
-      return 1;
+      return {1, 1};
+    case SlicedGlyphAtlas::TextureSize::k256_256_8_8:
+      return {8, 8};
   }
 }
 
@@ -105,28 +112,54 @@ size_t GetTextureDepth(SlicedGlyphAtlas::TextureSize texture_size) {
 SlicedGlyphAtlas::SlicedGlyphAtlas(BaseView& view, Config config)
     : SlicedGlyphAtlas::SlicedGlyphAtlas(
           view,
-          AsyncCanvasSourceFactory::Create(view.GetContext(),
-                                           config.use_hardware_rendering),
+          [&view, &config]() -> std::unique_ptr<AsyncCanvasSource> {
+            return AsyncCanvasSourceFactory::Create(
+                view.GetContext(), config.use_hardware_rendering);
+          },
           config) {}
 
 SlicedGlyphAtlas::SlicedGlyphAtlas(
-    BaseView& view, std::unique_ptr<AsyncCanvasSource> canvas_source,
+    BaseView& view,
+    std::function<std::unique_ptr<AsyncCanvasSource>()>
+        canvas_source_factory_fn,
     Config config)
     : view_(view),
       atlas_texture_size_(GetTextureSize(config.texture_size)),
-      atlas_texture_depth_(GetTextureDepth(config.texture_size)),
-      canvas_source_(std::move(canvas_source)),
-      glyph_emulator_(view.GetContext(), *canvas_source_) {
-  slice_storage_ =
-      static_cast<Slice*>(malloc(sizeof(Slice) * atlas_texture_depth_));
-  for (size_t i = 0; i < atlas_texture_depth_; ++i) {
-    std::construct_at(slice_storage_ + i, atlas_texture_size_);
+      atlas_grid_size_(GetGridSize(config.texture_size)),
+      glyph_emulator_(view.GetContext()),
+      addition_cursor_(SliceId::At(0)) {
+  size_t slice_count = atlas_grid_size_.x * atlas_grid_size_.y;
+  slice_storage_ = static_cast<Slice*>(malloc(sizeof(Slice) * slice_count));
+  for (size_t i = 0; i < slice_count; ++i) {
+    std::construct_at(slice_storage_ + i, atlas_texture_size_,
+                      canvas_source_factory_fn());
   }
-  slices_ = TypedSpan<Slice>(slice_storage_, atlas_texture_depth_);
+  slices_ = TypedSpan<Slice>(slice_storage_, slice_count);
+  pending_renders_.Resize(slice_count);
+
+  // This could be absent if there is only one slice, but on Android would
+  // require conditionally swapping materials based on the number of slices.
+  TextureManager::CreateAsync(view, atlas_texture_size_, atlas_grid_size_)
+      .Then([this](std::unique_ptr<TextureManager> texture_manager) {
+        texture_manager_ = std::move(texture_manager);
+        pending_renders_.ForEachBit<SliceId>([this](SliceId slice) {
+          texture_manager_->PrepareBlit(slice, slices_[slice].texture_);
+        });
+      })
+      .KeptBy(this);
 
   view.GetDispatcher().Connect(
       [this](const imp::ViewPostFrameUpdateEvent& event) mutable {
         EndFrame();
+      },
+      this);
+
+  // Hook up to 'PreRender' to handle blitting slices into the composite
+  // texture.  This happens late in the impress frame, after updates and
+  // beginFrame, but before the main frame is submitted to filament.
+  view.GetDispatcher().Connect(
+      [this](const ViewPreRenderEvent& pre_render_event) {
+        RenderBlits(*pre_render_event.GetRenderer());
       },
       this);
 
@@ -136,11 +169,12 @@ SlicedGlyphAtlas::SlicedGlyphAtlas(
     view.GetDispatcher().Connect(
         [this](const ViewResumedEvent& event) {
           // Cannot force reset if there is already an active canvas.
-          if (absl::c_all_of(slices_, [](const auto& slice) {
-                absl::MutexLock lock(slice.canvas_mutex_);
-                return slice.canvas_ == nullptr;
-              })) {
-            canvas_source_->ForceReset();
+          for (auto& slice : slices_) {
+            absl::MutexLock lock(slice.canvas_mutex_);
+            if (slice.canvas_ != nullptr) {
+              continue;
+            }
+            slice.canvas_source_->ForceReset();
           }
           for (auto& slice : slices_) {
             slice.OnViewResumed();
@@ -167,15 +201,50 @@ SlicedGlyphAtlas::SlicedGlyphAtlas(
         .AddWidget<editor::SlicedGlyphAtlasVisualizer>(
             editor::WidgetLayoutInfo(editor::PanelId::kTabBar), view,
             editor::SlicedGlyphAtlasVisualizer::AtlasDataProvider{
-                .get_texture_func = [this]() { return GetTexture(); },
+                .get_atlas_info_func =
+                    [this]() {
+                      return editor::SlicedGlyphAtlasVisualizer::AtlasInfo{
+                          .texture = GetTexture(),
+                          .texture_size = atlas_texture_size_,
+                          .grid_size = atlas_grid_size_,
+                      };
+                    },
                 .get_glyph_info_func =
-                    [this](float2 uv) { return GetSlicedGlyphAtlasInfoAt(uv); },
+                    [this](float2 uv) { return GetGlyphInfoAt(uv); },
                 .get_utilization_func =
                     [this]() { return GetAtlasUtilization(); },
                 .get_all_glyph_info_func =
                     [this]() { return GetAllGlyphInfo(); }});
   }
 #endif
+}
+
+void SlicedGlyphAtlas::RenderBlits(filament::Renderer& renderer) {
+  if (!texture_manager_) {
+    return;
+  }
+  size_t rendered_count = 0;
+  filament::Renderer::ClearOptions previous_clear_options;
+  pending_renders_.ForEachBit<SliceId>([&rendered_count, &renderer,
+                                        &previous_clear_options,
+                                        this](SliceId slice) {
+    if (!rendered_count) {
+      // Since blitting only affects a portion of the render target, we need to
+      // ensure discard/clear are disabled for the target prior to rendering.
+      previous_clear_options = renderer.getClearOptions();
+      renderer.setClearOptions(filament::Renderer::ClearOptions{
+          .clear = false,
+          .discard = false,
+      });
+    }
+    texture_manager_->RenderSlice(renderer, slice);
+    slices_[slice].OnBlitCompleted();
+    ++rendered_count;
+  });
+  if (rendered_count > 0) {
+    renderer.setClearOptions(previous_clear_options);
+    pending_renders_.SetAll(false);
+  }
 }
 
 SlicedGlyphAtlas::~SlicedGlyphAtlas() {
@@ -191,11 +260,28 @@ SlicedGlyphAtlas::~SlicedGlyphAtlas() {
     std::destroy_at(&slice);
   }
   free(slice_storage_);
+
+  texture_manager_.reset();
 }
 
 void SlicedGlyphAtlas::EndFrame() {
+  // A slice requests a blit because glyphs were added to it, but this is a
+  // heavyweight operation.  To prevent jank, we limit the number of slices
+  // that can request blits in each frame.
+  constexpr size_t kMaxSlicesRenderedCount = 2;
+  size_t slices_rendered_count = 0;
   for (auto& slice : slices_) {
-    slice.EndFrame(view_, *canvas_source_);
+    Slice::EndFrameResult result = slice.EndFrame(view_);
+    if (result == Slice::EndFrameResult::kBlitRequired) {
+      // Schedule a blit.
+      pending_renders_.Set(slices_.IdOf(slice), true);
+      if (texture_manager_) {
+        texture_manager_->PrepareBlit(slices_.IdOf(slice), slice.texture_);
+      }
+      if (++slices_rendered_count >= kMaxSlicesRenderedCount) {
+        break;
+      }
+    }
   }
 }
 
@@ -212,7 +298,8 @@ Future<absl::Status> SlicedGlyphAtlas::PrepareFont(absl::string_view text,
   if (!canvas_options.ok()) {
     return Future<absl::Status>(canvas_options.status());
   }
-  return glyph_emulator_.PrepareFont(text, *canvas_options);
+  return glyph_emulator_.PrepareFont(text, *canvas_options,
+                                     *slices_.front().canvas_source_);
 }
 
 Future<std::vector<ScopedCanvas::GlyphGroup>>
@@ -225,7 +312,8 @@ SlicedGlyphAtlas::GetCombinedCharacterGroups(absl::string_view text,
     return Future<std::vector<ScopedCanvas::GlyphGroup>>(
         canvas_options.status());
   }
-  return glyph_emulator_.GetCombinedCharacterGroups(text, *canvas_options);
+  return glyph_emulator_.GetCombinedCharacterGroups(
+      text, *canvas_options, *slices_.front().canvas_source_);
 }
 
 Future<TextMetrics> SlicedGlyphAtlas::GetTextMetrics(
@@ -236,7 +324,8 @@ Future<TextMetrics> SlicedGlyphAtlas::GetTextMetrics(
   if (!canvas_options.ok()) {
     return Future<TextMetrics>(canvas_options.status());
   }
-  return glyph_emulator_.GetTextMetrics(text, *canvas_options);
+  return glyph_emulator_.GetTextMetrics(text, *canvas_options,
+                                        *slices_.front().canvas_source_);
 }
 
 Future<FontInfo> SlicedGlyphAtlas::GetFontInfo(const TextOptions& options) {
@@ -245,7 +334,8 @@ Future<FontInfo> SlicedGlyphAtlas::GetFontInfo(const TextOptions& options) {
   if (!canvas_options.ok()) {
     return Future<FontInfo>(canvas_options.status());
   }
-  return glyph_emulator_.GetFontInfo(*canvas_options);
+  return glyph_emulator_.GetFontInfo(*canvas_options,
+                                     *slices_.front().canvas_source_);
 }
 
 Future<std::vector<SlicedGlyphAtlas::Glyph>> SlicedGlyphAtlas::GetGlyphs(
@@ -277,7 +367,9 @@ Future<std::vector<SlicedGlyphAtlas::Glyph>> SlicedGlyphAtlas::GetGlyphs(
               return Future<std::vector<Glyph>>(canvas_options.status());
             }
 
-            return glyph_emulator_.GetGlyphs(text, *canvas_options)
+            return glyph_emulator_
+                .GetGlyphs(text, *canvas_options,
+                           *slices_.front().canvas_source_)
                 .Then([this, canvas_options = *canvas_options,
                        super_sample_info](
                           std::unique_ptr<std::vector<GlyphEmulator::Glyph>>
@@ -302,13 +394,12 @@ Future<std::vector<SlicedGlyphAtlas::Glyph>> SlicedGlyphAtlas::GetGlyphs(
                   for (auto& entry : pending_canvas_glyphs->entries) {
                     Future<absl::Status> entry_future;
                     auto& slice = slices_[entry.slice];
-                    if (canvas_source_->IsFeatureSupported(
+                    if (slice.canvas_source_->IsFeatureSupported(
                             ScopedCanvas::Feature::kKeepContents)) {
                       {
                         absl::MutexLock lock(slice.canvas_mutex_);
                         slice.GetOrStartDrawing(
-                            view_, *canvas_source_,
-                            ScopedCanvas::DrawMode::kKeepContents);
+                            view_, ScopedCanvas::DrawMode::kKeepContents);
                       }
 
                       // Schedule the glyphs that are newly added to the atlas
@@ -328,7 +419,7 @@ Future<std::vector<SlicedGlyphAtlas::Glyph>> SlicedGlyphAtlas::GetGlyphs(
                       // to the glyphs's space reservation instead of the atlas
                       // itself.
                       slice
-                          .DrawGlyphsToCanvasAsync(view_, *canvas_source_,
+                          .DrawGlyphsToCanvasAsync(view_,
                                                    std::move(entry.glyphs))
                           .Then(
                               [entry_future](absl::Status status) {
@@ -341,7 +432,7 @@ Future<std::vector<SlicedGlyphAtlas::Glyph>> SlicedGlyphAtlas::GetGlyphs(
                       absl::MutexLock lock(slice.canvas_mutex_);
                       // Set the texture_status_ to kHasNewGlyphs to ensure that
                       // the glyphs will be drawn on the next frame.
-                      slice.GetOrStartDrawing(view_, *canvas_source_,
+                      slice.GetOrStartDrawing(view_,
                                               ScopedCanvas::DrawMode::kClear);
                       slice.texture_status_ = TextureStatus::kHasNewGlyphs;
                       entry_future.Return(absl::OkStatus());
@@ -397,14 +488,15 @@ Future<std::vector<SlicedGlyphAtlas::Glyph>> SlicedGlyphAtlas::GetGlyphs(
 }
 
 std::optional<SlicedGlyphAtlas::SlicedGlyphInfo> SlicedGlyphAtlas::GetGlyphInfo(
-    const CanvasOptionsGlyphKey& key) {
-  for (auto& slice : slices_) {
-    const GlyphInfo* glyph_info = slice.GetGlyphInfo(key);
+    const CanvasOptionsGlyphKey& key, const CanvasOptionsInfo& info) {
+  std::optional<SlicedGlyphAtlas::SlicedGlyphInfo> result = std::nullopt;
+  info.active_slices.ForEachBit<SliceId>([this, &key, &result](SliceId slice) {
+    const GlyphInfo* glyph_info = slices_[slice].GetGlyphInfo(key);
     if (glyph_info != nullptr) {
-      return SlicedGlyphInfo{.slice = slices_.IdOf(slice), .info = *glyph_info};
+      result.emplace(SlicedGlyphInfo{.slice = slice, .info = *glyph_info});
     }
-  }
-  return std::nullopt;
+  });
+  return result;
 }
 
 void SlicedGlyphAtlas::AddGlyphs(
@@ -436,11 +528,11 @@ void SlicedGlyphAtlas::AddGlyphs(
               : kZero4;
       pending_glyph.canvas_options.color = kFillIdentifierColor;
     }
-    bool needs_render = !GetGlyphInfo(pending_glyph).has_value();
+    bool needs_render = false;
     const float width = glyph.advance_width;
 
     std::optional<SlicedGlyphInfo> sliced_glyph_info =
-        GetOrAddGlyphInfo(glyph, pending_glyph);
+        GetOrAddGlyphInfo(glyph, pending_glyph, needs_render);
     if (sliced_glyph_info.has_value() && needs_render) {
       pending_canvas_glyphs.Get(sliced_glyph_info->slice)
           .push_back(pending_glyph);
@@ -456,11 +548,30 @@ void SlicedGlyphAtlas::AddGlyphs(
   }
 }
 
+SlicedGlyphAtlas::CanvasOptionsInfo& SlicedGlyphAtlas::GetCanvasOptionsInfo(
+    const CanvasOptionsKey& canvas_options_key) {
+  absl::MutexLock lock(canvas_options_map_mutex_);
+  SlicedGlyphAtlas::CanvasOptionsInfo& result =
+      canvas_options_map_[canvas_options_key];
+  if (result.active_slices.empty()) {
+    result.active_slices.Resize(slices_.size());
+    result.glyph_count.resize(slices_.size(), 0);
+  }
+  return result;
+}
+
 std::optional<SlicedGlyphAtlas::SlicedGlyphInfo>
 SlicedGlyphAtlas::GetOrAddGlyphInfo(GlyphEmulator::Glyph& glyph,
-                                    const CanvasOptionsGlyphKey& glyph_key) {
-  std::optional<SlicedGlyphInfo> glyph_info = GetGlyphInfo(glyph_key);
+                                    const CanvasOptionsGlyphKey& glyph_key,
+                                    bool& out_added_new_glyph) {
+  CanvasOptionsInfo& canvas_options_info = GetCanvasOptionsInfo(
+      CanvasOptionsKey{.canvas_options = glyph_key.canvas_options,
+                       .requires_color_key = glyph_key.requires_color_key});
+
+  std::optional<SlicedGlyphInfo> glyph_info =
+      GetGlyphInfo(glyph_key, canvas_options_info);
   if (glyph_info.has_value()) {
+    out_added_new_glyph = false;
     return *glyph_info;
   }
 
@@ -470,7 +581,7 @@ SlicedGlyphAtlas::GetOrAddGlyphInfo(GlyphEmulator::Glyph& glyph,
       static_cast<int>(std::ceil(glyph.metrics.font_size_y())) + kPadding};
 
   std::optional<SlicedAtlasEntry> atlas_entry =
-      TryAddAtlasEntry(atlas_entry_size);
+      TryAddAtlasEntry(atlas_entry_size, canvas_options_info);
 
   // TODO: Add support for automatically expanding to multiple
   // textures if we run out of space.
@@ -497,34 +608,113 @@ SlicedGlyphAtlas::GetOrAddGlyphInfo(GlyphEmulator::Glyph& glyph,
 #endif
                })
            .first->second;
+  out_added_new_glyph = true;
   return SlicedGlyphInfo{.slice = atlas_entry->slice, .info = *info};
 }
 
 std::optional<SlicedGlyphAtlas::SlicedAtlasEntry>
-SlicedGlyphAtlas::TryAddAtlasEntry(uint2 atlas_entry_size) {
-  for (auto& slice : slices_) {
-    absl::MutexLock lock(slice.atlas_packer_mutex_);
-    std::optional<AtlasPacker::ScopedAtlasEntry> atlas_entry =
-        slice.atlas_packer_.AddEntry(atlas_entry_size);
-    if (atlas_entry) {
-      return SlicedAtlasEntry{.slice = slices_.IdOf(slice),
-                              .entry = std::move(*atlas_entry)};
+SlicedGlyphAtlas::TryAddAtlasEntry(uint2 atlas_entry_size,
+                                   CanvasOptionsInfo& info) {
+  std::optional<SlicedGlyphAtlas::SlicedAtlasEntry> result = std::nullopt;
+
+  // Prefer slices that already contain these options.  This groups glyphs with
+  // the same canvas options together, which not only minimizes the number of
+  // slices we need to check when searching for a glyph, but also improves the
+  // performance of rendering a slice by minimizing JNI state changes on the
+  // canvas paint objects.
+  info.active_slices.ForEachBit<SliceId>(
+      [this, &atlas_entry_size, &result](SliceId slice) {
+        absl::MutexLock lock(slices_[slice].atlas_packer_mutex_);
+        std::optional<AtlasPacker::ScopedAtlasEntry> atlas_entry =
+            slices_[slice].atlas_packer_.AddEntry(atlas_entry_size);
+        if (atlas_entry) {
+          result.emplace(SlicedAtlasEntry{.slice = slice,
+                                          .entry = std::move(*atlas_entry)});
+        }
+      });
+
+  if (result.has_value()) {
+    ++info.glyph_count[result->slice];
+    return result;
+  }
+
+  SliceId begin_slice = SliceId::At(0);
+  SliceId end_slice = SliceId::At(slices_.size());
+  SliceId cursor = addition_cursor_;
+
+  // Attempt to add to a new slice starting from the (rotating) addition cursor.
+  do {
+    // Skip slices we've already checked.
+    if (!info.active_slices.Get(cursor)) {
+      absl::MutexLock lock(slices_[cursor].atlas_packer_mutex_);
+      std::optional<AtlasPacker::ScopedAtlasEntry> atlas_entry =
+          slices_[cursor].atlas_packer_.AddEntry(atlas_entry_size);
+      if (atlas_entry) {
+        result.emplace(SlicedAtlasEntry{.slice = cursor,
+                                        .entry = std::move(*atlas_entry)});
+      }
     }
+    // Handle wrapping the id as we cross the end.
+    if (++cursor == end_slice) cursor = begin_slice;
+  } while (!result.has_value() && cursor != addition_cursor_);
+
+  // Rotate the addition cursor after every add.
+  if (++addition_cursor_ == end_slice) addition_cursor_ = begin_slice;
+
+  if (result.has_value()) {
+    info.active_slices.Set(result->slice);
+    ++info.glyph_count[result->slice];
+    return result;
   }
 
   // The atlas was full. Clear unused glyphs and try again.
+  ClearUnusedGlyphs();
+
   for (auto& slice : slices_) {
     absl::MutexLock lock(slice.atlas_packer_mutex_);
-    slice.ClearUnusedGlyphs(view_, *canvas_source_);
 
     std::optional<AtlasPacker::ScopedAtlasEntry> atlas_entry =
         slice.atlas_packer_.AddEntry(atlas_entry_size);
     if (atlas_entry) {
-      return SlicedAtlasEntry{.slice = slices_.IdOf(slice),
-                              .entry = std::move(*atlas_entry)};
+      result.emplace(SlicedAtlasEntry{.slice = slices_.IdOf(slice),
+                                      .entry = std::move(*atlas_entry)});
     }
   }
+
+  if (result.has_value()) {
+    info.active_slices.Set(result->slice);
+    ++info.glyph_count[result->slice];
+    return result;
+  } else {
+    IMP_LOG(imp::ERROR) << "Unable to find space in Glyph Atlas for glyph with size x="
+               << atlas_entry_size.x << ", y=" << atlas_entry_size.y;
+  }
+
   return std::nullopt;
+}
+
+void SlicedGlyphAtlas::ClearUnusedGlyphs() {
+  for (auto& slice : slices_) {
+    absl::MutexLock lock(slice.atlas_packer_mutex_);
+    slice.ClearUnusedGlyphs(view_, [this, id = slices_.IdOf(slice)](
+                                       const CanvasOptionsGlyphKey& glyph_key) {
+      CanvasOptionsInfo& canvas_options_info = GetCanvasOptionsInfo(
+          CanvasOptionsKey{.canvas_options = glyph_key.canvas_options,
+                           .requires_color_key = glyph_key.requires_color_key});
+      if (!--canvas_options_info.glyph_count[id]) {
+        canvas_options_info.active_slices.Set(id, false);
+      }
+    });
+  }
+
+  // Holding the mutex, clear all infos that are now empty.
+  {
+    absl::MutexLock lock(canvas_options_map_mutex_);
+
+    absl::erase_if(canvas_options_map_, [](const auto& it) {
+      return !it.second.active_slices.Any();
+    });
+  }
 }
 
 size_t SlicedGlyphAtlas::GetNumCachedGlyphs() const {
@@ -560,12 +750,18 @@ SlicedGlyphAtlas::Glyph SlicedGlyphAtlas::GlyphInfoToGlyph(
   return glyph;
 }
 
-Texture* SlicedGlyphAtlas::GetTexture() {
+imp::Texture* SlicedGlyphAtlas::GetTexture() {
   if (Executor::CurrentExecutor() != Executor::ForegroundExecutor()) {
     IMP_LOG(imp::FATAL) << "GetTexture may only be called from the foreground "
                   "thread.";
   }
-  return slices_.front().texture_;
+  // If the grid size is 1x1, then we don't need to composite the textures, we
+  // just return the external texture.
+  if (atlas_grid_size_.x == 1 && atlas_grid_size_.y == 1) {
+    return slices_.front().texture_;
+  } else {
+    return texture_manager_->GetCompositeTexture();
+  }
 }
 
 Future<GlyphEmulator::SuperSampleInfo> SlicedGlyphAtlas::GetSuperSampleInfo(
@@ -598,11 +794,20 @@ float SlicedGlyphAtlas::GetAtlasUtilization() const {
 
 GlyphEmulator& SlicedGlyphAtlas::GetGlyphEmulator() { return glyph_emulator_; }
 
+void SlicedGlyphAtlas::GetSliceOffsetAndScale(SliceId slice, float2* offset,
+                                              float2* scale) const {
+  if (texture_manager_) {
+    texture_manager_->GetSliceOffsetAndScale(slice, offset, scale);
+  }
+}
+
 #if IMP_RUNTIME(DEV)
-std::optional<editor::SlicedGlyphAtlasVisualizer::SlicedGlyphAtlasInfo>
-SlicedGlyphAtlas::GetSlicedGlyphAtlasInfoAt(const float2& uv) const {
+std::optional<editor::SlicedGlyphAtlasVisualizer::GlyphInfo>
+SlicedGlyphAtlas::GetGlyphInfoAt(const float2& uv) const {
   for (auto& slice : slices_) {
-    auto result = slice.GetSlicedGlyphAtlasInfoAt(uv);
+    float2 slice_offset, slice_scale;
+    GetSliceOffsetAndScale(slices_.IdOf(slice), &slice_offset, &slice_scale);
+    auto result = slice.GetGlyphInfoAt(uv, slice_offset, slice_scale);
     if (result.has_value()) {
       return result;
     }
@@ -611,11 +816,13 @@ SlicedGlyphAtlas::GetSlicedGlyphAtlasInfoAt(const float2& uv) const {
   return std::nullopt;
 }
 
-std::vector<editor::SlicedGlyphAtlasVisualizer::SlicedGlyphAtlasInfo>
+std::vector<editor::SlicedGlyphAtlasVisualizer::GlyphInfo>
 SlicedGlyphAtlas::GetAllGlyphInfo() const {
-  std::vector<editor::SlicedGlyphAtlasVisualizer::SlicedGlyphAtlasInfo> result;
+  std::vector<editor::SlicedGlyphAtlasVisualizer::GlyphInfo> result;
   for (auto& slice : slices_) {
-    auto slice_result = slice.GetAllGlyphInfo();
+    float2 slice_offset, slice_scale;
+    GetSliceOffsetAndScale(slices_.IdOf(slice), &slice_offset, &slice_scale);
+    auto slice_result = slice.GetAllGlyphInfo(slice_offset, slice_scale);
     result.insert(result.end(), slice_result.begin(), slice_result.end());
   }
   return result;

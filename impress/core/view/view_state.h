@@ -19,12 +19,14 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "core/common/optional_error.h"
 #include "core/view/base_view.h"
+#include "core/view/utils/proto/filament_feature_flag.proto.imp.h"
 #include "core/window/filament_host.h"
 
 namespace imp {
@@ -43,6 +45,7 @@ class ViewState : public window::FilamentHost::State {
 
   filament::Engine::Config GetEngineConfig() const override;
   filament::backend::FeatureLevel GetMaximumEngineFeatureLevel() const override;
+  std::vector<FilamentFeatureFlag> GetFilamentFeatureFlags() const override;
   bool ShouldStartPaused() const override;
 
   bool ShouldUseSharedGlContext() const override;

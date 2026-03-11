@@ -134,6 +134,11 @@ class SplitEngineGenericMaterial : public SplitEngineMaterial,
   TextureAndSampler GetSheenRoughnessTexture() const override;
   void SetSheenRoughnessFactor(float factor) override;
 
+  TextureAndSampler GetThicknessTexture() const override;
+  void SetThicknessFactor(float factor) override;
+  void SetAttenuationDistance(float distance) override;
+  void SetAttenuationColor(const float3& color) override;
+
   TextureAndSampler GetTransmissionTexture() const override;
   absl::Status SetTransmissionUvTransform(const mat3f& uv_transform) override;
   void SetTransmissionFactor(float factor) override;

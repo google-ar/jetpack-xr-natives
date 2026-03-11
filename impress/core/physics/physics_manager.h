@@ -19,7 +19,6 @@
 
 #include <cstddef>
 
-#include "absl/container/flat_hash_map.h"
 #include "bullet/src/BulletCollision/BroadphaseCollision/btAxisSweep3.h"
 #include "bullet/src/BulletCollision/CollisionDispatch/btCollisionDispatcher.h"
 #include "bullet/src/BulletCollision/CollisionDispatch/btCollisionObject.h"
@@ -27,7 +26,6 @@
 #include "bullet/src/BulletDynamics/ConstraintSolver/btSequentialImpulseConstraintSolver.h"
 #include "bullet/src/BulletDynamics/Dynamics/btDiscreteDynamicsWorld.h"
 #include "bullet/src/BulletDynamics/Dynamics/btRigidBody.h"
-#include "core/common/invocable.h"
 #include "core/common/robin_map.h"
 #include "core/common/robin_set.h"
 #include "core/config.h"
@@ -38,6 +36,10 @@
 #include "core/ncsb/update_system.h"
 #include "core/view/base_view.h"
 #include "core/view/utils/frame_time.h"
+#if IMP_RUNTIME(DEV)
+#include "absl/container/flat_hash_map.h"
+#include "core/common/invocable.h"
+#endif
 
 namespace imp {
 // Physics Manager holds a DiscreteDynamicsWorld, a Bullet Physics instance that
@@ -126,16 +128,18 @@ class PhysicsManager : public UpdateSystem::Updater<PhysicsManager> {
   void FastForwardSimulation(float duration);
 
 #if IMP_RUNTIME(DEV)
-  // Registers a visualizer for a collidable. Based on the assumption that one
-  // Node can only have one collidable.
-  void RegisterCollidableVisualizer(NodeHandle node,
-                                    imp::Invocable<void()> visualizer);
+  // Registers a visualizer. Based on the assumption that one Node can only have
+  // one collidable and one constraint of each type.
+  void RegisterDebugVisualizer(NodeHandle node,
+                               imp::Invocable<void()> visualizer,
+                               absl::string_view visualizer_name);
 
-  // Unregisters a visualizer for a collidable. Based on the assumption that one
-  // Node can only have one collidable.
-  void UnregisterCollidableVisualizer(NodeHandle node);
+  // Unregisters a visualizer. Based on the assumption that one Node can only
+  // have one collidable and one constraint of each type.
+  void UnRegisterDebugVisualizer(NodeHandle node,
+                                 absl::string_view visualizer_name);
 
-  void DrawCollidables();
+  void DrawDebug();
 #endif
 
  private:
@@ -160,7 +164,8 @@ class PhysicsManager : public UpdateSystem::Updater<PhysicsManager> {
   float simulation_step_speed_;
 
 #if IMP_RUNTIME(DEV)
-  absl::flat_hash_map<NodeHandle, imp::Invocable<void()>>
+  absl::flat_hash_map<NodeHandle,
+                      absl::flat_hash_map<std::string, imp::Invocable<void()>>>
       collidable_visualizer_map_;
 #endif
 };

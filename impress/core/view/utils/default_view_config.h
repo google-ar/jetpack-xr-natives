@@ -24,13 +24,7 @@ namespace imp {
 constexpr float kForegroundExecutorTimeoutMs = 4.0f;
 constexpr float kBackgroundExecutorTimeoutMs = 1.0f;
 
-constexpr ViewConfig kDefaultViewConfig = {
-    .shader_caching_mode =
-        ViewConfig::ShaderCachingMode::SHADER_CACHING_MODE_DISABLED,
-    .default_lighting_loading =
-        ViewConfig::DefaultLightingLoading::DEFAULT_LIGHTING_LOADING_ENABLED,
-    .foreground_executor_timeout_ms = kForegroundExecutorTimeoutMs,
-};
+ViewConfig GetDefaultViewConfig();
 
 }  // namespace imp
 

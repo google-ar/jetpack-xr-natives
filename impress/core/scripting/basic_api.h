@@ -24,7 +24,6 @@
 #include "core/scripting/message_handlers/animate_node_handler.h"
 #include "core/scripting/message_handlers/create_node_handler.h"
 #include "core/scripting/message_handlers/destroy_node_handler.h"
-#include "core/scripting/message_handlers/event_handler.h"
 #include "core/scripting/message_handlers/find_node_handler.h"
 #include "core/scripting/message_handlers/forward_input_handler.h"
 #include "core/scripting/message_handlers/get_animation_names_handler.h"
@@ -58,8 +57,6 @@ static void AddBasicApiMessageHandlers(ScriptingSystem& scripting_system,
   scripting_system.AddHandler(std::make_unique<AnimateNodeHandler>(view));
   scripting_system.AddHandler(std::make_unique<CreateNodeHandler>(view));
   scripting_system.AddHandler(std::make_unique<DestroyNodeHandler>(view));
-  scripting_system.AddHandler(
-      std::make_unique<EventHandler>(view, scripting_system));
   scripting_system.AddHandler(std::make_unique<FindNodeHandler>(view));
 #if IMP_PLATFORM(ANDROID) || IMP_PLATFORM(IOS) || IMP_PLATFORM(DESKTOP)
   scripting_system.AddHandler(std::make_unique<ForwardInputHandler>(view));

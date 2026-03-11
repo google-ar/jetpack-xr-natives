@@ -35,9 +35,8 @@ message ParticleConfig {
   // particles that consist of a color, or a texture with an alpha channel.
   optional float alpha = 3;
 
-  // The base scale value to apply to the particle. Like alpha, this value is
-  // used as a base value that can be modified by an optional scale_curve.
-  optional float scale = 4;
+  // The base scale value to apply to the particle.
+  Float3 scale = 4 [(optional_type) = ABSL_OPTIONAL];
 
   // The initial velocity of the particle.
   Float3 velocity = 5 [(optional_type) = ABSL_OPTIONAL];
@@ -47,6 +46,8 @@ message ParticleConfig {
   Float3 acceleration = 6 [(optional_type) = ABSL_OPTIONAL];
 
   // The gltf asset to use as the visual representation of the particle.
+  // While optional, this field is required for emitters configured with the
+  // PARTICLE_RENDERER_NODE renderer.
   optional string gltf_asset = 7 [(imp.editor_control) = { scene: {} }];
 }
 

@@ -17,28 +17,32 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SCRIPTING_WEB_WASM_WASM_HELPERS_H_
 #define THIRD_PARTY_IMPRESS_CORE_SCRIPTING_WEB_WASM_WASM_HELPERS_H_
 
+#include "absl/strings/string_view.h"
+#include "core/config.h"
+#if IMP_PLATFORM(WASM)
 #include <emscripten/emscripten.h>
 
+#include <cstdio>
+#include <string>
+
+#include "absl/strings/escaping.h"
 #include "absl/strings/str_format.h"
+#endif
 
 namespace imp::scripting {
 
 inline constexpr absl::string_view kInjectToBridge =
     "window.javaScriptEntryPoint.incoming.injectScript(`%s`);";
-// TODO: Replace this with a message from JS informing native when
-// window.javaScriptEntryPoint.incoming.postMessage is ready.
-inline constexpr absl::string_view kPostMessage =
-    "if (window.javaScriptEntryPoint && window.javaScriptEntryPoint.incoming "
-    "&& window.javaScriptEntryPoint.incoming.postMessage) { "
-    "window.javaScriptEntryPoint.incoming.postMessage(`%s`); }";
 
 // Injects the given script into the IframeBridge's inject endpoint.
 static void InjectScriptToBridge(absl::string_view script) {
+#if IMP_PLATFORM(WASM)
   std::string encoded;
   absl::Base64Escape(script, &encoded);
   std::string inject_script_str(absl::StrFormat(kInjectToBridge, encoded));
   // TODO: use MAIN_THREAD_ASM here?
   emscripten_run_script(inject_script_str.c_str());
+#endif
 }
 
 }  // namespace imp::scripting

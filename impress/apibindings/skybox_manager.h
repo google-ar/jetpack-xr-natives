@@ -54,7 +54,7 @@ class SkyboxManager {
   virtual absl::Status SetEnvironmentLight(std::intptr_t ibl_token) = 0;
 
   // Clears the preferred IBL asset to be used by the system.
-  virtual absl::Status ClearEnvironmentLight() = 0;
+  virtual void ClearEnvironmentLight() = 0;
 };
 
 }  // namespace imp

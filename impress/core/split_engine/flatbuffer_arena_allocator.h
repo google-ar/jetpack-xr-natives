@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "zetasql/base/arena.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/types/span.h"
 #include "flatbuffers/allocator.h"
 #include "flatbuffers/base.h"
@@ -41,9 +42,10 @@ namespace imp {
 //
 // Multiple builders can be active at the same time within one arena.
 //
-class FlatbufferArenaAllocator : public flatbuffers::Allocator {
+class ArenaAllocator {
  public:
   using ArenaHandle = int32_t;
+  virtual ~ArenaAllocator() = default;
 
   // See the CreateArena function documentation for explanation of these types.
   using LowLevelAllocFunc = void* (*)(size_t size, void* user);
@@ -139,28 +141,18 @@ class FlatbufferArenaAllocator : public flatbuffers::Allocator {
   // Returns the address of the beginning of the first block in the arena.
   void* GetArenaHead(ArenaHandle arena_handle);
 
-  // Returns the handle of the currently active arena. If no arena is currently
-  // active, returns -1.
-  ArenaHandle GetActiveArena() { return active_arena_; }
-
-  // Closes the currently active arena. This prevents any further allocations
-  // from being made in this arena, but does not deallocate or recycle any
-  // memory until DestroyArena is called.
-  //
-  // As DestroyArena cannot be called on the currently active arena, this can be
-  // used to make an arena eligible for DestroyArena() without allocating a new
-  // arena.
-  void CloseActiveArena() { active_arena_ = -1; }
-
-  // Allocates memory from the currently active arena.
+  // Allocates memory from the specified arena.
   // Preconditions: An arena is currently active, which means 1) CreateArena has
   // been called at least once and 2) if DestroyArena was called on an active
   // arena then CreateArena has been called again before any call to allocate or
   // deallocate.
-  uint8_t* allocate(size_t size) override;
+  uint8_t* AllocateArenaMemory(ArenaHandle arena_handle, size_t size);
 
-  // deallocate does nothing. Memory is freed by DestroyArena().
-  void deallocate(uint8_t* p, size_t size) override;
+  flatbuffers::Allocator& GetFlatbufferAllocator(ArenaHandle arena_handle);
+
+ protected:
+  virtual std::unique_ptr<flatbuffers::Allocator> CreateFlatbufferAllocator(
+      ArenaHandle arena_handle);
 
  private:
   class ArenaAndAllocFunc {
@@ -177,6 +169,7 @@ class FlatbufferArenaAllocator : public flatbuffers::Allocator {
 
     // Mark the arena as being used.
     void SetInUse();
+    bool IsInUse() const { return in_use_; }
 
     // Deallocates all blocks in the arena except the first one, and flags the
     // arena as available for reuse.
@@ -201,7 +194,8 @@ class FlatbufferArenaAllocator : public flatbuffers::Allocator {
   };
 
   std::vector<ArenaAndAllocFunc> arenas_;
-  ArenaHandle active_arena_ = -1;
+  absl::flat_hash_map<ArenaHandle, std::unique_ptr<flatbuffers::Allocator>>
+      flatbuffer_allocators_;
 };
 
 // In order to transmit flatbuffers over RPC effectively, we need to prefix them
@@ -246,7 +240,7 @@ class FlatbufferArenaAllocator : public flatbuffers::Allocator {
 //                                 └-- PrependSize() returns this span.
 //
 //
-class SizePrefixedFlatbufferArenaAllocator : public FlatbufferArenaAllocator {
+class SizePrefixedArenaAllocator : public ArenaAllocator {
  public:
   using SizeType = flatbuffers::uoffset_t;
   // Caller is responsible to ensure that `ptr` points to a memory that was
@@ -264,7 +258,10 @@ class SizePrefixedFlatbufferArenaAllocator : public FlatbufferArenaAllocator {
 
   ArenaHandle CreateArena(size_t block_size,
                           MemoryOptions memory_options) override;
-  uint8_t* allocate(size_t size) override;
+
+ protected:
+  std::unique_ptr<flatbuffers::Allocator> CreateFlatbufferAllocator(
+      ArenaHandle arena_handle) override;
 };
 
 }  // namespace imp

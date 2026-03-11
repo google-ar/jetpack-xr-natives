@@ -694,6 +694,7 @@ class_<View>("View")
     .function("isStencilBufferEnabled", &View::isStencilBufferEnabled)
     .function("setMaterialGlobal", &View::setMaterialGlobal)
     .function("getMaterialGlobal", &View::getMaterialGlobal)
+    .function("getLastDynamicResolutionScale", &View::getLastDynamicResolutionScale)
     .function("getFogEntity", &View::getFogEntity)
     .function("clearFrameHistory", &View::clearFrameHistory);
 
@@ -1353,6 +1354,10 @@ class_<Material>("Material")
         return self->createInstance(name.c_str()); }), allow_raw_pointers())
     .function("getName", EMBIND_LAMBDA(std::string, (Material* self), {
         return std::string(self->getName());
+    }), allow_raw_pointers())
+    .function("getParameterTransformName", EMBIND_LAMBDA(std::string, (Material* self, std::string samplerName), {
+        const char* transformName = self->getParameterTransformName(samplerName.c_str());
+        return transformName ? std::string(transformName) : std::string();
     }), allow_raw_pointers());
 
 class_<MaterialInstance>("MaterialInstance")

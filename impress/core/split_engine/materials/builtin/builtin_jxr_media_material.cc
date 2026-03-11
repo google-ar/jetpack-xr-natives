@@ -41,6 +41,7 @@
 #include "core/math/math.h"
 #include "core/math/vec.h"
 #include "core/media/media_color_space.h"
+#include "core/media/media_type.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/render/display_color_space.h"
 #include "core/render/texture.h"
@@ -89,6 +90,10 @@ static constexpr absl::string_view kStereoTypeParameter = "stereoType";
 // Parameter used to pass the (UV) feather radius information to the material.
 static constexpr absl::string_view kFeatherRadiusParameter = "featherRadius";
 
+// Parameter used to report which eye to render to.
+static constexpr absl::string_view kMaterialConstantRenderEyeTarget =
+    "renderEyeTarget";
+
 // Parameter used to determine use of super sampling in the material.
 static constexpr absl::string_view kMaterialConstantUseSuperSampling =
     "useSuperSampling";
@@ -101,6 +106,11 @@ constexpr absl::string_view kMaterialConstantEnableColorCorrection =
 // Unset/ForceOn/ForceOff` to set the color correction mode.
 static constexpr const char* kEnableColorCorrectionProperty =
     "jxr.surface_entity.enable_color_correction";
+
+// Use `adb shell setprop jxr.surface_entity.force_render_eye_target
+// Unset/Both/LeftOnly/RightOnly` to set the render eye target.
+static constexpr const char* kForceRenderEyeTargetProperty =
+    "jxr.surface_entity.force_render_eye_target";
 #endif  // IMP_PLATFORM(ANDROID)
 
 resources::ResourceDefinition GetMaterialResource(
@@ -135,13 +145,54 @@ Future<split_engine::BuiltInMaterialPtr> BuiltInJxrMediaMaterial::Create(
       kMaterialConstantEnableColorCorrection;
   enable_color_correction_constant.value = true;
 
+  MaterialPreCompileConstant render_eye_target_constant;
+  render_eye_target_constant.name = kMaterialConstantRenderEyeTarget;
+  render_eye_target_constant.value =
+      static_cast<int>(imp::RenderEyeTarget::kBoth);
+  const android_xr::schemas::BuiltInMaterial1b616c8aRenderEyeTarget
+      render_eye_target_spec = spec.render_eye_target();
+  switch (render_eye_target_spec) {
+    case android_xr::schemas::BuiltInMaterial1b616c8aRenderEyeTarget::
+        DEFAULT_BOTH:
+      render_eye_target_constant.value =
+          static_cast<int>(imp::RenderEyeTarget::kBoth);
+      break;
+    case android_xr::schemas::BuiltInMaterial1b616c8aRenderEyeTarget::LEFT_ONLY:
+      render_eye_target_constant.value =
+          static_cast<int>(imp::RenderEyeTarget::kLeftOnly);
+      break;
+    case android_xr::schemas::BuiltInMaterial1b616c8aRenderEyeTarget::
+        RIGHT_ONLY:
+      render_eye_target_constant.value =
+          static_cast<int>(imp::RenderEyeTarget::kRightOnly);
+      break;
+    default:
+      break;
+  }
+
 #if IMP_PLATFORM(ANDROID)
   char propValue[PROP_VALUE_MAX];
+
   int len = __system_property_get(kEnableColorCorrectionProperty, propValue);
   if (len > 0) {
     std::string value(propValue, len);
     if (value == "ForceOff") {
       enable_color_correction_constant.value = false;
+    }
+  }
+
+  len = __system_property_get(kForceRenderEyeTargetProperty, propValue);
+  if (len > 0) {
+    std::string value(propValue, len);
+    if (value == "Both") {
+      render_eye_target_constant.value =
+          static_cast<int>(imp::RenderEyeTarget::kBoth);
+    } else if (value == "LeftOnly") {
+      render_eye_target_constant.value =
+          static_cast<int>(imp::RenderEyeTarget::kLeftOnly);
+    } else if (value == "RightOnly") {
+      render_eye_target_constant.value =
+          static_cast<int>(imp::RenderEyeTarget::kRightOnly);
     }
   }
 #endif  // IMP_PLATFORM(ANDROID)
@@ -152,6 +203,18 @@ Future<split_engine::BuiltInMaterialPtr> BuiltInJxrMediaMaterial::Create(
     IMP_LOG(imp::INFO) << "Super sampling disabled in JXR media material";
   }
   material_pre_compile_options.constants.push_back(use_super_sampling_constant);
+
+  if (std::get<int>(render_eye_target_constant.value) ==
+      static_cast<int>(imp::RenderEyeTarget::kBoth)) {
+    IMP_LOG(imp::INFO) << "Render eye target is Both";
+  } else if (std::get<int>(render_eye_target_constant.value) ==
+             static_cast<int>(imp::RenderEyeTarget::kLeftOnly)) {
+    IMP_LOG(imp::INFO) << "Render eye target is Left Only";
+  } else if (std::get<int>(render_eye_target_constant.value) ==
+             static_cast<int>(imp::RenderEyeTarget::kRightOnly)) {
+    IMP_LOG(imp::INFO) << "Render eye target is Right Only";
+  }
+  material_pre_compile_options.constants.push_back(render_eye_target_constant);
 
   if (std::get<bool>(enable_color_correction_constant.value)) {
     IMP_LOG(imp::INFO) << "Color correction enabled in JXR media material";

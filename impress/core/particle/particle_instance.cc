@@ -88,20 +88,20 @@ bool ParticleInstance::HasScale() const {
   return data_layout_.GetScale() != kInvalidParticleDataOffset;
 }
 
-float ParticleInstance::GetScale() const {
+float3 ParticleInstance::GetScale() const {
   if (data_layout_.GetScale() == kInvalidParticleDataOffset) {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid scale access.";
   }
 
-  return data_provider_.GetFloat(float_offset_ + data_layout_.GetScale());
+  return data_provider_.GetVector3f(float_offset_ + data_layout_.GetScale());
 }
 
-void ParticleInstance::SetScale(float scale) {
+void ParticleInstance::SetScale(float3 scale) {
   if (data_layout_.GetScale() == kInvalidParticleDataOffset) {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid scale access.";
   }
 
-  data_provider_.SetFloat(float_offset_ + data_layout_.GetScale(), scale);
+  data_provider_.SetVector3f(float_offset_ + data_layout_.GetScale(), scale);
 }
 
 float3 ParticleInstance::GetPosition() const {
@@ -109,10 +109,7 @@ float3 ParticleInstance::GetPosition() const {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid position access.";
   }
 
-  int32_t position_offset = float_offset_ + data_layout_.GetPosition();
-  return float3(data_provider_.GetFloat(position_offset + 0),
-                data_provider_.GetFloat(position_offset + 1),
-                data_provider_.GetFloat(position_offset + 2));
+  return data_provider_.GetVector3f(float_offset_ + data_layout_.GetPosition());
 }
 
 void ParticleInstance::SetPosition(float3 position) {
@@ -120,10 +117,8 @@ void ParticleInstance::SetPosition(float3 position) {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid position access.";
   }
 
-  int32_t position_offset = float_offset_ + data_layout_.GetPosition();
-  data_provider_.SetFloat(position_offset + 0, position.x);
-  data_provider_.SetFloat(position_offset + 1, position.y);
-  data_provider_.SetFloat(position_offset + 2, position.z);
+  data_provider_.SetVector3f(float_offset_ + data_layout_.GetPosition(),
+                             position);
 }
 
 bool ParticleInstance::HasVelocity() const {
@@ -135,10 +130,7 @@ float3 ParticleInstance::GetVelocity() const {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid velocity access.";
   }
 
-  int32_t velocity_offset = float_offset_ + data_layout_.GetVelocity();
-  return float3(data_provider_.GetFloat(velocity_offset + 0),
-                data_provider_.GetFloat(velocity_offset + 1),
-                data_provider_.GetFloat(velocity_offset + 2));
+  return data_provider_.GetVector3f(float_offset_ + data_layout_.GetVelocity());
 }
 
 void ParticleInstance::SetVelocity(float3 velocity) {
@@ -146,10 +138,8 @@ void ParticleInstance::SetVelocity(float3 velocity) {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid velocity access.";
   }
 
-  int32_t velocity_offset = float_offset_ + data_layout_.GetVelocity();
-  data_provider_.SetFloat(velocity_offset + 0, velocity.x);
-  data_provider_.SetFloat(velocity_offset + 1, velocity.y);
-  data_provider_.SetFloat(velocity_offset + 2, velocity.z);
+  data_provider_.SetVector3f(float_offset_ + data_layout_.GetVelocity(),
+                             velocity);
 }
 
 bool ParticleInstance::HasAcceleration() const {
@@ -161,10 +151,8 @@ float3 ParticleInstance::GetAcceleration() const {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid acceleration access.";
   }
 
-  int32_t acceleration_offset = float_offset_ + data_layout_.GetAcceleration();
-  return float3(data_provider_.GetFloat(acceleration_offset + 0),
-                data_provider_.GetFloat(acceleration_offset + 1),
-                data_provider_.GetFloat(acceleration_offset + 2));
+  return data_provider_.GetVector3f(float_offset_ +
+                                    data_layout_.GetAcceleration());
 }
 
 void ParticleInstance::SetAcceleration(float3 acceleration) {
@@ -172,10 +160,8 @@ void ParticleInstance::SetAcceleration(float3 acceleration) {
     IMP_LOG(imp::FATAL) << "ParticleInstance, invalid acceleration access.";
   }
 
-  int32_t acceleration_offset = float_offset_ + data_layout_.GetAcceleration();
-  data_provider_.SetFloat(acceleration_offset + 0, acceleration.x);
-  data_provider_.SetFloat(acceleration_offset + 1, acceleration.y);
-  data_provider_.SetFloat(acceleration_offset + 2, acceleration.z);
+  data_provider_.SetVector3f(float_offset_ + data_layout_.GetAcceleration(),
+                             acceleration);
 }
 
 }  // namespace imp

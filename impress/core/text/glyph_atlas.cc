@@ -123,7 +123,7 @@ GlyphAtlas::GlyphAtlas(BaseView& view,
     : view_(view),
       atlas_texture_size_(GetTextureSize(config.texture_size)),
       canvas_source_(std::move(canvas_source)),
-      glyph_emulator_(view.GetContext(), *canvas_source_),
+      glyph_emulator_(view.GetContext()),
       atlas_packer_(atlas_texture_size_) {
   view.GetDispatcher().Connect(
       [this](const imp::ViewPostFrameUpdateEvent& event) mutable {
@@ -236,7 +236,7 @@ Future<absl::Status> GlyphAtlas::PrepareFont(absl::string_view text,
   if (!canvas_options.ok()) {
     return Future<absl::Status>(canvas_options.status());
   }
-  return glyph_emulator_.PrepareFont(text, *canvas_options);
+  return glyph_emulator_.PrepareFont(text, *canvas_options, *canvas_source_);
 }
 
 Future<std::vector<ScopedCanvas::GlyphGroup>>
@@ -248,7 +248,8 @@ GlyphAtlas::GetCombinedCharacterGroups(absl::string_view text,
     return Future<std::vector<ScopedCanvas::GlyphGroup>>(
         canvas_options.status());
   }
-  return glyph_emulator_.GetCombinedCharacterGroups(text, *canvas_options);
+  return glyph_emulator_.GetCombinedCharacterGroups(text, *canvas_options,
+                                                    *canvas_source_);
 }
 
 Future<TextMetrics> GlyphAtlas::GetTextMetrics(absl::string_view text,
@@ -258,7 +259,7 @@ Future<TextMetrics> GlyphAtlas::GetTextMetrics(absl::string_view text,
   if (!canvas_options.ok()) {
     return Future<TextMetrics>(canvas_options.status());
   }
-  return glyph_emulator_.GetTextMetrics(text, *canvas_options);
+  return glyph_emulator_.GetTextMetrics(text, *canvas_options, *canvas_source_);
 }
 
 Future<FontInfo> GlyphAtlas::GetFontInfo(const TextOptions& options) {
@@ -267,7 +268,7 @@ Future<FontInfo> GlyphAtlas::GetFontInfo(const TextOptions& options) {
   if (!canvas_options.ok()) {
     return Future<FontInfo>(canvas_options.status());
   }
-  return glyph_emulator_.GetFontInfo(*canvas_options);
+  return glyph_emulator_.GetFontInfo(*canvas_options, *canvas_source_);
 }
 
 Future<std::vector<GlyphAtlas::Glyph>> GlyphAtlas::GetGlyphs(
@@ -299,7 +300,8 @@ Future<std::vector<GlyphAtlas::Glyph>> GlyphAtlas::GetGlyphs(
               return Future<std::vector<Glyph>>(canvas_options.status());
             }
 
-            return glyph_emulator_.GetGlyphs(text, *canvas_options)
+            return glyph_emulator_
+                .GetGlyphs(text, *canvas_options, *canvas_source_)
                 .Then([this, canvas_options = *canvas_options,
                        super_sample_info](
                           std::unique_ptr<std::vector<GlyphEmulator::Glyph>>

@@ -22,6 +22,7 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "core/async/future.h"
 #include "core/canvas/scoped_canvas.h"
 #include "core/common/small_source_location.h"
@@ -35,6 +36,11 @@ namespace imp {
 // Interface for the platform specific implementation of a CanvasSource.
 // Each platform should implement this interface.
 struct PlatformCanvasSource {
+  // TODO Value chosen arbitrarily since we don't have any
+  // real-world data yet to prove what a good choice would be.
+  // TODO Add the cache size to the cache config
+  static constexpr int kDefaultGlyphCacheSizeBytes = 8 * 1024;
+
   virtual ~PlatformCanvasSource() = default;
 
   virtual bool IsFeatureSupported(ScopedCanvas::Feature feature) = 0;
@@ -52,6 +58,8 @@ struct PlatformCanvasSource {
   virtual TextMetrics GetGlyphMetrics(
       ScopedCanvas::GlyphId glyph,
       const ScopedCanvas::TextOptions& text_options) = 0;
+
+  virtual void ReleaseTextGlyphs(absl::Span<int> glyph_ids) = 0;
 
   virtual std::vector<ScopedCanvas::GlyphGroup> GetCombinedCharacterGroups(
       absl::string_view text,

@@ -98,6 +98,10 @@ class RecipeAsyncExecutionManager {
   // referenced by any async executions.
   void DeleteFinishedScopes();
 
+  // Resets the state of the async execution manager and cancels all async
+  // executions in flight.
+  void Reset();
+
  private:
   AsyncExecutionId GetNextAsyncExecutionID();
 

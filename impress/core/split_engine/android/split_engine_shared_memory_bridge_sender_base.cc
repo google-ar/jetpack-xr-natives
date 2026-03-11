@@ -18,13 +18,13 @@
 #include <cstddef>
 #include <cstring>
 #include <memory>
-#include <optional>
 #include <utility>
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
+#include "flatbuffers/allocator.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/split_engine/android/bridge_buffer.h"
@@ -71,8 +71,7 @@ size_t GetEndMessageSize() {
 }  // namespace
 
 SplitEngineSharedMemoryBridgeSenderBase::
-    SplitEngineSharedMemoryBridgeSenderBase(bool recycle_buffers)
-    : recycle_buffers_(recycle_buffers) {}
+    SplitEngineSharedMemoryBridgeSenderBase() {}
 
 void* SplitEngineSharedMemoryBridgeSenderBase::CreateSharedMemoryBuffer(
     size_t size_in_bytes) {
@@ -91,84 +90,76 @@ void SplitEngineSharedMemoryBridgeSenderBase::DestroySharedMemoryBuffer(
   bridge_buffers_.erase(head);
 }
 
-void SplitEngineSharedMemoryBridgeSenderBase::BeginMessageGroup(
-    size_t size_bytes) {
+absl::StatusOr<MessageGroupId>
+SplitEngineSharedMemoryBridgeSenderBase::BeginMessageGroup(
+    size_t size_bytes, MessageType message_type) {
   // Step 1: Create a memory arena for the new group.
-  FlatbufferArenaAllocator::ArenaHandle arena_handle =
-      GetAllocator().CreateArena(
+  const ArenaAllocator::ArenaHandle arena_handle =
+      GetArenaAllocator().CreateArena(
           GetBeginMessageSize() + size_bytes + GetEndMessageSize(),
           {AllocateSharedMemoryBuffer, DeallocateSharedMemoryBuffer, this});
 
-  // Step 2: Remember which BridgeBuffer object this ArenaHandle is associated
-  // with.
-  auto bridge_buffer_backing_this_arena =
-      bridge_buffers_.find(GetAllocator().GetArenaHead(arena_handle));
-  assert(bridge_buffer_backing_this_arena != bridge_buffers_.end());
-  active_bridge_buffer_ = bridge_buffer_backing_this_arena->second.get();
+  const MessageGroupId group_id = GenerateMessageGroupId();
+  arena_handles_.emplace(group_id, arena_handle);
+  message_group_id_to_size_bytes_.emplace(group_id, size_bytes);
+  message_group_types_.emplace(group_id, message_type);
 
-  // Step 3: Send a `BeginMessageGroup` message with the arena handle.
-  std::unique_ptr<flatbuffers::FlatBufferBuilder> fbb =
-      CreateFlatBufferBuilder(GetBeginMessageSize());
-
-  MessageGroupId message_group_id = GenerateMessageGroupId();
-  arena_handles_.emplace(message_group_id, arena_handle);
-
-  if (absl::Status enqueue_result =
-          SplitEngineBridgeSender::EnqueueMessageGroup(GetClientId(),
-                                                       message_group_id);
-      !enqueue_result.ok()) {
-    IMP_LOG(imp::FATAL) << "EnqueueMessageGroupTransaction failed: "
-               << enqueue_result.ToString();
+  if (bridge_buffers_.find(GetArenaAllocator().GetArenaHead(arena_handle)) ==
+      bridge_buffers_.end()) {
+    return absl::InternalError(
+        "Cannot find bridge buffer corresponding to the arena handle.");
   }
+
+  // Step 2: Send a `BeginMessageGroup` message with the arena handle.
+  std::unique_ptr<flatbuffers::FlatBufferBuilder> fbb =
+      CreateFlatBufferBuilder(group_id, GetBeginMessageSize());
+
+  MP_RETURN_IF_ERROR(
+      SplitEngineBridgeSender::EnqueueMessageGroup(GetClientId(), group_id));
 
   flatbuffers::Offset<android_xr::schemas::MessageGroupOperation> operation =
       android_xr::schemas::CreateMessageGroupOperation(
-          *fbb, message_group_id,
+          *fbb, group_id,
           android_xr::schemas::MessageGroupOperationTypes::BeginMessageGroup,
           android_xr::schemas::CreateBeginMessageGroup(*fbb).Union());
   fbb->Finish(operation);
 
-  active_message_group_id_ = message_group_id;
-  active_message_group_size_bytes_ = size_bytes;
+  MP_RETURN_IF_ERROR(SendMessage(group_id, *fbb));
 
-  SendMessage(*fbb);
+  return group_id;
 }
 
 std::unique_ptr<flatbuffers::FlatBufferBuilder>
 SplitEngineSharedMemoryBridgeSenderBase::CreateFlatBufferBuilder(
-    size_t size_bytes) {
-  return std::make_unique<flatbuffers::FlatBufferBuilder>(size_bytes,
-                                                          &GetAllocator());
+    MessageGroupId message_group_id, size_t size_bytes) {
+  return std::make_unique<flatbuffers::FlatBufferBuilder>(
+      size_bytes, &GetFlatbuffersAllocator(message_group_id));
 }
 
-void SplitEngineSharedMemoryBridgeSenderBase::EndMessageGroup() {
+flatbuffers::Allocator&
+SplitEngineSharedMemoryBridgeSenderBase::GetFlatbuffersAllocator(
+    MessageGroupId group_id) {
+  const auto arena_handle_it = arena_handles_.find(group_id);
   
-  const MessageGroupId message_group_id = *active_message_group_id_;
+  return GetArenaAllocator().GetFlatbufferAllocator(arena_handle_it->second);
+}
 
-  // Verify that the active arena is the one we expect.
-  auto arena_handle = GetAllocator().GetActiveArena();
-  
-
+absl::Status SplitEngineSharedMemoryBridgeSenderBase::EndMessageGroup(
+    MessageGroupId group_id) {
   std::unique_ptr<flatbuffers::FlatBufferBuilder> fbb =
-      CreateFlatBufferBuilder(GetBeginMessageSize());
+      CreateFlatBufferBuilder(group_id, GetEndMessageSize());
 
   flatbuffers::Offset<android_xr::schemas::MessageGroupOperation> operation =
       android_xr::schemas::CreateMessageGroupOperation(
-          *fbb, message_group_id,
+          *fbb, group_id,
           android_xr::schemas::MessageGroupOperationTypes::EndMessageGroup,
           android_xr::schemas::CreateEndMessageGroup(*fbb).Union());
   fbb->Finish(operation);
 
-  GetAllocator().CloseActiveArena();
+  MP_RETURN_IF_ERROR(SendMessage(group_id, *fbb));
 
-  SendMessage(*fbb);
-
-  active_message_group_id_ = std::nullopt;
-  active_message_group_size_bytes_ = std::nullopt;
-}
-
-bool SplitEngineSharedMemoryBridgeSenderBase::IsMessageGroupActive() const {
-  return active_message_group_id_.has_value();
+  message_group_id_to_size_bytes_.erase(group_id);
+  return absl::OkStatus();
 }
 
 void SplitEngineSharedMemoryBridgeSenderBase::ClearReleasedMessageGroups() {
@@ -183,11 +174,19 @@ void SplitEngineSharedMemoryBridgeSenderBase::ClearReleasedMessageGroups() {
           // while iterating through it based on the documentation of
           // flat_hash_map.
           auto it_copy = it++;
-          if (active_message_groups.contains(it_copy->first)) {
+          const MessageGroupId message_group_id = it_copy->first;
+          const ArenaAllocator::ArenaHandle arena_handle = it_copy->second;
+          if (active_message_groups.contains(message_group_id)) {
             // The message group is still active.
             continue;
           }
-          GetAllocator().DestroyArena(it_copy->second, recycle_buffers_);
+          const auto message_group_type_it =
+              message_group_types_.find(message_group_id);
+          
+          const bool recycle =
+              message_group_type_it->second == MessageType::kFrameUpdate;
+          GetArenaAllocator().DestroyArena(arena_handle, recycle);
+          message_group_types_.erase(message_group_type_it);
           arena_handles_.erase(it_copy);
         }
       });
@@ -195,21 +194,6 @@ void SplitEngineSharedMemoryBridgeSenderBase::ClearReleasedMessageGroups() {
     IMP_LOG(imp::ERROR) << "Failed to clear released message groups: "
                << status.ToString();
   }
-}
-
-const BridgeBuffer&
-SplitEngineSharedMemoryBridgeSenderBase::GetActiveBridgeBuffer() const {
-  
-  return *active_bridge_buffer_;
-}
-std::optional<MessageGroupId>
-SplitEngineSharedMemoryBridgeSenderBase::GetActiveMessageGroupId() const {
-  return active_message_group_id_;
-}
-std::optional<size_t>
-SplitEngineSharedMemoryBridgeSenderBase::GetActiveMessageGroupSizeBytes()
-    const {
-  return active_message_group_size_bytes_;
 }
 
 absl::StatusOr<size_t>
@@ -223,6 +207,27 @@ SplitEngineSharedMemoryBridgeSenderBase::GetActiveMessageGroupCount() const {
       }));
 
   return in_flight_frame_count;
+}
+
+const BridgeBuffer& SplitEngineSharedMemoryBridgeSenderBase::GetBridgeBuffer(
+    MessageGroupId group_id) {
+  const auto arena_handle_it = arena_handles_.find(group_id);
+  
+  const ArenaAllocator::ArenaHandle arena_handle = arena_handle_it->second;
+  const void* arena_head = GetArenaAllocator().GetArenaHead(arena_handle);
+  auto it = bridge_buffers_.find(arena_head);
+  
+  return *it->second;
+}
+
+absl::StatusOr<size_t>
+SplitEngineSharedMemoryBridgeSenderBase::GetMessageGroupSizeBytes(
+    MessageGroupId group_id) const {
+  const auto size_bytes_it = message_group_id_to_size_bytes_.find(group_id);
+  if (size_bytes_it == message_group_id_to_size_bytes_.end()) {
+    return absl::NotFoundError("Message group not found");
+  }
+  return size_bytes_it->second;
 }
 
 }  // namespace imp::split_engine

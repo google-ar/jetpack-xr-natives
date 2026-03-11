@@ -23,6 +23,7 @@
 #include "absl/status/status.h"
 #include "bullet/src/BulletDynamics/ConstraintSolver/btPoint2PointConstraint.h"
 #include "bullet/src/BulletDynamics/Dynamics/btRigidBody.h"
+#include "core/config.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_id.h"
@@ -110,6 +111,10 @@ class Point2PointConstraint : public BaseConstraint, public Component {
     return bt_constraint_.get();
   }
   absl::Status SetupInternal();
+
+#if IMP_RUNTIME(DEV)
+  void Visualize();
+#endif
 
   Point2PointConstraintState state_;
   std::unique_ptr<btPoint2PointConstraint> bt_constraint_;

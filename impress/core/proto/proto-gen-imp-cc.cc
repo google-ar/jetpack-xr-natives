@@ -30,6 +30,7 @@
 #include "google/protobuf/descriptor.pb.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/ascii.h"
@@ -70,7 +71,51 @@ void MakeAsciiTitlecase(std::string* s, absl::string_view delimiters) {
   }
 }
 
-struct ImpCodeGenerator {
+class ImpCodeGenerator {
+ public:
+  using FilesToFileProtos =
+      absl::flat_hash_map<const google::protobuf::FileDescriptor*,
+                          const google::protobuf::FileDescriptorProto*>;
+
+  ImpCodeGenerator(FilesToFileProtos files_to_file_protos)
+      : file_descriptor_to_file_descriptor_protos_(
+            std::move(files_to_file_protos)) {}
+
+  bool GenerateAll(
+      const std::vector<const google::protobuf::FileDescriptor*>& parsed_files,
+      const std::string& parameter,
+      google::protobuf::compiler::CodeGeneratorResponse* response,
+      std::string* error_msg) const {
+    bool success = true;
+    for (const auto* file : parsed_files) {
+      std::string output;
+      {
+        // Restrict the lifetime of ostream & printer to force 'finalizing'
+        // the output string before adding it to the response.
+        google::protobuf::io::StringOutputStream ostream(&output);
+        google::protobuf::io::Printer printer(&ostream, '$');
+        success = Generate(file, parameter, &printer, error_msg);
+        if (!success && error_msg && error_msg->empty()) {
+          *error_msg = "Generate failed with no error.";
+        }
+        if (error_msg && !error_msg->empty()) {
+          *error_msg = absl::StrCat(file->name(), ": ", *error_msg);
+          break;
+        }
+        if (!success) {
+          break;
+        }
+      }
+      auto h_name = absl::StrCat(file->name(), ".imp.h");
+      google::protobuf::compiler::CodeGeneratorResponse_File* file_out =
+          response->add_file();
+      file_out->set_name(h_name);
+      file_out->set_content(output);
+    }
+    return success;
+  }
+
+ private:
   absl::string_view NativeType(const google::protobuf::Descriptor* msg) const {
     return msg->options().GetExtension(imp::native_type);
   }
@@ -1315,42 +1360,34 @@ struct ImpCodeGenerator {
     return true;
   }
 
-  bool GenerateAll(
-      const std::vector<const google::protobuf::FileDescriptor*>& parsed_files,
-      const std::string& parameter,
-      google::protobuf::compiler::CodeGeneratorResponse* response,
-      std::string* error_msg) const {
-    bool success = true;
-    for (const auto* file : parsed_files) {
-      std::string output;
-      {
-        // Restrict the lifetime of ostream & printer to force 'finalizing'
-        // the output string before adding it to the response.
-        google::protobuf::io::StringOutputStream ostream(&output);
-        google::protobuf::io::Printer printer(&ostream, '$');
-        success = Generate(file, parameter, &printer, error_msg);
-        if (!success && error_msg && error_msg->empty()) {
-          *error_msg = "Generate failed with no error.";
-        }
-        if (error_msg && !error_msg->empty()) {
-          *error_msg = absl::StrCat(file->name(), ": ", *error_msg);
-          break;
-        }
-        if (!success) {
-          break;
-        }
-      }
-      auto h_name = absl::StrCat(file->name(), ".imp.h");
-      auto* file_out = response->add_file();
-      file_out->set_name(h_name);
-      file_out->set_content(output);
+  // Returns the edition of the proto file.
+  //
+  // In most cases, the code generator does not need to know what syntax/edition
+  // the proto file was written in. The FileDescriptor tells the code generator
+  // what to generate, and the syntax simply influences what data the
+  // FileDescriptor contains.
+  //
+  // However, in some cases we want to branch the code generation based on
+  // syntax/edition to improve the generated code for newer editions/syntaxes
+  // without breaking existing protos written in older editions/syntaxes.
+  ::google::protobuf::Edition GetEdition(const google::protobuf::FileDescriptor* file) const {
+    auto it = file_descriptor_to_file_descriptor_protos_.find(file);
+    if (it == file_descriptor_to_file_descriptor_protos_.end()) {
+      return google::protobuf::Edition::EDITION_UNKNOWN;
     }
-    return success;
+    return it->second->edition();
   }
+
+  // Stores a mapping of FileDescriptor to FileDescriptorProto.
+  //
+  // The FileDescriptorProto contains metadata about the file that isn't
+  // available in the FileDescriptor itself.
+  //
+  // This is used to detect what syntax/edition the proto file was written in.
+  FilesToFileProtos file_descriptor_to_file_descriptor_protos_;
 };
 
 bool GenerateCode(const google::protobuf::compiler::CodeGeneratorRequest& request,
-                  const ImpCodeGenerator& generator,
                   google::protobuf::compiler::CodeGeneratorResponse* response,
                   std::string* error_msg) {
   google::protobuf::DescriptorPool pool;
@@ -1362,8 +1399,21 @@ bool GenerateCode(const google::protobuf::compiler::CodeGeneratorRequest& reques
   }
 
   std::vector<const google::protobuf::FileDescriptor*> parsed_files;
+  ImpCodeGenerator::FilesToFileProtos files_to_file_protos;
+
+  
+
   for (int i = 0; i < request.file_to_generate_size(); ++i) {
-    parsed_files.push_back(pool.FindFileByName(request.file_to_generate(i)));
+    const ::google::protobuf::FileDescriptor* file =
+        pool.FindFileByName(request.file_to_generate(i));
+
+    const ::google::protobuf::FileDescriptorProto& file_proto =
+        request.source_file_descriptors(i);
+    
+
+    parsed_files.push_back(file);
+    files_to_file_protos[file] = &file_proto;
+
     if (parsed_files.back() == nullptr) {
       *error_msg =
           "protoc asked to generate code, but didn't provide "
@@ -1374,6 +1424,7 @@ bool GenerateCode(const google::protobuf::compiler::CodeGeneratorRequest& reques
   }
 
   std::string error;
+  ImpCodeGenerator generator(std::move(files_to_file_protos));
   bool success = generator.GenerateAll(parsed_files, request.parameter(),
                                        response, &error);
   if (!success && error.empty()) {
@@ -1404,26 +1455,13 @@ int main(int argc, char* argv[]) {
 
   std::string error_msg;
   google::protobuf::compiler::CodeGeneratorResponse response;
-// TODO: Remove flag check once updates for latest protobuf support
-// have been properly implemented. The Bazel version of Protobuf is too old
-// for editions and upgrading is nontrivial.
-// LINT.IfChange
-#define SUPPORT_EDITIONS true
-#if SUPPORT_EDITIONS
   response.set_supported_features(
       google::protobuf::compiler::CodeGeneratorResponse::FEATURE_PROTO3_OPTIONAL |
       google::protobuf::compiler::CodeGeneratorResponse::FEATURE_SUPPORTS_EDITIONS);
   response.set_minimum_edition(google::protobuf::Edition::EDITION_PROTO2);
   response.set_maximum_edition(google::protobuf::Edition::EDITION_2023);
-#else
-  response.set_supported_features(
-      google::protobuf::compiler::CodeGeneratorResponse::FEATURE_PROTO3_OPTIONAL);
-#endif
-  // LINT.ThenChange(//depot/google3/copy.bara.sky)
 
-  ImpCodeGenerator generator;
-
-  if (GenerateCode(request, generator, &response, &error_msg)) {
+  if (GenerateCode(request, &response, &error_msg)) {
     if (!response.SerializeToFileDescriptor(STDOUT_FILENO)) {
       std::cerr << argv[0] << ": Error writing to stdout." << std::endl;
       return 1;

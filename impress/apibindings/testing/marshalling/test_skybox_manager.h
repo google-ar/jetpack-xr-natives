@@ -43,7 +43,7 @@ class TestSkyboxManager : public SkyboxManager {
       std::unique_ptr<BaseAssetLoader> asset_loader) override;
   absl::Status ReleaseImageBasedLightingAsset(std::intptr_t ibl_token) override;
   absl::Status SetEnvironmentLight(std::intptr_t ibl_token) override;
-  absl::Status ClearEnvironmentLight() override;
+  void ClearEnvironmentLight() override;
 };
 
 }  // namespace imp

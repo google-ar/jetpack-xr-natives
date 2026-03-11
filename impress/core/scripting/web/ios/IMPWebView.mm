@@ -19,14 +19,17 @@
 
 #include "core/common/log.h"
 #include "core/common/context.h"
+#include "core/common/invocable.h"
 #include "core/scripting/message_helpers.h"
 #include "core/scripting/proto/bridge.proto.imp.h"
 #include "core/scripting/web/web_view.h"
+#include "core/view/scripting/script_message_handler.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
 /* Defines block to invoke when evaluateJavaScript completes or fails. */
 typedef void (^EvaluateJavaScriptCompletionHandler)(_Nullable id, NSError *_Nullable error);
+typedef void (^ResponseHandler)(const imp::scripting::MessageToScript &response);
 
 // LINT.IfChange
 static NSString *const kNativeEntryPoint = @"nativeEntryPoint";
@@ -60,6 +63,8 @@ static int const kTimeoutIntervalSeconds = 100;
  */
 @property(nonatomic, readonly) imp::scripting::WebView *webView;
 
+@property(nonatomic, readonly) imp::scripting::ScriptMessageHandler *scriptMessageHandler;
+
 @end
 
 @implementation IMPWebView {
@@ -67,6 +72,7 @@ static int const kTimeoutIntervalSeconds = 100;
 }
 
 - (instancetype)initWithWebView:(imp::scripting::WebView *)webView
+           scriptMessageHandler:(imp::scripting::ScriptMessageHandler &)scriptMessageHandler
                         context:(const imp::Context &)context
                           frame:(CGRect)frame
                             url:(NSString *)url
@@ -83,6 +89,7 @@ static int const kTimeoutIntervalSeconds = 100;
   self = [super init];
   if (self) {
     _webView = webView;
+    _scriptMessageHandler = &scriptMessageHandler;
     _wkWebView = [[WKWebView alloc] initWithFrame:frame
                                     configuration:[[WKWebViewConfiguration alloc] init]];
     _wkWebView.navigationDelegate = self;
@@ -106,28 +113,17 @@ static int const kTimeoutIntervalSeconds = 100;
 }
 
 - (instancetype)initWithWebView:(imp::scripting::WebView *)webView
+           scriptMessageHandler:(imp::scripting::ScriptMessageHandler &)scriptMessageHandler
                 injectionScript:(NSString *)injectionScript
                 externalWebView:(WKWebView *)externalWebView {
   self = [super init];
   if (self) {
     _webView = webView;
+    _scriptMessageHandler = &scriptMessageHandler;
     _wkWebView = externalWebView;
     [self configureWebViewBridge:injectionScript];
   }
   return self;
-}
-
-- (void)postMessage:(NSString *)message {
-  if (_webView->GetState() == imp::scripting::WebView::State::kUnavailable) {
-    return;
-  }
-  EvaluateJavaScriptCompletionHandler callback = ^(NSString *result, NSError *error) {
-    if (error) {
-      IMP_LOG(imp::ERROR) << "Failed to evaluate JS with error: '" << [error.debugDescription UTF8String]
-                 << "'";
-    }
-  };
-  [self.wkWebView evaluateJavaScript:[self formatMessage:message] completionHandler:callback];
 }
 
 - (void)injectScript {
@@ -205,7 +201,25 @@ static int const kTimeoutIntervalSeconds = 100;
     IMP_LOG(imp::ERROR) << [kMessageParseError UTF8String];
     return;
   }
-  self.webView->HandleMessage(messageProto);
+
+  std::function<void(const imp::scripting::MessageToScript &, void *)> response_handler =
+      [self](const imp::scripting::MessageToScript &response, void *out) {
+        if (_webView->GetState() == imp::scripting::WebView::State::kUnavailable) {
+          return;
+        }
+        NSString *message_string =
+            [NSString stringWithCString:imp::scripting::SerializeToBase64(response).c_str()
+                               encoding:[NSString defaultCStringEncoding]];
+        EvaluateJavaScriptCompletionHandler callback = ^(NSString *result, NSError *error) {
+          if (error) {
+            IMP_LOG(imp::ERROR) << "Failed to evaluate JS with error: '"
+                       << [error.debugDescription UTF8String] << "'";
+          }
+        };
+        [self.wkWebView evaluateJavaScript:[self formatMessage:message_string]
+                         completionHandler:callback];
+      };
+  self.scriptMessageHandler->HandleMessage(messageProto, response_handler);
 }
 
 #pragma mark - WKWebView.navigationDelegate methods

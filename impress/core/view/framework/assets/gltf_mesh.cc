@@ -69,7 +69,7 @@ static constexpr uint8_t kMinPriority = 0;
 static constexpr uint8_t kMaxPriority = 7;
 
 static constexpr uint8_t kMinChannel = 0;
-static constexpr uint8_t kMaxChannel = 3;
+static constexpr uint8_t kMaxChannel = 7;
 }  // namespace
 
 GltfMesh::GltfMesh() : owner_(), self_() {}

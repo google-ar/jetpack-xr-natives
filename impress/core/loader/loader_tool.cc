@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 #include <cstddef>
 #include <memory>
 #include <ostream>
@@ -32,7 +31,6 @@
 #include "core/common/file_helpers.h"
 #include "core/common/flatbuffer_helpers.h"
 #include "core/common/optional_error.h"
-#include "core/common/platform_helpers.h"
 #include "core/common/resource_helpers.h"
 #include "core/common/schemas/math_generated.h"
 #include "core/common/schemas/render_generated.h"
@@ -43,6 +41,7 @@
 #include "core/loader/provider/provider.h"
 #include "core/loader/provider/schemas/loaded_model_generated.h"
 #include "core/loader/provider/usdz/provider_usdz.h"
+#include "core/material_library/schemas/generic_material_generated.h"
 #include "mediapipe/framework/port/status_macros.h"
 
 ABSL_FLAG(bool, info, false, "Print info about the model");
@@ -53,19 +52,19 @@ namespace imp::loader {
 
 namespace {
 
-std::ostream &PrintInfo(std::ostream &stream,
-                        const FlatBufferAccess<schemas::LoadedModel> &model) {
+std::ostream& PrintInfo(std::ostream& stream,
+                        const FlatBufferAccess<schemas::LoadedModel>& model) {
   stream << absl::StrFormat("Flatbuffer size: %llu\n", model.Buffer().Size());
   stream << absl::StrFormat(
       "Entities: %llu\n",
       flatbuffers::VectorLength(model->entity_graph()->entities()));
 
-  const auto *images = model->images();
-  const auto *textures = model->textures();
+  const auto* images = model->images();
+  const auto* textures = model->textures();
 
   for (int image_index = 0; image_index < images->size(); image_index++) {
-    const schemas::TextureInfo *texture = textures->Get(image_index);
-    const schemas::ImageFileData *image =
+    const schemas::TextureInfo* texture = textures->Get(image_index);
+    const schemas::ImageFileData* image =
         images->GetAs<schemas::ImageFileData>(image_index);
 
     stream << absl::StrFormat(
@@ -95,17 +94,17 @@ std::ostream &PrintInfo(std::ostream &stream,
     }
   }
 
-  const auto *vertex_buffers = model->vertex_buffers();
-  for (const schemas::VertexBufferInfo *vertex_buffer : *vertex_buffers) {
+  const auto* vertex_buffers = model->vertex_buffers();
+  for (const schemas::VertexBufferInfo* vertex_buffer : *vertex_buffers) {
     stream << absl::StrFormat(" - Vertex Buffer: '(%llu vertices)'\n",
                               vertex_buffer->vertex_count());
-    const auto *blocks = vertex_buffer->blocks();
-    for (const schemas::VertexBlockInfo *block : *blocks) {
+    const auto* blocks = vertex_buffer->blocks();
+    for (const schemas::VertexBlockInfo* block : *blocks) {
       stream << absl::StrFormat(
           "   - Vertex block (%llu attributes, %llu bytes)\n",
           block->attributes()->size(), block->buffer()->size());
-      const auto *attributes = block->attributes();
-      for (const schemas::VertexAttributeInfo *attr : *attributes) {
+      const auto* attributes = block->attributes();
+      for (const schemas::VertexAttributeInfo* attr : *attributes) {
         stream << absl::StrFormat(
             "     - Vertex Attribute: %s (%s) offset=%u normalized=%d\n",
             schemas::EnumNameVertexAttribute(attr->attribute()),
@@ -115,81 +114,120 @@ std::ostream &PrintInfo(std::ostream &stream,
     }
   }
 
-  const auto *index_buffers = model->index_buffers();
-  for (const schemas::IndexBufferInfo *index_buffer : *index_buffers) {
+  const auto* index_buffers = model->index_buffers();
+  for (const schemas::IndexBufferInfo* index_buffer : *index_buffers) {
     stream << absl::StrFormat(" - Index Buffer: '%s', %llu bytes\n",
                               schemas::EnumNameIndexType(index_buffer->type()),
                               index_buffer->buffer()->size());
   }
 
-  const auto *materials = model->materials();
-  for (const schemas::MaterialInfo *material : *materials) {
-    stream << absl::StrFormat(
-        " - Material: '%s'\n",
-        material->material_as_GenericMaterialInfo()->name()->str());
-    for (const schemas::MaterialParamInfo *param :
-         *material->material_as_GenericMaterialInfo()->params()) {
-      std::string value_string = "unknown";
-      if (const imp::schemas::Float *value = param->value_as_Float()) {
-        value_string = absl::StrFormat("(float): %.3f", value->value());
-      } else if (const imp::schemas::Float2 *value = param->value_as_Float2()) {
-        value_string =
-            absl::StrFormat("(float2): %.3f %.3f", value->x(), value->y());
-      } else if (const imp::schemas::Float3 *value = param->value_as_Float3()) {
-        value_string = absl::StrFormat("(float3): %.3f %.3f %.3f", value->x(),
-                                       value->y(), value->z());
-      } else if (const imp::schemas::Float4 *value = param->value_as_Float4()) {
-        value_string =
-            absl::StrFormat("(float4): %.3f %.3f %.3f %.3f", value->x(),
-                            value->y(), value->z(), value->w());
-      } else if (const imp::schemas::Int *value = param->value_as_Int()) {
-        value_string = absl::StrFormat("(int): %d", value->value());
-      } else if (const imp::schemas::Int2 *value = param->value_as_Int2()) {
-        value_string = absl::StrFormat("(int2): %d %d", value->x(), value->y());
-      } else if (const imp::schemas::Int3 *value = param->value_as_Int3()) {
-        value_string = absl::StrFormat("(int3): %d %d %d", value->x(),
-                                       value->y(), value->z());
-      } else if (const imp::schemas::Int4 *value = param->value_as_Int4()) {
-        value_string = absl::StrFormat("(int4): %d %d %d %d", value->x(),
-                                       value->y(), value->z(), value->w());
-      } else if (const imp::schemas::Bool *value = param->value_as_Bool()) {
-        value_string = absl::StrFormat("(bool): %d", value->value());
-      } else if (const imp::schemas::Bool2 *value = param->value_as_Bool2()) {
-        value_string =
-            absl::StrFormat("(bool2): %d %d", value->x(), value->y());
-      } else if (const imp::schemas::Bool3 *value = param->value_as_Bool3()) {
-        value_string = absl::StrFormat("(bool3): %d %d %d", value->x(),
-                                       value->y(), value->z());
-      } else if (const imp::schemas::Bool4 *value = param->value_as_Bool4()) {
-        value_string = absl::StrFormat("(bool4): %d %d %d %d", value->x(),
-                                       value->y(), value->z(), value->w());
-      } else if (const imp::schemas::MaterialTextureId *value =
-                     param->value_as_MaterialTextureId()) {
-        value_string =
-            absl::StrFormat("(material texture ID): %d", value->index());
-      } else if (const imp::schemas::ExternalSampler *value =
-                     param->value_as_ExternalSampler()) {
-      } else if (const imp::schemas::Mat3f *value = param->value_as_Mat3f()) {
-        value_string = absl::StrFormat("(mat3)");
-      } else if (const imp::schemas::Mat3fArray *value =
-                     param->value_as_Mat3fArray()) {
-        value_string =
-            absl::StrFormat("(mat3array length %llu)", value->mats()->size());
-      } else if (const imp::schemas::NilValue *value =
-                     param->value_as_NilValue()) {
-        value_string = absl::StrFormat("(nil)");
+  const auto* materials = model->materials();
+  for (const schemas::MaterialInfo* material : *materials) {
+    stream << absl::StrFormat(" - Material: '%s'\n",
+                              material->material()->name()->str());
+    const schemas::GenericMaterialParameters* params =
+        material->material()->params();
+    if (params) {
+      if (params->base_color()) {
+        const auto* base_color = params->base_color();
+        if (base_color->texture()) {
+          stream << absl::StrFormat(
+              "   - Param: 'base_color_texture' = (texture ID): %d\n",
+              base_color->texture()->texture());
+        }
+        if (base_color->factor()) {
+          stream << absl::StrFormat(
+              "   - Param: 'base_color_factor' = (float4): %.3f %.3f %.3f "
+              "%.3f\n",
+              base_color->factor()->x(), base_color->factor()->y(),
+              base_color->factor()->z(), base_color->factor()->w());
+        }
       }
-      stream << absl::StrFormat("   - Param: '%s' = %s\n", param->name()->str(),
-                                value_string);
-    }
-    for (const schemas::MaterialTextureInfo *tex :
-         *material->material_as_GenericMaterialInfo()->textures()) {
-      stream << absl::StrFormat(
-          "   - Texture: '%s' (tex %d, sampler %d, sampler_index_name '%s', "
-          "sampler_idx %d, fallback idx %d)\n",
-          tex->name()->str(), tex->texture(), tex->sampler(),
-          tex->sampler_index_name()->c_str(), tex->sampler_index(),
-          tex->sampler_fallback_index());
+      if (params->metallic_roughness()) {
+        const auto* metallic_roughness = params->metallic_roughness();
+        if (metallic_roughness->texture()) {
+          stream << absl::StrFormat(
+              "   - Param: 'metallic_roughness_texture' = (texture ID): %d\n",
+              metallic_roughness->texture()->texture());
+        }
+        if (metallic_roughness->metallic_factor()) {
+          stream << absl::StrFormat(
+              "   - Param: 'metallic_factor' = (float): %.3f\n",
+              metallic_roughness->metallic_factor()->value());
+        }
+        if (metallic_roughness->roughness_factor()) {
+          stream << absl::StrFormat(
+              "   - Param: 'roughness_factor' = (float): %.3f\n",
+              metallic_roughness->roughness_factor()->value());
+        }
+      }
+      if (params->normal()) {
+        const auto* normal = params->normal();
+        if (normal->texture()) {
+          stream << absl::StrFormat(
+              "   - Param: 'normal_texture' = (texture ID): %d\n",
+              normal->texture()->texture());
+        }
+        if (normal->factor()) {
+          stream << absl::StrFormat(
+              "   - Param: 'normal_scale' = (float): %.3f\n",
+              normal->factor()->value());
+        }
+      }
+      if (params->ambient_occlusion()) {
+        const auto* ambient_occlusion = params->ambient_occlusion();
+        if (ambient_occlusion->texture()) {
+          stream << absl::StrFormat(
+              "   - Param: 'ambient_occlusion_texture' = (texture ID): %d\n",
+              ambient_occlusion->texture()->texture());
+        }
+        if (ambient_occlusion->factor()) {
+          stream << absl::StrFormat(
+              "   - Param: 'ambient_occlusion_strength' = (float): %.3f\n",
+              ambient_occlusion->factor()->value());
+        }
+      }
+      if (params->emissive()) {
+        const auto* emissive = params->emissive();
+        if (emissive->texture()) {
+          stream << absl::StrFormat(
+              "   - Param: 'emissive_texture' = (texture ID): %d\n",
+              emissive->texture()->texture());
+        }
+        if (emissive->factor()) {
+          stream << absl::StrFormat(
+              "   - Param: 'emissive_factor' = (float3): %.3f %.3f %.3f\n",
+              emissive->factor()->x(), emissive->factor()->y(),
+              emissive->factor()->z());
+        }
+      }
+      if (params->clearcoat()) {
+        const auto* clearcoat = params->clearcoat();
+        if (clearcoat->intensity_texture()) {
+          stream << absl::StrFormat(
+              "   - Param: 'clearcoat_intensity_texture' = (texture ID): %d\n",
+              clearcoat->intensity_texture()->texture());
+        }
+        if (clearcoat->normal_texture()) {
+          stream << absl::StrFormat(
+              "   - Param: 'clearcoat_normal_texture' = (texture ID): %d\n",
+              clearcoat->normal_texture()->texture());
+        }
+      }
+      if (params->sheen()) {
+        const auto* sheen = params->sheen();
+        if (sheen->color_texture()) {
+          stream << absl::StrFormat(
+              "   - Param: 'sheen_color_texture' = (texture ID): %d\n",
+              sheen->color_texture()->texture());
+        }
+        if (sheen->color_factor()) {
+          stream << absl::StrFormat(
+              "   - Param: 'sheen_color_factor' = (float3): %.3f %.3f %.3f\n",
+              sheen->color_factor()->x(), sheen->color_factor()->y(),
+              sheen->color_factor()->z());
+        }
+      }
     }
   }
 
@@ -199,7 +237,7 @@ std::ostream &PrintInfo(std::ostream &stream,
                             flatbuffers::VectorLength(model->vertex_buffers()));
 
   size_t total_vertices = 0;
-  for (const auto &buf : *model->vertex_buffers()) {
+  for (const auto& buf : *model->vertex_buffers()) {
     total_vertices += buf->vertex_count();
   }
   stream << absl::StrFormat("Vertex count: %llu\n", total_vertices);
@@ -267,17 +305,19 @@ class LoaderTool {
   std::string filename_;
 };
 
-extern "C" int main(int argc, char **argv) {
+}  // namespace imp::loader
+
+int main(int argc, char** argv) {
   InitGoogle(argv[0], &argc, &argv, true);
 
-  RegisterPackagedResources(embedded_imp_default_gltf_materials_create());
-  RegisterPackagedResources(embedded_placeholder_textures_create());
+  imp::RegisterPackagedResources(embedded_imp_default_gltf_materials_create());
+  imp::RegisterPackagedResources(embedded_placeholder_textures_create());
 
   if (argc != 2) {
     IMP_LOG(imp::ERROR) << "Missing input file";
   }
 
-  LoaderTool tool(argv[1]);
+  imp::loader::LoaderTool tool(argv[1]);
   if (auto error = tool.Load(); !error.ok()) {
     IMP_LOG(imp::INFO) << "Load error: " << error;
     return 1;
@@ -297,5 +337,3 @@ extern "C" int main(int argc, char **argv) {
 
   return 0;
 }
-
-}  // namespace imp::loader

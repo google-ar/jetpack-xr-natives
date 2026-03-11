@@ -17,8 +17,6 @@ include "split_engine/schemas/split_engine_primitive.fbs";
 
 namespace android_xr.schemas;
 
-// LINT.IfChange
-
 table BoundsInfo (requires_api: 1) {
   bounds : Box (required, id: 0, requires_api: 1);
 }
@@ -470,5 +468,3 @@ table RemoveRenderable (requires_api: 1) {
   // Does nothing if the node is not found.
   entity: uint32 (id: 0, requires_api: 1);
 }
-
-// LINT.ThenChange(//depot/google3/third_party/split_engine/schemas/split_engine_schema_version.h)

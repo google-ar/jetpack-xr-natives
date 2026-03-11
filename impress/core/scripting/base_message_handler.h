@@ -18,12 +18,19 @@
 #define THIRD_PARTY_IMPRESS_CORE_WEB_BASE_MESSAGE_HANDLER_H_
 
 #include <optional>
+#include <type_traits>
+#include <variant>
 #include <vector>
 
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "core/async/future.h"
 #include "core/proto/any.proto.imp.h"
+#include "core/proto/proto_writer.h"
 #include "core/view/scripting/script_message_handler.h"
+#include "mediapipe/framework/port/status_macros.h"
 
 namespace imp::scripting {
 
@@ -33,11 +40,53 @@ namespace imp::scripting {
 //
 // It is not recommended to inherit from this directly, instead inherit from the
 // templated MessageHandler type or MultiMessageHandler.
-struct BaseMessageHandler {
+class BaseMessageHandler {
+ public:
   using Any = google::protobuf::imp_proto::Any;
 
-  // Generic return type used by ImpWeb - An optional proto response.
-  using OptionalResponse = absl::optional<Any>;
+  // Generic return type for all message handlers.
+  class Response {
+   public:
+    // Creates a Response from a value of valid type T, which could be one of
+    // absl::Status, a proto message, or a platform-specific object (void*).
+    // If status and not ok, return the status, else return an empty Response.
+    // If the value is a proto message, packs it into an Any proto & Response.
+    // Packing the Any can fail, which will be returned as an error status.
+    // If the value is a platform-specific object, return a void* Response.
+    template <typename T>
+    static absl::StatusOr<Response> Create(const T& value);
+
+    // Returns true if Response has a value (could be either proto or void*).
+    bool HasValue() const { return value_.has_value(); }
+
+    // Returns true if Response specifically contains a proto Any.
+    bool HasProtoValue() const {
+      return value_.has_value() && std::holds_alternative<const Any>(*value_);
+    }
+
+    // Returns true if Response specifically contains a platform object (void*).
+    bool HasPlatformObjectValue() const {
+      return value_.has_value() && std::holds_alternative<void*>(*value_);
+    }
+
+    // Assumes HasProtoValue() is true and returns the proto value as an Any.
+    // This is a helper for the common case where the response value is a proto.
+    const Any& Value() const { return ValueAsProto(); }
+    // Returns the proto response value as an Any. Caller is responsible for
+    // first checking that the value is an Any with HasProtoValue().
+    const Any& ValueAsProto() const { return std::get<const Any>(*value_); }
+    // Returns the void* (platform-specific object) response value. Caller is
+    // responsible for first checking that the value is a void* with
+    // HasPlatformObjectValue().
+    void* ValueAsPlatformObject() const { return std::get<void*>(*value_); }
+
+   private:
+    Response() : value_(std::nullopt) {}
+    explicit Response(const Any& value) : value_(value) {}
+    explicit Response(void* value) : value_(value) {}
+
+    const std::optional<std::variant<const Any, void*>> value_;
+  };
 
   BaseMessageHandler() = default;
   virtual ~BaseMessageHandler() = default;
@@ -52,25 +101,16 @@ struct BaseMessageHandler {
   // Implemented by subclasses to handle requests.
   // Handles an incoming message from the script side of the scripting system.
   // Returns a response message corresponding to the request type.
-  //
-  // The future return value represents one of three outcomes:
-  // 1) Status  - an error occurred in the handler.
-  // 2) nullopt - success with no return value.
-  // 3) Any     - success and the Any is the proto to return as the response.
-  virtual Future<OptionalResponse> HandleAnyMessage(const Any& message,
-                                                    const PlatformArgs& args,
-                                                    PlatformArgs& out) = 0;
+  // Platform args is an optional vector of void* arguments such as a jobject.
+  // Subclasses can override this version if they need the platform args.
+  // Otherwise, they should override the version without the PlatformArgs.
+  virtual Future<Response> HandleAnyMessage(const Any& message,
+                                            const PlatformArgs& args) = 0;
 
   // Handles an incoming message from the script side of the scripting system.
   // Returns a response message corresponding to the request type.
-  //
-  // The future return value represents one of three outcomes:
-  // 1) Status  - an error occurred in the handler.
-  // 2) nullopt - success with no return value.
-  // 3) Any     - success and the Any is the proto to return as the response.
-  Future<OptionalResponse> HandleAnyMessage(const Any& message) {
-    PlatformArgs out;
-    return HandleAnyMessage(message, PlatformArgs(), out);
+  Future<Response> HandleAnyMessage(const Any& message) {
+    return HandleAnyMessage(message, PlatformArgs());
   }
 
   template <typename T>
@@ -82,6 +122,20 @@ struct BaseMessageHandler {
     return {};
   }
 };
+
+template <typename T>
+absl::StatusOr<BaseMessageHandler::Response>
+BaseMessageHandler::Response::Create(const T& value) {
+  if constexpr (std::is_same<T, absl::Status>::value) {
+    MP_RETURN_IF_ERROR(value);
+    return Response();
+  } else if constexpr (std::is_same<T, void*>::value) {
+    return Response(value);
+  } else {
+    MP_ASSIGN_OR_RETURN(Any packed_value, proto::PackAny(value));
+    return Response(packed_value);
+  }
+}
 
 }  // namespace imp::scripting
 

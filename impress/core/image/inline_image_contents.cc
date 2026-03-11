@@ -19,12 +19,44 @@
 #include <functional>
 
 #include "absl/log/check.h"
+#include "core/common/log.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/backend/include/backend/PixelBufferDescriptor.h"
 
 namespace imp {
 using ::filament::backend::PixelBufferDescriptor;
+namespace {
 
+// The internal data layout to requested based on the given texture format.
+PixelBufferDescriptor::PixelDataType GetPixelDataTypeForFormat(
+    filament::backend::TextureFormat format) {
+  switch (format) {
+    case filament::backend::TextureFormat::R8:
+    case filament::backend::TextureFormat::R8UI:
+    case filament::backend::TextureFormat::RG8:
+    case filament::backend::TextureFormat::RG8UI:
+    case filament::backend::TextureFormat::RGB8:
+    case filament::backend::TextureFormat::SRGB8:
+    case filament::backend::TextureFormat::RGB8UI:
+    case filament::backend::TextureFormat::RGBA8:
+    case filament::backend::TextureFormat::SRGB8_A8:
+    case filament::backend::TextureFormat::RGBA8UI:
+      return PixelBufferDescriptor::PixelDataType::UBYTE;
+    case filament::backend::TextureFormat::R32F:
+    case filament::backend::TextureFormat::RG32F:
+    case filament::backend::TextureFormat::RGB32F:
+    case filament::backend::TextureFormat::RGBA32F:
+    case filament::backend::TextureFormat::DEPTH32F:
+      return PixelBufferDescriptor::PixelDataType::FLOAT;
+    default:
+      // See filament/filament/backend/include/backend/DriverEnums.h for all
+      // the possible texture formats.  Each type must be explicitly added here
+      // for use with this class.
+      IMP_LOG(imp::FATAL) << "Unimplemented Texture format: "
+                 << static_cast<int>(format);
+  }
+}
+}  // namespace
 filament::backend::PixelBufferDescriptor
 InlineImageContents::CreatePixelBufferDescriptor(std::function<void()> callback,
                                                  bool is_r11_g11_b10) {
@@ -48,7 +80,7 @@ InlineImageContents::CreatePixelBufferDescriptor(std::function<void()> callback,
 
   return PixelBufferDescriptor(
       texture_upload->data, texture_upload->size, texture_upload->pixel_format,
-      PixelBufferDescriptor::PixelDataType::UBYTE,
+      GetPixelDataTypeForFormat(format_),
       [](void* buffer, size_t size, void* user) {
         auto* texture_upload = reinterpret_cast<TextureUpload*>(user);
 

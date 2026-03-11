@@ -587,9 +587,28 @@ filament::backend::Platform::SwapChain* XrVulkanPlatform::createSwapChain(
   return swap_chain.value().release();
 }
 
+bool XrVulkanPlatform::isCompositorTimingSupported() const noexcept {
+  return false;
+}
+
+bool XrVulkanPlatform::setPresentFrameId(SwapChain const* swapchain,
+                                         uint64_t frameId) noexcept {
+  return false;
+}
+
+bool XrVulkanPlatform::queryFrameTimestamps(
+    SwapChain const* swapchain, uint64_t frameId,
+    FrameTimestamps* outFrameTimestamps) const noexcept {
+  return false;
+}
+
 bool XrVulkanPlatform::isProtected(SwapChain* swapChain) noexcept {
   return static_cast<XrSwapChain*>(swapChain)->GetContentSecurityLevel() ==
          ContentSecurityLevel::kProtected;
+}
+
+bool XrVulkanPlatform::isTransientAttachmentSupported() const {
+  return VulkanPlatform::isTransientAttachmentSupported();
 }
 
 void XrVulkanPlatform::destroy(SwapChain* swapChain) noexcept {

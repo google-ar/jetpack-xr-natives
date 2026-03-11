@@ -122,12 +122,12 @@ mat4 GetEncompassingProjectionMatrix(const XrView& left_eye_view,
                                      const XrView& right_eye_view,
                                      const float near_plane,
                                      const float far_plane) {
-  // Assert that the eyes are symmetrical.
-  
-  // TODO: Figure out why each eye orientation values might not be
+  // TODO: Figure out why each eye values might not be
   // almost equal and either uncomment the commented code below or even adapt
   // the fustrum calculation implementation in this file according to the
   // findings.
+  // Assert that the eyes are symmetrical.
+  // 
   // Assert gaze is parallel.
   // 
 

@@ -44,6 +44,10 @@ material {
     { type : mat3[{REASSIGNABLE_SAMPLER_COUNT}], name : samplers_uv_matrices },
     // LINT.ThenChange(//depot/google3/third_party/impress/core/material_library/generic_material_constants.h:generic_material_parameters)
 
+    // TODO: Remove gltf_placeholder.mat, then remove this lint.
+    // If a uniform is added to this file, it can cause a runtime crash in
+    // development Maps if another one is not added to that placeholder material
+    // LINT.IfChange(generic_material_uniforms)
     // Base Color
     { type : int, name : baseColorIndex, precision: low },
     { type : float4, name : baseColorFactor },
@@ -80,6 +84,12 @@ material {
     // KHR_materials_ior
     { type : float, name : indexOfRefraction },
 
+    // KHR_materials_volume
+    { type : float, name : thicknessFactor },
+    { type : int, name : thicknessIndex, precision: low },
+    { type : float, name : attenuationDistance },
+    { type : float3, name : attenuationColor },
+
     // KHR_materials_transmission
     { type : int, name : transmissionIndex, precision: low },
     { type : float, name : transmissionFactor },
@@ -92,6 +102,7 @@ material {
     { type : float, name : edgeBlur },
     { type : float, name : depthTextureAspectRatio },
     { type : float, name : fadeFactor }
+     // LINT.ThenChange(geo/imagery/viewer/imp/aerial/world_details/tiles/gltf_placeholder.mat)
   ],
   requires: [
     color,
@@ -210,9 +221,19 @@ highp vec4 getSample(lowp int samplerIndex) {
 #if defined(MATERIAL_HAS_REFRACTION)
     // KHR_materials_ior
     material.ior = materialParams.indexOfRefraction;
-    // TODO: this is the correct default, but this is meant to be a
-    // user-accessible parameter, as a part of KHR_materials_volume
-    material.thickness = 0.0;
+    // KHR_materials_volume
+    float scale = getObjectUserData();
+#if defined(MATERIAL_HAS_MICRO_THICKNESS) && (REFRACTION_TYPE == REFRACTION_TYPE_THIN)
+    material.microThickness = max(0.0, materialParams.thicknessFactor *
+      getSample(materialParams.thicknessIndex).g * scale);
+#endif
+#if defined(MATERIAL_HAS_THICKNESS) && (REFRACTION_TYPE == REFRACTION_TYPE_SOLID)
+    material.thickness = max(0.0, materialParams.thicknessFactor *
+      getSample(materialParams.thicknessIndex).g * scale);
+#endif
+    // Equation recommended by
+    // https://google.github.io/filament/Materials.md.html#materialmodels/litmodel/absorption
+    material.absorption = -log(clamp(materialParams.attenuationColor, 1e-5f, 1.0f)) / max(1e-5f, materialParams.attenuationDistance);
 
 #if defined(TRANSMISSION)
     // KHR_materials_transmission

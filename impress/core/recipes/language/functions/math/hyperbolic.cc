@@ -21,7 +21,7 @@
 #include "core/math/vec.h"
 #include "core/recipes/language/base_recipe_system.h"
 #include "core/recipes/language/functions/math/math.h"
-#include "core/recipes/language/recipe_graph.proto.imp.h"
+#include "core/recipes/language/recipe_types.proto.imp.h"
 #include "core/recipes/language/recipe_utils.h"
 
 namespace imp::recipe {

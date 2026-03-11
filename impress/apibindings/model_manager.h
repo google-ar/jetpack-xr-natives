@@ -60,6 +60,10 @@ class ModelManager {
   virtual absl::Status SetGltfModelColliderEnabled(int32_t node,
                                                    bool enable_collider) = 0;
 
+  // Attaches or detaches a footprint affordance to a glTF model.
+  virtual absl::Status SetGltfReformAffordanceEnabled(
+      int32_t impress_node, bool enable_affordance) = 0;
+
   // Animates a glTF model.
   virtual void AnimateGltfModel(
       int32_t node, absl::string_view animation_name, bool loop,

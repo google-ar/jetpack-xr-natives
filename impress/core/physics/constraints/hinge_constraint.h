@@ -18,11 +18,11 @@
 #define THIRD_PARTY_IMPRESS_CORE_PHYSICS_CONSTRAINTS_HINGE_CONSTRAINT_H_
 
 #include <memory>
-#include <optional>
 
 #include "absl/status/status.h"
 #include "bullet/src/BulletDynamics/ConstraintSolver/btHingeConstraint.h"
 #include "bullet/src/BulletDynamics/Dynamics/btRigidBody.h"
+#include "core/config.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_id.h"
@@ -154,6 +154,10 @@ class HingeConstraint : public BaseConstraint, public Component {
   void SetMotorParametersFromState();
 
   void LoadDefaultStateValues();
+
+#if IMP_RUNTIME(DEV)
+  void Visualize();
+#endif
 
   HingeConstraintState state_;
   std::unique_ptr<btHingeConstraint> bt_constraint_;

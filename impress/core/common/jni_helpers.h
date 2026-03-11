@@ -30,6 +30,7 @@
 #include "absl/strings/cord.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "absl/types/variant.h"
 #include "core/common/buffer_access.h"
 #include "core/common/context.h"
@@ -227,6 +228,9 @@ JniUniquePtr<jbooleanArray> CreateJniBooleanArray(JNIEnv* env, size_t length);
 JniUniquePtr<jobjectArray> CreateJniObjectArray(JNIEnv* env, size_t length,
                                                 jclass clazz, jobject initial);
 JniUniquePtr<jstring> CreateJniString(JNIEnv* env, const std::string& str);
+
+JniUniquePtr<jintArray> CreateJniIntArray(JNIEnv* env,
+                                          absl::Span<int> contents);
 
 // Takes a local reference, creates and returns a global reference to the same
 // object. Then releases the given local reference.

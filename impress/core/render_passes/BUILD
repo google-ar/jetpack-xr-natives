@@ -14,7 +14,7 @@
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:assets.bzl", "imp_assets")
-load("//build_tools:imp.bzl", "imp_copts")
+load("//build_tools:imp.bzl", "imp_copts", "imp_google3_copts")
 load("//build_tools:imp_material.bzl", "imp_material")
 load(
     "//core/proto:imp_cc_proto_library.bzl",
@@ -38,7 +38,7 @@ cc_library(
     hdrs = [
         "surface_renderer.h",
     ],
-    copts = imp_copts(),
+    copts = imp_google3_copts(),
     deps = [
         ":surface_renderer_proto_cc_imp",
         "//:api",
@@ -267,10 +267,15 @@ cc_library(
     deps = [
         ":surface_renderer",
         ":surface_renderer_proto_cc_imp",
+        "//core:config",
+        "//core/async:future",
         "//core/common:platform_helpers",
+        "//core/ncsb",
         "//core/scripting:message_handler",
         "//core/view:base_view",
+        "//core/view/scripting",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
         "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,

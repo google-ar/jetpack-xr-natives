@@ -82,7 +82,7 @@ class Image {
   const AHardwareBuffer* GetHardwareBuffer() const;
 
   // Returns the dataspace of the buffer of the underlying AImage.
-  const ADataSpace GetBufferDataSpace() const;
+  absl::StatusOr<ADataSpace> GetBufferDataSpace() const;
 
   // Returns the available <view type, hardware buffer> for the given hardware
   // buffer.

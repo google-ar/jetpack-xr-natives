@@ -207,8 +207,8 @@ void LayoutComposer::DrawAsStandaloneTab(absl::string_view tab_label,
         if (selected_tab_id_ == tab_id) {
           tab_flags |= ImGuiTabItemFlags_SetSelected;
         }
+        ImGui::SetNextItemAllowOverlap();
         if (ImGui::BeginTabItem(label.data(), nullptr, tab_flags)) {
-          ImGui::SetItemAllowOverlap();
           if (tabbed_window_state_.expanded_state ==
               LayoutConfig::WindowExpandedState::EXPANDED) {
             ImVec2 safe_display_size = GetSafeDisplaySize();
@@ -785,8 +785,16 @@ void LayoutComposer::SaveLayoutToIniFile() {
 absl::Span<const LayoutComposer::SubWindowInfo>
 LayoutComposer::GetSubWindowInfo() {
   sub_window_info_.clear();
-  for (const auto& [label, info] : sub_window_info_map_) {
-    sub_window_info_.push_back(info);
+
+  if (sub_window_info_map_.empty()) {
+    // If there are no windows, add a window that covers the entire screen.
+    sub_window_info_.push_back({.label = std::string(kEntireTexture),
+                                .window_size = ImGui::GetIO().DisplaySize,
+                                .window_position = ImVec2(0, 0)});
+  } else {
+    for (const auto& [label, info] : sub_window_info_map_) {
+      sub_window_info_.push_back(info);
+    }
   }
   return sub_window_info_;
 }

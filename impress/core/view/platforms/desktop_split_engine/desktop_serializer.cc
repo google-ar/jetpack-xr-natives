@@ -49,6 +49,7 @@
 #include "core/view/view_host.h"
 #include "core/window/filament_host.h"
 #include "core/window/sdl_venue.h"
+#include "split_engine/schemas/split_engine_schema_version.h"
 #include "mediapipe/framework/port/status_macros.h"
 
 ABSL_FLAG(std::string, server, "localhost:10000",
@@ -103,14 +104,8 @@ absl::Status Main(int argc, char* argv[]) {
                    SplitEngineDesktopBridgeClient::Create(
                        SplitEngineDesktopBridge::NewStub(channel)));
 
-  auto bridge_sender = std::make_unique<SplitEngineSharedMemoryBridgeSender>(
-      *client,
-      /*recycle_buffers=*/true);
-
-  auto bridge_one_shot_sender =
-      std::make_unique<SplitEngineSharedMemoryBridgeSender>(
-          *client,
-          /*recycle_buffers=*/false);
+  auto bridge_sender =
+      std::make_unique<SplitEngineSharedMemoryBridgeSender>(*client);
 
   std::unique_ptr<SplitEngineAndroidSharedMemoryBridge> bridge =
       std::make_unique<SplitEngineAndroidSharedMemoryBridge>(std::move(client));
@@ -122,8 +117,8 @@ absl::Status Main(int argc, char* argv[]) {
       std::make_unique<imp::RenderableManagerWrapper>(*view));
 
   auto split_engine_serializer = std::make_unique<SplitEngineSerializerImpl>(
-      *view, std::move(bridge), std::move(bridge_sender),
-      std::move(bridge_one_shot_sender), kBridgeBufferSizeBytes);
+      *view, android_xr::kSplitEngineProductionApiLevel, std::move(bridge),
+      std::move(bridge_sender), kBridgeBufferSizeBytes);
 
   view->SetSplitEngineSerializer(std::move(split_engine_serializer));
 
@@ -146,14 +141,8 @@ absl::Status MultimachineMain(int argc, char* argv[]) {
       std::make_unique<SplitEngineMMDesktopBridgeClientImpl>(
           SplitEngineMMDesktopBridge::NewStub(channel));
 
-  auto bridge_sender = std::make_unique<SplitEngineMMDesktopBridgeSender>(
-      *client,
-      /*recycle_buffers=*/true);
-
-  auto bridge_one_shot_sender =
-      std::make_unique<SplitEngineMMDesktopBridgeSender>(
-          *client,
-          /*recycle_buffers=*/false);
+  auto bridge_sender =
+      std::make_unique<SplitEngineMMDesktopBridgeSender>(*client);
 
   std::unique_ptr<SplitEngineAndroidBridge> bridge =
       std::make_unique<SplitEngineMMDesktopBridgeLegacy>(std::move(client));
@@ -165,8 +154,8 @@ absl::Status MultimachineMain(int argc, char* argv[]) {
       std::make_unique<imp::RenderableManagerWrapper>(*view));
 
   auto split_engine_serializer = std::make_unique<SplitEngineSerializerImpl>(
-      *view, std::move(bridge), std::move(bridge_sender),
-      std::move(bridge_one_shot_sender), kBridgeBufferSizeBytes);
+      *view, android_xr::kSplitEngineProductionApiLevel, std::move(bridge),
+      std::move(bridge_sender), kBridgeBufferSizeBytes);
 
   view->SetSplitEngineSerializer(std::move(split_engine_serializer));
 

@@ -35,6 +35,7 @@
 #include "apibindings/base_asset_loader.h"
 #include "apibindings/bindings_material.h"
 #include "apibindings/impress_api_view.h"
+#include "apibindings/model_interaction_ux/scene_viewer_component.h"
 #include "core/assets/asset_ptr.h"
 #include "core/common/small_source_location.h"
 #include "core/geometry/shapes/box.h"
@@ -67,6 +68,8 @@ class ModelManagerImpl : public ModelManager {
                                             bool enable_collider) override;
   absl::Status SetGltfModelColliderEnabled(int32_t node,
                                            bool enable_collider) override;
+  absl::Status SetGltfReformAffordanceEnabled(int32_t impress_node,
+                                              bool enable_affordance) override;
   void AnimateGltfModel(
       int32_t node, absl::string_view animation_name, bool loop,
       std::unique_ptr<BaseAssetAnimator> asset_animator) override;
@@ -157,6 +160,22 @@ absl::Status ModelManagerImpl::SetGltfModelColliderEnabled(
   }
 
   return absl::OkStatus();
+}
+
+absl::Status ModelManagerImpl::SetGltfReformAffordanceEnabled(
+    int32_t impress_node, bool enable_affordance) {
+  NodeHandle node_handle(utils::Entity::import(impress_node));
+  if (!node_handle) {
+    return absl::InvalidArgumentError("Node is not valid.");
+  }
+
+  if (enable_affordance) {
+    return node_handle->AddComponent<SceneViewerComponent>(node_handle)
+        .status();
+  } else {
+    node_handle->RemoveComponent<SceneViewerComponent>();
+    return absl::OkStatus();
+  }
 }
 
 void ModelManagerImpl::AnimateGltfModel(

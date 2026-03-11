@@ -17,9 +17,13 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SCRIPTING_SCRIPTING_SYSTEM_WEB_H_
 #define THIRD_PARTY_IMPRESS_CORE_SCRIPTING_SCRIPTING_SYSTEM_WEB_H_
 
+#include <memory>
+
 #include "core/common/log.h"
+#include "core/common/buffer_access.h"
 #include "core/common/resource_helpers.h"
 #include "core/scripting/scripting_system.h"
+#include "core/scripting/web/web_view.h"
 #include "core/view/base_view.h"
 #include "javascript/core/imp_web_js_embed.h"
 

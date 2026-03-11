@@ -16,6 +16,7 @@
 
 #include <jni.h>
 
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -504,6 +505,22 @@ void AndroidViewRenderer::ForwardControllerInputs(
     MotionEvent motion_event(GetView().GetContext().GetJniEnv(),
                              surface_coordinates,
                              MotionEvent::Action::kHoverMove);
+    DispatchGenericMotionEventToView(motion_event);
+  }
+
+  std::optional<imp::float2> scroll_value =
+      event.GetInputActionCurrentState<imp::float2>(
+          imp::kDefaultScrollActionName);
+  bool is_scrolling =
+      scroll_value.has_value() &&
+      (std::abs(scroll_value->x) > 0.0f || std::abs(scroll_value->y) > 0.0f);
+  if (is_scrolling) {
+    imp::float2 surface_coordinates =
+        this->GetSurfaceCoordinatesFromWorldPoint(event.GetHit()->world_point);
+
+    MotionEvent motion_event(GetView().GetContext().GetJniEnv(),
+                             surface_coordinates, MotionEvent::Action::kScroll,
+                             MotionEvent::ToolType::kUnknown, *scroll_value);
     DispatchGenericMotionEventToView(motion_event);
   }
 }

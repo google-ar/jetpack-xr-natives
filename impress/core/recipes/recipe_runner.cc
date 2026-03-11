@@ -22,6 +22,7 @@
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
+#include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "core/common/registry.h"
@@ -76,6 +77,14 @@ absl::Status RecipeRunner::Setup() {
   return absl::OkStatus();
 }
 
+std::optional<absl::Time> RecipeRunner::CalculateCutoffTime() {
+  if (!max_execution_time_.has_value()) {
+    return std::optional<absl::Time>();
+  }
+
+  return absl::Now() + max_execution_time_.value();
+}
+
 void RecipeRunner::Update(const FrameTime& frame_time) {
 #if IMP_RUNTIME(DEV)
   // Since RecipeRunner runs in Draft/Edit mode, we need to handle stopping
@@ -99,6 +108,8 @@ void RecipeRunner::Update(const FrameTime& frame_time) {
     return;
   }
 
+  std::optional<absl::Time> execution_cutoff_time = CalculateCutoffTime();
+
   // Set the value for the RecipeRunner's `time_since_start` global recipe
   // variable for this frame.
   scope_->GetVariable(std::string(recipe::kTimeSinceStart))->get() =
@@ -108,7 +119,7 @@ void RecipeRunner::Update(const FrameTime& frame_time) {
   std::vector<RecipeRuntimeEvent> pending_queue;
   std::swap(pending_queue, runtime_event_queue_);
   for (const RecipeRuntimeEvent& event : pending_queue) {
-    TriggerEventAndHandleExecutionResult(event);
+    TriggerEventAndHandleExecutionResult(event, execution_cutoff_time);
     // Events are also sent to the Dispatcher.
     GetView().GetDispatcher().Send(RecipeEvent(event.name, event.arguments));
   }
@@ -128,20 +139,29 @@ void RecipeRunner::Update(const FrameTime& frame_time) {
     on_update_event.arguments[std::string(recipe::kElapsedSecondsSocketName)] =
         absl::ToDoubleSeconds(elapsed_time_);
 
-    TriggerEventAndHandleExecutionResult(on_update_event);
+    TriggerEventAndHandleExecutionResult(on_update_event,
+                                         execution_cutoff_time);
   }
 
   // Consume all previously scheduled async executions that are ready
   async_execution_manager_.ForEachAsyncExecution(
-      [this](const RecipeAsyncExecutionManager::AsyncExecution& execution) {
+      [this, execution_cutoff_time](
+          const RecipeAsyncExecutionManager::AsyncExecution& execution) {
         if (!execution.handle.Ready()) {
           return;
         }
         RecipeRuntimeGraph::ExecutionResult result =
-            runtime_graph_->ResumeExecution(execution, GetView());
+            runtime_graph_->ResumeExecution(execution, GetView(),
+                                            execution_cutoff_time);
 
         if (!result.ok() && result.code() != absl::StatusCode::kCancelled) {
           IMP_LOG(imp::ERROR) << "Async execution failed: " << result;
+
+          if (result.code() == absl::StatusCode::kResourceExhausted) {
+            // Stops the recipe runner if the async execution fails due to
+            // resource exhaustion.
+            Stop();
+          }
         }
       });
 
@@ -149,7 +169,8 @@ void RecipeRunner::Update(const FrameTime& frame_time) {
 }
 
 void RecipeRunner::TriggerEventAndHandleExecutionResult(
-    const RecipeRuntimeEvent& event) {
+    const RecipeRuntimeEvent& event,
+    std::optional<absl::Time> execution_cutoff_time) {
   // Create a new scope based on the base member scope, and the async execution
   // manager is its sole owner
   // TODO Improve the management of RecipeScope, currently the
@@ -160,7 +181,8 @@ void RecipeRunner::TriggerEventAndHandleExecutionResult(
   RecipeExecutionContext context =
       RecipeExecutionContext{.scope = *scope,
                              .view = GetView(),
-                             .async_manager = async_execution_manager_};
+                             .async_manager = async_execution_manager_,
+                             .execution_cutoff_time = execution_cutoff_time};
 
   RecipeRuntimeGraph::ExecutionResult result =
       runtime_graph_->TriggerEvent(event, context);
@@ -168,6 +190,12 @@ void RecipeRunner::TriggerEventAndHandleExecutionResult(
   if (!result.ok()) {
     IMP_LOG(imp::ERROR) << "RecipeEvent " << event.name
                << " execution failed: " << result;
+    if (result.code() == absl::StatusCode::kResourceExhausted) {
+      // Stops the recipe runner if the event execution fails due to resource
+      // exhaustion.
+      Stop();
+    }
+
     return;
   }
 
@@ -314,7 +342,7 @@ absl::Status RecipeRunner::Start() {
   if (runtime_graph_->HasEvent(recipe::kOnStartEventName)) {
     RecipeRuntimeEvent on_start_event{
         .name = std::string(recipe::kOnStartEventName)};
-    TriggerEventAndHandleExecutionResult(on_start_event);
+    TriggerEventAndHandleExecutionResult(on_start_event, CalculateCutoffTime());
   }
 
   runtime_state_ = RuntimeState::kRunning;
@@ -331,6 +359,10 @@ void RecipeRunner::Stop() {
   tap_event_connection_.Disconnect();
   hover_event_connection_.Disconnect();
   runtime_graph_->SetRuntimeEventListener([](RecipeRuntimeEvent event) {});
+
+  // Resets the async execution manager and cancels all async executions in
+  // flight.
+  async_execution_manager_.Reset();
 
   runtime_state_ = RuntimeState::kStopped;
 }

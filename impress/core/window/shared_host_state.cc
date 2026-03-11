@@ -31,6 +31,7 @@
 #include "core/async/simple_executor.h"
 #include "core/async/thread_pool_executor.h"
 #include "core/config.h"
+#include "core/view/utils/proto/filament_feature_flag.proto.imp.h"
 #include "core/window/filament_host.h"
 
 #if IMP_THREADS(GOOGLE3)
@@ -110,6 +111,7 @@ absl::StatusOr<Engine*> SharedHostState::GetOrCreateEngine(
     void* shared_gl_context, bool should_use_shared_context,
     const filament::Engine::Config& config,
     const filament::backend::FeatureLevel featureLevel,
+    const std::vector<FilamentFeatureFlag>& features,
     bool pause_rendering_thread, SharedContextDeleter shared_context_deleter,
     bool preinitialize_metal_platform) {
   // If an engine already exists then it is reused, but only if it is
@@ -196,15 +198,19 @@ absl::StatusOr<Engine*> SharedHostState::GetOrCreateEngine(
   }
 #endif
 
-  engine_ = filament::Engine::Builder()
-                .backend(backend)
-                .platform(platform)
-                .sharedContext(should_use_shared_context ? shared_gl_context
-                                                         : nullptr)
-                .config(&config)
-                .featureLevel(featureLevel)
-                .paused(pause_rendering_thread)
-                .build();
+  filament::Engine::Builder builder =
+      filament::Engine::Builder()
+          .backend(backend)
+          .platform(platform)
+          .sharedContext(should_use_shared_context ? shared_gl_context
+                                                   : nullptr)
+          .config(&config)
+          .featureLevel(featureLevel)
+          .paused(pause_rendering_thread);
+  for (const FilamentFeatureFlag& feature : features) {
+    builder.feature(feature.name.c_str(), feature.enabled);
+  }
+  engine_ = builder.build();
   if (!engine_) {
     return absl::InternalError("Failed to create a filament engine");
   }

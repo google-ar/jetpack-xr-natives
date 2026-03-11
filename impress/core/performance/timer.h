@@ -14,8 +14,9 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_PERFORMANCE_TIMER_H_
 #define THIRD_PARTY_IMPRESS_CORE_PERFORMANCE_TIMER_H_
 
+#include <cstdint>
+
 #include "absl/strings/string_view.h"
-#include "core/performance/profiler.h"
 
 namespace imp {
 // Timer is a helper class for profiling a block of code. It adds a sample to
@@ -31,7 +32,7 @@ class Timer {
  private:
   const absl::string_view name_;
   bool stopped_;
-  SampleIndices indices_;
+  uint64_t id_;
 };
 }  // namespace imp
 #endif  // THIRD_PARTY_IMPRESS_CORE_PERFORMANCE_TIMER_H_

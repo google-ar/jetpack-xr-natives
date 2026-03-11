@@ -16,6 +16,7 @@
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 #include <openxr/openxr_platform_defines.h>
+#include <openxr/public/all_extensions.h>
 
 #include <cstdint>
 #include <cstring>
@@ -69,6 +70,9 @@ const XrInstance kInstance = XrInstance(1111);
 const XrSystemId kSystemId = XrSystemId(2222);
 const XrSession kSession = XrSession(3333);
 const XrSpace kSpace = XrSpace(4444);
+const XrSpatialEntityIdEXT kEntityId = XrSpatialEntityIdEXT(5555);
+const XrSpatialEntityEXT kSpatialEntity = XrSpatialEntityEXT(6666);
+const XrSpatialContextEXT kSpatialContext = XrSpatialContextEXT(7777);
 const XrDepthSwapchainANDROID kDepthSwapchain = XrDepthSwapchainANDROID(5555);
 const XrTime kTime = 1000;
 const XrUuidEXT kUuid = {
@@ -105,7 +109,8 @@ const XrTrackableTrackerANDROID kTrackableTracker =
     XrTrackableTrackerANDROID(1);
 const XrHandTrackerEXT kHandTracker = XrHandTrackerEXT(1);
 const XrFaceTrackerANDROID kFaceTracker = XrFaceTrackerANDROID(1);
-const XrEarthTrackerANDROIDX1 kEarthTracker = XrEarthTrackerANDROIDX1(1);
+const XrGeospatialTrackerANDROIDX2 kGeospatialTracker =
+    XrGeospatialTrackerANDROIDX2(1);
 const XrEyeTrackerANDROID kEyeTracker = XrEyeTrackerANDROID(1);
 const XrDeviceAnchorPersistenceANDROID kAnchorPersistence =
     XrDeviceAnchorPersistenceANDROID(1);
@@ -115,8 +120,11 @@ const XrUuid kZeroUuid = {0};
 
 int convert_to_khr_time_call_counter = 0;
 int create_anchor_call_counter = 0;
+uint64_t next_future_id = 1;
 
 bool anchor_persistence_handle_created = false;
+bool geospatial_tracker_handle_created = false;
+bool geospatial_tracker_running = false;
 
 }  // namespace
 
@@ -416,35 +424,63 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrGetFaceCalibrationStateANDROID(
   return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateEarthTrackerANDROIDX1(
-    XrSession session, const XrEarthTrackerCreateInfoANDROIDX1* createInfo,
-    XrEarthTrackerANDROIDX1* earthTracker) {
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateGeospatialTrackerANDROIDX2(
+    XrSession session, const XrGeospatialTrackerCreateInfoANDROIDX2* createInfo,
+    XrGeospatialTrackerANDROIDX2* geospatialTracker) {
   if (session == XR_NULL_HANDLE) {
     return XR_ERROR_HANDLE_INVALID;
   }
-  *earthTracker = kEarthTracker;
+  *geospatialTracker = kGeospatialTracker;
+  geospatial_tracker_handle_created = true;
   return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL
-Internal_xrDestroyEarthTrackerANDROIDX1(XrEarthTrackerANDROIDX1 earthTracker) {
-  if (earthTracker == XR_NULL_HANDLE) {
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrDestroyGeospatialTrackerANDROIDX2(
+    XrGeospatialTrackerANDROIDX2 geospatialTracker) {
+  if (geospatialTracker == XR_NULL_HANDLE) {
     return XR_ERROR_HANDLE_INVALID;
   }
+  geospatial_tracker_handle_created = false;
+  geospatial_tracker_running = false;
   return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL Internal_xrLocateGeospatialPoseANDROIDX1(
-    XrEarthTrackerANDROIDX1 earthTracker,
-    const XrGeospatialPoseLocateInfoANDROIDX1* locateInfo,
-    XrGeospatialPoseResultANDROIDX1* geospatialPose) {
-  if (earthTracker == XR_NULL_HANDLE) {
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCheckVpsAvailabilityAsyncANDROIDX2(
+    XrSession session, double latitude, double longitude, XrFutureEXT* future) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCheckVpsAvailabilityCompleteANDROIDX2(
+    XrSession session, XrFutureEXT future,
+    XrVPSAvailabilityCheckCompletionANDROIDX2* completion) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrLocateGeospatialPoseANDROIDX2(
+    XrGeospatialTrackerANDROIDX2 geospatialTracker,
+    const XrGeospatialPoseLocateInfoANDROIDX2* locateInfo,
+    XrSpaceLocation* location) {
+  if (geospatialTracker == XR_NULL_HANDLE) {
     return XR_ERROR_HANDLE_INVALID;
   }
-  geospatialPose->type = XR_TYPE_GEOSPATIAL_POSE_RESULT_ANDROIDX1;
+  location->type = XR_TYPE_SPACE_LOCATION;
+  location->next = nullptr;
+  location->locationFlags = kLocationFlags;
+  location->pose = kPose;
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrLocateGeospatialPoseFromPoseANDROIDX2(
+    XrGeospatialTrackerANDROIDX2 geospatialTracker,
+    const XrGeospatialPoseFromPoseLocateInfoANDROIDX2* locateInfo,
+    XrGeospatialPoseResultANDROIDX2* geospatialPose) {
+  if (geospatialTracker == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+  geospatialPose->type = XR_TYPE_GEOSPATIAL_POSE_RESULT_ANDROIDX2;
   geospatialPose->poseFlags =
-      XR_GEOSPATIAL_POSE_POSITION_VALID_BIT_ANDROIDX1 |
-      XR_GEOSPATIAL_POSE_ORIENTATION_VALID_BIT_ANDROIDX1;
+      XR_GEOSPATIAL_POSE_POSITION_VALID_BIT_ANDROIDX2 |
+      XR_GEOSPATIAL_POSE_ORIENTATION_VALID_BIT_ANDROIDX2;
   geospatialPose->geospatialPose.latitude = 37.422;
   geospatialPose->geospatialPose.longitude = -122.084;
   geospatialPose->geospatialPose.altitude = 10.0;
@@ -455,10 +491,15 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrLocateGeospatialPoseANDROIDX1(
   return XR_SUCCESS;
 }
 
-XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateGeospatialAnchorANDROIDX1(
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateGeospatialAnchorANDROIDX2(
     XrSpatialContextEXT spatialContext,
-    const XrGeospatialAnchorCreateInfoANDROIDX1* createInfo,
-    XrSpatialEntityIdEXT* anchorEntityId, XrSpatialEntityEXT* anchorEntity) {
+    const XrGeospatialAnchorCreateInfoANDROIDX2* createInfo,
+    XrSpatialEntityIdEXT* anchorEntityId) {
+  ++create_anchor_call_counter;
+  if (create_anchor_call_counter > kAnchorResourceLimit) {
+    return XR_ERROR_LIMIT_REACHED;
+  }
+  *anchorEntityId = kEntityId;
   return XR_SUCCESS;
 }
 
@@ -635,12 +676,25 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrEnumerateSpatialCapabilityFeaturesEXT(
 XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateSpatialContextAsyncEXT(
     XrSession session, const XrSpatialContextCreateInfoEXT* createInfo,
     XrFutureEXT* future) {
+  if (session == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+  *future = (XrFutureEXT)next_future_id++;
   return XR_SUCCESS;
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateSpatialContextCompleteEXT(
     XrSession session, XrFutureEXT future,
     XrCreateSpatialContextCompletionEXT* completion) {
+  if (session == XR_NULL_HANDLE) {
+    return XR_ERROR_HANDLE_INVALID;
+  }
+  if (completion == nullptr) {
+    return XR_ERROR_VALIDATION_FAILURE;
+  }
+  completion->type = XR_TYPE_CREATE_SPATIAL_CONTEXT_COMPLETION_EXT;
+  completion->futureResult = XR_SUCCESS;
+  completion->spatialContext = kSpatialContext;
   return XR_SUCCESS;
 }
 
@@ -682,6 +736,7 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateSpatialEntityFromIdEXT(
     XrSpatialContextEXT spatialContext,
     const XrSpatialEntityFromIdCreateInfoEXT* createInfo,
     XrSpatialEntityEXT* spatialEntity) {
+  *spatialEntity = kSpatialEntity;
   return XR_SUCCESS;
 }
 
@@ -705,14 +760,25 @@ XRAPI_ATTR XrResult XRAPI_CALL Internal_xrCreateSpatialAnchorEXT(
 }
 
 XRAPI_ATTR XrResult XRAPI_CALL
-Internal_xrCreateSpatialAnchorSpaceFromIdANDROIDX1(
+Internal_xrCreateSpatialAnchorSpaceFromIdANDROID(
     XrSession session, XrSpatialContextEXT spatialContext,
-    const XrSpatialAnchorSpaceFromIdCreateInfoANDROIDX1* createInfo,
+    const XrSpatialAnchorSpaceFromIdCreateInfoANDROID* createInfo,
     XrSpace* anchorSpace) {
   if (session == XR_NULL_HANDLE || spatialContext == XR_NULL_HANDLE) {
     return XR_ERROR_HANDLE_INVALID;
   }
   *anchorSpace = kSpace;
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrSetGoogleCloudAuthAsyncANDROIDX2(
+    XrSession session, const XrGoogleCloudAuthInfoBaseHeaderANDROIDX2* authInfo,
+    XrFutureEXT* future) {
+  return XR_SUCCESS;
+}
+
+XRAPI_ATTR XrResult XRAPI_CALL Internal_xrSetGoogleCloudAuthCompleteANDROIDX2(
+    XrSession session, XrFutureEXT future, XrFutureCompletionEXT* completion) {
   return XR_SUCCESS;
 }
 
@@ -771,14 +837,20 @@ const auto kXrFunctions = new absl::flat_hash_map<absl::string_view,
     {"xrGetFaceStateANDROID", ToXrVoidFunction(Internal_xrGetFaceStateANDROID)},
     {"xrGetFaceCalibrationStateANDROID",
      ToXrVoidFunction(Internal_xrGetFaceCalibrationStateANDROID)},
-    {"xrCreateEarthTrackerANDROIDX1",
-     ToXrVoidFunction(Internal_xrCreateEarthTrackerANDROIDX1)},
-    {"xrDestroyEarthTrackerANDROIDX1",
-     ToXrVoidFunction(Internal_xrDestroyEarthTrackerANDROIDX1)},
-    {"xrLocateGeospatialPoseANDROIDX1",
-     ToXrVoidFunction(Internal_xrLocateGeospatialPoseANDROIDX1)},
-    {"xrCreateGeospatialAnchorANDROIDX1",
-     ToXrVoidFunction(Internal_xrCreateGeospatialAnchorANDROIDX1)},
+    {"xrCreateGeospatialTrackerANDROIDX2",
+     ToXrVoidFunction(Internal_xrCreateGeospatialTrackerANDROIDX2)},
+    {"xrDestroyGeospatialTrackerANDROIDX2",
+     ToXrVoidFunction(Internal_xrDestroyGeospatialTrackerANDROIDX2)},
+    {"xrCheckVpsAvailabilityAsyncANDROIDX2",
+     ToXrVoidFunction(Internal_xrCheckVpsAvailabilityAsyncANDROIDX2)},
+    {"xrCheckVpsAvailabilityCompleteANDROIDX2",
+     ToXrVoidFunction(Internal_xrCheckVpsAvailabilityCompleteANDROIDX2)},
+    {"xrLocateGeospatialPoseFromPoseANDROIDX2",
+     ToXrVoidFunction(Internal_xrLocateGeospatialPoseFromPoseANDROIDX2)},
+    {"xrLocateGeospatialPoseANDROIDX2",
+     ToXrVoidFunction(Internal_xrLocateGeospatialPoseANDROIDX2)},
+    {"xrCreateGeospatialAnchorANDROIDX2",
+     ToXrVoidFunction(Internal_xrCreateGeospatialAnchorANDROIDX2)},
     {"xrCreateDepthSwapchainANDROID",
      ToXrVoidFunction(Internal_xrCreateDepthSwapchainANDROID)},
     {"xrDestroyDepthSwapchainANDROID",
@@ -825,8 +897,12 @@ const auto kXrFunctions = new absl::flat_hash_map<absl::string_view,
      ToXrVoidFunction(Internal_xrCreateSpatialUpdateSnapshotEXT)},
     {"xrCreateSpatialAnchorEXT",
      ToXrVoidFunction(Internal_xrCreateSpatialAnchorEXT)},
-    {"xrCreateSpatialAnchorSpaceFromIdANDROIDX1",
-     ToXrVoidFunction(Internal_xrCreateSpatialAnchorSpaceFromIdANDROIDX1)},
+    {"xrCreateSpatialAnchorSpaceFromIdANDROID",
+     ToXrVoidFunction(Internal_xrCreateSpatialAnchorSpaceFromIdANDROID)},
+    {"xrSetGoogleCloudAuthAsyncANDROIDX2",
+     ToXrVoidFunction(Internal_xrSetGoogleCloudAuthAsyncANDROIDX2)},
+    {"xrSetGoogleCloudAuthCompleteANDROIDX2",
+     ToXrVoidFunction(Internal_xrSetGoogleCloudAuthCompleteANDROIDX2)},
 });
 
 }  // namespace
@@ -872,13 +948,19 @@ const std::vector<XrExtensionProperties> kExtensions = {
     {XR_TYPE_EXTENSION_PROPERTIES, nullptr, XR_MND_HEADLESS_EXTENSION_NAME},
     // Geospatial extensions
     {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
-     XR_ANDROIDX1_GEOSPATIAL_EXTENSION_NAME},
+     XR_ANDROIDX2_GEOSPATIAL_EXTENSION_NAME},
     {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
-     XR_ANDROIDX1_SPATIAL_ANCHOR_SPACE_EXTENSION_NAME},
+     XR_ANDROIDX2_GEOSPATIAL_ANCHOR_EXTENSION_NAME},
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
+     XR_ANDROIDX2_GEOSPATIAL_STREETSCAPE_EXTENSION_NAME},
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
+     XR_ANDROID_SPATIAL_ANCHOR_SPACE_EXTENSION_NAME},
     {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
      XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME},
     {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
      XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME},
+    {XR_TYPE_EXTENSION_PROPERTIES, nullptr,
+     XR_ANDROIDX2_GOOGLE_CLOUD_AUTH_EXTENSION_NAME},
 };
 
 XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInstanceExtensionProperties(
@@ -905,6 +987,8 @@ xrCreateInstance(const XrInstanceCreateInfo* createInfo, XrInstance* instance) {
   // TODO: Temporarily enabling some features by default until
   // session configuration is fully implemented.
   anchor_persistence_handle_created = true;
+  geospatial_tracker_handle_created = false;
+  geospatial_tracker_running = false;
   return XR_SUCCESS;
 }
 
@@ -921,7 +1005,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetSystemProperties(
     return XR_ERROR_HANDLE_INVALID;
   }
   if (properties->next != nullptr) {
-    reinterpret_cast<XrSystemGeospatialPropertiesANDROIDX1*>(properties->next)
+    reinterpret_cast<XrSystemGeospatialPropertiesANDROIDX2*>(properties->next)
         ->supportsGeospatial = XR_TRUE;
   }
   return XR_SUCCESS;
@@ -1012,6 +1096,20 @@ XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateEnvironmentBlendModes(
 
 XRAPI_ATTR XrResult XRAPI_CALL xrPollEvent(XrInstance instance,
                                            XrEventDataBuffer* eventData) {
+  if (geospatial_tracker_handle_created && !geospatial_tracker_running) {
+    geospatial_tracker_running = true;
+
+    XrEventDataGeospatialTrackerStateChangedANDROIDX2* geospatial_event =
+        reinterpret_cast<XrEventDataGeospatialTrackerStateChangedANDROIDX2*>(
+            eventData);
+    geospatial_event->type =
+        XR_TYPE_EVENT_DATA_GEOSPATIAL_TRACKER_STATE_CHANGED_ANDROIDX2;
+    geospatial_event->next = nullptr;
+    geospatial_event->state = XR_GEOSPATIAL_TRACKER_STATE_RUNNING_ANDROIDX2;
+    geospatial_event->initializationResult = XR_SUCCESS;
+    return XR_SUCCESS;
+  }
+
   return XR_EVENT_UNAVAILABLE;
 }
 

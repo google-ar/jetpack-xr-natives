@@ -29,7 +29,7 @@ enum class AttributeType {
   // Alpha value for the particle. (float, 0.0f -> 1.0f)
   kAlpha,
 
-  // Scale value for the particle. (float, >= 0.0f)
+  // Scale value for the particle. (float3, sx, sy, sz, >= 0.0f)
   kScale,
 
   // Position. (float3, x, y, z)
@@ -67,7 +67,7 @@ DataLayout::DataLayout(const ParticleConfig& config) {
 
   if (config.scale.has_value()) {
     offsets_[static_cast<int>(AttributeType::kScale)] = particle_data_size_;
-    particle_data_size_++;
+    particle_data_size_ += 3;
   }
 
   // All particles have a position, it is not configurable from the proto.

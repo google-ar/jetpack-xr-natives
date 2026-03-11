@@ -56,6 +56,11 @@ class Invocable<R(Args...)> {
           !std::is_same_v<std::decay_t<Fn>, Invocable<R(Args...)>>,
       int>;
 
+  // Helper for enabling operator() if it is called with valid arguments.
+  template <typename... CallArgs>
+  using EnableIfCallableWith =
+      std::enable_if_t<std::is_invocable_r_v<R, R(Args...), CallArgs...>, int>;
+
   // Creates an Invocable that does not contain a functor.
   // Will evaluate to false.
   Invocable() noexcept;
@@ -73,9 +78,9 @@ class Invocable<R(Args...)> {
   // Invokes the invocable with the args passed in.
   // If the Invocable is empty, this will assert.
   // OperatorArgs is used to implement perfect forwarding.
-  template <typename... OperatorArgs>
+  template <typename... OperatorArgs, EnableIfCallableWith<OperatorArgs...> = 0>
   R operator()(OperatorArgs&&... args);
-  template <typename... OperatorArgs>
+  template <typename... OperatorArgs, EnableIfCallableWith<OperatorArgs...> = 0>
   R operator()(OperatorArgs&&... args) const;
 
   // Evaluates to true if Invocable contains a functor, false otherwise.
@@ -119,14 +124,18 @@ Invocable<R(Args...)>::Invocable(Fn&& fn) noexcept
     : invocable_(std::forward<Fn>(fn)), invoker_(Invoker<std::decay_t<Fn>>) {}
 
 template <typename R, typename... Args>
-template <typename... OperatorArgs>
+template <typename... OperatorArgs,
+          typename Invocable<R(Args...)>::template EnableIfCallableWith<
+              OperatorArgs...>>
 R Invocable<R(Args...)>::operator()(OperatorArgs&&... args) {
   assert(invoker_ && invocable_);
   return invoker_(invocable_, std::forward<OperatorArgs>(args)...);
 }
 
 template <typename R, typename... Args>
-template <typename... OperatorArgs>
+template <typename... OperatorArgs,
+          typename Invocable<R(Args...)>::template EnableIfCallableWith<
+              OperatorArgs...>>
 R Invocable<R(Args...)>::operator()(OperatorArgs&&... args) const {
   assert(invoker_ && invocable_);
   return invoker_(invocable_, std::forward<OperatorArgs>(args)...);

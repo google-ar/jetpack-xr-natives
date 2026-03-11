@@ -55,8 +55,18 @@ AsyncJobQueue::AsyncJobQueue(const char* name, Priority priority) {
 }
 
 AsyncJobQueue::~AsyncJobQueue() noexcept {
+    // wait for all pending callbacks to be called & terminate the thread
+    drainAndExit();
 #if !defined(__EMSCRIPTEN__)
+    assert_invariant(!mThread.joinable());
     assert_invariant(mQueue.empty());
+#endif
+}
+
+void AsyncJobQueue::cancelAll() noexcept {
+#if !defined(__EMSCRIPTEN__)
+    std::unique_lock const lock(mLock);
+    mQueue.clear();
 #endif
 }
 
@@ -87,6 +97,9 @@ bool AsyncJobQueue::isValid() const noexcept {
 void AsyncJobQueue::drainAndExit() {
 #if !defined(__EMSCRIPTEN__)
     std::unique_lock lock(mLock);
+    if (mExitRequested) {
+        return;
+    }
     // we request the service thread to exit, but we're guaranteed that it'll only exit
     // after all current callbacks are processed. In addition, once mExitRequested is set,
     // no new jobs can be added, so we can join the thread.

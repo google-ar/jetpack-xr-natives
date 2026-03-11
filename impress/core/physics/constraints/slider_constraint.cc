@@ -23,6 +23,7 @@
 #include "bullet/src/BulletDynamics/Dynamics/btRigidBody.h"
 #include "bullet/src/LinearMath/btScalar.h"
 #include "bullet/src/LinearMath/btTransform.h"
+#include "core/config.h"
 #include "core/math/math.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
@@ -30,6 +31,11 @@
 #include "core/physics/physics_helper.h"
 #include "core/physics/rigid_body.h"
 #include "core/view/utils/frame_time.h"
+
+#if IMP_RUNTIME(DEV)
+#include "core/physics/physics_constants.h"
+#include "core/physics/physics_debug_draw.h"
+#endif
 
 namespace imp {
 
@@ -127,8 +133,9 @@ absl::Status SliderConstraint::SetupInternal() {
     // then we will attach it to the world
     // useLinearReferenceFrameA is true, because world attached constraint is
     // expecting body B
+    use_linear_reference_frame_a_ = true;
     bt_constraint_ = std::make_unique<btSliderConstraint>(
-        *bt_rigid_body_A, frame_in_A, /*useLinearReferenceFrameA*/ true);
+        *bt_rigid_body_A, frame_in_A, use_linear_reference_frame_a_);
   } else {
     xAxis = normalize(cross(up_axis, axis));
     rot = mat3f(xAxis, up_axis, axis);
@@ -136,9 +143,10 @@ absl::Status SliderConstraint::SetupInternal() {
 
     // useLinearReferenceFrameA is false, so the motor (if enabled), will try to
     // move body A in the direction of B's X-axis.
+    use_linear_reference_frame_a_ = false;
     bt_constraint_ = std::make_unique<btSliderConstraint>(
         *bt_rigid_body_A, *bt_rigid_body_B, frame_in_A, frame_in_B,
-        /*useLinearReferenceFrameA*/ false);
+        use_linear_reference_frame_a_);
   }
 
   state_.axis = axis;
@@ -156,6 +164,10 @@ absl::Status SliderConstraint::SetupInternal() {
   SetLimitsFromState();
   SetMotorParametersFromState();
   SetSoftnessRestitutionDampingFromState();
+
+#if IMP_RUNTIME(DEV)
+  UseDebugVisualizer([this]() { Visualize(); }, kSliderConstraintVisualizer);
+#endif
 
   AddToPhysicsManager(true);
 
@@ -260,7 +272,7 @@ void SliderConstraint::OnRigidBodiesChanged() {
 
   absl::Status status = SetupInternal();
   if (!status.ok()) {
-    IMP_LOG(imp::ERROR) << "Failed to setup Point2PointConstraint: " << status;
+    IMP_LOG(imp::ERROR) << "Failed to setup SliderConstraint: " << status;
   }
 }
 
@@ -272,8 +284,50 @@ void SliderConstraint::OnIsfStateChanged() {
   bt_constraint_.reset();
   absl::Status status = SetupInternal();
   if (!status.ok()) {
-    IMP_LOG(imp::ERROR) << "Failed to setup Point2PointConstraint: " << status;
+    IMP_LOG(imp::ERROR) << "Failed to setup SliderConstraint: " << status;
   }
 }
+
+#if IMP_RUNTIME(DEV)
+void SliderConstraint::Visualize() {
+  physics_debug_draw::PhysicsDebugDraw debug_draw;
+  // Pivot A and axes
+  debug_draw.DrawPivotConnectedToOrigin(GetNode(), state_.pivot);
+  debug_draw.SetColor(debug_draw::GetColor(debug_draw::DebugColor::kBlue));
+  debug_draw.DrawAxis(GetNode(), state_.axis.value_or(kZAxis3f));
+  debug_draw.SetColor(debug_draw::GetColor(debug_draw::DebugColor::kGreen));
+  debug_draw.DrawAxis(GetNode(), state_.up_axis.value_or(kYAxis3f));
+
+  // Pivot B and axes
+  debug_draw.ResetColor();
+
+  debug_draw.DrawPivotConnectedToOrigin(
+      state_.connected_node, state_.connected_pivot.value_or(kZero3));
+  debug_draw.SetColor(debug_draw::GetColor(debug_draw::DebugColor::kBlue));
+  debug_draw.DrawAxis(state_.connected_node,
+                      state_.connected_axis.value_or(kZAxis3f));
+
+  debug_draw.SetColor(debug_draw::GetColor(debug_draw::DebugColor::kGreen));
+  debug_draw.DrawAxis(state_.connected_node,
+                      state_.connected_up_axis.value_or(kYAxis3f));
+
+  // The limits
+  debug_draw.ResetColor();
+  if (use_linear_reference_frame_a_ == false) {
+    const float3 dir = normalize(cross(state_.up_axis.value_or(kYAxis3f),
+                                       state_.axis.value_or(kZAxis3f)));
+    debug_draw.DrawLinearLimits(GetNode(), state_.pivot, dir,
+                                state_.linear_lower_limit,
+                                state_.linear_upper_limit, false);
+  } else {
+    const float3 dir =
+        normalize(cross(state_.connected_axis.value_or(kZAxis3f),
+                        state_.connected_up_axis.value_or(kYAxis3f)));
+    debug_draw.DrawLinearLimits(
+        state_.connected_node, state_.connected_pivot.value_or(kZero3), dir,
+        state_.linear_lower_limit, state_.linear_upper_limit, false);
+  }
+}
+#endif
 
 }  // namespace imp

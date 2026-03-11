@@ -158,7 +158,15 @@ backend_srcs = [
     "src/SystraceProfile.h",
     "src/noop/NoopDriver.cpp",
     "src/noop/PlatformNoop.cpp",
-]
+] + if_android([
+    "src/AndroidFrameCallback.h",
+    "src/AndroidFrameCallback.cpp",
+    "src/AndroidNdk.cpp",
+    "src/AndroidNativeWindow.cpp",
+    "src/AndroidNativeWindow.h",
+    "src/AndroidSwapChainHelper.cpp",
+    "src/AndroidSwapChainHelper.h",
+])
 
 backend_opengl_srcs = backend_srcs + [
     "src/opengl/OpenGLBlobCache.cpp",
@@ -243,6 +251,8 @@ backend_vulkan_srcs = backend_srcs + [
     "src/vulkan/VulkanDriver.h",
     "src/vulkan/VulkanExternalImageManager.cpp",
     "src/vulkan/VulkanExternalImageManager.h",
+    "src/vulkan/VulkanStreamedImageManager.cpp",
+    "src/vulkan/VulkanStreamedImageManager.h",
     "src/vulkan/VulkanFboCache.cpp",
     "src/vulkan/VulkanFboCache.h",
     "src/vulkan/VulkanHandles.cpp",
@@ -331,6 +341,7 @@ backend_metal_textual_hdrs = backend_textual_hdrs + [
     "src/metal/MetalDriver.h",
     "src/metal/MetalDriverFactory.h",
     "src/metal/MetalEnums.h",
+    "src/metal/MetalErrorQueue.h",
     "src/metal/MetalFlags.h",
     "src/metal/MetalExternalImage.h",
     "src/metal/MetalHandles.h",
@@ -371,6 +382,7 @@ cc_library(
     ]) + if_android([
         "include/backend/platforms/PlatformEGL.h",
         "include/backend/platforms/PlatformEGLAndroid.h",
+        "include/backend/platforms/AndroidNdk.h",
     ]) + if_windows([
         "include/backend/platforms/PlatformWGL.h",
     ]) + if_wasm([
@@ -382,7 +394,10 @@ cc_library(
     ]),
     copts = filament_copts(),
     defines = filament_defines(),
-    includes = ["include"],
+    includes = [
+        "include",
+        "src",
+    ],
     linkstatic = 1,
     textual_hdrs = if_apple(
         backend_metal_textual_hdrs,
@@ -401,10 +416,18 @@ cc_library(
         "include/backend/platforms/VulkanPlatform.h",
     ] + if_android([
         "include/backend/platforms/VulkanPlatformAndroid.h",
+        "include/backend/platforms/AndroidNdk.h",
+    ]) + if_windows([
+        "include/backend/platforms/VulkanPlatformWindows.h",
+    ]) + if_linux([
+        "include/backend/platforms/VulkanPlatformLinux.h",
     ]),
     copts = filament_copts(),
     defines = filament_defines(),
-    includes = ["include"],
+    includes = [
+        "include",
+        "src",
+    ],
     linkstatic = 1,
     textual_hdrs = backend_textual_hdrs,
     deps = backend_hdrs_deps + [
@@ -495,46 +518,6 @@ cc_library(
     alwayslink = 1,
 )
 
-genrule(
-    name = "generate_vkshaders",
-    srcs = [
-        "src/vulkan/BlitDepth.vs",
-        "src/vulkan/BlitDepth.fs",
-    ],
-    outs = [
-        "generated/vkshaders/vkshaders.c",
-        "generated/vkshaders/vkshaders.h",
-        "generated/vkshaders/BlitDepthVs.spv",
-        "generated/vkshaders/BlitDepthFs.spv",
-    ],
-    cmd = "MATC=$(location @third_party//filament:matc) && " +
-          "RESGEN=$(location @third_party//filament:resgen) && " +
-          "DEPLOY=`dirname $(location generated/vkshaders/vkshaders.c)` && " +
-          "$$MATC --raw -o $$DEPLOY/BlitDepthVs.spv $(location src/vulkan/BlitDepth.vs) && " +
-          "$$MATC --raw -o $$DEPLOY/BlitDepthFs.spv $(location src/vulkan/BlitDepth.fs) && " +
-          "$$RESGEN -cp vkshaders --deploy=$$DEPLOY $$DEPLOY/BlitDepthVs.spv $$DEPLOY/BlitDepthFs.spv",
-    tools = [
-        "@third_party//filament:matc",
-        "@third_party//filament:resgen",
-    ],
-)
-
-cc_library(
-    name = "generated_vkshaders",
-    srcs = [
-        "generated/vkshaders/vkshaders.c",
-    ],
-    hdrs = [],
-    copts = filament_copts(),
-    data = [],
-    includes = ["generated"],
-    linkstatic = 1,
-    textual_hdrs = [
-        "generated/vkshaders/vkshaders.h",
-    ],
-    alwayslink = 1,
-)
-
 # Vulkan backends
 [
     cc_library(
@@ -542,9 +525,9 @@ cc_library(
         srcs = backend_vulkan_srcs + if_android(
             ["src/vulkan/platform/VulkanPlatformAndroid.cpp"],
         ) + if_linux(
-            ["src/vulkan/platform/VulkanPlatformLinuxWindows.cpp"],
+            ["src/vulkan/platform/VulkanPlatformLinux.cpp"],
         ) + if_windows(
-            ["src/vulkan/platform/VulkanPlatformLinuxWindows.cpp"],
+            ["src/vulkan/platform/VulkanPlatformWindows.cpp"],
         ),
         copts = filament_copts(),
         defines = backend_defines + [
@@ -559,7 +542,6 @@ cc_library(
         textual_hdrs = backend_textual_hdrs,
         deps = deps + backend_deps + [
             ":backend_vk_hdrs",
-            ":generated_vkshaders",
             "@smol_v//:smol-v",
             "@spirv_headers//:spirv_cpp_headers",
             "@vulkan_memory_allocator",

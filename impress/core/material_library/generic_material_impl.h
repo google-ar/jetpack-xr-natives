@@ -139,6 +139,10 @@ class GenericMaterialImpl : public GenericMaterial {
   TextureAndSampler GetTransmissionTexture() const override;
   absl::Status SetTransmissionUvTransform(const mat3f& uv_transform) override;
   void SetTransmissionFactor(float factor) override;
+  TextureAndSampler GetThicknessTexture() const override;
+  void SetThicknessFactor(float factor) override;
+  void SetAttenuationDistance(float distance) override;
+  void SetAttenuationColor(const float3& color) override;
   void SetIndexOfRefraction(float index_of_refraction) override;
 
   std::optional<TextureAndSampler> GetFeatureIdTexture(

@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <jni.h>
+
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/common/log.h"
+#include "core/common/buffer_access.h"
 #include "core/common/jni_helpers.h"
 #include "core/proto/proto_reader.h"
 #include "core/proto/proto_writer.h"
@@ -47,9 +51,9 @@ inline T* FromJava(jlong n) {
 extern "C" {
 // LINT.IfChange(scripting)
 
-JNI_METHOD(jbyteArray, nPostMessage)
-(JNIEnv* env, jclass /*clazz*/, jlong view_host_handle,
- jbyteArray request_bytes, jobject jargs, jobject jout) {
+JNI_METHOD(void, nPostMessage)
+(JNIEnv* env, jclass /*clazz*/, jobject script_bridge, jlong view_host_handle,
+ jbyteArray request_bytes, jobject jargs) {
   imp::BufferAccess byte_buffer = imp::FromByteArray(env, request_bytes);
   imp::scripting::MessageToNative request;
   imp::proto::ParseMessage(byte_buffer.StringView(), &request);
@@ -81,45 +85,34 @@ JNI_METHOD(jbyteArray, nPostMessage)
     IMP_LOG(imp::FATAL) << "Unable to post script message with no bridge!";
   }
 
-  // Create a vector for the out arguments.
-  std::vector<void*> out;
+  imp::JniUniquePtr<jobject> script_bridge_global =
+      imp::WrapJni(env, env->NewWeakGlobalRef(script_bridge));
 
-  imp::Future<imp::scripting::MessageToScript> future =
-      script_message_handler->HandleMessage(request, args, out);
+  script_message_handler->HandleMessage(
+      request, args,
+      [script_bridge_global = std::move(script_bridge_global)](
+          const imp::scripting::MessageToScript& response, void* out) {
+        // Note: using the JniUniquePtr deleter is the only way to get the JNI
+        // Env* for this object without capturing in the lambda, which would
+        // result in the lambda being 24 bytes and unable to use
+        // small-object-optimization.
+        auto& custom_deleter = script_bridge_global.get_deleter();
+        JNIEnv* env = custom_deleter.env();
+        if (env->IsSameObject(script_bridge_global.get(), nullptr)) {
+          IMP_LOG(imp::ERROR) << "Script bridge is null in response_handler!";
+          return;
+        }
 
-  // Handle out params.
-  if (jout) {
-    if (out.empty()) {
-      IMP_LOG(imp::FATAL) << "Expected out params from message handler but got none.";
-    }
-    // Get the size of the out params list and verify it is initially empty.
-    jclass cls_List = env->GetObjectClass(jout);
-    jmethodID mid_size = env->GetMethodID(cls_List, "size", "()I");
-    int jout_size = env->CallIntMethod(jout, mid_size);
-    if (jout_size != 0) {
-      IMP_LOG(imp::FATAL) << "Expected empty out list to be filled by C++.";
-    }
-    // Add each item from the vector to the out list as jobject.
-    jmethodID mid_add =
-        env->GetMethodID(cls_List, "add", "(Ljava/lang/Object;)Z");
-    for (int i = 0; i < out.size(); i++) {
-      env->CallBooleanMethod(jout, mid_add, static_cast<jobject>(out[i]));
-    }
-  } else if (!out.empty()) {
-    IMP_LOG(imp::FATAL)
-        << "Message handler filled out params but JNI received null out list.";
-  }
-
-  if (future.Ready()) {
-    absl::StatusOr<imp::scripting::MessageToScript> response = future.Get();
-
-    // TODO: handle error status.
-    std::string serialized;
-    imp::proto::SerializeTo(&response.value(), &serialized);
-
-    return imp::ToByteArray(env, serialized);
-  }
-  return env->NewByteArray(0);
+        std::string serialized;
+        imp::proto::SerializeTo(&response, &serialized);
+        jclass script_api_class =
+            env->FindClass("com/google/ar/imp/core/scripting/ScriptBridge");
+        jmethodID post_message_method = env->GetMethodID(
+            script_api_class, "postMessage", "([BLjava/lang/Object;)V");
+        env->CallVoidMethod(script_bridge_global.get(), post_message_method,
+                            imp::ToByteArray(env, serialized),
+                            static_cast<jobject>(out));
+      });
 }
 
 // LINT.ThenChange(

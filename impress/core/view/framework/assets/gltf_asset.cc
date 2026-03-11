@@ -97,7 +97,7 @@ const MeshCollisionAccelerator* GltfAsset::GetMeshCollisionAccelerator(
     return nullptr;
   }
   absl::MutexLock mesh_collision_accelerators_lock(
-      &mesh_collision_accelerators_mutex_);
+      mesh_collision_accelerators_mutex_);
   auto it = mesh_collision_accelerators_.find(entity_id);
   if (it != mesh_collision_accelerators_.end()) {
     return it->second.get();
@@ -178,7 +178,7 @@ void GltfAsset::BuildMeshCollisionAccelerators(
 
 void GltfAsset::BuildMeshCollisionAcceleratorsInternal(
     CollisionAcceleratorProvider& collision_accelerator_provider) {
-  absl::MutexLock lock(&mesh_data_availability_mutex_);
+  absl::MutexLock lock(mesh_data_availability_mutex_);
   auto& stored_vertex_data = model_data_->GetStoredVertexData();
   auto& stored_index_data = model_data_->GetStoredIndexData();
   if (!stored_index_data.empty() && !stored_vertex_data.empty()) {
@@ -206,7 +206,7 @@ void GltfAsset::BuildMeshCollisionAcceleratorsInternal(
             .index_data = stored_index_data[part.index_buffer].get()});
       }
       absl::MutexLock mesh_collision_accelerators_lock(
-          &mesh_collision_accelerators_mutex_);
+          mesh_collision_accelerators_mutex_);
       mesh_collision_accelerators_[entity_id] =
           collision_accelerator_provider.GetMeshCollisionAccelerator(
               mesh_vertex_and_index_data, *local_bounds);
@@ -225,10 +225,10 @@ absl::StatusOr<std::unique_ptr<GltfAsset>> GltfAsset::Builder::Build() {
 
 GltfAsset::~GltfAsset() {
   // Wait until mesh collision accelerator creation futures are done.
-  absl::MutexLock mesh_data_lock(&mesh_data_availability_mutex_);
+  absl::MutexLock mesh_data_lock(mesh_data_availability_mutex_);
   model_data_.reset();
   absl::MutexLock mesh_collision_accelerators_lock(
-      &mesh_collision_accelerators_mutex_);
+      mesh_collision_accelerators_mutex_);
   mesh_collision_accelerators_.clear();
 }
 

@@ -14,6 +14,7 @@
 
 #include "core/editor/widgets/performance/frame_time_panel.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -31,6 +32,7 @@
 #include "core/editor/widgets/performance/imgui_helper.h"
 #include "core/editor/widgets/performance/monitor_panel.h"
 #include "core/editor/widgets/performance/sample_processor.h"
+#include "core/editor/widgets/performance/sample_processor_types.h"
 #include "core/performance/profiler.h"
 #include "core/view/base_view.h"
 
@@ -55,6 +57,9 @@ static constexpr const char* kTickLabels[] = {
 // Running at 30fps you will see the tick labels for 60, 90, and 30fps.
 // At 120 you will see the labels for 120, 144, and 240fps.
 static constexpr int kNumTickLabels = 3;
+
+// Nanoseconds in a millisecond.
+static constexpr float kNanosPerMs = 1000000.0f;
 }  // namespace
 
 FrameTimePanel::FrameTimePanel(BaseView& view, int buffer_size)
@@ -105,7 +110,8 @@ void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
 
   // Provides a border around the plot area since we removed the padding.
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-  ImGui::BeginChild("##FrameTimePanelChild", ImVec2(width, height), true);
+  ImGui::BeginChild("##FrameTimePanelChild", ImVec2(width, height),
+                    ImGuiChildFlags_Borders);
   ImGui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
 
   constexpr float lower_bound = 0;
@@ -127,10 +133,10 @@ void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
     ImPlot::SetupAxisLimits(ImAxis_Y1, lower_bound, upper_bound,
                             ImPlotCond_Always);
 
-    ValidTicks valid_ticks = GetValidTicks(upper_bound);
+    UpdateValidTicks(upper_bound);
 
-    if (!valid_ticks.values.empty()) {
-      ImPlot::SetupAxisTicks(ImAxis_Y1, valid_ticks.values.data(),
+    if (!valid_ticks_.values.empty()) {
+      ImPlot::SetupAxisTicks(ImAxis_Y1, valid_ticks_.values.data(),
                              kNumTickLabels);
     }
 
@@ -174,29 +180,47 @@ void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
     ImDrawList* draw_list_overlays = ImPlot::GetPlotDrawList();
     DrawHighlightFrame(selected_frame_number_, draw_list_overlays,
                        IM_COL32(255, 255, 255, 200), 0.3f);
-    DrawTickLabels(draw_list_overlays, valid_ticks);
+    DrawTickLabels(draw_list_overlays, valid_ticks_);
 
     ImPlot::EndPlot();
   }
   ImPlot::PopStyleVar();  // ImPlotStyleVar_PlotPadding
   ImGui::EndChild();
 
-  // If the panel is not paused, show the most recent frame recorded.
-  if (state_ != MonitorState::kPaused)
-    selected_frame_number_ = Profiler::GetCurrentFrameIndex() - 1;
+  // Options for changing the view and thread to display samples for.
+  DrawOptionsBar();
 
-  hierarchy_panel_.DrawPanel(selected_frame_number_, sample_processor_);
+  if (profiler_details_view_mode_ == ProfilerDetailsViewMode::kHierarchy) {
+    hierarchy_panel_.DrawPanel(selected_frame_number_, sample_processor_,
+                               *this);
+  } else {
+    flame_graph_.DrawPanel(selected_frame_number_, sample_processor_, *this);
+  }
 }
 
-FrameTimePanel::ValidTicks FrameTimePanel::GetValidTicks(float upper_bound) {
-  ValidTicks valid_ticks;
+void FrameTimePanel::DrawOptionsBar() {
+  // Toggle to switch between Hierarchy and Flame Graph.
+  if (ImGui::RadioButton(
+          "Hierarchy",
+          profiler_details_view_mode_ == ProfilerDetailsViewMode::kHierarchy)) {
+    profiler_details_view_mode_ = ProfilerDetailsViewMode::kHierarchy;
+  }
+  ImGui::SameLine();
+  if (ImGui::RadioButton("Flame Graph",
+                         profiler_details_view_mode_ ==
+                             ProfilerDetailsViewMode::kFlameGraph)) {
+    profiler_details_view_mode_ = ProfilerDetailsViewMode::kFlameGraph;
+  }
+}
+
+void FrameTimePanel::UpdateValidTicks(float upper_bound) {
+  valid_ticks_.clear();
   for (int i = 0; i < std::size(kTicks); ++i) {
     if (kTicks[i] <= upper_bound) {
-      valid_ticks.values.push_back(kTicks[i]);
-      valid_ticks.labels.push_back(kTickLabels[i]);
+      valid_ticks_.values.push_back(kTicks[i]);
+      valid_ticks_.labels.push_back(kTickLabels[i]);
     }
   }
-  return valid_ticks;
 }
 
 void FrameTimePanel::DrawTickLabels(ImDrawList* draw_list,
@@ -212,7 +236,10 @@ void FrameTimePanel::DrawTickLabels(ImDrawList* draw_list,
   // Manually draw Y-axis tick labels inside the plot
   ImPlot::PushPlotClipRect();
   float plot_left_x = ImPlot::GetPlotPos().x;
-  for (size_t i = 0; i < kNumTickLabels; ++i) {
+  size_t num_labels_to_draw =
+      std::min(static_cast<size_t>(kNumTickLabels), valid_ticks.labels.size());
+
+  for (size_t i = 0; i < num_labels_to_draw; ++i) {
     ImVec2 label_pos =
         ImPlot::PlotToPixels(ImPlotPoint(0, valid_ticks.values[i]));
     label_pos.x = plot_left_x +
@@ -234,11 +261,8 @@ void FrameTimePanel::DrawTickLabels(ImDrawList* draw_list,
 }
 
 void FrameTimePanel::DrawSelectedSamplePlot() {
-  absl::string_view selected_sample_name =
-      hierarchy_panel_.GetSelectedSampleName();
-
-  if (selected_sample_name.empty()) return;
-  PopulateSelectedSampleBuffer(selected_sample_name);
+  if (selected_sample_name_.empty()) return;
+  PopulateSelectedSampleBuffer();
 
   ImPlot::SetNextFillStyle(ImVec4(1.0f, 0.0f, 0.0f, -1.0f), 1.0f);
   ImPlot::PlotShaded(
@@ -247,15 +271,14 @@ void FrameTimePanel::DrawSelectedSamplePlot() {
       0, 0, 0, sizeof(SelectedSampleInfo));
 }
 
-void FrameTimePanel::PopulateSelectedSampleBuffer(
-    absl::string_view selected_sample_name) {
+void FrameTimePanel::PopulateSelectedSampleBuffer() {
   IMP_TRACE();
 
-  // If we're viewing the same sample as before and there have been no new
-  // samples processed then our buffer is already up to date.
-  if (!samples_processed_since_last_update_ &&
-      selected_sample_name_ == selected_sample_name)
+  // Don't update the buffer if we're viewing the same sample as before and
+  // there are no new samples recorded.
+  if (!selected_sample_changed_ && !samples_processed_since_last_update_) {
     return;
+  }
 
   std::thread::id main_thread_id = Profiler::GetMainThreadId();
 
@@ -269,48 +292,37 @@ void FrameTimePanel::PopulateSelectedSampleBuffer(
     selected_sample_buffer_[i].frame_time_ms = 0.0f;
 
     // Get all samples with the selected sample name for this frame and thread.
-    std::vector<ProfilerSampleNode*>* samples_ptr =
-        GetSamples(selected_sample_name, frame_index, main_thread_id);
+    std::vector<SampleNode*>* samples_ptr =
+        GetSamples(selected_sample_name_, frame_index, main_thread_id);
 
     // If there are no samples for this frame on this thread then we continue.
     if (!samples_ptr) continue;
 
-    std::vector<ProfilerSampleNode*>& samples = *samples_ptr;
+    std::vector<SampleNode*>& samples = *samples_ptr;
 
     uint32_t total_time_ns = 0;
 
     // Iterate over all samples with that name if there are any this frame.
     for (size_t j = 0; j < samples.size(); ++j) {
-      total_time_ns += samples[j]->total_time;
+      total_time_ns += samples[j]->total_time_ns;
     }
 
     selected_sample_buffer_[i].frame_time_ms =
-        static_cast<float>(total_time_ns) / 1000000.0f;
+        static_cast<float>(total_time_ns) / kNanosPerMs;
   }
 
-  selected_sample_name_ = selected_sample_name;
   samples_processed_since_last_update_ = false;
+  selected_sample_changed_ = false;
 }
 
-std::vector<ProfilerSampleNode*>* FrameTimePanel::GetSamples(
+std::vector<SampleNode*>* FrameTimePanel::GetSamples(
     absl::string_view sample_name, int frame_index, std::thread::id thread_id) {
-  ProcessedFrame& processed_frame =
+  ProcessedSamples& processed_frame =
       sample_processor_.GetProcessedFrame(frame_index);
 
-  const auto& samples_by_thread_and_name =
-      processed_frame.samples_by_thread_and_name.find(thread_id);
+  const auto& sample_it = processed_frame.samples_by_name.find(sample_name);
 
-  if (samples_by_thread_and_name ==
-      processed_frame.samples_by_thread_and_name.end()) {
-    return nullptr;
-  }
-
-  const auto& sample_it =
-      samples_by_thread_and_name->second.samples_by_name.find(sample_name);
-
-  if (sample_it == samples_by_thread_and_name->second.samples_by_name.end()) {
-    return nullptr;
-  }
+  if (sample_it == processed_frame.samples_by_name.end()) return nullptr;
 
   return &sample_it->second;
 }
@@ -334,9 +346,9 @@ void FrameTimePanel::DrawToolTip(int frame_number) {
 
   ImGui::BeginTooltip();
   float frame_time_ms =
-      Profiler::GetTotalFrameDurationNanos(frame_number) / 1000000.0f;
+      Profiler::GetTotalFrameDurationNanos(frame_number) / kNanosPerMs;
   float player_loop_time_ms =
-      Profiler::GetRenderNextFrameDurationNanos(frame_number) / 1000000.0f;
+      Profiler::GetRenderNextFrameDurationNanos(frame_number) / kNanosPerMs;
 
   ImGui::Text("Frame: %d", frame_number);
   ImGui::Text("Frame Time (w/ vsync): %.2fms", frame_time_ms);
@@ -354,15 +366,15 @@ void FrameTimePanel::Update(absl::Duration elapsed_time,
   // progress and the profiler can't see into the future to know how long it
   // will take. Instead we record the last frame times.
   int64_t frame_index = Profiler::GetCurrentFrameIndex() - 1;
-  sample_processor_.ProcessSamples(frame_index);
+  sample_processor_.ProcessMainThreadSamples(frame_index);
   samples_processed_since_last_update_ = true;
   float frame_time_ms =
       static_cast<float>(Profiler::GetTotalFrameDurationNanos(frame_index)) /
-      1000000.0f;
+      kNanosPerMs;
   float player_loop_time_ms =
       static_cast<float>(
           Profiler::GetRenderNextFrameDurationNanos(frame_index)) /
-      1000000.0f;
+      kNanosPerMs;
   buffer_.push_back(
       FrameTimeInfo{.frame_number = static_cast<float>(frame_index),
                     .frame_time_ms = frame_time_ms,

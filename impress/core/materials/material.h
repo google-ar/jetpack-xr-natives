@@ -226,6 +226,12 @@ class Material {
   // structures.
   virtual bool HasParameter(absl::string_view parameter_name) = 0;
 
+  // Gets the name of the transform field associated for the given sampler
+  // parameter. In the case where the parameter does not have a transform name
+  // field, it will return an empty string.
+  virtual absl::string_view GetParameterTransformName(
+      absl::string_view sampler_name) const = 0;
+
   enum class HeldTextureType {
     kNone,
     kRawPointer,

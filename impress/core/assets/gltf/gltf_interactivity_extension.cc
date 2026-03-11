@@ -379,8 +379,6 @@ GltfInteractivityExtension::System::System(BaseView* view)
   RegisterInteractivityNodeConverter(
       gltf::interactivity::GetDebugConsoleConverter());
   RegisterInteractivityNodeConverter(
-      gltf::interactivity::GetFlowDelayConverter());
-  RegisterInteractivityNodeConverter(
       gltf::interactivity::GetFlowBranchConverter());
   RegisterInteractivityNodeConverter(
       gltf::interactivity::GetMathAddConverter());
@@ -406,8 +404,6 @@ GltfInteractivityExtension::System::System(BaseView* view)
   RegisterInteractivityNodeConverter(
       gltf::interactivity::GetMathMaxConverter());
   RegisterInteractivityNodeConverter(
-      gltf::interactivity::GetMathClampConverter());
-  RegisterInteractivityNodeConverter(
       gltf::interactivity::GetMathAbsConverter());
   RegisterInteractivityNodeConverter(
       gltf::interactivity::GetMathSqrtConverter());
@@ -423,8 +419,6 @@ GltfInteractivityExtension::System::System(BaseView* view)
       gltf::interactivity::GetMathAcosConverter());
   RegisterInteractivityNodeConverter(
       gltf::interactivity::GetMathAtanConverter());
-  RegisterInteractivityNodeConverter(
-      gltf::interactivity::GetMathAtanTwoConverter());
   RegisterInteractivityNodeConverter(
       gltf::interactivity::GetMathLogConverter());
   RegisterInteractivityNodeConverter(

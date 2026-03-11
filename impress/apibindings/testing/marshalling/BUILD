@@ -43,7 +43,8 @@ cc_library(
     copts = imp_google3_copts(),
     linkstatic = True,
     deps = [
-        ":impress_api_test_context",
+        ":jni_test_utils",
+        ":model_test_context",
         "//apibindings:base_asset_animator",
         "//apibindings:base_asset_loader",
         "//apibindings:impress_api_view_header",
@@ -56,6 +57,7 @@ cc_library(
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_impress//core/common:log",
+        "@mediapipe//mediapipe/framework/port:gtest",
     ],
     alwayslink = 1,
 )
@@ -68,13 +70,17 @@ cc_library(
     copts = imp_google3_copts(),
     linkstatic = True,
     deps = [
+        ":jni_test_utils",
+        ":skybox_test_context",
         "//apibindings:base_asset_loader",
         "//apibindings:impress_api_view_header",
         "//apibindings:skybox_manager_interface",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:cord",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_impress//core/common:log",
+        "@mediapipe//mediapipe/framework/port:gtest",
     ],
     alwayslink = 1,
 )
@@ -109,10 +115,13 @@ cc_library(
     copts = imp_google3_copts(),
     linkstatic = True,
     deps = [
+        ":texture_test_context",
         "//apibindings:base_asset_loader",
         "//apibindings:impress_api_view_header",
         "//apibindings:texture_manager_interface",
         "//core/render",
+        "//core/view/utils:asset",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:string_view",
@@ -166,8 +175,10 @@ cc_library(
     copts = imp_google3_copts(),
     linkstatic = True,
     deps = [
-        ":impress_api_test_context",
+        ":model_test_context",
+        ":skybox_test_context",
         ":test_impress_api_view",
+        ":texture_test_context",
         "//core/common:buffer_access",
         "//core/common:jni_helpers",
         "//core/input",
@@ -206,12 +217,50 @@ cc_library(
 )
 
 cc_library(
-    name = "impress_api_test_context",
+    name = "model_test_context",
     testonly = True,
     hdrs = [
-        "impress_api_test_context.h",
+        "model_test_context.h",
     ],
     copts = imp_google3_copts(),
     linkstatic = True,
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "skybox_test_context",
+    testonly = True,
+    hdrs = [
+        "skybox_test_context.h",
+    ],
+    copts = imp_google3_copts(),
+    linkstatic = True,
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "texture_test_context",
+    testonly = True,
+    hdrs = [
+        "texture_test_context.h",
+    ],
+    copts = imp_google3_copts(),
+    linkstatic = True,
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "jni_test_utils",
+    testonly = True,
+    srcs = ["jni_test_utils.cc"],
+    hdrs = ["jni_test_utils.h"],
+    copts = imp_google3_copts(),
+    linkstatic = True,
+    deps = [
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/strings:string_view",
+    ],
     alwayslink = 1,
 )

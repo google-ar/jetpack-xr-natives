@@ -64,7 +64,7 @@ struct EditorSettingChangedEvent : public Event {
   std::optional<bool> show_all_bounds_enabled;
   std::optional<bool> show_all_colliders_enabled;
   std::optional<bool> show_all_origins_enabled;
-  std::optional<bool> show_physics_colliders_enabled;
+  std::optional<bool> show_physics_visualizer_enabled;
   std::optional<bool> vertex_selection_enabled;
   std::optional<bool> load_mesh_data_on_cpu_enabled;
   std::optional<bool> bvh_mesh_collision_acceleration_enabled;

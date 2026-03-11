@@ -17,6 +17,7 @@ syntax = "proto2";
 package com.google.ar.imp.view;
 
 import "core/view/utils/proto/render_settings.proto";
+import "core/view/utils/proto/view_config.proto";
 
 // option cc_api_version = 2;
 option java_package = "com.google.ar.imp.view";
@@ -133,4 +134,11 @@ message SetupParams {
   // the android surface used by the swapchain isn't used after it has been
   // destroyed. This only has an effect when using BACKGROUND thread_mode.
   optional bool use_synchronous_surface_changes = 29 [default = true];
+  // The view config for the main view. Used in preference over
+  // `view_render_settings` if set.
+  optional .imp.ViewConfig view_config = 30;
+
+  // When building for XR, whether or not to use the AndroidSys Eye Tracking
+  // Calibration extension.
+  optional bool use_eye_tracking_calibration = 31 [default = false];
 }

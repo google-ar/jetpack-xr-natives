@@ -92,6 +92,7 @@ class ModelCreator {
   TypedVector<GenericMaterialPtr> materials_;
   absl::flat_hash_map<uint16_t, model::ModelData::MaterialId>
       material_id_lookup_;
+  absl::flat_hash_map<uint32_t, model::ModelData::SkinId> skin_id_lookup_;
   TypedVector<model::ModelData::SkinningBufferData> skinning_buffers_;
   model::ModelData::MeshVertexDataLookup stored_vertex_data_;
   model::ModelData::MeshIndexDataLookup stored_index_data_;

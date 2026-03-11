@@ -63,10 +63,14 @@ class Executor {
 
   // Type is used to describe the intended Executor.
   enum class Type {
-    kImmediate,   // Executor that blocks and runs scheduled tasks immediately.
-    kForeground,  // The foreground executor
-    kBackground,  // The background executor
-    kCurrent      // Either kForeground or kBackground
+    kImmediate,   // Blocks the scheduling thread and runs the tasks immediately
+                  // when scheduled.
+    kForeground,  // Schedules tasks to be run on the foreground
+                  // thread when the executor is pumped, or whichever thread is
+                  // meant to be the main executing one.
+    kBackground,  // Schedules tasks to be run on a background
+                  // thread.
+    kCurrent      // Selects the active executor when the task is scheduled.
   };
 
   // Returns the string representation of Executor::Type.
@@ -119,6 +123,10 @@ class Executor {
   // If the TaskId cannot resolve to any task, or if task reprioritization is
   // not supported on this Executor, returns an error.
   virtual absl::Status UpdateTaskPriority(TaskId task_id, int task_priority);
+
+  // Tries to invoke the task associated with the given TaskId. Returns true if
+  // the task was invoked, false otherwise.
+  virtual bool InvokeScheduledTask(TaskId task_id);
 
   // Returns true if task reprioritization is supported on this executor.
   virtual bool IsTaskReprioritizingSupported() { return false; }

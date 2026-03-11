@@ -61,6 +61,7 @@
 #include "core/ncsb/update_phase.h"
 #include "core/ncsb/update_system.h"
 #include "core/split_engine/android/split_engine_android_bridge.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_mesh_serializer.h"
 #include "core/split_engine/split_engine_texture_serializer.h"
 #if IMP_PLATFORM(ANDROID)
@@ -118,9 +119,9 @@ class SplitEngineSerializerImpl
   // serialized data on a separate channel, allowing optimization of
   // underlying resources for serialization of larger and infrequent data.
   SplitEngineSerializerImpl(
-      BaseView& view, std::unique_ptr<SplitEngineAndroidBridge> bridge,
+      BaseView& view, int32_t api_level,
+      std::unique_ptr<SplitEngineAndroidBridge> bridge,
       std::unique_ptr<SplitEngineBridgeSender> bridge_sender,
-      std::unique_ptr<SplitEngineBridgeSender> one_shot_bridge_sender,
       size_t bridge_buffer_size_bytes);
 
   SplitEngineSerializerImpl(const SplitEngineSerializerImpl&) = delete;
@@ -187,6 +188,8 @@ class SplitEngineSerializerImpl
   std::unique_ptr<BaseRenderableManager::Builder> NewBuilder(
       size_t count) override;
 
+  int32_t GetApiLevel() const override;
+
   SplitEngineAndroidBridge& GetBridge() override;
 
   bool ReadyForNextFrame() const override;
@@ -234,12 +237,11 @@ class SplitEngineSerializerImpl
   void SetCapsuleCollider(utils::Entity entity, const Capsule& capsul,
                           bool enabled) override;
   void ClearCollider(utils::Entity entity, ColliderType collider_type) override;
-  void AddTexture(
-      filament::Texture& texture,
-      SplitEngineTextureSerializer& split_engine_texture_serializer) override;
+  void SerializeTexture(const SplitEngineTextureSerializer&
+                            split_engine_texture_serializer) override;
   void RemoveTexture(filament::Texture& texture) override;
   void SerializeMesh(
-      SplitEngineMeshSerializer& split_engine_mesh_serializer) override;
+      const SplitEngineMeshSerializer& split_engine_mesh_serializer) override;
   Future<GenericMaterialPtr> CreateGenericMaterial(
       const GenericMaterialSpec& spec) override;
   MaterialPtr CreateCustomMaterial(MaterialPtr material) override;
@@ -275,9 +277,9 @@ class SplitEngineSerializerImpl
       const SphericalHarmonics& spherical_harmonics,
       const ImageBasedLightingAssetCubemapImages& cubemap_images);
   void SerializeMeshIndicesAndVertices(
-      SplitEngineMeshSerializer& split_engine_mesh_serializer);
+      const SplitEngineMeshSerializer& split_engine_mesh_serializer);
   void SerializeMeshMorphTargets(
-      SplitEngineMeshSerializer& split_engine_mesh_serializer);
+      const SplitEngineMeshSerializer& split_engine_mesh_serializer);
 
   using ResourceId = std::uint64_t;
   using FlatBufferBuilderPtr = std::unique_ptr<flatbuffers::FlatBufferBuilder>;
@@ -409,21 +411,20 @@ class SplitEngineSerializerImpl
   FlatBufferBuilderPtr CreateFlatBufferBuilder(size_t size_bytes);
 
   BaseView& view_;
+
+  // The maximum API level that the serializer is allowed to serialize.
+  int32_t api_level_;
+
   // Hold the split engine bridge and ensures the lifetime of the bridge is the
   // lifetime of the serializer.
   // NOTE: it is critical that the bridge is destroyed after the senders are
   // destroyed, so the order of these fields is important.
   std::unique_ptr<SplitEngineAndroidBridge> bridge_;
 
-  // The main bridge sender used for sending messages to the split engine
-  // renderer.
+  // The sender used for sending messages to the split engine renderer.
   std::unique_ptr<SplitEngineBridgeSender> bridge_sender_;
 
-  // Use an independent sender for larger requests so that we can send them as
-  // throw away buffers of arbitrary size.
-  std::unique_ptr<SplitEngineBridgeSender> one_shot_bridge_sender_;
-
-  size_t bridge_buffer_size_bytes_;
+  const size_t bridge_buffer_size_bytes_;
 
   // A batch is a collection of commands that will be serialized together. All
   // commands within the same batch need to be of the same type, because the
@@ -640,6 +641,10 @@ class SplitEngineSerializerImpl
 
   // Sends all batches in the queue to the bridge and cleans up.
   void SendAllBatches();
+
+  // The group ID for the commands in the current frame update.
+  // One shot updates uses their own group IDs.
+  std::optional<MessageGroupId> frame_update_group_id_;
 };
 
 }  // namespace imp::split_engine

@@ -56,6 +56,7 @@ ModelData::ModelData(
     TypedVector<OwnedTexturePtr> textures,
     TypedVector<GenericMaterialPtr> materials,
     absl::flat_hash_map<uint16_t, MaterialId> material_id_lookup,
+    absl::flat_hash_map<uint32_t, SkinId> skin_id_lookup,
     TypedVector<SkinningBufferData> skinning_buffers,
     MeshVertexDataLookup stored_vertex_data,
     MeshIndexDataLookup stored_index_data,
@@ -79,6 +80,7 @@ ModelData::ModelData(
       textures_(std::move(textures)),
       materials_(std::move(materials)),
       material_id_lookup_(std::move(material_id_lookup)),
+      skin_id_lookup_(std::move(skin_id_lookup)),
       skinning_buffers_(std::move(skinning_buffers)),
       stored_vertex_data_(std::move(stored_vertex_data)),
       stored_index_data_(std::move(stored_index_data)),
@@ -178,6 +180,14 @@ MaterialId ModelData::GetMaterialId(uint16_t material_index) const {
   auto it = material_id_lookup_.find(material_index);
   if (it == material_id_lookup_.end()) {
     return MaterialId{};
+  }
+  return it->second;
+}
+
+SkinId ModelData::GetSkinId(uint32_t skin_index) const {
+  auto it = skin_id_lookup_.find(skin_index);
+  if (it == skin_id_lookup_.end()) {
+    return SkinId{};
   }
   return it->second;
 }

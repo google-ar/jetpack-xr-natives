@@ -79,8 +79,20 @@ class XrVulkanPlatform : public XrPlatformBase {
   SwapChain* createSwapChain(void* nativewindow, uint64_t flags,
                              VkExtent2D extent) noexcept override;
 
+  bool isCompositorTimingSupported() const noexcept override;
+
+  bool setPresentFrameId(SwapChain const* swapchain,
+                         uint64_t frameId) noexcept override;
+
+  bool queryFrameTimestamps(
+      SwapChain const* swapchain, uint64_t frameId,
+      FrameTimestamps* outFrameTimestamps) const noexcept override;
+
   // Check if the swapchain is protected.
   bool isProtected(SwapChain* swapChain) noexcept override;
+
+  // Query if transient attachments are supported by the backend.
+  bool isTransientAttachmentSupported() const;
 
   void destroy(SwapChain* swapChain) noexcept override;
 

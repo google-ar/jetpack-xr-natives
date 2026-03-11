@@ -293,7 +293,7 @@ TextureAndSampler GenericMaterialImpl::GetClearcoatTexture() const {
       it != texture_lookup_.end()) {
     return it->second;
   }
-  // TODO: lincolnfrog - Use placeholder_texture_.Borrow().
+  // TODO: Use placeholder_texture_.Borrow().
   return {placeholder_texture_->GetTexture(), filament::TextureSampler()};
 }
 TextureAndSampler GenericMaterialImpl::GetClearcoatNormalTexture() const {
@@ -301,7 +301,7 @@ TextureAndSampler GenericMaterialImpl::GetClearcoatNormalTexture() const {
       it != texture_lookup_.end()) {
     return it->second;
   }
-  // TODO: lincolnfrog - Use placeholder_texture_.Borrow().
+  // TODO: Use placeholder_texture_.Borrow().
   return {placeholder_texture_->GetTexture(), filament::TextureSampler()};
 }
 TextureAndSampler GenericMaterialImpl::GetClearcoatRoughnessTexture() const {
@@ -309,7 +309,7 @@ TextureAndSampler GenericMaterialImpl::GetClearcoatRoughnessTexture() const {
       it != texture_lookup_.end()) {
     return it->second;
   }
-  // TODO: lincolnfrog - Use placeholder_texture_.Borrow().
+  // TODO: Use placeholder_texture_.Borrow().
   return {placeholder_texture_->GetTexture(), filament::TextureSampler()};
 }
 void GenericMaterialImpl::SetClearcoatFactors(const float3& factor) {
@@ -320,7 +320,7 @@ TextureAndSampler GenericMaterialImpl::GetSheenColorTexture() const {
       it != texture_lookup_.end()) {
     return it->second;
   }
-  // TODO: lincolnfrog - Use placeholder_texture_.Borrow().
+  // TODO: Use placeholder_texture_.Borrow().
   return {placeholder_texture_->GetTexture(), filament::TextureSampler()};
 }
 void GenericMaterialImpl::SetSheenColorFactor(const float3& factor) {
@@ -331,7 +331,7 @@ TextureAndSampler GenericMaterialImpl::GetSheenRoughnessTexture() const {
       it != texture_lookup_.end()) {
     return it->second;
   }
-  // TODO: lincolnfrog - Use placeholder_texture_.Borrow().
+  // TODO: Use placeholder_texture_.Borrow().
   return {placeholder_texture_->GetTexture(), filament::TextureSampler()};
 }
 void GenericMaterialImpl::SetSheenRoughnessFactor(float factor) {
@@ -342,7 +342,7 @@ TextureAndSampler GenericMaterialImpl::GetTransmissionTexture() const {
       it != texture_lookup_.end()) {
     return it->second;
   }
-  // TODO: lincolnfrog - Use placeholder_texture_.Borrow().
+  // TODO: Use placeholder_texture_.Borrow().
   return {placeholder_texture_->GetTexture(), filament::TextureSampler()};
 }
 
@@ -351,9 +351,31 @@ absl::Status GenericMaterialImpl::SetTransmissionUvTransform(
   return AssignSamplerUvTransform(kTransmissionIndex, uv_transform);
 }
 
+TextureAndSampler GenericMaterialImpl::GetThicknessTexture() const {
+  if (auto it = texture_lookup_.find(kThicknessIndex);
+      it != texture_lookup_.end()) {
+    return it->second;
+  }
+  // TODO: Use placeholder_texture_.Borrow().
+  return {placeholder_texture_->GetTexture(), filament::TextureSampler()};
+}
+
+void GenericMaterialImpl::SetThicknessFactor(float factor) {
+  ApplyMaterialParameter(kThicknessFactor, factor);
+}
+
+void GenericMaterialImpl::SetAttenuationDistance(float distance) {
+  ApplyMaterialParameter(kAttenuationDistance, distance);
+}
+
+void GenericMaterialImpl::SetAttenuationColor(const float3& color) {
+  ApplyMaterialParameter(kAttenuationColor, color);
+}
+
 void GenericMaterialImpl::SetTransmissionFactor(float factor) {
   ApplyMaterialParameter(kTransmissionFactor, factor);
 }
+
 void GenericMaterialImpl::SetIndexOfRefraction(float index_of_refraction) {
   ApplyMaterialParameter(kIndexOfRefraction, index_of_refraction);
 }
@@ -717,6 +739,22 @@ absl::Status GenericMaterialImpl::AssignTexturesAndParams(
       AssignFallbackSampler(kSheenRoughnessIndex);
       SetSheenColorFactor(kDefaultSheenColorFactor);
       SetSheenRoughnessFactor(kDefaultSheenRoughnessFactor);
+    }
+
+    if (generic_material_parameters.volume) {
+      MP_RETURN_IF_ERROR(
+          AssignTexture(texture_borrower, kThicknessIndex,
+                        generic_material_parameters.volume->texture));
+      SetThicknessFactor(generic_material_parameters.volume->thickness_factor);
+      SetAttenuationDistance(
+          generic_material_parameters.volume->attenuation_distance);
+      SetAttenuationColor(
+          generic_material_parameters.volume->attenuation_color);
+    } else {
+      AssignFallbackSampler(kThicknessIndex);
+      SetThicknessFactor(kDefaultThicknessFactor);
+      SetAttenuationDistance(kDefaultAttenuationDistance);
+      SetAttenuationColor(kDefaultAttenuationColor);
     }
 
     if (generic_material_parameters.transmission) {

@@ -173,6 +173,7 @@ cc_library(
     linkstatic = True,
     deps = [
         ":renderer_policy_handler",
+        ":split_engine_renderer_context",
         ":split_engine_shared",
         "//core/async:future",
         "//core/common:invocable",
@@ -182,6 +183,7 @@ cc_library(
         "//core/render:display_color_space",
         "//core/render/android:platform_android_external_texture_surface",
         "//core/split_engine/materials/builtin:builtin_material",
+        "@com_google_absl//absl/base:nullability",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@flatbuffers",
@@ -202,6 +204,7 @@ cc_library(
     deps = [
         ":renderer_policy_handler",
         ":split_engine_renderer",
+        ":split_engine_renderer_context",
         ":split_engine_shared",
         "//core/async:future",
         "//core/common:invocable",
@@ -297,7 +300,6 @@ cc_library(
     defines = imp_defines(),
     deps = [
         "@flatbuffers",
-        "@third_party//filament/filament:filament_hdrs",
         "@third_party//split_engine:fbs",
         "@third_party//split_engine:fbs_deps",  # buildcleaner: keep
     ],
@@ -376,6 +378,7 @@ cc_library(
         "@com_google_absl//absl/base:nullability",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:string_view",
@@ -415,6 +418,7 @@ cc_library(
         "//core/model/mesh:base_mesh_builder",
         "//core/model/mesh:mesh_builder",
         "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_impress//core/common:log",
@@ -475,9 +479,13 @@ cc_library(
     deps = [
         ":split_engine_serializer",
         ":split_engine_texture_serializer",
+        "//core/assets",
         "//core/image",
+        "//core/render",
         "//core/render:base_texture_builder",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/strings:string_view",
+        "@com_google_impress//core/common:log",
         "@flatbuffers",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
@@ -527,6 +535,7 @@ cc_library(
         "@third_party//filament/libs:utils_hdrs",
         "@third_party//split_engine:fbs",
         "@third_party//split_engine:fbs_deps",  # buildcleaner: keep
+        "@third_party//split_engine:split_engine_schema_version",
     ] + if_android([
         "//core/render/android:android_external_texture_surface",
     ]),
@@ -540,6 +549,7 @@ cc_library(
     copts = imp_copts(),
     linkstatic = 1,
     deps = [
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/types:span",
@@ -660,7 +670,6 @@ cc_library(
         "//core/common:enum_flags",
         "//core/common:invocable",
         "//core/lighting:environment_light",
-        "//core/split_engine/android:split_engine_android_bridge",
         "//core/split_engine/android:split_engine_shared_memory_bridge_client_mock",
         "//core/split_engine/test_assets",
         "//core/view:base_view",
@@ -846,6 +855,52 @@ cc_library(
         "@com_google_impress//core/common:log",
         "@flatbuffers",
         "@mediapipe//mediapipe/framework/port:status",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "split_engine_renderer_context",
+    srcs = ["split_engine_renderer_context.cc"],
+    hdrs = ["split_engine_renderer_context.h"],
+    copts = imp_copts(),
+    deps = [
+        ":renderer_policy_handler",
+        ":split_engine_filament_resource_ptrs",
+        ":split_engine_shared",
+        ":user_id_holder",
+        "//core/assets",
+        "//core/common:invocable",
+        "//core/common:robin_map",
+        "//core/lighting:environment_light",
+        "//core/lighting:image_based_lighting_asset",
+        "//core/materials",
+        "//core/math",
+        "//core/media:media_color_space",
+        "//core/model/mesh:mesh_data",
+        "//core/ncsb",
+        "//core/render",
+        "//core/split_engine/materials/builtin:builtin_material",
+        "//core/view:base_view",
+        "//core/view/framework",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status",
+        "@com_google_impress//core/common:log",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "split_engine_external_texture_color_space_store",
+    srcs = ["split_engine_external_texture_color_space_store.cc"],
+    hdrs = ["split_engine_external_texture_color_space_store.h"],
+    copts = imp_copts(),
+    deps = [
+        ":split_engine_shared",
+        "//core/media:media_color_space",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
     ],
     alwayslink = 1,
 )

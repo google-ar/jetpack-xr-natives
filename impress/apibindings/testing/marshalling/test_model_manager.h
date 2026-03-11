@@ -49,6 +49,8 @@ class TestModelManager : public ModelManager {
                                             bool enable_collider) override;
   absl::Status SetGltfModelColliderEnabled(int32_t node,
                                            bool enable_collider) override;
+  absl::Status SetGltfReformAffordanceEnabled(int32_t impress_node,
+                                              bool enable_affordance) override;
   void AnimateGltfModel(
       int32_t node, absl::string_view animation_name, bool loop,
       std::unique_ptr<BaseAssetAnimator> asset_animator) override;

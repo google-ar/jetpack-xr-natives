@@ -19,6 +19,8 @@
 #include <memory>
 #include <utility>
 
+#include "core/async/future.h"
+#include "core/materials/compiler/cache/material_cache.h"
 #include "core/materials/compiler/material_compiler_client.h"
 #include "core/materials/compiler/material_compiler_service.h"
 #include "core/materials/compiler/runtime_material_compiler.h"
@@ -30,14 +32,17 @@ namespace imp {
 // same process.
 class DesktopRuntimeMaterialCompiler : public RuntimeMaterialCompiler {
  public:
-  static std::unique_ptr<RuntimeMaterialCompiler> Create(BaseView& view);
+  static Future<std::unique_ptr<RuntimeMaterialCompiler>> Create(
+      BaseView& view);
 
  private:
   DesktopRuntimeMaterialCompiler(
       BaseView& view,
       std::unique_ptr<MaterialCompilerService> material_compiler_service,
-      std::unique_ptr<MaterialCompilerClient> material_compiler_client)
-      : RuntimeMaterialCompiler(view, std::move(material_compiler_client)),
+      std::unique_ptr<MaterialCompilerClient> material_compiler_client,
+      std::unique_ptr<MaterialCache> cache)
+      : RuntimeMaterialCompiler(view, std::move(material_compiler_client),
+                                std::move(cache)),
         native_service_(std::move(material_compiler_service)) {}
 
   std::unique_ptr<MaterialCompilerService> native_service_;

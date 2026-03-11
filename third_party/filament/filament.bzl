@@ -34,6 +34,9 @@ def if_android(a, otherwise = []):
         "//conditions:default": otherwise,
     })
 
+def if_android_min_sdk_at_least_26(a, otherwise = []):
+    return a
+
 def if_macos(a, otherwise = []):
     return select({
         clean_dep("@third_party//filament:macos"): a,

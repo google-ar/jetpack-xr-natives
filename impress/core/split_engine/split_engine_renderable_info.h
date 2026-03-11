@@ -67,6 +67,15 @@ class SplitEngineRenderableInfo : public Component {
 
   uint32_t GetSkinningBoneCount() const noexcept;
 
+  // Stores the channel setting for this renderable. This is used to support
+  // SplitEngineRenderer::SetChannelOverride() & ClearChannelOverride().
+  // This should be called when the channel of a renderable is set via split
+  // engine schema.
+  // TODO: (broken link) - implement seting the channel via split engine schema.
+  void SetChannel(uint8_t channel);
+  // Returns the channel setting for this renderable, if it has been set.
+  std::optional<uint8_t> GetChannel() const;
+
   const imp::Box& GetRenderableBounds() const;
 
   BridgeId GetBridgeId() const noexcept;
@@ -107,6 +116,8 @@ class SplitEngineRenderableInfo : public Component {
   BorrowedIndexBufferPtr index_buffer_;
 
   uint32_t skinning_bone_count_ = 0;
+
+  std::optional<uint8_t> channel_;
 
   imp::Box renderable_bounds_;
 

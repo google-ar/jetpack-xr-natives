@@ -29,6 +29,7 @@ android_library(
 android_library(
     name = "material_compiler_no_jni",
     srcs = [
+        "FileUtilities.java",
         "MaterialCompilerClient.java",
         "MaterialCompilerService.java",
     ],

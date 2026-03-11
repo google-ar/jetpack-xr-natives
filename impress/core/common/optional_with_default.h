@@ -44,6 +44,17 @@ struct AdditionalFields<std::string> {
   // Used so that operator-> can return a non-temporary string_view.
   mutable std::string_view cached_view;
 };
+
+// Used as the default value for a given type when the default value is not
+// explicitly specified.
+template <typename T>
+inline constexpr T kUnspecifiedDefault = {};
+
+// Specialization for std::string to use std::string_view as the default
+// value's type.
+template <>
+inline constexpr std::string_view kUnspecifiedDefault<std::string> = {};
+
 }  // namespace imp_internal
 
 // The class  manages an optional contained value, i.e. a value that may or may
@@ -76,7 +87,20 @@ struct AdditionalFields<std::string> {
 // Note: The default value must outlive the OptionalWithDefault object. Given
 // that the default value is expected to be statically known, this is rarely an
 // issue.
-template <typename T, const auto* DefaultValuePointer>
+//
+// This class can also be used without explicitly specifying the default,
+// in which case it is the default-initialized value for the type.
+//
+// Example:
+//
+// using MyInt = OptionalWithDefault<int>;
+// using MyString = OptionalWithDefault<std::string>;
+// using MyStruct = OptionalWithDefault<MyStructType>;
+//
+// In this case, the default value is zero for int, the empty string for
+// std::string, and a default initialized struct for MyStructType.
+template <typename T, const auto* DefaultValuePointer =
+                          &imp_internal::kUnspecifiedDefault<T>>
 class OptionalWithDefault {
  public:
   // const T& or std::string_view if T is std::string.
@@ -97,7 +121,8 @@ class OptionalWithDefault {
   // for transparently wrapping values that can be assigned to the contained
   // type, making this type usable for aggregate types and other APIs.
   template <typename U = std::remove_cv_t<T>,
-            std::enable_if_t<std::is_convertible_v<U, T>, bool> = true>
+            std::enable_if_t<std::is_constructible_v<std::optional<T>, U>,
+                             bool> = true>
   constexpr OptionalWithDefault(U&& value);
 
   // Constructs an empty optional, i.e. the value is not set and accessing the
@@ -113,8 +138,9 @@ class OptionalWithDefault {
   // Note: Follows the same implicit conversion rules as std::optional to allow
   // for transparently wrapping values that can be assigned to the contained
   // type, making this type usable for aggregate types and other APIs.
-  template <typename U = std::remove_cv_t<T>,
-            std::enable_if_t<std::is_convertible_v<U, T>, bool> = true>
+  template <
+      typename U = std::remove_cv_t<T>,
+      std::enable_if_t<std::is_assignable_v<std::optional<T>, U>, bool> = true>
   OptionalWithDefault& operator=(U&& value);
 
   // Assigns empty to the optional, i.e. the value is not set and accessing the
@@ -122,6 +148,29 @@ class OptionalWithDefault {
   //
   // Similar to calling Reset().
   OptionalWithDefault& operator=(std::nullopt_t) noexcept;
+
+  // Compares this OptionalWithDefault to another OptionalWithDefault.
+  //
+  // The comparison is done on the value returned by Value(), which handles
+  // the case where the value is not set by using the default value.
+  template <typename U, const auto* OtherDefaultValuePointer>
+  bool operator==(
+      const OptionalWithDefault<U, OtherDefaultValuePointer>& other) const;
+  template <typename U, const auto* OtherDefaultValuePointer>
+  bool operator!=(
+      const OptionalWithDefault<U, OtherDefaultValuePointer>& other) const;
+  template <typename U, const auto* OtherDefaultValuePointer>
+  bool operator<(
+      const OptionalWithDefault<U, OtherDefaultValuePointer>& other) const;
+  template <typename U, const auto* OtherDefaultValuePointer>
+  bool operator>(
+      const OptionalWithDefault<U, OtherDefaultValuePointer>& other) const;
+  template <typename U, const auto* OtherDefaultValuePointer>
+  bool operator<=(
+      const OptionalWithDefault<U, OtherDefaultValuePointer>& other) const;
+  template <typename U, const auto* OtherDefaultValuePointer>
+  bool operator>=(
+      const OptionalWithDefault<U, OtherDefaultValuePointer>& other) const;
 
   // Returns true if a value is assigned to the optional.
   //
@@ -143,6 +192,17 @@ class OptionalWithDefault {
   // Note: The returned value is never mutable because it is not allowed to
   // mutate the default value. Use GetMutable() to modify the assigned value.
   AccessRefT Value() const;
+
+  // Returns a mutable reference to the value of the optional. This allows for
+  // modifying the assigned value in-place.
+  //
+  // If you call this and a value is not already set, then the optional
+  // will be set to the default value automatically. This means that HasValue()
+  // will return true after this call.
+  //
+  // Note: The returned value is mutable because it's possible to mutate the
+  // assigned value, but not the default value.
+  T& MutableValue();
 
   // Clears the assigned value if there is one, making the optional empty and
   // causing it to return the default value when accessed.
@@ -170,12 +230,6 @@ class OptionalWithDefault {
   // mutated, or if Reset is called. Do not store this pointer for later use.
   AccessPtrT operator->() const;
 
-  // Gets a mutable pointer to the value of the optional. This allows the value
-  // to be modified in place.
-  //
-  // If the value is not set, then nullptr is returned.
-  T* GetMutable();
-
   // Returns a reference to the default value.
   static constexpr AccessRefT GetDefaultValue();
 
@@ -189,7 +243,8 @@ class OptionalWithDefault {
 };
 
 template <typename T, const auto* DefaultValuePointer>
-template <typename U, std::enable_if_t<std::is_convertible_v<U, T>, bool>>
+template <typename U,
+          std::enable_if_t<std::is_constructible_v<std::optional<T>, U>, bool>>
 constexpr OptionalWithDefault<T, DefaultValuePointer>::OptionalWithDefault(
     U&& value)
     : value_(std::forward<U>(value)) {}
@@ -200,7 +255,8 @@ constexpr OptionalWithDefault<T, DefaultValuePointer>::OptionalWithDefault(
     : value_(std::nullopt) {}
 
 template <typename T, const auto* DefaultValuePointer>
-template <typename U, std::enable_if_t<std::is_convertible_v<U, T>, bool>>
+template <typename U,
+          std::enable_if_t<std::is_assignable_v<std::optional<T>, U>, bool>>
 OptionalWithDefault<T, DefaultValuePointer>&
 OptionalWithDefault<T, DefaultValuePointer>::operator=(U&& value) {
   value_ = std::forward<U>(value);
@@ -231,6 +287,14 @@ template <typename T, const auto* DefaultValuePointer>
 OptionalWithDefault<T, DefaultValuePointer>::AccessRefT
 OptionalWithDefault<T, DefaultValuePointer>::Value() const {
   return HasValue() ? value_.value() : GetDefaultValue();
+}
+
+template <typename T, const auto* DefaultValuePointer>
+T& OptionalWithDefault<T, DefaultValuePointer>::MutableValue() {
+  if (!HasValue()) {
+    value_.emplace(GetDefaultValue());
+  }
+  return value_.value();
 }
 
 template <typename T, const auto* DefaultValuePointer>
@@ -268,14 +332,114 @@ OptionalWithDefault<T, DefaultValuePointer>::operator->() const {
 }
 
 template <typename T, const auto* DefaultValuePointer>
-T* OptionalWithDefault<T, DefaultValuePointer>::GetMutable() {
-  return value_.has_value() ? &value_.value() : nullptr;
-}
-
-template <typename T, const auto* DefaultValuePointer>
 constexpr OptionalWithDefault<T, DefaultValuePointer>::AccessRefT
 OptionalWithDefault<T, DefaultValuePointer>::GetDefaultValue() {
   return *DefaultValuePointer;
+}
+
+template <typename T, const auto* DefaultValuePointer>
+template <typename U, const auto* OtherDefaultValuePointer>
+bool OptionalWithDefault<T, DefaultValuePointer>::operator==(
+    const OptionalWithDefault<U, OtherDefaultValuePointer>& other) const {
+  return Value() == other.Value();
+}
+
+template <typename T, const auto* DefaultValuePointer>
+template <typename U, const auto* OtherDefaultValuePointer>
+bool OptionalWithDefault<T, DefaultValuePointer>::operator!=(
+    const OptionalWithDefault<U, OtherDefaultValuePointer>& other) const {
+  return Value() != other.Value();
+}
+
+template <typename T, const auto* DefaultValuePointer>
+template <typename U, const auto* OtherDefaultValuePointer>
+bool OptionalWithDefault<T, DefaultValuePointer>::operator<(
+    const OptionalWithDefault<U, OtherDefaultValuePointer>& other) const {
+  return Value() < other.Value();
+}
+
+template <typename T, const auto* DefaultValuePointer>
+template <typename U, const auto* OtherDefaultValuePointer>
+bool OptionalWithDefault<T, DefaultValuePointer>::operator>(
+    const OptionalWithDefault<U, OtherDefaultValuePointer>& other) const {
+  return Value() > other.Value();
+}
+
+template <typename T, const auto* DefaultValuePointer>
+template <typename U, const auto* OtherDefaultValuePointer>
+bool OptionalWithDefault<T, DefaultValuePointer>::operator<=(
+    const OptionalWithDefault<U, OtherDefaultValuePointer>& other) const {
+  return Value() <= other.Value();
+}
+
+template <typename T, const auto* DefaultValuePointer>
+template <typename U, const auto* OtherDefaultValuePointer>
+bool OptionalWithDefault<T, DefaultValuePointer>::operator>=(
+    const OptionalWithDefault<U, OtherDefaultValuePointer>& other) const {
+  return Value() >= other.Value();
+}
+
+// Symmetric non-member comparison operators for U vs OptionalWithDefault.
+template <typename T, const auto* DefaultValuePointer, typename U>
+bool operator==(const OptionalWithDefault<T, DefaultValuePointer>& optional,
+                const U& value) {
+  return optional.Value() == value;
+}
+template <typename T, const auto* DefaultValuePointer, typename U>
+bool operator!=(const OptionalWithDefault<T, DefaultValuePointer>& optional,
+                const U& value) {
+  return optional.Value() != value;
+}
+template <typename T, const auto* DefaultValuePointer, typename U>
+bool operator<(const OptionalWithDefault<T, DefaultValuePointer>& optional,
+               const U& value) {
+  return optional.Value() < value;
+}
+template <typename T, const auto* DefaultValuePointer, typename U>
+bool operator>(const OptionalWithDefault<T, DefaultValuePointer>& optional,
+               const U& value) {
+  return optional.Value() > value;
+}
+template <typename T, const auto* DefaultValuePointer, typename U>
+bool operator<=(const OptionalWithDefault<T, DefaultValuePointer>& optional,
+                const U& value) {
+  return optional.Value() <= value;
+}
+template <typename T, const auto* DefaultValuePointer, typename U>
+bool operator>=(const OptionalWithDefault<T, DefaultValuePointer>& optional,
+                const U& value) {
+  return optional.Value() >= value;
+}
+
+template <typename T, const auto* DefaultValuePointer, typename U>
+bool operator==(const U& value,
+                const OptionalWithDefault<T, DefaultValuePointer>& optional) {
+  return value == optional.Value();
+}
+template <typename T, const auto* DefaultValuePointer, typename U>
+bool operator!=(const U& value,
+                const OptionalWithDefault<T, DefaultValuePointer>& optional) {
+  return value != optional.Value();
+}
+template <typename T, const auto* DefaultValuePointer, typename U>
+bool operator<(const U& value,
+               const OptionalWithDefault<T, DefaultValuePointer>& optional) {
+  return value < optional.Value();
+}
+template <typename T, const auto* DefaultValuePointer, typename U>
+bool operator>(const U& value,
+               const OptionalWithDefault<T, DefaultValuePointer>& optional) {
+  return value > optional.Value();
+}
+template <typename T, const auto* DefaultValuePointer, typename U>
+bool operator<=(const U& value,
+                const OptionalWithDefault<T, DefaultValuePointer>& optional) {
+  return value <= optional.Value();
+}
+template <typename T, const auto* DefaultValuePointer, typename U>
+bool operator>=(const U& value,
+                const OptionalWithDefault<T, DefaultValuePointer>& optional) {
+  return value >= optional.Value();
 }
 
 }  // namespace imp

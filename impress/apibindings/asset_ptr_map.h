@@ -51,6 +51,12 @@ class AssetPtrMap : public Rememberer {
       absl::Cord data, absl::string_view key,
       std::unique_ptr<BaseAssetLoader> asset_loader);
 
+  // Loads an image based lighting asset pointer from an AssetDefinition, and
+  // resolves the AssetLoader when it is ready.
+  void LoadImageBasedLightingAsset(
+      imp::AssetDefinition asset_definition,
+      std::unique_ptr<BaseAssetLoader> asset_loader);
+
   // Releases a previously loaded image based lighting asset from the pointer
   // map.
   absl::Status ReleaseImageBasedLightingAsset(std::intptr_t ibl_token);
@@ -98,6 +104,13 @@ class AssetPtrMap : public Rememberer {
   static std::string GetAssetString(absl::string_view name);
 
  private:
+  // Helper template to handle the result of loading an asset.
+  template <typename AssetT>
+  void HandleAssetLoadingResult(
+      absl::StatusOr<AssetPtr<AssetT>> asset_ptr,
+      std::unique_ptr<BaseAssetLoader> asset_loader,
+      absl::flat_hash_map<std::intptr_t, AssetPtr<AssetT>>& asset_map);
+
   BaseView& view_;
   absl::flat_hash_map<std::intptr_t, AssetPtr<GltfAsset>> gltf_asset_map_;
   absl::flat_hash_map<std::intptr_t, AssetPtr<ImageBasedLightingAsset>>
@@ -108,29 +121,6 @@ class AssetPtrMap : public Rememberer {
       "https?:\\/\\/"
       "(www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{2,256}\\.[a-z]{2,4}\\b([-a-zA-Z0-9@:%_"
       "\\+.~#?&//=]*)";
-
-  void OnGltfAssetLoadingResult(absl::StatusOr<AssetPtr<GltfAsset>> asset_ptr,
-                                std::unique_ptr<BaseAssetLoader> asset_loader) {
-    if (!asset_ptr.status().ok()) {
-      asset_loader->OnFailure(asset_ptr.status().ToString());
-      return;
-    }
-    std::intptr_t gltf_token =
-        reinterpret_cast<std::intptr_t>(asset_ptr->Get());
-    gltf_asset_map_[gltf_token] = *asset_ptr;
-    asset_loader->OnSuccess(gltf_token);
-  }
-
-  void OnIblAssetLoadingResult(AssetPtr<ImageBasedLightingAsset> asset_ptr,
-                               std::unique_ptr<BaseAssetLoader> asset_loader) {
-    if (!asset_ptr) {
-      asset_loader->OnFailure("Failed to load image based lighting asset.");
-      return;
-    }
-    std::intptr_t ibl_token = reinterpret_cast<std::intptr_t>(asset_ptr.Get());
-    ibl_asset_map_[ibl_token] = asset_ptr;
-    asset_loader->OnSuccess(ibl_token);
-  }
 };
 
 }  // namespace imp

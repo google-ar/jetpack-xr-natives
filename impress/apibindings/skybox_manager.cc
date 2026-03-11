@@ -29,7 +29,6 @@
 #include "core/assets/asset_ptr.h"
 #include "core/lighting/image_based_lighting_asset.h"
 #include "core/math/math.h"
-#include "core/split_engine/split_engine_serializer.h"
 #include "core/view/framework/lighting/light_manager.h"
 
 namespace imp {
@@ -49,7 +48,7 @@ class SkyboxManagerImpl : public SkyboxManager {
       std::unique_ptr<BaseAssetLoader> asset_loader) override;
   absl::Status ReleaseImageBasedLightingAsset(std::intptr_t ibl_token) override;
   absl::Status SetEnvironmentLight(std::intptr_t ibl_token) override;
-  absl::Status ClearEnvironmentLight() override;
+  void ClearEnvironmentLight() override;
 
  private:
   ImpressApiView& view_;
@@ -84,14 +83,6 @@ absl::Status SkyboxManagerImpl::SetEnvironmentLight(std::intptr_t ibl_token) {
     return absl::NotFoundError(absl::StrFormat(
         "IBL asset is not cached: %s.", ibl_asset_ptr.status().message()));
   }
-  split_engine::SplitEngineSerializer* serializer =
-      view_.GetSplitEngineSerializer();
-  if (serializer == nullptr) {
-    return absl::InternalError("SplitEngineSerializer is not available.");
-  }
-  serializer->SetPreferredEnvironmentIblAsset(
-      *ibl_asset_ptr.value()->BorrowReflectionTexture()->GetTexture(),
-      LightManager::kDefaultEnvironmentLightIntensity, kOne3);
   view_.GetLightManager().SetEnvironmentLight(
       view_.GetEnvironmentLightFactory().CreateEnvironmentLight(
           ibl_asset_ptr.value(),
@@ -99,14 +90,8 @@ absl::Status SkyboxManagerImpl::SetEnvironmentLight(std::intptr_t ibl_token) {
   return absl::OkStatus();
 }
 
-absl::Status SkyboxManagerImpl::ClearEnvironmentLight() {
-  split_engine::SplitEngineSerializer* serializer =
-      view_.GetSplitEngineSerializer();
-  if (serializer == nullptr) {
-    return absl::InternalError("SplitEngineSerializer is not available.");
-  }
-  serializer->ClearPreferredEnvironmentIblAsset();
-  return absl::OkStatus();
+void SkyboxManagerImpl::ClearEnvironmentLight() {
+  view_.GetLightManager().ClearEnvironmentLight();
 }
 
 std::unique_ptr<SkyboxManager> CreateSkyboxManager(ImpressApiView& view) {

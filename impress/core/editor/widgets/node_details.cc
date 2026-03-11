@@ -50,7 +50,7 @@
 #include "core/view/framework/scene/scene_reference.h"
 #include "core/view/framework/scene/scene_system.h"
 #if IMP_PLATFORM(DESKTOP)
-#include "tinyfiledialogs/tinyfiledialogs.h"
+#include "third_party/tinyfiledialogs/tinyfiledialogs.h"
 #endif
 #include "mediapipe/framework/port/status_macros.h"
 

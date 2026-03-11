@@ -15,6 +15,7 @@
 # Impress Physics Constraints
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("//build_tools:imp.bzl", "if_dev_runtime")
 load(
     "//core/proto:imp_cc_proto_library.bzl",
     "imp_cc_proto_library",
@@ -49,6 +50,8 @@ cc_library(
     ],
     deps = [
         ":constraints_proto_cc",
+        "//core:config",
+        "//core/common:invocable",
         "//core/common:registry",
         "//core/math",
         "//core/ncsb",
@@ -60,8 +63,13 @@ cc_library(
         "@bullet//:BulletDynamics",  # build_cleaner: keep
         "@bullet//:LinearMath",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:string_view",
         "@com_google_impress//core/common:log",
-    ],
+    ] + if_dev_runtime([
+        "//core/common:debug_draw",
+        "//core/physics:physics_constants",
+        "//core/physics:physics_debug_draw",
+    ]),
     alwayslink = 1,
 )
 

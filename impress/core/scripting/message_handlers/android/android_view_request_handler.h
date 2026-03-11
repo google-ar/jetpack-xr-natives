@@ -49,16 +49,11 @@ class AndroidViewRequestHandler
 // The node should be the node returned from a CreateSurfaceTextureQuadRequest.
 // TODO: Combined with the above in a MultiMessageHandler.
 class AndroidViewGetAttachedViewRequestHandler
-    : public scripting::MessageHandler<GetAttachedViewRequest, absl::Status> {
+    : public scripting::MessageHandler<GetAttachedViewRequest, void*> {
  public:
   explicit AndroidViewGetAttachedViewRequestHandler(BaseView& base_view);
 
-  Future<absl::Status> HandleMessage(
-      const GetAttachedViewRequest& message) override;
-
-  Future<absl::Status> HandleMessage(const GetAttachedViewRequest& message,
-                                     const scripting::PlatformArgs& args,
-                                     scripting::PlatformArgs& out) override;
+  Future<void*> HandleMessage(const GetAttachedViewRequest& message) override;
 
  private:
   BaseView& base_view_;
@@ -74,10 +69,6 @@ class AndroidViewUpdateColliderRequestHandler
 
   Future<absl::Status> HandleMessage(
       const UpdateSurfaceTextureQuadColliderRequest& message) override;
-
-  Future<absl::Status> HandleMessage(
-      const UpdateSurfaceTextureQuadColliderRequest& message,
-      const scripting::PlatformArgs& args) override;
 
  private:
   BaseView& base_view_;

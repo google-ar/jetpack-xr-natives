@@ -18,6 +18,9 @@
 #import <WebKit/WebKit.h>
 
 namespace imp {
+namespace scripting {
+class ScriptMessageHandler;
+}  // namespace scripting
 class Context;
 namespace scripting {
 class WebView;
@@ -34,12 +37,14 @@ NS_ASSUME_NONNULL_BEGIN
  * Construct an IMPWebView.
  *
  * @param webView The native abstraction of the webview.
+ * @param scriptMessageHandler The script message handler to pass incoming messages from JS.
  * @param context The Imp context for the application.
  * @param frame The size of the webview frame.
  * @param url The url to load.
  * @param injectionScript The ImpWeb JavaScript counterpart to inject.
  */
 - (instancetype)initWithWebView:(imp::scripting::WebView *)webView
+           scriptMessageHandler:(imp::scripting::ScriptMessageHandler &)scriptMessageHandler
                         context:(const imp::Context &)context
                           frame:(CGRect)frame
                             url:(NSString *)url
@@ -49,19 +54,15 @@ NS_ASSUME_NONNULL_BEGIN
  * Attaches an external WebView to an IMPWebView.
  *
  * @param webView The native abstraction of the webview.
+ * @param scriptMessageHandler The script message handler to pass incoming messages from JS.
  * @param context The Imp context for the application.
  * @param injectionScript The ImpWeb JavaScript counterpart to inject.
  * @param externalWebView The external WebView for ImpWebView to attach to.
  */
 - (instancetype)initWithWebView:(imp::scripting::WebView *)webView
+           scriptMessageHandler:(imp::scripting::ScriptMessageHandler &)scriptMessageHandler
                 injectionScript:(NSString *)injectionScript
                 externalWebView:(WKWebView *)externalWebView NS_DESIGNATED_INITIALIZER;
-
-/**
- * Sends a message via MessageToScript to the webview JS.
- * @param message A base-64 serialized MessageToScript proto.
- */
-- (void)postMessage:(NSString *)message;
 
 /**
  * Injects the last saved script into the WebView (either set in the

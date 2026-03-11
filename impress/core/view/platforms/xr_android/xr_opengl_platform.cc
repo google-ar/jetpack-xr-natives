@@ -47,9 +47,9 @@ XrGraphicsBindingOpenGLESAndroidKHR XrOpenGLPlatform::GetGraphicsBinding() {
   return XrGraphicsBindingOpenGLESAndroidKHR{
       .type = XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR,
       .next = nullptr,
-      .display = mEGLDisplay,
-      .config = mEGLConfig,
-      .context = mEGLContext,
+      .display = getEglDisplay(),
+      .config = getEglConfig(),
+      .context = getContextForType(ContextType::UNPROTECTED),
   };
 #else
   return {};
@@ -179,6 +179,21 @@ void XrOpenGLPlatform::commit(Platform::SwapChain* swapChain) noexcept {
                  << status;
     }
   }
+}
+
+bool XrOpenGLPlatform::isCompositorTimingSupported() const noexcept {
+  return false;
+}
+
+bool XrOpenGLPlatform::setPresentFrameId(SwapChain const* swapchain,
+                                         uint64_t frameId) noexcept {
+  return false;
+}
+
+bool XrOpenGLPlatform::queryFrameTimestamps(
+    SwapChain const* swapchain, uint64_t frameId,
+    FrameTimestamps* outFrameTimestamps) const noexcept {
+  return false;
 }
 
 }  // namespace imp

@@ -28,8 +28,8 @@ constexpr absl::string_view kSkyboxText = "Show Skybox";
 constexpr absl::string_view kShowBoundsText = "Show All Bounds";
 constexpr absl::string_view kShowAllCollidersText = "Show All Colliders";
 constexpr absl::string_view kShowAllOriginsText = "Show All Origins";
-constexpr absl::string_view kShowPhysicsCollidersText =
-    "Show Physics Colliders";
+constexpr absl::string_view kShowPhysicsVisualizerText =
+    "Show Physics Colliders & Constraints";
 constexpr absl::string_view kEnablePostProcessingText =
     "Enable Post Processing";
 constexpr absl::string_view kEnableVertexSelection = "Enable Vertex Selection";

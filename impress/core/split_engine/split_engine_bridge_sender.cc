@@ -48,7 +48,7 @@ MessageGroupTrackingData& GetActiveMessageGroups() {
 absl::Status SplitEngineBridgeSender::ConnectClient(ClientId client_id) {
   MessageGroupTrackingData& message_group_tracking_data =
       GetActiveMessageGroups();
-  absl::MutexLock lock(&message_group_tracking_data.mutex);
+  absl::MutexLock lock(message_group_tracking_data.mutex);
   if (message_group_tracking_data.active_ids.contains(client_id)) {
     return absl::AlreadyExistsError("Client already exists");
   }
@@ -60,7 +60,7 @@ absl::Status SplitEngineBridgeSender::ConnectClient(ClientId client_id) {
 absl::Status SplitEngineBridgeSender::DisconnectClient(ClientId client_id) {
   MessageGroupTrackingData& message_group_tracking_data =
       GetActiveMessageGroups();
-  absl::MutexLock lock(&message_group_tracking_data.mutex);
+  absl::MutexLock lock(message_group_tracking_data.mutex);
   if (!message_group_tracking_data.active_ids.contains(client_id)) {
     return absl::NotFoundError("Client not found");
   }
@@ -72,7 +72,7 @@ absl::Status SplitEngineBridgeSender::EnqueueMessageGroup(
     ClientId client_id, MessageGroupId message_group_id) {
   MessageGroupTrackingData& message_group_tracking_data =
       GetActiveMessageGroups();
-  absl::MutexLock lock(&message_group_tracking_data.mutex);
+  absl::MutexLock lock(message_group_tracking_data.mutex);
   auto it = message_group_tracking_data.active_ids.find(client_id);
   if (it == message_group_tracking_data.active_ids.end()) {
     return absl::NotFoundError("Client not found");
@@ -88,7 +88,7 @@ absl::Status SplitEngineBridgeSender::ReleaseMessageGroup(
     ClientId client_id, MessageGroupId message_group_id) {
   MessageGroupTrackingData& message_group_tracking_data =
       GetActiveMessageGroups();
-  absl::MutexLock lock(&message_group_tracking_data.mutex);
+  absl::MutexLock lock(message_group_tracking_data.mutex);
   auto it = message_group_tracking_data.active_ids.find(client_id);
   if (it == message_group_tracking_data.active_ids.end()) {
     return absl::NotFoundError("Client not found");
@@ -109,7 +109,7 @@ absl::Status SplitEngineBridgeSender::WithActiveMessageGroups(
 
   MessageGroupTrackingData& message_group_tracking_data =
       GetActiveMessageGroups();
-  absl::MutexLock lock(&message_group_tracking_data.mutex);
+  absl::MutexLock lock(message_group_tracking_data.mutex);
   auto it = message_group_tracking_data.active_ids.find(client_id);
   if (it == message_group_tracking_data.active_ids.end()) {
     return absl::NotFoundError("Client not found");

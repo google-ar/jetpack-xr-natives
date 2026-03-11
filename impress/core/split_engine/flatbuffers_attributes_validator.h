@@ -17,9 +17,10 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_FLATBUFFERS_API_LEVEL_VALIDATOR_H_
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_FLATBUFFERS_API_LEVEL_VALIDATOR_H_
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
-#include <stack>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -32,8 +33,8 @@
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "absl/strings/string_view.h"
 #include "flatbuffers/base.h"
 #include "flatbuffers/reflection.h"
@@ -74,6 +75,20 @@ struct EmbeddedSchemaProvider {
     }
     return reflection::GetSchema(T::BinarySchema::data());
   }
+
+  template <typename T>
+  absl::StatusOr<const reflection::Object*> GetObject() const {
+    MP_ASSIGN_OR_RETURN(const reflection::Schema* schema, GetSchema<T>());
+    // An object is a table or a struct definition.
+    const reflection::Object* object =
+        schema->objects()->LookupByKey(T::GetFullyQualifiedName());
+    if (object == nullptr) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Table ", T::GetFullyQualifiedName(),
+                       " is not found in the schema."));
+    }
+    return object;
+  }
 };
 
 // A schema provider that caches the embedded schemas in memory aligned buffers.
@@ -82,11 +97,14 @@ struct EmbeddedSchemaProvider {
 // retrieved from the generated table types and are guaranteed to be unique and
 // stable since they are static buffers embedded in the binary.
 // Multiple generated types can point to the same schema.
+// It also caches the object pointers to avoid looking up the same object
+// multiple times.
 class MemoryAlignedCachingSchemaProvider {
  public:
   template <typename T>
   absl::StatusOr<const reflection::Schema*> GetSchema() const {
-    if (auto it = cache_.find(T::BinarySchema::data()); it != cache_.end()) {
+    if (auto it = schema_cache_.find(T::BinarySchema::data());
+        it != schema_cache_.end()) {
       return reflection::GetSchema(it->second.data());
     }
 
@@ -96,15 +114,42 @@ class MemoryAlignedCachingSchemaProvider {
       return absl::InvalidArgumentError("Schema is not valid.");
     }
 
-    cache_[T::BinarySchema::data()] =
+    schema_cache_[T::BinarySchema::data()] =
         std::vector<uint8_t>(T::BinarySchema::data(),
                              T::BinarySchema::data() + T::BinarySchema::size());
 
-    return reflection::GetSchema(cache_[T::BinarySchema::data()].data());
+    return reflection::GetSchema(schema_cache_[T::BinarySchema::data()].data());
+  }
+
+  template <typename T>
+  absl::StatusOr<const reflection::Object*> GetObject() const {
+    if (auto it = object_ptr_cache_.find(T::GetFullyQualifiedName());
+        it != object_ptr_cache_.end()) {
+      return it->second;
+    }
+
+    MP_ASSIGN_OR_RETURN(const reflection::Schema* schema, GetSchema<T>());
+    // An object is a table or a struct definition.
+    const reflection::Object* object =
+        schema->objects()->LookupByKey(T::GetFullyQualifiedName());
+    if (object == nullptr) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Table ", T::GetFullyQualifiedName(),
+                       " is not found in the schema."));
+    }
+    object_ptr_cache_[T::GetFullyQualifiedName()] = object;
+    return object;
   }
 
  private:
-  mutable absl::flat_hash_map<const uint8_t*, std::vector<uint8_t>> cache_;
+  // Cache of the schema buffers. The key is the pointer to the static schema
+  // buffer in the binary.
+  mutable absl::flat_hash_map<const uint8_t*, std::vector<uint8_t>>
+      schema_cache_;
+  // Cache of the object pointers. The key is a pointer to the static string
+  // representing the fully qualified name of the generated type.
+  mutable absl::flat_hash_map<const char*, const reflection::Object*>
+      object_ptr_cache_;
 };
 
 // A validator that checks that the `requires_api` attribute is less than or
@@ -206,53 +251,12 @@ void VisitScalarField(const reflection::Field* field, Visitor visitor) {
 
 // Returns the object definition of the child object of a union field.
 // If the field is not a union or if the union type is not set, returns
-// std::nullopt.
-absl::StatusOr<std::optional<const reflection::Object*>> GetUnionChildObjectDef(
+// nullptr.
+absl::StatusOr<const reflection::Object* /*absl_nullable*/ > GetUnionChildObjectDef(
     const reflection::Schema* /*absl_nonnull*/  schema,
     const reflection::Field* /*absl_nonnull*/  field,
     const flatbuffers::Table* /*absl_nonnull*/  parent_table,
     const reflection::Object* /*absl_nonnull*/  parent_table_def);
-
-// Returns the value of the attribute with the given name, parsed as the given
-// type. If the attribute is not found or if the value cannot be parsed, returns
-// an error.
-template <typename T>
-absl::StatusOr<T> GetAttributeValue(
-    std::string_view attribute_name,
-    const flatbuffers::Vector<
-        flatbuffers::Offset<reflection::KeyValue>>* /*absl_nullable*/  attributes) {
-  static_assert(std::is_same_v<T, std::string_view> ||
-                    std::is_same_v<T, std::string> || std::is_integral_v<T>,
-                "Unsupported type.");
-
-  if (attributes == nullptr) {
-    return absl::NotFoundError(
-        absl::StrCat("Attribute '", attribute_name, "' not found."));
-  }
-
-  const reflection::KeyValue* attribute =
-      attributes->LookupByKey(attribute_name.data());
-  if (attribute == nullptr) {
-    return absl::NotFoundError(
-        absl::StrCat("Attribute '", attribute_name, "' not found."));
-  }
-
-  std::string_view string_value = attribute->value()->string_view();
-
-  if constexpr (std::is_same_v<T, std::string>) {
-    return std::string(string_value);
-  } else if constexpr (std::is_integral_v<T>) {
-    T value;
-    if (!absl::SimpleAtoi(string_value, &value)) {
-      return absl::InvalidArgumentError(
-          absl::StrCat("Attribute '", attribute_name,
-                       "' has invalid value: ", string_value));
-    }
-    return value;
-  } else {
-    return string_value;
-  }
-}
 
 // Options for the `FlatbuffersAttributesValidator`.
 struct FlatbuffersAttributesValidatorOptions {
@@ -269,10 +273,16 @@ struct FlatbuffersAttributesValidatorOptions {
 template <typename SchemaProvider>
 class FlatbuffersAttributesValidator {
  public:
+  static constexpr size_t kInitialEntriesCapacity = 1024;
+
   explicit FlatbuffersAttributesValidator(
       FlatbuffersAttributesValidatorOptions options,
       const SchemaProvider& schema_provider)
       : schema_provider_(schema_provider) {
+    // Reserve enough space to avoid resizing during validation. This should be
+    // enough for any reasonable flatbuffer schema.
+    entries_.reserve(kInitialEntriesCapacity);
+    visited_objects_.reserve(kInitialEntriesCapacity);
     if (options.max_api_level.has_value()) {
       attribute_validators_.push_back(
           ApiLevelValidator{*options.max_api_level});
@@ -283,69 +293,23 @@ class FlatbuffersAttributesValidator {
   absl::Status Validate(const T* table);
 
  private:
-  struct PathSegment {
-    std::string_view name;
-    std::string_view type;
-    bool is_vector = false;
-    std::optional<flatbuffers::uoffset_t> index = std::nullopt;
-    bool is_union = false;
-  };
-  using Path = std::vector<PathSegment>;
-
-  template <typename Sink>
-  friend void AbslStringify(Sink& sink, const Path& path) {
-    bool first = true;
-    for (const auto& segment : path) {
-      if (segment.index.has_value()) {
-        sink.Append(absl::StrCat("[", segment.index.value(), "]"));
-        continue;
-      }
-
-      if (!first) {
-        sink.Append(".");
-      }
-      if (!segment.name.empty()) {
-        sink.Append(segment.name);
-      }
-      if (!segment.type.empty()) {
-        sink.Append("(");
-        if (segment.is_vector) {
-          sink.Append("Vector<");
-        } else if (segment.is_union) {
-          sink.Append("Union<");
-        }
-        // Strip the package name from the type name if present.
-        auto last_dot_pos = segment.type.find_last_of('.');
-        if (last_dot_pos != std::string::npos) {
-          sink.Append(segment.type.substr(last_dot_pos + 1));
-        } else {
-          sink.Append(segment.type);
-        }
-        if (segment.is_vector || segment.is_union) {
-          sink.Append(">");
-        }
-        sink.Append(")");
-      }
-      first = false;
-    }
-  }
-
   using ObjectPtr =
       std::variant<const flatbuffers::Table*, const flatbuffers::Struct*>;
 
-  struct StackEntry {
+  struct Entry {
     const ObjectPtr object_ptr;
     const reflection::Object* object_def;
     const reflection::Schema* schema;
-    Path parent_path;
+    const std::optional<size_t> parent_entry_index;
+    const reflection::Field* /*absl_nullable*/  parent_field = nullptr;
+    const std::optional<flatbuffers::uoffset_t> parent_container_index;
   };
 
   struct EnumFieldVisitor {
     const FlatbuffersAttributesValidator& self;
     const reflection::Schema* /*absl_nonnull*/  schema;
     const reflection::Object* /*absl_nonnull*/  object_def;
-    const std::variant<const flatbuffers::Table*, const flatbuffers::Struct*>
-        object_ptr;
+    const ObjectPtr object_ptr;
 
     absl::Status& status;
 
@@ -365,8 +329,9 @@ class FlatbuffersAttributesValidator {
       const flatbuffers::Vector<flatbuffers::Offset<
           reflection::KeyValue>>* /*absl_nullable*/  attributes)>>
       attribute_validators_;
-  std::stack<StackEntry> stack_;
-  absl::flat_hash_set<ObjectPtr> visited_;
+  size_t next_entry_index_ = 0;
+  std::vector<Entry> entries_;
+  absl::flat_hash_set<ObjectPtr> visited_objects_;
   const SchemaProvider& schema_provider_;
 
   absl::Status ValidateAttributes(
@@ -374,9 +339,18 @@ class FlatbuffersAttributesValidator {
           flatbuffers::Offset<reflection::KeyValue>>* /*absl_nullable*/  attributes)
       const;
 
+  std::string RemovePackageFromName(std::string_view name) const;
+
+  std::string GetFieldTypeName(
+      const reflection::Field* /*absl_nonnull*/  field,
+      const reflection::Schema* /*absl_nonnull*/  schema) const;
+
+  std::string GetPath(size_t entry_index,
+                      const reflection::Field* /*absl_nullable*/  field) const;
+
   void Cleanup();
 
-  absl::Status ValidateObject(const StackEntry& entry);
+  absl::Status ValidateObject(size_t entry_index);
 };
 
 // Deduction guide for `FlatbuffersAttributesValidator`.
@@ -397,34 +371,26 @@ absl::Status FlatbuffersAttributesValidator<SchemaProvider>::Validate(
 
   MP_ASSIGN_OR_RETURN(const reflection::Schema* schema,
                    schema_provider_.template GetSchema<T>());
-  const reflection::Object* table_def =
-      schema->objects()->LookupByKey(table->GetFullyQualifiedName());
-  if (table_def == nullptr) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Table ", table->GetFullyQualifiedName(),
-                     " is not found in the schema."));
-  }
-
-  stack_.push(StackEntry{
+  MP_ASSIGN_OR_RETURN(const reflection::Object* table_def,
+                   schema_provider_.template GetObject<T>());
+  entries_.push_back({
       .object_ptr = reinterpret_cast<const flatbuffers::Table*>(table),
       .object_def = table_def,
       .schema = schema,
-      .parent_path = {{.name = "<ROOT>",
-                       .type = table_def->name()->string_view()}},
   });
 
   absl::Status status;
-  while (!stack_.empty()) {
-    StackEntry entry = stack_.top();
-    stack_.pop();
-    if (visited_.contains(entry.object_ptr)) {
+  while (next_entry_index_ < entries_.size()) {
+    if (visited_objects_.contains(entries_[next_entry_index_].object_ptr)) {
+      ++next_entry_index_;
       continue;
     }
-    status = ValidateObject(entry);
+    status = ValidateObject(next_entry_index_);
     if (!status.ok()) {
       break;
     }
-    visited_.insert(entry.object_ptr);
+    visited_objects_.insert(entries_[next_entry_index_].object_ptr);
+    ++next_entry_index_;
   }
   Cleanup();
   return status;
@@ -432,22 +398,134 @@ absl::Status FlatbuffersAttributesValidator<SchemaProvider>::Validate(
 
 template <typename SchemaProvider>
 void FlatbuffersAttributesValidator<SchemaProvider>::Cleanup() {
-  visited_.clear();
-  while (!stack_.empty()) {
-    stack_.pop();
+  visited_objects_.clear();
+  entries_.clear();
+}
+
+template <typename SchemaProvider>
+std::string
+FlatbuffersAttributesValidator<SchemaProvider>::RemovePackageFromName(
+    std::string_view name) const {
+  size_t last_dot_pos = name.rfind('.');
+  if (last_dot_pos != std::string::npos) {
+    name = name.substr(last_dot_pos + 1);
+  }
+  return std::string(name);
+}
+
+template <typename SchemaProvider>
+std::string FlatbuffersAttributesValidator<SchemaProvider>::GetFieldTypeName(
+    const reflection::Field* /*absl_nonnull*/  field,
+    const reflection::Schema* /*absl_nonnull*/  schema) const {
+  reflection::BaseType base_type = field->type()->base_type();
+  switch (base_type) {
+    case reflection::BaseType::Obj: {
+      if (field->type()->index() < 0 ||
+          field->type()->index() >= schema->objects()->size()) {
+        return "UnknownObj";
+      }
+      return RemovePackageFromName(schema->objects()
+                                       ->Get(field->type()->index())
+                                       ->name()
+                                       ->string_view());
+    }
+    case reflection::BaseType::Union: {
+      if (field->type()->index() < 0 ||
+          field->type()->index() >= schema->enums()->size()) {
+        return "UnknownUnion";
+      }
+      return RemovePackageFromName(
+          schema->enums()->Get(field->type()->index())->name()->string_view());
+    }
+    case reflection::BaseType::Array:
+    case reflection::BaseType::Vector:
+    case reflection::BaseType::Vector64: {
+      std::string element_type_name;
+      const reflection::BaseType element_type = field->type()->element();
+      if (element_type == reflection::BaseType::Obj) {
+        if (field->type()->index() < 0 ||
+            field->type()->index() >= schema->objects()->size()) {
+          element_type_name = "UnknownObj";
+        } else {
+          element_type_name =
+              RemovePackageFromName(schema->objects()
+                                        ->Get(field->type()->index())
+                                        ->name()
+                                        ->string_view());
+        }
+      } else {
+        element_type_name = reflection::EnumNameBaseType(element_type);
+      }
+      return absl::StrCat(reflection::EnumNameBaseType(base_type), "<",
+                          element_type_name, ">");
+    }
+    default:
+      return reflection::EnumNameBaseType(base_type);
   }
 }
 
 template <typename SchemaProvider>
+std::string FlatbuffersAttributesValidator<SchemaProvider>::GetPath(
+    size_t entry_index, const reflection::Field* /*absl_nullable*/  field) const {
+  std::vector<std::string> path_components;
+  size_t current_index = entry_index;
+  const reflection::Schema* current_schema = entries_[entry_index].schema;
+
+  // Add the current field info if provided
+  if (field != nullptr) {
+    path_components.push_back(absl::StrCat(
+        field->name()->str(), ":", GetFieldTypeName(field, current_schema)));
+  }
+
+  while (true) {
+    const auto& entry = entries_[current_index];
+    std::string current_component;
+
+    if (entry.parent_field != nullptr) {
+      current_component =
+          absl::StrCat(entry.parent_field->name()->str(), ":",
+                       GetFieldTypeName(entry.parent_field, entry.schema));
+
+      if (entry.parent_container_index.has_value()) {
+        absl::StrAppend(&current_component, "[",
+                        entry.parent_container_index.value(), "]");
+      }
+    } else {
+      // Root entry
+      current_component = absl::StrCat(
+          "ROOT:", RemovePackageFromName(entry.object_def->name()->str()));
+      path_components.push_back(current_component);
+      break;
+    }
+    path_components.push_back(current_component);
+
+    if (!entry.parent_entry_index.has_value()) {
+      break;
+    }
+    current_index = *entries_[current_index].parent_entry_index;
+    current_schema = entries_[current_index].schema;
+  }
+
+  std::reverse(path_components.begin(), path_components.end());
+  return absl::StrJoin(path_components, ".");
+}
+
+template <typename SchemaProvider>
 absl::Status FlatbuffersAttributesValidator<SchemaProvider>::ValidateObject(
-    const StackEntry& entry) {
+    size_t entry_index) {
   // Validate the object attributes.
-  MP_RETURN_IF_ERROR(ValidateAttributes(entry.object_def->attributes()))
-      << absl::StrCat(" (", entry.parent_path, ")");
+  if (auto status =
+          ValidateAttributes(entries_[entry_index].object_def->attributes());
+      !status.ok()) {
+    return absl::Status(status.code(),
+                        absl::StrCat(status.message(), " (",
+                                     GetPath(entry_index, nullptr), ")"));
+  }
 
   // Validate there are no unknown fields in the table.
-  if (!entry.object_def->is_struct()) {
-    auto table = std::get<const flatbuffers::Table*>(entry.object_ptr);
+  if (!entries_[entry_index].object_def->is_struct()) {
+    auto table =
+        std::get<const flatbuffers::Table*>(entries_[entry_index].object_ptr);
     auto vtable = table->GetVTable();
     auto vtable_byte_size =
         flatbuffers::ReadScalar<flatbuffers::voffset_t>(vtable);
@@ -456,10 +534,11 @@ absl::Status FlatbuffersAttributesValidator<SchemaProvider>::ValidateObject(
     // We substract those to get the number of fields in the vtable.
     auto vtable_field_count =
         (vtable_byte_size / sizeof(flatbuffers::voffset_t)) - 2;
-    if (vtable_field_count > entry.object_def->fields()->size()) {
+    if (vtable_field_count >
+        entries_[entry_index].object_def->fields()->size()) {
       // Get the highest field offset to ensure that all fields are known.
       flatbuffers::voffset_t max_field_offset = 0;
-      for (const auto* field : *entry.object_def->fields()) {
+      for (const auto* field : *entries_[entry_index].object_def->fields()) {
         max_field_offset = std::max(max_field_offset, field->offset());
       }
       // Check if there any unknown fields are set
@@ -469,7 +548,7 @@ absl::Status FlatbuffersAttributesValidator<SchemaProvider>::ValidateObject(
            unknown_field_offset += sizeof(flatbuffers::voffset_t)) {
         if (table->CheckField(unknown_field_offset)) {
           return absl::InvalidArgumentError(absl::StrCat(
-              "Table '", entry.object_def->name()->string_view(),
+              "Table '", entries_[entry_index].object_def->name()->c_str(),
               "' has unknown fields at offset ", unknown_field_offset));
         }
       }
@@ -477,13 +556,13 @@ absl::Status FlatbuffersAttributesValidator<SchemaProvider>::ValidateObject(
   }
 
   // Validate the field attributes.
-  for (const auto* field : *entry.object_def->fields()) {
+  for (const auto* field : *entries_[entry_index].object_def->fields()) {
     const reflection::BaseType field_base_type = field->type()->base_type();
-    const std::string_view field_name = field->name()->string_view();
 
     // Skip optional fields in tables that are not set.
-    if (!entry.object_def->is_struct() && field->optional()) {
-      auto table = std::get<const flatbuffers::Table*>(entry.object_ptr);
+    if (!entries_[entry_index].object_def->is_struct() && field->optional()) {
+      auto table =
+          std::get<const flatbuffers::Table*>(entries_[entry_index].object_ptr);
       if (!table->CheckField(field->offset())) {
         continue;
       }
@@ -492,91 +571,104 @@ absl::Status FlatbuffersAttributesValidator<SchemaProvider>::ValidateObject(
     // Skip scalar fields that have the default value (tables only). Struct
     // fields are never skipped because they must all have the same attribute
     // value as the struct, regardless if they are set or not.
-    if (!entry.object_def->is_struct() &&
+    if (!entries_[entry_index].object_def->is_struct() &&
         flatbuffers::IsScalar(field_base_type)) {
       bool has_default_value = false;
-      VisitScalarField(
-          field,
-          HasDefaultValueVisitor{
-              .table = std::get<const flatbuffers::Table*>(entry.object_ptr),
-              .has_default_value = has_default_value});
+      VisitScalarField(field, HasDefaultValueVisitor{
+                                  .table = std::get<const flatbuffers::Table*>(
+                                      entries_[entry_index].object_ptr),
+                                  .has_default_value = has_default_value});
       if (has_default_value) {
         continue;
       }
     }
-
-    Path field_path = entry.parent_path;
-    field_path.push_back(PathSegment{
-        .name = field_name,
-        .type = reflection::EnumNameBaseType(field->type()->base_type())});
 
     // Validate the field attributes.
     // Union type fields do not support attributes.
     if (field_base_type != reflection::BaseType::UType &&
         !(field_base_type == reflection::BaseType::Vector &&
           field->type()->element() == reflection::BaseType::UType)) {
-      MP_RETURN_IF_ERROR(ValidateAttributes(field->attributes()))
-          << absl::StrCat(" (", field_path, ")");
+      if (absl::Status status = ValidateAttributes(field->attributes());
+          !status.ok()) {
+        return absl::Status(status.code(),
+                            absl::StrCat(status.message(), " (",
+                                         GetPath(entry_index, field), ")"));
+      }
     }
 
     const bool is_enum =
         flatbuffers::IsInteger(field_base_type) && field->type()->index() > -1;
     if (is_enum) {
       absl::Status enum_validation_status = absl::OkStatus();
-      VisitIntegerField(field,
-                        EnumFieldVisitor{.self = *this,
-                                         .schema = entry.schema,
-                                         .object_def = entry.object_def,
-                                         .object_ptr = entry.object_ptr,
-                                         .status = enum_validation_status});
-      MP_RETURN_IF_ERROR(enum_validation_status)
-          << absl::StrCat(" (", field_path, ")");
+      VisitIntegerField(
+          field,
+          EnumFieldVisitor{.self = *this,
+                           .schema = entries_[entry_index].schema,
+                           .object_def = entries_[entry_index].object_def,
+                           .object_ptr = entries_[entry_index].object_ptr,
+                           .status = enum_validation_status});
+      if (absl::Status status = enum_validation_status; !status.ok()) {
+        return absl::Status(status.code(),
+                            absl::StrCat(status.message(), " (",
+                                         GetPath(entry_index, field), ")"));
+      }
     }
 
     // Handle field types that are objects, vectors/arrays of objects, or
     // unions of objects.
     if (field_base_type == reflection::BaseType::Obj) {
-      auto child_obj_def = entry.schema->objects()->Get(field->type()->index());
-      field_path.back().type = child_obj_def->name()->string_view();
-      if (entry.object_def->is_struct()) {
-        auto struct_object =
-            std::get<const flatbuffers::Struct*>(entry.object_ptr);
-        stack_.push(StackEntry{
+      auto child_obj_def =
+          entries_[entry_index].schema->objects()->Get(field->type()->index());
+      if (entries_[entry_index].object_def->is_struct()) {
+        auto struct_object = std::get<const flatbuffers::Struct*>(
+            entries_[entry_index].object_ptr);
+        entries_.push_back({
             .object_ptr =
                 struct_object->template GetStruct<const flatbuffers::Struct*>(
                     field->offset()),
             .object_def = child_obj_def,
-            .schema = entry.schema,
-            .parent_path = field_path});
+            .schema = entries_[entry_index].schema,
+            .parent_entry_index = entry_index,
+            .parent_field = field,
+        });
       } else {
-        auto table_object =
-            std::get<const flatbuffers::Table*>(entry.object_ptr);
+        auto table_object = std::get<const flatbuffers::Table*>(
+            entries_[entry_index].object_ptr);
         if (child_obj_def->is_struct()) {
-          stack_.push(StackEntry{
+          entries_.push_back({
               .object_ptr =
                   table_object->template GetStruct<const flatbuffers::Struct*>(
                       field->offset()),
               .object_def = child_obj_def,
-              .schema = entry.schema,
-              .parent_path = field_path});
+              .schema = entries_[entry_index].schema,
+              .parent_entry_index = entry_index,
+              .parent_field = field,
+          });
         } else {
-          stack_.push(StackEntry{
+          entries_.push_back({
               .object_ptr =
                   table_object->template GetPointer<const flatbuffers::Table*>(
                       field->offset()),
               .object_def = child_obj_def,
-              .schema = entry.schema,
-              .parent_path = field_path});
+              .schema = entries_[entry_index].schema,
+              .parent_entry_index = entry_index,
+              .parent_field = field,
+          });
         }
       }
     } else if (field_base_type == reflection::BaseType::Union) {
-      auto table_object = std::get<const flatbuffers::Table*>(entry.object_ptr);
-      MP_ASSIGN_OR_RETURN(auto child_obj_def,
-                       GetUnionChildObjectDef(entry.schema, field, table_object,
-                                              entry.object_def),
-                       _ << absl::StrCat(" (", field_path, ")"));
-      if (child_obj_def.has_value()) {
-        field_path.back().type = child_obj_def.value()->name()->string_view();
+      auto table_object =
+          std::get<const flatbuffers::Table*>(entries_[entry_index].object_ptr);
+      absl::StatusOr<const reflection::Object* /*absl_nullable*/ > child_obj_def =
+          GetUnionChildObjectDef(entries_[entry_index].schema, field,
+                                 table_object,
+                                 entries_[entry_index].object_def);
+      if (!child_obj_def.ok()) {
+        return absl::Status(child_obj_def.status().code(),
+                            absl::StrCat(child_obj_def.status().message(), " (",
+                                         GetPath(entry_index, field), ")"));
+      }
+      if (child_obj_def.value() != nullptr) {
         ObjectPtr child_obj_ptr;
         if (child_obj_def.value()->is_struct()) {
           child_obj_ptr =
@@ -587,52 +679,54 @@ absl::Status FlatbuffersAttributesValidator<SchemaProvider>::ValidateObject(
               table_object->template GetPointer<const flatbuffers::Table*>(
                   field->offset());
         }
-        stack_.push(StackEntry{.object_ptr = child_obj_ptr,
-                               .object_def = child_obj_def.value(),
-                               .schema = entry.schema,
-                               .parent_path = field_path});
+        entries_.push_back({
+            .object_ptr = child_obj_ptr,
+            .object_def = child_obj_def.value(),
+            .schema = entries_[entry_index].schema,
+            .parent_entry_index = entry_index,
+            .parent_field = field,
+        });
       }
     } else if (field_base_type == reflection::BaseType::Array &&
                field->type()->element() == reflection::BaseType::Obj &&
-               entry.object_def->is_struct()) {
-      auto child_obj_def = entry.schema->objects()->Get(field->type()->index());
-      field_path.back().type = child_obj_def->name()->string_view();
-      auto struct_object =
-          std::get<const flatbuffers::Struct*>(entry.object_ptr);
+               entries_[entry_index].object_def->is_struct()) {
+      auto child_obj_def =
+          entries_[entry_index].schema->objects()->Get(field->type()->index());
+      auto struct_object = std::get<const flatbuffers::Struct*>(
+          entries_[entry_index].object_ptr);
       for (int i = 0; i < field->type()->fixed_length(); ++i) {
-        stack_.push(StackEntry{
+        entries_.push_back({
             .object_ptr =
                 struct_object->template GetStruct<const flatbuffers::Struct*>(
                     field->offset() + i * child_obj_def->bytesize()),
             .object_def = child_obj_def,
-            .schema = entry.schema,
-            .parent_path = field_path});
+            .schema = entries_[entry_index].schema,
+            .parent_entry_index = entry_index,
+            .parent_field = field,
+            .parent_container_index = i,
+        });
       }
     } else if (field_base_type == reflection::BaseType::Vector) {
-      field_path.back().is_vector = true;
       if (field->type()->element() == reflection::BaseType::Obj) {
-        auto child_obj_def =
-            entry.schema->objects()->Get(field->type()->index());
-        field_path.back().type = child_obj_def->name()->string_view();
-        auto table_object =
-            std::get<const flatbuffers::Table*>(entry.object_ptr);
+        auto child_obj_def = entries_[entry_index].schema->objects()->Get(
+            field->type()->index());
+        auto table_object = std::get<const flatbuffers::Table*>(
+            entries_[entry_index].object_ptr);
         if (child_obj_def->is_struct()) {
           // Structs are stored inline in the vector.
           auto vec =
               table_object->template GetPointer<const flatbuffers::Vector<
                   flatbuffers::Offset<flatbuffers::Struct>>*>(field->offset());
           for (decltype(vec->size()) i = 0; i < vec->size(); ++i) {
-            Path entry_path = field_path;
-            PathSegment segment;
-            segment.index = i;
-            entry_path.push_back(segment);
-
-            stack_.push(StackEntry{
+            entries_.push_back({
                 .object_ptr = reinterpret_cast<const flatbuffers::Struct*>(
                     vec->Data() + i * child_obj_def->bytesize()),
                 .object_def = child_obj_def,
-                .schema = entry.schema,
-                .parent_path = entry_path});
+                .schema = entries_[entry_index].schema,
+                .parent_entry_index = entry_index,
+                .parent_field = field,
+                .parent_container_index = i,
+            });
           }
         } else {
           // Tables are stored as offsets in the vector.
@@ -640,29 +734,28 @@ absl::Status FlatbuffersAttributesValidator<SchemaProvider>::ValidateObject(
               table_object->template GetPointer<const flatbuffers::Vector<
                   flatbuffers::Offset<flatbuffers::Table>>*>(field->offset());
           for (decltype(vec->size()) i = 0; i < vec->size(); ++i) {
-            Path entry_path = field_path;
-            PathSegment segment;
-            segment.index = i;
-            entry_path.push_back(segment);
-            stack_.push(StackEntry{.object_ptr = vec->Get(i),
-                                   .object_def = child_obj_def,
-                                   .schema = entry.schema,
-                                   .parent_path = entry_path});
+            entries_.push_back({
+                .object_ptr = vec->Get(i),
+                .object_def = child_obj_def,
+                .schema = entries_[entry_index].schema,
+                .parent_entry_index = entry_index,
+                .parent_field = field,
+                .parent_container_index = i,
+            });
           }
         }
       } else if (field->type()->element() == reflection::BaseType::Union) {
-        field_path.back().type = "Union";
-
         constexpr std::string_view kUnionTypeFieldSuffix = "_type";
         const std::string type_field_name =
             absl::StrCat(field->name()->string_view(), kUnionTypeFieldSuffix);
         auto type_field =
-            entry.object_def->fields()->LookupByKey(type_field_name.c_str());
-        auto union_def =
-            entry.schema->enums()->Get(type_field->type()->index());
+            entries_[entry_index].object_def->fields()->LookupByKey(
+                type_field_name.c_str());
+        auto union_def = entries_[entry_index].schema->enums()->Get(
+            type_field->type()->index());
 
-        auto table_object =
-            std::get<const flatbuffers::Table*>(entry.object_ptr);
+        auto table_object = std::get<const flatbuffers::Table*>(
+            entries_[entry_index].object_ptr);
         auto union_type_vec =
             table_object
                 ->template GetPointer<const flatbuffers::Vector<uint8_t>*>(
@@ -670,42 +763,42 @@ absl::Status FlatbuffersAttributesValidator<SchemaProvider>::ValidateObject(
         auto union_vec = table_object->template GetPointer<
             const flatbuffers::Vector<flatbuffers::Offset<>>*>(field->offset());
         for (flatbuffers::uoffset_t i = 0; i < union_type_vec->size(); ++i) {
-          Path entry_path = field_path;
-          PathSegment segment;
-          segment.index = i;
-          entry_path.push_back(segment);
-
           auto type_enumval =
               union_def->values()->LookupByKey(union_type_vec->Get(i));
           if (type_enumval == nullptr) {
             return absl::NotFoundError(absl::StrCat(
                 "Definition for enum value ", union_type_vec->Get(i),
-                " is not found in the schema. (", entry_path, ")"));
+                " is not found in the schema. (", GetPath(entry_index, field),
+                ")"));
           }
-          entry_path.push_back({.name = type_enumval->name()->string_view(),
-                                .type = "",
-                                .is_union = true});
 
           const reflection::Object* child_obj_def =
-              entry.schema->objects()->Get(type_enumval->union_type()->index());
-          entry_path.back().type = child_obj_def->name()->string_view();
+              entries_[entry_index].schema->objects()->Get(
+                  type_enumval->union_type()->index());
           if (child_obj_def->is_struct()) {
             // Structs are stored inline in the vector.
-            stack_.push(StackEntry{
+            entries_.push_back({
                 .object_ptr = reinterpret_cast<const flatbuffers::Struct*>(
                     union_vec->Data() + i * child_obj_def->bytesize()),
                 .object_def = child_obj_def,
-                .schema = entry.schema,
-                .parent_path = entry_path});
+                .schema = entries_[entry_index].schema,
+                .parent_entry_index = entry_index,
+                .parent_field = field,
+                .parent_container_index = i,
+            });
           } else {
             // Tables are stored as offsets in the vector.
             auto vec =
                 table_object->template GetPointer<const flatbuffers::Vector<
                     flatbuffers::Offset<flatbuffers::Table>>*>(field->offset());
-            stack_.push(StackEntry{.object_ptr = vec->Get(i),
-                                   .object_def = child_obj_def,
-                                   .schema = entry.schema,
-                                   .parent_path = entry_path});
+            entries_.push_back({
+                .object_ptr = vec->Get(i),
+                .object_def = child_obj_def,
+                .schema = entries_[entry_index].schema,
+                .parent_entry_index = entry_index,
+                .parent_field = field,
+                .parent_container_index = i,
+            });
           }
         }
       }

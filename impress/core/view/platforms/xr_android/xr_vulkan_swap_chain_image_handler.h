@@ -23,11 +23,13 @@
 #include <memory>
 #include <vector>
 
+#include "filament/filament/backend/include/backend/platforms/VulkanPlatform.h"
 #include "filament/libs/bluevk/include/vulkan/vulkan_core.h"
 #include "core/math/vec.h"
 #include "core/render/content_security_level.h"
 #include "core/view/platforms/xr_android/openxr_includes.h"
 #include "core/view/platforms/xr_android/xr_session_host.h"
+#include "core/view/platforms/xr_android/xr_vulkan_platform.h"
 
 namespace imp {
 
@@ -47,6 +49,7 @@ class XrVulkanSwapChainImageHandler {
 
   using XrPlatformType = XrVulkanPlatform;
   using XrSwapChainImage = XrSwapchainImageVulkan2KHR;
+  using ImageSyncData = filament::backend::VulkanPlatform::ImageSyncData;
 
   // TODO:((broken link)) Test possible optimization later,
   // where we destroy and rebuild the swapchains
@@ -93,7 +96,7 @@ class XrVulkanSwapChainImageHandler {
 
   std::unique_ptr<SwapchainLayers>& GetSwapchainLayers() { return layers_; }
   void SwitchSwapchainLayers(bool use_varjo_foveation);
-  VkResult acquire(XrVulkanPlatform::ImageSyncData* outImageSyncData);
+  VkResult acquire(ImageSyncData* outImageSyncData);
   VkResult present(uint32_t index, VkSemaphore finishedDrawing);
 
  private:

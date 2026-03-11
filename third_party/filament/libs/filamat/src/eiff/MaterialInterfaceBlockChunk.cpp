@@ -79,6 +79,7 @@ void MaterialSamplerInterfaceBlockChunk::flatten(Flattener& f) {
         f.writeUint8(static_cast<uint8_t>(sInfo.precision));
         f.writeBool(sInfo.filterable);
         f.writeBool(sInfo.multisample);
+        f.writeString(sInfo.transformName.c_str_safe());
     }
 }
 
@@ -224,7 +225,7 @@ void MaterialDescriptorSetLayoutChunk::flatten(Flattener& f) {
     f.writeUint8(uint8_t(DescriptorType::UNIFORM_BUFFER));
     f.writeUint8(uint8_t(ShaderStageFlags::VERTEX | ShaderStageFlags::FRAGMENT));
     f.writeUint8(0);
-    f.writeUint8(uint8_t(DescriptorFlags::NONE));
+    f.writeUint8(uint8_t(DescriptorFlags::DYNAMIC_OFFSET));
     f.writeUint16(0);
 
     // all the material's sampler descriptors

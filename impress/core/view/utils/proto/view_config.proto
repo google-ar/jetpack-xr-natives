@@ -21,10 +21,19 @@ package imp;
 
 import "core/proto/imp.proto";
 import "core/view/utils/proto/cache_config.proto";
+import "core/view/utils/proto/filament_feature_flag.proto";
 import "core/view/utils/proto/render_settings.proto";
 
 // option cc_api_version = 2;
 option java_package = "com.google.ar.imp.core";
+option java_multiple_files = true;
+
+// Defines temporary flags used for testing code in development.
+message ExperimentalFeatureFlags {
+  optional bool glyph_atlas_use_hardware_rendering = 1;
+  optional bool glyph_atlas_force_reset_on_view_resumed = 2;
+  optional bool glyph_atlas_force_auto_method_rendering = 3;
+}
 
 message ViewConfig {
   enum ShaderCachingMode {
@@ -68,6 +77,8 @@ message ViewConfig {
     SIZE2048X4096 = 1;
     // A 4096x4096 texture size.
     SIZE4096 = 2;
+    // A 8x8 grid of 256x256 textures (2048x2048 total).
+    SIZE256X256X8X8 = 3;
   }
 
   // The size of the texture used by the GlyphAtlas. The default is SIZE2048,
@@ -76,4 +87,22 @@ message ViewConfig {
       [(imp.optional_type) = ABSL_OPTIONAL];
 
   CacheConfig cache_config = 9 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // If true, imp::Future will attempt to synchronously complete all pending
+  // work upon cancellation and/or destruction.
+  // What this means practically is that futures scheduled on the foreground
+  // (imp::SimpleExecutor) executor will be guaranteed to have a result when
+  // either the future is cancelled or its last reference is released. It also
+  // means that any held imp::Holdable or captured objects will be released
+  // after either cancellation or destruction.
+  // This behavior only applies to Executors that have implemented
+  // imp::Executor::InvokeScheduledTask().
+  optional bool enable_synchronous_future_cancellation = 10;
+
+  // Defines calls equivalent to filament::Engine::setFeatureFlag, executed when
+  // the Impress View is constructed.
+  repeated FilamentFeatureFlag filament_feature_flags = 11;
+
+  // Defines temporary flags for impress code in development.
+  optional ExperimentalFeatureFlags experimental_feature_flags = 12;
 }

@@ -33,6 +33,7 @@
 #include "absl/algorithm/container.h"
 #include "absl/base/nullability.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/strings/string_view.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
@@ -74,6 +75,7 @@
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/image_based_lighting_helpers.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_mesh_serializer.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/split_engine/split_engine_texture_serializer.h"
@@ -461,15 +463,15 @@ class SplitEngineSerializerImpl::RenderableBuilder
 };
 
 SplitEngineSerializerImpl::SplitEngineSerializerImpl(
-    BaseView& view, std::unique_ptr<SplitEngineAndroidBridge> bridge,
+    BaseView& view, int32_t api_level,
+    std::unique_ptr<SplitEngineAndroidBridge> bridge,
     std::unique_ptr<SplitEngineBridgeSender> bridge_sender,
-    std::unique_ptr<SplitEngineBridgeSender> one_shot_bridge_sender,
     size_t bridge_buffer_size_bytes)
     : Updater(view),
       view_(view),
+      api_level_(api_level),
       bridge_(std::move(bridge)),
       bridge_sender_(std::move(bridge_sender)),
-      one_shot_bridge_sender_(std::move(one_shot_bridge_sender)),
       bridge_buffer_size_bytes_(bridge_buffer_size_bytes) {
   view_.GetRenderableManager().SetSpy(*this);
 }
@@ -683,10 +685,16 @@ SplitEngineSerializerImpl::CreateFlatBufferBuilder(size_t size_bytes) {
   // any messages were sent that frame.
   // There may be additional logic in the future to have multiple message groups
   // per frame, but for now it's always exactly one per frame.
-  if (!bridge_sender_->IsMessageGroupActive()) {
-    bridge_sender_->BeginMessageGroup(bridge_buffer_size_bytes_);
+  if (!frame_update_group_id_.has_value()) {
+    const absl::StatusOr<MessageGroupId> group_id =
+        bridge_sender_->BeginMessageGroup(
+            bridge_buffer_size_bytes_,
+            SplitEngineBridgeSender::MessageType::kFrameUpdate);
+    
+    frame_update_group_id_ = *group_id;
   }
-  return bridge_sender_->CreateFlatBufferBuilder(size_bytes);
+  return bridge_sender_->CreateFlatBufferBuilder(*frame_update_group_id_,
+                                                 size_bytes);
 }
 
 SplitEngineSerializerImpl::FlatBufferBuilderPtr
@@ -695,9 +703,8 @@ SplitEngineSerializerImpl::CreateFlatBufferBuilder() {
   return CreateFlatBufferBuilder(kInitialSize);
 }
 
-void SplitEngineSerializerImpl::AddTexture(
-    filament::Texture& texture,
-    SplitEngineTextureSerializer& split_engine_texture_serializer) {
+void SplitEngineSerializerImpl::SerializeTexture(
+    const SplitEngineTextureSerializer& split_engine_texture_serializer) {
   const size_t kNumTextures = 1;
   std::vector<size_t> image_buffer_sizes =
       split_engine_texture_serializer.GetTextureBufferSizes();
@@ -709,21 +716,23 @@ void SplitEngineSerializerImpl::AddTexture(
                                  .Finish()
                                  .AddScratchSpace()
                                  .ComputeSize();
-  IMP_LOG(imp::INFO) << kTag << "texture: " << GetId(&texture);
-  one_shot_bridge_sender_->BeginMessageGroup(kBufferSize);
+  const absl::StatusOr<MessageGroupId> group_id =
+      bridge_sender_->BeginMessageGroup(
+          kBufferSize, SplitEngineBridgeSender::MessageType::kOneShot);
+  
   std::unique_ptr<flatbuffers::FlatBufferBuilder> builder =
-      one_shot_bridge_sender_->CreateFlatBufferBuilder(kBufferSize);
+      bridge_sender_->CreateFlatBufferBuilder(*group_id, kBufferSize);
 
   flatbuffers::Offset<android_xr::schemas::Texture> offset =
-      split_engine_texture_serializer.SerializeTexture(texture, *builder);
+      split_engine_texture_serializer.SerializeTexture(*builder);
 
   VectorOffset<android_xr::schemas::Texture> texture_vector;
   texture_vector.push_back(offset);
   CreateCommand(*builder, android_xr::schemas::CreateAddTextures(
                               *builder, builder->CreateVector(texture_vector)));
 
-  one_shot_bridge_sender_->SendMessage(*builder);
-  one_shot_bridge_sender_->EndMessageGroup();
+  bridge_sender_->SendMessage(*group_id, *builder);
+  bridge_sender_->EndMessageGroup(*group_id);
 }
 
 void SplitEngineSerializerImpl::RemoveTexture(filament::Texture& texture) {
@@ -736,13 +745,13 @@ void SplitEngineSerializerImpl::RemoveTexture(filament::Texture& texture) {
 }
 
 void SplitEngineSerializerImpl::SerializeMesh(
-    SplitEngineMeshSerializer& split_engine_mesh_serializer) {
+    const SplitEngineMeshSerializer& split_engine_mesh_serializer) {
   SerializeMeshIndicesAndVertices(split_engine_mesh_serializer);
   SerializeMeshMorphTargets(split_engine_mesh_serializer);
 }
 
 void SplitEngineSerializerImpl::SerializeMeshIndicesAndVertices(
-    SplitEngineMeshSerializer& split_engine_mesh_serializer) {
+    const SplitEngineMeshSerializer& split_engine_mesh_serializer) {
   FlatbufferSizeCalculator mesh_calculator;
   split_engine_mesh_serializer.ContributeVertexBufferSizes(mesh_calculator);
   split_engine_mesh_serializer.ContributeIndexBufferSizes(mesh_calculator);
@@ -753,9 +762,12 @@ void SplitEngineSerializerImpl::SerializeMeshIndicesAndVertices(
                                         .AddScratchSpace()
                                         .ComputeSize();
 
-  one_shot_bridge_sender_->BeginMessageGroup(kAddMeshBufferSize);
+  const absl::StatusOr<MessageGroupId> group_id =
+      bridge_sender_->BeginMessageGroup(
+          kAddMeshBufferSize, SplitEngineBridgeSender::MessageType::kOneShot);
+  
   std::unique_ptr<flatbuffers::FlatBufferBuilder> mesh_builder =
-      one_shot_bridge_sender_->CreateFlatBufferBuilder(kAddMeshBufferSize);
+      bridge_sender_->CreateFlatBufferBuilder(*group_id, kAddMeshBufferSize);
   SplitEngineMeshSerializer::VertexBufferVector vertex_buffer_offsets =
       split_engine_mesh_serializer.SerializeVertexBuffers(*mesh_builder);
   SplitEngineMeshSerializer::IndexBufferVector index_buffer_offsets =
@@ -764,12 +776,12 @@ void SplitEngineSerializerImpl::SerializeMeshIndicesAndVertices(
   CreateCommand(*mesh_builder, android_xr::schemas::CreateAddMeshData(
                                    *mesh_builder, vertex_buffer_offsets,
                                    index_buffer_offsets));
-  one_shot_bridge_sender_->SendMessage(*mesh_builder);
-  one_shot_bridge_sender_->EndMessageGroup();
+  bridge_sender_->SendMessage(*group_id, *mesh_builder);
+  bridge_sender_->EndMessageGroup(*group_id);
 }
 
 void SplitEngineSerializerImpl::SerializeMeshMorphTargets(
-    SplitEngineMeshSerializer& split_engine_mesh_serializer) {
+    const SplitEngineMeshSerializer& split_engine_mesh_serializer) {
   FlatbufferSizeCalculator morph_target_calculator;
   split_engine_mesh_serializer.ContributeMorphTargetBufferSizes(
       morph_target_calculator);
@@ -785,18 +797,23 @@ void SplitEngineSerializerImpl::SerializeMeshMorphTargets(
           .AddScratchSpace()
           .ComputeSize();
 
-  one_shot_bridge_sender_->BeginMessageGroup(kAddMorphTargetBufferSize);
+  const absl::StatusOr<MessageGroupId> group_id =
+      bridge_sender_->BeginMessageGroup(
+          kAddMorphTargetBufferSize,
+          SplitEngineBridgeSender::MessageType::kOneShot);
+  
   std::unique_ptr<flatbuffers::FlatBufferBuilder> morph_target_buffer_builder =
-      one_shot_bridge_sender_->CreateFlatBufferBuilder(
-          kAddMorphTargetBufferSize);
+      bridge_sender_->CreateFlatBufferBuilder(*group_id,
+                                              kAddMorphTargetBufferSize);
   SplitEngineMeshSerializer::MorphTargetBufferVector morph_buffer_offsets =
       split_engine_mesh_serializer.SerializeMorphTargetBuffers(
           *morph_target_buffer_builder);
   CreateCommand(*morph_target_buffer_builder,
                 android_xr::schemas::CreateAddMorphTargetBuffers(
                     *morph_target_buffer_builder, morph_buffer_offsets));
-  one_shot_bridge_sender_->SendMessage(*morph_target_buffer_builder);
-  one_shot_bridge_sender_->EndMessageGroup();
+  
+      bridge_sender_->SendMessage(*group_id, *morph_target_buffer_builder);
+  bridge_sender_->EndMessageGroup(*group_id);
 }
 
 size_t SplitEngineSerializerImpl::EstimateImageBasedLightingAssetBufferSize(
@@ -836,21 +853,25 @@ void SplitEngineSerializerImpl::SerializeImageBasedLightingAsset(
     const ImageBasedLightingAssetCubemapImages& cubemap_images) {
   const size_t kBufferSize = EstimateImageBasedLightingAssetBufferSize(
       spherical_harmonics, cubemap_images);
+  const ResourceId texture_id = GetId(&reflection_texture);
 
-  one_shot_bridge_sender_->BeginMessageGroup(kBufferSize);
+  const absl::StatusOr<MessageGroupId> group_id =
+      bridge_sender_->BeginMessageGroup(
+          kBufferSize, SplitEngineBridgeSender::MessageType::kOneShot);
+  
   std::unique_ptr<flatbuffers::FlatBufferBuilder> builder =
-      one_shot_bridge_sender_->CreateFlatBufferBuilder(kBufferSize);
+      bridge_sender_->CreateFlatBufferBuilder(*group_id, kBufferSize);
 
   flatbuffers::Offset<android_xr::schemas::ImageBasedLightingAsset> asset =
-      PackImageBasedLightingAsset(builder.get(), GetId(&reflection_texture),
+      PackImageBasedLightingAsset(builder.get(), texture_id,
                                   spherical_harmonics, cubemap_images);
 
   CreateCommand(*builder,
                 android_xr::schemas::CreateAddImageBasedLightingAssets(
                     *builder, builder->CreateVector({asset})));
 
-  one_shot_bridge_sender_->SendMessage(*builder);
-  one_shot_bridge_sender_->EndMessageGroup();
+  bridge_sender_->SendMessage(*group_id, *builder);
+  bridge_sender_->EndMessageGroup(*group_id);
 }
 
 void SplitEngineSerializerImpl::RemoveImageBasedLightingAsset(
@@ -922,6 +943,8 @@ SplitEngineSerializerImpl::GetFlatBufferBuilderFor(CommandBatchBase& batch) {
 
   return fbb_.emplace(&batch, CreateFlatBufferBuilder()).first->second.get();
 }
+
+int32_t SplitEngineSerializerImpl::GetApiLevel() const { return api_level_; }
 
 SplitEngineAndroidBridge& SplitEngineSerializerImpl::GetBridge() {
   return *bridge_;
@@ -1149,6 +1172,34 @@ flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> AddMaterialParam(
           fbb.CreateStruct(Pack(value)).Union());
     }
     flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
+        const uint value) {
+      LogMaterialParam(name, value);
+      return android_xr::schemas::CreateMaterialParamInfo(
+          fbb, fb_name, android_xr::schemas::MaterialParamValue::Uint,
+          fbb.CreateStruct(Pack(value)).Union());
+    }
+    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
+        const uint2& value) {
+      LogMaterialParam(name, value);
+      return android_xr::schemas::CreateMaterialParamInfo(
+          fbb, fb_name, android_xr::schemas::MaterialParamValue::Uint2,
+          fbb.CreateStruct(Pack(value)).Union());
+    }
+    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
+        const uint3& value) {
+      LogMaterialParam(name, value);
+      return android_xr::schemas::CreateMaterialParamInfo(
+          fbb, fb_name, android_xr::schemas::MaterialParamValue::Uint3,
+          fbb.CreateStruct(Pack(value)).Union());
+    }
+    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
+        const uint4& value) {
+      LogMaterialParam(name, value);
+      return android_xr::schemas::CreateMaterialParamInfo(
+          fbb, fb_name, android_xr::schemas::MaterialParamValue::Uint4,
+          fbb.CreateStruct(Pack(value)).Union());
+    }
+    flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
         const bool value) {
       LogMaterialParam(name, value);
       return android_xr::schemas::CreateMaterialParamInfo(
@@ -1198,11 +1249,10 @@ flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> AddMaterialParam(
     }
     flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
         const std::vector<mat3f>& value) {
-      IMP_LOG(imp::INFO) << kTag << kIndent << "material param: name: " << name
-                 << " value: <vector of mat3f>";
+      LogMaterialParam(name, "<vector of mat3f>");
       return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Mat3fArray,
-          android_xr::schemas::CreateMat3fArray(
+          fbb, fb_name, android_xr::schemas::MaterialParamValue::Mat3fVector,
+          android_xr::schemas::CreateMat3fVector(
               fbb, fbb.CreateVectorOfNativeStructs<android_xr::schemas::Mat3f>(
                        value.data(), value.size(), Pack))
               .Union());
@@ -1216,11 +1266,10 @@ flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> AddMaterialParam(
     }
     flatbuffers::Offset<android_xr::schemas::MaterialParamInfo> operator()(
         const std::vector<mat4f>& value) {
-      IMP_LOG(imp::INFO) << kTag << kIndent << "material param: name: " << name
-                 << " value: <vector of mat4f>";
+      LogMaterialParam(name, "<vector of mat4f>");
       return android_xr::schemas::CreateMaterialParamInfo(
-          fbb, fb_name, android_xr::schemas::MaterialParamValue::Mat4fArray,
-          android_xr::schemas::CreateMat4fArray(
+          fbb, fb_name, android_xr::schemas::MaterialParamValue::Mat4fVector,
+          android_xr::schemas::CreateMat4fVector(
               fbb, fbb.CreateVectorOfNativeStructs<android_xr::schemas::Mat4f>(
                        value.data(), value.size(), Pack))
               .Union());
@@ -2021,16 +2070,13 @@ SplitEngineSerializerImpl::GetOrCreateEndOfFrameBatch(
 void SplitEngineSerializerImpl::SendMessage(CommandBatchBase* batch_base) {
   flatbuffers::FlatBufferBuilder* fbb = GetFlatBufferBuilderFor(*batch_base);
   batch_base->Serialize(*fbb);
-  bridge_sender_->SendMessage(*fbb);
+  bridge_sender_->SendMessage(*frame_update_group_id_, *fbb);
 }
 
 void SplitEngineSerializerImpl::SendAllBatches() {
-  bool sent_message = false;
-
   while (!batch_queue_.empty()) {
     CommandBatchBase* batch = batch_queue_.front().get();
     SendMessage(batch);
-    sent_message = true;
     batch_queue_.pop();
   }
 
@@ -2039,13 +2085,16 @@ void SplitEngineSerializerImpl::SendAllBatches() {
 
     CommandBatchBase* batch = end_of_frame_batches_[i].get();
     SendMessage(batch);
-    sent_message = true;
     end_of_frame_batches_[i] = nullptr;
   }
 
-  if (!sent_message) return;
+  // If `SendMessage` was never called in the code above, it means that
+  // `BeginMessageGroup` was never called, and `EndMessageGroup`
+  // should not be called too.
+  if (!frame_update_group_id_.has_value()) return;
 
-  bridge_sender_->EndMessageGroup();
+  bridge_sender_->EndMessageGroup(*frame_update_group_id_);
+  frame_update_group_id_ = std::nullopt;
 
   // Clean up
   last_batch_idx_affecting_entity_.clear();
@@ -2057,7 +2106,6 @@ void SplitEngineSerializerImpl::SendAllBatches() {
 void SplitEngineSerializerImpl::Update(const FrameTime& frame_time) {
   // Check if any message groups are eligible for release.
   bridge_sender_->ClearReleasedMessageGroups();
-  one_shot_bridge_sender_->ClearReleasedMessageGroups();
 
   // Send all pending Command batches.
   SendAllBatches();

@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_SPLIT_ENGINE_BRIDGE_SENDER_H_
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <memory>
 
@@ -32,6 +33,27 @@ namespace imp::split_engine {
 // An interface for SplitEngine to use to send serialized data to a renderer.
 class SplitEngineBridgeSender {
  public:
+  // Implementation of SplitEngineBridgeSender shall support multiple active
+  // message groups in parallel.
+  //
+  // `BeginMessageGroup()` returns an ID that is used to identify which
+  // message group to interact with during the following calls:
+  // - `SendMessage()`
+  // - `EndMessageGroup()`
+  // - `CreateFlatBufferBuilder()`
+  //
+  // The type of message group to create.
+  //
+  // kOneShot message groups are used for sending larger, less frequent data
+  // types, such as textures and meshes.
+  //
+  // kFrameUpdate message groups are used for sending data that is updated
+  // every frame.
+  enum class MessageType {
+    kOneShot,
+    kFrameUpdate,
+  };
+
   virtual ~SplitEngineBridgeSender() = default;
 
   // TODO - food for thought:
@@ -45,20 +67,20 @@ class SplitEngineBridgeSender {
   // crashing.
 
   // Sends a message using the default active message group.
-  virtual void SendMessage(const flatbuffers::FlatBufferBuilder& message) = 0;
+  virtual absl::Status SendMessage(
+      MessageGroupId group_id,
+      const flatbuffers::FlatBufferBuilder& message) = 0;
 
   // Begin a new message group which will be contained within buffer of
   // specified size. The SplitEngineBridgeSender will handle adding overhead
   // for begin and end message group messages.
-  virtual void BeginMessageGroup(size_t size_bytes) = 0;
+  virtual absl::StatusOr<MessageGroupId> BeginMessageGroup(
+      size_t size_byte, MessageType message_type) = 0;
 
   // Ends the current message group and mark it eligible for release once
   // all messages in the group have been processed. A new message group will
   // need to be started before any more messages can be sent.
-  virtual void EndMessageGroup() = 0;
-
-  // True if we're between a BeginMessageGroup/EndMessageGroup pair.
-  virtual bool IsMessageGroupActive() const = 0;
+  virtual absl::Status EndMessageGroup(MessageGroupId group_id) = 0;
 
   // Returns the total number of message groups that remote side has not
   // released yet. 'Total' means that the result is not restricted to the
@@ -81,7 +103,7 @@ class SplitEngineBridgeSender {
   // SplitEngineBridgeSender, and so the returned FlatBufferBuilder is only
   // valid for the lifetime of the SplitEngineBridgeSender.
   virtual std::unique_ptr<flatbuffers::FlatBufferBuilder>
-  CreateFlatBufferBuilder(size_t size_bytes) = 0;
+  CreateFlatBufferBuilder(MessageGroupId group_id, size_t size_bytes) = 0;
 
   // Below is a set of static methods for use by the SplitEngineBridgeSender
   // to track active message groups across the bridge.

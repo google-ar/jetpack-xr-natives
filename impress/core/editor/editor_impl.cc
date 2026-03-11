@@ -587,13 +587,15 @@ void EditorImpl::InitializeWidgetUiSystem() {
   widget_ui_system_.AddWidget<Console>(WidgetLayoutInfo(PanelId::kTabBar),
                                        view);
 #if IMP_PLATFORM(DESKTOP) || IMP_PLATFORM(WASM)
-  asset_library_ = widget_ui_system_.AddWidget<AssetLibrary>(
-      WidgetLayoutInfo(PanelId::kTabBar), view);
-  widget_ui_system_.AddWidget<SettingsWidget>(
-      WidgetLayoutInfo(PanelId::kMenuBar), GetView());
-  widget_ui_system_.AddWidget<WindowWidget>(WidgetLayoutInfo(PanelId::kMenuBar),
-                                            GetView());
 #endif
+  if (widget_ui_system_.Is2DLargeScreenLayout()) {
+    asset_library_ = widget_ui_system_.AddWidget<AssetLibrary>(
+        WidgetLayoutInfo(PanelId::kTabBar), view);
+    widget_ui_system_.AddWidget<SettingsWidget>(
+        WidgetLayoutInfo(PanelId::kMenuBar), GetView());
+    widget_ui_system_.AddWidget<WindowWidget>(
+        WidgetLayoutInfo(PanelId::kMenuBar), GetView());
+  }
 
   widget_ui_system_.AddWidget<VisualizeBounds>(
       WidgetLayoutInfo(PanelId::kFreeform), view);

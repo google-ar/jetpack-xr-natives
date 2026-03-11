@@ -23,6 +23,7 @@
 #include <optional>
 #include <vector>
 
+#include "absl/base/nullability.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "flatbuffers/verifier.h"
@@ -36,6 +37,7 @@
 #include "core/split_engine/materials/builtin/builtin_material.h"
 #include "core/split_engine/renderer_policy_handler.h"
 #include "core/split_engine/shared/split_engine_defines.h"
+#include "core/split_engine/split_engine_renderer_context.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
@@ -156,10 +158,6 @@ class SplitEngineRenderer {
       std::function<MediaColorSpace()> get_source_color_space_fn,
       std::function<void*()> get_surface_fn,
       imp::Invocable<void()> release_fn) = 0;
-  // Returns the color space for the given texture. This is only for the
-  // specific Textures that are backed by an Android Surface.
-  virtual MediaColorSpace GetTextureColorSpace(BridgeId bridge_id,
-                                               TextureId texture_id) const = 0;
   // Returns the maximum content security level among all external textures.
   // If bridge_id is provided, only the content security level for the given
   // bridge id will be considered.
@@ -177,6 +175,14 @@ class SplitEngineRenderer {
   virtual void ForEachActiveSurface(std::optional<BridgeId> bridge_id,
                                     std::function<void(void*)> fn) = 0;
 
+  // Overrides the channel for all renderables associated with the given
+  // user_id.
+  virtual absl::Status SetChannelOverride(uint64_t user_id,
+                                          uint8_t channel) = 0;
+  // Clears any channel override set for the given user_id, restoring the
+  // original channel.
+  virtual absl::Status ClearChannelOverride(uint64_t user_id) = 0;
+
   // Adds permission grants for the application, identified with its BridgeId.
   virtual void AddAppPermission(BridgeId bridge_id,
                                 AppPermission app_permission) = 0;
@@ -191,6 +197,11 @@ class SplitEngineRenderer {
       BridgeId bridge_id,
       std::unique_ptr<RendererPolicyHandler> renderer_policy_handler) = 0;
 
+  // Returns the AppContext for a given bridge id, or nullptr if not found.
+  virtual const AppContext* /*absl_nullable*/  GetAppContext(
+      BridgeId bridge_id) const = 0;
+  // Returns the AppContext for a given bridge id, or nullptr if not found.
+  virtual AppContext* /*absl_nullable*/  GetAppContext(BridgeId bridge_id) = 0;
   // Sets the current context for all updates to the app with this bridge id.
   virtual void SetAppContext(BridgeId bridge_id) = 0;
   // Destroys all Nodes, materials, etc. associated with the given bridge id.

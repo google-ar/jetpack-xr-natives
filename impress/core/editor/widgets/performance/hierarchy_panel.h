@@ -12,33 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_CPU_HIERARCHY_PANEL_H_
-#define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_CPU_HIERARCHY_PANEL_H_
+#ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_HIERARCHY_PANEL_H_
+#define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_HIERARCHY_PANEL_H_
 
+#include <array>
 #include <cstdint>
-#include <thread>  // NOLINT: Need to sort things by thread id.
+#include <thread>  // NOLINT: Need to use std::thread::id.
+#include <vector>
 
-#include "absl/strings/string_view.h"
 #include "core/editor/widgets/performance/sample_processor.h"
+#include "core/editor/widgets/performance/sample_processor_types.h"
 #include "core/performance/profiler.h"
 
 namespace imp::editor {
+
+class FrameTimePanel;
 
 // Panel containing a tree view of performance profiling data.
 // Each node in the tree represents a sample taken across a scope.
 class HierarchyPanel {
  public:
-  HierarchyPanel();
-  ~HierarchyPanel();
+  HierarchyPanel() {}
+  ~HierarchyPanel() = default;
 
-  void DrawPanel(int frame_index, SampleProcessor& sample_processor);
-
-  absl::string_view GetSelectedSampleName();
+  void DrawPanel(int frame_index, SampleProcessor& sample_processor,
+                 FrameTimePanel& frame_time_panel);
 
  private:
   constexpr static int kMaxTreeDepth = 30;
-  // The name of the currently selected sample in the hierarchy.
-  absl::string_view selected_sample_name_ = "";
   // The total duration of the root node for the current tree.
   // This is used to calculate the percentage of time a sample takes up.
   // For instances where >1 root nodes are present, their children will show
@@ -46,7 +47,33 @@ class HierarchyPanel {
   int64_t root_duration_ns_ = 0;
   // Draws a node in the tree as a row in the table.
   // Recursively calls itself for child nodes.
-  void DrawTreeNode(ProfilerSampleNode* node, int depth, int& row_index);
+  void DrawTreeNode(FrameTimePanel& frame_time_panel, SampleNode* node,
+                    int depth, int& row_index);
+  void DrawWorkerTreeNode(FrameTimePanel& frame_time_panel, SampleNode* node,
+                          int depth, int& row_index);
+  void DrawMainThreadSamples(int frame_index, SampleProcessor& sample_processor,
+                             FrameTimePanel& frame_time_panel);
+  void DrawWorkerThreadSamples(int frame_index,
+                               SampleProcessor& sample_processor,
+                               std::thread::id thread_id,
+                               FrameTimePanel& frame_time_panel);
+  void DrawTableRow(FrameTimePanel& frame_time_panel, const char* name,
+                    uint32_t time, int calls, int& row_index);
+  void DrawThreadSelector();
+  // Returns a hard copy of a tree of samples.
+  // This is used to modify the tree without affecting the original data.
+  // Original data is owned by the SampleProcessor and will not be modified
+  // by this class.
+  std::vector<SampleNode*> GetTreeHardCopy(std::vector<SampleNode*>& roots,
+                                           NodePool& node_pool);
+  // Copies a node to the pool of sample nodes
+  // Recursively copies all child nodes.
+  SampleNode* CopyNodeToPool(SampleNode* node, NodePool& node_pool);
+  // Pool of nodes to be reused each time a tree is drawn.
+  MainThreadNodePool main_thread_node_pool_;
+  WorkerNodePool worker_node_pool_;
+
+  // For thread selection:
   const char* current_thread_ = Profiler::kMainThreadName.data();
   std::thread::id current_thread_id_;
   bool thread_set_ = false;
@@ -54,4 +81,4 @@ class HierarchyPanel {
 
 }  // namespace imp::editor
 
-#endif  // THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_CPU_HIERARCHY_PANEL_H_
+#endif  // THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_HIERARCHY_PANEL_H_

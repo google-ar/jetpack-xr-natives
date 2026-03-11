@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_GENERIC_MATERIAL_CONSTANTS_H_
 
 #include <array>
+#include <limits>
 
 #include "absl/strings/string_view.h"
 #include "core/math/vec.h"
@@ -54,6 +55,10 @@ constexpr const absl::string_view kSheenRoughnessFactor =
 constexpr const absl::string_view kTransmissionIndex = "transmissionIndex";
 constexpr const absl::string_view kTransmissionFactor = "transmissionFactor";
 constexpr const absl::string_view kIndexOfRefraction = "indexOfRefraction";
+constexpr const absl::string_view kThicknessFactor = "thicknessFactor";
+constexpr const absl::string_view kThicknessIndex = "thicknessIndex";
+constexpr const absl::string_view kAttenuationDistance = "attenuationDistance";
+constexpr const absl::string_view kAttenuationColor = "attenuationColor";
 constexpr const absl::string_view kSamplersUvBitflags = "samplers_uv_bitflags";
 constexpr const absl::string_view kSamplersUvMatrices = "samplers_uv_matrices";
 constexpr const absl::string_view kEstimatedDepthTexture =
@@ -80,6 +85,12 @@ constexpr float3 kDefaultClearcoatFactor = float3(0, 0, 1);
 constexpr float3 kDefaultSheenColorFactor = kZero3;
 constexpr float kDefaultSheenRoughnessFactor = 0;
 constexpr float kDefaultTransmissionFactor = 0;
+constexpr float kDefaultThicknessFactor = 0;
+// This is meant to be +infinity. See
+// https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Khronos/KHR_materials_volume
+// Inifinte values are supported in GLSL, but G3 uses -Wnan-infinity-disabled
+constexpr float kDefaultAttenuationDistance = std::numeric_limits<float>::max();
+constexpr float3 kDefaultAttenuationColor = kOne3;
 constexpr float kDefaultIndexOfRefraction = 1.5;
 constexpr float kDefaultAlphaCutoff = 0.5;
 

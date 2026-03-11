@@ -15,6 +15,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_DESKTOP_SPLIT_ENGINE_DESKTOP_BRIDGE_SENDER_H_
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_DESKTOP_SPLIT_ENGINE_DESKTOP_BRIDGE_SENDER_H_
 
+#include "absl/status/status.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/split_engine/android/buffer_handle_factory.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_sender_base.h"
@@ -28,9 +29,14 @@ namespace imp::split_engine {
 class SplitEngineMMDesktopBridgeSender
     : public SplitEngineSharedMemoryBridgeSenderBase {
  public:
-  SplitEngineMMDesktopBridgeSender(SplitEngineMMDesktopBridgeClient& client,
-                                   bool recycle_buffers);
+  SplitEngineMMDesktopBridgeSender(SplitEngineMMDesktopBridgeClient& client);
 
+  absl::Status SendMessage(
+      MessageGroupId group_id,
+      const flatbuffers::FlatBufferBuilder& message) override;
+  absl::Status EndMessageGroup(MessageGroupId group_id) override;
+
+ protected:
   // TODO: (broken link) - remove this once (broken link) is merged.
   MessageGroupId GenerateMessageGroupId() override;
 
@@ -38,14 +44,11 @@ class SplitEngineMMDesktopBridgeSender
 
   BufferHandleFactory& GetBufferHandleFactory() override;
 
-  FlatbufferArenaAllocator& GetAllocator() override;
-
-  void SendMessage(const flatbuffers::FlatBufferBuilder& message) override;
-  void EndMessageGroup() override;
+  ArenaAllocator& GetArenaAllocator() override;
 
  private:
   SplitEngineMMDesktopBridgeClient& client_;
-  SizePrefixedFlatbufferArenaAllocator arena_allocator_;
+  SizePrefixedArenaAllocator arena_allocator_;
   BufferHandleFactory buffer_handle_factory_;
 };
 

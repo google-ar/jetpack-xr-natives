@@ -85,9 +85,12 @@ class TaskScheduler {
   // this method.
   [[nodiscard]] TaskId ReserveTaskId();
 
-  // Pops and returns the Invocable of the next scheduled Task. Returns a
-  // FailedPreconditionError if there are no valid Tasks in the TaskScheduler.
-  [[nodiscard]] absl::StatusOr<Invocable<void()>> PopTask();
+  // Pops and returns the Invocable of the next scheduled Task. If a TaskId is
+  // provided, the Task with that TaskId is popped and returned. Returns a
+  // FailedPreconditionError if there are no valid Tasks in the TaskScheduler,
+  // or a NotFoundError if the provided TaskId does not resolve to a Task.
+  [[nodiscard]] absl::StatusOr<Invocable<void()>> PopTask(
+      std::optional<TaskId> task_id = std::nullopt);
 
   // Reschedules a Task with an updated task priority. Returns a NotFoundError
   // if the Task has already been completed, or if the TaskId does not resolve
@@ -116,9 +119,6 @@ class TaskScheduler {
  private:
   // Pushes a Task to the TaskScheduler.
   void PushTaskInternal(Task* /*absl_nonnull*/  task);
-
-  // Pops the next Task to be scheduled.
-  absl::StatusOr<std::unique_ptr<Task>> PopTaskInternal();
 
   // Stores Tasks and allows random access to Tasks by TaskId. Tasks are
   // stored with RegisterTask(), assigned a unique TaskId, and moved out of the

@@ -74,6 +74,8 @@ class WidgetUiSystem : public System {
 
   void SetLayoutComposer(std::unique_ptr<LayoutComposer> layout_composer);
 
+  bool Is2DLargeScreenLayout() const;
+
  private:
   void ProcessPendingRemoves();
   void AddWindowConfiguration(absl::string_view name,

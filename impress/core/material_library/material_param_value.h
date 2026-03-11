@@ -17,14 +17,10 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_MATERIAL_PARAM_VALUE_H_
 #define THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_MATERIAL_PARAM_VALUE_H_
 
-#include <cstdint>
 #include <memory>
-#include <string>
-#include <utility>
 #include <variant>
 #include <vector>
 
-#include "absl/strings/string_view.h"
 #include "filament/filament/include/filament/Texture.h"
 #include "filament/filament/include/filament/TextureSampler.h"
 #include "core/math/almost_equal.h"
@@ -69,6 +65,7 @@ struct TextureAndSampler {
 using MaterialParamValue =
     std::variant<float, float2, float3, float4,  //^
                  int, int2, int3, int4,          //^
+                 uint, uint2, uint3, uint4,      //^
                  bool, bool2, bool3, bool4,      //^
                  mat3f, std::vector<mat3f>, mat4f, std::vector<mat4f>>;
 

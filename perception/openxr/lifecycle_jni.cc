@@ -14,12 +14,32 @@
 
 #include <jni.h>
 
+#include <functional>
 #include <vector>
 
 #include "openxr/openxr.h"
+#include "absl/log/log.h"
 #include "common/pointer_util.h"
 #include "openxr/jobject_creator.h"
 #include "openxr/openxr_manager.h"
+
+namespace {
+void HandleAuthCompletion(const XrFutureCompletionEXT& completion) {
+  // Auth is set internally, so there is no app-initiated operation to return
+  // the failure result to, so we will just log it instead. Auth-bound
+  // operations like geospatial setup should also show useful error messages.
+  if (XR_FAILED(completion.futureResult)) {
+    if (completion.futureResult == XR_ERROR_KEYLESS_AUTH_FAILED_ANDROIDX2) {
+      LOG(ERROR) << "Google Cloud Auth future failed: Keyless Auth failed. The "
+                    "application can try again later.";
+    } else {
+      LOG(ERROR) << "Google Cloud Auth future failed with result: "
+                 << completion.futureResult;
+    }
+    return;
+  }
+}
+}  // namespace
 
 extern "C" {
 JNIEXPORT jlong JNICALL
@@ -79,7 +99,7 @@ Java_androidx_xr_arcore_openxr_OpenXrManager_nativeConfigureSession(
     JNIEnv* env, jclass /*clazz*/, jint plane_tracking, jint hand_tracking,
     jint head_tracking, jint depth_estimation, jint anchor_persistence,
     jint face_tracking, jint eye_tracking, jint object_tracking,
-    jlongArray object_tracking_labels) {
+    jlongArray object_tracking_labels, jint geospatial_tracking) {
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
 
@@ -109,6 +129,9 @@ Java_androidx_xr_arcore_openxr_OpenXrManager_nativeConfigureSession(
           static_cast<androidx::xr::openxr::OpenXrManager::EyeTrackingMode>(
               eye_tracking),
       .object_tracking_labels = {},
+      .geospatial_mode =
+          static_cast<androidx::xr::openxr::OpenXrManager::GeospatialMode>(
+              geospatial_tracking),
   };
 
   if (object_tracking_labels == nullptr) {
@@ -167,6 +190,77 @@ Java_androidx_xr_arcore_openxr_OpenXrRuntime_nativeIsGeospatialSupported(
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
 
   return xr_manager.IsGeospatialSupported();
+}
+
+JNIEXPORT void JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrManager_nativeSetApiKeyAuth(
+    JNIEnv* env, jclass /*clazz*/, jstring api_key) {
+  androidx::xr::openxr::OpenXrManager& xr_manager =
+      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+
+  const char* api_key_chars = env->GetStringUTFChars(api_key, nullptr);
+  XrGoogleCloudAuthApiKeyANDROIDX2 auth_info = {
+      .type = XR_TYPE_GOOGLE_CLOUD_AUTH_API_KEY_ANDROIDX2,
+      .next = nullptr,
+      .apiKey = api_key_chars,
+  };
+
+  XrResult result = xr_manager.SetGoogleCloudAuthAsync(
+      reinterpret_cast<XrGoogleCloudAuthInfoBaseHeaderANDROIDX2*>(&auth_info),
+      HandleAuthCompletion, /*on_cancel=*/nullptr);
+  if (XR_FAILED(result) && result != XR_ERROR_FUNCTION_UNSUPPORTED) {
+    if (result == XR_ERROR_VALIDATION_FAILURE) {
+      LOG(ERROR) << "Failed to set API key auth: API key is invalid.";
+    } else {
+      LOG(ERROR) << "Failed to set API key auth: " << result;
+    }
+  }
+  env->ReleaseStringUTFChars(api_key, api_key_chars);
+}
+
+JNIEXPORT void JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrManager_nativeSetAuthTokenAuth(
+    JNIEnv* env, jclass /*clazz*/, jstring auth_token) {
+  androidx::xr::openxr::OpenXrManager& xr_manager =
+      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+
+  const char* auth_token_chars = env->GetStringUTFChars(auth_token, nullptr);
+  XrGoogleCloudAuthTokenANDROIDX2 auth_info = {
+      .type = XR_TYPE_GOOGLE_CLOUD_AUTH_TOKEN_ANDROIDX2,
+      .next = nullptr,
+      .authToken = auth_token_chars,
+  };
+
+  XrResult result = xr_manager.SetGoogleCloudAuthAsync(
+      reinterpret_cast<XrGoogleCloudAuthInfoBaseHeaderANDROIDX2*>(&auth_info),
+      HandleAuthCompletion, /*on_cancel=*/nullptr);
+  if (XR_FAILED(result) && result != XR_ERROR_FUNCTION_UNSUPPORTED) {
+    if (result == XR_ERROR_VALIDATION_FAILURE) {
+      LOG(ERROR) << "Failed to set auth token auth: Auth token is invalid.";
+    } else {
+      LOG(ERROR) << "Failed to set auth token auth: " << result;
+    }
+  }
+  env->ReleaseStringUTFChars(auth_token, auth_token_chars);
+}
+
+JNIEXPORT void JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrManager_nativeSetKeylessAuth(
+    JNIEnv* env, jclass /*clazz*/) {
+  androidx::xr::openxr::OpenXrManager& xr_manager =
+      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+
+  XrGoogleCloudAuthKeylessANDROIDX2 auth_info = {
+      .type = XR_TYPE_GOOGLE_CLOUD_AUTH_KEYLESS_ANDROIDX2,
+      .next = nullptr,
+  };
+
+  XrResult result = xr_manager.SetGoogleCloudAuthAsync(
+      reinterpret_cast<XrGoogleCloudAuthInfoBaseHeaderANDROIDX2*>(&auth_info),
+      HandleAuthCompletion, /*on_cancel=*/nullptr);
+  if (XR_FAILED(result) && result != XR_ERROR_FUNCTION_UNSUPPORTED) {
+    LOG(ERROR) << "Failed to set keyless auth: " << result;
+  }
 }
 
 }  // extern "C"

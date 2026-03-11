@@ -361,6 +361,15 @@ LoadedModelBuilder::MaterialId LoadedModelBuilder::GetMaterial(
   return itr->second;
 }
 
+LoadedModelBuilder::SkinId LoadedModelBuilder::GetSkin(
+    uint32_t lookup_index) const {
+  auto itr = skin_from_lookup_index_.find(lookup_index);
+  if (itr == skin_from_lookup_index_.end()) {
+    return SkinId{};
+  }
+  return itr->second;
+}
+
 std::optional<VertexAttributeMask> LoadedModelBuilder::GetRequiredAttributes(
     MaterialId material) {
   const schemas::MaterialInfo* schema =
@@ -437,7 +446,7 @@ absl::StatusOr<LoadedModelBuilder::EntityId> LoadedModelBuilder::AddEntity(
     LightPunctualId light_punctual, AudioEmitterId audio_emitter,
     std::vector<PartData> parts, std::optional<filament::Box> bounds,
     std::optional<RuntimeData> runtime, int child_count, absl::string_view name,
-    uint16_t original_index, int original_mesh_index,
+    uint16_t original_index, int original_mesh_index, int original_skin_index,
     std::optional<NodeVisibility> node_visibility,
     std::optional<NodeSelectability> node_selectability,
     std::optional<NodeHoverability> node_hoverability) {
@@ -457,8 +466,8 @@ absl::StatusOr<LoadedModelBuilder::EntityId> LoadedModelBuilder::AddEntity(
       std::move(mesh_morph_target_weights), std::move(light_punctual),
       audio_emitter, std::move(bounds), std::move(runtime), std::string(name),
       std::move(original_index), std::move(original_mesh_index),
-      std::move(node_visibility), std::move(node_selectability),
-      std::move(node_hoverability));
+      std::move(original_skin_index), std::move(node_visibility),
+      std::move(node_selectability), std::move(node_hoverability));
 }
 
 absl::Status LoadedModelBuilder::FinishEntities() {
@@ -478,11 +487,13 @@ absl::Status LoadedModelBuilder::FinishEntities() {
 }
 
 absl::StatusOr<LoadedModelBuilder::SkinId> LoadedModelBuilder::AddSkin(
-    model::ModelData::SkinData skin_data) {
+    uint32_t lookup_index, model::ModelData::SkinData skin_data) {
   if (skins_.size() > std::numeric_limits<int16_t>::max()) {
     return absl::InternalError("Too many skins");
   }
-  return skins_.Append<SkinId>(std::move(skin_data));
+  SkinId skin_id = skins_.Append<SkinId>(std::move(skin_data));
+  skin_from_lookup_index_[lookup_index] = skin_id;
+  return skin_id;
 }
 
 absl::Status LoadedModelBuilder::AddSkinEntity(
@@ -501,7 +512,9 @@ absl::Status LoadedModelBuilder::FinishSkins() {
   using JointChildId = model::ModelData::JointChildId;
   using SampledJointId = model::ModelData::SampledJointId;
 
-  for (const model::ModelData::SkinData& skin : skins_) {
+  skin_offsets_.resize(skins_.size());
+  for (const auto& [skin_index, skin_id] : skin_from_lookup_index_) {
+    const model::ModelData::SkinData& skin = skins_[skin_id];
     auto joint_count = skin.joints.size();
     auto sampled_joint_count = skin.sampled_joints.size();
     auto skinned_entity_count = skin.skinned_entities.size();
@@ -600,14 +613,14 @@ absl::Status LoadedModelBuilder::FinishSkins() {
     Offset<Vector<Offset<schemas::SkinnedEntityJointUsageInfo>>>
         skinned_entity_joint_usage_offset =
             fbb_.CreateVector(item_sampled_bone_usage);
-    skin_offsets_.push_back(schemas::CreateSkinInfo(
+    skin_offsets_[skin_id] = schemas::CreateSkinInfo(
         fbb_, sampled_joints_offset, inverse_bind_poses_offset,
         joint_child_counts_offset, joint_parents_offset,
         joint_first_children_offset, joint_next_siblings_offset,
         joint_sources_offset, joint_targets_offset,
         skinned_entity_targets_offset, skinned_entity_joint_bounds_offset,
-        skinned_entity_joint_usage_offset,
-        static_cast<int32_t>(skin.pose_root)));
+        skinned_entity_joint_usage_offset, static_cast<int32_t>(skin.pose_root),
+        skin_index);
   }
   return absl::OkStatus();
 }
@@ -716,7 +729,7 @@ void LoadedModelBuilder::RemoveShadowPlanes(const filament::Box& scene_bounds) {
                   new_parts.push_back(PartData{
                       part.name, part.index_offset, part.index_count,
                       part.vertex_buffer, part.index_buffer, part.material,
-                      part.primitive_type,
+                      part.original_material_index, part.primitive_type,
                       std::move(part.materials_variants_mappings),
                       part.skinning_buffer, part.morph_target_buffer_offset,
                       part.morph_target_buffer_count});
@@ -835,6 +848,7 @@ absl::StatusOr<Offset<schemas::LoadedModel>> LoadedModelBuilder::Serialize() {
                   fbb, fbb.CreateString(part.name), part.index_offset,
                   part.index_count, uint16_t{part.vertex_buffer},
                   uint16_t{part.index_buffer}, uint16_t{part.material},
+                  part.original_material_index,
                   static_cast<uint8_t>(part.primitive_type),
                   materials_variants_mappings_offset,
                   uint16_t{part.skinning_buffer},
@@ -864,6 +878,7 @@ absl::StatusOr<Offset<schemas::LoadedModel>> LoadedModelBuilder::Serialize() {
             entity.get<EntityData::Fields::kNumChildren>(),
             uint16_t{entity.get<EntityData::Fields::kOriginalIndex>()},
             int16_t{entity.get<EntityData::Fields::kOriginalMeshIndex>()},
+            int16_t{entity.get<EntityData::Fields::kOriginalSkinIndex>()},
             CreateNodeVisibility(
                 fbb, entity.get<EntityData::Fields::kNodeVisibility>()),
             CreateNodeSelectability(

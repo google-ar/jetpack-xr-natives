@@ -19,5 +19,5 @@ package com.google.ar.imp.core.scripting;
 /** An interface for posting messages of type MessageToScript from Impress native code. */
 public interface ScriptEndpoint {
   /** Posts a MessageToScript from native to the Java scripting interface. */
-  void postMessage(byte[] message);
+  void postMessage(byte[] message, Object out);
 }

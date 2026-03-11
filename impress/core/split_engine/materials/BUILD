@@ -81,6 +81,7 @@ cc_library(
         "@third_party//filament",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//split_engine:fbs",
+        "@third_party//split_engine:split_engine_schema_version",
     ],
     alwayslink = 1,
 )
@@ -150,7 +151,6 @@ cc_library(
         "//core/async:future",
         "//core/material_library:generic_material_spec",
         "//core/material_library:material_package",
-        "//core/split_engine:split_engine_renderer",
         "//core/split_engine:split_engine_shared",
         "//core/split_engine/materials/builtin:builtin_generic_material",
         "//core/split_engine/materials/builtin:builtin_jxr_media_material",
@@ -161,7 +161,7 @@ cc_library(
         "//core/split_engine/materials/builtin:builtin_vignette_material",
         "//core/split_engine/materials/builtin:builtin_water_material",
         "//core/split_engine/materials/builtin:builtin_youtube_stereo_player_material",
-        "//core/split_engine/materials/builtin/gsplat:builtin_gsplat_background_material",
+        "//core/split_engine/materials/builtin/gsplat:gsplat_background_material_deserializer",
         "//core/split_engine/materials/builtin/gsplat:gsplat_material_deserializer",
         "//core/split_engine/materials/builtin/photosxr:builtin_photos_texture_3d_material",
         "//core/view:base_view",
@@ -207,11 +207,7 @@ cc_library(
     copts = imp_google3_copts(),
     defines = imp_defines(),
     deps = [
-        "//core/async:future",
-        "//core/split_engine:split_engine_renderer",
-        "//core/split_engine:split_engine_shared",
         "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/status",
         "@flatbuffers",
         "@third_party//split_engine:fbs",
         "@third_party//split_engine:fbs_deps",  # buildcleaner: keep

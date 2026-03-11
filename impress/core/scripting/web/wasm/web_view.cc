@@ -14,23 +14,33 @@
 
 #include "core/scripting/web/wasm/web_view.h"
 
-#include <emscripten/emscripten.h>
-#include <emscripten/threading.h>
-
 #include <memory>
 #include <string>
 #include <utility>
 
 #include "core/common/log.h"
-#include "absl/status/status.h"
-#include "absl/strings/str_format.h"
+#include "absl/strings/string_view.h"
 #include "core/common/buffer_access.h"
-#include "core/common/platform_helpers.h"
-#include "core/common/resource_helpers.h"
+#include "core/common/context.h"
 #include "core/common/string_helpers.h"
+#include "core/config.h"
 #include "core/scripting/message_helpers.h"
-#include "core/scripting/web/wasm/wasm_helpers.h"
+#include "core/scripting/proto/bridge.proto.imp.h"
+#include "core/scripting/web/web_view.h"
+#include "core/view/base_view.h"
+#include "core/view/scripting/script_message_handler.h"
 #include "javascript/core/imp_web_bridge_js_embed.h"
+
+#if IMP_PLATFORM(WASM)
+#include <emscripten/emscripten.h>
+#include <emscripten/threading.h>
+
+#include "absl/status/status.h"
+#include "core/async/executor.h"
+#include "core/async/future.h"
+#include "core/common/resource_helpers.h"
+#include "core/scripting/web/wasm/wasm_helpers.h"
+#endif
 
 namespace imp::scripting {
 
@@ -47,18 +57,16 @@ WasmWebView::WasmWebView(const Context& context, const WebViewParams& params,
   LoadInjectionScript();
 }
 
-WasmWebView::WasmWebView(void* external_web_view,
-                         BufferAccess injection_script) {
-  IMP_LOG(imp::FATAL) << "Cannot instantiate WasmWebView with external web view.";
-}
-
 // A helper function to eval the given script in the javascript environment.
 // This is used to asynchronously inject the injection_script_.
 void EvalInjectionScript(void* script) {
+#if IMP_PLATFORM(WASM)
   emscripten_run_script(static_cast<char*>(script));
+#endif
 }
 
 void WasmWebView::LoadInjectionScript() {
+#if IMP_PLATFORM(WASM)
   switch (injection_target_) {
     case InjectionTarget::kMainPage:
       // In the case of injecting to the main page, it would happen
@@ -74,6 +82,7 @@ void WasmWebView::LoadInjectionScript() {
       // back on the main thread, not the background thread. If threads
       // are not enabled, the background thread is the same thread so we
       // can just inject (and the async function doesn't exist).
+
 #if defined(__EMSCRIPTEN_PTHREADS__)
             emscripten_async_run_in_main_runtime_thread(
                 EM_FUNC_SIG_VI, EvalInjectionScript, injection_script_.Data());
@@ -103,25 +112,57 @@ void WasmWebView::LoadInjectionScript() {
       InjectScriptToBridge(injection_script_.StringView());
       break;
   }
+#endif
 }
 
-void WasmWebView::PostMessage(const MessageToScript& message) {
-  // Post message to the main thread so the script has DOM access.
-  MAIN_THREAD_EM_ASM(
-      {eval(UTF8ToString($0))},
-      absl::StrFormat(kPostMessage, SerializeToBase64(message)).c_str());
+void WasmWebView::HandleMessage(BaseView& view, absl::string_view message) {
+  auto script_message_handler = view.GetScriptMessageHandler();
+  if (script_message_handler) {
+    std::string decoded;
+    if (!DeserializeBase64(message, &decoded)) {
+      IMP_LOG(imp::ERROR) << "Failed to decode base64 string received from JS: "
+                 << message;
+      return;
+    }
+
+    scripting::MessageToNative message_proto;
+    if (!ParseFromArray(decoded.c_str(), decoded.length(), &message_proto)) {
+      IMP_LOG(imp::ERROR) << "Failed to parse message from Javascript!";
+      return;
+    }
+
+    script_message_handler->HandleMessage(
+        message_proto, [](scripting::MessageToScript message, void* out) {
+#if IMP_PLATFORM(WASM)
+          MAIN_THREAD_EM_ASM(
+              {
+                if (window.javaScriptEntryPoint &&
+                    window.javaScriptEntryPoint.incoming &&
+                    window.javaScriptEntryPoint.incoming.postMessage) {
+                  window.javaScriptEntryPoint.incoming.postMessage(
+                      UTF8ToString($0));
+                }
+              },
+              SerializeToBase64(message).c_str());
+#endif
+        });
+  } else {
+    IMP_LOG(imp::ERROR) << "Attempt to send script message but there is no "
+                  "ScriptMessageHandler attached to the View!";
+  }
 }
 
-std::unique_ptr<WebView> WebView::Create(const Context& context,
-                                         const WebViewParams& params,
-                                         BufferAccess injection_script) {
+std::unique_ptr<WebView> WebView::Create(
+    ScriptMessageHandler& script_message_handler, const Context& context,
+    const WebViewParams& params, BufferAccess injection_script) {
   return std::make_unique<WasmWebView>(context, params,
                                        std::move(injection_script));
 }
 
-std::unique_ptr<WebView> WebView::Create(void* web_view, const Context& context,
-                                         BufferAccess injection_script) {
-  return std::make_unique<WasmWebView>(web_view, std::move(injection_script));
+std::unique_ptr<WebView> WebView::Create(
+    ScriptMessageHandler& script_message_handler, const Context& context,
+    void* web_view, BufferAccess injection_script) {
+  IMP_LOG(imp::FATAL) << "Cannot instantiate WasmWebView with external web view.";
 }
 
 }  // namespace imp::scripting

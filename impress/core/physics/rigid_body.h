@@ -83,12 +83,17 @@ class RigidBody : public Component {
   // frame.
   void SetLinearVelocity(float3 velocity);
 
-  // Set's the rigid body's linear factor - how much it will move on x, y, z
-  // axis. Can be used for freezing the object on one axis.
-  void SetLinearFactor(const float3& linear_factor);
+  // Locks the rigid body's movement along x, y, or z axes.
+  void LockPosition(bool lock_x, bool lock_y, bool lock_z);
 
-  // Get's the rigid body's current linear factor.
-  float3 GetLinearFactor();
+  // Locks the rigid body's movement along all axes.
+  void LockPosition(bool all_axes);
+
+  // Locks the rigid body's rotation around x, y, or z axes.
+  void LockRotation(bool lock_x, bool lock_y, bool lock_z);
+
+  // Locks the rigid body's rotation around all axes.
+  void LockRotation(bool all_axes);
 
   // Set's the rigid body's angular velocity. This will take effect on the next
   // frame.
@@ -99,12 +104,6 @@ class RigidBody : public Component {
 
   // Get's the rigid body's current angular velocity.
   float3 GetAngularVelocity();
-
-  // Set's the rigid body's angular factor.
-  void SetAngularFactor(float3 angular_factor);
-
-  // Get's the rigid body's current angular factor.
-  float3 GetAngularFactor();
 
   // Sets the linear damping coefficient.
   //

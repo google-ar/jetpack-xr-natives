@@ -18,9 +18,12 @@
 #include <sys/socket.h>
 
 #include <memory>
+#include <utility>
 
 #include "core/common/log.h"
 #include "absl/memory/memory.h"
+#include "core/async/future.h"
+#include "core/materials/compiler/cache/material_cache.h"
 #include "core/materials/compiler/material_compiler_client.h"
 #include "core/materials/compiler/material_compiler_service.h"
 #include "core/materials/compiler/runtime_material_compiler.h"
@@ -28,16 +31,21 @@
 
 namespace imp {
 
-std::unique_ptr<RuntimeMaterialCompiler> DesktopRuntimeMaterialCompiler::Create(
-    BaseView& view) {
+Future<std::unique_ptr<RuntimeMaterialCompiler>>
+DesktopRuntimeMaterialCompiler::Create(BaseView& view) {
   int fds[2];
   if (socketpair(AF_UNIX, SOCK_STREAM, 0, fds) != 0) {
     IMP_LOG(imp::FATAL) << "Failed to create socket pair";
   }
 
-  return absl::WrapUnique(new DesktopRuntimeMaterialCompiler(
-      view, std::make_unique<MaterialCompilerService>(fds[0]),
-      std::make_unique<MaterialCompilerClient>(fds[1])));
+  return MaterialCache::Create(view.GetContext())
+      .Then([&view, fds](std::unique_ptr<MaterialCache> cache)
+                -> std::unique_ptr<RuntimeMaterialCompiler> {
+        return absl::WrapUnique(new DesktopRuntimeMaterialCompiler(
+            view, std::make_unique<MaterialCompilerService>(fds[0]),
+            std::make_unique<MaterialCompilerClient>(fds[1]),
+            std::move(cache)));
+      });
 }
 
 }  // namespace imp

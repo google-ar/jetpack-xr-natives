@@ -17,8 +17,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_WEB_SCRIPT_MESSAGE_HANDLER_PROVIDER_H_
 #define THIRD_PARTY_IMPRESS_CORE_WEB_SCRIPT_MESSAGE_HANDLER_PROVIDER_H_
 
-#include <memory>
-
+#include "absl/base/attributes.h"
 #include "core/view/scripting/script_message_handler.h"
 
 namespace imp {
@@ -28,7 +27,8 @@ class Dispatcher;
 namespace scripting {
 
 // An interface for a provider of ScriptMessageHandler objects.
-struct ScriptMessageHandlerProvider {
+class ScriptMessageHandlerProvider {
+ public:
   virtual ~ScriptMessageHandlerProvider() {}
 
   // Sets the ScriptMessageHandler that will be returned by Get().
@@ -42,10 +42,9 @@ struct ScriptMessageHandlerProvider {
 
   // Sets the bridge to use for posting scripting responses and events.
   // Assumed to be of type c/g/ar/imp/core/scripting/ScriptEndpoint.java.
-  // TODO: it would probably take more refactoring but it would be
-  // nice if SetScriptEndpoint could take a ScriptEndpoint interface or
-  // something, and the JniWrapper for the jobject is an implementation of the
-  // interface that gets created in view_jni instead of web_view.cc.
+  ABSL_DEPRECATED(
+      "Create the scripting system with ScriptingSystem(*this) in Setup() "
+      "instead. See //third_party/impress/samples/scripting for an example.")
   virtual void SetScriptEndpoint(void* script_endpoint) = 0;
 };
 

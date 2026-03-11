@@ -459,6 +459,15 @@ auto Future<T>::Then(Fn&& fn, FutureThenOptions then_options) const {
           return;
         }
 
+        // ReturnResultToFuture below can call synchronously children futures.
+        //
+        // We have to make sure that `fn` (user supplied lambda) will go out of
+        // scope before that to maintain in-order destruction of lambdas and
+        // captures.
+        //
+        auto&& result_value =
+            internal::InvokeThenFunctor<Fn, T>(std::move(fn), result);
+
         // Invoke the functor with the result using helper function
         // InvokeThenFunctor and then return the result to the future using the
         // helper function ReturnResultToFuture.
@@ -471,8 +480,7 @@ auto Future<T>::Then(Fn&& fn, FutureThenOptions then_options) const {
         // ReturnResultToFuture handles all the combinatorial cases of valid
         // results. Is it a future? Is it an absl::StatusOr? is it a value?
         internal::ReturnResultToFuture(
-            then_impl,
-            internal::InvokeThenFunctor<Fn, T>(std::move(fn), result));
+            then_impl, std::forward<decltype(result_value)>(result_value));
       };
 
   // Sets up the then to run the result producer.
@@ -618,12 +626,39 @@ Future<T> Future<T>::Schedule(Fn&& fn, FutureScheduleOptions schedule_options) {
         // because there is no parent future.
         const absl::Status& status = result.GetAs<absl::Status>();
         if constexpr (std::is_invocable_v<Fn, absl::Status>) {
-          internal::ReturnResultToFuture(scheduled_impl, fn(status));
+          // ReturnResultToFuture below can call synchronously children futures.
+          //
+          // We have to make sure that `fn` (user supplied lambda) will go out
+          // of scope before that to maintain in-order destruction of lambdas
+          // and captures.
+          //
+          auto&& result_value = [fn = std::move(fn),
+                                 &status]() mutable -> decltype(auto) {
+            return fn(status);
+          }();
+
+          internal::ReturnResultToFuture(
+              scheduled_impl,
+              std::forward<decltype(result_value)>(result_value));
         } else {
           if (!status.ok()) {
             internal::ReturnResultToFuture(scheduled_impl, status);
           } else {
-            internal::ReturnResultToFuture(scheduled_impl, fn());
+            // ReturnResultToFuture below can call synchronously children
+            // futures.
+            //
+            // We have to make sure that `fn` (user supplied lambda) will go out
+            // of scope before that to maintain in-order destruction of lambdas
+            // and captures.
+            //
+            auto&& result_value =
+                [fn = std::move(fn)]() mutable -> decltype(auto) {
+              return fn();
+            }();
+
+            internal::ReturnResultToFuture(
+                scheduled_impl,
+                std::forward<decltype(result_value)>(result_value));
           }
         }
       };

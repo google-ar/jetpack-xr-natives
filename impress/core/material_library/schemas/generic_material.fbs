@@ -135,9 +135,9 @@ union MaterialParamValue {
   MaterialTextureId,
   ExternalSampler,
   Mat3f,
-  Mat3fArray,
+  Mat3fVector,
   Mat4f,
-  Mat4fArray,
+  Mat4fVector,
   NilValue,
 }
 
@@ -178,7 +178,7 @@ table GenericMaterialTextureParameter {
 // The base color (diffuse channel) of the material. This is the color that
 // will be used to color the surface.
 table GenericMaterialParametersBaseColor {
-  // A texture that contains the base color data.  
+  // A texture that contains the base color data.
   texture: GenericMaterialTextureParameter;
   // An optional tint to multiply with the base color.
   factor: Float4;
@@ -250,6 +250,14 @@ table GenericMaterialParametersTransmission {
   factor: Float;
 }
 
+// Defines the KHR_materials_volume parameters in a generic material.
+table GenericMaterialParametersVolume {
+  texture: GenericMaterialTextureParameter;
+  thickness_factor: Float;
+  attenuation_distance: Float;
+  attenuation_color: Float3;
+}
+
 // Defines the refraction parameters in a generic material.
 table GenericMaterialParametersRefraction {
   index_of_refraction: Float;
@@ -274,6 +282,7 @@ table GenericMaterialParameters {
   refraction: GenericMaterialParametersRefraction;
   masking: GenericMaterialParametersMasking;
   feature_id_textures: [GenericMaterialTextureParameter];
+  volume: GenericMaterialParametersVolume;
 }
 
 root_type GenericMaterialParameters;

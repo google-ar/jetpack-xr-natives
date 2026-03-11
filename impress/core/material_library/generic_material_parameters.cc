@@ -88,6 +88,11 @@ class GenericMaterialParametersSchemaCreator {
   static constexpr auto CreateGenericMaterialParametersTransmission =
       schemas::CreateGenericMaterialParametersTransmission;
 
+  using GenericMaterialParametersVolume =
+      schemas::GenericMaterialParametersVolume;
+  static constexpr auto CreateGenericMaterialParametersVolume =
+      schemas::CreateGenericMaterialParametersVolume;
+
   using GenericMaterialParametersRefraction =
       schemas::GenericMaterialParametersRefraction;
   static constexpr auto CreateGenericMaterialParametersRefraction =

@@ -208,7 +208,7 @@ inline mat3f FromFlatbuffer(const schemas::Mat3f& v) {
                v.m10(), v.m11(), v.m12(),  //
                v.m20(), v.m21(), v.m22()};
 }
-std::vector<mat3f> FromFlatbuffer(schemas::Mat3fArray* v);
+std::vector<mat3f> FromFlatbuffer(schemas::Mat3fVector* v);
 
 // Converts a paired vector of Typed IDs into a flatbuffer vector using the
 // underlying type. Sfinae on T::ValueType ensures this is only considered

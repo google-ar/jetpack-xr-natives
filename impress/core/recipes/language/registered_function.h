@@ -19,10 +19,16 @@
 #include <memory>
 #include <string>
 #include <string_view>
-#include <utility>
+#include <tuple>
+#include <type_traits>
 #include <vector>
 
+#include "absl/base/attributes.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
+#include "core/recipes/language/recipe_function_utils.h"
+#include "core/recipes/language/recipe_traits.h"
 #include "core/recipes/language/recipe_utils.h"
 #include "core/view/utils/string_map.h"
 
@@ -38,17 +44,37 @@ class RegisteredFunction {
   // value.
   struct Param {
     std::string name;
-    std::optional<recipe::Variable> default_value = std::nullopt;
+    recipe::Variable default_value;
   };
 
-  explicit RegisteredFunction(std::string name, std::vector<Param> params,
-                              RecipeFunction fn);
+  // Argument limit used when the RegisteredFunction is checking for explicit
+  // argument types or named parameters. Is needed to prevent any accidental
+  // overflow when operating with the bit flags in the `Execute()` method. If a
+  // Recipe Function requires more arguments than what is listed here, please
+  // use a `recipe::Args` variable by itself to hold the arguments for the
+  // RegisteredFunction instead of using explicit argument names or types.
+  static constexpr size_t kMaxArgumentLimit = 16;
+
+  explicit RegisteredFunction(std::string_view name,
+                              const std::vector<Param>& params,
+                              RecipeFunction fn,
+                              bool uses_explicit_arg_type_checking);
+
+  absl::string_view GetName() const { return name_; }
 
   class Builder {
    public:
-    explicit Builder(std::string_view name);
+    explicit Builder(std::string_view name = "");
 
-    std::string GetName() const { return name_; }
+    absl::string_view GetName() const { return name_; }
+
+    // TODO: Remove dedicated name variable and pass the name to
+    // the builder through the `Build` method
+    ABSL_ATTRIBUTE_NOINLINE void SetName(absl::string_view name) {
+      name_ = name;
+    }
+
+    ABSL_ATTRIBUTE_NOINLINE void ClearParams() { params_.clear(); }
 
     Builder& AddParam(std::string_view name) {
       params_.push_back(Param{.name = std::string(name)});
@@ -62,13 +88,38 @@ class RegisteredFunction {
       return *this;
     }
 
-    std::unique_ptr<RegisteredFunction> Build(RecipeFunction fn) {
-      return std::make_unique<RegisteredFunction>(
-          std::move(name_), std::move(params_), std::move(fn));
+    template <typename Fn>
+    std::unique_ptr<RegisteredFunction> Build(Fn fn) {
+      using FnType = std::decay_t<Fn>;
+      if constexpr (std::is_constructible_v<RecipeFunction, FnType>) {
+        return BuildInternal(std::move(fn), false);
+      } else {
+        using FunctorUnpacker =
+            decltype(recipe_traits::FunctorUnpacker(&FnType::operator()));
+        using ArgsTuple = typename FunctorUnpacker::ArgsTuple;
+
+        constexpr bool kUsesRecipeArgsVariable =
+            std::is_same_v<ArgsTuple, std::tuple<recipe::Args>>;
+        constexpr int kRequiredArgsCount =
+            kUsesRecipeArgsVariable ? 0 : std::tuple_size<ArgsTuple>::value;
+
+        for (int i = params_.size(); i < kRequiredArgsCount; ++i) {
+          AddParam(absl::StrCat(recipe::kDefaultArgPrefix, i));
+        }
+
+        return BuildInternal(recipe::MakeRecipeFunction<Fn>(std::move(fn)),
+                             !kUsesRecipeArgsVariable);
+      }
     }
 
    private:
+    std::unique_ptr<RegisteredFunction> BuildInternal(
+        RecipeFunction fn, bool uses_explicit_arg_type_checking);
+
+    // The name of the RegisteredFunction to build
     std::string name_;
+
+    // The parameters to add to the built RegisteredFunction
     std::vector<Param> params_;
   };
 
@@ -85,14 +136,31 @@ class RegisteredFunction {
   //    parameter, the default value is used.
   // 4. If there are still unassigned parameters that do not have default
   //    values, an error is returned, indicating missing required arguments.
+  // TODO: Ensure args and named_args are passed by const reference
   absl::StatusOr<ReturnValue> Execute(Args& args, NamedArgs& named_args) const;
 
  private:
+  // The name of this RegisteredFunction
   std::string name_;
+
+  // The Parameters used in this RegisteredFunction
   std::vector<Param> params_;
+
+  // The backing RecipeFunction that will be called when this RegisteredFunction
+  // is executed
   RecipeFunction fn_;
+
+  // A map of variable names to argument indices
   StringMap<size_t> arg_positions_;
-  int num_defaults_ = 0;
+
+  // A bit flag where each bit represents index of an argument that holds a
+  // default value. Is not used if `uses_explicit_arg_type_checking_` set to
+  // false.
+  size_t params_with_default_values_bit_flag_;
+
+  // States whether or not this RegisteredFunction will check for explicit
+  // argument types passed into it
+  bool uses_explicit_arg_type_checking_;
 };
 
 }  // namespace imp::recipe

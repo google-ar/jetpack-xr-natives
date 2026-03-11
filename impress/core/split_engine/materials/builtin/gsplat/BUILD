@@ -35,6 +35,7 @@ cc_library(
         "//core/assets",
         "//core/assets/material:material_asset",
         "//core/async:future",
+        "//core/common:small_source_location",
         "//core/material_library:flatbuffer_utils",
         "//core/material_library:material_param_value",
         "//core/materials",
@@ -44,7 +45,6 @@ cc_library(
         "//core/split_engine:fbs",
         "//core/split_engine:fbs_deps",  # buildcleaner: keep
         "//core/split_engine:flatbuffer_utils",
-        "//core/split_engine:split_engine_renderer",
         "//core/split_engine:split_engine_shared",
         "//core/split_engine/materials/builtin:builtin_custom_material",
         "//core/split_engine/materials/builtin:builtin_material",
@@ -63,9 +63,9 @@ cc_library(
 )
 
 cc_library(
-    name = "builtin_gsplat_background_material",
-    srcs = ["builtin_gsplat_background_material.cc"],
-    hdrs = ["builtin_gsplat_background_material.h"],
+    name = "gsplat_background_material_deserializer",
+    srcs = ["gsplat_background_material_deserializer.cc"],
+    hdrs = ["gsplat_background_material_deserializer.h"],
     copts = imp_google3_copts(),
     defines = imp_defines(),
     deps = [
@@ -79,7 +79,6 @@ cc_library(
         "//core/render",
         "//core/split_engine:fbs",
         "//core/split_engine:fbs_deps",  # buildcleaner: keep
-        "//core/split_engine:split_engine_renderer",
         "//core/split_engine:split_engine_shared",
         "//core/split_engine/materials/builtin:builtin_custom_material",
         "//core/split_engine/materials/builtin:builtin_material",

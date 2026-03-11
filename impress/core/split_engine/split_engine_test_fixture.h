@@ -20,7 +20,6 @@
 #include <cassert>
 #include <cstdint>
 #include <memory>
-#include <string>
 #include <utility>
 
 #include "gmock/gmock.h"
@@ -37,7 +36,6 @@
 #include "core/common/enum_flags.h"
 #include "core/common/invocable.h"
 #include "core/lighting/environment_light.h"
-#include "core/split_engine/android/split_engine_android_bridge.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client_mock.h"
 #include "core/split_engine/renderer_policy_handler_mock.h"
 #include "core/split_engine/shared/split_engine_defines.h"
@@ -90,7 +88,7 @@ using ::testing::TestWithParam;
 template <typename RendererViewT = View>
 class SplitEngineTestFixture
     : public testing::GenericScubaViewFixture<RendererViewT,
-                                              TestWithParam<std::string>> {
+                                              TestWithParam<int32_t>> {
  public:
   // Note: These IDs are unique identifiers for the bridge on the client side
   // and service side, respectively. The client ID is used to identify message
@@ -114,7 +112,8 @@ class SplitEngineTestFixture
   class SerializerViewHolder {
    public:
     SerializerViewHolder(
-        SplitEngineTestBridgeSerializer& split_engine_test_bridge_serializer) {
+        SplitEngineTestBridgeSerializer& split_engine_test_bridge_serializer,
+        int32_t api_level) {
       ON_CALL(bridge_client_, GetClientId).WillByDefault(Return(kClientId));
       ON_CALL(bridge_client_, GenerateMessageGroupId)
           .WillByDefault(::testing::InvokeWithoutArgs([]() {
@@ -125,18 +124,12 @@ class SplitEngineTestFixture
       auto bridge = std::make_unique<TestSplitEngineAndroidBridge>(
           bridge_client_, split_engine_test_bridge_serializer);
 
-      auto sender = std::make_unique<TestSplitEngineBridgeSender>(
-          *bridge,
-          /*recycle_buffers=*/true);
+      auto sender = std::make_unique<TestSplitEngineBridgeSender>(*bridge);
       sender_ = sender.get();
-      auto sender_one_shot = std::make_unique<TestSplitEngineBridgeSender>(
-          *bridge,
-          /*recycle_buffers=*/false);
-      sender_one_shot_ = sender_one_shot.get();
       auto split_engine_serializer_impl =
           std::make_unique<split_engine::SplitEngineSerializerImpl>(
-              *serializer_view_.GetView(), std::move(bridge), std::move(sender),
-              std::move(sender_one_shot),
+              *serializer_view_.GetView(), api_level, std::move(bridge),
+              std::move(sender),
               // default shared memory size is ~10MB, same as in
               // ImpSplitEngineApi
               1024 * 10000);
@@ -152,7 +145,6 @@ class SplitEngineTestFixture
 
     MockSplitEngineSharedMemoryBridgeClient bridge_client_;
     TestSplitEngineBridgeSender* sender_;
-    TestSplitEngineBridgeSender* sender_one_shot_;
 
     SerializerTestView serializer_view_;
   };
@@ -169,10 +161,12 @@ class SplitEngineTestFixture
    public:
     SerializerViewThread(
         SplitEngineTestFixture& test,
-        SplitEngineTestBridgeSerializer& split_engine_test_bridge_serializer)
+        SplitEngineTestBridgeSerializer& split_engine_test_bridge_serializer,
+        int32_t api_level)
         : test_(test),
           split_engine_test_bridge_serializer_(
-              split_engine_test_bridge_serializer) {}
+              split_engine_test_bridge_serializer),
+          api_level_(api_level) {}
 
     // Run the given task on the serializer view.
     // This is a blocking call that runs on a separate thread and all operations
@@ -183,7 +177,7 @@ class SplitEngineTestFixture
                              bool advance = true) {
       absl::Notification notification;
       {
-        absl::MutexLock lock(&mutex_);
+        absl::MutexLock lock(mutex_);
         next_task_ = [task = std::move(task), &notification,
                       advance](SerializerTestView& view) {
           task(view);
@@ -208,7 +202,7 @@ class SplitEngineTestFixture
     // Stop the serializer view thread, blocking until it is safe to destroy.
     void Stop() {
       {
-        absl::MutexLock lock(&mutex_);
+        absl::MutexLock lock(mutex_);
         running_ = false;
       }
       auto then = absl::Now();
@@ -228,12 +222,12 @@ class SplitEngineTestFixture
         // RunOnSerializerView will wait for task to complete, so there is
         // always just one task and it's okay to lock mutex here for the
         // duration of the task.
-        absl::MutexLock lock(&mutex_);
+        absl::MutexLock lock(mutex_);
         if (!running_) break;
         if (next_task_) {
           if (!serializer_view_) {
             serializer_view_ = std::make_unique<SerializerViewHolder>(
-                split_engine_test_bridge_serializer_);
+                split_engine_test_bridge_serializer_, api_level_);
           }
           next_task_(serializer_view_->GetView());
           // Formally speaking, this thread can yield execution here and if no
@@ -259,12 +253,15 @@ class SplitEngineTestFixture
 
     SplitEngineTestFixture& test_;
     SplitEngineTestBridgeSerializer& split_engine_test_bridge_serializer_;
+    int32_t api_level_;
   };
 
-  SplitEngineTestFixture()
-      : testing::GenericScubaViewFixture<RendererViewT,
-                                         TestWithParam<std::string>>(
-            "third_party/impress/core/split_engine/scuba_goldens") {}
+  SplitEngineTestFixture(int32_t serializer_api_level,
+                         int32_t renderer_api_level)
+      : testing::GenericScubaViewFixture<RendererViewT, TestWithParam<int32_t>>(
+            "third_party/impress/core/split_engine/scuba_goldens"),
+        serializer_api_level_(serializer_api_level),
+        renderer_api_level_(renderer_api_level) {}
 
  protected:
   void SetUp() override {
@@ -275,6 +272,7 @@ class SplitEngineTestFixture
         std::make_unique<split_engine::SplitEngineRendererImpl>(
             *this->GetView());
     split_engine_renderer_ = split_engine_renderer_impl.get();
+    split_engine_renderer_->SetValidationApiLevel(renderer_api_level_);
 
     // Create a mock renderer policy handler and set it on the renderer.
     auto mock_renderer_policy_handler =
@@ -314,7 +312,7 @@ class SplitEngineTestFixture
         std::make_unique<SplitEngineTestBridgeSerializer>(
             *this->GetView(), *Executor::ForegroundExecutor());
     serializer_view_thread_ = std::make_unique<SerializerViewThread>(
-        *this, *split_engine_test_bridge_serializer_);
+        *this, *split_engine_test_bridge_serializer_, serializer_api_level_);
 
     serializer_view_thread_->Start();
 
@@ -381,6 +379,8 @@ class SplitEngineTestFixture
       split_engine_test_bridge_serializer_;
   std::unique_ptr<SerializerViewThread> serializer_view_thread_;
   MockRendererPolicyHandler* mock_renderer_policy_handler_;
+  int32_t serializer_api_level_;
+  int32_t renderer_api_level_;
 };
 
 }  // namespace imp::split_engine

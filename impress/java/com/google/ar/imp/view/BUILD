@@ -170,6 +170,7 @@ android_library(
         ":imp_api_scuba",
         ":setup_params_java_proto_lite",
         ":view",
+        "//core/view/utils:view_config_java_proto_lite",
         "//java/com/google/ar/imp/core/media:media_no_jni",  # buildcleaner: keep
         "//java/com/google/ar/imp/core/scripting:script_endpoint",
         "//java/com/google/ar/imp/core/web:fragment_host",
@@ -199,6 +200,7 @@ proto_library(
     srcs = ["setup_params.proto"],
     deps = [
         "//core/view/utils:render_settings_proto",
+        "//core/view/utils:view_config_proto",
     ],
 )
 

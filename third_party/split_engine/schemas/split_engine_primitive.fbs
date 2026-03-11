@@ -16,8 +16,6 @@ include "split_engine/schemas/split_engine_attributes.fbs";
 
 namespace android_xr.schemas;
 
-// LINT.IfChange
-
 struct Bool (requires_api: 1) {
   value : bool (id: 0, requires_api: 1);
 }
@@ -60,6 +58,28 @@ struct Int4 (requires_api: 1) {
   y : int (id: 1, requires_api: 1);
   z : int (id: 2, requires_api: 1);
   w : int (id: 3, requires_api: 1);
+}
+
+struct Uint {
+  value : uint (id: 0);
+}
+
+struct Uint2 {
+  x : uint (id: 0);
+  y : uint (id: 1);
+}
+
+struct Uint3 {
+  x : uint (id: 0);
+  y : uint (id: 1);
+  z : uint (id: 2);
+}
+
+struct Uint4 {
+  x : uint (id: 0);
+  y : uint (id: 1);
+  z : uint (id: 2);
+  w : uint (id: 3);
 }
 
 struct Float (requires_api: 1) {
@@ -141,11 +161,11 @@ struct Mat4 (requires_api: 1) {
   m33 : double (id: 15, requires_api: 1);
 }
 
-table Mat3fArray (requires_api: 1) {
+table Mat3fVector (requires_api: 1) {
   mats : [Mat3f] (required, id: 0, requires_api: 1);
 }
 
-table Mat4fArray (requires_api: 1) {
+table Mat4fVector (requires_api: 1) {
   mats : [Mat4f] (required, id: 0, requires_api: 1);
 }
 
@@ -178,5 +198,3 @@ struct UInt64 (requires_api: 1) {
 table String (requires_api: 1) {
   value : string (id: 0, requires_api: 1);
 }
-
-// LINT.ThenChange(//depot/google3/third_party/split_engine/schemas/split_engine_schema_version.h)

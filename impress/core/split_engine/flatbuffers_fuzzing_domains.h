@@ -455,8 +455,8 @@ class FlatbuffersUntypedObjectDomainBase
   FlatbuffersUntypedObjectDomainBase(
       const FlatbuffersUntypedObjectDomainBase& other)
       : DomainBase(other), schema_(other.schema_), object_(other.object_) {
-    absl::MutexLock l(&mutex_);
-    absl::MutexLock l_other(&other.mutex_);
+    absl::MutexLock l(mutex_);
+    absl::MutexLock l_other(other.mutex_);
     domains_ = other.domains_;
   }
 
@@ -464,8 +464,8 @@ class FlatbuffersUntypedObjectDomainBase
       const FlatbuffersUntypedObjectDomainBase& other) {
     schema_ = other.schema_;
     object_ = other.object_;
-    absl::MutexLock l(&mutex_);
-    absl::MutexLock l_other(&other.mutex_);
+    absl::MutexLock l(mutex_);
+    absl::MutexLock l_other(other.mutex_);
     domains_ = other.domains_;
     DomainBase::operator=(other);
     return *this;
@@ -473,8 +473,8 @@ class FlatbuffersUntypedObjectDomainBase
 
   FlatbuffersUntypedObjectDomainBase(FlatbuffersUntypedObjectDomainBase&& other)
       : schema_(other.schema_), object_(other.object_) {
-    absl::MutexLock l(&mutex_);
-    absl::MutexLock l_other(&other.mutex_);
+    absl::MutexLock l(mutex_);
+    absl::MutexLock l_other(other.mutex_);
     domains_ = std::move(other.domains_);
     DomainBase::operator=(other);
   }
@@ -483,8 +483,8 @@ class FlatbuffersUntypedObjectDomainBase
       FlatbuffersUntypedObjectDomainBase&& other) {
     schema_ = other.schema_;
     object_ = other.object_;
-    absl::MutexLock l(&mutex_);
-    absl::MutexLock l_other(&other.mutex_);
+    absl::MutexLock l(mutex_);
+    absl::MutexLock l_other(other.mutex_);
     domains_ = std::move(other.domains_);
     DomainBase::operator=(std::move(other));
     return *this;
@@ -771,7 +771,7 @@ class FlatbuffersUntypedObjectDomainBase
     using DomainT = Domain<typename TypedDomainT::value_type>;
     // Do the operation under a lock to prevent race conditions in `const`
     // methods.
-    absl::MutexLock l(&mutex_);
+    absl::MutexLock l(mutex_);
     auto it = domains_.find(field->id());
     if (it == domains_.end()) {
       it = domains_
@@ -1184,8 +1184,8 @@ class FlatbuffersUnionDomainImpl
       : schema_(other.schema_),
         union_def_(other.union_def_),
         type_domain_(other.type_domain_) {
-    absl::MutexLock l(&mutex_);
-    absl::MutexLock l_other(&other.mutex_);
+    absl::MutexLock l(mutex_);
+    absl::MutexLock l_other(other.mutex_);
     domains_ = other.domains_;
   }
 
@@ -1193,8 +1193,8 @@ class FlatbuffersUnionDomainImpl
       : schema_(other.schema_),
         union_def_(other.union_def_),
         type_domain_(std::move(other.type_domain_)) {
-    absl::MutexLock l(&mutex_);
-    absl::MutexLock l_other(&other.mutex_);
+    absl::MutexLock l(mutex_);
+    absl::MutexLock l_other(other.mutex_);
     domains_ = std::move(other.domains_);
   }
 
@@ -1203,8 +1203,8 @@ class FlatbuffersUnionDomainImpl
     schema_ = other.schema_;
     union_def_ = other.union_def_;
     type_domain_ = other.type_domain_;
-    absl::MutexLock l(&mutex_);
-    absl::MutexLock l_other(&other.mutex_);
+    absl::MutexLock l(mutex_);
+    absl::MutexLock l_other(other.mutex_);
     domains_ = other.domains_;
     return *this;
   }
@@ -1213,8 +1213,8 @@ class FlatbuffersUnionDomainImpl
     schema_ = other.schema_;
     union_def_ = other.union_def_;
     type_domain_ = std::move(other.type_domain_);
-    absl::MutexLock l(&mutex_);
-    absl::MutexLock l_other(&other.mutex_);
+    absl::MutexLock l(mutex_);
+    absl::MutexLock l_other(other.mutex_);
     domains_ = std::move(other.domains_);
     return *this;
   }
@@ -1271,7 +1271,7 @@ class FlatbuffersUnionDomainImpl
   template <typename T>
   auto& GetCachedDomain(const reflection::EnumVal& enum_value) const {
     using DomainT = decltype(GetDefaultDomainForType<T>(enum_value));
-    absl::MutexLock l(&mutex_);
+    absl::MutexLock l(mutex_);
     auto it = domains_.find(enum_value.value());
     if (it == domains_.end()) {
       it = domains_
@@ -1337,7 +1337,7 @@ class FlatbuffersTableUntypedDomainImpl
     using DomainT = decltype(get_opt_domain());
     // Do the operation under a lock to prevent race conditions in `const`
     // methods.
-    absl::MutexLock l(&mutex_);
+    absl::MutexLock l(mutex_);
     auto it = domains_.find(field->id());
     if (it == domains_.end()) {
       it = domains_

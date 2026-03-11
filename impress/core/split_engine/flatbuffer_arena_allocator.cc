@@ -26,13 +26,55 @@
 #include "core/common/log.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
+#include "flatbuffers/allocator.h"
 #include "flatbuffers/base.h"
 
 static constexpr absl::string_view kTag = "[FlatbufferArenaAllocator]: ";
 
 namespace imp {
 
-FlatbufferArenaAllocator::ArenaAndAllocFunc::ArenaAndAllocFunc(
+namespace {
+class ArenaBasedFlatbufferAllocator : public flatbuffers::Allocator {
+ public:
+  ArenaBasedFlatbufferAllocator(ArenaAllocator& arena_allocator,
+                                ArenaAllocator::ArenaHandle arena_handle)
+      : arena_allocator_(arena_allocator), arena_handle_(arena_handle) {}
+
+  uint8_t* allocate(size_t size) override {
+    return arena_allocator_.AllocateArenaMemory(arena_handle_, size);
+  }
+
+  void deallocate(uint8_t* p, size_t) override {
+    // deallocate() must be a no-op. This is because as FlatBufferBuilder
+    // objects get destructed, they attempt to deallocate the memory backing the
+    // flatbuffers that they have built. But we explicitly want to keep those
+    // flatbuffers around until the arena is destroyed. Indeed, that's the whole
+    // point of this class.
+  }
+
+ private:
+  ArenaAllocator& arena_allocator_;
+  const ArenaAllocator::ArenaHandle arena_handle_;
+};
+
+class SizePrefixedArenaBasedFlatbufferAllocator
+    : public ArenaBasedFlatbufferAllocator {
+  using SizeType = SizePrefixedArenaAllocator::SizeType;
+
+ public:
+  SizePrefixedArenaBasedFlatbufferAllocator(
+      ArenaAllocator& arena_allocator, ArenaAllocator::ArenaHandle arena_handle)
+      : ArenaBasedFlatbufferAllocator(arena_allocator, arena_handle) {}
+
+  uint8_t* allocate(size_t size) override {
+    return ArenaBasedFlatbufferAllocator::allocate(size + sizeof(SizeType)) +
+           sizeof(SizeType);
+  }
+};
+
+}  // namespace
+
+ArenaAllocator::ArenaAndAllocFunc::ArenaAndAllocFunc(
     size_t block_size, MemoryOptions memory_options)
     : first_block_head_(memory_options.first_block_alloc
                             ? memory_options.first_block_alloc(
@@ -44,15 +86,14 @@ FlatbufferArenaAllocator::ArenaAndAllocFunc::ArenaAndAllocFunc(
                                          block_size);
 }
 
-FlatbufferArenaAllocator::ArenaAndAllocFunc::~ArenaAndAllocFunc() { Clear(); }
+ArenaAllocator::ArenaAndAllocFunc::~ArenaAndAllocFunc() { Clear(); }
 
-FlatbufferArenaAllocator::ArenaAndAllocFunc::ArenaAndAllocFunc(
+ArenaAllocator::ArenaAndAllocFunc::ArenaAndAllocFunc(
     ArenaAndAllocFunc&& other) {
   *this = std::move(other);
 }
 
-FlatbufferArenaAllocator::ArenaAndAllocFunc&
-FlatbufferArenaAllocator::ArenaAndAllocFunc::operator=(
+ArenaAllocator::ArenaAndAllocFunc& ArenaAllocator::ArenaAndAllocFunc::operator=(
     ArenaAndAllocFunc&& other) {
   arena_ = std::move(other.arena_);
   first_block_head_ = other.first_block_head_;
@@ -66,20 +107,20 @@ FlatbufferArenaAllocator::ArenaAndAllocFunc::operator=(
   return *this;
 }
 
-bool FlatbufferArenaAllocator::ArenaAndAllocFunc::IsMatch(
+bool ArenaAllocator::ArenaAndAllocFunc::IsMatch(
     size_t block_size, const MemoryOptions& memory_options) {
   return (!in_use_ && arena_ && arena_->block_size() == block_size &&
           memory_options_ == memory_options);
 }
 
-void FlatbufferArenaAllocator::ArenaAndAllocFunc::SetInUse() { in_use_ = true; }
+void ArenaAllocator::ArenaAndAllocFunc::SetInUse() { in_use_ = true; }
 
-void FlatbufferArenaAllocator::ArenaAndAllocFunc::Reset() {
+void ArenaAllocator::ArenaAndAllocFunc::Reset() {
   arena_->Reset();
   in_use_ = false;
 }
 
-void FlatbufferArenaAllocator::ArenaAndAllocFunc::Clear() {
+void ArenaAllocator::ArenaAndAllocFunc::Clear() {
   if (memory_options_.first_block_dealloc != nullptr) {
     memory_options_.first_block_dealloc(first_block_head_,
                                         memory_options_.user);
@@ -90,20 +131,18 @@ void FlatbufferArenaAllocator::ArenaAndAllocFunc::Clear() {
   in_use_ = false;
 }
 
-FlatbufferArenaAllocator::ArenaHandle FlatbufferArenaAllocator::CreateArena(
-    size_t block_size) {
+ArenaAllocator::ArenaHandle ArenaAllocator::CreateArena(size_t block_size) {
   return CreateArena(block_size, {});
 }
 
-FlatbufferArenaAllocator::ArenaHandle FlatbufferArenaAllocator::CreateArena(
+ArenaAllocator::ArenaHandle ArenaAllocator::CreateArena(
     size_t block_size, MemoryOptions memory_options) {
   // First try to find an arena to reuse.
   for (int i = 0; i < arenas_.size(); ++i) {
-    if (i != active_arena_ && arenas_[i].IsMatch(block_size, memory_options)) {
+    if (arenas_[i].IsMatch(block_size, memory_options)) {
       // The handle is the index into the vector.
-      active_arena_ = i;
       arenas_[i].SetInUse();
-      return active_arena_;
+      return i;
     }
   }
   // If no empty arenas are found to reuse then allocate a new one.
@@ -113,18 +152,26 @@ FlatbufferArenaAllocator::ArenaHandle FlatbufferArenaAllocator::CreateArena(
   for (int i = 0; i < arenas_.size(); ++i) {
     if (!arenas_[i].Get()) {
       arenas_[i] = std::move(new_arena);
-      active_arena_ = i;
-      return active_arena_;
+      flatbuffer_allocators_.emplace(i, CreateFlatbufferAllocator(i));
+      return i;
     }
   }
 
   arenas_.emplace_back(std::move(new_arena));
-  active_arena_ = arenas_.size() - 1;
-  return active_arena_;
+  const ArenaHandle arena_handle = arenas_.size() - 1;
+  flatbuffer_allocators_.emplace(arena_handle,
+                                 CreateFlatbufferAllocator(arena_handle));
+  return arena_handle;
 }
 
-void FlatbufferArenaAllocator::DestroyArena(ArenaHandle arena_handle,
-                                            bool allow_recycle) {
+flatbuffers::Allocator& ArenaAllocator::GetFlatbufferAllocator(
+    ArenaHandle arena_handle) {
+  
+  return *flatbuffer_allocators_.at(arena_handle);
+}
+
+void ArenaAllocator::DestroyArena(ArenaHandle arena_handle,
+                                  bool allow_recycle) {
   
 
   ArenaAndAllocFunc& arena = arenas_[arena_handle];
@@ -133,55 +180,50 @@ void FlatbufferArenaAllocator::DestroyArena(ArenaHandle arena_handle,
   } else {
     arena.Clear();
   }
-
-  // Clients should never call DestroyArena on the active arena, but we can
-  // simply defend against it anyway.
-  if (active_arena_ == arena_handle) {
-    
-    IMP_LOG(imp::WARNING)
-        << "[FlatbufferPoolAllocator] DestroyArena called on active arena: "
-        << active_arena_;
-    active_arena_ = -1;
-  }
 }
 
-size_t FlatbufferArenaAllocator::GetArenaSize(ArenaHandle arena_handle) {
+size_t ArenaAllocator::GetArenaSize(ArenaHandle arena_handle) {
   
 
   return arenas_[arena_handle].Get()->status().bytes_allocated();
 }
 
-void* FlatbufferArenaAllocator::GetArenaHead(ArenaHandle arena_handle) {
+void* ArenaAllocator::GetArenaHead(ArenaHandle arena_handle) {
   
   
 
   return arenas_[arena_handle].GetArenaHead();
 }
 
-uint8_t* FlatbufferArenaAllocator::allocate(size_t size) {
+uint8_t* ArenaAllocator::AllocateArenaMemory(ArenaHandle arena_handle,
+                                             size_t size) {
+  
+  ArenaAndAllocFunc& arena = arenas_[arena_handle];
   
   
 
-  if (arenas_[active_arena_].GetGrowthStrategy() ==
-      GrowthStrategy::kDontGrowBeyondFirstBlock) {
+  if (arena.GetGrowthStrategy() == GrowthStrategy::kDontGrowBeyondFirstBlock) {
     
   }
 
-  return reinterpret_cast<uint8_t*>(arenas_[active_arena_].Get()->Alloc(size));
+  return reinterpret_cast<uint8_t*>(arena.Get()->Alloc(size));
 }
 
-void FlatbufferArenaAllocator::deallocate(uint8_t* p, size_t size) {
-  // deallocate() must be a no-op. This is because as FlatBufferBuilder objects
-  // get destructed, they attempt to deallocate the memory backing the
-  // flatbuffers that they have built. But we explicitly want to keep those
-  // flatbuffers around until the arena is destroyed. Indeed, that's the whole
-  // point of this class.
+std::unique_ptr<flatbuffers::Allocator>
+ArenaAllocator::CreateFlatbufferAllocator(ArenaHandle arena_handle) {
+  return std::make_unique<ArenaBasedFlatbufferAllocator>(*this, arena_handle);
 }
 
-FlatbufferArenaAllocator::ArenaHandle
-SizePrefixedFlatbufferArenaAllocator::CreateArena(
+std::unique_ptr<flatbuffers::Allocator>
+SizePrefixedArenaAllocator::CreateFlatbufferAllocator(
+    ArenaHandle arena_handle) {
+  return std::make_unique<SizePrefixedArenaBasedFlatbufferAllocator>(
+      *this, arena_handle);
+}
+
+ArenaAllocator::ArenaHandle SizePrefixedArenaAllocator::CreateArena(
     size_t block_size, MemoryOptions memory_options) {
-  return FlatbufferArenaAllocator::CreateArena(
+  return ArenaAllocator::CreateArena(
       block_size  // BeginMessageGroupSize + block_size + EndMessageGroupSize
           + sizeof(SizeType)  // BeginMessageGroup
 
@@ -193,12 +235,7 @@ SizePrefixedFlatbufferArenaAllocator::CreateArena(
       memory_options);
 }
 
-uint8_t* SizePrefixedFlatbufferArenaAllocator::allocate(size_t size) {
-  return FlatbufferArenaAllocator::allocate(size + sizeof(SizeType)) +
-         sizeof(SizeType);
-}
-
-absl::Span<const uint8_t> SizePrefixedFlatbufferArenaAllocator::PrependSize(
+absl::Span<const uint8_t> SizePrefixedArenaAllocator::PrependSize(
     uint8_t* ptr, SizeType size) {
   SizeType* size_ptr = reinterpret_cast<SizeType*>(ptr - sizeof(SizeType));
   // This is the same idea as in

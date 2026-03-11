@@ -17,9 +17,11 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_RENDER_PASSES_MESSAGE_HANDLERS_CREATE_NODE_WITH_SURFACE_RENDERER_HANDLER_H_
 #define THIRD_PARTY_IMPRESS_CORE_RENDER_PASSES_MESSAGE_HANDLERS_CREATE_NODE_WITH_SURFACE_RENDERER_HANDLER_H_
 
+#include "core/async/future.h"
 #include "core/render_passes/proto/surface_renderer_scripting.proto.imp.h"
 #include "core/scripting/message_handler.h"
 #include "core/view/base_view.h"
+#include "core/view/scripting/script_message_handler.h"
 
 namespace imp {
 
@@ -40,8 +42,7 @@ class CreateNodeWithSurfaceRendererHandler
 
   Future<NodeHandle> HandleMessage(
       const CreateNodeWithSurfaceRendererRequest& message,
-      const scripting::PlatformArgs& args,
-      scripting::PlatformArgs& out) override;
+      const scripting::PlatformArgs& args) override;
 
  protected:
   BaseView* view_;

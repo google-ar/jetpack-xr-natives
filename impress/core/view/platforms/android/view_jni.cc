@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <jni.h>
+
 #include <memory>
 #include <utility>
 
@@ -35,7 +37,6 @@
 #include "core/view/base_view.h"
 #include "core/view/framework/view.h"
 #include "core/view/platforms/android/wrappers/imp_lifecycle_callback.h"
-#include "core/view/utils/proto/render_settings.proto.imp.h"
 #include "core/view/utils/proto/view_config.proto.imp.h"
 #include "core/view/view_host.h"
 #include "core/window/filament_host.h"
@@ -78,27 +79,12 @@ inline T* FromJava(jlong n) {
 std::unique_ptr<View> CreateImpressView(JNIEnv* env, jobject context,
                                         jstring identifier,
                                         jobject fragment_host, jobject executor,
-                                        jbyteArray view_render_settings) {
+                                        jbyteArray view_config_bytes) {
   IMP_TRACE();
   JavaVM* vm;
   jint status = env->GetJavaVM(&vm);
   if (status != JNI_OK) {
     IMP_LOG(imp::FATAL) << "Failed to get java VM " << status;
-  }
-
-  imp::ViewConfig view_config;
-  if (view_render_settings != nullptr) {
-    jbyte* const buffer =
-        env->GetByteArrayElements(view_render_settings, nullptr);
-    const jsize buffer_size = env->GetArrayLength(view_render_settings);
-
-    imp::render_settings::ViewRenderSettings params;
-    absl::string_view data(reinterpret_cast<const char*>(buffer), buffer_size);
-    imp::proto::ProtoReader proto_reader(data);
-    proto_reader.ParseMsg(&params);
-    view_config.main_view_render_settings = params;
-
-    env->ReleaseByteArrayElements(view_render_settings, buffer, JNI_ABORT);
   }
 
   // We must assign the JavaVM to filament. This is required for certain
@@ -122,11 +108,33 @@ std::unique_ptr<View> CreateImpressView(JNIEnv* env, jobject context,
   absl::call_once(jni_on_load_once_flag,
                   [vm]() { ::filament::VirtualMachineEnv::JNI_OnLoad(vm); });
 
-  std::unique_ptr<View> view = imp::View::CreateClient(
+  if (view_config_bytes == nullptr) {
+    return imp::View::CreateClient(
+        std::make_unique<Context>(vm, context, fragment_host, executor),
+        imp::GetString(env, identifier));
+  }
+
+  jbyte* const buffer = env->GetByteArrayElements(view_config_bytes, nullptr);
+  const jsize buffer_size = env->GetArrayLength(view_config_bytes);
+
+  if (buffer == nullptr || buffer_size == 0) {
+    IMP_LOG(imp::WARNING) << "view_config_bytes is null but unable to retrieve the "
+                    "actual bytes. Will ignore the ViewConfig.";
+    return imp::View::CreateClient(
+        std::make_unique<Context>(vm, context, fragment_host, executor),
+        imp::GetString(env, identifier));
+  }
+
+  imp::ViewConfig view_config;
+  absl::string_view data(reinterpret_cast<const char*>(buffer), buffer_size);
+  imp::proto::ProtoReader proto_reader(data);
+  proto_reader.ParseMsg(&view_config);
+
+  env->ReleaseByteArrayElements(view_config_bytes, buffer, JNI_ABORT);
+
+  return imp::View::CreateClient(
       std::make_unique<Context>(vm, context, fragment_host, executor),
       imp::GetString(env, identifier), view_config);
-
-  return view;
 }
 
 }  // namespace
@@ -136,9 +144,9 @@ extern "C" {
 
 JNI_METHOD(jlong, nCreateView)
 (JNIEnv* env, jclass /*clazz*/, jobject context, jstring identifier,
- jobject fragment_host, jobject executor, jbyteArray view_render_settings) {
+ jobject fragment_host, jobject executor, jbyteArray view_config) {
   std::unique_ptr<View> view = CreateImpressView(
-      env, context, identifier, fragment_host, executor, view_render_settings);
+      env, context, identifier, fragment_host, executor, view_config);
   auto view_host = std::make_unique<ViewHost>(std::move(view));
 
   return ToJava(view_host.release());

@@ -29,7 +29,7 @@ public interface ApiBridge {
   }
 
   /** Sends a synchronous request to native and returns a response of the given type. */
-  <RequestT extends MessageLite, ResponseT extends MessageLite> ResponseT sendRequest(
+  <RequestT extends MessageLite, ResponseT> ResponseT sendRequest(
       ApiRequest<RequestT> request, Class<ResponseT> responseType);
 
   /** Sends a synchronous request to native and returns a response of the given type. */
@@ -47,14 +47,12 @@ public interface ApiBridge {
   }
 
   /** Sends an asynchronous request to native, returns a ListenableFuture of the response type. */
-  <RequestT extends MessageLite, ResponseT extends MessageLite>
-      ListenableFuture<ResponseT> sendRequestAsync(
-          ApiRequest<RequestT> request, Class<ResponseT> responseType);
+  <RequestT extends MessageLite, ResponseT> ListenableFuture<ResponseT> sendRequestAsync(
+      ApiRequest<RequestT> request, Class<ResponseT> responseType);
 
   /** Sends an asynchronous request to native, returns a ListenableFuture of the response type. */
-  default <RequestT extends MessageLite, ResponseT extends MessageLite>
-      ListenableFuture<ResponseT> sendRequestAsync(
-          String requestTypeUrl, RequestT request, Class<ResponseT> responseType) {
+  default <RequestT extends MessageLite, ResponseT> ListenableFuture<ResponseT> sendRequestAsync(
+      String requestTypeUrl, RequestT request, Class<ResponseT> responseType) {
     return sendRequestAsync(new ApiRequest<RequestT>(requestTypeUrl, request), responseType);
   }
 

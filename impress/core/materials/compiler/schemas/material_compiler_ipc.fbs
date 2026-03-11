@@ -15,7 +15,6 @@
  */
 namespace imp.schemas;
 
-// Client->Service requests.
 // This should match the Filament material builder Platform enum.
 enum Platform : uint8 {
   Desktop,
@@ -30,6 +29,16 @@ enum TargetApi : uint8 (bit_flags) {
   Metal,
   WebGPU,
 }
+
+// Filament error StatusCodes.
+// Note that this does not cover the full list of the absl::StatusCode.
+enum ErrorStatusCode : uint8 {
+  InvalidArgument,
+  Internal,
+  Unsupported,
+}
+
+// Client->Service requests.
 
 table CompileRequest {
   // The source material to compile.
@@ -49,7 +58,7 @@ union RequestType {
 
 table Request {
   request: RequestType;
-  // The operation id allows the client to associate a response with the request. 
+  // Operation id allows the client to associate a response with the request.
   // It must be greater than 0 due to implicit field presence.
   operation_id: uint64;
 }
@@ -65,7 +74,7 @@ union ResponseType {
 
 table Response {
   response: ResponseType;
-  // The operation id allows the client to associate the response with a request. 
+  // Operation id allows the client to associate the response with a request.
   // It must be greater than 0 due to implicit field presence.
   operation_id: uint64;
 }
@@ -75,6 +84,7 @@ table CompileResponse {
 }
 
 table ErrorResponse {
+  error_status_code: ErrorStatusCode;
   message: string;
 }
 

@@ -33,6 +33,8 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/clock.h"
+#include "absl/time/time.h"
 #include "absl/types/variant.h"
 #include "core/async/future.h"
 #include "core/common/invocable.h"
@@ -65,6 +67,9 @@ namespace {
 
 using AsyncExecutionHandle = RecipeAsyncExecutionManager::AsyncExecutionHandle;
 using ExecutionResult = RecipeRuntimeGraph::ExecutionResult;
+
+constexpr absl::string_view kExecutionTimeExceededMessage =
+    "Recipe node execution time limit exceeded.";
 
 absl::Status CacheSocketValue(RecipeScope& scope, const NodeId& node_id,
                               absl::string_view socket_name,
@@ -198,7 +203,7 @@ absl::Status ExecuteAssignmentOperation(
 
 ExecutionResult RecipeRuntimeGraph::ExecuteAssignmentStatement(
     const AssignmentStatement& statement,
-    RecipeExecutionContext context) const {
+    const RecipeExecutionContext& context) const {
   // Creating a temporary scope for caching all Variables evaluated only within
   // the scope of this executable node.
   RecipeScope executable_node_scope = RecipeScope(&context.scope);
@@ -261,7 +266,8 @@ ExecutionResult RecipeRuntimeGraph::ExecuteAssignmentStatement(
 }
 
 absl::StatusOr<Variable> RecipeRuntimeGraph::EvaluateUnaryExpression(
-    const UnaryExpression& expression, RecipeExecutionContext context) const {
+    const UnaryExpression& expression,
+    const RecipeExecutionContext& context) const {
   MP_ASSIGN_OR_RETURN(Variable input,
                    EvaluateValueConnection(expression.input, context));
 
@@ -269,7 +275,8 @@ absl::StatusOr<Variable> RecipeRuntimeGraph::EvaluateUnaryExpression(
 }
 
 absl::StatusOr<Variable> RecipeRuntimeGraph::EvaluateBinaryExpression(
-    const BinaryExpression& expression, RecipeExecutionContext context) const {
+    const BinaryExpression& expression,
+    const RecipeExecutionContext& context) const {
   MP_ASSIGN_OR_RETURN(Variable left_result,
                    EvaluateValueConnection(expression.left, context));
 
@@ -304,7 +311,7 @@ absl::StatusOr<Variable> RecipeRuntimeGraph::EvaluateBinaryExpression(
 
 absl::StatusOr<recipe::ReturnValue> RecipeRuntimeGraph::EvaluateCallExpression(
     const CallExpression& call_expression,
-    RecipeExecutionContext context) const {
+    const RecipeExecutionContext& context) const {
   Args evaluated_args;
   evaluated_args.reserve(call_expression.args.size());
   for (const ValueConnection& arg_value_connection : call_expression.args) {
@@ -341,7 +348,7 @@ absl::StatusOr<recipe::ReturnValue> RecipeRuntimeGraph::EvaluateCallExpression(
 
 ExecutionResult RecipeRuntimeGraph::ExecuteCallStatement(
     const NodeId& node_id, const CallStatement& call_statement,
-    RecipeExecutionContext context) const {
+    const RecipeExecutionContext& context) const {
   RecipeScope executable_node_scope{&context.scope};
   RecipeExecutionContext executable_node_context{
       .scope = executable_node_scope,
@@ -371,7 +378,7 @@ ExecutionResult RecipeRuntimeGraph::ExecuteCallStatement(
 
 ExecutionResult RecipeRuntimeGraph::ExecuteAsyncCallStatement(
     const NodeId& node_id, const AsyncCallStatement& call_statement,
-    RecipeExecutionContext context) const {
+    const RecipeExecutionContext& context) const {
   RecipeScope executable_node_scope{&context.scope};
   RecipeExecutionContext executable_node_context{
       .scope = executable_node_scope,
@@ -419,7 +426,8 @@ ExecutionResult RecipeRuntimeGraph::ExecuteAsyncCallStatement(
 }
 
 ExecutionResult RecipeRuntimeGraph::ExecuteBranchStatement(
-    const BranchStatement& statement, RecipeExecutionContext context) const {
+    const BranchStatement& statement,
+    const RecipeExecutionContext& context) const {
   // Creating a temporary scope for caching all Variables evaluated only
   // within the scope of this executable node.
   RecipeScope executable_node_scope{&context.scope};
@@ -458,7 +466,8 @@ ExecutionResult RecipeRuntimeGraph::ExecuteBranchStatement(
 }
 
 ExecutionResult RecipeRuntimeGraph::ExecuteSwitchStatement(
-    const SwitchStatement& statement, RecipeExecutionContext context) const {
+    const SwitchStatement& statement,
+    const RecipeExecutionContext& context) const {
   // Creating a temporary scope for caching all Variables evaluated only
   // within the scope of this executable node.
   RecipeScope executable_node_scope{&context.scope};
@@ -487,14 +496,14 @@ ExecutionResult RecipeRuntimeGraph::ExecuteSwitchStatement(
 
 ExecutionResult RecipeRuntimeGraph::ExecuteVariableDeclarationStatement(
     const VariableDeclarationStatement& statement,
-    RecipeExecutionContext context) const {
+    const RecipeExecutionContext& context) const {
   MP_RETURN_IF_ERROR(context.scope.DeclareVariable(statement.declaration));
   return ExecuteNode(statement.next_node, context);
 }
 
 ExecutionResult RecipeRuntimeGraph::ExecuteLoopStatement(
     const NodeId& node_id, const LoopStatement& statement,
-    RecipeExecutionContext context) const {
+    const RecipeExecutionContext& context) const {
   // Creating a temporary scope for caching all Variables evaluated only
   // within the scope of this executable node.
   RecipeScope executable_node_scope{&context.scope};
@@ -544,7 +553,7 @@ ExecutionResult RecipeRuntimeGraph::ExecuteLoopStatement(
 
 ExecutionResult RecipeRuntimeGraph::ExecuteWhileStatement(
     const NodeId& node_id, const WhileStatement& statement,
-    RecipeExecutionContext context) const {
+    const RecipeExecutionContext& context) const {
   // Creating a temporary scope for caching all Variables evaluated only
   // within the scope of this executable node.
   RecipeScope executable_node_scope{&context.scope};
@@ -572,7 +581,8 @@ ExecutionResult RecipeRuntimeGraph::ExecuteWhileStatement(
 }
 
 ExecutionResult RecipeRuntimeGraph::ExecuteSequenceStatement(
-    const SequenceStatement& statement, RecipeExecutionContext context) const {
+    const SequenceStatement& statement,
+    const RecipeExecutionContext& context) const {
   for (const ExecutableNodeConnection& node : statement.next_nodes) {
     MP_RETURN_IF_ERROR(ExecuteNode(node, context));
   }
@@ -581,7 +591,8 @@ ExecutionResult RecipeRuntimeGraph::ExecuteSequenceStatement(
 }
 
 ExecutionResult RecipeRuntimeGraph::ExecuteEventTriggerStatement(
-    const EventTrigger& statement, RecipeExecutionContext context) const {
+    const EventTrigger& statement,
+    const RecipeExecutionContext& context) const {
   Variables event_args;
   for (const auto& [arg_name, arg] : statement.args) {
     // Creating a temporary scope for caching all Variables evaluated only
@@ -615,8 +626,14 @@ ExecutionResult RecipeRuntimeGraph::ExecuteEventTriggerStatement(
 }
 
 absl::StatusOr<Variables> RecipeRuntimeGraph::EvaluateNode(
-    const NodeId& node_id, RecipeExecutionContext context) const {
+    const NodeId& node_id, const RecipeExecutionContext& context) const {
   MP_ASSIGN_OR_RETURN(const ValueNode* value_node, GetNode<ValueNode>(node_id));
+
+  // If we have exceeded the execution time limit, just return.
+  if (context.execution_cutoff_time.has_value() &&
+      absl::Now() > context.execution_cutoff_time) {
+    return absl::ResourceExhaustedError(kExecutionTimeExceededMessage);
+  }
 
   // TODO Guard this behind IMP_RUNTIME(DEV) instead
   if constexpr (output::kEnableRecipeLog) {
@@ -674,7 +691,7 @@ absl::StatusOr<Variables> RecipeRuntimeGraph::EvaluateNode(
 
 absl::StatusOr<Variable> RecipeRuntimeGraph::EvaluateValueConnection(
     const ValueConnection& value_connection,
-    RecipeExecutionContext context) const {
+    const RecipeExecutionContext& context) const {
   if (value_connection.literal_value()) {
     return value_connection.literal_value()->value;
   } else if (value_connection.socket_connection()) {
@@ -686,7 +703,7 @@ absl::StatusOr<Variable> RecipeRuntimeGraph::EvaluateValueConnection(
 
 absl::StatusOr<Variable> RecipeRuntimeGraph::EvaluateSocketConnection(
     const SocketConnection& socket_connection,
-    RecipeExecutionContext context) const {
+    const RecipeExecutionContext& context) const {
   std::optional<Variable> cached_value = RetrieveCachedSocketValue(
       context.scope, socket_connection.node_id, socket_connection.socket_name);
   if (cached_value) {
@@ -714,7 +731,8 @@ absl::StatusOr<Variable> RecipeRuntimeGraph::EvaluateSocketConnection(
 
 ExecutionResult RecipeRuntimeGraph::ExecuteCustomStatement(
     const ExecutableNodeConnection& connection,
-    const CustomStatement& statement, RecipeExecutionContext context) const {
+    const CustomStatement& statement,
+    const RecipeExecutionContext& context) const {
   NodeId node_id = *connection.node_id;
 
   auto it = custom_statements_.find(node_id);
@@ -818,7 +836,13 @@ ExecutionResult RecipeRuntimeGraph::ExecuteCustomStatement(
 // execution flow, have an O(1) sized call stack.
 ExecutionResult RecipeRuntimeGraph::ExecuteNode(
     const ExecutableNodeConnection& executable_node_connection,
-    RecipeExecutionContext context) const {
+    const RecipeExecutionContext& context) const {
+  // If we have exceeded the execution time limit, just return.
+  if (context.execution_cutoff_time.has_value() &&
+      absl::Now() > context.execution_cutoff_time) {
+    return absl::ResourceExhaustedError(kExecutionTimeExceededMessage);
+  }
+
   if (!executable_node_connection.node_id.has_value()) {
     return absl::OkStatus();
   }
@@ -883,7 +907,8 @@ ExecutionResult RecipeRuntimeGraph::ExecuteNode(
 }
 
 ExecutionResult RecipeRuntimeGraph::TriggerEvent(
-    const RecipeRuntimeEvent& event, RecipeExecutionContext context) const {
+    const RecipeRuntimeEvent& event,
+    const RecipeExecutionContext& context) const {
   auto it = event_node_map_.find(std::string(event.name));
   if (it == event_node_map_.end()) {
     return absl::NotFoundError(
@@ -904,7 +929,7 @@ ExecutionResult RecipeRuntimeGraph::TriggerEvent(
 
 ExecutionResult RecipeRuntimeGraph::ResumeExecution(
     const RecipeAsyncExecutionManager::AsyncExecution& execution,
-    BaseView& view) const {
+    BaseView& view, std::optional<absl::Time> execution_cutoff_time) const {
   if (!execution.handle.Ready()) {
     return absl::FailedPreconditionError("AsyncExecutionHandle is not ready.");
   }
@@ -919,9 +944,11 @@ ExecutionResult RecipeRuntimeGraph::ResumeExecution(
   // they will be scheduled with this same scope.
   async_manager->SetActiveScope(execution.scope);
 
-  RecipeExecutionContext context{.scope = *(execution.scope),
-                                 .view = view,
-                                 .async_manager = *async_manager};
+  RecipeExecutionContext context{
+      .scope = *(execution.scope),
+      .view = view,
+      .async_manager = *async_manager,
+      .execution_cutoff_time = execution_cutoff_time};
 
   ExecutionResult result = ExecuteNode(connection, context);
 

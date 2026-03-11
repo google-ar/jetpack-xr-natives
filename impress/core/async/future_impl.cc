@@ -110,7 +110,7 @@ FutureImpl::FutureImpl(const std::shared_ptr<FutureImplWrapper>& parent_future,
 
 FutureImpl::~FutureImpl() {
   AssertIntegrity();
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   if (!result_.HasResult()) {
     // Last ditch effort to cancel the future if it isn't ready when being
     // destroyed. It should only be possible for this to happen if
@@ -127,13 +127,13 @@ FutureImpl::~FutureImpl() {
 
 bool FutureImpl::Ready() const {
   AssertIntegrity();
-  absl::ReaderMutexLock lock(&mu_);
+  absl::ReaderMutexLock lock(mu_);
   return result_.HasResult();
 }
 
 ResultHolder& FutureImpl::Get() {
   AssertIntegrity();
-  absl::ReaderMutexLock lock(&mu_);
+  absl::ReaderMutexLock lock(mu_);
   AssertResultHasNotBeenMoved();
   if (!result_.HasResult()) {
     IMP_LOG(imp::FATAL)
@@ -146,7 +146,7 @@ ResultHolder& FutureImpl::Get() {
 void FutureImpl::AddChild(std::weak_ptr<FutureImpl> child) {
   AssertIntegrity();
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     AssertResultHasNotBeenMoved();
     if (!result_.HasResult()) {
       relationships_.emplace_back(child);
@@ -165,7 +165,7 @@ void FutureImpl::AddKeptForgetter(Invocable<void()> forget_fn,
   ResultHolder* result_ptr = nullptr;
 
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     if (!result_.HasResult()) {
       relationships_.emplace_back(KeptForgetter{
           .forget_fn = std::move(forget_fn), .kept_by_mode = kept_by_mode});
@@ -189,7 +189,7 @@ void FutureImpl::AddCombineChild(
   AssertIntegrity();
 
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     AssertResultHasNotBeenMoved();
     if (!result_.HasResult()) {
       relationships_.emplace_back(
@@ -215,7 +215,7 @@ void FutureImpl::AddCombineParent(
   AssertIntegrity();
   int task_priority;
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     combine_parents_.push_back(parent);
     task_priority = task_priority_;
   }
@@ -231,7 +231,7 @@ void FutureImpl::AddNestedChild(std::weak_ptr<FutureImpl> child,
 
   bool did_add_child = false;
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     AssertResultHasNotBeenMoved();
     if (!result_.HasResult()) {
       relationships_.emplace_back(NestedChild{
@@ -255,7 +255,7 @@ void FutureImpl::AddNestedChild(std::weak_ptr<FutureImpl> child,
 
 void FutureImpl::DependsOn(Holdable holdable) {
   AssertIntegrity();
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   if (!result_.HasResult()) {
     relationships_.emplace_back(std::move(holdable));
   }
@@ -266,7 +266,7 @@ void FutureImpl::SetNestedFuture(
   AssertIntegrity();
   int task_priority;
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     nested_future_ = nested_future;
     task_priority = task_priority_;
   }
@@ -277,13 +277,13 @@ void FutureImpl::SetNestedFuture(
 
 void FutureImpl::Return(ResultHolder value) {
   AssertIntegrity();
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   ReturnInternal(std::move(value));
 }
 
 void FutureImpl::Return(absl::Status status) {
   AssertIntegrity();
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   ReturnInternal(status);
 }
 
@@ -312,7 +312,7 @@ bool FutureImpl::ReturnInternal(ResultHolder result) {
   // of the API discourage it.
   ResultHolder* result_ptr = &result_;
 
-  mu_.Unlock();
+  mu_.unlock();
 
   // Loop through and resolve all the relationships.
   // Holdable is skipped, those are simply held until the future is ready so
@@ -343,7 +343,7 @@ bool FutureImpl::ReturnInternal(ResultHolder result) {
 
   nested_future.reset();
 
-  mu_.Lock();
+  mu_.lock();
 
   return true;
 }
@@ -363,7 +363,7 @@ void FutureImpl::ResolveCombineChild(const absl::Status& result_status,
     return;
   }
 
-  absl::MutexLock lock(&child->mu_);
+  absl::MutexLock lock(child->mu_);
 
   if (child->result_.HasResult()) {
     return;
@@ -416,15 +416,23 @@ void FutureImpl::InvokeResultProducer(std::shared_ptr<FutureImpl>& impl,
   Executor* producer_executor = nullptr;
   FutureExecutorMode future_executor_mode;
   int task_priority;
-  TaskId reserved_task_id;
+  TaskId extant_task_id;
   std::shared_ptr<FutureImplWrapper> parent_future;
   std::shared_ptr<FutureImplWrapper> nested_future_to_reset;
   std::vector<std::shared_ptr<FutureImplWrapper>> to_bubble;
 
   bool should_return_early = false;
   bool should_schedule = false;
+  bool should_invoke_pending = false;
   {
-    absl::MutexLock lock(&impl->mu_);
+    absl::MutexLock lock(impl->mu_);
+    producer_executor = impl->producer_executor_;
+    // If we are cancelling the future and we are on the producer's executor,
+    // then we should try to run the lambda synchronously.
+    should_invoke_pending =
+        !result_status.ok() &&
+        producer_executor == Executor::CurrentExecutor() &&
+        FutureFlags::IsSynchronousFutureCancellationEnabled();
 
     to_bubble = impl->GetPriorityBubbleUpTargets();
 
@@ -432,6 +440,7 @@ void FutureImpl::InvokeResultProducer(std::shared_ptr<FutureImpl>& impl,
         impl->pending_result_status_.has_value()) {
       impl->pending_result_status_ = result_status;
       should_return_early = true;
+      extant_task_id = impl->extant_task_id_;
 
       // If we have a nested future, it means the result producer has already
       // run and is now waiting on this future. That means we can let the
@@ -440,16 +449,15 @@ void FutureImpl::InvokeResultProducer(std::shared_ptr<FutureImpl>& impl,
       std::swap(nested_future_to_reset, impl->nested_future_);
     } else {
       impl->pending_result_status_ = result_status;
-      producer_executor = impl->producer_executor_;
       future_executor_mode = impl->future_executor_mode_;
       task_priority = impl->task_priority_;
       std::swap(parent_future, impl->parent_future_);
-      if (producer_executor &&
+      if (!should_invoke_pending && producer_executor &&
           (producer_executor != Executor::CurrentExecutor() ||
            future_executor_mode == FutureExecutorMode::kScheduleAlways)) {
         should_schedule = true;
-        reserved_task_id = producer_executor->ReserveTaskId();
-        impl->extant_task_id_ = reserved_task_id;
+        extant_task_id = producer_executor->ReserveTaskId();
+        impl->extant_task_id_ = extant_task_id;
       }
     }
   }
@@ -461,7 +469,10 @@ void FutureImpl::InvokeResultProducer(std::shared_ptr<FutureImpl>& impl,
 
   if (should_return_early) {
     nested_future_to_reset.reset();
-    return;
+    if (!should_invoke_pending) {
+      return;
+    }
+    producer_executor->InvokeScheduledTask(extant_task_id);
   }
 
   parent_future.reset();
@@ -473,7 +484,7 @@ void FutureImpl::InvokeResultProducer(std::shared_ptr<FutureImpl>& impl,
     FutureImpl::ResultProducer result_producer;
     ResultHolder result;
     {
-      absl::MutexLock lock(&impl->mu_);
+      absl::MutexLock lock(impl->mu_);
       if (impl->HasResultOrIsExecutingResultProducer()) {
         return;
       }
@@ -488,7 +499,7 @@ void FutureImpl::InvokeResultProducer(std::shared_ptr<FutureImpl>& impl,
 
   if (should_schedule) {
     if (!producer_executor->ScheduleWithReservedTaskId(
-            reserved_task_id, std::move(fn), task_priority)) {
+            extant_task_id, std::move(fn), task_priority)) {
       impl->Return(
           absl::CancelledError("Cannot schedule result producer. Cancelling "
                                "future immediately."));
@@ -511,7 +522,7 @@ void FutureImpl::InvokeResultProducerFromParent(
   TaskId reserved_task_id;
   bool should_schedule = false;
   {
-    absl::MutexLock lock(&impl->mu_);
+    absl::MutexLock lock(impl->mu_);
     if (impl->HasResultOrIsExecutingResultProducer()) {
       return;
     }
@@ -535,7 +546,7 @@ void FutureImpl::InvokeResultProducerFromParent(
     FutureImpl::ResultProducer result_producer;
     std::shared_ptr<FutureImplWrapper> parent_future;
     {
-      absl::MutexLock lock(&impl->mu_);
+      absl::MutexLock lock(impl->mu_);
       if (impl->HasResultOrIsExecutingResultProducer() ||
           !impl->parent_future_) {
         return;
@@ -604,7 +615,7 @@ void FutureImpl::BubbleUpPriority(std::optional<int> changed_priority) {
   std::vector<std::shared_ptr<FutureImplWrapper>> to_bubble;
   int changed_priority_to_bubble = 0;
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
 
     // Only continue bubbling if the active priority changed.
     if (RefreshActivePriority(changed_priority)) {
@@ -635,7 +646,7 @@ bool FutureImpl::RefreshActivePriority(std::optional<int> changed_priority) {
           std::weak_ptr<FutureImpl> weak_child =
               std::get<std::weak_ptr<FutureImpl>>(relationship);
           if (std::shared_ptr<FutureImpl> child = weak_child.lock()) {
-            absl::MutexLock lock(&child->mu_);
+            absl::MutexLock lock(child->mu_);
             if (child->HasResultOrIsExecutingResultProducer() ||
                 child->pending_result_status_.has_value()) {
               // If this child is in the process of returning a result, i.e.
@@ -656,7 +667,7 @@ bool FutureImpl::RefreshActivePriority(std::optional<int> changed_priority) {
           const CombineChild& combine_child =
               std::get<CombineChild>(relationship);
           if (std::shared_ptr<FutureImpl> child = combine_child.child.lock()) {
-            absl::MutexLock lock(&child->mu_);
+            absl::MutexLock lock(child->mu_);
             if (child->HasResultOrIsExecutingResultProducer() ||
                 child->pending_result_status_.has_value()) {
               // If this child is in the process of returning a result, i.e.
@@ -676,7 +687,7 @@ bool FutureImpl::RefreshActivePriority(std::optional<int> changed_priority) {
           /* A nested child future. */
           const NestedChild& nested_child = std::get<NestedChild>(relationship);
           if (std::shared_ptr<FutureImpl> child = nested_child.child.lock()) {
-            absl::MutexLock lock(&child->mu_);
+            absl::MutexLock lock(child->mu_);
             // Nested futures are handled a bit differently because the result
             // producer has already run to assign the nested future. If the
             // nested future has been cleared (i.e. it's been cancelled), that
@@ -739,7 +750,7 @@ void FutureImpl::UpdatePriority(std::optional<int> priority) {
   std::vector<std::shared_ptr<FutureImplWrapper>> to_bubble;
   int changed_priority_to_bubble;
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
 
     if (self_priority_ == priority) {
       return;
@@ -766,13 +777,13 @@ void FutureImpl::UpdatePriority(std::optional<int> priority) {
 
 int FutureImpl::GetActivePriority() {
   AssertIntegrity();
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   return task_priority_;
 }
 
 std::optional<int> FutureImpl::GetSelfPriority() {
   AssertIntegrity();
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   return self_priority_;
 }
 
@@ -782,7 +793,7 @@ int FutureImpl::GetDepth() const {
   const imp::internal::FutureImpl* curr = this;
   do {
     depth++;
-    absl::ReaderMutexLock lock(&(curr->mu_));
+    absl::ReaderMutexLock lock(curr->mu_);
     if (!curr->parent_future_) {
       break;
     }

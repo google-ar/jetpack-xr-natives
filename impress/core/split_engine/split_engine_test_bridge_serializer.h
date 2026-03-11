@@ -100,11 +100,13 @@ class SplitEngineTestBridgeSerializer {
  private:
   void SaveMessage(BridgeId bridge_id, android_xr::schemas::MessageType type,
                    const std::vector<uint8_t>& message);
+  bool ShouldCreateSnapshotForCurrentApiLevel();
   void CreateSnapshot();
   void PlaybackSnapshot();
   std::string GetDataFilename();
   std::string GetSnapshotDirWrite();
   std::string GetSnapshotDirRead();
+  std::string GetApiLevelString();
 
   BaseView& view_;
   TestSplitEngineSharedMemoryBridgeServiceImpl bridge_service_;
@@ -113,7 +115,7 @@ class SplitEngineTestBridgeSerializer {
   // during a single test segment. This is used to replay the messages in the
   // renderer view for backwards-compatibility testing.
   struct Snapshot {
-    std::string schema_version;
+    int32_t api_level;
     std::vector<flatbuffers::Offset<android_xr::schemas::Message>>
         message_sequence;
     std::unique_ptr<flatbuffers::FlatBufferBuilder> fbb;
@@ -126,9 +128,12 @@ template <typename TestT>
 void SplitEngineTestBridgeSerializer::RunAndCaptureTask(
     const TestT& test, Invocable<void()> task) {
   snapshot_.emplace();
-  snapshot_->schema_version = test.GetParam();
-  if (snapshot_->schema_version ==
-      android_xr::kSplitEngineSchemaVersionCurrent) {
+  snapshot_->api_level = test.GetParam();
+  // Use the real code when running against the experimental API level or when
+  // explicitly creating a snapshot for the current API level. All previous
+  // levels are played back from file.
+  if (ShouldCreateSnapshotForCurrentApiLevel() ||
+      snapshot_->api_level == android_xr::kSplitEngineExperimentalApiLevel) {
     snapshot_->fbb = std::make_unique<flatbuffers::FlatBufferBuilder>();
     task();
   }  // else do nothing since the snapshot will be played back.

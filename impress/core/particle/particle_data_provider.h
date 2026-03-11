@@ -19,6 +19,9 @@
 
 #include <cstdint>
 
+#include "core/math/quat.h"
+#include "core/math/vec.h"
+
 namespace imp {
 
 // Interface used by the Particle System to store data for each particle.
@@ -30,11 +33,21 @@ class ParticleDataProvider {
   // Returns the number of floats managed by the data provider.
   virtual int32_t GetNumFloats() const = 0;
 
-  // Returns the float value at the given index.
+  // Single float accessors.
   virtual float GetFloat(int32_t index) const = 0;
-
-  // Sets the float value at the given index.
   virtual void SetFloat(int32_t index, float value) = 0;
+
+  // Vector2f accessors.
+  float2 GetVector2f(int32_t index) const;
+  void SetVector2f(int32_t index, const float2& value);
+
+  // Vector3f accessors.
+  float3 GetVector3f(int32_t index) const;
+  void SetVector3f(int32_t index, const float3& value);
+
+  // Quaternion accessors.
+  quatf GetQuatf(int32_t index) const;
+  void SetQuatf(int32_t index, const quatf& value);
 };
 
 }  // namespace imp

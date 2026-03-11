@@ -225,7 +225,7 @@ Result TriangleIntersectsRay(const Triangle& triangle, const GenericRay<T>& ray,
 // Test if a mesh intersects a ray.
 template <typename T>
 std::optional<MeshIntersection<T>> MeshIntersectsRay(
-    MeshVertexAndIndexData mesh, const GenericRay<T>& ray,
+    MeshVertexAndIndexData mesh, const GenericRay<T>& input_ray,
     bool collide_with_back_faces,
     std::optional<MeshRange> sub_mesh_range = std::nullopt);
 
@@ -498,12 +498,12 @@ Result TriangleIntersectsRay(const Triangle& triangle, const GenericRay<T>& ray,
   T det = dot(edge1, ray_cross_e2);
 
   // Triangle is parallel to the ray
-  if (det > -imp::kFltEpsilon && det < imp::kFltEpsilon) {
+  if (std::abs(det) < std::numeric_limits<float>::epsilon()) {
     return Result::kDoesNotIntersect;
   }
 
   // Early out if a collision with the back of the triangle isn't wanted
-  if (!collide_with_back_faces && det < imp::kFltEpsilon) {
+  if (!collide_with_back_faces && det < 0) {
     return Result::kDoesNotIntersect;
   }
 
@@ -527,7 +527,7 @@ Result TriangleIntersectsRay(const Triangle& triangle, const GenericRay<T>& ray,
   float t = inv_det * dot(edge2, s_cross_e1);
 
   // This means that there is a line intersection but not a ray intersection.
-  if (t < imp::kFltEpsilon) {
+  if (t < 0) {
     return Result::kDoesNotIntersect;
   }
 
@@ -545,11 +545,12 @@ Result TriangleIntersectsRay(const Triangle& triangle, const GenericRay<T>& ray,
 
 template <typename T>
 std::optional<MeshIntersection<T>> MeshIntersectsRay(
-    MeshVertexAndIndexData mesh, const GenericRay<T>& ray,
+    MeshVertexAndIndexData mesh, const GenericRay<T>& input_ray,
     bool collide_with_back_faces, std::optional<MeshRange> sub_mesh_range) {
   MeshVertexData* vertex_data = mesh.vertex_data;
   MeshIndexData* index_data = mesh.index_data;
   MeshIntersection<T> intersection;
+  GenericRay<T> ray(input_ray.origin, normalize(input_ray.direction));
 
   // Distance between nearest hit point and ray origin, if hit point exist.
   T t_dist = std::numeric_limits<T>::max();

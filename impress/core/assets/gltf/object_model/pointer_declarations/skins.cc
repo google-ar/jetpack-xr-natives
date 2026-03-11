@@ -57,7 +57,11 @@ absl::StatusOr<model::SkinId> GetSkinId(
     return absl::InvalidArgumentError("Expected parsed token to be type int");
   }
 
-  model::SkinId skin_id{static_cast<int16_t>(std::get<int>(parsed_tokens[1]))};
+  int skin_index = std::get<int>(parsed_tokens[1]);
+
+  model::SkinId skin_id =
+      gltf_renderer->GetGltfAsset()->GetModelData().GetSkinId(
+          static_cast<uint32_t>(skin_index));
 
   if (!gltf_renderer->GetGltfAsset()->GetModelData().Skins().IsValid(skin_id)) {
     return absl::NotFoundError("Could not find skin_id in glTF Model Data");

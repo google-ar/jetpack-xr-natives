@@ -13,6 +13,7 @@
 # limitations under the License.
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("//build_tools:assets.bzl", "imp_assets")
 load("//build_tools:imp.bzl", "imp_copts")
 load(
     "//core/proto:imp_cc_proto_library.bzl",
@@ -45,11 +46,22 @@ imp_cc_proto_library(
     ],
 )
 
+imp_assets(
+    name = "test_data",
+    srcs = [
+        "test_data/cube.gltf",
+    ],
+    namespace = "imp_test_data",
+)
+
 cc_library(
     name = "particle",
     srcs = [
         "data_layout.cc",
+        "node_particle_controller.cc",
         "particle_behavior.cc",
+        "particle_data_provider.cc",
+        "particle_emitter.cc",
         "particle_emitter_info.cc",
         "particle_instance.cc",
         "particle_service.cc",
@@ -57,7 +69,9 @@ cc_library(
     ],
     hdrs = [
         "data_layout.h",
+        "node_particle_controller.h",
         "particle_behavior.h",
+        "particle_controller.h",
         "particle_data_provider.h",
         "particle_emitter.h",
         "particle_emitter_info.h",
@@ -69,9 +83,15 @@ cc_library(
     linkstatic = True,
     deps = [
         ":particle_emitter_state_proto_cc",
+        "//core/assets",
+        "//core/async:future",
+        "//core/common:owned_ptr",
         "//core/math",
         "//core/ncsb",
+        "//core/view:base_view",
+        "//core/view/framework",
         "//core/view/utils:frame_time",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/types:optional",
         "@com_google_impress//core/common:log",
     ],

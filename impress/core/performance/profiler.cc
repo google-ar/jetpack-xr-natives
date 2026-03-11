@@ -14,14 +14,18 @@
 
 #include "core/performance/profiler.h"
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <thread>  // NOLINT: Need to get current thread id.
+#include <vector>
 
+#include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/hash/hash.h"
 #include "core/common/log.h"
@@ -30,6 +34,7 @@
 #include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
 #include "core/config.h"
+#include "core/performance/profiler_structs.h"
 #if IMP_PLATFORM(WASM)
 #include <emscripten/emscripten.h>
 #endif
@@ -37,21 +42,31 @@
 namespace imp {
 
 // Static member definitions
+// Main thread members:
 bool Profiler::paused_ = false;
-std::atomic<bool> Profiler::is_recording_{true};
 int Profiler::frame_index_ = 0;
-std::atomic<int> Profiler::sample_index_{0};
-std::atomic<uint16_t> Profiler::id_counter_{0};
-std::atomic<uint16_t> Profiler::end_id_counter_{0};
+int Profiler::sample_index_ = 0;
+uint16_t Profiler::id_counter_ = 0;
+uint16_t Profiler::end_id_counter_ = 0;
 std::thread::id Profiler::main_thread_id_;
-std::array<std::array<ProfileResult, Profiler::kMaxSamples>,
+std::array<std::array<MainThreadProfileResult, Profiler::kMaxSamples>,
            Profiler::kMaxFrames>
     Profiler::samples_;
-std::array<int, Profiler::kMaxFrames> Profiler::sample_counts_;
-std::array<uint32_t, Profiler::kMaxFrames> Profiler::frame_durations_ns_;
-std::atomic<int64_t> Profiler::last_frame_start_time_ns_{0};
+std::array<FrameMetaData, Profiler::kMaxFrames> Profiler::frame_metadata_;
+int64_t Profiler::last_frame_start_time_ns_ = 0;
+bool Profiler::is_recording_main_thread_ = true;
+
+// Thread-safe members:
+std::atomic<bool> Profiler::is_recording_{true};
 absl::Mutex Profiler::mu_;
 absl::flat_hash_map<std::thread::id, std::string> Profiler::thread_names_;
+absl::Mutex Profiler::worker_samples_mu_;
+std::array<WorkerProfileResult, Profiler::kMaxWorkerSamples>
+    Profiler::worker_samples_;
+uint64_t Profiler::worker_end_id_counter_ = 0;
+size_t Profiler::worker_sample_index_ = 0;
+std::vector<std::thread::id> Profiler::worker_thread_ids_;
+absl::Mutex Profiler::worker_thread_ids_mu_;
 
 int64_t Profiler::GetCurrentTimeNanos() {
   // Absl's GetCurrentTimeNanos() is millisecond-accurate in wasm builds.
@@ -66,37 +81,71 @@ int64_t Profiler::GetCurrentTimeNanos() {
 }
 
 uint32_t Profiler::GetCurrentFrameTimeNanos() {
-  return static_cast<uint32_t>(
-      GetCurrentTimeNanos() -
-      last_frame_start_time_ns_.load(std::memory_order_relaxed));
+  return static_cast<uint32_t>(GetCurrentTimeNanos() -
+                               last_frame_start_time_ns_);
 }
 
-SampleIndices Profiler::AddSample(const absl::string_view name) {
-  if (!is_recording_) {
-    return {-1, -1};
+int64_t Profiler::AddSample(const absl::string_view name) {
+  if (CheckOnMainThread()) {
+    return AddMainThreadSample(name);
+  } else {
+    return AddWorkerThreadSample(name);
   }
+}
 
-  // AddSample may be called from any thread, we need to use atomic to
-  // ensure the index we're writing to is unique.
-  // This operation is safe because the array is pre-allocated, the ordering of
-  // samples between threads is not important, and we're ensuring the same
-  // index is never written to by multiple threads simultaneously.
-  // We could also lock the entire function, but that introduces deadlock risk
-  // and is likely to be slower for most hardware configurations.
-  uint16_t current_id = id_counter_.fetch_add(1, std::memory_order_relaxed);
+int64_t Profiler::AddMainThreadSample(const absl::string_view name) {
+  if (!is_recording_main_thread_) return kInvalidProfileResultId;
 
-  if (current_id >= kMaxSamples) {
-    // IMP_LOG(imp::WARNING) << "Attempted to add profile sample " << name
-    //              << " when the sample buffer is full. Max samples: "
-    //              << kMaxSamples;
-    return {-1, -1};
-  }
+  uint16_t current_id = id_counter_++;
+
+  // Would be nice to log here but it causes tests to fail.
+  // The console editor widget test fails if we log here.
+  if (current_id >= kMaxSamples) return kInvalidProfileResultId;
 
   uint32_t start_time = GetCurrentFrameTimeNanos();
-  int current_frame_index = sample_index_.load(std::memory_order_relaxed);
-  samples_[current_frame_index][current_id] = {name, current_id, current_id,
-                                               start_time, GetCachedThreadId()};
-  return {current_frame_index, current_id};
+  MainThreadProfileResult& sample = samples_[sample_index_][current_id];
+  sample.name = name;
+  sample.relative_start_time_ns = start_time;
+  sample.relative_end_time_ns = start_time;
+  sample.sample_end_id = current_id;
+  return static_cast<int64_t>(current_id);
+}
+
+int64_t Profiler::AddWorkerThreadSample(const absl::string_view name) {
+  if (!is_recording_.load(std::memory_order_relaxed))
+    return kInvalidProfileResultId;
+
+  // Get time and thread id before mutex to reduce time spent locked.
+  uint64_t start_time = GetCurrentTimeNanos();
+  std::thread::id thread_id = GetCachedThreadId();
+
+  size_t current_index;
+  {
+    absl::MutexLock lock(worker_samples_mu_);
+    current_index = worker_sample_index_;
+    worker_sample_index_ = (worker_sample_index_ + 1) % kMaxWorkerSamples;
+
+    WorkerProfileResult& sample = worker_samples_[current_index];
+    sample.name = name;
+    sample.start_time_ns = start_time;
+    sample.thread_id = thread_id;
+    sample.end_time_ns = start_time;
+  }
+
+  {
+    bool found = false;
+    absl::MutexLock lock(worker_thread_ids_mu_);
+    for (int i = 0; i < worker_thread_ids_.size(); ++i) {
+      if (worker_thread_ids_[i] == thread_id) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      worker_thread_ids_.push_back(thread_id);
+    }
+  }
+  return static_cast<int64_t>(current_index);
 }
 
 void Profiler::AdvanceFrame() {
@@ -106,45 +155,48 @@ void Profiler::AdvanceFrame() {
     main_thread_set = true;
   }
 
-  int sample_index = sample_index_.load(std::memory_order_relaxed);
-  sample_counts_[sample_index] = id_counter_.load(std::memory_order_relaxed);
+  frame_metadata_[sample_index_].sample_count = id_counter_;
 
   // Record frame timings even if paused.
   // If we don't there would be a big frametime spike on resuming.
   int64_t new_frame_time_ns = GetCurrentTimeNanos();
-  int64_t frame_duration_ns =
-      new_frame_time_ns -
-      last_frame_start_time_ns_.load(std::memory_order_relaxed);
-  last_frame_start_time_ns_.store(new_frame_time_ns, std::memory_order_relaxed);
+  int64_t frame_duration_ns = new_frame_time_ns - last_frame_start_time_ns_;
+  last_frame_start_time_ns_ = new_frame_time_ns;
 
   if (paused_) {
     // Pause can happen at any time during a frame.
     // We don't want that to mess with the frame currently being recorded.
     // is_recording updates on a per-frame basis to prevent this.
-    if (is_recording_.load(std::memory_order_relaxed)) {
-      is_recording_.store(false, std::memory_order_relaxed);
-    }
+    is_recording_.store(false, std::memory_order_relaxed);
+    is_recording_main_thread_ = false;
+
     return;
   }
 
   if (new_frame_time_ns > 0) {
     // Downcast is fine here unless a frame takes longer than 4 seconds.
-    frame_durations_ns_[sample_index] =
-        static_cast<uint32_t>(frame_duration_ns);
+    // Clamped to uint32_t max to avoid overflow in that case it happens.
+    int64_t clamped_frame_duration_ns =
+        std::min(frame_duration_ns,
+                 static_cast<int64_t>(std::numeric_limits<uint32_t>::max()));
+    frame_metadata_[sample_index_].total_duration_ns =
+        static_cast<uint32_t>(clamped_frame_duration_ns);
   }
   is_recording_.store(true, std::memory_order_relaxed);
-  id_counter_.store(0, std::memory_order_relaxed);
-  end_id_counter_.store(0, std::memory_order_relaxed);
+  is_recording_main_thread_ = true;
+  id_counter_ = 0;
+  end_id_counter_ = 0;
   frame_index_++;
-  int next_sample_index = (sample_index + 1) % kMaxFrames;
+  int next_sample_index = (sample_index_ + 1) % kMaxFrames;
   // Zero out the sample count for the next frame.
-  sample_counts_[next_sample_index] = 0;
-  sample_index_.store(next_sample_index, std::memory_order_relaxed);
+  frame_metadata_[next_sample_index].sample_count = 0;
+  frame_metadata_[next_sample_index].frame_start_time_ns = new_frame_time_ns;
+  sample_index_ = next_sample_index;
   main_thread_id_ = GetCachedThreadId();
 }
 
-std::array<ProfileResult, Profiler::kMaxSamples>& Profiler::GetSamples(
-    int frame_index) {
+std::array<MainThreadProfileResult, Profiler::kMaxSamples>&
+Profiler::GetSamples(int frame_index) {
   if (!HasFrameRecorded(frame_index)) return samples_[0];
 
   return samples_[frame_index % kMaxFrames];
@@ -153,7 +205,7 @@ std::array<ProfileResult, Profiler::kMaxSamples>& Profiler::GetSamples(
 int Profiler::GetSampleCount(int frame_index) {
   if (!HasFrameRecorded(frame_index)) return 0;
 
-  return sample_counts_[frame_index % kMaxFrames];
+  return frame_metadata_[frame_index % kMaxFrames].sample_count;
 }
 
 uint32_t Profiler::GetRenderNextFrameDurationNanos(int frame_index) {
@@ -164,28 +216,127 @@ uint32_t Profiler::GetRenderNextFrameDurationNanos(int frame_index) {
   // We would need to iterate over the entire sample vector to find the earliest
   // start time and latest end time in that case.
   // FilamentHost::RenderNextFrame() is the default "root" sample.
-  ProfileResult sample = samples_[frame_index % kMaxFrames][0];
-  return sample.duration_ns;
+  MainThreadProfileResult sample = samples_[frame_index % kMaxFrames][0];
+  return sample.relative_end_time_ns - sample.relative_start_time_ns;
+}
+
+FrameMetaData& Profiler::GetFrameMetaData(int frame_index) {
+  if (!HasFrameRecorded(frame_index)) return frame_metadata_[0];
+  return frame_metadata_[frame_index % kMaxFrames];
 }
 
 uint32_t Profiler::GetTotalFrameDurationNanos(int frame_index) {
   if (!HasFrameRecorded(frame_index)) return 0;
 
-  return frame_durations_ns_[frame_index % kMaxFrames];
+  return frame_metadata_[frame_index % kMaxFrames].total_duration_ns;
 }
 
-void Profiler::RecordCurrentFrameSampleEndTime(int sample_index, int64_t id) {
+void Profiler::RecordSampleEndTime(int64_t id) {
+  if (CheckOnMainThread()) {
+    RecordMainThreadSampleEndTime(id);
+  } else {
+    RecordWorkerThreadSampleEndTime(id);
+  }
+}
+
+void Profiler::RecordMainThreadSampleEndTime(int64_t id) {
   if (id < 0 || id >= kMaxSamples) {
     IMP_LOG(imp::WARNING)
         << "Invalid index used for Profiler::RecordCurrentFrameSampleEndTime: "
         << id;
     return;
   }
-  ProfileResult& sample = samples_[sample_index][id];
-  uint32_t start_time = sample.duration_ns;
-  sample.duration_ns = GetCurrentFrameTimeNanos() - start_time;
-  sample.sample_end_id =
-      end_id_counter_.fetch_add(1, std::memory_order_relaxed);
+  MainThreadProfileResult& sample = samples_[sample_index_][id];
+  sample.relative_end_time_ns = GetCurrentFrameTimeNanos();
+  sample.sample_end_id = end_id_counter_++;
+}
+
+void Profiler::RecordWorkerThreadSampleEndTime(int64_t id) {
+  if (id < 0 || id >= kMaxWorkerSamples) {
+    IMP_LOG(imp::WARNING)
+        << "Invalid index used for Profiler::RecordWorkerThreadSampleEndTime: "
+        << id;
+    return;
+  }
+  // Get the end time before mutex to reduce time spent locked.
+  uint64_t end_time = GetCurrentTimeNanos();
+
+  absl::MutexLock lock(worker_samples_mu_);
+  WorkerProfileResult& sample = worker_samples_[id];
+  sample.end_time_ns = end_time;
+  sample.sample_end_id = worker_end_id_counter_++;
+}
+
+absl::flat_hash_map<std::thread::id, std::vector<WorkerProfileResult>>
+Profiler::GetAllWorkerThreadsSamples(uint64_t start_time, uint64_t end_time) {
+  absl::flat_hash_map<std::thread::id, std::vector<WorkerProfileResult>>
+      samples;
+  absl::MutexLock lock(worker_samples_mu_);
+
+  size_t end_logical_idx = FindSampleIndexUpperBound(end_time);
+
+  for (size_t i = 0; i < end_logical_idx; ++i) {
+    size_t actual_idx = (worker_sample_index_ + i) % kMaxWorkerSamples;
+    WorkerProfileResult& sample = worker_samples_[actual_idx];
+
+    // We already filtered out samples that start after end_time so we just need
+    // to filter out samples that end before the start time.
+    if (sample.end_time_ns < start_time) {
+      continue;
+    }
+
+    samples[sample.thread_id].push_back(sample);
+  }
+
+  return samples;
+}
+
+std::vector<WorkerProfileResult> Profiler::GetWorkerThreadSamples(
+    uint64_t start_time, uint64_t end_time, std::thread::id thread_id) {
+  std::vector<WorkerProfileResult> samples;
+  absl::MutexLock lock(worker_samples_mu_);
+
+  size_t end_logical_idx = FindSampleIndexUpperBound(end_time);
+
+  for (size_t i = 0; i < end_logical_idx; ++i) {
+    size_t actual_idx = (worker_sample_index_ + i) % kMaxWorkerSamples;
+    WorkerProfileResult& sample = worker_samples_[actual_idx];
+
+    if (sample.end_time_ns < start_time || sample.thread_id != thread_id) {
+      continue;
+    }
+
+    samples.push_back(sample);
+  }
+  return samples;
+}
+
+size_t Profiler::FindSampleIndexUpperBound(uint64_t end_time)
+    ABSL_SHARED_LOCKS_REQUIRED(worker_samples_mu_) {
+  size_t low = 0, high = kMaxWorkerSamples;
+  size_t end_logical_idx = kMaxWorkerSamples;
+
+  // Worker samples are sorted by start time allowing for a small optimization.
+  // We can find the first sample whose start time exceeds the end time of our
+  // search to narrow down how many samples we need to check.
+  // We can't narrow down the start index because we would need the samples to
+  // be sorted by end time.
+  // This upper bound is exclusive, we don't want the sample at that index.
+
+  // Binary search to find the first sample starting AFTER end_time.
+  while (low < high) {
+    size_t mid = low + (high - low) / 2;
+    size_t actual_idx = (worker_sample_index_ + mid) % kMaxWorkerSamples;
+
+    if (worker_samples_[actual_idx].start_time_ns > end_time) {
+      end_logical_idx = mid;
+      high = mid;
+    } else {
+      low = mid + 1;
+    }
+  }
+
+  return end_logical_idx;
 }
 
 std::thread::id Profiler::GetCachedThreadId() {
@@ -194,21 +345,17 @@ std::thread::id Profiler::GetCachedThreadId() {
 }
 
 bool Profiler::HasFrameRecorded(int frame_index) {
-  return frame_index >= 0 && frame_index > frame_index_ - kMaxFrames &&
-         frame_index < frame_index_;
+  return (frame_index >= 0) && (frame_index > frame_index_ - kMaxFrames) &&
+         (frame_index < frame_index_);
 }
 
 void Profiler::SetThreadName(absl::string_view name) {
-  // Moohan repo only has deprecated MutexLock constructor.
-  // Didn't add nolint in case that changes.
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   thread_names_[GetCachedThreadId()] = name;
 }
 
 absl::string_view Profiler::GetThreadName(std::thread::id thread_id) {
-  // Moohan repo only has deprecated MutexLock constructor.
-  // Didn't add nolint in case that changes.
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   auto it = thread_names_.find(thread_id);
   if (it != thread_names_.end()) {
     return it->second;
@@ -218,5 +365,14 @@ absl::string_view Profiler::GetThreadName(std::thread::id thread_id) {
   size_t hash = absl::Hash<std::thread::id>()(thread_id);
   thread_names_.emplace(thread_id, absl::StrFormat("Thread %d", hash));
   return thread_names_[thread_id];
+}
+
+std::vector<std::thread::id> Profiler::GetWorkerThreadIds() {
+  absl::MutexLock lock(worker_thread_ids_mu_);
+  return worker_thread_ids_;
+}
+
+std::thread::id MainThreadProfileResult::GetThreadId() const {
+  return Profiler::GetMainThreadId();
 }
 }  // namespace imp

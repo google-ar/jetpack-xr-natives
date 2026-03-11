@@ -16,8 +16,8 @@
 #define JETPACK_XR_NATIVES_OPENXR_JOBJECT_CONVERTER_H_
 
 #include <jni.h>
-
 #include <openxr/openxr.h>
+#include <openxr/public/all_extensions.h>
 
 namespace androidx::xr::openxr {
 
@@ -32,6 +32,11 @@ XrSpace ConvertToXrSpace(const jlong& space);
 
 // Returns an 'XrQuaternionf' from an 'androidx/xr/math/Quaternion' JVM object.
 XrQuaternionf ConvertToXrQuaternionf(JNIEnv* env, const jobject& quaternion);
+
+// Returns an 'XrGeospatialPoseANDROIDX2' from an
+// 'androidx/xr/math/GeospatialPose' JVM object.
+XrGeospatialPoseANDROIDX2 ConvertToXrGeospatialPose(
+    JNIEnv* env, const jobject& geospatial_pose);
 
 }  // namespace androidx::xr::openxr
 

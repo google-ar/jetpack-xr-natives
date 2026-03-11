@@ -53,6 +53,7 @@
 #include "core/view/platforms/xr_android/openxr_includes.h"
 #include "core/view/platforms/xr_android/xr_events.proto.imp.h"
 #include "core/view/platforms/xr_android/xr_helpers.h"
+#include "core/xr/openxr_events.h"
 #if IMP_MATERIAL_API(VULKAN) && IMP_PLATFORM(ANDROID)
 #include "core/view/platforms/xr_android/xr_vulkan_platform.h"
 #else
@@ -95,6 +96,7 @@ class XrSessionHost : public ViewHost {
     bool enable_android_system_extensions = false;
     float swapchain_size_multiplier = 1.0f;
     bool use_global_passthrough_dimming_extensions = false;
+    bool use_eye_tracking_calibration = false;
   };
 
   // Metrics for performance monitoring.
@@ -245,6 +247,7 @@ class XrSessionHost : public ViewHost {
   bool IsXrEyeGazeInteractionEnabled() const;
   bool IsXrAndroidSystemExtensionsEnabled() const;
   bool IsXrGlobalPassthroughDimmingExtensionsEnabled() const;
+  bool IsXrEyeTrackingCalibrationEnabled() const;
 
   void SetFoveationLevel(XrFoveationLevelFB xr_foveation_level_fb);
 
@@ -406,6 +409,8 @@ class XrSessionHost : public ViewHost {
 
   absl::Status PollEvents();
 
+  void BroadcastReferenceSpaceChanges(XrTime predicted_display_time);
+
   std::optional<const XrEventDataBaseHeader*> GetNextEvent();
 
   absl::Status HandleSessionStateChanged(
@@ -545,6 +550,7 @@ class XrSessionHost : public ViewHost {
   int msaa_sample_count_ = 0;
   bool eye_tracking_enabled_ = false;
   bool ipd_eye_calibration_enabled_ = false;
+  bool eye_tracking_calibration_enabled_ = false;
   // Whether the current frame should render with varjo foveation. Should only
   // be used on Impress thread.
   bool use_varjo_foveation_this_frame_ = false;
@@ -565,6 +571,8 @@ class XrSessionHost : public ViewHost {
 
   // All enabled extensions
   RobinSet<std::string> enabled_extensions_;
+
+  std::vector<OpenXrSpaceChangePendingEvent> pending_space_changes_;
 
   // OpenXr layers that should be submitted to XrEndFrame, plus their weights
   // Negative weights are drawn in front of the impress-rendered projection

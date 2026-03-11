@@ -230,6 +230,13 @@ message MaterialTransmission {
   TextureInfo transmission_texture = 2;
 }
 
+message MaterialVolume {
+  optional float thickness_factor = 1;
+  optional float attenuation_distance = 2;
+  repeated float attenuation_color = 3;
+  TextureInfo volume_texture = 4;
+}
+
 // The mask material contains no material information, simply an extension that
 // operates as a flag on a material to indicate if its a mask.
 message MaterialMask {}
@@ -257,6 +264,8 @@ message Material {
     ];
     MaterialMask mask = 7
         [json_name = "GOOG_mask", (imp.optional_type) = ABSL_OPTIONAL];
+    optional MaterialVolume volume = 8
+        [json_name = "KHR_materials_volume", (imp.optional_type) = UNIQUE_PTR];
   }
 
   string name = 1 [(imp.string_type) = STRING_VIEW];

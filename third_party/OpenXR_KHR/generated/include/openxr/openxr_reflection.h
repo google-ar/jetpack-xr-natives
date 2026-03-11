@@ -199,13 +199,7 @@ XR_ENUM_STR(XrResult);
     _(XR_ERROR_SPATIAL_COMPONENT_NOT_ENABLED_EXT, -1000740006) \
     _(XR_ERROR_SPATIAL_PERSISTENCE_SCOPE_UNSUPPORTED_EXT, -1000763001) \
     _(XR_ERROR_SPATIAL_PERSISTENCE_SCOPE_INCOMPATIBLE_EXT, -1000781001) \
-    _(XR_ERROR_KEYLESS_AUTH_NOT_SETUP_ANDROIDX2, -1000787000) \
-    _(XR_ERROR_KEYLESS_AUTH_FAILED_ANDROIDX2, -1000787001) \
-    _(XR_ERROR_EARTH_TRACKER_NOT_RUNNING_ANDROIDX1, -1000789001) \
-    _(XR_ERROR_GEOSPATIAL_COORDINATES_INVALID_ANDROIDX1, -1000789002) \
-    _(XR_SURFACE_ANCHOR_LOCATION_UNSUPPORTED_ANDROIDX1, -1000789000) \
     _(XR_ERROR_SPATIAL_ANCHOR_ATTACHABLE_COMPONENT_NOT_FOUND_ANDROID, -1000790001) \
-    _(XR_ERROR_SPATIAL_ANCHOR_ENTITY_ID_INVALID_ANDROIDX1, -1000795001) \
     _(XR_RESULT_MAX_ENUM, 0x7FFFFFFF)
 
 #define XR_LIST_ENUM_XrStructureType(_) \
@@ -613,6 +607,11 @@ XR_ENUM_STR(XrResult);
     _(XR_TYPE_BODY_JOINTS_LOCATE_INFO_BD, 1000385002) \
     _(XR_TYPE_BODY_JOINT_LOCATIONS_BD, 1000385003) \
     _(XR_TYPE_SYSTEM_BODY_TRACKING_PROPERTIES_BD, 1000385004) \
+    _(XR_TYPE_SYSTEM_FACIAL_SIMULATION_PROPERTIES_BD, 1000386001) \
+    _(XR_TYPE_FACE_TRACKER_CREATE_INFO_BD, 1000386002) \
+    _(XR_TYPE_FACIAL_SIMULATION_DATA_GET_INFO_BD, 1000386003) \
+    _(XR_TYPE_FACIAL_SIMULATION_DATA_BD, 1000386004) \
+    _(XR_TYPE_LIP_EXPRESSION_DATA_BD, 1000386005) \
     _(XR_TYPE_SYSTEM_SPATIAL_SENSING_PROPERTIES_BD, 1000389000) \
     _(XR_TYPE_SPATIAL_ENTITY_COMPONENT_GET_INFO_BD, 1000389001) \
     _(XR_TYPE_SPATIAL_ENTITY_LOCATION_GET_INFO_BD, 1000389002) \
@@ -804,10 +803,7 @@ XR_ENUM_STR(XrResult);
     _(XR_TYPE_EYE_CALIBRATION_CREATE_INFO_ANDROIDSYS, 1000720002) \
     _(XR_TYPE_RX_LENS_OPTICAL_DESCRIPTION_ANDROIDSYS, 1000720003) \
     _(XR_TYPE_RX_LENS_ENTRY_ANDROIDSYS, 1000720004) \
-    _(XR_TYPE_SYSTEM_ADVANCED_LIGHT_ESTIMATION_PROPERTIES_ANDROID, 1000721000) \
-    _(XR_TYPE_ADVANCED_LIGHT_ESTIMATOR_CREATE_INFO_ANDROID, 1000721001) \
-    _(XR_TYPE_LIGHTING_CUBEMAP_DATA_ANDROID, 1000721002) \
-    _(XR_TYPE_POINT_LIGHTS_ANDROID, 1000721003) \
+    _(XR_TYPE_EYE_TRACKER_REALTIME_CALIBRATION_DATA_ANDROIDSYS, 1000720005) \
     _(XR_TYPE_INSTANCE_CREATE_INFO_BACKGROUND_TRACKING_ANDROIDSYS, 1000725000) \
     _(XR_TYPE_SHARED_ANCHOR_SPACE_CREATE_INFO_ANDROIDSYS, 1000726000) \
     _(XR_TYPE_TRACKABLE_SHOEBOX_ANDROIDSYS, 1000728000) \
@@ -862,36 +858,12 @@ XR_ENUM_STR(XrResult);
     _(XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_OBJECT_TRACKING_ANDROID, 1000785000) \
     _(XR_TYPE_SPATIAL_COMPONENT_OBJECT_SEMANTIC_LABEL_LIST_ANDROID, 1000785001) \
     _(XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_DEPTH_RAYCAST_ANDROID, 1000786000) \
-    _(XR_TYPE_SPATIAL_BOUNDS_RAYCAST_ANDROID, 1000786001) \
+    _(XR_TYPE_SPATIAL_RAYCAST_INFO_ANDROID, 1000786001) \
     _(XR_TYPE_SPATIAL_COMPONENT_RAYCAST_RESULT_LIST_ANDROID, 1000786002) \
-    _(XR_TYPE_GOOGLE_CLOUD_AUTH_API_KEY_ANDROIDX2, 1000787000) \
-    _(XR_TYPE_GOOGLE_CLOUD_AUTH_TOKEN_ANDROIDX2, 1000787001) \
-    _(XR_TYPE_GOOGLE_CLOUD_AUTH_KEYLESS_ANDROIDX2, 1000787002) \
-    _(XR_TYPE_GOOGLE_CLOUD_AUTH_ERROR_RESULT_ANDROIDX2, 1000787003) \
-    _(XR_TYPE_SYSTEM_GEOSPATIAL_PROPERTIES_ANDROIDX1, 1000789000) \
-    _(XR_TYPE_EARTH_TRACKER_CREATE_INFO_ANDROIDX1, 1000789001) \
-    _(XR_TYPE_EVENT_DATA_EARTH_TRACKER_STATE_CHANGED_ANDROIDX1, 1000789002) \
-    _(XR_TYPE_GEOSPATIAL_ANCHOR_CREATE_INFO_ANDROIDX1, 1000789003) \
-    _(XR_TYPE_GEOSPATIAL_POSE_LOCATE_INFO_ANDROIDX1, 1000789004) \
-    _(XR_TYPE_GEOSPATIAL_POSE_RESULT_ANDROIDX1, 1000789005) \
-    _(XR_TYPE_POSE_FROM_GEOSPATIAL_POSE_LOCATE_INFO_ANDROIDX1, 1000789006) \
-    _(XR_TYPE_SURFACE_ANCHOR_CREATE_INFO_ANDROIDX1, 1000789007) \
-    _(XR_TYPE_SURFACE_ANCHOR_CREATE_COMPLETION_ANDROIDX1, 1000789008) \
-    _(XR_TYPE_VPS_AVAILABILITY_CHECK_COMPLETION_ANDROIDX1, 1000789009) \
-    _(XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_STREETSCAPE_GEOMETRY_ANDROIDX1, 1000789010) \
-    _(XR_TYPE_SPATIAL_COMPONENT_STREETSCAPE_GEOMETRY_METADATA_LIST_ANDROIDX1, 1000789011) \
+    _(XR_TYPE_SPATIAL_RAYCAST_SNAPSHOT_CREATE_INFO_ANDROID, 1000786003) \
     _(XR_TYPE_SPATIAL_ANCHOR_PARENT_ANDROID, 1000790000) \
-    _(XR_TYPE_SPATIAL_DISCOVERY_NOT_SUBSUMED_FILTER_ANDROIDX1, 1000791001) \
-    _(XR_TYPE_SPATIAL_COMPONENT_SUBSUMED_BY_LIST_ANDROIDX1, 1000791002) \
-    _(XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_ROOM_TRACKING_ANDROIDX1, 1000792000) \
-    _(XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_ROOM_BOUNDARY_TRACKING_ANDROIDX1, 1000792001) \
-    _(XR_TYPE_SPATIAL_COMPONENT_ROOM_LIST_ANDROIDX1, 1000792002) \
-    _(XR_TYPE_SPATIAL_COMPONENT_MATERIAL_TYPE_LIST_ANDROIDX1, 1000792003) \
-    _(XR_TYPE_SPATIAL_COMPONENT_CONFIDENCE_LIST_ANDROIDX1, 1000792004) \
-    _(XR_TYPE_SPATIAL_COMPONENT_ROOM_EMPTINESS_LIST_ANDROIDX1, 1000792005) \
-    _(XR_TYPE_SPATIAL_DISCOVERY_ROOM_BOUNDARY_FILTER_ANDROIDX1, 1000792006) \
-    _(XR_TYPE_SPATIAL_COMPONENT_OCCUPANCY_GRID_LIST_ANDROIDX1, 1000793000) \
-    _(XR_TYPE_SPATIAL_ANCHOR_SPACE_FROM_ID_CREATE_INFO_ANDROIDX1, 1000795000) \
+    _(XR_TYPE_SPATIAL_DISCOVERY_UNIQUE_ENTITIES_FILTER_ANDROID, 1000791001) \
+    _(XR_TYPE_SPATIAL_COMPONENT_SUBSUMED_BY_LIST_ANDROID, 1000791002) \
     _(XR_TYPE_LOADER_INIT_INFO_PROPERTIES_EXT, 1000838000) \
     _(XR_STRUCTURE_TYPE_MAX_ENUM, 0x7FFFFFFF)
 
@@ -988,6 +960,7 @@ XR_ENUM_STR(XrResult);
     _(XR_OBJECT_TYPE_PASSTHROUGH_HTC, 1000317000) \
     _(XR_OBJECT_TYPE_BODY_TRACKER_HTC, 1000320000) \
     _(XR_OBJECT_TYPE_BODY_TRACKER_BD, 1000385000) \
+    _(XR_OBJECT_TYPE_FACE_TRACKER_BD, 1000386000) \
     _(XR_OBJECT_TYPE_SENSE_DATA_PROVIDER_BD, 1000389000) \
     _(XR_OBJECT_TYPE_SENSE_DATA_SNAPSHOT_BD, 1000389001) \
     _(XR_OBJECT_TYPE_ANCHOR_BD, 1000389002) \
@@ -1014,7 +987,6 @@ XR_ENUM_STR(XrResult);
     _(XR_OBJECT_TYPE_SPATIAL_CONTEXT_EXT, 1000740001) \
     _(XR_OBJECT_TYPE_SPATIAL_SNAPSHOT_EXT, 1000740002) \
     _(XR_OBJECT_TYPE_SPATIAL_PERSISTENCE_CONTEXT_EXT, 1000763000) \
-    _(XR_OBJECT_TYPE_EARTH_TRACKER_ANDROIDX1, 1000789000) \
     _(XR_OBJECT_TYPE_MAX_ENUM, 0x7FFFFFFF)
 
 #define XR_LIST_ENUM_XrLoaderInterfaceStructs(_) \
@@ -1969,6 +1941,91 @@ XR_ENUM_STR(XrResult);
     _(XR_BODY_JOINT_SET_FULL_BODY_JOINTS_BD, 2) \
     _(XR_BODY_JOINT_SET_MAX_ENUM_BD, 0x7FFFFFFF)
 
+#define XR_LIST_ENUM_XrFacialSimulationModeBD(_) \
+    _(XR_FACIAL_SIMULATION_MODE_DEFAULT_BD, 0) \
+    _(XR_FACIAL_SIMULATION_MODE_COMBINED_AUDIO_BD, 1) \
+    _(XR_FACIAL_SIMULATION_MODE_COMBINED_AUDIO_WITH_LIP_BD, 2) \
+    _(XR_FACIAL_SIMULATION_MODE_ONLY_AUDIO_WITH_LIP_BD, 3) \
+    _(XR_FACIAL_SIMULATION_MODE_MAX_ENUM_BD, 0x7FFFFFFF)
+
+#define XR_LIST_ENUM_XrFaceExpressionBD(_) \
+    _(XR_FACE_EXPRESSION_BROW_DROP_L_BD, 0) \
+    _(XR_FACE_EXPRESSION_BROW_DROP_R_BD, 1) \
+    _(XR_FACE_EXPRESSION_BROW_INNER_UPWARDS_BD, 2) \
+    _(XR_FACE_EXPRESSION_BROW_OUTER_UPWARDS_L_BD, 3) \
+    _(XR_FACE_EXPRESSION_BROW_OUTER_UPWARDS_R_BD, 4) \
+    _(XR_FACE_EXPRESSION_EYE_BLINK_L_BD, 5) \
+    _(XR_FACE_EXPRESSION_EYE_LOOK_DROP_L_BD, 6) \
+    _(XR_FACE_EXPRESSION_EYE_LOOK_IN_L_BD, 7) \
+    _(XR_FACE_EXPRESSION_EYE_LOOK_OUT_L_BD, 8) \
+    _(XR_FACE_EXPRESSION_EYE_LOOK_UPWARDS_L_BD, 9) \
+    _(XR_FACE_EXPRESSION_EYE_LOOK_SQUINT_L_BD, 10) \
+    _(XR_FACE_EXPRESSION_EYE_LOOK_WIDE_L_BD, 11) \
+    _(XR_FACE_EXPRESSION_EYE_BLINK_R_BD, 12) \
+    _(XR_FACE_EXPRESSION_EYE_LOOK_DROP_R_BD, 13) \
+    _(XR_FACE_EXPRESSION_EYE_LOOK_IN_R_BD, 14) \
+    _(XR_FACE_EXPRESSION_EYE_LOOK_OUT_R_BD, 15) \
+    _(XR_FACE_EXPRESSION_EYE_LOOK_UPWARDS_R_BD, 16) \
+    _(XR_FACE_EXPRESSION_EYE_LOOK_SQUINT_R_BD, 17) \
+    _(XR_FACE_EXPRESSION_EYE_LOOK_WIDE_R_BD, 18) \
+    _(XR_FACE_EXPRESSION_NOSE_SNEER_L_BD, 19) \
+    _(XR_FACE_EXPRESSION_NOSE_SNEER_R_BD, 20) \
+    _(XR_FACE_EXPRESSION_CHEEK_PUFF_BD, 21) \
+    _(XR_FACE_EXPRESSION_CHEEK_SQUINT_L_BD, 22) \
+    _(XR_FACE_EXPRESSION_CHEEK_SQUINT_R_BD, 23) \
+    _(XR_FACE_EXPRESSION_MOUTH_CLOSE_BD, 24) \
+    _(XR_FACE_EXPRESSION_MOUTH_FUNNEL_BD, 25) \
+    _(XR_FACE_EXPRESSION_MOUTH_PUCKER_BD, 26) \
+    _(XR_FACE_EXPRESSION_MOUTH_L_BD, 27) \
+    _(XR_FACE_EXPRESSION_MOUTH_R_BD, 28) \
+    _(XR_FACE_EXPRESSION_MOUTH_SMILE_L_BD, 29) \
+    _(XR_FACE_EXPRESSION_MOUTH_SMILE_R_BD, 30) \
+    _(XR_FACE_EXPRESSION_MOUTH_FROWN_L_BD, 31) \
+    _(XR_FACE_EXPRESSION_MOUTH_FROWN_R_BD, 32) \
+    _(XR_FACE_EXPRESSION_MOUTH_DIMPLE_L_BD, 33) \
+    _(XR_FACE_EXPRESSION_MOUTH_DIMPLE_R_BD, 34) \
+    _(XR_FACE_EXPRESSION_MOUTH_STRETCH_L_BD, 35) \
+    _(XR_FACE_EXPRESSION_MOUTH_STRETCH_R_BD, 36) \
+    _(XR_FACE_EXPRESSION_MOUTH_ROLL_LOWER_BD, 37) \
+    _(XR_FACE_EXPRESSION_MOUTH_ROLL_UPPER_BD, 38) \
+    _(XR_FACE_EXPRESSION_MOUTH_SHRUG_LOWER_BD, 39) \
+    _(XR_FACE_EXPRESSION_MOUTH_SHRUG_UPPER_BD, 40) \
+    _(XR_FACE_EXPRESSION_MOUTH_PRESS_L_BD, 41) \
+    _(XR_FACE_EXPRESSION_MOUTH_PRESS_R_BD, 42) \
+    _(XR_FACE_EXPRESSION_MOUTH_LOWER_DROP_L_BD, 43) \
+    _(XR_FACE_EXPRESSION_MOUTH_LOWER_DROP_R_BD, 44) \
+    _(XR_FACE_EXPRESSION_MOUTH_UPPER_UPWARDS_L_BD, 45) \
+    _(XR_FACE_EXPRESSION_MOUTH_UPPER_UPWARDS_R_BD, 46) \
+    _(XR_FACE_EXPRESSION_JAW_FORWARD_BD, 47) \
+    _(XR_FACE_EXPRESSION_JAW_L_BD, 48) \
+    _(XR_FACE_EXPRESSION_JAW_R_BD, 49) \
+    _(XR_FACE_EXPRESSION_JAW_OPEN_BD, 50) \
+    _(XR_FACE_EXPRESSION_TONGUE_OUT_BD, 51) \
+    _(XR_FACE_EXPRESSION_MAX_ENUM_BD, 0x7FFFFFFF)
+
+#define XR_LIST_ENUM_XrLipExpressionBD(_) \
+    _(XR_LIP_EXPRESSION_PP_BD, 0) \
+    _(XR_LIP_EXPRESSION_CH_BD, 1) \
+    _(XR_LIP_EXPRESSION_LO_BD, 2) \
+    _(XR_LIP_EXPRESSION_O_BD, 3) \
+    _(XR_LIP_EXPRESSION_I_BD, 4) \
+    _(XR_LIP_EXPRESSION_LU_BD, 5) \
+    _(XR_LIP_EXPRESSION_RR_BD, 6) \
+    _(XR_LIP_EXPRESSION_XX_BD, 7) \
+    _(XR_LIP_EXPRESSION_LAA_BD, 8) \
+    _(XR_LIP_EXPRESSION_LI_BD, 9) \
+    _(XR_LIP_EXPRESSION_FF_BD, 10) \
+    _(XR_LIP_EXPRESSION_U_BD, 11) \
+    _(XR_LIP_EXPRESSION_TH_BD, 12) \
+    _(XR_LIP_EXPRESSION_LKK_BD, 13) \
+    _(XR_LIP_EXPRESSION_SS_BD, 14) \
+    _(XR_LIP_EXPRESSION_LE_BD, 15) \
+    _(XR_LIP_EXPRESSION_DD_BD, 16) \
+    _(XR_LIP_EXPRESSION_E_BD, 17) \
+    _(XR_LIP_EXPRESSION_LNN_BD, 18) \
+    _(XR_LIP_EXPRESSION_SIL_BD, 19) \
+    _(XR_LIP_EXPRESSION_MAX_ENUM_BD, 0x7FFFFFFF)
+
 #define XR_LIST_ENUM_XrSpatialEntityComponentTypeBD(_) \
     _(XR_SPATIAL_ENTITY_COMPONENT_TYPE_LOCATION_BD, 0) \
     _(XR_SPATIAL_ENTITY_COMPONENT_TYPE_SEMANTIC_BD, 1) \
@@ -2508,16 +2565,6 @@ XR_ENUM_STR(XrResult);
     _(XR_EYE_TRACKER_CALIBRATION_ERROR_SAVE_ERROR_ANDROIDSYS, 5) \
     _(XR_EYE_TRACKER_CALIBRATION_ERROR_MAX_ENUM_ANDROIDSYS, 0x7FFFFFFF)
 
-#define XR_LIST_ENUM_XrLightingCubemapResolutionANDROID(_) \
-    _(XR_LIGHTING_CUBEMAP_RESOLUTION_32x32_ANDROID, 0) \
-    _(XR_LIGHTING_CUBEMAP_RESOLUTION_MAX_ENUM_ANDROID, 0x7FFFFFFF)
-
-#define XR_LIST_ENUM_XrEyeTrackerCalibrationStateANDROIDX1(_) \
-    _(XR_EYE_TRACKER_CALIBRATION_STATE_UNKNOWN_ANDROIDX1, 0) \
-    _(XR_EYE_TRACKER_CALIBRATION_STATE_DEFAULT_ANDROIDX1, 1) \
-    _(XR_EYE_TRACKER_CALIBRATION_STATE_USER_ANDROIDX1, 2) \
-    _(XR_EYE_TRACKER_CALIBRATION_STATE_ANDROIDX1_MAX_ENUM, 0x7FFFFFFF)
-
 #define XR_LIST_ENUM_XrFaceJointTypeANDROIDSYS(_) \
     _(XR_FACE_JOINT_TYPE_NECK_ANDROIDSYS, 0) \
     _(XR_FACE_JOINT_TYPE_HEAD_ANDROIDSYS, 1) \
@@ -2541,9 +2588,6 @@ XR_ENUM_STR(XrResult);
     _(XR_SPATIAL_CAPABILITY_ANCHOR_EXT, 1000762000) \
     _(XR_SPATIAL_CAPABILITY_OBJECT_TRACKING_ANDROID, 1000785000) \
     _(XR_SPATIAL_CAPABILITY_DEPTH_RAYCAST_ANDROID, 1000786000) \
-    _(XR_SPATIAL_CAPABILITY_STREETSCAPE_GEOMETRY_ANDROIDX1, 1000789000) \
-    _(XR_SPATIAL_CAPABILITY_ROOM_TRACKING_ANDROIDX1, 1000792000) \
-    _(XR_SPATIAL_CAPABILITY_ROOM_BOUNDARY_TRACKING_ANDROIDX1, 1000792001) \
     _(XR_SPATIAL_CAPABILITY_MAX_ENUM_EXT, 0x7FFFFFFF)
 
 #define XR_LIST_ENUM_XrSpatialCapabilityFeatureEXT(_) \
@@ -2565,13 +2609,7 @@ XR_ENUM_STR(XrResult);
     _(XR_SPATIAL_COMPONENT_TYPE_PERSISTENCE_EXT, 1000763000) \
     _(XR_SPATIAL_COMPONENT_TYPE_OBJECT_SEMANTIC_LABEL_ANDROID, 1000785000) \
     _(XR_SPATIAL_COMPONENT_TYPE_RAYCAST_RESULT_ANDROID, 1000786000) \
-    _(XR_SPATIAL_COMPONENT_TYPE_STREETSCAPE_GEOMETRY_METADATA_ANDROIDX1, 1000789000) \
-    _(XR_SPATIAL_COMPONENT_TYPE_SUBSUMED_BY_ANDROIDX1, 1000791000) \
-    _(XR_SPATIAL_COMPONENT_TYPE_ROOM_ANDROIDX1, 1000792002) \
-    _(XR_SPATIAL_COMPONENT_TYPE_MATERIAL_TYPE_ANDROIDX1, 1000792003) \
-    _(XR_SPATIAL_COMPONENT_TYPE_CONFIDENCE_ANDROIDX1, 1000792004) \
-    _(XR_SPATIAL_COMPONENT_TYPE_ROOM_EMPTINESS_ANDROIDX1, 1000792005) \
-    _(XR_SPATIAL_COMPONENT_TYPE_OCCUPANCY_GRID_ANDROIDX1, 1000793000) \
+    _(XR_SPATIAL_COMPONENT_TYPE_SUBSUMED_BY_ANDROID, 1000791000) \
     _(XR_SPATIAL_COMPONENT_TYPE_MAX_ENUM_EXT, 0x7FFFFFFF)
 
 #define XR_LIST_ENUM_XrSpatialEntityTrackingStateEXT(_) \
@@ -2654,75 +2692,6 @@ XR_ENUM_STR(XrResult);
     _(XR_SPATIAL_OBJECT_SEMANTIC_LABEL_MOUSE_ANDROID, 2) \
     _(XR_SPATIAL_OBJECT_SEMANTIC_LABEL_LAPTOP_BASE_ANDROID, 3) \
     _(XR_SPATIAL_OBJECT_SEMANTIC_LABEL_MAX_ENUM_ANDROID, 0x7FFFFFFF)
-
-#define XR_LIST_ENUM_XrGoogleCloudAuthErrorANDROIDX2(_) \
-    _(XR_GOOGLE_CLOUD_AUTH_ERROR_NONE_ANDROIDX2, 0) \
-    _(XR_GOOGLE_CLOUD_AUTH_ERROR_QUOTA_EXCEEDED_ANDROIDX2, -1) \
-    _(XR_GOOGLE_CLOUD_AUTH_ERROR_UNREACHABLE_ANDROIDX2, -2) \
-    _(XR_GOOGLE_CLOUD_AUTH_ERROR_ANDROIDX2, -3) \
-    _(XR_GOOGLE_CLOUD_AUTH_ERROR_ANDROIDX2_MAX_ENUM, 0x7FFFFFFF)
-
-#define XR_LIST_ENUM_XrEarthTrackerStateANDROIDX1(_) \
-    _(XR_EARTH_TRACKER_STATE_STOPPED_ANDROIDX1, 1) \
-    _(XR_EARTH_TRACKER_STATE_RUNNING_ANDROIDX1, 2) \
-    _(XR_EARTH_TRACKER_STATE_INITIALIZATION_FAILED_ANDROIDX1, 3) \
-    _(XR_EARTH_TRACKER_STATE_ANDROIDX1_MAX_ENUM, 0x7FFFFFFF)
-
-#define XR_LIST_ENUM_XrSurfaceAnchorTypeANDROIDX1(_) \
-    _(XR_SURFACE_ANCHOR_TYPE_TERRAIN_ANDROIDX1, 1) \
-    _(XR_SURFACE_ANCHOR_TYPE_ROOFTOP_ANDROIDX1, 2) \
-    _(XR_SURFACE_ANCHOR_TYPE_ANDROIDX1_MAX_ENUM, 0x7FFFFFFF)
-
-#define XR_LIST_ENUM_XrVPSAvailabilityANDROIDX1(_) \
-    _(XR_VPS_AVAILABILITY_UNAVAILABLE_ANDROIDX1, 1) \
-    _(XR_VPS_AVAILABILITY_AVAILABLE_ANDROIDX1, 2) \
-    _(XR_VPSAVAILABILITY_ANDROIDX1_MAX_ENUM, 0x7FFFFFFF)
-
-#define XR_LIST_ENUM_XrStreetscapeGeometrySemanticLabelANDROIDX1(_) \
-    _(XR_STREETSCAPE_GEOMETRY_SEMANTIC_LABEL_TERRAIN_ANDROIDX1, 1) \
-    _(XR_STREETSCAPE_GEOMETRY_SEMANTIC_LABEL_BUILDING_ANDROIDX1, 2) \
-    _(XR_STREETSCAPE_GEOMETRY_SEMANTIC_LABEL_ANDROIDX1_MAX_ENUM, 0x7FFFFFFF)
-
-#define XR_LIST_ENUM_XrStreetscapeGeometryQualityANDROIDX1(_) \
-    _(XR_STREETSCAPE_GEOMETRY_QUALITY_NONE_ANDROIDX1, 0) \
-    _(XR_STREETSCAPE_GEOMETRY_QUALITY_BUILDING_LOD1_ANDROIDX1, 1) \
-    _(XR_STREETSCAPE_GEOMETRY_QUALITY_BUILDING_LOD2_ANDROIDX1, 2) \
-    _(XR_STREETSCAPE_GEOMETRY_QUALITY_ANDROIDX1_MAX_ENUM, 0x7FFFFFFF)
-
-#define XR_LIST_ENUM_XrSpatialRoomTypeANDROIDX1(_) \
-    _(XR_SPATIAL_ROOM_TYPE_UNCATEGORIZED_ANDROIDX1, 0) \
-    _(XR_SPATIAL_ROOM_TYPE_LIVING_ROOM_ANDROIDX1, 1) \
-    _(XR_SPATIAL_ROOM_TYPE_BED_ROOM_ANDROIDX1, 2) \
-    _(XR_SPATIAL_ROOM_TYPE_CONFERENCE_ROOM_ANDROIDX1, 3) \
-    _(XR_SPATIAL_ROOM_TYPE_ANDROIDX1_MAX_ENUM, 0x7FFFFFFF)
-
-#define XR_LIST_ENUM_XrSpatialMaterialTypeANDROIDX1(_) \
-    _(XR_SPATIAL_MATERIAL_TYPE_UNCATEGORIZED_ANDROIDX1, 0) \
-    _(XR_SPATIAL_MATERIAL_TYPE_TRANSPARENT_ANDROIDX1, 1) \
-    _(XR_SPATIAL_MATERIAL_TYPE_ACOUSTIC_CEILING_TILES_ANDROIDX1, 2) \
-    _(XR_SPATIAL_MATERIAL_TYPE_BRICK_BARE_ANDROIDX1, 3) \
-    _(XR_SPATIAL_MATERIAL_TYPE_BRICK_PAINTED_ANDROIDX1, 4) \
-    _(XR_SPATIAL_MATERIAL_TYPE_CONCRETE_BLOCK_COARSE_ANDROIDX1, 5) \
-    _(XR_SPATIAL_MATERIAL_TYPE_CONCRETE_BLOCK_PAINTED_ANDROIDX1, 6) \
-    _(XR_SPATIAL_MATERIAL_TYPE_CURTAIN_HEAVY_ANDROIDX1, 7) \
-    _(XR_SPATIAL_MATERIAL_TYPE_FIBER_GLASS_INSULATION_ANDROIDX1, 8) \
-    _(XR_SPATIAL_MATERIAL_TYPE_GLASS_THIN_ANDROIDX1, 9) \
-    _(XR_SPATIAL_MATERIAL_TYPE_GLASS_THICK_ANDROIDX1, 10) \
-    _(XR_SPATIAL_MATERIAL_TYPE_GRASS_ANDROIDX1, 11) \
-    _(XR_SPATIAL_MATERIAL_TYPE_LINOLEUM_ON_CONCRETE_ANDROIDX1, 12) \
-    _(XR_SPATIAL_MATERIAL_TYPE_MARBLE_ANDROIDX1, 13) \
-    _(XR_SPATIAL_MATERIAL_TYPE_METAL_ANDROIDX1, 14) \
-    _(XR_SPATIAL_MATERIAL_TYPE_PARQUET_ON_CONCRETE_ANDROIDX1, 15) \
-    _(XR_SPATIAL_MATERIAL_TYPE_PLASTER_ROUGH_ANDROIDX1, 16) \
-    _(XR_SPATIAL_MATERIAL_TYPE_PLASTER_SMOOTH_ANDROIDX1, 17) \
-    _(XR_SPATIAL_MATERIAL_TYPE_PLYWOOD_PANEL_ANDROIDX1, 18) \
-    _(XR_SPATIAL_MATERIAL_TYPE_POLISHED_CONCRETE_OR_TILE_ANDROIDX1, 19) \
-    _(XR_SPATIAL_MATERIAL_TYPE_SHEETROCK_ANDROIDX1, 20) \
-    _(XR_SPATIAL_MATERIAL_TYPE_WATER_OR_ICE_SURFACE_ANDROIDX1, 21) \
-    _(XR_SPATIAL_MATERIAL_TYPE_WOOD_CEILING_ANDROIDX1, 22) \
-    _(XR_SPATIAL_MATERIAL_TYPE_WOOD_PANEL_ANDROIDX1, 23) \
-    _(XR_SPATIAL_MATERIAL_TYPE_UNIFORM_ANDROIDX1, 24) \
-    _(XR_SPATIAL_MATERIAL_TYPE_ANDROIDX1_MAX_ENUM, 0x7FFFFFFF)
 
 #define XR_LIST_BITS_XrInstanceCreateFlags(_)
 
@@ -2961,10 +2930,6 @@ XR_ENUM_STR(XrResult);
 
 #define XR_LIST_BITS_XrPlaneTrackableTrackerFlagsANDROIDX(_) \
     _(XR_PLANE_TRACKABLE_TRACKER_FLAGS_ENABLE_OCCUPANCY_GRID_BIT_ANDROIDX, 0x00000001) \
-
-#define XR_LIST_BITS_XrGeospatialPoseFlagsANDROIDX1(_) \
-    _(XR_GEOSPATIAL_POSE_ORIENTATION_VALID_BIT_ANDROIDX1, 0x00000001) \
-    _(XR_GEOSPATIAL_POSE_POSITION_VALID_BIT_ANDROIDX1, 0x00000002) \
 
 /// Calls your macro with the name of each member of XrApiLayerProperties, in order.
 #define XR_LIST_STRUCT_XrApiLayerProperties(_) \
@@ -6444,6 +6409,41 @@ XR_ENUM_STR(XrResult);
     _(jointLocationCount) \
     _(jointLocations) \
 
+/// Calls your macro with the name of each member of XrSystemFacialSimulationPropertiesBD, in order.
+#define XR_LIST_STRUCT_XrSystemFacialSimulationPropertiesBD(_) \
+    _(type) \
+    _(next) \
+    _(supportsFaceTracking) \
+
+/// Calls your macro with the name of each member of XrFaceTrackerCreateInfoBD, in order.
+#define XR_LIST_STRUCT_XrFaceTrackerCreateInfoBD(_) \
+    _(type) \
+    _(next) \
+    _(mode) \
+
+/// Calls your macro with the name of each member of XrFacialSimulationDataGetInfoBD, in order.
+#define XR_LIST_STRUCT_XrFacialSimulationDataGetInfoBD(_) \
+    _(type) \
+    _(next) \
+    _(time) \
+
+/// Calls your macro with the name of each member of XrFacialSimulationDataBD, in order.
+#define XR_LIST_STRUCT_XrFacialSimulationDataBD(_) \
+    _(type) \
+    _(next) \
+    _(faceExpressionWeightCount) \
+    _(faceExpressionWeights) \
+    _(isUpperFaceDataValid) \
+    _(isLowerFaceDataValid) \
+    _(time) \
+
+/// Calls your macro with the name of each member of XrLipExpressionDataBD, in order.
+#define XR_LIST_STRUCT_XrLipExpressionDataBD(_) \
+    _(type) \
+    _(next) \
+    _(lipsyncExpressionWeightCount) \
+    _(lipsyncExpressionWeights) \
+
 /// Calls your macro with the name of each member of XrSystemSpatialSensingPropertiesBD, in order.
 #define XR_LIST_STRUCT_XrSystemSpatialSensingPropertiesBD(_) \
     _(type) \
@@ -7929,48 +7929,14 @@ XR_ENUM_STR(XrResult);
     _(type) \
     _(next) \
 
-/// Calls your macro with the name of each member of XrSystemAdvancedLightEstimationPropertiesANDROID, in order.
-#define XR_LIST_STRUCT_XrSystemAdvancedLightEstimationPropertiesANDROID(_) \
+/// Calls your macro with the name of each member of XrEyeTrackerRealtimeCalibrationDataANDROIDSYS, in order.
+#define XR_LIST_STRUCT_XrEyeTrackerRealtimeCalibrationDataANDROIDSYS(_) \
     _(type) \
     _(next) \
-    _(supportsAdvancedLightEstimation) \
-    _(maxPointLightCount) \
-
-/// Calls your macro with the name of each member of XrAdvancedLightEstimatorCreateInfoANDROID, in order.
-#define XR_LIST_STRUCT_XrAdvancedLightEstimatorCreateInfoANDROID(_) \
-    _(type) \
-    _(next) \
-    _(cubemapResolution) \
-
-/// Calls your macro with the name of each member of XrLightingCubemapDataANDROID, in order.
-#define XR_LIST_STRUCT_XrLightingCubemapDataANDROID(_) \
-    _(type) \
-    _(next) \
-    _(state) \
-    _(facePixelCount) \
-    _(rightImageBuffer) \
-    _(leftImageBuffer) \
-    _(topImageBuffer) \
-    _(bottomImageBuffer) \
-    _(frontImageBuffer) \
-    _(backImageBuffer) \
-    _(rotation) \
-    _(centerExposureTime) \
-
-/// Calls your macro with the name of each member of XrPointLightDataANDROID, in order.
-#define XR_LIST_STRUCT_XrPointLightDataANDROID(_) \
-    _(position) \
-    _(color) \
-    _(intensity) \
-
-/// Calls your macro with the name of each member of XrPointLightsANDROID, in order.
-#define XR_LIST_STRUCT_XrPointLightsANDROID(_) \
-    _(type) \
-    _(next) \
-    _(state) \
-    _(lightCapacityInput) \
-    _(lightCountOutput) \
-    _(lights) \
+    _(timestamp) \
+    _(baseSpace) \
+    _(interactionCursorPosition) \
+    _(interactionCursorDimensions) \
 
 /// Calls your macro with the name of each member of XrInstanceCreateInfoBackgroundTrackingANDROIDSYS, in order.
 #define XR_LIST_STRUCT_XrInstanceCreateInfoBackgroundTrackingANDROIDSYS(_) \
@@ -8437,8 +8403,8 @@ XR_ENUM_STR(XrResult);
     _(enabledComponentCount) \
     _(enabledComponents) \
 
-/// Calls your macro with the name of each member of XrSpatialBoundsRaycastANDROID, in order.
-#define XR_LIST_STRUCT_XrSpatialBoundsRaycastANDROID(_) \
+/// Calls your macro with the name of each member of XrSpatialRaycastInfoANDROID, in order.
+#define XR_LIST_STRUCT_XrSpatialRaycastInfoANDROID(_) \
     _(type) \
     _(next) \
     _(space) \
@@ -8454,141 +8420,13 @@ XR_ENUM_STR(XrResult);
     _(raycastResultCount) \
     _(raycastResults) \
 
-/// Calls your macro with the name of each member of XrGoogleCloudAuthInfoBaseHeaderANDROIDX2, in order.
-#define XR_LIST_STRUCT_XrGoogleCloudAuthInfoBaseHeaderANDROIDX2(_) \
+/// Calls your macro with the name of each member of XrSpatialRaycastSnapshotCreateInfoANDROID, in order.
+#define XR_LIST_STRUCT_XrSpatialRaycastSnapshotCreateInfoANDROID(_) \
     _(type) \
     _(next) \
-
-/// Calls your macro with the name of each member of XrGoogleCloudAuthApiKeyANDROIDX2, in order.
-#define XR_LIST_STRUCT_XrGoogleCloudAuthApiKeyANDROIDX2(_) \
-    _(type) \
-    _(next) \
-    _(apiKey) \
-
-/// Calls your macro with the name of each member of XrGoogleCloudAuthTokenANDROIDX2, in order.
-#define XR_LIST_STRUCT_XrGoogleCloudAuthTokenANDROIDX2(_) \
-    _(type) \
-    _(next) \
-    _(authToken) \
-
-/// Calls your macro with the name of each member of XrGoogleCloudAuthKeylessANDROIDX2, in order.
-#define XR_LIST_STRUCT_XrGoogleCloudAuthKeylessANDROIDX2(_) \
-    _(type) \
-    _(next) \
-
-/// Calls your macro with the name of each member of XrGoogleCloudAuthErrorResultANDROIDX2, in order.
-#define XR_LIST_STRUCT_XrGoogleCloudAuthErrorResultANDROIDX2(_) \
-    _(type) \
-    _(next) \
-    _(error) \
-
-/// Calls your macro with the name of each member of XrGeospatialPoseANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrGeospatialPoseANDROIDX1(_) \
-    _(eastUpSouthOrientation) \
-    _(latitude) \
-    _(longitude) \
-    _(altitude) \
-
-/// Calls your macro with the name of each member of XrSystemGeospatialPropertiesANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrSystemGeospatialPropertiesANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(supportsGeospatial) \
-    _(maxSurfaceAnchorCount) \
-
-/// Calls your macro with the name of each member of XrEarthTrackerCreateInfoANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrEarthTrackerCreateInfoANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(shouldTrackPlanes) \
-
-/// Calls your macro with the name of each member of XrEventDataEarthTrackerStateChangedANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrEventDataEarthTrackerStateChangedANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(earthTracker) \
-    _(state) \
-    _(initializationResult) \
-    _(time) \
-
-/// Calls your macro with the name of each member of XrGeospatialAnchorCreateInfoANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrGeospatialAnchorCreateInfoANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(earthTracker) \
-    _(geospatialPose) \
-
-/// Calls your macro with the name of each member of XrGeospatialPoseLocateInfoANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrGeospatialPoseLocateInfoANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(space) \
-    _(time) \
-    _(pose) \
-
-/// Calls your macro with the name of each member of XrGeospatialPoseResultANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrGeospatialPoseResultANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(poseFlags) \
-    _(geospatialPose) \
-    _(horizontalAccuracy) \
-    _(verticalAccuracy) \
-    _(orientationYawAccuracy) \
-
-/// Calls your macro with the name of each member of XrPoseFromGeospatialPoseLocateInfoANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrPoseFromGeospatialPoseLocateInfoANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(space) \
-    _(time) \
-    _(geospatialPose) \
-
-/// Calls your macro with the name of each member of XrSurfaceAnchorCreateInfoANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrSurfaceAnchorCreateInfoANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(earthTracker) \
-    _(surfaceAnchorType) \
-    _(eastUpSouthOrientation) \
-    _(latitude) \
-    _(longitude) \
-    _(altitudeRelativeToSurface) \
-
-/// Calls your macro with the name of each member of XrSurfaceAnchorCreateCompletionANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrSurfaceAnchorCreateCompletionANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(futureResult) \
-    _(anchorEntityId) \
-    _(anchorEntity) \
-
-/// Calls your macro with the name of each member of XrVPSAvailabilityCheckCompletionANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrVPSAvailabilityCheckCompletionANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(futureResult) \
-    _(availability) \
-
-/// Calls your macro with the name of each member of XrSpatialCapabilityConfigurationStreetscapeGeometryANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrSpatialCapabilityConfigurationStreetscapeGeometryANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(capability) \
-    _(enabledComponentCount) \
-    _(enabledComponents) \
-
-/// Calls your macro with the name of each member of XrSpatialStreetscapeGeometryMetadataANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrSpatialStreetscapeGeometryMetadataANDROIDX1(_) \
-    _(semanticLabel) \
-    _(quality) \
-
-/// Calls your macro with the name of each member of XrSpatialComponentStreetscapeGeometryMetadataListANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrSpatialComponentStreetscapeGeometryMetadataListANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(metadataCount) \
-    _(metadatas) \
+    _(componentTypeCount) \
+    _(componentTypes) \
+    _(raycastInfo) \
 
 /// Calls your macro with the name of each member of XrSpatialAnchorParentANDROID, in order.
 #define XR_LIST_STRUCT_XrSpatialAnchorParentANDROID(_) \
@@ -8596,92 +8434,17 @@ XR_ENUM_STR(XrResult);
     _(next) \
     _(parentId) \
 
-/// Calls your macro with the name of each member of XrSpatialDiscoveryNotSubsumedFilterANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrSpatialDiscoveryNotSubsumedFilterANDROIDX1(_) \
+/// Calls your macro with the name of each member of XrSpatialDiscoveryUniqueEntitiesFilterANDROID, in order.
+#define XR_LIST_STRUCT_XrSpatialDiscoveryUniqueEntitiesFilterANDROID(_) \
     _(type) \
     _(next) \
 
-/// Calls your macro with the name of each member of XrSpatialComponentSubsumedByListANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrSpatialComponentSubsumedByListANDROIDX1(_) \
+/// Calls your macro with the name of each member of XrSpatialComponentSubsumedByListANDROID, in order.
+#define XR_LIST_STRUCT_XrSpatialComponentSubsumedByListANDROID(_) \
     _(type) \
     _(next) \
-    _(subsumedByCount) \
-    _(subsumedByIds) \
-
-/// Calls your macro with the name of each member of XrSpatialCapabilityConfigurationRoomTrackingANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrSpatialCapabilityConfigurationRoomTrackingANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(capability) \
-    _(enabledComponentCount) \
-    _(enabledComponents) \
-
-/// Calls your macro with the name of each member of XrSpatialCapabilityConfigurationRoomBoundaryTrackingANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrSpatialCapabilityConfigurationRoomBoundaryTrackingANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(capability) \
-    _(enabledComponentCount) \
-    _(enabledComponents) \
-
-/// Calls your macro with the name of each member of XrSpatialRoomDataANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrSpatialRoomDataANDROIDX1(_) \
-    _(roomType) \
-    _(centerPose) \
-
-/// Calls your macro with the name of each member of XrSpatialComponentRoomListANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrSpatialComponentRoomListANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(roomCount) \
-    _(rooms) \
-
-/// Calls your macro with the name of each member of XrSpatialComponentMaterialTypeListANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrSpatialComponentMaterialTypeListANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(materialTypeCount) \
-    _(materialTypes) \
-
-/// Calls your macro with the name of each member of XrSpatialComponentConfidenceListANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrSpatialComponentConfidenceListANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(confidenceCount) \
-    _(confidences) \
-
-/// Calls your macro with the name of each member of XrSpatialComponentRoomEmptinessListANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrSpatialComponentRoomEmptinessListANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(roomEmptinessCount) \
-    _(roomEmptinesses) \
-
-/// Calls your macro with the name of each member of XrSpatialDiscoveryRoomBoundaryFilterANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrSpatialDiscoveryRoomBoundaryFilterANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(parentId) \
-
-/// Calls your macro with the name of each member of XrSpatialOccupancyGridDataANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrSpatialOccupancyGridDataANDROIDX1(_) \
-    _(originPose) \
-    _(scale) \
-    _(cellBuffer) \
-    _(maxHeightBuffer) \
-
-/// Calls your macro with the name of each member of XrSpatialComponentOccupancyGridListANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrSpatialComponentOccupancyGridListANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(gridCount) \
-    _(occupancyGrids) \
-
-/// Calls your macro with the name of each member of XrSpatialAnchorSpaceFromIdCreateInfoANDROIDX1, in order.
-#define XR_LIST_STRUCT_XrSpatialAnchorSpaceFromIdCreateInfoANDROIDX1(_) \
-    _(type) \
-    _(next) \
-    _(anchorEntityId) \
+    _(subsumedUniqueIdCount) \
+    _(subsumedUniqueIds) \
 
 /// Calls your macro with the name of each member of XrLoaderInitPropertyValueEXT, in order.
 #define XR_LIST_STRUCT_XrLoaderInitPropertyValueEXT(_) \
@@ -9083,6 +8846,11 @@ XR_ENUM_STR(XrResult);
     _(XrBodyTrackerCreateInfoBD, XR_TYPE_BODY_TRACKER_CREATE_INFO_BD) \
     _(XrBodyJointsLocateInfoBD, XR_TYPE_BODY_JOINTS_LOCATE_INFO_BD) \
     _(XrBodyJointLocationsBD, XR_TYPE_BODY_JOINT_LOCATIONS_BD) \
+    _(XrSystemFacialSimulationPropertiesBD, XR_TYPE_SYSTEM_FACIAL_SIMULATION_PROPERTIES_BD) \
+    _(XrFaceTrackerCreateInfoBD, XR_TYPE_FACE_TRACKER_CREATE_INFO_BD) \
+    _(XrFacialSimulationDataGetInfoBD, XR_TYPE_FACIAL_SIMULATION_DATA_GET_INFO_BD) \
+    _(XrFacialSimulationDataBD, XR_TYPE_FACIAL_SIMULATION_DATA_BD) \
+    _(XrLipExpressionDataBD, XR_TYPE_LIP_EXPRESSION_DATA_BD) \
     _(XrSystemSpatialSensingPropertiesBD, XR_TYPE_SYSTEM_SPATIAL_SENSING_PROPERTIES_BD) \
     _(XrSpatialEntityComponentGetInfoBD, XR_TYPE_SPATIAL_ENTITY_COMPONENT_GET_INFO_BD) \
     _(XrSpatialEntityLocationGetInfoBD, XR_TYPE_SPATIAL_ENTITY_LOCATION_GET_INFO_BD) \
@@ -9274,10 +9042,7 @@ XR_ENUM_STR(XrResult);
     _(XrRxLensOpticalDescriptionANDROIDSYS, XR_TYPE_RX_LENS_OPTICAL_DESCRIPTION_ANDROIDSYS) \
     _(XrRxLensEntryANDROIDSYS, XR_TYPE_RX_LENS_ENTRY_ANDROIDSYS) \
     _(XrEyeCalibrationCreateInfoANDROIDSYS, XR_TYPE_EYE_CALIBRATION_CREATE_INFO_ANDROIDSYS) \
-    _(XrSystemAdvancedLightEstimationPropertiesANDROID, XR_TYPE_SYSTEM_ADVANCED_LIGHT_ESTIMATION_PROPERTIES_ANDROID) \
-    _(XrAdvancedLightEstimatorCreateInfoANDROID, XR_TYPE_ADVANCED_LIGHT_ESTIMATOR_CREATE_INFO_ANDROID) \
-    _(XrLightingCubemapDataANDROID, XR_TYPE_LIGHTING_CUBEMAP_DATA_ANDROID) \
-    _(XrPointLightsANDROID, XR_TYPE_POINT_LIGHTS_ANDROID) \
+    _(XrEyeTrackerRealtimeCalibrationDataANDROIDSYS, XR_TYPE_EYE_TRACKER_REALTIME_CALIBRATION_DATA_ANDROIDSYS) \
     _(XrTrackableShoeboxANDROIDSYS, XR_TYPE_TRACKABLE_SHOEBOX_ANDROIDSYS) \
     _(XrPcaFaceTrackerCreateInfoANDROIDSYS, XR_TYPE_PCA_FACE_TRACKER_CREATE_INFO_ANDROIDSYS) \
     _(XrFaceJointANDROIDSYS, XR_TYPE_FACE_JOINT_ANDROIDSYS) \
@@ -9329,36 +9094,12 @@ XR_ENUM_STR(XrResult);
     _(XrSpatialCapabilityConfigurationObjectTrackingANDROID, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_OBJECT_TRACKING_ANDROID) \
     _(XrSpatialComponentObjectSemanticLabelListANDROID, XR_TYPE_SPATIAL_COMPONENT_OBJECT_SEMANTIC_LABEL_LIST_ANDROID) \
     _(XrSpatialCapabilityConfigurationDepthRaycastANDROID, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_DEPTH_RAYCAST_ANDROID) \
-    _(XrSpatialBoundsRaycastANDROID, XR_TYPE_SPATIAL_BOUNDS_RAYCAST_ANDROID) \
+    _(XrSpatialRaycastInfoANDROID, XR_TYPE_SPATIAL_RAYCAST_INFO_ANDROID) \
     _(XrSpatialComponentRaycastResultListANDROID, XR_TYPE_SPATIAL_COMPONENT_RAYCAST_RESULT_LIST_ANDROID) \
-    _(XrGoogleCloudAuthApiKeyANDROIDX2, XR_TYPE_GOOGLE_CLOUD_AUTH_API_KEY_ANDROIDX2) \
-    _(XrGoogleCloudAuthTokenANDROIDX2, XR_TYPE_GOOGLE_CLOUD_AUTH_TOKEN_ANDROIDX2) \
-    _(XrGoogleCloudAuthKeylessANDROIDX2, XR_TYPE_GOOGLE_CLOUD_AUTH_KEYLESS_ANDROIDX2) \
-    _(XrGoogleCloudAuthErrorResultANDROIDX2, XR_TYPE_GOOGLE_CLOUD_AUTH_ERROR_RESULT_ANDROIDX2) \
-    _(XrSystemGeospatialPropertiesANDROIDX1, XR_TYPE_SYSTEM_GEOSPATIAL_PROPERTIES_ANDROIDX1) \
-    _(XrEarthTrackerCreateInfoANDROIDX1, XR_TYPE_EARTH_TRACKER_CREATE_INFO_ANDROIDX1) \
-    _(XrEventDataEarthTrackerStateChangedANDROIDX1, XR_TYPE_EVENT_DATA_EARTH_TRACKER_STATE_CHANGED_ANDROIDX1) \
-    _(XrGeospatialAnchorCreateInfoANDROIDX1, XR_TYPE_GEOSPATIAL_ANCHOR_CREATE_INFO_ANDROIDX1) \
-    _(XrGeospatialPoseLocateInfoANDROIDX1, XR_TYPE_GEOSPATIAL_POSE_LOCATE_INFO_ANDROIDX1) \
-    _(XrGeospatialPoseResultANDROIDX1, XR_TYPE_GEOSPATIAL_POSE_RESULT_ANDROIDX1) \
-    _(XrPoseFromGeospatialPoseLocateInfoANDROIDX1, XR_TYPE_POSE_FROM_GEOSPATIAL_POSE_LOCATE_INFO_ANDROIDX1) \
-    _(XrSurfaceAnchorCreateInfoANDROIDX1, XR_TYPE_SURFACE_ANCHOR_CREATE_INFO_ANDROIDX1) \
-    _(XrSurfaceAnchorCreateCompletionANDROIDX1, XR_TYPE_SURFACE_ANCHOR_CREATE_COMPLETION_ANDROIDX1) \
-    _(XrVPSAvailabilityCheckCompletionANDROIDX1, XR_TYPE_VPS_AVAILABILITY_CHECK_COMPLETION_ANDROIDX1) \
-    _(XrSpatialCapabilityConfigurationStreetscapeGeometryANDROIDX1, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_STREETSCAPE_GEOMETRY_ANDROIDX1) \
-    _(XrSpatialComponentStreetscapeGeometryMetadataListANDROIDX1, XR_TYPE_SPATIAL_COMPONENT_STREETSCAPE_GEOMETRY_METADATA_LIST_ANDROIDX1) \
+    _(XrSpatialRaycastSnapshotCreateInfoANDROID, XR_TYPE_SPATIAL_RAYCAST_SNAPSHOT_CREATE_INFO_ANDROID) \
     _(XrSpatialAnchorParentANDROID, XR_TYPE_SPATIAL_ANCHOR_PARENT_ANDROID) \
-    _(XrSpatialDiscoveryNotSubsumedFilterANDROIDX1, XR_TYPE_SPATIAL_DISCOVERY_NOT_SUBSUMED_FILTER_ANDROIDX1) \
-    _(XrSpatialComponentSubsumedByListANDROIDX1, XR_TYPE_SPATIAL_COMPONENT_SUBSUMED_BY_LIST_ANDROIDX1) \
-    _(XrSpatialCapabilityConfigurationRoomTrackingANDROIDX1, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_ROOM_TRACKING_ANDROIDX1) \
-    _(XrSpatialCapabilityConfigurationRoomBoundaryTrackingANDROIDX1, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_ROOM_BOUNDARY_TRACKING_ANDROIDX1) \
-    _(XrSpatialComponentRoomListANDROIDX1, XR_TYPE_SPATIAL_COMPONENT_ROOM_LIST_ANDROIDX1) \
-    _(XrSpatialComponentMaterialTypeListANDROIDX1, XR_TYPE_SPATIAL_COMPONENT_MATERIAL_TYPE_LIST_ANDROIDX1) \
-    _(XrSpatialComponentConfidenceListANDROIDX1, XR_TYPE_SPATIAL_COMPONENT_CONFIDENCE_LIST_ANDROIDX1) \
-    _(XrSpatialComponentRoomEmptinessListANDROIDX1, XR_TYPE_SPATIAL_COMPONENT_ROOM_EMPTINESS_LIST_ANDROIDX1) \
-    _(XrSpatialDiscoveryRoomBoundaryFilterANDROIDX1, XR_TYPE_SPATIAL_DISCOVERY_ROOM_BOUNDARY_FILTER_ANDROIDX1) \
-    _(XrSpatialComponentOccupancyGridListANDROIDX1, XR_TYPE_SPATIAL_COMPONENT_OCCUPANCY_GRID_LIST_ANDROIDX1) \
-    _(XrSpatialAnchorSpaceFromIdCreateInfoANDROIDX1, XR_TYPE_SPATIAL_ANCHOR_SPACE_FROM_ID_CREATE_INFO_ANDROIDX1) \
+    _(XrSpatialDiscoveryUniqueEntitiesFilterANDROID, XR_TYPE_SPATIAL_DISCOVERY_UNIQUE_ENTITIES_FILTER_ANDROID) \
+    _(XrSpatialComponentSubsumedByListANDROID, XR_TYPE_SPATIAL_COMPONENT_SUBSUMED_BY_LIST_ANDROID) \
     _(XrLoaderInitInfoPropertiesEXT, XR_TYPE_LOADER_INIT_INFO_PROPERTIES_EXT) \
 
 
@@ -9706,6 +9447,7 @@ XR_ENUM_STR(XrResult);
     _(XR_MNDX_force_feedback_curl, 376) \
     _(XR_BD_controller_interaction, 385) \
     _(XR_BD_body_tracking, 386) \
+    _(XR_BD_facial_simulation, 387) \
     _(XR_BD_spatial_sensing, 390) \
     _(XR_BD_spatial_anchor, 391) \
     _(XR_BD_spatial_anchor_sharing, 392) \
@@ -9713,6 +9455,7 @@ XR_ENUM_STR(XrResult);
     _(XR_BD_spatial_mesh, 394) \
     _(XR_BD_future_progress, 395) \
     _(XR_BD_spatial_plane, 397) \
+    _(XR_BD_ultra_controller_interaction, 404) \
     _(XR_EXT_local_floor, 427) \
     _(XR_EXT_hand_tracking_data_source, 429) \
     _(XR_EXT_plane_detection, 430) \
@@ -9760,8 +9503,6 @@ XR_ENUM_STR(XrResult);
     _(XR_ANDROID_scene_meshing, 719) \
     _(XR_ANDROIDSYS_ipd_calibration, 720) \
     _(XR_ANDROIDSYS_eye_tracking_calibration, 721) \
-    _(XR_ANDROID_advanced_light_estimation, 722) \
-    _(XR_ANDROIDX1_eye_tracking_calibration_state, 723) \
     _(XR_ANDROIDX_spatial_interaction_lifecycle, 724) \
     _(XR_ANDROIDSYS_background_tracking, 726) \
     _(XR_ANDROIDSYS_anchor_sharing_import, 727) \
@@ -9781,13 +9522,8 @@ XR_ENUM_STR(XrResult);
     _(XR_EXT_spatial_persistence_operations, 782) \
     _(XR_ANDROID_spatial_object_tracking, 786) \
     _(XR_ANDROID_spatial_discovery_raycast, 787) \
-    _(XR_ANDROIDX2_google_cloud_auth, 788) \
-    _(XR_ANDROIDX1_geospatial, 790) \
     _(XR_ANDROID_spatial_entity_bound_anchor, 791) \
-    _(XR_ANDROIDX1_spatial_component_subsumed_by, 792) \
-    _(XR_ANDROIDX1_spatial_room_tracking, 793) \
-    _(XR_ANDROIDX1_spatial_occupancy_grid, 794) \
-    _(XR_ANDROIDX1_spatial_anchor_space, 796) \
+    _(XR_ANDROID_spatial_component_subsumed_by, 792) \
     _(XR_EXT_loader_init_properties, 839) \
 
 
@@ -10747,6 +10483,19 @@ XR_ENUM_STR(XrResult);
     _(LocateBodyJointsBD, BD_body_tracking) \
 
 
+/// For every function defined by XR_BD_facial_simulation in this version of the spec,
+/// calls your macro with the function name and extension name.
+/// Trims the leading `xr` from the function name and the leading `XR_` from the feature name,
+/// because it is easy to add back but impossible to remove with the preprocessor.
+#define XR_LIST_FUNCTIONS_XR_BD_facial_simulation(_) \
+    _(EnumerateFacialSimulationModesBD, BD_facial_simulation) \
+    _(CreateFaceTrackerBD, BD_facial_simulation) \
+    _(DestroyFaceTrackerBD, BD_facial_simulation) \
+    _(GetFacialSimulationDataBD, BD_facial_simulation) \
+    _(SetFacialSimulationModeBD, BD_facial_simulation) \
+    _(GetFacialSimulationModeBD, BD_facial_simulation) \
+
+
 /// For every function defined by XR_BD_spatial_sensing in this version of the spec,
 /// calls your macro with the function name and extension name.
 /// Trims the leading `xr` from the function name and the leading `XR_` from the feature name,
@@ -11152,22 +10901,7 @@ XR_ENUM_STR(XrResult);
     _(UnregisterRxInsertANDROIDSYS, ANDROIDSYS_eye_tracking_calibration) \
     _(EnumerateRxInsertsANDROIDSYS, ANDROIDSYS_eye_tracking_calibration) \
     _(LoadRxInsertANDROIDSYS, ANDROIDSYS_eye_tracking_calibration) \
-
-
-/// For every function defined by XR_ANDROID_advanced_light_estimation in this version of the spec,
-/// calls your macro with the function name and extension name.
-/// Trims the leading `xr` from the function name and the leading `XR_` from the feature name,
-/// because it is easy to add back but impossible to remove with the preprocessor.
-#define XR_LIST_FUNCTIONS_XR_ANDROID_advanced_light_estimation(_) \
-    _(EnumerateLightingCubemapResolutionsANDROID, ANDROID_advanced_light_estimation) \
-
-
-/// For every function defined by XR_ANDROIDX1_eye_tracking_calibration_state in this version of the spec,
-/// calls your macro with the function name and extension name.
-/// Trims the leading `xr` from the function name and the leading `XR_` from the feature name,
-/// because it is easy to add back but impossible to remove with the preprocessor.
-#define XR_LIST_FUNCTIONS_XR_ANDROIDX1_eye_tracking_calibration_state(_) \
-    _(GetEyeTrackerCalibrationStateANDROIDX1, ANDROIDX1_eye_tracking_calibration_state) \
+    _(SubmitRealtimeEyeCalibrationDataANDROIDSYS, ANDROIDSYS_eye_tracking_calibration) \
 
 
 /// For every function defined by XR_ANDROIDX_spatial_interaction_lifecycle in this version of the spec,
@@ -11268,29 +11002,12 @@ XR_ENUM_STR(XrResult);
     _(UnpersistSpatialEntityCompleteEXT, EXT_spatial_persistence_operations) \
 
 
-/// For every function defined by XR_ANDROIDX2_google_cloud_auth in this version of the spec,
+/// For every function defined by XR_ANDROID_spatial_discovery_raycast in this version of the spec,
 /// calls your macro with the function name and extension name.
 /// Trims the leading `xr` from the function name and the leading `XR_` from the feature name,
 /// because it is easy to add back but impossible to remove with the preprocessor.
-#define XR_LIST_FUNCTIONS_XR_ANDROIDX2_google_cloud_auth(_) \
-    _(SetGoogleCloudAuthAsyncANDROIDX2, ANDROIDX2_google_cloud_auth) \
-    _(SetGoogleCloudAuthCompleteANDROIDX2, ANDROIDX2_google_cloud_auth) \
-
-
-/// For every function defined by XR_ANDROIDX1_geospatial in this version of the spec,
-/// calls your macro with the function name and extension name.
-/// Trims the leading `xr` from the function name and the leading `XR_` from the feature name,
-/// because it is easy to add back but impossible to remove with the preprocessor.
-#define XR_LIST_FUNCTIONS_XR_ANDROIDX1_geospatial(_) \
-    _(CreateEarthTrackerANDROIDX1, ANDROIDX1_geospatial) \
-    _(DestroyEarthTrackerANDROIDX1, ANDROIDX1_geospatial) \
-    _(LocateGeospatialPoseANDROIDX1, ANDROIDX1_geospatial) \
-    _(LocatePoseFromGeospatialPoseANDROIDX1, ANDROIDX1_geospatial) \
-    _(CreateGeospatialAnchorANDROIDX1, ANDROIDX1_geospatial) \
-    _(CreateSurfaceAnchorAsyncANDROIDX1, ANDROIDX1_geospatial) \
-    _(CreateSurfaceAnchorCompleteANDROIDX1, ANDROIDX1_geospatial) \
-    _(CheckVpsAvailabilityAsyncANDROIDX1, ANDROIDX1_geospatial) \
-    _(CheckVpsAvailabilityCompleteANDROIDX1, ANDROIDX1_geospatial) \
+#define XR_LIST_FUNCTIONS_XR_ANDROID_spatial_discovery_raycast(_) \
+    _(CreateSpatialRaycastSnapshotANDROID, ANDROID_spatial_discovery_raycast) \
 
 
 /// For every function defined by XR_ANDROID_spatial_entity_bound_anchor in this version of the spec,
@@ -11299,15 +11016,6 @@ XR_ENUM_STR(XrResult);
 /// because it is easy to add back but impossible to remove with the preprocessor.
 #define XR_LIST_FUNCTIONS_XR_ANDROID_spatial_entity_bound_anchor(_) \
     _(EnumerateSpatialAnchorAttachableComponentsANDROID, ANDROID_spatial_entity_bound_anchor) \
-
-
-/// For every function defined by XR_ANDROIDX1_spatial_anchor_space in this version of the spec,
-/// calls your macro with the function name and extension name.
-/// Trims the leading `xr` from the function name and the leading `XR_` from the feature name,
-/// because it is easy to add back but impossible to remove with the preprocessor.
-#define XR_LIST_FUNCTIONS_XR_ANDROIDX1_spatial_anchor_space(_) \
-    _(CreateSpatialAnchorSpaceANDROIDX1, ANDROIDX1_spatial_anchor_space) \
-    _(CreateSpatialAnchorSpaceFromIdANDROIDX1, ANDROIDX1_spatial_anchor_space) \
 
 
 

@@ -91,6 +91,13 @@ struct GenericMaterialParametersTransmission {
   float factor = kDefaultTransmissionFactor;
 };
 
+struct GenericMaterialParametersVolume {
+  std::optional<GenericMaterialTextureParameter> texture;
+  float thickness_factor = kDefaultThicknessFactor;
+  float attenuation_distance = kDefaultAttenuationDistance;
+  float3 attenuation_color = kDefaultAttenuationColor;
+};
+
 // The refraction parameters for a generic material.
 struct GenericMaterialParametersRefraction {
   float index_of_refraction = kDefaultIndexOfRefraction;
@@ -131,6 +138,7 @@ struct GenericMaterialParameters {
   std::optional<GenericMaterialParametersSheen> sheen = std::nullopt;
   std::optional<GenericMaterialParametersTransmission> transmission =
       std::nullopt;
+  std::optional<GenericMaterialParametersVolume> volume = std::nullopt;
   std::optional<GenericMaterialParametersRefraction> refraction = std::nullopt;
   std::optional<GenericMaterialParametersMasking> masking = std::nullopt;
   std::optional<std::vector<GenericMaterialTextureParameter>>
@@ -275,6 +283,21 @@ GenericMaterialParameters::ToFlatbufferT(
                 builder, transmission->texture),
             &transmission_factor);
   }
+  flatbuffers::Offset<typename SchemaCreator::GenericMaterialParametersVolume>
+      volume_offset = 0;
+  if (volume) {
+    typename SchemaCreator::Float thickness_factor(volume->thickness_factor);
+    typename SchemaCreator::Float attenuation_distance(
+        volume->attenuation_distance);
+    typename SchemaCreator::Float3 attenuation_color(
+        volume->attenuation_color.x, volume->attenuation_color.y,
+        volume->attenuation_color.z);
+    volume_offset = SchemaCreator::CreateGenericMaterialParametersVolume(
+        builder,
+        CreateGenericMaterialTextureParameter<SchemaCreator>(builder,
+                                                             volume->texture),
+        &thickness_factor, &attenuation_distance, &attenuation_color);
+  }
   flatbuffers::Offset<
       typename SchemaCreator::GenericMaterialParametersRefraction>
       refraction_offset = 0;
@@ -312,7 +335,7 @@ GenericMaterialParameters::ToFlatbufferT(
       builder, base_color_offset, metallic_roughness_offset, normal_offset,
       ambient_occlusion_offset, emissive_offset, clearcoat_offset, sheen_offset,
       transmission_offset, refraction_offset, masking_offset,
-      feature_id_textures_offset);
+      feature_id_textures_offset, volume_offset);
 }
 
 template <typename GenericMaterialTextureParameterSchema>
@@ -441,6 +464,25 @@ GenericMaterialParametersTransmission FromTransmissionFlatbuffer(
   };
 }
 
+template <typename GenericMaterialParametersVolumeSchema>
+GenericMaterialParametersVolume FromVolumeFlatbuffer(
+    const GenericMaterialParametersVolumeSchema& volume) {
+  return GenericMaterialParametersVolume{
+      .texture = FromTextureParameterFlatbuffer(volume.texture()),
+      .thickness_factor = volume.thickness_factor()
+                              ? FromFloatFlatbuffer(*volume.thickness_factor())
+                              : kDefaultThicknessFactor,
+      .attenuation_distance =
+          volume.attenuation_distance()
+              ? FromFloatFlatbuffer(*volume.attenuation_distance())
+              : kDefaultAttenuationDistance,
+      .attenuation_color =
+          volume.attenuation_color()
+              ? FromFloat3Flatbuffer(*volume.attenuation_color())
+              : kDefaultAttenuationColor,
+  };
+}
+
 template <typename GenericMaterialParametersRefractionSchema>
 GenericMaterialParametersRefraction FromRefractionFlatbuffer(
     const GenericMaterialParametersRefractionSchema& refraction) {
@@ -492,6 +534,9 @@ GenericMaterialParameters GenericMaterialParameters::FromFlatbuffer(
   if (schema.transmission()) {
     parameters.transmission =
         FromTransmissionFlatbuffer(*schema.transmission());
+  }
+  if (schema.volume()) {
+    parameters.volume = FromVolumeFlatbuffer(*schema.volume());
   }
   if (schema.refraction()) {
     parameters.refraction = FromRefractionFlatbuffer(*schema.refraction());

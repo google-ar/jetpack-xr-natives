@@ -16,7 +16,6 @@
 
 package com.google.ar.imp.core.scripting;
 
-import androidx.annotation.Nullable;
 import com.google.android.filament.proguard.UsedByNative;
 import com.google.ar.imp.core.NodeHandleMessageOuterClass.NodeHandleMessage;
 import com.google.ar.imp.core.scripting.Bridge.MessageToNative;
@@ -32,6 +31,7 @@ import com.google.protobuf.MessageLite;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
 /** Handles MessageToNative and MessageToScript transport between Java and C++. */
@@ -44,8 +44,8 @@ public final class ScriptBridge implements ScriptEndpoint, ApiBridge {
    * <p>This class is abstract to allow for both MessageLite (response) and empty (void) responses.
    */
   private abstract static class PendingRequest<T> {
-    protected final Class<T> type;
-    protected final SettableFuture<T> future;
+    final Class<T> type;
+    final SettableFuture<T> future;
 
     PendingRequest(Class<T> type) {
       this.type = type;
@@ -61,26 +61,48 @@ public final class ScriptBridge implements ScriptEndpoint, ApiBridge {
     }
 
     /** Resolves the pending request with the given message from native. */
-    void resolve(MessageToScript messageToScript) {
+    void resolve(MessageToScript messageToScript, Object out) {
       if (!messageToScript.getError().isEmpty()) {
         setException(new ApiException(messageToScript.getError()));
       } else {
-        future.set(getResponse(messageToScript));
+        future.set(getResponse(messageToScript, out));
       }
     }
 
-    abstract T getResponse(MessageToScript messageToScript);
+    abstract T getResponse(MessageToScript messageToScript, Object out);
   }
 
   /** A pending request for an async API call with a MessageLite response. */
-  private static class PendingRequestWithResponse<T extends MessageLite> extends PendingRequest<T> {
-    PendingRequestWithResponse(Class<T> type) {
+  private static class PendingRequestWithMessageResponse<T extends MessageLite>
+      extends PendingRequest<T> {
+    PendingRequestWithMessageResponse(Class<T> type) {
       super(type);
     }
 
     @Override
-    T getResponse(MessageToScript messageToScript) {
+    T getResponse(MessageToScript messageToScript, Object out) {
+      if (out != null) {
+        throw new ApiException("Out parameter is not supported with a Message response.");
+      }
       return MessageUtils.getContent(type, messageToScript);
+    }
+  }
+
+  /** A pending request for an async API call with an Object response. */
+  private static class PendingRequestWithObjectResponse<T> extends PendingRequest<T> {
+    PendingRequestWithObjectResponse(Class<T> type) {
+      super(type);
+    }
+
+    @Override
+    @SuppressWarnings(
+        "unchecked") // The cast is checked in the method, which throws an ApiException if the
+    // request returned an incompatible type.
+    T getResponse(MessageToScript messageToScript, Object out) {
+      if (!type.isAssignableFrom(out.getClass())) {
+        throw new ApiException("Out parameter is not assignable to the response type.");
+      }
+      return (T) out;
     }
   }
 
@@ -91,7 +113,7 @@ public final class ScriptBridge implements ScriptEndpoint, ApiBridge {
     }
 
     @Override
-    Void getResponse(MessageToScript messageToScript) {
+    Void getResponse(MessageToScript messageToScript, Object out) {
       return null;
     }
   }
@@ -121,43 +143,73 @@ public final class ScriptBridge implements ScriptEndpoint, ApiBridge {
   }
 
   @Override
-  public <RequestT extends MessageLite, ResponseT extends MessageLite> ResponseT sendRequest(
+  public <RequestT extends MessageLite, ResponseT> ResponseT sendRequest(
       ApiRequest<RequestT> request, Class<ResponseT> responseType) {
-    Any content = MessageUtils.toAny(request.requestTypeUrl(), request.request());
-    MessageToNative messageToNative =
-        MessageToNative.newBuilder()
-            // TODO: don't set id if it's a sync request.
-            .setMessageId(nextPromiseId++)
-            .setContent(content)
-            .build();
-    MessageToScript messageToScript =
-        sendRequestInternal(messageToNative, request.args(), request.out());
-    if (messageToScript != null && !messageToScript.getError().isEmpty()) {
-      throw new ApiException(messageToScript.getError());
+    ListenableFuture<ResponseT> future = sendRequestAsync(request, responseType);
+    try {
+      if (!future.isDone()) {
+        throw new ApiException(
+            "Synchronous request returned a future that was not immediately ready.");
+      }
+      return future.get();
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof ApiException) {
+        // Avoid double wrapping the exception with ApiException.
+        throw (ApiException) e.getCause();
+      } else {
+        throw new ApiException(e.getMessage(), e);
+      }
+    } catch (InterruptedException e) {
+      throw new ApiException(e.getMessage(), e);
     }
-    if (messageToScript == null) {
-      throw new ApiException(
-          String.format(
-              "Synchronous API call did not return a value. Request type: %s",
-              request.requestTypeUrl()));
-    }
-    if (responseType == null) {
-      return null;
-    }
-    return MessageUtils.getContent(responseType, messageToScript);
   }
 
   @Override
   public <RequestT extends MessageLite> void sendRequest(ApiRequest<RequestT> request) {
-    sendRequest(request, null);
+    ListenableFuture<Void> future = sendRequestAsync(request);
+    try {
+      if (!future.isDone()) {
+        throw new ApiException(
+            "Synchronous request returned a future that was not immediately ready.");
+      }
+      Void unused = future.get();
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof ApiException) {
+        // Avoid double wrapping the exception with ApiException.
+        throw (ApiException) e.getCause();
+      } else {
+        throw new ApiException(e.getMessage(), e);
+      }
+    } catch (InterruptedException e) {
+      throw new ApiException(e.getMessage(), e);
+    }
   }
 
   @Override
-  public <RequestT extends MessageLite, ResponseT extends MessageLite>
-      ListenableFuture<ResponseT> sendRequestAsync(
-          ApiRequest<RequestT> request, Class<ResponseT> responseType) {
-    return sendRequestAsyncInternal(
-        request, new PendingRequestWithResponse<ResponseT>(responseType));
+  public <RequestT extends MessageLite, ResponseT> ListenableFuture<ResponseT> sendRequestAsync(
+      ApiRequest<RequestT> request, Class<ResponseT> responseType) {
+    if (responseType == null) {
+      throw new IllegalArgumentException("Response type is null.");
+    }
+    // Since this method can handle both MessageLite and Object responses, check if the
+    // response type is a MessageLite to determine which PendingRequest to use.
+    // If the response type is a MessageLite, we can use the PendingRequestWithMessageResponse which
+    // will parse the MessageToScript into the specific MessageLite type.
+    // Otherwise, we use the PendingRequestWithObjectResponse which will pass the out parameter from
+    // native to Java.
+    if (MessageLite.class.isAssignableFrom(responseType)) {
+      // We just ensured that the response type is a MessageLite subtype, so it's safe to presume an
+      // `extends MessageLite` constraint for the below casts.
+      @SuppressWarnings("unchecked") // Safe because isAssignableFrom is checked above.
+      Class<? extends MessageLite> messageLiteType = (Class<? extends MessageLite>) responseType;
+      @SuppressWarnings("unchecked") // Safe because isAssignableFrom is checked above.
+      PendingRequest<ResponseT> pendingRequest =
+          (PendingRequest<ResponseT>) new PendingRequestWithMessageResponse<>(messageLiteType);
+      return sendRequestAsyncInternal(request, pendingRequest);
+    } else {
+      return sendRequestAsyncInternal(
+          request, new PendingRequestWithObjectResponse<>(responseType));
+    }
   }
 
   @Override
@@ -170,13 +222,18 @@ public final class ScriptBridge implements ScriptEndpoint, ApiBridge {
       ListenableFuture<ResponseT> sendRequestAsyncInternal(
           ApiRequest<RequestT> request, PendingRequest<ResponseT> pendingRequest) {
     SettableFuture<ResponseT> future = SettableFuture.create();
-    // TODO: This is a bit magical that we know nextPromiseId is post-incremented
-    // inside of sendRequest. Refactor to only send promise ids when the request is expected to be
-    // async and do that increment in this function for clarity.
-    int pendingRequestId = nextPromiseId;
+    int pendingRequestId = nextPromiseId++;
     pendingRequests.put(pendingRequestId, pendingRequest);
     try {
-      sendRequest(request);
+      Any content = MessageUtils.toAny(request.requestTypeUrl(), request.request());
+      MessageToNative messageToNative =
+          MessageToNative.newBuilder().setMessageId(pendingRequestId).setContent(content).build();
+
+      byte[] byteArray = messageToNative.toByteArray();
+      if (byteArray.length == 0) {
+        throw new ApiException("Failed to serialize request.");
+      }
+      nPostMessage(this, viewHostHandle, byteArray, request.args());
     } catch (ApiException ex) {
       // An async request can fail immediately, in which case we should set the exception on the
       // future and discard the pending request since we don't expect a message with that ID to be
@@ -233,28 +290,17 @@ public final class ScriptBridge implements ScriptEndpoint, ApiBridge {
     eventListeners.remove(id);
   }
 
-  /** Sends the given MessageToNative to native, parses and returns the response. */
-  @Nullable
-  private MessageToScript sendRequestInternal(
-      MessageToNative messageToNative, List<Object> args, List<Object> out) {
-    byte[] byteArray = messageToNative.toByteArray();
-    if (byteArray.length == 0) {
-      return null;
-    }
-    return MessageUtils.parseMessageToScript(nPostMessage(viewHostHandle, byteArray, args, out));
-  }
-
   /** Posts a MessageToScript from native to the Java scripting interface. */
   @Override
-  @UsedByNative("web_view.cc")
-  public void postMessage(byte[] message) {
+  @UsedByNative("scripting_bridge_jni.cc")
+  public void postMessage(byte[] message, Object out) {
     MessageToScript messageToScript = MessageUtils.parseMessageToScript(message);
     Integer id = messageToScript.getMessageId();
     if (id != 0) {
       PendingRequest<?> pendingRequest = pendingRequests.get(id);
       if (pendingRequest != null) {
         pendingRequests.remove(id);
-        pendingRequest.resolve(messageToScript);
+        pendingRequest.resolve(messageToScript, out);
       }
     } else {
       // If this is not a pending request, it must be an "event", i.e. a message type that comes
@@ -273,13 +319,14 @@ public final class ScriptBridge implements ScriptEndpoint, ApiBridge {
         }
       } else {
         // This is some other message that is not currently handled.
+        throw new ApiException("Unhandled response - type: " + content.getTypeUrl());
       }
     }
   }
 
   // LINT.IfChange(scripting)
-  private static native byte[] nPostMessage(
-      long viewHostHandle, byte[] request, List<Object> args, List<Object> out);
+  private static native void nPostMessage(
+      Object self, long viewHostHandle, byte[] request, List<Object> args);
   // LINT.ThenChange(
   //
   // //depot/google3/third_party/impress/core/scripting/web/android/jni/scripting_bridge_jni.cc:scripting

@@ -30,16 +30,32 @@ public class ImpTextureView extends TextureView implements ImpApiProvider, Input
   @Nullable private ImpApi impApi;
   @Nullable private InputEventHandler inputEventHandler;
 
+  @Deprecated
   public ImpTextureView(Context context) {
     super(context);
     this.context = context;
     this.host = null;
   }
 
+  @Deprecated
   public ImpTextureView(Context context, FragmentHost host) {
     super(context);
     this.context = context;
     this.host = host;
+  }
+
+  public ImpTextureView(Context context, ImpApi impApi) {
+    super(context);
+    this.context = context;
+    this.host = null;
+    this.impApi = impApi;
+  }
+
+  public ImpTextureView(Context context, FragmentHost host, ImpApi impApi) {
+    super(context);
+    this.context = context;
+    this.host = host;
+    this.impApi = impApi;
   }
 
   @Override

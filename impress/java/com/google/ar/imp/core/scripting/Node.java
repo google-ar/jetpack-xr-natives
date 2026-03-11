@@ -370,15 +370,9 @@ public class Node {
     GetTransformRequest.Builder getTransformRequestBuilder = GetTransformRequest.newBuilder();
     getTransformRequestBuilder.setTarget(getNodeHandle());
     switch (component) {
-      case TRANSLATION:
-        getTransformRequestBuilder.setTranslation(true);
-        break;
-      case ROTATION:
-        getTransformRequestBuilder.setRotation(true);
-        break;
-      case SCALE:
-        getTransformRequestBuilder.setScale(true);
-        break;
+      case TRANSLATION -> getTransformRequestBuilder.setTranslation(true);
+      case ROTATION -> getTransformRequestBuilder.setRotation(true);
+      case SCALE -> getTransformRequestBuilder.setScale(true);
     }
     getTransformRequestBuilder.setTransformType(transformType);
     return apiBridge.sendRequest(

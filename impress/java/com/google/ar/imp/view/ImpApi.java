@@ -22,6 +22,7 @@ import android.view.MotionEvent;
 import android.view.Surface;
 import androidx.annotation.Nullable;
 import com.google.android.filament.proguard.UsedByNative;
+import com.google.ar.imp.core.ViewConfig;
 import com.google.ar.imp.core.scripting.ScriptEndpoint;
 import com.google.ar.imp.core.web.FragmentHost;
 
@@ -188,6 +189,13 @@ public class ImpApi implements ImpApiScuba {
     FrameScheduler frameScheduler =
         frameSchedulerFactory.create(getThreadMode(setupParams.getThreadMode()));
 
+    ViewConfig viewConfig =
+        setupParams.hasViewConfig()
+            ? setupParams.getViewConfig()
+            : ViewConfig.newBuilder()
+                .setMainViewRenderSettings(setupParams.getViewRenderSettings())
+                .build();
+
     ListenableFuture<View> viewFuture =
         frameScheduler.submitOnFrameThread(
             () -> {
@@ -200,7 +208,7 @@ public class ImpApi implements ImpApiScuba {
                         context,
                         host,
                         frameScheduler.getExecutor(),
-                        setupParams.getViewRenderSettings().toByteArray());
+                        viewConfig.toByteArray());
               } else {
                 view =
                     View.createViewWithPreloadedLibrary(
@@ -209,7 +217,7 @@ public class ImpApi implements ImpApiScuba {
                         context,
                         host,
                         frameScheduler.getExecutor(),
-                        setupParams.getViewRenderSettings().toByteArray());
+                        viewConfig.toByteArray());
               }
               view.setup(setupParams.getPlatformHandle(), eglContext);
               return view;
@@ -236,6 +244,12 @@ public class ImpApi implements ImpApiScuba {
   @Deprecated // Use the builder instead.
   public static ListenableFuture<View> createViewAsync(
       SetupParams setupParams, Context context, FragmentHost host, Executor executor) {
+    ViewConfig viewConfig =
+        setupParams.hasViewConfig()
+            ? setupParams.getViewConfig()
+            : ViewConfig.newBuilder()
+                .setMainViewRenderSettings(setupParams.getViewRenderSettings())
+                .build();
     return Futures.submit(
         () ->
             View.createView(
@@ -244,7 +258,7 @@ public class ImpApi implements ImpApiScuba {
                 context,
                 host,
                 executor,
-                setupParams.getViewRenderSettings().toByteArray()),
+                viewConfig.toByteArray()),
         executor);
   }
 

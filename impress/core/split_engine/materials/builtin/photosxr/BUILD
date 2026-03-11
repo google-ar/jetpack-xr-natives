@@ -46,7 +46,6 @@ cc_library(
         "//core/render",
         "//core/render:display_color_space",
         "//core/render/android:platform_android_external_texture_surface",
-        "//core/split_engine:split_engine_renderer",
         "//core/split_engine:split_engine_shared",
         "//core/split_engine/materials/builtin:builtin_custom_material",
         "//core/split_engine/materials/builtin:builtin_material",

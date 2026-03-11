@@ -91,17 +91,17 @@ public class View {
    * thread because it creates the filament::Engine, which has the restriction that all API must be
    * from the same thread that created the engine.
    */
-  public static View createView(
+  /* package private */ static View createView(
       @Nullable String nativeLibrary,
       @Nullable String identifier,
       Context context,
       @Nullable FragmentHost host,
       Executor callbackExecutor,
-      // `viewRenderSettingsBytes` is a serialized `imp.render_settings.ViewRenderSettings` proto.
+      // `viewConfigBytes` is a serialized `imp.ViewConfig` proto.
       // A `byte[]` is used instead of the proto message to avoid a dependency on
       // `com.google.protobuf`,
       // which would break `//third_party/impress/apibindings:impress_no_native_lib_aar`.
-      @Nullable byte[] viewRenderSettingsBytes) {
+      @Nullable byte[] viewConfigBytes) {
     if (nativeLibrary == null || nativeLibrary.isEmpty()) {
       nativeLibrary = DEFAULT_LIBRARY_NAME;
     }
@@ -114,18 +114,18 @@ public class View {
       throw new IllegalStateException("Could not load native library \"" + nativeLibrary + "\"", e);
     }
     return new View(
-        nCreateView(context, identifier, host, callbackExecutor, viewRenderSettingsBytes),
+        nCreateView(context, identifier, host, callbackExecutor, viewConfigBytes),
         context,
         nativeLibrary);
   }
 
-  public static View createViewWithPreloadedLibrary(
+  /* package private */ static View createViewWithPreloadedLibrary(
       @Nullable String nativeLibraryName,
       @Nullable String identifier,
       Context context,
       @Nullable FragmentHost host,
       Executor callbackExecutor,
-      @Nullable byte[] viewRenderSettingsBytes) {
+      @Nullable byte[] viewConfigBytes) {
     if (nativeLibraryName == null || nativeLibraryName.isEmpty()) {
       nativeLibraryName = DEFAULT_LIBRARY_NAME;
     }
@@ -134,7 +134,7 @@ public class View {
     }
 
     return new View(
-        nCreateView(context, identifier, host, callbackExecutor, viewRenderSettingsBytes),
+        nCreateView(context, identifier, host, callbackExecutor, viewConfigBytes),
         context,
         nativeLibraryName);
   }
@@ -379,7 +379,7 @@ public class View {
       String identifier,
       Object fragmentHost,
       Object callbackExecutor,
-      byte[] viewRenderSettings);
+      byte[] viewConfig);
 
   protected static native long nCreateViewWithoutHost(Object context, String identifier);
 

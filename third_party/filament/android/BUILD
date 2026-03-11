@@ -5,6 +5,7 @@ load(
     "filament_copts",
     "filament_defines",
     "if_android",
+    "if_android_min_sdk_at_least_26",
     "if_linux",
 )
 
@@ -157,6 +158,9 @@ cc_library(
         "-lGLESv3",
         "-lEGL",
         "-landroid",
+    ]) + if_android_min_sdk_at_least_26([
+        # The native window library is only available on API level 26 and above.
+        "-lnativewindow",
     ]),
     linkstatic = 1,
     tags = [

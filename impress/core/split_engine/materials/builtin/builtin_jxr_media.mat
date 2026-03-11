@@ -36,6 +36,14 @@ material {
             name : enableColorCorrection,
             type : bool,
             default : true
+        },
+        {
+          // Indicates which eye this material is for.
+          // 0 = both, 1 = left, 2 = right.
+          type: int,
+          name: renderEyeTarget,
+          // default is kRenderEyeTargetBoth
+          default: 0
         }
     ],
     "parameters" : [
@@ -114,6 +122,7 @@ material {
 }
 
 vertex {
+#include "stereo.glsl"
   void materialVertex(inout MaterialVertexInputs material) {
 #if defined(VARIANT_HAS_STEREO)
     material.stereoData.x = 1.0;
@@ -121,6 +130,20 @@ vertex {
 #else
     material.stereoData.x = 0.0;
 #endif
+    bool isLeftEye = (material.stereoData.y < 1.0);
+    bool correctEye =
+        (materialConstants_renderEyeTarget == kRenderEyeTargetBoth) ||
+        (materialConstants_renderEyeTarget == kRenderEyeTargetLeft &&
+            isLeftEye) ||
+        (materialConstants_renderEyeTarget == kRenderEyeTargetRight &&
+            !isLeftEye);
+
+    // Force all the vertices to be at the same position so that we don't
+    // generate any triagles. This means we also don't need to handle anything
+    // in the fragment as all the triangles are thrown away.
+    if (!correctEye) {
+      material.worldPosition = vec4(0.0, 0.0, 0.0, 1.0);
+    }
   }
 }
 

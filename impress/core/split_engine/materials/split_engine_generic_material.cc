@@ -51,6 +51,7 @@
 #include "core/view/utils/string_map.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 #include "split_engine/schemas/split_engine_primitive_generated.h"
+#include "split_engine/schemas/split_engine_schema_version.h"
 
 namespace imp::split_engine {
 
@@ -115,6 +116,11 @@ class SplitEngineGenericMaterialParametersCreator {
       android_xr::schemas::GenericMaterialParametersTransmission;
   static constexpr auto CreateGenericMaterialParametersTransmission =  // NOLINT
       android_xr::schemas::CreateGenericMaterialParametersTransmission;
+
+  using GenericMaterialParametersVolume =
+      android_xr::schemas::GenericMaterialParametersVolume;
+  static constexpr auto CreateGenericMaterialParametersVolume =  // NOLINT
+      android_xr::schemas::CreateGenericMaterialParametersVolume;
 
   using GenericMaterialParametersRefraction =
       android_xr::schemas::GenericMaterialParametersRefraction;
@@ -334,22 +340,29 @@ GenericMaterialParameters SplitEngineGenericMaterial::RewriteTextureIds(
     RewriteTextureId(kTransmissionIndex, remapped.transmission->texture,
                      texture_borrower);
   }
+
   if (parameters.feature_id_textures) {
-    if (!remapped.feature_id_textures) {
-      remapped.feature_id_textures.emplace();
-    }
-    if (remapped.feature_id_textures->size() !=
-        parameters.feature_id_textures->size()) {
-      remapped.feature_id_textures->reserve(kFeatureIdTextureNames.size());
-    }
-    for (int i = 0; i < parameters.feature_id_textures->size(); ++i) {
-      if (i > kFeatureIdTextureNames.size()) break;
-      std::optional<GenericMaterialTextureParameter> temp_remapped_texture =
-          (*remapped.feature_id_textures)[i];
-      absl::string_view feature_id_index = kFeatureIdTextureNames[i];
-      RewriteTextureId(feature_id_index, temp_remapped_texture,
-                       texture_borrower);
-      (*remapped.feature_id_textures)[i] = *temp_remapped_texture;
+    if (view_.GetSplitEngineSerializer()->GetApiLevel() ==
+        android_xr::kSplitEngineExperimentalApiLevel) {
+      if (!remapped.feature_id_textures) {
+        remapped.feature_id_textures.emplace();
+      }
+      if (remapped.feature_id_textures->size() !=
+          parameters.feature_id_textures->size()) {
+        remapped.feature_id_textures->reserve(kFeatureIdTextureNames.size());
+      }
+      for (int i = 0; i < parameters.feature_id_textures->size(); ++i) {
+        if (i > kFeatureIdTextureNames.size()) break;
+        std::optional<GenericMaterialTextureParameter> temp_remapped_texture =
+            (*remapped.feature_id_textures)[i];
+        absl::string_view feature_id_index = kFeatureIdTextureNames[i];
+        RewriteTextureId(feature_id_index, temp_remapped_texture,
+                         texture_borrower);
+        (*remapped.feature_id_textures)[i] = *temp_remapped_texture;
+      }
+    } else {
+      IMP_LOG(imp::ERROR) << "EXT_mesh_features is not supported in this build.";
+      remapped.feature_id_textures.reset();
     }
   }
   return remapped;
@@ -617,6 +630,37 @@ void SplitEngineGenericMaterial::SetSheenRoughnessFactor(float factor) {
     generic_material_parameters_.sheen.emplace();
   }
   generic_material_parameters_.sheen->roughness_factor = factor;
+  MarkParametersDirty();
+}
+
+TextureAndSampler SplitEngineGenericMaterial::GetThicknessTexture() const {
+  if (!generic_material_parameters_.volume.has_value()) {
+    return GetPlaceholderTextureAndSampler();
+  }
+  return GetTextureAndSampler(*generic_material_parameters_.volume->texture);
+}
+
+void SplitEngineGenericMaterial::SetThicknessFactor(float factor) {
+  if (!generic_material_parameters_.volume.has_value()) {
+    generic_material_parameters_.volume.emplace();
+  }
+  generic_material_parameters_.volume->thickness_factor = factor;
+  MarkParametersDirty();
+}
+
+void SplitEngineGenericMaterial::SetAttenuationDistance(float distance) {
+  if (!generic_material_parameters_.volume.has_value()) {
+    generic_material_parameters_.volume.emplace();
+  }
+  generic_material_parameters_.volume->attenuation_distance = distance;
+  MarkParametersDirty();
+}
+
+void SplitEngineGenericMaterial::SetAttenuationColor(const float3& color) {
+  if (!generic_material_parameters_.volume.has_value()) {
+    generic_material_parameters_.volume.emplace();
+  }
+  generic_material_parameters_.volume->attenuation_color = color;
   MarkParametersDirty();
 }
 

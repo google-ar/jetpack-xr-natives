@@ -14,13 +14,13 @@
 
 #include "core/render/texture_builder.h"
 
-#include <cassert>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <utility>
 #include <vector>
 
+#include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
@@ -28,16 +28,15 @@
 #include "filament/filament/backend/include/backend/PixelBufferDescriptor.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/Texture.h"
+#include "core/assets/asset_ptr.h"
 #include "core/image/image_contents.h"
+#include "core/render/image_asset.h"
 #include "core/view/base_view.h"
 
 namespace imp {
 
 TextureBuilder::TextureBuilder(BaseView& view) noexcept
-    : view_(&view),
-      spy_(nullptr),
-      texture_(absl::Status(absl::StatusCode::kUnknown,
-                            "Texture is not initialized yet.")) {
+    : view_(&view), spy_(nullptr) {
   if (auto* serializer = view_->GetSplitEngineSerializer()) {
     spy_ = serializer->CreateTextureBuilder();
   }
@@ -58,7 +57,7 @@ TextureBuilder& TextureBuilder::operator=(TextureBuilder&& rhs) noexcept {
 }
 
 TextureBuilder& TextureBuilder::Width(uint32_t width) {
-  assert(texture_.status().code() == absl::StatusCode::kUnknown);
+  
 
   if (spy_) {
     spy_->Width(width);
@@ -67,7 +66,7 @@ TextureBuilder& TextureBuilder::Width(uint32_t width) {
   return *this;
 }
 TextureBuilder& TextureBuilder::Height(uint32_t height) {
-  assert(texture_.status().code() == absl::StatusCode::kUnknown);
+  
 
   if (spy_) {
     spy_->Height(height);
@@ -75,8 +74,19 @@ TextureBuilder& TextureBuilder::Height(uint32_t height) {
   builder_.height(height);
   return *this;
 }
+
+TextureBuilder& TextureBuilder::Depth(uint32_t depth) {
+  
+
+  if (spy_) {
+    spy_->Depth(depth);
+  }
+  builder_.depth(depth);
+  return *this;
+}
+
 TextureBuilder& TextureBuilder::Levels(uint8_t levels) {
-  assert(texture_.status().code() == absl::StatusCode::kUnknown);
+  
 
   if (spy_) {
     spy_->Levels(levels);
@@ -86,7 +96,7 @@ TextureBuilder& TextureBuilder::Levels(uint8_t levels) {
 }
 TextureBuilder& TextureBuilder::Format(
     filament::backend::TextureFormat format) {
-  assert(texture_.status().code() == absl::StatusCode::kUnknown);
+  
 
   if (spy_) {
     spy_->Format(format);
@@ -96,7 +106,7 @@ TextureBuilder& TextureBuilder::Format(
 }
 TextureBuilder& TextureBuilder::Sampler(
     filament::backend::SamplerType sampler) {
-  assert(texture_.status().code() == absl::StatusCode::kUnknown);
+  
 
   if (spy_) {
     spy_->Sampler(sampler);
@@ -106,7 +116,7 @@ TextureBuilder& TextureBuilder::Sampler(
 }
 
 TextureBuilder& TextureBuilder::Name(absl::string_view name) {
-  assert(texture_.status().code() == absl::StatusCode::kUnknown);
+  
 
   if (spy_) {
     spy_->Name(name);
@@ -114,6 +124,34 @@ TextureBuilder& TextureBuilder::Name(absl::string_view name) {
 
   name_ = name;
   builder_.name(name_.data(), name_.length());
+  return *this;
+}
+
+TextureBuilder& TextureBuilder::ImageInternal(filament::Engine& engine,
+                                              AssetPtr<ImageAsset> image,
+                                              int image_index) {
+  if (spy_) {
+    spy_->Image(engine, image, image_index);
+    // The images will be moved, so the normal setImage API should be skipped.
+    return *this;
+  }
+
+  if (!was_built_) {
+    texture_ = builder_.build(engine);
+    was_built_ = true;
+  }
+
+  if (texture_.ok()) {
+    auto descriptors = image->GetLevelDescriptors();
+    for (int level = 0; level < descriptors.size(); ++level) {
+      (*texture_)->setImage(
+          engine, level, 0, 0, image_index, (*texture_)->getWidth(level),
+          (*texture_)->getHeight(level), 1, std::move(descriptors[level]));
+    }
+  }
+
+  // If texture is not okay after build, TextureBuilder::build will return
+  // nullptr.
   return *this;
 }
 
@@ -126,8 +164,9 @@ TextureBuilder& TextureBuilder::ImageInternal(
     return *this;
   }
 
-  if (texture_.status().code() == absl::StatusCode::kUnknown) {
+  if (!was_built_) {
     texture_ = builder_.build(engine);
+    was_built_ = true;
   }
 
   if (texture_.ok()) {
@@ -151,8 +190,10 @@ TextureBuilder& TextureBuilder::GenerateMipmaps(filament::Engine& engine) {
   if (spy_) {
     spy_->GenerateMipmaps(engine);
   }
-  if (texture_.status().code() == absl::StatusCode::kUnknown) {
+
+  if (!was_built_) {
     texture_ = builder_.build(engine);
+    was_built_ = true;
   }
   if (texture_.ok()) {
     // Note: filament::Texture::generateMipmaps() can panic
@@ -165,8 +206,9 @@ TextureBuilder& TextureBuilder::GenerateMipmaps(filament::Engine& engine) {
 }
 
 filament::Texture* TextureBuilder::Build(filament::Engine& engine) {
-  if (texture_.status().code() == absl::StatusCode::kUnknown) {
+  if (!was_built_) {
     texture_ = builder_.build(engine);
+    was_built_ = true;
   }
 
   if (!texture_.ok()) {

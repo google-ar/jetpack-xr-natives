@@ -34,9 +34,7 @@ import com.google.ar.imp.proto.MaterialDefinition;
 import com.google.ar.imp.proto.Math.Box;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 
 /** An extension to the Impress scripting API for rendering Android views to textured quads. */
 public final class AndroidViewTextureApi {
@@ -219,10 +217,8 @@ public final class AndroidViewTextureApi {
   public View getAttachedView(Node node) {
     GetAttachedViewRequest request =
         GetAttachedViewRequest.newBuilder().setTarget(node.getNodeHandle()).build();
-    List<Object> out = new ArrayList<>();
-    apiBridge.sendRequest(
-        new ApiRequest<GetAttachedViewRequest>(
-            "imp.android.GetAttachedViewRequest", request, null, out));
-    return (View) out.get(0);
+    return apiBridge.sendRequest(
+        new ApiRequest<GetAttachedViewRequest>("imp.android.GetAttachedViewRequest", request),
+        View.class);
   }
 }

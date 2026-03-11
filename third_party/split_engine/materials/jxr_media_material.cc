@@ -204,11 +204,32 @@ static_assert(
     "New BuiltInMaterial1b616c8aShapeType fields added but MAX assert "
     "not updated");
 
+// Verify imp::RenderEyeTarget and
+// android_xr::schemas::BuiltInMaterial1b616c8aRenderEyeTarget enums match.
+static_assert(DoEnumsMatchUnsafe(
+                  imp::RenderEyeTarget::kBoth,
+                  android_xr::schemas::BuiltInMaterial1b616c8aRenderEyeTarget ::
+                      DEFAULT_BOTH),
+              "Enum mismatch");
+
+static_assert(
+    DoEnumsMatchUnsafe(imp::RenderEyeTarget::kLeftOnly,
+                       android_xr::schemas::
+                           BuiltInMaterial1b616c8aRenderEyeTarget ::LEFT_ONLY),
+    "Enum mismatch");
+
+static_assert(
+    DoEnumsMatchUnsafe(imp::RenderEyeTarget::kRightOnly,
+                       android_xr::schemas::
+                           BuiltInMaterial1b616c8aRenderEyeTarget ::RIGHT_ONLY),
+    "Enum mismatch");
+
 }  // namespace
 
 imp::Future<std::unique_ptr<JxrMediaMaterial>> JxrMediaMaterial::Create(
     imp::BaseView& view, imp::MediaShapeType shape_type,
-    bool use_super_sampling) {
+    bool use_super_sampling, imp::RenderEyeTarget render_eye_target) {
+
   // Verify the shape is supported.
   switch (shape_type) {
     case imp::MediaShapeType::kDefaultFlat:
@@ -230,7 +251,11 @@ imp::Future<std::unique_ptr<JxrMediaMaterial>> JxrMediaMaterial::Create(
           *fbb,
           static_cast<android_xr::schemas::BuiltInMaterial1b616c8aShapeType>(
               shape_type),
-          &use_super_sampling_packed);
+          &use_super_sampling_packed,
+          static_cast<
+              android_xr::schemas::BuiltInMaterial1b616c8aRenderEyeTarget>(
+              render_eye_target));
+
   return RequestBuiltInMaterial(
              view, std::move(fbb),
              android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterial1b616c8a,

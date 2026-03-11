@@ -16,8 +16,14 @@
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
-#include "core/common/platform_helpers.h"
+#include "absl/strings/str_cat.h"
+#include "core/async/future.h"
+#include "core/config.h"
+#include "core/ncsb/component_handle.h"
+#include "core/ncsb/node_handle.h"
 #include "core/render_passes/surface_renderer.h"
+#include "core/view/base_view.h"
+#include "core/view/scripting/script_message_handler.h"
 
 #if IMP_PLATFORM(ANDROID)
 #include <android/native_window_jni.h>
@@ -38,7 +44,7 @@ Future<NodeHandle> CreateNodeWithSurfaceRendererHandler::HandleMessage(
 
 Future<NodeHandle> CreateNodeWithSurfaceRendererHandler::HandleMessage(
     const CreateNodeWithSurfaceRendererRequest& message,
-    const scripting::PlatformArgs& args, scripting::PlatformArgs& out) {
+    const scripting::PlatformArgs& args) {
   if (args.size() != 1) {
     return Future<NodeHandle>(
         absl::InvalidArgumentError("CreateNodeWithSurfaceRendererHandler: "

@@ -98,6 +98,10 @@ class SplitEngineSerializer {
   // Disassociates the given ID from the object it was associated with.
   static void RemoveId(uint64_t id);
 
+  // Returns the API level that the serializer is allowed to use, as reported by
+  // the backend.
+  virtual int32_t GetApiLevel() const = 0;
+
   // Returns the bridge that this serializer uses to serialize data.
   virtual SplitEngineAndroidBridge& GetBridge() = 0;
 
@@ -153,19 +157,18 @@ class SplitEngineSerializer {
       const filament::Texture* texture,
       const filament::TextureSampler& sampler) = 0;
 
-  // Given a texture and a serializer, create a FlatBufferBuilder and
+  // Given a serializer, creates a FlatBufferBuilder and
   // serialize the texture into it, before sending to the remote
   // renderer.
-  virtual void AddTexture(
-      filament::Texture& texture,
-      SplitEngineTextureSerializer& split_engine_texture_serializer) = 0;
+  virtual void SerializeTexture(
+      const SplitEngineTextureSerializer& split_engine_texture_serializer) = 0;
   virtual void RemoveTexture(filament::Texture& texture) = 0;
 
   // Given a serializer, creates a FlatBufferBuilder and
   // serialize the mesh into it, before sending to the remote
   // renderer.
   virtual void SerializeMesh(
-      SplitEngineMeshSerializer& split_engine_mesh_serializer) = 0;
+      const SplitEngineMeshSerializer& split_engine_mesh_serializer) = 0;
 
   // Creates a node for the given entity on the remote renderer.
   virtual void CreateNode(utils::Entity entity) = 0;

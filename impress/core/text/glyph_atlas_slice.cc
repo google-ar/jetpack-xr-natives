@@ -18,12 +18,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/base/nullability.h"
+#include "absl/container/flat_hash_map.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -72,13 +74,12 @@ constexpr uint8_t kHalfPadding = kPadding / 2;
 }  // namespace
 
 AsyncScopedCanvas* Slice::GetOrStartDrawing(imp::BaseView& view,
-                                            AsyncCanvasSource& canvas_source,
                                             ScopedCanvas::DrawMode draw_mode) {
   if (canvas_) {
     return canvas_.get();
   }
 
-  canvas_ = canvas_source.StartDrawing(view, texture_size_, draw_mode);
+  canvas_ = canvas_source_->StartDrawing(view, texture_size_, draw_mode);
   if (canvas_->DidTextureChange()) {
     texture_ = canvas_->GetTexture();
     view.GetDispatcher().Send(TextureChangedEvent());
@@ -87,27 +88,30 @@ AsyncScopedCanvas* Slice::GetOrStartDrawing(imp::BaseView& view,
   return canvas_.get();
 }
 
-Slice::Slice(uint2 texture_size)
-    : texture_size_(texture_size), atlas_packer_(texture_size) {}
+Slice::Slice(uint2 texture_size,
+             std::unique_ptr<AsyncCanvasSource> canvas_source)
+    : texture_size_(texture_size),
+      atlas_packer_(texture_size),
+      canvas_source_(std::move(canvas_source)) {}
 
 Slice::~Slice() {
   absl::MutexLock lock(canvas_mutex_);
   canvas_.reset();
 }
 
-void Slice::EndFrame(imp::BaseView& view, AsyncCanvasSource& canvas_source) {
+Slice::EndFrameResult Slice::EndFrame(imp::BaseView& view) {
   IMP_TRACE();
   canvas_mutex_.lock();
   if (texture_status_ == TextureStatus::kStable ||
       texture_status_ == TextureStatus::kPreparingToUpdateTexture) {
     canvas_mutex_.unlock();
-    return;
+    return EndFrameResult::kStable;
   }
 
-  if (!canvas_ &&
-      canvas_source.IsFeatureSupported(ScopedCanvas::Feature::kKeepContents)) {
+  if (!canvas_ && canvas_source_->IsFeatureSupported(
+                      ScopedCanvas::Feature::kKeepContents)) {
     canvas_mutex_.unlock();
-    return;
+    return EndFrameResult::kStable;
   }
 
   // There are new glyphs that are ready to be drawn. For clients that do
@@ -119,10 +123,11 @@ void Slice::EndFrame(imp::BaseView& view, AsyncCanvasSource& canvas_source) {
   // TODO: Do async drawing of glyphs for platforms that don't
   // support kKeepContents
   if (texture_status_ == TextureStatus::kHasNewGlyphs &&
-      !canvas_source.IsFeatureSupported(ScopedCanvas::Feature::kKeepContents)) {
+      !canvas_source_->IsFeatureSupported(
+          ScopedCanvas::Feature::kKeepContents)) {
     // Unlock the mutex for DrawAllGlyphsToCanvas to hold.
     canvas_mutex_.unlock();
-    DrawAllGlyphsToCanvas(view, canvas_source);
+    DrawAllGlyphsToCanvas(view);
     canvas_mutex_.lock();
     texture_status_ = TextureStatus::kReadyToApplyDrawCommands;
   }
@@ -131,7 +136,14 @@ void Slice::EndFrame(imp::BaseView& view, AsyncCanvasSource& canvas_source) {
     UpdateTexture();
   }
 
+  auto result = EndFrameResult::kStable;
+  if (texture_status_ == TextureStatus::kReadyToBlit) {
+    result = EndFrameResult::kBlitRequired;
+  }
+
   canvas_mutex_.unlock();
+
+  return result;
 }
 
 const GlyphInfo* /*absl_nullable*/  Slice::GetGlyphInfo(
@@ -145,13 +157,11 @@ const GlyphInfo* /*absl_nullable*/  Slice::GetGlyphInfo(
   return nullptr;
 }
 
-void Slice::DrawAllGlyphsToCanvas(imp::BaseView& view,
-                                  AsyncCanvasSource& canvas_source) {
+void Slice::DrawAllGlyphsToCanvas(imp::BaseView& view) {
   ScopedCanvas* canvas;
   {
     absl::MutexLock lock(canvas_mutex_);
-    canvas =
-        GetOrStartDrawing(view, canvas_source, ScopedCanvas::DrawMode::kClear);
+    canvas = GetOrStartDrawing(view, ScopedCanvas::DrawMode::kClear);
     // TODO : Canvas can may be dirty due to async drawing of
     // glyphs; investigate how to prevent that from happening.
     canvas->ClearRect(
@@ -171,13 +181,14 @@ void Slice::DrawAllGlyphsToCanvas(imp::BaseView& view,
 }
 
 Future<absl::Status> Slice::DrawGlyphsToCanvasAsync(
-    imp::BaseView& view, AsyncCanvasSource& canvas_source,
+    imp::BaseView& view,
     std::unique_ptr<std::vector<CanvasOptionsGlyphKey>> glyphs) {
   if (glyphs->empty()) {
     return Future<absl::Status>(absl::OkStatus());
   }
 
-  if (!canvas_source.IsFeatureSupported(ScopedCanvas::Feature::kKeepContents)) {
+  if (!canvas_source_->IsFeatureSupported(
+          ScopedCanvas::Feature::kKeepContents)) {
     return Future<absl::Status>(
         absl::AbortedError("kKeepContents not supported"));
   }
@@ -196,8 +207,8 @@ Future<absl::Status> Slice::DrawGlyphsToCanvasAsync(
                return std::move(glyphs);
              },
              Executor::Type::kBackground)
-      .Then([this, &view, &canvas_source](
-                std::unique_ptr<std::vector<CanvasOptionsGlyphKey>> glyphs)
+      .Then([this,
+             &view](std::unique_ptr<std::vector<CanvasOptionsGlyphKey>> glyphs)
                 -> Future<absl::Status> {
         {
           absl::MutexLock canvas_lock(canvas_mutex_);
@@ -212,10 +223,9 @@ Future<absl::Status> Slice::DrawGlyphsToCanvasAsync(
           // completed drawing to the canvas, which indicates the canvas was
           // destroyed somewhere during the process. Recreate the canvas and try
           // again.
-          GetOrStartDrawing(view, canvas_source,
-                            ScopedCanvas::DrawMode::kKeepContents);
+          GetOrStartDrawing(view, ScopedCanvas::DrawMode::kKeepContents);
         }
-        return DrawGlyphsToCanvasAsync(view, canvas_source, std::move(glyphs));
+        return DrawGlyphsToCanvasAsync(view, std::move(glyphs));
       });
 }
 
@@ -243,37 +253,40 @@ absl::Status Slice::DrawGlyphsToCanvas(
   return absl::OkStatus();
 }
 
-void Slice::ClearUnusedGlyphs(imp::BaseView& view,
-                              AsyncCanvasSource& canvas_source) {
+void Slice::ClearUnusedGlyphs(
+    imp::BaseView& view,
+    std::function<void(const CanvasOptionsGlyphKey&)> glyph_cleared_fn) {
   absl::MutexLock glyph_map_lock(glyph_map_mutex_);
-  absl::MutexLock canvas_lock(canvas_mutex_);
   // Remove each glyph that is unused. Detect if it's unused if the ref
   // counter is at zero.
-  for (auto glyph_itr = glyph_map_.begin(); glyph_itr != glyph_map_.end();) {
-    auto copy_glyph_itr = glyph_itr++;
 
-    if (copy_glyph_itr->second.ref_counter.GetCount() == 0) {
-      // If we are retaining the canvas's content then we need to ensure
-      // that the old entries are cleared from the canvas for when the
-      // texture memory is re-used in the future.
-      if (canvas_source.IsFeatureSupported(
-              ScopedCanvas::Feature::kKeepContents)) {
-        const GlyphInfo& glyph_info = copy_glyph_itr->second;
-        ScopedCanvas* canvas = GetOrStartDrawing(
-            view, canvas_source, ScopedCanvas::DrawMode::kKeepContents);
-
-        const AtlasPacker::ScopedAtlasEntry& atlas_entry =
-            glyph_info.atlas_entry;
-        float2 half_extent =
-            (atlas_entry.GetBottomRight() - atlas_entry.GetTopLeft()) / 2.0f;
-        Rect rect{.center = atlas_entry.GetTopLeft() + half_extent,
-                  .half_extent = half_extent};
-        canvas->ClearRect(rect);
-      }
-
-      glyph_map_.erase(copy_glyph_itr);
+  absl::erase_if(glyph_map_, [this, &view, &glyph_cleared_fn](const auto& it) {
+    if (it.second.ref_counter.GetCount() != 0) {
+      return false;
     }
-  }
+
+    // If we are retaining the canvas's content then we need to ensure
+    // that the old entries are cleared from the canvas for when the
+    // texture memory is re-used in the future.
+    if (canvas_source_->IsFeatureSupported(
+            ScopedCanvas::Feature::kKeepContents)) {
+      absl::MutexLock canvas_lock(canvas_mutex_);
+      const GlyphInfo& glyph_info = it.second;
+      ScopedCanvas* canvas =
+          GetOrStartDrawing(view, ScopedCanvas::DrawMode::kKeepContents);
+
+      const AtlasPacker::ScopedAtlasEntry& atlas_entry = glyph_info.atlas_entry;
+      float2 half_extent =
+          (atlas_entry.GetBottomRight() - atlas_entry.GetTopLeft()) / 2.0f;
+      Rect rect{.center = atlas_entry.GetTopLeft() + half_extent,
+                .half_extent = half_extent};
+      canvas->ClearRect(rect);
+    }
+    // Immediately before the glyph actually gets removed, inform the caller
+    // about the removed glyph via the callback function.
+    glyph_cleared_fn(it.first);
+    return true;
+  });
 }
 
 size_t Slice::GetNumCachedGlyphs() const {
@@ -332,12 +345,19 @@ void Slice::UpdateTexture() {
 }
 
 void Slice::UpdateTextureSync() {
+  // TODO: this should be kReadyToBlit iff there are multiple slices.
+  // or alternatively it can just fall through this state?
+  texture_status_ = TextureStatus::kReadyToBlit;
+  canvas_.reset();
+}
+
+void Slice::OnBlitCompleted() {
+  absl::MutexLock lock(canvas_mutex_);
   texture_status_ = TextureStatus::kStable;
   for (const auto& future : texture_update_futures_) {
     future.Return(absl::OkStatus());
   }
   texture_update_futures_.clear();
-  canvas_.reset();
 }
 
 float Slice::GetAtlasUtilization() const {
@@ -366,9 +386,11 @@ std::string Slice::ToString(const GlyphEmulator::GlyphKeyOrGlyphString& glyph) {
 }
 
 #if IMP_RUNTIME(DEV)
-std::optional<editor::SlicedGlyphAtlasVisualizer::SlicedGlyphAtlasInfo>
-Slice::GetSlicedGlyphAtlasInfoAt(const float2& uv) const {
-  float2 texture_point = uv * texture_size_;
+std::optional<editor::SlicedGlyphAtlasVisualizer::GlyphInfo>
+Slice::GetGlyphInfoAt(const float2& uv, const float2& slice_offset,
+                      const float2& slice_scale) const {
+  float2 slice_uv = (uv - slice_offset) / slice_scale;
+  float2 texture_point = slice_uv * texture_size_;
 
   {
     absl::MutexLock lock(glyph_map_mutex_);
@@ -378,9 +400,15 @@ Slice::GetSlicedGlyphAtlasInfoAt(const float2& uv) const {
           (atlas_entry.GetBottomRight() - atlas_entry.GetTopLeft()) / 2.0f;
       Rect rect{.center = atlas_entry.GetTopLeft() + half_extent,
                 .half_extent = half_extent};
+
       if (RectContainsPoint(rect, texture_point)) {
         rect.half_extent /= texture_size_;
         rect.center /= texture_size_;
+
+        // Adjust for slice.
+        rect.center = slice_offset + rect.center * slice_scale;
+        rect.half_extent = rect.half_extent * slice_scale;
+
         float half_stroke_width = glyph_info.stroke_width / 2.0f;
         float2 origin =
             float2(atlas_entry.GetTopLeft().x +
@@ -391,7 +419,7 @@ Slice::GetSlicedGlyphAtlasInfoAt(const float2& uv) const {
                        glyph_info.measurements.font_origin_y() -
                        half_stroke_width - kHalfPadding) /
             texture_size_;
-        return editor::SlicedGlyphAtlasVisualizer::SlicedGlyphAtlasInfo{
+        return editor::SlicedGlyphAtlasVisualizer::GlyphInfo{
             .glyph = ToString(glyph.glyph),
             .is_stroke = false,
             .origin = origin,
@@ -402,9 +430,10 @@ Slice::GetSlicedGlyphAtlasInfoAt(const float2& uv) const {
   return std::nullopt;
 }
 
-std::vector<editor::SlicedGlyphAtlasVisualizer::SlicedGlyphAtlasInfo>
-Slice::GetAllGlyphInfo() const {
-  std::vector<editor::SlicedGlyphAtlasVisualizer::SlicedGlyphAtlasInfo> result;
+std::vector<editor::SlicedGlyphAtlasVisualizer::GlyphInfo>
+Slice::GetAllGlyphInfo(const float2& slice_offset,
+                       const float2& slice_scale) const {
+  std::vector<editor::SlicedGlyphAtlasVisualizer::GlyphInfo> result;
   {
     absl::MutexLock lock(glyph_map_mutex_);
     for (auto& [glyph, glyph_info] : glyph_map_) {
@@ -415,6 +444,8 @@ Slice::GetAllGlyphInfo() const {
                 .half_extent = half_extent};
       rect.half_extent /= texture_size_;
       rect.center /= texture_size_;
+      rect.center = slice_offset + rect.center * slice_scale;
+      rect.half_extent = rect.half_extent * slice_scale;
       float half_stroke_width = glyph_info.stroke_width / 2.0f;
       float2 origin =
           float2(atlas_entry.GetTopLeft().x +
@@ -425,7 +456,7 @@ Slice::GetAllGlyphInfo() const {
                      glyph_info.measurements.font_origin_y() -
                      half_stroke_width - kHalfPadding) /
           texture_size_;
-      result.push_back(editor::SlicedGlyphAtlasVisualizer::SlicedGlyphAtlasInfo{
+      result.push_back(editor::SlicedGlyphAtlasVisualizer::GlyphInfo{
           .glyph = ToString(glyph.glyph),
           .is_stroke = false,
           .origin = origin,

@@ -236,7 +236,6 @@ cc_library(
     defines = imp_defines(),
     deps = [
         "//core/math",
-        "@com_google_absl//absl/strings:string_view",
         "@third_party//filament/filament:filament_hdrs",
     ],
     alwayslink = 1,

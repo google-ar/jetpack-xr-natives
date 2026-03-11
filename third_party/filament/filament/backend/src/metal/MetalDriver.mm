@@ -29,6 +29,7 @@
 #include "MetalHandles.h"
 #include "MetalState.h"
 #include "MetalTimerQuery.h"
+#include "MetalUtils.h"
 
 #include <backend/platforms/PlatformMetal.h>
 #include <backend/platforms/PlatformMetal-ObjC.h>
@@ -253,6 +254,18 @@ MetalDriver::~MetalDriver() noexcept {
 void MetalDriver::tick(int) {
     executeTickOps();
     executeDeferredOps();
+
+    // Notify platform of GPU errors.
+    auto& platform = mPlatform;
+    if (UTILS_UNLIKELY(!mContext->commandBufferErrors.isEmpty())) {
+        mContext->commandBufferErrors.flush([&platform](NSError* error) {
+            if (UTILS_VERY_UNLIKELY(!error)) {
+                return;
+            }
+            const utils::CString errorString(error.localizedDescription.UTF8String);
+            platform.debugUpdateStat("filament.metal.command_buffer_error", errorString);
+        });
+    }
 }
 
 void MetalDriver::beginFrame(int64_t monotonic_clock_ns,
@@ -620,7 +633,9 @@ void MetalDriver::createRenderTargetR(Handle<HwRenderTarget> rth,
     auto& sc = mContext->sampleCountLookup;
     samples = sc[std::min(MAX_SAMPLE_COUNT, samples)];
 
-    MetalRenderTarget::Attachment colorAttachments[MRT::MAX_SUPPORTED_RENDER_TARGET_COUNT] = {{}};
+    using AttachmentInfo = MetalRenderTarget::AttachmentInfo;
+
+    AttachmentInfo colorAttachments[MRT::MAX_SUPPORTED_RENDER_TARGET_COUNT] = { {} };
     for (size_t i = 0; i < MRT::MAX_SUPPORTED_RENDER_TARGET_COUNT; i++) {
         if (none(targetBufferFlags & getTargetBufferFlagsAt(i))) {
             continue;
@@ -634,7 +649,7 @@ void MetalDriver::createRenderTargetR(Handle<HwRenderTarget> rth,
         colorAttachments[i] = { colorTexture, color[i].level, color[i].layer };
     }
 
-    MetalRenderTarget::Attachment depthAttachment = {};
+    AttachmentInfo depthAttachment = {};
     if (any(targetBufferFlags & TargetBufferFlags::DEPTH)) {
         FILAMENT_CHECK_PRECONDITION(depth.handle)
                 << "The DEPTH flag was specified, but invalid depth handle provided.";
@@ -644,7 +659,7 @@ void MetalDriver::createRenderTargetR(Handle<HwRenderTarget> rth,
         depthAttachment = { depthTexture, depth.level, depth.layer };
     }
 
-    MetalRenderTarget::Attachment stencilAttachment = {};
+    AttachmentInfo stencilAttachment = {};
     if (any(targetBufferFlags & TargetBufferFlags::STENCIL)) {
         FILAMENT_CHECK_PRECONDITION(stencil.handle)
                 << "The STENCIL flag was specified, but invalid stencil handle provided.";
@@ -668,8 +683,6 @@ void MetalDriver::createFenceR(Handle<HwFence> fh, utils::ImmutableCString&& tag
 
 void MetalDriver::createSwapChainR(Handle<HwSwapChain> sch, void* nativeWindow, uint64_t flags,
         utils::ImmutableCString&& tag) {
-    // TODO: support MSAA swapchain
-
     if (UTILS_UNLIKELY(flags & SWAP_CHAIN_CONFIG_APPLE_CVPIXELBUFFER)) {
         CVPixelBufferRef pixelBuffer = (CVPixelBufferRef) nativeWindow;
         construct_handle<MetalSwapChain>(sch, *mContext, mPlatform, pixelBuffer, flags);
@@ -1038,10 +1051,17 @@ void MetalDriver::updateStreams(DriverApi* driver) {
 
 void MetalDriver::destroyFence(Handle<HwFence> fh) {
     if (fh) {
-        auto* fence = handle_cast<MetalFence>(fh);
-        fence->cancel();
+        // note: it's invalid to call this during a fenceWait(fh) on another thread. For this
+        // reason there is no point signaling the waiters. There should be no waiters.
         destruct_handle<MetalFence>(fh);
     }
+}
+
+void MetalDriver::fenceCancel(FenceHandle const fh) {
+    // Even though this is a synchronous call, the fence handle must be (and stay) valid
+    assert_invariant(fh);
+    auto* fence = handle_cast<MetalFence>(fh);
+    fence->cancel();
 }
 
 FenceStatus MetalDriver::getFenceStatus(Handle<HwFence> fh) {
@@ -1049,10 +1069,9 @@ FenceStatus MetalDriver::getFenceStatus(Handle<HwFence> fh) {
 }
 
 FenceStatus MetalDriver::fenceWait(FenceHandle fh, uint64_t const timeout) {
+    // Even though this is a synchronous call, the fence handle must be (and stay) valid
+    assert_invariant(fh);
     auto* fence = handle_cast<MetalFence>(fh);
-    if (!fence) {
-        return FenceStatus::ERROR;
-    }
     return fence->wait(timeout);
 }
 
@@ -1151,8 +1170,7 @@ bool MetalDriver::isSRGBSwapChainSupported() {
 }
 
 bool MetalDriver::isMSAASwapChainSupported(uint32_t) {
-    // TODO: support MSAA swapchain
-    return false;
+    return true;
 }
 
 bool MetalDriver::isProtectedContentSupported() {
@@ -1252,6 +1270,10 @@ size_t MetalDriver::getMaxTextureSize(SamplerType type) {
 size_t MetalDriver::getMaxArrayTextureLayers() {
     // TODO: return the actual size instead of hardcoding the minspec
     return 256;
+}
+
+size_t MetalDriver::getUniformBufferOffsetAlignment() {
+    return ::filament::backend::getUniformBufferOffsetAlignment();
 }
 
 void MetalDriver::updateIndexBuffer(Handle<HwIndexBuffer> ibh, BufferDescriptor&& data,
@@ -1472,6 +1494,20 @@ void MetalDriver::setRenderPrimitiveBuffer(Handle<HwRenderPrimitive> rph, Primit
     primitive->type = pt;
 }
 
+bool MetalDriver::isCompositorTimingSupported() {
+    return false;
+}
+
+bool MetalDriver::queryCompositorTiming(backend::SwapChainHandle swapChain,
+        CompositorTiming* outCompositorTiming) {
+    return false;
+}
+
+bool MetalDriver::queryFrameTimestamps(SwapChainHandle swapChain, uint64_t frameId,
+        FrameTimestamps* outFrameTimestamps) {
+    return false;
+}
+
 void MetalDriver::makeCurrent(Handle<HwSwapChain> schDraw, Handle<HwSwapChain> schRead) {
     ASSERT_PRECONDITION_NON_FATAL(schDraw, "A draw SwapChain must be set.");
     auto* drawSwapChain = handle_cast<MetalSwapChain>(schDraw);
@@ -1558,9 +1594,9 @@ void MetalDriver::readPixels(Handle<HwRenderTarget> src, uint32_t x, uint32_t y,
 
     auto srcTarget = handle_cast<MetalRenderTarget>(src);
     // We always readPixels from the COLOR0 attachment.
-    MetalRenderTarget::Attachment color = srcTarget->getDrawColorAttachment(0);
+    MetalAttachment color = srcTarget->getDrawColorAttachment(0);
     id<MTLTexture> srcTexture = color.getTexture();
-    size_t miplevel = color.level;
+    size_t miplevel = color.getLevel();
 
     // Clamp height and width to actual texture's height and width
     MTLSize srcTextureSize = MTLSizeMake(srcTexture.width >> miplevel, srcTexture.height >> miplevel, 1);
@@ -1768,8 +1804,8 @@ void MetalDriver::blitDEPRECATED(TargetBufferFlags buffers,
     };
 
     // We always blit from/to the COLOR0 attachment.
-    MetalRenderTarget::Attachment const srcColorAttachment = srcTarget->getReadColorAttachment(0);
-    MetalRenderTarget::Attachment const dstColorAttachment = dstTarget->getDrawColorAttachment(0);
+    MetalAttachment const srcColorAttachment = srcTarget->getReadColorAttachment(0);
+    MetalAttachment const dstColorAttachment = dstTarget->getDrawColorAttachment(0);
 
     if (srcColorAttachment && dstColorAttachment) {
         FILAMENT_CHECK_PRECONDITION(
@@ -1781,13 +1817,13 @@ void MetalDriver::blitDEPRECATED(TargetBufferFlags buffers,
         args.filter = filter;
         args.source.region = srcTarget->getRegionFromClientRect(srcRect);
         args.source.texture = srcColorAttachment.getTexture();
-        args.source.level = srcColorAttachment.level;
-        args.source.slice = srcColorAttachment.layer;
+        args.source.level = srcColorAttachment.getLevel();
+        args.source.slice = srcColorAttachment.getLayer();
 
         args.destination.region = dstTarget->getRegionFromClientRect(dstRect);
         args.destination.texture = dstColorAttachment.getTexture();
-        args.destination.level = dstColorAttachment.level;
-        args.destination.slice = dstColorAttachment.layer;
+        args.destination.level = dstColorAttachment.getLevel();
+        args.destination.slice = dstColorAttachment.getLayer();
 
         mContext->blitter->blit(getPendingCommandBuffer(mContext), args, "blitDEPRECATED");
     }
@@ -1823,24 +1859,28 @@ void MetalDriver::bindPipeline(PipelineState const& ps) {
     auto [fragment, vertex] = functions.getRasterFunctions();
 
     // Pipeline state
+    MetalRenderTarget* const rt = mContext->currentRenderTarget;
     MTLPixelFormat colorPixelFormat[MRT::MAX_SUPPORTED_RENDER_TARGET_COUNT] = { MTLPixelFormatInvalid };
     for (size_t i = 0; i < MRT::MAX_SUPPORTED_RENDER_TARGET_COUNT; i++) {
-        const auto& attachment = mContext->currentRenderTarget->getDrawColorAttachment(i);
+        const auto& attachment = rt->getDrawColorAttachment(i);
         if (!attachment) {
             continue;
         }
         colorPixelFormat[i] = attachment.getPixelFormat();
+        assert_invariant(attachment.getSampleCount() == rt->getSampleCount());
     }
     MTLPixelFormat depthPixelFormat = MTLPixelFormatInvalid;
-    const auto& depthAttachment = mContext->currentRenderTarget->getDepthAttachment();
+    const auto& depthAttachment = rt->getDepthAttachment();
     if (depthAttachment) {
         depthPixelFormat = depthAttachment.getPixelFormat();
+        assert_invariant(depthAttachment.getSampleCount() == rt->getSampleCount());
     }
     MTLPixelFormat stencilPixelFormat = MTLPixelFormatInvalid;
-    const auto& stencilAttachment = mContext->currentRenderTarget->getStencilAttachment();
+    const auto& stencilAttachment = rt->getStencilAttachment();
     if (stencilAttachment) {
         stencilPixelFormat = stencilAttachment.getPixelFormat();
         assert_invariant(isMetalFormatStencil(stencilPixelFormat));
+        assert_invariant(stencilAttachment.getSampleCount() == rt->getSampleCount());
     }
     MetalPipelineState const pipelineState {
         .vertexFunction = vertex,
@@ -1858,7 +1898,7 @@ void MetalDriver::bindPipeline(PipelineState const& ps) {
         },
         .depthAttachmentPixelFormat = depthPixelFormat,
         .stencilAttachmentPixelFormat = stencilPixelFormat,
-        .sampleCount = mContext->currentRenderTarget->getSamples(),
+        .sampleCount = rt->getSampleCount(),
         .blendState = BlendState {
             .alphaBlendOperation = getMetalBlendOperation(rs.blendEquationAlpha),
             .rgbBlendOperation = getMetalBlendOperation(rs.blendEquationRGB),
@@ -2235,7 +2275,10 @@ MemoryMappedBufferHandle MetalDriver::mapBufferS() noexcept {
 void MetalDriver::mapBufferR(MemoryMappedBufferHandle mmbh,
         BufferObjectHandle boh, size_t offset,
         size_t size, MapBufferAccessFlags access, utils::ImmutableCString&& tag) {
-    construct_handle<MetalMemoryMappedBuffer>(mmbh, boh, offset, size, access);
+    assert_invariant(boh);
+    MetalBufferObject* bo = mHandleAllocator.handle_cast<MetalBufferObject*>(boh);
+    assert_invariant(bo);
+    construct_handle<MetalMemoryMappedBuffer>(mmbh, bo, offset, size, access);
     mHandleAllocator.associateTagToHandle(mmbh.getId(), std::move(tag));
 }
 
@@ -2243,21 +2286,16 @@ void MetalDriver::unmapBuffer(MemoryMappedBufferHandle mmbh) {
     if (UTILS_UNLIKELY(!mmbh)) {
         return;
     }
+
+    auto* mmb = handle_cast<MetalMemoryMappedBuffer>(mmbh);
+    mmb->unmap();
     destruct_handle<MetalMemoryMappedBuffer>(mmbh);
 }
 
 void MetalDriver::copyToMemoryMappedBuffer(MemoryMappedBufferHandle mmbh, size_t offset,
         BufferDescriptor&& data) {
-    auto mmb = handle_cast<MetalMemoryMappedBuffer>(mmbh);
-
-    assert_invariant(any(mmb->access & MapBufferAccessFlags::WRITE_BIT));
-    assert_invariant(offset + data.size <= mmb->size);
-
-    // TODO: this isa zero-effort implementation of copyToMemoryMappedBuffer(), where we just
-    //       call updateBufferObject(). This could be a fallback implementation for when
-    //       shared memory is not available.
-    //       On UMA systems, this should just be a memcpy into the memory-mapped buffer.
-    updateBufferObject(mmb->boh, std::move(data), mmb->offset + offset);
+    auto* mmb = handle_cast<MetalMemoryMappedBuffer>(mmbh);
+    mmb->copy(*this, offset, std::move(data));
 }
 
 // explicit instantiation of the Dispatcher

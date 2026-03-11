@@ -86,6 +86,7 @@ cc_library(
         "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament",
         "@third_party//filament/filament:filament_hdrs",
+        "@third_party//split_engine:split_engine_schema_version",
     ],
     alwayslink = 1,
 )

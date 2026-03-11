@@ -19,6 +19,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
@@ -35,6 +36,7 @@
 #include "core/math/vec.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/view/base_view.h"
+#include "core/view/utils/proto/filament_feature_flag.proto.imp.h"
 #include "core/view/utils/proto/render_settings.proto.imp.h"
 #include "core/view/view_events.h"
 #include "core/view/view_host.h"
@@ -89,7 +91,7 @@ OptionalError ViewState::Setup(FilamentHost* filament_host) {
   // dev mode extensions into the filament host if one already isn't registered.
   if (!host->TryGetExtension()) {
     MP_RETURN_IF_ERROR(host->RegisterExtension(
-        imp::window::CreateDefaultDevModeExtension(view_.get())));
+        imp::window::CreateDefaultDevModeExtension(*view_)));
     view_->GetInputManager().AddInterceptor(
         std::make_unique<DevModeInputInterceptor>(view_.get()));
   }
@@ -277,6 +279,10 @@ filament::Engine::Config ViewState::GetEngineConfig() const {
 filament::backend::FeatureLevel ViewState::GetMaximumEngineFeatureLevel()
     const {
   return view_->GetMaximumEngineFeatureLevel();
+}
+
+std::vector<FilamentFeatureFlag> ViewState::GetFilamentFeatureFlags() const {
+  return view_->GetConfig().filament_feature_flags;
 }
 
 bool ViewState::ShouldStartPaused() const { return view_->ShouldStartPaused(); }

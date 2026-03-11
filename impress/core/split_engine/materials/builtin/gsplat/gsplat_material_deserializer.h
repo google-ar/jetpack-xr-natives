@@ -50,25 +50,37 @@ class GsplatMaterialDeserializer : public BuiltInCustomMaterial {
   GsplatMaterialDeserializer(BaseView& view, BridgeId bridge_id,
                              android_xr::schemas::GsplatMode material_mode,
                              OwnedMaterialPtr material);
+  // The material used to precompute splat positions, colors, etc.
+  BorrowedMaterialPtr GetPrecomputeMaterial(
+      SmallSourceLocation loc = SmallSourceLocation::Current()) const;
+
+  // The material used for rendering parameters
+  BorrowedMaterialPtr GetRenderMaterial(
+      SmallSourceLocation loc = SmallSourceLocation::Current()) const;
+
+  absl::Status SetPrecomputeMaterialParameters(
+      const TextureBorrower& texture_borrower,
+      const android_xr::schemas::BuiltInMaterialGsplatParameters&
+          serialized_parameters);
 
   absl::Status SetCommonMaterialParameters(
-      const TextureBorrower& texture_borrower, BorrowedMaterialPtr material,
+      const TextureBorrower& texture_borrower,
       const android_xr::schemas::BuiltInMaterialGsplatParameters&
           serialized_parameters);
   absl::Status SetGsplatMaterialParameters(
-      const TextureBorrower& texture_borrower, BorrowedMaterialPtr material,
+      const TextureBorrower& texture_borrower,
       const android_xr::schemas::BuiltInMaterialGsplatParameters&
           serialized_parameters);
   absl::Status SetMagicWindowMaterialParameters(
-      const TextureBorrower& texture_borrower, BorrowedMaterialPtr material,
+      const TextureBorrower& texture_borrower,
       const android_xr::schemas::BuiltInMaterialGsplatParameters&
           serialized_parameters);
   absl::Status SetPrecomputedSplatDataParameters(
-      const TextureBorrower& texture_borrower, BorrowedMaterialPtr material,
+      const TextureBorrower& texture_borrower,
       const android_xr::schemas::BuiltInMaterialGsplatParameters&
           serialized_parameters);
   absl::Status SetRawSplatDataParameters(
-      const TextureBorrower& texture_borrower, BorrowedMaterialPtr material,
+      const TextureBorrower& texture_borrower,
       const android_xr::schemas::BuiltInMaterialGsplatParameters&
           serialized_parameters);
 

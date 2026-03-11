@@ -27,7 +27,6 @@ class DesktopWebView : public WebView {
   DesktopWebView() {}
   DesktopWebView(const DesktopWebView&) = delete;
   DesktopWebView& operator=(const DesktopWebView&) = delete;
-  void PostMessage(const MessageToScript& message) override{};
   void LoadInjectionScript() override{};
 
  private:

@@ -109,7 +109,7 @@ void computeSplatData(vec4 position, mat3 cov3d, mat4 worldFromModelMatrix,
                               eyeFromClip, cov3d, resolutionWidth);
     // Get basis axes for quad in NDC space (which encodes the scale and
     // rotation) from cov2d.
-    scaleAndRotationFromCov2D(cov2d, resolutionWidth, basisAxisX, aspectRatio);
+    scaleAndRotationFromCov2D(cov2d, resolutionWidth * .5, basisAxisX, aspectRatio);
     // Get the center of the quad associated with this splat.
     clipPos = clipFromEye * eyePos;
     // perspective divide ahead of time to avoid having to do this later in the

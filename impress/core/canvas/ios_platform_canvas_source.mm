@@ -279,6 +279,10 @@ std::vector<ScopedCanvas::GlyphAdvance> IosPlatformCanvasSource::GetTextGlyphs(
   return GetTextGlyphsInternal(text, text_options, TextGlyphsMode::kIncludeLigatures);
 }
 
+void IosPlatformCanvasSource::ReleaseTextGlyphs(absl::Span<int> glyph_ids) {
+  // No-op on iOS.
+}
+
 std::vector<ScopedCanvas::GlyphAdvance> IosPlatformCanvasSource::GetTextGlyphsInternal(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options, TextGlyphsMode mode) {
   @autoreleasepool {

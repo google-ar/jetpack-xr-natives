@@ -22,11 +22,13 @@
 #include "absl/base/attributes.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/optional.h"
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
 #include "core/common/owned_ptr.h"
 #include "core/lighting/environment_light.h"
 #include "core/lighting/image_based_lighting_asset.h"
+#include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/lighting/light_component.h"
@@ -47,6 +49,8 @@ class LightManager {
 
   static constexpr float kDefaultDirectionalLightIntensity = 250.0f;
   static constexpr float kDefaultEnvironmentLightIntensity = 220.0f;
+  static constexpr float3 kDefaultEnvironmentLightTint =
+      float3(1.0f, 1.0f, 1.0f);
 
   // Current status of EnvironmentLight.
   enum class EnvironmentLightingStatus {
@@ -160,6 +164,12 @@ class LightManager {
   void AddDefaultDirectionalLightToGroup(absl::string_view group_name);
 
   Future<absl::Status> SetupDefaultLighting();
+
+  void UpdateSplitEngineEnvironmentLight(
+      absl::optional<AssetPtr<ImageBasedLightingAsset>> ibl_asset,
+      absl::string_view group_name,
+      float intensity = kDefaultEnvironmentLightIntensity,
+      const float3& tint = kDefaultEnvironmentLightTint);
 
   BaseView& view_;
 

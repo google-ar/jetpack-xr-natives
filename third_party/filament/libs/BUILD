@@ -88,6 +88,7 @@ cc_library(
         "utils/include/utils/JobSystem.h",
         "utils/include/utils/Log.h",
         "utils/include/utils/Logger.h",
+        "utils/include/utils/MonotonicRingMap.h",
         "utils/include/utils/Mutex.h",
         "utils/include/utils/NameComponentManager.h",
         "utils/include/utils/Panic.h",
@@ -171,7 +172,7 @@ cc_library(
     deps = [
         ":utils_hdrs",
     ] + if_android_perfetto([
-        "//third_party/perfetto:libperfetto_client_experimental",
+        "@perfetto//:libperfetto_client_experimental",
     ]),
     alwayslink = 1,
 )
@@ -189,7 +190,7 @@ cc_library(
 #     linkstatic = 1,
 #     deps = [
 #         ":utils_private_hdrs",
-#         "//third_party/perfetto:libperfetto_client_experimental",
+#         "@perfetto//:libperfetto_client_experimental",
 #     ],
 # )
 
@@ -264,7 +265,7 @@ cc_library(
         ":utils_private_hdrs",
         "@robin_map",
     ] + if_apple([":utils_path"]) + if_android_perfetto([
-        "//third_party/perfetto:libperfetto_client_experimental",
+        "@perfetto//:libperfetto_client_experimental",
     ]),
     alwayslink = 1,
 )

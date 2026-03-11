@@ -16,12 +16,12 @@
 
 #if IMP_TRACE_USE_PERFETTO
 
-#include "third_party/perfetto/include/perfetto/tracing/backend_type.h"
-#include "third_party/perfetto/include/perfetto/tracing/string_helpers.h"
-#include "third_party/perfetto/include/perfetto/tracing/tracing.h"
-#include "third_party/perfetto/include/perfetto/tracing/track.h"
-#include "third_party/perfetto/include/perfetto/tracing/track_event.h"
-#include "third_party/perfetto/include/perfetto/tracing/track_event_category_registry.h"
+#include "perfetto/tracing/backend_type.h"
+#include "perfetto/tracing/string_helpers.h"
+#include "perfetto/tracing/tracing.h"
+#include "perfetto/tracing/track.h"
+#include "perfetto/tracing/track_event.h"
+#include "perfetto/tracing/track_event_category_registry.h"
 
 PERFETTO_TRACK_EVENT_STATIC_STORAGE_IN_NAMESPACE(imp_perfetto_tracing);
 

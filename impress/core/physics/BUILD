@@ -347,6 +347,7 @@ cc_library(
         ":cone_collidable_shape",
         ":convex_hull_mesh_collidable_shape",
         ":cylinder_collidable_shape",
+        ":physics_constants",
         ":physics_helper",
         ":physics_proto_cc",
         ":sphere_collidable_shape",
@@ -380,6 +381,32 @@ cc_library(
         "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
     ] + if_dev_runtime(["//core/common:debug_draw"]),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "physics_constants",
+    hdrs = ["physics_constants.h"],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    deps = ["@com_google_absl//absl/strings:string_view"],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "physics_debug_draw",
+    srcs = ["physics_debug_draw.cc"],
+    hdrs = ["physics_debug_draw.h"],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    deps = [
+        "//core/common:debug_draw",
+        "//core/math",
+        "//core/ncsb",
+        "@third_party//filament",
+        "@third_party//filament/filament:filament_hdrs",
+        "@third_party//filament/libs:utils_hdrs",
+    ],
     alwayslink = 1,
 )
 

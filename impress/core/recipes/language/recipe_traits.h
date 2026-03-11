@@ -22,6 +22,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "absl/status/statusor.h"
 #include "core/math/vec.h"
 #include "core/recipes/language/recipe_utils.h"
 
@@ -379,6 +380,13 @@ struct IsCrossAvailable<
     std::void_t<decltype(cross(std::declval<LeftT>(), std::declval<RightT>()))>>
     : std::true_type {};
 
+// Integral_constant that is true if T is a StatusOr.
+template <typename T>
+struct IsStatusOr : std::false_type {};
+
+template <typename T>
+struct IsStatusOr<absl::StatusOr<T>> : std::true_type {};
+
 }  // namespace internal
 
 template <typename InputT>
@@ -517,6 +525,12 @@ constexpr bool kIsDotAvailable = internal::IsDotAvailable<LeftT, RightT>::value;
 template <typename LeftT, typename RightT>
 constexpr bool kIsCrossAvailable =
     internal::IsCrossAvailable<LeftT, RightT>::value;
+
+// Determines if T is a IsStatusOr.
+// i.e. IsStatusOrV<IsStatusOr<int>> is true.
+//      IsStatusOrV<int> is false.
+template <typename T>
+inline constexpr bool kIsStatusOrV = internal::IsStatusOr<T>::value;
 
 template <typename Fn, typename Ret, typename... Args>
 struct FunctorUnpacker {

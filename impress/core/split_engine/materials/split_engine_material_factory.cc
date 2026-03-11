@@ -38,7 +38,7 @@
 #include "core/split_engine/materials/builtin/builtin_vignette_material.h"
 #include "core/split_engine/materials/builtin/builtin_water_material.h"
 #include "core/split_engine/materials/builtin/builtin_youtube_stereo_player_material.h"
-#include "core/split_engine/materials/builtin/gsplat/builtin_gsplat_background_material.h"
+#include "core/split_engine/materials/builtin/gsplat/gsplat_background_material_deserializer.h"
 #include "core/split_engine/materials/builtin/gsplat/gsplat_material_deserializer.h"
 #include "core/split_engine/materials/builtin/photosxr/builtin_photos_texture_3d_material.h"
 #include "core/split_engine/materials/builtin_material_creator_helper.h"
@@ -123,7 +123,7 @@ Future<BuiltInMaterialPtr> SplitEngineMaterialFactory::HandleCreateRequest(
           *request.data_as<android_xr::schemas::BuiltInMaterialGsplatSpec>());
     case android_xr::schemas::BuiltInMaterialSpec::
         BuiltInMaterialGsplatBackgroundSpec:
-      return BuiltInGSplatBackgroundMaterial::Create(
+      return GsplatBackgroundMaterialDeserializer::Create(
           view, bridge_id,
           *request.data_as<
               android_xr::schemas::BuiltInMaterialGsplatBackgroundSpec>());
@@ -157,7 +157,16 @@ SplitEngineMaterialFactory::CreateBuiltInCustomMaterialWithDefaultParams() {
   const uint64_t kFakeMaterialInstanceId = 0;
 
   std::vector<Future<BuiltInMaterialPtr>> builtin_material_futures;
-  for (auto spec_type : CreateBuiltInCustomMaterialSpecList()) {
+  for (android_xr::schemas::BuiltInMaterialSpec spec_type :
+       android_xr::schemas::EnumValuesBuiltInMaterialSpec()) {
+    // Skip NONE as it is not a actionable spec type.
+    // Skip the generic material spec, as it is not a custom material.
+    if (spec_type == android_xr::schemas::BuiltInMaterialSpec::NONE ||
+        spec_type ==
+            android_xr::schemas::BuiltInMaterialSpec::GenericMaterialSpec) {
+      continue;
+    }
+
     flatbuffers::FlatBufferBuilder builder;
     flatbuffers::Offset<android_xr::schemas::BuiltInMaterialRequest>
         fbb_request = android_xr::schemas::CreateBuiltInMaterialRequest(

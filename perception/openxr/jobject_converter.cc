@@ -72,6 +72,36 @@ XrPosef ConvertToXrPosef(JNIEnv* env, const jobject& pose) {
   return XrPosef{.orientation = xr_quaternion, .position = xr_vector3};
 }
 
+XrGeospatialPoseANDROIDX2 ConvertToXrGeospatialPose(
+    JNIEnv* env, const jobject& geospatial_pose) {
+  jclass geospatial_pose_cls = GetJxrClass(env, PACKAGE_MATH, "GeospatialPose");
+  jmethodID latitude_mid =
+      env->GetMethodID(geospatial_pose_cls, "getLatitude", "()D");
+  jmethodID longitude_mid =
+      env->GetMethodID(geospatial_pose_cls, "getLongitude", "()D");
+  jmethodID altitude_mid =
+      env->GetMethodID(geospatial_pose_cls, "getAltitude", "()D");
+  jmethodID quaternion_mid = env->GetMethodID(
+      geospatial_pose_cls, "getEastUpSouthQuaternion",
+      absl::StrFormat("()L%s;",
+                      GetJxrFullClassName(env, PACKAGE_MATH, "Quaternion"))
+          .c_str());
+
+  double latitude = env->CallDoubleMethod(geospatial_pose, latitude_mid);
+  double longitude = env->CallDoubleMethod(geospatial_pose, longitude_mid);
+  double altitude = env->CallDoubleMethod(geospatial_pose, altitude_mid);
+  jobject quaternion_obj =
+      env->CallObjectMethod(geospatial_pose, quaternion_mid);
+  XrQuaternionf xr_quaternion = ConvertToXrQuaternionf(env, quaternion_obj);
+
+  return XrGeospatialPoseANDROIDX2{
+      .eastUpSouthOrientation = xr_quaternion,
+      .latitude = latitude,
+      .longitude = longitude,
+      .altitude = altitude,
+  };
+}
+
 XrUuidEXT ConvertToXrUuid(JNIEnv* env, const jobject& uuid) {
   jclass uuid_cls = env->FindClass("java/util/UUID");
   jmethodID most_significant_bits_mid =

@@ -17,6 +17,9 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_RECIPES_LANGUAGE_RECIPE_EXECUTION_CONTEXT_H_
 #define THIRD_PARTY_IMPRESS_CORE_RECIPES_LANGUAGE_RECIPE_EXECUTION_CONTEXT_H_
 
+#include <optional>
+
+#include "absl/time/time.h"
 #include "core/recipes/language/recipe_async_execution_manager.h"
 #include "core/recipes/language/recipe_scope.h"
 #include "core/view/base_view.h"
@@ -30,9 +33,13 @@ namespace imp {
 struct RecipeExecutionContext {
   // The scope of the execution.
   RecipeScope& scope;
+
   // The view that's executing the RecipeGraph.
   BaseView& view;
   RecipeAsyncExecutionManager& async_manager;
+
+  // If this has a value, stop execution if we exceed this time.
+  std::optional<absl::Time> execution_cutoff_time;
 };
 
 }  // namespace imp

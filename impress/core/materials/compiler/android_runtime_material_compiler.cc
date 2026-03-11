@@ -16,6 +16,7 @@
 #include "core/materials/compiler/android_runtime_material_compiler.h"
 
 #include <memory>
+#include <tuple>
 #include <utility>
 
 #include "absl/memory/memory.h"
@@ -23,6 +24,7 @@
 #include "absl/strings/string_view.h"
 #include "core/async/future.h"
 #include "core/common/context.h"
+#include "core/materials/compiler/cache/material_cache.h"
 #include "core/materials/compiler/material_compiler_client.h"
 #include "core/materials/compiler/material_compiler_client_jni.h"
 #include "core/materials/compiler/runtime_material_compiler.h"
@@ -39,16 +41,22 @@ AndroidRuntimeMaterialCompiler::Create(
       std::make_unique<JavaMaterialCompilerClient>(context,
                                                    native_library_override);
 
-  return java_material_compiler_client->StartService(context).Then(
-      [&view,
-       java_client = std::move(java_material_compiler_client)](int fd) mutable
-          -> absl::StatusOr<std::unique_ptr<RuntimeMaterialCompiler>> {
+  Future<int> service_fd = java_material_compiler_client->StartService(context);
+  Future<std::unique_ptr<MaterialCache>> cache_future =
+      MaterialCache::Create(view.GetContext());
+
+  return service_fd.Merge(cache_future)
+      .Then([&view, java_client = std::move(java_material_compiler_client)](
+                std::tuple<int, std::unique_ptr<MaterialCache>> results) mutable
+                -> absl::StatusOr<std::unique_ptr<RuntimeMaterialCompiler>> {
+        auto [fd, cache] = std::move(results);
         auto native_client = std::make_unique<MaterialCompilerClient>(fd);
         // Bind java and native clients.
         java_client->SetNativeClient(*native_client);
 
         return absl::WrapUnique(new AndroidRuntimeMaterialCompiler(
-            view, std::move(java_client), std::move(native_client)));
+            view, std::move(java_client), std::move(native_client),
+            std::move(cache)));
       });
 }
 

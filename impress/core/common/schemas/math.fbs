@@ -155,11 +155,11 @@ struct Mat4 (native_type:"imp::mat4") {
   m33 : double;
 }
 
-table Mat3fArray {
+table Mat3fVector {
   mats : [Mat3f] (required);
 }
 
-table Mat4fArray {
+table Mat4fVector {
   mats : [Mat4f] (required);
 }
 

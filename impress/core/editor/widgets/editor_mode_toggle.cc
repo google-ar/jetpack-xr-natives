@@ -84,11 +84,13 @@ void EditorModeToggle::DrawImGui() {
 
   // First button in the toolbar: Play / Stop button.
   if (editor.GetRunMode() == EditorInfo::RunMode::kPlayMode) {
-    if (ImGui::ImageButton(stop_icon_->GetFilamentTexture(), kButtonSize)) {
+    if (ImGui::ImageButton("##stop", stop_icon_->GetFilamentTexture(),
+                           kButtonSize)) {
       editor.SetInEditMode(true);
     }
   } else {
-    if (ImGui::ImageButton(play_icon_->GetFilamentTexture(), kButtonSize)) {
+    if (ImGui::ImageButton("##play", play_icon_->GetFilamentTexture(),
+                           kButtonSize)) {
       editor.SetInEditMode(false);
     }
   }
@@ -100,7 +102,7 @@ void EditorModeToggle::DrawImGui() {
       editor.IsPaused() ? resume_icon_->GetFilamentTexture()
                         : pause_icon_->GetFilamentTexture();
 
-  if (ImGui::ImageButton(second_button_texture, kButtonSize)) {
+  if (ImGui::ImageButton("##pause", second_button_texture, kButtonSize)) {
     editor.SetPaused(!editor.IsPaused());
   }
 
@@ -110,7 +112,8 @@ void EditorModeToggle::DrawImGui() {
   bool disabled = editor.GetRunMode() != EditorInfo::RunMode::kPlayMode ||
                   !editor.IsPaused();
   if (disabled) ImGui::BeginDisabled();
-  if (ImGui::ImageButton(step_icon_->GetFilamentTexture(), kButtonSize)) {
+  if (ImGui::ImageButton("##step", step_icon_->GetFilamentTexture(),
+                         kButtonSize)) {
     editor.StepNextFrame();
   }
   if (disabled) ImGui::EndDisabled();

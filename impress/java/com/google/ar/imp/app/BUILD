@@ -58,6 +58,7 @@ android_library(
     ],
     manifest = "xr/AndroidManifest.xml",
     deps = [
+        "//java/com/google/ar/imp/view:setup_params_java_proto_lite",
         "//java/com/google/ar/imp/view/xr:imp_xr_renderer",
         "@maven//:androidx_appcompat_appcompat",
     ],

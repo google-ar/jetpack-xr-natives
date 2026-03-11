@@ -44,7 +44,7 @@ android_xr::schemas::ErrorCode StatusToErrorCode(absl::Status status);
 
 // Serializes the given flatbuffer table to a vector of bytes.
 template <typename TableT>
-std::vector<uint8_t> SerializeTable(flatbuffers::FlatBufferBuilder &fbb,
+std::vector<uint8_t> SerializeTable(flatbuffers::FlatBufferBuilder& fbb,
                                     flatbuffers::Offset<TableT> table_offset) {
   fbb.Finish(table_offset);
   std::vector<uint8_t> response_data(fbb.GetSize());
@@ -55,7 +55,7 @@ std::vector<uint8_t> SerializeTable(flatbuffers::FlatBufferBuilder &fbb,
 // Serializes any of android_xr::schemas::ResponseTypes to a vector of bytes.
 template <typename ResponseT>
 std::vector<uint8_t> SerializeResponse(
-    flatbuffers::FlatBufferBuilder &fbb,
+    flatbuffers::FlatBufferBuilder& fbb,
     flatbuffers::Offset<ResponseT> response_offset) {
   flatbuffers::Offset<android_xr::schemas::Response> response =
       android_xr::schemas::CreateResponse(
@@ -65,42 +65,50 @@ std::vector<uint8_t> SerializeResponse(
 }
 
 // Math struct helpers.
-android_xr::schemas::Bool Pack(const bool &obj);
-bool UnPack(const android_xr::schemas::Bool &obj);
-android_xr::schemas::Bool2 Pack(const bool2 &obj);
-bool2 UnPack(const android_xr::schemas::Bool2 &obj);
-android_xr::schemas::Bool3 Pack(const bool3 &obj);
-bool3 UnPack(const android_xr::schemas::Bool3 &obj);
-android_xr::schemas::Bool4 Pack(const bool4 &obj);
-bool4 UnPack(const android_xr::schemas::Bool4 &obj);
-android_xr::schemas::Int Pack(const int32_t &obj);
-int32_t UnPack(const android_xr::schemas::Int &obj);
-android_xr::schemas::Int2 Pack(const int2 &obj);
-int2 UnPack(const android_xr::schemas::Int2 &obj);
-android_xr::schemas::Int3 Pack(const int3 &obj);
-int3 UnPack(const android_xr::schemas::Int3 &obj);
-android_xr::schemas::Int4 Pack(const int4 &obj);
-int4 UnPack(const android_xr::schemas::Int4 &obj);
-android_xr::schemas::Float Pack(const float &obj);
-float UnPack(const android_xr::schemas::Float &obj);
-android_xr::schemas::Float2 Pack(const float2 &obj);
-float2 UnPack(const android_xr::schemas::Float2 &obj);
-android_xr::schemas::Float3 Pack(const float3 &obj);
-float3 UnPack(const android_xr::schemas::Float3 &obj);
-android_xr::schemas::Float4 Pack(const float4 &obj);
-float4 UnPack(const android_xr::schemas::Float4 &obj);
-android_xr::schemas::Quatf Pack(const quatf &obj);
-quatf UnPack(const android_xr::schemas::Quatf &obj);
-android_xr::schemas::Mat3f Pack(const mat3f &obj);
-mat3f UnPack(const android_xr::schemas::Mat3f &obj);
-android_xr::schemas::Mat4f Pack(const mat4f &obj);
-mat4f UnPack(const android_xr::schemas::Mat4f &obj);
-android_xr::schemas::Mat4 Pack(const mat4 &obj);
-mat4 UnPack(const android_xr::schemas::Mat4 &obj);
+android_xr::schemas::Bool Pack(const bool& obj);
+bool UnPack(const android_xr::schemas::Bool& obj);
+android_xr::schemas::Bool2 Pack(const bool2& obj);
+bool2 UnPack(const android_xr::schemas::Bool2& obj);
+android_xr::schemas::Bool3 Pack(const bool3& obj);
+bool3 UnPack(const android_xr::schemas::Bool3& obj);
+android_xr::schemas::Bool4 Pack(const bool4& obj);
+bool4 UnPack(const android_xr::schemas::Bool4& obj);
+android_xr::schemas::Int Pack(const int32_t& obj);
+int32_t UnPack(const android_xr::schemas::Int& obj);
+android_xr::schemas::Int2 Pack(const int2& obj);
+int2 UnPack(const android_xr::schemas::Int2& obj);
+android_xr::schemas::Int3 Pack(const int3& obj);
+int3 UnPack(const android_xr::schemas::Int3& obj);
+android_xr::schemas::Int4 Pack(const int4& obj);
+int4 UnPack(const android_xr::schemas::Int4& obj);
+android_xr::schemas::Uint Pack(const uint32_t& obj);
+uint32_t UnPack(const android_xr::schemas::Uint& obj);
+android_xr::schemas::Uint2 Pack(const uint2& obj);
+uint2 UnPack(const android_xr::schemas::Uint2& obj);
+android_xr::schemas::Uint3 Pack(const uint3& obj);
+uint3 UnPack(const android_xr::schemas::Uint3& obj);
+android_xr::schemas::Uint4 Pack(const uint4& obj);
+uint4 UnPack(const android_xr::schemas::Uint4& obj);
+android_xr::schemas::Float Pack(const float& obj);
+float UnPack(const android_xr::schemas::Float& obj);
+android_xr::schemas::Float2 Pack(const float2& obj);
+float2 UnPack(const android_xr::schemas::Float2& obj);
+android_xr::schemas::Float3 Pack(const float3& obj);
+float3 UnPack(const android_xr::schemas::Float3& obj);
+android_xr::schemas::Float4 Pack(const float4& obj);
+float4 UnPack(const android_xr::schemas::Float4& obj);
+android_xr::schemas::Quatf Pack(const quatf& obj);
+quatf UnPack(const android_xr::schemas::Quatf& obj);
+android_xr::schemas::Mat3f Pack(const mat3f& obj);
+mat3f UnPack(const android_xr::schemas::Mat3f& obj);
+android_xr::schemas::Mat4f Pack(const mat4f& obj);
+mat4f UnPack(const android_xr::schemas::Mat4f& obj);
+android_xr::schemas::Mat4 Pack(const mat4& obj);
+mat4 UnPack(const android_xr::schemas::Mat4& obj);
 
 // Helper to convert an std::optional to ptr for adding to
 template <typename T>
-const T *PointerFromOptional(const std::optional<T> &value) {
+const T* PointerFromOptional(const std::optional<T>& value) {
   return value.has_value() ? &value.value() : nullptr;
 }
 

@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+
 # The impel/window folder wraps the bits universal to all platforms and all contexts
 # for rendering a 3D image to a framebuffer.  Not to be confused with imp/core/view, the
 # client-facing view interface for imp.
@@ -35,6 +37,25 @@ package(
 
 #boop
 licenses(["notice"])
+
+string_flag(
+    name = "platform_type",
+    build_setting_default = "opengl",
+    values = [
+        "opengl",
+        "vulkan",
+    ],
+)
+
+config_setting(
+    name = "xr_opengl_platform",
+    flag_values = {":platform_type": "opengl"},
+)
+
+config_setting(
+    name = "xr_vulkan_platform",
+    flag_values = {":platform_type": "vulkan"},
+)
 
 cc_library(
     name = "window_rotation",
@@ -98,14 +119,18 @@ cc_library(
     defines = imp_defines(),
     linkstatic = True,
     deps = [
+        ":filagui_imgui_renderer",
         ":filament_host",
+        ":imgui_renderer",
         ":imp_dev_resources",
+        "//core:config",
         "//core/common",
         "//core/common:debug_draw",
         "//core/common:trace",
         "//core/common:typed_ids",
         "//core/input",
         "//core/math",
+        "//core/split_engine:split_engine_serializer",
         "//core/view:base_view",
         "//core/window/clipboard:clipboard_handler",
         "@com_google_absl//absl/status",
@@ -117,7 +142,77 @@ cc_library(
         "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/libs:filagui",
+    ] + if_android(
+        [
+            ":open_gl_imgui_renderer",
+        ],
+    ),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "filagui_imgui_renderer",
+    srcs = ["filagui_imgui_renderer.cc"],
+    hdrs = ["filagui_imgui_renderer.h"],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    linkstatic = True,
+    deps = [
+        ":imgui_renderer",
+        "//core/view:base_view",
+        "@com_google_absl//absl/status:statusor",
+        "@third_party//filament/filament:filament_hdrs",
+        "@third_party//filament/libs:filagui",
+        "@third_party//filament/libs:utils_hdrs",
     ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "imgui_renderer",
+    hdrs = ["imgui_renderer.h"],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    linkstatic = True,
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "open_gl_imgui_renderer",
+    srcs = [] + if_android(["open_gl_imgui_renderer.cc"]),
+    hdrs = [] + if_android(["open_gl_imgui_renderer.h"]),
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    linkstatic = True,
+    # Tag was added below since //third_party/dear_imgui:imgui_impl_opengl3_android is not
+    # compatible with glinux builds.
+    tags = ["nobuilder"],
+    deps =
+        [
+            ":imgui_renderer",
+            "//core/async:future",
+            "//core/math",
+            "//core/model/mesh",
+            "//core/ncsb",
+            "//core/render/android:android_external_texture_surface",
+            "//core/render/android:platform_android_external_texture_surface",
+            "//core/view:base_view",
+            "//core/view/framework",
+            "@com_google_absl//absl/memory",
+            "@com_google_absl//absl/status",
+            "@com_google_absl//absl/status:statusor",
+            "@com_google_impress//core/common:log",
+            "@dear_imgui",
+            "@third_party//filament/libs:utils_hdrs",
+            "@third_party//split_engine/materials:texture_external_material",
+        ] + select({
+            ":xr_opengl_platform": [
+                "//third_party/dear_imgui:imgui_impl_opengl3_android",
+                "@third_party//filament/filament:filament_hdrs",
+                "@third_party//gl",
+            ],
+            "//conditions:default": [],
+        }),
     alwayslink = 1,
 )
 
@@ -154,6 +249,7 @@ cc_library(
         "//core/common:typed_ids",
         "//core/math",
         "//core/monitor",
+        "//core/view/utils:filament_feature_flag_proto_cc_imp",
         "//core/window/clipboard:clipboard_handler",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/base:core_headers",

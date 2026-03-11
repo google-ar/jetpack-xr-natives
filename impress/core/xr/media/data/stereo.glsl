@@ -25,6 +25,16 @@ const int kInterleavedLeftPrimaryWithDepth = 6;
 const int kInterleavedRightPrimaryWithDepth = 7;
 // LINT.ThenChange(//depot/google3/third_party/impress/core/xr/media/xr_media_viewer_state.proto)
 
+/**
+ * These values map to the RenderEyeTarget enum in media_type.h.
+ */
+// This mesh should be rendered in both eyes.
+const int kRenderEyeTargetBoth = 0;
+// This mesh should be rendered only in the left eye.
+const int kRenderEyeTargetLeft = 1;
+// This mesh should be rendered only in the right eye.
+const int kRenderEyeTargetRight = 2;
+
 float sRGBToLinear(float color) {
   return color <= 0.04045 ? color / 12.92 : pow((color + 0.055) / 1.055, 2.4);
 }
@@ -57,22 +67,12 @@ highp float2 CalculateStereoUvs(highp float2 originalUvs, int encodingType, bool
 // The alpha value is 1.0 outside the feather radius, and smoothly transitions
 // to 0.0 inside the feather radius.
 float getEdgeFeatheredAlpha(highp float2 uv, vec2 feather_radius) {
-  // TODO: b/399922916 - Consider polishing this shader for performance and to
-  //                     improve the look around the corners of the canvas.
-  float alpha_x = 1.0f;
-  float alpha_y = 1.0f;
-
-  if (uv.x < feather_radius.x) {
-    alpha_x = smoothstep(0.0, 1.0, uv.x / feather_radius.x);
-  } else if (uv.x > 1.0f - feather_radius.x) {
-    alpha_x = smoothstep(0.0, 1.0, (1.0f - uv.x) / feather_radius.x);
-  }
-
-  if (uv.y < feather_radius.y) {
-    alpha_y = smoothstep(0.0, 1.0, uv.y / feather_radius.y);
-  } else if (uv.y > 1.0f - feather_radius.y) {
-    alpha_y = smoothstep(0.0, 1.0, (1.0f - uv.y) / feather_radius.y);
-  }
-
-  return alpha_x * alpha_y;
+  // Calculate the distance from the nearest edge (0.0 or 1.0)
+  float2 dist_from_edge = min(uv, 1.0 - uv);
+  // Normalize the distance by the feather radius.
+  dist_from_edge /= max(feather_radius, 1e-3);
+  // Calculate the alpha value based on the normalized distance.
+  float2 alpha = smoothstep(0.0, 1.0, dist_from_edge);
+  // Combine the alpha values for the two UVs.
+  return alpha.x * alpha.y;
 }

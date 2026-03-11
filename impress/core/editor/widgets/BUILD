@@ -360,7 +360,7 @@ cc_library(
         "@dear_imgui",
         "@mediapipe//mediapipe/framework/port:status",
     ] + if_desktop([
-        "@tinyfiledialogs",
+        "//third_party/tinyfiledialogs",
     ]),
     alwayslink = 1,
 )

@@ -20,17 +20,96 @@
 #include <utility>
 #include <vector>
 
+#include "absl/log/check.h"
+#include "core/common/log.h"
 #include "absl/strings/string_view.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/backend/include/backend/PixelBufferDescriptor.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
+#include "flatbuffers/vector.h"
+#include "core/assets/asset_ptr.h"
 #include "core/image/image_contents.h"
+#include "core/render/image_asset.h"
 #include "core/split_engine/split_engine_serializer.h"
+#include "core/split_engine/split_engine_texture_serializer.h"
 #include "split_engine/schemas/split_engine_data_generated.h"
 
 namespace imp::split_engine {
+
+namespace {
+
+class SplitEngineTextureSerializerImpl : public SplitEngineTextureSerializer {
+ public:
+  explicit SplitEngineTextureSerializerImpl(
+      SplitEngineTextureBuilder::State state)
+      : state_(std::move(state)) {
+    
+  }
+  ~SplitEngineTextureSerializerImpl() override = default;
+
+  flatbuffers::Offset<android_xr::schemas::Texture> SerializeTexture(
+      flatbuffers::FlatBufferBuilder& fbb) const noexcept override {
+    IMP_LOG(imp::INFO) << "[SplitEngineSerializer]: texture " << state_.texture_id;
+    return android_xr::schemas::CreateTexture(
+        fbb, state_.texture_id, state_.width, state_.height,
+        static_cast<uint16_t>(state_.format), state_.levels,
+        static_cast<uint8_t>(state_.sampler), state_.mips,
+        CreateFlatbufferImageParams(fbb), CreateFlatbufferPixelBuffers(fbb));
+  }
+
+  std::vector<size_t> GetTextureBufferSizes() const noexcept override {
+    std::vector<size_t> image_buffer_sizes(state_.image_descriptors.size());
+    // TODO: (broken link) - support texture arrays in Split Engine.
+    for (const auto& image_descriptor : state_.image_descriptors) {
+      image_buffer_sizes.push_back(image_descriptor.size);
+    }
+    return image_buffer_sizes;
+  }
+
+ private:
+  const SplitEngineTextureBuilder::State state_;
+
+  using ImageParamsOffset =
+      flatbuffers::Offset<android_xr::schemas::ImageParams>;
+  using ImageParamsArray =
+      flatbuffers::Offset<flatbuffers::Vector<ImageParamsOffset>>;
+  using PixelBufferOffset =
+      flatbuffers::Offset<android_xr::schemas::PixelBuffer>;
+  using PixelBufferArray =
+      flatbuffers::Offset<flatbuffers::Vector<PixelBufferOffset>>;
+
+  ImageParamsArray CreateFlatbufferImageParams(
+      flatbuffers::FlatBufferBuilder& fbb) const noexcept {
+    const int num_levels = state_.image_descriptors.size();
+    std::vector<ImageParamsOffset> image_params(num_levels);
+    for (int level = 0; level < num_levels; ++level) {
+      const filament::backend::PixelBufferDescriptor& image =
+          state_.image_descriptors[level];
+      image_params[level] = android_xr::schemas::CreateImageParams(
+          fbb, level, static_cast<uint8_t>(image.format),
+          static_cast<uint8_t>(image.type), image.alignment, image.left,
+          image.top, image.stride);
+    }
+    return fbb.CreateVector(image_params);
+  }
+
+  PixelBufferArray CreateFlatbufferPixelBuffers(
+      flatbuffers::FlatBufferBuilder& fbb) const noexcept {
+    const int num_levels = state_.image_descriptors.size();
+    std::vector<PixelBufferOffset> resource_datas(num_levels);
+    for (int level = 0; level < num_levels; ++level) {
+      resource_datas[level] = android_xr::schemas::CreatePixelBuffer(
+          fbb, fbb.CreateVector(static_cast<uint8_t*>(
+                                    state_.image_descriptors[level].buffer),
+                                state_.image_descriptors[level].size));
+    }
+    return fbb.CreateVector(resource_datas);
+  }
+};
+
+}  // namespace
 
 SplitEngineTextureBuilder::SplitEngineTextureBuilder(
     SplitEngineSerializer& serializer) noexcept
@@ -39,65 +118,95 @@ SplitEngineTextureBuilder::SplitEngineTextureBuilder(
 SplitEngineTextureBuilder::SplitEngineTextureBuilder(
     SplitEngineTextureBuilder&& rhs) noexcept
     : serializer_(rhs.serializer_),
-      width_(rhs.width_),
-      height_(rhs.height_),
-      levels_(rhs.levels_),
-      format_(rhs.format_),
-      sampler_(rhs.sampler_),
-      mips_(rhs.mips_),
-      image_descriptors_(std::move(rhs.image_descriptors_)),
+      state_(std::move(rhs.state_)),
       images_released_callback_(std::move(rhs.images_released_callback_)) {}
 
 SplitEngineTextureBuilder& SplitEngineTextureBuilder::operator=(
     SplitEngineTextureBuilder&& rhs) noexcept {
   serializer_ = rhs.serializer_;
-  width_ = rhs.width_;
-  height_ = rhs.height_;
-  levels_ = rhs.levels_;
-  format_ = rhs.format_;
-  sampler_ = rhs.sampler_;
-  mips_ = rhs.mips_;
-  image_descriptors_ = std::move(rhs.image_descriptors_);
+  state_ = std::move(rhs.state_);
   images_released_callback_ = std::move(rhs.images_released_callback_);
   return *this;
 }
 
 SplitEngineTextureBuilder& SplitEngineTextureBuilder::Width(uint32_t width) {
-  width_ = width;
+  
+
+  state_.width = width;
   return *this;
 }
+
 SplitEngineTextureBuilder& SplitEngineTextureBuilder::Height(uint32_t height) {
-  height_ = height;
+  
+
+  state_.height = height;
   return *this;
 }
+
+SplitEngineTextureBuilder& SplitEngineTextureBuilder::Depth(uint32_t depth) {
+  // TODO: (broken link) - support texture arrays in Split Engine.
+  IMP_LOG(imp::FATAL) << "Depth is not supported in Split Engine.";
+  return *this;
+}
+
 SplitEngineTextureBuilder& SplitEngineTextureBuilder::Levels(uint8_t levels) {
-  levels_ = levels;
+  
+
+  state_.levels = levels;
   return *this;
 }
+
 SplitEngineTextureBuilder& SplitEngineTextureBuilder::Format(
     filament::backend::TextureFormat format) {
-  format_ = format;
+  
+
+  state_.format = format;
   return *this;
 }
+
 SplitEngineTextureBuilder& SplitEngineTextureBuilder::Sampler(
     filament::backend::SamplerType sampler) {
-  sampler_ = sampler;
+  
+
+  state_.sampler = sampler;
   return *this;
 }
+
 SplitEngineTextureBuilder& SplitEngineTextureBuilder::Name(
     absl::string_view name) {
+  
+
   // TODO: Implement this.
   return *this;
 }
+
+SplitEngineTextureBuilder& SplitEngineTextureBuilder::ImageInternal(
+    filament::Engine& engine, AssetPtr<ImageAsset> image, int image_index) {
+  if (image_index != 0) {
+    // TODO: (broken link) - support texture arrays in Split Engine.
+    IMP_LOG(imp::FATAL) << "Texture arrays are not supported in Split Engine.";
+  }
+
+  state_.image_descriptors = image->GetLevelDescriptors();
+  // TODO: (broken link) - we may not need to store asset ptr in the state: even
+  // if the image asset is destroyed, PixelBufferDescriptor shall remain valid.
+  state_.image = std::move(image);
+
+  return *this;
+}
+
 SplitEngineTextureBuilder& SplitEngineTextureBuilder::ImageInternal(
     filament::Engine& engine, image::ImageContents& image_contents,
     std::function<void()> callback, int32_t* out_levels) {
-  image_descriptors_ =
+  
+  
+
+  state_.image_descriptors =
       image_contents.CreatePixelBufferDescriptorLevels(nullptr, false);
   images_released_callback_ = callback;
 
   if (out_levels) {
-    *out_levels = image_descriptors_.size();
+    *out_levels = state_.image_descriptors.size();
   }
 
   return *this;
@@ -105,65 +214,25 @@ SplitEngineTextureBuilder& SplitEngineTextureBuilder::ImageInternal(
 
 SplitEngineTextureBuilder& SplitEngineTextureBuilder::GenerateMipmaps(
     filament::Engine& engine) {
-  mips_ = true;
+  
+
+  state_.mips = true;
   return *this;
 }
 
-std::vector<size_t> SplitEngineTextureBuilder::GetTextureBufferSizes() {
-  std::vector<size_t> image_buffer_sizes(image_descriptors_.size());
-  for (const auto& image_descriptor : image_descriptors_) {
-    image_buffer_sizes.push_back(image_descriptor.size);
-  }
-  return image_buffer_sizes;
-}
-
 void SplitEngineTextureBuilder::Finalize(filament::Texture* texture) {
-  serializer_->AddTexture(*texture, *this);
+  
+  
+
+  state_.texture_id = SplitEngineSerializer::GetId(texture);
+  state_.finalized = true;
+  const SplitEngineTextureSerializerImpl texture_serializer(std::move(state_));
+  serializer_->SerializeTexture(texture_serializer);
 
   // We're done with image_descriptors_ so the backing buffers may now be freed.
   if (images_released_callback_) {
     images_released_callback_();
   }
-}
-
-flatbuffers::Offset<android_xr::schemas::Texture>
-SplitEngineTextureBuilder::SerializeTexture(
-    filament::Texture& texture, flatbuffers::FlatBufferBuilder& fbb) {
-  return android_xr::schemas::CreateTexture(
-      fbb, SplitEngineSerializer::GetId(&texture), width_, height_,
-      static_cast<uint16_t>(format_), levels_, static_cast<uint8_t>(sampler_),
-      mips_, CreateFlatbufferImageParams(fbb),
-      CreateFlatbufferPixelBuffers(fbb));
-}
-
-SplitEngineTextureBuilder::ImageParamsArray
-SplitEngineTextureBuilder::CreateFlatbufferImageParams(
-    flatbuffers::FlatBufferBuilder& fbb) {
-  int num_levels = image_descriptors_.size();
-  std::vector<ImageParamsOffset> image_params(num_levels);
-  for (int level = 0; level < num_levels; ++level) {
-    const filament::backend::PixelBufferDescriptor& image =
-        image_descriptors_[level];
-    image_params[level] = android_xr::schemas::CreateImageParams(
-        fbb, level, static_cast<uint8_t>(image.format),
-        static_cast<uint8_t>(image.type), image.alignment, image.left,
-        image.top, image.stride);
-  }
-  return fbb.CreateVector(image_params);
-}
-
-SplitEngineTextureBuilder::PixelBufferArray
-SplitEngineTextureBuilder::CreateFlatbufferPixelBuffers(
-    flatbuffers::FlatBufferBuilder& fbb) {
-  int num_levels = image_descriptors_.size();
-  std::vector<PixelBufferOffset> resource_datas(num_levels);
-  for (int level = 0; level < num_levels; ++level) {
-    resource_datas[level] = android_xr::schemas::CreatePixelBuffer(
-        fbb, fbb.CreateVector(
-                 static_cast<uint8_t*>(image_descriptors_[level].buffer),
-                 image_descriptors_[level].size));
-  }
-  return fbb.CreateVector(resource_datas);
 }
 
 }  // namespace imp::split_engine

@@ -26,15 +26,16 @@
 
 namespace imp {
 
-Rememberer::Rememberer() {}
+Rememberer::Rememberer() { info_ = std::make_shared<RemembererInfo>(); }
 
-Rememberer::~Rememberer() { ClearRememberedInternal(true); }
+Rememberer::~Rememberer() {
+  if (!info_) {
+    return;
+  }
+  ClearRememberedInternal(true);
+}
 
 bool Rememberer::HasRemembered() const {
-  if (!info_) {
-    return false;
-  }
-
   absl::MutexLock lock(&info_->mu);
   return !info_->remembered_objects_map.empty();
 }
@@ -42,10 +43,6 @@ bool Rememberer::HasRemembered() const {
 void Rememberer::ClearRemembered() { ClearRememberedInternal(false); }
 
 void Rememberer::ClearRememberedInternal(bool is_destroying_rememberer) {
-  if (!info_) {
-    return;
-  }
-
   RememberedObjectsMap remembered_objects_map;
   {
     absl::MutexLock lock(&info_->mu);
@@ -59,12 +56,7 @@ void Rememberer::ClearRememberedInternal(bool is_destroying_rememberer) {
 }
 
 Invocable<void()> Rememberer::Remember(Holdable holdable) {
-  if (!info_) {
-    info_ = std::make_shared<RemembererInfo>();
-  }
-
   absl::MutexLock lock(&info_->mu);
-
   // If the Rememberer is being destructed, return an empty function and do not
   // remember.
   if (!info_->can_remember_object) {

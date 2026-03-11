@@ -22,6 +22,7 @@
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/optional.h"
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
 #include "core/common/owned_or_unowned_memory.h"
@@ -34,6 +35,7 @@
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/groups_manager.h"
 #include "core/ncsb/node_handle.h"
+#include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/lighting/light_component.h"
@@ -73,6 +75,8 @@ void LightManager::SetEnvironmentLight(EnvironmentLightPtr environment_light,
   EnvironmentLightHolder environment_light_holder(
       AutomatedLightingMode::kNoEnvironmentLight);
   if (environment_light) {
+    UpdateSplitEngineEnvironmentLight(
+        environment_light->GetReflectionIblAsset(), group_name);
     environment_light_holder = EnvironmentLightHolder(
         OwnedOrUnownedMemory<EnvironmentLight>(std::move(environment_light)));
   }
@@ -87,6 +91,8 @@ void LightManager::SetEnvironmentLight(EnvironmentLight* environment_light,
   EnvironmentLightHolder environment_light_holder(
       AutomatedLightingMode::kNoEnvironmentLight);
   if (environment_light) {
+    UpdateSplitEngineEnvironmentLight(
+        environment_light->GetReflectionIblAsset(), group_name);
     environment_light_holder = EnvironmentLightHolder(
         OwnedOrUnownedMemory<EnvironmentLight>(std::move(environment_light)));
   }
@@ -102,6 +108,8 @@ void LightManager::SetEnvironmentLight(
   EnvironmentLightHolder environment_light_holder(
       AutomatedLightingMode::kNoEnvironmentLight);
   if (environment_light) {
+    UpdateSplitEngineEnvironmentLight(
+        environment_light->GetReflectionIblAsset(), group_name);
     environment_light_holder =
         EnvironmentLightHolder(std::move(environment_light));
   }
@@ -117,6 +125,8 @@ void LightManager::SetEnvironmentLight(
   EnvironmentLightHolder environment_light_holder(
       AutomatedLightingMode::kNoEnvironmentLight);
   if (environment_light) {
+    UpdateSplitEngineEnvironmentLight(
+        environment_light->GetReflectionIblAsset(), group_name);
     environment_light_holder =
         EnvironmentLightHolder(std::move(environment_light));
   }
@@ -135,6 +145,12 @@ void LightManager::MirrorMainGroupEnvironmentLightToGroup(
 }
 
 void LightManager::ClearEnvironmentLight(absl::string_view group_name) {
+  if (group_name == GroupsManager::kMainGroupName) {
+    if (split_engine::SplitEngineSerializer* serializer =
+            view_.GetSplitEngineSerializer()) {
+      serializer->ClearPreferredEnvironmentIblAsset();
+    }
+  }
   view_.GetGroupsManager().SetGroupEnvironmentLight(
       group_name,
       EnvironmentLightHolder(AutomatedLightingMode::kNoEnvironmentLight));
@@ -164,6 +180,20 @@ Future<absl::Status> LightManager::SetupDefaultLighting() {
 
         SetupDefaultDirectionalLight();
       });
+}
+
+void LightManager::UpdateSplitEngineEnvironmentLight(
+    absl::optional<AssetPtr<ImageBasedLightingAsset>> ibl_asset,
+    absl::string_view group_name, float intensity, const float3& tint) {
+  if (!ibl_asset.has_value() || group_name != GroupsManager::kMainGroupName) {
+    return;
+  }
+  if (split_engine::SplitEngineSerializer* serializer =
+          view_.GetSplitEngineSerializer()) {
+    serializer->SetPreferredEnvironmentIblAsset(
+        *ibl_asset.value()->BorrowReflectionTexture()->GetTexture(), intensity,
+        tint);
+  }
 }
 
 LightManager::EnvironmentLightingStatus LightManager::GetDefaultLightingStatus()

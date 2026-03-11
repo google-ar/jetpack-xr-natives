@@ -38,6 +38,7 @@
 #include "core/render/texture_factory.h"
 #include "core/render/texture_options.h"
 #include "core/view/framework/lighting/light_manager.h"
+#include "core/view/utils/asset.h"
 
 namespace imp {
 
@@ -65,12 +66,28 @@ Future<OwnedTexturePtr> LoadTextureFromPath(TextureFactory& texture_factory,
       });
 }
 
+Future<OwnedTexturePtr> LoadTextureFromData(
+    TextureFactory& texture_factory, AssetManager& asset_manager,
+    imp::AssetDefinition asset_definition) {
+  return asset_manager.LoadImage(asset_definition)
+      .Then([&texture_factory = texture_factory](
+                AssetPtr<ImageAsset> image) -> absl::StatusOr<OwnedTexturePtr> {
+        // Uploads the texture to the system.
+        OwnedTexturePtr texture = texture_factory.CreateTexture(
+            *image, imp::TextureGenerationOptions{},
+            kDefaultTextureSamplerOptions);
+        return texture;
+      });
+}
+
 class TextureManagerImpl : public TextureManager {
  public:
   explicit TextureManagerImpl(ImpressApiView& view);
   ~TextureManagerImpl() override = default;
 
   void LoadTexture(absl::string_view path,
+                   std::unique_ptr<BaseAssetLoader> asset_loader) override;
+  void LoadTexture(imp::AssetDefinition asset_definition,
                    std::unique_ptr<BaseAssetLoader> asset_loader) override;
   absl::StatusOr<std::intptr_t> BorrowReflectionTexture() override;
   absl::StatusOr<std::intptr_t> GetReflectionTextureFromIbl(
@@ -90,6 +107,28 @@ void TextureManagerImpl::LoadTexture(
     absl::string_view path, std::unique_ptr<BaseAssetLoader> asset_loader) {
   LoadTextureFromPath(view_.GetTextureFactory(), view_.GetAssetManager(),
                       view_.GetAssetPtrMap(), path)
+      .Then([this, asset_loader = std::move(asset_loader)](
+                absl::StatusOr<OwnedTexturePtr> texture) mutable {
+        if (texture.ok() && *texture != nullptr) {
+          auto bindings_texture = new BindingsTexture(
+              texture->Borrow(SmallSourceLocation::Current()));
+          std::intptr_t texture_token = view_.ToJava(bindings_texture);
+          view_.GetBindingsTextureMap().emplace(texture_token,
+                                                std::move(*texture));
+          asset_loader->OnSuccess(texture_token);
+        } else {
+          asset_loader->OnFailure(absl::StrFormat("Failed to load texture: %s.",
+                                                  texture.status().message()));
+        }
+      })
+      .KeptBy(&view_);
+}
+
+void TextureManagerImpl::LoadTexture(
+    imp::AssetDefinition asset_definition,
+    std::unique_ptr<BaseAssetLoader> asset_loader) {
+  LoadTextureFromData(view_.GetTextureFactory(), view_.GetAssetManager(),
+                      asset_definition)
       .Then([this, asset_loader = std::move(asset_loader)](
                 absl::StatusOr<OwnedTexturePtr> texture) mutable {
         if (texture.ok() && *texture != nullptr) {

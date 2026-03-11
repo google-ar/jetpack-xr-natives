@@ -100,8 +100,22 @@ class RecipeRunner : public Component {
 
   RecipeRuntimeGraph& GetRuntimeGraph() { return *runtime_graph_; }
 
+  std::optional<absl::Duration> GetMaxExecutionTime() const {
+    return max_execution_time_;
+  }
+
+  // Note: no value for execution_time means infinite execution time
+  void SetMaxExecutionTime(std::optional<absl::Duration> execution_time) {
+    max_execution_time_ = execution_time;
+  }
+
  private:
-  void TriggerEventAndHandleExecutionResult(const RecipeRuntimeEvent& event);
+  void TriggerEventAndHandleExecutionResult(
+      const RecipeRuntimeEvent& event,
+      std::optional<absl::Time> execution_cutoff_time);
+
+  // Calculate the absolute cutoff time based on max_execution_time_
+  std::optional<absl::Time> CalculateCutoffTime();
 
   RecipeRunnerState state_;
   RuntimeState runtime_state_ = RecipeRunner::RuntimeState::kStopped;
@@ -121,6 +135,9 @@ class RecipeRunner : public Component {
   NodeHandle hovered_node_;
 
   RecipeAsyncExecutionManager async_execution_manager_;
+
+  // Used to throttle the amount of execution time per update and start events
+  std::optional<absl::Duration> max_execution_time_;
 
  public:
   using IsfInfo = IsfInfo<&RecipeRunner::state_, IsfDependencies<GltfRenderer>>;

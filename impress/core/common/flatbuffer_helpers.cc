@@ -44,7 +44,7 @@ OptionalError ReleaseToBufferAccess(flatbuffers::FlatBufferBuilder* fbb,
   return NoError();
 }
 
-std::vector<mat3f> FromFlatbuffer(schemas::Mat3fArray* v) {
+std::vector<mat3f> FromFlatbuffer(schemas::Mat3fVector* v) {
   std::vector<mat3f> value;
   value.reserve(v->mats()->size());
   for (size_t i = 0; i < v->mats()->size(); ++i) {

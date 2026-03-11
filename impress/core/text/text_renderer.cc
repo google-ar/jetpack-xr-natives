@@ -147,6 +147,9 @@ GlyphAtlas::TextureSize GetAtlasTextureSize(
       return GlyphAtlas::TextureSize::k2048_4096;
     case ViewConfig::GlyphAtlasTextureSize::SIZE4096:
       return GlyphAtlas::TextureSize::k4096;
+    case ViewConfig::GlyphAtlasTextureSize::SIZE256X256X8X8:
+      IMP_LOG(imp::FATAL) << "GlyphAtlas does not support compound atlas textures.";
+      return GlyphAtlas::TextureSize::k2048;
   }
 }
 
@@ -160,6 +163,8 @@ SlicedGlyphAtlas::TextureSize GetSlicedAtlasTextureSize(
       return SlicedGlyphAtlas::TextureSize::k2048_4096;
     case ViewConfig::GlyphAtlasTextureSize::SIZE4096:
       return SlicedGlyphAtlas::TextureSize::k4096;
+    case ViewConfig::GlyphAtlasTextureSize::SIZE256X256X8X8:
+      return SlicedGlyphAtlas::TextureSize::k256_256_8_8;
   }
 }
 
@@ -235,19 +240,32 @@ Future<absl::Status> TextRenderer::SetupImpl(
   }
 
   ViewConfig view_config = GetView().GetConfig();
+  ExperimentalFeatureFlags experimental_feature_flags =
+      view_config.experimental_feature_flags;
   std::optional<ViewConfig::GlyphAtlasTextureSize> texture_size =
       view_config.glyph_atlas_texture_size;
   // TODO: Address duplication when SlicedGlyphAtlas is ready.
-  const bool kUseSlicedGlyphAtlas = false;
-  if (kUseSlicedGlyphAtlas) {
+  if (texture_size.has_value() &&
+      (*texture_size == ViewConfig::GlyphAtlasTextureSize::SIZE256X256X8X8)) {
     sliced_glyph_atlas_ =
         &GetView().GetRegistry().GetOrRegister<SlicedGlyphAtlas>(
-            [this, texture_size = texture_size] {
+            [this, texture_size = texture_size,
+             flags = experimental_feature_flags] {
               if (texture_size.has_value()) {
                 return std::make_unique<SlicedGlyphAtlas>(
-                    GetView(), SlicedGlyphAtlas::Config{
-                                   .texture_size = GetSlicedAtlasTextureSize(
-                                       *texture_size)});
+                    GetView(),
+                    SlicedGlyphAtlas::Config{
+                        .texture_size =
+                            GetSlicedAtlasTextureSize(*texture_size),
+                        .use_hardware_rendering =
+                            flags.glyph_atlas_use_hardware_rendering.value_or(
+                                true),
+                        .force_reset_on_view_resumed =
+                            flags.glyph_atlas_force_reset_on_view_resumed
+                                .value_or(true),
+                        .force_auto_method_rendering =
+                            flags.glyph_atlas_force_auto_method_rendering
+                                .value_or(false)});
 
               } else {
                 return std::make_unique<SlicedGlyphAtlas>(GetView());
@@ -267,12 +285,21 @@ Future<absl::Status> TextRenderer::SetupImpl(
         this);
   } else {
     glyph_atlas_ = &GetView().GetRegistry().GetOrRegister<GlyphAtlas>(
-        [this, texture_size = texture_size] {
+        [this, texture_size = texture_size,
+         flags = experimental_feature_flags] {
           if (texture_size.has_value()) {
             return std::make_unique<GlyphAtlas>(
                 GetView(),
-                GlyphAtlas::Config{.texture_size =
-                                       GetAtlasTextureSize(*texture_size)});
+                GlyphAtlas::Config{
+                    .texture_size = GetAtlasTextureSize(*texture_size),
+                    .use_hardware_rendering =
+                        flags.glyph_atlas_use_hardware_rendering.value_or(true),
+                    .force_reset_on_view_resumed =
+                        flags.glyph_atlas_force_reset_on_view_resumed.value_or(
+                            true),
+                    .force_auto_method_rendering =
+                        flags.glyph_atlas_force_auto_method_rendering.value_or(
+                            false)});
 
           } else {
             return std::make_unique<GlyphAtlas>(GetView());
@@ -313,17 +340,14 @@ Future<absl::Status> TextRenderer::UpdateMeshesAndMaterialsFromAtlas() {
       .stroke_width_pixels = state_.stroke_width_pixels,
       .color = GetTextColor(),
       .stroke_color = GetStrokeColor(),
-      .force_non_separable =
-          state_.force_non_separable && !text_layout_provider_.has_value(),
+      .force_non_separable = state_.force_non_separable &&
+                             GlyphEmulator::CanForceNonSeparable(
+                                 text_layout_provider_.has_value(),
+                                 state_.text_tracking.value_or(0.0f)),
       .precomputed_metrics = GetPrecomputedMetrics(),
   };
   if (state_.text_tracking.has_value()) {
     options.text_tracking = *state_.text_tracking;
-    // If we render an unseparated string with non-zero text tracking, scuba
-    // test output becomes nondeterministic.
-    if (options.text_tracking != 0.0f) {
-      options.force_non_separable = false;
-    }
   }
   force_non_separable_ = options.force_non_separable;
 
@@ -332,7 +356,10 @@ Future<absl::Status> TextRenderer::UpdateMeshesAndMaterialsFromAtlas() {
       GetView().GetMaterialFactory().LoadMaterial(
           state_.material.has_value()
               ? *state_.material
-              : text_renderer_assets::kTextMaterialCmat.GetUrl());
+              : (GetView().GetConfig().glyph_atlas_texture_size ==
+                         imp::ViewConfig::GlyphAtlasTextureSize::SIZE256X256X8X8
+                     ? text_renderer_assets::kSlicedTextMaterialCmat.GetUrl()
+                     : text_renderer_assets::kTextMaterialCmat.GetUrl()));
 
   Future<FontInfo> font_info_future;
   if (options.precomputed_metrics.has_value()) {
@@ -413,16 +440,13 @@ Future<absl::Status> TextRenderer::UpdateMeshesAndMaterialsFromSlicedAtlas() {
       .stroke_width_pixels = state_.stroke_width_pixels,
       .color = GetTextColor(),
       .stroke_color = GetStrokeColor(),
-      .force_non_separable =
-          state_.force_non_separable && !text_layout_provider_.has_value(),
+      .force_non_separable = state_.force_non_separable &&
+                             GlyphEmulator::CanForceNonSeparable(
+                                 text_layout_provider_.has_value(),
+                                 state_.text_tracking.value_or(0.0f)),
   };
   if (state_.text_tracking.has_value()) {
     options.text_tracking = *state_.text_tracking;
-    // If we render an unseparated string with non-zero text tracking, scuba
-    // test output becomes nondeterministic.
-    if (options.text_tracking != 0.0f) {
-      options.force_non_separable = false;
-    }
   }
   force_non_separable_ = options.force_non_separable;
 
@@ -1052,6 +1076,9 @@ void TextRenderer::RenderSlicedAtlasGlyphPass(
   for (int glyph_index = 0; glyph_index < sliced_atlas_glyphs_.size();
        ++glyph_index) {
     const SlicedGlyphAtlas::Glyph& glyph = sliced_atlas_glyphs_[glyph_index];
+    float2 slice_offset, slice_scale;
+    sliced_glyph_atlas_->GetSliceOffsetAndScale(glyph.slice, &slice_offset,
+                                                &slice_scale);
     for (int vertex_index = 0; vertex_index < kQuadVertices.size();
          ++vertex_index) {
       const QuadVertex& quad_vertex = kQuadVertices[vertex_index];
@@ -1065,6 +1092,8 @@ void TextRenderer::RenderSlicedAtlasGlyphPass(
       // atlas.
       float2 vertex_uv_coords =
           glyph.uv_top_left + (glyph.uv_size * quad_vertex.uv);
+      // Accommodate the slice position in the sampled texture.
+      vertex_uv_coords = slice_offset + (vertex_uv_coords * slice_scale);
       // In the text_material_common.glsl:getGlyphColor we check the signs to
       // return the stroke, text, or sample color.
       if (has_stroke) {

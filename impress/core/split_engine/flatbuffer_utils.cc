@@ -14,6 +14,7 @@
 
 #include "core/split_engine/flatbuffer_utils.h"
 
+#include <cstdint>
 #include <vector>
 
 #include "core/common/log.h"
@@ -166,6 +167,36 @@ android_xr::schemas::Int4 Pack(const int4& obj) {
 
 int4 UnPack(const android_xr::schemas::Int4& obj) {
   return int4(obj.x(), obj.y(), obj.z(), obj.w());
+}
+
+android_xr::schemas::Uint Pack(const uint32_t& obj) {
+  return android_xr::schemas::Uint(obj);
+}
+
+uint32_t UnPack(const android_xr::schemas::Uint& obj) { return obj.value(); }
+
+android_xr::schemas::Uint2 Pack(const uint2& obj) {
+  return android_xr::schemas::Uint2(obj.x, obj.y);
+}
+
+uint2 UnPack(const android_xr::schemas::Uint2& obj) {
+  return uint2(obj.x(), obj.y());
+}
+
+android_xr::schemas::Uint3 Pack(const uint3& obj) {
+  return android_xr::schemas::Uint3(obj.x, obj.y, obj.z);
+}
+
+uint3 UnPack(const android_xr::schemas::Uint3& obj) {
+  return uint3(obj.x(), obj.y(), obj.z());
+}
+
+android_xr::schemas::Uint4 Pack(const uint4& obj) {
+  return android_xr::schemas::Uint4(obj.x, obj.y, obj.z, obj.w);
+}
+
+uint4 UnPack(const android_xr::schemas::Uint4& obj) {
+  return uint4(obj.x(), obj.y(), obj.z(), obj.w());
 }
 
 android_xr::schemas::Float Pack(const float& obj) {

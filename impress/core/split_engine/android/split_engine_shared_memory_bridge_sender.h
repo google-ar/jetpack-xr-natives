@@ -19,6 +19,7 @@
 
 #include <memory>
 
+#include "absl/status/status.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/split_engine/android/buffer_handle_factory.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
@@ -36,20 +37,24 @@ class SplitEngineSharedMemoryBridgeSender
     : public SplitEngineSharedMemoryBridgeSenderBase {
  public:
   SplitEngineSharedMemoryBridgeSender(
-      SplitEngineSharedMemoryBridgeClient& bridge, bool recycle_buffers);
+      SplitEngineSharedMemoryBridgeClient& bridge);
 
   ~SplitEngineSharedMemoryBridgeSender() override = default;
 
-  void SendMessage(const flatbuffers::FlatBufferBuilder& builder) override;
+  absl::Status SendMessage(
+      MessageGroupId group_id,
+      const flatbuffers::FlatBufferBuilder& builder) override;
+
+ protected:
   MessageGroupId GenerateMessageGroupId() override;
   ClientId GetClientId() const override;
   BufferHandleFactory& GetBufferHandleFactory() override;
-  FlatbufferArenaAllocator& GetAllocator() override;
+  ArenaAllocator& GetArenaAllocator() override;
 
  private:
   SplitEngineSharedMemoryBridgeClient& bridge_;
   std::unique_ptr<BufferHandleFactory> buffer_handle_factory_;
-  FlatbufferArenaAllocator arena_allocator_;
+  ArenaAllocator arena_allocator_;
 };
 
 }  // namespace imp::split_engine

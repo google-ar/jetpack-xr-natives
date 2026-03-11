@@ -17,6 +17,7 @@
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "core/common/registry.h"
+#include "core/config.h"
 #include "core/math/almost_equal.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
@@ -25,6 +26,10 @@
 #include "core/physics/rigid_body.h"
 #include "core/view/framework/collision/collision_manager.h"
 
+#if IMP_RUNTIME(DEV)
+#include "core/physics/physics_constants.h"
+#endif
+
 namespace imp {
 
 void BaseConstraint::AddToPhysicsManager(bool add) {
@@ -32,8 +37,23 @@ void BaseConstraint::AddToPhysicsManager(bool add) {
     if (!added_to_physics_manager_ && GetBtConstraint()) {
       physics_manager_->AddConstraint(*GetBtConstraint());
       added_to_physics_manager_ = true;
+#if IMP_RUNTIME(DEV)
+      if (debug_visualizer_) {
+        debug_visualizer_registered_ = true;
+        physics_manager_->RegisterDebugVisualizer(
+            owner_node_, [this]() { debug_visualizer_(); },
+            debug_visualizer_name_);
+      }
+#endif
     }
   } else {
+#if IMP_RUNTIME(DEV)
+    if (debug_visualizer_registered_) {
+      debug_visualizer_registered_ = false;
+      physics_manager_->UnRegisterDebugVisualizer(owner_node_,
+                                                  debug_visualizer_name_);
+    }
+#endif
     if (added_to_physics_manager_) {
       if (GetBtConstraint()) {
         physics_manager_->RemoveConstraint(*GetBtConstraint());
@@ -149,5 +169,14 @@ void BaseConstraint::CheckIntegrityAndUpdate() {
     }
   }
 }
+
+#if IMP_RUNTIME(DEV)
+void BaseConstraint::UseDebugVisualizer(imp::Invocable<void()> visualizer,
+                                        absl::string_view visualizer_name) {
+  debug_visualizer_ = std::move(visualizer);
+  debug_visualizer_name_ = visualizer_name;
+}
+
+#endif
 
 }  // namespace imp

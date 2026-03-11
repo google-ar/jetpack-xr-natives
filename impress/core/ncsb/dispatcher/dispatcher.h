@@ -21,7 +21,6 @@
 #include <stdint.h>
 
 #include <cstddef>
-#include <functional>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -32,7 +31,6 @@
 #include "core/common/invocable.h"
 #include "core/common/rememberer.h"
 #include "core/common/trace.h"
-#include "core/ncsb/dispatcher/connection_holder.h"
 #include "core/ncsb/dispatcher/connection_id.h"
 #include "core/ncsb/dispatcher/connection_owner.h"
 #include "core/ncsb/dispatcher/event.h"
@@ -123,7 +121,7 @@ using EnableIfConnectionOwner =
 // for cases where you want to determine at runtime what type of event to
 // connect to, for example when listening to events across language boundaries.
 // Example:
-// google3/third_party/impress/core/scripting/message_handlers/event_handler.h
+// google3/third_party/impress/core/scripting/scripting_system.cc
 //
 // Connections are all made to a NodeHandle, which will only receive Events sent
 // to that NodeHandle.  Calling these API without the NodeHandle or passing in
@@ -255,7 +253,7 @@ class Dispatcher {
   // This is useful for cases where you want to determine at runtime what type
   // of event to connect to, for example when listening to events across
   // language boundaries. Example:
-  // google3/third_party/impress/core/scripting/message_handlers/event_handler.h
+  // google3/third_party/impress/core/scripting/scripting_system.cc
   //
   // The handler can return a Dispatcher::PropagationResult or void, which
   // defaults to Dispatcher::kContinue. Calling without the NodeHandle or
@@ -303,7 +301,7 @@ class Dispatcher {
   // This is useful for cases where you want to determine at runtime what type
   // of event to connect to, for example when listening to events across
   // language boundaries. Example:
-  // google3/third_party/impress/core/scripting/message_handlers/event_handler.h
+  // google3/third_party/impress/core/scripting/scripting_system.cc
   //
   // The handler can return a Dispatcher::PropagationResult or void. which
   // defaults to Dispatcher::kContinue. Calling without the NodeHandle or

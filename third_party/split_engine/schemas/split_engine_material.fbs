@@ -23,8 +23,6 @@ namespace android_xr.schemas;
 // This was tested and verified to be a backwards compatible change so it's safe
 // to defer.
 
-// LINT.IfChange
-
 // LINT.IfChange(generic_material_spec_jni_conversion_schema)
 
 // These enums are used to determine which material to load from the material
@@ -149,10 +147,14 @@ union MaterialParamValue (requires_api: 1) {
   MaterialTextureId = 13 (requires_api: 1),
   ExternalSampler = 14 (requires_api: 1),
   Mat3f = 15 (requires_api: 1),
-  Mat3fArray = 16 (requires_api: 1),
+  Mat3fVector = 16 (requires_api: 1),
   Mat4f = 17 (requires_api: 1),
-  Mat4fArray = 18 (requires_api: 1),
+  Mat4fVector = 18 (requires_api: 1),
   NilValue = 19 (requires_api: 1),
+  Uint = 20,
+  Uint2 = 21,
+  Uint3 = 22,
+  Uint4 = 23,
 }
 
 // Possible types of precompile constant values.
@@ -308,6 +310,14 @@ table GenericMaterialParametersTransmission (requires_api: 1) {
   factor: Float (id: 1, requires_api: 1);
 }
 
+// Defines the KHR_materials_volume parameters in a generic material.
+table GenericMaterialParametersVolume {
+  texture: GenericMaterialTextureParameter (id: 0);
+  thickness_factor: Float (id: 1);
+  attenuation_distance: Float (id: 2);
+  attenuation_color: Float3 (id: 3);
+}
+
 // Defines the refraction parameters in a generic material.
 table GenericMaterialParametersRefraction (requires_api: 1) {
   index_of_refraction: Float (id: 0, requires_api: 1);
@@ -333,6 +343,7 @@ table GenericMaterialParameters (requires_api: 1) {
   refraction: GenericMaterialParametersRefraction (id: 8, requires_api: 1);
   masking: GenericMaterialParametersMasking (id: 9, requires_api: 1);
   feature_id_textures: [GenericMaterialTextureParameter] (id: 10);
+  volume: GenericMaterialParametersVolume (id: 11);
 }
 
 root_type GenericMaterialParameters;
@@ -455,9 +466,16 @@ enum BuiltInMaterial1b616c8aShapeType : uint8 (requires_api: 1) {
   FULL360 = 2 (requires_api: 1),
 }
 
+enum BuiltInMaterial1b616c8aRenderEyeTarget : uint8 {
+  DEFAULT_BOTH = 0,
+  LEFT_ONLY = 1,
+  RIGHT_ONLY = 2,
+}
+
 table BuiltInMaterial1b616c8a (requires_api: 1) {
   shape: BuiltInMaterial1b616c8aShapeType (id: 0, requires_api: 1);
   use_super_sampling: Bool (id: 1, requires_api: 1);
+  render_eye_target: BuiltInMaterial1b616c8aRenderEyeTarget (id: 2);
 }
 
 enum BuiltInMaterial1b616c8aStereoType : uint8 (requires_api: 1) {
@@ -592,14 +610,13 @@ table BuiltInMaterialGsplatParameters {
   // If material_mode is "magic window",
   // this contains the dimension of the renderable area (the dimension of the black quad)
   window_dimension_in_magic_window: Float2 (id: 3);
-  // If material_mode is "magic window", this contains thetransform from World Space to Magic Window Space
+  // If material_mode is "magic window", this contains the transform from World Space to Magic Window Space
   // This is necessary to calculate a position in Magic Window space for an eye, a splat, etc
   // Magic Window Space is the world space of magic windows parent node.
   magic_window_from_user_world_matrix: Mat4f (id: 4);
-  // If true, precomputed_data_texture is used.
-  // If false, position_data_texture, cov3d_data_texture, and color_data_texture
-  //are used instead.
-  is_splat_data_precomputed: Bool (id: 5);
+  // The transform from World Space to the node responsible for rendering Gsplat.
+  // Necessary to precompute data for each splat.
+  gsplat_from_user_world_matrix: Mat4f (id: 5);
   // The precomputed data for rendering each splat, packed into an
   // RGBA32F texture. The format expected is:
   // R [2x16F] XY Clip Position of Splat Center
@@ -623,6 +640,9 @@ table BuiltInMaterialGsplatParameters {
   // If true, assigns random colors to nearby gsplats.
   // Debugging only: This may be removed in the future.
   visualize_chunks: Bool (id: 11);
+  // How many std-deviations of the gaussian will be shown. Lower values will
+  // clip the gaussian shapes (keeping the aspect ratio).
+  // Defaults to 4 std-devs.
   splat_scale: Float (id: 12);
 }
 
@@ -716,5 +736,3 @@ table AddCustomMaterialRequest {
   // Skip id: 1 for spec_type.
   spec: CustomMaterialSpec (id: 2);
 }
-
-// LINT.ThenChange(//depot/google3/third_party/split_engine/schemas/split_engine_schema_version.h)

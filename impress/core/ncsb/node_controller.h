@@ -200,7 +200,7 @@ class NodeController {
 
   std::string name_;
 
-  Rememberer rememberer_;
+  std::optional<Rememberer> rememberer_;
 };
 
 }  // namespace imp::imp_internal

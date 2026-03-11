@@ -107,6 +107,25 @@ cc_library(
         "//core/assets/gltf/object_model:property_pointer",
         "//core/assets/gltf/object_model:token_parser",
         "//core/common:robin_map",
+        "//core/model:model_data_details",
+        "//core/ncsb",
+        "//core/view/framework",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/types:span",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "animations_pointers",
+    srcs = ["animations.cc"],
+    hdrs = ["animations.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        "//core/assets/gltf/object_model:property_pointer",
+        "//core/assets/gltf/object_model:token_parser",
         "//core/ncsb",
         "//core/view/framework",
         "@com_google_absl//absl/status",
@@ -127,6 +146,7 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
+        ":animations_pointers",
         ":materials_pointers",
         ":meshes_pointers",
         ":nodes_pointers",

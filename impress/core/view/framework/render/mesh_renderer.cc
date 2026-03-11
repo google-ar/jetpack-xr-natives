@@ -47,7 +47,7 @@ using RenderFlags = ModelData::RenderFlags;
 static constexpr uint8_t kMinPriority = 0;
 static constexpr uint8_t kMaxPriority = 7;
 static constexpr uint8_t kMinChannel = 0;
-static constexpr uint8_t kMaxChannel = 3;
+static constexpr uint8_t kMaxChannel = 7;
 static constexpr uint16_t kMinBlendOrder = 0;
 static constexpr uint16_t kMaxBlendOrder = 0x7FFF;
 

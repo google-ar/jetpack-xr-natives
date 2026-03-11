@@ -19,28 +19,82 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <stack>
-#include <thread>  // NOLINT: Need to sort things by thread id.
+#include <vector>
 
 #include "absl/base/optimization.h"
 #include "absl/container/flat_hash_map.h"
 #include "core/common/trace.h"
+#include "core/editor/widgets/performance/sample_processor_types.h"
 #include "core/performance/profiler.h"
+#include "core/performance/profiler_structs.h"
 
 namespace imp::editor {
 
-ProcessedFrame& SampleProcessor::GetProcessedFrame(int frame_index) {
+ProcessedSamples& SampleProcessor::GetProcessedFrame(int frame_index) {
   return processed_samples_[frame_index % Profiler::kMaxFrames];
 }
 
-void SampleProcessor::ProcessSamples(int frame_index) {
+void SampleProcessor::ProcessSamples(int profiler_sample_count,
+                                     NodePool& node_pool,
+                                     ProcessedSamples& processed_samples,
+                                     ResultCollection& results) {
+  bool sample_has_parent;
+  std::stack<SampleNode*> active_nodes;
+  uint64_t current_sample_end_id;
+  ProfileResult* current_profiler_sample;
+  size_t current_depth = 0;
+  size_t max_depth = 0;
+
+  // Effectively a call stack. Each sample is added to the stack in the loop.
+  // When a sample does not take place during the start/end time of the sample
+  // at the top of the stack, it gets popped and that repeats until we find a
+  // sample that encapsulates the current sample.
+  for (size_t i = 0; i < profiler_sample_count; ++i) {
+    current_profiler_sample = results.Get(i);
+    // Pop nodes that have ended before the current sample starts
+    current_sample_end_id = current_profiler_sample->GetSampleEndId();
+    while (!active_nodes.empty() &&
+           active_nodes.top()->result->GetSampleEndId() <=
+               current_sample_end_id) {
+      active_nodes.pop();
+      current_depth--;
+    }
+
+    // Create a new node and add it as a child of the sample atop the stack.
+    SampleNode* new_node = node_pool.GetNext();
+    new_node->SetInitialValues(current_profiler_sample);
+
+    // If the stack is empty, the sample has no parent.
+    sample_has_parent = !active_nodes.empty();
+
+    // If the sample node has a parent, add it as a child of its parent and then
+    // register it into the processed samples.
+    // Otherwise, add it as a root sample in the processed samples.
+    if (ABSL_PREDICT_TRUE(sample_has_parent)) {
+      active_nodes.top()->AddChild(new_node);
+      processed_samples.AddSample(new_node);
+    } else {
+      processed_samples.AddRootSample(new_node);
+    }
+    active_nodes.push(new_node);
+    current_depth++;
+    max_depth = std::max(max_depth, current_depth);
+  }
+
+  processed_samples.max_depth = max_depth;
+}
+
+void SampleProcessor::ProcessMainThreadSamples(int frame_index) {
   IMP_TRACE();
 
   if (!Profiler::HasFrameRecorded(frame_index)) return;
 
   int sample_index = frame_index % Profiler::kMaxFrames;
-
-  processed_samples_[sample_index].samples_by_thread_and_name.clear();
+  ProcessedSamples& processed_samples = processed_samples_[sample_index];
+  processed_samples.samples_by_name.clear();
+  processed_samples.sample_roots.clear();
 
   // Returns 0 if the frame is not currently available or contains no samples.
   int profiler_sample_count = Profiler::GetSampleCount(frame_index);
@@ -51,53 +105,46 @@ void SampleProcessor::ProcessSamples(int frame_index) {
   profiler_sample_count =
       std::min(profiler_sample_count, Profiler::kMaxSamples);
 
-  std::array<ProfileResult, Profiler::kMaxSamples>& profiler_samples =
+  NodePool& node_pool = main_thread_node_pools_[sample_index];
+  node_pool.ResetIndex();
+
+  std::array<MainThreadProfileResult, Profiler::kMaxSamples>& profiler_samples =
       Profiler::GetSamples(frame_index);
+  MainThreadResultCollection results(&profiler_samples);
 
-  // Effectively a call stack. Each sample is added to the stack in the loop.
-  // When a sample does not take place during the start/end time of the sample
-  // at the top of the stack, it gets popped and that repeats until we find a
-  // sample that encapsulates the current sample.
-  absl::flat_hash_map<std::thread::id, std::stack<ProfilerSampleNode*>>
-      active_nodes;
-  std::thread::id last_thread_id;
-  bool sample_has_parent;
-  std::stack<ProfilerSampleNode*>* active_nodes_for_thread;
-
-  for (size_t i = 0; i < profiler_sample_count; ++i) {
-    // Only do a map lookup if the thread id has changed for performance.
-    // Otherwise we still have a reference to the stack we need to use.
-    std::thread::id new_thread_id = profiler_samples[i].thread_id;
-    if (ABSL_PREDICT_FALSE(new_thread_id != last_thread_id)) {
-      active_nodes_for_thread = &active_nodes[new_thread_id];
-      last_thread_id = new_thread_id;
-    }
-
-    // Pop nodes that have ended before the current sample starts
-    while (!active_nodes_for_thread->empty() &&
-           active_nodes_for_thread->top()->result->sample_end_id <=
-               profiler_samples[i].sample_end_id) {
-      active_nodes_for_thread->pop();
-    }
-
-    // Create a new node and add it as a child of the sample atop the stack.
-    ProfilerSampleNode* new_node = &sample_node_pool_[sample_index][i];
-    new_node->SetInitialValues(&profiler_samples[i]);
-
-    // If the stack is empty, the sample has no parent.
-    sample_has_parent = !active_nodes_for_thread->empty();
-
-    // If the sample node has a parent, add it as a child of its parent and then
-    // register it into the processed samples.
-    // Otherwise, add it as a root sample in the processed samples.
-    if (ABSL_PREDICT_TRUE(sample_has_parent)) {
-      active_nodes_for_thread->top()->AddChild(new_node);
-      processed_samples_[sample_index].AddSample(new_node);
-    } else {
-      processed_samples_[sample_index].AddRootSample(new_node);
-    }
-    active_nodes_for_thread->push(new_node);
-  }
+  ProcessSamples(profiler_sample_count, node_pool, processed_samples, results);
 }
 
+void SampleProcessor::ProcessWorkerSampleList(
+    std::vector<WorkerProfileResult>& samples,
+    ProcessedSamples& processed_worker_samples) {
+  WorkerResultCollection results(&samples);
+  ProcessSamples(samples.size(), worker_node_pool_, processed_worker_samples,
+                 results);
+}
+
+ProcessedWorkerSamplesMap SampleProcessor::ProcessAllWorkerThreadsSamples(
+    RawWorkerSamplesMap& raw_samples_map) {
+  IMP_TRACE();
+
+  ProcessedWorkerSamplesMap processed_worker_samples_map;
+  worker_node_pool_.ResetIndex();
+
+  for (auto& [thread_id, samples] : raw_samples_map) {
+    ProcessWorkerSampleList(samples, processed_worker_samples_map[thread_id]);
+  }
+  return processed_worker_samples_map;
+}
+
+ProcessedSamples SampleProcessor::ProcessWorkerThreadSamples(
+    std::vector<WorkerProfileResult>& samples) {
+  IMP_TRACE();
+
+  ProcessedSamples processed_worker_samples;
+  worker_node_pool_.ResetIndex();
+
+  ProcessWorkerSampleList(samples, processed_worker_samples);
+
+  return processed_worker_samples;
+}
 }  // namespace imp::editor

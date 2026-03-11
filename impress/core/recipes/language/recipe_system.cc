@@ -433,16 +433,22 @@ std::unique_ptr<RecipeCustomStatement> RecipeSystem::CreateCustomStatement(
 }
 
 void RecipeSystem::RegisterFunctionImpl(
-    absl::string_view name,
     std::unique_ptr<recipe::RegisteredFunction> function) {
-  registered_functions_[std::string(name)] = std::move(function);
+  if (function == nullptr) {
+    IMP_LOG(imp::ERROR) << "Recipe Function was null!";
+    return;
+  }
+
+  registered_functions_[std::string(function->GetName().data(),
+                                    function->GetName().length())] =
+      std::move(function);
 }
 
 void RecipeSystem::RegisterCustomStatementTypeImpl(
     absl::string_view name,
     Invocable<std::unique_ptr<RecipeCustomStatement>()> creation_fn) {
   auto [_, inserted] = custom_statement_creators_.insert(
-      {std::string(name), std::move(creation_fn)});
+      {std::string(name.data(), name.length()), std::move(creation_fn)});
 
   if (!inserted) {
     IMP_LOG(imp::WARNING) << "Custom statement " << name

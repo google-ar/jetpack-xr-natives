@@ -78,6 +78,7 @@ table PartInfo {
   vertex_buffer : uint16;
   index_buffer : uint16;
   material : uint16;
+  original_material_index : int16;
   primitive_type : uint8;
   materials_variants_mappings : [uint16] (required);
   skinning_buffer : uint16;
@@ -100,6 +101,7 @@ table EntityInfo {
   num_children : uint16;
   original_index : uint16; // optional
   original_mesh_index : int16; // optional
+  original_skin_index : int16; // optional
 
   node_visibility : NodeVisibility; // optional
   node_selectability : NodeSelectability; // optional
@@ -160,6 +162,8 @@ table SkinInfo {
   skinned_entity_joint_usage : [SkinnedEntityJointUsageInfo] (required);
   // The (optional, rarely specified) pose root entity.
   pose_root : int32;
+  // The original index in the skin in the glTF file.
+  original_index : uint32;
 }
 
 // Expected to hold PNG or JPG file data.

@@ -15,24 +15,25 @@
 #include "core/scripting/multi_message_handler.h"
 
 #include <algorithm>
-#include <iomanip>
 #include <iterator>
 #include <vector>
 
 #include "core/common/log.h"
+#include "absl/strings/string_view.h"
+#include "core/async/future.h"
+#include "core/scripting/base_message_handler.h"
+#include "core/view/scripting/script_message_handler.h"
 
 namespace imp {
 namespace scripting {
 
-Future<BaseMessageHandler::OptionalResponse>
-MultiMessageHandler::HandleAnyMessage(const Any& message,
-                                      const PlatformArgs& args,
-                                      PlatformArgs& out) {
+Future<BaseMessageHandler::Response> MultiMessageHandler::HandleAnyMessage(
+    const Any& message, const PlatformArgs& args) {
   auto iter = handler_forwarders_.find(message.type_url);
   if (iter == handler_forwarders_.end()) {
     IMP_LOG(imp::ERROR) << "Unable to handle message of type " << message.type_url
                << ", unsupported.";
-    return Future<BaseMessageHandler::OptionalResponse>();
+    return Future<BaseMessageHandler::Response>();
   }
 
   if (!args.empty()) {
@@ -40,7 +41,7 @@ MultiMessageHandler::HandleAnyMessage(const Any& message,
   }
 
   auto& forwarder = iter->second;
-  return forwarder->HandleAnyMessage(message, args, out);
+  return forwarder->HandleAnyMessage(message, args);
 }
 
 std::vector<absl::string_view>

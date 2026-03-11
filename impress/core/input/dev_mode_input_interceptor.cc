@@ -163,7 +163,7 @@ void DevModeInputInterceptor::FilterPointerEvents(
       for (down_index = 0; down_index < down_count; ++down_index) {
         io.MousePos = ImVec2(down_pointer_positions[down_index].x,
                              down_pointer_positions[down_index].y);
-        ImGui::UpdateHoveredWindowAndCaptureFlags();
+        ImGui::UpdateHoveredWindowAndCaptureFlags(io.MousePos);
         if (io.WantCaptureMouse) break;
       }
 
@@ -258,7 +258,6 @@ void DevModeInputInterceptor::FilterKeyboardEvents(
       case KeyboardEventType::kOnDown:
       case KeyboardEventType::kOnUp: {
         ImGuiKey key = static_cast<ImGuiKey>(event.key.code);
-        IM_ASSERT(key >= 0 && key < IM_ARRAYSIZE(io.KeysDown));
         io.AddKeyEvent(key, (event.type == KeyboardEventType::kOnDown));
         if (key == ImGuiKey_LeftShift || key == ImGuiKey_RightShift ||
             HasKeyModifier(KeyModifier::SHIFT, event.key.modifiers)) {

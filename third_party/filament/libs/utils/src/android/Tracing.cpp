@@ -17,9 +17,9 @@
 #include "filament/libs/utils/include/utils/compiler.h"
 #include <private/utils/Tracing.h>
 
-#include "third_party/perfetto/include/perfetto/tracing/backend_type.h"
-#include "third_party/perfetto/include/perfetto/tracing/tracing.h"
-#include "third_party/perfetto/include/perfetto/tracing/track_event.h"
+#include "perfetto/tracing/backend_type.h"
+#include "perfetto/tracing/tracing.h"
+#include "perfetto/tracing/track_event.h"
 
 PERFETTO_TRACK_EVENT_STATIC_STORAGE_IN_NAMESPACE(tracing);
 

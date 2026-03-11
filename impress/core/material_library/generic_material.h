@@ -135,6 +135,10 @@ class GenericMaterial {
   virtual absl::Status SetTransmissionUvTransform(
       const mat3f& uv_transform) = 0;
   virtual void SetTransmissionFactor(float factor) = 0;
+  virtual TextureAndSampler GetThicknessTexture() const = 0;
+  virtual void SetThicknessFactor(float factor) = 0;
+  virtual void SetAttenuationDistance(float distance) = 0;
+  virtual void SetAttenuationColor(const float3& color) = 0;
   virtual void SetIndexOfRefraction(float index_of_refraction) = 0;
 
   // If the mesh_features glTF extension is enabled, returns the feature id

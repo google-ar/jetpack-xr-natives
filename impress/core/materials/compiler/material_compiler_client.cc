@@ -30,7 +30,6 @@
 #include "absl/time/time.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
-#include "flatbuffers/vector.h"
 #include "flatbuffers/verifier.h"
 #include "core/common/buffer_access.h"
 #include "core/common/flatbuffer_helpers.h"
@@ -39,6 +38,22 @@
 #include "mediapipe/framework/port/status_macros.h"
 
 namespace imp {
+namespace {
+inline absl::Status GetAbslStatus(schemas::ErrorStatusCode error_status_code,
+                                  absl::string_view message) {
+  switch (error_status_code) {
+    case schemas::ErrorStatusCode::InvalidArgument:
+      return absl::InvalidArgumentError(message);
+    case schemas::ErrorStatusCode::Internal:
+      return absl::InternalError(message);
+    case schemas::ErrorStatusCode::Unsupported:
+      return absl::UnimplementedError(message);
+      // Note: Omit default so that the compiler can catch any missing
+      // schemas::ErrorStatusCode if it's extended.
+  }
+  return absl::UnknownError(message);
+}
+}  // namespace
 
 MaterialCompilerClient::MaterialCompilerClient(int fd)
     : pipe_(
@@ -167,8 +182,9 @@ void MaterialCompilerClient::OnMessage(std::unique_ptr<std::uint8_t[]> message,
     case schemas::ResponseType::ErrorResponse: {
       auto error = response->response_as<schemas::ErrorResponse>();
       if (error && error->message()) {
-        try_emplace_response(operation_id, absl::InvalidArgumentError(
-                                               error->message()->c_str()));
+        try_emplace_response(operation_id,
+                             GetAbslStatus(error->error_status_code(),
+                                           error->message()->string_view()));
         return;
       }
       try_emplace_response(

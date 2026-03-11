@@ -19,8 +19,8 @@
 
 namespace imp::scripting {
 
-IosWebView::IosWebView(const Context& context, const WebViewParams& params,
-                       BufferAccess injection_script)
+IosWebView::IosWebView(ScriptMessageHandler& script_message_handler, const Context& context,
+                       const WebViewParams& params, BufferAccess injection_script)
     : WebView() {
   CGRect frame;
   frame.origin.x = params.location_px.x;
@@ -33,17 +33,21 @@ IosWebView::IosWebView(const Context& context, const WebViewParams& params,
                                               length:injection_script.StringView().size()
                                             encoding:[NSString defaultCStringEncoding]];
   web_view_ = [[IMPWebView alloc] initWithWebView:this
+                             scriptMessageHandler:script_message_handler
                                           context:context
                                             frame:frame
                                               url:url
                                   injectionScript:script];
 }
 
-IosWebView::IosWebView(void* external_web_view, BufferAccess injection_script) : WebView() {
+IosWebView::IosWebView(ScriptMessageHandler& script_message_handler, void* external_web_view,
+                       BufferAccess injection_script)
+    : WebView() {
   NSString* script = [[NSString alloc] initWithBytes:injection_script.StringView().data()
                                               length:injection_script.StringView().size()
                                             encoding:[NSString defaultCStringEncoding]];
   web_view_ = [[IMPWebView alloc] initWithWebView:this
+                             scriptMessageHandler:script_message_handler
                                   injectionScript:script
                                   externalWebView:(__bridge WKWebView*)external_web_view];
 }
@@ -52,20 +56,18 @@ IosWebView::~IosWebView() { [web_view_ onWebViewDestruction]; }
 
 void IosWebView::LoadInjectionScript() { [web_view_ injectScript]; }
 
-void IosWebView::PostMessage(const MessageToScript& message) {
-  NSString* message_string = [NSString stringWithCString:SerializeToBase64(message).c_str()
-                                                encoding:[NSString defaultCStringEncoding]];
-  [web_view_ postMessage:message_string];
+std::unique_ptr<WebView> WebView::Create(ScriptMessageHandler& script_message_handler,
+                                         const Context& context, const WebViewParams& params,
+                                         BufferAccess injection_script) {
+  return absl::make_unique<IosWebView>(script_message_handler, context, params,
+                                       std::move(injection_script));
 }
 
-std::unique_ptr<WebView> WebView::Create(const Context& context, const WebViewParams& params,
+std::unique_ptr<WebView> WebView::Create(ScriptMessageHandler& script_message_handler,
+                                         const Context& context, void* web_view,
                                          BufferAccess injection_script) {
-  return absl::make_unique<IosWebView>(context, params, std::move(injection_script));
-}
-
-std::unique_ptr<WebView> WebView::Create(void* web_view, const Context& context,
-                                         BufferAccess injection_script) {
-  return absl::make_unique<IosWebView>(web_view, std::move(injection_script));
+  return absl::make_unique<IosWebView>(script_message_handler, web_view,
+                                       std::move(injection_script));
 }
 
 }  // namespace imp::scripting

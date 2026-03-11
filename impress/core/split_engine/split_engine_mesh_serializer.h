@@ -25,6 +25,39 @@
 
 namespace imp::split_engine {
 
+class SplitEngineIndexBufferSerializer {
+ public:
+  virtual ~SplitEngineIndexBufferSerializer() = default;
+  virtual void ContributeBufferSize(
+      FlatbufferSizeCalculator& calculator) const noexcept = 0;
+
+  virtual flatbuffers::Offset<android_xr::schemas::IndexBuffer>
+  SerializeIndexBuffer(
+      flatbuffers::FlatBufferBuilder& builder) const noexcept = 0;
+};
+
+class SplitEngineVertexBufferSerializer {
+ public:
+  virtual ~SplitEngineVertexBufferSerializer() = default;
+  virtual void ContributeBufferSize(
+      FlatbufferSizeCalculator& calculator) const noexcept = 0;
+
+  virtual flatbuffers::Offset<android_xr::schemas::VertexBuffer>
+  SerializeVertexBuffer(
+      flatbuffers::FlatBufferBuilder& builder) const noexcept = 0;
+};
+
+class SplitEngineMorphTargetBufferSerializer {
+ public:
+  virtual ~SplitEngineMorphTargetBufferSerializer() = default;
+  virtual void ContributeBufferSize(
+      FlatbufferSizeCalculator& calculator) const noexcept = 0;
+
+  virtual flatbuffers::Offset<android_xr::schemas::MorphTargetBuffer>
+  SerializeMorphTargetBuffer(
+      flatbuffers::FlatBufferBuilder& builder) const noexcept = 0;
+};
+
 // An interface for SplitEngine to use to serialize a mesh to a provided
 // flatbuffer builder. This separates the flatbuffer allocation and
 // serialization logic.
@@ -42,20 +75,20 @@ class SplitEngineMeshSerializer {
   // Serialize*Buffers: serializes the internal buffers to the provided
   // flatbuffer builder, and returns the offsets to the serialized data.
   virtual IndexBufferVector SerializeIndexBuffers(
-      flatbuffers::FlatBufferBuilder& builder) = 0;
+      flatbuffers::FlatBufferBuilder& builder) const noexcept = 0;
   virtual VertexBufferVector SerializeVertexBuffers(
-      flatbuffers::FlatBufferBuilder& builder) = 0;
+      flatbuffers::FlatBufferBuilder& builder) const noexcept = 0;
   virtual MorphTargetBufferVector SerializeMorphTargetBuffers(
-      flatbuffers::FlatBufferBuilder& builder) = 0;
+      flatbuffers::FlatBufferBuilder& builder) const noexcept = 0;
 
   // Contribute*BufferSizes: given a FlatbufferSizeCalculator, add the estimated
   // contribution of the internal buffers to serialization size.
   virtual void ContributeIndexBufferSizes(
-      FlatbufferSizeCalculator& calculator) = 0;
+      FlatbufferSizeCalculator& calculator) const noexcept = 0;
   virtual void ContributeVertexBufferSizes(
-      FlatbufferSizeCalculator& calculator) = 0;
+      FlatbufferSizeCalculator& calculator) const noexcept = 0;
   virtual void ContributeMorphTargetBufferSizes(
-      FlatbufferSizeCalculator& calculator) = 0;
+      FlatbufferSizeCalculator& calculator) const noexcept = 0;
 };
 
 }  // namespace imp::split_engine

@@ -18,6 +18,7 @@
 #include <array>
 #include <cassert>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -423,6 +424,22 @@ TexturePtr TextureFactory::CreateTexture(
       });
 }
 
+OwnedTexturePtr TextureFactory::CreateTexture(
+    AssetPtr<ImageAsset> image, TextureGenerationOptions generation_options,
+    TextureSamplerOptions sampler_options) {
+  // By default, CreateTexture(absl::Span<const AssetPtr<ImageAsset>>) uses
+  // SAMPLER_2D_ARRAY, since it expects an array of images. However,
+  // CreateTexture(AssetPtr<ImageAsset>) is a convenience function for a single
+  // image, so it should use SAMPLER_2D unless otherwise specified.
+  if (!sampler_options.sampler_type.has_value()) {
+    sampler_options.sampler_type =
+        TextureSamplerOptions::SamplerType::SAMPLER_2D;
+  }
+
+  absl::Span<AssetPtr<ImageAsset>> single_item_span(std::addressof(image), 1);
+  return CreateTexture(single_item_span, generation_options, sampler_options);
+}
+
 TexturePtr TextureFactory::CreateTexture(
     absl::Span<const AssetPtr<ImageAsset>> images,
     TextureGenerationOptions generation_options,
@@ -430,11 +447,6 @@ TexturePtr TextureFactory::CreateTexture(
   if (images.empty()) {
     IMP_LOG(imp::ERROR) << "CreateTexture: image array cannot be empty.";
     return {};
-  }
-
-  // TODO: support texture arrays.
-  if (view_.GetSplitEngineSerializer()) {
-    IMP_LOG(imp::WARNING) << "Texture arrays are not supported in split-engine mode!";
   }
 
   filament::Engine* engine = view_.GetSharedEngine();
@@ -446,32 +458,30 @@ TexturePtr TextureFactory::CreateTexture(
     texture_dimensions.y = std::max(image->GetHeight(), texture_dimensions.y);
   }
 
-  filament::Texture::Builder texture_builder;
-  texture_builder.sampler(filament::Texture::Sampler::SAMPLER_2D_ARRAY);
-  texture_builder.levels(
+  TextureBuilder texture_builder(view_);
+  texture_builder.Sampler(sampler_options.sampler_type.value_or(
+      filament::Texture::Sampler::SAMPLER_2D_ARRAY));
+  texture_builder.Levels(
       generation_options.generated_mipmap_levels.value_or(1));
-  texture_builder.format(format);
-  texture_builder.width(texture_dimensions.x);
-  texture_builder.height(texture_dimensions.y);
-  texture_builder.depth(texture_dimensions.z);
-  filament::Texture* texture = texture_builder.build(*engine);
-  if (texture == nullptr) {
-    IMP_LOG(imp::ERROR) << "Could not create texture.";
-    return {};
+  texture_builder.Format(format);
+  texture_builder.Width(texture_dimensions.x);
+  texture_builder.Height(texture_dimensions.y);
+  if (texture_dimensions.z > 1) {
+    texture_builder.Depth(texture_dimensions.z);
   }
 
   for (int i = 0; i < images.size(); ++i) {
-    const AssetPtr<ImageAsset>& image = images[i];
-    auto descriptors = image->GetLevelDescriptors();
-    for (int level = 0; level < descriptors.size(); ++level) {
-      texture->setImage(*engine, level, 0, 0, i, texture->getWidth(level),
-                        texture->getHeight(level), 1,
-                        std::move(descriptors[level]));
-    }
+    texture_builder.Image(*engine, images[i], i);
   }
 
   if (generation_options.generated_mipmap_levels.has_value()) {
-    texture->generateMipmaps(*engine);
+    texture_builder.GenerateMipmaps(*engine);
+  }
+
+  filament::Texture* texture = texture_builder.Build(*engine);
+  if (texture == nullptr) {
+    IMP_LOG(imp::ERROR) << "Could not create texture.";
+    return {};
   }
 
   filament::TextureSampler sampler(sampler_options.min_filter,
@@ -643,6 +653,14 @@ BorrowedTexturePtr TextureFactory::BorrowPlaceholderCubemapTexture(
   return placeholder_cubemap_texture_.Borrow(loc);
 }
 
+BorrowedTexturePtr TextureFactory::BorrowRGBA32FPlaceholderTexture(
+    SmallSourceLocation loc) {
+  if (!rgba32f_placeholder_texture_) {
+    rgba32f_placeholder_texture_ = CreateRGBA32FPlaceholderTexture();
+  }
+  return rgba32f_placeholder_texture_.Borrow(loc);
+}
+
 OwnedTexturePtr TextureFactory::CreatePlaceholderTexture() {
   constexpr uint32_t kPixel = 0xffffffff;
   constexpr int kPlaceholderTextureSize = 2;
@@ -697,4 +715,24 @@ OwnedTexturePtr TextureFactory::CreatePlaceholderCubemapTexture() {
   return result;
 }
 
+OwnedTexturePtr TextureFactory::CreateRGBA32FPlaceholderTexture() {
+  constexpr int kPlaceholderTextureSize = 2;
+  constexpr int kNumPlaceholderTexturePixels =
+      kPlaceholderTextureSize * kPlaceholderTextureSize;
+  constexpr int kFloatsPerPixel = 4;
+  constexpr int kFloatCount = kNumPlaceholderTexturePixels * kFloatsPerPixel;
+  static constexpr std::array<float, kFloatCount> kPlaceholderTextureFloats = {
+      1.0f, 1.0f, 1.0f, 1.0f,   // pixel 1
+      1.0f, 1.0f, 1.0f, 1.0f,   // pixel 2
+      1.0f, 1.0f, 1.0f, 1.0f,   // pixel 3
+      1.0f, 1.0f, 1.0f, 1.0f};  // pixel 4
+
+  InlineImageContents image_contents(
+      kPlaceholderTextureSize, kPlaceholderTextureSize,
+      reinterpret_cast<const uint8_t*>(kPlaceholderTextureFloats.data()),
+      kFloatCount * sizeof(float), filament::Texture::InternalFormat::RGBA32F);
+
+  return CreateTexture(image_contents, TextureGenerationOptions{},
+                       TextureSamplerOptions{}, "RGBA32F Placeholder Texture");
+}
 }  // namespace imp

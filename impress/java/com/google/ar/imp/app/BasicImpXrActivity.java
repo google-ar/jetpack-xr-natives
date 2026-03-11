@@ -18,6 +18,7 @@ package com.google.ar.imp.app;
 
 import android.os.Bundle;
 import androidx.appcompat.app.AppCompatActivity;
+import com.google.ar.imp.view.SetupParams;
 import com.google.ar.imp.view.xr.ImpXrRenderer;
 
 /** Example activity for using Impress with OpenXR */
@@ -40,7 +41,7 @@ public class BasicImpXrActivity extends AppCompatActivity {
   @Override
   public void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
-    renderer = ImpXrRenderer.create(this, /* setupParams= */ null);
+    renderer = ImpXrRenderer.create(this, getSetupParams());
   }
 
   @Override
@@ -52,5 +53,10 @@ public class BasicImpXrActivity extends AppCompatActivity {
   public void onDestroy() {
     super.onDestroy();
     renderer.destroy();
+  }
+
+  // Override this method to provide setup parameters for the ImpXrRenderer.
+  protected SetupParams getSetupParams() {
+    return null;
   }
 }

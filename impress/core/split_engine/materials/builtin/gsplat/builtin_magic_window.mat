@@ -91,48 +91,6 @@ vertex {
         return vec3(col) / 255.0;
   }
 
-  // Computes cov2d from cov3d, use eq(5) in the 3DGS paper.
-  vec3 computeCov2d(vec3 eyePos, mat3 eyeFromModel, mat4 clipFromEye, vec3 cov3dMat0, vec3 cov3dMat1) {
-    // this is needed in order for splats that are visible in view but clipped "quite a lot" to work
-    vec2 tanFov = vec2(getViewFromClipMatrix()[0][0], getViewFromClipMatrix()[1][1]);
-    vec2 limit = 1.3 * tanFov;
-    eyePos.xy = clamp(eyePos.xy / eyePos.z, -limit, limit) * eyePos.z;
-    float focal = getResolution().x * clipFromEye[0][0] / 2.0;
-
-    mat3 jacobian = mat3(
-        focal / eyePos.z, 0,                  -(focal * eyePos.x) / (eyePos.z * eyePos.z),
-        0,                  focal / eyePos.z, -(focal * eyePos.y) / (eyePos.z * eyePos.z),
-        0,                  0,                  0
-    );
-
-    mat3 jw = transpose(eyeFromModel) * jacobian;
-    mat3 cov3d = mat3(
-        cov3dMat0.x, cov3dMat0.y, cov3dMat0.z,
-        cov3dMat0.y, cov3dMat1.x, cov3dMat1.y,
-        cov3dMat0.z, cov3dMat1.y, cov3dMat1.z
-    );
-    mat3 cov = transpose(jw) * cov3d * jw;
-
-    // Low pass filter to make each splat at least 1px size.
-    cov[0][0] += 0.3;
-    cov[1][1] += 0.3;
-    // Only need upper half of matrix since it's diagonal
-    return vec3(cov[0][0], cov[0][1], cov[1][1]);
-  }
-
-  // Computes scale and rotation from 2D covariance via eigenvalue/vector decomposition
-  void scaleAndRotationFromCov2D(vec3 cov2d, out vec2 v1, out vec2 v2) {
-    float diag1 = cov2d.x, diag2 = cov2d.z, offDiag = cov2d.y;
-    float mid = 0.5f * (diag1 + diag2);
-    float radius = length(vec2((diag1 - diag2) / 2.0, offDiag));
-    float lambda1 = mid + radius;
-    float lambda2 = max(mid - radius, 0.1);
-    vec2 diagVec = normalize(vec2(offDiag, lambda1 - diag1));
-    float maxSize = 4096.0;
-    v1 = min(sqrt(2.0 * lambda1), maxSize) * diagVec;
-    v2 = min(sqrt(2.0 * lambda2), maxSize) * float2(diagVec.y, -diagVec.x);
-  }
-
   void materialVertex(inout MaterialVertexInputs material) {
     int vertIndex = getVertexIndex();
     int indicesWidth = textureSize(materialParams_sortedIndices, 0).x;
@@ -202,15 +160,6 @@ vertex {
     material.splatPosInMagicWindow =
         material.splatPosInMagicWindow / material.splatPosInMagicWindow.w;
 
-/*
-    // The clip space resulting from getClipFromViewMatrix() is what's defined
-    // as "DX Convention", where depth/z is in the range [1, 0].
-    // However, when the material is set to vertexDomain : Device, clip space is
-    // expected to be in "GL Convention" which has a depth/z range of [-1, 1].
-    // So we need to apply a conversion to the depth/z value of our clipPos
-    // from "DX Convention" [1, 0] to "GL Convention" [-1, 1]
-    clipPos.z = -2.0 * (clipPos.z - 0.5);
-*/
     // Override the clip space position with the newly computed position.
     material.clipSpaceTransform = mat4(vec4(0), vec4(0), vec4(0), vec4(clipPos.xyz, 1.0));
   }
@@ -256,18 +205,18 @@ fragment {
     if (alpha < 1.0/255.0)
         discard;
 
-      // Draw a ray from the camera to the splat and calculate a hit
-      // (i.e. projected position) in the magic window space.
-      vec2 projectedPositionInMagicWindow =
-          calculateProjectedPosition(
-            variable_eyePosInMagicWindow, variable_splatPosInMagicWindow);
+    // Draw a ray from the camera to the splat and calculate a hit
+    // (i.e. projected position) in the magic window space.
+    vec2 projectedPositionInMagicWindow =
+        calculateProjectedPosition(
+          variable_eyePosInMagicWindow, variable_splatPosInMagicWindow);
 
-      if (
-        isOutsideRenderableArea(
-          projectedPositionInMagicWindow,
-          materialParams.windowDimensionInMagicWindow)) {
-          discard;
-      }
+    if (
+      isOutsideRenderableArea(
+        projectedPositionInMagicWindow,
+        materialParams.windowDimensionInMagicWindow)) {
+        discard;
+    }
 
     // Based on the design guideline at (broken link),
     // 1024 dp = 1556.24 mm, so to have 32 dp rounded corner radius, the radius

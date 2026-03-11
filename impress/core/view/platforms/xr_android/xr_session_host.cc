@@ -113,7 +113,7 @@ namespace imp {
 
 namespace {
 
-std::array<const char*, 19> kOpenXRExtensionsCore = {
+std::array<const char*, 20> kOpenXRExtensionsCore = {
     XR_KHR_ANDROID_THREAD_SETTINGS_EXTENSION_NAME,        //
     XR_KHR_GRAPHICS_ENABLE_EXTENSION_NAME,                //
     XR_EXT_HAND_TRACKING_EXTENSION_NAME,                  //
@@ -133,6 +133,7 @@ std::array<const char*, 19> kOpenXRExtensionsCore = {
     XR_FB_HAND_TRACKING_MESH_EXTENSION_NAME,              //
     XR_KHR_VISIBILITY_MASK_EXTENSION_NAME,                //
     XR_ANDROID_SCENE_MESHING_EXTENSION_NAME,              //
+    XR_ANDROID_RAYCAST_EXTENSION_NAME,                    //
 };
 
 std::array<const char*, 2> kOpenXRExtensionsFbFoveation = {
@@ -178,6 +179,11 @@ std::array<const char*, 2> kOpenXRExtensionAndroidXSpatialInteraction = {
     XR_ANDROIDX_SPATIAL_INTERACTION_LIFECYCLE_EXTENSION_NAME,
 };
 
+std::array<const char*, 2> kOpenXRExtensionsAndroidSysEyeTrackingCalibration = {
+    XR_ANDROID_EYE_TRACKING_EXTENSION_NAME,
+    XR_ANDROIDSYS_EYE_TRACKING_CALIBRATION_EXTENSION_NAME,
+};
+
 std::array<const char*, 1> kOpenXRExtensionAndroidXGlobalPassthroughDimming = {
     // TODO: Add official extension once api is finalized.
     "XR_ANDROIDX1_global_passthrough_dimming",
@@ -218,6 +224,7 @@ XrSessionHost::XrSessionHost(std::unique_ptr<BaseView> view,
           options.use_quad_views && options.use_varjo_foveated_rendering),
       msaa_sample_count_(options.msaa_sample_count),
       eye_tracking_enabled_(options.use_eye_gaze_interaction),
+      eye_tracking_calibration_enabled_(options.use_eye_tracking_calibration),
       is_android_depth_texture_enabled_(options.use_android_depth_texture),
       display_enabled_duration_(GetView()->GetMonitor(),
                                 kXrDisplayEnabledStatistics),
@@ -541,6 +548,8 @@ absl::Status XrSessionHost::AdvanceFrame() {
 
   latest_predicted_display_time_ = frame_state.predictedDisplayTime;
 
+  BroadcastReferenceSpaceChanges(latest_predicted_display_time_);
+
   // TODO: Consider changing/renaming/moving as part of
   // designing system for Xr input.
   if (session_state_ == XR_SESSION_STATE_FOCUSED) {
@@ -668,6 +677,10 @@ bool XrSessionHost::IsXrAndroidSystemExtensionsEnabled() const {
 
 bool XrSessionHost::IsXrGlobalPassthroughDimmingExtensionsEnabled() const {
   return is_global_passthrough_dimming_extensions_enabled_;
+}
+
+bool XrSessionHost::IsXrEyeTrackingCalibrationEnabled() const {
+  return eye_tracking_calibration_enabled_;
 }
 
 absl::Status XrSessionHost::EnsureSupportedExtensions(
@@ -827,6 +840,11 @@ absl::StatusOr<XrInstance> XrSessionHost::CreateInstance(JNIEnv* env,
     extensions.insert(extensions.end(),
                       kOpenXRExtensionAndroidXGlobalPassthroughDimming.begin(),
                       kOpenXRExtensionAndroidXGlobalPassthroughDimming.end());
+  }
+  if (IsXrEyeTrackingCalibrationEnabled()) {
+    extensions.insert(extensions.end(),
+                      kOpenXRExtensionsAndroidSysEyeTrackingCalibration.begin(),
+                      kOpenXRExtensionsAndroidSysEyeTrackingCalibration.end());
   }
 
   if (absl::Status all_supported = EnsureSupportedExtensions(extensions);
@@ -1094,10 +1112,19 @@ absl::Status XrSessionHost::PollEvents() {
         // designing system for Xr input.
         GetView()->GetDispatcher().Send(OpenXrInteractionProfileChangedEvent{});
         break;
-      case XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING:
+      case XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING: {
         imp::output::Xr("Xr space change pending.");
-        GetView()->GetDispatcher().Send(OpenXrSpaceChangePendingEvent{});
+        const auto& space_change_pending =
+            *reinterpret_cast<const XrEventDataReferenceSpaceChangePending*>(
+                *event);
+        OpenXrSpaceChangePendingEvent event(
+            space_change_pending.referenceSpaceType,
+            space_change_pending.changeTime, space_change_pending.poseValid,
+            space_change_pending.poseInPreviousSpace);
+        pending_space_changes_.push_back(event);
+        GetView()->GetDispatcher().Send(event);
         break;
+      }
       case XR_TYPE_EVENT_DATA_VISIBILITY_MASK_CHANGED_KHR: {
         imp::output::Xr("Xr visibility mask changed.");
         const auto& visibility_mask_changed =
@@ -1118,6 +1145,23 @@ absl::Status XrSessionHost::PollEvents() {
   }
 
   return absl::OkStatus();
+}
+
+void XrSessionHost::BroadcastReferenceSpaceChanges(
+    XrTime predicted_display_time) {
+  // If we reach the predicted time of pending space changes, we will assume
+  // the space changes have occurred and broadcast these changes.
+  for (auto it = pending_space_changes_.begin();
+       it != pending_space_changes_.end();) {
+    if (predicted_display_time >= it->change_time) {
+      GetView()->GetDispatcher().Send(
+          OpenXrSpaceChangedEvent(it->reference_space_type, it->pose_valid,
+                                  it->pose_in_previous_space));
+      it = pending_space_changes_.erase(it);
+    } else {
+      ++it;
+    }
+  }
 }
 
 std::optional<const XrEventDataBaseHeader*> XrSessionHost::GetNextEvent() {

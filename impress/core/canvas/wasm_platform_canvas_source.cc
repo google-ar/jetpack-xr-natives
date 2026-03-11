@@ -21,6 +21,7 @@
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "core/async/future.h"
 #include "core/canvas/async_canvas_source.h"
 #include "core/canvas/scoped_canvas.h"
@@ -102,6 +103,10 @@ std::vector<ScopedCanvas::GlyphAdvance> WasmPlatformCanvasSource::GetTextGlyphs(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
   IMP_LOG(imp::FATAL) << "CanvasSource::GetTextGlyphs is unavailable on WASM.";
   return {};
+}
+
+void WasmPlatformCanvasSource::ReleaseTextGlyphs(absl::Span<int> glyph_ids) {
+  // No-op on wasm.
 }
 
 FontInfo WasmPlatformCanvasSource::GetFontInfo(

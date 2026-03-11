@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "absl/algorithm/container.h"
+#include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/memory/memory.h"
 #include "absl/strings/string_view.h"
@@ -38,35 +39,194 @@
 #include "core/model/mesh/base_mesh_builder.h"
 #include "core/model/mesh/mesh_builder.h"
 #include "core/split_engine/flatbuffer_size_calculator.h"
+#include "core/split_engine/split_engine_mesh_serializer.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "split_engine/schemas/split_engine_data_generated.h"
 
 namespace imp::split_engine {
 
-SplitEngineVertexBufferBuilder::SplitEngineVertexBufferBuilder() noexcept
-    : enable_buffer_objects_(false), advanced_skinning_(false) {}
+namespace {
+class SplitEngineMeshSerializerImpl : public SplitEngineMeshSerializer {
+ public:
+  struct Serializers {
+    Serializers() = default;
+    Serializers(Serializers&& other) noexcept = default;
+    Serializers& operator=(Serializers&& other) noexcept = default;
+    Serializers(const Serializers&) = delete;
+    Serializers& operator=(const Serializers&) = delete;
+
+    std::vector<std::unique_ptr<const SplitEngineIndexBufferSerializer>>
+        index_buffers;
+    std::vector<std::unique_ptr<const SplitEngineVertexBufferSerializer>>
+        vertex_buffers;
+    std::vector<std::unique_ptr<const SplitEngineMorphTargetBufferSerializer>>
+        morph_target_buffers;
+  };
+
+  explicit SplitEngineMeshSerializerImpl(Serializers serializers)
+      : serializers_(std::move(serializers)) {}
+  ~SplitEngineMeshSerializerImpl() override = default;
+
+  IndexBufferVector SerializeIndexBuffers(
+      flatbuffers::FlatBufferBuilder& builder) const noexcept override {
+    std::vector<flatbuffers::Offset<android_xr::schemas::IndexBuffer>>
+        index_buffers;
+    for (const std::unique_ptr<const SplitEngineIndexBufferSerializer>&
+             serializer : serializers_.index_buffers) {
+      flatbuffers::Offset<android_xr::schemas::IndexBuffer> offset =
+          serializer->SerializeIndexBuffer(builder);
+      index_buffers.push_back(offset);
+    }
+    return builder.CreateVector(index_buffers);
+  }
+
+  VertexBufferVector SerializeVertexBuffers(
+      flatbuffers::FlatBufferBuilder& builder) const noexcept override {
+    std::vector<flatbuffers::Offset<android_xr::schemas::VertexBuffer>>
+        vertex_buffers;
+    for (const std::unique_ptr<const SplitEngineVertexBufferSerializer>&
+             serializer : serializers_.vertex_buffers) {
+      flatbuffers::Offset<android_xr::schemas::VertexBuffer> offset =
+          serializer->SerializeVertexBuffer(builder);
+      vertex_buffers.push_back(offset);
+    }
+    return builder.CreateVector(vertex_buffers);
+  }
+
+  MorphTargetBufferVector SerializeMorphTargetBuffers(
+      flatbuffers::FlatBufferBuilder& builder) const noexcept override {
+    std::vector<flatbuffers::Offset<android_xr::schemas::MorphTargetBuffer>>
+        morph_target_buffers;
+    for (const std::unique_ptr<const SplitEngineMorphTargetBufferSerializer>&
+             serializer : serializers_.morph_target_buffers) {
+      flatbuffers::Offset<android_xr::schemas::MorphTargetBuffer> offset =
+          serializer->SerializeMorphTargetBuffer(builder);
+      morph_target_buffers.push_back(offset);
+    }
+    return builder.CreateVector(morph_target_buffers);
+  }
+
+  // Contribute*BufferSizes: given a FlatbufferSizeCalculator, add the
+  // estimated contribution of the internal buffers to serialization size.
+  void ContributeIndexBufferSizes(
+      FlatbufferSizeCalculator& calculator) const noexcept override {
+    for (const std::unique_ptr<const SplitEngineIndexBufferSerializer>&
+             serializer : serializers_.index_buffers) {
+      serializer->ContributeBufferSize(calculator);
+    }
+    calculator.AddReferenceVector(serializers_.index_buffers.size());
+  }
+
+  void ContributeVertexBufferSizes(
+      FlatbufferSizeCalculator& calculator) const noexcept override {
+    for (const std::unique_ptr<const SplitEngineVertexBufferSerializer>&
+             serializer : serializers_.vertex_buffers) {
+      serializer->ContributeBufferSize(calculator);
+    }
+  }
+
+  void ContributeMorphTargetBufferSizes(
+      FlatbufferSizeCalculator& calculator) const noexcept override {
+    for (const std::unique_ptr<const SplitEngineMorphTargetBufferSerializer>&
+             serializer : serializers_.morph_target_buffers) {
+      serializer->ContributeBufferSize(calculator);
+    }
+  }
+
+ private:
+  const Serializers serializers_;
+};
+
+class SplitEngineVertexBufferSerializerImpl
+    : public SplitEngineVertexBufferSerializer {
+ public:
+  explicit SplitEngineVertexBufferSerializerImpl(
+      SplitEngineVertexBufferBuilder::State state)
+      : state_(std::move(state)) {
+    
+  }
+  ~SplitEngineVertexBufferSerializerImpl() override = default;
+
+  void ContributeBufferSize(
+      FlatbufferSizeCalculator& calculator) const noexcept override;
+
+  flatbuffers::Offset<android_xr::schemas::VertexBuffer> SerializeVertexBuffer(
+      flatbuffers::FlatBufferBuilder& builder) const noexcept override;
+
+ private:
+  const SplitEngineVertexBufferBuilder::State state_;
+};
+
+class SplitEngineIndexBufferSerializerImpl
+    : public SplitEngineIndexBufferSerializer {
+ public:
+  explicit SplitEngineIndexBufferSerializerImpl(
+      SplitEngineIndexBufferBuilder::State state)
+      : state_(std::move(state)) {
+    
+  }
+  ~SplitEngineIndexBufferSerializerImpl() override = default;
+
+  void ContributeBufferSize(
+      FlatbufferSizeCalculator& calculator) const noexcept override;
+
+  flatbuffers::Offset<android_xr::schemas::IndexBuffer> SerializeIndexBuffer(
+      flatbuffers::FlatBufferBuilder& builder) const noexcept override;
+
+ private:
+  const SplitEngineIndexBufferBuilder::State state_;
+};
+
+class SplitEngineMorphTargetBufferSerializerImpl
+    : public SplitEngineMorphTargetBufferSerializer {
+ public:
+  explicit SplitEngineMorphTargetBufferSerializerImpl(
+      SplitEngineMorphTargetBufferBuilder::State state)
+      : state_(std::move(state)) {
+    
+  }
+  ~SplitEngineMorphTargetBufferSerializerImpl() override = default;
+
+  void ContributeBufferSize(
+      FlatbufferSizeCalculator& calculator) const noexcept override;
+
+  flatbuffers::Offset<android_xr::schemas::MorphTargetBuffer>
+  SerializeMorphTargetBuffer(
+      flatbuffers::FlatBufferBuilder& builder) const noexcept override;
+
+ private:
+  const SplitEngineMorphTargetBufferBuilder::State state_;
+};
+
+}  // namespace
+
+SplitEngineVertexBufferBuilder::SplitEngineVertexBufferBuilder() noexcept {}
 
 SplitEngineVertexBufferBuilder& SplitEngineVertexBufferBuilder::BufferCount(
     uint8_t bufferCount) noexcept {
+  
   return *this;
 }
 
 SplitEngineVertexBufferBuilder& SplitEngineVertexBufferBuilder::VertexCount(
     uint32_t vertexCount) noexcept {
+  
   return *this;
 }
 
 SplitEngineVertexBufferBuilder&
 SplitEngineVertexBufferBuilder::EnableBufferObjectsInternal(
     bool enabled) noexcept {
-  enable_buffer_objects_ = enabled;
+  
+  state_.enable_buffer_objects_ = enabled;
   return *this;
 }
 
 SplitEngineVertexBufferBuilder&
 SplitEngineVertexBufferBuilder::AdvancedSkinningInternal(
     bool enabled) noexcept {
-  advanced_skinning_ = enabled;
+  
+  state_.advanced_skinning_ = enabled;
   return *this;
 }
 
@@ -78,16 +238,17 @@ SplitEngineVertexBufferBuilder::AttributeInternal(
     filament::VertexAttribute attribute, uint8_t bufferIndex,
     filament::VertexBuffer::AttributeType attributeType, uint32_t byteOffset,
     uint8_t byteStride, bool normalized) noexcept {
-  if (bufferIndex >= attributes_.size()) {
+  
+  if (bufferIndex >= state_.attributes_.size()) {
     // We require an in-order build.
-    assert(bufferIndex == attributes_.size());
-    attributes_.emplace_back();
-    strides_.emplace_back(byteStride);
+    assert(bufferIndex == state_.attributes_.size());
+    state_.attributes_.emplace_back();
+    state_.strides_.emplace_back(byteStride);
   }
   // All strides must match.
-  assert(strides_[bufferIndex] == byteStride);
+  assert(state_.strides_[bufferIndex] == byteStride);
 
-  attributes_[bufferIndex].emplace_back(
+  state_.attributes_[bufferIndex].emplace_back(
       static_cast<android_xr::schemas::VertexAttribute>(attribute),
       static_cast<android_xr::schemas::AttributeType>(attributeType),
       byteOffset, normalized);
@@ -100,22 +261,26 @@ SplitEngineVertexBufferBuilder::BufferAtInternal(
     filament::Engine& engine, uint8_t bufferIndex,
     filament::backend::BufferDescriptor&& buffer,
     uint32_t byteOffset) noexcept {
+  
   // TODO: VertexBufferInfo doesn't have an offset field.
   assert(byteOffset == 0);
 
-  buffer_descriptors_[bufferIndex] = std::move(buffer);
+  state_.buffer_descriptors_[bufferIndex] = std::move(buffer);
   return *this;
 }
 
 SplitEngineVertexBufferBuilder&
 SplitEngineVertexBufferBuilder::VertexAccessFlags(
     uint8_t vertexAccessFlags) noexcept {
-  vertex_access_flags_ = vertexAccessFlags;
+  
+  state_.vertex_access_flags_ = vertexAccessFlags;
+
   return *this;
 }
 
 SplitEngineVertexBufferBuilder& SplitEngineVertexBufferBuilder::Name(
     absl::string_view name) noexcept {
+  
   // TODO: Implement this.
   return *this;
 }
@@ -127,82 +292,91 @@ filament::VertexBuffer* SplitEngineVertexBufferBuilder::Build(
   return nullptr;
 }
 
-void SplitEngineVertexBufferBuilder::ContributeBufferSize(
-    FlatbufferSizeCalculator& calculator) noexcept {
-  for (std::pair<const unsigned char, filament::backend::BufferDescriptor>&
-           buffer_descriptor : buffer_descriptors_) {
+void SplitEngineVertexBufferSerializerImpl::ContributeBufferSize(
+    FlatbufferSizeCalculator& calculator) const noexcept {
+  for (const std::pair<const unsigned char,
+                       filament::backend::BufferDescriptor>& buffer_descriptor :
+       state_.buffer_descriptors_) {
     int bufferIndex = buffer_descriptor.first;
-    calculator.AddAttributeVector(attributes_[bufferIndex].size());
+    calculator.AddAttributeVector(state_.attributes_[bufferIndex].size());
     calculator.AddVector(buffer_descriptor.second.size, sizeof(uint8_t));
     calculator.AddVertexBlockInfo();
   }
-  calculator.AddReferenceVector(buffer_descriptors_.size());
+  calculator.AddReferenceVector(state_.buffer_descriptors_.size());
   calculator.AddVertexBufferInfo();
   calculator.AddVertexBuffer();
 }
 
 flatbuffers::Offset<android_xr::schemas::VertexBuffer>
-SplitEngineVertexBufferBuilder::SerializeVertexBuffer(
-    flatbuffers::FlatBufferBuilder& builder) noexcept {
+SplitEngineVertexBufferSerializerImpl::SerializeVertexBuffer(
+    flatbuffers::FlatBufferBuilder& builder) const noexcept {
   std::vector<flatbuffers::Offset<android_xr::schemas::VertexBlockInfo>>
       vertex_blocks;
+  vertex_blocks.resize(state_.attributes_.size());
 
-  if (vertex_blocks.empty()) {
-    vertex_blocks.resize(attributes_.size());
-  }
-  for (std::pair<const unsigned char, filament::backend::BufferDescriptor>&
-           buffer_descriptor : buffer_descriptors_) {
+  for (const std::pair<const unsigned char,
+                       filament::backend::BufferDescriptor>& buffer_descriptor :
+       state_.buffer_descriptors_) {
     int bufferIndex = buffer_descriptor.first;
-    filament::backend::BufferDescriptor& buffer = buffer_descriptor.second;
+    const filament::backend::BufferDescriptor& buffer =
+        buffer_descriptor.second;
 
     vertex_blocks[bufferIndex] = android_xr::schemas::CreateVertexBlockInfo(
-        builder, builder.CreateVectorOfStructs(attributes_[bufferIndex]),
+        builder, builder.CreateVectorOfStructs(state_.attributes_[bufferIndex]),
         builder.CreateVector(reinterpret_cast<uint8_t*>(buffer.buffer),
                              buffer.size),
-        strides_[bufferIndex]);
+        state_.strides_[bufferIndex]);
   }
 
   return android_xr::schemas::CreateVertexBuffer(
-      builder, SplitEngineSerializer::GetId(vertex_buffer_),
+      builder, state_.vertex_buffer_id,
       android_xr::schemas::CreateVertexBufferInfo(
-          builder, builder.CreateVector(vertex_blocks),
-          vertex_buffer_->getVertexCount(), advanced_skinning_),
+          builder, builder.CreateVector(vertex_blocks), state_.vertex_count,
+          state_.advanced_skinning_),
       static_cast<android_xr::schemas::VertexAccessFlags>(
-          vertex_access_flags_));
+          state_.vertex_access_flags_));
 }
 
 void SplitEngineVertexBufferBuilder::Finalize(
     filament::VertexBuffer* vertex_buffer) noexcept {
-  vertex_buffer_ = vertex_buffer;
+  
+  state_.finalized = true;
+  state_.vertex_buffer_id = SplitEngineSerializer::GetId(vertex_buffer);
+  state_.vertex_count = vertex_buffer->getVertexCount();
 }
 
 SplitEngineIndexBufferBuilder::SplitEngineIndexBufferBuilder() noexcept {}
 
 SplitEngineIndexBufferBuilder& SplitEngineIndexBufferBuilder::IndexCount(
     uint32_t indexCount) noexcept {
+  
   return *this;
 }
 SplitEngineIndexBufferBuilder& SplitEngineIndexBufferBuilder::BufferType(
     filament::IndexBuffer::IndexType indexType) noexcept {
-  index_type_ = indexType;
+  
+  state_.index_type_ = indexType;
   return *this;
 }
 SplitEngineIndexBufferBuilder& SplitEngineIndexBufferBuilder::BufferInternal(
     filament::Engine& engine, filament::IndexBuffer::BufferDescriptor&& buffer,
     uint32_t byteOffset) noexcept {
-  buffer_ = std::move(buffer);
+  
+  state_.buffer_ = std::move(buffer);
 
   return *this;
 }
 
 SplitEngineIndexBufferBuilder& SplitEngineIndexBufferBuilder::StoreIndexData(
     bool store_index_data) noexcept {
-  store_index_data_ = store_index_data;
+  
+  state_.store_index_data_ = store_index_data;
   return *this;
 }
 
 SplitEngineIndexBufferBuilder& SplitEngineIndexBufferBuilder::Name(
     absl::string_view name) noexcept {
+  
   // TODO: Implement this.
   return *this;
 }
@@ -216,29 +390,17 @@ filament::IndexBuffer* SplitEngineIndexBufferBuilder::Build(
 
 void SplitEngineIndexBufferBuilder::Finalize(
     filament::IndexBuffer* index_buffer) noexcept {
-  index_buffer_ = index_buffer;
-}
-
-::flatbuffers::Offset<::flatbuffers::Vector<
-    flatbuffers::Offset<android_xr::schemas::IndexBuffer>>>
-SplitEngineMeshBuilder::SerializeIndexBuffers(
-    flatbuffers::FlatBufferBuilder& builder) noexcept {
-  std::vector<flatbuffers::Offset<android_xr::schemas::IndexBuffer>>
-      index_buffers;
-  for (std::unique_ptr<imp::split_engine::SplitEngineIndexBufferBuilder>&
-           index_buffer : index_buffers_) {
-    flatbuffers::Offset<android_xr::schemas::IndexBuffer> offset =
-        index_buffer->SerializeIndexBuffer(builder);
-    index_buffers.push_back(offset);
-  }
-  return builder.CreateVector(index_buffers);
+  
+  state_.finalized = true;
+  state_.index_buffer_id = SplitEngineSerializer::GetId(index_buffer);
+  state_.index_count = index_buffer->getIndexCount();
 }
 
 flatbuffers::Offset<android_xr::schemas::IndexBuffer>
-SplitEngineIndexBufferBuilder::SerializeIndexBuffer(
-    flatbuffers::FlatBufferBuilder& builder) noexcept {
+SplitEngineIndexBufferSerializerImpl::SerializeIndexBuffer(
+    flatbuffers::FlatBufferBuilder& builder) const noexcept {
   android_xr::schemas::IndexType schema_index_type;
-  switch (index_type_) {
+  switch (state_.index_type_) {
     default:
     case filament::IndexBuffer::IndexType::USHORT:
       schema_index_type = android_xr::schemas::IndexType::USHORT;
@@ -251,17 +413,18 @@ SplitEngineIndexBufferBuilder::SerializeIndexBuffer(
   flatbuffers::Offset<android_xr::schemas::IndexBufferInfo> serialized_ibinfo =
       android_xr::schemas::CreateIndexBufferInfo(
           builder, schema_index_type,
-          builder.CreateVector(reinterpret_cast<uint8_t*>(buffer_.buffer),
-                               buffer_.size));
+          builder.CreateVector(
+              reinterpret_cast<uint8_t*>(state_.buffer_.buffer),
+              state_.buffer_.size));
 
-  return android_xr::schemas::CreateIndexBuffer(
-      builder, SplitEngineSerializer::GetId(index_buffer_), serialized_ibinfo,
-      store_index_data_);
+  return android_xr::schemas::CreateIndexBuffer(builder, state_.index_buffer_id,
+                                                serialized_ibinfo,
+                                                state_.store_index_data_);
 }
 
-void SplitEngineIndexBufferBuilder::ContributeBufferSize(
-    FlatbufferSizeCalculator& calculator) noexcept {
-  calculator.AddVector(buffer_.size, sizeof(uint8_t));
+void SplitEngineIndexBufferSerializerImpl::ContributeBufferSize(
+    FlatbufferSizeCalculator& calculator) const noexcept {
+  calculator.AddVector(state_.buffer_.size, sizeof(uint8_t));
   calculator.AddIndexBufferInfo();
   calculator.AddIndexBuffer();
 }
@@ -271,13 +434,15 @@ SplitEngineMorphTargetBufferBuilder::
 
 SplitEngineMorphTargetBufferBuilder&
 SplitEngineMorphTargetBufferBuilder::VertexCount(size_t vertexCount) noexcept {
-  vertex_count_ = vertexCount;
+  
+  state_.vertex_count_ = vertexCount;
   return *this;
 }
 
 SplitEngineMorphTargetBufferBuilder& SplitEngineMorphTargetBufferBuilder::Count(
     size_t count) noexcept {
-  attribute_count_ = count;
+  
+  state_.attribute_count_ = count;
   return *this;
 }
 
@@ -286,11 +451,12 @@ SplitEngineMorphTargetBufferBuilder::PositionsAt(size_t target_index,
                                                  const float3* positions,
                                                  size_t count,
                                                  size_t offset) noexcept {
+  
   const uint8_t* positions_data =
       reinterpret_cast<const uint8_t*>(positions + offset);
   const size_t positions_size = count * sizeof(float3);
 
-  positions_.emplace_back(target_index, positions_data, positions_size);
+  state_.positions_.emplace_back(target_index, positions_data, positions_size);
 
   return *this;
 }
@@ -300,11 +466,12 @@ SplitEngineMorphTargetBufferBuilder::TangentsAt(size_t target_index,
                                                 const short4* tangents,
                                                 size_t count,
                                                 size_t offset) noexcept {
+  
   const uint8_t* tangents_data =
       reinterpret_cast<const uint8_t*>(tangents + offset);
   const size_t tangents_size = count * sizeof(short4);
 
-  tangents_.emplace_back(target_index, tangents_data, tangents_size);
+  state_.tangents_.emplace_back(target_index, tangents_data, tangents_size);
 
   return *this;
 }
@@ -318,16 +485,22 @@ SplitEngineMorphTargetBufferBuilder::Build() noexcept {
 }
 
 flatbuffers::Offset<android_xr::schemas::MorphTargetBuffer>
-SplitEngineMorphTargetBufferBuilder::SerializeMorphTargetBuffer(
-    flatbuffers::FlatBufferBuilder& builder) noexcept {
+SplitEngineMorphTargetBufferSerializerImpl::SerializeMorphTargetBuffer(
+    flatbuffers::FlatBufferBuilder& builder) const noexcept {
+  struct Attribute {
+    flatbuffers::Offset<flatbuffers::Vector<uint8_t>> positions;
+    flatbuffers::Offset<flatbuffers::Vector<uint8_t>> tangents;
+  };
   std::vector<Attribute> attributes;
-  attributes.resize(attribute_count_);
+  attributes.resize(state_.attribute_count_);
 
-  for (AttributeData& position : positions_) {
+  using AttributeData = SplitEngineMorphTargetBufferBuilder::AttributeData;
+
+  for (const AttributeData& position : state_.positions_) {
     attributes[position.index].positions =
         builder.CreateVector(position.data, position.size);
   }
-  for (AttributeData& tangent : tangents_) {
+  for (const AttributeData& tangent : state_.tangents_) {
     attributes[tangent.index].tangents =
         builder.CreateVector(tangent.data, tangent.size);
   }
@@ -343,26 +516,30 @@ SplitEngineMorphTargetBufferBuilder::SerializeMorphTargetBuffer(
       });
 
   return android_xr::schemas::CreateMorphTargetBuffer(
-      builder, SplitEngineSerializer::GetId(morph_target_buffer_),
+      builder, state_.morph_target_buffer_id,
       android_xr::schemas::CreateMorphTargetBufferInfo(
-          builder, builder.CreateVector(attribute_offsets), vertex_count_));
+          builder, builder.CreateVector(attribute_offsets),
+          state_.vertex_count_));
 }
 
-void SplitEngineMorphTargetBufferBuilder::ContributeBufferSize(
-    FlatbufferSizeCalculator& calculator) noexcept {
-  for (size_t i = 0; i < attribute_count_; ++i) {
-    calculator.AddVector(positions_[i].size, sizeof(uint8_t));
-    calculator.AddVector(tangents_[i].size, sizeof(uint8_t));
+void SplitEngineMorphTargetBufferSerializerImpl::ContributeBufferSize(
+    FlatbufferSizeCalculator& calculator) const noexcept {
+  for (size_t i = 0; i < state_.attribute_count_; ++i) {
+    calculator.AddVector(state_.positions_[i].size, sizeof(uint8_t));
+    calculator.AddVector(state_.tangents_[i].size, sizeof(uint8_t));
     calculator.AddMorphTargetAttributeInfo();
   }
-  calculator.AddReferenceVector(attribute_count_);
+  calculator.AddReferenceVector(state_.attribute_count_);
   calculator.AddMorphTargetBufferInfo();
   calculator.AddMorphTargetBuffer();
 }
 
 void SplitEngineMorphTargetBufferBuilder::Finalize(
     filament::MorphTargetBuffer* morph_target_buffer) noexcept {
-  morph_target_buffer_ = morph_target_buffer;
+  
+  state_.finalized = true;
+  state_.morph_target_buffer_id =
+      SplitEngineSerializer::GetId(morph_target_buffer);
 }
 
 SplitEngineMeshBuilder::SplitEngineMeshBuilder(
@@ -371,80 +548,71 @@ SplitEngineMeshBuilder::SplitEngineMeshBuilder(
 
 BaseVertexBufferBuilder&
 SplitEngineMeshBuilder::CreateVertexBufferBuilder() noexcept {
-  vertex_buffers_.push_back(
+  
+  vertex_buffers.push_back(
       absl::WrapUnique(new SplitEngineVertexBufferBuilder()));
-  return *vertex_buffers_.back();
+  return *vertex_buffers.back();
 }
 BaseIndexBufferBuilder&
 SplitEngineMeshBuilder::CreateIndexBufferBuilder() noexcept {
-  index_buffers_.push_back(
+  
+  index_buffers.push_back(
       absl::WrapUnique(new SplitEngineIndexBufferBuilder()));
-  return *index_buffers_.back();
+  return *index_buffers.back();
 }
 BaseMorphTargetBufferBuilder&
 SplitEngineMeshBuilder::CreateMorphTargetBufferBuilder() noexcept {
-  morph_target_buffers_.push_back(
+  
+  morph_target_buffers.push_back(
       absl::WrapUnique(new SplitEngineMorphTargetBufferBuilder()));
-  return *morph_target_buffers_.back();
-}
-
-flatbuffers::Offset<
-    flatbuffers::Vector<flatbuffers::Offset<android_xr::schemas::VertexBuffer>>>
-SplitEngineMeshBuilder::SerializeVertexBuffers(
-    flatbuffers::FlatBufferBuilder& builder) noexcept {
-  std::vector<flatbuffers::Offset<android_xr::schemas::VertexBuffer>>
-      vertex_buffers;
-  for (std::unique_ptr<imp::split_engine::SplitEngineVertexBufferBuilder>&
-           vertex_buffer : vertex_buffers_) {
-    flatbuffers::Offset<android_xr::schemas::VertexBuffer> offset =
-        vertex_buffer->SerializeVertexBuffer(builder);
-    vertex_buffers.push_back(offset);
-  }
-  return builder.CreateVector(vertex_buffers);
-}
-
-flatbuffers::Offset<flatbuffers::Vector<
-    flatbuffers::Offset<android_xr::schemas::MorphTargetBuffer>>>
-SplitEngineMeshBuilder::SerializeMorphTargetBuffers(
-    flatbuffers::FlatBufferBuilder& builder) noexcept {
-  std::vector<flatbuffers::Offset<android_xr::schemas::MorphTargetBuffer>>
-      morph_target_buffers;
-  for (std::unique_ptr<imp::split_engine::SplitEngineMorphTargetBufferBuilder>&
-           morph_target_buffer : morph_target_buffers_) {
-    flatbuffers::Offset<android_xr::schemas::MorphTargetBuffer> offset =
-        morph_target_buffer->SerializeMorphTargetBuffer(builder);
-    morph_target_buffers.push_back(offset);
-  }
-  return builder.CreateVector(morph_target_buffers);
-}
-
-void SplitEngineMeshBuilder::ContributeIndexBufferSizes(
-    FlatbufferSizeCalculator& calculator) noexcept {
-  for (std::unique_ptr<imp::split_engine::SplitEngineIndexBufferBuilder>&
-           index_buffer : index_buffers_) {
-    index_buffer->ContributeBufferSize(calculator);
-  }
-  calculator.AddReferenceVector(index_buffers_.size());
-}
-
-void SplitEngineMeshBuilder::ContributeVertexBufferSizes(
-    FlatbufferSizeCalculator& calculator) noexcept {
-  for (std::unique_ptr<imp::split_engine::SplitEngineVertexBufferBuilder>&
-           vertex_buffer : vertex_buffers_) {
-    vertex_buffer->ContributeBufferSize(calculator);
-  }
-}
-
-void SplitEngineMeshBuilder::ContributeMorphTargetBufferSizes(
-    FlatbufferSizeCalculator& calculator) noexcept {
-  for (std::unique_ptr<imp::split_engine::SplitEngineMorphTargetBufferBuilder>&
-           morph_target_buffer : morph_target_buffers_) {
-    morph_target_buffer->ContributeBufferSize(calculator);
-  }
+  return *morph_target_buffers.back();
 }
 
 void SplitEngineMeshBuilder::Finalize() noexcept {
-  serializer_.SerializeMesh(*this);
+  
+  is_finalized_ = true;
+
+  SplitEngineMeshSerializerImpl::Serializers serializers;
+
+  serializers.vertex_buffers.reserve(vertex_buffers.size());
+  for (const auto& vertex_buffer : vertex_buffers) {
+    serializers.vertex_buffers.push_back(vertex_buffer->CreateSerializer());
+  }
+
+  serializers.index_buffers.reserve(index_buffers.size());
+  for (const auto& index_buffer : index_buffers) {
+    serializers.index_buffers.push_back(index_buffer->CreateSerializer());
+  }
+
+  serializers.morph_target_buffers.reserve(morph_target_buffers.size());
+  for (const auto& morph_target_buffer : morph_target_buffers) {
+    serializers.morph_target_buffers.push_back(
+        morph_target_buffer->CreateSerializer());
+  }
+
+  const SplitEngineMeshSerializerImpl serializer(std::move(serializers));
+  serializer_.SerializeMesh(serializer);
+}
+
+std::unique_ptr<const SplitEngineVertexBufferSerializer>
+SplitEngineVertexBufferBuilder::CreateSerializer() noexcept {
+  
+  return std::make_unique<const SplitEngineVertexBufferSerializerImpl>(
+      std::move(state_));
+}
+
+std::unique_ptr<const SplitEngineIndexBufferSerializer>
+SplitEngineIndexBufferBuilder::CreateSerializer() noexcept {
+  
+  return std::make_unique<const SplitEngineIndexBufferSerializerImpl>(
+      std::move(state_));
+}
+
+std::unique_ptr<const SplitEngineMorphTargetBufferSerializer>
+SplitEngineMorphTargetBufferBuilder::CreateSerializer() noexcept {
+  
+  return std::make_unique<const SplitEngineMorphTargetBufferSerializerImpl>(
+      std::move(state_));
 }
 
 }  // namespace imp::split_engine

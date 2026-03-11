@@ -82,8 +82,11 @@ absl::Status StereoSurface::Setup(MediaStereoMode stereo_mode,
   mesh_renderer_->SetShadowReceivingMode(MeshRenderer::ShadowMode::kNone);
 
   material_future_ =
+      // TODO: (broken link) - Support Per Eye Geometry as part of the CustomMesh
+      //                     Shape type.
       android_xr::JxrMediaMaterial::Create(
-          GetView(), MediaShapeType::kDefaultFlat, use_super_sampling)
+          GetView(), MediaShapeType::kDefaultFlat, use_super_sampling,
+          RenderEyeTarget::kBoth)
           .Then([this, stereo_mode](
                     std::unique_ptr<android_xr::JxrMediaMaterial> material) {
             material_ = std::move(material);
@@ -154,6 +157,7 @@ absl::Status StereoSurface::SetCanvasShape(const CanvasShape& canvas_shape) {
   auto shape_q = std::get_if<Quad>(&canvas_shape);
   auto shape_s = std::get_if<Sphere>(&canvas_shape);
   auto shape_h = std::get_if<Hemisphere>(&canvas_shape);
+  auto shape_mesh = std::get_if<CustomMesh>(&canvas_shape);
   if (shape_q != nullptr) {
     // Don't set the z scale to 0.0f, as that breaks the collider.
     GetNode()->SetLocalScale({shape_q->width, shape_q->height, 1.0f});
@@ -187,6 +191,22 @@ absl::Status StereoSurface::SetCanvasShape(const CanvasShape& canvas_shape) {
               ? MeshFactory::MeshDataStorageMode::kDiscardMeshData
               : MeshFactory::MeshDataStorageMode::kStoreMeshData));
     }
+  } else if (shape_mesh != nullptr) {
+    // TODO: (broken link) - Support Per Eye Geometry as part of the CustomMesh
+    //                     Shape type.
+    imp::CreateCustomMeshSettings settings{
+        .positions = shape_mesh->left_positions,
+        .texcoords = shape_mesh->left_texcoords};
+
+    if (shape_mesh->left_indices.has_value() &&
+        !shape_mesh->left_indices->empty()) {
+      settings.indices = shape_mesh->left_indices;
+    }
+
+    settings.draw_mode = shape_mesh->draw_mode;
+
+    mesh_renderer_->SetMesh(GetView().GetMeshFactory().CreateCustomMesh(
+        settings, MeshFactory::MeshDataStorageMode::kDiscardMeshData));
   } else {
     // In practice this should be impossible, since the higher level JXR APIs
     // don't have a value for this; Shape is a required field whenever setting

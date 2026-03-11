@@ -123,7 +123,7 @@ DirectoryUiDesktop::DirectoryUiDesktop(BaseView& view, ImGuiTextFilter& filter,
 }
 
 void DirectoryUiDesktop::DrawDirectoriesHeader() {
-  if (ImGui::ImageButton(home_icon_->GetTexture(), kButtonSize)) {
+  if (ImGui::ImageButton("##home", home_icon_->GetTexture(), kButtonSize)) {
     current_working_directory_ = home_directory_;
   }
 
@@ -135,7 +135,7 @@ void DirectoryUiDesktop::DrawDirectoriesHeader() {
     ImGui::BeginDisabled();
   }
 
-  if (ImGui::ImageButton(up_arrow_icon_->GetTexture(), kButtonSize)) {
+  if (ImGui::ImageButton("##up", up_arrow_icon_->GetTexture(), kButtonSize)) {
     current_working_directory_ = current_working_directory_.substr(
         0, current_working_directory_.find_last_of('/'));
   }
@@ -158,30 +158,45 @@ void DirectoryUiDesktop::DrawDirectoriesHeader() {
 }
 
 void DirectoryUiDesktop::DrawDirectoriesInCurrentDirectory() {
-  DIR* d;
-  struct dirent* dir;
-  d = opendir(current_working_directory_.c_str());
-  if (d) {
-    while ((dir = readdir(d)) != NULL) {
+  struct dirent** dirlist;
+  int num_entries;
+  num_entries =
+      scandir(current_working_directory_.c_str(), &dirlist, nullptr, alphasort);
+  if (num_entries > 0) {
+    for (int i = 0; i < num_entries; ++i) {
+      struct dirent* dir = dirlist[i];
+      if (dir == nullptr) {
+        continue;
+      }
+
       std::string entry_name = dir->d_name;
       std::string full_entry_path =
           absl::StrCat(current_working_directory_, "/", entry_name);
 
-      struct stat statbuf;
-      int stat_result = stat(full_entry_path.c_str(), &statbuf);
-      if (stat_result != 0) {
-        continue;
-      }
+      auto is_entry_valid = [&]() {
+        if (entry_name == "." || entry_name == "..") {
+          return false;
+        }
 
-      if (entry_name == "." || entry_name == "..") {
-        continue;
-      }
+        struct stat statbuf;
+        int stat_result = stat(full_entry_path.c_str(), &statbuf);
 
-      if (!S_ISDIR(statbuf.st_mode)) {
-        continue;
-      }
+        if (stat_result != 0) {
+          return false;
+        }
 
-      if (!filter_.PassFilter(entry_name.c_str())) {
+        if (!S_ISDIR(statbuf.st_mode)) {
+          return false;
+        }
+
+        if (!filter_.PassFilter(entry_name.c_str())) {
+          return false;
+        }
+        return true;
+      };
+
+      if (!is_entry_valid()) {
+        free(dir);
         continue;
       }
 
@@ -199,8 +214,10 @@ void DirectoryUiDesktop::DrawDirectoriesInCurrentDirectory() {
                                              ImGui::GetContentRegionAvail().x);
       ImGuiCenterNextHorizontally(text_size.x, IncludePadding::kNone);
       ImGui::TextWrapped(entry_name.c_str(), "");
+
+      free(dir);
     }
-    closedir(d);
+    free(dirlist);
   }
 }
 

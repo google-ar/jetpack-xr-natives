@@ -234,7 +234,6 @@ void SurfaceRenderer::Render() {
                           near, far, filament::Camera::Fov::VERTICAL);
   }
 
-  // TODO: Render only if the main renderer rendered this frame.
   renderer->beginFrame(swap_chain_, 0);
   renderer->render(filament_view_);
   renderer->endFrame();

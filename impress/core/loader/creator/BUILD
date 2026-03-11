@@ -179,7 +179,7 @@ cc_library(
         "//core/math",
         "//core/model/mesh:base_mesh_builder",
         "//core/model/mesh:mesh_builder",
-        "//core/render:texture_builder",
+        "//core/render",
         "//core/view:base_view",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/status",

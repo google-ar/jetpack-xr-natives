@@ -333,6 +333,9 @@ class GltfRenderer : public Component {
   const RobinSet<NodeHandle>* GetNodesFromOriginalMeshIndex(
       int16_t original_mesh_index) const;
 
+  absl::StatusOr<int16_t> GetOriginalMaterialIndex(
+      model::EntityId entity_id, size_t primitive_index) const;
+
   int GetMeshCount() const { return mesh_index_to_nodes_.size(); };
 
   // Returns the per mesh record of morph target weights.

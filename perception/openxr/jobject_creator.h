@@ -16,10 +16,10 @@
 #define JETPACK_XR_NATIVES_OPENXR_JOBJECT_CREATOR_H_
 
 #include <jni.h>
+#include <openxr/openxr.h>
+#include <openxr/public/all_extensions.h>
 
 #include <cstdint>
-
-#include <openxr/openxr.h>
 
 namespace androidx::xr::openxr {
 
@@ -122,21 +122,26 @@ jobject CreateJavaEye(JNIEnv* env, const XrEyeANDROID& xr_eye);
 jobject CreateJavaEyesInfo(JNIEnv* env, const XrEyesANDROID& xr_eyes);
 
 // Returns a JVM object of type `androidx.xr.runtime.math.GeospatialPose` from
-// an `XrGeospatialPoseANDROIDX1`.
+// an `XrGeospatialPoseANDROIDX2`.
 jobject CreateJavaGeospatialPose(
-    JNIEnv* env, const XrGeospatialPoseANDROIDX1& xr_geospatial_pose);
+    JNIEnv* env, const XrGeospatialPoseANDROIDX2& xr_geospatial_pose);
 
 // Returns a JVM object of type
 // `androidx.xr.arcore.runtime.GeospatialPoseResult` from an
-// `XrGeospatialPoseResultANDROIDX1`.
+// `XrGeospatialPoseResultANDROIDX2`.
 jobject CreateJavaGeospatialPoseResult(
     JNIEnv* env,
-    const XrGeospatialPoseResultANDROIDX1& xr_geospatial_pose_result);
+    const XrGeospatialPoseResultANDROIDX2& xr_geospatial_pose_result);
 
 // Returns a JVM object of type `androidx.xr.runtime.XrDevice.DisplayBlendMode`
 // from an XrEnvironmentBlendMode.
 jobject CreateJavaDisplayBlendMode(JNIEnv* env,
                                    const XrEnvironmentBlendMode& xr_blend_mode);
+
+// Returns a JVM object of type `androidx.xr.runtime.VpsAvailability*` from an
+// `XrVPSAvailabilityCheckCompletionANDROIDX2`.
+jobject CreateVpsAvailabilityResult(
+    JNIEnv* env, const XrVPSAvailabilityCheckCompletionANDROIDX2& completion);
 
 }  // namespace androidx::xr::openxr
 

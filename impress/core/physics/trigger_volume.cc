@@ -31,6 +31,7 @@
 #include "mediapipe/framework/port/status_macros.h"
 #if IMP_RUNTIME(DEV)
 #include "core/common/debug_draw.h"
+#include "core/physics/physics_constants.h"
 #endif
 
 namespace imp {
@@ -57,8 +58,8 @@ absl::Status TriggerVolume::Setup() {
   physics_manager_->AddTriggerVolume(*trigger_volume_, GetNode());
 
 #if IMP_RUNTIME(DEV)
-  physics_manager_->RegisterCollidableVisualizer(GetNode(),
-                                                 [this]() { Visualize(); });
+  physics_manager_->RegisterDebugVisualizer(
+      GetNode(), [this]() { Visualize(); }, kCollidableVisualizer);
 #endif
 
   return absl::OkStatus();
@@ -70,7 +71,7 @@ void TriggerVolume::Cleanup() {
   }
 
 #if IMP_RUNTIME(DEV)
-  physics_manager_->UnregisterCollidableVisualizer(GetNode());
+  physics_manager_->UnRegisterDebugVisualizer(GetNode(), kCollidableVisualizer);
 #endif
 }
 

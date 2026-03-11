@@ -46,6 +46,7 @@
 #include "mediapipe/framework/port/status_macros.h"
 #if IMP_RUNTIME(DEV)
 #include "core/common/debug_draw.h"
+#include "core/physics/physics_constants.h"
 #endif
 
 namespace imp {
@@ -93,8 +94,8 @@ absl::Status RigidBody::Setup() {
 
 #if IMP_RUNTIME(DEV)
   if (status.ok()) {
-    physics_manager_->RegisterCollidableVisualizer(GetNode(),
-                                                   [this]() { Visualize(); });
+    physics_manager_->RegisterDebugVisualizer(
+        GetNode(), [this]() { Visualize(); }, kCollidableVisualizer);
   }
 #endif
 
@@ -179,12 +180,14 @@ absl::Status RigidBody::InitializeSimulated(const btTransform& bt_transform) {
     SetCustomGravity(*state_.gravity);
   }
 
-  if (state_.linear_factor.has_value()) {
-    SetLinearFactor(*state_.linear_factor);
+  if (state_.lock_position.has_value()) {
+    LockPosition(state_.lock_position.value().x, state_.lock_position.value().y,
+                 state_.lock_position.value().z);
   }
 
-  if (state_.angular_factor.has_value()) {
-    SetAngularFactor(*state_.angular_factor);
+  if (state_.lock_rotation.has_value()) {
+    LockRotation(state_.lock_rotation.value().x, state_.lock_rotation.value().y,
+                 state_.lock_rotation.value().z);
   }
 
   if (IsActive()) {
@@ -247,15 +250,6 @@ void RigidBody::SetLinearVelocity(float3 velocity) {
   rigid_body_->setLinearVelocity(ToBtVector3(velocity));
 }
 
-void RigidBody::SetLinearFactor(const float3& linear_factor) {
-  state_.linear_factor = linear_factor;
-  rigid_body_->setLinearFactor(ToBtVector3(linear_factor));
-}
-
-float3 RigidBody::GetLinearFactor() {
-  return ToVec3<float>(rigid_body_->getLinearFactor());
-}
-
 void RigidBody::SetAngularVelocity(float3 angular_velocity) {
   state_.angular_velocity = angular_velocity;
   rigid_body_->setAngularVelocity(ToBtVector3(angular_velocity));
@@ -269,13 +263,28 @@ float3 RigidBody::GetAngularVelocity() {
   return ToVec3<float>(rigid_body_->getAngularVelocity());
 }
 
-void RigidBody::SetAngularFactor(float3 angular_factor) {
-  state_.angular_factor = angular_factor;
-  rigid_body_->setAngularFactor(ToBtVector3(angular_factor));
+void RigidBody::LockPosition(bool lock_x, bool lock_y, bool lock_z) {
+  state_.lock_position = Bool3{lock_x, lock_y, lock_z};
+
+  btVector3 linear_factor(lock_x ? 0.0f : 1.0f, lock_y ? 0.0f : 1.0f,
+                          lock_z ? 0.0f : 1.0f);
+  rigid_body_->setLinearFactor(linear_factor);
 }
 
-float3 RigidBody::GetAngularFactor() {
-  return ToVec3<float>(rigid_body_->getAngularFactor());
+void RigidBody::LockPosition(bool all_axes) {
+  LockPosition(all_axes, all_axes, all_axes);
+}
+
+void RigidBody::LockRotation(bool lock_x, bool lock_y, bool lock_z) {
+  state_.lock_rotation = Bool3{lock_x, lock_y, lock_z};
+
+  btVector3 angular_factor(lock_x ? 0.0f : 1.0f, lock_y ? 0.0f : 1.0f,
+                           lock_z ? 0.0f : 1.0f);
+  rigid_body_->setAngularFactor(angular_factor);
+}
+
+void RigidBody::LockRotation(bool all_axes) {
+  LockRotation(all_axes, all_axes, all_axes);
 }
 
 void RigidBody::SetLinearDamping(float linear_damping) {
@@ -344,16 +353,18 @@ void RigidBody::OnIsfStateChanged() {
     UseWorldGravity();
   }
 
-  if (state_.linear_factor.has_value()) {
-    SetLinearFactor(*state_.linear_factor);
+  if (state_.lock_position.has_value()) {
+    LockPosition(state_.lock_position.value().x, state_.lock_position.value().y,
+                 state_.lock_position.value().z);
   } else {
-    rigid_body_->setLinearFactor(btVector3(1, 1, 1));
+    LockPosition(false);
   }
 
-  if (state_.angular_factor.has_value()) {
-    SetAngularFactor(*state_.angular_factor);
+  if (state_.lock_rotation.has_value()) {
+    LockRotation(state_.lock_rotation.value().x, state_.lock_rotation.value().y,
+                 state_.lock_rotation.value().z);
   } else {
-    rigid_body_->setAngularFactor(btVector3(1, 1, 1));
+    LockRotation(false);
   }
 
   SetMass(state_.mass);
@@ -396,7 +407,7 @@ void RigidBody::OnActiveStatusChanged(bool is_active) {
 void RigidBody::Cleanup() {
   CleanupInternal();
 #if IMP_RUNTIME(DEV)
-  physics_manager_->UnregisterCollidableVisualizer(GetNode());
+  physics_manager_->UnRegisterDebugVisualizer(GetNode(), kCollidableVisualizer);
 #endif
 }
 

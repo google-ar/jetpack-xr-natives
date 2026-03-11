@@ -20,16 +20,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 
-#include "absl/base/attributes.h"
 #include "absl/base/nullability.h"
 #include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
-#include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "core/async/future.h"
 #include "core/atlas/atlas_packer.h"
@@ -39,9 +36,7 @@
 #include "core/canvas/fonts/font_holder.h"
 #include "core/canvas/scoped_canvas.h"
 #include "core/common/ref_counter.h"
-#include "core/common/rememberer.h"
 #include "core/common/typed_id.h"
-#include "core/common/typed_span.h"
 #include "core/config.h"
 #include "core/math/almost_equal.h"
 #include "core/math/vec.h"
@@ -74,6 +69,8 @@ enum class TextureSize {
   k2048_4096,
   // Uses a 4096x4096 texture for the glyph atlas.
   k4096,
+  // Experimental: 256x256 textures in an 8x8 grid.
+  k256_256_8_8,
 };
 
 // Information about a glyph needed to render it and lay it out relative to
@@ -108,6 +105,58 @@ struct Glyph {
   SliceId slice;
   // Used to track how many references to this glyph there are.
   RefCounter::Ref glyph_ref;
+};
+
+// Like CanvasOptionsGlyphKey, but without the glyph.
+struct CanvasOptionsKey {
+  // Options that control how the text is drawn.
+  ScopedCanvas::TextOptions canvas_options;
+  // If the glyph contains an emoji and non-separable script, then we need to
+  // color it in the user's requested color. We need to update the key so that
+  // the color is part of the key, because each instance of the same glyph
+  // text will have to be rendered independently.
+  bool requires_color_key;
+
+  // Needed for using this type as a key within a map.
+  bool operator==(const CanvasOptionsKey& other) const {
+    bool eq = (canvas_options.stroke_width_pixels ==
+                   other.canvas_options.stroke_width_pixels &&
+               canvas_options.font_holder == other.canvas_options.font_holder &&
+               canvas_options.size_pixels == other.canvas_options.size_pixels &&
+               // text_tracking can affect the width of cursive glyphs.
+               AlmostEqual(canvas_options.text_tracking,
+                           other.canvas_options.text_tracking));
+    if (requires_color_key) {
+      return eq && canvas_options.color == other.canvas_options.color &&
+             canvas_options.stroke_color == other.canvas_options.stroke_color;
+    }
+    return eq;
+  }
+
+  // Needed for using this type as a key within a map.
+  template <typename H>
+  friend H AbslHashValue(H hash, const CanvasOptionsKey& canvas_options_key) {
+    if (canvas_options_key.requires_color_key) {
+      return H::combine(std::move(hash),
+                        canvas_options_key.canvas_options.stroke_width_pixels,
+                        canvas_options_key.canvas_options.font_holder,
+                        canvas_options_key.canvas_options.size_pixels,
+                        canvas_options_key.canvas_options.text_tracking,
+                        canvas_options_key.canvas_options.color.x,
+                        canvas_options_key.canvas_options.color.y,
+                        canvas_options_key.canvas_options.color.z,
+                        canvas_options_key.canvas_options.color.w,
+                        canvas_options_key.canvas_options.stroke_color.x,
+                        canvas_options_key.canvas_options.stroke_color.y,
+                        canvas_options_key.canvas_options.stroke_color.z,
+                        canvas_options_key.canvas_options.stroke_color.w);
+    }
+    return H::combine(std::move(hash),
+                      canvas_options_key.canvas_options.stroke_width_pixels,
+                      canvas_options_key.canvas_options.font_holder,
+                      canvas_options_key.canvas_options.size_pixels,
+                      canvas_options_key.canvas_options.text_tracking);
+  }
 };
 
 // Type that can be used as the key for a map and contains the
@@ -212,6 +261,10 @@ enum TextureStatus {
   // to be released. This stage only occurs for canvases that do not support
   // synchronous texture updates.
   kPreparingToUpdateTexture,
+
+  // The external texture is ready for blitting to the composite texture.
+  // This only occurs when there is more than one slice.
+  kReadyToBlit,
 };
 
 struct PendingCanvasGlyphs {
@@ -246,7 +299,8 @@ struct CompletionGate {
 class Slice {
  public:
   Slice() = default;
-  explicit Slice(uint2 texture_size);
+  explicit Slice(uint2 texture_size,
+                 std::unique_ptr<AsyncCanvasSource> canvas_source);
   ~Slice();
 
   // Movable but not copyable
@@ -279,26 +333,32 @@ class Slice {
   // PrepareToUpdateTexture docs for more details.
   Future<absl::Status> pending_prepare_future_;
 
+  // CanvasSource is thread-safe.
+  std::unique_ptr<AsyncCanvasSource> canvas_source_;
+
   // Represents the texture of the ScopedCanvas.
   Texture* texture_ = nullptr;
 
   std::shared_ptr<CompletionGate> completion_gate_ =
       std::make_shared<CompletionGate>();
 
-  void EndFrame(imp::BaseView& view, AsyncCanvasSource& canvas_source)
+  enum class EndFrameResult {
+    kStable,
+    kBlitRequired,
+  };
+
+  EndFrameResult EndFrame(imp::BaseView& view)
       ABSL_LOCKS_EXCLUDED(canvas_mutex_);
 
   static std::string ToString(
       const GlyphEmulator::GlyphKeyOrGlyphString& glyph);
 
   AsyncScopedCanvas* GetOrStartDrawing(imp::BaseView& view,
-                                       AsyncCanvasSource& canvas_source,
                                        ScopedCanvas::DrawMode draw_mode)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(canvas_mutex_);
 
   // Updates the actual texture atlas to include all the glyphs.
-  void DrawAllGlyphsToCanvas(imp::BaseView& view,
-                             AsyncCanvasSource& canvas_source)
+  void DrawAllGlyphsToCanvas(imp::BaseView& view)
       ABSL_LOCKS_EXCLUDED(canvas_mutex_, glyph_map_mutex_);
 
   // Updates the current texture based on what has been drawn to the current
@@ -315,34 +375,42 @@ class Slice {
   // completed.
   void UpdateTextureSync() ABSL_EXCLUSIVE_LOCKS_REQUIRED(canvas_mutex_);
 
-  // Updates the glyphs that are in the glyph atlas to the canvas
+  // Called when the texture has been successfully blitted to the composite
+  // texture.
+  void OnBlitCompleted();
+
+  // Updates the glyphs that are in the slice to the canvas
   // asynchronously
   Future<absl::Status> DrawGlyphsToCanvasAsync(
-      imp::BaseView& view, AsyncCanvasSource& canvas_source,
+      imp::BaseView& view,
       std::unique_ptr<std::vector<CanvasOptionsGlyphKey>> glyphs)
       ABSL_LOCKS_EXCLUDED(canvas_mutex_);
 
   // Gets a cached GlyphInfo by key or a nullptr if the glyph info is not yet
-  // added to this atlas.
+  // added to this slice.
   const GlyphInfo* /*absl_nullable*/  GetGlyphInfo(const CanvasOptionsGlyphKey& key);
 
   void DrawGlyphToCanvas(ScopedCanvas& canvas, CanvasOptionsGlyphKey glyph,
                          const GlyphInfo& glyph_info)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(canvas_mutex_);
 
-  // Updates the glyphs that are in the glyph atlas to the canvas
+  // Updates the glyphs that are in the slice to the canvas
   absl::Status DrawGlyphsToCanvas(std::vector<CanvasOptionsGlyphKey>& glyphs)
       ABSL_LOCKS_EXCLUDED(glyph_map_mutex_, canvas_mutex_);
 
-  void ClearUnusedGlyphs(imp::BaseView& view, AsyncCanvasSource& canvas_source)
+  // Remove all unused glyphs from the slice. `glyph_cleared_fn` is called for
+  // each glyph that is removed.
+  void ClearUnusedGlyphs(
+      imp::BaseView& view,
+      std::function<void(const CanvasOptionsGlyphKey&)> glyph_cleared_fn)
       ABSL_LOCKS_EXCLUDED(glyph_map_mutex_, canvas_mutex_);
 
-  // Returns the number of glyphs currently in the atlas.
+  // Returns the number of glyphs currently in the slice.
   //
   // This function is thread-safe.
   size_t GetNumCachedGlyphs() const;
 
-  // Provides the percentage of the slice atlas that is currently occupied.
+  // Provides the percentage of the slice that is currently occupied.
   //
   // This function is thread-safe.
   float GetAtlasUtilization() const;
@@ -353,13 +421,14 @@ class Slice {
   // Provides information of the glyph stored at the uv coordinate specified.
   //
   // This function is thread-safe.
-  std::optional<editor::SlicedGlyphAtlasVisualizer::SlicedGlyphAtlasInfo>
-  GetSlicedGlyphAtlasInfoAt(const float2& uv) const;
+  std::optional<editor::SlicedGlyphAtlasVisualizer::GlyphInfo> GetGlyphInfoAt(
+      const float2& uv, const float2& slice_offset,
+      const float2& slice_scale) const;
   // Provides information for all glyphs
   //
   // This function is thread-safe.
-  std::vector<editor::SlicedGlyphAtlasVisualizer::SlicedGlyphAtlasInfo>
-  GetAllGlyphInfo() const;
+  std::vector<editor::SlicedGlyphAtlasVisualizer::GlyphInfo> GetAllGlyphInfo(
+      const float2& slice_offset, const float2& slice_scale) const;
 #endif
 };
 

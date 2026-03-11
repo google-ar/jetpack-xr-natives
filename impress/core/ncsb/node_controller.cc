@@ -65,7 +65,9 @@ void NodeController::PreDestroyed() {
   // Clear the remembered objects before doing anything else during destruction.
   // This is to ensure that the node is still valid when the remembered objects
   // are destroyed.
-  rememberer_.ClearRemembered();
+  if (rememberer_.has_value()) {
+    rememberer_->ClearRemembered();
+  }
 
   // It's possible that the node was destroyed when ClearRemembered was running.
   // In that case, we don't need to do anything.
@@ -162,7 +164,10 @@ void NodeController::SetName(absl::string_view name) {
 }
 
 imp::Invocable<void()> NodeController::Remember(imp::Holdable holdable) {
-  return rememberer_.Remember(std::move(holdable));
+  if (!rememberer_.has_value()) {
+    rememberer_.emplace();
+  }
+  return rememberer_->Remember(std::move(holdable));
 }
 
 void NodeController::OnParentChanged() {

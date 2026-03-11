@@ -20,11 +20,18 @@
 #include "absl/status/status.h"
 #include "bullet/src/BulletDynamics/ConstraintSolver/btTypedConstraint.h"
 #include "bullet/src/BulletDynamics/Dynamics/btRigidBody.h"
+#include "core/config.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
 #include "core/physics/physics_manager.h"
 #include "core/physics/rigid_body.h"
+
+#if IMP_RUNTIME(DEV)
+#include "absl/strings/string_view.h"
+#include "core/common/debug_draw.h"
+#include "core/common/invocable.h"
+#endif
 
 namespace imp {
 
@@ -76,6 +83,13 @@ class BaseConstraint {
 
   bool IsActiveInWorld() const;
 
+#if IMP_RUNTIME(DEV)
+  // Must be called before the constraint is added to the physics manager.
+  // Otherwise it may not take effect in time.
+  void UseDebugVisualizer(imp::Invocable<void()> visualizer,
+                          absl::string_view visualizer_name);
+#endif
+
  private:
   bool added_to_physics_manager_ = false;
 
@@ -90,6 +104,13 @@ class BaseConstraint {
   mat4f owner_node_transform_prev_;
 
   bool is_bt_constraint_recreated_ = false;
+
+#if IMP_RUNTIME(DEV)
+  imp::Invocable<void()> debug_visualizer_;
+  absl::string_view debug_visualizer_name_;
+  // Indicates that debug visualizer is registered to physics manager.
+  bool debug_visualizer_registered_ = false;
+#endif
 };
 }  // namespace imp
 

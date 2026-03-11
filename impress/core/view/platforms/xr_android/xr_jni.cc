@@ -106,7 +106,8 @@ JNI_METHOD(jlong, nCreateSessionHost)
  jboolean use_android_depth_texture, jboolean use_xr_action_defaults,
  jboolean use_fb_color_space, jboolean enable_android_system_extensions,
  jfloat swapchain_size_multiplier,
- jboolean use_global_passthrough_dimming_extensions) {
+ jboolean use_global_passthrough_dimming_extensions,
+ jboolean use_eye_tracking_calibration) {
   context = env->NewGlobalRef(context);
   absl::Status status = InitializeLoader(env, context);
   if (!status.ok()) {
@@ -133,6 +134,7 @@ JNI_METHOD(jlong, nCreateSessionHost)
   options.swapchain_size_multiplier = swapchain_size_multiplier;
   options.use_global_passthrough_dimming_extensions =
       use_global_passthrough_dimming_extensions;
+  options.use_eye_tracking_calibration = use_eye_tracking_calibration;
 
   auto session_host = std::make_unique<XrSessionHost>(std::move(view), options);
   auto& xr_action_controller =

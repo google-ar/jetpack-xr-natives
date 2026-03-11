@@ -246,18 +246,18 @@ def non_module_dependencies():
     http_archive(
         name = "dear_imgui",
         build_file = "//:bazel/build_files/dear_imgui.BUILD",
-        sha256 = "b08a569eedcf2bf25e763e034754fdbe37dfcb035072310781c92fa6e6504bf7",
-        strip_prefix = "imgui-1.91.0-docking",
-        url = "https://github.com/ocornut/imgui/archive/refs/tags/v1.91.0-docking.tar.gz",
+        sha256 = "c5e2053afc707c70385431ed85c500b108b521784a3f6a7a31ea17583aab89a2",
+        strip_prefix = "imgui-1.92.4-docking",
+        url = "https://github.com/ocornut/imgui/archive/refs/tags/v1.92.4-docking.tar.gz",
     )
 
     # Not in Bazel Central Registry as of 12/2024.
     http_archive(
         name = "implot",
         build_file = "//:bazel/build_files/implot.BUILD",
-        sha256 = "4c20f22fbfbe4ad055f3d344581918d62cde72070b233dad75419a4334f82146",
-        strip_prefix = "implot-0.15",
-        url = "https://github.com/epezent/implot/archive/refs/tags/v0.15.tar.gz",
+        sha256 = "0abc6271d74def66b5e2dae5add59ad79242208cea18b4c7983e84fceec99ff1",
+        strip_prefix = "implot-0d4d87c3e005349c1aeb7ceacfd20a67f23c42b8",
+        url = "https://github.com/epezent/implot/archive/0d4d87c3e005349c1aeb7ceacfd20a67f23c42b8.tar.gz",
     )
 
     # Not in Bazel Central Registry as of 12/2024.

@@ -18,8 +18,6 @@ include "split_engine/schemas/split_engine_material.fbs";
 
 namespace android_xr.schemas;
 
-// LINT.IfChange
-
 //
 // Client->Service requests.
 //
@@ -362,5 +360,3 @@ table Response (requires_api: 1) {
 }
 
 root_type Response;
-
-// LINT.ThenChange(//depot/google3/third_party/split_engine/schemas/split_engine_schema_version.h)

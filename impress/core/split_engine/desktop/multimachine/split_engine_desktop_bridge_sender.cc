@@ -14,22 +14,25 @@
 
 #include "core/split_engine/desktop/multimachine/split_engine_desktop_bridge_sender.h"
 
+#include <cstddef>
+
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "flatbuffers/flatbuffer_builder.h"
+#include "core/split_engine/android/bridge_buffer.h"
 #include "core/split_engine/android/buffer_handle_factory.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_sender_base.h"
 #include "core/split_engine/desktop/multimachine/split_engine_desktop_bridge_client.h"
 #include "core/split_engine/flatbuffer_arena_allocator.h"
 #include "core/split_engine/shared/split_engine_defines.h"
+#include "mediapipe/framework/port/status_macros.h"
 
 namespace imp::split_engine {
 
 SplitEngineMMDesktopBridgeSender::SplitEngineMMDesktopBridgeSender(
-    SplitEngineMMDesktopBridgeClient& client, bool recycle_buffers)
-    : SplitEngineSharedMemoryBridgeSenderBase(recycle_buffers),
-      client_(client) {}
+    SplitEngineMMDesktopBridgeClient& client)
+    : client_(client) {}
 
 MessageGroupId SplitEngineMMDesktopBridgeSender::GenerateMessageGroupId() {
   return client_.GenerateMessageGroupId();
@@ -39,7 +42,7 @@ ClientId SplitEngineMMDesktopBridgeSender::GetClientId() const {
   return client_.GetClientId();
 }
 
-FlatbufferArenaAllocator& SplitEngineMMDesktopBridgeSender::GetAllocator() {
+ArenaAllocator& SplitEngineMMDesktopBridgeSender::GetArenaAllocator() {
   return arena_allocator_;
 }
 
@@ -48,26 +51,29 @@ SplitEngineMMDesktopBridgeSender::GetBufferHandleFactory() {
   return buffer_handle_factory_;
 }
 
-void SplitEngineMMDesktopBridgeSender::SendMessage(
-    const flatbuffers::FlatBufferBuilder& message) {
-  
-  
-  
-
-  if (const absl::Status status = client_.SendMessage(
-          *GetActiveMessageGroupId(), *GetActiveMessageGroupSizeBytes(),
-          arena_allocator_.PrependSize(message.GetBufferPointer(),
-                                       message.GetSize()));
-      !status.ok()) {
-    IMP_LOG(imp::FATAL) << "Failed to send message: " << status.ToString();
+absl::Status SplitEngineMMDesktopBridgeSender::SendMessage(
+    MessageGroupId group_id, const flatbuffers::FlatBufferBuilder& message) {
+  const BridgeBuffer& bridge_buffer = GetBridgeBuffer(group_id);
+  if (!bridge_buffer.IsValidBlock(message.GetBufferPointer(),
+                                  message.GetSize())) {
+    return absl::InternalError("Message is not in the active bridge buffer.");
   }
+
+  MP_ASSIGN_OR_RETURN(const size_t message_group_size_bytes,
+                   GetMessageGroupSizeBytes(group_id));
+
+  return client_.SendMessage(
+      group_id, message_group_size_bytes,
+      arena_allocator_.PrependSize(message.GetBufferPointer(),
+                                   message.GetSize()));
 }
 
-void SplitEngineMMDesktopBridgeSender::EndMessageGroup() {
-  
-  const MessageGroupId message_group_id = *GetActiveMessageGroupId();
-  SplitEngineSharedMemoryBridgeSenderBase::EndMessageGroup();
-  
+absl::Status SplitEngineMMDesktopBridgeSender::EndMessageGroup(
+    MessageGroupId group_id) {
+  MP_RETURN_IF_ERROR(
+      SplitEngineSharedMemoryBridgeSenderBase::EndMessageGroup(group_id));
+
+  return client_.EndMessageGroup(group_id);
 }
 
 }  // namespace imp::split_engine

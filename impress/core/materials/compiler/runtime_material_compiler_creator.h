@@ -18,6 +18,7 @@
 
 #include <memory>
 
+#include "absl/strings/string_view.h"
 #include "core/async/future.h"
 #include "core/materials/compiler/runtime_material_compiler.h"
 #include "core/view/base_view.h"
@@ -26,8 +27,11 @@ namespace imp {
 
 class RuntimeMaterialCompilerCreator {
  public:
+  // Creates a RuntimeMaterialCompiler based on the target platform.
+  // Note that the native library override param is only relevant to Android. If
+  // nothing is provided, it will use the default Impress so library.
   static Future<std::unique_ptr<RuntimeMaterialCompiler>> Create(
-      BaseView& view);
+      BaseView& view, absl::string_view native_library_override = "");
 };
 
 }  // namespace imp

@@ -145,7 +145,7 @@ class GlyphEmulator {
     std::optional<TextAndFontMetrics> precomputed_metrics = std::nullopt;
   };
 
-  GlyphEmulator(Context context, AsyncCanvasSource& canvas_source);
+  explicit GlyphEmulator(Context context);
 
   // For the given text, returns a list of glyphs used to render the text.
   //
@@ -161,7 +161,8 @@ class GlyphEmulator {
   //
   // This function is thread-safe.
   Future<std::unique_ptr<std::vector<Glyph>>> GetGlyphs(
-      absl::string_view text, const ScopedCanvas::TextOptions& options);
+      absl::string_view text, const ScopedCanvas::TextOptions& options,
+      AsyncCanvasSource& canvas_source);
 
   // Registers a font with the GlyphEmulator so that it can be used for glyphs.
   //
@@ -177,7 +178,8 @@ class GlyphEmulator {
   // In some cases such as on wasm we may need to download a font asynchronously
   // before it may be used.
   Future<absl::Status> PrepareFont(absl::string_view text,
-                                   const ScopedCanvas::TextOptions& options);
+                                   const ScopedCanvas::TextOptions& options,
+                                   AsyncCanvasSource& canvas_source);
 
   // Returns a vector of the group numbers for each glyph based on their
   // combining character information, referenced by the index in the vector.
@@ -204,7 +206,8 @@ class GlyphEmulator {
   // If there's no combining character information, then an empty vector is
   // returned.
   Future<std::vector<ScopedCanvas::GlyphGroup>> GetCombinedCharacterGroups(
-      absl::string_view text, const ScopedCanvas::TextOptions& options);
+      absl::string_view text, const ScopedCanvas::TextOptions& options,
+      AsyncCanvasSource& canvas_source);
 
   // Returns the metrics in pixels that a given text string will take up based
   // on the options passed in, and text tracking, which adds additional space
@@ -218,7 +221,8 @@ class GlyphEmulator {
   //
   // This function is thread-safe.
   Future<TextMetrics> GetTextMetrics(absl::string_view text,
-                                     const ScopedCanvas::TextOptions& options);
+                                     const ScopedCanvas::TextOptions& options,
+                                     AsyncCanvasSource& canvas_source);
 
   // Returns information about the font based on the given text options.
   //
@@ -229,7 +233,8 @@ class GlyphEmulator {
   // The resulting info respects the size of the font.
   //
   // This function is thread-safe.
-  Future<FontInfo> GetFontInfo(const ScopedCanvas::TextOptions& options);
+  Future<FontInfo> GetFontInfo(const ScopedCanvas::TextOptions& options,
+                               AsyncCanvasSource& canvas_source);
 
   // Performs a batch operation to measure the size of the given texts and
   // the font metrics for the text's text_options. This is effectively a
@@ -242,7 +247,8 @@ class GlyphEmulator {
   //
   // This function is thread-safe.
   Future<std::vector<TextAndFontMetrics>> GetFontAndTextMetrics(
-      std::vector<ScopedCanvas::TextToMeasure> texts);
+      std::vector<ScopedCanvas::TextToMeasure> texts,
+      AsyncCanvasSource& canvas_source);
 
   // Convert GlyphEmulator::TextOptions to ScopedCanvas::TextOptions.
   //
@@ -276,6 +282,13 @@ class GlyphEmulator {
                         const GlyphKeyOrGlyphString& glyph, float2 position,
                         const ScopedCanvas::TextOptions& canvas_options);
 
+  static bool CanForceNonSeparable(bool uses_text_layout_provider,
+                                   float text_tracking) {
+    // If we render an unseparated string with non-zero text tracking, scuba
+    // test output becomes nondeterministic.
+    return !uses_text_layout_provider && text_tracking == 0.0f;
+  }
+
  private:
   // This breaks up a string into a series of glyphs and their advance widths.
   //
@@ -283,16 +296,18 @@ class GlyphEmulator {
   // std::vector because Future.Then copies the vector otherwise. A copy of the
   // vector is illegal since Glyph contains a std::unique_ptr.
   Future<std::unique_ptr<std::vector<GlyphEmulator::Glyph>>> BreakIntoGlyphs(
-      absl::string_view text, const ScopedCanvas::TextOptions& canvas_options);
+      absl::string_view text, const ScopedCanvas::TextOptions& canvas_options,
+      AsyncCanvasSource& canvas_source);
 
   // Measures the given glyphs, or extracts cached measurements for glyphs
   // that are already stored in this atlas.
   Future<std::unique_ptr<std::vector<Glyph>>> MeasureGlyphs(
       std::unique_ptr<std::vector<Glyph>> glyphs,
-      ScopedCanvas::TextOptions canvas_options);
+      ScopedCanvas::TextOptions canvas_options,
+      AsyncCanvasSource& canvas_source);
 
   Context context_;
-  AsyncCanvasSource& canvas_source_;
+  // AsyncCanvasSource& canvas_source_;
 
   mutable absl::Mutex fonts_mutex_;
   StringMap<std::unique_ptr<FontHolder>> fonts_ ABSL_GUARDED_BY(fonts_mutex_);

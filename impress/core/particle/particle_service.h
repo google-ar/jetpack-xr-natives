@@ -47,16 +47,22 @@ class ParticleService {
   // frame.
   ParticleInstance GetParticleInstance(int32_t particle_index);
 
-  // Creates a new particle from the pool of available particles.
+  // Allocates a particle from the pool of available particles. The state of the
+  // particle is undefined when returned and should be initialized by the
+  // caller. `kInvalidParticleIndex`, if no particles are available.
   int32_t CreateParticle();
 
-  // Destroys a particle, returning its resources to the pool of available
-  // particles.
+  // Releases the particle resources back to the common pool. The instance must
+  // not be held after this call.
   void DestroyParticle(int32_t particle_index);
+
+  // Returns the maximum number of particles that may be active.
+  int32_t GetMaxParticles() const { return max_particles_; }
 
  private:
   imp_particle::DataLayout data_layout_;
   StandardParticleDataProvider data_provider_;
+  int32_t max_particles_;
   std::list<int32_t> free_particle_indices_;
 };
 

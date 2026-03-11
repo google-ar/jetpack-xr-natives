@@ -101,6 +101,11 @@ absl::Status Executor::UpdateTaskPriority(TaskId task_id, int task_priority) {
       "UpdateTaskPriority is not supported on this Executor.");
 };
 
+bool Executor::InvokeScheduledTask(TaskId task_id) {
+  // By default, executors do not support invoking scheduled tasks.
+  return false;
+};
+
 absl::StatusOr<int> Executor::GetTaskPriority(TaskId task_id) {
   return absl::UnimplementedError(
       "GetTaskPriority is not supported on this Executor.");

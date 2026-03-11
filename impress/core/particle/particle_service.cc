@@ -28,7 +28,8 @@ namespace imp {
 ParticleService::ParticleService(const ParticleConfig& particle_config,
                                  int32_t max_particles)
     : data_layout_(particle_config),
-      data_provider_(max_particles * data_layout_.GetSize()) {
+      data_provider_(max_particles * data_layout_.GetSize()),
+      max_particles_(max_particles) {
   // Initialize the list of free particle indices.
   for (int i = 0; i < max_particles; i++) {
     free_particle_indices_.push_back(i);
@@ -48,8 +49,6 @@ int32_t ParticleService::CreateParticle() {
   // Allocate the next available index from the free list.
   int32_t particle_index = free_particle_indices_.front();
   free_particle_indices_.pop_front();
-
-  // TODO: (broken link) - Initialize the instance with default values.
 
   return particle_index;
 }

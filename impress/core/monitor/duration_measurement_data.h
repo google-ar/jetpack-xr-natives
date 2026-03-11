@@ -19,6 +19,8 @@
 
 #include <stdint.h>
 
+#include <cstddef>
+#include <deque>
 #include <optional>
 #include <string>
 
@@ -45,6 +47,13 @@ class DurationMeasurementData : public MeasurementData {
   static void AddHistogram(Monitor& monitor, absl::string_view name,
                            absl::Duration lower_bound,
                            absl::Duration bucket_width, int bucket_count);
+
+  // Configures a sliding window for a Duration Measurement.
+  // If a sliding window already exists for this measurement, it will be
+  // cleared and re-configured with the new size. 0 disables the sliding
+  // window.
+  static void AddSlidingWindow(Monitor& monitor, absl::string_view name,
+                               size_t max_window_size);
 
   // Starts counting time for a duration.
   void BeginSample();
@@ -96,6 +105,15 @@ class DurationMeasurementData : public MeasurementData {
     return absl::Milliseconds(average_sample_duration_ms_.GetAverage());
   }
 
+  // Returns the average duration of samples in sliding window.
+  // Returns ZeroDuration if window is empty or not enabled.
+  absl::Duration GetSlidingWindowAverageDuration() const;
+
+  // Returns samples in sliding window.
+  const std::optional<std::deque<absl::Duration>>& GetRecentSamples() const {
+    return sample_deque_;
+  }
+
   uint64_t GetCancelledSampleCount() const;
 
   const absl::optional<SimpleHistogram>& GetHistogram() const {
@@ -116,6 +134,9 @@ class DurationMeasurementData : public MeasurementData {
   void InternalAddHistogram(absl::Duration lower_bound,
                             absl::Duration bucket_width, int bucket_count);
 
+  // Enables sliding window tracking.
+  void InternalAddSlidingWindow(size_t max_window_size);
+
   Monitor* monitor_;
   std::string name_;
   bool in_progress_;
@@ -134,6 +155,10 @@ class DurationMeasurementData : public MeasurementData {
 
   bool enable_averages_ = false;
   bool enable_percentiles_ = false;
+
+  size_t max_window_size_ = 0;
+  std::optional<std::deque<absl::Duration>> sample_deque_;
+  absl::Duration sliding_window_sum_ = absl::ZeroDuration();
 };
 
 }  // namespace imp

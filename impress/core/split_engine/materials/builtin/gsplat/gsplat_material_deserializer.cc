@@ -26,6 +26,7 @@
 #include "core/assets/asset_ptr.h"
 #include "core/assets/material/material_asset.h"
 #include "core/async/future.h"
+#include "core/common/small_source_location.h"
 #include "core/material_library/flatbuffer_utils.h"
 #include "core/materials/material.h"
 #include "core/render/texture.h"
@@ -147,17 +148,17 @@ absl::Status GsplatMaterialDeserializer::SetParameters(
           parameters
               .data_as<android_xr::schemas::BuiltInMaterialGsplatParameters>();
 
-  MP_RETURN_IF_ERROR(SetCommonMaterialParameters(texture_borrower, GetMaterial(),
-                                              *serialized_parameters));
+  MP_RETURN_IF_ERROR(
+      SetCommonMaterialParameters(texture_borrower, *serialized_parameters));
 
   switch (material_mode_) {
     case android_xr::schemas::GsplatMode::UNSPECIFIED:
     case android_xr::schemas::GsplatMode::GSPLAT:
-      return SetGsplatMaterialParameters(texture_borrower, GetMaterial(),
+      return SetGsplatMaterialParameters(texture_borrower,
                                          *serialized_parameters);
       break;
     case android_xr::schemas::GsplatMode::MAGIC_WINDOW:
-      return SetMagicWindowMaterialParameters(texture_borrower, GetMaterial(),
+      return SetMagicWindowMaterialParameters(texture_borrower,
                                               *serialized_parameters);
       break;
   }
@@ -171,105 +172,103 @@ split_engine::BuiltInMaterialPtr GsplatMaterialDeserializer::Duplicate() const {
               GetMaterial()->GetFilamentMaterialInstance()))));
 }
 
-absl::Status GsplatMaterialDeserializer::SetGsplatMaterialParameters(
-    const TextureBorrower& texture_borrower, BorrowedMaterialPtr material,
-    const android_xr::schemas::BuiltInMaterialGsplatParameters&
-        serialized_parameters) {
-  if (serialized_parameters.is_splat_data_precomputed()) {
-    return SetPrecomputedSplatDataParameters(texture_borrower, material,
-                                             serialized_parameters);
-  } else {
-    return SetRawSplatDataParameters(texture_borrower, material,
-                                     serialized_parameters);
-  }
-}
-
 absl::Status GsplatMaterialDeserializer::SetCommonMaterialParameters(
-    const TextureBorrower& texture_borrower, BorrowedMaterialPtr material,
+    const TextureBorrower& texture_borrower,
     const android_xr::schemas::BuiltInMaterialGsplatParameters&
         serialized_parameters) {
-  if (const android_xr::schemas::Bool* visualize_chunks =
-          serialized_parameters.visualize_chunks()) {
-    MP_RETURN_IF_ERROR(HasParameter(GetMaterial(), kVisualizeChunksParameter));
-    GetMaterial()->SetParameter(kVisualizeChunksParameter,
-                                UnPack(*visualize_chunks));
-  }
+  BorrowedMaterialPtr render_material = GetRenderMaterial();
 
   if (const android_xr::schemas::Float* splat_scale =
           serialized_parameters.splat_scale()) {
-    MP_RETURN_IF_ERROR(HasParameter(GetMaterial(), kSplatScaleParameter));
-    GetMaterial()->SetParameter(kSplatScaleParameter, UnPack(*splat_scale));
+    MP_RETURN_IF_ERROR(HasParameter(render_material, kSplatScaleParameter));
+    render_material->SetParameter(kSplatScaleParameter, UnPack(*splat_scale));
   }
 
   if (const android_xr::schemas::Float* opacity_scale =
           serialized_parameters.opacity_scale()) {
-    MP_RETURN_IF_ERROR(HasParameter(GetMaterial(), kOpacityScaleParameter));
-    GetMaterial()->SetParameter(kOpacityScaleParameter, UnPack(*opacity_scale));
+    MP_RETURN_IF_ERROR(HasParameter(render_material, kOpacityScaleParameter));
+    render_material->SetParameter(kOpacityScaleParameter,
+                                  UnPack(*opacity_scale));
   }
 
   if (const android_xr::schemas::Float2* min_screen_size =
           serialized_parameters.min_screen_size()) {
-    MP_RETURN_IF_ERROR(HasParameter(GetMaterial(), kMinScreenSizeParameter));
-    GetMaterial()->SetParameter(kMinScreenSizeParameter,
-                                UnPack(*min_screen_size));
+    MP_RETURN_IF_ERROR(HasParameter(render_material, kMinScreenSizeParameter));
+    render_material->SetParameter(kMinScreenSizeParameter,
+                                  UnPack(*min_screen_size));
   }
   if (const android_xr::schemas::Float2* max_screen_size =
           serialized_parameters.max_screen_size()) {
-    MP_RETURN_IF_ERROR(HasParameter(GetMaterial(), kMaxScreenSizeParameter));
-    GetMaterial()->SetParameter(kMaxScreenSizeParameter,
-                                UnPack(*max_screen_size));
+    MP_RETURN_IF_ERROR(HasParameter(render_material, kMaxScreenSizeParameter));
+    render_material->SetParameter(kMaxScreenSizeParameter,
+                                  UnPack(*max_screen_size));
+  }
+  if (const android_xr::schemas::BuiltInTextureParameter*
+          sorted_indices_texture =
+              serialized_parameters.sorted_indices_texture()) {
+    MP_RETURN_IF_ERROR(HasParameter(render_material, kSortedIndicesTexture));
+    MP_RETURN_IF_ERROR(SetMaterialParameterFromFlatbuffer(
+        texture_borrower, render_material, sorted_indices_texture,
+        kSortedIndicesTexture));
   }
   return absl::OkStatus();
 }
 
 absl::Status GsplatMaterialDeserializer::SetMagicWindowMaterialParameters(
-    const TextureBorrower& texture_borrower, BorrowedMaterialPtr material,
+    const TextureBorrower& texture_borrower,
     const android_xr::schemas::BuiltInMaterialGsplatParameters&
         serialized_parameters) {
+  BorrowedMaterialPtr magic_window_material = GetRenderMaterial();
   if (const android_xr::schemas::Float2* window_dimension_in_magic_window =
           serialized_parameters.window_dimension_in_magic_window()) {
-    MP_RETURN_IF_ERROR(
-        HasParameter(GetMaterial(), kWindowDimensionInMagicWindowParameter));
-    GetMaterial()->SetParameter(kWindowDimensionInMagicWindowParameter,
-                                UnPack(*window_dimension_in_magic_window));
+    MP_RETURN_IF_ERROR(HasParameter(magic_window_material,
+                                 kWindowDimensionInMagicWindowParameter));
+    magic_window_material->SetParameter(
+        kWindowDimensionInMagicWindowParameter,
+        UnPack(*window_dimension_in_magic_window));
   }
   if (const android_xr::schemas::Mat4f* magic_window_from_user_world_matrix =
           serialized_parameters.magic_window_from_user_world_matrix()) {
-    MP_RETURN_IF_ERROR(
-        HasParameter(GetMaterial(), kMagicWindowFromUserWorldMatrixParameter));
-    GetMaterial()->SetParameter(kMagicWindowFromUserWorldMatrixParameter,
-                                UnPack(*magic_window_from_user_world_matrix));
+    MP_RETURN_IF_ERROR(HasParameter(magic_window_material,
+                                 kMagicWindowFromUserWorldMatrixParameter));
+    magic_window_material->SetParameter(
+        kMagicWindowFromUserWorldMatrixParameter,
+        UnPack(*magic_window_from_user_world_matrix));
   }
 
-  return SetGsplatMaterialParameters(texture_borrower, material,
-                                     serialized_parameters);
+  return SetGsplatMaterialParameters(texture_borrower, serialized_parameters);
 }
 
-absl::Status GsplatMaterialDeserializer::SetPrecomputedSplatDataParameters(
-    const TextureBorrower& texture_borrower, BorrowedMaterialPtr material,
+absl::Status GsplatMaterialDeserializer::SetGsplatMaterialParameters(
+    const TextureBorrower& texture_borrower,
     const android_xr::schemas::BuiltInMaterialGsplatParameters&
         serialized_parameters) {
-  return absl::UnimplementedError(
-      "Precomputed splat data is not supported yet.");
-}
-
-absl::Status GsplatMaterialDeserializer::SetRawSplatDataParameters(
-    const TextureBorrower& texture_borrower, BorrowedMaterialPtr material,
-    const android_xr::schemas::BuiltInMaterialGsplatParameters&
-        serialized_parameters) {
+  BorrowedMaterialPtr precompute_material = GetPrecomputeMaterial();
   MP_RETURN_IF_ERROR(SetMaterialParameterFromFlatbuffer(
-      texture_borrower, GetMaterial(),
+      texture_borrower, precompute_material,
       serialized_parameters.position_data_texture(), kPositionDataTexture));
   MP_RETURN_IF_ERROR(SetMaterialParameterFromFlatbuffer(
-      texture_borrower, GetMaterial(),
+      texture_borrower, precompute_material,
       serialized_parameters.cov3d_data_texture(), kCov3dDataTexture));
   MP_RETURN_IF_ERROR(SetMaterialParameterFromFlatbuffer(
-      texture_borrower, GetMaterial(),
+      texture_borrower, precompute_material,
       serialized_parameters.color_data_texture(), kColorDataTexture));
-  MP_RETURN_IF_ERROR(SetMaterialParameterFromFlatbuffer(
-      texture_borrower, GetMaterial(),
-      serialized_parameters.sorted_indices_texture(), kSortedIndicesTexture));
 
+  if (const android_xr::schemas::Bool* visualize_chunks =
+          serialized_parameters.visualize_chunks()) {
+    precompute_material->SetParameter(kVisualizeChunksParameter,
+                                      UnPack(*visualize_chunks));
+  }
   return absl::OkStatus();
+}
+
+BorrowedMaterialPtr GsplatMaterialDeserializer::GetPrecomputeMaterial(
+    SmallSourceLocation loc) const {
+  return GetMaterial(loc);
+}
+
+BorrowedMaterialPtr GsplatMaterialDeserializer::GetRenderMaterial(
+    SmallSourceLocation loc) const {
+  return GetMaterial(loc);
 }
 }  // namespace imp::split_engine

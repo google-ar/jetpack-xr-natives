@@ -19,6 +19,7 @@
 #include <memory>
 #include <vector>
 
+#include "core/assets/gltf/object_model/pointer_declarations/animations.h"
 #include "core/assets/gltf/object_model/pointer_declarations/materials.h"
 #include "core/assets/gltf/object_model/pointer_declarations/meshes.h"
 #include "core/assets/gltf/object_model/pointer_declarations/nodes.h"
@@ -50,6 +51,7 @@ GetCorePointerDeclarations() {
       std::make_unique<NodesWeightsLengthPointerDeclaration>());
   declarations.push_back(std::make_unique<NodesWeightsPointerDeclaration>());
   declarations.push_back(std::make_unique<NodesWeightPointerDeclaration>());
+  declarations.push_back(std::make_unique<NodesSkinPointerDeclaration>());
 
   // materials
   declarations.push_back(
@@ -70,6 +72,8 @@ GetCorePointerDeclarations() {
       std::make_unique<
           MaterialsPbrMetallicRoughnessRoughnessFactorPointerDeclaration>());
   declarations.push_back(std::make_unique<MaterialsLengthPointerDeclaration>());
+  declarations.push_back(
+      std::make_unique<MaterialsDoubleSidedPointerDeclaration>());
 
   // skins
   declarations.push_back(
@@ -84,6 +88,13 @@ GetCorePointerDeclarations() {
       std::make_unique<MeshesWeightsLengthPointerDeclaration>());
   declarations.push_back(std::make_unique<MeshesWeightsPointerDeclaration>());
   declarations.push_back(std::make_unique<MeshesWeightPointerDeclaration>());
+  declarations.push_back(std::make_unique<MeshesPrimitivesLengthDeclaration>());
+  declarations.push_back(
+      std::make_unique<MeshesPrimitivesMaterialPointerDeclaration>());
+
+  // animations
+  declarations.push_back(
+      std::make_unique<AnimationsLengthPointerDeclaration>());
 
   return declarations;
 }

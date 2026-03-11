@@ -183,6 +183,7 @@ cc_library(
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/types:span",
         "@com_google_absl//absl/types:variant",
         "@com_google_impress//core/common:log",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
@@ -208,8 +209,8 @@ cc_library(
     hdrs = ["registry.h"],
     copts = imp_copts(),
     deps = [
+        ":hash",
         ":type_traits",
-        "//core/common:hash",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
@@ -546,6 +547,7 @@ cc_library(
     copts = imp_copts(),
     linkstatic = 1,
     deps = [
+        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
     ],
@@ -598,11 +600,10 @@ cc_library(
         "@third_party//filament/libs:utils_hdrs",
     ] + if_dev_runtime([
         "//core/performance:profiler",
-        "//core/performance:timer",
     ]) + select({
         "//core:imp_perfetto_enabled": [
-            "//third_party/perfetto:libperfetto_client_experimental",
             "@com_google_impress//core/common:log",
+            "@perfetto//:libperfetto_client_experimental",
         ],
         "//conditions:default": [],
     }),
@@ -791,11 +792,9 @@ cc_library(
     deps = [
         ":holdable",
         ":invocable",
-        ":platform_helpers",
         "//core/async:executor",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/memory",
         "@com_google_absl//absl/synchronization",
         "@com_google_impress//core/common:log",
     ],
@@ -928,5 +927,17 @@ cc_library(
     name = "optional_with_default",
     hdrs = ["optional_with_default.h"],
     copts = imp_copts(),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "filament_status_helpers",
+    srcs = ["filament_status_helpers.cc"],
+    hdrs = ["filament_status_helpers.h"],
+    copts = imp_copts(),
+    deps = [
+        "@com_google_absl//absl/status",
+        "@third_party//filament/libs:utils_hdrs",
+    ],
     alwayslink = 1,
 )

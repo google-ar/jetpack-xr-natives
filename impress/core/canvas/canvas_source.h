@@ -57,7 +57,9 @@ class CanvasSource {
   // currently only has any effect on Android.
   static std::unique_ptr<CanvasSource> Create(
       Context context, bool use_hardware_rendering = true,
-      bool force_auto_method_rendering = false);
+      bool force_auto_method_rendering = false,
+      int glyph_cache_size_bytes =
+          PlatformCanvasSource::kDefaultGlyphCacheSizeBytes);
 
   // Note: This is exposed for testing. Real clients should use
   // CanvasSource::Create to create a CanvasSource.

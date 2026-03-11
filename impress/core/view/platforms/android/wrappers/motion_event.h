@@ -23,20 +23,29 @@
 
 namespace imp::android {
 
-// JNI wrapper for the Android Rect class.
+// JNI wrapper for the Android MotionEvent class.
 class MotionEvent : public JavaWrapper {
  public:
   // See https://developer.android.com/reference/android/view/MotionEvent.
   // It's important to keep those values like this since the values of Action
-  // will be statically converted into int when passing to Java side as values
-  // for actions.
+  // and ToolType will be statically converted into int when passing to Java
+  // side as values for actions.
   enum class Action : int {
     kUp = 1,
     kDown = 0,
     kMove = 2,
+    kScroll = 8,
     kHoverEnter = 9,
     kHoverExit = 10,
     kHoverMove = 7,
+  };
+
+  enum class ToolType : int {
+    kUnknown = 0,
+    kFinger = 1,
+    kStylus = 2,
+    kMouse = 3,
+    kEraser = 4,
   };
 
   // Constructs a MotionEvent by calling MotionEvent.obtain.
@@ -46,6 +55,10 @@ class MotionEvent : public JavaWrapper {
   // This also converts PointerEventType to MotionEvent.Action
   MotionEvent(JNIEnv* env, float2 surface_coordinates,
               PointerEventType pointer_event_type);
+
+  // Constructs a MotionEvent with scroll deltas.
+  MotionEvent(JNIEnv* env, float2 surface_coordinates, Action action,
+              ToolType tool_type, float2 scroll_delta);
 
  private:
   // https://developer.android.com/reference/android/view/MotionEvent#obtain(long,%20long,%20int,%20float,%20float,%20int)

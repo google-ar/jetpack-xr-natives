@@ -15,7 +15,6 @@
 #include "core/physics/constraints/hinge_constraint.h"
 
 #include <memory>
-#include <optional>
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
@@ -23,12 +22,19 @@
 #include "bullet/src/BulletDynamics/Dynamics/btRigidBody.h"
 #include "bullet/src/LinearMath/btScalar.h"
 #include "bullet/src/LinearMath/btVector3.h"
+#include "core/config.h"
 #include "core/math/math.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
 #include "core/physics/physics_helper.h"
 #include "core/physics/rigid_body.h"
 #include "core/view/utils/frame_time.h"
+#if IMP_RUNTIME(DEV)
+#include "core/common/debug_draw.h"
+#include "core/common/registry.h"
+#include "core/physics/physics_constants.h"
+#include "core/physics/physics_debug_draw.h"
+#endif
 
 namespace imp {
 
@@ -127,6 +133,9 @@ absl::Status HingeConstraint::SetupInternal() {
   SetLimitsFromState();
   SetMotorParametersFromState();
 
+#if IMP_RUNTIME(DEV)
+  UseDebugVisualizer([this]() { Visualize(); }, kHingeConstraintVisualizer);
+#endif
   AddToPhysicsManager(true);
 
   return absl::OkStatus();
@@ -199,5 +208,29 @@ void HingeConstraint::OnIsfStateChanged() {
     IMP_LOG(imp::ERROR) << "Failed to setup HingeConstraint: " << status;
   }
 }
+
+#if IMP_RUNTIME(DEV)
+void HingeConstraint::Visualize() {
+  physics_debug_draw::PhysicsDebugDraw physics_debug_draw;
+
+  float3 frame_axis = normalize(*state_.axis);
+  debug_draw::Local(GetNode().GetEntity())
+      .Line(state_.pivot + frame_axis, state_.pivot - frame_axis,
+            debug_draw::GetColor(debug_draw::DebugColor::kYellow));
+
+  float3 connected_axis = normalize(*state_.connected_axis);
+  debug_draw::Local(state_.connected_node.GetEntity())
+      .Line(connected_axis, -connected_axis,
+            debug_draw::GetColor(debug_draw::DebugColor::kYellow));
+
+  physics_debug_draw.DrawPivotConnectedToOrigin(
+      state_.connected_node, state_.connected_pivot.value_or(kZero3));
+
+  // The owner node if exists.
+  if (GetRigidBodyB()) {
+    physics_debug_draw.DrawPivotConnectionToOrigin(GetNode(), state_.pivot);
+  }
+}
+#endif
 
 }  // namespace imp

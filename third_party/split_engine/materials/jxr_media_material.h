@@ -45,7 +45,8 @@ class JxrMediaMaterial : public imp::split_engine::SplitEngineMaterial {
   static imp::Future<std::unique_ptr<JxrMediaMaterial>> Create(
       imp::BaseView& view,
       imp::MediaShapeType shape_type = imp::MediaShapeType::kDefaultFlat,
-      bool use_super_sampling = false);
+      bool use_super_sampling = false,
+      imp::RenderEyeTarget render_eye_target = imp::RenderEyeTarget::kBoth);
 
   ~JxrMediaMaterial() override;
 
@@ -76,6 +77,7 @@ class JxrMediaMaterial : public imp::split_engine::SplitEngineMaterial {
   imp::OwnedOrBorrowedTexturePtr auxiliary_alpha_mask_;
   imp::MediaStereoMode stereo_type_ = imp::MediaStereoMode::kMonoscopic;
   imp::MediaColorSpace color_space_;
+  imp::RenderEyeTarget render_eye_target_ = imp::RenderEyeTarget::kBoth;
   std::optional<android_xr::schemas::Float2> feather_radius_;
 };
 

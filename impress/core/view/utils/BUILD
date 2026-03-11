@@ -165,6 +165,7 @@ imp_cc_proto_library(
 
 cc_library(
     name = "default_view_config",
+    srcs = ["default_view_config.cc"],
     hdrs = ["default_view_config.h"],
     copts = imp_google3_copts(),
     deps = [":view_config_proto_cc_imp"],
@@ -195,6 +196,7 @@ proto_library(
     ],
     deps = [
         ":cache_config_proto",
+        ":filament_feature_flag_proto",
         ":render_settings_proto",
         "//core/proto:imp_proto",
     ],
@@ -205,7 +207,28 @@ imp_cc_proto_library(
     proto = ":view_config_proto",
     deps = [
         ":cache_config_proto_cc_imp",
+        ":filament_feature_flag_proto_cc_imp",
         ":render_settings_proto_cc_imp",
         "//core/proto:imp_cc_proto",
     ],
+)
+
+proto_library(
+    name = "filament_feature_flag_proto",
+    srcs = [
+        "proto/filament_feature_flag.proto",
+    ],
+)
+
+imp_cc_proto_library(
+    name = "filament_feature_flag_proto_cc_imp",
+    proto = ":filament_feature_flag_proto",
+    deps = [
+        "//core/proto:imp_cc_proto",
+    ],
+)
+
+java_lite_proto_library(
+    name = "view_config_java_proto_lite",
+    deps = [":view_config_proto"],
 )

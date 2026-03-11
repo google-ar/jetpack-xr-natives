@@ -361,7 +361,7 @@ class TPairedContainerMethods {
   // Append() pushes and returns the id of the created item.
   // Disambiguate our two ways of Appending based on whether the element type
   // is copy-assignable.  If it is, push by const value; otherwise, by rvalue.
-  template <typename I = TypedId<T, size_t>>
+  template <typename I = TypedId<IdReferredType, size_t>>
   typename std::enable_if<kIsCopyable, I>::type Append(
       const T default_value = T()) {
     static_assert(std::is_same_v<typename I::ReferredType, IdReferredType>,
@@ -370,7 +370,7 @@ class TPairedContainerMethods {
     derived.container_.push_back(default_value);
     return I(this->template IdOf<I>(derived.container_.back()));
   }
-  template <typename I = TypedId<T, size_t>>
+  template <typename I = TypedId<IdReferredType, size_t>>
   typename std::enable_if<!kIsCopyable, I>::type Append(T&& value) {
     static_assert(std::is_same_v<typename I::ReferredType, IdReferredType>,
                   "Incompatible Id types");

@@ -17,13 +17,16 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SCRIPTING_MESSAGE_HANDLER_H_
 #define THIRD_PARTY_IMPRESS_CORE_SCRIPTING_MESSAGE_HANDLER_H_
 
-#include <tuple>
 #include <vector>
 
-#include "absl/types/optional.h"
+#include "absl/log/check.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "core/async/future.h"
 #include "core/scripting/base_message_handler.h"
 #include "core/scripting/message_helpers.h"
+#include "core/view/scripting/script_message_handler.h"
 
 namespace imp::scripting {
 
@@ -68,19 +71,11 @@ struct MessageHandler : public BaseMessageHandler {
     return HandleMessage(message);
   }
 
-  // Override this version instead if you need to return PlatformArgs out.
-  virtual Future<MessageResponseType> HandleMessage(
-      const MessageRequestType& message, const PlatformArgs& args,
-      PlatformArgs& out) {
-    return HandleMessage(message, args);
-  }
-
   // Expose the base version that only takes message.
   using BaseMessageHandler::HandleAnyMessage;
 
-  Future<OptionalResponse> HandleAnyMessage(const Any& message,
-                                            const PlatformArgs& args,
-                                            PlatformArgs& out) override;
+  Future<Response> HandleAnyMessage(const Any& message,
+                                    const PlatformArgs& args) override;
 
   std::vector<absl::string_view> GetSupportedRequestTypeUrls() override {
     return std::vector<absl::string_view>{MessageRequestType::kTypeUrl};
@@ -88,10 +83,9 @@ struct MessageHandler : public BaseMessageHandler {
 };
 
 template <typename TRequest, typename TResponse>
-Future<BaseMessageHandler::OptionalResponse>
-MessageHandler<TRequest, TResponse>::HandleAnyMessage(const Any& message,
-                                                      const PlatformArgs& args,
-                                                      PlatformArgs& out) {
+Future<BaseMessageHandler::Response>
+MessageHandler<TRequest, TResponse>::HandleAnyMessage(
+    const Any& message, const PlatformArgs& args) {
   // First, assert that the protobuf passed in is actually the type of protobuf
   // that this handler handles.
   
@@ -100,35 +94,15 @@ MessageHandler<TRequest, TResponse>::HandleAnyMessage(const Any& message,
   absl::StatusOr<TRequest> unpacked_message_or =
       proto::UnpackAny<TRequest>(message);
   if (!unpacked_message_or.ok()) {
-    return Future<OptionalResponse>(absl::InvalidArgumentError(
+    return Future<Response>(absl::InvalidArgumentError(
         absl::StrFormat("Unable to unpack message: %s",
                         unpacked_message_or.status().ToString())));
   }
   TRequest& unpacked_message = unpacked_message_or.value();
 
   // Call HandleMessage with the concrete type to process the actual request.
-  return HandleMessage(unpacked_message, args, out)
-      .Then([](MessageResponseType response) -> Future<OptionalResponse> {
-        // Convert the result of HandleMessage into the OptionalResponse type.
-        if constexpr (std::is_same<MessageResponseType, absl::Status>::value) {
-          if (response.ok()) {
-            // If TResponse is absl::Status, and HandleMessage succeeded,
-            // then return an empty response because there is no response proto.
-            return Future<OptionalResponse>(OptionalResponse());
-          } else {
-            // TResponse is absl::Status and HandleMessage failed, just pass
-            // along the failure status.
-            return Future<OptionalResponse>(response);
-          }
-        } else {
-          // TResponse is a proto and HandleMessage succeeded, so pack it into
-          // an Any and forward it along.
-          // If TResponse is a proto and HandleMessage failed, then this lambda
-          // is never called, the failure status is just automatically returned
-          // by the future.
-          return Future<OptionalResponse>(proto::PackAny(response));
-        }
-      });
+  return HandleMessage(unpacked_message, args)
+      .Then(&BaseMessageHandler::Response::Create<MessageResponseType>);
 }
 
 }  // namespace imp::scripting

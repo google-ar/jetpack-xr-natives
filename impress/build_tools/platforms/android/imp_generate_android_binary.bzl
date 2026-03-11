@@ -27,7 +27,7 @@ load("@bazel_skylib//rules:build_test.bzl", "build_test")
 
 IMP_ANDROID_DEPS = [
     Label("@com_google_impress//java/com/google/ar/imp/view:surface_view_no_jni"),
-    
+    "//third_party/java/android/android_sdk_linux/extras/android/compatibility/multidex",
 ]
 
 RESOURCES_DEPS = [

@@ -38,6 +38,7 @@ _IMPRESS_JNI_COMMON_DEPS = [
     ":asset_animator",
     ":asset_loader",
     ":jni_conversion_utils",
+    ":jni_utils",
     ":stereo_surface",
     "@com_google_impress//core/common:log",
     "@com_google_absl//absl/log:check",
@@ -138,7 +139,6 @@ cc_library(
         "//core/materials",
         "//core/ncsb",
         "//core/render",
-        "//core/split_engine:split_engine_serializer",
         "//core/view/framework",
         "@com_google_absl//absl/strings:str_format",
         "@third_party//filament/libs:utils_hdrs",
@@ -176,6 +176,7 @@ cc_library(
         ":bindings_material",
         ":impress_api_view_header",
         ":model_manager_interface",
+        "//apibindings/model_interaction_ux:reform_affordance_ux",
         "//core/assets",
         "//core/common:small_source_location",
         "//core/geometry/shapes",
@@ -223,7 +224,6 @@ cc_library(
         "//core/assets",
         "//core/lighting:image_based_lighting_asset",
         "//core/math",
-        "//core/split_engine:split_engine_serializer",
         "//core/view/framework",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -286,6 +286,7 @@ cc_library(
     deps = [
         ":base_asset_loader",
         "//core/render",
+        "//core/view/utils:asset",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:string_view",
     ],
@@ -310,6 +311,7 @@ cc_library(
         "//core/lighting:image_based_lighting_asset",
         "//core/render",
         "//core/view/framework",
+        "//core/view/utils:asset",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
@@ -417,7 +419,6 @@ cc_library(
         "//:api",
         "//core/assets",
         "//core/lighting:image_based_lighting_asset",
-        "//core/split_engine:split_engine_serializer",
         "//core/view:base_view",
         "//core/view/framework",
         "//core/view/utils:asset",
@@ -541,6 +542,7 @@ cc_library(
         "@com_google_absl//absl/types:span",
         "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
+        "@third_party//filament/filament:filament_hdrs",
         "@third_party//split_engine/materials:jxr_media_material",
     ],
     alwayslink = 1,
@@ -599,6 +601,21 @@ cc_library(
     ] + if_non_android([
         "@bazel_tools//tools/jdk:jni",
     ]),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "jni_utils",
+    srcs = ["jni_utils.cc"],
+    hdrs = ["jni_utils.h"],
+    deps = [
+        ":stereo_surface",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
+        "@mediapipe//mediapipe/framework/port:status",
+        "@third_party//filament/filament:filament_hdrs",
+    ],
     alwayslink = 1,
 )
 

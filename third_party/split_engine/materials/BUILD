@@ -234,9 +234,9 @@ cc_library(
 )
 
 cc_library(
-    name = "gsplat_background_material",
-    srcs = ["gsplat_background_material.cc"],
-    hdrs = ["gsplat_background_material.h"],
+    name = "gsplat_background_material_serializer",
+    srcs = ["gsplat_background_material_serializer.cc"],
+    hdrs = ["gsplat_background_material_serializer.h"],
     copts = imp_google3_copts(),
     deps = [
         "@com_google_absl//absl/memory",

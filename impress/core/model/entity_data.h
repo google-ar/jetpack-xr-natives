@@ -209,7 +209,7 @@ struct PartData {
   PartData(std::string in_name, uint32_t in_index_offset,
            uint32_t in_index_count, VertexBufferId in_vertex_buffer,
            IndexBufferId in_index_buffer, MaterialId in_material,
-           PrimitiveType in_primitive_type,
+           int16_t in_original_material_index, PrimitiveType in_primitive_type,
            MaterialsVariantsMappingLookup in_materials_variants_mappings,
            SkinningBufferId in_skinning_buffer,
            uint32_t in_morph_target_buffer_offset,
@@ -220,6 +220,7 @@ struct PartData {
         vertex_buffer(in_vertex_buffer),
         index_buffer(in_index_buffer),
         material(in_material),
+        original_material_index(in_original_material_index),
         primitive_type(in_primitive_type),
         materials_variants_mappings(std::move(in_materials_variants_mappings)),
         skinning_buffer(in_skinning_buffer),
@@ -232,6 +233,7 @@ struct PartData {
   VertexBufferId vertex_buffer;
   IndexBufferId index_buffer;
   MaterialId material;
+  int16_t original_material_index;
   PrimitiveType primitive_type;
   MaterialsVariantsMappingLookup materials_variants_mappings;
   SkinningBufferId skinning_buffer;
@@ -287,7 +289,7 @@ struct EntityData {
       std::vector<PartData>, BoneId, SkinId, MorphTargetBufferId,
       std::vector<float>, std::vector<float>, LightPunctualId, AudioEmitterId,
       std::optional<filament::Box>, std::optional<RuntimeData>, std::string,
-      uint16_t, int16_t, std::optional<NodeVisibility>,
+      uint16_t, int16_t, int16_t, std::optional<NodeVisibility>,
       std::optional<NodeSelectability>, std::optional<NodeHoverability>>;
   // Declare an enum to access fields (e.g. the iterator type in
   // utils::StructureOfArrays uses a tuple style get<>() API).
@@ -309,6 +311,7 @@ struct EntityData {
     kName,
     kOriginalIndex,
     kOriginalMeshIndex,
+    kOriginalSkinIndex,
     kNodeVisibility,
     kNodeSelectability,
     kNodeHoverability,
@@ -333,6 +336,7 @@ struct EntityData {
     Field<kName> name;
     Field<kOriginalIndex> original_index;
     Field<kOriginalMeshIndex> original_mesh_index;
+    Field<kOriginalSkinIndex> original_skin_index;
     Field<kNodeVisibility> node_visibility;
     Field<kNodeSelectability> node_selectability;
     Field<kNodeHoverability> node_hoverability;

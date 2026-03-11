@@ -88,7 +88,10 @@ cc_library(
         "@com_google_impress//core/common:log",
         "@third_party//filament",
         "@third_party//filament/filament:filament_hdrs",
-    ],
+        "@third_party//split_engine:split_engine_schema_version",
+    ] + if_non_android([
+        "@bazel_tools//tools/jdk:jni",
+    ]),
     alwayslink = 1,
 )
 

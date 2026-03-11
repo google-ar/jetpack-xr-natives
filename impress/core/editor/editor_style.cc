@@ -59,7 +59,7 @@ void SetupEditorImGuiStyle() {
   colors[ImGuiCol_HeaderActive] = kBlue600;
   colors[ImGuiCol_Tab] = WithAlpha(kBlue600, 0.8f);
   colors[ImGuiCol_TabHovered] = WithAlpha(kBlue600, 0.9f);
-  colors[ImGuiCol_TabActive] =
+  colors[ImGuiCol_TabSelected] =
       ImLerp(colors[ImGuiCol_Tab], colors[ImGuiCol_TitleBg], 0.5f);
 }
 

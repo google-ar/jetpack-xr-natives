@@ -17,6 +17,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
@@ -168,8 +169,7 @@ void GetGlyphsForChunk(const Chunk& chunk,
 
 }  // namespace
 
-GlyphEmulator::GlyphEmulator(Context context, AsyncCanvasSource& canvas_source)
-    : context_(context), canvas_source_(canvas_source) {}
+GlyphEmulator::GlyphEmulator(Context context) : context_(context) {}
 
 void GlyphEmulator::AddFont(absl::string_view font_name,
                             std::unique_ptr<FontHolder> font_holder) {
@@ -178,15 +178,17 @@ void GlyphEmulator::AddFont(absl::string_view font_name,
 }
 
 Future<absl::Status> GlyphEmulator::PrepareFont(
-    absl::string_view text, const ScopedCanvas::TextOptions& options) {
-  return canvas_source_.PrepareFont(text, options);
+    absl::string_view text, const ScopedCanvas::TextOptions& options,
+    AsyncCanvasSource& canvas_source) {
+  return canvas_source.PrepareFont(text, options);
 }
 
 Future<std::vector<ScopedCanvas::GlyphGroup>>
 GlyphEmulator::GetCombinedCharacterGroups(
-    absl::string_view text, const ScopedCanvas::TextOptions& options) {
-  if (canvas_source_.IsFeatureSupported(ScopedCanvas::Feature::kGlyphs)) {
-    return canvas_source_.GetCombinedCharacterGroups(text, options);
+    absl::string_view text, const ScopedCanvas::TextOptions& options,
+    AsyncCanvasSource& canvas_source) {
+  if (canvas_source.IsFeatureSupported(ScopedCanvas::Feature::kGlyphs)) {
+    return canvas_source.GetCombinedCharacterGroups(text, options);
   } else {
     return Future<std::vector<ScopedCanvas::GlyphGroup>>(
         std::vector<ScopedCanvas::GlyphGroup>());
@@ -194,43 +196,48 @@ GlyphEmulator::GetCombinedCharacterGroups(
 }
 
 Future<TextMetrics> GlyphEmulator::GetTextMetrics(
-    absl::string_view text, const ScopedCanvas::TextOptions& options) {
-  return canvas_source_.PrepareFont(text, options)
+    absl::string_view text, const ScopedCanvas::TextOptions& options,
+    AsyncCanvasSource& canvas_source) {
+  return canvas_source.PrepareFont(text, options)
       .Then(
-          [this, text = std::string(text), options]() {
-            return canvas_source_.MeasureGlyph(
+          [&canvas_source, text = std::string(text), options]() {
+            return canvas_source.MeasureGlyph(
                 AsyncCanvasSource::GlyphToMeasure({text}), options);
           },
           Executor::Type::kCurrent);
 }
 
 Future<FontInfo> GlyphEmulator::GetFontInfo(
-    const ScopedCanvas::TextOptions& options) {
-  return canvas_source_.PrepareFont(" ", options)
-      .Then([this, options]() { return canvas_source_.GetFontInfo(options); },
+    const ScopedCanvas::TextOptions& options,
+    AsyncCanvasSource& canvas_source) {
+  return canvas_source.PrepareFont(" ", options)
+      .Then([options,
+             &canvas_source]() { return canvas_source.GetFontInfo(options); },
             Executor::Type::kCurrent);
 }
 
 Future<std::vector<TextAndFontMetrics>> GlyphEmulator::GetFontAndTextMetrics(
-    std::vector<ScopedCanvas::TextToMeasure> texts) {
+    std::vector<ScopedCanvas::TextToMeasure> texts,
+    AsyncCanvasSource& canvas_source) {
   std::vector<Future<absl::Status>> prepare_futures;
   prepare_futures.reserve(texts.size());
   for (int i = 0; i < texts.size(); ++i) {
     prepare_futures.push_back(
-        canvas_source_.PrepareFont(texts[i].text, texts[i].text_options));
+        canvas_source.PrepareFont(texts[i].text, texts[i].text_options));
   }
   return Future<absl::Status>::CombineList(prepare_futures)
       .Then(
-          [this, texts = std::move(
-                     texts)]() -> Future<std::vector<TextAndFontMetrics>> {
-            return canvas_source_.GetFontAndTextMetrics(texts);
+          [&canvas_source, texts = std::move(texts)]()
+              -> Future<std::vector<TextAndFontMetrics>> {
+            return canvas_source.GetFontAndTextMetrics(texts);
           },
           Executor::Type::kCurrent);
 }
 
 Future<std::unique_ptr<std::vector<GlyphEmulator::Glyph>>>
 GlyphEmulator::GetGlyphs(absl::string_view text,
-                         const ScopedCanvas::TextOptions& options) {
+                         const ScopedCanvas::TextOptions& options,
+                         AsyncCanvasSource& canvas_source) {
   if (text.empty()) {
     return Future<std::unique_ptr<std::vector<Glyph>>>(
         std::make_unique<std::vector<Glyph>>());
@@ -239,16 +246,20 @@ GlyphEmulator::GetGlyphs(absl::string_view text,
   Future<absl::Status> prepare_font_future =
       options.precomputed_metrics.has_value()
           ? Future<absl::Status>(absl::OkStatus())
-          : canvas_source_.PrepareFont(text, options);
+          : canvas_source.PrepareFont(text, options);
+
+  bool reverse_order = ContainsRtl(text);
 
   Future<std::unique_ptr<std::vector<Glyph>>> glyphs_future;
   glyphs_future =
       prepare_font_future
-          .Then([this, text = std::string(text),
-                 options]() { return BreakIntoGlyphs(text, options); },
-                Executor::Type::kCurrent)
           .Then(
-              [this,
+              [this, &canvas_source, text = std::string(text), options]() {
+                return BreakIntoGlyphs(text, options, canvas_source);
+              },
+              Executor::Type::kCurrent)
+          .Then(
+              [this, reverse_order, &canvas_source,
                options](std::unique_ptr<std::vector<Glyph>> glyphs) mutable {
                 if (!options.precomputed_metrics.has_value() ||
                     options.precomputed_metrics->glyph_metrics().size() !=
@@ -258,12 +269,12 @@ GlyphEmulator::GetGlyphs(absl::string_view text,
                         << "Number of precomputed glyph metrics does not "
                            "match number of glyphs";
                   }
-                  return MeasureGlyphs(std::move(glyphs), options);
+                  return MeasureGlyphs(std::move(glyphs), options,
+                                       canvas_source);
                 }
-                for (int i = 0;
-                     i < options.precomputed_metrics->glyph_metrics().size();
-                     i++) {
-                  Glyph& glyph = (*glyphs)[i];
+                int size = options.precomputed_metrics->glyph_metrics().size();
+                for (int i = 0; i < size; i++) {
+                  Glyph& glyph = (*glyphs)[reverse_order ? size - 1 - i : i];
                   glyph.metrics =
                       options.precomputed_metrics->glyph_metrics()[i];
                 }
@@ -292,8 +303,9 @@ GlyphEmulator::GetGlyphs(absl::string_view text,
 }
 
 Future<std::unique_ptr<std::vector<GlyphEmulator::Glyph>>>
-GlyphEmulator::BreakIntoGlyphs(
-    absl::string_view text, const ScopedCanvas::TextOptions& canvas_options) {
+GlyphEmulator::BreakIntoGlyphs(absl::string_view text,
+                               const ScopedCanvas::TextOptions& canvas_options,
+                               AsyncCanvasSource& canvas_source) {
   // If CanvasSource supports glyphs on this platform / OS then use it.
   // Otherwise, fall back to representing glyphs as characters.
   //
@@ -304,12 +316,12 @@ GlyphEmulator::BreakIntoGlyphs(
   // TODO: Detect which fallback cases won't work based on the
   // unicode characters in the string and fallback to drawing the entire
   // string in the atlas instead of individual glyphs.
-  if (canvas_source_.IsFeatureSupported(ScopedCanvas::Feature::kGlyphs)) {
+  if (canvas_source.IsFeatureSupported(ScopedCanvas::Feature::kGlyphs)) {
     absl::string_view font_holder_name = "";
     if (canvas_options.font_holder) {
       font_holder_name = canvas_options.font_holder->GetFontName();
     }
-    return canvas_source_.GetTextGlyphs(text, canvas_options)
+    return canvas_source.GetTextGlyphs(text, canvas_options)
         .Then(
             [font_holder_name = std::string(font_holder_name)](
                 std::unique_ptr<std::vector<ScopedCanvas::GlyphAdvance>>
@@ -400,10 +412,10 @@ GlyphEmulator::BreakIntoGlyphs(
                      "number of glyphs in chunks. Expected "
                   << chunk_glyph_count << " but got "
                   << canvas_options.precomputed_metrics->glyph_metrics().size();
-      widths = canvas_source_.GetTextWidths(chunks, canvas_options);
+      widths = canvas_source.GetTextWidths(chunks, canvas_options);
     }
   } else {
-    widths = canvas_source_.GetTextWidths(chunks, canvas_options);
+    widths = canvas_source.GetTextWidths(chunks, canvas_options);
   }
   bool contains_rtl = ContainsRtl(text);
   return widths.Then(
@@ -427,30 +439,34 @@ GlyphEmulator::BreakIntoGlyphs(
 
 Future<std::unique_ptr<std::vector<GlyphEmulator::Glyph>>>
 GlyphEmulator::MeasureGlyphs(std::unique_ptr<std::vector<Glyph>> glyphs,
-                             ScopedCanvas::TextOptions canvas_options) {
+                             ScopedCanvas::TextOptions canvas_options,
+                             AsyncCanvasSource& canvas_source) {
   std::vector<AsyncCanvasSource::GlyphToMeasure> glyphs_to_measure;
+  glyphs_to_measure.reserve(glyphs->size());
+  absl::c_transform(
+      *glyphs, std::back_inserter(glyphs_to_measure),
+      [](const Glyph& glyph) -> AsyncCanvasSource::GlyphToMeasure {
+        std::variant<absl::string_view, ScopedCanvas::GlyphId> glyph_key;
+        if (absl::holds_alternative<GlyphKey>(glyph.glyph)) {
+          glyph_key = absl::get<GlyphKey>(glyph.glyph).glyph_id;
+        } else {
+          glyph_key = absl::get<std::string>(glyph.glyph);
+        }
+        AsyncCanvasSource::GlyphToMeasure glyph_to_measure(
+            {.glyph = glyph_key});
+        if (glyph.fallback_font) {
+          glyph_to_measure.font_override = glyph.fallback_font.get();
+        }
+        return glyph_to_measure;
+      });
 
-  for (Glyph& glyph : *glyphs) {
-    std::variant<absl::string_view, ScopedCanvas::GlyphId> glyph_key;
-    if (absl::holds_alternative<GlyphKey>(glyph.glyph)) {
-      glyph_key = absl::get<GlyphKey>(glyph.glyph).glyph_id;
-    } else {
-      glyph_key = absl::get<std::string>(glyph.glyph);
-    }
-    AsyncCanvasSource::GlyphToMeasure glyph_to_measure({.glyph = glyph_key});
-    if (glyph.fallback_font) {
-      glyph_to_measure.font_override = glyph.fallback_font.get();
-    }
-    glyphs_to_measure.push_back(std::move(glyph_to_measure));
-  }
-
-  return canvas_source_.MeasureGlyphs(glyphs_to_measure, canvas_options)
+  return canvas_source.MeasureGlyphs(glyphs_to_measure, canvas_options)
       .Then(
           [glyphs = std::move(glyphs)](
               std::vector<TextMetrics> text_metrics) mutable {
+            Glyph* glyph_data = glyphs->data();
             for (int i = 0; i < text_metrics.size(); i++) {
-              Glyph& glyph = (*glyphs)[i];
-              glyph.metrics = text_metrics[i];
+              glyph_data[i].metrics = text_metrics[i];
             }
             return std::move(glyphs);
           },

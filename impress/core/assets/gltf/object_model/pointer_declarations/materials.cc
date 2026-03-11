@@ -271,4 +271,26 @@ absl::Status MaterialsLengthPointerDeclaration::SetValue(
   return absl::FailedPreconditionError("materials.length is readonly.");
 }
 
+std::vector<TokenParser>
+MaterialsDoubleSidedPointerDeclaration::GetTokenParsers() const {
+  return {"materials", GetIntTokenParser(), "doubleSided"};
+}
+
+absl::StatusOr<PropertyPointer::PointerValue>
+MaterialsDoubleSidedPointerDeclaration::GetValue(
+    NodeHandle gltf_model, absl::Span<const ParsedToken> parsed_tokens) const {
+  MP_ASSIGN_OR_RETURN(GenericMaterial * material,
+                   GetMaterial(gltf_model, parsed_tokens));
+  return material->GetMaterial()
+      ->GetFilamentMaterialInstance()
+      ->isDoubleSided();
+}
+
+absl::Status MaterialsDoubleSidedPointerDeclaration::SetValue(
+    NodeHandle gltf_model, absl::Span<const ParsedToken> parsed_tokens,
+    PropertyPointer::PointerValue value) const {
+  return absl::FailedPreconditionError(
+      "/materials/{}/doubleSided is readonly.");
+}
+
 }  // namespace imp::gltf

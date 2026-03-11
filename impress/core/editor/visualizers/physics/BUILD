@@ -27,12 +27,12 @@ package(
 licenses(["notice"])
 
 cc_library(
-    name = "visualize_physics_collidables",
+    name = "visualize_physics_debug",
     srcs = [
-        "visualize_physics_collidables.cc",
+        "visualize_physics_debug.cc",
     ],
     hdrs = [
-        "visualize_physics_collidables.h",
+        "visualize_physics_debug.h",
     ],
     copts = imp_google3_copts(),
     deps = [

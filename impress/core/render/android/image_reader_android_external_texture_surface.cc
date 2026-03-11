@@ -20,6 +20,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "absl/container/inlined_vector.h"
@@ -28,12 +29,19 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "absl/synchronization/barrier.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
+#include "filament/filament/backend/include/backend/DriverEnums.h"
+#include "filament/filament/backend/include/backend/Platform.h"
+#include "filament/filament/include/filament/Engine.h"
+#include "filament/filament/include/filament/Texture.h"
+#include "filament/filament/include/filament/TextureSampler.h"
 #include "core/common/registry.h"
 #include "core/common/robin_map.h"
 #include "core/common/small_source_location.h"
+#include "core/materials/material.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
 #include "core/media/media_color_space.h"
@@ -47,6 +55,7 @@
 #include "core/view/platforms/android/ndkwrappers/image_reader.h"
 #include "core/view/platforms/android/wrappers/surface.h"
 #include "core/view/utils/frame_time.h"
+#include "core/window/shared_host_state.h"
 #include "mediapipe/framework/port/status_macros.h"
 
 namespace imp {
@@ -103,15 +112,9 @@ absl::Status ImageReaderAndroidExternalTextureSurface::Initialize(
                                  view_.GetContext(),
                                  image_reader_->GetSurface(), security_level_));
 
-  // Create the external textures using a nullptr native stream. This creates a
-  // texture with an underlying stream of type StreamType::ACQUIRED (vs.
-  // StreamType::NATIVE). Later, the desired native hardware buffer is
-  // connected to this stream using filament::Stream::setAcquiredImage(),
-  // updating the corresponding texture's content.
-  void* native_stream = nullptr;
   for (SurfaceViewType surface_view_type : view_types) {
-    if (TexturePtr texture = view_.GetTextureFactory().CreateExternalTexture(
-            native_stream, {1, 1}, security_level_);
+    if (OwnedImageReaderTexturePtr texture =
+            ImageReaderTexture::Create(view_, {1, 1}, security_level_);
         texture) {
       external_textures_.insert({surface_view_type, std::move(texture)});
     } else {
@@ -123,7 +126,7 @@ absl::Status ImageReaderAndroidExternalTextureSurface::Initialize(
 }
 
 Texture* ImageReaderAndroidExternalTextureSurface::GetTexture() {
-  const OwnedTexturePtr& texture =
+  const OwnedImageReaderTexturePtr& texture =
       external_textures_[SurfaceViewType::kPrimaryView];
   if (texture == nullptr) {
     return nullptr;
@@ -192,6 +195,16 @@ ImageReaderAndroidExternalTextureSurface::AcquireAndProcessLatestImage() {
     // Release the oldest image.
     latest_images_.pop_back();
   }
+
+  // Get the data space of the latest image.
+  absl::StatusOr<ADataSpace> data_space = (*latest_image)->GetBufferDataSpace();
+  if (!data_space.ok()) {
+    IMP_LOG(imp::ERROR) << "Failed to get data space from the latest image: "
+               << data_space.status().ToString() << ". Defaulting to SRGB.";
+    // Default to SRGB if we cannot get the data space.
+    data_space = ADATASPACE_SRGB;
+  }
+
   // Add the new image to the front of the deque.
   latest_images_.push_front(std::move(*latest_image));
 
@@ -228,10 +241,8 @@ ImageReaderAndroidExternalTextureSurface::AcquireAndProcessLatestImage() {
   // remove the const_cast here.
   for (const auto& [surface_view_type, ahardware_buffer] :
        *view_hardware_buffers) {
-    external_textures_[surface_view_type]->GetStream()->setAcquiredImage(
-        const_cast<void*>(static_cast<const void*>(ahardware_buffer)),
-        [](void* ahardware_buffer, void* user_data) {}, nullptr,
-        transform_matrix_3f);
+    external_textures_[surface_view_type]->UpdateTexture(
+        ahardware_buffer, *data_space, transform_matrix_3f);
   }
 
   return absl::OkStatus();
@@ -275,8 +286,148 @@ ImageReaderAndroidExternalTextureSurface::GetMediaColorSpace() const {
   if (latest_images_.empty()) {
     return absl::InternalError("No images available to extract color space.");
   }
-  ADataSpace data_space = latest_images_.front()->GetBufferDataSpace();
-  return MediaColorSpace(data_space);
+  absl::StatusOr<ADataSpace> data_space =
+      latest_images_.front()->GetBufferDataSpace();
+  if (!data_space.ok()) {
+    IMP_LOG(imp::ERROR) << "Failed to get data space from the latest image: "
+               << data_space.status().ToString();
+    data_space = ADATASPACE_UNKNOWN;
+  }
+  return MediaColorSpace(*data_space);
+}
+
+ImageReaderAndroidExternalTextureSurface::OwnedImageReaderTexturePtr
+ImageReaderAndroidExternalTextureSurface::ImageReaderTexture::Create(
+    BaseView& view, int2 size, ContentSecurityLevel security_level) {
+  filament::Engine* engine = view.GetSharedEngine();
+
+  // Create a placeholder texture until we have the first hardware buffer.
+  auto texture_builder =
+      filament::Texture::Builder()
+          .levels(1)
+          .width(size.x)
+          .height(size.y)
+          .format(filament::backend::TextureFormat::SRGB8_A8)
+          .sampler(filament::Texture::Sampler::SAMPLER_EXTERNAL);
+
+  if (security_level == ContentSecurityLevel::kProtected) {
+    if (!filament::Texture::isProtectedTexturesSupported(*engine)) {
+      IMP_LOG(imp::ERROR) << "Protected textures are not supported on this backend.";
+      return {};
+    }
+    texture_builder.usage(filament::Texture::Usage::DEFAULT |
+                          filament::Texture::Usage::PROTECTED);
+  }
+
+  filament::Texture* texture = texture_builder.build(*engine);
+  if (!texture) {
+    IMP_LOG(imp::ERROR) << "Could not create external texture";
+    return {};
+  }
+  auto sampler = filament::TextureSampler(
+      filament::TextureSampler::MagFilter::LINEAR,
+      filament::TextureSampler::WrapMode::CLAMP_TO_EDGE);
+
+  return absl::WrapUnique(
+      new ImageReaderTexture(view, texture, sampler, security_level));
+}
+
+void ImageReaderAndroidExternalTextureSurface::ImageReaderTexture::
+    OnAssignedToMaterial(const Material& material,
+                         absl::string_view parameter_name,
+                         UpdateTextureFn update_texture_fn) {
+  // Make sure to immediately invoke the update texture function with the
+  // current texture if one exists. The texture may have already been updated
+  // by the time this is called.
+  filament::Texture* current_texture =
+      current_texture_ ? current_texture_ : texture_;
+  update_texture_fn(parameter_name, current_texture);
+
+  material_bindings_[std::make_pair(&material, std::string(parameter_name))] = {
+      std::move(update_texture_fn),
+      material.GetParameterTransformName(parameter_name),
+  };
+}
+
+void ImageReaderAndroidExternalTextureSurface::ImageReaderTexture::
+    OnUnassignedFromMaterial(const Material& material,
+                             absl::string_view parameter_name) {
+  material_bindings_.erase(
+      std::make_pair(&material, std::string(parameter_name)));
+}
+
+void ImageReaderAndroidExternalTextureSurface::ImageReaderTexture::
+    UpdateTexture(const AHardwareBuffer* buffer, ADataSpace data_space,
+                  const mat3f& transform_matrix) {
+  // Since the metadata is cached inside the ExternalImageHandle, we need to
+  // re-register the buffer with a new handle to get the updated metadata.
+  bool is_srgb = (data_space & TRANSFER_SRGB) != 0;
+  filament::backend::Platform::ExternalImageHandle handle =
+      window::SharedHostState::GetInstance().RegisterExternalImageHandle(
+          buffer, /*sRGB=*/is_srgb);
+  window::SharedHostState::ExternalImageMetadata metadata =
+      window::SharedHostState::GetInstance().GetImageMetadata(handle);
+
+  // Do not use invalid metadata, it could crash Filament.
+  if (!metadata.IsValid()) {
+    IMP_LOG(imp::ERROR) << "Invalid metadata for external texture: " << metadata.width
+               << "x" << metadata.height
+               << ", format: " << static_cast<int>(metadata.format)
+               << ", usage: " << static_cast<int>(metadata.usage);
+    return;
+  }
+
+  auto it = textures_.find(buffer);
+  OwnedTexturePtr existing_texture = {};
+
+  // If the texture for this buffer doesn't exist or the metadata has changed
+  // or the data space has changed, create a new texture.
+  if (it == textures_.end() || it->second->metadata != metadata ||
+      it->second->data_space != data_space) {
+    if (security_level_ == ContentSecurityLevel::kProtected) {
+      metadata.usage |= filament::backend::TextureUsage::PROTECTED;
+    }
+
+    // Create an external texture for the buffer.
+    OwnedTexturePtr texture = view_.GetTextureFactory().CreateExternalTexture(
+        handle,
+        {.width = metadata.width,
+         .height = metadata.height,
+         .format = metadata.format,
+         .sampler_type = filament::backend::SamplerType::SAMPLER_EXTERNAL,
+         .usage = metadata.usage});
+    // Update the map with the new texture for the buffer. If there was already
+    // a texture for this buffer, it will be destroyed. In order to prevent the
+    // material from holding a destroyed texture in the interim, the old texture
+    // is moved to the existing_texture variable.
+    if (it != textures_.end()) {
+      existing_texture = std::move(textures_.extract(buffer).mapped()->texture);
+    }
+
+    // Limit the numbers of AHardwareBuffers held in memory, because in certain
+    // scenarios the amount of buffers can grow indefinitely.
+    textures_lru_cache_.push_front(buffer);
+    if (textures_lru_cache_.size() > imp::kImageReaderBufferSize) {
+      const AHardwareBuffer* oldest_buffer = textures_lru_cache_.back();
+      textures_.erase(oldest_buffer);
+
+      textures_lru_cache_.pop_back();
+    }
+
+    textures_[buffer] = std::make_unique<TextureInfo>(
+        std::move(texture), metadata, data_space, transform_matrix);
+  }
+  textures_[buffer]->transform_matrix = transform_matrix;
+  current_texture_ = textures_[buffer]->texture->GetTexture();
+  for (const auto& [material_sampler, binding] : material_bindings_) {
+    binding.update_texture_fn(material_sampler.second, current_texture_);
+
+    const Material* material = material_sampler.first;
+    if (!binding.transform_parameter_name.empty()) {
+      const_cast<Material*>(material)->SetParameter(
+          binding.transform_parameter_name, transform_matrix);
+    }
+  }
 }
 
 ImageReaderAndroidExternalTextureSurfaceUpdater::

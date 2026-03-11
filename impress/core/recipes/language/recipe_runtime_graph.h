@@ -18,12 +18,15 @@
 #define THIRD_PARTY_IMPRESS_CORE_RECIPES_LANGUAGE_RECIPE_RUNTIME_GRAPH_H_
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "core/common/invocable.h"
 #include "core/common/type_traits.h"
 #include "core/ncsb/node.h"
@@ -51,13 +54,15 @@ class RecipeRuntimeGraph {
 
   // Triggers an event in the RecipeGraph.
   ExecutionResult TriggerEvent(const RecipeRuntimeEvent& event,
-                               RecipeExecutionContext context) const;
+                               const RecipeExecutionContext& context) const;
 
   // Resumes an execution in the RecipeGraph and delete the async execution
   // record from the RecipeAsyncExecutionManager.
   ExecutionResult ResumeExecution(
       const RecipeAsyncExecutionManager::AsyncExecution& execution,
-      BaseView& view) const;
+      BaseView& view,
+      std::optional<absl::Time> execution_cutoff_time =
+          std::optional<absl::Time>()) const;
 
   void SetRuntimeEventListener(Invocable<void(RecipeRuntimeEvent)> listener);
 
@@ -91,69 +96,76 @@ class RecipeRuntimeGraph {
   }
 
   absl::StatusOr<recipe::Variables> EvaluateNode(
-      const NodeId& node_id, RecipeExecutionContext context) const;
+      const NodeId& node_id, const RecipeExecutionContext& context) const;
 
   absl::StatusOr<recipe::Variable> EvaluateValueConnection(
       const ValueConnection& value_connection,
-      RecipeExecutionContext context) const;
+      const RecipeExecutionContext& context) const;
 
   absl::StatusOr<recipe::Variable> EvaluateSocketConnection(
       const SocketConnection& socket_connection,
-      RecipeExecutionContext context) const;
+      const RecipeExecutionContext& context) const;
 
   ExecutionResult ExecuteNode(
       const ExecutableNodeConnection& executable_node_connection,
-      RecipeExecutionContext context) const;
+      const RecipeExecutionContext& context) const;
 
   absl::StatusOr<recipe::Variable> EvaluateUnaryExpression(
-      const UnaryExpression& expression, RecipeExecutionContext context) const;
+      const UnaryExpression& expression,
+      const RecipeExecutionContext& context) const;
 
   absl::StatusOr<recipe::Variable> EvaluateBinaryExpression(
-      const BinaryExpression& expression, RecipeExecutionContext context) const;
+      const BinaryExpression& expression,
+      const RecipeExecutionContext& context) const;
 
   absl::StatusOr<recipe::ReturnValue> EvaluateCallExpression(
       const CallExpression& call_expression,
-      RecipeExecutionContext context) const;
+      const RecipeExecutionContext& context) const;
 
   ExecutionResult ExecuteAssignmentStatement(
       const AssignmentStatement& statement,
-      RecipeExecutionContext context) const;
+      const RecipeExecutionContext& context) const;
 
-  ExecutionResult ExecuteCallStatement(const NodeId& node_id,
-                                       const CallStatement& call_statement,
-                                       RecipeExecutionContext context) const;
+  ExecutionResult ExecuteCallStatement(
+      const NodeId& node_id, const CallStatement& call_statement,
+      const RecipeExecutionContext& context) const;
 
   ExecutionResult ExecuteAsyncCallStatement(
       const NodeId& node_id, const AsyncCallStatement& call_statement,
-      RecipeExecutionContext context) const;
+      const RecipeExecutionContext& context) const;
 
-  ExecutionResult ExecuteBranchStatement(const BranchStatement& statement,
-                                         RecipeExecutionContext context) const;
+  ExecutionResult ExecuteBranchStatement(
+      const BranchStatement& statement,
+      const RecipeExecutionContext& context) const;
 
-  ExecutionResult ExecuteSwitchStatement(const SwitchStatement& statement,
-                                         RecipeExecutionContext context) const;
+  ExecutionResult ExecuteSwitchStatement(
+      const SwitchStatement& statement,
+      const RecipeExecutionContext& context) const;
 
   ExecutionResult ExecuteVariableDeclarationStatement(
       const VariableDeclarationStatement& statement,
-      RecipeExecutionContext context) const;
+      const RecipeExecutionContext& context) const;
 
-  ExecutionResult ExecuteWhileStatement(const NodeId& node_id,
-                                        const WhileStatement& statement,
-                                        RecipeExecutionContext context) const;
+  ExecutionResult ExecuteWhileStatement(
+      const NodeId& node_id, const WhileStatement& statement,
+      const RecipeExecutionContext& context) const;
 
-  ExecutionResult ExecuteLoopStatement(const NodeId& node_id,
-                                       const LoopStatement& statement,
-                                       RecipeExecutionContext context) const;
+  ExecutionResult ExecuteLoopStatement(
+      const NodeId& node_id, const LoopStatement& statement,
+      const RecipeExecutionContext& context) const;
 
   ExecutionResult ExecuteSequenceStatement(
-      const SequenceStatement& statement, RecipeExecutionContext context) const;
+      const SequenceStatement& statement,
+      const RecipeExecutionContext& context) const;
 
   ExecutionResult ExecuteEventTriggerStatement(
-      const EventTrigger& statement, RecipeExecutionContext context) const;
+      const EventTrigger& statement,
+      const RecipeExecutionContext& context) const;
 
   ExecutionResult ExecuteCustomStatement(
       const ExecutableNodeConnection& connection,
-      const CustomStatement& statement, RecipeExecutionContext context) const;
+      const CustomStatement& statement,
+      const RecipeExecutionContext& context) const;
 
   absl::Status CacheSocketValues(RecipeScope& scope, const NodeId& node_id,
                                  const recipe::Variables& socket_values) const;

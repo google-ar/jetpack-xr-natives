@@ -51,10 +51,10 @@ class ParticleInstance {
   float GetAlpha() const;
   void SetAlpha(float alpha);
 
-  // Uniform scaling size for the particle's visual representation.
+  // Scaling size for the particle's visual representation.
   bool HasScale() const;
-  float GetScale() const;
-  void SetScale(float scale);
+  float3 GetScale() const;
+  void SetScale(float3 scale);
 
   // Current position, in world-space, of the particle.
   // Note: particles always have a position.

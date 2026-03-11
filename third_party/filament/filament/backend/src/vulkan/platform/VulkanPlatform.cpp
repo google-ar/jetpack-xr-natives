@@ -29,16 +29,6 @@
 #include "filament/libs/utils/include/utils/Panic.h"
 #include "filament/libs/utils/include/utils/PrivateImplementation-impl.h"
 
-#define SWAPCHAIN_RET_FUNC(func, handle, ...)                                                      \
-    if (mImpl->mSurfaceSwapChains.find(handle) != mImpl->mSurfaceSwapChains.end()) {               \
-        return static_cast<VulkanPlatformSurfaceSwapChain*>(handle)->func(__VA_ARGS__);            \
-    } else if (mImpl->mHeadlessSwapChains.find(handle) != mImpl->mHeadlessSwapChains.end()) {      \
-        return static_cast<VulkanPlatformHeadlessSwapChain*>(handle)->func(__VA_ARGS__);           \
-    } else {                                                                                       \
-        PANIC_PRECONDITION("Bad handle for swapchain");                                            \
-        return {};                                                                                 \
-    }
-
 using namespace utils;
 using namespace bluevk;
 
@@ -238,6 +228,10 @@ ExtensionSet getDeviceExtensions(VkPhysicalDevice device) {
         VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME,
 #endif
         VK_KHR_MULTIVIEW_EXTENSION_NAME,
+
+#if FVK_ENABLED(FVK_DEBUG_SHADER_MODULE)
+        VK_EXT_PIPELINE_CREATION_FEEDBACK_EXTENSION_NAME,
+#endif
     };
     ExtensionSet exts;
     // Identify supported physical device extensions
@@ -685,26 +679,11 @@ struct VulkanPlatformPrivate {
     VkQueue mProtectedGraphicsQueue = VK_NULL_HANDLE;
     VulkanContext mContext = {};
 
-    // We use a map to both map a handle (i.e. SwapChainPtr) to the concrete type and also to
-    // store the actual swapchain struct, which is either backed-by-surface or headless.
-    std::unordered_set<SwapChainPtr> mSurfaceSwapChains;
-    std::unordered_set<SwapChainPtr> mHeadlessSwapChains;
-
     bool mSharedContext = false;
     bool mForceXCBSwapchain = false;
 };
 
 void VulkanPlatform::terminate() {
-    for (auto swapchain: mImpl->mHeadlessSwapChains) {
-        delete static_cast<VulkanPlatformHeadlessSwapChain*>(swapchain);
-    }
-    mImpl->mHeadlessSwapChains.clear();
-
-    for (auto swapchain: mImpl->mSurfaceSwapChains) {
-        delete static_cast<VulkanPlatformSurfaceSwapChain*>(swapchain);
-    }
-    mImpl->mSurfaceSwapChains.clear();
-
     if (!mImpl->mSharedContext) {
         vkDestroyDevice(mImpl->mDevice, VKALLOC);
         vkDestroyInstance(mImpl->mInstance, VKALLOC);
@@ -890,6 +869,8 @@ Driver* VulkanPlatform::createDriver(void* sharedContext,
     if (!mImpl->mSharedContext) {
         context.mDebugUtilsSupported = setContains(instExts, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
         context.mDebugMarkersSupported = setContains(deviceExts, VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
+        context.mPipelineCreationFeedbackSupported =
+                setContains(deviceExts, VK_EXT_PIPELINE_CREATION_FEEDBACK_EXTENSION_NAME);
     } else {
         VulkanSharedContext const* scontext = (VulkanSharedContext const*) sharedContext;
         context.mDebugUtilsSupported = scontext->debugUtilsSupported;
@@ -898,13 +879,16 @@ Driver* VulkanPlatform::createDriver(void* sharedContext,
 
     // Check the availability of lazily allocated memory
     context.mLazilyAllocatedMemorySupported = false;
-    for (uint32_t i = 0, typeCount = context.mMemoryProperties.memoryTypeCount; i < typeCount;
-         ++i) {
-        VkMemoryType const type = context.mMemoryProperties.memoryTypes[i];
-        if (type.propertyFlags & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) {
-            context.mLazilyAllocatedMemorySupported = true;
-            assert_invariant(type.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-            break;
+    // RenderDoc doesn't support lazy allocated memory
+    if constexpr (!FVK_RENDERDOC_CAPTURE_MODE) {
+        for (uint32_t i = 0, typeCount = context.mMemoryProperties.memoryTypeCount; i < typeCount;
+                ++i) {
+            VkMemoryType const type = context.mMemoryProperties.memoryTypes[i];
+            if (type.propertyFlags & VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) {
+                context.mLazilyAllocatedMemorySupported = true;
+                assert_invariant(type.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+                break;
+            }
         }
     }
 
@@ -940,38 +924,31 @@ VulkanPlatform::VulkanPlatform() = default;
 VulkanPlatform::~VulkanPlatform() = default;
 
 VulkanPlatform::SwapChainBundle VulkanPlatform::getSwapChainBundle(SwapChainPtr handle) {
-    SWAPCHAIN_RET_FUNC(getSwapChainBundle, handle, )
+    return static_cast<VulkanPlatformSwapChainBase*>(handle)->getSwapChainBundle();
 }
 
 VkResult VulkanPlatform::acquire(SwapChainPtr handle, ImageSyncData* outImageSyncData) {
-    SWAPCHAIN_RET_FUNC(acquire, handle, outImageSyncData)
+    return static_cast<VulkanPlatformSwapChainBase*>(handle)->acquire(outImageSyncData);
 }
 
-VkResult VulkanPlatform::present(SwapChainPtr handle, uint32_t index,
-        VkSemaphore finishedDrawing) {
-    SWAPCHAIN_RET_FUNC(present, handle, index, finishedDrawing)
+VkResult VulkanPlatform::present(SwapChainPtr handle, uint32_t index, VkSemaphore finishedDrawing) {
+    return static_cast<VulkanPlatformSwapChainBase*>(handle)->present(index, finishedDrawing);
 }
 
 bool VulkanPlatform::hasResized(SwapChainPtr handle) {
-    SWAPCHAIN_RET_FUNC(hasResized, handle, )
+    return static_cast<VulkanPlatformSwapChainBase*>(handle)->hasResized();
 }
 
 bool VulkanPlatform::isProtected(SwapChainPtr handle) {
-    SWAPCHAIN_RET_FUNC(isProtected, handle, )
+    return static_cast<VulkanPlatformSwapChainBase*>(handle)->isProtected();
 }
 
 VkResult VulkanPlatform::recreate(SwapChainPtr handle) {
-    SWAPCHAIN_RET_FUNC(recreate, handle, )
+    return static_cast<VulkanPlatformSwapChainBase*>(handle)->recreate();
 }
 
 void VulkanPlatform::destroy(SwapChainPtr handle) {
-    if (mImpl->mSurfaceSwapChains.erase(handle)) {
-        delete static_cast<VulkanPlatformSurfaceSwapChain*>(handle);
-    } else if (mImpl->mHeadlessSwapChains.erase(handle)) {
-        delete static_cast<VulkanPlatformHeadlessSwapChain*>(handle);
-    } else {
-        PANIC_PRECONDITION("Bad handle for swapchain");
-    }
+    delete static_cast<VulkanPlatformSwapChainBase*>(handle);
 }
 
 SwapChainPtr VulkanPlatform::createSwapChain(void* nativeWindow, uint64_t flags,
@@ -981,7 +958,6 @@ SwapChainPtr VulkanPlatform::createSwapChain(void* nativeWindow, uint64_t flags,
     if (headless) {
         VulkanPlatformHeadlessSwapChain* swapchain = new VulkanPlatformHeadlessSwapChain(
                 mImpl->mContext, mImpl->mDevice, mImpl->mGraphicsQueue, extent, flags);
-        mImpl->mHeadlessSwapChains.insert(swapchain);
         return swapchain;
     }
 
@@ -999,8 +975,7 @@ SwapChainPtr VulkanPlatform::createSwapChain(void* nativeWindow, uint64_t flags,
     // The VulkanPlatformSurfaceSwapChain now `owns` the surface.
     VulkanPlatformSurfaceSwapChain* swapchain = new VulkanPlatformSurfaceSwapChain(mImpl->mContext,
             mImpl->mPhysicalDevice, mImpl->mDevice, mImpl->mGraphicsQueue, mImpl->mInstance,
-            surface, fallbackExtent, flags);
-    mImpl->mSurfaceSwapChains.insert(swapchain);
+            surface, fallbackExtent, nativeWindow, flags);
     return swapchain;
 }
 
@@ -1056,14 +1031,8 @@ VkExternalFenceHandleTypeFlagBits VulkanPlatform::getFenceExportFlags() const no
     return static_cast<VkExternalFenceHandleTypeFlagBits>(0);
 }
 
-ExtensionSet VulkanPlatform::getSwapchainInstanceExtensions() const {
-    return getSwapchainInstanceExtensionsImpl();
+bool VulkanPlatform::isTransientAttachmentSupported() const noexcept {
+    return mImpl->mContext.isLazilyAllocatedMemorySupported();
 }
 
-VulkanPlatform::SurfaceBundle VulkanPlatform::createVkSurfaceKHR(void* nativeWindow,
-        VkInstance instance, uint64_t flags) const noexcept {
-    return createVkSurfaceKHRImpl(nativeWindow, instance, flags);
-}
-#undef SWAPCHAIN_RET_FUNC
-
-}// namespace filament::backend
+} // namespace filament::backend

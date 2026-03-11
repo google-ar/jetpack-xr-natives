@@ -256,8 +256,9 @@ Bvh::Bvh(const imp::MeshVertexAndIndexData& mesh_data, const Options& options,
     auto indices_uint16 = mesh_data.index_data->Indices<uint16_t>();
     uint16_t count = submesh_range.has_value() ? submesh_range->count
                                                : indices_uint16.size();
-    indices_.reserve(count / 3);
-    for (int i = offset, id = 0; id < count / 3; id++) {
+    uint16_t triangle_count = count / 3;
+    indices_.reserve(triangle_count);
+    for (int i = offset, id = 0; id < triangle_count; id++) {
       indices_.push_back(
           {indices_uint16[i++], indices_uint16[i++], indices_uint16[i++], id});
     }
@@ -265,8 +266,9 @@ Bvh::Bvh(const imp::MeshVertexAndIndexData& mesh_data, const Options& options,
     auto indices_uint32 = mesh_data.index_data->Indices<uint32_t>();
     uint32_t count = submesh_range.has_value() ? submesh_range->count
                                                : indices_uint32.size();
-    indices_.reserve(indices_uint32.size() / 3);
-    for (int i = offset, id = 0; id < count / 3; id++) {
+    uint32_t triangle_count = count / 3;
+    indices_.reserve(triangle_count);
+    for (int i = offset, id = 0; id < triangle_count; id++) {
       indices_.push_back(
           {indices_uint32[i++], indices_uint32[i++], indices_uint32[i++], id});
     }

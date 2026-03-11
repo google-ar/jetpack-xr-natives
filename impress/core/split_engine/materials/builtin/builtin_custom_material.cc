@@ -31,7 +31,7 @@
 #include "core/media/media_color_space.h"
 #include "core/render/display_color_space.h"
 #include "core/split_engine/shared/split_engine_defines.h"
-#include "core/split_engine/split_engine_renderer.h"
+#include "core/split_engine/split_engine_external_texture_color_space_store.h"
 #include "core/view/base_view.h"
 
 namespace imp::split_engine {
@@ -63,22 +63,25 @@ void BuiltInCustomMaterial::UpdateColorSpaceParameters(
   int transfer_function = static_cast<int>(default_color_space_.GetTransfer());
   int max_content_light_level = default_color_space_.GetMaxContentLightLevel();
 
-  // SplitEngineRenderer has the information about the color space of the
-  // surface texture.
-  absl::StatusOr<std::reference_wrapper<SplitEngineRenderer>> renderer =
-      view.GetRegistry().Get<SplitEngineRenderer>();
-  if (!renderer.ok()) {
-    // When there is no renderer, there's no way to request P3 color space, so
-    // the color transform matrix should be set to sRGB. This only happens in
-    // local (material) mode.
+  // SplitEngineExternalTextureColorSpaceStore has the information about the
+  // color space of the surface texture.
+  absl::StatusOr<
+      std::reference_wrapper<SplitEngineExternalTextureColorSpaceStore>>
+      color_space_manager =
+          view.GetRegistry().Get<SplitEngineExternalTextureColorSpaceStore>();
+  if (!color_space_manager.ok()) {
+    // Fall back to the sRGB color transform matrix if
+    // `SplitEngineExternalTextureColorSpaceStore` is not registered by the
+    // renderer (e.g., in local mode).
     color_transform_matrix =
         default_color_space_.GetColorTransformMatrixSRGB().value_or(
             imp::kIdentityMat3f);
   }
 
-  if (renderer.ok() && texture_id.has_value()) {
+  if (color_space_manager.ok() && texture_id.has_value()) {
     absl::StatusOr<MediaColorSpace> source_texture_color_space =
-        renderer->get().GetTextureColorSpace(GetBridgeId(), texture_id.value());
+        color_space_manager->get().GetTextureColorSpace(GetBridgeId(),
+                                                        *texture_id);
     if (source_texture_color_space.ok() &&
         source_texture_color_space->GetStandard() !=
             MediaColorSpace::Standard::kUnknown) {

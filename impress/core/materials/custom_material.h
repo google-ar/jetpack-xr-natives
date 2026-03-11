@@ -131,6 +131,9 @@ class CustomMaterial : public Material {
 
   bool HasParameter(absl::string_view parameter_name) override;
 
+  absl::string_view GetParameterTransformName(
+      absl::string_view sampler_name) const override;
+
   HeldTextureType GetAssignedTextureType(
       absl::string_view parameter_name) override;
 
@@ -144,6 +147,10 @@ class CustomMaterial : public Material {
  private:
   CustomMaterial(filament::MaterialInstance* material_instance,
                  AssetPtr<MaterialAsset> material_asset);
+
+  void SetOwnedOrBorrowedTexture(
+      absl::string_view parameter_name, OwnedOrBorrowedTexturePtr texture,
+      std::optional<filament::TextureSampler> sampler_override);
 
   filament::Engine* engine_;
   filament::MaterialInstance* material_instance_;

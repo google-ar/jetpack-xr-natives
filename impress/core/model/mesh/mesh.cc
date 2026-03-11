@@ -23,6 +23,7 @@
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
+#include "absl/synchronization/mutex.h"
 #include "filament/filament/include/filament/IndexBuffer.h"
 #include "filament/filament/include/filament/RenderableManager.h"
 #include "filament/filament/include/filament/VertexBuffer.h"
@@ -191,9 +192,10 @@ filament::RenderableManager::PrimitiveType Mesh::GetPrimitiveType() {
   return mesh_data_gpu_->GetPrimitiveType();
 }
 
-bool Mesh::IsCollisionAccelerationStructureEnabled() const {
-  if (collision_acceleration_structure_ ||
-      !prepare_collision_acceleration_future_.Ready()) {
+bool Mesh::IsCollisionAccelerationStructureEnabled() {
+  absl::MutexLock lock(collision_acceleration_structure_mutex_);
+  if (!prepare_collision_acceleration_future_.Ready() ||
+      collision_acceleration_structure_) {
     return true;
   }
   return false;
@@ -205,29 +207,35 @@ void Mesh::EnableCollisionAccelerationStructure(bool enable) {
       BuildCollisionAccelerationStructureInternal();
     }
   } else {
+    absl::MutexLock lock(collision_acceleration_structure_mutex_);
     collision_acceleration_structure_.reset();
-    prepare_collision_acceleration_future_ =
-        Future<absl::Status>(absl::OkStatus());
+    prepare_collision_acceleration_future_.Cancel();
   }
 }
 
 void Mesh::BuildCollisionAccelerationStructureInternal() {
+  prepare_collision_acceleration_future_.Cancel();
   prepare_collision_acceleration_future_ = Future<absl::Status>::Schedule(
-      [this]() {
+      [this, mesh_range = mesh_range_]() mutable {
         MeshVertexAndIndexData mesh_vertex_and_index_data{
             .vertex_data = mesh_data_->GetVertexData(),
             .index_data = mesh_data_->GetIndexData()};
         Bvh::Options options;
         options.intersect_backfaces = true;
+        absl::MutexLock lock(collision_acceleration_structure_mutex_);
         collision_acceleration_structure_ = std::make_unique<Bvh>(
-            mesh_vertex_and_index_data, options, GetMeshRange());
+            mesh_vertex_and_index_data, options, mesh_range);
         return absl::OkStatus();
       },
       {.executor = Executor::Type::kBackground});
 }
 
-Bvh* Mesh::GetCollisionAccelerationStructure() const {
-  return collision_acceleration_structure_.get();
+Bvh* Mesh::GetCollisionAccelerationStructure() {
+  if (prepare_collision_acceleration_future_.Ready()) {
+    absl::MutexLock lock(collision_acceleration_structure_mutex_);
+    return collision_acceleration_structure_.get();
+  }
+  return nullptr;
 }
 
 Mesh::Mesh(MeshGpuDataPtr mesh_data_gpu, MeshDataPtr mesh_data, const Box& aabb)

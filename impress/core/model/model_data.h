@@ -149,6 +149,7 @@ class ModelData {
             TypedVector<OwnedTexturePtr> textures,
             TypedVector<GenericMaterialPtr> materials,
             absl::flat_hash_map<uint16_t, MaterialId> material_id_lookup,
+            absl::flat_hash_map<uint32_t, SkinId> skin_id_lookup,
             TypedVector<SkinningBufferData> skinning_buffers,
             MeshVertexDataLookup stored_vertex_data,
             MeshIndexDataLookup stored_index_data,
@@ -173,6 +174,7 @@ class ModelData {
   const MaterialLookup<MaterialConfig>& MaterialConfigs() const;
   const GenericMaterial* GetMaterial(absl::string_view material_name) const;
   MaterialId GetMaterialId(uint16_t material_index) const;
+  SkinId GetSkinId(uint32_t skin_index) const;
   const SkeletonData& Skeleton() const;
   const TypedVector<SkinData>& Skins() const;
   const TypedVector<LightPunctualData>& LightsPunctual() const;
@@ -204,6 +206,7 @@ class ModelData {
   TypedVector<OwnedTexturePtr> textures_;
   TypedVector<GenericMaterialPtr> materials_;
   absl::flat_hash_map<uint16_t, MaterialId> material_id_lookup_;
+  absl::flat_hash_map<uint32_t, SkinId> skin_id_lookup_;
   TypedVector<SkinningBufferData> skinning_buffers_;
 
   // Vertex and index information stored on CPU

@@ -30,6 +30,7 @@
 #include "core/assets/gltf/object_model/token_parser.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
+#include "core/model/shared_data.h"
 #include "core/model/skeleton_data.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node.h"
@@ -60,6 +61,7 @@ constexpr absl::string_view kParentToken = "parent";
 constexpr absl::string_view kMeshToken = "mesh";
 constexpr absl::string_view kWeightsLengthToken = "weights.length";
 constexpr absl::string_view kWeightsToken = "weights";
+constexpr absl::string_view kSkinToken = "skin";
 
 struct NodeHandles {
   NodeHandle gltf_root;
@@ -469,6 +471,42 @@ absl::Status NodesWeightPointerDeclaration::SetValue(
   }
   gltf_mesh->SetMorphTargetWeight(index, std::get<float>(value));
   return absl::OkStatus();
+}
+
+std::vector<TokenParser> NodesSkinPointerDeclaration::GetTokenParsers() const {
+  return {std::string(kNodesToken), GetIntTokenParser(),
+          std::string(kSkinToken)};
+}
+
+absl::StatusOr<PointerValue> NodesSkinPointerDeclaration::GetValue(
+    NodeHandle gltf_model, absl::Span<const ParsedToken> parsed_tokens) const {
+  MP_ASSIGN_OR_RETURN(NodeHandles node_handles,
+                   GetNodeHandles(gltf_model, parsed_tokens));
+
+  ComponentHandle<GltfRenderer> gltf_renderer =
+      gltf_model->GetComponent<GltfRenderer>();
+  if (!gltf_renderer) {
+    return absl::InternalError("No GltfRenderer found on the glTF model node.");
+  }
+
+  std::optional<model::EntityId> entity_id =
+      gltf_renderer->GetEntityIdFromNodeHandle(node_handles.node);
+  if (!entity_id.has_value()) {
+    return absl::InternalError("No entity id found for the node.");
+  }
+
+  const auto& entities =
+      gltf_renderer->GetGltfAsset()->GetModelData().Entities();
+  if (!entities.IsValid(entity_id.value())) {
+    return absl::InternalError("No valid entity data found for the node.");
+  }
+  return static_cast<int>(entities[entity_id.value()].original_skin_index);
+}
+
+absl::Status NodesSkinPointerDeclaration::SetValue(
+    NodeHandle gltf_model, absl::Span<const ParsedToken> parsed_tokens,
+    PointerValue value) const {
+  return absl::FailedPreconditionError("Setting skin values is not supported.");
 }
 
 }  // namespace imp::gltf

@@ -114,7 +114,8 @@ absl::StatusOr<recipe::Variable> NegateValue(const recipe::Variable& value) {
     case Literal::kValue_Float4Value:
       return -std::get<float4>(value);
     default:
-      return absl::InvalidArgumentError("input must be an arithmetic type.");
+      return absl::InvalidArgumentError(
+          "input must be an integer, floating-point or floatN type.");
   }
 }
 
@@ -132,7 +133,7 @@ absl::StatusOr<recipe::Variable> Ceil(const recipe::Variable& value) {
       return ceil(std::get<float4>(value));
     default:
       return absl::InvalidArgumentError(
-          "input must be a floating-point, floatN or matrix type.");
+          "input must be a floating-point or floatN type.");
   }
 }
 

@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <jni.h>
+
 #include "core/common/jni_helpers.h"
 #include "core/scripting/message_helpers.h"
 #include "core/scripting/proto/bridge.proto.imp.h"
-#include "core/scripting/web/web_view.h"
+#include "core/scripting/web/android/web_view.h"
 
 #define JNI_METHOD(return_type, method_name) \
   IMP_JNI return_type JNICALL                \
@@ -24,18 +26,18 @@
 namespace {
 
 using ::imp::JniAllowlist;
+using ::imp::scripting::AndroidWebView;
 using ::imp::scripting::MessageToNative;
 using ::imp::scripting::ParseFromArray;
-using ::imp::scripting::WebView;
 
 template <class T>
 inline jlong ToJava(T* p) {
-  return JniAllowlist<T, WebView>::ToJava(p);
+  return JniAllowlist<T, AndroidWebView>::ToJava(p);
 }
 
 template <class T>
 inline T* FromJava(jlong n) {
-  return JniAllowlist<T, WebView>::FromJava(n);
+  return JniAllowlist<T, AndroidWebView>::FromJava(n);
 }
 
 }  // namespace
@@ -48,7 +50,7 @@ JNI_METHOD(void, nPostMessage)
   jsize length = env->GetArrayLength(array);
   MessageToNative message = MessageToNative();
   if (ParseFromArray(bufferPtr, length, &message)) {
-    FromJava<WebView>(handle)->HandleMessage(message);
+    FromJava<AndroidWebView>(handle)->HandleMessage(message);
   }
 }
 

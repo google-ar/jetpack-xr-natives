@@ -39,6 +39,7 @@
 
 namespace imp {
 
+class Material;
 class TextureFactory;
 
 // A wrapper around a filament::Texture that automatically cleans it up. These
@@ -46,7 +47,7 @@ class TextureFactory;
 // and accessed using TexturePtr.
 class Texture {
  public:
-  ~Texture();
+  virtual ~Texture();
 
   // Returns the name of the texture.
   //
@@ -74,7 +75,22 @@ class Texture {
   // Returns the content security level of the texture.
   ContentSecurityLevel GetContentSecurityLevel() const;
 
- private:
+  // A function that can be used to update the texture assignment of a material.
+  using UpdateTextureFn = Invocable<void(absl::string_view sampler_name,
+                                         filament::Texture* texture)>;
+  // Should be called when the texture is assigned to a material.
+  // UpdateTextureFn allows the texture to "replace itself" with a new texture
+  // when the texture is updated. This is important for videos to allow the
+  // underlying texture to be replaced when the video produces a new frame.
+  virtual void OnAssignedToMaterial(const Material& material,
+                                    absl::string_view parameter_name,
+                                    UpdateTextureFn update_texture_fn) {};
+
+  // Should be called when the texture is unassigned from a material.
+  virtual void OnUnassignedFromMaterial(const Material& material,
+                                        absl::string_view parameter_name) {};
+
+ protected:
   Texture(BaseView& view, filament::Stream* stream, filament::Texture* texture,
           const filament::TextureSampler& sampler,
           ContentSecurityLevel security_level = ContentSecurityLevel::kNone);

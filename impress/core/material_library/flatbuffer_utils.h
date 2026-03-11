@@ -17,6 +17,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_SCHEMA_HELPERS_H_
 #define THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_SCHEMA_HELPERS_H_
 
+#include <cmath>
 #include <optional>
 
 #include "filament/filament/include/filament/TextureSampler.h"
@@ -52,7 +53,7 @@ std::optional<filament::TextureSampler> ConvertSampler(
                              schema->compare_mode()),
                          static_cast<filament::TextureSampler::CompareFunc>(
                              schema->compare_func()));
-  sampler.setAnisotropy(schema->anisotropy_log2());
+  sampler.setAnisotropy(1u << schema->anisotropy_log2());
   return sampler;
 }
 
@@ -81,7 +82,7 @@ CreateTextureSampler(flatbuffers::FlatBufferBuilder& builder,
           sampler.getCompareMode()),
       static_cast<typename TextureSamplerCreator::CompareFunc>(
           sampler.getCompareFunc()),
-      sampler.getAnisotropy());
+      std::ilogb(sampler.getAnisotropy()));
 }
 
 template <typename BoolSchema>

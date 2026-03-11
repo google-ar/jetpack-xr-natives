@@ -17,10 +17,10 @@
 
 #include <cstddef>
 #include <memory>
-#include <optional>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/log/check.h"
+#include "flatbuffers/allocator.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/common/robin_map.h"
 #include "core/split_engine/android/bridge_buffer.h"
@@ -37,7 +37,9 @@ namespace imp::split_engine {
 class SplitEngineSharedMemoryBridgeSenderBase
     : public imp::split_engine::SplitEngineBridgeSender {
  public:
-  SplitEngineSharedMemoryBridgeSenderBase(bool recycle_buffers);
+  using MessageType = SplitEngineBridgeSender::MessageType;
+
+  SplitEngineSharedMemoryBridgeSenderBase();
 
   SplitEngineSharedMemoryBridgeSenderBase(
       const SplitEngineSharedMemoryBridgeSenderBase&) = delete;
@@ -52,13 +54,12 @@ class SplitEngineSharedMemoryBridgeSenderBase
   void* CreateSharedMemoryBuffer(size_t size_in_bytes);
   void DestroySharedMemoryBuffer(void*);
 
-  void BeginMessageGroup(size_t size_bytes) override;
-  void EndMessageGroup() override;
-
-  bool IsMessageGroupActive() const override;
+  absl::StatusOr<MessageGroupId> BeginMessageGroup(
+      size_t size_bytes, MessageType message_type) override;
+  absl::Status EndMessageGroup(MessageGroupId group_id) override;
 
   std::unique_ptr<flatbuffers::FlatBufferBuilder> CreateFlatBufferBuilder(
-      size_t size_bytes) override;
+      MessageGroupId group_id, size_t size_bytes) override;
 
   absl::StatusOr<size_t> GetActiveMessageGroupCount() const override;
 
@@ -68,20 +69,20 @@ class SplitEngineSharedMemoryBridgeSenderBase
   virtual MessageGroupId GenerateMessageGroupId() = 0;
   virtual ClientId GetClientId() const = 0;
   virtual BufferHandleFactory& GetBufferHandleFactory() = 0;
-  virtual FlatbufferArenaAllocator& GetAllocator() = 0;
+  virtual ArenaAllocator& GetArenaAllocator() = 0;
+  flatbuffers::Allocator& GetFlatbuffersAllocator(MessageGroupId group_id);
 
-  const BridgeBuffer& GetActiveBridgeBuffer() const;
-  std::optional<MessageGroupId> GetActiveMessageGroupId() const;
-  std::optional<size_t> GetActiveMessageGroupSizeBytes() const;
+  const BridgeBuffer& GetBridgeBuffer(MessageGroupId group_id);
+  absl::StatusOr<size_t> GetMessageGroupSizeBytes(
+      MessageGroupId group_id) const;
 
  private:
-  const bool recycle_buffers_;
-  std::optional<MessageGroupId> active_message_group_id_ = std::nullopt;
-  std::optional<size_t> active_message_group_size_bytes_ = std::nullopt;
-  imp::RobinMap<void*, std::unique_ptr<BridgeBuffer>> bridge_buffers_;
-  BridgeBuffer* active_bridge_buffer_;
-  absl::flat_hash_map<MessageGroupId, FlatbufferArenaAllocator::ArenaHandle>
+  imp::RobinMap<const void*, std::unique_ptr<BridgeBuffer>> bridge_buffers_;
+  absl::flat_hash_map<MessageGroupId, ArenaAllocator::ArenaHandle>
       arena_handles_;
+
+  absl::flat_hash_map<MessageGroupId, size_t> message_group_id_to_size_bytes_;
+  absl::flat_hash_map<MessageGroupId, MessageType> message_group_types_;
 };
 
 }  // namespace imp::split_engine

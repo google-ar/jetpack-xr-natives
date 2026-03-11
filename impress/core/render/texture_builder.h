@@ -31,8 +31,10 @@
 #include "filament/filament/include/filament/Renderer.h"
 #include "filament/filament/include/filament/Texture.h"
 #include "filament/filament/include/filament/VertexBuffer.h"
+#include "core/assets/asset_ptr.h"
 #include "core/image/image_contents.h"
 #include "core/render/base_texture_builder.h"
+#include "core/render/image_asset.h"
 #include "core/render/safe_filament_texture_builder.h"
 #include "core/view/base_view.h"
 
@@ -57,6 +59,7 @@ class TextureBuilder : public BaseTextureBuilder {
 
   TextureBuilder& Width(uint32_t width) override;
   TextureBuilder& Height(uint32_t height) override;
+  TextureBuilder& Depth(uint32_t depth) override;
   TextureBuilder& Levels(uint8_t levels) override;
   TextureBuilder& Format(filament::backend::TextureFormat format) override;
   TextureBuilder& Sampler(filament::backend::SamplerType sampler) override;
@@ -68,6 +71,9 @@ class TextureBuilder : public BaseTextureBuilder {
 
  protected:
   TextureBuilder& ImageInternal(filament::Engine& engine,
+                                AssetPtr<ImageAsset> image,
+                                int image_index) override;
+  TextureBuilder& ImageInternal(filament::Engine& engine,
                                 image::ImageContents& image_contents,
                                 std::function<void()> callback,
                                 int32_t* out_levels) override;
@@ -75,7 +81,14 @@ class TextureBuilder : public BaseTextureBuilder {
  private:
   BaseView* view_;
   std::unique_ptr<BaseTextureBuilder> spy_;
+  // Wrapper around filament::Texture::Builder that handles errors and prevents
+  // Filament from panicking.
   SafeFilamentTextureBuilder builder_;
+
+  // Whether or not builder_.build() was called.
+  bool was_built_ = false;
+
+  // Texture or error from builder_.build().
   absl::StatusOr<filament::Texture* /*absl_nonnull*/ > texture_;
 
   std::string name_;

@@ -61,6 +61,7 @@ cc_library(
         ":split_engine_input_event_hit_info",
         "@com_google_impress//core/common:jni_helpers",
         "@com_google_impress//core/common:log",
+        "@com_google_impress//core/math",
         "@com_google_impress//core/ncsb",
         "@third_party//filament/libs:utils_hdrs",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),

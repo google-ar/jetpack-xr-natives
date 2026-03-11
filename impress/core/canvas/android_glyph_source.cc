@@ -23,13 +23,13 @@
 
 #include "core/common/log.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "core/canvas/fonts/android_font_font_holder.h"
 #include "core/canvas/fonts/font_holder.h"
 #include "core/canvas/scoped_canvas.h"
 #include "core/common/context.h"
 #include "core/common/jni_helpers.h"
 #include "core/common/trace.h"
-#include "core/math/vec.h"
 #include "core/text/text_metrics.proto.h"
 #include "core/view/platforms/android/wrappers/canvas.h"
 #include "core/view/platforms/android/wrappers/font.h"
@@ -60,7 +60,8 @@ class MethodWrapper : public JavaEnumWrapper<AndroidGlyphSource::Method> {
             env, "com/google/ar/imp/core/glyph/GlyphSource$Method") {}
 };
 
-AndroidGlyphSource::AndroidGlyphSource(const Context& context, Method method)
+AndroidGlyphSource::AndroidGlyphSource(const Context& context, Method method,
+                                       int cache_size_bytes)
     : JavaWrapper(context.GetJniEnv()),
       glyph_advance_class_(WrapJni(Env(), static_cast<jclass>(nullptr))) {
   const char* class_path = "com/google/ar/imp/core/glyph/GlyphSource";
@@ -79,7 +80,7 @@ AndroidGlyphSource::AndroidGlyphSource(const Context& context, Method method)
 
   jmethodID init =
       env->GetMethodID(Clazz(), "<init>",
-                       "(Lcom/google/ar/imp/core/glyph/GlyphSource$Method;)V");
+                       "(Lcom/google/ar/imp/core/glyph/GlyphSource$Method;I)V");
   if (env->ExceptionCheck()) {
     env->ExceptionClear();
     LOG_MISSING_DEPENDENCY_MESSAGE(ERROR);
@@ -92,7 +93,8 @@ AndroidGlyphSource::AndroidGlyphSource(const Context& context, Method method)
   {
     MethodWrapper method_wrapper(context.GetJniEnv());
     JniUniquePtr<jobject> local_self_ref = WrapJni(
-        env, env->NewObject(Clazz(), init, method_wrapper.GetEnum(method)));
+        env, env->NewObject(Clazz(), init, method_wrapper.GetEnum(method),
+                            cache_size_bytes));
     SetSelf(LocalToGlobalRef(std::move(local_self_ref)));
   }
 
@@ -102,6 +104,8 @@ AndroidGlyphSource::AndroidGlyphSource(const Context& context, Method method)
       GetMethodHandle("getTextGlyphs",
                       "(Ljava/lang/String;Landroid/graphics/Paint;)[Lcom/"
                       "google/ar/imp/core/glyph/GlyphAdvance;");
+  release_text_glyphs_ = GetMethodHandle("releaseTextGlyphs", "([I)V");
+  release_text_glyph_ = GetMethodHandle("releaseTextGlyph", "(I)V");
   get_combined_character_groups_ =
       GetMethodHandle("getCombinedCharacterGroups",
                       "(Ljava/lang/String;Landroid/graphics/Paint;)[I");
@@ -234,6 +238,28 @@ std::vector<ScopedCanvas::GlyphAdvance> AndroidGlyphSource::GetTextGlyphs(
   }
 
   return result;
+}
+
+void AndroidGlyphSource::ReleaseTextGlyphs(absl::Span<int> glyph_ids) {
+  IMP_TRACE();
+
+  if (!IsAvailable()) {
+    LOG_MISSING_DEPENDENCY_MESSAGE(FATAL);
+  }
+
+  if (glyph_ids.empty()) {
+    return;
+  }
+
+  if (glyph_ids.size() == 1) {
+    // Optimize for the single-element RAII wrapper case.
+    CallVoidMethod(release_text_glyph_, glyph_ids[0]);
+  } else {
+    JniUniquePtr<jintArray> glyph_ids_java =
+        CreateJniIntArray(Env(), glyph_ids);
+    CallVoidMethod(release_text_glyphs_, glyph_ids_java.get());
+  }
+  AssertNoException(Env());
 }
 
 void AndroidGlyphSource::DrawGlyph(android::Canvas& canvas, int glyph_id,

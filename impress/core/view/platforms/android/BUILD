@@ -82,7 +82,7 @@ cc_library(
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:platform",
         "@third_party//filament/filament/backend:virtual_machine_env",
-    ],
+    ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )
 

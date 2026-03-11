@@ -28,6 +28,7 @@
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/include/filament/Texture.h"
 #include "core/async/future.h"
@@ -203,6 +204,10 @@ FontInfo DesktopPlatformCanvasSource::GetFontInfo(
   font_info.set_leading(font_metrics.fLeading);
   font_info.set_line_spacing(-font_metrics.fAscent + font_metrics.fDescent);
   return font_info;
+}
+
+void DesktopPlatformCanvasSource::ReleaseTextGlyphs(absl::Span<int> glyph_ids) {
+  // No-op on desktop.
 }
 
 std::unique_ptr<ScopedCanvas> DesktopPlatformCanvasSource::StartDrawing(

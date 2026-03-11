@@ -50,9 +50,13 @@ struct TextureGenerationOptions {
 // Sampler options are parameters to change the sampling behavior of textures
 // created by the TextureFactory.
 struct TextureSamplerOptions {
-  using MinFilter = ::filament::TextureSampler::MinFilter;
-  using MagFilter = ::filament::TextureSampler::MagFilter;
-  using WrapMode = ::filament::TextureSampler::WrapMode;
+  using MinFilter = filament::TextureSampler::MinFilter;
+  using MagFilter = filament::TextureSampler::MagFilter;
+  using WrapMode = filament::TextureSampler::WrapMode;
+  using SamplerType = filament::Texture::Sampler;
+
+  // Optional override to the default sampler type.
+  std::optional<SamplerType> sampler_type = std::nullopt;
 
   // Determines how texture coordinates outside of [0,1] are handled.
   WrapMode wrap_mode = WrapMode::CLAMP_TO_EDGE;

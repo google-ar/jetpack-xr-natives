@@ -511,6 +511,31 @@ absl::Status CreateGenericMaterialSchemas(
                   *m.extensions.transmission->transmission_factor;
             }
           }
+
+          // KHR_materials_volume
+          if (m.extensions.volume) {
+            generic_material_parameters.volume.emplace();
+            // volume Texture.
+            MP_ASSIGN_OR_RETURN(
+                generic_material_parameters.volume->texture,
+                CreateGenericMaterialTextureParameter(
+                    builder, model, m.extensions.volume->volume_texture));
+
+            if (m.extensions.volume->thickness_factor.has_value()) {
+              generic_material_parameters.volume->thickness_factor =
+                  *m.extensions.volume->thickness_factor;
+            }
+            if (m.extensions.volume->attenuation_distance.has_value()) {
+              generic_material_parameters.volume->attenuation_distance =
+                  *m.extensions.volume->attenuation_distance;
+            }
+            if (m.extensions.volume->attenuation_color.size() == 3) {
+              generic_material_parameters.volume->attenuation_color = {
+                  m.extensions.volume->attenuation_color[0],
+                  m.extensions.volume->attenuation_color[1],
+                  m.extensions.volume->attenuation_color[2]};
+            }
+          }
         }
       }
 

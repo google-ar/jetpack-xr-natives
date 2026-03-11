@@ -22,7 +22,9 @@
 #include <memory>
 
 #include "absl/base/attributes.h"
+#include "absl/base/thread_annotations.h"
 #include "absl/status/status.h"
+#include "absl/synchronization/mutex.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/IndexBuffer.h"
 #include "filament/filament/include/filament/RenderableManager.h"
@@ -127,7 +129,7 @@ class Mesh {
   void EnableCollisionAccelerationStructure(bool enable);
 
   void DisableCollisionAccelerationStructure();
-  Bvh* GetCollisionAccelerationStructure() const;
+  Bvh* GetCollisionAccelerationStructure();
 
  private:
   Mesh(MeshGpuDataPtr mesh_data_gpu, MeshDataPtr mesh_data, const Box& aabb);
@@ -145,7 +147,7 @@ class Mesh {
   void RemoveSubmeshCount() { submesh_count_--; }
 
   // Returns true if the collision acceleration structure is enabled.
-  bool IsCollisionAccelerationStructureEnabled() const;
+  bool IsCollisionAccelerationStructureEnabled();
 
   // Schedules the building of the collision acceleration structure. Assumes
   // that the mesh data is available on the CPU.
@@ -164,7 +166,9 @@ class Mesh {
 
   Future<absl::Status> prepare_collision_acceleration_future_ =
       Future<absl::Status>(absl::OkStatus());
-  std::unique_ptr<Bvh> collision_acceleration_structure_;
+  absl::Mutex collision_acceleration_structure_mutex_;
+  std::unique_ptr<Bvh> collision_acceleration_structure_
+      ABSL_GUARDED_BY(collision_acceleration_structure_mutex_);
 
   friend class MeshFactory;
 };

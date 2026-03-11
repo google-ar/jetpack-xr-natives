@@ -208,6 +208,7 @@ OptionalError CreateModelEntityGraph(
                           VertexBufferId(part->vertex_buffer()),
                           IndexBufferId(part->index_buffer()),
                           MaterialId(part->material()),
+                          part->original_material_index(),
                           ModelData::PrimitiveType(part->primitive_type()),
                           std::move(materials_variants_mappings),
                           SkinningBufferId(part->skinning_buffer()),
@@ -292,8 +293,8 @@ OptionalError CreateModelEntityGraph(
         LightPunctualId(entity->light_punctual()),
         AudioEmitterId(entity->audio_emitter()), bounds, runtime_data,
         (entity->name() ? entity->name()->str() : ""), entity->original_index(),
-        entity->original_mesh_index(), node_visibility, node_selectability,
-        node_hoverability);
+        entity->original_mesh_index(), entity->original_skin_index(),
+        node_visibility, node_selectability, node_hoverability);
   }
   return NoError();
 }
@@ -575,7 +576,8 @@ OptionalError CreateModelSkeleton(const SkeletonInfo* skeleton,
 
 OptionalError CreateModelSkins(
     const flatbuffers::Vector<flatbuffers::Offset<schemas::SkinInfo>>* skins,
-    size_t bone_count, TypedVector<ModelData::SkinData>* out_skins) {
+    size_t bone_count, TypedVector<ModelData::SkinData>* out_skins,
+    absl::flat_hash_map<uint32_t, model::ModelData::SkinId>& skin_id_lookup) {
   for (const schemas::SkinInfo* skin : *skins) {
     TypedVector<ModelData::SampledJointData> sampled_joints;
     absl::c_transform(
@@ -686,7 +688,7 @@ OptionalError CreateModelSkins(
 
     auto pose_root = WeakEntityId{skin->pose_root()};
 
-    out_skins->push_back(SkinData{
+    skin_id_lookup[skin->original_index()] = out_skins->Append(SkinData{
         .sampled_joints = std::move(sampled_joints),
         .inverse_bind_poses = std::move(inverse_bind_poses),
         .joints = std::move(joints),
@@ -742,7 +744,8 @@ Future<absl::Status> ModelCreator::LoadAllInternal(
             MP_RETURN_IF_ERROR(CreateModelSkeleton(model->skeleton(), &skeleton_));
 
             MP_RETURN_IF_ERROR(CreateModelSkins(model->skins(),
-                                             skeleton_->bones.size(), &skins_));
+                                             skeleton_->bones.size(), &skins_,
+                                             skin_id_lookup_));
 
             lights_punctual_.reserve(model->lights_punctual()->size());
             for (const schemas::LightPunctualInfo* light :
@@ -955,10 +958,10 @@ absl::StatusOr<std::unique_ptr<model::ModelData>> ModelCreator::CreateModelData(
       std::move(*skeleton_), std::move(vertex_buffers_),
       std::move(index_buffers_), std::move(morph_target_buffers_),
       std::move(textures_), std::move(materials_),
-      std::move(material_id_lookup_), std::move(skinning_buffers_),
-      std::move(stored_vertex_data_), std::move(stored_index_data_),
-      std::move(material_config_info_), std::move(audio_emitters_),
-      std::move(audio_sources_), std::move(audios_),
+      std::move(material_id_lookup_), std::move(skin_id_lookup_),
+      std::move(skinning_buffers_), std::move(stored_vertex_data_),
+      std::move(stored_index_data_), std::move(material_config_info_),
+      std::move(audio_emitters_), std::move(audio_sources_), std::move(audios_),
       std::move(scene_audio_emitters_), std::move(behavior_),
       std::move(interactivity_)));
 

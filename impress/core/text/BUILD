@@ -69,9 +69,32 @@ imp_material(
     ],
 )
 
+imp_material(
+    name = "sliced_text_screen_space_material",
+    src = "sliced_text_screen_space.mat",
+    enable_metal_postprocessing = True,
+    includes = [
+        ":label_clip_space.glsl",
+        ":text_colors.glsl",
+        ":text_material_common",
+    ],
+)
+
+imp_material(
+    name = "sliced_text_material",
+    src = "sliced_text.mat",
+    enable_metal_postprocessing = True,
+    includes = [
+        ":text_colors.glsl",
+        ":text_material_common",
+    ],
+)
+
 imp_assets(
     name = "text_renderer_assets",
     srcs = [
+        ":sliced_text_material",
+        ":sliced_text_screen_space_material",
         ":text_material",
         ":text_screen_space_material",
     ],
@@ -138,22 +161,41 @@ cc_library(
     alwayslink = 1,
 )
 
+imp_material(
+    name = "blit_slice_material",
+    src = "blit_slice.mat",
+    enable_metal_postprocessing = True,
+)
+
+imp_assets(
+    name = "sliced_glyph_atlas_assets",
+    srcs = [
+        ":blit_slice_material",
+    ],
+    namespace = "imp::sliced_glyph_atlas_assets",
+)
+
 cc_library(
     name = "sliced_glyph_atlas",
     srcs = [
         "glyph_atlas_slice.cc",
         "sliced_glyph_atlas.cc",
+        "sliced_glyph_texture_manager.cc",
     ],
     hdrs = [
         "glyph_atlas_slice.h",
         "sliced_glyph_atlas.h",
+        "sliced_glyph_texture_manager.h",
     ],
     copts = imp_google3_copts(),
     deps = [
         ":glyph_emulator",
+        ":sliced_glyph_atlas_assets",
         ":text_helpers",
         ":text_metrics_cc_proto",
         "//core:config",
+        "//core/assets",
+        "//core/assets/material:material_asset",
         "//core/async:executor",
         "//core/async:future",
         "//core/atlas:atlas_packer",
@@ -166,6 +208,7 @@ cc_library(
         "//core/canvas/fonts:font_params_helper",
         "//core/canvas/fonts:font_params_proto_cc",
         "//core/canvas/fonts:system_font_provider",
+        "//core/common:bit_vector",
         "//core/common:hash",
         "//core/common:ref_counter",
         "//core/common:rememberer",
@@ -177,6 +220,7 @@ cc_library(
         "//core/render",
         "//core/view:base_view",
         "//core/view:view_events",
+        "//core/view/framework",
         "//core/view/utils:device",
         "//core/view/utils:string_map",
         "@com_google_absl//absl/algorithm:container",
@@ -191,6 +235,10 @@ cc_library(
         "@com_google_absl//absl/types:variant",
         "@com_google_impress//core/common:log",
         "@icu//icu4c/source/common:headers",
+        "@third_party//filament/filament:filament_hdrs",
+        "@third_party//filament/libs:filabridge_hdrs",
+        "@third_party//filament/libs:math_hdrs",
+        "@third_party//filament/libs:utils_hdrs",
     ] + if_dev_runtime([
         "//core/editor",
         "//core/editor:widget_ui_system",

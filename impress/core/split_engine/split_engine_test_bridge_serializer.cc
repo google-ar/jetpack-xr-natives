@@ -57,6 +57,8 @@ constexpr absl::string_view kSchemaDataDefaultEnvVar =
     "TEST_UNDECLARED_OUTPUTS_DIR";
 constexpr absl::string_view kSchemaTestDataDirectory =
     "third_party/impress/core/split_engine/schema_test_data";
+constexpr absl::string_view kGenerateSnapshotApiLevel =
+    "GENERATE_SNAPSHOT_API_LEVEL";
 }  // namespace
 
 TestSplitEngineSharedMemoryBridgeServiceImpl::
@@ -144,24 +146,47 @@ std::string SplitEngineTestBridgeSerializer::GetSnapshotDirWrite() {
     schema_data_out_dir = getenv(kSchemaDataDefaultEnvVar.data());
   }
 
-  return absl::StrFormat("%s/%s", schema_data_out_dir,
-                         snapshot_->schema_version);
+  return absl::StrFormat("%s/api_%s/", schema_data_out_dir,
+                         GetApiLevelString());
 }
 
 std::string SplitEngineTestBridgeSerializer::GetSnapshotDirRead() {
-  return absl::StrFormat("file://%s/%s/%s/%s", ::testing::SrcDir(), "google3",
-                         kSchemaTestDataDirectory, snapshot_->schema_version);
+  return absl::StrFormat("file://%s/%s/%s/api_%s/", ::testing::SrcDir(),
+                         "google3", kSchemaTestDataDirectory,
+                         GetApiLevelString());
+}
+
+std::string SplitEngineTestBridgeSerializer::GetApiLevelString() {
+  return snapshot_->api_level == android_xr::kSplitEngineExperimentalApiLevel
+             ? "Experimental"
+             : absl::StrCat(snapshot_->api_level);
 }
 
 void SplitEngineTestBridgeSerializer::TakeSnapshot() {
-  if (snapshot_->schema_version ==
-      android_xr::kSplitEngineSchemaVersionCurrent) {
+  // By default, snapshots are loaded from disk for all API levels except the
+  // experimental API level which never gets a snapshot - it always runs the
+  // latest code.
+  // The schema_test_data/generate_schema_test_data.sh script sets this env var
+  // to the API level to generate the snapshot for - this is how the snapshots
+  // are updated when releasing a new API level.
+  if (ShouldCreateSnapshotForCurrentApiLevel()) {
     CreateSnapshot();
-  } else {
+  } else if (snapshot_->api_level !=
+             android_xr::kSplitEngineExperimentalApiLevel) {
     PlaybackSnapshot();
   }
   snapshot_ = std::nullopt;
   snapshot_index_++;
+}
+
+bool SplitEngineTestBridgeSerializer::ShouldCreateSnapshotForCurrentApiLevel() {
+  // Check if the environment variable set by the generate_schema_test_data.sh
+  // script is set and matchest the API level of the current test.
+  char* api_level_env_var = getenv(kGenerateSnapshotApiLevel.data());
+  if (!api_level_env_var) {
+    return false;
+  }
+  return snapshot_->api_level == std::stoi(api_level_env_var);
 }
 
 void SplitEngineTestBridgeSerializer::CreateSnapshot() {
@@ -170,16 +195,19 @@ void SplitEngineTestBridgeSerializer::CreateSnapshot() {
       snapshot_->fbb->CreateVector(snapshot_->message_sequence.data(),
                                    snapshot_->message_sequence.size())));
   absl::Status result =
-      SaveBinary(absl::StrCat(GetSnapshotDirWrite(), "_", GetDataFilename()),
+      SaveBinary(absl::StrCat(GetSnapshotDirWrite(), GetDataFilename()),
                  snapshot_->fbb->GetBufferPointer(), snapshot_->fbb->GetSize());
   if (!result.ok()) {
     IMP_LOG(imp::FATAL) << "Failed to save message: " << result.ToString();
+  } else {
+    IMP_LOG(imp::INFO) << "Saved snapshot to "
+              << absl::StrCat(GetSnapshotDirWrite(), GetDataFilename());
   }
 }
 
 void SplitEngineTestBridgeSerializer::PlaybackSnapshot() {
   std::string snapshot_filename =
-      absl::StrCat(GetSnapshotDirRead(), "_", GetDataFilename());
+      absl::StrCat(GetSnapshotDirRead(), GetDataFilename());
   absl::StatusOr<resources::Resource> resource =
       testing::BaseExecutorTestHelper::MoveFuture(
           view_.GetAssetManager().LoadResource(snapshot_filename));

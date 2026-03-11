@@ -695,6 +695,24 @@ const RobinSet<NodeHandle>* GltfRenderer::GetNodesFromOriginalMeshIndex(
   return nullptr;
 }
 
+absl::StatusOr<int16_t> GltfRenderer::GetOriginalMaterialIndex(
+    model::EntityId entity_id, size_t primitive_index) const {
+  const ModelData& model_data = GetGltfAsset()->GetModelData();
+  if (!model_data.Entities().IsValid(entity_id)) {
+    return absl::InvalidArgumentError(
+        "The entity id provided is not valid in finding the original material "
+        "index.");
+  }
+  const ModelData::EntityData::Proxy entity_data =
+      model_data.Entities()[entity_id];
+  const std::vector<ModelData::PartData> entity_parts = entity_data.parts;
+  if (primitive_index >= entity_parts.size()) {
+    return absl::InvalidArgumentError(
+        "The primitive index provided is out of bounds for the entity.");
+  }
+  return entity_parts[primitive_index].original_material_index;
+}
+
 std::vector<float> GltfRenderer::GetMeshMorphTargetWeights(
     size_t mesh_index) const {
   if (mesh_morph_target_weights_.contains(mesh_index)) {

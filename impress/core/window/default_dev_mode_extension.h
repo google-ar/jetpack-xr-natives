@@ -29,11 +29,13 @@
 #include "core/common/debug_draw.h"
 #include "core/common/typed_id.h"
 #include "core/common/typed_vector.h"
+#include "core/config.h"
 #include "core/math/vec.h"
 #include "core/view/base_view.h"
 #include "core/window/clipboard/clipboard_handler.h"
 #include "core/window/filament_host.h"
 #include "core/window/filament_view.h"
+#include "core/window/imgui_renderer.h"
 
 struct ImFont;
 
@@ -51,10 +53,13 @@ class DefaultDevModeExtension : public FilamentHost::DevModeExtension {
   static constexpr FontId kMonoFont = FontId(1);
   // Get a specific font pointer, or NULL for invalid FontId's
 
-  explicit DefaultDevModeExtension(BaseView* view) { view_ = view; }
+  explicit DefaultDevModeExtension(BaseView& view) : base_view_(view) {}
   ~DefaultDevModeExtension() override = default;
   // Loads packaged fonts into ImGui and sets up its bindings to filament.
-  absl::Status Setup(FilamentHost* host) override;
+  absl::Status Setup(FilamentHost& host) override;
+  // Called after Setup() to allow for delayed initialization after the view is
+  // ready.
+  absl::Status PostSetup() override;
   // Destroys all created resources.
   void Cleanup() override;
   // Examines a mouse event and returns true if it was consumed by ImGui.
@@ -93,18 +98,25 @@ class DefaultDevModeExtension : public FilamentHost::DevModeExtension {
 
   FilamentHost* GetHost() { return host_; }
   filament::View* GetFilamentView() { return ui_view_.Get(); }
-  filagui::ImGuiHelper* GetImGuiHelper() { return imgui_helper_.get(); }
+
+  ImGuiRenderer* GetImGuiRenderer() { return imgui_renderer_.get(); }
   void SetCustomDebugDrawMaterial(
       filament::Material* custom_debug_draw_material);
+
+  BaseView& base_view_;
+  ImGuiContext* imgui_context_ = nullptr;
 
  private:
   void ProcessImGuiCommands();
 
+  // Pointer to the host that owns this dev mode extension.
   FilamentHost* host_ = nullptr;
+
   // Optional view for developer UI.
   detail::FilamentView ui_view_;
   // Optional support for developer UI.
-  std::unique_ptr<filagui::ImGuiHelper> imgui_helper_;
+
+  std::unique_ptr<ImGuiRenderer> imgui_renderer_;
   std::vector<ImGuiCommand> pending_imgui_commands_;
   // Optional support for debug geometry.
   std::unique_ptr<debug_draw::Fixture> debug_draw_;
@@ -118,7 +130,6 @@ class DefaultDevModeExtension : public FilamentHost::DevModeExtension {
   uint2 cached_screen_size_;
   float2 cached_subpixel_ratio_;
   bool is_enabled_ = true;
-  BaseView* view_;
 };
 
 }  // namespace imp::window

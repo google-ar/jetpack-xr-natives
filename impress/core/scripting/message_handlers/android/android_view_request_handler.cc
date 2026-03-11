@@ -64,32 +64,21 @@ AndroidViewGetAttachedViewRequestHandler::
     AndroidViewGetAttachedViewRequestHandler(BaseView& base_view)
     : base_view_(base_view) {}
 
-Future<absl::Status> AndroidViewGetAttachedViewRequestHandler::HandleMessage(
+Future<void*> AndroidViewGetAttachedViewRequestHandler::HandleMessage(
     const GetAttachedViewRequest& message) {
-  IMP_LOG(imp::FATAL) << "Wrong version of HandleMessage was called.";
-  return Future<absl::Status>(
-      absl::InternalError("Wrong version of HandleMessage was called."));
-}
-
-Future<absl::Status> AndroidViewGetAttachedViewRequestHandler::HandleMessage(
-    const GetAttachedViewRequest& message, const scripting::PlatformArgs& args,
-    scripting::PlatformArgs& out) {
   if (!message.target) {
     IMP_LOG(imp::FATAL) << "Invalid node";
-    return Future<absl::Status>(absl::InvalidArgumentError("Invalid node"));
+    return Future<void*>(absl::InvalidArgumentError("Invalid node"));
   }
   ComponentHandle<AndroidViewRenderer> android_view_renderer =
       message.target->GetComponent<AndroidViewRenderer>();
   if (!android_view_renderer) {
-    // It is still required to populate the out list or the scripting
-    // infrastructure will crash.
-    out.push_back(nullptr);
-    return Future<absl::Status>(
+    return Future<void*>(
         absl::InvalidArgumentError("The given node has no child with an "
                                    "attached AndroidViewRenderer component."));
   }
-  out.push_back(static_cast<void*>(android_view_renderer->GetAndroidView()));
-  return Future<absl::Status>(absl::OkStatus());
+  return Future<void*>(
+      static_cast<void*>(android_view_renderer->GetAndroidView()));
 }
 
 AndroidViewUpdateColliderRequestHandler::
@@ -98,14 +87,6 @@ AndroidViewUpdateColliderRequestHandler::
 
 Future<absl::Status> AndroidViewUpdateColliderRequestHandler::HandleMessage(
     const UpdateSurfaceTextureQuadColliderRequest& message) {
-  IMP_LOG(imp::FATAL) << "Wrong version of HandleMessage was called.";
-  return Future<absl::Status>(
-      absl::InternalError("Wrong version of HandleMessage was called."));
-}
-
-Future<absl::Status> AndroidViewUpdateColliderRequestHandler::HandleMessage(
-    const UpdateSurfaceTextureQuadColliderRequest& message,
-    const scripting::PlatformArgs& args) {
   if (!message.target) {
     return Future<absl::Status>(absl::InvalidArgumentError("Invalid node"));
   }

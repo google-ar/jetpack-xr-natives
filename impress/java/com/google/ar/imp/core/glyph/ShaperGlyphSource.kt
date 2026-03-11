@@ -153,6 +153,10 @@ internal class ShaperGlyphSource : IGlyphSource {
     return result.toTypedArray()
   }
 
+  override fun releaseTextGlyph(glyphId: Int) {
+    // Shaper doesn't cache anything.
+  }
+
   override fun getCombinedCharacterGroups(text: String, paint: Paint): IntArray {
     val bidi = BidiRuns.create(text)
     var outIndex = 0

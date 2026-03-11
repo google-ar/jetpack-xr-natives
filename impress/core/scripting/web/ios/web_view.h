@@ -17,6 +17,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SCRIPTING_WEB_IOS_WEB_VIEW_H_
 #define THIRD_PARTY_IMPRESS_CORE_SCRIPTING_WEB_IOS_WEB_VIEW_H_
 
+#include "core/scripting/proto/bridge.proto.imp.h"
 #include "core/scripting/web/ios/IMPWebView.h"
 #include "core/scripting/web/web_view.h"
 
@@ -26,16 +27,16 @@ namespace imp::scripting {
 class IosWebView : public WebView {
  public:
   // Construct a new IosWebView given an Imp BaseView and params.
-  IosWebView(const Context& context, const WebViewParams& params,
+  IosWebView(ScriptMessageHandler& script_message_handler,
+             const Context& context, const WebViewParams& params,
              BufferAccess injection_script);
-  IosWebView(void* external_web_view, BufferAccess injection_script);
+  IosWebView(ScriptMessageHandler& script_message_handler,
+             void* external_web_view, BufferAccess injection_script);
 
   IosWebView(const IosWebView&) = delete;
   IosWebView& operator=(const IosWebView&) = delete;
 
   ~IosWebView();
-
-  void PostMessage(const MessageToScript& message) override;
 
   void LoadInjectionScript() override;
 

@@ -22,6 +22,7 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "core/async/future.h"
 #include "core/canvas/android_glyph_source.h"
 #include "core/canvas/platform_canvas_source.h"
@@ -44,9 +45,11 @@ namespace imp {
 // Implementation of CanvasSource for Android.
 class AndroidPlatformCanvasSource : public PlatformCanvasSource {
  public:
-  AndroidPlatformCanvasSource(Context context,
-                              AndroidGlyphSource::Method glyph_method,
-                              bool use_hardware_rendering = true);
+  AndroidPlatformCanvasSource(
+      Context context, AndroidGlyphSource::Method glyph_method,
+      bool use_hardware_rendering = true,
+      int glyph_cache_size_bytes =
+          PlatformCanvasSource::kDefaultGlyphCacheSizeBytes);
 
   bool IsFeatureSupported(ScopedCanvas::Feature feature) override;
 
@@ -81,6 +84,8 @@ class AndroidPlatformCanvasSource : public PlatformCanvasSource {
   std::vector<ScopedCanvas::GlyphAdvance> GetTextGlyphs(
       absl::string_view text,
       const ScopedCanvas::TextOptions& text_options) override;
+
+  void ReleaseTextGlyphs(absl::Span<int> glyph_ids) override;
 
   FontInfo GetFontInfo(const ScopedCanvas::TextOptions& text_options) override;
 

@@ -17,7 +17,6 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_SPLIT_ENGINE_TEXTURE_BUILDER_H_
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_SPLIT_ENGINE_TEXTURE_BUILDER_H_
 
-#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <vector>
@@ -28,20 +27,36 @@
 #include "filament/filament/include/filament/IndexBuffer.h"
 #include "filament/filament/include/filament/Renderer.h"
 #include "filament/filament/include/filament/VertexBuffer.h"
-#include "flatbuffers/buffer.h"
-#include "flatbuffers/flatbuffer_builder.h"
-#include "flatbuffers/vector.h"
+#include "core/assets/asset_ptr.h"
 #include "core/image/image_contents.h"
 #include "core/render/base_texture_builder.h"
 #include "core/split_engine/split_engine_serializer.h"
-#include "core/split_engine/split_engine_texture_serializer.h"
-#include "split_engine/schemas/split_engine_data_generated.h"
 
 namespace imp::split_engine {
 
-class SplitEngineTextureBuilder : public SplitEngineTextureSerializer,
-                                  public BaseTextureBuilder {
+class SplitEngineTextureBuilder : public BaseTextureBuilder {
  public:
+  struct State {
+    State() = default;
+    State(State&& other) noexcept = default;
+    State& operator=(State&& other) noexcept = default;
+    State(const State&) = delete;
+    State& operator=(const State&) = delete;
+
+    uint64_t texture_id = 0;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    uint8_t levels = 0;
+    filament::backend::TextureFormat format =
+        filament::backend::TextureFormat::RGB8;
+    filament::Texture::Sampler sampler = filament::Texture::Sampler::SAMPLER_2D;
+    bool mips = false;
+    std::vector<filament::backend::PixelBufferDescriptor> image_descriptors;
+    AssetPtr<ImageAsset> image;
+
+    bool finalized = false;
+  };
+
   explicit SplitEngineTextureBuilder(
       SplitEngineSerializer& serializer) noexcept;
   SplitEngineTextureBuilder(SplitEngineTextureBuilder const& rhs) noexcept =
@@ -54,6 +69,7 @@ class SplitEngineTextureBuilder : public SplitEngineTextureSerializer,
 
   SplitEngineTextureBuilder& Width(uint32_t width) override;
   SplitEngineTextureBuilder& Height(uint32_t height) override;
+  SplitEngineTextureBuilder& Depth(uint32_t depth) override;
   SplitEngineTextureBuilder& Levels(uint8_t levels) override;
   SplitEngineTextureBuilder& Format(
       filament::backend::TextureFormat format) override;
@@ -61,41 +77,25 @@ class SplitEngineTextureBuilder : public SplitEngineTextureSerializer,
       filament::backend::SamplerType sampler) override;
   SplitEngineTextureBuilder& GenerateMipmaps(filament::Engine& engine) override;
   SplitEngineTextureBuilder& Name(absl::string_view name) override;
+
   void Finalize(filament::Texture* texture) override;
 
-  flatbuffers::Offset<android_xr::schemas::Texture> SerializeTexture(
-      filament::Texture& texture, flatbuffers::FlatBufferBuilder& fbb) override;
-  std::vector<size_t> GetTextureBufferSizes() override;
-
  protected:
+  SplitEngineTextureBuilder& ImageInternal(filament::Engine& engine,
+                                           AssetPtr<ImageAsset> image,
+                                           int image_index) override;
   SplitEngineTextureBuilder& ImageInternal(
       filament::Engine& engine, image::ImageContents& image_contents,
       std::function<void()> callback, int32_t* out_levels = nullptr) override;
 
  private:
-  using ImageParamsOffset =
-      flatbuffers::Offset<android_xr::schemas::ImageParams>;
-  using ImageParamsArray =
-      flatbuffers::Offset<flatbuffers::Vector<ImageParamsOffset>>;
-  using PixelBufferOffset =
-      flatbuffers::Offset<android_xr::schemas::PixelBuffer>;
-  using PixelBufferArray =
-      flatbuffers::Offset<flatbuffers::Vector<PixelBufferOffset>>;
-
-  ImageParamsArray CreateFlatbufferImageParams(
-      flatbuffers::FlatBufferBuilder& fbb);
-  PixelBufferArray CreateFlatbufferPixelBuffers(
-      flatbuffers::FlatBufferBuilder& fbb);
-
   SplitEngineSerializer* serializer_;
-  uint32_t width_ = 0;
-  uint32_t height_ = 0;
-  uint8_t levels_ = 0;
-  filament::backend::TextureFormat format_ =
-      filament::backend::TextureFormat::RGB8;
-  filament::Texture::Sampler sampler_ = filament::Texture::Sampler::SAMPLER_2D;
-  bool mips_ = false;
-  std::vector<filament::backend::PixelBufferDescriptor> image_descriptors_;
+  State state_;
+
+  // TODO: (broken link) - delete the callback.
+  // Almost all callsites are setting this callback to an empty lambda.
+  // Remaining callsite uses this callback to track when the image was uploaded
+  // which is clearly a duplication of PixelBufferDescriptor's callback.
   std::function<void()> images_released_callback_;
 };
 

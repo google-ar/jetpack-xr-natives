@@ -37,14 +37,20 @@
 #include "core/common/resource_helpers.h"
 #include "core/common/trace.h"
 #include "core/common/typed_vector.h"
+#include "core/config.h"
 #include "core/input/key_codes.h"
 #include "core/math/vec.h"
 #include "core/window/clipboard/clipboard_handler.h"
+#include "core/window/filagui_imgui_renderer.h"
 #include "core/window/filament_host.h"
 #include "core/window/filament_host_input.h"
 #include "core/window/filament_view.h"
 #include "core/window/imp_dev_resources.h"
 #include "mediapipe/framework/port/status_macros.h"
+
+#if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(OPENGL) && IMP_RUNTIME(DEV)
+#include "core/window/open_gl_imgui_renderer.h"
+#endif
 
 namespace imp::window {
 
@@ -95,18 +101,36 @@ ImFont* DefaultDevModeExtension::LoadFont(const BufferAccess& font_data,
       font_data.Size(), size, &font_config);
 }
 
-absl::Status DefaultDevModeExtension::Setup(FilamentHost* host) {
-  host_ = host;
-  filament::Engine* engine = host->GetEngine();
-  filament::Scene* scene = host->GetScene();
+absl::Status DefaultDevModeExtension::PostSetup() {
+  // the OpenGLImGuiRenderer is initialized here because it depends on the
+  //  SplitEngineSerializer, and on the Android platform, it depends on the
+  //  view which is only available after setup.
+  if (base_view_.GetSplitEngineSerializer()) {
+#if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(OPENGL) && IMP_RUNTIME(DEV)
+    imgui_renderer_ =
+        std::make_unique<OpenGLImGuiRenderer>(base_view_, "", imgui_context_);
+#else
+    IMP_LOG(imp::WARNING) << "Editor rendering for SplitEngine App is only supported on "
+                    "Android with OpenGL backend.";
+#endif
+  }
 
-  MP_RETURN_IF_ERROR(ui_view_.Setup(engine, "ui"));
+  if (imgui_renderer_ == nullptr) {
+    return absl::InternalError("Failed to create ImGuiRenderer");
+  }
+
+  return absl::OkStatus();
+}
+
+absl::Status DefaultDevModeExtension::Setup(FilamentHost& host) {
+  host_ = &host;
+  MP_RETURN_IF_ERROR(ui_view_.Setup(host.GetEngine(), "ui"));
   ui_view_.Get()->setPostProcessingEnabled(false);
   ui_view_.Get()->setShadowingEnabled(false);
-  ImGuiContext* imgui_context = ImGui::CreateContext();
   // Resource setup.
   RegisterPackagedResources(imp_dev_resources_create());
 
+  imgui_context_ = ImGui::CreateContext();
   ImGuiIO& io = ImGui::GetIO();
   io.Fonts->Clear();
 
@@ -123,8 +147,15 @@ absl::Status DefaultDevModeExtension::Setup(FilamentHost* host) {
 
   io.FontDefault = fonts_[kDefaultFont];
 
-  imgui_helper_ = std::make_unique<filagui::ImGuiHelper>(engine, ui_view_.Get(),
-                                                         "", imgui_context);
+  // The imgui_helper which is wrapped by the FilaguiImGuiRenderer has no status
+  //  to return, and, is therefore, initialized here.
+  if (!base_view_.GetSplitEngineSerializer()) {
+    imgui_renderer_ = std::make_unique<FilaguiImGuiRenderer>(
+        ui_view_.Get(), base_view_, "", imgui_context_);
+    if (imgui_renderer_ == nullptr) {
+      return absl::InternalError("Failed to create ImGuiRenderer");
+    }
+  }
 
   io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX);
   io.MouseDown[0] = false;
@@ -132,15 +163,19 @@ absl::Status DefaultDevModeExtension::Setup(FilamentHost* host) {
   io.MouseDown[2] = false;
 
   debug_draw_ = std::make_unique<debug_draw::Fixture>(
-      engine, scene, custom_debug_draw_material_);
+      host_->GetEngine(), host_->GetScene(), custom_debug_draw_material_);
 
   return absl::OkStatus();
 }
 
 void DefaultDevModeExtension::Cleanup() {
-  imgui_helper_.reset();
-  debug_draw_.reset();
-  if (host_) {
+  if (imgui_renderer_) {
+    imgui_renderer_.reset();
+  }
+  if (debug_draw_) {
+    debug_draw_.reset();
+  }
+  if (ui_view_.Get() && host_->GetEngine()) {
     ui_view_.Cleanup(host_->GetEngine());
   }
   if (render_target_) {
@@ -156,7 +191,7 @@ bool DefaultDevModeExtension::TryConsumeMouseInput(
   // TODO: Remove once all uses are satisfied by
   // imp::PointerInputHandler.
   // Don't consume input if rendering to a texture.
-  if (imgui_helper_ && !render_target_texture_) {
+  if (imgui_renderer_ && !render_target_texture_) {
     ImGuiMouseInputProcessor processor{ImGui::GetIO()};
     absl::visit(processor, latest_input).IgnoreError();
     if (ImGui::GetIO().WantCaptureMouse) return true;
@@ -173,12 +208,12 @@ void DefaultDevModeExtension::PreRender(absl::Duration previous_vsync,
   // for the sake of imgui efficiency, as cached widgets are kept alive.
   absl::Duration delta_time =
       next_vsync - (last_vsync_ ? *last_vsync_ : previous_vsync);
-  if (imgui_helper_ && (delta_time != absl::ZeroDuration() || force)) {
+
+  if (imgui_renderer_ && (delta_time != absl::ZeroDuration() || force)) {
     float delta_time_seconds = std::clamp(
         static_cast<float>(absl::ToDoubleSeconds(delta_time)),
         kMinimumImGuiFrameDelta, std::numeric_limits<float>::infinity());
-    imgui_helper_->render(delta_time_seconds, [this](filament::Engine* engine,
-                                                     filament::View* view) {
+    imgui_renderer_->RenderImGui(delta_time_seconds, [this]() {
       // Processes submitted commands.
       ImGuiRender();
       ProcessImGuiCommands();
@@ -217,7 +252,10 @@ void DefaultDevModeExtension::ApplyTextureRenderTarget(
                                 texture);
   render_target_ = render_target_builder.build(*host_->GetEngine());
   ui_view_.Get()->setRenderTarget(render_target_);
-  imgui_helper_->setDisplaySize(texture->getWidth(), texture->getHeight());
+  if (imgui_renderer_) {
+    imgui_renderer_->SetDisplaySize(texture->getWidth(), texture->getHeight(),
+                                    /*scale_x*/ 1.0f, /*scale_y*/ 1.0f, false);
+  }
 }
 
 void DefaultDevModeExtension::OffscreenRender() {
@@ -229,7 +267,7 @@ void DefaultDevModeExtension::OffscreenRender() {
   if (!render_target_texture_) {
     return;
   }
-  if (imgui_helper_) {
+  if (imgui_renderer_) {
     host_->GetRenderer()->render(ui_view_.Get());
   }
 }
@@ -243,7 +281,7 @@ void DefaultDevModeExtension::Render() {
   if (render_target_texture_) {
     return;
   }
-  if (imgui_helper_) {
+  if (imgui_renderer_) {
     host_->GetRenderer()->render(ui_view_.Get());
   }
 }
@@ -269,8 +307,10 @@ void DefaultDevModeExtension::UpdateCameraAndViewport(uint2 screen_size,
   ui_view_.GetViewCamera()->setProjection(filament::Camera::Projection::ORTHO,
                                           0.0, virtual_size.x, virtual_size.y,
                                           0.0, 0.0, 1.0);
-  imgui_helper_->setDisplaySize(virtual_size.x, virtual_size.y,
-                                subpixel_ratio.x, subpixel_ratio.y);
+  if (imgui_renderer_) {
+    imgui_renderer_->SetDisplaySize(virtual_size.x, virtual_size.y,
+                                    subpixel_ratio.x, subpixel_ratio.y, false);
+  }
 }
 
 void DefaultDevModeExtension::QueueImGuiCommandBlock(ImGuiCommand cmd) {
@@ -287,10 +327,8 @@ void DefaultDevModeExtension::SetCustomDebugDrawMaterial(
 
   // If called after setup, recreate the debug draw fixture.
   if (debug_draw_) {
-    filament::Engine* engine = host_->GetEngine();
-    filament::Scene* scene = host_->GetScene();
     debug_draw_ = std::make_unique<debug_draw::Fixture>(
-        engine, scene, custom_debug_draw_material_);
+        host_->GetEngine(), host_->GetScene(), custom_debug_draw_material_);
   }
 }
 

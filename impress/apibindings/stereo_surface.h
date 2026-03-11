@@ -18,11 +18,15 @@
 #define THIRD_PARTY_IMPRESS_APIBINDINGS_STEREO_SURFACE_H_
 #include <sys/types.h>
 
+#include <cstdint>
 #include <memory>
+#include <optional>
 #include <variant>
+#include <vector>
 
 #include "absl/log/check.h"
 #include "absl/status/status.h"
+#include "filament/filament/include/filament/RenderableManager.h"
 #include "core/async/future.h"
 #include "core/math/vec.h"
 #include "core/media/media_color_space.h"
@@ -54,7 +58,25 @@ class StereoSurface : public Component {
     float radius = 1.0f;
   };
 
-  using CanvasShape = std::variant<std::monostate, Quad, Sphere, Hemisphere>;
+  struct CustomMesh {
+    // Left eye vertex positions.
+    std::vector<float> left_positions;
+    // Left eye vertex texture coordinates.
+    std::vector<float> left_texcoords;
+    // Left eye vertex indices.
+    std::optional<std::vector<uint32_t>> left_indices;
+    // Right eye vertex positions.
+    std::optional<std::vector<float>> right_positions;
+    // Right eye vertex texture coordinates.
+    std::optional<std::vector<float>> right_texcoords;
+    // Right eye vertex indices.
+    std::optional<std::vector<uint32_t>> right_indices;
+    // Draw mode.
+    filament::RenderableManager::PrimitiveType draw_mode;
+  };
+
+  using CanvasShape =
+      std::variant<std::monostate, Quad, Sphere, Hemisphere, CustomMesh>;
 
   absl::Status Setup(MediaStereoMode stereo_mode,
                      ContentSecurityLevel content_security_level,

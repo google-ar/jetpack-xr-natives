@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 
 #include "absl/strings/ascii.h"
@@ -40,7 +41,7 @@ std::string SerializeToBase64(const uint8_t* data, uint32_t size) {
   return encoded;
 }
 
-bool DeserializeBase64(const std::string& string_b64, std::string* dest) {
+bool DeserializeBase64(absl::string_view string_b64, std::string* dest) {
   return absl::Base64Unescape(string_b64, dest);
 }
 

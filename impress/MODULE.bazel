@@ -42,6 +42,7 @@ single_version_override(
 bazel_dep(name = "apple_support", version = "1.15.1", repo_name = "build_bazel_apple_support")
 bazel_dep(name = "aspect_bazel_lib", version = "1.16.3")
 bazel_dep(name = "bazel_skylib", version = "1.7.1")
+bazel_dep(name = "boringssl", version = "0.20251110.0")
 bazel_dep(name = "flatbuffers", version = "25.2.10")
 bazel_dep(name = "glog", version = "0.5.0", repo_name = "com_google_glog")
 bazel_dep(name = "jsoncpp", version = "1.9.6")
@@ -161,3 +162,20 @@ local_path_override(
     module_name = "third_party",
     path = "../third_party",
 )
+
+
+bazel_dep(name = "toolchains_llvm", version = "1.6.0")
+
+llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm", dev_dependency = True)
+llvm.toolchain(
+    name = "glinux_cc_toolchain",
+    # Roughly matches the LLVM version that the Soong build uses.
+    llvm_version = "19.1.0",
+)
+use_repo(llvm, "glinux_cc_toolchain")
+
+register_toolchains(
+    "@glinux_cc_toolchain//:all",
+    dev_dependency = True,
+)
+

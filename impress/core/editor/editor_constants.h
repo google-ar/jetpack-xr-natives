@@ -51,6 +51,8 @@ static constexpr LayoutConfig kDefaultXrLayoutConfig{
 static constexpr absl::string_view kSavedLayoutIniFile =
     "/third_party/impress/core/editor/layout/saved_layout.ini";
 
+static constexpr absl::string_view kEntireTexture = "Entire Texture";
+
 }  // namespace imp::editor
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_EDITOR_EDITOR_CONSTANTS_H_

@@ -35,6 +35,7 @@
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "flatbuffers/verifier.h"
+#include "core/common/filament_status_helpers.h"
 #include "core/ipc/message_pipe.h"
 #include "core/materials/compiler/runtime_material_compiler_config.h"
 #include "core/materials/compiler/schemas/material_compiler_ipc_generated.h"
@@ -44,7 +45,7 @@ namespace imp {
 namespace {
 // Convert the target API enum from the IPC schema to the Filament material
 // builder enum.
-inline filamat::MaterialBuilder::TargetApi ToMaterialBuilderTargetApi(
+inline filamat::MaterialBuilder::TargetApi UnpackTargetApi(
     schemas::TargetApi target_api) {
   switch (target_api) {
     case schemas::TargetApi::NONE:
@@ -64,7 +65,7 @@ inline filamat::MaterialBuilder::TargetApi ToMaterialBuilderTargetApi(
 
 // Convert the platform enum from the IPC schema to the Filament material
 // builder enum.
-inline filamat::MaterialBuilder::Platform ToMaterialBuilderPlatform(
+inline filamat::MaterialBuilder::Platform UnpackPlatform(
     schemas::Platform platform) {
   switch (platform) {
     case schemas::Platform::Desktop:
@@ -73,6 +74,20 @@ inline filamat::MaterialBuilder::Platform ToMaterialBuilderPlatform(
       return filamat::MaterialBuilder::Platform::MOBILE;
     case schemas::Platform::All:
       return filamat::MaterialBuilder::Platform::ALL;
+  }
+}
+
+// Convert the absl::StatusCode to the IPC schema ErrorStatusCode.
+inline schemas::ErrorStatusCode PackStatusCode(absl::StatusCode status_code) {
+  switch (status_code) {
+    case absl::StatusCode::kInvalidArgument:
+      return schemas::ErrorStatusCode::InvalidArgument;
+    case absl::StatusCode::kInternal:
+      return schemas::ErrorStatusCode::Internal;
+    case absl::StatusCode::kUnimplemented:
+      return schemas::ErrorStatusCode::Unsupported;
+    default:
+      IMP_LOG(imp::FATAL) << "Unexpected Abseil StatusCode: " << status_code;
   }
 }
 }  // namespace
@@ -131,7 +146,7 @@ ipc::MessagePipe::OnMessageResult MaterialCompilerService::OnMessage(
   }
 
   if (!status.ok()) {
-    SendErrorResponse(request->operation_id(), status.message());
+    SendErrorResponse(request->operation_id(), status);
   }
 
   return result;
@@ -171,9 +186,11 @@ absl::StatusOr<std::string> MaterialCompilerService::CompileMaterial(
   filamat::MaterialBuilder builder;
   std::ostringstream compiler_output;
 
+  // TODO: Consider exposing config in the schema. We need the
+  // client to be able to set some config including platform and target api.
   RuntimeMaterialCompilerConfig config(source_material_string, compiler_output);
-  config.SetPlatform(ToMaterialBuilderPlatform(platform));
-  config.SetTargetApi(ToMaterialBuilderTargetApi(target_api));
+  config.SetPlatform(UnpackPlatform(platform));
+  config.SetTargetApi(UnpackTargetApi(target_api));
 
   matp::Config::Input* input = config.getInput();
   if (input == nullptr) {
@@ -185,16 +202,17 @@ absl::StatusOr<std::string> MaterialCompilerService::CompileMaterial(
   }
   std::unique_ptr<const char[]> buffer = input->read();
 
-  bool template_sub_succeed =
-      parser.processTemplateSubstitutions(config, size, buffer).isOk();
-  if (!template_sub_succeed) {
-    return absl::InvalidArgumentError(
-        "Failed to process template substitutions");
+  if (absl::Status template_sub_status = FilamentStatusToAbslStatus(
+          parser.processTemplateSubstitutions(config, size, buffer));
+      !template_sub_status.ok()) {
+    return template_sub_status;
   }
 
   builder.init();
-  if (!parser.parse(builder, config, size, buffer).isOk()) {
-    return absl::InvalidArgumentError("Failed to parse material");
+  if (absl::Status parse_status = FilamentStatusToAbslStatus(
+          parser.parse(builder, config, size, buffer));
+      !parse_status.ok()) {
+    return parse_status;
   }
 
   utils::JobSystem js;
@@ -231,12 +249,13 @@ absl::Status MaterialCompilerService::SendResponse(
   return absl::OkStatus();
 }
 
-void MaterialCompilerService::SendErrorResponse(
-    uint64_t operation_id, absl::string_view error_message) {
+void MaterialCompilerService::SendErrorResponse(uint64_t operation_id,
+                                                absl::Status error_status) {
   flatbuffers::FlatBufferBuilder builder;
   flatbuffers::Offset<schemas::ErrorResponse> error_response =
-      schemas::CreateErrorResponse(builder,
-                                   builder.CreateString(error_message));
+      schemas::CreateErrorResponse(
+          builder, PackStatusCode(error_status.code()),
+          builder.CreateString(error_status.message()));
   flatbuffers::Offset<schemas::Response> response_offset =
       schemas::CreateResponse(builder, schemas::ResponseType::ErrorResponse,
                               error_response.Union(), operation_id);

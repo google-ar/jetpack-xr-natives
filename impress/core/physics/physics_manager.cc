@@ -226,18 +226,22 @@ void PhysicsManager::FastForwardSimulation(float duration) {
 }
 
 #if IMP_RUNTIME(DEV)
-void PhysicsManager::RegisterCollidableVisualizer(
-    NodeHandle node, imp::Invocable<void()> visualizer) {
-  collidable_visualizer_map_[node] = std::move(visualizer);
+void PhysicsManager::RegisterDebugVisualizer(
+    NodeHandle node, imp::Invocable<void()> visualizer,
+    absl::string_view visualizer_name) {
+  collidable_visualizer_map_[node][visualizer_name] = std::move(visualizer);
 }
 
-void PhysicsManager::UnregisterCollidableVisualizer(NodeHandle node) {
-  collidable_visualizer_map_.erase(node);
+void PhysicsManager::UnRegisterDebugVisualizer(
+    NodeHandle node, absl::string_view visualizer_name) {
+  collidable_visualizer_map_[node].erase(visualizer_name);
 }
 
-void PhysicsManager::DrawCollidables() {
-  for (const auto& [node, visualizer] : collidable_visualizer_map_) {
-    visualizer();
+void PhysicsManager::DrawDebug() {
+  for (const auto& [node, visualizers] : collidable_visualizer_map_) {
+    for (const auto& [visualizer_name, visualizer] : visualizers) {
+      visualizer();
+    }
   }
 }
 #endif

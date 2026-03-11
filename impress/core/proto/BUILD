@@ -74,6 +74,7 @@ cc_binary(
         "//core/common:hash",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -369,7 +370,10 @@ proto_library(
 
 proto_library(
     name = "test_proto",
-    srcs = ["test.proto"],
+    srcs = [
+        "test.proto",
+        "test_edition_2023.proto",
+    ],
     deps = [
         ":imp_proto",
         ":test_standard_proto",

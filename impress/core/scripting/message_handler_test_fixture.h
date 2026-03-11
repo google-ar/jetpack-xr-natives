@@ -27,14 +27,13 @@
 #include "core/ncsb/node_handle.h"
 #include "core/scripting/base_message_handler.h"
 #include "core/scripting/scripting_system.h"
-#include "core/scripting/web/mock_web_view.h"
 #include "testing/test_view.h"
 #include "testing/view_fixture.h"
 
 // TODO: Don't use the "testing" namespace.
 namespace imp::scripting::testing {
 
-using OptionalResponse = ::imp::scripting::BaseMessageHandler::OptionalResponse;
+using Response = ::imp::scripting::BaseMessageHandler::Response;
 
 // Generic fixture for testing message handlers.
 //
@@ -52,10 +51,7 @@ class GenericMessageHandlerTestFixture
  protected:
   GenericMessageHandlerTestFixture()
       : imp::testing::GenericViewFixture<TView>(std::make_unique<Context>()) {
-    auto web_view = std::make_unique<MockWebView>();
-    webview_ = web_view.get();
-    scripting_system_ = std::make_unique<ScriptingSystem>(
-        this->GetView()->GetContext(), this->GetView(), std::move(web_view));
+    scripting_system_ = std::make_unique<ScriptingSystem>(*this->GetView());
   }
 
   explicit GenericMessageHandlerTestFixture(std::unique_ptr<Context> context)
@@ -81,7 +77,6 @@ class GenericMessageHandlerTestFixture
   }
 
   std::unique_ptr<ScriptingSystem> scripting_system_;
-  MockWebView* webview_;
   std::unique_ptr<THandler> handler_;
 };
 

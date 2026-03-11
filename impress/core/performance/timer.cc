@@ -20,7 +20,7 @@
 namespace imp {
 
 imp::Timer::Timer(const absl::string_view name) : name_(name), stopped_(false) {
-  indices_ = Profiler::AddSample(name_);
+  id_ = Profiler::AddSample(name_);
 }
 
 imp::Timer::~Timer() {
@@ -34,9 +34,8 @@ void imp::Timer::Stop() {
     return;
   }
   stopped_ = true;
-  if (indices_.sample_id != -1) {
-    Profiler::RecordCurrentFrameSampleEndTime(indices_.sample_frame_index,
-                                              indices_.sample_id);
+  if (id_ != Profiler::kInvalidProfileResultId) {
+    Profiler::RecordSampleEndTime(id_);
   }
 }
 }  // namespace imp

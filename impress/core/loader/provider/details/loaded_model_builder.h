@@ -344,6 +344,9 @@ class LoadedModelBuilder {
   // Returns the index of a previously added material given the lookup index.
   MaterialId GetMaterial(uint16_t lookup_index) const;
 
+  // Returns the index of a previously added skin given the lookup index.
+  SkinId GetSkin(uint32_t lookup_index) const;
+
   // Returns a mask of all the vertex attributes required by a given material.
   std::optional<VertexAttributeMask> GetRequiredAttributes(MaterialId material);
 
@@ -370,7 +373,7 @@ class LoadedModelBuilder {
       std::vector<PartData> parts, std::optional<filament::Box> bounds,
       std::optional<RuntimeData> runtime, int child_count,
       absl::string_view name, uint16_t original_index = 0,
-      int original_mesh_index = -1,
+      int original_mesh_index = -1, int original_skin_index = -1,
       std::optional<NodeVisibility> node_visibility = std::nullopt,
       std::optional<NodeSelectability> node_selectability = std::nullopt,
       std::optional<NodeHoverability> node_hoverability = std::nullopt);
@@ -379,7 +382,8 @@ class LoadedModelBuilder {
   using WeakSkinId = imp::TypedId<model::SkinData, int>;
 
   // Adds a SkinInfo to the model and returns an ID to it.
-  absl::StatusOr<SkinId> AddSkin(model::ModelData::SkinData skin_data);
+  absl::StatusOr<SkinId> AddSkin(uint32_t lookup_index,
+                                 model::ModelData::SkinData skin_data);
 
   absl::Status AddSkinEntity(
       SkinId skin, EntityId target,
@@ -461,6 +465,7 @@ class LoadedModelBuilder {
   RobinMap<std::string, TextureId> dest_from_name_texture_cache_;
   RobinMap<uint16_t, TextureId> texture_from_lookup_index_;
   RobinMap<uint16_t, MaterialId> material_from_lookup_index_;
+  RobinMap<uint32_t, SkinId> skin_from_lookup_index_;
 };
 
 }  // namespace imp::loader::details

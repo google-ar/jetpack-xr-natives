@@ -20,6 +20,13 @@ import "core/math/math.proto";
 import "core/physics/collidable_type.proto";
 import "core/proto/imp.proto";
 
+// Message for holding 3 boolean values, typically for axes.
+message Bool3 {
+  bool x = 1;
+  bool y = 2;
+  bool z = 3;
+}
+
 // Serialized data for RigidBody.
 message RigidBodyState {
   // Decides how the rigid body will react to collision, physics law and direct
@@ -43,15 +50,13 @@ message RigidBodyState {
   physics.CollidableType collidable_type = 4;
   Float3 gravity = 5 [(imp.optional_type) = ABSL_OPTIONAL];
   float restitution = 6;
-  Float3 linear_velocity = 7;
-  Float3 angular_velocity = 8;
-  // The angular factor in bullet controls the percentage of angular velocity
-  // applied. Setting angular factor to 0 means the correponding axis is locked.
-  Float3 angular_factor = 9 [(imp.optional_type) = ABSL_OPTIONAL];
+  Float3 linear_velocity = 7 [(imp.editor_control) = { read_only: {} }];
+  Float3 angular_velocity = 8 [(imp.editor_control) = { read_only: {} }];
 
-  // The linear factor in bullet controls the percentage of linear velocity
-  // applied. Setting linear factor to 0 means the correponding axis is locked.
-  Float3 linear_factor = 10 [(imp.optional_type) = ABSL_OPTIONAL];
+  // Flags to freeze position along x, y, or z axes.
+  Bool3 lock_position = 9 [(imp.optional_type) = ABSL_OPTIONAL];
+  // Flags to freeze rotation around x, y, or z axes.
+  Bool3 lock_rotation = 10 [(imp.optional_type) = ABSL_OPTIONAL];
 
   // Simulates drag / air resistance on the angular velocity of the rigid
   // body, essentially slowing down the velocity over time even without

@@ -17,8 +17,13 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SCRIPTING_WEB_WASM_WEB_VIEW_H_
 #define THIRD_PARTY_IMPRESS_CORE_SCRIPTING_WEB_WASM_WEB_VIEW_H_
 
+#include "absl/strings/string_view.h"
+#include "core/common/buffer_access.h"
+#include "core/common/context.h"
 #include "core/common/rememberer.h"
+#include "core/scripting/proto/bridge.proto.imp.h"
 #include "core/scripting/web/web_view.h"
+#include "core/view/base_view.h"
 #include "core/view/framework/view.h"
 
 namespace imp::scripting {
@@ -26,15 +31,17 @@ namespace imp::scripting {
 // The native implementation of Imp WebView on Web-Assembly (WASM).
 class WasmWebView : public WebView, public Rememberer {
  public:
+  // Handles an incoming message from script by passing it to the scripting
+  // system. Invokes the JavaScriptEntryPoint.incoming.postMessage() method with
+  // the response.
+  static void HandleMessage(BaseView& view, absl::string_view message);
+
   // Construct a new WasmWebView given an Imp BaseView and params.
   WasmWebView(const Context& context, const WebViewParams& params,
               BufferAccess injection_script);
-  WasmWebView(void* external_web_view, BufferAccess injection_script);
 
   WasmWebView(const WasmWebView&) = delete;
   WasmWebView& operator=(const WasmWebView&) = delete;
-
-  void PostMessage(const MessageToScript& message) override;
 
   void LoadInjectionScript() override;
 

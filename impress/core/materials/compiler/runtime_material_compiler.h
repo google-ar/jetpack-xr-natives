@@ -24,6 +24,7 @@
 #include "core/assets/material/material_asset.h"
 #include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
+#include "core/materials/compiler/cache/material_cache.h"
 #include "core/materials/compiler/material_compiler_client.h"
 #include "core/materials/compiler/schemas/material_compiler_ipc_generated.h"
 #include "core/view/base_view.h"
@@ -39,8 +40,11 @@ class RuntimeMaterialCompiler {
   using TargetApi = schemas::TargetApi;
 
   RuntimeMaterialCompiler(BaseView& view,
-                          std::unique_ptr<MaterialCompilerClient> native_client)
-      : view_(view), native_client_(std::move(native_client)) {}
+                          std::unique_ptr<MaterialCompilerClient> native_client,
+                          std::unique_ptr<MaterialCache> cache)
+      : view_(view),
+        native_client_(std::move(native_client)),
+        cache_(std::move(cache)) {}
 
   virtual ~RuntimeMaterialCompiler() = default;
 
@@ -55,6 +59,7 @@ class RuntimeMaterialCompiler {
  private:
   BaseView& view_;
   std::unique_ptr<MaterialCompilerClient> native_client_;
+  std::unique_ptr<MaterialCache> cache_;
 };
 }  // namespace imp
 

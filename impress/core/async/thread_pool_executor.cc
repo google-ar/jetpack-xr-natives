@@ -169,7 +169,7 @@ ThreadPoolExecutor::ThreadPoolExecutor(Executor *foreground_executor)
 ThreadPoolExecutor::~ThreadPoolExecutor() { Shutdown(); }
 
 std::optional<Invocable<void()>> ThreadPoolExecutor::WaitForTask() {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
 
   while (task_scheduler_->IsEmpty() && !finished_) {
     condvar_.Wait(&mu_);
@@ -202,7 +202,7 @@ bool ThreadPoolExecutor::ProcessNextRequest() {
   Executor::SetCurrentExecutor(nullptr);
 
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     callback_counter_--;
   }
 
@@ -212,7 +212,7 @@ bool ThreadPoolExecutor::ProcessNextRequest() {
 TaskId ThreadPoolExecutor::ScheduleInvocable(Invocable<void()> invocable,
                                              int task_priority) {
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     if (finished_) {
       return kInvalidTaskId;
     }
@@ -220,7 +220,7 @@ TaskId ThreadPoolExecutor::ScheduleInvocable(Invocable<void()> invocable,
 
   TaskId task_id;
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     MP_ASSIGN_OR_RETURN(
         task_id, task_scheduler_->PushTask(std::move(invocable), task_priority),
         kInvalidTaskId);
@@ -230,7 +230,7 @@ TaskId ThreadPoolExecutor::ScheduleInvocable(Invocable<void()> invocable,
 }
 
 TaskId ThreadPoolExecutor::ReserveTaskId() {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   if (finished_) {
     return kInvalidTaskId;
   }
@@ -241,7 +241,7 @@ bool ThreadPoolExecutor::ScheduleWithReservedTaskId(
     TaskId reserved_task_id, imp::Invocable<void()> function,
     int task_priority) {
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     if (finished_) {
       return false;
     }
@@ -257,7 +257,7 @@ bool ThreadPoolExecutor::ScheduleWithReservedTaskId(
 
 absl::Status ThreadPoolExecutor::UpdateTaskPriority(TaskId task_id,
                                                     int task_priority) {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   if (finished_) {
     return absl::OkStatus();
   }
@@ -265,7 +265,7 @@ absl::Status ThreadPoolExecutor::UpdateTaskPriority(TaskId task_id,
 }
 
 absl::StatusOr<int> ThreadPoolExecutor::GetTaskPriority(TaskId task_id) {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   if (finished_) {
     return absl::FailedPreconditionError("Executor has shutdown.");
   }
@@ -275,7 +275,7 @@ absl::StatusOr<int> ThreadPoolExecutor::GetTaskPriority(TaskId task_id) {
 void ThreadPoolExecutor::Shutdown() {
   std::vector<imp::Invocable<void()>> tasks;
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     if (finished_) {
       return;
     }
@@ -326,7 +326,7 @@ bool ThreadPoolExecutor::Pump(bool drain) {
 
   {
     // Check if any tasks are scheduled.
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     if (task_scheduler_->IsEmpty() && callback_counter_ == 0) {
       return false;
     }
@@ -337,14 +337,14 @@ bool ThreadPoolExecutor::Pump(bool drain) {
 }
 
 void ThreadPoolExecutor::WaitUntilDrained() {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   while (!task_scheduler_->IsEmpty() || callback_counter_ != 0) {
     wait_condvar_.Wait(&mu_);
   }
 }
 
 int ThreadPoolExecutor::GetPendingTaskCount() {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   if (finished_) {
     return 0;
   }

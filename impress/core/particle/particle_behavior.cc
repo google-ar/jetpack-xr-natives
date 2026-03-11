@@ -16,34 +16,73 @@
 
 #include "core/particle/particle_behavior.h"
 
+#include "core/math/vec.h"
+#include "core/ncsb/node.h"
+#include "core/ncsb/node_handle.h"
+#include "core/particle/particle_emitter_state.proto.imp.h"
 #include "core/particle/particle_instance.h"
-#include "core/view/utils/frame_time.h"
 
 namespace imp {
 
+ParticleBehavior::ParticleBehavior(NodeHandle emitter_node,
+                                   const ParticleConfig& particle_config)
+    : emitter_node_(emitter_node),
+      default_lifetime_seconds_(
+          particle_config.lifetime_in_seconds.value_or(0.0f)),
+      default_velocity_(particle_config.velocity.value_or(kZero3)),
+      default_acceleration_(particle_config.acceleration.value_or(kZero3)),
+      default_scale_(particle_config.scale.value_or(kOne3)) {}
+
+void ParticleBehavior::SetDefaultValues(ParticleInstance& particle_instance) {
+  // Default position of a particle is the emitter node position.
+  particle_instance.SetPosition(emitter_node_->GetWorldPosition());
+
+  // Set particle lifetime.
+  if (particle_instance.HasRemainingLifetimeSeconds()) {
+    particle_instance.SetRemainingLifetimeSeconds(default_lifetime_seconds_);
+  }
+
+  // Set velocity and acceleration.
+  if (particle_instance.HasVelocity()) {
+    particle_instance.SetVelocity(default_velocity_);
+  }
+  if (particle_instance.HasAcceleration()) {
+    particle_instance.SetAcceleration(default_acceleration_);
+  }
+
+  // Set the scale.
+  if (particle_instance.HasScale()) {
+    particle_instance.SetScale(default_scale_);
+  }
+}
+
 ParticleBehavior::UpdateResult ParticleBehavior::UpdateParticle(
-    const FrameTime& frame_time, ParticleInstance& particle_instance) {
+    float delta_seconds, ParticleInstance& particle_instance) {
   // Lifetime is the most common reason a particle will expire, check it first.
   if (particle_instance.HasRemainingLifetimeSeconds()) {
-    UpdateResult result = UpdateLifetime(frame_time, particle_instance);
+    UpdateResult result = UpdateLifetime(delta_seconds, particle_instance);
     if (result != ParticleBehavior::UpdateResult::kActive) {
       return result;
     }
   }
 
-  // TODO: (broken link) - Support movement behavior.
+  // Update movement, dependent on Velocity, Acceleration will be updated if
+  // it is also defined.
+  if (particle_instance.HasVelocity()) {
+    UpdateMovement(delta_seconds, particle_instance);
+  }
+
   // TODO: (broken link) - Support billboarding behavior.
-  // TODO: (broken link) - Support scaling behavior.
   // TODO: (broken link) - Support alpha behavior.
 
   return UpdateResult::kActive;
 }
 
 ParticleBehavior::UpdateResult ParticleBehavior::UpdateLifetime(
-    const FrameTime& frame_time, ParticleInstance& particle_instance) {
+    float delta_seconds, ParticleInstance& particle_instance) {
   // Update the particle's remaining lifetime.
   float seconds = particle_instance.GetRemainingLifetimeSeconds();
-  seconds -= frame_time.GetDeltaSeconds();
+  seconds -= delta_seconds;
   particle_instance.SetRemainingLifetimeSeconds(seconds);
 
   // If the lifetime has run out, notify the caller that this particle may now
@@ -53,6 +92,22 @@ ParticleBehavior::UpdateResult ParticleBehavior::UpdateLifetime(
   }
 
   return ParticleBehavior::UpdateResult::kActive;
+}
+
+void ParticleBehavior::UpdateMovement(float delta_seconds,
+                                      ParticleInstance& particle_instance) {
+  // Read velocity once, it may also be modified by acceleration.
+  float3 velocity = particle_instance.GetVelocity();
+
+  // Update position.
+  particle_instance.SetPosition(particle_instance.GetPosition() +
+                                velocity * delta_seconds);
+
+  // If acceleration is also defined, update velocity.
+  if (particle_instance.HasAcceleration()) {
+    particle_instance.SetVelocity(
+        velocity + particle_instance.GetAcceleration() * delta_seconds);
+  }
 }
 
 }  // namespace imp

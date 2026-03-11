@@ -20,30 +20,29 @@
 #include <cstddef>
 #include <vector>
 
-#include "filament/filament/include/filament/Engine.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "split_engine/schemas/split_engine_data_generated.h"
 
 namespace imp::split_engine {
 
-// An interface for SplitEngine to use to serialize textures to a provided
+// An interface for SplitEngine to use to serialize a texture to a provided
 // flatbuffer builder. This separates the flatbuffer allocation and
 // serialization logic.
 class SplitEngineTextureSerializer {
  public:
   virtual ~SplitEngineTextureSerializer() = default;
 
-  // Serializes a given texture to the provided flatbuffer builder, and returns
-  // the offset of the serialized texture in the buffer.
+  // Serializes underlying texture to the provided flatbuffer builder, and
+  // returns the offset of the serialized texture in the buffer.
   virtual flatbuffers::Offset<android_xr::schemas::Texture> SerializeTexture(
-      filament::Texture& texture, flatbuffers::FlatBufferBuilder& builder) = 0;
+      flatbuffers::FlatBufferBuilder& builder) const noexcept = 0;
 
   // Returns a vector of sizes for each of the
   // filament::backend::PixelBufferDescriptor underlying the texture to be
   // serialized. This information is sufficient to calculate the buffer space
   // needed to serialize the texture.
-  virtual std::vector<size_t> GetTextureBufferSizes() = 0;
+  virtual std::vector<size_t> GetTextureBufferSizes() const noexcept = 0;
 };
 
 }  // namespace imp::split_engine

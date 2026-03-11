@@ -17,8 +17,11 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_PARTICLE_PARTICLE_EMITTER_H_
 #define THIRD_PARTY_IMPRESS_CORE_PARTICLE_PARTICLE_EMITTER_H_
 
+#include "absl/status/status.h"
+#include "core/async/future.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/isf_info.h"
+#include "core/particle/particle_controller.h"
 #include "core/particle/particle_emitter_state.proto.imp.h"
 #include "core/view/utils/frame_time.h"
 
@@ -29,10 +32,12 @@ namespace imp {
 // proto.
 class ParticleEmitter : public Component {
  public:
-  void Update(const FrameTime& frame_time) {};
+  Future<absl::Status> SetupWithState();
+  void Update(const FrameTime& frame_time);
 
  private:
   ParticleEmitterState state_;
+  OwnedParticleControllerPtr controller_;
 
  public:
   using IsfInfo = IsfInfo<&ParticleEmitter::state_>;

@@ -49,6 +49,13 @@ CustomMaterial::CustomMaterial(filament::MaterialInstance* material_instance,
 }
 
 CustomMaterial::~CustomMaterial() {
+  // Ensure to call OnUnassignedFromMaterial on all textures before destroying
+  // the material instance.
+  for (auto& [parameter_name, texture] :
+       parameters_to_owned_or_borrowed_textures_) {
+    texture->OnUnassignedFromMaterial(*this, parameter_name);
+  }
+
   if (engine_ && material_instance_) {
     engine_->destroy(material_instance_);
   }
@@ -257,9 +264,15 @@ void CustomMaterial::SetParameter(absl::string_view parameter_name,
 void CustomMaterial::SetParameter(
     absl::string_view parameter_name, const imp::Texture* texture,
     std::optional<filament::TextureSampler> sampler_override) {
-  material_instance_->setParameter(
+  // Unassign a previously assigned owned or borrowed texture if it exists.
+  auto it = parameters_to_owned_or_borrowed_textures_.find(parameter_name);
+  if (it != parameters_to_owned_or_borrowed_textures_.end()) {
+    it->second->OnUnassignedFromMaterial(*this, parameter_name);
+  }
+
+  GetFilamentMaterialInstance()->setParameter(
       parameter_name.data(), parameter_name.size(), texture->GetTexture(),
-      sampler_override.value_or(texture->GetSampler()));
+      sampler_override ? *sampler_override : texture->GetSampler());
 
   parameters_to_raw_textures_.insert_or_assign(std::string(parameter_name),
                                                texture);
@@ -276,32 +289,58 @@ void CustomMaterial::SetParameter(
 void CustomMaterial::SetParameter(
     absl::string_view parameter_name, OwnedTexturePtr texture,
     std::optional<filament::TextureSampler> sampler_override) {
-  material_instance_->setParameter(
-      parameter_name.data(), parameter_name.size(), texture->GetTexture(),
-      sampler_override.value_or(texture->GetSampler()));
-
-  parameters_to_owned_or_borrowed_textures_.insert_or_assign(
-      std::string(parameter_name),
-      OwnedOrBorrowedPtr<Texture>(std::move(texture)));
-  parameters_to_raw_textures_.erase(parameter_name);
+  SetOwnedOrBorrowedTexture(parameter_name, std::move(texture),
+                            sampler_override);
 }
 
 void CustomMaterial::SetParameter(
     absl::string_view parameter_name, BorrowedTexturePtr texture,
     std::optional<filament::TextureSampler> sampler_override) {
-  material_instance_->setParameter(
-      parameter_name.data(), parameter_name.size(), texture->GetTexture(),
-      sampler_override.value_or(texture->GetSampler()));
+  SetOwnedOrBorrowedTexture(parameter_name, std::move(texture),
+                            sampler_override);
+}
+
+void CustomMaterial::SetOwnedOrBorrowedTexture(
+    absl::string_view parameter_name, OwnedOrBorrowedTexturePtr texture,
+    std::optional<filament::TextureSampler> sampler_override) {
+  // Unassign a previously assigned owned or borrowed texture if it exists.
+  auto it = parameters_to_owned_or_borrowed_textures_.find(parameter_name);
+  if (it != parameters_to_owned_or_borrowed_textures_.end()) {
+    it->second->OnUnassignedFromMaterial(*this, parameter_name);
+  }
+
+  filament::TextureSampler sampler =
+      sampler_override ? *sampler_override : texture->GetSampler();
+
+  Texture::UpdateTextureFn update_texture_fn =
+      [this, sampler](absl::string_view parameter_name,
+                      filament::Texture* texture) {
+        GetFilamentMaterialInstance()->setParameter(
+            parameter_name.data(), parameter_name.size(), texture, sampler);
+      };
+  update_texture_fn(parameter_name, texture->GetTexture());
+  texture->OnAssignedToMaterial(*this, parameter_name,
+                                std::move(update_texture_fn));
 
   parameters_to_owned_or_borrowed_textures_.insert_or_assign(
-      std::string(parameter_name),
-      OwnedOrBorrowedPtr<Texture>(std::move(texture)));
+      std::string(parameter_name), std::move(texture));
   parameters_to_raw_textures_.erase(parameter_name);
 }
 
 bool CustomMaterial::HasParameter(absl::string_view name) {
   return GetFilamentMaterialInstance()->getMaterial()->hasParameter(
       std::string(name).c_str());
+}
+
+absl::string_view CustomMaterial::GetParameterTransformName(
+    absl::string_view sampler_name) const {
+  const char* transform_name =
+      material_instance_->getMaterial()->getParameterTransformName(
+          std::string(sampler_name).c_str());
+  if (transform_name) {
+    return absl::string_view(transform_name);
+  }
+  return {};
 }
 
 CustomMaterial::HeldTextureType CustomMaterial::GetAssignedTextureType(

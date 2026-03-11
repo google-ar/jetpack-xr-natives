@@ -24,27 +24,17 @@ public final class ApiRequest<RequestT extends MessageLite> {
   private final String requestTypeUrl;
   private final RequestT request;
   private final List<Object> args;
-  private final List<Object> out;
 
   public ApiRequest(String requestTypeUrl, RequestT request) {
     this.requestTypeUrl = requestTypeUrl;
     this.request = request;
     this.args = null;
-    this.out = null;
   }
 
   public ApiRequest(String requestTypeUrl, RequestT request, List<Object> args) {
     this.requestTypeUrl = requestTypeUrl;
     this.request = request;
     this.args = args;
-    this.out = null;
-  }
-
-  public ApiRequest(String requestTypeUrl, RequestT request, List<Object> args, List<Object> out) {
-    this.requestTypeUrl = requestTypeUrl;
-    this.request = request;
-    this.args = args;
-    this.out = out;
   }
 
   public String requestTypeUrl() {
@@ -57,9 +47,5 @@ public final class ApiRequest<RequestT extends MessageLite> {
 
   public List<Object> args() {
     return args;
-  }
-
-  public List<Object> out() {
-    return out;
   }
 }

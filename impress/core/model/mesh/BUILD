@@ -128,6 +128,7 @@ cc_library(
         "//core/view:base_view",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/synchronization",
         "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
     ],

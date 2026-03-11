@@ -19,13 +19,17 @@
 #ifndef TNT_FILAMENT_BACKEND_PLATFORM_H
 #define TNT_FILAMENT_BACKEND_PLATFORM_H
 
+#include "filament/libs/utils/include/utils/CString.h"
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/Invocable.h"
+#include "filament/libs/utils/include/utils/Mutex.h"
 
 #include <stddef.h>
 #include <stdint.h>
 
 #include <atomic>
+#include <memory>
+#include <mutex>
 
 namespace filament::backend {
 
@@ -70,6 +74,9 @@ public:
         ExternalImageHandle& operator=(ExternalImageHandle const& rhs) noexcept;
         ExternalImageHandle& operator=(ExternalImageHandle&& rhs) noexcept;
 
+        bool operator==(const ExternalImageHandle& rhs) const noexcept {
+            return mTarget == rhs.mTarget;
+        }
         explicit operator bool() const noexcept { return mTarget != nullptr; }
 
         ExternalImage* UTILS_NULLABLE get() noexcept { return mTarget; }
@@ -90,6 +97,113 @@ public:
     };
 
     using ExternalImageHandleRef = ExternalImageHandle const&;
+
+    struct CompositorTiming {
+        /** duration in nanosecond since epoch of std::steady_clock */
+        using time_point_ns = int64_t;
+        /** duration in nanosecond on the std::steady_clock */
+        using duration_ns = int64_t;
+        static constexpr time_point_ns INVALID = -1;    //!< value not supported
+        /**
+         * The timestamp [ns] since epoch of the next time the compositor will begin composition.
+         * This is effectively the deadline for when the compositor must receive a newly queued
+         * frame.
+         */
+        time_point_ns compositeDeadline;
+
+        /**
+         * The time delta [ns] between subsequent composition events.
+         */
+        duration_ns compositeInterval;
+
+        /**
+         * The time delta [ns] between the start of composition and the expected present time of
+         * that composition. This can be used to estimate the latency of the actual present time.
+         */
+        duration_ns compositeToPresentLatency;
+
+        /**
+         * The timestamp [ns] since epoch of the system's expected presentation time.
+         * INVALID if not supported.
+         */
+        time_point_ns expectedPresentTime;
+
+        /**
+         * The timestamp [ns] since epoch of the current frame's start (i.e. vsync)
+         * INVALID if not supported.
+         */
+        time_point_ns frameTime;
+
+        /**
+         * The timestamp [ns] since epoch of the current frame's deadline
+         * INVALID if not supported.
+         */
+        time_point_ns frameTimelineDeadline;
+    };
+
+    struct FrameTimestamps {
+        /** duration in nanosecond since epoch of std::steady_clock */
+        using time_point_ns = int64_t;
+        static constexpr time_point_ns INVALID = -1;    //!< value not supported
+        static constexpr time_point_ns PENDING = -2;    //!< value not yet available
+
+        /**
+         * The time the application requested this frame be presented.
+         * If the application does not request a presentation time explicitly,
+         * this will correspond to buffer's queue time.
+         */
+        time_point_ns requestedPresentTime;
+
+        /**
+         * The time when all the application's rendering to the surface was completed.
+         */
+        time_point_ns acquireTime;
+
+        /**
+         * The time when the compositor selected this frame as the one to use for the next
+         * composition. This is the earliest indication that the frame was submitted in time.
+         */
+        time_point_ns latchTime;
+
+        /**
+         * The first time at which the compositor began preparing composition for this frame.
+         * Zero if composition was handled by the display and the compositor didn't do any
+         * rendering.
+         */
+        time_point_ns firstCompositionStartTime;
+
+        /**
+         * The last time at which the compositor began preparing composition for this frame, for
+         * frames composited more than once. Zero if composition was handled by the display and the
+         * compositor didn't do any rendering.
+         */
+        time_point_ns lastCompositionStartTime;
+
+        /**
+         * The time at which the compositor's rendering work for this frame finished. This will be
+         * INVALID if composition was handled by the display and the compositor didn't do any
+         * rendering.
+         */
+        time_point_ns gpuCompositionDoneTime;
+
+        /**
+         * The time at which this frame started to scan out to the physical display.
+         */
+        time_point_ns displayPresentTime;
+
+        /**
+         * The time when the buffer became available for reuse as a buffer the client can target
+         * without blocking. This is generally the point when all read commands of the buffer have
+         * been submitted, but not necessarily completed.
+         */
+        time_point_ns dequeueReadyTime;
+
+        /**
+         * The time at which all reads for the purpose of display/composition were completed for
+         * this frame.
+         */
+        time_point_ns releaseTime;
+    };
 
     /**
      * The type of technique for stereoscopic rendering. (Note that the materials used will need to
@@ -247,6 +361,65 @@ public:
      */
     virtual bool pumpEvents() noexcept;
 
+    // --------------------------------------------------------------------------------------------
+    // Swapchain timing APIs
+
+    /**
+     * Whether this platform supports compositor timing querying.
+     *
+     * @return true if this Platform supports compositor timings, false otherwise [default]
+     * @see queryCompositorTiming()
+     * @see setPresentFrameId()
+     * @see queryFrameTimestamps()
+     */
+    virtual bool isCompositorTimingSupported() const noexcept;
+
+    /**
+     * If compositor timing is supported, fills the provided CompositorTiming structure
+     * with timing information form the compositor the swapchain's native window is using.
+     * The swapchain'snative window must be valid (i.e. not a headless swapchain).
+     * @param swapchain to query the compositor timing from
+     * @return true on success, false otherwise (e.g. if not supported)
+     * @see isCompositorTimingSupported()
+     */
+    virtual bool queryCompositorTiming(SwapChain const* UTILS_NONNULL swapchain,
+            CompositorTiming* UTILS_NONNULL outCompositorTiming) const noexcept;
+
+    /**
+     * Associate a generic frameId which must be monotonically increasing (albeit not strictly) with
+     * the next frame to be presented on the specified swapchain.
+     *
+     * This must be called from the backend thread.
+     *
+     * @param swapchain
+     * @param frameId
+     * @return true on success, false otherwise
+     * @see isCompositorTimingSupported()
+     * @see queryFrameTimestamps()
+     */
+    virtual bool setPresentFrameId(SwapChain const* UTILS_NONNULL swapchain,
+            uint64_t frameId) noexcept;
+
+    /**
+     * If compositor timing is supported, fills the provided FrameTimestamps structure
+     * with timing information of a given frame, identified by the frame id, of the specified
+     * swapchain. The system only keeps a limited history of frames timings.
+     *
+     * This API is thread safe and can be called from any thread.
+     *
+     * @param swapchain swapchain to query the timestamps of
+     * @param frameId frame we're interested it
+     * @param outFrameTimestamps output structure receiving the timestamps
+     * @return true if successful, false otherwise
+     * @see isCompositorTimingSupported()
+     * @see setPresentFrameId()
+     */
+    virtual bool queryFrameTimestamps(SwapChain const* UTILS_NONNULL swapchain,
+            uint64_t frameId, FrameTimestamps* UTILS_NONNULL outFrameTimestamps) const noexcept;
+
+    // --------------------------------------------------------------------------------------------
+    // Caching APIs
+
     /**
      * InsertBlobFunc is an Invocable to an application-provided function that a
      * backend implementation may use to insert a key/value pair into the
@@ -339,12 +512,24 @@ public:
     size_t retrieveBlob(const void* UTILS_NONNULL key, size_t keySize,
             void* UTILS_NONNULL value, size_t valueSize);
 
-    using DebugUpdateStatFunc = utils::Invocable<void(const char* UTILS_NONNULL key, uint64_t value)>;
+    // --------------------------------------------------------------------------------------------
+    // Debugging APIs
+
+    using DebugUpdateStatFunc = utils::Invocable<void(const char* UTILS_NONNULL key,
+            uint64_t intValue, utils::CString stringValue)>;
 
     /**
      * Sets the callback function that the backend can use to update backend-specific statistics
      * to aid with debugging. This callback is guaranteed to be called on the Filament driver
      * thread.
+     *
+     * The callback signature is (key, intValue, stringValue). Note that for any given call,
+     * only one of the value parameters (intValue or stringValue) will be meaningful, depending on
+     * the specific key.
+     *
+     * IMPORTANT_NOTE: because the callback is called on the driver thread, only quick, non-blocking
+     * work should be done inside it. Furthermore, no graphics API calls (such as GL calls) should
+     * be made, which could interfere with Filament's driver state.
      *
      * @param debugUpdateStat   an Invocable that updates debug statistics
      */
@@ -364,15 +549,32 @@ public:
      * This function is guaranteed to be called only on a single thread, the Filament driver
      * thread.
      *
-     * @param key          a null-terminated C-string with the key of the debug statistic
-     * @param value        the updated value of key
+     * @param key           a null-terminated C-string with the key of the debug statistic
+     * @param intValue      the updated integer value of key (the string value passed to the
+     *                      callback will be empty)
      */
-    void debugUpdateStat(const char* UTILS_NONNULL key, uint64_t value);
+    void debugUpdateStat(const char* UTILS_NONNULL key, uint64_t intValue);
+
+    /**
+     * To track backend-specific statistics, the backend implementation can call the
+     * application-provided callback function debugUpdateStatFunc to associate or update a value
+     * with a given key. It is possible for this function to be called multiple times with the
+     * same key, in which case newer values should overwrite older values.
+     *
+     * This function is guaranteed to be called only on a single thread, the Filament driver
+     * thread.
+     *
+     * @param key           a null-terminated C-string with the key of the debug statistic
+     * @param stringValue   the updated string value of key (the integer value passed to the
+     *                      callback will be 0)
+     */
+    void debugUpdateStat(const char* UTILS_NONNULL key, utils::CString stringValue);
 
 private:
-    InsertBlobFunc mInsertBlob;
-    RetrieveBlobFunc mRetrieveBlob;
-    DebugUpdateStatFunc mDebugUpdateStat;
+    std::shared_ptr<InsertBlobFunc> mInsertBlob;
+    std::shared_ptr<RetrieveBlobFunc> mRetrieveBlob;
+    std::shared_ptr<DebugUpdateStatFunc> mDebugUpdateStat;
+    mutable utils::Mutex mMutex;
 };
 
 } // namespace filament

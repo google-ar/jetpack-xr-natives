@@ -76,6 +76,7 @@ cc_library(
 cc_library(
     name = "default_panels",
     srcs = [
+        "flame_graph.cc",
         "frame_time_panel.cc",
         "hierarchy_panel.cc",
         "imgui_helper.cc",
@@ -83,11 +84,14 @@ cc_library(
         "sample_processor.cc",
     ],
     hdrs = [
+        "flame_graph.h",
+        "flame_graph_colors.h",
         "frame_time_panel.h",
         "hierarchy_panel.h",
         "imgui_helper.h",
         "render_info_panel.h",
         "sample_processor.h",
+        "sample_processor_types.h",
     ],
     copts = imp_google3_copts(),
     deps = [
@@ -105,6 +109,7 @@ cc_library(
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/hash",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
         "@dear_imgui",
         "@implot",

@@ -295,6 +295,7 @@ cc_binary(
         "//core/loader/provider/extensions:all_impl",
         "//core/loader/provider/extensions:verification",
         "//core/loader/provider/usdz",
+        "//core/material_library:fbs",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",

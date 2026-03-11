@@ -26,6 +26,7 @@
 #include "apibindings/impress_api_view.h"
 #include "apibindings/texture_manager.h"
 #include "core/render/texture.h"
+#include "core/view/utils/asset.h"
 
 namespace imp {
 
@@ -36,6 +37,8 @@ class TestTextureManager : public TextureManager {
   ~TestTextureManager() override = default;
 
   void LoadTexture(absl::string_view path,
+                   std::unique_ptr<BaseAssetLoader> asset_loader) override;
+  void LoadTexture(imp::AssetDefinition asset_definition,
                    std::unique_ptr<BaseAssetLoader> asset_loader) override;
   absl::StatusOr<std::intptr_t> BorrowReflectionTexture() override;
   absl::StatusOr<std::intptr_t> GetReflectionTextureFromIbl(

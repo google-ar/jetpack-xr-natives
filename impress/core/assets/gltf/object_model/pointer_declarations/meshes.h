@@ -81,6 +81,32 @@ class MeshesWeightPointerDeclaration
                         PropertyPointer::PointerValue value) const override;
 };
 
+class MeshesPrimitivesLengthDeclaration
+    : public PropertyPointer::PointerDeclaration {
+ public:
+  std::vector<TokenParser> GetTokenParsers() const override;
+
+  absl::StatusOr<PropertyPointer::PointerValue> GetValue(
+      NodeHandle gltf_model,
+      absl::Span<const ParsedToken> parsed_tokens) const override;
+  absl::Status SetValue(NodeHandle gltf_model,
+                        absl::Span<const ParsedToken> parsed_tokens,
+                        PropertyPointer::PointerValue value) const override;
+};
+
+class MeshesPrimitivesMaterialPointerDeclaration
+    : public PropertyPointer::PointerDeclaration {
+ public:
+  std::vector<TokenParser> GetTokenParsers() const override;
+
+  absl::StatusOr<PropertyPointer::PointerValue> GetValue(
+      NodeHandle gltf_model,
+      absl::Span<const ParsedToken> parsed_tokens) const override;
+  absl::Status SetValue(NodeHandle gltf_model,
+                        absl::Span<const ParsedToken> parsed_tokens,
+                        PropertyPointer::PointerValue value) const override;
+};
+
 }  // namespace imp::gltf
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_ASSETS_GLTF_OBJECT_MODEL_POINTER_DECLARATIONS_MESHES_H_

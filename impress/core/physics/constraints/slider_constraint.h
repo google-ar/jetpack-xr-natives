@@ -24,6 +24,7 @@
 #include "bullet/src/BulletDynamics/ConstraintSolver/btSliderConstraint.h"
 #include "bullet/src/BulletDynamics/ConstraintSolver/btTypedConstraint.h"
 #include "bullet/src/BulletDynamics/Dynamics/btRigidBody.h"
+#include "core/config.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_id.h"
@@ -176,8 +177,14 @@ class SliderConstraint : public BaseConstraint, public Component {
   absl::Status SetupInternal();
   void LoadDefaultStateValues();
 
+#if IMP_RUNTIME(DEV)
+  void Visualize();
+#endif
+
   SliderConstraintState state_;
   std::unique_ptr<btSliderConstraint> bt_constraint_;
+
+  bool use_linear_reference_frame_a_;
 
  public:
   using IsfInfo =

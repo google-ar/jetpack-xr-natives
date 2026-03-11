@@ -478,7 +478,7 @@ jobject CreateJavaEyesInfo(JNIEnv* env, const XrEyesANDROID& xr_eyes) {
 }
 
 jobject CreateJavaGeospatialPose(
-    JNIEnv* env, const XrGeospatialPoseANDROIDX1& xr_geospatial_pose) {
+    JNIEnv* env, const XrGeospatialPoseANDROIDX2& xr_geospatial_pose) {
   jclass geospatial_pose_class =
       GetJxrClass(env, PACKAGE_MATH, "GeospatialPose");
   jmethodID geospatial_pose_constructor = env->GetMethodID(
@@ -496,9 +496,9 @@ jobject CreateJavaGeospatialPose(
 
 jobject CreateJavaGeospatialPoseResult(
     JNIEnv* env,
-    const XrGeospatialPoseResultANDROIDX1& xr_geospatial_pose_result) {
-  jclass geospatial_pose_result_class =
-      GetJxrClass(env, PACKAGE_ARCORE_RUNTIME, "Earth$GeospatialPoseResult");
+    const XrGeospatialPoseResultANDROIDX2& xr_geospatial_pose_result) {
+  jclass geospatial_pose_result_class = GetJxrClass(
+      env, PACKAGE_ARCORE_RUNTIME, "Geospatial$GeospatialPoseResult");
   jmethodID geospatial_pose_result_constructor = env->GetMethodID(
       geospatial_pose_result_class, "<init>",
       absl::StrFormat("(L%s;DDD)V",
@@ -511,6 +511,71 @@ jobject CreateJavaGeospatialPoseResult(
                         xr_geospatial_pose_result.horizontalAccuracy,
                         xr_geospatial_pose_result.verticalAccuracy,
                         xr_geospatial_pose_result.orientationYawAccuracy);
+}
+
+jobject CreateVpsAvailabilityResultInstance(JNIEnv* env,
+                                            const char* class_name) {
+  jclass cls = GetJxrClass(env, PACKAGE_CORE, class_name);
+  if (cls == nullptr) {
+    return nullptr;
+  }
+  jmethodID constructor = env->GetMethodID(cls, "<init>", "()V");
+  if (constructor == nullptr) {
+    return nullptr;
+  }
+  return env->NewObject(cls, constructor);
+}
+
+jobject CreateVpsAvailabilityResult(
+    JNIEnv* env, const XrVPSAvailabilityCheckCompletionANDROIDX2& completion) {
+  if (completion.futureResult == XR_SUCCESS) {
+    switch (completion.availability) {
+      case XR_VPS_AVAILABILITY_AVAILABLE_ANDROIDX2:
+        return CreateVpsAvailabilityResultInstance(env,
+                                                   "VpsAvailabilityAvailable");
+      case XR_VPS_AVAILABILITY_UNAVAILABLE_ANDROIDX2:
+        return CreateVpsAvailabilityResultInstance(
+            env, "VpsAvailabilityUnavailable");
+      default:
+        return CreateVpsAvailabilityResultInstance(
+            env, "VpsAvailabilityErrorInternal");
+    }
+  } else {
+    // Detailed error information is linked in a chained struct from the
+    // google_cloud_auth extension.
+    const auto* next_struct =
+        static_cast<const XrBaseOutStructure*>(completion.next);
+
+    while (next_struct != nullptr &&
+           next_struct->type !=
+               XR_TYPE_GOOGLE_CLOUD_AUTH_ERROR_RESULT_ANDROIDX2) {
+      next_struct = static_cast<const XrBaseOutStructure*>(next_struct->next);
+    }
+
+    if (next_struct != nullptr &&
+        next_struct->type == XR_TYPE_GOOGLE_CLOUD_AUTH_ERROR_RESULT_ANDROIDX2) {
+      const auto* auth_error =
+          reinterpret_cast<const XrGoogleCloudAuthErrorResultANDROIDX2*>(
+              next_struct);
+      switch (auth_error->error) {
+        case XR_GOOGLE_CLOUD_AUTH_ERROR_QUOTA_EXCEEDED_ANDROIDX2:
+          return CreateVpsAvailabilityResultInstance(
+              env, "VpsAvailabilityResourceExhausted");
+        case XR_GOOGLE_CLOUD_AUTH_ERROR_UNREACHABLE_ANDROIDX2:
+          return CreateVpsAvailabilityResultInstance(
+              env, "VpsAvailabilityNetworkError");
+        case XR_GOOGLE_CLOUD_AUTH_ERROR_ANDROIDX2:
+          return CreateVpsAvailabilityResultInstance(
+              env, "VpsAvailabilityNotAuthorized");
+        default:
+          return CreateVpsAvailabilityResultInstance(
+              env, "VpsAvailabilityErrorInternal");
+      }
+    } else {
+      return CreateVpsAvailabilityResultInstance(
+          env, "VpsAvailabilityErrorInternal");
+    }
+  }
 }
 
 jobject CreateJavaDisplayBlendMode(
@@ -539,4 +604,5 @@ jobject CreateJavaDisplayBlendMode(
       blend_mode_ext_cls, fromOpenXrEnvironmentBlendMode, blend_mode_static_obj,
       static_cast<uint32_t>(xr_blend_mode));
 }
+
 }  // namespace androidx::xr::openxr

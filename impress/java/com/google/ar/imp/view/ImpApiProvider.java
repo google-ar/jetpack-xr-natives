@@ -31,6 +31,7 @@ public interface ImpApiProvider extends ImpApiScubaProvider {
    *
    * <p>This is required before any calls to getImpApi().
    */
+  @Deprecated
   public ImpApi createImpApiSync(SetupParams setupParams);
 
   /**
@@ -39,6 +40,7 @@ public interface ImpApiProvider extends ImpApiScubaProvider {
    *
    * <p>This is required before any calls to getImpApi().
    */
+  @Deprecated
   public ImpApi createImpApiSync(SetupParams setupParams, long eglContext);
 
   /**
@@ -47,6 +49,7 @@ public interface ImpApiProvider extends ImpApiScubaProvider {
    *
    * <p>This is required before any calls to getImpApi().
    */
+  @Deprecated
   public ImpApi createImpApiSync(
       SetupParams setupParams, @Nullable FrameScheduler.Factory frameSchedulerFactory);
 
@@ -55,6 +58,7 @@ public interface ImpApiProvider extends ImpApiScubaProvider {
    *
    * <p>This is required before any calls to getImpApi().
    */
+  @Deprecated
   public ImpApi createImpApiAsync(
       SetupParams setupParams, Executor executor, ImpApi.PostCreatedCallback postCreatedCallback);
 
@@ -65,6 +69,7 @@ public interface ImpApiProvider extends ImpApiScubaProvider {
    *
    * <p>This is required before any calls to getImpApi().
    */
+  @Deprecated
   public ImpApi createImpApiAsync(
       SetupParams setupParams,
       long eglContext,
@@ -79,6 +84,7 @@ public interface ImpApiProvider extends ImpApiScubaProvider {
    *
    * <p>This is required before any calls to getImpApi().
    */
+  @Deprecated
   public ImpApi createImpApiAsync(
       SetupParams setupParams,
       long eglContext,

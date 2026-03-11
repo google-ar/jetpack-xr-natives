@@ -17,9 +17,11 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_COMMON_STRING_HELPERS_H_
 #define THIRD_PARTY_IMPRESS_CORE_COMMON_STRING_HELPERS_H_
 
+#include <cstddef>
+#include <cstdint>
 #include <string>
 
-#include "absl/strings/escaping.h"
+#include "absl/base/attributes.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 
@@ -54,7 +56,7 @@ std::string ToLower(absl::string_view view);
 std::string SerializeToBase64(const uint8_t* data, uint32_t size);
 
 // Converts string_b64 to its binary equivalent and writes it into dest.
-bool DeserializeBase64(const std::string& string_b64, std::string* dest);
+bool DeserializeBase64(absl::string_view string_b64, std::string* dest);
 
 // Extracts the leading comments and whitespace from a string.
 //

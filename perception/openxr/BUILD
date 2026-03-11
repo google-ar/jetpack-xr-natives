@@ -24,6 +24,7 @@ JNI_DEPS = [
     ":openxr_manager",
     ":openxr_manager_utils",
     "@abseil-cpp//absl/log",
+    "@third_party//OpenXR_KHR:generated_openxr_headers_public",
     "@third_party//OpenXR_KHR:openxr_headers_androidxr",
     "//common:jni_utils",
     "@abseil-cpp//absl/strings:str_format",
@@ -110,6 +111,7 @@ cc_library(
         "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/numeric:int128",
         "@abseil-cpp//absl/synchronization",
+        "@third_party//OpenXR_KHR:generated_openxr_headers_public",
         "@third_party//OpenXR_KHR:openxr_headers_androidxr",  # build_cleaner: keep
     ],
     alwayslink = 1,
@@ -132,6 +134,7 @@ cc_library(
         "@abseil-cpp//absl/numeric:int128",
         "@abseil-cpp//absl/strings:str_format",
         "//common:jni_utils",
+        "@third_party//OpenXR_KHR:generated_openxr_headers_public",
         "@third_party//OpenXR_KHR:openxr_headers_androidxr",
     ],
     alwayslink = 1,

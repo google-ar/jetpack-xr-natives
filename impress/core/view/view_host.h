@@ -65,4 +65,4 @@ class ViewHost : public window::FilamentHost {
 
 }  // namespace imp
 
-#endif  // THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_VIEW_HOST_H_
+#endif  // THIRD_PARTY_IMPRESS_CORE_VIEW_VIEW_HOST_H_

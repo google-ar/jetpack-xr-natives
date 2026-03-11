@@ -17,19 +17,28 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_RENDER_ANDROID_IMAGE_READER_ANDROID_EXTERNAL_TEXTURE_SURFACE_H_
 #define THIRD_PARTY_IMPRESS_CORE_RENDER_ANDROID_IMAGE_READER_ANDROID_EXTERNAL_TEXTURE_SURFACE_H_
 
+#include <android/data_space.h>
 #include <android/hardware_buffer.h>
 
 #include <deque>
+#include <list>
 #include <memory>
+#include <string>
+#include <utility>
 
 #include "absl/base/attributes.h"
 #include "absl/base/thread_annotations.h"
-#include "absl/container/flat_hash_set.h"
+#include "absl/container/flat_hash_map.h"
+#include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
-#include "filament/filament/include/filament/Stream.h"
+#include "filament/filament/backend/include/backend/Platform.h"
+#include "filament/filament/include/filament/Texture.h"
+#include "filament/filament/include/filament/TextureSampler.h"
+#include "core/common/owned_ptr.h"
 #include "core/common/robin_map.h"
 #include "core/common/robin_set.h"
 #include "core/common/small_source_location.h"
@@ -47,6 +56,7 @@
 #include "core/view/platforms/android/ndkwrappers/image_reader.h"
 #include "core/view/platforms/android/wrappers/surface.h"
 #include "core/view/utils/frame_time.h"
+#include "core/window/shared_host_state.h"
 
 namespace imp {
 
@@ -118,6 +128,76 @@ class ImageReaderAndroidExternalTextureSurface
       BaseView& view,
       ContentSecurityLevel security_level = ContentSecurityLevel::kNone);
 
+  // A texture that can be bound to multiple hardware buffers.
+  // This is used to update the underlying hardware buffer of the texture
+  // without creating a new texture. It overrides the imp::Texture
+  // OnAssignedToMaterial and OnUnassignedFromMaterial functions to know when it
+  // is bound to a material so it can update the texture used by the material.
+  //
+  // Internally, it keeps track of the texture that should be used by the
+  // material. When the texture is updated, it traverses all the materials that
+  // are using the texture and updates their samplers with the new texture. It
+  // holds a map from Android hardware buffers to a texture and associated
+  // metadata to avoid unnecessarily creating new textures.
+  class ImageReaderTexture;
+  using OwnedImageReaderTexturePtr = OwnedPtr<ImageReaderTexture>;
+  class ImageReaderTexture : public Texture {
+   public:
+    static OwnedImageReaderTexturePtr Create(
+        BaseView& view, int2 size, ContentSecurityLevel security_level);
+
+    void OnAssignedToMaterial(const Material& material,
+                              absl::string_view parameter_name,
+                              UpdateTextureFn update_texture_fn) override;
+    void OnUnassignedFromMaterial(const Material& material,
+                                  absl::string_view parameter_name) override;
+
+    void UpdateTexture(const AHardwareBuffer* buffer, ADataSpace data_space,
+                       const mat3f& transform_matrix);
+
+   private:
+    ImageReaderTexture(BaseView& view, filament::Texture* texture,
+                       filament::TextureSampler sampler,
+                       ContentSecurityLevel security_level)
+        : Texture(view, nullptr, texture, sampler, security_level),
+          current_texture_(texture) {}
+
+    struct TextureInfo {
+      TextureInfo(OwnedTexturePtr texture,
+                  window::SharedHostState::ExternalImageMetadata metadata,
+                  ADataSpace data_space, mat3f transform_matrix)
+          : texture(std::move(texture)),
+            metadata(metadata),
+            data_space(data_space),
+            transform_matrix(transform_matrix) {}
+      OwnedTexturePtr texture;
+      window::SharedHostState::ExternalImageMetadata metadata;
+      ADataSpace data_space;
+      mat3f transform_matrix;
+    };
+    // A map from Android hardware buffers to a texture and associated metadata.
+    absl::flat_hash_map<const AHardwareBuffer*, std::unique_ptr<TextureInfo>>
+        textures_;
+    // List of Android hardware buffers that have been used to create textures.
+    // This is used to limit the number of textures to the buffer size.
+    std::list<const AHardwareBuffer*> textures_lru_cache_;
+    // The texture that should be used by the material. This is updated when
+    // a new image is available from the ImageReader stream.
+    filament::Texture* current_texture_;
+
+    // A binding to a specific material parameter.
+    struct MaterialBinding {
+      UpdateTextureFn update_texture_fn;
+      absl::string_view transform_parameter_name;
+    };
+    // A map of material parameter bindings that use this texture. The key is
+    // a pair of <Material, parameter_name>, allowing this texture to be bound
+    // to multiple parameters across multiple materials.
+    absl::flat_hash_map<std::pair<const Material*, std::string>,
+                        MaterialBinding>
+        material_bindings_;
+  };
+
   // Callback to be invoked when a new Image is available in the ImageReader.
   // The signature conforms to ImageReader::ImageListenerCallback. The user data
   // is a pointer to the ImageReaderAndroidExternalTextureSurface instance that
@@ -141,7 +221,7 @@ class ImageReaderAndroidExternalTextureSurface
   std::unique_ptr<ImageReader> image_reader_{nullptr};
 
   // External textures created for each supported view.
-  RobinMap<SurfaceViewType, OwnedTexturePtr> external_textures_;
+  RobinMap<SurfaceViewType, OwnedImageReaderTexturePtr> external_textures_;
 
   // Indicates whether the ImageReader has provided a new Image that is ready
   // for processing. This flag is set to true by the callback and reset to false

@@ -102,28 +102,6 @@ void TaskScheduler::PushTaskInternal(Task* /*absl_nonnull*/  task) {
   }
 }
 
-absl::StatusOr<std::unique_ptr<Task>> TaskScheduler::PopTaskInternal() {
-  if (IsEmpty()) {
-    return absl::FailedPreconditionError("No valid tasks are available.");
-  }
-  current_valid_tasks_--;
-
-  // Pop until we find the first valid Task.
-  Task* next_task = nullptr;
-  while (next_task == nullptr) {
-    MP_ASSIGN_OR_RETURN(Task * candidate_task, PopCandidateTask());
-    // Delete the task if it's invalid.
-    if (!(*candidate_task)) {
-      task_registry_.ReleaseTask(candidate_task->GetId());
-    } else {
-      next_task = candidate_task;
-    }
-  }
-
-  // Return the underlying Task.
-  return task_registry_.ReleaseTask(next_task->GetId());
-}
-
 absl::StatusOr<int> TaskScheduler::GetTaskPriority(TaskId task_id) {
   MP_ASSIGN_OR_RETURN(const Task* task_ptr, task_registry_.GetTask(task_id));
   return task_ptr->GetPriority();
@@ -179,9 +157,44 @@ absl::Status TaskScheduler::RescheduleTask(TaskId task_id, int task_priority) {
   return absl::OkStatus();
 }
 
-absl::StatusOr<Invocable<void()>> TaskScheduler::PopTask() {
-  MP_ASSIGN_OR_RETURN(std::unique_ptr<Task> task, PopTaskInternal());
-  return task->MoveInvocable();
+absl::StatusOr<imp::Invocable<void()>> TaskScheduler::PopTask(
+    std::optional<TaskId> task_id) {
+  if (IsEmpty()) {
+    return absl::FailedPreconditionError("No valid tasks are available.");
+  }
+
+  Invocable<void()> invocable;
+
+  if (task_id.has_value()) {
+    MP_ASSIGN_OR_RETURN(Task * task_ptr, task_registry_.GetTask(*task_id));
+    if (!(*task_ptr)) {
+      // If the Task is invalid, the Task has been rescheduled and the
+      // rescheduled Task has already completed, leaving just the original
+      // invalid Task in the TaskRegistry.
+      return absl::NotFoundError("Task has completed.");
+    }
+    // This is a lazy deletion of the Task. We don't need to release the Task
+    // from the TaskRegistry yet, because that will be done in a later call to
+    // PopTask (see the "Delete the task if it's invalid" comment below).
+    invocable = task_ptr->MoveInvocable();
+  } else {
+    // Pop until we find the first valid Task.
+    Task* next_task = nullptr;
+    while (next_task == nullptr) {
+      MP_ASSIGN_OR_RETURN(Task * candidate_task, PopCandidateTask());
+      // Delete the task if it's invalid.
+      if (!(*candidate_task)) {
+        task_registry_.ReleaseTask(candidate_task->GetId());
+      } else {
+        next_task = candidate_task;
+      }
+    }
+    invocable = task_registry_.ReleaseTask(next_task->GetId())->MoveInvocable();
+  }
+  current_valid_tasks_--;
+
+  // Return the underlying Task.
+  return std::move(invocable);
 }
 
 bool TaskScheduler::IsEmpty() const { return current_valid_tasks_ == 0; }

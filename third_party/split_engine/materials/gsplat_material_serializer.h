@@ -90,18 +90,10 @@ class GsplatMaterialSerializer : public imp::split_engine::SplitEngineMaterial {
     //  MarkParametersDirty();
   }
 
-  void SetPositionDataTexture(imp::OwnedOrBorrowedTexturePtr texture) {
-    position_data_texture_ = std::move(texture);
-    MarkParametersDirty();
-  }
-
-  void SetCov3dDataTexture(imp::OwnedOrBorrowedTexturePtr texture) {
-    cov3d_data_texture_ = std::move(texture);
-    MarkParametersDirty();
-  }
-
-  void SetColorDataTexture(imp::OwnedOrBorrowedTexturePtr texture) {
-    color_data_texture_ = std::move(texture);
+  void SetPrecomputeTextures(imp::AssetPtr<imp::GSplatAsset> gsplat_asset) {
+    position_data_texture_ = gsplat_asset->position_data_texture();
+    cov3d_data_texture_ = gsplat_asset->cov3d_data_texture();
+    color_data_texture_ = gsplat_asset->color_data_texture();
     MarkParametersDirty();
   }
 
@@ -136,7 +128,7 @@ class GsplatMaterialSerializer : public imp::split_engine::SplitEngineMaterial {
   std::optional<android_xr::schemas::Float2> window_dimension_in_magic_window_;
   std::optional<android_xr::schemas::Mat4f>
       magic_window_from_user_world_matrix_;
-  std::optional<android_xr::schemas::Bool> is_splat_data_precomputed_;
+  std::optional<android_xr::schemas::Mat4f> gsplat_from_user_world_matrix_;
 
   imp::OwnedOrBorrowedTexturePtr precomputed_data_texture_;
   imp::OwnedOrBorrowedTexturePtr position_data_texture_;

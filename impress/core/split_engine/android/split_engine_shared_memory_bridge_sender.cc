@@ -61,26 +61,24 @@ class SplitEngineSharedMemoryBridgeBufferHandleFactory
 }  // namespace
 
 SplitEngineSharedMemoryBridgeSender::SplitEngineSharedMemoryBridgeSender(
-    SplitEngineSharedMemoryBridgeClient& bridge, bool recycle_buffers)
-    : SplitEngineSharedMemoryBridgeSenderBase(recycle_buffers),
-      bridge_(bridge),
+    SplitEngineSharedMemoryBridgeClient& bridge)
+    : bridge_(bridge),
       buffer_handle_factory_(
           std::make_unique<SplitEngineSharedMemoryBridgeBufferHandleFactory>(
               bridge)) {}
 
-void SplitEngineSharedMemoryBridgeSender::SendMessage(
-    const flatbuffers::FlatBufferBuilder& builder) {
-  
-  const int offset =
-      builder.GetBufferPointer() - GetActiveBridgeBuffer().DataAs<uint8_t>();
-
-  const absl::Status process_result =
-      bridge_.ProcessRegion(GetActiveBridgeBuffer().GetHandle(), offset,
-                            static_cast<int>(builder.GetSize()));
-  if (!process_result.ok()) {
-    IMP_LOG(imp::FATAL) << "Failed to queue buffer to rendering bridge: "
-               << process_result.message();
+absl::Status SplitEngineSharedMemoryBridgeSender::SendMessage(
+    MessageGroupId group_id, const flatbuffers::FlatBufferBuilder& builder) {
+  const BridgeBuffer& bridge_buffer = GetBridgeBuffer(group_id);
+  if (!bridge_buffer.IsValidBlock(builder.GetBufferPointer(),
+                                  builder.GetSize())) {
+    return absl::InternalError("Message is not in the active bridge buffer.");
   }
+  const int offset =
+      builder.GetBufferPointer() - bridge_buffer.DataAs<uint8_t>();
+
+  return bridge_.ProcessRegion(bridge_buffer.GetHandle(), offset,
+                               static_cast<int>(builder.GetSize()));
 }
 
 MessageGroupId SplitEngineSharedMemoryBridgeSender::GenerateMessageGroupId() {
@@ -94,7 +92,7 @@ SplitEngineSharedMemoryBridgeSender::GetBufferHandleFactory() {
   return *buffer_handle_factory_;
 }
 
-FlatbufferArenaAllocator& SplitEngineSharedMemoryBridgeSender::GetAllocator() {
+ArenaAllocator& SplitEngineSharedMemoryBridgeSender::GetArenaAllocator() {
   return arena_allocator_;
 }
 

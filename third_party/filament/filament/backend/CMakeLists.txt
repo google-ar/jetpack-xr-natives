@@ -104,6 +104,10 @@ if (FILAMENT_SUPPORTS_OPENGL AND NOT FILAMENT_USE_EXTERNAL_GLES3)
         list(APPEND SRCS src/VirtualMachineEnv.cpp)
     endif ()
     if (ANDROID)
+        list(APPEND SRCS src/AndroidNdk.cpp)
+        list(APPEND SRCS src/AndroidNativeWindow.cpp)
+        list(APPEND SRCS src/AndroidSwapChainHelper.cpp)
+        list(APPEND SRCS src/AndroidFrameCallback.cpp)
         list(APPEND SRCS src/opengl/platforms/ExternalStreamManagerAndroid.cpp)
         list(APPEND SRCS src/opengl/platforms/PlatformEGLAndroid.cpp)
     elseif (IOS)
@@ -202,6 +206,8 @@ if (FILAMENT_SUPPORTS_VULKAN)
             src/vulkan/VulkanDriverFactory.h
             src/vulkan/VulkanExternalImageManager.cpp
             src/vulkan/VulkanExternalImageManager.h
+            src/vulkan/VulkanStreamedImageManager.cpp
+            src/vulkan/VulkanStreamedImageManager.h
             src/vulkan/VulkanFboCache.cpp
             src/vulkan/VulkanFboCache.h
             src/vulkan/VulkanHandles.cpp
@@ -248,10 +254,21 @@ if (FILAMENT_SUPPORTS_VULKAN)
             src/vulkan/utils/Spirv.h
             src/vulkan/utils/StaticVector.h
     )
-    if (LINUX OR WIN32)
-        list(APPEND SRCS src/vulkan/platform/VulkanPlatformLinuxWindows.cpp)
+    if (LINUX)
+        list(APPEND SRCS
+            src/vulkan/platform/VulkanPlatformLinux.cpp
+            include/backend/platforms/VulkanPlatformLinux.h
+        )
+    elseif (WIN32)
+        list(APPEND SRCS
+            include/backend/platforms/VulkanPlatformWindows.h
+            src/vulkan/platform/VulkanPlatformWindows.cpp
+        )
     elseif (APPLE OR IOS)
-        list(APPEND SRCS src/vulkan/platform/VulkanPlatformApple.mm)
+        list(APPEND SRCS
+            include/backend/platforms/VulkanPlatformApple.h
+            src/vulkan/platform/VulkanPlatformApple.mm
+        )
     elseif (ANDROID)
         list(APPEND SRCS
             include/backend/platforms/VulkanPlatformAndroid.h
@@ -368,46 +385,6 @@ add_library(${TARGET}_headers INTERFACE)
 target_include_directories(${TARGET}_headers INTERFACE ${PUBLIC_HDR_DIR})
 
 # ==================================================================================================
-# Build SPIRV snippets used by the Vulkan backend.
-# ==================================================================================================
-
-set(VKSHADERS_DIR  "${CMAKE_CURRENT_BINARY_DIR}/generated/vkshaders")
-
-file(MAKE_DIRECTORY ${VKSHADERS_DIR})
-
-get_resgen_vars(${VKSHADERS_DIR} vkshaders)
-
-set(VKSHADER_BINS)
-function(build_vkshader SOURCE TARGET_PATH)
-    set(SOURCE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/vulkan/${SOURCE}")
-    set(VKSHADER_BINS ${VKSHADER_BINS} ${TARGET_PATH} PARENT_SCOPE)
-    add_custom_command(
-            OUTPUT ${TARGET_PATH}
-            COMMAND matc --raw -o ${TARGET_PATH} ${SOURCE_PATH}
-            MAIN_DEPENDENCY ${SOURCE_PATH}
-            DEPENDS matc ${SOURCE_PATH}
-            COMMENT "Building SPIR-V")
-endfunction()
-build_vkshader("BlitDepth.vs" "BlitDepthVs.spv")
-build_vkshader("BlitDepth.fs" "BlitDepthFs.spv")
-
-add_custom_command(
-        OUTPUT ${RESGEN_OUTPUTS}
-        COMMAND resgen ${RESGEN_FLAGS} ${VKSHADER_BINS}
-        DEPENDS resgen ${VKSHADER_BINS}
-        COMMENT "Aggregating compiled VK shaders")
-
-if (DEFINED RESGEN_SOURCE_FLAGS)
-    set_source_files_properties(${RESGEN_SOURCE} PROPERTIES COMPILE_FLAGS ${RESGEN_SOURCE_FLAGS})
-endif()
-
-set(DUMMY_SRC "${VKSHADERS_DIR}/dummy.c")
-add_custom_command(OUTPUT ${DUMMY_SRC} COMMAND echo "//" > ${DUMMY_SRC})
-
-add_library(vkshaders STATIC ${DUMMY_SRC} ${RESGEN_SOURCE})
-set_target_properties(vkshaders PROPERTIES FOLDER Filament/Generated)
-
-# ==================================================================================================
 # Dependencies
 # ==================================================================================================
 
@@ -440,7 +417,7 @@ if(FILAMENT_SUPPORTS_OPENGL AND NOT IOS AND NOT ANDROID AND NOT WEBGL)
 endif()
 
 if (FILAMENT_SUPPORTS_VULKAN)
-    target_link_libraries(${TARGET} PUBLIC bluevk vkmemalloc vkshaders smol-v)
+    target_link_libraries(${TARGET} PUBLIC bluevk vkmemalloc smol-v)
     target_link_libraries(${TARGET} PRIVATE SPIRV-Headers)
 endif()
 
@@ -469,6 +446,13 @@ if (MSVC)
 elseif(WEBGL)
     # Avoid strict-vtable-pointers here, it is broken in WebAssembly.
     set(OPTIMIZATION_FLAGS -fvisibility-inlines-hidden)
+elseif(FILAMENT_USING_GCC)
+    set(OPTIMIZATION_FLAGS
+        -ffast-math
+        -fno-finite-math-only
+        -ffp-contract=fast
+        -fvisibility-inlines-hidden
+    )
 else()
     set(OPTIMIZATION_FLAGS
         -ffast-math
@@ -495,6 +479,13 @@ endif()
 
 if (MSVC)
     set(FILAMENT_WARNINGS /W3)
+elseif (FILAMENT_USING_GCC)
+    # GCC is not officially supported, so use a weaker set of warnings (incl. not using -Werror)
+    set(FILAMENT_WARNINGS
+            -Wall -Wno-unused-parameter -Wno-missing-field-initializers
+            -Wdeprecated -Wnon-virtual-dtor -Wno-strict-aliasing
+            -Wno-invalid-constexpr -Wno-parentheses -Wno-unused-variable
+    )
 else()
     set(FILAMENT_WARNINGS
             -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initializers
@@ -545,7 +536,7 @@ endif()
 # ==================================================================================================
 set(INSTALL_TYPE ARCHIVE)
 install(TARGETS ${TARGET} ${INSTALL_TYPE} DESTINATION lib/${DIST_DIR})
-install(TARGETS vkshaders ${INSTALL_TYPE} DESTINATION lib/${DIST_DIR})
+install(TARGETS ${INSTALL_TYPE} DESTINATION lib/${DIST_DIR})
 install(DIRECTORY ${PUBLIC_HDR_DIR}/backend DESTINATION include)
 
 if (FILAMENT_SUPPORTS_WEBGPU)
@@ -576,6 +567,7 @@ if (APPLE OR LINUX)
         test/test_BufferUpdates.cpp
         test/test_Callbacks.cpp
         test/test_MemoryMappedBuffer.cpp
+        test/test_MsaaSwapChain.cpp
         test/test_MRT.cpp
         test/test_PushConstants.cpp
         test/test_LoadImage.cpp

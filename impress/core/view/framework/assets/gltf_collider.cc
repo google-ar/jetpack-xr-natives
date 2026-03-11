@@ -68,6 +68,7 @@ absl::optional<RayHit> GltfCollider::Intersect(const Ray& world_ray) {
 
   mat4f local_from_world = inverse(GetNode()->GetWorldTrs());
   Ray local_ray = world_ray.GetTransformed(local_from_world);
+  local_ray.direction = normalize(local_ray.direction);
 
   // TODO: Make GltfCollider work with skinned meshes
   // and morph target.

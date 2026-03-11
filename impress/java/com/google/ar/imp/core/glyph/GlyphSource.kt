@@ -29,7 +29,9 @@ private val logger = GoogleLogger.forEnclosingClass()
  * text by glyphs. See android_glyph_source.h.
  */
 @UsedByNative("android_glyph_source.cc")
-class GlyphSource @UsedByNative("android_glyph_source.cc") constructor(method: Method) {
+class GlyphSource
+@UsedByNative("android_glyph_source.cc")
+constructor(method: Method, cacheSizeBytes: Int) {
   @UsedByNative("android_glyph_source.cc")
   enum class Method {
     AUTO,
@@ -43,9 +45,9 @@ class GlyphSource @UsedByNative("android_glyph_source.cc") constructor(method: M
         if (Build.VERSION.SDK_INT >= 31) {
           ShaperGlyphSource()
         } else {
-          PathGlyphSource()
+          PathGlyphSource(cacheSizeBytes)
         }
-      Method.PATH -> PathGlyphSource()
+      Method.PATH -> PathGlyphSource(cacheSizeBytes)
       Method.SHAPER -> ShaperGlyphSource()
     }
 
@@ -74,6 +76,24 @@ class GlyphSource @UsedByNative("android_glyph_source.cc") constructor(method: M
   fun getTextGlyphs(text: String, paint: Paint) = withExceptionsLogged {
     inner.getTextGlyphs(text, paint)
   }
+
+  /**
+   * Release glyph IDs.
+   *
+   * The path glyph method caches some information when new glyphs are gotten by getTextGlyphs().
+   * For every time getTextGlyphs() is called, releaseTextGlyphs() should be called with that glyph
+   * ID.
+   */
+  @UsedByNative("android_glyph_source.cc")
+  fun releaseTextGlyphs(glyphIds: IntArray) = withExceptionsLogged {
+    for (glyphId in glyphIds) {
+      inner.releaseTextGlyph(glyphId)
+    }
+  }
+
+  /** Release a single glyph ID. */
+  @UsedByNative("android_glyph_source.cc")
+  fun releaseTextGlyph(glyphId: Int) = withExceptionsLogged { inner.releaseTextGlyph(glyphId) }
 
   /**
    * Analogous to GetCombinedCharacterGroups.
@@ -113,6 +133,8 @@ internal interface IGlyphSource {
   fun getGlyphMetrics(glyphId: Int, font: Any?, paint: Paint): FloatArray
 
   fun getTextGlyphs(text: String, paint: Paint): Array<GlyphAdvance>
+
+  fun releaseTextGlyph(glyphId: Int)
 
   fun getCombinedCharacterGroups(text: String, paint: Paint): IntArray
 

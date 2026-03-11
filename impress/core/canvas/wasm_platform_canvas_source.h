@@ -22,6 +22,7 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "core/async/future.h"
 #include "core/canvas/platform_canvas_source.h"
 #include "core/canvas/scoped_canvas.h"
@@ -69,6 +70,8 @@ class WasmPlatformCanvasSource : public PlatformCanvasSource {
   std::vector<ScopedCanvas::GlyphAdvance> GetTextGlyphs(
       absl::string_view text,
       const ScopedCanvas::TextOptions& text_options) override;
+
+  void ReleaseTextGlyphs(absl::Span<int> glyph_ids) override;
 
   FontInfo GetFontInfo(const ScopedCanvas::TextOptions& text_options) override;
 

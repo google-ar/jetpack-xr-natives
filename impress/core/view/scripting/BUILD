@@ -32,8 +32,9 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
-        "//core/async:future",
+        "//core/common:invocable",
         "//core/scripting/proto:bridge_cc_proto",
+        "@com_google_absl//absl/base:core_headers",
     ],
     alwayslink = 1,
 )

@@ -17,26 +17,26 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SCRIPTING_SCRIPTING_SYSTEM_H_
 #define THIRD_PARTY_IMPRESS_CORE_SCRIPTING_SCRIPTING_SYSTEM_H_
 
+#include <cstdint>
 #include <memory>
 #include <set>
-#include <string>
 
+#include "absl/base/attributes.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
-#include "core/async/future.h"
 #include "core/common/buffer_access.h"
 #include "core/common/context.h"
 #include "core/common/invocable.h"
 #include "core/common/platform_helpers.h"
 #include "core/common/rememberer.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
-#include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
 #include "core/proto/any.proto.imp.h"
 #include "core/scripting/base_message_handler.h"
 #include "core/scripting/message_helpers.h"
 #include "core/scripting/proto/bridge.proto.imp.h"
+#include "core/scripting/proto/events.proto.imp.h"
 #include "core/scripting/web/web_view.h"
 #include "core/view/scripting/script_message_handler.h"
 #include "core/view/scripting/script_message_handler_provider.h"
@@ -54,6 +54,8 @@ class ScriptingSystem : public Rememberer, public ScriptMessageHandler {
  public:
   // Creates and initializes a WebView with the provided parameters.
   // The script parameter is the script code to inject into javascript.
+  // TODO: (broken link) - remove this constructor.
+  ABSL_DEPRECATED("Create a WebView and ScriptingSystem separately.")
   ScriptingSystem(const Context& context,
                   ScriptMessageHandlerProvider* provider,
                   const WebViewParams& params,
@@ -63,24 +65,16 @@ class ScriptingSystem : public Rememberer, public ScriptMessageHandler {
   // Note that to enable the scripting interface, LoadAPI needs to be called,
   // and is recommended to be done so on every page load.
   // The script parameter is the script code to inject into javascript.
+  // TODO: (broken link) - remove this constructor.
+  ABSL_DEPRECATED("Create a WebView and ScriptingSystem separately.")
   ScriptingSystem(const Context& context,
                   ScriptMessageHandlerProvider* provider,
                   void* external_web_view,
                   BufferAccess script = BufferAccess());
 
-  // Creates a ScriptingSystem with an already-initialized WebView.
-  ScriptingSystem(const Context& context,
-                  ScriptMessageHandlerProvider* provider,
-                  std::unique_ptr<WebView> web_view);
+  explicit ScriptingSystem(ScriptMessageHandlerProvider& provider);
 
   ~ScriptingSystem() override;
-
-  // Loads the Imp Scripting interface into the WebView. This is done
-  // automatically if the WebView is created by Imp, but it has to be called
-  // after a page load if the WebView is supplied externally to enable the
-  // scripting interface. It's recommended to have this be called on every page
-  // load when using a WebView that is already initialized and supplied to Imp.
-  void LoadAPI() const;
 
   // Adds a MessageHandler that will be invoked to handle its specified types.
   void AddHandler(std::unique_ptr<scripting::BaseMessageHandler> handler);
@@ -92,30 +86,37 @@ class ScriptingSystem : public Rememberer, public ScriptMessageHandler {
 
   // Sends an event of a registered type to the dispatcher with optional target.
   absl::Status SendRegisteredEvent(const Any& any,
-                                   NodeHandle target = NodeHandle());
+                                   NodeHandle target = NodeHandle()) const;
 
   // Expose the HandleMessage(message) variants to clients.
   using ScriptMessageHandler::HandleMessage;
 
-  // Handles an incoming message from Javascript (in base64 string format).
-  void HandleMessage(const std::string& message, const PlatformArgs& args,
-                     PlatformArgs& out) override;
+  // Handles an incoming message from script by delegating to handlers.
+  void HandleMessage(const MessageToNative& message, const PlatformArgs& args,
+                     ResponseHandler response_handler) override;
 
-  // Handles an incoming message from Javascript by delegating to handlers.
-  Future<MessageToScript> HandleMessage(const MessageToNative& message,
-                                        const PlatformArgs& args,
-                                        PlatformArgs& out) override;
-
+  // Returns the WebView owned by this ScriptingSystem (which may be null).
+  // TODO: (broken link) - remove this method.
+  ABSL_DEPRECATED("Construct a WebView and ScriptingSystem separately.")
   WebView* GetWebView() { return web_view_.get(); }
 
  private:
-  // Handles forwarding a log from imp output to the javascript console.
+  // Handles forwarding a log from imp output to the script console.
   static void HandleLog(void* context, output::OutputKind kind,
                         absl::string_view log);
 
+  void HandleEventListenerAddRequest(const EventListenerAddRequest& request,
+                                     int32_t message_id,
+                                     ResponseHandler response_handler);
+  void HandleEventListenerRemoveRequest(
+      const EventListenerRemoveRequest& request, int32_t message_id,
+      ResponseHandler response_handler) const;
+
+  // TODO: (broken link) - remove this field.
   std::unique_ptr<WebView> web_view_;
+
   std::set<std::unique_ptr<BaseMessageHandler>> handlers_;
-  ScriptMessageHandlerProvider* provider_;
+  ScriptMessageHandlerProvider& provider_;
 
   // Stores a map of proto type urls to the message handler that handles that
   // type of proto.

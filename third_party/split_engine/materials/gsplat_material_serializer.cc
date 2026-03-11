@@ -74,9 +74,7 @@ GsplatMaterialSerializer::GsplatMaterialSerializer(
                           std::move(material)),
       view_(view),
       gsplat_asset_(gsplat_asset) {
-  SetPositionDataTexture(gsplat_asset->position_data_texture());
-  SetCov3dDataTexture(gsplat_asset->cov3d_data_texture());
-  SetColorDataTexture(gsplat_asset->color_data_texture());
+  SetPrecomputeTextures(gsplat_asset);
 }
 
 GsplatMaterialSerializer::~GsplatMaterialSerializer() { Cleanup(); }
@@ -109,7 +107,8 @@ flatbuffers::Offset<void> GsplatMaterialSerializer::SerializeParameters(
                  window_dimension_in_magic_window_),
              imp::split_engine::PointerFromOptional(
                  magic_window_from_user_world_matrix_),
-             imp::split_engine::PointerFromOptional(is_splat_data_precomputed_),
+             imp::split_engine::PointerFromOptional(
+                 gsplat_from_user_world_matrix_),
              precomputed_data_texture, position_data_texture,
              cov3d_data_texture, color_data_texture, sorted_indices_texture,
              imp::split_engine::PointerFromOptional(visualize_chunks_),

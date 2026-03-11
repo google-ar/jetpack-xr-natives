@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// This check is to satisfy presubmit's Builder check as it runs on Linux.
+#if __ANDROID__
 #include <android/binder_auto_utils.h>
 #include <android/binder_ibinder_jni.h>
+#endif
 #include <jni.h>
 
 #include <cassert>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>  // IWYU pragma: keep
@@ -50,6 +54,7 @@
 #include "core/view/platforms/xr_android/xr_helpers.h"
 #include "core/view/view_host.h"
 #include "core/window/filament_host.h"
+#include "split_engine/schemas/split_engine_schema_version.h"
 
 #if __ANDROID_API__ >= 34
 #include "core/split_engine/android/split_engine_shared_memory_bridge_service.h"
@@ -149,13 +154,7 @@ JNI_METHOD_ACTIVITY(void, nSetup)
 
   auto bridge_sender =
       std::make_unique<imp::split_engine::SplitEngineSharedMemoryBridgeSender>(
-          *bridge_client,
-          /*recycle_buffers=*/true);
-
-  auto bridge_one_shot_sender =
-      std::make_unique<imp::split_engine::SplitEngineSharedMemoryBridgeSender>(
-          *bridge_client,
-          /*recycle_buffers=*/false);
+          *bridge_client);
 
   std::unique_ptr<imp::split_engine::SplitEngineAndroidSharedMemoryBridge>
       bridge = std::make_unique<
@@ -165,10 +164,15 @@ JNI_METHOD_ACTIVITY(void, nSetup)
   view->SetRenderableManager(
       std::make_unique<imp::RenderableManagerWrapper>(*view));
 
+  int32_t api_level = android_xr::kSplitEngineProductionApiLevel;
+#ifdef IMP_SPLIT_ENGINE_ALLOW_EXPERIMENTAL_APIS
+  api_level = android_xr::kSplitEngineExperimentalApiLevel;
+#endif
+
   auto split_engine_serializer =
       std::make_unique<imp::split_engine::SplitEngineSerializerImpl>(
-          *view, std::move(bridge), std::move(bridge_sender),
-          std::move(bridge_one_shot_sender), bridge_buffer_size_bytes);
+          *view, api_level, std::move(bridge), std::move(bridge_sender),
+          bridge_buffer_size_bytes);
 
   view->SetSplitEngineSerializer(std::move(split_engine_serializer));
 
@@ -181,8 +185,14 @@ JNI_METHOD_ACTIVITY(jlong, nRenderNextFrame)
  jlong next_vsync_nanos, jlong camera_update_params_handle) {
   imp::Flags<imp::window::FilamentHost::IsolatedPreRenderFlags>
       pre_render_flags;
+
+// When in DEV mode, we want to render the app's dev mode UI. Meanwhile, the
+// rendering is only available for the OPENGL backend. Otherwise, we will skip
+// rendering the dev mode UI, as there is no need or no way to render it.
+#if !(IMP_MATERIAL_API(OPENGL) && IMP_RUNTIME(DEV))
   pre_render_flags |=
       imp::window::FilamentHost::IsolatedPreRenderFlags::kNeverRenderDevMode;
+#endif
 
   imp::ViewHost* view_host = FromJava<imp::ViewHost>(view_host_handle);
   if (camera_update_params_handle) {

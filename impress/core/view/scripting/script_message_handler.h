@@ -17,42 +17,35 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_VIEW_SCRIPTING_SCRIPT_MESSAGE_HANDLER_H_
 #define THIRD_PARTY_IMPRESS_CORE_VIEW_SCRIPTING_SCRIPT_MESSAGE_HANDLER_H_
 
-#include <string>
+#include <utility>
 #include <vector>
 
-#include "core/async/future.h"
+#include "core/common/invocable.h"
 #include "core/scripting/proto/bridge.proto.imp.h"
 
 namespace imp {
 namespace scripting {
 
 using PlatformArgs = std::vector<void*>;
+using ResponseHandler = imp::Invocable<void(const MessageToScript&, void*)>;
 
 // An interface for a class that handles messages from script (i.e. Javascript).
-struct ScriptMessageHandler {
+class ScriptMessageHandler {
+ public:
   virtual ~ScriptMessageHandler() {}
 
-  // Handles a string message from script. Message format based on contract.
-  // Platform args is an optional vector of void* arguments such as a jobject.
-  virtual void HandleMessage(const std::string& message,
-                             const PlatformArgs& args, PlatformArgs& out) = 0;
-
-  // Handles a string message from script. Message format based on contract.
-  void HandleMessage(const std::string& message) {
-    PlatformArgs out;
-    HandleMessage(message, PlatformArgs(), out);
-  }
-
   // Handles an incoming message from script by delegating to handlers.
   // Platform args is an optional vector of void* arguments such as a jobject.
-  virtual Future<MessageToScript> HandleMessage(const MessageToNative& message,
-                                                const PlatformArgs& args,
-                                                PlatformArgs& out) = 0;
+  // The response handler is called with the MessageToScript response and an
+  // optional platform-specific void* output parameter (e.g. a jobject).
+  virtual void HandleMessage(const MessageToNative& message,
+                             const PlatformArgs& args,
+                             ResponseHandler response_handler) = 0;
 
   // Handles an incoming message from script by delegating to handlers.
-  Future<MessageToScript> HandleMessage(const MessageToNative& message) {
-    PlatformArgs out;
-    return HandleMessage(message, PlatformArgs(), out);
+  void HandleMessage(const MessageToNative& message,
+                     ResponseHandler response_handler) {
+    HandleMessage(message, PlatformArgs(), std::move(response_handler));
   }
 };
 

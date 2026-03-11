@@ -24,6 +24,7 @@
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "core/async/future.h"
 #include "core/canvas/android_glyph_source.h"
 #include "core/canvas/constants.h"
@@ -97,11 +98,11 @@ void ConfigurePaintForStrokeTextOptions(
 
 AndroidPlatformCanvasSource::AndroidPlatformCanvasSource(
     Context context, AndroidGlyphSource::Method glyph_method,
-    bool use_hardware_rendering)
+    bool use_hardware_rendering, int glyph_cache_size_bytes)
     : context_(context),
       paint_(context_),
       stroke_paint_(context_),
-      glyph_source_(context_, glyph_method),
+      glyph_source_(context_, glyph_method, glyph_cache_size_bytes),
       use_hardware_rendering_(use_hardware_rendering) {
   paint_.SetAntiAlias(true);
   stroke_paint_.SetAntiAlias(true);
@@ -188,6 +189,10 @@ AndroidPlatformCanvasSource::GetTextGlyphs(
   ConfigurePaintForTextOptions(paint_, text_options,
                                /*configure_for_glyphs=*/true);
   return glyph_source_.GetTextGlyphs(text, paint_);
+}
+
+void AndroidPlatformCanvasSource::ReleaseTextGlyphs(absl::Span<int> glyph_ids) {
+  return glyph_source_.ReleaseTextGlyphs(glyph_ids);
 }
 
 FontInfo AndroidPlatformCanvasSource::GetFontInfo(

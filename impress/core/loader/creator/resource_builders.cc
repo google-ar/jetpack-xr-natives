@@ -554,7 +554,7 @@ filament::TextureSampler BuildTextureSampler(
   sampler_state.setWrapModeR(ToFilament(sampler.wrap_mode_r()));
   sampler_state.setWrapModeS(ToFilament(sampler.wrap_mode_s()));
   sampler_state.setWrapModeT(ToFilament(sampler.wrap_mode_t()));
-  sampler_state.setAnisotropy(sampler.anisotropy_log2());
+  sampler_state.setAnisotropy(1u << sampler.anisotropy_log2());
   sampler_state.setCompareMode(ToFilament(sampler.compare_mode()),
                                ToFilament(sampler.compare_func()));
   return sampler_state;

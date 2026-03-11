@@ -14,15 +14,9 @@
 
 #include "core/split_engine/materials/builtin_material_creator_helper.h"
 
-#include <cstdint>
-
 #include "absl/log/check.h"
-#include "absl/status/status.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
-#include "core/async/future.h"
-#include "core/split_engine/shared/split_engine_defines.h"
-#include "core/split_engine/split_engine_renderer.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
 namespace imp::split_engine {
@@ -75,25 +69,6 @@ flatbuffers::Offset<void> CreateBuiltInMaterialSpecWithDefaultParameters(
 
   
   return {};
-}
-
-// Shortcut to create a built-in material with default parameters.
-Future<absl::Status> CreateBuiltInMaterialWithDefaultParameters(
-    SplitEngineRenderer* split_engine_renderer,
-    android_xr::schemas::BuiltInMaterialSpec spec, const BridgeId bridge_id,
-    const uint64_t material_instance_id) {
-  flatbuffers::FlatBufferBuilder builder;
-  flatbuffers::Offset<android_xr::schemas::BuiltInMaterialRequest> fbb_request =
-      android_xr::schemas::CreateBuiltInMaterialRequest(
-          builder, material_instance_id, spec,
-          CreateBuiltInMaterialSpecWithDefaultParameters(builder, spec));
-  builder.Finish(fbb_request);
-
-  const android_xr::schemas::BuiltInMaterialRequest* request =
-      flatbuffers::GetRoot<android_xr::schemas::BuiltInMaterialRequest>(
-          builder.GetBufferPointer());
-
-  return split_engine_renderer->CreateBuiltInMaterial(bridge_id, *request);
 }
 
 };  // namespace imp::split_engine

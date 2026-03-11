@@ -14,29 +14,12 @@
 
 #include "core/scripting/web/web_view.h"
 
-#include "absl/strings/string_view.h"
-#include "core/scripting/proto/bridge.proto.imp.h"
-
 namespace imp::scripting {
 
-WebView::WebView()
-    : state_(State::kAvailable), script_message_handler_(nullptr) {}
+WebView::WebView() : state_(State::kAvailable) {}
 
 WebView::State WebView::GetState() const { return state_; }
 
 void WebView::OnWebViewDestroyed() { state_ = State::kUnavailable; }
-
-void WebView::SetScriptMessageHandler(
-    ScriptMessageHandler* script_message_handler) {
-  script_message_handler_ = script_message_handler;
-}
-
-void WebView::HandleMessage(const MessageToNative& message) {
-  if (!script_message_handler_) return;
-  // Future is .KeptBy(script_message_handler_) internally, so we can ignore the
-  // return value.
-  PlatformArgs out;
-  auto unused = script_message_handler_->HandleMessage(message, {}, out);
-}
 
 }  // namespace imp::scripting

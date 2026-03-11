@@ -28,6 +28,7 @@
 #include "core/assets/gltf/object_model/property_pointer.h"
 #include "core/assets/gltf/object_model/token_parser.h"
 #include "core/common/robin_set.h"
+#include "core/model/shared_data.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
@@ -46,6 +47,9 @@ constexpr absl::string_view kMeshesLengthToken = "meshes.length";
 constexpr absl::string_view kMeshesToken = "meshes";
 constexpr absl::string_view kWeightsLengthToken = "weights.length";
 constexpr absl::string_view kWeightsToken = "weights";
+constexpr absl::string_view kPrimitivesLengthToken = "primitives.length";
+constexpr absl::string_view kPrimitivesToken = "primitives";
+constexpr absl::string_view kMaterialToken = "material";
 
 }  // namespace
 
@@ -218,6 +222,95 @@ absl::Status MeshesWeightPointerDeclaration::SetValue(
 
   return gltf_renderer->SetMeshMorphTargetWeight(weight, mesh_index,
                                                  target_index);
+}
+
+std::vector<TokenParser> MeshesPrimitivesLengthDeclaration::GetTokenParsers()
+    const {
+  return {std::string(kMeshesToken), GetIntTokenParser(),
+          std::string(kPrimitivesLengthToken)};
+}
+
+absl::StatusOr<PointerValue> MeshesPrimitivesLengthDeclaration::GetValue(
+    NodeHandle gltf_model, absl::Span<const ParsedToken> parsed_tokens) const {
+  if (!std::holds_alternative<int>(parsed_tokens[1])) {
+    return absl::FailedPreconditionError(
+        "The second parsed component is expected to be an int.");
+  }
+  int mesh_index = std::get<int>(parsed_tokens[1]);
+
+  ComponentHandle<GltfRenderer> gltf_renderer =
+      gltf_model->GetComponent<GltfRenderer>();
+  if (!gltf_renderer) {
+    return absl::InternalError("No GltfRenderer found on the glTF model node.");
+  }
+  const RobinSet<NodeHandle>* nodes =
+      gltf_renderer->GetNodesFromOriginalMeshIndex(mesh_index);
+  if (!nodes) {
+    return absl::InternalError(
+        "This mesh does not exist or is not used in the scene.");
+  }
+
+  // Get the primitive count from any of the nodes that use this mesh.
+  return static_cast<int>(
+      (*nodes->begin())->GetComponent<GltfMesh>()->GetPrimitiveCount());
+}
+
+absl::Status MeshesPrimitivesLengthDeclaration::SetValue(
+    NodeHandle gltf_model, absl::Span<const ParsedToken> parsed_tokens,
+    PointerValue value) const {
+  return absl::FailedPreconditionError(
+      "Setting primitives length values is not supported.");
+}
+
+std::vector<TokenParser>
+MeshesPrimitivesMaterialPointerDeclaration::GetTokenParsers() const {
+  return {std::string(kMeshesToken), GetIntTokenParser(),
+          std::string(kPrimitivesToken), GetIntTokenParser(),
+          std::string(kMaterialToken)};
+}
+
+absl::StatusOr<PointerValue>
+MeshesPrimitivesMaterialPointerDeclaration::GetValue(
+    NodeHandle gltf_model, absl::Span<const ParsedToken> parsed_tokens) const {
+  if (!std::holds_alternative<int>(parsed_tokens[1])) {
+    return absl::FailedPreconditionError(
+        "The second parsed component is expected to be an int.");
+  }
+  int mesh_index = std::get<int>(parsed_tokens[1]);
+
+  if (!std::holds_alternative<int>(parsed_tokens[3])) {
+    return absl::FailedPreconditionError(
+        "The fourth parsed component is expected to be an int.");
+  }
+  int primitive_index = std::get<int>(parsed_tokens[3]);
+
+  ComponentHandle<GltfRenderer> gltf_renderer =
+      gltf_model->GetComponent<GltfRenderer>();
+  if (!gltf_renderer) {
+    return absl::InternalError("No GltfRenderer found on the glTF model node.");
+  }
+  const RobinSet<NodeHandle>* node_handles =
+      gltf_renderer->GetNodesFromOriginalMeshIndex(mesh_index);
+  if (!node_handles) {
+    return absl::InternalError(
+        "This mesh does not exist or is not used in the scene.");
+  }
+
+  // Use the first node that uses this mesh to get the original material index.
+  std::optional<model::EntityId> entity_id =
+      gltf_renderer->GetEntityIdFromNodeHandle(*node_handles->begin());
+  if (!entity_id.has_value()) {
+    return absl::InternalError("No entity id found for the given node handle.");
+  }
+  return gltf_renderer->GetOriginalMaterialIndex(entity_id.value(),
+                                                 primitive_index);
+}
+
+absl::Status MeshesPrimitivesMaterialPointerDeclaration::SetValue(
+    NodeHandle gltf_model, absl::Span<const ParsedToken> parsed_tokens,
+    PointerValue value) const {
+  return absl::FailedPreconditionError(
+      "Setting primitives material values is not supported.");
 }
 
 }  // namespace imp::gltf

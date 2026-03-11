@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/base/attributes.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "absl/types/optional.h"
@@ -236,9 +237,11 @@ class View : public BaseView {
     return script_message_handler_;
   }
 
+  ABSL_DEPRECATED("ScriptingSystem can be created directly in View::Setup().")
   void SetScriptEndpoint(void* script_endpoint) override {
-    // Do nothing. View subclasses that want to use scripting should implement
-    // this. See samples/scripting for an example.
+    // Do nothing. View subclasses that want to use scripting used to have to
+    // override this function to create a scripting system. However, that is no
+    // longer necessary; instead, just call ScriptingSystem(*this) in Setup().
   }
 
   Monitor* GetMonitor() noexcept override { return host_->GetMonitor(); }
@@ -294,7 +297,7 @@ class View : public BaseView {
   ~View() override;
 
  protected:
-  View(ViewConfig view_config = kDefaultViewConfig);
+  explicit View(ViewConfig view_config = GetDefaultViewConfig());
 
   // Runs the main loop of View.  This should only be called by ViewState or
   // testing::ViewFixture.

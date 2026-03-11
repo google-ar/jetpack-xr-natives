@@ -19,11 +19,13 @@
 #include <string>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "absl/types/variant.h"
+#include "filament/filament/include/filament/RenderableManager.h"
 #include "core/async/future.h"
 #include "core/materials/material.h"
 #include "core/math/almost_equal.h"
@@ -152,6 +154,22 @@ CreateConeSettings MapSettings(
   return settings;
 }
 
+CreateCustomMeshSettings MapSettings(
+    const PrimitiveShapeRendererState::CustomMesh& mesh) {
+  CreateCustomMeshSettings settings;
+  settings.positions =
+      std::vector<float>(mesh.positions.begin(), mesh.positions.end());
+  settings.texcoords =
+      std::vector<float>(mesh.texcoords.begin(), mesh.texcoords.end());
+  settings.indices =
+      std::vector<uint32_t>(mesh.indices.begin(), mesh.indices.end());
+  settings.draw_mode = static_cast<filament::RenderableManager::PrimitiveType>(
+      mesh.draw_mode.value_or(static_cast<int32_t>(
+          filament::RenderableManager::PrimitiveType::TRIANGLES)));
+  settings.color = mesh.color;
+  return settings;
+}
+
 CreateQuadSettings MapSettings(
     const PrimitiveShapeRendererState::QuadMesh& mesh) {
   CreateQuadSettings settings;
@@ -207,6 +225,10 @@ PrimitiveShapeType GetShapeTypeForPrimitive(
                                  ParamT,
                                  PrimitiveShapeRendererState::ConeMesh>) {
           return PrimitiveShapeType::kCone;
+        } else if constexpr (std::is_same_v<
+                                 ParamT,
+                                 PrimitiveShapeRendererState::CustomMesh>) {
+          return PrimitiveShapeType::kCustomMesh;
         } else {
           return PrimitiveShapeType::kPanel;
         }
@@ -240,6 +262,10 @@ OwnedMeshPtr CreateMeshForPrimitive(
                                  ParamT,
                                  PrimitiveShapeRendererState::ConeMesh>) {
           return view.GetMeshFactory().CreateCone(MapSettings(mesh));
+        } else if constexpr (std::is_same_v<
+                                 ParamT,
+                                 PrimitiveShapeRendererState::CustomMesh>) {
+          return view.GetMeshFactory().CreateCustomMesh(MapSettings(mesh));
         } else if constexpr (std::is_same_v<
                                  ParamT,
                                  PrimitiveShapeRendererState::QuadMesh>) {

@@ -12,20 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <utility>
 
-#include "core/common/context.h"
+#include "gmock/gmock.h"
+#include "filament/filament/include/filament/Engine.h"
+#include "core/common/filament_engine_helpers.h"
+#include "core/common/test_helpers.h"
+#include "core/math/mat.h"
+#include "core/math/quat.h"
+#include "core/math/vec.h"
 #include "core/proto/any.proto.imp.h"
+#include "core/resources/resource_manager.h"
 #include "core/scripting/basic_api.h"
-#include "core/scripting/message_helpers.h"
 #include "core/scripting/proto/api.proto.imp.h"
 #include "core/scripting/proto/bridge.proto.imp.h"
-#include "core/scripting/proto/events.proto.imp.h"
 #include "core/scripting/scripting_system.h"
 #include "core/scripting/test_resources.h"
+#include "core/scripting/web/web_view.h"
+#include "core/view/base_view.h"
+#include "core/view/framework/generic_materials.h"
+#include "core/view/framework/generic_materials_always_embedded.h"
+#include "core/view/framework/view.h"
 #include "core/view/view_host.h"
 #include "testing/executor_test_helper.h"
-#include "testing/view_fixture.h"
+#include "testing/mock_url_loader.h"
 #include "third_party/llvm/llvm-project/compiler-rt/include/fuzzer/FuzzedDataProvider.h"
 
 namespace imp::scripting {
@@ -233,8 +247,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
                     {1, 1});
 
   WebViewParams params;
-  auto scripting_system = std::make_unique<ScriptingSystem>(
-      view_host->GetView()->GetContext(), nullptr, params);
+  auto scripting_system =
+      std::make_unique<ScriptingSystem>(*view_host->GetView());
 
   AddBasicApiMessageHandlers(*scripting_system, *view_host->GetView());
 
@@ -249,8 +263,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
                           &message_to_native);
 
     // Do the test!
-    ExecutorTestHelper::AwaitFuture(
-        scripting_system->HandleMessage(message_to_native));
+    scripting_system->HandleMessage(message_to_native,
+                                    [](MessageToScript, void*) {});
   }
 
   // Manually shutdown executors to prevent future work from being scheduled

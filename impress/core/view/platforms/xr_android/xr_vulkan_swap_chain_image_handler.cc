@@ -87,7 +87,7 @@ void XrVulkanSwapChainImageHandler::SwitchSwapchainLayers(
 }
 
 VkResult XrVulkanSwapChainImageHandler::acquire(
-    XrVulkanPlatform::ImageSyncData* outImageSyncData) {
+    ImageSyncData* outImageSyncData) {
   absl::Status status = host_->BeginFrame();
   if (!status.ok()) {
     return VK_INCOMPLETE;
@@ -169,6 +169,11 @@ void XrVulkanSwapChainImageHandler::CreateDepthSwapchains() {
 XrVulkanSwapChainImageHandler::SwapchainData
 XrVulkanSwapChainImageHandler::CreateDepthSwapchain(uint2 display_size,
                                                     uint32_t layers) {
+  VkImageUsageFlags usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+  if (platform_->isTransientAttachmentSupported()) {
+    usage |= VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+  }
+
   VkImage image = VK_NULL_HANDLE;
   VkImageCreateInfo create_info = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -185,8 +190,7 @@ XrVulkanSwapChainImageHandler::CreateDepthSwapchain(uint2 display_size,
       .arrayLayers = layers,
       .samples = VK_SAMPLE_COUNT_1_BIT,
       .tiling = VK_IMAGE_TILING_OPTIMAL,
-      .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-               VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT,
+      .usage = usage,
       .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
   };
 
@@ -203,15 +207,18 @@ XrVulkanSwapChainImageHandler::CreateDepthSwapchain(uint2 display_size,
   bluevk::vkGetPhysicalDeviceMemoryProperties(platform_->getPhysicalDevice(),
                                               &memoryProperties);
 
+  VkMemoryPropertyFlags memory_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+  if (platform_->isTransientAttachmentSupported()) {
+    memory_properties |= VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT;
+  }
+
   // There's no need to use VK_MEMORY_PROPERTY_PROTECTED_BIT here because it's a
   // transient attachment and the output will be discarded after being use in a
   // render pass.
   // That's why `VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT |
   // VK_MEMORY_PROPERTY_PROTECTED_BIT` is not a supported combination in vulkan.
-  allocInfo.memoryTypeIndex =
-      selectMemoryType(memoryProperties, memRequirements.memoryTypeBits,
-                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
-                           VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT);
+  allocInfo.memoryTypeIndex = selectMemoryType(
+      memoryProperties, memRequirements.memoryTypeBits, memory_properties);
 
   VkDeviceMemory vulkan_memory;
   bluevk::vkAllocateMemory(platform_->getDevice(), &allocInfo, nullptr,

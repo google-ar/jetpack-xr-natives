@@ -27,15 +27,23 @@ cc_library(
     copts = imp_test_copts(),
     linkstatic = True,
     deps = [
+        ":mock_asset_loader",
         "//apibindings:asset_ptr_map",
+        "//apibindings:base_asset_loader",
         "//apibindings:generic_material_manager_interface",
+        "//apibindings:impress_api_view",  # buildcleaner: keep
         "//apibindings:impress_api_view_header",
         "//apibindings:model_manager_interface",
         "//apibindings:skybox_manager_interface",
         "//apibindings:stereo_surface_manager_interface",
         "//apibindings:texture_manager_interface",
         "//apibindings:water_material_manager_interface",
+        "//core/common:invocable",
+        "//core/view/framework/assets/tests:test_resources",
+        "//core/view/utils:asset",
+        "//core/window:default_lighting",
         "//testing",
+        "@mediapipe//mediapipe/framework/port:gtest",
     ],
     alwayslink = 1,
 )

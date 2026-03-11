@@ -43,7 +43,8 @@ ToggleCamera::ToggleCamera(BaseView& view) : view_(view) {
 
 void ToggleCamera::DrawImGui() {
   if (switch_camera_icon_ &&
-      ImGui::ImageButton(switch_camera_icon_->GetFilamentTexture(),
+      ImGui::ImageButton("##toggle_camera",
+                         switch_camera_icon_->GetFilamentTexture(),
                          kButtonSize)) {
     Editor& editor = view_.GetRegistry().Get<Editor>()->get();
     editor.GetDispatcher().Send(ToggleCameraEvent());

@@ -22,11 +22,11 @@
 #include <vector>
 
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "core/canvas/fonts/font_holder.h"
 #include "core/canvas/scoped_canvas.h"
 #include "core/common/context.h"
 #include "core/common/jni_helpers.h"
-#include "core/math/vec.h"
 #include "core/text/text_metrics.proto.h"
 #include "core/view/platforms/android/wrappers/canvas.h"
 #include "core/view/platforms/android/wrappers/paint.h"
@@ -61,7 +61,8 @@ class AndroidGlyphSource : public JavaWrapper {
     kShaper,
   };
 
-  explicit AndroidGlyphSource(const Context& context, Method method);
+  explicit AndroidGlyphSource(const Context& context, Method method,
+                              int cache_size_bytes);
 
   /**
    * HACK: Don't crash clients which forget to include the
@@ -82,6 +83,11 @@ class AndroidGlyphSource : public JavaWrapper {
                                                         android::Paint& paint);
 
   /**
+   * See CanvasSource::ReleaseTextGlyphs().
+   */
+  void ReleaseTextGlyphs(absl::Span<int> glyph_ids);
+
+  /**
    * See CanvasSource::GetCombinedCharacterGroups().
    */
   std::vector<ScopedCanvas::GlyphGroup> GetCombinedCharacterGroups(
@@ -97,6 +103,8 @@ class AndroidGlyphSource : public JavaWrapper {
  private:
   JniHandle get_glyph_metrics_;
   JniHandle get_text_glyphs_;
+  JniHandle release_text_glyphs_;
+  JniHandle release_text_glyph_;
   JniHandle get_combined_character_groups_;
   JniHandle draw_glyph_;
 

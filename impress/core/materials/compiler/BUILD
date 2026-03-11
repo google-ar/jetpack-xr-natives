@@ -103,6 +103,7 @@ cc_library(
     deps = [
         ":fbs",
         ":runtime_material_compiler_config",
+        "//core/common:filament_status_helpers",
         "//core/ipc:common",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -126,6 +127,7 @@ cc_library(
     copts = imp_copts(),
     linkstatic = True,
     deps = [
+        ":material_cache",
         ":material_compiler_client",
         ":material_compiler_client_jni",
         ":material_compiler_service_jni",
@@ -146,10 +148,12 @@ cc_library(
     hdrs = ["desktop_runtime_material_compiler.h"],
     copts = imp_copts(),
     deps = [
+        ":material_cache",
         ":material_compiler_client",
         ":material_compiler_service",
         ":material_compiler_service_jni",
         ":runtime_material_compiler",
+        "//core/async:future",
         "//core/view:base_view",
         "@com_google_absl//absl/memory",
         "@com_google_impress//core/common:log",
@@ -165,6 +169,7 @@ cc_library(
     linkstatic = True,
     deps = [
         ":fbs",
+        ":material_cache",
         ":material_compiler_client",
         "//core/assets/material:material_asset",
         "//core/assets/material:material_load_options_proto_cc",
@@ -194,9 +199,39 @@ cc_library(
         "//core:config",
         "//core/async:future",
         "//core/view:base_view",
+        "@com_google_absl//absl/strings:string_view",
     ] + if_android([
         ":android_runtime_material_compiler",
     ]),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "material_cache",
+    srcs = [
+        "cache/material_cache.cc",
+    ],
+    hdrs = [
+        "cache/material_cache.h",
+    ],
+    copts = imp_copts(),
+    deps = [
+        ":file_utilities",
+        "//core/async:future",
+        "//core/common:context",
+        "//third_party/openssl:crypto",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_impress//core/common:log",
+        "@third_party//filament/libs:filabridge_hdrs",
+    ],
     alwayslink = 1,
 )
 
@@ -243,6 +278,36 @@ cc_library(
         "@flatbuffers",
         "@mediapipe//mediapipe/framework/port:gtest",
     ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "file_utilities_jni",
+    srcs = ["cache/file_utilities_jni.cc"],
+    hdrs = ["cache/file_utilities_jni.h"],
+    copts = imp_copts(),
+    linkstatic = True,
+    deps = [
+        "//core/common:context",
+        "//core/common:jni_helpers",
+    ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "file_utilities",
+    srcs = ["cache/file_utilities.cc"],
+    hdrs = ["cache/file_utilities.h"],
+    copts = imp_copts(),
+    deps = [
+        "//core:config",
+        "//core/common:context",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:string_view",
+    ] + if_android([
+        ":file_utilities_jni",
+    ]),
     alwayslink = 1,
 )
 

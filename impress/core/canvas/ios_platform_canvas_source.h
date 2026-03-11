@@ -20,6 +20,7 @@
 #include <memory>
 #include <vector>
 
+#include "absl/types/span.h"
 #include "core/canvas/platform_canvas_source.h"
 #include "core/canvas/scoped_canvas.h"
 #include "core/geometry/shapes/rect.h"
@@ -62,6 +63,8 @@ class IosPlatformCanvasSource : public PlatformCanvasSource {
   std::vector<ScopedCanvas::GlyphAdvance> GetTextGlyphs(
       absl::string_view text,
       const ScopedCanvas::TextOptions& text_options) override;
+
+  void ReleaseTextGlyphs(absl::Span<int> glyph_ids) override;
 
   FontInfo GetFontInfo(const ScopedCanvas::TextOptions& text_options) override;
 

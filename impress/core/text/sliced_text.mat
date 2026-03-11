@@ -1,0 +1,46 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+material{
+  name : "TextWithStroke",
+  parameters : [
+    {type : sampler2d, name : GlyphAtlas},
+    {type : float4, name : TextColorFactor},
+    {type : float4, name : StrokeColorFactor},
+    {type : bool, name : ShouldSuperSample}
+  ],
+    requires
+  : [uv0  // The texture coordinates of the glyph in the atlas. If the x coord
+          // is negative, it is an outline stroke and should be drawn with the
+          // StrokeColorFactor, otherwise it is a regular stroke and should
+          // use the TextColorFactor. If the y coord is negative, then it is
+          // an emoji and we should respect the original color from the atlas.
+],
+    culling : none,
+    depthWrite : false,
+    blending : transparent,
+    shadingModel : unlit,
+    flipUV : false,
+    featureLevel : 0
+  } fragment {
+#include "text_material_common.glsl"
+
+  void material(inout MaterialInputs material) {
+    prepareMaterial(material);
+
+    highp vec2 packed_uv = getUV0();
+    vec4 glyph_sample = getGlyphSample(packed_uv);
+    material.baseColor = getGlyphColor(packed_uv, glyph_sample);
+  }
+}

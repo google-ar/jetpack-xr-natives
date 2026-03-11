@@ -20,8 +20,6 @@
 #include <cstdint>
 #include <limits>
 
-#include "absl/strings/string_view.h"
-
 namespace android_xr {
 
 // This is the API level that is currently in production.
@@ -34,17 +32,6 @@ inline constexpr int32_t kSplitEngineProductionApiLevel = 1;
 // part of the schema to be used.
 inline constexpr int32_t kSplitEngineExperimentalApiLevel =
     std::numeric_limits<int32_t>::max();
-
-// Note: the last date for changes to the schema for system lock is 2025/03/14.
-//
-// Note: this system is still under development. Do not change these values
-// without consulting with lincolnfrog@. If you are just changing material
-// parameters for a built-in material, you don't need to update these values.
-// TODO: (broken link) - Change these to a single number, align with JXR.
-inline constexpr absl::string_view kSplitEngineSchemaVersion1_0_0 = "1.0.0";
-inline constexpr absl::string_view kSplitEngineSchemaVersion1_0_1 = "1.0.1";
-inline constexpr absl::string_view kSplitEngineSchemaVersionCurrent =
-    kSplitEngineSchemaVersion1_0_1;
 
 }  // namespace android_xr
 

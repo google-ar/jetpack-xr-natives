@@ -57,6 +57,17 @@ enum class MediaStereoMode : int {
   kInterleavedRightPrimaryWithDepth = 7,
 };
 
+// Controls which eye(s) a given mesh should be rendered in. This is used to
+// enable per-eye geometry; the default is to render to both eyes.
+enum class RenderEyeTarget : int {
+  // Mesh should be rendered in both eyes.
+  kBoth = 0,
+  // Mesh should only be rendered in the left eye.
+  kLeftOnly = 1,
+  // Mesh should only be rendered in the right eye.
+  kRightOnly = 2,
+};
+
 bool HasImageExtension(absl::string_view url);
 
 bool HasVideoExtension(absl::string_view url);

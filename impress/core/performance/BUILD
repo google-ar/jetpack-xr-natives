@@ -26,9 +26,12 @@ cc_library(
     name = "profiler",
     srcs = [
         "profiler.cc",
+        "timer.cc",
     ],
     hdrs = [
         "profiler.h",
+        "profiler_structs.h",
+        "timer.h",
     ],
     copts = imp_google3_copts(),
     deps = [
@@ -41,17 +44,6 @@ cc_library(
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
         "@com_google_impress//core/common:log",
-    ],
-    alwayslink = 1,
-)
-
-cc_library(
-    name = "timer",
-    srcs = ["timer.cc"],
-    hdrs = ["timer.h"],
-    deps = [
-        ":profiler",
-        "@com_google_absl//absl/strings:string_view",
     ],
     alwayslink = 1,
 )

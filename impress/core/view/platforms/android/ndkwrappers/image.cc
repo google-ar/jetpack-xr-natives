@@ -117,21 +117,15 @@ const AHardwareBuffer* Image::GetHardwareBuffer() const {
   return ahardware_buffer_;
 }
 
-const ADataSpace Image::GetBufferDataSpace() const {
+absl::StatusOr<ADataSpace> Image::GetBufferDataSpace() const {
   ImageAPIProvider* api_provider = GetImageAPIProvider().get();
   if (api_provider == nullptr) {
-    IMP_LOG(imp::ERROR) << "ImageAPIProvider is not set. Returning ADATASPACE_UNKNOWN.";
-    return ADATASPACE_UNKNOWN;
+    return absl::FailedPreconditionError("ImageAPIProvider is not set.");
   }
 
-  int32_t data_space = 0;  // ADATASPACE_UNKNOWN
-  if (absl::Status status =
-          api_provider->GetBufferDataSpace(ahardware_buffer_, data_space);
-      !status.ok()) {
-    IMP_LOG(imp::ERROR) << "Unable to get buffer data space from ImageAPIProvider: "
-               << status << ". Returning ADATASPACE_UNKNOWN.";
-    return ADATASPACE_UNKNOWN;
-  }
+  int32_t data_space = ADATASPACE_UNKNOWN;
+  MP_RETURN_IF_ERROR(
+      api_provider->GetBufferDataSpace(ahardware_buffer_, data_space));
   return static_cast<ADataSpace>(data_space);
 }
 

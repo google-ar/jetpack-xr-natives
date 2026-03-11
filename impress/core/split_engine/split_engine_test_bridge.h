@@ -26,20 +26,18 @@
 #include <cstdlib>
 #include <functional>
 #include <memory>
-#include <optional>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/split_engine/android/split_engine_android_bridge.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
-#include "core/split_engine/android/split_engine_shared_memory_bridge_client_mock.h"
 #include "core/split_engine/flatbuffer_arena_allocator.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_bridge_sender.h"
 #include "core/split_engine/split_engine_test_bridge_serializer.h"
-#include "core/view/base_view.h"
 
 namespace imp::split_engine {
 
@@ -89,7 +87,8 @@ class TestSplitEngineBridgeBuffer {
   ~TestSplitEngineBridgeBuffer();
 
   void* Data() { return mmapped_ptr_; }
-  bool IsValidBlock(const uint8_t* data, size_t data_size_in_bytes) {
+  const void* Data() const { return mmapped_ptr_; }
+  bool IsValidBlock(const uint8_t* data, size_t data_size_in_bytes) const {
     return data >= Data() &&
            (data + data_size_in_bytes) <=
                (static_cast<const uint8_t*>(Data()) + size_in_bytes_);
@@ -109,17 +108,20 @@ class TestSplitEngineBridgeBuffer {
 // possible.
 class TestSplitEngineBridgeSender : public SplitEngineBridgeSender {
  public:
-  TestSplitEngineBridgeSender(TestSplitEngineAndroidBridge& bridge,
-                              bool recycle_buffers);
-  void BeginMessageGroup(size_t size_bytes) override;
-  void EndMessageGroup() override;
-  bool IsMessageGroupActive() const override {
-    return active_message_group_id_.has_value();
-  }
-  std::unique_ptr<flatbuffers::FlatBufferBuilder> CreateFlatBufferBuilder(
-      size_t size_bytes) override;
+  using MessageType = SplitEngineBridgeSender::MessageType;
 
-  void SendMessage(const flatbuffers::FlatBufferBuilder& fbb) override;
+  TestSplitEngineBridgeSender(TestSplitEngineAndroidBridge& bridge);
+
+  absl::StatusOr<MessageGroupId> BeginMessageGroup(
+      size_t size_bytes, MessageType message_type) override;
+
+  absl::Status EndMessageGroup(MessageGroupId group_id) override;
+
+  std::unique_ptr<flatbuffers::FlatBufferBuilder> CreateFlatBufferBuilder(
+      MessageGroupId group_id, size_t size_bytes) override;
+
+  absl::Status SendMessage(MessageGroupId group_id,
+                           const flatbuffers::FlatBufferBuilder& fbb) override;
 
   void ClearReleasedMessageGroups() override;
 
@@ -129,14 +131,20 @@ class TestSplitEngineBridgeSender : public SplitEngineBridgeSender {
   void DestroySharedMemoryBuffer(void*);
 
  private:
-  TestSplitEngineAndroidBridge& test_bridge_;
-  bool recycle_buffers_;
+  const TestSplitEngineBridgeBuffer& GetBridgeBuffer(MessageGroupId group_id);
 
-  std::optional<MessageGroupId> active_message_group_id_ = std::nullopt;
-  absl::flat_hash_map<void*, std::unique_ptr<TestSplitEngineBridgeBuffer>>
+  TestSplitEngineAndroidBridge& test_bridge_;
+
+  absl::flat_hash_map<const void*, std::unique_ptr<TestSplitEngineBridgeBuffer>>
       bridge_buffers_;
-  TestSplitEngineBridgeBuffer* active_bridge_buffer_;
-  FlatbufferArenaAllocator arena_allocator_;
+  ArenaAllocator arena_allocator_;
+
+  absl::flat_hash_map<MessageGroupId, ArenaAllocator::ArenaHandle>
+      arena_handles_;
+
+  absl::flat_hash_map<MessageGroupId, MessageType> message_group_types_;
+
+  MessageType GetMessageGroupType(MessageGroupId message_group_id);
 };
 
 }  // namespace imp::split_engine

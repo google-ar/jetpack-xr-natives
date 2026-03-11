@@ -49,9 +49,7 @@ WidgetUiSystem::WidgetUiSystem(BaseView* view, bool enabled,
     : System(view),
       layout_composer_(std::move(layout_composer)),
       enabled_(enabled) {
-  if (layout_composer_ && layout_composer_->GetLayoutType().has_value() &&
-      layout_composer_->GetLayoutType() ==
-          LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT) {
+  if (Is2DLargeScreenLayout()) {
     window_configuration_ =
         &view->GetRegistry().GetOrCreate<WindowConfiguration>();
     layout_composer_->SetWindowConfiguration(window_configuration_);
@@ -64,10 +62,7 @@ WidgetUiSystem::WidgetUiSystem(BaseView* view, bool enabled,
         }
 
         bool is_using_window_configuration =
-            layout_composer_ &&
-            layout_composer_->GetLayoutType() ==
-                LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT &&
-            window_configuration_;
+            Is2DLargeScreenLayout() && window_configuration_;
 
         bool should_restore_default_layout =
             window_configuration_ &&
@@ -201,5 +196,11 @@ void WidgetUiSystem::AddWindowConfiguration(
 }
 
 void WidgetUiSystem::SetEnabled(bool enabled) { enabled_ = enabled; }
+
+bool WidgetUiSystem::Is2DLargeScreenLayout() const {
+  return layout_composer_ && layout_composer_->GetLayoutType().has_value() &&
+         layout_composer_->GetLayoutType() ==
+             LayoutConfig::LayoutType::MULTIPLE_WINDOWS_DEFAULT;
+}
 
 }  // namespace imp::editor

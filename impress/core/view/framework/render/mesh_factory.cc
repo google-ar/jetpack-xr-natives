@@ -483,6 +483,40 @@ void FillIndexBuffer(BaseView& view, filament::Engine* engine,
   index_builder.Buffer(*engine, std::move(buffer));
 }
 
+void FillVertexData(MeshData* mesh_data, size_t vertex_buffer_offset,
+                    const std::vector<float>& positions,
+                    const std::vector<float>& texcoords,
+                    std::optional<float4> color) {
+  const quatf tangents = mat3f::packTangentFrame({kRight, kUp, kBack});
+  size_t vertex_count = positions.size() / 3;
+  for (size_t i = 0; i < vertex_count; ++i) {
+    mesh_data->VertexAttributeAt<float3>(
+        vertex_buffer_offset + i,
+        imp::VertexFormat::VertexAttribute::POSITION) =
+        float3(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+    mesh_data->VertexAttributeAt<float2>(
+        vertex_buffer_offset + i, imp::VertexFormat::VertexAttribute::UV0) =
+        float2(texcoords[i * 2], texcoords[i * 2 + 1]);
+    // TODO: Implement a SurfaceEntity.Shape.CustomMesh pathway
+    // without MeshFactory.
+    mesh_data->VertexAttributeAt<quatf>(
+        vertex_buffer_offset + i,
+        imp::VertexFormat::VertexAttribute::TANGENTS) = tangents;
+    if (color) {
+      mesh_data->VertexAttributeAt<float4>(vertex_buffer_offset + i,
+                                           VertexAttribute::COLOR) = *color;
+    }
+  }
+}
+
+void FillIndicesWithRange(MeshData* mesh_data, size_t index_buffer_offset,
+                          size_t vertex_buffer_offset, size_t count) {
+  for (size_t i = 0; i < count; ++i) {
+    mesh_data->IndexAt<uint32_t>(index_buffer_offset + i) =
+        i + vertex_buffer_offset;
+  }
+}
+
 }  // namespace
 
 MeshFactory::MeshFactory(BaseView& view) : view_(view) {}
@@ -2049,6 +2083,70 @@ MeshPtr MeshFactory::CreateRegularPolygon(size_t side_count, float radius,
 
   return CreateByMovingMeshData(PrimitiveType::TRIANGLES, std::move(mesh_data),
                                 aabb.GetAabb(), data_mode, std::nullopt);
+}
+
+MeshPtr MeshFactory::CreateCustomMesh(CreateCustomMeshSettings settings,
+                                      MeshDataStorageMode data_mode) {
+  const size_t vertex_count = settings.positions.size() / 3;
+  const size_t texcoord_count = settings.texcoords.size() / 2;
+
+  if (vertex_count == 0) {
+    IMP_LOG(imp::ERROR) << "Custom mesh has no vertices.";
+    return {};
+  }
+
+  if (vertex_count != texcoord_count) {
+    IMP_LOG(imp::ERROR) << "Custom mesh has mismatch between position count ("
+               << vertex_count << ") and texcoord count (" << texcoord_count
+               << ").";
+    return {};
+  }
+
+  if (settings.draw_mode == PrimitiveType::TRIANGLES) {
+    if (settings.indices.has_value()) {
+      if (!settings.indices->empty() && settings.indices->size() % 3 != 0) {
+        IMP_LOG(imp::ERROR) << "Custom mesh with TRIANGLES draw mode must have an "
+                      "index count divisible by 3, but got "
+                   << settings.indices->size();
+        return {};
+      }
+    } else {
+      if (vertex_count % 3 != 0) {
+        IMP_LOG(imp::ERROR) << "Custom mesh with TRIANGLES draw mode and no indices "
+                      "must have a vertex count divisible by 3, but got "
+                   << vertex_count;
+        return {};
+      }
+    }
+  }
+
+  const bool has_indices =
+      settings.indices.has_value() && !settings.indices->empty();
+  const size_t index_count =
+      has_indices ? settings.indices->size() : vertex_count;
+
+  auto mesh_data = std::make_unique<MeshData>(MeshDescription{
+      settings.color.has_value() ? kVertexFormatWithColor : kVertexFormat,
+      MeshDescription::IndexType::UINT, vertex_count, index_count});
+
+  FillVertexData(mesh_data.get(), 0, settings.positions, settings.texcoords,
+                 settings.color);
+  if (has_indices) {
+    for (size_t i = 0; i < settings.indices->size(); ++i) {
+      if (settings.indices->at(i) >= vertex_count) {
+        IMP_LOG(imp::ERROR) << "Custom mesh has an index " << settings.indices->at(i)
+                   << " which is out of bounds, vertex count is "
+                   << vertex_count;
+        return {};
+      }
+      mesh_data->IndexAt<uint32_t>(i) = settings.indices->at(i);
+    }
+  } else {
+    FillIndicesWithRange(mesh_data.get(), 0, 0, vertex_count);
+  }
+
+  return CreateByMovingMeshData(settings.draw_mode, std::move(mesh_data),
+                                std::nullopt, data_mode, settings.name);
 }
 
 MeshPtr MeshFactory::CreateByCopyingMeshData(

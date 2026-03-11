@@ -23,7 +23,7 @@
 namespace imp::window {
 
 std::unique_ptr<FilamentHost::DevModeExtension> CreateDefaultDevModeExtension(
-    BaseView* view) {
+    BaseView& view) {
   return std::make_unique<DefaultDevModeExtension>(view);
 }
 

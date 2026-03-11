@@ -39,7 +39,12 @@ namespace imp::editor {
 // rendering in Impress.
 class SlicedGlyphAtlasVisualizer : public Widget, public imp::Rememberer {
  public:
-  struct SlicedGlyphAtlasInfo {
+  struct AtlasInfo {
+    imp::Texture* texture;
+    uint2 texture_size;
+    uint2 grid_size;
+  };
+  struct GlyphInfo {
     std::string glyph;
     bool is_stroke;
     float2 origin;
@@ -47,11 +52,10 @@ class SlicedGlyphAtlasVisualizer : public Widget, public imp::Rememberer {
   };
 
   struct AtlasDataProvider {
-    Invocable<Texture*()> get_texture_func;
-    Invocable<std::optional<SlicedGlyphAtlasInfo>(const float2&)>
-        get_glyph_info_func;
+    Invocable<AtlasInfo()> get_atlas_info_func;
+    Invocable<std::optional<GlyphInfo>(const float2&)> get_glyph_info_func;
     Invocable<float()> get_utilization_func;
-    Invocable<std::vector<SlicedGlyphAtlasInfo>()> get_all_glyph_info_func;
+    Invocable<std::vector<GlyphInfo>()> get_all_glyph_info_func;
   };
 
   explicit SlicedGlyphAtlasVisualizer(BaseView& view,
@@ -63,13 +67,12 @@ class SlicedGlyphAtlasVisualizer : public Widget, public imp::Rememberer {
   bool HasContent() const override;
 
  private:
-  void Draw(Texture* glyph_atlas_texture);
+  void Draw(const AtlasInfo& atlas_info);
 
   void DrawGlyphBounds(const Rect& bounds) const;
   void DrawGlyphOutline(const Rect& bounds, int color_idx = 0) const;
   void DrawGlyphOrigin(const Rect& bounds, const float2& origin) const;
-  void DrawToolTip(const SlicedGlyphAtlasInfo& info,
-                   Texture* glyph_atlas_texture) const;
+  void DrawToolTip(const GlyphInfo& info, const AtlasInfo& atlas_info) const;
 
   BaseView& view_;
   AtlasDataProvider provider_;

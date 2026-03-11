@@ -250,6 +250,8 @@ OptionalError GetPartInfosFromNode(
     LoadedModelBuilder::MaterialId material =
         primitive.material ? builder->GetMaterial(*primitive.material)
                            : builder->GetMaterial(-1);
+    int16_t original_material_index =
+        primitive.material ? *primitive.material : -1;
 
     out_parts->push_back(LoadedModelBuilder::PartData(
         std::string(gltf_material.name), 0,
@@ -257,9 +259,10 @@ OptionalError GetPartInfosFromNode(
         builder->AddVertexBuffer(std::move(processed.vertex_blocks),
                                  processed.vertex_count,
                                  static_cast<bool>(processed.skinning_buffer)),
-        processed.index_buffer, material, primitive_type,
-        std::move(materials_variants_mappings), processed.skinning_buffer,
-        processed.morph_target_offset, processed.morph_target_count));
+        processed.index_buffer, material, original_material_index,
+        primitive_type, std::move(materials_variants_mappings),
+        processed.skinning_buffer, processed.morph_target_offset,
+        processed.morph_target_count));
   }
   return NoError();
 }
@@ -478,7 +481,6 @@ OptionalError GetSkinBounds(gltf::imp_proto::Gltf const& gltf,
 absl::Status GetSkinInfoFromNode(
     const imp::gltf::imp_proto::Gltf& gltf, const GltfLookup& lookup,
     /*const PendingSkeleton& skeleton, */ NodeId node_id,
-    std::vector<WeakSkinId>& skin_remap,
     LoadedModelBuilder* builder, /*PendingSkins* skins,*/
     model::ModelData::SkinId* out_skin, uint16_t* out_sampled_joint_count) {
   using BoneData = LoadedModelBuilder::BoneData;
@@ -498,7 +500,7 @@ absl::Status GetSkinInfoFromNode(
   auto& skin = gltf.skins[*node.skin];
   size_t bone_count = bones.size();
 
-  if (!skin_remap[*node.skin]) {
+  if (!builder->GetSkin(*node.skin)) {
     LoadedModelBuilder::SampledJointLookup<mat4f> inverse_bind_poses;
     MP_RETURN_IF_ERROR(GetInverseBindPoses(gltf, skin, &inverse_bind_poses));
 
@@ -617,26 +619,25 @@ absl::Status GetSkinInfoFromNode(
 
     MP_ASSIGN_OR_RETURN(
         *out_skin,
-        builder->AddSkin(model::ModelData::SkinData{
-            .sampled_joints = std::move(sampled_joints),
-            .inverse_bind_poses = std::move(inverse_bind_poses),
-            .joints = std::move(joints),
-            .skinned_entities = std::move(skinned_entities),
-            .pose_root =
-                skeleton_export
-                    ? skeleton_export.CastTo<model::ModelData::WeakEntityId>()
-                    : model::ModelData::WeakEntityId(),
-        }));
-
-    skin_remap[*node.skin] = *out_skin;
-
+        builder->AddSkin(
+            *node.skin,
+            model::ModelData::SkinData{
+                .sampled_joints = std::move(sampled_joints),
+                .inverse_bind_poses = std::move(inverse_bind_poses),
+                .joints = std::move(joints),
+                .skinned_entities = std::move(skinned_entities),
+                .pose_root = skeleton_export
+                                 ? skeleton_export
+                                       .CastTo<model::ModelData::WeakEntityId>()
+                                 : model::ModelData::WeakEntityId(),
+            }));
   } else {
     using EntityId = model::ModelData::EntityId;
     auto target_export = lookup.exports[node_id];
     auto target = target_export.CastTo<EntityId>();
 
     *out_sampled_joint_count = skin.joints.size();
-    *out_skin = skin_remap[*node.skin];
+    *out_skin = builder->GetSkin(*node.skin);
 
     LoadedModelBuilder::SampledJointLookup<filament::Aabb> bounds(
         skin.joints.size());
@@ -1094,8 +1095,6 @@ ProtoGltfProvider::TryLoadGltf(LoaderState* state_ptr) {
   builder_->ReserveEntities(entry_count);
   auto bone_root_transforms = builder_->BoneRootTransforms();
 
-  std::vector<WeakSkinId> skin_remap(gltf.skins.size());
-
   for (auto entry : lookup.export_entries.Ids<GltfLookup::ExportId>()) {
     using PartData = model::ModelData::PartData;
     using RuntimeData = model::ModelData::RuntimeData;
@@ -1132,10 +1131,13 @@ ProtoGltfProvider::TryLoadGltf(LoaderState* state_ptr) {
       }
     }
 
+    int original_skin_index = -1;
     if (lookup.self_flags[node] & NodeGltfFlags::kHasSkin) {
-      MP_RETURN_IF_ERROR(GetSkinInfoFromNode(gltf, lookup, node, skin_remap,
-                                          builder_.get(), &skin,
-                                          &sampled_joint_count));
+      original_skin_index = *lookup.nodes[node].skin;
+    }
+    if (lookup.self_flags[node] & NodeGltfFlags::kHasSkin) {
+      MP_RETURN_IF_ERROR(GetSkinInfoFromNode(gltf, lookup, node, builder_.get(),
+                                          &skin, &sampled_joint_count));
     }
 
     if (lookup.self_flags[node] & NodeGltfFlags::kHasLightPunctual) {
@@ -1247,7 +1249,8 @@ ProtoGltfProvider::TryLoadGltf(LoaderState* state_ptr) {
             light_punctual.CastTo<imp::model::ModelData::LightPunctualId>(),
             audio_emitter, std::move(parts), bounds, runtime,
             entry_child_counts[entry], name, static_cast<int>(node), mesh,
-            node_visibility, node_selectability, node_hoverability));
+            original_skin_index, node_visibility, node_selectability,
+            node_hoverability));
     (void)(entity);
   }
 

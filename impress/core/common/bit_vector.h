@@ -22,6 +22,7 @@
 #include <climits>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <vector>
 
 #include "absl/types/span.h"
@@ -128,6 +129,27 @@ class BitVector {
     Set(count_++, value);
   }
   size_t size() const { return count_; }
+  bool empty() const { return count_ == 0; }
+
+  bool Any(bool set = true) const {
+    size_t partial_count = count_ & kWordMask;
+    size_t filled = partial_count ? words_.size() - 1 : words_.size();
+    size_t i;
+    for (i = 0; i < filled; ++i) {
+      Word test = set ? words_[i] : ~words_[i];
+      if (test) {
+        return true;
+      }
+    }
+    if (partial_count) {
+      auto partial_mask = static_cast<Word>((1 << partial_count) - 1);
+      Word word = (set ? words_[i] : ~words_[i]) & partial_mask;
+      if (word) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   template <typename F>
   void ForEachBit(F f, bool set_bits = true) const noexcept {

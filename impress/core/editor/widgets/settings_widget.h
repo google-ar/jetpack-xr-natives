@@ -43,7 +43,7 @@ class SettingsWidget : public editor::Widget {
   bool show_bounds_enabled_ = false;
   bool show_all_colliders_enabled_ = false;
   bool show_all_origins_enabled_ = false;
-  bool show_physics_colliders_enabled_ = false;
+  bool show_physics_visualizer_enabled_ = false;
   bool vertex_selection_enabled_ = false;
   bool load_mesh_data_on_cpu_enabled_ = false;
   bool bvh_mesh_collision_acceleration_enabled_ = false;

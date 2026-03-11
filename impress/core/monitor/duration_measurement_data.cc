@@ -17,6 +17,7 @@
 #include <stdint.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <string>
@@ -65,6 +66,19 @@ void DurationMeasurementData::AddHistogram(Monitor& monitor,
       ->InternalAddHistogram(lower_bound, bucket_width, bucket_count);
 }
 
+void DurationMeasurementData::AddSlidingWindow(Monitor& monitor,
+                                               absl::string_view name,
+                                               size_t max_window_size) {
+  MeasurementData::MeasurementId id = monitor.GetMeasurementId(name);
+  if (!id) {
+    id = monitor.AddMeasurement(
+        std::make_unique<DurationMeasurementData>(&monitor, name));
+  }
+
+  static_cast<DurationMeasurementData*>(monitor.GetMeasurementData(id))
+      ->InternalAddSlidingWindow(max_window_size);
+}
+
 void DurationMeasurementData::EndSample() {
   if (!IsInProgress()) {
     // No sample is in progress.
@@ -107,6 +121,15 @@ void DurationMeasurementData::AddSample(absl::Duration sample) {
     average_sample_duration_ms_.AddSample(sample_ms);
   }
 
+  if (sample_deque_.has_value()) {
+    if (sample_deque_->size() >= max_window_size_) {
+      sliding_window_sum_ -= sample_deque_->front();
+      sample_deque_->pop_front();
+    }
+    sample_deque_->push_back(sample);
+    sliding_window_sum_ += sample;
+  }
+
   if (histogram_.has_value()) {
     histogram_->Add(absl::ToInt64Milliseconds(sample));
   }
@@ -146,6 +169,10 @@ void DurationMeasurementData::Reset() {
   shortest_sample_duration_ = absl::ZeroDuration();
   average_sample_duration_ms_ = MovingAverage(0);
   cancelled_sample_count_ = 0;
+  if (sample_deque_.has_value()) {
+    sample_deque_->clear();
+    sliding_window_sum_ = absl::ZeroDuration();
+  }
 
   if (histogram_.has_value()) {
     histogram_->Reset();
@@ -162,6 +189,25 @@ void DurationMeasurementData::InternalAddHistogram(absl::Duration lower_bound,
   histogram_.emplace(SimpleHistogram(absl::ToInt64Milliseconds(lower_bound),
                                      absl::ToInt64Milliseconds(bucket_width),
                                      bucket_count));
+}
+
+void DurationMeasurementData::InternalAddSlidingWindow(size_t max_window_size) {
+  max_window_size_ = max_window_size;
+  sliding_window_sum_ = absl::ZeroDuration();
+  if (max_window_size > 0) {
+    sample_deque_.emplace();
+  } else {
+    sample_deque_.reset();
+  }
+}
+
+absl::Duration DurationMeasurementData::GetSlidingWindowAverageDuration()
+    const {
+  if (!sample_deque_.has_value() || sample_deque_->empty()) {
+    return absl::ZeroDuration();
+  }
+
+  return sliding_window_sum_ / sample_deque_->size();
 }
 
 }  // namespace imp

@@ -138,6 +138,9 @@ class SplitEngineCustomMaterial : public Material {
 
   bool HasParameter(absl::string_view parameter_name) override;
 
+  absl::string_view GetParameterTransformName(
+      absl::string_view sampler_name) const override;
+
   HeldTextureType GetAssignedTextureType(
       absl::string_view parameter_name) override;
 
@@ -149,6 +152,10 @@ class SplitEngineCustomMaterial : public Material {
       SmallSourceLocation loc = SmallSourceLocation::Current()) override;
 
  private:
+  void SetOwnedOrBorrowedTexture(
+      absl::string_view parameter_name, OwnedOrBorrowedTexturePtr texture,
+      std::optional<filament::TextureSampler> sampler_override);
+
   SplitEngineSerializer& serializer_;
   OwnedMaterialPtr material_;
 
@@ -168,7 +175,7 @@ class SplitEngineCustomMaterial : public Material {
   //
   // This is only used for debugging purposes to detect if the filament
   // texture is destroyed while it is in use.
-  StringMap<const filament::Texture*> parameters_to_raw_textures_;
+  StringMap<const Texture*> parameters_to_raw_textures_;
 };
 }  // namespace imp::split_engine
 

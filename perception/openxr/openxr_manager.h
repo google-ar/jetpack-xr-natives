@@ -17,6 +17,7 @@
 #include <jni.h>
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
+#include <openxr/public/all_extensions.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -121,7 +122,7 @@ class OpenXrManager {
     kEnabled = 0x01,
   };
 
-  enum class EarthState : int32_t {
+  enum class GeospatialState : int32_t {
     kRunning = 1,
     kStopped = 0,
     kErrorInternal = -1,
@@ -433,17 +434,31 @@ class OpenXrManager {
   // Returns whether or not geospatial APIs are supported on the current system.
   bool IsGeospatialSupported() ABSL_LOCKS_EXCLUDED(mutex_);
 
-  // Gets the earth state. This is a public function that is expected to be
+  // Gets the geospatial state. This is a public function that is expected to be
   // called from the jni thread.
-  EarthState GetEarthState() ABSL_LOCKS_EXCLUDED(mutex_);
+  GeospatialState GetGeospatialState() ABSL_LOCKS_EXCLUDED(mutex_);
 
   // Locates a geospatial pose from a local pose. Returns a GeospatialPoseResult
   // enum corresponding to whether the operation was successful, or what type of
   // error occurred.
-  GeospatialPoseResult LocateGeospatialPose(
+  GeospatialPoseResult LocateGeospatialPoseFromPose(
       XrTime time, const XrPosef& pose,
-      XrGeospatialPoseResultANDROIDX1* out_geospatial_pose_result)
+      XrGeospatialPoseResultANDROIDX2* out_geospatial_pose_result)
       ABSL_LOCKS_EXCLUDED(mutex_);
+
+  // Locates a local pose from a geospatial pose. Returns a GeospatialPoseResult
+  // enum corresponding to whether the operation was successful, or what type of
+  // error occurred.
+  GeospatialPoseResult LocatePoseFromGeospatialPose(
+      XrTime time, const XrGeospatialPoseANDROIDX2& geospatial_pose,
+      XrSpaceLocation* out_location) ABSL_LOCKS_EXCLUDED(mutex_);
+
+  // Checks if VPS is available at the given latitude and longitude.
+  XrResult CheckVpsAvailabilityAsync(
+      double latitude, double longitude,
+      std::function<void(const XrVPSAvailabilityCheckCompletionANDROIDX2&)>
+          on_complete,
+      std::function<void()> on_cancel);
 
   // Waits for the polling thread to finish.
   void JoinPollingThread();
@@ -467,10 +482,16 @@ class OpenXrManager {
       ABSL_LOCKS_EXCLUDED(mutex_);
 
   // Creates a spatial anchor from a geospatial pose.
-  CreateAnchorResult CreateEarthAnchor(
+  CreateAnchorResult CreateGeospatialAnchor(
       XrTime time, double latitude, double longitude, double altitude,
       const XrQuaternionf& east_up_south_quaternion, XrSpace* out_anchor_space)
       ABSL_LOCKS_EXCLUDED(mutex_);
+
+  // Sets the Google Cloud authentication credentials.
+  XrResult SetGoogleCloudAuthAsync(
+      const XrGoogleCloudAuthInfoBaseHeaderANDROIDX2* auth_info,
+      std::function<void(const XrFutureCompletionEXT&)> on_complete,
+      std::function<void()> on_cancel);
 
  private:
   // Enum values representing whether OpenXR instance and session have started.
@@ -482,6 +503,11 @@ class OpenXrManager {
     kResumed,
     kPaused,
     kUninitializing
+  };
+
+  struct FutureCallbackInfo {
+    std::function<void(XrFutureEXT)> on_complete;
+    std::function<void()> on_cancel = nullptr;
   };
 
   OpenXrManager(const OpenXrManager&) = delete;
@@ -632,8 +658,8 @@ class OpenXrManager {
   XrResult ConfigureFaceTracking(FaceTrackingMode mode)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
-  // Initializes or stops the earth tracker depending on the mode.
-  XrResult ConfigureEarthTracking(GeospatialMode mode)
+  // Initializes or stops the geospatial tracker depending on the mode.
+  XrResult ConfigureGeospatialTracking(GeospatialMode mode)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   // Initializes or destroys the eye tracking depending on the mode.
@@ -657,8 +683,8 @@ class OpenXrManager {
   // Creates the object tracker if it is not already created.
   XrResult MaybeCreateObjectTracker() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
-  // Creates the earth tracker if it is not already created.
-  XrResult MaybeCreateEarthTracker() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+  // Creates the geospatial tracker if it is not already created.
+  XrResult MaybeCreateGeospatialTracker() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   // Creates the eye tracker if it is not already created.
   XrResult MaybeCreateEyeTracker() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
@@ -714,12 +740,13 @@ class OpenXrManager {
       right_hand_joint_locations_[XR_HAND_JOINT_COUNT_EXT] ABSL_GUARDED_BY(
           mutex_);
   XrFaceTrackerANDROID face_tracker_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
-  XrEarthTrackerANDROIDX1 earth_tracker_ ABSL_GUARDED_BY(mutex_) =
+  XrGeospatialTrackerANDROIDX2 geospatial_tracker_ ABSL_GUARDED_BY(mutex_) =
       XR_NULL_HANDLE;
   XrSpatialContextEXT geospatial_anchors_spatial_context_
       ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
-  std::optional<XrEventDataEarthTrackerStateChangedANDROIDX1>
-      last_earth_tracker_state_update_ ABSL_GUARDED_BY(mutex_) = std::nullopt;
+  std::optional<XrEventDataGeospatialTrackerStateChangedANDROIDX2>
+      last_geospatial_tracker_state_update_ ABSL_GUARDED_BY(mutex_) =
+          std::nullopt;
   absl::flat_hash_map<XrSpace, XrSpatialEntityEXT>
       geospatial_anchor_space_to_entity_ ABSL_GUARDED_BY(mutex_);
   XrEyeTrackerANDROID eye_tracker_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
@@ -749,8 +776,8 @@ class OpenXrManager {
   size_t depth_data_confidence_image_buffer_size_ ABSL_GUARDED_BY(mutex_) = 0;
   size_t depth_data_image_num_elements_ ABSL_GUARDED_BY(mutex_) = 0;
 
-  std::list<std::pair<XrFutureEXT, std::function<void(XrFutureEXT)>>>
-      pending_futures_ ABSL_GUARDED_BY(mutex_);
+  std::list<std::pair<XrFutureEXT, FutureCallbackInfo>> pending_futures_
+      ABSL_GUARDED_BY(mutex_);
 
   std::vector<XrTrackableANDROID> all_plane_trackables_;
   OpenXrState open_xr_state_ ABSL_GUARDED_BY(mutex_) =
@@ -772,6 +799,7 @@ class OpenXrManager {
   // An object that contains the current state of the runtime configuration.
   ConfigSettings config_settings_ ABSL_GUARDED_BY(mutex_);
 
+  bool cloud_auth_exts_loaded_ ABSL_GUARDED_BY(mutex_) = false;
   bool geospatial_exts_loaded_ ABSL_GUARDED_BY(mutex_) = false;
 
   // Mutex to guard variables that are accessible by the polling thread. It must
@@ -827,10 +855,13 @@ class OpenXrManager {
   PFN_xrEnumerateDepthResolutionsANDROID enumerate_depth_resolutions_;
   PFN_xrAcquireDepthSwapchainImagesANDROID acquire_depth_swapchain_images_;
 
-  PFN_xrCreateEarthTrackerANDROIDX1 create_earth_tracker_;
-  PFN_xrDestroyEarthTrackerANDROIDX1 destroy_earth_tracker_;
-  PFN_xrLocateGeospatialPoseANDROIDX1 locate_geospatial_pose_;
-  PFN_xrCreateGeospatialAnchorANDROIDX1 create_geospatial_anchor_;
+  PFN_xrCreateGeospatialTrackerANDROIDX2 create_geospatial_tracker_;
+  PFN_xrDestroyGeospatialTrackerANDROIDX2 destroy_geospatial_tracker_;
+  PFN_xrLocateGeospatialPoseFromPoseANDROIDX2 locate_geospatial_pose_from_pose_;
+  PFN_xrLocateGeospatialPoseANDROIDX2 locate_geospatial_pose_;
+  PFN_xrCreateGeospatialAnchorANDROIDX2 create_geospatial_anchor_;
+  PFN_xrCheckVpsAvailabilityAsyncANDROIDX2 check_vps_availability_async_;
+  PFN_xrCheckVpsAvailabilityCompleteANDROIDX2 check_vps_availability_complete_;
 
   PFN_xrCreateEyeTrackerANDROID create_eye_tracker_;
   PFN_xrDestroyEyeTrackerANDROID destroy_eye_tracker_;
@@ -859,8 +890,12 @@ class OpenXrManager {
   PFN_xrDestroySpatialEntityEXT destroy_spatial_entity_;
   PFN_xrCreateSpatialUpdateSnapshotEXT create_spatial_update_snapshot_;
   PFN_xrCreateSpatialAnchorEXT create_spatial_anchor_;
-  PFN_xrCreateSpatialAnchorSpaceFromIdANDROIDX1
+  PFN_xrCreateSpatialAnchorSpaceFromIdANDROID
       create_spatial_anchor_space_from_id_;
+
+  // Google Cloud Auth functions.
+  PFN_xrSetGoogleCloudAuthAsyncANDROIDX2 set_google_cloud_auth_async_;
+  PFN_xrSetGoogleCloudAuthCompleteANDROIDX2 set_google_cloud_auth_complete_;
 };
 }  // namespace androidx::xr::openxr
 #endif  // JETPACK_XR_NATIVES_OPENXR_OPENXR_MANAGER_H_

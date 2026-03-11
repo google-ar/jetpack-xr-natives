@@ -23,8 +23,11 @@
 
 #include "absl/status/statusor.h"
 #include "filament/filament/include/filament/Engine.h"
+#include "core/async/executor.h"
 #include "core/async/executor_helpers.h"
 #include "core/async/thread_pool_executor.h"
+#include "core/config.h"
+#include "core/view/utils/proto/filament_feature_flag.proto.imp.h"
 
 #if IMP_PLATFORM(ANDROID)
 #include <android/hardware_buffer.h>
@@ -54,6 +57,7 @@ class SharedHostState {
       const filament::Engine::Config& config = {},
       const filament::backend::FeatureLevel featureLevel =
           filament::backend::FeatureLevel::FEATURE_LEVEL_1,
+      const std::vector<FilamentFeatureFlag>& features = {},
       bool pause_rendering_thread = false,
       SharedContextDeleter shared_context_deleter = {},
       bool preinitialize_metal_platform = false);
@@ -83,6 +87,7 @@ class SharedHostState {
 
 #if IMP_PLATFORM(ANDROID)
   // Registers an external image handle with the Filament platform.
+  // TODO: (broken link) - Investigate moving this to a better location.
   filament::backend::Platform::ExternalImageHandle RegisterExternalImageHandle(
       const AHardwareBuffer* buffer, bool sRGB);
   struct ExternalImageMetadata {
@@ -90,6 +95,25 @@ class SharedHostState {
     unsigned int height;                      // Texture height
     filament::backend::TextureFormat format;  // Texture format
     filament::backend::TextureUsage usage;    // Texture usage flags
+
+    bool operator==(const ExternalImageMetadata& other) const {
+      return width == other.width && height == other.height &&
+             format == other.format && usage == other.usage;
+    }
+
+    bool operator!=(const ExternalImageMetadata& other) const {
+      return !(*this == other);
+    }
+
+    // Filament has a precondition check that the texture dimension is less
+    // than or equal to this value.
+    static constexpr int kMaxTextureDimension = 16384;
+
+    // Ensure the metadata passes preconditions checked by Filament.
+    bool IsValid() const {
+      return width > 0 && width <= kMaxTextureDimension && height > 0 &&
+             height <= kMaxTextureDimension;
+    }
   };
   // Returns the metadata for the given external image handle.
   ExternalImageMetadata GetImageMetadata(

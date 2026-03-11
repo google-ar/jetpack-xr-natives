@@ -17,8 +17,11 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_WEB_MESSAGE_HELPERS_H_
 #define THIRD_PARTY_IMPRESS_CORE_WEB_MESSAGE_HELPERS_H_
 
+#include <cstddef>
+#include <string>
+
 #include "absl/strings/escaping.h"
-#include "absl/strings/match.h"
+#include "absl/strings/string_view.h"
 #include "core/proto/any.proto.imp.h"
 #include "core/proto/proto_reader.h"
 #include "core/proto/proto_writer.h"
@@ -49,10 +52,6 @@ std::string SerializeToBase64(T message) {
   std::string encoded;
   absl::Base64Escape(serialized, &encoded);
   return encoded;
-}
-
-inline bool DeserializeBase64(std::string string_b64, std::string* dest) {
-  return absl::Base64Unescape(string_b64, dest);
 }
 
 }  // namespace scripting

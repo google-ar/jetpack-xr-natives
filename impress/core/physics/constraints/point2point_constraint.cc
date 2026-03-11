@@ -22,11 +22,17 @@
 #include "bullet/src/BulletDynamics/ConstraintSolver/btPoint2PointConstraint.h"
 #include "bullet/src/BulletDynamics/Dynamics/btRigidBody.h"
 #include "bullet/src/LinearMath/btVector3.h"
+#include "core/config.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
 #include "core/physics/constraints/point2point_constraint_state.proto.imp.h"
 #include "core/physics/physics_helper.h"
 #include "core/view/utils/frame_time.h"
+
+#if IMP_RUNTIME(DEV)
+#include "core/physics/physics_constants.h"
+#include "core/physics/physics_debug_draw.h"
+#endif
 
 namespace imp {
 
@@ -87,6 +93,11 @@ absl::Status Point2PointConstraint::SetupInternal() {
 
   state_.connected_pivot = connected_pivot;
 
+#if IMP_RUNTIME(DEV)
+  UseDebugVisualizer([this]() { Visualize(); },
+                     kPoint2PointConstraintVisualizer);
+#endif
+
   AddToPhysicsManager(true);
 
   return absl::OkStatus();
@@ -120,5 +131,16 @@ void Point2PointConstraint::OnIsfStateChanged() {
     IMP_LOG(imp::ERROR) << "Failed to setup Point2PointConstraint: " << status;
   }
 }
+
+#if IMP_RUNTIME(DEV)
+void Point2PointConstraint::Visualize() {
+  physics_debug_draw::PhysicsDebugDraw debug_draw;
+  if (GetRigidBodyB()) {
+    debug_draw.DrawPivotConnectionToOrigin(GetNode(), state_.pivot);
+  }
+  debug_draw.DrawPivotConnectedToOrigin(
+      state_.connected_node, state_.connected_pivot.value_or(kZero3));
+}
+#endif
 
 }  // namespace imp

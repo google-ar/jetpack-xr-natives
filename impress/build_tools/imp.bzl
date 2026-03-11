@@ -74,6 +74,9 @@ def if_android(a, otherwise = []):
         "//conditions:default": otherwise,
     })
 
+def if_android_min_sdk_at_least_26(a, otherwise = []):
+    return a
+
 def if_non_android(a, otherwise = []):
     return select({
         clean_dep("@com_google_impress//core:android"): otherwise,
@@ -346,6 +349,9 @@ def imp_default_jni_linkopts():
         "-lEGL",
         "-landroid",
         # impress:insert(OSS) "-Wl,--no-undefined",
+    ]) + if_android_min_sdk_at_least_26([
+        # The native window library is only available on API level 26 and above.
+        "-lnativewindow",
     ])
 
 def imp_default_jni_binary_name():

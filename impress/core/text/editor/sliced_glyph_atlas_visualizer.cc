@@ -79,15 +79,14 @@ SlicedGlyphAtlasVisualizer::SlicedGlyphAtlasVisualizer(
 SlicedGlyphAtlasVisualizer::~SlicedGlyphAtlasVisualizer() = default;
 
 bool SlicedGlyphAtlasVisualizer::HasContent() const {
-  return provider_.get_texture_func() != nullptr;
+  return provider_.get_atlas_info_func().texture != nullptr;
 }
 
 void SlicedGlyphAtlasVisualizer::DrawImGui() {
-  Texture* texture = provider_.get_texture_func();
-  Draw(texture);
+  Draw(provider_.get_atlas_info_func());
 }
 
-void SlicedGlyphAtlasVisualizer::Draw(Texture* glyph_atlas_texture) {
+void SlicedGlyphAtlasVisualizer::Draw(const AtlasInfo& atlas_info) {
   float glyph_atlas_utilization = provider_.get_utilization_func();
   ImGui::Text("Glyph atlas, utilization: %f", glyph_atlas_utilization);
   if (ImPlot::BeginPlot("##Atlas", ImVec2(-1, kPanelHeight),
@@ -104,7 +103,7 @@ void SlicedGlyphAtlasVisualizer::Draw(Texture* glyph_atlas_texture) {
     ImPlot::SetupAxisLimits(ImAxis_X1, 0, 1);
     ImPlot::SetupAxisLimits(ImAxis_Y1, 1 - screen_ratio, 1);
 
-    ImPlot::PlotImage("", glyph_atlas_texture->GetTexture(),
+    ImPlot::PlotImage("", atlas_info.texture->GetTexture(),
                       /*bounds_min = */ {0, 0},
                       /*bounds_max = */ {1, 1});
 
@@ -112,17 +111,16 @@ void SlicedGlyphAtlasVisualizer::Draw(Texture* glyph_atlas_texture) {
       ImPlotPoint mouse = ImPlot::GetPlotMousePos();
 
 #if IMP_PLATFORM(DESKTOP) || IMP_PLATFORM(WASM)
+      uint2 composite_size = atlas_info.texture_size * atlas_info.grid_size;
       filament::RenderTarget::Builder render_target_builder;
       render_target_builder.texture(
           filament::RenderTarget::AttachmentPoint::COLOR,
-          glyph_atlas_texture->GetTexture());
+          atlas_info.texture->GetTexture());
       filament::Engine* engine = view_.GetSharedEngine();
       filament::RenderTarget* render_target =
           render_target_builder.build(*engine);
-      int32_t mouse_pixel_x =
-          (int32_t)(glyph_atlas_texture->GetSize().x * mouse.x);
-      int32_t mouse_pixel_y =
-          (int32_t)(glyph_atlas_texture->GetSize().y * (1 - mouse.y));
+      int32_t mouse_pixel_x = (int32_t)(composite_size.x * mouse.x);
+      int32_t mouse_pixel_y = (int32_t)(composite_size.y * (1 - mouse.y));
       filament::backend::PixelBufferDescriptor pixel_buffer_desc(
           rgba_buffer_.get(), 4, filament::Texture::Format::RGBA,
           filament::Texture::Type::UBYTE,
@@ -134,8 +132,7 @@ void SlicedGlyphAtlasVisualizer::Draw(Texture* glyph_atlas_texture) {
 
       if (mouse.x > 0 && mouse.x < 1 && mouse.y > 0 && mouse.y < 1) {
         float2 uv = float2{mouse.x, 1 - mouse.y};
-        std::optional<SlicedGlyphAtlasInfo> glyph =
-            provider_.get_glyph_info_func(uv);
+        std::optional<GlyphInfo> glyph = provider_.get_glyph_info_func(uv);
         if (glyph.has_value()) {
           Rect bounds = glyph->uv;
           bounds.center.y = 1 - bounds.center.y;
@@ -147,15 +144,14 @@ void SlicedGlyphAtlasVisualizer::Draw(Texture* glyph_atlas_texture) {
           float2 origin = glyph->origin;
           origin.y = 1 - origin.y;
           DrawGlyphOrigin(bounds, origin);
-          DrawToolTip(*glyph, glyph_atlas_texture);
+          DrawToolTip(*glyph, atlas_info);
         }
       }
     }
     if (show_all_glyph_origins_ || show_all_glyph_bounds_) {
-      std::vector<SlicedGlyphAtlasInfo> glyphs =
-          provider_.get_all_glyph_info_func();
+      std::vector<GlyphInfo> glyphs = provider_.get_all_glyph_info_func();
       for (int i = 0; i < glyphs.size(); ++i) {
-        const SlicedGlyphAtlasInfo& glyph = glyphs[i];
+        const GlyphInfo& glyph = glyphs[i];
         Rect bounds = glyph.uv;
         bounds.center.y = 1 - bounds.center.y;
         if (show_all_glyph_bounds_) {
@@ -208,9 +204,13 @@ void SlicedGlyphAtlasVisualizer::DrawGlyphOutline(const Rect& bounds,
   float tool_r = ImPlot::PlotToPixels(max).x;
   float tool_t = ImPlot::PlotToPixels(min).y;
   float tool_b = ImPlot::PlotToPixels(max).y;
+  ImU32 color = kGlyphOutlineColors[color_idx % kGlyphOutlineColorsCount];
+  float inset = 1.0 / 1024.0;
+
   ImPlot::PushPlotClipRect();
-  draw_list->AddRect(ImVec2(tool_l, tool_t), ImVec2(tool_r, tool_b),
-                     kGlyphOutlineColors[color_idx % kGlyphOutlineColorsCount]);
+  draw_list->AddRect(ImVec2(tool_l, tool_t), ImVec2(tool_r, tool_b), color);
+  draw_list->AddRect(ImVec2(tool_l + inset, tool_t + inset),
+                     ImVec2(tool_r - inset, tool_b - inset), color);
   ImPlot::PopPlotClipRect();
 }
 
@@ -237,7 +237,7 @@ void SlicedGlyphAtlasVisualizer::DrawGlyphOrigin(const Rect& bounds,
 }
 
 void SlicedGlyphAtlasVisualizer::DrawToolTip(
-    const SlicedGlyphAtlasInfo& info, Texture* glyph_atlas_texture) const {
+    const GlyphInfo& info, const AtlasInfo& atlas_info) const {
 #if IMP_PLATFORM(DESKTOP) || IMP_PLATFORM(WASM)
   ImVec4 rgba = ImVec4(rgba_buffer_[0] / 255.0f, rgba_buffer_[1] / 255.0f,
                        rgba_buffer_[2] / 255.0f, rgba_buffer_[3] / 255.0f);
@@ -252,9 +252,9 @@ void SlicedGlyphAtlasVisualizer::DrawToolTip(
   } else {
     ImGui::Text("Glyph: %s", info.glyph.c_str());
   }
-  ImGui::Text("Glyph origin: (%f, %f)",
-              info.origin.x * glyph_atlas_texture->GetSize().x,
-              info.origin.y * glyph_atlas_texture->GetSize().y);
+  uint2 composite_size = atlas_info.texture_size * atlas_info.grid_size;
+  ImGui::Text("Glyph origin: (%f, %f)", info.origin.x * composite_size.x,
+              info.origin.y * composite_size.y);
   ImGui::EndTooltip();
 }
 

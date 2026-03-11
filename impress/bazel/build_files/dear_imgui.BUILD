@@ -55,3 +55,28 @@ cc_library(
     #],
     include_prefix = "dear_imgui",
 )
+
+cc_library(
+    name = "imgui_impl_opengl3_android",
+    srcs = [
+        "backends/imgui_impl_android.cpp",
+        "backends/imgui_impl_opengl3.cpp",
+    ],
+    hdrs = [
+        "backends/imgui_impl_android.h",
+        "backends/imgui_impl_opengl3.h",
+    ],
+    copts = [
+        "-I./backends",
+        "-I./",
+        "-include ./imgui.h",
+        "-x c++",
+        "-Wno-pragma-once-outside-header",
+        "-DIMGUI_IMPL_API=",
+        "-Wno-unused-variable",
+    ],
+    include_prefix = "dear_imgui",
+    deps = [
+        ":dear_imgui",
+    ],
+)
