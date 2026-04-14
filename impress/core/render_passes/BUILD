@@ -53,6 +53,16 @@ cc_library(
     alwayslink = 1,
 )
 
+cc_library(
+    name = "texture_pipeline_renderer_projection_quad",
+    hdrs = ["texture_pipeline_renderer_projection_quad.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        "//core/math",
+    ],
+    alwayslink = 1,
+)
+
 proto_library(
     name = "surface_renderer_scripting_proto",
     srcs = [
@@ -116,6 +126,7 @@ cc_library(
     ],
     copts = imp_copts(),
     deps = [
+        ":texture_pipeline_renderer_projection_quad",
         ":texture_pipeline_renderer_proto_cc_imp",
         "//core/async:future",
         "//core/common:small_source_location",
@@ -123,12 +134,16 @@ cc_library(
         "//core/math",
         "//core/ncsb",
         "//core/render",
+        "//core/render:mesh_renderer",
+        "//core/render:primitive_shape_renderer",
+        "//core/split_engine:split_engine_serializer",
         "//core/view:base_view",
         "//core/view:view_events",
         "//core/view/framework",
         "//core/view/utils:device",
         "//core/view/utils:render_setting_utils",
         "//core/view/utils:render_settings_proto_cc_imp",
+        "//core/window:filament_host",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:optional",

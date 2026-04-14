@@ -24,8 +24,8 @@
 #include "core/math/quat.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
-#include "core/view/framework/assets/gltf_renderer.h"
 #include "extensions/sceneviewerxr/ux/constants.h"
+#include "extensions/sceneviewerxr/ux/gltf_bounds.h"
 #include "extensions/sceneviewerxr/ux/interaction_states/idle.h"
 #include "extensions/sceneviewerxr/ux/interaction_states/interaction_owner.h"
 #include "extensions/sceneviewerxr/ux/interaction_states/interaction_states.h"
@@ -69,10 +69,8 @@ void FrameModel(imp::NodeHandle sv_node, const imp::mat4& camera_from_world,
   float ideal_scale = std::min(vertical_scale, turn_table_scale);
 
   *out_rig_position =
-      (sv_node_from_world *
-       (ideal_world_position -
-        ideal_scale * imp::float3(0.f, model_local_bounds.halfExtent.y, 0.f)))
-          .xyz;
+      (sv_node_from_world * ideal_world_position).xyz -
+      (ideal_scale * imp::float3(0.f, model_local_bounds.halfExtent.y, 0.f));
   *out_model_scale = ideal_scale;
 }
 
@@ -100,7 +98,7 @@ void OnStateEnd(const interaction_states::Machine::State& current_state,
       imp::float3 rig_position = imp::kZero3;
 
       imp::Box local_bounds = owner.GetModelNode()
-                                  ->GetComponent<imp::GltfRenderer>()
+                                  ->GetOrAddComponent<GltfBounds>()
                                   ->GetLocalBounds();
       float model_scale = 1.0f;
 

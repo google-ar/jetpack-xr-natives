@@ -72,7 +72,7 @@ Future<flatbuffers::DetachedBuffer> AddCustomMaterialHandler::HandleRequest(
   switch (custom_material_request->spec_type()) {
     case android_xr::schemas::CustomMaterialSpec::FilamentMaterialSpec:
       filament_material_future = CreateFilamentMaterial(
-          app_context.view,
+          shared_context.view,
           *custom_material_request->spec_as_FilamentMaterialSpec());
       break;
     default:
@@ -103,6 +103,7 @@ AddCustomMaterialHandler::GetOrCreateMaterialCompiler(BaseView& view) {
                 // In a failure case, reset the future to indicate that we are
                 // no longer waiting for the compiler to be created.
                 material_compiler_future_ = std::nullopt;
+                material_compiler_.reset();
                 return compiler.status();
               }
               material_compiler_ = *std::move(compiler);
@@ -138,7 +139,7 @@ AddCustomMaterialHandler::CreateFilamentMaterial(
 #endif
 
   return GetOrCreateMaterialCompiler(view).Then(
-      [&spec, platform, target_api](RuntimeMaterialCompiler* compiler)
+      [this, &spec, platform, target_api](RuntimeMaterialCompiler* compiler)
           -> Future<OwnedFilamentMaterialPtr> {
         MaterialPreCompileOptions precompile_options;
         if (spec.precompile_options()) {
@@ -148,11 +149,22 @@ AddCustomMaterialHandler::CreateFilamentMaterial(
         return compiler
             ->CompileMaterial(spec.source()->string_view(), platform,
                               target_api, precompile_options)
-            .Then([start](filament::Material* material) {
+            .Then([this, start](absl::StatusOr<filament::Material*> material)
+                      -> absl::StatusOr<OwnedFilamentMaterialPtr> {
+              if (!material.ok()) {
+                // We return absl::UnavailableError when the pipe is closed.
+                // This can happen when the compilation process is crashed.
+                if (absl::IsUnavailable(material.status())) {
+                  IMP_LOG(imp::ERROR) << "Material compiler is crashed, recreating it.";
+                  material_compiler_future_ = std::nullopt;
+                  material_compiler_.reset();
+                }
+                return material.status();
+              }
               absl::Duration duration = absl::Now() - start;
-              IMP_LOG(imp::INFO) << "Compiled material '" << material->getName()
+              IMP_LOG(imp::INFO) << "Compiled material '" << (*material)->getName()
                          << "' in " << duration;
-              return OwnedFilamentMaterialPtr{material};
+              return OwnedFilamentMaterialPtr{*material};
             });
       });
 }

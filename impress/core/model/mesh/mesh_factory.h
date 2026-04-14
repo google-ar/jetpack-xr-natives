@@ -25,6 +25,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/base/attributes.h"
 #include "absl/strings/string_view.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/IndexBuffer.h"
@@ -174,6 +175,9 @@ struct CreateQuadSettings {
   std::optional<std::string> name = std::nullopt;
   // The color applied to VertexAttribute::COLOR for all vertices of the quad.
   std::optional<float4> color = std::nullopt;
+  // Use a vertex format with only positions. Otherwise meshes may have tangents
+  // and texture coordinates.
+  bool is_position_only = false;
 };
 
 // A helper struct for mapping UVs when calling
@@ -243,18 +247,9 @@ class MeshFactory {
   // Vertices have UVs and tangents.  If flip_uv is false, the UV origin is
   // at the bottom-left vertex.  If flip_uv is true, the UV origin is at the
   // top-left vertex.
+  ABSL_DEPRECATED("Use CreatePanel instead.")
   MeshPtr CreateQuad(
       CreateQuadSettings settings = {},
-      MeshDataStorageMode data_mode = MeshDataStorageMode::kDiscardMeshData);
-
-  // TODO: delete CreateHighPolyQuad() in favor of CreatePanel().
-  // Create a quad with dimensions and width/height vertex resolution.
-  // Optional radius parameter allows creation of cylindrical/spherical panels.
-  MeshPtr CreateHighPolyQuad(
-      CreateQuadSettings settings, size_t resolution_width = 100,
-      size_t resolution_height = 100,
-      std::optional<float> radius = std::nullopt,
-      float3 scale2 = {1.0f, 1.0f, 1.0f},
       MeshDataStorageMode data_mode = MeshDataStorageMode::kDiscardMeshData);
 
   // Creates a "panel" mesh based on the given settings. The result can be
@@ -300,6 +295,12 @@ class MeshFactory {
   //                                       index_render_count)
   //       and pass it to this function, if the parent mesh contains CPU mesh
   //       data.
+  OwnedMeshPtr CreateSubMesh(BorrowedMeshPtr parent_mesh,
+                             int index_render_offset, int index_render_count,
+                             const Box& aabb, PrimitiveType primitive_type);
+
+  // Similar to the above, but the primitive type of the submesh is taken from
+  // the parent mesh.
   OwnedMeshPtr CreateSubMesh(BorrowedMeshPtr parent_mesh,
                              int index_render_offset, int index_render_count,
                              const Box& aabb);

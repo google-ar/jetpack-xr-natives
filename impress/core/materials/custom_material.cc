@@ -20,6 +20,8 @@
 #include <utility>
 
 #include "absl/functional/function_ref.h"
+#include "absl/log/check.h"
+#include "core/common/log.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "filament/filament/include/filament/Color.h"
@@ -42,11 +44,10 @@ namespace imp {
 
 CustomMaterial::CustomMaterial(filament::MaterialInstance* material_instance,
                                AssetPtr<MaterialAsset> material_asset)
-    : engine_(BaseView::GetSharedEngine()),
+    : name_(material_instance->getName()),
+      engine_(BaseView::GetSharedEngine()),
       material_instance_(material_instance),
-      material_asset_(material_asset) {
-  SetName(material_instance_->getName());
-}
+      material_asset_(material_asset) {}
 
 CustomMaterial::~CustomMaterial() {
   // Ensure to call OnUnassignedFromMaterial on all textures before destroying
@@ -62,6 +63,10 @@ CustomMaterial::~CustomMaterial() {
   engine_ = nullptr;
   material_instance_ = nullptr;
 }
+
+const std::string& CustomMaterial::GetName() const { return name_; }
+
+void CustomMaterial::SetName(absl::string_view name) { name_ = name; }
 
 const filament::MaterialInstance* CustomMaterial::GetFilamentMaterialInstance()
     const {
@@ -269,6 +274,13 @@ void CustomMaterial::SetParameter(absl::string_view parameter_name,
 void CustomMaterial::SetParameter(
     absl::string_view parameter_name, const imp::Texture* texture,
     std::optional<filament::TextureSampler> sampler_override) {
+  if (!texture) {
+    IMP_LOG(imp::WARNING)
+        << "Attempted to set null texture for parameter " << parameter_name
+        << " this may cause a visible rendering issue or undefined behavior.";
+    return;
+  }
+
   // Unassign a previously assigned owned or borrowed texture if it exists.
   auto it = parameters_to_owned_or_borrowed_textures_.find(parameter_name);
   if (it != parameters_to_owned_or_borrowed_textures_.end()) {
@@ -308,6 +320,13 @@ void CustomMaterial::SetParameter(
 void CustomMaterial::SetOwnedOrBorrowedTexture(
     absl::string_view parameter_name, OwnedOrBorrowedTexturePtr texture,
     std::optional<filament::TextureSampler> sampler_override) {
+  if (!texture) {
+    IMP_LOG(imp::WARNING)
+        << "Attempted to set null texture for parameter " << parameter_name
+        << " this may cause a visible rendering issue or undefined behavior.";
+    return;
+  }
+
   // Unassign a previously assigned owned or borrowed texture if it exists.
   auto it = parameters_to_owned_or_borrowed_textures_.find(parameter_name);
   if (it != parameters_to_owned_or_borrowed_textures_.end()) {

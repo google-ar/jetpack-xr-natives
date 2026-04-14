@@ -17,9 +17,13 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_ASYNC_EXECUTOR_PROVIDER_H_
 #define THIRD_PARTY_IMPRESS_CORE_ASYNC_EXECUTOR_PROVIDER_H_
 
-#include "absl/synchronization/mutex.h"
+#include <memory>
+
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "core/async/executor.h"
 #include "core/async/future.h"
+#include "core/common/invocable.h"
 
 namespace imp {
 

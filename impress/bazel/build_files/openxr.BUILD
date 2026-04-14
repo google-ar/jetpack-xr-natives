@@ -53,13 +53,14 @@ cc_library(
     includes = [
         "generated/include/public",
     ],
+    include_prefix = "openxr",
     strip_include_prefix = "//OpenXR_KHR/generated/include",
 )
 
 cc_library(
     name = "openxr_loader",
     srcs = glob([
-        "generated/src/**",
+        "generated/src/loader/**",
         "generated/include/openxr/**",
         "src/common/**",
         "src/loader/*.h",

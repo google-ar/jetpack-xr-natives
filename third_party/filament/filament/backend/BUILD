@@ -532,6 +532,40 @@ cc_library(
     alwayslink = 1,
 )
 
+# Filament backend library that supports both OpenGL (PlatformGLX and PlatformEGLHeadless) and
+# Vulkan (VulkanPlatformLinux) platforms for linux.
+cc_library(
+    name = "backend_gl_vulkan_linux",
+    srcs = backend_opengl_srcs + backend_vulkan_only_srcs + if_linux([
+        "src/opengl/platforms/PlatformGLX.cpp",
+        "src/opengl/platforms/PlatformEGL.cpp",
+        "src/opengl/platforms/PlatformEGLHeadless.cpp",
+    ]),
+    hdrs = if_linux([
+        "include/backend/platforms/PlatformEGL.h",
+        "include/backend/platforms/PlatformEGLHeadless.h",
+        "include/backend/platforms/PlatformGLX.h",
+        "include/backend/platforms/VulkanPlatformLinux.h",
+    ]),
+    copts = filament_copts(),
+    defines = backend_opengl_defines + backend_vulkan_defines + [
+        "FILAMENT_SUPPORTS_X11",
+        "FILAMENT_SUPPORTS_XLIB",
+    ],
+    includes = ["src"],
+    linkstatic = True,
+    textual_hdrs = backend_textual_hdrs,
+    deps = [
+        # These should come early in the dep list.
+        "@third_party//filament/libs:bluegl",
+        "@third_party//filament/libs:bluevk",
+    ] + backend_opengl_deps + backend_vulkan_deps + [
+        "@third_party//gl",
+        "@third_party//gl/native:EGL",
+    ],
+    alwayslink = 1,
+)
+
 cc_library(
     name = "backend_opengl_osmesa",
     srcs = backend_opengl_srcs + [

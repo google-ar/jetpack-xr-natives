@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,9 @@
 
 #include "core/editor/widgets/transform_widget.h"
 
+#include <vector>
+
+#include "absl/container/flat_hash_set.h"
 #include "core/common/registry.h"
 #include "core/editor/editor.h"
 #include "core/editor/events.h"
@@ -26,8 +29,11 @@
 namespace imp::editor {
 
 namespace {
-constexpr float kFarAway = 1e9f;
-}
+
+// Minimum distance from the camera to the transform widget.
+const float kMinCameraDistance = 1e-5f;
+
+}  // namespace
 
 void TransformWidget::Setup() {
   Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
@@ -35,13 +41,10 @@ void TransformWidget::Setup() {
 
   editor_dispatcher.Connect(
       [this](const editor::NodeSelectionChangedEvent& event) mutable {
-        // We only support single selection for the transform widget.
-        active_model_ = GetView()
-                            .GetRegistry()
-                            .Get<Editor>()
-                            ->get()
-                            .GetSingleSelectedNode();
-        GetNode()->SetEnabled(active_model_ ? true : false);
+        const absl::flat_hash_set<NodeHandle>& selected_nodes =
+            GetView().GetRegistry().Get<Editor>()->get().GetSelectedNodes();
+        active_nodes_.assign(selected_nodes.begin(), selected_nodes.end());
+        GetNode()->SetEnabled(!active_nodes_.empty());
       },
       this);
 }
@@ -49,18 +52,45 @@ void TransformWidget::Setup() {
 void TransformWidget::Update(const FrameTime& frame_time) {
   Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
   if (!editor.GetEditorRoot()->IsActive()) return;
-  if (!active_model_) {
+  if (active_nodes_.empty()) {
     // TODO: Remove this once we have a better way to hide the
     // transform widget.
     GetNode()->SetEnabled(false);
     return;
   }
 
-  float3 camera_position = editor.GetCamera()->GetNode()->GetWorldPosition();
-  float3 camera_to_target = active_model_->GetWorldPosition() - camera_position;
-  GetNode()->SetWorldPosition(camera_position + normalize(camera_to_target));
+  // Compute the centroid of the active nodes.
+  float3 sum_positions = {0.0f, 0.0f, 0.0f};
+  int valid_nodes_count = 0;
+  for (const NodeHandle& node : active_nodes_) {
+    if (!node.IsValid()) continue;
+    sum_positions += node->GetWorldPosition();
+    valid_nodes_count++;
+  }
+
+  // If there are no valid nodes, disable the transform widget and return.
+  if (valid_nodes_count == 0) {
+    GetNode()->SetEnabled(false);
+    return;
+  }
+
+  const float3 centroid = sum_positions / static_cast<float>(valid_nodes_count);
+  const float3 camera_position =
+      editor.GetCamera()->GetNode()->GetWorldPosition();
+  const float3 camera_to_target = centroid - camera_position;
+
+  // Avoid divide by zero when normalizing a zero vector.
+  float3 dif;
+  if (length(camera_to_target) > kMinCameraDistance) {
+    dif = normalize(camera_to_target);
+  } else {
+    // If the camera is at the centroid, place the widget slightly in front.
+    dif = float3{0.0f, 0.0f, -1.0f};
+  }
+
+  GetNode()->SetWorldPosition(camera_position + dif);
   // TODO: Enable for local mode.
-  // GetNode()->SetWorldRotation(active_model_->GetWorldRotation());
+  // GetNode()->SetWorldRotation(active_nodes_[0]->GetWorldRotation());
 }
 
 }  // namespace imp::editor

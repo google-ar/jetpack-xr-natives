@@ -44,6 +44,14 @@ namespace imp::editor {
 namespace {
 constexpr float kLerpFactor = 0.5f;
 constexpr float kWindowAlpha = 0.85f;
+// Spacer between component filter and node info at top of NodeDetails panel
+constexpr float kComponentLibrarySpacer = 4.0f;
+// Spacer at between node info and the first header (NodeDetails)
+constexpr float kComponentFilterSpacer = 8.0f;
+// Spacer between Component Library title and normal widget UI (NodeDetails)
+constexpr float kNodeInfoSpacer = 4.0f;
+// Title of Component Library section at bottom of NodeDetails
+constexpr std::string_view kComponentLibraryTitle = "Component Library";
 constexpr int32_t kToolbarWidth = 200;
 constexpr int32_t kSceneItemWidth = 200;
 constexpr int32_t kFixedItemWidth = 200;
@@ -172,7 +180,8 @@ void LayoutComposer::DrawOnFixedLayout(const WidgetLayoutInfo& layout_info,
       if (IsLabelVisible(widget->GetName())) {
         DrawAsStandaloneTab(
             widget->GetName(), [widget]() { widget->DrawImGui(); },
-            ImGuiTabItemFlags_Leading);
+            ImGuiTabItemFlags_Leading, /*draw_before_previous_tabs=*/false,
+            /*force_focus=*/LatchFocusRequest(widget));
       } else {
         DrawAfterLayout(widget->GetName(), [widget]() { widget->DrawImGui(); });
       }
@@ -180,16 +189,20 @@ void LayoutComposer::DrawOnFixedLayout(const WidgetLayoutInfo& layout_info,
 }
 
 void LayoutComposer::DrawInDetailsSectionAsHeader(Widget* widget) {
-  // Only draw sections that pass the filter, unless it's the node name section.
   absl::string_view header_label = widget->GetName();
-  if (!details_filter_.PassFilter(header_label.data()) &&
-      (header_label != kNodeWidgetHeaderName)) {
-    return;
-  }
 
-  details_draw_functions_.push_back(BuildHeaderDrawFunction(
-      header_label, [widget]() { widget->DrawImGui(); },
-      widget->OnCloseButton(), widget->GetTreeNodeFlags()));
+  if (header_label == kNodeWidgetHeaderName) {
+    // Pull out node info to draw before other components (no header)
+    node_info_draw_function_ = [widget]() { widget->DrawImGui(); };
+  } else if (header_label == kComponentLibraryWidgetHeaderName) {
+    // Pull out component library to draw after other components (no header)
+    component_library_draw_function_ = [widget]() { widget->DrawImGui(); };
+  } else if (details_filter_.PassFilter(header_label.data())) {
+    // For all other widgets, only draw if filter passes (with header)
+    details_draw_functions_.push_back(BuildHeaderDrawFunction(
+        header_label, [widget]() { widget->DrawImGui(); },
+        widget->OnCloseButton(), widget->GetTreeNodeFlags()));
+  }
 }
 
 void LayoutComposer::DrawInSceneSectionAsHeader(Widget* widget) {
@@ -323,15 +336,26 @@ imp::Invocable<void()> LayoutComposer::BuildHeaderDrawFunction(
           draw_function = std::move(draw_function),
           on_close_button_pressed = std::move(on_close_button_pressed),
           additional_flags]() {
+    // Making it so that the header can highlight when hovered or clicked.
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered,
+                          ImGui::GetStyle().Colors[ImGuiCol_ButtonHovered]);
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive,
+                          ImGui::GetStyle().Colors[ImGuiCol_ButtonActive]);
     // A pointer of p_visible is passed into ImGui::CollapsingHeader and is set
     // to false if the close button is pressed.
     bool p_visible = true;
+    ImGui::Separator();
     if (ImGui::CollapsingHeader(
             label.c_str(), on_close_button_pressed ? &p_visible : nullptr,
             ImGuiTreeNodeFlags_OpenOnArrow |
                 ImGuiTreeNodeFlags_OpenOnDoubleClick | additional_flags)) {
+      ImGui::Indent();
       draw_function();
+      ImGui::Unindent();
     }
+
+    ImGui::PopStyleColor(2);
+
     // The close button has been pressed, so run the callback.
     if (!p_visible) {
       on_close_button_pressed();
@@ -362,13 +386,34 @@ void LayoutComposer::DrawDockableDetailsWindow() {
 }
 
 void LayoutComposer::DrawDetailsSectionContents() {
-  if (details_draw_functions_.empty()) {
+  if (!node_info_draw_function_) {
     ImGui::Text("Select a Node to see details.");
     return;
   }
+
+  // Draw component filter
   details_filter_.Draw(GenerateUniqueImGuiLabel("filter", this).c_str());
+  ImGui::Dummy(ImVec2(0.0f, kComponentFilterSpacer));
+
+  // Draw node info
+  if (node_info_draw_function_) {
+    node_info_draw_function_();
+    ImGui::Dummy(ImVec2(0.0f, kNodeInfoSpacer));
+  }
+
+  // Draw regular components
   for (auto& draw_function : details_draw_functions_) {
     draw_function();
+  }
+
+  // Draw add-component ui
+  ImGui::Separator();
+  if (component_library_draw_function_) {
+    ImGui::Indent();
+    ImGui::Text(kComponentLibraryTitle.data());
+    ImGui::Dummy(ImVec2(0.0f, kComponentLibrarySpacer));
+    component_library_draw_function_();
+    ImGui::Unindent();
   }
 }
 
@@ -439,6 +484,10 @@ void LayoutComposer::DrawDockableTabbedWindow() {
       ImGui::SetNextWindowDockID(
           docking_helper_->GetDockId(DockingHelper::DockingType::kBottom),
           ImGuiCond_Always);
+    } else {
+      ImGui::SetNextWindowDockID(
+          docking_helper_->GetDockId(DockingHelper::DockingType::kBottom),
+          ImGuiCond_FirstUseEver);
     }
     if (info.force_focus) {
       ImGui::SetNextWindowFocus();
@@ -677,6 +726,9 @@ void LayoutComposer::DrawAfterLayout() {
       ImGui::Begin(label.c_str(), &show_draw);
       draw_function();
       ImGui::End();
+      // Allow other mechanisms to hide the window while the window is shown and
+      // the close button is not clicked.
+      show_draw &= (*window_configuration_)->IsWindowVisible(label);
       (*window_configuration_)
           ->SetWindowVisibility(
               label, show_draw
@@ -791,6 +843,8 @@ void LayoutComposer::DrawLayout() {
   menu_draw_functions_.clear();
   toolbar_draw_functions_.clear();
   draw_after_functions_.clear();
+  node_info_draw_function_ = imp::Invocable<void()>();
+  component_library_draw_function_ = imp::Invocable<void()>();
 
   should_reset_docking_layout_ = false;
 }

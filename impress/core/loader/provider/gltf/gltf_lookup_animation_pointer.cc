@@ -119,10 +119,6 @@ void AssignChannelIdToTexture(absl::string_view texture_name,
 OptionalError AnimationPointerNodesLookup(
     const imp::gltf::imp_proto::Gltf &gltf, GltfLookup &lookup) {
   GltfLookup::ChannelSet default_channel_set;
-  default_channel_set.translation_channels.Pair(gltf.nodes);
-  default_channel_set.rotation_channels.Pair(gltf.nodes);
-  default_channel_set.scale_channels.Pair(gltf.nodes);
-  default_channel_set.weights_channels.Pair(gltf.nodes);
   lookup.channel_sets.Pair(gltf.animations, default_channel_set);
 
   for (const Animation &anim : lookup.animations) {
@@ -163,12 +159,16 @@ OptionalError AnimationPointerNodesLookup(
       absl::string_view channel_name = tokens[3];
       if (channel_name == kTranslation) {
         channel_set.translation_channels[node] = channel_id;
+        lookup.self_flags[node] |= NodeGltfFlags::kIsAnimated;
       } else if (channel_name == kRotation) {
         channel_set.rotation_channels[node] = channel_id;
+        lookup.self_flags[node] |= NodeGltfFlags::kIsAnimated;
       } else if (channel_name == kScale) {
         channel_set.scale_channels[node] = channel_id;
+        lookup.self_flags[node] |= NodeGltfFlags::kIsAnimated;
       } else if (channel_name == kWeights) {
         channel_set.weights_channels[node] = channel_id;
+        lookup.self_flags[node] |= NodeGltfFlags::kIsAnimated;
       } else {
         IMP_LOG(imp::INFO) << "Skipping unsupported channel target '"
                   << std::setw(channel_name.size()) << channel_name.data()

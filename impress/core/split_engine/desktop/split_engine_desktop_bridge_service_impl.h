@@ -45,6 +45,8 @@ class SplitEngineDesktopBridgeServiceImpl final
   SplitEngineDesktopBridgeServiceImpl& operator=(
       const SplitEngineDesktopBridgeServiceImpl&) = delete;
 
+  ~SplitEngineDesktopBridgeServiceImpl() override;
+
   grpc::ServerUnaryReactor* InitializeBridge(
       grpc::CallbackServerContext* context,
       const InitializeBridgeRequest* request,

@@ -2,7 +2,7 @@
 #define XR_ANDROIDX_SYSTEM_STATE_H_ 1
 
 /*
-** Copyright 2017-2025 The Khronos Group Inc.
+** Copyright 2017-2026 The Khronos Group Inc.
 **
 ** SPDX-License-Identifier: Apache-2.0 OR MIT
 */
@@ -29,20 +29,16 @@ extern "C" {
 typedef enum XrInputModalityANDROIDX {
     // Indicates an input modality that cannot be determined.
     XR_INPUT_MODALITY_UNKNOWN_ANDROIDX = 0,
-    // Indicates an input modality that is using hand tracking.
-    XR_INPUT_MODALITY_HAND_ANDROIDX = 1,
+    // Indicates an input modality that is using head tracking.
+    XR_INPUT_MODALITY_HEAD_ANDROIDX = 1,
     // Indicates an input modality that is using some XR controller inputs.
     XR_INPUT_MODALITY_CONTROLLER_ANDROIDX = 2,
+    // Indicates an input modality that is using hand tracking.
+    XR_INPUT_MODALITY_HANDS_ANDROIDX = 3,
     // Indicates an input modality that is using a mouse inputs.
-    XR_INPUT_MODALITY_MOUSE_ANDROIDX = 3,
-    // Indicates an input modality that is using eye tracking and/or hand tracking.
-    XR_INPUT_MODALITY_EYE_ANDROIDX = 4,
-    // Indicates an input modality where the ray is based on your head position while the click is triggered by the headset's physical buttons.
-    XR_INPUT_MODALITY_HMD_FALLBACK_ANDROIDX = 5,
-    // Indicates an input modality where the ray is based on your head position while click is triggered by keeping the ray fixed on a position after a set duration.
-    XR_INPUT_MODALITY_DWELL_WITH_HEAD_ANDROIDX = 6,
-    // Indicates an input modality where the ray is based on eye tracking while click is triggered by keeping the ray fixed on a position after a set duration.
-    XR_INPUT_MODALITY_DWELL_WITH_EYE_ANDROIDX = 7,
+    XR_INPUT_MODALITY_MOUSE_ANDROIDX = 4,
+    // Indicates an input modality that combines eye tracking and hand tracking.
+    XR_INPUT_MODALITY_GAZE_AND_GESTURE_ANDROIDX = 5,
     XR_INPUT_MODALITY_MAX_ENUM_ANDROIDX = 0x7FFFFFFF
 } XrInputModalityANDROIDX;
 typedef struct XrSystemStateANDROIDX {
@@ -53,19 +49,19 @@ typedef struct XrSystemStateANDROIDX {
     XrInputModalityANDROIDX    currentInputModality;
 } XrSystemStateANDROIDX;
 
-typedef XrResult                  (XRAPI_PTR *PFN_xrEnumerateInputModalityANDROIDX)(XrInstance                instance, XrSystemId                systemId, uint32_t  inputModalityCapacityInput, uint32_t*                 inputModalityCountOutput, XrInputModalityANDROIDX*   inputModalities);
-typedef XrResult   (XRAPI_PTR *PFN_xrGetSystemStateANDROIDX)(XrInstance instance, XrSystemId systemId, XrSystemStateANDROIDX* output);
+typedef XrResult (XRAPI_PTR *PFN_xrEnumerateInputModalityANDROIDX)(XrInstance instance, XrSystemId systemId, uint32_t inputModalityCapacityInput, uint32_t* inputModalityCountOutput, XrInputModalityANDROIDX*   inputModalities);
+typedef XrResult (XRAPI_PTR *PFN_xrGetSuggestedSettingsANDROIDX)(XrInstance instance, XrSystemId systemId, XrSystemStateANDROIDX* output);
 
 #ifndef XR_NO_PROTOTYPES
 #ifdef XR_EXTENSION_PROTOTYPES
-XRAPI_ATTR XrResult                  XRAPI_CALL xrEnumerateInputModalityANDROIDX(
+XRAPI_ATTR XrResult XRAPI_CALL xrEnumerateInputModalityANDROIDX(
     XrInstance                                  instance,
     XrSystemId                                  systemId,
     uint32_t                                    inputModalityCapacityInput,
     uint32_t*                                   inputModalityCountOutput,
     XrInputModalityANDROIDX*                    inputModalities);
 
-XRAPI_ATTR XrResult   XRAPI_CALL xrGetSystemStateANDROIDX(
+XRAPI_ATTR XrResult XRAPI_CALL xrGetSuggestedSettingsANDROIDX(
     XrInstance                                  instance,
     XrSystemId                                  systemId,
     XrSystemStateANDROIDX*                      output);

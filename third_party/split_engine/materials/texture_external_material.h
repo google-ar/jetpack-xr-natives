@@ -20,6 +20,7 @@
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
+#include "core/materials/material.h"
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
 #include "core/split_engine/materials/split_engine_builtin_material.h"
@@ -46,9 +47,7 @@ class TextureExternalMaterial
           texture_parameter_creator) const override;
 
  private:
-  TextureExternalMaterial(
-      imp::BaseView& view,
-      imp::split_engine::PlaceholderOrBuiltInMaterialPtr material);
+  TextureExternalMaterial(imp::BaseView& view, imp::OwnedMaterialPtr material);
 
   imp::OwnedOrBorrowedTexturePtr texture_;
 };

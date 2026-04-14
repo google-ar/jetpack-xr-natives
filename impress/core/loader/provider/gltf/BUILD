@@ -33,7 +33,6 @@ proto_library(
     name = "schema",
     srcs = ["gltf.proto"],
     deps = [
-        "//core/loader/provider/extensions/behavior:behavior_proto",
         "//core/loader/provider/extensions/interactivity:interactivity_proto",
         "//core/proto:imp_proto",
     ],
@@ -48,7 +47,6 @@ imp_cc_proto_library(
     name = "imp_cc_schema",
     proto = ":schema",
     deps = [
-        "//core/loader/provider/extensions/behavior:behavior_imp_cc_proto",
         "//core/loader/provider/extensions/interactivity:interactivity_imp_cc_proto",
     ],
 )
@@ -110,6 +108,7 @@ cc_library(
         "//core/loader/provider:fbs_deps",  # build_cleaner: keep
         "//core/math",
         "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:inlined_vector",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -137,7 +136,6 @@ cc_library(
         "//core/common",
         "//core/common:fbs",
         "//core/common:fbs_deps",  # build_cleaner: keep
-        "//core/loader/provider/extensions:extension_behavior",
         "//core/loader/provider/extensions:extension_interactivity",
         "//core/proto:json_reader",
         "@com_google_absl//absl/strings",
@@ -225,7 +223,6 @@ cc_library(
         "//core/loader/provider:loaded_model_builder",
         "//core/loader/provider/extensions:extension_basis",
         "//core/loader/provider/extensions:extension_mesh_features",
-        "//core/loader/provider/extensions/behavior:behavior_imp_cc_proto",
         "//core/loader/provider/extensions/interactivity:interactivity_imp_cc_proto",
         "//core/material_library:fbs",
         "//core/material_library:generic_material_constants",
@@ -283,8 +280,6 @@ cc_library(
         "//core/loader/provider:loaded_model_builder",
         "//core/loader/provider/extensions:extension_draco",
         "//core/loader/provider/extensions:extension_meshopt",
-        "//core/loader/provider/extensions/behavior:behavior_imp_cc_proto",
-        "//core/loader/provider/extensions/behavior:loader_extension",
         "//core/loader/provider/extensions/interactivity:interactivity_imp_cc_proto",
         "//core/loader/provider/extensions/interactivity:loader_extension",
         "//core/material_library:generic_material_schema_provider",

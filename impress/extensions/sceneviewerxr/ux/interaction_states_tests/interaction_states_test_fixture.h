@@ -86,8 +86,13 @@ class MockInteractionOwner : public InteractionOwner {
               (override));
   MOCK_METHOD(void, PlayDropSound, (), (override));
   MOCK_METHOD(void, PlayLiftSound, (), (override));
+  MOCK_METHOD(void, PlayGrabSound, (), (override));
+  MOCK_METHOD(void, PlayReleaseSound, (), (override));
   MOCK_METHOD(bool, IsPassthrough, (), (override));
   MOCK_METHOD(UiEventListener*, GetUiEventListener, (), (override));
+  MOCK_METHOD(svxr::AxisBounds, GetModelLogScaleLimits, (), (override));
+  MOCK_METHOD(float, ConstrainElastically,
+              (float value, svxr::AxisBounds range, float scale), (override));
 };
 
 class InteractionStatesTestFixture : public imp::testing::ViewFixture {

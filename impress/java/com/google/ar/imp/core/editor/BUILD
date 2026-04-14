@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,19 +16,15 @@ load("@build_bazel_rules_android//android:rules.bzl", "android_library")
 
 package(default_visibility = ["//visibility:public"])
 
-licenses(["notice"])
-
-exports_files(
-    ["AndroidManifest.xml"],
-)
-
 android_library(
     name = "remote_editor_server",
     srcs = [
         "RemoteEditorHttpServer.java",
+        "RemoteEditorScriptApiBridge.java",
+        "RemoteEditorServer.java",
+        "RemoteEditorVideoStreamer.java",
         "RemoteEditorWebSocketServer.java",
     ],
-    javacopts = ["-Xep:AndroidJdkLibsChecker:OFF"],
     deps = [
         "//third_party/java/WebSocket:android",
         "@maven//:androidx_annotation_annotation",

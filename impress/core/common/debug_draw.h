@@ -18,7 +18,8 @@
 #define THIRD_PARTY_IMPRESS_CORE_COMMON_DEBUG_DRAW_H_
 
 #include <cstdint>
-#include <utility>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include "absl/types/span.h"
@@ -33,11 +34,67 @@
 #include "core/math/mat.h"
 #include "core/math/vec.h"
 #include "core/model/mesh/mesh_vertex_and_index_data.h"
+#include "core/ncsb/node.h"
+#include "core/ncsb/node_handle.h"
 
 // Debug draw provides the ability to easily add simple debug geometry to a
 // Filament scene in order to graphically annotate the contents of the scene
 // for debugging and iteration.
 namespace imp {
+
+// Tagged debug draw is an alternative API for debug drawing that allows for
+// dynamically enabling and disabling debug drawing at runtime.
+//
+// Users can configure which tags are enabled by using the "Debug Draw" widget
+// in the editor. Alternatively, developers can programmatically configure tags
+// using imp::debug_draw::SetTagEnabled and
+// imp::debug_draw::SetTagEnabledDefault.
+//
+// Examples:
+// /* In header or anonymous namespace: */
+// inline constexpr std::string_view kTag{"MyFeatureTag"};
+//
+// imp::DebugDrawLocal(kTag, GetNode(), [](auto& drawer){
+//   draw.SphereLines({1.0f, 2.0f, 3.0f}, 1.0f, imp::debug_draw::kBlue);
+// });
+//
+// imp::DebugDrawLocal(kTag, GetNode()->GetParent(), [](auto& draw){
+//   draw.Point({0.25f, 0.5f, 0.75f}, imp::debug_draw::kRed);
+// });
+//
+// imp::DebugDrawGlobal(kTag, [](auto& draw){
+//   draw.Point({0.25f, 0.5f, 0.75f}, imp::debug_draw::kGreen);
+// });
+//
+// imp::DebugDrawNormalizedScreen(kTag, [](auto& draw){
+//   draw.Point({0.5f, 0.5f}, imp::debug_draw::kPurple);
+// });
+
+// Draw in local coordinate space of the given node.
+//
+// The Fn argument is a function that takes a single argument of type
+// imp::debug_draw::Local&. fn will only be called if the tag is enabled.
+template <typename Fn>
+void DebugDrawLocal(std::string_view tag, imp::NodeHandle node, Fn&& fn,
+                    uint32_t duration_frames = 1u);
+
+// Similar to DebugDrawLocal, but draws in global (world) coordinate space.
+//
+// The Fn argument is a function that takes a single argument of type
+// imp::debug_draw::Global&. fn will only be called if the tag is enabled.
+template <typename Fn>
+void DebugDrawGlobal(std::string_view tag, Fn&& fn,
+                     uint32_t duration_frames = 1u);
+
+// Similar to DebugDrawLocal, but draws in screen coordinate space.
+//
+// The Fn argument is a function that takes a single argument of type
+// imp::debug_draw::NormalizedScreen&. fn will only be called if the tag is
+// enabled.
+template <typename Fn>
+void DebugDrawNormalizedScreen(std::string_view tag, Fn&& fn,
+                               uint32_t duration_frames = 1u);
+
 namespace debug_draw {
 
 // Color values are passed as normalized sRGBA ubyte4.
@@ -335,7 +392,77 @@ class NormalizedScreen : public DrawSpace {
   void RectLines(const Rect& rect, const Color& color);
 };
 
+// Functions for configuring debug draw tags below.
+
+// Tagging used to dynamically enable/disable debug drawing at runtime. These
+// methods are expected to be called from the Impress main thread.
+
+// Returns true if a given tag is enabled. Only enabled tags have their debug
+// draws submitted to the Filament scene. Disabled tags should have close to no
+// cost to execute.
+//
+// Always returns false if the debug draw fixture isn't installed.
+bool IsTagEnabled(std::string_view tag);
+
+// Sets default value returned by IsTagEnabled if SetTagEnabled has not been
+// called for that tag yet. If this function is not called, the default is
+// assumed to be false.
+void SetDefaultForIsTagEnabled(bool enabled);
+
+// Get the currently set default value for tags.
+bool GetDefaultForIsTagEnabled();
+
+// Enables or disables a specific tag.
+void SetTagEnabled(std::string_view tag, bool enabled);
+
+// Unsets any value previously set for the given tag, causing it to inherit the
+// default value set by SetDefaultForIsTagEnabled.
+void RestoreTagStateToDefault(std::string_view tag);
+
+// Returns all of the tags known to the debug draw system and their enabled
+// status. A tag is known to the system if it has been passed to IsTagEnabled or
+// SetTagEnabled at least once.
+//
+// WARNING: This returned span is only valid as a temporary for immediate use.
+// If you need to store it, copy it into a vector or other container.
+absl::Span<const std::string> GetAllRegisteredTags();
+
 }  // namespace debug_draw
+
+// Template implementation details below.
+
+template <typename Fn>
+void DebugDrawLocal(std::string_view tag, imp::NodeHandle node, Fn&& fn,
+                    uint32_t duration_frames) {
+  if (!debug_draw::IsTagEnabled(tag)) {
+    return;
+  }
+
+  debug_draw::Local drawer(node->GetEntity(), duration_frames);
+  fn(drawer);
+}
+
+template <typename Fn>
+void DebugDrawGlobal(std::string_view tag, Fn&& fn, uint32_t duration_frames) {
+  if (!debug_draw::IsTagEnabled(tag)) {
+    return;
+  }
+
+  debug_draw::Global drawer(duration_frames);
+  fn(drawer);
+}
+
+template <typename Fn>
+void DebugDrawNormalizedScreen(std::string_view tag, Fn&& fn,
+                               uint32_t duration_frames) {
+  if (!debug_draw::IsTagEnabled(tag)) {
+    return;
+  }
+
+  debug_draw::NormalizedScreen drawer(duration_frames);
+  fn(drawer);
+}
+
 }  // namespace imp
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_COMMON_DEBUG_DRAW_H_

@@ -30,8 +30,8 @@
 #include "absl/synchronization/mutex.h"
 #include "core/common/jni_helpers.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
+#include "core/split_engine/message_group_monitor.h"
 #include "core/split_engine/shared/split_engine_defines.h"
-#include "core/split_engine/split_engine_bridge_sender.h"
 
 namespace imp::split_engine {
 
@@ -122,7 +122,7 @@ class SplitEngineBridge : public JavaWrapper,
         close_(JavaWrapper::GetMethodHandle("close", "()V")),
         client_id_(reinterpret_cast<int64_t>(this)) {
     if (absl::Status connect_result =
-            SplitEngineBridgeSender::ConnectClient(client_id_);
+            MessageGroupMonitor::ConnectClient(client_id_);
         !connect_result.ok()) {
       IMP_LOG(imp::FATAL) << "Failed to connect bridge: " << connect_result.ToString();
     }
@@ -140,7 +140,7 @@ class SplitEngineBridge : public JavaWrapper,
 
   ~SplitEngineBridge() {
     if (absl::Status disconnect_result =
-            SplitEngineBridgeSender::DisconnectClient(client_id_);
+            MessageGroupMonitor::DisconnectClient(client_id_);
         !disconnect_result.ok()) {
       IMP_LOG(imp::FATAL) << "Failed to disconnect bridge: "
                  << disconnect_result.ToString();

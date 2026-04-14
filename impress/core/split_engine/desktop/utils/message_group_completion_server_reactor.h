@@ -17,11 +17,13 @@
 
 #include <cstdint>
 #include <queue>
+#include <utility>
 
 #include "absl/base/thread_annotations.h"
 #include "absl/synchronization/mutex.h"
 #include "third_party/grpc/include/grpcpp/support/server_callback.h"
 #include "third_party/grpc/include/grpcpp/support/status.h"
+#include "core/common/invocable.h"
 #include "core/split_engine/desktop/split_engine_desktop_bridge.proto.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 
@@ -38,7 +40,8 @@ class MessageGroupCompletionServerReactor final
   };
 
  public:
-  MessageGroupCompletionServerReactor() = default;
+  MessageGroupCompletionServerReactor(imp::Invocable<void()> on_done)
+      : on_done_(std::move(on_done)) {}
   ~MessageGroupCompletionServerReactor() override = default;
 
   // Adds a message group completion to the queue of responses to be sent.
@@ -55,6 +58,8 @@ class MessageGroupCompletionServerReactor final
 
  private:
   void Write();
+
+  imp::Invocable<void()> on_done_;
 
   absl::Mutex responses_mutex_;
   std::queue<MessageGroupCompletionResponse> responses_

@@ -55,8 +55,6 @@
 #include "core/loader/provider/details/loaded_model_builder.h"
 #include "core/loader/provider/details/provider_details_common.h"
 #include "core/loader/provider/details/vertex_attribute.h"
-#include "core/loader/provider/extensions/behavior/behavior.proto.imp.h"
-#include "core/loader/provider/extensions/behavior/loader_extension.h"
 #include "core/loader/provider/extensions/gltf_extension_draco.h"
 #include "core/loader/provider/extensions/gltf_extension_meshopt.h"
 #include "core/loader/provider/extensions/interactivity/interactivity.proto.imp.h"
@@ -1055,22 +1053,10 @@ ProtoGltfProvider::TryLoadGltf(LoaderState* state_ptr) {
                                 audio_offsets, scene_emitters);
   }
 
-  // The gltf behavior extension listens to the Behavior message being visited
-  // and returns if it's not supported, so Behavior will already have been
-  // created. We need to check if it contains anything, in this case knowing if
-  // there's any nodes will suffice.
-  if (gltf.extensions.behavior && !gltf.extensions.behavior->nodes.empty()) {
-    std::unique_ptr<BehaviorLoaderExtension> behavior_loader_extension =
-        builder_->CreateBehaviorLoaderExtension();
-    absl::StatusOr<BehaviorOffset> behavior_offset =
-        behavior_loader_extension->AddBehavior(*gltf.extensions.behavior);
-    if (!behavior_offset.ok()) {
-      return behavior_offset.status();
-    }
-
-    builder_->AddBehavior(*std::move(behavior_offset));
-  }
-
+  // The gltf interactivity extension listens to the Interactivity message being
+  // visited and returns if it's not supported, so InteractivityData will
+  // already have been created. We need to check if it contains anything, in
+  // this case knowing if there's any nodes will suffice.
   if (gltf.extensions.interactivity &&
       !gltf.extensions.interactivity->graphs.empty()) {
     std::unique_ptr<InteractivityLoaderExtension>

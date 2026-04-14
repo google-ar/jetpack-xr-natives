@@ -43,6 +43,7 @@ cc_library(
     deps = [
         "//core/async:executor",
         "//core/common:jni_helpers",
+        "//core/split_engine:message_group_monitor",
         "//core/split_engine:split_engine_bridge_sender",
         "//core/split_engine:split_engine_shared",
         "//core/split_engine/android:split_engine_shared_memory_bridge_client",
@@ -65,6 +66,7 @@ cc_library(
         ":split_engine_bridge",
         "//:platform_android",
         "//core/common:jni_helpers",
+        "//core/split_engine:message_group_monitor",
         "//core/split_engine:split_engine_bridge_sender",
         "//core/split_engine:split_engine_shared",
         "//core/split_engine/android:split_engine_shared_memory_bridge_client",

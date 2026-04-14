@@ -18,7 +18,6 @@
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_MATERIALS_SPLIT_ENGINE_BUILTIN_MATERIAL_H_
 
 #include <memory>
-#include <variant>
 
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
@@ -28,23 +27,18 @@
 #include "core/materials/material.h"
 #include "core/ncsb/update_phase.h"
 #include "core/ncsb/update_system.h"
-#include "core/split_engine/materials/builtin/builtin_material.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
+#include "core/split_engine/materials/split_engine_material.h"
 #include "core/view/utils/frame_time.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
 namespace imp::split_engine {
 
-using PlaceholderOrBuiltInMaterialPtr =
-    std::variant<OwnedMaterialPtr, BuiltInMaterialPtr>;
-
 // A base class for Split Engine built-in materials on the app-side. This class
 // encapsulates the boilerplate for serializing material parameters.
-class SplitEngineBuiltinMaterial {
+class SplitEngineBuiltinMaterial : public SplitEngineMaterial {
  public:
-  static Future<OwnedMaterialPtr> CreatePlaceholderMaterial(BaseView& view);
-
-  static Future<PlaceholderOrBuiltInMaterialPtr> RequestBuiltInMaterial(
+  static Future<OwnedMaterialPtr> RequestBuiltInMaterial(
       BaseView& view, std::unique_ptr<flatbuffers::FlatBufferBuilder> fbb,
       android_xr::schemas::BuiltInMaterialSpec material_type,
       flatbuffers::Offset<void> spec);
@@ -54,7 +48,7 @@ class SplitEngineBuiltinMaterial {
   SplitEngineBuiltinMaterial(
       BaseView& view,
       android_xr::schemas::BuiltInMaterialParameters parameters_type,
-      PlaceholderOrBuiltInMaterialPtr material);
+      OwnedMaterialPtr material);
 
   virtual ~SplitEngineBuiltinMaterial();
 
@@ -83,28 +77,27 @@ class SplitEngineBuiltinMaterial {
   void Cleanup();
 
  private:
-  BaseView& view_;
   android_xr::schemas::BuiltInMaterialParameters parameters_type_;
-  PlaceholderOrBuiltInMaterialPtr material_;
   bool cleanup_called_ = false;
 };
 
-// An updater that calls Update() on all SplitEngineMaterials in the view.
-class SplitEngineMaterialUpdater
-    : public UpdateSystem::Updater<SplitEngineMaterialUpdater> {
+// An updater that calls Update() on all SplitEngineBuiltinMaterials in the
+// view.
+class SplitEngineBuiltinMaterialUpdater
+    : public UpdateSystem::Updater<SplitEngineBuiltinMaterialUpdater> {
  public:
   static constexpr UpdatePhase kUpdatePhase = UpdatePhase::kEnd;
 
-  explicit SplitEngineMaterialUpdater(BaseView& view);
+  explicit SplitEngineBuiltinMaterialUpdater(BaseView& view);
 
   void Update(const FrameTime& frame_time) override;
   void MarkParametersDirty(const SplitEngineBuiltinMaterial* material,
                            bool dirty = true);
   bool AreParametersDirty(const SplitEngineBuiltinMaterial* material) const;
-  void RemoveMaterial(SplitEngineBuiltinMaterial* material);
+  void RemoveMaterial(const SplitEngineBuiltinMaterial* material);
 
  private:
-  // Set of SplitEngineMaterials whose parameters have changed this frame.
+  // Set of SplitEngineBuiltinMaterial whose parameters have changed this frame.
   RobinSet<const SplitEngineBuiltinMaterial*> dirty_;
 };
 

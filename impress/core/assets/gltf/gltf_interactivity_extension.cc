@@ -64,6 +64,7 @@
 #include "core/async/future.h"
 #include "core/common/registry.h"
 #include "core/common/robin_map.h"
+#include "core/common/robin_set.h"
 #include "core/common/typed_set_vector.h"
 #include "core/common/variant.h"
 #include "core/model/entity_data.h"
@@ -111,7 +112,7 @@ enum InteractivityType : int { SELECTABILITY = 0, HOVERABILITY = 1 };
  *  std::vector<int> - the list of indicies correlating to nodes that can
  * be interacted
  */
-std::vector<int> GetInteractivityNodeIndices(
+RobinSet<int> GetInteractivityNodeIndices(
     const ComponentHandle<GltfRenderer>& gltf_renderer,
     InteractivityType interactivity_type) {
   std::stack<NodeHandle> node_stack;
@@ -121,7 +122,7 @@ std::vector<int> GetInteractivityNodeIndices(
 
   const TypedSetVector<model::EntityData>& entities =
       gltf_renderer->GetGltfAsset()->GetModelData().Entities();
-  std::vector<int> interactivity_node_gltf_indices;
+  RobinSet<int> interactivity_node_gltf_indices;
   while (!node_stack.empty()) {
     NodeHandle current_node = node_stack.top();
     node_stack.pop();
@@ -154,7 +155,7 @@ std::vector<int> GetInteractivityNodeIndices(
 
     if (is_interactivity_node) {
       uint64_t gltf_index = entities[*entity_id].original_index;
-      interactivity_node_gltf_indices.push_back(static_cast<int>(gltf_index));
+      interactivity_node_gltf_indices.insert(static_cast<int>(gltf_index));
       for (const NodeHandle& child : current_node->GetChildren()) {
         node_stack.push(child);
       }
@@ -315,6 +316,12 @@ Future<absl::Status> GltfInteractivityExtension::SetupInternal(
       .type = VariableDeclaration::MAP,
       .init_value = Literal{converted_graph.GetTapStopPropagationMap()}});
 
+  ComponentHandle<GltfScene> gltf_scene = GetNode()->GetComponent<GltfScene>();
+  if (!gltf_scene) {
+    return Future<absl::Status>(
+        absl::FailedPreconditionError("No GltfScene found."));
+  }
+
   // Create RecipeRunner that's initially stopped. It will be started when
   // GltfRenderer's Setup finishes.
   absl::StatusOr<ComponentHandle<RecipeRunner>> add_result =
@@ -327,6 +334,48 @@ Future<absl::Status> GltfInteractivityExtension::SetupInternal(
 
   recipe_runner_ = *add_result;
 
+  // Converts the tap node indices to NodeHandles.
+  std::vector<NodeHandle> tap_targets;
+  tap_targets.reserve(converted_graph.GetTapStopPropagationMap().values.size());
+  for (const auto& [index, stop_propagation] :
+       converted_graph.GetTapStopPropagationMap().values) {
+    int gltf_node_index = std::stoi(index);
+    if (tap_node_gltf_indices_.contains(gltf_node_index)) {
+      tap_targets.push_back(
+          gltf_scene->GetOrCreateNodeFromGltfNodeIndex(gltf_node_index));
+    }
+  }
+
+  // Sets the tap targets on the RecipeRunner.
+  recipe_runner_->SetTapTargets(
+      absl::Span<NodeHandle>(tap_targets.data(), tap_targets.size()));
+
+  // Converts the hover node indices to NodeHandles.
+  std::vector<NodeHandle> hover_targets;
+  hover_targets.reserve(
+      converted_graph.GetOnHoverInStopPropagationMap().values.size() +
+      converted_graph.GetOnHoverOutStopPropagationMap().values.size());
+  for (const auto& [index, stop_propagation] :
+       converted_graph.GetOnHoverInStopPropagationMap().values) {
+    int gltf_node_index = std::stoi(index);
+    if (hover_node_gltf_indicies_.contains(gltf_node_index)) {
+      hover_targets.push_back(
+          gltf_scene->GetOrCreateNodeFromGltfNodeIndex(gltf_node_index));
+    }
+  }
+  for (const auto& [index, stop_propagation] :
+       converted_graph.GetOnHoverOutStopPropagationMap().values) {
+    int gltf_node_index = std::stoi(index);
+    if (hover_node_gltf_indicies_.contains(gltf_node_index)) {
+      hover_targets.push_back(
+          gltf_scene->GetOrCreateNodeFromGltfNodeIndex(gltf_node_index));
+    }
+  }
+
+  // Sets the hover targets on the RecipeRunner.
+  recipe_runner_->SetHoverTargets(
+      absl::Span<NodeHandle>(hover_targets.data(), hover_targets.size()));
+
   return Future<absl::Status>(absl::OkStatus());
 }
 
@@ -338,31 +387,6 @@ bool GltfInteractivityExtension::IsValidFor(
 
 absl::Status GltfInteractivityExtension::Start() {
   if (recipe_runner_) {
-    ComponentHandle<GltfScene> gltf_scene =
-        recipe_runner_->GetNode()->GetComponent<GltfScene>();
-
-    // Converts the tap node indices to NodeHandles.
-    std::vector<NodeHandle> tap_targets;
-    tap_targets.reserve(tap_node_gltf_indices_.size());
-    for (int index : tap_node_gltf_indices_) {
-      tap_targets.push_back(
-          gltf_scene->GetOrCreateNodeFromGltfNodeIndex(index));
-    }
-    // Sets the tap targets on the RecipeRunner.
-    recipe_runner_->SetTapTargets(
-        absl::Span<NodeHandle>(tap_targets.data(), tap_targets.size()));
-
-    // Converts the hover node indices to NodeHandles.
-    std::vector<NodeHandle> hover_targets;
-    hover_targets.reserve(hover_node_gltf_indicies_.size());
-    for (int index : hover_node_gltf_indicies_) {
-      hover_targets.push_back(
-          gltf_scene->GetOrCreateNodeFromGltfNodeIndex(index));
-    }
-    // Sets the hover targets on the RecipeRunner
-    recipe_runner_->SetHoverTargets(
-        absl::Span<NodeHandle>(hover_targets.data(), hover_targets.size()));
-
     return recipe_runner_->Start();
   }
 

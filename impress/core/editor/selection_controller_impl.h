@@ -21,6 +21,7 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "core/editor/selection_controller.h"
+#include "core/input/key_codes.h"
 #include "core/ncsb/node_handle.h"
 #include "core/ncsb/system.h"
 
@@ -61,6 +62,7 @@ class SelectionControllerImpl : public SelectionController, public System {
   // Moves the camera to focus and frame it on the current selected nodes.
   void FocusCameraOnSelection();
 
+  absl::flat_hash_set<VirtualKeyCode> held_multi_select_keys_;
   absl::flat_hash_set<NodeHandle> selected_nodes_;
   std::vector<NodeHandle> selectable_nodes_;
   int selected_node_index_ = 0;

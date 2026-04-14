@@ -16,6 +16,7 @@
 
 #include <memory>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -213,7 +214,6 @@ SplitEngineGenericMaterial::SplitEngineGenericMaterial(
           android_xr::schemas::BuiltInMaterialParameters::
               GenericMaterialParameters,
           std::move(placeholder_material)),
-      view_(view),
       placeholder_texture_(
           view.GetTextureFactory().BorrowPlaceholderTexture()) {
   SetName("SplitEngineGenericMaterial");
@@ -230,8 +230,8 @@ GenericMaterialPtr SplitEngineGenericMaterial::Duplicate() const {
     MarkParametersDirty(false);
   }
 
-  filament::MaterialInstance* material_instance =
-      SplitEngineBuiltinMaterial::GetMaterial()->GetFilamentMaterialInstance();
+  const filament::MaterialInstance* material_instance =
+      GetFilamentMaterialInstance();
   filament::MaterialInstance* duplicate_instance =
       filament::MaterialInstance::duplicate(material_instance);
   view_.GetSplitEngineSerializer()->DuplicateMaterialInstance(
@@ -240,6 +240,12 @@ GenericMaterialPtr SplitEngineGenericMaterial::Duplicate() const {
       view_, view_.GetMaterialFactory().WrapMaterial(duplicate_instance)));
   duplicate->generic_material_parameters_ = generic_material_parameters_;
   return duplicate;
+}
+
+const std::string& SplitEngineGenericMaterial::GetName() const { return name_; }
+
+void SplitEngineGenericMaterial::SetName(absl::string_view name) {
+  name_ = name;
 }
 
 absl::Status SplitEngineGenericMaterial::AssignTexturesAndParams(
@@ -260,6 +266,11 @@ flatbuffers::Offset<void> SplitEngineGenericMaterial::SerializeParameters(
   return generic_material_parameters_
       .ToFlatbufferT<SplitEngineGenericMaterialParametersCreator>(fbb)
       .Union();
+}
+
+BorrowedMaterialPtr SplitEngineGenericMaterial::GetMaterialInternal(
+    SmallSourceLocation loc) const {
+  return SplitEngineBuiltinMaterial::GetMaterial(loc);
 }
 
 const filament::MaterialInstance*
@@ -285,11 +296,6 @@ TypedVector<model::MaterialTexture> SplitEngineGenericMaterial::GetTextures()
 }
 StringMap<int> SplitEngineGenericMaterial::GetSamplerIndexLookup() const {
   return {};
-}
-
-BorrowedMaterialPtr SplitEngineGenericMaterial::GetMaterialInternal(
-    SmallSourceLocation loc) const {
-  return SplitEngineBuiltinMaterial::GetMaterial(loc);
 }
 
 TextureAndSampler SplitEngineGenericMaterial::GetTextureAndSampler(

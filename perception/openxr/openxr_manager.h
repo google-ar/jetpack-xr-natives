@@ -38,6 +38,7 @@
 #include "absl/numeric/int128.h"
 #include "absl/synchronization/mutex.h"
 #include "openxr/openxr_manager_clock.h"
+#include "openxr/openxr_manager_utils.h"
 
 namespace androidx::xr::openxr {
 
@@ -215,7 +216,7 @@ class OpenXrManager {
   static CreateAnchorResult MapAnchorCreateResult(XrResult xr_result);
 
   // Initializes the OpenXrManager. This is broken down into loading OpenXR,
-  // creating an OpenXR instance, and creating a session from that instance. The
+  // and creating a session from the passed instance. The
   // instance must be associated with one activity. This will return true if the
   // initialization was successful, or if the instance is already initialized.
   // If start_polling_loop is set to true, this function will also resume the
@@ -224,13 +225,19 @@ class OpenXrManager {
   // PauseSession or DeInit to stop the polling thread after this function has
   // been called with start_polling_thread = true. The default_reference_space
   // is the reference space that will be used while querying OpenXR.
+  // get_instance_proc_addr_ptr is pointer to the xrGetInstanceProcAddr
+  // function that is required if passing an xr_instance from an OpenXR loader
+  // that was not dynamically linked to this native library. Otherwise this
+  // session will not be able to recognize the original XrInstance handle.
   // TODO: (broken link) -  Support multiple activities in the OpenXR manager.
-  bool Init(JNIEnv* env, jobject context,
+  bool Init(JNIEnv* env, jobject context, XrInstance xr_instance,
             XrReferenceSpaceType default_reference_space =
                 XR_REFERENCE_SPACE_TYPE_UNBOUNDED_ANDROID,
-            bool start_polling_thread = true) ABSL_LOCKS_EXCLUDED(mutex_);
+            bool start_polling_thread = true,
+            jlong get_instance_proc_address_ptr = 0)
+      ABSL_LOCKS_EXCLUDED(mutex_);
 
-  // Destroys the Session and Instance held by the OpenXrManager. Once destroyed
+  // Destroys the Session held by the OpenXrManager. Once destroyed
   // it can be reinitialized. If stop_polling_thread is true this will wait for
   // the polling thread to join. stop_polling_thread must be false when DeInit
   // is triggered from the polling thread. This can be called externally or
@@ -250,9 +257,10 @@ class OpenXrManager {
   // This function is thread safe.
   // Returns true if successful and populates the object_data. Returns false if
   // there was an error getting the object data.
-  bool GetTrackableObjectState(
-      XrTrackableANDROID object_id, XrReferenceSpaceType reference_space,
-      XrTime time, XrTrackableObjectANDROID& out_object);
+  bool GetTrackableObjectState(XrTrackableANDROID object_id,
+                               XrReferenceSpaceType reference_space,
+                               XrTime time,
+                               XrTrackableObjectANDROID& out_object);
 
   // Returns a vector containing tracked planes from the trackable tracker.
   std::vector<XrTrackableANDROID> GetPlanes();
@@ -336,11 +344,14 @@ class OpenXrManager {
   // from the jni thread.
   bool DestroyAnchor(XrSpace anchor_space);
 
+  // Destroys the provided XrSpace. Returns false if there was an error
+  // destroying the space. This should be called from the jni thread.
+  bool DestroySpace(XrSpace space);
+
   // Gets the head pose in the default reference space at the provided time.
-  // Returns true if successful and populates the out_pose. Returns false if
-  // there was an error getting the head pose. This is expected to be called
-  // from the jni thread.
-  bool GetHeadPose(XrTime time, XrPosef* out_pose);
+  // Returns a TrackingState representing the tracking state and populates the
+  // out pose. This is expected to be called from the jni thread.
+  TrackingState GetHeadPose(XrTime time, XrPosef* out_pose);
 
   // Gets the left and right views in the default reference space at the
   // provided time. Returns true if successful and populates the out_views.
@@ -422,8 +433,8 @@ class OpenXrManager {
 
   // Gets the face tracking state.
   XrResult GetFaceState(XrTime time, XrFaceStateANDROID* outFaceState,
-                       std::vector<float>& out_blend_shape_values,
-                       std::vector<float>& out_confidence_values);
+                        std::vector<float>& out_blend_shape_values,
+                        std::vector<float>& out_confidence_values);
 
   // Checks if the face tracker is calibrated.
   bool IsFaceTrackerCalibrated();
@@ -564,17 +575,13 @@ class OpenXrManager {
   // Loads the OpenXR runtime.
   bool LoadOpenXr(jobject context) ABSL_LOCKS_EXCLUDED(mutex_);
 
-  // Creates an OpenXR instance. The OpenXR runtime must first be loaded by
-  // calling LoadOpenXr.
-  bool CreateInstance() ABSL_LOCKS_EXCLUDED(mutex_);
-
   // Creates an OpenXR session. An instance must first be created by calling
   // CreateInstance.
   bool CreateSession() ABSL_LOCKS_EXCLUDED(mutex_);
 
-  // Loads in the OpenXR extension functions needed for functionality. This
-  // should be called from Init by the main thread.
-  bool InitExtensionFunctions() ABSL_LOCKS_EXCLUDED(mutex_);
+  // Loads in the OpenXR functions (both core and extension) that will need to
+  // be called by the openXR manager.
+  bool InitOpenXrFunctions() ABSL_LOCKS_EXCLUDED(mutex_);
 
   // Creates a reference space at origin of the STAGE reference space type. This
   // should be called from Init and is used as a reference point when finding
@@ -601,13 +608,12 @@ class OpenXrManager {
   void FillInHandDataBuffer(std::byte* buffer,
                             XrHandJointLocationsEXT hand_joints);
 
-
   // Fills in the vector3 into the float buffer.
   void FillVector3IntoFloatBuffer(float* floatBuffer, XrVector3f vector);
 
   // Fills in the quaternion into the float buffer.
-  void FillQuaternionIntoFloatBuffer(
-      float* floatBuffer, XrQuaternionf quaternion);
+  void FillQuaternionIntoFloatBuffer(float* floatBuffer,
+                                     XrQuaternionf quaternion);
 
   // Destroys all geospatial resources.
   void CleanupGeospatial() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
@@ -751,8 +757,8 @@ class OpenXrManager {
   // Creates the spatial context if it doesn't exist.
   XrResult MaybeCreateSpatialContextAsync(
       XrSpatialContextCreateInfoEXT create_info,
-      std::function<void(const XrCreateSpatialContextCompletionEXT&)>
-          callback) ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+      std::function<void(const XrCreateSpatialContextCompletionEXT&)> callback)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   XrInstance instance_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
   XrSystemId system_id_ ABSL_GUARDED_BY(mutex_) = XR_NULL_SYSTEM_ID;
@@ -853,6 +859,25 @@ class OpenXrManager {
 
   JNIEnv* java_env_ = nullptr;
   JavaVM* app_vm_ = nullptr;
+
+  PFN_xrGetInstanceProcAddr xr_get_instance_proc_addr_ = nullptr;
+
+  // core OpenXR functions.
+  PFN_xrGetSystem xr_get_system_ = nullptr;
+  PFN_xrCreateSession xr_create_session_ = nullptr;
+  PFN_xrDestroySession xr_destroy_session_ = nullptr;
+  PFN_xrGetSystemProperties xr_get_system_properties_ = nullptr;
+  PFN_xrCreateReferenceSpace xr_create_reference_space_ = nullptr;
+  PFN_xrDestroySpace xr_destroy_space_ = nullptr;
+  PFN_xrLocateSpace xr_locate_space_ = nullptr;
+  PFN_xrLocateViews xr_locate_views_ = nullptr;
+  PFN_xrEnumerateEnvironmentBlendModes xr_enumerate_environment_blend_modes_ =
+      nullptr;
+  PFN_xrBeginSession xr_begin_session_ = nullptr;
+  PFN_xrEndSession xr_end_session_ = nullptr;
+  PFN_xrPollEvent xr_poll_event_ = nullptr;
+  PFN_xrEnumerateInstanceExtensionProperties
+      xr_enumerate_instance_extension_properties_ = nullptr;
 
   // Loaded OpenXR functions.
   PFN_xrVoidFunction convert_time_;

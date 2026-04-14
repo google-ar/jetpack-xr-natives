@@ -32,7 +32,6 @@
 #include "core/material_library/generic_material.h"
 #include "core/material_library/material_param_value.h"
 #include "core/math/math.h"
-#include "core/model/behavior_data.h"
 #include "core/model/entity_data.h"
 #include "core/model/interactivity_data.h"
 #include "core/model/skeleton_data.h"
@@ -64,7 +63,6 @@ ModelData::ModelData(
     TypedVector<AudioEmitterData> audio_emitters,
     TypedVector<AudioSourceData> audio_sources, TypedVector<AudioData> audios,
     std::vector<AudioEmitterId> scene_audio_emitters,
-    std::optional<BehaviorData> behavior,
     std::optional<InteractivityData> interactivity)
 
     : view_(view),
@@ -89,7 +87,6 @@ ModelData::ModelData(
       audio_sources_(std::move(audio_sources)),
       audios_(std::move(audios)),
       scene_audio_emitters_(std::move(scene_audio_emitters)),
-      behavior_(std::move(behavior)),
       interactivity_(std::move(interactivity)) {}
 
 ModelData::~ModelData() {
@@ -238,14 +235,6 @@ const TypedVector<AudioData>& ModelData::Audios() const { return audios_; }
 
 const std::vector<AudioEmitterId>& ModelData::SceneAudioEmitters() const {
   return scene_audio_emitters_;
-}
-
-const BehaviorData* ModelData::Behavior() const {
-  if (!behavior_.has_value()) {
-    return nullptr;
-  }
-
-  return &behavior_.value();
 }
 
 const InteractivityData* ModelData::Interactivity() const {

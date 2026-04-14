@@ -22,6 +22,8 @@ import "core/ncsb/node_handle_message.proto";
 import "core/proto/imp.proto";
 import "core/scene_handles/scene_handles.proto";
 
+// LINT.IfChange
+
 // LiteralArray represents a list of literals.
 message LiteralArray {
   repeated Literal values = 1;
@@ -106,3 +108,5 @@ message VariableDeclaration {
   Type type = 2;
   Literal init_value = 3 [(imp.optional_type) = ABSL_OPTIONAL];
 }
+
+// LINT.ThenChange(//depot/google3/core/recipes/architecture.md)

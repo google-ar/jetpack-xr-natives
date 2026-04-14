@@ -24,16 +24,15 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "core/common/registry.h"
-#include "core/common/small_source_location.h"
 #include "core/config.h"
 #include "core/materials/material.h"
 #include "core/math/mat.h"
 #include "core/media/media_color_space.h"
 #include "core/render/display_color_space.h"
+#include "core/split_engine/materials/builtin/builtin_material_wrapper.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_external_texture_color_space_store.h"
 #include "core/view/base_view.h"
-
 namespace imp::split_engine {
 namespace {
 constexpr absl::string_view kColorConversionMatrixParameter =
@@ -45,14 +44,9 @@ constexpr absl::string_view kMaxContentLightLevelParameter =
 
 BuiltInCustomMaterial::BuiltInCustomMaterial(BridgeId bridge_id,
                                              OwnedMaterialPtr material)
-    : bridge_id_(bridge_id), material_(std::move(material)) {}
+    : BuiltInMaterialWrapper(std::move(material)), bridge_id_(bridge_id) {}
 
 BridgeId BuiltInCustomMaterial::GetBridgeId() const { return bridge_id_; }
-
-BorrowedMaterialPtr BuiltInCustomMaterial::GetMaterialInternal(
-    SmallSourceLocation loc) const {
-  return material_.Borrow(loc);
-}
 
 void BuiltInCustomMaterial::UpdateColorSpaceParameters(
     BaseView& view, std::optional<TextureId> texture_id) {
@@ -105,11 +99,9 @@ void BuiltInCustomMaterial::UpdateColorSpaceParameters(
   }
 #endif
 
-  GetMaterial()->SetParameter(kColorConversionMatrixParameter,
-                              color_transform_matrix);
-  GetMaterial()->SetParameter(kTransferFunctionParameter, transfer_function);
-  GetMaterial()->SetParameter(kMaxContentLightLevelParameter,
-                              max_content_light_level);
+  SetParameter(kColorConversionMatrixParameter, color_transform_matrix);
+  SetParameter(kTransferFunctionParameter, transfer_function);
+  SetParameter(kMaxContentLightLevelParameter, max_content_light_level);
 }
 
 void BuiltInCustomMaterial::OverrideColorSpaceParameters(
@@ -137,11 +129,9 @@ void BuiltInCustomMaterial::OverrideColorSpaceParameters(
   int transfer_function = static_cast<int>(color_space.GetTransfer());
   int max_content_light_level = color_space.GetMaxContentLightLevel();
 
-  GetMaterial()->SetParameter(kColorConversionMatrixParameter,
-                              color_transform_matrix);
-  GetMaterial()->SetParameter(kTransferFunctionParameter, transfer_function);
-  GetMaterial()->SetParameter(kMaxContentLightLevelParameter,
-                              max_content_light_level);
+  SetParameter(kColorConversionMatrixParameter, color_transform_matrix);
+  SetParameter(kTransferFunctionParameter, transfer_function);
+  SetParameter(kMaxContentLightLevelParameter, max_content_light_level);
 }
 
 }  // namespace imp::split_engine

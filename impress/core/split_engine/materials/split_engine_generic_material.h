@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "absl/base/attributes.h"
@@ -71,6 +72,10 @@ class SplitEngineGenericMaterial : public SplitEngineBuiltinMaterial,
       BaseView& view, const GenericMaterialSpec& spec);
 
   ~SplitEngineGenericMaterial() override;
+
+  const std::string& GetName() const override;
+
+  void SetName(absl::string_view name) override;
 
   GenericMaterialPtr Duplicate() const override;
 
@@ -316,7 +321,7 @@ class SplitEngineGenericMaterial : public SplitEngineBuiltinMaterial,
       const GenericMaterialParameters& parameters,
       const TextureBorrower& texture_borrower);
 
-  BaseView& view_;
+  std::string name_;
   GenericMaterialParameters generic_material_parameters_;
   BorrowedTexturePtr placeholder_texture_;
   absl::flat_hash_map<absl::string_view, BorrowedTexturePtr> borrowed_textures_;

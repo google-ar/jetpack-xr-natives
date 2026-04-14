@@ -47,6 +47,8 @@ constructor(
     SHAPER,
   }
 
+  // TODO: Remove the shared glyph source implementation once
+  // forceIndividualGlyphSourceInstances is fully launched.
   companion object {
     internal val lock = ReentrantLock()
 
@@ -59,10 +61,10 @@ constructor(
           if (Build.VERSION.SDK_INT >= 31) {
             ShaperGlyphSource()
           } else {
-            PathGlyphSource(cacheSizeBytes)
+            PathGlyphSource(cacheSizeBytes, useLocalCache = false)
           }
         Method.PATH -> {
-          PathGlyphSource(cacheSizeBytes)
+          PathGlyphSource(cacheSizeBytes, useLocalCache = false)
         }
         Method.SHAPER -> {
           ShaperGlyphSource()

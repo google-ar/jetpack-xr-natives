@@ -12,14 +12,22 @@ namespace androidx::xr::openxr {
 
 class OpenXrInstanceManager {
  public:
-  OpenXrInstanceManager();
+  OpenXrInstanceManager() = default;
   ~OpenXrInstanceManager();
 
   // Returns OpenXR instance, creates it if it doesn't exist.
-  XrInstance GetInstance() ABSL_LOCKS_EXCLUDED(mutex_);
+  XrInstance GetInstance(JNIEnv* env, jobject context)
+      ABSL_LOCKS_EXCLUDED(mutex_);
 
   // Destroys OpenXR instance.
   void DestroyInstance() ABSL_LOCKS_EXCLUDED(mutex_);
+
+  // Returns the address of the global xrGetInstanceProcAddr symbol.
+  PFN_xrGetInstanceProcAddr GetGetInstanceProcAddr() const;
+
+  // Returns the supported environment blend modes.
+  std::vector<XrEnvironmentBlendMode> GetEnvironmentBlendModes(
+      XrInstance instance) ABSL_LOCKS_EXCLUDED(mutex_);
 
  private:
   // Gets the extensions to be loaded from the required and optional extensions.
@@ -27,11 +35,21 @@ class OpenXrInstanceManager {
 
   // Creates an OpenXR instance. The OpenXR runtime must first be loaded by
   // calling LoadOpenXr.
-  bool CreateInstance() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+  bool CreateInstance(JNIEnv* env, jobject context)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
+  // Retrieves the XR system ID.
+  bool GetXrSystem() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
+
+  // Loads the OpenXR runtime.
+  bool LoadOpenXr(jobject context) ABSL_EXCLUSIVE_LOCKS_REQUIRED(mutex_);
 
   absl::Mutex mutex_;
-  XrInstance instance_ ABSL_GUARDED_BY(mutex_);
+  XrInstance instance_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
+  XrSystemId system_id_ ABSL_GUARDED_BY(mutex_) = XR_NULL_SYSTEM_ID;
+
+  JNIEnv* java_env_ = nullptr;
+  JavaVM* app_vm_ = nullptr;
 };
 }  // namespace androidx::xr::openxr
 

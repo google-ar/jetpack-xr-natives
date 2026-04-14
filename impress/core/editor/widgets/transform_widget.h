@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Google LLC
+ * Copyright 2026 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_TRANSFORM_WIDGET_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_TRANSFORM_WIDGET_H_
+
+#include <vector>
 
 #include "absl/strings/string_view.h"
 #include "core/ncsb/component.h"
@@ -41,7 +43,7 @@ class TransformWidget : public imp::Component {
  private:
   static constexpr absl::string_view kType = "imp.editor.TransformWidget";
 
-  NodeHandle active_model_;
+  std::vector<NodeHandle> active_nodes_;
 
  public:
   using IsfInfo = StatelessIsfInfo<TransformWidget, kType>;

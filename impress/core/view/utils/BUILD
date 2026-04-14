@@ -210,6 +210,11 @@ proto_library(
     ],
 )
 
+java_lite_proto_library(
+    name = "filament_feature_flag_java_proto_lite",
+    deps = [":filament_feature_flag_proto"],
+)
+
 imp_cc_proto_library(
     name = "filament_feature_flag_proto_cc_imp",
     proto = ":filament_feature_flag_proto",

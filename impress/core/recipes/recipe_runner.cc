@@ -314,8 +314,11 @@ absl::Status RecipeRunner::Start() {
             HandleTap(recipe_ray_hit, float2{});
             break;
           }
-          case android_xr::SplitEngineInputEvent::Action::ACTION_HOVER_MOVE:
+          case android_xr::SplitEngineInputEvent::Action::ACTION_HOVER_ENTER:
             HandleHover(event.hit_node->target);
+            break;
+          case android_xr::SplitEngineInputEvent::Action::ACTION_HOVER_EXIT:
+            HandleHover(NodeHandle());
             break;
           default:
             break;

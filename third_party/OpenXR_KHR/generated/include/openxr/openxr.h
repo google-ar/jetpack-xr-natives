@@ -2,7 +2,7 @@
 #define OPENXR_H_ 1
 
 /*
-** Copyright 2017-2025 The Khronos Group Inc.
+** Copyright 2017-2026 The Khronos Group Inc.
 **
 ** SPDX-License-Identifier: Apache-2.0 OR MIT
 */
@@ -26,7 +26,7 @@ extern "C" {
     ((((major) & 0xffffULL) << 48) | (((minor) & 0xffffULL) << 32) | ((patch) & 0xffffffffULL))
 
 // OpenXR current version number.
-#define XR_CURRENT_API_VERSION XR_MAKE_VERSION(1, 1, 54)
+#define XR_CURRENT_API_VERSION XR_MAKE_VERSION(1, 1, 57)
 
 // OpenXR 1.0 version number
 #define XR_API_VERSION_1_0 XR_MAKE_VERSION(1, 0, XR_VERSION_PATCH(XR_CURRENT_API_VERSION))
@@ -2301,7 +2301,7 @@ typedef struct XrBindingModificationsKHR {
 
 // XR_KHR_extended_struct_name_lengths is a preprocessor guard. Do not pass it to API calls.
 #define XR_KHR_extended_struct_name_lengths 1
-#define XR_KHR_extended_struct_name_lengths_SPEC_VERSION 1
+#define XR_KHR_extended_struct_name_lengths_SPEC_VERSION 2
 #define XR_KHR_EXTENDED_STRUCT_NAME_LENGTHS_EXTENSION_NAME "XR_KHR_extended_struct_name_lengths"
 #define XR_MAX_STRUCTURE_NAME_SIZE_EXTENDED_KHR 256
 typedef XrResult (XRAPI_PTR *PFN_xrStructureTypeToString2KHR)(XrInstance instance, XrStructureType value, char buffer[XR_MAX_STRUCTURE_NAME_SIZE_EXTENDED_KHR]);
@@ -11401,12 +11401,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetHandMeshANDROID(
 #define XR_ANDROID_MOUSE_INTERACTION_EXTENSION_NAME "XR_ANDROID_mouse_interaction"
 
 
-// XR_ANDROIDX_spatial_interaction is a preprocessor guard. Do not pass it to API calls.
-#define XR_ANDROIDX_spatial_interaction 1
-#define XR_ANDROIDX_spatial_interaction_SPEC_VERSION 1
-#define XR_ANDROIDX_SPATIAL_INTERACTION_EXTENSION_NAME "XR_ANDROIDX_spatial_interaction"
-
-
 // XR_ANDROID_trackables_marker is a preprocessor guard. Do not pass it to API calls.
 #define XR_ANDROID_trackables_marker 1
 #define XR_ANDROID_trackables_marker_SPEC_VERSION 1
@@ -12387,6 +12381,7 @@ typedef enum XrHeadTrackingErrorCauseANDROIDSYS {
     XR_HEAD_TRACKING_ERROR_CAUSE_OTHER_ANDROIDSYS = -3,
     XR_HEAD_TRACKING_ERROR_CAUSE_MAX_ENUM_ANDROIDSYS = 0x7FFFFFFF
 } XrHeadTrackingErrorCauseANDROIDSYS;
+// XrViewStateTrackingErrorANDROIDSYS extends XrViewState
 typedef struct XrViewStateTrackingErrorANDROIDSYS {
     XrStructureType                       type;
     void* XR_MAY_ALIAS                    next;

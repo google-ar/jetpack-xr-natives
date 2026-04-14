@@ -246,10 +246,14 @@ OptionalError SerializeSqtAnimation(
         out_mt_offset,
     absl::optional<Domain>* out_domain) {
   const GltfLookup::ChannelSet& channel_set = lookup.channel_sets[animation];
-  ChannelId translation_channel = channel_set.translation_channels[node];
-  ChannelId rotation_channel = channel_set.rotation_channels[node];
-  ChannelId scale_channel = channel_set.scale_channels[node];
-  ChannelId weights_channel = channel_set.weights_channels[node];
+  ChannelId translation_channel =
+      GltfLookup::GetValueOrDefault(channel_set.translation_channels, node);
+  ChannelId rotation_channel =
+      GltfLookup::GetValueOrDefault(channel_set.rotation_channels, node);
+  ChannelId scale_channel =
+      GltfLookup::GetValueOrDefault(channel_set.scale_channels, node);
+  ChannelId weights_channel =
+      GltfLookup::GetValueOrDefault(channel_set.weights_channels, node);
   TypedSpan<const imp::gltf::imp_proto::AnimationChannel> animation_channels(
       lookup.animations[animation].channels);
   const std::vector<AnimationSampler>& animation_samplers =

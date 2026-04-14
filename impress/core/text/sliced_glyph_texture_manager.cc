@@ -286,13 +286,5 @@ void SlicedGlyphTextureManager::PrepareBlit(SliceId slice, Texture* texture) {
   }
 }
 
-void SlicedGlyphTextureManager::OnViewResumed() {
-  using TextureSampler = filament::TextureSampler;
-  for (auto& blit_material_instances : blit_material_instances_) {
-    blit_material_instances->setParameter(
-        "Slice", nullptr, TextureSampler(TextureSampler::MagFilter::NEAREST));
-  }
-}
-
 }  // namespace sliced_glyph_atlas
 }  // namespace imp

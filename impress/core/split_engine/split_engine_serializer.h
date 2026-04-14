@@ -21,8 +21,11 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
+#include <vector>
 
 #include "absl/base/nullability.h"
+#include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "filament/filament/include/filament/Engine.h"
@@ -55,6 +58,9 @@
 
 namespace imp {
 class Material;
+class Texture;
+class TexturePipelineRendererState;
+struct TexturePipelineRendererProjectionQuad;
 }  // namespace imp
 
 namespace imp::split_engine {
@@ -139,12 +145,6 @@ class SplitEngineSerializer {
   virtual void AddMaterialInstance(
       const filament::Material* material,
       const filament::MaterialInstance* instance) = 0;
-  // Creates a material instance from the given material on the remote renderer.
-  // The IDs are used for tracking the material and instance separately.
-  // This is useful for custom materials, when using an imp::Material to track
-  // the material ID.
-  virtual void AddMaterialInstance(uint64_t material_id,
-                                   uint64_t instance_id) = 0;
   // Serializes an already-duplicated material instance.
   // This will cause the instance to be duplicated on the remote renderer to
   // match the duplication that has already occurred here.
@@ -202,6 +202,7 @@ class SplitEngineSerializer {
   virtual void SetGroups(utils::Entity entity,
                          absl::Span<const absl::string_view> groups) = 0;
   virtual void AssignUserId(utils::Entity entity, uint32_t user_id) = 0;
+
   // Creates a texture builder that serializes created textures.
   virtual std::unique_ptr<BaseTextureBuilder> CreateTextureBuilder() = 0;
   // Creates a mesh builder that serializes mesh data.
@@ -291,6 +292,30 @@ class SplitEngineSerializer {
 
   // Destroys IndexBuffer that is given.
   virtual void RemoveIndexBuffer(filament::IndexBuffer* index_buffer) = 0;
+
+  // Adds a TexturePipelineRenderer on the node on the remote renderer.
+  // The state is serialized as a TexturePipelineRendererState proto.
+  virtual void AddTexturePipelineRenderer(
+      utils::Entity entity, const TexturePipelineRendererState& state) = 0;
+  // Removes a TexturePipelineRenderer from the node on the remote renderer.
+  // Note: this must be done before removing the node itself.
+  virtual void RemoveTexturePipelineRenderer(utils::Entity entity) = 0;
+  // Sets the enabled passes for a TexturePipelineRenderer on the remote
+  // renderer. This will trigger an UpdateTexturePipelineRenderers command.
+  virtual void SetTexturePipelineRendererPassesEnabled(
+      utils::Entity entity, const std::vector<bool>& enabled_passes) = 0;
+  // Sets the projection quad for a TexturePipelineRenderer on the remote
+  // renderer. This will trigger an UpdateTexturePipelineRenderers command.
+  virtual void SetTexturePipelineRendererProjectionQuad(
+      utils::Entity entity,
+      const std::optional<TexturePipelineRendererProjectionQuad>& quad) = 0;
+
+  // Registers a named texture with a specific ID on the remote renderer.
+  // This allows the remote renderer to resolve the ID to a texture that may be
+  // created later by a TexturePipelineRenderer on the backend.
+  virtual void RegisterNamedTexture(const filament::Texture& texture,
+                                    absl::string_view name) = 0;
+  virtual void UnregisterNamedTexture(const filament::Texture& texture) = 0;
 };
 
 }  // namespace imp::split_engine

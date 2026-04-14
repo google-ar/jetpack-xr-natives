@@ -73,7 +73,6 @@ def imp_app(
         android_java_deps = [],
         android_native_lib_deps = [],
         android_jni_library_dep = None,
-        multidex = "native",
         imp_impl = Label("@com_google_impress//:impl_full"),
         **_kwargs):
     """Generates Imp View app targets.
@@ -136,7 +135,6 @@ def imp_app(
       android_jni_library_dep: (Optional) An existing jni library to use, rather than
         generating one inside this rule. Useful if you want to use both imp_app and
         also have a custom app setup.
-      multidex: (Optional) Whether to allow the java dex to be split.
       imp_impl: (Optional) The implementation of optional impress features to use, i.e.
         either @com_google_impress//:impl_full or
         @com_google_impress//:impl_minimal. Defaults to full.
@@ -202,7 +200,6 @@ def imp_app(
                 resource_files = ":" + app_resources_name,
                 java_deps = android_java_deps,
                 native_lib_deps = android_native_lib_deps,
-                multidex = multidex,
             )
 
         if "xr" in platforms:
@@ -244,7 +241,6 @@ def imp_app(
                 java_deps = android_java_deps +
                             [Label("@com_google_impress//core/xr:openxr_loader_lib")],
                 native_lib_deps = android_native_lib_deps,
-                multidex = multidex,
             )
 
         if "split_engine" in platforms:
@@ -289,5 +285,4 @@ def imp_app(
                 resource_files = ":" + app_resources_name,
                 java_deps = android_java_deps,
                 native_lib_deps = android_native_lib_deps,
-                multidex = multidex,
             )

@@ -86,14 +86,26 @@ constexpr int kSharedMeshInitialMaxOrder = 10;
 
 // Vertex format for the glyph mesh. Currently excludes tangents since text
 // is always rendered unlit.
-const VertexFormat kVertexFormat = {
-    {VertexAttribute::POSITION, AttributeType::FLOAT3},
-    {VertexAttribute::UV0, AttributeType::FLOAT2}};
+const VertexFormat kVertexFormat = {{.attribute = VertexAttribute::POSITION,
+                                     .type = AttributeType::FLOAT3,
+                                     .attribute_group_override = 0},
+                                    {.attribute = VertexAttribute::UV0,
+                                     .type = AttributeType::FLOAT2,
+                                     .attribute_group_override = 0}};
 
 struct TextMeshVertex {
   float3 position;
   float2 uv;
 };
+
+// Vertex format for deinterleaved glyph mesh.
+const VertexFormat kDeinterleavedVertexFormat = {
+    {.attribute = VertexAttribute::POSITION,
+     .type = AttributeType::FLOAT3,
+     .attribute_group_override = 0},
+    {.attribute = VertexAttribute::UV0,
+     .type = AttributeType::FLOAT2,
+     .attribute_group_override = 1}};
 
 // Helper used to organize basic vertices for a quad. See below for more
 // details.
@@ -212,8 +224,13 @@ TextRenderer::System::AllocSubMesh(int size) {
     mesh_pool_ = AllocatorPool<SharedMesh>::Create(
         kSharedMeshInitialMaxOrder, [&view](int size) {
           const MeshDescription kMeshDescription = {
-              kVertexFormat, MeshDescription::IndexType::USHORT,
-              size * kQuadVertices.size(), size * kQuadIndices.size()};
+              *view.GetConfig()
+                      .experimental_feature_flags
+                      ->enable_deinterleaved_text_renderer
+                  ? kDeinterleavedVertexFormat
+                  : kVertexFormat,
+              MeshDescription::IndexType::USHORT, size * kQuadVertices.size(),
+              size * kQuadIndices.size()};
 
           MeshData mesh_data = MeshData(kMeshDescription);
           InitMeshDataIndices(mesh_data);
@@ -270,7 +287,8 @@ Future<absl::Status> TextRenderer::SetupImpl(
                             *flags.glyph_atlas_force_reset_on_view_resumed,
                         .force_auto_method_rendering =
                             *flags.glyph_atlas_force_auto_method_rendering,
-                        .force_individual_glyph_source_instances = false});
+                        .force_individual_glyph_source_instances =
+                            *flags.force_individual_glyph_source_instances});
 
               } else {
                 return std::make_unique<SlicedGlyphAtlas>(GetView());
@@ -303,7 +321,8 @@ Future<absl::Status> TextRenderer::SetupImpl(
                         *flags.glyph_atlas_force_reset_on_view_resumed,
                     .force_auto_method_rendering =
                         *flags.glyph_atlas_force_auto_method_rendering,
-                    .force_individual_glyph_source_instances = false});
+                    .force_individual_glyph_source_instances =
+                        *flags.force_individual_glyph_source_instances});
 
           } else {
             return std::make_unique<GlyphAtlas>(GetView());
@@ -547,7 +566,12 @@ void TextRenderer::RecalculateMesh(bool force_regenerate_mesh) {
     }
   } else {
     const MeshDescription kMeshDescription = {
-        kVertexFormat, MeshDescription::IndexType::USHORT,
+        *GetView()
+                .GetConfig()
+                .experimental_feature_flags->enable_deinterleaved_text_renderer
+            ? kDeinterleavedVertexFormat
+            : kVertexFormat,
+        MeshDescription::IndexType::USHORT,
         glyph_count * kQuadVertices.size() * stroke_multiplier,
         glyph_count * kQuadIndices.size() * stroke_multiplier};
     MeshDataPtr mesh_data = std::make_unique<MeshData>(kMeshDescription);
@@ -810,8 +834,21 @@ void TextRenderer::RenderTextGlyphPass(
   absl::Span<const float4> uv_origins_and_sizes =
       text_glyphs_->UVOriginsAndSizes();
 
-  TextMeshVertex* pass_vertices =
-      &mesh_data.VertexAt<TextMeshVertex>(vertex_offset);
+  bool enable_deinterleaved_text_renderer =
+      *GetView()
+           .GetConfig()
+           .experimental_feature_flags->enable_deinterleaved_text_renderer;
+
+  absl::Span<float3> positions;
+  absl::Span<float2> uvs;
+  TextMeshVertex* pass_vertices;
+
+  if (enable_deinterleaved_text_renderer) {
+    positions = mesh_data.Vertices<float3>(0);
+    uvs = mesh_data.Vertices<float2>(1);
+  } else {
+    pass_vertices = &mesh_data.VertexAt<TextMeshVertex>(vertex_offset);
+  }
 
   // Label space y is down, Filament's is up.
   for (int glyph_index = 0; glyph_index < glyph_count; ++glyph_index) {
@@ -821,9 +858,15 @@ void TextRenderer::RenderTextGlyphPass(
       float4 uv_origin_and_size = uv_origins_and_sizes[glyph_index];
       int glyph_vert_index =
           vertex_index + (glyph_index * kQuadVertices.size());
-      pass_vertices[glyph_vert_index].position =
-          float3(glyph_vertices[glyph_vert_index].xy * glyph_render_multiplier,
-                 glyph_vertices[glyph_vert_index].z);
+      if (enable_deinterleaved_text_renderer) {
+        positions[vertex_offset + glyph_vert_index] = float3(
+            glyph_vertices[glyph_vert_index].xy * glyph_render_multiplier,
+            glyph_vertices[glyph_vert_index].z);
+      } else {
+        pass_vertices[glyph_vert_index].position = float3(
+            glyph_vertices[glyph_vert_index].xy * glyph_render_multiplier,
+            glyph_vertices[glyph_vert_index].z);
+      }
       // Assign the UV coordinates to point to the correct glyph in the texture
       // atlas.
       float2 vertex_uv_coords =
@@ -834,7 +877,11 @@ void TextRenderer::RenderTextGlyphPass(
       if (has_stroke) {
         vertex_uv_coords.x *= -1;
       }
-      pass_vertices[glyph_vert_index].uv = vertex_uv_coords;
+      if (enable_deinterleaved_text_renderer) {
+        uvs[vertex_offset + glyph_vert_index] = vertex_uv_coords;
+      } else {
+        pass_vertices[glyph_vert_index].uv = vertex_uv_coords;
+      }
     }
   }
 }

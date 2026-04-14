@@ -118,7 +118,9 @@ cc_library(
         "//core/geometry/shapes",
         "//core/math",
         "//core/model/mesh:mesh_data",
+        "//core/ncsb",
         "//core/render:render_order_constants",
+        "//core/view/utils:string_map",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/hash",
@@ -178,6 +180,7 @@ cc_library(
         ":common",
         ":context",
         ":jni_context",
+        ":type_helpers",
         ":typed_ids",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/cleanup",
@@ -948,7 +951,11 @@ cc_library(
 
 cc_library(
     name = "pool_allocator",
-    hdrs = ["pool_allocator.h"],
+    hdrs = [
+        "base_pool_allocator.h",
+        "pool_allocator.h",
+        "pool_allocator_helpers.h",
+    ],
     copts = imp_copts(),
     linkstatic = True,
     deps = [

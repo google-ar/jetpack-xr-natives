@@ -27,7 +27,6 @@ def imp_android_app(
         name,
         jni_library,
         resource_files,
-        multidex,
         jni_binary_name = "",
         override_manifest = None,
         override_activity = None,
@@ -53,7 +52,6 @@ def imp_android_app(
       resource_files: App resources for the resource_files attribute of android_binary.
       java_deps: Java dependencies passed through to the android_binary rule.
       native_lib_deps: Additional native .so deps to include in the Android apk.
-      multidex: Multidex setting passed through to the android_binary rule.
       jni_binary_name: (Optional) The name of the binary generated from the jni library if it is
         overidden.
       nocompress_extensions: (Optional) A list of file extensions that should not be compressed in
@@ -81,7 +79,6 @@ def imp_android_app(
         resource_files = resource_files,
         java_deps = java_deps,
         native_lib_deps = native_lib_deps,
-        multidex = multidex,
         jni_binary_name = jni_binary_name,
         nocompress_extensions = nocompress_extensions,
         tags = tags,

@@ -20,7 +20,6 @@
 #include "core/math/vec.h"
 
 namespace imp {
-namespace imp_particle {
 
 // This object stores emitter information relevant to all particles being
 // updated each frame. For example, the camera position will be used by all
@@ -38,7 +37,6 @@ class ParticleEmitterInfo {
   float3 camera_position_ = kZero3;
 };
 
-}  // namespace imp_particle
 }  // namespace imp
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_PARTICLE_PARTICLE_EMITTER_INFO_H_

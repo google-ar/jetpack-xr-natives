@@ -53,7 +53,8 @@ class AssetLibrary : public editor::Widget, public imp::Rememberer {
                          absl::string_view data,
                          absl::string_view description = "");
 
-  void SetThumbnailOverride(absl::string_view resource, TexturePtr texture);
+  void SetThumbnailOverride(absl::string_view resource,
+                            OwnedTexturePtr texture);
 
   // Resource that is loaded in at runtime.
   struct DynamicResource {
@@ -130,7 +131,6 @@ class AssetLibrary : public editor::Widget, public imp::Rememberer {
   // Used to filter the assets shown in the library by extension.
   StringSet filtered_extensions_;
 
-  std::unique_ptr<AssetThumbnailProvider> thumbnail_provider_;
   std::unique_ptr<DirectoryUi> directory_ui_;
   bool saving_to_disk_enabled_ = false;
 

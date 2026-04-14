@@ -71,9 +71,8 @@ class YouTubeStereoPlayerMaterial
           texture_parameter_creator) const override;
 
  private:
-  YouTubeStereoPlayerMaterial(
-      imp::BaseView& view,
-      imp::split_engine::PlaceholderOrBuiltInMaterialPtr material);
+  YouTubeStereoPlayerMaterial(imp::BaseView& view,
+                              imp::OwnedMaterialPtr material);
 
   imp::OwnedOrBorrowedTexturePtr video_texture_;
   std::optional<android_xr::schemas::Bool> flip_horizontally_;

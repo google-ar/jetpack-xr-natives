@@ -27,9 +27,11 @@
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/isf_info.h"
+#include "core/ncsb/node_handle.h"
 #include "core/render/mesh_renderer.h"
 #include "core/render/primitive_shape_renderer_state.proto.imp.h"
 #include "core/render/primitive_shape_type.h"
+#include "core/view/base_view.h"
 #include "core/view/framework/render/material_definition.proto.imp.h"
 
 namespace imp {
@@ -138,6 +140,12 @@ class PrimitiveShapeRenderer : public Component {
   absl::Status SetBlendOrder(
       uint16_t blend_order,
       MeshRenderer::BlendOrderMode mode = MeshRenderer::BlendOrderMode::kLocal);
+
+  // Creates a node with a PrimitiveShapeRenderer component of the given type.
+  // Also adds the appropriate collider component for the shape type.
+  // In dev mode, also adds SceneMetadata and marks the components as authored.
+  static Future<NodeHandle> CreatePrimitive(BaseView& view,
+                                            PrimitiveShapeType shape_type);
 
  private:
   PrimitiveShapeType shape_type_;

@@ -78,8 +78,28 @@ cc_library(
         "//core/geometry/shapes",
         "//core/math",
         "//core/ncsb",
-        "//core/view/framework",
         "//extensions/sceneviewerxr/ux:constants",
+        "//extensions/sceneviewerxr/ux:gltf_bounds",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "one_handed_scale",
+    srcs = ["one_handed_scale.cc"],
+    hdrs = ["one_handed_scale.h"],
+    deps = [
+        ":idle",
+        ":interaction_states",
+        "//core/camera",
+        "//core/collision:ray",
+        "//core/common:enum_flags",
+        "//core/math",
+        "//core/ncsb",
+        "//core/view/utils:frame_time",
+        "//extensions/sceneviewerxr/ux:input_flag",
+        "//extensions/sceneviewerxr/ux:interaction_mode",
+        "//extensions/sceneviewerxr/ux:state_machine",
     ],
     alwayslink = 1,
 )
@@ -97,6 +117,7 @@ cc_library(
         "//core/ncsb",
         "//core/view/utils:frame_time",
         "//extensions/sceneviewerxr/ux:input_flag",
+        "//extensions/sceneviewerxr/ux:interaction_mode",
     ],
     alwayslink = 1,
 )
@@ -135,6 +156,26 @@ cc_library(
         "//extensions/sceneviewerxr/ux:input_flag",
         "//extensions/sceneviewerxr/ux:interaction_mode",
         "@com_google_absl//absl/time",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "two_handed_scale",
+    srcs = ["two_handed_scale.cc"],
+    hdrs = ["two_handed_scale.h"],
+    deps = [
+        ":interaction_states",
+        "//core/collision:ray",
+        "//core/common:enum_flags",
+        "//core/common:smooth",
+        "//core/math",
+        "//core/ncsb",
+        "//core/view/utils:frame_time",
+        "//extensions/sceneviewerxr/ux:constants",
+        "//extensions/sceneviewerxr/ux:input_flag",
+        "//extensions/sceneviewerxr/ux:interaction_mode",
+        "//extensions/sceneviewerxr/ux:state_machine",
     ],
     alwayslink = 1,
 )

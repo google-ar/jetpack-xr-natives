@@ -39,6 +39,7 @@
 #include "filament/filament/include/filament/Material.h"
 #include "filament/filament/include/filament/RenderableManager.h"
 #include "filament/filament/include/filament/SwapChain.h"
+#include "filament/filament/include/filament/TransformManager.h"
 #include "filament/filament/include/filament/VertexBuffer.h"
 #include "filament/filament/include/filament/View.h"
 #include "filament/filament/include/filament/Viewport.h"
@@ -49,12 +50,14 @@
 #include "core/common/pass_key.h"
 #include "core/common/trace.h"
 #include "core/config.h"
+#include "core/math/mat.h"
 #include "core/math/vec.h"
 #include "core/monitor/monitor_helpers.h"
 #include "core/monitor/scoped_duration_measurement.h"
 #include "core/view/utils/proto/filament_feature_flag.proto.imp.h"
 #include "core/window/clipboard/clipboard_handler.h"
 #include "core/window/filament_host_input.h"
+#include "core/window/projection_helpers.h"
 #include "core/window/shared_host_state.h"
 #include "core/window/window_rotation.h"
 #include "mediapipe/framework/port/status_macros.h"
@@ -887,7 +890,32 @@ void FilamentHost::SetClipboardHandler(
 
 void FilamentHost::PerformRender(filament::View* view,
                                  RenderPassOptions options) {
+  filament::Camera& camera = view->getCamera();
+  mat4 camera_model_matrix;
+  mat4 camera_projection_matrix;
+  float camera_near_clip;
+  float camera_far_clip;
+  if (options.projection_quad.has_value()) {
+    // Save the camera's original matrices.
+    camera_model_matrix = camera.getModelMatrix();
+    camera_projection_matrix = camera.getProjectionMatrix();
+    camera_near_clip = camera.getNear();
+    camera_far_clip = camera.getCullingFar();
+
+    // Adjust the viewport to match a portal (aka a projection quad) exactly.
+    // modifies the projection and view matrices.
+    AimCameraToFitQuad(engine_, &view->getCamera(),
+                       options.projection_quad.value());
+  }
+
   renderer_->render(view);
+
+  if (options.projection_quad.has_value()) {
+    // Restore the camera's original matrices.
+    camera.setModelMatrix(camera_model_matrix);
+    camera.setCustomProjection(camera_projection_matrix, camera_near_clip,
+                               camera_far_clip);
+  }
 }
 
 filament::Engine::Config FilamentHost::GetEngineConfig() {

@@ -17,7 +17,6 @@ syntax = "proto3";
 
 package imp.gltf;
 
-import "core/loader/provider/extensions/behavior/behavior.proto";
 import "core/loader/provider/extensions/interactivity/interactivity.proto";
 import "core/proto/imp.proto";
 
@@ -555,9 +554,7 @@ message Gltf {
     ];
     AudioExtension audio_extension = 3
         [json_name = "ADBE_audio_emitter", (imp.optional_type) = ABSL_OPTIONAL];
-    Behavior behavior = 4
-        [json_name = "KHR_behavior", (imp.optional_type) = ABSL_OPTIONAL];
-    Interactivity interactivity = 5
+    Interactivity interactivity = 4
         [json_name = "KHR_interactivity", (imp.optional_type) = ABSL_OPTIONAL];
   }
   repeated string extensions_used = 1 [(imp.string_type) = STRING_VIEW];

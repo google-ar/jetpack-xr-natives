@@ -14,15 +14,17 @@
 
 #include "core/editor/widgets/visualize_bounds.h"
 
+#include "absl/container/flat_hash_set.h"
 #include "core/common/log.h"
+#include "core/camera/camera_component.h"
 #include "core/common/debug_draw.h"
-#include "core/common/platform_helpers.h"
 #include "core/common/registry.h"
 #include "core/editor/editor.h"
 #include "core/editor/events.h"
 #include "core/geometry/shapes/box.h"
 #include "core/math/almost_equal.h"
 #include "core/math/vec.h"
+#include "core/ncsb/component_handle.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/node_flag.h"
 #include "core/ncsb/node_handle.h"
@@ -30,7 +32,6 @@
 #include "core/view/framework/assets/gltf_mesh.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/framework/assets/gltf_scene.h"
-#include "core/view/framework/camera/camera_manager.h"
 #include "core/view/framework/collision/box_collider.h"
 #include "core/view/framework/collision/capsule_collider.h"
 #include "core/view/framework/collision/cone_collider.h"
@@ -51,42 +52,41 @@ VisualizeBounds::VisualizeBounds(BaseView& view) : view_(view) {
   Editor& editor = view_.GetRegistry().Get<Editor>()->get();
   Dispatcher& editor_dispatcher = editor.GetDispatcher();
   editor_dispatcher.Connect(
-      [this](const ModelLoadedEvent& event) mutable {
+      [](const ModelLoadedEvent& event) {
         auto gltf_renderer = event.model->GetComponent<GltfRenderer>();
-        if (gltf_renderer) {
-          Box bounds = gltf_renderer->GetLocalFullBounds();
-          // Log the bounds of any loaded glTF to make it really easy to
-          // determine the size of a model for debugging purposes.
-          // TODO: Make a Widget to show this in the UI.
-          IMP_LOG(imp::INFO) << "Loaded Model " << gltf_renderer->GetAssetUrl()
-                    << " Bounds: center=" << ToString(bounds.center)
-                    << ", extent=" << ToString(bounds.halfExtent);
-        }
+        if (!gltf_renderer) return;
+        Box bounds = gltf_renderer->GetLocalFullBounds();
+        // Log the bounds of any loaded glTF to make it really easy to
+        // determine the size of a model for debugging purposes.
+        // TODO: Make a Widget to show this in the UI.
+        IMP_LOG(imp::INFO) << "Loaded Model " << gltf_renderer->GetAssetUrl()
+                  << " Bounds: center=" << ToString(bounds.center)
+                  << ", extent=" << ToString(bounds.halfExtent);
       },
       this);
   editor_dispatcher.Connect(
-      [this](const NodeSelectionChangedEvent& event) mutable {
-        // We only support single selection for the visualize bounds widget.
-        // Track which node is assigned in the hierarchy widget.
-        selected_node_ =
-            view_.GetRegistry().Get<Editor>()->get().GetSingleSelectedNode();
+      [this](const NodeSelectionChangedEvent& event) {
+        selected_nodes_ =
+            view_.GetRegistry().Get<Editor>()->get().GetSelectedNodes();
       },
       this);
   editor_dispatcher.Connect(
-      [this](const EditorSettingChangedEvent& event) mutable {
+      [this](const EditorSettingChangedEvent& event) {
         // Switch modes based on the "show all bounds" setting.
-        if (event.show_all_bounds_enabled.has_value()) {
-          if (*event.show_all_bounds_enabled) {
-            mode_ = Mode::kShowAllBounds;
-          } else {
-            mode_ = Mode::kShowSelectedBounds;
-          }
+        if (!event.show_all_bounds_enabled.has_value()) return;
+
+        if (*event.show_all_bounds_enabled) {
+          mode_ = Mode::kShowAllBounds;
+        } else {
+          mode_ = Mode::kShowSelectedBounds;
         }
       },
       this);
 }
 
 bool VisualizeBounds::HasCollider(NodeHandle node) const {
+  if (!node) return false;
+
   return node->GetComponent<BoxCollider>() ||
          node->GetComponent<SphereCollider>() ||
          node->GetComponent<CapsuleCollider>() ||
@@ -97,34 +97,48 @@ bool VisualizeBounds::HasCollider(NodeHandle node) const {
 void VisualizeBounds::DrawImGui() { DrawBounds(); }
 
 void VisualizeBounds::DrawBounds() {
+  visited_nodes_.clear();
+
+  Editor& editor = *view_.GetRegistry().Get<Editor>();
+  const ComponentHandle<CameraComponent> active_camera =
+      editor.GetActiveCamera();
+
+  if (!active_camera) return;
+
+  const NodeHandle camera_node = active_camera->GetNode();
+  const double3 camera_pos = camera_node->GetWorldPositionPrecise();
+
   switch (mode_) {
     case Mode::kShowSelectedBounds: {
-      // Only draw the selected node, if there is one.
-      if (selected_node_) {
-        // If top-level GltfRenderer node, draw all bounds
-        auto gltf_renderer = selected_node_->GetComponent<GltfRenderer>();
-        if (gltf_renderer) {
-          DrawBoundsForNodeRecursive(selected_node_);
-          return;
-        }
-        DrawBoundsForNode(selected_node_);
+      // Process GltfRenderer nodes first to ensure their subtrees are fully
+      // drawn.
+      for (const NodeHandle& node : selected_nodes_) {
+        if (!node || !node->GetComponent<GltfRenderer>()) continue;
+
+        DrawBoundsForNodeRecursive(node, camera_pos);
+      }
+      for (const NodeHandle& node : selected_nodes_) {
+        DrawBoundsForNode(node, camera_pos);
       }
       break;
     }
     case Mode::kShowAllBounds: {
       // Draw all bounds for all nodes.
-      DrawBoundsForAllNodes();
+      DrawBoundsForAllNodes(camera_pos);
       break;
     }
   }
 }
 
-void VisualizeBounds::DrawBoundsForNode(NodeHandle node) {
-  if (!node) {
-    return;
-  }
-  bool is_selected = node == selected_node_;
-  auto mesh = node->GetComponent<GltfMesh>();
+void VisualizeBounds::DrawBoundsForNode(const NodeHandle node,
+                                        const double3& camera_pos) {
+  if (!node) return;
+
+  if (!visited_nodes_.insert(node).second) return;
+
+  const bool is_selected = selected_nodes_.contains(node);
+  const auto mesh = node->GetComponent<GltfMesh>();
+
   if (mesh) {
     // Draw a node that contains a mesh using the mesh's real bounds.
     debug_draw::Color color = is_selected ? kSelectedNodeColor : kMeshNodeColor;
@@ -139,45 +153,43 @@ void VisualizeBounds::DrawBoundsForNode(NodeHandle node) {
     // the camera so that it always appears at a fixed size. This makes it easy
     // to see the nodes. Calling the precise variant is fine because either
     // it will be too far to render or we can truncate it to a float.
-    Editor& editor = *view_.GetRegistry().Get<Editor>();
-    double3 dist_vec =
-        editor.GetActiveCamera()->GetNode()->GetWorldPositionPrecise() -
-        node->GetWorldPositionPrecise();
-    if (AlmostEqual(dist_vec, double3(kZero3))) {
-      return;
-    }
-    double dist = norm(dist_vec);
-    float3 extent(dist * kEmptyNodeBoundsDistanceRatio / node->GetWorldScale());
+    const double3 dist_vec = camera_pos - node->GetWorldPositionPrecise();
 
-    Box box{.center = kZero3, .halfExtent = extent};
+    if (AlmostEqual(dist_vec, double3(kZero3))) return;
+
+    const double dist = norm(dist_vec);
+    const float3 extent(dist * kEmptyNodeBoundsDistanceRatio /
+                        node->GetWorldScale());
+
+    const Box box{.center = kZero3, .halfExtent = extent};
     debug_draw::Local(node->GetEntity()).BoxFaces(box, kEmptyNodeColor);
   }
 }
 
-void VisualizeBounds::DrawBoundsForNodeRecursive(NodeHandle node) {
+void VisualizeBounds::DrawBoundsForNodeRecursive(const NodeHandle node,
+                                                 const double3& camera_pos) {
+  if (!node || visited_nodes_.contains(node)) return;
+
   // If this node is part of the editor, return early.
   // Also, make sure that its children are also treated as part of the editor
   // and not shown.
   Editor& editor = view_.GetRegistry().Get<Editor>()->get();
-  if (node == editor.GetEditorRoot()) {
-    return;
-  }
 
-  DrawBoundsForNode(node);
+  if (node == editor.GetEditorRoot()) return;
 
-  for (NodeHandle child : node->GetChildren()) {
-    DrawBoundsForNodeRecursive(child);
+  DrawBoundsForNode(node, camera_pos);
+
+  for (const NodeHandle& child : node->GetChildren()) {
+    DrawBoundsForNodeRecursive(child, camera_pos);
   }
 }
 
-void VisualizeBounds::DrawBoundsForAllNodes() {
+void VisualizeBounds::DrawBoundsForAllNodes(const double3& camera_pos) {
   view_.ForEachNode(
-      [this](NodeHandle node) {
-        if (node == view_.GetCameraManager().GetCamera()->GetNode()) {
-          return;
-        }
+      [this, &camera_pos](const NodeHandle& node) {
+        if (!node) return;
 
-        DrawBoundsForNodeRecursive(node);
+        DrawBoundsForNodeRecursive(node, camera_pos);
       },
       NodeFlags::kIsRoot);
 }

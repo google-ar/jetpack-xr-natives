@@ -56,6 +56,12 @@ class WidgetUiSystem : public System {
   void AddWidget(const WidgetLayoutInfo& layout_info,
                  std::unique_ptr<Widget> widget);
 
+  // Gets a widget of type T if one exists, otherwise returns nullptr.
+  // If more than one widget of type T exist, it returns the first one that was
+  // added.
+  template <typename T>
+  T* GetWidget();
+
   // Removes a widget of type T if one exists, otherwise does nothing.
   // If more than one widget of type T exist, it removes the first one that was
   // added.
@@ -112,6 +118,15 @@ T* WidgetUiSystem::AddWidget(const WidgetLayoutInfo& layout_info,
 
   AddWindowConfiguration(widget_ptr->GetName(), layout_info);
   return widget_ptr;
+}
+
+template <typename T>
+T* WidgetUiSystem::GetWidget() {
+  auto iter = std::find(type_hashes_.begin(), type_hashes_.end(),
+                        type_traits::kTypeHash<T>);
+  if (iter == type_hashes_.end()) return nullptr;
+  size_t index = iter - type_hashes_.begin();
+  return static_cast<T*>(widgets_.at(index).first.get());
 }
 
 template <typename T>

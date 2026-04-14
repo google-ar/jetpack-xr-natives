@@ -14,6 +14,8 @@
 
 #include "core/split_engine/desktop/utils/message_group_completion_server_reactor.h"
 
+#include <cstdint>
+#include <optional>
 #include <utility>
 
 #include "core/common/log.h"
@@ -39,73 +41,115 @@ void MessageGroupCompletionServerReactor::ReportCompletion(
 }
 
 void MessageGroupCompletionServerReactor::Shutdown(const grpc::Status& status) {
-  absl::MutexLock status_lock(status_mutex_);
-  if (status_ == ReactorStatus::kDead ||
-      status_ == ReactorStatus::kTerminating) {
-    return;
+  {
+    absl::MutexLock status_lock(status_mutex_);
+    if (status_ == ReactorStatus::kDead ||
+        status_ == ReactorStatus::kTerminating) {
+      return;
+    }
+
+    status_ = ReactorStatus::kTerminating;
   }
 
-  status_ = ReactorStatus::kTerminating;
+  // Call gRPC methods outside of the lock.
   Finish(status);
 }
 
 void MessageGroupCompletionServerReactor::OnDone() {
-  absl::MutexLock status_lock(status_mutex_);
-  status_ = ReactorStatus::kDead;
+  {
+    absl::MutexLock status_lock(status_mutex_);
+    status_ = ReactorStatus::kDead;
+  }
+
+  if (on_done_) {
+    on_done_();
+  }
+
+  delete this;
 }
 
 void MessageGroupCompletionServerReactor::OnCancel() {
-  absl::MutexLock status_lock(status_mutex_);
-  if (status_ == ReactorStatus::kDead ||
-      status_ == ReactorStatus::kTerminating) {
-    return;
+  {
+    absl::MutexLock status_lock(status_mutex_);
+    if (status_ == ReactorStatus::kDead ||
+        status_ == ReactorStatus::kTerminating) {
+      return;
+    }
+    status_ = ReactorStatus::kTerminating;
   }
-  status_ = ReactorStatus::kTerminating;
+
+  // Call gRPC methods outside of the lock.
   Finish(
       grpc::Status(grpc::StatusCode::CANCELLED, "Client cancelled requests."));
 }
 
 void MessageGroupCompletionServerReactor::OnWriteDone(bool ok) {
-  {
+  enum class Action : uint8_t {
+    kNone,
+    kFinish,
+    kWrite,
+  };
+
+  std::optional<grpc::Status> finish_status;
+  const Action action = [this, ok, &finish_status]() -> Action {
     absl::MutexLock status_lock(status_mutex_);
     if (!ok) {
       if (status_ != ReactorStatus::kTerminating &&
           status_ != ReactorStatus::kDead) {
         status_ = ReactorStatus::kTerminating;
-        Finish(grpc::Status(grpc::StatusCode::INTERNAL,
-                            "Failed to write response"));
+        finish_status = grpc::Status(grpc::StatusCode::INTERNAL,
+                                     "Failed to write response");
+        return Action::kFinish;
       }
-      return;
+      return Action::kNone;
     }
+
     if (status_ != ReactorStatus::kWriting) {
       IMP_LOG(imp::ERROR) << "Successful OnWriteDone called when not writing.";
-      return;
+      return Action::kNone;
     }
+
     {
       absl::MutexLock events_lock(responses_mutex_);
       responses_.pop();
     }
 
     status_ = ReactorStatus::kIdle;
-  }
+    return Action::kWrite;
+  }();
 
-  Write();
+  // Call gRPC methods outside of the lock.
+  switch (action) {
+    case Action::kNone:
+      return;
+    case Action::kFinish:
+      Finish(*finish_status);
+      return;
+    case Action::kWrite:
+      Write();
+      return;
+  }
 }
 
 void MessageGroupCompletionServerReactor::Write() {
-  absl::MutexLock status_lock(status_mutex_);
-  if (status_ != ReactorStatus::kIdle) {
-    return;
+  MessageGroupCompletionResponse* response = nullptr;
+  {
+    absl::MutexLock status_lock(status_mutex_);
+    if (status_ != ReactorStatus::kIdle) {
+      return;
+    }
+
+    absl::MutexLock responses_lock(responses_mutex_);
+    if (responses_.empty()) {
+      return;
+    }
+
+    status_ = ReactorStatus::kWriting;
+    response = &responses_.front();
   }
 
-  absl::MutexLock responses_lock(responses_mutex_);
-  if (responses_.empty()) {
-    return;
-  }
-
-  status_ = ReactorStatus::kWriting;
-
-  StartWrite(&responses_.front());
+  // Call gRPC methods outside of the lock.
+  StartWrite(response);
 }
 
 }  // namespace imp::split_engine

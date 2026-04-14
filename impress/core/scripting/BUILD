@@ -217,6 +217,7 @@ cc_library(
         "//core/async:future",
         "//core/async:future_interrupter",
         "//core/common:context",
+        "//core/common:enum_flags",
         "//core/common:hash",
         "//core/common:invocable",
         "//core/common:platform_helpers",

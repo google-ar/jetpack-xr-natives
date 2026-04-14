@@ -36,7 +36,7 @@ class FlameGraph {
   FlameGraph() = default;
   ~FlameGraph() = default;
 
-  void DrawPanel(float width, int frame_index,
+  void DrawPanel(float width, int start_frame, int end_frame,
                  SampleProcessor& sample_processor,
                  FrameTimePanel& frame_time_panel);
 
@@ -44,6 +44,13 @@ class FlameGraph {
   struct Rect {
     ImVec2 min;
     ImVec2 max;
+  };
+
+  // Display style for elements in the flame graph, used to fade out elements
+  // that are not part of the selected frame.
+  enum class DisplayStyle {
+    kNormal,
+    kFaded,
   };
 
   // Arguments for DrawFlameGraphNode.
@@ -57,7 +64,7 @@ class FlameGraph {
     ImVec2 canvas_size;
     float row_height;
     float time_scale;
-    bool is_current_frame;
+    DisplayStyle display_style;
     uint64_t frame_start_time_ns;
     uint64_t selected_frame_start_time_ns;
   };
@@ -65,11 +72,8 @@ class FlameGraph {
   // Draws a rectangle in the flame graph. Width is based on time elapsed.
   // Y-position is based on depth.
   // Returns true if the rectangle was drawn, false if it was clipped.
-  bool DrawRectangle(ImDrawList* draw_list, const char* name, int depth,
-                     ImVec2 canvas_pos, ImVec2 canvas_size, float time_scale,
-                     float row_height, uint64_t start_time, uint64_t end_time,
-                     uint64_t selected_frame_start_time_ns,
-                     bool is_current_frame, Rect& rect);
+  bool DrawRectangle(const DrawNodeArgs& args, const char* name,
+                     uint64_t start_time, uint64_t end_time, Rect& rect);
 
   // Draws a hover tooltip for a node in the flame graph.
   void DrawTooltip(absl::string_view name, uint64_t total_time_ns,
@@ -83,7 +87,7 @@ class FlameGraph {
   // Draws a frame in the flame graph. Frames other than the selected frame are
   // drawn with reduced opacity to make it more obvious which frame is selected.
   void DrawFrame(DrawNodeArgs& args, SampleProcessor& sample_processor,
-                 int frame_index, int selected_frame_index);
+                 int frame_index, DisplayStyle display_style);
 
   // Draws the timeline for the flame graph.
   void DrawTimeline(ImDrawList* draw_list, ImVec2 canvas_pos,
@@ -101,7 +105,8 @@ class FlameGraph {
   // Draws a flame graph for the main thread.
   void DrawMainThreadGraph(DrawNodeArgs& args,
                            SampleProcessor& sample_processor, int min_frame,
-                           int max_frame, int selected_frame_index);
+                           int max_frame, bool range_selected,
+                           int selected_frame_index);
 
   // Draws all worker threads graphs.
   void DrawWorkerThreadGraphs(SampleProcessor& sample_processor,
@@ -110,7 +115,7 @@ class FlameGraph {
 
   // Draws a flame graph for a specific set of samples.
   void DrawWorkerThreadGraph(std::thread::id thread_id, DrawNodeArgs& args,
-                             ProcessedSamples& samples);
+                             const ProcessedSamples& samples);
 
   // Draws a node in the flame graph for a specific set of samples.
   // Recursively calls itself for child nodes.
@@ -127,7 +132,7 @@ class FlameGraph {
   void DrawExpandCollapseButton(bool& expanded);
 
   // Helper to get a color based on the name.
-  ImU32 GetColorForName(absl::string_view name, bool is_current_frame);
+  ImU32 GetColorForName(absl::string_view name, DisplayStyle display_style);
 
   // Current zoom level of the flame graph.
   float flame_graph_zoom_ = 1.0f;

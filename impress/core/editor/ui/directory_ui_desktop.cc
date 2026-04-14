@@ -69,12 +69,12 @@ Future<std::unique_ptr<DirectoryUi>> DirectoryUiDesktop::Create(
         auto [home_icon_asset, folder_icon_asset, up_arrow_icon_asset] =
             std::move(tuple);
 
-        TexturePtr home_icon =
-            view.GetTextureFactory().CreateTexture(*home_icon_asset);
-        TexturePtr folder_icon =
-            view.GetTextureFactory().CreateTexture(*folder_icon_asset);
-        TexturePtr up_arrow_icon =
-            view.GetTextureFactory().CreateTexture(*up_arrow_icon_asset);
+        OwnedTexturePtr home_icon =
+            view.GetTextureFactory().CreateTexture(home_icon_asset);
+        OwnedTexturePtr folder_icon =
+            view.GetTextureFactory().CreateTexture(folder_icon_asset);
+        OwnedTexturePtr up_arrow_icon =
+            view.GetTextureFactory().CreateTexture(up_arrow_icon_asset);
 
         return absl::WrapUnique<DirectoryUi>(new DirectoryUiDesktop(
             view, filter, std::move(home_icon), std::move(folder_icon),
@@ -83,9 +83,9 @@ Future<std::unique_ptr<DirectoryUi>> DirectoryUiDesktop::Create(
 }
 
 DirectoryUiDesktop::DirectoryUiDesktop(BaseView& view, ImGuiTextFilter& filter,
-                                       TexturePtr home_icon,
-                                       TexturePtr folder_icon,
-                                       TexturePtr up_arrow_icon)
+                                       OwnedTexturePtr home_icon,
+                                       OwnedTexturePtr folder_icon,
+                                       OwnedTexturePtr up_arrow_icon)
     : view_(view),
       filter_(filter),
       home_icon_(std::move(home_icon)),

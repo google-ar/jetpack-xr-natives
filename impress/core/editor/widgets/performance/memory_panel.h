@@ -28,15 +28,16 @@
 
 namespace imp::editor {
 
+class PerformanceWindow;
+
 class MemoryPanel : public MonitorPanel {
  public:
-  MemoryPanel(int buffer_size);
+  MemoryPanel(PerformanceWindow& performance_window, int buffer_size);
   ~MemoryPanel() override;
 
   void DrawPlot(int current_frame, int oldest_frame);
   void DrawPanel(int width, int height, int time_span_seconds) override;
   void Update(absl::Duration elapsed_time, absl::Duration delta_time) override;
-  void OnStateChanged(MonitorState state) override;
 
  private:
   static constexpr size_t kKilobyte = 1024;
@@ -53,6 +54,7 @@ class MemoryPanel : public MonitorPanel {
   // Draws labels for the selected frame.
   void DrawSelectedFrameLabels(int frame_number, ImDrawList* draw_list);
 
+  PerformanceWindow& performance_window_;
   bool show_allocations_ = true;
   bool show_memory_ = true;
 
@@ -64,7 +66,6 @@ class MemoryPanel : public MonitorPanel {
 
   CircularBuffer<MemoryInfo> buffer_;
   int upper_bound_ = 0;
-  MonitorState state_ = MonitorState::kRunning;
 
   static constexpr int kNumFrameValueLabels = 2;
   std::array<ImGuiHelper::LabelData, kNumFrameValueLabels> frame_value_data_;

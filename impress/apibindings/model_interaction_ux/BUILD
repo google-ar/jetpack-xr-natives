@@ -53,9 +53,11 @@ cc_library(
         "//extensions/sceneviewerxr/ux/interaction_states",
         "//extensions/sceneviewerxr/ux/interaction_states:idle",
         "//extensions/sceneviewerxr/ux/interaction_states:initial",
+        "//extensions/sceneviewerxr/ux/interaction_states:one_handed_scale",
         "//extensions/sceneviewerxr/ux/interaction_states:rotation",
         "//extensions/sceneviewerxr/ux/interaction_states:scale_reset",
         "//extensions/sceneviewerxr/ux/interaction_states:translation",
+        "//extensions/sceneviewerxr/ux/interaction_states:two_handed_scale",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_impress//core/common:log",
@@ -64,3 +66,5 @@ cc_library(
     ],
     alwayslink = 1,
 )
+
+# blaze run //apibindings/model_interaction_ux:scene_viewer_component_test

@@ -25,6 +25,7 @@
 
 #include "absl/base/optimization.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/statusor.h"
 #include "core/common/trace.h"
 #include "core/editor/widgets/performance/sample_processor_types.h"
 #include "core/performance/profiler.h"
@@ -32,18 +33,19 @@
 
 namespace imp::editor {
 
-ProcessedSamples& SampleProcessor::GetProcessedFrame(int frame_index) {
+const ProcessedSamples& SampleProcessor::GetProcessedFrame(
+    const int frame_index) const {
   return processed_samples_[frame_index % Profiler::kMaxFrames];
 }
 
-void SampleProcessor::ProcessSamples(int profiler_sample_count,
+void SampleProcessor::ProcessSamples(const int profiler_sample_count,
                                      NodePool& node_pool,
                                      ProcessedSamples& processed_samples,
                                      ResultCollection& results) {
   bool sample_has_parent;
   std::stack<SampleNode*> active_nodes;
   uint64_t current_sample_end_id;
-  ProfileResult* current_profiler_sample;
+  const ProfileResult* current_profiler_sample;
   size_t current_depth = 0;
   size_t max_depth = 0;
 
@@ -86,7 +88,7 @@ void SampleProcessor::ProcessSamples(int profiler_sample_count,
   processed_samples.max_depth = max_depth;
 }
 
-void SampleProcessor::ProcessMainThreadSamples(int frame_index) {
+void SampleProcessor::ProcessMainThreadSamples(const int frame_index) {
   IMP_TRACE();
 
   if (!Profiler::HasFrameRecorded(frame_index)) return;
@@ -96,27 +98,35 @@ void SampleProcessor::ProcessMainThreadSamples(int frame_index) {
   processed_samples.samples_by_name.clear();
   processed_samples.sample_roots.clear();
 
-  // Returns 0 if the frame is not currently available or contains no samples.
-  int profiler_sample_count = Profiler::GetSampleCount(frame_index);
-  if (profiler_sample_count <= 0) {
-    return;
-  }
+  absl::StatusOr<int> sample_count = Profiler::GetSampleCount(frame_index);
 
-  profiler_sample_count =
-      std::min(profiler_sample_count, Profiler::kMaxSamples);
+  if (!sample_count.ok()) return;
+
+  int count = *sample_count;
+
+  if (count == 0) return;
+
+  count = std::min(count, Profiler::kMaxSamples);
 
   NodePool& node_pool = main_thread_node_pools_[sample_index];
   node_pool.ResetIndex();
 
-  std::array<MainThreadProfileResult, Profiler::kMaxSamples>& profiler_samples =
-      Profiler::GetSamples(frame_index);
-  MainThreadResultCollection results(&profiler_samples);
+  absl::StatusOr<
+      const std::array<MainThreadProfileResult, Profiler::kMaxSamples>*>
+      profiler_samples = Profiler::GetSamples(frame_index);
 
-  ProcessSamples(profiler_sample_count, node_pool, processed_samples, results);
+  if (!profiler_samples.ok()) return;
+
+  const std::array<MainThreadProfileResult, Profiler::kMaxSamples>& samples =
+      **profiler_samples;
+
+  MainThreadResultCollection results(&samples);
+
+  ProcessSamples(count, node_pool, processed_samples, results);
 }
 
 void SampleProcessor::ProcessWorkerSampleList(
-    std::vector<WorkerProfileResult>& samples,
+    const std::vector<WorkerProfileResult>& samples,
     ProcessedSamples& processed_worker_samples) {
   WorkerResultCollection results(&samples);
   ProcessSamples(samples.size(), worker_node_pool_, processed_worker_samples,
@@ -124,20 +134,20 @@ void SampleProcessor::ProcessWorkerSampleList(
 }
 
 ProcessedWorkerSamplesMap SampleProcessor::ProcessAllWorkerThreadsSamples(
-    RawWorkerSamplesMap& raw_samples_map) {
+    const RawWorkerSamplesMap& raw_samples_map) {
   IMP_TRACE();
 
   ProcessedWorkerSamplesMap processed_worker_samples_map;
   worker_node_pool_.ResetIndex();
 
-  for (auto& [thread_id, samples] : raw_samples_map) {
+  for (const auto& [thread_id, samples] : raw_samples_map) {
     ProcessWorkerSampleList(samples, processed_worker_samples_map[thread_id]);
   }
   return processed_worker_samples_map;
 }
 
 ProcessedSamples SampleProcessor::ProcessWorkerThreadSamples(
-    std::vector<WorkerProfileResult>& samples) {
+    const std::vector<WorkerProfileResult>& samples) {
   IMP_TRACE();
 
   ProcessedSamples processed_worker_samples;

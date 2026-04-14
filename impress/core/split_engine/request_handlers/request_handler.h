@@ -31,6 +31,10 @@ class RequestHandler {
  public:
   virtual ~RequestHandler() = default;
 
+  // Helper function to serialize a flatbuffer response table from a status.
+  static flatbuffers::DetachedBuffer SerializeStatusResponse(
+      absl::Status status);
+
   // Handles a request, must be implemented by each handler.
   //
   // The `app_context` is the AppContext of the app that is making the request.
@@ -40,10 +44,6 @@ class RequestHandler {
   virtual Future<flatbuffers::DetachedBuffer> HandleRequest(
       SharedContext& shared_context, AppContext& app_context,
       const android_xr::schemas::Request& request) = 0;
-
- protected:
-  static flatbuffers::DetachedBuffer SerializeStatusResponse(
-      absl::Status status);
 };
 
 }  // namespace imp::split_engine

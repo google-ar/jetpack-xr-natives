@@ -112,6 +112,34 @@ const T* PointerFromOptional(const std::optional<T>& value) {
   return value.has_value() ? &value.value() : nullptr;
 }
 
+// Wrapper for converting an std::optional of a native type to a pointer of a
+// FlatBuffer struct. It holds a copy of the FlatBuffer struct and implicitly
+// converts to a pointer to it. This allows inline usage securely because the
+// temporary wrapper survives until the end of the full expression.
+template <typename OutType, typename InType>
+struct FbbStructWrapper {
+  std::optional<OutType> storage;
+
+  explicit FbbStructWrapper(const std::optional<InType>& in) {
+    if (in.has_value()) {
+      storage.emplace(OutType(*in));
+    }
+  }
+
+  operator const OutType*() const {
+    return storage.has_value() ? &storage.value() : nullptr;
+  }
+};
+
+// Helper to convert an std::optional to a FlatBuffer struct of the same
+// underlying primitive type, i.e. from std::optional<float> to
+// flatbuffers::Offset<android_xr::schemas::Float>.
+template <typename OutType, typename InType>
+FbbStructWrapper<OutType, InType> StructFromOptional(
+    const std::optional<InType>& in) {
+  return FbbStructWrapper<OutType, InType>(in);
+}
+
 // Packs the proto MaterialPreCompileOptions to the flatbuffer format.
 flatbuffers::Offset<android_xr::schemas::MaterialPrecompileOptions> Pack(
     flatbuffers::FlatBufferBuilder& fbb,

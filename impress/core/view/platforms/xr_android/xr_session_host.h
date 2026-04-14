@@ -228,11 +228,14 @@ class XrSessionHost : public ViewHost {
   // frame.
   bool ShouldRenderVarjoFoveationThisFrame();
   bool IsXrAndroidXOccupancyGridEnabled() const;
+#if IMP_PLATFORM(ANDROID)
   bool IsXrAndroidXSpatialInteractionEnabled() const;
+#endif  // IMP_PLATFORM(ANDROID)
   bool IsXrAndroidDepthTextureEnabled() const;
   bool IsXrEyeGazeInteractionEnabled() const;
   bool IsXrAndroidSystemExtensionsEnabled() const;
   bool IsXrGlobalPassthroughDimmingExtensionsEnabled() const;
+  bool IsXrHandOcclusionExtensionsEnabled() const;
   bool IsXrEyeTrackingCalibrationEnabled() const;
 
   void SetFoveationLevel(XrFoveationLevelFB xr_foveation_level_fb);
@@ -251,9 +254,7 @@ class XrSessionHost : public ViewHost {
 
   filament::Engine::Config GetEngineConfig() override;
 
-  MonitorSummary& GetXrTimingSummary() {
-    return xr_timing_summary_.GetSummary();
-  }
+  MonitorSummary& GetXrTimingSummary();
 
   XrPerformanceState& GetXrPerformanceState() { return xr_performance_state_; }
 
@@ -543,7 +544,6 @@ class XrSessionHost : public ViewHost {
   bool should_resize_view_ = false;
   bool is_android_depth_texture_enabled_ = false;
   DurationMeasurement display_enabled_duration_;
-  DefaultMonitorSummary xr_timing_summary_;
   XrPerformanceState xr_performance_state_;
 
   // Whether the color space extension is supported by the system.
@@ -554,6 +554,9 @@ class XrSessionHost : public ViewHost {
 
   // Whether the global passthrough dimming extensions are enabled.
   bool is_global_passthrough_dimming_extensions_enabled_ = false;
+
+  // Whether the hand occlusion extensions are enabled.
+  bool is_hand_occlusion_extensions_enabled_ = false;
 
   // All enabled extensions
   RobinSet<std::string> enabled_extensions_;

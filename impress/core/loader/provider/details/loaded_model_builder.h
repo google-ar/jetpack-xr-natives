@@ -46,7 +46,6 @@
 #include "core/common/typed_set_vector.h"
 #include "core/image/image_contents.h"
 #include "core/loader/provider/details/vertex_attribute.h"
-#include "core/loader/provider/extensions/behavior/loader_extension.h"
 #include "core/loader/provider/extensions/interactivity/loader_extension.h"
 #include "core/loader/provider/extensions/interactivity/schemas/interactivity_generated.h"
 #include "core/loader/provider/gltf/dense_data_access.h"
@@ -202,7 +201,6 @@ class LoadedModelBuilder {
   using AudioOffsets = PairedVector<AudioOffset, AudioId::ReferredType>;
   using AudioExtensionOffset = Offset<schemas::AudioExtension>;
 
-  using BehaviorOffset = Offset<schemas::Behavior>;
   using InteractivityOffset = Offset<schemas::Interactivity>;
 
   using NodeVisibility = model::ModelData::NodeVisibility;
@@ -421,10 +419,6 @@ class LoadedModelBuilder {
                          const AudioOffsets &audio_offsets,
                          const std::vector<uint16_t> &scene_emitters);
 
-  void AddBehavior(const BehaviorOffset &behavior_offset);
-
-  std::unique_ptr<BehaviorLoaderExtension> CreateBehaviorLoaderExtension();
-
   void AddInteractivity(const InteractivityOffset &interactivity_offset);
 
   std::unique_ptr<InteractivityLoaderExtension>
@@ -457,7 +451,6 @@ class LoadedModelBuilder {
   MaterialsVariantsOffsets materials_variants_offsets_;
   MorphTargetBufferOffsets morph_target_buffer_offsets_;
   AudioExtensionOffset audio_extension_offset_;
-  BehaviorOffset behavior_offset_;
   InteractivityOffset interactivity_offset_;
   SkinningBufferOffsets skinning_buffer_offsets_;
 

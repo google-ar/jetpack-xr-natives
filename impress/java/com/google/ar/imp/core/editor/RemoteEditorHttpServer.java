@@ -1,5 +1,5 @@
 /*
- * Copyright 2025 Google LLC
+ * Copyright 2026 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import android.content.Context;
 import android.content.res.AssetManager;
 import android.util.Log;
 import androidx.annotation.VisibleForTesting;
-import com.google.android.filament.proguard.UsedByNative;
 import com.google.common.base.Splitter;
 import com.google.common.io.ByteStreams;
 import java.io.BufferedReader;
@@ -34,31 +33,33 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
 
-// LINT.IfChange(remote_editor_server)
-
 /**
  * A thread that runs a simple HTTP server to serve static assets for the Impress remote editor.
  *
  * <p>This server listens on a specified port and handles GET requests. It is designed to serve
  * files such as `index.html`, JavaScript (`.js`), and CSS (`.css`) from the application's assets.
+ * It also dynamically generates a `config.json` file containing WebSocket port information for
+ * connecting clients.
  *
  * <ul>
  *   <li><b>Starting the Server:</b> The server is started by calling {@link #startServer()}, which
  *       launches this thread.
  *   <li><b>Handling Requests:</b> The {@link #run()} method contains the main loop where the server
  *       socket accepts incoming connections. For each connection, it reads the HTTP GET request and
- *       attempts to serve the requested file.
+ *       attempts to serve the requested file or dynamic content.
  *   <li><b>Serving Files:</b> The {@link #sendResponseToClient(String, OutputStream)} method parses
- *       the GET request. It supports serving `index.html` (for requests to "/") and files with
- *       `.js` and `.css` extensions. These files are loaded from the app's {@link AssetManager}.
+ *       the GET request. It supports serving `index.html` (for requests to "/"), files with `.js`
+ *       and `.css` extensions from the app's {@link AssetManager}, and dynamically serves
+ *       `config.json` for requests to "/config.json".
  *   <li><b>Error Handling:</b> If a requested file is not found or the request is not a supported
  *       GET request for a known file type, a "404 Not Found" response is sent.
  * </ul>
  */
-@UsedByNative("remote_editor_server.cc")
 public final class RemoteEditorHttpServer implements Runnable {
   private static final String TAG = RemoteEditorHttpServer.class.getSimpleName();
-  private int port = 8080;
+  private final int httpPort;
+  private final int scriptApiBridgePort;
+  private final int uiStreamingPort;
   private volatile ServerSocket serverSocket;
   private volatile boolean running = false;
   private Thread serverThread;
@@ -70,24 +71,36 @@ public final class RemoteEditorHttpServer implements Runnable {
 
       """;
   private static final String INDEX_HTML_FILENAME = "index.html";
+  private static final float BYTES_PER_KB = 1024.0f;
+  private String indexFilename = INDEX_HTML_FILENAME;
 
-  @UsedByNative("remote_editor_server.cc")
-  public RemoteEditorHttpServer(Context context, int port) {
+  RemoteEditorHttpServer(
+      Context context, int httpPort, int scriptApiBridgePort, int uiStreamingPort) {
     this.assetManager = context.getAssets();
-    this.port = port;
+    this.httpPort = httpPort;
+    this.scriptApiBridgePort = scriptApiBridgePort;
+    this.uiStreamingPort = uiStreamingPort;
   }
 
-  @UsedByNative("remote_editor_server.cc")
+  // Sets the filename of the custom index file to serve.
+  void setIndexFilename(String filename) {
+    indexFilename = filename;
+  }
+
   // Attempts to start this thread which runs an HTTP server listening on the specified port.
-  public void startServer() {
-    try {
-      running = true;
-      serverThread = new Thread(this);
-      serverThread.start();
-    } catch (IllegalThreadStateException e) {
-      Log.e(TAG, "Error starting HTTP server thread - " + e.getMessage());
-      running = false;
+  void startServer() {
+    if (running) {
+      return;
     }
+    running = true;
+    serverThread = new Thread(this);
+    serverThread.start();
+  }
+
+  /** Returns the port this server is listening on. */
+  int getPort() {
+    ServerSocket socket = serverSocket;
+    return (socket == null) ? httpPort : socket.getLocalPort();
   }
 
   // Returns the thread running the server. For testing only.
@@ -96,15 +109,14 @@ public final class RemoteEditorHttpServer implements Runnable {
     return serverThread;
   }
 
-  @UsedByNative("remote_editor_server.cc")
   // Stops this thread and its HTTP server.
-  public void stopServer() {
+  void stopServer() {
     running = false;
 
     if (serverSocket != null) {
       try {
         serverSocket.close();
-        Log.i(TAG, "HTTP server stopped on [port = " + port + "]");
+        Log.i(TAG, "HTTP server stopped on [port = " + httpPort + "]");
       } catch (IOException e) {
         Log.e(TAG, "Error closing server socket: " + e.getMessage());
       } finally {
@@ -118,17 +130,16 @@ public final class RemoteEditorHttpServer implements Runnable {
   @Override
   public void run() {
     try {
-      ServerSocket serverSocket = new ServerSocket(port);
+      ServerSocket serverSocket = new ServerSocket(httpPort);
       this.serverSocket = serverSocket;
-      Log.i(TAG, "HTTP server started on [port = " + port + "]");
+      Log.i(TAG, "HTTP server started on [port = " + httpPort + "]");
 
       while (running) {
         // This is a blocking call, waits for a client connection.
-
         try (Socket clientSocket = serverSocket.accept();
             BufferedReader in =
                 new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-            OutputStream out = clientSocket.getOutputStream(); ) {
+            OutputStream out = clientSocket.getOutputStream()) {
 
           String request = in.readLine();
           sendResponseToClient(request, out);
@@ -146,7 +157,7 @@ public final class RemoteEditorHttpServer implements Runnable {
           break;
         }
       }
-    } catch (IOException | SecurityException | IllegalThreadStateException e) {
+    } catch (IOException | SecurityException e) {
       Log.e(TAG, "Error encountered while running HTTP server: " + e.getMessage());
     } finally {
       stopServer();
@@ -154,74 +165,112 @@ public final class RemoteEditorHttpServer implements Runnable {
   }
 
   private void sendResponseToClient(String request, OutputStream out) {
+    if (request == null) {
+      return;
+    }
+
+    List<String> requestParts = Splitter.on(' ').splitToList(request);
+    // Check for a known GET request structure: "GET /path/to/resource HTTP/1.1"
+    if ((requestParts.size() < 2) || !requestParts.get(0).equals("GET")) {
+      send404(out, request);
+      return;
+    }
+
+    String resourcePath = null;
+    try {
+      // Using URI to parse the resource path ensures proper handling of encodings and structure.
+      URI uri = new URI(requestParts.get(1));
+      resourcePath = uri.getPath();
+    } catch (URISyntaxException e) {
+      Log.e(TAG, "Invalid URI in request: " + requestParts.get(1) + " - " + e.getMessage());
+      send404(out, request);
+      return;
+    }
+
     String filename = null;
-
-    if (request != null) {
-      List<String> requestParts = Splitter.on(' ').splitToList(request);
-
-      // Check for a known GET request structure: "GET /path/to/resource HTTP/1.1"
-      if ((requestParts.size() >= 2) && requestParts.get(0).equals("GET")) {
-        String resourcePath = null;
+    if (resourcePath != null) {
+      // Determine the filename to serve based on the resource path.
+      if (resourcePath.equals("/")) {
+        filename = indexFilename;
+      } else if (resourcePath.equals("/config.json")) {
+        String json =
+            "{\"scriptApiBridgePort\": "
+                + scriptApiBridgePort
+                + ", \"uiStreamingPort\": "
+                + uiStreamingPort
+                + "}";
+        byte[] bytes = json.getBytes();
         try {
-          // Using URI to parse the resource path ensures proper handling of encodings and
-          // structure.
-          URI uri = new URI(requestParts.get(1));
-          resourcePath = uri.getPath();
-        } catch (URISyntaxException e) {
-          Log.e(TAG, "Invalid URI in request: " + requestParts.get(1) + " - " + e.getMessage());
-          // resourcePath remains null, triggering a 404 response.
+          out.write("HTTP/1.1 200 OK\r\n".getBytes());
+          out.write("Content-Type: application/json\r\n".getBytes());
+          out.write(("Content-Length: " + bytes.length + "\r\n").getBytes());
+          out.write("\r\n".getBytes());
+          out.write(bytes);
+          out.flush();
+          Log.i(TAG, "Served dynamic config.json");
+        } catch (IOException e) {
+          Log.e(TAG, "Error serving config.json: " + e.getMessage());
         }
-
-        if (resourcePath != null) {
-          // Determine the filename to serve based on the resource path.
-          if (resourcePath.equals("/")) {
-            filename = INDEX_HTML_FILENAME;
-          } else if (resourcePath.endsWith(".js") || resourcePath.endsWith(".css")) {
-            // Remove the leading slash to get the filename relative to the assets directory.
-            filename = resourcePath.substring(1);
-          }
-          // Note: Any other resourcePath will result in filename being null, leading to a 404.
-        }
-
-        if (filename != null) {
-          // Security Note: assetManager.open() is used here to access files. The Android
-          // AssetManager only allows access to files bundled within the application's APK
-          // in the 'assets/' directory. This prevents path traversal vulnerabilities, as
-          // requests cannot access arbitrary files on the device's file system (e.g., via "../").
-          try (InputStream file = assetManager.open(filename)) {
-            out.write("HTTP/1.1 200 OK\r\n".getBytes());
-            out.write("\r\n".getBytes()); // Blank line separates headers from body.
-            byte[] bytes = ByteStreams.toByteArray(file);
-            out.write(bytes);
-            out.flush();
-
-            Log.i(
-                TAG,
-                "Received GET request and sending [file = "
-                    + filename
-                    + "] [size = "
-                    + String.format("%.2f", (float) bytes.length / 1024.0f)
-                    + " KB]");
-          } catch (IOException e) {
-            filename = null;
-          }
-        }
+        return;
+      } else if (resourcePath.endsWith(".js") || resourcePath.endsWith(".css")) {
+        // Remove the leading slash to get the filename relative to the assets directory.
+        filename = resourcePath.substring(1);
       }
     }
 
     if (filename == null) {
-      try {
-        out.write(NOT_FOUND_RESPONSE.getBytes());
-        out.flush();
-        Log.i(TAG, "Received unsupported request. Sent 404 [request = " + request + "]");
-      } catch (IOException e) {
-        Log.e(TAG, "Error sending 404 response - " + e.getMessage());
+      send404(out, request);
+      return;
+    }
+
+    // Security Note: assetManager.open() is used here to access files. The Android
+    // AssetManager only allows access to files bundled within the application's APK
+    // in the 'assets/' directory. This prevents path traversal vulnerabilities, as
+    // requests cannot access arbitrary files on the device's file system (e.g., via "../").
+    InputStream fileStream;
+    try {
+      fileStream = assetManager.open(filename);
+    } catch (IOException e) {
+      Log.e(TAG, "Asset not found: " + filename + ". Sending 404.");
+      send404(out, request);
+      return;
+    }
+
+    try (fileStream) {
+      byte[] bytes = ByteStreams.toByteArray(fileStream);
+
+      out.write("HTTP/1.1 200 OK\r\n".getBytes());
+      if (filename.endsWith(".html")) {
+        out.write("Content-Type: text/html\r\n".getBytes());
+      } else if (filename.endsWith(".js")) {
+        out.write("Content-Type: text/javascript\r\n".getBytes());
+      } else if (filename.endsWith(".css")) {
+        out.write("Content-Type: text/css\r\n".getBytes());
       }
+      out.write(("Content-Length: " + bytes.length + "\r\n").getBytes());
+      out.write("\r\n".getBytes()); // Blank line separates headers from body.
+      out.write(bytes);
+      out.flush();
+
+      Log.i(
+          TAG,
+          "Received GET request and sending [file = "
+              + filename
+              + "] [size = "
+              + String.format("%.2f", (float) bytes.length / BYTES_PER_KB)
+              + " KB]");
+    } catch (IOException e) {
+      Log.e(TAG, "Error serving file " + filename + ": " + e.getMessage());
+    }
+  }
+
+  private void send404(OutputStream out, String request) {
+    try {
+      out.write(NOT_FOUND_RESPONSE.getBytes());
+      out.flush();
+      Log.i(TAG, "Received unsupported request. Sent 404 [request = " + request + "]");
+    } catch (IOException e) {
+      Log.e(TAG, "Error sending 404 response - " + e.getMessage());
     }
   }
 }
-
-// LINT.ThenChange(
-//
-// //depot/google3/third_party/impress/core/editor/remote_editor/remote_editor_server.cc
-// )

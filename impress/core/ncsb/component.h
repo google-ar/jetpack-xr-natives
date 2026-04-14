@@ -25,6 +25,7 @@
 #include "core/common/bit_flag.h"
 #include "core/common/hash.h"
 #include "core/config.h"
+#include "core/ncsb/base_component_pool.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/component_id.h"
 #include "core/ncsb/component_traits.h"
@@ -298,7 +299,7 @@ class Component {
 
   // Called when the component is first created to pass in the underlying node
   // that this component is attached to.
-  void PostCreated(NodeHandle node, ComponentId component_id);
+  void PostCreated(NodeHandle node, ComponentKey key, BaseComponentPool& pool);
 
   // Called after PostCreated.  Subclasses may provide their own
   // implementations.  Subclass implementations may take arguments.
@@ -350,6 +351,9 @@ class Component {
     return CheckBit(status_flags_, StatusFlags::kComponentIsRunningAsyncSetup);
   }
 
+  // Returns the key for this component used by the underlying PoolAllocator.
+  inline ComponentKey GetComponentKey() const { return key_; }
+
   // Associates the lifetime of the holdable with the component.
   // Part of the Remember protocol, which makes it possible to pass a component
   // into Future::KeptBy or as an owner to Dispatcher::Connect.
@@ -391,7 +395,6 @@ class Component {
   template <typename T>
   static ComponentHandle<T> GetHandle(const T* component);
 
- protected:
   BaseComponentPool& GetBaseComponentPool() const;
 
  private:
@@ -420,7 +423,8 @@ class Component {
   void SetRemovingFlagInternal(bool is_removing);
 
   NodeHandle node_;
-  ComponentId component_id_;
+  ComponentKey key_;
+  BaseComponentPool* pool_ = nullptr;
   BitFlag status_flags_ = 0;
 
   template <typename T>
@@ -448,11 +452,9 @@ Dispatcher::Connection Component::Connect(Fn&& handler, Owner owner) {
 
 template <typename T>
 ComponentHandle<T> Component::GetHandle(const T* component) {
-  auto& pool = component->GetBaseComponentPool();
-  utils::Entity entity = component->GetEntity();
   // TODO: Handle const-correctness correctly with the
   // ComponentHandle type.
-  return ComponentHandle<T>(entity, &pool, const_cast<T*>(component));
+  return ComponentHandle<T>(const_cast<T&>(*component));
 }
 
 }  // namespace imp

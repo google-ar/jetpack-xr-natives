@@ -207,7 +207,7 @@ def if_optimized(a, otherwise = []):
 # A looser set of copts which is compatible with e.g. //util/status
 def filament_google3_copts():
     out_copts = [
-        "-Wno-reorder",
+        "-Wno-reorder-ctor",
         "-Wno-unused-variable",
         "-fno-exceptions",
         "-Wno-unused-local-typedef",

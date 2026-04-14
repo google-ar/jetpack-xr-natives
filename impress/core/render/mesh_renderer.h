@@ -389,7 +389,6 @@ class MeshRenderer : public Component {
   // mode, so track it ourselves.
   uint8_t priority_ = kDefaultPriority;
   uint8_t channel_ = kDefaultChannel;
-  FrustumCullingMode culling_mode_ = FrustumCullingMode::kEnabled;
 
  public:
   static constexpr bool kRunInEditMode = true;

@@ -44,17 +44,6 @@ class UiEventListener {
                                              imp::quatf rotation, float scale,
                                              float alpha,
                                              float scale_percentage) = 0;
-  virtual void OnA11yRotateLeftControlAnchorUpdated(imp::float3 translation,
-                                                    imp::quatf rotation,
-                                                    float scale,
-                                                    float alpha) = 0;
-  virtual void OnA11yRotateRightControlAnchorUpdated(imp::float3 translation,
-                                                     imp::quatf rotation,
-                                                     float scale,
-                                                     float alpha) = 0;
-  virtual void OnA11yScaleControlAnchorUpdated(imp::float3 translation,
-                                               imp::quatf rotation, float scale,
-                                               float alpha) = 0;
 
   virtual void OnMessageShowed(const std::string& message) = 0;
 

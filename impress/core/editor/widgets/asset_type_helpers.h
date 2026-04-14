@@ -21,16 +21,19 @@
 
 namespace imp::editor {
 
-constexpr absl::string_view kIsfExt = ".isf";
-constexpr absl::string_view kGlbExt = ".glb";
-constexpr absl::string_view kGltfExt = ".gltf";
-constexpr absl::string_view kCmatExt = ".cmat";
-constexpr absl::string_view kPngExt = ".png";
-constexpr absl::string_view kMaterialDefinitionExt = ".materialdefinition";
+static constexpr absl::string_view kPendingIconName = "pending";
+static constexpr absl::string_view kFileIconName = "file";
+static constexpr absl::string_view kIsfExt = ".isf";
+static constexpr absl::string_view kGlbExt = ".glb";
+static constexpr absl::string_view kGltfExt = ".gltf";
+static constexpr absl::string_view kCmatExt = ".cmat";
+static constexpr absl::string_view kPngExt = ".png";
+static constexpr absl::string_view kMaterialDefinitionExt =
+    ".materialdefinition";
 
 // Used to distinguish drag and drop payloads that are protos from
 // editor_proto_visitor so they can be saved in the asset library.
-constexpr absl::string_view kProtoDragAndDropScheme = "proto://";
+static constexpr absl::string_view kProtoDragAndDropScheme = "proto://";
 
 }  // namespace imp::editor
 

@@ -62,7 +62,7 @@ constexpr float kLowerPanelMinHeight = 100.0f;
 
 namespace imp::editor {
 
-absl::StatusOr<std::vector<SampleNode*>*> CallstackPanel::GetSamples(
+absl::StatusOr<const std::vector<SampleNode*>*> CallstackPanel::GetSamples(
     int frame_index, SampleProcessor& sample_processor,
     std::thread::id thread_id, absl::string_view selected_sample_name) {
   if (selected_sample_name.empty()) {
@@ -71,7 +71,7 @@ absl::StatusOr<std::vector<SampleNode*>*> CallstackPanel::GetSamples(
   }
 
   if (thread_id == Profiler::GetMainThreadId()) {
-    ProcessedSamples& processed_frame =
+    const ProcessedSamples& processed_frame =
         sample_processor.GetProcessedFrame(frame_index);
 
     const auto& sample_it =
@@ -89,7 +89,8 @@ absl::StatusOr<std::vector<SampleNode*>*> CallstackPanel::GetSamples(
       "Callstack data is not supported for worker threads.");
 }
 
-void CallstackPanel::DrawPanel(float width, int frame_index,
+void CallstackPanel::DrawPanel(const float width, const int start_frame,
+                               const int end_frame,
                                FrameTimePanel& frame_time_panel,
                                SampleProcessor& sample_processor,
                                std::thread::id thread_id) {
@@ -98,12 +99,12 @@ void CallstackPanel::DrawPanel(float width, int frame_index,
       frame_time_panel.GetSelectedSampleName();
 
   // Reset the selected sample if we change the selected frame or sample.
-  if (frame_index != last_frame_index_ ||
+  if (end_frame != last_frame_index_ ||
       selected_sample_name != last_selected_sample_name_) {
     selected_sample_node_index_ = kInvalidId;
     selected_start_index_ = kInvalidId;
     selected_end_index_ = kInvalidId;
-    last_frame_index_ = frame_index;
+    last_frame_index_ = end_frame;
     last_selected_sample_name_ = selected_sample_name;
   }
 
@@ -115,8 +116,8 @@ void CallstackPanel::DrawPanel(float width, int frame_index,
   ImGui::BeginChild("##callstackpanel", ImVec2(width, child_height),
                     ImGuiChildFlags_Borders);
 
-  absl::StatusOr<std::vector<SampleNode*>*> samples = GetSamples(
-      frame_index, sample_processor, thread_id, selected_sample_name);
+  absl::StatusOr<const std::vector<SampleNode*>*> samples =
+      GetSamples(end_frame, sample_processor, thread_id, selected_sample_name);
 
   if (samples.ok()) {
     // If there are samples for this frame, draw the callstack table.
@@ -130,7 +131,8 @@ void CallstackPanel::DrawPanel(float width, int frame_index,
   ImGui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
 }
 
-void CallstackPanel::DrawCallstackPanel(std::vector<SampleNode*>& samples) {
+void CallstackPanel::DrawCallstackPanel(
+    const std::vector<SampleNode*>& samples) {
   if (upper_panel_height_ <= 0.0f) {
     upper_panel_height_ =
         ImGui::GetContentRegionAvail().y - kLowerPanelStartingHeight - 20.0f;
@@ -146,7 +148,8 @@ void CallstackPanel::DrawCallstackPanel(std::vector<SampleNode*>& samples) {
   DrawFullCallstackReadout();
 }
 
-void CallstackPanel::DrawCallstackTable(std::vector<SampleNode*>& samples) {
+void CallstackPanel::DrawCallstackTable(
+    const std::vector<SampleNode*>& samples) {
   IMP_TRACE();
   ImGui::BeginChild("##callstacktable", ImVec2(-1, upper_panel_height_));
 

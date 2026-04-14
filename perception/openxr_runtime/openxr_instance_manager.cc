@@ -1,5 +1,6 @@
 #include "openxr_runtime/openxr_instance_manager.h"
 
+#include <jni.h>
 #include <openxr/openxr_platform.h>
 #include <openxr/openxr_reflection.h>
 #include <openxr/public/all_extensions.h>
@@ -78,18 +79,42 @@ const std::array<std::string, 7> kGeospatialExtensions = {
 }  // namespace
 
 
-OpenXrInstanceManager::OpenXrInstanceManager() : instance_(XR_NULL_HANDLE) {}
-
 OpenXrInstanceManager::~OpenXrInstanceManager() { DestroyInstance(); }
 
-XrInstance OpenXrInstanceManager::GetInstance() {
+XrInstance OpenXrInstanceManager::GetInstance(JNIEnv* env, jobject context) {
   absl::MutexLock lock(mutex_);
   if (instance_ == XR_NULL_HANDLE) {
-    if (!CreateInstance()) {
+    if (!CreateInstance(env, context)) {
       return XR_NULL_HANDLE;
     }
   }
   return instance_;
+}
+
+bool OpenXrInstanceManager::LoadOpenXr(jobject context) {
+  PFN_xrInitializeLoaderKHR initialize_loader = nullptr;
+
+  // Gets a function pointer to the OpenXR loader.
+  XR_RETURN_IF_FAILED(
+      xrGetInstanceProcAddr(XR_NULL_HANDLE, "xrInitializeLoaderKHR",
+                            (PFN_xrVoidFunction*)(&initialize_loader)));
+  if (initialize_loader == nullptr) {
+    return false;
+  }
+  XrLoaderInitInfoAndroidKHR loader_init_info_android;
+  {
+    loader_init_info_android = {
+        .type = XR_TYPE_LOADER_INIT_INFO_ANDROID_KHR,
+        .applicationVM = app_vm_,
+        .applicationContext = context,
+    };
+  }
+
+  // Call the loader function obtained above to load OpenXR.
+  XR_RETURN_IF_FAILED(
+      initialize_loader(reinterpret_cast<const XrLoaderInitInfoBaseHeaderKHR*>(
+          &loader_init_info_android)));
+  return true;
 }
 
 bool OpenXrInstanceManager::GetEnabledExtensions(
@@ -135,7 +160,14 @@ bool OpenXrInstanceManager::GetEnabledExtensions(
   return true;
 }
 
-bool OpenXrInstanceManager::CreateInstance() {
+bool OpenXrInstanceManager::CreateInstance(JNIEnv* env, jobject context) {
+  java_env_ = env;
+  java_env_->GetJavaVM(&app_vm_);
+
+  if (!LoadOpenXr(context)) {
+    return false;
+  }
+
   std::vector<std::string> enabled_exts_str;
   if (!GetEnabledExtensions(enabled_exts_str)) {
     return false;
@@ -164,6 +196,31 @@ bool OpenXrInstanceManager::CreateInstance() {
   // Create an OpenXR instance.
   XR_RETURN_IF_FAILED(xrCreateInstance(&create_info, &instance_));
 
+  // Retrieve the system ID.
+  if (!GetXrSystem()) {
+    return false;
+  }
+
+  return true;
+}
+
+bool OpenXrInstanceManager::GetXrSystem() {
+  if (system_id_ != XR_NULL_SYSTEM_ID) {
+    return true;
+  }
+
+  // TODO: (broken link) - Update this to dynamically evaluate the form factor
+  // once we support multiple form factors.
+  XrSystemGetInfo system_info = {
+      .type = XR_TYPE_SYSTEM_GET_INFO,
+      .formFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY,
+  };
+
+  XR_RETURN_IF_FAILED(xrGetSystem(instance_, &system_info, &system_id_));
+  if (system_id_ == XR_NULL_SYSTEM_ID) {
+    return false;
+  }
+
   return true;
 }
 
@@ -172,7 +229,37 @@ void OpenXrInstanceManager::DestroyInstance() {
   if (instance_ != XR_NULL_HANDLE) {
     xrDestroyInstance(instance_);
     instance_ = XR_NULL_HANDLE;
+    system_id_ = XR_NULL_SYSTEM_ID;
   }
+}
+
+PFN_xrGetInstanceProcAddr OpenXrInstanceManager::GetGetInstanceProcAddr()
+    const {
+  return xrGetInstanceProcAddr;
+}
+
+std::vector<XrEnvironmentBlendMode>
+OpenXrInstanceManager::GetEnvironmentBlendModes(XrInstance instance) {
+  absl::MutexLock lock(mutex_);
+  if (instance_ == XR_NULL_HANDLE || !GetXrSystem()) {
+    return {};
+  }
+
+  uint32_t blend_mode_count;
+  if (XR_FAILED(xrEnumerateEnvironmentBlendModes(
+          instance_, system_id_, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, 0,
+          &blend_mode_count, nullptr))) {
+    return {};
+  }
+
+  std::vector<XrEnvironmentBlendMode> blend_modes(blend_mode_count);
+  if (XR_FAILED(xrEnumerateEnvironmentBlendModes(
+          instance_, system_id_, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
+          blend_mode_count, &blend_mode_count, blend_modes.data()))) {
+    return {};
+  }
+
+  return blend_modes;
 }
 
 }  // namespace androidx::xr::openxr

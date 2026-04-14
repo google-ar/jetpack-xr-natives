@@ -14,6 +14,7 @@
 
 #include "core/view/framework/assets/material_factory.h"
 
+#include <cstring>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -39,6 +40,16 @@
 #include "core/view/utils/asset.h"
 
 namespace imp {
+
+namespace {
+bool IsPlaceholderSplitEngineMaterial(const filament::Material* material) {
+  if (material) {
+    // TODO: (broken link) - Find a better way to check the placeholder material.
+    return strcmp(material->getName(), "Split Engine Placeholder") == 0;
+  }
+  return false;
+}
+}  // namespace
 
 Future<MaterialPtr> MaterialFactory::LoadMaterial(
     const AssetDefinition& asset_definition) {
@@ -88,7 +99,9 @@ MaterialPtr MaterialFactory::CreateMaterial(
   auto material = absl::WrapUnique(new CustomMaterial(
       material_asset->GetFilamentMaterial()->createInstance(), material_asset));
 
-  if (auto serializer = view_->GetSplitEngineSerializer()) {
+  if (auto serializer = view_->GetSplitEngineSerializer();
+      serializer && !IsPlaceholderSplitEngineMaterial(
+                        material_asset->GetFilamentMaterial())) {
     serializer->AddMaterialInstance(material_asset->GetFilamentMaterial(),
                                     material->GetFilamentMaterialInstance());
     return serializer->CreateCustomMaterial(std::move(material));
@@ -118,10 +131,12 @@ MaterialPtr MaterialFactory::WrapMaterial(
   }
 
   auto material = absl::WrapUnique(new CustomMaterial(material_instance, {}));
-  if (auto serializer = view_->GetSplitEngineSerializer()) {
-    serializer->AddMaterialInstance(
-        material->GetFilamentMaterialInstance()->getMaterial(),
-        material->GetFilamentMaterialInstance());
+
+  if (auto serializer = view_->GetSplitEngineSerializer();
+      serializer &&
+      !IsPlaceholderSplitEngineMaterial(material_instance->getMaterial())) {
+    serializer->AddMaterialInstance(material_instance->getMaterial(),
+                                    material_instance);
     return serializer->CreateCustomMaterial(std::move(material));
   }
 
@@ -154,8 +169,8 @@ Future<absl::Status> MaterialFactory::SetMaterialParameters(
               .LoadImage(*parameter.image_asset_texture())
               .Then([&view, material,
                      parameter](AssetPtr<ImageAsset> image_asset) mutable {
-                TexturePtr texture =
-                    view.GetTextureFactory().CreateTexture(*image_asset);
+                OwnedTexturePtr texture =
+                    view.GetTextureFactory().CreateTexture(image_asset);
                 material->SetParameter(parameter.name, std::move(texture));
               }));
     } else {

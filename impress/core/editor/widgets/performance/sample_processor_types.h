@@ -57,7 +57,7 @@ struct SampleNode {
   uint16_t total_memory_allocations_count;
 
   // Sets the initial values for a new sample node, clears existing children.
-  void SetInitialValues(ProfileResult* profile_result) {
+  void SetInitialValues(const ProfileResult* profile_result) {
     result = profile_result;
     total_time_ns =
         profile_result->GetEndTimeNanos() - profile_result->GetStartTimeNanos();
@@ -136,34 +136,35 @@ class MainThreadNodePool final : public NodePool {
 class ResultCollection {
  public:
   virtual ~ResultCollection() = default;
-  virtual ProfileResult* Get(int index) = 0;
+  virtual const ProfileResult* Get(int index) const = 0;
 };
 
 class WorkerResultCollection final : public ResultCollection {
  public:
-  WorkerResultCollection(std::vector<WorkerProfileResult>* samples) {
+  WorkerResultCollection(const std::vector<WorkerProfileResult>* samples) {
     worker_samples = samples;
   }
-  inline ProfileResult* Get(int index) override {
+  inline const ProfileResult* Get(int index) const override {
     return &(*worker_samples)[index];
   }
 
  private:
-  std::vector<WorkerProfileResult>* worker_samples;
+  const std::vector<WorkerProfileResult>* worker_samples;
 };
 
 class MainThreadResultCollection final : public ResultCollection {
  public:
-  MainThreadResultCollection(
-      std::array<MainThreadProfileResult, Profiler::kMaxSamples>* samples) {
+  MainThreadResultCollection(const std::array<MainThreadProfileResult,
+                                              Profiler::kMaxSamples>* samples) {
     profiler_samples = samples;
   }
-  inline ProfileResult* Get(int index) override {
+  inline const ProfileResult* Get(int index) const override {
     return &(*profiler_samples)[index];
   }
 
  private:
-  std::array<MainThreadProfileResult, Profiler::kMaxSamples>* profiler_samples;
+  const std::array<MainThreadProfileResult, Profiler::kMaxSamples>*
+      profiler_samples;
 };
 }  // namespace imp::editor
 

@@ -191,6 +191,10 @@ class LayoutComposer {
   std::vector<imp::Invocable<void()>> menu_draw_functions_;
   std::vector<imp::Invocable<void()>> toolbar_draw_functions_;
   std::vector<WidgetInfo> draw_after_functions_;
+  // Separate out Node Info to draw before all components
+  imp::Invocable<void()> node_info_draw_function_;
+  // Separate out Component Library to draw after all components
+  imp::Invocable<void()> component_library_draw_function_;
 
   LayoutConfig layout_config_;
   std::unique_ptr<DockingHelper> docking_helper_;

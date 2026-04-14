@@ -26,15 +26,19 @@ material{
   flipUV : false,
   featureLevel : 0
 } fragment {
+  vec4 getSliceSample(highp vec2 uv) {
+#if FILAMENT_EFFECTIVE_VERSION == 100
+    return texture2D(materialParams_Slice, uv);
+#else
+    return texture(materialParams_Slice, uv);
+#endif
+  }
+
   void material(inout MaterialInputs material) {
     prepareMaterial(material);
 
     highp vec2 uv = getUV0();
-
-#if FILAMENT_EFFECTIVE_VERSION == 100
-    material.baseColor = texture2D(materialParams_Slice, uv);
-#else
-    material.baseColor = texture(materialParams_Slice, uv);
-#endif
+    vec4 slice_sample = getSliceSample(uv);
+    material.baseColor = slice_sample;
   }
 }

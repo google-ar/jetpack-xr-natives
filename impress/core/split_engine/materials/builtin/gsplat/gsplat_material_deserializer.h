@@ -37,7 +37,41 @@
 
 namespace imp::split_engine {
 
-// The built-in material for GSplat visualization.
+// The built-in material for Gsplat visualization.
+// This material has several distinctive modes of operation:
+//
+// 1) Standard Gsplat rendering (when material_mode in spec is GSPLAT)
+//    For efficiency, Gsplat rendering is done in 2-passes: the first pass
+//    processes the raw data (positions, covariances, etc.) into a texture
+//    (precomputed data texture), and the second pass uses that texture to
+//    render the splats. Depending on the parameters given, we have 2 ways to
+//    produce this texture:
+//
+//    A) With an internal precompute data pipeline
+//       This is when the has_precomputed_data_texture in spec is false.
+//       In this mode, an internal texture pipeline is created to generate this
+//       texture, and then the texture is used to render the actual splats.
+//
+//    B) With client provided precompute data texture
+//       This is when the has_precomputed_data_texture in spec is true.
+//       In this mode, the client generate the precomputed data texture itself,
+//       and provide that to the material. In this mode, no precompute data
+//       pipeline is created, and the material will use the given texture
+//       instead.
+//
+// 2) Magic Window rendering (when material_mode in spec is MAGIC_WINDOW)
+//    In this mode, a special shader is used to do a similar Gsplat rendering
+//    like (1), but with additional fragment discard logic in the shader to cull
+//    the splats that are outside of the given window, to create a "magic
+//    window" look.
+//    TODO: (broken link) - Due to an issue with TexturePipelineRenderer, this
+//    mode does not use precomputed data texture but instead renders the splats
+//    directly from the raw data.
+//    TODO: (broken link) - This Magic Window rendering mode is too inefficient,
+//    and will be replaced by a new method that renders an offscreen texture
+//    that contains the rendered splat scene to create the same magic window
+//    look.
+//
 class GsplatMaterialDeserializer : public BuiltInCustomMaterial,
                                    public imp::Rememberer {
  public:
@@ -72,12 +106,12 @@ class GsplatMaterialDeserializer : public BuiltInCustomMaterial,
       const android_xr::schemas::BuiltInMaterialGsplatParameters&
           serialized_parameters);
 
-  // The material used to precompute splat positions, colors, etc.
-  // For some modes, this is the same as the render material.
+  // The material used to precompute texture pipeline, using splat positions,
+  // colors, etc.
   BorrowedMaterialPtr GetPrecomputedDataMaterial(
       SmallSourceLocation loc = SmallSourceLocation::Current()) const;
 
-  // The material used for rendering parameters
+  // The material used for rendering.
   BorrowedMaterialPtr GetRenderMaterial(
       SmallSourceLocation loc = SmallSourceLocation::Current()) const;
 
@@ -87,14 +121,15 @@ class GsplatMaterialDeserializer : public BuiltInCustomMaterial,
       const android_xr::schemas::BuiltInMaterialGsplatParameters&
           serialized_parameters);
 
-  // Updates parameters on the precompute material.
-  absl::Status SetPrecomputedDataParameters(
+  // Updates the raw gsplat data parameters (e.g., splat positions, colors) on
+  // the given material.
+  absl::Status SetRawGsplatDataParameters(
       const TextureBorrower& texture_borrower,
       const android_xr::schemas::BuiltInMaterialGsplatParameters&
           serialized_parameters,
-      BorrowedMaterialPtr precompute_material);
+      BorrowedMaterialPtr material);
 
-  // Updates parameters on the magic window material.
+  // Updates parameters for the magic window mode (mode 2).
   absl::Status SetMagicWindowMaterialParameters(
       const TextureBorrower& texture_borrower,
       const android_xr::schemas::BuiltInMaterialGsplatParameters&

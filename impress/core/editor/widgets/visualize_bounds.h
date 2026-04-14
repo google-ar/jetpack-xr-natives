@@ -17,13 +17,13 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_VISUALIZE_BOUNDS_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_VISUALIZE_BOUNDS_H_
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/strings/string_view.h"
 #include "core/common/rememberer.h"
 #include "core/editor/widget.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
 #include "core/view/base_view.h"
-#include "core/view/utils/frame_time.h"
 
 namespace imp::editor {
 
@@ -33,9 +33,8 @@ class VisualizeBounds : public editor::Widget, public imp::Rememberer {
   explicit VisualizeBounds(BaseView& view);
   absl::string_view GetName() const override { return "##Visualize Bounds"; }
   void DrawImGui() override;
-  void Update(const FrameTime& frame_time);
 
-  // Explicitly draws the bounds. Exposed for testing.
+  // Draws the bounds for the relevant nodes based on the current mode.
   void DrawBounds();
 
  private:
@@ -51,16 +50,19 @@ class VisualizeBounds : public editor::Widget, public imp::Rememberer {
     kShowAllBounds
   };
 
-  void DrawBoundsForAllNodes();
-  void DrawBoundsForNodeRecursive(NodeHandle node);
-  void DrawBoundsForNode(NodeHandle node);
+  // Draws the bounds for all nodes in the scene.
+  void DrawBoundsForAllNodes(const double3& camera_pos);
+  // Recursively draws the bounds for a node and its children.
+  void DrawBoundsForNodeRecursive(NodeHandle node, const double3& camera_pos);
+  // Draws the bounds for a single node.
+  void DrawBoundsForNode(NodeHandle node, const double3& camera_pos);
 
   bool HasCollider(NodeHandle node) const;
 
   BaseView& view_;
   Mode mode_ = Mode::kShowSelectedBounds;
-  NodeHandle selected_node_;
-  float3 empty_node_bounds_size_;
+  absl::flat_hash_set<NodeHandle> selected_nodes_;
+  absl::flat_hash_set<NodeHandle> visited_nodes_;
 };
 
 }  // namespace imp::editor

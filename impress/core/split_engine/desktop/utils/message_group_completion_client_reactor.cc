@@ -16,7 +16,6 @@
 
 #include <utility>
 
-#include "absl/log/check.h"
 #include "third_party/grpc/include/grpcpp/support/status.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 
@@ -49,6 +48,14 @@ void MessageGroupCompletionClientReactor::OnReadDone(bool ok) {
 }
 
 void MessageGroupCompletionClientReactor::OnDone(const grpc::Status& status) {
-  
+  on_done_notification_.Notify();
 }
+
+MessageGroupCompletionClientReactor::~MessageGroupCompletionClientReactor() {
+  if (!on_done_notification_.HasBeenNotified()) {
+    context_.TryCancel();
+    on_done_notification_.WaitForNotification();
+  }
+}
+
 }  // namespace imp::split_engine

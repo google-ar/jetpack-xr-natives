@@ -42,13 +42,6 @@ struct MonitorPanel {
                       absl::Duration delta_time) = 0;
 
   virtual ~MonitorPanel() = default;
-
-  enum MonitorState {
-    kRunning,
-    kPaused,
-  };
-
-  virtual void OnStateChanged(MonitorState state) = 0;
 };
 
 }  // namespace imp::editor

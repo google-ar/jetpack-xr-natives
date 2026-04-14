@@ -94,6 +94,7 @@ cc_library(
         "//core/split_engine/desktop:split_engine_desktop_bridge_cc_proto",
         "//third_party/grpc:grpc++_unsecure",
         "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/synchronization",
     ],
     alwayslink = 1,
 )
@@ -105,6 +106,7 @@ cc_library(
     copts = imp_copts(),
     defines = imp_defines(),
     deps = [
+        "//core/common:invocable",
         "//core/split_engine:split_engine_shared",
         "//core/split_engine/desktop:split_engine_desktop_bridge_cc_proto",
         "//third_party/grpc:grpc++_unsecure",

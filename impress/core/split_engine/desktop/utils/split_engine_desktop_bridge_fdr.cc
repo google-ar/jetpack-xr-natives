@@ -22,7 +22,6 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "absl/log/check.h"
-#include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/synchronization/mutex.h"
@@ -133,13 +132,19 @@ void FileDescriptorReceiver::Server() {
         return;
       } else if (event_fd == GetSocketFd()) {
         
+      } else {
+        const absl::Status status = Receive(event_fd);
+        if (!status.ok()) {
+          
+        } else {
+          
+        }
       }
     }
   }
 }
 
 absl::Status FileDescriptorReceiver::AcceptAll() {
-  IMP_LOG(imp::INFO) << "AcceptAll";
   while (true) {
     struct sockaddr_un client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
@@ -152,12 +157,8 @@ absl::Status FileDescriptorReceiver::AcceptAll() {
       return absl::ErrnoToStatus(errno, "accept failed");
     }
 
-    SetBlocking(client_sock_fd);
-
-    MP_RETURN_IF_ERROR(Receive(client_sock_fd));
-    MP_RETURN_IF_ERROR(SendAck(client_sock_fd));
-
-    close(client_sock_fd);
+    SetNonBlocking(client_sock_fd);
+    MP_RETURN_IF_ERROR(epoll_->Add(client_sock_fd));
   }
 
   return absl::OkStatus();
@@ -173,7 +174,6 @@ absl::Status FileDescriptorReceiver::SendAck(int fd) {
 }
 
 absl::Status FileDescriptorReceiver::Receive(int client_fd) {
-  IMP_LOG(imp::INFO) << "Receive";
   FileDescriptorMetadata metadata;
   struct msghdr msg = {0};
   struct cmsghdr* cmsg;

@@ -206,6 +206,7 @@ class GltfAsset {
   static Future<std::unique_ptr<GltfAsset>> Load(
       BaseView* view, absl::string_view asset_url,
       Future<resources::Resource> resource_future, GltfAssetLoader* loader,
+      resources::ResourceManager* resource_manager,
       GltfAsset::LoadOptions options);
 
   GltfAsset();

@@ -33,6 +33,7 @@
 #include "filament/filament/include/filament/TransformManager.h"
 #include "filament/libs/utils/include/utils/EntityManager.h"
 #include "core/async/executor.h"
+#include "core/async/executor_flags.h"
 #include "core/async/future_common.h"
 #include "core/common/invocable.h"
 #include "core/common/trace.h"
@@ -59,6 +60,19 @@
 #include "core/view/view_events.h"
 #include "core/window/filament_host.h"
 #include "core/window/window_rotation.h"
+
+// Because Custom materials are currently an experimental feature, local mode
+// now only works if IMP_SPLIT_ENGINE_ALLOW_EXPERIMENTAL_APIS=1 is also defined.
+// When running on Moohan device we also need to set
+// persist.device_config.com_android_xr.com.android.xr.flags.enable_split_engine_experimental_apis
+// for this to work.
+// TODO: (broken link) - Remove this check once custom materials are no longer
+// experimental.
+#if defined(IMP_USE_LOCAL_SPLIT_ENGINE_MATERIALS) && \
+    !defined(IMP_SPLIT_ENGINE_ALLOW_EXPERIMENTAL_APIS)
+#error IMP_USE_LOCAL_SPLIT_ENGINE_MATERIALS requires \
+IMP_SPLIT_ENGINE_ALLOW_EXPERIMENTAL_APIS to be defined.
+#endif
 
 namespace imp {
 
@@ -103,6 +117,13 @@ View::View(ViewConfig config)
     asset_manager_cache_cleanup_interval_ = absl::Seconds(
         view_config_.cache_config->cache_cleanup_interval_seconds.value());
   }
+
+  // ApplyViewConfig is called long after Executors were created, so applying
+  // this flag here instead.
+  if (view_config_.experimental_feature_flags
+          ->enable_simple_executor_destroys_tasks_on_shutdown.Value()) {
+    ExecutorFlags::EnableSimpleExecutorToDestroyTasksOnShutdown();
+  }
 }
 
 View::~View() {
@@ -146,6 +167,14 @@ std::unique_ptr<View> View::CreateClient(std::unique_ptr<Context> context,
   std::unique_ptr<View> result = imp::client_api::CreateView(identifier);
   result->context_ = std::move(context);
   result->view_config_ = config;
+
+  // ApplyViewConfig is called long after Executors were created, so applying
+  // this flag here instead.
+  if (config.experimental_feature_flags
+          ->enable_simple_executor_destroys_tasks_on_shutdown.Value()) {
+    ExecutorFlags::EnableSimpleExecutorToDestroyTasksOnShutdown();
+  }
+
   return result;
 }
 
@@ -653,7 +682,8 @@ void View::ApplyViewConfig() {
       break;
   }
 
-  if (*view_config_.enable_synchronous_future_cancellation) {
+  if (*view_config_.experimental_feature_flags
+           ->enable_synchronous_future_cancellation) {
     FutureFlags::EnableSynchronousFutureCancellation();
   }
 }

@@ -14,6 +14,11 @@
 
 #include "core/camera/camera_manager.h"
 
+#include "core/common/log.h"
+#include "absl/strings/string_view.h"
+#include "core/camera/camera_component.h"
+#include "core/ncsb/component_handle.h"
+#include "core/view/base_view.h"
 #include "core/view/view_events.h"
 
 namespace imp {
@@ -40,12 +45,24 @@ void CameraManager::InitializeDefaultCamera() {
 }
 
 void CameraManager::SetCamera(ComponentHandle<CameraComponent> camera) {
+  // If the camera is invalid, set it to the default camera.
   if (!camera) {
     camera = default_camera_;
   }
 
-  view_->GetHost()->GetView()->setCamera(camera->GetCamera());
-  camera_ = camera;
+  if (camera) {
+    view_->GetHost()->GetView()->setCamera(camera->GetCamera());
+    camera_ = camera;
+  } else {
+    // If the default camera is also invalid, clear the camera.
+    ClearCamera();
+  }
+}
+
+void CameraManager::ClearCamera() {
+  view_->GetHost()->GetView()->setCamera(nullptr);
+  camera_ = ComponentHandle<CameraComponent>();
+  IMP_LOG(imp::INFO) << "No current active camera to display.";
 }
 
 ComponentHandle<CameraComponent> CameraManager::GetCamera() const {

@@ -30,10 +30,9 @@ namespace imp::android {
 // JNI wrapper for the Android SurfaceTexture class.
 class SurfaceTexture : public JavaWrapper {
  public:
-  explicit SurfaceTexture(const Context& context, bool enable_memory_leak_fix);
+  explicit SurfaceTexture(const Context& context);
 
-  SurfaceTexture(const Context& context, uint32_t texture_id, bool is_secure,
-                 bool enable_memory_leak_fix);
+  SurfaceTexture(const Context& context, uint32_t texture_id, bool is_secure);
 
   ~SurfaceTexture() override;
 
@@ -53,7 +52,6 @@ class SurfaceTexture : public JavaWrapper {
   uint32_t texture_id_ = 0;
   bool is_secure_ = false;
   bool is_attached_to_secure_gl_context_ = false;
-  bool enable_memory_leak_fix_;
 #if __ANDROID_API__ >= 33
   JniHandle get_data_space_;
 #endif  // __ANDROID_API__ >= 33

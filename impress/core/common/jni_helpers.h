@@ -20,6 +20,7 @@
 #include <jni.h>
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -36,6 +37,7 @@
 #include "core/common/context.h"
 #include "core/common/jni_context.h"
 #include "core/common/optional_error.h"
+#include "core/common/type_helpers.h"
 #include "core/common/typed_id.h"
 #include "core/common/typed_vector.h"
 
@@ -72,6 +74,28 @@ constexpr bool IsFirstOneOfRest() {
     if (p) return true;
   return false;
 }
+
+// Compile-time helper function to check if T is a type that can be passed to
+// a JNI function.
+template <typename T>
+using IsJniCallableType =
+    IsAnyOf<T, jobject, jmethodID, jclass, jint, jlong, jsize, jboolean, jbyte,
+            jchar, jshort, jfloat, jdouble, jobjectArray, jfloatArray,
+            jintArray, jlongArray, jbooleanArray, jbyteArray, jcharArray,
+            jshortArray, jdoubleArray, jstring, bool, int, unsigned int, char,
+            uint64_t, long, short, float, double, std::nullptr_t>;
+
+// Compile-time helper function to check if all types in JniTypes are types
+// that can be passed to a JNI function.
+template <typename... JniTypes>
+constexpr bool AreJniCallableTypes =
+    std::conjunction_v<IsJniCallableType<std::decay_t<JniTypes>>...>;
+
+// Compile-time type trait to check if all types in JniTypes are types
+// that can be passed to a JNI function.
+template <typename... JniTypes>
+using EnableIfJniCallable =
+    std::enable_if_t<AreJniCallableTypes<JniTypes...>, int>;
 
 }  // namespace details
 
@@ -476,7 +500,7 @@ class JavaWrapper {
     return Env()->GetStaticIntField(Clazz(), ToFieldID(handle));
   }
 
-  template <class... Args>
+  template <class... Args, details::EnableIfJniCallable<Args...> = 0>
   void CallVoidMethod(JniHandle handle, Args&&... args) {
     JNIEnv* env = Env();
     if (!handle) {
@@ -486,7 +510,7 @@ class JavaWrapper {
     env->CallVoidMethod(Self(), id, std::forward<Args>(args)...);
   }
 
-  template <class... Args>
+  template <class... Args, details::EnableIfJniCallable<Args...> = 0>
   void CallStaticVoidMethod(JniHandle handle, Args&&... args) {
     JNIEnv* env = Env();
     if (!handle) {
@@ -496,7 +520,7 @@ class JavaWrapper {
     env->CallStaticVoidMethod(Clazz(), id, std::forward<Args>(args)...);
   }
 
-  template <class... Args>
+  template <class... Args, details::EnableIfJniCallable<Args...> = 0>
   int64_t CallLongMethod(JniHandle handle, Args&&... args) {
     JNIEnv* env = Env();
     if (!handle) {
@@ -506,7 +530,7 @@ class JavaWrapper {
     return env->CallLongMethod(Self(), id, std::forward<Args>(args)...);
   }
 
-  template <class... Args>
+  template <class... Args, details::EnableIfJniCallable<Args...> = 0>
   float CallFloatMethod(JniHandle handle, Args&&... args) {
     JNIEnv* env = Env();
     if (!handle) {
@@ -516,7 +540,7 @@ class JavaWrapper {
     return env->CallFloatMethod(Self(), id, std::forward<Args>(args)...);
   }
 
-  template <class... Args>
+  template <class... Args, details::EnableIfJniCallable<Args...> = 0>
   bool CallBooleanMethod(JniHandle handle, Args&&... args) {
     JNIEnv* env = Env();
     if (!handle) {
@@ -526,7 +550,7 @@ class JavaWrapper {
     return env->CallBooleanMethod(Self(), id, std::forward<Args>(args)...);
   }
 
-  template <class... Args>
+  template <class... Args, details::EnableIfJniCallable<Args...> = 0>
   int CallIntMethod(JniHandle handle, Args&&... args) {
     JNIEnv* env = Env();
     if (!handle) {
@@ -536,7 +560,7 @@ class JavaWrapper {
     return env->CallIntMethod(Self(), id, std::forward<Args>(args)...);
   }
 
-  template <class... Args>
+  template <class... Args, details::EnableIfJniCallable<Args...> = 0>
   int CallStaticIntMethod(JniHandle handle, Args&&... args) {
     JNIEnv* env = Env();
     if (!handle) {
@@ -548,7 +572,7 @@ class JavaWrapper {
 
   // Calls a Java method that returns a Java string and converts it to an
   // std::string so the Java string reference can be released.
-  template <class... Args>
+  template <class... Args, details::EnableIfJniCallable<Args...> = 0>
   std::string CallStringMethod(JniHandle handle, Args&&... args) {
     JNIEnv* env = Env();
     if (!handle) {
@@ -562,7 +586,7 @@ class JavaWrapper {
     return str;
   }
 
-  template <class... Args>
+  template <class... Args, details::EnableIfJniCallable<Args...> = 0>
   JniUniquePtr<jobject> CallObjectMethod(JniHandle handle, Args&&... args) {
     if (!handle) {
       return WrapJni(Env(), static_cast<jobject>(nullptr));
@@ -572,7 +596,7 @@ class JavaWrapper {
                                                   std::forward<Args>(args)...));
   }
 
-  template <class... Args>
+  template <class... Args, details::EnableIfJniCallable<Args...> = 0>
   JniUniquePtr<jobject> CallStaticObjectMethod(JniHandle handle,
                                                Args&&... args) {
     JNIEnv* env = Env();
@@ -586,7 +610,7 @@ class JavaWrapper {
 
   // Adapted from
   // (broken link)
-  template <class... Args>
+  template <class... Args, details::EnableIfJniCallable<Args...> = 0>
   JniUniquePtr<jbyteArray> CallByteArrayMethod(JniHandle handle,
                                                Args&&... args) {
     JNIEnv* env = Env();
@@ -599,7 +623,7 @@ class JavaWrapper {
                             Self(), id, std::forward<Args>(args)...)));
   }
 
-  template <class... Args>
+  template <class... Args, details::EnableIfJniCallable<Args...> = 0>
   JniUniquePtr<jintArray> CallIntArrayMethod(JniHandle handle, Args&&... args) {
     JNIEnv* env = Env();
     if (!handle) {
@@ -611,7 +635,7 @@ class JavaWrapper {
                             Self(), id, std::forward<Args>(args)...)));
   }
 
-  template <class... Args>
+  template <class... Args, details::EnableIfJniCallable<Args...> = 0>
   JniUniquePtr<jfloatArray> CallFloatArrayMethod(JniHandle handle,
                                                  Args&&... args) {
     JNIEnv* env = Env();

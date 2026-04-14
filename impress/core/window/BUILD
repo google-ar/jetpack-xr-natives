@@ -245,6 +245,7 @@ cc_library(
     tags = ["nobuilder"],
     deps = [
         ":imgui_renderer",
+        ":projection_helpers",
         ":window_rotation",
         "//core:config",
         "//core/async:executor",
@@ -260,6 +261,7 @@ cc_library(
         "//core/common:typed_ids",
         "//core/math",
         "//core/monitor",
+        "//core/render_passes:texture_pipeline_renderer_projection_quad",
         "//core/view/utils:filament_feature_flag_proto_cc_imp",
         "//core/window/clipboard:clipboard_handler",
         "@com_google_absl//absl/algorithm:container",
@@ -413,9 +415,11 @@ cc_library(
     deps = [
         ":filament_host",
         "//core:config",
+        "//core/common:enum_flags",
         "//core/input",
         "@SDL2",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/time",
         "@mediapipe//mediapipe/framework/port:status",
     ],
     alwayslink = 1,
@@ -435,6 +439,32 @@ cc_library(
         "@com_google_absl//absl/strings",
     ],
     alwayslink = 1,
+)
+
+cc_library(
+    name = "projection_helpers",
+    srcs = ["projection_helpers.cc"],
+    hdrs = ["projection_helpers.h"],
+    deps = [
+        "//core/math",
+        "//core/render_passes:texture_pipeline_renderer_projection_quad",
+        "@third_party//filament/filament:filament_hdrs",
+        "@third_party//filament/libs:utils_hdrs",
+    ],
+    alwayslink = 1,
+)
+
+imp_assets(
+    name = "projection_helpers_scuba_assets",
+    srcs = [
+        "Tiger.glb",
+    ],
+    namespace = "imp::projection_helpers_scuba",
+)
+
+filegroup(
+    name = "projection_helpers_scuba_goldens",
+    srcs = glob(["projection_helpers_scuba_goldens/**/*.png"]),
 )
 
 # For a more maintainable build this target should not exist and the headers

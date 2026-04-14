@@ -74,7 +74,8 @@ template <typename T, typename Deleter = std::default_delete<T>>
 class OwnedPtr {
  public:
   // Creates an empty OwnedPtr.
-  OwnedPtr();
+  OwnedPtr() noexcept;
+  OwnedPtr(std::nullptr_t) noexcept;
 
   // Creates an OwnedPtr by taking ownership of the raw pointer passed in.
   explicit OwnedPtr(T* ptr, Deleter deleter = {});
@@ -234,7 +235,8 @@ class OwnedPtr {
 template <typename T>
 class BorrowedPtr {
  public:
-  BorrowedPtr();
+  BorrowedPtr() noexcept;
+  BorrowedPtr(std::nullptr_t) noexcept;
 
   BorrowedPtr<T>(const BorrowedPtr&) = default;
   BorrowedPtr<T>& operator=(const BorrowedPtr&) = default;
@@ -317,7 +319,10 @@ class BorrowedPtr {
 };
 
 template <typename T, typename Deleter>
-OwnedPtr<T, Deleter>::OwnedPtr() {}
+OwnedPtr<T, Deleter>::OwnedPtr() noexcept {}
+
+template <typename T, typename Deleter>
+OwnedPtr<T, Deleter>::OwnedPtr(std::nullptr_t) noexcept {}
 
 template <typename T, typename Deleter>
 OwnedPtr<T, Deleter>::OwnedPtr(T* ptr, Deleter deleter)
@@ -430,7 +435,10 @@ bool OwnedPtr<T, Deleter>::operator!=(std::nullptr_t) const {
 }
 
 template <typename T>
-BorrowedPtr<T>::BorrowedPtr() {}
+BorrowedPtr<T>::BorrowedPtr() noexcept {}
+
+template <typename T>
+BorrowedPtr<T>::BorrowedPtr(std::nullptr_t) noexcept {}
 
 template <typename T>
 BorrowedPtr<T>::BorrowedPtr(T* ptr, RefCounter::Ref ref)

@@ -22,7 +22,7 @@
 #include "core/common/trace.h"
 #include "core/editor/widgets/performance/config.h"
 #include "core/editor/widgets/performance/imgui_helper.h"
-#include "core/editor/widgets/performance/monitor_panel.h"
+#include "core/editor/widgets/performance/performance_window.h"
 #include "core/ncsb/base_component_pool.h"
 #include "core/ncsb/component_id.h"
 #include "core/performance/profiler.h"
@@ -36,8 +36,12 @@ namespace {
 constexpr int kStartingUpperBound = 100;
 }  // namespace
 
-RenderInfoPanel::RenderInfoPanel(BaseView& view, int buffer_size)
-    : view_(view), buffer_(buffer_size), upper_bound_(kStartingUpperBound) {}
+RenderInfoPanel::RenderInfoPanel(PerformanceWindow& performance_window,
+                                 BaseView& view, int buffer_size)
+    : performance_window_(performance_window),
+      view_(view),
+      buffer_(buffer_size),
+      upper_bound_(kStartingUpperBound) {}
 
 RenderInfoPanel::~RenderInfoPanel() = default;
 
@@ -121,7 +125,7 @@ void RenderInfoPanel::DrawPanel(int width, int height, int time_span_seconds) {
         }
       }
 
-      int selected_frame_number = ImGuiHelper::GetSelectedFrameNumber();
+      int selected_frame_number = performance_window_.GetSelectedFrameNumber();
       ImDrawList* draw_list_overlays = ImPlot::GetPlotDrawList();
       DrawHighlightFrame(selected_frame_number, draw_list_overlays,
                          IM_COL32(255, 255, 255, 200), 0.3f);
@@ -209,10 +213,6 @@ void RenderInfoPanel::DrawToolTip(int frame_number) {
   }
 
   ImGui::EndTooltip();
-}
-
-void RenderInfoPanel::OnStateChanged(MonitorPanel::MonitorState state) {
-  state_ = state;
 }
 
 void RenderInfoPanel::Update(absl::Duration elapsed_time,

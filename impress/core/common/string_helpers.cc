@@ -37,7 +37,7 @@ std::string ToLower(absl::string_view view) {
 std::string SerializeToBase64(const uint8_t* data, uint32_t size) {
   std::string str(data, data + size);
   std::string encoded;
-  absl::Base64Escape(str, &encoded);
+  encoded = absl::Base64Escape(str);
   return encoded;
 }
 

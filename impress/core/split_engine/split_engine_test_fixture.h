@@ -28,6 +28,7 @@
 #include "absl/base/thread_annotations.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
+#include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/synchronization/notification.h"
 #include "absl/time/clock.h"
@@ -47,7 +48,7 @@
 #include "core/split_engine/split_engine_test_bridge_serializer.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/view.h"
-#include "testing/scuba_view_fixture.h"
+#include "testing/base_scuba_view_fixture.h"
 #include "testing/test_view.h"
 #include "thread/thread.h"
 
@@ -256,10 +257,12 @@ class SplitEngineTestFixture
     int32_t api_level_;
   };
 
-  SplitEngineTestFixture(int32_t serializer_api_level,
-                         int32_t renderer_api_level)
+  SplitEngineTestFixture(
+      int32_t serializer_api_level, int32_t renderer_api_level,
+      absl::string_view golden_folder_path =
+          "third_party/impress/core/split_engine/scuba_goldens")
       : testing::GenericScubaViewFixture<RendererViewT, TestWithParam<int32_t>>(
-            "third_party/impress/core/split_engine/scuba_goldens"),
+            golden_folder_path),
         serializer_api_level_(serializer_api_level),
         renderer_api_level_(renderer_api_level) {}
 

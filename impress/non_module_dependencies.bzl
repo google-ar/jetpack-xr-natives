@@ -366,6 +366,22 @@ def non_module_dependencies():
         remote = "https://git.code.sf.net/p/tinyfiledialogs/code",
     )
 
+    # Not in Bazel Central Registry as of 3/2026.
+    # This dep does exist in AndroidXR but Impress has to build independently.
+    http_archive(
+        name = "perfetto",
+        patch_cmds = [
+            "mv bazel/standalone/perfetto_cfg.bzl perfetto_cfg.bzl",
+            "find . -type f -exec sed -i 's|@perfetto_cfg//|@perfetto//|g' {} +",
+            "find . -type f -exec sed -i 's|@rules_android//|@build_bazel_rules_android//|g' {} +",
+            "sed -i 's|@perfetto_dep_zlib//:zlib|@zlib//:zlib|g' perfetto_cfg.bzl",
+            "sed -i 's|@perfetto_dep_jsoncpp//:jsoncpp|@jsoncpp//:jsoncpp|g' perfetto_cfg.bzl",
+        ],
+        sha256 = "8a6144d81592e00fb9e75da42483a2544315b25e3113845505d69950083913c1",
+        strip_prefix = "perfetto-54.0",
+        url = "https://github.com/google/perfetto/archive/refs/tags/v54.0.tar.gz",
+    )
+
 def _non_module_repos_impl(_ctx):
     """Wrapper for converting non_module_dependencies to a module_extension."""
     non_module_dependencies()

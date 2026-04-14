@@ -26,6 +26,7 @@
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
 #include "core/gsplat/gsplat_asset.h"
+#include "core/materials/material.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
 #include "core/render/texture.h"
@@ -112,12 +113,9 @@ class GsplatMaterialSerializer
   }
 
  private:
-  GsplatMaterialSerializer(
-      imp::BaseView& view,
-      imp::split_engine::PlaceholderOrBuiltInMaterialPtr material,
-      imp::AssetPtr<imp::GSplatAsset> gsplat_asset,
-      imp::BorrowedTexturePtr precomputed_data_texture);
-  imp::BaseView& view_;
+  GsplatMaterialSerializer(imp::BaseView& view, imp::OwnedMaterialPtr material,
+                           imp::AssetPtr<imp::GSplatAsset> gsplat_asset,
+                           imp::BorrowedTexturePtr precomputed_data_texture);
   imp::AssetPtr<imp::GSplatAsset> gsplat_asset_;
 
   std::optional<android_xr::schemas::GsplatMode> material_mode_;

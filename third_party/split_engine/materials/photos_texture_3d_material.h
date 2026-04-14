@@ -49,9 +49,9 @@ class PhotosTexture3DMaterial
           texture_parameter_creator) const override;
 
  private:
-  PhotosTexture3DMaterial(
-      imp::BaseView& view, const PhotosTexture3DMaterialParams& params,
-      imp::split_engine::PlaceholderOrBuiltInMaterialPtr material);
+  PhotosTexture3DMaterial(imp::BaseView& view,
+                          const PhotosTexture3DMaterialParams& params,
+                          imp::OwnedMaterialPtr material);
 
   template <typename Param>
   void WriteTexture(

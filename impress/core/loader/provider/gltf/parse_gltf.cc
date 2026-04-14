@@ -25,7 +25,6 @@
 #include "core/common/buffer_access.h"
 #include "core/common/optional_error.h"
 #include "core/common/schemas/render_generated.h"
-#include "core/loader/provider/extensions/gltf_extension_behavior.h"
 #include "core/loader/provider/extensions/gltf_extension_interactivity.h"
 #include "core/loader/provider/gltf/gltf.proto.imp.h"
 #include "core/proto/json_message_visitor.h"
@@ -87,10 +86,6 @@ OptionalError ParseGltf(const BufferAccess& access,
   imp::gltf::imp_proto::Gltf parse_result;
 
   proto::JsonMessageVisitor visitor;
-  std::unique_ptr<loader::extensions::Behavior> behavior =
-      loader::extensions::CreateBehaviorGltfExtension();
-  behavior->AddHooks(visitor);
-
   std::unique_ptr<loader::extensions::Interactivity> interactivity =
       loader::extensions::CreateInteractivityGltfExtension();
   interactivity->AddHooks(visitor);

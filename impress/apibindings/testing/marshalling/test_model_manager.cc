@@ -123,7 +123,7 @@ absl::Status TestModelManager::SetGltfReformAffordanceEnabled(
   return absl::OkStatus();
 }
 
-void TestModelManager::AnimateGltfModelNew(
+void TestModelManager::AnimateGltfModel(
     int32_t node, absl::string_view animation_name, bool loop, float speed,
     float start_time, int32_t channel_id,
     std::unique_ptr<BaseAssetAnimator> asset_animator) {
@@ -151,31 +151,8 @@ void TestModelManager::AnimateGltfModelNew(
   }
 }
 
-// TODO: (broken link) - Remove old animation APIs once all clients are migrated
-// to new animation system.
-void TestModelManager::AnimateGltfModel(
-    int32_t node, absl::string_view animation_name, bool loop,
-    std::unique_ptr<BaseAssetAnimator> asset_animator) {
-  ModelTestContext& context = ModelTestContext::Get();
-  context.animate_gltf_model.actual_node_id = node;
-  context.animate_gltf_model.actual_name = std::string(animation_name);
-  context.animate_gltf_model.actual_loop = loop;
-
-  
-  
-  
-
-  if (asset_animator != nullptr) {
-    if (!context.animate_gltf_model.failure_message.empty()) {
-      asset_animator->OnFailure(context.animate_gltf_model.failure_message);
-    } else {
-      asset_animator->OnComplete();
-    }
-  }
-}
-
-absl::Status TestModelManager::StopGltfModelAnimationNew(int32_t node,
-                                                         int32_t channel_id) {
+absl::Status TestModelManager::StopGltfModelAnimation(int32_t node,
+                                                      int32_t channel_id) {
   ModelTestContext& context = ModelTestContext::Get();
   context.stop_gltf_model_animation.actual_node_id = node;
   context.stop_gltf_model_animation.actual_channel_id = channel_id;
@@ -184,35 +161,14 @@ absl::Status TestModelManager::StopGltfModelAnimationNew(int32_t node,
   return absl::OkStatus();
 }
 
-// TODO: (broken link) - Remove old animation APIs once all clients are migrated
-// to new animation system.
-absl::Status TestModelManager::StopGltfModelAnimation(int32_t node) {
-  ModelTestContext& context = ModelTestContext::Get();
-  context.stop_gltf_model_animation.actual_node_id = node;
-  
-  return absl::OkStatus();
-}
-
-absl::Status TestModelManager::ToggleGltfModelAnimationNew(int32_t node,
-                                                           bool toggle,
-                                                           int32_t channel_id) {
+absl::Status TestModelManager::ToggleGltfModelAnimation(int32_t node,
+                                                        bool toggle,
+                                                        int32_t channel_id) {
   ModelTestContext& context = ModelTestContext::Get();
   context.toggle_gltf_model_animation.actual_node_id = node;
   context.toggle_gltf_model_animation.actual_toggle = toggle;
   context.toggle_gltf_model_animation.actual_channel_id = channel_id;
   
-  
-  
-  return absl::OkStatus();
-}
-
-// TODO: (broken link) - Remove old animation APIs once all clients are migrated
-// to new animation system.
-absl::Status TestModelManager::ToggleGltfModelAnimation(int32_t node,
-                                                        bool toggle) {
-  ModelTestContext& context = ModelTestContext::Get();
-  context.toggle_gltf_model_animation.actual_node_id = node;
-  context.toggle_gltf_model_animation.actual_toggle = toggle;
   
   
   return absl::OkStatus();

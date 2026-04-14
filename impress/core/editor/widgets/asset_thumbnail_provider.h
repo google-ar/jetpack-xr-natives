@@ -18,17 +18,12 @@
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_ASSET_THUMBNAIL_PROVIDER_H_
 
 #include <memory>
+#include <string>
 
-#include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "filament/filament/include/filament/Texture.h"
-#include "core/assets/asset_ptr.h"
-#include "core/async/future.h"
-#include "core/editor/visualizers/material_visualizer.h"
+#include "core/editor/widgets/asset_thumbnail_generator.h"
 #include "core/render/texture.h"
-#include "core/render/texture_asset.h"
-#include "core/view/base_view.h"
-#include "core/view/utils/asset.h"
 #include "core/view/utils/string_map.h"
 
 namespace imp::editor {
@@ -39,38 +34,37 @@ namespace imp::editor {
 // icon based on the assets extension.
 class AssetThumbnailProvider {
  public:
-  // Creates an AssetThumbnailProvider. Loads icons for various asset extensions
-  // as part of creation.
-  static Future<std::unique_ptr<AssetThumbnailProvider>> Create(BaseView& view);
+  AssetThumbnailProvider(StringMap<OwnedTexturePtr> icons,
+                         std::unique_ptr<AssetThumbnailGenerator> generator);
 
   // Gets the thumbnail for the asset passed in as an Impress texture.
   //
-  // Currently, only material definitions generate full thumbnails, everything
-  // else uses an icon based on the extension.
+  // Checks overrides, then generator, then default icons.
   filament::Texture* GetThumbnailForResource(absl::string_view resource);
 
   // Sets the thumbnail for the resource.
-  //
-  // Material thumbnail overrides are not supported.
-  void SetThumbnailOverride(absl::string_view resource, TexturePtr texture);
+  void SetThumbnailOverride(absl::string_view resource,
+                            OwnedTexturePtr texture);
+
+  // Sets the default icon for a specific extension.
+  // Use empty string for fallback file icon.
+  void SetDefaultIcon(absl::string_view extension, OwnedTexturePtr icon);
+
+  // Sets the pending icon.
+  void SetPendingIcon(OwnedTexturePtr icon);
 
  private:
-  static Future<absl::Status> LoadBasicIcon(BaseView& view,
-                                            StringMap<TexturePtr>* icons,
-                                            const imp::AssetDefinition& asset);
-
-  AssetThumbnailProvider(BaseView& view, StringMap<TexturePtr> icons);
-
-  BaseView& view_;
   // Default icons keyed by file extension.
-  StringMap<TexturePtr> icons_;
+  StringMap<OwnedTexturePtr> icons_;
 
-  MaterialVisualizer material_visualizer_;
-  // Futures for preparing material textures.
-  StringMap<Future<Texture*>> material_thumbnail_futures_;
+  // Pending icon separate from icons map for easy access.
+  OwnedTexturePtr pending_icon_;
+
+  // Generator for dynamic thumbnails.
+  std::unique_ptr<AssetThumbnailGenerator> generator_;
+
   // Resources that have had their icons overridden.
-  StringMap<TexturePtr> resources_with_icons_;
-  StringMap<Future<AssetPtr<TextureAsset>>> image_futures_;
+  StringMap<OwnedTexturePtr> resources_with_icons_;
 };
 
 }  // namespace imp::editor

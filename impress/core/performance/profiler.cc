@@ -32,6 +32,8 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/hash/hash.h"
 #include "core/common/log.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
@@ -153,7 +155,7 @@ int64_t Profiler::AddWorkerThreadSample(const absl::string_view name) {
 
   {
     bool found = false;
-    absl::MutexLock lock(&worker_thread_ids_mu);
+    absl::MutexLock lock(worker_thread_ids_mu);
     for (int i = 0; i < worker_thread_ids.size(); ++i) {
       if (worker_thread_ids[i] == thread_id) {
         found = true;
@@ -221,21 +223,32 @@ void Profiler::AdvanceFrame() {
   main_thread_id_.store(GetCachedThreadId());
 }
 
-std::array<MainThreadProfileResult, Profiler::kMaxSamples>&
+absl::StatusOr<
+    const std::array<MainThreadProfileResult, Profiler::kMaxSamples>*>
 Profiler::GetSamples(int frame_index) {
-  if (!HasFrameRecorded(frame_index)) return samples[0];
+  if (!HasFrameRecorded(frame_index)) {
+    return absl::OutOfRangeError(
+        absl::StrFormat("Frame %d not found or overwritten", frame_index));
+  }
 
-  return samples[frame_index % kMaxFrames];
+  return &samples[frame_index % kMaxFrames];
 }
 
-int Profiler::GetSampleCount(int frame_index) {
-  if (!HasFrameRecorded(frame_index)) return 0;
+absl::StatusOr<int> Profiler::GetSampleCount(int frame_index) {
+  if (!HasFrameRecorded(frame_index)) {
+    return absl::OutOfRangeError(
+        absl::StrFormat("Frame %d not found or overwritten", frame_index));
+  }
 
   return frame_metadata_[frame_index % kMaxFrames].sample_count;
 }
 
-uint32_t Profiler::GetRenderNextFrameDurationNanos(int frame_index) {
-  if (!HasFrameRecorded(frame_index)) return 0;
+absl::StatusOr<uint32_t> Profiler::GetRenderNextFrameDurationNanos(
+    int frame_index) {
+  if (!HasFrameRecorded(frame_index)) {
+    return absl::OutOfRangeError(
+        absl::StrFormat("Frame %d not found or overwritten", frame_index));
+  }
 
   // We assume that the first PROFILE call encapsulates all other samples.
   // If not this will require changes and influence the performance impact.
@@ -246,13 +259,19 @@ uint32_t Profiler::GetRenderNextFrameDurationNanos(int frame_index) {
   return sample.relative_end_time_ns - sample.relative_start_time_ns;
 }
 
-FrameMetaData& Profiler::GetFrameMetaData(int frame_index) {
-  if (!HasFrameRecorded(frame_index)) return frame_metadata_[0];
+absl::StatusOr<FrameMetaData> Profiler::GetFrameMetaData(int frame_index) {
+  if (!HasFrameRecorded(frame_index)) {
+    return absl::OutOfRangeError(
+        absl::StrFormat("Frame %d not found or overwritten", frame_index));
+  }
   return frame_metadata_[frame_index % kMaxFrames];
 }
 
-uint32_t Profiler::GetTotalFrameDurationNanos(int frame_index) {
-  if (!HasFrameRecorded(frame_index)) return 0;
+absl::StatusOr<uint32_t> Profiler::GetTotalFrameDurationNanos(int frame_index) {
+  if (!HasFrameRecorded(frame_index)) {
+    return absl::OutOfRangeError(
+        absl::StrFormat("Frame %d not found or overwritten", frame_index));
+  }
 
   return frame_metadata_[frame_index % kMaxFrames].total_duration_ns;
 }

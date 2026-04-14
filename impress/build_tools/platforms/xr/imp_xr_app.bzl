@@ -35,7 +35,6 @@ def imp_xr_app(
         resource_files,
         java_deps,
         native_lib_deps,
-        multidex,
         tags = None):
     """Helper used by the imp_app rule to generate targets specific to the Xr platform.
 
@@ -51,7 +50,6 @@ def imp_xr_app(
       resource_files: App resources for the resource_files attribute of android_binary.
       java_deps: Java dependencies passed through to the android_binary rule.
       native_lib_deps: Additional native .so deps to include in the Android apk.
-      multidex: Multidex setting passed through to the android_binary rule.
       tags: (Optional) tags to use on the android_library rule.
     """
 
@@ -76,6 +74,5 @@ def imp_xr_app(
         resource_files = resource_files,
         java_deps = java_deps,
         native_lib_deps = native_lib_deps,
-        multidex = multidex,
         tags = tags,
     )

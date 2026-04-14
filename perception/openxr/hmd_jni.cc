@@ -20,6 +20,7 @@
 
 #include "openxr/jobject_creator.h"
 #include "openxr/openxr_manager.h"
+#include "openxr/openxr_manager_utils.h"
 
 extern "C" {
 JNIEXPORT jobject JNICALL
@@ -29,11 +30,28 @@ Java_androidx_xr_arcore_openxr_OpenXrDevice_nativeGetHeadPose(
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
 
   XrPosef pose;
-  if (!xr_manager.GetHeadPose(static_cast<int64_t>(monotonic_time_ns), &pose)) {
+  androidx::xr::openxr::TrackingState tracking_state =
+      xr_manager.GetHeadPose(static_cast<int64_t>(monotonic_time_ns), &pose);
+
+  if (tracking_state == androidx::xr::openxr::TrackingState::kPaused ||
+      tracking_state == androidx::xr::openxr::TrackingState::kStopped) {
     return nullptr;
   }
 
   return androidx::xr::openxr::CreateJavaPose(env, pose);
+}
+
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrDevice_nativeGetDeviceState(
+    JNIEnv* env, jclass /*clazz*/, jlong monotonic_time_ns) {
+  androidx::xr::openxr::OpenXrManager& xr_manager =
+      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+
+  XrPosef pose;
+  androidx::xr::openxr::TrackingState tracking_state =
+      xr_manager.GetHeadPose(static_cast<int64_t>(monotonic_time_ns), &pose);
+
+  return androidx::xr::openxr::CreateJavaDeviceState(env, tracking_state, pose);
 }
 
 JNIEXPORT jobjectArray JNICALL

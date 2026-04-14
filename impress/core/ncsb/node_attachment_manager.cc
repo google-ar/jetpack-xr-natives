@@ -15,7 +15,6 @@
 #include "core/ncsb/node_attachment_manager.h"
 
 #include <cstddef>
-#include <memory>
 #include <utility>
 
 #include "absl/log/check.h"
@@ -30,7 +29,11 @@
 namespace imp::imp_internal {
 
 NodeAttachmentManager::NodeAttachmentManager(BaseView* view) noexcept
-    : view_(view) {}
+    : view_(view) {
+  if (*view->GetConfig().experimental_feature_flags->enable_pool_allocator) {
+    allocator_.emplace();
+  }
+}
 
 NodeAttachmentManager::~NodeAttachmentManager() {
   // All nodes should be destroyed before the NodeAttachmentManager is
@@ -76,10 +79,14 @@ NodeHandle NodeAttachmentManager::Attach(utils::Entity entity) {
     tm.create(entity);
   }
 
-  auto node_controller =
-      std::make_unique<NodeController>(view_, entity, node_controllers_.size());
-  NodeController* node_controller_ptr = node_controller.get();
-  node_controllers_.push_back(std::move(node_controller));
+  NodeController* node_controller_ptr;
+  if (allocator_) {
+    node_controller_ptr = allocator_->Allocate(view_, entity, 0);
+  } else {
+    node_controller_ptr =
+        new NodeController(view_, entity, node_controllers_.size());
+    node_controllers_.push_back(node_controller_ptr);
+  }
 
   // Track the association between the entity and the node controller.
   entities_to_controllers.emplace(entity, node_controller_ptr);
@@ -106,9 +113,6 @@ void NodeAttachmentManager::Destroy(NodeHandle node) noexcept {
   }
 
   NodeController* node_controller = node->node_controller_;
-  std::size_t index = node_controller->GetIndex();
-  
-  
 
   // First call PreDestroyed, which must be done prior to removing the node
   // from the NodeAttachmentManager & node_controllers_ vector, which is why
@@ -122,34 +126,41 @@ void NodeAttachmentManager::Destroy(NodeHandle node) noexcept {
     return;
   }
 
-  // It's possible that the index changed while PreDestroyed was running if a
-  // different node was destroyed.
-  index = node_controller->GetIndex();
-
   utils::Entity entity = node_controller->GetEntity();
 
   EntitiesToControllersMap& entities_to_controllers =
       GetEntitiesToControllersMap();
   entities_to_controllers.erase(entity);
 
-  // Special case for removing a node while in the midst of iterating over
-  // the nodes. In this case, we can't swap and pop because it can cause
-  // the iteration to skip over nodes. Instead we leave a gap in the vector and
-  // compact it after iteration ends.
-  if (iterating_depth_ > 0) {
-    node_controllers_[index].reset();
-    needs_compaction_ = true;
+  if (allocator_) {
+    allocator_->Deallocate(node_controller);
   } else {
-    std::size_t last_index = node_controllers_.size() - 1;
-    // To prevent the node_controllers_ vector from having gaps, we swap the
-    // node_controllers_ the node to the last index, and then remove the last
-    // index.
-    if (index != last_index) {
-      std::swap(node_controllers_[index], node_controllers_[last_index]);
-      // Update the index of the node that was swapped in.
-      node_controllers_[index]->SetIndex(index);
+    std::size_t index = node_controller->GetIndex();
+    
+    
+
+    // Special case for removing a node while in the midst of iterating over
+    // the nodes. In this case, we can't swap and pop because it can cause
+    // the iteration to skip over nodes. Instead we leave a gap in the vector
+    // and compact it after iteration ends.
+    if (iterating_depth_ > 0) {
+      delete node_controllers_[index];
+      node_controllers_[index] = nullptr;
+      needs_compaction_ = true;
+    } else {
+      std::size_t last_index = node_controllers_.size() - 1;
+      // To prevent the node_controllers_ vector from having gaps, we swap the
+      // node_controllers_ the node to the last index, and then remove the last
+      // index.
+      if (index != last_index) {
+        std::swap(node_controllers_[index], node_controllers_[last_index]);
+        // Update the index of the node that was swapped in.
+        node_controllers_[index]->SetIndex(index);
+      }
+
+      delete node_controllers_.back();
+      node_controllers_.pop_back();
     }
-    node_controllers_.pop_back();
   }
 
   // Ensure filament components are removed from the entity before we destroy
@@ -172,30 +183,42 @@ void NodeAttachmentManager::Cleanup() {
   utils::EntityManager& em = utils::EntityManager::get();
   filament::Engine* engine = BaseView::GetSharedEngine();
 
-  for (std::unique_ptr<imp_internal::NodeController>& node_controller :
-       node_controllers_) {
+  auto cleanup_fn = [&em, engine](utils::Entity entity,
+                                  NodeController* node_controller) {
     // Must be called before the node controller is removed from the lookup.
     node_controller->PreDestroyed();
 
-    // Disassociate the node controller from the entity.
-    entities_to_controllers.erase(node_controller->GetEntity());
-
-    utils::Entity entity = node_controller->GetEntity();
     if (em.isAlive(entity)) {
       // This is a saving-throw to remove any filament components (i.e.
       // renderable) from the entity before we destroy it. If we don't do
-      // this, filament should eventually clean up the components attached to
-      // a dead entity anyways, but better for us to explicitly remove them
-      // first.
+      // this, filament should eventually clean up the components attached
+      // to a dead entity anyways, but better for us to explicitly remove
+      // them first.
       engine->destroy(entity);
 
       // Destroys the actual entity in filament's entity manager.
       em.destroy(entity);
     }
-  }
+  };
 
-  // Destroy all node controllers.
-  node_controllers_.clear();
+  if (allocator_) {
+    while (!entities_to_controllers.empty()) {
+      auto itr = entities_to_controllers.begin();
+      utils::Entity entity = itr->first;
+      NodeController* node_controller = itr->second;
+      cleanup_fn(entity, node_controller);
+      entities_to_controllers.erase(itr);
+      allocator_->Deallocate(node_controller);
+    }
+  } else {
+    for (NodeController* node_controller : node_controllers_) {
+      utils::Entity entity = node_controller->GetEntity();
+      cleanup_fn(entity, node_controller);
+      entities_to_controllers.erase(entity);
+      delete node_controller;
+    }
+    node_controllers_.clear();
+  }
 }
 
 void NodeAttachmentManager::TryCompactingNodeControllers() {

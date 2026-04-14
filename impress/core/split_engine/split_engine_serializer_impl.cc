@@ -96,15 +96,18 @@
 #if IMP_PLATFORM(ANDROID)
 #include "core/split_engine/android/split_engine_platform_android_external_texture_surface.h"
 #endif
+#include "core/render_passes/texture_pipeline_renderer_state.proto.imp.h"
 #include "core/split_engine/flatbuffer_size_calculator.h"
 #include "core/split_engine/materials/split_engine_generic_material.h"
 #include "core/split_engine/split_engine_bridge_sender.h"
 #include "core/split_engine/split_engine_mesh_builder.h"
 #include "core/split_engine/split_engine_texture_builder.h"
+#include "core/split_engine/texture_pipeline_schema_conversion.h"
 #include "core/view/base_view.h"
 #include "core/view/utils/frame_time.h"
 #include "split_engine/schemas/split_engine_data_generated.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
+#include "split_engine/schemas/split_engine_render_passes_generated.h"
 
 namespace imp::split_engine {
 
@@ -118,17 +121,9 @@ static constexpr Box kDefaultBox;
 // This is used to ensure that we skip serializing the placeholder material when
 // we are in local mode.
 //
-// This is needed because of an issue where GenericMaterial uses remote
-// materials even when in local mode, in which case it uses the placeholder
-// material to represent the material on the app side. If that material gets
-// serialized across split engine, there is a race condition that can cause the
-// placeholder material to be used to actually render.
-//
+// This is needed for the legacy AddMaterial/RemoveMaterial commands.
 // That being said, it still makes sense not to serialize the placeholder
 // material anyways.
-//
-// TODO: (broken link) - We should fix GenericMaterial to not use remote
-// materials in local mode.
 // TODO: (broken link) - Find a better way to check the placeholder material.
 bool IsPlaceholderSplitEngineMaterial(const filament::Material* material) {
   return strcmp(material->getName(), "Split Engine Placeholder") == 0;
@@ -697,6 +692,11 @@ void SplitEngineSerializerImpl::SetMorphWeights(
       *fbb, fbb->CreateVector(weights, count), offset);
 }
 
+bool SplitEngineSerializerImpl::IsCullingEnabled(
+    filament::RenderableManager::Instance instance) const {
+  return false;
+}
+
 std::unique_ptr<BaseRenderableManager::Builder>
 SplitEngineSerializerImpl::NewBuilder(size_t count) {
   return std::make_unique<RenderableBuilder>(*this, count);
@@ -1170,16 +1170,8 @@ void SplitEngineSerializerImpl::RemoveMaterial(
 void SplitEngineSerializerImpl::AddMaterialInstance(
     const filament::Material* material,
     const filament::MaterialInstance* instance) {
-  if (IsPlaceholderSplitEngineMaterial(material)) {
-    return;
-  }
-  AddMaterialInstance(GetId(material), GetId(instance));
-}
-
-void SplitEngineSerializerImpl::AddMaterialInstance(uint64_t material_id,
-                                                    uint64_t instance_id) {
-  IMP_LOG(imp::INFO) << kTag << "add material instance: " << instance_id
-            << " (using material id: " << material_id << ")";
+  ResourceId material_id = GetId(material);
+  ResourceId instance_id = GetId(instance);
   Batch<CommandTypes::AddMaterialInstances>& batch =
       GetOrCreateBatch<CommandTypes::AddMaterialInstances>(
           {}, {material_id, instance_id});
@@ -1707,7 +1699,7 @@ Future<GenericMaterialPtr> SplitEngineSerializerImpl::CreateGenericMaterial(
 MaterialPtr SplitEngineSerializerImpl::CreateCustomMaterial(
     MaterialPtr material) {
   return std::make_unique<split_engine::SplitEngineCustomMaterial>(
-      *this, std::move(material));
+      view_, std::move(material));
 }
 
 Future<absl::Status> SplitEngineSerializerImpl::RequestCustomFilamentMaterial(
@@ -1920,6 +1912,56 @@ void SplitEngineSerializerImpl::ClearCollider(
       GetOrCreateBatch<CommandTypes::RemoveColliders>({entity});
   batch.data[entity] =
       static_cast<android_xr::schemas::ColliderType>(collider_type);
+}
+
+void SplitEngineSerializerImpl::AddTexturePipelineRenderer(
+    utils::Entity entity, const TexturePipelineRendererState& state) {
+  Batch<CommandTypes::AddTexturePipelineRenderers>& batch =
+      GetOrCreateBatch<CommandTypes::AddTexturePipelineRenderers>({entity});
+  batch.data[entity].state = state;
+}
+
+void SplitEngineSerializerImpl::RemoveTexturePipelineRenderer(
+    utils::Entity entity) {
+  Batch<CommandTypes::RemoveTexturePipelineRenderers>& batch =
+      GetOrCreateBatch<CommandTypes::RemoveTexturePipelineRenderers>({entity});
+  batch.data.push_back(entity);
+}
+
+void SplitEngineSerializerImpl::SetTexturePipelineRendererPassesEnabled(
+    utils::Entity entity, const std::vector<bool>& enabled_passes) {
+  Batch<CommandTypes::UpdateTexturePipelineRenderers>& batch =
+      GetOrCreateBatch<CommandTypes::UpdateTexturePipelineRenderers>({entity});
+  auto& info = batch.data[entity];
+  info.enabled_passes = enabled_passes;
+}
+
+void SplitEngineSerializerImpl::SetTexturePipelineRendererProjectionQuad(
+    utils::Entity entity,
+    const std::optional<TexturePipelineRendererProjectionQuad>& quad) {
+  Batch<CommandTypes::UpdateTexturePipelineRenderers>& batch =
+      GetOrCreateBatch<CommandTypes::UpdateTexturePipelineRenderers>({entity});
+  batch.data[entity].projection_quad = quad;
+}
+
+void SplitEngineSerializerImpl::RegisterNamedTexture(
+    const filament::Texture& texture, absl::string_view name) {
+  uint64_t id = GetId(&texture);
+  IMP_LOG(imp::INFO) << kTag << "RegisterNamedTexture - id: " << id
+             << ", name: " << name;
+  // Named texture registration doesn't depend on entities, but might depend on
+  // texture creation if we tracked it. For now, we just batch it.
+  Batch<CommandTypes::RegisterNamedTextures>& batch =
+      GetOrCreateBatch<CommandTypes::RegisterNamedTextures>({}, {id});
+  batch.data[id] = RegisterNamedTextureInfo{std::string(name)};
+}
+
+void SplitEngineSerializerImpl::UnregisterNamedTexture(
+    const filament::Texture& texture) {
+  uint64_t id = GetId(&texture);
+  Batch<CommandTypes::UnregisterNamedTextures>& batch =
+      GetOrCreateBatch<CommandTypes::UnregisterNamedTextures>({}, {id});
+  batch.data.push_back(id);
 }
 
 template <>
@@ -2213,6 +2255,7 @@ void SplitEngineSerializerImpl::Batch<CommandTypes::UpdateNodes>::Serialize(
     }
 
     NodeHandle node = NodeHandle(entry.first);
+
     IMP_LOG(imp::INFO) << kTag << kIndent << ToString(node);
     return android_xr::schemas::CreateUpdateNode(
         fbb, entry.first.getId(), name, PointerFromOptional(update.enabled),
@@ -2528,6 +2571,135 @@ void SplitEngineSerializerImpl::Update(const FrameTime& frame_time) {
 
   // Send all pending Command batches.
   SendAllBatches();
+}
+
+template <>
+void SplitEngineSerializerImpl::Batch<
+    android_xr::schemas::CommandTypes::AddTexturePipelineRenderers>::
+    Serialize(flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
+
+  IMP_LOG(imp::INFO) << kTag << "add or update texture pipeline renderer: count: "
+             << data.size();
+  VectorOffset<android_xr::schemas::AddTexturePipelineRenderer> offset(
+      data.size());
+  absl::c_transform(data, offset.data(), [&fbb](const auto& entry) {
+    const AddTexturePipelineRendererInfo& info = entry.second;
+    auto state_offset = TexturePipelineRendererSchemaFromState(fbb, info.state);
+    if (!state_offset.ok()) {
+      IMP_LOG(imp::FATAL) << kTag << "Failed to serialize texture pipeline renderer: "
+                 << state_offset.status();
+    }
+    return android_xr::schemas::CreateAddTexturePipelineRenderer(
+        fbb, entry.first.getId(), *state_offset);
+  });
+
+  auto command = android_xr::schemas::CreateAddTexturePipelineRenderers(
+      fbb, fbb.CreateVector(offset.data(), offset.size()));
+  CreateCommand(fbb, command);
+}
+
+template <>
+void SplitEngineSerializerImpl::Batch<
+    android_xr::schemas::CommandTypes::RemoveTexturePipelineRenderers>::
+    Serialize(flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
+
+  IMP_LOG(imp::INFO) << kTag
+             << "remove texture pipeline renderer: count: " << data.size();
+  VectorOffset<android_xr::schemas::RemoveTexturePipelineRenderer> offset(
+      data.size());
+  absl::c_transform(data, offset.data(), [&fbb](const utils::Entity& entity) {
+    return android_xr::schemas::CreateRemoveTexturePipelineRenderer(
+        fbb, entity.getId());
+  });
+
+  auto command = android_xr::schemas::CreateRemoveTexturePipelineRenderers(
+      fbb, fbb.CreateVector(offset.data(), offset.size()));
+  CreateCommand(fbb, command);
+}
+
+template <>
+void SplitEngineSerializerImpl::
+    Batch<android_xr::schemas::CommandTypes::RegisterNamedTextures>::Serialize(
+        flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
+
+  IMP_LOG(imp::INFO) << kTag << "register named textures: count: " << data.size();
+  VectorOffset<android_xr::schemas::RegisterNamedTexture> offset(data.size());
+  size_t i = 0;
+  for (const auto& [id, info] : data) {
+    auto name_offset = fbb.CreateString(info.name);
+    offset[i++] =
+        android_xr::schemas::CreateRegisterNamedTexture(fbb, id, name_offset);
+  }
+
+  auto command = android_xr::schemas::CreateRegisterNamedTextures(
+      fbb, fbb.CreateVector(offset.data(), offset.size()));
+  CreateCommand(fbb, command);
+}
+
+template <>
+void SplitEngineSerializerImpl::Batch<
+    android_xr::schemas::CommandTypes::UnregisterNamedTextures>::
+    Serialize(flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
+
+  IMP_LOG(imp::INFO) << kTag << "register named textures: count: " << data.size();
+  VectorOffset<android_xr::schemas::UnregisterNamedTexture> offset(data.size());
+  size_t i = 0;
+  for (uint64_t id : data) {
+    offset[i++] = android_xr::schemas::CreateUnregisterNamedTexture(fbb, id);
+  }
+
+  auto command = android_xr::schemas::CreateUnregisterNamedTextures(
+      fbb, fbb.CreateVector(offset.data(), offset.size()));
+  CreateCommand(fbb, command);
+}
+
+template <>
+void SplitEngineSerializerImpl::Batch<
+    android_xr::schemas::CommandTypes::UpdateTexturePipelineRenderers>::
+    Serialize(flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.empty()) return;
+
+  IMP_LOG(imp::INFO) << kTag
+             << "update texture pipeline renderer: count: " << data.size();
+  VectorOffset<android_xr::schemas::UpdateTexturePipelineRenderer> offset(
+      data.size());
+  absl::c_transform(data, offset.data(), [&fbb](const auto& entry) {
+    const UpdateTexturePipelineRendererInfo& info = entry.second;
+
+    flatbuffers::Offset<flatbuffers::Vector<uint8_t>> enabled_passes_offset;
+    if (info.enabled_passes) {
+      enabled_passes_offset = fbb.CreateVector(*info.enabled_passes);
+    }
+
+    flatbuffers::Offset<android_xr::schemas::ProjectionQuad> quad_offset = 0;
+    if (info.projection_quad) {
+      if (info.projection_quad->has_value()) {
+        const auto& q = **info.projection_quad;
+        auto size = android_xr::schemas::Float2(q.size.x, q.size.y);
+        auto center =
+            android_xr::schemas::Float3(q.center.x, q.center.y, q.center.z);
+        auto rotation = android_xr::schemas::Quatf(q.rotation.x, q.rotation.y,
+                                                   q.rotation.z, q.rotation.w);
+        quad_offset = android_xr::schemas::CreateProjectionQuad(
+            fbb, &size, &center, &rotation);
+      } else {
+        // If projection_quad is set but contains nullopt, it means clear it.
+        // We'll represent a cleared quad by leaving projection_quad null in the
+        // flatbuffer.
+      }
+    }
+
+    return android_xr::schemas::CreateUpdateTexturePipelineRenderer(
+        fbb, entry.first.getId(), enabled_passes_offset, quad_offset);
+  });
+
+  auto command = android_xr::schemas::CreateUpdateTexturePipelineRenderers(
+      fbb, fbb.CreateVector(offset.data(), offset.size()));
+  CreateCommand(fbb, command);
 }
 
 }  // namespace imp::split_engine

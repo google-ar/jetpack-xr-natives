@@ -92,6 +92,9 @@ private:
     VulkanDescriptorSetCache* mDescriptorSetCache;
     VulkanDescriptorSetLayoutCache* mDescriptorSetLayoutCache;
 
+    using SetAndLayout = std::pair<fvkmemory::resource_ptr<VulkanDescriptorSet>,
+            fvkmemory::resource_ptr<VulkanDescriptorSetLayout>>;
+
     struct SetBindingInfo {
         uint8_t binding = 0;
         fvkmemory::resource_ptr<VulkanTexture> image;

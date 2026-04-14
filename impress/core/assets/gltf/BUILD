@@ -54,49 +54,6 @@ cc_library(
 )
 
 cc_library(
-    name = "gltf_behavior_extension",
-    srcs = [
-        "gltf_behavior_extension.cc",
-    ],
-    hdrs = [
-        "gltf_behavior_extension.h",
-    ],
-    copts = imp_google3_copts(),
-    deps = [
-        "//core/animation:property_animator",
-        "//core/animation:property_animator_state_imp_cc_proto",
-        "//core/assets/gltf/behavior:converted_graph",
-        "//core/assets/gltf/behavior:node_converter_constants",
-        "//core/assets/gltf/behavior:node_converters",
-        "//core/async:future",
-        "//core/common:registry",
-        "//core/common:robin_map",
-        "//core/math",
-        "//core/math:arrays_proto_cc",
-        "//core/model",
-        "//core/model:model_data_details",
-        "//core/ncsb",
-        "//core/recipes:recipe_runner",
-        "//core/recipes:recipe_runner_proto_cc",
-        "//core/recipes/language:recipe_graph_cc",
-        "//core/recipes/language:recipe_system",
-        "//core/view:base_view",
-        "//core/view/framework",
-        "//core/view/framework:framework_proto_cc",
-        "//core/view/utils:string_map",
-        "@com_google_absl//absl/container:flat_hash_set",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/strings:string_view",
-        "@com_google_absl//absl/types:span",
-        "@com_google_absl//absl/types:variant",
-        "@com_google_impress//core/common:log",
-    ],
-    alwayslink = 1,
-)
-
-cc_library(
     name = "gltf_interactivity_extension",
     srcs = [
         "gltf_interactivity_extension.cc",

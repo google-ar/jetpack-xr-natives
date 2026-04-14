@@ -20,12 +20,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "core/common/entity_absl_hasher.h"
+#include "core/common/pool_allocator.h"
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_controller.h"
 #include "core/ncsb/node_flag.h"
@@ -104,10 +106,31 @@ class NodeAttachmentManager {
 
   static EntitiesToControllersMap& GetEntitiesToControllersMap();
 
+  template <typename Fn>
+  void ForEachUsingAllocator(Fn&& fn);
+
+  template <typename Fn>
+  void ForEachUsingAllocator(Fn&& fn, NodeFlag filter);
+
+  template <typename Fn>
+  void ForEachWithoutAllocator(Fn&& fn);
+
+  template <typename Fn>
+  void ForEachWithoutAllocator(Fn&& fn, NodeFlag filter);
+
   void TryCompactingNodeControllers();
 
   BaseView* view_;
-  std::vector<std::unique_ptr<NodeController>> node_controllers_;
+  std::optional<PoolAllocator<NodeController, false>> allocator_;
+
+  //////////////////////////////////////////////////////////////////////////////
+  // WARNING: Fields below this point are only used if allocator is disabled.
+  // Be cautious of this when modifying this class.
+  //
+  // TODO: Remove when the allocator flag is removed.
+  //////////////////////////////////////////////////////////////////////////////
+
+  std::vector<NodeController*> node_controllers_;
 
   // Used to track when we are in the middle of iterating over nodes.
   //
@@ -131,6 +154,42 @@ class NodeAttachmentManager {
 
 template <typename Fn>
 void NodeAttachmentManager::ForEach(Fn&& fn) {
+  if (allocator_) {
+    ForEachUsingAllocator(std::forward<Fn>(fn));
+  } else {
+    ForEachWithoutAllocator(std::forward<Fn>(fn));
+  }
+}
+
+template <typename Fn>
+void NodeAttachmentManager::ForEach(Fn&& fn, NodeFlag filter) {
+  if (allocator_) {
+    ForEachUsingAllocator(std::forward<Fn>(fn), filter);
+  } else {
+    ForEachWithoutAllocator(std::forward<Fn>(fn), filter);
+  }
+}
+
+template <typename Fn>
+void NodeAttachmentManager::ForEachUsingAllocator(Fn&& fn) {
+  allocator_->ForEach(
+      [fn = std::forward<Fn>(fn)](NodeController* node_controller) {
+        fn(node_controller->GetNode());
+      });
+}
+
+template <typename Fn>
+void NodeAttachmentManager::ForEachUsingAllocator(Fn&& fn, NodeFlag filter) {
+  allocator_->ForEach(
+      [fn = std::forward<Fn>(fn), filter](NodeController* node_controller) {
+        if ((node_controller->GetFlags() & filter) == filter) {
+          fn(node_controller->GetNode());
+        }
+      });
+}
+
+template <typename Fn>
+void NodeAttachmentManager::ForEachWithoutAllocator(Fn&& fn) {
   iterating_depth_++;
 
   // Iterate using indices so that it is safe to create/destroy nodes during
@@ -138,7 +197,7 @@ void NodeAttachmentManager::ForEach(Fn&& fn) {
   for (std::size_t i = 0; i < node_controllers_.size(); ++i) {
     // If the controller is null, it is implied that the node was destroyed
     // during iteration. After iteration ends, the vector will be compacted.
-    NodeController* node_controller = node_controllers_[i].get();
+    NodeController* node_controller = node_controllers_[i];
     if (node_controller) {
       fn(node_controller->GetNode());
     }
@@ -150,7 +209,7 @@ void NodeAttachmentManager::ForEach(Fn&& fn) {
 }
 
 template <typename Fn>
-void NodeAttachmentManager::ForEach(Fn&& fn, NodeFlag filter) {
+void NodeAttachmentManager::ForEachWithoutAllocator(Fn&& fn, NodeFlag filter) {
   iterating_depth_++;
 
   // Iterate using indices so that it is safe to create/destroy nodes during
@@ -158,7 +217,7 @@ void NodeAttachmentManager::ForEach(Fn&& fn, NodeFlag filter) {
   for (std::size_t i = 0; i < node_controllers_.size(); ++i) {
     // If the controller is null, it is implied that the node was destroyed
     // during iteration. After iteration ends, the vector will be compacted.
-    NodeController* node_controller = node_controllers_[i].get();
+    NodeController* node_controller = node_controllers_[i];
     if (node_controller && (node_controller->GetFlags() & filter) == filter) {
       fn(node_controller->GetNode());
     }

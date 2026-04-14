@@ -56,6 +56,9 @@
 // Now it is safe to include OpenXR headers.
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
+#if IMP_PLATFORM(ANDROID)
+#include <openxr/public/xr_androidx_spatial_interaction.h>
+#endif
 
 // IWYU pragma: end_exports
 

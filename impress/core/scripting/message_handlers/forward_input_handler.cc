@@ -21,10 +21,14 @@
 #include "absl/status/status.h"
 #include "absl/time/time.h"
 #include "core/async/future.h"
+#include "core/common/enum_flags.h"
 #include "core/input/input_manager.h"
 #include "core/input/key_codes.h"
 #include "core/input/keyboard_event.h"
 #include "core/input/keyboard_event.proto.imp.h"
+#include "core/input/pointer_event.h"
+#include "core/input/pointer_event.proto.imp.h"
+#include "core/input/pointer_event_processor.h"
 #include "core/input/wheel_event.proto.imp.h"
 #include "core/scripting/web/web_key_codes.h"
 
@@ -79,7 +83,8 @@ Future<absl::Status> ForwardInputHandler::HandleMessage(
     const WheelEventMessage& message) {
   auto& input_manager = view_.GetInputManager();
   if (auto status = input_manager.ProcessWheelInput(
-          message.delta, absl::Milliseconds(message.elapsed_time));
+          message.delta, message.point,
+          absl::Milliseconds(message.elapsed_time));
       !status.ok()) {
     return Future<absl::Status>(absl::InvalidArgumentError(kProcessError));
   }

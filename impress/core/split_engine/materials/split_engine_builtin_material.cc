@@ -17,7 +17,6 @@
 #include <cstdint>
 #include <memory>
 #include <utility>
-#include <variant>
 #include <vector>
 
 #include "absl/log/check.h"
@@ -26,8 +25,8 @@
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "flatbuffers/verifier.h"
-#include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
+#include "core/common/owned_ptr.h"
 #include "core/common/registry.h"
 #include "core/common/robin_set.h"
 #include "core/common/small_source_location.h"
@@ -37,30 +36,17 @@
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
-#include "core/split_engine/materials/placeholder_material_asset.h"
 #include "core/split_engine/materials/split_engine_builtin_material_factory.h"
+#include "core/split_engine/materials/split_engine_material.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
-#include "core/view/framework/assets/asset_manager.h"
-#include "core/view/framework/assets/material_factory.h"
 #include "core/view/utils/frame_time.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
 namespace imp::split_engine {
 
-Future<OwnedMaterialPtr> SplitEngineBuiltinMaterial::CreatePlaceholderMaterial(
-    BaseView& view) {
-  return view.GetAssetManager()
-      .LoadMaterial(kPlaceholderMaterialCmat)
-      .Then([&view](imp::AssetPtr<imp::MaterialAsset> material_asset) {
-        return OwnedMaterialPtr(
-            view.GetMaterialFactory().CreateMaterial(material_asset));
-      });
-}
-
-Future<PlaceholderOrBuiltInMaterialPtr>
-SplitEngineBuiltinMaterial::RequestBuiltInMaterial(
+Future<OwnedMaterialPtr> SplitEngineBuiltinMaterial::RequestBuiltInMaterial(
     BaseView& view, std::unique_ptr<flatbuffers::FlatBufferBuilder> fbb,
     android_xr::schemas::BuiltInMaterialSpec material_type,
     flatbuffers::Offset<void> spec) {
@@ -79,8 +65,9 @@ SplitEngineBuiltinMaterial::RequestBuiltInMaterial(
     const BridgeId fake_bridge_id = 1;
     return SplitEngineBuiltinMaterialFactory::HandleCreateRequest(
                view, fake_bridge_id, *schema)
-        .Then([](BuiltInMaterialPtr material) {
-          return PlaceholderOrBuiltInMaterialPtr(std::move(material));
+        .Then([](BuiltInMaterialPtr material) -> Future<OwnedMaterialPtr> {
+          return Future<OwnedMaterialPtr>(
+              OwnedMaterialPtr{std::move(material)});
         });
   }
 
@@ -100,8 +87,7 @@ SplitEngineBuiltinMaterial::RequestBuiltInMaterial(
                    built_in_material_request)
             .Then([placeholder_material =
                        std::move(placeholder_material)]() mutable {
-              return PlaceholderOrBuiltInMaterialPtr(
-                  std::move(placeholder_material));
+              return OwnedMaterialPtr(std::move(placeholder_material));
             });
       });
 }
@@ -109,10 +95,9 @@ SplitEngineBuiltinMaterial::RequestBuiltInMaterial(
 SplitEngineBuiltinMaterial::SplitEngineBuiltinMaterial(
     BaseView& view,
     android_xr::schemas::BuiltInMaterialParameters parameters_type,
-    PlaceholderOrBuiltInMaterialPtr material)
-    : view_(view),
-      parameters_type_(parameters_type),
-      material_(std::move(material)) {}
+    OwnedMaterialPtr material)
+    : SplitEngineMaterial(view, std::move(material)),
+      parameters_type_(parameters_type) {}
 
 SplitEngineBuiltinMaterial::~SplitEngineBuiltinMaterial() {
   // Subclasses should override and call Cleanup().
@@ -124,47 +109,52 @@ SplitEngineBuiltinMaterial::~SplitEngineBuiltinMaterial() {
 }
 
 void SplitEngineBuiltinMaterial::Cleanup() {
-  SplitEngineMaterialUpdater& updater =
-      view_.GetRegistry().GetOrCreate<SplitEngineMaterialUpdater>(view_);
+  SplitEngineBuiltinMaterialUpdater& updater =
+      view_.GetRegistry().GetOrCreate<SplitEngineBuiltinMaterialUpdater>(view_);
   updater.RemoveMaterial(this);
-  material_ = {};
+  if (material_) {
+    if (SplitEngineSerializer* serializer = view_.GetSplitEngineSerializer()) {
+      serializer->RemoveMaterialInstance(GetFilamentMaterialInstance());
+    }
+    material_.Reset();
+  }
   cleanup_called_ = true;
 }
 
 BorrowedMaterialPtr SplitEngineBuiltinMaterial::GetMaterial(
     SmallSourceLocation loc) const {
-  if (std::holds_alternative<OwnedMaterialPtr>(material_)) {
-    return std::get<OwnedMaterialPtr>(material_).Borrow(loc);
-  } else {
-    return std::get<BuiltInMaterialPtr>(material_)->GetMaterial(loc);
-  }
+  return material_.Borrow(loc);
 }
 
 void SplitEngineBuiltinMaterial::MarkParametersDirty(bool dirty) const {
-  if (dirty && std::holds_alternative<BuiltInMaterialPtr>(material_)) {
-    // If running in "local mode", update the parameters immediately.
-    UpdateParameters();
-    return;
+  if (view_.AreSplitEngineMaterialsInLocalMode()) {
+    if (dirty) {
+      // If running in "local mode", update the parameters immediately.
+      UpdateParameters();
+      return;
+    }
+  } else {
+    SplitEngineBuiltinMaterialUpdater& updater =
+        view_.GetRegistry().GetOrCreate<SplitEngineBuiltinMaterialUpdater>(
+            view_);
+    updater.MarkParametersDirty(this, dirty);
   }
-  SplitEngineMaterialUpdater& updater =
-      view_.GetRegistry().GetOrCreate<SplitEngineMaterialUpdater>(view_);
-  updater.MarkParametersDirty(this, dirty);
 }
 
 bool SplitEngineBuiltinMaterial::AreParametersDirty() const {
-  SplitEngineMaterialUpdater& updater =
-      view_.GetRegistry().GetOrCreate<SplitEngineMaterialUpdater>(view_);
+  SplitEngineBuiltinMaterialUpdater& updater =
+      view_.GetRegistry().GetOrCreate<SplitEngineBuiltinMaterialUpdater>(view_);
   return updater.AreParametersDirty(this);
 }
 
 void SplitEngineBuiltinMaterial::UpdateParameters() const {
-  bool local_mode = view_.AreSplitEngineMaterialsInLocalMode();
-  BuiltInTextureParameterCreator texture_parameter_creator(local_mode);
+  const bool kUsingLocalMode = view_.AreSplitEngineMaterialsInLocalMode();
+  BuiltInTextureParameterCreator texture_parameter_creator(kUsingLocalMode);
   auto serialize_func = [this, &texture_parameter_creator](
                             flatbuffers::FlatBufferBuilder& fbb) mutable {
     return SerializeParameters(fbb, texture_parameter_creator);
   };
-  if (local_mode) {
+  if (kUsingLocalMode) {
     // In local mode, the material is the real, locally-created built-in
     // material. The material will be serialized as a raw material, which
     // requires that the Filament version on device matches the app version.
@@ -182,8 +172,7 @@ void SplitEngineBuiltinMaterial::UpdateParameters() const {
         built_in_material_instance_parameters =
             android_xr::schemas::CreateBuiltInMaterialInstanceParameters(
                 fbb,
-                SplitEngineSerializer::GetId(
-                    GetMaterial()->GetFilamentMaterialInstance()),
+                SplitEngineSerializer::GetId(GetFilamentMaterialInstance()),
                 parameters_type_, serialize_func(fbb));
     std::vector<uint8_t> data =
         SerializeTable(fbb, built_in_material_instance_parameters);
@@ -193,49 +182,43 @@ void SplitEngineBuiltinMaterial::UpdateParameters() const {
             data.data());
     flatbuffers::Verifier verifier(data.data(), data.size());
 
-    // TODO: Remove this check once GenericMaterial stops using
-    // remote material even in local mode.
-    if (std::holds_alternative<BuiltInMaterialPtr>(material_)) {
-      if (absl::Status status =
-              std::get<BuiltInMaterialPtr>(material_)->SetParameters(
-                  verifier, *schema, texture_borrower);
-          !status.ok()) {
-        IMP_LOG(imp::FATAL) << "Failed to set parameters on built-in material: "
-                   << status;
-      }
-    } else {
-      view_.GetSplitEngineSerializer()->SetBuiltInMaterialParameters(
-          GetMaterial()->GetFilamentMaterialInstance(),
-          static_cast<BuiltInMaterialParameters>(parameters_type_),
-          std::move(serialize_func));
+    // In local mode, the material_ is an OwnedMaterialPtr holding a
+    // BuiltInMaterial, so this cast is safe.
+    BorrowedPtr<BuiltInMaterial> local_material = BorrowedPtr<BuiltInMaterial>(
+        material_.Borrow(SmallSourceLocation::Current()));
+    if (absl::Status status =
+            local_material->SetParameters(verifier, *schema, texture_borrower);
+        !status.ok()) {
+      IMP_LOG(imp::FATAL) << "Failed to set parameters on built-in material: " << status;
     }
   } else {
     // In Split Engine built-in material mode, the OwnedMaterialPtr is a
     // placeholder material. Serialization of the material parameters happens
     // through the built-in schema to ensure safety & backwards compatibility.
     view_.GetSplitEngineSerializer()->SetBuiltInMaterialParameters(
-        GetMaterial()->GetFilamentMaterialInstance(),
+        GetFilamentMaterialInstance(),
         static_cast<BuiltInMaterialParameters>(parameters_type_),
         std::move(serialize_func));
   }
 }
 
-SplitEngineMaterialUpdater::SplitEngineMaterialUpdater(BaseView& view)
+SplitEngineBuiltinMaterialUpdater::SplitEngineBuiltinMaterialUpdater(
+    BaseView& view)
     : Updater(view) {}
 
-void SplitEngineMaterialUpdater::Update(const FrameTime& frame_time) {
+void SplitEngineBuiltinMaterialUpdater::Update(const FrameTime& frame_time) {
   for (const SplitEngineBuiltinMaterial* material : dirty_) {
     material->UpdateParameters();
   }
   dirty_.clear();
 }
 
-void SplitEngineMaterialUpdater::RemoveMaterial(
-    SplitEngineBuiltinMaterial* material) {
+void SplitEngineBuiltinMaterialUpdater::RemoveMaterial(
+    const SplitEngineBuiltinMaterial* material) {
   dirty_.erase(material);
 }
 
-void SplitEngineMaterialUpdater::MarkParametersDirty(
+void SplitEngineBuiltinMaterialUpdater::MarkParametersDirty(
     const SplitEngineBuiltinMaterial* material, bool dirty) {
   if (dirty) {
     dirty_.insert(material);
@@ -244,7 +227,7 @@ void SplitEngineMaterialUpdater::MarkParametersDirty(
   }
 }
 
-bool SplitEngineMaterialUpdater::AreParametersDirty(
+bool SplitEngineBuiltinMaterialUpdater::AreParametersDirty(
     const SplitEngineBuiltinMaterial* material) const {
   return dirty_.contains(material);
 }

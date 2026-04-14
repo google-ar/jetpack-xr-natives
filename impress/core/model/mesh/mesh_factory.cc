@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include "absl/base/attributes.h"
 #include "core/common/log.h"
 #include "absl/memory/memory.h"
 #include "absl/strings/str_format.h"
@@ -1365,6 +1366,7 @@ MeshPtr MeshFactory::CreateCone(CreateConeSettings settings,
   return mesh;
 }
 
+ABSL_DEPRECATED("Use CreatePanel instead.")
 MeshPtr MeshFactory::CreateQuad(CreateQuadSettings settings,
                                 MeshDataStorageMode data_mode) {
   const VertexFormat format =
@@ -1905,17 +1907,6 @@ uint2 CalculateCornerRadiusSkipVertices(float corner_radius, float2 size,
           corner_radius / size.y * resolution.y};
 }
 
-MeshPtr MeshFactory::CreateHighPolyQuad(CreateQuadSettings settings,
-                                        size_t resolution_width,
-                                        size_t resolution_height,
-                                        std::optional<float> radius,
-                                        float3 scale2,
-                                        MeshDataStorageMode data_mode) {
-  settings.resolution = resolution_width;
-  settings.radius = radius;
-  return CreatePanel(settings, scale2, data_mode);
-}
-
 // Creates a flat or curved panel with support for corner radius.
 // By default, panel is created in the x/y axis pointing along +z.
 MeshPtr MeshFactory::CreatePanel(CreateQuadSettings settings, float3 scale,
@@ -1954,7 +1945,9 @@ MeshPtr MeshFactory::CreatePanel(CreateQuadSettings settings, float3 scale,
 
   ProceduralMeshBuilder mesh_builder(
       vertex_count, triangle_count,
-      settings.color.has_value() ? kVertexFormatWithColor : kVertexFormat,
+      settings.is_position_only    ? kVertexFormatPositionOnly
+      : settings.color.has_value() ? kVertexFormatWithColor
+                                   : kVertexFormat,
       /*is_smooth*/ false, settings.color);
 
   AabbCalculator aabb;
@@ -2157,15 +2150,24 @@ MeshPtr MeshFactory::CreateByMovingMeshData(
 
 OwnedMeshPtr MeshFactory::CreateSubMesh(BorrowedMeshPtr parent_mesh,
                                         int index_render_offset,
-                                        int index_render_count,
-                                        const Box& aabb) {
+                                        int index_render_count, const Box& aabb,
+                                        PrimitiveType primitive_type) {
   MeshRange parent_mesh_data_range = parent_mesh->GetMeshDataRange();
   int32_t parent_mesh_index_max =
       parent_mesh_data_range.offset + parent_mesh_data_range.count;
   int32_t offset = fmin(fmax(index_render_offset, 0), parent_mesh_index_max);
   int32_t count = fmin(index_render_count, parent_mesh_index_max - offset);
 
-  return OwnedMeshPtr(new Mesh(parent_mesh, offset, count, aabb));
+  return OwnedMeshPtr(
+      new Mesh(parent_mesh, offset, count, aabb, primitive_type));
+}
+
+OwnedMeshPtr MeshFactory::CreateSubMesh(BorrowedMeshPtr parent_mesh,
+                                        int index_render_offset,
+                                        int index_render_count,
+                                        const Box& aabb) {
+  return CreateSubMesh(parent_mesh, index_render_offset, index_render_count,
+                       aabb, parent_mesh->GetPrimitiveType());
 }
 
 filament::Engine* MeshFactory::GetEngine() {

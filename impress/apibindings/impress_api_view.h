@@ -40,6 +40,7 @@ class SkyboxManager;
 class StereoSurfaceManager;
 class TextureManager;
 class WaterMaterialManager;
+class MeshManager;
 class NodeManager;
 
 // Implements an Impress View for the ImpressJava API used by Jetpack XR.
@@ -86,6 +87,7 @@ class ImpressApiView : public View {
   GenericMaterialManager& GetGenericMaterialManager() {
     return *generic_material_manager_;
   }
+  MeshManager& GetMeshManager() { return *mesh_manager_; }
   NodeManager& GetNodeManager() { return *node_manager_; }
 
   // Accessors for maps, allowing them to collaborate (e.g., for
@@ -117,6 +119,7 @@ class ImpressApiView : public View {
   std::unique_ptr<TextureManager> texture_manager_;
   std::unique_ptr<WaterMaterialManager> water_material_manager_;
   std::unique_ptr<GenericMaterialManager> generic_material_manager_;
+  std::unique_ptr<MeshManager> mesh_manager_;
   std::unique_ptr<NodeManager> node_manager_;
   absl::flat_hash_map<std::intptr_t, OwnedTexturePtr> bindings_texture_map_;
   absl::flat_hash_map<std::intptr_t,

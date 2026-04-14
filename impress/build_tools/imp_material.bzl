@@ -31,6 +31,7 @@ def imp_material(
         }),
         defines = [],
         force_feature_level_zero = False,
+        include_source_mat = None,
         **kwargs):
     """Creates a binary material asset
 
@@ -55,6 +56,9 @@ def imp_material(
       visibility: The visibility attribute on a rule controls whether the rule can be used by other packages.
       variant_filter: The list of variants to filter out of compiled materials (for size savings)
       defines: Defines passed through to the material compiler that can be used from a .mat file.
+      force_feature_level_zero: Optional. Whether to force only ESSL 1.0 materials to be compiled.
+      include_source_mat: Optional. Whether to include the source code in the material. The
+           default (None) allows this rule to include the source in experimental builds.
       **kwargs: Other parameters to pass to the material compiler. ("optimization" and
         "enable_metal_postprocessing" are typically passed this way.)
     """
@@ -68,5 +72,6 @@ def imp_material(
         variant_filter = variant_filter,
         defines = defines,
         force_feature_level_zero = force_feature_level_zero,
+        include_source_mat = include_source_mat,
         **kwargs
     )

@@ -200,21 +200,6 @@ Machine::OptionalState Update(const imp::FrameTime& delta_time,
         kSmoothFastResolvingPositionParameters);
   }
 
-  // If inactive, check if the targets are reached before returning to idle.
-  if (!state.is_active && state.rig_local_position.IsAtTarget()) {
-    if (footprint->IsSnapMode(SnapMode::kSnappingToPlane) ||
-        footprint->IsSnapMode(SnapMode::kSnappable)) {
-      owner.PlayDropSound();
-      footprint->SetSnapMode(SnapMode::kSnappedToPlane);
-      // Keep the model selected so the menu panel remains visible.
-      if (owner.IsTalkbackEnabled()) {
-        owner.GetUiEventListener()->OnModelSelected(true);
-      }
-      footprint->SetColliderEnabled(true);
-      return Machine::OptionalState{SetupIdleState()};
-    }
-    return Machine::OptionalState{SetupIdleState()};
-  }
 
   return {};
 }
@@ -281,6 +266,21 @@ Machine::OptionalState HandleInput(Translation& state, const imp::Ray& ray,
         footprint->SetColliderEnabled(is_footprint_enabled);
       }
     }
+    state.rig_local_position.SetTarget(owner.GetRigPosition().Get());
+    owner.GetRigPosition().SetTarget(owner.GetRigPosition().Get());
+    imp::ComponentHandle<svxr::Footprint> footprint = owner.GetFootprint();
+    if (footprint->IsSnapMode(SnapMode::kSnappingToPlane) ||
+        footprint->IsSnapMode(SnapMode::kSnappable)) {
+      owner.PlayDropSound();
+      footprint->SetSnapMode(SnapMode::kSnappedToPlane);
+      // Keep the model selected so the menu panel remains visible.
+      if (owner.IsTalkbackEnabled()) {
+        owner.GetUiEventListener()->OnModelSelected(true);
+      }
+      footprint->SetColliderEnabled(true);
+      return Machine::OptionalState{SetupIdleState()};
+    }
+    return Machine::OptionalState{SetupIdleState()};
   }
 
   if (!input_flags.Test(InputFlag::kIsDown)) {

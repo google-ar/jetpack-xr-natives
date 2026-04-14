@@ -22,6 +22,7 @@
 
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
+#include "core/materials/material.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
 #include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "imp.h"
@@ -52,9 +53,7 @@ class SVXRFootprintMaterial
           texture_parameter_creator) const override;
 
  private:
-  SVXRFootprintMaterial(
-      imp::BaseView& view,
-      imp::split_engine::PlaceholderOrBuiltInMaterialPtr material);
+  SVXRFootprintMaterial(imp::BaseView& view, imp::OwnedMaterialPtr material);
 
   std::optional<android_xr::schemas::Float3> primary_touch_point_;
   std::optional<android_xr::schemas::Float2> touch_control_;

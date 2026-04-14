@@ -47,7 +47,6 @@ def imp_generate_android_binary(
         resource_files,
         java_deps,
         native_lib_deps,
-        multidex,
         jni_binary_name = "",
         nocompress_extensions = None,
         proguard_generate_mapping = None,
@@ -69,7 +68,6 @@ def imp_generate_android_binary(
       resource_files: App resources for the resource_files attribute of android_binary.
       java_deps: Java dependencies passed through to the android_binary rule.
       native_lib_deps: Additional native .so deps to include in the Android apk.
-      multidex: Multidex setting passed through to the android_binary rule.
       jni_binary_name: (Optional) The name of the binary generated from the jni library if it is
         overidden.
       nocompress_extensions: (Optional) A list of file extensions that should not be compressed in
@@ -121,7 +119,6 @@ def imp_generate_android_binary(
             manifest_values = manifest_values_copy,
             resource_files = [resource_files],
             deps = [":" + jni_library] + IMP_ANDROID_DEPS + java_deps + activity_deps + native_lib_deps + RESOURCES_DEPS,
-            multidex = multidex,
             proguard_generate_mapping = proguard_generate_mapping if proguard_generate_mapping else False,
             proguard_specs = proguard_specs + ["@com_google_impress//build_tools/platforms/android:proguard.pgcfg"] if proguard_specs else [],
         )

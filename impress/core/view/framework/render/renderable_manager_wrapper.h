@@ -92,6 +92,8 @@ class RenderableManagerWrapper : public BaseRenderableManager {
   void SetMorphWeights(filament::RenderableManager::Instance instance,
                        float const* weights, size_t count,
                        size_t offset) override;
+  bool IsCullingEnabled(
+      filament::RenderableManager::Instance instance) const override;
 
   // Adds renderable components to entities using a builder pattern.
   class Builder : public BaseRenderableManager::Builder {

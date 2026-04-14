@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-syntax = "proto3";
+edition = "2024";
 
 package imp;
 
@@ -25,38 +25,56 @@ import "core/proto/imp.proto";
 // created and emitted by a ParticleEmitter.
 // Next ID: 9
 message ParticleConfig {
-  // The length of time, in seconds, that a particle will remain active.
-  optional float lifetime_in_seconds = 1;
+  // Rotation of the particle
+  Quatf initial_rotation = 1 [(imp.msg_default) = "{0.0f, 0.0f, 0.0f, 1.0f}"];
 
-  // If true, the particle will orient itself to always face the camera.
-  optional bool billboard = 2;
+  // Size of the particle.
+  Float3 initial_scale = 2 [(imp.msg_default) = "{1.0f, 1.0f, 1.0f}"];
+
+  // The gltf asset to use as the visual representation of the particle.
+  // This field is required for emitters configured with the
+  // PARTICLE_RENDERER_NODE renderer.
+  string gltf_asset = 3 [default = ""];
+
+  // The length of time, in seconds, that a particle will remain active.
+  float lifetime_in_seconds = 4 [default = 1.0];
+
+  // If true, particles will orient themselves to always face the camera.
+  bool billboard = 5 [default = false];
 
   // The base alpha value to apply to the particle. This only applies to
   // particles that consist of a color, or a texture with an alpha channel.
-  optional float alpha = 3;
-
-  // The base scale value to apply to the particle.
-  Float3 scale = 4 [(optional_type) = ABSL_OPTIONAL];
+  float initial_alpha = 6 [default = 1.0];
 
   // The initial velocity of the particle.
-  Float3 velocity = 5 [(optional_type) = ABSL_OPTIONAL];
+  Float3 initial_velocity = 7 [(imp.msg_default) = "{0.0f, 0.0f, 0.0f}"];
 
   // A constant acceleration to apply to the particle velocity over time.
   // Common examples are gravity and convection.
-  Float3 acceleration = 6 [(optional_type) = ABSL_OPTIONAL];
+  Float3 acceleration = 8 [(imp.msg_default) = "{0.0f, 0.0f, 0.0f}"];
+}
 
-  // The gltf asset to use as the visual representation of the particle.
-  // While optional, this field is required for emitters configured with the
-  // PARTICLE_RENDERER_NODE renderer.
-  optional string gltf_asset = 7;
+// Configuration information that describes how an emitter should behave.
+// Next ID: 5
+message EmitterConfig {
+  // The length of time, in seconds, that the emitter should remain active.
+  // Must not be negative.
+  float duration_in_seconds = 1 [default = 0.0];
 
-  // The initial rotation of the particle.
-  Quatf rotation = 8 [(optional_type) = ABSL_OPTIONAL];
+  // Indicates the emitter will restart after the duration has elapased?
+  bool loop = 2 [default = false];
+
+  // The maximum number of particles that may be active at any given time.
+  // This value must be greater than 0 or no particles will be emitted.
+  int32 max_particles = 3 [default = 1];
+
+  // Number of particles to emit (on average) per second.
+  float particles_per_second = 4 [default = 1.0];
 }
 
 // Configuration information that describes how particles should be created and
 // by a ParticleEmitter.
-// Next ID: 7
+// Next ID: 4
 message ParticleEmitterState {
   // Definition of the different rendering pathways available for particles.
   enum ParticleRenderer {
@@ -69,24 +87,13 @@ message ParticleEmitterState {
     PARTICLE_RENDERER_NODE = 1;
   }
 
-  // The length of time, in seconds, that the emitter should remain active.
-  // Must not be negative.
-  float duration_in_seconds = 1;
-
-  // Indicates the emitter will restart after the duration has elapased?
-  bool loop = 2;
-
-  // The maximum number of particles that may be active at any given time.
-  // This value must be greater than 0 or no particles will be emitted.
-  int32 max_particles = 3;
-
-  // Number of particles to emit (on average) per second.
-  float particles_per_second = 4;
-
   // Defines how the particles will be rendered, see the ParticleRenderer
   // definition above for more details.
-  ParticleRenderer renderer = 5;
+  ParticleRenderer renderer = 1 [default = PARTICLE_RENDERER_DRAW_DEFAULT];
+
+  // Configuration for how the emitter should behave.
+  EmitterConfig emitter_config = 2;
 
   // Configuration for the particle to emit.
-  ParticleConfig particle_config = 6;
+  ParticleConfig particle_config = 3;
 }

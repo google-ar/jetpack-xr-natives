@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "absl/base/attributes.h"
@@ -74,6 +75,9 @@ class GenericMaterialImpl : public GenericMaterial {
   ~GenericMaterialImpl();
 
   GenericMaterialPtr Duplicate() const override;
+
+  const std::string& GetName() const override;
+  void SetName(absl::string_view name) override;
 
   absl::Status AssignTexturesAndParams(
       const GenericMaterialParameters& generic_material_parameters,

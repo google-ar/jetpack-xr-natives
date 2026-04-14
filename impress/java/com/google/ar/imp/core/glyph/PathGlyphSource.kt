@@ -47,16 +47,20 @@ private class GlyphCache(cacheSizeBytes: Int) {
       protected override fun sizeOf(key: Int, value: Glyph) = value.sizeBytes
     }
 
-  operator fun get(glyphId: Int) = glyphs.get(glyphId)
+  @Synchronized operator fun get(glyphId: Int) = glyphs.get(glyphId)
 
+  @Synchronized
   fun acquireString(glyphId: Int, string: String) {
     glyphs.getOrPut(glyphId) { ReferenceCountedString(string) }.referenceCount++
   }
 
-  inline fun acquireGlyph(glyphId: Int, defaultValue: () -> Glyph) {
-    glyphs.getOrPut(glyphId) { orphanedGlyphs.remove(glyphId) ?: defaultValue() }.referenceCount++
+  fun acquireGlyph(glyphId: Int, defaultValue: () -> Glyph) {
+    synchronized(this) {
+      glyphs.getOrPut(glyphId) { orphanedGlyphs.remove(glyphId) ?: defaultValue() }.referenceCount++
+    }
   }
 
+  @Synchronized
   fun release(glyphId: Int) {
     val glyph = glyphs[glyphId] ?: throw IllegalStateException(PathGlyphSource.NULL_GLYPH_MESSAGE)
 
@@ -69,13 +73,29 @@ private class GlyphCache(cacheSizeBytes: Int) {
   }
 }
 
+private object SharedGlyphCache {
+  private var instance: GlyphCache? = null
+  private val lock = Any()
+
+  fun get(cacheSizeBytes: Int): GlyphCache {
+    synchronized(lock) {
+      var current = instance
+      if (current == null) {
+        current = GlyphCache(cacheSizeBytes)
+        instance = current
+      }
+      return current
+    }
+  }
+}
+
 /**
  * PathGlyphSource provides a workaround for Android API levels 30 and below, in which there are
  * extremely limited options for directly interacting with fonts on a per-glyph basis. It operates
  * by splitting the result of [Paint.getTextPath] along the glyph boundaries reported by
  * [Paint.getTextWidths].
  */
-internal class PathGlyphSource(cacheSizeBytes: Int) : IGlyphSource {
+internal class PathGlyphSource(cacheSizeBytes: Int, useLocalCache: Boolean = false) : IGlyphSource {
   companion object {
     const val NULL_GLYPH_MESSAGE = "Attempted to reference a non-existent glyph"
     const val UNKNOWN_GLYPH_MESSAGE = "Unexpected data type in glyph store"
@@ -103,7 +123,9 @@ internal class PathGlyphSource(cacheSizeBytes: Int) : IGlyphSource {
     internal const val GLYPH_IS_UTF32_MASK = 1 shl 31
   }
 
-  private val glyphs = GlyphCache(cacheSizeBytes)
+  // Use the SharedGlyphCache when not forcing individual instances
+  private val glyphs =
+    if (useLocalCache) GlyphCache(cacheSizeBytes) else SharedGlyphCache.get(cacheSizeBytes)
 
   // Reusable buffers.
   private val tempPath = Path()

@@ -96,6 +96,9 @@ class SceneViewerComponent : public imp::Component,
   void SetModelScale(float model_scale) override;
   void RequestUpdateRigPositionFromCamera(
       const imp::SmoothParameters& parameters) override;
+  svxr::AxisBounds GetModelLogScaleLimits() override;
+  float ConstrainElastically(float value, svxr::AxisBounds range,
+                             float scale) override;
   svxr::UiEventListener* GetUiEventListener() override;
 
   // Translation State Dependencies
@@ -105,6 +108,8 @@ class SceneViewerComponent : public imp::Component,
       imp::float3 target_position, imp::float3 rig_to_target) override;
   void PlayDropSound() override;
   void PlayLiftSound() override;
+  void PlayGrabSound() override;
+  void PlayReleaseSound() override;
   bool IsPassthrough() override;
 
   // LINT.ThenChange(//depot/google3/third_party/impress/extensions/sceneviewerxr/ux/interaction_states_tests/interaction_states_test_fixture.h)
@@ -139,18 +144,14 @@ class SceneViewerComponent : public imp::Component,
     kHomeEnvironment,
   };
 
-  struct AxisBounds {
-    float min;
-    float max;
-  };
-  static constexpr struct AxisBounds kEnvironmentYBounds =
-      AxisBounds{-2.0f, 5.0f};
-  static constexpr struct AxisBounds kPassthroughYBounds =
-      AxisBounds{-10.0f, 6.0f};
-  static constexpr struct AxisBounds kEnvironmentXZBounds =
-      AxisBounds{.001f, 2.75f};
-  static constexpr struct AxisBounds kPassthroughXZBounds =
-      AxisBounds{.001f, 10.0f};
+  static constexpr struct svxr::AxisBounds kEnvironmentYBounds =
+      svxr::AxisBounds(-2.0f, 5.0f);
+  static constexpr struct svxr::AxisBounds kPassthroughYBounds =
+      svxr::AxisBounds(-10.0f, 6.0f);
+  static constexpr struct svxr::AxisBounds kEnvironmentXZBounds =
+      svxr::AxisBounds(.001f, 2.75f);
+  static constexpr struct svxr::AxisBounds kPassthroughXZBounds =
+      svxr::AxisBounds(.001f, 10.0f);
 
   // Processes SplitEngineInputEventProto for input.
   void HandleInputEvent(const android_xr::SplitEngineInputEvent& event,
@@ -162,9 +163,6 @@ class SceneViewerComponent : public imp::Component,
                            imp::Flags<svxr::InputFlag> input_flags);
 
   // Non-trivial update methods.
-  OptionalInteractionState UpdateOneHandedScale(
-      svxr::interaction_states::OneHandedScale& state,
-      const imp::FrameTime& delta_time);
   OptionalInteractionState UpdateTwoHandedScale(
       svxr::interaction_states::TwoHandedScale& state,
       const imp::FrameTime& delta_time);
@@ -178,9 +176,6 @@ class SceneViewerComponent : public imp::Component,
   // Input handling methods
   OptionalInteractionState HandleInitializedInput(
       svxr::interaction_states::Initialized& state);
-  OptionalInteractionState HandleOneHandedScaleInput(
-      svxr::interaction_states::OneHandedScale& state, const imp::Ray& ray,
-      imp::NodeHandle receiver, imp::Flags<svxr::InputFlag> input_flags);
   OptionalInteractionState HandleTwoHandedScaleInput(
       svxr::interaction_states::TwoHandedScale& state, const imp::Ray& ray,
       imp::NodeHandle receiver, const imp::float3& hit_position,
@@ -208,7 +203,7 @@ class SceneViewerComponent : public imp::Component,
   // The unit offset from the authored origin to the rig-relative origin.
   imp::float3 model_offset_ = imp::float3(0.0f);
   // The lower/upper bounds for the model scale.
-  AxisBounds model_log_scale_limits_ = AxisBounds{0.0f, 0.0f};
+  svxr::AxisBounds model_log_scale_limits_ = svxr::AxisBounds(0.0f, 0.0f);
   // A controller for the model scale.
   imp::Smooth<float> model_log_scale_;
   // A controller for the rig position.
@@ -245,6 +240,8 @@ class SceneViewerComponent : public imp::Component,
 
   imp::ComponentHandle<imp::AudioPlayer> drop_audio_player_;
   imp::ComponentHandle<imp::AudioPlayer> lift_audio_player_;
+  imp::ComponentHandle<imp::AudioPlayer> grab_audio_player_;
+  imp::ComponentHandle<imp::AudioPlayer> release_audio_player_;
   bool dropped_ = false;  // Indicates if the model was dropped onto a plane.
 
   bool DoesRayIntersectModel(imp::Ray ray);
@@ -282,7 +279,6 @@ class SceneViewerComponent : public imp::Component,
   bool FootprintReceivesInput();
   void CreateFootprint(const imp::FrameTime& delta_time);
   imp::float3 GetRigToCameraXz();
-  float ConstrainElastically(float value, AxisBounds range, float scale);
 
   void ConstrainRigPosition();
   void PauseAnimationAndSound();

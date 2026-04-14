@@ -72,18 +72,6 @@ cc_binary(
     ],
 )
 
-cc_library(
-    name = "stub",
-    testonly = 1,
-    srcs = ["openxr_stub.cc"],
-    defines = DEFINES,
-    deps = JNI_DEPS + [
-        "@abseil-cpp//absl/container:flat_hash_map",
-        "@abseil-cpp//absl/strings:string_view",
-    ],
-    alwayslink = 1,
-)
-
 cc_binary(
     name = "libandroidx.xr.arcore.openxr.test.so",
     testonly = 1,
@@ -93,7 +81,7 @@ cc_binary(
         "-lbinder_ndk",
     ],
     linkshared = 1,
-    deps = JNI_DEPS + [":stub"],
+    deps = JNI_DEPS + ["//common:stub"],
 )
 
 cc_library(

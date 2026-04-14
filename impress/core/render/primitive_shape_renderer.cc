@@ -25,8 +25,9 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "absl/types/variant.h"
-#include "filament/filament/include/filament/RenderableManager.h"
 #include "core/async/future.h"
+#include "core/config.h"
+#include "core/geometry/shapes/box.h"
 #include "core/materials/material.h"
 #include "core/math/almost_equal.h"
 #include "core/model/mesh/mesh.h"
@@ -40,7 +41,18 @@
 #include "core/render/primitive_shape_type.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/material_factory.h"
+#include "core/view/framework/collision/box_collider.h"
+#include "core/view/framework/collision/capsule_collider.h"
+#include "core/view/framework/collision/cone_collider.h"
+#include "core/view/framework/collision/cylinder_collider.h"
+#include "core/view/framework/collision/sphere_collider.h"
 #include "core/view/framework/render/material_definition.proto.imp.h"
+
+#if IMP_RUNTIME(DEV)
+#include "absl/strings/string_view.h"
+#include "core/common/hash.h"
+#include "core/ncsb/scene_metadata.h"
+#endif  // IMP_RUNTIME(DEV)
 
 namespace imp {
 namespace {
@@ -467,6 +479,103 @@ absl::Status PrimitiveShapeRenderer::SetBlendOrder(
     uint16_t blend_order, MeshRenderer::BlendOrderMode mode) {
   mesh_renderer_->SetBlendOrder(blend_order, mode);
   return absl::OkStatus();
+}
+
+Future<NodeHandle> PrimitiveShapeRenderer::CreatePrimitive(
+    BaseView& view, PrimitiveShapeType shape_type) {
+  NodeHandle node = view.CreateNode();
+  PrimitiveShapeRendererState state;
+
+  switch (shape_type) {
+    case PrimitiveShapeType::kQuad:
+      state.primitive.mesh = PrimitiveShapeRendererState::QuadMesh();
+      node->AddComponent<BoxCollider>(
+          Box{.center = {0.0f, 0.0f, 0.0f}, .halfExtent = {1.0f, 1.0f, 0.05f}});
+      break;
+    case PrimitiveShapeType::kBox:
+      state.primitive.mesh = PrimitiveShapeRendererState::BoxMesh();
+      node->AddComponent<BoxCollider>(
+          Box{.center = {0.0f, 0.0f, 0.0f}, .halfExtent = {0.5f, 0.5f, 0.5f}});
+      break;
+    case PrimitiveShapeType::kSphere:
+      state.primitive.mesh = PrimitiveShapeRendererState::SphereMesh();
+      node->AddComponent<SphereCollider>();
+      break;
+    case PrimitiveShapeType::kCapsule:
+      state.primitive.mesh = PrimitiveShapeRendererState::CapsuleMesh();
+      node->AddComponent<CapsuleCollider>();
+      break;
+    case PrimitiveShapeType::kCylinder:
+      state.primitive.mesh = PrimitiveShapeRendererState::CylinderMesh();
+      node->AddComponent<CylinderCollider>();
+      break;
+    case PrimitiveShapeType::kCone:
+      state.primitive.mesh = PrimitiveShapeRendererState::ConeMesh();
+      node->AddComponent<ConeCollider>();
+      break;
+    default:
+      return Future<NodeHandle>(
+          absl::InvalidArgumentError("Unsupported shape type."));
+  }
+
+#if IMP_RUNTIME(DEV)
+  return node->AddComponentWithState<PrimitiveShapeRenderer>(state).Then(
+      [node, shape_type](
+          absl::StatusOr<ComponentHandle<PrimitiveShapeRenderer>> component)
+          -> absl::StatusOr<NodeHandle> {
+        if (!component.ok()) {
+          return component.status();
+        }
+
+        //  In dev mode, add SceneMetadata and mark as authored.
+        //  Required for editing the serialized values of these components.
+        ComponentHandle<SceneMetadata> metadata =
+            node->GetOrAddComponent<SceneMetadata>();
+        metadata->SetComponentAuthored(
+            PrimitiveShapeRenderer::IsfInfo::kTypeUrlHash, true);
+        HashValue colliderHash = 0;
+        absl::string_view name;
+        switch (shape_type) {
+          case PrimitiveShapeType::kQuad:
+            colliderHash = BoxCollider::IsfInfo::kTypeUrlHash;
+            name = "Quad";
+            break;
+          case PrimitiveShapeType::kBox:
+            colliderHash = BoxCollider::IsfInfo::kTypeUrlHash;
+            name = "Cube";
+            break;
+          case PrimitiveShapeType::kSphere:
+            colliderHash = SphereCollider::IsfInfo::kTypeUrlHash;
+            name = "Sphere";
+            break;
+          case PrimitiveShapeType::kCapsule:
+            colliderHash = CapsuleCollider::IsfInfo::kTypeUrlHash;
+            name = "Capsule";
+            break;
+          case PrimitiveShapeType::kCylinder:
+            colliderHash = CylinderCollider::IsfInfo::kTypeUrlHash;
+            name = "Cylinder";
+            break;
+          case PrimitiveShapeType::kCone:
+            colliderHash = ConeCollider::IsfInfo::kTypeUrlHash;
+            name = "Cone";
+            break;
+          default:
+            return absl::InvalidArgumentError("Unsupported shape type.");
+        }
+
+        metadata->SetComponentAuthored(colliderHash, true);
+        node->SetName(name);
+#else
+  return node->AddComponentWithState<PrimitiveShapeRenderer>(state).Then(
+      [node](absl::StatusOr<ComponentHandle<PrimitiveShapeRenderer>> component)
+          -> absl::StatusOr<NodeHandle> {
+        if (!component.ok()) {
+          return component.status();
+        }
+#endif  // IMP_RUNTIME(DEV)
+        return node;
+      });
 }
 
 }  // namespace imp

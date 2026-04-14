@@ -19,6 +19,7 @@
 #include <utility>
 
 #include "absl/log/check.h"
+#include "absl/synchronization/notification.h"
 #include "third_party/grpc/include/grpcpp/client_context.h"
 #include "third_party/grpc/include/grpcpp/support/client_callback.h"
 #include "third_party/grpc/include/grpcpp/support/status.h"
@@ -42,6 +43,8 @@ class MessageGroupCompletionClientReactor final
       ReadMessageGroupCompletionsFunc&& read_message_group_completions_func,
       OnMessageGroupProcessedCallback&& on_message_group_processed_callback);
 
+  ~MessageGroupCompletionClientReactor() override;
+
   void OnReadDone(bool ok) override;
 
   void OnDone(const grpc::Status& status) override;
@@ -51,6 +54,8 @@ class MessageGroupCompletionClientReactor final
   grpc::ClientContext context_;
   MessageGroupCompletionRequest request_;
   MessageGroupCompletionResponse response_;
+
+  absl::Notification on_done_notification_;
 };
 
 }  // namespace imp::split_engine

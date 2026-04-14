@@ -52,25 +52,14 @@ class TestModelManager : public ModelManager {
   absl::Status SetGltfReformAffordanceEnabled(int32_t impress_node,
                                               bool enable_affordance,
                                               bool system_movable) override;
-  void AnimateGltfModelNew(
+  void AnimateGltfModel(
       int32_t node, absl::string_view animation_name, bool loop, float speed,
       float start_time, int32_t channel_id,
       std::unique_ptr<BaseAssetAnimator> asset_animator) override;
-  // TODO: (broken link) - Remove old animation APIs once all clients are migrated
-  // to new animation system.
-  void AnimateGltfModel(
-      int32_t node, absl::string_view animation_name, bool loop,
-      std::unique_ptr<BaseAssetAnimator> asset_animator) override;
-  absl::Status StopGltfModelAnimationNew(int32_t node,
-                                         int32_t channel_id) override;
-  // TODO: (broken link) - Remove old animation APIs once all clients are migrated
-  // to new animation system.
-  absl::Status StopGltfModelAnimation(int32_t node) override;
-  absl::Status ToggleGltfModelAnimationNew(int32_t node, bool toggle,
-                                           int32_t channel_id) override;
-  // TODO: (broken link) - Remove old animation APIs once all clients are migrated
-  // to new animation system.
-  absl::Status ToggleGltfModelAnimation(int32_t node, bool toggle) override;
+  absl::Status StopGltfModelAnimation(int32_t node,
+                                      int32_t channel_id) override;
+  absl::Status ToggleGltfModelAnimation(int32_t node, bool toggle,
+                                        int32_t channel_id) override;
   absl::Status SetGltfModelAnimationSpeed(int32_t node, float speed,
                                           int32_t channel_id) override;
   absl::Status SetGltfModelAnimationPlaybackTime(int32_t node,

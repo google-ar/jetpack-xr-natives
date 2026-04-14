@@ -1,0 +1,55 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+edition = "2024";
+
+package imp;
+
+import "core/math/math.proto";
+import "core/proto/imp.proto";
+import "core/proto/imp_editor.proto";
+
+// Holds the display information for a GroupToProjectionQuadTextureRenderer's
+// Projection Quad.
+message ProjectionQuadState {
+  // The dimensions of the Projection Quad.
+  imp.Float2 size = 1;
+
+  // The world position of the Projection Quad.
+  imp.Float3 center = 2;
+
+  // The world rotation of the Projection Quad.
+  imp.Quatf rotation = 3;
+}
+
+// Holds the state information for a GroupToProjectionQuadTextureRenderer.
+// TODO: Allow authoring of GroupToProjectionQuadTextureRenderer
+// within the Impress Editor itself.
+message GroupToProjectionQuadTextureRendererState {
+  // The name of the texture to render to.
+  string texture_name = 1 [(imp.editor_control) = { read_only: {} }];
+
+  // The name of the Render Group of content that should be rendered to the
+  // texture.
+  string render_group_name = 2 [(imp.editor_control) = { read_only: {} }];
+
+  // The size of the texture being rendered to.
+  imp.Float2 texture_size = 3 [
+    (imp.editor_control) = { read_only: {} },
+    (imp.msg_default) = "{1024, 1024}"
+  ];
+
+  // The state info for the Projection Quad.
+  ProjectionQuadState projection_quad_state = 4
+      [(imp.editor_control) = { read_only: {} }];
+}

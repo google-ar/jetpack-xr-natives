@@ -48,7 +48,6 @@
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/resources/resource_manager.h"
 #include "core/view/base_view.h"
-#include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/gltf_asset.h"
 #include "core/view/framework/assets/gltf_state.proto.imp.h"
 #include "core/window/filament_host.h"
@@ -62,8 +61,9 @@ using resources::Resource;
 
 Future<std::unique_ptr<GltfAsset>> GltfAssetLoader::Load(
     BaseView* view, absl::string_view asset_url,
-    Future<resources::Resource> resource_future, GltfAsset::LoadOptions options,
-    mediapipe::Clock* clock /*= nullptr*/) {
+    Future<resources::Resource> resource_future,
+    resources::ResourceManager* resource_manager,
+    GltfAsset::LoadOptions options, mediapipe::Clock* clock /*= nullptr*/) {
   IMP_TRACE();
   // If it hasn't already been created, create the material package for the type
   // of materials being loaded. This is done right away so that the zip file
@@ -75,7 +75,7 @@ Future<std::unique_ptr<GltfAsset>> GltfAssetLoader::Load(
       material_package = itr->second.get();
     } else {
       Future<resources::Resource> materials_zip =
-          view->GetAssetManager().LoadResource(*options.materials_url_override);
+          resource_manager->Load(*options.materials_url_override);
       material_package =
           custom_material_packages_
               .emplace(*options.materials_url_override,
@@ -87,7 +87,7 @@ Future<std::unique_ptr<GltfAsset>> GltfAssetLoader::Load(
   } else if (options.use_lite_materials) {
     if (!lite_material_package_) {
       lite_material_package_ = std::make_unique<MaterialPackage>(
-          view->GetAssetManager().LoadResource(
+          resource_manager->Load(
               materials::kCompiledImpDefaultLiteGltfMaterialsZip),
           GltfAsset::kDefaultMaterialPreCompileOptions);
     }
@@ -95,7 +95,7 @@ Future<std::unique_ptr<GltfAsset>> GltfAssetLoader::Load(
   } else {
     if (!material_package_) {
       material_package_ = std::make_unique<MaterialPackage>(
-          view->GetAssetManager().LoadResource(
+          resource_manager->Load(
               materials::kCompiledImpDefaultGltfMaterialsZip),
           GltfAsset::kDefaultMaterialPreCompileOptions);
     }
@@ -154,12 +154,12 @@ Future<std::unique_ptr<GltfAsset>> GltfAssetLoader::Load(
     get_loader_future.Return(&loader::CreateLoaderInProcess);
   }
 
-  LoadAssetFn load_missing_asset = [view,
-                                    query_string](absl::string_view asset) {
+  LoadAssetFn load_missing_asset = [query_string,
+                                    resource_manager](absl::string_view asset) {
     std::string asset_with_query_string = std::string(asset) + query_string;
     return Future<resources::Resource>::Schedule(
-        [view, asset_with_query_string]() {
-          return view->GetAssetManager().LoadResource(asset_with_query_string);
+        [resource_manager, asset_with_query_string]() {
+          return resource_manager->Load(asset_with_query_string);
         });
   };
 

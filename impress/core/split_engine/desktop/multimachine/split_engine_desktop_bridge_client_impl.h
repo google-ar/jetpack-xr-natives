@@ -57,8 +57,7 @@ class SplitEngineMMDesktopBridgeClientImpl
   absl::Status EndMessageGroup(MessageGroupId message_group_id) override;
 
   MessageGroupId GenerateMessageGroupId() override {
-    static MessageGroupId message_group_id = 0;
-    return ++message_group_id;
+    return ++next_message_group_id_;
   }
 
   ClientId GetClientId() const override { return client_id_; }
@@ -90,8 +89,18 @@ class SplitEngineMMDesktopBridgeClientImpl
 
   std::thread heartbeat_thread_;
 
-  bool stop_heartbeat_ = false;
+  enum class HeartbeatState {
+    kRun,
+    kStop,
+  };
+  absl::Mutex heartbeat_mutex_;
+  HeartbeatState heartbeat_state_ ABSL_GUARDED_BY(heartbeat_mutex_) =
+      HeartbeatState::kRun;
+
   void Heartbeat(absl::Duration heartbeat_interval);
+  void StopHeartbeat();
+
+  MessageGroupId next_message_group_id_ = 0;
 };
 
 }  // namespace imp::split_engine

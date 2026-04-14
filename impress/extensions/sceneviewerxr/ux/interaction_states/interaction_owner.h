@@ -76,10 +76,14 @@ class InteractionOwner {
   virtual void SetRigRotationTarget(imp::quatf rig_rotation) = 0;
 
   virtual void CalculateModelScaleLimits() = 0;
+  virtual svxr::AxisBounds GetModelLogScaleLimits() = 0;
   virtual void SetModelScale(float model_scale) = 0;
 
   virtual void RequestUpdateRigPositionFromCamera(
       const imp::SmoothParameters& parameters) = 0;
+
+  virtual float ConstrainElastically(float value, svxr::AxisBounds range,
+                                     float scale) = 0;
 
   virtual UiEventListener* GetUiEventListener() = 0;
 
@@ -90,6 +94,8 @@ class InteractionOwner {
       imp::float3 target_position, imp::float3 rig_to_target) = 0;
   virtual void PlayDropSound() = 0;
   virtual void PlayLiftSound() = 0;
+  virtual void PlayGrabSound() = 0;
+  virtual void PlayReleaseSound() = 0;
   // TODO: Abstract EnvironmentType or remove this dependency if
   // possible.
   virtual bool IsPassthrough() = 0;

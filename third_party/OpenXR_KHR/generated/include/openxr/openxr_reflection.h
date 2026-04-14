@@ -2,7 +2,7 @@
 #define OPENXR_REFLECTION_H_ 1
 
 /*
-** Copyright (c) 2017-2025 The Khronos Group Inc.
+** Copyright (c) 2017-2026 The Khronos Group Inc.
 **
 ** SPDX-License-Identifier: Apache-2.0 OR MIT
 */
@@ -9426,7 +9426,6 @@ XR_ENUM_STR(XrResult);
     _(XR_ANDROID_depth_texture, 703) \
     _(XR_ANDROID_hand_mesh, 704) \
     _(XR_ANDROID_mouse_interaction, 705) \
-    _(XR_ANDROIDX_spatial_interaction, 706) \
     _(XR_ANDROID_trackables_marker, 708) \
     _(XR_ANDROID_trackables_qr_code, 709) \
     _(XR_ANDROID_trackables_image, 710) \

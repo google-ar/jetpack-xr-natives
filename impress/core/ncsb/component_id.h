@@ -20,6 +20,7 @@
 #include <array>
 
 #include "absl/base/attributes.h"
+#include "core/common/base_pool_allocator.h"
 #include "core/common/hash.h"
 #include "core/ncsb/update_id.h"
 
@@ -31,6 +32,11 @@ using ComponentId = HashValue;
 // Used to get a Component's id so that it can be used at runtime.
 template <typename T>
 constexpr ComponentId kComponentId = type_traits::kTypeHash<T>;
+
+// Key used to identify a component instance within a pool.
+//
+// Used to efficiently check if a ComponentHandle is valid.
+using ComponentKey = PoolAllocatorKey;
 
 template <typename... Components>
 using ComponentIds ABSL_DEPRECATED("Use imp::UpdateIds<T> instead.") =

@@ -19,6 +19,7 @@
 
 #include "core/editor/widgets/transform_widget_mode_control_state.proto.imp.h"
 #include "core/ncsb/component.h"
+#include "core/ncsb/isf_info.h"
 
 namespace imp::editor {
 
@@ -37,6 +38,9 @@ class TransformWidgetModeControl : public Component {
  private:
   // Whether to control the position, rotation, or scale of the selected node.
   enum class Mode { kTranslate, kRotate, kScale };
+
+  // Sets the mode of the transform widget directly.
+  void SetMode(Mode mode);
 
   Mode mode_ = Mode::kTranslate;
 

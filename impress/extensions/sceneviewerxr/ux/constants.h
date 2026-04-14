@@ -24,6 +24,16 @@
 
 namespace svxr {
 
+struct AxisBounds {
+  float min;
+  float max;
+
+  constexpr AxisBounds() : min(0.0f), max(0.0f) {}
+  constexpr AxisBounds(float min, float max) : min(min), max(max) {}
+};
+
+constexpr float kElasticScale = 10.0f;
+
 enum class ResetScaleType : uint32_t {
   kInitialScale,
   kOneToOne,

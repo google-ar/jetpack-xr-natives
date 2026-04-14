@@ -14,11 +14,19 @@
 
 #include "core/view/framework/input/pointer_input_handler.h"
 
+#include <cstddef>
+#include <utility>
 #include <vector>
 
+#include "absl/algorithm/container.h"
 #include "core/common/log.h"
 #include "absl/types/optional.h"
 #include "absl/types/variant.h"
+#include "core/input/input_manager.h"
+#include "core/input/keyboard_event.h"
+#include "core/input/pointer_event.h"
+#include "core/input/wheel_event.h"
+#include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/node_handle.h"
 #include "core/view/framework/collision/collision_manager.h"
 #include "core/view/framework/collision/ray_hit.h"
@@ -126,8 +134,8 @@ void PointerInputHandler::Update(InputManager* input_manager) {
     DispatchHitEvents(event);
   }
 
-  if (input_manager->HasWheelEvent()) {
-    WheelEvent event = input_manager->PopWheelEvent();
+  std::vector<WheelEvent> wheel_events = input_manager->PopWheelEvents();
+  for (auto& event : wheel_events) {
     dispatcher_.Send(WheelScrollEvent(event));
   }
 

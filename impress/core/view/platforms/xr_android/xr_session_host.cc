@@ -14,6 +14,9 @@
 
 #include "core/view/platforms/xr_android/xr_session_host.h"
 
+#include "core/monitor/default_monitor_summary.h"
+#include "core/monitor/monitor_summary.h"
+
 #if IMP_MATERIAL_API(OPENGL) && IMP_PLATFORM(ANDROID)
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>  // NOLINT
@@ -58,6 +61,7 @@
 #include "core/common/enum_flags.h"
 #include "core/common/invocable.h"
 #include "core/common/platform_helpers.h"
+#include "core/common/registry.h"
 #include "core/common/robin_set.h"
 #include "core/common/trace.h"
 #include "core/config.h"
@@ -175,10 +179,12 @@ std::array<const char*, 2> kOpenXRExtensionsAndroidSys = {
     XR_ANDROIDSYS_INPUT_TRACING_EXTENSION_NAME,
 };
 
+#if IMP_PLATFORM(ANDROID)
 std::array<const char*, 2> kOpenXRExtensionAndroidXSpatialInteraction = {
     XR_ANDROIDX_SPATIAL_INTERACTION_EXTENSION_NAME,
     XR_ANDROIDX_SPATIAL_INTERACTION_LIFECYCLE_EXTENSION_NAME,
 };
+#endif  // IMP_PLATFORM(ANDROID)
 
 std::array<const char*, 2> kOpenXRExtensionsAndroidSysEyeTrackingCalibration = {
     XR_ANDROID_EYE_TRACKING_EXTENSION_NAME,
@@ -187,7 +193,12 @@ std::array<const char*, 2> kOpenXRExtensionsAndroidSysEyeTrackingCalibration = {
 
 std::array<const char*, 1> kOpenXRExtensionAndroidXGlobalPassthroughDimming = {
     // TODO: Add official extension once api is finalized.
-    "XR_ANDROIDX1_global_passthrough_dimming",
+    "XR_ANDROID_global_passthrough_dimming",
+};
+
+std::array<const char*, 1> kOpenXRExtensionAndroidXHandOcclusion = {
+    // TODO: Add official extension once api is finalized.
+    "XR_ANDROIDX1_hand_occlusion",
 };
 
 absl::Time GetFilamentTimeNow() {
@@ -277,14 +288,14 @@ XrSessionHost::XrSessionHost(
           setup_params.use_android_depth_texture.Value()),
       display_enabled_duration_(GetView()->GetMonitor(),
                                 kXrDisplayEnabledStatistics),
-      xr_timing_summary_(*GetView()),
       is_fb_color_space_enabled_(setup_params.use_fb_color_space.Value()),
       is_android_system_extensions_enabled_(
           setup_params.enable_android_system_extensions.Value()),
       is_global_passthrough_dimming_extensions_enabled_(
-          setup_params.use_global_passthrough_dimming_extensions.Value()) {
-  SetupXrTimingSummary(xr_timing_summary_.GetSummary(),
-                       xr_performance_state_.metrics);
+          setup_params.use_global_passthrough_dimming_extensions.Value()),
+      is_hand_occlusion_extensions_enabled_(
+          setup_params.use_hand_occlusion_extensions.Value()) {
+  SetupXrTimingSummary(GetXrTimingSummary(), xr_performance_state_.metrics);
   if (is_varjo_foveated_rendering_enabled_) {
     eye_tracking_enabled_ = true;
   }
@@ -495,9 +506,11 @@ absl::Status XrSessionHost::AdvanceFrame() {
     // Report if predictedDisplayPeriod is exceeded significantly.
     auto maximum_display_period =
         absl::Nanoseconds(frame_state.predictedDisplayPeriod * 1.25);
-    if (xr_timing_summary_.GetDisplayPeriod() != maximum_display_period) {
-      xr_timing_summary_.SetDisplayPeriod(maximum_display_period,
-                                          kXrBetweenFrameTiming);
+    auto& xr_timing_summary =
+        GetView()->GetRegistry().GetOrCreate<DefaultMonitorSummary>(*GetView());
+    if (xr_timing_summary.GetDisplayPeriod() != maximum_display_period) {
+      xr_timing_summary.SetDisplayPeriod(maximum_display_period,
+                                         kXrBetweenFrameTiming);
     }
   }
 
@@ -667,6 +680,7 @@ bool XrSessionHost::IsXrAndroidXOccupancyGridEnabled() const {
   return is_supported.ok();
 }
 
+#if IMP_PLATFORM(ANDROID)
 bool XrSessionHost::IsXrAndroidXSpatialInteractionEnabled() const {
   std::vector<const char*> extensions;
   extensions.insert(extensions.end(),
@@ -675,6 +689,7 @@ bool XrSessionHost::IsXrAndroidXSpatialInteractionEnabled() const {
   absl::Status is_supported = EnsureSupportedExtensions(extensions);
   return is_supported.ok();
 }
+#endif  // IMP_PLATFORM(ANDROID)
 
 bool XrSessionHost::IsXrAndroidDepthTextureEnabled() const {
   return is_android_depth_texture_enabled_;
@@ -690,6 +705,10 @@ bool XrSessionHost::IsXrAndroidSystemExtensionsEnabled() const {
 
 bool XrSessionHost::IsXrGlobalPassthroughDimmingExtensionsEnabled() const {
   return is_global_passthrough_dimming_extensions_enabled_;
+}
+
+bool XrSessionHost::IsXrHandOcclusionExtensionsEnabled() const {
+  return is_hand_occlusion_extensions_enabled_;
 }
 
 bool XrSessionHost::IsXrEyeTrackingCalibrationEnabled() const {
@@ -826,11 +845,13 @@ absl::StatusOr<XrInstance> XrSessionHost::CreateInstance(JNIEnv* env,
                       kOpenXRExtensionAndroidXOccupancyGrid.begin(),
                       kOpenXRExtensionAndroidXOccupancyGrid.end());
   }
+#if IMP_PLATFORM(ANDROID)
   if (IsXrAndroidXSpatialInteractionEnabled()) {
     extensions.insert(extensions.end(),
                       kOpenXRExtensionAndroidXSpatialInteraction.begin(),
                       kOpenXRExtensionAndroidXSpatialInteraction.end());
   }
+#endif  // IMP_PLATFORM(ANDROID)
   if (IsXrEyeGazeInteractionEnabled()) {
     extensions.insert(extensions.end(),
                       kOpenXRExtensionsEyeGazeInteraction.begin(),
@@ -853,6 +874,11 @@ absl::StatusOr<XrInstance> XrSessionHost::CreateInstance(JNIEnv* env,
     extensions.insert(extensions.end(),
                       kOpenXRExtensionAndroidXGlobalPassthroughDimming.begin(),
                       kOpenXRExtensionAndroidXGlobalPassthroughDimming.end());
+  }
+  if (IsXrHandOcclusionExtensionsEnabled()) {
+    extensions.insert(extensions.end(),
+                      kOpenXRExtensionAndroidXHandOcclusion.begin(),
+                      kOpenXRExtensionAndroidXHandOcclusion.end());
   }
   if (IsXrEyeTrackingCalibrationEnabled()) {
     extensions.insert(extensions.end(),
@@ -1924,8 +1950,21 @@ void XrSessionHost::PerformEnhancedStereoscopicRender(
   filament::Camera* main_camera =
       GetView()->GetCameraManager().GetCamera()->GetCamera();
 
-  if (options.use_main_view_projection_matrix) {
+  if (options.projection_quad.has_value()) {
+    if (pass_camera != main_camera) {
+      IMP_LOG(imp::WARNING)
+          << "When a projection quad is specified, the rendering needs to "
+             "use the main camera for stereo vision to work, but a "
+             "different pass camera is currently given. The pass camera will "
+             "be ignored.";
+    }
+    SetCameraEyesForProjectionQuad(GetEngine(), main_camera,
+                                   options.projection_quad.value(),
+                                   latest_views_);
+  } else {
     SetCustomEyeProjectionOnCamera(pass_camera, latest_views_);
+    SetEyeModelMatrixOnCamera(GetEngine(), main_camera, pass_camera,
+                              latest_views_);
   }
 
   if (!is_enhanced_stereoscopic_rendering_initialized_) {
@@ -1940,8 +1979,7 @@ void XrSessionHost::PerformEnhancedStereoscopicRender(
     imp::output::Xr("Instanced rendering is now initialized.");
     is_enhanced_stereoscopic_rendering_initialized_ = true;
   }
-  SetEyeModelMatrixOnCamera(GetEngine(), main_camera, pass_camera,
-                            latest_views_);
+
   renderer_->render(view);
 }
 
@@ -2117,6 +2155,13 @@ filament::Engine::Config XrSessionHost::GetEngineConfig() {
   engine_config.stereoscopicType = GetStereoscopicType();
   return engine_config;
 };
+
+MonitorSummary& XrSessionHost::GetXrTimingSummary() {
+  return GetView()
+      ->GetRegistry()
+      .GetOrCreate<DefaultMonitorSummary>(*GetView())
+      .GetSummary();
+}
 
 void XrSessionHost::SetBeforeEndFrameCallback(Invocable<void()> callback) {
   absl::MutexLock lock(frame_queue_mutex_);

@@ -26,7 +26,6 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "core/assets/gltf/gltf_audio_extension.h"
-#include "core/assets/gltf/gltf_behavior_extension.h"
 #include "core/assets/gltf/gltf_interactivity_extension.h"
 #include "core/async/future.h"
 #include "core/camera/camera_component.h"
@@ -34,6 +33,7 @@
 #include "core/common/registry.h"
 #include "core/common/robin_set.h"
 #include "core/config.h"
+#include "core/editor/camera_defaults.h"
 #include "core/editor/command_manager.h"
 #include "core/editor/components/camera_rotate.h"
 #include "core/editor/components/camera_translate.h"
@@ -64,6 +64,7 @@
 #include "core/editor/widgets/asset_library.h"
 #include "core/editor/widgets/component_ui.h"
 #include "core/editor/widgets/console.h"
+#include "core/editor/widgets/debug_draw_widget.h"
 #include "core/editor/widgets/editor_mode_toggle.h"
 #include "core/editor/widgets/environment_light_editor.h"
 #include "core/editor/widgets/event_injector.h"
@@ -118,13 +119,6 @@ namespace imp::editor {
 namespace {
 // Number of fingers required to toggle the editor.
 constexpr int kToggleEditorPointerCount = 3;
-// The default camera angle constants.
-constexpr float kCameraPitch = -45;
-constexpr float kCameraYaw = 45;
-constexpr float3 kCameraPosition = float3(3.5, 5, 3.5);
-// The default camera near/far clip so that farther away objects can be seen.
-constexpr float kCameraNearClipPlane = 0.01f;
-constexpr float kCameraFarClipPlane = 250.0f;
 // Select the platform-dependent layout.
 constexpr LayoutConfig kDefaultLayoutConfig =
 #if (IMP_PLATFORM(ANDROID) || IMP_PLATFORM(IOS))
@@ -351,12 +345,6 @@ void EditorImpl::Initialize() {
   GetView()
       .GetComponentManager()
       .GetComponentSystem<GltfRenderer>()
-      .RegisterExtensionWithDependency<GltfBehaviorExtension,
-                                       GltfAudioExtension>();
-
-  GetView()
-      .GetComponentManager()
-      .GetComponentSystem<GltfRenderer>()
       .RegisterExtensionWithDependency<GltfInteractivityExtension,
                                        GltfAudioExtension>();
 
@@ -400,8 +388,10 @@ void EditorImpl::Initialize() {
   camera_node->SetName("editor-camera");
   camera_node->SetParent(pivot);
   camera_ = camera_node->AddComponent<CameraComponent>();
-  camera_->SetNearAndFarClip(kCameraNearClipPlane, kCameraFarClipPlane);
-  camera_node->AddComponent<CameraRotate>(pivot, kCameraPitch, kCameraYaw);
+  camera_->SetNearAndFarClip(CameraDefaults::kNearClipPlane,
+                             CameraDefaults::kFarClipPlane);
+  camera_node->AddComponent<CameraRotate>(pivot, CameraDefaults::kPitch,
+                                          CameraDefaults::kYaw);
   camera_node->AddComponent<CameraTranslate>(pivot);
   camera_node->AddComponent<CameraZoom>(pivot);
 
@@ -571,7 +561,8 @@ void EditorImpl::InitializeCameraPosition() {
   }
 
   camera_->GetNode()->GetParent()->SetWorldPosition(average_position);
-  camera_->GetNode()->SetWorldPosition(average_position + kCameraPosition);
+  camera_->GetNode()->SetWorldPosition(average_position +
+                                       CameraDefaults::kStartingPosition);
   camera_position_initialized_ = true;
 }
 
@@ -634,6 +625,9 @@ void EditorImpl::InitializeWidgetUiSystem() {
       WidgetLayoutInfo(PanelId::kFreeform, WidgetPresence::kAlways,
                        WidgetVisibility::kHidden),
       view);
+
+  widget_ui_system_.AddWidget<DebugDrawWidget>(WidgetLayoutInfo(
+      PanelId::kTabBar, WidgetPresence::kAlways, WidgetVisibility::kHidden));
 
   // Edit mode is only available in the Impress sandbox.
   if (is_sandbox_) {

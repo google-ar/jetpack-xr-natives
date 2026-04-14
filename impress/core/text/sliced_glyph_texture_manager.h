@@ -59,8 +59,6 @@ class SlicedGlyphTextureManager {
   // Renders a single slice.
   void RenderSlice(filament::Renderer& renderer, SliceId slice);
 
-  void OnViewResumed();
-
   static std::unique_ptr<Texture> CreateCompositeTexture(BaseView& view,
                                                          uint2 atlas_size,
                                                          uint2 grid_size);

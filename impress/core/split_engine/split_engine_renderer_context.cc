@@ -14,10 +14,13 @@
 
 #include "core/split_engine/split_engine_renderer_context.h"
 
+#include <string>
 #include <utility>
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "core/math/mat.h"
 #include "core/ncsb/node.h"
 #include "core/split_engine/shared/split_engine_defines.h"
@@ -31,6 +34,10 @@ AppPermissionController::AppPermissionController(BaseView& view) : view_(view) {
   default_parent_node_ = view_.CreateNode();
   // Disable the default parent node by default.
   default_parent_node_->SetEnabled(false);
+}
+
+AppPermissionController::~AppPermissionController() {
+  view_.DestroyNode(default_parent_node_);
 }
 
 void AppPermissionController::AddPermissions(AppPermission permission) {
@@ -72,6 +79,11 @@ void AppPermissionController::ApplyControls(imp::NodeHandle node) {
 
 imp::NodeHandle AppPermissionController::GetDefaultParentNode() {
   return default_parent_node_;
+}
+
+std::string AppContext::GetBridgePrefixedName(BridgeId bridge_id,
+                                              absl::string_view name) {
+  return absl::StrCat("bridge_", bridge_id, "_", name);
 }
 
 AppContext::AppContext(BaseView& view,

@@ -32,7 +32,6 @@ imp_extensions(
         "draco",
         "meshopt",
         "verification",
-        "behavior",
         "interactivity",
         "mesh_features",
     ],
@@ -315,74 +314,6 @@ cc_library(
         "//core/model",
         "//core/model:model_data_details",
         "@com_google_absl//absl/status",
-        "@flatbuffers",
-    ],
-    alwayslink = 1,
-)
-
-cc_library(
-    name = "extension_behavior",
-    hdrs = [
-        "gltf_extension_behavior.h",
-    ],
-    copts = imp_copts(),
-    linkopts = imp_linkopts(),
-    linkstatic = True,
-    deps = [
-        "//core/loader/provider/extensions/behavior:loader_extension",
-        "//core/loader/provider/extensions/behavior:model_creator_extension",
-        "//core/proto:json_reader",
-        "@flatbuffers",
-    ],
-    alwayslink = 1,
-)
-
-cc_library(
-    name = "extension_behavior_impl",
-    srcs = [
-        "gltf_extension_behavior.cc",
-    ],
-    copts = imp_copts(),
-    linkopts = imp_linkopts(),
-    linkstatic = True,
-    deps = [
-        ":extension_behavior",
-        "//core/loader/provider/extensions/behavior:behavior_imp_cc_proto",
-        "//core/loader/provider/extensions/behavior:helpers",
-        "//core/loader/provider/extensions/behavior:loader_extension",
-        "//core/loader/provider/extensions/behavior:loader_extension_impl",
-        "//core/loader/provider/extensions/behavior:model_creator_extension",
-        "//core/loader/provider/extensions/behavior:model_creator_extension_impl",
-        "//core/math",
-        "//core/proto:json_reader",
-        "//core/proto:proto_common",
-        "//core/view/utils:string_map",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_absl//absl/strings:string_view",
-        "@flatbuffers",
-        "@mediapipe//mediapipe/framework/port:status",
-    ],
-    alwayslink = 1,
-)
-
-cc_library(
-    name = "extension_behavior_noop",
-    srcs = [
-        "gltf_extension_behavior_noop.cc",
-    ],
-    copts = imp_copts(),
-    linkopts = imp_linkopts(),
-    linkstatic = True,
-    deps = [
-        ":extension_behavior",
-        "//core/loader/provider/extensions/behavior:behavior_imp_cc_proto",
-        "//core/loader/provider/extensions/behavior:loader_extension",
-        "//core/loader/provider/extensions/behavior:model_creator_extension",
-        "//core/proto:json_reader",
-        "@com_google_absl//absl/status:statusor",
         "@flatbuffers",
     ],
     alwayslink = 1,

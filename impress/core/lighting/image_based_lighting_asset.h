@@ -170,12 +170,12 @@ class ImageBasedLightingAsset {
   // skybox CubemapLevelImageContents, returns an ImageBasedLightingAsset.
   // Serializes the resultant ImageasedLightingAsset and adds it to the
   // SplitEngineSerializer, if it exists.
-  static absl::StatusOr<std::unique_ptr<ImageBasedLightingAsset>>
+  static Future<std::unique_ptr<ImageBasedLightingAsset>>
   SerializeAndConstructImageBasedLightingAsset(
       BaseView& view,
       /*absl_nonnull*/  std::unique_ptr<SphericalHarmonics> spherical_harmonics,
       ImageBasedLightingAssetCubemapImages cubemap_images,
-      std::optional<std::string_view> asset_url);
+      std::optional<std::string> asset_url);
 
   std::unique_ptr<SphericalHarmonics> spherical_harmonics_;
   // Pre-filtered mip map cubemap, intended for IBL.

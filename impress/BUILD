@@ -37,6 +37,7 @@ licenses(["notice"])
 
 exports_files([
     "LICENSE",
+    "METADATA",
 ])
 
 license_kind(
@@ -133,7 +134,7 @@ imp_extensions(
         "draco",
         "verification",
         "basis",
-        "behavior",
+        "interactivity",
         "webp",
         "mesh_features",
     ],

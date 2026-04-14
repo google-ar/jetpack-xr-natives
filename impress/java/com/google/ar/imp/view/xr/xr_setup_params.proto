@@ -90,4 +90,6 @@ message XrSetupParams {
   // When building for XR, whether or not to use the AndroidSys Eye Tracking
   // Calibration extension.
   bool use_eye_tracking_calibration = 19 [default = false];
+  // When building for XR, whether or not to use the hand occlusion extensions.
+  bool use_hand_occlusion_extensions = 20 [default = false];
 }

@@ -101,6 +101,7 @@ cc_library(
         "//core/assets",
         "//core/async:future",
         "//core/geometry/shapes",
+        "//core/materials",
         "//core/math",
         "//core/model/mesh",
         "//core/ncsb",

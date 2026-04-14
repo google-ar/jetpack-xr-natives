@@ -28,7 +28,6 @@ cc_library(
     name = "materials",
     srcs = [
         "custom_material.cc",
-        "material.cc",
     ],
     hdrs = [
         "custom_material.h",
@@ -49,8 +48,10 @@ cc_library(
         "//core/view/utils:string_map",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/functional:function_ref",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/libs:math_hdrs",
     ],

@@ -21,6 +21,7 @@
 #include <thread>  // NOLINT: Need to sort things by thread id.
 #include <vector>
 
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "dear_imgui/imgui.h"
@@ -31,7 +32,7 @@
 #include "core/editor/widgets/performance/config.h"
 #include "core/editor/widgets/performance/hierarchy_panel.h"
 #include "core/editor/widgets/performance/imgui_helper.h"
-#include "core/editor/widgets/performance/monitor_panel.h"
+#include "core/editor/widgets/performance/performance_window.h"
 #include "core/editor/widgets/performance/sample_processor.h"
 #include "core/editor/widgets/performance/sample_processor_types.h"
 #include "core/performance/memory_stats.h"
@@ -98,14 +99,14 @@ constexpr float kCallstackPanelMinWidth = 200.0f;
 constexpr float kSampleViewMinWidth = 500.0f;
 }  // namespace
 
-FrameTimePanel::FrameTimePanel(BaseView& view, int buffer_size)
-    : view_(view), buffer_(buffer_size), view_config_(view.GetConfig()) {}
+FrameTimePanel::FrameTimePanel(PerformanceWindow& performance_window,
+                               BaseView& view, int buffer_size)
+    : performance_window_(performance_window),
+      view_(view),
+      buffer_(buffer_size),
+      view_config_(view.GetConfig()) {}
 
 FrameTimePanel::~FrameTimePanel() = default;
-
-void FrameTimePanel::OnStateChanged(MonitorPanel::MonitorState state) {
-  state_ = state;
-}
 
 float FrameTimePanel::GetHighestVisibleFrameTimeMS(int time_span_seconds) {
   int earliest_visible_frame =
@@ -140,7 +141,8 @@ void FrameTimePanel::DrawLegend(float width, float height) {
 void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
   IMP_TRACE();
 
-  const int selected_frame_number = ImGuiHelper::GetSelectedFrameNumber();
+  const int selection_start_frame = performance_window_.GetSelectedFrameStart();
+  const int selection_end_frame = performance_window_.GetSelectedFrameEnd();
 
   DrawLegend(kLegendWidth, height);
   ImGui::SameLine();  // Place plot to the right of the legend.
@@ -205,16 +207,14 @@ void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
             DrawToolTip(hovered_frame);
           }
 
-          if (ImGui::IsMouseDown(ImPlot::GetInputMap().SelectCancel)) {
-            ImGuiHelper::SelectFrame(hovered_frame);
-          }
+          HandleFrameSelection(hovered_frame);
         }
       }
 
       ImDrawList* draw_list_overlays = ImPlot::GetPlotDrawList();
-      DrawHighlightFrame(selected_frame_number, draw_list_overlays,
-                         IM_COL32(255, 255, 255, 200), 0.3f);
-      DrawSelectedFrameLabels(selected_frame_number, draw_list_overlays);
+      DrawHighlightFrameRange(selection_start_frame, selection_end_frame,
+                              draw_list_overlays, IM_COL32(255, 255, 255, 200));
+      DrawSelectedFrameLabels(selection_end_frame, draw_list_overlays);
       DrawTickLabels(draw_list_overlays, valid_ticks_);
 
       ImPlot::EndPlot();
@@ -225,7 +225,7 @@ void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
   ImGui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
 
   // Options for changing the view and thread to display samples for.
-  DrawOptionsBar(selected_frame_number);
+  DrawOptionsBar();
 
   float content_width = ImGui::GetContentRegionAvail().x;
   if (show_callstack_) {
@@ -238,11 +238,11 @@ void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
   }
 
   if (profiler_details_view_mode_ == ProfilerDetailsViewMode::kHierarchy) {
-    hierarchy_panel_.DrawPanel(content_width, selected_frame_number,
-                               sample_processor_, *this);
+    hierarchy_panel_.DrawPanel(content_width, selection_start_frame,
+                               selection_end_frame, sample_processor_, *this);
   } else {
-    flame_graph_.DrawPanel(content_width, selected_frame_number,
-                           sample_processor_, *this);
+    flame_graph_.DrawPanel(content_width, selection_start_frame,
+                           selection_end_frame, sample_processor_, *this);
   }
 
   if (show_callstack_) {
@@ -250,12 +250,13 @@ void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
     DrawSplitter();
     ImGui::SameLine();
     callstack_panel_.DrawPanel(ImGui::GetContentRegionAvail().x,
-                               selected_frame_number, *this, sample_processor_,
+                               selection_start_frame, selection_end_frame,
+                               *this, sample_processor_,
                                hierarchy_panel_.GetSelectedThreadId());
   }
 }
 
-void FrameTimePanel::DrawOptionsBar(int selected_frame_number) {
+void FrameTimePanel::DrawOptionsBar() {
   // Toggle to switch between Hierarchy and Flame Graph.
   if (ImGui::RadioButton(
           "Hierarchy",
@@ -388,19 +389,17 @@ void FrameTimePanel::PopulateSelectedSampleBuffer() {
     selected_sample_buffer_[i].frame_time_ms = 0.0f;
 
     // Get all samples with the selected sample name for this frame and thread.
-    std::vector<SampleNode*>* samples_ptr =
+    const std::vector<SampleNode*>* samples =
         GetSamples(selected_sample_name_, frame_index, main_thread_id);
 
     // If there are no samples for this frame on this thread then we continue.
-    if (!samples_ptr) continue;
-
-    std::vector<SampleNode*>& samples = *samples_ptr;
+    if (!samples) continue;
 
     uint32_t total_time_ns = 0;
 
     // Iterate over all samples with that name if there are any this frame.
-    for (size_t j = 0; j < samples.size(); ++j) {
-      total_time_ns += samples[j]->total_time_ns;
+    for (size_t j = 0; j < samples->size(); ++j) {
+      total_time_ns += (*samples)[j]->total_time_ns;
     }
 
     selected_sample_buffer_[i].frame_time_ms =
@@ -411,9 +410,9 @@ void FrameTimePanel::PopulateSelectedSampleBuffer() {
   selected_sample_changed_ = false;
 }
 
-std::vector<SampleNode*>* FrameTimePanel::GetSamples(
+const std::vector<SampleNode*>* FrameTimePanel::GetSamples(
     absl::string_view sample_name, int frame_index, std::thread::id thread_id) {
-  ProcessedSamples& processed_frame =
+  const ProcessedSamples& processed_frame =
       sample_processor_.GetProcessedFrame(frame_index);
 
   const auto& sample_it = processed_frame.samples_by_name.find(sample_name);
@@ -429,6 +428,21 @@ void FrameTimePanel::DrawHighlightFrame(int frame_number, ImDrawList* draw_list,
 
   const float tool_l = ImPlot::PlotToPixels(frame_number - frame_width, 0).x;
   const float tool_r = ImPlot::PlotToPixels(frame_number + frame_width, 0).x;
+  const float tool_t = ImPlot::GetPlotPos().y;
+  const float tool_b = tool_t + ImPlot::GetPlotSize().y;
+  ImPlot::PushPlotClipRect();
+  draw_list->AddRectFilled(ImVec2(tool_l, tool_t), ImVec2(tool_r, tool_b),
+                           color);
+  ImPlot::PopPlotClipRect();
+}
+
+void FrameTimePanel::DrawHighlightFrameRange(int start_frame, int end_frame,
+                                             ImDrawList* draw_list,
+                                             ImU32 color) {
+  if (!draw_list || start_frame == -1) return;
+
+  const float tool_l = ImPlot::PlotToPixels(start_frame - 0.5f, 0).x;
+  const float tool_r = ImPlot::PlotToPixels(end_frame + 0.5f, 0).x;
   const float tool_t = ImPlot::GetPlotPos().y;
   const float tool_b = tool_t + ImPlot::GetPlotSize().y;
   ImPlot::PushPlotClipRect();
@@ -471,15 +485,30 @@ void FrameTimePanel::DrawToolTip(int frame_number) {
   if (!Profiler::HasFrameRecorded(frame_number)) return;
 
   ImGui::BeginTooltip();
-  const float frame_time_ms =
-      Profiler::GetTotalFrameDurationNanos(frame_number) / kNanosPerMs;
-  const float player_loop_time_ms =
-      Profiler::GetRenderNextFrameDurationNanos(frame_number) / kNanosPerMs;
+  absl::StatusOr<uint32_t> total_frame_duration_nanos =
+      Profiler::GetTotalFrameDurationNanos(frame_number);
+  float frame_time_ms = 0.0f;
+  if (total_frame_duration_nanos.ok()) {
+    frame_time_ms = *total_frame_duration_nanos / kNanosPerMs;
+  }
+
+  absl::StatusOr<uint32_t> render_next_frame_duration_nanos =
+      Profiler::GetRenderNextFrameDurationNanos(frame_number);
+  float player_loop_time_ms = 0.0f;
+  if (render_next_frame_duration_nanos.ok()) {
+    player_loop_time_ms = *render_next_frame_duration_nanos / kNanosPerMs;
+  }
+
+  absl::StatusOr<int> sample_count = Profiler::GetSampleCount(frame_number);
+  int sample_count_val = 0;
+  if (sample_count.ok()) {
+    sample_count_val = *sample_count;
+  }
 
   ImGui::Text("Frame: %d", frame_number);
   ImGui::Text("Frame Time (w/ vsync): %.2fms", frame_time_ms);
   ImGui::Text("Frame Time: %.2fms", player_loop_time_ms);
-  ImGui::Text("Samples: %.0d", Profiler::GetSampleCount(frame_number));
+  ImGui::Text("Samples: %.0d", sample_count_val);
 
   ImGui::EndTooltip();
 }
@@ -494,17 +523,44 @@ void FrameTimePanel::Update(absl::Duration elapsed_time,
   const int64_t frame_index = Profiler::GetCurrentFrameIndex() - 1;
   sample_processor_.ProcessMainThreadSamples(frame_index);
   samples_processed_since_last_update_ = true;
-  const float frame_time_ms =
-      static_cast<float>(Profiler::GetTotalFrameDurationNanos(frame_index)) /
-      kNanosPerMs;
-  const float player_loop_time_ms =
-      static_cast<float>(
-          Profiler::GetRenderNextFrameDurationNanos(frame_index)) /
-      kNanosPerMs;
+
+  absl::StatusOr<uint32_t> total_frame_duration_nanos =
+      Profiler::GetTotalFrameDurationNanos(frame_index);
+  float frame_time_ms = 0.0f;
+  if (total_frame_duration_nanos.ok()) {
+    frame_time_ms =
+        static_cast<float>(*total_frame_duration_nanos) / kNanosPerMs;
+  }
+
+  absl::StatusOr<uint32_t> render_next_frame_duration_nanos =
+      Profiler::GetRenderNextFrameDurationNanos(frame_index);
+  float player_loop_time_ms = 0.0f;
+  if (render_next_frame_duration_nanos.ok()) {
+    player_loop_time_ms =
+        static_cast<float>(*render_next_frame_duration_nanos) / kNanosPerMs;
+  }
+
   buffer_.push_back(
       FrameTimeInfo{.frame_number = static_cast<float>(frame_index),
                     .frame_time_ms = frame_time_ms,
                     .player_loop_time_ms = player_loop_time_ms});
+}
+
+void FrameTimePanel::HandleFrameSelection(int hovered_frame) {
+  if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+    is_dragging_ = true;
+    drag_start_frame_ = hovered_frame;
+    performance_window_.SelectFrame(hovered_frame);
+  } else if (ImGui::IsMouseDragging(ImGuiMouseButton_Left) && is_dragging_) {
+    performance_window_.SelectFrames(drag_start_frame_, hovered_frame);
+  } else if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && is_dragging_) {
+    is_dragging_ = false;
+    performance_window_.SelectFrames(drag_start_frame_, hovered_frame);
+    drag_start_frame_ = -1;
+  } else if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+    // Right click to select single frame.
+    performance_window_.SelectFrame(hovered_frame);
+  }
 }
 
 }  // namespace imp::editor

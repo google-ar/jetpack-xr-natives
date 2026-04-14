@@ -21,19 +21,19 @@
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 #include "flatbuffers/verifier.h"
 #include "core/async/future.h"
-#include "core/common/small_source_location.h"
 #include "core/material_library/generic_material_impl.h"
 #include "core/material_library/generic_material_parameters.h"
 #include "core/material_library/generic_material_spec.h"
 #include "core/material_library/material_package.h"
 #include "core/material_library/material_param_value.h"
-#include "core/materials/material.h"
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin/builtin_generic_spec_helpers.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
 #include "core/split_engine/materials/builtin/builtin_material_registry.h"
+#include "core/split_engine/materials/builtin/builtin_material_wrapper.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
@@ -52,11 +52,10 @@ Future<BuiltInMaterialPtr> BuiltInGenericMaterial::Create(
 
 BuiltInGenericMaterial::BuiltInGenericMaterial(
     GenericMaterialPtr generic_material)
-    : generic_material_(std::move(generic_material)) {}
+    : BuiltInMaterialWrapper<GenericMaterial>(std::move(generic_material)) {}
 
 BuiltInMaterialPtr BuiltInGenericMaterial::Duplicate() const {
-  return absl::WrapUnique(
-      new BuiltInGenericMaterial(generic_material_->Duplicate()));
+  return absl::WrapUnique(new BuiltInGenericMaterial(material_->Duplicate()));
 }
 
 absl::Status BuiltInGenericMaterial::SetParameters(
@@ -80,13 +79,8 @@ absl::Status BuiltInGenericMaterial::SetParameters(
           parameters.data_as<android_xr::schemas::GenericMaterialParameters>();
   GenericMaterialParameters generic_material_parameters =
       GenericMaterialParameters::FromFlatbuffer(*generic_parameters_schema);
-  return generic_material_->AssignTexturesAndParams(generic_material_parameters,
-                                                    texture_borrower);
-}
-
-BorrowedMaterialPtr BuiltInGenericMaterial::GetMaterialInternal(
-    SmallSourceLocation loc) const {
-  return generic_material_->GetMaterial(loc);
+  return material_->AssignTexturesAndParams(generic_material_parameters,
+                                            texture_borrower);
 }
 
 // Registers the built-in material factory.

@@ -30,7 +30,6 @@ imp_app(
     android_base_activity = "//java/com/google/ar/imp/app/splitengine:split_engine_renderer_activity",
     android_manifest = "//java/com/google/ar/imp/app/splitengine:SplitEngineRendererAndroidManifest.xml",
     android_package = "com.google.ar.imp.app.splitengine",
-    multidex = "native",
     platforms = [
         "android",
         "desktop",

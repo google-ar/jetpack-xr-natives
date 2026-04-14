@@ -139,6 +139,18 @@ class SplitEngineRenderer {
   virtual absl::StatusOr<int32_t> GetImageBasedLightingAssetCount(
       BridgeId bridge_id) = 0;
 
+  // Texture pipeline renderer functions.
+  virtual absl::Status AddTexturePipelineRenderers(
+      const android_xr::schemas::AddTexturePipelineRenderers& command) = 0;
+  virtual absl::Status RemoveTexturePipelineRenderers(
+      const android_xr::schemas::RemoveTexturePipelineRenderers& command) = 0;
+  virtual absl::Status UpdateTexturePipelineRenderers(
+      const android_xr::schemas::UpdateTexturePipelineRenderers& command) = 0;
+  virtual absl::Status RegisterNamedTextures(
+      const android_xr::schemas::RegisterNamedTextures& command) = 0;
+  virtual absl::Status UnregisterNamedTextures(
+      const android_xr::schemas::UnregisterNamedTextures& command) = 0;
+
   // Sets an external texture for the given bridge id.
   //
   // The content_security_level is the security level of the content being

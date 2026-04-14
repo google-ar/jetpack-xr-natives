@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "core/common/log.h"
@@ -185,11 +186,8 @@ filament::IndexBuffer* Mesh::GetIndexBuffer() {
   return mesh_data_gpu_->GetIndexBuffer();
 }
 
-filament::RenderableManager::PrimitiveType Mesh::GetPrimitiveType() {
-  if (parent_mesh_) {
-    return parent_mesh_->GetPrimitiveType();
-  }
-  return mesh_data_gpu_->GetPrimitiveType();
+filament::RenderableManager::PrimitiveType Mesh::GetPrimitiveType() const {
+  return primitive_type_;
 }
 
 bool Mesh::IsCollisionAccelerationStructureEnabled() {
@@ -244,10 +242,13 @@ Mesh::Mesh(MeshGpuDataPtr mesh_data_gpu, MeshDataPtr mesh_data, const Box& aabb)
   mesh_range_.offset = 0;
   mesh_range_.count = mesh_data_gpu_->GetDescription().index_count;
   aabb_ = aabb;
+  primitive_type_ = mesh_data_gpu_->GetPrimitiveType();
 }
 
-Mesh::Mesh(BorrowedMeshPtr parent_mesh, int index_render_offset,
-           int index_render_count, const Box& aabb) {
+Mesh::Mesh(
+    BorrowedMeshPtr parent_mesh, int index_render_offset,
+    int index_render_count, const Box& aabb,
+    std::optional<filament::RenderableManager::PrimitiveType> primitive_type) {
   if (parent_mesh->IsSubmesh()) {
     IMP_LOG(imp::FATAL) << "Cannot create a submesh from a submesh.";
     return;
@@ -258,5 +259,10 @@ Mesh::Mesh(BorrowedMeshPtr parent_mesh, int index_render_offset,
   mesh_range_.offset = index_render_offset;
   mesh_range_.count = index_render_count;
   aabb_ = aabb;
+  if (primitive_type.has_value()) {
+    primitive_type_ = *primitive_type;
+  } else {
+    primitive_type_ = parent_mesh_->GetPrimitiveType();
+  }
 }
 }  // namespace imp

@@ -309,10 +309,8 @@ auto ComponentManager::SetupComponentAfterAdd(ComponentHandle<T> comp,
 template <typename T>
 ComponentHandle<T> ComponentManager::AddWithoutSetup(NodeHandle node) {
   ComponentPool<T>& pool = GetComponentPool<T>();
-  T* component = static_cast<T*>(pool.Add(node.GetEntity()));
-  ComponentHandle<T> comp =
-      ComponentHandle<T>(node.GetEntity(), &pool, component);
-  comp->PostCreated(node, kComponentId<T>);
+  T* component = static_cast<T*>(pool.Add(node));
+  ComponentHandle<T> comp = ComponentHandle<T>(*component);
   return comp;
 }
 
@@ -409,7 +407,7 @@ ComponentHandle<T> ComponentManager::Get(utils::Entity entity) {
     return ComponentHandle<T>();
   }
 
-  return ComponentHandle<T>(entity, &pool, static_cast<T*>(component));
+  return ComponentHandle<T>(static_cast<T&>(*component));
 }
 
 template <typename T, typename Fn>

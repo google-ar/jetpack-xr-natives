@@ -32,7 +32,7 @@ void DesktopInputHandler::Update(InputManager* input_manager) {
       event.pointer_events = input_manager->PopPointerEvents();
     }
     if (input_manager->HasWheelEvent()) {
-      event.wheel_event = input_manager->PopWheelEvent();
+      event.wheel_events = input_manager->PopWheelEvents();
     }
     view_->GetDispatcher().Send(DesktopCombinedInputEvent(event));
   }

@@ -344,6 +344,10 @@ class SlicedGlyphAtlas : public Rememberer {
       .atlas_entry = AtlasPacker::ScopedAtlasEntry::Empty(),
       .measurements = TextMetrics::default_instance(),
       .fallback_font = nullptr};
+
+#if IMP_RUNTIME(DEV)
+  friend class TextStressTestView;
+#endif
 };
 
 }  // namespace imp

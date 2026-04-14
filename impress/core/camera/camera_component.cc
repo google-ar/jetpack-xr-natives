@@ -14,6 +14,8 @@
 
 #include "core/camera/camera_component.h"
 
+#include <cmath>
+#include <limits>
 #include <optional>
 #include <utility>
 
@@ -31,6 +33,7 @@
 #include "core/math/almost_equal.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
+#include "core/ncsb/component_handle.h"
 #include "core/ncsb/node.h"
 #include "core/view/base_view.h"
 #include "core/view/view_events.h"
@@ -46,14 +49,44 @@ using ProjectionType = CameraState::ProjectionType;
 constexpr float kDefaultOrthographicScale = 5;
 // Magic constants courtesy of sceneform/rendering/Renderer.java:72
 constexpr float kVerticalFOV = 45.0f;
-constexpr float kClipNear = 0.01f;
+// Value for the far clipping plane if not set.
 constexpr float kClipFar = 30.0f;
 constexpr float kCameraAperture = 4.0f;
 constexpr float kCameraShutterSpeed = 1.0f / 30.0f;
 constexpr float kCameraIso = 320;
+
 }  // namespace
 
+void CameraComponent::SanitizeClipPlanes() {
+  // The near clipping plane must be greater than 0 for Filament not to crash.
+  if (state_.near.has_value() && state_.near.value() <= kClipNearMinimum) {
+    state_.near = kClipNearMinimum;
+  }
+  const float near_clip = GetNearClip();
+  if (near_clip >= GetFarClip() - kClipNearToFarTolerance) {
+    float new_far = near_clip + kClipNearToFarTolerance;
+    // Edge case where someone passes in a value so large for near clip that
+    // there is not enough precision to make near clip + tolerance different
+    // from near clip.
+    if (new_far <= near_clip) {
+      new_far = std::nextafter(near_clip, std::numeric_limits<float>::max());
+      if (new_far <= near_clip) {
+        // Near clip is so large there is no valid far clip value.
+        // Decrease near clip instead so that far clip can exceed it.
+        state_.near = std::nextafter(near_clip, 0.0f);
+        new_far = near_clip;
+      }
+    }
+    state_.far = new_far;
+    IMP_LOG(imp::WARNING) << "CameraComponent on Node " << GetNode()->GetName()
+                 << " had near clip greater than far clip. Far clip was set to "
+                    "a valid value.";
+  }
+}
+
 void CameraComponent::UpdateProjection(float2 scale) {
+  SanitizeClipPlanes();
+
   float fov = state_.fov.value_or(kVerticalFOV);
 
   switch (GetProjectionType()) {
@@ -187,6 +220,22 @@ void CameraComponent::Setup(filament::Camera* camera) {
 }
 
 void CameraComponent::Cleanup() {
+  CameraManager& camera_manager = GetView().GetCameraManager();
+  const ComponentHandle<CameraComponent> this_camera = GetHandle(this);
+  // If this is the active camera, we need to try to find a replacement.
+  if (camera_manager.GetCamera() == this_camera) {
+    const ComponentHandle<CameraComponent> default_camera =
+        camera_manager.GetDefaultCamera();
+
+    if (!default_camera || default_camera == this_camera) {
+      // Clear the camera if the default is invalid or if we are the default.
+      camera_manager.ClearCamera();
+    } else {
+      // If we're not the default camera, that's our first choice to switch to.
+      camera_manager.SetCamera(default_camera);
+    }
+  }
+
   if (is_owned_) {
     GetView().GetHost()->GetEngine()->destroyCameraComponent(camera_entity_);
     // If the camera has a separate entity, destroy that too.
@@ -200,12 +249,6 @@ void CameraComponent::Cleanup() {
 }
 
 void CameraComponent::OnIsfStateChanged() {
-  if (GetNearClip() >= GetFarClip()) {
-    IMP_LOG(imp::WARNING) << "CameraComponent on Node " << GetNode()->GetName()
-                 << " has invalid near/far clip. Near: " << GetNearClip()
-                 << ", Far: " << GetFarClip()
-                 << ". Near clip should always be smaller than far clip";
-  }
   if (GetAspectRatio() <= 0.0f) {
     IMP_LOG(imp::WARNING) << "CameraComponent on Node " << GetNode()->GetName()
                  << " has invalid aspect ratio: " << GetAspectRatio();
@@ -273,27 +316,30 @@ float CameraComponent::GetOrthographicScale() const {
 }
 
 void CameraComponent::SetNearClip(float near_clip) {
-  
   state_.near = near_clip;
   UpdateProjection();
 }
 
 float CameraComponent::GetNearClip() const {
-  return state_.near.value_or(kClipNear);
+  // If the near clip is not set, set it to the minimum value.
+  // We do not need to check for valid range here since SetNearClip is the only
+  // method that sets the near clip and UpdateProjection sanitizes the value.
+  return state_.near.value_or(kClipNearMinimum);
 }
 
 void CameraComponent::SetFarClip(float far_clip) {
-  
   state_.far = far_clip;
   UpdateProjection();
 }
 
 float CameraComponent::GetFarClip() const {
+  // If the far clip is not set, set it to the minimum value.
+  // We do not need to check for valid range here since SetFarClip is the only
+  // method that sets the far clip and UpdateProjection sanitizes the value.
   return state_.far.value_or(kClipFar);
 }
 
 void CameraComponent::SetNearAndFarClip(float near_clip, float far_clip) {
-  
   state_.near = near_clip;
   state_.far = far_clip;
   UpdateProjection();

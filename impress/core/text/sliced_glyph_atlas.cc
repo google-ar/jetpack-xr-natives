@@ -176,8 +176,10 @@ SlicedGlyphAtlas::SlicedGlyphAtlas(
       this);
 
   // Prevents an issue where the texture can get cleared and needs to be redrawn
-  // when the view is resumed.
-  if (config.force_reset_on_view_resumed) {
+  // when the view is resumed. This is only relevant to the sliced atlas if
+  // there is only one slice. With multiple slices, the external texture is
+  // not sampled directly.
+  if (config.force_reset_on_view_resumed && (slice_count == 1)) {
     view.GetDispatcher().Connect(
         [this](const ViewResumedEvent& event) {
           // Cannot force reset if there is already an active canvas.
@@ -191,7 +193,6 @@ SlicedGlyphAtlas::SlicedGlyphAtlas(
           for (auto& slice : slices_) {
             slice.OnViewResumed();
           }
-          texture_manager_->OnViewResumed();
         },
         this);
   }
@@ -311,6 +312,14 @@ SlicedGlyphAtlas::~SlicedGlyphAtlas() {
 
   texture_manager_.reset();
   composite_texture_.reset();
+
+#if IMP_RUNTIME(DEV)
+  if (auto editor = view_.GetRegistry().Get<editor::Editor>(); editor.ok()) {
+    editor->get()
+        .GetWidgetUiSystem()
+        .RemoveWidget<editor::SlicedGlyphAtlasVisualizer>();
+  }
+#endif
 }
 
 void SlicedGlyphAtlas::EndFrame() {

@@ -142,6 +142,7 @@ cc_library(
         "//core/common:owned_or_borrowed_ptr",
         "//core/common:owned_or_unowned_memory",
         "//core/common:owned_ptr",
+        "//core/common:pool_allocator",
         "//core/common:rememberer",
         "//core/common:robin_map",
         "//core/common:template_helpers",

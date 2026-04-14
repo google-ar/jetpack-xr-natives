@@ -23,6 +23,7 @@
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
+#include "core/materials/material.h"
 #include "core/math/vec.h"
 #include "core/render/texture.h"
 #include "core/split_engine/flatbuffer_utils.h"
@@ -54,16 +55,14 @@ WaterReflectionMaterial::Create(imp::BaseView& view, bool transparent) {
              view, std::move(fbb),
              android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterial5cf26af8,
              spec_offset.Union())
-      .Then(
-          [&view](imp::split_engine::PlaceholderOrBuiltInMaterialPtr material) {
-            return absl::WrapUnique(
-                new WaterReflectionMaterial(view, std::move(material)));
-          });
+      .Then([&view](imp::OwnedMaterialPtr material) {
+        return absl::WrapUnique(
+            new WaterReflectionMaterial(view, std::move(material)));
+      });
 }
 
-WaterReflectionMaterial::WaterReflectionMaterial(
-    imp::BaseView& view,
-    imp::split_engine::PlaceholderOrBuiltInMaterialPtr material)
+WaterReflectionMaterial::WaterReflectionMaterial(imp::BaseView& view,
+                                                 imp::OwnedMaterialPtr material)
     : SplitEngineBuiltinMaterial(
           view,
           android_xr::schemas::BuiltInMaterialParameters::

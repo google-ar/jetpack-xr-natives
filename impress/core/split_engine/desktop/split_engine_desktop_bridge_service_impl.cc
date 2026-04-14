@@ -53,10 +53,13 @@ SplitEngineDesktopBridgeServiceImpl::SplitEngineDesktopBridgeServiceImpl(
               IMP_LOG(imp::WARNING) << "Bridge " << bridge_id << " not found.";
               return;
             }
-            static_cast<MessageGroupCompletionServerReactor*>(
-                it->second.reactor)
-                ->Shutdown(grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
-                                        "Bridge is dead."));
+            if (it->second.reactor) {
+              static_cast<MessageGroupCompletionServerReactor*>(
+                  it->second.reactor)
+                  ->Shutdown(grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
+                                          "Bridge is dead."));
+            }
+
             bridge_data_.erase(it);
           }),
       uds_path_(absl::StrFormat("/tmp/impress-uds-%d-XXXXXXXXX", getpid())) {
@@ -96,10 +99,11 @@ grpc::ServerUnaryReactor* SplitEngineDesktopBridgeServiceImpl::InitializeBridge(
               IMP_LOG(imp::WARNING) << "Bridge " << bridge_id << " not found.";
               return;
             }
-            
-            static_cast<MessageGroupCompletionServerReactor*>(
-                it->second.reactor)
-                ->ReportCompletion(message_group_id);
+            if (it->second.reactor) {
+              static_cast<MessageGroupCompletionServerReactor*>(
+                  it->second.reactor)
+                  ->ReportCompletion(message_group_id);
+            }
           });
       !status.ok()) {
     reactor->Finish(status);
@@ -244,7 +248,8 @@ SplitEngineDesktopBridgeServiceImpl::ReadMessageGroupCompletions(
 
   auto it = bridge_data_.find(bridge_id);
   if (it == bridge_data_.end()) {
-    auto reactor = new MessageGroupCompletionServerReactor();
+    // Reactor will self-delete itself when OnDone is called.
+    auto reactor = new MessageGroupCompletionServerReactor({});
     reactor->Shutdown(grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
                                    "Bridge not found."));
 
@@ -252,18 +257,32 @@ SplitEngineDesktopBridgeServiceImpl::ReadMessageGroupCompletions(
   }
 
   if (it->second.reactor) {
-    auto reactor = new MessageGroupCompletionServerReactor();
+    // Reactor will self-delete itself when OnDone is called.
+    auto reactor = new MessageGroupCompletionServerReactor({});
     reactor->Shutdown(grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
                                    "Already registered."));
 
     return reactor;
   }
 
-  // gRPC takes ownership of the reactor, so we don't need to worry about
-  // deleting it.
-  it->second.reactor = new MessageGroupCompletionServerReactor();
+  // Reactor will call provided lambda and self-delete itself when OnDone is
+  // called.
+  it->second.reactor =
+      new MessageGroupCompletionServerReactor([this, bridge_id]() {
+        absl::MutexLock lock(bridge_data_mutex_);
+        auto it = bridge_data_.find(bridge_id);
+        if (it != bridge_data_.end()) {
+          it->second.reactor = nullptr;
+        }
+      });
 
   return it->second.reactor;
+}
+
+SplitEngineDesktopBridgeServiceImpl::~SplitEngineDesktopBridgeServiceImpl() {
+  // Terminate monitoring explicitly to make sure that monitor will not
+  // access any of the destructed members.
+  heartbeat_monitor_.TerminateMonitoring();
 }
 
 }  // namespace imp::split_engine

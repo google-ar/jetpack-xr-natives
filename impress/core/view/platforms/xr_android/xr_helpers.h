@@ -32,6 +32,7 @@
 #include "core/math/vec.h"
 #include "core/monitor/monitor.h"
 #include "core/monitor/monitor_summary.h"
+#include "core/render_passes/texture_pipeline_renderer_projection_quad.h"
 #include "core/view/base_view.h"
 #include "core/view/platforms/xr_android/openxr_includes.h"
 
@@ -184,6 +185,28 @@ std::string DumpXrFrameTiming(Monitor& monitor, MonitorSummary& summary);
 
 // Converts an XrVector3f into an Impress vector.
 float3 ToVector3(XrVector3f xr_vector_3f);
+
+// Sets the eye model matrices and projection matrices for a projection on the
+// given `quad_in_world`.
+// See (broken link) for an illustration.
+void SetCameraEyesForProjectionQuad(
+    filament::Engine* engine, filament::Camera* camera,
+    const TexturePipelineRendererProjectionQuad& quad_in_world,
+    const std::vector<XrView>& latest_views);
+
+// Computes a projection matrix for a camera at `eye_pos`, with its rotation
+// the same as the rotation in `quad_trs` so that:
+// - The view direction is aligned with the quad's normal (i.e., the Z-axis in
+//   `quad_trs`).
+// - The horizontal and vertical axes of the camera also aligned with the quad's
+//   horizontal and vertical edges.
+// With that, we can then adjust the frustum's 4 planes to fit the quad
+// perfectly.
+// See (broken link) for an illustration.
+mat4 ComputeProjectionMatrixToFitQuad(const double3& eye_pos,
+                                      const mat4& quad_trs,
+                                      const float2& quad_size, float near_clip,
+                                      float far_clip);
 }  // namespace imp
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_VIEW_PLATFORMS_XR_ANDROID_XR_HELPERS_H_

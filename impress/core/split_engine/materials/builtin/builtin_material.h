@@ -38,7 +38,7 @@ using BuiltInMaterialPtr = std::unique_ptr<BuiltInMaterial>;
 // Built-in materials are on the Split Engine renderer side, which includes
 // generic glTF materials. Each built-in material has a front-end C++ class to
 // handle communicating parameters to these built-in materials via schema.
-class BuiltInMaterial {
+class BuiltInMaterial : public Material {
  public:
   virtual ~BuiltInMaterial() = default;
 

@@ -22,6 +22,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 
 #include "absl/base/attributes.h"
 #include "absl/functional/function_ref.h"
@@ -77,13 +78,11 @@ class Material {
   // Returns the underlying filament::MaterialInstance*;
   virtual filament::MaterialInstance* GetFilamentMaterialInstance() = 0;
 
-  // Returns the name of this Material.  The name is stored in this class and
-  // not connected to the underlying filament structures.
-  virtual const std::string& GetName() const;
+  // Returns the name of this Material.
+  virtual const std::string& GetName() const = 0;
 
-  // Assigns a name for this Material.  The name set in this class is not copied
-  // into underlying filament structures.
-  virtual void SetName(absl::string_view name);
+  // Assigns a name for this Material.
+  virtual void SetName(absl::string_view name) = 0;
 
   virtual void SetParameter(absl::string_view parameter_name, bool value) = 0;
   virtual void SetParameter(absl::string_view parameter_name, bool2 value) = 0;
@@ -159,9 +158,13 @@ class Material {
       "Use imp::BorrowedTexturePtr overload instead. See "
       "(broken link).")
   virtual void SetParameter(absl::string_view parameter_name,
-                            const imp::Texture* texture,
-                            std::optional<filament::TextureSampler>
-                                sampler_override = std::nullopt) = 0;
+                            const imp::Texture* texture);
+  ABSL_DEPRECATED(
+      "Use imp::BorrowedTexturePtr overload instead. See "
+      "(broken link).")
+  virtual void SetParameter(
+      absl::string_view parameter_name, const imp::Texture* texture,
+      std::optional<filament::TextureSampler> sampler_override) = 0;
 
   // Forwards the TexturePtr to the overload that takes an OwnedTexturePtr.
   //
@@ -171,10 +174,10 @@ class Material {
   //
   // If sampler_override is provided, it will be used instead of the sampler
   // from the texture.
-  virtual void SetParameter(absl::string_view parameter_name,
-                            TexturePtr texture,
-                            std::optional<filament::TextureSampler>
-                                sampler_override = std::nullopt) = 0;
+  void SetParameter(absl::string_view parameter_name, TexturePtr texture);
+  virtual void SetParameter(
+      absl::string_view parameter_name, TexturePtr texture,
+      std::optional<filament::TextureSampler> sampler_override) = 0;
 
   // Set a parameter in filament structures using texture.
   //
@@ -183,10 +186,10 @@ class Material {
   //
   // If sampler_override is provided, it will be used instead of the sampler
   // from the texture.
-  virtual void SetParameter(absl::string_view parameter_name,
-                            OwnedTexturePtr texture,
-                            std::optional<filament::TextureSampler>
-                                sampler_override = std::nullopt) = 0;
+  void SetParameter(absl::string_view parameter_name, OwnedTexturePtr texture);
+  virtual void SetParameter(
+      absl::string_view parameter_name, OwnedTexturePtr texture,
+      std::optional<filament::TextureSampler> sampler_override) = 0;
 
   // Set a parameter in filament structures using texture.
   //
@@ -196,10 +199,11 @@ class Material {
   //
   // If sampler_override is provided, it will be used instead of the sampler
   // from the texture.
-  virtual void SetParameter(absl::string_view parameter_name,
-                            BorrowedTexturePtr texture,
-                            std::optional<filament::TextureSampler>
-                                sampler_override = std::nullopt) = 0;
+  void SetParameter(absl::string_view parameter_name,
+                    BorrowedTexturePtr texture);
+  virtual void SetParameter(
+      absl::string_view parameter_name, BorrowedTexturePtr texture,
+      std::optional<filament::TextureSampler> sampler_override) = 0;
 
   // Sets an Array of values to a parameter in the underlying Filament
   // structures. Errors out if parameter_name is invalid.
@@ -253,13 +257,29 @@ class Material {
       const = 0;
 
   // Invokes the given function on each texture used by the material.
-  virtual void ForEachTexture(
-      absl::FunctionRef<void(BorrowedTexturePtr)> fn,
-      SmallSourceLocation loc = SmallSourceLocation::Current()) = 0;
-
- protected:
-  std::string name_;
+  virtual void ForEachTexture(absl::FunctionRef<void(BorrowedTexturePtr)> fn,
+                              SmallSourceLocation loc) = 0;
 };
+
+inline void Material::SetParameter(absl::string_view parameter_name,
+                                   const imp::Texture* texture) {
+  SetParameter(parameter_name, texture, std::nullopt);
+}
+
+inline void Material::SetParameter(absl::string_view parameter_name,
+                                   TexturePtr texture) {
+  SetParameter(parameter_name, std::move(texture), std::nullopt);
+}
+
+inline void Material::SetParameter(absl::string_view parameter_name,
+                                   OwnedTexturePtr texture) {
+  SetParameter(parameter_name, std::move(texture), std::nullopt);
+}
+
+inline void Material::SetParameter(absl::string_view parameter_name,
+                                   BorrowedTexturePtr texture) {
+  SetParameter(parameter_name, texture, std::nullopt);
+}
 
 }  // namespace imp
 

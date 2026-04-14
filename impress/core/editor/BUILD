@@ -68,6 +68,7 @@ cc_library(
     copts = imp_google3_copts(),
     defines = imp_defines(),
     deps = [
+        ":camera_defaults",
         ":command",
         ":editor",
         ":editor_clipboard",
@@ -86,7 +87,6 @@ cc_library(
         ":widget_ui_system",
         "//core:config",
         "//core/assets/gltf:gltf_audio_extension",
-        "//core/assets/gltf:gltf_behavior_extension",
         "//core/assets/gltf:gltf_interactivity_extension",
         "//core/async:future",
         "//core/camera",
@@ -106,6 +106,7 @@ cc_library(
         "//core/editor/widgets:asset_library",
         "//core/editor/widgets:component_ui",
         "//core/editor/widgets:console",
+        "//core/editor/widgets:debug_draw_widget",
         "//core/editor/widgets:editor_mode_toggle",
         "//core/editor/widgets:environment_light_editor",
         "//core/editor/widgets:event_injector",
@@ -459,7 +460,6 @@ cc_library(
         ":file_type_registry",
         "//core:config",
         "//core/assets",
-        "//core/assets/gltf:gltf_behavior_extension",
         "//core/assets/gltf:gltf_interactivity_extension",
         "//core/async:future",
         "//core/common",
@@ -566,11 +566,13 @@ cc_library(
     name = "command",
     srcs = [
         "command_manager.cc",
+        "composite_command.cc",
         "function_command.cc",
     ],
     hdrs = [
         "command.h",
         "command_manager.h",
+        "composite_command.h",
         "function_command.h",
     ],
     copts = imp_google3_copts(),
@@ -592,5 +594,12 @@ cc_library(
         "//core/editor/layout",
         "//core/view:base_view",
     ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "camera_defaults",
+    hdrs = ["camera_defaults.h"],
+    deps = ["//core/math"],
     alwayslink = 1,
 )

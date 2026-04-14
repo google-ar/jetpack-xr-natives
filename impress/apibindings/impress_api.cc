@@ -14,10 +14,13 @@
 
 #include <jni.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/log/check.h"
 #include "core/common/log.h"
@@ -25,13 +28,17 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 #include "filament/filament/include/filament/TextureSampler.h"
 #include "apibindings/asset_animator.h"
 #include "apibindings/asset_loader.h"
+#include "apibindings/bindings_custom_mesh.h"
+#include "apibindings/bindings_mesh_buffer.h"
 #include "apibindings/generic_material_manager.h"
 #include "apibindings/impress_api_view.h"
 #include "apibindings/jni_conversion_utils.h"
 #include "apibindings/jni_utils.h"
+#include "apibindings/mesh_manager.h"
 #include "apibindings/model_manager.h"
 #include "apibindings/node_manager.h"
 #include "apibindings/skybox_manager.h"
@@ -65,6 +72,15 @@ using ImpressApiImplAllowlist = JniAllowlist<T, imp::ImpressApiView>;
 template <class T>
 constexpr auto FromJava = &ImpressApiImplAllowlist<T>::FromJava;
 
+// Helper to validate the Impress View and log an error if it is null.
+inline bool IsValidView(imp::ImpressApiView* view) {
+  if (view == nullptr) {
+    IMP_LOG(imp::ERROR) << "ImpressApiView is null";
+    return false;
+  }
+  return true;
+}
+
 }  // namespace
 
 extern "C" {
@@ -72,12 +88,16 @@ extern "C" {
 JNI_METHOD_AOSP(void, nSetup)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   view->SetupImpressApiNative();
 }
 
 JNI_METHOD_AOSP(void, nReleaseImageBasedLightingAsset)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong ibl_token) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetSkyboxManager().ReleaseImageBasedLightingAsset(ibl_token));
 }
@@ -86,6 +106,8 @@ JNI_METHOD_AOSP(void, nLoadImageBasedLightingAssetFromPath)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jobject j_asset_loader,
  jstring path) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   auto asset_loader = std::make_unique<imp::AssetLoader>(env, j_asset_loader);
   view->GetSkyboxManager().LoadImageBasedLightingAsset(
       imp::GetString(env, path), std::move(asset_loader));
@@ -95,6 +117,8 @@ JNI_METHOD_AOSP(void, nLoadImageBasedLightingAssetFromByteArray)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jobject j_asset_loader,
  jbyteArray data, jstring key) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   auto asset_loader = std::make_unique<imp::AssetLoader>(env, j_asset_loader);
   // Move the binary data for the resource into the Releaser callback for the
   // Cord. The data is now managed by the Impress resource system.
@@ -112,6 +136,8 @@ JNI_METHOD_AOSP(void, nLoadGltfAssetFromPath)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jobject j_asset_loader,
  jstring path) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   auto asset_loader = std::make_unique<imp::AssetLoader>(env, j_asset_loader);
   view->GetModelManager().LoadGltfAsset(imp::GetString(env, path),
                                         std::move(asset_loader));
@@ -121,6 +147,8 @@ JNI_METHOD_AOSP(void, nLoadGltfAssetFromByteArray)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jobject j_asset_loader,
  jbyteArray data, jstring key) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   auto asset_loader = std::make_unique<imp::AssetLoader>(env, j_asset_loader);
   // Move the binary data for the resource into the Releaser callback for the
   // Cord. The data is now managed by the Impress resource system.
@@ -136,6 +164,8 @@ JNI_METHOD_AOSP(void, nLoadGltfAssetFromByteArray)
 JNI_METHOD_AOSP(void, nReleaseGltfAsset)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong gltf_token) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetModelManager().ReleaseGltfAsset(gltf_token));
 }
@@ -144,6 +174,8 @@ JNI_METHOD_AOSP(int32_t, nInstanceGltfModel)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong gltf_token,
  jboolean enable_collider) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return -1;
+
   absl::StatusOr<int32_t> result =
       view->GetModelManager().InstanceGltfModel(gltf_token, enable_collider);
   if (!imp::android::ThrowIfError(env, result).ok()) {
@@ -158,6 +190,8 @@ JNI_METHOD_AOSP(void, nSetGltfModelColliderEnabled)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong impress_node,
  jboolean enable_collider) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetModelManager().SetGltfModelColliderEnabled(
                impress_node, enable_collider));
@@ -167,79 +201,56 @@ JNI_METHOD_AOSP(void, nSetGltfReformAffordanceEnabled)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
  jboolean enable_affordance, jboolean system_movable) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetModelManager().SetGltfReformAffordanceEnabled(
                impress_node, enable_affordance, system_movable));
 }
 
-JNI_METHOD_AOSP(void, nAnimateGltfModelNew)
+JNI_METHOD_AOSP(void, nAnimateGltfModel)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
  jstring animation_name, jboolean loop, jfloat speed, jfloat start_time,
  jint channel_id, jobject j_asset_animator) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   auto asset_animator =
       std::make_unique<imp::AssetAnimator>(env, j_asset_animator);
 
-  view->GetModelManager().AnimateGltfModelNew(
+  view->GetModelManager().AnimateGltfModel(
       impress_node, imp::GetString(env, animation_name), loop, speed,
       start_time, channel_id, std::move(asset_animator));
 }
 
-// TODO: (broken link) - Remove old animation APIs once all clients are migrated
-// to new animation system.
-JNI_METHOD_AOSP(void, nAnimateGltfModel)
-(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
- jstring animation_name, jboolean loop, jobject j_asset_animator) {
-  auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto asset_animator =
-      std::make_unique<imp::AssetAnimator>(env, j_asset_animator);
-  view->GetModelManager().AnimateGltfModel(impress_node,
-                                           imp::GetString(env, animation_name),
-                                           loop, std::move(asset_animator));
-}
-
-JNI_METHOD_AOSP(void, nStopGltfModelAnimationNew)
+JNI_METHOD_AOSP(void, nStopGltfModelAnimation)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
  jint channel_id) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
-      env, view->GetModelManager().StopGltfModelAnimationNew(impress_node,
-                                                             channel_id));
+      env,
+      view->GetModelManager().StopGltfModelAnimation(impress_node, channel_id));
 }
 
-// TODO: (broken link) - Remove old animation APIs once all clients are migrated
-// to new animation system.
-JNI_METHOD_AOSP(void, nStopGltfModelAnimation)
-(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node) {
-  auto view = FromJava<imp::ImpressApiView>(view_handle);
-  (void)imp::android::ThrowIfError(
-      env, view->GetModelManager().StopGltfModelAnimation(impress_node));
-}
-
-JNI_METHOD_AOSP(void, nToggleGltfModelAnimationNew)
+JNI_METHOD_AOSP(void, nToggleGltfModelAnimation)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
  jboolean toggle, jint channel_id) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  (void)imp::android::ThrowIfError(
-      env, view->GetModelManager().ToggleGltfModelAnimationNew(
-               impress_node, toggle, channel_id));
-}
+  if (!IsValidView(view)) return;
 
-// TODO: (broken link) - Remove old animation APIs once all clients are migrated
-// to new animation system.
-JNI_METHOD_AOSP(void, nToggleGltfModelAnimation)
-(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
- jboolean toggle) {
-  auto view = FromJava<imp::ImpressApiView>(view_handle);
   (void)imp::android::ThrowIfError(
-      env,
-      view->GetModelManager().ToggleGltfModelAnimation(impress_node, toggle));
+      env, view->GetModelManager().ToggleGltfModelAnimation(
+               impress_node, toggle, channel_id));
 }
 
 JNI_METHOD_AOSP(void, nSetGltfModelAnimationSpeed)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
  jfloat speed, jint channel_id) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetModelManager().SetGltfModelAnimationSpeed(
                impress_node, speed, channel_id));
@@ -249,6 +260,8 @@ JNI_METHOD_AOSP(void, nSetGltfModelAnimationPlaybackTime)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
  jfloat playback_time, jint channel_id) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetModelManager().SetGltfModelAnimationPlaybackTime(
                impress_node, playback_time, channel_id));
@@ -257,6 +270,8 @@ JNI_METHOD_AOSP(void, nSetGltfModelAnimationPlaybackTime)
 JNI_METHOD_AOSP(jint, nGetGltfModelAnimationCount)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return -1;
+
   absl::StatusOr<int32_t> result =
       view->GetModelManager().GetGltfModelAnimationCount(impress_node);
   if (!imp::android::ThrowIfError(env, result).ok()) {
@@ -270,6 +285,8 @@ JNI_METHOD_AOSP(jstring, nGetGltfModelAnimationName)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
  jint index) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return nullptr;
+
   absl::StatusOr<std::string> result =
       view->GetModelManager().GetGltfModelAnimationName(impress_node, index);
   if (!imp::android::ThrowIfError(env, result).ok()) {
@@ -283,6 +300,8 @@ JNI_METHOD_AOSP(jfloat, nGetGltfModelAnimationDurationSeconds)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
  jint index) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return -1.0f;
+
   absl::StatusOr<float> result =
       view->GetModelManager().GetGltfModelAnimationDurationSeconds(impress_node,
                                                                    index);
@@ -297,6 +316,8 @@ JNI_METHOD_AOSP(void, nGetGltfModelLocalBounds)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
  jfloatArray out_center, jfloatArray out_half_extent) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   absl::StatusOr<imp::Box> result =
       view->GetModelManager().GetGltfModelLocalBounds(impress_node);
   if (!imp::android::ThrowIfError(env, result).ok()) {
@@ -326,12 +347,16 @@ JNI_METHOD_AOSP(void, nGetGltfModelLocalBounds)
 JNI_METHOD_AOSP(jint, nCreateImpressNode)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return -1;
+
   return view->GetNodeManager().CreateImpressNode();
 }
 
 JNI_METHOD_AOSP(void, nDestroyImpressNode)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetNodeManager().DestroyImpressNode(impress_node));
 }
@@ -340,6 +365,8 @@ JNI_METHOD_AOSP(void, nSetImpressNodeParent)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node_child,
  jint impress_node_parent) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetNodeManager().SetImpressNodeParent(impress_node_child,
                                                        impress_node_parent));
@@ -348,6 +375,8 @@ JNI_METHOD_AOSP(void, nSetImpressNodeParent)
 JNI_METHOD_AOSP(jint, nGetImpressNodeParent)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return -1;
+
   absl::StatusOr<int32_t> result =
       view->GetNodeManager().GetImpressNodeParent(impress_node);
   if (!result.ok()) {
@@ -361,6 +390,8 @@ JNI_METHOD_AOSP(jint, nGetImpressNodeParent)
 JNI_METHOD_AOSP(jint, nGetImpressNodeChildCount)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return -1;
+
   absl::StatusOr<int32_t> result =
       view->GetNodeManager().GetImpressNodeChildCount(impress_node);
   if (!result.ok()) {
@@ -375,6 +406,8 @@ JNI_METHOD_AOSP(jint, nGetImpressNodeChildAt)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
  jint index) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return -1;
+
   absl::StatusOr<int32_t> result =
       view->GetNodeManager().GetImpressNodeChildAt(impress_node, index);
   if (!result.ok()) {
@@ -388,6 +421,8 @@ JNI_METHOD_AOSP(jint, nGetImpressNodeChildAt)
 JNI_METHOD_AOSP(jstring, nGetImpressNodeName)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return nullptr;
+
   absl::StatusOr<absl::string_view> result =
       view->GetNodeManager().GetImpressNodeName(impress_node);
   if (!result.ok()) {
@@ -403,6 +438,7 @@ JNI_METHOD_AOSP(void, nSetImpressNodeLocalTransform)
  jfloat ty, jfloat tz, jfloat qx, jfloat qy, jfloat qz, jfloat qw, jfloat sx,
  jfloat sy, jfloat sz) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
 
   imp::Transform<float> transform;
   transform.translation = {tx, ty, tz};
@@ -418,6 +454,7 @@ JNI_METHOD_AOSP(void, nGetImpressNodeLocalTransform)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
  jfloatArray out_transform) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
 
   if (out_transform == nullptr || env->GetArrayLength(out_transform) < 10) {
     (void)imp::android::ThrowIfError(
@@ -443,6 +480,7 @@ JNI_METHOD_AOSP(void, nSetImpressNodeRelativeTransform)
  jint relative_impress_node, jfloat tx, jfloat ty, jfloat tz, jfloat qx,
  jfloat qy, jfloat qz, jfloat qw, jfloat sx, jfloat sy, jfloat sz) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
 
   imp::Transform<float> transform;
   transform.translation = {tx, ty, tz};
@@ -458,6 +496,7 @@ JNI_METHOD_AOSP(void, nGetImpressNodeRelativeTransform)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
  jint relative_impress_node, jfloatArray out_transform) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
 
   if (out_transform == nullptr || env->GetArrayLength(out_transform) < 10) {
     (void)imp::android::ThrowIfError(
@@ -484,6 +523,7 @@ JNI_METHOD_AOSP(jint, nCreateStereoSurfaceEntity)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, int stereo_mode,
  int blending_mode, int content_security_level, jboolean use_super_sampling) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return -1;
 
   // Validate stereo mode.
   if (stereo_mode < static_cast<int>(imp::MediaStereoMode::kUnknown) ||
@@ -530,16 +570,32 @@ JNI_METHOD_AOSP(void, nSetStereoSurfaceEntityCanvasShapeQuad)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id, jfloat width,
  jfloat height, jfloat corner_radius) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env,
       view->GetStereoSurfaceManager().SetStereoSurfaceEntityCanvasShape(
           node_id, imp::StereoSurface::Quad({width, height, corner_radius})));
 }
 
+JNI_METHOD_AOSP(void, nSetStereoSurfaceEntityCanvasShapeCurvedRect)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id, jfloat width,
+ jfloat height, jfloat corner_radius, jfloat curve_radius) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
+  auto unused = imp::android::ThrowIfError(
+      env, view->GetStereoSurfaceManager().SetStereoSurfaceEntityCanvasShape(
+               node_id, imp::StereoSurface::CurvedRect(
+                            {width, height, corner_radius, curve_radius})));
+}
+
 JNI_METHOD_AOSP(void, nSetStereoSurfaceEntityCanvasShapeSphere)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
  jfloat radius) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetStereoSurfaceManager().SetStereoSurfaceEntityCanvasShape(
                node_id, imp::StereoSurface::Sphere({radius})));
@@ -549,6 +605,8 @@ JNI_METHOD_AOSP(void, nSetStereoSurfaceEntityCanvasShapeHemisphere)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
  jfloat radius) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetStereoSurfaceManager().SetStereoSurfaceEntityCanvasShape(
                node_id, imp::StereoSurface::Hemisphere({radius})));
@@ -560,6 +618,8 @@ JNI_METHOD_AOSP(void, nSetStereoSurfaceEntityCanvasShapeCustomMesh)
  jobject right_positions, jobject right_texcoords, jobject right_indices,
  jint draw_mode) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   absl::StatusOr<imp::StereoSurface::StereoMesh> mesh = imp::BuildStereoMesh(
       env, left_positions, left_texcoords, left_indices, right_positions,
       right_texcoords, right_indices, draw_mode);
@@ -576,6 +636,8 @@ JNI_METHOD_AOSP(void, nSetStereoSurfaceEntityColliderEnabled)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
  jboolean enable_collider) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env,
       view->GetStereoSurfaceManager().SetStereoSurfaceEntityColliderEnabled(
@@ -585,6 +647,8 @@ JNI_METHOD_AOSP(void, nSetStereoSurfaceEntityColliderEnabled)
 JNI_METHOD_AOSP(jobject, nGetSurfaceFromStereoSurfaceEntity)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return nullptr;
+
   absl::StatusOr<imp::android::Surface*> result =
       view->GetStereoSurfaceManager().GetSurfaceFromStereoSurfaceEntity(
           node_id);
@@ -602,6 +666,8 @@ JNI_METHOD_AOSP(void, nSetStereoSurfaceEntitySurfaceSize)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id, jint width,
  jint height) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env,
       view->GetStereoSurfaceManager()
@@ -612,6 +678,8 @@ JNI_METHOD_AOSP(void, nSetFeatherRadiusForStereoSurfaceEntity)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
  jfloat radius_x, jfloat radius_y) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env,
       view->GetStereoSurfaceManager().SetFeatherRadiusForStereoSurfaceEntity(
@@ -622,6 +690,7 @@ JNI_METHOD_AOSP(void, nSetStereoModeForStereoSurfaceEntity)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
  jint stereo_mode) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
 
   // Validate stereo mode.
   if (stereo_mode < static_cast<int>(imp::MediaStereoMode::kUnknown) ||
@@ -642,6 +711,7 @@ JNI_METHOD_AOSP(void, nSetBlendingModeForStereoSurfaceEntity)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
  jint blending_mode) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
 
   // Validate blending mode.
   if (blending_mode < static_cast<int>(imp::MediaBlendingMode::kTransparent) ||
@@ -662,6 +732,7 @@ JNI_METHOD_AOSP(void, nSetContentColorMetadataForStereoSurfaceEntity)
  jint color_standard, jint color_transfer, jint color_range,
  jint max_luminance) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
 
   absl::StatusOr<imp::MediaColorSpace::Standard> verified_color_standard =
       imp::MediaColorSpace::ToColorStandard(color_standard);
@@ -699,6 +770,8 @@ JNI_METHOD_AOSP(void, nSetContentColorMetadataForStereoSurfaceEntity)
 JNI_METHOD_AOSP(void, nResetContentColorMetadataForStereoSurfaceEntity)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetStereoSurfaceManager()
                .SetContentColorMetadataForStereoSurfaceEntity(node_id));
@@ -708,6 +781,8 @@ JNI_METHOD_AOSP(void, nSetPrimaryAlphaMaskForStereoSurfaceEntity)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
  jlong alpha_mask_token, jobject j_asset_loader) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env,
       view->GetStereoSurfaceManager().SetPrimaryAlphaMaskForStereoSurfaceEntity(
@@ -718,6 +793,8 @@ JNI_METHOD_AOSP(void, nSetAuxiliaryAlphaMaskForStereoSurfaceEntity)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
  jlong alpha_mask_token, jobject j_asset_loader) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetStereoSurfaceManager()
                .SetAuxiliaryAlphaMaskForStereoSurfaceEntity(node_id,
@@ -730,6 +807,8 @@ JNI_METHOD_AOSP(void, nSetSubViewConfigForStereoSurfaceEntity)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id, jfloat bottom,
  jfloat left, jfloat right, jfloat top) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   auto unused = imp::android::ThrowIfError(
       env,
       view->GetStereoSurfaceManager().SetSubViewConfigForStereoSurfaceEntity(
@@ -740,6 +819,8 @@ JNI_METHOD_AOSP(void, nLoadTexture)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jobject j_asset_loader,
  jstring path) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   auto asset_loader = std::make_unique<imp::AssetLoader>(env, j_asset_loader);
   view->GetTextureManager().LoadTexture(imp::GetString(env, path),
                                         std::move(asset_loader));
@@ -748,6 +829,8 @@ JNI_METHOD_AOSP(void, nLoadTexture)
 JNI_METHOD_AOSP(std::intptr_t, nBorrowReflectionTexture)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return -1;
+
   absl::StatusOr<intptr_t> result =
       view->GetTextureManager().BorrowReflectionTexture();
   if (!imp::android::ThrowIfError(env, result).ok()) {
@@ -760,6 +843,8 @@ JNI_METHOD_AOSP(std::intptr_t, nBorrowReflectionTexture)
 JNI_METHOD_AOSP(std::intptr_t, nGetReflectionTextureFromIbl)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong ibl_token) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return -1;
+
   absl::StatusOr<intptr_t> result =
       view->GetTextureManager().GetReflectionTextureFromIbl(ibl_token);
   if (!imp::android::ThrowIfError(env, result).ok()) {
@@ -773,6 +858,8 @@ JNI_METHOD_AOSP(void, nCreateWaterMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jobject j_asset_loader,
  jboolean is_alpha_map_version) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   auto asset_loader = std::make_unique<imp::AssetLoader>(env, j_asset_loader);
   view->GetWaterMaterialManager().CreateWaterMaterial(std::move(asset_loader),
                                                       is_alpha_map_version);
@@ -784,6 +871,8 @@ JNI_METHOD_AOSP(void, nSetReflectionMapOnWaterMaterial)
  jint wrap_mode_t, jint wrap_mode_r, jint compare_mode, jint compare_func,
  jint anisotropyLog2) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   absl::StatusOr<filament::TextureSampler> native_sampler =
       imp::BuildTextureSamplerFromValues(min_filter, mag_filter, wrap_mode_s,
                                          wrap_mode_t, wrap_mode_r, compare_mode,
@@ -802,6 +891,8 @@ JNI_METHOD_AOSP(void, nSetNormalMapOnWaterMaterial)
  jint wrap_mode_t, jint wrap_mode_r, jint compare_mode, jint compare_func,
  jint anisotropyLog2) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   absl::StatusOr<filament::TextureSampler> native_sampler =
       imp::BuildTextureSamplerFromValues(min_filter, mag_filter, wrap_mode_s,
                                          wrap_mode_t, wrap_mode_r, compare_mode,
@@ -818,6 +909,8 @@ JNI_METHOD_AOSP(void, nSetNormalTilingOnWaterMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong water_material,
  jfloat normal_tiling) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetWaterMaterialManager().SetNormalTilingOnWaterMaterial(
                water_material, normal_tiling));
@@ -827,6 +920,8 @@ JNI_METHOD_AOSP(void, nSetNormalSpeedOnWaterMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong water_material,
  jfloat normal_speed) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetWaterMaterialManager().SetNormalSpeedOnWaterMaterial(
                water_material, normal_speed));
@@ -836,6 +931,8 @@ JNI_METHOD_AOSP(void, nSetAlphaStepMultiplierOnWaterMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong water_material,
  jfloat alpha_step_multiplier) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env,
       view->GetWaterMaterialManager().SetAlphaStepMultiplierOnWaterMaterial(
@@ -848,6 +945,8 @@ JNI_METHOD_AOSP(void, nSetAlphaMapOnWaterMaterial)
  jint wrap_mode_t, jint wrap_mode_r, jint compare_mode, jint compare_func,
  jint anisotropyLog2) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   absl::StatusOr<filament::TextureSampler> native_sampler =
       imp::BuildTextureSamplerFromValues(min_filter, mag_filter, wrap_mode_s,
                                          wrap_mode_t, wrap_mode_r, compare_mode,
@@ -864,6 +963,8 @@ JNI_METHOD_AOSP(void, nSetNormalZOnWaterMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong water_material,
  jfloat normal_z) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetWaterMaterialManager().SetNormalZOnWaterMaterial(
                water_material, normal_z));
@@ -873,6 +974,8 @@ JNI_METHOD_AOSP(void, nSetNormalBoundaryOnWaterMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong water_material,
  jfloat normal_boundary) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetWaterMaterialManager().SetNormalBoundaryOnWaterMaterial(
                water_material, normal_boundary));
@@ -882,6 +985,8 @@ JNI_METHOD_AOSP(void, nCreateGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jobject j_asset_loader,
  jint lighting_model, jint blend_mode, jint double_sided_mode) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   auto asset_loader = std::make_unique<imp::AssetLoader>(env, j_asset_loader);
   absl::StatusOr<imp::GenericMaterialSpec> generic_material_spec =
       imp::BuildGenericMaterialSpecFromValues(lighting_model, blend_mode,
@@ -899,6 +1004,8 @@ JNI_METHOD_AOSP(void, nSetBaseColorTextureOnGenericMaterial)
  jint wrap_mode_t, jint wrap_mode_r, jint compare_mode, jint compare_func,
  jint anisotropyLog2) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   absl::StatusOr<filament::TextureSampler> native_sampler =
       imp::BuildTextureSamplerFromValues(min_filter, mag_filter, wrap_mode_s,
                                          wrap_mode_t, wrap_mode_r, compare_mode,
@@ -917,6 +1024,8 @@ JNI_METHOD_AOSP(void, nSetBaseColorUvTransformOnGenericMaterial)
  jfloat m00, jfloat m01, jfloat m02, jfloat m10, jfloat m11, jfloat m12,
  jfloat m20, jfloat m21, jfloat m22) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   imp::mat3f uv_transform(m00, m01, m02, m10, m11, m12, m20, m21, m22);
   (void)imp::android::ThrowIfError(
       env, view->GetGenericMaterialManager()
@@ -928,6 +1037,8 @@ JNI_METHOD_AOSP(void, nSetBaseColorFactorsOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat x, jfloat y, jfloat z, jfloat w) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetBaseColorFactorsOnGenericMaterial(
@@ -940,6 +1051,8 @@ JNI_METHOD_AOSP(void, nSetMetallicRoughnessTextureOnGenericMaterial)
  jint wrap_mode_s, jint wrap_mode_t, jint wrap_mode_r, jint compare_mode,
  jint compare_func, jint anisotropyLog2) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   absl::StatusOr<filament::TextureSampler> native_sampler =
       imp::BuildTextureSamplerFromValues(min_filter, mag_filter, wrap_mode_s,
                                          wrap_mode_t, wrap_mode_r, compare_mode,
@@ -959,6 +1072,8 @@ JNI_METHOD_AOSP(void, nSetMetallicRoughnessUvTransformOnGenericMaterial)
  jfloat m00, jfloat m01, jfloat m02, jfloat m10, jfloat m11, jfloat m12,
  jfloat m20, jfloat m21, jfloat m22) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   imp::mat3f uv_transform(m00, m01, m02, m10, m11, m12, m20, m21, m22);
   (void)imp::android::ThrowIfError(
       env, view->GetGenericMaterialManager()
@@ -970,6 +1085,8 @@ JNI_METHOD_AOSP(void, nSetMetallicFactorOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat factor) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetGenericMaterialManager().SetMetallicFactorOnGenericMaterial(
                generic_material, factor));
@@ -979,6 +1096,8 @@ JNI_METHOD_AOSP(void, nSetRoughnessFactorOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat factor) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetRoughnessFactorOnGenericMaterial(
@@ -991,6 +1110,8 @@ JNI_METHOD_AOSP(void, nSetNormalTextureOnGenericMaterial)
  jint wrap_mode_t, jint wrap_mode_r, jint compare_mode, jint compare_func,
  jint anisotropyLog2) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   absl::StatusOr<filament::TextureSampler> native_sampler =
       imp::BuildTextureSamplerFromValues(min_filter, mag_filter, wrap_mode_s,
                                          wrap_mode_t, wrap_mode_r, compare_mode,
@@ -1008,6 +1129,8 @@ JNI_METHOD_AOSP(void, nSetNormalUvTransformOnGenericMaterial)
  jfloat m00, jfloat m01, jfloat m02, jfloat m10, jfloat m11, jfloat m12,
  jfloat m20, jfloat m21, jfloat m22) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   imp::mat3f uv_transform(m00, m01, m02, m10, m11, m12, m20, m21, m22);
   (void)imp::android::ThrowIfError(
       env,
@@ -1019,6 +1142,8 @@ JNI_METHOD_AOSP(void, nSetNormalFactorOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat factor) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetGenericMaterialManager().SetNormalFactorOnGenericMaterial(
                generic_material, factor));
@@ -1030,6 +1155,8 @@ JNI_METHOD_AOSP(void, nSetAmbientOcclusionTextureOnGenericMaterial)
  jint wrap_mode_s, jint wrap_mode_t, jint wrap_mode_r, jint compare_mode,
  jint compare_func, jint anisotropyLog2) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   absl::StatusOr<filament::TextureSampler> native_sampler =
       imp::BuildTextureSamplerFromValues(min_filter, mag_filter, wrap_mode_s,
                                          wrap_mode_t, wrap_mode_r, compare_mode,
@@ -1049,6 +1176,8 @@ JNI_METHOD_AOSP(void, nSetAmbientOcclusionUvTransformOnGenericMaterial)
  jfloat m00, jfloat m01, jfloat m02, jfloat m10, jfloat m11, jfloat m12,
  jfloat m20, jfloat m21, jfloat m22) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   imp::mat3f uv_transform(m00, m01, m02, m10, m11, m12, m20, m21, m22);
   (void)imp::android::ThrowIfError(
       env, view->GetGenericMaterialManager()
@@ -1060,6 +1189,8 @@ JNI_METHOD_AOSP(void, nSetAmbientOcclusionFactorOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat factor) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetGenericMaterialManager()
                .SetAmbientOcclusionFactorOnGenericMaterial(generic_material,
@@ -1072,6 +1203,8 @@ JNI_METHOD_AOSP(void, nSetEmissiveTextureOnGenericMaterial)
  jint wrap_mode_t, jint wrap_mode_r, jint compare_mode, jint compare_func,
  jint anisotropyLog2) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   absl::StatusOr<filament::TextureSampler> native_sampler =
       imp::BuildTextureSamplerFromValues(min_filter, mag_filter, wrap_mode_s,
                                          wrap_mode_t, wrap_mode_r, compare_mode,
@@ -1090,6 +1223,8 @@ JNI_METHOD_AOSP(void, nSetEmissiveUvTransformOnGenericMaterial)
  jfloat m00, jfloat m01, jfloat m02, jfloat m10, jfloat m11, jfloat m12,
  jfloat m20, jfloat m21, jfloat m22) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   imp::mat3f uv_transform(m00, m01, m02, m10, m11, m12, m20, m21, m22);
   (void)imp::android::ThrowIfError(
       env,
@@ -1101,6 +1236,8 @@ JNI_METHOD_AOSP(void, nSetEmissiveFactorsOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat x, jfloat y, jfloat z) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetEmissiveFactorsOnGenericMaterial(
@@ -1113,6 +1250,8 @@ JNI_METHOD_AOSP(void, nSetClearcoatTextureOnGenericMaterial)
  jint wrap_mode_t, jint wrap_mode_r, jint compare_mode, jint compare_func,
  jint anisotropyLog2) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   absl::StatusOr<filament::TextureSampler> native_sampler =
       imp::BuildTextureSamplerFromValues(min_filter, mag_filter, wrap_mode_s,
                                          wrap_mode_t, wrap_mode_r, compare_mode,
@@ -1132,6 +1271,8 @@ JNI_METHOD_AOSP(void, nSetClearcoatNormalTextureOnGenericMaterial)
  jint wrap_mode_s, jint wrap_mode_t, jint wrap_mode_r, jint compare_mode,
  jint compare_func, jint anisotropyLog2) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   absl::StatusOr<filament::TextureSampler> native_sampler =
       imp::BuildTextureSamplerFromValues(min_filter, mag_filter, wrap_mode_s,
                                          wrap_mode_t, wrap_mode_r, compare_mode,
@@ -1152,6 +1293,8 @@ JNI_METHOD_AOSP(void, nSetClearcoatRoughnessTextureOnGenericMaterial)
  jint wrap_mode_s, jint wrap_mode_t, jint wrap_mode_r, jint compare_mode,
  jint compare_func, jint anisotropyLog2) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   absl::StatusOr<filament::TextureSampler> native_sampler =
       imp::BuildTextureSamplerFromValues(min_filter, mag_filter, wrap_mode_s,
                                          wrap_mode_t, wrap_mode_r, compare_mode,
@@ -1170,6 +1313,8 @@ JNI_METHOD_AOSP(void, nSetClearcoatFactorsOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat intensity, jfloat roughness, jfloat normal) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetClearcoatFactorsOnGenericMaterial(
@@ -1182,6 +1327,8 @@ JNI_METHOD_AOSP(void, nSetSheenColorTextureOnGenericMaterial)
  jint wrap_mode_t, jint wrap_mode_r, jint compare_mode, jint compare_func,
  jint anisotropyLog2) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   absl::StatusOr<filament::TextureSampler> native_sampler =
       imp::BuildTextureSamplerFromValues(min_filter, mag_filter, wrap_mode_s,
                                          wrap_mode_t, wrap_mode_r, compare_mode,
@@ -1199,6 +1346,8 @@ JNI_METHOD_AOSP(void, nSetSheenColorFactorsOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat x, jfloat y, jfloat z) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetSheenColorFactorsOnGenericMaterial(
@@ -1211,6 +1360,8 @@ JNI_METHOD_AOSP(void, nSetSheenRoughnessTextureOnGenericMaterial)
  jint wrap_mode_s, jint wrap_mode_t, jint wrap_mode_r, jint compare_mode,
  jint compare_func, jint anisotropyLog2) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   absl::StatusOr<filament::TextureSampler> native_sampler =
       imp::BuildTextureSamplerFromValues(min_filter, mag_filter, wrap_mode_s,
                                          wrap_mode_t, wrap_mode_r, compare_mode,
@@ -1228,6 +1379,8 @@ JNI_METHOD_AOSP(void, nSetSheenRoughnessFactorOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat factor) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager()
@@ -1240,6 +1393,8 @@ JNI_METHOD_AOSP(void, nSetTransmissionTextureOnGenericMaterial)
  jint wrap_mode_t, jint wrap_mode_r, jint compare_mode, jint compare_func,
  jint anisotropyLog2) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   absl::StatusOr<filament::TextureSampler> native_sampler =
       imp::BuildTextureSamplerFromValues(min_filter, mag_filter, wrap_mode_s,
                                          wrap_mode_t, wrap_mode_r, compare_mode,
@@ -1258,6 +1413,8 @@ JNI_METHOD_AOSP(void, nSetTransmissionUvTransformOnGenericMaterial)
  jfloat m00, jfloat m01, jfloat m02, jfloat m10, jfloat m11, jfloat m12,
  jfloat m20, jfloat m21, jfloat m22) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   imp::mat3f uv_transform(m00, m01, m02, m10, m11, m12, m20, m21, m22);
   (void)imp::android::ThrowIfError(
       env, view->GetGenericMaterialManager()
@@ -1269,6 +1426,8 @@ JNI_METHOD_AOSP(void, nSetTransmissionFactorOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat factor) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetTransmissionFactorOnGenericMaterial(
@@ -1279,6 +1438,8 @@ JNI_METHOD_AOSP(void, nSetIndexOfRefractionOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat index_of_refraction) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetIndexOfRefractionOnGenericMaterial(
@@ -1289,6 +1450,8 @@ JNI_METHOD_AOSP(void, nSetAlphaCutoffOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat alpha_cutoff) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetGenericMaterialManager().SetAlphaCutoffOnGenericMaterial(
                generic_material, alpha_cutoff));
@@ -1297,6 +1460,8 @@ JNI_METHOD_AOSP(void, nSetAlphaCutoffOnGenericMaterial)
 JNI_METHOD_AOSP(void, nDestroyNativeObject)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong handle) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   view->DestroyNativeObject(handle);
 }
 
@@ -1304,6 +1469,8 @@ JNI_METHOD_AOSP(void, nSetGltfModelNodeMaterialOverride)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id, jlong material,
  jint primitive_index) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetModelManager().SetGltfModelNodeMaterialOverride(
                node_id, material, primitive_index));
@@ -1313,6 +1480,8 @@ JNI_METHOD_AOSP(void, nClearGltfModelNodeMaterialOverride)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
  jint primitive_index) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetModelManager().ClearGltfModelNodeMaterialOverride(
                node_id, primitive_index));
@@ -1321,6 +1490,8 @@ JNI_METHOD_AOSP(void, nClearGltfModelNodeMaterialOverride)
 JNI_METHOD_AOSP(void, nScheduleGltfReskinning)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetModelManager().ScheduleReskinning(impress_node));
 }
@@ -1328,6 +1499,8 @@ JNI_METHOD_AOSP(void, nScheduleGltfReskinning)
 JNI_METHOD_AOSP(void, nSetEnvironmentLight)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong ibl_token) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(
       env, view->GetSkyboxManager().SetEnvironmentLight(ibl_token));
 }
@@ -1335,13 +1508,379 @@ JNI_METHOD_AOSP(void, nSetEnvironmentLight)
 JNI_METHOD_AOSP(void, nClearEnvironmentLight)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   view->GetSkyboxManager().ClearEnvironmentLight();
 }
 
 JNI_METHOD_AOSP(void, nDisposeAllResources)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
   (void)imp::android::ThrowIfError(env, view->DisposeAllResources());
+}
+
+// Creates a mesh buffer with the given options.
+// The parameters are the same as the BindingsMeshBuffer::CreateOptions struct.
+JNI_METHOD_AOSP(jlong, nCreateMeshBuffer)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jintArray attribute_ids,
+ jintArray attribute_types, jbyteArray buffer_indices, jint max_vertices,
+ jint max_indices, jobjectArray vertex_data, jintArray vertex_data_sizes,
+ jobject index_data, jint index_data_size) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return -1;
+
+  if (attribute_ids == nullptr) {
+    if (!imp::android::ThrowIfError(
+             env, absl::InvalidArgumentError("attribute_ids must not be null."))
+             .ok()) {
+      return -1;
+    }
+  }
+  jsize attributes_count = env->GetArrayLength(attribute_ids);
+  if (attributes_count == 0) {
+    if (!imp::android::ThrowIfError(
+             env,
+             absl::InvalidArgumentError("Attribute arrays must not be empty."))
+             .ok()) {
+      return -1;
+    }
+  }
+
+  if (attribute_types == nullptr) {
+    if (!imp::android::ThrowIfError(
+             env,
+             absl::InvalidArgumentError("attribute_types must not be null."))
+             .ok()) {
+      return -1;
+    }
+  }
+  if (buffer_indices == nullptr) {
+    if (!imp::android::ThrowIfError(
+             env,
+             absl::InvalidArgumentError("buffer_indices must not be null."))
+             .ok()) {
+      return -1;
+    }
+  }
+  if (attributes_count != env->GetArrayLength(attribute_types) ||
+      attributes_count != env->GetArrayLength(buffer_indices)) {
+    if (!imp::android::ThrowIfError(
+             env, absl::InvalidArgumentError(
+                      "Attribute arrays must have the same length."))
+             .ok()) {
+      return -1;
+    }
+  }
+
+  if (max_vertices < 0) {
+    if (!imp::android::ThrowIfError(
+             env,
+             absl::InvalidArgumentError("max_vertices must be non-negative."))
+             .ok()) {
+      return -1;
+    }
+  }
+  if (max_indices < 0) {
+    if (!imp::android::ThrowIfError(
+             env,
+             absl::InvalidArgumentError("max_indices must be non-negative."))
+             .ok()) {
+      return -1;
+    }
+  }
+
+  std::vector<jint> ids(attributes_count);
+  env->GetIntArrayRegion(attribute_ids, 0, attributes_count, ids.data());
+
+  std::vector<jint> types(attributes_count);
+  env->GetIntArrayRegion(attribute_types, 0, attributes_count, types.data());
+
+  std::vector<jbyte> buffers(attributes_count);
+  env->GetByteArrayRegion(buffer_indices, 0, attributes_count, buffers.data());
+
+  imp::BindingsMeshBuffer::VertexLayout layout;
+  layout.attributes.reserve(attributes_count);
+  for (size_t i = 0; i < attributes_count; ++i) {
+    layout.attributes.push_back(
+        {.attribute =
+             static_cast<imp::BindingsMeshBuffer::VertexAttribute>(ids[i]),
+         .type = static_cast<imp::BindingsMeshBuffer::VertexAttributeType>(
+             types[i]),
+         .buffer_index = static_cast<uint8_t>(buffers[i])});
+  }
+
+  imp::BindingsMeshBuffer::CreateOptions options;
+  options.layout = std::move(layout);
+  options.max_vertices = max_vertices;
+  options.max_indices = max_indices;
+
+  if (vertex_data != nullptr) {
+    jsize num_vertex_buffers = env->GetArrayLength(vertex_data);
+    if (vertex_data_sizes == nullptr) {
+      if (!imp::android::ThrowIfError(
+               env, absl::InvalidArgumentError(
+                        "Vertex data sizes must be provided if vertex "
+                        "data is provided."))
+               .ok()) {
+        return -1;
+      }
+    }
+    if (env->GetArrayLength(vertex_data_sizes) != num_vertex_buffers) {
+      if (!imp::android::ThrowIfError(
+               env, absl::InvalidArgumentError(
+                        "Vertex data arrays must have the same length."))
+               .ok()) {
+        return -1;
+      }
+    }
+
+    std::vector<jint> sizes(num_vertex_buffers);
+    env->GetIntArrayRegion(vertex_data_sizes, 0, num_vertex_buffers,
+                           sizes.data());
+
+    options.initial_vertex_data.resize(num_vertex_buffers);
+    for (size_t i = 0; i < num_vertex_buffers; ++i) {
+      jobject buffer = env->GetObjectArrayElement(vertex_data, i);
+      if (buffer != nullptr) {
+        uint8_t* bytes =
+            static_cast<uint8_t*>(env->GetDirectBufferAddress(buffer));
+        if (bytes != nullptr) {
+          options.initial_vertex_data[i] = absl::MakeSpan(bytes, sizes[i]);
+        } else {
+          if (!imp::android::ThrowIfError(
+                   env, absl::InvalidArgumentError(
+                            "Vertex data buffer is not a direct byte buffer."))
+                   .ok()) {
+            env->DeleteLocalRef(buffer);
+            return -1;
+          }
+        }
+        env->DeleteLocalRef(buffer);
+      }
+    }
+  }
+
+  if (index_data != nullptr) {
+    uint8_t* bytes =
+        static_cast<uint8_t*>(env->GetDirectBufferAddress(index_data));
+    if (bytes != nullptr) {
+      options.initial_index_data = absl::MakeSpan(bytes, index_data_size);
+    } else {
+      if (!imp::android::ThrowIfError(
+               env, absl::InvalidArgumentError(
+                        "Index data buffer is not a direct byte buffer."))
+               .ok()) {
+        return -1;
+      }
+    }
+  }
+
+  absl::StatusOr<std::intptr_t> result =
+      view->GetMeshManager().CreateMeshBuffer(options);
+  if (!imp::android::ThrowIfError(env, result).ok()) {
+    return -1;
+  }
+  return *result;
+}
+
+JNI_METHOD_AOSP(void, nDestroyMeshBuffer)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong mesh_buffer_handle) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
+  (void)imp::android::ThrowIfError(
+      env, view->GetMeshManager().DestroyMeshBuffer(mesh_buffer_handle));
+}
+
+JNI_METHOD_AOSP(jlong, nCreateCustomMesh)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong mesh_buffer_handle,
+ jintArray subset_offsets, jintArray subset_counts, jintArray subset_topologies,
+ jfloat center_x, jfloat center_y, jfloat center_z, jfloat half_extent_x,
+ jfloat half_extent_y, jfloat half_extent_z) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return -1;
+
+  if (subset_offsets == nullptr) {
+    if (!imp::android::ThrowIfError(
+             env,
+             absl::InvalidArgumentError("subset_offsets must not be null."))
+             .ok()) {
+      return -1;
+    }
+  }
+  if (subset_counts == nullptr) {
+    if (!imp::android::ThrowIfError(
+             env, absl::InvalidArgumentError("subset_counts must not be null."))
+             .ok()) {
+      return -1;
+    }
+  }
+  if (subset_topologies == nullptr) {
+    if (!imp::android::ThrowIfError(
+             env,
+             absl::InvalidArgumentError("subset_topologies must not be null."))
+             .ok()) {
+      return -1;
+    }
+  }
+
+  jsize subsets_count = env->GetArrayLength(subset_offsets);
+  if (subsets_count == 0) {
+    if (!imp::android::ThrowIfError(
+             env,
+             absl::InvalidArgumentError("Subset arrays must not be empty."))
+             .ok()) {
+      return -1;
+    }
+  }
+
+  if (subsets_count != env->GetArrayLength(subset_counts) ||
+      subsets_count != env->GetArrayLength(subset_topologies)) {
+    if (!imp::android::ThrowIfError(
+             env, absl::InvalidArgumentError(
+                      "Subset arrays must have the same length."))
+             .ok()) {
+      return -1;
+    }
+  }
+
+  std::vector<jint> offsets(subsets_count);
+  env->GetIntArrayRegion(subset_offsets, 0, subsets_count, offsets.data());
+
+  std::vector<jint> counts(subsets_count);
+  env->GetIntArrayRegion(subset_counts, 0, subsets_count, counts.data());
+
+  std::vector<jint> topologies(subsets_count);
+  env->GetIntArrayRegion(subset_topologies, 0, subsets_count,
+                         topologies.data());
+
+  std::vector<imp::BindingsCustomMesh::Subset> subsets;
+  subsets.reserve(subsets_count);
+  for (size_t i = 0; i < subsets_count; ++i) {
+    if (offsets[i] < 0) {
+      if (!imp::android::ThrowIfError(
+               env, absl::InvalidArgumentError(
+                        "Subset offsets must be non-negative."))
+               .ok()) {
+        return -1;
+      }
+    }
+    if (counts[i] < 0) {
+      if (!imp::android::ThrowIfError(
+               env, absl::InvalidArgumentError(
+                        "Subset counts must be non-negative."))
+               .ok()) {
+        return -1;
+      }
+    }
+    subsets.push_back(
+        {.index_offset = offsets[i],
+         .index_count = counts[i],
+         .topology = static_cast<imp::BindingsCustomMesh::SubsetTopology>(
+             topologies[i])});
+  }
+
+  // A bounding box with any negative half-extent value signals that a custom
+  // bounding box is not being provided. In this case, the automatically
+  // calculated bounding box of the mesh buffer will be used.
+  std::optional<imp::Box> box;
+  if (half_extent_x >= 0.0f && half_extent_y >= 0.0f && half_extent_z >= 0.0f) {
+    imp::Box b;
+    b.center = {center_x, center_y, center_z};
+    b.halfExtent = {half_extent_x, half_extent_y, half_extent_z};
+    box = b;
+  }
+
+  absl::StatusOr<std::intptr_t> result =
+      view->GetMeshManager().CreateCustomMesh(
+          static_cast<std::intptr_t>(mesh_buffer_handle), subsets, box);
+  if (!imp::android::ThrowIfError(env, result).ok()) {
+    return -1;
+  }
+  return *result;
+}
+
+JNI_METHOD_AOSP(void, nDestroyCustomMesh)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong custom_mesh_handle) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
+  (void)imp::android::ThrowIfError(
+      env, view->GetMeshManager().DestroyCustomMesh(custom_mesh_handle));
+}
+
+JNI_METHOD_AOSP(void, nSetCustomMeshNodeMaterial)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
+ jint submesh_index, jlong material_handle) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
+  (void)imp::android::ThrowIfError(
+      env,
+      view->GetMeshManager().SetCustomMeshNodeMaterial(
+          node_id, submesh_index, static_cast<std::intptr_t>(material_handle)));
+}
+
+JNI_METHOD_AOSP(jint, nCreateCustomMeshNode)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong custom_mesh_handle,
+ jlongArray material_handles, jint bone_count) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return -1;
+
+  if (material_handles == nullptr) {
+    if (!imp::android::ThrowIfError(
+             env,
+             absl::InvalidArgumentError("material_handles must not be null."))
+             .ok()) {
+      return -1;
+    }
+  }
+
+  jsize material_count = env->GetArrayLength(material_handles);
+  std::vector<jlong> handles(material_count);
+  env->GetLongArrayRegion(material_handles, 0, material_count, handles.data());
+
+  std::vector<std::intptr_t> native_handles;
+  native_handles.reserve(material_count);
+  for (jlong h : handles) {
+    native_handles.push_back(static_cast<std::intptr_t>(h));
+  }
+
+  absl::StatusOr<int32_t> result = view->GetMeshManager().CreateCustomMeshNode(
+      static_cast<std::intptr_t>(custom_mesh_handle), native_handles,
+      bone_count);
+  if (!imp::android::ThrowIfError(env, result).ok()) {
+    return -1;
+  }
+  return *result;
+}
+
+JNI_METHOD_AOSP(void, nUpdateCustomMeshNodeBoneTransforms)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
+ jint offset, jfloatArray transforms) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  if (!IsValidView(view)) return;
+
+  if (transforms == nullptr) {
+    (void)imp::android::ThrowIfError(
+        env, absl::InvalidArgumentError("transforms must not be null."));
+    return;
+  }
+
+  jsize transforms_length = env->GetArrayLength(transforms);
+  jfloat* transforms_data = env->GetFloatArrayElements(transforms, nullptr);
+  if (transforms_data == nullptr) {
+    return;
+  }
+
+  (void)imp::android::ThrowIfError(
+      env, view->GetMeshManager().UpdateCustomMeshNodeBoneTransforms(
+               impress_node, offset,
+               absl::MakeSpan(transforms_data, transforms_length)));
+
+  env->ReleaseFloatArrayElements(transforms, transforms_data, JNI_ABORT);
 }
 
 }  // extern "C"

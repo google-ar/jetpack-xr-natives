@@ -489,6 +489,10 @@ class GlyphAtlas : public Rememberer {
 
   std::shared_ptr<CompletionGate> completion_gate_ =
       std::make_shared<CompletionGate>();
+
+#if IMP_RUNTIME(DEV)
+  friend class TextStressTestView;
+#endif
 };
 
 }  // namespace imp

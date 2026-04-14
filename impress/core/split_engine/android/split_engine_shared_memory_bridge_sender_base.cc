@@ -25,18 +25,16 @@
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/synchronization/mutex.h"
-#include "absl/synchronization/notification.h"
 #include "flatbuffers/allocator.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/executor.h"
-#include "core/async/future.h"
-#include "core/async/future_common.h"
 #include "core/common/invocable.h"
 #include "core/common/owned_ptr.h"
 #include "core/split_engine/android/bridge_buffer.h"
 #include "core/split_engine/flatbuffer_arena_allocator.h"
 #include "core/split_engine/flatbuffer_size_calculator.h"
+#include "core/split_engine/message_group_monitor.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_bridge_sender.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
@@ -123,7 +121,7 @@ SplitEngineSharedMemoryBridgeSenderBase::BeginMessageGroup(
   // called from different threads, Message Group will be released before it was
   // even sent to the remote side.
   MP_RETURN_IF_ERROR(
-      SplitEngineBridgeSender::EnqueueMessageGroup(GetClientId(), group_id));
+      MessageGroupMonitor::EnqueueMessageGroup(GetClientId(), group_id));
   {
     absl::MutexLock lock(arena_handles_mutex_);
     if (!arena_handles_.emplace(group_id, arena_handle).second) {
@@ -216,7 +214,7 @@ void SplitEngineSharedMemoryBridgeSenderBase::ClearReleasedMessageGroups() {
   
 
   // Get the set of active message groups from the bridge.
-  absl::Status status = SplitEngineBridgeSender::WithActiveMessageGroups(
+  absl::Status status = MessageGroupMonitor::WithActiveMessageGroups(
       GetClientId(),
       [this](const absl::flat_hash_set<MessageGroupId>& active_message_groups) {
         absl::MutexLock lock(arena_handles_mutex_);
@@ -252,7 +250,7 @@ void SplitEngineSharedMemoryBridgeSenderBase::ClearReleasedMessageGroups() {
 absl::StatusOr<size_t>
 SplitEngineSharedMemoryBridgeSenderBase::GetActiveMessageGroupCount() const {
   size_t in_flight_frame_count = 0;
-  MP_RETURN_IF_ERROR(SplitEngineBridgeSender::WithActiveMessageGroups(
+  MP_RETURN_IF_ERROR(MessageGroupMonitor::WithActiveMessageGroups(
       GetClientId(),
       [&in_flight_frame_count](
           const absl::flat_hash_set<MessageGroupId>& active_message_groups) {
@@ -294,47 +292,12 @@ SplitEngineSharedMemoryBridgeSenderBase::GetMessageGroupSizeBytes(
 // separate class.
 void SplitEngineSharedMemoryBridgeSenderBase::Schedule(
     imp::Invocable<absl::Status()> fn) {
-  
-
-  // Once future becomes ready, it stops referencing its parents, so there's no
-  // need to manage the chain manually. I.e., it's not possible to have a chain
-  // that have 100 completed futures and keep on growing.
-  //
-  // What actually can happen is that we may have a very long chain of pending
-  // futures (think creating and destroying a hundred of textures per frame).
-  // Since child futures are called recursively by default, that increases the
-  // risk of stack overflow (call stacks with 1000+ frames were observed in
-  // stress tests).
-  //
-  // `future_benchmark_test.cc` shows that using kScheduleAlways slow things
-  // down noticeably. Based on obtained results, it's better to inject
-  // kScheduleAlways every 64 futures to maintain performance that is similar to
-  // default behavior, and keep the size of the call stack reasonable.
-  //
-  // TODO: (broken link) - re-visit this logic later to make sure it still shows
-  // good performance.
-  total_ops_count_++;
-  const FutureExecutorMode executor_mode =
-      (total_ops_count_ % kScheduleAlwaysEveryN == 0)
-          ? FutureExecutorMode::kScheduleAlways
-          : FutureExecutorMode::kScheduleIfNotOnExecutorThread;
-
-  pending_ops_ = pending_ops_.Then(
-      std::move(fn), {
-                         .executor = Executor::BackgroundExecutor(),
-                         .executor_mode = executor_mode,
-                     });
+  background_scheduler_.Schedule(std::move(fn));
 }
 
 void SplitEngineSharedMemoryBridgeSenderBase::DrainScheduler(
     absl::Status status) {
-  
-  absl::Notification notification;
-  Schedule([&notification, status = std::move(status)]() {
-    notification.Notify();
-    return status;
-  });
-  notification.WaitForNotification();
+  background_scheduler_.Drain(status);
 }
 
 SplitEngineSharedMemoryBridgeSenderBase::

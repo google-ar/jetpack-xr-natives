@@ -68,37 +68,19 @@ class ModelManager {
       bool system_movable = true) = 0;
 
   // Animates a glTF model.
-  virtual void AnimateGltfModelNew(
+  virtual void AnimateGltfModel(
       int32_t node, absl::string_view animation_name, bool loop, float speed,
       float start_time, int32_t channel_id,
       std::unique_ptr<BaseAssetAnimator> asset_animator) = 0;
 
-  // Animates a glTF model.
-  // TODO: (broken link) - Remove old animation APIs once all clients are migrated
-  // to new animation system.
-  virtual void AnimateGltfModel(
-      int32_t node, absl::string_view animation_name, bool loop,
-      std::unique_ptr<BaseAssetAnimator> asset_animator) = 0;
-
   // Stops the animation of a glTF model.
-  virtual absl::Status StopGltfModelAnimationNew(int32_t node,
-                                                 int32_t channel_id) = 0;
-
-  // Stops the animation of a glTF model.
-  // TODO: (broken link) - Remove old animation APIs once all clients are migrated
-  // to new animation system.
-  virtual absl::Status StopGltfModelAnimation(int32_t node) = 0;
+  virtual absl::Status StopGltfModelAnimation(int32_t node,
+                                              int32_t channel_id) = 0;
 
   // Pause or resume the animation of a glTF model. If `toggle` = true resume
   // the animation, `toggle` = false pause the animation.
-  virtual absl::Status ToggleGltfModelAnimationNew(int32_t node, bool toggle,
-                                                   int32_t channel_id) = 0;
-
-  // Pause or resume the animation of a glTF model. If `toggle` = true resume
-  // the animation, `toggle` = false pause the animation.
-  // TODO: (broken link) - Remove old animation APIs once all clients are migrated
-  // to new animation system.
-  virtual absl::Status ToggleGltfModelAnimation(int32_t node, bool toggle) = 0;
+  virtual absl::Status ToggleGltfModelAnimation(int32_t node, bool toggle,
+                                                int32_t channel_id) = 0;
 
   // Sets the speed of the animation of a glTF model.
   virtual absl::Status SetGltfModelAnimationSpeed(int32_t node, float speed,

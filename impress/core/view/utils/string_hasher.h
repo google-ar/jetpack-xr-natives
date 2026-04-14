@@ -18,7 +18,6 @@
 #define THIRD_PARTY_IMPRESS_CORE_VIEW_UTILS_STRING_HASHER_H_
 
 #include <cstddef>
-#include <string>
 
 #include "absl/hash/hash.h"
 #include "absl/strings/string_view.h"
@@ -28,12 +27,11 @@ namespace imp {
 // Equivalent to std::hash, but can handle both std::string and
 // absl::string_view.
 struct StringHasher {
-  std::size_t operator()(const std::string& s) const {
-    return absl::Hash<std::string>()(s);
-  }
+  // Allow hasher to be used for different types that are convertible to
+  // absl::string_view, such as std::string.
+  using is_transparent = void;
 
   std::size_t operator()(absl::string_view sv) const {
-    // std::hash<absl::string_view> is not defined, so use absl::Hash for both.
     return absl::Hash<absl::string_view>()(sv);
   }
 };

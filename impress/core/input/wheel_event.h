@@ -17,12 +17,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_INPUT_WHEEL_EVENT_H_
 #define THIRD_PARTY_IMPRESS_CORE_INPUT_WHEEL_EVENT_H_
 
-#include <vector>
-
-#include "absl/status/status.h"
 #include "absl/time/time.h"
-#include "absl/types/span.h"
-#include "filament/libs/math/include/math/vec2.h"
 #include "core/math/vec.h"
 
 namespace imp {
@@ -30,22 +25,28 @@ namespace imp {
 // Represents a wheel event user interaction.
 class WheelEvent {
  public:
-  WheelEvent(const float delta, absl::Duration elapsed_time);
+  WheelEvent(float2 delta, float2 point, absl::Duration elapsed_time);
   ~WheelEvent() {}
 
   // Duration of time elapsed between system startup and time of event.
   absl::Duration GetElapsedTime() const { return elapsed_time_; }
 
   // Returns the delta from the Event.
-  float GetDelta() const { return delta_; }
+  float2 GetDelta() const { return delta_; }
+
+  // Returns the point the wheel event occurred.
+  float2 GetPoint() const { return point_; }
 
  private:
-  // The scroll wheel vertical delta value, or how much the wheel.
-  float delta_ = 0;
+  // The amount scrolled horizontally and vertically.
+  // Positive delta_.x is to the right, negative to the left.
+  // Positive delta_.y is away (up) from the user, negative toward the user
+  // (down).
+  float2 delta_ = float2(0);
+  // The point where the wheel event occurred.
+  float2 point_ = float2(0);
   // Duration of time elapsed between system startup and time of event.
   absl::Duration elapsed_time_ = absl::ZeroDuration();
-  // Allow only the InputManager to set the delta and elapsed time.
-  friend class InputManager;
 };
 
 }  // namespace imp

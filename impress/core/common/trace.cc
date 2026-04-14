@@ -27,7 +27,8 @@ PERFETTO_TRACK_EVENT_STATIC_STORAGE_IN_NAMESPACE(imp_perfetto_tracing);
 
 void imp_perfetto_tracing::InitializePerfetto() {
   perfetto::TracingInitArgs args = {};
-  args.backends = perfetto::BackendType::kSystemBackend;
+  args.backends = perfetto::BackendType::kSystemBackend |
+                  perfetto::BackendType::kInProcessBackend;
   perfetto::Tracing::Initialize(args);
   imp_perfetto_tracing::TrackEvent::Register();
 }

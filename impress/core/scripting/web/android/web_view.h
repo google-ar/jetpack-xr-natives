@@ -55,7 +55,7 @@ class AndroidImpWebViewFragment : public JavaWrapper {
                         "(Lcom/google/ar/imp/core/web/FragmentHost;"
                         "JFFIILjava/lang/String;Ljava/lang/String;Z)V");
     CallVoidMethod(
-        inflate, imp_context_.GetFragmentHost(), web_view_,
+        inflate, imp_context_.GetFragmentHost(), ToJava<WebView>(web_view_),
         params.location_px.x, params.location_px.y, params.dimensions_px.x,
         params.dimensions_px.y, ToString(imp_context_.GetJniEnv(), params.url),
         ToString(imp_context_.GetJniEnv(), injection_script.StringView().empty()
@@ -67,7 +67,8 @@ class AndroidImpWebViewFragment : public JavaWrapper {
   ~AndroidImpWebViewFragment() override {
     JniHandle deflate = GetStaticMethodHandle(
         "deflate", "(Lcom/google/ar/imp/core/web/FragmentHost;J)V");
-    CallStaticVoidMethod(deflate, imp_context_.GetFragmentHost(), web_view_);
+    CallStaticVoidMethod(deflate, imp_context_.GetFragmentHost(),
+                         ToJava<WebView>(web_view_));
   }
 
   void PostMessage(const MessageToScript& message) {

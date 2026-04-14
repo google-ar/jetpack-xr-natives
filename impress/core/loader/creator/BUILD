@@ -92,10 +92,8 @@ cc_library(
         "//core/loader:loader_options",
         "//core/loader/provider:fbs",
         "//core/loader/provider:fbs_deps",  # build_cleaner: keep
-        "//core/loader/provider/extensions:extension_behavior",
         "//core/loader/provider/extensions:extension_interactivity",
         "//core/loader/provider/extensions:verification",
-        "//core/loader/provider/extensions/behavior:model_creator_extension",
         "//core/loader/provider/extensions/interactivity:model_creator_extension",
         "//core/material_library:fbs",
         "//core/material_library:generic_material",

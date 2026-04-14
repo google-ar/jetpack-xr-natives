@@ -131,7 +131,6 @@ GenericMaterialImpl::GenericMaterialImpl(
       parameter_info_(parameter_info),
       placeholder_texture_(view.GetTextureFactory().BorrowPlaceholderTexture()),
       placeholder_sampler_() {
-  SetName(name);
   material_ = OwnedMaterialPtr(new CustomMaterial(&material_instance, {}));
   material_->SetName(name);
 }
@@ -149,7 +148,7 @@ GenericMaterialPtr GenericMaterialImpl::Duplicate() const {
         material_->GetFilamentMaterialInstance(), duplicate_instance);
   }
   auto result = absl::WrapUnique(new GenericMaterialImpl(
-      view_, name_, *duplicate_instance, parameter_info_));
+      view_, material_->GetName(), *duplicate_instance, parameter_info_));
   result->parameters_ = parameters_;
   result->material_textures_ = material_textures_;
   result->sampler_index_lookup_ = sampler_index_lookup_;
@@ -159,6 +158,14 @@ GenericMaterialPtr GenericMaterialImpl::Duplicate() const {
   result->samplers_uv_bitflags_ = samplers_uv_bitflags_;
   result->samplers_uv_matrices_ = samplers_uv_matrices_;
   return result;
+}
+
+const std::string& GenericMaterialImpl::GetName() const {
+  return material_->GetName();
+}
+
+void GenericMaterialImpl::SetName(absl::string_view name) {
+  material_->SetName(name);
 }
 
 const filament::MaterialInstance*

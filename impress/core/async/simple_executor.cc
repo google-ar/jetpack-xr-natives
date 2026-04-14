@@ -20,12 +20,14 @@
 #include <utility>
 #include <vector>
 
+#include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 #include "core/async/executor.h"
+#include "core/async/executor_flags.h"
 #include "core/async/task.h"
 #include "core/async/task_scheduler.h"
 #include "core/common/invocable.h"
@@ -34,7 +36,9 @@ namespace imp {
 
 SimpleExecutor::SimpleExecutor(std::function<void(Executor*)> init_fn,
                                std::function<void(Executor*)> join_fn)
-    : join_fn_(std::move(join_fn)),
+    : destroy_tasks_on_shutdown_(
+          ExecutorFlags::ShouldSimpleExecutorDestroyTasksOnShutdown()),
+      join_fn_(std::move(join_fn)),
       task_scheduler_(std::make_unique<TaskScheduler>()) {
   if (init_fn) {
     init_fn(this);
@@ -49,12 +53,12 @@ TaskId SimpleExecutor::ScheduleInvocable(Invocable<void()> invocable,
   if (finished_) {
     return kInvalidTaskId;
   }
-  const absl::StatusOr<TaskId> status_or_task_id =
+  const absl::StatusOr<TaskId> task_id =
       task_scheduler_->PushTask(std::move(invocable), task_priority);
-  if (!status_or_task_id.ok()) {
+  if (!task_id.ok()) {
     return kInvalidTaskId;
   }
-  return *status_or_task_id;
+  return *task_id;
 }
 
 TaskId SimpleExecutor::ReserveTaskId() {
@@ -114,6 +118,45 @@ absl::StatusOr<int> SimpleExecutor::GetTaskPriority(TaskId task_id) {
 }
 
 void SimpleExecutor::Shutdown() {
+  if (destroy_tasks_on_shutdown_) {
+    ShutdownAndDestroyTasks();
+  } else {
+    ShutdownWithoutDestroyingTasks();
+  }
+}
+
+void SimpleExecutor::ShutdownAndDestroyTasks() {
+  std::vector<imp::Invocable<void()>> tasks;
+
+  tasks.reserve(GetPendingTaskCount());
+  IMP_LOG(imp::INFO) << "Shutting down SimpleExecutor and destroying remaining ~"
+             << GetPendingTaskCount() << " tasks.";
+
+  {
+    absl::MutexLock lock(mu_);
+    if (finished_) {
+      return;
+    }
+    while (!task_scheduler_->IsEmpty()) {
+      absl::StatusOr<imp::Invocable<void()>> task = task_scheduler_->PopTask();
+      if (!task.ok()) {
+        IMP_LOG(imp::ERROR) << "Failed to pop task during SimpleExecutor shutdown: "
+                   << task.status();
+        return;
+      }
+      tasks.push_back(*std::move(task));
+    }
+    finished_ = true;
+  }
+  if (join_fn_) {
+    join_fn_(this);
+    join_fn_ = nullptr;
+  }
+
+  tasks.clear();
+}
+
+void SimpleExecutor::ShutdownWithoutDestroyingTasks() {
   {
     absl::MutexLock lock(mu_);
     if (finished_) {
@@ -135,12 +178,13 @@ size_t SimpleExecutor::PumpInternal(bool drain) {
 
   std::vector<Invocable<void()>> invocables;
   while (!task_scheduler_->IsEmpty()) {
-    absl::StatusOr<Invocable<void()>> status_or_invocable =
-        task_scheduler_->PopTask();
-    if (!status_or_invocable.ok()) {
+    absl::StatusOr<Invocable<void()>> task = task_scheduler_->PopTask();
+    if (!task.ok()) {
+      IMP_LOG(imp::ERROR) << "Failed to pop task during SimpleExecutor PumpInternal: "
+                 << task.status();
       break;
     }
-    invocables.push_back(*std::move(status_or_invocable));
+    invocables.push_back(*std::move(task));
     if (!drain) {
       break;
     }

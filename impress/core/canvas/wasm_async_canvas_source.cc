@@ -50,6 +50,11 @@
 #include "core/view/base_view.h"
 #include "core/view/platforms/wasm/wasm_canvas_manager.h"
 
+#if IMP_PLATFORM(WASM)
+#include <emscripten.h>
+#include <emscripten/em_asm.h>
+#endif  // IMP_PLATFORM(WASM)
+
 namespace imp {
 namespace {
 
@@ -133,7 +138,7 @@ Texture* WasmAsyncCanvasSource::GetTexture() { return texture_.operator->(); }
 
 Future<absl::Status> WasmAsyncCanvasSource::PrepareFont(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
-  absl::MutexLock lock(&canvas_mutex_);
+  absl::MutexLock lock(canvas_mutex_);
   absl::string_view font_family = kDefaultFontName;
   absl::string_view font_weight = GetFontWeightFromTextOptions(text_options);
   absl::string_view text_style = GetTextStyleFromTextOptions(text_options);
@@ -150,13 +155,13 @@ Future<absl::Status> WasmAsyncCanvasSource::PrepareFont(
 Future<std::vector<TextAndFontMetrics>>
 WasmAsyncCanvasSource::GetFontAndTextMetrics(
     std::vector<ScopedCanvas::TextToMeasure> texts) {
-  absl::MutexLock lock(&canvas_mutex_);
+  absl::MutexLock lock(canvas_mutex_);
   return measuring_scoped_canvas_.GetFontAndTextMetrics(texts);
 }
 
 Future<TextMetrics> WasmAsyncCanvasSource::MeasureGlyph(
     GlyphToMeasure glyph_to_measure, ScopedCanvas::TextOptions text_options) {
-  absl::MutexLock lock(&canvas_mutex_);
+  absl::MutexLock lock(canvas_mutex_);
 
   if (!absl::holds_alternative<absl::string_view>(glyph_to_measure.glyph)) {
     IMP_LOG(imp::ERROR) << "Measuring by GlyphId is not supported on WASM.";
@@ -220,7 +225,7 @@ Future<TextMetrics> WasmAsyncCanvasSource::MeasureGlyph(
 Future<std::vector<TextMetrics>> WasmAsyncCanvasSource::MeasureGlyphs(
     std::vector<GlyphToMeasure> glyphs_to_measure,
     ScopedCanvas::TextOptions text_options) {
-  absl::MutexLock lock(&canvas_mutex_);
+  absl::MutexLock lock(canvas_mutex_);
   return measuring_scoped_canvas_.MeasureGlyphs(glyphs_to_measure,
                                                 text_options);
 }
@@ -236,7 +241,7 @@ WasmAsyncCanvasSource::GetCombinedCharacterGroups(
 Future<std::vector<std::vector<float>>> WasmAsyncCanvasSource::GetTextWidths(
     const std::vector<Chunk>& chunks,
     const ScopedCanvas::TextOptions& text_options) {
-  absl::MutexLock lock(&canvas_mutex_);
+  absl::MutexLock lock(canvas_mutex_);
   return measuring_scoped_canvas_.GetTextWidths(chunks, text_options);
 }
 
@@ -250,13 +255,13 @@ WasmAsyncCanvasSource::GetTextGlyphs(
 
 Future<FontInfo> WasmAsyncCanvasSource::GetFontInfo(
     const ScopedCanvas::TextOptions& text_options) {
-  absl::MutexLock lock(&canvas_mutex_);
+  absl::MutexLock lock(canvas_mutex_);
   return measuring_scoped_canvas_.GetFontInfo(text_options);
 }
 
 std::unique_ptr<AsyncScopedCanvas> WasmAsyncCanvasSource::StartDrawing(
     BaseView& view, uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) {
-  absl::MutexLock lock(&canvas_mutex_);
+  absl::MutexLock lock(canvas_mutex_);
   bool did_texture_change = false;
   if (!texture_ || pixel_size_ != pixel_size) {
     pixel_size_ = pixel_size;
@@ -272,6 +277,13 @@ std::unique_ptr<AsyncScopedCanvas> WasmAsyncCanvasSource::StartDrawing(
 #endif
     drawing_canvas_ = std::make_unique<WasmCanvasManager>(
         std::make_unique<WasmCanvasManagerCallbacks>(*this, view), pixel_size_);
+    if (view.GetConfig().experimental_feature_flags) {
+      bool enable_label_prep = view.GetConfig()
+                                   .experimental_feature_flags
+                                   ->enable_label_prep_profile_logging.Value();
+      drawing_canvas_->SetLabelPrepProfileLogging(enable_label_prep);
+      measuring_canvas_->SetLabelPrepProfileLogging(enable_label_prep);
+    }
     did_texture_change = true;
   }
 
@@ -284,7 +296,7 @@ std::unique_ptr<AsyncScopedCanvas> WasmAsyncCanvasSource::StartDrawing(
     BaseView& view, uint2 pixel_size,
     ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
     ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) {
-  absl::MutexLock lock(&canvas_mutex_);
+  absl::MutexLock lock(canvas_mutex_);
   bool did_texture_change = false;
   if (!texture_ || pixel_size_ != pixel_size) {
     pixel_size_ = pixel_size;
@@ -304,6 +316,13 @@ std::unique_ptr<AsyncScopedCanvas> WasmAsyncCanvasSource::StartDrawing(
 #endif
     drawing_canvas_ = std::make_unique<WasmCanvasManager>(
         std::make_unique<WasmCanvasManagerCallbacks>(*this, view), pixel_size_);
+    if (view.GetConfig().experimental_feature_flags) {
+      bool enable_label_prep = view.GetConfig()
+                                   .experimental_feature_flags
+                                   ->enable_label_prep_profile_logging.Value();
+      drawing_canvas_->SetLabelPrepProfileLogging(enable_label_prep);
+      measuring_canvas_->SetLabelPrepProfileLogging(enable_label_prep);
+    }
     did_texture_change = true;
 
     on_texture_changed_fn(texture_.Borrow(loc));
@@ -329,12 +348,39 @@ void WasmAsyncCanvasSource::OnPixelBufferReady(BaseView& view, uint8_t* data,
     const uint32_t height = dirty_rects_data[i + 3];
     const int block_size = (int)(width * height * 4);
     Future<absl::Status> gpu_upload;
+    bool enable_label_prep_profile_logging = false;
+    double wasm_gpu_upload_start_time = 0.0;
+#if IMP_PLATFORM(WASM)
+    if (view.GetConfig().experimental_feature_flags) {
+      enable_label_prep_profile_logging =
+          view.GetConfig()
+              .experimental_feature_flags->enable_label_prep_profile_logging
+              .Value();
+    }
+    if (enable_label_prep_profile_logging) {
+      wasm_gpu_upload_start_time = EM_ASM_DOUBLE({ return performance.now(); });
+    }
+#endif  // IMP_PLATFORM(WASM)
     gpu_upload_future = gpu_upload_future.Combine(gpu_upload);
     filament::Texture::PixelBufferDescriptor pixel_buffer =
         filament::Texture::PixelBufferDescriptor::make(
             data + data_offset, block_size, format, type,
-            [gpu_upload](void* buffer, size_t size) {
+            [gpu_upload, wasm_gpu_upload_start_time,
+             enable_label_prep_profile_logging](void* buffer, size_t size) {
               gpu_upload.Return(absl::OkStatus());
+#if IMP_PLATFORM(WASM)
+              if (enable_label_prep_profile_logging) {
+                EM_ASM(
+                    {
+                      try {
+                        performance.measure('Label Prep: GetGlyphs: Gpu Upload',
+                                            {start : $0});
+                      } catch (e) {
+                      }
+                    },
+                    wasm_gpu_upload_start_time);
+              }
+#endif  // IMP_PLATFORM(WASM)
             });
     texture_->GetTexture()->setImage(*BaseView::GetSharedEngine(),
                                      /*level=*/0, x, y, width, height,

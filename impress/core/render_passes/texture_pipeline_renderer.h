@@ -35,15 +35,20 @@
 #include "core/ncsb/component_system.h"
 #include "core/ncsb/dispatcher/event.h"
 #include "core/ncsb/isf_info.h"
+#include "core/render/mesh_renderer.h"
+#include "core/render/primitive_shape_renderer.h"
 #include "core/render/texture.h"
 #include "core/render/texture_registry.h"
+#include "core/render_passes/texture_pipeline_renderer_projection_quad.h"
 #include "core/render_passes/texture_pipeline_renderer_state.proto.imp.h"
 #include "core/view/base_view.h"
-#include "core/view/framework/render/mesh_renderer.h"
 #include "core/view/framework/render/render_component.h"
 #include "core/view/utils/proto/render_settings.proto.imp.h"
 
 namespace imp {
+
+// Forward declaration of peer class to support testing.
+class TexturePipelineRendererPeer;
 
 // Component for rendering a sequence of passes into offscreen textures prior to
 // the main scene being rendered.
@@ -121,6 +126,20 @@ class TexturePipelineRenderer : public Component {
       size_t pass_index,
       imp::SmallSourceLocation loc = imp::SmallSourceLocation::Current()) const;
 
+  // Sets a projection quad, or clears the quad if null.
+  //
+  // When a projection quad is given (specified in the World Space), the
+  // TexturePipelineRenderer operates in a special mode to render the scene
+  // "through" the given quad with the main camera. This is useful to render a
+  // "magic window" like effect by first rendering the scene to a texture, and
+  // then the caller can render this texture onto the quad.
+  //
+  // When projection quad is given, the TexturePipelineRenderer::Pass::camera
+  // field will be ignored, since the rendering will be done with the main
+  // camera.
+  void SetProjectionQuad(
+      const std::optional<TexturePipelineRendererProjectionQuad>& quadInWorld);
+
   // ComponentSystem to handle priority-ordering of TexturePipelineRenderer.
   class System : public ComponentSystem<TexturePipelineRenderer> {
    public:
@@ -195,6 +214,8 @@ class TexturePipelineRenderer : public Component {
   bool IsRenderTargetStale(const TexturePipelineRendererState::Pass& pass,
                            const RuntimePass& runtime_pass) const;
 
+  // Allow tests to access the state for verification.
+  friend class TexturePipelineRendererPeer;
   TexturePipelineRendererState state_;
 
   std::vector<RuntimePass> runtime_passes_;
@@ -206,8 +227,14 @@ class TexturePipelineRenderer : public Component {
   // PostResizeEvent.
   std::vector<OwnedTexturePtr> textures_marked_for_deletion_;
 
+  // Optional projection quad. See SetProjectionQuad() for more information.
+  std::optional<TexturePipelineRendererProjectionQuad> projection_quad_;
+
  public:
-  using IsfInfo = IsfInfo<&TexturePipelineRenderer::state_>;
+  // PrimitiveShapeRenderer needs to be dependent since it might be using
+  // textures created by this component.
+  using IsfInfo = IsfInfo<&TexturePipelineRenderer::state_, void,
+                          IsfDependents<PrimitiveShapeRenderer>>;
   static constexpr bool kRunInEditMode = true;
   using CleanupDependencies = CleanupIds<RenderComponent, MeshRenderer>;
 };

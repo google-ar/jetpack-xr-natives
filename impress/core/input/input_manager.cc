@@ -14,17 +14,19 @@
 
 #include "core/input/input_manager.h"
 
-#include <string>
+#include <cstdint>
+#include <memory>
 #include <utility>
 #include <vector>
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
-#include "absl/types/optional.h"
+#include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "core/actions/input_action_event.h"
-#include "core/common/optional_error.h"
-#include "core/common/platform_helpers.h"
 #include "core/common/trace.h"
+#include "core/input/keyboard_event.h"
+#include "core/input/pointer_event.h"
 #include "core/input/wheel_event.h"
 #include "core/math/vec.h"
 
@@ -74,17 +76,9 @@ void InputManager::ProcessTextInput(absl::string_view contents) {
   text_input_events_.push_back(TextInputEvent(contents));
 }
 
-absl::Status InputManager::ProcessWheelInput(float delta,
+absl::Status InputManager::ProcessWheelInput(float2 delta, float2 point,
                                              absl::Duration elapsed_time) {
-  if (delta != 0) {
-    if (!wheel_event_.has_value()) {
-      wheel_event_ = WheelEvent(delta, elapsed_time);
-    } else {
-      wheel_event_->delta_ = wheel_event_->GetDelta() + delta;
-      wheel_event_->elapsed_time_ =
-          wheel_event_->GetElapsedTime() + elapsed_time;
-    }
-  }
+  wheel_events_.push_back(WheelEvent(delta, point, elapsed_time));
   return absl::OkStatus();
 }
 
@@ -124,12 +118,12 @@ std::vector<TextInputEvent> InputManager::PopTextInputEvents() {
   return result;
 }
 
-bool InputManager::HasWheelEvent() { return wheel_event_.has_value(); }
+bool InputManager::HasWheelEvent() { return !wheel_events_.empty(); }
 
-WheelEvent InputManager::PopWheelEvent() {
-  WheelEvent event = wheel_event_.value();
-  wheel_event_ = absl::nullopt;
-  return event;
+std::vector<WheelEvent> InputManager::PopWheelEvents() {
+  std::vector<WheelEvent> result;
+  std::swap(result, wheel_events_);
+  return result;
 }
 
 void InputManager::Update() {
@@ -138,10 +132,7 @@ void InputManager::Update() {
   for (std::unique_ptr<InputInterceptor>& interceptor : input_interceptors_) {
     interceptor->FilterPointerEvents(pointer_events_);
     interceptor->FilterKeyboardEvents(keyboard_events_, text_input_events_);
-    if (wheel_event_ &&
-        interceptor->TryConsumeWheelEvent(wheel_event_.value())) {
-      wheel_event_ = absl::nullopt;
-    }
+    interceptor->FilterWheelEvents(wheel_events_);
     interceptor->FilterInputActionEvents(input_action_events_);
   }
   text_input_events_.clear();

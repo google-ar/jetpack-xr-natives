@@ -108,9 +108,6 @@ class TextureFactory {
     // is destroyed. The width, height, levels, and format should match what the
     // metal texture returns.
     std::optional<intptr_t> native_texture_id;
-    // Other options of the texture. See TextureFactory::Options for details.
-    ABSL_DEPRECATED("Use TextureCreationSettings::sampler_options instead.")
-    std::optional<Options> options;
     // Sampler options for the texture.
     std::optional<TextureSamplerOptions> sampler_options;
   };
@@ -134,10 +131,6 @@ class TextureFactory {
       ContentSecurityLevel security_level = ContentSecurityLevel::kNone);
 
   TexturePtr CreateExternalTexture(
-      filament::Stream* stream, int2 size = {1, 1},
-      ContentSecurityLevel security_level = ContentSecurityLevel::kNone);
-
-  TexturePtr CreateExternalTexture(
       intptr_t texture_id, int2 size = {1, 1},
       ContentSecurityLevel security_level = ContentSecurityLevel::kNone);
 
@@ -149,34 +142,21 @@ class TextureFactory {
                                         TextureCreationSettings settings);
 
   // Loads a texture from the cached texture asset.
-  OwnedTexturePtr CreateTexture(AssetPtr<TextureAsset> texture);
   OwnedTexturePtr CreateTexture(AssetPtr<TextureAsset> texture,
-                                TextureSamplerOptions options);
+                                TextureSamplerOptions options = {});
 
   // Loads a texture from the given image asset.
   //
   // Note: this is currently the only variant that can be used via Split Engine.
-  OwnedTexturePtr CreateTexture(AssetPtr<ImageAsset> image,
-                                TextureGenerationOptions generation_options,
-                                TextureSamplerOptions sampler_options);
+  OwnedTexturePtr CreateTexture(
+      AssetPtr<ImageAsset> image,
+      TextureGenerationOptions generation_options = {},
+      TextureSamplerOptions sampler_options = {});
 
   // Create a 'normal' texture from the resource.
   // TODO: Refactor to use AssetPtr<ImageAsset>
+  ABSL_DEPRECATED("Use CreateTexture(AssetPtr<ImageAsset>) instead.")
   TexturePtr CreateTexture(const ImageAsset& image);
-
-  // Create a texture and specify options.
-  ABSL_DEPRECATED(
-      "Use CreateTexture(AssetPtr<ImageAsset>, TextureGenerationOptions, "
-      "TextureSamplerOptions) instead.")
-  TexturePtr CreateTexture(const ImageAsset& image, Options options);
-
-  // Create a texture and specify options.
-  ABSL_DEPRECATED(
-      "Use CreateTexture(AssetPtr<ImageAsset>, TextureGenerationOptions, "
-      "TextureSamplerOptions) instead.")
-  TexturePtr CreateTexture(const ImageAsset& image,
-                           TextureGenerationOptions generation_options,
-                           TextureSamplerOptions sampler_options);
 
   // Creates an empty texture of specified size and format.
   // TODO: This does not send the texture data to split engine.

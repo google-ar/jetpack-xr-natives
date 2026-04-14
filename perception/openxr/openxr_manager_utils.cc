@@ -67,4 +67,23 @@ timespec AddTimespecs(const timespec &timespec1, const timespec &timespec2) {
   return result;
 }
 
+TrackingState convertTrackingState(XrSpaceLocationFlags location_flags) {
+  // kTracking: bits are all valid and tracking (Orientation and Position).
+  if ((location_flags & XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT) != 0 &&
+      (location_flags & XR_SPACE_LOCATION_POSITION_TRACKED_BIT) != 0) {
+    return TrackingState::kTracking;
+  }
+  // kTrackingDegraded: orientation is being tracked but not the position.
+  if ((location_flags & XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT) != 0) {
+    return TrackingState::kTrackingDegraded;
+  }
+  // kPaused: the bits are valid but not tracking.
+  if ((location_flags & (XR_SPACE_LOCATION_ORIENTATION_VALID_BIT |
+                         XR_SPACE_LOCATION_POSITION_VALID_BIT)) != 0) {
+    return TrackingState::kPaused;
+  }
+  // kStopped: the bits are not valid.
+  return TrackingState::kStopped;
+}
+
 }  // namespace androidx::xr::openxr

@@ -15,6 +15,7 @@
 #include "core/editor/components/camera_zoom.h"
 
 #include <algorithm>
+#include <functional>
 
 #include "core/common/log.h"
 #include "core/common/registry.h"
@@ -22,7 +23,9 @@
 #include "core/editor/editor_plugin.h"
 #include "core/editor/events.h"
 #include "core/input/wheel_event.h"
+#include "core/math/vec.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
+#include "core/ncsb/node_handle.h"
 #include "core/view/framework/gestures/pinch_gesture.h"
 #include "core/view/framework/input/pointer_input_handler.h"
 
@@ -41,13 +44,18 @@ void CameraZoom::Setup(NodeHandle pivot) {
 
   pivot_ = pivot;
 
-  Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
+  absl::StatusOr<std::reference_wrapper<Editor>> editor_or =
+      GetView().GetRegistry().Get<Editor>();
+  if (!editor_or.ok()) {
+    IMP_LOG(imp::FATAL) << "Editor could not be retrieved from the registry.";
+  }
+  Editor& editor = editor_or->get();
   Dispatcher& editor_dispatcher = editor.GetDispatcher();
 
   auto wheel_scroll_event_listener =
       [this](const imp::WheelScrollEvent& event) mutable {
         UpdateCameraZoom(
-            event.event.GetDelta() * (invert_scroll_enabled_ ? 1.0f : -1.0f),
+            event.event.GetDelta().y * (invert_scroll_enabled_ ? -1.0f : 1.0f),
             kScrollZoomSensitivity, kScrollZoomMinDistance);
       };
 

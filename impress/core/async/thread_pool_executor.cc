@@ -178,14 +178,13 @@ std::optional<Invocable<void()>> ThreadPoolExecutor::WaitForTask() {
 
   if (finished_) return {};
 
-  absl::StatusOr<Invocable<void()>> status_or_callback =
-      task_scheduler_->PopTask();
-  if (!status_or_callback.ok()) {
+  absl::StatusOr<Invocable<void()>> callback = task_scheduler_->PopTask();
+  if (!callback.ok()) {
     return {};
   }
 
   callback_counter_++;
-  return *std::move(status_or_callback);
+  return *std::move(callback);
 }
 
 bool ThreadPoolExecutor::ProcessNextRequest() {
@@ -280,12 +279,13 @@ void ThreadPoolExecutor::Shutdown() {
       return;
     }
     while (!task_scheduler_->IsEmpty()) {
-      absl::StatusOr<imp::Invocable<void()>> status_or_task =
-          task_scheduler_->PopTask();
-      if (!status_or_task.ok()) {
+      absl::StatusOr<imp::Invocable<void()>> task = task_scheduler_->PopTask();
+      if (!task.ok()) {
+        IMP_LOG(imp::ERROR) << "Failed to pop task during ThreadPoolExecutor shutdown: "
+                   << task.status();
         return;
       }
-      tasks.push_back(*std::move(status_or_task));
+      tasks.push_back(*std::move(task));
     }
     finished_ = true;
     condvar_.SignalAll();

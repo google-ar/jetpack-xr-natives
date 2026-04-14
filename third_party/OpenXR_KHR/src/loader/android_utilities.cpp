@@ -1,4 +1,4 @@
-// Copyright (c) 2020-2025 The Khronos Group Inc.
+// Copyright (c) 2020-2026 The Khronos Group Inc.
 // Copyright (c) 2020-2021, Collabora, Ltd.
 //
 // SPDX-License-Identifier:  Apache-2.0 OR MIT
@@ -325,7 +325,7 @@ int getActiveRuntimeVirtualManifest(wrap::android::content::Context &context, Js
 
     if (cursor.isNull()) {
         // Couldn't find either broker
-        ALOGE("Could access neither the installable nor system runtime broker.");
+        ALOGW("Could access neither the installable nor system runtime broker.");
         return -1;
     }
 
@@ -363,7 +363,7 @@ int getActiveRuntimeVirtualManifest(wrap::android::content::Context &context, Js
         ALOGV("Unable to open broker provided runtime at %s, checking for more records...", lib_path.c_str());
     } while (cursor.moveToNext());
 
-    ALOGE("Unable to open any of the broker provided runtimes.");
+    ALOGW("Unable to open any of the broker provided runtimes.");
     cursor.close();
     return -1;
 }

@@ -89,6 +89,10 @@ class SimpleExecutor : public Executor {
   // Returns the number of tasks executed.
   size_t PumpInternal(bool drain) ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
 
+  void ShutdownWithoutDestroyingTasks();
+  void ShutdownAndDestroyTasks();
+
+  const bool destroy_tasks_on_shutdown_;
   std::function<void(Executor*)> join_fn_;
   absl::Mutex mu_;
   bool finished_ ABSL_GUARDED_BY(mu_) = false;

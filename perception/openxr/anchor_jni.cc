@@ -62,7 +62,7 @@ Java_androidx_xr_arcore_openxr_OpenXrAnchor_nativeGetAnchorToken(
   XrSpace anchor_space = androidx::xr::openxr::ConvertToXrSpace(native_ptr);
   AIBinder* anchor_token = nullptr;
   if (!xr_manager.ExportAnchor(anchor_space, &anchor_token)) {
-    xrDestroySpace(anchor_space);
+    xr_manager.DestroySpace(anchor_space);
     return nullptr;
   }
 

@@ -22,11 +22,13 @@
 #include "absl/status/status.h"
 #include "core/camera/camera_component.h"
 #include "core/common/registry.h"
+#include "core/editor/camera_defaults.h"
 #include "core/editor/editor.h"
 #include "core/editor/editor_info.h"
 #include "core/editor/events.h"
 #include "core/input/key_codes.h"
 #include "core/input/keyboard_event.h"
+#include "core/math/quat.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node_handle.h"
@@ -109,6 +111,14 @@ bool TrySelectNodeUnderMultiSelection(
   return true;
 }
 
+// Returns true if the key code is a multi-select key.
+constexpr bool IsMultiSelectKey(VirtualKeyCode key_code) {
+  return key_code == VirtualKeyCode::VK_LEFT_SUPER ||
+         key_code == VirtualKeyCode::VK_RIGHT_SUPER ||
+         key_code == VirtualKeyCode::VK_LEFT_CTRL ||
+         key_code == VirtualKeyCode::VK_RIGHT_CTRL;
+}
+
 }  // namespace
 
 SelectionControllerImpl::SelectionControllerImpl(BaseView* view)
@@ -158,9 +168,19 @@ SelectionControllerImpl::SelectionControllerImpl(BaseView* view)
       },
       this);
 
-  // Move camera view to frame a selected node.
+  // Move camera view to frame a selected node, and track multi-select keys.
   editor_dispatcher.Connect(
       [this](const imp::KeyboardEvent& event) {
+        if (event.type == KeyboardEventType::kOnDown) {
+          if (IsMultiSelectKey(event.key.code)) {
+            held_multi_select_keys_.insert(event.key.code);
+          }
+        } else if (event.type == KeyboardEventType::kOnUp) {
+          if (IsMultiSelectKey(event.key.code)) {
+            held_multi_select_keys_.erase(event.key.code);
+          }
+        }
+
         if (selected_nodes_.empty()) {
           return;
         }
@@ -229,8 +249,8 @@ void SelectionControllerImpl::CycleOrUpdateSelection(
   // selection list, as long as the list remains constant up to that
   // depth. Wraps around to front of the list otherwise.
   if (!new_selectable_nodes.empty()) {
-    if (selectable_nodes_.empty()) {
-      // On the first selection, pick the first node.
+    if (selectable_nodes_.empty() || !held_multi_select_keys_.empty()) {
+      // On the first selection, or when multi-selecting, pick the first node.
       selected_node_index_ = 0;
     } else {
       // On subsequent selections, try to select one node deeper.
@@ -250,8 +270,14 @@ void SelectionControllerImpl::CycleOrUpdateSelection(
     target = new_selectable_nodes[selected_node_index_];
   }
   selectable_nodes_ = new_selectable_nodes;
+
+  const EditorInfo::SelectionMode mode =
+      held_multi_select_keys_.empty()
+          ? EditorInfo::SelectionMode::kSingleNode
+          : EditorInfo::SelectionMode::kMultipleNodes;
+
   // TODO: Review this function to make sure the target exists.
-  TrySelectNode(target, EditorInfo::SelectionMode::kSingleNode);
+  TrySelectNode(target, mode);
 }
 
 void SelectionControllerImpl::FocusCameraOnSelection() {
@@ -268,16 +294,25 @@ void SelectionControllerImpl::FocusCameraOnSelection() {
                                   selected_nodes_.end());
   absl::Status status = MoveIntoView(editor_camera, targets,
                                      CameraHelperOptions::kIncludeDescendants);
-  // If there was nothing viewable found in the selection,
-  // the camera was not moved. Simply exit early from the function.
-  if (!status.ok()) return;
 
   // Update the pivot.
   float3 cam_position = editor_camera->GetNode()->GetWorldPosition();
   NodeHandle pivot = editor_camera->GetNode()->GetParent();
-  pivot->SetWorldPosition(GetTargetsCenterPosition(selected_nodes_));
-  // After setting the pivot, we need to set the editor camera position again.
-  editor_camera->GetNode()->SetWorldPosition(cam_position);
+  float3 targets_center = GetTargetsCenterPosition(selected_nodes_);
+  pivot->SetWorldPosition(targets_center);
+
+  if (status.ok()) {
+    // After setting the pivot, we need to set the editor camera position again.
+    editor_camera->GetNode()->SetWorldPosition(cam_position);
+  } else {
+    // If MoveIntoView failed (e.g., empty nodes), we set the camera to a
+    // default distance from the new pivot, preserving its rotation.
+    // Assuming the camera is looking at the pivot, we move it back along its
+    // forward axis.
+    quatf rotation = editor_camera->GetNode()->GetWorldRotation();
+    float3 offset = rotation * kBack * CameraDefaults::kDefaultFocusDistance;
+    editor_camera->GetNode()->SetWorldPosition(targets_center + offset);
+  }
 }
 
 }  // namespace imp::editor

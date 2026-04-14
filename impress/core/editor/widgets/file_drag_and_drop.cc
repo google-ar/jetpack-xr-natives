@@ -44,6 +44,10 @@
 namespace imp::editor {
 
 namespace {
+
+// The threshold to snap the spawn_point to the origin.
+constexpr float kSnapThreshold = 0.1f;
+
 // Load a node from file and places the node at the cursor location.
 void LoadFileAtCursor(BaseView& view, absl::string_view filename,
                       LoadFileSource source,
@@ -54,7 +58,11 @@ void LoadFileAtCursor(BaseView& view, absl::string_view filename,
   std::optional<RayHit> hit = std::nullopt;
   std::optional<float3> spawn_point =
       GetPointerIntersectionWithGroundPlane(view, *cursor);
+
   if (spawn_point.has_value()) {
+    if (length(*spawn_point) < kSnapThreshold) {
+      spawn_point = kZero3;
+    }
     hit.emplace(0, kIdentityQuatf, *spawn_point, NodeHandle(), kUp);
   }
 

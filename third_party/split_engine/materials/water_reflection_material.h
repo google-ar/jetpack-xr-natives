@@ -46,14 +46,17 @@ class WaterReflectionMaterial
 
   ~WaterReflectionMaterial() override;
 
-  void SetReflectionCube(imp::OwnedOrBorrowedTexturePtr reflection_cube,
-                         std::optional<filament::TextureSampler> sampler = std::nullopt);
-  void SetNormalMap(imp::OwnedOrBorrowedTexturePtr normal_map,
-                    std::optional<filament::TextureSampler> sampler = std::nullopt);
+  void SetReflectionCube(
+      imp::OwnedOrBorrowedTexturePtr reflection_cube,
+      std::optional<filament::TextureSampler> sampler = std::nullopt);
+  void SetNormalMap(
+      imp::OwnedOrBorrowedTexturePtr normal_map,
+      std::optional<filament::TextureSampler> sampler = std::nullopt);
   void SetNormalTiling(float normal_tiling);
   void SetNormalSpeed(float normal_speed);
-  void SetAlphaMap(imp::OwnedOrBorrowedTexturePtr alpha_map,
-                   std::optional<filament::TextureSampler> sampler = std::nullopt);
+  void SetAlphaMap(
+      imp::OwnedOrBorrowedTexturePtr alpha_map,
+      std::optional<filament::TextureSampler> sampler = std::nullopt);
   void SetAlphaStepMultiplier(float alpha_step_multiplier);
   void SetNormalZ(float normal_z);
   void SetNormalBoundary(float normal_boundary);
@@ -70,9 +73,7 @@ class WaterReflectionMaterial
           texture_parameter_creator) const override;
 
  private:
-  WaterReflectionMaterial(
-      imp::BaseView& view,
-      imp::split_engine::PlaceholderOrBuiltInMaterialPtr material);
+  WaterReflectionMaterial(imp::BaseView& view, imp::OwnedMaterialPtr material);
 
   std::optional<TextureAndSampler> reflection_cube_;
   std::optional<TextureAndSampler> normal_map_;

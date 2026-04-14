@@ -50,6 +50,7 @@
 #include "core/render/content_security_level.h"
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
+#include "core/render/texture_options.h"
 #include "core/view/base_view.h"
 #include "core/view/platforms/android/ndkwrappers/image.h"
 #include "core/view/platforms/android/ndkwrappers/image_reader.h"
@@ -213,6 +214,11 @@ ImageReaderAndroidExternalTextureSurface::AcquireAndProcessLatestImage() {
   std::unique_ptr<RobinMap<SurfaceViewType, const AHardwareBuffer*>>
       view_hardware_buffers = latest_images_.front()->GetViewHardwareBuffers();
 
+  if (!view_hardware_buffers) {
+    return absl::InternalError(
+        "Failed to get view hardware buffers from the latest image.");
+  }
+
   // Set the transform matrix for the latest acquired image.
   latest_acquired_image_transform_matrix_ =
       latest_images_.front()->GetTransformMatrix();
@@ -241,8 +247,14 @@ ImageReaderAndroidExternalTextureSurface::AcquireAndProcessLatestImage() {
   // remove the const_cast here.
   for (const auto& [surface_view_type, ahardware_buffer] :
        *view_hardware_buffers) {
-    external_textures_[surface_view_type]->UpdateTexture(
-        ahardware_buffer, *data_space, transform_matrix_3f);
+    auto it = external_textures_.find(surface_view_type);
+    if (it != external_textures_.end() && it->second) {
+      it->second->UpdateTexture(ahardware_buffer, *data_space,
+                                transform_matrix_3f);
+    } else {
+      IMP_LOG(imp::WARNING) << "No external texture found for surface view type: "
+                   << static_cast<int>(surface_view_type);
+    }
   }
 
   return absl::OkStatus();
@@ -390,35 +402,55 @@ void ImageReaderAndroidExternalTextureSurface::ImageReaderTexture::
 
     // Create an external texture for the buffer.
     OwnedTexturePtr texture = view_.GetTextureFactory().CreateExternalTexture(
-        handle,
-        {.width = metadata.width,
-         .height = metadata.height,
-         .format = metadata.format,
-         .sampler_type = filament::backend::SamplerType::SAMPLER_EXTERNAL,
-         .usage = metadata.usage});
+        handle, {.width = metadata.width,
+                 .height = metadata.height,
+                 .format = metadata.format,
+                 .usage = metadata.usage,
+                 .sampler_options = TextureSamplerOptions{
+                     .sampler_type =
+                         TextureSamplerOptions::SamplerType::SAMPLER_EXTERNAL,
+                 }});
+
+    if (!texture) {
+      IMP_LOG(imp::ERROR) << "Failed to create external texture for buffer " << buffer;
+      return;
+    }
+
     // Update the map with the new texture for the buffer. If there was already
     // a texture for this buffer, it will be destroyed. In order to prevent the
     // material from holding a destroyed texture in the interim, the old texture
     // is moved to the existing_texture variable.
     if (it != textures_.end()) {
-      existing_texture = std::move(textures_.extract(buffer).mapped()->texture);
+      existing_texture = std::move(it->second->texture);
+      textures_.erase(it);
+      textures_lru_cache_.remove(buffer);
     }
+
+    // Update the LRU cache: move this buffer to the front.
+    textures_lru_cache_.push_front(buffer);
 
     // Limit the numbers of AHardwareBuffers held in memory, because in certain
     // scenarios the amount of buffers can grow indefinitely.
-    textures_lru_cache_.push_front(buffer);
     if (textures_lru_cache_.size() > imp::kImageReaderBufferSize) {
       const AHardwareBuffer* oldest_buffer = textures_lru_cache_.back();
       textures_.erase(oldest_buffer);
-
       textures_lru_cache_.pop_back();
     }
 
-    textures_[buffer] = std::make_unique<TextureInfo>(
-        std::move(texture), metadata, data_space, transform_matrix);
+    auto [new_it, inserted] = textures_.insert_or_assign(
+        buffer, std::make_unique<TextureInfo>(std::move(texture), metadata,
+                                              data_space, transform_matrix));
+    it = new_it;
+  } else {
+    // Metadata and data space matched. Still update the LRU cache to move this
+    // buffer to the front.
+    textures_lru_cache_.remove(buffer);
+    textures_lru_cache_.push_front(buffer);
   }
-  textures_[buffer]->transform_matrix = transform_matrix;
-  current_texture_ = textures_[buffer]->texture->GetTexture();
+
+  it->second->transform_matrix = transform_matrix;
+  current_texture_ = it->second->texture->GetTexture();
+
   for (const auto& [material_sampler, binding] : material_bindings_) {
     binding.update_texture_fn(material_sampler.second, current_texture_);
 

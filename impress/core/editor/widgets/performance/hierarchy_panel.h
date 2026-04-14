@@ -15,15 +15,16 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_HIERARCHY_PANEL_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_HIERARCHY_PANEL_H_
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <thread>  // NOLINT: Need to use std::thread::id.
 #include <vector>
 
 #include "core/editor/widgets/performance/sample_processor.h"
 #include "core/editor/widgets/performance/sample_processor_types.h"
 #include "core/performance/profiler.h"
+#include "core/performance/profiler_structs.h"
 
 namespace imp::editor {
 
@@ -37,7 +38,7 @@ class HierarchyPanel {
   HierarchyPanel() {}
   ~HierarchyPanel() = default;
 
-  void DrawPanel(float width, int frame_index,
+  void DrawPanel(float width, int start_frame, int end_frame,
                  SampleProcessor& sample_processor,
                  FrameTimePanel& frame_time_panel);
 
@@ -56,9 +57,12 @@ class HierarchyPanel {
                     int depth, int& row_index);
   void DrawWorkerTreeNode(FrameTimePanel& frame_time_panel, SampleNode* node,
                           int depth, int& row_index);
-  void DrawMainThreadSamples(int frame_index, SampleProcessor& sample_processor,
+  bool DrawMainThreadSamples(int start_frame, int end_frame,
+                             SampleProcessor& sample_processor,
                              FrameTimePanel& frame_time_panel);
-  void DrawWorkerThreadSamples(int frame_index,
+  bool DrawMainThreadFrame(int frame_index, SampleProcessor& sample_processor,
+                           FrameTimePanel& frame_time_panel);
+  bool DrawWorkerThreadSamples(int start_frame, int end_frame,
                                SampleProcessor& sample_processor,
                                std::thread::id thread_id,
                                FrameTimePanel& frame_time_panel);
@@ -70,14 +74,17 @@ class HierarchyPanel {
   // This is used to modify the tree without affecting the original data.
   // Original data is owned by the SampleProcessor and will not be modified
   // by this class.
-  std::vector<SampleNode*> GetTreeHardCopy(std::vector<SampleNode*>& roots,
-                                           NodePool& node_pool);
+  std::vector<SampleNode*> GetTreeHardCopy(
+      const std::vector<SampleNode*>& roots, NodePool& node_pool);
   // Copies a node to the pool of sample nodes
   // Recursively copies all child nodes.
-  SampleNode* CopyNodeToPool(SampleNode* node, NodePool& node_pool);
+  SampleNode* CopyNodeToPool(const SampleNode* node, NodePool& node_pool);
+  std::unique_ptr<SampleNode> CreateFakeRootSample(
+      const std::vector<SampleNode*>& roots, uint64_t start_time,
+      uint64_t end_time, WorkerProfileResult& fake_result);
+
   // Pool of nodes to be reused each time a tree is drawn.
   MainThreadNodePool main_thread_node_pool_;
-  WorkerNodePool worker_node_pool_;
 
   // For thread selection:
   const char* current_thread_ = Profiler::kMainThreadName.data();

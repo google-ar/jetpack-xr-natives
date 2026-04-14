@@ -21,6 +21,7 @@
 #include <optional>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "core/common/enum_flags.h"
 #include "core/common/optional_error.h"
 #include "core/common/paired_vector.h"
@@ -72,12 +73,14 @@ enum class TextureTransformChannels : uint16_t {
 struct GltfLookup {
   template <typename T>
   using NodeLookup = PairedVector<T, const imp::gltf::imp_proto::Node>;
+  template <typename T>
+  using SparseNodeLookup = absl::flat_hash_map<NodeId, T>;
   struct ChannelSet {
     TypedSpan<const gltf::imp_proto::AnimationChannel> channels;
-    NodeLookup<ChannelId> translation_channels;
-    NodeLookup<ChannelId> rotation_channels;
-    NodeLookup<ChannelId> scale_channels;
-    NodeLookup<ChannelId> weights_channels;
+    SparseNodeLookup<ChannelId> translation_channels;
+    SparseNodeLookup<ChannelId> rotation_channels;
+    SparseNodeLookup<ChannelId> scale_channels;
+    SparseNodeLookup<ChannelId> weights_channels;
   };
   struct TextureTransformChannelSet {
     std::optional<ChannelId> offset_channel;
@@ -136,6 +139,16 @@ struct GltfLookup {
   };
   using ExportId =
       TypedIdWithSentinel<ExportEntry, uint32_t, kMaxValue<uint32_t>>;
+
+  // Retrieves a value from a map by key, or a default-constructed value if not
+  // found, without modifying the map.
+  template <typename MapType, typename KeyType>
+  static typename MapType::mapped_type GetValueOrDefault(const MapType& map,
+                                                         KeyType key) {
+    using ValueType = typename MapType::mapped_type;
+    auto it = map.find(key);
+    return it != map.end() ? it->second : ValueType();
+  }
 
   NodeLookup<Flags<NodeGltfFlags>> self_flags;
   NodeLookup<NodeId> parents;

@@ -79,22 +79,19 @@ Future<std::unique_ptr<MaterialAsset>> CreateMaterialFromResource(
       std::make_unique<MaterialAsset>(view, filament_material);
 
   if (view->GetSplitEngineSerializer()) {
+    // Material source is available when built with flag:
+    // --define=IMP_SPLIT_ENGINE_ALLOW_EXPERIMENTAL_APIS=1
+    // or when imp_material sets include_source_mat true.
     std::string material_source = std::string(filament_material->getSource());
 
-    if (view->AreSplitEngineMaterialsInLocalMode()) {
-      // In local mode we send the compiled material data to the split engine.
-      view->GetSplitEngineSerializer()->AddMaterial(
-          filament_material, compiled_material_data,
-          material_pre_compile_options);
-    } else if (!material_source.empty() &&
-               strcmp(filament_material->getName(),
-                      "Split Engine Placeholder") != 0) {
-      // The placeholder material is used for built-in materials as a kind of
-      // app-side handle. The built-in materials expect it to be loaded as a
-      // normal app-side material. Because of this, we should not request it
-      // from split engine.
-      // TODO: (broken link) - Find a better way to check the placeholder
-      // material.
+    // The placeholder material is used for built-in materials as a kind of
+    // app-side handle. The built-in materials expect it to be loaded as a
+    // normal app-side material. Because of this, we should not request it
+    // from split engine.
+    // TODO: (broken link) - Find a better way to check the placeholder
+    // material.
+    if (!material_source.empty() &&
+        strcmp(filament_material->getName(), "Split Engine Placeholder") != 0) {
       Future<absl::Status> request_material_status =
           view->GetSplitEngineSerializer()->RequestCustomFilamentMaterial(
               material_source, filament_material, material_pre_compile_options);
@@ -175,9 +172,6 @@ MaterialAsset::MaterialAsset(BaseView* view, filament::Material* material)
 MaterialAsset::~MaterialAsset() {
   if (view_ != nullptr && view_->GetSharedEngine() != nullptr &&
       material_ != nullptr) {
-    if (auto* serializer = view_->GetSplitEngineSerializer()) {
-      serializer->RemoveMaterial(material_);
-    }
     view_->GetSharedEngine()->destroy(material_);
     material_ = nullptr;
   }

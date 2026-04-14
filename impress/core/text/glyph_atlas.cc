@@ -24,6 +24,11 @@
 #include <utility>
 #include <vector>
 
+#if IMP_PLATFORM(WASM)
+#include <emscripten.h>
+#include <emscripten/em_asm.h>
+#endif  // IMP_PLATFORM(WASM)
+
 #include "absl/base/nullability.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
@@ -193,6 +198,14 @@ GlyphAtlas::~GlyphAtlas() {
     absl::MutexLock lock(canvas_mutex_);
     canvas_.reset();
   }
+
+#if IMP_RUNTIME(DEV)
+  if (auto editor = view_.GetRegistry().Get<editor::Editor>(); editor.ok()) {
+    editor->get()
+        .GetWidgetUiSystem()
+        .RemoveWidget<editor::GlyphAtlasVisualizer>();
+  }
+#endif
 }
 
 void GlyphAtlas::EndFrame() {
@@ -314,6 +327,19 @@ Future<std::vector<GlyphAtlas::Glyph>> GlyphAtlas::GetGlyphs(
   if (text.empty()) {
     return Future<std::vector<Glyph>>(std::vector<Glyph>());
   }
+  double wasm_start_time = 0.0;
+  bool enable_label_prep_profile_logging = false;
+#if IMP_PLATFORM(WASM)
+  if (view_.GetConfig().experimental_feature_flags) {
+    enable_label_prep_profile_logging =
+        view_.GetConfig()
+            .experimental_feature_flags->enable_label_prep_profile_logging
+            .Value();
+  }
+  if (enable_label_prep_profile_logging) {
+    wasm_start_time = EM_ASM_DOUBLE({ return performance.now(); });
+  }
+#endif  // IMP_PLATFORM(WASM)
 
   // GetGlyphs must run on the foreground Executor since we make calls to
   // Filament through GetOrStartDrawing().
@@ -329,7 +355,8 @@ Future<std::vector<GlyphAtlas::Glyph>> GlyphAtlas::GetGlyphs(
   // Convert the text options into the canvas options actually used for drawing.
   return GetSuperSampleInfo(options.force_non_separable)
       .Then(
-          [this, text = std::string(text), options = options](
+          [this, text = std::string(text), options = options, wasm_start_time,
+           enable_label_prep_profile_logging](
               GlyphEmulator::SuperSampleInfo super_sample_info) {
             absl::StatusOr<ScopedCanvas::TextOptions> canvas_options =
                 glyph_emulator_.CanvasOptionsFromGlyphEmulatorOptions(
@@ -338,10 +365,36 @@ Future<std::vector<GlyphAtlas::Glyph>> GlyphAtlas::GetGlyphs(
               return Future<std::vector<Glyph>>(canvas_options.status());
             }
 
+            double break_start_time = 0.0;
+            (void)break_start_time;
+#if IMP_PLATFORM(WASM)
+            break_start_time = EM_ASM_DOUBLE({ return performance.now(); });
+#endif  // IMP_PLATFORM(WASM)
+
             return glyph_emulator_
                 .GetGlyphs(text, *canvas_options, *canvas_source_)
+                .Then([break_start_time, enable_label_prep_profile_logging](
+                          std::unique_ptr<std::vector<GlyphEmulator::Glyph>>
+                              glyphs) {
+#if IMP_PLATFORM(WASM)
+                  if (enable_label_prep_profile_logging) {
+                    EM_ASM(
+                        {
+                          try {
+                            performance.measure(
+                                'Label Prep: GetGlyphs: Break Text',
+                                {start : $0});
+                          } catch (e) {
+                          }
+                        },
+                        break_start_time);
+                  }
+#endif  // IMP_PLATFORM(WASM)
+                  return glyphs;
+                })
                 .Then([this, canvas_options = *canvas_options,
-                       super_sample_info](
+                       super_sample_info, wasm_start_time,
+                       enable_label_prep_profile_logging](
                           std::unique_ptr<std::vector<GlyphEmulator::Glyph>>
                               glyphs) {
                   auto pending_canvas_glyphs =
@@ -436,7 +489,23 @@ Future<std::vector<GlyphAtlas::Glyph>> GlyphAtlas::GetGlyphs(
                           return pending_glyph_future;
                         }
                       })
-                      .Then([glyphs = std::move(result)]() { return glyphs; });
+                      .Then([glyphs = std::move(result), wasm_start_time,
+                             enable_label_prep_profile_logging]() {
+#if IMP_PLATFORM(WASM)
+                        if (enable_label_prep_profile_logging) {
+                          EM_ASM(
+                              {
+                                try {
+                                  performance.measure('Label Prep: GetGlyphs',
+                                                      {start : $0});
+                                } catch (e) {
+                                }
+                              },
+                              wasm_start_time);
+                        }
+#endif  // IMP_PLATFORM(WASM)
+                        return glyphs;
+                      });
                 });
           },
           Executor::Type::kCurrent);

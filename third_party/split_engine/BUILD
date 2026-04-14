@@ -47,6 +47,7 @@ schemas = [
     "schemas/split_engine_ipc.fbs",
     "schemas/split_engine_material.fbs",
     "schemas/split_engine_primitive.fbs",
+    "schemas/split_engine_render_passes.fbs",
 ]
 
 filegroup(
@@ -196,6 +197,7 @@ filegroup(
     srcs = [
         "schemas/split_engine_data.fbs",
         "schemas/split_engine_ipc.fbs",
+        "schemas/split_engine_render_passes.fbs",
     ],
     tags = ["ignore_srcs"],
 )

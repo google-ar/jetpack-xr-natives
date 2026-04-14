@@ -13,37 +13,75 @@
 // limitations under the License.
 
 #include <jni.h>
+#include <vector>
 
 #include "openxr/openxr.h"
 #include "common/pointer_util.h"
+#include "openxr_runtime/jobject_creator.h"
 #include "openxr_runtime/openxr_instance_manager.h"
 
 extern "C" {
 
 using androidx::xr::common::PointerFromJLong;
 using androidx::xr::common::PointerToJLong;
+using ::androidx::xr::openxr::CreateJavaDisplayBlendMode;
 using androidx::xr::openxr::OpenXrInstanceManager;
 
 JNIEXPORT jlong JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrDeviceCapabilityProvider_nativeCreateOpenXrInstanceManager(
+Java_androidx_xr_runtime_openxr_OpenXrInstanceManager_nativeCreateOpenXrInstanceManager(
     JNIEnv* env, jclass /*clazz*/) {
   return PointerToJLong(new OpenXrInstanceManager());
 }
 
 JNIEXPORT void JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrDeviceCapabilityProvider_nativeDestroyOpenXrInstanceManager(
+Java_androidx_xr_runtime_openxr_OpenXrInstanceManager_nativeDestroyOpenXrInstanceManager(
     JNIEnv* env, jclass /*clazz*/, jlong manager_ptr) {
   delete androidx::xr::common::PointerFromJLong<OpenXrInstanceManager>(
       manager_ptr);
 }
 
 JNIEXPORT jlong JNICALL
-Java_androidx_xr_runtime_openxr_OpenXrDeviceCapabilityProvider_nativeGetOpenXrInstanceHandle(
+Java_androidx_xr_runtime_openxr_OpenXrInstanceManager_nativeGetOpenXrInstanceHandle(
+    JNIEnv* env, jclass /*clazz*/, jobject context, jlong manager_ptr) {
+  XrInstance instance = PointerFromJLong<OpenXrInstanceManager>(manager_ptr)
+                            ->GetInstance(env, context);
+  return (jlong)instance;
+}
+
+JNIEXPORT jlong JNICALL
+Java_androidx_xr_runtime_openxr_OpenXrInstanceManager_nativeGetGetInstanceProcAddr(
     JNIEnv* env, jclass /*clazz*/, jlong manager_ptr) {
-  XrInstance instance =
-      PointerFromJLong<OpenXrInstanceManager>(manager_ptr)->GetInstance();
-  return PointerToJLong(&instance);
+  PFN_xrGetInstanceProcAddr gipa =
+      PointerFromJLong<OpenXrInstanceManager>(manager_ptr)
+          ->GetGetInstanceProcAddr();
+  return androidx::xr::common::PointerToJLong(reinterpret_cast<void*>(gipa));
+}
+
+JNIEXPORT jobject JNICALL
+Java_androidx_xr_runtime_openxr_OpenXrDeviceCapabilityProvider_nativeGetPreferredBlendMode(
+    JNIEnv* env, jobject j_provider, jlong manager_ptr) {
+  OpenXrInstanceManager* manager =
+      PointerFromJLong<OpenXrInstanceManager>(manager_ptr);
+  XrInstance instance = manager->GetInstance(env, nullptr);
+  if (instance == XR_NULL_HANDLE) {
+    return nullptr;
+  }
+
+  std::vector<XrEnvironmentBlendMode> blend_modes =
+      manager->GetEnvironmentBlendModes(instance);
+
+  if (blend_modes.empty()) {
+    return nullptr;
+  }
+
+  // We ignore OPAQUE as we want only blend modes that describe rendering
+  // capabilities with a visible environment.
+  for (XrEnvironmentBlendMode blend_mode : blend_modes) {
+    if (blend_mode != XR_ENVIRONMENT_BLEND_MODE_OPAQUE) {
+      return CreateJavaDisplayBlendMode(env, blend_mode);
+    }
+  }
+  return nullptr;
 }
 
 }  // extern "C"
-

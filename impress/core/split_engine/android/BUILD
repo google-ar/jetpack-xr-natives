@@ -175,13 +175,14 @@ cc_library(
     deps = [
         ":bridge_buffer",
         ":buffer_handle_factory",
+        "//core/async:background_scheduler_impl",
         "//core/async:executor",
-        "//core/async:future",
         "//core/common:invocable",
         "//core/common:owned_ptr",
         "//core/common:robin_map",
         "//core/split_engine:flatbuffer_allocator",
         "//core/split_engine:flatbuffer_size_calculator",
+        "//core/split_engine:message_group_monitor",
         "//core/split_engine:split_engine_bridge_sender",
         "//core/split_engine:split_engine_shared",
         "@com_google_absl//absl/base:core_headers",
@@ -210,7 +211,7 @@ cc_library(
     defines = imp_defines(),
     deps = [
         ":buffer_handle_factory",
-        ":scheduler",
+        "//core/async:background_scheduler",
         "//core/common:trace",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
@@ -379,18 +380,6 @@ cc_library(
     ]) + [
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
-    ],
-    alwayslink = 1,
-)
-
-cc_library(
-    name = "scheduler",
-    hdrs = ["scheduler.h"],
-    copts = imp_copts(),
-    defines = imp_defines(),
-    deps = [
-        "//core/common:invocable",
-        "@com_google_absl//absl/status",
     ],
     alwayslink = 1,
 )

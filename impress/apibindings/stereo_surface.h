@@ -19,6 +19,7 @@
 #include <sys/types.h>
 
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <variant>
@@ -79,8 +80,15 @@ class StereoSurface : public Component {
     filament::RenderableManager::PrimitiveType draw_mode;
   };
 
-  using CanvasShape =
-      std::variant<std::monostate, Quad, Sphere, Hemisphere, StereoMesh>;
+  struct CurvedRect {
+    float width = 1.0f;
+    float height = 1.0f;
+    float corner_radius = 0.0f;
+    float curve_radius = std::numeric_limits<float>::infinity();
+  };
+
+  using CanvasShape = std::variant<std::monostate, Quad, Sphere, Hemisphere,
+                                   StereoMesh, CurvedRect>;
 
   absl::Status Setup(MediaStereoMode stereo_mode,
                      MediaBlendingMode blending_mode,
@@ -132,7 +140,16 @@ class StereoSurface : public Component {
   void SetSubViewRects(const float4& left_rect, const float4& right_rect);
 
  private:
-  enum class ColliderType { kNone, kUnknown, kPanel, kSphere, kMesh };
+  enum class ColliderType {
+    kNone,
+    kUnknown,
+    kPanel,
+    kSphere,
+    kMesh,
+    // A mesh collider on a child node of the stereo surface, which is a
+    // workaround for older system images.
+    kWorkaroundMesh
+  };
 
   std::unique_ptr<AndroidExternalTextureSurface> surface_;
   ComponentHandle<MeshRenderer> mesh_renderer_left_or_both_;
@@ -147,15 +164,12 @@ class StereoSurface : public Component {
 
   MediaStereoMode stereo_mode_;
   CanvasShape canvas_shape_;
-  ColliderType collider_type_;
+  ColliderType collider_type_ = ColliderType::kNone;
   MediaBlendingMode blending_mode_ = MediaBlendingMode::kTransparent;
   bool use_super_sampling_ = false;
 
-  ColliderType GetColliderTypeByShape(const CanvasShape& canvas_shape);
-  bool GetColliderEnabled() const {
-    return collider_type_ != ColliderType::kNone;
-  }
-  absl::Status UpdateColliderType(ColliderType collider_type);
+  bool GetColliderEnabled() const;
+  absl::Status UpdateColliderTypeByShape(const CanvasShape& canvas_shape);
   void CleanupColliderType();
 
   Future<absl::Status> InitializeMaterial(RenderEyeTarget eye_target);

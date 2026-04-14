@@ -113,7 +113,7 @@ T* OwnedOrBorrowedPtr<T>::GetPointer() const {
 template <typename T>
 BorrowedPtr<T> OwnedOrBorrowedPtr<T>::Borrow(SmallSourceLocation loc) const {
   if (!*this) {
-    return {};
+    return nullptr;
   }
 
   if (std::holds_alternative<OwnedPtr<T>>(ptr_)) {

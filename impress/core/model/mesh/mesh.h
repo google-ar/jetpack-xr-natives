@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <limits>
 #include <memory>
+#include <optional>
 
 #include "absl/base/attributes.h"
 #include "absl/base/thread_annotations.h"
@@ -118,7 +119,7 @@ class Mesh {
   MeshData* GetMeshData();
   filament::VertexBuffer* GetVertexBuffer();
   filament::IndexBuffer* GetIndexBuffer();
-  filament::RenderableManager::PrimitiveType GetPrimitiveType();
+  filament::RenderableManager::PrimitiveType GetPrimitiveType() const;
 
   bool IsSubmesh() const { return parent_mesh_ != nullptr; }
 
@@ -139,7 +140,9 @@ class Mesh {
   // is destroyed.
   // NOTE: the user is responsible to provide a valid indices range.
   Mesh(BorrowedPtr<Mesh> parent_mesh, int index_render_offset,
-       int index_render_count, const Box& aabb);
+       int index_render_count, const Box& aabb,
+       std::optional<filament::RenderableManager::PrimitiveType>
+           primitive_type = std::nullopt);
 
   // Keep track of the number of submeshes to delete the mesh data when the
   // number of submeshes is zero.
@@ -160,6 +163,7 @@ class Mesh {
   // Those variables varies for each mesh or submesh.
   MeshRange mesh_range_;
   Box aabb_;
+  filament::RenderableManager::PrimitiveType primitive_type_;
 
   BorrowedPtr<Mesh> parent_mesh_;
   size_t submesh_count_ = 0;

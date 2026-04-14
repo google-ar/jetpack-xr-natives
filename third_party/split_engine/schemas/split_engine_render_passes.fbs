@@ -1,0 +1,183 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+include "split_engine/schemas/split_engine_attributes.fbs";
+include "split_engine/schemas/split_engine_primitive.fbs";
+
+namespace android_xr.schemas;
+
+// Mirrors imp.TexturePipelineRendererState.Texture.Format
+enum RenderTargetTextureFormat:uint32 {
+  AUTO = 0,
+  RGBA8 = 1,
+  RGB8 = 2,
+  RG8 = 3,
+  R8 = 4,
+  RGBA32F = 8,
+  RGB32F = 10,
+  RG32F = 11,
+  R32F = 7,
+  RGBA16F = 9,
+  RGB16F = 12,
+  RG16F = 13,
+  R16F = 14,
+  DEPTH24 = 5,
+  DEPTH32F = 6,
+}
+
+table NewRegisteredTexture {
+  name:string (id: 0);
+  format:RenderTargetTextureFormat (id: 1);
+}
+
+// Mirror imp.TexturePipelineRendererState.AutomaticTextureSize
+enum AutomaticTextureSizeMode:uint32 {
+  DEFAULT_VIEW_SIZE_VIRTUAL_PIXELS = 0,
+  VIEW_SIZE_PHYSICAL_PIXELS = 1,
+}
+
+table AutomaticTextureSize {
+  mode:AutomaticTextureSizeMode (id: 0);
+  factor:float (id: 1);
+  resize_with_view:bool (id: 2);
+}
+
+// RenderSettings enums
+enum QualityLevel:uint32 {
+  UNDEFINED = 0,
+  LOW = 1,
+  MEDIUM = 2,
+  HIGH = 3,
+  ULTRA = 4,
+}
+
+enum AntiAliasing:uint32 {
+  NONE = 0,
+  FXAA = 1,
+}
+
+enum Dithering:uint32 {
+  NONE = 0,
+  TEMPORAL = 1,
+}
+
+table RenderQuality {
+  hdr_color_buffer:QualityLevel (id: 0);
+}
+
+// ColorGrading types
+enum ToneMappingMode:uint32 {
+  UNDEFINED = 0,
+  LINEAR = 1,
+  ACES = 2,
+  ACES_LEGACY = 3,
+  FILMIC = 4,
+  GENERIC = 5,
+}
+
+table ToneMapper {
+  mode:ToneMappingMode (id: 0);
+  contrast:float (id: 1);
+  mid_gray_in:float (id: 2);
+  mid_gray_out:float (id: 3);
+  hdr_max:float (id: 4);
+}
+
+table ColorGrading {
+  quality:QualityLevel (id: 0);
+  tone_mapper:ToneMapper (id: 1);
+  exposure:Float (id: 2);
+  night_adaptation:Float (id: 3);
+  contrast:Float (id: 4);
+  vibrance:Float (id: 5);
+  saturation:Float (id: 6);
+}
+
+table MultiSampleAntiAliasingOptions {
+  enabled:Bool (id: 0);
+  sample_count:UInt32 (id: 1);
+  custom_resolve:Bool (id: 2);
+}
+
+table ViewRenderSettings {
+  post_processing_enabled:Bool (id: 0);
+  anti_aliasing:AntiAliasing (id: 1);
+  dithering:Dithering (id: 2);
+  render_quality:RenderQuality (id: 3);
+  color_grading:ColorGrading (id: 4);
+  shadowing_enabled:Bool (id: 5);
+  multi_sample_anti_aliasing_options:MultiSampleAntiAliasingOptions (id: 6);
+  use_srgb_swapchain:Bool (id: 7);
+  use_stencil_swapchain:Bool (id: 8);
+  use_msaa_swapchain:Bool (id: 9);
+}
+
+union ColorTextureConfig {
+  NewRegisteredTexture = 1,
+  String = 2,
+}
+
+union TextureSizeConfig {
+  AutomaticTextureSize = 1,
+  Uint2 = 2,
+}
+
+table TexturePipelinePass {
+  group:string (id: 0);
+  camera:uint32 (id: 1);
+  color_texture_config:ColorTextureConfig (id: 3);
+  color_texture_layer:Int (id: 4);
+  depth_texture:NewRegisteredTexture (id: 5);
+  texture_size:TextureSizeConfig (id: 7);
+  use_main_view_settings:Bool (id: 8);
+  // render_settings will be applied on top of the default view render settings.
+  render_settings:ViewRenderSettings (id: 9);
+  view_port_left_bottom:Int2 (id: 10);
+  clear_color:Float4 (id: 11);
+}
+
+table ProjectionQuad {
+  size:Float2 (id: 0);
+  center:Float3 (id: 1);
+  rotation:Quatf (id: 2);
+}
+
+table TexturePipelineRenderer {
+  passes:[TexturePipelinePass] (id: 0);
+  priority:int32 (id: 1);
+}
+
+table AddTexturePipelineRenderer {
+  entity:uint32 (id: 0);
+  state:TexturePipelineRenderer (id: 1);
+}
+
+table RemoveTexturePipelineRenderer {
+  entity:uint32 (id: 0);
+}
+
+table UpdateTexturePipelineRenderer {
+  entity:uint32 (id: 0);
+  enabled_passes:[bool] (id: 1);
+  projection_quad:ProjectionQuad (id: 2);
+}
+
+table RegisterNamedTexture {
+  id:uint64 (id: 0);
+  name:string (id: 1);
+}
+
+table UnregisterNamedTexture {
+  id:uint64 (id: 0);
+}

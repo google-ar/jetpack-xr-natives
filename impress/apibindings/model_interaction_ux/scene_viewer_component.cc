@@ -47,9 +47,11 @@
 #include "extensions/sceneviewerxr/ux/interaction_states/idle.h"
 #include "extensions/sceneviewerxr/ux/interaction_states/initial.h"
 #include "extensions/sceneviewerxr/ux/interaction_states/interaction_states.h"
+#include "extensions/sceneviewerxr/ux/interaction_states/one_handed_scale.h"
 #include "extensions/sceneviewerxr/ux/interaction_states/rotation.h"
 #include "extensions/sceneviewerxr/ux/interaction_states/scale_reset.h"
 #include "extensions/sceneviewerxr/ux/interaction_states/translation.h"
+#include "extensions/sceneviewerxr/ux/interaction_states/two_handed_scale.h"
 #include "extensions/sceneviewerxr/ux/ui_event_listener.h"
 #include "split_engine/input/split_engine_input_event.h"
 
@@ -78,11 +80,6 @@ using InputFlag = svxr::InputFlag;
 
 constexpr auto kPlaneEpsilon = 1e-3f;
 
-constexpr auto kOneHandedScaleUnit = float3(100.f, 0.17f, 0.13f);
-constexpr auto kOneHandedScaleDeadzone = float3(0.05f);
-constexpr auto kOneHandedScaleThrow = 2.0f;
-constexpr auto kOneHandedScaleMultiplier = 1.0f;
-
 constexpr auto kMinimumRotationDelta = .5f;
 
 // If the model is within this distance of the camera it won't be scaled up.
@@ -110,7 +107,6 @@ mat4f GetRayFromWorldSpace(const imp::Ray& ray) {
 
 }  // namespace
 
-// TODO: Add unit tests for this component.
 SceneViewerComponent::SceneViewerComponent()
     : interaction_machine_(svxr::interaction_states::Initialized{}, this),
       model_node_(),
@@ -288,11 +284,17 @@ void SceneViewerComponent::HandleInputInternal(
         return HandleTranslationInput(state, ray, receiver, input_flags);
       },
       [&](svxr::interaction_states::Idle& state) -> OptionalInteractionState {
-        if (footprint_ && (footprint_->IsScaleHandle(receiver) ||
-                           footprint_->IsCloseToScaleHandle(hit_position))) {
+        std::optional<svxr::ScaleHandle> handle = std::nullopt;
+        if (footprint_) {
+          handle = footprint_->GetTargetedScaleHandle(receiver, hit_position);
+        }
+        if (handle.has_value() &&
+            handle.value() != svxr::ScaleHandle::kTwoHanded) {
           if (input_flags.Test(InputFlag::kIsDown)) {
             interaction_data_.SetTransform(
                 InteractionMode::TransformMode::kScale);
+            interaction_data_.SetScaleHandle(handle);
+            PlayGrabSound();
             return svxr::interaction_states::OneHandedScale{
                 .initial_world_space_ray = ray,
                 .current_world_space_ray = ray,
@@ -305,6 +307,11 @@ void SceneViewerComponent::HandleInputInternal(
                            *this);
       },
       [&](svxr::interaction_states::Rotation& state)
+          -> OptionalInteractionState {
+        return svxr::interaction_states::HandleInput(state, ray, receiver,
+                                                     input_flags, *this);
+      },
+      [&](svxr::interaction_states::OneHandedScale& state)
           -> OptionalInteractionState {
         return svxr::interaction_states::HandleInput(state, ray, receiver,
                                                      input_flags, *this);
@@ -322,7 +329,8 @@ imp::float3 SceneViewerComponent::GetRigToCameraXz() {
   return camera_world_position_xz - rig_world_position_xz;
 }
 
-float SceneViewerComponent::ConstrainElastically(float value, AxisBounds range,
+float SceneViewerComponent::ConstrainElastically(float value,
+                                                 svxr::AxisBounds range,
                                                  float scale) {
   if (value < range.min) {
     float excess = range.min - value;
@@ -378,17 +386,17 @@ void SceneViewerComponent::ConstrainRigPosition() {
       is_translating ? kTranslationRigCorrectionRate : kIdleRigCorrectionRate;
 
   imp::float3 target_position = rig_position_.GetTarget();
-  AxisBounds world_y_bounds =
+  svxr::AxisBounds world_y_bounds =
       (environment_type_ == EnvironmentType::kHomeEnvironment
            ? kEnvironmentYBounds
            : kPassthroughYBounds);
-  AxisBounds world_xz_bounds =
+  svxr::AxisBounds world_xz_bounds =
       (environment_type_ == EnvironmentType::kHomeEnvironment
            ? kEnvironmentXZBounds
            : kPassthroughXZBounds);
 
   // Convert the bounds to rig space.
-  AxisBounds rig_y_bounds;
+  svxr::AxisBounds rig_y_bounds;
   rig_y_bounds.min = (inverse(rig_node_->GetWorldTrs()) *
                       imp::float3(0, world_y_bounds.min, 0))
                          .y;
@@ -461,14 +469,14 @@ void SceneViewerComponent::CalculateModelScaleLimits() {
   scale_max = std::max(std::max(scale_min, scale_max), initial_model_scale_);
 
   model_log_scale_limits_ =
-      AxisBounds{std::log(scale_min), std::log(scale_max)};
+      svxr::AxisBounds(std::log(scale_min), std::log(scale_max));
 
   // Account for the environment type.
-  AxisBounds world_y_bounds =
+  svxr::AxisBounds world_y_bounds =
       (environment_type_ == EnvironmentType::kHomeEnvironment
            ? kEnvironmentYBounds
            : kPassthroughYBounds);
-  AxisBounds world_xz_bounds =
+  svxr::AxisBounds world_xz_bounds =
       (environment_type_ == EnvironmentType::kHomeEnvironment
            ? kEnvironmentXZBounds
            : kPassthroughXZBounds);
@@ -484,6 +492,10 @@ void SceneViewerComponent::CalculateModelScaleLimits() {
       std::max(radius, svxr::kModelSizeEpsilon));
   model_log_scale_limits_.max = std::min(
       model_log_scale_limits_.max, std::min(world_y_range, world_xz_range));
+}
+
+svxr::AxisBounds SceneViewerComponent::GetModelLogScaleLimits() {
+  return model_log_scale_limits_;
 }
 
 void SceneViewerComponent::OnStateChange(
@@ -504,6 +516,11 @@ void SceneViewerComponent::Update(const imp::FrameTime& delta_time) {
           -> OptionalInteractionState {
         interaction_data_.SetActive(InteractionMode::ActiveMode::kInteracting);
         return svxr::interaction_states::Update(state, delta_time, *this);
+      },
+      [&](svxr::interaction_states::OneHandedScale& state)
+          -> OptionalInteractionState {
+        interaction_data_.SetActive(InteractionMode::ActiveMode::kInteracting);
+        return svxr::interaction_states::Update(delta_time, state, *this);
       },
       [](auto& state) -> OptionalInteractionState { return {}; });
   if (footprint_) {
@@ -578,6 +595,14 @@ void SceneViewerComponent::PlayLiftSound() {
   }
 }
 
+// Plays the audio effect for when a scale handle is grabbed.
+// This is a no-op in the apibindings component as audio is not managed here.
+void SceneViewerComponent::PlayGrabSound() {}
+
+// Plays the audio effect for when a scale handle is released.
+// This is a no-op in the apibindings component as audio is not managed here.
+void SceneViewerComponent::PlayReleaseSound() {}
+
 bool SceneViewerComponent::IsPassthrough() {
   return environment_type_ == EnvironmentType::kPassthrough;
 }
@@ -588,57 +613,10 @@ imp::float3 SceneViewerComponent::ComputeFootprintPositionFromPlanes(
   return imp::kZero3;
 }
 
-OptionalInteractionState SceneViewerComponent::UpdateOneHandedScale(
-    svxr::interaction_states::OneHandedScale& state,
-    const imp::FrameTime& delta_time) {
-  float3 delta_translation = state.current_world_space_ray.origin -
-                             state.initial_world_space_ray.origin;
-  float3 delta_translation_with_deadzone =
-      greaterThan(delta_translation, kOneHandedScaleDeadzone) *
-          (delta_translation - kOneHandedScaleDeadzone) +
-      lessThan(delta_translation, -kOneHandedScaleDeadzone) *
-          (delta_translation + kOneHandedScaleDeadzone);
-  float3 unit_delta_translation =
-      delta_translation_with_deadzone / kOneHandedScaleUnit;
-  float scalar_delta_translation = dot(unit_delta_translation, float3(1.f));
-  float scale_offset =
-      pow(fabs(scalar_delta_translation), kOneHandedScaleThrow) *
-      ((scalar_delta_translation < 0.f) ? -1.f : 1.f) *
-      kOneHandedScaleMultiplier;
-
-  if (std::abs(scale_offset) > 1e-5f) {
-    state.has_scaled = true;
-  }
-
-  auto model_log_scale = state.initial_model_log_scale + scale_offset;
-  auto constrained_model_log_scale = ConstrainElastically(
-      model_log_scale, model_log_scale_limits_, kElasticScale);
-  model_log_scale_.SetTarget(constrained_model_log_scale);
-  return {};
-}
-
 OptionalInteractionState SceneViewerComponent::UpdateTwoHandedScale(
     svxr::interaction_states::TwoHandedScale& state,
     const imp::FrameTime& delta_time) {
-  float initial_pinch_distance =
-      length(state.initial_world_space_ray_left.origin -
-             state.initial_world_space_ray_right.origin);
-  float current_pinch_distance =
-      length(state.current_world_space_ray_left.origin -
-             state.current_world_space_ray_right.origin);
-
-  float current_scale = current_pinch_distance / initial_pinch_distance;
-  if (std::abs(current_scale - 1.0f) > 1e-5f) {
-    state.has_scaled = true;
-  }
-
-  float model_log_scale =
-      std::log(std::exp(state.initial_model_log_scale) * current_scale);
-  auto constrained_model_log_scale = ConstrainElastically(
-      model_log_scale, model_log_scale_limits_, kElasticScale);
-
-  model_log_scale_.SetTarget(constrained_model_log_scale);
-  return {};
+  return svxr::interaction_states::Update(delta_time, state, *this);
 }
 
 OptionalInteractionState SceneViewerComponent::UpdateScaleReset(
@@ -647,54 +625,12 @@ OptionalInteractionState SceneViewerComponent::UpdateScaleReset(
   return svxr::interaction_states::Update(delta_time, state, *this);
 }
 
-OptionalInteractionState SceneViewerComponent::HandleOneHandedScaleInput(
-    svxr::interaction_states::OneHandedScale& state, const imp::Ray& ray,
-    imp::NodeHandle receiver, imp::Flags<InputFlag> input_flags) {
-  // Ignore events for pointers which did not initiate one handed scale.
-  if (state.is_right != input_flags.Test(InputFlag::kIsRight)) {
-    return {};
-  }
-
-  if (!input_flags.Test(InputFlag::kIsDown)) {
-    return OptionalInteractionState{SetupIdleState()};
-  } else {
-    // If we are still down, we are potentially scaling.
-    interaction_data_.SetTransform(InteractionMode::TransformMode::kScale);
-    state.current_world_space_ray = ray;
-  }
-  return {};
-}
-
 OptionalInteractionState SceneViewerComponent::HandleTwoHandedScaleInput(
     svxr::interaction_states::TwoHandedScale& state, const imp::Ray& ray,
     imp::NodeHandle receiver, const float3& hit_position,
     imp::Flags<InputFlag> input_flags) {
-  if (input_flags.Test(InputFlag::kIsDownStopping)) {
-    // Transition to single-hand gesture
-    bool use_translation = false;
-    if (use_translation) {
-      // do we need to save hit positions in two-handed scale to safely
-      // degrade to translation?
-    } else {
-      auto rig_rotation = rig_node_->GetLocalRotation();
-      auto& other_ray = input_flags.Test(InputFlag::kIsRight)
-                            ? state.current_world_space_ray_left
-                            : state.current_world_space_ray_right;
-
-      return OptionalInteractionState{svxr::interaction_states::Rotation{
-          .initial_world_space_ray = other_ray,
-          .current_world_space_ray = other_ray,
-          .initial_rig_rotation = rig_rotation,
-          .is_right = !input_flags.Test(InputFlag::kIsRight),
-          .is_rotating_after_two_handed_scale = true,
-          .cumulative_change_delta = 0}};
-    }
-  }
-  interaction_data_.SetTransform(InteractionMode::TransformMode::kScale);
-  (input_flags.Test(InputFlag::kIsRight) ? state.current_world_space_ray_right
-                                         : state.current_world_space_ray_left) =
-      ray;
-  return {};
+  return svxr::interaction_states::HandleInput(state, ray, receiver,
+                                               input_flags, *this);
 }
 
 OptionalInteractionState SceneViewerComponent::HandleTranslationInput(

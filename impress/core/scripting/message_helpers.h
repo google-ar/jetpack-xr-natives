@@ -46,7 +46,7 @@ bool Is(const Any& message) {
 
 // Returns proto as a base-64 encoded string.
 template <typename T>
-std::string SerializeToBase64(T message) {
+std::string SerializeToBase64(T const& message) {
   std::string serialized;
   proto::SerializeTo(&message, &serialized);
   std::string encoded;

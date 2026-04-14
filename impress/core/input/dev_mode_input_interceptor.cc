@@ -14,11 +14,15 @@
 
 #include "core/input/dev_mode_input_interceptor.h"
 
+#include <cstddef>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
+#include "core/common/log.h"
+#include "absl/status/statusor.h"
 #include "absl/types/variant.h"
 #include "dear_imgui/imgui.h"
 #include "dear_imgui/imgui_internal.h"
@@ -31,7 +35,10 @@
 #include "core/editor/xr/xr_editor_ui.h"
 #include "core/input/input_manager.h"
 #include "core/input/key_codes.h"
+#include "core/input/keyboard_controller.h"
 #include "core/input/keyboard_event.h"
+#include "core/input/pointer_event.h"
+#include "core/input/wheel_event.h"
 #include "core/math/transform.h"
 #include "core/math/vec.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
@@ -98,9 +105,13 @@ void InterceptXrEditorInput(BaseView& view,
     return;
   }
 
+  absl::StatusOr<std::reference_wrapper<editor::Editor>> editor_or =
+      view.GetRegistry().Get<editor::Editor>();
+  if (!editor_or.ok()) {
+    IMP_LOG(imp::FATAL) << "Editor could not be retrieved from the registry.";
+  }
   // Send a ControllerHitEvent on in the Editor dispatcher
-  Dispatcher& editor_dispatcher =
-      view.GetRegistry().Get<editor::Editor>()->get().GetDispatcher();
+  Dispatcher& editor_dispatcher = editor_or->get().GetDispatcher();
   editor_dispatcher.Send(*controller_hit_event);
 
   // If hitting the XR Editor, strip away button inputs.
@@ -293,6 +304,23 @@ void DevModeInputInterceptor::FilterKeyboardEvents(
   }
 }
 
+void DevModeInputInterceptor::FilterWheelEvents(
+    std::vector<WheelEvent>& wheel_events) {
+  constexpr float kWheelSensitivity = 0.2f;
+  ImGuiIO& io = ImGui::GetIO();
+  auto wheel_itr = wheel_events.begin();
+  while (wheel_itr != wheel_events.end()) {
+    io.MousePos = ImVec2(wheel_itr->GetPoint().x, wheel_itr->GetPoint().y);
+    ImGui::UpdateHoveredWindowAndCaptureFlags(io.MousePos);
+    if (io.WantCaptureMouse) {
+      io.MouseWheel += wheel_itr->GetDelta().y * kWheelSensitivity;
+      wheel_itr = wheel_events.erase(wheel_itr);
+    } else {
+      ++wheel_itr;
+    }
+  }
+}
+
 void DevModeInputInterceptor::FilterInputActionEvents(
     std::vector<InputActionEvent>& input_action_events) {
   IMP_TRACE();
@@ -311,18 +339,5 @@ void DevModeInputInterceptor::FilterInputActionEvents(
   for (auto& input_action_event : input_action_events) {
     InterceptXrEditorInput(*view_, input_action_event);
   }
-}
-
-bool DevModeInputInterceptor::TryConsumeWheelEvent(
-    const WheelEvent& wheel_event) {
-  constexpr float kWheelSensitivity = 0.2f;
-
-  if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
-    ImGuiIO& io = ImGui::GetIO();
-    io.MouseWheel -= wheel_event.GetDelta() * kWheelSensitivity;
-    return true;
-  }
-
-  return false;
 }
 }  // namespace imp

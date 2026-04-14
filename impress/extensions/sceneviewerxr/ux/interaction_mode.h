@@ -17,7 +17,17 @@
 #ifndef THIRD_PARTY_IMPRESS_EXTENSIONS_SCENEVIEWERXR_UX_INTERACTION_MODE_H_
 #define THIRD_PARTY_IMPRESS_EXTENSIONS_SCENEVIEWERXR_UX_INTERACTION_MODE_H_
 
+#include <optional>
+
 namespace svxr {
+
+enum class ScaleHandle {
+  kBottomRight,
+  kBottomLeft,
+  kTopRight,
+  kTopLeft,
+  kTwoHanded,
+};
 
 // Holds data on the different interaction modes that are currently engaged.
 class InteractionMode {
@@ -33,6 +43,9 @@ class InteractionMode {
   void SetTransform(TransformMode transform) { transform_ = transform; }
   void SetActive(ActiveMode active) { active_ = active; }
   void SetGaze(GazeMode gaze) { gaze_ = gaze; }
+  void SetScaleHandle(std::optional<ScaleHandle> handle) {
+    scale_handle_ = handle;
+  }
 
   bool TestSelected(SelectedMode test_mode) const {
     return selected_ == test_mode;
@@ -45,6 +58,7 @@ class InteractionMode {
   }
   bool TestActive(ActiveMode test_mode) const { return active_ == test_mode; }
   bool TestGaze(GazeMode test_mode) const { return gaze_ == test_mode; }
+  std::optional<ScaleHandle> GetScaleHandle() const { return scale_handle_; }
 
   InteractionMode() = default;
 
@@ -61,6 +75,7 @@ class InteractionMode {
   TransformMode transform_ = TransformMode::kNothing;
   ActiveMode active_ = ActiveMode::kNothing;
   GazeMode gaze_ = GazeMode::kGaze;
+  std::optional<ScaleHandle> scale_handle_ = std::nullopt;
 };
 
 }  // namespace svxr

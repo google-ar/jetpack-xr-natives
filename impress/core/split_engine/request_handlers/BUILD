@@ -47,7 +47,6 @@ cc_library(
         "//core/common:small_source_location",
         "@com_google_absl//absl/base:no_destructor",
         "@com_google_absl//absl/container:flat_hash_map",
-        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -112,6 +111,8 @@ cc_library(
     ],
     alwayslink = 1,
 )
+
+# Requires: --config=android_arm
 
 cc_library(
     name = "request_handlers",

@@ -18,11 +18,13 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <string>
 #include <utility>
 #include <variant>
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/strings/string_view.h"
 #include "core/assets/asset_cache.h"
 #include "core/common/invocable.h"
 #include "core/common/rememberer.h"
@@ -35,6 +37,7 @@
 #include "core/model/mesh/mesh_vertex_data.h"
 #include "core/ncsb/node_handle.h"
 #include "core/render/texture.h"
+#include "core/render/texture_registry.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
 #include "core/split_engine/renderer_policy_handler.h"
 #include "core/split_engine/shared/split_engine_defines.h"
@@ -69,7 +72,7 @@ struct EnvironmentLightContext {
 class AppPermissionController {
  public:
   explicit AppPermissionController(BaseView& view);
-  ~AppPermissionController() = default;
+  ~AppPermissionController();
   void AddPermissions(AppPermission permission);
   void RemovePermissions(AppPermission permission);
   bool HasPermission(AppPermissionTypes permission) const;
@@ -115,10 +118,16 @@ struct AppContext : public Rememberer {
   using RawOrBuiltInMaterialInstance =
       std::variant<RawMaterialInstance, BuiltInMaterialPtr>;
 
+  // Returns a name for the given name that is prefixed with the bridge id.
+  // This is used to ensure that names are unique across different apps.
+  static std::string GetBridgePrefixedName(BridgeId bridge_id,
+                                           absl::string_view name);
+
   AppContext(BaseView& view, EnvironmentLightContext& environment_light_cxt,
              BridgeId bridge_id);
   ~AppContext();
 
+  // The shared SplitEngineRenderer view.
   BaseView& view;
 
   // A map from front end entity ids to the corresponding NodeHandle.
@@ -194,6 +203,11 @@ struct AppContext : public Rememberer {
   //
   // The texture id comes from the memory address of the front end texture.
   RobinMap<TextureId, TextureExternalMetadata> textures_external;
+
+  // A map from front end texture ids to the prefixed name of the texture
+  // in the TextureRegistry. Used to resolve textures created by the backend
+  // (e.g. TexturePipelineRenderer).
+  RobinMap<TextureId, std::string> named_texture_resolution_map;
 
   // The EnvironmentLightContext not owned by the AppContext - it has
   // a separate map so that it can have a longer lifetime than the

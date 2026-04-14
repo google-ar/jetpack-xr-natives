@@ -19,10 +19,10 @@ package com.google.androidxr.splitengine;
 import android.app.Activity;
 import android.util.DisplayMetrics;
 import androidx.annotation.Nullable;
+import androidx.xr.arcore.NativeData;
+import androidx.xr.arcore.NativeDataExt;
 import androidx.xr.arcore.RenderViewpoint;
-import androidx.xr.arcore.openxr.NativeHandleGetter;
-import androidx.xr.arcore.openxr.OpenXrRuntime;
-import androidx.xr.runtime.Config.HeadTrackingMode;
+import androidx.xr.runtime.DeviceTrackingMode;
 import androidx.xr.runtime.FieldOfView;
 import androidx.xr.runtime.Session;
 import androidx.xr.runtime.SessionCreateResult;
@@ -44,7 +44,7 @@ public class SplitEngineViewUpdateProvider implements ImpSplitEngine.SplitEngine
 
   private static final String TAG = SplitEngineViewUpdateProvider.class.getSimpleName();
   private final Activity activity;
-  private final OpenXrRuntime openXrRuntime;
+  private final NativeData nativeData;
   private final RenderViewpoint left;
   private final RenderViewpoint right;
 
@@ -55,12 +55,7 @@ public class SplitEngineViewUpdateProvider implements ImpSplitEngine.SplitEngine
   public SplitEngineViewUpdateProvider(
       Session session, Activity activity, Node sceneNode, Node windowLeashNode) {
     this.activity = activity;
-    openXrRuntime =
-        (OpenXrRuntime)
-            session.getRuntimes().stream()
-                .filter(runtime -> runtime instanceof OpenXrRuntime)
-                .findFirst()
-                .get();
+    nativeData = NativeDataExt.getNativeData(session);
     left = RenderViewpoint.left(session);
     right = RenderViewpoint.right(session);
   }
@@ -75,7 +70,7 @@ public class SplitEngineViewUpdateProvider implements ImpSplitEngine.SplitEngine
               .copy(
                   session.getConfig().getPlaneTracking(),
                   session.getConfig().getHandTracking(),
-                  HeadTrackingMode.LAST_KNOWN));
+                  DeviceTrackingMode.LAST_KNOWN));
       return session;
     } else {
       throw new IllegalStateException("Failed to create session.");
@@ -104,12 +99,12 @@ public class SplitEngineViewUpdateProvider implements ImpSplitEngine.SplitEngine
 
   // TODO: traorem - Remove this once SceneViewerXR can use JXR plane APIs directly.
   public long getNativeSession() {
-    return NativeHandleGetter.getXrSessionPointer(openXrRuntime);
+    return nativeData.getNativeSessionPointer();
   }
 
   // TODO: traorem - Remove this once SceneViewerXR can use JXR plane APIs directly.
   public long getNativeInstance() {
-    return NativeHandleGetter.getXrInstancePointer(openXrRuntime);
+    return nativeData.getNativeInstancePointer();
   }
 
   private ImpSplitEngine.ViewUpdateParams createViewUpdateParams(

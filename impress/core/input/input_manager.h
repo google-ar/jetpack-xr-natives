@@ -17,22 +17,19 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_INPUT_INPUT_MANAGER_H_
 #define THIRD_PARTY_IMPRESS_CORE_INPUT_INPUT_MANAGER_H_
 
+#include <cstdint>
 #include <memory>
-#include <queue>
 #include <vector>
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "core/actions/input_action_event.h"
-#include "core/collision/collision_flags.h"
-#include "core/common/optional_error.h"
 #include "core/input/keyboard_event.h"
 #include "core/input/pointer_event.h"
 #include "core/input/pointer_event_processor.h"
 #include "core/input/textinput_event.h"
 #include "core/input/wheel_event.h"
-#include "core/math/transform.h"
 #include "core/math/vec.h"
 
 namespace imp {
@@ -55,8 +52,10 @@ struct InputHandlerBase {
   virtual void Update(InputManager* input_manager) = 0;
 };
 
-// Dev mode installs an instance of a type to prevent tap events for imgui
-// widgets from making it up to the view.
+// InputInterceptor can be used to intercept and filter out any input events,
+// preventing other views from receiving them. This is particularly used by the
+// dev_mode_input_interceptor to have ImGui consume the input events and prevent
+// them from bubbling up to the impress view.
 struct InputInterceptor {
   virtual ~InputInterceptor() {}
   virtual void FilterPointerEvents(
@@ -64,7 +63,7 @@ struct InputInterceptor {
   virtual void FilterKeyboardEvents(
       std::vector<KeyboardEvent>& keyboard_events,
       std::vector<TextInputEvent>& text_input_events) = 0;
-  virtual bool TryConsumeWheelEvent(const WheelEvent& wheel_event) = 0;
+  virtual void FilterWheelEvents(std::vector<WheelEvent>& wheel_events) = 0;
   virtual void FilterInputActionEvents(
       std::vector<InputActionEvent>& input_action_events) = 0;
 };
@@ -88,9 +87,10 @@ class InputManager {
                                     absl::Duration elapsed_time);
   // Take/adds in a text input contents and add it toTextInputEvent queue.
   void ProcessTextInput(absl::string_view contents);
-  // Takes/adds in a scroll wheel delta and elapsed time and add it to the
-  // stored WheelEvent.
-  absl::Status ProcessWheelInput(float delta, absl::Duration elapsed_time);
+  // Takes/adds in a scroll wheel delta, point, and elapsed time and add it to
+  // the WheelEvent queue.
+  absl::Status ProcessWheelInput(float2 delta, float2 point,
+                                 absl::Duration elapsed_time);
 
   // Pushes an InputActionEvent to the end of the queue.
   void PushInputActionEvent(InputActionEvent input_action_event);
@@ -127,7 +127,7 @@ class InputManager {
   // Returns true if there is a stored wheel event.
   bool HasWheelEvent();
   // Removes the currently stored wheel event.
-  WheelEvent PopWheelEvent();
+  std::vector<WheelEvent> PopWheelEvents();
 
   // Update the current input handler.
   void Update();
@@ -141,7 +141,7 @@ class InputManager {
   std::vector<PointerEvent> pointer_events_;
   std::vector<KeyboardEvent> keyboard_events_;
   std::vector<TextInputEvent> text_input_events_;
-  absl::optional<WheelEvent> wheel_event_;
+  std::vector<WheelEvent> wheel_events_;
   std::vector<std::unique_ptr<InputInterceptor>> input_interceptors_;
   std::vector<InputActionEvent> input_action_events_;
 };

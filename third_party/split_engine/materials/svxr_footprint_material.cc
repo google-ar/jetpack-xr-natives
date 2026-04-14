@@ -22,6 +22,7 @@
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
+#include "core/materials/material.h"
 #include "core/math/vec.h"
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
@@ -40,16 +41,14 @@ SVXRFootprintMaterial::Create(imp::BaseView& view) {
              view, std::move(fbb),
              android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterial0d0cb9aa,
              spec_offset.Union())
-      .Then(
-          [&view](imp::split_engine::PlaceholderOrBuiltInMaterialPtr material) {
-            return absl::WrapUnique(
-                new SVXRFootprintMaterial(view, std::move(material)));
-          });
+      .Then([&view](imp::OwnedMaterialPtr material) {
+        return absl::WrapUnique(
+            new SVXRFootprintMaterial(view, std::move(material)));
+      });
 }
 
-SVXRFootprintMaterial::SVXRFootprintMaterial(
-    imp::BaseView& view,
-    imp::split_engine::PlaceholderOrBuiltInMaterialPtr material)
+SVXRFootprintMaterial::SVXRFootprintMaterial(imp::BaseView& view,
+                                             imp::OwnedMaterialPtr material)
     : SplitEngineBuiltinMaterial(
           view,
           android_xr::schemas::BuiltInMaterialParameters::

@@ -154,6 +154,7 @@ cc_library(
         "//core/math",
         "//core/math:aabb_helpers",
         "//core/view:base_view",
+        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/strings:string_view",

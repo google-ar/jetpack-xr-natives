@@ -38,7 +38,8 @@ class CallstackPanel {
   CallstackPanel() {}
   ~CallstackPanel() = default;
 
-  void DrawPanel(float width, int frame_index, FrameTimePanel& frame_time_panel,
+  void DrawPanel(float width, int start_frame, int end_frame,
+                 FrameTimePanel& frame_time_panel,
                  SampleProcessor& sample_processor, std::thread::id thread_id);
 
  private:
@@ -54,15 +55,15 @@ class CallstackPanel {
   static constexpr int kInvalidId = -1;
 
   // Returns all samples with a specific name for a given frame and thread.
-  absl::StatusOr<std::vector<SampleNode*>*> GetSamples(
+  absl::StatusOr<const std::vector<SampleNode*>*> GetSamples(
       int frame_index, SampleProcessor& sample_processor,
       std::thread::id thread_id, absl::string_view selected_sample_name);
 
   // Draws the call stack table, splitter, and the full call stack panel.
-  void DrawCallstackPanel(std::vector<SampleNode*>& samples);
+  void DrawCallstackPanel(const std::vector<SampleNode*>& samples);
 
   // Draws the table contents with a row for each allocation in the samples.
-  void DrawCallstackTable(std::vector<SampleNode*>& samples);
+  void DrawCallstackTable(const std::vector<SampleNode*>& samples);
 
   // Draws the splitter between the table and the full call stack panel.
   void DrawSplitter();

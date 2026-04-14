@@ -15,349 +15,282 @@
 include "core/animation/schemas/gltf_animation.fbs";
 include "core/common/schemas/math.fbs";
 include "core/common/schemas/render.fbs";
-include "core/material_library/schemas/generic_material.fbs";
 include "core/loader/provider/extensions/interactivity/schemas/interactivity.fbs";
+include "core/material_library/schemas/generic_material.fbs";
 
 namespace imp.schemas;
 
 // This is 1-1 with TextureInfo, but is split out so that we could
 // incrementally load images in the future.
-union ImageInfo { ImageFileData, CompressedImageData }
+union ImageInfo {
+  ImageFileData,
+  CompressedImageData,
+}
 
 table MaterialsVariantsInfo {
-  name: string (required);
+  name:string (required);
 }
 
 table LoadedModel {
-  skeleton : SkeletonInfo (required);
-  entity_graph : EntityGraphInfo (required);
-  skins : [SkinInfo] (required);
-  vertex_buffers : [VertexBufferInfo] (required);
-  index_buffers : [IndexBufferInfo] (required);
-  materials : [MaterialInfo] (required);
-  textures : [TextureInfo] (required);
-  images : [ImageInfo] (required);
-  animations : [GltfAnimationInfo] (required);
-  lights_punctual : [LightPunctualInfo] (required);
-  materials_variants : [MaterialsVariantsInfo] (required);
-  morph_target_buffers : [MorphTargetBufferInfo] (required);
-  skinning_buffers : [SkinningBufferInfo] (required);
-  audio_extension: AudioExtension;
-  behavior: Behavior;
-  interactivity: Interactivity;
+  skeleton:SkeletonInfo (required);
+  entity_graph:EntityGraphInfo (required);
+  skins:[SkinInfo] (required);
+  vertex_buffers:[VertexBufferInfo] (required);
+  index_buffers:[IndexBufferInfo] (required);
+  materials:[MaterialInfo] (required);
+  textures:[TextureInfo] (required);
+  images:[ImageInfo] (required);
+  animations:[GltfAnimationInfo] (required);
+  lights_punctual:[LightPunctualInfo] (required);
+  materials_variants:[MaterialsVariantsInfo] (required);
+  morph_target_buffers:[MorphTargetBufferInfo] (required);
+  skinning_buffers:[SkinningBufferInfo] (required);
+  audio_extension:AudioExtension;
+  interactivity:Interactivity;
 }
 
 root_type LoadedModel;
 
 table SkeletonInfo {
-  child_counts : [uint16] (required);
-  parents : [uint16] (required);
-  first_children : [uint16] (required);
-  next_siblings : [uint16] (required);
-  local_transforms : [PreciseTransform] (required);
-  root_transforms : [Mat4] (required);
-  names : [string] (required);
-  node_indices : [uint16] (required);
+  child_counts:[uint16] (required);
+  parents:[uint16] (required);
+  first_children:[uint16] (required);
+  next_siblings:[uint16] (required);
+  local_transforms:[PreciseTransform] (required);
+  root_transforms:[Mat4] (required);
+  names:[string] (required);
+  node_indices:[uint16] (required);
 }
 
-enum RenderInfoFlags : ubyte (bit_flags) {
-  DoNotCastShadows,      // (1 << 0)
-  DoNotReceiveShadows,   // (1 << 1)
-  DisableFrustumCulling, // (1 << 2)
+enum RenderInfoFlags:ubyte (bit_flags) {
+  DoNotCastShadows,  // (1 << 0)
+  DoNotReceiveShadows,  // (1 << 1)
+  DisableFrustumCulling,  // (1 << 2)
 }
 
 table RuntimeInfo {
-  flags : RenderInfoFlags;
-  priority : ubyte;
+  flags:RenderInfoFlags;
+  priority:ubyte;
 }
 
 table PartInfo {
-  name : string (required);
-  index_offset : uint32;
-  index_count : uint32;
-  vertex_buffer : uint16;
-  index_buffer : uint16;
-  material : uint16;
-  original_material_index : int16;
-  primitive_type : uint8;
-  materials_variants_mappings : [uint16] (required);
-  skinning_buffer : uint16;
-  morph_target_buffer_offset : uint32;
-  morph_target_buffer_count: uint32;
+  name:string (required);
+  index_offset:uint32;
+  index_count:uint32;
+  vertex_buffer:uint16;
+  index_buffer:uint16;
+  material:uint16;
+  original_material_index:int16;
+  primitive_type:uint8;
+  materials_variants_mappings:[uint16] (required);
+  skinning_buffer:uint16;
+  morph_target_buffer_offset:uint32;
+  morph_target_buffer_count:uint32;
 }
 
 table EntityInfo {
-  name : string (required);
-  bone : uint16;
-  skin : int16;
-  morph_target_buffer : uint16;
-  node_morph_target_weights : [float];
-  mesh_morph_target_weights : [float];
-  light_punctual : int16;
-  audio_emitter: uint16;
-  parts : [PartInfo] (required);
-  bounds : BoundsInfo; // optional
-  runtime : RuntimeInfo; // optional
-  num_children : uint16;
-  original_index : uint16; // optional
-  original_mesh_index : int16; // optional
-  original_skin_index : int16; // optional
+  name:string (required);
+  bone:uint16;
+  skin:int16;
+  morph_target_buffer:uint16;
+  node_morph_target_weights:[float];
+  mesh_morph_target_weights:[float];
+  light_punctual:int16;
+  audio_emitter:uint16;
+  parts:[PartInfo] (required);
+  bounds:BoundsInfo;  // optional
+  runtime:RuntimeInfo;  // optional
+  num_children:uint16;
+  original_index:uint16;  // optional
+  original_mesh_index:int16;  // optional
+  original_skin_index:int16;  // optional
 
-  node_visibility : NodeVisibility; // optional
-  node_selectability : NodeSelectability; // optional
-  node_hoverability : NodeHoverability; // optional
+  node_visibility:NodeVisibility;  // optional
+  node_selectability:NodeSelectability;  // optional
+  node_hoverability:NodeHoverability;  // optional
 }
 
 table EntityGraphInfo {
-  entities : [EntityInfo] (required);
-  parents : [uint16] (required);
-  first_children : [uint16] (required);
-  next_siblings : [uint16] (required);
+  entities:[EntityInfo] (required);
+  parents:[uint16] (required);
+  first_children:[uint16] (required);
+  next_siblings:[uint16] (required);
 }
 
 // One for each transform uploaded via setBones.
 struct SampledJointInfo {
   // Points into the skin.joints.
-  joint : uint16;
+  joint:uint16;
 }
 
 // Specifies each entity that needs bones uploaded for the owning skin.
 struct SkinnedEntityTargetInfo {
   // Points into entity_graph.
-  entity : uint16;
+  entity:uint16;
 }
 
 // Bounding box per sampled joint which enclose the vertices that sample it.
 table SkinnedEntityBoundsInfo {
-  bounds : [Box] (required);
+  bounds:[Box] (required);
 }
 
 // Words for a bitvector desribing which sampled joints are actually sampled.
 table SkinnedEntityJointUsageInfo {
-  mask : [uint32] (required);
+  mask:[uint32] (required);
 }
 
 table SkinInfo {
   // Joint index per sampled joint.
-  sampled_joints : [SampledJointInfo] (required);
+  sampled_joints:[SampledJointInfo] (required);
+
   // Inverse bind pose per sampled joint.
-  inverse_bind_poses : [Mat4f] (required);
+  inverse_bind_poses:[Mat4f] (required);
+
   // Child counts per joint.
-  joint_child_counts : [uint16] (required);
+  joint_child_counts:[uint16] (required);
+
   // Joint parents per joint.
-  joint_parents : [uint16] (required);
+  joint_parents:[uint16] (required);
+
   // First child joint per joint.
-  joint_first_children : [uint16] (required);
+  joint_first_children:[uint16] (required);
+
   // Next sibling joint per joint.
-  joint_next_siblings : [uint16] (required);
+  joint_next_siblings:[uint16] (required);
+
   // Source bone per joint.
-  joint_sources : [uint16] (required);
+  joint_sources:[uint16] (required);
+
   // Weak sampled joint index per joint.
-  joint_targets : [int16] (required);
+  joint_targets:[int16] (required);
+
   // Target entities per skinned entity.
-  skinned_entity_targets : [SkinnedEntityTargetInfo] (required);
+  skinned_entity_targets:[SkinnedEntityTargetInfo] (required);
+
   // Sampled joint bounds per skinned entity.
-  skinned_entity_joint_bounds : [SkinnedEntityBoundsInfo] (required);
+  skinned_entity_joint_bounds:[SkinnedEntityBoundsInfo] (required);
+
   // Sampled joint usage per skinned entity.
-  skinned_entity_joint_usage : [SkinnedEntityJointUsageInfo] (required);
+  skinned_entity_joint_usage:[SkinnedEntityJointUsageInfo] (required);
+
   // The (optional, rarely specified) pose root entity.
-  pose_root : int32;
+  pose_root:int32;
+
   // The original index in the skin in the glTF file.
-  original_index : uint32;
+  original_index:uint32;
 }
 
 // Expected to hold PNG or JPG file data.
 table ImageFileData {
   // Stores the encoded image.
-  buffer: [uint8] (required);
+  buffer:[uint8] (required);
 }
 
 // Expected to hold data that was transcoded from a KTX2 file.
 table CompressedImageData {
-  width: uint32;
-  height: uint32;
-  format: uint32;             // gles compressed texture format.
-  buffer: [uint8] (required); // Compressed texture data for all mip levels.
+  width:uint32;
+  height:uint32;
+  format:uint32;  // gles compressed texture format.
+  buffer:[uint8] (required);  // Compressed texture data for all mip levels.
 }
-
 
 table GltfAnimationInfo {
-  buffer:[uint8] (required, nested_flatbuffer: "imp.animation.schemas.GltfAnimation");
+  buffer:[uint8] (
+    required,
+    nested_flatbuffer: "imp.animation.schemas.GltfAnimation"
+  );
 }
 
-enum LightPunctualType : int {
+enum LightPunctualType:int {
   DIRECTIONAL,
   POINT,
   SPOT,
 }
 
 struct Color {
-  r: float;
-  g: float;
-  b: float;
+  r:float;
+  g:float;
+  b:float;
 }
 
 struct SpotConeAngles {
-  inner: float;
-  outer: float;
+  inner:float;
+  outer:float;
 }
 
 table LightPunctualInfo {
-  name: string (required);
-  color: Color (required);
-  intensity: float;
-  type: LightPunctualType;
-  range: float;
-  spot_cone_angles: SpotConeAngles;
+  name:string (required);
+  color:Color (required);
+  intensity:float;
+  type:LightPunctualType;
+  range:float;
+  spot_cone_angles:SpotConeAngles;
 }
 
-enum AudioEmitterType : uint8 {
+enum AudioEmitterType:uint8 {
   POSITIONAL,
   GLOBAL,
 }
 
-enum AudioEmitterDistanceModel : uint8 {
+enum AudioEmitterDistanceModel:uint8 {
   LINEAR,
   INVERSE,
   EXPONENTIAL,
 }
 
 table AudioEmitterPositional {
-  cone_inner_angle: float;
-  cone_outer_angle: float;
-  cone_outer_gain: float;
-  distance_model: AudioEmitterDistanceModel;
-  max_distance: float;
-  ref_distance: float;
-  rolloff_factor: float;
+  cone_inner_angle:float;
+  cone_outer_angle:float;
+  cone_outer_gain:float;
+  distance_model:AudioEmitterDistanceModel;
+  max_distance:float;
+  ref_distance:float;
+  rolloff_factor:float;
 }
 
 table AudioEmitter {
-  name: string (required);
-  type: AudioEmitterType;
-  gain: float;
-  sources: [uint16];
-  positional: AudioEmitterPositional;
+  name:string (required);
+  type:AudioEmitterType;
+  gain:float;
+  sources:[uint16];
+  positional:AudioEmitterPositional;
 }
 
 table AudioSource {
-  name: string (required);
-  auto_play: bool;
-  gain: float;
-  loop: bool;
-  audio: uint16;
+  name:string (required);
+  auto_play:bool;
+  gain:float;
+  loop:bool;
+  audio:uint16;
 }
 
 table Audio {
-  buffer: [uint8] (required);
+  buffer:[uint8] (required);
 }
 
 table AudioExtension {
-  emitters : [AudioEmitter];
-  sources: [AudioSource];
-  audios: [Audio];
-  scene_emitters : [uint16];
-}
-
-enum BehaviorVariableType : uint8 {
-  NIL,
-  BOOL,
-  INT,
-  FLOAT,
-}
-
-union BehaviorValue {
-  Bool,
-  Int,
-  Float,
-  Float2,
-  Float3,
-  Float4,
-  Mat4f,
-  String,
-}
-
-table BehaviorVariable {
-  id : string (required);
-  value: BehaviorValue (required);
-}
-
-table BehaviorNodeFlow {
-  id : string (required);
-  node : uint32;
-  socket : string (required);
-}
-
-union BehaviorConfigurationValue {
-  Int,
-  String,
-  Bool,
-  Float,
-}
-
-enum BehaviorNodeConfigurationType : uint8 {
-  VARIABLE,
-  NUMBER_OF_OUTPUT_FLOWS,
-  PATH,
-  CUSTOM_EVENT,
-  NODE_INDEX,
-  STOP_PROPAGATION,
-  EASING_TYPE,
-  EASING_DURATION,
-}
-
-table BehaviorNodeConfiguration {
-  id : BehaviorNodeConfigurationType;
-  type : BehaviorVariableType;
-  value : BehaviorConfigurationValue (required);
-}
-
-// The union is stored in a table instead of being used directly as the API
-// exposed by this is a lot more usable.
-union BehaviorNodeValueType {
-  BehaviorVariable,
-  BehaviorNodeFlow,
-}
-
-table BehaviorNodeValue {
-  value: BehaviorNodeValueType;
-}
-
-table BehaviorNode {
-  type : string (required);
-  index : uint32;
-  flows : [BehaviorNodeFlow];
-  configuration : [BehaviorNodeConfiguration];
-  values: [BehaviorNodeValue];
-}
-
-table BehaviorCustomEvent {
-  id : string (required);
-  values: [BehaviorVariable];
-}
-
-table Behavior {
-  nodes : [BehaviorNode];
-  variables : [BehaviorVariable];
-  custom_events : [BehaviorCustomEvent];
+  emitters:[AudioEmitter];
+  sources:[AudioSource];
+  audios:[Audio];
+  scene_emitters:[uint16];
 }
 
 // Contains information for KHR_node_visibility.
 table NodeVisibility {
-  visible : Bool;
+  visible:Bool;
 }
 
 // Contains information for KHR_node_selectability.
 table NodeSelectability {
-  selectable : Bool;
+  selectable:Bool;
 }
 
 // Contains information for KHR_node_hoverability.
 table NodeHoverability {
-  hoverable : Bool;
+  hoverable:Bool;
 }
 
 table MaterialInfo {
-  material : GenericMaterial;
-  original_index : uint16;
+  material:GenericMaterial;
+  original_index:uint16;
 }

@@ -24,6 +24,7 @@
 #include "filament/libs/utils/include/utils/EntityManager.h"
 #include "core/common/type_traits.h"
 #include "core/ncsb/base_component_pool.h"
+#include "core/ncsb/component_id.h"
 
 namespace imp {
 
@@ -44,7 +45,7 @@ template <typename T>
 class ComponentHandle {
  public:
   using ComponentType = T;
-  ComponentHandle(utils::Entity entity, BaseComponentPool* pool, T* component);
+  explicit ComponentHandle(T& component);
 
   // Typecast operator that allows casting a ComponentHandle to a related type.
   //
@@ -101,19 +102,22 @@ class ComponentHandle {
   utils::Entity entity_;
   BaseComponentPool* pool_ = nullptr;
   T* component_ = nullptr;
+  ComponentKey key_;
 };
 
 template <typename T>
-ComponentHandle<T>::ComponentHandle(utils::Entity entity,
-                                    BaseComponentPool* pool, T* component)
-    : entity_(entity), pool_(pool), component_(component) {}
+ComponentHandle<T>::ComponentHandle(T& component)
+    : entity_(component.GetEntity()),
+      pool_(&component.GetBaseComponentPool()),
+      component_(&component),
+      key_(component.GetComponentKey()) {}
 
 template <typename T>
 template <typename U>
 ComponentHandle<T>::operator ComponentHandle<U>() const {
   static_assert(std::is_base_of_v<T, U> || std::is_base_of_v<U, T>,
                 "Cannot convert ComponentHandle types, they are unrelated.");
-  return ComponentHandle<U>(entity_, pool_, static_cast<U*>(component_));
+  return ComponentHandle<U>(static_cast<U&>(*component_));
 }
 
 template <typename T>
@@ -166,7 +170,14 @@ bool ComponentHandle<T>::IsValid() const {
     return false;
   }
 
-  return pool_->TryGetRawComponentFromEntity(entity_) == component_;
+  if (key_) {
+    // If the key isn't empty, then that means the PoolAllocator is enabled, so
+    // we can check if the key is valid to determine if the component is valid.
+    return pool_->IsKeyValid(key_);
+  } else {
+    // Fallback using a hash map lookup to determine if the component is valid.
+    return pool_->TryGetRawComponentFromEntity(entity_) == component_;
+  }
 }
 
 template <typename T>

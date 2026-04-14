@@ -68,8 +68,6 @@
 #include "core/loader/creator/inflight_creation.h"
 #include "core/loader/creator/resource_builders.h"
 #include "core/loader/loader_options.h"
-#include "core/loader/provider/extensions/behavior/model_creator_extension.h"
-#include "core/loader/provider/extensions/gltf_extension_behavior.h"
 #include "core/loader/provider/extensions/gltf_extension_interactivity.h"
 #include "core/loader/provider/extensions/interactivity/model_creator_extension.h"
 #include "core/loader/provider/extensions/verification.h"
@@ -829,23 +827,6 @@ Future<absl::Status> ModelCreator::LoadAllInternal(
             }
 
             // TODO Move this into a separate file to reduce bloat
-            if (model->behavior()) {
-              std::unique_ptr<BehaviorModelCreatorExtension>
-                  behavior_extension =
-                      extensions::CreateBehaviorModelCreatorExtension();
-              if (behavior_extension) {
-                absl::StatusOr<model::ModelData::BehaviorData> behavior_result =
-                    behavior_extension->DeserializeBehaviorData(
-                        model->behavior());
-                if (!behavior_result.ok()) {
-                  return behavior_result.status();
-                }
-                behavior_ = *std::move(behavior_result);
-              } else {
-                return Error("Failed to create BehaviorModelCreatorExtension.");
-              }
-            }
-
             if (model->interactivity()) {
               std::unique_ptr<InteractivityModelCreatorExtension>
                   interactivity_extension =
@@ -963,8 +944,7 @@ absl::StatusOr<std::unique_ptr<model::ModelData>> ModelCreator::CreateModelData(
       std::move(skinning_buffers_), std::move(stored_vertex_data_),
       std::move(stored_index_data_), std::move(material_config_info_),
       std::move(audio_emitters_), std::move(audio_sources_), std::move(audios_),
-      std::move(scene_audio_emitters_), std::move(behavior_),
-      std::move(interactivity_)));
+      std::move(scene_audio_emitters_), std::move(interactivity_)));
 
   return result;
 }

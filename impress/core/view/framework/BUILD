@@ -55,6 +55,7 @@ cc_library(
         "//core/assets/material:material_helpers",
         "//core/assets/material:material_load_options_proto_cc",
         "//core/async:executor",
+        "//core/async:executor_flags",
         "//core/async:future",
         "//core/async:future_status_utils",
         "//core/async:thread_pool_executor",

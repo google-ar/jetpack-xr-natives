@@ -81,6 +81,7 @@ class FileDescriptorSender : public UnixDomainSocket {
  public:
   // `uds_path`: The path to the Unix Domain Socket (UDS) to connect to.
   explicit FileDescriptorSender(std::string_view uds_path);
+  ~FileDescriptorSender();
 
   // Sends a file descriptor and its metadata over a UDS.
   absl::Status Send(int fd, FileDescriptorMetadata& metadata);

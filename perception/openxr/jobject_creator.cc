@@ -23,6 +23,7 @@
 
 #include "absl/strings/str_format.h"
 #include "common/namespace_util.h"
+#include "openxr/openxr_manager_utils.h"
 
 namespace androidx::xr::openxr {
 using ::androidx::xr::common::GetJxrClass;
@@ -54,8 +55,8 @@ jclass LoadClassWithClassLoader(JNIEnv* env, jobject class_loader,
 
 jobject CreateVpsAvailabilityResultInstance(JNIEnv* env, jobject class_loader,
                                             const char* class_name) {
-  jclass cls =
-      LoadClassWithClassLoader(env, class_loader, PACKAGE_CORE, class_name);
+  jclass cls = LoadClassWithClassLoader(env, class_loader,
+                                        PACKAGE_ARCORE_RUNTIME, class_name);
   if (cls == nullptr) {
     return nullptr;
   }
@@ -74,77 +75,49 @@ constexpr XrSpaceLocationFlags kPoseValidFlags =
     XR_SPACE_LOCATION_POSITION_VALID_BIT |
     XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
 
-jobject CreateJavaTrackingState(
-    JNIEnv* env, const XrTrackingStateANDROID& xr_tracking_state) {
-  jclass plane_state_ext_cls =
-      GetJxrClass(env, PACKAGE_ARCORE_OPENXR, "PlaneStateKt");
-  jclass tracking_state_enum = GetJxrClass(env, PACKAGE_CORE, "TrackingState");
-  jfieldID tracking_state_static_fid = env->GetStaticFieldID(
-      tracking_state_enum, "Companion",
-      absl::StrFormat("L%s;", GetJxrFullClassName(env, PACKAGE_CORE,
-                                                  "TrackingState$Companion"))
+jobject CreateJavaTrackingState(JNIEnv* env, TrackingState tracking_state) {
+  static constexpr const char* tracking_states[] = {
+      "TRACKING", "PAUSED", "STOPPED", "TRACKING_DEGRADED"};
+  uint32_t tracking_state_index = static_cast<uint32_t>(tracking_state);
+  const char* field_name = (tracking_state_index <= 3)
+                               ? tracking_states[tracking_state_index]
+                               : "PAUSED";
+  jclass cls = GetJxrClass(env, PACKAGE_ARCORE_RUNTIME, "TrackingState");
+  jfieldID fid = env->GetStaticFieldID(
+      cls, field_name,
+      absl::StrFormat("L%s;", GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME,
+                                                  "TrackingState"))
           .c_str());
-  jmethodID fromOpenXrTrackingState = env->GetStaticMethodID(
-      plane_state_ext_cls, "fromOpenXrTrackingState",
-      absl::StrFormat(
-          "(L%s;I)L%s;",
-          GetJxrFullClassName(env, PACKAGE_CORE, "TrackingState$Companion"),
-          GetJxrFullClassName(env, PACKAGE_CORE, "TrackingState"))
-          .c_str());
-  jobject tracking_state_static_obj =
-      env->GetStaticObjectField(tracking_state_enum, tracking_state_static_fid);
-  return env->CallStaticObjectMethod(
-      plane_state_ext_cls, fromOpenXrTrackingState,
-      tracking_state_static_obj, static_cast<uint32_t>(xr_tracking_state));
+
+  return env->GetStaticObjectField(cls, fid);
 }
 
 jobject CreateJavaTrackingState(
     JNIEnv* env, const XrFaceTrackingStateANDROID& xr_face_tracking_state) {
-  jclass plane_state_ext_cls =
-      GetJxrClass(env, PACKAGE_ARCORE_OPENXR, "FaceStateKt");
-  jclass tracking_state_enum = GetJxrClass(env, PACKAGE_CORE, "TrackingState");
-  jfieldID tracking_state_static_fid = env->GetStaticFieldID(
-      tracking_state_enum, "Companion",
-      absl::StrFormat("L%s;", GetJxrFullClassName(env, PACKAGE_CORE,
-                                                  "TrackingState$Companion"))
-          .c_str());
-  jmethodID fromOpenXrFaceTrackingState = env->GetStaticMethodID(
-      plane_state_ext_cls, "fromOpenXrFaceTrackingState",
-      absl::StrFormat(
-          "(L%s;I)L%s;",
-          GetJxrFullClassName(env, PACKAGE_CORE, "TrackingState$Companion"),
-          GetJxrFullClassName(env, PACKAGE_CORE, "TrackingState"))
-          .c_str());
-  jobject tracking_state_static_obj =
-      env->GetStaticObjectField(tracking_state_enum, tracking_state_static_fid);
-  return env->CallStaticObjectMethod(
-      plane_state_ext_cls, fromOpenXrFaceTrackingState,
-      tracking_state_static_obj, static_cast<uint32_t>(xr_face_tracking_state));
+  static constexpr TrackingState kTrackingStates[] = {kPaused, kStopped,
+                                                      kTracking};
+  uint32_t tracking_state_index = static_cast<uint32_t>(xr_face_tracking_state);
+  TrackingState tracking_state = (tracking_state_index < 3)
+                                     ? kTrackingStates[tracking_state_index]
+                                     : kPaused;
+  return CreateJavaTrackingState(env, tracking_state);
+}
+
+jobject CreateJavaTrackingState(
+    JNIEnv* env, const XrTrackingStateANDROID& xr_tracking_state) {
+  static constexpr TrackingState kTrackingStates[] = {kPaused, kStopped,
+                                                      kTracking};
+  uint32_t tracking_state_index = static_cast<uint32_t>(xr_tracking_state);
+  TrackingState tracking_state = (tracking_state_index < 3)
+                                     ? kTrackingStates[tracking_state_index]
+                                     : kPaused;
+  return CreateJavaTrackingState(env, tracking_state);
 }
 
 jobject CreateJavaTrackingState(JNIEnv* env,
                                 const XrSpaceLocationFlags& location_flags) {
-  jclass tracking_state_ext_cls =
-      GetJxrClass(env, PACKAGE_ARCORE_OPENXR, "AnchorStateKt");
-  jclass tracking_state_enum = GetJxrClass(env, PACKAGE_CORE, "TrackingState");
-  jfieldID tracking_state_static_fid = env->GetStaticFieldID(
-      tracking_state_enum, "Companion",
-      absl::StrFormat("L%s;", GetJxrFullClassName(env, PACKAGE_CORE,
-                                                  "TrackingState$Companion"))
-          .c_str());
-  jmethodID fromOpenXrLocationFlags = env->GetStaticMethodID(
-      tracking_state_ext_cls, "fromOpenXrLocationFlags",
-      absl::StrFormat(
-          "(L%s;I)L%s;",
-          GetJxrFullClassName(env, PACKAGE_CORE, "TrackingState$Companion"),
-          GetJxrFullClassName(env, PACKAGE_CORE, "TrackingState"))
-          .c_str());
-
-  jobject tracking_state_static_obj =
-      env->GetStaticObjectField(tracking_state_enum, tracking_state_static_fid);
-  return env->CallStaticObjectMethod(
-      tracking_state_ext_cls, fromOpenXrLocationFlags,
-      tracking_state_static_obj, static_cast<uint32_t>(location_flags));
+  TrackingState tracking_state = convertTrackingState(location_flags);
+  return CreateJavaTrackingState(env, tracking_state);
 }
 
 jobject CreateJavaFloatSize2d(JNIEnv* env, const XrExtent2Df& xr_extent) {
@@ -194,7 +167,7 @@ jobject CreateJavaPose(JNIEnv* env, const XrPosef& xr_pose) {
 }
 
 jobject CreateJavaFieldOfView(JNIEnv* env, const XrFovf& fov) {
-  jclass fov_class = GetJxrClass(env, PACKAGE_CORE, "FieldOfView");
+  jclass fov_class = GetJxrClass(env, PACKAGE_MATH, "FieldOfView");
   jmethodID fov_constructor = env->GetMethodID(fov_class, "<init>", "(FFFF)V");
   return env->NewObject(fov_class, fov_constructor, fov.angleLeft,
                         fov.angleRight, fov.angleUp, fov.angleDown);
@@ -208,7 +181,7 @@ jobjectArray CreateJavaViewCameraStates(JNIEnv* env, uint32_t view_count,
       view_camera_state_class, "<init>",
       absl::StrFormat("(L%s;L%s;)V",
                       GetJxrFullClassName(env, PACKAGE_MATH, "Pose"),
-                      GetJxrFullClassName(env, PACKAGE_CORE, "FieldOfView"))
+                      GetJxrFullClassName(env, PACKAGE_MATH, "FieldOfView"))
           .c_str());
 
   jobjectArray view_camera_states =
@@ -232,7 +205,7 @@ jobject CreateJavaPlaneState(JNIEnv* env,
       plane_state_class, "<init>",
       absl::StrFormat(
           "(L%s;L%s;L%s;L%s;[L%s;J)V",
-          GetJxrFullClassName(env, PACKAGE_CORE, "TrackingState"),
+          GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME, "TrackingState"),
           GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME, "Plane$Label"),
           GetJxrFullClassName(env, PACKAGE_MATH, "Pose"),
           GetJxrFullClassName(env, PACKAGE_MATH, "FloatSize2d"),
@@ -300,10 +273,11 @@ jobject CreateJavaAugmentedObjectState(JNIEnv* env,
       GetJxrClass(env, PACKAGE_ARCORE_OPENXR, "AugmentedObjectState");
   jmethodID augmented_object_state_constructor = env->GetMethodID(
       augmented_object_state_class, "<init>",
-      absl::StrFormat("(L%s;JL%s;L%s;)V",
-                      GetJxrFullClassName(env, PACKAGE_CORE, "TrackingState"),
-                      GetJxrFullClassName(env, PACKAGE_MATH, "Pose"),
-                      GetJxrFullClassName(env, PACKAGE_MATH, "FloatSize3d"))
+      absl::StrFormat(
+          "(L%s;JL%s;L%s;)V",
+          GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME, "TrackingState"),
+          GetJxrFullClassName(env, PACKAGE_MATH, "Pose"),
+          GetJxrFullClassName(env, PACKAGE_MATH, "FloatSize3d"))
           .c_str());
   jobject tracking_state =
       CreateJavaTrackingState(env, xr_object.trackingState);
@@ -322,9 +296,10 @@ jobject CreateJavaAnchorState(JNIEnv* env,
       GetJxrClass(env, PACKAGE_ARCORE_OPENXR, "AnchorState");
   jmethodID anchor_data_constructor = env->GetMethodID(
       anchor_data_class, "<init>",
-      absl::StrFormat("(L%s;L%s;)V",
-                      GetJxrFullClassName(env, PACKAGE_CORE, "TrackingState"),
-                      GetJxrFullClassName(env, PACKAGE_MATH, "Pose"))
+      absl::StrFormat(
+          "(L%s;L%s;)V",
+          GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME, "TrackingState"),
+          GetJxrFullClassName(env, PACKAGE_MATH, "Pose"))
           .c_str());
 
   jobject tracking_state =
@@ -338,6 +313,31 @@ jobject CreateJavaAnchorState(JNIEnv* env,
 
   return env->NewObject(anchor_data_class, anchor_data_constructor,
                         tracking_state, pose);
+}
+
+jobject CreateJavaDeviceState(JNIEnv* env, TrackingState tracking_state,
+                              XrPosef head_pose) {
+  jclass device_state_class =
+      GetJxrClass(env, PACKAGE_ARCORE_OPENXR, "DeviceState");
+  jmethodID device_state_constructor = env->GetMethodID(
+      device_state_class, "<init>",
+      absl::StrFormat(
+          "(L%s;L%s;)V",
+          GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME, "TrackingState"),
+          GetJxrFullClassName(env, PACKAGE_MATH, "Pose"))
+          .c_str());
+
+  jobject tracking_state_java = CreateJavaTrackingState(env, tracking_state);
+  // Only set the pose if the head tracking state is not paused (1),
+  // else return pose as null;
+  jobject pose = nullptr;
+  if (tracking_state == TrackingState::kTracking ||
+      tracking_state == TrackingState::kTrackingDegraded) {
+    pose = CreateJavaPose(env, head_pose);
+  }
+
+  return env->NewObject(device_state_class, device_state_constructor,
+                        tracking_state_java, pose);
 }
 
 jobject CreateJavaHitData(JNIEnv* env,
@@ -395,8 +395,9 @@ jobject CreateJavaFaceState(JNIEnv* env, const XrFaceStateANDROID& xr_face) {
       GetJxrClass(env, PACKAGE_ARCORE_OPENXR, "FaceState");
   jmethodID face_state_constructor = env->GetMethodID(
       face_state_class, "<init>",
-      absl::StrFormat("(L%s;Z[F[F)V",
-                      GetJxrFullClassName(env, PACKAGE_CORE, "TrackingState"))
+      absl::StrFormat(
+          "(L%s;Z[F[F)V",
+          GetJxrFullClassName(env, PACKAGE_ARCORE_RUNTIME, "TrackingState"))
           .c_str());
   jobject tracking_state =
       CreateJavaTrackingState(env, xr_face.faceTrackingState);

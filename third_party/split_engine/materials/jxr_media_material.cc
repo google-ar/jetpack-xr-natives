@@ -27,6 +27,7 @@
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
 #include "core/common/type_helpers.h"
+#include "core/materials/material.h"
 #include "core/math/vec.h"
 #include "core/media/media_color_space.h"
 #include "core/media/media_type.h"
@@ -280,16 +281,14 @@ imp::Future<std::unique_ptr<JxrMediaMaterial>> JxrMediaMaterial::Create(
              view, std::move(fbb),
              android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterial1b616c8a,
              spec_offset.Union())
-      .Then(
-          [&view](imp::split_engine::PlaceholderOrBuiltInMaterialPtr material) {
-            return absl::WrapUnique(
-                new JxrMediaMaterial(view, std::move(material)));
-          });
+      .Then([&view](imp::OwnedMaterialPtr material) {
+        return absl::WrapUnique(
+            new JxrMediaMaterial(view, std::move(material)));
+      });
 }
 
-JxrMediaMaterial::JxrMediaMaterial(
-    imp::BaseView& view,
-    imp::split_engine::PlaceholderOrBuiltInMaterialPtr material)
+JxrMediaMaterial::JxrMediaMaterial(imp::BaseView& view,
+                                   imp::OwnedMaterialPtr material)
     : SplitEngineBuiltinMaterial(
           view,
           android_xr::schemas::BuiltInMaterialParameters::

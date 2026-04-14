@@ -215,6 +215,7 @@ absl::Status MaterialCompilerClient::SendRequest(
   // Lock to avoid sending multiple requests at the same time. This is
   // needed because the pipe is not thread-safe.
   absl::MutexLock lock(lock_);
+
   bool sent = pipe_.Send(builder.GetBufferPointer(),
                          static_cast<uint32_t>(builder.GetSize()));
   if (!sent) {
@@ -231,9 +232,16 @@ MaterialCompilerClient::GetCompiledMaterialResponse(uint64_t operation_id) {
     return processed_messages_.contains(operation_id) ||
            connection_state_ != ConnectionState::kConnected;
   };
+
   if (!lock_.AwaitWithTimeout(absl::Condition(&has_response_or_pipe_closed),
                               absl::Seconds(30))) {
     return absl::DeadlineExceededError("Timed out waiting for response");
+  }
+
+  // We need to check the connection state again here, as the pipe may have been
+  // closed due to the process crashing.
+  if (connection_state_ != ConnectionState::kConnected) {
+    return absl::UnavailableError("Pipe closed");
   }
 
   auto it = processed_messages_.find(operation_id);
@@ -243,6 +251,7 @@ MaterialCompilerClient::GetCompiledMaterialResponse(uint64_t operation_id) {
     processed_messages_.erase(it);
     return response;
   }
+
   return absl::NotFoundError("Operation id not found");
 }
 }  // namespace imp

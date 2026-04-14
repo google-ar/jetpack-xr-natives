@@ -26,6 +26,8 @@ static constexpr absl::string_view kOverlayGroup = "EditorOverlay";
 // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/widgets/transform_widget.textproto)
 
 static constexpr absl::string_view kNodeWidgetHeaderName = "Node";
+static constexpr absl::string_view kComponentLibraryWidgetHeaderName =
+    "Component Library";
 
 static constexpr LayoutConfig kDefaultMobileLayoutConfig{
     .layout_type = LayoutConfig::LayoutType::SINGLE_TABBED_WINDOW,

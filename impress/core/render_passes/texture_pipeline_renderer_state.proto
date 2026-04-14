@@ -140,7 +140,7 @@ message TexturePipelineRendererState {
     MaterialDefinition override_material = 7
         [(imp.optional_type) = ABSL_OPTIONAL];
 
-    // If assgined, the settings will be applied on top of the default view
+    // If assigned, the settings will be applied on top of the default view
     // render settings.
     imp.render_settings.ViewRenderSettings render_settings = 8
         [(imp.optional_type) = ABSL_OPTIONAL];

@@ -17,13 +17,19 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_INPUT_POINTER_INPUT_HANDLER_H_
 #define THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_INPUT_POINTER_INPUT_HANDLER_H_
 
+#include <cassert>
+#include <cstddef>
 #include <vector>
 
 #include "absl/time/time.h"
+#include "absl/types/optional.h"
+#include "absl/types/variant.h"
 #include "core/input/input_manager.h"
 #include "core/input/pointer_event.h"
+#include "core/input/wheel_event.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/dispatcher/event.h"
+#include "core/ncsb/node_handle.h"
 #include "core/view/framework/collision/ray_hit.h"
 
 namespace imp {
@@ -77,7 +83,8 @@ struct WheelScrollEvent : public Event {
   WheelScrollEvent() = default;
   explicit WheelScrollEvent(const WheelEvent& wheel_event)
       : event(wheel_event) {}
-  WheelEvent event = WheelEvent({}, absl::ZeroDuration());
+  WheelEvent event =
+      WheelEvent(/*delta=*/{}, /*point=*/{}, absl::ZeroDuration());
 };
 
 // PointerInputHandler calculates and sends PointerHitEvents, which combines

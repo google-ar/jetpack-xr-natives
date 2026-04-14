@@ -297,9 +297,15 @@ void EditorClipboard::Copy() {
   absl::StatusOr<std::vector<ClipboardNode>> clipboard_nodes =
       ClipboardNode::FromVector(nodes_to_copy);
 
-  if (!CopyImpl(*clipboard_nodes).ok()) {
-    IMP_LOG(imp::ERROR) << "Failed to copy nodes: "
-               << clipboard_nodes.status().ToString();
+  if (!clipboard_nodes.ok()) {
+    IMP_LOG(imp::ERROR) << "Failed to get nodes to copy: " << clipboard_nodes.status();
+    return;
+  }
+
+  absl::Status status = CopyImpl(*clipboard_nodes);
+
+  if (!status.ok()) {
+    IMP_LOG(imp::ERROR) << "Failed to copy nodes: " << status;
   }
 }
 
@@ -399,9 +405,15 @@ Future<std::vector<NodeHandle>> EditorClipboard::PasteImpl(
                 clipboard_node.node_data, clipboard_node.asset_url,
                 SceneSystem::LoadSceneOptions{
                     .metadata_mode = SceneSystem::MetadataMode::kInclude})
-            .Then([this, parent](NodeHandle node_handle) {
-              node_handle->SetName(
-                  GenerateUniqueSiblingName(node_handle, parent));
+            .Then([this, parent,
+                   is_name_empty = clipboard_node.node_data.name.empty()](
+                      NodeHandle node_handle) {
+              if (is_name_empty) {
+                node_handle->SetName("");
+              } else {
+                node_handle->SetName(
+                    GenerateUniqueSiblingName(node_handle, parent));
+              }
               node_handle->SetParent(parent);
               // When we paste, we want to select the new node, but we don't
               // want to set it as the parent of the next pasted node.

@@ -36,6 +36,7 @@
 #include "filament/filament/include/filament/Texture.h"
 #include "core/async/future.h"
 #include "core/common/file_helpers.h"
+#include "core/common/registry.h"
 #include "core/config.h"
 #include "core/editor/layout/editor_control_flags.h"
 #include "core/editor/layout/helpers.h"
@@ -45,6 +46,7 @@
 #include "core/editor/ui/ui_helpers.h"
 #include "core/editor/widgets/asset_thumbnail_provider.h"
 #include "core/editor/widgets/asset_type_helpers.h"
+#include "core/editor/widgets/standard_asset_thumbnail_generator.h"
 #include "core/ncsb/node_data.proto.imp.h"
 #include "core/proto/proto_writer.h"
 #include "core/proto/textproto_writer.h"
@@ -94,8 +96,8 @@ AssetLibrary::AssetLibrary(BaseView& view)
                        {kCmatExt, DragAndDropType::kMaterial},
                        {kPngExt, DragAndDropType::kTexture}}) {
   // Load the thumbnail provider.
-  Future<std::unique_ptr<AssetThumbnailProvider>> thumbnail_provider_future =
-      AssetThumbnailProvider::Create(view_);
+  Future<std::unique_ptr<StandardAssetThumbnailGenerator>> generator_future =
+      StandardAssetThumbnailGenerator::Create(view_);
 
   // Load the directory ui.
 #if IMP_PLATFORM(DESKTOP)
@@ -108,13 +110,20 @@ AssetLibrary::AssetLibrary(BaseView& view)
       std::make_unique<DirectoryUiNoop>());
 #endif
 
-  thumbnail_provider_future.Merge(directory_ui_future)
-      .Then([this](std::tuple<std::unique_ptr<AssetThumbnailProvider>,
+  generator_future.Merge(directory_ui_future)
+      .Then([this](std::tuple<std::unique_ptr<StandardAssetThumbnailGenerator>,
                               std::unique_ptr<DirectoryUi>>
                        tuple) mutable {
-        auto [thumbnail_provider, directory_ui] = std::move(tuple);
+        auto [generator, directory_ui] = std::move(tuple);
 
-        thumbnail_provider_ = std::move(thumbnail_provider);
+        StringMap<OwnedTexturePtr> icons = generator->ConsumeDefaultIcons();
+
+        std::unique_ptr<AssetThumbnailProvider> thumbnail_provider =
+            std::make_unique<AssetThumbnailProvider>(std::move(icons),
+                                                     std::move(generator));
+
+        view_.GetRegistry().GetOrRegister<AssetThumbnailProvider>(
+            [&thumbnail_provider] { return std::move(thumbnail_provider); });
         // TODO: The directory UI can be accessed before this
         // future is complete.
         directory_ui_ = std::move(directory_ui);
@@ -127,9 +136,15 @@ bool IsCoreResource(std::string_view resource) {
 }
 
 void AssetLibrary::DrawImGui() {
-  if (!thumbnail_provider_ || !directory_ui_) {
+  if (!directory_ui_) {
     return;
   }
+
+  auto provider_or = view_.GetRegistry().Get<AssetThumbnailProvider>();
+  if (!provider_or.ok()) {
+    return;
+  }
+  AssetThumbnailProvider& thumbnail_provider = provider_or.value();
 
   bool is_docking_layout =
       ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_DockingEnable;
@@ -198,7 +213,7 @@ void AssetLibrary::DrawImGui() {
                                   IncludePadding::kCell);
 
       filament::Texture* thumbnail =
-          thumbnail_provider_->GetThumbnailForResource(resource);
+          thumbnail_provider.GetThumbnailForResource(resource);
       ImGui::Image(thumbnail, kTableEntryImageSize);
 
       auto itr = resource_types_.find(extension);
@@ -458,8 +473,12 @@ void AssetLibrary::AddResourceAtPath(absl::string_view resource_path,
 }
 
 void AssetLibrary::SetThumbnailOverride(absl::string_view resource,
-                                        TexturePtr texture) {
-  thumbnail_provider_->SetThumbnailOverride(resource, std::move(texture));
+                                        OwnedTexturePtr texture) {
+  auto provider_or = view_.GetRegistry().Get<AssetThumbnailProvider>();
+  if (provider_or.ok()) {
+    provider_or.value().get().SetThumbnailOverride(resource,
+                                                   std::move(texture));
+  }
 }
 
 std::string AssetLibrary::AddResource(

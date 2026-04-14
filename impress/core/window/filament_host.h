@@ -45,10 +45,12 @@
 #include "core/common/invocable.h"
 #include "core/common/optional_error.h"
 #include "core/common/pass_key.h"
+#include "core/render_passes/texture_pipeline_renderer_projection_quad.h"
 // TODO: Remove config.h and fix breaks.
 #include "absl/status/statusor.h"
 #include "core/common/robin_set.h"
 #include "core/config.h"
+#include "core/math/quat.h"
 #include "core/math/vec.h"
 #include "core/monitor/monitor.h"
 #include "core/view/utils/proto/filament_feature_flag.proto.imp.h"
@@ -326,7 +328,7 @@ class FilamentHost {
   };
 
   struct RenderPassOptions {
-    bool use_main_view_projection_matrix = true;
+    std::optional<TexturePipelineRendererProjectionQuad> projection_quad;
   };
 
   // Construct with a state object constructed by the caller.  We take over
@@ -498,9 +500,7 @@ class FilamentHost {
   // left eye and the right eye are rendered with the correct camera settings.
   virtual void PerformRender(filament::View* view, RenderPassOptions options);
 
-  void PerformRender(filament::View* view) {
-    PerformRender(view, {.use_main_view_projection_matrix = true});
-  }
+  void PerformRender(filament::View* view) { PerformRender(view, {}); }
 
   // Pause or resume the rendering thread.
   void SetPaused(bool paused);

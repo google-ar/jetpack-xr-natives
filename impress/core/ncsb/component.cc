@@ -32,9 +32,11 @@ namespace imp {
 
 Component::Component() {}
 
-void Component::PostCreated(NodeHandle node, ComponentId component_id) {
+void Component::PostCreated(NodeHandle node, ComponentKey key,
+                            BaseComponentPool& pool) {
   node_ = node;
-  component_id_ = component_id;
+  key_ = key;
+  pool_ = &pool;
 }
 
 NodeHandle Component::GetNode() const { return node_; }
@@ -43,12 +45,13 @@ BaseView& Component::GetView() const { return GetNode()->GetView(); }
 
 utils::Entity Component::GetEntity() const { return node_.GetEntity(); }
 
-ComponentId Component::GetComponentId() const { return component_id_; }
+ComponentId Component::GetComponentId() const {
+  return pool_->GetComponentId();
+}
 
 BaseComponentPool& Component::GetBaseComponentPool() const {
   // Guaranteed to exist, because this component exists.
-  return *GetView().GetComponentManager().GetComponentPoolById(
-      GetComponentId());
+  return *pool_;
 }
 
 Dispatcher& Component::GetDispatcher() const {

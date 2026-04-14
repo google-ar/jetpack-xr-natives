@@ -22,6 +22,7 @@
 
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
+#include "core/materials/material.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
 #include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "imp.h"
@@ -51,9 +52,7 @@ class SVXRPlaneMaterial : public imp::split_engine::SplitEngineBuiltinMaterial {
           texture_parameter_creator) const override;
 
  private:
-  SVXRPlaneMaterial(
-      imp::BaseView& view,
-      imp::split_engine::PlaceholderOrBuiltInMaterialPtr material);
+  SVXRPlaneMaterial(imp::BaseView& view, imp::OwnedMaterialPtr material);
 
   std::optional<android_xr::schemas::Float3> highlight_point_;
   imp::OwnedOrBorrowedTexturePtr dot_pattern_;

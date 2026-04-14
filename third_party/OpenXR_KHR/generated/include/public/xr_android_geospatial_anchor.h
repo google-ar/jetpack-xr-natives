@@ -5,7 +5,7 @@
 #include <openxr/public/xr_android_geospatial.h>
 
 /*
-** Copyright 2017-2025 The Khronos Group Inc.
+** Copyright 2017-2026 The Khronos Group Inc.
 **
 ** SPDX-License-Identifier: Apache-2.0 OR MIT
 */

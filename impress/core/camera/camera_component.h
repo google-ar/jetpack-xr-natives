@@ -35,6 +35,11 @@ namespace imp {
 
 class CameraComponent : public Component {
  public:
+  // Minimum and default value for the near clipping plane.
+  static constexpr float kClipNearMinimum = 0.01f;
+  // Closest the far clipping plane can be to the near clipping plane.
+  static constexpr float kClipNearToFarTolerance = 1.0f;
+
   void Setup();
   void Cleanup();
   void OnIsfStateChanged();
@@ -260,9 +265,14 @@ class CameraComponent : public Component {
   // Returns the inverse view projection matrix.
   mat4 WorldFromClip() const;
 
+  bool IsNearClipValid() const;
+  bool IsFarClipValid() const;
+
  private:
   // Helper method to recompute the current aspect ratio
   void UpdateProjection(float2 scale = kOne2);
+
+  void SanitizeClipPlanes();
 
   filament::Camera* camera_ = nullptr;
   utils::Entity camera_entity_;

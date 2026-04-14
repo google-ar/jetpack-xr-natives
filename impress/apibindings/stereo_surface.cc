@@ -18,6 +18,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <cstdlib>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <tuple>
@@ -57,6 +60,8 @@
 
 namespace imp {
 namespace {
+// The threshold for the arc radians to be considered near-flat.
+constexpr float kNearFlatArcThresholdRadians = 0.02f;
 constexpr float2 kDefaultCornerRadius = kZero2;
 constexpr float4 kRectFullView = {0.f, 0.f, 1.f, 1.f};
 // Render priority for the surface is set to 5 to ensure they render after the
@@ -77,6 +82,21 @@ constexpr std::array<RenderEyeTarget, 2> kEyeTargetsLeftRight = {
 constexpr std::array<RenderEyeTarget, 3> kEyeTargetsAll = {
     RenderEyeTarget::kBoth, RenderEyeTarget::kLeftOnly,
     RenderEyeTarget::kRightOnly};
+
+// Returns the arc radians for the curved rect.
+float GetCurvedRectArcRadians(const StereoSurface::CurvedRect& curved_rect) {
+  if (curved_rect.curve_radius == 0.0f) {
+    return std::numeric_limits<float>::infinity();
+  }
+  return std::abs(curved_rect.width / curved_rect.curve_radius);
+}
+
+// Returns the corner radius in UV space.
+float2 GetUvCornerRadius(float width, float height, float radius) {
+  // Ensure that maximum radius doesn't exceed 0.5, preserving aspect ratio.
+  radius = std::min(radius, std::min(width, height) * 0.5f);
+  return float2(radius / width, radius / height);
+}
 
 }  // namespace
 
@@ -206,7 +226,11 @@ absl::Status StereoSurface::SetCanvasShape(const CanvasShape& canvas_shape) {
   // We should only create a new mesh if the shape type is different, otherwise
   // we'll just update the scale to match the new request
   bool is_different_shape = (canvas_shape.index() != canvas_shape_.index());
-  canvas_shape_ = canvas_shape;
+  // Set the corner radius if the shape is a quad, or zero otherwise.
+  float2 corner_radius = kDefaultCornerRadius;
+  // If the collider is enabled and the shape is different, we need to update
+  // the collider type.
+  bool should_update_collider = GetColliderEnabled() && is_different_shape;
 
   // std::visit does not offer significant readability or
   // performance benefits here.
@@ -214,6 +238,7 @@ absl::Status StereoSurface::SetCanvasShape(const CanvasShape& canvas_shape) {
   auto shape_s = std::get_if<Sphere>(&canvas_shape);
   auto shape_h = std::get_if<Hemisphere>(&canvas_shape);
   auto shape_stereo = std::get_if<StereoMesh>(&canvas_shape);
+  auto shape_c = std::get_if<CurvedRect>(&canvas_shape);
   if (shape_q != nullptr) {
     is_per_eye_ = false;
     // Don't set the z scale to 0.0f, as that breaks the collider.
@@ -221,6 +246,13 @@ absl::Status StereoSurface::SetCanvasShape(const CanvasShape& canvas_shape) {
     if (is_different_shape) {
       mesh_renderer_left_or_both_->SetMesh(
           GetView().GetMeshFactory().CreateQuad({.size = float2(1.0f, 1.0f)}));
+    }
+
+    // If the corner radius is non-zero, convert it to UV space and set it on
+    // the material.
+    if (shape_q->corner_radius != 0.0f) {
+      corner_radius = GetUvCornerRadius(shape_q->width, shape_q->height,
+                                        shape_q->corner_radius);
     }
   } else if (shape_s != nullptr) {
     is_per_eye_ = false;
@@ -284,35 +316,109 @@ absl::Status StereoSurface::SetCanvasShape(const CanvasShape& canvas_shape) {
           CreateStereoMesh(&GetView(), right_settings,
                            MeshFactory::MeshDataStorageMode::kDiscardMeshData));
     }
+  } else if (shape_c != nullptr) {
+    is_per_eye_ = false;
+
+    float xz_scale = std::copysign(shape_c->width, shape_c->curve_radius);
+    GetNode()->SetLocalScale({xz_scale, shape_c->height, xz_scale});
+
+    float arc_radians = GetCurvedRectArcRadians(*shape_c);
+    bool create_new_mesh = is_different_shape;
+    if (!is_different_shape) {
+      // trigger create new mesh if arc_radians is different then before.
+      float prev_arc_radians =
+          GetCurvedRectArcRadians(std::get<CurvedRect>(canvas_shape_));
+      create_new_mesh = std::abs(arc_radians - prev_arc_radians) > 1e-5f;
+    }
+
+    if (create_new_mesh) {
+      if (std::abs(arc_radians) < kNearFlatArcThresholdRadians) {
+        // Use a quad for near-flat curves to optimize performance.
+        mesh_renderer_left_or_both_->SetMesh(
+            GetView().GetMeshFactory().CreateQuad(
+                {.size = float2(1.0f, 1.0f)}));
+      } else {
+        mesh_renderer_left_or_both_->SetMesh(
+            GetView().GetMeshFactory().CreatePanel(
+                {.size = float2(1.0f, 1.0f),
+                 .radius = std::abs(shape_c->curve_radius) / shape_c->width,
+                 .resolution = 50},
+                {1.0f, 1.0f, 1.0f},
+                use_mesh_collider_workaround_
+                    ? MeshFactory::MeshDataStorageMode::kDiscardMeshData
+                    : MeshFactory::MeshDataStorageMode::kStoreMeshData));
+      }
+
+      if (GetColliderEnabled()) {
+        // Since the mesh has been re-created for curvature changes, must
+        // trigger a collider update if it's enabled to keep them in sync.
+        should_update_collider = true;
+      }
+    }
+
+    // If the corner radius is non-zero, convert it to UV space and set it on
+    // the material.
+    if (shape_c->corner_radius != 0.0f) {
+      corner_radius = GetUvCornerRadius(shape_c->width, shape_c->height,
+                                        shape_c->corner_radius);
+    }
+  } else if (shape_c != nullptr) {
+    is_per_eye_ = false;
+
+    float xz_scale = std::copysign(shape_c->width, shape_c->curve_radius);
+    GetNode()->SetLocalScale({xz_scale, shape_c->height, xz_scale});
+
+    float arc_radians = GetCurvedRectArcRadians(*shape_c);
+    bool create_new_mesh = is_different_shape;
+    if (!is_different_shape) {
+      // trigger create new mesh if arc_radians is different then before.
+      float prev_arc_radians =
+          GetCurvedRectArcRadians(std::get<CurvedRect>(canvas_shape_));
+      create_new_mesh = std::abs(arc_radians - prev_arc_radians) > 1e-5f;
+    }
+
+    if (create_new_mesh) {
+      if (std::abs(arc_radians) < kNearFlatArcThresholdRadians) {
+        // Use a quad for near-flat curves to optimize performance.
+        mesh_renderer_left_or_both_->SetMesh(
+            GetView().GetMeshFactory().CreateQuad(
+                {.size = float2(1.0f, 1.0f)}));
+      } else {
+        mesh_renderer_left_or_both_->SetMesh(
+            GetView().GetMeshFactory().CreatePanel(
+                {.size = float2(1.0f, 1.0f),
+                 .radius = std::abs(shape_c->curve_radius) / shape_c->width,
+                 .resolution = 50},
+                {1.0f, 1.0f, 1.0f},
+                use_mesh_collider_workaround_
+                    ? MeshFactory::MeshDataStorageMode::kDiscardMeshData
+                    : MeshFactory::MeshDataStorageMode::kStoreMeshData));
+      }
+
+      if (GetColliderEnabled()) {
+        // Since the mesh has been re-created for curvature changes, must
+        // trigger a collider update if it's enabled to keep them in sync.
+        should_update_collider = true;
+      }
+    }
+
+    // If the corner radius is non-zero, convert it to UV space and set it on
+    // the material.
+    if (shape_c->corner_radius != 0.0f) {
+      corner_radius = GetUvCornerRadius(shape_c->width, shape_c->height,
+                                        shape_c->corner_radius);
+    }
   } else {
     // In practice this should be impossible, since the higher level JXR APIs
     // don't have a value for this; Shape is a required field whenever setting
     // the state.
-
-    CleanupColliderType();
 
     // early return to avoid avoid spuriously enabling the mesh.
     return absl::InvalidArgumentError(
         "monostate CanvasShape is not supported.");
   }
 
-  // If the collider was enabled, get the collider type based on the canvas
-  // shape and update the collider type.
-  if (GetColliderEnabled()) {
-    auto collider_type = GetColliderTypeByShape(canvas_shape);
-    MP_RETURN_IF_ERROR(UpdateColliderType(collider_type));
-  }
-
-  // Set the corner radius if the shape is a quad, or zero otherwise.
-  float2 corner_radius = kDefaultCornerRadius;
-  if (shape_q != nullptr && shape_q->corner_radius > 0.f) {
-    // Convert the corner radius to UV space.
-    corner_radius = {shape_q->corner_radius / shape_q->width,
-                     shape_q->corner_radius / shape_q->height};
-    float max_radius = std::max(corner_radius.x, corner_radius.y);
-    // Ensure that maximum radius doesn't exceed 0.5, preserving aspect ratio.
-    corner_radius *= std::min(max_radius, 0.5f) / max_radius;
-  }
+  canvas_shape_ = canvas_shape;
 
   // Once we have a canvas shape set and the material is ready, we can enable
   // the mesh renderer.
@@ -362,83 +468,20 @@ absl::Status StereoSurface::SetCanvasShape(const CanvasShape& canvas_shape) {
         })
         .KeptBy(this);
   }
+
+  if (should_update_collider) {
+    MP_RETURN_IF_ERROR(UpdateColliderTypeByShape(canvas_shape));
+  }
   return absl::OkStatus();
 }
 
-StereoSurface::ColliderType StereoSurface::GetColliderTypeByShape(
+bool StereoSurface::GetColliderEnabled() const {
+  return collider_type_ != ColliderType::kNone;
+}
+
+absl::Status StereoSurface::UpdateColliderTypeByShape(
     const CanvasShape& canvas_shape) {
-  auto shape_q = std::get_if<Quad>(&canvas_shape);
-  if (shape_q != nullptr) {
-    return ColliderType::kPanel;
-  }
-  auto shape_s = std::get_if<Sphere>(&canvas_shape);
-  if (shape_s != nullptr) {
-    return ColliderType::kSphere;
-  }
-  auto shape_h = std::get_if<Hemisphere>(&canvas_shape);
-  if (shape_h != nullptr) {
-    return ColliderType::kMesh;
-  }
-  IMP_LOG(imp::ERROR) << "Collider for monostate CanvasShape is not supported.";
-  return ColliderType::kUnknown;
-}
-
-absl::Status StereoSurface::UpdateColliderType(ColliderType collider_type) {
-  if (collider_type_ == collider_type) {
-    return absl::OkStatus();
-  }
-
   // Remove the old collider
-  CleanupColliderType();
-
-  // Add the new collider
-  switch (collider_type) {
-    case ColliderType::kPanel:
-      GetNode()->AddComponent<BoxCollider>()->SetBox({{}, {0.5f, 0.5f, 0.0f}});
-      break;
-    case ColliderType::kSphere:
-      GetNode()->AddComponent<SphereCollider>()->SetSphere({{}, 1.0f});
-      break;
-    case ColliderType::kMesh: {
-      auto collider_node = GetNode();
-      if (use_mesh_collider_workaround_) {
-        // Create a new node to host the mesh collider. Because MeshCollider
-        // on old sys-image versions does not support rendering mesh format
-        // created from the MeshFactory.
-        collider_node = GetNode()->CreateChildNode();
-        collider_node->SetName(kMeshColliderWorkaroundNodeName);
-        // MeshRenderer here is only used to hold the mesh data for
-        // MeshCollider, but not to be rendered.
-        auto collider_node_mesh_renderer =
-            collider_node->AddComponent<MeshRenderer>();
-        collider_node_mesh_renderer->SetEnabled(false);
-        collider_node_mesh_renderer->SetMesh(
-            GetView().GetMeshFactory().CreateXYHemisphere(
-                {.radius = 1.0f, .resolution = 50, .is_position_only = true},
-                MeshFactory::MeshDataStorageMode::kStoreMeshData));
-      }
-      MP_RETURN_IF_ERROR(
-          collider_node
-              ->AddComponent<MeshCollider>(MeshColliderState::ColliderMode::
-                                               COLLIDE_WITH_MESH_ONLY_DEFAULT)
-              .status());
-      break;
-    }
-    case ColliderType::kNone:
-      // Attempting to clean up the collider. Do nothing.
-      break;
-    case ColliderType::kUnknown:
-    default:
-      IMP_LOG(imp::WARNING) << "Attempting to add an unknown collider type: "
-                   << static_cast<int>(collider_type);
-      break;
-  }
-
-  collider_type_ = collider_type;
-  return absl::OkStatus();
-}
-
-void StereoSurface::CleanupColliderType() {
   switch (collider_type_) {
     case ColliderType::kPanel:
       GetNode()->RemoveComponent<BoxCollider>();
@@ -447,14 +490,13 @@ void StereoSurface::CleanupColliderType() {
       GetNode()->RemoveComponent<SphereCollider>();
       break;
     case ColliderType::kMesh:
-      if (use_mesh_collider_workaround_) {
-        for (NodeHandle child : GetNode()->GetChildren()) {
-          if (child->GetName() == kMeshColliderWorkaroundNodeName) {
-            GetView().DestroyNode(child);
-          }
+      GetNode()->RemoveComponent<MeshCollider>();
+      break;
+    case ColliderType::kWorkaroundMesh:
+      for (NodeHandle child : GetNode()->GetChildren()) {
+        if (child->GetName() == kMeshColliderWorkaroundNodeName) {
+          GetView().DestroyNode(child);
         }
-      } else {
-        GetNode()->RemoveComponent<MeshCollider>();
       }
       break;
     case ColliderType::kNone:
@@ -467,6 +509,100 @@ void StereoSurface::CleanupColliderType() {
       break;
   }
   collider_type_ = ColliderType::kNone;
+
+  // Add the new collider
+  auto shape_q = std::get_if<Quad>(&canvas_shape);
+  auto shape_s = std::get_if<Sphere>(&canvas_shape);
+  auto shape_h = std::get_if<Hemisphere>(&canvas_shape);
+  auto shape_m = std::get_if<StereoMesh>(&canvas_shape);
+  auto shape_c = std::get_if<CurvedRect>(&canvas_shape);
+  if (shape_q != nullptr) {
+    collider_type_ = ColliderType::kPanel;
+
+    GetNode()->AddComponent<BoxCollider>()->SetBox({{}, {0.5f, 0.5f, 0.0f}});
+  } else if (shape_s != nullptr) {
+    collider_type_ = ColliderType::kSphere;
+
+    GetNode()->AddComponent<SphereCollider>()->SetSphere({{}, 1.0f});
+  } else if (shape_h != nullptr) {
+    NodeHandle collider_node = GetNode();
+    if (!use_mesh_collider_workaround_) {
+      collider_type_ = ColliderType::kMesh;
+    } else {
+      collider_type_ = ColliderType::kWorkaroundMesh;
+
+      // Create a new node to host the mesh collider. Because MeshCollider
+      // on old sys-image versions does not support rendering mesh format
+      // created from the MeshFactory.
+      collider_node = GetNode()->CreateChildNode();
+      collider_node->SetName(kMeshColliderWorkaroundNodeName);
+      // MeshRenderer here is only used to hold the mesh data for
+      // MeshCollider, but not to be rendered.
+      auto collider_node_mesh_renderer =
+          collider_node->AddComponent<MeshRenderer>();
+      collider_node_mesh_renderer->SetEnabled(false);
+      collider_node_mesh_renderer->SetMesh(
+          GetView().GetMeshFactory().CreateXYHemisphere(
+              {.radius = 1.0f, .resolution = 50, .is_position_only = true},
+              MeshFactory::MeshDataStorageMode::kStoreMeshData));
+    }
+
+    MP_RETURN_IF_ERROR(
+        collider_node
+            ->AddComponent<MeshCollider>(
+                MeshColliderState::ColliderMode::COLLIDE_WITH_MESH_ONLY_DEFAULT)
+            .status());
+  } else if (shape_c != nullptr) {
+    if (std::abs(GetCurvedRectArcRadians(*shape_c)) < 0.02f) {
+      // Fallback to a box collider if the curve is near flat.
+      collider_type_ = ColliderType::kPanel;
+      GetNode()->AddComponent<BoxCollider>()->SetBox({{}, {0.5f, 0.5f, 0.0f}});
+    } else {
+      NodeHandle collider_node = GetNode();
+      if (!use_mesh_collider_workaround_) {
+        collider_type_ = ColliderType::kMesh;
+      } else {
+        collider_type_ = ColliderType::kWorkaroundMesh;
+        // Create a new node to host the mesh collider. Because MeshCollider
+        // on old sys-image versions does not support rendering mesh format
+        // created from the MeshFactory.
+        collider_node = GetNode()->CreateChildNode();
+        collider_node->SetName(kMeshColliderWorkaroundNodeName);
+        // MeshRenderer here is only used to hold the mesh data for
+        // MeshCollider, but not to be rendered.
+        auto collider_node_mesh_renderer =
+            collider_node->AddComponent<MeshRenderer>();
+        collider_node_mesh_renderer->SetEnabled(false);
+        collider_node_mesh_renderer->SetMesh(
+            GetView().GetMeshFactory().CreatePanel(
+                {.size = float2(1.0f, 1.0f),
+                 .flip_uv = shape_c->curve_radius < 0.0f,  // flip if concave
+                 .radius = std::abs(shape_c->curve_radius) / shape_c->width,
+                 .resolution = 50,
+                 .is_position_only = true},
+                {1.0f, 1.0f, 1.0f},
+                MeshFactory::MeshDataStorageMode::kStoreMeshData));
+      }
+
+      MP_RETURN_IF_ERROR(
+          collider_node
+              ->AddComponent<MeshCollider>(MeshColliderState::ColliderMode::
+                                               COLLIDE_WITH_MESH_ONLY_DEFAULT)
+              .status());
+    }
+  } else if (shape_m != nullptr) {
+    // TODO - Update collider type to kMesh for stereo mesh once
+    // supporting the mesh data is confirmed.
+    collider_type_ = ColliderType::kUnknown;
+  } else {
+    IMP_LOG(imp::WARNING) << "Attempting to add an unknown CanvasShape";
+  }
+
+  return absl::OkStatus();
+}
+
+void StereoSurface::CleanupColliderType() {
+  UpdateColliderTypeByShape(std::monostate()).IgnoreError();
 }
 
 absl::Status StereoSurface::SetColliderEnabled(bool enable_collider) {
@@ -474,10 +610,12 @@ absl::Status StereoSurface::SetColliderEnabled(bool enable_collider) {
     CleanupColliderType();
     return absl::OkStatus();
   }
+  // If the collider is already enabled, do nothing.
+  if (GetColliderEnabled()) {
+    return absl::OkStatus();
+  }
 
-  ColliderType collider_type = GetColliderTypeByShape(canvas_shape_);
-  MP_RETURN_IF_ERROR(UpdateColliderType(collider_type));
-  return absl::OkStatus();
+  return UpdateColliderTypeByShape(canvas_shape_);
 }
 
 absl::StatusOr<android::Surface*> StereoSurface::GetSurface() {
@@ -674,39 +812,38 @@ void StereoSurface::RecreateMaterials() {
                 });
           });
 
-  per_eye_material_future_ =
-      per_eye_material_future_.Then(
-          // Capture the current values of the use_super_sampling_ and
-          // blending_mode_ variables, as they may change by the time the lambda
-          // is called.
-          [this, use_super_sampling = use_super_sampling_,
-           blending_mode = blending_mode_]() {
-            auto left_future = GetOrCreateMaterial(
-                RenderEyeTarget::kLeftOnly, use_super_sampling, blending_mode);
-            auto right_future = GetOrCreateMaterial(
-                RenderEyeTarget::kRightOnly, use_super_sampling, blending_mode);
+  per_eye_material_future_ = per_eye_material_future_.Then(
+      // Capture the current values of the use_super_sampling_ and
+      // blending_mode_ variables, as they may change by the time the lambda
+      // is called.
+      [this, use_super_sampling = use_super_sampling_,
+       blending_mode = blending_mode_]() {
+        auto left_future = GetOrCreateMaterial(
+            RenderEyeTarget::kLeftOnly, use_super_sampling, blending_mode);
+        auto right_future = GetOrCreateMaterial(
+            RenderEyeTarget::kRightOnly, use_super_sampling, blending_mode);
 
-            return left_future.Merge(std::move(right_future))
-                .Then([this](std::tuple<android_xr::JxrMediaMaterial*,
-                                        android_xr::JxrMediaMaterial*>
-                                 materials) {
-                  auto [material_left, material_right] = materials;
-                  if (material_left == nullptr || material_right == nullptr) {
-                    return;
-                  }
+        return left_future.Merge(std::move(right_future))
+            .Then([this](std::tuple<android_xr::JxrMediaMaterial*,
+                                    android_xr::JxrMediaMaterial*>
+                             materials) {
+              auto [material_left, material_right] = materials;
+              if (material_left == nullptr || material_right == nullptr) {
+                return;
+              }
 
-                  if (is_per_eye_) {
-                    if (mesh_renderer_left_or_both_) {
-                      mesh_renderer_left_or_both_->SetMaterial(
-                          material_left->GetMaterial());
-                    }
-                    if (mesh_renderer_right_) {
-                      mesh_renderer_right_->SetMaterial(
-                          material_right->GetMaterial());
-                    }
-                  }
-                });
-          });
+              if (is_per_eye_) {
+                if (mesh_renderer_left_or_both_) {
+                  mesh_renderer_left_or_both_->SetMaterial(
+                      material_left->GetMaterial());
+                }
+                if (mesh_renderer_right_) {
+                  mesh_renderer_right_->SetMaterial(
+                      material_right->GetMaterial());
+                }
+              }
+            });
+      });
 }
 
 void StereoSurface::SetSubViewRects(const float4& left_rect,

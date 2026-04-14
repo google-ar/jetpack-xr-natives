@@ -17,14 +17,13 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_VISUALIZE_COLLIDERS_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_VISUALIZE_COLLIDERS_H_
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/strings/string_view.h"
 #include "core/collision/collision_flags.h"
 #include "core/common/rememberer.h"
 #include "core/editor/widget.h"
-#include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
 #include "core/view/base_view.h"
-#include "core/view/utils/frame_time.h"
 
 namespace imp::editor {
 
@@ -35,7 +34,6 @@ class VisualizeColliders : public editor::Widget, public imp::Rememberer {
                               bool show_all_colliders = false);
   absl::string_view GetName() const override { return "##Visualize Colliders"; }
   void DrawImGui() override;
-  void Update(const FrameTime& frame_time);
 
  private:
   enum class Mode {
@@ -47,15 +45,18 @@ class VisualizeColliders : public editor::Widget, public imp::Rememberer {
     kShowSelectedNodeCollider,
   };
 
+  // Draws the colliders for all relevant nodes based on the current mode.
   void DrawCollidersForAllNodes();
+  // Recursively draws the colliders for a node and its children.
   void DrawCollidersForNodeRecursive(NodeHandle node,
                                      VisualizationStyle visualization_style);
+  // Draws the colliders for a single node.
   void DrawCollidersForNode(NodeHandle node,
                             VisualizationStyle visualization_style);
   BaseView& view_;
   Mode mode_;
-  NodeHandle selected_node_;
-  float3 empty_node_bounds_size_;
+  absl::flat_hash_set<NodeHandle> selected_nodes_;
+  absl::flat_hash_set<NodeHandle> visited_nodes_;
 };
 
 }  // namespace imp::editor

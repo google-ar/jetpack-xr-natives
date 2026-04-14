@@ -14,46 +14,73 @@
 
 #include "core/editor/widgets/transform_widget_mode_control.h"
 
+#include "dear_imgui/imgui.h"
 #include "core/common/registry.h"
 #include "core/editor/editor.h"
-#include "core/editor/events.h"
+#include "core/input/key_codes.h"
+#include "core/input/keyboard_event.h"
+#include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/view/framework/gestures/tap_gesture.h"
 
 namespace imp::editor {
 
 void TransformWidgetModeControl::Setup() {
-  GetView().GetRegistry().Get<Editor>()->get().GetDispatcher().Connect(
+  Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
+  editor.GetDispatcher().Connect(
       GetNode(),
       [this](const imp::TapGesture::TapEvent& event) mutable {
         CycleMode();
         return imp::Dispatcher::kAccept;
       },
       this);
+
+  auto handle_keyboard = [this](const imp::KeyboardEvent& event) {
+    // Don't handle key presses if ImGui is using the keyboard.
+    if (ImGui::GetIO().WantTextInput) return;
+
+    if (event.type != KeyboardEventType::kOnDown) return;
+
+    switch (event.key.code) {
+      case VirtualKeyCode::VK_w:
+        SetMode(Mode::kTranslate);
+        break;
+      case VirtualKeyCode::VK_e:
+        SetMode(Mode::kRotate);
+        break;
+      case VirtualKeyCode::VK_r:
+        SetMode(Mode::kScale);
+        break;
+      default:
+        break;
+    }
+  };
+
+  editor.GetDispatcher().Connect(handle_keyboard, this);
 }
 
 void TransformWidgetModeControl::CycleMode() {
-  if (IsActive()) {
-    switch (mode_) {
-      case Mode::kTranslate:
-        mode_ = Mode::kRotate;
-        state_.translate->SetEnabled(false);
-        state_.rotate->SetEnabled(true);
-        state_.scale->SetEnabled(false);
-        break;
-      case Mode::kRotate:
-        mode_ = Mode::kScale;
-        state_.translate->SetEnabled(false);
-        state_.rotate->SetEnabled(false);
-        state_.scale->SetEnabled(true);
-        break;
-      case Mode::kScale:
-        mode_ = Mode::kTranslate;
-        state_.translate->SetEnabled(true);
-        state_.rotate->SetEnabled(false);
-        state_.scale->SetEnabled(false);
-        break;
-    }
+  if (!IsActive()) return;
+
+  switch (mode_) {
+    case Mode::kTranslate:
+      SetMode(Mode::kRotate);
+      break;
+    case Mode::kRotate:
+      SetMode(Mode::kScale);
+      break;
+    case Mode::kScale:
+      SetMode(Mode::kTranslate);
+      break;
   }
+}
+
+void TransformWidgetModeControl::SetMode(Mode mode) {
+  if (!IsActive()) return;
+
+  mode_ = mode;
+  state_.translate->SetEnabled(mode_ == Mode::kTranslate);
+  state_.rotate->SetEnabled(mode_ == Mode::kRotate);
+  state_.scale->SetEnabled(mode_ == Mode::kScale);
 }
 
 }  // namespace imp::editor

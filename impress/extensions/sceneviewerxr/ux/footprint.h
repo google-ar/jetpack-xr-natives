@@ -72,7 +72,10 @@ struct FootprintInteractionStates {
     Ramp<imp::float4> fill_cutoff_color;
     bool is_footprint_primary_receiver = false;
     bool is_footprint_secondary_receiver = false;
+    int footprint_primary_receiver_grace_frames = 0;
     std::bitset<4> scale_handles_visibility;
+    std::array<Ramp<float>, 4> scale_handle_animations;
+    std::array<Ramp<float>, 4> scale_handle_pressed_animations;
   };
 
   // State machine type for footprint.
@@ -133,8 +136,8 @@ class Footprint : public imp::Component,
   // or lifting off a plane.
   bool IsSnappedOrSnapping() const;
 
-  bool IsScaleHandle(imp::NodeHandle node) const;
-  bool IsCloseToScaleHandle(const imp::float3& world_hit_pos) const;
+  std::optional<ScaleHandle> GetTargetedScaleHandle(
+      imp::NodeHandle receiver, const imp::float3& world_hit_pos) const;
 
  private:
   // Observer method.
@@ -154,6 +157,11 @@ class Footprint : public imp::Component,
   imp::float2 RetrieveSizeFromModel();
   void UpdateFootBonesAndBounds(float2 foot_size, float foot_fraction);
   void MaintainThickness();
+  std::bitset<4> CalculateScaleHandleVisibility(
+      const InteractionMode& interaction,
+      const FootprintInteractionStates::Active& state);
+  void UpdateFootprintReceiverGracePeriod(
+      FootprintInteractionStates::Active& state);
 
   // State machine for the footprint.
   InteractionMachine machine_;

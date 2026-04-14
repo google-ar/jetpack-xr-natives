@@ -16,12 +16,18 @@ syntax = "proto3";
 
 package imp;
 
+import "core/math/math.proto";
+
 option java_multiple_files = true;
 // option cc_api_version = 2;
 // option cc_api_version = 2;
 
 // Represents an input wheel event
 message WheelEventMessage {
-  float delta = 1;
-  int64 elapsed_time = 2;
+  // The dx and dy delta of the wheel event.
+  Float2 delta = 1;
+  // The point where the wheel event occurred.
+  Float2 point = 2;
+  // Duration of time elapsed between system startup and time of event.
+  int64 elapsed_time = 3;
 }

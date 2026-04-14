@@ -104,6 +104,8 @@ struct BaseRenderableManager {
   virtual void SetMorphWeights(filament::RenderableManager::Instance instance,
                                float const* weights, size_t count,
                                size_t offset = 0) = 0;
+  virtual bool IsCullingEnabled(
+      filament::RenderableManager::Instance instance) const = 0;
 
   /**
    * Adds renderable components to entities using a builder pattern.

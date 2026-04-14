@@ -19,11 +19,10 @@
 
 #include <optional>
 
-#include "core/common/small_source_location.h"
 #include "core/materials/material.h"
 #include "core/media/media_color_space.h"
 #include "core/render/display_color_space.h"
-#include "core/split_engine/materials/builtin/builtin_material.h"
+#include "core/split_engine/materials/builtin/builtin_material_wrapper.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 
@@ -44,8 +43,7 @@ enum class ColorCorrectionMode {
 };
 
 // The base class for all built-in materials that are not generic materials.
-// This class holds the OwnedMaterialPtr and implements GetMaterialInternal.
-class BuiltInCustomMaterial : public BuiltInMaterial {
+class BuiltInCustomMaterial : public BuiltInMaterialWrapper<Material> {
  public:
   BuiltInCustomMaterial(BridgeId bridge_id, OwnedMaterialPtr material);
 
@@ -55,9 +53,6 @@ class BuiltInCustomMaterial : public BuiltInMaterial {
 
  protected:
   BridgeId GetBridgeId() const;
-
-  BorrowedMaterialPtr GetMaterialInternal(
-      SmallSourceLocation loc) const override;
 
   // Updates the material's color space parameters. Attempts to retrieve
   // color information from the BufferItem associated with the given
@@ -76,7 +71,6 @@ class BuiltInCustomMaterial : public BuiltInMaterial {
   // color space of the material from the SplitEngineRenderer since the texture
   // in question is associated with the app's context.
   BridgeId bridge_id_;
-  OwnedMaterialPtr material_;
   // Initialize the default color space to BT709/sRGB.
   // When the color space is not available, we assume the color space is
   // BT709/sRGB.

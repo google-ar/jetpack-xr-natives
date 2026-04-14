@@ -13,7 +13,7 @@
 # limitations under the License.
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("//build_tools:imp.bzl", "if_android", "if_emscripten", "imp_copts", "imp_google3_copts")
+load("//build_tools:imp.bzl", "if_android", "if_emscripten", "imp_copts", "imp_defines", "imp_google3_copts")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -144,6 +144,7 @@ cc_library(
     linkstatic = True,
     deps = [
         ":executor",
+        ":executor_flags",
         ":task",
         ":task_priority",
         ":task_scheduler",
@@ -153,6 +154,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )
@@ -254,6 +256,50 @@ cc_library(
         "//core/common:invocable",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_impress//core/common:log",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "executor_flags",
+    srcs = ["executor_flags.cc"],
+    hdrs = ["executor_flags.h"],
+    deps = [
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/base:no_destructor",
+        "@com_google_absl//absl/synchronization",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "background_scheduler",
+    hdrs = ["background_scheduler.h"],
+    copts = imp_copts(),
+    defines = imp_defines(),
+    deps = [
+        "//core/common:invocable",
+        "@com_google_absl//absl/cleanup",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/synchronization",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "background_scheduler_impl",
+    srcs = ["background_scheduler_impl.cc"],
+    hdrs = ["background_scheduler_impl.h"],
+    copts = imp_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":background_scheduler",
+        ":executor",
+        ":future",
+        "//core/common:invocable",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
     ],
     alwayslink = 1,
 )

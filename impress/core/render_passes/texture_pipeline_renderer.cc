@@ -18,8 +18,10 @@
 #include <cassert>
 #include <cstddef>
 #include <optional>
+#include <string>
 #include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "core/common/log.h"
@@ -43,7 +45,9 @@
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
 #include "core/render/texture_options.h"
+#include "core/render_passes/texture_pipeline_renderer_projection_quad.h"
 #include "core/render_passes/texture_pipeline_renderer_state.proto.imp.h"
+#include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/material_factory.h"
 #include "core/view/framework/camera/camera_manager.h"
@@ -51,6 +55,7 @@
 #include "core/view/utils/proto/render_settings.proto.imp.h"
 #include "core/view/utils/render_setting_utils.h"
 #include "core/view/view_events.h"
+#include "core/window/filament_host.h"
 
 namespace imp {
 
@@ -116,8 +121,15 @@ uint2 TextureSizeFromPass(const TexturePipelineRendererState::Pass& pass,
               return view.GetSize() * size.factor.value_or(1.0f);
             case TexturePipelineRendererState::AutomaticTextureSize::
                 VIEW_SIZE_PHYSICAL_PIXELS:
-              return view.GetDevice().PixelsToPhysicalPixels(view.GetSize()) *
-                     size.factor.value_or(1.0f);
+              const Device& device = view.GetDevice();
+              const uint2 view_size = view.GetSize();
+              const float factor = size.factor.value_or(1.0f);
+
+              if (!device.IsPhysicalPixelRatioAvailable()) {
+                return view_size * factor;
+              }
+
+              return device.PixelsToPhysicalPixels(view_size) * factor;
           }
         } else {
           if (texture && pass.registered_color_texture()) {
@@ -155,6 +167,49 @@ Future<absl::Status> TexturePipelineRenderer::Setup() {
         "TexturePipelineRenderer must have at least one pass."));
   }
 
+  if (split_engine::SplitEngineSerializer* serializer =
+          GetView().GetSplitEngineSerializer()) {
+    // Serialize the TexturePipelineRenderer state.
+    serializer->AddTexturePipelineRenderer(GetNode().GetEntity(), state_);
+
+    // Register any output textures that don't exist yet with a placeholder
+    // texture. Register those textures in the app-side texture registry so the
+    // corresponding texture that the backend TexturePipelineRenderer creates
+    // can be linked to it. This allows the app to use the texture from the
+    // registry to assign to material parameters and they will be resolved by
+    // the backend to the texture rendered to by the backend TPR mirror.
+    for (size_t i = 0; i < state_.passes.size(); ++i) {
+      RuntimePass& runtime_pass = runtime_passes_.emplace_back();
+      const auto& pass = state_.passes[i];
+      if (std::holds_alternative<imp::TexturePipelineRendererState::Texture>(
+              pass.color_texture_config)) {
+        const auto& tex = std::get<imp::TexturePipelineRendererState::Texture>(
+            pass.color_texture_config);
+        const std::string& name = tex.name;
+        if (!GetView().GetTextureRegistry().GetTexture(name)) {
+          // Create a 1x1 placeholder texture.
+          // Note: manually creating a texture with filament::TextureBuilder to
+          // avoid automatic Split Engine texture serialization.
+          filament::Texture* filament_texture =
+              filament::Texture::Builder()
+                  .width(1)
+                  .height(1)
+                  .sampler(filament::Texture::Sampler::SAMPLER_2D)
+                  .format(filament::Texture::InternalFormat::RGBA8)
+                  .build(*BaseView::GetSharedEngine());
+          OwnedTexturePtr texture =
+              GetView().GetTextureFactory().WrapTexture(filament_texture);
+          runtime_pass.color_texture_registration =
+              GetView().GetTextureRegistry().RegisterTexture(
+                  name, std::move(texture));
+        }
+      }
+    }
+    // Return early, do not run any real TexturePipelineRenderer logic on the
+    // Split Engine app side.
+    return result;
+  }
+
   // Setup runtime information for each pass.
   filament::Engine* engine = BaseView::GetSharedEngine();
   bool requires_view_size_changed_event = false;
@@ -171,6 +226,8 @@ Future<absl::Status> TexturePipelineRenderer::Setup() {
 
     RuntimePass& runtime_pass = runtime_passes_.emplace_back();
     runtime_pass.view = GetView().CreateFilamentView();
+    runtime_pass.view->setName(
+        ("TexturePipelineRenderer_" + pass.group).c_str());
     runtime_pass.view->setCamera(
         pass.camera ? pass.camera->GetCamera()
                     : GetView().GetCameraManager().GetCamera()->GetCamera());
@@ -185,12 +242,9 @@ Future<absl::Status> TexturePipelineRenderer::Setup() {
                                  engine);
     }
 
-    if (!requires_physical_pixels_ratio ||
-        GetView().GetDevice().IsPhysicalPixelRatioAvailable()) {
-      absl::Status initialized = InitializeTextures(pass, runtime_pass);
-      if (!initialized.ok()) {
-        return Future<absl::Status>(initialized);
-      }
+    absl::Status initialized = InitializeTextures(pass, runtime_pass);
+    if (!initialized.ok()) {
+      return Future<absl::Status>(initialized);
     }
 
     // Setup the override material, if one is specified for this pass.
@@ -273,6 +327,15 @@ void TexturePipelineRenderer::SetPassEnabled(size_t pass_index, bool enabled) {
     return;
   }
   runtime_passes_[pass_index].enabled = enabled;
+  if (split_engine::SplitEngineSerializer* serializer =
+          GetView().GetSplitEngineSerializer()) {
+    std::vector<bool> enabled_passes(runtime_passes_.size());
+    for (size_t i = 0; i < runtime_passes_.size(); ++i) {
+      enabled_passes[i] = runtime_passes_[i].enabled;
+    }
+    serializer->SetTexturePipelineRendererPassesEnabled(GetNode().GetEntity(),
+                                                        enabled_passes);
+  }
 }
 
 bool TexturePipelineRenderer::IsPassEnabled(size_t pass_index) const {
@@ -289,6 +352,13 @@ absl::Status TexturePipelineRenderer::ResizePassTexture(size_t pass_index,
     return absl::InvalidArgumentError("Pass index out of bounds");
   }
   TexturePipelineRendererState::Pass& pass = state_.passes[pass_index];
+
+  if (split_engine::SplitEngineSerializer* serializer =
+          GetView().GetSplitEngineSerializer()) {
+    // TODO: (broken link) - Implement texture resize in Split Engine.
+    IMP_LOG(imp::FATAL) << "ResizePassTexture is not supported in Split Engine.";
+  }
+
   RuntimePass& runtime_pass = runtime_passes_.at(pass_index);
   pass.texture_size = size;
   absl::Status status = InitializeTextures(pass, runtime_pass);
@@ -308,6 +378,11 @@ filament::View* TexturePipelineRenderer::GetFilamentView(
 }
 
 void TexturePipelineRenderer::Cleanup() {
+  if (split_engine::SplitEngineSerializer* serializer =
+          GetView().GetSplitEngineSerializer()) {
+    serializer->RemoveTexturePipelineRenderer(GetNode().GetEntity());
+  }
+
   filament::Engine* engine = BaseView::GetSharedEngine();
 
   // Destroy filament resources.
@@ -367,9 +442,13 @@ absl::Status TexturePipelineRenderer::InitializeTextures(
           .format = color_format,
           .depth = stereo_depth,
           .levels = 1,
-          .sampler_type = filament::Texture::Sampler::SAMPLER_2D_ARRAY,
           .usage = filament::Texture::Usage::COLOR_ATTACHMENT |
                    filament::Texture::Usage::SAMPLEABLE,
+          .sampler_options =
+              TextureSamplerOptions{
+                  .sampler_type =
+                      TextureSamplerOptions::SamplerType::SAMPLER_2D_ARRAY,
+              },
       };
       color_texture = GetView().GetTextureFactory().CreateTexture(settings);
     } else {
@@ -420,6 +499,7 @@ absl::Status TexturePipelineRenderer::InitializeTextures(
     OwnedTexturePtr depth_texture;
     if (is_multiview) {
       TextureSamplerOptions sampler_options = {
+          .sampler_type = TextureSamplerOptions::SamplerType::SAMPLER_2D_ARRAY,
           .mag_filter = TextureSamplerOptions::MagFilter::NEAREST,
           .min_filter = TextureSamplerOptions::MinFilter::NEAREST,
       };
@@ -429,7 +509,6 @@ absl::Status TexturePipelineRenderer::InitializeTextures(
           .format = depth_format,
           .depth = stereo_depth,
           .levels = 1,
-          .sampler_type = filament::Texture::Sampler::SAMPLER_2D_ARRAY,
           .usage = filament::Texture::Usage::DEPTH_ATTACHMENT |
                    filament::Texture::Usage::SAMPLEABLE,
           .sampler_options = sampler_options,
@@ -537,6 +616,12 @@ absl::Status TexturePipelineRenderer::InitializeTextures(
 
 void TexturePipelineRenderer::RenderPasses(
     filament::Renderer* filament_renderer) {
+  if (GetView().GetSplitEngineSerializer()) {
+    // Return early, do not run any real TexturePipelineRenderer logic on the
+    // Split Engine app side.
+    return;
+  }
+
   // Loop through each pass and render it.
   assert(state_.passes.size() == runtime_passes_.size());
   for (int i = 0; i < runtime_passes_.size(); i++) {
@@ -622,9 +707,10 @@ void TexturePipelineRenderer::RenderPasses(
 
     // Render the pass.
     GetView().GetHost()->PerformRender(
-        runtime_pass.view,
-        {.use_main_view_projection_matrix =
-             runtime_pass.use_main_view_camera_projection_matrix});
+        runtime_pass.view, window::FilamentHost::RenderPassOptions{
+                               .projection_quad = projection_quad_});
+
+    // Render the pass.
 
     // Send the post-pass event.
     PostPassEvent post_pass_event;
@@ -716,6 +802,17 @@ std::optional<BorrowedMaterialPtr> TexturePipelineRenderer::GetOverrideMaterial(
     return std::nullopt;
   }
   return runtime_passes_[pass_index].override_material.Borrow(loc);
+}
+
+void TexturePipelineRenderer::SetProjectionQuad(
+    const std::optional<TexturePipelineRendererProjectionQuad>& quad) {
+  if (split_engine::SplitEngineSerializer* serializer =
+          GetView().GetSplitEngineSerializer()) {
+    serializer->SetTexturePipelineRendererProjectionQuad(GetNode().GetEntity(),
+                                                         quad);
+  }
+
+  projection_quad_ = quad;
 }
 
 }  // namespace imp

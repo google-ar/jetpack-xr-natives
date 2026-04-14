@@ -35,7 +35,7 @@ struct DesktopCombinedInputEvent : public Event {
   DesktopCombinedInputEvent() = default;
   std::vector<KeyboardEvent> keyboard_events;
   std::vector<PointerEvent> pointer_events;
-  absl::optional<WheelEvent> wheel_event;
+  std::vector<WheelEvent> wheel_events;
 };
 
 // A simplified input handler that skips gesture detection and hit detection.

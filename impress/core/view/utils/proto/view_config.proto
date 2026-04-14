@@ -50,7 +50,7 @@ message ExperimentalFeatureFlags {
   // BUG: b/469883152
   // PLATFORMS: ANDROID
   // ACTION: Clean up by 2026-02-26
-  bool surface_texture_memory_leak_fix = 4 [default = false];
+  bool surface_texture_memory_leak_fix = 4 [deprecated = true];
 
   // OWNERS: faaland
   // BUG: b/361658541
@@ -63,6 +63,92 @@ message ExperimentalFeatureFlags {
   // PLATFORMS: ANDROID
   // ACTION: Clean up by 2026-03-31
   bool force_individual_glyph_source_instances = 6 [default = false];
+
+  // OWNERS: mitsuruo
+  // BUG: b/469106532
+  // PLATFORMS: ALL/WASM
+  // ACTION: Clean up by 2026-04-23
+  // DESCRIPTION:
+  // Enables the new experimental texture asset API when loading glTF files.
+  //
+  // On all platforms:
+  // During the glTF loading process, when images are decoded and rendered to a
+  // texture, this flag makes the loader use the new texture asset API to manage
+  // the texture data. While this should be a no-op in terms of final output,
+  // the underlying code flow has changed significantly, warranting this flag.
+  //
+  // Additionally, on WASM:
+  // This flag also enables the new 'DecodeImageToTexture' API, which is
+  // specific to WASM. This API decodes images directly into an OpenGL texture,
+  // bypassing the ImageContents intermediary. This approach is significantly
+  // faster on WASM because it avoids an expensive texture read and marshalling
+  // between the JS and native layers.
+  bool enable_use_texture_asset_api = 7 [default = false];
+
+  // If true, imp::Future will attempt to synchronously complete all pending
+  // work upon cancellation and/or destruction.
+  // What this means practically is that futures scheduled on the foreground
+  // (imp::SimpleExecutor) executor will be guaranteed to have a result when
+  // either the future is cancelled or its last reference is released. It also
+  // means that any held imp::Holdable or captured objects will be released
+  // after either cancellation or destruction.
+  // This behavior only applies to Executors that have implemented
+  // imp::Executor::InvokeScheduledTask().
+  // The flag is enabled by default.
+  // OWNERS: cjdaly, eugenecys
+  // BUG: b/451541739
+  // PLATFORMS: MCTF
+  // ACTION: Clean up by 2026-04-25
+  bool enable_synchronous_future_cancellation = 8 [default = true];
+
+  // OWNERS: sakhin, lincolnfrog
+  // BUG: b/474144275
+  // PLATFORMS: ANDROID/WASM
+  // ACTION: Clean up by 2026-06-01
+  //
+  // WARNING: If this flag is enabled by at least one Impress instance in a
+  // process, all Impress instances will be affected.
+  //
+  // This flag changes the behavior of SimpleExecutor:
+  //
+  // - If false, it represents the default pre-existing behavior where
+  // SimpleExecutor's tasks will be destroyed when the executor is destroyed,
+  // and in turn this can lead to a crash: if a ForegroundExecutor's task need
+  // live BackgroundExecutor, it will crash on null-pointer dereference, because
+  // BackgroundExecutor is destroyed first.
+  //
+  // - If true, SimpleExecutor will destroy tasks on `Shutdown()` call and this
+  // prevents the crash.
+  //
+  bool enable_simple_executor_destroys_tasks_on_shutdown = 9 [default = false];
+
+  // OWNERS: dsternfeld
+  // BUG: b/475595933
+  // PLATFORMS: ALL
+  // ACTION: Clean up by 2026-05-31
+  // DESCRIPTION: If true, use imp::PoolAllocator instead of raw new/delete for
+  // nodes and components.
+  bool enable_pool_allocator = 10 [default = false];
+
+  // If true, whenever a TextRenderer component is created, its meshes will be
+  // created with the deinterleaved vertex format. The theory is that by
+  // separating out position, we will have performance gains on both the CPU and
+  // GPU side.
+  // OWNERS: mitsuruo
+  // BUG: b/480150905
+  // PLATFORMS: ALL
+  // ACTION: Clean up by 2026-06-03
+  bool enable_deinterleaved_text_renderer = 11 [default = false];
+
+  // OWNERS: egmuhm
+  // BUG: b/491186219
+  // PLATFORMS: WASM
+  // ACTION: Clean up by 2026-05-10
+  // DESCRIPTION:
+  // Enables emscripten performance.measure calls for label prep process on
+  // WASM that are logged in the performance bootstrap flow in tactile.
+  // go/tactile-safari-label-prep-instrumentation.
+  bool enable_label_prep_profile_logging = 12 [default = false];
 }
 
 message ViewConfig {
@@ -114,18 +200,6 @@ message ViewConfig {
   GlyphAtlasTextureSize glyph_atlas_texture_size = 7 [default = SIZE2048];
 
   CacheConfig cache_config = 9;
-
-  // If true, imp::Future will attempt to synchronously complete all pending
-  // work upon cancellation and/or destruction.
-  // What this means practically is that futures scheduled on the foreground
-  // (imp::SimpleExecutor) executor will be guaranteed to have a result when
-  // either the future is cancelled or its last reference is released. It also
-  // means that any held imp::Holdable or captured objects will be released
-  // after either cancellation or destruction.
-  // This behavior only applies to Executors that have implemented
-  // imp::Executor::InvokeScheduledTask().
-  // The flag is enabled by default.
-  bool enable_synchronous_future_cancellation = 10 [default = true];
 
   // Defines calls equivalent to filament::Engine::setFeatureFlag, executed when
   // the Impress View is constructed.

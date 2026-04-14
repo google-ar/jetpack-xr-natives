@@ -40,7 +40,7 @@ namespace imp {
 //
 // Create a GenericMaterial using the Create method, passing in a schema, a
 // material cache, and the textures required by the material.
-class GenericMaterial : public virtual Material {
+class GenericMaterial : public Material {
  public:
   virtual ~GenericMaterial() = default;
 

@@ -23,7 +23,10 @@
 #include <cstdint>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <set>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -60,6 +63,7 @@
 #include "core/model/mesh/mesh_vertex_data.h"
 #include "core/model/mesh/vertex_format.h"
 #include "core/render/render_order_constants.h"
+#include "core/view/utils/string_map.h"
 #include "robin_map/include/tsl/robin_map.h"
 
 namespace imp {
@@ -116,6 +120,14 @@ filament::Box CalculateBounds(const PositionBuffer& positions) {
   }
   return bb;
 }
+
+struct TaggedDebugDrawState {
+  bool default_enabled_state = false;
+  StringMap<std::optional<bool>> debug_tag_states;
+  // A separate list of tag names so that we can return a view of the registered
+  // tags.
+  std::vector<std::string> debug_tag_names;
+};
 
 class Details final {
  public:
@@ -196,6 +208,10 @@ class Details final {
           parent_instance,
           GeometrySnippets{std::move(geometry_snippets), vertex_space});
     }
+  }
+
+  TaggedDebugDrawState& GetTaggedDebugDrawState() {
+    return tagged_debug_draw_state_;
   }
 
  private:
@@ -489,6 +505,8 @@ class Details final {
   // The set of currently active instances which is ordered ascending by
   // expiration time.
   std::set<Instance> active_instances_;
+
+  TaggedDebugDrawState tagged_debug_draw_state_;
 };
 
 // Gets the pointer to the global instance that keeps the debug rendering state
@@ -500,6 +518,11 @@ Details** GetDetailsInstanceCreator() {
 }
 
 Details* GetDetailsInstancePointer() { return *GetDetailsInstanceCreator(); }
+
+TaggedDebugDrawState* GetTaggedDebugDrawState() {
+  Details* details = GetDetailsInstancePointer();
+  return details == nullptr ? nullptr : &details->GetTaggedDebugDrawState();
+}
 
 }  // namespace
 
@@ -994,6 +1017,89 @@ void NormalizedScreen::RectLines(const Rect& rect, const Color& color) {
   absl::c_copy(kQuadLineIndices, std::back_inserter(geometry.indices));
 
   UserDefined(std::move(geometry));
+}
+
+bool IsTagEnabled(std::string_view tag) {
+  TaggedDebugDrawState* state = GetTaggedDebugDrawState();
+  if (state == nullptr) {
+    return false;
+  }
+
+  StringMap<std::optional<bool>>::const_iterator it =
+      state->debug_tag_states.find(tag);
+  if (it == state->debug_tag_states.end()) {
+    // Mark the tag as known, and return the default value.
+    const std::string tag_str(tag);
+    state->debug_tag_states[tag_str] = std::nullopt;
+    state->debug_tag_names.push_back(tag_str);
+
+    return state->default_enabled_state;
+  }
+
+  return it.value().value_or(state->default_enabled_state);
+}
+
+void SetDefaultForIsTagEnabled(bool enabled) {
+  TaggedDebugDrawState* state = GetTaggedDebugDrawState();
+  if (state == nullptr) {
+    return;
+  }
+
+  state->default_enabled_state = enabled;
+}
+
+bool GetDefaultForIsTagEnabled() {
+  TaggedDebugDrawState* state = GetTaggedDebugDrawState();
+  if (state == nullptr) {
+    return false;
+  }
+
+  return state->default_enabled_state;
+}
+
+void SetTagEnabled(std::string_view tag, bool enabled) {
+  TaggedDebugDrawState* state = GetTaggedDebugDrawState();
+  if (state == nullptr) {
+    return;
+  }
+
+  StringMap<std::optional<bool>>::iterator it =
+      state->debug_tag_states.find(tag);
+  if (it == state->debug_tag_states.end()) {
+    const std::string tag_str(tag);
+    state->debug_tag_states[tag_str] = enabled;
+    state->debug_tag_names.push_back(tag_str);
+    return;
+  }
+
+  it.value() = enabled;
+}
+
+void RestoreTagStateToDefault(std::string_view tag) {
+  TaggedDebugDrawState* state = GetTaggedDebugDrawState();
+  if (state == nullptr) {
+    return;
+  }
+
+  StringMap<std::optional<bool>>::iterator it =
+      state->debug_tag_states.find(tag);
+  if (it == state->debug_tag_states.end()) {
+    const std::string tag_str(tag);
+    state->debug_tag_states[tag_str] = std::nullopt;
+    state->debug_tag_names.push_back(tag_str);
+    return;
+  }
+
+  it.value() = std::nullopt;
+}
+
+absl::Span<const std::string> GetAllRegisteredTags() {
+  TaggedDebugDrawState* state = GetTaggedDebugDrawState();
+  if (state == nullptr) {
+    return {};
+  }
+
+  return state->debug_tag_names;
 }
 
 }  // namespace debug_draw

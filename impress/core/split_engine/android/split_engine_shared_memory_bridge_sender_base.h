@@ -25,7 +25,7 @@
 #include "absl/synchronization/mutex.h"
 #include "flatbuffers/allocator.h"
 #include "flatbuffers/flatbuffer_builder.h"
-#include "core/async/future.h"
+#include "core/async/background_scheduler_impl.h"
 #include "core/common/invocable.h"
 #include "core/common/owned_ptr.h"
 #include "core/common/robin_map.h"
@@ -105,19 +105,7 @@ class SplitEngineSharedMemoryBridgeSenderBase
   absl::flat_hash_map<MessageGroupId, size_t> message_group_id_to_size_bytes_
       ABSL_GUARDED_BY(message_sizes_mutex_);
 
-  // Represents a chain of operations that are scheduled to be executed on
-  // the background thread.
-  //
-  // Accessed via `Schedule` method only and only on the foreground thread.
-  Future<absl::Status> pending_ops_ = Future<absl::Status>(absl::OkStatus());
-
-  // This is used to determine when it's time to use kScheduleAlways mode to
-  // prevent infinite callstacks. See `Schedule` method for more details.
-  size_t total_ops_count_ = 0;
-
-  // Obtained results from `future_benchmark_test.cc` shows that 64 is sweet
-  // spot both for XR device and Desktop.
-  static constexpr size_t kScheduleAlwaysEveryN = 64;
+  BackgroundSchedulerImpl background_scheduler_;
 };
 
 }  // namespace imp::split_engine

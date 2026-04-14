@@ -21,9 +21,18 @@
 #include "SDL2/include/SDL_keyboard.h"
 #include "SDL2/include/SDL_keycode.h"
 #include "SDL2/include/SDL_mouse.h"
+#include "SDL2/include/SDL_touch.h"
 #include "SDL2/include/SDL_video.h"
+#include "absl/status/status.h"
+#include "absl/time/time.h"
+#include "core/common/enum_flags.h"
 #include "core/config.h"
+#include "core/input/input_manager.h"
 #include "core/input/key_codes.h"
+#include "core/input/keyboard_event.h"
+#include "core/input/pointer_event.h"
+#include "core/input/pointer_event_processor.h"
+#include "core/window/filament_host.h"
 #include "mediapipe/framework/port/status_macros.h"
 
 namespace imp {
@@ -74,8 +83,8 @@ Flags<KeyModifier> GetKeyModifier(uint32_t modifier) {
 }  // namespace
 
 // A multiplier for the mouse wheel delta to make it similar to the values seen
-// on the web platform (direction is inverted and magnitude is much smaller).
-static constexpr float kMouseWheelWebConsistencyMultiplier = -30.0f;
+// on the web platform (magnitude is much smaller).
+static constexpr float kMouseWheelWebConsistencyMultiplier = 30.0f;
 
 // The ordering of these values match those of imp::VirtualKeyCode
 VirtualKeyCode GetVirtualKeyCode(int key_code) {
@@ -372,11 +381,11 @@ absl::Status ProcessInputFromSdlEvent(FilamentHost* host,
     }
     case SDL_MOUSEWHEEL: {
       MP_RETURN_IF_ERROR(input_manager->ProcessWheelInput(
-          // Depending on the platform wheel delta will go into x or y
-          // component.
-          static_cast<float>(event->wheel.y + event->wheel.x) *
+          float2(event->wheel.x, event->wheel.y) *
               kMouseWheelWebConsistencyMultiplier,
+          float2(0.0f, 0.0f),
           absl::Milliseconds(event->wheel.timestamp)));
+      break;
 
 #if IMP_RUNTIME(DEV)
       MP_RETURN_IF_ERROR(host->QueueMouseInput(

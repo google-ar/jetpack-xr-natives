@@ -18,13 +18,13 @@
 
 #include <cstdint>
 #include <memory>
-#include <utility>
 
 #include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "filament/libs/bluevk/include/vulkan/vulkan_core.h"
 #include "core/math/vec.h"
 #include "core/render/content_security_level.h"
+#include "core/view/platforms/xr_android/openxr_includes.h"
 #include "core/view/platforms/xr_android/xr_session_host.h"
 
 namespace imp {
@@ -99,6 +99,12 @@ VkResult XrVulkanSwapChainImageHandler::acquire(
   uint32_t color_idx;
   xrAcquireSwapchainImage(layers_->active_color->handle, &acquire_info,
                           &color_idx);
+  XrSwapchainImageWaitInfo wait_info{
+      .type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO,
+      .next = nullptr,
+      .timeout = XR_INFINITE_DURATION,
+  };
+  xrWaitSwapchainImage(layers_->active_color->handle, &wait_info);
 
   if (layers_->active_depth->handle != XR_NULL_HANDLE) {
     XrSwapchainImageAcquireInfo acquire_info{
@@ -108,6 +114,7 @@ VkResult XrVulkanSwapChainImageHandler::acquire(
     uint32_t depth_idx;
     xrAcquireSwapchainImage(layers_->active_depth->handle, &acquire_info,
                             &depth_idx);
+    xrWaitSwapchainImage(layers_->active_depth->handle, &wait_info);
     
   }
 

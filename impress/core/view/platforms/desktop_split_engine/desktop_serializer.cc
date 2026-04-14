@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -24,6 +25,7 @@
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "third_party/grpc/include/grpcpp/client_context.h"
@@ -94,6 +96,15 @@ absl::Status PresentHostAndCleanup(FilamentHost* host,
   return absl::OkStatus();
 }
 
+// Returns the API level to use for the serializer.
+constexpr int32_t GetApiLevel() {
+#ifdef IMP_SPLIT_ENGINE_ALLOW_EXPERIMENTAL_APIS
+  return android_xr::kSplitEngineExperimentalApiLevel;
+#else
+  return android_xr::kSplitEngineProductionApiLevel;
+#endif
+}
+
 absl::Status Main(int argc, char* argv[]) {
   // Connect to the server
   // TODO: (broken link) - update channel creation to use different credentials
@@ -116,9 +127,15 @@ absl::Status Main(int argc, char* argv[]) {
   view->SetRenderableManager(
       std::make_unique<imp::RenderableManagerWrapper>(*view));
 
+  constexpr int32_t api_level = GetApiLevel();
+  IMP_LOG(imp::INFO) << "Serializer using API level: "
+            << (api_level == android_xr::kSplitEngineExperimentalApiLevel
+                    ? "experimental"
+                    : absl::StrCat(api_level));
+
   auto split_engine_serializer = std::make_unique<SplitEngineSerializerImpl>(
-      *view, android_xr::kSplitEngineProductionApiLevel, std::move(bridge),
-      std::move(bridge_sender), kBridgeBufferSizeBytes);
+      *view, api_level, std::move(bridge), std::move(bridge_sender),
+      kBridgeBufferSizeBytes);
 
   view->SetSplitEngineSerializer(std::move(split_engine_serializer));
 
@@ -153,9 +170,15 @@ absl::Status MultimachineMain(int argc, char* argv[]) {
   view->SetRenderableManager(
       std::make_unique<imp::RenderableManagerWrapper>(*view));
 
+  constexpr int32_t api_level = GetApiLevel();
+  IMP_LOG(imp::INFO) << "Serializer using API level: "
+            << (api_level == android_xr::kSplitEngineExperimentalApiLevel
+                    ? "experimental"
+                    : absl::StrCat(api_level));
+
   auto split_engine_serializer = std::make_unique<SplitEngineSerializerImpl>(
-      *view, android_xr::kSplitEngineProductionApiLevel, std::move(bridge),
-      std::move(bridge_sender), kBridgeBufferSizeBytes);
+      *view, api_level, std::move(bridge), std::move(bridge_sender),
+      kBridgeBufferSizeBytes);
 
   view->SetSplitEngineSerializer(std::move(split_engine_serializer));
 

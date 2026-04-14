@@ -48,8 +48,7 @@ class VignetteMaterial : public imp::split_engine::SplitEngineBuiltinMaterial {
           texture_parameter_creator) const override;
 
  private:
-  VignetteMaterial(imp::BaseView& view,
-                   imp::split_engine::PlaceholderOrBuiltInMaterialPtr material);
+  VignetteMaterial(imp::BaseView& view, imp::OwnedMaterialPtr material);
 
   std::optional<imp::float4> color_;
   std::optional<float> coverage_;

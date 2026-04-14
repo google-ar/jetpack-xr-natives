@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
 
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_IMGUI_HELPER_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_IMGUI_HELPER_H_
-#include <cstddef>
 
 #include "absl/types/span.h"
 #include "dear_imgui/imgui.h"
@@ -24,11 +23,6 @@ namespace imp::editor {
 class ImGuiHelper {
  public:
   ImGuiHelper() = delete;
-
-  static void SelectFrame(size_t frame_number) {
-    selected_frame_number_ = frame_number;
-  }
-  static size_t GetSelectedFrameNumber() { return selected_frame_number_; }
 
   // Draws a legend item for the custom legends used by performance graphs.
   static void DrawLegendItem(const char* label, bool& show_flag,
@@ -46,9 +40,6 @@ class ImGuiHelper {
   static void DrawFrameValueLabels(int frame_number,
                                    absl::Span<const LabelData> labels,
                                    ImDrawList* draw_list);
-
- private:
-  inline static size_t selected_frame_number_ = -1;
 };
 }  // namespace imp::editor
 

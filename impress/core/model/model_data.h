@@ -33,7 +33,6 @@
 #include "core/common/typed_vector.h"
 #include "core/material_library/material_param_value.h"
 #include "core/math/math.h"
-#include "core/model/behavior_data.h"
 #include "core/model/entity_data.h"
 #include "core/model/interactivity_data.h"
 #include "core/model/joint_data.h"
@@ -117,14 +116,6 @@ class ModelData {
   using LightPunctualData = LightPunctualData;
   using LightPunctualId = LightPunctualId;
 
-  using BehaviorData = BehaviorData;
-  using BehaviorCustomEventId = BehaviorCustomEventId;
-  using BehaviorVariableId = BehaviorVariableId;
-  using BehaviorNodeId = BehaviorNodeId;
-  using BehaviorNodeValueId = BehaviorNodeValueId;
-  using BehaviorNodeConfigurationId = BehaviorNodeConfigurationId;
-  using BehaviorNodeFlowId = BehaviorNodeFlowId;
-
   using InteractivityData = InteractivityData;
   using InteractivityGraphData = InteractivityData::GraphData;
   using InteractivityGraphId = InteractivityGraphId;
@@ -158,7 +149,6 @@ class ModelData {
             TypedVector<AudioSourceData> audio_sources,
             TypedVector<AudioData> audios,
             std::vector<AudioEmitterId> scene_audio_emitters,
-            std::optional<BehaviorData> behavior,
             std::optional<InteractivityData> interactivity);
 
   // Disposes of all filament resources using saved engine pointer.
@@ -189,7 +179,6 @@ class ModelData {
   const TypedVector<AudioSourceData>& AudioSources() const;
   const TypedVector<AudioData>& Audios() const;
   const std::vector<AudioEmitterId>& SceneAudioEmitters() const;
-  const BehaviorData* Behavior() const;
   const InteractivityData* Interactivity() const;
 
  private:
@@ -218,8 +207,6 @@ class ModelData {
   TypedVector<AudioSourceData> audio_sources_;
   TypedVector<AudioData> audios_;
   std::vector<AudioEmitterId> scene_audio_emitters_;
-
-  std::optional<BehaviorData> behavior_;
 
   std::optional<InteractivityData> interactivity_;
 };

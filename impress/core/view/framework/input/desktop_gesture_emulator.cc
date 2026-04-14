@@ -14,11 +14,22 @@
 
 #include "core/view/framework/input/desktop_gesture_emulator.h"
 
+#include <cstdint>
 #include <memory>
+#include <vector>
 
 #include "core/common/log.h"
-#include "absl/status/statusor.h"
+#include "absl/time/time.h"
+#include "core/common/enum_flags.h"
+#include "core/input/key_codes.h"
+#include "core/input/keyboard_event.h"
+#include "core/input/pointer_event.h"
+#include "core/input/pointer_event_processor.h"
+#include "core/input/wheel_event.h"
+#include "core/ncsb/node_handle.h"
+#include "core/view/base_view.h"
 #include "core/view/framework/gestures/double_tap_gesture.h"
+#include "core/view/framework/input/desktop_input_handler.h"
 
 namespace imp {
 namespace {
@@ -103,17 +114,25 @@ class DesktopPinchGesture : public DesktopGestureEmulator::BaseGesture {
       const float kMaxScaleAmount = 500.0f;
       // Scales the raw wheel delta values.
       const float kWheelAmplitude = 2.0f;
-      // Returns early if not a wheel event.
-      if (!input.wheel_event) {
+      // Returns early if there are no wheel events.
+      if (input.wheel_events.empty()) {
         return;
       }
+
+      float input_wheel_delta = 0.0f;
+      absl::Duration wheel_total_elapsed_time = absl::ZeroDuration();
+      for (const WheelEvent& wheel_event : input.wheel_events) {
+        input_wheel_delta += wheel_event.GetDelta().y;
+        wheel_total_elapsed_time += wheel_event.GetElapsedTime();
+      }
+
       // Establishes the 'finger' starting positions.
       const float2 first_point = float2(0.0f, 0.0f);
       const float2 second_point =
           first_point + float2(kMaxScaleAmount * 4.0f, 0.0f);
 
       // Scales the wheel delta.
-      float wheel_delta = kWheelAmplitude * input.wheel_event->GetDelta();
+      float wheel_delta = kWheelAmplitude * input_wheel_delta;
 
       // Clamps wheel accumulation (and therefore scale) between upper and
       // lower maximums.
@@ -127,12 +146,12 @@ class DesktopPinchGesture : public DesktopGestureEmulator::BaseGesture {
       scale_pointers_[0] = {
           kDefaultMousePointerId,
           first_point - wheel_position,
-          input.wheel_event->GetDelta(),
+          input_wheel_delta,
       };
       scale_pointers_[1] = {
           kDefaultMousePointerId + 1,
           second_point + wheel_position,
-          input.wheel_event->GetDelta(),
+          input_wheel_delta,
       };
 
       // Updates the scaling gesture.
@@ -140,17 +159,17 @@ class DesktopPinchGesture : public DesktopGestureEmulator::BaseGesture {
         // Clears an ongoing scaling event.
         pointer_handler_.DispatchHitEvents(
             PointerEvent(PointerEventType::kUp, scale_pointers_, 2,
-                         input.wheel_event->GetElapsedTime()));
+                         wheel_total_elapsed_time));
         // Starts a new scaling event.
         pointer_handler_.DispatchHitEvents(
             PointerEvent(PointerEventType::kDown, scale_pointers_, 2,
-                         input.wheel_event->GetElapsedTime()));
+                         wheel_total_elapsed_time));
         SetGestureActive();
       } else {
         // Updates scale event.
         pointer_handler_.DispatchHitEvents(
             PointerEvent(PointerEventType::kMove, scale_pointers_, 2,
-                         input.wheel_event->GetElapsedTime()));
+                         wheel_total_elapsed_time));
       }
     } else if (GestureActive()) {
       PointerEvent scale_event(PointerEventType::kUp, scale_pointers_, 2,

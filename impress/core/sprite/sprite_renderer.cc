@@ -31,6 +31,7 @@
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
 #include "core/geometry/shapes/rect.h"
+#include "core/materials/material.h"
 #include "core/math/mat.h"
 #include "core/math/quat.h"
 #include "core/math/transform.h"
@@ -41,6 +42,7 @@
 #include "core/ncsb/component_system.h"
 #include "core/render/image_asset.h"
 #include "core/render/texture.h"
+#include "core/render/texture_asset.h"
 #include "core/sprite/sprite_renderer_assets.h"
 #include "core/sprite/sprite_renderer_state.proto.imp.h"
 #include "core/view/base_view.h"
@@ -168,6 +170,16 @@ void SpriteRenderer::Setup(OwnedMaterialPtr material) {
 }
 
 Future<absl::Status> SpriteRenderer::Setup(const AssetDefinition& image) {
+  if (*GetView()
+           .GetConfig()
+           .experimental_feature_flags->enable_use_texture_asset_api) {
+    return GetView().GetAssetManager().LoadTexture(image).Then(
+        [this](AssetPtr<TextureAsset> texture_asset) {
+          return Setup(
+              GetView().GetTextureFactory().CreateTexture(texture_asset));
+        });
+  }
+
   Future<AssetPtr<ImageAsset>> image_asset_future =
       GetView().GetAssetManager().LoadImage(image);
 
@@ -175,19 +187,29 @@ Future<absl::Status> SpriteRenderer::Setup(const AssetDefinition& image) {
       [this](AssetPtr<ImageAsset> image_asset) mutable {
         BaseView& view = GetView();
         OwnedTexturePtr texture =
-            view.GetTextureFactory().CreateTexture(*image_asset);
+            view.GetTextureFactory().CreateTexture(image_asset);
 
         return Setup(std::move(texture));
       });
 }
 
 Future<absl::Status> SpriteRenderer::Setup(absl::string_view url) {
+  if (*GetView()
+           .GetConfig()
+           .experimental_feature_flags->enable_use_texture_asset_api) {
+    return GetView().GetAssetManager().LoadTexture(url).Then(
+        [this](AssetPtr<TextureAsset> texture_asset) {
+          return Setup(
+              GetView().GetTextureFactory().CreateTexture(texture_asset));
+        });
+  }
+
   Future<AssetPtr<ImageAsset>> image_asset_future =
       GetView().GetAssetManager().LoadImage(url);
 
   return image_asset_future.Then([this](AssetPtr<ImageAsset> image) mutable {
     BaseView& view = GetView();
-    OwnedTexturePtr texture = view.GetTextureFactory().CreateTexture(*image);
+    OwnedTexturePtr texture = view.GetTextureFactory().CreateTexture(image);
 
     return Setup(std::move(texture));
   });

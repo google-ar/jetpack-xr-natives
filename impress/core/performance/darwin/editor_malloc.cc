@@ -444,15 +444,19 @@ void operator delete(void* ptr, const std::nothrow_t&) noexcept { free(ptr); }
 void operator delete[](void* ptr, const std::nothrow_t&) noexcept { free(ptr); }
 
 #ifdef __cpp_aligned_new
-void* operator new(size_t size, std::align_val_t al) { return malloc(size); }
-void* operator new[](size_t size, std::align_val_t al) { return malloc(size); }
+void* operator new(size_t size, std::align_val_t al) {
+  return aligned_alloc(static_cast<size_t>(al), size);
+}
+void* operator new[](size_t size, std::align_val_t al) {
+  return aligned_alloc(static_cast<size_t>(al), size);
+}
 void* operator new(size_t size, std::align_val_t al,
                    const std::nothrow_t&) noexcept {
-  return malloc(size);
+  return aligned_alloc(static_cast<size_t>(al), size);
 }
 void* operator new[](size_t size, std::align_val_t al,
                      const std::nothrow_t&) noexcept {
-  return malloc(size);
+  return aligned_alloc(static_cast<size_t>(al), size);
 }
 void operator delete(void* ptr, std::align_val_t al) noexcept { free(ptr); }
 void operator delete[](void* ptr, std::align_val_t al) noexcept { free(ptr); }

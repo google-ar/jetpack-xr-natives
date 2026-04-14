@@ -34,20 +34,21 @@
 #include "core/editor/widgets/performance/sample_processor_types.h"
 #include "core/performance/profiler.h"
 #include "core/view/base_view.h"
-#include "core/view/utils/proto/view_config.proto.imp.h"
 
 namespace imp::editor {
+
+class PerformanceWindow;
 
 // A panel for the performance monitor to show the various information on the
 // lifetime of a frame
 class FrameTimePanel : public MonitorPanel {
  public:
-  FrameTimePanel(BaseView& view, int buffer_size);
+  FrameTimePanel(PerformanceWindow& performance_window, BaseView& view,
+                 int buffer_size);
   ~FrameTimePanel() override;
 
   void DrawPanel(int width, int height, int time_span_seconds) override;
   void Update(absl::Duration elapsed_time, absl::Duration delta_time) override;
-  void OnStateChanged(MonitorState state) override;
 
   absl::string_view GetSelectedSampleName() const {
     return selected_sample_name_;
@@ -58,6 +59,7 @@ class FrameTimePanel : public MonitorPanel {
     selected_sample_changed_ = true;
   }
   bool IsCallstackPanelEnabled() const { return show_callstack_ != 0; }
+  bool IsDragging() const { return is_dragging_; }
 
  private:
   // Number of labels to draw next to the vertical line on the plot.
@@ -107,6 +109,10 @@ class FrameTimePanel : public MonitorPanel {
                           ImU32 color = IM_COL32(128, 128, 128, 64),
                           float frame_width = 0.5f);
 
+  // Draws a grey highlight over the selected frame range.
+  void DrawHighlightFrameRange(int start_frame, int end_frame,
+                               ImDrawList* draw_list, ImU32 color);
+
   // Draws a tool tip showing more information on the frame
   void DrawToolTip(int frame_number);
 
@@ -124,8 +130,7 @@ class FrameTimePanel : public MonitorPanel {
   void DrawTickLabels(ImDrawList* draw_list, ValidTicks valid_ticks);
 
   // Draws the options to swap between hierarchy/flame graph views.
-  void DrawOptionsBar(int selected_frame_number);
-
+  void DrawOptionsBar();
   // Draws the splitter between the sample view and the call stack view.
   void DrawSplitter();
 
@@ -133,10 +138,11 @@ class FrameTimePanel : public MonitorPanel {
   void DrawSelectedFrameLabels(int frame_number, ImDrawList* draw_list);
 
   // Returns all samples with a specific name for a given frame and thread.
-  std::vector<SampleNode*>* GetSamples(absl::string_view sample_name,
-                                       int frame_index,
-                                       std::thread::id thread_id);
+  const std::vector<SampleNode*>* GetSamples(absl::string_view sample_name,
+                                             int frame_index,
+                                             std::thread::id thread_id);
 
+  PerformanceWindow& performance_window_;
   BaseView& view_;
   CircularBuffer<FrameTimeInfo> buffer_;
   std::array<SelectedSampleInfo, Profiler::kMaxFrames> selected_sample_buffer_;
@@ -144,7 +150,6 @@ class FrameTimePanel : public MonitorPanel {
   // This is incremented on every frame that is updated on this panel. This is
   // different from the actual frame number Impress is at.
   int frame_number_;
-  MonitorState state_ = MonitorState::kRunning;
 
   ViewConfig view_config_;
   HierarchyPanel hierarchy_panel_;
@@ -165,6 +170,11 @@ class FrameTimePanel : public MonitorPanel {
   // Which view to display (hierarchy or flame graph)
   ProfilerDetailsViewMode profiler_details_view_mode_ =
       ProfilerDetailsViewMode::kHierarchy;
+
+  // Frame selection.
+  void HandleFrameSelection(int hovered_frame);
+  bool is_dragging_ = false;
+  int drag_start_frame_ = -1;
 };
 
 }  // namespace imp::editor

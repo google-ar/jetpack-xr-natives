@@ -14,10 +14,9 @@
 
 #include "core/editor/widgets/visualize_colliders.h"
 
+#include "absl/container/flat_hash_set.h"
 #include "core/common/log.h"
-#include "absl/strings/string_view.h"
 #include "core/collision/collision_flags.h"
-#include "core/common/platform_helpers.h"
 #include "core/common/registry.h"
 #include "core/config.h"
 #include "core/editor/editor.h"
@@ -25,7 +24,7 @@
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/node_flag.h"
 #include "core/ncsb/node_handle.h"
-#include "core/view/framework/camera/camera_manager.h"
+#include "core/view/base_view.h"
 #include "core/view/framework/collision/collision_manager.h"
 
 namespace imp::editor {
@@ -35,20 +34,21 @@ VisualizeColliders::VisualizeColliders(BaseView& view, bool use_view_dispatcher,
     : view_(view) {
   mode_ = show_all_colliders ? Mode::kShowAllColliders
                              : Mode::kShowSelectedAndDescendantColliders;
+
+  Editor& editor = view_.GetRegistry().Get<Editor>()->get();
+  selected_nodes_ = editor.GetSelectedNodes();
   Dispatcher& dispatcher =
-      use_view_dispatcher
-          ? view_.GetDispatcher()
-          : view_.GetRegistry().Get<Editor>()->get().GetDispatcher();
+      use_view_dispatcher ? view_.GetDispatcher() : editor.GetDispatcher();
+
   dispatcher.Connect(
-      [this](const NodeSelectionChangedEvent& event) mutable {
-        // We only support single selection for the visualize colliders widget.
-        // Track which node is assigned in the hierarchy widget.
-        selected_node_ =
-            view_.GetRegistry().Get<Editor>()->get().GetSingleSelectedNode();
+      [this](const NodeSelectionChangedEvent&) {
+        selected_nodes_ =
+            view_.GetRegistry().Get<Editor>()->get().GetSelectedNodes();
       },
       this);
+
   dispatcher.Connect(
-      [this](const EditorSettingChangedEvent& event) mutable {
+      [this](const EditorSettingChangedEvent& event) {
         // Switch modes based on the "show all colliders" setting.
         if (event.show_all_colliders_enabled.has_value()) {
           if (*event.show_all_colliders_enabled) {
@@ -64,35 +64,38 @@ VisualizeColliders::VisualizeColliders(BaseView& view, bool use_view_dispatcher,
 }
 
 void VisualizeColliders::DrawImGui() {
+  visited_nodes_.clear();
+
   switch (mode_) {
     case Mode::kShowSelectedAndDescendantColliders: {
-      if (selected_node_) {
-        DrawCollidersForNodeRecursive(selected_node_,
-                                      VisualizationStyle::kSelected);
+      for (const NodeHandle& node : selected_nodes_) {
+        DrawCollidersForNodeRecursive(node, VisualizationStyle::kSelected);
       }
       break;
     }
     case Mode::kShowAllColliders: {
-      // Draw all bounds for all nodes.
+      // Draw all colliders for all nodes.
       DrawCollidersForAllNodes();
       break;
     }
     case Mode::kShowSelectedNodeCollider:
-      if (selected_node_) {
-        DrawCollidersForNode(selected_node_, VisualizationStyle::kSelected);
+      for (const NodeHandle& node : selected_nodes_) {
+        DrawCollidersForNode(node, VisualizationStyle::kSelected);
       }
       break;
   }
 }
 
 void VisualizeColliders::DrawCollidersForNodeRecursive(
-    NodeHandle node, VisualizationStyle visualization_style) {
+    const NodeHandle node, const VisualizationStyle visualization_style) {
+  if (!node || visited_nodes_.contains(node)) return;
+
   DrawCollidersForNode(node, visualization_style);
 
   VisualizationStyle child_viz_style =
-      (node == selected_node_ ? VisualizationStyle::kSelectedDescendent
-                              : visualization_style);
-  for (NodeHandle child : node->GetChildren()) {
+      (selected_nodes_.contains(node) ? VisualizationStyle::kSelectedDescendent
+                                      : visualization_style);
+  for (const NodeHandle& child : node->GetChildren()) {
     DrawCollidersForNodeRecursive(child, child_viz_style);
   }
 }
@@ -100,9 +103,7 @@ void VisualizeColliders::DrawCollidersForNodeRecursive(
 void VisualizeColliders::DrawCollidersForAllNodes() {
   view_.ForEachNode(
       [this](NodeHandle node) {
-        if (node == view_.GetCameraManager().GetCamera()->GetNode()) {
-          return;
-        }
+        if (!node) return;
 
         DrawCollidersForNodeRecursive(node, VisualizationStyle::kNotSelected);
       },
@@ -112,14 +113,18 @@ void VisualizeColliders::DrawCollidersForAllNodes() {
 void VisualizeColliders::DrawCollidersForNode(
     NodeHandle node, VisualizationStyle visualization_style) {
 #if IMP_RUNTIME(DEV)
+  if (!node) return;
+
   Editor& editor = view_.GetRegistry().Get<Editor>()->get();
-  if (node == editor.GetEditorRoot()) {
-    return;
-  }
+
+  if (node == editor.GetEditorRoot()) return;
+
+  // If we've already visited this node, don't draw it again.
+  if (!visited_nodes_.insert(node).second) return;
 
   VisualizationStyle node_viz_style =
-      (node == selected_node_ ? VisualizationStyle::kSelected
-                              : visualization_style);
+      (selected_nodes_.contains(node) ? VisualizationStyle::kSelected
+                                      : visualization_style);
 
   view_.GetCollisionManager().VisualizeCollidersForNode(node, node_viz_style);
 

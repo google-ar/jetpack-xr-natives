@@ -199,6 +199,7 @@ Future<AssetPtr<GltfAsset>> AssetManager::LoadGltfAsset(
     const AssetDefinition& asset_definition,
     absl::optional<GltfAsset::LoadOptions> options) {
   return LoadAsset<GltfAsset>(asset_definition, &gltf_asset_loader_,
+                              &resource_manager_,
                               options ? *options : GetDefaultLoadOptions());
 }
 
@@ -206,6 +207,7 @@ Future<AssetPtr<GltfAsset>> AssetManager::LoadGltfAsset(
     absl::string_view asset_url,
     absl::optional<GltfAsset::LoadOptions> options) {
   return LoadAsset<GltfAsset>(asset_url, &gltf_asset_loader_,
+                              &resource_manager_,
                               options ? *options : GetDefaultLoadOptions());
 }
 
@@ -213,6 +215,7 @@ Future<AssetPtr<GltfAsset>> AssetManager::LoadGltfAsset(
     absl::Cord contents, absl::string_view asset_url,
     absl::optional<GltfAsset::LoadOptions> options) {
   return LoadAsset<GltfAsset>(contents, asset_url, &gltf_asset_loader_,
+                              &resource_manager_,
                               options ? *options : GetDefaultLoadOptions());
 }
 
@@ -221,7 +224,7 @@ Future<AssetPtr<GltfAsset>> AssetManager::LoadGltfAsset(
     std::unique_ptr<InputStream> input_stream, absl::string_view asset_url,
     absl::optional<GltfAsset::LoadOptions> options) {
   return LoadAsset<GltfAsset>(std::move(input_stream), asset_url,
-                              &gltf_asset_loader_,
+                              &gltf_asset_loader_, &resource_manager_,
                               options ? *options : GetDefaultLoadOptions());
 }
 #endif

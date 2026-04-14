@@ -50,18 +50,6 @@ using ::imp::gltf::imp_proto::Node;
 using ::imp::gltf::imp_proto::Scene;
 using ::imp::gltf::imp_proto::Skin;
 
-bool IsAnimated(const GltfLookup &lookup, NodeId node) {
-  const ChannelId kNilChannel = {};
-  return absl::c_any_of(
-      lookup.channel_sets,
-      [&node, &kNilChannel](const GltfLookup::ChannelSet &channel_set) {
-        return (channel_set.translation_channels[node] != kNilChannel ||
-                channel_set.rotation_channels[node] != kNilChannel ||
-                channel_set.scale_channels[node] != kNilChannel ||
-                channel_set.weights_channels[node] != kNilChannel);
-      });
-}
-
 absl::StatusOr<PreciseTransform> GetLocalTransform(const Node &node) {
   if (node.matrix.size() == 16) {
     const double *data = node.matrix.data();
@@ -147,10 +135,6 @@ OptionalError BuildExports(GltfLookup *out_lookup) {
 OptionalError BuildGltfAnimationLookup(const imp::gltf::imp_proto::Gltf &gltf,
                                        GltfLookup &lookup) {
   GltfLookup::ChannelSet default_channel_set;
-  default_channel_set.translation_channels.Pair(gltf.nodes);
-  default_channel_set.rotation_channels.Pair(gltf.nodes);
-  default_channel_set.scale_channels.Pair(gltf.nodes);
-  default_channel_set.weights_channels.Pair(gltf.nodes);
   lookup.channel_sets.Pair(gltf.animations, default_channel_set);
 
   for (const Animation &anim : lookup.animations) {
@@ -166,12 +150,16 @@ OptionalError BuildGltfAnimationLookup(const imp::gltf::imp_proto::Gltf &gltf,
         }
         if (channel.target.path == kTranslation) {
           channel_set.translation_channels[node] = channel_id;
+          lookup.self_flags[node] |= NodeGltfFlags::kIsAnimated;
         } else if (channel.target.path == kRotation) {
           channel_set.rotation_channels[node] = channel_id;
+          lookup.self_flags[node] |= NodeGltfFlags::kIsAnimated;
         } else if (channel.target.path == kScale) {
           channel_set.scale_channels[node] = channel_id;
+          lookup.self_flags[node] |= NodeGltfFlags::kIsAnimated;
         } else if (channel.target.path == kWeights) {
           channel_set.weights_channels[node] = channel_id;
+          lookup.self_flags[node] |= NodeGltfFlags::kIsAnimated;
         } else {
           IMP_LOG(imp::INFO) << "Skipping unsupported channel target '"
                     << std::setw(channel.target.path.size())
@@ -252,48 +240,45 @@ OptionalError BuildGltfLookup(const imp::gltf::imp_proto::Gltf &gltf,
           return Error("node graph had cycles");
         }
 
-        if (IsAnimated(lookup, child_node)) {
+        if (lookup.self_flags[child_node] & NodeGltfFlags::kIsAnimated) {
           lookup.self_flags[node] |= NodeGltfFlags::kIsParentOfAnimated;
         }
         work_stack.push_back(static_cast<int>(child_node));
         lookup.parents[child_node] = node;
       }
     }
-    if (lookup.nodes[node].mesh.has_value()) {
+    const Node& node_lookup = lookup.nodes[node];
+    if (node_lookup.mesh.has_value()) {
       lookup.self_flags[node] |= NodeGltfFlags::kHasMesh;
     }
-    if (lookup.nodes[node].skin.has_value()) {
+    if (node_lookup.skin.has_value()) {
       lookup.self_flags[node] |= NodeGltfFlags::kHasSkin;
     }
-    if (!lookup.nodes[node].name.empty() &&
-        lookup.nodes[node].children.empty()) {
+    if (!node_lookup.name.empty() && node_lookup.children.empty()) {
       lookup.self_flags[node] |= NodeGltfFlags::kIsNamedLeaf;
     }
-    if (IsAnimated(lookup, node)) {
-      lookup.self_flags[node] |= NodeGltfFlags::kIsAnimated;
-    }
-    if (lookup.nodes[node].extensions.lights_punctual &&
-        lookup.nodes[node].extensions.lights_punctual->light.has_value()) {
+    if (node_lookup.extensions.lights_punctual &&
+        node_lookup.extensions.lights_punctual->light.has_value()) {
       lookup.self_flags[node] |= NodeGltfFlags::kHasLightPunctual;
     }
-    if (lookup.nodes[node].extensions.audio_extension &&
-        lookup.nodes[node].extensions.audio_extension->emitter.has_value()) {
+    if (node_lookup.extensions.audio_extension &&
+        node_lookup.extensions.audio_extension->emitter.has_value()) {
       lookup.self_flags[node] |= NodeGltfFlags::kHasAudioEmitter;
     }
 
-    if (lookup.nodes[node].extensions.khr_visibility) {
+    if (node_lookup.extensions.khr_visibility) {
       lookup.self_flags[node] |= NodeGltfFlags::kHasKhrVisibility;
     }
 
-    if (lookup.nodes[node].extensions.khr_node_visibility) {
+    if (node_lookup.extensions.khr_node_visibility) {
       lookup.self_flags[node] |= NodeGltfFlags::kHasKhrNodeVisibility;
     }
 
-    if (lookup.nodes[node].extensions.khr_node_selectability) {
+    if (node_lookup.extensions.khr_node_selectability) {
       lookup.self_flags[node] |= NodeGltfFlags::kHasKhrNodeSelectability;
     }
 
-    if (lookup.nodes[node].extensions.khr_node_hoverability) {
+    if (node_lookup.extensions.khr_node_hoverability) {
       lookup.self_flags[node] |= NodeGltfFlags::kHasKhrNodeHoverability;
     }
 
@@ -311,10 +296,8 @@ OptionalError BuildGltfLookup(const imp::gltf::imp_proto::Gltf &gltf,
     }
 
     // Cache our local transform.
-    absl::StatusOr<PreciseTransform> local_transform =
-        GetLocalTransform(lookup.nodes[node]);
     MP_ASSIGN_OR_RETURN(lookup.local_transforms[node],
-                     GetLocalTransform(lookup.nodes[node]));
+                     GetLocalTransform(node_lookup));
 
     // If a node has a mesh or a skin, then propagate the
     // IsMeshOrSkinRootAncestor to all of its parents (stop once we find they're

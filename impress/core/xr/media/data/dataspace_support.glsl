@@ -35,6 +35,8 @@ const int kTransferFunctionHLG = 7;
 // be found in https://www.w3.org/Graphics/Color/Workshop/slides/talk/cotton2.
 highp const float maxHlgToSdrDisplayLuminance = 302.f;
 
+const float kEpsilon  = 1e-6;
+
 // Calculates the maximum component of a vec3.
 highp float maxOf(highp float3 value) {
     return max(value.r, max(value.g, value.b));
@@ -44,7 +46,7 @@ highp float maxOf(highp float3 value) {
 // Returns: color in the range [0,10000]
 highp float3 pqToLuminance(highp float3 v_input) { // Changed 'v' to 'v_input' for clarity
     // Clamp the input PQ signal to its defined valid range [0,1]
-    highp float3 v = clamp(v_input, 0.0, 1.0);
+    highp float3 v = clamp(v_input, kEpsilon, 1.0);
 
     // See https://www.itu.int/rec/R-REC-BT.2100 regarding the PQ EOTF for
     // background on the calculation. m1,m2 are inverted from the spec
@@ -55,7 +57,7 @@ highp float3 pqToLuminance(highp float3 v_input) { // Changed 'v' to 'v_input' f
     const highp float3 c3 = float3(2392.0 / 128.0);
     const highp float3 c1 = c3 - c2 + float3(1.0);
     highp float3 e = pow(v, m2);
-    return 10000.0 * pow(max(e - c1, float3(0.0)) / (c2 - c3 * e), m1);
+    return 10000.0 * pow(max(e - c1, float3(kEpsilon)) / (c2 - c3 * e), m1);
 }
 
 // Calculates display-linear color from BT2020 scene-linear color.
@@ -75,7 +77,7 @@ highp float3 hlgOOTF(highp float3 color, highp float Lw, out highp float luminan
 
     luminance = dot(Y, color);
 
-    return Lw * pow(luminance, gamma - 1.0) * color;
+    return Lw * pow(max(luminance, kEpsilon), gamma - 1.0) * color;
 }
 
 // color - HLG-encoded color in the range [0,1].
@@ -97,7 +99,7 @@ highp float3 hlgInvOETF(highp float3 color) {
 // Converts an HLG-encoded color into linear color in the range [0,302].
 highp float3 hlgToLuminance(highp float3 color) {
     // Clamp the input HLG signal to its defined valid range [0,1]
-    highp float3 clamped_color = clamp(color, 0.0, 1.0);
+    highp float3 clamped_color = clamp(color, kEpsilon, 1.0);
     float ignore;
     return hlgOOTF(hlgInvOETF(clamped_color), /*Lw=*/maxHlgToSdrDisplayLuminance, /*luminance=*/ignore);
 }
@@ -130,7 +132,7 @@ highp float3 gamma22ToLinear(highp float3 rgb) {
 
     // Quartic polynomial fit gives < 1 / 256 errors for full range
     highp float3 res = a * (x * x * x * x) + b * (x * x * x) + c * (x * x) + d * x;
-    return clamp(res, float3(0.0), float3(1.0));
+    return clamp(res, float3(kEpsilon), float3(1.0));
 }
 
 highp float3 srgbToLinear(highp float3 color) {

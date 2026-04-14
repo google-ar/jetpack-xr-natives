@@ -13,7 +13,7 @@
 # limitations under the License.
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("//build_tools:imp.bzl", "if_android", "if_emscripten", "imp_copts", "imp_defines", "imp_google3_copts", "imp_test_copts")
+load("//build_tools:imp.bzl", "if_android", "if_dev_runtime", "if_emscripten", "imp_copts", "imp_defines", "imp_google3_copts", "imp_test_copts")
 load("//core/proto:imp_cc_proto_library.bzl", "imp_cc_proto_library")
 
 package(
@@ -230,7 +230,9 @@ cc_library(
         ":mesh_renderer",
         ":primitive_shape_renderer_state_cc_proto",
         ":primitive_shape_type",
+        "//core:config",
         "//core/async:future",
+        "//core/geometry/shapes",
         "//core/materials",
         "//core/math",
         "//core/model/mesh",
@@ -244,8 +246,10 @@ cc_library(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:variant",
         "@com_google_impress//core/common:log",
-        "@third_party//filament/filament:filament_hdrs",
-    ],
+    ] + if_dev_runtime([
+        "@com_google_absl//absl/strings:string_view",
+        "//core/common:hash",
+    ]),
     alwayslink = 1,
 )
 

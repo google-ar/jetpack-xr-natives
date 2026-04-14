@@ -44,11 +44,11 @@ class SampleProcessor {
   // samples for.
   void ProcessMainThreadSamples(int frame_index);
   ProcessedSamples ProcessWorkerThreadSamples(
-      std::vector<WorkerProfileResult>& samples);
+      const std::vector<WorkerProfileResult>& samples);
   ProcessedWorkerSamplesMap ProcessAllWorkerThreadsSamples(
-      RawWorkerSamplesMap& raw_samples_map);
+      const RawWorkerSamplesMap& raw_samples_map);
   // Returns a reference to the processed samples for a specific frame.
-  ProcessedSamples& GetProcessedFrame(int frame_index);
+  const ProcessedSamples& GetProcessedFrame(int frame_index) const;
 
  private:
   void ProcessSamples(int profiler_sample_count, NodePool& node_pool,
@@ -60,7 +60,7 @@ class SampleProcessor {
 
   // Pool of processed samples, one per frame.
   std::array<ProcessedSamples, Profiler::kMaxFrames> processed_samples_;
-  void ProcessWorkerSampleList(std::vector<WorkerProfileResult>& samples,
+  void ProcessWorkerSampleList(const std::vector<WorkerProfileResult>& samples,
                                ProcessedSamples& processed_worker_samples);
 };
 }  // namespace imp::editor

@@ -25,7 +25,7 @@ void MeshDataBufferDescriptorDeleter(void* buffer, size_t size, void* user) {
   auto* copy_counter = static_cast<imp_internal::MeshDataCopyCounter*>(user);
   size_t remaining_copies;
   {
-    absl::MutexLock lock(&copy_counter->mu);
+    absl::MutexLock lock(copy_counter->mu);
     remaining_copies = --copy_counter->copies;
   }
 

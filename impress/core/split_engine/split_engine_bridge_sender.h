@@ -24,15 +24,15 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "flatbuffers/flatbuffer_builder.h"
+#include "core/async/background_scheduler.h"
 #include "core/common/owned_ptr.h"
-#include "core/split_engine/android/scheduler.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 
 namespace imp::split_engine {
 
 // An interface for SplitEngine to use to send serialized data to a renderer.
 // TODO: (broken link) - remove SplitEngineBridgeSender interface.
-class SplitEngineBridgeSender : public Scheduler {
+class SplitEngineBridgeSender : public BackgroundScheduler {
  public:
   // Implementation of SplitEngineBridgeSender shall support multiple active
   // message groups in parallel.
@@ -108,32 +108,6 @@ class SplitEngineBridgeSender : public Scheduler {
   // task should take the ownership of imp::OwnedPtr.
   virtual imp::OwnedPtr<flatbuffers::FlatBufferBuilder> CreateFlatBufferBuilder(
       MessageGroupId group_id, size_t size_bytes) = 0;
-
-  // Below is a set of static methods for use by the SplitEngineBridgeSender
-  // to track active message groups across the bridge.
-  // They are all thread-safe as the underlying data structure is guarded by
-  // a mutex.
-
-  // Creates a new, empty set of active message groups for the client.
-  static absl::Status ConnectClient(ClientId client_id);
-
-  // Removes the active message groups for the client.
-  static absl::Status DisconnectClient(ClientId client_id);
-
-  // Marks the given message group as processing for the given client.
-  // This message group will not be released until the client signals via
-  // ReleaseMessageGroup.
-  static absl::Status EnqueueMessageGroup(ClientId client_id,
-                                          MessageGroupId message_group_id);
-  // Releases the given message group for the given client, meaning it can be
-  // reclaimed for reuse by the client.
-  static absl::Status ReleaseMessageGroup(ClientId client_id,
-                                          MessageGroupId message_group_id);
-  // Executes the given function with the set of active message groups for the
-  // given client. Can return an error if the client is not found.
-  static absl::Status WithActiveMessageGroups(
-      ClientId client_id,
-      std::function<void(const absl::flat_hash_set<MessageGroupId>&)> fn);
 };
 
 }  // namespace imp::split_engine

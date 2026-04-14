@@ -205,6 +205,11 @@ void RenderableManagerWrapper::SetMorphWeights(
   GetRenderableManager().setMorphWeights(instance, weights, count, offset);
 }
 
+bool RenderableManagerWrapper::IsCullingEnabled(
+    filament::RenderableManager::Instance instance) const {
+  return GetRenderableManager().isCullingEnabled(instance);
+}
+
 std::unique_ptr<BaseRenderableManager::Builder>
 RenderableManagerWrapper::NewBuilder(size_t count) {
   return std::make_unique<RenderableManagerWrapper::Builder>(

@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "absl/base/nullability.h"
+#include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -39,6 +40,7 @@
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/Texture.h"
 #include "core/async/executor.h"
+#include "core/async/executor_flags.h"
 #include "core/async/future.h"
 #include "core/common/buffer_access.h"
 #include "core/common/context.h"
@@ -50,6 +52,7 @@
 #include "core/lighting/image_based_lighting_types.h"
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
+#include "core/render/texture_options.h"
 #include "core/resources/resource_manager.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
@@ -112,7 +115,9 @@ OwnedTexturePtr CreateIblCubemapTexture(CubemapImageContents& cubemaps,
           .height = cubemaps.cubemap->levels.front().face_size,
           .format = TextureFactory::Format::R11F_G11F_B10F,
           .levels = cubemaps.cubemap->levels.size(),
-          .sampler_type = TextureFactory::SamplerType::SAMPLER_CUBEMAP});
+          .sampler_options = TextureSamplerOptions{
+              .sampler_type =
+                  TextureSamplerOptions::SamplerType::SAMPLER_CUBEMAP}});
   if (!cubemaps.cubemap->texture) {
     return {};
   }
@@ -138,7 +143,9 @@ OwnedTexturePtr CreateSkyboxCubemapTexture(CubemapLevelImageContents& cubemap,
           .width = skybox_cubemap->levels.front().face_size,
           .height = skybox_cubemap->levels.front().face_size,
           .format = TextureFactory::Format::R11F_G11F_B10F,
-          .sampler_type = TextureFactory::SamplerType::SAMPLER_CUBEMAP});
+          .sampler_options = TextureSamplerOptions{
+              .sampler_type =
+                  TextureSamplerOptions::SamplerType::SAMPLER_CUBEMAP}});
   if (!skybox_cubemap->texture) {
     return {};
   }
@@ -216,11 +223,19 @@ Future<CubemapLevelImageContents> LoadCubemapLevel(
   // TODO (broken link) Investigate why this needs to be an rvalue
   return Future<std::unique_ptr<image::ImageContents>>::MergeList(
              face_image_futures)
-      .Then([level_prefix](
-                std::vector<std::unique_ptr<image::ImageContents>>&& images)
-                -> absl::StatusOr<CubemapLevelImageContents> {
-        return CreateCubemapLevelImageContents(images, level_prefix);
-      });
+      .Then(
+          [level_prefix](
+              std::vector<std::unique_ptr<image::ImageContents>>&& images)
+              -> absl::StatusOr<CubemapLevelImageContents> {
+            return CreateCubemapLevelImageContents(images, level_prefix);
+          },
+          // We can schedule on the background executor if only flag is set,
+          // otherwise it will lead to a crash in `view_test` when the executors
+          // are shutting down and SimpleExecutor does not destroy tasks during
+          // ::Shutdown() call.
+          ExecutorFlags::ShouldSimpleExecutorDestroyTasksOnShutdown()
+              ? Executor::Type::kBackground
+              : Executor::Type::kForeground);
 }
 
 // Creates a deep copy of a CubemapLevelImageContents.
@@ -382,12 +397,13 @@ Future<std::unique_ptr<ImageBasedLightingAsset>> ImageBasedLightingAsset::Load(
 
         return MergeIblCubemapFutures(std::move(ibl_future),
                                       std::move(skybox_future))
-            .Then([spherical_harmonics = std::move(spherical_harmonics), url,
+            .Then([spherical_harmonics = std::move(spherical_harmonics),
+                   url = std::move(url),
                    view](ImageBasedLightingAssetCubemapImages
                              cubemap_images) mutable {
               return SerializeAndConstructImageBasedLightingAsset(
                   *view, std::move(spherical_harmonics),
-                  std::move(cubemap_images), url);
+                  std::move(cubemap_images), std::move(url));
             });
       },
       Executor::Type::kBackground);
@@ -453,54 +469,85 @@ BorrowedTexturePtr ImageBasedLightingAsset::BorrowReflectionTexture(
 // skybox CubemapLevelImageContents, returns an ImageBasedLightingAsset.
 // Serializes the resultant ImageasedLightingAsset and adds it to the
 // SplitEngineSerializer, if it exists.
-absl::StatusOr<std::unique_ptr<ImageBasedLightingAsset>>
+Future<std::unique_ptr<ImageBasedLightingAsset>>
 ImageBasedLightingAsset::SerializeAndConstructImageBasedLightingAsset(
     BaseView& view,
     /*absl_nonnull*/  std::unique_ptr<SphericalHarmonics> spherical_harmonics,
     ImageBasedLightingAssetCubemapImages cubemap_images,
-    std::optional<std::string_view> asset_url) {
+    std::optional<std::string> asset_url) {
   if (split_engine::SplitEngineSerializer* serializer =
           view.GetSplitEngineSerializer()) {
-    // Copy the spherical harmonics and cubemaps so that they can be
-    // serialized.
-    std::unique_ptr<SphericalHarmonics> spherical_harmonics_copy;
-    if (spherical_harmonics) {
-      spherical_harmonics_copy =
-          std::make_unique<SphericalHarmonics>(*spherical_harmonics);
-    }
-    MP_ASSIGN_OR_RETURN(ImageBasedLightingAssetCubemapImages cubemap_images_copy,
-                     DeepCopyIblCubemaps(cubemap_images));
-    auto image_based_lighting_asset = std::make_unique<ImageBasedLightingAsset>(
-        view, std::move(spherical_harmonics), std::move(cubemap_images),
-        asset_url);
+    return Future<std::unique_ptr<ImageBasedLightingAsset>>::Schedule(
+        [&view, serializer,
+         spherical_harmonics = std::move(spherical_harmonics),
+         cubemap_images = std::move(cubemap_images),
+         asset_url = std::move(asset_url)]() mutable {
+          // Copy everything on background thread (deep copy takes a while).
+          std::unique_ptr<SphericalHarmonics> spherical_harmonics_copy;
+          if (spherical_harmonics) {
+            spherical_harmonics_copy =
+                std::make_unique<SphericalHarmonics>(*spherical_harmonics);
+          }
+          absl::StatusOr<ImageBasedLightingAssetCubemapImages>
+              cubemap_images_copy = DeepCopyIblCubemaps(cubemap_images);
 
-    Texture* reflection_texture =
-        image_based_lighting_asset->GetReflectionTexture();
-    if (!reflection_texture) {
-      return absl::InternalError("Failed to get reflections texture.");
-    }
+          if (!cubemap_images_copy.ok()) {
+            return Future<std::unique_ptr<ImageBasedLightingAsset>>(
+                cubemap_images_copy.status());
+          }
 
-    serializer->SerializeImageBasedLightingAsset(
-        *reflection_texture->GetTexture(), std::move(spherical_harmonics_copy),
-        std::move(cubemap_images_copy));
-    // Remove the IBL asset from SplitEngine when it is destroyed.
-    // These textures are created through TextureFactory, but using an overload
-    // of TextureFactory::CreateTexture() that doesn't use imp::TextureBuilder,
-    // so it bypasses SplitEngine serialization add and remove calls. Instead,
-    // they are removed in ~ImageBasedLightingAsset() via
-    // RemoveImageBasedLightingAsset in the on_destroy_callback_.
-    image_based_lighting_asset->on_destroy_callback_ = [serializer,
-                                                        reflection_texture] {
-      serializer->RemoveImageBasedLightingAsset(
-          *reflection_texture->GetTexture());
-    };
+          // Do everything else on the foreground thread, because Filament
+          // interaction required.
+          return Future<std::unique_ptr<ImageBasedLightingAsset>>::Schedule(
+              [&view, serializer,
+               spherical_harmonics_copy = std::move(spherical_harmonics_copy),
+               cubemap_images_copy = std::move(*cubemap_images_copy),
+               asset_url = std::move(asset_url),
+               spherical_harmonics = std::move(spherical_harmonics),
+               cubemap_images = std::move(cubemap_images)]() mutable
+                  -> absl::StatusOr<std::unique_ptr<ImageBasedLightingAsset>> {
+                auto image_based_lighting_asset =
+                    std::make_unique<ImageBasedLightingAsset>(
+                        view, std::move(spherical_harmonics),
+                        std::move(cubemap_images), asset_url);
+                Texture* reflection_texture =
+                    image_based_lighting_asset->GetReflectionTexture();
+                if (!reflection_texture) {
+                  return absl::InternalError(
+                      "Failed to get reflections texture.");
+                }
 
-    return image_based_lighting_asset;
+                serializer->SerializeImageBasedLightingAsset(
+                    *reflection_texture->GetTexture(),
+                    std::move(spherical_harmonics_copy),
+                    std::move(cubemap_images_copy));
+                // Remove the IBL asset from SplitEngine when it is destroyed.
+                // These textures are created through TextureFactory, but using
+                // an overload of TextureFactory::CreateTexture() that doesn't
+                // use imp::TextureBuilder, so it bypasses SplitEngine
+                // serialization add and remove calls. Instead, they are removed
+                // in ~ImageBasedLightingAsset() via
+                // RemoveImageBasedLightingAsset in the on_destroy_callback_.
+                image_based_lighting_asset->on_destroy_callback_ =
+                    [serializer, reflection_texture] {
+                      serializer->RemoveImageBasedLightingAsset(
+                          *reflection_texture->GetTexture());
+                    };
+
+                return image_based_lighting_asset;
+              });
+        },
+        Executor::Type::kBackground);
   }
 
-  return std::make_unique<ImageBasedLightingAsset>(
-      view, std::move(spherical_harmonics), std::move(cubemap_images),
-      asset_url);
+  // Construction of the ImageBasedLightingAsset requires interaction with
+  // Filament, and that requires the foreground executor.
+  
+
+  return Future<std::unique_ptr<ImageBasedLightingAsset>>(
+      std::make_unique<ImageBasedLightingAsset>(
+          view, std::move(spherical_harmonics), std::move(cubemap_images),
+          asset_url));
 }
 
 Future<std::unique_ptr<ImageBasedLightingAsset>> ImageBasedLightingAsset::Load(

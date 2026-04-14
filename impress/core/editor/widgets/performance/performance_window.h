@@ -35,6 +35,11 @@ namespace imp::editor {
 // logs. Useful for identifying problems with the model parsing and loading.
 class PerformanceWindow : public Widget, public imp::Rememberer {
  public:
+  enum MonitorState {
+    kRunning,
+    kPaused,
+  };
+
   explicit PerformanceWindow(BaseView& view);
   ~PerformanceWindow() override;
 
@@ -46,6 +51,16 @@ class PerformanceWindow : public Widget, public imp::Rememberer {
 
   void AddPanel(std::unique_ptr<MonitorPanel> monitor_panel);
 
+  void SelectFrame(int frame_number);
+  void SelectFrames(int start_frame, int end_frame);
+
+  int GetSelectedFrameStart() const { return selected_frame_start_; }
+  int GetSelectedFrameEnd() const { return selected_frame_end_; }
+  int GetSelectedFrameNumber() const { return selected_frame_end_; }
+
+  MonitorState GetMonitorState() const { return monitor_state_; }
+  void SetMonitorState(MonitorState monitor_state);
+
  private:
   void OnViewPostRender();
   void DrawMonitorPanels();
@@ -54,10 +69,10 @@ class PerformanceWindow : public Widget, public imp::Rememberer {
   BaseView& view_;
   std::vector<std::unique_ptr<MonitorPanel>> monitor_panels_;
   float time_span_seconds_;
-  MonitorPanel::MonitorState monitor_state_ =
-      MonitorPanel::MonitorState::kRunning;
   Dispatcher::ScopedConnection post_frame_connection_;
-  int selected_frame_number_ = 0;
+  int selected_frame_start_ = -1;
+  int selected_frame_end_ = -1;
+  MonitorState monitor_state_ = MonitorState::kRunning;
 };
 
 }  // namespace imp::editor

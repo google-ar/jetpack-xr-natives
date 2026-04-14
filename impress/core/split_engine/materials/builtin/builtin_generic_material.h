@@ -20,14 +20,14 @@
 #include "absl/status/status.h"
 #include "flatbuffers/verifier.h"
 #include "core/async/future.h"
-#include "core/common/small_source_location.h"
+#include "core/material_library/generic_material.h"
 #include "core/material_library/generic_material_spec.h"
 #include "core/material_library/material_package.h"
 #include "core/material_library/material_param_value.h"
-#include "core/materials/material.h"
 #include "core/render/display_color_space.h"
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
+#include "core/split_engine/materials/builtin/builtin_material_wrapper.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
@@ -35,7 +35,7 @@ namespace imp::split_engine {
 
 // The built-in material for all glTF materials. This material is on the backend
 // side, and is requested by SplitEngineGenericMaterial on the app side.
-class BuiltInGenericMaterial : public BuiltInMaterial {
+class BuiltInGenericMaterial : public BuiltInMaterialWrapper<GenericMaterial> {
  public:
   // Creates a built-in generic material based on the given spec, which is used
   // to lookup the material in the material package.
@@ -54,14 +54,8 @@ class BuiltInGenericMaterial : public BuiltInMaterial {
     return DisplayColorSpace::kBT709;
   }
 
- protected:
-  BorrowedMaterialPtr GetMaterialInternal(
-      SmallSourceLocation loc) const override;
-
  private:
   explicit BuiltInGenericMaterial(GenericMaterialPtr generic_material);
-
-  GenericMaterialPtr generic_material_;
 };
 
 }  // namespace imp::split_engine

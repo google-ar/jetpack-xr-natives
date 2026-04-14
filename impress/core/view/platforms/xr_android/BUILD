@@ -208,6 +208,7 @@ cc_library(
         "//core/math",
         "//core/monitor",
         "//core/monitor:monitor_summary",
+        "//core/render_passes:texture_pipeline_renderer_projection_quad",
         "//core/view:base_view",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",

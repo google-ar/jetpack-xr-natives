@@ -61,8 +61,12 @@ absl::StatusOr<std::unique_ptr<Image>> Image::Create(AImage& aimage) {
 
 absl::Status Image::UpdateMultivewInfoUsingImageAPIProvider() {
   ImageAPIProvider* api_provider = GetImageAPIProvider().get();
-  if (api_provider == nullptr) {
-    return absl::InternalError("ImageAPIProvider is not set.");
+  if (!api_provider) {
+    IMP_LOG(imp::WARNING) << "ImageAPIProvider is not set. Assuming single view.";
+    is_multiview_ = false;
+    is_left_primary_ = true;
+    auxiliary_view_ahardware_buffer_ = nullptr;
+    return absl::OkStatus();
   }
 
   uint32_t base_view_mask = 0;
@@ -119,10 +123,11 @@ const AHardwareBuffer* Image::GetHardwareBuffer() const {
 
 absl::StatusOr<ADataSpace> Image::GetBufferDataSpace() const {
   ImageAPIProvider* api_provider = GetImageAPIProvider().get();
-  if (api_provider == nullptr) {
-    return absl::FailedPreconditionError("ImageAPIProvider is not set.");
+  if (!api_provider) {
+    IMP_LOG(imp::WARNING)
+        << "ImageAPIProvider is not set. Returning ADATASPACE_UNKNOWN.";
+    return ADATASPACE_UNKNOWN;
   }
-
   int32_t data_space = ADATASPACE_UNKNOWN;
   MP_RETURN_IF_ERROR(
       api_provider->GetBufferDataSpace(ahardware_buffer_, data_space));
@@ -147,19 +152,18 @@ bool Image::IsMultiview() const { return is_multiview_; }
 bool Image::IsLeftPrimary() const { return is_left_primary_; }
 
 absl::StatusOr<mat4f> Image::GetTransformMatrix() const {
+  ImageAPIProvider* api_provider = GetImageAPIProvider().get();
+  mat4f result;
+  if (!api_provider) {
+    IMP_LOG(imp::WARNING) << "ImageAPIProvider not available. Returning identity "
+                    "transform matrix.";
+    return result;
+  }
+
   float matrix[16];
   media_status_t media_status = AMEDIA_ERROR_UNKNOWN;
   absl::Status status =
-      absl::UnavailableError("No API available to get transform matrix.");
-
-  ImageAPIProvider* api_provider = GetImageAPIProvider().get();
-  if (api_provider) {
-    status =
-        api_provider->GetImageTransformMatrix(aimage_, matrix, media_status);
-  } else {
-    IMP_LOG(imp::ERROR) << "Image transform matrix API is not available.";
-    return absl::UnavailableError("Image transform matrix API is not enabled.");
-  }
+      api_provider->GetImageTransformMatrix(aimage_, matrix, media_status);
 
   if (!status.ok()) {
     return absl::InternalError(
@@ -171,7 +175,6 @@ absl::StatusOr<mat4f> Image::GetTransformMatrix() const {
         media_status));
   }
 
-  mat4f result;
   for (int i = 0; i < 4; ++i) {
     for (int j = 0; j < 4; ++j) {
       result[i][j] = matrix[i * 4 + j];
@@ -186,9 +189,10 @@ absl::Status Image::SetImageReaderDefaultBufferSize(AImageReader* image_reader,
                                                     uint32_t height) {
   ImageAPIProvider* api_provider = GetImageAPIProvider().get();
   if (!api_provider) {
-    IMP_LOG(imp::ERROR) << "ImageReader set default buffer size API is not available.";
-    return absl::UnavailableError(
-        "ImageReader set default buffer size API is not enabled.");
+    IMP_LOG(imp::WARNING)
+        << "ImageAPIProvider not available. ImageReader default buffer "
+           "size cannot be changed.";
+    return absl::OkStatus();
   }
 
   absl::Status status = api_provider->SetImageReaderDefaultBufferSize(

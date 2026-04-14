@@ -113,8 +113,6 @@ class ModelCreator {
   TypedVector<model::ModelData::AudioData> audios_;
   std::vector<model::ModelData::AudioEmitterId> scene_audio_emitters_;
 
-  std::optional<model::ModelData::BehaviorData> behavior_;
-
   std::optional<model::ModelData::InteractivityData> interactivity_;
 };
 

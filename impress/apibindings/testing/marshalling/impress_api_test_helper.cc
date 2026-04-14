@@ -118,7 +118,7 @@ JNI_METHOD_AOSP(void, nativeSetExpectedSetGltfReformAffordanceEnabled)
       enable_affordance;
 }
 
-JNI_METHOD_AOSP(void, nativeSetExpectedAnimateGltfModelNew)
+JNI_METHOD_AOSP(void, nativeSetExpectedAnimateGltfModel)
 (JNIEnv* env, jclass /*clazz*/, jint node_id, jstring animation_name,
  jboolean loop, jfloat speed, jfloat start_time, jint channel_id) {
   imp::ModelTestContext& context = imp::ModelTestContext::Get();
@@ -129,18 +129,6 @@ JNI_METHOD_AOSP(void, nativeSetExpectedAnimateGltfModelNew)
   context.animate_gltf_model.expected_speed = speed;
   context.animate_gltf_model.expected_start_time = start_time;
   context.animate_gltf_model.expected_channel_id = channel_id;
-}
-
-// TODO: (broken link) - Remove old animation APIs once all clients are migrated
-// to new animation system.
-JNI_METHOD_AOSP(void, nativeSetExpectedAnimateGltfModel)
-(JNIEnv* env, jclass /*clazz*/, jint node_id, jstring animation_name,
- jboolean loop) {
-  imp::ModelTestContext& context = imp::ModelTestContext::Get();
-  context.animate_gltf_model.expected_node_id = node_id;
-  context.animate_gltf_model.expected_name =
-      imp::GetString(env, animation_name);
-  context.animate_gltf_model.expected_loop = loop;
 }
 
 JNI_METHOD_AOSP(void, nativeSetAnimateGltfModelSuccess)
@@ -155,37 +143,20 @@ JNI_METHOD_AOSP(void, nativeSetAnimateGltfModelFailure)
   context.animate_gltf_model.failure_message = imp::GetString(env, message);
 }
 
-JNI_METHOD_AOSP(void, nativeSetExpectedStopGltfModelAnimationNew)
+JNI_METHOD_AOSP(void, nativeSetExpectedStopGltfModelAnimation)
 (JNIEnv* env, jclass /*clazz*/, jint node_id, jint channel_id) {
   imp::ModelTestContext& context = imp::ModelTestContext::Get();
   context.stop_gltf_model_animation.expected_node_id = node_id;
   context.stop_gltf_model_animation.expected_channel_id = channel_id;
 }
 
-// TODO: (broken link) - Remove old animation APIs once all clients are migrated
-// to new animation system.
-JNI_METHOD_AOSP(void, nativeSetExpectedStopGltfModelAnimation)
-(JNIEnv* env, jclass /*clazz*/, jint node_id) {
-  imp::ModelTestContext& context = imp::ModelTestContext::Get();
-  context.stop_gltf_model_animation.expected_node_id = node_id;
-}
-
-JNI_METHOD_AOSP(void, nativeSetExpectedToggleGltfModelAnimationNew)
+JNI_METHOD_AOSP(void, nativeSetExpectedToggleGltfModelAnimation)
 (JNIEnv* env, jclass /*clazz*/, jint node_id, jboolean toggle,
  jint channel_id) {
   imp::ModelTestContext& context = imp::ModelTestContext::Get();
   context.toggle_gltf_model_animation.expected_node_id = node_id;
   context.toggle_gltf_model_animation.expected_toggle = toggle;
   context.toggle_gltf_model_animation.expected_channel_id = channel_id;
-}
-
-// TODO: (broken link) - Remove old animation APIs once all clients are migrated
-// to new animation system.
-JNI_METHOD_AOSP(void, nativeSetExpectedToggleGltfModelAnimation)
-(JNIEnv* env, jclass /*clazz*/, jint node_id, jboolean toggle) {
-  imp::ModelTestContext& context = imp::ModelTestContext::Get();
-  context.toggle_gltf_model_animation.expected_node_id = node_id;
-  context.toggle_gltf_model_animation.expected_toggle = toggle;
 }
 
 JNI_METHOD_AOSP(void, nativeSetExpectedSetGltfModelAnimationSpeed)

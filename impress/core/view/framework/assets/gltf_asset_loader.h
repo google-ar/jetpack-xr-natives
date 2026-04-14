@@ -62,6 +62,7 @@ class GltfAssetLoader {
   Future<std::unique_ptr<GltfAsset>> Load(
       BaseView* view, absl::string_view asset_url,
       Future<resources::Resource> resource_future,
+      resources::ResourceManager* resource_manager,
       GltfAsset::LoadOptions options, mediapipe::Clock* clock = nullptr);
 
   // Sets the sandboxed loader creator to use when loading GLTFs.

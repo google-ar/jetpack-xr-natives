@@ -21,6 +21,7 @@
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
+#include "core/materials/material.h"
 #include "core/math/vec.h"
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
@@ -44,16 +45,14 @@ imp::Future<std::unique_ptr<VignetteMaterial>> VignetteMaterial::Create(
              view, std::move(fbb),
              android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialE3ca0ab9,
              spec_offset.Union())
-      .Then(
-          [&view](imp::split_engine::PlaceholderOrBuiltInMaterialPtr material) {
-            return absl::WrapUnique(
-                new VignetteMaterial(view, std::move(material)));
-          });
+      .Then([&view](imp::OwnedMaterialPtr material) {
+        return absl::WrapUnique(
+            new VignetteMaterial(view, std::move(material)));
+      });
 }
 
-VignetteMaterial::VignetteMaterial(
-    imp::BaseView& view,
-    imp::split_engine::PlaceholderOrBuiltInMaterialPtr material)
+VignetteMaterial::VignetteMaterial(imp::BaseView& view,
+                                   imp::OwnedMaterialPtr material)
     : SplitEngineBuiltinMaterial(
           view,
           android_xr::schemas::BuiltInMaterialParameters::

@@ -51,11 +51,14 @@ FallbackComponentWidget::FallbackComponentWidget(NodeHandle node,
                                                  BaseComponentPool* pool)
     : node_(node),
       pool_(pool),
-      component_(node.GetEntity(), pool_,
-                 pool->TryGetRawComponentFromEntity(node.GetEntity())),
       command_manager_(node->GetView()
                            .GetRegistry()
                            .template GetOrCreate<CommandManager>()) {
+  Component* comp = pool->TryGetRawComponentFromEntity(node.GetEntity());
+  if (comp) {
+    component_ = ComponentHandle<Component>(*comp);
+  }
+
 #if IMP_RUNTIME(DEV)
   std::vector<std::string> segments =
       absl::StrSplit(std::string(pool->GetTypeName()), "::");

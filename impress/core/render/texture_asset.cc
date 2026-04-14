@@ -17,6 +17,9 @@
 #include <memory>
 #include <string>
 #include <utility>
+#if IMP_PLATFORM(WASM)
+#include <cstdint>
+#endif
 
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
@@ -46,7 +49,11 @@ Future<std::unique_ptr<TextureAsset>> TextureAsset::Load(
                                options](resources::Resource resource)
                                   -> Future<std::unique_ptr<TextureAsset>> {
 #if IMP_PLATFORM(WASM)
-    return image::details::WasmDecodeImageToTexture(asset_url_copy, resource)
+    filament::backend::TextureFormat format =
+        options.texture_format_override.value_or(
+            filament::backend::TextureFormat::SRGB8_A8);
+    return image::details::WasmDecodeImageToTexture(asset_url_copy, resource,
+                                                    format)
         .Then([view, asset_url_copy,
                options](WasmTextureContents texture_contents)
                   -> std::unique_ptr<TextureAsset> {
@@ -77,9 +84,8 @@ TextureAsset::TextureAsset(BaseView* view, absl::string_view texture_name,
         absl::StrFormat("%s_tex", GetLocalFilenameFromFilename(texture_name)));
   }
   texture_builder.Sampler(filament::Texture::Sampler::SAMPLER_2D);
-  texture_builder.Format(options.texture_format_override.has_value()
-                             ? *options.texture_format_override
-                             : image_contents->GetTextureFormat());
+  texture_builder.Format(options.texture_format_override.value_or(
+      image_contents->GetTextureFormat()));
   texture_builder.Width(image_contents->GetWidth());
   texture_builder.Height(image_contents->GetHeight());
   if (options.generated_mipmap_levels.has_value()) {
@@ -108,16 +114,29 @@ TextureAsset::TextureAsset(BaseView* view, absl::string_view texture_name,
     texture_builder =
         texture_builder.name(texture_name_.data(), texture_name.length());
   }
+
+  filament::Texture::InternalFormat format =
+      options.texture_format_override.value_or(
+          filament::Texture::InternalFormat::SRGB8_A8);
+  uint8_t levels = 1;
+  if (options.generated_mipmap_levels.has_value()) {
+    levels = options.generated_mipmap_levels.value();
+  } else if (options.generate_mipmaps) {
+    // We use the dimensions of the image to estimate the number of mip levels.
+    levels = static_cast<uint8_t>(std::floor(std::log2(std::max(
+                 texture_contents.GetWidth(), texture_contents.GetHeight())))) +
+             1;
+  }
+
   texture_ = texture_builder.width(texture_contents.GetWidth())
                  .height(texture_contents.GetHeight())
-                 .levels(options.generated_mipmap_levels.value_or(1))
-                 .format(options.texture_format_override.value_or(
-                     filament::backend::TextureFormat::SRGB8_A8))
+                 .levels(levels)
+                 .format(format)
                  .sampler(filament::Texture::Sampler::SAMPLER_2D)
                  .import(texture_contents.GetTextureId())
                  .usage(filament::Texture::Usage::DEFAULT)
                  .build(*engine);
-  if (options.generated_mipmap_levels.has_value()) {
+  if (levels > 1) {
     texture_->generateMipmaps(*engine);
   }
 }

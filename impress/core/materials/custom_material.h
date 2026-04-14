@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_MATERIALS_CUSTOM_MATERIAL_H_
 
 #include <optional>
+#include <string>
 
 #include "absl/base/attributes.h"
 #include "absl/functional/function_ref.h"
@@ -44,6 +45,9 @@ namespace imp {
 class CustomMaterial : public Material {
  public:
   ~CustomMaterial() override;
+
+  const std::string& GetName() const override;
+  void SetName(absl::string_view name) override;
 
   const filament::MaterialInstance* GetFilamentMaterialInstance()
       const override;
@@ -113,23 +117,21 @@ class CustomMaterial : public Material {
   ABSL_DEPRECATED(
       "Use imp::BorrowedTexturePtr overload instead. See "
       "(broken link).")
-  void SetParameter(absl::string_view parameter_name,
-                    const imp::Texture* texture,
-                    std::optional<filament::TextureSampler> sampler_override =
-                        std::nullopt) override;
+  void SetParameter(
+      absl::string_view parameter_name, const imp::Texture* texture,
+      std::optional<filament::TextureSampler> sampler_override) override;
 
-  void SetParameter(absl::string_view parameter_name, TexturePtr texture,
-                    std::optional<filament::TextureSampler> sampler_override =
-                        std::nullopt) override;
+  void SetParameter(
+      absl::string_view parameter_name, TexturePtr texture,
+      std::optional<filament::TextureSampler> sampler_override) override;
 
-  void SetParameter(absl::string_view parameter_name, OwnedTexturePtr texture,
-                    std::optional<filament::TextureSampler> sampler_override =
-                        std::nullopt) override;
+  void SetParameter(
+      absl::string_view parameter_name, OwnedTexturePtr texture,
+      std::optional<filament::TextureSampler> sampler_override) override;
 
-  void SetParameter(absl::string_view parameter_name,
-                    BorrowedTexturePtr texture,
-                    std::optional<filament::TextureSampler> sampler_override =
-                        std::nullopt) override;
+  void SetParameter(
+      absl::string_view parameter_name, BorrowedTexturePtr texture,
+      std::optional<filament::TextureSampler> sampler_override) override;
 
   bool HasParameter(absl::string_view parameter_name) override;
 
@@ -142,9 +144,8 @@ class CustomMaterial : public Material {
   imp::StringMap<const filament::Texture*> GetUnownedFilamentTextures()
       const override;
 
-  void ForEachTexture(
-      absl::FunctionRef<void(BorrowedTexturePtr)> fn,
-      SmallSourceLocation loc = SmallSourceLocation::Current()) override;
+  void ForEachTexture(absl::FunctionRef<void(BorrowedTexturePtr)> fn,
+                      SmallSourceLocation loc) override;
 
  private:
   CustomMaterial(filament::MaterialInstance* material_instance,
@@ -154,6 +155,7 @@ class CustomMaterial : public Material {
       absl::string_view parameter_name, OwnedOrBorrowedTexturePtr texture,
       std::optional<filament::TextureSampler> sampler_override);
 
+  std::string name_;
   filament::Engine* engine_;
   filament::MaterialInstance* material_instance_;
 

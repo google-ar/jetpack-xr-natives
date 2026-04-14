@@ -21,6 +21,7 @@
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
+#include "core/materials/material.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
 #include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "core/view/base_view.h"
@@ -39,8 +40,7 @@ PhotosTexture3DMaterial::Create(imp::BaseView& view,
              view, std::move(fbb),
              android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialD1750064,
              spec_offset.Union())
-      .Then([&view, &params](
-                imp::split_engine::PlaceholderOrBuiltInMaterialPtr material) {
+      .Then([&view, &params](imp::OwnedMaterialPtr material) {
         return absl::WrapUnique(
             new PhotosTexture3DMaterial(view, params, std::move(material)));
       });
@@ -48,7 +48,7 @@ PhotosTexture3DMaterial::Create(imp::BaseView& view,
 
 PhotosTexture3DMaterial::PhotosTexture3DMaterial(
     imp::BaseView& view, const PhotosTexture3DMaterialParams& params,
-    imp::split_engine::PlaceholderOrBuiltInMaterialPtr material)
+    imp::OwnedMaterialPtr material)
     : SplitEngineBuiltinMaterial(
           view,
           android_xr::schemas::BuiltInMaterialParameters::

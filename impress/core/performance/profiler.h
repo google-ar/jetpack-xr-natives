@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "core/config.h"
 #include "core/performance/memory_stats.h"
@@ -72,15 +73,16 @@ class Profiler {
   // Tells the profiler a new frame has started.
   static void AdvanceFrame();
   // Returns the profile samples for the frame at the given index.
-  static std::array<MainThreadProfileResult, kMaxSamples>& GetSamples(
-      int frame_index);
+  static absl::StatusOr<const std::array<MainThreadProfileResult, kMaxSamples>*>
+  GetSamples(int frame_index);
   // Returns the number of samples for the frame at the given index.
-  static int GetSampleCount(int frame_index);
+  static absl::StatusOr<int> GetSampleCount(int frame_index);
   // Returns the duration of time FilamentHost::RenderNextFrame() took for the
   // given frame in nanoseconds.
-  static uint32_t GetRenderNextFrameDurationNanos(int frame_index);
+  static absl::StatusOr<uint32_t> GetRenderNextFrameDurationNanos(
+      int frame_index);
   // Returns the total duration of the given frame in nanoseconds.
-  static uint32_t GetTotalFrameDurationNanos(int frame_index);
+  static absl::StatusOr<uint32_t> GetTotalFrameDurationNanos(int frame_index);
   // Sets the end time of the given sample index to the current time.
   static void RecordSampleEndTime(int64_t id);
   // Returns the main thread id.
@@ -106,6 +108,8 @@ class Profiler {
   static constexpr bool IsMemoryGraphSupported() {
     return MemoryStats::IsMemoryGraphSupported();
   }
+  // Returns the current time in nanoseconds.
+  static int64_t GetCurrentTimeNanos();
   // Returns true if the data for the given frame is available.
   static bool HasFrameRecorded(int frame_index);
   // Records a name for the thread executing this function.
@@ -116,7 +120,7 @@ class Profiler {
   // in this case an allocation will occur the first time the name is requested.
   static absl::string_view GetThreadName(std::thread::id thread_id);
   // Returns the frame metadata for the frame at the given index.
-  static FrameMetaData& GetFrameMetaData(int frame_index);
+  static absl::StatusOr<FrameMetaData> GetFrameMetaData(int frame_index);
   // Returns the samples for a given thread that overlap the given time range.
   static std::vector<WorkerProfileResult> GetWorkerThreadSamples(
       uint64_t start_time, uint64_t end_time, std::thread::id thread_id);
@@ -163,8 +167,6 @@ class Profiler {
   static int64_t AddMainThreadSample(absl::string_view name);
 
   // Thread-safe members:
-
-  static int64_t GetCurrentTimeNanos();
 
   // Whether the profiler is recording samples.
   inline static std::atomic<bool> is_recording_{true};

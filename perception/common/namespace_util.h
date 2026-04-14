@@ -28,6 +28,7 @@ enum Package {
   PACKAGE_MATH,
   PACKAGE_PERCEPTION,
   PACKAGE_CORE,
+  PACKAGE_CORE_INTERFACES,
 };
 
 inline std::string GetJxrFullClassName(JNIEnv* env, Package package,
@@ -51,6 +52,9 @@ inline std::string GetJxrFullClassName(JNIEnv* env, Package package,
       break;
     case PACKAGE_CORE:
       package_name = "androidx/xr/runtime/";
+      break;
+    case PACKAGE_CORE_INTERFACES:
+      package_name = "androidx/xr/runtime/interfaces/";
       break;
   }
   return package_name + class_name;

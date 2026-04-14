@@ -86,6 +86,7 @@ cc_library(
     deps = [
         ":split_engine_desktop_bridge_cc_grpc",
         ":split_engine_desktop_bridge_cc_proto",
+        "//core/split_engine:message_group_monitor",
         "//core/split_engine:split_engine_bridge_sender",
         "//core/split_engine:split_engine_shared",
         "//core/split_engine/android:split_engine_shared_memory_bridge_client",

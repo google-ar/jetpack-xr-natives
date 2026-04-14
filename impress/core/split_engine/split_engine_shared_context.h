@@ -17,11 +17,19 @@
 
 
 #include "core/split_engine/materials/split_engine_builtin_material_factory.h"
+#include "core/view/base_view.h"
 
 namespace imp::split_engine {
 
 // Holds all the shared content context for all apps.
 struct SharedContext {
+  SharedContext(BaseView& view)
+      : view(view),
+        builtin_material_factory(SplitEngineBuiltinMaterialFactory(view)) {}
+
+  // Shared SplitEngineRenderer view.
+  BaseView& view;
+
   // The material factory that is used to create materials for all apps.
   SplitEngineBuiltinMaterialFactory builtin_material_factory;
 };

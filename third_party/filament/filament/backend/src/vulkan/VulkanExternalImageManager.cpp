@@ -143,6 +143,13 @@ void VulkanExternalImageManager::bindExternallySampledTexture(
     // https://registry.khronos.org/vulkan/specs/latest/man/html/VkSamplerCreateInfo.html#VUID-VkSamplerCreateInfo-minFilter-01645
     samplerParams.filterMag = SamplerMagFilter::NEAREST;
     samplerParams.filterMin = SamplerMinFilter::NEAREST;
+    // If the sampler has a ycbcrConversion then anisotropic must be disabled and addressModeU,
+    // addressModeV and addressModeW must be VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE.
+    // (broken link)
+    samplerParams.wrapS = SamplerWrapMode::CLAMP_TO_EDGE;
+    samplerParams.wrapT = SamplerWrapMode::CLAMP_TO_EDGE;
+    samplerParams.wrapR = SamplerWrapMode::CLAMP_TO_EDGE;
+    samplerParams.anisotropyLog2 = 0;
 
     VkSampler const sampler = mSamplerCache->getSampler({
         .sampler = samplerParams,

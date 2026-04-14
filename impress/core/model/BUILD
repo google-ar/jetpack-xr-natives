@@ -55,7 +55,6 @@ cc_library(
 cc_library(
     name = "model_data_details",
     hdrs = [
-        "behavior_data.h",
         "entity_data.h",
         "interactivity_data.h",
         "joint_data.h",
@@ -82,7 +81,6 @@ cc_library(
         "//core/view/utils:string_map",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
-        "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:variant",
         "@third_party//filament/filament:filament_hdrs",
     ],

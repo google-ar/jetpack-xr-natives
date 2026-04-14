@@ -79,25 +79,14 @@ class ModelManagerImpl : public ModelManager {
   absl::Status SetGltfReformAffordanceEnabled(int32_t impress_node,
                                               bool enable_affordance,
                                               bool system_movable) override;
-  // TODO: (broken link) - Remove old animation APIs once all clients are migrated
-  // to new animation system.
   void AnimateGltfModel(
-      int32_t node, absl::string_view animation_name, bool loop,
-      std::unique_ptr<BaseAssetAnimator> asset_animator) override;
-  // TODO: (broken link) - Remove old animation APIs once all clients are migrated
-  // to new animation system.
-  absl::Status StopGltfModelAnimation(int32_t node) override;
-  // TODO: (broken link) - Remove old animation APIs once all clients are migrated
-  // to new animation system.
-  absl::Status ToggleGltfModelAnimation(int32_t node, bool toggle) override;
-  void AnimateGltfModelNew(
       int32_t node, absl::string_view animation_name, bool loop, float speed,
       float start_time, int32_t channel_id,
       std::unique_ptr<BaseAssetAnimator> asset_animator) override;
-  absl::Status StopGltfModelAnimationNew(int32_t node,
-                                         int32_t channel_id) override;
-  absl::Status ToggleGltfModelAnimationNew(int32_t node, bool toggle,
-                                           int32_t channel_id) override;
+  absl::Status StopGltfModelAnimation(int32_t node,
+                                      int32_t channel_id) override;
+  absl::Status ToggleGltfModelAnimation(int32_t node, bool toggle,
+                                        int32_t channel_id) override;
   absl::Status SetGltfModelAnimationSpeed(int32_t node, float speed,
                                           int32_t channel_id) override;
   absl::Status SetGltfModelAnimationPlaybackTime(int32_t node,
@@ -215,7 +204,7 @@ absl::Status ModelManagerImpl::SetGltfReformAffordanceEnabled(
   }
 }
 
-void ModelManagerImpl::AnimateGltfModelNew(
+void ModelManagerImpl::AnimateGltfModel(
     int32_t node, absl::string_view animation_name, bool loop, float speed,
     float start_time, int32_t channel_id,
     std::unique_ptr<BaseAssetAnimator> asset_animator) {
@@ -256,41 +245,8 @@ void ModelManagerImpl::AnimateGltfModelNew(
   channel_map[channel_id] = std::move(asset_animator);
 }
 
-// TODO: (broken link) - Remove old animation APIs once all clients are migrated
-// to new animation system.
-void ModelManagerImpl::AnimateGltfModel(
-    int32_t node, absl::string_view animation_name, bool loop,
-    std::unique_ptr<BaseAssetAnimator> asset_animator) {
-  NodeHandle node_handle(utils::Entity::import(node));
-  if (!node_handle) {
-    asset_animator->OnFailure("Node is not valid.");
-    return;
-  }
-  ComponentHandle<GltfAnimator> gltf_animator =
-      node_handle->GetOrAddComponent<GltfAnimator>();
-
-  GltfAnimator::PlayCommand gltf_animation;
-  // If no animation_name was supplied, default to first available animation.
-  if (!animation_name.empty()) {
-    gltf_animation.animation = std::string(animation_name);
-  }
-  gltf_animation.options.looping = loop;
-
-  absl::Status can_play = gltf_animator->CanPlay(gltf_animation);
-  if (!can_play.ok()) {
-    IMP_LOG(imp::ERROR) << "Cannot play animation: " << can_play.message();
-    asset_animator->OnFailure("Cannot play animation.");
-    return;
-  }
-  gltf_animator->SetSpeedMultiplier(1.0f);
-  gltf_animator->Play(gltf_animation);
-  auto& [animator, channel_map] = node_to_anim_ctx_[node];
-  animator = gltf_animator;
-  channel_map[kDefaultChannelId] = std::move(asset_animator);
-}
-
-absl::Status ModelManagerImpl::StopGltfModelAnimationNew(int32_t node,
-                                                         int32_t channel_id) {
+absl::Status ModelManagerImpl::StopGltfModelAnimation(int32_t node,
+                                                      int32_t channel_id) {
   NodeHandle node_handle(utils::Entity::import(node));
   if (!node_handle) {
     return absl::InvalidArgumentError("Node is not valid.");
@@ -318,36 +274,9 @@ absl::Status ModelManagerImpl::StopGltfModelAnimationNew(int32_t node,
   return absl::OkStatus();
 }
 
-// TODO: (broken link) - Remove old animation APIs once all clients are migrated
-// to new animation system.
-absl::Status ModelManagerImpl::StopGltfModelAnimation(int32_t node) {
-  NodeHandle node_handle(utils::Entity::import(node));
-  if (!node_handle) {
-    return absl::InvalidArgumentError("Node is not valid.");
-  }
-  auto it = node_to_anim_ctx_.find(node);
-  if (it != node_to_anim_ctx_.end()) {
-    auto& [animator, channel_map] = it->second;
-    if (animator) {
-      // We technically can avoid checking validity here because we don't
-      // support attaching and detaching the animation component from the
-      // application side, but keeping for correctness.
-      animator->Stop({.id = kDefaultChannelId});
-    }
-    // Optionally we could call the callback here, but this method implies
-    // that the animation has been "cancelled,"  rather than completing.
-    channel_map.erase(kDefaultChannelId);
-    if (channel_map.empty()) {
-      node_to_anim_ctx_.erase(it);
-    }
-    return absl::OkStatus();
-  }
-  return absl::NotFoundError("Animation is not playing.");
-}
-
-absl::Status ModelManagerImpl::ToggleGltfModelAnimationNew(int32_t node,
-                                                           bool toggle,
-                                                           int32_t channel_id) {
+absl::Status ModelManagerImpl::ToggleGltfModelAnimation(int32_t node,
+                                                        bool toggle,
+                                                        int32_t channel_id) {
   NodeHandle node_handle(utils::Entity::import(node));
   if (!node_handle) {
     return absl::InvalidArgumentError("Node is not valid.");
@@ -361,25 +290,6 @@ absl::Status ModelManagerImpl::ToggleGltfModelAnimationNew(int32_t node,
 
   animator->SetPaused(!toggle, {.id = channel_id});
   return absl::OkStatus();
-}
-
-// TODO: (broken link) - Remove old animation APIs once all clients are migrated
-// to new animation system.
-absl::Status ModelManagerImpl::ToggleGltfModelAnimation(int32_t node,
-                                                        bool toggle) {
-  NodeHandle node_handle(utils::Entity::import(node));
-  if (!node_handle) {
-    return absl::InvalidArgumentError("Node is not valid.");
-  }
-  auto it = node_to_anim_ctx_.find(node);
-  if (it != node_to_anim_ctx_.end()) {
-    auto& [animator, channel_map] = it->second;
-    if (animator) {
-      animator->SetPaused(!toggle, {.id = kDefaultChannelId});
-      return absl::OkStatus();
-    }
-  }
-  return absl::InvalidArgumentError("Animation is not playing.");
 }
 
 absl::Status ModelManagerImpl::SetGltfModelAnimationSpeed(int32_t node,

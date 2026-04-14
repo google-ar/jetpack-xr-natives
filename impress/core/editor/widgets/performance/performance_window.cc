@@ -43,8 +43,6 @@ constexpr int kPanelHeight = 50;
 constexpr int kPanelHeight = 200;
 #endif
 
-using MonitorState = MonitorPanel::MonitorState;
-
 }  // namespace
 
 PerformanceWindow::PerformanceWindow(BaseView& view) : view_(view) {
@@ -56,14 +54,15 @@ PerformanceWindow::PerformanceWindow(BaseView& view) : view_(view) {
   }
   time_span_seconds_ = details::kDefaultTimeSpanSeconds;
   if (Profiler::IsMemoryGraphSupported()) {
-    AddPanel(std::make_unique<MemoryPanel>(details::kNumDisplayValuesPerSecond *
-                                           details::kMaxTimeSpanSeconds));
+    AddPanel(std::make_unique<MemoryPanel>(
+        *this,
+        details::kNumDisplayValuesPerSecond * details::kMaxTimeSpanSeconds));
   }
   AddPanel(std::make_unique<RenderInfoPanel>(
-      view,
+      *this, view,
       details::kNumDisplayValuesPerSecond * details::kMaxTimeSpanSeconds));
   AddPanel(std::make_unique<FrameTimePanel>(
-      view,
+      *this, view,
       details::kNumDisplayValuesPerSecond * details::kMaxTimeSpanSeconds));
 
   post_frame_connection_ = view.GetDispatcher().Connect(
@@ -84,17 +83,14 @@ void PerformanceWindow::DrawMonitorPanels() {
   IMP_TRACE();
   ImGui::SliderFloat("Time span", &time_span_seconds_, 1,
                      details::kMaxTimeSpanSeconds, "%.1f s");
+  const MonitorState monitor_state = GetMonitorState();
   bool clicked = ImGui::Button(
-      monitor_state_ == MonitorState::kPaused ? "Resume" : "Pause");
+      monitor_state == MonitorState::kPaused ? "Resume" : "Pause");
   if (clicked) {
-    monitor_state_ = monitor_state_ == MonitorState::kPaused
-                         ? MonitorState::kRunning
-                         : MonitorState::kPaused;
-    Profiler::SetPaused(monitor_state_ == MonitorState::kPaused ? true : false);
-
-    for (auto& monitor_panel : monitor_panels_) {
-      monitor_panel->OnStateChanged(monitor_state_);
-    }
+    MonitorState new_state = monitor_state == MonitorState::kPaused
+                                 ? MonitorState::kRunning
+                                 : MonitorState::kPaused;
+    SetMonitorState(new_state);
   }
 
   for (auto& monitor_panel : monitor_panels_) {
@@ -103,7 +99,7 @@ void PerformanceWindow::DrawMonitorPanels() {
 }
 
 void PerformanceWindow::OnViewPostRender() {
-  if (monitor_state_ == MonitorState::kPaused) {
+  if (GetMonitorState() == MonitorState::kPaused) {
     return;
   }
   FrameTime frame_time = view_.GetFrameTime();
@@ -111,6 +107,28 @@ void PerformanceWindow::OnViewPostRender() {
     monitor_panel->Update(frame_time.GetElapsedTime(),
                           frame_time.GetDeltaTime());
   }
+}
+
+void PerformanceWindow::SelectFrame(int frame_number) {
+  SetMonitorState(MonitorState::kPaused);
+  selected_frame_start_ = frame_number;
+  selected_frame_end_ = frame_number;
+}
+
+void PerformanceWindow::SelectFrames(int start_frame, int end_frame) {
+  SetMonitorState(MonitorState::kPaused);
+  if (start_frame > end_frame) {
+    selected_frame_start_ = end_frame;
+    selected_frame_end_ = start_frame;
+  } else {
+    selected_frame_start_ = start_frame;
+    selected_frame_end_ = end_frame;
+  }
+}
+
+void PerformanceWindow::SetMonitorState(MonitorState monitor_state) {
+  monitor_state_ = monitor_state;
+  Profiler::SetPaused(monitor_state == MonitorState::kPaused);
 }
 
 }  // namespace imp::editor

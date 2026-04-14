@@ -72,6 +72,7 @@ cc_library(
     deps = [
         ":image_based_lighting_types",
         "//core/async:executor",
+        "//core/async:executor_flags",
         "//core/async:future",
         "//core/common",
         "//core/common:buffer_access",
@@ -88,6 +89,7 @@ cc_library(
         "//core/view/utils:string_map",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/base:nullability",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",

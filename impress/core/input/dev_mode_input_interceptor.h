@@ -20,9 +20,13 @@
 #include <memory>
 #include <vector>
 
+#include "absl/types/optional.h"
 #include "core/actions/input_action_event.h"
 #include "core/input/input_manager.h"
 #include "core/input/keyboard_controller.h"
+#include "core/input/keyboard_event.h"
+#include "core/input/pointer_event.h"
+#include "core/input/wheel_event.h"
 #include "core/view/base_view.h"
 
 namespace imp {
@@ -34,11 +38,19 @@ class DevModeInputInterceptor : public InputInterceptor {
  public:
   explicit DevModeInputInterceptor(BaseView* view);
   ~DevModeInputInterceptor() override = default;
+  // The interceptor should process and filter out any pointer events that it
+  // does not want to propagate to the rest of the view.
   void FilterPointerEvents(std::vector<PointerEvent>& pointer_events) override;
-  bool TryConsumeWheelEvent(const WheelEvent& wheel_event) override;
+  // The interceptor should process and filter out any keyboard or text input
+  // events that it does not want to propagate to the rest of the view.
   void FilterKeyboardEvents(
       std::vector<KeyboardEvent>& keyboard_events,
       std::vector<TextInputEvent>& text_input_events) override;
+  // The interceptor should process and filter out any wheel events that it does
+  // not want to propagate to the rest of the view.
+  void FilterWheelEvents(std::vector<WheelEvent>& wheel_events) override;
+  // The interceptor should process and filter out any input action events that
+  // it does not want to propagate to the rest of the view.
   void FilterInputActionEvents(
       std::vector<InputActionEvent>& input_action_events) override;
 

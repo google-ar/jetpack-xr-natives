@@ -54,8 +54,10 @@ const MaterialPreCompileOptions& GltfAsset::kDefaultMaterialPreCompileOptions =
 Future<std::unique_ptr<GltfAsset>> GltfAsset::Load(
     BaseView* view, absl::string_view asset_url,
     Future<resources::Resource> resource_future, GltfAssetLoader* loader,
+    resources::ResourceManager* resource_manager,
     GltfAsset::LoadOptions options) {
-  return loader->Load(view, asset_url, resource_future, std::move(options));
+  return loader->Load(view, asset_url, resource_future, resource_manager,
+                      std::move(options));
 }
 
 absl::Duration GltfAsset::LoadEvent::GetTotalDuration() const {

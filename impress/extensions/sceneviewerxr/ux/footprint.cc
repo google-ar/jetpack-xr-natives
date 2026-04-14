@@ -18,6 +18,7 @@
 #include <bitset>
 #include <cstdlib>
 #include <memory>
+#include <optional>
 #include <tuple>
 #include <utility>
 #include <variant>
@@ -33,6 +34,7 @@
 #include "core/async/future.h"
 #include "core/geometry/shapes/box.h"
 #include "core/math/mat.h"
+#include "core/math/math.h"
 #include "core/math/quat.h"
 #include "core/math/transform.h"
 #include "core/math/vec.h"
@@ -49,6 +51,7 @@
 #include "core/view/framework/collision/box_collider.h"
 #include "core/view/utils/frame_time.h"
 #include "extensions/sceneviewerxr/assets/footprint_assets.h"
+#include "extensions/sceneviewerxr/ux/gltf_bounds.h"
 #include "extensions/sceneviewerxr/ux/interaction_mode.h"
 #include "split_engine/materials/svxr_footprint_material.h"
 
@@ -98,8 +101,10 @@ constexpr float kDefaultScale = 0.05f;
 
 #endif  // defined(USE_UX_FOOTPRINT)
 constexpr auto kCornerCount = 4;
-constexpr auto kScaleHandleVisibleDistance = 0.07f;
 constexpr auto kScaleHandleInteractionDistance = 0.035f;
+constexpr auto kScaleHandleAnimationSlideDistance = 0.08f;
+// Adjust this to lower or raise the handle relative to the footprint plane.
+constexpr float kScaleHandleYOffset = -0.03f;
 
 // Used to help buff up the footprint thickness when it is very far away.
 constexpr auto kDistanceBasedYBuffer = 1.5f;
@@ -113,6 +118,10 @@ constexpr auto kFootSizeUpdateRampDuration = absl::Milliseconds(50);
 constexpr auto kSpawnFadeInDuration = absl::Milliseconds(120);
 constexpr auto kInteractFadeInDuration = absl::Milliseconds(120);
 constexpr auto kUnselectFadeOutDuration = absl::Milliseconds(120);
+constexpr auto kScaleHandleAnimationDuration = absl::Milliseconds(150);
+constexpr auto kScaleHandleGrabAnimationDuration = absl::Milliseconds(100);
+constexpr float kScaleHandleGrabScaleMultiplier = 0.85f;
+constexpr int kFootprintGraceFrames = 2;
 
 struct ShaderParameters {
   imp::float2 edge_touch_control;
@@ -188,19 +197,23 @@ bool IsVisibleBasedOnFlags(const InteractionMode& interaction_data) {
     return false;
   }
 
-  // If a scale or rotate is occurring, be sure to hide the footprint.
-  if (interaction_data.TestTransform(InteractionMode::TransformMode::kRotate) ||
-      interaction_data.TestTransform(InteractionMode::TransformMode::kScale)) {
+  // If a rotate is occurring, be sure to hide the footprint.
+  if (interaction_data.TestTransform(InteractionMode::TransformMode::kRotate)) {
     return false;
   } else if (interaction_data.TestTransform(
                  InteractionMode::TransformMode::kTranslate)) {
     // If we are translating, be sure to show the footprint.
     return true;
+  } else if (interaction_data.TestTransform(
+                 InteractionMode::TransformMode::kScale)) {
+    // If we are scaling, only show footprint/handles for 1-handed scale.
+    return interaction_data.GetScaleHandle().has_value() &&
+           *interaction_data.GetScaleHandle() != ScaleHandle::kTwoHanded;
   }
 
   // If hovering, the footprint is visible.
   if (interaction_data.TestPointer(InteractionMode::PointerMode::kHover) ||
-      interaction_data.TestPointer((InteractionMode::PointerMode::kPress))) {
+      interaction_data.TestPointer(InteractionMode::PointerMode::kPress)) {
     return true;
   }
 
@@ -320,7 +333,7 @@ absl::Status Footprint::Setup(
 
   auto local_scale = footprint_node_->GetLocalScale();
   imp::Box local_bounds =
-      footprint_node_->GetComponent<imp::GltfRenderer>()->GetLocalBounds();
+      footprint_node_->GetOrAddComponent<GltfBounds>()->GetLocalBounds();
   auto model_root = model->GetModelRoot();
   auto scale = kFootprintScale * (imp::float3(kDefaultScale) / local_scale);
   model_root->SetLocalPosition(scale * local_bounds.halfExtent *
@@ -486,6 +499,10 @@ FootprintInteractionStates::Machine::OptionalState Footprint::UpdateHidden(
     next.is_footprint_primary_receiver = false;
     next.is_footprint_secondary_receiver = false;
     next.scale_handles_visibility.reset();
+    for (int i = 0; i < 4; ++i) {
+      next.scale_handle_animations[i].Setup(0.0f);
+      next.scale_handle_pressed_animations[i].Setup(0.0f);
+    }
     return next;
   }
   return {};
@@ -494,7 +511,23 @@ FootprintInteractionStates::Machine::OptionalState Footprint::UpdateHidden(
 FootprintInteractionStates::Machine::OptionalState Footprint::UpdateActive(
     FootprintInteractionStates::Active& state, const imp::FrameTime& delta_time,
     const InteractionMode& interaction) {
-  if (!IsVisibleBasedOnFlags(interaction)) {
+  // When we are scaling via a scale handle, we are in one-handed scaling mode.
+  std::optional<ScaleHandle> scale_handle = interaction.GetScaleHandle();
+  bool is_one_handed_scale =
+      interaction.TestTransform(InteractionMode::TransformMode::kScale) &&
+      scale_handle.has_value() && *scale_handle != ScaleHandle::kTwoHanded;
+  if (footprint_model_) {
+    // If we are in one-handed scaling mode, we want to hide the footprint so
+    // only the scale handle is visible.
+    footprint_model_->SetEnabled(!is_one_handed_scale);
+  }
+
+  // Handle visibility logic
+  std::bitset<kCornerCount> next_visibility =
+      CalculateScaleHandleVisibility(interaction, state);
+  bool handles_visible = next_visibility.any();
+
+  if (!IsVisibleBasedOnFlags(interaction) || handles_visible) {
     //  Fade out.
     state.alpha.SetTarget(0, kUnselectFadeOutDuration);
     state.edge_touch_control.SetTarget(kParamsHidden.edge_touch_control,
@@ -514,6 +547,10 @@ FootprintInteractionStates::Machine::OptionalState Footprint::UpdateActive(
     state.fill_cutoff_color.SetTarget(kParamsHidden.fill_cutoff_color,
                                       kUnselectFadeOutDuration);
   } else {
+    // Ensure the footprint is visible.
+    if (state.alpha.GetTarget() != 1.f) {
+      state.alpha.SetTarget(1.f, kInteractFadeInDuration);
+    }
     bool show_pointer_on_footprint = false;
     bool is_footprint_receiver = state.is_footprint_primary_receiver ||
                                  state.is_footprint_secondary_receiver;
@@ -643,7 +680,7 @@ FootprintInteractionStates::Machine::OptionalState Footprint::UpdateActive(
   edge_material_->SetSecondaryTouchPoint(secondary_touch_point);
   fill_material_->SetSecondaryTouchPoint(secondary_touch_point);
 
-  if (alpha_stopping && state.alpha.GetTarget() == 0.f) {
+  if (alpha_stopping && state.alpha.GetTarget() == 0.f && !handles_visible) {
     // done fading out...
     FootprintInteractionStates::Hidden next;
     next.has_ever_been_active = true;
@@ -651,11 +688,74 @@ FootprintInteractionStates::Machine::OptionalState Footprint::UpdateActive(
     return next;
   }
 
+  // Determine if a handle is currently actively dragged for scaling
+  bool is_scaling =
+      interaction.TestTransform(InteractionMode::TransformMode::kScale);
+  std::optional<ScaleHandle> active_handle =
+      is_scaling ? interaction.GetScaleHandle() : std::nullopt;
+
+  for (int corner_index = 0; corner_index < kCornerCount; ++corner_index) {
+    if (next_visibility[corner_index] !=
+        state.scale_handles_visibility[corner_index]) {
+      if (next_visibility[corner_index]) {
+        state.scale_handle_animations[corner_index].SetTarget(
+            1.0f, kScaleHandleAnimationDuration);
+      } else {
+        state.scale_handle_animations[corner_index].SetTarget(
+            0.0f, kScaleHandleAnimationDuration);
+        // Force the grab animation to drop when visibility is lost
+        state.scale_handle_pressed_animations[corner_index].SetTarget(
+            0.0f, absl::ZeroDuration());
+      }
+    }
+
+    bool is_this_corner_grabbed =
+        (active_handle.has_value() &&
+         static_cast<int>(*active_handle) == corner_index);
+    if (is_this_corner_grabbed &&
+        state.scale_handle_pressed_animations[corner_index].GetTarget() !=
+            1.0f) {
+      state.scale_handle_pressed_animations[corner_index].SetTarget(
+          1.0f, kScaleHandleGrabAnimationDuration);
+    } else if (!is_this_corner_grabbed &&
+               state.scale_handle_pressed_animations[corner_index]
+                       .GetTarget() != 0.0f) {
+      state.scale_handle_pressed_animations[corner_index].SetTarget(
+          0.0f, kScaleHandleGrabAnimationDuration);
+    }
+
+    if (scale_handle_visuals_[corner_index]) {
+      // The handle visual should be enabled if it is targeted (animating in or
+      // already fully out) OR if it is untargeted but still animating away
+      // (ramp is > 0.0f).
+      bool visually_active =
+          next_visibility[corner_index] ||
+          state.scale_handle_animations[corner_index].Get() > 0.0f;
+
+      // Make sure our local state matches the desired visual enablement state
+      // to avoid redundantly calling SetEnabled on the NdkNode
+      if (scale_handle_visuals_[corner_index]->IsEnabled() != visually_active) {
+        scale_handle_visuals_[corner_index]->SetEnabled(visually_active);
+      }
+    }
+  }
+  state.scale_handles_visibility = next_visibility;
+
+  // We update the handle positions *after* determining their visibility and
+  // setting up their initial animation ramps. This ensures that on the very
+  // first frame a handle becomes visible, its position is calculated using
+  // the new animation state (e.g. anim_t = 0.0) rather than popping at
+  // 1.0 for a single frame before the ramp resets.
   // Update handle positions every frame since model_root transform changes
   if (auto model = footprint_node_->GetComponent<imp::GltfRenderer>()) {
     auto model_root = model->GetModelRoot();
     auto model_trs = model_root->GetLocalTrs();
     for (int corner_index = 0; corner_index < kCornerCount; ++corner_index) {
+      state.scale_handle_animations[corner_index].Step(
+          delta_time.GetDeltaTime());
+      state.scale_handle_pressed_animations[corner_index].Step(
+          delta_time.GetDeltaTime());
+
       if (!scale_handles_[corner_index]) continue;
       // 1.0f - kCardInclusionFraction accounts for the visual extent of the
       // corner card beyond the bone position.
@@ -663,7 +763,22 @@ FootprintInteractionStates::Machine::OptionalState Footprint::UpdateActive(
       auto offset = kCorners[corner_index] *
                     (model_space_inner_half_extents_ +
                      imp::float3(kVisualExtent, 0.f, kVisualExtent));
-      auto handle_pos = (model_trs * imp::float4(offset, 1.f)).xyz;
+      offset.y += kScaleHandleYOffset;
+
+      float anim_t = state.scale_handle_animations[corner_index].Get();
+      float clamped_t = std::clamp(anim_t, 0.0f, 1.0f);
+      // The handle slides outward along a strictly 45-degree angle from the
+      // resting offset. We use a fixed distance constraint
+      // (kScaleHandleAnimationSlideDistance) and normalize kCorners to get the
+      // pure 45-degree directional vector.
+      imp::float3 slide_direction = normalize(kCorners[corner_index]);
+      auto animated_offset =
+          offset - (slide_direction *
+                    (kScaleHandleAnimationSlideDistance * (1.0f - clamped_t)));
+
+      // Calculate resting position and animated position in rig space
+      auto resting_pos = (model_trs * imp::float4(offset, 1.f)).xyz;
+      auto animated_pos = (model_trs * imp::float4(animated_offset, 1.f)).xyz;
 
       constexpr float kRotations[] = {
           M_PI / 2.0f,        // 90 deg  (bottom-right)
@@ -672,42 +787,92 @@ FootprintInteractionStates::Machine::OptionalState Footprint::UpdateActive(
           3.0f * M_PI / 2.0f  // 270 deg (top-left)
       };
 
+      // Set the physical handle_node to the resting position so the BoxCollider
+      // doesn't slip away from the raycast when animating
       auto handle_trs =
           imp::Transform<float>(scale_handles_[corner_index]->GetLocalTrs());
-      handle_trs.translation = handle_pos;
+      handle_trs.translation = resting_pos;
       handle_trs.rotation = imp::quatf::fromAxisAngle(
           imp::float3(0.f, 1.f, 0.f), kRotations[corner_index]);
       scale_handles_[corner_index]->SetLocalTrs(handle_trs.AsMat4());
+
+      // Set the visual child node to animate towards the final position
+      // We calculate the delta translation, then un-rotate it by the parent's
+      // yaw to align it with the visual node's internal local space.
+      imp::quatf inv_handle_rot = imp::quatf::fromAxisAngle(
+          imp::float3(0.f, 1.f, 0.f), -kRotations[corner_index]);
+      auto visual_trs = imp::Transform<float>(
+          scale_handle_visuals_[corner_index]->GetLocalTrs());
+      visual_trs.translation = inv_handle_rot * (animated_pos - resting_pos);
+
+      // Apply the grab scale effect
+      float pressed_t =
+          std::clamp(state.scale_handle_pressed_animations[corner_index].Get(),
+                     0.0f, 1.0f);
+      float grab_scale =
+          imp::lerp(1.0f, kScaleHandleGrabScaleMultiplier, pressed_t);
+      visual_trs.scale = imp::float3(grab_scale, grab_scale, grab_scale);
+
+      scale_handle_visuals_[corner_index]->SetLocalTrs(visual_trs.AsMat4());
     }
   }
 
-  // Handle visibility logic
+  UpdateFootprintReceiverGracePeriod(state);
+  return {};
+}
+
+std::bitset<4> Footprint::CalculateScaleHandleVisibility(
+    const InteractionMode& interaction,
+    const FootprintInteractionStates::Active& state) {
   std::bitset<kCornerCount> next_visibility;
-  if (state.is_footprint_primary_receiver) {
+  if (interaction.TestTransform(InteractionMode::TransformMode::kScale)) {
+    std::optional<ScaleHandle> handle = interaction.GetScaleHandle();
+    if (handle.has_value() && *handle != ScaleHandle::kTwoHanded) {
+      next_visibility[static_cast<int>(*handle)] = true;
+    }
+  } else if (IsVisibleBasedOnFlags(interaction) &&
+             state.is_footprint_primary_receiver &&
+             !interaction.TestTransform(
+                 InteractionMode::TransformMode::kTranslate)) {
     imp::float3 touch_local = state.primary_touch_point;
     for (int corner_index = 0; corner_index < kCornerCount; ++corner_index) {
       if (!scale_handles_[corner_index]) continue;
       if (!scale_handle_visuals_[corner_index]) continue;
 
-      imp::float3 handle_pos = scale_handles_[corner_index]->GetLocalPosition();
+      auto model = footprint_node_->GetComponent<imp::GltfRenderer>();
+      if (!model) continue;
+
+      // We calculate the theoretical "resting" position of the handle from
+      // scratch, rather than using `scale_handles_[...]->GetLocalPosition()`.
+      // This is because the handle's actual localized position is animated
+      // inward when it appears. If we used the animated position, the handle
+      // would run away from the user's touch point, lose its hover state, and
+      // instantly disappear, causing a flicker loop.
+      constexpr float kVisualExtent = 1.0f - kCardInclusionFraction;
+      auto offset = kCorners[corner_index] *
+                    (model_space_inner_half_extents_ +
+                     imp::float3(kVisualExtent, 0.f, kVisualExtent));
+      imp::float3 handle_pos =
+          (model->GetModelRoot()->GetLocalTrs() * imp::float4(offset, 1.f)).xyz;
+
       float dist = length(imp::float2(touch_local.x, touch_local.z) -
                           imp::float2(handle_pos.x, handle_pos.z));
-      if (dist < kScaleHandleVisibleDistance) {
+      if (dist < kScaleHandleInteractionDistance) {
         next_visibility[corner_index] = true;
       }
     }
   }
+  return next_visibility;
+}
 
-  for (int corner_index = 0; corner_index < kCornerCount; ++corner_index) {
-    if (scale_handle_visuals_[corner_index] &&
-        state.scale_handles_visibility[corner_index] !=
-            next_visibility[corner_index]) {
-      scale_handle_visuals_[corner_index]->SetEnabled(
-          next_visibility[corner_index]);
-    }
+void Footprint::UpdateFootprintReceiverGracePeriod(
+    FootprintInteractionStates::Active& state) {
+  if (state.footprint_primary_receiver_grace_frames > 0) {
+    state.footprint_primary_receiver_grace_frames--;
   }
-  state.scale_handles_visibility = next_visibility;
-  return {};
+  state.is_footprint_primary_receiver =
+      (state.footprint_primary_receiver_grace_frames > 0);
+  state.is_footprint_secondary_receiver = false;
 }
 
 void Footprint::HandleInputEvent(const imp::float3& hit_position,
@@ -721,6 +886,10 @@ void Footprint::HandleInputEvent(const imp::float3& hit_position,
           state.primary_touch_point =
               FootprintNode()->LocalFromWorldPoint(hit_position);
           state.is_footprint_primary_receiver = is_footprint_receiver;
+          if (is_footprint_receiver) {
+            state.footprint_primary_receiver_grace_frames =
+                kFootprintGraceFrames;
+          }
         } else {
           state.secondary_touch_point =
               FootprintNode()->LocalFromWorldPoint(hit_position);
@@ -774,14 +943,14 @@ void Footprint::OnStateChange(const InteractionMachine& machine,
                               const InteractionMachine::State& next_state) {
   if (std::holds_alternative<FootprintInteractionStates::Hidden>(next_state)) {
     // Hide the asset when entering Hidden
-    footprint_model_->GetModelRoot()->SetEnabled(true);
+    footprint_model_->SetEnabled(true);
     footprint_node_->SetEnabled(true);
   } else if (std::holds_alternative<FootprintInteractionStates::Active>(
                  next_state)) {
     const FootprintInteractionStates::Active& next_active =
         std::get<FootprintInteractionStates::Active>(next_state);
     // Show the asset when entering Active
-    footprint_model_->GetModelRoot()->SetEnabled(true);
+    footprint_model_->SetEnabled(true);
     footprint_node_->SetEnabled(true);
     // Apply the initial size specified for the footprint.
     UpdateFootBonesAndBounds(next_active.foot_size.Get(),
@@ -795,7 +964,7 @@ imp::float2 Footprint::RetrieveSizeFromModel() {
   }
   if (initial_model_bounds_.isEmpty()) {
     initial_model_bounds_ =
-        model_node_->GetComponent<imp::GltfRenderer>()->GetLocalBounds();
+        model_node_->GetOrAddComponent<GltfBounds>()->GetLocalBounds();
   }
   imp::float3 size =
       model_node_->GetLocalScale() * 2.0f * initial_model_bounds_.halfExtent;
@@ -858,26 +1027,13 @@ void Footprint::UpdateFootBonesAndBounds(float2 foot_size,
   }
 }
 
-bool Footprint::IsCloseToScaleHandle(const imp::float3& world_hit_pos) const {
-  imp::float3 local_hit = footprint_node_->LocalFromWorldPoint(world_hit_pos);
-  for (const auto& handle : scale_handles_) {
-    if (!handle) continue;
-    imp::float3 handle_pos = handle->GetLocalPosition();
-    float dist = length(imp::float2(local_hit.x, local_hit.z) -
-                        imp::float2(handle_pos.x, handle_pos.z));
-    // Use a tighter threshold for interaction (2.5cm) than visibility
-    if (dist < kScaleHandleInteractionDistance) return true;
-  }
-  return false;
-}
-
 void Footprint::MaintainThickness() {
   auto local_scale = footprint_node_->GetLocalScale();
   auto model = footprint_node_->GetComponent<imp::GltfRenderer>();
 
   // Ensure footprint height stays the same at far distances.
   imp::Box local_bounds =
-      footprint_node_->GetComponent<imp::GltfRenderer>()->GetLocalBounds();
+      footprint_node_->GetComponent<GltfBounds>()->GetLocalBounds();
   auto model_root = model->GetModelRoot();
 
   // Make footprint keep same height at any distance.
@@ -903,20 +1059,33 @@ void Footprint::MaintainThickness() {
   model_root->SetLocalScale(scale);
 }
 
-bool Footprint::IsScaleHandle(imp::NodeHandle node) const {
-  for (const auto& handle : scale_handles_) {
+std::optional<ScaleHandle> Footprint::GetTargetedScaleHandle(
+    imp::NodeHandle receiver, const imp::float3& world_hit_pos) const {
+  imp::float3 local_hit_pos =
+      footprint_node_->LocalFromWorldPoint(world_hit_pos);
+  for (int i = 0; i < scale_handles_.size(); ++i) {
+    const auto& handle = scale_handles_[i];
     if (!handle) continue;
-    // Check if node is the handle or a child of it (since GltfRenderer might
-    // have subnodes)
-    if (node == handle) return true;
-    auto parent = node->GetParent();
-    while (parent) {
-      if (parent == handle) return true;
-      if (parent->GetName() == "ScaleHandle") return true;
-      parent = parent->GetParent();
+    imp::NodeHandle node = receiver;
+    while (node) {
+      if (node == handle) {
+        return static_cast<ScaleHandle>(i);
+      }
+      node = node->GetParent();
+      // Optimization: Stop if we reach the footprint node.
+      if (node == footprint_node_) {
+        break;
+      }
     }
+
+    // Check proximity
+    imp::float3 handle_pos = handle->GetLocalPosition();
+    float dist = length(imp::float2(local_hit_pos.x, local_hit_pos.z) -
+                        imp::float2(handle_pos.x, handle_pos.z));
+    if (dist < kScaleHandleInteractionDistance)
+      return static_cast<ScaleHandle>(i);
   }
-  return false;
+  return std::nullopt;
 }
 
 }  // namespace svxr

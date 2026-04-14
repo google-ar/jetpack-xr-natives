@@ -38,6 +38,9 @@ struct TextureGenerationOptions {
   // Optional override to the default format in the ImageAsset object.
   std::optional<Format> texture_format_override = {};
 
+  // If true, generates full mipmaps.
+  bool generate_mipmaps = false;
+
   template <typename Sink>
   friend void AbslStringify(Sink& sink,
                             const TextureGenerationOptions& options) {

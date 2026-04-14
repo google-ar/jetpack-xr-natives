@@ -68,6 +68,32 @@ void CompactVector(std::vector<std::unique_ptr<T, Deleter>>& vector, Fn fn) {
   vector.erase(vector.begin() + right, vector.end());
 }
 
+template <typename T, typename Fn>
+void CompactVector(std::vector<T*>& vector, Fn fn) {
+  size_t left = 0;
+  size_t right = vector.size();
+
+  while (left < right) {
+    if (!vector[left]) {
+      // Find the rightmost non-null element to swap with.
+      while (right > left && !vector[right - 1]) {
+        right--;
+      }
+
+      // If there's a non-null element on the right side, swap it.
+      if (right > left) {
+        vector[left] = std::move(vector[right - 1]);
+        fn(left);
+        right--;
+      }
+    }
+    left++;
+  }
+
+  // Resize the vector to remove the empty slots at the end.
+  vector.erase(vector.begin() + right, vector.end());
+}
+
 }  // namespace imp
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_COMMON_VECTOR_HELPERS_H_

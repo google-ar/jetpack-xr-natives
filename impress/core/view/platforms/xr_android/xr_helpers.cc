@@ -35,6 +35,7 @@
 #include "core/math/vec.h"
 #include "core/monitor/duration_measurement_data.h"
 #include "core/monitor/monitor_summary.h"
+#include "core/render_passes/texture_pipeline_renderer_projection_quad.h"
 #include "core/view/platforms/xr_android/openxr_includes.h"
 
 namespace imp {
@@ -323,4 +324,65 @@ std::string DumpXrFrameTiming(Monitor& monitor, MonitorSummary& summary) {
 float3 ToVector3(XrVector3f xr_vector_3f) {
   return float3{xr_vector_3f.x, xr_vector_3f.y, xr_vector_3f.z};
 }
+
+void SetCameraEyesForProjectionQuad(
+    filament::Engine* engine, filament::Camera* camera,
+    const TexturePipelineRendererProjectionQuad& quad_in_world,
+    const std::vector<XrView>& latest_views) {
+  // In Stereo, get eye poses and calculate the custom projection matrices for
+  // each eye.
+  const int eye_count = latest_views.size();
+  std::vector<mat4> projection_matrix_array(eye_count);
+  mat4 projection_culling_matrix;
+
+  const mat4 world_from_quad =
+      mat4::translation(quad_in_world.center) * mat4(quad_in_world.rotation);
+  const filament::TransformManager& transform_manager =
+      engine->getTransformManager();
+  const mat4 world_from_view = transform_manager.getTransformAccurate(
+      transform_manager.getInstance(camera->getEntity()));
+  const mat4 view_from_world = inverse(world_from_view);
+  const float near_clip = camera->getNear();
+  const float far_clip = camera->getCullingFar();
+
+  for (int eye_index = 0; eye_index < eye_count; eye_index++) {
+    // Logic for setting up the camera through the projection quad:
+    // - The camera is placed at where the eye is.
+    // - The camera optical axis (i.e., perpendicular to the image plane) is
+    //   parallel to the quad normal.
+    // - The camera roll is set so that the image quad is parallel to the
+    //   boundary of the quad. This allows us to move the 4
+    //   frustum edges to exactly match the 4 edges of the quad.
+    // - The camera frustum is set up to be asymmetric / off-axis, i.e., it is
+    //   not symmetrical to the optical axis, and each of the 4 sides falls
+    //   directly on the 4 sides of the quad.
+    // For more details, see (broken link)
+
+    // Set eye model matrix to (EyePos, QuadRot)
+    Transform<float> world_from_eye_transform =
+        ToTransform(latest_views[eye_index].pose);
+    world_from_eye_transform.rotation = quad_in_world.rotation;
+    const mat4 world_from_eye(world_from_eye_transform.AsMat4());
+    const mat4 view_from_eye = view_from_world * world_from_eye;
+    camera->setEyeModelMatrix(eye_index, view_from_eye);
+
+    mat4 projection = ComputeProjectionMatrixToFitQuad(
+        world_from_eye_transform.translation, world_from_quad,
+        quad_in_world.size, near_clip, far_clip);
+    projection_matrix_array[eye_index] = projection;
+  }
+
+  // Set the projection culling matrix, which is a projection matrix
+  // representing the frustum that encompasses the FOV of both eyes.
+  // Whether or not we are using quad views, the first and second XrViews
+  // represent the left eye outer view and the right eye outer view,
+  // respectively.
+  projection_culling_matrix = GetEncompassingProjectionMatrix(
+      latest_views[0], latest_views[1], near_clip, far_clip);
+  camera->setCustomEyeProjection(projection_matrix_array.data(), eye_count,
+                                 projection_culling_matrix, near_clip,
+                                 far_clip);
+}
+
+
 }  // namespace imp

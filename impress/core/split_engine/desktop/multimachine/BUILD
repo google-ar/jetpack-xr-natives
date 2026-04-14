@@ -75,12 +75,12 @@ cc_library(
     deps = [
         ":split_engine_desktop_bridge_cc_grpc",  # buildcleaner: keep
         ":split_engine_desktop_bridge_client",
+        "//core/split_engine:message_group_monitor",
         "//core/split_engine:split_engine_bridge_sender",
         "//core/split_engine:split_engine_shared",
         "//core/split_engine/desktop/utils:message_group_completion_client_reactor",
         "//third_party/grpc:grpc++_unsecure",
         "@com_google_absl//absl/base:core_headers",
-        "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",

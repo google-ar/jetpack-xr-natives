@@ -44,6 +44,7 @@
 #include "core/split_engine/desktop/split_engine_desktop_bridge.proto.h"
 #include "core/split_engine/desktop/utils/message_group_completion_client_reactor.h"
 #include "core/split_engine/desktop/utils/split_engine_desktop_bridge_utils.h"
+#include "core/split_engine/message_group_monitor.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_bridge_sender.h"
 #include "mediapipe/framework/port/status_macros.h"
@@ -68,7 +69,7 @@ SplitEngineDesktopBridgeClient::SplitEngineDesktopBridgeClient(
 absl::Status SplitEngineDesktopBridgeClient::Initialize() {
   // TODO: (broken link) - remove this once ClientID is moved to the higher level
   // components.
-  MP_RETURN_IF_ERROR(SplitEngineBridgeSender::ConnectClient(client_id_));
+  MP_RETURN_IF_ERROR(MessageGroupMonitor::ConnectClient(client_id_));
 
   struct {
     grpc::ClientContext context;
@@ -100,24 +101,26 @@ absl::Status SplitEngineDesktopBridgeClient::Initialize() {
   notification.WaitForNotification();
   if (!result.ok()) {
     if (const absl::Status status =
-            SplitEngineBridgeSender::DisconnectClient(client_id_);
+            MessageGroupMonitor::DisconnectClient(client_id_);
         !status.ok()) {
       IMP_LOG(imp::ERROR) << "Failed to disconnect client: " << status;
     }
     return result;
   }
 
-  message_group_completion_reactor_ = std::make_unique<
-      MessageGroupCompletionClientReactor>(
-      bridge_id_,
-      [this](grpc::ClientContext* context,
-             MessageGroupCompletionRequest* request,
-             grpc::ClientReadReactor<MessageGroupCompletionResponse>* reactor) {
-        stub_->async()->ReadMessageGroupCompletions(context, request, reactor);
-      },
-      [this](MessageGroupId message_group_id) {
-        
-      });
+  message_group_completion_reactor_ =
+      std::make_unique<MessageGroupCompletionClientReactor>(
+          bridge_id_,
+          [this](grpc::ClientContext* context,
+                 MessageGroupCompletionRequest* request,
+                 grpc::ClientReadReactor<MessageGroupCompletionResponse>*
+                     reactor) {
+            stub_->async()->ReadMessageGroupCompletions(context, request,
+                                                        reactor);
+          },
+          [this](MessageGroupId message_group_id) {
+            
+          });
 
   heartbeat_thread_ =
       std::thread(&SplitEngineDesktopBridgeClient::Heartbeat, this,
@@ -132,7 +135,16 @@ SplitEngineDesktopBridgeClient::~SplitEngineDesktopBridgeClient() {
     absl::MutexLock lock(heartbeat_state_mutex_);
     heartbeat_state_ = HeartbeatState::kStop;
   }
-  heartbeat_thread_.join();
+
+  if (heartbeat_thread_.joinable()) {
+    heartbeat_thread_.join();
+  }
+
+  // Need to make sure that reactor is destructed before the client is removed
+  // from the SplitEngineBridgeSender.
+  message_group_completion_reactor_.reset();
+
+  
 }
 
 void SplitEngineDesktopBridgeClient::Heartbeat(
@@ -194,8 +206,10 @@ SplitEngineDesktopBridgeClient::RegisterBuffer(int fd,
     metadata.fd = fd;
     metadata.size = buffer_size_bytes;
 
-    FileDescriptorSender sender(uds_path_);
-    MP_RETURN_IF_ERROR(sender.Send(fd, metadata));
+    if (sender_ == nullptr) {
+      sender_ = std::make_unique<FileDescriptorSender>(uds_path_);
+    }
+    MP_RETURN_IF_ERROR(sender_->Send(fd, metadata));
   }
 
   struct RegisterBufferRequestArgs {
@@ -249,7 +263,11 @@ absl::Status SplitEngineDesktopBridgeClient::ProcessRegion(
   stub_->async()->ProcessRegion(
       &args->context, &args->request, &args->response,
       [&notification, &result, args](grpc::Status status) {
-        result = FromGrpcStatus(args->response);
+        if (status.ok()) {
+          result = FromGrpcStatus(args->response);
+        } else {
+          result = FromGrpcStatus(status);
+        }
         notification.Notify();
       });
 

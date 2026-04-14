@@ -22,7 +22,7 @@ JNI_SRCS = glob(["*_jni.cc"])
 
 JNI_DEPS = [
     ":openxr_instance_manager",
-    "@abseil-cpp//absl/log",
+    ":openxr_instance_manager_utils",
     "@third_party//OpenXR_KHR:generated_openxr_headers_public",
     "@third_party//OpenXR_KHR:openxr_headers_androidxr",
     "//common:jni_utils",
@@ -47,9 +47,6 @@ cc_library(
 cc_binary(
     name = "libandroidx.xr.runtime.openxr.so",
     srcs = JNI_SRCS,
-    copts = [
-        "-gmlt",
-    ],
     linkopts = [
         "-landroid",
         "-lbinder_ndk",
@@ -69,7 +66,7 @@ cc_binary(
         "-lbinder_ndk",
     ],
     linkshared = 1,
-    deps = JNI_DEPS + [":stub"],
+    deps = JNI_DEPS + ["//common:stub"],
 )
 
 cc_library(
@@ -79,6 +76,7 @@ cc_library(
     defines = DEFINES,
     deps = [
         "@abseil-cpp//absl/base:core_headers",
+        "@abseil-cpp//absl/log",
         "@abseil-cpp//absl/synchronization",
         "//common:openxr_utils",
         "@third_party//OpenXR_KHR:generated_openxr_headers_public",  # build_cleaner: keep
@@ -88,10 +86,19 @@ cc_library(
 )
 
 cc_library(
-    name = "stub",
-    testonly = 1,
-    srcs = ["openxr_stub.cc"],
+    name = "openxr_instance_manager_utils",
+    srcs = [
+        "jobject_creator.cc",
+    ],
+    hdrs = [
+        "jobject_creator.h",
+    ],
     defines = DEFINES,
-    deps = JNI_DEPS,
+    deps = [
+        "@abseil-cpp//absl/strings:str_format",
+        "//common:namespace_util",
+        "@third_party//OpenXR_KHR:generated_openxr_headers_public",  # build_cleaner: keep
+        "@third_party//OpenXR_KHR:openxr_headers_androidxr",  # build_cleaner: keep
+    ],
     alwayslink = 1,
 )

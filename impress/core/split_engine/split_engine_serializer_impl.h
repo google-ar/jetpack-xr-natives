@@ -63,6 +63,7 @@
 #include "core/ncsb/update_id.h"
 #include "core/ncsb/update_phase.h"
 #include "core/ncsb/update_system.h"
+#include "core/render_passes/texture_pipeline_renderer_state.proto.imp.h"
 #include "core/split_engine/android/split_engine_android_bridge.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_mesh_serializer.h"
@@ -109,7 +110,7 @@ class SplitEngineSerializerImpl
   // Update at the very end so that serialization occurs after all other frame
   // logic is done.
   static constexpr UpdatePhase kUpdatePhase = UpdatePhase::kEnd;
-  using UpdateDependencies = UpdateIds<SplitEngineMaterialUpdater>;
+  using UpdateDependencies = UpdateIds<SplitEngineBuiltinMaterialUpdater>;
 
   // The maximum number of frames that can be in-flight before we stop sending
   // frames to the renderer and wait for the system to catch up.
@@ -187,6 +188,8 @@ class SplitEngineSerializerImpl
   void SetMorphWeights(filament::RenderableManager::Instance instance,
                        float const* weights, size_t count,
                        size_t offset) override;
+  bool IsCullingEnabled(
+      filament::RenderableManager::Instance instance) const override;
 
   std::unique_ptr<BaseRenderableManager::Builder> NewBuilder(
       size_t count) override;
@@ -203,7 +206,6 @@ class SplitEngineSerializerImpl
   void RemoveMaterial(const filament::Material* material) override;
   void AddMaterialInstance(const filament::Material* material,
                            const filament::MaterialInstance* instance) override;
-  void AddMaterialInstance(uint64_t material_id, uint64_t instance_id) override;
   void DuplicateMaterialInstance(
       const filament::MaterialInstance* instance,
       const filament::MaterialInstance* copy) override;
@@ -272,6 +274,20 @@ class SplitEngineSerializerImpl
       filament::MorphTargetBuffer* morph_target_buffer) override;
   void RemoveVertexBuffer(filament::VertexBuffer* vertex_buffer) override;
   void RemoveIndexBuffer(filament::IndexBuffer* index_buffer) override;
+
+  // Texture Pipeline Renderer
+  void AddTexturePipelineRenderer(
+      utils::Entity entity, const TexturePipelineRendererState& state) override;
+  void RemoveTexturePipelineRenderer(utils::Entity entity) override;
+  void SetTexturePipelineRendererPassesEnabled(
+      utils::Entity entity, const std::vector<bool>& enabled_passes) override;
+  void SetTexturePipelineRendererProjectionQuad(
+      utils::Entity entity,
+      const std::optional<TexturePipelineRendererProjectionQuad>& quad)
+      override;
+  void RegisterNamedTexture(const filament::Texture& texture,
+                            absl::string_view name) override;
+  void UnregisterNamedTexture(const filament::Texture& texture) override;
 
  protected:
   void SetBonesInternal(filament::RenderableManager::Instance instance,
@@ -352,6 +368,18 @@ class SplitEngineSerializerImpl
 
   struct RenderableFlags {
     std::optional<android_xr::schemas::Bool> culling_enabled;
+  };
+
+  struct AddTexturePipelineRendererInfo {
+    TexturePipelineRendererState state;
+  };
+  struct UpdateTexturePipelineRendererInfo {
+    std::optional<std::vector<bool>> enabled_passes;
+    std::optional<std::optional<TexturePipelineRendererProjectionQuad>>
+        projection_quad;
+  };
+  struct RegisterNamedTextureInfo {
+    std::string name;
   };
 
   struct MorphTargetData {
@@ -547,6 +575,33 @@ class SplitEngineSerializerImpl
   template <>
   struct DataSelector<android_xr::schemas::CommandTypes::RemoveColliders> {
     using data_type = EntityMap<android_xr::schemas::ColliderType>;
+  };
+  template <>
+  struct DataSelector<
+      android_xr::schemas::CommandTypes::AddTexturePipelineRenderers> {
+    using data_type = EntityMap<AddTexturePipelineRendererInfo>;
+  };
+  template <>
+  struct DataSelector<
+      android_xr::schemas::CommandTypes::RemoveTexturePipelineRenderers> {
+    using data_type = std::vector<utils::Entity>;
+  };
+  template <>
+  struct DataSelector<
+      android_xr::schemas::CommandTypes::UpdateTexturePipelineRenderers> {
+    using data_type = EntityMap<UpdateTexturePipelineRendererInfo>;
+  };
+
+  template <>
+  struct DataSelector<
+      android_xr::schemas::CommandTypes::RegisterNamedTextures> {
+    using data_type = RobinMap<uint64_t, RegisterNamedTextureInfo>;
+  };
+
+  template <>
+  struct DataSelector<
+      android_xr::schemas::CommandTypes::UnregisterNamedTextures> {
+    using data_type = std::vector<ResourceId>;
   };
 
   template <android_xr::schemas::CommandTypes CommandT>

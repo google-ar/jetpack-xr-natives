@@ -28,7 +28,6 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "core/assets/asset_ptr.h"
-#include "core/assets/gltf/gltf_behavior_extension.h"
 #include "core/assets/gltf/gltf_interactivity_extension.h"
 #include "core/async/future.h"
 #include "core/common/buffer_access.h"
@@ -67,7 +66,6 @@ static constexpr absl::string_view kFileSuffix = "file://";
 static constexpr float kDefaultIndirectIntensity = 220.0f;
 
 }  // namespace
-
 
 // Adds the file to the AssetLibrary if it is not already present.
 //
@@ -164,10 +162,9 @@ Future<absl::Status> GltfFileLoader::LoadNode(
 
               gltf_scene->CreateAllNodes();
 
-              if (!node->GetComponent<GltfBehaviorExtension>() &&
-                  !node->GetComponent<GltfInteractivityExtension>()) {
+              if (!node->GetComponent<GltfInteractivityExtension>()) {
                 // Start animation by default unless it contains
-                // the KHR_behavior or KHR_interactivity extension which may be
+                // the KHR_interactivity extension which may be
                 // controlling the animation. If it is an ISF, we should assume
                 // that the animations are set as needed.
                 AssetPtr<GltfAsset> gltf_asset = gltf_renderer->GetGltfAsset();

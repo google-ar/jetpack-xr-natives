@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "absl/hash/hash.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
@@ -32,6 +33,7 @@
 #include "core/editor/widgets/performance/sample_processor.h"
 #include "core/editor/widgets/performance/sample_processor_types.h"
 #include "core/performance/profiler.h"
+#include "core/performance/profiler_structs.h"
 
 namespace imp::editor {
 
@@ -107,7 +109,8 @@ constexpr float kNanosPerMs = 1000000.0f;
 
 }  // namespace
 
-void FlameGraph::DrawPanel(float width, int frame_index,
+void FlameGraph::DrawPanel(const float width, const int start_frame,
+                           const int end_frame,
                            SampleProcessor& sample_processor,
                            FrameTimePanel& frame_time_panel) {
   IMP_TRACE();
@@ -132,19 +135,44 @@ void FlameGraph::DrawPanel(float width, int frame_index,
     // Mouse input for zoom and pan
     HandleInput(flame_canvas_pos);
 
-    // We want to display frames before/after the selected frame if they exist.
-    const int min_frame = std::max(0, frame_index - kFrameWindow);
-    const int max_frame = std::min(Profiler::GetCurrentFrameIndex() - 1,
-                                   frame_index + kFrameWindow);
+    // Check to see if we've selected a single frame or a range of frames.
+    const bool range_selected = start_frame != end_frame && start_frame != -1;
+
+    // If we have a range selected, draw graphs for all the selected frames.
+    // If we have a single frame selected, draw graphs for the current frame and
+    // kFrameWindow frames before and after to add a bit of context.
+    const int min_frame =
+        range_selected ? start_frame : std::max(0, end_frame - kFrameWindow);
+    const int max_frame = range_selected
+                              ? end_frame
+                              : std::min(Profiler::GetCurrentFrameIndex() - 1,
+                                         end_frame + kFrameWindow);
+
+    // For the timeline, the 0ms point is different depending on if we have a
+    // single frame selected or a range of frames.
+    // In the single frame case, the 0ms point is the start of the selected
+    // frame. In the range case, 0ms is the start of the first frame in the
+    // range.
+    absl::StatusOr<FrameMetaData> frame_meta_data =
+        Profiler::GetFrameMetaData(range_selected ? min_frame : end_frame);
+
+    if (!frame_meta_data.ok()) {
+      ImGui::EndChild();
+      return;
+    }
 
     const uint64_t selected_frame_start_time_ns =
-        Profiler::GetFrameMetaData(frame_index).frame_start_time_ns;
+        frame_meta_data->frame_start_time_ns;
     uint64_t total_visible_duration = 0;
 
     for (int i = min_frame; i <= max_frame; ++i) {
-      const uint64_t frame_duration = Profiler::GetTotalFrameDurationNanos(i);
-      total_visible_duration += frame_duration;
+      absl::StatusOr<uint32_t> frame_duration =
+          Profiler::GetTotalFrameDurationNanos(i);
+      if (frame_duration.ok()) {
+        total_visible_duration += *frame_duration;
+      }
     }
+
     if (total_visible_duration == 0) {
       ImGui::EndChild();
       return;
@@ -157,8 +185,17 @@ void FlameGraph::DrawPanel(float width, int frame_index,
     // one.
     const float content_screen_width =
         static_cast<float>(total_visible_duration) * time_scale;
+
+    absl::StatusOr<FrameMetaData> min_frame_meta_data =
+        Profiler::GetFrameMetaData(min_frame);
+
+    if (!min_frame_meta_data.ok()) {
+      ImGui::EndChild();
+      return;
+    }
+
     const uint64_t min_frame_start_time_ns =
-        Profiler::GetFrameMetaData(min_frame).frame_start_time_ns;
+        min_frame_meta_data->frame_start_time_ns;
     const uint64_t time_before_selected =
         selected_frame_start_time_ns - min_frame_start_time_ns;
 
@@ -185,22 +222,28 @@ void FlameGraph::DrawPanel(float width, int frame_index,
         .canvas_size = flame_canvas_size,
         .row_height = row_height,
         .time_scale = time_scale,
-        .is_current_frame = false,
+        .display_style = DisplayStyle::kNormal,
         .frame_start_time_ns = min_frame_start_time_ns,
         .selected_frame_start_time_ns = selected_frame_start_time_ns,
     };
 
     DrawMainThreadGraph(draw_node_args, sample_processor, min_frame, max_frame,
-                        frame_index);
+                        range_selected, end_frame);
 
     DrawWorkerThreadGraphs(sample_processor, min_frame_start_time_ns,
                            min_frame_start_time_ns + total_visible_duration,
                            draw_node_args);
 
-    // Draw start and end lines for the selected frame.
-    DrawFrameBoundaryLines(draw_list, canvas_pos, canvas_size, time_scale,
-                           selected_frame_start_time_ns,
-                           Profiler::GetTotalFrameDurationNanos(frame_index));
+    // If a single frame is selected draw boundary lines around it.
+    if (!range_selected) {
+      absl::StatusOr<uint32_t> frame_duration =
+          Profiler::GetTotalFrameDurationNanos(end_frame);
+
+      if (frame_duration.ok()) {
+        DrawFrameBoundaryLines(draw_list, canvas_pos, canvas_size, time_scale,
+                               selected_frame_start_time_ns, *frame_duration);
+      }
+    }
   }
   ImGui::EndChild();
 }
@@ -208,16 +251,17 @@ void FlameGraph::DrawPanel(float width, int frame_index,
 void FlameGraph::DrawMainThreadGraph(DrawNodeArgs& args,
                                      SampleProcessor& sample_processor,
                                      int min_frame, int max_frame,
+                                     bool range_selected,
                                      int selected_frame_index) {
-  // Calculate the height of the thread window by figuring out the max depth of
-  // all frames currently displayed in the window.
+  // Calculate the height of the thread window by figuring out the max depth
+  // of all frames currently displayed in the window.
   size_t max_depth = 0;
   for (int i = min_frame; i <= max_frame; ++i) {
     max_depth =
         std::max(max_depth, sample_processor.GetProcessedFrame(i).max_depth);
   }
 
-  std::thread::id main_thread_id = Profiler::GetMainThreadId();
+  const std::thread::id main_thread_id = Profiler::GetMainThreadId();
 
   // Set the main thread to be expanded by default here.
   auto it = thread_expanded_state_.find(main_thread_id);
@@ -245,8 +289,15 @@ void FlameGraph::DrawMainThreadGraph(DrawNodeArgs& args,
   if (ImGui::BeginChild("main_thread_child", ImVec2(0, thread_window_height),
                         ImGuiChildFlags_None,
                         ImGuiWindowFlags_NoScrollWithMouse)) {
+    // If we have a single frame selected, fade out the frames before and after
+    // the selected frame to make it easier to see the selected frame.
+    // If we have a range selected, don't fade anything.
     for (int i = min_frame; i <= max_frame; ++i) {
-      DrawFrame(args, sample_processor, i, selected_frame_index);
+      const DisplayStyle display_style =
+          !range_selected && (i != selected_frame_index)
+              ? DisplayStyle::kFaded
+              : DisplayStyle::kNormal;
+      DrawFrame(args, sample_processor, i, display_style);
     }
 
     if (show_button) {
@@ -261,22 +312,25 @@ void FlameGraph::DrawMainThreadGraph(DrawNodeArgs& args,
 
 void FlameGraph::DrawFrame(DrawNodeArgs& args,
                            SampleProcessor& sample_processor, int frame_index,
-                           int selected_frame_index) {
+                           DisplayStyle display_style) {
   args.draw_list = ImGui::GetWindowDrawList();
   const ProcessedSamples& frame_to_draw =
       sample_processor.GetProcessedFrame(frame_index);
-  const uint64_t frame_duration =
+  absl::StatusOr<uint32_t> frame_duration =
       Profiler::GetTotalFrameDurationNanos(frame_index);
 
-  // Create a fake root node for the entire frametime w/ vysnc
-  args.is_current_frame = (frame_index == selected_frame_index);
+  if (!frame_duration.ok()) return;
 
+  // Create a fake root node for the entire frametime w/ vysnc
+  args.display_style = display_style;
+
+  DrawNodeArgs rect_args = args;
+  rect_args.depth = 0;
+  rect_args.display_style = display_style;
   Rect rect;
-  bool is_frame_visible = DrawRectangle(
-      args.draw_list, "Frametime w/ Vsync", 0, args.canvas_pos,
-      args.canvas_size, args.time_scale, args.row_height,
-      args.frame_start_time_ns, args.frame_start_time_ns + frame_duration,
-      args.selected_frame_start_time_ns, args.is_current_frame, rect);
+  const bool is_frame_visible =
+      DrawRectangle(rect_args, "Frametime w/ Vsync", args.frame_start_time_ns,
+                    args.frame_start_time_ns + *frame_duration, rect);
 
   // If the overall frame rectangle is not visible, none of the samples that
   // correspond to it will be either so we can avoid doing any more work.
@@ -288,14 +342,15 @@ void FlameGraph::DrawFrame(DrawNodeArgs& args,
       DrawFlameGraphNode(args);
     }
   }
-  args.frame_start_time_ns += frame_duration;
+  args.frame_start_time_ns += *frame_duration;
 }
 
-void FlameGraph::DrawTooltip(absl::string_view name, uint64_t total_time_ns,
-                             size_t total_memory_allocated,
-                             size_t total_memory_allocations_count) {
+void FlameGraph::DrawTooltip(const absl::string_view name,
+                             const uint64_t total_time_ns,
+                             const size_t total_memory_allocated,
+                             const size_t total_memory_allocations_count) {
   ImGui::BeginTooltip();
-  float duration_ms = static_cast<float>(total_time_ns / kNanosPerMs);
+  const float duration_ms = static_cast<float>(total_time_ns / kNanosPerMs);
   const size_t allocated = total_memory_allocated;
   constexpr size_t kKilobyte = 1024;
   constexpr size_t kMegabyte = 1024 * 1024;
@@ -319,12 +374,7 @@ void FlameGraph::DrawFlameGraphNode(DrawNodeArgs& args) {
   const SampleNode* node = args.node;
   if (!node) return;
 
-  // Copied from the struct for readability.
   const int depth = args.depth;
-  const ImVec2& canvas_pos = args.canvas_pos;
-  const ImVec2& canvas_size = args.canvas_size;
-  const float row_height = args.row_height;
-  const float time_scale = args.time_scale;
 
   const uint64_t absolute_start_time_ns =
       args.frame_start_time_ns +
@@ -338,10 +388,8 @@ void FlameGraph::DrawFlameGraphNode(DrawNodeArgs& args) {
   // Draw the rectangle for this node.
   // If the rectangle gets culled this returns false and we return early.
   Rect rect;
-  if (!DrawRectangle(
-          args.draw_list, name.data(), depth, canvas_pos, canvas_size,
-          time_scale, row_height, absolute_start_time_ns, absolute_end_time_ns,
-          args.selected_frame_start_time_ns, args.is_current_frame, rect)) {
+  if (!DrawRectangle(args, name.data(), absolute_start_time_ns,
+                     absolute_end_time_ns, rect)) {
     return;
   }
 
@@ -380,34 +428,33 @@ void FlameGraph::DrawWorkerThreadGraphs(SampleProcessor& sample_processor,
   // Gets every profile result for every worker thread for the duration.
   // This includes samples that start/finish outside of the range but overlap
   // during a portion of it.
-  RawWorkerSamplesMap raw_worker_samples_map =
+  const RawWorkerSamplesMap raw_worker_samples_map =
       Profiler::GetAllWorkerThreadsSamples(start_time_ns, end_time_ns);
 
-  ProcessedWorkerSamplesMap worker_samples_map =
+  const ProcessedWorkerSamplesMap worker_samples_map =
       sample_processor.ProcessAllWorkerThreadsSamples(raw_worker_samples_map);
 
-  std::vector<std::thread::id> worker_thread_ids =
+  const std::vector<std::thread::id> worker_thread_ids =
       Profiler::GetWorkerThreadIds();
 
-  size_t worker_thread_count = worker_thread_ids.size();
+  const size_t worker_thread_count = worker_thread_ids.size();
   std::thread::id thread_id;
-  std::thread::id main_thread_id = Profiler::GetMainThreadId();
+  const std::thread::id main_thread_id = Profiler::GetMainThreadId();
 
   for (size_t i = 0; i < worker_thread_count; ++i) {
     thread_id = worker_thread_ids[i];
 
     if (thread_id == main_thread_id) continue;
-    if (worker_samples_map.find(thread_id) == worker_samples_map.end())
-      continue;
+    const auto it = worker_samples_map.find(thread_id);
+    if (it == worker_samples_map.end()) continue;
 
-    DrawWorkerThreadGraph(thread_id, draw_node_args,
-                          worker_samples_map[thread_id]);
+    DrawWorkerThreadGraph(thread_id, draw_node_args, it->second);
   }
 }
 
-void FlameGraph::DrawWorkerThreadGraph(std::thread::id thread_id,
+void FlameGraph::DrawWorkerThreadGraph(const std::thread::id thread_id,
                                        DrawNodeArgs& args,
-                                       ProcessedSamples& samples) {
+                                       const ProcessedSamples& samples) {
   char thread_name[64];
   absl::SNPrintF(thread_name, sizeof(thread_name), "Worker Thread %d",
                  absl::Hash<std::thread::id>{}(thread_id));
@@ -432,7 +479,7 @@ void FlameGraph::DrawWorkerThreadGraph(std::thread::id thread_id,
   args.canvas_pos = ImGui::GetCursorScreenPos();
   args.canvas_size = ImGui::GetContentRegionAvail();
 
-  size_t root_count = samples.sample_roots.size();
+  const size_t root_count = samples.sample_roots.size();
   for (size_t i = 0; i < root_count; i++) {
     args.node = samples.sample_roots[i];
     args.depth = 0;
@@ -459,19 +506,15 @@ void FlameGraph::DrawWorkerGraphNode(DrawNodeArgs& args) {
   if (!node) return;
 
   const int depth = args.depth;
-  const ImVec2& canvas_pos = args.canvas_pos;
-  const ImVec2& canvas_size = args.canvas_size;
-  const float row_height = args.row_height;
-  const float time_scale = args.time_scale;
 
   const absl::string_view name = node->result->GetName();
   const uint64_t start_time = node->result->GetStartTimeNanos();
   const uint64_t end_time = node->result->GetEndTimeNanos();
 
+  DrawNodeArgs rect_args = args;
+  rect_args.display_style = DisplayStyle::kNormal;
   Rect rect;
-  if (!DrawRectangle(args.draw_list, name.data(), depth, canvas_pos,
-                     canvas_size, time_scale, row_height, start_time, end_time,
-                     args.selected_frame_start_time_ns, true, rect)) {
+  if (!DrawRectangle(rect_args, name.data(), start_time, end_time, rect)) {
     return;
   }
 
@@ -493,8 +536,9 @@ void FlameGraph::DrawWorkerGraphNode(DrawNodeArgs& args) {
   }
 }
 
-void FlameGraph::DrawTimeline(ImDrawList* draw_list, ImVec2 canvas_pos,
-                              ImVec2 canvas_size, float time_scale) {
+void FlameGraph::DrawTimeline(ImDrawList* draw_list, const ImVec2 canvas_pos,
+                              const ImVec2 canvas_size,
+                              const float time_scale) {
   const ImVec2 timeline_pos = canvas_pos;
   const float timeline_line_y =
       timeline_pos.y + kTimelineHeight - kTimelinePadding;
@@ -591,24 +635,24 @@ void FlameGraph::HandleInput(const ImVec2& flame_canvas_pos) {
   }
 }
 
-bool FlameGraph::DrawRectangle(ImDrawList* draw_list, const char* name,
-                               int depth, ImVec2 canvas_pos, ImVec2 canvas_size,
-                               float time_scale, float row_height,
-                               uint64_t start_time, uint64_t end_time,
-                               uint64_t selected_frame_start_time_ns,
-                               bool is_current_frame, Rect& rect) {
+bool FlameGraph::DrawRectangle(const DrawNodeArgs& args, const char* name,
+                               const uint64_t start_time,
+                               const uint64_t end_time, Rect& rect) {
   // Calculate the x/y position and width of the node in the flame graph.
   const int64_t time_offset =
       static_cast<int64_t>(start_time) -
-      static_cast<int64_t>(selected_frame_start_time_ns);
-  const float width = static_cast<float>(end_time - start_time) * time_scale;
-  const float x = canvas_pos.x + flame_graph_pan_x_ +
-                  static_cast<float>(time_offset) * time_scale;
-  const float y = canvas_pos.y + depth * row_height;
+      static_cast<int64_t>(args.selected_frame_start_time_ns);
+  const float width =
+      static_cast<float>(end_time - start_time) * args.time_scale;
+  const float x = args.canvas_pos.x + flame_graph_pan_x_ +
+                  static_cast<float>(time_offset) * args.time_scale;
+  const float y = args.canvas_pos.y + args.depth * args.row_height;
 
   // Return early if the rectangle would be outside the canvas.
-  if (y + row_height < canvas_pos.y || y > canvas_pos.y + canvas_size.y ||
-      x + width < canvas_pos.x || x > canvas_pos.x + canvas_size.x) {
+  if (y + args.row_height < args.canvas_pos.y ||
+      y > args.canvas_pos.y + args.canvas_size.y ||
+      x + width < args.canvas_pos.x ||
+      x > args.canvas_pos.x + args.canvas_size.x) {
     return false;
   }
 
@@ -616,13 +660,13 @@ bool FlameGraph::DrawRectangle(ImDrawList* draw_list, const char* name,
   rect.min.x = x;
   rect.min.y = y;
   rect.max.x = x + width;
-  rect.max.y = y + row_height;
+  rect.max.y = y + args.row_height;
 
   // Clamp the rectangle bounds to the canvas bounds.
-  rect.min.x = std::max(rect.min.x, canvas_pos.x);
-  rect.min.y = std::max(rect.min.y, canvas_pos.y);
-  rect.max.x = std::min(rect.max.x, canvas_pos.x + canvas_size.x);
-  rect.max.y = std::min(rect.max.y, canvas_pos.y + canvas_size.y);
+  rect.min.x = std::max(rect.min.x, args.canvas_pos.x);
+  rect.min.y = std::max(rect.min.y, args.canvas_pos.y);
+  rect.max.x = std::min(rect.max.x, args.canvas_pos.x + args.canvas_size.x);
+  rect.max.y = std::min(rect.max.y, args.canvas_pos.y + args.canvas_size.y);
 
   // Add a small gap between rectangles.
   rect.max.x -= kRectGap;
@@ -638,8 +682,8 @@ bool FlameGraph::DrawRectangle(ImDrawList* draw_list, const char* name,
   if (rect.max.x <= rect.min.x || rect.max.y <= rect.min.y) return false;
 
   // Get a random but name-stable color for the sample.
-  ImU32 color = GetColorForName(name, is_current_frame);
-  draw_list->AddRectFilled(rect.min, rect.max, color);
+  ImU32 color = GetColorForName(name, args.display_style);
+  args.draw_list->AddRectFilled(rect.min, rect.max, color);
 
   // Draw text if the rectangle is wide enough to display it.
   const float font_size = ImGui::GetFontSize() * kFontSizeScale;
@@ -658,11 +702,11 @@ bool FlameGraph::DrawRectangle(ImDrawList* draw_list, const char* name,
       rect_width > kNodeOverrideTextClippingWidth) {
     ImVec2 text_pos(
         rect.min.x + ((rect.max.x - rect.min.x) - text_size.x) * 0.5f,
-        rect.min.y + (row_height - text_size.y) * 0.5f);
+        rect.min.y + (args.row_height - text_size.y) * 0.5f);
     // Text clipping
     ImVec4 clip_rect(rect.min.x, rect.min.y, rect.max.x, rect.max.y);
-    draw_list->AddText(ImGui::GetFont(), font_size, text_pos, IM_COL32_WHITE,
-                       name, nullptr, 0.0f, &clip_rect);
+    args.draw_list->AddText(ImGui::GetFont(), font_size, text_pos,
+                            IM_COL32_WHITE, name, nullptr, 0.0f, &clip_rect);
   }
 
   return true;  // Rectangle is visible.
@@ -739,13 +783,13 @@ void FlameGraph::DrawFrameBoundaryLines(ImDrawList* draw_list,
   }
 }
 
-ImU32 FlameGraph::GetColorForName(absl::string_view name,
-                                  bool is_current_frame) {
+ImU32 FlameGraph::GetColorForName(const absl::string_view name,
+                                  const DisplayStyle display_style) {
   // Hash the name of the sample and then mod it by the number of colors to get
   // a consistent color across all samples with the same name.
-  size_t hash = absl::Hash<absl::string_view>{}(name);
-  size_t index = hash % flame_graph_colors::kNumColors;
-  if (!is_current_frame) {
+  const size_t hash = absl::Hash<absl::string_view>{}(name);
+  const size_t index = hash % flame_graph_colors::kNumColors;
+  if (display_style == DisplayStyle::kFaded) {
     return flame_graph_colors::kUnselectedFrameColors[index];
   }
   return flame_graph_colors::kFrameColors[index];

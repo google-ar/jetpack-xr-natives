@@ -14,6 +14,8 @@
 
 #include "core/editor/widgets/hierarchy.h"
 
+#include <cstdlib>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <vector>
@@ -26,6 +28,7 @@
 #include "dear_imgui/imgui.h"
 #include "dear_imgui/imgui_internal.h"  // IWYU pragma: keep
 #include "filament/libs/utils/include/utils/Entity.h"
+#include "core/async/future.h"
 #include "core/common/registry.h"
 #include "core/common/robin_set.h"
 #include "core/config.h"
@@ -46,6 +49,8 @@
 #include "core/ncsb/node_handle.h"
 #include "core/ncsb/path_manager.h"
 #include "core/ncsb/scene_metadata.h"
+#include "core/render/primitive_shape_renderer.h"
+#include "core/render/primitive_shape_type.h"
 #include "core/view/framework/camera/camera_helpers.h"
 
 namespace imp::editor {
@@ -60,6 +65,12 @@ constexpr VirtualKeyCode kMultiSelectKeyCodes[] = {
     VirtualKeyCode::VK_RIGHT_SUPER,
     VirtualKeyCode::VK_LEFT_CTRL,
     VirtualKeyCode::VK_RIGHT_CTRL,
+};
+
+// Keycodes used for shift-click selecting a range of nodes.
+constexpr VirtualKeyCode kShiftKeyCodes[] = {
+    VirtualKeyCode::VK_LEFT_SHIFT,
+    VirtualKeyCode::VK_RIGHT_SHIFT,
 };
 
 #if IMP_PLATFORM(ANDROID) || IMP_PLATFORM(IOS)
@@ -106,6 +117,27 @@ void CollectFilteredNodes(const ImGuiTextFilter& filter,
   }
 }
 
+NodeHandle CreateAndSelectEmptyNode(BaseView& view) {
+  NodeHandle node = view.CreateNode();
+  EditorTouch(node);
+  Editor& editor = view.GetRegistry().Get<Editor>()->get();
+  editor.SelectNode(node);
+  return node;
+}
+
+void CreateAndSelectPrimitiveShapeNode(BaseView& view,
+                                       PrimitiveShapeType shape_type) {
+  Future<NodeHandle> node =
+      PrimitiveShapeRenderer::CreatePrimitive(view, shape_type);
+
+  node.Then([&view](NodeHandle node) {
+        EditorTouch(node);
+        Editor& editor = view.GetRegistry().Get<Editor>()->get();
+        editor.SelectNode(node);
+      })
+      .KeptBy(&view);
+}
+
 }  // namespace
 
 Hierarchy::Hierarchy(BaseView& view, absl::string_view filter)
@@ -132,26 +164,45 @@ Hierarchy::Hierarchy(BaseView& view, absl::string_view filter)
       this);
 
   const auto handle_keyboard_event = [this](const imp::KeyboardEvent& event) {
-    // Only handle multi-select keys.
-    if (!absl::c_linear_search(kMultiSelectKeyCodes, event.key.code)) {
-      return;
+    // If the delete or backspace key is pressed, delete the selected nodes.
+    // Only handle the key press if the user is not typing in a text field.
+    if (event.type == KeyboardEventType::kOnDown &&
+        (event.key.code == VirtualKeyCode::VK_DELETE ||
+         event.key.code == VirtualKeyCode::VK_BACKSPACE) &&
+        !ImGui::GetIO().WantTextInput) {
+      view_.GetRegistry().GetOrCreate<EditorClipboard>(&view_).Delete();
     }
-    // We can check if we should multi-select or not, based on whether or not
-    // held_multi_select_keys_ is empty.
-    switch (event.type) {
-      case KeyboardEventType::kOnDown:
-        held_multi_select_keys_.insert(event.key.code);
-        break;
-      case KeyboardEventType::kOnUp:
-        held_multi_select_keys_.erase(event.key.code);
-        break;
-      default:
-        return;
+
+    // Handle multi-select keys.
+    if (absl::c_linear_search(kMultiSelectKeyCodes, event.key.code)) {
+      switch (event.type) {
+        case KeyboardEventType::kOnDown:
+          held_multi_select_keys_.insert(event.key.code);
+          break;
+        case KeyboardEventType::kOnUp:
+          held_multi_select_keys_.erase(event.key.code);
+          break;
+        default:
+          break;
+      }
+    }
+
+    // Handle shift keys.
+    if (absl::c_linear_search(kShiftKeyCodes, event.key.code)) {
+      switch (event.type) {
+        case KeyboardEventType::kOnDown:
+          held_shift_keys_.insert(event.key.code);
+          break;
+        case KeyboardEventType::kOnUp:
+          held_shift_keys_.erase(event.key.code);
+          break;
+        default:
+          break;
+      }
     }
   };
 
   editor.GetDispatcher().Connect(handle_keyboard_event, this);
-  view_.GetDispatcher().Connect(handle_keyboard_event, this);
 }
 
 ImGuiTreeNodeFlags Hierarchy::GetTreeNodeFlags() const {
@@ -159,17 +210,9 @@ ImGuiTreeNodeFlags Hierarchy::GetTreeNodeFlags() const {
 }
 
 void Hierarchy::DrawImGui() {
-  // Decorate the widget header with a context menu trigger.
-  if (MobileLongPress(kNodesHeaderLabel)) {
-    ImGui::OpenPopup(kNodesHeaderLabel.data());
-  }
-  if (ImGui::BeginPopupContextItem(kNodesHeaderLabel.data())) {
-    if (ImGui::MenuItem("New Node")) {
-      NodeHandle node = view_.CreateNode();
-      EditorTouch(node);
-      Editor& editor = view_.GetRegistry().Get<Editor>()->get();
-      editor.SelectNode(node);
-    }
+  // Draw the popup menu for creating new nodes.
+  if (ImGui::BeginPopupContextWindow()) {
+    ShowCreateNodeMenu();
     ImGui::EndPopup();
   }
   if (ImGui::BeginDragDropTarget()) {
@@ -213,31 +256,16 @@ void Hierarchy::DrawImGui() {
 void Hierarchy::DrawHierarchy(
     NodeHandle node, std::optional<RobinSet<NodeHandle>> filtered_nodes,
     const absl::flat_hash_set<NodeHandle>& selected_nodes) {
-  if (filtered_nodes.has_value() && !filtered_nodes->contains(node)) return;
+  if (!ShouldShowNode(node, filtered_nodes)) return;
 
-  Editor& editor = view_.GetRegistry().Get<Editor>()->get();
-  // Do not draw any of the editor nodes.
-  if (node == editor.GetEditorRoot()) {
-    return;
-  }
-
-#if IMP_RUNTIME(DEV)
-  if (node->IsEditorStaging()) {
-    return;
-  }
-#endif
-
-  if (!DrawNode(node, filtered_nodes, selected_nodes)) {
-    return;
-  }
+  if (!DrawNode(node, filtered_nodes, selected_nodes)) return;
 
   if (node) {
     for (NodeHandle child : node->GetChildren()) {
       // Because of operations like multi-select -> delete, etc, it's possible
       // for a child node to be removed in between DrawHierarchy calls.
-      if (!child) {
-        continue;
-      }
+      if (!child) continue;
+
       // Recurse with the children.
       DrawHierarchy(child, filtered_nodes, selected_nodes);
     }
@@ -259,7 +287,7 @@ bool Hierarchy::DrawNode(
   ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow |
                              ImGuiTreeNodeFlags_OpenOnDoubleClick |
                              ImGuiTreeNodeFlags_SpanAvailWidth;
-  bool is_node_selected = selected_nodes.contains(node);
+  const bool is_node_selected = selected_nodes.contains(node);
 
   bool should_scroll_to_node = false;
   // Check if the node is currently selected.
@@ -278,23 +306,25 @@ bool Hierarchy::DrawNode(
   }
 
   // If the filter is active, control expanded state by a filter match.
-  if (filtered_nodes.has_value()) {
-    // Respect manually-collapsed nodes so the user can collapse parts of the
-    // hierarchy even if they match the filter.
-    ImGui::SetNextItemOpen(filtered_nodes.value().contains(node) &&
-                               !manually_collapsed_nodes_.contains(node),
-                           ImGuiCond_Always);
-  } else {
+  if (!filtered_nodes.has_value()) {
     // If the filter is empty, set the expanded state to the set of expanded
     // nodes controlled by the user. This restores the hierarchy to its
     // original state if the user deletes the filter.
     manually_collapsed_nodes_.clear();
-    ImGui::SetNextItemOpen(manually_expanded_nodes_.contains(node),
-                           ImGuiCond_Always);
   }
+  ImGui::SetNextItemOpen(IsNodeExpanded(node, filtered_nodes),
+                         ImGuiCond_Always);
 
-  bool is_expanded =
+  const bool is_disabled = !node->IsActive();
+  if (is_disabled) {
+    ImGui::PushStyleColor(ImGuiCol_Text,
+                          ImGui::GetStyle().Colors[ImGuiCol_TextDisabled]);
+  }
+  const bool is_expanded =
       ImGui::TreeNodeEx(GetTreeNodeLabelForNode(node).c_str(), flags);
+  if (is_disabled) {
+    ImGui::PopStyleColor();
+  }
 
   if (should_scroll_to_node) {
     ImGui::SetScrollHereY();
@@ -322,7 +352,7 @@ bool Hierarchy::DrawNode(
   // If the TreeNode was clicked to the right of the arrow, then toggle
   // selection.
   // TODO: don't accept click if dragging and dropping.
-  bool is_mouse_beyond_arrow =
+  const bool is_mouse_beyond_arrow =
       node->GetChildren().empty() ||
       (ImGui::GetMousePos().x - ImGui::GetItemRectMin().x) >
           ImGui::GetTreeNodeToLabelSpacing();
@@ -333,7 +363,9 @@ bool Hierarchy::DrawNode(
   // the rest of the UX.
   if (ImGui::IsMouseReleased(0) &&
       ImGui::IsItemHovered(ImGuiHoveredFlags_None) && is_mouse_beyond_arrow) {
-    if (!held_multi_select_keys_.empty()) {
+    if (!held_shift_keys_.empty()) {
+      SelectRange(node);
+    } else if (!held_multi_select_keys_.empty()) {
       editor.SelectNode(node, EditorInfo::SelectionMode::kMultipleNodes);
     } else {
       if (is_node_selected && selected_nodes.size() == 1) {
@@ -354,6 +386,9 @@ bool Hierarchy::DrawNode(
 
   bool has_multiple_selection = selected_nodes.size() > 1;
   if (ImGui::BeginPopupContextItem(GetTreeNodeLabelForNode(node).c_str())) {
+    ShowCreateNodeMenu();
+    ImGui::Separator();
+
     EditorClipboard& editor_clipboard =
         view_.GetRegistry().GetOrCreate<EditorClipboard>(&view_);
     if (ImGui::MenuItem("Cut")) {
@@ -434,8 +469,8 @@ bool Hierarchy::DrawNode(
       // Note: This is intentionally checked here instead of when calling
       // BeginDragAndDropSource because these nodes can still be dragged into
       // other places (i.e. NodeSceneHandle, the AssetLibrary).
-      auto peeked_metadata = peeked_node->GetComponent<SceneMetadata>();
-      bool is_child_of_base =
+      const auto peeked_metadata = peeked_node->GetComponent<SceneMetadata>();
+      const bool is_child_of_base =
           peeked_metadata && peeked_metadata->IsChildOfBase();
 
       if (is_ancestor_of_target || is_child_of_base) {
@@ -480,6 +515,141 @@ bool Hierarchy::MobileLongPress(absl::string_view node) {
   }
 #endif
   return false;
+}
+
+bool Hierarchy::ShouldShowNode(
+    NodeHandle node,
+    const std::optional<RobinSet<NodeHandle>>& filtered_nodes) const {
+  if (filtered_nodes.has_value() && !filtered_nodes->contains(node)) {
+    return false;
+  }
+
+  Editor& editor = view_.GetRegistry().Get<Editor>()->get();
+  // Do not draw any of the editor nodes.
+  if (node == editor.GetEditorRoot()) {
+    return false;
+  }
+
+#if IMP_RUNTIME(DEV)
+  if (node->IsEditorStaging()) {
+    return false;
+  }
+#endif
+
+  return true;
+}
+
+bool Hierarchy::IsNodeExpanded(
+    NodeHandle node,
+    const std::optional<RobinSet<NodeHandle>>& filtered_nodes) const {
+  if (filtered_nodes.has_value()) {
+    return filtered_nodes.value().contains(node) &&
+           !manually_collapsed_nodes_.contains(node);
+  }
+  return manually_expanded_nodes_.contains(node);
+}
+
+void Hierarchy::SelectRange(NodeHandle end_node) {
+  Editor& editor = view_.GetRegistry().Get<Editor>()->get();
+  const absl::flat_hash_set<NodeHandle>& selected_nodes =
+      editor.GetSelectedNodes();
+
+  // We have to find all the visible nodes in the Hierarchy because range
+  // selection needs to work even if a filter is being used.
+  std::vector<NodeHandle> visible_nodes;
+  view_.ForEachNode(
+      [this, &visible_nodes](NodeHandle root) {
+        std::optional<RobinSet<NodeHandle>> filtered_nodes = std::nullopt;
+        if (filter_.IsActive()) {
+          filtered_nodes.emplace();
+          CollectFilteredNodes(filter_, *filtered_nodes, root);
+        }
+        CollectVisibleNodes(root, filtered_nodes, visible_nodes);
+      },
+      NodeFlags::kIsRoot);
+
+  // Find the selected node that is furthest away from the end node.
+  // This will make it so that if you already have multiple nodes selected,
+  // when you shift-click a new node, it will additively select the range.
+  auto start_it = visible_nodes.end();
+  auto end_it = absl::c_find(visible_nodes, end_node);
+
+  int max_distance = -1;
+  int end_index = std::distance(visible_nodes.begin(), end_it);
+
+  for (int i = 0; i < visible_nodes.size(); ++i) {
+    if (!selected_nodes.contains(visible_nodes[i])) continue;
+
+    int distance = std::abs(i - end_index);
+
+    if (distance <= max_distance) continue;
+
+    max_distance = distance;
+    start_it = visible_nodes.begin() + i;
+  }
+
+  // If no visible start node was found, select the end node only.
+  // This happens if the start node was filtered out since it was selected.
+  if (start_it == visible_nodes.end()) {
+    editor.SelectNode(end_node);
+    return;
+  }
+
+  // If the start node is after the end node, swap them.
+  // Required for ranges from a low node to a high node rather than vice-versa.
+  if (start_it > end_it) {
+    std::swap(start_it, end_it);
+  }
+
+  // Select the whole range of nodes we've found.
+  editor.SelectNode(*start_it);
+  for (auto it = start_it + 1; it <= end_it; ++it) {
+    editor.SelectNode(*it, EditorInfo::SelectionMode::kMultipleNodes);
+  }
+}
+
+void Hierarchy::CollectVisibleNodes(
+    NodeHandle node, const std::optional<RobinSet<NodeHandle>>& filtered_nodes,
+    std::vector<NodeHandle>& out_nodes) {
+  if (!ShouldShowNode(node, filtered_nodes)) return;
+
+  out_nodes.push_back(node);
+
+  if (!IsNodeExpanded(node, filtered_nodes)) return;
+
+  // Recursively collect all expanded, non-filtered children.
+  for (NodeHandle child : node->GetChildren()) {
+    if (!child) continue;
+
+    CollectVisibleNodes(child, filtered_nodes, out_nodes);
+  }
+}
+
+void Hierarchy::ShowCreateNodeMenu() {
+  if (ImGui::BeginMenu("New Node")) {
+    if (ImGui::MenuItem("Empty")) {
+      CreateAndSelectEmptyNode(view_);
+    }
+    if (ImGui::MenuItem("Cube")) {
+      CreateAndSelectPrimitiveShapeNode(view_, PrimitiveShapeType::kBox);
+    }
+    if (ImGui::MenuItem("Sphere")) {
+      CreateAndSelectPrimitiveShapeNode(view_, PrimitiveShapeType::kSphere);
+    }
+    if (ImGui::MenuItem("Cone")) {
+      CreateAndSelectPrimitiveShapeNode(view_, PrimitiveShapeType::kCone);
+    }
+    if (ImGui::MenuItem("Cylinder")) {
+      CreateAndSelectPrimitiveShapeNode(view_, PrimitiveShapeType::kCylinder);
+    }
+    if (ImGui::MenuItem("Capsule")) {
+      CreateAndSelectPrimitiveShapeNode(view_, PrimitiveShapeType::kCapsule);
+    }
+    if (ImGui::MenuItem("Quad")) {
+      CreateAndSelectPrimitiveShapeNode(view_, PrimitiveShapeType::kQuad);
+    }
+    ImGui::EndMenu();
+  }
 }
 
 }  // namespace imp::editor

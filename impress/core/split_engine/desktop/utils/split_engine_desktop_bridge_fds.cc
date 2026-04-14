@@ -16,6 +16,8 @@
 #include <cstring>
 #include <string_view>
 
+#include "absl/log/check.h"
+#include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/synchronization/mutex.h"
 #include "core/split_engine/desktop/utils/split_engine_desktop_bridge_uds.h"
@@ -25,15 +27,22 @@
 namespace imp::split_engine {
 
 FileDescriptorSender::FileDescriptorSender(const std::string_view uds_path)
-    : UnixDomainSocket(uds_path, false) {}
+    : UnixDomainSocket(uds_path, false) {
+  
+}
+
+FileDescriptorSender::~FileDescriptorSender() { CHECK_OK(Disconnect()); }
 
 absl::Status FileDescriptorSender::Send(int fd,
                                         FileDescriptorMetadata& metadata) {
   absl::MutexLock lock(mutex_);
-  MP_RETURN_IF_ERROR(Connect());
+  if (!connected_) {
+    return absl::FailedPreconditionError("Not connected");
+  }
+
   MP_RETURN_IF_ERROR(SendImpl(fd, metadata));
   MP_RETURN_IF_ERROR(ReceiveAck());
-  MP_RETURN_IF_ERROR(Disconnect());
+
   return absl::OkStatus();
 }
 

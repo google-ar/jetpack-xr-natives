@@ -27,7 +27,7 @@ using std::string;
 
 /*
  * LogSink for Jetpack XR applications on AOSP devices. Uses JNI to call the
- * Kotlin log APIs in androidx.xr.runtime.Log.
+ * Kotlin log APIs in androidx.xr.runtime.XrLog.
  * */
 class JxrLogSink : public LogSink {
  public:

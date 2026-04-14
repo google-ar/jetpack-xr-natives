@@ -108,13 +108,13 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
     return result;
   }
 
-  jclass logClass = env->FindClass("androidx/xr/runtime/Log");
+  jclass logClass = env->FindClass("androidx/xr/runtime/XrLog");
   if (logClass == nullptr) {
     return JNI_ERR;
   }
 
-  jfieldID instanceFieldID =
-      env->GetStaticFieldID(logClass, "INSTANCE", "Landroidx/xr/runtime/Log;");
+  jfieldID instanceFieldID = env->GetStaticFieldID(
+      logClass, "INSTANCE", "Landroidx/xr/runtime/XrLog;");
   if (instanceFieldID == nullptr) {
     return JNI_ERR;
   }

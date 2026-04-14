@@ -388,6 +388,20 @@ cc_library(
             False,
         ),
         (
+            # The main filament library, configured to link to both OpenGL and Vulkan on desktop.
+            "gl_vulkan",
+            [
+                "@third_party//filament/libs:filaflat_vulkan",
+                "@third_party//filament/filament/backend:backend_gl_vulkan_linux",
+                ":_generated_desktop_gl_vulkan_noFL0_noMV_noMPC_materials",
+            ],
+            [],
+            [],
+            [],
+            False,
+            False,
+        ),
+        (
             # The main filament library, configured to link to both OpenGL and Vulkan on Android
             "gl_vulkan_android",
             [
@@ -484,6 +498,7 @@ cc_library(
         ("mobile", "gl_vulkan", "all", False, False, None),
         ("desktop", "opengl", "all", False, False, None),
         ("desktop", "vulkan", "all", False, False, None),
+        ("desktop", "gl_vulkan", "all", False, False, None),
     ]
 ]
 
@@ -519,5 +534,6 @@ cc_library(
         ("mobile", "gl_vulkan", "noFL0", "noMV", "noMPC"),
         ("desktop", "opengl", "noFL0", "noMV", "noMPC"),
         ("desktop", "vulkan", "noFL0", "noMV", "noMPC"),
+        ("desktop", "gl_vulkan", "noFL0", "noMV", "noMPC"),
     ]
 ]

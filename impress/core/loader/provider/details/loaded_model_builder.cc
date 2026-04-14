@@ -53,8 +53,6 @@
 #include "core/common/typed_tree.h"
 #include "core/image/image_contents.h"
 #include "core/loader/provider/details/vertex_attribute.h"
-#include "core/loader/provider/extensions/behavior/loader_extension.h"
-#include "core/loader/provider/extensions/gltf_extension_behavior.h"
 #include "core/loader/provider/extensions/gltf_extension_interactivity.h"
 #include "core/loader/provider/extensions/interactivity/loader_extension.h"
 #include "core/loader/provider/gltf/dense_data_access.h"
@@ -784,15 +782,6 @@ void LoadedModelBuilder::AddAudioExtension(
       fbb_.CreateVector(scene_emitters));
 }
 
-std::unique_ptr<BehaviorLoaderExtension>
-LoadedModelBuilder::CreateBehaviorLoaderExtension() {
-  return extensions::CreateBehaviorLoaderExtension(fbb_);
-}
-
-void LoadedModelBuilder::AddBehavior(const BehaviorOffset& behavior_offset) {
-  behavior_offset_ = behavior_offset;
-}
-
 std::unique_ptr<InteractivityLoaderExtension>
 LoadedModelBuilder::CreateInteractivityLoaderExtension() {
   return extensions::CreateInteractivityLoaderExtension(fbb_);
@@ -981,7 +970,7 @@ absl::StatusOr<Offset<schemas::LoadedModel>> LoadedModelBuilder::Serialize() {
       fbb_, skeleton, entity_graph, skins, vertex_buffers, index_buffers,
       materials, textures, images_types, images, animations, lights_punctual,
       materials_variants, morph_target_buffers, skinning_buffers,
-      audio_extension_offset_, behavior_offset_, interactivity_offset_);
+      audio_extension_offset_, interactivity_offset_);
 }
 
 flatbuffers::FlatBufferBuilder& LoadedModelBuilder::GetFlatBufferBuilder() {

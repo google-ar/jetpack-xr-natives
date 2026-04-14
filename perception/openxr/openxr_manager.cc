@@ -62,7 +62,7 @@ struct OpenXrExtension {
 
 // TODO: (broken link) - Change this from a global list to something more
 // flexible. Also split up between "required" and "optional" extensions, and
-// check against xrEnumerateInstanceExtensionProperties()
+// check against xr_enumerate_instance_extension_properties_()
 const std::array<std::string, 13> kRequiredExtensions = {
     // (broken link) start
     XR_ANDROID_ANCHOR_SHARING_EXPORT_EXTENSION_NAME,
@@ -234,121 +234,140 @@ OpenXrManager& OpenXrManager::GetOpenXrManager(
   return *kOpenXrManager;
 }
 
-bool OpenXrManager::InitExtensionFunctions() {
+bool OpenXrManager::InitOpenXrFunctions() {
   absl::MutexLock lock(mutex_);
+  PFN_xrGetInstanceProcAddr gipa = xr_get_instance_proc_addr_ != nullptr
+                                       ? xr_get_instance_proc_addr_
+                                       : xrGetInstanceProcAddr;
   XR_RETURN_IF_FAILED(
-      xrGetInstanceProcAddr(instance_, "xrConvertTimespecTimeToTimeKHR",
-                            (PFN_xrVoidFunction*)(&convert_time_)));
+      gipa(instance_, "xrGetSystem", (PFN_xrVoidFunction*)(&xr_get_system_)));
+  XR_RETURN_IF_FAILED(gipa(instance_, "xrCreateSession",
+                           (PFN_xrVoidFunction*)(&xr_create_session_)));
+  XR_RETURN_IF_FAILED(gipa(instance_, "xrDestroySession",
+                           (PFN_xrVoidFunction*)(&xr_destroy_session_)));
+  XR_RETURN_IF_FAILED(gipa(instance_, "xrGetSystemProperties",
+                           (PFN_xrVoidFunction*)(&xr_get_system_properties_)));
+  XR_RETURN_IF_FAILED(gipa(instance_, "xrCreateReferenceSpace",
+                           (PFN_xrVoidFunction*)(&xr_create_reference_space_)));
+  XR_RETURN_IF_FAILED(gipa(instance_, "xrDestroySpace",
+                           (PFN_xrVoidFunction*)(&xr_destroy_space_)));
+  XR_RETURN_IF_FAILED(gipa(instance_, "xrLocateSpace",
+                           (PFN_xrVoidFunction*)(&xr_locate_space_)));
+  XR_RETURN_IF_FAILED(gipa(instance_, "xrLocateViews",
+                           (PFN_xrVoidFunction*)(&xr_locate_views_)));
   XR_RETURN_IF_FAILED(
-      xrGetInstanceProcAddr(instance_, "xrCreateTrackableTrackerANDROID",
-                            (PFN_xrVoidFunction*)(&create_trackable_tracker_)));
+      gipa(instance_, "xrEnumerateEnvironmentBlendModes",
+           (PFN_xrVoidFunction*)(&xr_enumerate_environment_blend_modes_)));
+  XR_RETURN_IF_FAILED(gipa(instance_, "xrBeginSession",
+                           (PFN_xrVoidFunction*)(&xr_begin_session_)));
   XR_RETURN_IF_FAILED(
-      xrGetInstanceProcAddr(instance_, "xrGetAllTrackablesANDROID",
-                            (PFN_xrVoidFunction*)(&get_all_trackables_)));
+      gipa(instance_, "xrEndSession", (PFN_xrVoidFunction*)(&xr_end_session_)));
   XR_RETURN_IF_FAILED(
-      xrGetInstanceProcAddr(instance_, "xrGetTrackablePlaneANDROID",
-                            (PFN_xrVoidFunction*)(&get_trackable_plane_)));
-  XR_RETURN_IF_FAILED(
-      xrGetInstanceProcAddr(instance_, "xrGetTrackableObjectANDROID",
-                            (PFN_xrVoidFunction*)(&get_trackable_object_)));
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+      gipa(instance_, "xrPollEvent", (PFN_xrVoidFunction*)(&xr_poll_event_)));
+
+  XR_RETURN_IF_FAILED(gipa(instance_, "xrConvertTimespecTimeToTimeKHR",
+                           (PFN_xrVoidFunction*)(&convert_time_)));
+  XR_RETURN_IF_FAILED(gipa(instance_, "xrCreateTrackableTrackerANDROID",
+                           (PFN_xrVoidFunction*)(&create_trackable_tracker_)));
+  XR_RETURN_IF_FAILED(gipa(instance_, "xrGetAllTrackablesANDROID",
+                           (PFN_xrVoidFunction*)(&get_all_trackables_)));
+  XR_RETURN_IF_FAILED(gipa(instance_, "xrGetTrackablePlaneANDROID",
+                           (PFN_xrVoidFunction*)(&get_trackable_plane_)));
+  XR_RETURN_IF_FAILED(gipa(instance_, "xrGetTrackableObjectANDROID",
+                           (PFN_xrVoidFunction*)(&get_trackable_object_)));
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrDestroyTrackableTrackerANDROID",
       (PFN_xrVoidFunction*)(&destroy_trackable_tracker_)));
-  XR_RETURN_IF_FAILED(
-      xrGetInstanceProcAddr(instance_, "xrCreateAnchorSpaceANDROID",
-                            (PFN_xrVoidFunction*)(&create_anchor_space_)));
-  XR_RETURN_IF_FAILED(
-      xrGetInstanceProcAddr(instance_, "xrShareAnchorANDROID",
-                            (PFN_xrVoidFunction*)(&share_anchor_)));
+  XR_RETURN_IF_FAILED(gipa(instance_, "xrCreateAnchorSpaceANDROID",
+                           (PFN_xrVoidFunction*)(&create_anchor_space_)));
+  XR_RETURN_IF_FAILED(gipa(instance_, "xrShareAnchorANDROID",
+                           (PFN_xrVoidFunction*)(&share_anchor_)));
   // Set up persistence functions.
-  XR_RETURN_IF_FAILED(
-      xrGetInstanceProcAddr(instance_, "xrCreateDeviceAnchorPersistenceANDROID",
-                            reinterpret_cast<PFN_xrVoidFunction*>(
-                                &create_device_anchor_persistence_)));
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(instance_, "xrCreateDeviceAnchorPersistenceANDROID",
+                           reinterpret_cast<PFN_xrVoidFunction*>(
+                               &create_device_anchor_persistence_)));
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrDestroyDeviceAnchorPersistenceANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(
           &destroy_device_anchor_persistence_)));
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrPersistAnchorANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&persist_anchor_)));
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrEnumeratePersistedAnchorsANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&enumerate_persisted_anchors_)));
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrGetAnchorPersistStateANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&get_anchor_persist_state_)));
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrUnpersistAnchorANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&unpersist_anchor_)));
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrCreatePersistedAnchorSpaceANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&create_persisted_anchor_space_)));
   // Hit test functions.
-  XR_RETURN_IF_FAILED(
-      xrGetInstanceProcAddr(instance_, "xrRaycastANDROID",
-                            reinterpret_cast<PFN_xrVoidFunction*>(&raycast_)));
+  XR_RETURN_IF_FAILED(gipa(instance_, "xrRaycastANDROID",
+                           reinterpret_cast<PFN_xrVoidFunction*>(&raycast_)));
   // Depth functions.
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrCreateDepthSwapchainANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&create_depth_swapchain_)));
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrDestroyDepthSwapchainANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&destroy_depth_swapchain_)));
-  XR_RETURN_IF_FAILED(
-      xrGetInstanceProcAddr(instance_, "xrEnumerateDepthSwapchainImagesANDROID",
-                            reinterpret_cast<PFN_xrVoidFunction*>(
-                                &enumerate_depth_swapchain_images_)));
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(instance_, "xrEnumerateDepthSwapchainImagesANDROID",
+                           reinterpret_cast<PFN_xrVoidFunction*>(
+                               &enumerate_depth_swapchain_images_)));
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrEnumerateDepthResolutionsANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&enumerate_depth_resolutions_)));
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrAcquireDepthSwapchainImagesANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&acquire_depth_swapchain_images_)));
   // Hand functions.
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrCreateHandTrackerEXT",
       reinterpret_cast<PFN_xrVoidFunction*>(&create_hand_tracker_)));
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrDestroyHandTrackerEXT",
       reinterpret_cast<PFN_xrVoidFunction*>(&destroy_hand_tracker_)));
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrLocateHandJointsEXT",
       reinterpret_cast<PFN_xrVoidFunction*>(&locate_hand_joints_)));
 
   // Face functions.
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrCreateFaceTrackerANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&create_face_tracker_)));
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrDestroyFaceTrackerANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&destroy_face_tracker_)));
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrGetFaceCalibrationStateANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&get_face_calibration_state_)));
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrGetFaceStateANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&get_face_state_)));
 
   // Eye functions.
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrCreateEyeTrackerANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&create_eye_tracker_)));
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrDestroyEyeTrackerANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&destroy_eye_tracker_)));
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrGetFineTrackingEyesInfoANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&get_fine_tracking_eyes_info_)));
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrGetCoarseTrackingEyesInfoANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&get_coarse_tracking_eyes_info_)));
 
   // Future functions.
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrCancelFutureEXT",
       reinterpret_cast<PFN_xrVoidFunction*>(&cancel_future_)));
-  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+  XR_RETURN_IF_FAILED(gipa(
       instance_, "xrPollFutureEXT",
       reinterpret_cast<PFN_xrVoidFunction*>(&poll_future_)));
 
@@ -367,104 +386,100 @@ bool OpenXrManager::InitExtensionFunctions() {
       enabled_exts.end()) {
     cloud_auth_exts_loaded_ = true;
     // Google Cloud Authentication functions.
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+    XR_RETURN_IF_FAILED(gipa(
         instance_, "xrSetGoogleCloudAuthAsyncANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&set_google_cloud_auth_async_)));
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
-        instance_, "xrSetGoogleCloudAuthCompleteANDROID",
-        reinterpret_cast<PFN_xrVoidFunction*>(
-            &set_google_cloud_auth_complete_)));
+    XR_RETURN_IF_FAILED(
+        gipa(instance_, "xrSetGoogleCloudAuthCompleteANDROID",
+             reinterpret_cast<PFN_xrVoidFunction*>(
+                 &set_google_cloud_auth_complete_)));
   }
 
   if (all_geospatial_present) {
     // Spatial Entities functions.
-    XR_RETURN_IF_FAILED(
-        xrGetInstanceProcAddr(instance_, "xrEnumerateSpatialCapabilitiesEXT",
-                              reinterpret_cast<PFN_xrVoidFunction*>(
-                                  &enumerate_spatial_capabilities_)));
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+    XR_RETURN_IF_FAILED(gipa(instance_, "xrEnumerateSpatialCapabilitiesEXT",
+                             reinterpret_cast<PFN_xrVoidFunction*>(
+                                 &enumerate_spatial_capabilities_)));
+    XR_RETURN_IF_FAILED(gipa(
         instance_, "xrEnumerateSpatialCapabilityComponentTypesEXT",
         reinterpret_cast<PFN_xrVoidFunction*>(
             &enumerate_spatial_capability_component_types_)));
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+    XR_RETURN_IF_FAILED(gipa(
         instance_, "xrEnumerateSpatialCapabilityFeaturesEXT",
         reinterpret_cast<PFN_xrVoidFunction*>(
             &enumerate_spatial_capability_features_)));
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+    XR_RETURN_IF_FAILED(gipa(
         instance_, "xrCreateSpatialContextAsyncEXT",
         reinterpret_cast<PFN_xrVoidFunction*>(&create_spatial_context_async_)));
-    XR_RETURN_IF_FAILED(
-        xrGetInstanceProcAddr(instance_, "xrCreateSpatialContextCompleteEXT",
-                              reinterpret_cast<PFN_xrVoidFunction*>(
-                                  &create_spatial_context_complete_)));
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+    XR_RETURN_IF_FAILED(gipa(instance_, "xrCreateSpatialContextCompleteEXT",
+                             reinterpret_cast<PFN_xrVoidFunction*>(
+                                 &create_spatial_context_complete_)));
+    XR_RETURN_IF_FAILED(gipa(
         instance_, "xrDestroySpatialContextEXT",
         reinterpret_cast<PFN_xrVoidFunction*>(&destroy_spatial_context_)));
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+    XR_RETURN_IF_FAILED(gipa(
         instance_, "xrCreateSpatialDiscoverySnapshotAsyncEXT",
         reinterpret_cast<PFN_xrVoidFunction*>(
             &create_spatial_discovery_snapshot_async_)));
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+    XR_RETURN_IF_FAILED(gipa(
         instance_, "xrCreateSpatialDiscoverySnapshotCompleteEXT",
         reinterpret_cast<PFN_xrVoidFunction*>(
             &create_spatial_discovery_snapshot_complete_)));
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+    XR_RETURN_IF_FAILED(gipa(
         instance_, "xrQuerySpatialComponentDataEXT",
         reinterpret_cast<PFN_xrVoidFunction*>(&query_spatial_component_data_)));
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+    XR_RETURN_IF_FAILED(gipa(
         instance_, "xrDestroySpatialSnapshotEXT",
         reinterpret_cast<PFN_xrVoidFunction*>(&destroy_spatial_snapshot_)));
-    XR_RETURN_IF_FAILED(
-        xrGetInstanceProcAddr(instance_, "xrCreateSpatialEntityFromIdEXT",
-                              reinterpret_cast<PFN_xrVoidFunction*>(
-                                  &create_spatial_entity_from_id_)));
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+    XR_RETURN_IF_FAILED(gipa(instance_, "xrCreateSpatialEntityFromIdEXT",
+                             reinterpret_cast<PFN_xrVoidFunction*>(
+                                 &create_spatial_entity_from_id_)));
+    XR_RETURN_IF_FAILED(gipa(
         instance_, "xrDestroySpatialEntityEXT",
         reinterpret_cast<PFN_xrVoidFunction*>(&destroy_spatial_entity_)));
-    XR_RETURN_IF_FAILED(
-        xrGetInstanceProcAddr(instance_, "xrCreateSpatialUpdateSnapshotEXT",
-                              reinterpret_cast<PFN_xrVoidFunction*>(
-                                  &create_spatial_update_snapshot_)));
+    XR_RETURN_IF_FAILED(gipa(instance_, "xrCreateSpatialUpdateSnapshotEXT",
+                             reinterpret_cast<PFN_xrVoidFunction*>(
+                                 &create_spatial_update_snapshot_)));
 
     // Spatial Anchors functions.
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+    XR_RETURN_IF_FAILED(gipa(
         instance_, "xrCreateSpatialAnchorEXT",
         reinterpret_cast<PFN_xrVoidFunction*>(&create_spatial_anchor_)));
 
     // Spatial Anchor Space functions.
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+    XR_RETURN_IF_FAILED(gipa(
         instance_, "xrCreateSpatialAnchorSpaceFromIdANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(
             &create_spatial_anchor_space_from_id_)));
 
     // Geospatial functions.
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+    XR_RETURN_IF_FAILED(gipa(
         instance_, "xrCreateGeospatialTrackerANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&create_geospatial_tracker_)));
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+    XR_RETURN_IF_FAILED(gipa(
         instance_, "xrDestroyGeospatialTrackerANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&destroy_geospatial_tracker_)));
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+    XR_RETURN_IF_FAILED(gipa(
         instance_, "xrLocateGeospatialPoseFromPoseANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(
             &locate_geospatial_pose_from_pose_)));
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+    XR_RETURN_IF_FAILED(gipa(
         instance_, "xrLocateGeospatialPoseANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&locate_geospatial_pose_)));
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+    XR_RETURN_IF_FAILED(gipa(
         instance_, "xrCreateGeospatialAnchorANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&create_geospatial_anchor_)));
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+    XR_RETURN_IF_FAILED(gipa(
         instance_, "xrCreateSurfaceAnchorAsyncANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&create_surface_anchor_async_)));
     XR_RETURN_IF_FAILED(
-        xrGetInstanceProcAddr(instance_, "xrCreateSurfaceAnchorCompleteANDROID",
-                              reinterpret_cast<PFN_xrVoidFunction*>(
-                                  &create_surface_anchor_complete_)));
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+        gipa(instance_, "xrCreateSurfaceAnchorCompleteANDROID",
+             reinterpret_cast<PFN_xrVoidFunction*>(
+                 &create_surface_anchor_complete_)));
+    XR_RETURN_IF_FAILED(gipa(
         instance_, "xrCheckVpsAvailabilityAsyncANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&check_vps_availability_async_)));
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+    XR_RETURN_IF_FAILED(gipa(
         instance_, "xrCheckVpsAvailabilityCompleteANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(
             &check_vps_availability_complete_)));
@@ -485,7 +500,7 @@ bool OpenXrManager::CreateStageReferenceSpace() {
   {
     absl::MutexLock lock(mutex_);
     XR_RETURN_IF_FAILED(
-        xrCreateReferenceSpace(session_, &createInfo, &stage_space_));
+        xr_create_reference_space_(session_, &createInfo, &stage_space_));
   }
   return true;
 }
@@ -500,7 +515,7 @@ bool OpenXrManager::CreateUnboundedReferenceSpace() {
   {
     absl::MutexLock lock(mutex_);
     XR_RETURN_IF_FAILED(
-        xrCreateReferenceSpace(session_, &createInfo, &unbounded_space_));
+        xr_create_reference_space_(session_, &createInfo, &unbounded_space_));
   }
   return true;
 }
@@ -513,7 +528,7 @@ bool OpenXrManager::CreateViewReferenceSpace() {
   };
   absl::MutexLock lock(mutex_);
   XR_RETURN_IF_FAILED(
-      xrCreateReferenceSpace(session_, &createInfo, &view_space_));
+      xr_create_reference_space_(session_, &createInfo, &view_space_));
   return true;
 }
 
@@ -775,8 +790,8 @@ OpenXrManager::CreateAnchorResult OpenXrManager::LocatePersistedAnchorSpace(
   XrSpaceLocation location = {
       .type = XR_TYPE_SPACE_LOCATION,
   };
-  xr_result = xrLocateSpace(anchor_space, GetSpaceInDefaultReferenceSpace(),
-                            GetXrTimeNow(), &location);
+  xr_result = xr_locate_space_(anchor_space, GetSpaceInDefaultReferenceSpace(),
+                               GetXrTimeNow(), &location);
   if (XR_FAILED(xr_result)) {
     LOG(ERROR) << "Failed to locate persisted anchor with: "
                << XrEnumStr(xr_result);
@@ -957,7 +972,7 @@ bool OpenXrManager::IsGeospatialSupported() {
   XrSystemProperties systemProperties{.type = XR_TYPE_SYSTEM_PROPERTIES,
                                       .next = &geospatialSystemProperties};
   XR_RETURN_IF_FAILED(
-      xrGetSystemProperties(instance_, system_id_, &systemProperties));
+      xr_get_system_properties_(instance_, system_id_, &systemProperties));
 
   return geospatialSystemProperties.supportsGeospatial;
 }
@@ -1181,14 +1196,19 @@ XrResult OpenXrManager::SetGoogleCloudAuthAsync(
   return XR_SUCCESS;
 }
 
-bool OpenXrManager::Init(JNIEnv* env, jobject context,
+bool OpenXrManager::Init(JNIEnv* env, jobject context, XrInstance xr_instance,
                          XrReferenceSpaceType default_reference_space,
-                         bool start_polling_thread) {
+                         bool start_polling_thread,
+                         jlong get_instance_proc_address_ptr) {
   java_env_ = env;
   java_env_->GetJavaVM(&app_vm_);
   absl::MutexLock state_lock(initialization_mutex_);
   {
     absl::MutexLock lock(mutex_);
+
+    xr_get_instance_proc_addr_ =
+        reinterpret_cast<PFN_xrGetInstanceProcAddr>(
+            static_cast<intptr_t>(get_instance_proc_address_ptr));
 
     if (open_xr_state_ == OpenXrState::kResumed) {
       LOG(INFO) << "Returning existing OpenXR session.";
@@ -1201,6 +1221,8 @@ bool OpenXrManager::Init(JNIEnv* env, jobject context,
       }
       return true;
     }
+
+    instance_ = xr_instance;
     open_xr_state_ = OpenXrState::kInitializing;
     default_reference_space_ = default_reference_space;
   }
@@ -1211,21 +1233,15 @@ bool OpenXrManager::Init(JNIEnv* env, jobject context,
     return false;
   }
 
-  // Create an OpenXR instance.
-  if (!CreateInstance()) {
+  // Loads in the OpenXR functions (both core and extension) that will need to
+  // be called by the openXR manager.
+  if (!InitOpenXrFunctions()) {
     DeInitWithLockHeld();
     return false;
   }
 
   // Create an OpenXR session.
   if (!CreateSession()) {
-    DeInitWithLockHeld();
-    return false;
-  }
-
-  // Loads in the OpenXR extension functions that will need to be called by the
-  // openXR manager.
-  if (!InitExtensionFunctions()) {
     DeInitWithLockHeld();
     return false;
   }
@@ -1282,17 +1298,12 @@ void OpenXrManager::DeInitWithLockHeld(bool stop_polling_thread) {
     }
     open_xr_state_ = OpenXrState::kUninitializing;
 
-    XrResult session_result = xrDestroySession(session_);
+    XrResult session_result = xr_destroy_session_(session_);
     if (XR_FAILED(session_result)) {
       LOG(ERROR) << "Failed to destroy session with error: "
                  << XrEnumStr(session_result);
     }
 
-    XrResult instance_result = xrDestroyInstance(instance_);
-    if (XR_FAILED(instance_result)) {
-      LOG(ERROR) << "Failed to destroy instance with error: "
-                 << XrEnumStr(instance_result);
-    }
     // Destroy planes tracker.
     if (planes_trackable_tracker_ != XR_NULL_HANDLE) {
       XrResult result = destroy_trackable_tracker_(planes_trackable_tracker_);
@@ -1376,7 +1387,7 @@ void OpenXrManager::DeInitWithLockHeld(bool stop_polling_thread) {
 
     // Destroy view space.
     if (view_space_ != XR_NULL_HANDLE) {
-      XrResult destroy_view_space_result = xrDestroySpace(view_space_);
+      XrResult destroy_view_space_result = xr_destroy_space_(view_space_);
       view_space_ = XR_NULL_HANDLE;
       if (XR_FAILED(destroy_view_space_result)) {
         LOG(ERROR) << "Failed to destroy view space with error: "
@@ -1425,18 +1436,34 @@ bool OpenXrManager::PauseSession() {
 
 bool OpenXrManager::LoadOpenXr(jobject context) {
   PFN_xrInitializeLoaderKHR initialize_loader = nullptr;
+  XrLoaderInitInfoAndroidKHR loader_init_info_android;
 
   // Gets a function pointer to the OpenXR loader.
-  XR_RETURN_IF_FAILED(
-      xrGetInstanceProcAddr(XR_NULL_HANDLE, "xrInitializeLoaderKHR",
-                            (PFN_xrVoidFunction*)(&initialize_loader)));
-  if (initialize_loader == nullptr) {
-    LOG(ERROR) << "Failure loading OpenXR. Loader is null.";
-    return false;
-  }
-  XrLoaderInitInfoAndroidKHR loader_init_info_android;
   {
     absl::MutexLock lock(mutex_);
+    PFN_xrGetInstanceProcAddr gipa =
+        xr_get_instance_proc_addr_ != nullptr ? xr_get_instance_proc_addr_
+                                   : xrGetInstanceProcAddr;
+
+    XR_RETURN_IF_FAILED(gipa(
+        XR_NULL_HANDLE, "xrEnumerateInstanceExtensionProperties",
+        (PFN_xrVoidFunction*)(&xr_enumerate_instance_extension_properties_)));
+
+    if (instance_ != XR_NULL_HANDLE && xr_get_instance_proc_addr_ != nullptr) {
+      LOG(INFO)
+          << "OpenXR loader is already initialized (instance exists and GIPA "
+             "provided). skipping re-initialization.";
+      return true;
+    }
+
+    XR_RETURN_IF_FAILED(
+        gipa(XR_NULL_HANDLE, "xrInitializeLoaderKHR",
+             (PFN_xrVoidFunction*)(&initialize_loader)));
+    if (initialize_loader == nullptr) {
+      LOG(ERROR) << "Failure loading OpenXR. Loader is null.";
+      return false;
+    }
+
     loader_init_info_android = {
         .type = XR_TYPE_LOADER_INIT_INFO_ANDROID_KHR,
         .applicationVM = app_vm_,
@@ -1456,14 +1483,14 @@ bool OpenXrManager::GetEnabledExtensions(
     std::vector<std::string>& enabled_exts) {
   std::vector<XrExtensionProperties> available_ext_props;
   uint32_t property_count;
-  XR_RETURN_IF_FAILED(xrEnumerateInstanceExtensionProperties(
+  XR_RETURN_IF_FAILED(xr_enumerate_instance_extension_properties_(
       /*layerName=*/nullptr, /*propertyCapacityInput=*/0, &property_count,
       /*properties=*/nullptr));
   available_ext_props.resize(property_count);
   for (auto& prop : available_ext_props) {
     prop.type = XR_TYPE_EXTENSION_PROPERTIES;
   }
-  XR_RETURN_IF_FAILED(xrEnumerateInstanceExtensionProperties(
+  XR_RETURN_IF_FAILED(xr_enumerate_instance_extension_properties_(
       /*layerName=*/nullptr, property_count, &property_count,
       available_ext_props.data()));
 
@@ -1495,42 +1522,6 @@ bool OpenXrManager::GetEnabledExtensions(
   return true;
 }
 
-bool OpenXrManager::CreateInstance() {
-  std::vector<std::string> enabled_exts_str;
-  if (!GetEnabledExtensions(enabled_exts_str)) {
-    return false;
-  }
-
-  std::vector<const char*> enabled_exts;
-  enabled_exts.reserve(enabled_exts_str.size());
-  for (const auto& ext : enabled_exts_str) {
-    enabled_exts.push_back(ext.c_str());
-  }
-
-  XrInstanceCreateInfo create_info = {
-      .type = XR_TYPE_INSTANCE_CREATE_INFO,
-      .applicationInfo =
-          {
-              .apiVersion = XR_API_VERSION_1_0,
-          },
-      .enabledApiLayerCount = 0,
-      .enabledApiLayerNames = nullptr,
-      .enabledExtensionCount = static_cast<uint32_t>(enabled_exts.size()),
-      .enabledExtensionNames = enabled_exts.data(),
-  };
-  strncpy(create_info.applicationInfo.applicationName, kApplicationName,
-          XR_MAX_APPLICATION_NAME_SIZE);
-
-  {
-    absl::MutexLock lock(mutex_);
-    // Create an OpenXR instance.
-    XR_RETURN_IF_FAILED(xrCreateInstance(&create_info, &instance_));
-  }
-
-  LOG(INFO) << "XrInstance created.";
-  return true;
-}
-
 bool OpenXrManager::GetXrSystem() {
   // TODO: (broken link) - Update this to dynamically evaluate the form factor
   // once we support multiple form factors.
@@ -1541,7 +1532,7 @@ bool OpenXrManager::GetXrSystem() {
 
   {
     absl::MutexLock lock(mutex_);
-    XR_RETURN_IF_FAILED(xrGetSystem(instance_, &system_info, &system_id_));
+    XR_RETURN_IF_FAILED(xr_get_system_(instance_, &system_info, &system_id_));
     if (system_id_ == XR_NULL_SYSTEM_ID) {
       LOG(ERROR) << "XrSystemId is null, this should not be possible.";
       return false;
@@ -1563,7 +1554,7 @@ bool OpenXrManager::CreateSession() {
         .systemId = system_id_,
     };
     XR_RETURN_IF_FAILED(
-        xrCreateSession(instance_, &session_create_info, &session_));
+        xr_create_session_(instance_, &session_create_info, &session_));
   }
   LOG(INFO) << "Successfully created XrSession.";
   return true;
@@ -2604,9 +2595,9 @@ OpenXrManager::CreateAnchorResult OpenXrManager::CreateSurfaceAnchorAsync(
 
 bool OpenXrManager::GetAnchorLocationData(
     XrSpace anchor_space, XrTime time, XrSpaceLocation* out_anchor_location) {
-  XR_RETURN_IF_FAILED(xrLocateSpace(anchor_space,
-                                    GetSpaceInDefaultReferenceSpace(), time,
-                                    out_anchor_location));
+  XR_RETURN_IF_FAILED(xr_locate_space_(anchor_space,
+                                       GetSpaceInDefaultReferenceSpace(), time,
+                                       out_anchor_location));
   return true;
 }
 
@@ -2643,7 +2634,7 @@ bool OpenXrManager::CreateSemanticAnchor(
     return false;
   }
   if (!ExportAnchor(*out_anchor_space, out_anchor_token)) {
-    xrDestroySpace(*out_anchor_space);
+    xr_destroy_space_(*out_anchor_space);
     return false;
   }
   return true;
@@ -2659,28 +2650,34 @@ bool OpenXrManager::DestroyAnchor(XrSpace anchor_space) {
     }
   }
 
-  XR_RETURN_IF_FAILED(xrDestroySpace(anchor_space));
+  return DestroySpace(anchor_space);
+}
+
+bool OpenXrManager::DestroySpace(XrSpace space) {
+  if (space == XR_NULL_HANDLE) {
+    return true;
+  }
+  XR_RETURN_IF_FAILED(xr_destroy_space_(space));
   return true;
 }
 
-bool OpenXrManager::GetHeadPose(XrTime time, XrPosef* out_pose) {
+// Returns the tracking state.
+TrackingState OpenXrManager::GetHeadPose(XrTime time, XrPosef* out_pose) {
   XrSpaceLocation space_location = {.type = XR_TYPE_SPACE_LOCATION,
                                     .next = nullptr,
                                     .locationFlags = 0,
                                     .pose = kIdentityPose};
-  XR_RETURN_IF_FAILED(xrLocateSpace(
-      view_space_, GetSpaceInDefaultReferenceSpace(), time, &space_location));
+  XrResult result = xr_locate_space_(
+      view_space_, GetSpaceInDefaultReferenceSpace(), time, &space_location);
 
-  bool is_valid_pose =
-      (space_location.locationFlags & kPoseValidFlags) == kPoseValidFlags;
-
-  if (!is_valid_pose) {
-    LOG(WARNING) << "xrLocateSpace returned an invalid pose.";
-    return false;
+  if (XR_FAILED(result)) {
+    *out_pose = kIdentityPose;
+    return kPaused;
   }
 
   *out_pose = space_location.pose;
-  return true;
+
+  return convertTrackingState(space_location.locationFlags);
 }
 
 bool OpenXrManager::GetStereoViews(XrTime time,
@@ -2710,9 +2707,9 @@ bool OpenXrManager::GetStereoViews(XrTime time, bool is_head_tracking_enabled,
   uint32_t view_count;
   {
     absl::MutexLock lock(mutex_);
-    XR_RETURN_IF_FAILED(xrLocateViews(session_, &view_locate_info, &view_state,
-                                      kViewTypeStereoViewCount, &view_count,
-                                      out_views->data()));
+    XR_RETURN_IF_FAILED(xr_locate_views_(session_, &view_locate_info,
+                                         &view_state, kViewTypeStereoViewCount,
+                                         &view_count, out_views->data()));
   }
 
   if (view_count != kViewTypeStereoViewCount) {
@@ -2737,7 +2734,7 @@ bool OpenXrManager::GetEnvironmentBlendModes(
   }
   absl::MutexLock lock(mutex_);
   uint32_t count = 0;
-  XR_RETURN_IF_FAILED(xrEnumerateEnvironmentBlendModes(
+  XR_RETURN_IF_FAILED(xr_enumerate_environment_blend_modes_(
       instance_, system_id_, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, 0,
       &count, nullptr));
 
@@ -2746,7 +2743,7 @@ bool OpenXrManager::GetEnvironmentBlendModes(
     return true;
   }
   out_modes->resize(count);
-  XR_RETURN_IF_FAILED(xrEnumerateEnvironmentBlendModes(
+  XR_RETURN_IF_FAILED(xr_enumerate_environment_blend_modes_(
       instance_, system_id_, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, count,
       &count, out_modes->data()));
   return true;
@@ -2766,14 +2763,14 @@ void OpenXrManager::HandleSessionChangedEvent(
 
       {
         absl::MutexLock lock(mutex_);
-        xrBeginSession(session_, &beginInfo);
+        xr_begin_session_(session_, &beginInfo);
       }
       break;
     }
     case XR_SESSION_STATE_STOPPING: {
       {
         absl::MutexLock lock(mutex_);
-        xrEndSession(session_);
+        xr_end_session_(session_);
       }
       break;
     }
@@ -2841,7 +2838,7 @@ void OpenXrManager::PollOpenXR() {
       if (instance_ == XR_NULL_HANDLE) {
         return;
       }
-      result = xrPollEvent(instance_, &event);
+      result = xr_poll_event_(instance_, &event);
     }
     if (result == XR_EVENT_UNAVAILABLE) {
       return;

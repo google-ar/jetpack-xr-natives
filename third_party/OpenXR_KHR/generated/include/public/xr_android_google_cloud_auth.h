@@ -2,7 +2,7 @@
 #define XR_ANDROID_GOOGLE_CLOUD_AUTH_H_ 1
 
 /*
-** Copyright 2017-2025 The Khronos Group Inc.
+** Copyright 2017-2026 The Khronos Group Inc.
 **
 ** SPDX-License-Identifier: Apache-2.0 OR MIT
 */
@@ -26,9 +26,9 @@ extern "C" {
 #define XR_ANDROID_GOOGLE_CLOUD_AUTH_EXTENSION_NAME "XR_ANDROID_google_cloud_auth"
 #define XR_ERROR_KEYLESS_AUTH_NOT_SETUP_ANDROID ((XrResult) -1000787000U)
 #define XR_ERROR_KEYLESS_AUTH_FAILED_ANDROID ((XrResult) -1000787001U)
-#define XR_TYPE_GOOGLE_CLOUD_AUTH_API_KEY_ANDROID ((XrStructureType) 1000787000U)
-#define XR_TYPE_GOOGLE_CLOUD_AUTH_TOKEN_ANDROID ((XrStructureType) 1000787001U)
-#define XR_TYPE_GOOGLE_CLOUD_AUTH_KEYLESS_ANDROID ((XrStructureType) 1000787002U)
+#define XR_TYPE_GOOGLE_CLOUD_AUTH_INFO_API_KEY_ANDROID ((XrStructureType) 1000787000U)
+#define XR_TYPE_GOOGLE_CLOUD_AUTH_INFO_TOKEN_ANDROID ((XrStructureType) 1000787001U)
+#define XR_TYPE_GOOGLE_CLOUD_AUTH_INFO_KEYLESS_ANDROID ((XrStructureType) 1000787002U)
 #define XR_TYPE_GOOGLE_CLOUD_AUTH_ERROR_RESULT_ANDROID ((XrStructureType) 1000787003U)
 
 typedef enum XrGoogleCloudAuthErrorANDROID {
@@ -42,32 +42,29 @@ typedef enum XrGoogleCloudAuthErrorANDROID {
     XR_GOOGLE_CLOUD_AUTH_ERROR_ANDROID = -3,
     XR_GOOGLE_CLOUD_AUTH_ERROR_MAX_ENUM_ANDROID = 0x7FFFFFFF
 } XrGoogleCloudAuthErrorANDROID;
-typedef struct XrGoogleCloudAuthInfoBaseHeaderANDROID {
+typedef struct XR_MAY_ALIAS XrGoogleCloudAuthInfoBaseHeaderANDROID {
     XrStructureType             type;
     const void* XR_MAY_ALIAS    next;
 } XrGoogleCloudAuthInfoBaseHeaderANDROID;
 
-// XrGoogleCloudAuthApiKeyANDROID extends XrGoogleCloudAuthInfoBaseHeaderANDROID
-typedef struct XrGoogleCloudAuthApiKeyANDROID {
+typedef struct XrGoogleCloudAuthInfoApiKeyANDROID {
     XrStructureType             type;
     const void* XR_MAY_ALIAS    next;
     const char*                 apiKey;
-} XrGoogleCloudAuthApiKeyANDROID;
+} XrGoogleCloudAuthInfoApiKeyANDROID;
 
-// XrGoogleCloudAuthTokenANDROID extends XrGoogleCloudAuthInfoBaseHeaderANDROID
-typedef struct XrGoogleCloudAuthTokenANDROID {
+typedef struct XrGoogleCloudAuthInfoTokenANDROID {
     XrStructureType             type;
     const void* XR_MAY_ALIAS    next;
     const char*                 authToken;
-} XrGoogleCloudAuthTokenANDROID;
+} XrGoogleCloudAuthInfoTokenANDROID;
 
-// XrGoogleCloudAuthKeylessANDROID extends XrGoogleCloudAuthInfoBaseHeaderANDROID
-typedef struct XrGoogleCloudAuthKeylessANDROID {
+typedef struct XrGoogleCloudAuthInfoKeylessANDROID {
     XrStructureType             type;
     const void* XR_MAY_ALIAS    next;
-} XrGoogleCloudAuthKeylessANDROID;
+} XrGoogleCloudAuthInfoKeylessANDROID;
 
-// XrGoogleCloudAuthErrorResultANDROID extends XrSurfaceAnchorCreateCompletionANDROID,XrVPSAvailabilityCheckCompletionANDROID
+// XrGoogleCloudAuthErrorResultANDROID extends XrGoogleCloudAuthInfoBaseHeaderANDROID
 typedef struct XrGoogleCloudAuthErrorResultANDROID {
     XrStructureType                  type;
     void* XR_MAY_ALIAS               next;

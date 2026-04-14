@@ -22,8 +22,8 @@
 #include <memory>
 
 #include "absl/synchronization/notification.h"
+#include "core/async/background_scheduler.h"
 #include "core/split_engine/android/buffer_handle_factory.h"
-#include "core/split_engine/android/scheduler.h"
 
 namespace imp::split_engine {
 
@@ -33,7 +33,7 @@ class BridgeBuffer {
 
  public:
   BridgeBuffer(BufferHandleFactory& handle_factory, size_t buffer_size_bytes,
-               Scheduler& scheduler);
+               BackgroundScheduler& scheduler);
 
   BridgeBuffer(BridgeBuffer&& other) = delete;
   BridgeBuffer& operator=(BridgeBuffer&& other) = delete;
@@ -55,7 +55,7 @@ class BridgeBuffer {
   }
 
  private:
-  Scheduler& scheduler_;
+  BackgroundScheduler& scheduler_;
   std::unique_ptr<BufferHandle> handle_;
 
   int shared_memory_region_fd_;

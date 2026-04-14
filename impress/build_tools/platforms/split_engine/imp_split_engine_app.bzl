@@ -35,7 +35,6 @@ def imp_split_engine_app(
         resource_files,
         java_deps,
         native_lib_deps,
-        multidex,
         nocompress_extensions = None,
         proguard_generate_mapping = None,
         proguard_specs = None,
@@ -54,7 +53,6 @@ def imp_split_engine_app(
       resource_files: App resources for the resource_files attribute of android_binary.
       java_deps: Java dependencies passed through to the android_binary rule.
       native_lib_deps: Additional native .so deps to include in the Android apk.
-      multidex: Multidex setting passed through to the android_binary rule.
       nocompress_extensions: (Optional) A list of file extensions that should not be
         compressed in the Android apk.
       proguard_generate_mapping: (Optional) Whether to generate a Proguard mapping file.
@@ -83,7 +81,6 @@ def imp_split_engine_app(
         resource_files = resource_files,
         java_deps = java_deps,
         native_lib_deps = native_lib_deps,
-        multidex = multidex,
         nocompress_extensions = nocompress_extensions,
         proguard_generate_mapping = proguard_generate_mapping,
         proguard_specs = proguard_specs if proguard_specs else [],

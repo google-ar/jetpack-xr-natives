@@ -14,21 +14,36 @@
 
 #include "core/view/framework/collision/collision_system.h"
 
+#include "absl/base/optimization.h"
+#include "core/camera/camera_component.h"
+#include "core/camera/camera_manager.h"
+#include "core/collision/ray.h"
+#include "core/math/vec.h"
+#include "core/ncsb/component_handle.h"
 #include "core/view/base_view.h"
-#include "core/view/framework/camera/camera_manager.h"
 
 namespace imp {
 namespace details {
 
-Ray GetWorldRayFromPixelPosition(BaseView& view, float2 screen_pos) {
-  return view.GetCameraManager().GetCamera()->WorldRayFromPixelPoint(
-      screen_pos);
+Ray GetWorldRayFromPixelPosition(BaseView& view, const float2 screen_pos) {
+  const ComponentHandle<CameraComponent> camera =
+      view.GetCameraManager().GetCamera();
+  // If there is no camera, return a zero ray.
+  if (ABSL_PREDICT_FALSE(!camera)) {
+    return Ray(kZero3, kZero3);
+  }
+  return camera->WorldRayFromPixelPoint(screen_pos);
 }
 
 DoubleRay GetWorldRayFromPixelPositionPrecise(BaseView& view,
-                                              float2 screen_pos) {
-  return view.GetCameraManager().GetCamera()->WorldRayFromPixelPointPrecise(
-      screen_pos);
+                                              const float2 screen_pos) {
+  const ComponentHandle<CameraComponent> camera =
+      view.GetCameraManager().GetCamera();
+  // If there is no camera, return a zero ray.
+  if (ABSL_PREDICT_FALSE(!camera)) {
+    return DoubleRay(kZero3, kZero3);
+  }
+  return camera->WorldRayFromPixelPointPrecise(screen_pos);
 }
 
 }  // namespace details

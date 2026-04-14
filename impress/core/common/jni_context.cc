@@ -14,10 +14,16 @@
 
 #include "core/common/jni_context.h"
 
+#include <jni.h>
+
 #include <atomic>
 
 #include "core/common/log.h"
 #include "core/common/platform_helpers.h"
+
+#ifdef __ANDROID__
+#include <pthread.h>
+#endif
 
 // For some reason, the signature of AttachCurrentThread is different.
 #ifdef __ANDROID__
@@ -34,6 +40,34 @@ namespace {
 // synchronized.
 std::atomic<JavaVM*> g_jvm{nullptr};
 std::atomic<jint> g_jni_version{JNI_VERSION_1_6};
+
+// Attaches the current thread to the JVM with its pthread name.
+JNIEnv* AttachCurrentThreadToJvm(JavaVM* jvm) {
+  JNIEnv* env = nullptr;
+#ifdef __ANDROID__
+  JavaVMAttachArgs args;
+  args.version = g_jni_version.load();
+  args.group = nullptr;
+  args.name = nullptr;
+  if (__builtin_available(android 26, *)) {
+    char threadName[16];
+    if (pthread_getname_np(pthread_self(), threadName, sizeof(threadName)) ==
+        0) {
+      args.name = threadName;
+    }
+  }
+  if (jvm->AttachCurrentThread(reinterpret_cast<JNI_PTR**>(&env), &args) ==
+      JNI_OK) {
+    return env;
+  }
+#else
+  if (jvm->AttachCurrentThread(reinterpret_cast<JNI_PTR**>(&env), nullptr) ==
+      JNI_OK) {
+    return env;
+  }
+#endif
+  return nullptr;
+}
 
 // This class is designed to only be stored as a thread_local, because it stores
 // JNIEnv's that are only valid in the thread they are created in.
@@ -88,8 +122,8 @@ class ThreadLocalJniEnv {
 
     // If we call AttachCurrentThread(), we need to call DetachCurrentThread().
     // Store the result as |attached_| to indicate this.
-    if (jvm->AttachCurrentThread(reinterpret_cast<JNI_PTR**>(&env), nullptr) ==
-        JNI_OK) {
+    env = AttachCurrentThreadToJvm(jvm);
+    if (env) {
       attached_ = env;
       return env;
     }
@@ -124,12 +158,7 @@ class ThreadLocalJniEnv {
 
     // If we call AttachCurrentThread(), we need to call DetachCurrentThread().
     // Store the result as |attached_| to indicate this.
-    if (jvm->AttachCurrentThread(reinterpret_cast<JNI_PTR**>(&env), nullptr) ==
-        JNI_OK) {
-      return env;
-    }
-
-    return nullptr;
+    return AttachCurrentThreadToJvm(jvm);
   }
 
  private:

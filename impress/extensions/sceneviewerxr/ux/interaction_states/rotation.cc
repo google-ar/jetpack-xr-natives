@@ -27,6 +27,7 @@
 #include "core/ncsb/node_handle.h"
 #include "core/view/utils/frame_time.h"
 #include "extensions/sceneviewerxr/ux/input_flag.h"
+#include "extensions/sceneviewerxr/ux/interaction_mode.h"
 #include "extensions/sceneviewerxr/ux/interaction_states/idle.h"
 #include "extensions/sceneviewerxr/ux/interaction_states/interaction_owner.h"
 #include "extensions/sceneviewerxr/ux/interaction_states/interaction_states.h"
@@ -141,6 +142,7 @@ Machine::OptionalState HandleInput(Rotation& state, const imp::Ray& ray,
     // Handle events for pointers which did not initiate rotation.
     if (input_flags.Test(InputFlag::kIsDownStarting)) {
       // Start two-handed scale.
+      owner.GetInteractionData().SetScaleHandle(ScaleHandle::kTwoHanded);
       auto model_scale = owner.GetModelNode()->GetLocalScale().x;
       constexpr auto kEpsilon = 1e-5f;
       auto model_log_scale = std::log(std::max(kEpsilon, model_scale));

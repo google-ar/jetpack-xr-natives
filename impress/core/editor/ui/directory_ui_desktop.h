@@ -49,8 +49,8 @@ class DirectoryUiDesktop : public DirectoryUi {
 
  private:
   DirectoryUiDesktop(BaseView& view, ImGuiTextFilter& filter,
-                     TexturePtr home_icon, TexturePtr folder_icon,
-                     TexturePtr up_arrow_icon);
+                     OwnedTexturePtr home_icon, OwnedTexturePtr folder_icon,
+                     OwnedTexturePtr up_arrow_icon);
 
   absl::string_view GetCurrentWorkingDirectory() const;
 
@@ -60,9 +60,9 @@ class DirectoryUiDesktop : public DirectoryUi {
   ImGuiTextFilter& filter_;
 
   // Impress textures for the icons.
-  TexturePtr home_icon_;
-  TexturePtr folder_icon_;
-  TexturePtr up_arrow_icon_;
+  OwnedTexturePtr home_icon_;
+  OwnedTexturePtr folder_icon_;
+  OwnedTexturePtr up_arrow_icon_;
 
   std::string repo_directory_;
   std::string home_directory_;

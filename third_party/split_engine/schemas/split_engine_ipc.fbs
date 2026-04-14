@@ -15,6 +15,7 @@
 include "split_engine/schemas/split_engine_attributes.fbs";
 include "split_engine/schemas/split_engine_data.fbs";
 include "split_engine/schemas/split_engine_material.fbs";
+include "split_engine/schemas/split_engine_render_passes.fbs";
 
 namespace android_xr.schemas;
 
@@ -208,6 +209,29 @@ table RemoveColliders (requires_api: 1) {
   removes: [RemoveCollider] (id: 0, requires_api: 1);
 }
 
+// Adds a set of offscreen render passes that write to textures.
+table AddTexturePipelineRenderers {
+  renderers: [AddTexturePipelineRenderer] (id: 0);
+}
+
+// Updates existing offscreen render passes that were previously added.
+table UpdateTexturePipelineRenderers {
+  updates: [UpdateTexturePipelineRenderer] (id: 0);
+}
+
+// Removes previously created offscreen render passes.
+table RemoveTexturePipelineRenderers {
+  removes: [RemoveTexturePipelineRenderer] (id: 0);
+}
+
+table RegisterNamedTextures {
+  textures:[RegisterNamedTexture] (id: 0);
+}
+
+table UnregisterNamedTextures {
+  textures:[UnregisterNamedTexture] (id: 0);
+}
+
 // TestExperimentalCommand is a command that is not part of the public API.
 // It is only used for testing and benchmarking purposes.
 // It does nothing, and will never do anything.
@@ -263,6 +287,15 @@ union CommandTypes (requires_api: 1) {
   // Collider requests.
   AddOrUpdateColliders = 24 (requires_api: 1),
   RemoveColliders = 25 (requires_api: 1),
+
+  // TexturePipelineRenderer requests.
+  AddTexturePipelineRenderers = 26,
+  RemoveTexturePipelineRenderers = 27,
+  UpdateTexturePipelineRenderers = 28,
+
+  // Named Texture requests.
+  RegisterNamedTextures = 29,
+  UnregisterNamedTextures = 30,
 
   // TestExperimentalCommand requests. It is not part of the public API and will
   // always remain experimental.

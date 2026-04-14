@@ -19,6 +19,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/strings/string_view.h"
@@ -42,6 +43,10 @@ class Hierarchy : public Widget, public imp::Rememberer {
   void DrawImGui() override;
   ImGuiTreeNodeFlags GetTreeNodeFlags() const override;
 
+  // Selects all nodes visible in the hierarchy between the last selected node
+  // and the given node.
+  void SelectRange(NodeHandle end_node);
+
  private:
   // Recursive function for printing out the nodes of the gltf renderer.
   void DrawHierarchy(NodeHandle node,
@@ -56,8 +61,29 @@ class Hierarchy : public Widget, public imp::Rememberer {
   // Returns whether or not a long press happened on the given node.
   bool MobileLongPress(absl::string_view node);
 
+  // Collects all nodes that are currently visible in the hierarchy.
+  void CollectVisibleNodes(
+      NodeHandle node,
+      const std::optional<RobinSet<NodeHandle>>& filtered_nodes,
+      std::vector<NodeHandle>& out_nodes);
+
+  // Returns true if the node should be shown in the hierarchy (e.g. not an
+  // internal editor node and passes the filter).
+  bool ShouldShowNode(
+      NodeHandle node,
+      const std::optional<RobinSet<NodeHandle>>& filtered_nodes) const;
+
+  // Returns true if the node is expanded in the hierarchy.
+  bool IsNodeExpanded(
+      NodeHandle node,
+      const std::optional<RobinSet<NodeHandle>>& filtered_nodes) const;
+
+  // Shows the popup menu for creating new nodes.
+  void ShowCreateNodeMenu();
+
   BaseView& view_;
   absl::flat_hash_set<VirtualKeyCode> held_multi_select_keys_;
+  absl::flat_hash_set<VirtualKeyCode> held_shift_keys_;
   bool selected_nodes_changed_ = false;
   float2 inspector_size_;
   float header_height_;

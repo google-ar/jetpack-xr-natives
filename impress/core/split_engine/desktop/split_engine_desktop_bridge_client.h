@@ -33,6 +33,7 @@
 #include "third_party/grpc/include/grpcpp/support/client_callback.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/desktop/split_engine_desktop_bridge.grpc.pb.h"
+#include "core/split_engine/desktop/utils/split_engine_desktop_bridge_utils.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 
 namespace imp::split_engine {
@@ -95,6 +96,7 @@ class SplitEngineDesktopBridgeClient
   void Heartbeat(absl::Duration heartbeat_interval);
 
   std::string uds_path_;
+  std::unique_ptr<FileDescriptorSender> sender_;
 };
 
 }  // namespace imp::split_engine

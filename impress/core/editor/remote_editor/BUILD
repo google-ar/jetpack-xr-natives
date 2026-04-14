@@ -1,4 +1,4 @@
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
     "//build_tools:imp.bzl",
+    "if_android",
     "if_non_android",
 )
 
@@ -29,45 +30,98 @@ licenses(["notice"])
 
 cc_library(
     name = "remote_editor_jni",
-    srcs = ["remote_editor_jni.cc"],
-    linkstatic = True,
+    srcs = [
+        "remote_editor_script_api_bridge_jni.cc",
+        "remote_editor_video_streamer_jni.cc",
+    ],
+    linkstatic = 1,
     deps = [
+        ":remote_editor",
+        "//core:config",
         "//core/async:executor",
         "//core/common:buffer_access",
         "//core/common:jni_helpers",
+        "//core/common:registry",
         "//core/proto:proto_reader",
         "//core/scripting:message_helpers",
         "//core/scripting/proto:bridge_cc_proto",
         "//core/view:base_view",
         "//core/view/scripting",
+        "@com_google_absl//absl/base",
         "@com_google_impress//core/common:log",
+    ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "remote_editor_renderer",
+    srcs = [
+        "remote_editor_renderer.cc",
+    ],
+    hdrs = [
+        "remote_editor_renderer.h",
+    ],
+    linkstatic = 1,
+    deps = [
+        "//core/assets",
+        "//core/assets/material:material_asset",
+        "//core/async:future",
+        "//core/common:rememberer",
+        "//core/editor/components:world_space_editor_ui_assets",
+        "//core/materials",
+        "//core/math",
+        "//core/ncsb",
+        "//core/render",
+        "//core/render:primitive_shape_renderer",
+        "//core/render:primitive_shape_renderer_state_cc_proto",
+        "//core/view:base_view",
+        "//core/view/framework",
+        "//core/view/utils:frame_time",
+        "//core/window:filament_host",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/time",
+        "@com_google_impress//core/common:log",
+        "@third_party//filament/filament:filament_hdrs",
+        "@third_party//filament/libs:utils_hdrs",
     ],
     alwayslink = 1,
 )
 
 cc_library(
     name = "remote_editor",
-    srcs = ["remote_editor_server.cc"],
-    hdrs = ["remote_editor_server.h"],
+    srcs = [
+        "remote_editor_server.cc",
+    ] + if_android([
+        "android_remote_editor_server_wrapper.cc",
+        "android_remote_editor_script_api_bridge_wrapper.cc",
+    ]),
+    hdrs = [
+        "remote_editor_config.h",
+        "remote_editor_server.h",
+        "remote_editor_server_wrapper.h",
+    ] + if_android([
+        "android_remote_editor_server_wrapper.h",
+        "android_remote_editor_script_api_bridge_wrapper.h",
+    ]),
+    linkstatic = 1,
     deps = [
-        ":remote_editor_jni",  # buildcleaner: keep
+        ":remote_editor_renderer",
         "//core:config",
         "//core/async:executor",
         "//core/async:future",
-        "//core/common:buffer_access",
         "//core/common:jni_helpers",
-        "//core/common:platform_helpers",
-        "//core/ncsb",
-        "//core/proto:proto_reader",
-        "//core/proto:proto_writer",
-        "//core/scripting/proto:bridge_cc_proto",
+        "//core/common:rememberer",
+        "//core/editor",
+        "//core/editor:editor_constants",
+        "//core/editor:widget_ui_system",
+        "//core/editor/components:world_space_editor_ui_assets",
+        "//core/editor/layout",
         "//core/view:base_view",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:string_view",
-        "@com_google_absl//absl/synchronization",
-        "@com_google_absl//absl/time",
         "@com_google_impress//core/common:log",
-    ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
+    ],
     alwayslink = 1,
 )

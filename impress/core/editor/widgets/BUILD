@@ -40,15 +40,30 @@ cc_library(
 )
 
 cc_library(
-    name = "asset_thumbnail_provider",
-    srcs = [
-        "asset_thumbnail_provider.cc",
-    ],
+    name = "asset_thumbnail_generator",
     hdrs = [
-        "asset_thumbnail_provider.h",
+        "asset_thumbnail_generator.h",
     ],
     copts = imp_google3_copts(),
     deps = [
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@third_party//filament/filament:filament_hdrs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "standard_asset_thumbnail_generator",
+    srcs = [
+        "standard_asset_thumbnail_generator.cc",
+    ],
+    hdrs = [
+        "standard_asset_thumbnail_generator.h",
+    ],
+    copts = imp_google3_copts(),
+    deps = [
+        ":asset_thumbnail_generator",
         ":asset_type_helpers",
         "//core/assets",
         "//core/async:future",
@@ -62,10 +77,32 @@ cc_library(
         "//core/view/utils:asset",
         "//core/view/utils:string_map",
         "@com_google_absl//absl/log:check",
-        "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_impress//core/common:log",
+        "@third_party//filament/filament:filament_hdrs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "asset_thumbnail_provider",
+    srcs = [
+        "asset_thumbnail_provider.cc",
+    ],
+    hdrs = [
+        "asset_thumbnail_provider.h",
+    ],
+    copts = imp_google3_copts(),
+    deps = [
+        ":asset_thumbnail_generator",
+        ":asset_type_helpers",
+        "//core/common",
+        "//core/render",
+        "//core/view/utils:string_map",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
         "@third_party//filament/filament:filament_hdrs",
     ],
     alwayslink = 1,
@@ -83,10 +120,12 @@ cc_library(
     deps = [
         ":asset_thumbnail_provider",
         ":asset_type_helpers",
+        ":standard_asset_thumbnail_generator",
         "//core:config",
         "//core/async:future",
         "//core/common",
         "//core/common:invocable",
+        "//core/common:registry",
         "//core/common:rememberer",
         "//core/editor:widget",
         "//core/editor/layout:editor_control_flags",
@@ -244,6 +283,7 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         "//core:config",
+        "//core/async:future",
         "//core/common:registry",
         "//core/common:rememberer",
         "//core/common:robin_map",
@@ -261,6 +301,8 @@ cc_library(
         "//core/math",
         "//core/ncsb",
         "//core/ncsb:node_flag",
+        "//core/render:primitive_shape_renderer",
+        "//core/render:primitive_shape_type",
         "//core/view:base_view",
         "//core/view/framework",
         "@com_google_absl//absl/algorithm:container",
@@ -419,6 +461,7 @@ cc_library(
         "//core/view:base_view",
         "//core/view/framework",
         "//core/view/utils:frame_time",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/strings",
         "@dear_imgui",
     ],
@@ -437,6 +480,7 @@ cc_library(
     linkopts = imp_linkopts(),
     deps = [
         ":transform_widget_aspect_state_imp_cc_proto",
+        "//core/camera",
         "//core/collision:collision_helpers",
         "//core/collision:ray",
         "//core/common:registry",
@@ -450,6 +494,7 @@ cc_library(
         "//core/scene_handles:scene_handle_status_utils",
         "//core/view/framework",
         "//core/view/utils:frame_time",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament/libs:math_hdrs",
@@ -489,9 +534,10 @@ cc_library(
         ":transform_widget_mode_control_state_imp_cc_proto",
         "//core/common:registry",
         "//core/editor",
-        "//core/editor:events",
+        "//core/input",
         "//core/ncsb",
         "//core/view/framework",
+        "@dear_imgui",
     ],
     alwayslink = 1,
 )
@@ -581,8 +627,8 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
+        "//core/camera",
         "//core/common:debug_draw",
-        "//core/common:platform_helpers",
         "//core/common:registry",
         "//core/common:rememberer",
         "//core/editor",
@@ -594,7 +640,7 @@ cc_library(
         "//core/ncsb:node_flag",
         "//core/view:base_view",
         "//core/view/framework",
-        "//core/view/utils:frame_time",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/strings",
         "@com_google_impress//core/common:log",
     ],
@@ -623,18 +669,16 @@ cc_library(
         "//core:config",
         "//core/collision:collision_flags",
         "//core/common:debug_draw",
-        "//core/common:platform_helpers",
         "//core/common:registry",
         "//core/common:rememberer",
         "//core/editor",
         "//core/editor:events",
         "//core/editor:widget",
-        "//core/math",
         "//core/ncsb",
         "//core/ncsb:node_flag",
         "//core/view:base_view",
         "//core/view/framework",
-        "//core/view/utils:frame_time",
+        "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/strings",
         "@com_google_impress//core/common:log",
     ],
@@ -789,6 +833,26 @@ cc_library(
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/libs:filagui",
         "@third_party//filament/libs:math_hdrs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "debug_draw_widget",
+    srcs = [
+        "debug_draw_widget.cc",
+    ],
+    hdrs = [
+        "debug_draw_widget.h",
+    ],
+    copts = imp_google3_copts(),
+    deps = [
+        "//core/common:debug_draw",
+        "//core/editor:widget",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+        "@dear_imgui",
     ],
     alwayslink = 1,
 )

@@ -14,8 +14,11 @@
 
 #include "core/input/wheel_event.h"
 
+#include "absl/time/time.h"
+#include "core/math/vec.h"
+
 namespace imp {
 
-WheelEvent::WheelEvent(const float delta, absl::Duration elapsed_time)
-    : delta_(delta), elapsed_time_(elapsed_time) {}
+WheelEvent::WheelEvent(float2 delta, float2 point, absl::Duration elapsed_time)
+    : delta_(delta), point_(point), elapsed_time_(elapsed_time) {}
 }  // namespace imp

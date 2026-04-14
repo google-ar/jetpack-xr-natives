@@ -67,6 +67,7 @@ cc_library(
         "//core/view:view_events",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:string_view",
         "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/libs:utils_hdrs",

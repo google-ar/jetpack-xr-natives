@@ -19,6 +19,8 @@ package imp;
 import "core/proto/imp.proto";
 import "core/recipes/language/recipe_types.proto";
 
+// LINT.IfChange
+
 // NodeId is a unique identifier for a node.
 message NodeId {
   uint32 index = 1;
@@ -305,3 +307,5 @@ message RecipeGraph {
   repeated RecipeNode recipe_nodes = 1;
   repeated VariableDeclaration member_declarations = 2;
 }
+
+// LINT.ThenChange(//depot/google3/core/recipes/architecture.md)

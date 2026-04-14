@@ -23,6 +23,7 @@
 #include "absl/strings/string_view.h"
 #include "core/common/small_source_location.h"
 #include "core/render/texture.h"
+#include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
 
 namespace imp {
@@ -103,6 +104,14 @@ TextureRegistry::ScopedTextureRegistration TextureRegistry::RegisterTexture(
                << texture_name;
   }
 
+  if (split_engine::SplitEngineSerializer* serializer =
+          view_->GetSplitEngineSerializer()) {
+    if (serializer->GetApiLevel() ==
+        split_engine::kSplitEngineExperimentalApiLevel) {
+      serializer->RegisterNamedTexture(*texture->GetTexture(), texture_name);
+    }
+  }
+
   uint32_t id = last_id_++;
   registered_textures_[std::string(texture_name)] =
       RegisteredTexture{.id = id, .texture = std::move(texture)};
@@ -114,6 +123,14 @@ TextureRegistry::ScopedTextureRegistration TextureRegistry::RegisterTexture(
   if (registered_textures_.count(texture_name) > 0) {
     IMP_LOG(imp::FATAL) << "Cannot register already registered texture named "
                << texture_name;
+  }
+
+  if (split_engine::SplitEngineSerializer* serializer =
+          view_->GetSplitEngineSerializer()) {
+    if (serializer->GetApiLevel() ==
+        split_engine::kSplitEngineExperimentalApiLevel) {
+      serializer->RegisterNamedTexture(*texture->GetTexture(), texture_name);
+    }
   }
 
   uint32_t id = last_id_++;
@@ -152,7 +169,18 @@ uint32_t TextureRegistry::GetId(absl::string_view texture_name) {
 }
 
 void TextureRegistry::UnregisterTexture(absl::string_view texture_name) {
-  registered_textures_.erase(texture_name);
+  auto itr = registered_textures_.find(texture_name);
+  if (itr == registered_textures_.end()) {
+    return;
+  }
+  if (split_engine::SplitEngineSerializer* serializer =
+          view_->GetSplitEngineSerializer()) {
+    if (serializer->GetApiLevel() ==
+        split_engine::kSplitEngineExperimentalApiLevel) {
+      serializer->UnregisterNamedTexture(*itr.value().texture->GetTexture());
+    }
+  }
+  registered_textures_.erase(itr);
 }
 
 size_t TextureRegistry::GetTextureCount() const {

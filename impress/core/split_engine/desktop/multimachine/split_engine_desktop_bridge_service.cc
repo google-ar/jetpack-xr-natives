@@ -184,7 +184,7 @@ class MessageGroupReaderReactor final
     StartRead(&request_);
   }
 
-  void OnDone() override {}
+  void OnDone() override { delete this; }
 
  private:
   SplitEngineMMDesktopBridgeServiceImplFacade& impl_;
@@ -208,20 +208,31 @@ SplitEngineMMDesktopBridgeService::ReadMessageGroupCompletions(
   absl::MutexLock lock(bridge_data_mutex_);
   auto it = bridge_data_.find(request->bridge_id());
   if (it == bridge_data_.end()) {
-    auto reactor = new MessageGroupCompletionServerReactor();
+    // Reactor will self-delete itself when OnDone is called.
+    auto reactor = new MessageGroupCompletionServerReactor({});
     reactor->Shutdown(grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
                                    "Bridge not found."));
     return reactor;
   }
 
   if (it->second.reactor) {
-    auto reactor = new MessageGroupCompletionServerReactor();
+    // Reactor will self-delete itself when OnDone is called.
+    auto reactor = new MessageGroupCompletionServerReactor({});
     reactor->Shutdown(grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
                                    "Already registered."));
     return reactor;
   }
 
-  it->second.reactor = new MessageGroupCompletionServerReactor();
+  // Reactor will call provided lambda and self-delete itself when OnDone is
+  // called.
+  it->second.reactor = new MessageGroupCompletionServerReactor(
+      [this, bridge_id = request->bridge_id()]() {
+        absl::MutexLock lock(bridge_data_mutex_);
+        auto it = bridge_data_.find(bridge_id);
+        if (it != bridge_data_.end()) {
+          it->second.reactor = nullptr;
+        }
+      });
 
   return it->second.reactor;
 }

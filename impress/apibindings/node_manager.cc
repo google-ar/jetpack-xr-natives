@@ -73,9 +73,8 @@ int32_t NodeManagerImpl::CreateImpressNode() {
 absl::Status NodeManagerImpl::DestroyImpressNode(int32_t node) {
   // If the node is animating, be sure to remove it from the Animation map.
   // Otherwise we hit an assert on the next update.
-  auto unused1 = view_.GetModelManager().StopGltfModelAnimation(node);
-  auto unused2 =
-      view_.GetModelManager().StopGltfModelAnimationNew(node, kAllChannels);
+  auto unused =
+      view_.GetModelManager().StopGltfModelAnimation(node, kAllChannels);
 
   NodeHandle node_handle(utils::Entity::import(node));
   if (node_handle) {

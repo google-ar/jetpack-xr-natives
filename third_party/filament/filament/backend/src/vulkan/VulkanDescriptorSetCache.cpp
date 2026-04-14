@@ -355,12 +355,13 @@ void VulkanDescriptorSetCache::updateBuffer(fvkmemory::resource_ptr<VulkanDescri
 }
 
 void VulkanDescriptorSetCache::updateSampler(fvkmemory::resource_ptr<VulkanDescriptorSet> set,
-        uint8_t binding, fvkmemory::resource_ptr<VulkanTexture> texture,
-        VkSampler sampler, VkDescriptorSetLayout externalSamplerLayout) noexcept {
+        uint8_t binding, fvkmemory::resource_ptr<VulkanTexture> texture, VkSampler sampler,
+        VkDescriptorSetLayout externalSamplerLayout) noexcept {
 
     // We have to update a bound set for two use cases
     //   - streaming API (a changing feed of AHardwareBuffer)
     //   - external samplers - potential changing of dataspace per-frame
+
     // TODO: Fix the stream flow case base on the above comment!!
     if (set->isAnExternalSamplerBound) {
         auto layout = set->getLayout();

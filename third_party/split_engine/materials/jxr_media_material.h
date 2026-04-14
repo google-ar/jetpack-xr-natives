@@ -25,6 +25,7 @@
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
+#include "core/materials/material.h"
 #include "core/math/vec.h"
 #include "core/media/media_color_space.h"
 #include "core/media/media_type.h"
@@ -73,8 +74,7 @@ class JxrMediaMaterial : public imp::split_engine::SplitEngineBuiltinMaterial {
                         imp::float4 sub_view_rect_right);
 
  private:
-  JxrMediaMaterial(imp::BaseView& view,
-                   imp::split_engine::PlaceholderOrBuiltInMaterialPtr material);
+  JxrMediaMaterial(imp::BaseView& view, imp::OwnedMaterialPtr material);
 
   // This tracks the "Spatial API level" of the system image; we're depending on
   // the Serializer reporting the same value as XrExtensions.GetApiLevel().

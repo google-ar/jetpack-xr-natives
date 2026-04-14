@@ -16,6 +16,7 @@
 
 #include <cassert>
 #include <cstddef>
+#include <optional>
 #include <utility>
 
 #include "absl/log/check.h"
@@ -24,11 +25,13 @@
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "core/async/future.h"
+#include "core/common/base_pool_allocator.h"
 #include "core/common/holdable.h"
 #include "core/common/invocable.h"
 #include "core/common/rememberer.h"
 #include "core/common/vector_helpers.h"
 #include "core/ncsb/component.h"
+#include "core/ncsb/component_id.h"
 #include "core/view/base_view.h"
 
 namespace imp {
@@ -38,11 +41,6 @@ BaseComponentPool::ComponentStore::ComponentStore(BaseComponentPool* pool)
 
 bool BaseComponentPool::ComponentStore::Has(utils::Entity entity) const {
   return entities_to_indices_.count(entity) > 0;
-}
-
-BaseComponentPool::ComponentIndex BaseComponentPool::ComponentStore::GetIndex(
-    utils::Entity entity) const {
-  return entities_to_indices_.at(entity);
 }
 
 bool BaseComponentPool::ComponentStore::Empty() const {
@@ -55,6 +53,11 @@ size_t BaseComponentPool::ComponentStore::GetComponentCount() const {
 
 utils::Entity BaseComponentPool::ComponentStore::BackEntity() const {
   return components_.back()->GetEntity();
+}
+
+void BaseComponentPool::ComponentStore::Add(NodeHandle node, Component* ptr) {
+  components_.push_back(ptr);
+  entities_to_indices_[node.GetEntity()] = components_.size() - 1;
 }
 
 void BaseComponentPool::ComponentStore::Remove(utils::Entity entity) {
@@ -75,31 +78,27 @@ void BaseComponentPool::ComponentStore::Remove(utils::Entity entity) {
   // the iteration to skip over components. Instead we track the free indices
   // so we can densify the vector later.
   if (iterating_depth_ > 0) {
-    components_[index].reset();
+    pool_->Deallocate(components_[index]);
+    components_[index] = nullptr;
     ++free_indices_count_;
     
     return;
   }
 
+  Component* to_delete = components_[index];
+
   // Swap and pop the last component to ensure the vector of components stays
   // dense.
   if (index != last_index) {
-    ComponentPtr& last_component = components_.at(last_index);
+    Component* last_component = components_[last_index];
     utils::Entity swapped_entity = last_component->GetEntity();
-    std::swap(components_.at(index), last_component);
+    std::swap(components_[index], components_[last_index]);
     entities_to_indices_[swapped_entity] = index;
   }
 
   components_.pop_back();
-}
 
-Component& BaseComponentPool::ComponentStore::AtRaw(ComponentIndex index) {
-  return *components_[index];
-}
-
-const Component& BaseComponentPool::ComponentStore::AtRaw(
-    ComponentIndex index) const {
-  return *components_[index];
+  pool_->Deallocate(to_delete);
 }
 
 Component* BaseComponentPool::ComponentStore::TryGetRaw(utils::Entity entity) {
@@ -108,7 +107,7 @@ Component* BaseComponentPool::ComponentStore::TryGetRaw(utils::Entity entity) {
     return nullptr;
   }
 
-  return components_[itr->second].get();
+  return components_[itr->second];
 }
 
 void BaseComponentPool::ComponentStore::TryDensifyComponentsVector() {
@@ -131,33 +130,47 @@ void BaseComponentPool::ComponentStore::TryDensifyComponentsVector() {
   free_indices_count_ = 0;
 }
 
-BaseComponentPool::BaseComponentPool(BaseView& view)
-    : view_(view), components_(this) {}
+BaseComponentPool::BaseComponentPool(BaseView& view,
+                                     BasePoolAllocator<>* base_allocator,
+                                     ComponentId component_id)
+    : view_(view),
+      base_allocator_(base_allocator),
+      component_id_(component_id),
+      components_(this) {}
 
 BaseComponentPool::~BaseComponentPool() {
   // RemoveAll should be called prior to getting here.
   assert(components_.Empty());
+  if (base_allocator_) {
+    
+  }
 }
 
 bool BaseComponentPool::Has(utils::Entity entity) const noexcept {
-  return components_.Has(entity);
+  return base_allocator_ ? entities_to_components_.count(entity) > 0
+                         : components_.Has(entity);
 }
 
-BaseComponentPool::ComponentIndex BaseComponentPool::Get(
-    utils::Entity entity) const noexcept {
-  return components_.GetIndex(entity);
-}
-
-Component* BaseComponentPool::Add(utils::Entity entity) noexcept {
-  if (UTILS_UNLIKELY(Has(entity))) {
-    Remove(entity);
+Component* BaseComponentPool::Add(NodeHandle node) noexcept {
+  if (UTILS_UNLIKELY(Has(node.GetEntity()))) {
+    Remove(node.GetEntity());
   }
 
-  if (components_.Empty()) {
+  if (GetComponentCount() == 0) {
     BeforeFirstAdded();
   }
 
-  return Emplace(entity);
+  ComponentKey key;
+  Component* component = Emplace(node, &key);
+
+  if (base_allocator_) {
+    entities_to_components_[node.GetEntity()] = component;
+  } else {
+    components_.Add(node, component);
+  }
+  component->PostCreated(node, key, *this);
+
+  return component;
 }
 
 void BaseComponentPool::PostSetup(Component& component,
@@ -170,23 +183,19 @@ void BaseComponentPool::PostSetup(Component& component,
   AfterAdd(component);
 }
 
-Component& BaseComponentPool::GetRawComponent(
-    ComponentIndex instance) noexcept {
-  return components_.AtRaw(instance);
-}
-
 Component* BaseComponentPool::TryGetRawComponentFromEntity(
     utils::Entity entity) noexcept {
-  return components_.TryGetRaw(entity);
-}
-
-utils::Entity BaseComponentPool::GetEntity(
-    ComponentIndex instance) const noexcept {
-  return components_.AtRaw(instance).GetEntity();
+  if (base_allocator_) {
+    auto itr = entities_to_components_.find(entity);
+    return itr != entities_to_components_.end() ? itr->second : nullptr;
+  } else {
+    return components_.TryGetRaw(entity);
+  }
 }
 
 size_t BaseComponentPool::GetComponentCount() const noexcept {
-  return components_.GetComponentCount();
+  return base_allocator_ ? base_allocator_->GetAllocatedCount()
+                         : components_.GetComponentCount();
 }
 
 void BaseComponentPool::Remove(utils::Entity entity) noexcept {
@@ -194,7 +203,7 @@ void BaseComponentPool::Remove(utils::Entity entity) noexcept {
   Forget(entity);
 
   // CancelPending or Forget may have removed the component already.
-  Component* component = components_.TryGetRaw(entity);
+  Component* component = TryGetRawComponentFromEntity(entity);
   if (component == nullptr || component->IsRemoving()) {
     return;
   }
@@ -209,16 +218,31 @@ void BaseComponentPool::Remove(utils::Entity entity) noexcept {
 
   Cleanup(*component);
 
-  components_.Remove(entity);
+  if (base_allocator_) {
+    // Lookup the component again in case it was removed by Cleanup.
+    auto itr = entities_to_components_.find(entity);
+    if (itr != entities_to_components_.end()) {
+      entities_to_components_.erase(itr);
+      Deallocate(component);
+    }
+  } else {
+    components_.Remove(entity);
+  }
 
-  if (components_.Empty()) {
+  if (GetComponentCount() == 0) {
     AfterLastRemoved();
   }
 }
 
 void BaseComponentPool::RemoveAll() noexcept {
-  while (!components_.Empty()) {
-    Remove(components_.BackEntity());
+  if (base_allocator_) {
+    while (!entities_to_components_.empty()) {
+      Remove(entities_to_components_.begin()->first);
+    }
+  } else {
+    while (!components_.Empty()) {
+      Remove(components_.BackEntity());
+    }
   }
 }
 

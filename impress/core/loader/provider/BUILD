@@ -218,9 +218,7 @@ cc_library(
         "//core/common:typed_ids",
         "//core/common:typed_set_vector",
         "//core/image",
-        "//core/loader/provider/extensions:extension_behavior",
         "//core/loader/provider/extensions:extension_interactivity",
-        "//core/loader/provider/extensions/behavior:loader_extension",
         "//core/loader/provider/extensions/interactivity:fbs",
         "//core/loader/provider/extensions/interactivity:fbs_deps",  # build_cleaner: keep
         "//core/loader/provider/extensions/interactivity:loader_extension",

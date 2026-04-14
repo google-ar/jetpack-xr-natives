@@ -22,6 +22,7 @@
 #include "core/common/jni_helpers.h"
 #include "core/split_engine/android/extensions/split_engine_bridge.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
+#include "core/split_engine/message_group_monitor.h"
 #include "core/split_engine/split_engine_bridge_sender.h"
 
 #if __ANDROID_API__ >= 34
@@ -223,7 +224,7 @@ JNI_METHOD_REQUEST_CALLBACK(void, nOnResult)(JNIEnv* env, jclass /*clazz*/,
 JNI_METHOD_MESSAGE_GROUP_CALLBACK(void, nOnMessageGroupComplete)
 (JNIEnv* env, jclass /*clazz*/, jlong bridgeId, jint messageGroupId) {
   if (absl::Status release_result =
-          imp::split_engine::SplitEngineBridgeSender::ReleaseMessageGroup(
+          imp::split_engine::MessageGroupMonitor::ReleaseMessageGroup(
               bridgeId, messageGroupId);
       !release_result.ok()) {
     IMP_LOG(imp::ERROR) << "Failed to release message group: "

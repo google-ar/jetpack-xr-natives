@@ -23,9 +23,8 @@
 #include "core/common/trace.h"
 #include "core/editor/widgets/performance/config.h"
 #include "core/editor/widgets/performance/imgui_helper.h"
-#include "core/editor/widgets/performance/monitor_panel.h"
+#include "core/editor/widgets/performance/performance_window.h"
 #include "core/performance/profiler.h"
-#include "core/view/base_view.h"
 
 namespace {
 // Bytes in a megabyte.
@@ -49,20 +48,23 @@ constexpr float kHighlightFrameWidth = 0.3f;
 
 namespace imp::editor {
 
-MemoryPanel::MemoryPanel(int buffer_size) : buffer_(buffer_size) {}
+MemoryPanel::MemoryPanel(PerformanceWindow& performance_window, int buffer_size)
+    : performance_window_(performance_window), buffer_(buffer_size) {}
 
 MemoryPanel::~MemoryPanel() = default;
 
 float MemoryPanel::GetHighestVisibleMemoryUsage(int time_span_seconds) {
-  int earliest_visible_frame =
+  const int earliest_visible_frame =
       Profiler::GetCurrentFrameIndex() -
       time_span_seconds * details::kNumDisplayValuesPerSecond;
-  float highest_frame_memory_allocated = 0.0f;
-  for (const auto& memory_info : buffer_.data()) {
-    if (memory_info.frame_number < earliest_visible_frame) {
-      continue;
-    }
 
+  float highest_frame_memory_allocated = 0.0f;
+
+  for (const auto& memory_info : buffer_.data()) {
+    if (memory_info.frame_number < earliest_visible_frame) continue;
+
+    // Use whichever value is higher as our upper bound.
+    // Ensures no matter what that both plots will be visible.
     if (memory_info.allocated_megabytes >= highest_frame_memory_allocated) {
       highest_frame_memory_allocated = memory_info.allocated_megabytes;
     } else if (memory_info.allocations > highest_frame_memory_allocated) {
@@ -121,8 +123,10 @@ void MemoryPanel::DrawPanel(const int width, const int height,
 
       DrawPlot(current_frame, oldest_frame);
 
-      const int selected_frame_number = ImGuiHelper::GetSelectedFrameNumber();
+      const int selected_frame_number =
+          performance_window_.GetSelectedFrameNumber();
       ImDrawList* draw_list_overlays = ImPlot::GetPlotDrawList();
+
       DrawHighlightFrame(selected_frame_number, draw_list_overlays,
                          kSelectedFrameColor, kHighlightFrameWidth);
       DrawSelectedFrameLabels(selected_frame_number, draw_list_overlays);
@@ -155,9 +159,9 @@ void MemoryPanel::DrawPlot(const int current_frame, const int oldest_frame) {
 
   if (ImPlot::IsPlotHovered()) {
     ImDrawList* draw_list = ImPlot::GetPlotDrawList();
-    ImPlotPoint mouse = ImPlot::GetPlotMousePos();
+    const ImPlotPoint mouse = ImPlot::GetPlotMousePos();
 
-    int hovered_frame = static_cast<int>(std::floor(mouse.x));
+    const int hovered_frame = static_cast<int>(std::floor(mouse.x));
 
     if (hovered_frame < current_frame && hovered_frame >= oldest_frame) {
       DrawHighlightFrame(hovered_frame, draw_list);
@@ -258,10 +262,6 @@ void MemoryPanel::DrawToolTip(int frame_number) {
   ImGui::Text("Frame Number: %.0f", info.frame_number);
 
   ImGui::EndTooltip();
-}
-
-void MemoryPanel::OnStateChanged(MonitorPanel::MonitorState state) {
-  state_ = state;
 }
 
 void MemoryPanel::Update(absl::Duration elapsed_time,

@@ -195,8 +195,9 @@ def _emit_single_matc_target(
         compiled_material,
         api,
         force_feature_level_zero = False,
+        include_source_mat = False,
         **kwargs):
-    _FORBIDDEN_ARGS = ["platform", "include_essl1", "enable_multiview", "include_source_mat"]
+    _FORBIDDEN_ARGS = ["platform", "include_essl1", "enable_multiview"]
     for arg in _FORBIDDEN_ARGS:
         if arg in kwargs:
             fail("_emit_single_matc_target overrides %s, do not pass it" % arg)
@@ -222,7 +223,7 @@ def _emit_single_matc_target(
             "//conditions:default": False,
         }),
         enable_multiview = if_enable_stereo_type_multiview(True, False),
-        include_source_mat = if_imp_split_engine_allow_experimental_apis(True, otherwise = False),
+        include_source_mat = include_source_mat,
         **kwargs
     )
 
@@ -238,7 +239,8 @@ def process_and_build_material(
         enable_metal_postprocessing = None,
         metal_postprocessing_fast_math = None,
         preserve_text_shaders = None,
-        force_feature_level_zero = False):
+        force_feature_level_zero = False,
+        include_source_mat = None):
     """Preprocesses a material with replacements and includes, and builds it using filamat.
 
     Includes within includes are not supported.
@@ -268,6 +270,8 @@ def process_and_build_material(
            processing is enabled. By default, text shaders are removed; pass True to preserve them.
            This flag is ignored if Metal post-processing is disabled.
         force_feature_level_zero: Optional. Whether to force only ESSL 1.0 materials to be compiled.
+        include_source_mat: Optional. Whether to include the source code in the material. The
+           default (None) allows this rule to include the source in experimental builds.
     """
     is_opengl = by_backend(
         metal = False,
@@ -281,6 +285,10 @@ def process_and_build_material(
 
     if enable_metal_postprocessing == None:
         enable_metal_postprocessing = _enable_metal_postprocessing_by_default()
+
+    # Custom materials are an experimental feature that requires the source code in the cmat.
+    if include_source_mat == None:
+        include_source_mat = if_imp_split_engine_allow_experimental_apis(True, otherwise = False)
 
     process_target = "process_" + name
     process_material(
@@ -299,6 +307,7 @@ def process_and_build_material(
         defines = defines,
         optimization = optimization,
         force_feature_level_zero = force_feature_level_zero,
+        include_source_mat = include_source_mat,
     )
 
     if not force_feature_level_zero:
@@ -310,6 +319,7 @@ def process_and_build_material(
             variant_filter = variant_filter,
             defines = defines,
             optimization = optimization,
+            include_source_mat = include_source_mat,
         )
 
         _emit_single_matc_target(
@@ -320,6 +330,7 @@ def process_and_build_material(
             variant_filter = variant_filter,
             defines = defines,
             optimization = optimization,
+            include_source_mat = include_source_mat,
         )
 
     if not force_feature_level_zero:
@@ -334,6 +345,7 @@ def process_and_build_material(
                 defines = defines,
                 optimization = optimization,
                 force_feature_level_zero = force_feature_level_zero,
+                include_source_mat = include_source_mat,
             )
             _postprocess_metal_shaders_noop(
                 name = "metal_cmat_%s" % name,
@@ -354,6 +366,7 @@ def process_and_build_material(
                 defines = defines,
                 optimization = optimization,
                 force_feature_level_zero = force_feature_level_zero,
+                include_source_mat = include_source_mat,
             )
 
     # The generic alias should automatically select a backend-specific build

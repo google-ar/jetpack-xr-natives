@@ -24,7 +24,6 @@
 #include <utility>
 
 #include "absl/base/thread_annotations.h"
-#include "absl/cleanup/cleanup.h"
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
@@ -40,6 +39,7 @@
 #include "core/split_engine/desktop/multimachine/split_engine_desktop_bridge.grpc.pb.h"
 #include "core/split_engine/desktop/multimachine/split_engine_desktop_bridge_client.h"
 #include "core/split_engine/desktop/utils/message_group_completion_client_reactor.h"
+#include "core/split_engine/message_group_monitor.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_bridge_sender.h"
 
@@ -136,7 +136,7 @@ class SendMessageGroupReactor final
     
 
     // Mark that we don't expect any more messages.
-    no_more_messages_ = true;
+    SetNoMoreMessages();
 
     {
       absl::MutexLock lock(status_mutex_);
@@ -151,6 +151,7 @@ class SendMessageGroupReactor final
 
   void Await() { done_.WaitForNotification(); }
 
+  // Callback for client-side event.
   void OnWriteDone(bool ok) override {
     if (!ok) {
       // OnDone will be called
@@ -173,6 +174,7 @@ class SendMessageGroupReactor final
     Write();
   }
 
+  // Callback for server-side event, can be called in parallel to `OnWriteDone`.
   void OnDone(const grpc::Status& status) override {
     // Server completed the RPC call.
     
@@ -181,60 +183,91 @@ class SendMessageGroupReactor final
       status_ = ReactorStatus::kDead;
     }
 
+    {
+      absl::MutexLock lock(messages_mutex_);
+      
+    }
+
     // Message group was delivered to the server successfully.
     done_.Notify();
   }
 
   void Write() {
-    // Declared here to call cleanup after scoped mutexes are unlocked.
-    absl::Cleanup cleanup = absl::MakeCleanup(
-        [this] { on_message_group_sent_callback_(message_group_id_); });
+    // StartWrite, StartWritesDone should be called outside of the lock, because
+    // OnWriteDone can be called from them.
+    enum class Action : uint8_t {
+      kNone,
+      kStartWrite,
+      kStartWritesDone,
+    };
 
-    absl::MutexLock status_lock(status_mutex_);
-    // `kStart` is the only state that can initiate writes.
-    if (status_ != ReactorStatus::kStarted) {
-      std::move(cleanup).Cancel();
-      return;
+    SendMessageGroupRequest* next_message = nullptr;
+
+    Action action = Action::kNone;
+
+    // We want lambda to be destroyed prior to gRPC calls.
+    // StartWritesDone can almost immediately trigger OnDone in different thread
+    // (e.g. in case of inprocess channels). OnDone will allow destruction of
+    // `this`. In turn there will be race between destruction of `this` and
+    // completion of this method.
+    {
+      action = [this, &next_message]() -> Action {
+        absl::MutexLock status_lock(status_mutex_);
+        // `kStart` is the only state that can initiate writes.
+        if (status_ != ReactorStatus::kStarted) {
+          return Action::kNone;
+        }
+
+        absl::MutexLock messages_lock(messages_mutex_);
+        // Let's see if we have any messages to send.
+        if (messages_.empty()) {
+          // There are no more messages to send.
+          // This can happen in two cases:
+          //  1. gRPC is sending messages faster, than flow of `AddMessage`
+          //  calls.
+          //
+          //     There is nothing to send, so we will exit early.
+          //     Next `AddMessage` call will start the next write.
+          //
+          //  2. gRPC has sent all messages and `Finish` was called.
+          //
+          //     There will be no more messages at all and we shall finalize RPC
+          //     call.
+          //
+          if (no_more_messages_) {
+            // We are here because `Finish()` was called after the last chunk
+            // was sent.
+            //
+            // All chunks of the message group were sent to the server, but
+            // we don't know yet if it was delivered. There will be no more
+            // writes from the client side, so we can finalize RPC call.
+            status_ = ReactorStatus::kTerminating;
+            return Action::kStartWritesDone;
+          }
+
+          // We still can send the data, but we don't have any.
+          return Action::kNone;
+        }
+        status_ = ReactorStatus::kWriting;
+        next_message = &messages_.front();
+        return Action::kStartWrite;
+      }();
     }
 
-    absl::MutexLock messages_lock(messages_mutex_);
-    // Let's see if we have any messages to send.
-    if (messages_.empty()) {
-      // There are no more messages to send.
-      // This can happen in two cases:
-      //  1. gRPC is sending messages faster, than flow of `AddMessage` calls.
-      //
-      //     There is nothing to send, so we will exit early.
-      //     Next `AddMessage` call will start the next write.
-      //
-      //  2. gRPC has sent all messages and `Finish` was called.
-      //
-      //     There will be no more messages at all and we shall finalize RPC
-      //     call.
-      //
-      if (no_more_messages_) {
-        // We are here because `Finish()` was called after the last chunk
-        // was sent.
-        //
-        // All chunks of the message group were sent to the server, but
-        // we don't know yet if it was delivered. There will be no more writes
-        // from the client side, so we can finalize RPC call.
+    switch (action) {
+      case Action::kNone:
+        return;
+      case Action::kStartWrite:
+        StartWrite(next_message);
+        return;
+      case Action::kStartWritesDone:
+        on_message_group_sent_callback_(message_group_id_);
+        // Then finalize the RPC call. This might trigger `OnDone` almost
+        // immediately in different thread which then will trigger destruction
+        // of `this`.
         StartWritesDone();
-        status_ = ReactorStatus::kTerminating;
-      } else {
-        std::move(cleanup).Cancel();
-      }
-
-      // We still can send the data, but we don't have any.
-      // Exit early.
-      return;
+        return;
     }
-
-    std::move(cleanup).Cancel();
-
-    // Update the status and start the next write.
-    status_ = ReactorStatus::kWriting;
-    StartWrite(&messages_.front());
   }
 
  private:
@@ -249,7 +282,15 @@ class SendMessageGroupReactor final
   absl::Mutex messages_mutex_;
   std::queue<SendMessageGroupRequest> messages_
       ABSL_GUARDED_BY(messages_mutex_);
-  bool no_more_messages_ = false;
+  bool no_more_messages_ ABSL_GUARDED_BY(messages_mutex_) = false;
+  bool GetNoMoreMessages() {
+    absl::MutexLock lock(messages_mutex_);
+    return no_more_messages_;
+  }
+  void SetNoMoreMessages() {
+    absl::MutexLock lock(messages_mutex_);
+    no_more_messages_ = true;
+  }
 
   absl::Mutex status_mutex_;
   ReactorStatus status_ ABSL_GUARDED_BY(status_mutex_) = ReactorStatus::kIdle;
@@ -336,10 +377,14 @@ void SplitEngineMMDesktopBridgeClientImpl::Heartbeat(
     google::rpc::Status response;
   };
 
-  absl::Mutex mutex;
-  absl::MutexLock lock(mutex);
-  while (!mutex.AwaitWithTimeout(absl::Condition(&stop_heartbeat_),
-                                 heartbeat_interval)) {
+  absl::MutexLock lock(heartbeat_mutex_);
+  while (!heartbeat_mutex_.AwaitWithTimeout(absl::Condition(
+                                                +[](HeartbeatState* state) {
+                                                  return *state ==
+                                                         HeartbeatState::kStop;
+                                                },
+                                                &heartbeat_state_),
+                                            heartbeat_interval)) {
     auto args = std::make_shared<HeartbeatRequestArgs>();
     args->request.set_bridge_id(bridge_id_);
     IMP_LOG(imp::INFO) << "Heartbeat " << bridge_id_;
@@ -354,8 +399,20 @@ void SplitEngineMMDesktopBridgeClientImpl::Heartbeat(
 }
 
 SplitEngineMMDesktopBridgeClientImpl::~SplitEngineMMDesktopBridgeClientImpl() {
-  stop_heartbeat_ = true;
-  heartbeat_thread_.join();
+  {
+    absl::MutexLock lock(heartbeat_mutex_);
+    heartbeat_state_ = HeartbeatState::kStop;
+  }
+
+  if (heartbeat_thread_.joinable()) {
+    heartbeat_thread_.join();
+  }
+
+  // Need to make sure that reactor is destructed before the client is removed
+  // from the SplitEngineBridgeSender.
+  message_group_completion_reactor_.reset();
+
+  
 }
 
 absl::Status SplitEngineMMDesktopBridgeClientImpl::SendMessage(
@@ -487,5 +544,9 @@ SplitEngineMMDesktopBridgeClientImpl::SetOnMessageGroupSentCallback(
     MessageGroupSentCallback&& callback) {
   on_message_group_sent_callback_ = std::move(callback);
   return absl::OkStatus();
+}
+void SplitEngineMMDesktopBridgeClientImpl::StopHeartbeat() {
+  absl::MutexLock lock(heartbeat_mutex_);
+  heartbeat_state_ = HeartbeatState::kStop;
 }
 }  // namespace imp::split_engine

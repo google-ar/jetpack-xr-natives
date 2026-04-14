@@ -28,17 +28,19 @@
 
 namespace imp::editor {
 
+class PerformanceWindow;
+
 // A panel for the performance monitor to show the various information related
 // to rendering
 class RenderInfoPanel : public MonitorPanel {
  public:
-  RenderInfoPanel(BaseView& view, int buffer_size);
+  RenderInfoPanel(PerformanceWindow& performance_window, BaseView& view,
+                  int buffer_size);
   ~RenderInfoPanel() override;
 
   static constexpr ImU32 kDefaultHighlightColor = IM_COL32(128, 128, 128, 64);
   void DrawPanel(int width, int height, int time_span_seconds) override;
   void Update(absl::Duration elapsed_time, absl::Duration delta_time) override;
-  void OnStateChanged(MonitorState state) override;
 
  private:
   // Draws a grey highlight over the frame being moused over
@@ -64,10 +66,10 @@ class RenderInfoPanel : public MonitorPanel {
   bool show_sprites_ = true;
   bool show_gltfs_ = true;
 
+  PerformanceWindow& performance_window_;
   BaseView& view_;
   CircularBuffer<RenderInfo> buffer_;
   int upper_bound_ = 0;
-  MonitorState state_ = MonitorState::kRunning;
 
   static constexpr int kNumFrameValueLabels = 3;
   std::array<ImGuiHelper::LabelData, kNumFrameValueLabels> frame_value_data_;

@@ -60,7 +60,7 @@ Future<OwnedTexturePtr> LoadTextureFromPath(TextureFactory& texture_factory,
                 AssetPtr<ImageAsset> image) -> absl::StatusOr<OwnedTexturePtr> {
         // Uploads the texture to the system.
         OwnedTexturePtr texture = texture_factory.CreateTexture(
-            *image, imp::TextureGenerationOptions{},
+            image, imp::TextureGenerationOptions{},
             kDefaultTextureSamplerOptions);
         return texture;
       });
@@ -74,7 +74,7 @@ Future<OwnedTexturePtr> LoadTextureFromData(
                 AssetPtr<ImageAsset> image) -> absl::StatusOr<OwnedTexturePtr> {
         // Uploads the texture to the system.
         OwnedTexturePtr texture = texture_factory.CreateTexture(
-            *image, imp::TextureGenerationOptions{},
+            image, imp::TextureGenerationOptions{},
             kDefaultTextureSamplerOptions);
         return texture;
       });

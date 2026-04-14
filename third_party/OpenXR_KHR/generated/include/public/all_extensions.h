@@ -10,6 +10,7 @@
 #include <openxr/public/xr_android_face_tracking_data_source.h>
 #include <openxr/public/xr_android_geospatial.h>
 #include <openxr/public/xr_android_geospatial_anchor.h>
+#include <openxr/public/xr_android_global_passthrough_dimming.h>
 #include <openxr/public/xr_android_google_cloud_auth.h>
 #include <openxr/public/xr_android_spatial_anchor_space.h>
 
@@ -23,6 +24,7 @@
 #include <openxr/public/xr_androidx1_eye_tracking_calibration_state.h>
 #include <openxr/public/xr_androidx1_spatial_occupancy_grid.h>
 #include <openxr/public/xr_androidx2_geospatial_streetscape.h>
+#include <openxr/public/xr_androidx_spatial_interaction.h>
 #include <openxr/public/xr_androidx_system_state.h>
 #endif  // DO_NOT_USE_INCLUDE_LATEST_EXPERIMENTAL_EXTENSIONS
 
@@ -30,6 +32,7 @@
 // this header.
 #define XR_LIST_PUBLIC_EXTENSIONS(_) \
     _(XR_ANDROIDX_system_state, 455)\
+    _(XR_ANDROIDX_spatial_interaction, 706)\
     _(XR_ANDROID_face_tracking_data_source, 707)\
     _(XR_ANDROIDX1_body_tracking, 717)\
     _(XR_ANDROIDX1_eye_tracking_calibration_state, 723)\
@@ -38,6 +41,7 @@
     _(XR_ANDROID_geospatial, 790)\
     _(XR_ANDROIDX1_spatial_occupancy_grid, 794)\
     _(XR_ANDROID_spatial_anchor_space, 796)\
+    _(XR_ANDROID_global_passthrough_dimming, 797)\
     _(XR_ANDROID_geospatial_anchor, 798)\
     _(XR_ANDROIDX2_geospatial_streetscape, 799)\
 

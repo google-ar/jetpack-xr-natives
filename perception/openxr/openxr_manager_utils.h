@@ -23,6 +23,13 @@
 
 namespace androidx::xr::openxr {
 
+enum TrackingState {
+  kTracking = 0,
+  kPaused = 1,
+  kStopped = 2,
+  kTrackingDegraded = 3
+};
+
 // Multiplies two poses together. The first pose is the base and the second pose
 // is the offset from the base. This is used to get a pose in the reference
 // space of the first pose. This does not normalize the quaternion.
@@ -33,6 +40,8 @@ absl::uint128 UuidToUint128(const XrUuidEXT& uuid);
 
 // Adds two timespecs.
 timespec AddTimespecs(const timespec& timespec1, const timespec& timespec2);
+
+TrackingState convertTrackingState(XrSpaceLocationFlags location_flags);
 
 }  // namespace androidx::xr::openxr
 

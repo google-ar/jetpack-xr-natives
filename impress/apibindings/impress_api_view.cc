@@ -24,6 +24,7 @@
 #include "apibindings/asset_ptr_map.h"
 #include "apibindings/bindings_object.h"
 #include "apibindings/generic_material_manager.h"
+#include "apibindings/mesh_manager.h"
 #include "apibindings/model_manager.h"
 #include "apibindings/node_manager.h"
 #include "apibindings/skybox_manager.h"
@@ -31,6 +32,7 @@
 #include "apibindings/texture_manager.h"
 #include "apibindings/water_material_manager.h"
 #include "core/ncsb/node_handle.h"
+#include "core/render/mesh_renderer.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/utils/frame_time.h"
 
@@ -59,6 +61,7 @@ void ImpressApiView::SetupImpressApiNative() {
   texture_manager_ = CreateTextureManager(*this);
   water_material_manager_ = CreateWaterMaterialManager(*this);
   generic_material_manager_ = CreateGenericMaterialManager(*this);
+  mesh_manager_ = MeshManager::Create(*this);
   node_manager_ = CreateNodeManager(*this);
 }
 
@@ -117,10 +120,18 @@ absl::Status ImpressApiView::DisposeAllResources() {
       [&nodes_to_destroy](const GltfRenderer* gltf_renderer) {
         nodes_to_destroy.push_back(gltf_renderer->GetNode());
       });
+  GetComponentManager().ForEach<MeshRenderer>(
+      [&nodes_to_destroy](const MeshRenderer* mesh_renderer) {
+        nodes_to_destroy.push_back(mesh_renderer->GetNode());
+      });
   for (const auto& node : nodes_to_destroy) {
     DestroyNode(node);
   }
   asset_ptr_map_->DestroyGltfAssets();
+
+  // Destroy all custom mesh resources.
+  mesh_manager_->DestroyAllResources();
+
   absl::Status status = asset_ptr_map_->DisposeIblAssets();
   if (!status.ok()) {
     return status;

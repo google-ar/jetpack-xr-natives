@@ -26,6 +26,7 @@
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
 #include "core/gsplat/gsplat_asset.h"
+#include "core/materials/material.h"
 #include "core/ncsb/node.h"
 #include "core/render/texture.h"
 #include "core/split_engine/flatbuffer_utils.h"
@@ -69,17 +70,15 @@ GsplatMaterialSerializer::Create(
              view, std::move(fbb),
              schemas::BuiltInMaterialSpec::BuiltInMaterialGsplatSpec,
              spec_offset.Union())
-      .Then([&view, gsplat_asset, precomputed_data_texture](
-                imp::split_engine::PlaceholderOrBuiltInMaterialPtr
-                    material) mutable {
+      .Then([&view, gsplat_asset,
+             precomputed_data_texture](imp::OwnedMaterialPtr material) mutable {
         return absl::WrapUnique(new GsplatMaterialSerializer(
             view, std::move(material), gsplat_asset, precomputed_data_texture));
       });
 }
 
 GsplatMaterialSerializer::GsplatMaterialSerializer(
-    imp::BaseView& view,
-    imp::split_engine::PlaceholderOrBuiltInMaterialPtr material,
+    imp::BaseView& view, imp::OwnedMaterialPtr material,
     imp::AssetPtr<imp::GSplatAsset> gsplat_asset,
     imp::BorrowedTexturePtr precomputed_data_texture)
     : SplitEngineBuiltinMaterial(
@@ -87,7 +86,6 @@ GsplatMaterialSerializer::GsplatMaterialSerializer(
           android_xr::schemas::BuiltInMaterialParameters::
               BuiltInMaterialGsplatParameters,
           std::move(material)),
-      view_(view),
       gsplat_asset_(gsplat_asset),
       precomputed_data_texture_(precomputed_data_texture) {
   SetPrecomputeTextures(gsplat_asset);

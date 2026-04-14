@@ -45,6 +45,8 @@ class EpollBase {
   EpollBase() = default;
   virtual ~EpollBase() = default;
   virtual absl::Status Setup(int socket_fd, int shutdown_pipe_fd) = 0;
+  virtual absl::Status Add(int fd) = 0;
+  virtual absl::Status Remove(int fd) = 0;
   virtual absl::StatusOr<int> Poll() = 0;
   virtual absl::StatusOr<int> GetFd(int index) = 0;
 };
@@ -62,7 +64,7 @@ class EpollImpl : public EpollBase {
   absl::Status Setup(int socket_fd, int shutdown_pipe_fd) override {
     epoll_fd_ = epoll_create1(0);
     if (epoll_fd_ == -1) {
-      return absl::ErrnoToStatus(errno, "epoll_create1 failed");
+      return absl::ErrnoToStatus(errno, "Setup: epoll_create1 failed");
     }
 
     absl::Cleanup epoll_close = [this] {
@@ -71,22 +73,41 @@ class EpollImpl : public EpollBase {
     };
 
     struct epoll_event event;
-    event.events = EPOLLIN | EPOLLET;
+    event.events = EPOLLIN;
     event.data.fd = socket_fd;
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, socket_fd, &event) == -1) {
-      return absl::ErrnoToStatus(errno, "epoll_ctl ADD failed");
+      return absl::ErrnoToStatus(errno,
+                                 "Setup: epoll_ctl ADD failed for socket_fd");
     }
 
     event.events = EPOLLIN | EPOLLET;
     event.data.fd = shutdown_pipe_fd;
     if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, shutdown_pipe_fd, &event) == -1) {
-      return absl::ErrnoToStatus(errno,
-                                 "epoll_ctl ADD failed for shutdown_pipe");
+      return absl::ErrnoToStatus(
+          errno, "Setup: epoll_ctl ADD failed for shutdown_pipe");
     }
 
     std::move(epoll_close).Cancel();
     return absl::OkStatus();
   }
+
+  absl::Status Add(int fd) override {
+    struct epoll_event event;
+    event.events = EPOLLIN;
+    event.data.fd = fd;
+    if (epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, fd, &event) == -1) {
+      return absl::ErrnoToStatus(errno, "Add: epoll_ctl ADD failed");
+    }
+    return absl::OkStatus();
+  }
+
+  absl::Status Remove(int fd) override {
+    if (epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, fd, nullptr) == -1) {
+      return absl::ErrnoToStatus(errno, "Remove: epoll_ctl DEL failed");
+    }
+    return absl::OkStatus();
+  }
+
   absl::StatusOr<int> Poll() override {
     if (epoll_fd_ == -1) {
       return absl::InternalError("epoll_fd_ is not initialized");
@@ -98,7 +119,7 @@ class EpollImpl : public EpollBase {
       if (errno == EINTR) {
         return 0;
       }
-      return absl::ErrnoToStatus(errno, "epoll_wait failed");
+      return absl::ErrnoToStatus(errno, "Poll: epoll_wait failed");
     }
     return result;
   }
@@ -128,7 +149,7 @@ class EpollImpl : public EpollBase {
   absl::Status Setup(int socket_fd, int shutdown_pipe_fd) override {
     kq_fd_ = kqueue();
     if (kq_fd_ == -1) {
-      return absl::ErrnoToStatus(errno, "kqueue failed");
+      return absl::ErrnoToStatus(errno, "Setup: kqueue failed");
     }
     absl::Cleanup epoll_close = [this] {
       close(kq_fd_);
@@ -139,15 +160,34 @@ class EpollImpl : public EpollBase {
     EV_SET(&change_event, socket_fd, EVFILT_READ, EV_ADD | EV_ENABLE | EV_CLEAR,
            0, 0, NULL);
     if (kevent(kq_fd_, &change_event, 1, NULL, 0, NULL) == -1) {
-      return absl::ErrnoToStatus(errno, "kevent failed");
+      return absl::ErrnoToStatus(errno, "Setup: kevent failed for socket_fd");
     }
     EV_SET(&change_event, shutdown_pipe_fd, EVFILT_READ,
            EV_ADD | EV_ENABLE | EV_CLEAR, 0, 0, NULL);
     if (kevent(kq_fd_, &change_event, 1, NULL, 0, NULL) == -1) {
-      return absl::ErrnoToStatus(errno, "kevent failed for shutdown_pipe");
+      return absl::ErrnoToStatus(errno,
+                                 "Setup: kevent failed for shutdown_pipe");
     }
 
     std::move(epoll_close).Cancel();
+    return absl::OkStatus();
+  }
+
+  absl::Status Add(int fd) override {
+    struct kevent change_event;
+    EV_SET(&change_event, fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, NULL);
+    if (kevent(kq_fd_, &change_event, 1, NULL, 0, NULL) == -1) {
+      return absl::ErrnoToStatus(errno, "Add: kevent failed");
+    }
+    return absl::OkStatus();
+  }
+
+  absl::Status Remove(int fd) override {
+    struct kevent change_event;
+    EV_SET(&change_event, fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+    if (kevent(kq_fd_, &change_event, 1, NULL, 0, NULL) == -1) {
+      return absl::ErrnoToStatus(errno, "Remove: kevent failed");
+    }
     return absl::OkStatus();
   }
 
@@ -165,7 +205,7 @@ class EpollImpl : public EpollBase {
       if (errno == EINTR) {
         return 0;
       }
-      return absl::ErrnoToStatus(errno, "kevent failed");
+      return absl::ErrnoToStatus(errno, "Poll: kevent failed");
     }
     return result;
   }
@@ -176,7 +216,7 @@ class EpollImpl : public EpollBase {
     }
     const int event_flags = events_[index].flags;
     if (event_flags & EV_ERROR) {
-      return absl::ErrnoToStatus(events_[index].data, "kevent error");
+      return absl::ErrnoToStatus(events_[index].data, "GetFd: kevent error");
     }
 
     return events_[index].ident;

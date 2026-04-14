@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_CAMERA_CAMERA_MANAGER_H_
 
 #include "core/camera/camera_component.h"
+#include "core/ncsb/component_handle.h"
 #include "core/ncsb/node.h"
 #include "core/view/base_view.h"
 
@@ -44,6 +45,9 @@ class CameraManager {
 
   // Returns the camera used to render the view by default.
   ComponentHandle<CameraComponent> GetDefaultCamera() const;
+
+  // Clears the current camera, setting it to null.
+  void ClearCamera();
 
  private:
   BaseView* view_;

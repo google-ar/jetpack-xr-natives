@@ -27,6 +27,7 @@
 #include "core/assets/gltf/object_model/pointer_parser.h"
 #include "core/async/future.h"
 #include "core/common/robin_map.h"
+#include "core/common/robin_set.h"
 #include "core/model/model_data.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_handle.h"
@@ -105,8 +106,8 @@ class GltfInteractivityExtension : public GltfExtension {
   Future<absl::Status> SetupInternal(
       ComponentHandle<GltfRenderer> gltf_renderer) override;
 
-  std::vector<int> tap_node_gltf_indices_;
-  std::vector<int> hover_node_gltf_indicies_;
+  RobinSet<int> tap_node_gltf_indices_;
+  RobinSet<int> hover_node_gltf_indicies_;
   ComponentHandle<RecipeRunner> recipe_runner_;
 };
 

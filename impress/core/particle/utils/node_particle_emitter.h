@@ -1,0 +1,121 @@
+/*
+ * Copyright 2025 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#ifndef THIRD_PARTY_IMPRESS_CORE_PARTICLE_UTILS_NODE_PARTICLE_EMITTER_H_
+#define THIRD_PARTY_IMPRESS_CORE_PARTICLE_UTILS_NODE_PARTICLE_EMITTER_H_
+
+#include <cstdint>
+#include <list>
+#include <memory>
+#include <string>
+
+#include "core/assets/asset_ptr.h"
+#include "core/async/future.h"
+#include "core/ncsb/node_handle.h"
+#include "core/particle/custom_particle_behavior.h"
+#include "core/particle/particle_emitter_info.h"
+#include "core/particle/particle_emitter_state.proto.imp.h"
+#include "core/particle/particle_instance.h"
+#include "core/particle/utils/particle_behavior.h"
+#include "core/particle/utils/particle_emitter.h"
+#include "core/particle/utils/particle_pool.h"
+#include "core/view/framework/assets/gltf_asset.h"
+#include "core/view/utils/frame_time.h"
+
+namespace imp::imp_particle {
+
+// A particle emitter that manages node-based particles. These are particles
+// that are each represented by a Node in the scene.
+class NodeParticleEmitter : public ParticleEmitter {
+ public:
+  // Creates a new NodeParticleEmitter.
+  static Future<OwnedParticleEmitterPtr> Create(
+      NodeHandle emitter_node, const ParticleEmitterState& emitter_state,
+      std::unique_ptr<CustomParticleBehavior> custom_particle_behavior =
+          std::unique_ptr<CustomParticleBehavior>());
+
+  // Updates all active particles in the system, creates and destroys particles
+  // as defined by the ParticleEmitterConfig.
+  void UpdateParticleSystem(const FrameTime& frame_time) override;
+
+  // Returns information about the emitter used to update particle behavior.
+  ParticleEmitterInfo GetParticleEmitterInfo() const override;
+
+ protected:
+  // Verifies elements of the emitter state to ensure the particle system can
+  // be properly initialized.
+  static std::string ValidateEmitterState(
+      const ParticleEmitterState& emitter_state);
+
+ private:
+  // Initializes the emitter using the configuration provided. The emitter
+  // node is stored here so particles may be emitted from it using its position
+  // and orientation when configured to emit into world space.
+  NodeParticleEmitter(
+      NodeHandle emitter_node, AssetPtr<GltfAsset> gltf_asset,
+      const ParticleEmitterState& emitter_state,
+      std::unique_ptr<CustomParticleBehavior> custom_particle_behavior);
+
+  // Synchronizes the scene node with the current state of the particle.
+  void SyncNode(const ParticleInstance& particle_instance, NodeHandle node);
+
+  // Performs updates that effect the emitter itself, such as it's own lifetime.
+  void UpdateEmitterBehavior(const FrameTime& frame_time);
+
+  // Determines if particles may be emitted. This will check different factors
+  // such as the current particle delay, number of active particles, and the
+  // Emitter lifetime. It does not emit a particle. The return value should not
+  // be used to determine if the Emitter is active.
+  bool CanEmitParticles();
+
+  // Node particles include a scene node and a particle index, which refers to
+  // the particle state stored in the ParticlePool, and updated by a
+  // ParticleBehavior.
+  struct NodeParticle {
+    NodeHandle node;
+    int32_t particle_index;
+  };
+
+  // Holds data for all particles.
+  ParticlePool particle_pool_;
+
+  // Behaviors to perform behaviors on particles.
+  ParticleBehavior particle_behavior_;
+
+  // List of active particles.
+  std::list<NodeParticle> active_particles_;
+
+  // Reference to the emitter node.
+  NodeHandle emitter_node_;
+
+  // Particle asset, by holding this when the emitter is created, we ensure
+  // that the asset is loaded and available when instantiating particles.
+  AssetPtr<GltfAsset> gltf_asset_;
+
+  // Emitter lifetime.
+  bool emitter_duration_finite_ = false;
+  float remaining_emitter_duration_ = 0.0f;
+  float emitter_duration_ = 0.0f;
+  bool looping_ = false;
+
+  // Particle emission control.
+  float particles_per_second_;
+  float particle_delay_;
+};
+
+}  // namespace imp::imp_particle
+
+#endif  // THIRD_PARTY_IMPRESS_CORE_PARTICLE_UTILS_NODE_PARTICLE_EMITTER_H_

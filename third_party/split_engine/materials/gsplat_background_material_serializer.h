@@ -24,6 +24,7 @@
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
+#include "core/materials/material.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
 #include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "core/view/base_view.h"
@@ -53,9 +54,8 @@ class GsplatBackgroundMaterialSerializer
           texture_parameter_creator) const override;
 
  private:
-  GsplatBackgroundMaterialSerializer(
-      imp::BaseView& view,
-      imp::split_engine::PlaceholderOrBuiltInMaterialPtr material);
+  GsplatBackgroundMaterialSerializer(imp::BaseView& view,
+                                     imp::OwnedMaterialPtr material);
 };
 
 }  // namespace android_xr

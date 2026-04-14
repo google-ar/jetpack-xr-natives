@@ -1,3 +1,8 @@
+load(
+    "@flatbuffers//:build_defs.bzl",
+    "flatbuffer_cc_library",
+)
+
 # Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,10 +16,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-load(
-    "@flatbuffers//:build_defs.bzl",
-    "flatbuffer_cc_library",
-)
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
     "//build_tools:imp.bzl",
@@ -53,16 +54,37 @@ config_setting(
     },
 )
 
+filegroup(
+    name = "scuba_goldens",
+    srcs = glob(["scuba_goldens/**"]),
+)
+
+cc_library(
+    name = "message_group_monitor",
+    srcs = ["message_group_monitor.cc"],
+    hdrs = ["message_group_monitor.h"],
+    copts = imp_copts(),
+    deps = [
+        ":split_engine_shared",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/base:no_destructor",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/synchronization",
+    ],
+    alwayslink = 1,
+)
+
 cc_library(
     name = "split_engine_bridge_sender",
-    srcs = ["split_engine_bridge_sender.cc"],
     hdrs = ["split_engine_bridge_sender.h"],
     copts = imp_copts(),
     defines = imp_defines(),
     deps = [
         ":split_engine_shared",
+        "//core/async:background_scheduler",
         "//core/common:owned_ptr",
-        "//core/split_engine/android:scheduler",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/base:no_destructor",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -285,6 +307,7 @@ cc_library(
         "//core/math",
         "//core/model/mesh:base_mesh_builder",
         "//core/render:base_texture_builder",
+        "//core/render_passes:texture_pipeline_renderer_projection_quad",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/base:nullability",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -333,6 +356,31 @@ cc_library(
 )
 
 cc_library(
+    name = "texture_pipeline_schema_conversion",
+    srcs = ["texture_pipeline_schema_conversion.cc"],
+    hdrs = ["texture_pipeline_schema_conversion.h"],
+    copts = imp_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":flatbuffer_utils",
+        ":split_engine_renderer_context",
+        ":split_engine_shared",
+        "//core/common:type_helpers",
+        "//core/math",
+        "//core/ncsb",
+        "//core/render_passes:texture_pipeline_renderer_proto_cc_imp",
+        "//core/view/utils:render_settings_proto_cc_imp",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_impress//core/common:log",
+        "@flatbuffers",
+        "@third_party//split_engine:fbs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "split_engine_serializer_impl",
     srcs = ["split_engine_serializer_impl.cc"],
     hdrs = ["split_engine_serializer_impl.h"],
@@ -351,6 +399,7 @@ cc_library(
         ":split_engine_shared",
         ":split_engine_texture_builder",
         ":split_engine_texture_serializer",
+        ":texture_pipeline_schema_conversion",
         "//core:config",
         "//core/assets/material:material_load_options_proto_cc",
         "//core/async:executor",
@@ -380,8 +429,11 @@ cc_library(
         "//core/math:flatbuffer_support",
         "//core/model/mesh:base_mesh_builder",
         "//core/ncsb",
+        "//core/render",
         "//core/render:base_renderable_manager",
         "//core/render:base_texture_builder",
+        "//core/render_passes:texture_pipeline_renderer",
+        "//core/render_passes:texture_pipeline_renderer_proto_cc_imp",
         "//core/split_engine/android:split_engine_android_bridge",
         "//core/split_engine/materials:builtin_texture_parameter_creator",
         "//core/split_engine/materials:split_engine_builtin_material",
@@ -390,6 +442,7 @@ cc_library(
         "//core/view:base_view",
         "//core/view/framework",
         "//core/view/utils:frame_time",
+        "//core/view/utils:render_settings_proto_cc_imp",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/base:nullability",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -701,9 +754,11 @@ cc_library(
         "//core/view:base_view",
         "//core/view/framework",
         "//testing",
+        "//testing:base_scuba_view_fixture",
         "//testing:scuba_view_fixture",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:string_view",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
         "@com_google_impress//core/common:log",
@@ -911,6 +966,8 @@ cc_library(
         "//core/view/framework",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:string_view",
         "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
@@ -921,7 +978,10 @@ cc_library(
     srcs = [],
     hdrs = ["split_engine_shared_context.h"],
     copts = imp_copts(),
-    deps = ["//core/split_engine/materials:split_engine_builtin_material_factory"],
+    deps = [
+        "//core/split_engine/materials:split_engine_builtin_material_factory",
+        "//core/view:base_view",
+    ],
     alwayslink = 1,
 )
 
