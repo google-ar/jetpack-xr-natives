@@ -18,9 +18,8 @@
 #include <dlfcn.h>
 #include <jni.h>
 
+#include <array>
 #include <cstdint>
-#include <memory>
-#include <vector>
 
 #include "absl/log/check.h"
 #include "core/common/log.h"
@@ -29,7 +28,6 @@
 #include "filament/filament/backend/include/backend/Platform.h"
 #include "filament/filament/backend/include/backend/platforms/VulkanPlatform.h"
 #include "filament/filament/include/filament/SwapChain.h"
-#include "filament/libs/bluevk/include/vulkan/vulkan_beta.h"
 #include "filament/libs/bluevk/include/vulkan/vulkan_core.h"
 #include "filament/libs/utils/include/utils/CString.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
@@ -46,53 +44,73 @@
 #include "core/view/platforms/xr_android/xr_session_host.h"
 #include "core/view/platforms/xr_android/xr_swap_chain.h"
 
+#if IMP_PLATFORM(ANDROID)
+#include <android/hardware_buffer.h>
+#endif  // IMP_PLATFORM(ANDROID)
+
 namespace imp {
 
 namespace {
 
-constexpr uint32_t const kInvalidVkIndex = 0xFFFFFFFF;
+// To avoid hitching when compiling samplers with external samplers,
+// we can proactively compile them with specific YCbCr formats. Here, we
+// define which those are.
+struct ExternalSamplerFormatDescription {
+  AHardwareBuffer_Format ahbFormat;
+  uint64_t ahbUsage;
+  VkSamplerYcbcrRange ycbcrRange;
+  VkSamplerYcbcrModelConversion ycbcrModel;
+};
 
-uint32_t identifyQueueFamilyIndex(VkPhysicalDevice physical_device,
-                                  uint32_t queue_flags) {
-  uint32_t queue_families_count = 0;
-  bluevk::vkGetPhysicalDeviceQueueFamilyProperties(
-      physical_device, &queue_families_count,
-      /*pQueueFamilyProperties=*/nullptr);
-  utils::FixedCapacityVector<VkQueueFamilyProperties> queue_families_properties(
-      queue_families_count);
-  if (queue_families_count > 0) {
-    bluevk::vkGetPhysicalDeviceQueueFamilyProperties(
-        physical_device, &queue_families_count,
-        queue_families_properties.data());
-  }
+// Until we update our build target, this value will not exist.
+// We'll leave an error so that this can be removed in the future.
+#if __ANDROID_API__ < 36
+#define AHARDWAREBUFFER_FORMAT_YCbCr_P210 \
+  static_cast<AHardwareBuffer_Format>(0x3c)
+#endif
 
-  uint32_t family_index = kInvalidVkIndex;
-  for (uint32_t index = 0; index < queue_families_properties.size(); ++index) {
-    const VkQueueFamilyProperties& properties =
-        queue_families_properties[index];
-    if (properties.queueCount != 0 && (properties.queueFlags & queue_flags)) {
-      family_index = index;
-      break;
-    }
-  }
-  return family_index;
-}
-
-VkQueueGlobalPriorityKHR getVkQueueGlobalPriority(
-    filament::backend::Platform::GpuContextPriority priority) {
-  switch (priority) {
-    case filament::backend::Platform::GpuContextPriority::LOW:
-      return VK_QUEUE_GLOBAL_PRIORITY_LOW_KHR;
-    case filament::backend::Platform::GpuContextPriority::MEDIUM:
-      return VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_KHR;
-    case filament::backend::Platform::GpuContextPriority::HIGH:
-      return VK_QUEUE_GLOBAL_PRIORITY_HIGH_KHR;
-    case filament::backend::Platform::GpuContextPriority::REALTIME:
-      return VK_QUEUE_GLOBAL_PRIORITY_REALTIME_KHR;
-    case filament::backend::Platform::GpuContextPriority::DEFAULT:
-      return VK_QUEUE_GLOBAL_PRIORITY_MEDIUM_KHR;
-  }
-}
+constexpr std::array kExternalSamplerFormats = {
+    // Standard video playback
+    ExternalSamplerFormatDescription{
+        AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420,
+        AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE,
+        VK_SAMPLER_YCBCR_RANGE_ITU_NARROW,
+        VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_709,
+    },
+    // HDR video playback
+    ExternalSamplerFormatDescription{
+        AHARDWAREBUFFER_FORMAT_YCbCr_P010,
+        AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE,
+        VK_SAMPLER_YCBCR_RANGE_ITU_NARROW,
+        VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_2020,
+    },
+    // Camera preview. Note: ITU_FULL may cause linker errors with certain
+    // formats,
+    // which often come up if AHARDWAREBUFFER_USAGE_VIDEO_ENCODE is used. If
+    // there are
+    // crashes on older devices, it may be that we need to remove some of the
+    // ITU_FULL
+    // entries, as those conversions may not exist. That case is very unlikely.
+    ExternalSamplerFormatDescription{
+        AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420,
+        AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE,
+        VK_SAMPLER_YCBCR_RANGE_ITU_FULL,
+        VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_709,
+    },
+    ExternalSamplerFormatDescription{
+        AHARDWAREBUFFER_FORMAT_Y8Cb8Cr8_420,
+        AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE,
+        VK_SAMPLER_YCBCR_RANGE_ITU_FULL,
+        VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_601,
+    },
+    // If supported
+    ExternalSamplerFormatDescription{
+        AHARDWAREBUFFER_FORMAT_YCbCr_P210,
+        AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE,
+        VK_SAMPLER_YCBCR_RANGE_ITU_FULL,
+        VK_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_2020,
+    },
+};
 
 }  // namespace
 
@@ -100,21 +118,25 @@ XrVulkanPlatform::XrVulkanPlatform() { bluevk::initialize(); }
 
 filament::backend::Driver* XrVulkanPlatform::createDriver(
     void* sharedContext, const Platform::DriverConfig& driverConfig) noexcept {
-  gpu_context_priority_ = driverConfig.gpuContextPriority;
-
   // TODO: (broken link) - Remove this once impress supports filament feature
   // flags
   Platform::DriverConfig vk_driver_config = driverConfig;
+  vk_driver_config.vulkanEnableAsyncPipelineCachePrewarming = true;
   vk_driver_config.vulkanEnableStagingBufferBypass = true;
 
   filament::backend::Driver* driver =
       XrPlatformBase::createDriver(sharedContext, vk_driver_config);
 
-  return driver;
-}
+  // This loads several AHardwareBuffers to fetch their external formats,
+  // and store them in a list for async cache prewarming.
+  // We're currently setting this flag a few lines prior to this, so it seems
+  // odd; there are plans for that to change as soon as the Impress-Filament
+  // feature flag system is fixed.
+  if (vk_driver_config.vulkanEnableAsyncPipelineCachePrewarming) {
+    registerAndroidExternalFormatsForCachePrewarm();
+  }
 
-void XrVulkanPlatform::bindVulkanInstance(VkInstance instance) {
-  bluevk::bindInstance(instance);
+  return driver;
 }
 
 XrGraphicsBindingVulkan2KHR XrVulkanPlatform::GetGraphicsBinding() {
@@ -123,7 +145,7 @@ XrGraphicsBindingVulkan2KHR XrVulkanPlatform::GetGraphicsBinding() {
       .type = XR_TYPE_GRAPHICS_BINDING_VULKAN2_KHR,
       .next = nullptr,
       .instance = getInstance(),
-      .physicalDevice = physicalDevice_,
+      .physicalDevice = getPhysicalDevice(),
       .device = getDevice(),
       .queueFamilyIndex = getGraphicsQueueFamilyIndex(),
       .queueIndex = getGraphicsQueueIndex(),
@@ -139,11 +161,6 @@ void XrVulkanPlatform::setXrInstance(XrInstance instance) {
 
 void XrVulkanPlatform::setXrSystemId(XrSystemId systemId) {
   xrSystemId = systemId;
-}
-
-void XrVulkanPlatform::setVulkanSharedContext(
-    XrPlatformBase::VulkanSharedContext context) {
-  vulkan_shared_context_ = context;
 }
 
 XrVulkanPlatform::Customization XrVulkanPlatform::getCustomization()
@@ -251,103 +268,24 @@ VkResult XrVulkanPlatform::present(SwapChainPtr handle, uint32_t index,
   return swap_chain->GetSwapchainImageHandler().present(index, finishedDrawing);
 }
 
-VkInstance XrVulkanPlatform::createVulkanInstance() {
-  VkInstance instance;
-  VkInstanceCreateInfo vulkanInstanceCreateInfo = {};
-  bool validationFeaturesSupported = false;
-
-  // The Platform class requires at most 2 instance extensions, so a max of 3.
-  static constexpr uint32_t MAX_INSTANCE_EXTENSION_COUNT = 3;
-  const char* ppEnabledExtensions[MAX_INSTANCE_EXTENSION_COUNT];
-
-  // Request platform-specific extensions.
-  VulkanPlatform::ExtensionSet const TARGET_EXTS = {
-      VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
-      VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME,
-  };
-
-  uint32_t extensionCount = 0;
-  bluevk::vkEnumerateInstanceExtensionProperties(
-      static_cast<char const*>(nullptr) /* pLayerName */, &extensionCount,
-      nullptr);
-
-  std::vector<VkExtensionProperties> availableExtensions;
-  availableExtensions.resize(extensionCount);
-  bluevk::vkEnumerateInstanceExtensionProperties(
-      static_cast<char const*>(nullptr) /* pLayerName */, &extensionCount,
-      availableExtensions.data());
-
-  uint32_t enabledExtensionCount = 0;
-  if (validationFeaturesSupported) {
-    ppEnabledExtensions[enabledExtensionCount++] =
-        VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME;
-  }
-
-  for (auto const& extensionProperties : availableExtensions) {
-    assert_invariant(enabledExtensionCount < MAX_INSTANCE_EXTENSION_COUNT);
-    utils::CString name{extensionProperties.extensionName};
-    // To workaround an Adreno bug where the extension name could be of 0
-    // length.
-    if (name.size() == 0) {
-      continue;
-    }
-
-    if (TARGET_EXTS.find(name) != TARGET_EXTS.end()) {
-      ppEnabledExtensions[enabledExtensionCount++] =
-          extensionProperties.extensionName;
-
-      if (name == VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME) {
-        vulkanInstanceCreateInfo.flags =
-            VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
-      }
-    }
-  }
-
-  // Do not support the filament debug utils extension.
-  vulkan_shared_context_.debugUtilsSupported = false;
-
-  // Create the Vulkan instance.
-  VkApplicationInfo appInfo = {};
-  appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-  appInfo.pEngineName = "Filament";
-  // TODO Replace 1s with FVK_REQUIRED_VERSION_MINOR and
-  // FVK_REQUIRED_VERSION_MAJOR
-  appInfo.apiVersion = VK_MAKE_API_VERSION(0, 1, 1, 0);
-  vulkanInstanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-  vulkanInstanceCreateInfo.pApplicationInfo = &appInfo;
-  vulkanInstanceCreateInfo.enabledExtensionCount = enabledExtensionCount;
-  vulkanInstanceCreateInfo.ppEnabledExtensionNames = ppEnabledExtensions;
-
-  VkValidationFeaturesEXT features = {};
-  VkValidationFeatureEnableEXT enables[] = {
-      VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
-      VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT,
-  };
-
-  if (validationFeaturesSupported) {
-    features.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
-    features.enabledValidationFeatureCount =
-        sizeof(enables) / sizeof(enables[0]);
-    features.pEnabledValidationFeatures = enables;
-    vulkanInstanceCreateInfo.pNext = &features;
-  }
-
+VkInstance XrVulkanPlatform::createVkInstance(
+    const VkInstanceCreateInfo& createInfo) {
   XrVulkanInstanceCreateInfoKHR xrVulkanInstanceCreateInfo = {
       .type = XR_TYPE_VULKAN_INSTANCE_CREATE_INFO_KHR,
       .next = nullptr,
       .systemId = xrSystemId,
       .createFlags = 0,
       .pfnGetInstanceProcAddr = bluevk::vkGetInstanceProcAddr,
-      .vulkanCreateInfo = &vulkanInstanceCreateInfo,
+      .vulkanCreateInfo = &createInfo,
       .vulkanAllocator = nullptr};
-
-  VkResult vkResult;
 
   PFN_xrCreateVulkanInstanceKHR xrCreateVulkanInstanceKHR = nullptr;
   xrGetInstanceProcAddr(
       xrInstance, "xrCreateVulkanInstanceKHR",
       reinterpret_cast<PFN_xrVoidFunction*>(&xrCreateVulkanInstanceKHR));
 
+  VkResult vkResult;
+  VkInstance instance = VK_NULL_HANDLE;
   XrResult xrResult = xrCreateVulkanInstanceKHR(
       xrInstance, &xrVulkanInstanceCreateInfo, &instance, &vkResult);
 
@@ -358,205 +296,50 @@ VkInstance XrVulkanPlatform::createVulkanInstance() {
   return instance;
 }
 
-VkPhysicalDevice XrVulkanPlatform::getVulkanPhysicalDevice(
-    VkInstance instance) {
-  uint32_t deviceCount = 1;  // We want to enumerate only one device
-  // VkPhysicalDevice physicalDevice;
-  bluevk::vkEnumeratePhysicalDevices(instance, &deviceCount, &physicalDevice_);
-  return physicalDevice_;
-}
-
-uint32_t XrVulkanPlatform::identifyVulkanGraphicsQueueFamilyIndex(
-    VkPhysicalDevice physicalDevice) {
-  return identifyQueueFamilyIndex(physicalDevice, VK_QUEUE_GRAPHICS_BIT);
-}
-
-uint32_t XrVulkanPlatform::identifyVulkanProtectedGraphicsQueueFamilyIndex(
-    VkPhysicalDevice physicalDevice) {
-  return identifyQueueFamilyIndex(
-      physicalDevice, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_PROTECTED_BIT);
-}
-
-VkDevice XrVulkanPlatform::createVulkanLogicalDevice(
-    VkPhysicalDevice physicalDevice, VkInstance instance,
-    uint32_t graphicsQueueFamilyIndex,
-    uint32_t protectedGraphicsQueueFamilyIndex, bool enableMultiview) {
-  // Platform-specific extensions.
-  VulkanPlatform::ExtensionSet const TARGET_EXTS = {
-      VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME,
-      VK_KHR_MAINTENANCE1_EXTENSION_NAME,
-      VK_KHR_MAINTENANCE2_EXTENSION_NAME,
-      VK_KHR_MAINTENANCE3_EXTENSION_NAME,
-      VK_KHR_MULTIVIEW_EXTENSION_NAME,
-      VK_KHR_IMAGE_FORMAT_LIST_EXTENSION_NAME,
-      VK_KHR_GLOBAL_PRIORITY_EXTENSION_NAME,
-  };
-
-  uint32_t deviceExtensionCount = 0;
-  // Identify supported physical device extensions
-  bluevk::vkEnumerateDeviceExtensionProperties(
-      physicalDevice, static_cast<const char*>(nullptr) /* pLayerName */,
-      &deviceExtensionCount, nullptr);
-
-  std::vector<VkExtensionProperties> availableDeviceExtensions;
-  availableDeviceExtensions.resize(deviceExtensionCount);
-  bluevk::vkEnumerateDeviceExtensionProperties(
-      physicalDevice, static_cast<const char*>(nullptr) /* pLayerName */,
-      &deviceExtensionCount, availableDeviceExtensions.data());
-
-  void* pNext = nullptr;
-
-  VkPhysicalDeviceProtectedMemoryFeatures protectedMemory = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROTECTED_MEMORY_FEATURES,
-      .pNext = pNext,
-      .protectedMemory = VK_TRUE,
-  };
-  pNext = &protectedMemory;
-
-  VkPhysicalDeviceSamplerYcbcrConversionFeatures ycbcrConversion = {
-      .sType =
-          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SAMPLER_YCBCR_CONVERSION_FEATURES,
-      .pNext = pNext,
-      .samplerYcbcrConversion = VK_TRUE,
-  };
-  pNext = &ycbcrConversion;
-
-  const bool requires_gpu_priority =
-      gpu_context_priority_ !=
-      filament::backend::Platform::GpuContextPriority::DEFAULT;
-  VkPhysicalDeviceGlobalPriorityQueryFeaturesKHR globalPriority = {
-      .sType =
-          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GLOBAL_PRIORITY_QUERY_FEATURES_KHR,
-      .pNext = pNext,
-      .globalPriorityQuery = VK_TRUE,
-  };
-  if (requires_gpu_priority) {
-    pNext = &globalPriority;
-  }
-
-  VkPhysicalDevicePortabilitySubsetFeaturesKHR portability = {
-      .sType =
-          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PORTABILITY_SUBSET_FEATURES_KHR,
-      .pNext = nullptr,
-      .imageViewFormatSwizzle = VK_TRUE,
-      .mutableComparisonSamplers = VK_TRUE,
-  };
-
-  VkPhysicalDeviceMultiviewFeaturesKHR multiview = {
-      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES_KHR,
-      .pNext = nullptr,
-      .multiview = VK_TRUE,
-      .multiviewGeometryShader = VK_FALSE,
-      .multiviewTessellationShader = VK_FALSE,
-  };
-
-  std::vector<const char*> enabledExtensions;
-  for (auto const& extensionProperties : availableDeviceExtensions) {
-    utils::CString name{extensionProperties.extensionName};
-    // To workaround an Adreno bug where the extension name could be of 0
-    // length.
-    if (name.size() == 0) {
-      continue;
-    }
-
-    if (TARGET_EXTS.find(name) != TARGET_EXTS.end()) {
-      enabledExtensions.push_back(extensionProperties.extensionName);
-
-      if (name == VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME) {
-        portability.pNext = pNext;
-        pNext = &portability;
-      } else if (name == VK_KHR_MULTIVIEW_EXTENSION_NAME) {
-        multiview.pNext = pNext;
-        pNext = &multiview;
-        vulkan_shared_context_.multiviewSupported = enableMultiview;
-      }
-    }
-  }
-
-  // Do not support the filament debug markers extension.
-  vulkan_shared_context_.debugMarkersSupported = false;
-
-  VkDeviceQueueGlobalPriorityCreateInfoKHR queuePriorityCreateInfo = {
-      .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_GLOBAL_PRIORITY_CREATE_INFO_KHR,
-      .pNext = nullptr,
-      .globalPriority = getVkQueueGlobalPriority(gpu_context_priority_),
-  };
-
-  VkDeviceQueueCreateInfo deviceQueueCreateInfo[2] = {};
-  const float queuePriority[] = {1.0f};
-  VkDeviceCreateInfo deviceCreateInfo = {};
-  deviceQueueCreateInfo[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-  deviceQueueCreateInfo[0].queueFamilyIndex = graphicsQueueFamilyIndex;
-  deviceQueueCreateInfo[0].queueCount = 1;
-  deviceQueueCreateInfo[0].pQueuePriorities = &queuePriority[0];
-  deviceQueueCreateInfo[0].pNext =
-      requires_gpu_priority ? &queuePriorityCreateInfo : nullptr;
-
-  deviceQueueCreateInfo[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-  deviceQueueCreateInfo[1].flags = VK_DEVICE_QUEUE_CREATE_PROTECTED_BIT;
-  deviceQueueCreateInfo[1].queueFamilyIndex = protectedGraphicsQueueFamilyIndex;
-  deviceQueueCreateInfo[1].queueCount = 1;
-  deviceQueueCreateInfo[1].pQueuePriorities = &queuePriority[0];
-  deviceQueueCreateInfo[1].pNext =
-      requires_gpu_priority ? &queuePriorityCreateInfo : nullptr;
-
-  deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-  deviceCreateInfo.queueCreateInfoCount =
-      protectedGraphicsQueueFamilyIndex != kInvalidVkIndex ? 2 : 1;
-  deviceCreateInfo.pQueueCreateInfos = deviceQueueCreateInfo;
-  deviceCreateInfo.pNext = pNext;
-
-  // We could simply enable all supported features, but since that may have
-  // performance consequences let's just enable the features we need. Get these
-  // from the physical device.
-  VkPhysicalDeviceFeatures enabledFeatures{
-      .samplerAnisotropy = true,
-      .textureCompressionETC2 = true,
-      .textureCompressionBC = true,
-      .shaderClipDistance = true,
-  };
-
-  deviceCreateInfo.pEnabledFeatures = &enabledFeatures;
-  deviceCreateInfo.enabledExtensionCount =
-      static_cast<uint32_t>(enabledExtensions.size());
-  deviceCreateInfo.ppEnabledExtensionNames = enabledExtensions.data();
-
-  VkDevice device;
-  XrVulkanDeviceCreateInfoKHR vulkanDeviceCreateInfo = {
-      .type = XR_TYPE_VULKAN_DEVICE_CREATE_INFO_KHR,
-      .next = nullptr,
-      .systemId = xrSystemId,
-      .createFlags = 0,
-      .pfnGetInstanceProcAddr = bluevk::vkGetInstanceProcAddr,
-      .vulkanPhysicalDevice = physicalDevice,
-      .vulkanCreateInfo = &deviceCreateInfo,
-      .vulkanAllocator = nullptr};
-
+VkPhysicalDevice XrVulkanPlatform::selectVkPhysicalDevice(VkInstance instance) {
   XrVulkanGraphicsDeviceGetInfoKHR vulkanGraphicsDeviceGetInfo = {
       .type = XR_TYPE_VULKAN_GRAPHICS_DEVICE_GET_INFO_KHR,
       .next = nullptr,
       .systemId = xrSystemId,
-      .vulkanInstance = instance};
-
-  VkResult vkResult;
+      .vulkanInstance = instance,
+  };
 
   PFN_xrGetVulkanGraphicsDevice2KHR xrGetVulkanGraphicsDevice2KHR = nullptr;
   xrGetInstanceProcAddr(
       xrInstance, "xrGetVulkanGraphicsDevice2KHR",
       reinterpret_cast<PFN_xrVoidFunction*>(&xrGetVulkanGraphicsDevice2KHR));
 
+  VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
   XrResult xrResult = xrGetVulkanGraphicsDevice2KHR(
       xrInstance, &vulkanGraphicsDeviceGetInfo, &physicalDevice);
   ASSERT_POSTCONDITION(xrResult == XR_SUCCESS,
                        "Unable to get Vulkan graphics device. Result=%d",
                        xrResult);
+  return physicalDevice;
+}
+
+VkDevice XrVulkanPlatform::createVkDevice(
+    const VkDeviceCreateInfo& createInfo) {
+  XrVulkanDeviceCreateInfoKHR vulkanDeviceCreateInfo = {
+      .type = XR_TYPE_VULKAN_DEVICE_CREATE_INFO_KHR,
+      .next = nullptr,
+      .systemId = xrSystemId,
+      .createFlags = 0,
+      .pfnGetInstanceProcAddr = bluevk::vkGetInstanceProcAddr,
+      .vulkanPhysicalDevice = getPhysicalDevice(),
+      .vulkanCreateInfo = &createInfo,
+      .vulkanAllocator = nullptr,
+  };
 
   PFN_xrCreateVulkanDeviceKHR xrCreateVulkanDeviceKHR = nullptr;
   xrGetInstanceProcAddr(
       xrInstance, "xrCreateVulkanDeviceKHR",
       reinterpret_cast<PFN_xrVoidFunction*>(&xrCreateVulkanDeviceKHR));
-  xrResult = xrCreateVulkanDeviceKHR(xrInstance, &vulkanDeviceCreateInfo,
-                                     &device, &vkResult);
+
+  VkResult vkResult;
+  VkDevice device = VK_NULL_HANDLE;
+  XrResult xrResult = xrCreateVulkanDeviceKHR(
+      xrInstance, &vulkanDeviceCreateInfo, &device, &vkResult);
   ASSERT_POSTCONDITION(xrResult == XR_SUCCESS,
                        "Unable to create Vulkan device. Result=%d", xrResult);
   ASSERT_POSTCONDITION(vkResult == VK_SUCCESS,
@@ -616,4 +399,73 @@ void XrVulkanPlatform::destroy(SwapChain* swapChain) noexcept {
   // Destroyed when it falls out of scope.
   std::unique_ptr<XrSwapChain> swap_chain(static_cast<XrSwapChain*>(swapChain));
 }
+
+void XrVulkanPlatform::registerAndroidExternalFormatsForCachePrewarm() {
+  if (__builtin_available(android 26, *)) {
+    for (const auto& externalFormat : kExternalSamplerFormats) {
+      AHardwareBuffer_Desc desc{
+          .width = 2,
+          .height = 2,
+          .layers = 1,
+          .format = externalFormat.ahbFormat,
+          .usage = externalFormat.ahbUsage,
+      };
+
+      // Some formats may not be supported, depending on the runtime API
+      // version. Try to check if the format is supported to avoid a more
+      // expensive call to allocate.
+      if (__builtin_available(android 29, *)) {
+        if (!AHardwareBuffer_isSupported(&desc)) {
+          IMP_LOG(imp::ERROR) << "Skipping unsupported ahb format "
+                     << std::to_string(externalFormat.ahbFormat)
+                     << " for cache prewarming.";
+          continue;
+        }
+      }
+
+      // Try to create a fake buffer, so we can fetch the external format
+      // number.
+      AHardwareBuffer* buffer = nullptr;
+      if (int rc = AHardwareBuffer_allocate(&desc, &buffer); rc != 0) {
+        IMP_LOG(imp::ERROR) << "Failed to allocate fake AHardwareBuffer to "
+                      "check external format constant, not registering "
+                   << std::to_string(externalFormat.ahbFormat) << " / "
+                   << std::to_string(externalFormat.ahbUsage) << " (rc = " << rc
+                   << ")";
+        continue;
+      }
+
+      // Get the format properties from Vulkan.
+      VkAndroidHardwareBufferFormatPropertiesANDROID formatProps = {
+          .sType =
+              VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_FORMAT_PROPERTIES_ANDROID,  // NOLINT
+      };
+      VkAndroidHardwareBufferPropertiesANDROID props = {
+          .sType = VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_PROPERTIES_ANDROID,
+          .pNext = &formatProps,
+      };
+      VkResult result = bluevk::vkGetAndroidHardwareBufferPropertiesANDROID(
+          getDevice(), buffer, &props);
+      if (result == VK_SUCCESS) {
+        IMP_LOG(imp::INFO) << "Registered external format for cache prewarming: "
+                  << std::to_string(externalFormat.ahbFormat) << " / "
+                  << std::to_string(externalFormat.ahbUsage);
+        registerPipelineCachePrewarmExternalFormat({
+            .externalFormat = formatProps.externalFormat,
+            .ycbcrModelConversion = externalFormat.ycbcrModel,
+            .ycbcrRange = externalFormat.ycbcrRange,
+        });
+      } else {
+        IMP_LOG(imp::ERROR)
+            << "Failed to fetch format props for fake AHardwareBuffer, not "
+            << "registering " << std::to_string(externalFormat.ahbFormat)
+            << " / " << std::to_string(externalFormat.ahbUsage)
+            << " (rc = " << result << ")";
+      }
+
+      AHardwareBuffer_release(buffer);
+    }
+  }
+}
+
 }  // namespace imp

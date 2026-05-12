@@ -30,6 +30,7 @@
 #include "apibindings/generic_material_manager.h"
 #include "apibindings/impress_api_view.h"
 #include "apibindings/model_manager.h"
+#include "apibindings/node_manager.h"
 #include "apibindings/skybox_manager.h"
 #include "apibindings/stereo_surface_manager.h"
 #include "apibindings/testing/unit/mock_asset_loader.h"
@@ -102,16 +103,19 @@ class ApiBindingsTest
     return this->view_->GetStereoSurfaceManager();
   }
 
+  // Returns the real NodeManager for testing purposes.
+  NodeManager& GetNodeManager() { return this->view_->GetNodeManager(); }
+
   // Returns the real AssetPtrMap for testing purposes.
   AssetPtrMap& GetAssetPtrMap() { return this->view_->GetAssetPtrMap(); }
 
   // Creates a mock loader for a GLTF asset.
-  MockLoaderContext CreateGltfLoader() {
+  MockLoaderContext CreateGltfLoader(
+      const AssetDefinition& asset = test_data::kAnimatedMorphCubeGltf) {
     // We use the asset path directly inside the lambda now.
     return CreateLoaderInternal(
-        [this](std::unique_ptr<BaseAssetLoader> loader) {
-          GetAssetPtrMap().LoadGltfAsset(test_data::kAnimatedMorphCubeGltf,
-                                         std::move(loader));
+        [this, asset](std::unique_ptr<BaseAssetLoader> loader) {
+          GetAssetPtrMap().LoadGltfAsset(asset, std::move(loader));
         });
   }
 

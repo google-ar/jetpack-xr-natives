@@ -8,7 +8,7 @@
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
@@ -34,10 +34,11 @@ GsplatBackgroundMaterialSerializer::Create(imp::BaseView& view) {
 GsplatBackgroundMaterialSerializer::GsplatBackgroundMaterialSerializer(
     imp::BaseView& view,
     imp::split_engine::PlaceholderOrBuiltInMaterialPtr material)
-    : SplitEngineMaterial(view,
-                          android_xr::schemas::BuiltInMaterialParameters::
-                              BuiltInMaterialGsplatBackgroundParameters,
-                          std::move(material)) {}
+    : SplitEngineBuiltinMaterial(
+          view,
+          android_xr::schemas::BuiltInMaterialParameters::
+              BuiltInMaterialGsplatBackgroundParameters,
+          std::move(material)) {}
 
 GsplatBackgroundMaterialSerializer::~GsplatBackgroundMaterialSerializer() {
   Cleanup();

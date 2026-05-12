@@ -33,7 +33,7 @@ import "core/text/text_metrics.proto";
 // share glyphs instead of duplicating them in texture memory and repeatedly
 // re-drawing them.
 //
-// Next ID: 23
+// Next ID: 24
 message TextRendererState {
   // Type used for bottom_pivot and top_pivot. These two fields respectively
   // determine how a pivot.y value of 0 or a pivot.y value of 1 positions text
@@ -249,4 +249,7 @@ message TextRendererState {
   // to entirely skip having to do the computation.
   optional TextAndFontMetrics precomputed_metrics = 22
       [(imp.is_imported_standard_proto) = true];
+
+  // If set, the text will not be culled by the frustum culling.
+  bool disable_frustum_culling = 23;
 }

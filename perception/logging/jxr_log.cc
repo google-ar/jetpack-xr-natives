@@ -18,6 +18,42 @@
 #include "logging/log.h"
 
 namespace androidx::xr {
+namespace {
+class JniThreadAttacher {
+ public:
+  explicit JniThreadAttacher(JavaVM* vm) : vm_(vm) {
+    if (vm_ == nullptr) {
+      return;
+    }
+    jint get_env_result =
+        vm_->GetEnv(reinterpret_cast<void**>(&env_), JNI_VERSION_1_6);
+    if (get_env_result == JNI_EDETACHED) {
+      if (vm_->AttachCurrentThread(&env_, nullptr) ==
+          JNI_OK) {
+        attached_ = true;
+      } else {
+        env_ = nullptr;
+      }
+    } else if (get_env_result != JNI_OK) {
+      env_ = nullptr;
+    }
+  }
+
+  ~JniThreadAttacher() {
+    if (attached_ && vm_) {
+      vm_->DetachCurrentThread();
+    }
+  }
+  JNIEnv* get() const { return env_; }
+  explicit operator bool() const { return env_ != nullptr; }
+
+ private:
+  JavaVM* vm_ = nullptr;
+  JNIEnv* env_ = nullptr;
+  bool attached_ = false;
+};
+}  // namespace
+
 Log::Log(LogLevel level)
     : log_sink_(JxrLogSink::GetSharedInstance()), level_(level) {}
 
@@ -42,12 +78,12 @@ void JxrLogSink::verbose(const string& message) const {
 }
 
 void JxrLogSink::log_jni(const char* method_name, const char* message) const {
-  JNIEnv* env = nullptr;
-  jint result = g_VM->AttachCurrentThread(&env, nullptr);
-  if (result != JNI_OK) {
+  JniThreadAttacher attacher(g_VM);
+  if (!attacher) {
     return;
   }
 
+  JNIEnv* env = attacher.get();
   jclass logClass = env->GetObjectClass(log_singleton);
   if (logClass) {
     jmethodID method =
@@ -55,10 +91,8 @@ void JxrLogSink::log_jni(const char* method_name, const char* message) const {
     if (method) {
       env->CallVoidMethod(log_singleton, method, env->NewStringUTF(message));
     }
+    env->DeleteLocalRef(logClass);
   }
-
-  env->DeleteLocalRef(logClass);
-  g_VM->DetachCurrentThread();
 }
 
 extern "C" {

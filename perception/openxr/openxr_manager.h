@@ -18,6 +18,7 @@
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 #include <openxr/public/all_extensions.h>
+#include <openxr/public/xr_androidx2_geospatial_anchor.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -69,6 +70,23 @@ class OpenXrManager {
     kSuccess = 0,               // XR_SUCCESS
     kErrorRuntimeFailure = -2,  // XR_ERROR_RUNTIME_FAILURE
     kErrorLimitReached = -10,   // XR_ERROR_LIMIT_REACHED
+
+    // Provided by XR_ANDROID_geospatial:
+    // // TODO: Distinguish between auth and quota failure.
+    kErrorCloudAuthFailed =
+        -1000789002,  // XR_ERROR_GEOSPATIAL_CLOUD_AUTH_FAILED
+
+    // This is a synchronous error and should be thrown as an exception.
+    kErrorGeospatialTrackerNotRunning =
+        -1000789000,  // XR_ERROR_GEOSPATIAL_TRACKER_NOT_RUNNING_ANDROID
+
+    // This is a synchronous error and should be thrown as an exception.
+    kErrorGeospatialCoordinatesInvalid =
+        -1000789001,  // XR_ERROR_GEOSPATIAL_COORDINATES_INVALID_ANDROID
+
+    // Provided by XR_ANDROIDX2_geospatial_anchor:
+    kErrorSurfaceAnchorLocationUnsupported =
+        -1000797000,  // XR_ERROR_SURFACE_ANCHOR_LOCATION_UNSUPPORTED_ANDROIDX2
   };
 
   // Enum representing the configuration state for the plane trackers.
@@ -192,6 +210,9 @@ class OpenXrManager {
   // A static function to get a singleton for the OpenXR Manager with the
   // provided clock.
   static OpenXrManager& GetOpenXrManager(OpenXrManagerClockInterface* clock);
+
+  // Maps the XrResult to the CreateAnchorResult.
+  static CreateAnchorResult MapAnchorCreateResult(XrResult xr_result);
 
   // Initializes the OpenXrManager. This is broken down into loading OpenXR,
   // creating an OpenXR instance, and creating a session from that instance. The
@@ -443,20 +464,20 @@ class OpenXrManager {
   // error occurred.
   GeospatialPoseResult LocateGeospatialPoseFromPose(
       XrTime time, const XrPosef& pose,
-      XrGeospatialPoseResultANDROIDX2* out_geospatial_pose_result)
+      XrGeospatialPoseResultANDROID* out_geospatial_pose_result)
       ABSL_LOCKS_EXCLUDED(mutex_);
 
   // Locates a local pose from a geospatial pose. Returns a GeospatialPoseResult
   // enum corresponding to whether the operation was successful, or what type of
   // error occurred.
   GeospatialPoseResult LocatePoseFromGeospatialPose(
-      XrTime time, const XrGeospatialPoseANDROIDX2& geospatial_pose,
+      XrTime time, const XrGeospatialPoseANDROID& geospatial_pose,
       XrSpaceLocation* out_location) ABSL_LOCKS_EXCLUDED(mutex_);
 
   // Checks if VPS is available at the given latitude and longitude.
   XrResult CheckVpsAvailabilityAsync(
       double latitude, double longitude,
-      std::function<void(const XrVPSAvailabilityCheckCompletionANDROIDX2&)>
+      std::function<void(const XrVPSAvailabilityCheckCompletionANDROID&)>
           on_complete,
       std::function<void()> on_cancel);
 
@@ -487,11 +508,25 @@ class OpenXrManager {
       const XrQuaternionf& east_up_south_quaternion, XrSpace* out_anchor_space)
       ABSL_LOCKS_EXCLUDED(mutex_);
 
+  // Creates a surface anchor asynchronously.
+  CreateAnchorResult CreateSurfaceAnchorAsync(
+      XrSurfaceAnchorTypeANDROIDX2 anchor_type, double latitude,
+      double longitude, double altitude_relative_to_surface,
+      const XrQuaternionf& east_up_south_quaternion,
+      std::function<void(const XrSurfaceAnchorCreateCompletionANDROIDX2&)>
+          on_complete,
+      std::function<void()> on_cancel);
+
   // Sets the Google Cloud authentication credentials.
   XrResult SetGoogleCloudAuthAsync(
-      const XrGoogleCloudAuthInfoBaseHeaderANDROIDX2* auth_info,
+      const XrGoogleCloudAuthInfoBaseHeaderANDROID* auth_info,
       std::function<void(const XrFutureCompletionEXT&)> on_complete,
       std::function<void()> on_cancel);
+
+  // Creates an anchor space from a spatial entity ID.
+  CreateAnchorResult CreateAnchorSpaceFromEntityId(
+      XrSpatialEntityIdEXT entity_id, XrSpace* out_anchor_space)
+      ABSL_LOCKS_EXCLUDED(mutex_);
 
  private:
   // Enum values representing whether OpenXR instance and session have started.
@@ -740,11 +775,11 @@ class OpenXrManager {
       right_hand_joint_locations_[XR_HAND_JOINT_COUNT_EXT] ABSL_GUARDED_BY(
           mutex_);
   XrFaceTrackerANDROID face_tracker_ ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
-  XrGeospatialTrackerANDROIDX2 geospatial_tracker_ ABSL_GUARDED_BY(mutex_) =
+  XrGeospatialTrackerANDROID geospatial_tracker_ ABSL_GUARDED_BY(mutex_) =
       XR_NULL_HANDLE;
   XrSpatialContextEXT geospatial_anchors_spatial_context_
       ABSL_GUARDED_BY(mutex_) = XR_NULL_HANDLE;
-  std::optional<XrEventDataGeospatialTrackerStateChangedANDROIDX2>
+  std::optional<XrEventDataGeospatialTrackerStateChangedANDROID>
       last_geospatial_tracker_state_update_ ABSL_GUARDED_BY(mutex_) =
           std::nullopt;
   absl::flat_hash_map<XrSpace, XrSpatialEntityEXT>
@@ -855,13 +890,15 @@ class OpenXrManager {
   PFN_xrEnumerateDepthResolutionsANDROID enumerate_depth_resolutions_;
   PFN_xrAcquireDepthSwapchainImagesANDROID acquire_depth_swapchain_images_;
 
-  PFN_xrCreateGeospatialTrackerANDROIDX2 create_geospatial_tracker_;
-  PFN_xrDestroyGeospatialTrackerANDROIDX2 destroy_geospatial_tracker_;
-  PFN_xrLocateGeospatialPoseFromPoseANDROIDX2 locate_geospatial_pose_from_pose_;
-  PFN_xrLocateGeospatialPoseANDROIDX2 locate_geospatial_pose_;
+  PFN_xrCreateGeospatialTrackerANDROID create_geospatial_tracker_;
+  PFN_xrDestroyGeospatialTrackerANDROID destroy_geospatial_tracker_;
+  PFN_xrLocateGeospatialPoseFromPoseANDROID locate_geospatial_pose_from_pose_;
+  PFN_xrLocateGeospatialPoseANDROID locate_geospatial_pose_;
   PFN_xrCreateGeospatialAnchorANDROIDX2 create_geospatial_anchor_;
-  PFN_xrCheckVpsAvailabilityAsyncANDROIDX2 check_vps_availability_async_;
-  PFN_xrCheckVpsAvailabilityCompleteANDROIDX2 check_vps_availability_complete_;
+  PFN_xrCreateSurfaceAnchorAsyncANDROIDX2 create_surface_anchor_async_;
+  PFN_xrCreateSurfaceAnchorCompleteANDROIDX2 create_surface_anchor_complete_;
+  PFN_xrCheckVpsAvailabilityAsyncANDROID check_vps_availability_async_;
+  PFN_xrCheckVpsAvailabilityCompleteANDROID check_vps_availability_complete_;
 
   PFN_xrCreateEyeTrackerANDROID create_eye_tracker_;
   PFN_xrDestroyEyeTrackerANDROID destroy_eye_tracker_;
@@ -894,8 +931,8 @@ class OpenXrManager {
       create_spatial_anchor_space_from_id_;
 
   // Google Cloud Auth functions.
-  PFN_xrSetGoogleCloudAuthAsyncANDROIDX2 set_google_cloud_auth_async_;
-  PFN_xrSetGoogleCloudAuthCompleteANDROIDX2 set_google_cloud_auth_complete_;
+  PFN_xrSetGoogleCloudAuthAsyncANDROID set_google_cloud_auth_async_;
+  PFN_xrSetGoogleCloudAuthCompleteANDROID set_google_cloud_auth_complete_;
 };
 }  // namespace androidx::xr::openxr
 #endif  // JETPACK_XR_NATIVES_OPENXR_OPENXR_MANAGER_H_

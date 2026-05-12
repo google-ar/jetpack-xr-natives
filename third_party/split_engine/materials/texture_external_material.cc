@@ -23,7 +23,7 @@
 #include "core/async/future.h"
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
@@ -34,7 +34,7 @@ TextureExternalMaterial::Create(imp::BaseView& view) {
   flatbuffers::Offset<android_xr::schemas::BuiltInMaterialTextureExternal>
       spec_offset =
           android_xr::schemas::CreateBuiltInMaterialTextureExternal(*fbb);
-  return imp::split_engine::SplitEngineMaterial::RequestBuiltInMaterial(
+  return imp::split_engine::SplitEngineBuiltinMaterial::RequestBuiltInMaterial(
              view, std::move(fbb),
              android_xr::schemas::BuiltInMaterialSpec::
                  BuiltInMaterialTextureExternal,
@@ -49,10 +49,11 @@ TextureExternalMaterial::Create(imp::BaseView& view) {
 TextureExternalMaterial::TextureExternalMaterial(
     imp::BaseView& view,
     imp::split_engine::PlaceholderOrBuiltInMaterialPtr material)
-    : SplitEngineMaterial(view,
-                          android_xr::schemas::BuiltInMaterialParameters::
-                              BuiltInMaterialTextureExternalParameters,
-                          std::move(material)) {}
+    : SplitEngineBuiltinMaterial(
+          view,
+          android_xr::schemas::BuiltInMaterialParameters::
+              BuiltInMaterialTextureExternalParameters,
+          std::move(material)) {}
 
 TextureExternalMaterial::~TextureExternalMaterial() { Cleanup(); }
 

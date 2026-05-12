@@ -146,7 +146,7 @@ constexpr auto kParamsActiveOverFootprint = ShaderParameters{
     .edge_falloff_color = imp::float4(0.95f, 0.95f, 0.95f, 1.0f),
     .edge_cutoff_color = imp::float4(0.7f, 0.7f, 0.7f, 1.0f),
     .fill_touch_control = imp::kZero2,  // disabled
-    .fill_touch_response = imp::float4(0.8f, 0.0f, 2.0f, 0.3f),
+    .fill_touch_response = imp::float4(0.8f, 0.0f, 2.0f, 0.2f),
     .fill_falloff_color = imp::float4(0.5f, 0.5f, 0.5f, 1.0f),
     .fill_cutoff_color = imp::float4(0.2f, 0.2f, 0.2f, 1.0f),
 };
@@ -160,15 +160,15 @@ constexpr auto kParamsActiveNoPointer = ShaderParameters{
     .fill_falloff_color = imp::float4(0.3f, 0.3f, 0.3f, 1.0f),
     .fill_cutoff_color = imp::float4(0.3f, 0.3f, 0.3f, 1.0f),
 };
-constexpr auto kParamsIsSnappedToPlane = ShaderParameters{
+constexpr auto kParamsIsSnappable = ShaderParameters{
     .edge_touch_control = imp::float2(0.01f, 0.5f),
-    .edge_touch_response = imp::float4(0.f, 0.75f, 2.0f, 0.75f),
+    .edge_touch_response = imp::float4(1.0f, 0.75f, 2.0f, 1.0f),
     .edge_falloff_color = imp::float4(1.0f, 1.0f, 1.0f, 1.0f),
-    .edge_cutoff_color = imp::float4(0.95f, 0.95f, 0.95f, 1.0f),
+    .edge_cutoff_color = imp::float4(0.99f, 0.99f, 0.99f, 1.0f),
     .fill_touch_control = imp::kZero2,  // disabled
-    .fill_touch_response = imp::float4(0.0f, 0.8f, 2.0f, 0.2f),
-    .fill_falloff_color = imp::float4(0.99f, 0.99f, 0.99f, 1.0f),
-    .fill_cutoff_color = imp::float4(0.95f, 0.95f, 0.95f, 1.0f),
+    .fill_touch_response = imp::float4(1.0f, 1.0f, 2.0f, 0.3f),
+    .fill_falloff_color = imp::float4(1.0f, 1.0f, 1.0f, 1.0f),
+    .fill_cutoff_color = imp::float4(1.0f, 1.0f, 1.0f, 1.0f),
 };
 constexpr auto kParamsActivePressNoPointer = kParamsActiveOverModel;
 
@@ -490,8 +490,8 @@ FootprintInteractionStates::Machine::OptionalState Footprint::UpdateActive(
 
     if (kDisablePointerGlow) {
       if (interaction.TestPointer(InteractionMode::PointerMode::kPress) &&
-          state.is_snapped_to_plane) {
-        params = kParamsIsSnappedToPlane;
+          IsSnapMode(SnapMode::kSnappable)) {
+        params = kParamsIsSnappable;
       } else if (interaction.TestPointer(
                      InteractionMode::PointerMode::kPress) &&
                  (is_footprint_receiver ||
@@ -643,25 +643,21 @@ void Footprint::SetColliderEnabled(bool is_enabled) {
   }
 }
 
-void Footprint::SetSnappedToPlane(bool is_snapped_to_plane) {
-  machine_.UpdateWithAlternatives(
-      [is_snapped_to_plane](FootprintInteractionStates::Active& state)
-          -> InteractionMachine::OptionalState {
-        state.is_snapped_to_plane = is_snapped_to_plane;
-        return {};
-      },
-      [](FootprintInteractionStates::Hidden& state)
-          -> InteractionMachine::OptionalState { return {}; },
-      [](FootprintInteractionStates::Initialized& state)
-          -> InteractionMachine::OptionalState { return {}; });
+bool Footprint::IsSnapMode(SnapMode snap_mode) const {
+  return snap_mode_ == snap_mode;
 }
 
-bool Footprint::IsSnappedToPlane() {
-  auto* active_state = machine_.TryGet<FootprintInteractionStates::Active>();
-  if (active_state) {
-    return active_state->is_snapped_to_plane;
+void Footprint::SetSnapMode(SnapMode snap_mode) {
+  if (IsSnapMode(snap_mode)) {
+    return;
   }
-  return false;
+  snap_mode_ = snap_mode;
+}
+
+bool Footprint::IsSnappedOrSnapping() const {
+  return IsSnapMode(SnapMode::kSnappedToPlane) ||
+         IsSnapMode(SnapMode::kSnappingToPlane) ||
+         IsSnapMode(SnapMode::kLiftingOffPlane);
 }
 
 void Footprint::OnStateChange(const InteractionMachine& machine,

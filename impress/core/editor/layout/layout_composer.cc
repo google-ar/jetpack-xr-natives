@@ -70,6 +70,12 @@ constexpr absl::string_view kPinToBottomLabel = "Bottom";
 bool IsLabelVisible(absl::string_view label) {
   return !absl::StartsWith(label, "##");
 }
+
+bool LatchFocusRequest(Widget* widget) {
+  const bool focus_requested = widget->IsRequestingFocus();
+  widget->SetIsRequestingFocus(false);
+  return focus_requested;
+}
 }  // namespace
 
 LayoutComposer::LayoutComposer(LayoutConfig layout_config)
@@ -119,10 +125,15 @@ void LayoutComposer::DrawOnDockingLayout(const WidgetLayoutInfo& layout_info,
       DrawInSceneSectionAsHeader(widget);
       break;
     case PanelId::kLeftPanel:
-      DrawInLeftDock(widget->GetName(), [widget]() { widget->DrawImGui(); });
+      DrawInLeftDock(
+          widget->GetName(), [widget]() { widget->DrawImGui(); },
+          /*force_focus=*/LatchFocusRequest(widget));
       break;
     case PanelId::kTabBar:
-      DrawAsDockableTab(widget->GetName(), [widget]() { widget->DrawImGui(); });
+      DrawAsDockableTab(
+          widget->GetName(), [widget]() { widget->DrawImGui(); },
+          /*draw_before_previous_tabs=*/false,
+          /*force_focus=*/LatchFocusRequest(widget));
       break;
     case PanelId::kMenuBar:
       DrawAsMenuInMenuBar(widget->GetName(),
@@ -149,7 +160,8 @@ void LayoutComposer::DrawOnFixedLayout(const WidgetLayoutInfo& layout_info,
     case PanelId::kTabBar:
       DrawAsStandaloneTab(
           widget->GetName(), [widget]() { widget->DrawImGui(); },
-          ImGuiTabItemFlags_Leading);
+          ImGuiTabItemFlags_Leading, /*draw_before_previous_tabs=*/false,
+          /*force_focus=*/LatchFocusRequest(widget));
       break;
     case PanelId::kMenuBar:
     case PanelId::kToolBar:
@@ -189,16 +201,20 @@ void LayoutComposer::DrawInSceneSectionAsHeader(Widget* widget) {
 void LayoutComposer::DrawAsStandaloneTab(absl::string_view tab_label,
                                          imp::Invocable<void()> draw_function,
                                          ImGuiTabItemFlags flags,
-                                         bool draw_before_previous_tabs) {
+                                         bool draw_before_previous_tabs,
+                                         bool force_focus) {
   Invocable<void()> draw_function_final =
       [this, flags, label = std::string(tab_label),
-       draw_function = std::move(draw_function)]() {
+       draw_function = std::move(draw_function), force_focus]() {
         // The Dear ImGui TabItem tap-to-select logic depends on hovering
         // and is incompatible with touchscreens, so this code uses
         // ImGuiTabItemFlags_SetSelected to manually handle tab selection.
         // (See ImGuiTreeNodeFlags_AllowItemOverlap).
         ImGuiID tab_id = ImGui::GetCurrentWindow()->GetID(label.c_str());
         ImGuiTabItemFlags tab_flags = flags;
+        if (force_focus) {
+          selected_tab_id_ = tab_id;
+        }
         // The first leading tab will be selected by default.
         if (selected_tab_id_ == 0 &&
             (flags & ImGuiTabItemFlags_Leading) == ImGuiTabItemFlags_Leading) {
@@ -258,15 +274,18 @@ void LayoutComposer::DrawAsStandaloneTab(absl::string_view tab_label,
 }
 
 void LayoutComposer::DrawInLeftDock(absl::string_view tab_label,
-                                    imp::Invocable<void()> draw_function) {
+                                    imp::Invocable<void()> draw_function,
+                                    bool force_focus) {
   left_dock_draw_functions_.push_back(
-      {std::string(tab_label), std::move(draw_function)});
+      {std::string(tab_label), std::move(draw_function), force_focus});
 }
 
 void LayoutComposer::DrawAsDockableTab(absl::string_view tab_label,
                                        imp::Invocable<void()> draw_function,
-                                       bool draw_before_previous_tabs) {
-  WidgetInfo tab = {std::string(tab_label), std::move(draw_function)};
+                                       bool draw_before_previous_tabs,
+                                       bool force_focus) {
+  WidgetInfo tab = {std::string(tab_label), std::move(draw_function),
+                    force_focus};
 
   if (draw_before_previous_tabs) {
     tab_item_info_.insert(tab_item_info_.begin(), std::move(tab));
@@ -421,6 +440,9 @@ void LayoutComposer::DrawDockableTabbedWindow() {
           docking_helper_->GetDockId(DockingHelper::DockingType::kBottom),
           ImGuiCond_Always);
     }
+    if (info.force_focus) {
+      ImGui::SetNextWindowFocus();
+    }
     if (ImGui::Begin(info.label.c_str(), nullptr, flags)) {
       info.draw_function();
     }
@@ -431,6 +453,9 @@ void LayoutComposer::DrawDockableTabbedWindow() {
     ImGui::SetNextWindowDockID(
         docking_helper_->GetDockId(DockingHelper::DockingType::kLeft),
         ImGuiCond_Appearing);
+    if (info.force_focus) {
+      ImGui::SetNextWindowFocus();
+    }
     if (ImGui::Begin(info.label.c_str(), nullptr, flags)) {
       info.draw_function();
     }
@@ -627,7 +652,7 @@ void LayoutComposer::DrawToolbar() {
 }
 
 void LayoutComposer::DrawAfterLayout() {
-  for (auto& [label, draw_function] : draw_after_functions_) {
+  for (auto& [label, draw_function, _] : draw_after_functions_) {
     // Freeform windows with invisible labels draw invisible widgets, so we
     // don't need to draw them in a freeform window.
     if (label.empty() || !IsLabelVisible(label)) {

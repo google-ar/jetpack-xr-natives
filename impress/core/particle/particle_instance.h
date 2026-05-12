@@ -19,6 +19,7 @@
 
 #include <cstdint>
 
+#include "core/math/quat.h"
 #include "core/math/vec.h"
 #include "core/particle/data_layout.h"
 #include "core/particle/particle_data_provider.h"
@@ -71,11 +72,16 @@ class ParticleInstance {
   float3 GetAcceleration() const;
   void SetAcceleration(float3 acceleration);
 
+  // Rotation of the particle.
+  bool HasRotation() const;
+  quatf GetRotation() const;
+  void SetRotation(quatf rotation);
+
  private:
   ParticleDataProvider& data_provider_;
   const imp_particle::DataLayout& data_layout_;
-  int32_t particle_index_;
-  int32_t float_offset_;
+  int32_t particle_index_ = 0;
+  int32_t float_offset_ = 0;
 };
 
 }  // namespace imp

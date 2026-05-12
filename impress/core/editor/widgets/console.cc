@@ -91,7 +91,7 @@ void Console::HandleLog(void* context, output::OutputKind kind,
   if (kind == output::OutputKind::kFatal || kind == output::OutputKind::kMax)
     kind = output::OutputKind::kError;
   {
-    absl::MutexLock lock(&console_ui_widget->logs_mutex_);
+    absl::MutexLock lock(console_ui_widget->logs_mutex_);
     if (console_ui_widget->all_logs_.size() > kMaxLogs) {
       console_ui_widget
           ->log_count_[console_ui_widget
@@ -166,7 +166,7 @@ void Console::DrawLogs() {
   bool list_box_header =
       ImGui::BeginListBox(kConsoleListBoxLabel.data(), list_box_size);
   {
-    absl::MutexLock lock(&logs_mutex_);
+    absl::MutexLock lock(logs_mutex_);
     if (all_logs_.empty()) {
       ImGui::Text("No logs to display.");
       ImGui::EndListBox();
@@ -216,7 +216,7 @@ void Console::DrawLogs() {
 }
 
 void Console::ClearLogs() {
-  absl::MutexLock lock(&logs_mutex_);
+  absl::MutexLock lock(logs_mutex_);
   all_logs_.clear();
   log_start_index_ = 0;
   log_count_[output::OutputKind::kInfo] = 0;

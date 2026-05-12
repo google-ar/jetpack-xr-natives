@@ -26,10 +26,10 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/variant.h"
 #include "filament/libs/math/include/math/TVecHelpers.h"
+#include "core/camera/camera_component.h"
 #include "core/collision/ray.h"
 #include "core/common/bit_flag.h"
 #include "core/common/filament_helpers.h"
-#include "core/common/platform_helpers.h"
 #include "core/common/robin_set.h"
 #include "core/geometry/shapes/sphere.h"
 #include "core/math/math.h"
@@ -41,8 +41,9 @@
 #include "core/ncsb/path_manager.h"
 #include "core/view/framework/assets/gltf_mesh.h"
 #include "core/view/framework/assets/gltf_renderer.h"
-#include "core/view/framework/camera/camera_component.h"
-#include "core/view/framework/camera/camera_state.proto.imp.h"
+// TODO: Update this to use the new camera_state.proto.imp.h
+// location, when framework_cc_proto is split.
+#include "core/camera/camera_state.proto.imp.h"
 #include "core/view/framework/render/mesh_renderer.h"
 
 namespace imp {

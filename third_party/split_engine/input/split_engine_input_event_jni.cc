@@ -58,7 +58,7 @@ android_xr::SplitEngineInputEvent::DispatchFlag GetInputEventDispatchFlag(
           dispatch_flag);
     // LINT.ThenChange(//depot/google3/third_party/split_engine/input/split_engine_input_event.h:dispatch_flag)
     default:
-      LOG(WARNING) << "[split_engine_input_event_jni] Unknown dispatch flag: "
+      IMP_LOG(imp::WARNING) << "[split_engine_input_event_jni] Unknown dispatch flag: "
                    << dispatch_flag;
       return NONE;
   }
@@ -80,7 +80,7 @@ android_xr::SplitEngineInputEvent::DeviceType GetInputEventDeviceType(
           device_type);
     // LINT.ThenChange(//depot/google3/third_party/split_engine/input/split_engine_input_event.h:device_type)
     default:
-      LOG(WARNING) << "[split_engine_input_event_jni] Unknown device_type: "
+      IMP_LOG(imp::WARNING) << "[split_engine_input_event_jni] Unknown device_type: "
                    << device_type;
       return UNKNOWN;
   }
@@ -100,7 +100,7 @@ android_xr::SplitEngineInputEvent::PointerType GetInputEventPointerType(
           pointer_type);
     // LINT.ThenChange(//depot/google3/third_party/split_engine/input/split_engine_input_event.h:pointer_type)
     default:
-      LOG(WARNING) << "[split_engine_input_event_jni] Unknown pointer_type: "
+      IMP_LOG(imp::WARNING) << "[split_engine_input_event_jni] Unknown pointer_type: "
                    << pointer_type;
       return DEFAULT;
   }
@@ -120,7 +120,7 @@ android_xr::SplitEngineInputEvent::Action GetInputEventAction(int action) {
       return static_cast<android_xr::SplitEngineInputEvent::Action>(action);
     // LINT.ThenChange(//depot/google3/third_party/split_engine/input/split_engine_input_event.h:action)
     default:
-      LOG(WARNING) << "[split_engine_input_event_jni] Unknown action: "
+      IMP_LOG(imp::WARNING) << "[split_engine_input_event_jni] Unknown action: "
                    << action;
       return ACTION_CANCEL;
   }

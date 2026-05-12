@@ -41,6 +41,9 @@ enum class AttributeType {
   // Acceleration. (float3, ddx, ddy, ddz)
   kAcceleration,
 
+  // Rotation. (float4, w, x, y, z)
+  kRotation,
+
   // This must be the last field.
   kNumFields,
 };
@@ -68,6 +71,11 @@ DataLayout::DataLayout(const ParticleConfig& config) {
   if (config.scale.has_value()) {
     offsets_[static_cast<int>(AttributeType::kScale)] = particle_data_size_;
     particle_data_size_ += 3;
+  }
+
+  if (config.billboard.value_or(false)) {
+    offsets_[static_cast<int>(AttributeType::kRotation)] = particle_data_size_;
+    particle_data_size_ += 4;
   }
 
   // All particles have a position, it is not configurable from the proto.
@@ -110,6 +118,10 @@ int DataLayout::GetVelocity() const {
 
 int DataLayout::GetAcceleration() const {
   return offsets_[static_cast<int>(AttributeType::kAcceleration)];
+}
+
+int DataLayout::GetRotation() const {
+  return offsets_[static_cast<int>(AttributeType::kRotation)];
 }
 
 }  // namespace imp_particle

@@ -24,14 +24,16 @@
 #include "absl/types/span.h"
 #include "filament/filament/include/filament/Color.h"
 #include "filament/filament/include/filament/MaterialInstance.h"
+#include "core/assets/material/material_load_options.proto.imp.h"
+#include "core/async/future.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/small_source_location.h"
 #include "core/materials/material.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
 #include "core/render/texture.h"
-#include "core/split_engine/materials/split_engine_material.h"
 #include "core/split_engine/split_engine_serializer.h"
+#include "core/view/base_view.h"
 #include "core/view/utils/string_map.h"
 
 namespace imp::split_engine {
@@ -43,10 +45,20 @@ namespace imp::split_engine {
 // serializing material changes to the Split Engine host.
 class SplitEngineCustomMaterial : public Material {
  public:
+  // Request a custom filament material from the backend.
+  static Future<absl::Status> RequestCustomFilamentMaterial(
+      BaseView& view, absl::string_view material_source,
+      filament::Material* filament_material,
+      const MaterialPreCompileOptions& precompile_options =
+          MaterialAsset::kDefaultPreCompileOptions);
+
   explicit SplitEngineCustomMaterial(SplitEngineSerializer& serializer,
                                      OwnedMaterialPtr material);
 
   ~SplitEngineCustomMaterial() override;
+
+  const filament::MaterialInstance* GetFilamentMaterialInstance()
+      const override;
 
   filament::MaterialInstance* GetFilamentMaterialInstance() override;
 

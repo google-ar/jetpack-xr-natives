@@ -40,6 +40,7 @@ cc_library(
         "//core/assets/material:material_asset",
         "//core/async:future",
         "//core/material_library:flatbuffer_utils",
+        "//core/material_library:material_package",
         "//core/materials",
         "//core/math",
         "//core/ncsb",
@@ -49,6 +50,7 @@ cc_library(
         "//core/split_engine:split_engine_shared",
         "//core/split_engine/materials/builtin:builtin_custom_material",
         "//core/split_engine/materials/builtin:builtin_material",
+        "//core/split_engine/materials/builtin:builtin_material_registry",
         "//core/view:base_view",
         "//core/view:view_events",
         "//core/view/framework",
@@ -61,7 +63,7 @@ cc_library(
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//split_engine:fbs",
     ],
-    alwayslink = 1,
+    alwayslink = 1,  # Required for registration.
 )
 
 imp_assets(

@@ -21,6 +21,7 @@
 #include "bullet/src/LinearMath/btQuaternion.h"
 #include "bullet/src/LinearMath/btTransform.h"
 #include "bullet/src/LinearMath/btVector3.h"
+#include "core/math/mat.h"
 #include "core/math/quat.h"
 #include "core/math/transform.h"
 #include "core/math/vec.h"
@@ -40,6 +41,9 @@ btVector3 ToBtVector3(const float3& vec);
 
 // Convert a Bullet transformation to Impress transformation.
 Transform<float> ToTransform(const btTransform& bt_trans);
+
+// Convert a Bullet transformation to Impress matrix.
+mat4f ToMatrix(const btTransform& bt_trans);
 
 // Convert a Bullet vector to Impress vector.
 float3 ToFloat3(const btVector3& vec);

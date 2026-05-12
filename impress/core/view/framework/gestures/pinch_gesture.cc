@@ -150,7 +150,8 @@ bool PinchGesture::TryStart(const PointerHitEvent& pointer_hit) {
   pointer_retainer_[0] = GetPointerUtils()->RetainPointer(pointer_id_[0]);
   pointer_retainer_[1] = GetPointerUtils()->RetainPointer(pointer_id_[1]);
   GetDispatcher().Send(
-      PinchGesture::StartEvent(GetId(), MakeCancelFn(this, pointer_hit)));
+      PinchGesture::StartEvent(GetId(), MakeCancelFn(this, pointer_hit), gap,
+                               (position_[0] + position_[1]) * 0.5f));
   return true;
 }
 
@@ -170,7 +171,8 @@ void PinchGesture::OnUpdate(const PointerHitEvent& pointer_hit) {
           float delta = gap - gap_;
           gap_ = gap;
           GetDispatcher().Send(PinchGesture::UpdateEvent(
-              GetId(), MakeCancelFn(this, pointer_hit), gap, delta));
+              GetId(), MakeCancelFn(this, pointer_hit), gap, delta,
+              (position_[0] + position_[1]) * 0.5f));
         }
         break;
       }

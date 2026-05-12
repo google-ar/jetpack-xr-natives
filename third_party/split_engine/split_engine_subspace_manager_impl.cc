@@ -49,7 +49,7 @@ void SplitEngineSubspaceManagerImpl::RegisterSubspace(
           utils::Entity entity = utils::Entity::import(existing_root_entity_id);
           node = imp::NodeHandle(entity);
           if (!node.IsValid()) {
-            LOG(FATAL) << "Attempt to create subspace with invalid existing "
+            IMP_LOG(imp::FATAL) << "Attempt to create subspace with invalid existing "
                           "root entity id: "
                        << existing_root_entity_id;
           }
@@ -75,7 +75,7 @@ void SplitEngineSubspaceManagerImpl::CreateSubspace(
       [this, subspace_id, app_name]() {
         auto it = subspace_map_.find(subspace_id);
         if (it == subspace_map_.end()) {
-          LOG(ERROR) << "Subspace not found";
+          IMP_LOG(imp::ERROR) << "Subspace not found";
           return absl::NotFoundError("Subspace not found");
         }
         it->second.SetSubspaceName(app_name);
@@ -93,7 +93,7 @@ void SplitEngineSubspaceManagerImpl::DestroySubspace(
        [this, subspace_id]() {
         auto it = subspace_map_.find(subspace_id);
         if (it == subspace_map_.end()) {
-          LOG(ERROR) << "Subspace not found";
+          IMP_LOG(imp::ERROR) << "Subspace not found";
           return absl::NotFoundError("Subspace not found");
         }
         auto event = OnSubspaceDestroyedEvent{subspace_id};
@@ -138,7 +138,7 @@ absl::Status SplitEngineSubspaceManagerImpl::ForwardInputEvent(
     if (subspace_root_node.IsValid()) {
       subspace_root_node->Send(input_event);
     } else {
-      LOG(ERROR) << "Subspace not found or no hit node is valid";
+      IMP_LOG(imp::ERROR) << "Subspace not found or no hit node is valid";
       return absl::FailedPreconditionError(
           "Subspace not found or no hit node is valid");
     }
@@ -167,11 +167,11 @@ void SplitEngineSubspaceManagerImpl::ForwardSubspaceTransform(
       [this, subspace_id, subspace_transform]() {
         auto it = subspace_map_.find(subspace_id);
         if (it == subspace_map_.end()) {
-          LOG(ERROR) << "Subspace not found";
+          IMP_LOG(imp::ERROR) << "Subspace not found";
           return absl::NotFoundError("Subspace not found");
         }
         if (!it->second.GetNode().IsValid()) {
-          LOG(ERROR) << "Subspace is not valid";
+          IMP_LOG(imp::ERROR) << "Subspace is not valid";
           return absl::NotFoundError("Subspace is not valid");
         }
         return it->second.UpdateSubspaceTransform(subspace_transform);
@@ -186,7 +186,7 @@ void SplitEngineSubspaceManagerImpl::UpdateSubspaceAnchor(
       [this, subspace_id, anchor_type]() {
         auto it = subspace_map_.find(subspace_id);
         if (it == subspace_map_.end()) {
-          LOG(ERROR) << "Subspace not found";
+          IMP_LOG(imp::ERROR) << "Subspace not found";
           return absl::NotFoundError("Subspace not found");
         }
         return it->second.UpdateAnchor(anchor_type);

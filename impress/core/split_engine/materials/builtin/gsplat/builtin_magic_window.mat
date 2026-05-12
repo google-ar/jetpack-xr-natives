@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// TODO: (broken link) - This needs to apply the change to use precompute texture
+// in (broken link)
+// after the black screen issue is resolved.
+
 material {
   name : "MagicWindow",
   parameters : [
@@ -68,9 +72,24 @@ material {
            name      : windowDimensionInMagicWindow
         }
   ],
+  constants : [
+        {
+           // If true, use triangles to render splats (3 vertices). Otherwise,
+           // use quads (6 vertices).
+           type      : bool,
+           name      : useTrianglesForSplats,
+           value     : false
+        }
+  ],
   variables : [
-         color,
-         uvCoord,
+         {
+            name : color,
+            precision : medium
+         },
+         {
+            name : uvCoord,
+            precision : medium
+         },
          splatPosInMagicWindow,
          eyePosInMagicWindow
   ],
@@ -92,10 +111,11 @@ vertex {
   }
 
   void materialVertex(inout MaterialVertexInputs material) {
+    const int kNumVerticesPerSplat = materialConstants_useTrianglesForSplats ? 3 : 6;
     int vertIndex = getVertexIndex();
     int indicesWidth = textureSize(materialParams_sortedIndices, 0).x;
-    int splatIndex = int(texelFetch(materialParams_sortedIndices, ivec2(vertIndex / 6 % indicesWidth,
-                                                                        vertIndex / 6 / indicesWidth), 0).x);
+    int splatIndex = int(texelFetch(materialParams_sortedIndices, ivec2(vertIndex / kNumVerticesPerSplat % indicesWidth,
+                                                                        vertIndex / kNumVerticesPerSplat / indicesWidth), 0).x);
 
     mat4 magicWindowFromUserWorld = materialParams.magicWindowFromUserWorldMatrix;
     mat4 viewFromEye = inverse(getEyeFromViewMatrix());
@@ -104,7 +124,7 @@ vertex {
     vec4 eyePosInUserWorld = vec4(userWorldFromEye[3].xyz, 1.0);
     material.eyePosInMagicWindow = magicWindowFromUserWorld * eyePosInUserWorld;
 
-    ivec2 sampleCoord = getSampleCoord(splatIndex, 1, materialParams_splatDataPosition);
+    ivec2 sampleCoord = getSampleCoord(splatIndex, /*stride=*/1, materialParams_splatDataPosition);
 
     // Pull position from splat data.
     vec4 position = texelFetch(materialParams_splatDataPosition, sampleCoord, 0);
@@ -115,8 +135,15 @@ vertex {
     vec4 clipPos;
     vec2 basisAxisX;
     float aspectRatio;
-    computeSplatData(position, cov3d, getWorldFromModelMatrix(),
-                     getResolution().x, clipPos, basisAxisX, aspectRatio);
+#if defined(VARIANT_HAS_STEREO)
+   int eyeIndex = getEyeIndex();
+#else
+   int eyeIndex = -1;
+#endif
+    computeSplatData(eyeIndex, position, cov3d, getWorldFromModelMatrix(),
+                     getResolution().xy, clipPos, basisAxisX, aspectRatio);
+    // computeSplatData() sets clipPos.w to 0.0 if the splat is behind the
+    // camera.
     if (clipPos.w == 0.0) {
       material.clipSpaceTransform = mat4(vec4(0), vec4(0), vec4(0), vec4(-2, -2, 0, 1));
       return;
@@ -132,23 +159,17 @@ vertex {
 
     // Compute NDC coordinate for the current vertex of the triangle on the quad
     // representing this splat.
-    const vec2 quadCoords[6] = vec2[6](
-      // 6 vertices per splat to make a 2 triangle quad.
-      vec2(-1.0,  1.0),  // 0
-      vec2( 1.0,  1.0),  // 1
-      vec2(-1.0, -1.0),  // 2
-      vec2(-1.0, -1.0),  // 3
-      vec2( 1.0,  1.0),  // 4
-      vec2( 1.0, -1.0)   // 5
-    );
     // Scale the quad to go beyond the first stddev of gaussian distribution.
-    vec2 quadCoord = quadCoords[vertIndex % 6] * materialParams.splatScale;
+    vec2 vertexCoord = getVertexCoord(vertIndex, materialConstants_useTrianglesForSplats) * materialParams.splatScale;
     // Compute interpolated UV coordinate used to calculate final color in frag.
-    material.uvCoord.xy = quadCoord * .5;
+    material.uvCoord.xy = vertexCoord * .5;
     // Rotate and scale the quad coord based on the gaussian cov2d.
     vec2 basisAxisY = vec2(basisAxisX.y, -basisAxisX.x) * aspectRatio;
-    vec2 clipQuadOffset = (quadCoord.x * basisAxisX + quadCoord.y * basisAxisY) * getResolution().zw;
-    // Apply the offset.
+    // getResolution().zw is
+    // (1 / viewport_width_pixels, 1 / viewport_height_pixels).
+    vec2 clipQuadOffset = (vertexCoord.x * basisAxisX + vertexCoord.y * basisAxisY) * getResolution().zw;
+    // Apply the offset. Here we are assuming computeSplatData() already
+    // normalize the clipPos, so clipPos.w == 1.0.
     clipPos.xy += clipQuadOffset;
 
     // Find the position of the splat in Magic Window Space.
@@ -161,7 +182,7 @@ vertex {
         material.splatPosInMagicWindow / material.splatPosInMagicWindow.w;
 
     // Override the clip space position with the newly computed position.
-    material.clipSpaceTransform = mat4(vec4(0), vec4(0), vec4(0), vec4(clipPos.xyz, 1.0));
+    material.clipSpaceTransform = createClipSpaceTransform(clipPos);
   }
 }
 

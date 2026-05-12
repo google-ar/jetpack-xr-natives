@@ -120,27 +120,12 @@ absl::StatusOr<std::unique_ptr<Image>> ImageReader::AcquireLatestImage() {
   return Image::Create(*aimage);
 }
 
-absl::Status ImageReader::SetBufferSize(const int2 size) {
+absl::Status ImageReader::SetDefaultBufferSize(const int2 size) {
   if (size_ == size) {
     return absl::OkStatus();
   }
 
-  // Ensure no outstanding images are held
-  {
-    AImage* tmp = nullptr;
-    while (AImageReader_acquireNextImage(reader_, &tmp) == AMEDIA_OK) {
-      AImage_delete(tmp);
-    }
-  }
-
-  int32_t result =
-      ANativeWindow_setBuffersGeometry(native_window_, size.x, size.y, format_);
-
-  if (result == 0) {
-    size_ = size;
-    return absl::OkStatus();
-  }
-  return absl::InternalError("Failed to resize ImageReader.");
+  return Image::SetImageReaderDefaultBufferSize(reader_, size.x, size.y);
 }
 
 }  // namespace imp::android

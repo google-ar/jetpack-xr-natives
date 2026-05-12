@@ -48,7 +48,7 @@
 #include "core/resources/resource_manager.h"
 #include "core/video/video_source.h"
 #include "core/view/base_view.h"
-#include "util/task/status_builder.h"
+#include "mediapipe/framework/port/status_builder.h"
 #include "mediapipe/framework/port/status_macros.h"
 
 namespace imp::video {

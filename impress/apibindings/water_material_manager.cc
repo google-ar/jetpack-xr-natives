@@ -33,7 +33,7 @@
 #include "core/common/small_source_location.h"
 #include "core/common/type_traits.h"
 #include "core/render/texture.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "split_engine/materials/water_reflection_material.h"
 #include "mediapipe/framework/port/status_macros.h"
 
@@ -128,7 +128,7 @@ WaterMaterialManagerImpl::GetWaterMaterial(std::intptr_t material_handle) {
         "Provided material handle is not of the correct type.");
   }
 
-  split_engine::SplitEngineMaterial* base_material =
+  split_engine::SplitEngineBuiltinMaterial* base_material =
       &(*view_.GetBindingsMaterialMap().at(material_handle));
   android_xr::WaterReflectionMaterial* derived_material =
       static_cast<android_xr::WaterReflectionMaterial*>(base_material);

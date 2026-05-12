@@ -23,7 +23,6 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "mediapipe/framework/port/status_matchers.h"
-#include "core/recipes/language/recipe_graph.proto.imp.h"
 
 // ((broken link)) These are matchers for Recipe stuff, and should belong in
 // the Recipe library instead.
@@ -31,19 +30,6 @@ namespace imp::recipes_testing {
 
 // Matcher for testing equality of RecipeGraph::NodeId
 MATCHER_P(EqNodeId, node_id, "") { return arg.index == node_id.index; }
-
-class LiteralMatcher : public ::testing::MatcherInterface<const Literal&> {
- public:
-  explicit LiteralMatcher(const Literal& expected) : expected_(expected) {}
-
-  bool MatchAndExplain(const Literal& actual,
-                       ::testing::MatchResultListener* listener) const override;
-
-  void DescribeTo(std::ostream* os) const override;
-
- private:
-  const Literal& expected_;
-};
 
 // Matcher class for testing equality of two ValueConnections
 template <typename ValueType>
@@ -79,9 +65,6 @@ class ValueConnectionMatcher {
  private:
   const ::testing::Matcher<const ValueType&> matcher_;
 };
-
-// Matcher for RecipeGraph::Literal
-::testing::Matcher<const Literal&> EqualsLiteral(const Literal& literal);
 
 // Matcher for RecipeGraph::ValueConnection with its variant class member
 template <typename T>

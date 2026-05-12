@@ -19,11 +19,13 @@
 #include <cstdint>
 #include <cstdlib>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "absl/algorithm/container.h"
 #include "absl/base/nullability.h"
 #include "absl/container/flat_hash_map.h"
 #include "core/common/log.h"
@@ -108,6 +110,14 @@ Slice::EndFrameResult Slice::EndFrame(imp::BaseView& view) {
     return EndFrameResult::kStable;
   }
 
+  // Intentionally check for kReadyToBlit first, so that it gets acted on the
+  // frame after it is set.  This prevents occasional issues where blitting
+  // occurs before the external texture has been updated
+  if (texture_status_ == TextureStatus::kReadyToBlit) {
+    canvas_mutex_.unlock();
+    return EndFrameResult::kBlitRequired;
+  }
+
   if (!canvas_ && canvas_source_->IsFeatureSupported(
                       ScopedCanvas::Feature::kKeepContents)) {
     canvas_mutex_.unlock();
@@ -137,9 +147,6 @@ Slice::EndFrameResult Slice::EndFrame(imp::BaseView& view) {
   }
 
   auto result = EndFrameResult::kStable;
-  if (texture_status_ == TextureStatus::kReadyToBlit) {
-    result = EndFrameResult::kBlitRequired;
-  }
 
   canvas_mutex_.unlock();
 
@@ -345,19 +352,20 @@ void Slice::UpdateTexture() {
 }
 
 void Slice::UpdateTextureSync() {
-  // TODO: this should be kReadyToBlit iff there are multiple slices.
-  // or alternatively it can just fall through this state?
   texture_status_ = TextureStatus::kReadyToBlit;
   canvas_.reset();
+  absl::c_move(texture_update_futures_,
+               std::back_inserter(texture_blit_futures_));
+  texture_update_futures_.clear();
 }
 
 void Slice::OnBlitCompleted() {
   absl::MutexLock lock(canvas_mutex_);
   texture_status_ = TextureStatus::kStable;
-  for (const auto& future : texture_update_futures_) {
+  for (const auto& future : texture_blit_futures_) {
     future.Return(absl::OkStatus());
   }
-  texture_update_futures_.clear();
+  texture_blit_futures_.clear();
 }
 
 float Slice::GetAtlasUtilization() const {
@@ -378,7 +386,7 @@ std::string Slice::ToString(const GlyphEmulator::GlyphKeyOrGlyphString& glyph) {
   if (absl::holds_alternative<GlyphEmulator::GlyphKey>(glyph)) {
     GlyphEmulator::GlyphKey glyph_key =
         absl::get<GlyphEmulator::GlyphKey>(glyph);
-    return absl::StrFormat("Id=%i, Font=%i", glyph_key.glyph_id,
+    return absl::StrFormat("Id=%i, Font=%i", glyph_key.glyph_id.Get(),
                            glyph_key.font_id);
   } else {
     return absl::get<std::string>(glyph);

@@ -70,6 +70,11 @@ proto_library(
     ],
 )
 
+cc_proto_library(
+    name = "interactivity_cc_proto",
+    deps = [":interactivity_proto"],
+)
+
 imp_cc_proto_library(
     name = "interactivity_imp_cc_proto",
     proto = ":interactivity_proto",

@@ -276,6 +276,7 @@ cc_library(
     deps = [
         ":url_loader",
         "//core:config",
+        "//core/async:background_delete",
         "//core/async:executor",
         "//core/async:future",
         "//core/common",

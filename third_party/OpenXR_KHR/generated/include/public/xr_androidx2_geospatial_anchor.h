@@ -1,6 +1,9 @@
 #ifndef XR_ANDROIDX2_GEOSPATIAL_ANCHOR_H_
 #define XR_ANDROIDX2_GEOSPATIAL_ANCHOR_H_ 1
 
+// Standalone dependencies:
+#include <openxr/public/xr_android_geospatial.h>
+
 /*
 ** Copyright 2017-2025 The Khronos Group Inc.
 **
@@ -44,7 +47,7 @@ typedef struct XrSystemGeospatialAnchorPropertiesANDROIDX2 {
     uint32_t              maxSurfaceAnchorCount;
 } XrSystemGeospatialAnchorPropertiesANDROIDX2;
 
-// XrGeospatialTrackerAnchorTrackingInfoANDROIDX2 extends XrGeospatialTrackerCreateInfoANDROIDX2
+// XrGeospatialTrackerAnchorTrackingInfoANDROIDX2 extends XrGeospatialTrackerCreateInfoANDROID
 typedef struct XrGeospatialTrackerAnchorTrackingInfoANDROIDX2 {
     XrStructureType             type;
     const void* XR_MAY_ALIAS    next;
@@ -52,16 +55,16 @@ typedef struct XrGeospatialTrackerAnchorTrackingInfoANDROIDX2 {
 } XrGeospatialTrackerAnchorTrackingInfoANDROIDX2;
 
 typedef struct XrGeospatialAnchorCreateInfoANDROIDX2 {
-    XrStructureType                 type;
-    const void* XR_MAY_ALIAS        next;
-    XrGeospatialTrackerANDROIDX2    geospatialTracker;
-    XrGeospatialPoseANDROIDX2       geospatialPose;
+    XrStructureType               type;
+    const void* XR_MAY_ALIAS      next;
+    XrGeospatialTrackerANDROID    geospatialTracker;
+    XrGeospatialPoseANDROID       geospatialPose;
 } XrGeospatialAnchorCreateInfoANDROIDX2;
 
 typedef struct XrSurfaceAnchorCreateInfoANDROIDX2 {
     XrStructureType                 type;
     const void* XR_MAY_ALIAS        next;
-    XrGeospatialTrackerANDROIDX2    geospatialTracker;
+    XrGeospatialTrackerANDROID      geospatialTracker;
     XrSurfaceAnchorTypeANDROIDX2    surfaceAnchorType;
     XrQuaternionf                   eastUpSouthOrientation;
     double                          latitude;

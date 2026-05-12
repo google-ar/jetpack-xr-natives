@@ -31,10 +31,12 @@
 #include "absl/types/span.h"
 #include "flatbuffers/base.h"
 #include "flatbuffers/buffer.h"
+#include "flatbuffers/detached_buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "flatbuffers/flatbuffers.h"
 #include "flatbuffers/verifier.h"
 #include "core/async/executor.h"
+#include "core/async/future.h"
 #include "core/common/enum_flags.h"
 #include "core/common/registry.h"
 #include "core/split_engine/desktop/utils/buffer_factory.h"
@@ -144,6 +146,9 @@ void SplitEngineMMDesktopBridgeServiceImplLocal::SequentialPipeline::Schedule(
     task_ = task_.Then(std::move(execute_func));
   } else {
     // The group came early, save it for later execution.
+    const bool was_inserted =
+        pending_message_groups_.emplace(group_id, std::move(execute_func))
+            .second;
     
   }
 
@@ -292,13 +297,24 @@ absl::Status SplitEngineMMDesktopBridgeServiceImplLocal::SendRequest(
           return absl::FailedPreconditionError(
               "SendRequest requires a SplitEngineRenderer in the registry.");
         }
-        renderer->get()
-            .HandleRequest(bridge_id, *request)
-            .Then([response_handler =
-                       std::move(response_handler)](absl::Status status) {
-              response_handler(SerializeStatusResponse(status));
+        // Set the app context for the bridge.
+        renderer->get().SetAppContext(bridge_id);
+        Future<flatbuffers::DetachedBuffer> response_future =
+            renderer->get().HandleRequest(bridge_id, *request);
+        response_future.DependsOn(std::move(data));
+        response_future
+            .Then([response_handler = std::move(response_handler)](
+                      absl::StatusOr<flatbuffers::DetachedBuffer> response) {
+              std::vector<uint8_t> response_data;
+              if (!response.ok()) {
+                response_data = SerializeStatusResponse(response.status());
+              } else {
+                response_data =
+                    std::vector<uint8_t>(response->begin(), response->end());
+              }
+              response_handler(response_data);
             })
-            .KeptBy(this);
+            .KeptBy(renderer->get().GetAppContext(bridge_id));
         return absl::OkStatus();
       });
 

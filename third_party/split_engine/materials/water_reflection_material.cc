@@ -27,7 +27,7 @@
 #include "core/render/texture.h"
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 #include "split_engine/schemas/split_engine_primitive_generated.h"
@@ -50,7 +50,7 @@ WaterReflectionMaterial::Create(imp::BaseView& view, bool transparent) {
   flatbuffers::Offset<android_xr::schemas::BuiltInMaterial5cf26af8>
       spec_offset =
           android_xr::schemas::CreateBuiltInMaterial5cf26af8(*fbb, transparent);
-  return imp::split_engine::SplitEngineMaterial::RequestBuiltInMaterial(
+  return imp::split_engine::SplitEngineBuiltinMaterial::RequestBuiltInMaterial(
              view, std::move(fbb),
              android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterial5cf26af8,
              spec_offset.Union())
@@ -64,10 +64,11 @@ WaterReflectionMaterial::Create(imp::BaseView& view, bool transparent) {
 WaterReflectionMaterial::WaterReflectionMaterial(
     imp::BaseView& view,
     imp::split_engine::PlaceholderOrBuiltInMaterialPtr material)
-    : SplitEngineMaterial(view,
-                          android_xr::schemas::BuiltInMaterialParameters::
-                              BuiltInMaterial5cf26af8Parameters,
-                          std::move(material)) {}
+    : SplitEngineBuiltinMaterial(
+          view,
+          android_xr::schemas::BuiltInMaterialParameters::
+              BuiltInMaterial5cf26af8Parameters,
+          std::move(material)) {}
 
 WaterReflectionMaterial::~WaterReflectionMaterial() { Cleanup(); }
 

@@ -25,21 +25,18 @@
 #include <utility>
 #include <vector>
 
-#include "glog/logging.h"
 #include "absl/base/attributes.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/str_format.h"
 #include "absl/synchronization/blocking_counter.h"
-#include "absl/types/optional.h"
 #include "core/async/executor.h"
 #include "core/async/future_common.h"
 #include "core/async/future_impl.h"
 #include "core/async/future_traits.h"
 #include "core/async/task_priority.h"
 #include "core/common/holdable.h"
-#include "core/common/platform_helpers.h"
+#include "mediapipe/framework/port/status_builder.h"
 #include "mediapipe/framework/port/status_macros.h"
 
 namespace imp {
@@ -77,7 +74,77 @@ class ABSL_MUST_USE_RESULT Future {
   Future();
 
   // Constructs a ready future with the result passed in.
-  explicit Future(Result result);
+  //
+  // This constructor handles types that are convertible to Result (which is
+  // absl::StatusOr<T>) but are not exactly Result, Future, or absl::Status. It
+  // allows for efficient perfect forwarding.
+  //
+  // Examples:
+  //   Future<std::string> f("hello"); // const char* -> std::string
+  //   Future<int> f(42L);             // long -> int
+  //
+  // This constructor uses SFINAE to disable itself in cases where other
+  // constructors should be preferred or when the type is incompatible:
+  // 1. absl::Status: Prefer the Future(absl::Status) constructor.
+  // 2. Future: Prefer the copy/move constructors (Perfect Forwarding Guard).
+  //    Without this, Future(Future&) would bind here instead of the copy ctor.
+  // 3. Incompatible types: Ensure Result is constructible from U.
+  template <typename R, typename std::enable_if_t<
+                            !std::is_same_v<std::decay_t<R>, absl::Status> &&
+                                !std::is_same_v<std::decay_t<R>, Future> &&
+                                !std::is_same_v<std::decay_t<R>, Result> &&
+                                !std::is_same_v<std::decay_t<R>, Value> &&
+                                std::is_constructible_v<Result, R>,
+                            int> = 0>
+  explicit Future(R&& result);
+
+  // Constructs a ready future with the Result (absl::StatusOr<T>) passed in.
+  //
+  // This constructor is strictly for the exact Result type. It is required to
+  // support brace initialization for Result, which fails template argument
+  // deduction for the forwarding constructor above.
+  //
+  // Example:
+  //   Future<int> f({absl::OkStatus(), 42}); // Brace init for StatusOr<int>
+  template <typename R = Result,
+            typename = std::enable_if_t<std::is_same_v<R, Result> &&
+                                        !std::is_same_v<R, absl::Status>>>
+  explicit Future(R result);
+
+  // Constructs a ready future with the Value (T) passed in.
+  //
+  // This constructor is strictly for the exact Value type. It is required to
+  // support brace initialization for T, as the forwarding constructor cannot
+  // deduce the type from a braced list.
+  //
+  // Example:
+  //   Future<std::vector<int>> f({1, 2, 3});
+  template <typename V = Value,
+            typename = std::enable_if_t<std::is_same_v<V, Value> &&
+                                        !std::is_same_v<V, absl::Status> &&
+                                        !std::is_same_v<V, Result>>>
+  explicit Future(V result, int = 0);
+
+  // Constructs a ready future with the status passed in.
+  //
+  // The constructor is non-explicit to allow for returning an absl::Status
+  // from a function that returns a Future without having to explicitly wrap
+  // the Status in a Future.
+  //
+  // Example:
+  //   Future<int> MyFunc() {
+  //     return absl::InternalError("Failed");
+  //   }
+  Future(absl::Status result);
+
+  // Allow implicit construction from StatusBuilder to support MP_RETURN_IF_ERROR.
+  //
+  // Example:
+  //   Future<int> MyFunc() {
+  //     MP_RETURN_IF_ERROR(DoSomething());
+  //     return 42;
+  //   }
+  Future(const mediapipe::StatusBuilder& builder);
 
   ~Future();
 
@@ -380,9 +447,39 @@ Future<T>::Future()
           internal::ResultHolderWithTypeFromStatus<Result>))) {}
 
 template <typename T>
-Future<T>::Future(Result result)
+template <
+    typename R,
+    typename std::enable_if_t<
+        !std::is_same_v<std::decay_t<R>, absl::Status> &&
+            !std::is_same_v<std::decay_t<R>, Future<T>> &&
+            !std::is_same_v<std::decay_t<R>, typename Future<T>::Result> &&
+            !std::is_same_v<std::decay_t<R>, typename Future<T>::Value> &&
+            std::is_constructible_v<typename Future<T>::Result, R>,
+        int>>
+Future<T>::Future(R&& result)
+    : impl_wrapper_(std::make_shared<ImplWrapper>(std::make_shared<Impl>(
+          internal::ResultHolder(Result(std::forward<R>(result)))))) {}
+
+template <typename T>
+template <typename R, typename>
+Future<T>::Future(R result, int)
+    : impl_wrapper_(std::make_shared<ImplWrapper>(std::make_shared<Impl>(
+          internal::ResultHolder(Result(std::move(result)))))) {}
+
+template <typename T>
+template <typename V, typename>
+Future<T>::Future(V result)
     : impl_wrapper_(std::make_shared<ImplWrapper>(
           std::make_shared<Impl>(internal::ResultHolder(std::move(result))))) {}
+
+template <typename T>
+Future<T>::Future(absl::Status result)
+    : impl_wrapper_(std::make_shared<ImplWrapper>(std::make_shared<Impl>(
+          internal::ResultHolder(Result(std::move(result)))))) {}
+
+template <typename T>
+Future<T>::Future(const mediapipe::StatusBuilder& builder)
+    : Future(absl::Status(builder)) {}
 
 template <typename T>
 Future<T>::~Future() {
@@ -709,7 +806,7 @@ Future<absl::Status> Future<T>::CombineList(const ListT& futures) {
 
   if (futures.empty()) {
     // If there are no futures, return a ready future.
-    return Future<absl::Status>(absl::OkStatus());
+    return absl::OkStatus();
   } else if (futures.size() == 1) {
     if constexpr (std::is_same_v<Result, absl::Status>) {
       // There is only one future and it is already of the correct type so just

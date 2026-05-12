@@ -169,6 +169,26 @@ cc_library(
 )
 
 cc_library(
+    name = "test_node_manager",
+    testonly = True,
+    srcs = ["test_node_manager.cc"],
+    hdrs = ["test_node_manager.h"],
+    copts = imp_google3_copts(),
+    linkstatic = True,
+    deps = [
+        "//apibindings:impress_api_view_header",
+        "//apibindings:node_manager_interface",
+        "//core/math",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_impress//core/common:log",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "impress_api_test_helper",
     testonly = True,
     srcs = ["impress_api_test_helper.cc"],
@@ -206,6 +226,7 @@ cc_library(
     deps = [
         ":test_generic_material_manager",
         ":test_model_manager",
+        ":test_node_manager",
         ":test_skybox_manager",
         ":test_stereo_surface_manager",
         ":test_texture_manager",

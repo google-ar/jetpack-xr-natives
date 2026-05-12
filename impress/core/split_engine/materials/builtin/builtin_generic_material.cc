@@ -14,162 +14,31 @@
 
 #include "core/split_engine/materials/builtin/builtin_generic_material.h"
 
-#include <cstddef>
+#include <functional>
 #include <optional>
 #include <utility>
 
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
-#include "filament/filament/include/filament/MaterialInstance.h"
-#include "flatbuffers/buffer.h"
-#include "flatbuffers/flatbuffer_builder.h"
+#include "absl/status/statusor.h"
 #include "flatbuffers/verifier.h"
 #include "core/async/future.h"
 #include "core/common/small_source_location.h"
-#include "core/common/type_helpers.h"
 #include "core/material_library/generic_material_impl.h"
 #include "core/material_library/generic_material_parameters.h"
 #include "core/material_library/generic_material_spec.h"
 #include "core/material_library/material_package.h"
 #include "core/material_library/material_param_value.h"
-#include "core/material_library/schemas/generic_material_generated.h"
 #include "core/materials/material.h"
 #include "core/render/texture.h"
+#include "core/split_engine/materials/builtin/builtin_generic_spec_helpers.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
+#include "core/split_engine/materials/builtin/builtin_material_registry.h"
+#include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
 namespace imp::split_engine {
-
-namespace {
-
-// Verify android_xr::schemas::GenericMaterialLightingModel and
-// schemas::GenericMaterialLightingModel enums match.
-static_assert(
-    DoEnumsMatch(schemas::GenericMaterialLightingModel::Lit,
-                 android_xr::schemas::GenericMaterialLightingModel::Lit),
-    "Enum mismatch");
-static_assert(
-    DoEnumsMatch(schemas::GenericMaterialLightingModel::Unlit,
-                 android_xr::schemas::GenericMaterialLightingModel::Unlit),
-    "Enum mismatch");
-static_assert(android_xr::schemas::GenericMaterialLightingModel::MAX ==
-                  android_xr::schemas::GenericMaterialLightingModel::Unlit,
-              "New fields added but assert not updated");
-
-// Verify android_xr::schemas::GenericMaterialBlendMode and
-// schemas::GenericMaterialBlendMode enums match.
-static_assert(
-    DoEnumsMatch(schemas::GenericMaterialBlendMode::Opaque,
-                 android_xr::schemas::GenericMaterialBlendMode::Opaque),
-    "Enum mismatch");
-static_assert(
-    DoEnumsMatch(schemas::GenericMaterialBlendMode::Masked,
-                 android_xr::schemas::GenericMaterialBlendMode::Masked),
-    "Enum mismatch");
-static_assert(
-    DoEnumsMatch(schemas::GenericMaterialBlendMode::Transparent,
-                 android_xr::schemas::GenericMaterialBlendMode::Transparent),
-    "Enum mismatch");
-static_assert(
-    DoEnumsMatch(schemas::GenericMaterialBlendMode::Refractive,
-                 android_xr::schemas::GenericMaterialBlendMode::Refractive),
-    "Enum mismatch");
-
-static_assert(android_xr::schemas::GenericMaterialBlendMode::MAX ==
-                  android_xr::schemas::GenericMaterialBlendMode::Refractive,
-              "New fields added but assert not updated");
-
-// Verify android_xr::schemas::GenericMaterialDoubleSidedMode and
-// schemas::GenericMaterialDoubleSidedMode enums match.
-static_assert(
-    DoEnumsMatch(
-        schemas::GenericMaterialDoubleSidedMode::SingleSided,
-        android_xr::schemas::GenericMaterialDoubleSidedMode::SingleSided),
-    "Enum mismatch");
-static_assert(
-    DoEnumsMatch(
-        schemas::GenericMaterialDoubleSidedMode::DoubleSided,
-        android_xr::schemas::GenericMaterialDoubleSidedMode::DoubleSided),
-    "Enum mismatch");
-static_assert(
-    android_xr::schemas::GenericMaterialDoubleSidedMode::MAX ==
-        android_xr::schemas::GenericMaterialDoubleSidedMode::DoubleSided,
-    "New fields added but assert not updated");
-
-// Verify android_xr::schemas::GenericMaterialDepthClearMaterial and
-// schemas::GenericMaterialDepthClearMaterial enums match.
-static_assert(
-    DoEnumsMatch(
-        schemas::GenericMaterialDepthClearMaterial::Disabled,
-        android_xr::schemas::GenericMaterialDepthClearMaterial::Disabled),
-    "Enum mismatch");
-static_assert(
-    DoEnumsMatch(
-        schemas::GenericMaterialDepthClearMaterial::Enabled,
-        android_xr::schemas::GenericMaterialDepthClearMaterial::Enabled),
-    "Enum mismatch");
-static_assert(
-    android_xr::schemas::GenericMaterialDepthClearMaterial::MAX ==
-        android_xr::schemas::GenericMaterialDepthClearMaterial::Enabled,
-    "New fields added but assert not updated");
-
-// Verify android_xr::schemas::MinFilter and filament::TextureSampler::MinFilter
-// enums match.
-static_assert(DoEnumsMatch(filament::TextureSampler::MinFilter::NEAREST,
-                           android_xr::schemas::MinFilter::NEAREST),
-              "Enum mismatch");
-static_assert(DoEnumsMatch(filament::TextureSampler::MinFilter::LINEAR,
-                           android_xr::schemas::MinFilter::LINEAR),
-              "Enum mismatch");
-static_assert(
-    DoEnumsMatch(filament::TextureSampler::MinFilter::NEAREST_MIPMAP_NEAREST,
-                 android_xr::schemas::MinFilter::NEAREST_MIPMAP_NEAREST),
-    "Enum mismatch");
-static_assert(
-    DoEnumsMatch(filament::TextureSampler::MinFilter::LINEAR_MIPMAP_NEAREST,
-                 android_xr::schemas::MinFilter::LINEAR_MIPMAP_NEAREST),
-    "Enum mismatch");
-static_assert(
-    DoEnumsMatch(filament::TextureSampler::MinFilter::NEAREST_MIPMAP_LINEAR,
-                 android_xr::schemas::MinFilter::NEAREST_MIPMAP_LINEAR),
-    "Enum mismatch");
-static_assert(
-    DoEnumsMatch(filament::TextureSampler::MinFilter::LINEAR_MIPMAP_LINEAR,
-                 android_xr::schemas::MinFilter::LINEAR_MIPMAP_LINEAR),
-    "Enum mismatch");
-static_assert(android_xr::schemas::MinFilter::MAX ==
-                  android_xr::schemas::MinFilter::LINEAR_MIPMAP_LINEAR,
-              "New fields added but assert not updated");
-
-}  // namespace
-
-flatbuffers::Offset<android_xr::schemas::GenericMaterialSpec>
-CreateGenericMaterialSpec(flatbuffers::FlatBufferBuilder& fbb,
-                          const GenericMaterialSpec& spec) {
-  return android_xr::schemas::CreateGenericMaterialSpec(
-      fbb,
-      static_cast<android_xr::schemas::GenericMaterialLightingModel>(
-          spec.GetLightingModel()),
-      static_cast<android_xr::schemas::GenericMaterialBlendMode>(
-          spec.GetBlendMode()),
-      static_cast<android_xr::schemas::GenericMaterialDoubleSidedMode>(
-          spec.GetDoubleSidedMode()),
-      static_cast<android_xr::schemas::GenericMaterialDepthClearMaterial>(
-          spec.GetDepthClearMaterial()));
-}
-
-GenericMaterialSpec FromFlatbuffer(
-    const android_xr::schemas::GenericMaterialSpec& flatbuffer) {
-  return GenericMaterialSpec(
-      static_cast<schemas::GenericMaterialLightingModel>(
-          flatbuffer.lighting_model()),
-      static_cast<schemas::GenericMaterialBlendMode>(flatbuffer.blend_mode()),
-      static_cast<schemas::GenericMaterialDoubleSidedMode>(
-          flatbuffer.double_sided_mode()),
-      static_cast<schemas::GenericMaterialDepthClearMaterial>(
-          flatbuffer.depth_clear_material()));
-}
 
 Future<BuiltInMaterialPtr> BuiltInGenericMaterial::Create(
     BaseView& view, const GenericMaterialSpec& spec,
@@ -219,5 +88,26 @@ BorrowedMaterialPtr BuiltInGenericMaterial::GetMaterialInternal(
     SmallSourceLocation loc) const {
   return generic_material_->GetMaterial(loc);
 }
+
+// Registers the built-in material factory.
+const bool kRegisterMaterial = BuiltinMaterialRegistry::RegisterOrDie(
+    android_xr::schemas::BuiltInMaterialSpec::GenericMaterialSpec,
+    [](BaseView& view, BridgeId bridge_id,
+       const android_xr::schemas::BuiltInMaterialRequest& request,
+       std::optional<
+           std::reference_wrapper<const MaterialPackage::MaterialCache>>
+           cache) -> Future<BuiltInMaterialPtr> {
+      const android_xr::schemas::GenericMaterialSpec* spec =
+          request.data_as_GenericMaterialSpec();
+      if (spec == nullptr) {
+        return Future<BuiltInMaterialPtr>(absl::InvalidArgumentError(
+            "Failed to get the GenericMaterialSpec from the request."));
+      }
+      absl::StatusOr<GenericMaterialSpec> unpacked_spec = Unpack(*spec);
+      if (!unpacked_spec.ok()) {
+        return Future<BuiltInMaterialPtr>(unpacked_spec.status());
+      }
+      return BuiltInGenericMaterial::Create(view, *unpacked_spec, *cache);
+    });
 
 }  // namespace imp::split_engine

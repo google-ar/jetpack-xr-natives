@@ -23,9 +23,11 @@
 #include <type_traits>
 #include <vector>
 
+#include "absl/base/thread_annotations.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/synchronization/mutex.h"
 #include "core/common/jni_helpers.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/shared/split_engine_defines.h"
@@ -152,6 +154,7 @@ class SplitEngineBridge : public JavaWrapper,
   // TODO: (broken link) - when we can use memory addresses for message groups,
   // this will be removed and the message group id will be the memory address.
   MessageGroupId GenerateMessageGroupId() override {
+    absl::MutexLock lock(next_message_group_id_mutex_);
     return MessageGroupId(++next_message_group_id_);
   }
 
@@ -192,7 +195,13 @@ class SplitEngineBridge : public JavaWrapper,
   const JniHandle close_;
   const ClientId client_id_;
   std::unique_ptr<SplitEngineMessageGroupCallback> message_group_callback_;
-  int32_t next_message_group_id_ = 0;
+
+  absl::Mutex next_message_group_id_mutex_;
+
+  // clang-format off
+  int32_t next_message_group_id_
+      ABSL_GUARDED_BY(next_message_group_id_mutex_) = 0;
+  // clang-format on
 };
 }  // namespace imp::split_engine
 #endif  // THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_ANDROID_VIEW_EXTENSIONS_SPLITENGINEBRIDGE_H_

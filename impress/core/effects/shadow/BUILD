@@ -56,7 +56,7 @@ proto_library(
         "contact_shadow_projector_state.proto",
     ],
     deps = [
-        "//core/view/framework:framework_proto",
+        "//core/camera:camera_state_proto",
     ],
 )
 
@@ -94,6 +94,7 @@ cc_library(
         ":contact_shadow_receiver_state_cc_proto",
         "//core/assets",
         "//core/async:future",
+        "//core/camera:camera_proto_cc_imp",
         "//core/common:platform_helpers",
         "//core/math",
         "//core/ncsb",

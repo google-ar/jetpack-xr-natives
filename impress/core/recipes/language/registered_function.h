@@ -21,11 +21,11 @@
 #include <string_view>
 #include <tuple>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "absl/base/attributes.h"
 #include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "core/recipes/language/recipe_function_utils.h"
 #include "core/recipes/language/recipe_traits.h"
@@ -44,6 +44,7 @@ class RegisteredFunction {
   // value.
   struct Param {
     std::string name;
+    int type;
     recipe::Variable default_value;
   };
 
@@ -77,14 +78,17 @@ class RegisteredFunction {
     ABSL_ATTRIBUTE_NOINLINE void ClearParams() { params_.clear(); }
 
     Builder& AddParam(std::string_view name) {
-      params_.push_back(Param{.name = std::string(name)});
+      params_.push_back(
+          Param{.name = std::string(name),
+                .type = recipe::GetRecipeVariableIndex<recipe::Variable>()});
       return *this;
     }
 
     template <typename T>
     Builder& AddParamWithDefault(std::string_view name, T default_value) {
-      params_.push_back(
-          Param{.name = std::string(name), .default_value = default_value});
+      params_.push_back(Param{.name = std::string(name),
+                              .type = recipe::GetRecipeVariableIndex<T>(),
+                              .default_value = default_value});
       return *this;
     }
 
@@ -92,29 +96,32 @@ class RegisteredFunction {
     std::unique_ptr<RegisteredFunction> Build(Fn fn) {
       using FnType = std::decay_t<Fn>;
       if constexpr (std::is_constructible_v<RecipeFunction, FnType>) {
-        return BuildInternal(std::move(fn), false);
+        return BuildInternal(std::move(fn), {}, false);
       } else {
         using FunctorUnpacker =
             decltype(recipe_traits::FunctorUnpacker(&FnType::operator()));
-        using ArgsTuple = typename FunctorUnpacker::ArgsTuple;
+        using ConstArgsRefTuple = typename FunctorUnpacker::ConstArgsRefTuple;
 
         constexpr bool kUsesRecipeArgsVariable =
-            std::is_same_v<ArgsTuple, std::tuple<recipe::Args>>;
+            std::is_same_v<ConstArgsRefTuple, std::tuple<const recipe::Args&>>;
         constexpr int kRequiredArgsCount =
-            kUsesRecipeArgsVariable ? 0 : std::tuple_size<ArgsTuple>::value;
+            kUsesRecipeArgsVariable ? 0
+                                    : std::tuple_size<ConstArgsRefTuple>::value;
 
-        for (int i = params_.size(); i < kRequiredArgsCount; ++i) {
-          AddParam(absl::StrCat(recipe::kDefaultArgPrefix, i));
-        }
-
-        return BuildInternal(recipe::MakeRecipeFunction<Fn>(std::move(fn)),
-                             !kUsesRecipeArgsVariable);
+        return BuildInternal(
+            recipe::MakeRecipeFunction<Fn>(std::move(fn)),
+            recipe::GetParameterTypeIds<ConstArgsRefTuple>(
+                std::make_index_sequence<kRequiredArgsCount>()),
+            !kUsesRecipeArgsVariable);
       }
     }
 
    private:
     std::unique_ptr<RegisteredFunction> BuildInternal(
-        RecipeFunction fn, bool uses_explicit_arg_type_checking);
+        RecipeFunction fn, const std::vector<int>& parameter_types,
+        bool uses_explicit_arg_type_checking);
+
+    bool FillParameterTypes(const std::vector<int>& parameter_types);
 
     // The name of the RegisteredFunction to build
     std::string name_;
@@ -136,8 +143,8 @@ class RegisteredFunction {
   //    parameter, the default value is used.
   // 4. If there are still unassigned parameters that do not have default
   //    values, an error is returned, indicating missing required arguments.
-  // TODO: Ensure args and named_args are passed by const reference
-  absl::StatusOr<ReturnValue> Execute(Args& args, NamedArgs& named_args) const;
+  absl::StatusOr<ReturnValue> Execute(const Args& args,
+                                      const NamedArgs& named_args) const;
 
  private:
   // The name of this RegisteredFunction

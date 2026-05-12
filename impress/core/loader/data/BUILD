@@ -16,6 +16,7 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@com_google_sandboxed_api//sandboxed_api/bazel:embed_data.bzl", "sapi_cc_embed_data")
 load(
     "//build_tools:imp_gltf_materials_package.bzl",
+    "generate_imp_default_fl0_gltf_materials_package",
     "generate_imp_default_gltf_materials_package",
     "generate_imp_default_lite_gltf_materials_package",
     "generate_imp_default_performance_gltf_materials_package",
@@ -26,6 +27,8 @@ package(default_visibility = ["//visibility:public"])
 licenses(["notice"])
 
 generate_imp_default_gltf_materials_package()
+
+generate_imp_default_fl0_gltf_materials_package()
 
 generate_imp_default_lite_gltf_materials_package()
 

@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -49,7 +50,8 @@ class ModelManager {
   virtual void LoadGltfAsset(absl::Cord data, absl::string_view key,
                              std::unique_ptr<BaseAssetLoader> asset_loader) = 0;
 
-  // Releases the asset pointer of previously loaded glTF model.
+  // Releases the asset pointer of previously loaded glTF model if the reference
+  // count is 0, otherwise decrements the reference count.
   virtual absl::Status ReleaseGltfAsset(std::intptr_t gltf_token) = 0;
 
   // Instantiates a glTF model and returns an entity ID.
@@ -62,7 +64,8 @@ class ModelManager {
 
   // Attaches or detaches a footprint affordance to a glTF model.
   virtual absl::Status SetGltfReformAffordanceEnabled(
-      int32_t impress_node, bool enable_affordance) = 0;
+      int32_t impress_node, bool enable_affordance,
+      bool system_movable = true) = 0;
 
   // Animates a glTF model.
   virtual void AnimateGltfModel(
@@ -76,19 +79,51 @@ class ModelManager {
   // the animation, `toggle` = false pause the animation.
   virtual absl::Status ToggleGltfModelAnimation(int32_t node, bool toggle) = 0;
 
+  // Sets the speed of the animation of a glTF model.
+  virtual absl::Status SetGltfModelAnimationSpeed(int32_t node, float speed,
+                                                  int32_t channel_id) = 0;
+
+  // Sets the playback time of the animation of a glTF model.
+  virtual absl::Status SetGltfModelAnimationPlaybackTime(
+      int32_t node, float playback_time, int32_t channel_id) = 0;
+
+  // Gets the total count of the animation clips in the glTF model.
+  virtual absl::StatusOr<int32_t> GetGltfModelAnimationCount(int32_t node) = 0;
+
+  // Gets the name of an animation clip by index.
+  virtual absl::StatusOr<std::string> GetGltfModelAnimationName(
+      int32_t node, int32_t index) = 0;
+
   // Returns the local space unscaled bounds of the glTF model.
   virtual absl::StatusOr<imp::Box> GetGltfModelLocalBounds(int32_t node) = 0;
 
   // Sets the material override for a node's mesh at a given primitive index.
+  // TODO Remove this API once the migration to the new
+  // introspection APIs is complete.
   virtual absl::Status SetMaterialOverride(int32_t node_id,
                                            std::intptr_t material,
                                            absl::string_view node_name,
                                            size_t primitive_index) = 0;
 
   // Clears the material override for a node's mesh at a given primitive index.
+  // TODO Remove this API once the migration to the new
+  // introspection APIs is complete.
   virtual absl::Status ClearMaterialOverride(int32_t node_id,
                                              absl::string_view node_name,
                                              size_t primitive_index) = 0;
+
+  // Sets the material override directly on a specific node's mesh at a given
+  // primitive index.
+  virtual absl::Status SetGltfModelNodeMaterialOverride(
+      int32_t node_id, std::intptr_t material, size_t primitive_index) = 0;
+
+  // Clears the material override directly on a specific node's mesh at a given
+  // primitive index.
+  virtual absl::Status ClearGltfModelNodeMaterialOverride(
+      int32_t node_id, size_t primitive_index) = 0;
+
+  // Schedules reskinning for a glTF model using its entity ID.
+  virtual absl::Status ScheduleReskinning(int32_t node_id) = 0;
 
   // Called by ImpressApiView::Update() to manage animation callbacks.
   virtual void Update(const FrameTime& frame_time) = 0;

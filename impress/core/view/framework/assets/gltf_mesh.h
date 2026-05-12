@@ -38,6 +38,7 @@
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_handle.h"
 #include "core/render/base_renderable_manager.h"
+#include "core/render/render_order_constants.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/utils/frame_time.h"
 
@@ -287,8 +288,6 @@ class GltfMesh : public Component {
 
   // Filament::RenderableManager has no getter for priority or channel, so track
   // it ourselves.
-  static constexpr uint8_t kDefaultPriority = 4;
-  static constexpr uint8_t kDefaultChannel = 2;
   uint8_t priority_ = kDefaultPriority;
   uint8_t channel_ = kDefaultChannel;
   BaseRenderableManager& GetRenderableManager() const;

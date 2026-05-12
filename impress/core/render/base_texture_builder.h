@@ -65,6 +65,8 @@ class BaseTextureBuilder {
   }
   virtual BaseTextureBuilder& GenerateMipmaps(filament::Engine& engine) = 0;
   virtual BaseTextureBuilder& Name(absl::string_view name) = 0;
+
+  // Designed to be implemented by Split Engine spy.
   virtual void Finalize(filament::Texture* texture) = 0;
 
  protected:

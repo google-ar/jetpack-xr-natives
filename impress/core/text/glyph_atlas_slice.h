@@ -324,8 +324,10 @@ class Slice {
 
   TextureStatus texture_status_ ABSL_GUARDED_BY(canvas_mutex_) = kStable;
 
-  // A set of futures which will resolve the next time the texture is updated.
+  // A set of futures which move to the blit list when the texture is updated.
   std::vector<Future<absl::Status>> texture_update_futures_;
+  // A set of futures which will resolve the next time the texture is uploaded.
+  std::vector<Future<absl::Status>> texture_blit_futures_;
 
   // The currently pending prepare request. This may be a completed future if
   // there is no active request. This is not thread-safe but does not need

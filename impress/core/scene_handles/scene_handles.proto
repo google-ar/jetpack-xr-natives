@@ -32,6 +32,7 @@ message NodeSceneHandle {
   option (imp.native_include) =
       "core/scene_handles/scene_handles.h";
   option (imp.no_codegen) = true;
+  option (imp.native_type_has_presence) = true;
 
   // Used to identify what node to map to within a .isf file.
   oneof identifier {
@@ -74,6 +75,7 @@ message ComponentSceneHandle {
   option (imp.native_include) =
       "core/scene_handles/scene_handles.h";
   option (imp.no_codegen) = true;
+  option (imp.native_type_has_presence) = true;
 
   // Identifies which node within a .isf has the component being referenced.
   oneof identifier {
@@ -103,6 +105,7 @@ message GltfNodeSceneHandle {
   option (imp.native_include) =
       "core/scene_handles/scene_handles.h";
   option (imp.no_codegen) = true;
+  option (imp.native_type_has_presence) = true;
 
   // Used to identify what node to map to within a .isf file.
   // If no identifier is assigned, then the glTF node will be looked for on the

@@ -407,10 +407,6 @@ RecipeSystem::RecipeSystem(BaseView& view) {
     return view.GetCameraManager().GetCamera()->GetNode();
   });
 
-  // TODO: Remove this function when deprecating KHR_behavior.
-  RegisterFunction("DebugLog",
-                   [](std::string message) { output::Recipe("%s", message); });
-
   recipe::RegisterMathAngleFunctions(this);
   recipe::RegisterMathArithmeticFunctions(this);
   recipe::RegisterMathBitWiseFunctions(this);

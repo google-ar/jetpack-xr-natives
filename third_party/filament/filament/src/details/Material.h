@@ -81,18 +81,18 @@ public:
         return mDefinition.uniformInterfaceBlock;
     }
 
-    DescriptorSetLayout const& getPerViewDescriptorSetLayout() const noexcept {
+    inline filament::DescriptorSetLayout const& getPerViewDescriptorSetLayout() const noexcept {
         assert_invariant(mDefinition.materialDomain == MaterialDomain::POST_PROCESS);
         return mDefinition.perViewDescriptorSetLayout;
     }
 
-    DescriptorSetLayout const& getPerViewDescriptorSetLayout(
+    filament::DescriptorSetLayout const& getPerViewDescriptorSetLayout(
             Variant const variant, bool const useVsmDescriptorSetLayout) const noexcept;
 
     // Returns the layout that should be used when this material is bound to the pipeline for the
     // given variant. Shared variants use the Engine's default material's variants, so we should
     // also use the default material's layout.
-    DescriptorSetLayout const& getDescriptorSetLayout(Variant variant = {}) const noexcept {
+    filament::DescriptorSetLayout const& getDescriptorSetLayout(Variant variant = {}) const noexcept {
         if (!isSharedVariant(variant)) {
             return mDefinition.descriptorSetLayout;
         }
@@ -134,11 +134,11 @@ public:
     // prepareProgram creates the program for the material's given variant at the backend level.
     // Must be called outside of backend render pass.
     // Must be called before getProgram() below.
-    void prepareProgram(Variant const variant,
+    void prepareProgram(backend::DriverApi& driver, Variant const variant,
             backend::CompilerPriorityQueue const priorityQueue) const noexcept {
         // prepareProgram() is called for each RenderPrimitive in the scene, so it must be efficient.
         if (UTILS_UNLIKELY(!isCached(variant))) {
-            prepareProgramSlow(variant, priorityQueue);
+            prepareProgramSlow(driver, variant, priorityQueue);
         }
     }
 
@@ -248,6 +248,14 @@ public:
         return mDefinition.perViewLayoutIndex;
     }
 
+    bool useUboBatching() const noexcept {
+        return mUseUboBatching;
+    }
+
+    std::string_view getSource() const noexcept {
+        return mDefinition.source.c_str_safe();
+    }
+
 #if FILAMENT_ENABLE_MATDBG
     void applyPendingEdits() noexcept;
 
@@ -284,11 +292,11 @@ private:
     MaterialParser const& getMaterialParser() const noexcept;
 
     bool hasVariant(Variant variant) const noexcept;
-    void prepareProgramSlow(Variant variant,
+    void prepareProgramSlow(backend::DriverApi& driver, Variant variant,
             CompilerPriorityQueue priorityQueue) const noexcept;
-    void getSurfaceProgramSlow(Variant variant,
+    void getSurfaceProgramSlow(backend::DriverApi& driver, Variant variant,
             CompilerPriorityQueue priorityQueue) const noexcept;
-    void getPostProcessProgramSlow(Variant variant,
+    void getPostProcessProgramSlow(backend::DriverApi& driver, Variant variant,
             CompilerPriorityQueue priorityQueue) const noexcept;
     backend::Program getProgramWithVariants(Variant variant,
             Variant vertexVariant, Variant fragmentVariant) const;
@@ -296,9 +304,15 @@ private:
     utils::FixedCapacityVector<backend::Program::SpecializationConstant>
             processSpecializationConstants(Builder const& builder);
 
-    void precacheDepthVariants(FEngine& engine);
+    void precacheDepthVariants(backend::DriverApi& driver);
 
-    void createAndCacheProgram(backend::Program&& p, Variant variant) const noexcept;
+    void createAndCacheProgram(backend::DriverApi& driver, backend::Program&& p, Variant variant) const noexcept;
+
+    backend::DescriptorSetLayout const& getPerViewDescriptorSetLayoutDescription(
+            Variant const variant, bool const useVsmDescriptorSetLayout) const noexcept;
+
+    backend::DescriptorSetLayout const& getDescriptorSetLayoutDescription(
+            Variant variant = {}) const noexcept;
 
     inline bool isSharedVariant(Variant const variant) const {
         return (mDefinition.materialDomain == MaterialDomain::SURFACE) && !mIsDefaultMaterial &&
@@ -309,6 +323,13 @@ private:
     MaterialDefinition const& mDefinition;
 
     bool mIsDefaultMaterial = false;
+
+    bool mUseUboBatching = false;
+    bool mIsStereoSupported = false;
+    bool mIsParallelShaderCompileSupported = false;
+    bool mDepthPrecacheDisabled = false;
+
+    FMaterial const* mDefaultMaterial = nullptr;
 
     // reserve some space to construct the default material instance
     mutable FMaterialInstance* mDefaultMaterialInstance = nullptr;

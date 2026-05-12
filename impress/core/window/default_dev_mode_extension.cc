@@ -101,27 +101,6 @@ ImFont* DefaultDevModeExtension::LoadFont(const BufferAccess& font_data,
       font_data.Size(), size, &font_config);
 }
 
-absl::Status DefaultDevModeExtension::PostSetup() {
-  // the OpenGLImGuiRenderer is initialized here because it depends on the
-  //  SplitEngineSerializer, and on the Android platform, it depends on the
-  //  view which is only available after setup.
-  if (base_view_.GetSplitEngineSerializer()) {
-#if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(OPENGL) && IMP_RUNTIME(DEV)
-    imgui_renderer_ =
-        std::make_unique<OpenGLImGuiRenderer>(base_view_, "", imgui_context_);
-#else
-    IMP_LOG(imp::WARNING) << "Editor rendering for SplitEngine App is only supported on "
-                    "Android with OpenGL backend.";
-#endif
-  }
-
-  if (imgui_renderer_ == nullptr) {
-    return absl::InternalError("Failed to create ImGuiRenderer");
-  }
-
-  return absl::OkStatus();
-}
-
 absl::Status DefaultDevModeExtension::Setup(FilamentHost& host) {
   host_ = &host;
   MP_RETURN_IF_ERROR(ui_view_.Setup(host.GetEngine(), "ui"));
@@ -149,12 +128,22 @@ absl::Status DefaultDevModeExtension::Setup(FilamentHost& host) {
 
   // The imgui_helper which is wrapped by the FilaguiImGuiRenderer has no status
   //  to return, and, is therefore, initialized here.
-  if (!base_view_.GetSplitEngineSerializer()) {
+  if (base_view_.GetSplitEngineSerializer()) {
+#if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(OPENGL) && IMP_RUNTIME(DEV)
+
+    imgui_renderer_ =
+        std::make_unique<OpenGLImGuiRenderer>(base_view_, "", imgui_context_);
+#else
+    IMP_LOG(imp::WARNING) << "Editor rendering for SplitEngine App is only supported on "
+                    "Android with OpenGL backend.";
+#endif
+  } else {
     imgui_renderer_ = std::make_unique<FilaguiImGuiRenderer>(
         ui_view_.Get(), base_view_, "", imgui_context_);
-    if (imgui_renderer_ == nullptr) {
-      return absl::InternalError("Failed to create ImGuiRenderer");
-    }
+  }
+
+  if (imgui_renderer_ == nullptr) {
+    return absl::InternalError("Failed to create ImGuiRenderer");
   }
 
   io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX);
@@ -168,10 +157,13 @@ absl::Status DefaultDevModeExtension::Setup(FilamentHost& host) {
   return absl::OkStatus();
 }
 
-void DefaultDevModeExtension::Cleanup() {
+void DefaultDevModeExtension::PreCleanup() {
   if (imgui_renderer_) {
     imgui_renderer_.reset();
   }
+}
+
+void DefaultDevModeExtension::Cleanup() {
   if (debug_draw_) {
     debug_draw_.reset();
   }
@@ -253,8 +245,9 @@ void DefaultDevModeExtension::ApplyTextureRenderTarget(
   render_target_ = render_target_builder.build(*host_->GetEngine());
   ui_view_.Get()->setRenderTarget(render_target_);
   if (imgui_renderer_) {
-    imgui_renderer_->SetDisplaySize(texture->getWidth(), texture->getHeight(),
-                                    /*scale_x*/ 1.0f, /*scale_y*/ 1.0f, false);
+    imgui_renderer_->SetRenderTargetDisplaySize(
+        texture->getWidth(), texture->getHeight(),
+        /*scale_x*/ 1.0f, /*scale_y*/ 1.0f, false);
   }
 }
 
@@ -298,7 +291,6 @@ void DefaultDevModeExtension::UpdateCameraAndViewport(uint2 screen_size,
   }
 
   if (!std::min(screen_size.x, screen_size.y)) {
-    IMP_LOG(imp::INFO) << "Skipping UpdateCameraAndViewport due to invalid bounds";
     return;
   }
   uint2 virtual_size = uint2{screen_size / subpixel_ratio};
@@ -308,8 +300,9 @@ void DefaultDevModeExtension::UpdateCameraAndViewport(uint2 screen_size,
                                           0.0, virtual_size.x, virtual_size.y,
                                           0.0, 0.0, 1.0);
   if (imgui_renderer_) {
-    imgui_renderer_->SetDisplaySize(virtual_size.x, virtual_size.y,
-                                    subpixel_ratio.x, subpixel_ratio.y, false);
+    imgui_renderer_->SetRenderTargetDisplaySize(virtual_size.x, virtual_size.y,
+                                                subpixel_ratio.x,
+                                                subpixel_ratio.y, false);
   }
 }
 

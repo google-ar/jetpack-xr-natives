@@ -14,6 +14,7 @@
 
 #include "apibindings/model_manager.h"
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -29,6 +30,7 @@
 #include "absl/strings/cord.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "absl/time/time.h"
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "apibindings/asset_ptr_map.h"
 #include "apibindings/base_asset_animator.h"
@@ -69,19 +71,37 @@ class ModelManagerImpl : public ModelManager {
   absl::Status SetGltfModelColliderEnabled(int32_t node,
                                            bool enable_collider) override;
   absl::Status SetGltfReformAffordanceEnabled(int32_t impress_node,
-                                              bool enable_affordance) override;
+                                              bool enable_affordance,
+                                              bool system_movable) override;
   void AnimateGltfModel(
       int32_t node, absl::string_view animation_name, bool loop,
       std::unique_ptr<BaseAssetAnimator> asset_animator) override;
   absl::Status StopGltfModelAnimation(int32_t node) override;
   absl::Status ToggleGltfModelAnimation(int32_t node, bool toggle) override;
+  absl::Status SetGltfModelAnimationSpeed(int32_t node, float speed,
+                                          int32_t channel_id) override;
+  absl::Status SetGltfModelAnimationPlaybackTime(int32_t node,
+                                                 float playback_time,
+                                                 int32_t channel_id) override;
+  absl::StatusOr<int32_t> GetGltfModelAnimationCount(int32_t node) override;
+  absl::StatusOr<std::string> GetGltfModelAnimationName(int32_t node,
+                                                        int32_t index) override;
   absl::StatusOr<imp::Box> GetGltfModelLocalBounds(int32_t node) override;
+  // TODO Remove this API once the migration to the new
+  // introspection APIs is complete.
   absl::Status SetMaterialOverride(int32_t node_id, std::intptr_t material,
                                    absl::string_view node_name,
                                    size_t primitive_index) override;
+  // TODO Remove this API once the migration to the new
+  // introspection APIs is complete.
   absl::Status ClearMaterialOverride(int32_t node_id,
                                      absl::string_view node_name,
                                      size_t primitive_index) override;
+  absl::Status SetGltfModelNodeMaterialOverride(
+      int32_t node_id, std::intptr_t material, size_t primitive_index) override;
+  absl::Status ClearGltfModelNodeMaterialOverride(
+      int32_t node_id, size_t primitive_index) override;
+  absl::Status ScheduleReskinning(int32_t node_id) override;
   void Update(const FrameTime& frame_time) override;
   void ResetAnimationContexts() override;
 
@@ -163,14 +183,15 @@ absl::Status ModelManagerImpl::SetGltfModelColliderEnabled(
 }
 
 absl::Status ModelManagerImpl::SetGltfReformAffordanceEnabled(
-    int32_t impress_node, bool enable_affordance) {
+    int32_t impress_node, bool enable_affordance, bool system_movable) {
   NodeHandle node_handle(utils::Entity::import(impress_node));
   if (!node_handle) {
     return absl::InvalidArgumentError("Node is not valid.");
   }
 
   if (enable_affordance) {
-    return node_handle->AddComponent<SceneViewerComponent>(node_handle)
+    return node_handle
+        ->AddComponent<SceneViewerComponent>(node_handle, system_movable)
         .status();
   } else {
     node_handle->RemoveComponent<SceneViewerComponent>();
@@ -241,13 +262,85 @@ absl::Status ModelManagerImpl::ToggleGltfModelAnimation(int32_t node,
   if (it != node_to_anim_ctx_.end()) {
     auto& [animator, callback] = node_to_anim_ctx_[node];
     if (animator) {
-      // Adjust the animation's playing speed to control playback, simulating a
-      // pause and resume process.
-      animator->SetSpeedMultiplier(toggle ? 1.0f : 0.0f);
+      animator->SetPaused(!toggle);
       return absl::OkStatus();
     }
   }
   return absl::InvalidArgumentError("Animation is not playing.");
+}
+
+absl::Status ModelManagerImpl::SetGltfModelAnimationSpeed(int32_t node,
+                                                          float speed,
+                                                          int32_t channel_id) {
+  NodeHandle node_handle(utils::Entity::import(node));
+  if (!node_handle) {
+    return absl::InvalidArgumentError("Node is not valid.");
+  }
+
+  ComponentHandle<GltfAnimator> animator =
+      node_handle->GetComponent<GltfAnimator>();
+  if (!animator) {
+    return absl::NotFoundError(
+        "Node does not have an active GltfAnimator component.");
+  }
+
+  animator->SetSpeedMultiplier(speed, {.id = channel_id});
+  return absl::OkStatus();
+}
+
+absl::Status ModelManagerImpl::SetGltfModelAnimationPlaybackTime(
+    int32_t node, float playback_time, int32_t channel_id) {
+  NodeHandle node_handle(utils::Entity::import(node));
+  if (!node_handle) {
+    return absl::InvalidArgumentError("Node is not valid.");
+  }
+
+  ComponentHandle<GltfAnimator> animator =
+      node_handle->GetComponent<GltfAnimator>();
+  if (!animator) {
+    return absl::NotFoundError(
+        "Node does not have an active GltfAnimator component.");
+  }
+
+  animator->SetPlaybackTime(absl::Seconds(playback_time), {.id = channel_id});
+  return absl::OkStatus();
+}
+
+absl::StatusOr<int32_t> ModelManagerImpl::GetGltfModelAnimationCount(
+    int32_t node) {
+  NodeHandle node_handle(utils::Entity::import(node));
+  if (!node_handle) {
+    return absl::InvalidArgumentError("Node is not valid.");
+  }
+
+  ComponentHandle<GltfRenderer> gltf_renderer =
+      node_handle->GetComponent<GltfRenderer>();
+  if (!gltf_renderer) {
+    return absl::InvalidArgumentError("Node does not have a GltfRenderer.");
+  }
+
+  return gltf_renderer->GetGltfAsset()->AnimationCount();
+}
+
+absl::StatusOr<std::string> ModelManagerImpl::GetGltfModelAnimationName(
+    int32_t node, int32_t index) {
+  NodeHandle node_handle(utils::Entity::import(node));
+  if (!node_handle) {
+    return absl::InvalidArgumentError("Node is not valid.");
+  }
+
+  ComponentHandle<GltfRenderer> gltf_renderer =
+      node_handle->GetComponent<GltfRenderer>();
+  if (!gltf_renderer) {
+    return absl::InvalidArgumentError("Node does not have a GltfRenderer.");
+  }
+
+  auto anim_names = gltf_renderer->GetGltfAsset()->GetAnimNames();
+  if (index < 0 || index >= anim_names.size()) {
+    return absl::OutOfRangeError("Animation index is out of range.");
+  }
+
+  return anim_names[index];
 }
 
 absl::StatusOr<imp::Box> ModelManagerImpl::GetGltfModelLocalBounds(
@@ -263,9 +356,23 @@ absl::StatusOr<imp::Box> ModelManagerImpl::GetGltfModelLocalBounds(
     return absl::InvalidArgumentError("Node does not have a GltfRenderer.");
   }
 
-  return gltf_renderer->GetLocalBounds();
+  // TODO: (broken link) - A policy to handle the NaN or negative
+  // center / halfExtents of a glTF model.
+  imp::Box bounds = gltf_renderer->GetLocalBounds();
+  if (std::isnan(bounds.center.x) || std::isnan(bounds.center.y) ||
+      std::isnan(bounds.center.z)) {
+    bounds.center = {0.0f, 0.0f, 0.0f};
+  }
+  if (std::isnan(bounds.halfExtent.x) || bounds.halfExtent.x < 0.0f ||
+      std::isnan(bounds.halfExtent.y) || bounds.halfExtent.y < 0.0f ||
+      std::isnan(bounds.halfExtent.z) || bounds.halfExtent.z < 0.0f) {
+    bounds.halfExtent = {0.0f, 0.0f, 0.0f};
+  }
+  return bounds;
 }
 
+// TODO Remove this API once the migration to the new
+// introspection APIs is complete.
 absl::Status ModelManagerImpl::SetMaterialOverride(int32_t node_id,
                                                    std::intptr_t material,
                                                    absl::string_view node_name,
@@ -285,12 +392,65 @@ absl::Status ModelManagerImpl::SetMaterialOverride(int32_t node_id,
   return absl::OkStatus();
 }
 
+// TODO Remove this API once the migration to the new
+// introspection APIs is complete.
 absl::Status ModelManagerImpl::ClearMaterialOverride(
     int32_t node_id, absl::string_view node_name, size_t primitive_index) {
   MP_ASSIGN_OR_RETURN(ComponentHandle<GltfMesh> mesh,
                    FindGltfMeshByNodeName(node_id, node_name));
   // Clears the material override for that mesh.
   mesh->SetMaterialOverride(OwnedMaterialPtr{}, primitive_index);
+  return absl::OkStatus();
+}
+
+absl::Status ModelManagerImpl::SetGltfModelNodeMaterialOverride(
+    int32_t node_id, std::intptr_t material, size_t primitive_index) {
+  BindingsMaterial* bindings_material =
+      view_.FromJava<BindingsMaterial>(material);
+  if (!bindings_material) {
+    return absl::InvalidArgumentError("Provided material handle is not valid.");
+  }
+  NodeHandle node_handle(utils::Entity::import(node_id));
+  if (!node_handle) {
+    return absl::InvalidArgumentError("Node is not valid.");
+  }
+  ComponentHandle<GltfMesh> mesh = node_handle->GetComponent<GltfMesh>();
+  if (!mesh) {
+    return absl::InvalidArgumentError(
+        "The targeted node does not have a GltfMesh component.");
+  }
+  mesh->SetMaterialOverride(
+      bindings_material->GetMaterial(SmallSourceLocation::Current()),
+      primitive_index);
+  return absl::OkStatus();
+}
+
+absl::Status ModelManagerImpl::ClearGltfModelNodeMaterialOverride(
+    int32_t node_id, size_t primitive_index) {
+  NodeHandle node_handle(utils::Entity::import(node_id));
+  if (!node_handle) {
+    return absl::InvalidArgumentError("Node is not valid.");
+  }
+  ComponentHandle<GltfMesh> mesh = node_handle->GetComponent<GltfMesh>();
+  if (!mesh) {
+    return absl::InvalidArgumentError(
+        "The targeted node does not have a GltfMesh component.");
+  }
+  mesh->SetMaterialOverride(OwnedMaterialPtr{}, primitive_index);
+  return absl::OkStatus();
+}
+
+absl::Status ModelManagerImpl::ScheduleReskinning(int32_t node_id) {
+  NodeHandle node_handle(utils::Entity::import(node_id));
+  if (!node_handle) {
+    return absl::InvalidArgumentError("Node is not valid.");
+  }
+  ComponentHandle<GltfRenderer> gltf_renderer =
+      node_handle->GetComponent<GltfRenderer>();
+  if (!gltf_renderer) {
+    return absl::FailedPreconditionError("Node does not have a GltfRenderer.");
+  }
+  gltf_renderer->ScheduleSkinningUpdate();
   return absl::OkStatus();
 }
 
@@ -314,6 +474,8 @@ void ModelManagerImpl::ResetAnimationContexts() {
   node_to_anim_ctx_.clear();
 }
 
+// TODO Remove this API once the migration to the new introspection
+// APIs is complete.
 absl::StatusOr<ComponentHandle<GltfMesh>>
 ModelManagerImpl::FindGltfMeshByNodeName(int32_t node_id,
                                          absl::string_view node_name) {

@@ -173,7 +173,7 @@ void ImageReaderAndroidExternalTextureSurface::OnNewImageAvailable(
 
 absl::Status ImageReaderAndroidExternalTextureSurface::SetDefaultBufferSize(
     int2 size) const {
-  return image_reader_->SetBufferSize(size);
+  return image_reader_->SetDefaultBufferSize(size);
 };
 
 void ImageReaderAndroidExternalTextureSurface::NewImageAvailable() {

@@ -17,12 +17,14 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "absl/base/attributes.h"
+#include "absl/functional/function_ref.h"
+#include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
@@ -30,6 +32,8 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
+#include "absl/types/span.h"
+#include "filament/filament/include/filament/Color.h"
 #include "filament/filament/include/filament/Material.h"
 #include "filament/filament/include/filament/MaterialInstance.h"
 #include "filament/filament/include/filament/TextureSampler.h"
@@ -87,6 +91,13 @@ absl::StatusOr<filament::MaterialInstance*> CreateMaterialInstance(
   return material_instance;
 }
 
+void LogUnsupportedParameter(absl::string_view name) {
+  IMP_LOG(imp::ERROR) << "SetParameter: Unsupported parameter: " << name;
+}
+
+void LogParameterNotDirectlyAssignable(absl::string_view name) {
+  IMP_LOG(imp::ERROR) << "SetParameter: Parameter is not directly assignable: " << name;
+}
 }  // namespace
 
 Future<GenericMaterialPtr> GenericMaterialImpl::Create(
@@ -117,12 +128,12 @@ GenericMaterialImpl::GenericMaterialImpl(
     filament::MaterialInstance& material_instance,
     const ParameterInfo& parameter_info)
     : view_(view),
-      name_(name),
       parameter_info_(parameter_info),
       placeholder_texture_(view.GetTextureFactory().BorrowPlaceholderTexture()),
       placeholder_sampler_() {
+  SetName(name);
   material_ = OwnedMaterialPtr(new CustomMaterial(&material_instance, {}));
-  material_->SetName(name_.c_str());
+  material_->SetName(name);
 }
 
 GenericMaterialImpl::~GenericMaterialImpl() {}
@@ -150,7 +161,14 @@ GenericMaterialPtr GenericMaterialImpl::Duplicate() const {
   return result;
 }
 
-absl::string_view GenericMaterialImpl::GetName() const { return name_; }
+const filament::MaterialInstance*
+GenericMaterialImpl::GetFilamentMaterialInstance() const {
+  return material_->GetFilamentMaterialInstance();
+}
+
+filament::MaterialInstance* GenericMaterialImpl::GetFilamentMaterialInstance() {
+  return material_->GetFilamentMaterialInstance();
+}
 
 std::vector<model::MaterialParameter> GenericMaterialImpl::GetParameters()
     const {
@@ -407,19 +425,277 @@ float GenericMaterialImpl::GetAlphaCutoff() const {
   return material_->GetFilamentMaterialInstance()->getMaskThreshold();
 }
 
-template <>
+template <typename T>
 void GenericMaterialImpl::ApplyMaterialParameter(absl::string_view name,
-                                                 const std::vector<mat3f>& v) {
+                                                 const T& value) {
+  material_->GetFilamentMaterialInstance()->setParameter(name.data(), value);
+  parameters_.emplace_back(model::MaterialParameter(name, value));
+}
+
+template <>
+void GenericMaterialImpl::ApplyMaterialParameter<std::vector<mat3f>>(
+    absl::string_view name, const std::vector<mat3f>& value) {
   // The size of the mat3 array should match the number of samplers available
   // and may be truncated if too many samplers are requested.
-  size_t mat_size = v.size() < parameter_info_.max_available_samplers
-                        ? v.size()
+  size_t mat_size = value.size() < parameter_info_.max_available_samplers
+                        ? value.size()
                         : parameter_info_.max_available_samplers;
-  if (!v.empty()) {
+  if (!value.empty()) {
     material_->GetFilamentMaterialInstance()->setParameter(
-        name.data(), name.size(), v.data(), mat_size);
+        name.data(), name.size(), value.data(), mat_size);
   }
-  parameters_.emplace_back(model::MaterialParameter(name, v));
+  parameters_.emplace_back(model::MaterialParameter(
+      name, std::vector<mat3f>(value.begin(), value.end())));
+}
+
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       bool value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       bool2 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       bool3 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       bool4 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       float value) {
+  if (parameter_name == kMetallicFactor) {
+    SetMetallicFactor(value);
+  } else if (parameter_name == kRoughnessFactor) {
+    SetRoughnessFactor(value);
+  } else if (parameter_name == kNormalScale) {
+    SetNormalScale(value);
+  } else if (parameter_name == kSheenRoughnessFactor) {
+    SetSheenRoughnessFactor(value);
+  } else if (parameter_name == kIndexOfRefraction) {
+    SetIndexOfRefraction(value);
+  } else if (parameter_name == kThicknessFactor) {
+    SetThicknessFactor(value);
+  } else if (parameter_name == kAttenuationDistance) {
+    SetAttenuationDistance(value);
+  } else if (parameter_name == kTransmissionFactor) {
+    SetTransmissionFactor(value);
+  } else {
+    LogUnsupportedParameter(parameter_name);
+  }
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       float2 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       float3 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       float4 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       int value) {
+  if (parameter_name == kSamplersUvBitflags ||       //
+      parameter_name == kBaseColorIndex ||           //
+      parameter_name == kMetallicRoughnessIndex ||   //
+      parameter_name == kNormalIndex ||              //
+      parameter_name == kAoIndex ||                  //
+      parameter_name == kEmissiveIndex ||            //
+      parameter_name == kClearcoatIndex ||           //
+      parameter_name == kClearcoatRoughnessIndex ||  //
+      parameter_name == kClearcoatNormalIndex ||     //
+      parameter_name == kSheenColorIndex ||          //
+      parameter_name == kSheenRoughnessIndex ||      //
+      parameter_name == kThicknessIndex ||           //
+      parameter_name == kTransmissionIndex) {
+    LogParameterNotDirectlyAssignable(parameter_name);
+  } else {
+    LogUnsupportedParameter(parameter_name);
+  }
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       int2 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       int3 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       int4 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       uint value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       uint2 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       uint3 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       uint4 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       mat3f value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       mat4f value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       absl::Span<const bool> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       absl::Span<const bool2> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       absl::Span<const bool3> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       absl::Span<const bool4> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       absl::Span<const float> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       absl::Span<const float2> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       absl::Span<const float3> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       absl::Span<const float4> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       absl::Span<const int> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       absl::Span<const int2> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       absl::Span<const int3> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       absl::Span<const int4> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       absl::Span<const uint> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       absl::Span<const uint2> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       absl::Span<const uint3> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       absl::Span<const uint4> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       absl::Span<const mat3f> value) {
+  if (parameter_name == kSamplersUvMatrices) {
+    LogParameterNotDirectlyAssignable(parameter_name);
+  } else {
+    LogUnsupportedParameter(parameter_name);
+  }
+}
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       absl::Span<const mat4f> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       filament::RgbaType type,
+                                       filament::math::float4 color) {
+  LogUnsupportedParameter(parameter_name);
+}
+
+void GenericMaterialImpl::SetParameter(absl::string_view parameter_name,
+                                       filament::RgbType type,
+                                       filament::math::float3 color) {
+  LogUnsupportedParameter(parameter_name);
+}
+
+ABSL_DEPRECATED(
+    "Use imp::BorrowedTexturePtr overload instead. See "
+    "(broken link).")
+void GenericMaterialImpl::SetParameter(
+    absl::string_view parameter_name, const imp::Texture* texture,
+    std::optional<filament::TextureSampler> sampler_override) {
+  IMP_LOG(imp::ERROR) << "SetParameter with const imp::Texture* is not supported. Use "
+                "AssignTexture instead.";
+}
+
+void GenericMaterialImpl::SetParameter(
+    absl::string_view parameter_name, TexturePtr texture,
+    std::optional<filament::TextureSampler> sampler_override) {
+  IMP_LOG(imp::ERROR) << "SetParameter with TexturePtr is not supported. Use "
+                "AssignTexture instead.";
+}
+
+void GenericMaterialImpl::SetParameter(
+    absl::string_view parameter_name, OwnedTexturePtr texture,
+    std::optional<filament::TextureSampler> sampler_override) {
+  IMP_LOG(imp::ERROR) << "SetParameter with OwnedTexturePtr is not supported. Use "
+                "AssignTexture instead.";
+}
+
+void GenericMaterialImpl::SetParameter(
+    absl::string_view parameter_name, BorrowedTexturePtr texture,
+    std::optional<filament::TextureSampler> sampler_override) {
+  IMP_LOG(imp::ERROR) << "SetParameter with BorrowedTexturePtr is not supported. Use "
+                "AssignTexture instead.";
+}
+
+bool GenericMaterialImpl::HasParameter(absl::string_view name) {
+  return material_->HasParameter(name);
+}
+
+absl::string_view GenericMaterialImpl::GetParameterTransformName(
+    absl::string_view sampler_name) const {
+  return material_->GetParameterTransformName(sampler_name);
+}
+
+Material::HeldTextureType GenericMaterialImpl::GetAssignedTextureType(
+    absl::string_view parameter_name) {
+  return material_->GetAssignedTextureType(parameter_name);
+}
+
+imp::StringMap<const filament::Texture*>
+GenericMaterialImpl::GetUnownedFilamentTextures() const {
+  return material_->GetUnownedFilamentTextures();
+}
+
+void GenericMaterialImpl::ForEachTexture(
+    absl::FunctionRef<void(BorrowedTexturePtr)> fn, SmallSourceLocation loc) {
+  material_->ForEachTexture(fn, loc);
 }
 
 absl::Status GenericMaterialImpl::ApplyMaterialTextureParameter(
@@ -445,8 +721,7 @@ absl::Status GenericMaterialImpl::ApplyMaterialTextureParameter(
     // Pass the borrowed texture directly to the material so the location is
     // within the given TextureBorrower. This ensures that stack traces don't
     // always point to this function.
-    material_->SetParameter(sampler_name, std::move(texture),
-                            texture_parameter.sampler);
+    material_->SetParameter(sampler_name, texture, texture_parameter.sampler);
 
     texture_lookup_.insert_or_assign<TextureAndSampler>(
         texture_channel_name, {texture->GetTexture(), texture_parameter.sampler,
@@ -609,13 +884,23 @@ absl::StatusOr<GenericMaterialImpl::ParameterInfo>
 GenericMaterialImpl::GetMaterialParameterInfo(
     const filament::Material& material) {
   GenericMaterialImpl::ParameterInfo parameter_info;
-  parameter_info.material_parameters.resize(material.getParameterCount());
+  const size_t parameter_count = material.getParameterCount();
+  // Early exit if there are no parameters to avoid calling
+  // material `filament::Material::getParameters` with a null parameters
+  // pointer.
+  if (parameter_count == 0) {
+    return parameter_info;
+  }
+
+  parameter_info.material_parameters.resize(parameter_count);
   const size_t actual_parameter_count =
       material.getParameters(parameter_info.material_parameters.data(),
                              parameter_info.material_parameters.size());
   parameter_info.material_parameters.resize(actual_parameter_count);
+  if (parameter_info.material_parameters.empty()) {
+    return parameter_info;
+  }
 
-  parameter_info.max_available_samplers = 0;
   for (const auto& parameter : parameter_info.material_parameters) {
     if (parameter.isSampler) {
       parameter_info.sampler_parameters.insert(parameter.name);

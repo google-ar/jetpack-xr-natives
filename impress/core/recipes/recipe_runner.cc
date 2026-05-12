@@ -29,6 +29,7 @@
 #include "core/common/robin_set.h"
 #include "core/config.h"
 #include "core/input/pointer_event.h"
+#include "core/math/vec.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/node_handle.h"
 #include "core/recipes/language/recipe_async_execution_manager.h"
@@ -47,6 +48,7 @@
 #include "core/view/framework/gestures/tap_gesture.h"
 #include "core/view/framework/input/pointer_input_handler.h"
 #include "core/view/utils/frame_time.h"
+#include "split_engine/input/split_engine_input_event.h"
 #include "mediapipe/framework/port/status_macros.h"
 
 #if IMP_RUNTIME(DEV)
@@ -102,10 +104,17 @@ void RecipeRunner::Update(const FrameTime& frame_time) {
     }
   }
 
-  elapsed_time_ += frame_time.GetDeltaTime();
-
   if (runtime_state_ != RuntimeState::kRunning) {
     return;
+  }
+
+  float time_delta;
+  if (elapsed_time_.has_value()) {
+    *elapsed_time_ += frame_time.GetDeltaTime();
+    time_delta = frame_time.GetDeltaSeconds();
+  } else {
+    time_delta = 0.f;
+    elapsed_time_ = absl::ZeroDuration();
   }
 
   std::optional<absl::Time> execution_cutoff_time = CalculateCutoffTime();
@@ -113,7 +122,7 @@ void RecipeRunner::Update(const FrameTime& frame_time) {
   // Set the value for the RecipeRunner's `time_since_start` global recipe
   // variable for this frame.
   scope_->GetVariable(std::string(recipe::kTimeSinceStart))->get() =
-      recipe::Variable((float)absl::ToDoubleSeconds(elapsed_time_));
+      recipe::Variable((float)absl::ToDoubleSeconds(*elapsed_time_));
 
   // Pending events from the previous round of execution are now executed.
   std::vector<RecipeRuntimeEvent> pending_queue;
@@ -135,9 +144,9 @@ void RecipeRunner::Update(const FrameTime& frame_time) {
     RecipeRuntimeEvent on_update_event{
         .name = std::string(recipe::kOnUpdateEventName)};
     on_update_event.arguments[std::string(recipe::kDeltaSecondsSocketName)] =
-        frame_time.GetDeltaSeconds();
+        time_delta;
     on_update_event.arguments[std::string(recipe::kElapsedSecondsSocketName)] =
-        absl::ToDoubleSeconds(elapsed_time_);
+        absl::ToDoubleSeconds(*elapsed_time_);
 
     TriggerEventAndHandleExecutionResult(on_update_event,
                                          execution_cutoff_time);
@@ -233,74 +242,55 @@ absl::Status RecipeRunner::Start() {
   });
 
   // Resets the elapsed time.
-  elapsed_time_ = absl::ZeroDuration();
+  elapsed_time_ = std::nullopt;
 
-  // Initializes the `time_since_start` variable to the value of `elapsed_time_`
+  // Initializes the `time_since_start` variable to zero
   VariableDeclaration time_since_start_declaration{
       .name = std::string(recipe::kTimeSinceStart),
       .type = VariableDeclaration::Type::FLOAT,
-      .init_value =
-          Literal{.value = (float)absl::ToDoubleSeconds(elapsed_time_)},
+      .init_value = Literal{.value = 0.f},
   };
 
   MP_RETURN_IF_ERROR(scope_->DeclareVariable(time_since_start_declaration));
 
   // Starts listening to tap events.
-  tap_event_connection_ = Connect([this](
-                                      const TapGesture::TapEvent& tap_event) {
-    if (!tap_targets_.has_value() || tap_event.type != PointerEventType::kUp ||
-        !tap_event.ray_hits.has_value()) {
-      return;
-    }
+  tap_event_connection_ =
+      Connect([this](const TapGesture::TapEvent& tap_event) {
+        if (!tap_targets_.has_value() ||
+            tap_event.type != PointerEventType::kUp ||
+            !tap_event.ray_hits.has_value()) {
+          return;
+        }
 
-    RayHit tap_ray_hit;
-    for (const RayHit& ray_hit : *tap_event.ray_hits) {
-      if (tap_targets_->contains(ray_hit.node)) {
-        tap_ray_hit = ray_hit;
-        break;
-      }
-    }
+        RayHit tap_ray_hit;
+        for (const RayHit& ray_hit : *tap_event.ray_hits) {
+          if (tap_targets_->contains(ray_hit.node)) {
+            tap_ray_hit = ray_hit;
+            break;
+          }
+        }
 
-    if (!tap_ray_hit.node.IsValid()) {
-      output::Recipe(
-          "Failed to generate OnTapEvent. No valid tap target found.");
-      return;
-    }
+        if (!tap_ray_hit.node.IsValid()) {
+          output::Recipe(
+              "Failed to generate OnTapEvent. No valid tap target found.");
+          return;
+        }
 
-    if (!runtime_graph_->HasEvent(recipe::kOnTapEventName)) {
-      return;
-    }
+        RecipeRayHit recipe_ray_hit{
+            .distance = tap_ray_hit.distance,
+            .node = tap_ray_hit.node,
+            .world_point = tap_ray_hit.world_point,
+            .world_orientation = tap_ray_hit.world_orientation,
+            .world_normal = tap_ray_hit.world_normal};
 
-    RecipeRayHit recipe_ray_hit{
-        .distance = tap_ray_hit.distance,
-        .node = tap_ray_hit.node,
-        .world_point = tap_ray_hit.world_point,
-        .world_orientation = tap_ray_hit.world_orientation,
-        .world_normal = tap_ray_hit.world_normal};
-
-    RecipeRuntimeEvent on_tap_event{.name =
-                                        std::string(recipe::kOnTapEventName)};
-    on_tap_event.arguments[std::string(recipe::kTapTargetSocketName)] =
-        tap_ray_hit.node;
-    on_tap_event.arguments[std::string(recipe::kControllerIndexSocketName)] = 0;
-    on_tap_event.arguments[std::string(recipe::kTapPositionSocketName)] =
-        tap_event.position;
-    on_tap_event.arguments[std::string(recipe::kTapRayHitSocketName)] =
-        recipe_ray_hit;
-
-    runtime_event_queue_.push_back(std::move(on_tap_event));
-  });
+        HandleTap(recipe_ray_hit, tap_event.position);
+      });
 
   hover_event_connection_ =
       Connect([this](const HoverGesture::HoverEvent& hover_event) {
         if (!hover_targets_.has_value()) {
           return;
         }
-
-        const std::string target_socket_name =
-            std::string(recipe::kHoverTargetSocketName);
-        const std::string controller_index_socket_name =
-            std::string(recipe::kControllerIndexSocketName);
 
         NodeHandle hover_target;
         for (const NodeHandle& hit_node : hover_event.all_intersecting_nodes) {
@@ -310,31 +300,26 @@ absl::Status RecipeRunner::Start() {
           }
         }
 
-        if (hover_target == hovered_node_) {
-          return;
+        HandleHover(hover_target);
+      });
+
+  split_engine_input_event_connection_ =
+      Connect([this](const android_xr::SplitEngineInputEvent& event) {
+        switch (event.action) {
+          case android_xr::SplitEngineInputEvent::Action::ACTION_DOWN: {
+            RecipeRayHit recipe_ray_hit{
+                .node = event.hit_node->target,
+                .world_point = event.hit_node->hit_position,
+            };
+            HandleTap(recipe_ray_hit, float2{});
+            break;
+          }
+          case android_xr::SplitEngineInputEvent::Action::ACTION_HOVER_MOVE:
+            HandleHover(event.hit_node->target);
+            break;
+          default:
+            break;
         }
-
-        if (hovered_node_.IsValid() &&
-            runtime_graph_->HasEvent(recipe::kOnHoverEndEventName)) {
-          RecipeRuntimeEvent on_hover_end_event{
-              .name = std::string(recipe::kOnHoverEndEventName)};
-          on_hover_end_event.arguments[target_socket_name] = hovered_node_;
-          on_hover_end_event.arguments[controller_index_socket_name] = 0;
-
-          runtime_event_queue_.push_back(std::move(on_hover_end_event));
-        }
-
-        if (hover_target.IsValid() &&
-            runtime_graph_->HasEvent(recipe::kOnHoverBeginEventName)) {
-          RecipeRuntimeEvent on_hover_begin_event{
-              .name = std::string(recipe::kOnHoverBeginEventName)};
-          on_hover_begin_event.arguments[target_socket_name] = hover_target;
-          on_hover_begin_event.arguments[controller_index_socket_name] = 0;
-
-          runtime_event_queue_.push_back(std::move(on_hover_begin_event));
-        }
-
-        hovered_node_ = hover_target;
       });
 
   // Triggers the OnStartEvent if a `OnStartEvent` Recipe Event node exists in
@@ -406,6 +391,55 @@ std::optional<const std::vector<NodeHandle>> RecipeRunner::GetHoverTargets()
                                    hover_targets_->end());
   }
   return std::nullopt;
+}
+
+void RecipeRunner::HandleTap(RecipeRayHit tap_ray_hit, float2 tap_position) {
+  if (!runtime_graph_->HasEvent(recipe::kOnTapEventName)) {
+    return;
+  }
+
+  RecipeRuntimeEvent on_tap_event{.name = std::string(recipe::kOnTapEventName)};
+  on_tap_event.arguments[std::string(recipe::kTapTargetSocketName)] =
+      tap_ray_hit.node;
+  on_tap_event.arguments[std::string(recipe::kControllerIndexSocketName)] = 0;
+  on_tap_event.arguments[std::string(recipe::kTapPositionSocketName)] =
+      tap_position;
+  on_tap_event.arguments[std::string(recipe::kTapRayHitSocketName)] =
+      tap_ray_hit;
+
+  runtime_event_queue_.push_back(std::move(on_tap_event));
+}
+
+void RecipeRunner::HandleHover(NodeHandle hover_target) {
+  if (hover_target == hovered_node_) {
+    return;
+  }
+
+  if (hovered_node_.IsValid() &&
+      runtime_graph_->HasEvent(recipe::kOnHoverEndEventName)) {
+    RecipeRuntimeEvent on_hover_end_event{
+        .name = std::string(recipe::kOnHoverEndEventName)};
+    on_hover_end_event.arguments[std::string(recipe::kHoverTargetSocketName)] =
+        hovered_node_;
+    on_hover_end_event
+        .arguments[std::string(recipe::kControllerIndexSocketName)] = 0;
+
+    runtime_event_queue_.push_back(std::move(on_hover_end_event));
+  }
+
+  if (hover_target.IsValid() &&
+      runtime_graph_->HasEvent(recipe::kOnHoverBeginEventName)) {
+    RecipeRuntimeEvent on_hover_begin_event{
+        .name = std::string(recipe::kOnHoverBeginEventName)};
+    on_hover_begin_event
+        .arguments[std::string(recipe::kHoverTargetSocketName)] = hover_target;
+    on_hover_begin_event
+        .arguments[std::string(recipe::kControllerIndexSocketName)] = 0;
+
+    runtime_event_queue_.push_back(std::move(on_hover_begin_event));
+  }
+
+  hovered_node_ = hover_target;
 }
 
 }  // namespace imp

@@ -102,6 +102,7 @@ cc_library(
         "@com_google_absl//absl/types:span",
         "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
+        "@third_party//split_engine/input:split_engine_input_event",
     ] + if_dev_runtime([
         "//core/editor:editor_info",
     ]),

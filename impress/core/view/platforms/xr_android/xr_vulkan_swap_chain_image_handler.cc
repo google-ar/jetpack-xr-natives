@@ -34,8 +34,6 @@ XrVulkanSwapChainImageHandler::XrVulkanSwapChainImageHandler(
     std::unique_ptr<SwapchainLayers> layers,
     ContentSecurityLevel /*content_security_level*/)
     : platform_(platform), host_(host), layers_(std::move(layers)) {
-  bluevk::bindInstance(platform->getVulkanSharedContext().instance);
-
   if (!host->IsCompositionLayerDepthEnabled()) {
     CreateDepthSwapchains();
   }

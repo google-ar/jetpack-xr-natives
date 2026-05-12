@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "openxr/openxr.h"
+#include "openxr/public/all_extensions.h"
 #include "absl/log/log.h"
 #include "common/pointer_util.h"
 #include "openxr/jobject_creator.h"
@@ -29,7 +30,7 @@ void HandleAuthCompletion(const XrFutureCompletionEXT& completion) {
   // the failure result to, so we will just log it instead. Auth-bound
   // operations like geospatial setup should also show useful error messages.
   if (XR_FAILED(completion.futureResult)) {
-    if (completion.futureResult == XR_ERROR_KEYLESS_AUTH_FAILED_ANDROIDX2) {
+    if (completion.futureResult == XR_ERROR_KEYLESS_AUTH_FAILED_ANDROID) {
       LOG(ERROR) << "Google Cloud Auth future failed: Keyless Auth failed. The "
                     "application can try again later.";
     } else {
@@ -199,14 +200,14 @@ Java_androidx_xr_arcore_openxr_OpenXrManager_nativeSetApiKeyAuth(
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
 
   const char* api_key_chars = env->GetStringUTFChars(api_key, nullptr);
-  XrGoogleCloudAuthApiKeyANDROIDX2 auth_info = {
-      .type = XR_TYPE_GOOGLE_CLOUD_AUTH_API_KEY_ANDROIDX2,
+  XrGoogleCloudAuthApiKeyANDROID auth_info = {
+      .type = XR_TYPE_GOOGLE_CLOUD_AUTH_API_KEY_ANDROID,
       .next = nullptr,
       .apiKey = api_key_chars,
   };
 
   XrResult result = xr_manager.SetGoogleCloudAuthAsync(
-      reinterpret_cast<XrGoogleCloudAuthInfoBaseHeaderANDROIDX2*>(&auth_info),
+      reinterpret_cast<XrGoogleCloudAuthInfoBaseHeaderANDROID*>(&auth_info),
       HandleAuthCompletion, /*on_cancel=*/nullptr);
   if (XR_FAILED(result) && result != XR_ERROR_FUNCTION_UNSUPPORTED) {
     if (result == XR_ERROR_VALIDATION_FAILURE) {
@@ -225,14 +226,14 @@ Java_androidx_xr_arcore_openxr_OpenXrManager_nativeSetAuthTokenAuth(
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
 
   const char* auth_token_chars = env->GetStringUTFChars(auth_token, nullptr);
-  XrGoogleCloudAuthTokenANDROIDX2 auth_info = {
-      .type = XR_TYPE_GOOGLE_CLOUD_AUTH_TOKEN_ANDROIDX2,
+  XrGoogleCloudAuthTokenANDROID auth_info = {
+      .type = XR_TYPE_GOOGLE_CLOUD_AUTH_TOKEN_ANDROID,
       .next = nullptr,
       .authToken = auth_token_chars,
   };
 
   XrResult result = xr_manager.SetGoogleCloudAuthAsync(
-      reinterpret_cast<XrGoogleCloudAuthInfoBaseHeaderANDROIDX2*>(&auth_info),
+      reinterpret_cast<XrGoogleCloudAuthInfoBaseHeaderANDROID*>(&auth_info),
       HandleAuthCompletion, /*on_cancel=*/nullptr);
   if (XR_FAILED(result) && result != XR_ERROR_FUNCTION_UNSUPPORTED) {
     if (result == XR_ERROR_VALIDATION_FAILURE) {
@@ -250,13 +251,13 @@ Java_androidx_xr_arcore_openxr_OpenXrManager_nativeSetKeylessAuth(
   androidx::xr::openxr::OpenXrManager& xr_manager =
       androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
 
-  XrGoogleCloudAuthKeylessANDROIDX2 auth_info = {
-      .type = XR_TYPE_GOOGLE_CLOUD_AUTH_KEYLESS_ANDROIDX2,
+  XrGoogleCloudAuthKeylessANDROID auth_info = {
+      .type = XR_TYPE_GOOGLE_CLOUD_AUTH_KEYLESS_ANDROID,
       .next = nullptr,
   };
 
   XrResult result = xr_manager.SetGoogleCloudAuthAsync(
-      reinterpret_cast<XrGoogleCloudAuthInfoBaseHeaderANDROIDX2*>(&auth_info),
+      reinterpret_cast<XrGoogleCloudAuthInfoBaseHeaderANDROID*>(&auth_info),
       HandleAuthCompletion, /*on_cancel=*/nullptr);
   if (XR_FAILED(result) && result != XR_ERROR_FUNCTION_UNSUPPORTED) {
     LOG(ERROR) << "Failed to set keyless auth: " << result;

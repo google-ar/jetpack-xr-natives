@@ -405,7 +405,7 @@ cc_library(
         "//core/ncsb",
         "@third_party//filament",
         "@third_party//filament/filament:filament_hdrs",
-        "@third_party//filament/libs:utils_hdrs",
+        "@third_party//filament/filament/backend:driver_enums",
     ],
     alwayslink = 1,
 )

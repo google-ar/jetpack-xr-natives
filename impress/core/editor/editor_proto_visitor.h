@@ -36,6 +36,8 @@
 #include "dear_imgui/imgui.h"
 #include "core/common/bit_flag.h"
 #include "core/common/copyable_ptr.h"
+#include "core/common/invocable.h"
+#include "core/common/optional_with_default.h"
 #include "core/common/template_helpers.h"
 #include "core/editor/editor_field_control.h"
 #include "core/editor/editor_style.h"
@@ -75,7 +77,8 @@ class EditorProtoVisitor {
   template <int field_type, typename T>
   Cursor Visit(
       Cursor field_index, int field_id, T* field, T* other,
-      EditorControlFlags editor_control_flags = EditorControlFlags::kDefault) {
+      EditorControlFlags editor_control_flags = EditorControlFlags::kDefault,
+      Invocable<void()> extra_popup_fn = {}) {
     if (IsFieldDisabled(field_id)) {
       return ++field_index;
     }
@@ -93,6 +96,16 @@ class EditorProtoVisitor {
         // recurse.
         if (CheckBit(editor_control_flags, EditorControlFlags::kDisplayLabel)) {
           ImGui::Text("%s", proto::GetFieldName<Proto>(field_id).data());
+
+          if (extra_popup_fn) {
+            if (ImGui::BeginPopupContextItem(
+                    EditorFieldControl::ElementPopupLabel(*field, "Message")
+                        .c_str())) {
+              extra_popup_fn();
+              ImGui::EndPopup();
+            }
+          }
+
           if (other) {
             updated_ |= EditorFieldControl::RevertToBasePopup(*field, *other,
                                                               "Message");
@@ -119,6 +132,14 @@ class EditorProtoVisitor {
         // Otherwise, just show the control for this field.
         updated_ |= ShowControl(field_index, field_id, field, other,
                                 editor_control_flags);
+      }
+
+      if (extra_popup_fn) {
+        if (ImGui::BeginPopupContextItem(
+                EditorFieldControl::ElementPopupLabel(*field).c_str())) {
+          extra_popup_fn();
+          ImGui::EndPopup();
+        }
       }
     }
 
@@ -264,6 +285,72 @@ class EditorProtoVisitor {
         });
   }
 
+  // Handles the case where the field is a OptionalWithDefault.
+  template <int field_type, typename T, const auto* DefaultValuePointer>
+  Cursor Visit(Cursor field_index, int field_id,
+               OptionalWithDefault<T, DefaultValuePointer>* field,
+               OptionalWithDefault<T, DefaultValuePointer>* other) {
+    // It isn't allowed for the base to be assigned without the field being
+    // assigned, that can't be saved out due to inheritance rules. In
+    // practice, this case shouldn't happen.
+    if (!field->HasValue() && other && other->HasValue()) {
+      IMP_LOG(imp::WARNING) << "Base has a value but field does not for field: "
+                   << proto::GetFieldName<Proto>(field_id);
+      *field = *other;
+    }
+
+    if (field->HasValue()) {
+      T* field_value = &field->MutableValue();
+
+      // Both other and field have values. In this case, we don't want to
+      // allow unsetting the field, so we can just Visit the values.
+      if (other && other->HasValue()) {
+        T* other_value = &other->MutableValue();
+
+        return Visit<field_type, T>(field_index, field_id, field_value,
+                                    other_value);
+      }
+
+      // Visit the field with a context menu for resetting the field to its
+      // default value.
+      //
+      // Base is always nullptr because other doesn't exist or doesn't have a
+      // value.
+      Cursor cursor = Visit<field_type, T>(
+          field_index, field_id, field_value, nullptr,
+          EditorControlFlags::kDefault, [this, field]() {
+            if (ImGui::MenuItem(absl::StrFormat("Reset To Default").c_str(),
+                                nullptr, nullptr, true)) {
+              field->Reset();
+              updated_ = true;
+            }
+          });
+
+      return cursor;
+    } else {
+      bool previous_updated = updated_;
+      updated_ = false;
+
+      // MutableValue() will implicitly set the value, Visit then allows it to
+      // be mutated in-place.
+      //
+      // We do this instead of creating a temporary value to edit because it's
+      // important the memory address doesn't change on subsequent frames for
+      // ImGui selection tracking.
+      Cursor cursor = Visit<field_type, T>(field_index, field_id,
+                                           &field->MutableValue(), nullptr);
+
+      if (!updated_) {
+        // The value wasn't actually modified, so reset it back to how it was.
+        field->Reset();
+      }
+
+      updated_ = previous_updated | updated_;
+
+      return cursor;
+    }
+  }
+
   // Handles the case where field is a vector.
   // TODO: Add unit tests for vector component editor widget
   template <int field_type, proto::RepeatedMergeStrategy merge_strategy,
@@ -338,8 +425,8 @@ class EditorProtoVisitor {
 
       // Drag-and-drop target for inserting before.
       ImGui::Dummy(kVectorFieldElementDragAndDropTargetSize);
-      // Check to only enable drag targets for elements that are not the source
-      // or the element right after the source.
+      // Check to only enable drag targets for elements that are not the
+      // source or the element right after the source.
       if (can_rearrange_element && drag_and_drop_index.has_value() &&
           *drag_and_drop_index != i && *drag_and_drop_index + 1 != i &&
           ImGui::BeginDragDropTarget()) {
@@ -449,7 +536,8 @@ class EditorProtoVisitor {
     }
 
     if constexpr (internal::kIsImpressProtoMessage<field_type, T>) {
-      // Allow drag-and-drop from the Asset Library onto the Add Element button.
+      // Allow drag-and-drop from the Asset Library onto the Add Element
+      // button.
       T maybe_insert;
       if (CreateDragAndDropTargetForField(&maybe_insert)) {
         field->push_back(maybe_insert);
@@ -575,11 +663,11 @@ class EditorProtoVisitor {
     }
 
     ImGui::Text("%s:", field_name.data());
-    // TODO: Support RevertToBasePopup for variants that contain a
-    // unique_ptr. This is a bit tricky because the unique_ptr needs to be
+    // TODO: Support RevertToBasePopup for variants that contain
+    // a unique_ptr. This is a bit tricky because the unique_ptr needs to be
     // deep copied, which we support via a copy assignment operator on the
-    // generated Message type but not on the variant itself. Luckily, this is a
-    // rare case.
+    // generated Message type but not on the variant itself. Luckily, this is
+    // a rare case.
     if constexpr (std::is_copy_assignable_v<T>) {
       if (other) {
         updated_ |=
@@ -587,8 +675,8 @@ class EditorProtoVisitor {
       }
     }
 
-    // Second, ensure all protobuf message types can be dragged onto the combo.
-    // Monostate (unset) is index 0, so start at 1.
+    // Second, ensure all protobuf message types can be dragged onto the
+    // combo. Monostate (unset) is index 0, so start at 1.
     ForConstexpr<1, std::variant_size_v<T>>(
         [this, field, &variant_field_types](auto i) mutable {
           constexpr int field_type = GetAt<i - 1>(variant_field_types);
@@ -620,7 +708,8 @@ class EditorProtoVisitor {
           [this, can_unset, field, &variant_field_ids](auto i) mutable {
             bool selected = field->index() == i;
             absl::string_view label_str;
-            // Index 0 is std::monostate (unset), so skip if the field is unset.
+            // Index 0 is std::monostate (unset), so skip if the field is
+            // unset.
             if (i == 0) {
               if (!can_unset) return;
               label_str = "unset";
@@ -708,7 +797,8 @@ class EditorProtoVisitor {
             // TODO: figure out why this is not working.
             // using T = std::decay_t<decltype(control)>;
             // if constexpr (std::is_same_v<T, absl::monostate>) {
-            //   IMP_LOG(imp::FATAL) << "Invalid unset/empty EditorControlType on field "
+            //   IMP_LOG(imp::FATAL) << "Invalid unset/empty EditorControlType on field
+            //   "
             //   << field_name;
             // } else {
             absl::StatusOr<bool> result = EditorFieldControl::ShowControl(
@@ -765,7 +855,8 @@ class EditorProtoVisitor {
                editor_control_type->type);
   }
 
-  // Accepts a drag-and-drop payload from Asset Library matching the field type.
+  // Accepts a drag-and-drop payload from Asset Library matching the field
+  // type.
   template <typename T>
   bool AcceptDragAndDropPayloadForField(T* field) {
     // Add a drag-and-drop target for this message.

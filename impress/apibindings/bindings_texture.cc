@@ -17,7 +17,9 @@
 #include <utility>
 
 #include "apibindings/bindings_object.h"
+#include "core/assets/asset_ptr.h"
 #include "core/common/small_source_location.h"
+#include "core/lighting/image_based_lighting_asset.h"
 #include "core/render/texture.h"
 
 namespace imp {
@@ -27,6 +29,11 @@ BindingsTexture::BindingsTexture(BorrowedTexturePtr texture)
 
 BorrowedTexturePtr BindingsTexture::GetTexture(SmallSourceLocation loc) {
   return texture_.WithNewLocation(loc);
+}
+
+void BindingsTexture::SetKeepAliveAsset(
+    AssetPtr<ImageBasedLightingAsset> asset) {
+  keep_alive_asset_ = std::move(asset);
 }
 
 }  // namespace imp

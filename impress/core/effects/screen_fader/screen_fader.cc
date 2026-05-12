@@ -18,10 +18,10 @@
 #include "core/common/smooth.h"
 #include "core/effects/screen_fader/screen_fader_assets.h"
 #include "core/ncsb/component_handle.h"
+#include "core/render/primitive_shape_renderer.h"
+#include "core/render/primitive_shape_renderer_state.proto.imp.h"
 #include "core/view/framework/render/material_definition.proto.imp.h"
 #include "core/view/framework/render/mesh_renderer.h"
-#include "core/view/framework/render/primitive_shape_renderer.h"
-#include "core/view/framework/render/primitive_shape_renderer_state.proto.imp.h"
 
 namespace imp {
 

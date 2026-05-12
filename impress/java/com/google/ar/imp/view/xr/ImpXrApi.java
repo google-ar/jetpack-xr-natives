@@ -42,15 +42,6 @@ final class ImpXrApi {
   private final Context context;
   private final View view;
 
-  private static int intFromFoveationLevel(SetupParams.FoveationLevel level) {
-    return switch (level) {
-      case LOW -> 1;
-      case MEDIUM -> 2;
-      case HIGH -> 3;
-      default -> 0;
-    };
-  }
-
   /** Initialize Impress for OpenXR. */
   static ImpXrApi create(Context context, SetupParams setupParams) {
     // If no native library name has been specified, use the correct one for Xr builds.
@@ -64,33 +55,13 @@ final class ImpXrApi {
     //
     // Create the Impress View Jni object with a special path that allows us to provide this custom
     // subclass of ViewHost.
-    // TODO: (broken link) - serialize setupParams instead of passing each param individually.
     View view =
         View.createViewWithCustomHost(
             nativeLibrary,
             setupParams.getViewIdentifier(),
             context,
             (long viewHandle) ->
-                nCreateSessionHost(
-                    context,
-                    viewHandle,
-                    setupParams.getEnableCompositionLayerDepth(),
-                    setupParams.getUseEnhancedStereoscopicRendering(),
-                    setupParams.getUseMaxSwapchainSize(),
-                    intFromFoveationLevel(setupParams.getFoveationLevel()),
-                    setupParams.getUseQuadViews(),
-                    setupParams.getUseMonoView(),
-                    setupParams.getUseVarjoFoveatedRendering(),
-                    setupParams.getMsaaSampleCount(),
-                    setupParams.getOpenxrReferenceSpaceType(),
-                    setupParams.getUseEyeGazeInteraction(),
-                    setupParams.getUseAndroidDepthTexture(),
-                    setupParams.getUseXrActionDefaults(),
-                    setupParams.getUseFbColorSpace(),
-                    setupParams.getEnableAndroidSystemExtensions(),
-                    setupParams.getSwapchainSizeMultiplier(),
-                    setupParams.getUseGlobalPassthroughDimmingExtensions(),
-                    setupParams.getUseEyeTrackingCalibration()));
+                nCreateSessionHost(context, viewHandle, setupParams.toByteArray()));
 
     // Calls XrSessionHost::Setup, which sets up Impress with the custom XrPlatform.
     // This doesn't actually initialize OpenXR yet. That happens in onWindowAttached.
@@ -150,25 +121,7 @@ final class ImpXrApi {
   // LINT.IfChange
 
   private static native long nCreateSessionHost(
-      Object context,
-      long viewHandle,
-      boolean useCompositionLayerDepth,
-      boolean useInstancedRendering,
-      boolean useMaxSwapchainSize,
-      int foveationLevel,
-      boolean useQuadViews,
-      boolean useMonoView,
-      boolean useVarjoFoveatedRendering,
-      int msaaSampleCount,
-      long openXrReferenceSpaceType,
-      boolean useEyeGazeInteraction,
-      boolean useAndroidDepthTexture,
-      boolean useXrActionDefaults,
-      boolean useFbColorSpace,
-      boolean enableAndroidSystemExtensions,
-      float swapchainSizeMultiplier,
-      boolean useGlobalPassthroughDimmingExtensions,
-      boolean useEyeTrackingCalibration);
+      Object context, long viewHandle, byte[] setupParams);
 
   private static native void nSetup(Object context, long viewHostHandle);
 

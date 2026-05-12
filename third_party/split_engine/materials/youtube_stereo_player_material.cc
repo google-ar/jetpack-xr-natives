@@ -25,7 +25,7 @@
 #include "core/async/future.h"
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 #include "split_engine/schemas/split_engine_primitive_generated.h"
@@ -37,7 +37,7 @@ YouTubeStereoPlayerMaterial::Create(imp::BaseView& view) {
   auto fbb = std::make_unique<flatbuffers::FlatBufferBuilder>();
   flatbuffers::Offset<android_xr::schemas::BuiltInMaterialEb117dd9>
       spec_offset = android_xr::schemas::CreateBuiltInMaterialEb117dd9(*fbb);
-  return imp::split_engine::SplitEngineMaterial::RequestBuiltInMaterial(
+  return imp::split_engine::SplitEngineBuiltinMaterial::RequestBuiltInMaterial(
              view, std::move(fbb),
              android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialEb117dd9,
              spec_offset.Union())
@@ -51,10 +51,11 @@ YouTubeStereoPlayerMaterial::Create(imp::BaseView& view) {
 YouTubeStereoPlayerMaterial::YouTubeStereoPlayerMaterial(
     imp::BaseView& view,
     imp::split_engine::PlaceholderOrBuiltInMaterialPtr material)
-    : SplitEngineMaterial(view,
-                          android_xr::schemas::BuiltInMaterialParameters::
-                              BuiltInMaterialEb117dd9Parameters,
-                          std::move(material)) {}
+    : SplitEngineBuiltinMaterial(
+          view,
+          android_xr::schemas::BuiltInMaterialParameters::
+              BuiltInMaterialEb117dd9Parameters,
+          std::move(material)) {}
 
 YouTubeStereoPlayerMaterial::~YouTubeStereoPlayerMaterial() { Cleanup(); }
 

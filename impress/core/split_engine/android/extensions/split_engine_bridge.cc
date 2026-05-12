@@ -32,6 +32,7 @@
 #include "absl/status/statusor.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
+#include "core/async/executor.h"
 #include "core/common/jni_helpers.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/shared/split_engine_defines.h"
@@ -101,8 +102,12 @@ std::optional<std::string> FatalIfUnspecifiedExceptionOccurred(
 
 absl::StatusOr<std::unique_ptr<BufferHandle>> SplitEngineBridge::RegisterBuffer(
     int fd, size_t buffer_size_bytes) {
-  // TODO: Refactor aidl to take a int64 instead of int32 for this
-  // method.
+  // RegisterBuffer is blocking two-way Binder IPC which can block the main
+  // thread, so let's ensure it's called on the background thread.
+  
+
+  // TODO: Refactor aidl to take a int64 instead of int32 for
+  // this method.
   jobject buffer_handle =
       JavaWrapper::CallObjectMethod(register_buffer_, static_cast<jint>(fd),
                                     static_cast<jint>(buffer_size_bytes));
@@ -113,6 +118,12 @@ absl::StatusOr<std::unique_ptr<BufferHandle>> SplitEngineBridge::RegisterBuffer(
 absl::Status SplitEngineBridge::ProcessRegion(const BufferHandle& buffer_handle,
                                               int offset_bytes,
                                               int region_length_bytes) {
+  // Even though ProcessRegion is cheap one-way Binder IPC, it depends on
+  // RegisterBuffer result. For simplicity sake, ProcessRegion shall be in the
+  // same chain as RegisterBuffer and in turn shall be called on the background
+  // thread.
+  
+
   jobject token = static_cast<const SplitEngineBufferHandle*>(&buffer_handle)
                       ->handle_.get();
   std::optional<std::string> exception_message = std::nullopt;

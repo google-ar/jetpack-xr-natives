@@ -19,10 +19,12 @@
 
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
 #include "absl/base/attributes.h"
+#include "absl/base/nullability.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "filament/filament/include/filament/Engine.h"
@@ -34,6 +36,7 @@
 #include "core/render/texture.h"
 #include "core/resources/resource_manager.h"
 #include "core/view/base_view.h"
+#include "core/view/utils/string_map.h"
 
 namespace imp {
 
@@ -63,6 +66,8 @@ class ImageBasedLightingAsset {
         BaseView* view, absl::string_view asset_url,
         Future<resources::Resource> resource_future) = 0;
   };
+
+  ~ImageBasedLightingAsset();
 
   ImageBasedLightingAsset(
       std::unique_ptr<SphericalHarmonics> spherical_harmonics,
@@ -167,7 +172,8 @@ class ImageBasedLightingAsset {
   // SplitEngineSerializer, if it exists.
   static absl::StatusOr<std::unique_ptr<ImageBasedLightingAsset>>
   SerializeAndConstructImageBasedLightingAsset(
-      BaseView& view, std::unique_ptr<SphericalHarmonics> spherical_harmonics,
+      BaseView& view,
+      /*absl_nonnull*/  std::unique_ptr<SphericalHarmonics> spherical_harmonics,
       ImageBasedLightingAssetCubemapImages cubemap_images,
       std::optional<std::string_view> asset_url);
 

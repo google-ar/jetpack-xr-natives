@@ -18,8 +18,6 @@
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_MATERIALS_BUILTIN_GENERIC_MATERIAL_H_
 
 #include "absl/status/status.h"
-#include "flatbuffers/buffer.h"
-#include "flatbuffers/flatbuffer_builder.h"
 #include "flatbuffers/verifier.h"
 #include "core/async/future.h"
 #include "core/common/small_source_location.h"
@@ -65,17 +63,6 @@ class BuiltInGenericMaterial : public BuiltInMaterial {
 
   GenericMaterialPtr generic_material_;
 };
-
-// Creates an Android XR GenericMaterialSpec schema from a GenericMaterialSpec
-// by casting the enum values to the correct type. The above asserts ensure
-// that the enum values are the same.
-flatbuffers::Offset<android_xr::schemas::GenericMaterialSpec>
-CreateGenericMaterialSpec(flatbuffers::FlatBufferBuilder& fbb,
-                          const GenericMaterialSpec& spec);
-
-// Converts an Android XR GenericMaterialSpec schema to a GenericMaterialSpec.
-GenericMaterialSpec FromFlatbuffer(
-    const android_xr::schemas::GenericMaterialSpec& flatbuffer);
 
 }  // namespace imp::split_engine
 

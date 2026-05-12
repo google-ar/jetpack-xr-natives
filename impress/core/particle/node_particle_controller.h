@@ -26,6 +26,7 @@
 #include "core/ncsb/node_handle.h"
 #include "core/particle/particle_behavior.h"
 #include "core/particle/particle_controller.h"
+#include "core/particle/particle_emitter_info.h"
 #include "core/particle/particle_emitter_state.proto.imp.h"
 #include "core/particle/particle_instance.h"
 #include "core/particle/particle_service.h"
@@ -46,6 +47,9 @@ class NodeParticleController : public ParticleController {
   // as defined by the ParticleEmitterConfig.
   void UpdateParticleSystem(const FrameTime& frame_time) override;
 
+  // Returns information about the emitter used to update particle behavior.
+  imp_particle::ParticleEmitterInfo GetParticleEmitterInfo() const override;
+
  protected:
   // Verifies elements of the emitter state to ensure the particle system can
   // be properly initialized.
@@ -62,6 +66,15 @@ class NodeParticleController : public ParticleController {
 
   // Synchronizes the scene node with the current state of the particle.
   void SyncNode(const ParticleInstance& particle_instance, NodeHandle node);
+
+  // Performs updates that effect the emitter itself, such as it's own lifetime.
+  void UpdateEmitterBehavior(const FrameTime& frame_time);
+
+  // Determines if particles may be emitted. This will check different factors
+  // such as the current particle delay, number of active particles, and the
+  // Emitter lifetime. It does not emit a particle. The return value should not
+  // be used to determine if the Emitter is active.
+  bool CanEmitParticles();
 
   // Node particles include a scene node and a particle index, which refers to
   // the particle state stored in the ParticleService, and updated by a
@@ -86,6 +99,12 @@ class NodeParticleController : public ParticleController {
   // Particle asset, by holding this when the controller is created, we ensure
   // that the asset is loaded and available when instantiating particles.
   AssetPtr<GltfAsset> gltf_asset_;
+
+  // Emitter lifetime.
+  bool emitter_duration_finite_ = false;
+  float remaining_emitter_duration_ = 0.0f;
+  float emitter_duration_ = 0.0f;
+  bool looping_ = false;
 
   // Particle emission control.
   float particles_per_second_;

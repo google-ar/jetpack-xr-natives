@@ -124,35 +124,13 @@ Future<absl::Status> AndroidExternalTextureSurface::CreatePlatformSurface(
             Executor::Type::kBackground);
   } else {
 #if defined(IMP_ANDROID_EXTERNAL_TEXTURE_SURFACE_USES_IMAGE_READER)
-    bool use_surface_texture = security_level_ == ContentSecurityLevel::kNone &&
-                               view_types.size() == 1;
-
-#if IMP_MATERIAL_API(VULKAN)
-    // SurfaceTexture is not supported for Vulkan, so always use ImageReader.
-    use_surface_texture = false;
-#endif  // IMP_MATERIAL_API(VULKAN)
-
-    if (use_surface_texture) {
-      absl::StatusOr<
-          std::unique_ptr<DefaultPlatformAndroidExternalTextureSurface>>
-          platform_surface =
-              DefaultPlatformAndroidExternalTextureSurface::Create(
-                  view, security_level_, view_types);
-      if (!platform_surface.ok()) {
-        return Future<absl::Status>(platform_surface.status());
-      }
-      platform_surface_ = std::move(*platform_surface);
-
-    } else {
-      absl::StatusOr<std::unique_ptr<ImageReaderAndroidExternalTextureSurface>>
-          platform_surface = ImageReaderAndroidExternalTextureSurface::Create(
-              view, security_level_, view_types);
-      if (!platform_surface.ok()) {
-        return Future<absl::Status>(platform_surface.status());
-      }
-      platform_surface_ = std::move(*platform_surface);
+    absl::StatusOr<std::unique_ptr<ImageReaderAndroidExternalTextureSurface>>
+        platform_surface = ImageReaderAndroidExternalTextureSurface::Create(
+            view, security_level_, view_types);
+    if (!platform_surface.ok()) {
+      return Future<absl::Status>(platform_surface.status());
     }
-    return Future<absl::Status>(absl::OkStatus());
+    platform_surface_ = std::move(*platform_surface);
 #else  // Use SurfaceTexture (default) version.
 
 #if IMP_MATERIAL_API(VULKAN)

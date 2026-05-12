@@ -45,7 +45,6 @@ cc_library(
     deps = [
         ":camera_visualizer_assets",
         "//core/common:invocable",
-        "//core/common:platform_helpers",
         "//core/common:registry",
         "//core/common:robin_map",
         "//core/editor",
@@ -99,6 +98,8 @@ cc_library(
         "//core/ncsb",
         "//core/proto:proto_writer",
         "//core/render",
+        "//core/render:primitive_shape_renderer",
+        "//core/render:primitive_shape_renderer_state_cc_proto",
         "//core/render_passes:on_demand_texture_pipeline_render_params_proto_cc_imp",
         "//core/render_passes:on_demand_texture_pipeline_renderer",
         "//core/render_passes:texture_config_proto_cc_imp",
@@ -131,6 +132,8 @@ imp_isf_data(
         "material_visualizer.textproto",
     ],
     deps = [
+        "//core/camera:camera_state_proto",
+        "//core/render:primitive_shape_renderer_state_proto",
         "//core/render_passes:texture_pipeline_renderer_proto",
     ],
 )

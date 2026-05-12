@@ -21,7 +21,6 @@
 #include <vector>
 
 #include "absl/status/status.h"
-#include "absl/strings/string_view.h"
 #include "core/common/small_source_location.h"
 #include "core/common/typed_vector.h"
 #include "core/material_library/generic_material_parameters.h"
@@ -41,7 +40,7 @@ namespace imp {
 //
 // Create a GenericMaterial using the Create method, passing in a schema, a
 // material cache, and the textures required by the material.
-class GenericMaterial {
+class GenericMaterial : public virtual Material {
  public:
   virtual ~GenericMaterial() = default;
 
@@ -55,7 +54,6 @@ class GenericMaterial {
 
   // Legacy methods for MaterialConfig.
   // TODO: (broken link) - Remove these methods once MaterialConfig is removed.
-  virtual absl::string_view GetName() const = 0;
   virtual std::vector<model::MaterialParameter> GetParameters() const = 0;
   virtual TypedVector<model::MaterialTexture> GetTextures() const = 0;
   virtual StringMap<int> GetSamplerIndexLookup() const = 0;

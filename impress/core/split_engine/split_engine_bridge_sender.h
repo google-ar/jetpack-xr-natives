@@ -18,20 +18,21 @@
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_SPLIT_ENGINE_BRIDGE_SENDER_H_
 
 #include <cstddef>
-#include <cstdint>
 #include <functional>
-#include <memory>
 
 #include "absl/container/flat_hash_set.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "flatbuffers/flatbuffer_builder.h"
+#include "core/common/owned_ptr.h"
+#include "core/split_engine/android/scheduler.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 
 namespace imp::split_engine {
 
 // An interface for SplitEngine to use to send serialized data to a renderer.
-class SplitEngineBridgeSender {
+// TODO: (broken link) - remove SplitEngineBridgeSender interface.
+class SplitEngineBridgeSender : public Scheduler {
  public:
   // Implementation of SplitEngineBridgeSender shall support multiple active
   // message groups in parallel.
@@ -66,10 +67,9 @@ class SplitEngineBridgeSender {
   // the shared memory. There should be typesafe way to enforce this without
   // crashing.
 
-  // Sends a message using the default active message group.
   virtual absl::Status SendMessage(
       MessageGroupId group_id,
-      const flatbuffers::FlatBufferBuilder& message) = 0;
+      imp::OwnedPtr<flatbuffers::FlatBufferBuilder> message) = 0;
 
   // Begin a new message group which will be contained within buffer of
   // specified size. The SplitEngineBridgeSender will handle adding overhead
@@ -102,8 +102,12 @@ class SplitEngineBridgeSender {
   // The memory backing the FlatBufferBuilder is owned by the
   // SplitEngineBridgeSender, and so the returned FlatBufferBuilder is only
   // valid for the lifetime of the SplitEngineBridgeSender.
-  virtual std::unique_ptr<flatbuffers::FlatBufferBuilder>
-  CreateFlatBufferBuilder(MessageGroupId group_id, size_t size_bytes) = 0;
+  //
+  // Returned FlatBufferBuilder will be shared between serialization tasks and
+  // SendMessage task. Serialization tasks should use BorrowedPtr, SendMessage
+  // task should take the ownership of imp::OwnedPtr.
+  virtual imp::OwnedPtr<flatbuffers::FlatBufferBuilder> CreateFlatBufferBuilder(
+      MessageGroupId group_id, size_t size_bytes) = 0;
 
   // Below is a set of static methods for use by the SplitEngineBridgeSender
   // to track active message groups across the bridge.

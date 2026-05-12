@@ -15,6 +15,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_FLAME_GRAPH_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_FLAME_GRAPH_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <thread>  // NOLINT: We show graphs by thread id.
 
@@ -66,6 +67,11 @@ class FlameGraph {
                      float row_height, uint64_t start_time, uint64_t end_time,
                      uint64_t selected_frame_start_time_ns,
                      bool is_current_frame, Rect& rect);
+
+  // Draws a hover tooltip for a node in the flame graph.
+  void DrawTooltip(absl::string_view name, uint64_t total_time_ns,
+                   size_t total_memory_allocated,
+                   size_t total_memory_allocations_count);
 
   // Draws a node in the flame graph.
   // Recursively calls itself for child nodes.

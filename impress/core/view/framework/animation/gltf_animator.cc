@@ -200,6 +200,40 @@ void GltfAnimator::System::SendOrQueuePlaybackEndedEvent(PlaybackEndedEvent ev,
   }
 }
 
+void GltfAnimator::System::SendOrQueuePlaybackPausedEvent(
+    PlaybackPausedEvent ev, NodeHandle target) {
+  if (!are_events_paused_) {
+    if (target) {
+      target->Send(ev);
+    }
+  } else {
+    playback_paused_event_queue_.push_back(std::make_pair(ev, target));
+  }
+}
+
+void GltfAnimator::System::SendOrQueuePlaybackResumedEvent(
+    PlaybackResumedEvent ev, NodeHandle target) {
+  if (!are_events_paused_) {
+    if (target) {
+      target->Send(ev);
+    }
+  } else {
+    playback_resumed_event_queue_.push_back(std::make_pair(ev, target));
+  }
+}
+
+void GltfAnimator::System::SendOrQueuePlaybackActiveStatusChangedEvent(
+    PlaybackActiveStatusChangedEvent ev, NodeHandle target) {
+  if (!are_events_paused_) {
+    if (target) {
+      target->Send(ev);
+    }
+  } else {
+    playback_active_status_changed_event_queue_.push_back(
+        std::make_pair(ev, target));
+  }
+}
+
 void GltfAnimator::System::DispatchQueuedEvents() {
   if (are_events_paused_) {
     return;
@@ -230,6 +264,32 @@ void GltfAnimator::System::DispatchQueuedEvents() {
     }
   }
   playback_ended_event_queue_.clear();
+
+  for (const QueuedPlaybackPausedEvent& queued_paused_event :
+       playback_paused_event_queue_) {
+    if (queued_paused_event.second) {
+      queued_paused_event.second->Send(queued_paused_event.first);
+    }
+  }
+  playback_paused_event_queue_.clear();
+
+  for (const QueuedPlaybackResumedEvent& queued_resumed_event :
+       playback_resumed_event_queue_) {
+    if (queued_resumed_event.second) {
+      queued_resumed_event.second->Send(queued_resumed_event.first);
+    }
+  }
+  playback_resumed_event_queue_.clear();
+
+  for (const QueuedPlaybackActiveStatusChangedEvent&
+           queued_active_status_changed_event :
+       playback_active_status_changed_event_queue_) {
+    if (queued_active_status_changed_event.second) {
+      queued_active_status_changed_event.second->Send(
+          queued_active_status_changed_event.first);
+    }
+  }
+  playback_active_status_changed_event_queue_.clear();
 }
 
 GltfAnimator::GltfAnimator() = default;
@@ -253,6 +313,13 @@ void GltfAnimator::OnActiveStatusChanged(bool is_active) {
   if (is_active) {
     AdvanceAnimationPlayback(absl::ZeroDuration());
   }
+
+  PlaybackActiveStatusChangedEvent ev;
+  ev.active = is_active;
+  GetView()
+      .GetComponentManager()
+      .GetComponentSystem<GltfAnimator>()
+      .SendOrQueuePlaybackActiveStatusChangedEvent(ev, GetNode());
 }
 
 absl::Status GltfAnimator::CanPlay(const PlayCommand& play_command) const {
@@ -376,6 +443,7 @@ void GltfAnimator::PlayAnim(int32_t anim_index,
         end_duration,
         options.speed_multiplier ? options.speed_multiplier : 1.0f,
         options.looping,
+        0,
         0};
     channel->active = true;
     channel->persist = options.persist_channel;
@@ -386,7 +454,7 @@ void GltfAnimator::PlayAnim(int32_t anim_index,
                 anim_index, anim, anim->CreateCursor(), start_duration,
                 start_duration, end_duration,
                 options.speed_multiplier ? options.speed_multiplier : 1.0f,
-                options.looping, 0},
+                options.looping, 0, 0},
         .blend_anim = {},
         .active = true,
         .persist = options.persist_channel};
@@ -530,7 +598,12 @@ void GltfAnimator::AdvanceAnimationPlayback(absl::Duration delta_time) {
     for (auto channel_id = playback_channel_lookup_.begin();
          channel_id != playback_channel_lookup_.end(); ++channel_id) {
       PlaybackChannel& channel = playback_channels_[channel_id->second];
-      if (!channel.active) {
+      if (!channel.active ||
+          (channel.anim_playback.paused &&
+           // Methods like SetPlaybackTime call AdvanceAnimationPlayback with
+           // zero duration. This check ensures the pose updates during those
+           // calls, even if the animation is paused.
+           delta_time > absl::ZeroDuration())) {
         continue;
       }
       bool animation_ended =
@@ -1086,6 +1159,49 @@ bool GltfAnimator::IsLooping(PlaybackChannelId channel_id) const {
     return true;
   } else if (const PlaybackChannel* channel = GetPlaybackChannel(channel_id)) {
     return channel->anim_playback.looping;
+  }
+
+  return false;
+}
+
+void GltfAnimator::SetPaused(bool paused, PlaybackChannelId channel_id) {
+  auto& system =
+      GetView().GetComponentManager().GetComponentSystem<GltfAnimator>();
+  auto update_channel = [this, &system, paused](PlaybackChannel& channel) {
+    if (channel.anim_playback.paused != paused) {
+      channel.anim_playback.paused = paused;
+      if (paused) {
+        PlaybackPausedEvent ev;
+        ev.animation_index = channel.anim_playback.anim_index;
+        system.SendOrQueuePlaybackPausedEvent(ev, GetNode());
+      } else {
+        PlaybackResumedEvent ev;
+        ev.animation_index = channel.anim_playback.anim_index;
+        system.SendOrQueuePlaybackResumedEvent(ev, GetNode());
+      }
+    }
+  };
+
+  if (IsAllChannelsId(channel_id)) {
+    for (auto [_, channel_id] : playback_channel_lookup_) {
+      PlaybackChannel& channel = playback_channels_[channel_id];
+      update_channel(channel);
+    }
+  } else if (PlaybackChannel* channel = GetPlaybackChannel(channel_id)) {
+    update_channel(*channel);
+  }
+}
+
+bool GltfAnimator::IsPaused(PlaybackChannelId channel_id) const {
+  if (IsAllChannelsId(channel_id)) {
+    for (auto [_, channel_id] : playback_channel_lookup_) {
+      if (!playback_channels_[channel_id].anim_playback.paused) {
+        return false;
+      }
+    }
+    return true;
+  } else if (const PlaybackChannel* channel = GetPlaybackChannel(channel_id)) {
+    return channel->anim_playback.paused;
   }
 
   return false;

@@ -21,9 +21,12 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "filament/filament/include/filament/Texture.h"
+#include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
 #include "core/editor/visualizers/material_visualizer.h"
 #include "core/render/texture.h"
+#include "core/render/texture_asset.h"
 #include "core/view/base_view.h"
 #include "core/view/utils/asset.h"
 #include "core/view/utils/string_map.h"
@@ -44,7 +47,7 @@ class AssetThumbnailProvider {
   //
   // Currently, only material definitions generate full thumbnails, everything
   // else uses an icon based on the extension.
-  Texture& GetThumbnailForResource(absl::string_view resource);
+  filament::Texture* GetThumbnailForResource(absl::string_view resource);
 
   // Sets the thumbnail for the resource.
   //
@@ -67,6 +70,7 @@ class AssetThumbnailProvider {
   StringMap<Future<Texture*>> material_thumbnail_futures_;
   // Resources that have had their icons overridden.
   StringMap<TexturePtr> resources_with_icons_;
+  StringMap<Future<AssetPtr<TextureAsset>>> image_futures_;
 };
 
 }  // namespace imp::editor

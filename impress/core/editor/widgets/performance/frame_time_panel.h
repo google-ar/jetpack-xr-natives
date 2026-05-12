@@ -27,6 +27,7 @@
 #include "core/editor/widgets/performance/circular_buffer.h"
 #include "core/editor/widgets/performance/flame_graph.h"
 #include "core/editor/widgets/performance/hierarchy_panel.h"
+#include "core/editor/widgets/performance/imgui_helper.h"
 #include "core/editor/widgets/performance/monitor_panel.h"
 #include "core/editor/widgets/performance/sample_processor.h"
 #include "core/editor/widgets/performance/sample_processor_types.h"
@@ -106,7 +107,9 @@ class FrameTimePanel : public MonitorPanel {
   // Draws the tick labels based on the valid ticks.
   void DrawTickLabels(ImDrawList* draw_list, ValidTicks valid_ticks);
   // Draws the options to swap between hierarchy/flame graph views.
-  void DrawOptionsBar();
+  void DrawOptionsBar(int selected_frame_number);
+  // Draws a label next to each plot showing its value at the selected frame.
+  void DrawSelectedFrameLabels(int frame_number, ImDrawList* draw_list);
   std::vector<SampleNode*>* GetSamples(absl::string_view sample_name,
                                        int frame_index,
                                        std::thread::id thread_id);
@@ -119,7 +122,6 @@ class FrameTimePanel : public MonitorPanel {
   int frame_number_;
   MonitorState state_ = MonitorState::kRunning;
 
-  int selected_frame_number_ = -1;
   ViewConfig view_config_;
   HierarchyPanel hierarchy_panel_;
   FlameGraph flame_graph_;
@@ -130,6 +132,8 @@ class FrameTimePanel : public MonitorPanel {
   bool show_frametime_ = true;
   bool selected_sample_changed_ = false;
   ValidTicks valid_ticks_;
+  static constexpr int kNumFrameValueLabels = 2;
+  std::array<ImGuiHelper::LabelData, kNumFrameValueLabels> frame_value_data_;
 
   // Which view to display (hierarchy or flame graph)
   ProfilerDetailsViewMode profiler_details_view_mode_ =

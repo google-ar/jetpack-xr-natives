@@ -16,7 +16,7 @@ syntax = "proto3";
 
 package imp;
 
-import "core/view/framework/camera/camera_state.proto";
+import "core/camera/camera_state.proto";
 
 // Casts contact shadows upon members of its target group.
 message ContactShadowProjectorState {

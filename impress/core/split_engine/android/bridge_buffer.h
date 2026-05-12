@@ -21,7 +21,9 @@
 #include <cstdint>
 #include <memory>
 
+#include "absl/synchronization/notification.h"
 #include "core/split_engine/android/buffer_handle_factory.h"
+#include "core/split_engine/android/scheduler.h"
 
 namespace imp::split_engine {
 
@@ -30,8 +32,11 @@ class BridgeBuffer {
   using BufferHandle = BufferHandleFactory::BufferHandle;
 
  public:
-  BridgeBuffer(BufferHandleFactory& handle_factory, size_t buffer_size_bytes);
-  BridgeBuffer(BridgeBuffer&& other);
+  BridgeBuffer(BufferHandleFactory& handle_factory, size_t buffer_size_bytes,
+               Scheduler& scheduler);
+
+  BridgeBuffer(BridgeBuffer&& other) = delete;
+  BridgeBuffer& operator=(BridgeBuffer&& other) = delete;
   BridgeBuffer(const BridgeBuffer&) = delete;
   BridgeBuffer& operator=(const BridgeBuffer&) = delete;
 
@@ -50,11 +55,14 @@ class BridgeBuffer {
   }
 
  private:
+  Scheduler& scheduler_;
   std::unique_ptr<BufferHandle> handle_;
 
   int shared_memory_region_fd_;
   void* mmapped_ptr_;
   size_t size_in_bytes_;
+
+  absl::Notification work_completed_;
 };
 
 }  // namespace imp::split_engine

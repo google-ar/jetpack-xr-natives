@@ -16,6 +16,7 @@
 
 #include <jni.h>
 #include <openxr/openxr.h>
+#include <openxr/public/all_extensions.h>
 
 #include <cstdint>
 
@@ -72,7 +73,7 @@ XrPosef ConvertToXrPosef(JNIEnv* env, const jobject& pose) {
   return XrPosef{.orientation = xr_quaternion, .position = xr_vector3};
 }
 
-XrGeospatialPoseANDROIDX2 ConvertToXrGeospatialPose(
+XrGeospatialPoseANDROID ConvertToXrGeospatialPose(
     JNIEnv* env, const jobject& geospatial_pose) {
   jclass geospatial_pose_cls = GetJxrClass(env, PACKAGE_MATH, "GeospatialPose");
   jmethodID latitude_mid =
@@ -94,7 +95,7 @@ XrGeospatialPoseANDROIDX2 ConvertToXrGeospatialPose(
       env->CallObjectMethod(geospatial_pose, quaternion_mid);
   XrQuaternionf xr_quaternion = ConvertToXrQuaternionf(env, quaternion_obj);
 
-  return XrGeospatialPoseANDROIDX2{
+  return XrGeospatialPoseANDROID{
       .eastUpSouthOrientation = xr_quaternion,
       .latitude = latitude,
       .longitude = longitude,

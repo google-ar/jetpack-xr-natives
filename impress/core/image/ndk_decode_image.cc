@@ -17,16 +17,21 @@
 #include <android/bitmap.h>
 #include <android/imagedecoder.h>
 
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <memory>
-#include <string>
+#include <utility>
 
-#include "absl/memory/memory.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/backend/include/backend/PixelBufferDescriptor.h"
 #include "filament/filament/include/filament/Texture.h"
-#include "core/common/platform_helpers.h"
+#include "core/async/background_delete.h"
 #include "core/image/image_contents.h"
-#include "mediapipe/framework/port/status_macros.h"
+#include "core/resources/resource_manager.h"
 
 namespace imp::image::details {
 namespace {
@@ -36,13 +41,13 @@ using ::filament::backend::PixelBufferDescriptor;
 class NdkImageContents : public ImageContents {
  public:
   NdkImageContents(int width, int stride, int height,
-                   std::unique_ptr<uint8_t> pixels)
+                   std::unique_ptr<uint8_t[]> pixels)
       : width_(width),
         stride_(stride),
         height_(height),
-        pixels_(std::move(pixels)) {}
-
-  ~NdkImageContents() override {}
+        pixels_(
+            imp::MakeSharedWithBackgroundDeleter<uint8_t[]>(pixels.release())) {
+  }
 
   uint32_t GetWidth() const override { return static_cast<uint32_t>(width_); }
   uint32_t GetStride() const override { return static_cast<uint32_t>(stride_); }
@@ -117,7 +122,7 @@ absl::StatusOr<std::unique_ptr<ImageContents>> NdkDecodeImage(
     size_t stride = AImageDecoder_getMinimumStride(decoder);
     size_t size = height * stride;
 
-    std::unique_ptr<uint8_t> pixels(new uint8_t[size]);
+    std::unique_ptr<uint8_t[]> pixels(new uint8_t[size]);
 
     result = AImageDecoder_decodeImage(decoder, pixels.get(), stride, size);
     // We’re done with the decoder, so now it’s safe to delete it.

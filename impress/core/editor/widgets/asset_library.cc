@@ -25,7 +25,6 @@
 
 #include "absl/container/btree_set.h"
 #include "core/common/log.h"
-#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
@@ -34,9 +33,9 @@
 #include "dear_imgui/imgui.h"
 #include "dear_imgui/imgui_internal.h"
 #include "dear_imgui/misc/cpp/imgui_stdlib.h"
+#include "filament/filament/include/filament/Texture.h"
 #include "core/async/future.h"
 #include "core/common/file_helpers.h"
-#include "core/common/platform_helpers.h"
 #include "core/config.h"
 #include "core/editor/layout/editor_control_flags.h"
 #include "core/editor/layout/helpers.h"
@@ -52,8 +51,6 @@
 #include "core/render/texture.h"
 #include "core/resources/resource_manager.h"
 #include "core/view/base_view.h"
-#include "core/view/framework/assets/asset_manager.h"
-#include "core/view/framework/render/material_definition.proto.imp.h"
 #include "core/view/framework/scene/scene_reference.h"
 #include "core/view/framework/scene/scene_system.h"
 #include "core/view/utils/string_map.h"
@@ -62,6 +59,10 @@
 #include "core/editor/ui/directory_ui_desktop.h"
 #else
 #include "core/editor/ui/directory_ui_noop.h"
+#endif
+
+#if IMP_RUNTIME(DEV)
+#include "core/view/framework/assets/asset_manager.h"
 #endif
 
 namespace imp::editor {
@@ -196,9 +197,9 @@ void AssetLibrary::DrawImGui() {
       ImGuiCenterNextHorizontally(kTableEntryImageSize.x,
                                   IncludePadding::kCell);
 
-      Texture& thumbnail =
+      filament::Texture* thumbnail =
           thumbnail_provider_->GetThumbnailForResource(resource);
-      ImGui::Image(thumbnail.GetTexture(), kTableEntryImageSize);
+      ImGui::Image(thumbnail, kTableEntryImageSize);
 
       auto itr = resource_types_.find(extension);
       if (itr != resource_types_.end()) {

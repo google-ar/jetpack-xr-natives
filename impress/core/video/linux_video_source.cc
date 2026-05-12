@@ -47,7 +47,7 @@
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "util/regexp/re2/re2.h"
-#include "util/task/status_builder.h"
+#include "mediapipe/framework/port/status_builder.h"
 #include "mediapipe/framework/port/status_macros.h"
 #include "video/common/subprocess/ffmpeg/ffmpeg.h"
 #include "video/common/subprocess/ffmpeg/ffmpeg.pb.h"

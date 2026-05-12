@@ -157,7 +157,7 @@ TextMetrics AndroidPlatformCanvasSource::GetGlyphMetrics(
     const ScopedCanvas::TextOptions& text_options) {
   ConfigurePaintForTextOptions(paint_, text_options,
                                /*configure_for_glyphs=*/true);
-  return glyph_source_.GetGlyphMetrics(glyph, text_options.font_holder,
+  return glyph_source_.GetGlyphMetrics(glyph.Get(), text_options.font_holder,
                                        text_options.stroke_width_pixels,
                                        paint_);
 }
@@ -214,9 +214,16 @@ FontInfo AndroidPlatformCanvasSource::GetFontInfo(
 std::unique_ptr<ScopedCanvas> AndroidPlatformCanvasSource::StartDrawing(
     BaseView& view, uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) {
   bool did_texture_change = false;
+
+  bool enable_memory_leak_fix =
+      view.GetConfig()
+          .experimental_feature_flags.surface_texture_memory_leak_fix.value_or(
+              false);
+
   if (!surface_texture_) {
-    surface_texture_ =
-        std::make_unique<android::SurfaceTexture>(context_, false);
+    // TODO: (broken link) - why do we pass 0 as textureId?
+    surface_texture_ = std::make_unique<android::SurfaceTexture>(
+        context_, 0, false, enable_memory_leak_fix);
     surface_ = std::make_unique<android::Surface>(context_, *surface_texture_);
 
     texture_ = view.GetTextureFactory().CreateExternalTexture(
@@ -238,8 +245,14 @@ std::unique_ptr<ScopedCanvas> AndroidPlatformCanvasSource::StartDrawing(
     ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) {
   bool did_texture_change = false;
   if (!surface_texture_) {
-    surface_texture_ =
-        std::make_unique<android::SurfaceTexture>(context_, false);
+    bool enable_memory_leak_fix =
+        view.GetConfig()
+            .experimental_feature_flags.surface_texture_memory_leak_fix
+            .value_or(false);
+
+    // TODO: (broken link) - why do we pass 0 as textureId?
+    surface_texture_ = std::make_unique<android::SurfaceTexture>(
+        context_, 0, false, enable_memory_leak_fix);
     surface_ = std::make_unique<android::Surface>(context_, *surface_texture_);
 
     OwnedTexturePtr texture = view.GetTextureFactory().CreateExternalTexture(
@@ -384,7 +397,7 @@ void AndroidPlatformCanvasSource::AndroidScopedCanvas::DrawGlyph(
   ConfigurePaintForTextOptions(source_.paint_, text_options,
                                /*configure_for_glyphs=*/true);
   source_.glyph_source_.DrawGlyph(
-      canvas_, glyph, pos.x, pos.y, text_options.font_holder,
+      canvas_, glyph.Get(), pos.x, pos.y, text_options.font_holder,
       text_options.stroke_width_pixels, source_.paint_, source_.stroke_paint_);
 }
 

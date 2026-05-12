@@ -409,7 +409,11 @@ Future<absl::Status> TextRenderer::UpdateMeshesAndMaterialsFromAtlas() {
         if (!root_) {
           root_ = GetView().CreateNode();
           root_->SetParent(GetNode());
-          renderer_ = root_->AddComponent<MeshRenderer>();
+          MeshRenderer::FrustumCullingMode culling_mode =
+              state_.disable_frustum_culling
+                  ? MeshRenderer::FrustumCullingMode::kDisabled
+                  : MeshRenderer::FrustumCullingMode::kEnabled;
+          renderer_ = root_->AddComponent<MeshRenderer>(culling_mode);
         }
 
         if (text_layout_provider_.has_value()) {
@@ -500,7 +504,11 @@ Future<absl::Status> TextRenderer::UpdateMeshesAndMaterialsFromSlicedAtlas() {
         if (!root_) {
           root_ = GetView().CreateNode();
           root_->SetParent(GetNode());
-          renderer_ = root_->AddComponent<MeshRenderer>();
+          MeshRenderer::FrustumCullingMode culling_mode =
+              state_.disable_frustum_culling
+                  ? MeshRenderer::FrustumCullingMode::kDisabled
+                  : MeshRenderer::FrustumCullingMode::kEnabled;
+          renderer_ = root_->AddComponent<MeshRenderer>(culling_mode);
         }
 
         if (text_layout_provider_.has_value()) {
@@ -1480,6 +1488,11 @@ absl::StatusOr<std::vector<float3>> TextRenderer::GetScreenPath() const {
 }
 
 float2 TextRenderer::GetOffset() const { return state_.offset; }
+
+void TextRenderer::SetOffset(float2 offset) {
+  state_.offset = offset;
+  RecalculateMesh();
+}
 
 float2 TextRenderer::GetPivot() const {
   return state_.pivot.value_or(kDefaultPivot);

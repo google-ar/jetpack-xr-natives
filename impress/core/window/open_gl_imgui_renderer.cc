@@ -37,14 +37,12 @@
 #include "core/math/vec.h"
 #include "core/ncsb/node.h"
 #include "core/render/android/android_external_texture_surface.h"
-#include "core/view/framework/render/mesh_factory.h"
-#include "core/view/framework/render/mesh_renderer.h"
+#include "core/render/texture.h"
 #include "core/view/framework/view.h"
 #include "split_engine/materials/texture_external_material.h"
 
 namespace imp::window {
 
-constexpr imp::int2 kDefaultRenderSize = {1280, 1024};
 constexpr ImVec4 kClearColor = {0.0f, 0.0f, 0.0f, 1.0f};
 
 OpenGLImGuiRenderer::OpenGLImGuiRenderer(BaseView& base_view,
@@ -64,10 +62,6 @@ OpenGLImGuiRenderer::OpenGLImGuiRenderer(BaseView& base_view,
     io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 16.0f);
   }
   ImGui::StyleColorsDark();
-
-  // TODO: Move the initialization to the WorldSpaceEditorUi.
-  setup_android_external_texture_surface_future_ =
-      SetupAndroidExternalTextureSurface();
 }
 
 OpenGLImGuiRenderer::~OpenGLImGuiRenderer() {
@@ -75,40 +69,39 @@ OpenGLImGuiRenderer::~OpenGLImGuiRenderer() {
   imgui_context_ = nullptr;
 }
 
-// resets the windows display size
-void OpenGLImGuiRenderer::SetDisplaySize(int width, int height, float scale_x,
-                                         float scale_y, bool flip_vertical) {
-  ImGuiIO& io = ImGui::GetIO();
-  io.DisplaySize = ImVec2(width, height);
-  io.DisplayFramebufferScale.x = scale_x;
-  io.DisplayFramebufferScale.y = scale_y;
-  flip_vertical_ = flip_vertical;
-}
+void OpenGLImGuiRenderer::Initialize(float2 texture_resolution) {
+  texture_size_ = texture_resolution;
 
-// Sets up the AndroidExternalTextureSurface and its associated window
-// references.
-Future<absl::Status> OpenGLImGuiRenderer::SetupAndroidExternalTextureSurface() {
-  return imp::AndroidExternalTextureSurface::CreateAsync(
-             base_view_, ContentSecurityLevel::kNone,
-             imp::kAndroidExternalTextureSurfaceConfigMono)
-      .Then([this](absl::StatusOr<
-                   std::unique_ptr<imp::AndroidExternalTextureSurface>>
-                       surface) {
+  ImGuiIO& io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(texture_resolution.x, texture_resolution.y);
+  io.DisplayFramebufferScale.x = 1.0f;
+  io.DisplayFramebufferScale.y = 1.0f;
+  flip_vertical_ = false;
+
+  surface_future_ = imp::AndroidExternalTextureSurface::CreateAsync(
+      base_view_, ContentSecurityLevel::kNone,
+      imp::kAndroidExternalTextureSurfaceConfigMono);
+  surface_future_
+      .Then([this, texture_resolution](
+                absl::StatusOr<
+                    std::unique_ptr<imp::AndroidExternalTextureSurface>>
+                    surface) {
         if (!surface.ok()) {
           return absl::InternalError(
               "Failed to create AndroidExternalTextureSurface");
         }
         texture_surface_ptr_ = *std::move(surface);
 
-        absl::Status status_resize =
-            texture_surface_ptr_->SetDefaultBufferSize(kDefaultRenderSize);
+        absl::Status status_resize = texture_surface_ptr_->SetDefaultBufferSize(
+            int2(texture_resolution.x, texture_resolution.y));
         if (!status_resize.ok()) {
           return absl::InternalError("Failed to set default buffer size: ");
         }
+
         texture_ = texture_surface_ptr_->BorrowTexture();
         if (!texture_) {
           return absl::InternalError(
-              "Failed to borrow texture from AndroidExternalTextureSurface");
+              "Failed to get texture from AndroidExternalTextureSurface");
         }
         env_ = base_view_.GetContext().GetJniEnv();
         jobject surface_reference =
@@ -129,8 +122,24 @@ Future<absl::Status> OpenGLImGuiRenderer::SetupAndroidExternalTextureSurface() {
               "Failed to initialize OGL: trying to execute "
               "AndroidExternalTextureSurfaceCleanup");
         }
+
         return absl::OkStatus();
-      });
+      })
+      .KeptBy(&base_view_);
+}
+
+// resets the windows display size
+void OpenGLImGuiRenderer::SetRenderTargetDisplaySize(int width, int height,
+                                                     float scale_x,
+                                                     float scale_y,
+                                                     bool flip_vertical) {
+  SetTextureBufferSize(width, height);
+
+  ImGuiIO& io = ImGui::GetIO();
+  io.DisplaySize = ImVec2(width, height);
+  io.DisplayFramebufferScale.x = scale_x;
+  io.DisplayFramebufferScale.y = scale_y;
+  flip_vertical_ = flip_vertical;
 }
 
 // run the main render loop and do lazy initialization of the OGL context, AET,
@@ -139,13 +148,6 @@ void OpenGLImGuiRenderer::RenderImGui(float timeStepInSeconds,
                                       std::function<void()> render_imgui_fn) {
   // wait until the OGL context is initialized before rendering
   if (!is_ogl_initialized_) {
-    return;
-  }
-  if (!setup_android_external_texture_surface_future_.Ready() ||
-      !setup_android_external_texture_surface_future_.Get().ok()) {
-    IMP_LOG(imp::ERROR) << "OpenGLImGuiRenderer::RenderImGui: "
-                  "setup_android_external_texture_surface_future_ is not "
-                  "ready or has an error";
     return;
   }
 
@@ -238,36 +240,25 @@ absl::Status OpenGLImGuiRenderer::InitializeOGL() {
   io.Fonts->Build();
 
   if (window_) {
-    android_xr::TextureExternalMaterial::Create(base_view_)
-        .Then(
-            [this](
-                std::unique_ptr<android_xr::TextureExternalMaterial> material) {
-              // Assign the texture to the material.
-              material_ = std::move(material);
-              material_->SetTexture(texture_);
-            })
-        .Then([this]() {
-          // Create a quad mesh and render it with the texture material.
-          node_ = base_view_.CreateNode();
-          node_->SetName("SimpleViewQuad");
-          node_->SetLocalPosition({0.0f, 0.0f, -1.0f});
-          quad_mesh_ =
-              dynamic_cast<imp::View*>(&base_view_)
-                  ->GetMeshFactory()
-                  .CreateQuad(CreateQuadSettings{.size = {2.0f, 2.0f},
-                                                 .center = {1.0f, 1.0f},
-                                                 .flip_uv = true});
-          mesh_renderer_ = node_->AddComponent<MeshRenderer>();
-          mesh_renderer_->SetMesh(quad_mesh_.Borrow());
-          // Comment out this line to see the quad without the texture.
-          mesh_renderer_->SetMaterial(material_->GetMaterial());
-        })
-        .KeptBy(&base_view_);
+    if (notify_texture_ready_callback_ != nullptr) {
+      notify_texture_ready_callback_();
+    }
+    is_ogl_initialized_ = true;
   }
 
-  is_ogl_initialized_ = true;
-
   return absl::OkStatus();
+}
+
+void OpenGLImGuiRenderer::SetTextureBufferSize(int width, int height) {
+  if (!texture_surface_ptr_) {
+    return;
+  }
+  absl::Status status_resize =
+      texture_surface_ptr_->SetDefaultBufferSize(imp::int2(width, height));
+  if (!status_resize.ok()) {
+    IMP_LOG(imp::ERROR) << "Failed to set default buffer size: " << status_resize;
+    return;
+  }
 }
 
 }  // namespace imp::window

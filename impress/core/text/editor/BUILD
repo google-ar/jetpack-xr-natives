@@ -72,6 +72,7 @@ cc_library(
         "//core/view:base_view",
         "@com_google_absl//absl/debugging:leak_check",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
         "@dear_imgui",
         "@implot",
         "@third_party//filament/filament:filament_hdrs",

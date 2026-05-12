@@ -14,6 +14,8 @@
 
 #include "core/split_engine/materials/builtin/builtin_youtube_stereo_player_material.h"
 
+#include <functional>
+#include <optional>
 #include <utility>
 
 #include "absl/memory/memory.h"
@@ -26,12 +28,14 @@
 #include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
 #include "core/material_library/flatbuffer_utils.h"
+#include "core/material_library/material_package.h"
 #include "core/materials/material.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/render/android/platform_android_external_texture_surface.h"
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
+#include "core/split_engine/materials/builtin/builtin_material_registry.h"
 #include "core/split_engine/materials/builtin/builtin_youtube_stereo_player_material_assets.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
@@ -171,5 +175,23 @@ absl::Status BuiltInYouTubeStereoPlayerMaterial::SetParameters(
   }
   return absl::OkStatus();
 }
+
+// Registers the built-in material factory.
+const bool kRegisterMaterial = BuiltinMaterialRegistry::RegisterOrDie(
+    android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialEb117dd9,
+    [](BaseView& view, BridgeId bridge_id,
+       const android_xr::schemas::BuiltInMaterialRequest& request,
+       std::optional<
+           std::reference_wrapper<const MaterialPackage::MaterialCache>>
+           cache) -> Future<BuiltInMaterialPtr> {
+      const android_xr::schemas::BuiltInMaterialEb117dd9* spec =
+          request.data_as_BuiltInMaterialEb117dd9();
+      if (spec == nullptr) {
+        return Future<BuiltInMaterialPtr>(absl::InvalidArgumentError(
+            "Failed to get BuiltInYouTubeStereoPlayerMaterial spec from the "
+            "request."));
+      }
+      return BuiltInYouTubeStereoPlayerMaterial::Create(view, bridge_id, *spec);
+    });
 
 }  // namespace imp::split_engine

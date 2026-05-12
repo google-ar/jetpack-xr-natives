@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
-#ifndef THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_SCHEMA_HELPERS_H_
-#define THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_SCHEMA_HELPERS_H_
+#ifndef THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_FLATBUFFER_UTILS_H_
+#define THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_FLATBUFFER_UTILS_H_
 
 #include <cmath>
+#include <cstdint>
 #include <optional>
 
+#include "core/common/log.h"
 #include "filament/filament/include/filament/TextureSampler.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
@@ -53,7 +55,17 @@ std::optional<filament::TextureSampler> ConvertSampler(
                              schema->compare_mode()),
                          static_cast<filament::TextureSampler::CompareFunc>(
                              schema->compare_func()));
-  sampler.setAnisotropy(1u << schema->anisotropy_log2());
+  // The maximum permissible value for anisotropy is 128.
+  // Since anisotropy is set to (1u << anisotropy_log2), anisotropy_log2
+  // must not exceed 7.
+  uint8_t anisotropy_log2 = schema->anisotropy_log2();
+  if (anisotropy_log2 > 7) {
+    IMP_LOG(imp::WARNING) << "Anisotropy log2 value "
+                 << static_cast<int>(anisotropy_log2)
+                 << " is out of range for filament, clamping to 7.";
+    anisotropy_log2 = 7;
+  }
+  sampler.setAnisotropy(1u << anisotropy_log2);
   return sampler;
 }
 
@@ -125,4 +137,4 @@ Mat4 FromMat4Flatbuffer(const Mat4Schema& m) {
 
 }  // namespace imp
 
-#endif  // THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_SCHEMA_HELPERS_H_
+#endif  // THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_FLATBUFFER_UTILS_H_

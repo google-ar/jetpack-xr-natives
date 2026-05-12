@@ -26,12 +26,17 @@
 #include "openxr/openxr_manager.h"
 
 using ::androidx::xr::common::Package::PACKAGE_ARCORE_RUNTIME;
+using ::androidx::xr::openxr::ConvertToXrGeospatialPose;
+using ::androidx::xr::openxr::ConvertToXrPosef;
+using ::androidx::xr::openxr::ConvertToXrQuaternionf;
+using ::androidx::xr::openxr::CreateJavaAnchorHandle;
+using ::androidx::xr::openxr::CreateJavaGeospatialPoseResult;
+using ::androidx::xr::openxr::CreateJavaPose;
 using ::androidx::xr::openxr::CreateVpsAvailabilityResult;
 using ::androidx::xr::openxr::OpenXrManager;
 
 static jobject CreateJavaGeospatialState(
-    JNIEnv* env,
-    const androidx::xr::openxr::OpenXrManager::GeospatialState& earth_state) {
+    JNIEnv* env, const OpenXrManager::GeospatialState& earth_state) {
   jclass earth_state_class =
       GetJxrClass(env, PACKAGE_ARCORE_RUNTIME, "Geospatial$State");
   const char* field_name;
@@ -65,21 +70,18 @@ static jobject CreateJavaGeospatialState(
 }
 
 static jobject NativeGetGeospatialState(JNIEnv* env, jlong monotonic_time_ns) {
-  androidx::xr::openxr::OpenXrManager& xr_manager =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
-  androidx::xr::openxr::OpenXrManager::GeospatialState earth_state =
-      xr_manager.GetGeospatialState();
+  OpenXrManager& xr_manager = OpenXrManager::GetOpenXrManager();
+  OpenXrManager::GeospatialState earth_state = xr_manager.GetGeospatialState();
   return CreateJavaGeospatialState(env, earth_state);
 }
 
 static jobject NativeGetGeospatialPose(JNIEnv* env, jlong monotonic_time_ns,
                                        jobject pose) {
-  OpenXrManager& xr_manager =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+  OpenXrManager& xr_manager = OpenXrManager::GetOpenXrManager();
   const XrTime time = static_cast<int64_t>(monotonic_time_ns);
-  const XrPosef xr_pose = androidx::xr::openxr::ConvertToXrPosef(env, pose);
+  const XrPosef xr_pose = ConvertToXrPosef(env, pose);
 
-  XrGeospatialPoseResultANDROIDX2 geospatial_pose_result;
+  XrGeospatialPoseResultANDROID geospatial_pose_result;
 
   OpenXrManager::GeospatialPoseResult result =
       xr_manager.LocateGeospatialPoseFromPose(time, xr_pose,
@@ -87,8 +89,7 @@ static jobject NativeGetGeospatialPose(JNIEnv* env, jlong monotonic_time_ns,
 
   switch (result) {
     case OpenXrManager::GeospatialPoseResult::kSuccess:
-      return androidx::xr::openxr::CreateJavaGeospatialPoseResult(
-          env, geospatial_pose_result);
+      return CreateJavaGeospatialPoseResult(env, geospatial_pose_result);
       break;
     case OpenXrManager::GeospatialPoseResult::kErrorIllegalState: {
       env->ThrowNew(env->FindClass("java/lang/IllegalStateException"),
@@ -108,11 +109,10 @@ static jobject NativeGetGeospatialPose(JNIEnv* env, jlong monotonic_time_ns,
 static jobject NativeLocatePoseFromGeospatialPose(JNIEnv* env,
                                                   jlong monotonic_time_ns,
                                                   jobject geospatial_pose_obj) {
-  OpenXrManager& xr_manager =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+  OpenXrManager& xr_manager = OpenXrManager::GetOpenXrManager();
   const XrTime time = static_cast<int64_t>(monotonic_time_ns);
-  const XrGeospatialPoseANDROIDX2 xr_geospatial_pose =
-      androidx::xr::openxr::ConvertToXrGeospatialPose(env, geospatial_pose_obj);
+  const XrGeospatialPoseANDROID xr_geospatial_pose =
+      ConvertToXrGeospatialPose(env, geospatial_pose_obj);
 
   XrSpaceLocation location;
   OpenXrManager::GeospatialPoseResult result =
@@ -121,7 +121,7 @@ static jobject NativeLocatePoseFromGeospatialPose(JNIEnv* env,
 
   switch (result) {
     case OpenXrManager::GeospatialPoseResult::kSuccess:
-      return androidx::xr::openxr::CreateJavaPose(env, location.pose);
+      return CreateJavaPose(env, location.pose);
     case OpenXrManager::GeospatialPoseResult::kErrorIllegalState: {
       env->ThrowNew(env->FindClass("java/lang/IllegalStateException"),
                     "Geospatial not in running state.");
@@ -163,32 +163,41 @@ Java_androidx_xr_arcore_openxr_OpenXrGeospatial_nativeCreateAnchor(
     JNIEnv* env, jclass /*clazz*/, jdouble latitude, jdouble longitude,
     jdouble altitude, jobject eastUpSouthQuaternion_obj,
     jlong monotonic_time_ns) {
-  androidx::xr::openxr::OpenXrManager& xr_manager =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+  OpenXrManager& xr_manager = OpenXrManager::GetOpenXrManager();
 
   // Convert eastUpSouthQuaternion_obj to XrQuaternionf
-  XrQuaternionf xr_quaternion = androidx::xr::openxr::ConvertToXrQuaternionf(
-      env, eastUpSouthQuaternion_obj);
+  XrQuaternionf xr_quaternion =
+      ConvertToXrQuaternionf(env, eastUpSouthQuaternion_obj);
 
   XrSpace anchor;
-  androidx::xr::openxr::OpenXrManager::CreateAnchorResult result =
-      xr_manager.CreateGeospatialAnchor(static_cast<int64_t>(monotonic_time_ns),
-                                        latitude, longitude, altitude,
-                                        xr_quaternion, &anchor);
+  OpenXrManager::CreateAnchorResult result = xr_manager.CreateGeospatialAnchor(
+      static_cast<int64_t>(monotonic_time_ns), latitude, longitude, altitude,
+      xr_quaternion, &anchor);
 
-  if (result !=
-      androidx::xr::openxr::OpenXrManager::CreateAnchorResult::kSuccess) {
+  if (result != OpenXrManager::CreateAnchorResult::kSuccess) {
+    if (result ==
+        OpenXrManager::CreateAnchorResult::kErrorGeospatialTrackerNotRunning) {
+      env->ThrowNew(env->FindClass("java/lang/IllegalStateException"),
+                    "Geospatial not in running state.");
+      return 0;
+    }
+    if (result ==
+        OpenXrManager::CreateAnchorResult::kErrorGeospatialCoordinatesInvalid) {
+      env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"),
+                    "Invalid latitude/longitude.");
+      return 0;
+    }
+
     return static_cast<jlong>(result);
   }
-  return androidx::xr::openxr::CreateJavaAnchorHandle(anchor);
+  return CreateJavaAnchorHandle(anchor);
 }
 
 JNIEXPORT void JNICALL
 Java_androidx_xr_arcore_openxr_OpenXrGeospatial_nativeCheckVpsAvailabilityAsync(
     JNIEnv* env, jclass /*clazz*/, jdouble latitude, jdouble longitude,
     jobject java_callback) {
-  androidx::xr::openxr::OpenXrManager& xr_manager =
-      androidx::xr::openxr::OpenXrManager::GetOpenXrManager();
+  OpenXrManager& xr_manager = OpenXrManager::GetOpenXrManager();
 
   JavaVM* jvm;
   env->GetJavaVM(&jvm);
@@ -197,30 +206,151 @@ Java_androidx_xr_arcore_openxr_OpenXrGeospatial_nativeCheckVpsAvailabilityAsync(
   // deleted in the completion or cancellation callback.
   jobject java_callback_global = env->NewGlobalRef(java_callback);
 
-  std::function<void(const XrVPSAvailabilityCheckCompletionANDROIDX2&)>
-      on_complete = [jvm, java_callback_global](
-                        const XrVPSAvailabilityCheckCompletionANDROIDX2&
-                            completion) {
-        JNIEnv* env;
-        bool attached = false;
-        if (jvm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) ==
-            JNI_EDETACHED) {
-          jvm->AttachCurrentThread(&env, nullptr);
-          attached = true;
-        }
+  // Cache the class loader, since the default class loader from the attached
+  // thread cannot load the Jetpack classes.
+  jclass callback_cls = env->GetObjectClass(java_callback);
+  jclass class_cls = env->FindClass("java/lang/Class");
+  jmethodID get_class_loader_mid = env->GetMethodID(
+      class_cls, "getClassLoader", "()Ljava/lang/ClassLoader;");
+  jobject class_loader_obj =
+      env->CallObjectMethod(callback_cls, get_class_loader_mid);
+  jobject class_loader_global = env->NewGlobalRef(class_loader_obj);
+  env->DeleteLocalRef(class_loader_obj);
+  env->DeleteLocalRef(class_cls);
+  env->DeleteLocalRef(callback_cls);
 
-        jobject result_obj = CreateVpsAvailabilityResult(env, completion);
+  std::function<void(const XrVPSAvailabilityCheckCompletionANDROID&)>
+      on_complete =
+          [jvm, java_callback_global, class_loader_global](
+              const XrVPSAvailabilityCheckCompletionANDROID& completion) {
+            JNIEnv* env;
+            bool attached = false;
+            if (jvm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) ==
+                JNI_EDETACHED) {
+              jvm->AttachCurrentThread(&env, nullptr);
+              attached = true;
+            }
 
-        jclass function1_cls = env->FindClass("kotlin/jvm/functions/Function1");
-        jmethodID invoke_mid = env->GetMethodID(
-            function1_cls, "invoke", "(Ljava/lang/Object;)Ljava/lang/Object;");
-        env->CallObjectMethod(java_callback_global, invoke_mid, result_obj);
-        env->DeleteGlobalRef(java_callback_global);
+            jobject result_obj = CreateVpsAvailabilityResult(
+                env, class_loader_global, completion);
 
-        if (attached) {
-          jvm->DetachCurrentThread();
-        }
-      };
+            jclass function1_cls = env->GetObjectClass(java_callback_global);
+            jmethodID invoke_mid =
+                env->GetMethodID(function1_cls, "invoke",
+                                 "(Ljava/lang/Object;)Ljava/lang/Object;");
+            env->CallObjectMethod(java_callback_global, invoke_mid, result_obj);
+            env->DeleteLocalRef(function1_cls);
+            env->DeleteGlobalRef(java_callback_global);
+            env->DeleteGlobalRef(class_loader_global);
+
+            if (attached) {
+              jvm->DetachCurrentThread();
+            }
+          };
+
+  std::function<void()> on_cancel = [jvm, java_callback_global,
+                                     class_loader_global]() {
+    JNIEnv* env;
+    bool attached = false;
+    if (jvm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) ==
+        JNI_EDETACHED) {
+      jvm->AttachCurrentThread(&env, nullptr);
+      attached = true;
+    }
+    env->DeleteGlobalRef(java_callback_global);
+    env->DeleteGlobalRef(class_loader_global);
+    if (attached) {
+      jvm->DetachCurrentThread();
+    }
+  };
+
+  XrResult result = xr_manager.CheckVpsAvailabilityAsync(
+      latitude, longitude, on_complete, on_cancel);
+  if (XR_FAILED(result)) {
+    if (result == XR_ERROR_GEOSPATIAL_COORDINATES_INVALID_ANDROID) {
+      env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"),
+                    "Invalid latitude/longitude.");
+      return;
+    } else if (XR_FAILED(result)) {
+      env->ThrowNew(env->FindClass("java/lang/IllegalStateException"),
+                    "Check VPS availability failed.");
+    }
+
+    env->DeleteGlobalRef(java_callback_global);
+    env->DeleteGlobalRef(class_loader_global);
+    return;
+  }
+}
+
+JNIEXPORT void JNICALL
+Java_androidx_xr_arcore_openxr_OpenXrGeospatial_nativeCreateSurfaceAnchorAsync(
+    JNIEnv* env, jclass /*clazz*/, jint surfaceAnchorType, jdouble latitude,
+    jdouble longitude, jdouble altitudeRelativeToSurface,
+    jobject eastUpSouthQuaternion_obj, jobject java_callback) {
+  OpenXrManager& xr_manager = OpenXrManager::GetOpenXrManager();
+
+  JavaVM* jvm;
+  env->GetJavaVM(&jvm);
+  // Create a global reference to the callback so that it is not garbage
+  // collected until the callback is called. The global reference must be
+  // deleted in the completion or cancellation callback.
+  jobject java_callback_global = env->NewGlobalRef(java_callback);
+
+  XrQuaternionf xr_quaternion =
+      ConvertToXrQuaternionf(env, eastUpSouthQuaternion_obj);
+
+  std::function<void(const XrSurfaceAnchorCreateCompletionANDROIDX2&)>
+      on_complete =
+          [jvm, java_callback_global](
+              const XrSurfaceAnchorCreateCompletionANDROIDX2& completion) {
+            JNIEnv* env;
+            bool attached = false;
+            if (jvm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) ==
+                JNI_EDETACHED) {
+              jvm->AttachCurrentThread(&env, nullptr);
+              attached = true;
+            }
+
+            OpenXrManager& xr_manager = OpenXrManager::GetOpenXrManager();
+
+            jlong anchor_handle = 0;
+            if (completion.futureResult == XR_SUCCESS) {
+              XrSpace anchor_space = XR_NULL_HANDLE;
+
+              OpenXrManager::CreateAnchorResult result =
+                  xr_manager.CreateAnchorSpaceFromEntityId(
+                      completion.anchorEntityId, &anchor_space);
+
+              if (result == OpenXrManager::CreateAnchorResult::kSuccess) {
+                anchor_handle = CreateJavaAnchorHandle(anchor_space);
+              } else {
+                anchor_handle = static_cast<jlong>(result);
+              }
+            } else {
+              OpenXrManager::CreateAnchorResult result =
+                  OpenXrManager::MapAnchorCreateResult(completion.futureResult);
+              anchor_handle = static_cast<jlong>(result);
+            }
+
+            jclass long_cls = env->FindClass("java/lang/Long");
+            jmethodID long_init = env->GetMethodID(long_cls, "<init>", "(J)V");
+            jobject result_obj =
+                env->NewObject(long_cls, long_init, anchor_handle);
+
+            jclass function1_cls = env->GetObjectClass(java_callback_global);
+            jmethodID invoke_mid =
+                env->GetMethodID(function1_cls, "invoke",
+                                 "(Ljava/lang/Object;)Ljava/lang/Object;");
+            env->CallObjectMethod(java_callback_global, invoke_mid, result_obj);
+            env->DeleteLocalRef(function1_cls);
+            env->DeleteLocalRef(long_cls);
+            env->DeleteLocalRef(result_obj);
+            env->DeleteGlobalRef(java_callback_global);
+
+            if (attached) {
+              jvm->DetachCurrentThread();
+            }
+          };
 
   std::function<void()> on_cancel = [jvm, java_callback_global]() {
     JNIEnv* env;
@@ -236,16 +366,40 @@ Java_androidx_xr_arcore_openxr_OpenXrGeospatial_nativeCheckVpsAvailabilityAsync(
     }
   };
 
-  XrResult result = xr_manager.CheckVpsAvailabilityAsync(
-      latitude, longitude, on_complete, on_cancel);
-  if (result == XR_ERROR_GEOSPATIAL_COORDINATES_INVALID_ANDROIDX2) {
-    env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"),
-                  "Invalid latitude/longitude.");
-    return;
-  } else if (XR_FAILED(result)) {
+  OpenXrManager::CreateAnchorResult result =
+      xr_manager.CreateSurfaceAnchorAsync(
+          static_cast<XrSurfaceAnchorTypeANDROIDX2>(surfaceAnchorType),
+          latitude, longitude, altitudeRelativeToSurface, xr_quaternion,
+          on_complete, on_cancel);
+
+  if (result != OpenXrManager::CreateAnchorResult::kSuccess) {
+    env->DeleteGlobalRef(java_callback_global);
+
+    if (result ==
+        OpenXrManager::CreateAnchorResult::kErrorGeospatialCoordinatesInvalid) {
+      env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"),
+                    "Invalid latitude/longitude.");
+      return;
+    }
+
+    if (result ==
+        OpenXrManager::CreateAnchorResult::kErrorGeospatialTrackerNotRunning) {
+      env->ThrowNew(env->FindClass("java/lang/IllegalStateException"),
+                    "Geospatial tracker is not running.");
+      return;
+    }
+
+    if (result == OpenXrManager::CreateAnchorResult::kErrorLimitReached) {
+      env->ThrowNew(GetJxrClass(env, PACKAGE_ARCORE_RUNTIME,
+                                "AnchorResourcesExhaustedException"),
+                    "Unable to create anchor. Anchor resources exhausted.");
+      return;
+    }
+
     env->ThrowNew(env->FindClass("java/lang/IllegalStateException"),
-                  "Check VPS availability failed.");
+                  "Create surface anchor async failed.");
     return;
   }
 }
+
 }  // extern "C"

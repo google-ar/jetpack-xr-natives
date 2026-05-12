@@ -102,6 +102,12 @@ class GltfAnimator : public Component {
                                         NodeHandle target);
     void SendOrQueuePlaybackEndedEvent(PlaybackEndedEvent ev,
                                        NodeHandle target);
+    void SendOrQueuePlaybackPausedEvent(PlaybackPausedEvent ev,
+                                        NodeHandle target);
+    void SendOrQueuePlaybackResumedEvent(PlaybackResumedEvent ev,
+                                         NodeHandle target);
+    void SendOrQueuePlaybackActiveStatusChangedEvent(
+        PlaybackActiveStatusChangedEvent ev, NodeHandle target);
 
    private:
     void DispatchQueuedEvents();
@@ -120,6 +126,16 @@ class GltfAnimator : public Component {
     std::vector<QueuedPlaybackLoopedEvent> playback_looped_event_queue_;
     using QueuedPlaybackEndedEvent = std::pair<PlaybackEndedEvent, NodeHandle>;
     std::vector<QueuedPlaybackEndedEvent> playback_ended_event_queue_;
+    using QueuedPlaybackPausedEvent =
+        std::pair<PlaybackPausedEvent, NodeHandle>;
+    std::vector<QueuedPlaybackPausedEvent> playback_paused_event_queue_;
+    using QueuedPlaybackResumedEvent =
+        std::pair<PlaybackResumedEvent, NodeHandle>;
+    std::vector<QueuedPlaybackResumedEvent> playback_resumed_event_queue_;
+    using QueuedPlaybackActiveStatusChangedEvent =
+        std::pair<PlaybackActiveStatusChangedEvent, NodeHandle>;
+    std::vector<QueuedPlaybackActiveStatusChangedEvent>
+        playback_active_status_changed_event_queue_;
   };
 
   GltfAnimator();
@@ -188,11 +204,12 @@ class GltfAnimator : public Component {
   // Restarts the currently playing animation on one playback channel, or all
   // animations on all playback channels if passed the special channel ID value
   // `kAllChannels`.
-  // Restarting an animation amounts to simply resetting its playback time to 0,
-  // without modifying any of the rest of the playback options. An animation
-  // must already be playing in order to be restarted; a channel on which Stop()
-  // has been previously called is effectively cleared and cannot be
-  // "Restart()"ed. To restart in that case you must call Play() again.
+  // Restarting an animation amounts to resetting its playback time to
+  // its configured start time, without modifying any of the rest of the
+  // playback options. An animation must already be playing in order to be
+  // restarted; a channel on which Stop() has been previously called is
+  // effectively cleared and cannot be "Restart()"ed. To restart in that case
+  // you must call Play() again.
   void Restart(PlaybackChannelId channel_id = kAllChannels);
 
   bool IsPlaying(
@@ -230,6 +247,14 @@ class GltfAnimator : public Component {
   // is looping.
   bool IsLooping(PlaybackChannelId channel_id = kDefaultChannelId) const;
 
+  // Pauses or resumes the animation on the given channel (if one is playing),
+  // or all animations on all channels if kAllChannels is passed.
+  void SetPaused(bool paused, PlaybackChannelId channel_id = kDefaultChannelId);
+
+  // Returns true if there is an animation playing on the given channel and it
+  // is paused.
+  bool IsPaused(PlaybackChannelId channel_id = kDefaultChannelId) const;
+
   // Set the current playback time for the given channel if an animation is
   // playing on it.
   void SetPlaybackTime(absl::Duration playback_time,
@@ -257,9 +282,8 @@ class GltfAnimator : public Component {
   absl::Duration GetEndTime(
       PlaybackChannelId channel_id = kDefaultChannelId) const;
 
-  // Get the total duration for the current animation playback.
-  // Options::speed_multiplier can make the real duration different than the
-  // original duration.
+  // Get the total duration for the current animation playback. Accounts for the
+  // configured start time and end time if set.
   absl::Duration GetPlaybackDuration(
       PlaybackChannelId channel_id = kDefaultChannelId);
 
@@ -299,7 +323,8 @@ class GltfAnimator : public Component {
     std::optional<absl::Duration> end_time;
     float speed_multiplier;
     uint32_t looping : 1;
-    uint32_t loop_count : 31;
+    uint32_t paused : 1;
+    uint32_t loop_count : 30;
   };
 
   // Supports blending between previous animation and a new one.

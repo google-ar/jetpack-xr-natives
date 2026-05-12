@@ -76,6 +76,7 @@ cc_library(
     deps = [
         ":recipe_utils",
         "//core/math",
+        "@com_google_absl//absl/meta:type_traits",
         "@com_google_absl//absl/status:statusor",
     ],
     alwayslink = 1,
@@ -98,6 +99,7 @@ cc_library(
         "//core/math",
         "//core/ncsb",
         "//core/proto:any_imp_proto",
+        "//core/proto:proto_writer",
         "//core/scene_handles",
         "//core/view/utils:string_map",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -251,6 +253,7 @@ cc_library(
     deps = [
         ":recipe_function_utils",
         ":recipe_traits",
+        ":recipe_types_cc",
         ":recipe_utils",
         "//core/view/utils:string_map",
         "@com_google_absl//absl/base:core_headers",
@@ -368,12 +371,13 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         ":recipe_traits",
+        ":recipe_types_cc",
         ":recipe_utils",
         "//core/async:future",
         "//core/view/utils:string_map",
+        "@com_google_absl//absl/meta:type_traits",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings:str_format",
         "@mediapipe//mediapipe/framework/port:status",
     ],
     alwayslink = 1,

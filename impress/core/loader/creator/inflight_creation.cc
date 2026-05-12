@@ -19,17 +19,20 @@
 #include <utility>
 
 #include "absl/status/status.h"
+#include "absl/synchronization/mutex.h"
 #include "filament/filament/backend/include/backend/BufferDescriptor.h"
 #include "core/common/invocable.h"
 
 namespace imp::loader::details {
 
 bool InflightCreation::IsFullyLoaded() const {
+  absl::MutexLock lock(mutex_);
   return posted_resource_count_ == submitted_resource_count_ &&
          is_finished_posting_resources_;
 }
 
 bool InflightCreation::HasPendingWork() const {
+  absl::MutexLock lock(mutex_);
   return posted_resource_count_ != submitted_resource_count_;
 }
 
@@ -53,19 +56,28 @@ absl::Status InflightCreation::TryComplete() {
 }
 
 void InflightCreation::FinishPostingResources() {
-  is_finished_posting_resources_ = true;
+  {
+    absl::MutexLock lock(mutex_);
+    is_finished_posting_resources_ = true;
+  }
   (void)TryComplete();
 }
 
 filament::backend::BufferDescriptor InflightCreation::MakeDescriptor(
     void const* buffer, size_t size) {
-  ++posted_resource_count_;
+  {
+    absl::MutexLock lock(mutex_);
+    ++posted_resource_count_;
+  }
   return filament::backend::BufferDescriptor(buffer, size,
                                              InflightCreation::Callback, this);
 }
 
 std::function<void()> InflightCreation::CreateImageCallback() {
-  ++posted_resource_count_;
+  {
+    absl::MutexLock lock(mutex_);
+    ++posted_resource_count_;
+  }
   return [this]() { Callback(nullptr, 0, this); };
 }
 
@@ -81,7 +93,10 @@ void InflightCreation::SafeInvokeCallback() {
 // static
 void InflightCreation::Callback(void* buffer, size_t size, void* user) {
   auto* self = reinterpret_cast<InflightCreation*>(user);
-  ++self->submitted_resource_count_;
+  {
+    absl::MutexLock lock(self->mutex_);
+    ++self->submitted_resource_count_;
+  }
   if (self->IsFullyLoaded()) {
     self->SafeInvokeCallback();
   }

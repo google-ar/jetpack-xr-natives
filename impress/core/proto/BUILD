@@ -49,6 +49,20 @@ cc_proto_library(
 )
 
 proto_library(
+    name = "imp_editions_proto",
+    srcs = ["imp_editions.proto"],
+    deps = [
+        ":imp_proto",
+        "@com_google_protobuf//:descriptor_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "imp_editions_cc_proto",
+    deps = [":imp_editions_proto"],
+)
+
+proto_library(
     name = "imp_editor_proto",
     srcs = ["imp_editor.proto"],
 )
@@ -66,10 +80,13 @@ imp_cc_proto_library(
 
 cc_binary(
     name = "proto-gen-imp-cc",
-    srcs = ["proto-gen-imp-cc.cc"],
+    srcs = [
+        "proto-gen-imp-cc.cc",
+    ],
     data = ["@com_google_protobuf//:protoc"],
     deps = [
         ":imp_cc_proto",
+        ":imp_editions_cc_proto",
         ":imp_editor_cc_proto",
         "//core/common:hash",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -81,6 +98,7 @@ cc_binary(
         "@com_google_absl//absl/strings:str_format",
         "@com_google_protobuf//:protobuf",
         "@com_google_protobuf//:protoc_lib",
+        "@com_google_protobuf//src/google/protobuf/compiler:code_generator",
         "@mediapipe//mediapipe/framework/port:status",
     ],
 )
@@ -130,6 +148,7 @@ cc_library(
         ":proto_common",
         "//core/common:copyable_ptr",
         "//core/common:hash",
+        "//core/common:optional_with_default",
         "//core/common:platform_helpers",
         "//core/common:robin_map",
         "//core/common:type_traits",
@@ -158,6 +177,7 @@ cc_library(
         ":any_imp_proto",
         ":proto_common",
         "//core/common:copyable_ptr",
+        "//core/common:optional_with_default",
         "@boost_beast",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
@@ -189,6 +209,7 @@ cc_library(
         ":proto_writer",
         "//core/common:copyable_ptr",
         "//core/common:hash",
+        "//core/common:optional_with_default",
         "//core/common:robin_map",
         "//core/common:type_traits",
         "//core/view/utils:string_map",
@@ -214,6 +235,7 @@ cc_library(
         ":proto_reader",
         "//core/common",
         "//core/common:copyable_ptr",
+        "//core/common:optional_with_default",
         "//core/view/utils:string_map",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/strings",
@@ -236,6 +258,7 @@ cc_library(
         ":proto_writer",
         "//core/common:copyable_ptr",
         "//core/common:hash",
+        "//core/common:optional_with_default",
         "//core/view/utils:string_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
@@ -258,6 +281,7 @@ cc_library(
         ":proto_reader",
         "//core/common:bit_flag",
         "//core/common:copyable_ptr",
+        "//core/common:optional_with_default",
         "//core/common:platform_helpers",
         "//core/common:template_helpers",
         "//core/view/utils:string_map",
@@ -278,6 +302,7 @@ cc_library(
     deps = [
         ":proto_common",
         "//core/common:copyable_ptr",
+        "//core/common:optional_with_default",
         "//core/common:template_helpers",
         "//core/math",
         "@com_google_absl//absl/strings",
@@ -345,6 +370,7 @@ imp_cc_proto_library(
 cc_library(
     name = "test_native_h",
     hdrs = ["test_native.h"],
+    deps = [":proto_common"],
     alwayslink = 1,
 )
 
@@ -373,8 +399,11 @@ proto_library(
     srcs = [
         "test.proto",
         "test_edition_2023.proto",
+        "test_edition_2024.proto",
     ],
+    option_deps = [":imp_proto"],
     deps = [
+        ":imp_editions_proto",
         ":imp_proto",
         ":test_standard_proto",
         ":unused_import_proto",

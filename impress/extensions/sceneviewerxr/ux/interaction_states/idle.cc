@@ -18,11 +18,6 @@
 
 #include "core/common/log.h"
 #include "absl/time/time.h"
-#include "extensions/sceneviewerxr/ux/constants.h"
-#include "extensions/sceneviewerxr/ux/input_flag.h"
-#include "extensions/sceneviewerxr/ux/interaction_mode.h"
-#include "extensions/sceneviewerxr/ux/interaction_states/interaction_owner.h"
-#include "extensions/sceneviewerxr/ux/interaction_states/interaction_states.h"
 #include "core/collision/ray.h"
 #include "core/common/enum_flags.h"
 #include "core/common/smooth.h"
@@ -30,9 +25,18 @@
 #include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
 #include "core/view/utils/frame_time.h"
+#include "extensions/sceneviewerxr/ux/constants.h"
+#include "extensions/sceneviewerxr/ux/footprint.h"
+#include "extensions/sceneviewerxr/ux/input_flag.h"
+#include "extensions/sceneviewerxr/ux/interaction_mode.h"
+#include "extensions/sceneviewerxr/ux/interaction_states/interaction_owner.h"
+#include "extensions/sceneviewerxr/ux/interaction_states/interaction_states.h"
+#include "extensions/sceneviewerxr/ux/ramp.h"
 
 namespace svxr {
 namespace interaction_states {
+
+using SnapMode = Footprint::SnapMode;
 
 constexpr auto kIdleTimeToUnselect = absl::Seconds(5);
 
@@ -108,29 +112,49 @@ Machine::OptionalState HandleInput(interaction_states::Idle& state,
 
     // Start translating.
     auto rig_node = owner.GetRigNode();
-    auto footprint_node = owner.GetFootprintNode();
     auto world_space_rig_position = rig_node->GetWorldPosition();
 
     auto head_position = owner.GetHeadPosition();
     auto target_distance = length(hit_position - head_position);
     auto hand_distance = length(ray.origin - head_position);
 
-    return Machine::OptionalState{interaction_states::Translation{
+    auto pickup_offset =
+        (owner.GetFootprint().IsValid() &&
+         owner.GetFootprint()->IsSnapMode(SnapMode::kSnappedToPlane))
+            ? imp::kUp * kPickupOffset
+            : imp::kZero3;
+
+    auto translation = interaction_states::Translation{
         .initial_world_space_ray = ray,
         .current_world_space_ray = ray,
         .initial_world_space_rig_to_hit =
             hit_position - world_space_rig_position,
         .initial_world_space_hit_position = hit_position,
+        .pickup_offset = pickup_offset,
+        .anchor_snap_position = rig_node->GetWorldPosition(),
         .rig_local_position =
             imp::Smooth<imp::float3>(kSmoothFastResolvingPositionParameters,
                                      rig_node->GetLocalPosition()),
-        .footprint_local_position =
-            imp::Smooth<imp::float3>(kSmoothFastResolvingPositionParameters,
-                                     footprint_node->GetLocalPosition()),
         .is_right = input_flags.Test(InputFlag::kIsRight),
         .is_active = true,
         .cumulative_change_delta = 0,
-        .initial_distance_ratio = target_distance / hand_distance}};
+        .initial_distance_ratio = target_distance / hand_distance};
+
+    if (owner.GetFootprint().IsValid() &&
+        owner.GetFootprint()->IsSnapMode(SnapMode::kSnappedToPlane)) {
+      translation.anchor_cooldown.Setup(3.5f);
+      translation.anchor_cooldown.SetTarget(0.f, absl::Seconds(.75f));
+      translation.lift_cooldown.Setup(.25f);
+      translation.lift_cooldown.SetTarget(0.f, absl::Seconds(.25f));
+    } else {
+      translation.anchor_cooldown.Setup(0.f);
+      translation.anchor_cooldown.SetTarget(0.f, absl::ZeroDuration());
+      translation.lift_cooldown.Setup(0.f);
+      translation.lift_cooldown.SetTarget(0.f, absl::ZeroDuration());
+      translation.anchor_cooldown.Snap();
+      translation.lift_cooldown.Snap();
+    }
+    return Machine::OptionalState{translation};
   } else if (input_flags.Test(InputFlag::kIsHoverStarting)) {
     interaction_data.SetPointer(InteractionMode::PointerMode::kHover);
   } else if (input_flags.Test(InputFlag::kIsHoverStopping) ||

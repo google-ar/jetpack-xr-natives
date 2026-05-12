@@ -24,7 +24,7 @@
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "imp.h"
 #include "split_engine/schemas/split_engine_primitive_generated.h"
 
@@ -32,7 +32,7 @@ namespace android_xr {
 
 // Displays a YouTube VR video in stereo mode.
 class YouTubeStereoPlayerMaterial
-    : public imp::split_engine::SplitEngineMaterial {
+    : public imp::split_engine::SplitEngineBuiltinMaterial {
  public:
   static imp::Future<std::unique_ptr<YouTubeStereoPlayerMaterial>> Create(
       imp::BaseView& view);

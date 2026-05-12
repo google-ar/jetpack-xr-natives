@@ -571,6 +571,7 @@ XR_ENUM_STR(XrResult);
     _(XR_TYPE_ENVIRONMENT_DEPTH_IMAGE_META, 1000291005) \
     _(XR_TYPE_ENVIRONMENT_DEPTH_HAND_REMOVAL_SET_INFO_META, 1000291006) \
     _(XR_TYPE_SYSTEM_ENVIRONMENT_DEPTH_PROPERTIES_META, 1000291007) \
+    _(XR_TYPE_ENVIRONMENT_DEPTH_IMAGE_TIMESTAMP_META, 1000291008) \
     _(XR_TYPE_RENDER_MODEL_CREATE_INFO_EXT, 1000300000) \
     _(XR_TYPE_RENDER_MODEL_PROPERTIES_GET_INFO_EXT, 1000300001) \
     _(XR_TYPE_RENDER_MODEL_PROPERTIES_EXT, 1000300002) \
@@ -774,12 +775,6 @@ XR_ENUM_STR(XrResult);
     _(XR_TYPE_EVENT_DATA_IMAGE_TRACKING_LOST_ANDROID, 1000709006) \
     _(XR_TYPE_OCCUPANCY_GRID_ANDROIDX, 1000715000) \
     _(XR_TYPE_PLANE_TRACKABLE_TRACKER_CREATE_INFO_ANDROIDX, 1000715001) \
-    _(XR_TYPE_BODY_TRACKER_CREATE_INFO_ANDROIDX, 1000716000) \
-    _(XR_TYPE_AVATAR_SKELETON_ANDROIDX, 1000716001) \
-    _(XR_TYPE_BODY_TRACKER_GET_INFO_ANDROIDX, 1000716002) \
-    _(XR_TYPE_BODY_TRACKER_AVATAR_PROPORTIONS_ANDROIDX, 1000716003) \
-    _(XR_TYPE_AVATAR_SKELETON_JOINT_ANDROIDX, 1000716004) \
-    _(XR_TYPE_BODY_TRACKER_CALIBRATION_ANDROIDX, 1000716005) \
     _(XR_TYPE_BODY_JOINT_LOCATIONS_ANDROIDSYS, 1000717003) \
     _(XR_TYPE_BODY_TRACKER_CREATE_INFO_ANDROIDSYS, 1000717004) \
     _(XR_TYPE_BODY_JOINTS_LOCATE_INFO_ANDROIDSYS, 1000717005) \
@@ -977,7 +972,6 @@ XR_ENUM_STR(XrResult);
     _(XR_OBJECT_TYPE_DEPTH_SWAPCHAIN_ANDROID, 1000702001) \
     _(XR_OBJECT_TYPE_HAND_MESH_TRACKER_ANDROID, 1000703000) \
     _(XR_OBJECT_TYPE_TRACKABLE_IMAGE_DATABASE_ANDROID, 1000709000) \
-    _(XR_OBJECT_TYPE_BODY_TRACKER_ANDROIDX, 1000716000) \
     _(XR_OBJECT_TYPE_BODY_TRACKER_ANDROIDSYS, 1000717000) \
     _(XR_OBJECT_TYPE_SCENE_MESHING_TRACKER_ANDROID, 1000718000) \
     _(XR_OBJECT_TYPE_SCENE_MESH_SNAPSHOT_ANDROID, 1000718001) \
@@ -2457,37 +2451,6 @@ XR_ENUM_STR(XrResult);
 #define XR_LIST_ENUM_XrTrackableImageFormatANDROID(_) \
     _(XR_TRACKABLE_IMAGE_FORMAT_R8G8B8A8_ANDROID, 1) \
     _(XR_TRACKABLE_IMAGE_FORMAT_MAX_ENUM_ANDROID, 0x7FFFFFFF)
-
-#define XR_LIST_ENUM_XrAvatarSkeletonJointStatusANDROIDX(_) \
-    _(XR_AVATAR_SKELETON_JOINT_STATUS_TRACKED_ANDROIDX, 0) \
-    _(XR_AVATAR_SKELETON_JOINT_STATUS_ESTIMATED_ANDROIDX, 1) \
-    _(XR_AVATAR_SKELETON_JOINT_STATUS_INVALID_ANDROIDX, 2) \
-    _(XR_AVATAR_SKELETON_JOINT_STATUS_MAX_ENUM_ANDROIDX, 0x7FFFFFFF)
-
-#define XR_LIST_ENUM_XrAvatarSkeletonJointTypeANDROIDX(_) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_HIPS_ANDROIDX, 0) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_SPINE_ANDROIDX, 1) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_RIBS_ANDROIDX, 2) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_CHEST_ANDROIDX, 3) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_NECK_ANDROIDX, 4) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_HEAD_ANDROIDX, 5) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_LEFT_SHOULDER_ANDROIDX, 6) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_RIGHT_SHOULDER_ANDROIDX, 7) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_LEFT_UPPER_ARM_ANDROIDX, 8) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_RIGHT_UPPER_ARM_ANDROIDX, 9) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_LEFT_LOWER_ARM_ANDROIDX, 10) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_RIGHT_LOWER_ARM_ANDROIDX, 11) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_LEFT_HAND_ANDROIDX, 12) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_RIGHT_HAND_ANDROIDX, 13) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_LEFT_UPPER_LEG_ANDROIDX, 14) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_RIGHT_UPPER_LEG_ANDROIDX, 15) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_LEFT_LOWER_LEG_ANDROIDX, 16) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_RIGHT_LOWER_LEG_ANDROIDX, 17) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_LEFT_FOOT_ANDROIDX, 18) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_RIGHT_FOOT_ANDROIDX, 19) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_LEFT_TOES_ANDROIDX, 20) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_RIGHT_TOES_ANDROIDX, 21) \
-    _(XR_AVATAR_SKELETON_JOINT_TYPE_MAX_ENUM_ANDROIDX, 0x7FFFFFFF)
 
 #define XR_LIST_ENUM_XrUpperBodyJointTypeANDROIDSYS(_) \
     _(XR_UPPER_BODY_JOINT_TYPE_HIPS_ANDROIDSYS, 0) \
@@ -6109,6 +6072,12 @@ XR_ENUM_STR(XrResult);
     _(farZ) \
     _(views) \
 
+/// Calls your macro with the name of each member of XrEnvironmentDepthImageTimestampMETA, in order.
+#define XR_LIST_STRUCT_XrEnvironmentDepthImageTimestampMETA(_) \
+    _(type) \
+    _(next) \
+    _(captureTime) \
+
 /// Calls your macro with the name of each member of XrEnvironmentDepthHandRemovalSetInfoMETA, in order.
 #define XR_LIST_STRUCT_XrEnvironmentDepthHandRemovalSetInfoMETA(_) \
     _(type) \
@@ -7699,61 +7668,6 @@ XR_ENUM_STR(XrResult);
     _(next) \
     _(createFlags) \
 
-/// Calls your macro with the name of each member of XrAvatarSkeletonJointANDROIDX, in order.
-#define XR_LIST_STRUCT_XrAvatarSkeletonJointANDROIDX(_) \
-    _(type) \
-    _(next) \
-    _(jointType) \
-    _(parent) \
-    _(status) \
-    _(pose) \
-
-/// Calls your macro with the name of each member of XrAvatarSkeletonANDROIDX, in order.
-#define XR_LIST_STRUCT_XrAvatarSkeletonANDROIDX(_) \
-    _(type) \
-    _(next) \
-    _(rootPose) \
-    _(updateTime) \
-    _(restSkeletonUpdateCount) \
-    _(numJoints) \
-    _(joints) \
-
-/// Calls your macro with the name of each member of XrBodyTrackerCreateInfoANDROIDX, in order.
-#define XR_LIST_STRUCT_XrBodyTrackerCreateInfoANDROIDX(_) \
-    _(type) \
-    _(next) \
-
-/// Calls your macro with the name of each member of XrBodyTrackerGetInfoANDROIDX, in order.
-#define XR_LIST_STRUCT_XrBodyTrackerGetInfoANDROIDX(_) \
-    _(type) \
-    _(next) \
-    _(time) \
-    _(space) \
-
-/// Calls your macro with the name of each member of XrBodyTrackerAvatarProportionsANDROIDX, in order.
-#define XR_LIST_STRUCT_XrBodyTrackerAvatarProportionsANDROIDX(_) \
-    _(type) \
-    _(next) \
-    _(headHeight) \
-    _(hipsWidth) \
-    _(hipsLength) \
-    _(torsoLength) \
-    _(neckLength) \
-    _(shoulderWidth) \
-    _(upperArmLength) \
-    _(lowerArmLength) \
-    _(upperLegLength) \
-    _(lowerLegLength) \
-    _(ankleHeight) \
-    _(footLength) \
-
-/// Calls your macro with the name of each member of XrBodyTrackerCalibrationANDROIDX, in order.
-#define XR_LIST_STRUCT_XrBodyTrackerCalibrationANDROIDX(_) \
-    _(type) \
-    _(next) \
-    _(enableAutoCalibration) \
-    _(proportions) \
-
 /// Calls your macro with the name of each member of XrBodyJointLocationsANDROIDSYS, in order.
 #define XR_LIST_STRUCT_XrBodyJointLocationsANDROIDSYS(_) \
     _(type) \
@@ -8390,8 +8304,8 @@ XR_ENUM_STR(XrResult);
     _(semanticLabelCount) \
     _(semanticLabels) \
 
-/// Calls your macro with the name of each member of XrSpatialRaycastResultANDROID, in order.
-#define XR_LIST_STRUCT_XrSpatialRaycastResultANDROID(_) \
+/// Calls your macro with the name of each member of XrSpatialRaycastResultDataANDROID, in order.
+#define XR_LIST_STRUCT_XrSpatialRaycastResultDataANDROID(_) \
     _(hitPose) \
     _(distanceSquared) \
 
@@ -8808,6 +8722,7 @@ XR_ENUM_STR(XrResult);
     _(XrEnvironmentDepthImageAcquireInfoMETA, XR_TYPE_ENVIRONMENT_DEPTH_IMAGE_ACQUIRE_INFO_META) \
     _(XrEnvironmentDepthImageViewMETA, XR_TYPE_ENVIRONMENT_DEPTH_IMAGE_VIEW_META) \
     _(XrEnvironmentDepthImageMETA, XR_TYPE_ENVIRONMENT_DEPTH_IMAGE_META) \
+    _(XrEnvironmentDepthImageTimestampMETA, XR_TYPE_ENVIRONMENT_DEPTH_IMAGE_TIMESTAMP_META) \
     _(XrEnvironmentDepthHandRemovalSetInfoMETA, XR_TYPE_ENVIRONMENT_DEPTH_HAND_REMOVAL_SET_INFO_META) \
     _(XrSystemEnvironmentDepthPropertiesMETA, XR_TYPE_SYSTEM_ENVIRONMENT_DEPTH_PROPERTIES_META) \
     _(XrRenderModelCreateInfoEXT, XR_TYPE_RENDER_MODEL_CREATE_INFO_EXT) \
@@ -9013,12 +8928,6 @@ XR_ENUM_STR(XrResult);
     _(XrEventDataImageTrackingLostANDROID, XR_TYPE_EVENT_DATA_IMAGE_TRACKING_LOST_ANDROID) \
     _(XrOccupancyGridANDROIDX, XR_TYPE_OCCUPANCY_GRID_ANDROIDX) \
     _(XrPlaneTrackableTrackerCreateInfoANDROIDX, XR_TYPE_PLANE_TRACKABLE_TRACKER_CREATE_INFO_ANDROIDX) \
-    _(XrAvatarSkeletonJointANDROIDX, XR_TYPE_AVATAR_SKELETON_JOINT_ANDROIDX) \
-    _(XrAvatarSkeletonANDROIDX, XR_TYPE_AVATAR_SKELETON_ANDROIDX) \
-    _(XrBodyTrackerCreateInfoANDROIDX, XR_TYPE_BODY_TRACKER_CREATE_INFO_ANDROIDX) \
-    _(XrBodyTrackerGetInfoANDROIDX, XR_TYPE_BODY_TRACKER_GET_INFO_ANDROIDX) \
-    _(XrBodyTrackerAvatarProportionsANDROIDX, XR_TYPE_BODY_TRACKER_AVATAR_PROPORTIONS_ANDROIDX) \
-    _(XrBodyTrackerCalibrationANDROIDX, XR_TYPE_BODY_TRACKER_CALIBRATION_ANDROIDX) \
     _(XrBodyJointLocationsANDROIDSYS, XR_TYPE_BODY_JOINT_LOCATIONS_ANDROIDSYS) \
     _(XrBodyTrackerCreateInfoANDROIDSYS, XR_TYPE_BODY_TRACKER_CREATE_INFO_ANDROIDSYS) \
     _(XrBodyJointsLocateInfoANDROIDSYS, XR_TYPE_BODY_JOINTS_LOCATE_INFO_ANDROIDSYS) \
@@ -9498,7 +9407,6 @@ XR_ENUM_STR(XrResult);
     _(XR_KHR_maintenance1, 711) \
     _(XR_KHR_generic_controller, 712) \
     _(XR_ANDROIDX_occupancy_grid, 716) \
-    _(XR_ANDROIDX_body_tracking, 717) \
     _(XR_ANDROIDSYS_body_tracking, 718) \
     _(XR_ANDROID_scene_meshing, 719) \
     _(XR_ANDROIDSYS_ipd_calibration, 720) \
@@ -10831,19 +10739,6 @@ XR_ENUM_STR(XrResult);
 /// because it is easy to add back but impossible to remove with the preprocessor.
 #define XR_LIST_FUNCTIONS_XR_ANDROIDX_occupancy_grid(_) \
     _(GetOccupancyGridForPlaneANDROIDX, ANDROIDX_occupancy_grid) \
-
-
-/// For every function defined by XR_ANDROIDX_body_tracking in this version of the spec,
-/// calls your macro with the function name and extension name.
-/// Trims the leading `xr` from the function name and the leading `XR_` from the feature name,
-/// because it is easy to add back but impossible to remove with the preprocessor.
-#define XR_LIST_FUNCTIONS_XR_ANDROIDX_body_tracking(_) \
-    _(CreateBodyTrackerANDROIDX, ANDROIDX_body_tracking) \
-    _(DestroyBodyTrackerANDROIDX, ANDROIDX_body_tracking) \
-    _(GetBodyTrackerSkeletonANDROIDX, ANDROIDX_body_tracking) \
-    _(GetBodyTrackerRestSkeletonANDROIDX, ANDROIDX_body_tracking) \
-    _(SetBodyTrackerCalibrationANDROIDX, ANDROIDX_body_tracking) \
-    _(GetBodyTrackerCalibrationANDROIDX, ANDROIDX_body_tracking) \
 
 
 /// For every function defined by XR_ANDROIDSYS_body_tracking in this version of the spec,

@@ -39,6 +39,7 @@
 #include "absl/types/optional.h"
 #include "core/common/copyable_ptr.h"
 #include "core/common/hash.h"
+#include "core/common/optional_with_default.h"
 #include "core/proto/any.proto.imp.h"
 #include "core/proto/proto_common.h"
 #include "core/proto/proto_writer.h"
@@ -74,6 +75,12 @@ class TextprotoReader {
   template <int field_type, typename T>
   const char* Visit(const char* ptr, int field_id, absl::optional<T>* field,
                     absl::optional<T>* other, int token_type);
+
+  template <int field_type, typename T, const auto* DefaultValuePointer>
+  const char* Visit(const char* ptr, int field_id,
+                    OptionalWithDefault<T, DefaultValuePointer>* field,
+                    OptionalWithDefault<T, DefaultValuePointer>* other,
+                    int token_type);
 
   template <int field_type, typename T>
   const char* Visit(const char* ptr, int field_id, CopyablePtr<T>* field,
@@ -264,6 +271,19 @@ const char* TextprotoReader::Visit(const char* ptr, int field_id,
   }
   return Visit<field_type>(ptr, field_id, &(**field), static_cast<T*>(nullptr),
                            token_type);
+}
+
+template <int field_type, typename T, const auto* DefaultValuePointer>
+const char* TextprotoReader::Visit(
+    const char* ptr, int field_id,
+    OptionalWithDefault<T, DefaultValuePointer>* field,
+    OptionalWithDefault<T, DefaultValuePointer>* other, int token_type) {
+  if (!field->HasValue()) {
+    *field = T();
+  }
+
+  return Visit<field_type>(ptr, field_id, &field->MutableValue(),
+                           static_cast<T*>(nullptr), token_type);
 }
 
 template <int field_type, typename T>

@@ -238,6 +238,12 @@ def if_imp_split_engine_allow_experimental_apis(a, otherwise = []):
         "//conditions:default": otherwise,
     })
 
+def if_imp_profiler_enable_memory_graph(a, otherwise = []):
+    return select({
+        clean_dep("@com_google_impress//core/performance:imp_profiler_enable_memory_graph"): a,
+        "//conditions:default": otherwise,
+    })
+
 # Whether the target we're compiling for should pack-in generic materials for glTF loading.
 # We pack-in on desktop platforms, on the iOS Simulator (which can't hit gstatic), or if requested
 # on the command line via --define=IMP_EMBED_ASSETS=1
@@ -330,6 +336,8 @@ def imp_defines():
         disabled = ["IMP_DISABLE_FUTURE_VALIDATION=0"],
     ) + if_imp_split_engine_allow_experimental_apis(
         ["IMP_SPLIT_ENGINE_ALLOW_EXPERIMENTAL_APIS"],
+    ) + if_imp_profiler_enable_memory_graph(
+        ["IMP_PROFILER_MEMORY_GRAPH=1"],
     )
     return out_defines
 
@@ -342,6 +350,17 @@ def imp_linkopts():
         ],
     )
     return out_linkopts
+
+def imp_malloc_wrap_linkopts():
+    return [
+        "-Wl,--wrap=malloc",
+        "-Wl,--wrap=free",
+        "-Wl,--wrap=calloc",
+        "-Wl,--wrap=realloc",
+        "-Wl,--wrap=aligned_alloc",
+        "-Wl,--wrap=posix_memalign",
+        "-Wl,--wrap=memalign",
+    ]
 
 def imp_default_jni_linkopts():
     return if_android([

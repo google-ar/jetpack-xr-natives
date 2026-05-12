@@ -19,6 +19,7 @@
 #include "apibindings/asset_ptr_map.h"
 #include "apibindings/testing/marshalling/test_generic_material_manager.h"
 #include "apibindings/testing/marshalling/test_model_manager.h"
+#include "apibindings/testing/marshalling/test_node_manager.h"
 #include "apibindings/testing/marshalling/test_skybox_manager.h"
 #include "apibindings/testing/marshalling/test_stereo_surface_manager.h"
 #include "apibindings/testing/marshalling/test_texture_manager.h"
@@ -35,6 +36,7 @@ TestImpressApiView::TestImpressApiView() {
   water_material_manager_ = std::make_unique<TestWaterMaterialManager>(*this);
   generic_material_manager_ =
       std::make_unique<TestGenericMaterialManager>(*this);
+  node_manager_ = std::make_unique<TestNodeManager>(*this);
 }
 
 // Prevents the base class from overwriting our test managers with real ones.

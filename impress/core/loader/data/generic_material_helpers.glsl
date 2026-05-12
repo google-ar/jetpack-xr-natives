@@ -34,7 +34,7 @@ vec3 srgbToLinear(vec3 color) {
 //
 // Transforms the uvs using the matrix in samplers_uv_matrices.
 // Used to implement KHR_texture_transform glTF Extension.
-highp vec2 uvForSampler(lowp int samplerIndex) {
+highp vec2 uvForSampler(const lowp int samplerIndex) {
 #if FILAMENT_EFFECTIVE_VERSION == 100
   // ESSL 1.0 doesn't support bit shifting operations.
   bool isUV1 = mod(float(materialParams.samplers_uv_bitflags) /

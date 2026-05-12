@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include "filament/filament/include/filament/Texture.h"
@@ -51,6 +52,24 @@ struct CubemapLevelImageContents {
 
 // The cubemap images required to construct an ImageBasedLightingAsset.
 struct ImageBasedLightingAssetCubemapImages {
+  ImageBasedLightingAssetCubemapImages() = default;
+  ImageBasedLightingAssetCubemapImages(
+      std::vector<CubemapLevelImageContents> ibl_cubemap_images,
+      std::optional<CubemapLevelImageContents> skybox_cubemap_images)
+      : ibl_cubemap_images(std::move(ibl_cubemap_images)),
+        skybox_cubemap_images(std::move(skybox_cubemap_images)) {}
+
+  // DeepCopyIblCubemaps should be used to copy this struct.
+  ImageBasedLightingAssetCubemapImages(
+      const ImageBasedLightingAssetCubemapImages& other) = delete;
+  ImageBasedLightingAssetCubemapImages& operator=(
+      const ImageBasedLightingAssetCubemapImages& other) = delete;
+
+  ImageBasedLightingAssetCubemapImages(
+      ImageBasedLightingAssetCubemapImages&& other) = default;
+  ImageBasedLightingAssetCubemapImages& operator=(
+      ImageBasedLightingAssetCubemapImages&& other) = default;
+
   std::vector<CubemapLevelImageContents> ibl_cubemap_images;
   std::optional<CubemapLevelImageContents> skybox_cubemap_images;
 };

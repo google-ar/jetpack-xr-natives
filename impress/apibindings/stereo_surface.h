@@ -33,6 +33,7 @@
 #include "core/media/media_type.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_handle.h"
+#include "core/ncsb/node_handle.h"
 #include "core/render/android/android_external_texture_surface.h"
 #include "core/render/content_security_level.h"
 #include "core/render/texture.h"
@@ -48,6 +49,7 @@ class StereoSurface : public Component {
   struct Quad {
     float width = 1.0f;
     float height = 1.0f;
+    float corner_radius = 0.0f;
   };
 
   struct Sphere {
@@ -79,6 +81,7 @@ class StereoSurface : public Component {
       std::variant<std::monostate, Quad, Sphere, Hemisphere, CustomMesh>;
 
   absl::Status Setup(MediaStereoMode stereo_mode,
+                     MediaBlendingMode blending_mode,
                      ContentSecurityLevel content_security_level,
                      bool use_super_sampling);
   void Cleanup();
@@ -91,6 +94,9 @@ class StereoSurface : public Component {
   // Matches the values returned by media3. See Also:
   // third_party/java_src/android_libs/media/libraries/common/src/main/java/androidx/media3/common/C.java
   void SetStereoMode(MediaStereoMode stereo_mode);
+
+  // Sets the blending mode for the surface.
+  void SetBlendingMode(MediaBlendingMode blending_mode);
 
   // Dynamically updates the shape of the canvas.
   absl::Status SetCanvasShape(const CanvasShape& canvas_shape);
@@ -124,13 +130,24 @@ class StereoSurface : public Component {
   enum class ColliderType { kNone, kUnknown, kPanel, kSphere, kMesh };
 
   std::unique_ptr<AndroidExternalTextureSurface> surface_;
-  std::unique_ptr<android_xr::JxrMediaMaterial> material_;
-  ComponentHandle<MeshRenderer> mesh_renderer_;
-  Future<absl::Status> material_future_;
+  std::unique_ptr<android_xr::JxrMediaMaterial> material_both_;
+  ComponentHandle<MeshRenderer> mesh_renderer_left_or_both_;
+  Future<absl::Status> material_future_both_;
+
+  NodeHandle right_eye_node_;
+  std::unique_ptr<android_xr::JxrMediaMaterial> material_left_;
+  std::unique_ptr<android_xr::JxrMediaMaterial> material_right_;
+  ComponentHandle<MeshRenderer> mesh_renderer_right_;
+  Future<absl::Status> material_future_left_;
+  Future<absl::Status> material_future_right_;
+  Future<absl::Status> per_eye_material_future_;
+  bool is_per_eye_ = false;
 
   MediaStereoMode stereo_mode_;
   CanvasShape canvas_shape_;
   ColliderType collider_type_;
+  MediaBlendingMode blending_mode_ = MediaBlendingMode::kTransparent;
+  bool use_super_sampling_ = false;
 
   ColliderType GetColliderTypeByShape(const CanvasShape& canvas_shape);
   bool GetColliderEnabled() const {
@@ -138,6 +155,18 @@ class StereoSurface : public Component {
   }
   absl::Status UpdateColliderType(ColliderType collider_type);
   void CleanupColliderType();
+
+  Future<absl::Status> InitializeMaterial(
+      std::unique_ptr<android_xr::JxrMediaMaterial>& material,
+      RenderEyeTarget eye_target);
+
+  Future<std::unique_ptr<android_xr::JxrMediaMaterial>> CreateJxrMediaMaterial(
+      RenderEyeTarget eye_target, bool use_super_sampling,
+      MediaBlendingMode blending_mode);
+
+  // Recreates the materials for the surface copying parameters from the
+  // existing materials.
+  void RecreateMaterials();
 
   // True if the old workaround of creating a child node for mesh colliders
   // should be used.

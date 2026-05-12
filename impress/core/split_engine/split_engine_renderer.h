@@ -26,10 +26,12 @@
 #include "absl/base/nullability.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "flatbuffers/detached_buffer.h"
 #include "flatbuffers/verifier.h"
 #include "core/async/future.h"
 #include "core/common/invocable.h"
 #include "core/media/media_color_space.h"
+#include "core/ncsb/node_handle.h"
 #include "core/render/android/platform_android_external_texture_surface.h"
 #include "core/render/content_security_level.h"
 #include "core/render/display_color_space.h"
@@ -39,7 +41,6 @@
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_renderer_context.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
-#include "split_engine/schemas/split_engine_material_generated.h"
 
 namespace imp::split_engine {
 
@@ -64,7 +65,7 @@ class SplitEngineRenderer {
       OnFinishedCallback on_finished) = 0;
   // Handles an android_xr::schemas::Request sent from the app, for example to
   // create a built-in material.
-  virtual Future<absl::Status> HandleRequest(
+  virtual Future<flatbuffers::DetachedBuffer> HandleRequest(
       BridgeId bridge_id, const android_xr::schemas::Request& request) = 0;
 
   virtual absl::Status AddMeshData(
@@ -126,14 +127,8 @@ class SplitEngineRenderer {
       flatbuffers::Verifier& verifier,
       const android_xr::schemas::SetBuiltInMaterialParameters& command) = 0;
 
-  virtual Future<absl::Status> CreateBuiltInMaterial(
-      BridgeId bridge_id,
-      const android_xr::schemas::BuiltInMaterialRequest& request) = 0;
   virtual Future<std::vector<BuiltInMaterialPtr>>
   PreloadBuiltInCustomMaterials() = 0;
-  virtual Future<absl::Status> CreateCustomMaterial(
-      BridgeId bridge_id,
-      const android_xr::schemas::AddCustomMaterialRequest& request) = 0;
 
   virtual absl::Status AddImageBasedLightingAssets(
       const android_xr::schemas::AddImageBasedLightingAssets& command) = 0;
@@ -176,12 +171,17 @@ class SplitEngineRenderer {
                                     std::function<void(void*)> fn) = 0;
 
   // Overrides the channel for all renderables associated with the given
-  // user_id.
-  virtual absl::Status SetChannelOverride(uint64_t user_id,
+  // bridge_id and user_id.
+  //
+  // Note: the user id itself is not globally unique; it's only unique within
+  // the bridge. This means that we need to use both ids to correctly identify
+  // the renderables when overriding the channel.
+  virtual absl::Status SetChannelOverride(uint64_t bridge_id, uint64_t user_id,
                                           uint8_t channel) = 0;
-  // Clears any channel override set for the given user_id, restoring the
-  // original channel.
-  virtual absl::Status ClearChannelOverride(uint64_t user_id) = 0;
+  // Clears any channel override set for the given bridge_id and user_id,
+  // restoring the original channel.
+  virtual absl::Status ClearChannelOverride(uint64_t bridge_id,
+                                            uint64_t user_id) = 0;
 
   // Adds permission grants for the application, identified with its BridgeId.
   virtual void AddAppPermission(BridgeId bridge_id,
@@ -216,6 +216,11 @@ class SplitEngineRenderer {
   // allowed.
   // The validation is inclusive of the range [1, api_level].
   virtual void SetValidationApiLevel(int32_t api_level) = 0;
+
+  // Uses the current bridge id to lookup an entity id and convert it to a node
+  // handle.
+  virtual absl::StatusOr<NodeHandle> GetNodeForCurrentApp(
+      uint32_t entity_id) = 0;
 };
 
 }  // namespace imp::split_engine

@@ -297,6 +297,32 @@ cc_library(
         ),
         (
             # The main filament library, configured to link to OpenGL ES 3.1 on
+            # Linux with Feature Level 0 enabled.
+            "opengl_egl_headless_fl0",
+            [
+                "@third_party//filament/filament/backend:backend_opengl_egl_headless_fl0",
+                "@third_party//filament/libs:filaflat",
+            ] + if_multiview(
+                [
+                    ":generated_mobile_opengl_yesFL0_yesMV_noMPC_materials",
+                ],
+                [
+                    ":generated_mobile_opengl_yesFL0_noMV_noMPC_materials",
+                ],
+            ),
+            [],
+            [],
+            if_multiview(
+                ["FILAMENT_ENABLE_MULTIVIEW=1"],
+            ) + [
+                "FILAMENT_ENABLE_FEATURE_LEVEL_0=1",
+                "FILAMENT_SUPPORTS_EGL_ON_LINUX=1",
+            ],
+            False,
+            False,
+        ),
+        (
+            # The main filament library, configured to link to OpenGL ES 3.1 on
             # Android with Feature Level 0 enabled.
             "opengl_android_feature_level_0",
             [
@@ -330,6 +356,21 @@ cc_library(
             [],
             [],
             [],
+            True,
+            True,
+        ),
+        (
+            # The main filament library, always configured to link to GLES 3.1, using FL0/GLES 2
+            # at runtime (for WASM)
+            "gles3_feature_level_0",
+            [
+                "@third_party//filament/filament/backend:backend_opengl",
+                "@third_party//filament/libs:filaflat",
+                ":generated_mobile_opengl_yesFL0_noMV_noMPC_materials",
+            ],
+            [],
+            [],
+            ["FILAMENT_ENABLE_FEATURE_LEVEL_0=1"],
             True,
             True,
         ),

@@ -17,6 +17,7 @@
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load(
     "@com_google_impress//build_tools:imp.bzl",
+    "if_dev_runtime",
     "if_remote_desktop",
 )
 load(
@@ -60,7 +61,7 @@ def imp_desktop_app(
                 # See (broken link) and (broken link) for more context.
                 "-Wl,--dynamic-linker=/lib64/ld-linux-x86-64.so.2",
             ]) + extra_linkopts,
-            deps = [
+            deps = if_dev_runtime(["@com_google_impress//core/performance:memory_stats"]) + [
                 impress_library,
                 Label("@com_google_impress//:platform_desktop"),
             ] + ([Label("@com_google_impress//core/view:app_sandbox_target")] if target_type == "sandbox" else []),

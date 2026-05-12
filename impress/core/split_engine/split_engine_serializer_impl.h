@@ -45,6 +45,8 @@
 #include "core/async/future.h"
 #include "core/common/buffer_access.h"
 #include "core/common/entity_absl_hasher.h"
+#include "core/common/invocable.h"
+#include "core/common/owned_ptr.h"
 #include "core/common/robin_map.h"
 #include "core/common/robin_set.h"
 #include "core/config.h"
@@ -70,7 +72,7 @@
 #endif
 #include "core/render/base_renderable_manager.h"
 #include "core/render/base_texture_builder.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "core/split_engine/split_engine_bridge_sender.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
@@ -237,22 +239,26 @@ class SplitEngineSerializerImpl
   void SetCapsuleCollider(utils::Entity entity, const Capsule& capsul,
                           bool enabled) override;
   void ClearCollider(utils::Entity entity, ColliderType collider_type) override;
-  void SerializeTexture(const SplitEngineTextureSerializer&
-                            split_engine_texture_serializer) override;
+  void SerializeTexture(std::unique_ptr<const SplitEngineTextureSerializer>
+                            split_engine_texture_serializer,
+                        imp::Invocable<void()> on_done) override;
   void RemoveTexture(filament::Texture& texture) override;
-  void SerializeMesh(
-      const SplitEngineMeshSerializer& split_engine_mesh_serializer) override;
+  void SerializeMesh(std::unique_ptr<const SplitEngineMeshSerializer>
+                         split_engine_mesh_serializer) override;
   Future<GenericMaterialPtr> CreateGenericMaterial(
       const GenericMaterialSpec& spec) override;
   MaterialPtr CreateCustomMaterial(MaterialPtr material) override;
+  Future<absl::Status> RequestCustomFilamentMaterial(
+      absl::string_view material_source, filament::Material* filament_material,
+      const MaterialPreCompileOptions& precompile_options) override;
   void SetBuiltInMaterialParameters(
       const filament::MaterialInstance* material,
       BuiltInMaterialParameters type,
       SerializeBuiltInMaterialParametersFunc serialize_func) override;
   void SerializeImageBasedLightingAsset(
       filament::Texture& reflection_texture,
-      const SphericalHarmonics& spherical_harmonics,
-      const ImageBasedLightingAssetCubemapImages& cubemap_images) override;
+      SphericalHarmonics spherical_harmonics,
+      ImageBasedLightingAssetCubemapImages cubemap_images) override;
   void RemoveImageBasedLightingAsset(
       filament::Texture& reflection_texture) override;
   void SetPreferredEnvironmentIblAsset(filament::Texture& reflection_texture,
@@ -279,10 +285,10 @@ class SplitEngineSerializerImpl
   void SerializeMeshIndicesAndVertices(
       const SplitEngineMeshSerializer& split_engine_mesh_serializer);
   void SerializeMeshMorphTargets(
-      const SplitEngineMeshSerializer& split_engine_mesh_serializer);
+      std::unique_ptr<const SplitEngineMeshSerializer>
+          split_engine_mesh_serializer);
 
   using ResourceId = std::uint64_t;
-  using FlatBufferBuilderPtr = std::unique_ptr<flatbuffers::FlatBufferBuilder>;
 
   // Helper to create a vector of flatbuffers::Offset<T>.
   template <typename T>
@@ -407,8 +413,9 @@ class SplitEngineSerializerImpl
   utils::Entity GetEntity(
       const filament::RenderableManager::Instance& instance) const;
 
-  FlatBufferBuilderPtr CreateFlatBufferBuilder();
-  FlatBufferBuilderPtr CreateFlatBufferBuilder(size_t size_bytes);
+  imp::OwnedPtr<flatbuffers::FlatBufferBuilder> CreateFlatBufferBuilder();
+  imp::OwnedPtr<flatbuffers::FlatBufferBuilder> CreateFlatBufferBuilder(
+      size_t size_bytes);
 
   BaseView& view_;
 
@@ -548,11 +555,17 @@ class SplitEngineSerializerImpl
     T data;
   };
 
-  // Returns the FlatBufferBuilderPtr for the given batch.
-  // If there is no current builder, a new one will be created.
+  // Borrows a FlatbufferBuilder associated with the given batch.
+  //
   // TODO: (broken link) - Use OwnedPtr and BorrowedPtr for CommandBatchBase when
   // they support implicit upcast and static_cast.
-  flatbuffers::FlatBufferBuilder* /*absl_nonnull*/  GetFlatBufferBuilderFor(
+  imp::BorrowedPtr<flatbuffers::FlatBufferBuilder> BorrowFlatBufferBuilder(
+      CommandBatchBase& batch);
+
+  // Transfers ownership of a FlatbufferBuilder associated with the given batch
+  // to the caller.
+  //
+  imp::OwnedPtr<flatbuffers::FlatBufferBuilder> ReleaseFlatBufferBuilder(
       CommandBatchBase& batch);
 
   // Note: In the best case scenario we would only create a flatbuffer builder
@@ -565,7 +578,7 @@ class SplitEngineSerializerImpl
   // the Batch data should be independent of the builder.
   // The batch pointers are owned by batch_queue_.
   absl::flat_hash_map<CommandBatchBase* /*absl_nonnull*/ ,
-                      /*absl_nonnull*/  FlatBufferBuilderPtr>
+                      imp::OwnedPtr<flatbuffers::FlatBufferBuilder>>
       fbb_;
 
   // Stores batches of commands in the order they were created. This ensures

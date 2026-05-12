@@ -14,31 +14,47 @@
 
 #include "core/split_engine/materials/builtin/gsplat/gsplat_material_deserializer.h"
 
+#include <cstdint>
+#include <functional>
+#include <optional>
 #include <utility>
 
+#include "core/common/log.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
-#include "filament/filament/include/filament/Engine.h"
+#include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/include/filament/MaterialInstance.h"
+#include "filament/filament/include/filament/Options.h"
+#include "filament/libs/utils/include/utils/Entity.h"
 #include "flatbuffers/verifier.h"
 #include "core/assets/asset_ptr.h"
 #include "core/assets/material/material_asset.h"
+#include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
+#include "core/common/registry.h"
 #include "core/common/small_source_location.h"
 #include "core/material_library/flatbuffer_utils.h"
+#include "core/material_library/material_package.h"
 #include "core/materials/material.h"
+#include "core/math/vec.h"
+#include "core/ncsb/component_handle.h"
 #include "core/render/texture.h"
 #include "core/resources/resource_definition.h"
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
+#include "core/split_engine/materials/builtin/builtin_material_registry.h"
 #include "core/split_engine/materials/builtin/gsplat/gsplat_material_deserializer_assets.h"
+#include "core/split_engine/materials/builtin/gsplat/precompute_texture_pipeline.h"
 #include "core/split_engine/shared/split_engine_defines.h"
+#include "core/split_engine/split_engine_renderer.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/material_factory.h"
+#include "core/window/filament_host.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 #include "split_engine/schemas/split_engine_primitive_generated.h"
 #include "mediapipe/framework/port/status_macros.h"
@@ -58,6 +74,30 @@ constexpr char kColorDataTexture[] = "splatDataColor";
 constexpr char kSortedIndicesTexture[] = "sortedIndices";
 constexpr char kSplatScaleParameter[] = "splatScale";
 constexpr char kVisualizeChunksParameter[] = "visualizeChunks";
+constexpr char kUseTrianglesForSplatsParameter[] = "useTrianglesForSplats";
+constexpr char kSplatDataPrecomputed[] = "splatDataPrecomputed";
+constexpr char kMainViewResolution[] = "mainViewResolution";
+
+// Helper to get the size of the data textures.
+absl::StatusOr<imp::uint2> GetTextureSizeFromFlatbuffer(
+    const TextureBorrower& texture_borrower,
+    const android_xr::schemas::BuiltInMaterialGsplatParameters&
+        serialized_parameters) {
+  const android_xr::schemas::BuiltInTextureParameter* serialized_texture =
+      serialized_parameters.position_data_texture();
+  if (!serialized_texture) {
+    return absl::NotFoundError(
+        absl::StrCat("Texture not set yet for ", kPositionDataTexture));
+  }
+  const BorrowedTexturePtr texture =
+      texture_borrower(serialized_texture->texture_id());
+  if (!texture) {
+    return absl::InternalError(absl::StrFormat("Texture not found: %d, %s",
+                                               serialized_texture->texture_id(),
+                                               kPositionDataTexture));
+  }
+  return texture->GetSize();
+}
 
 // Helper function to read texture from flatbuffer and set it on a material.
 absl::Status SetMaterialParameterFromFlatbuffer(
@@ -66,7 +106,8 @@ absl::Status SetMaterialParameterFromFlatbuffer(
     const android_xr::schemas::BuiltInTextureParameter* serialized_texture,
     absl::string_view material_parameter_name) {
   if (!serialized_texture) {
-    return absl::OkStatus();
+    return absl::NotFoundError(
+        absl::StrCat("Texture not set yet for ", material_parameter_name));
   }
   if (!material->HasParameter(material_parameter_name)) {
     return absl::OkStatus();
@@ -75,8 +116,9 @@ absl::Status SetMaterialParameterFromFlatbuffer(
   const BorrowedTexturePtr texture =
       texture_borrower(serialized_texture->texture_id());
   if (!texture) {
-    return absl::NotFoundError(absl::StrFormat(
-        "Texture not found: %d", serialized_texture->texture_id()));
+    return absl::InternalError(absl::StrFormat("Texture not found: %d, %s",
+                                               serialized_texture->texture_id(),
+                                               material_parameter_name));
   }
   material->SetParameter(material_parameter_name, texture,
                          ConvertSampler(serialized_texture->sampler()));
@@ -84,13 +126,20 @@ absl::Status SetMaterialParameterFromFlatbuffer(
 }
 
 resources::ResourceDefinition GetResourceDefinition(
-    android_xr::schemas::GsplatMode material_mode) {
+    BaseView& view, android_xr::schemas::GsplatMode material_mode) {
+  // In multiview mode, materials must accept texture arrays.
+  bool is_multiview =
+      view.GetHost()->GetEngine()->getConfig().stereoscopicType ==
+      filament::backend::StereoscopicType::MULTIVIEW;
+
   switch (material_mode) {
     case android_xr::schemas::GsplatMode::UNSPECIFIED:
     case android_xr::schemas::GsplatMode::GSPLAT:
-      return kBuiltinGsplatMatCmat;
+      return is_multiview ? kBuiltinGsplatStereoMatCmat
+                          : kBuiltinGsplatMonoMatCmat;
     case android_xr::schemas::GsplatMode::MAGIC_WINDOW:
-      return kBuiltinMagicWindowMatCmat;
+      return is_multiview ? kBuiltinMagicWindowStereoMatCmat
+                          : kBuiltinMagicWindowMonoMatCmat;
   }
 }
 
@@ -102,29 +151,142 @@ absl::Status HasParameter(const BorrowedMaterialPtr& material,
   return absl::UnimplementedError(
       absl::StrFormat("%s is not supported in this material.", parameter_name));
 }
+
+// Extracts main view resolution and applies it as material setting.
+absl::Status UpdateMainViewResolution(BaseView& view,
+                                      BorrowedMaterialPtr precompute_material) {
+  window::FilamentHost& host = *view.GetHost();
+  const filament::DynamicResolutionOptions drs_options =
+      host.GetView()->getDynamicResolutionOptions();
+  const imp::float2 scale =
+      drs_options.enabled ? drs_options.maxScale : imp::kOne2;
+  precompute_material->SetParameter(
+      kMainViewResolution, imp::uint2(host.GetPixelDimensions() * scale));
+  return absl::OkStatus();
+}
+
+// Utility function convert a node id to a node handle.
+absl::StatusOr<NodeHandle> DeserializeNodeId(BaseView& view,
+                                             uint32_t gsplat_node_id) {
+  absl::StatusOr<NodeHandle> gsplat_node;
+  if (view.GetSplitEngineSerializer() == nullptr) {
+    // If not in split engine, use the node id directly.
+    gsplat_node = NodeHandle(utils::Entity::import(gsplat_node_id));
+  } else {
+    auto renderer =
+        view.GetRegistry().Get<imp::split_engine::SplitEngineRenderer>();
+    if (!renderer.ok()) {
+      return absl::InvalidArgumentError(
+          absl::StrCat("Invalid split engine renderer: ", renderer.status()));
+    }
+
+    gsplat_node = renderer->get().GetNodeForCurrentApp(gsplat_node_id);
+  }
+  return gsplat_node;
+}
+
+Future<ComponentHandle<PrecomputeTexturePipeline>>
+BuildPrecomputeTexturePipeline(NodeHandle gsplat_node,
+                               android_xr::schemas::GsplatMode material_mode) {
+  // TODO: Temporarily disable precompute with magic window.
+  if (material_mode == android_xr::schemas::GsplatMode::MAGIC_WINDOW) {
+    Future<ComponentHandle<PrecomputeTexturePipeline>> future;
+    future.Return(ComponentHandle<PrecomputeTexturePipeline>());
+    return future;
+  }
+  NodeHandle precompute_node = gsplat_node->CreateChildNode();
+  // precompute_node is created disabled and will be enabled after the pipeline
+  // is created.
+  precompute_node->SetEnabled(false);
+
+  return precompute_node->AddComponent<PrecomputeTexturePipeline>().Then(
+      [](ComponentHandle<PrecomputeTexturePipeline> pipeline) mutable
+          -> absl::StatusOr<ComponentHandle<PrecomputeTexturePipeline>> {
+        MP_RETURN_IF_ERROR(UpdateMainViewResolution(pipeline->GetView(),
+                                                 pipeline->BorrowMaterial()));
+        return pipeline;
+      });
+}
+
 }  // namespace
 
 Future<BuiltInMaterialPtr> GsplatMaterialDeserializer::Create(
     BaseView& view, BridgeId bridge_id,
     const android_xr::schemas::BuiltInMaterialGsplatSpec& spec) {
-  ::imp::resources::ResourceDefinition source =
-      GetResourceDefinition(spec.material_mode());
+  android_xr::schemas::GsplatMode material_mode = spec.material_mode();
 
-  return view.GetAssetManager().LoadMaterial(source).Then(
-      [&view, bridge_id, material_mode = spec.material_mode()](
-          AssetPtr<MaterialAsset> material_asset) -> BuiltInMaterialPtr {
-        return absl::WrapUnique(new GsplatMaterialDeserializer(
-            view, bridge_id, material_mode,
-            view.GetMaterialFactory().CreateMaterial(material_asset)));
+  absl::StatusOr<NodeHandle> gsplat_node =
+      DeserializeNodeId(view, spec.gsplat_node_id());
+  // A valid gsplat renderer is required to correctly provide and update the
+  // transforms for the filament material.
+  if (!gsplat_node.ok() || !gsplat_node->IsValid()) {
+    IMP_LOG(imp::WARNING) << "Invalid gsplat renderer entity ";
+    // TODO: Refactor to support default construction of
+    // GsplatMaterialDeserializer, without a valid gsplat node.
+    gsplat_node = view.CreateNode();
+  }
+  NodeHandle gsplat_node_value = gsplat_node.value();
+  ::imp::resources::ResourceDefinition source =
+      GetResourceDefinition(view, material_mode);
+  bool use_triangles = false;
+  if (spec.use_triangles_for_splats()) {
+    use_triangles = spec.use_triangles_for_splats()->value();
+  }
+  return view.GetAssetManager()
+      .LoadMaterial(source,
+                    MaterialPreCompileOptions{
+                        .constants = {{.name = kUseTrianglesForSplatsParameter,
+                                       .value = use_triangles}}})
+      .Then([bridge_id, material_mode,
+             gsplat_node_value](AssetPtr<MaterialAsset> material_asset) mutable
+                -> Future<BuiltInMaterialPtr> {
+        return BuildPrecomputeTexturePipeline(gsplat_node_value, material_mode)
+            .Then(
+                [gsplat_node_value, bridge_id, material_mode, material_asset](
+                    ComponentHandle<PrecomputeTexturePipeline> pipeline) mutable
+                    -> BuiltInMaterialPtr {
+                  return Create(gsplat_node_value, bridge_id, material_mode,
+                                material_asset, pipeline);
+                });
       });
 }
 
+BuiltInMaterialPtr GsplatMaterialDeserializer::Create(
+    NodeHandle gsplat_node, BridgeId bridge_id,
+    android_xr::schemas::GsplatMode material_mode,
+    AssetPtr<MaterialAsset> material_asset,
+    ComponentHandle<PrecomputeTexturePipeline> pipeline) {
+  return BuiltInMaterialPtr(new GsplatMaterialDeserializer(
+      gsplat_node, bridge_id, material_mode,
+      gsplat_node->GetView().GetMaterialFactory().CreateMaterial(
+          material_asset),
+      pipeline));
+}
+
 GsplatMaterialDeserializer::GsplatMaterialDeserializer(
-    BaseView& view, BridgeId bridge_id,
-    android_xr::schemas::GsplatMode material_mode, OwnedMaterialPtr material)
+    NodeHandle gsplat_node, BridgeId bridge_id,
+    android_xr::schemas::GsplatMode material_mode, OwnedMaterialPtr material,
+    ComponentHandle<PrecomputeTexturePipeline> precompute_texture_pipeline)
     : BuiltInCustomMaterial(bridge_id, std::move(material)),
-      view_(view),
-      material_mode_(material_mode) {}
+      view_(gsplat_node->GetView()),
+      gsplat_node_(gsplat_node),
+      material_mode_(material_mode) {
+  precompute_texture_pipeline_ = precompute_texture_pipeline;
+}
+
+GsplatMaterialDeserializer::~GsplatMaterialDeserializer() {
+  if (ShouldUsePrecomputeComponent()) {
+    // Release the pass texture before destroying the pass.
+    BorrowedTexturePtr placeholder_texture =
+        view_.GetTextureFactory().BorrowRGBA32FPlaceholderTexture();
+    GetRenderMaterial()->SetParameter(kSplatDataPrecomputed,
+                                      placeholder_texture,
+                                      placeholder_texture->GetSampler());
+    // A node was added for the precompute texture pipeline.
+    // If it hasn't already been destroyed, destroy it now.
+    view_.DestroyNode(precompute_texture_pipeline_->GetNode());
+  }
+}
 
 absl::Status GsplatMaterialDeserializer::SetParameters(
     flatbuffers::Verifier& verifier,
@@ -149,30 +311,43 @@ absl::Status GsplatMaterialDeserializer::SetParameters(
               .data_as<android_xr::schemas::BuiltInMaterialGsplatParameters>();
 
   MP_RETURN_IF_ERROR(
-      SetCommonMaterialParameters(texture_borrower, *serialized_parameters));
+      SetRenderMaterialParameters(texture_borrower, *serialized_parameters));
 
-  switch (material_mode_) {
-    case android_xr::schemas::GsplatMode::UNSPECIFIED:
-    case android_xr::schemas::GsplatMode::GSPLAT:
-      return SetGsplatMaterialParameters(texture_borrower,
-                                         *serialized_parameters);
-      break;
-    case android_xr::schemas::GsplatMode::MAGIC_WINDOW:
-      return SetMagicWindowMaterialParameters(texture_borrower,
-                                              *serialized_parameters);
-      break;
+  if (material_mode_ == android_xr::schemas::GsplatMode::MAGIC_WINDOW) {
+    MP_RETURN_IF_ERROR(SetMagicWindowMaterialParameters(texture_borrower,
+                                                     *serialized_parameters));
   }
+  MP_RETURN_IF_ERROR(SetPrecomputedDataParameters(
+      texture_borrower, *serialized_parameters, GetPrecomputedDataMaterial()));
+
+  MP_RETURN_IF_ERROR(UpdatePrecomputeTexturePipeline(texture_borrower,
+                                                  *serialized_parameters));
+  return absl::OkStatus();
 }
 
 split_engine::BuiltInMaterialPtr GsplatMaterialDeserializer::Duplicate() const {
-  return absl::WrapUnique(new GsplatMaterialDeserializer(
-      view_, GetBridgeId(), material_mode_,
-      view_.GetMaterialFactory().WrapMaterial(
-          filament::MaterialInstance::duplicate(
-              GetMaterial()->GetFilamentMaterialInstance()))));
+  ComponentHandle<PrecomputeTexturePipeline> pipeline;
+  Future<ComponentHandle<PrecomputeTexturePipeline>> pipeline_future =
+      BuildPrecomputeTexturePipeline(gsplat_node_, material_mode_);
+  if (pipeline_future.Ready() && pipeline_future.Get().ok()) {
+    pipeline = pipeline_future.Get().value();
+  } else {
+    pipeline_future.Cancel();
+    // Does not exit if NDEBUG is defined.
+    IMP_LOG(imp::FATAL) << "Failed to duplicate precompute texture pipeline.";
+  }
+
+  OwnedMaterialPtr material = view_.GetMaterialFactory().WrapMaterial(
+      filament::MaterialInstance::duplicate(
+          GetMaterial()->GetFilamentMaterialInstance()));
+  split_engine::BuiltInMaterialPtr result =
+      absl::WrapUnique(new GsplatMaterialDeserializer(
+          gsplat_node_, GetBridgeId(), material_mode_, std::move(material),
+          pipeline));
+  return result;
 }
 
-absl::Status GsplatMaterialDeserializer::SetCommonMaterialParameters(
+absl::Status GsplatMaterialDeserializer::SetRenderMaterialParameters(
     const TextureBorrower& texture_borrower,
     const android_xr::schemas::BuiltInMaterialGsplatParameters&
         serialized_parameters) {
@@ -236,14 +411,14 @@ absl::Status GsplatMaterialDeserializer::SetMagicWindowMaterialParameters(
         UnPack(*magic_window_from_user_world_matrix));
   }
 
-  return SetGsplatMaterialParameters(texture_borrower, serialized_parameters);
+  return absl::OkStatus();
 }
 
-absl::Status GsplatMaterialDeserializer::SetGsplatMaterialParameters(
+absl::Status GsplatMaterialDeserializer::SetPrecomputedDataParameters(
     const TextureBorrower& texture_borrower,
     const android_xr::schemas::BuiltInMaterialGsplatParameters&
-        serialized_parameters) {
-  BorrowedMaterialPtr precompute_material = GetPrecomputeMaterial();
+        serialized_parameters,
+    BorrowedMaterialPtr precompute_material) {
   MP_RETURN_IF_ERROR(SetMaterialParameterFromFlatbuffer(
       texture_borrower, precompute_material,
       serialized_parameters.position_data_texture(), kPositionDataTexture));
@@ -262,8 +437,50 @@ absl::Status GsplatMaterialDeserializer::SetGsplatMaterialParameters(
   return absl::OkStatus();
 }
 
-BorrowedMaterialPtr GsplatMaterialDeserializer::GetPrecomputeMaterial(
+absl::Status GsplatMaterialDeserializer::UpdatePrecomputeTexturePipeline(
+    const TextureBorrower& texture_borrower,
+    const android_xr::schemas::BuiltInMaterialGsplatParameters&
+        serialized_parameters) {
+  if (!ShouldUsePrecomputeComponent()) {
+    return absl::OkStatus();
+  }
+  // Resize the pass texture based on the size provided in data textures.
+  MP_ASSIGN_OR_RETURN(
+      imp::uint2 position_data_texture_size,
+      GetTextureSizeFromFlatbuffer(texture_borrower, serialized_parameters));
+  MP_RETURN_IF_ERROR(precompute_texture_pipeline_->ResizePassTexture(
+      0, position_data_texture_size));
+
+  // Set the main view resolution
+  MP_RETURN_IF_ERROR(UpdateMainViewResolution(
+      view_, precompute_texture_pipeline_->BorrowMaterial()));
+
+  if (!precompute_texture_pipeline_->IsRunningAsyncSetup() &&
+      !precompute_texture_pipeline_->GetNode()->IsEnabled()) {
+    precompute_texture_pipeline_->GetNode()->SetEnabled(true);
+  }
+  // Set the precompute texture on the render material.
+  BorrowedTexturePtr precompute_texture =
+      precompute_texture_pipeline_->BorrowTexture();
+  if (!precompute_texture) {
+    return absl::InternalError("Failed to borrow precompute texture");
+  }
+  GetRenderMaterial()->SetParameter(kSplatDataPrecomputed, precompute_texture,
+                                    precompute_texture->GetSampler());
+  return absl::OkStatus();
+}
+
+bool GsplatMaterialDeserializer::ShouldUsePrecomputeComponent() const {
+  // TODO: Return false if the precompute texture is passed via
+  // parameter.
+  return precompute_texture_pipeline_.IsValid();
+}
+
+BorrowedMaterialPtr GsplatMaterialDeserializer::GetPrecomputedDataMaterial(
     SmallSourceLocation loc) const {
+  if (ShouldUsePrecomputeComponent()) {
+    return precompute_texture_pipeline_->BorrowMaterial(loc);
+  }
   return GetMaterial(loc);
 }
 
@@ -271,4 +488,22 @@ BorrowedMaterialPtr GsplatMaterialDeserializer::GetRenderMaterial(
     SmallSourceLocation loc) const {
   return GetMaterial(loc);
 }
+
+// Registers the built-in material factory.
+const bool kRegisterMaterial = BuiltinMaterialRegistry::RegisterOrDie(
+    android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialGsplatSpec,
+    [](BaseView& view, BridgeId bridge_id,
+       const android_xr::schemas::BuiltInMaterialRequest& request,
+       std::optional<
+           std::reference_wrapper<const MaterialPackage::MaterialCache>>
+           cache) -> Future<BuiltInMaterialPtr> {
+      const android_xr::schemas::BuiltInMaterialGsplatSpec* spec =
+          request.data_as_BuiltInMaterialGsplatSpec();
+      if (spec == nullptr) {
+        return Future<BuiltInMaterialPtr>(absl::InvalidArgumentError(
+            "Failed to get the BuiltInMaterialGsplatSpec from the request."));
+      }
+      return GsplatMaterialDeserializer::Create(view, bridge_id, *spec);
+    });
+
 }  // namespace imp::split_engine

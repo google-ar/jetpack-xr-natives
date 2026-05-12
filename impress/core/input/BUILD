@@ -155,6 +155,13 @@ cc_library(
     alwayslink = 1,
 )
 
+cc_library(
+    name = "clipboard_event",
+    hdrs = ["clipboard_event.h"],
+    deps = ["@com_google_absl//absl/strings:string_view"],
+    alwayslink = 1,
+)
+
 objc_library(
     name = "ios_keyboard",
     srcs = [

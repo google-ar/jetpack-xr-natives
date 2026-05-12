@@ -88,6 +88,11 @@ struct SceneHandleInterface {
 
   // Returns the node that this scene handle is referencing.
   virtual NodeHandle GetSceneNode() const = 0;
+
+ protected:
+  SceneHandleInterface() = default;
+  SceneHandleInterface(const SceneHandleInterface&) = default;
+  SceneHandleInterface& operator=(const SceneHandleInterface&) = default;
 };
 
 }  // namespace imp

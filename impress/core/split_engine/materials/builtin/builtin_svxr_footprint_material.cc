@@ -14,6 +14,8 @@
 
 #include "core/split_engine/materials/builtin/builtin_svxr_footprint_material.h"
 
+#include <functional>
+#include <optional>
 #include <utility>
 
 #include "absl/memory/memory.h"
@@ -23,12 +25,13 @@
 #include "core/assets/asset_ptr.h"
 #include "core/assets/material/material_asset.h"
 #include "core/async/future.h"
-#include "core/material_library/material_param_value.h"
+#include "core/material_library/material_package.h"
 #include "core/materials/material.h"
 #include "core/render/texture.h"
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
+#include "core/split_engine/materials/builtin/builtin_material_registry.h"
 #include "core/split_engine/materials/builtin/builtin_svxr_footprint_material_assets.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
@@ -112,5 +115,23 @@ absl::Status BuiltInSVXRFootprintMaterial::SetParameters(
 
   return absl::OkStatus();
 }
+
+// Registers the built-in material factory.
+const bool kRegisterMaterial = BuiltinMaterialRegistry::RegisterOrDie(
+    android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterial0d0cb9aa,
+    [](BaseView& view, BridgeId bridge_id,
+       const android_xr::schemas::BuiltInMaterialRequest& request,
+       std::optional<
+           std::reference_wrapper<const MaterialPackage::MaterialCache>>
+           cache) -> Future<BuiltInMaterialPtr> {
+      const android_xr::schemas::BuiltInMaterial0d0cb9aa* spec =
+          request.data_as_BuiltInMaterial0d0cb9aa();
+      if (spec == nullptr) {
+        return Future<BuiltInMaterialPtr>(absl::InvalidArgumentError(
+            "Failed to get BuiltInSVXRFootprintMaterial spec from the "
+            "request."));
+      }
+      return BuiltInSVXRFootprintMaterial::Create(view, bridge_id, *spec);
+    });
 
 }  // namespace imp::split_engine

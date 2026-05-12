@@ -14,6 +14,7 @@
 
 #include "core/recipes/language/binary_expression.h"
 
+#include <type_traits>
 #include <variant>
 
 #include "absl/status/status.h"
@@ -47,27 +48,25 @@ struct EvaluateBinaryExpressionVisitor {
         break;
       case BinaryExpression::MULTIPLY:
         if constexpr (recipe_traits::kIsMultiplyAvailable<LeftT, RightT>) {
-          using ResultT = decltype(left * right);
+          using ResultT = decltype(recipe::Multiply(left, right));
           if constexpr (std::is_constructible_v<Variable, ResultT>) {
-            return left * right;
+            return recipe::Multiply(left, right);
           }
         }
         break;
       case BinaryExpression::DIVIDE:
         if constexpr (recipe_traits::kIsDivideAvailable<LeftT, RightT>) {
-          using ResultT = decltype(left / right);
+          using ResultT = decltype(recipe::Divide(left, right));
           if constexpr (std::is_constructible_v<Variable, ResultT>) {
-            return left / right;
+            return recipe::Divide(left, right);
           }
         }
         break;
       case BinaryExpression::MOD:
         if constexpr (recipe_traits::kIsModAvailable<LeftT, RightT>) {
-          if constexpr (std::is_same_v<LeftT, int> &&
-                        std::is_same_v<RightT, int>) {
-            return left % right;
-          } else {
-            return fmod(left, right);
+          using ResultT = decltype(recipe::Fmod(left, right));
+          if constexpr (std::is_constructible_v<Variable, ResultT>) {
+            return recipe::Fmod(left, right);
           }
         }
         break;

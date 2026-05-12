@@ -18,13 +18,18 @@
 #define THIRD_PARTY_IMPRESS_CORE_MATERIAL_LIBRARY_GENERIC_MATERIAL_IMPL_H_
 
 #include <cstdint>
-#include <string>
+#include <optional>
 #include <vector>
 
+#include "absl/base/attributes.h"
+#include "absl/functional/function_ref.h"
+#include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
+#include "absl/types/span.h"
+#include "filament/filament/include/filament/Color.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/Material.h"
 #include "filament/filament/include/filament/MaterialInstance.h"
@@ -74,7 +79,9 @@ class GenericMaterialImpl : public GenericMaterial {
       const GenericMaterialParameters& generic_material_parameters,
       const TextureBorrower& texture_borrower) override;
 
-  absl::string_view GetName() const override;
+  const filament::MaterialInstance* GetFilamentMaterialInstance()
+      const override;
+  filament::MaterialInstance* GetFilamentMaterialInstance() override;
   std::vector<model::MaterialParameter> GetParameters() const override;
   TypedVector<model::MaterialTexture> GetTextures() const override;
   StringMap<int> GetSamplerIndexLookup() const override;
@@ -151,6 +158,138 @@ class GenericMaterialImpl : public GenericMaterial {
   void SetAlphaCutoff(float alpha_cutoff) override;
   float GetAlphaCutoff() const override;
 
+  void SetParameter(absl::string_view parameter_name, bool value) override;
+  void SetParameter(absl::string_view parameter_name, bool2 value) override;
+  void SetParameter(absl::string_view parameter_name, bool3 value) override;
+  void SetParameter(absl::string_view parameter_name, bool4 value) override;
+  void SetParameter(absl::string_view parameter_name, float value) override;
+  void SetParameter(absl::string_view parameter_name, float2 value) override;
+  void SetParameter(absl::string_view parameter_name, float3 value) override;
+  void SetParameter(absl::string_view parameter_name, float4 value) override;
+  void SetParameter(absl::string_view parameter_name, int value) override;
+  void SetParameter(absl::string_view parameter_name, int2 value) override;
+  void SetParameter(absl::string_view parameter_name, int3 value) override;
+  void SetParameter(absl::string_view parameter_name, int4 value) override;
+  void SetParameter(absl::string_view parameter_name, uint value) override;
+  void SetParameter(absl::string_view parameter_name, uint2 value) override;
+  void SetParameter(absl::string_view parameter_name, uint3 value) override;
+  void SetParameter(absl::string_view parameter_name, uint4 value) override;
+  void SetParameter(absl::string_view parameter_name, mat3f value) override;
+  void SetParameter(absl::string_view parameter_name, mat4f value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const bool> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const bool2> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const bool3> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const bool4> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const float> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const float2> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const float3> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const float4> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const int> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const int2> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const int3> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const int4> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const uint> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const uint2> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const uint3> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const uint4> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const mat3f> value) override;
+  void SetParameter(absl::string_view parameter_name,
+                    absl::Span<const mat4f> value) override;
+
+  // Sets the value of a RGBA parameter in the underlying Filament structures.
+  void SetParameter(absl::string_view parameter_name, filament::RgbaType type,
+                    filament::math::float4 color) override;
+
+  // Sets the value of a RGB parameter in the underlying Filament structures.
+  void SetParameter(absl::string_view parameter_name, filament::RgbType type,
+                    filament::math::float3 color) override;
+
+  // Set a parameter in filament structures using texture.
+  // Does not take ownership of texture.
+  //
+  // If sampler_override is provided, it will be used instead of the sampler
+  // from the texture.
+  ABSL_DEPRECATED(
+      "Use imp::BorrowedTexturePtr overload instead. See "
+      "(broken link).")
+  void SetParameter(
+      absl::string_view parameter_name, const imp::Texture* texture,
+      std::optional<filament::TextureSampler> sampler_override) override;
+
+  // Forwards the TexturePtr to the overload that takes an OwnedTexturePtr.
+  //
+  // This method is kept for backwards compatibility. Typically, TexturePtr can
+  // be implicitly converted to OwnedTexturePtr. However, in this overload is
+  // needed to disambiguate which overload of SetParameter is called.
+  //
+  // If sampler_override is provided, it will be used instead of the sampler
+  // from the texture.
+  void SetParameter(
+      absl::string_view parameter_name, TexturePtr texture,
+      std::optional<filament::TextureSampler> sampler_override) override;
+
+  // Set a parameter in filament structures using texture.
+  //
+  // Takes full ownership of texture.  The texture will be destroyed when this
+  // material is.
+  //
+  // If sampler_override is provided, it will be used instead of the sampler
+  // from the texture.
+  void SetParameter(
+      absl::string_view parameter_name, OwnedTexturePtr texture,
+      std::optional<filament::TextureSampler> sampler_override) override;
+
+  // Set a parameter in filament structures using texture.
+  //
+  // The OwnedTexturePtr that texture was borrowed from must not be destroyed
+  // until after the material is either destroyed or SetParameter has been
+  // called again to change to a different texture.
+  //
+  // If sampler_override is provided, it will be used instead of the sampler
+  // from the texture.
+  void SetParameter(
+      absl::string_view parameter_name, BorrowedTexturePtr texture,
+      std::optional<filament::TextureSampler> sampler_override) override;
+
+  // Returns true if parameter_name exists in the underlying Filament
+  // structures.
+  bool HasParameter(absl::string_view name) override;
+
+  // Gets the name of the transform field associated for the given sampler
+  // parameter. In the case where the parameter does not have a transform name
+  // field, it will return an empty string.
+  absl::string_view GetParameterTransformName(
+      absl::string_view sampler_name) const override;
+
+  // Returns the type of texture assignment for the given parameter name.
+  HeldTextureType GetAssignedTextureType(
+      absl::string_view parameter_name) override;
+
+  // Returns a map of unowned filament textures used by the material.
+  imp::StringMap<const filament::Texture*> GetUnownedFilamentTextures()
+      const override;
+
+  // Invokes the given function on each texture used by the material.
+  void ForEachTexture(absl::FunctionRef<void(BorrowedTexturePtr)> fn,
+                      SmallSourceLocation loc) override;
+
  protected:
   BorrowedMaterialPtr GetMaterialInternal(
       SmallSourceLocation loc) const override;
@@ -160,7 +299,7 @@ class GenericMaterialImpl : public GenericMaterial {
   struct ParameterInfo {
     std::vector<filament::Material::ParameterInfo> material_parameters;
     StringSet sampler_parameters;
-    int max_available_samplers;
+    int max_available_samplers = 0;
     bool has_estimated_depth_texture = false;
     bool has_camera_texture = false;
   };
@@ -239,7 +378,6 @@ class GenericMaterialImpl : public GenericMaterial {
   bool IsValidSampler(absl::string_view sampler_name);
 
   BaseView& view_;
-  std::string name_;
   OwnedMaterialPtr material_;
   ParameterInfo parameter_info_;
   BorrowedTexturePtr placeholder_texture_;
@@ -259,17 +397,6 @@ class GenericMaterialImpl : public GenericMaterial {
   int samplers_uv_bitflags_ = 0;
   std::vector<mat3f> samplers_uv_matrices_;
 };
-
-template <typename T>
-void GenericMaterialImpl::ApplyMaterialParameter(absl::string_view name,
-                                                 const T& value) {
-  material_->GetFilamentMaterialInstance()->setParameter(name.data(), value);
-  parameters_.emplace_back(model::MaterialParameter(name, value));
-}
-
-template <>
-void GenericMaterialImpl::ApplyMaterialParameter(absl::string_view name,
-                                                 const std::vector<mat3f>& v);
 
 }  // namespace imp
 

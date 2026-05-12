@@ -369,6 +369,7 @@ This file contains expansion macros (X Macros) for OpenXR structures.
     _avail(XrEnvironmentDepthImageAcquireInfoMETA, XR_TYPE_ENVIRONMENT_DEPTH_IMAGE_ACQUIRE_INFO_META) \
     _avail(XrEnvironmentDepthImageViewMETA, XR_TYPE_ENVIRONMENT_DEPTH_IMAGE_VIEW_META) \
     _avail(XrEnvironmentDepthImageMETA, XR_TYPE_ENVIRONMENT_DEPTH_IMAGE_META) \
+    _avail(XrEnvironmentDepthImageTimestampMETA, XR_TYPE_ENVIRONMENT_DEPTH_IMAGE_TIMESTAMP_META) \
     _avail(XrEnvironmentDepthHandRemovalSetInfoMETA, XR_TYPE_ENVIRONMENT_DEPTH_HAND_REMOVAL_SET_INFO_META) \
     _avail(XrSystemEnvironmentDepthPropertiesMETA, XR_TYPE_SYSTEM_ENVIRONMENT_DEPTH_PROPERTIES_META) \
     _avail(XrRenderModelCreateInfoEXT, XR_TYPE_RENDER_MODEL_CREATE_INFO_EXT) \
@@ -574,12 +575,6 @@ This file contains expansion macros (X Macros) for OpenXR structures.
     _avail(XrEventDataImageTrackingLostANDROID, XR_TYPE_EVENT_DATA_IMAGE_TRACKING_LOST_ANDROID) \
     _avail(XrOccupancyGridANDROIDX, XR_TYPE_OCCUPANCY_GRID_ANDROIDX) \
     _avail(XrPlaneTrackableTrackerCreateInfoANDROIDX, XR_TYPE_PLANE_TRACKABLE_TRACKER_CREATE_INFO_ANDROIDX) \
-    _avail(XrAvatarSkeletonJointANDROIDX, XR_TYPE_AVATAR_SKELETON_JOINT_ANDROIDX) \
-    _avail(XrAvatarSkeletonANDROIDX, XR_TYPE_AVATAR_SKELETON_ANDROIDX) \
-    _avail(XrBodyTrackerCreateInfoANDROIDX, XR_TYPE_BODY_TRACKER_CREATE_INFO_ANDROIDX) \
-    _avail(XrBodyTrackerGetInfoANDROIDX, XR_TYPE_BODY_TRACKER_GET_INFO_ANDROIDX) \
-    _avail(XrBodyTrackerAvatarProportionsANDROIDX, XR_TYPE_BODY_TRACKER_AVATAR_PROPORTIONS_ANDROIDX) \
-    _avail(XrBodyTrackerCalibrationANDROIDX, XR_TYPE_BODY_TRACKER_CALIBRATION_ANDROIDX) \
     _avail(XrBodyJointLocationsANDROIDSYS, XR_TYPE_BODY_JOINT_LOCATIONS_ANDROIDSYS) \
     _avail(XrBodyTrackerCreateInfoANDROIDSYS, XR_TYPE_BODY_TRACKER_CREATE_INFO_ANDROIDSYS) \
     _avail(XrBodyJointsLocateInfoANDROIDSYS, XR_TYPE_BODY_JOINTS_LOCATE_INFO_ANDROIDSYS) \

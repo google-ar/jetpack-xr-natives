@@ -18,7 +18,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <new>
 #include <utility>
 
 #include "core/common/log.h"
@@ -446,8 +445,7 @@ MeshBuilder::CreateMorphTargetBufferBuilder() noexcept {
 }
 
 void MeshBuilder::Finalize() noexcept {
-  // Do nothing. This is designed to be overridden by
-  // SplitEngineMeshBuilder.
+  // Do nothing. This is designed to be overridden by SplitEngineMeshBuilder.
 }
 
 }  // namespace imp

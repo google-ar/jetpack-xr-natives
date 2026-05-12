@@ -112,7 +112,7 @@ int main(int argc, char** argv) {
   auto positional_args = absl::ParseCommandLine(argc, argv);
 
   if (positional_args.size() == 1) {
-    LOG(ERROR) << "Missing input file.\n" << absl::ProgramUsageMessage();
+    IMP_LOG(imp::ERROR) << "Missing input file.\n" << absl::ProgramUsageMessage();
     return 1;
   }
 
@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
     const char* input_filepath = *it;
     std::string contents;
     if (!flatbuffers::LoadFile(input_filepath, true, &contents)) {
-      LOG(ERROR) << "Unable to load file: " << input_filepath;
+      IMP_LOG(imp::ERROR) << "Unable to load file: " << input_filepath;
       return 1;
     }
 
@@ -133,13 +133,13 @@ int main(int argc, char** argv) {
 
     flatbuffers::Parser parser(parser_options);
     if (!parser.Parse(contents.data(), nullptr, input_filepath)) {
-      LOG(ERROR) << "Failed to parse input file: " << parser.error_;
+      IMP_LOG(imp::ERROR) << "Failed to parse input file: " << parser.error_;
       return 1;
     }
 
     auto max_schema_requires_api = GetSchemaMaxRequiresApiValue(parser);
     if (!max_schema_requires_api.ok()) {
-      LOG(ERROR) << "Failed to get max schema requires api value: "
+      IMP_LOG(imp::ERROR) << "Failed to get max schema requires api value: "
                  << max_schema_requires_api.status();
       return 1;
     }

@@ -15,6 +15,7 @@
 #include "core/editor/components/world_space_editor_ui.h"
 
 #include <cfloat>
+#include <functional>
 #include <optional>
 #include <utility>
 
@@ -47,20 +48,23 @@
 #include "core/view/framework/input/pointer_input_handler.h"
 #include "core/view/utils/string_map.h"
 #include "core/window/filament_host.h"
+#include "core/window/imgui_renderer.h"
 
 namespace imp::editor {
 
 Future<absl::Status> WorldSpaceEditorUi::Setup(
     float2 texture_resolution, StringMap<float3> canvas_position_map) {
-  window::FilamentHost::DevModeExtension* dev_mode_extension =
-      GetView().GetHost()->TryGetExtension();
-  if (dev_mode_extension && dev_mode_extension->HasRenderTarget()) {
+  dev_mode_extension_ = GetView().GetHost()->TryGetExtension();
+  if (dev_mode_extension_ == nullptr) {
+    return Future<absl::Status>(
+        absl::InternalError("DevModeExtension is null"));
+  }
+  if (dev_mode_extension_ && dev_mode_extension_->HasRenderTarget()) {
     return Future<absl::Status>(
         absl::FailedPreconditionError("Can't create a WorldSpaceEditorUi when "
                                       "DevModeExtension already has an "
                                       "existing render target."));
   }
-
   if (texture_resolution.y <= 0 || texture_resolution.x <= 0) {
     return Future<absl::Status>(absl::InvalidArgumentError(
         "Invalid resolution. Both X and Y values must be positive."));
@@ -68,15 +72,25 @@ Future<absl::Status> WorldSpaceEditorUi::Setup(
   texture_resolution_ = texture_resolution;
   texture_aspect_ratio_ = texture_resolution.y / texture_resolution_.x;
 
-  // Create and register a texture to act as a canvas for the ImGui UI.
-  texture_ = GetView().GetTextureFactory().CreateTexture(
-      texture_resolution.x, texture_resolution.y,
-      filament::Texture::InternalFormat::RGBA8,
-      filament::Texture::Usage::COLOR_ATTACHMENT |
-          filament::Texture::Usage::SAMPLEABLE);
+  window::ImGuiRenderer* imgui_renderer =
+      dev_mode_extension_->GetImGuiRenderer();
+  if (!imgui_renderer) {
+    return Future<absl::Status>(absl::InternalError("ImGuiRenderer is null"));
+  }
 
   canvas_position_map_ = std::move(canvas_position_map);
 
+  if (!GetView().GetSplitEngineSerializer()) {
+    // cannot resize a filament texture, so we have to create a new one with the
+    // correct size.
+    imgui_renderer->Initialize(texture_resolution);
+    texture_ = imgui_renderer->GetTexture();
+  } else {
+    imgui_renderer->RegisterCallback(
+        [this, imgui_renderer]() { texture_ = imgui_renderer->GetTexture(); });
+    // initialize the AndroidExternalTexture.
+    imgui_renderer->Initialize(texture_resolution);
+  }
   // Listen for ControllerHitEvents on the Editor dispatcher
   Dispatcher& editor_dispatcher =
       GetView().GetRegistry().Get<editor::Editor>()->get().GetDispatcher();
@@ -90,6 +104,7 @@ Future<absl::Status> WorldSpaceEditorUi::Setup(
   ConnectToPointerHitEvents(GetView().GetDispatcher());
 
   GetNode()->SetName(kWorldUiName);
+
   return Future<absl::Status>(absl::OkStatus());
 }
 
@@ -103,6 +118,14 @@ void WorldSpaceEditorUi::Cleanup() {
 
 Future<absl::Status> WorldSpaceEditorUi::UpdateSpatialUiCanvas(
     SpatialUiCanvas::SpatialUiCanvasSettings settings) {
+  window::ImGuiRenderer* imgui_renderer =
+      dev_mode_extension_->GetImGuiRenderer();
+
+  if (!imgui_renderer->IsReady()) {
+    // not ready yet, but not a failure either. Exit until the texture is ready.
+    return Future<absl::Status>(absl::OkStatus());
+  }
+
   auto it = spatial_ui_canvases_.find(settings.name);
   if (it != spatial_ui_canvases_.end()) {
     ComponentHandle<SpatialUiCanvas> canvas =
@@ -117,23 +140,21 @@ Future<absl::Status> WorldSpaceEditorUi::UpdateSpatialUiCanvas(
     }
     return Future<absl::Status>(absl::OkStatus());
   }
-
   NodeHandle canvas_node = GetNode()->GetView().CreateNode();
   spatial_ui_canvases_[settings.name] = canvas_node;
   return canvas_node
       ->AddComponent<SpatialUiCanvas>(
           /*name=*/settings.name,
           /*content_position=*/settings.content_position,
-          /*content_size=*/settings.content_size, texture_.Borrow())
+          /*content_size=*/settings.content_size, texture_,
+          imgui_renderer->GetTextureSize())
       .Then([this, canvas_node, settings](
                 absl::StatusOr<ComponentHandle<SpatialUiCanvas>> canvas) {
         if (!canvas.ok()) {
-          IMP_LOG(imp::ERROR) << "Failed to create SpatialUiCanvas: " << canvas.status();
           spatial_ui_canvases_.erase(canvas_node->GetName());
           GetNode()->GetView().DestroyNode(canvas_node);
           return canvas.status();
         }
-
         NodeHandle grab_handle = GetNode()->GetView().CreateNode();
         grab_handle->SetParent(GetNode());
         grab_handle->SetName(absl::StrCat("grab_handle_", settings.name));
@@ -163,6 +184,9 @@ void WorldSpaceEditorUi::UpdateImGuiMouseDown(bool is_left_click_down,
 }
 
 void WorldSpaceEditorUi::OnActiveStatusChanged(bool is_active) {
+  if (GetView().GetSplitEngineSerializer()) {
+    return;
+  }
   if (texture_ && is_active) {
     GetView().GetHost()->TryGetExtension()->ApplyTextureRenderTarget(
         texture_->GetTexture());
@@ -253,6 +277,7 @@ void WorldSpaceEditorUi::ConnectToPointerHitEvents(Dispatcher& dispatcher) {
         if (it != spatial_ui_canvases_.end() && it->second == hit_node) {
           hit_canvas_ = it->second->GetComponent<SpatialUiCanvas>();
         }
+
         if (!hit_canvas_) {
           UpdateImGuiMouseDown(false, false);
           return;

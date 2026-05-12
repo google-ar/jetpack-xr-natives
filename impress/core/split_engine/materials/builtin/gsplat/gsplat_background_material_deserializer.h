@@ -15,10 +15,8 @@
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_MATERIALS_BUILTIN_GSPLAT_GSPLAT_BACKGROUND_MATERIAL_DESERIALIZER_H_
 
 #include "absl/status/status.h"
-#include "filament/filament/include/filament/Texture.h"
 #include "flatbuffers/verifier.h"
 #include "core/async/future.h"
-#include "core/material_library/material_param_value.h"
 #include "core/materials/material.h"
 #include "core/ncsb/update_system.h"
 #include "core/render/texture.h"

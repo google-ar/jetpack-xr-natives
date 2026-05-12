@@ -299,6 +299,12 @@ table MessageGroupOperation (requires_api: 1) {
 
 root_type MessageGroupOperation;
 
+// TestRequest is a Request that is not part of the public API.
+// It is only used for testing purposes.
+// It does nothing, and will never do anything.
+// Note: this is not actually available on all devices that have API 1, it was
+// added afterwards.
+table TestRequest (requires_api: 1) {}
 
 // TestExperimentalRequest is a Request that is not part of the public API.
 // It is only used for testing and benchmarking purposes.
@@ -311,6 +317,9 @@ union RequestTypes (requires_api: 1) {
   BuiltInMaterialRequest = 1 (requires_api: 1),
   AddCustomMaterialRequest = 2,
 
+  // TestRequest is a request that is not part of the public API.
+  // It is only used for testing purposes.
+  TestRequest = 254 (requires_api: 1),
   // TestExperimentalRequest is not part of the public API and will always
   // remain experimental.
   TestExperimentalRequest = 255,
@@ -347,14 +356,32 @@ table ErrorResponse (requires_api: 1) {
   error_message: string (id: 1, requires_api: 1);
 }
 
+// TestResponse is a response that is not part of the public API.
+// It is only used for testing purposes.
+// It does nothing, and will never do anything.
+// Note: this is not actually available on all devices that have API 1, it was
+// added afterwards.
+table TestResponse (requires_api: 1) {
+  response_message: string (id: 0, requires_api: 1);
+}
+
+table TestExperimentalResponse {
+  response_message: string (id: 0);
+}
+
 // A response is sent back from the Split Engine service to the client in
 // fulfillment of a request. If the error string is set, the request failed.
 union ResponseTypes (requires_api: 1) {
   ErrorResponse = 1 (requires_api: 1),
-  // NOTE: NO NEW RESPONSES SHOULD BE ADDED TO THIS UNION AT THIS TIME.
-  // Until the split engine renderer is able to validate responses.
-  // TODO: Remove this comment once validation is in place.
+
+  // TestResponse is a response that is not part of the public API.
+  // It is only used for testing purposes.
+  TestResponse = 254 (requires_api: 1),
+  // TestExperimentalResponse is not part of the public API and will always
+  // remain experimental.
+  TestExperimentalResponse = 255,
 }
+
 table Response (requires_api: 1) {
   response: ResponseTypes (id: 1, requires_api: 1);
 }

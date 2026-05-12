@@ -494,6 +494,17 @@ absl::Status CreateInteractivityNodeConfigurations(
                 fbb, schemas::InteractivityNodeConfigurationType::USE_SLERP,
                 std::get<bool>(configuration.value)));
         break;
+      case imp::gltf::Interactivity::Graph::Node::ConfigurationType::SEVERITY:
+        if (!std::get_if<int>(&configuration.value)) {
+          return absl::InternalError(
+              absl::StrFormat("Interactivity configuration id %d has no value",
+                              configuration.id));
+        }
+        out_configuration_offsets.push_back(
+            CreateInteractivityNodeConfiguration(
+                fbb, schemas::InteractivityNodeConfigurationType::SEVERITY,
+                std::get<int>(configuration.value)));
+        break;
       default:
         return absl::InternalError(
             absl::StrFormat("Invalid interactivity configuration id with id %d",

@@ -30,6 +30,7 @@
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/backend/include/backend/PixelBufferDescriptor.h"
 #include "filament/filament/include/filament/Texture.h"
+#include "core/async/executor.h"
 #include "core/common/buffer_access.h"
 #include "core/image/image_contents.h"
 #include "core/resources/resource_manager.h"
@@ -63,8 +64,14 @@ class StbImageContents : public ImageContents {
   StbImageContents(int width, int stride, int height, int channels,
                    uint8_t* stb_memory)
       : width_(width), stride_(stride), height_(height), channels_(channels) {
-    stb_memory_ = std::shared_ptr<uint8_t>(
-        stb_memory, [](uint8_t* p) { ReleaseStorage(p); });
+    stb_memory_ = std::shared_ptr<uint8_t>(stb_memory, [](uint8_t* p) {
+      if (Executor::BackgroundExecutor() != nullptr) {
+        Executor::BackgroundExecutor()->ScheduleInvocable(
+            [p]() { ReleaseStorage(p); });
+      } else {
+        ReleaseStorage(p);
+      }
+    });
   }
 
   uint32_t GetWidth() const override { return static_cast<uint32_t>(width_); }

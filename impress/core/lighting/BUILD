@@ -52,6 +52,7 @@ cc_library(
         "//core/view:base_view",
         "//core/view/utils:string_map",
         "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/base:nullability",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",

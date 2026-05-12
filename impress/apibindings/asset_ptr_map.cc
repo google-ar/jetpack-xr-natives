@@ -23,6 +23,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
+#include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "apibindings/base_asset_loader.h"
 #include "core/assets/asset_ptr.h"
@@ -80,11 +81,16 @@ void AssetPtrMap::LoadImageBasedLightingAsset(
 
 absl::Status AssetPtrMap::ReleaseImageBasedLightingAsset(
     std::intptr_t ibl_token) {
-  if (ibl_asset_map_.find(ibl_token) != ibl_asset_map_.end()) {
-    ibl_asset_map_.erase(ibl_token);
-    return absl::OkStatus();
+  auto asset_ptr = ibl_asset_map_.find(ibl_token);
+  if (asset_ptr == ibl_asset_map_.end()) {
+    return absl::NotFoundError(absl::StrFormat(
+        "Image based lighting asset with token %d is not cached.", ibl_token));
   }
-  return absl::NotFoundError("Image based lighting asset is not cached.");
+  --asset_ptr->second.ref_count;
+  if (asset_ptr->second.ref_count <= 0) {
+    ibl_asset_map_.erase(asset_ptr);
+  }
+  return absl::OkStatus();
 }
 
 void AssetPtrMap::LoadGltfAsset(absl::string_view path,
@@ -124,11 +130,16 @@ void AssetPtrMap::LoadGltfAsset(imp::AssetDefinition asset_definition,
 }
 
 absl::Status AssetPtrMap::ReleaseGltfAsset(std::intptr_t gltf_token) {
-  if (gltf_asset_map_.find(gltf_token) != gltf_asset_map_.end()) {
-    gltf_asset_map_.erase(gltf_token);
-    return absl::OkStatus();
+  auto asset_ptr = gltf_asset_map_.find(gltf_token);
+  if (asset_ptr == gltf_asset_map_.end()) {
+    return absl::NotFoundError(
+        absl::StrFormat("Gltf asset with token %d is not cached.", gltf_token));
   }
-  return absl::NotFoundError("Gltf asset is not cached.");
+  --asset_ptr->second.ref_count;
+  if (asset_ptr->second.ref_count <= 0) {
+    gltf_asset_map_.erase(asset_ptr);
+  }
+  return absl::OkStatus();
 }
 
 absl::StatusOr<AssetPtr<GltfAsset>> AssetPtrMap::GetStoredGltfAsset(
@@ -137,7 +148,7 @@ absl::StatusOr<AssetPtr<GltfAsset>> AssetPtrMap::GetStoredGltfAsset(
   if (asset_ptr == gltf_asset_map_.end()) {
     return absl::NotFoundError("Gltf asset is not cached.");
   }
-  return asset_ptr->second;
+  return asset_ptr->second.asset;
 }
 
 absl::StatusOr<AssetPtr<ImageBasedLightingAsset>>
@@ -146,7 +157,7 @@ AssetPtrMap::GetStoredIblAsset(std::intptr_t ibl_token) {
   if (asset_ptr == ibl_asset_map_.end()) {
     return absl::NotFoundError("Image based lighting asset is not cached.");
   }
-  return asset_ptr->second;
+  return asset_ptr->second.asset;
 }
 
 void AssetPtrMap::DestroyGltfAssets() { gltf_asset_map_.clear(); }
@@ -172,14 +183,20 @@ template <typename AssetT>
 void AssetPtrMap::HandleAssetLoadingResult(
     absl::StatusOr<AssetPtr<AssetT>> asset_ptr,
     std::unique_ptr<BaseAssetLoader> asset_loader,
-    absl::flat_hash_map<std::intptr_t, AssetPtr<AssetT>>& asset_map) {
+    absl::flat_hash_map<std::intptr_t, RefCountedAsset<AssetT>>& asset_map) {
   if (!asset_ptr.ok()) {
     asset_loader->OnFailure(asset_ptr.status().ToString());
     return;
   }
 
   std::intptr_t token = reinterpret_cast<std::intptr_t>(asset_ptr->Get());
-  asset_map[token] = *asset_ptr;
+  auto it = asset_map.find(token);
+  if (it != asset_map.end()) {
+    // Cached asset already exists, increment reference count.
+    it->second.ref_count++;
+  } else {
+    asset_map[token] = {*asset_ptr, 1};
+  }
   asset_loader->OnSuccess(token);
 }
 

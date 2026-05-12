@@ -16,8 +16,10 @@
 
 #include <jni.h>
 #include <openxr/openxr.h>
+#include <openxr/public/all_extensions.h>
 
 #include <cstdint>
+#include <string>
 
 #include "absl/strings/str_format.h"
 #include "common/namespace_util.h"
@@ -31,6 +33,42 @@ using ::androidx::xr::common::PACKAGE_ARCORE_RUNTIME;
 using ::androidx::xr::common::PACKAGE_ARCORE_OPENXR;
 using ::androidx::xr::common::PACKAGE_CORE;
 using ::androidx::xr::common::PACKAGE_MATH;
+
+namespace {
+
+jclass LoadClassWithClassLoader(JNIEnv* env, jobject class_loader,
+                                common::Package package,
+                                const char* class_name) {
+  std::string full_class_name_str =
+      ::androidx::xr::common::GetJxrFullClassName(env, package, class_name);
+  jstring full_class_name = env->NewStringUTF(full_class_name_str.c_str());
+  jclass class_loader_clazz = env->FindClass("java/lang/ClassLoader");
+  jmethodID load_class_method = env->GetMethodID(
+      class_loader_clazz, "loadClass", "(Ljava/lang/String;)Ljava/lang/Class;");
+  jclass result = (jclass)env->CallObjectMethod(class_loader, load_class_method,
+                                                full_class_name);
+  env->DeleteLocalRef(full_class_name);
+  env->DeleteLocalRef(class_loader_clazz);
+  return result;
+}
+
+jobject CreateVpsAvailabilityResultInstance(JNIEnv* env, jobject class_loader,
+                                            const char* class_name) {
+  jclass cls =
+      LoadClassWithClassLoader(env, class_loader, PACKAGE_CORE, class_name);
+  if (cls == nullptr) {
+    return nullptr;
+  }
+  jmethodID constructor = env->GetMethodID(cls, "<init>", "()V");
+  if (constructor == nullptr) {
+    env->DeleteLocalRef(cls);
+    return nullptr;
+  }
+  jobject instance = env->NewObject(cls, constructor);
+  env->DeleteLocalRef(cls);
+  return instance;
+}
+}  // namespace
 
 constexpr XrSpaceLocationFlags kPoseValidFlags =
     XR_SPACE_LOCATION_POSITION_VALID_BIT |
@@ -478,7 +516,7 @@ jobject CreateJavaEyesInfo(JNIEnv* env, const XrEyesANDROID& xr_eyes) {
 }
 
 jobject CreateJavaGeospatialPose(
-    JNIEnv* env, const XrGeospatialPoseANDROIDX2& xr_geospatial_pose) {
+    JNIEnv* env, const XrGeospatialPoseANDROID& xr_geospatial_pose) {
   jclass geospatial_pose_class =
       GetJxrClass(env, PACKAGE_MATH, "GeospatialPose");
   jmethodID geospatial_pose_constructor = env->GetMethodID(
@@ -496,7 +534,7 @@ jobject CreateJavaGeospatialPose(
 
 jobject CreateJavaGeospatialPoseResult(
     JNIEnv* env,
-    const XrGeospatialPoseResultANDROIDX2& xr_geospatial_pose_result) {
+    const XrGeospatialPoseResultANDROID& xr_geospatial_pose_result) {
   jclass geospatial_pose_result_class = GetJxrClass(
       env, PACKAGE_ARCORE_RUNTIME, "Geospatial$GeospatialPoseResult");
   jmethodID geospatial_pose_result_constructor = env->GetMethodID(
@@ -513,32 +551,20 @@ jobject CreateJavaGeospatialPoseResult(
                         xr_geospatial_pose_result.orientationYawAccuracy);
 }
 
-jobject CreateVpsAvailabilityResultInstance(JNIEnv* env,
-                                            const char* class_name) {
-  jclass cls = GetJxrClass(env, PACKAGE_CORE, class_name);
-  if (cls == nullptr) {
-    return nullptr;
-  }
-  jmethodID constructor = env->GetMethodID(cls, "<init>", "()V");
-  if (constructor == nullptr) {
-    return nullptr;
-  }
-  return env->NewObject(cls, constructor);
-}
-
 jobject CreateVpsAvailabilityResult(
-    JNIEnv* env, const XrVPSAvailabilityCheckCompletionANDROIDX2& completion) {
+    JNIEnv* env, jobject class_loader,
+    const XrVPSAvailabilityCheckCompletionANDROID& completion) {
   if (completion.futureResult == XR_SUCCESS) {
     switch (completion.availability) {
-      case XR_VPS_AVAILABILITY_AVAILABLE_ANDROIDX2:
-        return CreateVpsAvailabilityResultInstance(env,
+      case XR_VPS_AVAILABILITY_AVAILABLE_ANDROID:
+        return CreateVpsAvailabilityResultInstance(env, class_loader,
                                                    "VpsAvailabilityAvailable");
-      case XR_VPS_AVAILABILITY_UNAVAILABLE_ANDROIDX2:
+      case XR_VPS_AVAILABILITY_UNAVAILABLE_ANDROID:
         return CreateVpsAvailabilityResultInstance(
-            env, "VpsAvailabilityUnavailable");
+            env, class_loader, "VpsAvailabilityUnavailable");
       default:
         return CreateVpsAvailabilityResultInstance(
-            env, "VpsAvailabilityErrorInternal");
+            env, class_loader, "VpsAvailabilityErrorInternal");
     }
   } else {
     // Detailed error information is linked in a chained struct from the
@@ -548,32 +574,32 @@ jobject CreateVpsAvailabilityResult(
 
     while (next_struct != nullptr &&
            next_struct->type !=
-               XR_TYPE_GOOGLE_CLOUD_AUTH_ERROR_RESULT_ANDROIDX2) {
+               XR_TYPE_GOOGLE_CLOUD_AUTH_ERROR_RESULT_ANDROID) {
       next_struct = static_cast<const XrBaseOutStructure*>(next_struct->next);
     }
 
     if (next_struct != nullptr &&
-        next_struct->type == XR_TYPE_GOOGLE_CLOUD_AUTH_ERROR_RESULT_ANDROIDX2) {
+        next_struct->type == XR_TYPE_GOOGLE_CLOUD_AUTH_ERROR_RESULT_ANDROID) {
       const auto* auth_error =
-          reinterpret_cast<const XrGoogleCloudAuthErrorResultANDROIDX2*>(
+          reinterpret_cast<const XrGoogleCloudAuthErrorResultANDROID*>(
               next_struct);
       switch (auth_error->error) {
-        case XR_GOOGLE_CLOUD_AUTH_ERROR_QUOTA_EXCEEDED_ANDROIDX2:
+        case XR_GOOGLE_CLOUD_AUTH_ERROR_QUOTA_EXCEEDED_ANDROID:
           return CreateVpsAvailabilityResultInstance(
-              env, "VpsAvailabilityResourceExhausted");
-        case XR_GOOGLE_CLOUD_AUTH_ERROR_UNREACHABLE_ANDROIDX2:
+              env, class_loader, "VpsAvailabilityResourceExhausted");
+        case XR_GOOGLE_CLOUD_AUTH_ERROR_UNREACHABLE_ANDROID:
           return CreateVpsAvailabilityResultInstance(
-              env, "VpsAvailabilityNetworkError");
-        case XR_GOOGLE_CLOUD_AUTH_ERROR_ANDROIDX2:
+              env, class_loader, "VpsAvailabilityNetworkError");
+        case XR_GOOGLE_CLOUD_AUTH_ERROR_ANDROID:
           return CreateVpsAvailabilityResultInstance(
-              env, "VpsAvailabilityNotAuthorized");
+              env, class_loader, "VpsAvailabilityNotAuthorized");
         default:
           return CreateVpsAvailabilityResultInstance(
-              env, "VpsAvailabilityErrorInternal");
+              env, class_loader, "VpsAvailabilityErrorInternal");
       }
     } else {
       return CreateVpsAvailabilityResultInstance(
-          env, "VpsAvailabilityErrorInternal");
+          env, class_loader, "VpsAvailabilityErrorInternal");
     }
   }
 }
@@ -582,21 +608,18 @@ jobject CreateJavaDisplayBlendMode(
     JNIEnv* env, const XrEnvironmentBlendMode& xr_blend_mode) {
   jclass blend_mode_ext_cls =
       GetJxrClass(env, PACKAGE_ARCORE_OPENXR, "OpenXrRuntimeKt");
-  jclass blend_mode_enum =
-      GetJxrClass(env, PACKAGE_CORE, "XrDevice$DisplayBlendMode");
+  jclass blend_mode_enum = GetJxrClass(env, PACKAGE_CORE, "DisplayBlendMode");
   jfieldID blend_mode_static_fid = env->GetStaticFieldID(
       blend_mode_enum, "Companion",
-      absl::StrFormat(
-          "L%s;", GetJxrFullClassName(env, PACKAGE_CORE,
-                                      "XrDevice$DisplayBlendMode$Companion"))
+      absl::StrFormat("L%s;", GetJxrFullClassName(env, PACKAGE_CORE,
+                                                  "DisplayBlendMode$Companion"))
           .c_str());
   jmethodID fromOpenXrEnvironmentBlendMode = env->GetStaticMethodID(
       blend_mode_ext_cls, "fromOpenXrEnvironmentBlendMode",
       absl::StrFormat(
           "(L%s;I)L%s;",
-          GetJxrFullClassName(env, PACKAGE_CORE,
-                              "XrDevice$DisplayBlendMode$Companion"),
-          GetJxrFullClassName(env, PACKAGE_CORE, "XrDevice$DisplayBlendMode"))
+          GetJxrFullClassName(env, PACKAGE_CORE, "DisplayBlendMode$Companion"),
+          GetJxrFullClassName(env, PACKAGE_CORE, "DisplayBlendMode"))
           .c_str());
   jobject blend_mode_static_obj =
       env->GetStaticObjectField(blend_mode_enum, blend_mode_static_fid);

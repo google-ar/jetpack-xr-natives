@@ -38,6 +38,7 @@
 #include "core/model/model_data.h"
 #include "core/ncsb/node.h"
 #include "core/render/base_renderable_manager.h"
+#include "core/render/render_order_constants.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/material_factory.h"
 #include "core/view/framework/render/material_definition.proto.imp.h"
@@ -50,12 +51,6 @@ namespace {
 using model::ModelData;
 using RenderFlags = ModelData::RenderFlags;
 
-static constexpr uint8_t kMinPriority = 0;
-static constexpr uint8_t kMaxPriority = 7;
-static constexpr uint8_t kMinChannel = 0;
-static constexpr uint8_t kMaxChannel = 7;
-static constexpr uint16_t kMinBlendOrder = 0;
-static constexpr uint16_t kMaxBlendOrder = 0x7FFF;
 static constexpr char kDebugNamePrefix[] = "rc_";
 
 // TODO: Combine Proto frustum culling mode and C++ frustum

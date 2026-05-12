@@ -36,6 +36,7 @@
 #include "core/assets/gltf/interactivity/custom_statements/animation_stop.h"
 #include "core/assets/gltf/interactivity/custom_statements/animation_stop_at.h"
 #include "core/assets/gltf/interactivity/custom_statements/cancel_delay.h"
+#include "core/assets/gltf/interactivity/custom_statements/debug_log.h"
 #include "core/assets/gltf/interactivity/custom_statements/do_n.h"
 #include "core/assets/gltf/interactivity/custom_statements/multi_gate.h"
 #include "core/assets/gltf/interactivity/custom_statements/on_hover.h"
@@ -523,6 +524,8 @@ GltfInteractivityExtension::System::System(BaseView* view)
       gltf::interactivity::PointerSetCustomStatement>();
   recipe_system.RegisterCustomStatementType<
       gltf::interactivity::VariableSetCustomStatement>();
+  recipe_system.RegisterCustomStatementType<
+      gltf::interactivity::DebugLogCustomStatement>();
 
   recipe_system.RegisterFunction(
       gltf::interactivity::kGetNodeByIndexFunctionName,

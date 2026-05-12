@@ -17,13 +17,27 @@ edition = "2023";
 package test;
 
 import "core/proto/imp.proto";
+import "core/proto/imp_editions.proto";
 
 option java_multiple_files = true;
 option java_outer_classname = "TestEdition2023";
 option (imp.impress_append_namespace) = true;
 
 message TestEdition2023Message {
-  // TODO): Support OptionalWithDefault for fields with presence.
-  // TODO: Support primitive types with specified defaults.
-  // TODO: Support message types with specified defaults.
+  message TestNestedMessage {
+    int32 int_field = 1;
+  }
+
+  string string_field = 1;
+
+  string string_field_optional_with_default = 2 [
+    features.(.imp.impress_feature_set).presence_mode = OPTIONAL_WITH_DEFAULT,
+    default = "hello"
+  ];
+
+  TestNestedMessage nested_message = 3;
+
+  TestNestedMessage nested_message_optional_with_default = 4
+      [features.(.imp.impress_feature_set).presence_mode =
+           OPTIONAL_WITH_DEFAULT];
 }

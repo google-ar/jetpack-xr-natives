@@ -78,6 +78,7 @@ enum InteractivityNodeConfigurationType : uint8 {
   INITIAL_INDEX,
   VARIABLES,
   USE_SLERP,
+  SEVERITY,
 }
 
 table InteractivityNodeConfiguration {

@@ -14,28 +14,64 @@
 
 #include "core/split_engine/materials/split_engine_custom_material.h"
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/functional/function_ref.h"
-#include "absl/log/check.h"
-#include "core/common/log.h"
+#include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "filament/filament/include/filament/Color.h"
 #include "filament/filament/include/filament/MaterialInstance.h"
+#include "flatbuffers/buffer.h"
+#include "flatbuffers/flatbuffer_builder.h"
+#include "core/assets/asset_ptr.h"
+#include "core/assets/material/material_asset.h"
+#include "core/assets/material/material_load_options.proto.imp.h"
+#include "core/async/future.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/small_source_location.h"
 #include "core/materials/material.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
 #include "core/render/texture.h"
+#include "core/split_engine/android/split_engine_android_bridge.h"
+#include "core/split_engine/flatbuffer_utils.h"
+#include "core/split_engine/materials/placeholder_material_asset.h"
 #include "core/split_engine/split_engine_serializer.h"
+#include "core/view/base_view.h"
+#include "core/view/framework/assets/asset_manager.h"
+#include "core/view/framework/assets/material_factory.h"
 #include "core/view/utils/string_map.h"
+#include "split_engine/schemas/split_engine_material_generated.h"
 
 namespace imp::split_engine {
+
+Future<absl::Status> SplitEngineCustomMaterial::RequestCustomFilamentMaterial(
+    BaseView& view, absl::string_view material_source,
+    filament::Material* filament_material,
+    const MaterialPreCompileOptions& precompile_options) {
+  const uint64_t material_id = SplitEngineSerializer::GetId(filament_material);
+
+  flatbuffers::FlatBufferBuilder fbb;
+  flatbuffers::Offset<android_xr::schemas::FilamentMaterialSpec>
+      material_spec_offset = android_xr::schemas::CreateFilamentMaterialSpec(
+          fbb, fbb.CreateString(material_source),
+          Pack(fbb, precompile_options));
+  flatbuffers::Offset<android_xr::schemas::AddCustomMaterialRequest> request =
+      android_xr::schemas::CreateAddCustomMaterialRequest(
+          fbb, material_id,
+          android_xr::schemas::CustomMaterialSpec::FilamentMaterialSpec,
+          material_spec_offset.Union());
+
+  return SendRequest<android_xr::schemas::AddCustomMaterialRequest,
+                     absl::Status>(view.GetSplitEngineSerializer()->GetBridge(),
+                                   fbb, request);
+}
 
 SplitEngineCustomMaterial::SplitEngineCustomMaterial(
     SplitEngineSerializer& serializer, OwnedMaterialPtr material)
@@ -43,6 +79,11 @@ SplitEngineCustomMaterial::SplitEngineCustomMaterial(
 
 SplitEngineCustomMaterial::~SplitEngineCustomMaterial() {
   serializer_.RemoveMaterialInstance(GetFilamentMaterialInstance());
+}
+
+const filament::MaterialInstance*
+SplitEngineCustomMaterial::GetFilamentMaterialInstance() const {
+  return material_->GetFilamentMaterialInstance();
 }
 
 filament::MaterialInstance*
@@ -150,75 +191,111 @@ void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              absl::Span<const bool> value) {
-  IMP_LOG(imp::ERROR) << "span parameters are not supported for " << parameter_name;
+  serializer_.SetMaterialParameter(
+      GetFilamentMaterialInstance(), parameter_name,
+      std::vector<bool>(value.begin(), value.end()));
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              absl::Span<const bool2> value) {
-  IMP_LOG(imp::ERROR) << "span parameters are not supported for " << parameter_name;
+  serializer_.SetMaterialParameter(
+      GetFilamentMaterialInstance(), parameter_name,
+      std::vector<bool2>(value.begin(), value.end()));
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              absl::Span<const bool3> value) {
-  IMP_LOG(imp::ERROR) << "span parameters are not supported for " << parameter_name;
+  serializer_.SetMaterialParameter(
+      GetFilamentMaterialInstance(), parameter_name,
+      std::vector<bool3>(value.begin(), value.end()));
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              absl::Span<const bool4> value) {
-  IMP_LOG(imp::ERROR) << "span parameters are not supported for " << parameter_name;
+  serializer_.SetMaterialParameter(
+      GetFilamentMaterialInstance(), parameter_name,
+      std::vector<bool4>(value.begin(), value.end()));
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              absl::Span<const float> value) {
-  IMP_LOG(imp::ERROR) << "span parameters are not supported for " << parameter_name;
+  serializer_.SetMaterialParameter(
+      GetFilamentMaterialInstance(), parameter_name,
+      std::vector<float>(value.begin(), value.end()));
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              absl::Span<const float2> value) {
-  IMP_LOG(imp::ERROR) << "span parameters are not supported for " << parameter_name;
+  serializer_.SetMaterialParameter(
+      GetFilamentMaterialInstance(), parameter_name,
+      std::vector<float2>(value.begin(), value.end()));
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              absl::Span<const float3> value) {
-  IMP_LOG(imp::ERROR) << "span parameters are not supported for " << parameter_name;
+  serializer_.SetMaterialParameter(
+      GetFilamentMaterialInstance(), parameter_name,
+      std::vector<float3>(value.begin(), value.end()));
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              absl::Span<const float4> value) {
-  IMP_LOG(imp::ERROR) << "span parameters are not supported for " << parameter_name;
+  serializer_.SetMaterialParameter(
+      GetFilamentMaterialInstance(), parameter_name,
+      std::vector<float4>(value.begin(), value.end()));
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              absl::Span<const int> value) {
-  IMP_LOG(imp::ERROR) << "span parameters are not supported for " << parameter_name;
+  serializer_.SetMaterialParameter(
+      GetFilamentMaterialInstance(), parameter_name,
+      std::vector<int>(value.begin(), value.end()));
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              absl::Span<const int2> value) {
-  IMP_LOG(imp::ERROR) << "span parameters are not supported for " << parameter_name;
+  serializer_.SetMaterialParameter(
+      GetFilamentMaterialInstance(), parameter_name,
+      std::vector<int2>(value.begin(), value.end()));
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              absl::Span<const int3> value) {
-  IMP_LOG(imp::ERROR) << "span parameters are not supported for " << parameter_name;
+  serializer_.SetMaterialParameter(
+      GetFilamentMaterialInstance(), parameter_name,
+      std::vector<int3>(value.begin(), value.end()));
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              absl::Span<const int4> value) {
-  IMP_LOG(imp::ERROR) << "span parameters are not supported for " << parameter_name;
+  serializer_.SetMaterialParameter(
+      GetFilamentMaterialInstance(), parameter_name,
+      std::vector<int4>(value.begin(), value.end()));
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              absl::Span<const uint> value) {
-  IMP_LOG(imp::ERROR) << "span parameters are not supported for " << parameter_name;
+  serializer_.SetMaterialParameter(
+      GetFilamentMaterialInstance(), parameter_name,
+      std::vector<uint>(value.begin(), value.end()));
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              absl::Span<const uint2> value) {
-  IMP_LOG(imp::ERROR) << "span parameters are not supported for " << parameter_name;
+  serializer_.SetMaterialParameter(
+      GetFilamentMaterialInstance(), parameter_name,
+      std::vector<uint2>(value.begin(), value.end()));
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              absl::Span<const uint3> value) {
-  IMP_LOG(imp::ERROR) << "span parameters are not supported for " << parameter_name;
+  serializer_.SetMaterialParameter(
+      GetFilamentMaterialInstance(), parameter_name,
+      std::vector<uint3>(value.begin(), value.end()));
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              absl::Span<const uint4> value) {
-  IMP_LOG(imp::ERROR) << "span parameters are not supported for " << parameter_name;
+  serializer_.SetMaterialParameter(
+      GetFilamentMaterialInstance(), parameter_name,
+      std::vector<uint4>(value.begin(), value.end()));
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              absl::Span<const mat3f> value) {
-  IMP_LOG(imp::ERROR) << "span parameters are not supported for " << parameter_name;
+  serializer_.SetMaterialParameter(
+      GetFilamentMaterialInstance(), parameter_name,
+      std::vector<mat3f>(value.begin(), value.end()));
 }
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,
                                              absl::Span<const mat4f> value) {
-  IMP_LOG(imp::ERROR) << "span parameters are not supported for " << parameter_name;
+  serializer_.SetMaterialParameter(
+      GetFilamentMaterialInstance(), parameter_name,
+      std::vector<mat4f>(value.begin(), value.end()));
 }
 
 void SplitEngineCustomMaterial::SetParameter(absl::string_view parameter_name,

@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-syntax = "proto2";
+edition = "2024";
 
 package com.google.ar.imp.view;
 
 import "core/view/utils/proto/render_settings.proto";
 import "core/view/utils/proto/view_config.proto";
+import "java/com/google/ar/imp/view/xr/xr_setup_params.proto";
 
 // option cc_api_version = 2;
 option java_package = "com.google.ar.imp.view";
-option java_multiple_files = true;
 
 // Configurations for an ImpSurfaceView or ImpTextureView. A default instance is
 // sufficient for functional rendering.
@@ -42,103 +42,28 @@ message SetupParams {
     BACKGROUND = 1;
   }
 
-  // Configures the foveated rendering level when building for Xr
-  enum FoveationLevel {
-    OFF_DEFAULT = 0;
-    LOW = 1;
-    MEDIUM = 2;
-    HIGH = 3;
-  }
-
-  optional string custom_native_library = 1;
-  optional bool is_opaque = 2 [default = true];
-  optional int64 platform_handle = 3;
-  optional string view_identifier = 4;
-  optional float desired_size_scale = 5 [default = 1.0];
-  optional ThreadMode thread_mode = 6;
+  string custom_native_library = 1;
+  bool skip_native_library_load = 2 [default = false];
+  bool is_opaque = 3 [default = true];
+  int64 platform_handle = 4;
+  string view_identifier = 5;
+  float desired_size_scale = 6 [default = 1.0];
+  ThreadMode thread_mode = 7;
   // Additional flags to be enabled when creating the backing swap chain in
   // Filament. Flags should be taken from the config constants in
   // filament/swapchain.h (e.g., filament::SwapChain::CONFIG_READABLE).
-  optional int64 swap_chain_flags = 7 [default = 0];
-  // When building for XR, whether or not to submit depth images along with
-  // color images in projection layers.
-  // https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#XR_KHR_composition_layer_depth
-  optional bool enable_composition_layer_depth = 8 [default = false];
-  // When building for XR, whether or not to apply enhanced stereoscopic
-  // rendering.
-  optional bool use_enhanced_stereoscopic_rendering = 9 [default = true];
-  // When building for XR, whether or not to use the max swapchain size over the
-  // recommended swapchain size.
-  optional bool use_max_swapchain_size = 10 [default = false];
-  // When building for XR, the level of foveation to use, as per the
-  // XR_FB_foveation OpenXR extension.
-  // https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#XR_FB_foveation
-  // Note: If foveation_level is not OFF_DEFAULT, use_quad_views must be false.
-  optional FoveationLevel foveation_level = 11 [default = OFF_DEFAULT];
-  optional bool skip_native_library_load = 12 [default = false];
-  // When building for XR, whether or not to render with quad views. In this
-  // configuration, each eye consists of two viewports of which one is smaller
-  // and fully included inside of the larger FoV one.
-  // https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#XR_VARJO_quad_views
-  // Note: If use_quad_views is true, foveation_level must be OFF_DEFAULT.
-  optional bool use_quad_views = 13 [default = false];
-  // When building for XR, whether or not to render with mono view. It is for
-  // emulator only.
-  optional bool use_mono_view = 26 [default = false];
-  // When building for XR, whether or not to use Varjo foveated rendering. In
-  // this configuration, the smaller (higher resolution) viewport follows the
-  // eye movement, while the larger (lower resolution) viewport is fixed.
-  // https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#XR_VARJO_foveated_rendering
-  // Note: use_quad_views must be true to use this feature.
-  optional bool use_varjo_foveated_rendering = 14 [default = false];
-  // When building for XR, the number of MSAA samples per pixel for the color
-  // and depth textures. Zero means MSAA is disabled.
-  optional int32 msaa_sample_count = 25 [default = 0];
-  // Selects the default reference space for XR applications. This should match
-  // values from
-  // https://registry.khronos.org/OpenXR/specs/1.1/man/html/XrReferenceSpaceType.html.
-  // Default to be STAGE.
-  optional int64 openxr_reference_space_type = 15 [default = 3];
-  // When building for XR, whether or not to use the eye gaze interaction
-  // extension.
-  // https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#XR_EXT_eye_gaze_interaction
-  optional bool use_eye_gaze_interaction = 16 [default = true];
-  // When building for XR, whether or not to use the AndroidSys IPD Eye
-  // Calibration extension.
-  optional bool use_ipd_eye_calibration = 17 [default = true];
-  // When building for XR, whether or not to use the Android depth texture
-  // extension.
-  optional bool use_android_depth_texture = 19 [default = false];
-  // Set to true to use default XR actions, or false if you plan to manually
-  // set XR actions with AttachXrActions.
-  optional bool use_xr_action_defaults = 20 [default = true];
-  // When building for XR, whether or not to use the FB color space extension.
-  // https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#XR_FB_color_space
-  optional bool use_fb_color_space = 21 [default = false];
-  // When building for XR, whether or not to use the AndroidSYS extensions.
-  optional bool enable_android_system_extensions = 22 [default = false];
-  // When building for XR and not using max swapchain size, the multiplier to be
-  // applied to the recommended swapchain size.
-  optional float swapchain_size_multiplier = 23 [default = 1.0];
+  int64 swap_chain_flags = 8 [default = 0];
   // The name of the thread that the background frame scheduler will run on.
-  optional string background_thread_name = 24 [default = "impressThread"];
-  // The render settings for the main view.
-  optional .imp.render_settings.ViewRenderSettings view_render_settings = 27;
-  // When building for XR, whether or not to use the global passthrough dimming
-  // extensions.
-  optional bool use_global_passthrough_dimming_extensions = 28
-      [default = false];
-
+  string background_thread_name = 9 [default = "impressThread"];
   // If true, then when the swapchain needs to be destroyed or re-created, the
   // operation wil block until it is completed. This is important to ensure that
   // the android surface used by the swapchain isn't used after it has been
   // destroyed. This only has an effect when using BACKGROUND thread_mode.
-  optional bool use_synchronous_surface_changes = 29 [default = true];
+  bool use_synchronous_surface_changes = 10 [default = true];
   // The view config for the main view. Used in preference over
   // `view_render_settings` if set.
-  optional .imp.ViewConfig view_config = 30;
-
-  // When building for XR, whether or not to use the AndroidSys Eye Tracking
-  // Calibration extension.
-  optional bool use_eye_tracking_calibration = 31 [default = false];
+  .imp.ViewConfig view_config = 11;
+  // The setup params specific for XR / OpenXR platform, such as stereoscopic
+  // rendering, foveation, etc.
+  xr.XrSetupParams xr_setup_params = 12;
 }

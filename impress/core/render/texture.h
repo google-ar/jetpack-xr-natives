@@ -90,6 +90,15 @@ class Texture {
   virtual void OnUnassignedFromMaterial(const Material& material,
                                         absl::string_view parameter_name) {};
 
+  // Suppresses the removal of the texture from the SplitEngineSerializer.
+  // This is used for textures that are owned by other objects and should not
+  // be removed by the SplitEngineSerializer automatically. For example, IBL
+  // textures are owned by ImageBasedLightingAsset and should not be removed
+  // here.
+  void SetSuppressSplitEngineRemoval(bool suppress) {
+    suppress_split_engine_removal_ = suppress;
+  }
+
  protected:
   Texture(BaseView& view, filament::Stream* stream, filament::Texture* texture,
           const filament::TextureSampler& sampler,
@@ -110,6 +119,11 @@ class Texture {
 
   friend class TextureFactory;
   friend class TextureDrmTestHelper;
+
+ private:
+  // If true, the destructor will not remove the texture from the
+  // SplitEngineSerializer.
+  bool suppress_split_engine_removal_ = false;
 };
 
 // For now, we only support move semantics and single ownership.

@@ -35,6 +35,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "core/common/copyable_ptr.h"
+#include "core/common/optional_with_default.h"
 #include "core/common/platform_helpers.h"
 #include "core/proto/any.proto.imp.h"
 #include "core/proto/proto_common.h"
@@ -60,6 +61,12 @@ class JsonWriter {
   template <int field_type, typename M, typename T>
   M* Visit(M* m, int field_id, absl::optional<T>* field,
            absl::optional<T>* other);
+
+  template <int field_type, typename M, typename T,
+            const auto* DefaultValuePointer>
+  M* Visit(M* m, int field_id,
+           OptionalWithDefault<T, DefaultValuePointer>* field,
+           OptionalWithDefault<T, DefaultValuePointer>* other);
 
   template <int field_type, typename M, typename T>
   M* Visit(M* m, int field_id, CopyablePtr<T>* field, CopyablePtr<T>* other);
@@ -171,6 +178,18 @@ M* JsonWriter::Visit(M* m, int field_id, absl::optional<T>* field,
     return m;
   }
   return Visit<field_type>(m, field_id, &(**field), static_cast<T*>(nullptr));
+}
+
+template <int field_type, typename M, typename T,
+          const auto* DefaultValuePointer>
+M* JsonWriter::Visit(M* m, int field_id,
+                     OptionalWithDefault<T, DefaultValuePointer>* field,
+                     OptionalWithDefault<T, DefaultValuePointer>* other) {
+  if (!field->HasValue()) {
+    return m;
+  }
+  return Visit<field_type>(m, field_id, &field->MutableValue(),
+                           static_cast<T*>(nullptr));
 }
 
 template <int field_type, typename M, typename T>

@@ -17,6 +17,7 @@
 
 #include "absl/status/status.h"
 #include "flatbuffers/flatbuffer_builder.h"
+#include "core/common/owned_ptr.h"
 #include "core/split_engine/android/buffer_handle_factory.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_sender_base.h"
 #include "core/split_engine/desktop/multimachine/split_engine_desktop_bridge_client.h"
@@ -30,10 +31,11 @@ class SplitEngineMMDesktopBridgeSender
     : public SplitEngineSharedMemoryBridgeSenderBase {
  public:
   SplitEngineMMDesktopBridgeSender(SplitEngineMMDesktopBridgeClient& client);
+  ~SplitEngineMMDesktopBridgeSender() override;
 
   absl::Status SendMessage(
       MessageGroupId group_id,
-      const flatbuffers::FlatBufferBuilder& message) override;
+      imp::OwnedPtr<flatbuffers::FlatBufferBuilder> message) override;
   absl::Status EndMessageGroup(MessageGroupId group_id) override;
 
  protected:

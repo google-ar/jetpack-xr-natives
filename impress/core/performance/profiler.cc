@@ -20,6 +20,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <limits>
 #include <string>
 #include <thread>  // NOLINT: Need to get current thread id.
@@ -34,6 +35,7 @@
 #include "absl/synchronization/mutex.h"
 #include "absl/time/clock.h"
 #include "core/config.h"
+#include "core/performance/memory_stats.h"
 #include "core/performance/profiler_structs.h"
 #if IMP_PLATFORM(WASM)
 #include <emscripten/emscripten.h>
@@ -108,6 +110,10 @@ int64_t Profiler::AddMainThreadSample(const absl::string_view name) {
   sample.relative_start_time_ns = start_time;
   sample.relative_end_time_ns = start_time;
   sample.sample_end_id = current_id;
+  sample.allocation_bytes =
+      MemoryStats::Get().GetMemoryBytesAllocatedOnThisThread();
+  sample.allocation_count =
+      MemoryStats::Get().GetAllocationsCountOnThisThread();
   return static_cast<int64_t>(current_id);
 }
 
@@ -118,6 +124,10 @@ int64_t Profiler::AddWorkerThreadSample(const absl::string_view name) {
   // Get time and thread id before mutex to reduce time spent locked.
   uint64_t start_time = GetCurrentTimeNanos();
   std::thread::id thread_id = GetCachedThreadId();
+  size_t memory_usage_bytes =
+      MemoryStats::Get().GetMemoryBytesAllocatedOnThisThread();
+  size_t allocations_count =
+      MemoryStats::Get().GetAllocationsCountOnThisThread();
 
   size_t current_index;
   {
@@ -130,6 +140,8 @@ int64_t Profiler::AddWorkerThreadSample(const absl::string_view name) {
     sample.start_time_ns = start_time;
     sample.thread_id = thread_id;
     sample.end_time_ns = start_time;
+    sample.allocation_bytes = memory_usage_bytes;
+    sample.allocation_count = allocations_count;
   }
 
   {
@@ -183,6 +195,7 @@ void Profiler::AdvanceFrame() {
         static_cast<uint32_t>(clamped_frame_duration_ns);
   }
   is_recording_.store(true, std::memory_order_relaxed);
+  MemoryStats::Get().ResetMemoryCountersForThisThread();
   is_recording_main_thread_ = true;
   id_counter_ = 0;
   end_id_counter_ = 0;
@@ -249,6 +262,15 @@ void Profiler::RecordMainThreadSampleEndTime(int64_t id) {
   MainThreadProfileResult& sample = samples_[sample_index_][id];
   sample.relative_end_time_ns = GetCurrentFrameTimeNanos();
   sample.sample_end_id = end_id_counter_++;
+  size_t memory_allocated_diff =
+      MemoryStats::Get().GetMemoryBytesAllocatedOnThisThread() -
+      sample.allocation_bytes;
+  size_t allocations_count_diff =
+      MemoryStats::Get().GetAllocationsCountOnThisThread() -
+      sample.allocation_count;
+
+  sample.allocation_bytes = memory_allocated_diff;
+  sample.allocation_count = allocations_count_diff;
 }
 
 void Profiler::RecordWorkerThreadSampleEndTime(int64_t id) {
@@ -260,11 +282,18 @@ void Profiler::RecordWorkerThreadSampleEndTime(int64_t id) {
   }
   // Get the end time before mutex to reduce time spent locked.
   uint64_t end_time = GetCurrentTimeNanos();
+  size_t memory_allocated =
+      MemoryStats::Get().GetMemoryBytesAllocatedOnThisThread();
+  size_t allocations_count =
+      MemoryStats::Get().GetAllocationsCountOnThisThread();
 
   absl::MutexLock lock(worker_samples_mu_);
   WorkerProfileResult& sample = worker_samples_[id];
   sample.end_time_ns = end_time;
   sample.sample_end_id = worker_end_id_counter_++;
+
+  sample.allocation_bytes = memory_allocated - sample.allocation_bytes;
+  sample.allocation_count = allocations_count - sample.allocation_count;
 }
 
 absl::flat_hash_map<std::thread::id, std::vector<WorkerProfileResult>>

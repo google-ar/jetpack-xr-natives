@@ -25,6 +25,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "core/assets/asset_cache.h"
 #include "core/common/invocable.h"
+#include "core/common/rememberer.h"
 #include "core/common/robin_map.h"
 #include "core/lighting/environment_light.h"
 #include "core/lighting/image_based_lighting_asset.h"
@@ -104,7 +105,9 @@ struct IndexBufferData {
 };
 
 // Holds all Nodes, materials, textures, meshes, etc. for a single app.
-struct AppContext {
+// The app context inherits from Rememberer so that it can be used to cancel
+// futures when the app context is destroyed.
+struct AppContext : public Rememberer {
   // TODO: (broken link) - eliminate the need for std::pair usage here.
   using RawMaterialInstance =
       std::pair<BorrowedFilamentMaterialPtr, OwnedMaterialPtr>;

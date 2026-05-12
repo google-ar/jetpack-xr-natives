@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef THIRD_PARTY_IMPRESS_CORE_MATERIALS_MATERIAL_ASSET_H_
-#define THIRD_PARTY_IMPRESS_CORE_MATERIALS_MATERIAL_ASSET_H_
+#ifndef THIRD_PARTY_IMPRESS_CORE_ASSETS_MATERIAL_MATERIAL_ASSET_H_
+#define THIRD_PARTY_IMPRESS_CORE_ASSETS_MATERIAL_MATERIAL_ASSET_H_
 
 #include <memory>
 #include <utility>
@@ -25,8 +25,6 @@
 #include "filament/filament/include/filament/Material.h"
 #include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
-#include "core/common/buffer_access.h"
-#include "core/config.h"
 #include "core/resources/resource_manager.h"
 #include "core/view/base_view.h"
 
@@ -48,8 +46,7 @@ class MaterialAsset {
       MaterialPreCompileOptions material_pre_compile_options =
           kDefaultPreCompileOptions);
 
-  MaterialAsset(BaseView* view, const BufferAccess& data,
-                const MaterialPreCompileOptions& material_pre_compile_options);
+  MaterialAsset(BaseView* view, filament::Material* material);
   ~MaterialAsset();
 
   MaterialAsset(const MaterialAsset&) = delete;
@@ -75,4 +72,4 @@ class MaterialAsset {
 
 }  // namespace imp
 
-#endif  // THIRD_PARTY_IMPRESS_CORE_MATERIALS_MATERIAL_ASSET_H_
+#endif  // THIRD_PARTY_IMPRESS_CORE_ASSETS_MATERIAL_MATERIAL_ASSET_H_

@@ -16,6 +16,8 @@
 
 #include <sys/types.h>
 
+#include <functional>
+#include <optional>
 #include <utility>
 
 #include "core/common/log.h"
@@ -30,12 +32,14 @@
 #include "core/assets/material/material_asset.h"
 #include "core/async/future.h"
 #include "core/material_library/flatbuffer_utils.h"
+#include "core/material_library/material_package.h"
 #include "core/materials/material.h"
 #include "core/math/vec.h"
 #include "core/render/android/platform_android_external_texture_surface.h"
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
+#include "core/split_engine/materials/builtin/builtin_material_registry.h"
 #include "core/split_engine/materials/builtin/photosxr/builtin_photos_texture_3d_material_assets.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
@@ -389,5 +393,23 @@ absl::Status BuiltInPhotosTexture3dMaterial::SetParameters(
 
   return absl::OkStatus();
 }
+
+// Registers the built-in material factory.
+const bool kRegisterMaterial = BuiltinMaterialRegistry::RegisterOrDie(
+    android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialD1750064,
+    [](BaseView& view, BridgeId bridge_id,
+       const android_xr::schemas::BuiltInMaterialRequest& request,
+       std::optional<
+           std::reference_wrapper<const MaterialPackage::MaterialCache>>
+           cache) -> Future<BuiltInMaterialPtr> {
+      const android_xr::schemas::BuiltInMaterialD1750064* spec =
+          request.data_as_BuiltInMaterialD1750064();
+      if (spec == nullptr) {
+        return Future<BuiltInMaterialPtr>(absl::InvalidArgumentError(
+            "Failed to get BuiltInPhotosTexture3dMaterial spec from the "
+            "request."));
+      }
+      return BuiltInPhotosTexture3dMaterial::Create(view, bridge_id, *spec);
+    });
 
 }  // namespace imp::split_engine

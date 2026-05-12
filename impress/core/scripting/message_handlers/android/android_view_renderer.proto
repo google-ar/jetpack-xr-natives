@@ -64,6 +64,10 @@ message CreateSurfaceTextureQuadRequest {
   // The blend priority for the quad. If not specified, a default priority
   // will be used.
   uint32 blend_priority = 5 [(imp.optional_type) = ABSL_OPTIONAL];
+
+  // The corner radius for the view surface. If not specified, the rendered view
+  // will have sharp corners.
+  optional float corner_radius = 6 [(imp.optional_type) = ABSL_OPTIONAL];
 }
 
 // Request to get the jobject of the View that this node is attached to, if any.

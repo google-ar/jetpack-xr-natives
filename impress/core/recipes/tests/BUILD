@@ -27,24 +27,11 @@ licenses(["notice"])
 cc_library(
     name = "node_matchers",
     testonly = 1,
-    srcs = [
-        "node_matchers.cc",
-    ],
     hdrs = [
         "node_matchers.h",
     ],
     copts = imp_test_copts(),
-    deps = [
-        ":recipe_matchers",
-        "//core/ncsb",
-        "//core/proto:any_imp_proto",
-        "//core/proto:proto_writer",
-        "//core/recipes/language:recipe_graph_cc",
-        "//core/recipes/language:recipe_utils",
-        "//core/scene_handles",
-        "@com_google_absl//absl/types:variant",
-        "@mediapipe//mediapipe/framework/port:gtest_main",
-    ],
+    deps = ["@mediapipe//mediapipe/framework/port:gtest_main"],
     alwayslink = 1,
 )
 

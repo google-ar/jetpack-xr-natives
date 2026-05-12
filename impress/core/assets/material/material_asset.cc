@@ -16,19 +16,21 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "filament/filament/include/filament/Engine.h"
+#include "filament/filament/include/filament/Material.h"
 #include "filament/filament/include/filament/MaterialInstance.h"
 #include "core/assets/material/material_helpers.h"
 #include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
 #include "core/common/buffer_access.h"
 #include "core/common/trace.h"
-#include "core/config.h"
 #include "core/resources/resource_manager.h"
 #include "core/view/base_view.h"
 
@@ -51,6 +53,77 @@ ToFilamentShadowSamplingQuality(
   }
 }
 
+Future<std::unique_ptr<MaterialAsset>> CreateMaterialFromResource(
+    BaseView* view, MaterialPreCompileOptions material_pre_compile_options,
+    resources::Resource resource) {
+  IMP_TRACE();
+  BufferAccess compiled_material_data = resource.GetData();
+
+  if (compiled_material_data.Empty()) {
+    return Future<std::unique_ptr<MaterialAsset>>(
+        absl::InternalError("MaterialAsset has no compiled data."));
+  }
+
+  // Parse and create the filament material from the cmat data.
+  filament::Material* filament_material = MaterialAsset::BuildMaterial(
+      *view->GetSharedEngine(), compiled_material_data.Data(),
+      compiled_material_data.Size(), material_pre_compile_options);
+
+  if (filament_material == nullptr) {
+    return Future<std::unique_ptr<MaterialAsset>>(
+        absl::InternalError("Failed to build material from compiled data."));
+  }
+
+  // MaterialAsset is a thin wrapper around the filament material.
+  auto material_asset =
+      std::make_unique<MaterialAsset>(view, filament_material);
+
+  if (view->GetSplitEngineSerializer()) {
+    std::string material_source = std::string(filament_material->getSource());
+
+    if (view->AreSplitEngineMaterialsInLocalMode()) {
+      // In local mode we send the compiled material data to the split engine.
+      view->GetSplitEngineSerializer()->AddMaterial(
+          filament_material, compiled_material_data,
+          material_pre_compile_options);
+    } else if (!material_source.empty() &&
+               strcmp(filament_material->getName(),
+                      "Split Engine Placeholder") != 0) {
+      // The placeholder material is used for built-in materials as a kind of
+      // app-side handle. The built-in materials expect it to be loaded as a
+      // normal app-side material. Because of this, we should not request it
+      // from split engine.
+      // TODO: (broken link) - Find a better way to check the placeholder
+      // material.
+      Future<absl::Status> request_material_status =
+          view->GetSplitEngineSerializer()->RequestCustomFilamentMaterial(
+              material_source, filament_material, material_pre_compile_options);
+
+      return request_material_status.Then(
+          [material_asset = std::move(material_asset)]() mutable {
+            return std::move(material_asset);
+          });
+    }
+
+    return Future<std::unique_ptr<MaterialAsset>>(std::move(material_asset));
+  } else {
+    if (view->GetEngineConfig().disableParallelShaderCompile) {
+      return Future<std::unique_ptr<MaterialAsset>>(std::move(material_asset));
+    }
+
+    // Pre compiles variants of the material.
+    Future<absl::Status> pre_compile_status =
+        material_helpers::PreCompileMaterial(filament_material,
+                                             material_pre_compile_options);
+
+    // Waits for high priority variants' compilation to complete before
+    // returning the MaterialAsset.
+    return pre_compile_status.Then(
+        [asset = std::move(material_asset)]() mutable {
+          return std::move(asset);
+        });
+  }
+}
 }  // namespace
 
 // Specifies which material variants to precompile and if the loading needs to
@@ -87,42 +160,17 @@ Future<std::unique_ptr<MaterialAsset>> MaterialAsset::Load(
     BaseView* view, absl::string_view asset_url,
     Future<resources::Resource> resource_future,
     MaterialPreCompileOptions material_pre_compile_options) {
-  IMP_TRACE();
   return resource_future.Then([view, material_pre_compile_options = std::move(
                                          material_pre_compile_options)](
-                                  resources::Resource resource)
+                                  resources::Resource resource) mutable
                                   -> Future<std::unique_ptr<MaterialAsset>> {
-    IMP_TRACE_BLOCK("Then");
-    auto material_asset = std::make_unique<MaterialAsset>(
-        view, resource.GetData(), material_pre_compile_options);
-
-    if (view->GetEngineConfig().disableParallelShaderCompile) {
-      return Future<std::unique_ptr<MaterialAsset>>(std::move(material_asset));
-    }
-    // Pre compiles variants of the material.
-    Future<absl::Status> pre_compile_status =
-        material_helpers::PreCompileMaterial(material_asset->material_,
-                                             material_pre_compile_options);
-
-    // Waits for high priority variants' compilation to complete before
-    // returning the MaterialAsset.
-    return pre_compile_status.Then(
-        [asset = std::move(material_asset)]() mutable {
-          return std::move(asset);
-        });
+    return CreateMaterialFromResource(
+        view, std::move(material_pre_compile_options), std::move(resource));
   });
 }
 
-MaterialAsset::MaterialAsset(
-    BaseView* view, const BufferAccess& data,
-    const MaterialPreCompileOptions& material_pre_compile_options)
-    : view_(view) {
-  material_ = BuildMaterial(*view_->GetSharedEngine(), data.Data(), data.Size(),
-                            material_pre_compile_options);
-  if (auto* serializer = view_->GetSplitEngineSerializer()) {
-    serializer->AddMaterial(material_, data, material_pre_compile_options);
-  }
-}
+MaterialAsset::MaterialAsset(BaseView* view, filament::Material* material)
+    : view_(view), material_(material) {}
 
 MaterialAsset::~MaterialAsset() {
   if (view_ != nullptr && view_->GetSharedEngine() != nullptr &&

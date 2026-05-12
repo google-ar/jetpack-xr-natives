@@ -500,63 +500,6 @@ class EditorFieldControl {
     return result;
   }
 
-  // Specialization for string fields that accept material assets.
-  static absl::StatusOr<bool> ShowControl(
-      absl::string_view name, EditorControlMaterial& control, std::string* val,
-      std::string* base,
-      editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
-    bool edited = ShowDefaultControl(name, val, base, editor_control_flags);
-    if (ImGui::BeginDragDropTarget()) {
-      std::optional<std::string> payload =
-          AcceptDragAndDropPayload(editor::DragAndDropType::kMaterial);
-      if (payload.has_value()) {
-        *val = *payload;
-        return true;
-      }
-      ImGui::EndDragDropTarget();
-    }
-    return edited;
-  }
-
-  // Specialization for string fields that accept scene assets.
-  static absl::StatusOr<bool> ShowControl(
-      absl::string_view name, EditorControlScene& control, std::string* val,
-      std::string* base,
-      editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
-    bool edited = ShowDefaultControl(name, val, base, editor_control_flags);
-    if (ImGui::BeginDragDropTarget()) {
-      std::optional<std::string> payload =
-          AcceptDragAndDropPayload(editor::DragAndDropType::kNodeAsset);
-      if (payload.has_value()) {
-        *val = *payload;
-        return true;
-      }
-      ImGui::EndDragDropTarget();
-    }
-    return edited;
-  }
-
-  // Specialization for string fields that accept texture assets.
-  static absl::StatusOr<bool> ShowControl(
-      absl::string_view name, EditorControlTexture& control, std::string* val,
-      std::string* base,
-      editor::EditorControlFlags editor_control_flags =
-          editor::EditorControlFlags::kDefault) {
-    bool edited = ShowDefaultControl(name, val, base, editor_control_flags);
-    if (ImGui::BeginDragDropTarget()) {
-      std::optional<std::string> payload =
-          AcceptDragAndDropPayload(editor::DragAndDropType::kTexture);
-      if (payload.has_value()) {
-        *val = *payload;
-        return true;
-      }
-      ImGui::EndDragDropTarget();
-    }
-    return edited;
-  }
-
   // General handler for unsupported types.
   static bool ShowDefaultControl(
       absl::string_view name, void* val, void* base,
@@ -667,6 +610,23 @@ class EditorFieldControl {
     std::string label =
         editor::GenerateUniqueImGuiLabel(name, val, editor_control_flags);
     bool result = ImGui::InputText(label.c_str(), val);
+
+    if (ImGui::BeginDragDropTarget()) {
+      std::optional<std::string> payload =
+          AcceptDragAndDropPayload(editor::DragAndDropType::kMaterial);
+      if (!payload.has_value()) {
+        payload = AcceptDragAndDropPayload(editor::DragAndDropType::kTexture);
+      }
+      if (!payload.has_value()) {
+        payload = AcceptDragAndDropPayload(editor::DragAndDropType::kNodeAsset);
+      }
+
+      if (payload.has_value()) {
+        *val = *payload;
+        result = true;
+      }
+      ImGui::EndDragDropTarget();
+    }
 
     result |= EndEditingElement(mode, val, base);
 

@@ -27,14 +27,15 @@
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "imp.h"
 
 namespace android_xr {
 
 // Displays a flowing water effect by reflecting the current IBL with custom
 // normal map and tiling parameters. This uses a Split Engine Built-in material.
-class WaterReflectionMaterial : public imp::split_engine::SplitEngineMaterial {
+class WaterReflectionMaterial
+    : public imp::split_engine::SplitEngineBuiltinMaterial {
  public:
   // TODO: Use the unified TextureAndSampler once it is compatible.
   using TextureAndSampler = std::pair<imp::OwnedOrBorrowedTexturePtr,

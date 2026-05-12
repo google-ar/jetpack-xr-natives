@@ -16,6 +16,7 @@
 
 #include <sys/stat.h>
 
+#include <cstdint>
 #include <memory>
 #include <utility>
 
@@ -25,12 +26,14 @@
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
 #include "core/gsplat/gsplat_asset.h"
+#include "core/ncsb/node.h"
 #include "core/render/texture.h"
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
+#include "split_engine/schemas/split_engine_primitive_generated.h"
 
 namespace android_xr {
 namespace {
@@ -47,12 +50,17 @@ ToTextureParameter(flatbuffers::FlatBufferBuilder& fbb,
 }  // namespace
 
 imp::Future<std::unique_ptr<GsplatMaterialSerializer>>
-GsplatMaterialSerializer::Create(
-    imp::BaseView& view, imp::AssetPtr<imp::GSplatAsset> gsplat_asset,
-    android_xr::schemas::GsplatMode material_mode) {
+GsplatMaterialSerializer::Create(imp::NodeHandle gsplat_node,
+                                 imp::AssetPtr<imp::GSplatAsset> gsplat_asset,
+                                 android_xr::schemas::GsplatMode material_mode,
+                                 bool use_triangles_for_splats) {
+  imp::BaseView& view = gsplat_node->GetView();
+  uint32_t gsplat_renderer_entity_id = gsplat_node.GetEntity().getId();
   auto fbb = std::make_unique<flatbuffers::FlatBufferBuilder>();
+  auto use_triangles_bool = android_xr::schemas::Bool(use_triangles_for_splats);
   flatbuffers::Offset<schemas::BuiltInMaterialGsplatSpec> spec_offset =
-      schemas::CreateBuiltInMaterialGsplatSpec(*fbb, material_mode);
+      schemas::CreateBuiltInMaterialGsplatSpec(
+          *fbb, material_mode, gsplat_renderer_entity_id, &use_triangles_bool);
   return RequestBuiltInMaterial(
              view, std::move(fbb),
              schemas::BuiltInMaterialSpec::BuiltInMaterialGsplatSpec,
@@ -68,10 +76,11 @@ GsplatMaterialSerializer::GsplatMaterialSerializer(
     imp::BaseView& view,
     imp::split_engine::PlaceholderOrBuiltInMaterialPtr material,
     imp::AssetPtr<imp::GSplatAsset> gsplat_asset)
-    : SplitEngineMaterial(view,
-                          android_xr::schemas::BuiltInMaterialParameters::
-                              BuiltInMaterialGsplatParameters,
-                          std::move(material)),
+    : SplitEngineBuiltinMaterial(
+          view,
+          android_xr::schemas::BuiltInMaterialParameters::
+              BuiltInMaterialGsplatParameters,
+          std::move(material)),
       view_(view),
       gsplat_asset_(gsplat_asset) {
   SetPrecomputeTextures(gsplat_asset);
@@ -107,8 +116,6 @@ flatbuffers::Offset<void> GsplatMaterialSerializer::SerializeParameters(
                  window_dimension_in_magic_window_),
              imp::split_engine::PointerFromOptional(
                  magic_window_from_user_world_matrix_),
-             imp::split_engine::PointerFromOptional(
-                 gsplat_from_user_world_matrix_),
              precomputed_data_texture, position_data_texture,
              cov3d_data_texture, color_data_texture, sorted_indices_texture,
              imp::split_engine::PointerFromOptional(visualize_chunks_),

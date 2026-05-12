@@ -34,6 +34,7 @@ cc_library(
         "//apibindings:impress_api_view",  # buildcleaner: keep
         "//apibindings:impress_api_view_header",
         "//apibindings:model_manager_interface",
+        "//apibindings:node_manager_interface",
         "//apibindings:skybox_manager_interface",
         "//apibindings:stereo_surface_manager_interface",
         "//apibindings:texture_manager_interface",

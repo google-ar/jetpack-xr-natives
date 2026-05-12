@@ -33,6 +33,15 @@ enum class MediaShapeType : int {
   kFull360 = 2,
 };
 
+// The blending mode of a media asset.
+enum class MediaBlendingMode : int {
+  // The asset is blended with the background using the alpha channel.
+  // This is the default mode.
+  kTransparent = 0,
+  // The asset is rendered as fully opaque with the alpha channel ignored.
+  kOpaque,
+};
+
 // The stereo mode of a media asset. The enum values are defined to match
 // the values returned by media3. Please see here for more information:
 // third_party/java_src/android_libs/media/libraries/common/src/main/java/androidx/media3/common/C.java

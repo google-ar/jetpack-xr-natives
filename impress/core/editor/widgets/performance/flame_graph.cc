@@ -43,68 +43,67 @@ constexpr float kMinPanelHeight = 250.0f;
 constexpr float kRectGap = 1.0f;
 
 // The height of the timeline.
-static constexpr float kTimelineHeight = 20.0f;
+constexpr float kTimelineHeight = 20.0f;
 
 // Padding between the timeline and the graph.
-static constexpr float kTimelinePadding = 5.0f;
+constexpr float kTimelinePadding = 5.0f;
 
 // The desired number of pixels per timeline tick.
-static constexpr float kDesiredPixelsPerTimelineTick = 160.0f;
+constexpr float kDesiredPixelsPerTimelineTick = 160.0f;
 
 // The factor by which to zoom in/out when using the mouse wheel.
-static constexpr float kZoomFactor = 0.01f;
+constexpr float kZoomFactor = 0.01f;
 
 // The minimum zoom level for the flame graph.
-static constexpr float kMinZoomLevel = 1.0f;
+constexpr float kMinZoomLevel = 1.0f;
 
 // The number of frames to show before and after the selected frame.
-static constexpr int kFrameWindow = 2;
+constexpr int kFrameWindow = 2;
 
 // Distance of the tick labels to the right of their tick mark line.
-static constexpr float kTickLabelRightOffset = 6.0f;
+constexpr float kTickLabelRightOffset = 6.0f;
 
 // Distance of the tick labels from the timeline.
-static constexpr float kTickLabelTopOffset = 2.0f;
+constexpr float kTickLabelTopOffset = 2.0f;
 
 // Height of a tick mark line above the timeline.
-static constexpr float kTickMarkHeight = 10.0f;
+constexpr float kTickMarkHeight = 10.0f;
 
 // Scale factor for the sample name displayed in each flame graph node.
-static constexpr float kFontSizeScale = 0.8f;
+constexpr float kFontSizeScale = 0.8f;
 
 // The maximum amount of pixels the text of a node can be beyond the width of
 // its rectangle and still display w/ clipping. Beyond this amount, the text
 // will not be displayed at all.
-static constexpr float kNodeLabelMaxOversize = 20.0f;
+constexpr float kNodeLabelMaxOversize = 20.0f;
 
 // The minimum width of a node in the flame graph to override the clipping
 // threshold for text.
-static constexpr float kNodeOverrideTextClippingWidth = 100.0f;
+constexpr float kNodeOverrideTextClippingWidth = 100.0f;
 
 // The height of the thread window when collapsed.
-static constexpr float kThreadWindowHeightCollapsed = 100.0f;
+constexpr float kThreadWindowHeightCollapsed = 100.0f;
 
 // Distance of the expand/collapse button from the bottom of the window.
-static constexpr float kButtonBottomPadding = 2.0f;
+constexpr float kButtonBottomPadding = 2.0f;
 
 // The color of the top horizontal line in the timeline.
-static constexpr ImU32 kTimelineColor = IM_COL32(255, 255, 255, 150);
+constexpr ImU32 kTimelineColor = IM_COL32(255, 255, 255, 150);
 
 // The color of the tick marks in the timeline.
-static constexpr ImU32 kTickColor = IM_COL32(255, 255, 255, 70);
+constexpr ImU32 kTickColor = IM_COL32(255, 255, 255, 70);
 
 // The color of the border around a selected sample node.
-static constexpr ImU32 kSelectedSampleBorderColor =
-    IM_COL32(255, 255, 255, 255);
+constexpr ImU32 kSelectedSampleBorderColor = IM_COL32(255, 255, 255, 255);
 
 // The color of the separator line between each flame graph window.
-static constexpr ImU32 kSeparatorLineColor = IM_COL32(20, 20, 20, 255);
+constexpr ImU32 kSeparatorLineColor = IM_COL32(20, 20, 20, 255);
 
 // Background color of the worker thread label overlays.
-static constexpr ImU32 kWorkerThreadLabelColor = IM_COL32(0, 0, 0, 150);
+constexpr ImU32 kWorkerThreadLabelColor = IM_COL32(0, 0, 0, 150);
 
 // Nanoseconds in a millisecond.
-static constexpr float kNanosPerMs = 1000000.0f;
+constexpr float kNanosPerMs = 1000000.0f;
 
 }  // namespace
 
@@ -117,89 +116,91 @@ void FlameGraph::DrawPanel(int frame_index, SampleProcessor& sample_processor,
   const float available_height = ImGui::GetContentRegionAvail().y;
   const float child_height = std::max(kMinPanelHeight, available_height);
 
-  ImGui::BeginChild("flame_graph_child", ImVec2(0, child_height),
-                    ImGuiChildFlags_Borders,
-                    ImGuiWindowFlags_NoScrollWithMouse);
-  ImDrawList* draw_list = ImGui::GetWindowDrawList();
-  const ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
-  const float row_height = ImGui::GetTextLineHeightWithSpacing();
-  const ImVec2 canvas_size = ImGui::GetContentRegionAvail();
-  const ImVec2 flame_canvas_pos =
-      ImVec2(canvas_pos.x, canvas_pos.y + kTimelineHeight);
-  const ImVec2 flame_canvas_size =
-      ImVec2(canvas_size.x, canvas_size.y - kTimelineHeight);
+  if (ImGui::BeginChild("flame_graph_child", ImVec2(0, child_height),
+                        ImGuiChildFlags_Borders,
+                        ImGuiWindowFlags_NoScrollWithMouse)) {
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    const ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
+    const float row_height = ImGui::GetTextLineHeightWithSpacing();
+    const ImVec2 canvas_size = ImGui::GetContentRegionAvail();
+    const ImVec2 flame_canvas_pos =
+        ImVec2(canvas_pos.x, canvas_pos.y + kTimelineHeight);
+    const ImVec2 flame_canvas_size =
+        ImVec2(canvas_size.x, canvas_size.y - kTimelineHeight);
 
-  // Mouse input for zoom and pan
-  HandleInput(flame_canvas_pos);
+    // Mouse input for zoom and pan
+    HandleInput(flame_canvas_pos);
 
-  // We want to display frames before/after the selected frame if they exist.
-  const int min_frame = std::max(0, frame_index - kFrameWindow);
-  const int max_frame = std::min(Profiler::GetCurrentFrameIndex() - 1,
-                                 frame_index + kFrameWindow);
+    // We want to display frames before/after the selected frame if they exist.
+    const int min_frame = std::max(0, frame_index - kFrameWindow);
+    const int max_frame = std::min(Profiler::GetCurrentFrameIndex() - 1,
+                                   frame_index + kFrameWindow);
 
-  const uint64_t selected_frame_start_time_ns =
-      Profiler::GetFrameMetaData(frame_index).frame_start_time_ns;
-  uint64_t total_visible_duration = 0;
+    const uint64_t selected_frame_start_time_ns =
+        Profiler::GetFrameMetaData(frame_index).frame_start_time_ns;
+    uint64_t total_visible_duration = 0;
 
-  for (int i = min_frame; i <= max_frame; ++i) {
-    const uint64_t frame_duration = Profiler::GetTotalFrameDurationNanos(i);
-    total_visible_duration += frame_duration;
+    for (int i = min_frame; i <= max_frame; ++i) {
+      const uint64_t frame_duration = Profiler::GetTotalFrameDurationNanos(i);
+      total_visible_duration += frame_duration;
+    }
+    if (total_visible_duration == 0) {
+      ImGui::EndChild();
+      return;
+    }
+
+    const float time_scale = (flame_canvas_size.x * flame_graph_zoom_) /
+                             static_cast<float>(total_visible_duration);
+
+    // Clamp panning so that you can't pan past +/- 2 frames of the selected
+    // one.
+    const float content_screen_width =
+        static_cast<float>(total_visible_duration) * time_scale;
+    const uint64_t min_frame_start_time_ns =
+        Profiler::GetFrameMetaData(min_frame).frame_start_time_ns;
+    const uint64_t time_before_selected =
+        selected_frame_start_time_ns - min_frame_start_time_ns;
+
+    float pan_offset = static_cast<float>(time_before_selected) * time_scale;
+
+    if (content_screen_width > flame_canvas_size.x) {
+      flame_graph_pan_x_ = std::clamp(
+          flame_graph_pan_x_,
+          flame_canvas_size.x - content_screen_width + pan_offset, pan_offset);
+    } else {
+      flame_graph_pan_x_ = pan_offset;
+    }
+
+    // Shows the timeline/tick marks and their labels.
+    DrawTimeline(draw_list, canvas_pos, canvas_size, time_scale);
+
+    // Draw the nodes for each frame.
+    DrawNodeArgs draw_node_args = {
+        .frame_time_panel = frame_time_panel,
+        .draw_list = draw_list,
+        .node = nullptr,
+        .depth = 0,
+        .canvas_pos = flame_canvas_pos,
+        .canvas_size = flame_canvas_size,
+        .row_height = row_height,
+        .time_scale = time_scale,
+        .is_current_frame = false,
+        .frame_start_time_ns = min_frame_start_time_ns,
+        .selected_frame_start_time_ns = selected_frame_start_time_ns,
+    };
+
+    DrawMainThreadGraph(draw_node_args, sample_processor, min_frame, max_frame,
+                        frame_index);
+
+    DrawWorkerThreadGraphs(sample_processor, min_frame_start_time_ns,
+                           min_frame_start_time_ns + total_visible_duration,
+                           draw_node_args);
+
+    // Draw start and end lines for the selected frame.
+    DrawFrameBoundaryLines(draw_list, canvas_pos, canvas_size, time_scale,
+                           selected_frame_start_time_ns,
+                           Profiler::GetTotalFrameDurationNanos(frame_index));
   }
-  if (total_visible_duration == 0) {
-    ImGui::EndChild();
-    return;
-  }
-
-  const float time_scale = (flame_canvas_size.x * flame_graph_zoom_) /
-                           static_cast<float>(total_visible_duration);
-
-  // Clamp panning so that you can't pan past +/- 2 frames of the selected one.
-  const float content_screen_width =
-      static_cast<float>(total_visible_duration) * time_scale;
-  const uint64_t min_frame_start_time_ns =
-      Profiler::GetFrameMetaData(min_frame).frame_start_time_ns;
-  const uint64_t time_before_selected =
-      selected_frame_start_time_ns - min_frame_start_time_ns;
-
-  float pan_offset = static_cast<float>(time_before_selected) * time_scale;
-
-  if (content_screen_width > flame_canvas_size.x) {
-    flame_graph_pan_x_ = std::clamp(
-        flame_graph_pan_x_,
-        flame_canvas_size.x - content_screen_width + pan_offset, pan_offset);
-  } else {
-    flame_graph_pan_x_ = pan_offset;
-  }
-
-  // Shows the timeline/tick marks and their labels.
-  DrawTimeline(draw_list, canvas_pos, canvas_size, time_scale);
-
-  // Draw the nodes for each frame.
-  DrawNodeArgs draw_node_args = {
-      .frame_time_panel = frame_time_panel,
-      .draw_list = draw_list,
-      .node = nullptr,
-      .depth = 0,
-      .canvas_pos = flame_canvas_pos,
-      .canvas_size = flame_canvas_size,
-      .row_height = row_height,
-      .time_scale = time_scale,
-      .is_current_frame = false,
-      .frame_start_time_ns = min_frame_start_time_ns,
-      .selected_frame_start_time_ns = selected_frame_start_time_ns,
-  };
-
-  DrawMainThreadGraph(draw_node_args, sample_processor, min_frame, max_frame,
-                      frame_index);
-
-  DrawWorkerThreadGraphs(sample_processor, min_frame_start_time_ns,
-                         min_frame_start_time_ns + total_visible_duration,
-                         draw_node_args);
-
-  // Draw start and end lines for the selected frame.
-  DrawFrameBoundaryLines(draw_list, canvas_pos, canvas_size, time_scale,
-                         selected_frame_start_time_ns,
-                         Profiler::GetTotalFrameDurationNanos(frame_index));
   ImGui::EndChild();
 }
 
@@ -240,16 +241,17 @@ void FlameGraph::DrawMainThreadGraph(DrawNodeArgs& args,
 
   // Create a new window for the main thread graph and draw frames into it.
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-  ImGui::BeginChild("main_thread_child", ImVec2(0, thread_window_height),
-                    ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollWithMouse);
-  for (int i = min_frame; i <= max_frame; ++i) {
-    DrawFrame(args, sample_processor, i, selected_frame_index);
-  }
+  if (ImGui::BeginChild("main_thread_child", ImVec2(0, thread_window_height),
+                        ImGuiChildFlags_None,
+                        ImGuiWindowFlags_NoScrollWithMouse)) {
+    for (int i = min_frame; i <= max_frame; ++i) {
+      DrawFrame(args, sample_processor, i, selected_frame_index);
+    }
 
-  if (show_button) {
-    DrawExpandCollapseButton(expanded);
+    if (show_button) {
+      DrawExpandCollapseButton(expanded);
+    }
   }
-
   ImGui::EndChild();
   ImGui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
 
@@ -286,6 +288,30 @@ void FlameGraph::DrawFrame(DrawNodeArgs& args,
     }
   }
   args.frame_start_time_ns += frame_duration;
+}
+
+void FlameGraph::DrawTooltip(absl::string_view name, uint64_t total_time_ns,
+                             size_t total_memory_allocated,
+                             size_t total_memory_allocations_count) {
+  ImGui::BeginTooltip();
+  float duration_ms = static_cast<float>(total_time_ns / kNanosPerMs);
+  const size_t allocated = total_memory_allocated;
+  constexpr size_t kKilobyte = 1024;
+  constexpr size_t kMegabyte = 1024 * 1024;
+  char label_str[32];
+
+  if (allocated >= kMegabyte) {
+    absl::SNPrintF(label_str, sizeof(label_str), "%.1f MB",
+                   static_cast<float>(allocated) / kMegabyte);
+  } else if (allocated >= kKilobyte) {
+    absl::SNPrintF(label_str, sizeof(label_str), "%.1f KB",
+                   static_cast<float>(allocated) / kKilobyte);
+  } else {
+    absl::SNPrintF(label_str, sizeof(label_str), "%zu B", allocated);
+  }
+  ImGui::Text("%s\n%.3f ms\n%zu Allocations\n%s Allocated", name.data(),
+              duration_ms, total_memory_allocations_count, label_str);
+  ImGui::EndTooltip();
 }
 
 void FlameGraph::DrawFlameGraphNode(DrawNodeArgs& args) {
@@ -326,12 +352,8 @@ void FlameGraph::DrawFlameGraphNode(DrawNodeArgs& args) {
 
   // Hover Tooltip
   if (ImGui::IsMouseHoveringRect(rect.min, rect.max)) {
-    ImGui::BeginTooltip();
-    float duration_ms = static_cast<float>(node->total_time_ns) / kNanosPerMs;
-    ImGui::Text("%s\n%.3f ms\nStart: %.3fms\nEnd: %.3fms", name.data(),
-                duration_ms, node->result->GetStartTimeNanos() / kNanosPerMs,
-                node->result->GetEndTimeNanos() / kNanosPerMs);
-    ImGui::EndTooltip();
+    DrawTooltip(name, node->total_time_ns, node->total_memory_allocated,
+                node->total_memory_allocations_count);
   }
 
   // If this is the selected sample, draw a white border around it.
@@ -454,10 +476,8 @@ void FlameGraph::DrawWorkerGraphNode(DrawNodeArgs& args) {
 
   // Hover Tooltip
   if (ImGui::IsMouseHoveringRect(rect.min, rect.max)) {
-    ImGui::BeginTooltip();
-    float duration_ms = static_cast<float>(node->total_time_ns) / kNanosPerMs;
-    ImGui::Text("%s\n%.3f ms", name.data(), duration_ms);
-    ImGui::EndTooltip();
+    DrawTooltip(name, node->total_time_ns, node->total_memory_allocated,
+                node->total_memory_allocations_count);
   }
 
   // Cannot select samples in worker threads so that is not present here.

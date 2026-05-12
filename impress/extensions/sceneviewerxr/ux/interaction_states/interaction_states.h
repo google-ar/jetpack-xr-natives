@@ -17,12 +17,14 @@
 #ifndef THIRD_PARTY_IMPRESS_EXTENSIONS_SCENEVIEWERXR_UX_INTERACTION_STATES_INTERACTION_STATES_H_
 #define THIRD_PARTY_IMPRESS_EXTENSIONS_SCENEVIEWERXR_UX_INTERACTION_STATES_INTERACTION_STATES_H_
 
+#include <optional>
+
 #include "absl/time/time.h"
-#include "extensions/sceneviewerxr/ux/ramp.h"
-#include "extensions/sceneviewerxr/ux/state_machine.h"
 #include "core/collision/ray.h"
 #include "core/common/smooth.h"
 #include "core/math/math.h"
+#include "extensions/sceneviewerxr/ux/ramp.h"
+#include "extensions/sceneviewerxr/ux/state_machine.h"
 
 namespace svxr {
 namespace interaction_states {
@@ -44,13 +46,16 @@ struct Translation {
   absl::Duration active_duration = absl::ZeroDuration();
   imp::float3 initial_world_space_rig_to_hit;
   imp::float3 initial_world_space_hit_position;
+  imp::float3 pickup_offset;
+  std::optional<imp::float3> anchor_snap_position;
   imp::Smooth<imp::float3> rig_local_position;
-  imp::Smooth<imp::float3> footprint_local_position;
   bool is_right;
   bool is_active;
   float cumulative_change_delta;
   float initial_distance_ratio;
   bool has_translated = false;
+  Ramp<float> lift_cooldown;
+  Ramp<float> anchor_cooldown;
 };
 
 // State for when the asset is being rotated about the Y axis.

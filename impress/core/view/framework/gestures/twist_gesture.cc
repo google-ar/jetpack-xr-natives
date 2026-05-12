@@ -146,7 +146,9 @@ bool TwistGesture::TryStart(const PointerHitEvent& pointer_hit) {
   pointer_retainer_[0] = GetPointerUtils()->RetainPointer(pointer_id_[0]);
   pointer_retainer_[1] = GetPointerUtils()->RetainPointer(pointer_id_[1]);
   GetDispatcher().Send(
-      TwistGesture::StartEvent(GetId(), MakeCancelFn(this, pointer_hit)));
+      TwistGesture::StartEvent(GetId(), MakeCancelFn(this, pointer_hit),
+                               distance(positions[0], positions[1]),
+                               (positions[0] + positions[1]) * 0.5f));
 
   return true;
 }
@@ -171,7 +173,9 @@ void TwistGesture::OnUpdate(const PointerHitEvent& pointer_hit) {
 
         if (!AlmostEqual(delta_radians, 0.0f)) {
           GetDispatcher().Send(TwistGesture::UpdateEvent(
-              GetId(), MakeCancelFn(this, pointer_hit), delta_radians));
+              GetId(), MakeCancelFn(this, pointer_hit), delta_radians,
+              distance(positions[0], positions[1]),
+              (positions[0] + positions[1]) * 0.5f));
         }
         break;
       }

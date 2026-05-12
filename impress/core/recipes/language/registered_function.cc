@@ -24,8 +24,11 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "core/recipes/language/recipe_function_utils.h"
+#include "core/recipes/language/recipe_types.proto.imp.h"
 #include "core/recipes/language/recipe_utils.h"
 
 namespace imp::recipe {
@@ -36,8 +39,13 @@ using Param = RegisteredFunction::Param;
 RegisteredFunction::Builder::Builder(std::string_view name) : name_(name) {}
 
 std::unique_ptr<RegisteredFunction> RegisteredFunction::Builder::BuildInternal(
-    RecipeFunction fn, bool uses_explicit_arg_type_checking) {
+    RecipeFunction fn, const std::vector<int>& parameter_types,
+    bool uses_explicit_arg_type_checking) {
   if (!fn || params_.size() > kMaxArgumentLimit) {
+    return nullptr;
+  }
+
+  if (uses_explicit_arg_type_checking && !FillParameterTypes(parameter_types)) {
     return nullptr;
   }
 
@@ -62,8 +70,32 @@ RegisteredFunction::RegisteredFunction(std::string_view name,
   }
 }
 
+bool RegisteredFunction::Builder::FillParameterTypes(
+    const std::vector<int>& parameter_types) {
+  if (!parameter_types.empty() && parameter_types.size() < params_.size()) {
+    return false;
+  }
+
+  for (int i = params_.size(); i < parameter_types.size(); ++i) {
+    AddParam(absl::StrCat(recipe::kDefaultArgPrefix, i));
+  }
+
+  for (int i = 0; i < parameter_types.size(); ++i) {
+    if (parameter_types[i] !=
+            recipe::GetRecipeVariableIndex<recipe::Variable>() &&
+        params_[i].type != recipe::GetRecipeVariableIndex<recipe::Variable>() &&
+        params_[i].type != parameter_types[i]) {
+      return false;
+    }
+
+    params_[i].type = parameter_types[i];
+  }
+
+  return true;
+}
+
 absl::StatusOr<recipe::ReturnValue> RegisteredFunction::Execute(
-    Args& args, NamedArgs& named_args) const {
+    const Args& args, const NamedArgs& named_args) const {
   imp::output::Recipe("Calling function %s", name_);
 
   // Special case to handle registered functions that take in N positional
@@ -131,7 +163,7 @@ absl::StatusOr<recipe::ReturnValue> RegisteredFunction::Execute(
   std::vector<Variable> final_args(params_.size());
 
   // Fill in positional arguments first.
-  for (size_t i = 0; i < args.size(); ++i) {
+  for (int i = 0; i < args.size(); ++i) {
     final_args[i] = args[i];
   }
 
@@ -147,6 +179,111 @@ absl::StatusOr<recipe::ReturnValue> RegisteredFunction::Execute(
         (~args_provided_bit_flag & params_with_default_values_bit_flag_));
     final_args[index] = params_[index].default_value;
     args_provided_bit_flag |= (1 << index);
+  }
+
+  // Ensure final arguments have the correct parameter types
+  for (int i = 0; i < params_.size(); ++i) {
+    if (params_[i].type == recipe::GetRecipeVariableIndex<recipe::Variable>() ||
+        static_cast<int>(final_args[i].index()) == params_[i].type) {
+      continue;
+    }
+
+#if IMP_ENABLE_RECIPE_EXPERIMENTAL
+    bool was_able_to_coerce_variable = false;
+    switch (params_[i].type) {
+      case recipe::GetRecipeVariableIndex<bool>(): {
+        std::optional<bool> coerced_val = recipe::CoerceToBool(final_args[i]);
+        if (coerced_val != std::nullopt) {
+          final_args[i].emplace<bool>(coerced_val.value());
+          was_able_to_coerce_variable = true;
+        }
+        break;
+      }
+      case recipe::GetRecipeVariableIndex<int>(): {
+        std::optional<int> coerced_val = recipe::CoerceToInt(final_args[i]);
+        if (coerced_val != std::nullopt) {
+          final_args[i].emplace<int>(coerced_val.value());
+          was_able_to_coerce_variable = true;
+        }
+        break;
+      }
+      case recipe::GetRecipeVariableIndex<float>(): {
+        std::optional<float> coerced_val = recipe::CoerceToFloat(final_args[i]);
+        if (coerced_val != std::nullopt) {
+          final_args[i].emplace<float>(coerced_val.value());
+          was_able_to_coerce_variable = true;
+        }
+        break;
+      }
+      case recipe::GetRecipeVariableIndex<double>(): {
+        std::optional<double> coerced_val =
+            recipe::CoerceToDouble(final_args[i]);
+        if (coerced_val != std::nullopt) {
+          final_args[i].emplace<double>(coerced_val.value());
+          was_able_to_coerce_variable = true;
+        }
+        break;
+      }
+      case recipe::GetRecipeVariableIndex<float3>(): {
+        std::optional<float3> coerced_val =
+            recipe::CoerceToFloat3(final_args[i]);
+        if (coerced_val != std::nullopt) {
+          final_args[i].emplace<float3>(coerced_val.value());
+          was_able_to_coerce_variable = true;
+        }
+        break;
+      }
+      case recipe::GetRecipeVariableIndex<float4>(): {
+        std::optional<float4> coerced_val =
+            recipe::CoerceToFloat4(final_args[i]);
+        if (coerced_val != std::nullopt) {
+          final_args[i].emplace<float4>(coerced_val.value());
+          was_able_to_coerce_variable = true;
+        }
+        break;
+      }
+      case recipe::GetRecipeVariableIndex<quatf>(): {
+        std::optional<quatf> coerced_val = recipe::CoerceToQuatf(final_args[i]);
+        if (coerced_val != std::nullopt) {
+          final_args[i].emplace<quatf>(coerced_val.value());
+          was_able_to_coerce_variable = true;
+        }
+        break;
+      }
+      case recipe::GetRecipeVariableIndex<std::string>():
+        final_args[i].emplace<std::string>(recipe::ToString(final_args[i]));
+        was_able_to_coerce_variable = true;
+        break;
+      case recipe::GetRecipeVariableIndex<NodeHandle>(): {
+        // Special case for coercing NodeHandle - if the variable can coerce,
+        // but it is an invalid NodeHandle, return an error.
+        auto coerced_node = recipe::CoerceToNode(final_args[i]);
+
+        if (coerced_node.IsValid()) {
+          final_args[i].emplace<NodeHandle>(coerced_node);
+          was_able_to_coerce_variable = true;
+        } else {
+          return absl::InvalidArgumentError(
+              absl::StrFormat("Function expected arg %d of type NodeHandle. "
+                              "Received invalid Node.",
+                              i));
+        }
+        break;
+      }
+    }
+
+    if (!was_able_to_coerce_variable) {
+      return absl::InvalidArgumentError(absl::StrFormat(
+          "Function expected arg %d of type %s.", i,
+          recipe::ToTypeName(
+              static_cast<VariableDeclaration::Type>(params_[i].type))));
+    }
+#else
+    return absl::InvalidArgumentError(absl::StrFormat(
+        "Function expected arg %d of type %s.", i,
+        recipe::ToTypeName(
+            static_cast<VariableDeclaration::Type>(params_[i].type))));
+#endif
   }
 
   return fn_(final_args);

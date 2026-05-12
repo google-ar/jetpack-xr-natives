@@ -23,6 +23,9 @@
 #include "filament/filament/include/filament/View.h"
 #include "filament/libs/filagui/include/filagui/ImGuiHelper.h"
 #include "filament/libs/utils/include/utils/Path.h"
+#include "core/math/vec.h"
+#include "core/render/texture.h"
+#include "core/render/texture_factory.h"
 #include "core/view/base_view.h"
 
 namespace imp::window {
@@ -34,13 +37,29 @@ FilaguiImGuiRenderer::FilaguiImGuiRenderer(filament::View* view,
     : engine_(base_view.GetHost()->GetEngine()),
       view_(view),
       helper_(std::make_unique<filagui::ImGuiHelper>(engine_, view_, fontPath,
-                                                     imgui_context)) {}
+                                                     imgui_context)),
+      base_view_(base_view) {}
 
-FilaguiImGuiRenderer::~FilaguiImGuiRenderer() = default;
+FilaguiImGuiRenderer::~FilaguiImGuiRenderer() { helper_.reset(); };
 
-void FilaguiImGuiRenderer::SetDisplaySize(int width, int height, float scale_x,
-                                          float scale_y, bool flip_vertical) {
+void FilaguiImGuiRenderer::SetRenderTargetDisplaySize(int width, int height,
+                                                      float scale_x,
+                                                      float scale_y,
+                                                      bool flip_vertical) {
   helper_->setDisplaySize(width, height, scale_x, scale_y, flip_vertical);
+}
+
+void FilaguiImGuiRenderer::Initialize(float2 texture_resolution) {
+  // Create and register a texture to act as a canvas for the ImGui UI.
+  // create with initial default size, since there will be a request to resize
+  // it my the spatial ui canvas component.
+  texture_size_ = texture_resolution;
+  texture_ =
+      OwnedOrBorrowedTexturePtr(base_view_.GetTextureFactory().CreateTexture(
+          texture_size_.x, texture_size_.y,
+          filament::Texture::InternalFormat::RGBA8,
+          filament::Texture::Usage::COLOR_ATTACHMENT |
+              filament::Texture::Usage::SAMPLEABLE));
 }
 
 void FilaguiImGuiRenderer::RenderImGui(float timeStepInSeconds,

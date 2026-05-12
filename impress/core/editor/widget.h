@@ -41,7 +41,19 @@ struct Widget {
     return ImGuiTreeNodeFlags_None;
   }
 
+  // Used by the widget to request focus on this frame. The request will be
+  // automatically unset once handled.
+  void SetIsRequestingFocus(bool focus_requested) {
+    focus_requested_ = focus_requested;
+  }
+
+  // Whether or not this widget is requesting focus on this frame.
+  bool IsRequestingFocus() { return focus_requested_; }
+
   virtual ~Widget() = default;
+
+ private:
+  bool focus_requested_ = false;
 };
 
 }  // namespace imp::editor

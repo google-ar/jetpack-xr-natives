@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
@@ -58,7 +59,7 @@ class AssetPtrMap : public Rememberer {
       std::unique_ptr<BaseAssetLoader> asset_loader);
 
   // Releases a previously loaded image based lighting asset from the pointer
-  // map.
+  // map if the reference count is 0, otherwise decrements the reference count.
   absl::Status ReleaseImageBasedLightingAsset(std::intptr_t ibl_token);
 
   // Loads the asset pointer of a glTF model from the local assets folder or
@@ -79,7 +80,8 @@ class AssetPtrMap : public Rememberer {
   void LoadGltfAsset(imp::AssetDefinition asset_definition,
                      std::unique_ptr<BaseAssetLoader> asset_loader);
 
-  // Release a previously loaded glTF asset from the pointer map.
+  // Release a previously loaded glTF asset from the pointer map if the
+  // reference count is 0, otherwise decrements the reference count.
   absl::Status ReleaseGltfAsset(std::intptr_t gltf_token);
 
   // Returns a previously loaded glTF asset from the pointer map if it exists,
@@ -104,16 +106,24 @@ class AssetPtrMap : public Rememberer {
   static std::string GetAssetString(absl::string_view name);
 
  private:
+  // Stores an asset and its reference count.
+  template <typename AssetT>
+  struct RefCountedAsset {
+    AssetPtr<AssetT> asset;
+    int32_t ref_count;
+  };
+
   // Helper template to handle the result of loading an asset.
   template <typename AssetT>
   void HandleAssetLoadingResult(
       absl::StatusOr<AssetPtr<AssetT>> asset_ptr,
       std::unique_ptr<BaseAssetLoader> asset_loader,
-      absl::flat_hash_map<std::intptr_t, AssetPtr<AssetT>>& asset_map);
+      absl::flat_hash_map<std::intptr_t, RefCountedAsset<AssetT>>& asset_map);
 
   BaseView& view_;
-  absl::flat_hash_map<std::intptr_t, AssetPtr<GltfAsset>> gltf_asset_map_;
-  absl::flat_hash_map<std::intptr_t, AssetPtr<ImageBasedLightingAsset>>
+  absl::flat_hash_map<std::intptr_t, RefCountedAsset<GltfAsset>>
+      gltf_asset_map_;
+  absl::flat_hash_map<std::intptr_t, RefCountedAsset<ImageBasedLightingAsset>>
       ibl_asset_map_;
 
   // Regular expression pattern for matching URLs.

@@ -21,14 +21,18 @@
 
 #include "absl/log/check.h"
 #include "absl/status/status.h"
+#include "core/common/buffer_access.h"
 #include "core/common/jni_helpers.h"
 #include "core/monitor/monitor.h"
+#include "core/proto/proto_reader.h"
 #include "core/render/content_security_level.h"
 #include "core/view/framework/view.h"
 #include "core/view/platforms/xr_android/openxr_includes.h"
 #include "core/view/platforms/xr_android/xr_action_controller.h"
 #include "core/view/platforms/xr_android/xr_helpers.h"
 #include "core/view/platforms/xr_android/xr_session_host.h"
+#include "java/com/google/ar/imp/view/setup_params.proto.imp.h"
+#include "java/com/google/ar/imp/view/xr/xr_setup_params.proto.imp.h"
 #include "mediapipe/framework/port/status_macros.h"
 
 #define JNI_METHOD(return_type, method_name) \
@@ -76,21 +80,6 @@ absl::Status InitializeLoader(JNIEnv* env, jobject context) {
           &loader_init_info_android)));
 }
 
-XrFoveationLevelFB XrFoveationLevelFBFromInt(int foveation_level) {
-  
-  switch (foveation_level) {
-    case 1:
-      return XR_FOVEATION_LEVEL_LOW_FB;
-    case 2:
-      return XR_FOVEATION_LEVEL_MEDIUM_FB;
-    case 3:
-      return XR_FOVEATION_LEVEL_HIGH_FB;
-    default:
-    case 0:
-      return XR_FOVEATION_LEVEL_NONE_FB;
-  }
-}
-
 }  // namespace
 
 extern "C" {
@@ -98,16 +87,7 @@ extern "C" {
 
 JNI_METHOD(jlong, nCreateSessionHost)
 (JNIEnv* env, jclass /*clazz*/, jobject context, jlong view_handle,
- jboolean use_composition_layer_depth,
- jboolean use_enhanced_stereoscopic_rendering, jboolean use_max_swapchain_size,
- jint foveation_level, jboolean use_quad_views, jboolean use_mono_view,
- jboolean use_varjo_foveated_rendering, jint msaa_sample_count,
- jlong openxr_reference_space_type, jboolean use_eye_gaze_interaction,
- jboolean use_android_depth_texture, jboolean use_xr_action_defaults,
- jboolean use_fb_color_space, jboolean enable_android_system_extensions,
- jfloat swapchain_size_multiplier,
- jboolean use_global_passthrough_dimming_extensions,
- jboolean use_eye_tracking_calibration) {
+ jbyteArray setup_params_bytes) {
   context = env->NewGlobalRef(context);
   absl::Status status = InitializeLoader(env, context);
   if (!status.ok()) {
@@ -115,36 +95,24 @@ JNI_METHOD(jlong, nCreateSessionHost)
   }
   auto view = std::unique_ptr<View>(FromJava<View>(view_handle));
 
-  XrSessionHost::XrSessionHostOptions options;
-  options.use_composition_layer_depth = use_composition_layer_depth;
-  options.use_enhanced_stereoscopic_rendering =
-      use_enhanced_stereoscopic_rendering;
-  options.use_max_swapchain_size = use_max_swapchain_size;
-  options.foveation_level = XrFoveationLevelFBFromInt(foveation_level);
-  options.use_quad_views = use_quad_views;
-  options.use_mono_view = use_mono_view;
-  options.use_varjo_foveated_rendering = use_varjo_foveated_rendering;
-  options.msaa_sample_count = msaa_sample_count;
-  options.reference_space_type =
-      static_cast<XrReferenceSpaceType>(openxr_reference_space_type);
-  options.use_eye_gaze_interaction = use_eye_gaze_interaction;
-  options.use_android_depth_texture = use_android_depth_texture;
-  options.use_fb_color_space = use_fb_color_space;
-  options.enable_android_system_extensions = enable_android_system_extensions;
-  options.swapchain_size_multiplier = swapchain_size_multiplier;
-  options.use_global_passthrough_dimming_extensions =
-      use_global_passthrough_dimming_extensions;
-  options.use_eye_tracking_calibration = use_eye_tracking_calibration;
+  imp::BufferAccess byte_buffer = imp::FromByteArray(env, setup_params_bytes);
+  com::google::ar::imp::view::SetupParams setup_params;
+  if (!imp::proto::ParseMessage(byte_buffer.StringView(), &setup_params)) {
+    ThrowError(env, absl::InternalError("Failed to parse setup params"));
+  }
+  const com::google::ar::imp::view::xr::XrSetupParams& xr_setup_params =
+      setup_params.xr_setup_params.Value();
 
-  auto session_host = std::make_unique<XrSessionHost>(std::move(view), options);
+  auto session_host =
+      std::make_unique<XrSessionHost>(std::move(view), xr_setup_params);
   auto& xr_action_controller =
       session_host->GetView()
           ->GetRegistry()
           .GetOrCreate<imp::XrActionController>(*session_host);
-  if (use_xr_action_defaults == JNI_TRUE) {
+  if (xr_setup_params.use_xr_action_defaults.Value() == JNI_TRUE) {
     xr_action_controller.SetXrSessionActionConfig(
         imp::XrActionController::XrSessionActionConfig::kUseXrActionDefaults);
-  } else if (use_xr_action_defaults == JNI_FALSE) {
+  } else if (xr_setup_params.use_xr_action_defaults.Value() == JNI_FALSE) {
     xr_action_controller.SetXrSessionActionConfig(
         imp::XrActionController::XrSessionActionConfig::kOmitXrActionDefaults);
   }

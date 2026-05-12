@@ -231,7 +231,8 @@ void FilamentViewSettingsWidget::DrawImGui() {
     ImGui::Checkbox("TAA##taaEnabled", &view_settings_.taa.enabled);
     ImGui::Indent();
     if (ImGui::CollapsingHeader("TAA Options")) {
-      ImGui::Checkbox("Upscaling", &view_settings_.taa.upscaling);
+      ImGui::SliderFloat("Upscaling", &view_settings_.taa.upscaling, 1.0f,
+                         3.0f);
       ImGui::Checkbox("History Reprojection",
                       &view_settings_.taa.historyReprojection);
       ImGui::SliderFloat("Feedback", &view_settings_.taa.feedback, 0.0f, 1.0f);

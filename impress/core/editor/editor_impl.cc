@@ -37,6 +37,7 @@
 #include "core/editor/components/camera_translate.h"
 #include "core/editor/components/camera_zoom.h"
 #include "core/editor/components/grid.h"
+#include "core/editor/components/temporary_editor_metadata.h"
 #include "core/editor/editor.h"
 #include "core/editor/editor_clipboard.h"
 #include "core/editor/editor_constants.h"
@@ -351,6 +352,11 @@ void EditorImpl::Initialize() {
       .GetComponentSystem<GltfRenderer>()
       .RegisterExtensionWithDependency<GltfInteractivityExtension,
                                        GltfAudioExtension>();
+
+  // Register TemporaryEditorMetadata so it can be saved/loaded with the scene.
+  GetView()
+      .GetSceneSystem()
+      .RegisterComponentIsfInfo<TemporaryEditorMetadata>();
 
   // Set the default light and camera components as authored so that the full
   // component widgets are available in edit mode.
@@ -841,14 +847,31 @@ void EditorImpl::SetInEditMode(bool in_edit_mode) {
   // scene graph as NodeData so that it can be recreated as a way to revert the
   // nodes to their original state when Stop is pressed.
 
-  // Deselect node, they are all getting reset.
-  SelectNode({}, SelectionMode::kSingleNode);
+  // Used to assign additional tracking information for nodes that will be
+  // destroyed and recreated.
+  int64_t next_node_id = 0;
+  std::function<void(NodeHandle)> add_metadata_recursive =
+      [&next_node_id, &add_metadata_recursive](NodeHandle node) {
+        // Add or update TemporaryEditorMetadata with a unique ID for this
+        // session.
+        auto editor_metadata =
+            node->GetOrAddComponent<TemporaryEditorMetadata>();
+        editor_metadata->SetId(next_node_id++);
+
+        auto scene_metadata = node->GetOrAddComponent<SceneMetadata>();
+        scene_metadata->SetComponentAuthored(
+            TemporaryEditorMetadata::IsfInfo::kTypeUrlHash, true);
+
+        for (NodeHandle child : node->GetChildren()) {
+          add_metadata_recursive(child);
+        }
+      };
 
   // Used to gather all the nodes that must be destroyed when switching modes.
   std::vector<NodeHandle> to_destroy;
-
   GetView().ForEachNode(
-      [this, &to_destroy, in_edit_mode](NodeHandle node) {
+      [this, &to_destroy, in_edit_mode,
+       &add_metadata_recursive](NodeHandle node) {
         // Don't recreate editor nodes.
         if (node == editor_root_node_) {
           return;
@@ -888,6 +911,9 @@ void EditorImpl::SetInEditMode(bool in_edit_mode) {
         // NodeData so that they can be restored to their original state when
         // stopping.
         if (!in_edit_mode) {
+          // Add additional metadata to the nodes being destroyed.
+          add_metadata_recursive(node);
+
           // Handle nodes that don't have metadata as well for things like
           // default cameras and lights that aren't created by the editor.
           auto scene_metadata = node->GetComponent<SceneMetadata>();
@@ -917,6 +943,32 @@ void EditorImpl::SetInEditMode(bool in_edit_mode) {
       },
       NodeFlags::kIsRoot);
 
+  // Gather the IDs of the selected nodes so that they can be reselected after
+  // the nodes are recreated.
+  // Also, identify if any selected nodes are about to be destroyed (either
+  // directly or as descendants) and deselect them to prevent
+  // SelectionController from holding invalid handles.
+  std::vector<int64_t> selected_node_ids;
+  absl::flat_hash_set<NodeHandle> currently_selected_nodes = GetSelectedNodes();
+  selected_node_ids.reserve(currently_selected_nodes.size());
+  absl::flat_hash_set<NodeHandle> roots_to_destroy(to_destroy.begin(),
+                                                   to_destroy.end());
+
+  for (NodeHandle node : currently_selected_nodes) {
+    if (auto metadata = node->GetComponent<TemporaryEditorMetadata>()) {
+      selected_node_ids.push_back(metadata->GetId());
+    }
+
+    NodeHandle current = node;
+    while (current) {
+      if (roots_to_destroy.contains(current)) {
+        SelectNode(node, SelectionMode::kMultipleNodes);
+        break;
+      }
+      current = current->GetParent();
+    }
+  }
+
   // Destroy the nodes and re-create from the NodeData
   //
   // This is done even when entering Play mode instead of just using the already
@@ -945,6 +997,44 @@ void EditorImpl::SetInEditMode(bool in_edit_mode) {
         SceneSystem::LoadSceneOptions{.metadata_mode =
                                           backup_node_data.metadata_mode}));
   }
+
+  // Chain the reselection logic to run after loading completes.
+  result = result.Then([this, selected_node_ids = std::move(selected_node_ids)](
+                           absl::Status status) -> absl::Status {
+    if (!status.ok()) {
+      return status;
+    }
+
+    GetView().GetComponentManager().ForEach<TemporaryEditorMetadata>(
+        [this, &selected_node_ids](TemporaryEditorMetadata* metadata) {
+          if (!metadata) {
+            return;
+          }
+          for (int64_t id : selected_node_ids) {
+            if (metadata->GetId() == id) {
+              // Use kMultipleNodes to add the restored node to the selection.
+              // This preserves the selection of any persistent nodes (e.g.
+              // default lights) that were not destroyed. Using kSingleNode
+              // would clear the selection of these persistent nodes.
+              // The SelectionController lazily cleans up the invalid handles of
+              // the destroyed nodes.
+              SelectNode(metadata->GetNode(), SelectionMode::kMultipleNodes);
+              break;
+            }
+          }
+        });
+
+    // Mark the metadata as not authored so that it doesn't get saved to disk
+    GetView().ForEachNode([](NodeHandle node) {
+      if (node->GetComponent<TemporaryEditorMetadata>()) {
+        if (auto scene_metadata = node->GetComponent<SceneMetadata>()) {
+          scene_metadata->SetComponentAuthored(
+              TemporaryEditorMetadata::IsfInfo::kTypeUrlHash, false);
+        }
+      }
+    });
+    return status;
+  });
 
   // If we are entering edit mode, then we must remove the backup NodeData.
   // Next time Play mode is entered, new backup NodeData will be created.

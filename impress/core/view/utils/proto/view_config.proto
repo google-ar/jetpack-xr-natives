@@ -30,9 +30,35 @@ option java_multiple_files = true;
 
 // Defines temporary flags used for testing code in development.
 message ExperimentalFeatureFlags {
+  // OWNERS: eugenecys
+  // BUG: b/452459028
+  // PLATFORMS: ANDROID
+  // ACTION: Clean up by 2026-01-17
   optional bool glyph_atlas_use_hardware_rendering = 1;
+
+  // OWNERS: eugenecys
+  // BUG: b/385221395
+  // PLATFORMS: ANDROID
+  // ACTION: Clean up by 2026-01-17
   optional bool glyph_atlas_force_reset_on_view_resumed = 2;
+
+  // OWNERS: eugenecys, exv
+  // BUG: b/454131370
+  // PLATFORMS: ANDROID
+  // ACTION: Clean up by 2026-01-24
   optional bool glyph_atlas_force_auto_method_rendering = 3;
+
+  // OWNERS: artyompp
+  // BUG: b/469883152
+  // PLATFORMS: ANDROID
+  // ACTION: Clean up by 2026-02-26
+  optional bool surface_texture_memory_leak_fix = 4;
+
+  // OWNERS: faaland
+  // BUG: b/361658541
+  // PLATFORMS: IOS
+  // ACTION: Clean up by 2026-06-01
+  optional bool enable_set_presentation_time = 5;
 }
 
 message ViewConfig {
@@ -63,11 +89,6 @@ message ViewConfig {
   // If true, use the system's own frame scheduled handler instead of providing
   // a callback handler to Filament.
   optional bool use_system_frame_scheduled_handler = 6;
-
-  // Flag to preinitialize the Metal platform. This is an experiment to try and
-  // fetch the command queue before initializing the Filament engine.
-  // TODO Remove this flag once the experiment is complete.
-  optional bool should_preinitialize_metal_platform = 8;
 
   // The size of the texture used by the GlyphAtlas.
   enum GlyphAtlasTextureSize {

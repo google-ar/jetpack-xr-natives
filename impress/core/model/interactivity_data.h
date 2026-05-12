@@ -71,6 +71,7 @@ struct InteractivityData {
       INITIAL_INDEX,
       VARIABLES,
       USE_SLERP,
+      SEVERITY,
     };
 
     struct FlowData {

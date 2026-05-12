@@ -20,6 +20,7 @@
 #include <android/data_space.h>
 #include <android/hardware_buffer.h>
 #include <media/NdkImage.h>
+#include <media/NdkImageReader.h>
 
 #include <cstdint>
 #include <memory>
@@ -50,6 +51,9 @@ class ImageAPIProvider {
 
   virtual absl::Status GetBufferDataSpace(AHardwareBuffer* buffer,
                                           int32_t& data_space);
+
+  virtual absl::Status SetImageReaderDefaultBufferSize(
+      AImageReader* image_reader, uint32_t width, uint32_t height);
 
   virtual ~ImageAPIProvider() = default;
 };
@@ -94,6 +98,9 @@ class Image {
 
   // Sets the static API provider for class Image.
   static void SetImageAPIProvider(std::unique_ptr<ImageAPIProvider> provider);
+
+  static absl::Status SetImageReaderDefaultBufferSize(
+      AImageReader* image_reader, uint32_t width, uint32_t height);
 
  private:
   Image(AImage* aimage, AHardwareBuffer* ahardware_buffer);

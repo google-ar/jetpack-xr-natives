@@ -128,7 +128,7 @@ JNI_METHOD_ACTIVITY(void, nForwardInputEvent)
   android_xr::SplitEngineInputEvent* input_event =
       FromJava<android_xr::SplitEngineInputEvent>(input_event_handle);
   if (subspace_manager == nullptr || input_event == nullptr) {
-    LOG(ERROR) << "[subspace_jni] Could not forward input event!";
+    IMP_LOG(imp::ERROR) << "[subspace_jni] Could not forward input event!";
     return;
   }
   THROW_IF_ERROR(
@@ -142,7 +142,7 @@ JNI_METHOD_ACTIVITY(void, nForwardSubspaceTransform)
       FromJava<android_xr::SplitEngineSubspaceManagerImpl>(
           subspace_manager_handle);
   if (subspace_manager == nullptr) {
-    LOG(ERROR)
+    IMP_LOG(imp::ERROR)
         << "[subspace_jni] Could not forward subspace transform! The subspace "
            "manager is null. Likely the subspace has been destroyed, and there "
            "was a race condition.";
@@ -159,7 +159,7 @@ JNI_METHOD_ACTIVITY(void, nUpdateSubspaceAnchor)
       FromJava<android_xr::SplitEngineSubspaceManagerImpl>(
           subspace_manager_handle);
   if (subspace_manager == nullptr) {
-    LOG(ERROR) << "[subspace_jni] Update subspace anchor failed. The subspace "
+    IMP_LOG(imp::ERROR) << "[subspace_jni] Update subspace anchor failed. The subspace "
                   "manager is null.";
     return;
   }

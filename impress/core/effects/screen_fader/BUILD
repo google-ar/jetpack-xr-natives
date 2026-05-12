@@ -53,6 +53,8 @@ cc_library(
         "//core/async:future",
         "//core/common:smooth",
         "//core/ncsb",
+        "//core/render:primitive_shape_renderer",
+        "//core/render:primitive_shape_renderer_state_cc_proto",
         "//core/view/framework",
         "//core/view/framework:framework_proto_cc",
         "//core/view/utils:frame_time",

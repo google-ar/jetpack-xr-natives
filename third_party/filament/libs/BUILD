@@ -159,6 +159,7 @@ cc_library(
 cc_library(
     name = "utils_private_hdrs",
     hdrs = [
+        "utils/include/private/utils/FeatureFlagManager.h",
         "utils/include/private/utils/Tracing.h",
     ],
     copts = filament_copts(),
@@ -217,6 +218,7 @@ cc_library(
         "utils/src/CyclicBarrier.cpp",
         "utils/src/EntityManager.cpp",
         "utils/src/EntityManagerImpl.h",
+        "utils/src/FeatureFlagManager.cpp",
         "utils/src/FixedCapacityVectorBase.cpp",
         "utils/src/ImmutableCString.cpp",
         "utils/src/Invocable.cpp",
@@ -649,6 +651,7 @@ cc_library(
         "@third_party//filament/filament:generated_shaders",
         "@third_party//filament/filament/backend:backend_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
+        "@zstdlib",
     ],
     alwayslink = 1,
 )
@@ -768,6 +771,13 @@ cc_library(
             "bluegl_osmesa",
             ["bluegl/src/BlueGLOSMesa.cpp"],
             ["//third_party/mesa:OSMesa_header_thirdparty"],
+        ),
+        (
+            "bluegl_linux_egl",
+            if_linux([
+                "bluegl/src/BlueGLLinuxEGL.cpp",
+            ]),
+            [],
         ),
     ]
 ]

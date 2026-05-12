@@ -77,6 +77,7 @@
 #include "core/view/framework/camera/camera_manager.h"
 #include "core/view/platforms/xr_android/openxr_includes.h"
 #include "core/view/platforms/xr_android/xr_helpers.h"
+#include "java/com/google/ar/imp/view/xr/xr_setup_params.proto.imp.h"
 
 #if IMP_MATERIAL_API(VULKAN) && IMP_PLATFORM(ANDROID)
 #include "core/view/platforms/xr_android/xr_vulkan_platform.h"
@@ -203,37 +204,85 @@ absl::string_view GetApplicationName() {
 #endif
 }
 
+XrFoveationLevelFB XrFoveationLevelFBFromInt(int foveation_level) {
+  switch (foveation_level) {
+    case static_cast<int>(XR_FOVEATION_LEVEL_LOW_FB):
+      return XR_FOVEATION_LEVEL_LOW_FB;
+    case static_cast<int>(XR_FOVEATION_LEVEL_MEDIUM_FB):
+      return XR_FOVEATION_LEVEL_MEDIUM_FB;
+    case static_cast<int>(XR_FOVEATION_LEVEL_HIGH_FB):
+      return XR_FOVEATION_LEVEL_HIGH_FB;
+    default:
+    case 0:
+      return XR_FOVEATION_LEVEL_NONE_FB;
+  }
+}
+
+XrReferenceSpaceType XrReferenceSpaceTypeFromInt(int reference_space_type) {
+  switch (reference_space_type) {
+    case static_cast<int>(XR_REFERENCE_SPACE_TYPE_VIEW):
+      return XR_REFERENCE_SPACE_TYPE_VIEW;
+    case static_cast<int>(XR_REFERENCE_SPACE_TYPE_LOCAL):
+      return XR_REFERENCE_SPACE_TYPE_LOCAL;
+    case static_cast<int>(XR_REFERENCE_SPACE_TYPE_STAGE):
+      return XR_REFERENCE_SPACE_TYPE_STAGE;
+    case static_cast<int>(XR_REFERENCE_SPACE_TYPE_LOCAL_FLOOR):
+      return XR_REFERENCE_SPACE_TYPE_LOCAL_FLOOR;
+    case static_cast<int>(XR_REFERENCE_SPACE_TYPE_UNBOUNDED_MSFT):
+      return XR_REFERENCE_SPACE_TYPE_UNBOUNDED_MSFT;
+    case static_cast<int>(XR_REFERENCE_SPACE_TYPE_COMBINED_EYE_VARJO):
+      return XR_REFERENCE_SPACE_TYPE_COMBINED_EYE_VARJO;
+    case static_cast<int>(XR_REFERENCE_SPACE_TYPE_LOCALIZATION_MAP_ML):
+      return XR_REFERENCE_SPACE_TYPE_LOCALIZATION_MAP_ML;
+    case static_cast<int>(XR_REFERENCE_SPACE_TYPE_UNBOUNDED_ANDROID):
+      return XR_REFERENCE_SPACE_TYPE_UNBOUNDED_ANDROID;
+    default:
+      IMP_LOG(imp::FATAL) << "Unsupported reference space type: "
+                 << reference_space_type;
+      return XR_REFERENCE_SPACE_TYPE_MAX_ENUM;
+  }
+}
+
 }  // namespace
 
-XrSessionHost::XrSessionHost(std::unique_ptr<BaseView> view,
-                             XrSessionHostOptions options)
+XrSessionHost::XrSessionHost(
+    std::unique_ptr<BaseView> view,
+    com::google::ar::imp::view::xr::XrSetupParams setup_params)
     : ViewHost(std::move(view)),
-      reference_space_type_(options.reference_space_type),
-      is_composition_layer_depth_enabled_(options.use_composition_layer_depth),
+      reference_space_type_(XrReferenceSpaceTypeFromInt(
+          setup_params.openxr_reference_space_type.Value())),
+      is_composition_layer_depth_enabled_(
+          setup_params.enable_composition_layer_depth.Value()),
       is_enhanced_stereoscopic_rendering_enabled_(
-          options.use_enhanced_stereoscopic_rendering),
-      use_max_swapchain_size_(options.use_max_swapchain_size),
-      swapchain_size_multiplier_(options.swapchain_size_multiplier),
-      current_foveation_level_(options.foveation_level),
+          setup_params.use_enhanced_stereoscopic_rendering.Value()),
+      use_max_swapchain_size_(setup_params.use_max_swapchain_size.Value()),
+      swapchain_size_multiplier_(
+          setup_params.swapchain_size_multiplier.Value()),
+      current_foveation_level_(
+          XrFoveationLevelFBFromInt(setup_params.foveation_level.Value())),
       view_configuration_type_(
-          options.use_mono_view ? XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO
-          : options.use_quad_views
+          setup_params.use_mono_view.Value()
+              ? XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO
+          : setup_params.use_quad_views.Value()
               ? XR_VIEW_CONFIGURATION_TYPE_PRIMARY_QUAD_VARJO
               : XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO),
       is_varjo_foveated_rendering_enabled_(
-          options.use_quad_views && options.use_varjo_foveated_rendering),
-      msaa_sample_count_(options.msaa_sample_count),
-      eye_tracking_enabled_(options.use_eye_gaze_interaction),
-      eye_tracking_calibration_enabled_(options.use_eye_tracking_calibration),
-      is_android_depth_texture_enabled_(options.use_android_depth_texture),
+          setup_params.use_quad_views.Value() &&
+          setup_params.use_varjo_foveated_rendering.Value()),
+      msaa_sample_count_(setup_params.msaa_sample_count.Value()),
+      eye_tracking_enabled_(setup_params.use_eye_gaze_interaction.Value()),
+      eye_tracking_calibration_enabled_(
+          setup_params.use_eye_tracking_calibration.Value()),
+      is_android_depth_texture_enabled_(
+          setup_params.use_android_depth_texture.Value()),
       display_enabled_duration_(GetView()->GetMonitor(),
                                 kXrDisplayEnabledStatistics),
       xr_timing_summary_(*GetView()),
-      is_fb_color_space_enabled_(options.use_fb_color_space),
+      is_fb_color_space_enabled_(setup_params.use_fb_color_space.Value()),
       is_android_system_extensions_enabled_(
-          options.enable_android_system_extensions),
+          setup_params.enable_android_system_extensions.Value()),
       is_global_passthrough_dimming_extensions_enabled_(
-          options.use_global_passthrough_dimming_extensions) {
+          setup_params.use_global_passthrough_dimming_extensions.Value()) {
   SetupXrTimingSummary(xr_timing_summary_.GetSummary(),
                        xr_performance_state_.metrics);
   if (is_varjo_foveated_rendering_enabled_) {
@@ -318,46 +367,10 @@ absl::Status XrSessionHost::Setup(JNIEnv* env, JavaVM* vm, jobject context) {
   // backend.
   platform_->setXrInstance(instance_);
   platform_->setXrSystemId(system_id_);
+#endif  // IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(VULKAN)
 
-  // Create the Vulkan instance, physical device, and logical device.
-  VkInstance vk_instance = platform_->createVulkanInstance();
-  platform_->bindVulkanInstance(vk_instance);
-
-  VkPhysicalDevice vk_physical_device =
-      platform_->getVulkanPhysicalDevice(vk_instance);
-
-  // Identify the graphics queue family index.
-  uint32_t graphics_queue_family_index =
-      platform_->identifyVulkanGraphicsQueueFamilyIndex(vk_physical_device);
-
-  uint32_t protected_graphics_queue_family_index =
-      platform_->identifyVulkanProtectedGraphicsQueueFamilyIndex(
-          vk_physical_device);
-
-  VkDevice vk_device = platform_->createVulkanLogicalDevice(
-      vk_physical_device, vk_instance, graphics_queue_family_index,
-      protected_graphics_queue_family_index, IsMultiviewStereo());
-
-  // Create the Vulkan shared context. This is used to pass the Vulkan instance,
-  // physical device, logical device, graphics queue family index, and graphics
-  // queue index to the Filament backend.
-  filament::backend::VulkanPlatform::VulkanSharedContext shared_context =
-      platform_->getVulkanSharedContext();
-  shared_context.instance = vk_instance;
-  shared_context.logicalDevice = vk_device;
-  shared_context.physicalDevice = vk_physical_device;
-  shared_context.graphicsQueueFamilyIndex = graphics_queue_family_index;
-  shared_context.graphicsQueueIndex = 0;
-
-  platform_->setVulkanSharedContext(shared_context);
-  imp::output::Xr("Calling Impress Setup.");
-  MP_RETURN_IF_ERROR(ViewHost::Setup(platform_.get(), &shared_context));
-
-#else
   imp::output::Xr("Calling Impress Setup.");
   MP_RETURN_IF_ERROR(ViewHost::Setup(platform_.get(), nullptr));
-
-#endif
 
   // Sets settings on the Filament view that are required for OpenXR.
   // TODO: Provide helper method GetRecommendedColorSpace on
@@ -2084,7 +2097,7 @@ XrFoveationLevelFB XrSessionHost::GetCurrentFoveationLevel() {
   return current_foveation_level_;
 }
 
-int XrSessionHost::GetMsaaSampleCount() const { return msaa_sample_count_; }
+int32_t XrSessionHost::GetMsaaSampleCount() const { return msaa_sample_count_; }
 
 filament::Engine::Config XrSessionHost::GetEngineConfig() {
   filament::Engine::Config engine_config =

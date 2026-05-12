@@ -17,10 +17,14 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_MODEL_MESH_VERTEX_FORMAT_H_
 #define THIRD_PARTY_IMPRESS_CORE_MODEL_MESH_VERTEX_FORMAT_H_
 
+#include <cstddef>
+#include <cstdint>
 #include <initializer_list>
+#include <vector>
 
 #include "absl/types/optional.h"
 #include "filament/filament/include/filament/VertexBuffer.h"
+#include "filament/libs/filabridge/include/filament/MaterialEnums.h"
 
 namespace imp {
 
@@ -30,11 +34,35 @@ class VertexFormat {
   using VertexAttribute = filament::VertexAttribute;
   using AttributeType = filament::VertexBuffer::AttributeType;
 
+  // AttributeKey contains the group index and offset of a given
+  // VertexAttribute. This key can be used to directly access the attribute data
+  // in the vertex buffer. The attribute_size is included for convenience when
+  // the data is being validated.
+  struct AttributeKey {
+    size_t group_index;
+    size_t attribute_offset;
+    size_t attribute_size;
+
+    bool operator==(const AttributeKey& rhs) const {
+      return group_index == rhs.group_index &&
+             attribute_offset == rhs.attribute_offset &&
+             attribute_size == rhs.attribute_size;
+    }
+  };
+
   // Every attribute has a type, e.g. attribute POSITION could have type FLOAT3.
   struct AttributeInfo {
     VertexAttribute attribute;
     AttributeType type;
     bool normalized = false;
+
+    // Controls how attributes are interleaved.
+    //
+    // If unset or 0, uses the default (every attribute is interleaved).
+    // If set, every attribute with the same group will be interleaved together.
+    // To make nothing interleaved, give every attribute a different group.
+    //
+    uint8_t attribute_group_override = 0;
   };
 
   // Matches filament::backend::MAX_VERTEX_ATTRIBUTE_COUNT.
@@ -54,21 +82,31 @@ class VertexFormat {
   void AppendAttribute(const AttributeInfo& attribute);
 
   // Returns the size of the whole vertex in bytes.
-  size_t GetVertexSize() const;
+  size_t GetVertexSize(uint8_t group_idx = 0) const;
 
-  size_t GetNumAttributes() const;
+  size_t GetNumAttributes(size_t group_idx = 0) const;
 
   // Returns the index for |attribute|, or nullopt if not present. This
   // is recalculated and not cached to save space and is only a short vector.
-  absl::optional<size_t> GetIndexForAttribute(VertexAttribute attribute) const;
+  absl::optional<size_t> GetIndexForAttribute(VertexAttribute attribute,
+                                              size_t group_idx = 0) const;
+
+  // Returns the AttributeKey for |attribute|, or nullopt if not present.
+  // The AttributeKey is used to directly access the attribute data in the
+  // vertex buffer, and also has information to easily validate the data.
+  absl::optional<AttributeKey> GetKeyForAttribute(
+      VertexAttribute attribute) const;
 
   // Returns the attribute at |index|. Fatals if out of bounds.
-  const AttributeInfo& GetAttributeAt(size_t index) const;
+  const AttributeInfo& GetAttributeAt(size_t index, size_t group_idx = 0) const;
 
   // Returns the offset of the attribute at |index|. Fatals if out of bounds.
   // This is recalculated and not cached to save space and is only a short
   // vector.
-  size_t GetAttributeOffsetAt(size_t index) const;
+  size_t GetAttributeOffsetAt(size_t index, size_t group_idx = 0) const;
+
+  // Returns the number of attribute groups.
+  size_t GetAttributeGroupsCount() const;
 
   // Tests if two VertexFormats are equal.
   bool operator==(const VertexFormat& rhs) const;
@@ -78,11 +116,14 @@ class VertexFormat {
   static size_t GetAttributeSize(const AttributeInfo& attr);
 
  private:
-  // This class's data must be restricted to POD, so we can use static const
-  // VertexFormats for dynamic rendering.
-  AttributeInfo attributes_[kMaxAttributes];
-  size_t num_attributes_ = 0;
-  size_t vertex_size_ = 0;
+  struct AttributeGroup {
+    // This class's data must be restricted to POD, so we can use static const
+    // VertexFormats for dynamic rendering.
+    AttributeInfo attributes[kMaxAttributes];
+    size_t num_attributes = 0;
+    size_t vertex_size = 0;
+  };
+  std::vector<AttributeGroup> attribute_groups_;
 };
 
 template <typename Iterator>

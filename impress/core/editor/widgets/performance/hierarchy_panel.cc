@@ -38,8 +38,9 @@ constexpr float kMinPanelHeight = 250.0f;
 // Width of the columns that display details about the sample.
 constexpr float kDetailColumnWidthWide = 100.0f;
 constexpr float kDetailColumnWidthNarrow = 50.0f;
+constexpr bool kShowMemoryColumns = Profiler::IsMemoryTrackingSupported();
 // Number of columns to display in the table.
-constexpr int kNumColumns = 4;
+constexpr int kNumColumns = kShowMemoryColumns ? 6 : 4;
 constexpr float kNanosPerMs = 1000000.0f;
 }  // namespace
 
@@ -66,14 +67,19 @@ void HierarchyPanel::DrawPanel(int frame_index,
   const float available_height = ImGui::GetContentRegionAvail().y;
   const float child_height = std::max(kMinPanelHeight, available_height);
 
-  ImGui::BeginChild("tree_table_child", ImVec2(0, child_height), true);
-
   if (ImGui::BeginTable("tree table", kNumColumns,
-                        ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY)) {
+                        ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY,
+                        ImVec2(0, child_height))) {
     ImGui::TableSetupColumn("Hierarchy", ImGuiTableColumnFlags_WidthStretch,
                             1.0f);
     ImGui::TableSetupColumn("Calls", ImGuiTableColumnFlags_WidthFixed,
                             kDetailColumnWidthNarrow);
+    if (kShowMemoryColumns) {
+      ImGui::TableSetupColumn("Allocations", ImGuiTableColumnFlags_WidthFixed,
+                              kDetailColumnWidthWide);
+      ImGui::TableSetupColumn("Alloc Size", ImGuiTableColumnFlags_WidthFixed,
+                              kDetailColumnWidthWide);
+    }
     ImGui::TableSetupColumn("Frametime", ImGuiTableColumnFlags_WidthFixed,
                             kDetailColumnWidthWide);
     ImGui::TableSetupColumn("% of Frame", ImGuiTableColumnFlags_WidthFixed,
@@ -96,7 +102,6 @@ void HierarchyPanel::DrawPanel(int frame_index,
 
     ImGui::EndTable();
   }
-  ImGui::EndChild();
   ImGui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
 }
 
@@ -129,7 +134,7 @@ void HierarchyPanel::DrawWorkerThreadSamples(int frame_index,
   const uint64_t end_time = frame_metadata.total_duration_ns + start_time;
   std::vector<WorkerProfileResult> raw_samples =
       Profiler::GetWorkerThreadSamples(start_time, end_time, thread_id);
-  ProcessedSamples current_worker_samples_ =
+  const ProcessedSamples current_worker_samples_ =
       sample_processor.ProcessWorkerThreadSamples(raw_samples);
   int row_index = 0;
   const size_t root_count = current_worker_samples_.sample_roots.size();
@@ -166,11 +171,13 @@ void HierarchyPanel::DrawTreeNode(FrameTimePanel& frame_time_panel,
       if (unique_children.find(child_name) == unique_children.end()) {
         unique_children[child_name] = child;
       } else {
-        // If this group exists, increment the call count and add the
-        // frametime.
+        // If this group exists, increment the call count and add other values.
         SampleNode* child_node = unique_children[child_name];
         child_node->calls += 1;
         child_node->total_time_ns += child->total_time_ns;
+        child_node->total_memory_allocated += child->total_memory_allocated;
+        child_node->total_memory_allocations_count +=
+            child->total_memory_allocations_count;
 
         // Add child's children to the group's children.
         grandchild = child->first_child;
@@ -209,7 +216,8 @@ void HierarchyPanel::DrawTreeNode(FrameTimePanel& frame_time_panel,
   const absl::string_view name = node->result->GetName();
 
   DrawTableRow(frame_time_panel, name.data(), node->total_time_ns, node->calls,
-               row_index);
+               node->total_memory_allocated,
+               node->total_memory_allocations_count, row_index);
 
   // Recursively draw children.
   ImGui::TableSetColumnIndex(0);
@@ -231,7 +239,8 @@ void HierarchyPanel::DrawTreeNode(FrameTimePanel& frame_time_panel,
 
 void HierarchyPanel::DrawTableRow(FrameTimePanel& frame_time_panel,
                                   const char* name, uint32_t time, int calls,
-                                  int& row_index) {
+                                  size_t memory_allocated,
+                                  size_t allocations_count, int& row_index) {
   // Alternate background colors for each row.
   ImGui::TableNextRow();
   ImU32 row_color;
@@ -247,15 +256,36 @@ void HierarchyPanel::DrawTableRow(FrameTimePanel& frame_time_panel,
   ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, row_color);
   row_index++;
 
+  int column_index = 1;  // Skip the first column, it's handled last.
+
   // Fill out information for this row.
-  ImGui::TableSetColumnIndex(1);
+  ImGui::TableSetColumnIndex(column_index++);
   ImGui::Text("%i", calls);
 
-  ImGui::TableSetColumnIndex(2);
+  // Memory tracking may not be supported on all platforms.
+  if (Profiler::IsMemoryTrackingSupported()) {
+    ImGui::TableSetColumnIndex(column_index++);
+    ImGui::Text("%zu", allocations_count);
+
+    ImGui::TableSetColumnIndex(column_index++);
+    const size_t allocated = memory_allocated;
+    constexpr size_t kKilobyte = 1024;
+    constexpr size_t kMegabyte = 1024 * 1024;
+
+    if (allocated > kMegabyte) {
+      ImGui::Text("%.1f MB", (float)allocated / kMegabyte);
+    } else if (allocated > kKilobyte) {
+      ImGui::Text("%.1f KB", (float)allocated / kKilobyte);
+    } else {
+      ImGui::Text("%zu B", allocated);
+    }
+  }
+
+  ImGui::TableSetColumnIndex(column_index++);
   const float duration = static_cast<float>(time) / kNanosPerMs;
   ImGui::Text("%.3f ms", duration);
 
-  ImGui::TableSetColumnIndex(3);
+  ImGui::TableSetColumnIndex(column_index++);
   ImGui::Text("%.1f %%", 100.0f * static_cast<float>(time) /
                              static_cast<float>(root_duration_ns_));
 }
@@ -305,6 +335,9 @@ SampleNode* HierarchyPanel::CopyNodeToPool(SampleNode* node,
   node_copy->total_time_ns = node->total_time_ns;
   node_copy->first_child = CopyNodeToPool(node->first_child, node_pool);
   node_copy->next_sibling = CopyNodeToPool(node->next_sibling, node_pool);
+  node_copy->total_memory_allocated = node->total_memory_allocated;
+  node_copy->total_memory_allocations_count =
+      node->total_memory_allocations_count;
   node_copy->calls = 1;
   return node_copy;
 }

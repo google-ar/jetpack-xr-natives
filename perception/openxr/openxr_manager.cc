@@ -19,6 +19,8 @@
 #include <openxr/openxr_platform.h>
 #include <openxr/openxr_reflection.h>
 #include <openxr/public/all_extensions.h>
+#include <openxr/public/xr_androidx2_geospatial_anchor.h>
+#include <openxr/public/xr_androidx2_geospatial_streetscape.h>
 #include <stdbool.h>
 #include <sys/types.h>
 
@@ -80,29 +82,30 @@ const std::array<std::string, 13> kRequiredExtensions = {
 
 // Extensions must be listed after their dependencies.
 const std::array<OpenXrExtension, 7> kOptionalExtensions = {{
-    {XR_ANDROIDX2_GEOSPATIAL_EXTENSION_NAME, {XR_EXT_FUTURE_EXTENSION_NAME}},
+    {XR_ANDROID_GEOSPATIAL_EXTENSION_NAME, {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME, {XR_EXT_FUTURE_EXTENSION_NAME}},
     {XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME,
      {XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME}},
     {XR_ANDROIDX2_GEOSPATIAL_ANCHOR_EXTENSION_NAME,
-     {XR_ANDROIDX2_GEOSPATIAL_EXTENSION_NAME, XR_EXT_FUTURE_EXTENSION_NAME,
+     {XR_ANDROID_GEOSPATIAL_EXTENSION_NAME, XR_EXT_FUTURE_EXTENSION_NAME,
       XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME,
       XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME}},
     {XR_ANDROIDX2_GEOSPATIAL_STREETSCAPE_EXTENSION_NAME,
      {XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME}},
     {XR_ANDROID_SPATIAL_ANCHOR_SPACE_EXTENSION_NAME,
      {XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME}},
-    {XR_ANDROIDX2_GOOGLE_CLOUD_AUTH_EXTENSION_NAME, {}},
+    {XR_ANDROID_GOOGLE_CLOUD_AUTH_EXTENSION_NAME,
+     {XR_EXT_FUTURE_EXTENSION_NAME}},
 }};
 
 const std::array<std::string, 7> kGeospatialExtensions = {
-    XR_ANDROIDX2_GEOSPATIAL_EXTENSION_NAME,
+    XR_ANDROID_GEOSPATIAL_EXTENSION_NAME,
     XR_ANDROIDX2_GEOSPATIAL_ANCHOR_EXTENSION_NAME,
     XR_ANDROIDX2_GEOSPATIAL_STREETSCAPE_EXTENSION_NAME,
     XR_ANDROID_SPATIAL_ANCHOR_SPACE_EXTENSION_NAME,
     XR_EXT_SPATIAL_ANCHOR_EXTENSION_NAME,
     XR_EXT_SPATIAL_ENTITY_EXTENSION_NAME,
-    XR_ANDROIDX2_GOOGLE_CLOUD_AUTH_EXTENSION_NAME,
+    XR_ANDROID_GOOGLE_CLOUD_AUTH_EXTENSION_NAME,
 };
 
 constexpr XrPosef kIdentityPose = {
@@ -220,21 +223,32 @@ bool GetDepthCameraImageWidthAndHeight(
   }
 }
 
-constexpr OpenXrManager::CreateAnchorResult MapAnchorCreateResult(
+}  // namespace
+
+OpenXrManager::CreateAnchorResult OpenXrManager::MapAnchorCreateResult(
     XrResult xr_result) {
-  switch (xr_result) {
+  switch (static_cast<int>(xr_result)) {
     case XR_SUCCESS:
       return OpenXrManager::CreateAnchorResult::kSuccess;
     case XR_ERROR_LIMIT_REACHED:
       return OpenXrManager::CreateAnchorResult::kErrorLimitReached;
     case XR_ERROR_RUNTIME_FAILURE:
       return OpenXrManager::CreateAnchorResult::kErrorRuntimeFailure;
+    case XR_ERROR_GEOSPATIAL_CLOUD_AUTH_FAILED_ANDROID:
+      return OpenXrManager::CreateAnchorResult::kErrorCloudAuthFailed;
+    case XR_ERROR_GEOSPATIAL_TRACKER_NOT_RUNNING_ANDROID:
+      return OpenXrManager::CreateAnchorResult::
+          kErrorGeospatialTrackerNotRunning;
+    case XR_ERROR_GEOSPATIAL_COORDINATES_INVALID_ANDROID:
+      return OpenXrManager::CreateAnchorResult::
+          kErrorGeospatialCoordinatesInvalid;
+    case XR_ERROR_SURFACE_ANCHOR_LOCATION_UNSUPPORTED_ANDROIDX2:
+      return OpenXrManager::CreateAnchorResult::
+          kErrorSurfaceAnchorLocationUnsupported;
     default:
       return OpenXrManager::CreateAnchorResult::kErrorRuntimeFailure;
   }
 }
-
-}  // namespace
 
 OpenXrManagerClockInterface* OpenXrManager::GetOpenXrManagerClock() {
   // The clock should be a singleton. So we are creating it here without any
@@ -364,6 +378,14 @@ bool OpenXrManager::InitExtensionFunctions() {
       instance_, "xrGetCoarseTrackingEyesInfoANDROID",
       reinterpret_cast<PFN_xrVoidFunction*>(&get_coarse_tracking_eyes_info_)));
 
+  // Future functions.
+  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+      instance_, "xrCancelFutureEXT",
+      reinterpret_cast<PFN_xrVoidFunction*>(&cancel_future_)));
+  XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+      instance_, "xrPollFutureEXT",
+      reinterpret_cast<PFN_xrVoidFunction*>(&poll_future_)));
+
   std::vector<std::string> enabled_exts;
   GetEnabledExtensions(enabled_exts);
 
@@ -375,28 +397,20 @@ bool OpenXrManager::InitExtensionFunctions() {
                   });
 
   if (std::find(enabled_exts.begin(), enabled_exts.end(),
-                XR_ANDROIDX2_GOOGLE_CLOUD_AUTH_EXTENSION_NAME) !=
+                XR_ANDROID_GOOGLE_CLOUD_AUTH_EXTENSION_NAME) !=
       enabled_exts.end()) {
     cloud_auth_exts_loaded_ = true;
     // Google Cloud Authentication functions.
     XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
-        instance_, "xrSetGoogleCloudAuthAsyncANDROIDX2",
+        instance_, "xrSetGoogleCloudAuthAsyncANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&set_google_cloud_auth_async_)));
     XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
-        instance_, "xrSetGoogleCloudAuthCompleteANDROIDX2",
+        instance_, "xrSetGoogleCloudAuthCompleteANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(
             &set_google_cloud_auth_complete_)));
   }
 
   if (all_geospatial_present) {
-    // Future functions.
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
-        instance_, "xrCancelFutureEXT",
-        reinterpret_cast<PFN_xrVoidFunction*>(&cancel_future_)));
-    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
-        instance_, "xrPollFutureEXT",
-        reinterpret_cast<PFN_xrVoidFunction*>(&poll_future_)));
-
     // Spatial Entities functions.
     XR_RETURN_IF_FAILED(
         xrGetInstanceProcAddr(instance_, "xrEnumerateSpatialCapabilitiesEXT",
@@ -459,26 +473,33 @@ bool OpenXrManager::InitExtensionFunctions() {
 
     // Geospatial functions.
     XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
-        instance_, "xrCreateGeospatialTrackerANDROIDX2",
+        instance_, "xrCreateGeospatialTrackerANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&create_geospatial_tracker_)));
     XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
-        instance_, "xrDestroyGeospatialTrackerANDROIDX2",
+        instance_, "xrDestroyGeospatialTrackerANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&destroy_geospatial_tracker_)));
     XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
-        instance_, "xrLocateGeospatialPoseFromPoseANDROIDX2",
+        instance_, "xrLocateGeospatialPoseFromPoseANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(
             &locate_geospatial_pose_from_pose_)));
     XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
-        instance_, "xrLocateGeospatialPoseANDROIDX2",
+        instance_, "xrLocateGeospatialPoseANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&locate_geospatial_pose_)));
     XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
         instance_, "xrCreateGeospatialAnchorANDROIDX2",
         reinterpret_cast<PFN_xrVoidFunction*>(&create_geospatial_anchor_)));
     XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
-        instance_, "xrCheckVpsAvailabilityAsyncANDROIDX2",
+        instance_, "xrCreateSurfaceAnchorAsyncANDROIDX2",
+        reinterpret_cast<PFN_xrVoidFunction*>(&create_surface_anchor_async_)));
+    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+        instance_, "xrCreateSurfaceAnchorCompleteANDROIDX2",
+        reinterpret_cast<PFN_xrVoidFunction*>(
+            &create_surface_anchor_complete_)));
+    XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
+        instance_, "xrCheckVpsAvailabilityAsyncANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(&check_vps_availability_async_)));
     XR_RETURN_IF_FAILED(xrGetInstanceProcAddr(
-        instance_, "xrCheckVpsAvailabilityCompleteANDROIDX2",
+        instance_, "xrCheckVpsAvailabilityCompleteANDROID",
         reinterpret_cast<PFN_xrVoidFunction*>(
             &check_vps_availability_complete_)));
 
@@ -965,8 +986,8 @@ bool OpenXrManager::IsGeospatialSupported() {
     return false;
   }
 
-  XrSystemGeospatialPropertiesANDROIDX2 geospatialSystemProperties{
-      XR_TYPE_SYSTEM_GEOSPATIAL_PROPERTIES_ANDROIDX2};
+  XrSystemGeospatialPropertiesANDROID geospatialSystemProperties{
+      XR_TYPE_SYSTEM_GEOSPATIAL_PROPERTIES_ANDROID};
   XrSystemProperties systemProperties{.type = XR_TYPE_SYSTEM_PROPERTIES,
                                       .next = &geospatialSystemProperties};
   XR_RETURN_IF_FAILED(
@@ -981,12 +1002,12 @@ OpenXrManager::GeospatialState OpenXrManager::GetGeospatialState() {
   if (geospatial_tracker_ == XR_NULL_HANDLE ||
       !last_geospatial_tracker_state_update_.has_value() ||
       last_geospatial_tracker_state_update_->state ==
-          XR_GEOSPATIAL_TRACKER_STATE_STOPPED_ANDROIDX2) {
+          XR_GEOSPATIAL_TRACKER_STATE_STOPPED_ANDROID) {
     return GeospatialState::kStopped;
   }
 
   if (last_geospatial_tracker_state_update_->state ==
-      XR_GEOSPATIAL_TRACKER_STATE_RUNNING_ANDROIDX2) {
+      XR_GEOSPATIAL_TRACKER_STATE_RUNNING_ANDROID) {
     // Ensure the spatial context is ready before returning RUNNING to Jetpack.
     if (geospatial_anchors_spatial_context_ == XR_NULL_HANDLE) {
       return GeospatialState::kStopped;
@@ -1010,14 +1031,14 @@ OpenXrManager::GeospatialState OpenXrManager::GetGeospatialState() {
 
 OpenXrManager::GeospatialPoseResult OpenXrManager::LocateGeospatialPoseFromPose(
     XrTime time, const XrPosef& pose,
-    XrGeospatialPoseResultANDROIDX2* out_geospatial_pose_result) {
+    XrGeospatialPoseResultANDROID* out_geospatial_pose_result) {
   if (GetGeospatialState() != GeospatialState::kRunning) {
     return GeospatialPoseResult::kErrorIllegalState;
   }
 
   absl::MutexLock lock(mutex_);
-  XrGeospatialPoseFromPoseLocateInfoANDROIDX2 locate_info = {
-      .type = XR_TYPE_GEOSPATIAL_POSE_FROM_POSE_LOCATE_INFO_ANDROIDX2,
+  XrGeospatialPoseFromPoseLocateInfoANDROID locate_info = {
+      .type = XR_TYPE_GEOSPATIAL_POSE_FROM_POSE_LOCATE_INFO_ANDROID,
       .next = nullptr,
       .space = GetSpaceInDefaultReferenceSpace(),
       .time = time,
@@ -1025,7 +1046,7 @@ OpenXrManager::GeospatialPoseResult OpenXrManager::LocateGeospatialPoseFromPose(
   };
 
   *out_geospatial_pose_result = {
-      .type = XR_TYPE_GEOSPATIAL_POSE_RESULT_ANDROIDX2,
+      .type = XR_TYPE_GEOSPATIAL_POSE_RESULT_ANDROID,
       .next = nullptr,
   };
 
@@ -1035,16 +1056,16 @@ OpenXrManager::GeospatialPoseResult OpenXrManager::LocateGeospatialPoseFromPose(
   switch (result) {
     case XR_SUCCESS:
       if (!(out_geospatial_pose_result->poseFlags &
-                XR_GEOSPATIAL_POSE_ORIENTATION_VALID_BIT_ANDROIDX2 &&
+                XR_GEOSPATIAL_POSE_ORIENTATION_VALID_BIT_ANDROID &&
             out_geospatial_pose_result->poseFlags &
-                XR_GEOSPATIAL_POSE_POSITION_VALID_BIT_ANDROIDX2)) {
+                XR_GEOSPATIAL_POSE_POSITION_VALID_BIT_ANDROID)) {
         return GeospatialPoseResult::kErrorNotTracking;
       }
 
       return GeospatialPoseResult::kSuccess;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wswitch"
-    case XR_ERROR_GEOSPATIAL_COORDINATES_INVALID_ANDROIDX2:
+    case XR_ERROR_GEOSPATIAL_COORDINATES_INVALID_ANDROID:
       return GeospatialPoseResult::kErrorInvalidArgument;
 #pragma clang diagnostic pop
     default:
@@ -1053,15 +1074,15 @@ OpenXrManager::GeospatialPoseResult OpenXrManager::LocateGeospatialPoseFromPose(
 }
 
 OpenXrManager::GeospatialPoseResult OpenXrManager::LocatePoseFromGeospatialPose(
-    XrTime time, const XrGeospatialPoseANDROIDX2& geospatial_pose,
+    XrTime time, const XrGeospatialPoseANDROID& geospatial_pose,
     XrSpaceLocation* out_location) {
   if (GetGeospatialState() != GeospatialState::kRunning) {
     return GeospatialPoseResult::kErrorIllegalState;
   }
 
   absl::MutexLock lock(mutex_);
-  XrGeospatialPoseLocateInfoANDROIDX2 locate_info = {
-      .type = XR_TYPE_GEOSPATIAL_POSE_LOCATE_INFO_ANDROIDX2,
+  XrGeospatialPoseLocateInfoANDROID locate_info = {
+      .type = XR_TYPE_GEOSPATIAL_POSE_LOCATE_INFO_ANDROID,
       .next = nullptr,
       .space = GetSpaceInDefaultReferenceSpace(),
       .time = time,
@@ -1086,7 +1107,7 @@ OpenXrManager::GeospatialPoseResult OpenXrManager::LocatePoseFromGeospatialPose(
       return GeospatialPoseResult::kSuccess;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wswitch"
-    case XR_ERROR_GEOSPATIAL_COORDINATES_INVALID_ANDROIDX2:
+    case XR_ERROR_GEOSPATIAL_COORDINATES_INVALID_ANDROID:
       return GeospatialPoseResult::kErrorInvalidArgument;
 #pragma clang diagnostic pop
     default:
@@ -1096,7 +1117,7 @@ OpenXrManager::GeospatialPoseResult OpenXrManager::LocatePoseFromGeospatialPose(
 
 XrResult OpenXrManager::CheckVpsAvailabilityAsync(
     double latitude, double longitude,
-    std::function<void(const XrVPSAvailabilityCheckCompletionANDROIDX2&)>
+    std::function<void(const XrVPSAvailabilityCheckCompletionANDROID&)>
         on_complete,
     std::function<void()> on_cancel) {
   absl::MutexLock lock(mutex_);
@@ -1107,8 +1128,8 @@ XrResult OpenXrManager::CheckVpsAvailabilityAsync(
   pending_futures_.push_back(
       {future,
        {[this, on_complete](XrFutureEXT future) {
-          XrVPSAvailabilityCheckCompletionANDROIDX2 completion = {
-              .type = XR_TYPE_VPS_AVAILABILITY_CHECK_COMPLETION_ANDROIDX2,
+          XrVPSAvailabilityCheckCompletionANDROID completion = {
+              .type = XR_TYPE_VPS_AVAILABILITY_CHECK_COMPLETION_ANDROID,
               .next = nullptr,
           };
           XrResult result;
@@ -1132,8 +1153,29 @@ XrResult OpenXrManager::CheckVpsAvailabilityAsync(
   return XR_SUCCESS;
 }
 
+OpenXrManager::CreateAnchorResult OpenXrManager::CreateAnchorSpaceFromEntityId(
+    XrSpatialEntityIdEXT entity_id, XrSpace* out_anchor_space) {
+  absl::MutexLock lock(mutex_);
+  XrSpatialAnchorSpaceFromIdCreateInfoANDROID space_create_info = {
+      .type = XR_TYPE_SPATIAL_ANCHOR_SPACE_FROM_ID_CREATE_INFO_ANDROID,
+      .next = nullptr,
+      .anchorEntityId = entity_id,
+  };
+
+  XrResult result = create_spatial_anchor_space_from_id_(
+      session_, geospatial_anchors_spatial_context_, &space_create_info,
+      out_anchor_space);
+
+  if (XR_FAILED(result)) {
+    LOG(ERROR) << "Failed to create spatial anchor space from id with: "
+               << XrEnumStr(result);
+    return MapAnchorCreateResult(result);
+  }
+  return CreateAnchorResult::kSuccess;
+}
+
 XrResult OpenXrManager::SetGoogleCloudAuthAsync(
-    const XrGoogleCloudAuthInfoBaseHeaderANDROIDX2* auth_info,
+    const XrGoogleCloudAuthInfoBaseHeaderANDROID* auth_info,
     std::function<void(const XrFutureCompletionEXT&)> on_complete,
     std::function<void()> on_cancel) {
   absl::MutexLock lock(mutex_);
@@ -1797,9 +1839,9 @@ XrResult OpenXrManager::ConfigureGeospatialTracking(GeospatialMode mode) {
           // call already returned success.
           last_geospatial_tracker_state_update_ = {
               .type =
-                  XR_TYPE_EVENT_DATA_GEOSPATIAL_TRACKER_STATE_CHANGED_ANDROIDX2,
+                  XR_TYPE_EVENT_DATA_GEOSPATIAL_TRACKER_STATE_CHANGED_ANDROID,
               .state =
-                  XR_GEOSPATIAL_TRACKER_STATE_INITIALIZATION_FAILED_ANDROIDX2,
+                  XR_GEOSPATIAL_TRACKER_STATE_INITIALIZATION_FAILED_ANDROID,
               .initializationResult = XR_ERROR_RUNTIME_FAILURE,
           };
 
@@ -1968,8 +2010,8 @@ XrResult OpenXrManager::MaybeCreateGeospatialTracker() {
       .next = nullptr,
       .shouldTrackPlanes = XR_FALSE,
   };
-  XrGeospatialTrackerCreateInfoANDROIDX2 create_info = {
-      .type = XR_TYPE_GEOSPATIAL_TRACKER_CREATE_INFO_ANDROIDX2,
+  XrGeospatialTrackerCreateInfoANDROID create_info = {
+      .type = XR_TYPE_GEOSPATIAL_TRACKER_CREATE_INFO_ANDROID,
       .next = &anchor_tracking_info,
   };
   XR_RETURN_RESULT_IF_FAILED(
@@ -2495,48 +2537,103 @@ OpenXrManager::CreateAnchorResult OpenXrManager::CreateGeospatialAnchor(
     XrTime time, double latitude, double longitude, double altitude,
     const XrQuaternionf& east_up_south_quaternion, XrSpace* out_anchor_space) {
   if (GetGeospatialState() != GeospatialState::kRunning) {
-    return CreateAnchorResult::kErrorRuntimeFailure;
+    return CreateAnchorResult::kErrorGeospatialTrackerNotRunning;
   }
-  {
-    absl::MutexLock lock(mutex_);
+
     XrResult result;
     XrSpatialEntityIdEXT anchor_entity_id;
-    XrGeospatialAnchorCreateInfoANDROIDX2 create_info = {
-        .type = XR_TYPE_GEOSPATIAL_ANCHOR_CREATE_INFO_ANDROIDX2,
-        .next = nullptr,
-        .geospatialTracker = geospatial_tracker_,
 
-        .geospatialPose =
-            {
-                .eastUpSouthOrientation = east_up_south_quaternion,
-                .latitude = latitude,
-                .longitude = longitude,
-                .altitude = altitude,
-            },
-    };
+    {
+      absl::MutexLock lock(mutex_);
+      XrGeospatialAnchorCreateInfoANDROIDX2 create_info = {
+          .type = XR_TYPE_GEOSPATIAL_ANCHOR_CREATE_INFO_ANDROIDX2,
+          .next = nullptr,
+          .geospatialTracker = geospatial_tracker_,
 
-    result = create_geospatial_anchor_(geospatial_anchors_spatial_context_,
-                                       &create_info, &anchor_entity_id);
+          .geospatialPose =
+              {
+                  .eastUpSouthOrientation = east_up_south_quaternion,
+                  .latitude = latitude,
+                  .longitude = longitude,
+                  .altitude = altitude,
+              },
+      };
+
+      result = create_geospatial_anchor_(geospatial_anchors_spatial_context_,
+                                         &create_info, &anchor_entity_id);
+    }
 
     if (XR_FAILED(result)) {
       LOG(ERROR) << "Failed to create geospatial anchor with: "
                  << XrEnumStr(result);
       // TODO: Handle more specific error translation.
       return MapAnchorCreateResult(result);
-    } else {
-      XrSpatialAnchorSpaceFromIdCreateInfoANDROID space_create_info = {
-          .type = XR_TYPE_SPATIAL_ANCHOR_SPACE_FROM_ID_CREATE_INFO_ANDROID,
-          .next = nullptr,
-          .anchorEntityId = anchor_entity_id,
-      };
-
-      result = create_spatial_anchor_space_from_id_(
-          session_, geospatial_anchors_spatial_context_, &space_create_info,
-          out_anchor_space);
     }
 
-    return MapAnchorCreateResult(result);
+    return CreateAnchorSpaceFromEntityId(anchor_entity_id, out_anchor_space);
+}
+
+OpenXrManager::CreateAnchorResult OpenXrManager::CreateSurfaceAnchorAsync(
+    XrSurfaceAnchorTypeANDROIDX2 anchor_type, double latitude, double longitude,
+    double altitude_relative_to_surface,
+    const XrQuaternionf& east_up_south_quaternion,
+    std::function<void(const XrSurfaceAnchorCreateCompletionANDROIDX2&)>
+        on_complete,
+    std::function<void()> on_cancel) {
+  if (GetGeospatialState() != GeospatialState::kRunning) {
+    return CreateAnchorResult::kErrorGeospatialTrackerNotRunning;
   }
+
+  {
+    absl::MutexLock lock(mutex_);
+
+    XrSurfaceAnchorCreateInfoANDROIDX2 create_info = {
+        .type = XR_TYPE_SURFACE_ANCHOR_CREATE_INFO_ANDROIDX2,
+        .next = nullptr,
+        .geospatialTracker = geospatial_tracker_,
+        .surfaceAnchorType = anchor_type,
+        .eastUpSouthOrientation = east_up_south_quaternion,
+        .latitude = latitude,
+        .longitude = longitude,
+        .altitudeRelativeToSurface = altitude_relative_to_surface,
+    };
+
+    XrFutureEXT future;
+    XrResult result = create_surface_anchor_async_(
+        geospatial_anchors_spatial_context_, &create_info, &future);
+    if (XR_FAILED(result)) {
+      LOG(ERROR) << "create_surface_anchor_async_ failed with "
+                 << XrEnumStr(result);
+      return MapAnchorCreateResult(result);
+    }
+
+    pending_futures_.push_back(
+        {future,
+         {[this, on_complete](XrFutureEXT future) {
+            XrSurfaceAnchorCreateCompletionANDROIDX2 completion = {
+                .type = XR_TYPE_SURFACE_ANCHOR_CREATE_COMPLETION_ANDROIDX2,
+                .next = nullptr,
+            };
+            XrResult result;
+            {
+              absl::MutexLock lock(mutex_);
+              result = create_surface_anchor_complete_(
+                  geospatial_anchors_spatial_context_, future, &completion);
+            }
+
+            if (XR_FAILED(result)) {
+              LOG(ERROR) << "Failed to complete surface anchor future "
+                            "with error: "
+                         << XrEnumStr(result);
+              completion.futureResult = result;
+            }
+
+            on_complete(completion);
+          },
+          on_cancel}});
+  }
+
+  return CreateAnchorResult::kSuccess;
 }
 
 bool OpenXrManager::GetAnchorLocationData(
@@ -2802,10 +2899,10 @@ void OpenXrManager::PollOpenXR() {
       }
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wswitch"
-      case XR_TYPE_EVENT_DATA_GEOSPATIAL_TRACKER_STATE_CHANGED_ANDROIDX2: {
+      case XR_TYPE_EVENT_DATA_GEOSPATIAL_TRACKER_STATE_CHANGED_ANDROID: {
         LOG(INFO) << "Received geospatial tracker state changed event";
         const auto& geospatial_event = *reinterpret_cast<
-            const XrEventDataGeospatialTrackerStateChangedANDROIDX2*>(&event);
+            const XrEventDataGeospatialTrackerStateChangedANDROID*>(&event);
         absl::MutexLock lock(mutex_);
         last_geospatial_tracker_state_update_ = geospatial_event;
         break;

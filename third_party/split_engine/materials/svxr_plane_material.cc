@@ -26,7 +26,7 @@
 #include "core/math/vec.h"
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
@@ -37,7 +37,7 @@ imp::Future<std::unique_ptr<SVXRPlaneMaterial>> SVXRPlaneMaterial::Create(
   auto fbb = std::make_unique<flatbuffers::FlatBufferBuilder>();
   flatbuffers::Offset<android_xr::schemas::BuiltInMaterialbd7fe08c>
       spec_offset = android_xr::schemas::CreateBuiltInMaterialbd7fe08c(*fbb);
-  return imp::split_engine::SplitEngineMaterial::RequestBuiltInMaterial(
+  return imp::split_engine::SplitEngineBuiltinMaterial::RequestBuiltInMaterial(
              view, std::move(fbb),
              android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialbd7fe08c,
              spec_offset.Union())
@@ -51,10 +51,11 @@ imp::Future<std::unique_ptr<SVXRPlaneMaterial>> SVXRPlaneMaterial::Create(
 SVXRPlaneMaterial::SVXRPlaneMaterial(
     imp::BaseView& view,
     imp::split_engine::PlaceholderOrBuiltInMaterialPtr material)
-    : SplitEngineMaterial(view,
-                          android_xr::schemas::BuiltInMaterialParameters::
-                              BuiltInMaterialbd7fe08cParameters,
-                          std::move(material)) {}
+    : SplitEngineBuiltinMaterial(
+          view,
+          android_xr::schemas::BuiltInMaterialParameters::
+              BuiltInMaterialbd7fe08cParameters,
+          std::move(material)) {}
 
 SVXRPlaneMaterial::~SVXRPlaneMaterial() { Cleanup(); }
 

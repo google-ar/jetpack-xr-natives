@@ -32,13 +32,13 @@ namespace imp::recipe {
 namespace internal {
 
 template <>
-absl::StatusOr<std::tuple<recipe::Args>> ArgsToTupleHelper(
-    recipe::Args& args, std::index_sequence<0>) {
-  return std::tuple<recipe::Args>(args);
+std::tuple<const recipe::Args&> ArgsToTupleHelper(const recipe::Args& args,
+                                                  std::index_sequence<0>) {
+  return std::tuple<const recipe::Args&>(args);
 }
 
 absl::StatusOr<recipe::ReturnValue> ConvertStatusToStatusOrReturnValue(
-    absl::Status status) {
+    const absl::Status& status) {
   if (!status.ok()) {
     return status;
   }
@@ -47,7 +47,7 @@ absl::StatusOr<recipe::ReturnValue> ConvertStatusToStatusOrReturnValue(
 }
 
 recipe::ReturnValue ConvertFutureStatusToReturnValue(
-    Future<absl::Status> future_status) {
+    const Future<absl::Status>& future_status) {
   // Handles the case where the return type is Future<absl::Status>.
   return recipe::ReturnValue{
       .async_values = future_status.Then([]() { return recipe::Variables(); })};
@@ -55,7 +55,7 @@ recipe::ReturnValue ConvertFutureStatusToReturnValue(
 
 absl::StatusOr<recipe::ReturnValue>
 ConvertStatusOrReturnValueDeclarationToStatusOrReturnValue(
-    absl::StatusOr<ReturnValueDeclaration> return_value_declaration) {
+    const absl::StatusOr<ReturnValueDeclaration>& return_value_declaration) {
   // Handles the case where the return type is
   // recipe::ReturnValueDeclaration or
   // absl::StatusOr<recipe::ReturnValueDeclaration>.
@@ -67,7 +67,7 @@ ConvertStatusOrReturnValueDeclarationToStatusOrReturnValue(
 }
 
 recipe::ReturnValue ConvertReturnValueDeclarationToReturnValue(
-    ReturnValueDeclaration return_value_declaration) {
+    const ReturnValueDeclaration& return_value_declaration) {
   recipe::ReturnValue return_value;
 
   // combined_future combines all of the async variables to one
@@ -115,12 +115,12 @@ recipe::ReturnValue ConvertReturnValueDeclarationToReturnValue(
 }
 
 recipe::ReturnValue ConvertFutureRecipeVariablesToReturnValue(
-    Future<recipe::Variables> variables) {
+    const Future<recipe::Variables>& variables) {
   return recipe::ReturnValue{.async_values = variables};
 }
 
 recipe::ReturnValue ConvertFutureRecipeVariableToReturnValue(
-    Future<recipe::Variable> variable) {
+    const Future<recipe::Variable>& variable) {
   return recipe::ReturnValue{
       .async_values =
           variable.Then([](recipe::Variable return_value) -> recipe::Variables {
@@ -133,13 +133,13 @@ recipe::ReturnValue ConvertFutureRecipeVariableToReturnValue(
 }
 
 recipe::ReturnValue ConvertRecipeVariablesToReturnValue(
-    recipe::Variables variables) {
+    const recipe::Variables& variables) {
   return recipe::ReturnValue{.values = variables};
 }
 
 absl::StatusOr<recipe::ReturnValue>
 ConvertStatusOrRecipeVariablesToStatusOrReturnValue(
-    absl::StatusOr<recipe::Variables> variables) {
+    const absl::StatusOr<recipe::Variables>& variables) {
   if (!variables.ok()) {
     return variables.status();
   }
@@ -148,7 +148,7 @@ ConvertStatusOrRecipeVariablesToStatusOrReturnValue(
 }
 
 absl::StatusOr<recipe::ReturnValue> ConvertStatusOrRecipeVariableToReturnValue(
-    absl::StatusOr<recipe::Variable> variable) {
+    const absl::StatusOr<recipe::Variable>& variable) {
   if (!variable.ok()) {
     return variable.status();
   }
@@ -160,7 +160,7 @@ absl::StatusOr<recipe::ReturnValue> ConvertStatusOrRecipeVariableToReturnValue(
 }
 
 recipe::ReturnValue ConvertRecipeVariableToReturnValue(
-    recipe::Variable variable) {
+    const recipe::Variable& variable) {
   return recipe::ReturnValue{
       .values = {{std::string(recipe::kDefaultOutputSocketName.data(),
                               recipe::kDefaultOutputSocketName.length()),

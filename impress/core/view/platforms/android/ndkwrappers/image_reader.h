@@ -61,7 +61,7 @@ class ImageReader {
   absl::Status ResetImageListenerCallback();
 
   // Set the buffer size of the ImageReader.
-  absl::Status SetBufferSize(int2 size);
+  absl::Status SetDefaultBufferSize(int2 size);
 
  private:
   // Create ImageReader with the given size, format and usage.

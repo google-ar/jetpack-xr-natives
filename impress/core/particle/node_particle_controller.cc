@@ -23,11 +23,14 @@
 #include "absl/status/status.h"
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
+#include "core/math/vec.h"
 #include "core/ncsb/component.h"
+#include "core/ncsb/component_handle.h"
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
 #include "core/particle/particle_behavior.h"
 #include "core/particle/particle_controller.h"
+#include "core/particle/particle_emitter_info.h"
 #include "core/particle/particle_emitter_state.proto.imp.h"
 #include "core/particle/particle_instance.h"
 #include "core/particle/particle_service.h"
@@ -35,6 +38,8 @@
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/gltf_asset.h"
 #include "core/view/framework/assets/gltf_renderer.h"
+#include "core/view/framework/camera/camera_component.h"
+#include "core/view/framework/camera/camera_manager.h"
 #include "core/view/utils/frame_time.h"
 
 namespace imp {
@@ -66,12 +71,21 @@ NodeParticleController::NodeParticleController(
                         emitter_state.max_particles),
       particle_behavior_(emitter_node, emitter_state.particle_config),
       emitter_node_(emitter_node),
-      gltf_asset_(gltf_asset) {
-  particles_per_second_ = emitter_state.particles_per_second;
-  particle_delay_ = 0.0f;
-}
+      gltf_asset_(gltf_asset),
+      emitter_duration_finite_(emitter_state.duration_in_seconds > 0.0f),
+      remaining_emitter_duration_(emitter_state.duration_in_seconds),
+      emitter_duration_(emitter_state.duration_in_seconds),
+      looping_(emitter_state.loop),
+      particles_per_second_(emitter_state.particles_per_second),
+      particle_delay_(0.0f) {}
 
 void NodeParticleController::UpdateParticleSystem(const FrameTime& frame_time) {
+  // Prepare the emitter info.
+  imp_particle::ParticleEmitterInfo emitter_info = GetParticleEmitterInfo();
+
+  // Update behaviors specific to the emitter.
+  UpdateEmitterBehavior(frame_time);
+
   // Process active particles.
   auto it = active_particles_.begin();
   while (it != active_particles_.end()) {
@@ -81,7 +95,7 @@ void NodeParticleController::UpdateParticleSystem(const FrameTime& frame_time) {
 
     // Update particle behaviors.
     ParticleBehavior::UpdateResult result = particle_behavior_.UpdateParticle(
-        frame_time.GetDeltaSeconds(), particle_instance);
+        emitter_info, frame_time.GetDeltaSeconds(), particle_instance);
     if (result == ParticleBehavior::UpdateResult::kExpired) {
       // Removes the node from the active particles list.
       it->node->GetView().DestroyNode(it->node);
@@ -97,8 +111,7 @@ void NodeParticleController::UpdateParticleSystem(const FrameTime& frame_time) {
   // Create new particles.
   // TODO: (broken link) - Revisit this while loop to prevent performance issues.
   particle_delay_ -= frame_time.GetDeltaSeconds();
-  while (particle_delay_ <= 0.0f &&
-         active_particles_.size() < particle_service_.GetMaxParticles()) {
+  while (CanEmitParticles()) {
     // Determine when the next particle will be emitted.
     particle_delay_ += 1.0f / particles_per_second_;
 
@@ -133,6 +146,42 @@ void NodeParticleController::SyncNode(const ParticleInstance& particle_instance,
   if (particle_instance.HasScale()) {
     node->SetWorldScale(particle_instance.GetScale());
   }
+
+  // Update the rotation if defined.
+  if (particle_instance.HasRotation()) {
+    node->SetWorldRotation(particle_instance.GetRotation());
+  }
+}
+
+void NodeParticleController::UpdateEmitterBehavior(
+    const FrameTime& frame_time) {
+  // Update the remaining duration.
+  if (emitter_duration_finite_) {
+    // Reduce the emitter lifetime.
+    if (remaining_emitter_duration_ > 0.0f) {
+      remaining_emitter_duration_ -= frame_time.GetDeltaSeconds();
+    }
+
+    // If the emitter has expired, but is looping, reset its duration.
+    if (looping_ && remaining_emitter_duration_ <= 0.0f) {
+      remaining_emitter_duration_ = emitter_duration_;
+    }
+  }
+}
+
+bool NodeParticleController::CanEmitParticles() {
+  // Waiting for the next time to emit a particle?
+  if (particle_delay_ > 0.0f) return false;
+
+  // Are there too many active particles?
+  if (active_particles_.size() >= particle_service_.GetMaxParticles())
+    return false;
+
+  // Is the emitter actively emitting particles?
+  if (emitter_duration_finite_ && remaining_emitter_duration_ <= 0.0f)
+    return false;
+
+  return true;
 }
 
 std::string NodeParticleController::ValidateEmitterState(
@@ -152,7 +201,28 @@ std::string NodeParticleController::ValidateEmitterState(
     return "NodeParticleController - max particles must be > 0!";
   }
 
+  // The duration must be non-negative.
+  if (emitter_state.duration_in_seconds < 0.0f) {
+    return "NodeParticleController - duration in seconds must be >= 0!";
+  }
+
   return "";
+}
+
+imp_particle::ParticleEmitterInfo
+NodeParticleController::GetParticleEmitterInfo() const {
+  // Get the current camera position.
+  float3 camera_position = kZero3;
+  if (emitter_node_.IsValid()) {
+    ComponentHandle<CameraComponent> camera =
+        emitter_node_->GetView().GetCameraManager().GetCamera();
+    if (camera.IsValid()) {
+      camera_position = camera->GetNode()->GetWorldPosition();
+    }
+  }
+
+  // Assemble the emitter info.
+  return imp_particle::ParticleEmitterInfo(camera_position);
 }
 
 }  // namespace imp

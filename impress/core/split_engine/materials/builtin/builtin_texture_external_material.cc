@@ -13,6 +13,8 @@
 // limitations under the License.
 #include "core/split_engine/materials/builtin/builtin_texture_external_material.h"
 
+#include <functional>
+#include <optional>
 #include <utility>
 
 #include "absl/memory/memory.h"
@@ -24,10 +26,13 @@
 #include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
 #include "core/material_library/flatbuffer_utils.h"
+#include "core/material_library/material_package.h"
 #include "core/materials/material.h"
+#include "core/ncsb/update_system.h"
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
+#include "core/split_engine/materials/builtin/builtin_material_registry.h"
 #include "core/split_engine/materials/builtin/builtin_texture_external_material_assets.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
@@ -101,5 +106,23 @@ absl::Status BuiltInTextureExternalMaterial::SetParameters(
   }
   return absl::OkStatus();
 }
+
+// Registers the built-in material factory.
+const bool kRegisterMaterial = BuiltinMaterialRegistry::RegisterOrDie(
+    android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialTextureExternal,
+    [](BaseView& view, BridgeId bridge_id,
+       const android_xr::schemas::BuiltInMaterialRequest& request,
+       std::optional<
+           std::reference_wrapper<const MaterialPackage::MaterialCache>>
+           cache) -> Future<BuiltInMaterialPtr> {
+      const android_xr::schemas::BuiltInMaterialTextureExternal* spec =
+          request.data_as_BuiltInMaterialTextureExternal();
+      if (spec == nullptr) {
+        return Future<BuiltInMaterialPtr>(absl::InvalidArgumentError(
+            "Failed to get BuiltInTextureExternalMaterial spec from the "
+            "request."));
+      }
+      return BuiltInTextureExternalMaterial::Create(view, bridge_id, *spec);
+    });
 
 }  // namespace imp::split_engine

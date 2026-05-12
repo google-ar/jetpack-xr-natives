@@ -175,15 +175,21 @@ cc_library(
     deps = [
         ":bridge_buffer",
         ":buffer_handle_factory",
+        "//core/async:executor",
+        "//core/async:future",
+        "//core/common:invocable",
+        "//core/common:owned_ptr",
         "//core/common:robin_map",
         "//core/split_engine:flatbuffer_allocator",
         "//core/split_engine:flatbuffer_size_calculator",
         "//core/split_engine:split_engine_bridge_sender",
         "//core/split_engine:split_engine_shared",
+        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/synchronization",
         "@com_google_impress//core/common:log",
         "@flatbuffers",
         "@mediapipe//mediapipe/framework/port:status",
@@ -204,9 +210,11 @@ cc_library(
     defines = imp_defines(),
     deps = [
         ":buffer_handle_factory",
-        "//core/async:executor",
+        ":scheduler",
         "//core/common:trace",
         "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/synchronization",
         "@com_google_impress//core/common:log",
         "@third_party//filament/libs:utils_hdrs",
     ],
@@ -235,12 +243,15 @@ cc_library(
         ":buffer_handle_factory",
         ":split_engine_shared_memory_bridge_client",
         ":split_engine_shared_memory_bridge_sender_base",
+        "//core/async:executor",
+        "//core/common:owned_ptr",
         "//core/split_engine:flatbuffer_allocator",
         "//core/split_engine:split_engine_shared",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_impress//core/common:log",
         "@flatbuffers",
+        "@mediapipe//mediapipe/framework/port:status",
         "@third_party//split_engine:fbs",  # buildcleaner: keep
         "@third_party//split_engine:fbs_deps",  # buildcleaner: keep
     ],
@@ -368,6 +379,18 @@ cc_library(
     ]) + [
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "scheduler",
+    hdrs = ["scheduler.h"],
+    copts = imp_copts(),
+    defines = imp_defines(),
+    deps = [
+        "//core/common:invocable",
+        "@com_google_absl//absl/status",
     ],
     alwayslink = 1,
 )

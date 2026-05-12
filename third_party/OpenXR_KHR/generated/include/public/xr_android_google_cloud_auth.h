@@ -1,0 +1,99 @@
+#ifndef XR_ANDROID_GOOGLE_CLOUD_AUTH_H_
+#define XR_ANDROID_GOOGLE_CLOUD_AUTH_H_ 1
+
+/*
+** Copyright 2017-2025 The Khronos Group Inc.
+**
+** SPDX-License-Identifier: Apache-2.0 OR MIT
+*/
+
+/*
+** This header is generated from the Khronos OpenXR XML API Registry.
+**
+*/
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
+#ifndef XR_ANDROID_google_cloud_auth
+
+// XR_ANDROID_google_cloud_auth is a preprocessor guard. Do not pass it to API calls.
+#define XR_ANDROID_google_cloud_auth 1
+#define XR_ANDROID_google_cloud_auth_SPEC_VERSION 1
+#define XR_ANDROID_GOOGLE_CLOUD_AUTH_EXTENSION_NAME "XR_ANDROID_google_cloud_auth"
+#define XR_ERROR_KEYLESS_AUTH_NOT_SETUP_ANDROID ((XrResult) -1000787000U)
+#define XR_ERROR_KEYLESS_AUTH_FAILED_ANDROID ((XrResult) -1000787001U)
+#define XR_TYPE_GOOGLE_CLOUD_AUTH_API_KEY_ANDROID ((XrStructureType) 1000787000U)
+#define XR_TYPE_GOOGLE_CLOUD_AUTH_TOKEN_ANDROID ((XrStructureType) 1000787001U)
+#define XR_TYPE_GOOGLE_CLOUD_AUTH_KEYLESS_ANDROID ((XrStructureType) 1000787002U)
+#define XR_TYPE_GOOGLE_CLOUD_AUTH_ERROR_RESULT_ANDROID ((XrStructureType) 1000787003U)
+
+typedef enum XrGoogleCloudAuthErrorANDROID {
+    // No error occurred when invoking a Google Cloud API.
+    XR_GOOGLE_CLOUD_AUTH_ERROR_NONE_ANDROID = 0,
+    // Quota exceeded when invoking a Google Cloud API.
+    XR_GOOGLE_CLOUD_AUTH_ERROR_QUOTA_EXCEEDED_ANDROID = -1,
+    // Failed to reach a Google Cloud API, possibly due to network connectivity issues or server availability.
+    XR_GOOGLE_CLOUD_AUTH_ERROR_UNREACHABLE_ANDROID = -2,
+    // An auth error occurred when invoking a Google Cloud API.
+    XR_GOOGLE_CLOUD_AUTH_ERROR_ANDROID = -3,
+    XR_GOOGLE_CLOUD_AUTH_ERROR_MAX_ENUM_ANDROID = 0x7FFFFFFF
+} XrGoogleCloudAuthErrorANDROID;
+typedef struct XrGoogleCloudAuthInfoBaseHeaderANDROID {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+} XrGoogleCloudAuthInfoBaseHeaderANDROID;
+
+// XrGoogleCloudAuthApiKeyANDROID extends XrGoogleCloudAuthInfoBaseHeaderANDROID
+typedef struct XrGoogleCloudAuthApiKeyANDROID {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+    const char*                 apiKey;
+} XrGoogleCloudAuthApiKeyANDROID;
+
+// XrGoogleCloudAuthTokenANDROID extends XrGoogleCloudAuthInfoBaseHeaderANDROID
+typedef struct XrGoogleCloudAuthTokenANDROID {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+    const char*                 authToken;
+} XrGoogleCloudAuthTokenANDROID;
+
+// XrGoogleCloudAuthKeylessANDROID extends XrGoogleCloudAuthInfoBaseHeaderANDROID
+typedef struct XrGoogleCloudAuthKeylessANDROID {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+} XrGoogleCloudAuthKeylessANDROID;
+
+// XrGoogleCloudAuthErrorResultANDROID extends XrSurfaceAnchorCreateCompletionANDROIDX2,XrVPSAvailabilityCheckCompletionANDROID
+typedef struct XrGoogleCloudAuthErrorResultANDROID {
+    XrStructureType                  type;
+    void* XR_MAY_ALIAS               next;
+    XrGoogleCloudAuthErrorANDROID    error;
+} XrGoogleCloudAuthErrorResultANDROID;
+
+typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudAuthAsyncANDROID)(XrSession session, const XrGoogleCloudAuthInfoBaseHeaderANDROID* authInfo, XrFutureEXT* future);
+typedef XrResult (XRAPI_PTR *PFN_xrSetGoogleCloudAuthCompleteANDROID)(XrSession session, XrFutureEXT future, XrFutureCompletionEXT* completion);
+
+#ifndef XR_NO_PROTOTYPES
+#ifdef XR_EXTENSION_PROTOTYPES
+XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudAuthAsyncANDROID(
+    XrSession                                   session,
+    const XrGoogleCloudAuthInfoBaseHeaderANDROID* authInfo,
+    XrFutureEXT*                                future);
+
+XRAPI_ATTR XrResult XRAPI_CALL xrSetGoogleCloudAuthCompleteANDROID(
+    XrSession                                   session,
+    XrFutureEXT                                 future,
+    XrFutureCompletionEXT*                      completion);
+#endif /* XR_EXTENSION_PROTOTYPES */
+#endif /* !XR_NO_PROTOTYPES */
+#endif /* XR_ANDROID_google_cloud_auth */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

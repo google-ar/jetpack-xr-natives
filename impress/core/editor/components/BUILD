@@ -16,8 +16,9 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:assets.bzl", "imp_assets")
 
 # Components for Impress Previewer.
-load("//build_tools:imp.bzl", "imp_google3_copts")
+load("//build_tools:imp.bzl", "if_android", "imp_google3_copts")
 load("//build_tools:imp_material.bzl", "imp_material")
+load("//core/proto:imp_cc_proto_library.bzl", "imp_cc_proto_library")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -100,6 +101,29 @@ cc_library(
     alwayslink = 1,
 )
 
+cc_library(
+    name = "temporary_editor_metadata",
+    hdrs = [
+        "temporary_editor_metadata.h",
+    ],
+    copts = imp_google3_copts(),
+    deps = [
+        ":temporary_editor_metadata_state_proto_cc",
+        "//core/ncsb",
+    ],
+    alwayslink = 1,
+)
+
+proto_library(
+    name = "temporary_editor_metadata_state_proto",
+    srcs = ["temporary_editor_metadata_state.proto"],
+)
+
+imp_cc_proto_library(
+    name = "temporary_editor_metadata_state_proto_cc",
+    proto = ":temporary_editor_metadata_state_proto",
+)
+
 imp_assets(
     name = "grid_asset",
     srcs = [
@@ -132,6 +156,8 @@ cc_library(
         "//core/editor:events",
         "//core/math",
         "//core/ncsb",
+        "//core/render:primitive_shape_renderer",
+        "//core/render:primitive_shape_renderer_state_cc_proto",
         "//core/view/framework",
         "//core/view/framework:framework_proto_cc",
         "@com_google_absl//absl/status",
@@ -160,15 +186,19 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         ":world_space_editor_ui_assets",
+        "//core:config",
         "//core/actions:action_config",
         "//core/actions:controller_events",
+        "//core/assets",
         "//core/async:future",
         "//core/common:debug_draw",
         "//core/common:registry",
         "//core/editor",
         "//core/editor/xr:xr_grab_handle",
         "//core/input",
+        "//core/materials",
         "//core/math",
+        "//core/model/mesh",
         "//core/ncsb",
         "//core/render",
         "//core/view:base_view",
@@ -176,7 +206,9 @@ cc_library(
         "//core/view/framework:framework_proto_cc",
         "//core/view/utils:frame_time",
         "//core/view/utils:string_map",
+        "//core/window:default_dev_mode_extension",
         "//core/window:filament_host",
+        "//core/window:imgui_renderer",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -184,7 +216,13 @@ cc_library(
         "@com_google_impress//core/common:log",
         "@dear_imgui",
         "@third_party//filament/filament:filament_hdrs",
-    ],
+        "@third_party//split_engine/materials:texture_external_material",
+    ] + if_android(
+        [
+            "//core/window:open_gl_imgui_renderer",
+            "//core/render/android:android_external_texture_surface",
+        ],
+    ),
     alwayslink = 1,
 )
 
@@ -198,9 +236,15 @@ imp_material(
     src = ":spatial_ui_canvas_texture.mat",
 )
 
+imp_material(
+    name = "spatial_ui_canvas_ogl_texture",
+    src = ":spatial_ui_canvas_ogl_texture.mat",
+)
+
 imp_assets(
     name = "world_space_editor_ui_assets",
     srcs = [
+        ":spatial_ui_canvas_ogl_texture",
         ":spatial_ui_canvas_texture",
         ":world_space_editor_ui_texture",
     ],

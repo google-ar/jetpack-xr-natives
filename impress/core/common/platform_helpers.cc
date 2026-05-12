@@ -186,7 +186,7 @@ ABSL_CONST_INIT absl::Mutex output_verbose_mutex(absl::kConstInit);
 bool output_verbose = false;
 
 void Configure(bool verbose) {
-  absl::WriterMutexLock lock(&output_verbose_mutex);
+  absl::WriterMutexLock lock(output_verbose_mutex);
   output_verbose = verbose;
 }
 
@@ -213,7 +213,7 @@ void AddExternalLogHandler(void* context, PlatformOutputFunction f)
   bool need_to_add_sink = false;
 
   {
-    absl::WriterMutexLock lock(&external_log_handlers_mutex);
+    absl::WriterMutexLock lock(external_log_handlers_mutex);
     need_to_add_sink = GetExternalLogHandlers().empty();
     GetExternalLogHandlers().push_back(ExternalLogHandler{context, f});
   }
@@ -225,7 +225,7 @@ void AddExternalLogHandler(void* context, PlatformOutputFunction f)
 
 void LogToExternalHandlers(OutputKind kind, absl::string_view body)
     ABSL_LOCKS_EXCLUDED(external_log_handlers_mutex) {
-  absl::ReaderMutexLock lock(&external_log_handlers_mutex);
+  absl::ReaderMutexLock lock(external_log_handlers_mutex);
   for (ExternalLogHandler& external_log_handler : GetExternalLogHandlers()) {
     external_log_handler.fn(external_log_handler.context, kind, body);
   }
@@ -236,7 +236,7 @@ void RemoveExternalLogHandler(void* context)
   bool need_to_remove_sink = false;
 
   {
-    absl::WriterMutexLock lock(&external_log_handlers_mutex);
+    absl::WriterMutexLock lock(external_log_handlers_mutex);
     for (auto itr = GetExternalLogHandlers().begin();
          itr != GetExternalLogHandlers().end(); ++itr) {
       if (itr->context == context) {
@@ -255,7 +255,7 @@ void RemoveExternalLogHandler(void* context)
 void Info(absl::string_view info) {
   bool should_output = false;
   {
-    absl::ReaderMutexLock lock(&output_verbose_mutex);
+    absl::ReaderMutexLock lock(output_verbose_mutex);
     should_output = output_verbose;
   }
 

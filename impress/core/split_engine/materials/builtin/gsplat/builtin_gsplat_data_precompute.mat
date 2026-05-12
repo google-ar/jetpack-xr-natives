@@ -1,0 +1,161 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+material {
+  name : "GSplatDataPrecompute",
+  parameters : [
+        {
+           // The position of each gaussian in the scene
+           type      : sampler2d,
+           format    : float,
+           precision : high,
+           name      : splatDataPosition
+        },
+        {
+           // The cov3d of each gaussian in the scene
+           type      : sampler2d,
+           format    : uint,
+           precision : high,
+           name      : splatDataCov3d
+        },
+        {
+           // The color of each gaussian in the scene
+           type      : sampler2d,
+           format    : float,
+           precision : high,
+           name      : splatDataColor
+        },
+        {
+           // The physical pixel resolution of the main camera's view.
+           type      : uint2,
+           name      : mainViewResolution
+        },
+        {
+           // Debug visualize the splat chunks by overriding the splat colors
+           // with a random color based on the splat's associated chunk index.
+           type      : bool,
+           name      : visualizeChunks
+        }
+  ],
+  constants : [
+        {
+           // If true, use triangles to render splats (3 vertices). Otherwise,
+           // use quads (6 vertices).
+           type      : bool,
+           name      : useTrianglesForSplats,
+           value     : false
+        }
+  ],
+  variables : [
+        // TODO: Replace with call to getWorldFromModelMatrix() in
+        // the fragment shader.
+        worldFromModelMatrix0,
+        worldFromModelMatrix1,
+        worldFromModelMatrix2,
+        worldFromModelMatrix3,
+        hasStereoAndEyeIndex //stereo info must be passed from fs to vs.
+  ],
+  flipUV : false,
+  vertexDomain : device,
+  depthWrite : false,
+  depthCulling : false,
+  shadingModel : unlit,
+  variantFilter : [ skinning, shadowReceiver ],
+  culling : none,
+  blending : opaque,
+  interpolation : flat,
+}
+
+vertex {
+  void materialVertex(inout MaterialVertexInputs material) {
+    mat4 worldFromModelMatrix = getWorldFromModelMatrix();
+    material.worldFromModelMatrix0 = worldFromModelMatrix[0];
+    material.worldFromModelMatrix1 = worldFromModelMatrix[1];
+    material.worldFromModelMatrix2 = worldFromModelMatrix[2];
+    material.worldFromModelMatrix3 = worldFromModelMatrix[3];
+#if defined(VARIANT_HAS_STEREO)
+   material.hasStereoAndEyeIndex.x = float(getEyeIndex());
+#else
+   material.hasStereoAndEyeIndex.x = -1.0;
+#endif
+  }
+}
+
+fragment {
+  // By default in fragment shaders, GLES defines int types as mediump and has
+  // no default precision for float types.
+  // When using ints to define indexes into splat data, mediump uint range of 
+  // [0, 2^16-1] is too small for most scenes which can easily contain more than
+  // 100000 splats.
+  // So we define the int types as highp and the float types as highp to ensure
+  // we have enough precision for the fragment shader.
+  precision highp float;
+  precision highp int;
+
+  #include "gsplat_common.glsl"
+
+
+  // (broken link)
+  vec3 rand(int i) {
+        ivec3 col = i * ivec3(158, 2*156, 3*159);
+        col = col % ivec3(255, 253, 256); // skips some channel values
+        return vec3(col) / 255.0;
+  }
+
+  void material(inout MaterialInputs material) {
+    prepareMaterial(material);
+    mat4 worldFromModelMatrix = mat4(variable_worldFromModelMatrix0,
+                                     variable_worldFromModelMatrix1,
+                                     variable_worldFromModelMatrix2,
+                                     variable_worldFromModelMatrix3);
+
+    int splatIndex = int(floor(gl_FragCoord.y) * getResolution().x + floor(gl_FragCoord.x));
+    ivec2 sampleCoord = getSampleCoord(splatIndex, /*stride=*/1, materialParams_splatDataPosition);
+
+    // Pull position from splat data.
+    vec4 position = texelFetch(materialParams_splatDataPosition, sampleCoord, 0);
+
+    // Pull cov3d from splat data.
+    uint4 cov3dPacked = texelFetch(materialParams_splatDataCov3d, sampleCoord, 0);
+    mat3 cov3d = unpackCov3d(cov3dPacked.xyz);
+    int eyeIndex = int(variable_hasStereoAndEyeIndex.x);
+    vec4 clipPos;
+    vec2 basisAxisX;
+    float aspectRatio;
+
+    computeSplatData(eyeIndex, position, cov3d, worldFromModelMatrix,
+                     vec2(materialParams.mainViewResolution), clipPos,
+                     basisAxisX, aspectRatio);
+    // computeSplatData() sets clipPos.w to 0.0 if the splat is behind the
+    // camera.
+
+    // Pull color from splat data.
+    ivec2 sampleCoordColor = getSampleCoord(splatIndex, 1, materialParams_splatDataColor);
+    vec4 color = texelFetch(materialParams_splatDataColor, sampleCoordColor, 0);
+    if (materialParams.visualizeChunks) {
+      int chunkIndex = splatIndex / 256;
+      color.rgb = rand(chunkIndex);
+    }
+
+    // If the splat is behind the camera, discard it.
+    if (clipPos.w == 0.0) {
+      color.a = 0.0;
+    }
+
+    material.baseColor = vec4(uintBitsToFloat(packHalf2x16(clipPos.xy)),
+                              uintBitsToFloat(packHalf2x16(vec2(clipPos.z, aspectRatio))),
+                              uintBitsToFloat(packHalf2x16(basisAxisX)),
+                              uintBitsToFloat(packUnorm4x8(color)));
+  }
+}

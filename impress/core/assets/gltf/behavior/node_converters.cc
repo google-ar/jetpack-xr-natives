@@ -1714,10 +1714,12 @@ NodeConverter GetMathMatMulConverter() {
             ValueConnection mat_b,
             ToValueConnection(node_data.values[1], converted_graph));
 
-        main_node.node = ValueNode{
-            .value = BinaryExpression{.op = BinaryExpression::MULTIPLY,
-                                      .left = mat_a,
-                                      .right = mat_b}};
+        CallExpression call_expression;
+        call_expression.name = "MatrixMultiply";
+        call_expression.args.push_back(mat_a);
+        call_expression.args.push_back(mat_b);
+
+        main_node.node = ValueNode{.value = call_expression};
         return absl::OkStatus();
       }};
 }

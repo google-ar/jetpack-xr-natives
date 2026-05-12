@@ -51,7 +51,7 @@ class SceneViewerComponent : public imp::Component,
  public:
   SceneViewerComponent();
 
-  absl::Status Setup(imp::NodeHandle target_node);
+  absl::Status Setup(imp::NodeHandle target_node, bool system_movable);
 
   void Cleanup();
   void Update(const imp::FrameTime& delta_time);
@@ -72,7 +72,7 @@ class SceneViewerComponent : public imp::Component,
   void ToggleResetScaleType() override;
   bool IsTalkbackEnabled() override;
   bool IsIdleTimeoutEnabled() override;
-  // LINT.ThenChange(//depot/google3/vr/android_xr/sceneviewerxr/ux/interaction_states_tests/interaction_states_test_fixture.h)
+  // LINT.ThenChange(//depot/google3/third_party/impress/extensions/sceneviewerxr/ux/interaction_states_tests/interaction_states_test_fixture.h)
 
  private:
 // TODO: Custom cursors are not yet supported yet.
@@ -243,7 +243,20 @@ class SceneViewerComponent : public imp::Component,
   EnvironmentType environment_type_ = EnvironmentType::kUnknown;
   // Stores a flag to control if the idle timeout should be enabled or not.
   bool idle_timeout_enabled_ = true;
-
+  // Stores a flag if the component should move the model or not.
+  bool system_movable_ = false;
+  // Stores the distance between the rig and the ray origin when the user
+  // starts to pinch the rig.
+  float origin_to_hit_position_distance_ = 0.0f;
+  // Stores the offset between the rig and the hit position when the user
+  // starts to pinch the rig.
+  imp::float3 rig_to_hit_position_offset_ = imp::kZero3;
+  // Stores the hit position of the ray obtained from the split engine input
+  // event.
+  imp::float3 event_hit_position_ = imp::kZero3;
+  // Stores the transform of the hit node when obtained from the split engine
+  // input event.
+  imp::mat4f event_hit_node_transform_;
 
   // Projects the target position on to each plane, checks for overlap with the
   // plane geometry, and returns the target position for the footprint.

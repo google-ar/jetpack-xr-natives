@@ -37,7 +37,7 @@ PackagedResourcesState& GetPackagedResourcesState() {
 
 const FileToc* EntryFromFilename(absl::string_view filename) {
   auto& state = GetPackagedResourcesState();
-  absl::MutexLock lock(&state.mutex);
+  absl::MutexLock lock(state.mutex);
   auto iter = state.files.find(filename);
   if (iter == state.files.end()) return nullptr;
   return iter->second;
@@ -47,7 +47,7 @@ const FileToc* EntryFromFilename(absl::string_view filename) {
 
 void RegisterPackagedResources(const FileToc* resources) {
   auto& state = GetPackagedResourcesState();
-  absl::MutexLock lock(&state.mutex);
+  absl::MutexLock lock(state.mutex);
   if (state.resources.find(resources) != state.resources.end()) return;
   state.resources.emplace(resources);
   for (const FileToc* entry = resources; entry->name != nullptr; ++entry) {

@@ -35,6 +35,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "core/common/copyable_ptr.h"
+#include "core/common/optional_with_default.h"
 #include "core/common/platform_helpers.h"
 #include "core/common/robin_map.h"
 #include "core/common/type_traits.h"
@@ -81,6 +82,12 @@ class ProtoReader {
   const char* Visit(const char* ptr, int field_id, absl::optional<T>* field,
                     absl::optional<T>* other, int wire_type);
 
+  template <int field_type, typename T, const auto* DefaultValuePointer>
+  const char* Visit(const char* ptr, int field_id,
+                    OptionalWithDefault<T, DefaultValuePointer>* field,
+                    OptionalWithDefault<T, DefaultValuePointer>* other,
+                    int wire_type);
+
   template <int field_type, typename T>
   const char* Visit(const char* ptr, int field_id, CopyablePtr<T>* field,
                     CopyablePtr<T>* other, int wire_type);
@@ -123,6 +130,12 @@ class ProtoReader {
   template <int field_type>
   const char* Visit(const char* ptr, int field_id, absl::Cord* field,
                     absl::Cord* other, int wire_type);
+
+  template <typename Proto, const auto* DefaultValuePointer>
+  const char* VisitStandardProto(
+      const char* ptr, int field_id,
+      OptionalWithDefault<Proto, DefaultValuePointer>* proto,
+      OptionalWithDefault<Proto, DefaultValuePointer>* other, int wire_type);
 
   template <typename Proto>
   const char* VisitStandardProto(const char* ptr, int field_id, Proto* proto,
@@ -208,6 +221,15 @@ const char* ProtoReader::Visit(const char* ptr, int field_id,
   }
   return Visit<field_type>(ptr, field_id, &(**field), static_cast<T*>(nullptr),
                            wire_type);
+}
+
+template <int field_type, typename T, const auto* DefaultValuePointer>
+const char* ProtoReader::Visit(
+    const char* ptr, int field_id,
+    OptionalWithDefault<T, DefaultValuePointer>* field,
+    OptionalWithDefault<T, DefaultValuePointer>* other, int wire_type) {
+  return Visit<field_type>(ptr, field_id, &field->MutableValue(),
+                           static_cast<T*>(nullptr), wire_type);
 }
 
 template <int field_type, typename T>
@@ -351,6 +373,15 @@ const char* ProtoReader::Visit(const char* ptr, int field_id, absl::Cord* field,
       absl::MakeCordFromExternal(absl::string_view(ptr_, size), [] {}));
   ptr_ += size;
   return ptr_;
+}
+
+template <typename Proto, const auto* DefaultValuePointer>
+const char* ProtoReader::VisitStandardProto(
+    const char* ptr, int field_id,
+    OptionalWithDefault<Proto, DefaultValuePointer>* proto,
+    OptionalWithDefault<Proto, DefaultValuePointer>* other, int wire_type) {
+  return VisitStandardProto(ptr, field_id, &proto->MutableValue(),
+                            static_cast<Proto*>(nullptr), wire_type);
 }
 
 template <typename Proto>

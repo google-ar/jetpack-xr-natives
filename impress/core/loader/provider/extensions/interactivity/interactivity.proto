@@ -84,6 +84,7 @@ message Interactivity {
         INITIAL_INDEX = 15;
         VARIABLES = 16;
         USE_SLERP = 17;
+        SEVERITY = 18;
       }
 
       message Flow {

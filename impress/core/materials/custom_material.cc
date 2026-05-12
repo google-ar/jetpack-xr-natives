@@ -63,6 +63,11 @@ CustomMaterial::~CustomMaterial() {
   material_instance_ = nullptr;
 }
 
+const filament::MaterialInstance* CustomMaterial::GetFilamentMaterialInstance()
+    const {
+  return material_instance_;
+}
+
 filament::MaterialInstance* CustomMaterial::GetFilamentMaterialInstance() {
   return material_instance_;
 }

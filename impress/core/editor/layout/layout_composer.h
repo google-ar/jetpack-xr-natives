@@ -77,13 +77,17 @@ class LayoutComposer {
 
  private:
   struct WidgetInfo {
-    WidgetInfo(absl::string_view label, imp::Invocable<void()> draw_function)
-        : label(label), draw_function(std::move(draw_function)) {}
+    WidgetInfo(absl::string_view label, imp::Invocable<void()> draw_function,
+               bool force_focus = false)
+        : label(label),
+          draw_function(std::move(draw_function)),
+          force_focus(force_focus) {}
 
     // The label of the tab. This is used to name the dockable window of the
     // tab.
     std::string label;
     imp::Invocable<void()> draw_function;
+    bool force_focus;
   };
 
   // Helper functions for queuing widgets for docking layout, which is used for
@@ -106,10 +110,11 @@ class LayoutComposer {
   void DrawAsStandaloneTab(
       absl::string_view tab_label, imp::Invocable<void()> draw_function,
       ImGuiTabItemFlags flags = ImGuiTabBarFlags_FittingPolicyScroll,
-      bool draw_before_previous_tabs = false);
+      bool draw_before_previous_tabs = false, bool force_focus = false);
 
   void DrawInLeftDock(absl::string_view tab_label,
-                      imp::Invocable<void()> draw_function);
+                      imp::Invocable<void()> draw_function,
+                      bool force_focus = false);
 
   // Queues the given Invocable to be drawn as its own tab in a dockable tabbed
   // window.
@@ -118,7 +123,8 @@ class LayoutComposer {
   // last tab of all existing tabs.
   void DrawAsDockableTab(absl::string_view tab_label,
                          imp::Invocable<void()> draw_function,
-                         bool draw_before_previous_tabs = false);
+                         bool draw_before_previous_tabs = false,
+                         bool force_focus = false);
 
   // Queues the given Invocable to be drawn as its own menu in the main menu
   // bar.

@@ -204,6 +204,18 @@ config_setting(
 )
 
 config_setting(
+    name = "filament_uses_opengl_egl_headless_fl0",
+    constraint_values = [
+        "@platforms//os:linux",
+    ],
+    define_values = {
+        "FILAMENT_ENABLE_FEATURE_LEVEL_0": "1",
+        "FILAMENT_USES_OPENGL": "1",
+        "FILAMENT_SUPPORTS_EGL_ON_LINUX": "1",
+    },
+)
+
+config_setting(
     name = "filament_uses_vulkan_linux",
     constraint_values = [
         "@platforms//os:linux",
@@ -317,6 +329,16 @@ config_setting(
     constraint_values = [
         "@platforms//cpu:wasm32",
     ],
+)
+
+config_setting(
+    name = "wasm_feature_level_0",
+    constraint_values = [
+        "@platforms//cpu:wasm32",
+    ],
+    define_values = {
+        "FILAMENT_ENABLE_FEATURE_LEVEL_0": "1",
+    },
 )
 
 config_setting(
@@ -449,6 +471,7 @@ alias(
         ":android": "@third_party//filament/filament:filament_opengl_android_feature_level_0",
         ":filament_uses_metal_ios": "@third_party//filament/filament:filament_metal",
         ":filament_uses_opengl_ios": "@third_party//filament/filament:filament_opengl_mobile",
+        "filament_uses_opengl_egl_headless_fl0": "@third_party//filament/filament:filament_opengl_egl_headless_fl0",
         ":ios": "@third_party//filament/filament:filament_metal",
         # If building in Exoblaze, it's NextCode. Otherwise, it's the simulator.
         # Support both NextCode and iOS Simulator Tests without depending on a config flag
@@ -458,6 +481,7 @@ alias(
         ":ios_x86_64_macos": "@third_party//filament/filament:filament_metal",
         ":filament_uses_metal_ios_x86_64": "@third_party//filament/filament:filament_metal",
         ":filament_uses_opengl_ios_x86_64": "@third_party//filament/filament:filament_opengl_mobile",
+        ":wasm_feature_level_0": "@third_party//filament/filament:filament_gles3_feature_level_0",
         ":wasm": "@third_party//filament/filament:filament_gles3",
         ":filament_uses_opengl_linux": "@third_party//filament/filament:filament_opengl_desktop",
         ":filament_uses_vulkan_linux": "@third_party//filament/filament:filament_vulkan_for_linux",

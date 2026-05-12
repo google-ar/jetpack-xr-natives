@@ -52,13 +52,13 @@ class ViewState : public window::FilamentHost::State {
 
   bool ShouldUseSystemFrameScheduledHandler() const override;
 
-  bool ShouldPreinitializeMetalPlatform() const override;
-
   bool ShouldUseSrgbSwapChain() const override;
 
   bool ShouldUseStencilSwapChain() const override;
 
   bool ShouldUseMsaaSwapChain() const override;
+
+  bool ShouldSetPresentationTime() const override;
 
  protected:
   using RenderResult = window::FilamentHost::RenderResult;

@@ -136,6 +136,8 @@ class BaseMeshBuilder {
   virtual BaseIndexBufferBuilder& CreateIndexBufferBuilder() noexcept = 0;
   virtual BaseMorphTargetBufferBuilder&
   CreateMorphTargetBufferBuilder() noexcept = 0;
+
+  // Designed to be implemented by Split Engine spy.
   virtual void Finalize() noexcept = 0;
 };
 

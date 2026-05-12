@@ -268,6 +268,10 @@ InteractivityModelCreatorExtensionImpl::DeserializeInteractivityData(
             configuration_data.id = model::ModelData::InteractivityData::
                 NodeData::ConfigurationType::USE_SLERP;
             break;
+          case schemas::InteractivityNodeConfigurationType::SEVERITY:
+            configuration_data.id = model::ModelData::InteractivityData::
+                NodeData::ConfigurationType::SEVERITY;
+            break;
         }
 
         // Second switch statement to reduce the amount of duplicated code
@@ -281,6 +285,7 @@ InteractivityModelCreatorExtensionImpl::DeserializeInteractivityData(
           case schemas::InteractivityNodeConfigurationType::NODE_INDEX:
           case schemas::InteractivityNodeConfigurationType::TYPE:
           case schemas::InteractivityNodeConfigurationType::INITIAL_INDEX:
+          case schemas::InteractivityNodeConfigurationType::SEVERITY:
             if (!config->value_as_Int()) {
               return absl::InternalError(absl::StrFormat(
                   "Interactivity node configuration indicates an int value is "

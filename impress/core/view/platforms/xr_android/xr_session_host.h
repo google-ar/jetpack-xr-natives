@@ -54,6 +54,7 @@
 #include "core/view/platforms/xr_android/xr_events.proto.imp.h"
 #include "core/view/platforms/xr_android/xr_helpers.h"
 #include "core/xr/openxr_events.h"
+#include "java/com/google/ar/imp/view/xr/xr_setup_params.proto.imp.h"
 #if IMP_MATERIAL_API(VULKAN) && IMP_PLATFORM(ANDROID)
 #include "core/view/platforms/xr_android/xr_vulkan_platform.h"
 #else
@@ -80,25 +81,6 @@ class XrSessionHost : public ViewHost {
     kHidden
   };
 
-  struct XrSessionHostOptions {
-    bool use_composition_layer_depth = false;
-    bool use_enhanced_stereoscopic_rendering = false;
-    bool use_max_swapchain_size = false;
-    XrFoveationLevelFB foveation_level = XR_FOVEATION_LEVEL_NONE_FB;
-    bool use_quad_views = false;
-    bool use_mono_view = false;
-    bool use_varjo_foveated_rendering = false;
-    int msaa_sample_count = 0;
-    XrReferenceSpaceType reference_space_type = XR_REFERENCE_SPACE_TYPE_STAGE;
-    bool use_eye_gaze_interaction = false;
-    bool use_android_depth_texture = false;
-    bool use_fb_color_space = false;
-    bool enable_android_system_extensions = false;
-    float swapchain_size_multiplier = 1.0f;
-    bool use_global_passthrough_dimming_extensions = false;
-    bool use_eye_tracking_calibration = false;
-  };
-
   // Metrics for performance monitoring.
   struct XrPerformanceState {
     std::unordered_map<std::string_view, MonitorSummary::CustomMetricHandle>
@@ -106,7 +88,7 @@ class XrSessionHost : public ViewHost {
   };
 
   XrSessionHost(std::unique_ptr<imp::BaseView> view,
-                XrSessionHostOptions options);
+                com::google::ar::imp::view::xr::XrSetupParams xr_setup_params);
   ~XrSessionHost() override;
 
   // Sets up the host, which will create the filament Engine with an XrPlatform
@@ -259,7 +241,7 @@ class XrSessionHost : public ViewHost {
       XrEnvironmentBlendMode xr_environment_blend_mode);
 
   // Returns the number of samples per pixel for the color and depth textures.
-  int GetMsaaSampleCount() const;
+  int32_t GetMsaaSampleCount() const;
 
   absl::Status SetDisplayState(XrHelpers::DisplayState new_state);
 

@@ -18,14 +18,13 @@
 #define THIRD_PARTY_IMPRESS_CORE_LOADER_CREATOR_INFLIGHT_CREATION_H_
 
 #include <cstddef>
-#include <cstdint>
 #include <functional>
 
+#include "absl/base/thread_annotations.h"
 #include "absl/status/status.h"
+#include "absl/synchronization/mutex.h"
 #include "filament/filament/backend/include/backend/BufferDescriptor.h"
-#include "filament/filament/backend/include/backend/PixelBufferDescriptor.h"
 #include "core/common/invocable.h"
-#include "core/image/image_contents.h"
 
 namespace imp::loader::details {
 
@@ -61,9 +60,13 @@ class InflightCreation {
   // Post-condition: callback_ is unset.
   void SafeInvokeCallback();
 
-  bool is_finished_posting_resources_ = false;
-  int posted_resource_count_ = 0;
-  int submitted_resource_count_ = 0;
+  // `posted_resource_count` and `submitted_resource_count` are updated on
+  // different threads on the serializer side, hence the mutex.
+  mutable absl::Mutex mutex_;
+  bool is_finished_posting_resources_ ABSL_GUARDED_BY(mutex_) = false;
+  int posted_resource_count_ ABSL_GUARDED_BY(mutex_) = 0;
+  int submitted_resource_count_ ABSL_GUARDED_BY(mutex_) = 0;
+
   Invocable<void()> callback_;
 };
 

@@ -23,7 +23,9 @@
 #include <vector>
 
 #include "zetasql/base/arena.h"
+#include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
 #include "flatbuffers/allocator.h"
 #include "flatbuffers/base.h"
@@ -186,16 +188,20 @@ class ArenaAllocator {
       return memory_options_.growth_strategy;
     }
 
+    size_t GetBlockSize() const { return block_size_; }
+
    private:
+    size_t block_size_;
     std::unique_ptr<zetasql_base::UnsafeArena> arena_;
     void* first_block_head_;
     MemoryOptions memory_options_;
     bool in_use_;
   };
 
-  std::vector<ArenaAndAllocFunc> arenas_;
+  absl::Mutex arenas_mutex_;
+  std::vector<ArenaAndAllocFunc> arenas_ ABSL_GUARDED_BY(arenas_mutex_);
   absl::flat_hash_map<ArenaHandle, std::unique_ptr<flatbuffers::Allocator>>
-      flatbuffer_allocators_;
+      flatbuffer_allocators_ ABSL_GUARDED_BY(arenas_mutex_);
 };
 
 // In order to transmit flatbuffers over RPC effectively, we need to prefix them

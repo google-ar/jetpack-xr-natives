@@ -17,8 +17,12 @@
 #ifndef THIRD_PARTY_IMPRESS_APIBINDINGS_BINDINGS_TEXTURE_H_
 #define THIRD_PARTY_IMPRESS_APIBINDINGS_BINDINGS_TEXTURE_H_
 
+#include <optional>
+
 #include "apibindings/bindings_object.h"
+#include "core/assets/asset_ptr.h"
 #include "core/common/small_source_location.h"
+#include "core/lighting/image_based_lighting_asset.h"
 #include "core/render/texture.h"
 
 namespace imp {
@@ -33,7 +37,15 @@ class BindingsTexture : public BindingsObject {
   BorrowedTexturePtr GetTexture(
       SmallSourceLocation loc = SmallSourceLocation::Current());
 
+  // Sets an IBL asset that must be kept alive as long as this texture is alive
+  // which is needed when a (reflection) texture is created from an IBL asset.
+  void SetKeepAliveAsset(AssetPtr<ImageBasedLightingAsset> asset);
+
  private:
+  // A (reflection) texture may come from an IBL asset, in which case we need to
+  // hold a reference to the asset to prevent it from being destroyed until the
+  // texture (which might be still in use by a Material) is destroyed.
+  std::optional<AssetPtr<ImageBasedLightingAsset>> keep_alive_asset_;
   BorrowedTexturePtr texture_;
 };
 

@@ -248,8 +248,7 @@ OptionalError FilamentHost::Setup(Engine::Backend backend,
           shared_gl_context ? shared_gl_context : shared_gl_context_,
           state_->ShouldUseSharedGlContext(), GetEngineConfig(),
           state_->GetMaximumEngineFeatureLevel(),
-          state_->GetFilamentFeatureFlags(), state_->ShouldStartPaused(), {},
-          state_->ShouldPreinitializeMetalPlatform()));
+          state_->GetFilamentFeatureFlags(), state_->ShouldStartPaused(), {}));
 
   shared_state.RegisterHost(this);
   renderer_ = engine_->createRenderer();
@@ -301,10 +300,6 @@ OptionalError FilamentHost::InternalSetup() {
   }
 
   MP_RETURN_IF_ERROR(state_->Setup(this));
-
-  if (dev_mode_extension_) {
-    MP_RETURN_IF_ERROR(dev_mode_extension_->PostSetup());
-  }
 
   life_cycle_state_ = LifeCycleState::kRunning;
 
@@ -508,6 +503,10 @@ absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
       }
 
       MP_RETURN_IF_ERROR(state_->PostRender(this));
+
+      if (state_->ShouldSetPresentationTime()) {
+        renderer_->setPresentationTime(absl::ToInt64Nanoseconds(next_vsync));
+      }
 
       {
         IMP_TRACE_NAME("Renderer::EndFrame");

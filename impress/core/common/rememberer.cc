@@ -36,7 +36,7 @@ Rememberer::~Rememberer() {
 }
 
 bool Rememberer::HasRemembered() const {
-  absl::MutexLock lock(&info_->mu);
+  absl::MutexLock lock(info_->mu);
   return !info_->remembered_objects_map.empty();
 }
 
@@ -45,7 +45,7 @@ void Rememberer::ClearRemembered() { ClearRememberedInternal(false); }
 void Rememberer::ClearRememberedInternal(bool is_destroying_rememberer) {
   RememberedObjectsMap remembered_objects_map;
   {
-    absl::MutexLock lock(&info_->mu);
+    absl::MutexLock lock(info_->mu);
     if (is_destroying_rememberer) {
       info_->can_remember_object = false;
     }
@@ -56,7 +56,7 @@ void Rememberer::ClearRememberedInternal(bool is_destroying_rememberer) {
 }
 
 Invocable<void()> Rememberer::Remember(Holdable holdable) {
-  absl::MutexLock lock(&info_->mu);
+  absl::MutexLock lock(info_->mu);
   // If the Rememberer is being destructed, return an empty function and do not
   // remember.
   if (!info_->can_remember_object) {
@@ -79,7 +79,7 @@ Invocable<void()> Rememberer::GetForgetFunction(const Id& id) {
         return;
       }
 
-      absl::MutexLock lock(&info->mu);
+      absl::MutexLock lock(info->mu);
       info->remembered_objects_map.erase(id);
     };
 

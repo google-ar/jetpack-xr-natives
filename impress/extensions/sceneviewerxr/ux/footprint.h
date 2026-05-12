@@ -58,7 +58,6 @@ struct FootprintInteractionStates {
     Ramp<imp::float2> foot_size;
     imp::float3 primary_touch_point;
     imp::float3 secondary_touch_point;
-    bool is_snapped_to_plane = false;
     Ramp<imp::float2> edge_touch_control;
     Ramp<imp::float4> edge_touch_response;
     Ramp<imp::float4> edge_falloff_color;
@@ -113,9 +112,20 @@ class Footprint : public imp::Component,
 
   void SetColliderEnabled(bool is_enabled);
 
-  void SetSnappedToPlane(bool is_snapped_to_plane);
+  enum class SnapMode {
+    kNone,
+    kSnappable,
+    kSnappingToPlane,
+    kSnappedToPlane,
+    kLiftingOffPlane,
+    kCooldown,
+  };
+  bool IsSnapMode(SnapMode snap_mode) const;
+  void SetSnapMode(SnapMode snap_mode);
 
-  bool IsSnappedToPlane();
+  // Returns true if the footprint is snapped or is in the process of snapping
+  // or lifting off a plane.
+  bool IsSnappedOrSnapping() const;
 
  private:
   // Observer method.
@@ -151,6 +161,8 @@ class Footprint : public imp::Component,
   // Holds a snapshot of the model's bounds. This helps us keep the
   // footprint's scaling relatively the same.
   imp::Box initial_model_bounds_;
+
+  SnapMode snap_mode_ = SnapMode::kNone;
 };
 
 }  // namespace svxr

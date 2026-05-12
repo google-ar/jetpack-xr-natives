@@ -30,9 +30,8 @@
 #include "core/media/media_type.h"
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "core/view/base_view.h"
-#include "split_engine/schemas/split_engine_material_generated.h"
 #include "split_engine/schemas/split_engine_primitive_generated.h"
 
 namespace android_xr {
@@ -40,15 +39,21 @@ namespace android_xr {
 // A material wrapper for the built-in JxrMediaMaterial to support Split Engine.
 //
 // Note: This is the split-engine app side of BuiltInJxrMediaMaterial.
-class JxrMediaMaterial : public imp::split_engine::SplitEngineMaterial {
+class JxrMediaMaterial : public imp::split_engine::SplitEngineBuiltinMaterial {
  public:
+  // Creates a new JxrMediaMaterial.
   static imp::Future<std::unique_ptr<JxrMediaMaterial>> Create(
       imp::BaseView& view,
       imp::MediaShapeType shape_type = imp::MediaShapeType::kDefaultFlat,
       bool use_super_sampling = false,
-      imp::RenderEyeTarget render_eye_target = imp::RenderEyeTarget::kBoth);
+      imp::RenderEyeTarget render_eye_target = imp::RenderEyeTarget::kBoth,
+      imp::MediaBlendingMode blending_mode =
+          imp::MediaBlendingMode::kTransparent);
 
   ~JxrMediaMaterial() override;
+
+  // Applies the parameters of this material to another material.
+  void ApplyParametersTo(JxrMediaMaterial& other) const;
 
   flatbuffers::Offset<void> SerializeParameters(
       flatbuffers::FlatBufferBuilder& fbb,
@@ -66,19 +71,22 @@ class JxrMediaMaterial : public imp::split_engine::SplitEngineMaterial {
   void ResetContentColorMetadata();
 
   void SetFeatherRadius(imp::float2 feather_radius);
+  void SetCornerRadius(imp::float2 corner_radius);
 
  private:
   JxrMediaMaterial(imp::BaseView& view,
                    imp::split_engine::PlaceholderOrBuiltInMaterialPtr material);
 
+  // LINT.IfChange(parameters)
   imp::OwnedOrBorrowedTexturePtr primary_texture_;
   imp::OwnedOrBorrowedTexturePtr auxiliary_texture_;
   imp::OwnedOrBorrowedTexturePtr primary_alpha_mask_;
   imp::OwnedOrBorrowedTexturePtr auxiliary_alpha_mask_;
   imp::MediaStereoMode stereo_type_ = imp::MediaStereoMode::kMonoscopic;
   imp::MediaColorSpace color_space_;
-  imp::RenderEyeTarget render_eye_target_ = imp::RenderEyeTarget::kBoth;
   std::optional<android_xr::schemas::Float2> feather_radius_;
+  std::optional<android_xr::schemas::Float2> corner_radius_;
+  // LINT.ThenChange(jxr_media_material.cc:parameters)
 };
 
 }  // namespace android_xr

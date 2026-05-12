@@ -25,7 +25,7 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load("@third_party//filament:filament.bzl", "by_backend")
 load("//build_tools:assets.bzl", "imp_assets")
-load("//build_tools:imp.bzl", "if_android", "if_apple", "if_dev_runtime", "if_emscripten", "imp_copts", "imp_defines", "imp_google3_copts")
+load("//build_tools:imp.bzl", "if_android", "if_apple", "if_dev_runtime", "if_emscripten", "if_linux", "imp_copts", "imp_defines", "imp_google3_copts")
 load("//build_tools:imp_image_based_lighting.bzl", "imp_image_based_lighting")
 
 package(
@@ -159,8 +159,11 @@ cc_library(
     linkstatic = True,
     deps = [
         ":imgui_renderer",
+        "//core/math",
+        "//core/render",
         "//core/view:base_view",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/libs:filagui",
         "@third_party//filament/libs:utils_hdrs",
@@ -170,10 +173,16 @@ cc_library(
 
 cc_library(
     name = "imgui_renderer",
-    hdrs = ["imgui_renderer.h"],
+    hdrs = [
+        "imgui_renderer.h",
+    ],
     copts = imp_google3_copts(),
     defines = imp_defines(),
     linkstatic = True,
+    deps = [
+        "//core/common:owned_ptr",
+        "//core/math",
+    ],
     alwayslink = 1,
 )
 
@@ -194,6 +203,7 @@ cc_library(
             "//core/math",
             "//core/model/mesh",
             "//core/ncsb",
+            "//core/render",
             "//core/render/android:android_external_texture_surface",
             "//core/render/android:platform_android_external_texture_surface",
             "//core/view:base_view",
@@ -234,6 +244,7 @@ cc_library(
     linkstatic = True,
     tags = ["nobuilder"],
     deps = [
+        ":imgui_renderer",
         ":window_rotation",
         "//core:config",
         "//core/async:executor",
@@ -274,7 +285,12 @@ cc_library(
         "@third_party//filament/filament/backend:backend_hdrs",
     ]) + if_apple([
         "@third_party//filament/filament/backend:backend_hdrs",
+    ]) + if_linux([
+        "@third_party//filament/filament/backend:egl_backend_hdrs",
     ]) + by_backend(
+        opengl = [
+            "@third_party//gl",
+        ],
         vulkan = [
             "@third_party//filament/filament/backend:backend_vk_hdrs",
         ],

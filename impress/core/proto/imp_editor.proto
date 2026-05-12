@@ -53,23 +53,6 @@ message EditorControlColor3 {}
 // Displays a color-picker widget including alpha.
 message EditorControlColor4 {}
 
-// Displays a field that can be dropped into by materials from the asset
-// library.
-//
-// This will populate a string field with the path to the asset.
-message EditorControlMaterial {}
-
-// Displays a field that can be dropped into by textures from the asset library.
-//
-// This will populate a string field with the path to the asset.
-message EditorControlTexture {}
-
-// Displays a field that can be dropped into by scenes (Isfs, glTFs) from the
-// asset library.
-//
-// This will populate a string field with the path to the asset.
-message EditorControlScene {}
-
 // The top-level type that is a one-of of all possible editor controls above.
 message EditorControlType {
   oneof type {
@@ -79,8 +62,5 @@ message EditorControlType {
     EditorControlSliderInt slider_int = 3;
     EditorControlColor3 color_picker_3 = 4;
     EditorControlColor4 color_picker_4 = 5;
-    EditorControlMaterial material = 6;
-    EditorControlTexture texture = 7;
-    EditorControlScene scene = 8;
   }
 }

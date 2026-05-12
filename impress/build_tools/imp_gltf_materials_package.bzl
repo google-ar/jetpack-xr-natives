@@ -219,6 +219,17 @@ def generate_imp_default_gltf_materials_package(name = None):
         optimization = "performance",
     )
 
+def generate_imp_default_fl0_gltf_materials_package(name = None):
+    imp_gltf_materials_package(
+        name = "imp_default_fl0_gltf_materials",
+        shading_models = ["unlit"],
+        blend_modes = ["masked", "opaque"],
+        sided = ["single_sided", "double_sided"],
+        features = ["ar_occlusion", "depth_clear"],
+        optimization = "performance",
+        force_feature_level_zero = True,
+    )
+
 def generate_imp_default_lite_gltf_materials_package(name = None):
     # The lite materials (used by lens) don't need refraction support, so don't include them in the zip.
     imp_gltf_materials_package(

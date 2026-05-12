@@ -20,8 +20,10 @@
 #include <sys/types.h>
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <optional>
+#include <utility>
 
 #include "absl/strings/string_view.h"
 #include "core/canvas/constants.h"
@@ -56,15 +58,66 @@ struct ScopedCanvas {
   // Determines the draw mode when calling CanvasSource::StartDrawing.
   enum class DrawMode { kClear, kKeepContents };
 
-  // Represents a glyph within a font, which is a single representation of a
-  // unicode character.
-  //
-  // There may be multiple glyphs for a single character, where a different
-  // glyph is picked based on adjacent characters. Sometimes multiple characters
-  // can get combined into a single glyph.
-  // Each font may have its own range of GlyphIds, which means GlyphIds are
-  // only guaranteed to be unique only within the space of a font.
-  using GlyphId = int32_t;
+  /**
+   * Represents a glyph within a font, which is a single representation of a
+   * unicode character.
+   *
+   * There may be multiple glyphs for a single character, where a different
+   * glyph is picked based on adjacent characters. Sometimes multiple characters
+   * can get combined into a single glyph.
+   * Each font may have its own range of GlyphIds, which means GlyphIds are
+   * only guaranteed to be unique only within the space of a font.
+   *
+   * When GlyphId goes out of scope, the release function will be called if it
+   * was provided to deallocate the glyph. This is handled in the Android glyph
+   * implementation.
+   */
+  class GlyphId {
+   public:
+    GlyphId(
+        int32_t glyph_id,
+        std::optional<std::function<void(int32_t)>> release_fn = std::nullopt)
+        : glyph_id_(glyph_id) {
+      if (release_fn.has_value()) {
+        release_fn_ = std::shared_ptr<int32_t>(
+            new int32_t(glyph_id_),
+            [release_fn = std::move(*release_fn)](int32_t* glyph_id) {
+              release_fn(*glyph_id);
+              delete glyph_id;
+            });
+      }
+    }
+
+    GlyphId(const GlyphId& other)
+        : glyph_id_(other.glyph_id_), release_fn_(other.release_fn_) {}
+
+    GlyphId(GlyphId&& other)
+        : glyph_id_(other.glyph_id_),
+          release_fn_(std::move(other.release_fn_)) {
+      other.release_fn_ = nullptr;
+    }
+
+    GlyphId& operator=(const GlyphId& other) {
+      glyph_id_ = other.glyph_id_;
+      release_fn_ = other.release_fn_;
+      return *this;
+    }
+
+    int32_t Get() const { return glyph_id_; }
+
+   private:
+    int32_t glyph_id_;
+    std::shared_ptr<int32_t> release_fn_;
+
+    friend bool operator==(const GlyphId& lhs, const GlyphId& rhs) {
+      return lhs.glyph_id_ == rhs.glyph_id_;
+    }
+
+    template <typename H>
+    friend H AbslHashValue(H h, const GlyphId& glyph_id) {
+      return H::combine(std::move(h), glyph_id.glyph_id_);
+    }
+  };
 
   // Represents a group of glyphs that should be rendered together, such as in
   // the case of combining characters where all glyphs in a combined character

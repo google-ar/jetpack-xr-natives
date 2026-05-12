@@ -18,6 +18,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "absl/algorithm/container.h"
 #include "core/common/log.h"
@@ -55,6 +56,13 @@
 #include "filament/filament/backend/include/backend/platforms/PlatformMetal.h"
 #endif  // IMP_MATERIAL_API(METAL)
 
+#if IMP_PLATFORM(LINUX) && defined(FILAMENT_SUPPORTS_EGL_ON_LINUX) && \
+    IMP_MATERIAL_API(OPENGL)
+#include "filament/filament/backend/include/backend/platforms/OpenGLPlatform.h"
+#include "filament/filament/backend/include/backend/platforms/PlatformEGL.h"
+#include "filament/filament/backend/include/backend/platforms/PlatformEGLHeadless.h"
+#endif  // IMP_PLATFORM(LINUX) && IMP_MATERIAL_API(OPENGL)
+
 #if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(VULKAN)
 #include "filament/filament/backend/include/backend/platforms/VulkanPlatformAndroid.h"
 #endif  // IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(VULKAN)
@@ -66,12 +74,16 @@
 namespace imp::window {
 
 namespace {
-#if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(OPENGL)
+#if (IMP_PLATFORM(ANDROID) ||                                             \
+     (IMP_PLATFORM(LINUX) && defined(FILAMENT_SUPPORTS_EGL_ON_LINUX))) && \
+    IMP_MATERIAL_API(OPENGL)
 void* CreateDefaultEGLContext(EGLDisplay* out_display, EGLContext* out_context,
                               EGLSurface* out_surface);
 void DestroyDefaultEGLContext(EGLDisplay egl_display, EGLContext egl_context,
                               EGLSurface egl_surface);
-#endif  // IMP_MATERIAL_API(OPENGL) && IMP_PLATFORM(ANDROID)
+#endif  // (IMP_PLATFORM(ANDROID) || (IMP_PLATFORM(LINUX) &&
+        // defined(FILAMENT_SUPPORTS_EGL_ON_LINUX))) &&
+        // IMP_MATERIAL_API(OPENGL)
 
 void FilamentPanicHandler(void* user, utils::Panic const& panic) {
   // TODO Uncomment once utils::Panic::whatNonSensitive is
@@ -112,8 +124,7 @@ absl::StatusOr<Engine*> SharedHostState::GetOrCreateEngine(
     const filament::Engine::Config& config,
     const filament::backend::FeatureLevel featureLevel,
     const std::vector<FilamentFeatureFlag>& features,
-    bool pause_rendering_thread, SharedContextDeleter shared_context_deleter,
-    bool preinitialize_metal_platform) {
+    bool pause_rendering_thread, SharedContextDeleter shared_context_deleter) {
   // If an engine already exists then it is reused, but only if it is
   // initialized with the same backend, platform, and context.
   if (engine_ != nullptr) {
@@ -137,7 +148,9 @@ absl::StatusOr<Engine*> SharedHostState::GetOrCreateEngine(
       return absl::InvalidArgumentError(
           "Cannot supply a deleter without a context");
     }
-#if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(OPENGL)
+#if (IMP_PLATFORM(ANDROID) ||                                             \
+     (IMP_PLATFORM(LINUX) && defined(FILAMENT_SUPPORTS_EGL_ON_LINUX))) && \
+    IMP_MATERIAL_API(OPENGL)
     if (backend == filament::backend::Backend::OPENGL) {
       EGLDisplay egl_display;
       EGLContext egl_context;
@@ -181,8 +194,7 @@ absl::StatusOr<Engine*> SharedHostState::GetOrCreateEngine(
 
   bool using_precreated_platform = false;
 #if IMP_MATERIAL_API(METAL)
-  if (preinitialize_metal_platform &&
-      backend == filament::backend::Backend::METAL) {
+  if (backend == filament::backend::Backend::METAL) {
     using_precreated_platform = platform == nullptr;
     filament::backend::PlatformMetal* platform_metal =
         platform == nullptr
@@ -311,12 +323,22 @@ void SharedHostState::RequestSynchronousShutdown() {
   use_async_shutdown_ = false;
 }
 
+filament::Engine::Platform* SharedHostState::GetPlatform() {
+  if (!engine_) {
+    return nullptr;
+  }
+  return engine_->getPlatform();
+}
+
 absl::StatusOr<std::string> SharedHostState::GetVendorString() {
 #if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(OPENGL)
-  filament::backend::OpenGLPlatform* opengl_platform =
-      static_cast<filament::backend::OpenGLPlatform*>(platform_);
-  if (!engine_ || !opengl_platform) {
+  if (!engine_) {
     return absl::InternalError("Filament is not initialized");
+  }
+  filament::backend::OpenGLPlatform* opengl_platform =
+      static_cast<filament::backend::OpenGLPlatform*>(GetPlatform());
+  if (!opengl_platform) {
+    return absl::InternalError("Filament platform is null");
   }
   auto driver = engine_->getDriver();
   if (!driver) {
@@ -335,10 +357,13 @@ absl::StatusOr<std::string> SharedHostState::GetVendorString() {
 
 absl::StatusOr<std::string> SharedHostState::GetRendererString() {
 #if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(OPENGL)
-  filament::backend::OpenGLPlatform* opengl_platform =
-      static_cast<filament::backend::OpenGLPlatform*>(platform_);
-  if (!engine_ || !opengl_platform) {
+  if (!engine_) {
     return absl::InternalError("Filament is not initialized");
+  }
+  filament::backend::OpenGLPlatform* opengl_platform =
+      static_cast<filament::backend::OpenGLPlatform*>(GetPlatform());
+  if (!opengl_platform) {
+    return absl::InternalError("Filament platform is null");
   }
   auto driver = engine_->getDriver();
   if (!driver) {
@@ -359,13 +384,23 @@ absl::StatusOr<std::string> SharedHostState::GetRendererString() {
 filament::backend::Platform::ExternalImageHandle
 SharedHostState::RegisterExternalImageHandle(const AHardwareBuffer* buffer,
                                              bool sRGB) {
+  if (!engine_) {
+    IMP_LOG(imp::ERROR) << "Filament is not initialized";
+    return filament::backend::Platform::ExternalImageHandle(nullptr);
+  }
+  filament::Engine::Platform* platform = GetPlatform();
+  if (!platform) {
+    IMP_LOG(imp::ERROR) << "Filament platform is null";
+    return filament::backend::Platform::ExternalImageHandle(nullptr);
+  }
+
   filament::backend::Platform::ExternalImageHandle buffer_handle;
 #if IMP_MATERIAL_API(OPENGL)
-  buffer_handle = static_cast<filament::backend::PlatformEGLAndroid*>(platform_)
+  buffer_handle = static_cast<filament::backend::PlatformEGLAndroid*>(platform)
                       ->createExternalImage(buffer, sRGB);
 #elif IMP_MATERIAL_API(VULKAN)
   buffer_handle =
-      static_cast<filament::backend::VulkanPlatformAndroid*>(platform_)
+      static_cast<filament::backend::VulkanPlatformAndroid*>(platform)
           ->createExternalImage(buffer, sRGB);
 #endif
   return buffer_handle;
@@ -373,10 +408,20 @@ SharedHostState::RegisterExternalImageHandle(const AHardwareBuffer* buffer,
 
 SharedHostState::ExternalImageMetadata SharedHostState::GetImageMetadata(
     filament::backend::Platform::ExternalImageHandle externalImage) {
+  if (!engine_) {
+    IMP_LOG(imp::ERROR) << "Filament is not initialized";
+    return {};
+  }
+  filament::Engine::Platform* platform = GetPlatform();
+  if (!platform) {
+    IMP_LOG(imp::ERROR) << "Filament platform is null";
+    return {};
+  }
+
   ExternalImageMetadata metadata;
 #if IMP_MATERIAL_API(OPENGL)
   auto eglExternalImageMetadata =
-      static_cast<filament::backend::PlatformEGLAndroid*>(platform_)
+      static_cast<filament::backend::PlatformEGLAndroid*>(platform)
           ->getExternalImageDesc(externalImage);
   metadata.height = eglExternalImageMetadata.height;
   metadata.width = eglExternalImageMetadata.width;
@@ -384,7 +429,7 @@ SharedHostState::ExternalImageMetadata SharedHostState::GetImageMetadata(
   metadata.usage = eglExternalImageMetadata.usage;
 #elif IMP_MATERIAL_API(VULKAN)
   auto fvkExternalImage =
-      static_cast<filament::backend::VulkanPlatformAndroid*>(platform_)
+      static_cast<filament::backend::VulkanPlatformAndroid*>(platform)
           ->getExternalImageDesc(externalImage);
   metadata.height = fvkExternalImage.height;
   metadata.width = fvkExternalImage.width;
@@ -395,7 +440,9 @@ SharedHostState::ExternalImageMetadata SharedHostState::GetImageMetadata(
 };
 #endif  // IMP_PLATFORM(ANDROID)
 
-#if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(OPENGL)
+#if (IMP_PLATFORM(ANDROID) ||                                             \
+     (IMP_PLATFORM(LINUX) && defined(FILAMENT_SUPPORTS_EGL_ON_LINUX))) && \
+    IMP_MATERIAL_API(OPENGL)
 namespace {
 
 static const char* GetEGLError() {
@@ -523,6 +570,7 @@ void DestroyDefaultEGLContext(EGLDisplay egl_display, EGLContext egl_context,
 }
 
 }  // namespace
-#endif  // IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(OPENGL)
+#endif  // (IMP_PLATFORM(ANDROID) || (IMP_PLATFORM(LINUX) &&
+        // defined(FILAMENT_SUPPORTS_EGL_ON_LINUX))) && IMP_MATERIAL_API(OPENGL)
 
 }  // namespace imp::window

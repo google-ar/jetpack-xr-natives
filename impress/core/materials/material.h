@@ -67,8 +67,13 @@ using BorrowedMaterialPtr = BorrowedPtr<Material>;
 // subclass acts as a proxy to a material on the remote Split Engine Renderer.
 class Material {
  public:
+  Material() = default;
+
   virtual ~Material() = default;
 
+  // Returns the underlying const filament::MaterialInstance*;
+  virtual const filament::MaterialInstance* GetFilamentMaterialInstance()
+      const = 0;
   // Returns the underlying filament::MaterialInstance*;
   virtual filament::MaterialInstance* GetFilamentMaterialInstance() = 0;
 
@@ -252,7 +257,7 @@ class Material {
       absl::FunctionRef<void(BorrowedTexturePtr)> fn,
       SmallSourceLocation loc = SmallSourceLocation::Current()) = 0;
 
- private:
+ protected:
   std::string name_;
 };
 

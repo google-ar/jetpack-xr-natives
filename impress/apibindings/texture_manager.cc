@@ -96,6 +96,8 @@ class TextureManagerImpl : public TextureManager {
       std::intptr_t texture_handle) override;
 
  private:
+  std::intptr_t CreateKeepAliveTextureToken(
+      BorrowedTexturePtr texture, AssetPtr<ImageBasedLightingAsset> asset);
   ImpressApiView& view_;
 };
 
@@ -158,9 +160,9 @@ absl::StatusOr<std::intptr_t> TextureManagerImpl::BorrowReflectionTexture() {
 
   BorrowedTexturePtr reflections_texture =
       (*ibl_asset)->BorrowReflectionTexture();
-  std::intptr_t reflections_texture_token =
-      view_.ToJava(new BindingsTexture(std::move(reflections_texture)));
-  return reflections_texture_token;
+
+  return CreateKeepAliveTextureToken(std::move(reflections_texture),
+                                     *ibl_asset);
 }
 
 absl::StatusOr<std::intptr_t> TextureManagerImpl::GetReflectionTextureFromIbl(
@@ -174,10 +176,10 @@ absl::StatusOr<std::intptr_t> TextureManagerImpl::GetReflectionTextureFromIbl(
   }
 
   BorrowedTexturePtr reflections_texture =
-      ibl_asset_ptr.value()->BorrowSkyboxCubemap();
-  std::intptr_t reflections_texture_token =
-      view_.ToJava(new BindingsTexture(std::move(reflections_texture)));
-  return reflections_texture_token;
+      ibl_asset_ptr.value()->BorrowReflectionTexture();
+
+  return CreateKeepAliveTextureToken(std::move(reflections_texture),
+                                     *ibl_asset_ptr);
 }
 
 absl::StatusOr<BorrowedTexturePtr> TextureManagerImpl::BorrowTexture(
@@ -196,6 +198,17 @@ absl::StatusOr<BorrowedTexturePtr> TextureManagerImpl::BorrowTexture(
   }
 
   return borrowed_texture;
+}
+
+std::intptr_t TextureManagerImpl::CreateKeepAliveTextureToken(
+    BorrowedTexturePtr texture, AssetPtr<ImageBasedLightingAsset> asset) {
+  BindingsTexture* bindings_texture = new BindingsTexture(std::move(texture));
+
+  // Ensures the IBL asset cannot be destroyed while this BindingsTexture is
+  // still alive.
+  bindings_texture->SetKeepAliveAsset(std::move(asset));
+
+  return view_.ToJava(bindings_texture);
 }
 
 std::unique_ptr<TextureManager> CreateTextureManager(ImpressApiView& view) {

@@ -35,6 +35,8 @@
 #include "filament/libs/utils/include/utils/ashmem.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
+#include "core/common/invocable.h"
+#include "core/common/owned_ptr.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/flatbuffer_arena_allocator.h"
 #include "core/split_engine/flatbuffer_size_calculator.h"
@@ -204,12 +206,12 @@ absl::StatusOr<MessageGroupId> TestSplitEngineBridgeSender::BeginMessageGroup(
   return group_id;
 }
 
-std::unique_ptr<flatbuffers::FlatBufferBuilder>
+imp::OwnedPtr<flatbuffers::FlatBufferBuilder>
 TestSplitEngineBridgeSender::CreateFlatBufferBuilder(MessageGroupId group_id,
                                                      size_t size_bytes) {
   auto it = arena_handles_.find(group_id);
   
-  return std::make_unique<flatbuffers::FlatBufferBuilder>(
+  return imp::MakeOwned<flatbuffers::FlatBufferBuilder>(
       size_bytes, &arena_allocator_.GetFlatbufferAllocator(it->second));
 }
 
@@ -257,14 +259,15 @@ const TestSplitEngineBridgeBuffer& TestSplitEngineBridgeSender::GetBridgeBuffer(
 }
 
 absl::Status TestSplitEngineBridgeSender::SendMessage(
-    MessageGroupId group_id, const flatbuffers::FlatBufferBuilder& fbb) {
-  if (!GetBridgeBuffer(group_id).IsValidBlock(fbb.GetBufferPointer(),
-                                              fbb.GetSize())) {
+    MessageGroupId group_id,
+    imp::OwnedPtr<flatbuffers::FlatBufferBuilder> fbb) {
+  if (!GetBridgeBuffer(group_id).IsValidBlock(fbb->GetBufferPointer(),
+                                              fbb->GetSize())) {
     return absl::InternalError("Message is not in the active bridge buffer.");
   }
 
   std::vector<uint8_t> command_data;
-  std::copy(fbb.GetBufferPointer(), &fbb.GetBufferPointer()[fbb.GetSize()],
+  std::copy(fbb->GetBufferPointer(), &fbb->GetBufferPointer()[fbb->GetSize()],
             std::back_inserter(command_data));
 
   if (!test_bridge_.SendCommand(command_data)) {
@@ -289,4 +292,9 @@ TestSplitEngineBridgeSender::GetMessageGroupType(
   
   return it->second;
 }
+
+void TestSplitEngineBridgeSender::Schedule(imp::Invocable<absl::Status()> fn) {
+  
+}
+
 }  // namespace imp::split_engine

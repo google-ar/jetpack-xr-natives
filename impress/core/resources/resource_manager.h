@@ -30,6 +30,7 @@
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
+#include "core/async/background_delete.h"
 #include "core/async/future.h"
 #include "core/common/buffer_access.h"
 #include "core/common/context.h"
@@ -60,7 +61,9 @@ class ResourceManager;
 class Resource final {
  public:
   explicit Resource(absl::Cord&& data)
-      : data_(std::make_shared<absl::Cord>(std::move(data))) {}
+      : data_(
+            imp::MakeSharedWithBackgroundDeleter<absl::Cord>(std::move(data))) {
+  }
 
   Resource() = delete;
 

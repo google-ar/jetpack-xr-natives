@@ -79,11 +79,11 @@ fragment {
 #endif
   #include "color_conversion_helpers.glsl"
 
-  highp vec4 getSample(lowp int samplerIndex)
+  highp vec4 getSample(const lowp int samplerIndex)
   {
     // ESSL 1.0 does not support switch statements.
     if (samplerIndex == 0) {
-      vec2 uv = uvForSampler(samplerIndex);
+      vec2 uv = uvForSampler(0);
       return texture2D(materialParams_samplerZero, uv);
     } else if (samplerIndex == 16) {
       return whiteFallbackSample();

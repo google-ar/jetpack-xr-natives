@@ -16,18 +16,16 @@
 
 #include <cstdint>
 #include <memory>
-#include <utility>
 #include <vector>
 
 #include "absl/log/check.h"
 #include "absl/status/status.h"
-#include "absl/strings/str_format.h"
 #include "filament/filament/include/filament/View.h"
-#include "filament/libs/utils/include/utils/Entity.h"
 #include "apibindings/asset_ptr_map.h"
 #include "apibindings/bindings_object.h"
 #include "apibindings/generic_material_manager.h"
 #include "apibindings/model_manager.h"
+#include "apibindings/node_manager.h"
 #include "apibindings/skybox_manager.h"
 #include "apibindings/stereo_surface_manager.h"
 #include "apibindings/texture_manager.h"
@@ -48,6 +46,7 @@ std::unique_ptr<WaterMaterialManager> CreateWaterMaterialManager(
     ImpressApiView& view);
 std::unique_ptr<GenericMaterialManager> CreateGenericMaterialManager(
     ImpressApiView& view);
+std::unique_ptr<NodeManager> CreateNodeManager(ImpressApiView& view);
 
 ImpressApiView::ImpressApiView() = default;
 ImpressApiView::~ImpressApiView() = default;
@@ -60,39 +59,7 @@ void ImpressApiView::SetupImpressApiNative() {
   texture_manager_ = CreateTextureManager(*this);
   water_material_manager_ = CreateWaterMaterialManager(*this);
   generic_material_manager_ = CreateGenericMaterialManager(*this);
-}
-
-int32_t ImpressApiView::CreateImpressNode() {
-  return CreateNode().GetEntity().getId();
-}
-
-absl::Status ImpressApiView::DestroyImpressNode(int32_t node) {
-  // If the node is animating, be sure to remove it from the Animation map.
-  // Otherwise we hit an assert on the next update.
-  auto unused = model_manager_->StopGltfModelAnimation(node);
-
-  NodeHandle node_handle(utils::Entity::import(node));
-  if (node_handle) {
-    DestroyNode(node_handle);
-    return absl::OkStatus();
-  }
-  return absl::InvalidArgumentError("Node is not valid.");
-}
-
-absl::Status ImpressApiView::SetImpressNodeParent(int32_t child,
-                                                  int32_t parent) {
-  NodeHandle child_handle(utils::Entity::import(child));
-  if (!child_handle) {
-    return absl::InvalidArgumentError(
-        absl::StrFormat("Child node is not valid: %d.", child));
-  }
-  NodeHandle parent_handle(utils::Entity::import(parent));
-  if (!parent_handle) {
-    return absl::InvalidArgumentError(
-        absl::StrFormat("Parent node is not valid: %d.", parent));
-  }
-  child_handle->SetParent(parent_handle);
-  return absl::OkStatus();
+  node_manager_ = CreateNodeManager(*this);
 }
 
 void ImpressApiView::DestroyNativeObject(std::intptr_t handle) {

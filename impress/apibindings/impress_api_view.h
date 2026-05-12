@@ -29,7 +29,7 @@
 #include "apibindings/bindings_texture.h"
 #include "core/common/jni_helpers.h"
 #include "core/common/owned_ptr.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "imp.h"
 
 namespace imp {
@@ -40,6 +40,7 @@ class SkyboxManager;
 class StereoSurfaceManager;
 class TextureManager;
 class WaterMaterialManager;
+class NodeManager;
 
 // Implements an Impress View for the ImpressJava API used by Jetpack XR.
 // This view manages the core lifecycle and delegates specific functionalities
@@ -63,14 +64,6 @@ class ImpressApiView : public View {
   // Sets up the native side of the Impress API and initializes all managers.
   virtual void SetupImpressApiNative();
 
-  // Creates an Impress node and returns a corresponding entity ID.
-  int32_t CreateImpressNode();
-  // Destroys an Impress node using its entity ID.
-  absl::Status DestroyImpressNode(int32_t node);
-  // Sets the parent of an Impress node using the entity IDs of the child and
-  // parent nodes.
-  absl::Status SetImpressNodeParent(int32_t child, int32_t parent);
-
   // Destroys a native Impress object (texture or material) using its handle.
   // This delegates the destruction to the appropriate manager.
   void DestroyNativeObject(std::intptr_t handle);
@@ -93,6 +86,7 @@ class ImpressApiView : public View {
   GenericMaterialManager& GetGenericMaterialManager() {
     return *generic_material_manager_;
   }
+  NodeManager& GetNodeManager() { return *node_manager_; }
 
   // Accessors for maps, allowing them to collaborate (e.g., for
   // textures to be shared across managers).
@@ -107,7 +101,7 @@ class ImpressApiView : public View {
   // Returns the map of materials owned by the Impress API view which is used by
   // the GenericMaterialManager and WaterMaterialManager.
   absl::flat_hash_map<std::intptr_t,
-                      OwnedPtr<split_engine::SplitEngineMaterial>>&
+                      OwnedPtr<split_engine::SplitEngineBuiltinMaterial>>&
   GetBindingsMaterialMap() {
     return bindings_material_map_;
   }
@@ -123,9 +117,10 @@ class ImpressApiView : public View {
   std::unique_ptr<TextureManager> texture_manager_;
   std::unique_ptr<WaterMaterialManager> water_material_manager_;
   std::unique_ptr<GenericMaterialManager> generic_material_manager_;
+  std::unique_ptr<NodeManager> node_manager_;
   absl::flat_hash_map<std::intptr_t, OwnedTexturePtr> bindings_texture_map_;
   absl::flat_hash_map<std::intptr_t,
-                      OwnedPtr<split_engine::SplitEngineMaterial>>
+                      OwnedPtr<split_engine::SplitEngineBuiltinMaterial>>
       bindings_material_map_;
 
  private:

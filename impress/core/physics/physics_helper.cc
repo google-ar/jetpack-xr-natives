@@ -15,9 +15,11 @@
 #include "core/physics/physics_helper.h"
 
 #include "bullet/src/BulletDynamics/Dynamics/btRigidBody.h"
+#include "bullet/src/LinearMath/btMatrix3x3.h"
 #include "bullet/src/LinearMath/btQuaternion.h"
 #include "bullet/src/LinearMath/btTransform.h"
 #include "bullet/src/LinearMath/btVector3.h"
+#include "core/math/mat.h"
 #include "core/math/quat.h"
 #include "core/math/transform.h"
 #include "core/math/vec.h"
@@ -46,6 +48,20 @@ btTransform ToBtTransform(const float3& translation, const quatf& rotation) {
   bt_trans.setRotation(ToBtQuaternion(rotation));
   bt_trans.setOrigin(ToBtVector3(translation));
   return bt_trans;
+}
+
+mat4f ToMatrix(const btTransform& bt_trans) {
+  const btMatrix3x3& basis = bt_trans.getBasis();
+  const btVector3& origin = bt_trans.getOrigin();
+
+  mat4f mat;
+
+  for (int i = 0; i < 3; i++) {
+    const float3 col = ToFloat3(basis.getColumn(i));
+    mat[i] = float4(col, 0.0f);
+  }
+  mat[3] = float4(ToFloat3(origin), 1.0f);
+  return mat;
 }
 
 quatf ToQuaternion(const btQuaternion& bt_quat) {

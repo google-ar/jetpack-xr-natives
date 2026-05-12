@@ -17,22 +17,28 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_PARTICLE_PARTICLE_EMITTER_INFO_H_
 #define THIRD_PARTY_IMPRESS_CORE_PARTICLE_PARTICLE_EMITTER_INFO_H_
 
+#include "core/math/vec.h"
+
 namespace imp {
+namespace imp_particle {
 
-// Forward declaration.
-class ParticleService;
-
-// An object that facilitates access to the common state of the particle
-// emitter. Users of custom callbacks will be provided an instance of this class
-// each time their callback is invoked. It may be updated once at the start of
-// each frame update cycle to reflect the current state of dependencies, such
-// as the current active camera position (useful for billboard particles.)
+// This object stores emitter information relevant to all particles being
+// updated each frame. For example, the camera position will be used by all
+// particles with the billboard behavior. This object is not intended to last
+// beyond the frame in which it is created.
 class ParticleEmitterInfo {
  public:
-  // TODO: (broken link) - Add content to this class when available.
-  ParticleEmitterInfo();
+  ParticleEmitterInfo(float3 camera_position)
+      : camera_position_(camera_position) {};
+
+  // Returns the position of the camera in world space, for the current frame.
+  float3 GetCameraPosition() const { return camera_position_; }
+
+ private:
+  float3 camera_position_ = kZero3;
 };
 
+}  // namespace imp_particle
 }  // namespace imp
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_PARTICLE_PARTICLE_EMITTER_INFO_H_

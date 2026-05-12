@@ -76,6 +76,11 @@ material {
           type : float2,
           name : featherRadius
         },
+        {
+          // radius for rounding the corners of the quad in UV space
+          type : float2,
+          name : cornerRadius
+        },
         // Below three parameters are used for color correction.
         // TODO - (broken link): Move max luminance float conversion out of the
         // material and pass a float instead.
@@ -115,10 +120,11 @@ material {
     ],
     "shadingModel" : "unlit",
     "flipUV" : false,
-    // Disable depth culling to avoid clipping with the environment.
-    depthCulling: false,
+    // {DEPTH_CULLING} is replaced by the build system.
+    depthCulling: {DEPTH_CULLING},
     culling: none,
-    blending : transparent
+    // {BLENDING_MODE} is replaced by the build system.
+    blending : {BLENDING_MODE}
 }
 
 vertex {
@@ -163,7 +169,8 @@ fragment {
     if (!gl_FrontFacing) {
       uv.x = 1.0 - uv.x;
     }
-    uv.y = 1.0 - uv.y;
+    vec2 media_uv = uv;
+    media_uv.y = 1.0 - media_uv.y;
 
     vec4 alphaMaskColor = vec4(0.0, 0.0, 0.0, 1.0);
     vec4 textureColor = vec4(0.0);
@@ -179,23 +186,23 @@ fragment {
     if (variable_stereoData.x > 0.0 &&
         materialParams.stereoType == kInterleavedLeftPrimary) {
       if (variable_stereoData.y == 0.0) {
-        SAMPLE_TEXTURE(materialParams_mediaTexture, uv, textureColor);
+        SAMPLE_TEXTURE(materialParams_mediaTexture, media_uv, textureColor);
         SAMPLE_TEXTURE(materialParams_primaryAlphaMaskTexture, uv, alphaMaskColor);
       } else {
-        SAMPLE_TEXTURE(materialParams_mediaAuxiliaryTexture, uv, textureColor);
+        SAMPLE_TEXTURE(materialParams_mediaAuxiliaryTexture, media_uv, textureColor);
         SAMPLE_TEXTURE(materialParams_auxiliaryAlphaMaskTexture, uv, alphaMaskColor);
       }
     } else if (variable_stereoData.x > 0.0 &&
                materialParams.stereoType == kInterleavedRightPrimary) {
       if (variable_stereoData.y == 0.0) {
-        SAMPLE_TEXTURE(materialParams_mediaAuxiliaryTexture, uv, textureColor);
+        SAMPLE_TEXTURE(materialParams_mediaAuxiliaryTexture, media_uv, textureColor);
         SAMPLE_TEXTURE(materialParams_auxiliaryAlphaMaskTexture, uv, alphaMaskColor);
       } else {
-        SAMPLE_TEXTURE(materialParams_mediaTexture, uv, textureColor);
+        SAMPLE_TEXTURE(materialParams_mediaTexture, media_uv, textureColor);
         SAMPLE_TEXTURE(materialParams_primaryAlphaMaskTexture, uv, alphaMaskColor);
       }
     } else {
-      SAMPLE_TEXTURE(materialParams_mediaTexture, uv, textureColor);
+      SAMPLE_TEXTURE(materialParams_mediaTexture, media_uv, textureColor);
       SAMPLE_TEXTURE(materialParams_primaryAlphaMaskTexture, uv, alphaMaskColor);
     }
 
@@ -204,7 +211,7 @@ fragment {
     // determine feathered alpha based on the UVs
     float alpha =
       getEdgeFeatheredAlpha(
-        alpha_uv, materialParams.featherRadius) * textureColor.a;
+        alpha_uv, materialParams.featherRadius, materialParams.cornerRadius.xy) * textureColor.a;
 
     if (materialConstants_enableColorCorrection) {
       material.baseColor = vec4(convertColor(textureColor.rgb, materialParams.colorConversionMatrix) * alpha, alpha);

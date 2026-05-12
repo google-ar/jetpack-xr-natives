@@ -33,9 +33,9 @@ XrSpace ConvertToXrSpace(const jlong& space);
 // Returns an 'XrQuaternionf' from an 'androidx/xr/math/Quaternion' JVM object.
 XrQuaternionf ConvertToXrQuaternionf(JNIEnv* env, const jobject& quaternion);
 
-// Returns an 'XrGeospatialPoseANDROIDX2' from an
+// Returns an 'XrGeospatialPoseANDROID' from an
 // 'androidx/xr/math/GeospatialPose' JVM object.
-XrGeospatialPoseANDROIDX2 ConvertToXrGeospatialPose(
+XrGeospatialPoseANDROID ConvertToXrGeospatialPose(
     JNIEnv* env, const jobject& geospatial_pose);
 
 }  // namespace androidx::xr::openxr

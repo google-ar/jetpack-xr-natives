@@ -31,6 +31,7 @@
 #include "core/ncsb/component.h"
 #include "core/ncsb/isf_info.h"
 #include "core/render/base_renderable_manager.h"
+#include "core/render/render_order_constants.h"
 #include "core/view/framework/render/material.h"
 #include "core/view/framework/render/material_definition.proto.imp.h"
 #include "core/view/framework/render/render_component_state.proto.imp.h"
@@ -255,9 +256,6 @@ class ABSL_DEPRECATED(
   void ApplyAllMeshPropertyChanges();
 
  private:
-  static constexpr uint8_t kDefaultPriority = 4;
-  static constexpr uint8_t kDefaultChannel = 2;
-
   enum class HeldPtrType {
     kNone,
     kUniquePtr,

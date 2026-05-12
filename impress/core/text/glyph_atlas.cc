@@ -691,7 +691,7 @@ std::string GlyphAtlas::ToString(
   if (absl::holds_alternative<GlyphEmulator::GlyphKey>(glyph)) {
     GlyphEmulator::GlyphKey glyph_key =
         absl::get<GlyphEmulator::GlyphKey>(glyph);
-    return absl::StrFormat("Id=%i, Font=%i", glyph_key.glyph_id,
+    return absl::StrFormat("Id=%i, Font=%i", glyph_key.glyph_id.Get(),
                            glyph_key.font_id);
   } else {
     return absl::get<std::string>(glyph);

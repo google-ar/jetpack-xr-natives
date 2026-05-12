@@ -17,42 +17,8 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_CAMERA_CAMERA_MANAGER_H_
 #define THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_CAMERA_CAMERA_MANAGER_H_
 
-#include "core/ncsb/node.h"
-#include "core/view/base_view.h"
-#include "core/view/framework/camera/camera_component.h"
-
-namespace imp {
-
-class CameraManager {
- public:
-  explicit CameraManager(BaseView* view);
-
-  // The first time this is called, creates the default camera and assigns
-  // it as the currently used camera.
-  void InitializeDefaultCamera();
-
-  // Sets the camera that is used to render the view.
-  //
-  // If an invalid camera is passed in, then the camera is reset back to the
-  // default camera returned by GetDefaultCamera().
-  void SetCamera(ComponentHandle<CameraComponent> camera);
-
-  // Returns the camera being used to render the view.
-  //
-  // Unless SetCamera is called, this is the same as GetDefaultCamera().
-  ComponentHandle<CameraComponent> GetCamera() const;
-
-  // Returns the camera used to render the view by default.
-  ComponentHandle<CameraComponent> GetDefaultCamera() const;
-
- private:
-  BaseView* view_;
-
-  ComponentHandle<CameraComponent> default_camera_;
-  ComponentHandle<CameraComponent> camera_;
-  Dispatcher::ScopedConnection transition_parameters_changed_connection_;
-};
-
-}  // namespace imp
+// TODO: Remove this file once all external references are
+// updated.
+#include "core/camera/camera_manager.h"
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_CAMERA_CAMERA_MANAGER_H_

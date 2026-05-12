@@ -48,15 +48,13 @@
 #include "flatbuffers/table.h"
 #include "flatbuffers/vector.h"
 #include "flatbuffers/verifier.h"
-#include "third_party/googlefuzztest/internal/domains/arbitrary_impl.h"
-#include "third_party/googlefuzztest/internal/domains/container_of_impl.h"
-#include "third_party/googlefuzztest/internal/domains/domain_base.h"
-#include "third_party/googlefuzztest/internal/domains/domain_type_erasure.h"
-#include "third_party/googlefuzztest/internal/domains/element_of_impl.h"
 
 // TODO: (broken link) - Remove this file once the flatbuffers domain is
 // integrated into fuzztest.
 namespace fuzztest::internal {
+
+constexpr size_t kDefaultMaxFlatbuffersVectorSize = 1000;
+constexpr size_t kMaxFlatbuffersByteVectorSize = 16 * 1024 * 1024;  // 16 MiB
 
 // We have to be creative here because
 // `//third_party/googlefuzztest:serialization` is not visible publicly.
@@ -1835,8 +1833,15 @@ auto GetDefaultDomain(const reflection::Schema* /*absl_nonnull*/  schema,
     auto union_type = schema->enums()->Get(field->type()->index());
     return FlatbuffersUnionDomainImpl{schema, union_type};
   } else if constexpr (is_flatbuffers_vector_tag_v<T>) {
-    return VectorOf(GetDefaultDomain<typename T::value_type>(schema, field))
-        .WithMaxSize(1000);
+    auto inner_domain = GetDefaultDomain<typename T::value_type>(schema, field);
+    // Default to a maximum of 1000 elements for all vector types.
+    if constexpr (std::is_same_v<typename T::value_type, uint8_t>) {
+      // Allow for a maximum of 16MiB of data for byte vectors.
+      return VectorOf(inner_domain).WithMaxSize(kMaxFlatbuffersByteVectorSize);
+    } else {
+      return VectorOf(inner_domain)
+          .WithMaxSize(kDefaultMaxFlatbuffersVectorSize);
+    }
   } else {
     return Arbitrary<T>();
   }

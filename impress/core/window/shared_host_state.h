@@ -59,8 +59,7 @@ class SharedHostState {
           filament::backend::FeatureLevel::FEATURE_LEVEL_1,
       const std::vector<FilamentFeatureFlag>& features = {},
       bool pause_rendering_thread = false,
-      SharedContextDeleter shared_context_deleter = {},
-      bool preinitialize_metal_platform = false);
+      SharedContextDeleter shared_context_deleter = {});
 
   // Registers a new host.
   //
@@ -79,6 +78,10 @@ class SharedHostState {
   Executor* GetBackgroundExecutor();
   void* GetSharedGlContext() { return shared_gl_context_; }
   void RequestSynchronousShutdown();
+
+  // Returns the Filament Platform associated with the Engine, or nullptr if
+  // the engine has not been initialized.
+  filament::Engine::Platform* GetPlatform();
 
   // Returns the OpenGL vendor string or an error.
   absl::StatusOr<std::string> GetVendorString();

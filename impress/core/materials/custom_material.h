@@ -45,6 +45,8 @@ class CustomMaterial : public Material {
  public:
   ~CustomMaterial() override;
 
+  const filament::MaterialInstance* GetFilamentMaterialInstance()
+      const override;
   filament::MaterialInstance* GetFilamentMaterialInstance() override;
 
   void SetParameter(absl::string_view parameter_name, bool value) override;

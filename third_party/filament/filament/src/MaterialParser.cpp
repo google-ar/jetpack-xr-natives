@@ -35,6 +35,8 @@
 #include <backend/DriverEnums.h>
 #include <backend/Program.h>
 
+#include "stdlib/lib/zstd.h"
+
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/CString.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
@@ -235,6 +237,40 @@ bool MaterialParser::getName(CString* cstring) const noexcept {
     if (start == end) return false;
    Unflattener unflattener(start, end);
    return unflattener.read(cstring);
+}
+
+bool MaterialParser::getSourceShader(CString* cstring) const noexcept {
+    auto [start, end] = mImpl.mChunkContainer.getChunkRange(MaterialSource);
+    // Source material is optional, treat it as a success.
+    if (start == end) return true;
+
+    Unflattener unflattener(start, end);
+
+    // First get the compressed blob.
+    const char* compressed;
+    size_t compressedSize = 0;
+    if (!unflattener.read(&compressed, &compressedSize)) {
+        return false;
+    }
+
+    // Get the bound and decompress it.
+    const size_t decompressBound =
+            ZSTD_getFrameContentSize(compressed, compressedSize);
+    if (ZSTD_isError(decompressBound)) {
+        return false;
+    }
+
+    auto dst_buffer = std::make_unique<char[]>(decompressBound);
+    const size_t decompressed =
+            ZSTD_decompress(
+                    dst_buffer.get(), decompressBound,
+                    compressed, compressedSize);
+    if (ZSTD_isError(decompressed)) {
+        return false;
+    }
+    *cstring = CString { dst_buffer.get(), decompressed };
+
+    return true;
 }
 
 bool MaterialParser::getCacheId(uint64_t* cacheId) const noexcept {
@@ -756,7 +792,7 @@ bool ChunkDescriptorSetLayoutInfo::unflatten(Unflattener& unflattener,
     if (!unflattener.read(&descriptorCount)) {
         return false;
     }
-    auto& descriptors = container->bindings;
+    auto& descriptors = container->descriptors;
     descriptors.reserve(descriptorCount);
     for (size_t i = 0; i < descriptorCount; i++) {
         uint8_t type;

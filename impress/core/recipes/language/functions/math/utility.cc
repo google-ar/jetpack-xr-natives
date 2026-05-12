@@ -61,8 +61,8 @@ void RegisterMathUtilityFunctions(BaseRecipeSystem* recipe_system) {
 
   recipe_system->RegisterFunction(
       "Select",
-      [](bool condition, recipe::Variable a,
-         recipe::Variable b) -> absl::StatusOr<recipe::Variable> {
+      [](bool condition, const recipe::Variable& a,
+         const recipe::Variable& b) -> absl::StatusOr<recipe::Variable> {
         return Select(condition, a, b);
       });
 }

@@ -31,8 +31,8 @@ namespace imp {
 TestStereoSurfaceManager::TestStereoSurfaceManager(ImpressApiView& view) {}
 
 absl::StatusOr<int32_t> TestStereoSurfaceManager::CreateStereoSurfaceEntity(
-    MediaStereoMode stereo_mode, ContentSecurityLevel content_security_level,
-    bool use_super_sampling) {
+    MediaStereoMode stereo_mode, MediaBlendingMode blending_mode,
+    ContentSecurityLevel content_security_level, bool use_super_sampling) {
   return absl::UnimplementedError(
       "TestStereoSurfaceManager::CreateStereoSurfaceEntity unimplemented");
 }
@@ -77,6 +77,13 @@ absl::Status TestStereoSurfaceManager::SetStereoModeForStereoSurfaceEntity(
     int32_t node_id, MediaStereoMode stereo_mode) {
   return absl::UnimplementedError(
       "TestStereoSurfaceManager::SetStereoModeForStereoSurfaceEntity "
+      "unimplemented");
+}
+
+absl::Status TestStereoSurfaceManager::SetBlendingModeForStereoSurfaceEntity(
+    int32_t node_id, MediaBlendingMode blending_mode) {
+  return absl::UnimplementedError(
+      "TestStereoSurfaceManager::SetBlendingModeForStereoSurfaceEntity "
       "unimplemented");
 }
 

@@ -30,6 +30,7 @@
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/backend/include/backend/PixelBufferDescriptor.h"
 #include "filament/filament/include/filament/Texture.h"
+#include "core/async/background_delete.h"
 #include "core/common/buffer_access.h"
 
 namespace imp::image {
@@ -105,7 +106,8 @@ class StitchedImageContents : public ImageContents {
       : width_(width),
         height_(height),
         channels_(channels),
-        memory_(std::make_shared<std::vector<uint8_t>>(std::move(memory))) {
+        memory_(imp::MakeSharedWithBackgroundDeleter<std::vector<uint8_t>>(
+            std::move(memory))) {
     assert(memory_->size() == GetSize());
   }
 

@@ -23,6 +23,8 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "apibindings/base_asset_loader.h"
+#include "core/assets/asset_ptr.h"
+#include "core/lighting/image_based_lighting_asset.h"
 #include "core/render/texture.h"
 #include "core/view/utils/asset.h"
 
@@ -51,6 +53,12 @@ class TextureManager {
   // Borrows a texture by its handle, returning an error if not found.
   virtual absl::StatusOr<BorrowedTexturePtr> BorrowTexture(
       std::intptr_t texture_handle) = 0;
+
+ private:
+  // Associates a texture with an IBL asset so that the IBL asset is kept alive
+  // as long as the texture is alive.
+  std::intptr_t CreateKeepAliveTextureToken(
+      BorrowedTexturePtr texture, AssetPtr<ImageBasedLightingAsset> asset);
 };
 
 }  // namespace imp

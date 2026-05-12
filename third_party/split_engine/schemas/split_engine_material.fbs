@@ -155,6 +155,22 @@ union MaterialParamValue (requires_api: 1) {
   Uint2 = 21,
   Uint3 = 22,
   Uint4 = 23,
+  FloatVector = 24,
+  Float2Vector = 25,
+  Float3Vector = 26,
+  Float4Vector = 27,
+  IntVector = 28,
+  Int2Vector = 29,
+  Int3Vector = 30,
+  Int4Vector = 31,
+  UintVector = 32,
+  Uint2Vector = 33,
+  Uint3Vector = 34,
+  Uint4Vector = 35,
+  BoolVector = 36,
+  Bool2Vector = 37,
+  Bool3Vector = 38,
+  Bool4Vector = 39,
 }
 
 // Possible types of precompile constant values.
@@ -472,10 +488,16 @@ enum BuiltInMaterial1b616c8aRenderEyeTarget : uint8 {
   RIGHT_ONLY = 2,
 }
 
+enum BuiltInMaterial1b616c8aBlendingMode : uint8 {
+  TRANSPARENT = 0,
+  OPAQUE = 1,
+}
+
 table BuiltInMaterial1b616c8a (requires_api: 1) {
   shape: BuiltInMaterial1b616c8aShapeType (id: 0, requires_api: 1);
   use_super_sampling: Bool (id: 1, requires_api: 1);
   render_eye_target: BuiltInMaterial1b616c8aRenderEyeTarget (id: 2);
+  blending_mode: BuiltInMaterial1b616c8aBlendingMode (id: 3);
 }
 
 enum BuiltInMaterial1b616c8aStereoType : uint8 (requires_api: 1) {
@@ -563,6 +585,7 @@ table BuiltInMaterial1b616c8aParameters (requires_api: 1) {
   primary_alpha_mask: BuiltInTextureParameter (id: 3, requires_api: 1);
   auxiliary_alpha_mask: BuiltInTextureParameter (id: 4, requires_api: 1);
   feather_radius: Float2 (id: 5, requires_api: 1);
+  corner_radius: Float2 (id: 7);
 }
 
 table BuiltInMaterial0d0cb9aa (requires_api: 1) {
@@ -598,6 +621,10 @@ enum GsplatMode : int {
 table BuiltInMaterialGsplatSpec {
   // The material mode is used to select the material to render.
   material_mode: GsplatMode (id: 0);
+  // Node responsible for rendering the Gsplat.
+  gsplat_node_id: uint32 (id: 1);
+  // Whether to use 3 vertices per splat (triangle) instead of 6 (quad).
+  use_triangles_for_splats: Bool (id: 2);
 }
 
 table BuiltInMaterialGsplatParameters {
@@ -614,36 +641,33 @@ table BuiltInMaterialGsplatParameters {
   // This is necessary to calculate a position in Magic Window space for an eye, a splat, etc
   // Magic Window Space is the world space of magic windows parent node.
   magic_window_from_user_world_matrix: Mat4f (id: 4);
-  // The transform from World Space to the node responsible for rendering Gsplat.
-  // Necessary to precompute data for each splat.
-  gsplat_from_user_world_matrix: Mat4f (id: 5);
   // The precomputed data for rendering each splat, packed into an
   // RGBA32F texture. The format expected is:
   // R [2x16F] XY Clip Position of Splat Center
   // G [2x16F] Z Clip Position of Splat Center and Aspect Ratio of Splat
   // B [2x16F] X Basis Vector of Splat in Screen Space
   // A [4x8unorm] RGBA Color of Splat - If A == 0 the splat is disabled.
-  precomputed_data_texture: BuiltInTextureParameter (id: 6);
+  precomputed_data_texture: BuiltInTextureParameter (id: 5);
   // Each texel value corresponds to a 3D position for a splat
   // The texture format is RGBA16F. The pixel data format is RGBA. The pixel data type is HALF
-  position_data_texture: BuiltInTextureParameter (id: 7);
+  position_data_texture: BuiltInTextureParameter (id: 6);
   // Texels contain a 3D covariance matrix packed into RGB values.
   // The texture format is RGBA32UI. The pixel data format is RGB_INTEGER or
   // RGBA_INTEGER. The pixel data type is UINT
-  cov3d_data_texture: BuiltInTextureParameter (id: 8);
+  cov3d_data_texture: BuiltInTextureParameter (id: 7);
   // Texels contain a 3D color.
   // The texture format is RGBA8. The pixel data format is RGBA. The pixel data type is UBYTE
-  color_data_texture: BuiltInTextureParameter (id: 9);
+  color_data_texture: BuiltInTextureParameter (id: 8);
   // Texel values control rendering order.
   // The texture format is R32UI. The pixel data format is R_INTEGER. The pixel data type is UINT
-  sorted_indices_texture: BuiltInTextureParameter (id: 10);
+  sorted_indices_texture: BuiltInTextureParameter (id: 9);
   // If true, assigns random colors to nearby gsplats.
   // Debugging only: This may be removed in the future.
-  visualize_chunks: Bool (id: 11);
+  visualize_chunks: Bool (id: 10);
   // How many std-deviations of the gaussian will be shown. Lower values will
   // clip the gaussian shapes (keeping the aspect ratio).
   // Defaults to 4 std-devs.
-  splat_scale: Float (id: 12);
+  splat_scale: Float (id: 11);
 }
 
 table BuiltInMaterialGsplatBackgroundSpec {

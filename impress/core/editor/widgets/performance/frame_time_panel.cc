@@ -89,15 +89,15 @@ float FrameTimePanel::GetHighestVisibleFrameTimeMS(int time_span_seconds) {
 }
 
 void FrameTimePanel::DrawLegend(float width, float height) {
-  ImGui::BeginChild("##frametimelegend", ImVec2(width, height), true);
-  ImGui::Text("CPU Usage");
-  ImGui::Separator();
+  if (ImGui::BeginChild("##frametimelegend", ImVec2(width, height), true)) {
+    ImGui::Text("CPU Usage");
+    ImGui::Separator();
 
-  int color_idx = 0;
+    int color_idx = 0;
 
-  ImGuiHelper::DrawLegendItem("Vsync", show_vsync_, color_idx++);
-  ImGuiHelper::DrawLegendItem("Frametime", show_frametime_, color_idx++);
-
+    ImGuiHelper::DrawLegendItem("Vsync", show_vsync_, color_idx++);
+    ImGuiHelper::DrawLegendItem("Frametime", show_frametime_, color_idx++);
+  }
   ImGui::EndChild();
 }
 
@@ -105,100 +105,102 @@ void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
   IMP_TRACE();
 
   constexpr float kLegendWidth = 150.0f;
+  const int selected_frame_number = ImGuiHelper::GetSelectedFrameNumber();
+
   DrawLegend(kLegendWidth, height);
   ImGui::SameLine();  // Place plot to the right of the legend.
 
   // Provides a border around the plot area since we removed the padding.
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-  ImGui::BeginChild("##FrameTimePanelChild", ImVec2(width, height),
-                    ImGuiChildFlags_Borders);
+  if (ImGui::BeginChild("##FrameTimePanelChild", ImVec2(width, height),
+                        ImGuiChildFlags_Borders)) {
+    constexpr float lower_bound = 0;
+    const float upper_bound = GetHighestVisibleFrameTimeMS(time_span_seconds);
+
+    // Remove padding around the plot area
+    ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(0, 0));
+
+    if (ImPlot::BeginPlot("##FrameTimePanel", ImVec2(width, height),
+                          ImPlotFlags_NoLegend | ImPlotFlags_NoFrame)) {
+      ImPlot::SetupAxes(nullptr, nullptr,
+                        ImPlotAxisFlags_Lock | ImPlotAxisFlags_NoTickLabels,
+                        ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoTickLabels);
+      ImPlot::SetupAxisLimits(
+          ImAxis_X1,
+          Profiler::GetCurrentFrameIndex() -
+              time_span_seconds * details::kNumDisplayValuesPerSecond,
+          Profiler::GetCurrentFrameIndex(), ImPlotCond_Always);
+      ImPlot::SetupAxisLimits(ImAxis_Y1, lower_bound, upper_bound,
+                              ImPlotCond_Always);
+
+      UpdateValidTicks(upper_bound);
+
+      if (!valid_ticks_.values.empty()) {
+        ImPlot::SetupAxisTicks(ImAxis_Y1, valid_ticks_.values.data(),
+                               kNumTickLabels);
+      }
+
+      ImPlot::SetNextFillStyle(IMPLOT_AUTO_COL, 0.5f);
+
+      if (!buffer_.empty()) {
+        if (show_vsync_) {
+          ImPlot::PlotShaded("Vsync", &buffer_.data()[0].frame_number,
+                             &buffer_.data()[0].frame_time_ms,
+                             buffer_.data().size(), 0, 0, buffer_.marker(),
+                             sizeof(FrameTimeInfo));
+        }
+        if (show_frametime_) {
+          ImPlot::SetNextFillStyle(ImVec4(0.0f, 1.0f, 0.0f, -1.0f), 0.5f);
+          ImPlot::PlotShaded("Frametime", &buffer_.data()[0].frame_number,
+                             &buffer_.data()[0].player_loop_time_ms,
+                             buffer_.data().size(), 0, 0, buffer_.marker(),
+                             sizeof(FrameTimeInfo));
+        }
+
+        DrawSelectedSamplePlot();
+
+        if (ImPlot::IsPlotHovered()) {
+          ImPlotPoint mouse = ImPlot::GetPlotMousePos();
+          ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+
+          int hovered_frame = static_cast<int>(std::floor(mouse.x));
+
+          DrawHighlightFrame(hovered_frame, draw_list);
+
+          if (hovered_frame > 0) {
+            DrawToolTip(hovered_frame);
+          }
+
+          if (ImGui::IsMouseDown(ImPlot::GetInputMap().SelectCancel)) {
+            ImGuiHelper::SelectFrame(hovered_frame);
+          }
+        }
+      }
+
+      ImDrawList* draw_list_overlays = ImPlot::GetPlotDrawList();
+      DrawHighlightFrame(selected_frame_number, draw_list_overlays,
+                         IM_COL32(255, 255, 255, 200), 0.3f);
+      DrawSelectedFrameLabels(selected_frame_number, draw_list_overlays);
+      DrawTickLabels(draw_list_overlays, valid_ticks_);
+
+      ImPlot::EndPlot();
+    }
+    ImPlot::PopStyleVar();  // ImPlotStyleVar_PlotPadding
+  }
+  ImGui::EndChild();
   ImGui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
 
-  constexpr float lower_bound = 0;
-  float upper_bound = GetHighestVisibleFrameTimeMS(time_span_seconds);
-
-  // Remove padding around the plot area
-  ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(0, 0));
-
-  if (ImPlot::BeginPlot("##FrameTimePanel", ImVec2(width, height),
-                        ImPlotFlags_NoLegend | ImPlotFlags_NoFrame)) {
-    ImPlot::SetupAxes(nullptr, nullptr,
-                      ImPlotAxisFlags_Lock | ImPlotAxisFlags_NoTickLabels,
-                      ImPlotAxisFlags_AutoFit | ImPlotAxisFlags_NoTickLabels);
-    ImPlot::SetupAxisLimits(
-        ImAxis_X1,
-        Profiler::GetCurrentFrameIndex() -
-            time_span_seconds * details::kNumDisplayValuesPerSecond,
-        Profiler::GetCurrentFrameIndex(), ImPlotCond_Always);
-    ImPlot::SetupAxisLimits(ImAxis_Y1, lower_bound, upper_bound,
-                            ImPlotCond_Always);
-
-    UpdateValidTicks(upper_bound);
-
-    if (!valid_ticks_.values.empty()) {
-      ImPlot::SetupAxisTicks(ImAxis_Y1, valid_ticks_.values.data(),
-                             kNumTickLabels);
-    }
-
-    ImPlot::SetNextFillStyle(IMPLOT_AUTO_COL, 0.5f);
-
-    if (!buffer_.empty()) {
-      if (show_vsync_) {
-        ImPlot::PlotShaded("Vsync", &buffer_.data()[0].frame_number,
-                           &buffer_.data()[0].frame_time_ms,
-                           buffer_.data().size(), 0, 0, buffer_.marker(),
-                           sizeof(FrameTimeInfo));
-      }
-      if (show_frametime_) {
-        ImPlot::SetNextFillStyle(ImVec4(0.0f, 1.0f, 0.0f, -1.0f), 0.5f);
-        ImPlot::PlotShaded("Frametime", &buffer_.data()[0].frame_number,
-                           &buffer_.data()[0].player_loop_time_ms,
-                           buffer_.data().size(), 0, 0, buffer_.marker(),
-                           sizeof(FrameTimeInfo));
-      }
-
-      DrawSelectedSamplePlot();
-
-      if (ImPlot::IsPlotHovered()) {
-        ImPlotPoint mouse = ImPlot::GetPlotMousePos();
-        ImDrawList* draw_list = ImPlot::GetPlotDrawList();
-
-        int hovered_frame = static_cast<int>(std::floor(mouse.x));
-
-        DrawHighlightFrame(hovered_frame, draw_list);
-
-        if (hovered_frame > 0) {
-          DrawToolTip(hovered_frame);
-        }
-
-        if (ImGui::IsMouseDown(ImPlot::GetInputMap().SelectCancel)) {
-          selected_frame_number_ = hovered_frame;
-        }
-      }
-    }
-
-    ImDrawList* draw_list_overlays = ImPlot::GetPlotDrawList();
-    DrawHighlightFrame(selected_frame_number_, draw_list_overlays,
-                       IM_COL32(255, 255, 255, 200), 0.3f);
-    DrawTickLabels(draw_list_overlays, valid_ticks_);
-
-    ImPlot::EndPlot();
-  }
-  ImPlot::PopStyleVar();  // ImPlotStyleVar_PlotPadding
-  ImGui::EndChild();
-
   // Options for changing the view and thread to display samples for.
-  DrawOptionsBar();
+  DrawOptionsBar(selected_frame_number);
 
   if (profiler_details_view_mode_ == ProfilerDetailsViewMode::kHierarchy) {
-    hierarchy_panel_.DrawPanel(selected_frame_number_, sample_processor_,
-                               *this);
+    hierarchy_panel_.DrawPanel(selected_frame_number, sample_processor_, *this);
   } else {
-    flame_graph_.DrawPanel(selected_frame_number_, sample_processor_, *this);
+    flame_graph_.DrawPanel(selected_frame_number, sample_processor_, *this);
   }
 }
 
-void FrameTimePanel::DrawOptionsBar() {
+void FrameTimePanel::DrawOptionsBar(int selected_frame_number) {
   // Toggle to switch between Hierarchy and Flame Graph.
   if (ImGui::RadioButton(
           "Hierarchy",
@@ -339,6 +341,36 @@ void FrameTimePanel::DrawHighlightFrame(int frame_number, ImDrawList* draw_list,
   draw_list->AddRectFilled(ImVec2(tool_l, tool_t), ImVec2(tool_r, tool_b),
                            color);
   ImPlot::PopPlotClipRect();
+}
+
+void FrameTimePanel::DrawSelectedFrameLabels(int frame_number,
+                                             ImDrawList* draw_list) {
+  if (frame_number < 0 || buffer_.empty()) return;
+
+  const FrameTimeInfo* frame_info = nullptr;
+  for (const auto& info : buffer_.data()) {
+    if (static_cast<int>(info.frame_number) == frame_number) {
+      frame_info = &info;
+      break;
+    }
+  }
+
+  if (!frame_info) return;
+
+  // Order must match plot order.
+  int idx = 0;
+  frame_value_data_[idx].y_val = frame_info->frame_time_ms;
+  frame_value_data_[idx].unit = "ms";
+  frame_value_data_[idx].color_index = idx;
+  frame_value_data_[idx].show_flag = show_vsync_;
+
+  idx++;
+  frame_value_data_[idx].y_val = frame_info->player_loop_time_ms;
+  frame_value_data_[idx].unit = "ms";
+  frame_value_data_[idx].color_index = idx;
+  frame_value_data_[idx].show_flag = show_frametime_;
+
+  ImGuiHelper::DrawFrameValueLabels(frame_number, frame_value_data_, draw_list);
 }
 
 void FrameTimePanel::DrawToolTip(int frame_number) {

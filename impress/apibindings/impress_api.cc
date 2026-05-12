@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "absl/log/check.h"
@@ -32,6 +33,7 @@
 #include "apibindings/jni_conversion_utils.h"
 #include "apibindings/jni_utils.h"
 #include "apibindings/model_manager.h"
+#include "apibindings/node_manager.h"
 #include "apibindings/skybox_manager.h"
 #include "apibindings/stereo_surface.h"
 #include "apibindings/stereo_surface_manager.h"
@@ -76,7 +78,7 @@ JNI_METHOD_AOSP(void, nSetup)
 JNI_METHOD_AOSP(void, nReleaseImageBasedLightingAsset)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong ibl_token) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetSkyboxManager().ReleaseImageBasedLightingAsset(ibl_token));
 }
 
@@ -134,7 +136,7 @@ JNI_METHOD_AOSP(void, nLoadGltfAssetFromByteArray)
 JNI_METHOD_AOSP(void, nReleaseGltfAsset)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong gltf_token) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetModelManager().ReleaseGltfAsset(gltf_token));
 }
 
@@ -156,18 +158,18 @@ JNI_METHOD_AOSP(void, nSetGltfModelColliderEnabled)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong impress_node,
  jboolean enable_collider) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetModelManager().SetGltfModelColliderEnabled(
                impress_node, enable_collider));
 }
 
 JNI_METHOD_AOSP(void, nSetGltfReformAffordanceEnabled)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
- jboolean enable_affordance) {
+ jboolean enable_affordance, jboolean system_movable) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetModelManager().SetGltfReformAffordanceEnabled(
-               impress_node, enable_affordance));
+               impress_node, enable_affordance, system_movable));
 }
 
 JNI_METHOD_AOSP(void, nAnimateGltfModel)
@@ -184,7 +186,7 @@ JNI_METHOD_AOSP(void, nAnimateGltfModel)
 JNI_METHOD_AOSP(void, nStopGltfModelAnimation)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetModelManager().StopGltfModelAnimation(impress_node));
 }
 
@@ -192,9 +194,52 @@ JNI_METHOD_AOSP(void, nToggleGltfModelAnimation)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
  jboolean toggle) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetModelManager().ToggleGltfModelAnimation(impress_node, toggle));
+}
+
+JNI_METHOD_AOSP(void, nSetGltfModelAnimationSpeed)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
+ jfloat speed, jint channel_id) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  (void)imp::android::ThrowIfError(
+      env, view->GetModelManager().SetGltfModelAnimationSpeed(
+               impress_node, speed, channel_id));
+}
+
+JNI_METHOD_AOSP(void, nSetGltfModelAnimationPlaybackTime)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
+ jfloat playback_time, jint channel_id) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  (void)imp::android::ThrowIfError(
+      env, view->GetModelManager().SetGltfModelAnimationPlaybackTime(
+               impress_node, playback_time, channel_id));
+}
+
+JNI_METHOD_AOSP(jint, nGetGltfModelAnimationCount)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  absl::StatusOr<int32_t> result =
+      view->GetModelManager().GetGltfModelAnimationCount(impress_node);
+  if (!imp::android::ThrowIfError(env, result).ok()) {
+    // Returned value does not matter since an exception was thrown.
+    return -1;
+  }
+  return *result;
+}
+
+JNI_METHOD_AOSP(jstring, nGetGltfModelAnimationName)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
+ jint index) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  absl::StatusOr<std::string> result =
+      view->GetModelManager().GetGltfModelAnimationName(impress_node, index);
+  if (!imp::android::ThrowIfError(env, result).ok()) {
+    // Returned value does not matter since an exception was thrown.
+    return nullptr;
+  }
+  return env->NewStringUTF(result->c_str());
 }
 
 JNI_METHOD_AOSP(void, nGetGltfModelLocalBounds)
@@ -209,14 +254,14 @@ JNI_METHOD_AOSP(void, nGetGltfModelLocalBounds)
   }
 
   if (out_center == nullptr || env->GetArrayLength(out_center) < 3) {
-    auto unused = imp::android::ThrowIfError(
+    (void)imp::android::ThrowIfError(
         env, absl::InvalidArgumentError(
                  "out_center must be a non-null float array with a length of "
                  "at least 3."));
     return;
   }
   if (out_half_extent == nullptr || env->GetArrayLength(out_half_extent) < 3) {
-    auto unused = imp::android::ThrowIfError(
+    (void)imp::android::ThrowIfError(
         env, absl::InvalidArgumentError(
                  "out_half_extent must be a non-null float array with a length "
                  "of at least 3."));
@@ -230,28 +275,122 @@ JNI_METHOD_AOSP(void, nGetGltfModelLocalBounds)
 JNI_METHOD_AOSP(jint, nCreateImpressNode)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  return view->CreateImpressNode();
+  return view->GetNodeManager().CreateImpressNode();
 }
 
 JNI_METHOD_AOSP(void, nDestroyImpressNode)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused =
-      imp::android::ThrowIfError(env, view->DestroyImpressNode(impress_node));
+  (void)imp::android::ThrowIfError(
+      env, view->GetNodeManager().DestroyImpressNode(impress_node));
 }
 
 JNI_METHOD_AOSP(void, nSetImpressNodeParent)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node_child,
  jint impress_node_parent) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
-      env, view->SetImpressNodeParent(impress_node_child, impress_node_parent));
+  (void)imp::android::ThrowIfError(
+      env, view->GetNodeManager().SetImpressNodeParent(impress_node_child,
+                                                       impress_node_parent));
+}
+
+JNI_METHOD_AOSP(jint, nGetImpressNodeParent)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  absl::StatusOr<int32_t> result =
+      view->GetNodeManager().GetImpressNodeParent(impress_node);
+  if (!result.ok()) {
+    (void)imp::android::ThrowIfError(env, result.status());
+    // Returned value does not matter since an exception was thrown.
+    return -1;
+  }
+  return *result;
+}
+
+JNI_METHOD_AOSP(jint, nGetImpressNodeChildCount)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  absl::StatusOr<int32_t> result =
+      view->GetNodeManager().GetImpressNodeChildCount(impress_node);
+  if (!result.ok()) {
+    (void)imp::android::ThrowIfError(env, result.status());
+    // Returned value does not matter since an exception was thrown.
+    return -1;
+  }
+  return *result;
+}
+
+JNI_METHOD_AOSP(jint, nGetImpressNodeChildAt)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
+ jint index) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  absl::StatusOr<int32_t> result =
+      view->GetNodeManager().GetImpressNodeChildAt(impress_node, index);
+  if (!result.ok()) {
+    (void)imp::android::ThrowIfError(env, result.status());
+    // Returned value does not matter since an exception was thrown.
+    return -1;
+  }
+  return *result;
+}
+
+JNI_METHOD_AOSP(jstring, nGetImpressNodeName)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  absl::StatusOr<absl::string_view> result =
+      view->GetNodeManager().GetImpressNodeName(impress_node);
+  if (!result.ok()) {
+    (void)imp::android::ThrowIfError(env, result.status());
+    // Returned value does not matter since an exception was thrown.
+    return nullptr;
+  }
+  return env->NewStringUTF(result->data());
+}
+
+JNI_METHOD_AOSP(void, nSetImpressNodeLocalTransform)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node, jfloat tx,
+ jfloat ty, jfloat tz, jfloat qx, jfloat qy, jfloat qz, jfloat qw, jfloat sx,
+ jfloat sy, jfloat sz) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+
+  imp::Transform<float> transform;
+  transform.translation = {tx, ty, tz};
+  transform.rotation = {qx, qy, qz, qw};
+  transform.scale = {sx, sy, sz};
+
+  (void)imp::android::ThrowIfError(
+      env, view->GetNodeManager().SetImpressNodeLocalTransform(impress_node,
+                                                               transform));
+}
+
+JNI_METHOD_AOSP(void, nGetImpressNodeLocalTransform)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
+ jfloatArray out_transform) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+
+  if (out_transform == nullptr || env->GetArrayLength(out_transform) < 10) {
+    (void)imp::android::ThrowIfError(
+        env, absl::InvalidArgumentError("Array not present or too small."));
+    return;
+  }
+
+  absl::StatusOr<imp::Transform<float>> result =
+      view->GetNodeManager().GetImpressNodeLocalTransform(impress_node);
+  if (!imp::android::ThrowIfError(env, result.status()).ok()) return;
+
+  float raw_data[10] = {result->translation.x, result->translation.y,
+                        result->translation.z, result->rotation.x,
+                        result->rotation.y,    result->rotation.z,
+                        result->rotation.w,    result->scale.x,
+                        result->scale.y,       result->scale.z};
+
+  env->SetFloatArrayRegion(out_transform, 0, 10, raw_data);
 }
 
 // TODO: (broken link) - Update this to return Status
 JNI_METHOD_AOSP(jint, nCreateStereoSurfaceEntity)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, int stereo_mode,
- int content_security_level, jboolean use_super_sampling) {
+ int blending_mode, int content_security_level, jboolean use_super_sampling) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
 
   // Validate stereo mode.
@@ -272,14 +411,23 @@ JNI_METHOD_AOSP(jint, nCreateStereoSurfaceEntity)
                << content_security_level << ". Using kNone instead.";
   }
 
+  // Validate blending mode.
+  if (blending_mode < static_cast<int>(imp::MediaBlendingMode::kTransparent) ||
+      blending_mode > static_cast<int>(imp::MediaBlendingMode::kOpaque)) {
+    blending_mode = static_cast<int>(imp::MediaBlendingMode::kTransparent);
+    IMP_LOG(imp::ERROR) << "Invalid blending mode provided: " << blending_mode
+               << ". Using kTransparent instead.";
+  }
+
   bool use_super_sampling_bool = use_super_sampling == JNI_TRUE;
   absl::StatusOr<int32_t> result =
       view->GetStereoSurfaceManager().CreateStereoSurfaceEntity(
           static_cast<imp::MediaStereoMode>(stereo_mode),
+          static_cast<imp::MediaBlendingMode>(blending_mode),
           static_cast<imp::ContentSecurityLevel>(content_security_level),
           use_super_sampling_bool);
   if (!result.ok()) {
-    auto unused = imp::android::ThrowIfError(env, result.status());
+    (void)imp::android::ThrowIfError(env, result.status());
     // Returned value does not matter since an exception was thrown.
     return -1;
   }
@@ -288,18 +436,19 @@ JNI_METHOD_AOSP(jint, nCreateStereoSurfaceEntity)
 
 JNI_METHOD_AOSP(void, nSetStereoSurfaceEntityCanvasShapeQuad)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id, jfloat width,
- jfloat height) {
+ jfloat height, jfloat corner_radius) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
-      env, view->GetStereoSurfaceManager().SetStereoSurfaceEntityCanvasShape(
-               node_id, imp::StereoSurface::Quad({width, height})));
+  (void)imp::android::ThrowIfError(
+      env,
+      view->GetStereoSurfaceManager().SetStereoSurfaceEntityCanvasShape(
+          node_id, imp::StereoSurface::Quad({width, height, corner_radius})));
 }
 
 JNI_METHOD_AOSP(void, nSetStereoSurfaceEntityCanvasShapeSphere)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
  jfloat radius) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetStereoSurfaceManager().SetStereoSurfaceEntityCanvasShape(
                node_id, imp::StereoSurface::Sphere({radius})));
 }
@@ -308,7 +457,7 @@ JNI_METHOD_AOSP(void, nSetStereoSurfaceEntityCanvasShapeHemisphere)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
  jfloat radius) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetStereoSurfaceManager().SetStereoSurfaceEntityCanvasShape(
                node_id, imp::StereoSurface::Hemisphere({radius})));
 }
@@ -326,7 +475,7 @@ JNI_METHOD_AOSP(void, nSetStereoSurfaceEntityCanvasShapeCustomMesh)
     return;
   }
 
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetStereoSurfaceManager().SetStereoSurfaceEntityCanvasShape(
                node_id, *mesh));
 }
@@ -335,7 +484,7 @@ JNI_METHOD_AOSP(void, nSetStereoSurfaceEntityColliderEnabled)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
  jboolean enable_collider) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetStereoSurfaceManager().SetStereoSurfaceEntityColliderEnabled(
           node_id, enable_collider));
@@ -348,7 +497,7 @@ JNI_METHOD_AOSP(jobject, nGetSurfaceFromStereoSurfaceEntity)
       view->GetStereoSurfaceManager().GetSurfaceFromStereoSurfaceEntity(
           node_id);
   if (!result.ok()) {
-    auto unused = imp::android::ThrowIfError(env, result.status());
+    (void)imp::android::ThrowIfError(env, result.status());
     // Returned value does not matter since an exception was thrown.
     return nullptr;
   }
@@ -361,7 +510,7 @@ JNI_METHOD_AOSP(void, nSetStereoSurfaceEntitySurfaceSize)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id, jint width,
  jint height) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetStereoSurfaceManager()
           .SetSurfaceDimensionsForStereoSurfaceEntity(node_id, width, height));
@@ -371,7 +520,7 @@ JNI_METHOD_AOSP(void, nSetFeatherRadiusForStereoSurfaceEntity)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
  jfloat radius_x, jfloat radius_y) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetStereoSurfaceManager().SetFeatherRadiusForStereoSurfaceEntity(
           node_id, {radius_x, radius_y}));
@@ -392,9 +541,28 @@ JNI_METHOD_AOSP(void, nSetStereoModeForStereoSurfaceEntity)
                << ". Using kUnknown instead.";
   }
 
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetStereoSurfaceManager().SetStereoModeForStereoSurfaceEntity(
                node_id, static_cast<imp::MediaStereoMode>(stereo_mode)));
+}
+
+JNI_METHOD_AOSP(void, nSetBlendingModeForStereoSurfaceEntity)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
+ jint blending_mode) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+
+  // Validate blending mode.
+  if (blending_mode < static_cast<int>(imp::MediaBlendingMode::kTransparent) ||
+      blending_mode > static_cast<int>(imp::MediaBlendingMode::kOpaque)) {
+    IMP_LOG(imp::ERROR) << "Invalid blending mode provided: " << blending_mode
+               << ". Using kTransparent instead.";
+    blending_mode = static_cast<int>(imp::MediaBlendingMode::kTransparent);
+  }
+
+  (void)imp::android::ThrowIfError(
+      env,
+      view->GetStereoSurfaceManager().SetBlendingModeForStereoSurfaceEntity(
+          node_id, static_cast<imp::MediaBlendingMode>(blending_mode)));
 }
 
 JNI_METHOD_AOSP(void, nSetContentColorMetadataForStereoSurfaceEntity)
@@ -427,7 +595,7 @@ JNI_METHOD_AOSP(void, nSetContentColorMetadataForStereoSurfaceEntity)
     return;
   }
 
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetStereoSurfaceManager()
           .SetContentColorMetadataForStereoSurfaceEntity(
@@ -439,7 +607,7 @@ JNI_METHOD_AOSP(void, nSetContentColorMetadataForStereoSurfaceEntity)
 JNI_METHOD_AOSP(void, nResetContentColorMetadataForStereoSurfaceEntity)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetStereoSurfaceManager()
                .SetContentColorMetadataForStereoSurfaceEntity(node_id));
 }
@@ -448,7 +616,7 @@ JNI_METHOD_AOSP(void, nSetPrimaryAlphaMaskForStereoSurfaceEntity)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
  jlong alpha_mask_token, jobject j_asset_loader) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetStereoSurfaceManager().SetPrimaryAlphaMaskForStereoSurfaceEntity(
           node_id, alpha_mask_token));
@@ -458,7 +626,7 @@ JNI_METHOD_AOSP(void, nSetAuxiliaryAlphaMaskForStereoSurfaceEntity)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
  jlong alpha_mask_token, jobject j_asset_loader) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetStereoSurfaceManager()
                .SetAuxiliaryAlphaMaskForStereoSurfaceEntity(node_id,
                                                             alpha_mask_token));
@@ -519,7 +687,7 @@ JNI_METHOD_AOSP(void, nSetReflectionMapOnWaterMaterial)
   if (!imp::android::ThrowIfError(env, native_sampler.status()).ok()) {
     return;
   }
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetWaterMaterialManager().SetReflectionMapOnWaterMaterial(
                water_material, reflection_map, *native_sampler));
 }
@@ -537,7 +705,7 @@ JNI_METHOD_AOSP(void, nSetNormalMapOnWaterMaterial)
   if (!imp::android::ThrowIfError(env, native_sampler.status()).ok()) {
     return;
   }
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetWaterMaterialManager().SetNormalMapOnWaterMaterial(
                water_material, normal_map, *native_sampler));
 }
@@ -546,7 +714,7 @@ JNI_METHOD_AOSP(void, nSetNormalTilingOnWaterMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong water_material,
  jfloat normal_tiling) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetWaterMaterialManager().SetNormalTilingOnWaterMaterial(
                water_material, normal_tiling));
 }
@@ -555,7 +723,7 @@ JNI_METHOD_AOSP(void, nSetNormalSpeedOnWaterMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong water_material,
  jfloat normal_speed) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetWaterMaterialManager().SetNormalSpeedOnWaterMaterial(
                water_material, normal_speed));
 }
@@ -564,7 +732,7 @@ JNI_METHOD_AOSP(void, nSetAlphaStepMultiplierOnWaterMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong water_material,
  jfloat alpha_step_multiplier) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetWaterMaterialManager().SetAlphaStepMultiplierOnWaterMaterial(
           water_material, alpha_step_multiplier));
@@ -583,7 +751,7 @@ JNI_METHOD_AOSP(void, nSetAlphaMapOnWaterMaterial)
   if (!imp::android::ThrowIfError(env, native_sampler.status()).ok()) {
     return;
   }
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetWaterMaterialManager().SetAlphaMapOnWaterMaterial(
                water_material, alpha_map, *native_sampler));
 }
@@ -592,7 +760,7 @@ JNI_METHOD_AOSP(void, nSetNormalZOnWaterMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong water_material,
  jfloat normal_z) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetWaterMaterialManager().SetNormalZOnWaterMaterial(
                water_material, normal_z));
 }
@@ -601,7 +769,7 @@ JNI_METHOD_AOSP(void, nSetNormalBoundaryOnWaterMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong water_material,
  jfloat normal_boundary) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetWaterMaterialManager().SetNormalBoundaryOnWaterMaterial(
                water_material, normal_boundary));
 }
@@ -634,7 +802,7 @@ JNI_METHOD_AOSP(void, nSetBaseColorTextureOnGenericMaterial)
   if (!imp::android::ThrowIfError(env, native_sampler.status()).ok()) {
     return;
   }
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetBaseColorTextureOnGenericMaterial(
           generic_material, base_color_texture, *native_sampler));
@@ -646,7 +814,7 @@ JNI_METHOD_AOSP(void, nSetBaseColorUvTransformOnGenericMaterial)
  jfloat m20, jfloat m21, jfloat m22) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
   imp::mat3f uv_transform(m00, m01, m02, m10, m11, m12, m20, m21, m22);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetGenericMaterialManager()
                .SetBaseColorUvTransformOnGenericMaterial(generic_material,
                                                          uv_transform));
@@ -656,7 +824,7 @@ JNI_METHOD_AOSP(void, nSetBaseColorFactorsOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat x, jfloat y, jfloat z, jfloat w) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetBaseColorFactorsOnGenericMaterial(
           generic_material, {x, y, z, w}));
@@ -675,7 +843,7 @@ JNI_METHOD_AOSP(void, nSetMetallicRoughnessTextureOnGenericMaterial)
   if (!imp::android::ThrowIfError(env, native_sampler.status()).ok()) {
     return;
   }
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager()
           .SetMetallicRoughnessTextureOnGenericMaterial(
@@ -688,7 +856,7 @@ JNI_METHOD_AOSP(void, nSetMetallicRoughnessUvTransformOnGenericMaterial)
  jfloat m20, jfloat m21, jfloat m22) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
   imp::mat3f uv_transform(m00, m01, m02, m10, m11, m12, m20, m21, m22);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetGenericMaterialManager()
                .SetMetallicRoughnessUvTransformOnGenericMaterial(
                    generic_material, uv_transform));
@@ -698,7 +866,7 @@ JNI_METHOD_AOSP(void, nSetMetallicFactorOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat factor) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetGenericMaterialManager().SetMetallicFactorOnGenericMaterial(
                generic_material, factor));
 }
@@ -707,7 +875,7 @@ JNI_METHOD_AOSP(void, nSetRoughnessFactorOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat factor) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetRoughnessFactorOnGenericMaterial(
           generic_material, factor));
@@ -726,7 +894,7 @@ JNI_METHOD_AOSP(void, nSetNormalTextureOnGenericMaterial)
   if (!imp::android::ThrowIfError(env, native_sampler.status()).ok()) {
     return;
   }
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetGenericMaterialManager().SetNormalTextureOnGenericMaterial(
                generic_material, normal_texture, *native_sampler));
 }
@@ -737,7 +905,7 @@ JNI_METHOD_AOSP(void, nSetNormalUvTransformOnGenericMaterial)
  jfloat m20, jfloat m21, jfloat m22) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
   imp::mat3f uv_transform(m00, m01, m02, m10, m11, m12, m20, m21, m22);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetNormalUvTransformOnGenericMaterial(
           generic_material, uv_transform));
@@ -747,7 +915,7 @@ JNI_METHOD_AOSP(void, nSetNormalFactorOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat factor) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetGenericMaterialManager().SetNormalFactorOnGenericMaterial(
                generic_material, factor));
 }
@@ -765,7 +933,7 @@ JNI_METHOD_AOSP(void, nSetAmbientOcclusionTextureOnGenericMaterial)
   if (!imp::android::ThrowIfError(env, native_sampler.status()).ok()) {
     return;
   }
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager()
           .SetAmbientOcclusionTextureOnGenericMaterial(
@@ -778,7 +946,7 @@ JNI_METHOD_AOSP(void, nSetAmbientOcclusionUvTransformOnGenericMaterial)
  jfloat m20, jfloat m21, jfloat m22) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
   imp::mat3f uv_transform(m00, m01, m02, m10, m11, m12, m20, m21, m22);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetGenericMaterialManager()
                .SetAmbientOcclusionUvTransformOnGenericMaterial(
                    generic_material, uv_transform));
@@ -788,7 +956,7 @@ JNI_METHOD_AOSP(void, nSetAmbientOcclusionFactorOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat factor) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetGenericMaterialManager()
                .SetAmbientOcclusionFactorOnGenericMaterial(generic_material,
                                                            factor));
@@ -807,7 +975,7 @@ JNI_METHOD_AOSP(void, nSetEmissiveTextureOnGenericMaterial)
   if (!imp::android::ThrowIfError(env, native_sampler.status()).ok()) {
     return;
   }
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetEmissiveTextureOnGenericMaterial(
           generic_material, emissive_texture, *native_sampler));
@@ -819,7 +987,7 @@ JNI_METHOD_AOSP(void, nSetEmissiveUvTransformOnGenericMaterial)
  jfloat m20, jfloat m21, jfloat m22) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
   imp::mat3f uv_transform(m00, m01, m02, m10, m11, m12, m20, m21, m22);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetEmissiveUvTransformOnGenericMaterial(
           generic_material, uv_transform));
@@ -829,7 +997,7 @@ JNI_METHOD_AOSP(void, nSetEmissiveFactorsOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat x, jfloat y, jfloat z) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetEmissiveFactorsOnGenericMaterial(
           generic_material, {x, y, z}));
@@ -848,7 +1016,7 @@ JNI_METHOD_AOSP(void, nSetClearcoatTextureOnGenericMaterial)
   if (!imp::android::ThrowIfError(env, native_sampler.status()).ok()) {
     return;
   }
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetClearcoatTextureOnGenericMaterial(
           generic_material, clearcoat_texture, *native_sampler));
@@ -867,7 +1035,7 @@ JNI_METHOD_AOSP(void, nSetClearcoatNormalTextureOnGenericMaterial)
   if (!imp::android::ThrowIfError(env, native_sampler.status()).ok()) {
     return;
   }
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager()
           .SetClearcoatNormalTextureOnGenericMaterial(
@@ -887,7 +1055,7 @@ JNI_METHOD_AOSP(void, nSetClearcoatRoughnessTextureOnGenericMaterial)
   if (!imp::android::ThrowIfError(env, native_sampler.status()).ok()) {
     return;
   }
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager()
           .SetClearcoatRoughnessTextureOnGenericMaterial(
@@ -898,7 +1066,7 @@ JNI_METHOD_AOSP(void, nSetClearcoatFactorsOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat intensity, jfloat roughness, jfloat normal) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetClearcoatFactorsOnGenericMaterial(
           generic_material, {intensity, roughness, normal}));
@@ -917,7 +1085,7 @@ JNI_METHOD_AOSP(void, nSetSheenColorTextureOnGenericMaterial)
   if (!imp::android::ThrowIfError(env, native_sampler.status()).ok()) {
     return;
   }
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetSheenColorTextureOnGenericMaterial(
           generic_material, sheen_color_texture, *native_sampler));
@@ -927,7 +1095,7 @@ JNI_METHOD_AOSP(void, nSetSheenColorFactorsOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat x, jfloat y, jfloat z) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetSheenColorFactorsOnGenericMaterial(
           generic_material, {x, y, z}));
@@ -946,7 +1114,7 @@ JNI_METHOD_AOSP(void, nSetSheenRoughnessTextureOnGenericMaterial)
   if (!imp::android::ThrowIfError(env, native_sampler.status()).ok()) {
     return;
   }
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetGenericMaterialManager()
                .SetSheenRoughnessTextureOnGenericMaterial(
                    generic_material, sheen_roughness_texture, *native_sampler));
@@ -956,7 +1124,7 @@ JNI_METHOD_AOSP(void, nSetSheenRoughnessFactorOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat factor) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager()
           .SetSheenRoughnessFactorOnGenericMaterial(generic_material, factor));
@@ -975,7 +1143,7 @@ JNI_METHOD_AOSP(void, nSetTransmissionTextureOnGenericMaterial)
   if (!imp::android::ThrowIfError(env, native_sampler.status()).ok()) {
     return;
   }
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetTransmissionTextureOnGenericMaterial(
           generic_material, transmission_texture, *native_sampler));
@@ -987,7 +1155,7 @@ JNI_METHOD_AOSP(void, nSetTransmissionUvTransformOnGenericMaterial)
  jfloat m20, jfloat m21, jfloat m22) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
   imp::mat3f uv_transform(m00, m01, m02, m10, m11, m12, m20, m21, m22);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetGenericMaterialManager()
                .SetTransmissionUvTransformOnGenericMaterial(generic_material,
                                                             uv_transform));
@@ -997,7 +1165,7 @@ JNI_METHOD_AOSP(void, nSetTransmissionFactorOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat factor) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetTransmissionFactorOnGenericMaterial(
           generic_material, factor));
@@ -1007,7 +1175,7 @@ JNI_METHOD_AOSP(void, nSetIndexOfRefractionOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat index_of_refraction) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env,
       view->GetGenericMaterialManager().SetIndexOfRefractionOnGenericMaterial(
           generic_material, index_of_refraction));
@@ -1017,7 +1185,7 @@ JNI_METHOD_AOSP(void, nSetAlphaCutoffOnGenericMaterial)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong generic_material,
  jfloat alpha_cutoff) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetGenericMaterialManager().SetAlphaCutoffOnGenericMaterial(
                generic_material, alpha_cutoff));
 }
@@ -1028,29 +1196,58 @@ JNI_METHOD_AOSP(void, nDestroyNativeObject)
   view->DestroyNativeObject(handle);
 }
 
+// TODO Remove this API once the migration to the new introspection
+// APIs is complete.
 JNI_METHOD_AOSP(void, nSetMaterialOverride)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
  jlong material, jstring node_name, jint primitive_index) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetModelManager().SetMaterialOverride(
                impress_node, material, imp::GetString(env, node_name),
                primitive_index));
 }
 
+// TODO Remove this API once the migration to the new introspection
+// APIs is complete.
 JNI_METHOD_AOSP(void, nClearMaterialOverride)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node,
  jstring node_name, jint primitive_index) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetModelManager().ClearMaterialOverride(
                impress_node, imp::GetString(env, node_name), primitive_index));
+}
+
+JNI_METHOD_AOSP(void, nSetGltfModelNodeMaterialOverride)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id, jlong material,
+ jint primitive_index) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  (void)imp::android::ThrowIfError(
+      env, view->GetModelManager().SetGltfModelNodeMaterialOverride(
+               node_id, material, primitive_index));
+}
+
+JNI_METHOD_AOSP(void, nClearGltfModelNodeMaterialOverride)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint node_id,
+ jint primitive_index) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  (void)imp::android::ThrowIfError(
+      env, view->GetModelManager().ClearGltfModelNodeMaterialOverride(
+               node_id, primitive_index));
+}
+
+JNI_METHOD_AOSP(void, nScheduleGltfReskinning)
+(JNIEnv* env, jclass /*clazz*/, jlong view_handle, jint impress_node) {
+  auto view = FromJava<imp::ImpressApiView>(view_handle);
+  (void)imp::android::ThrowIfError(
+      env, view->GetModelManager().ScheduleReskinning(impress_node));
 }
 
 JNI_METHOD_AOSP(void, nSetEnvironmentLight)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle, jlong ibl_token) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(
+  (void)imp::android::ThrowIfError(
       env, view->GetSkyboxManager().SetEnvironmentLight(ibl_token));
 }
 
@@ -1063,7 +1260,7 @@ JNI_METHOD_AOSP(void, nClearEnvironmentLight)
 JNI_METHOD_AOSP(void, nDisposeAllResources)
 (JNIEnv* env, jclass /*clazz*/, jlong view_handle) {
   auto view = FromJava<imp::ImpressApiView>(view_handle);
-  auto unused = imp::android::ThrowIfError(env, view->DisposeAllResources());
+  (void)imp::android::ThrowIfError(env, view->DisposeAllResources());
 }
 
 }  // extern "C"

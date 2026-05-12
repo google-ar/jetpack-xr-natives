@@ -17,6 +17,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_COMPONENTS_SPATIAL_UI_CANVAS_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_COMPONENTS_SPATIAL_UI_CANVAS_H_
 
+#include <memory>
 #include <string>
 
 #include "core/common/log.h"
@@ -24,12 +25,13 @@
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
 #include "core/async/future.h"
+#include "core/materials/material.h"
 #include "core/math/math.h"
 #include "core/math/vec.h"
+#include "core/model/mesh/mesh.h"
 #include "core/ncsb/component.h"
-#include "core/ncsb/component_handle.h"
 #include "core/render/texture.h"
-#include "core/view/framework/render/primitive_shape_renderer.h"
+#include "core/view/base_view.h"
 #include "core/view/utils/frame_time.h"
 
 namespace imp::editor {
@@ -50,7 +52,8 @@ class SpatialUiCanvas : public Component {
   };
 
   Future<absl::Status> Setup(absl::string_view name, float2 content_position,
-                             float2 content_size, BorrowedTexturePtr texture);
+                             float2 content_size, BorrowedTexturePtr texture,
+                             int2 texture_resolution);
 
   void Update(FrameTime& frame_time);
 
@@ -69,7 +72,9 @@ class SpatialUiCanvas : public Component {
   std::string name_;
   float2 content_position_;
   float2 content_size_;
-  ComponentHandle<PrimitiveShapeRenderer> primitive_renderer_;
+  OwnedMaterialPtr material_;
+  OwnedMeshPtr quad_mesh_;
+  float2 global_texture_resolution_;
 };
 }  // namespace imp::editor
 

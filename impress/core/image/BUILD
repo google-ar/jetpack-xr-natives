@@ -37,6 +37,7 @@ cc_library(
     copts = imp_copts(),
     linkstatic = True,
     deps = [
+        "//core/async:background_delete",
         "//core/common",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/status",
@@ -166,6 +167,7 @@ cc_library(
     linkstatic = True,
     deps = [
         ":image",
+        "//core/async:background_delete",
         "//core/async:future",
         "//core/common",
         "//core/common:context",
@@ -173,10 +175,12 @@ cc_library(
         "//core/resources",
         "//core/view/platforms/android/wrappers:graphics",
         "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament/filament:filament_hdrs",
+        "@third_party//filament/filament/backend:driver_enums",
         "@third_party//filament/filament/backend:pixel_buffer_descriptor",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
@@ -197,6 +201,7 @@ cc_library(
         ":image",
         ":wasm_texture_contents",
         "//base:atomic_sequence_num",
+        "//core/async:background_delete",
         "//core/async:future",
         "//core/resources",
         "//javascript/core/wasm/decode_image:decode_image.js.lds",
@@ -228,6 +233,7 @@ cc_library(
     linkstatic = True,
     deps = [
         ":image",
+        "//core/async:executor",
         "//core/common",
         "//core/resources",
         "@com_google_absl//absl/log:check",
@@ -290,6 +296,7 @@ cc_library(
     linkstatic = True,
     deps = [
         ":image",
+        "//core/async:background_delete",
         "//core/common",
         "//core/resources",
         "//image/wimage",

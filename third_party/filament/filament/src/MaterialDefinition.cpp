@@ -13,21 +13,41 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include "MaterialDefinition.h"
 
 #include "Froxelizer.h"
 #include "MaterialParser.h"
 
-#include <backend/DriverEnums.h>
-
 #include <ds/ColorPassDescriptorSet.h>
 
 #include <details/Engine.h>
 
+#include <private/filament/EngineEnums.h>
+#include <private/filament/DescriptorSets.h>
 #include <private/filament/PushConstantInfo.h>
 
+#include <filament/MaterialEnums.h>
+
+#include <backend/DriverEnums.h>
+
+#include <string_view>
+#include "filament/libs/utils/include/utils/CString.h"
+#include "filament/libs/utils/include/utils/bitset.h"
+#include "filament/libs/utils/include/utils/debug.h"
+#include "filament/libs/utils/include/utils/FixedCapacityVector.h"
+#include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/Logger.h"
 #include "filament/libs/utils/include/utils/Panic.h"
+
+#include <algorithm>
+#include <iterator>
+#include <memory>
+#include <utility>
+
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
 
 namespace filament {
 
@@ -41,6 +61,8 @@ std::unique_ptr<MaterialParser> MaterialDefinition::createParser(Backend const b
 
     MaterialParser::ParseResult const materialResult = materialParser->parse();
 
+    CString name;
+    materialParser->getName(&name);
     if (UTILS_UNLIKELY(materialResult == MaterialParser::ParseResult::ERROR_MISSING_BACKEND)) {
         CString languageNames;
         for (auto it = languages.begin(); it != languages.end(); ++it) {
@@ -52,7 +74,7 @@ std::unique_ptr<MaterialParser> MaterialDefinition::createParser(Backend const b
 
         FILAMENT_CHECK_POSTCONDITION(
                 materialResult != MaterialParser::ParseResult::ERROR_MISSING_BACKEND)
-                << "the material was not built for any of the " << to_string(backend)
+                << "the material " << name.c_str_safe() << " was not built for any of the " << to_string(backend)
                 << " backend's supported shader languages (" << languageNames.c_str() << ")\n";
     }
 
@@ -61,13 +83,13 @@ std::unique_ptr<MaterialParser> MaterialDefinition::createParser(Backend const b
     }
 
     FILAMENT_CHECK_POSTCONDITION(materialResult == MaterialParser::ParseResult::SUCCESS)
-            << "could not parse the material package";
+            << "could not parse the material package for material " << name.c_str_safe();
 
     uint32_t version = 0;
     materialParser->getMaterialVersion(&version);
     FILAMENT_CHECK_POSTCONDITION(version == MATERIAL_VERSION)
             << "Material version mismatch. Expected " << MATERIAL_VERSION << " but received "
-            << version << ".";
+            << version << " for material " << name.c_str_safe();
 
     assert_invariant(backend != Backend::DEFAULT && "Default backend has not been resolved.");
 
@@ -81,7 +103,7 @@ std::unique_ptr<MaterialDefinition> MaterialDefinition::create(FEngine& engine,
         uint32_t parsedCrc32 = 0;
         parser->getMaterialCrc32(&parsedCrc32);
 
-        uint32_t expectedCrc32 = parser->computeCrc32();
+        uint32_t const expectedCrc32 = parser->computeCrc32();
 
         if (parsedCrc32 != expectedCrc32) {
             CString name;
@@ -129,9 +151,9 @@ std::unique_ptr<MaterialDefinition> MaterialDefinition::create(FEngine& engine,
                 CString name;
                 parser->getName(&name);
                 LOG(WARNING) << "The stereoscopic type in the compiled material '"
-                             << name.c_str_safe() << "' is " << (int) materialStereoscopicType
+                             << name.c_str_safe() << "' is " << int(materialStereoscopicType)
                              << ", which is not compatible with the engine's setting "
-                             << (int) engineStereoscopicType << ".";
+                             << int(engineStereoscopicType) << ".";
             }
         }
     }
@@ -166,16 +188,16 @@ void MaterialDefinition::processMain() {
         uint8_t level = 1;
         mMaterialParser->getFeatureLevel(&level);
         assert_invariant(level <= 3);
-        FeatureLevel featureLevel = FeatureLevel::FEATURE_LEVEL_1;
+        FeatureLevel result = FeatureLevel::FEATURE_LEVEL_1;
         switch (FeatureLevel(level)) {
             case FeatureLevel::FEATURE_LEVEL_0:
             case FeatureLevel::FEATURE_LEVEL_1:
             case FeatureLevel::FEATURE_LEVEL_2:
             case FeatureLevel::FEATURE_LEVEL_3:
-                featureLevel = FeatureLevel(level);
+                result = FeatureLevel(level);
                 break;
         }
-        return featureLevel;
+        return result;
     }();
 
     UTILS_UNUSED_IN_RELEASE bool success;
@@ -257,6 +279,8 @@ void MaterialDefinition::processMain() {
     bool const hasFog = !(variantFilterMask & UserVariantFilterMask(UserVariantFilterBit::FOG));
 
     perViewLayoutIndex = ColorPassDescriptorSet::getIndex(isLit, isSSR, hasFog);
+
+    mMaterialParser->getSourceShader(&source);
 }
 
 void MaterialDefinition::processBlendingMode() {
@@ -342,6 +366,8 @@ void MaterialDefinition::processBlendingMode() {
 }
 
 void MaterialDefinition::processSpecializationConstants(FEngine& engine) {
+    FEngine::DriverApi& driver = engine.getDriverApi();
+
     // Older materials won't have a constants chunk, but that's okay.
     mMaterialParser->getConstants(&materialConstants);
 
@@ -360,18 +386,18 @@ void MaterialDefinition::processSpecializationConstants(FEngine& engine) {
 
     specializationConstants
             [+ReservedSpecializationConstants::CONFIG_STATIC_TEXTURE_TARGET_WORKAROUND] =
-                    engine.getDriverApi().isWorkaroundNeeded(
+                    driver.isWorkaroundNeeded(
                             Workaround::METAL_STATIC_TEXTURE_TARGET_ERROR);
 
     specializationConstants[+ReservedSpecializationConstants::CONFIG_SRGB_SWAPCHAIN_EMULATION] =
-            engine.getDriverApi().isWorkaroundNeeded(Workaround::EMULATE_SRGB_SWAPCHAIN);
+            driver.isWorkaroundNeeded(Workaround::EMULATE_SRGB_SWAPCHAIN);
 
     // The 16u below denotes the 16 bytes in a uvec4, which is how the froxel buffer is stored.
     specializationConstants[+ReservedSpecializationConstants::CONFIG_FROXEL_BUFFER_HEIGHT] =
-            int(Froxelizer::getFroxelBufferByteCount(engine.getDriverApi()) / 16u);
+            int(Froxelizer::getFroxelBufferByteCount(driver) / 16u);
 
     specializationConstants[+ReservedSpecializationConstants::CONFIG_POWER_VR_SHADER_WORKAROUNDS] =
-            engine.getDriverApi().isWorkaroundNeeded(Workaround::POWER_VR_SHADER_WORKAROUNDS);
+            driver.isWorkaroundNeeded(Workaround::POWER_VR_SHADER_WORKAROUNDS);
 
     specializationConstants[+ReservedSpecializationConstants::CONFIG_DEBUG_DIRECTIONAL_SHADOWMAP] =
             engine.debug.shadowmap.debug_directional_shadowmap;
@@ -389,7 +415,7 @@ void MaterialDefinition::processSpecializationConstants(FEngine& engine) {
     specializationConstants[+ReservedSpecializationConstants::CONFIG_SHADOW_SAMPLING_METHOD] = 0;
 
     specializationConstants[+ReservedSpecializationConstants::CONFIG_FROXEL_RECORD_BUFFER_HEIGHT] =
-            int(Froxelizer::getFroxelRecordBufferByteCount(engine.getDriverApi()) / 16u);
+            int(Froxelizer::getFroxelRecordBufferByteCount(driver) / 16u);
 
     // Initialize the rest of the reserved constants with a dummy value.
     for (size_t i = CONFIG_NEXT_RESERVED_SPEC_CONSTANT; i < CONFIG_MAX_RESERVED_SPEC_CONSTANTS;
@@ -422,23 +448,21 @@ void MaterialDefinition::processSpecializationConstants(FEngine& engine) {
 }
 
 void MaterialDefinition::processPushConstants() {
-    FixedCapacityVector<Program::PushConstant>& vertexConstants =
-            pushConstants[uint8_t(ShaderStage::VERTEX)];
-    FixedCapacityVector<Program::PushConstant>& fragmentConstants =
-            pushConstants[uint8_t(ShaderStage::FRAGMENT)];
+    FixedCapacityVector<Program::PushConstant>& vertexConstants = pushConstants[uint8_t(ShaderStage::VERTEX)];
+    FixedCapacityVector<Program::PushConstant>& fragmentConstants = pushConstants[uint8_t(ShaderStage::FRAGMENT)];
 
     CString structVarName;
-    FixedCapacityVector<MaterialPushConstant> pushConstants;
-    mMaterialParser->getPushConstants(&structVarName, &pushConstants);
+    FixedCapacityVector<MaterialPushConstant> allPushConstants;
+    mMaterialParser->getPushConstants(&structVarName, &allPushConstants);
 
-    vertexConstants.reserve(pushConstants.size());
-    fragmentConstants.reserve(pushConstants.size());
+    vertexConstants.reserve(allPushConstants.size());
+    fragmentConstants.reserve(allPushConstants.size());
 
     constexpr size_t MAX_NAME_LEN = 60;
     char buf[MAX_NAME_LEN];
     uint8_t vertexCount = 0, fragmentCount = 0;
 
-    std::for_each(pushConstants.cbegin(), pushConstants.cend(),
+    std::for_each(allPushConstants.cbegin(), allPushConstants.cend(),
             [&](MaterialPushConstant const& constant) {
                 snprintf(buf, sizeof(buf), "%s.%s", structVarName.c_str(), constant.name.c_str());
 
@@ -458,13 +482,15 @@ void MaterialDefinition::processPushConstants() {
 }
 
 void MaterialDefinition::processDescriptorSets(FEngine& engine) {
+    FEngine::DriverApi& driver = engine.getDriverApi();
+    auto& descriptorSetLayoutFactory = engine.getDescriptorSetLayoutFactory();
+
     UTILS_UNUSED_IN_RELEASE bool success;
 
     success = mMaterialParser->getDescriptorBindings(&programDescriptorBindings);
     assert_invariant(success);
 
-    backend::DescriptorSetLayout descriptorSetLayout;
-    success = mMaterialParser->getDescriptorSetLayout(&descriptorSetLayout);
+    success = mMaterialParser->getDescriptorSetLayout(&this->descriptorSetLayoutDescription);
     assert_invariant(success);
 
     // get the PER_VIEW descriptor binding info
@@ -473,42 +499,42 @@ void MaterialDefinition::processDescriptorSets(FEngine& engine) {
             refractionMode == RefractionMode::SCREEN_SPACE;
     bool const hasFog = !(variantFilterMask & UserVariantFilterMask(UserVariantFilterBit::FOG));
 
-    auto perViewDescriptorSetLayout = descriptor_sets::getPerViewDescriptorSetLayout(
+    this->perViewDescriptorSetLayoutDescription = descriptor_sets::getPerViewDescriptorSetLayout(
             materialDomain, isLit, isSSR, hasFog, false);
 
-    auto perViewDescriptorSetLayoutVsm = descriptor_sets::getPerViewDescriptorSetLayout(
+    this->perViewDescriptorSetLayoutVsmDescription = descriptor_sets::getPerViewDescriptorSetLayout(
             materialDomain, isLit, isSSR, hasFog, true);
 
     // set the labels
-    descriptorSetLayout.label = CString{ name }.append("_perMat");
-    perViewDescriptorSetLayout.label = CString{ name }.append("_perView");
-    perViewDescriptorSetLayoutVsm.label = CString{ name }.append("_perViewVsm");
+    this->descriptorSetLayoutDescription.label = CString{ name }.append("_perMat");
+    this->perViewDescriptorSetLayoutDescription.label = CString{ name }.append("_perView");
+    this->perViewDescriptorSetLayoutVsmDescription.label = CString{ name }.append("_perViewVsm");
 
     // get the PER_RENDERABLE and PER_VIEW descriptor binding info
-    for (auto&& [bindingPoint, descriptorSetLayout] : {
+    for (auto&& [bindingPoint, dsl] : {
             std::pair{ DescriptorSetBindingPoints::PER_RENDERABLE,
                     descriptor_sets::getPerRenderableLayout() },
             std::pair{ DescriptorSetBindingPoints::PER_VIEW,
-                    perViewDescriptorSetLayout }}) {
+                    this->perViewDescriptorSetLayoutDescription }}) {
         Program::DescriptorBindingsInfo& descriptors = programDescriptorBindings[+bindingPoint];
-        descriptors.reserve(descriptorSetLayout.bindings.size());
-        for (auto const& entry: descriptorSetLayout.bindings) {
-            auto const& name = descriptor_sets::getDescriptorName(bindingPoint, entry.binding);
-            descriptors.push_back({ name, entry.type, entry.binding });
+        descriptors.reserve(dsl.descriptors.size());
+        for (auto const& entry: dsl.descriptors) {
+            auto const& descriptorName = descriptor_sets::getDescriptorName(bindingPoint, entry.binding);
+            descriptors.push_back({ descriptorName, entry.type, entry.binding });
         }
     }
 
     this->descriptorSetLayout = {
-            engine.getDescriptorSetLayoutFactory(),
-            engine.getDriverApi(), std::move(descriptorSetLayout) };
+            descriptorSetLayoutFactory, driver,
+            this->descriptorSetLayoutDescription };
 
     this->perViewDescriptorSetLayout = {
-            engine.getDescriptorSetLayoutFactory(),
-            engine.getDriverApi(), std::move(perViewDescriptorSetLayout) };
+            descriptorSetLayoutFactory, driver,
+            this->perViewDescriptorSetLayoutDescription };
 
     this->perViewDescriptorSetLayoutVsm = {
-            engine.getDescriptorSetLayoutFactory(),
-            engine.getDriverApi(), std::move(perViewDescriptorSetLayoutVsm) };
+            descriptorSetLayoutFactory, driver,
+            this->perViewDescriptorSetLayoutVsmDescription };
 }
 
 } // namespace filament

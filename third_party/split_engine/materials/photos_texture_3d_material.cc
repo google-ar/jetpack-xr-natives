@@ -15,21 +15,17 @@
 #include "split_engine/materials/photos_texture_3d_material.h"
 
 #include <memory>
-#include <string>
 #include <utility>
-#include <variant>
 
 #include "absl/memory/memory.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
-#include "core/render/texture.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "core/view/base_view.h"
 #include "split_engine/materials/photos_texture_3d_material_params.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
-#include "split_engine/schemas/split_engine_primitive_generated.h"
 
 namespace android_xr {
 
@@ -39,7 +35,7 @@ PhotosTexture3DMaterial::Create(imp::BaseView& view,
   auto fbb = std::make_unique<flatbuffers::FlatBufferBuilder>();
   flatbuffers::Offset<android_xr::schemas::BuiltInMaterialD1750064>
       spec_offset = android_xr::schemas::CreateBuiltInMaterialD1750064(*fbb);
-  return imp::split_engine::SplitEngineMaterial::RequestBuiltInMaterial(
+  return imp::split_engine::SplitEngineBuiltinMaterial::RequestBuiltInMaterial(
              view, std::move(fbb),
              android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterialD1750064,
              spec_offset.Union())
@@ -53,10 +49,11 @@ PhotosTexture3DMaterial::Create(imp::BaseView& view,
 PhotosTexture3DMaterial::PhotosTexture3DMaterial(
     imp::BaseView& view, const PhotosTexture3DMaterialParams& params,
     imp::split_engine::PlaceholderOrBuiltInMaterialPtr material)
-    : SplitEngineMaterial(view,
-                          android_xr::schemas::BuiltInMaterialParameters::
-                              BuiltInMaterialD1750064Parameters,
-                          std::move(material)),
+    : SplitEngineBuiltinMaterial(
+          view,
+          android_xr::schemas::BuiltInMaterialParameters::
+              BuiltInMaterialD1750064Parameters,
+          std::move(material)),
       params_(params) {}
 
 PhotosTexture3DMaterial::~PhotosTexture3DMaterial() { Cleanup(); }

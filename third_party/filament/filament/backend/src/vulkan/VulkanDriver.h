@@ -41,7 +41,6 @@
 #include "vulkan/utils/Definitions.h"
 
 #include "backend/DriverEnums.h"
-#include "backend/BufferObjectStreamDescriptor.h"
 
 #include "DriverBase.h"
 #include "private/backend/Driver.h"
@@ -133,6 +132,8 @@ private:
     // Flush the current command buffer and reset the pipeline state.
     void endCommandRecording();
 
+    void acquireNextSwapchainImage();
+
     VulkanPlatform* mPlatform = nullptr;
     fvkmemory::ResourceManager mResourceManager;
 
@@ -160,11 +161,6 @@ private:
     VulkanQueryManager mQueryManager;
     VulkanExternalImageManager mExternalImageManager;
     VulkanStreamedImageManager mStreamedImageManager;
-
-    // Stream transforms
-    std::unordered_map<VulkanBufferObject*, BufferObjectStreamDescriptor> mStreamUniformDescriptors;
-    math::mat3f getStreamTransformMatrix(Handle<HwStream> sh);
-
 
     // This maps a VulkanSwapchain to a native swapchain. VulkanSwapchain should have a copy of the
     // Platform::Swapchain pointer, but queryFrameTimestamps() and queryCompositorTiming() are
@@ -209,7 +205,10 @@ private:
 
     bool const mIsSRGBSwapChainSupported;
     bool const mIsMSAASwapChainSupported;
+    bool const mAcquireSwapChainInMakeCurrent;
     backend::StereoscopicType const mStereoscopicType;
+    uint8_t const mStereoscopicEyeCount;
+    backend::AsynchronousMode const mAsynchronousMode;
 
     // setAcquiredImage is a DECL_DRIVER_API_SYNCHRONOUS_N which means we don't necessarily have the
     // data to process it at call time. So we store it and process it during updateStreams.

@@ -33,10 +33,12 @@
 #include "core/render/texture.h"
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
+#include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 #include "split_engine/schemas/split_engine_primitive_generated.h"
+#include "split_engine/schemas/split_engine_schema_version.h"
 
 namespace android_xr {
 
@@ -228,8 +230,8 @@ static_assert(
 
 imp::Future<std::unique_ptr<JxrMediaMaterial>> JxrMediaMaterial::Create(
     imp::BaseView& view, imp::MediaShapeType shape_type,
-    bool use_super_sampling, imp::RenderEyeTarget render_eye_target) {
-
+    bool use_super_sampling, imp::RenderEyeTarget render_eye_target,
+    imp::MediaBlendingMode blending_mode) {
   // Verify the shape is supported.
   switch (shape_type) {
     case imp::MediaShapeType::kDefaultFlat:
@@ -243,18 +245,34 @@ imp::Future<std::unique_ptr<JxrMediaMaterial>> JxrMediaMaterial::Create(
           "state's given shape type."));
   }
 
+  auto fbb = std::make_unique<flatbuffers::FlatBufferBuilder>();
+  android_xr::schemas::BuiltInMaterial1b616c8aBuilder builder_(*fbb);
+  builder_.add_shape(
+      static_cast<android_xr::schemas::BuiltInMaterial1b616c8aShapeType>(
+          shape_type));
   android_xr::schemas::Bool use_super_sampling_packed =
       imp::split_engine::Pack(use_super_sampling);
-  auto fbb = std::make_unique<flatbuffers::FlatBufferBuilder>();
-  flatbuffers::Offset<android_xr::schemas::BuiltInMaterial1b616c8a>
-      spec_offset = android_xr::schemas::CreateBuiltInMaterial1b616c8a(
-          *fbb,
-          static_cast<android_xr::schemas::BuiltInMaterial1b616c8aShapeType>(
-              shape_type),
-          &use_super_sampling_packed,
-          static_cast<
-              android_xr::schemas::BuiltInMaterial1b616c8aRenderEyeTarget>(
-              render_eye_target));
+  builder_.add_use_super_sampling(&use_super_sampling_packed);
+
+  if (view.GetSplitEngineSerializer()->GetApiLevel() ==
+      android_xr::kSplitEngineExperimentalApiLevel) {
+    // We're accessing unreleased features.
+    builder_.add_render_eye_target(
+        static_cast<
+            android_xr::schemas::BuiltInMaterial1b616c8aRenderEyeTarget>(
+            render_eye_target));
+    builder_.add_blending_mode(
+        static_cast<android_xr::schemas::BuiltInMaterial1b616c8aBlendingMode>(
+            blending_mode));
+  } else {
+    if (render_eye_target != imp::RenderEyeTarget::kBoth) {
+      IMP_LOG(imp::ERROR) << "RenderEyeTarget is not supported on this API level.";
+    }
+    if (blending_mode != imp::MediaBlendingMode::kTransparent) {
+      IMP_LOG(imp::ERROR) << "BlendingMode is not supported on this API level.";
+    }
+  }
+  auto spec_offset = builder_.Finish();
 
   return RequestBuiltInMaterial(
              view, std::move(fbb),
@@ -267,13 +285,28 @@ imp::Future<std::unique_ptr<JxrMediaMaterial>> JxrMediaMaterial::Create(
           });
 }
 
+void JxrMediaMaterial::ApplyParametersTo(JxrMediaMaterial& other) const {
+  // LINT.IfChange(parameters)
+  other.primary_texture_ = primary_texture_.Borrow();
+  other.auxiliary_texture_ = auxiliary_texture_.Borrow();
+  other.primary_alpha_mask_ = primary_alpha_mask_.Borrow();
+  other.auxiliary_alpha_mask_ = auxiliary_alpha_mask_.Borrow();
+  other.stereo_type_ = stereo_type_;
+  other.color_space_ = color_space_;
+  other.feather_radius_ = feather_radius_;
+  other.corner_radius_ = corner_radius_;
+  other.MarkParametersDirty();
+  // LINT.ThenChange(jxr_media_material.h:parameters)
+}
+
 JxrMediaMaterial::JxrMediaMaterial(
     imp::BaseView& view,
     imp::split_engine::PlaceholderOrBuiltInMaterialPtr material)
-    : SplitEngineMaterial(view,
-                          android_xr::schemas::BuiltInMaterialParameters::
-                              BuiltInMaterial1b616c8aParameters,
-                          std::move(material)) {}
+    : SplitEngineBuiltinMaterial(
+          view,
+          android_xr::schemas::BuiltInMaterialParameters::
+              BuiltInMaterial1b616c8aParameters,
+          std::move(material)) {}
 
 JxrMediaMaterial::~JxrMediaMaterial() { Cleanup(); }
 
@@ -327,7 +360,8 @@ flatbuffers::Offset<void> JxrMediaMaterial::SerializeParameters(
                  stereo_type_),
              primary_alpha_mask, auxiliary_alpha_mask,
              imp::split_engine::PointerFromOptional(feather_radius_),
-             media_color_space_parameters)
+             media_color_space_parameters,
+             imp::split_engine::PointerFromOptional(corner_radius_))
       .Union();
 }
 
@@ -345,11 +379,11 @@ void JxrMediaMaterial::SetAuxiliaryTexture(
 
 void JxrMediaMaterial::SetPrimaryDepthTexture(
     imp::OwnedOrBorrowedTexturePtr texture) {
-  LOG(FATAL) << "Depth texture is unsupported on built-in material";
+  IMP_LOG(imp::FATAL) << "Depth texture is unsupported on built-in material";
 }
 void JxrMediaMaterial::SetAuxiliaryDepthTexture(
     imp::OwnedOrBorrowedTexturePtr texture) {
-  LOG(FATAL) << "Depth texture is unsupported on built-in material";
+  IMP_LOG(imp::FATAL) << "Depth texture is unsupported on built-in material";
 }
 
 void JxrMediaMaterial::SetStereoType(imp::MediaStereoMode stereo_type) {
@@ -370,6 +404,11 @@ void JxrMediaMaterial::SetAuxiliaryAlphaMask(
 
 void JxrMediaMaterial::SetFeatherRadius(imp::float2 feather_radius) {
   feather_radius_ = imp::split_engine::Pack(feather_radius);
+  MarkParametersDirty();
+}
+
+void JxrMediaMaterial::SetCornerRadius(imp::float2 corner_radius) {
+  corner_radius_ = imp::split_engine::Pack(corner_radius);
   MarkParametersDirty();
 }
 

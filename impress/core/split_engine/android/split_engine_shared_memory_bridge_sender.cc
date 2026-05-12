@@ -25,12 +25,14 @@
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "flatbuffers/flatbuffer_builder.h"
+#include "core/async/executor.h"
+#include "core/common/owned_ptr.h"
 #include "core/split_engine/android/bridge_buffer.h"
 #include "core/split_engine/android/buffer_handle_factory.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
-#include "core/split_engine/android/split_engine_shared_memory_bridge_sender_base.h"
 #include "core/split_engine/flatbuffer_arena_allocator.h"
 #include "core/split_engine/shared/split_engine_defines.h"
+#include "mediapipe/framework/port/status_macros.h"
 
 namespace imp::split_engine {
 
@@ -68,17 +70,32 @@ SplitEngineSharedMemoryBridgeSender::SplitEngineSharedMemoryBridgeSender(
               bridge)) {}
 
 absl::Status SplitEngineSharedMemoryBridgeSender::SendMessage(
-    MessageGroupId group_id, const flatbuffers::FlatBufferBuilder& builder) {
-  const BridgeBuffer& bridge_buffer = GetBridgeBuffer(group_id);
-  if (!bridge_buffer.IsValidBlock(builder.GetBufferPointer(),
-                                  builder.GetSize())) {
-    return absl::InternalError("Message is not in the active bridge buffer.");
-  }
-  const int offset =
-      builder.GetBufferPointer() - bridge_buffer.DataAs<uint8_t>();
+    MessageGroupId group_id,
+    imp::OwnedPtr<flatbuffers::FlatBufferBuilder> builder) {
+  
 
-  return bridge_.ProcessRegion(bridge_buffer.GetHandle(), offset,
-                               static_cast<int>(builder.GetSize()));
+  Schedule(
+      [this, group_id, builder = std::move(builder)]() mutable -> absl::Status {
+        const BridgeBuffer& bridge_buffer = GetBridgeBuffer(group_id);
+        if (!bridge_buffer.IsValidBlock(builder->GetBufferPointer(),
+                                        builder->GetSize())) {
+          IMP_LOG(imp::FATAL) << "Message is not in the bridge buffer.";
+        }
+
+        const int offset =
+            builder->GetBufferPointer() - bridge_buffer.DataAs<uint8_t>();
+
+        const absl::Status status =
+            bridge_.ProcessRegion(bridge_buffer.GetHandle(), offset,
+                                  static_cast<int>(builder->GetSize()));
+        if (!status.ok()) {
+          IMP_LOG(imp::FATAL) << "Failed to process region: " << status;
+        }
+
+        return status;
+      });
+
+  return absl::OkStatus();
 }
 
 MessageGroupId SplitEngineSharedMemoryBridgeSender::GenerateMessageGroupId() {
@@ -94,6 +111,12 @@ SplitEngineSharedMemoryBridgeSender::GetBufferHandleFactory() {
 
 ArenaAllocator& SplitEngineSharedMemoryBridgeSender::GetArenaAllocator() {
   return arena_allocator_;
+}
+
+SplitEngineSharedMemoryBridgeSender::~SplitEngineSharedMemoryBridgeSender() {
+  // Need to make sure that all pending tasks that may be referring to members
+  // of this class are executed before destruction.
+  DrainScheduler();
 }
 
 }  // namespace imp::split_engine

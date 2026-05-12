@@ -157,6 +157,9 @@ class HingeConstraint : public BaseConstraint, public Component {
 
 #if IMP_RUNTIME(DEV)
   void Visualize();
+  mat4f GetFrameB(bool world_space = false);
+
+  float hinge_start_angle_;
 #endif
 
   HingeConstraintState state_;

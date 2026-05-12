@@ -13,7 +13,11 @@
 # limitations under the License.
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("//build_tools:imp.bzl", "imp_google3_copts")
+load(
+    "//build_tools:imp.bzl",
+    "imp_google3_copts",
+    "imp_malloc_wrap_linkopts",
+)
 
 package(
     default_visibility = ["//visibility:public"],
@@ -35,6 +39,7 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
+        ":memory_stats",
         "//core:config",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
@@ -46,4 +51,59 @@ cc_library(
         "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
+)
+
+cc_library(
+    name = "memory_stats",
+    srcs = select({
+        "@platforms//os:osx": [
+            "darwin/editor_malloc.cc",
+            "darwin/memory_stats.cc",
+        ],
+        "@platforms//os:ios": [
+            "darwin/editor_malloc.cc",
+            "darwin/memory_stats.cc",
+        ],
+        "@platforms//os:android": [
+            "android/editor_malloc.cc",
+            "android/memory_stats.cc",
+        ],
+        "@platforms//os:emscripten": [
+            "wasm/editor_malloc.cc",
+            "wasm/memory_stats.cc",
+        ],
+        "//conditions:default": [
+            "default/memory_stats.cc",
+        ],
+    }),
+    hdrs = select({
+        "@platforms//os:android": [
+            "android/editor_malloc.h",
+            "memory_stats.h",
+        ],
+        "//conditions:default": [
+            "memory_stats.h",
+        ],
+    }),
+    linkopts = select({
+        "@platforms//os:android": imp_malloc_wrap_linkopts(),
+        "@platforms//os:emscripten": imp_malloc_wrap_linkopts(),
+        "//conditions:default": [],
+    }),
+    deps = [
+        "//core:config",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/hash",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/synchronization",
+    ],
+    alwayslink = 1,
+)
+
+config_setting(
+    name = "imp_profiler_enable_memory_graph",
+    define_values = {
+        "IMP_PROFILER_MEMORY_GRAPH": "1",
+    },
 )

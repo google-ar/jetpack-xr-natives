@@ -27,53 +27,63 @@ namespace imp {
 
 MeshVertexData::MeshVertexData(const MeshDescription& description)
     : description_(description) {
-  size_t buffer_size =
-      description.vertex_format.GetVertexSize() * description.vertex_count;
+  size_t attribute_groups_count =
+      description.vertex_format.GetAttributeGroupsCount();
+  vertex_data_.reserve(attribute_groups_count);
+  copy_counter_.reserve(attribute_groups_count);
+  for (int group_idx = 0; group_idx < attribute_groups_count; ++group_idx) {
+    size_t buffer_size = description.vertex_format.GetVertexSize(group_idx) *
+                         description.vertex_count;
 
-  // Allocated with new, this is deleted by MeshDataBufferDescriptorDeleter when
-  // the last copy of the buffer is destroyed.
-  copy_counter_ = new imp_internal::MeshDataCopyCounter();
+    // Allocated with new, this is deleted by MeshDataBufferDescriptorDeleter
+    // when the last copy of the buffer is destroyed.
+    copy_counter_.push_back(new imp_internal::MeshDataCopyCounter());
 
-  void* buffer = new uint8_t[buffer_size];
-  if (!buffer) {
-    IMP_LOG(imp::FATAL) << "Failed to allocate vertex buffer of size " << buffer_size;
+    void* buffer = new uint8_t[buffer_size];
+    if (!buffer) {
+      IMP_LOG(imp::FATAL) << "Failed to allocate vertex buffer of size " << buffer_size;
+    }
+
+    vertex_data_.push_back(BufferDescriptor(
+        buffer, buffer_size, &imp_internal::MeshDataBufferDescriptorDeleter,
+        copy_counter_[group_idx]));
   }
-
-  vertex_data_ = BufferDescriptor(
-      buffer, buffer_size, &imp_internal::MeshDataBufferDescriptorDeleter,
-      copy_counter_);
 }
 
 const MeshDescription& MeshVertexData::GetDescription() const {
   return description_;
 }
 
-MeshVertexData::BufferDescriptor MeshVertexData::CopyVertexData() const {
-  CheckVerticesNotMoved();
-  absl::MutexLock lock(&copy_counter_->mu);
-  ++copy_counter_->copies;
-  return BufferDescriptor(vertex_data_.buffer, vertex_data_.size,
-                          &imp_internal::MeshDataBufferDescriptorDeleter,
-                          copy_counter_);
+MeshVertexData::BufferDescriptor MeshVertexData::CopyVertexData(
+    size_t group_idx) const {
+  CheckVerticesNotMoved(group_idx);
+  absl::MutexLock lock(copy_counter_[group_idx]->mu);
+  ++copy_counter_[group_idx]->copies;
+  return BufferDescriptor(
+      vertex_data_[group_idx].buffer, vertex_data_[group_idx].size,
+      &imp_internal::MeshDataBufferDescriptorDeleter, copy_counter_[group_idx]);
 }
 
-MeshVertexData::BufferDescriptor MeshVertexData::MoveVertexData() {
-  CheckVerticesNotMoved();
-  description_.vertex_count = 0;
-  return std::move(vertex_data_);
+MeshVertexData::BufferDescriptor MeshVertexData::MoveVertexData(
+    size_t group_idx) {
+  CheckVerticesNotMoved(group_idx);
+  return std::move(vertex_data_[group_idx]);
 }
 
 void MeshVertexData::TruncateVertices(size_t new_count) {
-  CheckVerticesNotMoved();
-  size_t new_size = description_.vertex_format.GetVertexSize() * new_count;
-  if (new_size < vertex_data_.size) {
-    description_.vertex_count = new_count;
-    vertex_data_.size = new_size;
+  for (int group_idx = 0; group_idx < vertex_data_.size(); ++group_idx) {
+    CheckVerticesNotMoved(group_idx);
+    size_t new_size =
+        description_.vertex_format.GetVertexSize(group_idx) * new_count;
+    if (new_size < vertex_data_[group_idx].size) {
+      description_.vertex_count = new_count;
+      vertex_data_[group_idx].size = new_size;
+    }
   }
 }
 
-void MeshVertexData::CheckVerticesNotMoved() const {
-  if (vertex_data_.buffer == nullptr) {
+void MeshVertexData::CheckVerticesNotMoved(size_t group_idx) const {
+  if (vertex_data_[group_idx].buffer == nullptr) {
     IMP_LOG(imp::FATAL) << "The vertex buffer has been moved!";
   }
 }

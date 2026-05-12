@@ -31,7 +31,7 @@
 #include "core/render/texture.h"
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 #include "split_engine/schemas/split_engine_primitive_generated.h"
@@ -42,11 +42,13 @@ namespace android_xr {
 // Engine.
 //
 // Note: This is the split-engine app side of GsplatMaterialDeserializer.
-class GsplatMaterialSerializer : public imp::split_engine::SplitEngineMaterial {
+class GsplatMaterialSerializer
+    : public imp::split_engine::SplitEngineBuiltinMaterial {
  public:
   static imp::Future<std::unique_ptr<GsplatMaterialSerializer>> Create(
-      imp::BaseView& view, imp::AssetPtr<imp::GSplatAsset> gsplat_asset,
-      android_xr::schemas::GsplatMode material_mode);
+      imp::NodeHandle gsplat_node, imp::AssetPtr<imp::GSplatAsset> gsplat_asset,
+      android_xr::schemas::GsplatMode material_mode,
+      bool use_triangles_for_splats);
 
   ~GsplatMaterialSerializer() override;
 
@@ -85,7 +87,7 @@ class GsplatMaterialSerializer : public imp::split_engine::SplitEngineMaterial {
   }
 
   void SetPrecomputedDataTexture(imp::OwnedOrBorrowedTexturePtr texture) {
-    LOG(FATAL) << "(broken link): Precomputed data texture is not supported yet.";
+    IMP_LOG(imp::FATAL) << "(broken link): Precomputed data texture is not supported yet.";
     //  precomputed_data_texture_ = std::move(texture);
     //  MarkParametersDirty();
   }
@@ -122,13 +124,13 @@ class GsplatMaterialSerializer : public imp::split_engine::SplitEngineMaterial {
   imp::AssetPtr<imp::GSplatAsset> gsplat_asset_;
 
   std::optional<android_xr::schemas::GsplatMode> material_mode_;
+  std::optional<android_xr::schemas::Uint> gsplat_node_id_;
   std::optional<android_xr::schemas::Float> opacity_scale_;
   std::optional<android_xr::schemas::Float2> min_screen_size_;
   std::optional<android_xr::schemas::Float2> max_screen_size_;
   std::optional<android_xr::schemas::Float2> window_dimension_in_magic_window_;
   std::optional<android_xr::schemas::Mat4f>
       magic_window_from_user_world_matrix_;
-  std::optional<android_xr::schemas::Mat4f> gsplat_from_user_world_matrix_;
 
   imp::OwnedOrBorrowedTexturePtr precomputed_data_texture_;
   imp::OwnedOrBorrowedTexturePtr position_data_texture_;

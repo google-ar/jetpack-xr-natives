@@ -149,6 +149,36 @@ extend google.protobuf.FileOptions {
 }
 
 extend google.protobuf.FieldOptions {
+  // Specifies a default value for a field of a message type.
+  //
+  // Standard protobufs only support default values for primitive types. The
+  // `imp.msg_default` extension fills this gap for Impress protos, allowing
+  // message fields to have a default state.
+  //
+  // The value of `msg_default` must be a string containing a valid
+  // C++ expression that can initialize the message type. This C++ code is
+  // directly embedded in the generated Impress proto C++ struct.
+  //
+  // Because it's a C++ expression, this option is not portable to other
+  // languages, but it offers the flexibility to use any C++ initialization
+  // syntax, and its correctness is verified during C++ compilation.
+  //
+  // Example:
+  //
+  // message Foo {
+  //   int32 int_field = 1;
+  //   string string_field = 2;
+  // }
+  //
+  // message Bar {
+  //   Foo foo = 1
+  //       [(imp.msg_default) = "{.int_field = 1, .string_field = \"hello\"}"];
+  // }
+  //
+  // Note: This option requires the field to use the `OPTIONAL_WITH_DEFAULT`
+  // presence mode, which is the default starting with proto editions 2024.
+  optional string msg_default = 535815063;
+
   // The optional_type instructs the impress C++ code generator to use either
   // absl::optional or CopyablePtr for fields marked with the optional
   // keyword. See the FieldType enum  for details.
@@ -180,8 +210,23 @@ extend google.protobuf.FieldOptions {
 }
 
 extend google.protobuf.MessageOptions {
+  // Instructs the impress C++ code generator to use the specified C++ type
+  // instead of generating a C++ type for the message.
+  //
+  // This is used to support custom types within a generated proto.
   optional string native_type = 268371054;
+
+  // Instructs the impress C++ code generator to include the specified C++
+  // header files in the generated C++ code.
+  //
+  // This is used to ensure the native_type is available in the generated C++
+  // code.
   repeated string native_include = 268371055;
+
+  // Indicates to the code generator that the native type has intrinsic support
+  // for detecting presence. This instructs the C++ code generator not to wrap
+  // fields of this type in imp::OptionalWithDefault.
+  optional bool native_type_has_presence = 535801679;
 
   // no_codegen turns off code generation in imp proto.
   // Use this when a proto will only be used to transport data, where there is

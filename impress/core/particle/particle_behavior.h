@@ -19,6 +19,7 @@
 
 #include "core/math/vec.h"
 #include "core/ncsb/node_handle.h"
+#include "core/particle/particle_emitter_info.h"
 #include "core/particle/particle_emitter_state.proto.imp.h"
 #include "core/particle/particle_instance.h"
 
@@ -58,8 +59,9 @@ class ParticleBehavior {
   // Performs all behaviors intrinsic to the particle. Returns kActive if all
   // behaviors were performed and the particle remains active, or one of the
   // other ParticleBehaviorResults if other actions should be taken.
-  UpdateResult UpdateParticle(float delta_seconds,
-                              ParticleInstance& particle_instance);
+  UpdateResult UpdateParticle(
+      const imp_particle::ParticleEmitterInfo& emitter_info,
+      float delta_seconds, ParticleInstance& particle_instance);
 
  protected:
   // Updates the time a particle will remain active. Returns kActive if the
@@ -78,6 +80,15 @@ class ParticleBehavior {
   // Callers are required to verify the ParticleInstance has the velocity field
   // before calling this method.
   void UpdateMovement(float delta_seconds, ParticleInstance& particle_instance);
+
+  // Updates the orientation of a particle to face the camera. Does not return
+  // an UpdateResult because billboard behavior does not presently cause a
+  // particle to expire.
+  //
+  // Callers are required to verify the ParticleInstance has the rotation field
+  // before calling this method.
+  void UpdateBillboard(const imp_particle::ParticleEmitterInfo& emitter_info,
+                       ParticleInstance& particle_instance);
 
  private:
   NodeHandle emitter_node_;

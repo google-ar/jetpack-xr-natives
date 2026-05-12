@@ -20,6 +20,7 @@
 #include <sys/types.h>
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 
 #include "absl/strings/string_view.h"
@@ -161,14 +162,16 @@ class SplitEngineSerializer {
   // serialize the texture into it, before sending to the remote
   // renderer.
   virtual void SerializeTexture(
-      const SplitEngineTextureSerializer& split_engine_texture_serializer) = 0;
+      std::unique_ptr<const SplitEngineTextureSerializer>
+          split_engine_texture_serializer,
+      imp::Invocable<void()> on_done) = 0;
   virtual void RemoveTexture(filament::Texture& texture) = 0;
 
   // Given a serializer, creates a FlatBufferBuilder and
   // serialize the mesh into it, before sending to the remote
   // renderer.
-  virtual void SerializeMesh(
-      const SplitEngineMeshSerializer& split_engine_mesh_serializer) = 0;
+  virtual void SerializeMesh(std::unique_ptr<const SplitEngineMeshSerializer>
+                                 split_engine_mesh_serializer) = 0;
 
   // Creates a node for the given entity on the remote renderer.
   virtual void CreateNode(utils::Entity entity) = 0;
@@ -236,6 +239,13 @@ class SplitEngineSerializer {
   virtual std::unique_ptr<Material> CreateCustomMaterial(
       std::unique_ptr<Material> material) = 0;
 
+  // Request a custom filament material from the backend.
+  // The provided `filament_material` pointer must remain valid until the
+  // returned future is resolved.
+  virtual Future<absl::Status> RequestCustomFilamentMaterial(
+      absl::string_view material_source, filament::Material* filament_material,
+      const MaterialPreCompileOptions& precompile_options) = 0;
+
   // Sets the parameters for a built-in material. This call requires that
   // the material has already been created through the Split Engine bridge.
   using SerializeBuiltInMaterialParametersFunc =
@@ -249,8 +259,8 @@ class SplitEngineSerializer {
   // Serializes an ImageBasedLightingAsset to the remote renderer.
   virtual void SerializeImageBasedLightingAsset(
       filament::Texture& reflection_texture,
-      const SphericalHarmonics& spherical_harmonics,
-      const ImageBasedLightingAssetCubemapImages& cubemap_images) = 0;
+      SphericalHarmonics spherical_harmonics,
+      ImageBasedLightingAssetCubemapImages cubemap_images) = 0;
   virtual void RemoveImageBasedLightingAsset(
       filament::Texture& reflection_texture) = 0;
   // Sets the preferred ImageBasedLightingAsset to use for the environment.
@@ -259,11 +269,14 @@ class SplitEngineSerializer {
       const float3& tint = float3(1.0f, 1.0f, 1.0f)) = 0;
   // Clears any preferred ImageBasedLightingAsset to use for the environment.
   virtual void ClearPreferredEnvironmentIblAsset() = 0;
+
   // Destroys MorphTargetBuffer that is given.
   virtual void RemoveMorphTargetBuffer(
       filament::MorphTargetBuffer* morph_target_buffer) = 0;
+
   // Destroys VertexBuffer that is given.
   virtual void RemoveVertexBuffer(filament::VertexBuffer* vertex_buffer) = 0;
+
   // Destroys IndexBuffer that is given.
   virtual void RemoveIndexBuffer(filament::IndexBuffer* index_buffer) = 0;
 };

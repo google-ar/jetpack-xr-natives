@@ -81,3 +81,30 @@ message PlaybackUpdatedEvent {
   // animation playback time the animation was updated to.
   float delta_playback_seconds = 2;
 }
+
+// Event sent when the GltfAnimator is paused.
+// Sent to the node that the animator is attached to and can bubble.
+message PlaybackPausedEvent {
+  option (imp.is_event) = true;
+
+  // The index of the animation in the glTF asset.
+  int32 animation_index = 1;
+}
+
+// Event sent when the GltfAnimator is resumed from pause.
+// Sent to the node that the animator is attached to and can bubble.
+message PlaybackResumedEvent {
+  option (imp.is_event) = true;
+
+  // The index of the animation in the glTF asset.
+  int32 animation_index = 1;
+}
+
+// Event sent when the GltfAnimator active status is changed.
+// Sent to the node that the animator is attached to and can bubble.
+message PlaybackActiveStatusChangedEvent {
+  option (imp.is_event) = true;
+
+  // The active status of the animator.
+  bool active = 1;
+}

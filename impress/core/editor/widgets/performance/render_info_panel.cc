@@ -42,20 +42,20 @@ RenderInfoPanel::RenderInfoPanel(BaseView& view, int buffer_size)
 RenderInfoPanel::~RenderInfoPanel() = default;
 
 void RenderInfoPanel::DrawLegend(float width, float height) {
-  ImGui::BeginChild("legend", ImVec2(width, height), true);
-  ImGui::Text("Rendering");
-  ImGui::Separator();
+  if (ImGui::BeginChild("legend", ImVec2(width, height), true)) {
+    ImGui::Text("Rendering");
+    ImGui::Separator();
 
-  int color_idx = 0;
+    int color_idx = 0;
 
-  ImGuiHelper::DrawLegendItem("Renderables", show_renderables_, color_idx++);
-  if (has_sprites_) {
-    ImGuiHelper::DrawLegendItem("Sprites", show_sprites_, color_idx++);
+    ImGuiHelper::DrawLegendItem("Renderables", show_renderables_, color_idx++);
+    if (has_sprites_) {
+      ImGuiHelper::DrawLegendItem("Sprites", show_sprites_, color_idx++);
+    }
+    if (has_gltfs_) {
+      ImGuiHelper::DrawLegendItem("Gltfs", show_gltfs_, color_idx++);
+    }
   }
-  if (has_gltfs_) {
-    ImGuiHelper::DrawLegendItem("Gltfs", show_gltfs_, color_idx++);
-  }
-
   ImGui::EndChild();
 }
 
@@ -68,79 +68,128 @@ void RenderInfoPanel::DrawPanel(int width, int height, int time_span_seconds) {
 
   // Provides a border around the plot area since we removed the padding.
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-  ImGui::BeginChild("##RenderInfoChild", ImVec2(width, height), true);
-  ImGui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
+  if (ImGui::BeginChild("##RenderInfoChild", ImVec2(width, height), true)) {
+    // Remove padding around the plot area
+    ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(0, 0));
+    ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, ImVec2(0.0f, 0.1f));
 
-  // Remove padding around the plot area
-  ImPlot::PushStyleVar(ImPlotStyleVar_PlotPadding, ImVec2(0, 0));
-  ImPlot::PushStyleVar(ImPlotStyleVar_FitPadding, ImVec2(0.0f, 0.1f));
+    if (ImPlot::BeginPlot("##RenderInfo", ImVec2(width, height),
+                          ImPlotFlags_NoLegend | ImPlotFlags_NoFrame)) {
+      ImPlot::SetupAxes(nullptr, nullptr,
+                        ImPlotAxisFlags_Lock | ImPlotAxisFlags_NoTickLabels,
+                        ImPlotAxisFlags_NoTickLabels | ImPlotAxisFlags_AutoFit);
+      ImPlot::SetupAxisLimits(
+          ImAxis_X1,
+          Profiler::GetCurrentFrameIndex() -
+              time_span_seconds * details::kNumDisplayValuesPerSecond,
+          Profiler::GetCurrentFrameIndex(), ImPlotCond_Always);
 
-  if (ImPlot::BeginPlot("##RenderInfo", ImVec2(width, height),
-                        ImPlotFlags_NoLegend | ImPlotFlags_NoFrame)) {
-    ImPlot::SetupAxes(nullptr, nullptr,
-                      ImPlotAxisFlags_Lock | ImPlotAxisFlags_NoTickLabels,
-                      ImPlotAxisFlags_NoTickLabels | ImPlotAxisFlags_AutoFit);
-    ImPlot::SetupAxisLimits(
-        ImAxis_X1,
-        Profiler::GetCurrentFrameIndex() -
-            time_span_seconds * details::kNumDisplayValuesPerSecond,
-        Profiler::GetCurrentFrameIndex(), ImPlotCond_Always);
+      ImPlot::SetNextFillStyle(IMPLOT_AUTO_COL, 0.5f);
 
-    ImPlot::SetNextFillStyle(IMPLOT_AUTO_COL, 0.5f);
+      if (!buffer_.empty()) {
+        if (show_renderables_) {
+          ImPlot::PlotLine(
+              "Total Filament renderables", &buffer_.data()[0].frame_number,
+              &buffer_.data()[0].num_renderables, buffer_.data().size(), 0,
+              buffer_.marker(), sizeof(RenderInfo));
+        }
 
-    if (!buffer_.empty()) {
-      if (show_renderables_) {
-        ImPlot::PlotLine(
-            "Total Filament renderables", &buffer_.data()[0].frame_number,
-            &buffer_.data()[0].num_renderables, buffer_.data().size(), 0,
-            buffer_.marker(), sizeof(RenderInfo));
-      }
+        if (has_sprites_ && show_sprites_) {
+          ImPlot::PlotLine("Sprite Renderer", &buffer_.data()[0].frame_number,
+                           &buffer_.data()[0].num_sprites,
+                           buffer_.data().size(), 0, buffer_.marker(),
+                           sizeof(RenderInfo));
+        }
 
-      if (has_sprites_ && show_sprites_) {
-        ImPlot::PlotLine("Sprite Renderer", &buffer_.data()[0].frame_number,
-                         &buffer_.data()[0].num_sprites, buffer_.data().size(),
-                         0, buffer_.marker(), sizeof(RenderInfo));
-      }
+        if (has_gltfs_ && show_gltfs_) {
+          ImPlot::PlotLine("Gltf Renderer", &buffer_.data()[0].frame_number,
+                           &buffer_.data()[0].num_gltfs, buffer_.data().size(),
+                           0, buffer_.marker(), sizeof(RenderInfo));
+        }
 
-      if (has_gltfs_ && show_gltfs_) {
-        ImPlot::PlotLine("Gltf Renderer", &buffer_.data()[0].frame_number,
-                         &buffer_.data()[0].num_gltfs, buffer_.data().size(), 0,
-                         buffer_.marker(), sizeof(RenderInfo));
-      }
+        if (ImPlot::IsPlotHovered()) {
+          ImDrawList* draw_list = ImPlot::GetPlotDrawList();
+          ImPlotPoint mouse = ImPlot::GetPlotMousePos();
 
-      if (ImPlot::IsPlotHovered()) {
-        ImDrawList* draw_list = ImPlot::GetPlotDrawList();
-        ImPlotPoint mouse = ImPlot::GetPlotMousePos();
+          int hovered_frame = static_cast<int>(std::floor(mouse.x));
 
-        int hovered_frame = static_cast<int>(std::floor(mouse.x));
+          DrawHighlightFrame(hovered_frame, draw_list);
 
-        DrawHighlightFrame(hovered_frame, draw_list);
-
-        if (hovered_frame > 0) {
-          DrawToolTip(hovered_frame);
+          if (hovered_frame > 0) {
+            DrawToolTip(hovered_frame);
+          }
         }
       }
+
+      int selected_frame_number = ImGuiHelper::GetSelectedFrameNumber();
+      ImDrawList* draw_list_overlays = ImPlot::GetPlotDrawList();
+      DrawHighlightFrame(selected_frame_number, draw_list_overlays,
+                         IM_COL32(255, 255, 255, 200), 0.3f);
+      DrawSelectedFrameLabels(selected_frame_number, draw_list_overlays);
+
+      ImPlot::EndPlot();
     }
-    ImPlot::EndPlot();
+    ImPlot::PopStyleVar();  // ImPlotStyleVar_FitPadding
+    ImPlot::PopStyleVar();  // ImPlotStyleVar_PlotPadding
   }
-  ImPlot::PopStyleVar();  // ImPlotStyleVar_FitPadding
-  ImPlot::PopStyleVar();  // ImPlotStyleVar_PlotPadding
   ImGui::EndChild();
+  ImGui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
+}
+
+void RenderInfoPanel::DrawSelectedFrameLabels(int frame_number,
+                                              ImDrawList* draw_list) {
+  if (frame_number < 0 || buffer_.empty()) return;
+
+  const RenderInfo* frame_info = nullptr;
+  for (const auto& info : buffer_.data()) {
+    if (static_cast<int>(info.frame_number) == frame_number) {
+      frame_info = &info;
+      break;
+    }
+  }
+
+  if (!frame_info) return;
+
+  // Order must match plot order.
+  int idx = 0;
+  frame_value_data_[idx].y_val = frame_info->num_renderables;
+  frame_value_data_[idx].unit = "";
+  frame_value_data_[idx].color_index = idx;
+  frame_value_data_[idx].show_flag = show_renderables_;
+
+  if (has_sprites_) {
+    idx++;
+    frame_value_data_[idx].y_val = frame_info->num_sprites;
+    frame_value_data_[idx].unit = "";
+    frame_value_data_[idx].color_index = idx;
+    frame_value_data_[idx].show_flag = show_sprites_;
+  }
+
+  if (has_gltfs_) {
+    idx++;
+    frame_value_data_[idx].y_val = frame_info->num_gltfs;
+    frame_value_data_[idx].unit = "";
+    frame_value_data_[idx].color_index = idx;
+    frame_value_data_[idx].show_flag = show_gltfs_;
+  }
+
+  ImGuiHelper::DrawFrameValueLabels(frame_number, frame_value_data_, draw_list);
 }
 
 void RenderInfoPanel::DrawHighlightFrame(int frame_number,
-                                         ImDrawList* draw_list) {
+                                         ImDrawList* draw_list, ImU32 color,
+                                         float size) {
   if (!draw_list) {
     return;
   }
 
-  float tool_l = ImPlot::PlotToPixels(frame_number - 0.5f, 0).x;
-  float tool_r = ImPlot::PlotToPixels(frame_number + 0.5f, 0).x;
+  float tool_l = ImPlot::PlotToPixels(frame_number - size, 0).x;
+  float tool_r = ImPlot::PlotToPixels(frame_number + size, 0).x;
   float tool_t = ImPlot::GetPlotPos().y;
   float tool_b = tool_t + ImPlot::GetPlotSize().y;
   ImPlot::PushPlotClipRect();
   draw_list->AddRectFilled(ImVec2(tool_l, tool_t), ImVec2(tool_r, tool_b),
-                           IM_COL32(128, 128, 128, 64));
+                           color);
   ImPlot::PopPlotClipRect();
 }
 

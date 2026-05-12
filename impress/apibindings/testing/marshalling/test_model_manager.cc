@@ -109,11 +109,14 @@ absl::Status TestModelManager::SetGltfModelColliderEnabled(
 }
 
 absl::Status TestModelManager::SetGltfReformAffordanceEnabled(
-    int32_t impress_node, bool enable_affordance) {
+    int32_t impress_node, bool enable_affordance, bool system_movable) {
   ModelTestContext& context = ModelTestContext::Get();
   context.set_gltf_reform_affordance_enabled.actual_node_id = impress_node;
   context.set_gltf_reform_affordance_enabled.actual_enabled = enable_affordance;
+  context.set_gltf_reform_affordance_enabled.actual_system_movable =
+      system_movable;
 
+  
   
   
 
@@ -150,8 +153,64 @@ absl::Status TestModelManager::StopGltfModelAnimation(int32_t node) {
 
 absl::Status TestModelManager::ToggleGltfModelAnimation(int32_t node,
                                                         bool toggle) {
-  return absl::UnimplementedError(
-      "TestModelManager::ToggleGltfModelAnimation unimplemented");
+  ModelTestContext& context = ModelTestContext::Get();
+  context.toggle_gltf_model_animation.actual_node_id = node;
+  context.toggle_gltf_model_animation.actual_toggle = toggle;
+  
+  
+  return absl::OkStatus();
+}
+
+absl::Status TestModelManager::SetGltfModelAnimationSpeed(int32_t node,
+                                                          float speed,
+                                                          int32_t channel_id) {
+  ModelTestContext& context = ModelTestContext::Get();
+  context.set_gltf_model_animation_speed.actual_node_id = node;
+  context.set_gltf_model_animation_speed.actual_speed = speed;
+  context.set_gltf_model_animation_speed.actual_channel_id = channel_id;
+
+  
+  
+  
+
+  return absl::OkStatus();
+}
+
+absl::Status TestModelManager::SetGltfModelAnimationPlaybackTime(
+    int32_t node, float playback_time, int32_t channel_id) {
+  ModelTestContext& context = ModelTestContext::Get();
+  context.set_gltf_model_animation_playback_time.actual_node_id = node;
+  context.set_gltf_model_animation_playback_time.actual_playback_time =
+      playback_time;
+  context.set_gltf_model_animation_playback_time.actual_channel_id = channel_id;
+
+  
+  
+  
+
+  return absl::OkStatus();
+}
+
+absl::StatusOr<int32_t> TestModelManager::GetGltfModelAnimationCount(
+    int32_t node) {
+  ModelTestContext& context = ModelTestContext::Get();
+  context.get_gltf_model_animation_count.actual_node_id = node;
+
+  
+
+  return context.get_gltf_model_animation_count.success_count;
+}
+
+absl::StatusOr<std::string> TestModelManager::GetGltfModelAnimationName(
+    int32_t node, int32_t index) {
+  ModelTestContext& context = ModelTestContext::Get();
+  context.get_gltf_model_animation_name.actual_node_id = node;
+  context.get_gltf_model_animation_name.actual_index = index;
+
+  
+  
+
+  return context.get_gltf_model_animation_name.success_name;
 }
 
 absl::StatusOr<imp::Box> TestModelManager::GetGltfModelLocalBounds(
@@ -205,6 +264,27 @@ absl::Status TestModelManager::ClearMaterialOverride(
   
 
   return absl::OkStatus();
+}
+
+// TODO Remove this API once the migration to the new
+// introspection APIs is complete.
+absl::Status TestModelManager::SetGltfModelNodeMaterialOverride(
+    int32_t node_id, std::intptr_t material, size_t primitive_index) {
+  return absl::UnimplementedError(
+      "TestModelManager::SetGltfModelNodeMaterialOverride unimplemented");
+}
+
+// TODO Remove this API once the migration to the new
+// introspection APIs is complete.
+absl::Status TestModelManager::ClearGltfModelNodeMaterialOverride(
+    int32_t node_id, size_t primitive_index) {
+  return absl::UnimplementedError(
+      "TestModelManager::ClearGltfModelNodeMaterialOverride unimplemented");
+}
+
+absl::Status TestModelManager::ScheduleReskinning(int32_t node_id) {
+  return absl::UnimplementedError(
+      "TestModelManager::ScheduleReskinning unimplemented");
 }
 
 void TestModelManager::Update(const FrameTime& frame_time) {

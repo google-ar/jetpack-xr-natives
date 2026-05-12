@@ -19,10 +19,12 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
 #include "absl/debugging/leak_check.h"
+#include "absl/strings/str_format.h"
 #include "dear_imgui/imgui.h"
 #include "dear_imgui/imgui_internal.h"
 #include "filament/filament/backend/include/backend/PixelBufferDescriptor.h"
@@ -63,7 +65,8 @@ SlicedGlyphAtlasVisualizer::SlicedGlyphAtlasVisualizer(
       provider_(std::move(provider)),
       show_all_glyph_bounds_(false),
       show_all_glyph_origins_(false),
-      enable_hover_highlight_(false) {
+      enable_hover_highlight_(false),
+      selected_buffer_index_(0) {
   {
     // TODO Either fix the leak or find a way to automatically
     // disable the leak check for all usages of ImPlot.
@@ -86,24 +89,61 @@ void SlicedGlyphAtlasVisualizer::DrawImGui() {
   Draw(provider_.get_atlas_info_func());
 }
 
+std::string GetSelectedBufferDescription(size_t selected_buffer_index) {
+  std::string selected_buffer_description = "Composite texture";
+  if (selected_buffer_index > 0) {
+    size_t slice_index = selected_buffer_index - 1;
+    selected_buffer_description = absl::StrFormat("Slice %d", slice_index);
+  }
+  return selected_buffer_description;
+}
+
 void SlicedGlyphAtlasVisualizer::Draw(const AtlasInfo& atlas_info) {
   float glyph_atlas_utilization = provider_.get_utilization_func();
   ImGui::Text("Glyph atlas, utilization: %f", glyph_atlas_utilization);
-  if (ImPlot::BeginPlot("##Atlas", ImVec2(-1, kPanelHeight),
+
+  std::string selected_buffer_description =
+      GetSelectedBufferDescription(selected_buffer_index_);
+  size_t slice_count = atlas_info.slice_textures.size();
+
+  if (ImGui::BeginCombo("Displayed buffer",
+                        selected_buffer_description.c_str())) {
+    for (size_t i = 0; i < slice_count + 1; ++i) {
+      bool isSelected = (i == selected_buffer_index_);
+      if (ImGui::Selectable(GetSelectedBufferDescription(i).c_str(),
+                            isSelected)) {
+        selected_buffer_index_ = static_cast<int>(i);
+      }
+      if (isSelected) {
+        ImGui::SetItemDefaultFocus();
+      }
+    }
+    ImGui::EndCombo();
+  }
+
+  constexpr int kPadding = 32;
+  ImVec2 display_size = ImGui::GetIO().DisplaySize;
+  int size = std::min(display_size.x, display_size.y) - kPadding;
+
+  if (ImPlot::BeginPlot("##Atlas", ImVec2(size, size),
                         ImPlotFlags_Equal | ImPlotFlags_NoLegend |
                             ImPlotFlags_NoMouseText | ImPlotFlags_Crosshairs)) {
-    int width = ImGui::GetIO().DisplaySize.x;
-    float screen_ratio = kPanelHeight / width;
-
     ImPlotAxisFlags flags =
         ImPlotAxisFlags_NoHighlight | ImPlotAxisFlags_NoGridLines;
     ImPlot::SetupAxes(nullptr, nullptr, flags, flags);
 
     // Set up initial display axis limits
     ImPlot::SetupAxisLimits(ImAxis_X1, 0, 1);
-    ImPlot::SetupAxisLimits(ImAxis_Y1, 1 - screen_ratio, 1);
+    ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 1);
 
-    ImPlot::PlotImage("", atlas_info.texture->GetTexture(),
+    imp::Texture* texture = nullptr;
+    if (selected_buffer_index_ == 0) {
+      texture = atlas_info.texture;
+    } else {
+      size_t slice_index = selected_buffer_index_ - 1;
+      texture = atlas_info.slice_textures[slice_index];
+    }
+    ImPlot::PlotImage("", texture->GetTexture(),
                       /*bounds_min = */ {0, 0},
                       /*bounds_max = */ {1, 1});
 

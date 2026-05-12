@@ -30,11 +30,16 @@
 
 namespace imp::editor {
 
+// Processed sample node, acts as a grouping of samples that have the same name
+// and parent sample.
+// There will be one of these for every sample in the profiler so we use
+// small types to save memory where possible.
 struct SampleNode {
   // Other sample groups that took place within this sample's duration.
   SampleNode* first_child;
   SampleNode* next_sibling;
 
+  // The original profile result that this node is based on.
   const ProfileResult* result;
 
   // uint64 since worker samples might exceed 4s.
@@ -42,7 +47,14 @@ struct SampleNode {
   uint64_t total_time_ns;
 
   // Number of times a ProfileResult with the same name and parent was found.
+  // 16 bits to save memory as it is incredibly unlikely there will be >65k
+  // profiler samples with the same name in a single frame.
   uint16_t calls;
+
+  // Int32 to save memory since 32 bits gives 4GB per sample.
+  uint32_t total_memory_allocated;
+  // Int16 to save memory since 16 bits gives 65k allocations per sample.
+  uint16_t total_memory_allocations_count;
 
   // Sets the initial values for a new sample node, clears existing children.
   void SetInitialValues(ProfileResult* profile_result) {
@@ -50,6 +62,8 @@ struct SampleNode {
     total_time_ns =
         profile_result->GetEndTimeNanos() - profile_result->GetStartTimeNanos();
     calls = 1;
+    total_memory_allocated = profile_result->GetMemoryAllocated();
+    total_memory_allocations_count = profile_result->GetAllocationsCount();
     first_child = nullptr;
     next_sibling = nullptr;
   }

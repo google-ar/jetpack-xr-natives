@@ -48,7 +48,7 @@ message ParticleConfig {
   // The gltf asset to use as the visual representation of the particle.
   // While optional, this field is required for emitters configured with the
   // PARTICLE_RENDERER_NODE renderer.
-  optional string gltf_asset = 7 [(imp.editor_control) = { scene: {} }];
+  optional string gltf_asset = 7;
 }
 
 // Configuration information that describes how particles should be created and
@@ -67,6 +67,7 @@ message ParticleEmitterState {
   }
 
   // The length of time, in seconds, that the emitter should remain active.
+  // Must not be negative.
   float duration_in_seconds = 1;
 
   // Indicates the emitter will restart after the duration has elapased?

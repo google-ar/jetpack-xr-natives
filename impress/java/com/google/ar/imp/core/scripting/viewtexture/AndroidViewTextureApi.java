@@ -40,6 +40,81 @@ import java.util.Arrays;
 public final class AndroidViewTextureApi {
   private final ApiBridge apiBridge;
 
+  /**
+   * Represents all supported options for {@link #attachViewToNode(Node, View, AttachViewOptions)}.
+   */
+  public record AttachViewOptions(
+      int width,
+      int height,
+      @Nullable Float cornerRadius,
+      @Nullable Float metersPerPixel,
+      InputForwardingMode inputForwardingMode,
+      @Nullable MaterialDefinition material,
+      @Nullable Integer blendPriority) {
+
+    public static Builder newBuilder() {
+      return new Builder();
+    }
+
+    /** Builder for {@link AttachViewOptions}. */
+    public static class Builder {
+      private int width = 0;
+      private int height = 0;
+      @Nullable private Float cornerRadius;
+      @Nullable private Float metersPerPixel;
+      private InputForwardingMode inputForwardingMode =
+          InputForwardingMode.INPUT_FORWARDING_MODE_DEFAULT;
+      @Nullable private MaterialDefinition material;
+      @Nullable private Integer blendPriority;
+
+      public Builder setWidth(int width) {
+        this.width = width;
+        return this;
+      }
+
+      public Builder setHeight(int height) {
+        this.height = height;
+        return this;
+      }
+
+      public Builder setCornerRadius(@Nullable Float cornerRadius) {
+        this.cornerRadius = cornerRadius;
+        return this;
+      }
+
+      public Builder setMetersPerPixel(@Nullable Float metersPerPixel) {
+        this.metersPerPixel = metersPerPixel;
+        return this;
+      }
+
+      public Builder setInputForwardingMode(InputForwardingMode inputForwardingMode) {
+        this.inputForwardingMode = inputForwardingMode;
+        return this;
+      }
+
+      public Builder setMaterial(@Nullable MaterialDefinition material) {
+        this.material = material;
+        return this;
+      }
+
+      public Builder setBlendPriority(@Nullable Integer blendPriority) {
+        this.blendPriority = blendPriority;
+        return this;
+      }
+
+      public AttachViewOptions build() {
+        return new AttachViewOptions(
+            width,
+            height,
+            cornerRadius,
+            metersPerPixel,
+            inputForwardingMode,
+            material,
+            blendPriority);
+      }
+    }
+  }
+
   public AndroidViewTextureApi(ApiBridge apiBridge) {
     this.apiBridge = apiBridge;
   }
@@ -52,7 +127,7 @@ public final class AndroidViewTextureApi {
    * ratio of the view is preserved and the view is scaled to fit in a 1x1 meter rectangle.
    */
   public ListenableFuture<Void> attachViewToNode(Node node, View view) {
-    return attachViewToNode(node, view, null);
+    return attachViewToNode(node, view, AttachViewOptions.newBuilder().build());
   }
 
   /**
@@ -169,20 +244,40 @@ public final class AndroidViewTextureApi {
       InputForwardingMode inputForwardingMode,
       @Nullable MaterialDefinition material,
       @Nullable Integer blendPriority) {
+    AttachViewOptions.Builder options =
+        AttachViewOptions.newBuilder()
+            .setWidth(width)
+            .setHeight(height)
+            .setMetersPerPixel(metersPerPixel)
+            .setInputForwardingMode(inputForwardingMode)
+            .setMaterial(material)
+            .setBlendPriority(blendPriority);
+    return attachViewToNode(node, view, options.build());
+  }
+
+  /**
+   * Sets up a node to hold a quad with the given view rendered continuously to texture with full
+   * options specified in {@link AttachViewOptions}.
+   */
+  public ListenableFuture<Void> attachViewToNode(Node node, View view, AttachViewOptions options) {
     CreateSurfaceTextureQuadRequest.Builder request =
         CreateSurfaceTextureQuadRequest.newBuilder()
             .setTarget(node.getNodeHandle())
-            .setInputForwardingMode(inputForwardingMode);
-    ViewSize.Builder viewSizeBuilder = ViewSize.newBuilder().setWidth(width).setHeight(height);
-    if (metersPerPixel != null) {
-      viewSizeBuilder.setMetersPerPixel(metersPerPixel);
+            .setInputForwardingMode(options.inputForwardingMode());
+    ViewSize.Builder viewSizeBuilder =
+        ViewSize.newBuilder().setWidth(options.width()).setHeight(options.height());
+    if (options.metersPerPixel() != null) {
+      viewSizeBuilder.setMetersPerPixel(options.metersPerPixel());
     }
     request.setViewSize(viewSizeBuilder.build());
-    if (material != null) {
-      request.setMaterial(material);
+    if (options.material() != null) {
+      request.setMaterial(options.material());
     }
-    if (blendPriority != null) {
-      request.setBlendPriority(blendPriority);
+    if (options.blendPriority() != null) {
+      request.setBlendPriority(options.blendPriority());
+    }
+    if (options.cornerRadius() != null && options.cornerRadius() > 0) {
+      request.setCornerRadius(options.cornerRadius());
     }
     return apiBridge.sendRequestAsync(
         new ApiRequest<CreateSurfaceTextureQuadRequest>(

@@ -65,7 +65,7 @@ PackCubemapImageLevelContents(
 
 flatbuffers::Offset<android_xr::schemas::ImageBasedLightingAsset>
 PackImageBasedLightingAsset(
-    flatbuffers::FlatBufferBuilder* fbb, std::uint64_t id,
+    flatbuffers::FlatBufferBuilder& fbb, std::uint64_t id,
     const SphericalHarmonics& spherical_harmonics,
     const ImageBasedLightingAssetCubemapImages& cubemap_images) {
   // Pack IBL cubemap images.
@@ -76,7 +76,7 @@ PackImageBasedLightingAsset(
   for (const CubemapLevelImageContents& ibl_cubemap_image :
        cubemap_images.ibl_cubemap_images) {
     cubemap_images_offset.push_back(
-        PackCubemapImageLevelContents(*fbb, ibl_cubemap_image));
+        PackCubemapImageLevelContents(fbb, ibl_cubemap_image));
   }
 
   // Pack spherical harmonics.
@@ -88,7 +88,7 @@ PackImageBasedLightingAsset(
   flatbuffers::Offset<android_xr::schemas::SphericalHarmonics>
       spherical_harmonics_offset =
           android_xr::schemas::CreateSphericalHarmonics(
-              *fbb, fbb->CreateVectorOfStructs(coefficients),
+              fbb, fbb.CreateVectorOfStructs(coefficients),
               spherical_harmonics.num_bands);
 
   // Pack skybox cubemap images.
@@ -97,14 +97,14 @@ PackImageBasedLightingAsset(
       skybox_cubemap_images_offset = std::nullopt;
   if (cubemap_images.skybox_cubemap_images.has_value()) {
     skybox_cubemap_images_offset = PackCubemapImageLevelContents(
-        *fbb, cubemap_images.skybox_cubemap_images.value());
+        fbb, cubemap_images.skybox_cubemap_images.value());
   }
   flatbuffers::Offset<flatbuffers::Vector<
       flatbuffers::Offset<android_xr::schemas::CubemapLevelImageContents>>>
-      vector = fbb->CreateVector(cubemap_images_offset);
+      vector = fbb.CreateVector(cubemap_images_offset);
 
   // Build ImageBasedLightingAsset.
-  android_xr::schemas::ImageBasedLightingAssetBuilder ibl_asset_builder(*fbb);
+  android_xr::schemas::ImageBasedLightingAssetBuilder ibl_asset_builder(fbb);
   ibl_asset_builder.add_id(id);
   ibl_asset_builder.add_ibl_cubemap_level_image_contents(vector);
   if (skybox_cubemap_images_offset) {

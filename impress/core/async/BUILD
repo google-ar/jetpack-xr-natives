@@ -104,6 +104,7 @@ cc_library(
 cc_library(
     name = "future",
     srcs = [
+        "future_common.cc",
         "future_impl.cc",
     ],
     hdrs = [
@@ -118,7 +119,6 @@ cc_library(
         ":executor",
         ":task",
         ":task_priority",
-        "//core/common",
         "//core/common:holdable",
         "//core/common:invocable",
         "//core/common:type_erased",
@@ -127,11 +127,9 @@ cc_library(
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:variant",
-        "@com_google_glog//:glog",
         "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
     ],
@@ -242,6 +240,20 @@ cc_library(
         ":task_priority",
         "//core/common:invocable",
         "@com_google_absl//absl/time",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "background_delete",
+    hdrs = ["background_delete.h"],
+    copts = imp_copts(),
+    linkstatic = True,
+    deps = [
+        ":executor",
+        "//core/common:invocable",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,
 )

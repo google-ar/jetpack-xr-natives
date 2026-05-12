@@ -55,7 +55,8 @@ Texture::Texture(BaseView& view, filament::Stream* stream,
 Texture::~Texture() {
   // Ensure filament resources are destroyed over split engine.
   if (split_engine::SplitEngineSerializer* serializer =
-          view_.GetSplitEngineSerializer()) {
+          view_.GetSplitEngineSerializer();
+      serializer && !suppress_split_engine_removal_) {
     serializer->RemoveTexture(*texture_);
   }
 

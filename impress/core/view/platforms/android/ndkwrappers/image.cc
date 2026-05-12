@@ -181,6 +181,25 @@ absl::StatusOr<mat4f> Image::GetTransformMatrix() const {
   return result;
 }
 
+absl::Status Image::SetImageReaderDefaultBufferSize(AImageReader* image_reader,
+                                                    uint32_t width,
+                                                    uint32_t height) {
+  ImageAPIProvider* api_provider = GetImageAPIProvider().get();
+  if (!api_provider) {
+    IMP_LOG(imp::ERROR) << "ImageReader set default buffer size API is not available.";
+    return absl::UnavailableError(
+        "ImageReader set default buffer size API is not enabled.");
+  }
+
+  absl::Status status = api_provider->SetImageReaderDefaultBufferSize(
+      image_reader, width, height);
+  if (!status.ok()) {
+    return absl::InternalError(absl::StrCat(
+        "Unable to set ImageReader default buffer size. Error: ", status));
+  }
+  return absl::OkStatus();
+}
+
 void Image::SetImageAPIProvider(std::unique_ptr<ImageAPIProvider> provider) {
   api_provider = std::move(provider);
 }
@@ -215,6 +234,12 @@ absl::Status ImageAPIProvider::GetImageTransformMatrix(AImage* image,
 absl::Status ImageAPIProvider::GetBufferDataSpace(AHardwareBuffer* buffer,
                                                   int32_t& data_space) {
   return absl::UnimplementedError("GetBufferDataSpace is not implemented.");
+}
+
+absl::Status ImageAPIProvider::SetImageReaderDefaultBufferSize(
+    AImageReader* image_reader, uint32_t width, uint32_t height) {
+  return absl::UnimplementedError(
+      "SetImageReaderDefaultBufferSize is not implemented.");
 }
 
 }  // namespace imp::android

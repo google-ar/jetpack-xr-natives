@@ -24,25 +24,18 @@ material {
            name      : splatScale
         },
         {
-           // The position of each gaussian in the scene
-           type      : sampler2d,
+           // The precomputed data for rendering each splat, packed into an
+           // RGBA32F texture. The format expected is:
+           // R = [2x16F] XY Clip Position of Splat Center
+           // G = [2x16F] Z Clip Position of Splat Center and Aspect Ratio of Splat
+           // B = [2x16F] X Basis Vector of Splat in Screen Space
+           // A = [4x8unorm] RGBA Color of Splat - If A == 0 the splat is disabled.
+           // In mono, the texture is sampled using a sampler2d. In stereo, this
+           // is a texture array and is sampled using a sampler2dArray.
+           type      : {PRECOMPUTE_SAMPLER},
            format    : float,
            precision : high,
-           name      : splatDataPosition
-        },
-        {
-           // The cov3d of each gaussian in the scene
-           type      : sampler2d,
-           format    : uint,
-           precision : high,
-           name      : splatDataCov3d
-        },
-        {
-           // The color of each gaussian in the scene
-           type      : sampler2d,
-           format    : float,
-           precision : high,
-           name      : splatDataColor
+           name      : splatDataPrecomputed
         },
         {
            // The order in which to render the splats.
@@ -50,17 +43,26 @@ material {
            format    : uint,
            precision : high,
            name      : sortedIndices
-        },
+        }
+  ],
+  constants : [
         {
-           // Debug visualize the splat chunks by overriding the splat colors
-           // with a random color based on the splat's associated chunk index.
+           // If true, use triangles to render splats (3 vertices). Otherwise,
+           // use quads (6 vertices).
            type      : bool,
-           name      : visualizeChunks
+           name      : useTrianglesForSplats,
+           value     : false
         }
   ],
   variables : [
-         color,
-         uvCoord
+         {
+            name : color,
+            precision : medium
+         },
+         {
+            name : uvCoord,
+            precision : medium
+         }
   ],
   vertexDomain : device,
   shadingModel : unlit,
@@ -70,71 +72,54 @@ material {
 vertex {
   #include "gsplat_common.glsl"
 
-  // (broken link)
-  vec3 rand(int i){
-        ivec3 col = i * ivec3(158, 2*156, 3*159);
-        col = col % ivec3(255, 253, 256); // skips some channel values
-        return vec3(col) / 255.0;
-  }
-
   void materialVertex(inout MaterialVertexInputs material) {
+    const int kNumVerticesPerSplat = materialConstants_useTrianglesForSplats ? 3 : 6;
     int vertIndex = getVertexIndex();
     int indicesWidth = textureSize(materialParams_sortedIndices, 0).x;
-    int splatIndex = int(texelFetch(materialParams_sortedIndices, ivec2(vertIndex / 6 % indicesWidth,
-                                                                        vertIndex / 6 / indicesWidth), 0).x);
-    ivec2 sampleCoord = getSampleCoord(splatIndex, 1, materialParams_splatDataPosition);
-
-    // Pull position from splat data.
-    vec4 position = texelFetch(materialParams_splatDataPosition, sampleCoord, 0);
-
-    // Pull cov3d from splat data.
-    uint4 cov3dPacked = texelFetch(materialParams_splatDataCov3d, sampleCoord, 0);
-    mat3 cov3d = unpackCov3d(cov3dPacked.xyz);
-
-    vec4 clipPos;
-    vec2 basisAxisX;
-    float aspectRatio;
-    computeSplatData(position, cov3d, getWorldFromModelMatrix(),
-                     getResolution().x, clipPos, basisAxisX, aspectRatio);
-    if (clipPos.w == 0.0) {
+    int splatIndex = int(texelFetch(materialParams_sortedIndices, ivec2(vertIndex / kNumVerticesPerSplat % indicesWidth,
+                                                                        vertIndex / kNumVerticesPerSplat / indicesWidth), 0).x);
+    int splatDataWidth = textureSize(materialParams_splatDataPrecomputed, 0).x;
+    uint4 splatDataPrecomputed = fetchPrecomputedSplatData(splatIndex, splatDataWidth, getEyeIndex(), materialParams_splatDataPrecomputed);
+    vec4 color = unpackUnorm4x8(splatDataPrecomputed.w);
+    // If splat is disabled, discard
+    if (color.a == 0.0)
+    {
       material.clipSpaceTransform = mat4(vec4(0), vec4(0), vec4(0), vec4(-2, -2, 0, 1));
       return;
     }
+    material.color = color;
 
-    // Pull color from splat data.
-    material.color = texelFetch(materialParams_splatDataColor, sampleCoord, 0);
-    if (materialParams.visualizeChunks)
-    {
-      int chunkIndex = splatIndex / 256;
-      material.color.rgb = rand(chunkIndex);
-    }
+    vec2 clipPosXY = unpackHalf2x16(splatDataPrecomputed.x);
+    vec2 clipPosZAspectRatio = unpackHalf2x16(splatDataPrecomputed.y);
+    vec4 clipPos = vec4(clipPosXY, clipPosZAspectRatio.x, 1.0);
 
-    // Compute NDC coordinate for the current vertex of the triangle on the quad
-    // representing this splat.
-    const vec2 quadCoords[6] = vec2[6](
-      // 6 vertices per splat to make a 2 triangle quad.
-      vec2(-1.0,  1.0),  // 0
-      vec2( 1.0,  1.0),  // 1
-      vec2(-1.0, -1.0),  // 2
-      vec2(-1.0, -1.0),  // 3
-      vec2( 1.0,  1.0),  // 4
-      vec2( 1.0, -1.0)   // 5
-    );
+    vec2 basisAxisX = unpackHalf2x16(splatDataPrecomputed.z);
+    float xSize = length(basisAxisX);
+
+    vec2 basisAxisXNormalized = basisAxisX / xSize;
+    vec2 basisAxisY = vec2(basisAxisXNormalized.y, -basisAxisXNormalized.x) *
+                      xSize * clipPosZAspectRatio.y;
+
     // Scale the quad to go beyond the first stddev of gaussian distribution.
-    vec2 quadCoord = quadCoords[vertIndex % 6] * materialParams.splatScale;
+    vec2 vertexCoord = getVertexCoord(vertIndex, materialConstants_useTrianglesForSplats) * materialParams.splatScale;
     // Compute interpolated UV coordinate used to calculate final color in frag.
-    material.uvCoord.xy = quadCoord * .5;
+    material.uvCoord.xy = vertexCoord * .5;
     // Rotate and scale the quad coord based on the gaussian cov2d.
-    vec2 basisAxisY = vec2(basisAxisX.y, -basisAxisX.x) * aspectRatio;
-    vec2 clipQuadOffset = (quadCoord.x * basisAxisX + quadCoord.y * basisAxisY) * getResolution().zw;
-    // Apply the offset.
+    // getResolution().zw is
+    // (1 / viewport_width_pixels, 1 / viewport_height_pixels).
+    vec2 clipQuadOffset = (vertexCoord.x * basisAxisX + vertexCoord.y * basisAxisY) * getResolution().zw;
+    // Apply the offset. Here we are relying on the clipPos from
+    // `splatDataPrecomputed` being normalized (i.e., clipPos.w == 1.0).
     clipPos.xy += clipQuadOffset;
     // Override the clip space position with the newly computed position.
-    material.clipSpaceTransform = mat4(vec4(0), vec4(0), vec4(0), vec4(clipPos.xyz, 1.0));
+    material.clipSpaceTransform = createClipSpaceTransform(clipPos);
   }
 }
 
 fragment {
+  precision mediump float;
+  precision mediump int;
+
   void material(inout MaterialInputs material) {
     prepareMaterial(material);
     float dist2 = dot(variable_uvCoord.xy, variable_uvCoord.xy);

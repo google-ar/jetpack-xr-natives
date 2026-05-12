@@ -649,7 +649,7 @@ void View::ApplyViewConfig() {
       break;
   }
 
-  if (view_config_.enable_synchronous_future_cancellation.value_or(false)) {
+  if (view_config_.enable_synchronous_future_cancellation.value_or(true)) {
     FutureFlags::EnableSynchronousFutureCancellation();
   }
 }

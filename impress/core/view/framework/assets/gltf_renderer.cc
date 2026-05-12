@@ -156,8 +156,6 @@ void GltfRenderer::Setup(AssetPtr<GltfAsset> gltf_asset,
   } else {
     load_options_ = GetView().GetAssetManager().GetDefaultLoadOptions();
   }
-  state_.collider_mode = load_options_.collider_mode;
-  state_.material_sharing_mode = load_options_.material_sharing_mode;
 
   gltf_asset_ = gltf_asset;
   const auto& data = gltf_asset->GetModelData();

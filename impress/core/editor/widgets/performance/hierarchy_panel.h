@@ -16,6 +16,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_HIERARCHY_PANEL_H_
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <thread>  // NOLINT: Need to use std::thread::id.
 #include <vector>
@@ -58,7 +59,8 @@ class HierarchyPanel {
                                std::thread::id thread_id,
                                FrameTimePanel& frame_time_panel);
   void DrawTableRow(FrameTimePanel& frame_time_panel, const char* name,
-                    uint32_t time, int calls, int& row_index);
+                    uint32_t time, int calls, size_t memory_allocated,
+                    size_t allocations_count, int& row_index);
   void DrawThreadSelector();
   // Returns a hard copy of a tree of samples.
   // This is used to modify the tree without affecting the original data.

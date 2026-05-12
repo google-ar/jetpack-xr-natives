@@ -22,7 +22,9 @@
 #include <type_traits>
 #include <utility>
 
+#include "absl/meta/type_traits.h"
 #include "absl/status/statusor.h"
+#include "core/math/mat.h"
 #include "core/math/vec.h"
 #include "core/recipes/language/recipe_utils.h"
 
@@ -35,14 +37,12 @@ namespace internal {
 template <typename InputT, typename = void>
 struct IsAbsAvailable : std::false_type {};
 
-// TODO: Look into allowing this expression to support matNf types
-// as well
 template <typename InputT>
 struct IsAbsAvailable<InputT,
                       std::void_t<decltype(abs(std::declval<InputT>()))>>
-    : std::integral_constant<bool,
-                             std::is_signed_v<InputT> ||
-                                 kIsAnyOf<InputT, float2, float3, float4>> {};
+    : std::integral_constant<bool, std::is_signed_v<InputT> ||
+                                       kIsAnyOf<InputT, float2, float3, float4,
+                                                mat2f, mat3f, mat4f>> {};
 
 template <typename InputT, typename = void>
 struct IsSqrtAvailable : std::false_type {};
@@ -162,27 +162,27 @@ template <typename LeftT, typename RightT, typename = void>
 struct IsMultiplyAvailable : std::false_type {};
 
 template <typename LeftT, typename RightT>
-struct IsMultiplyAvailable<
-    LeftT, RightT,
-    std::void_t<decltype(std::declval<LeftT>() * std::declval<RightT>())>>
+struct IsMultiplyAvailable<LeftT, RightT,
+                           std::void_t<decltype(recipe::Multiply(
+                               std::declval<LeftT>(), std::declval<RightT>()))>>
     : std::true_type {};
 
 template <typename LeftT, typename RightT, typename = void>
 struct IsDivideAvailable : std::false_type {};
 
 template <typename LeftT, typename RightT>
-struct IsDivideAvailable<
-    LeftT, RightT,
-    std::void_t<decltype(std::declval<LeftT>() / std::declval<RightT>())>>
+struct IsDivideAvailable<LeftT, RightT,
+                         std::void_t<decltype(recipe::Divide(
+                             std::declval<LeftT>(), std::declval<RightT>()))>>
     : std::true_type {};
 
 template <typename LeftT, typename RightT, typename = void>
 struct IsModAvailable : std::false_type {};
 
 template <typename LeftT, typename RightT>
-struct IsModAvailable<
-    LeftT, RightT,
-    std::void_t<decltype(fmod(std::declval<LeftT>(), std::declval<RightT>()))>>
+struct IsModAvailable<LeftT, RightT,
+                      std::void_t<decltype(recipe::Fmod(
+                          std::declval<LeftT>(), std::declval<RightT>()))>>
     : std::true_type {};
 
 template <typename LeftT, typename RightT, typename = void>
@@ -536,6 +536,7 @@ template <typename Fn, typename Ret, typename... Args>
 struct FunctorUnpacker {
   using ReturnT = Ret;
   using ArgsTuple = std::tuple<Args...>;
+  using ConstArgsRefTuple = std::tuple<const absl::remove_cvref_t<Args>&...>;
 
   explicit FunctorUnpacker(Ret (Fn::*)(Args...));
   explicit FunctorUnpacker(Ret (Fn::*)(Args...) const);

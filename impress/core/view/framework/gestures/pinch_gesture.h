@@ -43,16 +43,28 @@ class PinchGesture : public Gesture {
                                     GesturePointerUtils* pointer_utils);
 
   struct StartEvent : public Event {
-    StartEvent(Id id, CancelFn cancel) : Event(id, cancel) {}
+    StartEvent(Id id, CancelFn cancel, std::optional<float> gap = std::nullopt,
+               std::optional<float2> centroid = std::nullopt)
+        : Event(id, cancel), gap(gap), centroid(centroid) {}
+    // Gap in pixels between the two pointers.
+    std::optional<float> gap;
+    // Centroid of the two pointers.
+    std::optional<float2> centroid;
   };
 
   struct UpdateEvent : public Event {
-    UpdateEvent(Id id, CancelFn cancel, float gap, float gap_delta)
-        : Event(id, cancel), gap(gap), gap_delta(gap_delta) {}
+    UpdateEvent(Id id, CancelFn cancel, float gap, float gap_delta,
+                std::optional<float2> centroid = std::nullopt)
+        : Event(id, cancel),
+          gap(gap),
+          gap_delta(gap_delta),
+          centroid(centroid) {}
     // Gap in pixels between the two pointers.
     float gap;
     // Delta in pixels for change in pointer positions.
     float gap_delta;
+    // Centroid of the two pointers.
+    std::optional<float2> centroid = std::nullopt;
   };
 
   struct FinishEvent : public Event {

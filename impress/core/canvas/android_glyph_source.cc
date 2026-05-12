@@ -17,7 +17,9 @@
 #include <jni.h>
 
 #include <cassert>
+#include <cstdint>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -113,6 +115,7 @@ AndroidGlyphSource::AndroidGlyphSource(const Context& context, Method method,
       GetMethodHandle("drawGlyph",
                       "(Landroid/graphics/Canvas;IFFLjava/lang/Object;F"
                       "Landroid/graphics/Paint;Landroid/graphics/Paint;)V");
+  dispose_ = GetMethodHandle("dispose", "()V");
 
   // GlyphAdvance.
   glyph_advance_class_ = LocalToGlobalRef(WrapJni(
@@ -125,6 +128,12 @@ AndroidGlyphSource::AndroidGlyphSource(const Context& context, Method method,
                                              "getFont", "()Ljava/lang/Object;");
   glyph_advance_is_emoji_ =
       env->GetMethodID(glyph_advance_class_.get(), "isEmoji", "()Z");
+}
+
+AndroidGlyphSource::~AndroidGlyphSource() {
+  if (IsAvailable()) {
+    CallVoidMethod(dispose_);
+  }
 }
 
 bool AndroidGlyphSource::IsAvailable() const {
@@ -230,7 +239,11 @@ std::vector<ScopedCanvas::GlyphAdvance> AndroidGlyphSource::GetTextGlyphs(
     }
 
     result.push_back(ScopedCanvas::GlyphAdvance{
-        .glyph = GlyphAdvanceGetId(glyph_advance.get()),
+        .glyph = ScopedCanvas::GlyphId(
+            GlyphAdvanceGetId(glyph_advance.get()),
+            std::make_optional([this](int32_t glyph_id) {
+              ReleaseTextGlyphs(absl::MakeSpan(&glyph_id, 1));
+            })),
         .width = GlyphAdvanceGetWidth(glyph_advance.get()),
         .fallback_font = std::move(fallback_font),
         .is_emoji = GlyphAdvanceIsEmoji(glyph_advance.get()),

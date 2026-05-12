@@ -18,7 +18,10 @@
 #define THIRD_PARTY_IMPRESS_CORE_PROTO_TEST_NATIVE_H_
 
 #include <cstdint>
+#include <optional>
 #include <utility>
+
+#include "core/proto/proto_common.h"
 
 namespace test {
 
@@ -30,6 +33,50 @@ struct NativeStruct {
 
 struct NativeNoCodegenStruct {
   int32_t i32 = -1;
+};
+
+class NativeWithPresenceNoCodegen {
+ public:
+  explicit operator bool() const { return i32_.has_value(); }
+
+  int32_t GetValue() const { return *i32_; }
+
+  void SetValue(int32_t value) { i32_.emplace(value); }
+
+  template <typename Visitor, typename Cursor, typename... Args>
+  Cursor Visit(Visitor& v, Cursor cursor, NativeWithPresenceNoCodegen* other,
+               Args... args) {
+    if (!i32_) {
+      return cursor;
+    }
+
+    int32_t* other_i32 = nullptr;
+    if (other && other->i32_) {
+      other_i32 = &other->i32_.value();
+    }
+
+    return v.template Visit<imp::proto::TYPE_INT32>(
+        cursor, 1, &i32_.value(), other_i32, std::forward<Args>(args)...);
+  }
+
+  template <typename Visitor, typename Cursor, typename... Args>
+  Cursor VisitField(int field_id, Visitor& v, Cursor cursor,
+                    NativeWithPresenceNoCodegen* other, Args... args) {
+    if (!i32_) {
+      i32_.emplace();
+    }
+
+    int32_t* other_i32 = nullptr;
+    if (other && other->i32_) {
+      other_i32 = &other->i32_.value();
+    }
+
+    return v.template Visit<imp::proto::TYPE_INT32>(
+        cursor, 1, &i32_.value(), other_i32, std::forward<Args>(args)...);
+  }
+
+ private:
+  std::optional<int32_t> i32_;
 };
 
 template <typename T>

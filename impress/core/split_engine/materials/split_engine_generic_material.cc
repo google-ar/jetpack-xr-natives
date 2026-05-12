@@ -19,11 +19,15 @@
 #include <utility>
 #include <vector>
 
+#include "absl/base/attributes.h"
+#include "absl/functional/function_ref.h"
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
+#include "filament/filament/include/filament/Color.h"
 #include "filament/filament/include/filament/Material.h"
 #include "filament/filament/include/filament/MaterialInstance.h"
 #include "flatbuffers/buffer.h"
@@ -42,9 +46,9 @@
 #include "core/model/entity_data.h"
 #include "core/render/texture.h"
 #include "core/split_engine/android/split_engine_android_bridge.h"
-#include "core/split_engine/materials/builtin/builtin_generic_material.h"
+#include "core/split_engine/materials/builtin/builtin_generic_spec_helpers.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/material_factory.h"
@@ -142,14 +146,20 @@ class SplitEngineGenericMaterialParametersCreator {
   using TextureSamplerCreator = SplitEngineTextureSamplerCreator;
 };
 
-}  // namespace
+void LogUnsupportedParameter(absl::string_view name) {
+  IMP_LOG(imp::ERROR) << "SetParameter: Unsupported parameter: " << name;
+}
 
-class GenericMaterialSpecCreator {
- public:
-  using GenericMaterialSpec = android_xr::schemas::GenericMaterialSpec;
-  static constexpr auto CreateGenericMaterialSpec =
-      android_xr::schemas::CreateGenericMaterialSpec;
-};
+void LogParameterNotDirectlyAssignable(absl::string_view name) {
+  IMP_LOG(imp::ERROR) << "SetParameter: Parameter is not directly assignable: " << name;
+}
+
+void LogTextureParameterNotDirectlyAssignable(absl::string_view name) {
+  IMP_LOG(imp::ERROR) << "SetParameter: Texture parameters are not directly assignable: "
+             << name << " Use AssignTexture instead.";
+}
+
+}  // namespace
 
 Future<std::unique_ptr<SplitEngineGenericMaterial>>
 SplitEngineGenericMaterial::Create(BaseView& view,
@@ -162,10 +172,14 @@ SplitEngineGenericMaterial::Create(BaseView& view,
             "not supported in Split Engine."));
   }
   auto fbb = std::make_unique<flatbuffers::FlatBufferBuilder>();
-  flatbuffers::Offset<android_xr::schemas::GenericMaterialSpec> spec_offset =
-      CreateGenericMaterialSpec(*fbb, spec);
+  absl::StatusOr<flatbuffers::Offset<android_xr::schemas::GenericMaterialSpec>>
+      spec_offset = Pack(*fbb, spec);
+  if (!spec_offset.ok()) {
+    return Future<std::unique_ptr<SplitEngineGenericMaterial>>(
+        spec_offset.status());
+  }
 
-  return SplitEngineMaterial::CreatePlaceholderMaterial(view).Then(
+  return SplitEngineBuiltinMaterial::CreatePlaceholderMaterial(view).Then(
       [&view, fbb = std::move(fbb),
        spec_offset](OwnedMaterialPtr placeholder_material) {
         flatbuffers::Offset<android_xr::schemas::BuiltInMaterialRequest>
@@ -176,7 +190,7 @@ SplitEngineGenericMaterial::Create(BaseView& view,
                         placeholder_material->GetFilamentMaterialInstance()),
                     android_xr::schemas::BuiltInMaterialSpec::
                         GenericMaterialSpec,
-                    spec_offset.Union());
+                    spec_offset->Union());
         return SendRequest<android_xr::schemas::BuiltInMaterialRequest,
                            absl::Status>(
                    view.GetSplitEngineSerializer()->GetBridge(), *fbb,
@@ -191,16 +205,19 @@ SplitEngineGenericMaterial::Create(BaseView& view,
 
 SplitEngineGenericMaterial::SplitEngineGenericMaterial(
     BaseView& view, OwnedMaterialPtr placeholder_material)
-    : SplitEngineMaterial(view,
-                          // Note: this is the union enum type of the new schema
-                          // but the old schema is still used for serialization.
-                          // TODO: (broken link) - remove this comment.
-                          android_xr::schemas::BuiltInMaterialParameters::
-                              GenericMaterialParameters,
-                          std::move(placeholder_material)),
+    : SplitEngineBuiltinMaterial(
+          view,
+          // Note: this is the union enum type of the new schema
+          // but the old schema is still used for serialization.
+          // TODO: (broken link) - remove this comment.
+          android_xr::schemas::BuiltInMaterialParameters::
+              GenericMaterialParameters,
+          std::move(placeholder_material)),
       view_(view),
       placeholder_texture_(
-          view.GetTextureFactory().BorrowPlaceholderTexture()) {}
+          view.GetTextureFactory().BorrowPlaceholderTexture()) {
+  SetName("SplitEngineGenericMaterial");
+}
 
 SplitEngineGenericMaterial::~SplitEngineGenericMaterial() { Cleanup(); }
 
@@ -214,7 +231,7 @@ GenericMaterialPtr SplitEngineGenericMaterial::Duplicate() const {
   }
 
   filament::MaterialInstance* material_instance =
-      SplitEngineMaterial::GetMaterial()->GetFilamentMaterialInstance();
+      SplitEngineBuiltinMaterial::GetMaterial()->GetFilamentMaterialInstance();
   filament::MaterialInstance* duplicate_instance =
       filament::MaterialInstance::duplicate(material_instance);
   view_.GetSplitEngineSerializer()->DuplicateMaterialInstance(
@@ -245,8 +262,16 @@ flatbuffers::Offset<void> SplitEngineGenericMaterial::SerializeParameters(
       .Union();
 }
 
-absl::string_view SplitEngineGenericMaterial::GetName() const {
-  return "SplitEngineGenericMaterial";
+const filament::MaterialInstance*
+SplitEngineGenericMaterial::GetFilamentMaterialInstance() const {
+  return GetMaterialInternal(SmallSourceLocation::Current())
+      ->GetFilamentMaterialInstance();
+}
+
+filament::MaterialInstance*
+SplitEngineGenericMaterial::GetFilamentMaterialInstance() {
+  return GetMaterialInternal(SmallSourceLocation::Current())
+      ->GetFilamentMaterialInstance();
 }
 
 // TODO: (broken link) - Remove these methods once MaterialConfig is removed.
@@ -264,7 +289,7 @@ StringMap<int> SplitEngineGenericMaterial::GetSamplerIndexLookup() const {
 
 BorrowedMaterialPtr SplitEngineGenericMaterial::GetMaterialInternal(
     SmallSourceLocation loc) const {
-  return SplitEngineMaterial::GetMaterial(loc);
+  return SplitEngineBuiltinMaterial::GetMaterial(loc);
 }
 
 TextureAndSampler SplitEngineGenericMaterial::GetTextureAndSampler(
@@ -728,6 +753,262 @@ float SplitEngineGenericMaterial::GetAlphaCutoff() const {
   }
 
   return generic_material_parameters_.masking->alpha_cutoff;
+}
+
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              bool value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              bool2 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              bool3 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              bool4 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              float value) {
+  if (parameter_name == kMetallicFactor) {
+    SetMetallicFactor(value);
+  } else if (parameter_name == kRoughnessFactor) {
+    SetRoughnessFactor(value);
+  } else if (parameter_name == kNormalScale) {
+    SetNormalScale(value);
+  } else if (parameter_name == kSheenRoughnessFactor) {
+    SetSheenRoughnessFactor(value);
+  } else if (parameter_name == kIndexOfRefraction) {
+    SetIndexOfRefraction(value);
+  } else if (parameter_name == kThicknessFactor) {
+    SetThicknessFactor(value);
+  } else if (parameter_name == kAttenuationDistance) {
+    SetAttenuationDistance(value);
+  } else if (parameter_name == kTransmissionFactor) {
+    SetTransmissionFactor(value);
+  } else {
+    LogUnsupportedParameter(parameter_name);
+  }
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              float2 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              float3 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              float4 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              int value) {
+  if (parameter_name == kSamplersUvBitflags ||       //
+      parameter_name == kBaseColorIndex ||           //
+      parameter_name == kMetallicRoughnessIndex ||   //
+      parameter_name == kNormalIndex ||              //
+      parameter_name == kAoIndex ||                  //
+      parameter_name == kEmissiveIndex ||            //
+      parameter_name == kClearcoatIndex ||           //
+      parameter_name == kClearcoatRoughnessIndex ||  //
+      parameter_name == kClearcoatNormalIndex ||     //
+      parameter_name == kSheenColorIndex ||          //
+      parameter_name == kSheenRoughnessIndex ||      //
+      parameter_name == kThicknessIndex ||           //
+      parameter_name == kTransmissionIndex) {
+    LogParameterNotDirectlyAssignable(parameter_name);
+  } else {
+    LogUnsupportedParameter(parameter_name);
+  }
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              int2 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              int3 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              int4 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              uint value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              uint2 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              uint3 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              uint4 value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              mat3f value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              mat4f value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              absl::Span<const bool> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              absl::Span<const bool2> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              absl::Span<const bool3> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              absl::Span<const bool4> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              absl::Span<const float> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              absl::Span<const float2> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              absl::Span<const float3> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              absl::Span<const float4> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              absl::Span<const int> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              absl::Span<const int2> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              absl::Span<const int3> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              absl::Span<const int4> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              absl::Span<const uint> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              absl::Span<const uint2> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              absl::Span<const uint3> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              absl::Span<const uint4> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              absl::Span<const mat3f> value) {
+  if (parameter_name == kSamplersUvMatrices) {
+    LogParameterNotDirectlyAssignable(parameter_name);
+  } else {
+    LogUnsupportedParameter(parameter_name);
+  }
+}
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              absl::Span<const mat4f> value) {
+  LogUnsupportedParameter(parameter_name);
+}
+
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              filament::RgbaType type,
+                                              filament::math::float4 color) {
+  LogUnsupportedParameter(parameter_name);
+}
+
+void SplitEngineGenericMaterial::SetParameter(absl::string_view parameter_name,
+                                              filament::RgbType type,
+                                              filament::math::float3 color) {
+  LogUnsupportedParameter(parameter_name);
+}
+
+ABSL_DEPRECATED(
+    "Use imp::BorrowedTexturePtr overload instead. See "
+    "(broken link).")
+void SplitEngineGenericMaterial::SetParameter(
+    absl::string_view parameter_name, const imp::Texture* texture,
+    std::optional<filament::TextureSampler> sampler_override) {
+  LogTextureParameterNotDirectlyAssignable(parameter_name);
+}
+
+void SplitEngineGenericMaterial::SetParameter(
+    absl::string_view parameter_name, TexturePtr texture,
+    std::optional<filament::TextureSampler> sampler_override) {
+  LogTextureParameterNotDirectlyAssignable(parameter_name);
+}
+
+void SplitEngineGenericMaterial::SetParameter(
+    absl::string_view parameter_name, OwnedTexturePtr texture,
+    std::optional<filament::TextureSampler> sampler_override) {
+  LogTextureParameterNotDirectlyAssignable(parameter_name);
+}
+
+void SplitEngineGenericMaterial::SetParameter(
+    absl::string_view parameter_name, BorrowedTexturePtr texture,
+    std::optional<filament::TextureSampler> sampler_override) {
+  LogTextureParameterNotDirectlyAssignable(parameter_name);
+}
+
+bool SplitEngineGenericMaterial::HasParameter(absl::string_view name) {
+  // We don't know if the parameter exists because the material is held on the
+  // SplitEngine renderer side.
+  // NOTE: This means that TrySetParameter will behave the same as SetParameter
+  // and crash the app if the parameter does not exist.
+  return true;
+}
+
+absl::string_view SplitEngineGenericMaterial::GetParameterTransformName(
+    absl::string_view sampler_name) const {
+  // We don't know the mapping between sampler names and transform names
+  // because the material is held on the SplitEngine renderer side.
+  return {};
+}
+
+Material::HeldTextureType SplitEngineGenericMaterial::GetAssignedTextureType(
+    absl::string_view parameter_name) {
+  return HeldTextureType::kBorrowedPointer;
+}
+
+imp::StringMap<const filament::Texture*>
+SplitEngineGenericMaterial::GetUnownedFilamentTextures() const {
+  return {};
+}
+
+void SplitEngineGenericMaterial::ForEachTexture(
+    absl::FunctionRef<void(BorrowedTexturePtr)> fn, SmallSourceLocation loc) {
+  for (auto& [_, texture] : borrowed_textures_) {
+    if (texture) {
+      fn(texture);
+    }
+  }
 }
 
 }  // namespace imp::split_engine

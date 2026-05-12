@@ -25,6 +25,7 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "core/common/robin_set.h"
+#include "core/math/vec.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/node_handle.h"
@@ -32,7 +33,9 @@
 #include "core/recipes/language/recipe_runtime_event.h"
 #include "core/recipes/language/recipe_runtime_graph.h"
 #include "core/recipes/language/recipe_scope.h"
+#include "core/recipes/language/recipe_types.proto.imp.h"
 #include "core/recipes/recipe_runner_state.proto.imp.h"
+#include "core/view/framework/collision/ray_hit.h"
 #include "core/view/utils/frame_time.h"
 
 namespace imp {
@@ -117,6 +120,12 @@ class RecipeRunner : public Component {
   // Calculate the absolute cutoff time based on max_execution_time_
   std::optional<absl::Time> CalculateCutoffTime();
 
+  // Handles a tap event by pushing an OnTapEvent to the runtime event queue.
+  void HandleTap(RecipeRayHit tap_ray_hit, float2 tap_position);
+  // Handles a hover event by pushing an OnHoverBeginEvent or OnHoverEndEvent to
+  // the runtime event queue.
+  void HandleHover(NodeHandle hover_target);
+
   RecipeRunnerState state_;
   RuntimeState runtime_state_ = RecipeRunner::RuntimeState::kStopped;
 
@@ -126,11 +135,13 @@ class RecipeRunner : public Component {
   std::unique_ptr<RecipeRuntimeGraph> runtime_graph_;
   std::unique_ptr<RecipeScope> scope_;
   std::vector<RecipeRuntimeEvent> runtime_event_queue_;
-  absl::Duration elapsed_time_;
+  std::optional<absl::Duration> elapsed_time_;
 
   Dispatcher::ScopedConnection tap_event_connection_;
 
   Dispatcher::ScopedConnection hover_event_connection_;
+
+  Dispatcher::ScopedConnection split_engine_input_event_connection_;
 
   NodeHandle hovered_node_;
 

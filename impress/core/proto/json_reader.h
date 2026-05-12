@@ -41,6 +41,7 @@
 #include "absl/types/optional.h"
 #include "core/common/copyable_ptr.h"
 #include "core/common/hash.h"
+#include "core/common/optional_with_default.h"
 #include "core/proto/any.proto.imp.h"
 #include "core/proto/json_message_visitor.h"
 #include "core/proto/proto_common.h"
@@ -103,6 +104,12 @@ class JsonReader {
   template <int field_type, typename T>
   const char* Visit(const char* ptr, int field_id, absl::optional<T>* field,
                     absl::optional<T>* other, int token_type);
+
+  template <int field_type, typename T, const auto* DefaultValuePointer>
+  const char* Visit(const char* ptr, int field_id,
+                    OptionalWithDefault<T, DefaultValuePointer>* field,
+                    OptionalWithDefault<T, DefaultValuePointer>* other,
+                    int token_type);
 
   template <int field_type, typename T>
   const char* Visit(const char* ptr, int field_id, CopyablePtr<T>* field,
@@ -378,6 +385,24 @@ const char* JsonReader::Visit(const char* ptr, int field_id,
   }
   Visit<field_type>(ptr_, field_id, &(**field), static_cast<T*>(nullptr),
                     token_type);
+  return ptr_;
+}
+
+template <int field_type, typename T, const auto* DefaultValuePointer>
+const char* JsonReader::Visit(
+    const char* ptr, int field_id,
+    OptionalWithDefault<T, DefaultValuePointer>* field,
+    OptionalWithDefault<T, DefaultValuePointer>* other, int token_type) {
+  if (!status_.ok()) {
+    return ptr_;
+  }
+
+  if (!field->HasValue()) {
+    *field = T();
+  }
+
+  Visit<field_type>(ptr_, field_id, &field->MutableValue(),
+                    static_cast<T*>(nullptr), token_type);
   return ptr_;
 }
 

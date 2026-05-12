@@ -43,6 +43,8 @@ class SlicedGlyphAtlasVisualizer : public Widget, public imp::Rememberer {
     imp::Texture* texture;
     uint2 texture_size;
     uint2 grid_size;
+    uint2 slice_texture_size;
+    std::vector<imp::Texture*> slice_textures;
   };
   struct GlyphInfo {
     std::string glyph;
@@ -80,6 +82,7 @@ class SlicedGlyphAtlasVisualizer : public Widget, public imp::Rememberer {
   bool show_all_glyph_origins_;
   bool enable_hover_highlight_;
   std::unique_ptr<uint8_t[]> rgba_buffer_;
+  size_t selected_buffer_index_;
 };
 
 }  // namespace imp::editor

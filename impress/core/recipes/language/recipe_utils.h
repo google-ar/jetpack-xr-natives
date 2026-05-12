@@ -25,6 +25,7 @@
 #include <variant>
 #include <vector>
 
+#include "core/math/mat.h"
 #include "core/recipes/language/recipe_types.proto.imp.h"
 
 #ifdef IMP_ENABLE_RECIPE_EXPERIMENTAL
@@ -67,7 +68,7 @@ struct ReturnValue {
   std::optional<Future<Variables>> async_values;
 };
 
-using RecipeFunction = Invocable<absl::StatusOr<ReturnValue>(Args&)>;
+using RecipeFunction = Invocable<absl::StatusOr<ReturnValue>(const Args&)>;
 
 inline constexpr absl::string_view kDefaultOutputSocketName = "out";
 inline constexpr absl::string_view kDefaultInputSocketName = "in";
@@ -137,8 +138,6 @@ std::optional<float3> CoerceToFloat3(const Variable& var);
 std::optional<float4> CoerceToFloat4(const Variable& var);
 
 std::optional<quatf> CoerceToQuatf(const Variable& var);
-
-std::optional<std::string> CoerceToString(const Variable& var);
 
 // Attempts to coerce the variable to a NodeHandle. Returns an invalid
 // NodeHandle if the variable is not successful.
@@ -272,6 +271,46 @@ recipe::Variable Max(T left, T right) {
   return std::max(left, right);
 }
 
+template <typename LeftT, typename RightT,
+          typename = std::enable_if_t<std::is_constructible_v<
+              recipe::Variable,
+              decltype(std::declval<LeftT>() / std::declval<RightT>())>>>
+recipe::Variable Divide(LeftT left, RightT right) {
+  return left / right;
+}
+
+template <template <typename T> class MATRIX, typename T,
+          typename = std::enable_if_t<kIsAnyOf<MATRIX<T>, mat2f, mat3f, mat4f>>>
+MATRIX<T> Divide(MATRIX<T> left, MATRIX<T> right) {
+  MATRIX<T> result(0);
+  for (int i = 0; i < left.size(); ++i) {
+    result[i] = left[i] / right[i];
+  }
+  return result;
+}
+
+template <typename LeftT, typename RightT,
+          typename = std::enable_if_t<std::is_constructible_v<
+              recipe::Variable,
+              decltype(fmod(std::declval<LeftT>(), std::declval<RightT>()))>>>
+recipe::Variable Fmod(LeftT left, RightT right) {
+  if constexpr (std::is_same_v<LeftT, int> && std::is_same_v<RightT, int>) {
+    return left % right;
+  } else {
+    return fmod(left, right);
+  }
+}
+
+template <template <typename T> class MATRIX, typename T,
+          typename = std::enable_if_t<kIsAnyOf<MATRIX<T>, mat2f, mat3f, mat4f>>>
+MATRIX<T> Fmod(MATRIX<T> left, MATRIX<T> right) {
+  MATRIX<T> result(0);
+  for (int i = 0; i < left.size(); ++i) {
+    result[i] = fmod(left[i], right[i]);
+  }
+  return result;
+}
+
 template <typename T>
 TVec2<T> Max(TVec2<T> left, TVec2<T> right) {
   return max(left, right);
@@ -285,6 +324,16 @@ TVec3<T> Max(TVec3<T> left, TVec3<T> right) {
 template <typename T>
 TVec4<T> Max(TVec4<T> left, TVec4<T> right) {
   return max(left, right);
+}
+
+template <template <typename T> class ImpType, typename T,
+          EnableIfMatrix<ImpType<T>> = 0>
+ImpType<T> Max(ImpType<T> left, ImpType<T> right) {
+  ImpType<T> result;
+  for (int i = 0; i < ImpType<T>::COL_SIZE; ++i) {
+    result[i] = Max(left[i], right[i]);
+  }
+  return result;
 }
 
 template <typename T, typename = std::enable_if_t<std::is_arithmetic_v<T>>>
@@ -305,6 +354,34 @@ TVec3<T> Min(TVec3<T> left, TVec3<T> right) {
 template <typename T>
 TVec4<T> Min(TVec4<T> left, TVec4<T> right) {
   return min(left, right);
+}
+
+template <template <typename T> class ImpType, typename T,
+          EnableIfMatrix<ImpType<T>> = 0>
+ImpType<T> Min(ImpType<T> left, ImpType<T> right) {
+  ImpType<T> result;
+  for (int i = 0; i < ImpType<T>::COL_SIZE; ++i) {
+    result[i] = Min(left[i], right[i]);
+  }
+  return result;
+}
+
+template <typename LeftT, typename RightT,
+          typename = std::enable_if_t<std::is_constructible_v<
+              recipe::Variable,
+              decltype(std::declval<LeftT>() * std::declval<RightT>())>>>
+recipe::Variable Multiply(LeftT left, RightT right) {
+  return left * right;
+}
+
+template <template <typename T> class MATRIX, typename T,
+          typename = std::enable_if_t<kIsAnyOf<MATRIX<T>, mat2f, mat3f, mat4f>>>
+MATRIX<T> Multiply(MATRIX<T> left, MATRIX<T> right) {
+  MATRIX<T> result(0);
+  for (int i = 0; i < left.size(); ++i) {
+    result[i] = left[i] * right[i];
+  }
+  return result;
 }
 
 // Returns the sign of the input value.
@@ -338,6 +415,12 @@ TVec3<T> Sign(TVec3<T> v) {
 template <typename T>
 TVec4<T> Sign(TVec4<T> v) {
   return TVec4<T>(Sign(v.x), Sign(v.y), Sign(v.z), Sign(v.w));
+}
+
+template <template <typename T> class ImpType, typename T,
+          EnableIfMatrix<ImpType<T>> = 0>
+ImpType<T> Sign(ImpType<T> m) {
+  return TransformMatrix(Sign, m);
 }
 
 template <typename T, typename = std::enable_if_t<std::is_arithmetic_v<T>>>

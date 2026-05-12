@@ -68,7 +68,6 @@ cc_binary(
     ],
     linkshared = 1,
     deps = JNI_DEPS + [
-        "//perception_library:perception_library_jni",
         "@third_party//OpenXR_KHR:openxr_loader",
     ],
 )

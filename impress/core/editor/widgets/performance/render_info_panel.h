@@ -17,9 +17,12 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_RENDER_INFO_PANEL_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_RENDER_INFO_PANEL_H_
 
+#include <array>
+
 #include "absl/time/time.h"
 #include "dear_imgui/imgui.h"
 #include "core/editor/widgets/performance/circular_buffer.h"
+#include "core/editor/widgets/performance/imgui_helper.h"
 #include "core/editor/widgets/performance/monitor_panel.h"
 #include "core/view/base_view.h"
 
@@ -32,16 +35,20 @@ class RenderInfoPanel : public MonitorPanel {
   RenderInfoPanel(BaseView& view, int buffer_size);
   ~RenderInfoPanel() override;
 
+  static constexpr ImU32 kDefaultHighlightColor = IM_COL32(128, 128, 128, 64);
   void DrawPanel(int width, int height, int time_span_seconds) override;
   void Update(absl::Duration elapsed_time, absl::Duration delta_time) override;
   void OnStateChanged(MonitorState state) override;
 
  private:
   // Draws a grey highlight over the frame being moused over
-  void DrawHighlightFrame(int frame_number, ImDrawList* draw_list);
+  void DrawHighlightFrame(int frame_number, ImDrawList* draw_list,
+                          ImU32 color = kDefaultHighlightColor,
+                          float size = 0.5f);
   // Draws a tool tip showing more information on the number of renderables in
   // the frame.
   void DrawToolTip(int frame_number);
+  void DrawSelectedFrameLabels(int frame_number, ImDrawList* draw_list);
   struct RenderInfo {
     int frame_number;
     int num_renderables;
@@ -61,6 +68,9 @@ class RenderInfoPanel : public MonitorPanel {
   CircularBuffer<RenderInfo> buffer_;
   int upper_bound_ = 0;
   MonitorState state_ = MonitorState::kRunning;
+
+  static constexpr int kNumFrameValueLabels = 3;
+  std::array<ImGuiHelper::LabelData, kNumFrameValueLabels> frame_value_data_;
 };
 
 }  // namespace imp::editor

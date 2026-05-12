@@ -1,0 +1,103 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto2";
+
+package imp;
+
+import "google/protobuf/descriptor.proto";
+import "core/proto/imp.proto";
+
+extend google.protobuf.FeatureSet {
+  optional ImpressFeatureSet impress_feature_set = 1100;
+}
+
+message ImpressFeatureSet {
+  enum PresenceMode {
+    // Unused default value.
+    PRESENCE_MODE_UNKNOWN = 0;
+    // The legacy presence mode, which is used in proto3 and by default in
+    // edition 2023.
+    //
+    // Primitive fields will be generated as std::optional when they have
+    // explicit presence.
+    //
+    // Message fields will be generated as direct fields that don't actually
+    // support presence unless the optional_type is set.
+    //
+    // Example for proto3 syntax:
+    //
+    // message Foo {
+    //   message Bar {
+    //    string baz = 1; // std::string
+    //   }
+    //
+    //   // Generates as int32_t
+    //   int32 x = 1;
+    //
+    //   // Generates as std::optional<int32_t>
+    //   optional int32 y = 2;
+    //
+    //   // Generates as Bar
+    //   Bar bar = 3;  // Bar
+    //
+    //   // Generates as std::optional<Bar>
+    //   Bar bar2 = 4 [(imp.optional_type) = ABSL_OPTIONAL];
+    // }
+    LEGACY_OPTIONAL = 1;
+    // The optional with default presence mode, which is used by default
+    // starting in edition 2024.
+    //
+    // All fields with explicit presence will be generated as the type
+    // imp::OptionalWithDefault.
+    //
+    // If the field specifies a default value, then it will be generated as
+    // imp::OptionalWithDefault<T, &MyProto::kFieldNameDefault>, where
+    // MyProto is the proto's message type and kFieldNameDefault is the default
+    // value.
+    //
+    // If the field does not specify a default value, then it will be generated
+    // as imp::OptionalWithDefault<T>.
+    //
+    // Example for edition 2024 syntax (primitive fields all have explicit
+    // presence, no more optional keyword):
+    //
+    // message Foo {
+    //   message Bar {
+    //    string baz = 1; // std::string
+    //   }
+    //
+    //   // Generates as imp::OptionalWithDefault<int32_t>
+    //   int32 x = 1;
+    //
+    //   // Generates as imp::OptionalWithDefault<int32_t, &Foo::kYDefault>
+    //   int32 y = 2 [default = 1];
+    //
+    //   // Generates as imp::OptionalWithDefault<Bar>
+    //   Bar bar = 3;
+    // }
+    OPTIONAL_WITH_DEFAULT = 2;
+  }
+
+  optional PresenceMode presence_mode = 1 [
+    retention = RETENTION_SOURCE,
+    targets = TARGET_TYPE_FIELD,
+    targets = TARGET_TYPE_FILE,
+    feature_support = {
+      edition_introduced: EDITION_2023,
+    },
+    edition_defaults = { edition: EDITION_LEGACY, value: "LEGACY_OPTIONAL" },
+    edition_defaults = { edition: EDITION_2024, value: "OPTIONAL_WITH_DEFAULT" }
+  ];
+}

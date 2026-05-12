@@ -25,12 +25,19 @@
 #include "core/async/future.h"
 #include "core/editor/components/spatial_ui_canvas.h"
 #include "core/math/vec.h"
+#include "core/model/mesh/mesh.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/node_handle.h"
 #include "core/render/texture.h"
+#include "core/view/framework/render/mesh_renderer.h"
 #include "core/view/utils/string_map.h"
+
+#if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(OPENGL) && IMP_RUNTIME(DEV)
+#include "core/render/android/android_external_texture_surface.h"
+#include "core/window/open_gl_imgui_renderer.h"
+#endif
 
 namespace imp::editor {
 /*
@@ -86,7 +93,8 @@ class WorldSpaceEditorUi : public Component {
   // returns the default position.
   float3 GetKnownCanvasPosition(absl::string_view canvas_name) const;
 
-  OwnedTexturePtr texture_;
+  // Texture reference to the ImGui UI texture.
+  BorrowedTexturePtr texture_;
   float2 texture_resolution_;
   float texture_aspect_ratio_;
   absl::optional<ControllerHitEvent::Hand> active_hand_;
@@ -97,6 +105,8 @@ class WorldSpaceEditorUi : public Component {
   StringMap<NodeHandle> spatial_ui_canvases_;
   // The canvas that is currently being hit by the input.
   ComponentHandle<SpatialUiCanvas> hit_canvas_;
+
+  window::FilamentHost::DevModeExtension* dev_mode_extension_ = nullptr;
 };
 }  // namespace imp::editor
 

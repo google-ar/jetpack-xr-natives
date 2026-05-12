@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("//build_tools:assets.bzl", "imp_assets")
+
 package(
     default_visibility = ["//visibility:public"],
     features = [
@@ -20,3 +22,24 @@ package(
 )
 
 licenses(["notice"])
+
+filegroup(
+    name = "scuba_goldens",
+    srcs = glob(["scuba_goldens/*.png"]),
+)
+
+imp_assets(
+    name = "fl0_test_assets",
+    srcs = [
+        "assets/colored_cube_unlit.glb",
+    ],
+    namespace = "fl0_test_assets",
+)
+
+imp_assets(
+    name = "fl0_materials_assets",
+    srcs = [
+        "//core/loader/data:compiled_imp_default_fl0_gltf_materials.zip",
+    ],
+    namespace = "imp::fl0_materials",
+)

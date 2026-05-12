@@ -33,6 +33,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
 #include "core/common/copyable_ptr.h"
+#include "core/common/optional_with_default.h"
 #include "core/proto/any.proto.imp.h"
 #include "core/proto/proto_common.h"
 #include "boost_beast/varint.hpp"
@@ -163,6 +164,12 @@ class ProtoWriter : public Impl {
   Cursor Visit(Cursor ptr, int field_id, absl::optional<T>* field,
                absl::optional<T>* other, bool optional = false);
 
+  template <int field_type, typename T, const auto* DefaultValuePointer>
+  Cursor Visit(Cursor ptr, int field_id,
+               OptionalWithDefault<T, DefaultValuePointer>* field,
+               OptionalWithDefault<T, DefaultValuePointer>* other,
+               bool optional = false);
+
   template <int field_type, typename T>
   Cursor Visit(Cursor ptr, int field_id, CopyablePtr<T>* field,
                CopyablePtr<T>* other, bool optional = false);
@@ -205,6 +212,13 @@ class ProtoWriter : public Impl {
   template <int field_type>
   Cursor Visit(Cursor ptr, int field_id, absl::Cord* field, absl::Cord* other,
                bool optional = false);
+
+  template <typename Proto, const auto* DefaultValuePointer>
+  Cursor VisitStandardProto(
+      Cursor ptr, int field_id,
+      OptionalWithDefault<Proto, DefaultValuePointer>* proto,
+      OptionalWithDefault<Proto, DefaultValuePointer>* other,
+      bool optional = false);
 
   template <typename Proto>
   Cursor VisitStandardProto(Cursor ptr, int field_id, Proto* proto,
@@ -259,6 +273,19 @@ typename Impl::Cursor ProtoWriter<Impl>::Visit(Cursor ptr, int field_id,
   }
   return Visit<field_type>(ptr, field_id, &(**field), static_cast<T*>(nullptr),
                            true);
+}
+
+template <typename Impl>
+template <int field_type, typename T, const auto* DefaultValuePointer>
+typename Impl::Cursor ProtoWriter<Impl>::Visit(
+    Cursor ptr, int field_id,
+    OptionalWithDefault<T, DefaultValuePointer>* field,
+    OptionalWithDefault<T, DefaultValuePointer>* other, bool optional) {
+  if (!field->HasValue()) {
+    return ptr;
+  }
+  return Visit<field_type>(ptr, field_id, &field->MutableValue(),
+                           static_cast<T*>(nullptr), true);
 }
 
 template <typename Impl>
@@ -505,6 +532,19 @@ typename Impl::Cursor ProtoWriter<Impl>::Visit(Cursor ptr, int field_id,
   auto view = copy.Flatten();
   ptr = Impl::WriteVarint(ptr, static_cast<uint64_t>(view.size()));
   return Impl::Copy(ptr, view.data(), view.size());
+}
+
+template <typename Impl>
+template <typename Proto, const auto* DefaultValuePointer>
+typename Impl::Cursor ProtoWriter<Impl>::VisitStandardProto(
+    Cursor ptr, int field_id,
+    OptionalWithDefault<Proto, DefaultValuePointer>* proto,
+    OptionalWithDefault<Proto, DefaultValuePointer>* other, bool optional) {
+  if (!proto->HasValue()) {
+    return ptr;
+  }
+  return VisitStandardProto(ptr, field_id, &proto->MutableValue(),
+                            static_cast<Proto*>(nullptr));
 }
 
 template <typename Impl>

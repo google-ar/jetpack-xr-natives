@@ -39,7 +39,8 @@ class TestStereoSurfaceManager : public StereoSurfaceManager {
   ~TestStereoSurfaceManager() override = default;
 
   absl::StatusOr<int32_t> CreateStereoSurfaceEntity(
-      MediaStereoMode stereo_mode, ContentSecurityLevel content_security_level,
+      MediaStereoMode stereo_mode, MediaBlendingMode blending_mode,
+      ContentSecurityLevel content_security_level,
       bool use_super_sampling) override;
   absl::Status SetStereoSurfaceEntityCanvasShape(
       int32_t node_id, StereoSurface::CanvasShape canvas_shape) override;
@@ -53,6 +54,8 @@ class TestStereoSurfaceManager : public StereoSurfaceManager {
       int32_t node_id, const float2& feather_radius) override;
   absl::Status SetStereoModeForStereoSurfaceEntity(
       int32_t node_id, MediaStereoMode stereo_mode) override;
+  absl::Status SetBlendingModeForStereoSurfaceEntity(
+      int32_t node_id, MediaBlendingMode blending_mode) override;
   absl::Status SetPrimaryAlphaMaskForStereoSurfaceEntity(
       int32_t node_id, int64_t alpha_mask_token) override;
   absl::Status SetAuxiliaryAlphaMaskForStereoSurfaceEntity(

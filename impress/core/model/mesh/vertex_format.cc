@@ -14,11 +14,13 @@
 
 #include "core/model/mesh/vertex_format.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <initializer_list>
 #include <iterator>
 
 #include "core/common/log.h"
-#include "core/common/platform_helpers.h"
+#include "absl/types/optional.h"
 #include "core/loader/details/bundle_resource_helpers.h"
 
 namespace imp {
@@ -42,65 +44,124 @@ VertexFormat::VertexFormat(std::initializer_list<AttributeInfo> attributes)
     : VertexFormat(std::begin(attributes), std::end(attributes)) {}
 
 void VertexFormat::AppendAttribute(const AttributeInfo& attribute) {
-  if (num_attributes_ == kMaxAttributes) {
+  const uint8_t group_idx = attribute.attribute_group_override;
+  if (group_idx >= attribute_groups_.size()) {
+    attribute_groups_.resize(group_idx + 1);
+  }
+  AttributeGroup& group = attribute_groups_[group_idx];
+  if (group.num_attributes == kMaxAttributes) {
     IMP_LOG(imp::FATAL) << "Cannot exceed max attributes size of " << kMaxAttributes;
     return;
   }
-  for (size_t i = 0; i < GetNumAttributes(); ++i) {
-    if (attribute.attribute == GetAttributeAt(i).attribute) {
-      IMP_LOG(imp::FATAL) << "Repeated vertex attribute " << attribute.attribute;
-      return;
+  for (int group_idx = 0; group_idx < GetAttributeGroupsCount(); ++group_idx) {
+    for (size_t i = 0; i < GetNumAttributes(group_idx); ++i) {
+      if (attribute.attribute == GetAttributeAt(i, group_idx).attribute) {
+        IMP_LOG(imp::FATAL) << "Repeated vertex attribute " << attribute.attribute;
+        return;
+      }
     }
   }
-  attributes_[num_attributes_] = attribute;
-  vertex_size_ += GetAttributeSize(attribute);
-  ++num_attributes_;
+  group.attributes[group.num_attributes] = attribute;
+  group.vertex_size += GetAttributeSize(attribute);
+  ++group.num_attributes;
 }
 
-size_t VertexFormat::GetVertexSize() const { return vertex_size_; }
+size_t VertexFormat::GetVertexSize(uint8_t group_idx) const {
+  return attribute_groups_.size() <= group_idx
+             ? 0
+             : attribute_groups_[group_idx].vertex_size;
+}
 
-size_t VertexFormat::GetNumAttributes() const { return num_attributes_; }
+size_t VertexFormat::GetNumAttributes(size_t group_idx) const {
+  return attribute_groups_.size() <= group_idx
+             ? 0
+             : attribute_groups_[group_idx].num_attributes;
+}
 
 absl::optional<size_t> VertexFormat::GetIndexForAttribute(
-    VertexAttribute attribute) const {
-  for (size_t i = 0; i < num_attributes_; ++i) {
-    if (attributes_[i].attribute == attribute) {
+    VertexAttribute attribute, size_t group_idx) const {
+  if (group_idx >= attribute_groups_.size()) {
+    return absl::nullopt;
+  }
+
+  for (size_t i = 0; i < attribute_groups_[group_idx].num_attributes; ++i) {
+    if (attribute_groups_[group_idx].attributes[i].attribute == attribute) {
       return i;
     }
   }
   return absl::nullopt;
 }
 
-const VertexFormat::AttributeInfo& VertexFormat::GetAttributeAt(
-    size_t index) const {
-  if (index >= num_attributes_) {
-    IMP_LOG(imp::FATAL) << "Index " << index << " out of bounds " << num_attributes_;
+absl::optional<VertexFormat::AttributeKey> VertexFormat::GetKeyForAttribute(
+    VertexAttribute attribute) const {
+  for (size_t i = 0; i < attribute_groups_.size(); ++i) {
+    size_t offset = 0;
+    for (size_t j = 0; j < attribute_groups_[i].num_attributes; ++j) {
+      size_t attribute_size =
+          GetAttributeSize(attribute_groups_[i].attributes[j]);
+      if (attribute_groups_[i].attributes[j].attribute == attribute) {
+        return VertexFormat::AttributeKey{.group_index = i,
+                                          .attribute_offset = offset,
+                                          .attribute_size = attribute_size};
+      }
+      offset += attribute_size;
+    }
   }
-  return attributes_[index];
+  return absl::nullopt;
 }
 
-size_t VertexFormat::GetAttributeOffsetAt(size_t index) const {
-  if (index >= num_attributes_) {
-    IMP_LOG(imp::FATAL) << "Index " << index << " out of bounds " << num_attributes_;
-    return 0;
+const VertexFormat::AttributeInfo& VertexFormat::GetAttributeAt(
+    size_t index, size_t group_idx) const {
+  if (group_idx >= attribute_groups_.size()) {
+    IMP_LOG(imp::FATAL) << "Group index " << index << " out of bounds "
+               << attribute_groups_.size();
+  }
+  if (index >= attribute_groups_[group_idx].num_attributes) {
+    IMP_LOG(imp::FATAL) << "Index " << index << " out of bounds "
+               << attribute_groups_[group_idx].num_attributes;
+  }
+  return attribute_groups_[group_idx].attributes[index];
+}
+
+size_t VertexFormat::GetAttributeOffsetAt(size_t index,
+                                          size_t group_idx) const {
+  if (group_idx >= attribute_groups_.size()) {
+    IMP_LOG(imp::FATAL) << "Group index " << group_idx << " out of bounds "
+               << attribute_groups_.size();
+  }
+  if (index >= attribute_groups_[group_idx].num_attributes) {
+    IMP_LOG(imp::FATAL) << "Index " << index << " out of bounds "
+               << attribute_groups_[group_idx].num_attributes;
   }
   size_t offset = 0;
   for (size_t i = 0; i < index; ++i) {
-    offset += GetAttributeSize(attributes_[i]);
+    offset += GetAttributeSize(attribute_groups_[group_idx].attributes[i]);
   }
   return offset;
 }
 
+size_t VertexFormat::GetAttributeGroupsCount() const {
+  return attribute_groups_.size();
+}
+
 bool VertexFormat::operator==(const VertexFormat& rhs) const {
-  if (vertex_size_ != rhs.vertex_size_) {
+  if (attribute_groups_.size() != rhs.attribute_groups_.size()) {
     return false;
   }
-  if (num_attributes_ != rhs.num_attributes_) {
-    return false;
-  }
-  for (size_t i = 0; i < num_attributes_; ++i) {
-    if (attributes_[i] != rhs.attributes_[i]) {
+  for (size_t group = 0; group < attribute_groups_.size(); ++group) {
+    if (attribute_groups_[group].vertex_size !=
+        rhs.attribute_groups_[group].vertex_size) {
       return false;
+    }
+    if (attribute_groups_[group].num_attributes !=
+        rhs.attribute_groups_[group].num_attributes) {
+      return false;
+    }
+    for (size_t i = 0; i < attribute_groups_[group].num_attributes; ++i) {
+      if (attribute_groups_[group].attributes[i] !=
+          rhs.attribute_groups_[group].attributes[i]) {
+        return false;
+      }
     }
   }
   return true;

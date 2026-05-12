@@ -32,6 +32,7 @@
 #include "absl/types/optional.h"
 #include "absl/types/variant.h"
 #include "core/common/copyable_ptr.h"
+#include "core/common/optional_with_default.h"
 #include "core/common/template_helpers.h"
 #include "core/math/almost_equal.h"
 #include "core/proto/proto_common.h"
@@ -87,6 +88,11 @@ class ProtoDiffer {
   template <int field_type, typename T>
   Cursor* Visit(Cursor* cursor, int field_id, absl::optional<T>* field,
                 absl::optional<T>* other);
+
+  template <int field_type, typename T, const auto* DefaultValuePointer>
+  Cursor* Visit(Cursor* cursor, int field_id,
+                OptionalWithDefault<T, DefaultValuePointer>* field,
+                OptionalWithDefault<T, DefaultValuePointer>* other);
 
   template <int field_type, typename T>
   Cursor* Visit(Cursor* cursor, int field_id, CopyablePtr<T>* field,
@@ -186,6 +192,38 @@ ProtoDiffer::Cursor* ProtoDiffer::Visit(Cursor* cursor, int field_id,
   if (sub_cursor.result == Result::kFoundAllFieldsMatch) {
     if (cursor->mode == Mode::kRemoveMatchingFields) {
       field->reset();
+    }
+  } else {
+    cursor->result = Result::kFoundDifferences;
+  }
+
+  return cursor;
+}
+
+template <int field_type, typename T, const auto* DefaultValuePointer>
+ProtoDiffer::Cursor* ProtoDiffer::Visit(
+    Cursor* cursor, int field_id,
+    OptionalWithDefault<T, DefaultValuePointer>* field,
+    OptionalWithDefault<T, DefaultValuePointer>* other) {
+  // We can only diff them if one of them contains a value.
+  if (!field->HasValue() || !other->HasValue()) {
+    if (field->HasValue() || other->HasValue()) {
+      // Only one is empty, so they are different.
+      cursor->result = Result::kFoundDifferences;
+      if (cursor->mode == ProtoDiffer::Mode::kCheckDifferences) {
+        return cursor;
+      }
+    }
+    return cursor;
+  }
+
+  Cursor sub_cursor{.mode = cursor->mode};
+  Visit<field_type>(&sub_cursor, field_id, &field->MutableValue(),
+                    &other->MutableValue());
+
+  if (sub_cursor.result == Result::kFoundAllFieldsMatch) {
+    if (cursor->mode == Mode::kRemoveMatchingFields) {
+      field->Reset();
     }
   } else {
     cursor->result = Result::kFoundDifferences;

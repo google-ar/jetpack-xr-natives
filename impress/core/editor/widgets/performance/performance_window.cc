@@ -24,6 +24,7 @@
 #include "core/config.h"
 #include "core/editor/widgets/performance/config.h"
 #include "core/editor/widgets/performance/frame_time_panel.h"
+#include "core/editor/widgets/performance/memory_panel.h"
 #include "core/editor/widgets/performance/monitor_panel.h"
 #include "core/editor/widgets/performance/render_info_panel.h"
 #include "core/ncsb/update_system.h"
@@ -54,6 +55,10 @@ PerformanceWindow::PerformanceWindow(BaseView& view) : view_(view) {
     ImPlot::CreateContext();
   }
   time_span_seconds_ = details::kDefaultTimeSpanSeconds;
+  if (Profiler::IsMemoryGraphSupported()) {
+    AddPanel(std::make_unique<MemoryPanel>(details::kNumDisplayValuesPerSecond *
+                                           details::kMaxTimeSpanSeconds));
+  }
   AddPanel(std::make_unique<RenderInfoPanel>(
       view,
       details::kNumDisplayValuesPerSecond * details::kMaxTimeSpanSeconds));

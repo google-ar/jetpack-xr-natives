@@ -20,14 +20,12 @@
 #include <stdbool.h>
 #include <sys/types.h>
 
-#include <cstdint>
 #include <optional>
 
 #include "absl/status/status.h"
 #include "flatbuffers/verifier.h"
 #include "core/async/future.h"
 #include "core/materials/material.h"
-#include "core/media/media_color_space.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/update_system.h"
 #include "core/render/display_color_space.h"

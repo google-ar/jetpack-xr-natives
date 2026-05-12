@@ -430,7 +430,7 @@ void FutureImpl::InvokeResultProducer(std::shared_ptr<FutureImpl>& impl,
     // If we are cancelling the future and we are on the producer's executor,
     // then we should try to run the lambda synchronously.
     should_invoke_pending =
-        !result_status.ok() &&
+        !result_status.ok() && producer_executor &&
         producer_executor == Executor::CurrentExecutor() &&
         FutureFlags::IsSynchronousFutureCancellationEnabled();
 

@@ -139,27 +139,33 @@ absl::StatusOr<Variable> Atanh(const recipe::Variable& value) {
 
 void RegisterMathHyperbolicFunctions(BaseRecipeSystem* recipe_system) {
   recipe_system->RegisterFunction(
-      "Sinh", [](recipe::Variable value) -> absl::StatusOr<recipe::Variable> {
+      "Sinh",
+      [](const recipe::Variable& value) -> absl::StatusOr<recipe::Variable> {
         return Sinh(value);
       });
   recipe_system->RegisterFunction(
-      "Asinh", [](recipe::Variable value) -> absl::StatusOr<recipe::Variable> {
+      "Asinh",
+      [](const recipe::Variable& value) -> absl::StatusOr<recipe::Variable> {
         return Asinh(value);
       });
   recipe_system->RegisterFunction(
-      "Cosh", [](recipe::Variable value) -> absl::StatusOr<recipe::Variable> {
+      "Cosh",
+      [](const recipe::Variable& value) -> absl::StatusOr<recipe::Variable> {
         return Cosh(value);
       });
   recipe_system->RegisterFunction(
-      "Acosh", [](recipe::Variable value) -> absl::StatusOr<recipe::Variable> {
+      "Acosh",
+      [](const recipe::Variable& value) -> absl::StatusOr<recipe::Variable> {
         return Acosh(value);
       });
   recipe_system->RegisterFunction(
-      "Tanh", [](recipe::Variable value) -> absl::StatusOr<recipe::Variable> {
+      "Tanh",
+      [](const recipe::Variable& value) -> absl::StatusOr<recipe::Variable> {
         return Tanh(value);
       });
   recipe_system->RegisterFunction(
-      "Atanh", [](recipe::Variable value) -> absl::StatusOr<recipe::Variable> {
+      "Atanh",
+      [](const recipe::Variable& value) -> absl::StatusOr<recipe::Variable> {
         return Atanh(value);
       });
 }

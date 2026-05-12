@@ -21,13 +21,12 @@
 #include "core/math/vec.h"
 #include "core/recipes/language/base_recipe_system.h"
 #include "core/recipes/language/functions/math/math.h"
-#include "core/recipes/language/recipe_graph.proto.imp.h"
 #include "core/recipes/language/recipe_utils.h"
 
 namespace imp::recipe {
 namespace {
 
-absl::StatusOr<recipe::Variable> Exp(const recipe::Variable value) {
+absl::StatusOr<recipe::Variable> Exp(const recipe::Variable& value) {
   switch (value.index()) {
     case Literal::kValue_FloatValue:
       return std::exp(std::get<float>(value));
@@ -45,7 +44,7 @@ absl::StatusOr<recipe::Variable> Exp(const recipe::Variable value) {
   }
 }
 
-absl::StatusOr<recipe::Variable> Log2(const recipe::Variable value) {
+absl::StatusOr<recipe::Variable> Log2(const recipe::Variable& value) {
   switch (value.index()) {
     case Literal::kValue_FloatValue:
       return std::log2(std::get<float>(value));
@@ -63,7 +62,7 @@ absl::StatusOr<recipe::Variable> Log2(const recipe::Variable value) {
   }
 }
 
-absl::StatusOr<recipe::Variable> Log10(const recipe::Variable value) {
+absl::StatusOr<recipe::Variable> Log10(const recipe::Variable& value) {
   switch (value.index()) {
     case Literal::kValue_FloatValue:
       return std::log10(std::get<float>(value));
@@ -81,7 +80,7 @@ absl::StatusOr<recipe::Variable> Log10(const recipe::Variable value) {
   }
 }
 
-absl::StatusOr<recipe::Variable> CubeRoot(const recipe::Variable value) {
+absl::StatusOr<recipe::Variable> CubeRoot(const recipe::Variable& value) {
   switch (value.index()) {
     case Literal::kValue_FloatValue:
       return std::cbrt(std::get<float>(value));
@@ -99,8 +98,8 @@ absl::StatusOr<recipe::Variable> CubeRoot(const recipe::Variable value) {
   }
 }
 
-absl::StatusOr<recipe::Variable> Pow(const recipe::Variable base,
-                                     const recipe::Variable exponent) {
+absl::StatusOr<recipe::Variable> Pow(const recipe::Variable& base,
+                                     const recipe::Variable& exponent) {
   if (base.index() != exponent.index()) {
     return absl::InvalidArgumentError(
         "base and exponent must be of the same type.");
@@ -127,29 +126,32 @@ absl::StatusOr<recipe::Variable> Pow(const recipe::Variable base,
 
 void RegisterMathExponentialFunctions(BaseRecipeSystem* recipe_system) {
   recipe_system->RegisterFunction(
-      "Exp", [](recipe::Variable value) -> absl::StatusOr<recipe::Variable> {
+      "Exp",
+      [](const recipe::Variable& value) -> absl::StatusOr<recipe::Variable> {
         return Exp(value);
       });
 
   recipe_system->RegisterFunction(
-      "Log2", [](recipe::Variable value) -> absl::StatusOr<recipe::Variable> {
+      "Log2",
+      [](const recipe::Variable& value) -> absl::StatusOr<recipe::Variable> {
         return Log2(value);
       });
 
   recipe_system->RegisterFunction(
-      "Log10", [](recipe::Variable value) -> absl::StatusOr<recipe::Variable> {
+      "Log10",
+      [](const recipe::Variable& value) -> absl::StatusOr<recipe::Variable> {
         return Log10(value);
       });
 
   recipe_system->RegisterFunction(
       "CubeRoot",
-      [](recipe::Variable value) -> absl::StatusOr<recipe::Variable> {
+      [](const recipe::Variable& value) -> absl::StatusOr<recipe::Variable> {
         return CubeRoot(value);
       });
 
   recipe_system->RegisterFunction(
       "Pow",
-      [](recipe::Variable base, recipe::Variable exponent)
+      [](const recipe::Variable& base, const recipe::Variable& exponent)
           -> absl::StatusOr<recipe::Variable> { return Pow(base, exponent); });
 }
 

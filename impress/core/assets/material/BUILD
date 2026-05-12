@@ -53,7 +53,6 @@ cc_library(
     deps = [
         ":material_helpers",
         ":material_load_options_proto_cc",
-        "//core:config",
         "//core/async:future",
         "//core/common:buffer_access",
         "//core/common:trace",

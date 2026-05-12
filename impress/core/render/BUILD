@@ -14,6 +14,7 @@
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:imp.bzl", "if_android", "if_emscripten", "imp_copts", "imp_defines", "imp_google3_copts", "imp_test_copts")
+load("//core/proto:imp_cc_proto_library.bzl", "imp_cc_proto_library")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -23,6 +24,16 @@ package(
 )
 
 licenses(["notice"])
+
+cc_library(
+    name = "render_order_constants",
+    hdrs = [
+        "render_order_constants.h",
+    ],
+    copts = imp_copts(),
+    linkstatic = True,
+    alwayslink = 1,
+)
 
 cc_library(
     name = "render",
@@ -183,5 +194,88 @@ cc_library(
     hdrs = ["display_color_space.h"],
     defines = imp_defines(),
     deps = ["//core/media:media_color_space"],
+    alwayslink = 1,
+)
+
+proto_library(
+    name = "primitive_shape_renderer_state_proto",
+    srcs = ["primitive_shape_renderer_state.proto"],
+    deps = [
+        "//core/math:math_proto",
+        "//core/proto:imp_proto",
+        "//core/view/framework:framework_proto",
+    ],
+)
+
+imp_cc_proto_library(
+    name = "primitive_shape_renderer_state_cc_proto",
+    proto = ":primitive_shape_renderer_state_proto",
+    deps = [
+        "//core/math:math_proto_cc",
+        "//core/view/framework:framework_proto_cc",
+    ],
+)
+
+cc_library(
+    name = "primitive_shape_renderer",
+    srcs = ["primitive_shape_renderer.cc"],
+    hdrs = [
+        "primitive_shape_renderer.h",
+    ],
+    copts = imp_copts(),
+    linkstatic = True,
+    deps = [
+        ":base_renderable_manager",
+        ":mesh_renderer",
+        ":primitive_shape_renderer_state_cc_proto",
+        ":primitive_shape_type",
+        "//core/async:future",
+        "//core/materials",
+        "//core/math",
+        "//core/model/mesh",
+        "//core/model/mesh:mesh_factory",
+        "//core/ncsb",
+        "//core/view:base_view",
+        "//core/view/framework",
+        "//core/view/framework:framework_proto_cc",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:variant",
+        "@com_google_impress//core/common:log",
+        "@third_party//filament/filament:filament_hdrs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "primitive_shape_type",
+    hdrs = ["primitive_shape_type.h"],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "mesh_renderer",
+    srcs = ["mesh_renderer.cc"],
+    hdrs = ["mesh_renderer.h"],
+    deps = [
+        ":base_renderable_manager",
+        ":render_order_constants",
+        "//core/common:owned_or_borrowed_ptr",
+        "//core/common:small_source_location",
+        "//core/geometry/shapes",
+        "//core/materials",
+        "//core/math",
+        "//core/model",
+        "//core/model/mesh",
+        "//core/ncsb",
+        "//core/view:base_view",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+        "@com_google_impress//core/common:log",
+        "@third_party//filament/filament:filament_hdrs",
+    ],
     alwayslink = 1,
 )

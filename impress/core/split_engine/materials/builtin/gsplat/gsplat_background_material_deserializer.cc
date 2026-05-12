@@ -13,6 +13,8 @@
 // limitations under the License.
 #include "core/split_engine/materials/builtin/gsplat/gsplat_background_material_deserializer.h"
 
+#include <functional>
+#include <optional>
 #include <utility>
 
 #include "absl/memory/memory.h"
@@ -23,10 +25,12 @@
 #include "core/assets/asset_ptr.h"
 #include "core/assets/material/material_asset.h"
 #include "core/async/future.h"
+#include "core/material_library/material_package.h"
 #include "core/materials/material.h"
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
+#include "core/split_engine/materials/builtin/builtin_material_registry.h"
 #include "core/split_engine/materials/builtin/gsplat/gsplat_material_deserializer_assets.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
@@ -81,5 +85,25 @@ GsplatBackgroundMaterialDeserializer::Duplicate() const {
           filament::MaterialInstance::duplicate(
               GetMaterial()->GetFilamentMaterialInstance()))));
 }
+
+// Registers the built-in material factory.
+const bool kRegisterMaterial = BuiltinMaterialRegistry::RegisterOrDie(
+    android_xr::schemas::BuiltInMaterialSpec::
+        BuiltInMaterialGsplatBackgroundSpec,
+    [](BaseView& view, BridgeId bridge_id,
+       const android_xr::schemas::BuiltInMaterialRequest& request,
+       std::optional<
+           std::reference_wrapper<const MaterialPackage::MaterialCache>>
+           cache) -> Future<BuiltInMaterialPtr> {
+      const android_xr::schemas::BuiltInMaterialGsplatBackgroundSpec* spec =
+          request.data_as_BuiltInMaterialGsplatBackgroundSpec();
+      if (spec == nullptr) {
+        return Future<BuiltInMaterialPtr>(absl::InvalidArgumentError(
+            "Failed to get the BuiltInMaterialGsplatBackgroundSpec from the "
+            "request."));
+      }
+      return GsplatBackgroundMaterialDeserializer::Create(view, bridge_id,
+                                                          *spec);
+    });
 
 }  // namespace imp::split_engine

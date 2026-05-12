@@ -32,6 +32,8 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "flatbuffers/flatbuffer_builder.h"
+#include "core/common/invocable.h"
+#include "core/common/owned_ptr.h"
 #include "core/split_engine/android/split_engine_android_bridge.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/flatbuffer_arena_allocator.h"
@@ -117,11 +119,12 @@ class TestSplitEngineBridgeSender : public SplitEngineBridgeSender {
 
   absl::Status EndMessageGroup(MessageGroupId group_id) override;
 
-  std::unique_ptr<flatbuffers::FlatBufferBuilder> CreateFlatBufferBuilder(
+  imp::OwnedPtr<flatbuffers::FlatBufferBuilder> CreateFlatBufferBuilder(
       MessageGroupId group_id, size_t size_bytes) override;
 
-  absl::Status SendMessage(MessageGroupId group_id,
-                           const flatbuffers::FlatBufferBuilder& fbb) override;
+  absl::Status SendMessage(
+      MessageGroupId group_id,
+      imp::OwnedPtr<flatbuffers::FlatBufferBuilder> fbb) override;
 
   void ClearReleasedMessageGroups() override;
 
@@ -129,6 +132,8 @@ class TestSplitEngineBridgeSender : public SplitEngineBridgeSender {
 
   void* CreateSharedMemoryBuffer(size_t size_in_bytes);
   void DestroySharedMemoryBuffer(void*);
+
+  void Schedule(imp::Invocable<absl::Status()> fn) override;
 
  private:
   const TestSplitEngineBridgeBuffer& GetBridgeBuffer(MessageGroupId group_id);

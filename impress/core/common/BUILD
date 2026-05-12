@@ -118,6 +118,7 @@ cc_library(
         "//core/geometry/shapes",
         "//core/math",
         "//core/model/mesh:mesh_data",
+        "//core/render:render_order_constants",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/hash",
@@ -927,6 +928,9 @@ cc_library(
     name = "optional_with_default",
     hdrs = ["optional_with_default.h"],
     copts = imp_copts(),
+    deps = [
+        "@com_google_absl//absl/base:no_destructor",
+    ],
     alwayslink = 1,
 )
 

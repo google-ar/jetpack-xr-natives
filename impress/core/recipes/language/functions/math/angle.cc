@@ -105,18 +105,20 @@ absl::StatusOr<Variable> Atan2(const recipe::Variable& y,
 
 void RegisterMathAngleFunctions(BaseRecipeSystem* recipe_system) {
   recipe_system->RegisterFunction(
-      "Rad", [](recipe::Variable value) -> absl::StatusOr<recipe::Variable> {
+      "Rad",
+      [](const recipe::Variable& value) -> absl::StatusOr<recipe::Variable> {
         return Rad(value);
       });
 
   recipe_system->RegisterFunction(
-      "Deg", [](recipe::Variable value) -> absl::StatusOr<recipe::Variable> {
+      "Deg",
+      [](const recipe::Variable& value) -> absl::StatusOr<recipe::Variable> {
         return Deg(value);
       });
 
   recipe_system->RegisterFunction(
       "Atan2",
-      [](recipe::Variable y, recipe::Variable x)
+      [](const recipe::Variable& y, const recipe::Variable& x)
           -> absl::StatusOr<recipe::Variable> { return Atan2(y, x); });
 }
 

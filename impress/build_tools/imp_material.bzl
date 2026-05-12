@@ -30,6 +30,7 @@ def imp_material(
             "//conditions:default": DEFAULT_XR_VARIANT_FILTER,
         }),
         defines = [],
+        force_feature_level_zero = False,
         **kwargs):
     """Creates a binary material asset
 
@@ -66,5 +67,6 @@ def imp_material(
         visibility = visibility,
         variant_filter = variant_filter,
         defines = defines,
+        force_feature_level_zero = force_feature_level_zero,
         **kwargs
     )

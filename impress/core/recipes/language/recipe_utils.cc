@@ -14,8 +14,6 @@
 
 #include "core/recipes/language/recipe_utils.h"
 
-#include <iomanip>
-#include <ios>
 #include <sstream>
 #include <string>
 #include <variant>
@@ -33,6 +31,7 @@
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
 #include "core/proto/any.proto.imp.h"
+#include "core/proto/proto_writer.h"
 #include "core/recipes/language/recipe_graph.proto.imp.h"
 #include "core/scene_handles/scene_handles.h"
 
@@ -93,7 +92,9 @@ struct RecipeTypeToStringVisitor {
   }
 
   std::string operator()(const google::protobuf::imp_proto::Any& value) const {
-    return "[imp_proto::Any]";
+    std::string data;
+    proto::SerializeTo(&value, &data);
+    return data;
   }
 
   std::string operator()(const NodeHandle& value) const {

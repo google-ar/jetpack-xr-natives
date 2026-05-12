@@ -110,20 +110,20 @@ absl::Status HingeConstraint::SetupInternal() {
     connected_axis = state_.connected_axis.value_or(kZAxis3f);
   }
 
-  btVector3 bt_pivot_in_A = ToBtVector3(connected_pivot);
-  btVector3 bt_axis_in_A = ToBtVector3(connected_axis);
+  btVector3 bt_connected_pivot = ToBtVector3(connected_pivot);
+  btVector3 bt_connected_axis = ToBtVector3(normalize(connected_axis));
 
   if (bt_rigid_body_B == nullptr) {
     // then we will attach it to the world
     bt_constraint_ = std::make_unique<btHingeConstraint>(
-        *bt_rigid_body_A, bt_pivot_in_A, bt_axis_in_A);
+        *bt_rigid_body_A, bt_connected_pivot, bt_connected_axis);
   } else {
-    btVector3 bt_pivot_in_B = ToBtVector3(state_.pivot);
-    btVector3 bt_axis_in_B = ToBtVector3(axis);
+    btVector3 bt_pivot = ToBtVector3(state_.pivot);
+    btVector3 bt_axis = ToBtVector3(normalize(axis));
 
     bt_constraint_ = std::make_unique<btHingeConstraint>(
-        *bt_rigid_body_A, *bt_rigid_body_B, bt_pivot_in_A, bt_pivot_in_B,
-        bt_axis_in_A, bt_axis_in_B);
+        *bt_rigid_body_A, *bt_rigid_body_B, bt_connected_pivot, bt_pivot,
+        bt_connected_axis, bt_axis);
   }
 
   state_.axis = axis;
@@ -135,7 +135,9 @@ absl::Status HingeConstraint::SetupInternal() {
 
 #if IMP_RUNTIME(DEV)
   UseDebugVisualizer([this]() { Visualize(); }, kHingeConstraintVisualizer);
+  hinge_start_angle_ = GetHingeAngle();
 #endif
+
   AddToPhysicsManager(true);
 
   return absl::OkStatus();
@@ -211,26 +213,66 @@ void HingeConstraint::OnIsfStateChanged() {
 
 #if IMP_RUNTIME(DEV)
 void HingeConstraint::Visualize() {
-  physics_debug_draw::PhysicsDebugDraw physics_debug_draw;
+  physics_debug_draw::PhysicsDebugDraw helper;
 
   float3 frame_axis = normalize(*state_.axis);
-  debug_draw::Local(GetNode().GetEntity())
-      .Line(state_.pivot + frame_axis, state_.pivot - frame_axis,
-            debug_draw::GetColor(debug_draw::DebugColor::kYellow));
+  helper.DrawRotationAxis(GetNode(), state_.pivot, frame_axis);
 
   float3 connected_axis = normalize(*state_.connected_axis);
-  debug_draw::Local(state_.connected_node.GetEntity())
-      .Line(connected_axis, -connected_axis,
-            debug_draw::GetColor(debug_draw::DebugColor::kYellow));
+  helper.DrawRotationAxis(state_.connected_node, kZero3, connected_axis);
 
-  physics_debug_draw.DrawPivotConnectedToOrigin(
-      state_.connected_node, state_.connected_pivot.value_or(kZero3));
+  helper.DrawPivotConnectedToOrigin(state_.connected_node,
+                                    state_.connected_pivot.value_or(kZero3));
 
   // The owner node if exists.
   if (GetRigidBodyB()) {
-    physics_debug_draw.DrawPivotConnectionToOrigin(GetNode(), state_.pivot);
+    helper.DrawPivotConnectionToOrigin(GetNode(), state_.pivot);
+  }
+
+  // The limits
+  // TODO: (broken link) - Investigate why the limits are a bit off in certain
+  // scenarios. One example would be to set the axis to (0.0, 0.2, 1.0)
+  float lower_limit = state_.lower_limit;
+  float upper_limit = state_.upper_limit;
+
+  if (state_.lower_limit > state_.upper_limit) {
+    lower_limit = 0.0f;
+    upper_limit = 360.0f;
+  }
+
+  const float hinge_angle_offset = 180.0f - hinge_start_angle_;
+
+  const float adjusted_lower_limit = lower_limit + hinge_angle_offset;
+  const float adjusted_upper_limit = upper_limit + hinge_angle_offset;
+
+  const NodeHandle node_ref = GetNode();
+
+  // Arc geometry should be in frame B space
+  helper.SetTransform(GetFrameB());
+
+  helper.DrawArc(node_ref, adjusted_lower_limit, adjusted_upper_limit, 1.0f);
+  float3 arc_point = helper.GetArcPoint(adjusted_upper_limit, 1.0f);
+  float3 arc_tangent = helper.GetArcTangent(adjusted_upper_limit, 1.0f);
+  helper.DrawArrowTip(node_ref, arc_point, arc_tangent);
+
+  helper.DrawLine(node_ref, kZero3, arc_point);
+
+  arc_point = helper.GetArcPoint(adjusted_lower_limit, 1.0f);
+  arc_tangent = helper.GetArcTangent(adjusted_lower_limit, 1.0f);
+  helper.DrawArrowTip(node_ref, arc_point, -arc_tangent);
+
+  helper.DrawLine(node_ref, kZero3, arc_point);
+}
+
+mat4f HingeConstraint::GetFrameB(bool world_space) {
+  const mat4f frame_b = ToMatrix(bt_constraint_->getFrameOffsetB());
+  if (world_space) {
+    return GetNode()->GetWorldTrs() * frame_b;
+  } else {
+    return frame_b;
   }
 }
+
 #endif
 
 }  // namespace imp

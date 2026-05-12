@@ -44,7 +44,7 @@ const MeshDescription& MeshIndexData::GetDescription() const {
 
 MeshIndexData::BufferDescriptor MeshIndexData::CopyIndexData() const {
   CheckIndicesNotMoved();
-  absl::MutexLock lock(&copy_counter_->mu);
+  absl::MutexLock lock(copy_counter_->mu);
   ++copy_counter_->copies;
   return BufferDescriptor(index_data_.buffer, index_data_.size,
                           &imp_internal::MeshDataBufferDescriptorDeleter,

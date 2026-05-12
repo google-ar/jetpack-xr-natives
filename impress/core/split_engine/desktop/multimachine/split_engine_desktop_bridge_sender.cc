@@ -15,11 +15,14 @@
 #include "core/split_engine/desktop/multimachine/split_engine_desktop_bridge_sender.h"
 
 #include <cstddef>
+#include <utility>
 
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "flatbuffers/flatbuffer_builder.h"
+#include "core/async/executor.h"
+#include "core/common/owned_ptr.h"
 #include "core/split_engine/android/bridge_buffer.h"
 #include "core/split_engine/android/buffer_handle_factory.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_sender_base.h"
@@ -52,20 +55,37 @@ SplitEngineMMDesktopBridgeSender::GetBufferHandleFactory() {
 }
 
 absl::Status SplitEngineMMDesktopBridgeSender::SendMessage(
-    MessageGroupId group_id, const flatbuffers::FlatBufferBuilder& message) {
-  const BridgeBuffer& bridge_buffer = GetBridgeBuffer(group_id);
-  if (!bridge_buffer.IsValidBlock(message.GetBufferPointer(),
-                                  message.GetSize())) {
-    return absl::InternalError("Message is not in the active bridge buffer.");
-  }
+    MessageGroupId group_id,
+    imp::OwnedPtr<flatbuffers::FlatBufferBuilder> message) {
+  
 
-  MP_ASSIGN_OR_RETURN(const size_t message_group_size_bytes,
-                   GetMessageGroupSizeBytes(group_id));
+  Schedule([this, group_id, message = std::move(message)]() mutable {
+    const BridgeBuffer& bridge_buffer = GetBridgeBuffer(group_id);
+    const absl::StatusOr<size_t> message_group_size_bytes =
+        GetMessageGroupSizeBytes(group_id);
+    if (!message_group_size_bytes.ok()) {
+      IMP_LOG(imp::FATAL) << "Failed to get message group size bytes: "
+                 << message_group_size_bytes.status();
+    }
 
-  return client_.SendMessage(
-      group_id, message_group_size_bytes,
-      arena_allocator_.PrependSize(message.GetBufferPointer(),
-                                   message.GetSize()));
+    if (!bridge_buffer.IsValidBlock(message->GetBufferPointer(),
+                                    message->GetSize())) {
+      IMP_LOG(imp::FATAL) << "Message is not in the active bridge buffer.";
+    }
+
+    const absl::Status status = client_.SendMessage(
+        group_id, *message_group_size_bytes,
+        arena_allocator_.PrependSize(message->GetBufferPointer(),
+                                     message->GetSize()));
+
+    if (!status.ok()) {
+      IMP_LOG(imp::FATAL) << "Failed to send message: " << status;
+    }
+
+    return status;
+  });
+
+  return absl::OkStatus();
 }
 
 absl::Status SplitEngineMMDesktopBridgeSender::EndMessageGroup(
@@ -73,7 +93,19 @@ absl::Status SplitEngineMMDesktopBridgeSender::EndMessageGroup(
   MP_RETURN_IF_ERROR(
       SplitEngineSharedMemoryBridgeSenderBase::EndMessageGroup(group_id));
 
-  return client_.EndMessageGroup(group_id);
+  Schedule([this, group_id]() {
+    const absl::Status status = client_.EndMessageGroup(group_id);
+    if (!status.ok()) {
+      IMP_LOG(imp::FATAL) << "Failed to end message group: " << status;
+    }
+    return status;
+  });
+
+  return absl::OkStatus();
+}
+
+SplitEngineMMDesktopBridgeSender::~SplitEngineMMDesktopBridgeSender() {
+  DrainScheduler();
 }
 
 }  // namespace imp::split_engine

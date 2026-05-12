@@ -358,6 +358,9 @@ class GltfRenderer : public Component {
   absl::Status SetMeshMorphTargetWeight(float weight, size_t mesh_index,
                                         size_t target_index);
 
+  // Returns true if skinning is scheduled to be updated.
+  bool IsSkinningScheduled() const { return skinning_scheduled_; }
+
  private:
   using Bone = model::BoneData;
   using BoneId = model::BoneId;

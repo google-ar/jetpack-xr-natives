@@ -146,6 +146,58 @@ JNI_METHOD_AOSP(void, nativeSetExpectedStopGltfModelAnimation)
   context.stop_gltf_model_animation.expected_node_id = node_id;
 }
 
+JNI_METHOD_AOSP(void, nativeSetExpectedToggleGltfModelAnimation)
+(JNIEnv* env, jclass /*clazz*/, jint node_id, jboolean toggle) {
+  imp::ModelTestContext& context = imp::ModelTestContext::Get();
+  context.toggle_gltf_model_animation.expected_node_id = node_id;
+  context.toggle_gltf_model_animation.expected_toggle = toggle;
+}
+
+JNI_METHOD_AOSP(void, nativeSetExpectedSetGltfModelAnimationSpeed)
+(JNIEnv* env, jclass /*clazz*/, jint node_id, jfloat speed, jint channel_id) {
+  imp::ModelTestContext& context = imp::ModelTestContext::Get();
+  context.set_gltf_model_animation_speed.expected_node_id = node_id;
+  context.set_gltf_model_animation_speed.expected_speed = speed;
+  context.set_gltf_model_animation_speed.expected_channel_id = channel_id;
+}
+
+JNI_METHOD_AOSP(void, nativeSetExpectedSetGltfModelAnimationPlaybackTime)
+(JNIEnv* env, jclass /*clazz*/, jint node_id, jfloat playback_time,
+ jint channel_id) {
+  imp::ModelTestContext& context = imp::ModelTestContext::Get();
+  context.set_gltf_model_animation_playback_time.expected_node_id = node_id;
+  context.set_gltf_model_animation_playback_time.expected_playback_time =
+      playback_time;
+  context.set_gltf_model_animation_playback_time.expected_channel_id =
+      channel_id;
+}
+
+JNI_METHOD_AOSP(void, nativeSetExpectedGetGltfModelAnimationCount)
+(JNIEnv* env, jclass /*clazz*/, jint node_id) {
+  imp::ModelTestContext& context = imp::ModelTestContext::Get();
+  context.get_gltf_model_animation_count.expected_node_id = node_id;
+}
+
+JNI_METHOD_AOSP(void, nativeSetGetGltfModelAnimationCountSuccess)
+(JNIEnv* env, jclass /*clazz*/, jint count) {
+  imp::ModelTestContext& context = imp::ModelTestContext::Get();
+  context.get_gltf_model_animation_count.success_count = count;
+}
+
+JNI_METHOD_AOSP(void, nativeSetExpectedGetGltfModelAnimationName)
+(JNIEnv* env, jclass /*clazz*/, jint node_id, jint index) {
+  imp::ModelTestContext& context = imp::ModelTestContext::Get();
+  context.get_gltf_model_animation_name.expected_node_id = node_id;
+  context.get_gltf_model_animation_name.expected_index = index;
+}
+
+JNI_METHOD_AOSP(void, nativeSetGetGltfModelAnimationNameSuccess)
+(JNIEnv* env, jclass /*clazz*/, jstring name) {
+  imp::ModelTestContext& context = imp::ModelTestContext::Get();
+  context.get_gltf_model_animation_name.success_name =
+      imp::GetString(env, name);
+}
+
 JNI_METHOD_AOSP(void, nativeSetExpectedGetGltfModelLocalBounds)
 (JNIEnv* env, jclass /*clazz*/, jint node_id) {
   imp::ModelTestContext& context = imp::ModelTestContext::Get();

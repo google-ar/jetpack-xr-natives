@@ -116,6 +116,10 @@ class TextureFactory {
 
   TextureFactory(BaseView& view);
 
+  // TODO: (broken link) - Refactor CreateTexture functions to reduce duplication
+  // and volume of overloads. Make it clear somehow which calls can be used
+  // with Split Engine.
+
   // Create an external texture with a native stream, whose type depends on the
   // platform. Returns a null handle if it fails to create the texture.
   // Dimension information can be optionally provided purely for informational

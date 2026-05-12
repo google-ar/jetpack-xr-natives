@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_VIEW_FRAMEWORK_GESTURES_TWIST_GESTURE_H_
 
 #include "core/math/math.h"
+#include "core/math/vec.h"
 #include "core/view/framework/gestures/gesture.h"
 #include "core/view/framework/gestures/gesture_pointer_utils.h"
 #include "core/view/framework/input/pointer_input_handler.h"
@@ -40,13 +41,24 @@ class TwistGesture : public Gesture {
                                     GesturePointerUtils* pointer_utils);
 
   struct StartEvent : public Event {
-    StartEvent(Id id, CancelFn cancel) : Event(id, cancel) {}
+    StartEvent(Id id, CancelFn cancel, std::optional<float> gap = std::nullopt,
+               std::optional<float2> centroid = std::nullopt)
+        : Event(id, cancel), gap(gap), centroid(centroid) {}
+    std::optional<float> gap;
+    std::optional<float2> centroid;
   };
 
   struct UpdateEvent : public Event {
-    UpdateEvent(Id id, CancelFn cancel, float delta_radians)
-        : Event(id, cancel), delta_radians(delta_radians) {}
+    UpdateEvent(Id id, CancelFn cancel, float delta_radians,
+                std::optional<float> gap = std::nullopt,
+                std::optional<float2> centroid = std::nullopt)
+        : Event(id, cancel),
+          delta_radians(delta_radians),
+          gap(gap),
+          centroid(centroid) {}
     float delta_radians;
+    std::optional<float> gap;
+    std::optional<float2> centroid;
   };
 
   struct FinishEvent : public Event {

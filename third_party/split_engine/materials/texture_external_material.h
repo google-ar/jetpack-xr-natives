@@ -22,14 +22,15 @@
 #include "core/async/future.h"
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "core/view/base_view.h"
 
 // TODO : Find a better namespace for this. (e.g., imp::android)
 namespace android_xr {
 
 // Displays an external texture.
-class TextureExternalMaterial : public imp::split_engine::SplitEngineMaterial {
+class TextureExternalMaterial
+    : public imp::split_engine::SplitEngineBuiltinMaterial {
  public:
   static imp::Future<std::unique_ptr<TextureExternalMaterial>> Create(
       imp::BaseView& view);

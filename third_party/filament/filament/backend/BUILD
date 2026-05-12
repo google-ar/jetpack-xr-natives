@@ -151,6 +151,8 @@ backend_srcs = [
     "src/DriverBase.h",
     "src/Handle.cpp",
     "src/HandleAllocator.cpp",
+    "src/JobQueue.cpp",
+    "src/JobQueue.h",
     "src/ostream.cpp",
     "src/Platform.cpp",
     "src/PlatformFactory.cpp",
@@ -354,7 +356,6 @@ backend_metal_textual_hdrs = backend_textual_hdrs + [
 
 backend_hdrs_hdrs = [
     "include/backend/AcquiredImage.h",
-    "include/backend/BufferObjectStreamDescriptor.h",
     "include/backend/CallbackHandler.h",
     "include/backend/DriverApiForward.h",
     "include/backend/Handle.h",
@@ -518,6 +519,71 @@ cc_library(
     alwayslink = 1,
 )
 
+cc_library(
+    name = "egl_backend_hdrs",
+    hdrs = backend_hdrs_hdrs + if_linux([
+        "include/backend/platforms/PlatformEGL.h",
+        "include/backend/platforms/PlatformEGLHeadless.h",
+    ]),
+    copts = filament_copts(),
+    defines = filament_defines(),
+    includes = ["include"],
+    linkstatic = 1,
+    textual_hdrs = if_apple(
+        backend_metal_textual_hdrs,
+        backend_opengl_textual_hdrs,
+    ),
+    deps = backend_hdrs_deps + [
+        ":backend_hdrs",
+        ":backend_opengl_private_hdrs",
+        "@third_party//filament/libs:bluegl_hdrs",
+        "@third_party//gl",
+    ] + if_linux([
+    ]),
+    alwayslink = 1,
+)
+
+egl_backend_deps = [
+    ":egl_backend_hdrs",
+    ":backend_utils",
+    ":driver_enums",
+    ":pixel_buffer_descriptor",
+    "@third_party//filament/libs:math_hdrs",
+    "@third_party//filament/libs:utils",
+    "@third_party//filament/libs:utils_hdrs",
+    "@third_party//filament/libs:utils_private_hdrs",
+    "@robin_map",
+]
+
+cc_library(
+    name = "backend_opengl_egl_headless_fl0",
+    srcs = backend_opengl_srcs + [
+        "src/opengl/platforms/PlatformEGL.cpp",
+        "src/opengl/platforms/PlatformEGLHeadless.cpp",
+    ],
+    hdrs = [
+        "include/backend/platforms/PlatformEGL.h",
+        "include/backend/platforms/PlatformEGLHeadless.h",
+    ],
+    copts = filament_copts(),
+    defines = backend_opengl_defines + [
+        "FILAMENT_SUPPORTS_EGL_ON_LINUX=1",
+        "FILAMENT_ENABLE_FEATURE_LEVEL_0=1",
+    ],
+    includes = ["src"],
+    linkstatic = True,
+    textual_hdrs = backend_opengl_textual_hdrs,
+    deps = egl_backend_deps + [
+        "//third_party/angle:EGL",
+        "//third_party/angle:GLESv2",
+        "//third_party/angle:swiftshader_icd",
+        "@third_party//filament/libs:bluegl_hdrs",
+        "@third_party//filament/libs:bluegl_linux_egl",
+        "@third_party//gl",
+    ],
+    alwayslink = 1,
+)
+
 # Vulkan backends
 [
     cc_library(
@@ -654,6 +720,7 @@ cc_library(
         "src/CallbackManager.h",
         "src/CompilerThreadPool.h",
         "src/DriverBase.h",
+        "src/JobQueue.h",
         "include/backend/DescriptorSetOffsetArray.h",
         "include/backend/DriverEnums.h",
         "include/private/backend/BackendUtils.h",

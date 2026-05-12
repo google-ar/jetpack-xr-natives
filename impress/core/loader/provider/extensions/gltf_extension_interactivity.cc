@@ -67,6 +67,7 @@ constexpr char kMessageNodeConfiguration[] = "message";
 constexpr char kInitialIndexNodeConfiguration[] = "initialIndex";
 constexpr char kVariablesNodeConfiguration[] = "variables";
 constexpr char kUseSlerpNodeConfiguration[] = "useSlerp";
+constexpr char kSeverityNodeConfiguration[] = "severity";
 
 // Interactivity::Graph::Variable types
 constexpr char kBoolValueType[] = "bool";
@@ -348,6 +349,9 @@ InteractivityImpl::InteractivityImpl() {
   configuration_id_map_.emplace(
       kUseSlerpNodeConfiguration,
       gltf::Interactivity::Graph::Node::ConfigurationType::USE_SLERP);
+  configuration_id_map_.emplace(
+      kSeverityNodeConfiguration,
+      gltf::Interactivity::Graph::Node::ConfigurationType::SEVERITY);
 
   value_type_map_.emplace(kBoolValueType,
                           gltf::Interactivity::Graph::ValueType::BOOL);
@@ -620,6 +624,7 @@ absl::StatusOr<bool> InteractivityImpl::OnVisitNodeConfiguration(
         case gltf::Interactivity::Graph::Node::ConfigurationType::
             NUMBER_OF_INPUT_FLOWS:
         case gltf::Interactivity::Graph::Node::ConfigurationType::INITIAL_INDEX:
+        case gltf::Interactivity::Graph::Node::ConfigurationType::SEVERITY:
           MP_RETURN_IF_ERROR(OnVisitVariantArrayWithSingleElement<int>(
               configuration.value, field_id, visitor, ptr, token_type));
           break;

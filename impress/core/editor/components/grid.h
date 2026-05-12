@@ -19,7 +19,7 @@
 
 #include "absl/status/status.h"
 #include "core/ncsb/component.h"
-#include "core/view/framework/render/primitive_shape_renderer.h"
+#include "core/render/primitive_shape_renderer.h"
 
 namespace imp::editor {
 

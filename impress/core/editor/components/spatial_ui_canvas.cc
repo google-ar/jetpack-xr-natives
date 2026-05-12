@@ -14,6 +14,8 @@
 
 #include "core/editor/components/spatial_ui_canvas.h"
 
+#include <stdbool.h>
+
 #include <string>
 #include <utility>
 
@@ -21,20 +23,24 @@
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
+#include "core/assets/asset_ptr.h"
 #include "core/async/future.h"
 #include "core/editor/components/world_space_editor_ui_assets.h"
+#include "core/materials/material.h"
 #include "core/math/math.h"
 #include "core/math/vec.h"
+#include "core/model/mesh/mesh.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
 #include "core/render/texture.h"
 #include "core/view/base_view.h"
+#include "core/view/framework/assets/asset_manager.h"
+#include "core/view/framework/assets/material_factory.h"
 #include "core/view/framework/camera/camera_manager.h"
 #include "core/view/framework/collision/box_collider.h"
-#include "core/view/framework/render/material_definition.proto.imp.h"
-#include "core/view/framework/render/primitive_shape_renderer.h"
-#include "core/view/framework/render/primitive_shape_renderer_state.proto.imp.h"
+#include "core/view/framework/render/mesh_factory.h"
+#include "core/view/framework/render/mesh_renderer.h"
 #include "core/view/utils/frame_time.h"
 
 namespace imp::editor {
@@ -46,34 +52,47 @@ constexpr float kHandleOffset = 0.1f;
 constexpr absl::string_view kCanvasTextureName = "globalBaseColor";
 constexpr absl::string_view kCornerUv = "cornerUv";
 constexpr absl::string_view kSizeUv = "sizeUv";
-// LINT.ThenChange(//depot/google3/third_party/impress/core/editor/components/spatial_ui_canvas_texture.mat)
+// LINT.ThenChange(//depot/google3/third_party/impress/core/editor/components/spatial_ui_canvas_texture.mat,//depot/google3/third_party/impress/core/editor/components/spatial_ui_canvas_ogl_texture.mat)
 }  // namespace
 
 Future<absl::Status> SpatialUiCanvas::Setup(absl::string_view name,
                                             float2 content_position,
                                             float2 content_size,
-                                            BorrowedTexturePtr texture) {
+                                            BorrowedTexturePtr texture,
+                                            int2 texture_resolution) {
   name_ = name;
   content_position_ = content_position;
   content_size_ = content_size;
   texture_ = std::move(texture);
+  global_texture_resolution_ = texture_resolution;
 
-  PrimitiveShapeRendererState primitive_shape_state;
-  primitive_shape_state.primitive = {
-      .material =
-          MaterialDefinition{
-              .asset = std::string(
-                  world_space_editor_ui_assets::kSpatialUiCanvasTextureCmat
-                      .GetIdentifier())},
-      .mesh = PrimitiveShapeRendererState::QuadMesh{.size = float2{1.0f},
-                                                    .flip_uv = true}};
+  Future<AssetPtr<imp::MaterialAsset>> material_asset;
+  if (GetNode()->GetView().GetSplitEngineSerializer()) {
+    material_asset = GetNode()->GetView().GetAssetManager().LoadMaterial(
+        imp::editor::world_space_editor_ui_assets::
+            kSpatialUiCanvasOglTextureCmat);
+  } else {
+    material_asset = GetNode()->GetView().GetAssetManager().LoadMaterial(
+        imp::editor::world_space_editor_ui_assets::kSpatialUiCanvasTextureCmat);
+  }
 
-  return GetNode()
-      ->AddComponentWithState<PrimitiveShapeRenderer>(primitive_shape_state)
-      .Then([this](ComponentHandle<PrimitiveShapeRenderer> primitive_renderer) {
-        primitive_renderer_ = primitive_renderer;
-        primitive_renderer_->GetMaterial()->SetParameter(kCanvasTextureName,
-                                                         texture_);
+  return material_asset
+      .Then([this](AssetPtr<imp::MaterialAsset> material_asset) {
+        material_ = OwnedMaterialPtr(
+            GetNode()->GetView().GetMaterialFactory().CreateMaterial(
+                material_asset));
+        material_->SetParameter(kCanvasTextureName, texture_);
+      })
+      .Then([this]() {
+        // Create a quad mesh and render it with the texture material.
+        GetNode()->SetName(name_);
+        quad_mesh_ = GetNode()->GetView().GetMeshFactory().CreateQuad(
+            CreateQuadSettings{.size = float2{1.0f}, .flip_uv = true});
+        ComponentHandle<MeshRenderer> mesh_renderer =
+            GetNode()->AddComponent<MeshRenderer>();
+        mesh_renderer->SetMesh(quad_mesh_.Borrow());
+        mesh_renderer->SetMaterial(material_.Borrow());
+
         UpdateCanvas({.name = name_,
                       .content_position = content_position_,
                       .content_size = content_size_});
@@ -101,7 +120,7 @@ void SpatialUiCanvas::UpdateCanvas(SpatialUiCanvasSettings settings) {
   }
   content_position_ = settings.content_position;
   content_size_ = settings.content_size;
-  int2 global_content_size = texture_->GetSize();
+  int2 global_content_size = global_texture_resolution_;
   if (global_content_size.x <= 0 || global_content_size.y <= 0) {
     return;
   }
@@ -119,8 +138,8 @@ void SpatialUiCanvas::UpdateCanvas(SpatialUiCanvasSettings settings) {
                     content_size_.y / global_content_size.y};
   float2 corner_uv = {content_position_.x / global_content_size.x,
                       content_position_.y / global_content_size.y};
-  primitive_renderer_->GetMaterial()->SetParameter(kCornerUv, corner_uv);
-  primitive_renderer_->GetMaterial()->SetParameter(kSizeUv, size_uv);
+  material_->SetParameter(kCornerUv, corner_uv);
+  material_->SetParameter(kSizeUv, size_uv);
 }
 
 SpatialUiCanvas::SpatialUiCanvasSettings SpatialUiCanvas::GetSettings() {

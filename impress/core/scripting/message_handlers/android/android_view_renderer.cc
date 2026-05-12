@@ -41,6 +41,8 @@
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
 #include "core/render/android/android_external_texture_surface.h"
+#include "core/render/primitive_shape_renderer.h"
+#include "core/render/primitive_shape_renderer_state.proto.imp.h"
 #include "core/render/texture.h"
 #include "core/scripting/message_handlers/android/android_view_renderer.proto.imp.h"
 #include "core/view/base_view.h"
@@ -49,8 +51,6 @@
 #include "core/view/framework/collision/ray_hit.h"
 #include "core/view/framework/input/pointer_input_handler.h"
 #include "core/view/framework/render/material_definition.proto.imp.h"
-#include "core/view/framework/render/primitive_shape_renderer.h"
-#include "core/view/framework/render/primitive_shape_renderer_state.proto.imp.h"
 #include "core/view/platforms/android/wrappers/motion_event.h"
 #include "core/view/platforms/android/wrappers/surface.h"
 #include "split_engine/input/split_engine_input_event.h"
@@ -103,15 +103,16 @@ JNI_METHOD(void, nSetRenderViewSurfaceDimensions)
 
 RenderViewToSurfaceTextureWrapper::RenderViewToSurfaceTextureWrapper(
     NodeHandle node, jobject android_view, ViewSize view_size,
-    AndroidExternalTextureSurface& surface)
+    float corner_radius, AndroidExternalTextureSurface& surface)
     : JavaWrapper(node->GetView().GetContext().GetJniEnv(),
                   "com/google/ar/imp/core/scripting/viewtexture/"
                   "RenderViewToSurfaceTexture",
                   "(Landroid/content/Context;Landroid/view/View;Landroid/view/"
-                  "Surface;IIJ)V",
+                  "Surface;IIFJ)V",
                   node->GetView().GetContext().GetActivityContext(),
                   android_view, surface.GetSurface()->Reference(),
-                  view_size.width, view_size.height, ToJava(this)),
+                  view_size.width, view_size.height, corner_radius,
+                  ToJava(this)),
       node_(node),
       surface_(surface),
       view_size_(view_size) {
@@ -171,7 +172,8 @@ Future<absl::Status> AndroidViewRenderer::Setup(
     jobject android_view, ViewSize view_size,
     InputForwardingMode input_forwarding_mode,
     absl::optional<imp::MaterialDefinition> material_definition,
-    absl::optional<uint32_t> blend_priority) {
+    absl::optional<uint32_t> blend_priority,
+    absl::optional<float> corner_radius) {
   // Adding a child node so that generated Components are not attached to the
   // root node and so that we can set the scale of the renderer node to reflect
   // the aspect ratio of the Android View.
@@ -183,10 +185,12 @@ Future<absl::Status> AndroidViewRenderer::Setup(
 
   return AndroidExternalTextureSurface::CreateAsync(GetView()).Then(
       [this, view_size, input_forwarding_mode, material_definition,
-       blend_priority](std::unique_ptr<AndroidExternalTextureSurface> surface) {
+       blend_priority,
+       corner_radius](std::unique_ptr<AndroidExternalTextureSurface> surface) {
         surface_ = std::move(surface);
         renderer_wrapper_ = std::make_unique<RenderViewToSurfaceTextureWrapper>(
-            renderer_node_, android_view_, view_size, *surface_);
+            renderer_node_, android_view_, view_size,
+            corner_radius.value_or(0.0f), *surface_);
 
         // Add a collider so we get hit events.
         renderer_node_->AddComponent<BoxCollider>(kBaseBoxBounds);

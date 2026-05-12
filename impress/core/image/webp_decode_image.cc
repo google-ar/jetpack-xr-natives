@@ -27,6 +27,7 @@
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/backend/include/backend/PixelBufferDescriptor.h"
 #include "filament/filament/include/filament/Texture.h"
+#include "core/async/executor.h"
 #include "core/common/buffer_access.h"
 #include "core/image/image_contents.h"
 #include "core/resources/resource_manager.h"
@@ -44,8 +45,14 @@ class WebpImageContents : public ImageContents {
   WebpImageContents(int width, int stride, int height, int channels,
                     uint8_t* webp_memory)
       : width_(width), stride_(stride), height_(height), channels_(channels) {
-    webp_memory_ =
-        std::shared_ptr<uint8_t>(webp_memory, [](uint8_t* p) { WebPFree(p); });
+    webp_memory_ = std::shared_ptr<uint8_t>(webp_memory, [](uint8_t* p) {
+      if (Executor::BackgroundExecutor() != nullptr) {
+        Executor::BackgroundExecutor()->ScheduleInvocable(
+            [p]() { WebPFree(p); });
+      } else {
+        WebPFree(p);
+      }
+    });
   }
 
   uint32_t GetWidth() const override { return static_cast<uint32_t>(width_); }

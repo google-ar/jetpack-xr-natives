@@ -25,6 +25,7 @@
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
 #include "flatbuffers/allocator.h"
 #include "flatbuffers/base.h"
@@ -76,7 +77,8 @@ class SizePrefixedArenaBasedFlatbufferAllocator
 
 ArenaAllocator::ArenaAndAllocFunc::ArenaAndAllocFunc(
     size_t block_size, MemoryOptions memory_options)
-    : first_block_head_(memory_options.first_block_alloc
+    : block_size_(block_size),
+      first_block_head_(memory_options.first_block_alloc
                             ? memory_options.first_block_alloc(
                                   block_size, memory_options.user)
                             : nullptr),
@@ -99,17 +101,31 @@ ArenaAllocator::ArenaAndAllocFunc& ArenaAllocator::ArenaAndAllocFunc::operator=(
   first_block_head_ = other.first_block_head_;
   memory_options_ = other.memory_options_;
   in_use_ = other.in_use_;
+  block_size_ = other.block_size_;
 
   other.first_block_head_ = nullptr;
   other.memory_options_ = {};
   other.in_use_ = false;
+  other.block_size_ = 0;
 
   return *this;
 }
 
 bool ArenaAllocator::ArenaAndAllocFunc::IsMatch(
     size_t block_size, const MemoryOptions& memory_options) {
-  return (!in_use_ && arena_ && arena_->block_size() == block_size &&
+  // We cannot rely on arena_->block_size() here, because the return value is
+  // specific to the Malloc used.
+  //
+  // If TCMalloc is used (e.g. tests), it's value will be different than the
+  // value we passed to the zetasql_base::UnsafeArena constructor: zetasql_base::UnsafeArena constructor
+  // uses `nallocx(original_block_size)` function to initialize its private
+  // block_size_ field (return value of arena_->block_size()), but return value
+  // of `nallocx` will be bigger than `original_block_size` in case of TCMalloc
+  // and that will break comparison below.
+  //
+  // So, we are using here our cached, unchanged value from GetBlockSize().
+  //
+  return (!in_use_ && arena_ && GetBlockSize() == block_size &&
           memory_options_ == memory_options);
 }
 
@@ -137,6 +153,7 @@ ArenaAllocator::ArenaHandle ArenaAllocator::CreateArena(size_t block_size) {
 
 ArenaAllocator::ArenaHandle ArenaAllocator::CreateArena(
     size_t block_size, MemoryOptions memory_options) {
+  absl::MutexLock lock(arenas_mutex_);
   // First try to find an arena to reuse.
   for (int i = 0; i < arenas_.size(); ++i) {
     if (arenas_[i].IsMatch(block_size, memory_options)) {
@@ -166,12 +183,14 @@ ArenaAllocator::ArenaHandle ArenaAllocator::CreateArena(
 
 flatbuffers::Allocator& ArenaAllocator::GetFlatbufferAllocator(
     ArenaHandle arena_handle) {
+  absl::MutexLock lock(arenas_mutex_);
   
   return *flatbuffer_allocators_.at(arena_handle);
 }
 
 void ArenaAllocator::DestroyArena(ArenaHandle arena_handle,
                                   bool allow_recycle) {
+  absl::MutexLock lock(arenas_mutex_);
   
 
   ArenaAndAllocFunc& arena = arenas_[arena_handle];
@@ -183,12 +202,14 @@ void ArenaAllocator::DestroyArena(ArenaHandle arena_handle,
 }
 
 size_t ArenaAllocator::GetArenaSize(ArenaHandle arena_handle) {
+  absl::MutexLock lock(arenas_mutex_);
   
 
   return arenas_[arena_handle].Get()->status().bytes_allocated();
 }
 
 void* ArenaAllocator::GetArenaHead(ArenaHandle arena_handle) {
+  absl::MutexLock lock(arenas_mutex_);
   
   
 
@@ -197,6 +218,7 @@ void* ArenaAllocator::GetArenaHead(ArenaHandle arena_handle) {
 
 uint8_t* ArenaAllocator::AllocateArenaMemory(ArenaHandle arena_handle,
                                              size_t size) {
+  absl::MutexLock lock(arenas_mutex_);
   
   ArenaAndAllocFunc& arena = arenas_[arena_handle];
   

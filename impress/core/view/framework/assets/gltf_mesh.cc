@@ -50,6 +50,7 @@
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node.h"
 #include "core/render/base_renderable_manager.h"
+#include "core/render/render_order_constants.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/gltf_renderer.h"
 #include "core/view/utils/frame_time.h"
@@ -63,14 +64,6 @@ using model::ModelData;
 using RenderFlags = ModelData::RenderFlags;
 using SampledJointId = model::ModelData::SampledJointId;
 
-namespace {
-
-static constexpr uint8_t kMinPriority = 0;
-static constexpr uint8_t kMaxPriority = 7;
-
-static constexpr uint8_t kMinChannel = 0;
-static constexpr uint8_t kMaxChannel = 7;
-}  // namespace
 
 GltfMesh::GltfMesh() : owner_(), self_() {}
 

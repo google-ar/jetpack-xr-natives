@@ -1,0 +1,93 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+edition = "2024";
+
+package com.google.ar.imp.view.xr;
+
+// option cc_api_version = 2;
+option java_package = "com.google.ar.imp.view.xr";
+option java_outer_classname = "XrSetupParamsOuterClass";
+
+message XrSetupParams {
+  // Configures the foveated rendering level when building for Xr
+  enum FoveationLevel {
+    OFF_DEFAULT = 0;
+    LOW = 1;
+    MEDIUM = 2;
+    HIGH = 3;
+  }
+
+  // Whether or not to submit depth images along with color images in projection
+  // layers.
+  // https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#XR_KHR_composition_layer_depth
+  bool enable_composition_layer_depth = 1 [default = false];
+  // Whether or not to apply enhanced stereoscopic rendering.
+  bool use_enhanced_stereoscopic_rendering = 2 [default = true];
+  // Whether or not to use the max swapchain size over the recommended swapchain
+  // size.
+  bool use_max_swapchain_size = 3 [default = false];
+  // The level of foveation to use, as per the XR_FB_foveation OpenXR extension.
+  // https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#XR_FB_foveation
+  // Note: If foveation_level is not OFF_DEFAULT, use_quad_views must be false.
+  FoveationLevel foveation_level = 4 [default = OFF_DEFAULT];
+  bool skip_native_library_load = 5 [default = false];
+  // Whether or not to render with quad views. In this configuration, each eye
+  // consists of two viewports of which one is smaller and fully included inside
+  // of the larger FoV one.
+  // https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#XR_VARJO_quad_views
+  // Note: If use_quad_views is true, foveation_level must be OFF_DEFAULT.
+  bool use_quad_views = 6 [default = false];
+  // When building for XR, whether or not to render with mono view. It is for
+  // emulator only.
+  bool use_mono_view = 7 [default = false];
+  // Whether or not to use Varjo foveated rendering. In this configuration, the
+  // smaller (higher resolution) viewport follows the eye movement, while the
+  // larger (lower resolution) viewport is fixed.
+  // https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#XR_VARJO_foveated_rendering
+  // Note: use_quad_views must be true to use this feature.
+  bool use_varjo_foveated_rendering = 8 [default = false];
+  // The number of MSAA samples per pixel for the color and depth textures. Zero
+  // means MSAA is disabled.
+  int32 msaa_sample_count = 9 [default = 0];
+  // Selects the default reference space for XR applications. This should match
+  // values from
+  // https://registry.khronos.org/OpenXR/specs/1.1/man/html/XrReferenceSpaceType.html.
+  // Default to be STAGE.
+  int64 openxr_reference_space_type = 10 [default = 3];
+  // Whether or not to use the eye gaze interaction extension.
+  // https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#XR_EXT_eye_gaze_interaction
+  bool use_eye_gaze_interaction = 11 [default = true];
+  // Whether or not to use the AndroidSys IPD Eye Calibration extension.
+  bool use_ipd_eye_calibration = 12 [default = true];
+  // Whether or not to use the Android depth texture extension.
+  bool use_android_depth_texture = 13 [default = false];
+  // Set to true to use default XR actions, or false if you plan to manually
+  // set XR actions with AttachXrActions.
+  bool use_xr_action_defaults = 14 [default = true];
+  // Whether or not to use the FB color space extension.
+  // https://registry.khronos.org/OpenXR/specs/1.0/html/xrspec.html#XR_FB_color_space
+  bool use_fb_color_space = 15 [default = false];
+  // Whether or not to use the AndroidSYS extensions.
+  bool enable_android_system_extensions = 16 [default = false];
+  // When not using max swapchain size, the multiplier to be
+  // applied to the recommended swapchain size.
+  float swapchain_size_multiplier = 17 [default = 1.0];
+  // When building for XR, whether or not to use the global passthrough dimming
+  // extensions.
+  bool use_global_passthrough_dimming_extensions = 18 [default = false];
+  // When building for XR, whether or not to use the AndroidSys Eye Tracking
+  // Calibration extension.
+  bool use_eye_tracking_calibration = 19 [default = false];
+}

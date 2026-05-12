@@ -28,7 +28,7 @@ extern "C" {
 #define XR_TYPE_SPATIAL_COMPONENT_STREETSCAPE_GEOMETRY_METADATA_LIST_ANDROIDX2 ((XrStructureType) 1000798001U)
 // Streetscape geometry
 #define XR_SPATIAL_CAPABILITY_STREETSCAPE_GEOMETRY_ANDROIDX2 ((XrSpatialCapabilityEXT) 1000798000U)
-// Component that provides the metadata for a streetscape geometry; List struct - slink:XrSpatialComponentStreetscapeGeometryMetadataListANDROIDX2; Data struct - slink:XrSpatialStreetscapeGeometryMetadataANDROIDX2
+// Component that provides the metadata for a streetscape geometry; Corresponding list structure is slink:XrSpatialComponentStreetscapeGeometryMetadataListANDROIDX2; Corresponding data structure is slink:XrSpatialStreetscapeGeometryMetadataANDROIDX2
 #define XR_SPATIAL_COMPONENT_TYPE_STREETSCAPE_GEOMETRY_METADATA_ANDROIDX2 ((XrSpatialComponentTypeEXT) 1000798000U)
 
 typedef enum XrStreetscapeGeometrySemanticLabelANDROIDX2 {

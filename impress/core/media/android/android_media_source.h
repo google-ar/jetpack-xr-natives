@@ -137,7 +137,7 @@ AndroidMediaSource<T>::AndroidMediaSource(BaseView* view,
 
 template <typename T>
 absl::Status AndroidMediaSource<T>::Play() {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   bool result = media_player_ptr_->Start();
   if (!result) {
     // TODO: Retrieve Java error and pipe it here
@@ -149,7 +149,7 @@ absl::Status AndroidMediaSource<T>::Play() {
 
 template <typename T>
 absl::Status AndroidMediaSource<T>::Pause() {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   bool result = media_player_ptr_->Pause();
   if (!result) {
     // TODO: Retrieve Java error and pipe it here
@@ -161,7 +161,7 @@ absl::Status AndroidMediaSource<T>::Pause() {
 
 template <typename T>
 absl::Status AndroidMediaSource<T>::Stop() {
-  absl::ReleasableMutexLock lock(&mu_);
+  absl::ReleasableMutexLock lock(mu_);
   bool result = media_player_ptr_->Stop();
   if (!result) {
     // TODO: Retrieve Java error and pipe it here
@@ -176,7 +176,7 @@ absl::Status AndroidMediaSource<T>::Stop() {
 
 template <typename T>
 absl::Status AndroidMediaSource<T>::SetPlaybackSpeed(const float speed) {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   bool result = media_player_ptr_->SetPlaybackSpeed(speed);
   if (!result) {
     // TODO: Retrieve Java error and pipe it here
@@ -189,7 +189,7 @@ absl::Status AndroidMediaSource<T>::SetPlaybackSpeed(const float speed) {
 template <typename T>
 absl::Status AndroidMediaSource<T>::SeekTo(
     const float seconds, const MediaSource::SeekType seek_type) {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   bool result = media_player_ptr_->SeekTo(seconds * 1000, seek_type);
   if (!result) {
     // TODO: Retrieve Java error and pipe it here
@@ -206,7 +206,7 @@ absl::Status AndroidMediaSource<T>::SetLoopCount(const int loop) {
         "playback");
   }
 
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   bool result = media_player_ptr_->SetLooping(loop < 0);
   if (!result) {
     // TODO: Retrieve Java error and pipe it here
@@ -217,7 +217,7 @@ absl::Status AndroidMediaSource<T>::SetLoopCount(const int loop) {
 
 template <typename T>
 absl::Status AndroidMediaSource<T>::SetVolume(const float volume) {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   bool result = media_player_ptr_->SetVolume(volume, volume);
   if (!result) {
     // TODO: Retrieve Java error and pipe it here
@@ -228,7 +228,7 @@ absl::Status AndroidMediaSource<T>::SetVolume(const float volume) {
 
 template <typename T>
 absl::StatusOr<absl::Duration> AndroidMediaSource<T>::GetDuration() const {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   int duration_msec = media_player_ptr_->GetDuration();
   // Returned value is negative if there is an error/exception
   if (duration_msec < 0) {
@@ -239,7 +239,7 @@ absl::StatusOr<absl::Duration> AndroidMediaSource<T>::GetDuration() const {
 
 template <typename T>
 absl::StatusOr<absl::Duration> AndroidMediaSource<T>::GetPlaybackTime() const {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   int position_msec = media_player_ptr_->GetCurrentPosition();
   // Returned value is negative if there is an error/exception
   if (position_msec < 0) {
@@ -250,7 +250,7 @@ absl::StatusOr<absl::Duration> AndroidMediaSource<T>::GetPlaybackTime() const {
 
 template <typename T>
 absl::StatusOr<int> AndroidMediaSource<T>::GetLoopCount() const {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   if (media_player_ptr_->IsLooping()) {
     return MediaSource::kLoopIndefinite;
   }
@@ -259,7 +259,7 @@ absl::StatusOr<int> AndroidMediaSource<T>::GetLoopCount() const {
 
 template <typename T>
 MediaSource::State AndroidMediaSource<T>::GetState() const {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   return state_;
 }
 
@@ -284,7 +284,7 @@ void AndroidMediaSource<T>::SetOnBufferingCallback(
 template <typename T>
 void AndroidMediaSource<T>::OnPlaybackComplete() {
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     state_ = MediaSource::State::kReady;
   }
   if (on_playback_complete_callback_) {
@@ -302,7 +302,7 @@ void AndroidMediaSource<T>::OnSeekComplete() {
 template <typename T>
 void AndroidMediaSource<T>::OnReady() {
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     state_ = MediaSource::State::kReady;
   }
   if (on_ready_callback_) {
@@ -316,7 +316,7 @@ std::string MediaErrorToString(AndroidMediaPlayer* player, int what, int extra);
 template <typename T>
 bool AndroidMediaSource<T>::OnError(int what, int extra) {
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     std::string error =
         MediaErrorToString(media_player_ptr_.get(), what, extra);
     result_status_ = absl::InternalError(error);
@@ -335,7 +335,7 @@ template <typename T>
 bool AndroidMediaSource<T>::OnInfo(int what, int extra) {
   std::optional<MediaSource::BufferingState> buffering = std::nullopt;
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     if (what == media_player_ptr_->MediaInfoBufferingStart()) {
       buffering = MediaSource::BufferingState::kBuffering;
     } else if (what == media_player_ptr_->MediaInfoBufferingEnd()) {
@@ -368,7 +368,7 @@ Future<absl::Status> AndroidMediaSource<T>::Load(absl::string_view url) {
 
 template <typename T>
 void AndroidMediaSource<T>::SetUpMediaPlayer() {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   media_player_ptr_->SetOnCompletionListener(on_completion_listener_ptr_.get());
   media_player_ptr_->SetOnSeekCompleteListener(
       on_seek_complete_listener_ptr_.get());
@@ -407,7 +407,7 @@ Future<absl::Status> AndroidMediaSource<T>::LoadImpl(
   };
 
   {
-    absl::MutexLock lock(&mu_);
+    absl::MutexLock lock(mu_);
     if (!media_player_ptr_) {
       media_player_ptr_ = std::make_unique<AndroidMediaPlayer>(context_);
     }
@@ -419,7 +419,7 @@ Future<absl::Status> AndroidMediaSource<T>::LoadImpl(
             // On a background thread, call SetDataSource.
             [this, asset]() {
               {
-                absl::MutexLock lock(&mu_);
+                absl::MutexLock lock(mu_);
                 if (absl::holds_alternative<const MediaAsset*>(asset)) {
                   media_player_ptr_->SetDataSource(media_data_src_ptr_.get());
                 } else {
@@ -439,7 +439,7 @@ Future<absl::Status> AndroidMediaSource<T>::LoadImpl(
             }));
   } else {
     {
-      absl::MutexLock lock(&mu_);
+      absl::MutexLock lock(mu_);
       if (absl::holds_alternative<const MediaAsset*>(asset)) {
         media_player_ptr_->SetDataSource(media_data_src_ptr_.get());
       } else {
@@ -456,13 +456,13 @@ Future<absl::Status> AndroidMediaSource<T>::LoadImpl(
 
 template <typename T>
 void AndroidMediaSource<T>::PrepareAsync() {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   media_player_ptr_->PrepareAsync();
 }
 
 template <typename T>
 void AndroidMediaSource<T>::Prepare() {
-  absl::MutexLock lock(&mu_);
+  absl::MutexLock lock(mu_);
   media_player_ptr_->Prepare();
 }
 

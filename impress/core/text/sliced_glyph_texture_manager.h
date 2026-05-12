@@ -66,6 +66,8 @@ class SlicedGlyphTextureManager {
   // Renders a single slice.
   void RenderSlice(filament::Renderer& renderer, SliceId slice);
 
+  void OnViewResumed();
+
  private:
   SlicedGlyphTextureManager(BaseView& view,
                             AssetPtr<MaterialAsset> blit_material,

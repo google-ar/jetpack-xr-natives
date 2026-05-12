@@ -32,8 +32,6 @@
 #include "flatbuffers/reflection_generated.h"
 #include "flatbuffers/struct.h"
 #include "flatbuffers/table.h"
-#include "third_party/googlefuzztest/internal/domains/domain_base.h"
-#include "third_party/googlefuzztest/internal/domains/domain_type_erasure.h"
 
 namespace fuzztest {
 namespace internal {

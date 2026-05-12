@@ -39,10 +39,15 @@
 #include "core/scene_handles/scene_handles.h"
 #include "google/protobuf/util/message_differencer.h"
 
-namespace imp::recipes_testing {
+namespace imp {
+
+namespace recipes_testing {
 
 template <typename T>
-constexpr bool kIsImpType =
+constexpr bool kIsImpType = kIsAnyOf<T, NodeHandle, NodeSceneHandle>;
+
+template <typename T>
+constexpr bool kIsVecType =
     kIsAnyOf<T, float2, float3, float4, mat2f, mat3f, mat4f, quatf>;
 
 template <typename T>
@@ -51,10 +56,11 @@ constexpr bool kIsNativeType =
 
 template <typename T>
 constexpr bool kIsImpRecipeType =
-    kIsAnyOf<T, Box, LiteralArray, LiteralTuple, LiteralMap, RecipeRayHit>;
+    kIsAnyOf<T, Box, LiteralArray, LiteralTuple, LiteralMap, RecipeRayHit,
+             ::google::protobuf::imp_proto::Any>;
 
 template <typename T>
-using EnableIfImpType = std::enable_if_t<kIsImpType<T>, int>;
+using EnableIfVecType = std::enable_if_t<kIsVecType<T>, int>;
 
 template <typename T>
 using EnableIfNativeType = std::enable_if_t<kIsNativeType<T>, int>;
@@ -66,7 +72,7 @@ using EnableIfImpRecipeType = std::enable_if_t<kIsImpRecipeType<T>, int>;
 // graph are equal.
 template <typename Variant>
 struct VariantEq {
-  template <typename T, EnableIfImpType<T> = 0>
+  template <typename T, EnableIfVecType<T> = 0>
   bool operator()(const T& rhs) const {
     return AlmostEqual(std::get<T>(lhs), rhs);
   }
@@ -133,14 +139,10 @@ class RecipeTypeMatcher {
 
  private:
   void DescribeExpected(std::ostream* os) const {
-    if constexpr (std::is_floating_point_v<ExpectedT>) {
+    if constexpr (kIsNativeType<ExpectedT>) {
       *os << expected_;
-    } else if constexpr (kIsImpType<ExpectedT>) {
-      *os << expected_;
-    } else if constexpr (kIsImpRecipeType<ExpectedT>) {
-      *os << recipe::ToString(expected_);
     } else {
-      *os << expected_;
+      *os << recipe::ToString(expected_);
     }
   }
 
@@ -151,22 +153,21 @@ class RecipeTypeMatcher {
   }
 
   template <typename ActualT>
-  void ExplainLiteralMismatch(::testing::MatchResultListener* listener,
-                              const ActualT& actual) const {
-    *listener << "Expected Literal value " << recipe::ToString(expected_)
-              << " but got value " << recipe::ToString(actual);
-  }
-
-  template <typename ActualT>
   void ExplainValueMismatch(::testing::MatchResultListener* listener,
                             const ActualT& actual) const {
-    *listener << "Expected value " << expected_ << " but got value " << actual;
+    if constexpr (kIsNativeType<ActualT> || kIsNativeType<ExpectedT>) {
+      *listener << "Expected value " << expected_ << " but got value "
+                << actual;
+    } else {
+      *listener << "Expected value " << recipe::ToString(expected_)
+                << " but got value " << recipe::ToString(actual);
+    }
   }
 
   template <typename ActualT>
   bool MatchAndExplainImpl(const ActualT& actual,
                            ::testing::MatchResultListener* listener) const {
-    if constexpr (kIsImpType<ActualT> || kIsImpType<ExpectedT> ||
+    if constexpr (kIsVecType<ActualT> || kIsVecType<ExpectedT> ||
                   kIsAnyOf<ActualT, int, float, bool, double> ||
                   kIsAnyOf<ExpectedT, int, float, bool, double>) {
       if constexpr (!std::is_same_v<ActualT, ExpectedT>) {
@@ -184,7 +185,17 @@ class RecipeTypeMatcher {
         ExplainTypeMismatch<ActualT>(listener);
         return false;
       } else if (recipe::ToString(actual) != recipe::ToString(expected_)) {
-        ExplainLiteralMismatch(listener, actual);
+        ExplainValueMismatch(listener, actual);
+        return false;
+      } else {
+        return true;
+      }
+    } else if constexpr (kIsImpType<ActualT> || kIsImpType<ExpectedT>) {
+      if constexpr (!std::is_same_v<ActualT, ExpectedT>) {
+        ExplainTypeMismatch<ActualT>(listener);
+        return false;
+      } else if (actual != expected_) {
+        ExplainValueMismatch(listener, actual);
         return false;
       } else {
         return true;
@@ -201,6 +212,58 @@ class RecipeTypeMatcher {
   ExpectedT expected_;
 };
 
+template <typename T>
+class LiteralMatcher {
+ public:
+  explicit LiteralMatcher(::testing::Matcher<const T&> matcher)
+      : matcher_(std::move(matcher)) {}
+
+  bool MatchAndExplain(const Literal& actual,
+                       ::testing::MatchResultListener* listener) const {
+    if (!std::holds_alternative<T>(actual.value)) {
+      *listener << "whose value is not of the expected type";
+      return false;
+    }
+
+    const bool match =
+        matcher_.MatchAndExplain(std::get<T>(actual.value), listener);
+    *listener << "whose value " << (match ? " matches" : " doesn't match");
+    return match;
+  }
+
+  void DescribeTo(std::ostream* os) const {
+    *os << "is a variant<> matching the value ";
+    matcher_.DescribeTo(os);
+  }
+
+  void DescribeNegationTo(std::ostream* os) const {
+    *os << "is a variant<> not matching the value ";
+    matcher_.DescribeNegationTo(os);
+  }
+
+ private:
+  const ::testing::Matcher<const T&> matcher_;
+};
+
+template <typename T>
+inline ::testing::Matcher<const Literal&> ToLiteralMatcher(const T value) {
+  return ::testing::MakePolymorphicMatcher(
+      LiteralMatcher<T>(RecipeTypeMatcher<T>(value)));
+}
+
+template <typename T>
+inline ::testing::Matcher<const Literal&> ToLiteralMatcher(
+    const ::testing::Matcher<const T&>& matcher) {
+  return ::testing::MakePolymorphicMatcher(LiteralMatcher<T>(matcher));
+}
+
+// Specialization for char* to convert it to string.
+template <>
+inline ::testing::Matcher<const Literal&> ToLiteralMatcher(const char* value) {
+  return ::testing::MakePolymorphicMatcher(LiteralMatcher<std::string>(
+      RecipeTypeMatcher<std::string>(std::string(value))));
+}
+
 // Checks if the matched value is equal to the expected value in both type and
 // value, or in floating point types, if they are almost equal.
 template <typename T>
@@ -208,6 +271,15 @@ inline RecipeTypeMatcher<T> RecipeEq(T expected) {
   return RecipeTypeMatcher<T>(expected);
 }
 
-}  // namespace imp::recipes_testing
+}  // namespace recipes_testing
+
+// Returns a gMock matcher that matches the provided Recipe Literal.
+template <typename LiteralMatcher>
+inline ::testing::Matcher<const Literal&> LiteralWith(
+    const LiteralMatcher matcher) {
+  return recipes_testing::ToLiteralMatcher(matcher);
+}
+
+}  // namespace imp
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_RECIPES_TESTS_RECIPE_MATCHERS_H_

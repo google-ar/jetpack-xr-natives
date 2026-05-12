@@ -29,9 +29,8 @@
 namespace imp::recipe {
 namespace {
 
-template <typename T>
-bool VecHasGreaterElement(const T& a, const T& b) {
-  for (size_t i = 0; i < a.size(); ++i) {
+bool FloatArrHasGreaterElement(const float* a, const float* b, int size) {
+  for (size_t i = 0; i < size; ++i) {
     if (a[i] > b[i]) {
       return true;
     }
@@ -70,7 +69,8 @@ absl::StatusOr<recipe::Variable> Clamp(const recipe::Variable& value,
                         std::get<double>(max));
 
     case Literal::kValue_Float2Value: {
-      if (VecHasGreaterElement(std::get<float2>(min), std::get<float2>(max))) {
+      if (FloatArrHasGreaterElement(&std::get<float2>(min)[0],
+                                    &std::get<float2>(max)[0], float2::SIZE)) {
         break;
       }
       return clamp(std::get<float2>(value), std::get<float2>(min),
@@ -78,18 +78,65 @@ absl::StatusOr<recipe::Variable> Clamp(const recipe::Variable& value,
     }
 
     case Literal::kValue_Float3Value:
-      if (VecHasGreaterElement(std::get<float3>(min), std::get<float3>(max))) {
+      if (FloatArrHasGreaterElement(&std::get<float3>(min)[0],
+                                    &std::get<float3>(max)[0], float3::SIZE)) {
         break;
       }
       return clamp(std::get<float3>(value), std::get<float3>(min),
                    std::get<float3>(max));
 
     case Literal::kValue_Float4Value:
-      if (VecHasGreaterElement(std::get<float4>(min), std::get<float4>(max))) {
+      if (FloatArrHasGreaterElement(&std::get<float4>(min)[0],
+                                    &std::get<float4>(max)[0], float4::SIZE)) {
         break;
       }
       return clamp(std::get<float4>(value), std::get<float4>(min),
                    std::get<float4>(max));
+    case Literal::kValue_Mat2fValue: {
+      constexpr int size = mat2f::COL_SIZE * mat2f::ROW_SIZE;
+      if (FloatArrHasGreaterElement(std::get<mat2f>(min).asArray(),
+                                    std::get<mat2f>(max).asArray(), size)) {
+        break;
+      }
+      mat2f result;
+      for (int i = 0; i < size; ++i) {
+        result[i / mat2f::COL_SIZE][i % mat2f::COL_SIZE] =
+            clamp(std::get<mat2f>(value).asArray()[i],
+                  std::get<mat2f>(min).asArray()[i],
+                  std::get<mat2f>(max).asArray()[i]);
+      }
+      return result;
+    }
+    case Literal::kValue_Mat3fValue: {
+      constexpr int size = mat3f::COL_SIZE * mat3f::ROW_SIZE;
+      if (FloatArrHasGreaterElement(std::get<mat3f>(min).asArray(),
+                                    std::get<mat3f>(max).asArray(), size)) {
+        break;
+      }
+      mat3f result;
+      for (int i = 0; i < size; ++i) {
+        result[i / mat3f::COL_SIZE][i % mat3f::COL_SIZE] =
+            clamp(std::get<mat3f>(value).asArray()[i],
+                  std::get<mat3f>(min).asArray()[i],
+                  std::get<mat3f>(max).asArray()[i]);
+      }
+      return result;
+    }
+    case Literal::kValue_Mat4fValue: {
+      constexpr int size = mat4f::COL_SIZE * mat4f::ROW_SIZE;
+      if (FloatArrHasGreaterElement(std::get<mat4f>(min).asArray(),
+                                    std::get<mat4f>(max).asArray(), size)) {
+        break;
+      }
+      mat4f result;
+      for (int i = 0; i < size; ++i) {
+        result[i / mat4f::COL_SIZE][i % mat4f::COL_SIZE] =
+            clamp(std::get<mat4f>(value).asArray()[i],
+                  std::get<mat4f>(min).asArray()[i],
+                  std::get<mat4f>(max).asArray()[i]);
+      }
+      return result;
+    }
     default:
       return absl::InvalidArgumentError(
           "Clamp is not available for given types.");
@@ -113,9 +160,15 @@ absl::StatusOr<recipe::Variable> NegateValue(const recipe::Variable& value) {
       return -std::get<float3>(value);
     case Literal::kValue_Float4Value:
       return -std::get<float4>(value);
+    case Literal::kValue_Mat2fValue:
+      return -std::get<mat2f>(value);
+    case Literal::kValue_Mat3fValue:
+      return -std::get<mat3f>(value);
+    case Literal::kValue_Mat4fValue:
+      return -std::get<mat4f>(value);
     default:
       return absl::InvalidArgumentError(
-          "input must be an integer, floating-point or floatN type.");
+          "input must be a floating-point, floatN or matrix type.");
   }
 }
 
@@ -131,9 +184,15 @@ absl::StatusOr<recipe::Variable> Ceil(const recipe::Variable& value) {
       return ceil(std::get<float3>(value));
     case Literal::kValue_Float4Value:
       return ceil(std::get<float4>(value));
+    case Literal::kValue_Mat2fValue:
+      return TransformMatrix(ceil, std::get<mat2f>(value));
+    case Literal::kValue_Mat3fValue:
+      return TransformMatrix(ceil, std::get<mat3f>(value));
+    case Literal::kValue_Mat4fValue:
+      return TransformMatrix(ceil, std::get<mat4f>(value));
     default:
       return absl::InvalidArgumentError(
-          "input must be a floating-point or floatN type.");
+          "input must be a floating-point, floatN or matrix type.");
   }
 }
 
@@ -149,9 +208,15 @@ absl::StatusOr<recipe::Variable> Floor(const recipe::Variable& value) {
       return floor(std::get<float3>(value));
     case Literal::kValue_Float4Value:
       return floor(std::get<float4>(value));
+    case Literal::kValue_Mat2fValue:
+      return TransformMatrix(floor, std::get<mat2f>(value));
+    case Literal::kValue_Mat3fValue:
+      return TransformMatrix(floor, std::get<mat3f>(value));
+    case Literal::kValue_Mat4fValue:
+      return TransformMatrix(floor, std::get<mat4f>(value));
     default:
       return absl::InvalidArgumentError(
-          "input must be a floating-point type or a floatN type.");
+          "input must be a floating-point, floatN or matrix type.");
   }
 }
 
@@ -167,9 +232,15 @@ absl::StatusOr<recipe::Variable> Round(const recipe::Variable& value) {
       return round(std::get<float3>(value));
     case Literal::kValue_Float4Value:
       return round(std::get<float4>(value));
+    case Literal::kValue_Mat2fValue:
+      return TransformMatrix(round, std::get<mat2f>(value));
+    case Literal::kValue_Mat3fValue:
+      return TransformMatrix(round, std::get<mat3f>(value));
+    case Literal::kValue_Mat4fValue:
+      return TransformMatrix(round, std::get<mat4f>(value));
     default:
       return absl::InvalidArgumentError(
-          "input must be a floating-point type or a floatN type.");
+          "input must be a floating-point, floatN or matrix type.");
   }
 }
 
@@ -189,9 +260,15 @@ absl::StatusOr<recipe::Variable> Fraction(const recipe::Variable& value) {
       return TransformVector(fraction, std::get<float3>(value));
     case Literal::kValue_Float4Value:
       return TransformVector(fraction, std::get<float4>(value));
+    case Literal::kValue_Mat2fValue:
+      return TransformMatrix(fraction, std::get<mat2f>(value));
+    case Literal::kValue_Mat3fValue:
+      return TransformMatrix(fraction, std::get<mat3f>(value));
+    case Literal::kValue_Mat4fValue:
+      return TransformMatrix(fraction, std::get<mat4f>(value));
     default:
       return absl::InvalidArgumentError(
-          "input must be a floating-point type or a floatN type.");
+          "input must be a floating-point, floatN or matrix type.");
   }
 }
 
@@ -207,9 +284,15 @@ absl::StatusOr<recipe::Variable> Saturate(const recipe::Variable& value) {
       return saturate(std::get<float3>(value));
     case Literal::kValue_Float4Value:
       return saturate(std::get<float4>(value));
+    case Literal::kValue_Mat2fValue:
+      return TransformMatrix(saturate, std::get<mat2f>(value));
+    case Literal::kValue_Mat3fValue:
+      return TransformMatrix(saturate, std::get<mat3f>(value));
+    case Literal::kValue_Mat4fValue:
+      return TransformMatrix(saturate, std::get<mat4f>(value));
     default:
       return absl::InvalidArgumentError(
-          "input must be a floating-point type or a floatN type.");
+          "input must be a floating-point, floatN or matrix type.");
   }
 }
 
@@ -238,9 +321,33 @@ absl::StatusOr<recipe::Variable> Mix(const recipe::Variable& point1,
     case Literal::kValue_Float4Value:
       return mix(std::get<float4>(point1), std::get<float4>(point2),
                  std::get<float4>(coefficient));
+    case Literal::kValue_Mat2fValue: {
+      mat2f result;
+      for (int i = 0; i < mat2f::COL_SIZE; ++i) {
+        result[i] = mix(std::get<mat2f>(point1)[i], std::get<mat2f>(point2)[i],
+                        std::get<mat2f>(coefficient)[i]);
+      }
+      return result;
+    }
+    case Literal::kValue_Mat3fValue: {
+      mat3f result;
+      for (int i = 0; i < mat3f::COL_SIZE; ++i) {
+        result[i] = mix(std::get<mat3f>(point1)[i], std::get<mat3f>(point2)[i],
+                        std::get<mat3f>(coefficient)[i]);
+      }
+      return result;
+    }
+    case Literal::kValue_Mat4fValue: {
+      mat4f result;
+      for (int i = 0; i < mat4f::COL_SIZE; ++i) {
+        result[i] = mix(std::get<mat4f>(point1)[i], std::get<mat4f>(point2)[i],
+                        std::get<mat4f>(coefficient)[i]);
+      }
+      return result;
+    }
     default:
       return absl::InvalidArgumentError(
-          "input must be a floating-point type or a floatN type.");
+          "input must be a floating-point, floatN or matrix type.");
   }
 }
 
@@ -256,9 +363,15 @@ absl::StatusOr<recipe::Variable> Truncate(const recipe::Variable& value) {
       return TransformVector(std::trunc, std::get<float3>(value));
     case Literal::kValue_Float4Value:
       return TransformVector(std::trunc, std::get<float4>(value));
+    case Literal::kValue_Mat2fValue:
+      return TransformMatrix(std::trunc, std::get<mat2f>(value));
+    case Literal::kValue_Mat3fValue:
+      return TransformMatrix(std::trunc, std::get<mat3f>(value));
+    case Literal::kValue_Mat4fValue:
+      return TransformMatrix(std::trunc, std::get<mat4f>(value));
     default:
       return absl::InvalidArgumentError(
-          "input must be a floating-point type or a floatN type.");
+          "input must be a floating-point, floatN or matrix type.");
   }
 }
 
@@ -267,46 +380,50 @@ absl::StatusOr<recipe::Variable> Truncate(const recipe::Variable& value) {
 void RegisterMathArithmeticFunctions(BaseRecipeSystem* recipe_system) {
   recipe_system->RegisterFunction(
       "Clamp",
-      [](recipe::Variable value, recipe::Variable min,
-         recipe::Variable max) -> absl::StatusOr<recipe::Variable> {
+      [](const recipe::Variable& value, const recipe::Variable& min,
+         const recipe::Variable& max) -> absl::StatusOr<recipe::Variable> {
         return Clamp(value, min, max);
       });
   recipe_system->RegisterFunction(
       "NegateValue",
-      [](recipe::Variable value) -> absl::StatusOr<recipe::Variable> {
+      [](const recipe::Variable& value) -> absl::StatusOr<recipe::Variable> {
         return NegateValue(value);
       });
   recipe_system->RegisterFunction(
-      "Ceil", [](recipe::Variable value) -> absl::StatusOr<recipe::Variable> {
+      "Ceil",
+      [](const recipe::Variable& value) -> absl::StatusOr<recipe::Variable> {
         return Ceil(value);
       });
   recipe_system->RegisterFunction(
-      "Floor", [](recipe::Variable value) -> absl::StatusOr<recipe::Variable> {
+      "Floor",
+      [](const recipe::Variable& value) -> absl::StatusOr<recipe::Variable> {
         return Floor(value);
       });
   recipe_system->RegisterFunction(
-      "Round", [](recipe::Variable value) -> absl::StatusOr<recipe::Variable> {
+      "Round",
+      [](const recipe::Variable& value) -> absl::StatusOr<recipe::Variable> {
         return Round(value);
       });
   recipe_system->RegisterFunction(
       "Fraction",
-      [](recipe::Variable value) -> absl::StatusOr<recipe::Variable> {
+      [](const recipe::Variable& value) -> absl::StatusOr<recipe::Variable> {
         return Fraction(value);
       });
   recipe_system->RegisterFunction(
       "Saturate",
-      [](recipe::Variable value) -> absl::StatusOr<recipe::Variable> {
+      [](const recipe::Variable& value) -> absl::StatusOr<recipe::Variable> {
         return Saturate(value);
       });
   recipe_system->RegisterFunction(
       "Mix",
-      [](recipe::Variable point1, recipe::Variable point2,
-         recipe::Variable coefficient) -> absl::StatusOr<recipe::Variable> {
+      [](const recipe::Variable& point1, const recipe::Variable& point2,
+         const recipe::Variable& coefficient)
+          -> absl::StatusOr<recipe::Variable> {
         return Mix(point1, point2, coefficient);
       });
   recipe_system->RegisterFunction(
       "Truncate",
-      [](recipe::Variable value) -> absl::StatusOr<recipe::Variable> {
+      [](const recipe::Variable& value) -> absl::StatusOr<recipe::Variable> {
         return Truncate(value);
       });
 }

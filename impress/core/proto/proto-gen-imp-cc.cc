@@ -44,7 +44,9 @@
 #include "absl/strings/strip.h"
 #include "core/common/hash.h"
 #include "core/proto/imp.pb.h"
+#include "core/proto/imp_editions.pb.h"
 #include "core/proto/imp_editor.pb.h"
+#include "google/protobuf/compiler/code_generator.h"
 #include "google/protobuf/descriptor.h"
 #include "google/protobuf/io/printer.h"
 #include "google/protobuf/io/zero_copy_stream_impl_lite.h"
@@ -70,6 +72,24 @@ void MakeAsciiTitlecase(std::string* s, absl::string_view delimiters) {
     upper = (absl::StrContains(delimiters, ch));
   }
 }
+
+// Helper class to access CodeGenerator APIs from ImpCodeGenerator.
+//
+// TODO: Refactor ImpCodeGenerator to inherit from
+// google::protobuf::compiler::CodeGenerator so that we don't need this helper class.
+//
+// Protobuffer team does recommend refactoring to use the CodeGenerator API
+// directly eventually, however this is a larger change and they have said this
+// approach is supported & allowed.
+class CodeGeneratorHelper : public google::protobuf::compiler::CodeGenerator {
+ public:
+  template <typename DescriptorT>
+  static imp::ImpressFeatureSet GetResolvedFeatureSet(
+      const DescriptorT& descriptor) {
+    return CodeGenerator::GetResolvedSourceFeatureExtension(
+        descriptor, imp::impress_feature_set);
+  }
+};
 
 class ImpCodeGenerator {
  public:
@@ -215,6 +235,20 @@ class ImpCodeGenerator {
       // same thing.
       if (field->options().GetExtension(imp::string_type) ==
           imp::StringType::STRING_VIEW) {
+        // Special Impress option to support a string that points to external
+        // memory.
+        //
+        // Standard C++ protos have a feature called aliasing, which can be
+        // accessed by calling 'ParseFromStringWithAliasing'. This allows users
+        // to choose *at runtime* if they want the string to reference the
+        // memory of the input buffer. The aliasing feature is not currently
+        // supported in Impress. This special option acts as a workaround to
+        // achieve similar behavior, however it is more limited since it is a
+        // compile time choice to specify the option in the proto.
+        //
+        // This is useful for performance optimizations when working with
+        // large string data that is known to live outside of the proto object's
+        // lifetime.
         return "absl::string_view";
       } else if (field->options().GetExtension(imp::string_type) ==
                  imp::StringType::CORD) {
@@ -223,7 +257,31 @@ class ImpCodeGenerator {
 
       switch (field->cpp_string_type()) {
         case google::protobuf::FieldDescriptor::CppStringType::kView:
-          return "absl::string_view";
+          // kView has two special meanings in the standard C++ Proto:
+          //
+          // 1. It is used to indicate that the generated
+          // setters and getters should use std::string_view instead of
+          // std::string. However, the message still holds the memory for the
+          // string by default, it does *not* point to external memory. This was
+          // done to enable a performance optimization and code improvement for
+          // how the standard plugin uses arena allocators with strings. This
+          // isn't directly applicable to the Impress plugin which uses direct
+          // fields with no heap allocation.
+          //
+          // 2. If the message is parsed with 'ParseFromStringWithAliasing' the
+          // string will point to the underlying memory of the input buffer.
+          // This feature is applicable to Impress, however not currently
+          // supported.
+          //
+          // Note: kView is the default for string fields starting in edition
+          // 2024.
+          //
+          // For now, we just treat kView as an std::string. Generating it as a
+          // string_view would mean that the data is stored externally, which is
+          // not desired behavior most of the time.
+          //
+          // TODO: Add support for proper runtime aliasing.
+          return "std::string";
         case google::protobuf::FieldDescriptor::CppStringType::kCord:
           return "absl::Cord";
         case google::protobuf::FieldDescriptor::CppStringType::kString:
@@ -235,36 +293,75 @@ class ImpCodeGenerator {
     }
   }
 
-  absl::StatusOr<std::pair<std::string, std::string>> FieldInfo(
+  std::string DefaultConstantTypeName(
       const google::protobuf::FieldDescriptor* field) const {
-    // Verify that STRING_VIEW is only used for string fields.
-    if (field->options().GetExtension(imp::string_type) !=
-            imp::StringType::STRING_TYPE_UNKNOWN &&
-        field->cpp_type() != google::protobuf::FieldDescriptor::CPPTYPE_STRING) {
+    if (field->cpp_type() == google::protobuf::FieldDescriptor::CPPTYPE_STRING) {
+      return "std::string_view";
+    } else {
+      return TypeName(field);
+    }
+  }
+
+  bool HasDefault(const google::protobuf::FieldDescriptor* field) const {
+    return field->has_default_value() ||
+           field->options().HasExtension(imp::msg_default);
+  }
+
+  std::string DefaultValue(const google::protobuf::FieldDescriptor* field) const {
+    if (!HasDefault(field)) {
+      return "";
+    }
+
+    if (field->options().HasExtension(imp::msg_default)) {
+      return field->options().GetExtension(imp::msg_default);
+    }
+
+    switch (field->cpp_type()) {
+      case google::protobuf::FieldDescriptor::CPPTYPE_INT32:
+        return absl::StrCat(field->default_value_int32());
+      case google::protobuf::FieldDescriptor::CPPTYPE_INT64:
+        return absl::StrCat(field->default_value_int64());
+      case google::protobuf::FieldDescriptor::CPPTYPE_UINT32:
+        return absl::StrCat(field->default_value_uint32());
+      case google::protobuf::FieldDescriptor::CPPTYPE_UINT64:
+        return absl::StrCat(field->default_value_uint64());
+      case google::protobuf::FieldDescriptor::CPPTYPE_DOUBLE:
+        return absl::StrCat(field->default_value_double());
+      case google::protobuf::FieldDescriptor::CPPTYPE_FLOAT:
+        return absl::StrCat(field->default_value_float());
+      case google::protobuf::FieldDescriptor::CPPTYPE_BOOL:
+        return field->default_value_bool() ? "true" : "false";
+      case google::protobuf::FieldDescriptor::CPPTYPE_ENUM:
+        return absl::StrCat(TypeName(field),
+                            "::", field->default_value_enum()->name());
+      case google::protobuf::FieldDescriptor::CPPTYPE_STRING:
+        return absl::StrCat("\"", field->default_value_string(), "\"");
+      default:
+        return "UNSUPPORTED DEFAULT VALUE";
+    }
+  }
+
+  std::string DefaultValueFieldName(
+      const google::protobuf::FieldDescriptor* field) const {
+    std::string upper_case_name = std::string(field->camelcase_name());
+    upper_case_name[0] = absl::ascii_toupper(upper_case_name[0]);
+    return absl::StrCat("k", upper_case_name, "Default");
+  }
+
+  absl::StatusOr<std::pair<std::string, std::string>>
+  SingleFieldInfoLegacyPresence(const google::protobuf::FieldDescriptor* field) const {
+    if (field->options().HasExtension(imp::msg_default)) {
       return absl::InvalidArgumentError(absl::StrCat(
           "ERROR: field ", field->containing_type()->name(),
           "::", field->name(),
-          " - imp.string_type is only supported for string fields."));
+          " - imp.msg_default is not supported in legacy presence mode."));
     }
 
     std::string type_name;
     std::string default_value;
-    if (field->is_map()) {
-      const auto* map_type = field->message_type();
-      const auto* key = map_type->FindFieldByNumber(1);
-      const auto* value = map_type->FindFieldByNumber(2);
-      std::string value_type_name = TypeName(value);
-      const std::string& template_type =
-          field->options().GetExtension(imp::template_type);
-      if (!template_type.empty()) {
-        absl::StrAppend(&value_type_name, "<", template_type, ">");
-      }
-      type_name =
-          absl::StrCat("std::map<", TypeName(key), ", ", value_type_name, ">");
-    } else if (field->is_repeated()) {
-      type_name = absl::StrCat("std::vector<", TypeName(field), ">");
-    } else if (field->options().GetExtension(imp::optional_type) ==
-               imp::OptionalType::UNIQUE_PTR) {
+
+    if (field->options().GetExtension(imp::optional_type) ==
+        imp::OptionalType::UNIQUE_PTR) {
       if (!field->has_presence() || field->is_required()) {
         return absl::InvalidArgumentError(absl::StrCat(
             "ERROR: field ", field->containing_type()->name(),
@@ -301,6 +398,124 @@ class ImpCodeGenerator {
     return std::make_pair(type_name, default_value.empty()
                                          ? default_value
                                          : absl::StrCat(" = ", default_value));
+  }
+
+  absl::StatusOr<std::pair<std::string, std::string>>
+  SingleFieldInfoOptionalWithDefaultPresence(
+      const google::protobuf::FieldDescriptor* field) const {
+    if (field->options().HasExtension(imp::msg_default) &&
+        field->type() != google::protobuf::FieldDescriptor::TYPE_MESSAGE) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "ERROR: field ", field->containing_type()->name(),
+          "::", field->name(),
+          " - imp.msg_default is only supported for message fields."));
+    }
+
+    if (field->options().GetExtension(imp::optional_type) !=
+        imp::OptionalType::OPTIONAL_TYPE_UNKNOWN) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "ERROR: field ", field->containing_type()->name(),
+          "::", field->name(),
+          " - imp.optional_type is not supported in editions 2024 and later."));
+    }
+
+    bool native_type_has_presence = false;
+    if (field->type() == google::protobuf::FieldDescriptor::TYPE_MESSAGE) {
+      const google::protobuf::Descriptor* message_type = field->message_type();
+      native_type_has_presence =
+          message_type->options().GetExtension(imp::native_type_has_presence);
+
+      if (native_type_has_presence &&
+          message_type->options().GetExtension(imp::native_type).empty()) {
+        return absl::InvalidArgumentError(absl::StrCat(
+            "ERROR: field ", field->containing_type()->name(),
+            "::", field->name(),
+            " - imp.native_type_has_presence is only supported for "
+            "messages with a native type. "));
+      }
+
+      if (native_type_has_presence &&
+          !field->options().GetExtension(imp::msg_default).empty()) {
+        return absl::InvalidArgumentError(
+            absl::StrCat("ERROR: field ", field->containing_type()->name(),
+                         "::", field->name(),
+                         " - imp.msg_default is not supported for messages "
+                         "with imp.native_type_has_presence. "));
+      }
+    }
+
+    std::string type_name;
+    std::string default_value;
+
+    if (field->has_presence() && field->real_containing_oneof() == nullptr &&
+        !native_type_has_presence) {
+      if (HasDefault(field)) {
+        type_name = absl::StrCat("::imp::OptionalWithDefault<", TypeName(field),
+                                 ", &", DefaultValueFieldName(field), ">");
+      } else {
+        type_name =
+            absl::StrCat("::imp::OptionalWithDefault<", TypeName(field), ">");
+      }
+    } else {
+      // Note: Message types cannot specify IMPLICIT presence, proto compiler
+      // will not allow it. Therefore, only primitive types can reach this
+      // branch.
+      type_name = TypeName(field);
+      if (field->has_default_value()) {
+        default_value = DefaultValue(field);
+      } else {
+        default_value = "{}";
+      }
+    }
+
+    // Prepend "=" sign if default value is not empty.
+    if (!default_value.empty()) {
+      default_value = absl::StrCat(" = ", default_value);
+    }
+
+    return std::make_pair(type_name, default_value);
+  }
+
+  absl::StatusOr<std::pair<std::string, std::string>> FieldInfo(
+      const google::protobuf::FieldDescriptor* field) const {
+    // Verify that STRING_VIEW is only used for string fields.
+    if (field->options().GetExtension(imp::string_type) !=
+            imp::StringType::STRING_TYPE_UNKNOWN &&
+        field->cpp_type() != google::protobuf::FieldDescriptor::CPPTYPE_STRING) {
+      return absl::InvalidArgumentError(absl::StrCat(
+          "ERROR: field ", field->containing_type()->name(),
+          "::", field->name(),
+          " - imp.string_type is only supported for string fields."));
+    }
+
+    if (field->is_map()) {
+      const auto* map_type = field->message_type();
+      const auto* key = map_type->FindFieldByNumber(1);
+      const auto* value = map_type->FindFieldByNumber(2);
+      std::string value_type_name = TypeName(value);
+      const std::string& template_type =
+          field->options().GetExtension(imp::template_type);
+      if (!template_type.empty()) {
+        absl::StrAppend(&value_type_name, "<", template_type, ">");
+      }
+      std::string type_name =
+          absl::StrCat("std::map<", TypeName(key), ", ", value_type_name, ">");
+      return std::make_pair(type_name, "");
+    } else if (field->is_repeated()) {
+      std::string type_name =
+          absl::StrCat("std::vector<", TypeName(field), ">");
+      return std::make_pair(type_name, "");
+    } else {
+      imp::ImpressFeatureSet feature_set =
+          CodeGeneratorHelper::GetResolvedFeatureSet(*field);
+
+      if (feature_set.presence_mode() ==
+          imp::ImpressFeatureSet::OPTIONAL_WITH_DEFAULT) {
+        return SingleFieldInfoOptionalWithDefaultPresence(field);
+      } else {
+        return SingleFieldInfoLegacyPresence(field);
+      }
+    }
   }
 
   absl::StatusOr<std::string> GetRepeatedMergeStrategy(
@@ -822,7 +1037,8 @@ class ImpCodeGenerator {
     printer->Outdent();
     printer->Print("};\n");
 
-    printer->Print("static constexpr imp::HashValue kFieldNameHashes[] = {\n");
+    printer->Print(
+        "static constexpr ::imp::HashValue kFieldNameHashes[] = {\n");
     printer->Indent();
     for (int i = 0; i < desc->field_count(); ++i) {
       const google::protobuf::FieldDescriptor* field = desc->field(i);
@@ -847,7 +1063,7 @@ class ImpCodeGenerator {
     printer->Print("};\n");
 
     printer->Print(
-        "static constexpr imp::HashValue kFieldJsonNameHashes[] = {\n");
+        "static constexpr ::imp::HashValue kFieldJsonNameHashes[] = {\n");
     printer->Indent();
     for (int i = 0; i < desc->field_count(); ++i) {
       const google::protobuf::FieldDescriptor* field = desc->field(i);
@@ -909,8 +1125,8 @@ class ImpCodeGenerator {
       printer->Print(
           "static constexpr absl::string_view kTypeUrl =\n"
           "    \"type.googleapis.com/$name$\";\n"
-          "static constexpr imp::HashValue kTypeUrlHash =\n"
-          "    imp::Hash(kTypeUrl);\n\n",
+          "static constexpr ::imp::HashValue kTypeUrlHash =\n"
+          "    ::imp::Hash(kTypeUrl);\n\n",
           "name", desc->full_name());
 
       PrintAbslStringify(printer, desc);
@@ -930,6 +1146,22 @@ class ImpCodeGenerator {
       for (int i = 0; i < desc->nested_type_count(); ++i) {
         const auto* nested_type = desc->nested_type(i);
         MP_RETURN_IF_ERROR(PrintMessage(printer, nested_type, enum_descriptors));
+      }
+
+      // Print field specified defaults.
+      for (int i = 0; i < desc->field_count(); ++i) {
+        const google::protobuf::FieldDescriptor* field = desc->field(i);
+
+        imp::ImpressFeatureSet feature_set =
+            CodeGeneratorHelper::GetResolvedFeatureSet(*field);
+
+        if (HasDefault(field) &&
+            feature_set.presence_mode() ==
+                imp::ImpressFeatureSet::OPTIONAL_WITH_DEFAULT) {
+          printer->Print(absl::StrCat(
+              "static constexpr ", DefaultConstantTypeName(field), " ",
+              DefaultValueFieldName(field), " = ", DefaultValue(field), ";\n"));
+        }
       }
 
       // Print Field template specialization.
@@ -1223,6 +1455,7 @@ class ImpCodeGenerator {
     printer->Print("\n");
     // Include native includes.
     std::set<std::string> native_includes;
+    bool has_event_message = false;
     for (int i = 0; i < file->message_type_count(); ++i) {
       const google::protobuf::MessageOptions& msg_options =
           file->message_type(i)->options();
@@ -1233,20 +1466,33 @@ class ImpCodeGenerator {
       }
 
       if (msg_options.GetExtension(imp::is_event)) {
-        printer->Print(
-            "#include "
-            "\"core/ncsb/dispatcher/event.h\"\n");
-        printer->Print(
-            "#include "
-            "\"core/common/type_traits.h\"\n");
-        printer->Print(
-            "#include "
-            "\"core/proto/proto_writer.h\"\n");
+        has_event_message = true;
       }
     }
+
+    if (has_event_message) {
+      printer->Print(
+          "#include "
+          "\"core/ncsb/dispatcher/event.h\"\n");
+      printer->Print(
+          "#include "
+          "\"core/common/type_traits.h\"\n");
+      printer->Print(
+          "#include "
+          "\"core/proto/proto_writer.h\"\n");
+    }
+
     for (const auto& include : native_includes) {
       printer->Print("#include \"$include$\"\n", "include", include);
     }
+
+    // Feature only supported in editions 2023 and later.
+    if (GetEdition(file) >= google::protobuf::Edition::EDITION_2023) {
+      printer->Print(
+          "#include "
+          "\"core/common/optional_with_default.h\"\n");
+    }
+
     printer->Print("\n");
 
     auto package = absl::StrReplaceAll(file->package(), {{".", "::"}});
@@ -1390,9 +1636,30 @@ class ImpCodeGenerator {
 bool GenerateCode(const google::protobuf::compiler::CodeGeneratorRequest& request,
                   google::protobuf::compiler::CodeGeneratorResponse* response,
                   std::string* error_msg) {
+  absl::flat_hash_map<std::string, const google::protobuf::FileDescriptorProto*>
+      source_file_descriptors_by_name;
   google::protobuf::DescriptorPool pool;
+
+  for (int i = 0; i < request.source_file_descriptors_size(); ++i) {
+    const ::google::protobuf::FileDescriptorProto& file_proto =
+        request.source_file_descriptors(i);
+    source_file_descriptors_by_name[file_proto.name()] = &file_proto;
+  }
+
   for (int i = 0; i < request.proto_file_size(); ++i) {
-    const auto* file = pool.BuildFile(request.proto_file(i));
+    const ::google::protobuf::FileDescriptorProto* file_proto = &request.proto_file(i);
+
+    // If the file is available via source_file_descriptors, use that instead.
+    // This allows features that use RETENTION_SOURCE to be detected correctly.
+    //
+    // The order the files are built in must be preserved according to the
+    // proto_file field ordering, so the map is used to look up the file.
+    auto itr = source_file_descriptors_by_name.find(file_proto->name());
+    if (itr != source_file_descriptors_by_name.end()) {
+      file_proto = itr->second;
+    }
+
+    const ::google::protobuf::FileDescriptor* file = pool.BuildFile(*file_proto);
     if (!file) {
       return false;
     }
@@ -1459,7 +1726,7 @@ int main(int argc, char* argv[]) {
       google::protobuf::compiler::CodeGeneratorResponse::FEATURE_PROTO3_OPTIONAL |
       google::protobuf::compiler::CodeGeneratorResponse::FEATURE_SUPPORTS_EDITIONS);
   response.set_minimum_edition(google::protobuf::Edition::EDITION_PROTO2);
-  response.set_maximum_edition(google::protobuf::Edition::EDITION_2023);
+  response.set_maximum_edition(google::protobuf::Edition::EDITION_2024);
 
   if (GenerateCode(request, &response, &error_msg)) {
     if (!response.SerializeToFileDescriptor(STDOUT_FILENO)) {

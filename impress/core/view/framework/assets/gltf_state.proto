@@ -23,8 +23,6 @@ option java_multiple_files = true;
 option java_package = "com.google.ar.imp.proto";
 
 // Serialized data for GltfRenderer
-// It is possible to override the default load options for GltfAsset with
-// AssetManager::SetDefaultLoadOptions(...).
 message GltfState {
   // Determines which (if any) collider components will be automatically added
   // to the nodes in the glTF scene.

@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_PARTICLE_PARTICLE_CONTROLLER_H_
 
 #include "core/common/owned_ptr.h"
+#include "core/particle/particle_emitter_info.h"
 #include "core/view/utils/frame_time.h"
 
 namespace imp {
@@ -33,6 +34,9 @@ class ParticleController {
   // Updates all active particles in the system, creates and destroys particles
   // as defined by the ParticleEmitterConfig.
   virtual void UpdateParticleSystem(const FrameTime& frame_time) = 0;
+
+  // Returns information about the emitter used to update particle behavior.
+  virtual imp_particle::ParticleEmitterInfo GetParticleEmitterInfo() const = 0;
 };
 
 // OwnedPtr and BorrowedPtr definitions for ParticleController.

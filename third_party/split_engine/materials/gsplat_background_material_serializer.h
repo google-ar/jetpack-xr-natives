@@ -25,7 +25,7 @@
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "core/view/base_view.h"
 
 namespace android_xr {
@@ -40,7 +40,7 @@ namespace android_xr {
 // Note: This is the split-engine app side of BuiltInGsplatMaterial.
 
 class GsplatBackgroundMaterialSerializer
-    : public imp::split_engine::SplitEngineMaterial {
+    : public imp::split_engine::SplitEngineBuiltinMaterial {
  public:
   static imp::Future<std::unique_ptr<GsplatBackgroundMaterialSerializer>>
   Create(imp::BaseView& view);

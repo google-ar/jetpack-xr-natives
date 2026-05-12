@@ -69,6 +69,7 @@ public class ImpApi implements ImpApiScuba {
     return switch (threadMode) {
       case MAIN_DEFAULT -> FrameScheduler.ThreadMode.MAIN_DEFAULT;
       case BACKGROUND -> FrameScheduler.ThreadMode.BACKGROUND;
+      case UNRECOGNIZED -> FrameScheduler.ThreadMode.MAIN_DEFAULT;
     };
   }
 
@@ -190,11 +191,7 @@ public class ImpApi implements ImpApiScuba {
         frameSchedulerFactory.create(getThreadMode(setupParams.getThreadMode()));
 
     ViewConfig viewConfig =
-        setupParams.hasViewConfig()
-            ? setupParams.getViewConfig()
-            : ViewConfig.newBuilder()
-                .setMainViewRenderSettings(setupParams.getViewRenderSettings())
-                .build();
+        setupParams.hasViewConfig() ? setupParams.getViewConfig() : ViewConfig.getDefaultInstance();
 
     ListenableFuture<View> viewFuture =
         frameScheduler.submitOnFrameThread(
@@ -245,11 +242,7 @@ public class ImpApi implements ImpApiScuba {
   public static ListenableFuture<View> createViewAsync(
       SetupParams setupParams, Context context, FragmentHost host, Executor executor) {
     ViewConfig viewConfig =
-        setupParams.hasViewConfig()
-            ? setupParams.getViewConfig()
-            : ViewConfig.newBuilder()
-                .setMainViewRenderSettings(setupParams.getViewRenderSettings())
-                .build();
+        setupParams.hasViewConfig() ? setupParams.getViewConfig() : ViewConfig.getDefaultInstance();
     return Futures.submit(
         () ->
             View.createView(

@@ -30,6 +30,7 @@
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "core/collision/collision_flags.h"
 #include "core/geometry/shapes/rect.h"
+#include "core/math/mat.h"
 #include "core/math/vec.h"
 #include "core/model/mesh/mesh_vertex_and_index_data.h"
 
@@ -217,10 +218,15 @@ class DrawSpace {
                      VertexSpace vertex_space = VertexSpace::kModelView);
   ~DrawSpace();
 
+  void TransformVertices(debug_draw::Geometry& geometry);
+
   const utils::Entity entity_;
   const uint32_t duration_frames_;
   std::vector<Geometry> geometry_snippets_;
   VertexSpace vertex_space_;
+
+  mat4f matrix_offset_ = kIdentityMat4f;
+  bool using_matrix_offset_ = false;
 };
 
 // Provides scope-controlled debug drawing in the coordinate space of a
@@ -238,6 +244,12 @@ class Local : public DrawSpace {
   // given number of frames, with a minimum of 1 frame of persistence.
   explicit Local(utils::Entity entity, uint32_t duration_frames = 1u)
       : DrawSpace(entity, duration_frames, VertexSpace::kModelView) {}
+
+  // Specifies a matrix offset to apply to all subsequent geometry drawn
+  Local& Transform(const mat4f& matrix_offset);
+
+  // Resets the matrix offset
+  void ResetTransform();
 
   // Draws the edges of an axis-aligned bounding box with the given color.
   void BoxLines(const filament::Box& box, const Color& color);

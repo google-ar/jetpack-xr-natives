@@ -38,8 +38,8 @@
 #include "core/math/mat.h"
 #include "core/math/vec.h"
 #include "core/render/texture.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "core/split_engine/materials/split_engine_generic_material.h"
-#include "core/split_engine/materials/split_engine_material.h"
 #include "mediapipe/framework/port/status_macros.h"
 
 namespace imp {
@@ -152,7 +152,7 @@ void GenericMaterialManagerImpl::CreateGenericMaterial(
                     std::unique_ptr<split_engine::SplitEngineGenericMaterial>>
                     generic_material) {
         if (generic_material.ok() && *generic_material != nullptr) {
-          OwnedPtr<split_engine::SplitEngineMaterial> owned_material_ptr(
+          OwnedPtr<split_engine::SplitEngineBuiltinMaterial> owned_material_ptr(
               *std::move(generic_material));
           std::intptr_t material_token = view_.ToJava(new BindingsMaterial(
               owned_material_ptr->GetMaterial(SmallSourceLocation::Current()),
@@ -191,7 +191,7 @@ GenericMaterialManagerImpl::GetMaterial(std::intptr_t material_handle) {
     return absl::NotFoundError("Material handle not found in generic map.");
   }
 
-  split_engine::SplitEngineMaterial* base_material = &(*it->second);
+  split_engine::SplitEngineBuiltinMaterial* base_material = &(*it->second);
   split_engine::SplitEngineGenericMaterial* derived_material =
       static_cast<split_engine::SplitEngineGenericMaterial*>(base_material);
   if (!derived_material) {

@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -30,6 +31,7 @@
 #include "flatbuffers/flatbuffer_builder.h"
 #include "flatbuffers/vector.h"
 #include "core/assets/asset_ptr.h"
+#include "core/async/executor.h"
 #include "core/image/image_contents.h"
 #include "core/render/image_asset.h"
 #include "core/split_engine/split_engine_serializer.h"
@@ -226,13 +228,24 @@ void SplitEngineTextureBuilder::Finalize(filament::Texture* texture) {
 
   state_.texture_id = SplitEngineSerializer::GetId(texture);
   state_.finalized = true;
-  const SplitEngineTextureSerializerImpl texture_serializer(std::move(state_));
-  serializer_->SerializeTexture(texture_serializer);
-
-  // We're done with image_descriptors_ so the backing buffers may now be freed.
-  if (images_released_callback_) {
-    images_released_callback_();
-  }
+  serializer_->SerializeTexture(
+      std::make_unique<const SplitEngineTextureSerializerImpl>(
+          std::move(state_)),
+      [images_released_callback = std::move(images_released_callback_)]() {
+        // We're done with image_descriptors_ so the backing buffers may now be
+        // freed.
+        if (images_released_callback) {
+          images_released_callback();
+        }
+      });
 }
 
+SplitEngineTextureBuilder::State::~State() {
+  if (image && Executor::CurrentExecutor() != Executor::ForegroundExecutor()) {
+    Executor::ForegroundExecutor()->ScheduleInvocable(
+        [image = std::move(image)]() {
+          /* AssetPtr shall be destroyed on foreground thread.*/
+        });
+  }
+}
 }  // namespace imp::split_engine

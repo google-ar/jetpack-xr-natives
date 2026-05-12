@@ -52,12 +52,14 @@
 #include "core/common/filament_helpers.h"
 #include "core/common/resource_helpers.h"
 #include "core/geometry/shapes/rect.h"
+#include "core/math/mat.h"
 #include "core/math/vec.h"
 #include "core/model/mesh/mesh_description.h"
 #include "core/model/mesh/mesh_index_data.h"
 #include "core/model/mesh/mesh_vertex_and_index_data.h"
 #include "core/model/mesh/mesh_vertex_data.h"
 #include "core/model/mesh/vertex_format.h"
+#include "core/render/render_order_constants.h"
 #include "robin_map/include/tsl/robin_map.h"
 
 namespace imp {
@@ -178,7 +180,7 @@ class Details final {
 
     // This could happen on any thread and needs to be guarded against Advance
     // swapping the buffer builder map for processing.
-    absl::MutexLock lock(&lock_);
+    absl::MutexLock lock(lock_);
 
     GeometrySnippetsMap& geometry_snippets_map =
         geometry_snippets_maps_[active_geometry_snippets_map_];
@@ -227,7 +229,7 @@ class Details final {
     // Swap active vertex buffer builder map.
     uint32_t map_index_to_process;
     {
-      absl::MutexLock lock(&lock_);
+      absl::MutexLock lock(lock_);
       map_index_to_process = active_geometry_snippets_map_;
       active_geometry_snippets_map_ ^= 1u;
     }
@@ -294,7 +296,11 @@ class Details final {
                            index_buffer);
 
           if (geometry_snippets.vertex_space == VertexSpace::kModelView) {
-            builder.boundingBox(bb).priority(7);
+            // Make sure the debug draw is drawn towards the end of the current
+            // render pass by placing it at the highest channel and priority.
+            builder.boundingBox(bb)
+                .priority(imp::kMaxPriority)
+                .channel(imp::kMaxChannel);
             builder.material(renderable_index, material_instance_);
           } else if (geometry_snippets.vertex_space == VertexSpace::kScreen) {
             builder.material(renderable_index, screenspace_material_instance_);
@@ -639,6 +645,8 @@ void DrawSpace::UserDefined(Geometry geometry) {
     return index < geometry.positions.size();
   }));
 
+  TransformVertices(geometry);
+
   geometry_snippets_.emplace_back(geometry);
 }
 
@@ -662,6 +670,29 @@ void DrawSpace::Line(const float3& start, const float3& end,
   geometry.colors.emplace_back(color);
   geometry.indices.emplace_back(1u);
   UserDefined(std::move(geometry));
+}
+
+void DrawSpace::TransformVertices(Geometry& geometry) {
+  if (using_matrix_offset_) {
+    if (geometry.positions.size() > 300) {
+      IMP_LOG(imp::WARNING) << "Too many vertices to transform. Consider not using "
+                      "Transform on this DrawSpace.";
+    }
+    for (auto& position : geometry.positions) {
+      position = (matrix_offset_ * float4(position, 1.0f)).xyz;
+    }
+  }
+}
+
+Local& Local::Transform(const mat4f& matrix_offset) {
+  matrix_offset_ = matrix_offset;
+  using_matrix_offset_ = true;
+  return *this;
+}
+
+void Local::ResetTransform() {
+  matrix_offset_ = kIdentityMat4f;
+  using_matrix_offset_ = false;
 }
 
 void Local::BoxLines(const filament::Box& box, const Color& color) {
@@ -750,6 +781,7 @@ void Local::BoxFaces(const filament::Box& box, const Color& color) {
     geometry.colors.emplace_back(color);
   }
   absl::c_copy(kBoxFaceIndices, std::back_inserter(geometry.indices));
+
   UserDefined(std::move(geometry));
 }
 
@@ -960,6 +992,7 @@ void NormalizedScreen::RectLines(const Rect& rect, const Color& color) {
   geometry.positions.emplace_back(float3(upper_left.x, lower_right.y, 0.0f));
   geometry.colors.emplace_back(color);
   absl::c_copy(kQuadLineIndices, std::back_inserter(geometry.indices));
+
   UserDefined(std::move(geometry));
 }
 

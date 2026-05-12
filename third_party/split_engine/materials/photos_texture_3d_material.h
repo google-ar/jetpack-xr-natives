@@ -18,16 +18,11 @@
 #define THIRD_PARTY_SPLIT_ENGINE_MATERIALS_PHOTOS_TEXTURE_3D_MATERIAL_H_
 
 #include <memory>
-#include <string>
-#include <utility>
-#include <variant>
 
-#include "core/common/log.h"
-#include "absl/strings/string_view.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "imp.h"
 #include "split_engine/materials/photos_texture_3d_material_params.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
@@ -35,14 +30,17 @@
 namespace android_xr {
 
 // Displays a 3D texture with support for various formats and parameters.
-class PhotosTexture3DMaterial : public imp::split_engine::SplitEngineMaterial {
+class PhotosTexture3DMaterial
+    : public imp::split_engine::SplitEngineBuiltinMaterial {
  public:
   static imp::Future<std::unique_ptr<PhotosTexture3DMaterial>> Create(
       imp::BaseView& view, const PhotosTexture3DMaterialParams& params);
 
   ~PhotosTexture3DMaterial() override;
 
-  void MarkParametersDirty() { SplitEngineMaterial::MarkParametersDirty(); }
+  void MarkParametersDirty() {
+    SplitEngineBuiltinMaterial::MarkParametersDirty();
+  }
 
  protected:
   flatbuffers::Offset<void> SerializeParameters(

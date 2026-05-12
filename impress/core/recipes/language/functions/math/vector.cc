@@ -28,28 +28,17 @@
 namespace imp::recipe {
 namespace {
 
-recipe::Variables Extract2(const float2 input) {
-  recipe::Variables variables;
-  variables["0"] = input.x;
-  variables["1"] = input.y;
-  return variables;
+recipe::Variables Extract2(float2 input) {
+  return recipe::Variables{{"0", input.x}, {"1", input.y}};
 }
 
-recipe::Variables Extract3(const float3 input) {
-  recipe::Variables variables;
-  variables["0"] = input.x;
-  variables["1"] = input.y;
-  variables["2"] = input.z;
-  return variables;
+recipe::Variables Extract3(float3 input) {
+  return recipe::Variables{{"0", input.x}, {"1", input.y}, {"2", input.z}};
 }
 
-recipe::Variables Extract4(const float4 input) {
-  recipe::Variables variables;
-  variables["0"] = input.x;
-  variables["1"] = input.y;
-  variables["2"] = input.z;
-  variables["3"] = input.w;
-  return variables;
+recipe::Variables Extract4(float4 input) {
+  return recipe::Variables{
+      {"0", input.x}, {"1", input.y}, {"2", input.z}, {"3", input.w}};
 }
 
 absl::StatusOr<float> GetVectorLength(const recipe::Variable& value) {
@@ -65,13 +54,13 @@ absl::StatusOr<float> GetVectorLength(const recipe::Variable& value) {
   }
 }
 
-float2 Rotate2D(const float2 vector, float angle) {
+float2 Rotate2D(float2 vector, float angle) {
   auto rotationMatrix =
       mat2f(float2(cos(angle), sin(angle)), float2(-sin(angle), cos(angle)));
   return rotationMatrix * vector;
 }
 
-float3 Rotate3D(const float3 vector, const float4 rotation) {
+float3 Rotate3D(float3 vector, float4 rotation) {
   return quatf(rotation) * vector;
 }
 
@@ -121,7 +110,8 @@ void RegisterMathVectorFunctions(BaseRecipeSystem* recipe_system) {
                                   [](float4 input) { return Extract4(input); });
 
   recipe_system->RegisterFunction(
-      "GetVectorLength", [](recipe::Variable value) -> absl::StatusOr<float> {
+      "GetVectorLength",
+      [](const recipe::Variable& value) -> absl::StatusOr<float> {
         return GetVectorLength(value);
       });
 
@@ -136,8 +126,8 @@ void RegisterMathVectorFunctions(BaseRecipeSystem* recipe_system) {
 
   recipe_system->RegisterFunction(
       "Transform",
-      [](recipe::Variable vector,
-         recipe::Variable matrix) -> absl::StatusOr<recipe::Variable> {
+      [](const recipe::Variable& vector,
+         const recipe::Variable& matrix) -> absl::StatusOr<recipe::Variable> {
         return Transform(vector, matrix);
       });
 }

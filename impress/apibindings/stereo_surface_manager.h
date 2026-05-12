@@ -37,8 +37,8 @@ class StereoSurfaceManager {
 
   // Creates a new Impress node and attaches a StereoSurface component to it.
   virtual absl::StatusOr<int32_t> CreateStereoSurfaceEntity(
-      MediaStereoMode stereo_mode, ContentSecurityLevel content_security_level,
-      bool use_super_sampling) = 0;
+      MediaStereoMode stereo_mode, MediaBlendingMode blending_mode,
+      ContentSecurityLevel content_security_level, bool use_super_sampling) = 0;
 
   // Sets the canvas shape of a stereo surface using its entity ID.
   virtual absl::Status SetStereoSurfaceEntityCanvasShape(
@@ -63,6 +63,10 @@ class StereoSurfaceManager {
   // Sets the stereo mode of a stereo surface entity.
   virtual absl::Status SetStereoModeForStereoSurfaceEntity(
       int32_t node_id, MediaStereoMode stereo_mode) = 0;
+
+  // Sets the blending mode of a stereo surface entity.
+  virtual absl::Status SetBlendingModeForStereoSurfaceEntity(
+      int32_t node_id, MediaBlendingMode blending_mode) = 0;
 
   // Sets an alpha mask on an stereo surface entity.
   virtual absl::Status SetPrimaryAlphaMaskForStereoSurfaceEntity(

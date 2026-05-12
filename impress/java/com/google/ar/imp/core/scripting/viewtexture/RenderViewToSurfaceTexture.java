@@ -18,6 +18,7 @@ package com.google.ar.imp.core.scripting.viewtexture;
 
 import android.app.Presentation;
 import android.content.Context;
+import android.graphics.Outline;
 import android.graphics.PixelFormat;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
@@ -26,6 +27,7 @@ import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.View;
+import android.view.ViewOutlineProvider;
 import android.view.WindowManager;
 import com.google.android.filament.proguard.UsedByNative;
 import java.util.ArrayList;
@@ -57,6 +59,7 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
   // VirtualDisplay does not have accessors for the information.
   private int virtualDisplayWidth;
   private int virtualDisplayHeight;
+  private float virtualDisplayCornerRadius;
 
   @UsedByNative("android_view_renderer.cc")
   public RenderViewToSurfaceTexture(
@@ -65,6 +68,7 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
       Surface surface,
       int width,
       int height,
+      float cornerRadius,
       long nativeAndroidViewRenderer) {
     this.context = context;
     this.view = view;
@@ -72,6 +76,7 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
     this.nativeAndroidViewRenderer = nativeAndroidViewRenderer;
     virtualDisplayWidth = width;
     virtualDisplayHeight = height;
+    virtualDisplayCornerRadius = cornerRadius;
   }
 
   @UsedByNative("android_view_renderer.cc")
@@ -84,6 +89,8 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
       virtualDisplayWidth = view.getMeasuredWidth();
       virtualDisplayHeight = view.getMeasuredHeight();
     }
+
+    setCornerRadius(virtualDisplayCornerRadius);
 
     nSetRenderViewSurfaceDimensions(
         nativeAndroidViewRenderer, virtualDisplayWidth, virtualDisplayHeight);
@@ -152,6 +159,25 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
     virtualDisplayHeight = view.getHeight();
     nSetRenderViewSurfaceDimensions(
         nativeAndroidViewRenderer, virtualDisplayWidth, virtualDisplayHeight);
+  }
+
+  @UsedByNative("android_view_renderer.cc")
+  public void setCornerRadius(float cornerRadius) {
+    this.virtualDisplayCornerRadius = cornerRadius;
+    if (this.virtualDisplayCornerRadius > 0) {
+      view.setOutlineProvider(
+          new ViewOutlineProvider() {
+            @Override
+            public void getOutline(View view, Outline outline) {
+              outline.setRoundRect(
+                  0, 0, view.getWidth(), view.getHeight(), virtualDisplayCornerRadius);
+            }
+          });
+      view.setClipToOutline(true);
+    } else {
+      view.setOutlineProvider(null);
+      view.setClipToOutline(false);
+    }
   }
 
   @UsedByNative("android_view_renderer.cc")

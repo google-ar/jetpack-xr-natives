@@ -93,6 +93,25 @@ absl::StatusOr<recipe::Variable> InvertMatrix(const recipe::Variable& matrix) {
   }
 }
 
+absl::StatusOr<recipe::Variable> MatrixMultiply(const recipe::Variable& left,
+                                                const recipe::Variable& right) {
+  if (left.index() != right.index()) {
+    return absl::InvalidArgumentError(
+        "left and right inputs must be the same type.");
+  }
+
+  switch (left.index()) {
+    case Literal::kValue_Mat2fValue:
+      return std::get<mat2f>(left) * std::get<mat2f>(right);
+    case Literal::kValue_Mat3fValue:
+      return std::get<mat3f>(left) * std::get<mat3f>(right);
+    case Literal::kValue_Mat4fValue:
+      return std::get<mat4f>(left) * std::get<mat4f>(right);
+    default:
+      return absl::InvalidArgumentError("inputs must be matrix types.");
+  }
+}
+
 absl::StatusOr<recipe::Variable> Transpose(const recipe::Variable& value) {
   switch (value.index()) {
     case Literal::kValue_Mat2fValue:
@@ -126,26 +145,33 @@ void RegisterMathMatrixFunctions(BaseRecipeSystem* recipe_system) {
       });
 
   recipe_system->RegisterFunction(
-      "Extract2x2", [](mat2f input) { return Extract2x2(input); });
+      "Extract2x2", [](const mat2f& input) { return Extract2x2(input); });
   recipe_system->RegisterFunction(
-      "Extract3x3", [](mat3f input) { return Extract3x3(input); });
+      "Extract3x3", [](const mat3f& input) { return Extract3x3(input); });
   recipe_system->RegisterFunction(
-      "Extract4x4", [](mat4f input) { return Extract4x4(input); });
+      "Extract4x4", [](const mat4f& input) { return Extract4x4(input); });
 
   recipe_system->RegisterFunction(
-      "Determinant", [](recipe::Variable value) -> absl::StatusOr<float> {
+      "Determinant",
+      [](const recipe::Variable& value) -> absl::StatusOr<float> {
         return Determinant(value);
       });
 
   recipe_system->RegisterFunction(
       "InvertMatrix",
-      [](recipe::Variable matrix) -> absl::StatusOr<recipe::Variable> {
+      [](const recipe::Variable& matrix) -> absl::StatusOr<recipe::Variable> {
         return InvertMatrix(matrix);
       });
 
   recipe_system->RegisterFunction(
+      "MatrixMultiply",
+      [](const recipe::Variable& left, const recipe::Variable& right) {
+        return MatrixMultiply(left, right);
+      });
+
+  recipe_system->RegisterFunction(
       "Transpose",
-      [](recipe::Variable value) -> absl::StatusOr<recipe::Variable> {
+      [](const recipe::Variable& value) -> absl::StatusOr<recipe::Variable> {
         return Transpose(value);
       });
 }

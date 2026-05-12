@@ -31,6 +31,7 @@
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/backend/include/backend/PixelBufferDescriptor.h"
 #include "filament/filament/include/filament/Texture.h"
+#include "core/async/background_delete.h"
 #include "core/common/string_helpers.h"
 #include "core/image/image_contents.h"
 #include "core/resources/resource_manager.h"
@@ -44,9 +45,8 @@ using ::filament::backend::PixelBufferDescriptor;
 class WImageImageContents : public ImageContents {
  public:
   explicit WImageImageContents(WImageBuffer4_b image)
-      : image_(std::make_shared<WImageBuffer4_b>(std::move(image))) {}
-
-  ~WImageImageContents() override;
+      : image_(imp::MakeSharedWithBackgroundDeleter<WImageBuffer4_b>(
+            std::move(image))) {}
 
   uint32_t GetWidth() const override {
     return static_cast<uint32_t>(image_->Width());
@@ -72,8 +72,6 @@ class WImageImageContents : public ImageContents {
  private:
   std::shared_ptr<WImageBuffer4_b> image_;
 };
-
-WImageImageContents::~WImageImageContents() = default;
 
 PixelBufferDescriptor WImageImageContents::CreatePixelBufferDescriptor(
     std::function<void()> callback, bool is_r11_g11_b10) {

@@ -19,6 +19,13 @@
 
 #include <functional>
 
+#include "core/common/owned_ptr.h"
+#include "core/math/vec.h"
+
+namespace imp {
+class Texture;
+}  // namespace imp
+
 namespace imp::window {
 
 // An interface that provide a generic reference to ImGuiHelper and
@@ -29,8 +36,9 @@ class ImGuiRenderer {
 
   // Informs ImGui of the current display size, as well as a scaling factor when
   // scissoring.
-  virtual void SetDisplaySize(int width, int height, float scale_x,
-                              float scale_y, bool flip_vertical) = 0;
+  virtual void SetRenderTargetDisplaySize(int width, int height, float scale_x,
+                                          float scale_y,
+                                          bool flip_vertical) = 0;
 
   // High-level utility method that takes a callback for creating all ImGui
   // windows and widgets. Clients are responsible for rendering the View. This
@@ -38,6 +46,24 @@ class ImGuiRenderer {
   // to skip or not.
   virtual void RenderImGui(float timeStepInSeconds,
                            std::function<void()> render_imgui_fn) = 0;
+
+  // Initializes the ImGuiRenderer.
+  virtual void Initialize(float2 texture_resolution) = 0;
+
+  // Returns true if the ImGuiRenderer is ready to render and the texture has
+  // been initialized and is ready to be rendered to.
+  virtual bool IsReady() = 0;
+
+  virtual imp::BorrowedPtr<imp::Texture> GetTexture() = 0;
+
+  // Registers a callback to be called when the ImGuiRenderer is ready to
+  // render.
+  virtual void RegisterCallback(std::function<void()> callback) = 0;
+
+  // Returns the GUI renderer interface.
+  virtual ImGuiRenderer* GetImGuiRenderer() = 0;
+
+  virtual uint2 GetTextureSize() const = 0;
 };
 
 }  // namespace imp::window

@@ -19,6 +19,7 @@
 #include <cstdint>
 
 #include "core/common/log.h"
+#include "core/math/quat.h"
 #include "core/math/vec.h"
 #include "core/particle/data_layout.h"
 #include "core/particle/particle_data_provider.h"
@@ -162,6 +163,26 @@ void ParticleInstance::SetAcceleration(float3 acceleration) {
 
   data_provider_.SetVector3f(float_offset_ + data_layout_.GetAcceleration(),
                              acceleration);
+}
+
+bool ParticleInstance::HasRotation() const {
+  return data_layout_.GetRotation() != kInvalidParticleDataOffset;
+}
+
+quatf ParticleInstance::GetRotation() const {
+  if (data_layout_.GetRotation() == kInvalidParticleDataOffset) {
+    IMP_LOG(imp::FATAL) << "ParticleInstance, invalid rotation access.";
+  }
+
+  return data_provider_.GetQuatf(float_offset_ + data_layout_.GetRotation());
+}
+
+void ParticleInstance::SetRotation(quatf rotation) {
+  if (data_layout_.GetRotation() == kInvalidParticleDataOffset) {
+    IMP_LOG(imp::FATAL) << "ParticleInstance, invalid rotation access.";
+  }
+
+  data_provider_.SetQuatf(float_offset_ + data_layout_.GetRotation(), rotation);
 }
 
 }  // namespace imp

@@ -31,7 +31,7 @@ single_version_override(
     patches = ["//:bazel/patches/com_google_absl.patch"],
 )
 
-bazel_dep(name = "protobuf", version = "32.1", repo_name = "com_google_protobuf")
+bazel_dep(name = "protobuf", version = "33.2", repo_name = "com_google_protobuf")
 single_version_override(
     module_name = "protobuf",
     patch_strip = 1,

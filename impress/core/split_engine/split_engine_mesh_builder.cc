@@ -590,8 +590,9 @@ void SplitEngineMeshBuilder::Finalize() noexcept {
         morph_target_buffer->CreateSerializer());
   }
 
-  const SplitEngineMeshSerializerImpl serializer(std::move(serializers));
-  serializer_.SerializeMesh(serializer);
+  serializer_.SerializeMesh(
+      std::make_unique<const SplitEngineMeshSerializerImpl>(
+          std::move(serializers)));
 }
 
 std::unique_ptr<const SplitEngineVertexBufferSerializer>

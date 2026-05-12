@@ -28,10 +28,10 @@
 #include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node_handle.h"
+#include "core/render/primitive_shape_renderer.h"
+#include "core/render/primitive_shape_renderer_state.proto.imp.h"
 #include "core/view/framework/camera/camera_component.h"
 #include "core/view/framework/render/material_definition.proto.imp.h"
-#include "core/view/framework/render/primitive_shape_renderer.h"
-#include "core/view/framework/render/primitive_shape_renderer_state.proto.imp.h"
 
 namespace imp::editor {
 // This value is subtracted from the local y position of the grid to avoid z

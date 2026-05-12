@@ -57,9 +57,8 @@ class DefaultDevModeExtension : public FilamentHost::DevModeExtension {
   ~DefaultDevModeExtension() override = default;
   // Loads packaged fonts into ImGui and sets up its bindings to filament.
   absl::Status Setup(FilamentHost& host) override;
-  // Called after Setup() to allow for delayed initialization after the view is
-  // ready.
-  absl::Status PostSetup() override;
+  // Cleans up the imguirenderer before the view is destroyed.
+  void PreCleanup() override;
   // Destroys all created resources.
   void Cleanup() override;
   // Examines a mouse event and returns true if it was consumed by ImGui.
@@ -92,14 +91,14 @@ class DefaultDevModeExtension : public FilamentHost::DevModeExtension {
   void SetEnabled(bool is_enabled) override;
   bool IsEnabled() override;
 
+  ImGuiRenderer* GetImGuiRenderer() override { return imgui_renderer_.get(); }
+
  protected:
   ImFont* LoadFont(const BufferAccess& font_data, const char* font_name,
                    int size);
 
   FilamentHost* GetHost() { return host_; }
   filament::View* GetFilamentView() { return ui_view_.Get(); }
-
-  ImGuiRenderer* GetImGuiRenderer() { return imgui_renderer_.get(); }
   void SetCustomDebugDrawMaterial(
       filament::Material* custom_debug_draw_material);
 

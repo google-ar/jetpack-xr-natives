@@ -38,6 +38,7 @@
 #include "absl/types/optional.h"
 #include "core/common/bit_flag.h"
 #include "core/common/copyable_ptr.h"
+#include "core/common/optional_with_default.h"
 #include "core/common/platform_helpers.h"
 #include "core/common/template_helpers.h"
 #include "core/proto/any.proto.imp.h"
@@ -85,6 +86,13 @@ class TextprotoWriter {
   template <int field_type, typename M, typename T>
   M* Visit(M* m, int field_id, absl::optional<T>* field,
            absl::optional<T>* other, BitFlag flags = 0);
+
+  template <int field_type, typename M, typename T,
+            const auto* DefaultValuePointer>
+  M* Visit(M* m, int field_id,
+           OptionalWithDefault<T, DefaultValuePointer>* field,
+           OptionalWithDefault<T, DefaultValuePointer>* other,
+           BitFlag flags = 0);
 
   template <int field_type, typename M, typename T>
   M* Visit(M* m, int field_id, CopyablePtr<T>* field, CopyablePtr<T>* other,
@@ -340,6 +348,20 @@ M* TextprotoWriter::Visit(M* m, int field_id, absl::optional<T>* field,
   }
   return Visit<field_type>(m, field_id, &(**field), static_cast<T*>(nullptr),
                            flags | kOptional);
+}
+
+template <int field_type, typename M, typename T,
+          const auto* DefaultValuePointer>
+M* TextprotoWriter::Visit(M* m, int field_id,
+                          OptionalWithDefault<T, DefaultValuePointer>* field,
+                          OptionalWithDefault<T, DefaultValuePointer>* other,
+                          BitFlag flags) {
+  if (!field->HasValue()) {
+    return m;
+  }
+
+  return Visit<field_type>(m, field_id, &field->MutableValue(),
+                           static_cast<T*>(nullptr), flags | kOptional);
 }
 
 template <int field_type, typename M, typename T>

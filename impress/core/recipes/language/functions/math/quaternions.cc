@@ -26,25 +26,23 @@
 namespace imp::recipe {
 namespace {
 
-float4 Float4QuatMultiply(const float4 a, const float4 b) {
+float4 Float4QuatMultiply(float4 a, float4 b) {
   quatf result = quatf(a) * quatf(b);
   return float4(result.x, result.y, result.z, result.w);
 }
 
-float4 Float4QuatFromAxisAngle(const float3 a, const float b) {
+float4 Float4QuatFromAxisAngle(float3 a, float b) {
   quatf result = quatf::fromAxisAngle(a, b);
   return float4(result.x, result.y, result.z, result.w);
 }
 
-float Float4QuatAngleBetween(const float4 a, const float4 b) {
+float Float4QuatAngleBetween(float4 a, float4 b) {
   return 2.f * std::acos(a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w);
 }
 
-float4 Float4QuatConjugate(const float4 a) {
-  return float4(-a.x, -a.y, -a.z, a.w);
-}
+float4 Float4QuatConjugate(float4 a) { return float4(-a.x, -a.y, -a.z, a.w); }
 
-recipe::Variables Float4QuatToAxisAngle(const float4 a) {
+recipe::Variables Float4QuatToAxisAngle(float4 a) {
   recipe::Variables variables;
 
   // Clamp the w component so we don't get a NAN from a little floating point
@@ -66,41 +64,52 @@ recipe::Variables Float4QuatToAxisAngle(const float4 a) {
   return variables;
 }
 
-float4 Float4QuatFromDirections(const float3 a, const float3 b) {
+float4 Float4QuatFromDirections(float3 a, float3 b) {
   quatf result = quatf::fromDirectedRotation(a, b);
+  return float4(result.x, result.y, result.z, result.w);
+}
+
+float4 Float4QuatSlerp(float4 p, float4 q, float t) {
+  quatf unit_p = normalize(quatf(p));
+  quatf unit_q = normalize(quatf(q));
+  quatf result = slerp(unit_p, unit_q, t);
   return float4(result.x, result.y, result.z, result.w);
 }
 
 }  // namespace
 
 void RegisterMathQuaternionFunctions(BaseRecipeSystem* recipe_system) {
-  recipe_system->RegisterFunction("Float4QuatMultiply",
-                                  [](const float4 a, const float4 b) -> float4 {
-                                    return Float4QuatMultiply(a, b);
-                                  });
+  recipe_system->RegisterFunction(
+      "Float4QuatMultiply",
+      [](float4 a, float4 b) -> float4 { return Float4QuatMultiply(a, b); });
 
   recipe_system->RegisterFunction("Float4QuatFromAxisAngle",
-                                  [](const float3 a, const float b) -> float4 {
+                                  [](float3 a, float b) -> float4 {
                                     return Float4QuatFromAxisAngle(a, b);
                                   });
 
-  recipe_system->RegisterFunction("Float4QuatAngleBetween",
-                                  [](const float4 a, const float4 b) -> float {
-                                    return Float4QuatAngleBetween(a, b);
-                                  });
+  recipe_system->RegisterFunction(
+      "Float4QuatAngleBetween",
+      [](float4 a, float4 b) -> float { return Float4QuatAngleBetween(a, b); });
 
   recipe_system->RegisterFunction(
       "Float4QuatConjugate",
-      [](const float4 a) -> float4 { return Float4QuatConjugate(a); });
+      [](float4 a) -> float4 { return Float4QuatConjugate(a); });
 
   recipe_system->RegisterFunction("Float4QuatToAxisAngle", [](float4 a) {
     return Float4QuatToAxisAngle(a);
   });
 
   recipe_system->RegisterFunction("Float4QuatFromDirections",
-                                  [](const float3 a, const float3 b) -> float4 {
+                                  [](float3 a, float3 b) -> float4 {
                                     return Float4QuatFromDirections(a, b);
                                   });
+
+  recipe_system->RegisterFunction(
+      "Float4QuatSlerp",
+      [](const float4 a, const float4 b, const float c) -> float4 {
+        return Float4QuatSlerp(a, b, c);
+      });
 }
 
 }  // namespace imp::recipe

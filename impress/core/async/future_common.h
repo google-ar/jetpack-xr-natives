@@ -219,22 +219,11 @@ class FutureFlags {
   // Enables synchronous future cancellation for all Impress instances in this
   // process. This applies to all views in a process, and cannot be disabled
   // once enabled.
-  static void EnableSynchronousFutureCancellation() {
-    absl::MutexLock lock(*mu_);
-    enable_synchronous_future_cancellation_ = true;
-  }
+  static void EnableSynchronousFutureCancellation();
 
   // Returns true if synchronous future cancellation is enabled. By default,
   // this is disabled
-  static bool IsSynchronousFutureCancellationEnabled() {
-    absl::MutexLock lock(*mu_);
-    return enable_synchronous_future_cancellation_;
-  }
-
- private:
-  static inline absl::NoDestructor<absl::Mutex> mu_;
-  static inline bool enable_synchronous_future_cancellation_
-      ABSL_GUARDED_BY(mu_) = false;
+  static bool IsSynchronousFutureCancellationEnabled();
 };
 
 }  // namespace imp

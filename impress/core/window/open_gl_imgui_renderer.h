@@ -35,12 +35,14 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "dear_imgui/backends/imgui_impl_android.h"
+#include "core/async/future.h"
+#include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node.h"
 #include "core/render/android/android_external_texture_surface.h"
 #include "core/render/android/platform_android_external_texture_surface.h"
+#include "core/render/texture.h"
 #include "core/view/base_view.h"
-#include "core/view/framework/render/mesh_renderer.h"
 #include "core/window/imgui_renderer.h"
 #include "split_engine/materials/texture_external_material.h"
 
@@ -62,8 +64,9 @@ class OpenGLImGuiRenderer : public ImGuiRenderer {
 
   // Informs ImGui of the current display size, as well as a scaling factor when
   // scissoring.
-  void SetDisplaySize(int width, int height, float scale_x, float scale_y,
-                      bool flip_vertical = false) override;
+  void SetRenderTargetDisplaySize(int width, int height, float scale_x,
+                                  float scale_y,
+                                  bool flip_vertical = false) override;
 
   // High-level utility method that takes a callback for creating all ImGui
   // windows and widgets. Clients are responsible for rendering the View. This
@@ -72,9 +75,39 @@ class OpenGLImGuiRenderer : public ImGuiRenderer {
   void RenderImGui(float timeStepInSeconds,
                    std::function<void()> render_imgui_fn) override;
 
+  void SetTextureBufferSize(int width, int height);
+
+  // Initializes the ImGuiRenderer. Initializes the surface_future_ and
+  // initializes the OGL context and ImGui. Class holder a pointer to the
+  // AndroidExternalTextureSurface and can access the state from the IsReady()
+  // call.
+  void Initialize(float2 texture_resolution) override;
+
+  // Indiicates whether the imgui renderer is ready to render. This is true
+  // when the surface_future_ is ready and the OGL is initialized.
+  bool IsReady() override {
+    return surface_future_.Ready() && is_ogl_initialized_;
+  }
+
+  // returns a pointer to the ImGuiRenderer interface.
+  ImGuiRenderer* GetImGuiRenderer() override { return this; }
+
+  void RegisterCallback(std::function<void()> callback) override {
+    notify_texture_ready_callback_ = callback;
+  }
+
+  absl::Status PreRender();
+
+  uint2 GetTextureSize() const override { return texture_size_; };
+
+  BorrowedTexturePtr GetTexture() override { return texture_.Borrow(); }
+
  private:
   absl::Status InitializeOGL();
-  Future<absl::Status> SetupAndroidExternalTextureSurface();
+
+  // Callback to be called when the ImGuiRenderer (OpenGL) is done initializing
+  // and is ready to render.
+  std::function<void()> notify_texture_ready_callback_ = nullptr;
 
   utils::Path m_settings_path_;
   bool flip_vertical_ = false;
@@ -84,7 +117,7 @@ class OpenGLImGuiRenderer : public ImGuiRenderer {
   EGLSurface egl_surface_ = EGL_NO_SURFACE;
 
   ImGuiContext* imgui_context_ = nullptr;
-  BorrowedTexturePtr texture_;
+  OwnedOrBorrowedTexturePtr texture_;
   std::unique_ptr<AndroidExternalTextureSurface> texture_surface_ptr_;
   BaseView& base_view_;
   JNIEnv* env_ = nullptr;
@@ -92,11 +125,10 @@ class OpenGLImGuiRenderer : public ImGuiRenderer {
 
   std::unique_ptr<android_xr::TextureExternalMaterial> material_;
   imp::NodeHandle node_;
-  imp::OwnedMeshPtr quad_mesh_;
-  imp::ComponentHandle<imp::MeshRenderer> mesh_renderer_;
-  Future<absl::Status> setup_android_external_texture_surface_future_;
+  Future<std::unique_ptr<imp::AndroidExternalTextureSurface>> surface_future_;
 
   bool is_ogl_initialized_ = false;
+  float2 texture_size_ = {1, 1};
 };
 
 }  // namespace imp::window

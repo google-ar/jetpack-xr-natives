@@ -23,14 +23,14 @@
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
-#include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "imp.h"
 #include "split_engine/schemas/split_engine_primitive_generated.h"
 
 namespace android_xr {
 
 // Displays a 3D texture with support for various formats and parameters.
-class SVXRPlaneMaterial : public imp::split_engine::SplitEngineMaterial {
+class SVXRPlaneMaterial : public imp::split_engine::SplitEngineBuiltinMaterial {
  public:
   static imp::Future<std::unique_ptr<SVXRPlaneMaterial>> Create(
       imp::BaseView& view);

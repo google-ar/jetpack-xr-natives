@@ -83,8 +83,12 @@ TexturePtr TextureFactory::CreateExternalTexture(
   auto sampler =
       filament::TextureSampler(MagFilter::LINEAR, WrapMode::CLAMP_TO_EDGE);
 
-  return absl::WrapUnique(
+  auto texture_ptr = absl::WrapUnique(
       new Texture(view_, nullptr, texture, sampler, security_level));
+  // This version of CreateTexture is not compatible with Split Engine.
+  // TODO: (broken link) - remove call to SetSuppressSplitEngineRemoval().
+  texture_ptr->SetSuppressSplitEngineRemoval(true);
+  return texture_ptr;
 }
 
 TexturePtr TextureFactory::CreateExternalTexture(
@@ -129,8 +133,12 @@ TexturePtr TextureFactory::CreateExternalTexture(
   filament::TextureSampler sampler(MagFilter::LINEAR, WrapMode::CLAMP_TO_EDGE);
 
   // Using `new` to access a non-public constructor, see (broken link).
-  return absl::WrapUnique(
+  auto texture_ptr = absl::WrapUnique(
       new Texture(view_, stream, texture, sampler, security_level));
+  // This version of CreateTexture is not compatible with Split Engine.
+  // TODO: (broken link) - remove call to SetSuppressSplitEngineRemoval().
+  texture_ptr->SetSuppressSplitEngineRemoval(true);
+  return texture_ptr;
 }
 
 TexturePtr TextureFactory::CreateExternalTexture(
@@ -161,8 +169,12 @@ TexturePtr TextureFactory::CreateExternalTexture(
   filament::TextureSampler sampler(MagFilter::LINEAR, WrapMode::CLAMP_TO_EDGE);
 
   // Using `new` to access a non-public constructor, see (broken link).
-  return absl::WrapUnique(
+  auto texture_ptr = absl::WrapUnique(
       new Texture(view_, nullptr, texture, sampler, security_level));
+  // This version of CreateTexture is not compatible with Split Engine.
+  // TODO: (broken link) - remove call to SetSuppressSplitEngineRemoval().
+  texture_ptr->SetSuppressSplitEngineRemoval(true);
+  return texture_ptr;
 }
 
 OwnedTexturePtr TextureFactory::CreateExternalTexture(
@@ -187,8 +199,12 @@ OwnedTexturePtr TextureFactory::CreateExternalTexture(
   }
   texture->setExternalImage(*engine, handle);
   filament::TextureSampler sampler(MagFilter::LINEAR, WrapMode::CLAMP_TO_EDGE);
-  return absl::WrapUnique(
+  auto texture_ptr = absl::WrapUnique(
       new Texture(view_, /*stream=*/nullptr, texture, sampler));
+  // This version of CreateTexture is not compatible with Split Engine.
+  // TODO: (broken link) - remove call to SetSuppressSplitEngineRemoval().
+  texture_ptr->SetSuppressSplitEngineRemoval(true);
+  return texture_ptr;
 }
 
 OwnedTexturePtr TextureFactory::CreateTexture(
@@ -200,8 +216,12 @@ OwnedTexturePtr TextureFactory::CreateTexture(
     const AssetPtr<TextureAsset> texture, TextureSamplerOptions options) {
   filament::TextureSampler sampler(options.mag_filter, options.wrap_mode);
 
-  return absl::WrapUnique(
+  auto texture_ptr = absl::WrapUnique(
       new Texture(view_, /*stream=*/nullptr, texture, sampler));
+  // This version of CreateTexture is not compatible with Split Engine.
+  // TODO: (broken link) - remove call to SetSuppressSplitEngineRemoval().
+  texture_ptr->SetSuppressSplitEngineRemoval(true);
+  return texture_ptr;
 }
 
 TexturePtr TextureFactory::CreateTexture(const ImageAsset& image,
@@ -334,7 +354,12 @@ TexturePtr TextureFactory::CreateTexture(
                                    sampler_options.wrap_mode);
   sampler.setAnisotropy(sampler_options.anisotropy);
 
-  return absl::WrapUnique(new Texture(view_, nullptr, texture, sampler));
+  auto texture_ptr =
+      absl::WrapUnique(new Texture(view_, nullptr, texture, sampler));
+  // This version of CreateTexture is not compatible with Split Engine.
+  // TODO: (broken link) - remove call to SetSuppressSplitEngineRemoval().
+  texture_ptr->SetSuppressSplitEngineRemoval(true);
+  return texture_ptr;
 }
 
 TexturePtr TextureFactory::CreateTexture(intptr_t id, uint32_t width,
@@ -353,7 +378,12 @@ TexturePtr TextureFactory::CreateTexture(intptr_t id, uint32_t width,
 
   auto sampler =
       filament::TextureSampler(MagFilter::LINEAR, WrapMode::CLAMP_TO_EDGE);
-  return absl::WrapUnique(new Texture(view_, nullptr, texture, sampler));
+  auto texture_ptr =
+      absl::WrapUnique(new Texture(view_, nullptr, texture, sampler));
+  // This version of CreateTexture is not compatible with Split Engine.
+  // TODO: (broken link) - remove call to SetSuppressSplitEngineRemoval().
+  texture_ptr->SetSuppressSplitEngineRemoval(true);
+  return texture_ptr;
 }
 
 TexturePtr TextureFactory::CreateTexture(TextureCreationSettings settings) {
@@ -405,7 +435,12 @@ TexturePtr TextureFactory::CreateTexture(TextureCreationSettings settings) {
     sampler.setAnisotropy(settings.options->anisotropy);
   }
 
-  return absl::WrapUnique(new Texture(view_, nullptr, *texture, sampler));
+  auto texture_ptr =
+      absl::WrapUnique(new Texture(view_, nullptr, *texture, sampler));
+  // This version of CreateTexture is not compatible with Split Engine.
+  // TODO: (broken link) - remove call to SetSuppressSplitEngineRemoval().
+  texture_ptr->SetSuppressSplitEngineRemoval(true);
+  return texture_ptr;
 }
 
 TexturePtr TextureFactory::CreateTexture(
@@ -627,14 +662,23 @@ OwnedTexturePtr TextureFactory::CreateTextureWithMipmaps(
                                    sampler_options.wrap_mode);
   sampler.setAnisotropy(sampler_options.anisotropy);
 
-  return absl::WrapUnique(new Texture(view_, nullptr, texture, sampler));
+  auto texture_ptr =
+      absl::WrapUnique(new Texture(view_, nullptr, texture, sampler));
+  // This version of CreateTexture is not compatible with Split Engine.
+  // TODO: (broken link) - remove call to SetSuppressSplitEngineRemoval().
+  texture_ptr->SetSuppressSplitEngineRemoval(true);
+  return texture_ptr;
 }
 
 TexturePtr TextureFactory::WrapTexture(
     filament::Texture* texture,
     const filament::backend::SamplerParams& params) {
-  return absl::WrapUnique(
+  auto texture_ptr = absl::WrapUnique(
       new Texture(view_, nullptr, texture, filament::TextureSampler(params)));
+  // This version of CreateTexture is not compatible with Split Engine.
+  // TODO: (broken link) - remove call to SetSuppressSplitEngineRemoval().
+  texture_ptr->SetSuppressSplitEngineRemoval(true);
+  return texture_ptr;
 }
 
 BorrowedTexturePtr TextureFactory::BorrowPlaceholderTexture(

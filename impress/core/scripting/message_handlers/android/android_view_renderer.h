@@ -38,11 +38,11 @@
 #include "core/ncsb/component_id.h"
 #include "core/ncsb/node_handle.h"
 #include "core/render/android/android_external_texture_surface.h"
+#include "core/render/primitive_shape_renderer.h"
 #include "core/render/texture.h"
 #include "core/scripting/message_handlers/android/android_view_renderer.proto.imp.h"
 #include "core/view/framework/input/pointer_input_handler.h"
 #include "core/view/framework/render/material_definition.proto.imp.h"
-#include "core/view/framework/render/primitive_shape_renderer.h"
 #include "core/view/framework/view.h"
 #include "core/view/platforms/android/wrappers/motion_event.h"
 #include "split_engine/input/split_engine_input_event.h"
@@ -55,7 +55,7 @@ class RenderViewToSurfaceTextureWrapper : public JavaWrapper {
  public:
   explicit RenderViewToSurfaceTextureWrapper(
       NodeHandle node, jobject android_view, ViewSize view_size,
-      AndroidExternalTextureSurface& surface);
+      float corner_radius, AndroidExternalTextureSurface& surface);
   ~RenderViewToSurfaceTextureWrapper() override;
 
   BorrowedTexturePtr BorrowTexture();
@@ -93,7 +93,8 @@ class AndroidViewRenderer : public Component {
           InputForwardingMode::INPUT_FORWARDING_MODE_DEFAULT,
       absl::optional<imp::MaterialDefinition> material_definition =
           std::nullopt,
-      absl::optional<uint32_t> blend_priority = std::nullopt);
+      absl::optional<uint32_t> blend_priority = std::nullopt,
+      absl::optional<float> corner_radius = std::nullopt);
   void Cleanup();
 
   // Returns the material used to render the Android View.

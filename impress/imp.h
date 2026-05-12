@@ -36,6 +36,8 @@
 #include "core/async/executor.h"
 #include "core/async/future.h"
 #include "core/async/future_status_utils.h"
+#include "core/camera/camera_component.h"
+#include "core/camera/camera_manager.h"
 #include "core/common/context.h"
 #include "core/common/filament_helpers.h"
 #include "core/common/holdable.h"
@@ -97,8 +99,6 @@
 #include "core/view/framework/assets/gltf_scene.h"
 #include "core/view/framework/assets/material_factory.h"
 #include "core/view/framework/assets/proto_asset.h"
-#include "core/view/framework/camera/camera_component.h"
-#include "core/view/framework/camera/camera_manager.h"
 #include "core/view/framework/client_api.h"
 #include "core/view/framework/collision/box_collider.h"
 #include "core/view/framework/collision/collision_manager.h"
@@ -119,10 +119,17 @@
 #endif
 #include "filament/libs/utils/include/utils/Systrace.h"
 #include "core/model/mesh/mesh.h"
+#include "core/render/primitive_shape_renderer.h"
+#include "core/render/primitive_shape_renderer_state.proto.imp.h"
+#include "core/view/framework/animation/animation.proto.imp.h"
+#include "core/view/framework/animation/gltf_animator_state.proto.imp.h"
+#include "core/view/framework/assets/gltf_state.proto.imp.h"
+#include "core/view/framework/collision/collider_state.proto.imp.h"
 #include "core/view/framework/input/pointer_input_handler.h"
 #include "core/view/framework/lighting/light_component.h"
 #include "core/view/framework/lighting/light_manager.h"
 #include "core/view/framework/render/material.h"
+#include "core/view/framework/render/material_definition.proto.imp.h"
 #include "core/view/framework/render/mesh_factory.h"
 // TODO: When render_component is safe to deprecate, change this.
 #include "core/view/framework/render/render_component.h"
@@ -134,6 +141,7 @@
 #include "core/view/view_host.h"
 #include "core/window/filament_host.h"
 #include "core/window/window_rotation.h"
+
 // IWYU pragma: end_exports
 
 #endif  // THIRD_PARTY_IMPRESS_IMP_H_

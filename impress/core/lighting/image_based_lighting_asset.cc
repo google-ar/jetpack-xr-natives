@@ -23,10 +23,10 @@
 #include <optional>
 #include <set>
 #include <string>
-#include <tuple>
 #include <utility>
 #include <vector>
 
+#include "absl/base/nullability.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
@@ -258,9 +258,8 @@ absl::StatusOr<ImageBasedLightingAssetCubemapImages> DeepCopyIblCubemaps(
     MP_ASSIGN_OR_RETURN(skybox_cubemap_copy, DeepCopyCubemapLevelImageContents(
                                               *cubemaps.skybox_cubemap_images));
   }
-  return ImageBasedLightingAssetCubemapImages{
-      .ibl_cubemap_images = std::move(ibl_cubemap_copy),
-      .skybox_cubemap_images = std::move(skybox_cubemap_copy)};
+  return ImageBasedLightingAssetCubemapImages(std::move(ibl_cubemap_copy),
+                                              std::move(skybox_cubemap_copy));
 }
 
 // TODO Replace this with Future<T>::Merge once vectors of
@@ -282,9 +281,9 @@ Future<ImageBasedLightingAssetCubemapImages> MergeIblCubemapFutures(
           if (skybox_cubemap_contents.ok()) {
             optional_skybox_contents = std::move(*skybox_cubemap_contents);
           }
-          return ImageBasedLightingAssetCubemapImages{
-              .ibl_cubemap_images = std::move(ibl_cubemap_contents),
-              .skybox_cubemap_images = std::move(optional_skybox_contents)};
+          return ImageBasedLightingAssetCubemapImages(
+              std::move(ibl_cubemap_contents),
+              std::move(optional_skybox_contents));
         });
       });
 }
@@ -456,7 +455,8 @@ BorrowedTexturePtr ImageBasedLightingAsset::BorrowReflectionTexture(
 // SplitEngineSerializer, if it exists.
 absl::StatusOr<std::unique_ptr<ImageBasedLightingAsset>>
 ImageBasedLightingAsset::SerializeAndConstructImageBasedLightingAsset(
-    BaseView& view, std::unique_ptr<SphericalHarmonics> spherical_harmonics,
+    BaseView& view,
+    /*absl_nonnull*/  std::unique_ptr<SphericalHarmonics> spherical_harmonics,
     ImageBasedLightingAssetCubemapImages cubemap_images,
     std::optional<std::string_view> asset_url) {
   if (split_engine::SplitEngineSerializer* serializer =
@@ -477,9 +477,14 @@ ImageBasedLightingAsset::SerializeAndConstructImageBasedLightingAsset(
     }
 
     serializer->SerializeImageBasedLightingAsset(
-        *reflection_texture->GetTexture(), spherical_harmonics_copy,
-        cubemap_images_copy);
+        *reflection_texture->GetTexture(), std::move(spherical_harmonics_copy),
+        std::move(cubemap_images_copy));
     // Remove the IBL asset from SplitEngine when it is destroyed.
+    // These textures are created through TextureFactory, but using an overload
+    // of TextureFactory::CreateTexture() that doesn't use imp::TextureBuilder,
+    // so it bypasses SplitEngine serialization add and remove calls. Instead,
+    // they are removed in ~ImageBasedLightingAsset() via
+    // RemoveImageBasedLightingAsset in the on_destroy_callback_.
     image_based_lighting_asset->on_destroy_callback_ = [serializer,
                                                         reflection_texture] {
       serializer->RemoveImageBasedLightingAsset(
@@ -532,18 +537,7 @@ ImageBasedLightingAsset::LoadSkyboxCubemapLevelImageContents(
     const Context& context, TextureFactory& texture_factory,
     filament::Engine& engine,
     const StringMap<resources::Resource>& filename_to_resource) {
-  return LoadCubemapLevel(context, "", filename_to_resource)
-      .Then(
-          [](absl::StatusOr<CubemapLevelImageContents> cubemap)
-              -> absl::StatusOr<CubemapLevelImageContents> {
-            if (!cubemap.ok()) {
-              return absl::NotFoundError(
-                  absl::StrFormat("Failed to load skybox cubemap level: %s",
-                                  cubemap.status().ToString()));
-            }
-            return std::move(*cubemap);
-          },
-          Executor::Type::kForeground);
+  return LoadCubemapLevel(context, "", filename_to_resource);
 }
 
 ImageBasedLightingAsset::ImageBasedLightingAsset(
@@ -580,7 +574,13 @@ ImageBasedLightingAsset::ImageBasedLightingAsset(
   spherical_harmonics_ = std::move(spherical_harmonics);
   ibl_cubemap_ = std::move(ibl_cubemap_texture);
   skybox_cubemap_ = std::move(skybox_cubemap_texture);
-};
+}
+
+ImageBasedLightingAsset::~ImageBasedLightingAsset() {
+  if (on_destroy_callback_) {
+    on_destroy_callback_();
+  }
+}
 
 absl::StatusOr<std::unique_ptr<SphericalHarmonics>>
 ImageBasedLightingAsset::LoadSphericalHarmonics(const BufferAccess& data) {

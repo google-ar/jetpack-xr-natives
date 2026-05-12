@@ -124,6 +124,7 @@ class TextRenderer : public Component {
 
   float4 GetTextColor() const;
   float2 GetOffset() const;
+  void SetOffset(float2 offset);
   float2 GetPivot() const;
   void SetPivot(float2 pivot);
   TextRendererState::VerticalPivot GetTopPivot() const;

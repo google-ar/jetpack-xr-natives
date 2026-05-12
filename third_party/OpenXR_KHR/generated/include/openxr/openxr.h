@@ -26,7 +26,7 @@ extern "C" {
     ((((major) & 0xffffULL) << 48) | (((minor) & 0xffffULL) << 32) | ((patch) & 0xffffffffULL))
 
 // OpenXR current version number.
-#define XR_CURRENT_API_VERSION XR_MAKE_VERSION(1, 1, 53)
+#define XR_CURRENT_API_VERSION XR_MAKE_VERSION(1, 1, 54)
 
 // OpenXR 1.0 version number
 #define XR_API_VERSION_1_0 XR_MAKE_VERSION(1, 0, XR_VERSION_PATCH(XR_CURRENT_API_VERSION))
@@ -688,6 +688,7 @@ typedef enum XrStructureType {
     XR_TYPE_ENVIRONMENT_DEPTH_IMAGE_META = 1000291005,
     XR_TYPE_ENVIRONMENT_DEPTH_HAND_REMOVAL_SET_INFO_META = 1000291006,
     XR_TYPE_SYSTEM_ENVIRONMENT_DEPTH_PROPERTIES_META = 1000291007,
+    XR_TYPE_ENVIRONMENT_DEPTH_IMAGE_TIMESTAMP_META = 1000291008,
     XR_TYPE_RENDER_MODEL_CREATE_INFO_EXT = 1000300000,
     XR_TYPE_RENDER_MODEL_PROPERTIES_GET_INFO_EXT = 1000300001,
     XR_TYPE_RENDER_MODEL_PROPERTIES_EXT = 1000300002,
@@ -891,12 +892,6 @@ typedef enum XrStructureType {
     XR_TYPE_EVENT_DATA_IMAGE_TRACKING_LOST_ANDROID = 1000709006,
     XR_TYPE_OCCUPANCY_GRID_ANDROIDX = 1000715000,
     XR_TYPE_PLANE_TRACKABLE_TRACKER_CREATE_INFO_ANDROIDX = 1000715001,
-    XR_TYPE_BODY_TRACKER_CREATE_INFO_ANDROIDX = 1000716000,
-    XR_TYPE_AVATAR_SKELETON_ANDROIDX = 1000716001,
-    XR_TYPE_BODY_TRACKER_GET_INFO_ANDROIDX = 1000716002,
-    XR_TYPE_BODY_TRACKER_AVATAR_PROPORTIONS_ANDROIDX = 1000716003,
-    XR_TYPE_AVATAR_SKELETON_JOINT_ANDROIDX = 1000716004,
-    XR_TYPE_BODY_TRACKER_CALIBRATION_ANDROIDX = 1000716005,
     XR_TYPE_BODY_JOINT_LOCATIONS_ANDROIDSYS = 1000717003,
     XR_TYPE_BODY_TRACKER_CREATE_INFO_ANDROIDSYS = 1000717004,
     XR_TYPE_BODY_JOINTS_LOCATE_INFO_ANDROIDSYS = 1000717005,
@@ -1111,7 +1106,6 @@ typedef enum XrObjectType {
     XR_OBJECT_TYPE_DEPTH_SWAPCHAIN_ANDROID = 1000702001,
     XR_OBJECT_TYPE_HAND_MESH_TRACKER_ANDROID = 1000703000,
     XR_OBJECT_TYPE_TRACKABLE_IMAGE_DATABASE_ANDROID = 1000709000,
-    XR_OBJECT_TYPE_BODY_TRACKER_ANDROIDX = 1000716000,
     XR_OBJECT_TYPE_BODY_TRACKER_ANDROIDSYS = 1000717000,
     XR_OBJECT_TYPE_SCENE_MESHING_TRACKER_ANDROID = 1000718000,
     XR_OBJECT_TYPE_SCENE_MESH_SNAPSHOT_ANDROID = 1000718001,
@@ -3787,6 +3781,7 @@ typedef struct XrSceneMeshBuffersMSFT {
     void* XR_MAY_ALIAS    next;
 } XrSceneMeshBuffersMSFT;
 
+// XrSceneMeshVertexBufferMSFT extends XrSceneMeshBuffersMSFT
 typedef struct XrSceneMeshVertexBufferMSFT {
     XrStructureType       type;
     void* XR_MAY_ALIAS    next;
@@ -3795,6 +3790,7 @@ typedef struct XrSceneMeshVertexBufferMSFT {
     XrVector3f*           vertices;
 } XrSceneMeshVertexBufferMSFT;
 
+// XrSceneMeshIndicesUint32MSFT extends XrSceneMeshBuffersMSFT
 typedef struct XrSceneMeshIndicesUint32MSFT {
     XrStructureType       type;
     void* XR_MAY_ALIAS    next;
@@ -3803,6 +3799,7 @@ typedef struct XrSceneMeshIndicesUint32MSFT {
     uint32_t*             indices;
 } XrSceneMeshIndicesUint32MSFT;
 
+// XrSceneMeshIndicesUint16MSFT extends XrSceneMeshBuffersMSFT
 typedef struct XrSceneMeshIndicesUint16MSFT {
     XrStructureType       type;
     void* XR_MAY_ALIAS    next;
@@ -6128,6 +6125,7 @@ typedef struct XrBoundary2DFB {
     XrVector2f*                 vertices;
 } XrBoundary2DFB;
 
+// XrSemanticLabelsSupportInfoFB extends XrSemanticLabelsFB
 typedef struct XrSemanticLabelsSupportInfoFB {
     XrStructureType                   type;
     const void* XR_MAY_ALIAS          next;
@@ -7773,7 +7771,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrShareSpacesMETA(
 #define XR_META_environment_depth 1
 XR_DEFINE_HANDLE(XrEnvironmentDepthProviderMETA)
 XR_DEFINE_HANDLE(XrEnvironmentDepthSwapchainMETA)
-#define XR_META_environment_depth_SPEC_VERSION 1
+#define XR_META_environment_depth_SPEC_VERSION 2
 #define XR_META_ENVIRONMENT_DEPTH_EXTENSION_NAME "XR_META_environment_depth"
 typedef XrFlags64 XrEnvironmentDepthProviderCreateFlagsMETA;
 
@@ -7824,6 +7822,13 @@ typedef struct XrEnvironmentDepthImageMETA {
     float                              farZ;
     XrEnvironmentDepthImageViewMETA    views[2];
 } XrEnvironmentDepthImageMETA;
+
+// XrEnvironmentDepthImageTimestampMETA extends XrEnvironmentDepthImageMETA
+typedef struct XrEnvironmentDepthImageTimestampMETA {
+    XrStructureType             type;
+    const void* XR_MAY_ALIAS    next;
+    XrTime                      captureTime;
+} XrEnvironmentDepthImageTimestampMETA;
 
 typedef struct XrEnvironmentDepthHandRemovalSetInfoMETA {
     XrStructureType             type;
@@ -8728,6 +8733,7 @@ typedef struct XrFacialSimulationDataBD {
     XrTime                time;
 } XrFacialSimulationDataBD;
 
+// XrLipExpressionDataBD extends XrFacialSimulationDataBD
 typedef struct XrLipExpressionDataBD {
     XrStructureType       type;
     void* XR_MAY_ALIAS    next;
@@ -8856,6 +8862,7 @@ typedef struct XrSpatialEntityComponentDataBaseHeaderBD {
     void* XR_MAY_ALIAS    next;
 } XrSpatialEntityComponentDataBaseHeaderBD;
 
+// XrSpatialEntityLocationGetInfoBD extends XrSpatialEntityComponentGetInfoBD
 typedef struct XrSpatialEntityLocationGetInfoBD {
     XrStructureType             type;
     const void* XR_MAY_ALIAS    next;
@@ -10478,7 +10485,7 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetFitTrackerFitDataANDROIDSYS(
 
 // XR_EXT_future is a preprocessor guard. Do not pass it to API calls.
 #define XR_EXT_future 1
-#define XR_EXT_future_SPEC_VERSION        1
+#define XR_EXT_future_SPEC_VERSION        2
 #define XR_EXT_FUTURE_EXTENSION_NAME      "XR_EXT_future"
 #define XR_NULL_FUTURE_EXT                0
 
@@ -11119,6 +11126,7 @@ typedef struct XrShareSpacesRecipientGroupsMETA {
     XrUuid*                     groups;
 } XrShareSpacesRecipientGroupsMETA;
 
+// XrSpaceGroupUuidFilterInfoMETA extends XrSpaceQueryInfoBaseHeaderFB
 typedef struct XrSpaceGroupUuidFilterInfoMETA {
     XrStructureType             type;
     const void* XR_MAY_ALIAS    next;
@@ -11691,138 +11699,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetOccupancyGridForPlaneANDROIDX(
     XrTrackableTrackerANDROID                   trackableTracker,
     const XrTrackableGetInfoANDROID*            getInfo,
     XrOccupancyGridANDROIDX*                    occupancyGridOutput);
-#endif /* XR_EXTENSION_PROTOTYPES */
-#endif /* !XR_NO_PROTOTYPES */
-
-
-// XR_ANDROIDX_body_tracking is a preprocessor guard. Do not pass it to API calls.
-#define XR_ANDROIDX_body_tracking 1
-XR_DEFINE_HANDLE(XrBodyTrackerANDROIDX)
-#define XR_ANDROIDX_BODY_TRACKING_MAX_NUM_JOINTS_ANDROIDX 22
-#define XR_ANDROIDX_body_tracking_SPEC_VERSION 1
-#define XR_ANDROIDX_BODY_TRACKING_EXTENSION_NAME "XR_ANDROIDX_body_tracking"
-
-typedef enum XrAvatarSkeletonJointStatusANDROIDX {
-    XR_AVATAR_SKELETON_JOINT_STATUS_TRACKED_ANDROIDX = 0,
-    XR_AVATAR_SKELETON_JOINT_STATUS_ESTIMATED_ANDROIDX = 1,
-    XR_AVATAR_SKELETON_JOINT_STATUS_INVALID_ANDROIDX = 2,
-    XR_AVATAR_SKELETON_JOINT_STATUS_MAX_ENUM_ANDROIDX = 0x7FFFFFFF
-} XrAvatarSkeletonJointStatusANDROIDX;
-
-typedef enum XrAvatarSkeletonJointTypeANDROIDX {
-    XR_AVATAR_SKELETON_JOINT_TYPE_HIPS_ANDROIDX = 0,
-    XR_AVATAR_SKELETON_JOINT_TYPE_SPINE_ANDROIDX = 1,
-    XR_AVATAR_SKELETON_JOINT_TYPE_RIBS_ANDROIDX = 2,
-    XR_AVATAR_SKELETON_JOINT_TYPE_CHEST_ANDROIDX = 3,
-    XR_AVATAR_SKELETON_JOINT_TYPE_NECK_ANDROIDX = 4,
-    XR_AVATAR_SKELETON_JOINT_TYPE_HEAD_ANDROIDX = 5,
-    XR_AVATAR_SKELETON_JOINT_TYPE_LEFT_SHOULDER_ANDROIDX = 6,
-    XR_AVATAR_SKELETON_JOINT_TYPE_RIGHT_SHOULDER_ANDROIDX = 7,
-    XR_AVATAR_SKELETON_JOINT_TYPE_LEFT_UPPER_ARM_ANDROIDX = 8,
-    XR_AVATAR_SKELETON_JOINT_TYPE_RIGHT_UPPER_ARM_ANDROIDX = 9,
-    XR_AVATAR_SKELETON_JOINT_TYPE_LEFT_LOWER_ARM_ANDROIDX = 10,
-    XR_AVATAR_SKELETON_JOINT_TYPE_RIGHT_LOWER_ARM_ANDROIDX = 11,
-    XR_AVATAR_SKELETON_JOINT_TYPE_LEFT_HAND_ANDROIDX = 12,
-    XR_AVATAR_SKELETON_JOINT_TYPE_RIGHT_HAND_ANDROIDX = 13,
-    XR_AVATAR_SKELETON_JOINT_TYPE_LEFT_UPPER_LEG_ANDROIDX = 14,
-    XR_AVATAR_SKELETON_JOINT_TYPE_RIGHT_UPPER_LEG_ANDROIDX = 15,
-    XR_AVATAR_SKELETON_JOINT_TYPE_LEFT_LOWER_LEG_ANDROIDX = 16,
-    XR_AVATAR_SKELETON_JOINT_TYPE_RIGHT_LOWER_LEG_ANDROIDX = 17,
-    XR_AVATAR_SKELETON_JOINT_TYPE_LEFT_FOOT_ANDROIDX = 18,
-    XR_AVATAR_SKELETON_JOINT_TYPE_RIGHT_FOOT_ANDROIDX = 19,
-    XR_AVATAR_SKELETON_JOINT_TYPE_LEFT_TOES_ANDROIDX = 20,
-    XR_AVATAR_SKELETON_JOINT_TYPE_RIGHT_TOES_ANDROIDX = 21,
-    XR_AVATAR_SKELETON_JOINT_TYPE_MAX_ENUM_ANDROIDX = 0x7FFFFFFF
-} XrAvatarSkeletonJointTypeANDROIDX;
-typedef struct XrAvatarSkeletonJointANDROIDX {
-    XrStructureType                        type;
-    void *                                 next;
-    XrAvatarSkeletonJointTypeANDROIDX      jointType;
-    XrAvatarSkeletonJointTypeANDROIDX      parent;
-    XrAvatarSkeletonJointStatusANDROIDX    status;
-    XrPosef                                pose;
-} XrAvatarSkeletonJointANDROIDX;
-
-typedef struct XrAvatarSkeletonANDROIDX {
-    XrStructureType                  type;
-    void *                           next;
-    XrPosef                          rootPose;
-    XrTime                           updateTime;
-    uint32_t                         restSkeletonUpdateCount;
-    uint32_t                         numJoints;
-    XrAvatarSkeletonJointANDROIDX    joints[XR_ANDROIDX_BODY_TRACKING_MAX_NUM_JOINTS_ANDROIDX];
-} XrAvatarSkeletonANDROIDX;
-
-typedef struct XrBodyTrackerCreateInfoANDROIDX {
-    XrStructureType    type;
-    const void *       next;
-} XrBodyTrackerCreateInfoANDROIDX;
-
-typedef struct XrBodyTrackerGetInfoANDROIDX {
-    XrStructureType    type;
-    const void *       next;
-    XrTime             time;
-    XrSpace            space;
-} XrBodyTrackerGetInfoANDROIDX;
-
-typedef struct XrBodyTrackerAvatarProportionsANDROIDX {
-    XrStructureType    type;
-    void *             next;
-    float              headHeight;
-    float              hipsWidth;
-    float              hipsLength;
-    float              torsoLength;
-    float              neckLength;
-    float              shoulderWidth;
-    float              upperArmLength;
-    float              lowerArmLength;
-    float              upperLegLength;
-    float              lowerLegLength;
-    float              ankleHeight;
-    float              footLength;
-} XrBodyTrackerAvatarProportionsANDROIDX;
-
-typedef struct XrBodyTrackerCalibrationANDROIDX {
-    XrStructureType                           type;
-    void *                                    next;
-    XrBool32                                  enableAutoCalibration;
-    XrBodyTrackerAvatarProportionsANDROIDX    proportions;
-} XrBodyTrackerCalibrationANDROIDX;
-
-typedef XrResult (XRAPI_PTR *PFN_xrCreateBodyTrackerANDROIDX)(XrSession session, const XrBodyTrackerCreateInfoANDROIDX* createInfo, XrBodyTrackerANDROIDX* bodyTracker);
-typedef XrResult (XRAPI_PTR *PFN_xrDestroyBodyTrackerANDROIDX)(XrBodyTrackerANDROIDX bodyTracker);
-typedef XrResult (XRAPI_PTR *PFN_xrGetBodyTrackerSkeletonANDROIDX)(XrBodyTrackerANDROIDX bodyTracker, const XrBodyTrackerGetInfoANDROIDX* getInfo, XrAvatarSkeletonANDROIDX* skeletonPoseOutput);
-typedef XrResult (XRAPI_PTR *PFN_xrGetBodyTrackerRestSkeletonANDROIDX)(XrBodyTrackerANDROIDX bodyTracker, const XrBodyTrackerGetInfoANDROIDX* getInfo, XrAvatarSkeletonANDROIDX* skeletonRestOutput);
-typedef XrResult (XRAPI_PTR *PFN_xrSetBodyTrackerCalibrationANDROIDX)(XrBodyTrackerANDROIDX bodyTracker, const XrBodyTrackerCalibrationANDROIDX* calibration);
-typedef XrResult (XRAPI_PTR *PFN_xrGetBodyTrackerCalibrationANDROIDX)(XrBodyTrackerANDROIDX bodyTracker, XrBodyTrackerCalibrationANDROIDX* calibration);
-
-#ifndef XR_NO_PROTOTYPES
-#ifdef XR_EXTENSION_PROTOTYPES
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateBodyTrackerANDROIDX(
-    XrSession                                   session,
-    const XrBodyTrackerCreateInfoANDROIDX*      createInfo,
-    XrBodyTrackerANDROIDX*                      bodyTracker);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrDestroyBodyTrackerANDROIDX(
-    XrBodyTrackerANDROIDX                       bodyTracker);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrGetBodyTrackerSkeletonANDROIDX(
-    XrBodyTrackerANDROIDX                       bodyTracker,
-    const XrBodyTrackerGetInfoANDROIDX*         getInfo,
-    XrAvatarSkeletonANDROIDX*                   skeletonPoseOutput);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrGetBodyTrackerRestSkeletonANDROIDX(
-    XrBodyTrackerANDROIDX                       bodyTracker,
-    const XrBodyTrackerGetInfoANDROIDX*         getInfo,
-    XrAvatarSkeletonANDROIDX*                   skeletonRestOutput);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrSetBodyTrackerCalibrationANDROIDX(
-    XrBodyTrackerANDROIDX                       bodyTracker,
-    const XrBodyTrackerCalibrationANDROIDX*     calibration);
-
-XRAPI_ATTR XrResult XRAPI_CALL xrGetBodyTrackerCalibrationANDROIDX(
-    XrBodyTrackerANDROIDX                       bodyTracker,
-    XrBodyTrackerCalibrationANDROIDX*           calibration);
 #endif /* XR_EXTENSION_PROTOTYPES */
 #endif /* !XR_NO_PROTOTYPES */
 
@@ -13261,10 +13137,10 @@ typedef struct XrSpatialComponentObjectSemanticLabelListANDROID {
 #define XR_ANDROID_spatial_discovery_raycast 1
 #define XR_ANDROID_spatial_discovery_raycast_SPEC_VERSION 1
 #define XR_ANDROID_SPATIAL_DISCOVERY_RAYCAST_EXTENSION_NAME "XR_ANDROID_spatial_discovery_raycast"
-typedef struct XrSpatialRaycastResultANDROID {
+typedef struct XrSpatialRaycastResultDataANDROID {
     XrPosef    hitPose;
     float      distanceSquared;
-} XrSpatialRaycastResultANDROID;
+} XrSpatialRaycastResultDataANDROID;
 
 typedef struct XrSpatialCapabilityConfigurationDepthRaycastANDROID {
     XrStructureType                     type;
@@ -13287,10 +13163,10 @@ typedef struct XrSpatialRaycastInfoANDROID {
 
 // XrSpatialComponentRaycastResultListANDROID extends XrSpatialComponentDataQueryResultEXT
 typedef struct XrSpatialComponentRaycastResultListANDROID {
-    XrStructureType                   type;
-    void* XR_MAY_ALIAS                next;
-    uint32_t                          raycastResultCount;
-    XrSpatialRaycastResultANDROID*    raycastResults;
+    XrStructureType                       type;
+    void* XR_MAY_ALIAS                    next;
+    uint32_t                              raycastResultCount;
+    XrSpatialRaycastResultDataANDROID*    raycastResults;
 } XrSpatialComponentRaycastResultListANDROID;
 
 typedef struct XrSpatialRaycastSnapshotCreateInfoANDROID {

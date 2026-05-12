@@ -50,19 +50,37 @@ class TestModelManager : public ModelManager {
   absl::Status SetGltfModelColliderEnabled(int32_t node,
                                            bool enable_collider) override;
   absl::Status SetGltfReformAffordanceEnabled(int32_t impress_node,
-                                              bool enable_affordance) override;
+                                              bool enable_affordance,
+                                              bool system_movable) override;
   void AnimateGltfModel(
       int32_t node, absl::string_view animation_name, bool loop,
       std::unique_ptr<BaseAssetAnimator> asset_animator) override;
   absl::Status StopGltfModelAnimation(int32_t node) override;
   absl::Status ToggleGltfModelAnimation(int32_t node, bool toggle) override;
+  absl::Status SetGltfModelAnimationSpeed(int32_t node, float speed,
+                                          int32_t channel_id) override;
+  absl::Status SetGltfModelAnimationPlaybackTime(int32_t node,
+                                                 float playback_time,
+                                                 int32_t channel_id) override;
+  absl::StatusOr<int32_t> GetGltfModelAnimationCount(int32_t node) override;
+  absl::StatusOr<std::string> GetGltfModelAnimationName(int32_t node,
+                                                        int32_t index) override;
   absl::StatusOr<imp::Box> GetGltfModelLocalBounds(int32_t node) override;
+  // TODO Remove this API once the migration to the new
+  // introspection APIs is complete.
   absl::Status SetMaterialOverride(int32_t node_id, std::intptr_t material,
                                    absl::string_view node_name,
                                    size_t primitive_index) override;
+  // TODO Remove this API once the migration to the new
+  // introspection APIs is complete.
   absl::Status ClearMaterialOverride(int32_t node_id,
                                      absl::string_view node_name,
                                      size_t primitive_index) override;
+  absl::Status SetGltfModelNodeMaterialOverride(
+      int32_t node_id, std::intptr_t material, size_t primitive_index) override;
+  absl::Status ClearGltfModelNodeMaterialOverride(
+      int32_t node_id, size_t primitive_index) override;
+  absl::Status ScheduleReskinning(int32_t node_id) override;
   void Update(const FrameTime& frame_time) override;
   void ResetAnimationContexts() override;
 };

@@ -77,17 +77,39 @@ cc_library(
 )
 
 cc_library(
+    name = "builtin_generic_spec_helpers",
+    srcs = ["builtin_generic_spec_helpers.cc"],
+    hdrs = ["builtin_generic_spec_helpers.h"],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    deps = [
+        "//core/material_library:fbs",
+        "//core/material_library:fbs_deps",  # buildcleaner: keep
+        "//core/material_library:generic_material_spec",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:str_format",
+        "@flatbuffers",
+        "@mediapipe//mediapipe/framework/port:status",
+        "@third_party//split_engine:fbs",
+        "@third_party//split_engine:fbs_deps",  # buildcleaner: keep
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "builtin_generic_material",
     srcs = ["builtin_generic_material.cc"],
     hdrs = ["builtin_generic_material.h"],
     copts = imp_google3_copts(),
     defines = imp_defines(),
     deps = [
+        ":builtin_generic_spec_helpers",
         ":builtin_material",
+        ":builtin_material_registry",
         "//core/async:future",
         "//core/common:small_source_location",
-        "//core/common:type_helpers",
-        "//core/material_library:fbs",
         "//core/material_library:fbs_deps",  # buildcleaner: keep
         "//core/material_library:generic_material",
         "//core/material_library:generic_material_parameters",
@@ -97,16 +119,17 @@ cc_library(
         "//core/materials",
         "//core/render",
         "//core/render:display_color_space",
+        "//core/split_engine:split_engine_shared",
         "//core/view:base_view",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@flatbuffers",
         "@third_party//filament",
-        "@third_party//filament/filament:filament_hdrs",
         "@third_party//split_engine:fbs",
         "@third_party//split_engine:fbs_deps",  # buildcleaner: keep
     ],
-    alwayslink = 1,
+    alwayslink = 1,  # Required for the built-in material registry.
 )
 
 cc_library(
@@ -119,12 +142,14 @@ cc_library(
         ":builtin_custom_material",
         ":builtin_jxr_media_material_assets",
         ":builtin_material",
+        ":builtin_material_registry",
         "//core:config",
         "//core/assets",
         "//core/assets/material:material_asset",
         "//core/assets/material:material_load_options_proto_cc",
         "//core/async:future",
         "//core/material_library:flatbuffer_utils",
+        "//core/material_library:material_package",
         "//core/materials",
         "//core/math",
         "//core/media:media_color_space",
@@ -149,13 +174,14 @@ cc_library(
         "@flatbuffers",
         "@third_party//filament/filament:filament_hdrs",
     ],
-    alwayslink = 1,
+    alwayslink = 1,  # Required for the built-in material registry.
 )
 
 imp_assets(
     name = "builtin_jxr_media_material_assets",
     srcs = [
         ":builtin_jxr_media_mat",
+        ":builtin_jxr_media_opaque_mat",
     ],
     namespace = "imp::split_engine",
 )
@@ -169,6 +195,25 @@ imp_material(
         "//core/xr/media/data:dataspace_support.glsl",
         "//core/xr/media/data:stereo.glsl",
     ],
+    replacements = {
+        "{BLENDING_MODE}": "transparent",
+        "{DEPTH_CULLING}": "false",
+    },
+)
+
+imp_material(
+    name = "builtin_jxr_media_opaque_mat",
+    src = "builtin_jxr_media.mat",
+    includes = [
+        "//core/materials:color_conversion_helpers.glsl",
+        "//core/materials:super_sample.glsl",
+        "//core/xr/media/data:dataspace_support.glsl",
+        "//core/xr/media/data:stereo.glsl",
+    ],
+    replacements = {
+        "{BLENDING_MODE}": "opaque",
+        "{DEPTH_CULLING}": "true",
+    },
 )
 
 cc_library(
@@ -180,11 +225,12 @@ cc_library(
     deps = [
         ":builtin_custom_material",
         ":builtin_material",
+        ":builtin_material_registry",
         ":builtin_svxr_footprint_material_assets",
         "//core/assets",
         "//core/assets/material:material_asset",
         "//core/async:future",
-        "//core/material_library:material_param_value",
+        "//core/material_library:material_package",
         "//core/materials",
         "//core/ncsb",
         "//core/render",
@@ -198,7 +244,7 @@ cc_library(
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//split_engine:fbs",
     ],
-    alwayslink = 1,
+    alwayslink = 1,  # Required for the built-in material registry.
 )
 
 imp_assets(
@@ -226,12 +272,13 @@ cc_library(
     deps = [
         ":builtin_custom_material",
         ":builtin_material",
+        ":builtin_material_registry",
         ":builtin_svxr_plane_material_assets",
         "//core/assets",
         "//core/assets/material:material_asset",
         "//core/async:future",
         "//core/material_library:flatbuffer_utils",
-        "//core/material_library:material_param_value",
+        "//core/material_library:material_package",
         "//core/materials",
         "//core/ncsb",
         "//core/render",
@@ -246,7 +293,7 @@ cc_library(
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//split_engine:fbs",
     ],
-    alwayslink = 1,
+    alwayslink = 1,  # Required for the built-in material registry.
 )
 
 imp_assets(
@@ -274,9 +321,11 @@ cc_library(
     deps = [
         ":builtin_custom_material",
         ":builtin_material",
+        ":builtin_material_registry",
         ":builtin_vignette_material_assets",
         "//core/assets",
         "//core/async:future",
+        "//core/material_library:material_package",
         "//core/materials",
         "//core/ncsb",
         "//core/render",
@@ -290,7 +339,7 @@ cc_library(
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//split_engine:fbs",
     ],
-    alwayslink = 1,
+    alwayslink = 1,  # Required for the built-in material registry.
 )
 
 imp_assets(
@@ -318,11 +367,12 @@ cc_library(
     deps = [
         ":builtin_custom_material",
         ":builtin_material",
+        ":builtin_material_registry",
         ":builtin_texture_external_material_assets",
         "//core/assets",
         "//core/async:future",
         "//core/material_library:flatbuffer_utils",
-        "//core/material_library:material_param_value",
+        "//core/material_library:material_package",
         "//core/materials",
         "//core/ncsb",
         "//core/render",
@@ -337,7 +387,7 @@ cc_library(
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//split_engine:fbs",
     ],
-    alwayslink = 1,
+    alwayslink = 1,  # Required for the built-in material registry.
 )
 
 imp_assets(
@@ -365,11 +415,13 @@ cc_library(
     deps = [
         ":builtin_custom_material",
         ":builtin_material",
+        ":builtin_material_registry",
         ":builtin_water_material_assets",
         "//core/assets",
         "//core/assets/material:material_asset",
         "//core/async:future",
         "//core/material_library:flatbuffer_utils",
+        "//core/material_library:material_package",
         "//core/materials",
         "//core/ncsb",
         "//core/render",
@@ -384,7 +436,7 @@ cc_library(
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//split_engine:fbs",
     ],
-    alwayslink = 1,
+    alwayslink = 1,  # Required for the built-in material registry.
 )
 
 imp_assets(
@@ -421,11 +473,13 @@ cc_library(
     deps = [
         ":builtin_custom_material",
         ":builtin_material",
+        ":builtin_material_registry",
         ":builtin_youtube_stereo_player_material_assets",
         "//core/assets",
         "//core/assets/material:material_load_options_proto_cc",
         "//core/async:future",
         "//core/material_library:flatbuffer_utils",
+        "//core/material_library:material_package",
         "//core/materials",
         "//core/ncsb",
         "//core/render",
@@ -443,7 +497,7 @@ cc_library(
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//split_engine:fbs",
     ],
-    alwayslink = 1,
+    alwayslink = 1,  # Required for the built-in material registry.
 )
 
 imp_assets(
@@ -462,4 +516,29 @@ imp_material(
         "//core/materials:super_sample.glsl",
         "//core/xr/media/data:dataspace_support.glsl",
     ],
+)
+
+cc_library(
+    name = "builtin_material_registry",
+    srcs = ["builtin_material_registry.cc"],
+    hdrs = ["builtin_material_registry.h"],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":builtin_material",
+        "//core/async:future",
+        "//core/common:invocable",
+        "//core/common:small_source_location",
+        "//core/material_library:material_package",
+        "//core/split_engine:split_engine_shared",
+        "//core/view:base_view",
+        "@com_google_absl//absl/base:no_destructor",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_impress//core/common:log",
+        "@third_party//split_engine:fbs",
+    ],
+    alwayslink = 1,
 )

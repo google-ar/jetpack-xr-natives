@@ -39,6 +39,7 @@
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/backend/include/backend/PixelBufferDescriptor.h"
 #include "filament/filament/include/filament/Texture.h"
+#include "core/async/background_delete.h"
 #include "core/async/future.h"
 #include "core/async/future_common.h"
 #include "core/image/image_contents.h"
@@ -51,13 +52,17 @@ namespace {
 class WasmImageContents : public ImageContents {
  public:
   explicit WasmImageContents(uint8_t* data, int width, int height)
-      : data_(data), width_(width), height_(height) {}
+      : data_(imp::MakeSharedWithBackgroundDeleter<uint8_t[]>(data)),
+        width_(width),
+        height_(height) {}
 
   uint32_t GetWidth() const override { return width_; }
   uint32_t GetStride() const override { return width_ * 4; }
   uint32_t GetHeight() const override { return height_; }
   std::size_t GetSize() const override { return width_ * height_ * 4; }
-  uint8_t* GetData() override { return data_.get(); }
+  uint8_t* GetData() override {
+    return reinterpret_cast<uint8_t*>(data_.get());
+  }
   bool HasAlpha() const override { return true; }
   filament::backend::TextureFormat GetTextureFormat() const override {
     return filament::Texture::InternalFormat::SRGB8_A8;

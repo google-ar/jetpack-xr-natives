@@ -29,7 +29,7 @@ namespace imp::split_engine {
 // Packs an ImageBasedLightingAsset into its flatbuffer equivalent.
 flatbuffers::Offset<android_xr::schemas::ImageBasedLightingAsset>
 PackImageBasedLightingAsset(
-    flatbuffers::FlatBufferBuilder* fbb, uint64_t id,
+    flatbuffers::FlatBufferBuilder& fbb, uint64_t id,
     const SphericalHarmonics& spherical_harmonics,
     const ImageBasedLightingAssetCubemapImages& cubemap_images);
 

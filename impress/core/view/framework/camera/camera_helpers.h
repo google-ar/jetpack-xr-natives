@@ -22,10 +22,10 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "core/camera/camera_component.h"
 #include "core/common/bit_flag.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node_handle.h"
-#include "core/view/framework/camera/camera_component.h"
 
 namespace imp {
 

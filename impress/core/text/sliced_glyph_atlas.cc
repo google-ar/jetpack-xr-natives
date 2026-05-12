@@ -179,6 +179,7 @@ SlicedGlyphAtlas::SlicedGlyphAtlas(
           for (auto& slice : slices_) {
             slice.OnViewResumed();
           }
+          texture_manager_->OnViewResumed();
         },
         this);
   }
@@ -203,10 +204,18 @@ SlicedGlyphAtlas::SlicedGlyphAtlas(
             editor::SlicedGlyphAtlasVisualizer::AtlasDataProvider{
                 .get_atlas_info_func =
                     [this]() {
+                      std::vector<Texture*> slice_textures;
+                      for (auto& slice : slices_) {
+                        slice_textures.push_back(slice.texture_);
+                      }
+
                       return editor::SlicedGlyphAtlasVisualizer::AtlasInfo{
                           .texture = GetTexture(),
                           .texture_size = atlas_texture_size_,
                           .grid_size = atlas_grid_size_,
+                          .slice_texture_size =
+                              atlas_texture_size_ / atlas_grid_size_,
+                          .slice_textures = std::move(slice_textures),
                       };
                     },
                 .get_glyph_info_func =
@@ -388,7 +397,6 @@ Future<std::vector<SlicedGlyphAtlas::Glyph>> SlicedGlyphAtlas::GetGlyphs(
                   // Whether updating the texture can happen synchronously and
                   // therefore is guaranteed to happen on the next EndFrame
                   // after all draw commands are issued.
-                  bool synchronous_texture_update;
                   Future<absl::Status> result_future;
                   std::vector<Future<absl::Status>> entry_futures;
                   for (auto& entry : pending_canvas_glyphs->entries) {
@@ -438,16 +446,16 @@ Future<std::vector<SlicedGlyphAtlas::Glyph>> SlicedGlyphAtlas::GetGlyphs(
                       entry_future.Return(absl::OkStatus());
                     }
                     absl::MutexLock lock(slice.canvas_mutex_);
-                    synchronous_texture_update =
-                        slice.canvas_->SupportsSynchronousTextureUpdate();
                     entry_futures.push_back(entry_future);
                   }
                   result_future =
                       Future<absl::Status>::CombineList(entry_futures);
                   return result_future
-                      .Then([this, synchronous_texture_update]() {
+                      .Then([this, pending_canvas_glyphs =
+                                       std::move(pending_canvas_glyphs)]() {
                         std::vector<Future<absl::Status>> slice_futures;
-                        for (auto& slice : slices_) {
+                        for (auto& entry : pending_canvas_glyphs->entries) {
+                          auto& slice = slices_[entry.slice];
                           bool canvas_is_null;
                           {
                             absl::MutexLock lock(slice.canvas_mutex_);
@@ -456,28 +464,16 @@ Future<std::vector<SlicedGlyphAtlas::Glyph>> SlicedGlyphAtlas::GetGlyphs(
                               slice.texture_status_ = TextureStatus::kStable;
                             }
                           }
-                          if (synchronous_texture_update || canvas_is_null) {
-                            // If synchronous_texture_update is true, the
-                            // texture is guaranteed to update synchronously on
-                            // the next EndFrame after the result_future
-                            // resolves, so no need to block this future until
-                            // the texture is updated.
 
-                            // If the canvas is null, that means the texture has
-                            // already been updated after the draw, but before
-                            // this code is executed. Theres no more work to do
-                            // so return immediately.
-                            slice_futures.push_back(
-                                Future<absl::Status>(absl::OkStatus()));
-                          } else {
-                            // Block resolution of the glyphs until the texture
-                            // has been updated and the glyphs can be safely
-                            // used.
-                            Future<absl::Status> pending_glyph_future;
-                            slice.texture_update_futures_.push_back(
-                                pending_glyph_future);
-                            slice_futures.push_back(pending_glyph_future);
-                          }
+                          // Block resolution of the glyphs until the texture
+                          // has been updated and the glyphs can be safely used.
+                          // With the SlicedGlyphAtlas this always blocks, since
+                          // the glyphs are not available until the external
+                          // texture has been blitted to the composite texture.
+                          Future<absl::Status> pending_glyph_future;
+                          slice.texture_update_futures_.push_back(
+                              pending_glyph_future);
+                          slice_futures.push_back(pending_glyph_future);
                         }
                         return Future<absl::Status>::CombineList(slice_futures);
                       })

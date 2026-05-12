@@ -37,6 +37,8 @@ cc_library(
     defines = imp_defines(),
     deps = [
         ":split_engine_desktop_bridge_client",
+        "//core/async:executor",
+        "//core/common:owned_ptr",
         "//core/split_engine:flatbuffer_allocator",
         "//core/split_engine:split_engine_shared",
         "//core/split_engine/android:bridge_buffer",

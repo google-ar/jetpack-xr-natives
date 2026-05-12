@@ -63,16 +63,47 @@ highp float2 CalculateStereoUvs(highp float2 originalUvs, int encodingType, bool
   return newUvs;
 }
 
-// Calculate the alpha value for a given UV position, using a feather radius.
+// Calculate the alpha value for a given UV position, using a feather radius and
+// a corner radius.
 // The alpha value is 1.0 outside the feather radius, and smoothly transitions
 // to 0.0 inside the feather radius.
-float getEdgeFeatheredAlpha(highp float2 uv, vec2 feather_radius) {
-  // Calculate the distance from the nearest edge (0.0 or 1.0)
-  float2 dist_from_edge = min(uv, 1.0 - uv);
+float getEdgeFeatheredAlpha(highp float2 uv, float2 feather_radius,
+                            float2 corner_radius) {
+  float4 edges = float4(0.0, 0.0, 1.0, 1.0); // Left, bottom, right, top
+
+  if (corner_radius.x > 0.0 && corner_radius.y > 0.0) {
+    // Transform the coordinates to make the corner radius square.
+    float aspect_ratio = corner_radius.x / corner_radius.y;
+    uv.y *= aspect_ratio;
+    feather_radius.y *= aspect_ratio;
+    edges.w *= aspect_ratio;
+
+    float2 uv_half_size = float2(0.5, 0.5 * aspect_ratio);
+    // After scaling, the corner radius is the same for both dimensions.
+    float  radius = corner_radius.x;
+    // Calculate the distance from the inner rectangle that is formed by the
+    // corner radius.
+    float2 dist = max(abs(uv - uv_half_size) - (uv_half_size - radius), 0.0);
+    // Distance squared and radius squared must be highp to avoid flushing to
+    // zero for small values of corner_radius (b/475301410)
+    highp float2 dist2 = dist * dist;
+    highp float radius2 = radius * radius;
+    // Calculate the inward offset from the main (0.0 or 1.0) edge.
+    // This uses the circular arc equation.
+    float corner_u = radius - sqrt(max(0.0, radius2 - dist2.y));
+    float corner_v = radius - sqrt(max(0.0, radius2 - dist2.x));
+    edges += float4(corner_u, corner_v, -corner_u, -corner_v);
+  }
+
+  // Calculate the distance from the nearest edge
+  float2 dist_from_edge = min(uv - edges.xy, edges.zw - uv);
   // Normalize the distance by the feather radius.
-  dist_from_edge /= max(feather_radius, 1e-3);
+  feather_radius = max(feather_radius, 1e-4);
+  dist_from_edge /= feather_radius;
   // Calculate the alpha value based on the normalized distance.
   float2 alpha = smoothstep(0.0, 1.0, dist_from_edge);
   // Combine the alpha values for the two UVs.
-  return alpha.x * alpha.y;
+  float feathered_alpha = alpha.x * alpha.y;
+
+  return feathered_alpha;
 }

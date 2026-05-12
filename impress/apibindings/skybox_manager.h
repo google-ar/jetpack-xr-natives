@@ -46,7 +46,8 @@ class SkyboxManager {
       std::unique_ptr<BaseAssetLoader> asset_loader) = 0;
 
   // Releases the asset pointer of a previously loaded image based lighting
-  // asset.
+  // asset if the reference count is 0, otherwise decrements the reference
+  // count.
   virtual absl::Status ReleaseImageBasedLightingAsset(
       std::intptr_t ibl_token) = 0;
 

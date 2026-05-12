@@ -1,0 +1,265 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package imp;
+
+import "core/math/math.proto";
+import "core/proto/imp.proto";
+import "core/view/framework/render/material_definition.proto";
+
+option java_multiple_files = true;
+option java_outer_classname = "PrimitiveShapeRendererStateOuterClass";
+
+// Component for rendering basic & dynamically generated meshes.
+//
+// This message can specify basic geometry & materials in an Isf file. For
+// custom dynamically generated meshes, the mesh of a primitive can be assigned
+// at runtime by another component.
+//
+// Note: To render glTF models, use GltfRenderer instead.
+message PrimitiveShapeRendererState {
+  enum FrustrumCullingMode {
+    // Culling is enabled.
+    DEFAULT_ENABLED = 0;
+    // Culling is enabled.
+    DISABLED = 1;
+  }
+
+  enum ShadowMode {
+    // Defaults to HARD_SHADOWS for ShadowReceiving and NONE for ShadowCasting
+    AUTOMATIC = 0;
+    NONE = 1;
+    HARD_SHADOWS = 2;
+  }
+
+  // Defines the parameters for generating a quad primitive.
+  // Defaults are drawn from CreateQuadSettings in mesh_factory.h
+  // TODO: rename to PanelMesh
+  message QuadMesh {
+    // The x and y size of the quad geometry (defaults to 2, meaning the quad
+    // goes from [-1, 1] on both x and y axes).
+    Float2 size = 1 [(imp.optional_type) = ABSL_OPTIONAL];
+
+    // The z position of the quad vertices (defaults to 0).
+    float z = 2;
+
+    // Whether to flip the uv of the geometry (if your texture looks backwards).
+    bool flip_uv = 3;
+
+    // If non-zero, curves the quad around a cylinder with radius meters.
+    // This will cause the quad to be "high-poly" by default. Set resolution
+    // to customize the complexity of the curvature.
+    optional float radius = 4;
+
+    // Determines the radius of the corners. If non-zero, will automatically
+    // create a high-poly quad at default resolution unless resolution is set.
+    optional float corner_radius = 5;
+
+    // Determines the number of vertices along the corner radius curve.
+    optional float corner_resolution = 6;
+
+    // If set, creates a "high-poly quad" with resolution vertices on each axis.
+    optional int32 resolution = 7;
+
+    // The color applied to VertexAttribute::COLOR for all vertices of the
+    // quad.
+    optional imp.Float4 color = 8;
+  }
+
+  // Defines the parameters for generating a box primitive.
+  // Defaults are drawn from CreateBoxSettings in mesh_factory.h
+  message BoxMesh {
+    // The dimensions of the box (default is {1, 1, 1}).
+    imp.Float3 size = 1 [(imp.optional_type) = ABSL_OPTIONAL];
+
+    // Whether to flip the uv of the geometry (if your texture looks backwards).
+    bool flip_uv = 2;
+
+    // The color applied to VertexAttribute::COLOR for all vertices of the
+    // box.
+    optional imp.Float4 color = 3;
+  }
+
+  // Defines the parameters for generating a sphere primitive.
+  // Defaults are drawn from CreateSphereSettings in mesh_factory.h
+  message SphereMesh {
+    // The radius is 1 by default.
+    optional float radius = 1;
+
+    // Determines the number of edge rings that make up the sphere,
+    // and the number of vertices in each edge ring.
+    optional uint32 resolution = 2;
+
+    // Whether to flip the uv of the geometry (if your texture looks backwards).
+    bool flip_uv = 3;
+
+    // If true, the sphere will be drawn inside out. This will also cause the
+    // UV seam to be rotated to align with +Z, which would be behind the camera
+    // if it aligned with the sphere's origin pose.
+    bool flip_face_direction = 4;
+
+    // The color applied to VertexAttribute::COLOR for all vertices of the
+    // sphere.
+    optional imp.Float4 color = 5;
+  }
+
+  // Defines the parameters for generating a cylinder primitive.
+  message CylinderMesh {
+    // The default radius is .5f.
+    optional float radius = 1;
+
+    // The default height is 1.
+    optional float height = 2;
+
+    // Determines the number of edge rings that make up the cylinder,
+    // and the number of vertices in each edge ring.
+    optional uint32 resolution = 3;
+
+    // Whether to flip the uv of the geometry (if your texture looks backwards).
+    bool flip_uv = 4;
+
+    // The color applied to VertexAttribute::COLOR for all vertices of the
+    // cylinder.
+    optional imp.Float4 color = 5;
+  }
+
+  // Defines the parameters for generating a capsule primitive.
+  // Defaults are drawn from CreateCapsuleSettings in mesh_factory.h
+  message CapsuleMesh {
+    // The default radius is .5f.
+    optional float radius = 1;
+
+    // The default height is 2.
+    optional float height = 2;
+
+    // Determines the number of edge rings that make up the capsule,
+    // and the number of vertices in each edge ring.
+    optional uint32 resolution = 3;
+
+    // Whether to flip the uv of the geometry (if your texture looks backwards).
+    bool flip_uv = 4;
+
+    // The color applied to VertexAttribute::COLOR for all vertices of the
+    // capsule.
+    optional imp.Float4 color = 5;
+  }
+
+  // Defines the parameters for generating a cone primitive.
+  message ConeMesh {
+    // The default radius is .5f.
+    optional float radius = 1;
+
+    // The default height is 1.
+    optional float height = 2;
+
+    // Determines the number of edge rings that make up the cone,
+    // and the number of vertices in each edge ring.
+    optional uint32 resolution = 3;
+
+    // Whether to flip the uv of the geometry (if your texture looks backwards).
+    bool flip_uv = 4;
+
+    // The color applied to VertexAttribute::COLOR for all vertices of the cone.
+    optional imp.Float4 color = 5;
+  }
+
+  // Defines the parameters for generating a custom mesh primitive.
+  // Defaults are drawn from CreateCustomMeshSettings in mesh_factory.h
+  message CustomMesh {
+    // The vertex positions of the mesh.
+    repeated float positions = 1;
+
+    // The texture coordinates of the mesh.
+    repeated float texcoords = 2;
+
+    // The indices of the mesh.
+    repeated uint32 indices = 3;
+
+    // The draw mode of the mesh, corresponding to imp::Mesh::PrimitiveType.
+    optional int32 draw_mode = 4;
+
+    // The color applied to VertexAttribute::COLOR for all vertices of the mesh.
+    optional imp.Float4 color = 5;
+  }
+
+  // Defines a primitive to render.
+  message Primitive {
+    // Determines what material & material parameters to use when rendering the
+    // mesh for this primitive.
+    //
+    // If unset, then there is no material assigned. A material can be assigned
+    // in code dynamically at a later point.
+    MaterialDefinition material = 1 [(imp.optional_type) = ABSL_OPTIONAL];
+
+    // Determines the mesh for the primitive.
+    //
+    // If unset, then there is no mesh assigned. A mesh can be assigned in code
+    // dynamically at a later point.
+    oneof mesh {
+      QuadMesh quad_mesh = 2;
+      BoxMesh box_mesh = 3;
+      SphereMesh sphere_mesh = 4;
+      CapsuleMesh capsule_mesh = 5;
+      CylinderMesh cylinder_mesh = 6;
+      ConeMesh cone_mesh = 7;
+      CustomMesh custom_mesh = 8;
+    }
+  }
+
+  // The primitive that this component will render.
+  Primitive primitive = 1;
+
+  // Determines if the primitive is culled when its bounds are outside of
+  // the camera's view frustrum.
+  //
+  // Default is enabled.
+  FrustrumCullingMode frustrum_culling_mode = 2;
+
+  // Determines if this components primitive can cast shadows onto other nodes.
+  // Shadow casting and shadow receiving do not impact each other. For instance,
+  // this can cast shadows without receiving shadows.
+  // Default is None.
+  ShadowMode shadow_casting_mode = 3;
+
+  // Determines if other nodes can cast shadows onto the primitive.
+  // Shadow casting and shadow receiving do not impact each other. For instance,
+  // this can receive shadows without casting shadows
+  // Default is Hard Shadows
+  ShadowMode shadow_receiving_mode = 4;
+
+  // Provides a limited amount of control over draw order.
+  //
+  // Note that draw order is also impacted by blend mode (i.e. transparent vs.
+  // opaque), channel, and culling.
+  //
+  // The priority is clamped to the range [0..7]. 0 is rendered first, 7 is
+  // rendered last.
+  //
+  // The default is 4.
+  optional uint32 priority = 5;
+
+  // Provides a limited amount of control over draw order. Takes precedence over
+  // setting "priority".
+  //
+  // Note that draw order is also impacted by blend mode (i.e. transparent vs.
+  // opaque), priority, and culling.
+  //
+  // The channel is clamped to the range [0..3]. 0 is rendered first, 3 is
+  // rendered last.
+  //
+  // The default is 2.
+  optional uint32 channel = 6;
+}

@@ -28,6 +28,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
 #include "core/config.h"
+#include "core/performance/memory_stats.h"
 #include "core/performance/profiler_structs.h"
 
 namespace imp {
@@ -92,7 +93,23 @@ class Profiler {
   static std::thread::id GetCachedThreadId();
   // Is the profiler currently recording samples?
   static bool IsRecording() { return is_recording_; }
-  // Returns true if the frame index has been recorded and is still available.
+  // Returns the total memory allocated by the app so far.
+  static size_t GetMemoryUsageBytes() {
+    return MemoryStats::Get().GetMemoryUsageBytes();
+  }
+  // Returns the total number of allocations made by the app so far.
+  static size_t GetAllocationsCountTotal() {
+    return MemoryStats::Get().GetAllocationsCountTotal();
+  }
+  // Returns true if memory tracking is enabled for the current platform.
+  static constexpr bool IsMemoryTrackingSupported() {
+    return MemoryStats::IsMemoryTrackingSupported();
+  }
+  // Returns true if the memory graph is enabled for the current platform.
+  static constexpr bool IsMemoryGraphSupported() {
+    return MemoryStats::IsMemoryGraphSupported();
+  }
+  // Returns true if the data for the given frame is available.
   static bool HasFrameRecorded(int frame_index);
   // Records a name for the thread executing this function.
   // Used to identify the thread in the profiler UI.

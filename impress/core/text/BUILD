@@ -70,6 +70,17 @@ imp_material(
 )
 
 imp_material(
+    name = "text_material_fl0",
+    src = "text.mat",
+    enable_metal_postprocessing = True,
+    force_feature_level_zero = True,
+    includes = [
+        ":text_colors.glsl",
+        ":text_material_common",
+    ],
+)
+
+imp_material(
     name = "sliced_text_screen_space_material",
     src = "sliced_text_screen_space.mat",
     enable_metal_postprocessing = True,
@@ -96,6 +107,7 @@ imp_assets(
         ":sliced_text_material",
         ":sliced_text_screen_space_material",
         ":text_material",
+        ":text_material_fl0",
         ":text_screen_space_material",
     ],
     namespace = "imp::text_renderer_assets",

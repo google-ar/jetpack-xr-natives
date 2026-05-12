@@ -175,7 +175,7 @@ TextMetrics IosPlatformCanvasSource::GetGlyphMetrics(
     ScopedCanvas::GlyphId glyph, const ScopedCanvas::TextOptions& text_options) {
   UIFont* text_font = FontFromTextOptions(text_options, pixels_per_dp_);
 
-  CGGlyph cg_glyph = static_cast<CGGlyph>(glyph);
+  CGGlyph cg_glyph = static_cast<CGGlyph>(glyph.Get());
 
   // Get the bounds of the glyph.
   CGRect glyph_rect = CTFontGetBoundingRectsForGlyphs(
@@ -644,7 +644,7 @@ void IosPlatformCanvasSource::IosScopedCanvas::DrawGlyph(GlyphId glyph, float2 p
                                              blue:text_options.stroke_color.z
                                             alpha:text_options.stroke_color.w];
 
-    CGGlyph cg_glyph = static_cast<CGGlyph>(glyph);
+    CGGlyph cg_glyph = static_cast<CGGlyph>(glyph.Get());
 
     CGRect glyph_rect = CTFontGetBoundingRectsForGlyphs(
         (CTFontRef)text_font, kCTFontOrientationDefault, &cg_glyph, nullptr, 1);

@@ -70,6 +70,8 @@ class EditorImpl;
 
 namespace window {
 
+class ImGuiRenderer;
+
 // FilamentHost is a wrapper class that allows you to create, use, and destroy
 // a filament engine and its many appendages.  Clients can subclass the 'State'
 // inner to customize behavior.
@@ -263,13 +265,14 @@ class FilamentHost {
 
     virtual bool ShouldUseSystemFrameScheduledHandler() const { return false; }
 
-    virtual bool ShouldPreinitializeMetalPlatform() const { return false; }
-
     virtual bool ShouldUseSrgbSwapChain() const { return false; }
 
     virtual bool ShouldUseStencilSwapChain() const { return false; }
 
     virtual bool ShouldUseMsaaSwapChain() const { return false; }
+
+    // When true, the host will set the presentation time on the renderer.
+    virtual bool ShouldSetPresentationTime() const { return false; }
   };
 
   // Dev mode is optionally installed and operates via this abstract interface.
@@ -279,8 +282,9 @@ class FilamentHost {
     virtual ~DevModeExtension() = default;
     // Manage any setup related work and acquire a pointer to the host.
     virtual absl::Status Setup(FilamentHost& host) = 0;
-    // view is already set up.
-    virtual absl::Status PostSetup() = 0;
+    // called prior to view being cleaned up to allow for any cleanup that
+    // needs to happen before the view is destroyed.
+    virtual void PreCleanup() = 0;
     // Dispose any extension specific resources.
     virtual void Cleanup() = 0;
     // Filters legacy MouseInput for FilamentHost.
@@ -310,6 +314,9 @@ class FilamentHost {
     // Gets called when FilamentHost::SetClipboardHandler gets called.
     virtual void OnClipboardHandlerChanged(
         ClipboardHandler* clipboard_handler) = 0;
+
+    // Returns a pointer to the ImGuiRenderer interface.
+    virtual ImGuiRenderer* GetImGuiRenderer() = 0;
   };
 
   // Construct with a state object constructed by the caller.  We take over

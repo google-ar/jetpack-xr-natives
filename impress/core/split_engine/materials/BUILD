@@ -16,6 +16,7 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:assets.bzl", "imp_assets")
 load(
     "//build_tools:imp.bzl",
+    "if_imp_use_local_split_engine_materials",
     "imp_defines",
     "imp_google3_copts",
 )
@@ -51,7 +52,7 @@ cc_library(
     defines = imp_defines(),
     deps = [
         ":builtin_texture_parameter_creator",
-        ":split_engine_material",
+        ":split_engine_builtin_material",
         "//core/async:future",
         "//core/common:small_source_location",
         "//core/common:typed_ids",
@@ -67,15 +68,18 @@ cc_library(
         "//core/render",
         "//core/split_engine:split_engine_serializer",
         "//core/split_engine/android:split_engine_android_bridge",
-        "//core/split_engine/materials/builtin:builtin_generic_material",
+        "//core/split_engine/materials/builtin:builtin_generic_spec_helpers",
         "//core/view:base_view",
         "//core/view/framework",
         "//core/view/utils:string_map",
+        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/types:span",
         "@com_google_impress//core/common:log",
         "@flatbuffers",
         "@third_party//filament",
@@ -92,30 +96,21 @@ config_setting(
 )
 
 cc_library(
-    name = "split_engine_material",
-    srcs = [
-        "split_engine_custom_material.cc",
-        "split_engine_material.cc",
-    ],
-    hdrs = [
-        "split_engine_custom_material.h",
-        "split_engine_material.h",
-    ],
+    name = "split_engine_builtin_material",
+    srcs = ["split_engine_builtin_material.cc"],
+    hdrs = ["split_engine_builtin_material.h"],
     copts = imp_google3_copts(),
     defines = imp_defines(),
     deps = [
         ":builtin_texture_parameter_creator",
         ":placeholder_material_asset",
-        ":split_engine_material_factory",
+        ":split_engine_builtin_material_factory",
         "//core/assets",
-        "//core/assets/material:material_load_options_proto_cc",
         "//core/async:future",
-        "//core/common:owned_or_borrowed_ptr",
         "//core/common:registry",
         "//core/common:robin_map",
         "//core/common:small_source_location",
         "//core/materials",
-        "//core/math",
         "//core/ncsb",
         "//core/render",
         "//core/split_engine:flatbuffer_utils",
@@ -126,6 +121,37 @@ cc_library(
         "//core/view:base_view",
         "//core/view/framework",
         "//core/view/utils:frame_time",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_impress//core/common:log",
+        "@flatbuffers",
+        "@third_party//split_engine:fbs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "split_engine_custom_material",
+    srcs = ["split_engine_custom_material.cc"],
+    hdrs = ["split_engine_custom_material.h"],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":placeholder_material_asset",
+        "//core/assets",
+        "//core/assets/material:material_asset",
+        "//core/assets/material:material_load_options_proto_cc",
+        "//core/async:future",
+        "//core/common:owned_or_borrowed_ptr",
+        "//core/common:small_source_location",
+        "//core/materials",
+        "//core/math",
+        "//core/render",
+        "//core/split_engine:flatbuffer_utils",
+        "//core/split_engine:split_engine_serializer",
+        "//core/split_engine/android:split_engine_android_bridge",
+        "//core/view:base_view",
+        "//core/view/framework",
         "//core/view/utils:string_map",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/functional:function_ref",
@@ -137,24 +163,10 @@ cc_library(
         "@flatbuffers",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//split_engine:fbs",
-    ],
-    alwayslink = 1,
-)
-
-cc_library(
-    name = "split_engine_material_factory",
-    srcs = ["split_engine_material_factory.cc"],
-    hdrs = ["split_engine_material_factory.h"],
-    copts = imp_google3_copts(),
-    deps = [
-        ":builtin_material_creator_helper",
-        "//core/async:future",
-        "//core/material_library:generic_material_spec",
-        "//core/material_library:material_package",
-        "//core/split_engine:split_engine_shared",
+    ] + if_imp_use_local_split_engine_materials([
+        # Local mode needs to include all built-in materials on the app side.
         "//core/split_engine/materials/builtin:builtin_generic_material",
         "//core/split_engine/materials/builtin:builtin_jxr_media_material",
-        "//core/split_engine/materials/builtin:builtin_material",
         "//core/split_engine/materials/builtin:builtin_svxr_footprint_material",
         "//core/split_engine/materials/builtin:builtin_svxr_plane_material",
         "//core/split_engine/materials/builtin:builtin_texture_external_material",
@@ -164,6 +176,24 @@ cc_library(
         "//core/split_engine/materials/builtin/gsplat:gsplat_background_material_deserializer",
         "//core/split_engine/materials/builtin/gsplat:gsplat_material_deserializer",
         "//core/split_engine/materials/builtin/photosxr:builtin_photos_texture_3d_material",
+    ]),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "split_engine_builtin_material_factory",
+    srcs = ["split_engine_builtin_material_factory.cc"],
+    hdrs = ["split_engine_builtin_material_factory.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        ":builtin_material_creator_helper",
+        "//core/async:future",
+        "//core/material_library:generic_material_spec",
+        "//core/material_library:material_package",
+        "//core/split_engine:split_engine_shared",
+        "//core/split_engine/materials/builtin:builtin_generic_spec_helpers",
+        "//core/split_engine/materials/builtin:builtin_material",
+        "//core/split_engine/materials/builtin:builtin_material_registry",
         "//core/view:base_view",
         "//core/view/framework",
         "//core/view/framework:generic_materials",
@@ -211,30 +241,6 @@ cc_library(
         "@flatbuffers",
         "@third_party//split_engine:fbs",
         "@third_party//split_engine:fbs_deps",  # buildcleaner: keep
-    ],
-    alwayslink = 1,
-)
-
-cc_library(
-    name = "split_engine_custom_material_factory",
-    srcs = ["split_engine_custom_material_factory.cc"],
-    hdrs = ["split_engine_custom_material_factory.h"],
-    copts = imp_google3_copts(),
-    deps = [
-        "//core:config",
-        "//core/assets/material:material_load_options_proto_cc",
-        "//core/async:future",
-        "//core/common:trace",
-        "//core/materials/compiler:runtime_material_compiler",
-        "//core/materials/compiler:runtime_material_compiler_creator",
-        "//core/split_engine:flatbuffer_utils",
-        "//core/split_engine:split_engine_filament_resource_ptrs",
-        "//core/view:base_view",
-        "@com_google_absl//absl/status",
-        "@com_google_absl//absl/time",
-        "@com_google_impress//core/common:log",
-        "@third_party//filament/filament:filament_hdrs",
-        "@third_party//split_engine:fbs",
     ],
     alwayslink = 1,
 )

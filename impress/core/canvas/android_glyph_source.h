@@ -19,6 +19,7 @@
 
 #include <jni.h>
 
+#include <cstdint>
 #include <vector>
 
 #include "absl/strings/string_view.h"
@@ -64,6 +65,8 @@ class AndroidGlyphSource : public JavaWrapper {
   explicit AndroidGlyphSource(const Context& context, Method method,
                               int cache_size_bytes);
 
+  ~AndroidGlyphSource() override;
+
   /**
    * HACK: Don't crash clients which forget to include the
    * corresponding Java dependency.
@@ -107,6 +110,7 @@ class AndroidGlyphSource : public JavaWrapper {
   JniHandle release_text_glyph_;
   JniHandle get_combined_character_groups_;
   JniHandle draw_glyph_;
+  JniHandle dispose_;
 
   JniUniquePtr<jclass> glyph_advance_class_;
   jmethodID glyph_advance_get_id_;

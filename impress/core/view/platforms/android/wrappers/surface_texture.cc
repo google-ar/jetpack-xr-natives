@@ -24,8 +24,10 @@
 
 namespace imp::android {
 
-SurfaceTexture::SurfaceTexture(const Context& context)
-    : JavaWrapper(context, "android/graphics/SurfaceTexture", "(Z)V", false) {
+SurfaceTexture::SurfaceTexture(const Context& context,
+                               bool enable_memory_leak_fix)
+    : JavaWrapper(context, "android/graphics/SurfaceTexture", "(Z)V", false),
+      enable_memory_leak_fix_(enable_memory_leak_fix) {
   set_default_buffer_size_ = GetMethodHandle("setDefaultBufferSize", "(II)V");
   update_tex_image_ = GetMethodHandle("updateTexImage", "()V");
   attach_to_gl_context_ = GetMethodHandle("attachToGLContext", "(I)V");
@@ -38,11 +40,12 @@ SurfaceTexture::SurfaceTexture(const Context& context)
 }
 
 SurfaceTexture::SurfaceTexture(const Context& context, uint32_t texture_id,
-                               bool is_secure)
+                               bool is_secure, bool enable_memory_leak_fix)
     : JavaWrapper(context, "android/graphics/SurfaceTexture", "(I)V",
                   texture_id),
       texture_id_(texture_id),
-      is_secure_(is_secure) {
+      is_secure_(is_secure),
+      enable_memory_leak_fix_(enable_memory_leak_fix) {
   set_default_buffer_size_ = GetMethodHandle("setDefaultBufferSize", "(II)V");
   update_tex_image_ = GetMethodHandle("updateTexImage", "()V");
   attach_to_gl_context_ = GetMethodHandle("attachToGLContext", "(I)V");
@@ -53,7 +56,16 @@ SurfaceTexture::SurfaceTexture(const Context& context, uint32_t texture_id,
 #endif  // __ANDROID_API__ >= 33
 }
 
-SurfaceTexture::~SurfaceTexture() { CallVoidMethod(release_); }
+SurfaceTexture::~SurfaceTexture() {
+  // TODO: find the correct way of releasing the surface texture
+  // that's still being used. We cannot call Release() here because it breaks
+  // detachFromContext() which happened later in the Filament rendering
+  // thread.
+  // The fix is skip Release() call.
+  if (!enable_memory_leak_fix_) {
+    CallVoidMethod(release_);
+  }
+}
 
 absl::Status SurfaceTexture::SetDefaultBufferSize(int2 size) {
   CallVoidMethod(set_default_buffer_size_, size.x, size.y);

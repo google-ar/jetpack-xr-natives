@@ -23,12 +23,6 @@
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/time/time.h"
-#include "extensions/sceneviewerxr/ux/constants.h"
-#include "extensions/sceneviewerxr/ux/footprint.h"
-#include "extensions/sceneviewerxr/ux/input_flag.h"
-#include "extensions/sceneviewerxr/ux/interaction_mode.h"
-#include "extensions/sceneviewerxr/ux/interaction_states/idle.h"
-#include "extensions/sceneviewerxr/ux/interaction_states/interaction_states.h"
 #include "core/collision/collision_helpers.h"
 #include "core/collision/ray.h"
 #include "core/common/enum_flags.h"
@@ -37,6 +31,7 @@
 #include "core/math/mat.h"
 #include "core/math/math.h"
 #include "core/math/quat.h"
+#include "core/math/transform.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node_handle.h"
@@ -45,6 +40,12 @@
 #include "core/view/framework/collision/ray_hit.h"
 #include "core/view/framework/input/pointer_input_handler.h"
 #include "core/view/utils/frame_time.h"
+#include "extensions/sceneviewerxr/ux/constants.h"
+#include "extensions/sceneviewerxr/ux/footprint.h"
+#include "extensions/sceneviewerxr/ux/input_flag.h"
+#include "extensions/sceneviewerxr/ux/interaction_mode.h"
+#include "extensions/sceneviewerxr/ux/interaction_states/idle.h"
+#include "extensions/sceneviewerxr/ux/interaction_states/interaction_states.h"
 #include "split_engine/input/split_engine_input_event.h"
 
 namespace imp {
@@ -94,7 +95,7 @@ constexpr auto kIdleRigCorrectionRate = 0.15f;
 
 // The delay before the footprint is initialized. This is to avoid the
 // footprint being initialized when the model is not fully loaded.
-constexpr auto kFootprintInitializationDelay = 1.5f;
+constexpr auto kFootprintInitializationDelay = 2.5f;
 
 // Ray origin/forward are in world space.
 mat4f GetRayFromWorldSpace(const imp::Ray& ray) {
@@ -106,11 +107,13 @@ mat4f GetRayFromWorldSpace(const imp::Ray& ray) {
 
 }  // namespace
 
+// TODO: Add unit tests for this component.
 SceneViewerComponent::SceneViewerComponent()
     : interaction_machine_(svxr::interaction_states::Initialized{}, this),
       model_node_(),
       footprint_() {}
-absl::Status SceneViewerComponent::Setup(imp::NodeHandle target_node) {
+absl::Status SceneViewerComponent::Setup(imp::NodeHandle target_node,
+                                         bool system_movable) {
   auto& view = GetView();
   camera_ = view.GetCameraManager().GetCamera();
 
@@ -130,6 +133,7 @@ absl::Status SceneViewerComponent::Setup(imp::NodeHandle target_node) {
 
   // Setup initial flags
   interaction_data_ = InteractionMode();
+  system_movable_ = system_movable;
 
   return absl::OkStatus();
 }
@@ -151,6 +155,8 @@ void SceneViewerComponent::CreateFootprint(const imp::FrameTime& delta_time) {
         footprint_node->SetEnabled(false);
         footprint_event_connection_ = footprint_node->Connect(
             [this](const SplitEngineInputEvent& event) {
+              event_hit_node_transform_ = event.hit_node->transform;
+              event_hit_position_ = event.hit_node->hit_position;
               HandleInputEvent(event, InputEventSource::kFootprint);
             },
             this);
@@ -228,6 +234,7 @@ void SceneViewerComponent::HandleInputEvent(const SplitEngineInputEvent& event,
                                            is_previous_left_ray_hovering_);
     prev_left_input_ = event;
   }
+
   auto hit_position = imp::kZero3;
   bool hit_node_is_valid = event.hit_node && event.hit_node->target;
   imp::NodeHandle receiver_node = event.GetTargetNode();
@@ -277,6 +284,11 @@ void SceneViewerComponent::HandleInputInternal(
           svxr::interaction_states::Idle& state) -> OptionalInteractionState {
         return HandleInput(state, ray, receiver, hit_position, input_flags,
                            *this);
+      },
+      [this, &input_flags, &ray,
+       &receiver](svxr::interaction_states::Translation& state)
+          -> OptionalInteractionState {
+        return HandleTranslationInput(state, ray, receiver, input_flags);
       },
       [](auto& state) -> OptionalInteractionState { return {}; });
 }
@@ -455,7 +467,6 @@ void SceneViewerComponent::CalculateModelScaleLimits() {
       model_log_scale_limits_.max, std::min(world_y_range, world_xz_range));
 }
 
-// TODO: Enable input handling for translation.
 void SceneViewerComponent::OnStateChange(
     const InteractionMachine& machine,
     const InteractionMachine::State& current_state,
@@ -466,6 +477,16 @@ void SceneViewerComponent::Update(const imp::FrameTime& delta_time) {
 
   // TODO: Enable input handling for translation.
   interaction_machine_.UpdateWithAlternatives(
+      [this](svxr::interaction_states::Initialized& state)
+          -> OptionalInteractionState {
+        if (!footprint_) return {};
+        return OptionalInteractionState{SetupIdleState()};
+      },
+      [this, &delta_time](svxr::interaction_states::Translation& state)
+          -> OptionalInteractionState {
+        interaction_data_.SetActive(InteractionMode::ActiveMode::kInteracting);
+        return UpdateTranslation(state, delta_time);
+      },
       [](auto& state) -> OptionalInteractionState { return {}; });
   if (footprint_) {
     footprint_->OnUpdate(delta_time, interaction_data_);
@@ -560,7 +581,6 @@ OptionalInteractionState SceneViewerComponent::UpdateTranslation(
           state.initial_world_space_rig_to_hit);
     }
 
-    state.footprint_local_position.SetTarget(footprint_target_position);
     state.rig_local_position.SetTarget(target_position);
   }
 
@@ -575,7 +595,6 @@ OptionalInteractionState SceneViewerComponent::UpdateTranslation(
 
   float current_distance_to_camera = length(rig_to_camera_xz);
 
-  state.footprint_local_position.Step(delta_time.GetDeltaSeconds());
   state.rig_local_position.Step(delta_time.GetDeltaSeconds());
 
   float next_distance_to_camera =
@@ -591,15 +610,10 @@ OptionalInteractionState SceneViewerComponent::UpdateTranslation(
   // stop translating.
   if (next_distance_to_camera < minimum_distance_to_camera &&
       next_distance_to_camera < current_distance_to_camera) {
-    state.footprint_local_position.Setup(
-        svxr::kSmoothSlowResolvingPositionParameters,
-        footprint_->FootprintNode()->GetLocalPosition());
     state.rig_local_position.Setup(svxr::kSmoothSlowResolvingPositionParameters,
                                    rig_node_->GetLocalPosition());
     rig_node_->SetLocalPosition(state.rig_local_position.Get());
   } else {
-    state.footprint_local_position.SetParameters(
-        svxr::kSmoothFastResolvingPositionParameters);
     state.rig_local_position.SetParameters(
         svxr::kSmoothFastResolvingPositionParameters);
   }
@@ -608,13 +622,9 @@ OptionalInteractionState SceneViewerComponent::UpdateTranslation(
       distance(rig_node_->GetLocalPosition(), state.rig_local_position.Get());
   state.cumulative_change_delta += delta;
   rig_position_.SetTarget(state.rig_local_position.Get());
-  footprint_->FootprintNode()->SetLocalPosition(
-      state.footprint_local_position.Get());
 
   // If inactive, check if the targets are reached before returning to idle.
-  if (!state.is_active && state.footprint_local_position.IsAtTarget() &&
-      state.rig_local_position.IsAtTarget()) {
-    // PlayDropSound();
+  if (!state.is_active && state.rig_local_position.IsAtTarget()) {
     return OptionalInteractionState{SetupIdleState()};
   }
 
@@ -798,89 +808,45 @@ OptionalInteractionState SceneViewerComponent::HandleInitializedInput(
   return OptionalInteractionState{SetupIdleState()};
 }
 
-// TODO: Enable input handling for translation.
 OptionalInteractionState SceneViewerComponent::HandleTranslationInput(
     svxr::interaction_states::Translation& state, const imp::Ray& ray,
     imp::NodeHandle receiver, imp::Flags<InputFlag> input_flags) {
-  if (!state.is_active) {
-    // Ignore all events if the state is not active.
-    return {};
-  }
+  // Check if the system is movable. When it is not, the client
+  // (SceneCore/Compose) is responsible for handling the translation.
+  if (system_movable_) {
+    auto rig_position = rig_node_->GetLocalPosition();
+    // Hit positions are sent from SpF relative to the task space. SplitEngine
+    // converts the hit position to be relative to the subspace they will be
+    // handled by (i.e. the hit node). We convert origin & direction to also be
+    // relative to the subspace before operating on them.
+    auto origin = (event_hit_node_transform_ * float4(ray.origin, 1.0f)).xyz;
+    auto direction = normalize(
+        (event_hit_node_transform_ * float4(ray.direction, 0.0f)).xyz);
 
-  // Handle events for pointers which did not initiate translation.
-  if (state.is_right != input_flags.Test(InputFlag::kIsRight)) {
     if (input_flags.Test(InputFlag::kIsDownStarting)) {
-      // Start two-handed scale.
-      auto model_scale = model_node_->GetLocalScale().x;
-      constexpr auto kEpsilon = 1e-5f;
-      auto model_log_scale = std::log(std::max(kEpsilon, model_scale));
+      // Calculate the distance between the hit position and the origin along
+      // the ray's direction.
+      origin_to_hit_position_distance_ =
+          dot(event_hit_position_ - origin, direction);
+      // Calculate the pinch point along the ray scaled by the distance to the
+      // hit position.
+      auto pinchPoint = origin + (direction * origin_to_hit_position_distance_);
 
-      auto& ray_right = state.is_right ? state.current_world_space_ray : ray;
-      auto& ray_left = state.is_right ? ray : state.current_world_space_ray;
-      return OptionalInteractionState{svxr::interaction_states::TwoHandedScale{
-          .initial_world_space_ray_right = ray_right,
-          .initial_world_space_ray_left = ray_left,
-          .current_world_space_ray_right = ray_right,
-          .current_world_space_ray_left = ray_left,
-          .initial_model_log_scale = model_log_scale,
-          .was_right_translation =
-              state.is_right ? true : ReceiverInitiatesTranslation(receiver),
-          .was_left_translation =
-              state.is_right ? ReceiverInitiatesTranslation(receiver) : true,
-      }};
-    }
-    // Ignore all other events from other pointers.
-    return {};
-  }
+      // Calculate the offset between the rig and the pinch point when pinch
+      // starts.
+      rig_to_hit_position_offset_ = rig_position - pinchPoint;
+    } else if (input_flags.Test(InputFlag::kIsDown)) {
+      // Calculate the pinch point along the ray scaled by the distance to the
+      // hit position.
+      auto pinchPoint = origin + (direction * origin_to_hit_position_distance_);
+      // Use the pinchPoint and offset to cached when the pinch first started
+      // to determine the new rig position.
+      rig_position = pinchPoint + rig_to_hit_position_offset_;
 
-  if (input_flags.Test(InputFlag::kIsDownStopping)) {
-    interaction_data_.SetPointer(InteractionMode::PointerMode::kNothing);
-    if (interaction_data_.TestTransform(
-            InteractionMode::TransformMode::kTranslate)) {
-      interaction_data_.SetTransform(InteractionMode::TransformMode::kNothing);
-    } else if (ReceiverIsModel(receiver)) {
-      bool is_footprint_enabled = interaction_data_.ToggleSelect();
-      footprint_->SetColliderEnabled(is_footprint_enabled);
+      rig_position_.SetTarget(rig_position);
+      rig_node_->SetLocalPosition(rig_position);
     }
   }
-
-  if (!input_flags.Test(InputFlag::kIsDown)) {
-    interaction_data_.SetTransform(InteractionMode::TransformMode::kNothing);
-
-    // Check to see if our footprint is offset (indicating the model should
-    // now interpolate to match that offset).
-    if (length(state.footprint_local_position.GetTarget()) > kPlaneEpsilon) {
-      auto footprint_target = rig_node_->WorldFromLocalPoint(
-          state.footprint_local_position.GetTarget());
-      auto footprint_delta = footprint_target - rig_node_->GetWorldPosition();
-      // Force to reset the positions to the current ones via snapping before
-      // setting the new targets.
-      state.rig_local_position.Setup(
-          svxr::kSmoothSlowResolvingPositionParameters,
-          rig_node_->GetLocalPosition());
-      state.rig_local_position.SetTarget(rig_node_->GetLocalPosition() +
-                                         footprint_delta);
-      state.footprint_local_position.Setup(
-          svxr::kSmoothSlowResolvingPositionParameters,
-          footprint_->FootprintNode()->GetLocalPosition());
-      state.footprint_local_position.SetTarget(imp::kZero3);
-    }
-
-    if (state.footprint_local_position.IsAtTarget() &&
-        state.rig_local_position.IsAtTarget()) {
-      return OptionalInteractionState{SetupIdleState()};
-    } else {
-      // Disable further input, don't exit state until we're at target.
-      state.is_active = false;
-    }
-  }
-  state.current_world_space_ray = ray;
-
-  if (state.cumulative_change_delta > kMinimumTranslationDelta) {
-    interaction_data_.SetTransform(InteractionMode::TransformMode::kTranslate);
-    state.has_translated = true;
-  }
-
   return {};
 }
 

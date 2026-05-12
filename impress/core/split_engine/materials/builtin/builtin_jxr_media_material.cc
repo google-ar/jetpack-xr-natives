@@ -19,7 +19,9 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include <functional>
 #include <memory>
+#include <optional>
 #include <utility>
 
 #include "core/common/log.h"
@@ -37,12 +39,14 @@
 #include "core/async/future.h"
 #include "core/config.h"
 #include "core/material_library/flatbuffer_utils.h"
+#include "core/material_library/material_package.h"
 #include "core/materials/material.h"
 #include "core/math/math.h"
 #include "core/math/vec.h"
 #include "core/media/media_color_space.h"
 #include "core/media/media_type.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
+#include "core/ncsb/update_system.h"
 #include "core/render/display_color_space.h"
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
@@ -51,6 +55,7 @@
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_jxr_media_material_assets.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
+#include "core/split_engine/materials/builtin/builtin_material_registry.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
@@ -90,6 +95,9 @@ static constexpr absl::string_view kStereoTypeParameter = "stereoType";
 // Parameter used to pass the (UV) feather radius information to the material.
 static constexpr absl::string_view kFeatherRadiusParameter = "featherRadius";
 
+// Parameter used to pass the (UV) corner radius information to the material.
+static constexpr absl::string_view kCornerRadiusParameter = "cornerRadius";
+
 // Parameter used to report which eye to render to.
 static constexpr absl::string_view kMaterialConstantRenderEyeTarget =
     "renderEyeTarget";
@@ -114,14 +122,34 @@ static constexpr const char* kForceRenderEyeTargetProperty =
 #endif  // IMP_PLATFORM(ANDROID)
 
 resources::ResourceDefinition GetMaterialResource(
-    android_xr::schemas::BuiltInMaterial1b616c8aShapeType shape_type) {
-  switch (shape_type) {
-    case android_xr::schemas::BuiltInMaterial1b616c8aShapeType::DEFAULT_FLAT:
-      return kBuiltinJxrMediaMatCmat;
-    default:
-      IMP_LOG(imp::ERROR) << "Unsupported shape type!";
-      return kBuiltinJxrMediaMatCmat;
+    android_xr::schemas::BuiltInMaterial1b616c8aShapeType shape_type,
+    android_xr::schemas::BuiltInMaterial1b616c8aBlendingMode blending_mode) {
+  switch (blending_mode) {
+    case android_xr::schemas::BuiltInMaterial1b616c8aBlendingMode::OPAQUE: {
+      switch (shape_type) {
+        case android_xr::schemas::BuiltInMaterial1b616c8aShapeType::
+            DEFAULT_FLAT:
+          return kBuiltinJxrMediaOpaqueMatCmat;
+        default:
+          IMP_LOG(imp::ERROR) << "Unsupported shape type for OPAQUE blending mode!";
+          return kBuiltinJxrMediaOpaqueMatCmat;
+      }
+    }
+    case android_xr::schemas::BuiltInMaterial1b616c8aBlendingMode::
+        TRANSPARENT: {
+      switch (shape_type) {
+        case android_xr::schemas::BuiltInMaterial1b616c8aShapeType::
+            DEFAULT_FLAT:
+          return kBuiltinJxrMediaMatCmat;
+        default:
+          IMP_LOG(imp::ERROR) << "Unsupported shape type for TRANSPARENT blending mode!";
+          return kBuiltinJxrMediaMatCmat;
+      }
+    }
   }
+  IMP_LOG(imp::ERROR) << "Unsupported blending mode: "
+             << static_cast<int>(blending_mode);
+  return kBuiltinJxrMediaMatCmat;
 }
 
 }  // namespace
@@ -225,7 +253,8 @@ Future<split_engine::BuiltInMaterialPtr> BuiltInJxrMediaMaterial::Create(
       enable_color_correction_constant);
 
   Future<AssetPtr<MaterialAsset>> future = view.GetAssetManager().LoadMaterial(
-      GetMaterialResource(spec.shape()), material_pre_compile_options);
+      GetMaterialResource(spec.shape(), spec.blending_mode()),
+      material_pre_compile_options);
   return future.Then([&view, bridge_id, enable_color_correction_constant](
                          AssetPtr<MaterialAsset> material_asset)
                          -> split_engine::BuiltInMaterialPtr {
@@ -385,6 +414,13 @@ absl::Status BuiltInJxrMediaMaterial::SetParameters(
                     xr_media_parameters->feather_radius()->y()));
   }
 
+  if (xr_media_parameters->corner_radius()) {
+    GetMaterial()->SetParameter(
+        kCornerRadiusParameter,
+        imp::float2(xr_media_parameters->corner_radius()->x(),
+                    xr_media_parameters->corner_radius()->y()));
+  }
+
   return SetupColorCorrectionParameters(xr_media_parameters);
 }
 
@@ -468,5 +504,22 @@ DisplayColorSpace BuiltInJxrMediaMaterial::GetRequiredDisplayColorSpace()
   // By default, use P3 as the display color space for JXR Media material.
   return DisplayColorSpace::kP3;
 }
+
+// Registers the built-in material factory.
+const bool kRegisterMaterial = BuiltinMaterialRegistry::RegisterOrDie(
+    android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterial1b616c8a,
+    [](BaseView& view, BridgeId bridge_id,
+       const android_xr::schemas::BuiltInMaterialRequest& request,
+       std::optional<
+           std::reference_wrapper<const MaterialPackage::MaterialCache>>
+           cache) -> Future<BuiltInMaterialPtr> {
+      const android_xr::schemas::BuiltInMaterial1b616c8a* spec =
+          request.data_as_BuiltInMaterial1b616c8a();
+      if (spec == nullptr) {
+        return Future<BuiltInMaterialPtr>(absl::InvalidArgumentError(
+            "Failed to get BuiltInJxrMediaMaterial spec from the request."));
+      }
+      return BuiltInJxrMediaMaterial::Create(view, bridge_id, *spec);
+    });
 
 }  // namespace imp::split_engine

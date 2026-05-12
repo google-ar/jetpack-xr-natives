@@ -16,9 +16,13 @@
 
 #include "core/particle/particle_behavior.h"
 
+#include "core/math/mat.h"
+#include "core/math/quat.h"
+#include "core/math/transform.h"
 #include "core/math/vec.h"
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
+#include "core/particle/particle_emitter_info.h"
 #include "core/particle/particle_emitter_state.proto.imp.h"
 #include "core/particle/particle_instance.h"
 
@@ -57,7 +61,8 @@ void ParticleBehavior::SetDefaultValues(ParticleInstance& particle_instance) {
 }
 
 ParticleBehavior::UpdateResult ParticleBehavior::UpdateParticle(
-    float delta_seconds, ParticleInstance& particle_instance) {
+    const imp_particle::ParticleEmitterInfo& emitter_info, float delta_seconds,
+    ParticleInstance& particle_instance) {
   // Lifetime is the most common reason a particle will expire, check it first.
   if (particle_instance.HasRemainingLifetimeSeconds()) {
     UpdateResult result = UpdateLifetime(delta_seconds, particle_instance);
@@ -72,7 +77,11 @@ ParticleBehavior::UpdateResult ParticleBehavior::UpdateParticle(
     UpdateMovement(delta_seconds, particle_instance);
   }
 
-  // TODO: (broken link) - Support billboarding behavior.
+  // Update billboard orientation to face the camera.
+  if (particle_instance.HasRotation()) {
+    UpdateBillboard(emitter_info, particle_instance);
+  }
+
   // TODO: (broken link) - Support alpha behavior.
 
   return UpdateResult::kActive;
@@ -108,6 +117,16 @@ void ParticleBehavior::UpdateMovement(float delta_seconds,
     particle_instance.SetVelocity(
         velocity + particle_instance.GetAcceleration() * delta_seconds);
   }
+}
+
+void ParticleBehavior::UpdateBillboard(
+    const imp_particle::ParticleEmitterInfo& emitter_info,
+    ParticleInstance& particle_instance) {
+  // Use the lookAt matrix function to calculate the rotation of the particle
+  // to face the camera.
+  auto transform = Transform<float>(mat4f::lookAt(
+      particle_instance.GetPosition(), emitter_info.GetCameraPosition(), kUp));
+  particle_instance.SetRotation(transform.rotation);
 }
 
 }  // namespace imp

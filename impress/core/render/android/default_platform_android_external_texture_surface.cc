@@ -78,15 +78,17 @@ absl::Status DefaultPlatformAndroidExternalTextureSurface::Initialize(
     uint32_t texture_id = 0;
     glGenTextures(1, &texture_id);
     surface_texture_ = std::make_unique<android::SurfaceTexture>(
-        view_.GetContext(), texture_id, /* is_secure= */ true);
+        view_.GetContext(), texture_id, /* is_secure= */ true,
+        /* enable_memory_leak_fix= */ false);
 #else
     return absl::InternalError(
         "Protected content is not supported on this platform.");
 #endif  // IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(OPENGL)
   } else {
     // Construct Android SurfaceTexture and Surface
-    surface_texture_ =
-        std::make_unique<android::SurfaceTexture>(view_.GetContext(), 0);
+    surface_texture_ = std::make_unique<android::SurfaceTexture>(
+        view_.GetContext(), 0,
+        /* is_secure= */ false, /* enable_memory_leak_fix= */ false);
   }
 
   MP_ASSIGN_OR_RETURN(

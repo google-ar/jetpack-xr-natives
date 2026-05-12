@@ -103,7 +103,7 @@ SlicedGlyphTextureManager::SlicedGlyphTextureManager(
 
   // Create the composite texture that slices will blit into.
   composite_texture_ = view.GetTextureFactory().CreateTexture(
-      composite_size.x, composite_size.y, Format::SRGB8_A8,
+      composite_size.x, composite_size.y, Format::RGBA8,
       Usage::DEFAULT | Usage::COLOR_ATTACHMENT | Usage::BLIT_SRC |
           Usage::BLIT_DST);
 
@@ -287,6 +287,14 @@ void SlicedGlyphTextureManager::PrepareBlit(SliceId slice, Texture* texture) {
     blit_material_instances_[slice]->setParameter(
         "Slice", texture->GetTexture(),
         TextureSampler(TextureSampler::MagFilter::NEAREST));
+  }
+}
+
+void SlicedGlyphTextureManager::OnViewResumed() {
+  using TextureSampler = filament::TextureSampler;
+  for (auto& blit_material_instances : blit_material_instances_) {
+    blit_material_instances->setParameter(
+        "Slice", nullptr, TextureSampler(TextureSampler::MagFilter::NEAREST));
   }
 }
 

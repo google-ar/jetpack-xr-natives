@@ -62,7 +62,6 @@ cc_library(
         "particle_behavior.cc",
         "particle_data_provider.cc",
         "particle_emitter.cc",
-        "particle_emitter_info.cc",
         "particle_instance.cc",
         "particle_service.cc",
         "standard_particle_data_provider.cc",

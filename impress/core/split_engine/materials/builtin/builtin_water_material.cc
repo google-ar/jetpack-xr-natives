@@ -14,6 +14,8 @@
 
 #include "core/split_engine/materials/builtin/builtin_water_material.h"
 
+#include <functional>
+#include <optional>
 #include <utility>
 
 #include "absl/memory/memory.h"
@@ -27,10 +29,12 @@
 #include "core/assets/material/material_asset.h"
 #include "core/async/future.h"
 #include "core/material_library/flatbuffer_utils.h"
+#include "core/material_library/material_package.h"
 #include "core/materials/material.h"
 #include "core/render/texture.h"
 #include "core/split_engine/materials/builtin/builtin_custom_material.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
+#include "core/split_engine/materials/builtin/builtin_material_registry.h"
 #include "core/split_engine/materials/builtin/builtin_water_material_assets.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
@@ -174,5 +178,22 @@ absl::Status BuiltInWaterMaterial::SetParameters(
   }
   return absl::OkStatus();
 }
+
+// Registers the built-in material factory.
+const bool kRegisterMaterial = BuiltinMaterialRegistry::RegisterOrDie(
+    android_xr::schemas::BuiltInMaterialSpec::BuiltInMaterial5cf26af8,
+    [](BaseView& view, BridgeId bridge_id,
+       const android_xr::schemas::BuiltInMaterialRequest& request,
+       std::optional<
+           std::reference_wrapper<const MaterialPackage::MaterialCache>>
+           cache) -> Future<BuiltInMaterialPtr> {
+      const android_xr::schemas::BuiltInMaterial5cf26af8* spec =
+          request.data_as_BuiltInMaterial5cf26af8();
+      if (spec == nullptr) {
+        return Future<BuiltInMaterialPtr>(absl::InvalidArgumentError(
+            "Failed to get BuiltInWaterMaterial spec from the request."));
+      }
+      return BuiltInWaterMaterial::Create(view, bridge_id, *spec);
+    });
 
 }  // namespace imp::split_engine

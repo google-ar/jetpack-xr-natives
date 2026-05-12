@@ -14,6 +14,10 @@
 
 load("@build_bazel_rules_android//android:rules.bzl", "android_library")
 load("//build_tools:imp.bzl", "if_dev_runtime")
+load(
+    "//core/proto:imp_cc_proto_library.bzl",
+    "imp_cc_proto_library",
+)
 
 package(default_visibility = ["//visibility:public"])
 
@@ -201,6 +205,7 @@ proto_library(
     deps = [
         "//core/view/utils:render_settings_proto",
         "//core/view/utils:view_config_proto",
+        "//java/com/google/ar/imp/view/xr:xr_setup_params_proto",
     ],
 )
 
@@ -209,4 +214,9 @@ java_lite_proto_library(
     deps = [
         ":setup_params_proto",
     ],
+)
+
+imp_cc_proto_library(
+    name = "setup_params_cc_proto",
+    proto = ":setup_params_proto",
 )

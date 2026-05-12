@@ -45,7 +45,10 @@ inline constexpr auto kModelSizeEpsilon = 0.001f;
 inline constexpr auto kDistanceBasedScaleFactorMin = 1.0f;
 inline constexpr auto kDistanceBasedScaleFactorMax = kLargestModelSize;
 inline constexpr auto kFootprintSlop = 0.1f;
+inline constexpr auto kPickupOffset = 0.025f;
 
+constexpr auto kSoftAnchorPositionParameters =
+    imp::SmoothParameters(.01f, 0, 0);
 constexpr auto kSmoothSlowResolvingPositionParameters =
    imp::SmoothParameters(4.f, 40.f, 100.f);
 constexpr auto kSmoothFastResolvingPositionParameters =

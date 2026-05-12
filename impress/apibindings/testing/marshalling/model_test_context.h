@@ -111,14 +111,18 @@ class ModelTestContext {
   struct SetGltfReformAffordanceEnabledParams {
     int32_t expected_node_id = kUninitialized32;
     bool expected_enabled = false;
+    bool expected_system_movable = false;
     int32_t actual_node_id = kUninitialized32;
     bool actual_enabled = false;
+    bool actual_system_movable = false;
 
     void Reset() {
       expected_node_id = kUninitialized32;
       expected_enabled = false;
+      expected_system_movable = false;
       actual_node_id = kUninitialized32;
       actual_enabled = false;
+      actual_system_movable = false;
     }
   };
 
@@ -149,6 +153,84 @@ class ModelTestContext {
     void Reset() {
       expected_node_id = kUninitialized32;
       actual_node_id = kUninitialized32;
+    }
+  };
+
+  struct ToggleGltfModelAnimationParams {
+    int32_t expected_node_id = kUninitialized32;
+    bool expected_toggle = false;
+    int32_t actual_node_id = kUninitialized32;
+    bool actual_toggle = false;
+
+    void Reset() {
+      expected_node_id = kUninitialized32;
+      expected_toggle = false;
+      actual_node_id = kUninitialized32;
+      actual_toggle = false;
+    }
+  };
+
+  struct SetGltfModelAnimationSpeedParams {
+    int32_t expected_node_id = kUninitialized32;
+    float expected_speed = 0.0f;
+    int32_t expected_channel_id = kUninitialized32;
+    int32_t actual_node_id = kUninitialized32;
+    float actual_speed = 0.0f;
+    int32_t actual_channel_id = kUninitialized32;
+
+    void Reset() {
+      expected_node_id = kUninitialized32;
+      expected_speed = 0.0f;
+      expected_channel_id = kUninitialized32;
+      actual_node_id = kUninitialized32;
+      actual_speed = 0.0f;
+      actual_channel_id = kUninitialized32;
+    }
+  };
+
+  struct SetGltfModelAnimationPlaybackTimeParams {
+    int32_t expected_node_id = kUninitialized32;
+    float expected_playback_time = 0.0f;
+    int32_t expected_channel_id = kUninitialized32;
+    int32_t actual_node_id = kUninitialized32;
+    float actual_playback_time = 0.0f;
+    int32_t actual_channel_id = kUninitialized32;
+
+    void Reset() {
+      expected_node_id = kUninitialized32;
+      expected_playback_time = 0.0f;
+      expected_channel_id = kUninitialized32;
+      actual_node_id = kUninitialized32;
+      actual_playback_time = 0.0f;
+      actual_channel_id = kUninitialized32;
+    }
+  };
+
+  struct GetGltfModelAnimationCountParams {
+    int32_t expected_node_id = kUninitialized32;
+    int32_t success_count = kUninitialized32;
+    int32_t actual_node_id = kUninitialized32;
+
+    void Reset() {
+      expected_node_id = kUninitialized32;
+      success_count = kUninitialized32;
+      actual_node_id = kUninitialized32;
+    }
+  };
+
+  struct GetGltfModelAnimationNameParams {
+    int32_t expected_node_id = kUninitialized32;
+    int32_t expected_index = kUninitialized32;
+    std::string success_name;
+    int32_t actual_node_id = kUninitialized32;
+    int32_t actual_index = kUninitialized32;
+
+    void Reset() {
+      expected_node_id = kUninitialized32;
+      expected_index = kUninitialized32;
+      success_name.clear();
+      actual_node_id = kUninitialized32;
+      actual_index = kUninitialized32;
     }
   };
 
@@ -215,6 +297,11 @@ class ModelTestContext {
     set_gltf_reform_affordance_enabled.Reset();
     animate_gltf_model.Reset();
     stop_gltf_model_animation.Reset();
+    toggle_gltf_model_animation.Reset();
+    set_gltf_model_animation_speed.Reset();
+    set_gltf_model_animation_playback_time.Reset();
+    get_gltf_model_animation_count.Reset();
+    get_gltf_model_animation_name.Reset();
     get_gltf_model_local_bounds.Reset();
     set_material_override.Reset();
     clear_material_override.Reset();
@@ -228,6 +315,12 @@ class ModelTestContext {
   SetGltfReformAffordanceEnabledParams set_gltf_reform_affordance_enabled;
   AnimateGltfModelParams animate_gltf_model;
   StopGltfModelAnimationParams stop_gltf_model_animation;
+  ToggleGltfModelAnimationParams toggle_gltf_model_animation;
+  SetGltfModelAnimationSpeedParams set_gltf_model_animation_speed;
+  SetGltfModelAnimationPlaybackTimeParams
+      set_gltf_model_animation_playback_time;
+  GetGltfModelAnimationCountParams get_gltf_model_animation_count;
+  GetGltfModelAnimationNameParams get_gltf_model_animation_name;
   GetGltfModelLocalBoundsParams get_gltf_model_local_bounds;
   SetMaterialOverrideParams set_material_override;
   ClearMaterialOverrideParams clear_material_override;

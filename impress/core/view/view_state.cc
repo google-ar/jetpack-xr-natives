@@ -203,6 +203,12 @@ OptionalError ViewState::Cleanup(FilamentHost* filament_host) {
   IMP_TRACE();
   view_hooks_.OnHostCleanup();
 
+  // Call PreCleanup to release resources that require a valid view before
+  //  the view is destroyed.
+  if (filament_host->TryGetExtension()) {
+    filament_host->TryGetExtension()->PreCleanup();
+  }
+
   // Reset the view pointer.
   // This is important to do during Cleanup so that the view can deallocate
   // any filament resources it's holding in its destructor before the
@@ -295,10 +301,6 @@ bool ViewState::ShouldUseSystemFrameScheduledHandler() const {
   return view_->GetConfig().use_system_frame_scheduled_handler.value_or(false);
 }
 
-bool ViewState::ShouldPreinitializeMetalPlatform() const {
-  return view_->GetConfig().should_preinitialize_metal_platform.value_or(false);
-}
-
 bool ViewState::ShouldUseSrgbSwapChain() const {
   const std::optional<render_settings::ViewRenderSettings>& render_settings =
       view_->GetConfig().main_view_render_settings;
@@ -318,6 +320,11 @@ bool ViewState::ShouldUseMsaaSwapChain() const {
       view_->GetConfig().main_view_render_settings;
   return render_settings.has_value() &&
          render_settings->use_msaa_swapchain.value_or(false);
+}
+
+bool ViewState::ShouldSetPresentationTime() const {
+  return view_->GetConfig()
+      .experimental_feature_flags.enable_set_presentation_time.value_or(false);
 }
 
 }  // namespace imp

@@ -30,12 +30,12 @@ ABSL_CONST_INIT absl::LogSeverity owned_ptr_log_severity =
 }  // namespace
 
 void SetOwnedPtrLogSeverity(absl::LogSeverity log_severity) {
-  absl::MutexLock lock(&owned_ptr_log_severity_mutex);
+  absl::MutexLock lock(owned_ptr_log_severity_mutex);
   owned_ptr_log_severity = log_severity;
 }
 
 absl::LogSeverity GetOwnedPtrLogSeverity() {
-  absl::MutexLock lock(&owned_ptr_log_severity_mutex);
+  absl::MutexLock lock(owned_ptr_log_severity_mutex);
   return owned_ptr_log_severity;
 }
 

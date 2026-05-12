@@ -17,7 +17,6 @@ syntax = "proto3";
 package imp;
 
 import "core/math/math.proto";
-import "core/proto/imp.proto";
 
 // option cc_api_version = 2;
 option java_multiple_files = true;
@@ -39,7 +38,7 @@ message MaterialDefinition {
       // Texture loaded by AssetManager::LoadImage.
       // The path may be the google3 path to an image asset within an imp_assets
       // rule, or a url.
-      string image_asset_texture = 2 [(imp.editor_control) = { texture: {} }];
+      string image_asset_texture = 2;
       // Name of a texture stored in the TextureRegistry.
       string registered_texture = 3;
 
@@ -64,7 +63,7 @@ message MaterialDefinition {
   //
   // The path may be the google3 path to a material asset within an imp_assets
   // rule, or a url.
-  string asset = 1 [(imp.editor_control) = { material: {} }];
+  string asset = 1;
 
   // List of parameters to apply to the loaded material.
   repeated Parameter parameters = 2;

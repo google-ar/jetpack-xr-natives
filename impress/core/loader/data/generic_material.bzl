@@ -17,7 +17,7 @@
 load("@bazel_skylib//rules:copy_file.bzl", "copy_file")
 load("@third_party//filament:filament.bzl", "by_backend")
 # Placeholder: load postprocess_metal_shaders
-load("@com_google_impress//build_tools:imp.bzl", "if_enable_stereo_type_multiview")
+load("@com_google_impress//build_tools:imp.bzl", "if_enable_stereo_type_multiview", "if_imp_split_engine_allow_experimental_apis")
 
 # Minimum iOS version to target when generating Metal AIR bitcode.
 _METAL_POSTPROCESSING_MINIMUM_IOS_VERSION = "15.0"
@@ -121,6 +121,7 @@ def _build_material_impl(ctx):
         "-PstereoscopicType=multiview" if ctx.attr.enable_multiview else "",
         "-a %s" % api,
         "-p %s" % platform,
+        "--include-source-mat" if ctx.attr.include_source_mat else "",
         "-o %s" % ctx.outputs.compiled_material.path,
         ctx.file.material_source.path,
     ])
@@ -155,6 +156,7 @@ _build_material_rule = rule(
         "optimization": attr.string(),
         "include_essl1": attr.bool(default = False),
         "enable_multiview": attr.bool(default = False),
+        "include_source_mat": attr.bool(default = False),
     },
 )
 
@@ -191,8 +193,9 @@ def _emit_single_matc_target(
         material_source,
         compiled_material,
         api,
+        force_feature_level_zero = False,
         **kwargs):
-    _FORBIDDEN_ARGS = ["platform", "include_essl1", "enable_multiview"]
+    _FORBIDDEN_ARGS = ["platform", "include_essl1", "enable_multiview", "include_source_mat"]
     for arg in _FORBIDDEN_ARGS:
         if arg in kwargs:
             fail("_emit_single_matc_target overrides %s, do not pass it" % arg)
@@ -208,14 +211,17 @@ def _emit_single_matc_target(
             "@third_party//filament:android": "mobile",
             "//conditions:default": "all",
         }),
-        include_essl1 = select({
+        include_essl1 = True if force_feature_level_zero else select({
             "@third_party//filament:filament_uses_gles2_android": True,
+            "@third_party//filament:filament_uses_opengl_egl_headless_fl0": True,
             "@third_party//filament:filament_uses_gles3_android": False,
             "@third_party//filament:filament_uses_vulkan_android": False,
+            "@third_party//filament:wasm_feature_level_0": True,
             "@third_party//filament:android": True,
             "//conditions:default": False,
         }),
         enable_multiview = if_enable_stereo_type_multiview(True, False),
+        include_source_mat = if_imp_split_engine_allow_experimental_apis(True, otherwise = False),
         **kwargs
     )
 
@@ -230,7 +236,8 @@ def process_and_build_material(
         optimization = None,
         enable_metal_postprocessing = None,
         metal_postprocessing_fast_math = None,
-        preserve_text_shaders = None):
+        preserve_text_shaders = None,
+        force_feature_level_zero = False):
     """Preprocesses a material with replacements and includes, and builds it using filamat.
 
     Includes within includes are not supported.
@@ -259,7 +266,17 @@ def process_and_build_material(
         preserve_text_shaders: Optional. Whether to preserve MSL text shaders when Metal post-
            processing is enabled. By default, text shaders are removed; pass True to preserve them.
            This flag is ignored if Metal post-processing is disabled.
+        force_feature_level_zero: Optional. Whether to force only ESSL 1.0 materials to be compiled.
     """
+    is_opengl = by_backend(
+        metal = False,
+        opengl = True,
+        vulkan = False,
+    )
+
+    if not is_opengl and force_feature_level_zero:
+        fail("force_feature_level_zero only works with OpenGL")
+
     if enable_metal_postprocessing == None:
         enable_metal_postprocessing = _enable_metal_postprocessing_by_default()
 
@@ -279,59 +296,73 @@ def process_and_build_material(
         variant_filter = variant_filter,
         defines = defines,
         optimization = optimization,
+        force_feature_level_zero = force_feature_level_zero,
     )
 
-    _emit_single_matc_target(
-        name = "vulkan_cmat_%s" % name,
-        material_source = ":%s" % process_target,
-        compiled_material = "vulkan/%s.cmat" % name,
-        api = "vulkan",
-        variant_filter = variant_filter,
-        defines = defines,
-        optimization = optimization,
-    )
-
-    if enable_metal_postprocessing:
-        metal_matc_target_name = "metal_matc_%s" % name
+    if not force_feature_level_zero:
         _emit_single_matc_target(
-            name = metal_matc_target_name,
+            name = "vulkan_cmat_%s" % name,
             material_source = ":%s" % process_target,
-            compiled_material = "metal_matc/%s.cmat" % name,
-            api = "metal",
+            compiled_material = "vulkan/%s.cmat" % name,
+            api = "vulkan",
             variant_filter = variant_filter,
             defines = defines,
             optimization = optimization,
         )
-        _postprocess_metal_shaders_noop(
-            name = "metal_cmat_%s" % name,
-            input_material = ":%s" % metal_matc_target_name,
-            output_material = "metal/%s.cmat" % name,
-            minimum_ios_version = _METAL_POSTPROCESSING_MINIMUM_IOS_VERSION,
-            preserve_text_shaders = preserve_text_shaders,
-            backend_is_metal = True,
-            fast_math = metal_postprocessing_fast_math,
-        )
-    else:
-        _emit_single_matc_target(
-            name = "metal_cmat_%s" % name,
-            material_source = ":%s" % process_target,
-            compiled_material = "metal/%s.cmat" % name,
-            api = "metal",
-            variant_filter = variant_filter,
-            defines = defines,
-            optimization = optimization,
-        )
+
+    if not force_feature_level_zero:
+        if enable_metal_postprocessing:
+            metal_matc_target_name = "metal_matc_%s" % name
+            _emit_single_matc_target(
+                name = metal_matc_target_name,
+                material_source = ":%s" % process_target,
+                compiled_material = "metal_matc/%s.cmat" % name,
+                api = "metal",
+                variant_filter = variant_filter,
+                defines = defines,
+                optimization = optimization,
+                force_feature_level_zero = force_feature_level_zero,
+            )
+            _postprocess_metal_shaders_noop(
+                name = "metal_cmat_%s" % name,
+                input_material = ":%s" % metal_matc_target_name,
+                output_material = "metal/%s.cmat" % name,
+                minimum_ios_version = _METAL_POSTPROCESSING_MINIMUM_IOS_VERSION,
+                preserve_text_shaders = preserve_text_shaders,
+                backend_is_metal = True,
+                fast_math = metal_postprocessing_fast_math,
+            )
+        else:
+            _emit_single_matc_target(
+                name = "metal_cmat_%s" % name,
+                material_source = ":%s" % process_target,
+                compiled_material = "metal/%s.cmat" % name,
+                api = "metal",
+                variant_filter = variant_filter,
+                defines = defines,
+                optimization = optimization,
+                force_feature_level_zero = force_feature_level_zero,
+            )
 
     # The generic alias should automatically select a backend-specific build
     # rule based on config_settings() and copy it to a generic output name.
-    copy_file(
-        name = name,
-        src = by_backend(
-            metal = ":metal_cmat_%s" % name,
-            opengl = ":opengl_cmat_%s" % name,
-            vulkan = ":vulkan_cmat_%s" % name,
-        ),
-        out = "%s.cmat" % name,
-        allow_symlink = True,
-        visibility = visibility,
-    )
+    if force_feature_level_zero:
+        copy_file(
+            name = name,
+            src = ":opengl_cmat_%s" % name,
+            out = "%s.cmat" % name,
+            allow_symlink = True,
+            visibility = visibility,
+        )
+    else:
+        copy_file(
+            name = name,
+            src = by_backend(
+                metal = ":metal_cmat_%s" % name,
+                opengl = ":opengl_cmat_%s" % name,
+                vulkan = ":vulkan_cmat_%s" % name,
+            ),
+            out = "%s.cmat" % name,
+            allow_symlink = True,
+            visibility = visibility,
+        )

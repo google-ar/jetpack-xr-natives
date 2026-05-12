@@ -161,6 +161,70 @@ struct Mat4 (requires_api: 1) {
   m33 : double (id: 15, requires_api: 1);
 }
 
+table FloatVector {
+  data:[Float] (required, id: 0);
+}
+
+table Float2Vector {
+  data:[Float2] (required, id: 0);
+}
+
+table Float3Vector {
+  data:[Float3] (required, id: 0);
+}
+
+table Float4Vector {
+  data:[Float4] (required, id: 0);
+}
+
+table IntVector {
+  data:[Int] (required, id: 0);
+}
+
+table Int2Vector {
+  data:[Int2] (required, id: 0);
+}
+
+table Int3Vector {
+  data:[Int3] (required, id: 0);
+}
+
+table Int4Vector {
+  data:[Int4] (required, id: 0);
+}
+
+table UintVector {
+  data:[Uint] (required, id: 0);
+}
+
+table Uint2Vector {
+  data:[Uint2] (required, id: 0);
+}
+
+table Uint3Vector {
+  data:[Uint3] (required, id: 0);
+}
+
+table Uint4Vector {
+  data:[Uint4] (required, id: 0);
+}
+
+table BoolVector {
+  data:[Bool] (required, id: 0);
+}
+
+table Bool2Vector {
+  data:[Bool2] (required, id: 0);
+}
+
+table Bool3Vector {
+  data:[Bool3] (required, id: 0);
+}
+
+table Bool4Vector {
+  data:[Bool4] (required, id: 0);
+}
+
 table Mat3fVector (requires_api: 1) {
   mats : [Mat3f] (required, id: 0, requires_api: 1);
 }

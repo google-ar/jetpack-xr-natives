@@ -18,10 +18,16 @@
 #include <cstddef>
 #include <memory>
 
+#include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/log/check.h"
+#include "absl/status/status.h"
+#include "absl/synchronization/mutex.h"
 #include "flatbuffers/allocator.h"
 #include "flatbuffers/flatbuffer_builder.h"
+#include "core/async/future.h"
+#include "core/common/invocable.h"
+#include "core/common/owned_ptr.h"
 #include "core/common/robin_map.h"
 #include "core/split_engine/android/bridge_buffer.h"
 #include "core/split_engine/android/buffer_handle_factory.h"
@@ -32,14 +38,14 @@
 namespace imp::split_engine {
 
 // Has no dependency on the actual implementation of the underlying transport.
-// TODO: (broken link) - extract memory management and rename the class to
-// "BasicSplitEngineBridgeSender"
+// TODO: (broken link) - remove this class.
 class SplitEngineSharedMemoryBridgeSenderBase
     : public imp::split_engine::SplitEngineBridgeSender {
  public:
   using MessageType = SplitEngineBridgeSender::MessageType;
 
   SplitEngineSharedMemoryBridgeSenderBase();
+  ~SplitEngineSharedMemoryBridgeSenderBase() override;
 
   SplitEngineSharedMemoryBridgeSenderBase(
       const SplitEngineSharedMemoryBridgeSenderBase&) = delete;
@@ -58,12 +64,14 @@ class SplitEngineSharedMemoryBridgeSenderBase
       size_t size_bytes, MessageType message_type) override;
   absl::Status EndMessageGroup(MessageGroupId group_id) override;
 
-  std::unique_ptr<flatbuffers::FlatBufferBuilder> CreateFlatBufferBuilder(
+  imp::OwnedPtr<flatbuffers::FlatBufferBuilder> CreateFlatBufferBuilder(
       MessageGroupId group_id, size_t size_bytes) override;
 
   absl::StatusOr<size_t> GetActiveMessageGroupCount() const override;
 
   void ClearReleasedMessageGroups() override;
+
+  void Schedule(imp::Invocable<absl::Status()> fn) override;
 
  protected:
   virtual MessageGroupId GenerateMessageGroupId() = 0;
@@ -76,13 +84,40 @@ class SplitEngineSharedMemoryBridgeSenderBase
   absl::StatusOr<size_t> GetMessageGroupSizeBytes(
       MessageGroupId group_id) const;
 
- private:
-  imp::RobinMap<const void*, std::unique_ptr<BridgeBuffer>> bridge_buffers_;
-  absl::flat_hash_map<MessageGroupId, ArenaAllocator::ArenaHandle>
-      arena_handles_;
+  // Drains the scheduler and sets the given status as the result of the last
+  // Future.
+  //
+  // The method is blocking.
+  void DrainScheduler(absl::Status status = absl::OkStatus());
 
-  absl::flat_hash_map<MessageGroupId, size_t> message_group_id_to_size_bytes_;
-  absl::flat_hash_map<MessageGroupId, MessageType> message_group_types_;
+ private:
+  absl::Mutex bridge_buffers_mutex_;
+  imp::RobinMap<const void*, std::unique_ptr<BridgeBuffer>> bridge_buffers_
+      ABSL_GUARDED_BY(bridge_buffers_mutex_);
+
+  absl::Mutex arena_handles_mutex_;
+  absl::flat_hash_map<MessageGroupId, ArenaAllocator::ArenaHandle>
+      arena_handles_ ABSL_GUARDED_BY(arena_handles_mutex_);
+  absl::flat_hash_map<MessageGroupId, MessageType> message_group_types_
+      ABSL_GUARDED_BY(arena_handles_mutex_);
+
+  mutable absl::Mutex message_sizes_mutex_;
+  absl::flat_hash_map<MessageGroupId, size_t> message_group_id_to_size_bytes_
+      ABSL_GUARDED_BY(message_sizes_mutex_);
+
+  // Represents a chain of operations that are scheduled to be executed on
+  // the background thread.
+  //
+  // Accessed via `Schedule` method only and only on the foreground thread.
+  Future<absl::Status> pending_ops_ = Future<absl::Status>(absl::OkStatus());
+
+  // This is used to determine when it's time to use kScheduleAlways mode to
+  // prevent infinite callstacks. See `Schedule` method for more details.
+  size_t total_ops_count_ = 0;
+
+  // Obtained results from `future_benchmark_test.cc` shows that 64 is sweet
+  // spot both for XR device and Desktop.
+  static constexpr size_t kScheduleAlwaysEveryN = 64;
 };
 
 }  // namespace imp::split_engine

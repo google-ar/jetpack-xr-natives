@@ -46,10 +46,11 @@ class DataLayout {
   int GetPosition() const;
   int GetVelocity() const;
   int GetAcceleration() const;
+  int GetRotation() const;
 
  private:
   std::vector<int> offsets_;
-  int particle_data_size_;
+  int particle_data_size_ = 0;
 };
 
 }  // namespace imp_particle

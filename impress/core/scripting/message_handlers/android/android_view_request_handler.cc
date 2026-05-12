@@ -19,7 +19,6 @@
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "core/async/future.h"
-#include "core/common/platform_helpers.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
@@ -54,7 +53,7 @@ Future<absl::Status> AndroidViewRequestHandler::HandleMessage(
       ->AddComponent<AndroidViewRenderer>(
           reinterpret_cast<jobject>(args[0]), message.view_size,
           message.input_forwarding_mode, message.material,
-          message.blend_priority)
+          message.blend_priority, message.corner_radius)
       .Then([](ComponentHandle<AndroidViewRenderer> component) {
         return absl::OkStatus();
       });

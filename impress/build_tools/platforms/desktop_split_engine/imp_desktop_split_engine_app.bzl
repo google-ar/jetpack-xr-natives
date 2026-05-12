@@ -17,6 +17,7 @@
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load(
     "@com_google_impress//build_tools:imp.bzl",
+    "if_dev_runtime",
     "if_remote_desktop",
 )
 load(
@@ -58,9 +59,10 @@ def imp_desktop_split_engine_app(
                 "-Wl,--dynamic-linker=/lib64/ld-linux-x86-64.so.2",
             ]) + extra_linkopts,
             deps = [
-                impress_library,
-                Label("@com_google_impress//:platform_desktop_split_engine"),
-            ],
+                       impress_library,
+                       Label("@com_google_impress//:platform_desktop_split_engine"),
+                   ] +
+                   if_dev_runtime(["@com_google_impress//core/performance:editor_malloc"]),
             testonly = testonly,
             **kwargs
         )

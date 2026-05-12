@@ -36,8 +36,9 @@ cc_library(
     linkstatic = 1,
     deps = [
         "//core/common:invocable",
-        "//core/image",
+        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/synchronization",
         "@third_party//filament/filament/backend:pixel_buffer_descriptor",
     ],
     alwayslink = 1,

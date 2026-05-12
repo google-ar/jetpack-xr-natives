@@ -28,7 +28,6 @@
 #include <private/filament/DescriptorSets.h>
 #include <private/filament/SamplerInterfaceBlock.h>
 #include <private/filament/BufferInterfaceBlock.h>
-#include <private/filament/PushConstantInfo.h>
 #include <private/filament/Variant.h>
 
 #include <filament/Material.h>
@@ -40,6 +39,7 @@
 
 #include <filaflat/ChunkContainer.h>
 
+#include <backend/DriverApiForward.h>
 #include <backend/DriverEnums.h>
 #include <backend/CallbackHandler.h>
 #include <backend/Program.h>
@@ -51,7 +51,6 @@
 #include "filament/libs/utils/include/utils/Invocable.h"
 #include "filament/libs/utils/include/utils/Logger.h"
 #include "filament/libs/utils/include/utils/Panic.h"
-#include "filament/libs/utils/include/utils/bitset.h"
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/ostream.h"
@@ -70,10 +69,19 @@
 
 namespace filament {
 
+namespace {
+
 using namespace backend;
 using namespace filaflat;
 using namespace utils;
-using UboBatchingMode = FEngine::UboBatchingMode;
+using UboBatchingMode = Material::UboBatchingMode;
+
+bool shouldEnableBatching(FEngine& engine, UboBatchingMode batchingMode, MaterialDomain domain) {
+    return batchingMode != UboBatchingMode::DISABLED && engine.isUboBatchingEnabled() &&
+           domain == MaterialDomain::SURFACE;
+}
+
+} // anonymous namespace
 
 struct Material::BuilderDetails {
     const void* mPayload = nullptr;
@@ -81,10 +89,10 @@ struct Material::BuilderDetails {
     bool mDefaultMaterial = false;
     int32_t mShBandsCount = 3;
     Builder::ShadowSamplingQuality mShadowSamplingQuality = Builder::ShadowSamplingQuality::LOW;
+    UboBatchingMode mUboBatchingMode = UboBatchingMode::DEFAULT;
     std::unordered_map<
         CString,
-        std::variant<int32_t, float, bool>,
-        CString::Hasher> mConstantSpecializations;
+        std::variant<int32_t, float, bool>> mConstantSpecializations;
 };
 
 FMaterial::DefaultMaterialBuilder::DefaultMaterialBuilder() {
@@ -112,6 +120,11 @@ Material::Builder& Material::Builder::sphericalHarmonicsBandCount(size_t const s
 
 Material::Builder& Material::Builder::shadowSamplingQuality(ShadowSamplingQuality const quality) noexcept {
     mImpl->mShadowSamplingQuality = quality;
+    return *this;
+}
+
+Material::Builder& Material::Builder::uboBatching(UboBatchingMode const mode) noexcept {
+    mImpl->mUboBatchingMode = mode;
     return *this;
 }
 
@@ -148,10 +161,24 @@ Material* Material::Builder::build(Engine& engine) const {
 FMaterial::FMaterial(FEngine& engine, const Builder& builder, MaterialDefinition const& definition)
         : mDefinition(definition),
           mIsDefaultMaterial(builder->mDefaultMaterial),
+          mUseUboBatching(shouldEnableBatching(engine, builder->mUboBatchingMode,
+                  definition.materialDomain)),
           mEngine(engine),
           mMaterialId(engine.getMaterialId()) {
+
+    FILAMENT_CHECK_PRECONDITION(!mUseUboBatching || engine.isUboBatchingEnabled())
+            << "UBO batching is not enabled.";
+
+    DriverApi& driver = engine.getDriverApi();
+
+    mIsStereoSupported = driver.isStereoSupported();
+    mIsParallelShaderCompileSupported = driver.isParallelShaderCompileSupported();
+    mDepthPrecacheDisabled = driver.isWorkaroundNeeded(Workaround::DISABLE_DEPTH_PRECACHE_FOR_DEFAULT_MATERIAL);
+    mDefaultMaterial = engine.getDefaultMaterial();
+
     mSpecializationConstants = processSpecializationConstants(builder);
-    precacheDepthVariants(engine);
+
+    precacheDepthVariants(driver);
 
 #if FILAMENT_ENABLE_MATDBG
     // Register the material with matdbg.
@@ -216,6 +243,24 @@ void FMaterial::terminate(FEngine& engine) {
     engine.getMaterialCache().release(engine, mDefinition);
 }
 
+backend::DescriptorSetLayout const& FMaterial::getPerViewDescriptorSetLayoutDescription(
+        Variant const variant, bool const useVsmDescriptorSetLayout) const noexcept {
+    if (mDefinition.materialDomain == MaterialDomain::SURFACE) {
+        if (Variant::isValidDepthVariant(variant)) {
+            // Use the layout description used to create the per view depth variant layout.
+            return descriptor_sets::getDepthVariantLayout();
+        }
+        if (Variant::isSSRVariant(variant)) {
+            // Use the layout description used to create the per view SSR variant layout.
+            return descriptor_sets::getSsrVariantLayout();
+        }
+    }
+    if (useVsmDescriptorSetLayout) {
+        return mDefinition.perViewDescriptorSetLayoutVsmDescription;
+    }
+    return mDefinition.perViewDescriptorSetLayoutDescription;
+}
+
 filament::DescriptorSetLayout const& FMaterial::getPerViewDescriptorSetLayout(
         Variant const variant, bool const useVsmDescriptorSetLayout) const noexcept {
     if (mDefinition.materialDomain == MaterialDomain::SURFACE) {
@@ -234,26 +279,39 @@ filament::DescriptorSetLayout const& FMaterial::getPerViewDescriptorSetLayout(
     return mDefinition.perViewDescriptorSetLayout;
 }
 
+backend::DescriptorSetLayout const& FMaterial::getDescriptorSetLayoutDescription(Variant variant)
+        const noexcept {
+    if (!isSharedVariant(variant)) {
+        return mDefinition.descriptorSetLayoutDescription;
+    }
+    if (UTILS_UNLIKELY(!mDefaultMaterial)) {
+        return mDefinition.descriptorSetLayoutDescription;
+    }
+    return mDefaultMaterial->getDescriptorSetLayoutDescription();
+}
+
 void FMaterial::compile(CompilerPriorityQueue const priority,
         UserVariantFilterMask variantSpec,
         CallbackHandler* handler,
         Invocable<void(Material*)>&& callback) noexcept {
 
+    DriverApi& driver = mEngine.getDriverApi();
+
     // Turn off the STE variant if stereo is not supported.
-    if (!mEngine.getDriverApi().isStereoSupported()) {
+    if (!mIsStereoSupported) {
         variantSpec &= ~UserVariantFilterMask(UserVariantFilterBit::STE);
     }
 
     UserVariantFilterMask const variantFilter =
             ~variantSpec & UserVariantFilterMask(UserVariantFilterBit::ALL);
 
-    if (UTILS_LIKELY(mEngine.getDriverApi().isParallelShaderCompileSupported())) {
+    if (UTILS_LIKELY(mIsParallelShaderCompileSupported)) {
         auto const& variants = isVariantLit() ?
                 VariantUtils::getLitVariants() : VariantUtils::getUnlitVariants();
         for (auto const variant: variants) {
             if (!variantFilter || variant == Variant::filterUserVariant(variant, variantFilter)) {
                 if (hasVariant(variant)) {
-                    prepareProgram(variant, priority);
+                    prepareProgram(driver, variant, priority);
                 }
             }
         }
@@ -270,9 +328,9 @@ void FMaterial::compile(CompilerPriorityQueue const priority,
             }
         };
         auto* const user = new(std::nothrow) Callback{ std::move(callback), this };
-        mEngine.getDriverApi().compilePrograms(priority, handler, &Callback::func, user);
+        driver.compilePrograms(priority, handler, &Callback::func, user);
     } else {
-        mEngine.getDriverApi().compilePrograms(priority, nullptr, nullptr, nullptr);
+        driver.compilePrograms(priority, nullptr, nullptr, nullptr);
     }
 }
 
@@ -282,14 +340,14 @@ FMaterialInstance* FMaterial::createInstance(const char* name) const noexcept {
         return FMaterialInstance::duplicate(mDefaultMaterialInstance, name);
     } else {
         // but if we don't, just create an instance with all the default parameters
-        return mEngine.createMaterialInstance(this, name, UboBatchingMode::DEFAULT);
+        return mEngine.createMaterialInstance(this, name);
     }
 }
 
 FMaterialInstance* FMaterial::getDefaultInstance() noexcept {
     if (UTILS_UNLIKELY(!mDefaultMaterialInstance)) {
         mDefaultMaterialInstance =
-                mEngine.createMaterialInstance(this, mDefinition.name.c_str(), UboBatchingMode::DEFAULT);
+                mEngine.createMaterialInstance(this, mDefinition.name.c_str());
         mDefaultMaterialInstance->setDefaultInstance(true);
     }
     return mDefaultMaterialInstance;
@@ -343,15 +401,15 @@ bool FMaterial::hasVariant(Variant const variant) const noexcept {
     return true;
 }
 
-void FMaterial::prepareProgramSlow(Variant const variant,
+void FMaterial::prepareProgramSlow(DriverApi& driver, Variant const variant,
         backend::CompilerPriorityQueue const priorityQueue) const noexcept {
     assert_invariant(mEngine.hasFeatureLevel(mDefinition.featureLevel));
     switch (getMaterialDomain()) {
         case MaterialDomain::SURFACE:
-            getSurfaceProgramSlow(variant, priorityQueue);
+            getSurfaceProgramSlow(driver, variant, priorityQueue);
             break;
         case MaterialDomain::POST_PROCESS:
-            getPostProcessProgramSlow(variant, priorityQueue);
+            getPostProcessProgramSlow(driver, variant, priorityQueue);
             break;
         case MaterialDomain::COMPUTE:
             // TODO: implement MaterialDomain::COMPUTE
@@ -359,7 +417,7 @@ void FMaterial::prepareProgramSlow(Variant const variant,
     }
 }
 
-void FMaterial::getSurfaceProgramSlow(Variant const variant,
+void FMaterial::getSurfaceProgramSlow(DriverApi& driver, Variant const variant,
         CompilerPriorityQueue const priorityQueue) const noexcept {
     // filterVariant() has already been applied in generateCommands(), shouldn't be needed here
     // if we're unlit, we don't have any bits that correspond to lit materials
@@ -375,14 +433,14 @@ void FMaterial::getSurfaceProgramSlow(Variant const variant,
     pb.multiview(
             mEngine.getConfig().stereoscopicType == StereoscopicType::MULTIVIEW &&
             Variant::isStereoVariant(variant));
-    createAndCacheProgram(std::move(pb), variant);
+    createAndCacheProgram(driver, std::move(pb), variant);
 }
 
-void FMaterial::getPostProcessProgramSlow(Variant const variant,
+void FMaterial::getPostProcessProgramSlow(DriverApi& driver, Variant const variant,
         CompilerPriorityQueue const priorityQueue) const noexcept {
     Program pb{ getProgramWithVariants(variant, variant, variant) };
     pb.priorityQueue(priorityQueue);
-    createAndCacheProgram(std::move(pb), variant);
+    createAndCacheProgram(driver, std::move(pb), variant);
 }
 
 Program FMaterial::getProgramWithVariants(
@@ -429,7 +487,7 @@ Program FMaterial::getProgramWithVariants(
             .shader(ShaderStage::FRAGMENT, fsBuilder.data(), fsBuilder.size())
             .shaderLanguage(parser.getShaderLanguage())
             .diagnostics(mDefinition.name,
-                    [variant, vertexVariant, fragmentVariant](utils::CString const& name,
+                    [variant, vertexVariant, fragmentVariant](CString const& name,
                             io::ostream& out) -> io::ostream& {
                         return out << name.c_str_safe() << ", variant=(" << io::hex << +variant.key
                                    << io::dec << "), vertexVariant=(" << io::hex
@@ -463,17 +521,13 @@ Program FMaterial::getProgramWithVariants(
     return program;
 }
 
-void FMaterial::createAndCacheProgram(Program&& p, Variant const variant) const noexcept {
-    FEngine const& engine = mEngine;
-    DriverApi& driverApi = mEngine.getDriverApi();
-
+void FMaterial::createAndCacheProgram(DriverApi& driver, Program&& p, Variant const variant) const noexcept {
     bool const isShared = isSharedVariant(variant);
 
     // Check if the default material has this program cached
     if (isShared) {
-        FMaterial const* const pDefaultMaterial = engine.getDefaultMaterial();
-        if (pDefaultMaterial) {
-            auto const program = pDefaultMaterial->mCachedPrograms[variant.key];
+        if (mDefaultMaterial) {
+            auto const program = mDefaultMaterial->mCachedPrograms[variant.key];
             if (program) {
                 mCachedPrograms[variant.key] = program;
                 return;
@@ -481,7 +535,17 @@ void FMaterial::createAndCacheProgram(Program&& p, Variant const variant) const 
         }
     }
 
-    auto const program = driverApi.createProgram(std::move(p),
+    // Set descriptor sets for the program.
+    // Note: right now, we're going to assume VSM is disabled. In the future, we may
+    // want to provide both to the backend, so that both can be built.
+    p.descriptorLayout(+DescriptorSetBindingPoints::PER_VIEW,
+        getPerViewDescriptorSetLayoutDescription(variant, Variant::isVSMVariant(variant)));
+    p.descriptorLayout(+DescriptorSetBindingPoints::PER_RENDERABLE,
+        descriptor_sets::getPerRenderableLayout());
+    p.descriptorLayout(+DescriptorSetBindingPoints::PER_MATERIAL,
+        getDescriptorSetLayoutDescription(variant));
+
+    auto const program = driver.createProgram(std::move(p),
             ImmutableCString{ mDefinition.name.c_str_safe() });
     assert_invariant(program);
     mCachedPrograms[variant.key] = program;
@@ -490,9 +554,8 @@ void FMaterial::createAndCacheProgram(Program&& p, Variant const variant) const 
     // are met (Surface Domain and no custom depth shader), cache it now.
     // New Materials will inherit these program automatically.
     if (isShared) {
-        FMaterial const* const pDefaultMaterial = engine.getDefaultMaterial();
-        if (pDefaultMaterial && !pDefaultMaterial->mCachedPrograms[variant.key]) {
-            pDefaultMaterial->mCachedPrograms[variant.key] = program;
+        if (mDefaultMaterial && !mDefaultMaterial->mCachedPrograms[variant.key]) {
+            mDefaultMaterial->mCachedPrograms[variant.key] = program;
         }
     }
 }
@@ -780,17 +843,16 @@ FMaterial::processSpecializationConstants(Builder const& builder) {
     return specializationConstants;
 }
 
-void FMaterial::precacheDepthVariants(FEngine& engine) {
+void FMaterial::precacheDepthVariants(DriverApi& driver) {
 
-    bool const disableDepthPrecacheForDefaultMaterial = engine.getDriverApi().isWorkaroundNeeded(
-                               Workaround::DISABLE_DEPTH_PRECACHE_FOR_DEFAULT_MATERIAL);
+    bool const disableDepthPrecacheForDefaultMaterial = mDepthPrecacheDisabled;
 
     // pre-cache all depth variants inside the default material. Note that this should be
     // entirely optional; if we remove this pre-caching, these variants will be populated
     // later, when/if needed by createAndCacheProgram(). Doing it now potentially uses more
     // memory and increases init time, but reduces hiccups during the first frame.
     if (UTILS_UNLIKELY(mIsDefaultMaterial && !disableDepthPrecacheForDefaultMaterial)) {
-        const bool stereoSupported = mEngine.getDriverApi().isStereoSupported();
+        const bool stereoSupported = driver.isStereoSupported();
         auto const allDepthVariants = VariantUtils::getDepthVariants();
         for (auto const variant: allDepthVariants) {
             // Don't precache any stereo variants if stereo is not supported.
@@ -799,7 +861,7 @@ void FMaterial::precacheDepthVariants(FEngine& engine) {
             }
             assert_invariant(Variant::isValidDepthVariant(variant));
             if (hasVariant(variant)) {
-                prepareProgram(variant, CompilerPriorityQueue::HIGH);
+                prepareProgram(driver, variant, CompilerPriorityQueue::HIGH);
             }
         }
         return;
@@ -809,12 +871,11 @@ void FMaterial::precacheDepthVariants(FEngine& engine) {
     if (mDefinition.materialDomain == MaterialDomain::SURFACE &&
             !mIsDefaultMaterial &&
             !mDefinition.hasCustomDepthShader) {
-        FMaterial const* const pDefaultMaterial = engine.getDefaultMaterial();
-        assert_invariant(pDefaultMaterial);
+        assert_invariant(mDefaultMaterial);
         auto const allDepthVariants = VariantUtils::getDepthVariants();
         for (auto const variant: allDepthVariants) {
             assert_invariant(Variant::isValidDepthVariant(variant));
-            mCachedPrograms[variant.key] = pDefaultMaterial->mCachedPrograms[variant.key];
+            mCachedPrograms[variant.key] = mDefaultMaterial->mCachedPrograms[variant.key];
         }
     }
 }

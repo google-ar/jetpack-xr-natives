@@ -43,6 +43,8 @@ class SplitEngineTextureBuilder : public BaseTextureBuilder {
     State(const State&) = delete;
     State& operator=(const State&) = delete;
 
+    ~State();
+
     uint64_t texture_id = 0;
     uint32_t width = 0;
     uint32_t height = 0;
