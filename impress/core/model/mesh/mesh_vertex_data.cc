@@ -16,10 +16,12 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <utility>
 
 #include "core/common/log.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/types/span.h"
 #include "core/model/mesh/mesh_data_helper.h"
 #include "core/model/mesh/mesh_description.h"
 
@@ -80,6 +82,18 @@ void MeshVertexData::TruncateVertices(size_t new_count) {
       vertex_data_[group_idx].size = new_size;
     }
   }
+}
+
+void MeshVertexData::UpdateData(size_t group_idx, size_t offset,
+                                absl::Span<const uint8_t> new_data) {
+  CheckVerticesNotMoved(group_idx);
+  if (offset + new_data.size() > vertex_data_[group_idx].size) {
+    IMP_LOG(imp::FATAL) << "MeshVertexData UpdateData out of bounds: offset=" << offset
+               << " size=" << new_data.size()
+               << " max=" << vertex_data_[group_idx].size;
+  }
+  std::memcpy(static_cast<uint8_t*>(vertex_data_[group_idx].buffer) + offset,
+              new_data.data(), new_data.size());
 }
 
 void MeshVertexData::CheckVerticesNotMoved(size_t group_idx) const {

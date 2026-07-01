@@ -30,10 +30,10 @@
 #include "absl/time/time.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
+#include "flatbuffers/vector.h"
 #include "flatbuffers/verifier.h"
 #include "core/common/buffer_access.h"
 #include "core/common/flatbuffer_helpers.h"
-#include "core/ipc/message_pipe.h"
 #include "core/materials/compiler/material_compiler_config.h"
 #include "core/materials/compiler/schemas/material_compiler_ipc_generated.h"
 #include "mediapipe/framework/port/status_macros.h"
@@ -49,6 +49,8 @@ inline absl::Status GetAbslStatus(schemas::ErrorStatusCode error_status_code,
       return absl::InternalError(message);
     case schemas::ErrorStatusCode::Unsupported:
       return absl::UnimplementedError(message);
+    case schemas::ErrorStatusCode::Cancelled:
+      return absl::CancelledError(message);
       // Note: Omit default so that the compiler can catch any missing
       // schemas::ErrorStatusCode if it's extended.
   }
@@ -76,20 +78,27 @@ MaterialCompilerClient::MaterialCompilerClient(int fd)
 MaterialCompilerClient::~MaterialCompilerClient() { Close(); }
 
 // Execution order:
-// 1) GetCompiledMaterialResponse in CompileMaterial grabs the lock.
-// 2) Releases the lock at processing_message_, waiting on the server response
-// 3) OnMessage grabs the lock and signals processing_message_, releases the
-// lock as it exits the function.
-// 4) Since processing_message_ is signalled, GetCompiledShaderResponse resumes
-// the execution and grabs the lock again.
-// 5) After it moves/copies the last_message_ and its size, it signals
-// can_process_new_message_ and releases the lock.
-// 6) Now the lock is released, OnMessage can grab the lock if there's any new
-// response from the server.
+// 1) CompileMaterial sends a CompileRequest with a unique operation_id.
+// 2) It then calls GetCompiledMaterialResponse, which internally grabs the
+//    lock_, releases it, and waits for the response from the compilation
+//    service, or until timed out (30 seconds).
+// 3) Before the service response is received, the client may cancel the request
+//    by calling CancelOperation. This sends a CancelRequest with the
+//    operation_id to the service and leads to a CancelResponse.
+// 4) When the service sends the corresponding response we receive it in
+//    OnMessage. This grabs the lock, unpacks the response, and inserts the
+//    response to processed_messages_ with the operation_id_ from the response.
+// 5) OnMessage releases the lock_.
+// 6) Now the condition (has response or timed out) is met in
+//    GetCompiledMaterialResponse, it re-acquires the lock_ and proceeds.
+// 7) It attempts to find the response from the processed_messages_ using the
+//    request side operation_id.
+// 8) Once it finds or fails to find, it reports the result and releases the
+//    lock_.
 absl::StatusOr<FlatBufferAccess<const schemas::CompileResponse>>
 MaterialCompilerClient::CompileMaterial(absl::string_view material_string,
-                                        const MaterialCompilerConfig& config) {
-  uint64_t operation_id = ++last_operation_id_;
+                                        const MaterialCompilerConfig& config,
+                                        OperationId operation_id) {
   flatbuffers::FlatBufferBuilder builder;
   auto config_offset =
       schemas::CreateConfig(builder, config.platform, config.target_api);
@@ -136,6 +145,21 @@ void MaterialCompilerClient::Close() {
   }
 }
 
+void MaterialCompilerClient::CancelOperation(OperationId operation_id) {
+  flatbuffers::FlatBufferBuilder builder;
+  flatbuffers::Offset<schemas::CancelRequest> cancel_offset =
+      schemas::CreateCancelRequest(builder,
+                                   builder.CreateVector({operation_id}));
+  flatbuffers::Offset<schemas::Request> request_offset = schemas::CreateRequest(
+      builder, schemas::RequestType::CancelRequest, cancel_offset.Union());
+  builder.Finish(request_offset);
+
+  if (absl::Status status = SendRequest(builder); !status.ok()) {
+    IMP_LOG(imp::ERROR) << "Failed to send cancel request for operation: "
+               << operation_id << " error: " << status;
+  }
+}
+
 void MaterialCompilerClient::OnPipeClosed() {
   absl::MutexLock lock(lock_);
   if (connection_state_ == ConnectionState::kClosed) {
@@ -163,7 +187,7 @@ void MaterialCompilerClient::OnMessage(std::unique_ptr<std::uint8_t[]> message,
   }
 
   auto try_emplace_response =
-      [this](uint64_t operation_id,
+      [this](OperationId operation_id,
              absl::StatusOr<FlatBufferAccess<const schemas::CompileResponse>>
                  response) {
         lock_.AssertHeld();
@@ -175,7 +199,7 @@ void MaterialCompilerClient::OnMessage(std::unique_ptr<std::uint8_t[]> message,
       };
 
   uint64_t operation_id = response->operation_id();
-  if (operation_id == 0) {
+  if (operation_id == kInvalidOperationId) {
     IMP_LOG(imp::ERROR) << "Operation id must be greater than 0, ignoring the response.";
     return;
   }
@@ -227,8 +251,10 @@ absl::Status MaterialCompilerClient::SendRequest(
 }
 
 absl::StatusOr<FlatBufferAccess<const schemas::CompileResponse>>
-MaterialCompilerClient::GetCompiledMaterialResponse(uint64_t operation_id) {
+MaterialCompilerClient::GetCompiledMaterialResponse(OperationId operation_id) {
   absl::MutexLock lock(lock_);
+  absl::StatusOr<FlatBufferAccess<const schemas::CompileResponse>> result;
+
   auto has_response_or_pipe_closed = [this, operation_id]() -> bool {
     lock_.AssertReaderHeld();
     return processed_messages_.contains(operation_id) ||
@@ -237,23 +263,19 @@ MaterialCompilerClient::GetCompiledMaterialResponse(uint64_t operation_id) {
 
   if (!lock_.AwaitWithTimeout(absl::Condition(&has_response_or_pipe_closed),
                               absl::Seconds(30))) {
-    return absl::DeadlineExceededError("Timed out waiting for response");
-  }
-
-  // We need to check the connection state again here, as the pipe may have been
-  // closed due to the process crashing.
-  if (connection_state_ != ConnectionState::kConnected) {
-    return absl::UnavailableError("Pipe closed");
-  }
-
-  auto it = processed_messages_.find(operation_id);
-  if (it != processed_messages_.end()) {
-    absl::StatusOr<FlatBufferAccess<const schemas::CompileResponse>> response =
-        std::move(it->second);
+    result = absl::DeadlineExceededError("Timed out waiting for response");
+  } else if (connection_state_ != ConnectionState::kConnected) {
+    // We need to check the connection state here, as the pipe may have been
+    // closed due to the process crashing.
+    result = absl::UnavailableError("Pipe closed");
+  } else if (auto it = processed_messages_.find(operation_id);
+             it != processed_messages_.end()) {
+    result = std::move(it->second);
     processed_messages_.erase(it);
-    return response;
+  } else {
+    result = absl::NotFoundError("Operation id not found");
   }
 
-  return absl::NotFoundError("Operation id not found");
+  return result;
 }
 }  // namespace imp

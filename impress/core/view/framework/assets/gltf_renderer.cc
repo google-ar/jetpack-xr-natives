@@ -28,11 +28,13 @@
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
+#include "absl/types/span.h"
 #include "filament/filament/include/filament/Box.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/libs/math/include/math/scalar.h"
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "core/assets/asset_ptr.h"
+#include "core/assets/gltf/gltf_asset.h"
 #include "core/async/future.h"
 #include "core/common/bit_vector.h"
 #include "core/common/filament_helpers.h"
@@ -44,6 +46,7 @@
 #include "core/common/typed_id.h"
 #include "core/common/typed_set_vector.h"
 #include "core/common/typed_vector.h"
+#include "core/lighting/light_component.h"
 #include "core/loader/provider/schemas/loaded_model_generated.h"
 #include "core/material_library/generic_material.h"
 #include "core/material_library/material_param_value.h"
@@ -62,14 +65,12 @@
 #include "core/render/base_renderable_manager.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
-#include "core/view/framework/assets/gltf_asset.h"
 #include "core/view/framework/assets/gltf_collider.h"
 #include "core/view/framework/assets/gltf_extension.h"
 #include "core/view/framework/assets/gltf_mesh.h"
 #include "core/view/framework/assets/gltf_scene.h"
 #include "core/view/framework/assets/gltf_state.proto.imp.h"
 #include "core/view/framework/collision/box_collider.h"
-#include "core/view/framework/lighting/light_component.h"
 #include "core/view/utils/asset.h"
 #include "core/view/utils/frame_time.h"
 
@@ -794,6 +795,18 @@ void GltfRenderer::SetMeshMorphTargetWeights(const std::vector<float>& weights,
       // If the per node weights are not set for this node handle, set its
       // real-time weights on Filament to the per mesh weights.
       SetMorphTargetWeights(weights, entity_id.value());
+  }
+}
+
+void GltfRenderer::UpdateInstanceTransforms(
+    absl::Span<const mat4f> transforms) {
+  for (const auto& mesh_index_and_nodes : mesh_index_to_nodes_) {
+    for (const NodeHandle& node_handle : mesh_index_and_nodes.second) {
+      if (ComponentHandle<GltfMesh> gltf_mesh =
+              node_handle->GetComponent<GltfMesh>()) {
+        gltf_mesh->UpdateInstanceTransforms(transforms);
+      }
+    }
   }
 }
 

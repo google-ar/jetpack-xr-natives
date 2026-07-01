@@ -98,14 +98,10 @@ class AndroidPlatformCanvasSource : public PlatformCanvasSource {
       ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) override;
 
   void ForceReset() override;
-  void OnPause() override;
-  void OnResume() override;
 
   class SurfaceProvider {
    public:
     virtual ~SurfaceProvider() = default;
-    virtual void OnPause(Context& context) = 0;
-    virtual void OnResume(Context& context) = 0;
     virtual bool StartDrawing(BaseView& view, Context& context,
                               uint2 pixel_size) = 0;
     virtual bool StartDrawing(
@@ -170,7 +166,7 @@ class AndroidPlatformCanvasSource : public PlatformCanvasSource {
   // Paint object initialized to clear mode.
   android::Paint clear_paint_;
 
-  AndroidGlyphSource glyph_source_;
+  std::shared_ptr<AndroidGlyphSource> glyph_source_;
 };
 
 }  // namespace imp

@@ -197,7 +197,7 @@ OptionalError AddWeightsChannel(const imp::gltf::imp_proto::Gltf& gltf,
                                 flatbuffers::FlatBufferBuilder* fbb,
                                 T* out_type,
                                 flatbuffers::Offset<void>* out_union,
-                                absl::optional<Domain>* out_domain) {
+                                std::optional<Domain>* out_domain) {
   if (!sampler.output) return absl::InternalError("Invalid sampler");
   MP_ASSIGN_OR_RETURN(AccessorReader reader,
                    AccessorReader::Create(gltf, *sampler.output));
@@ -240,12 +240,10 @@ OptionalError AddWeightsChannel(const imp::gltf::imp_proto::Gltf& gltf,
 OptionalError SerializeSqtAnimation(
     const imp::gltf::imp_proto::Gltf& gltf, const GltfLookup& lookup,
     NodeId node, AnimationId animation, flatbuffers::FlatBufferBuilder* fbb,
-    absl::optional<flatbuffers::Offset<animation::schemas::GltfNodeAnimation>>*
-        out_offset,
-    absl::optional<
-        flatbuffers::Offset<animation::schemas::MorphTargetAnimation>>*
+    std::optional<flatbuffers::Offset<schemas::GltfNodeAnimation>>* out_offset,
+    std::optional<flatbuffers::Offset<schemas::MorphTargetAnimation>>*
         out_mt_offset,
-    absl::optional<Domain>* out_domain) {
+    std::optional<Domain>* out_domain) {
   const GltfLookup::ChannelSet& channel_set = lookup.channel_sets[animation];
   ChannelId translation_channel =
       GltfLookup::GetValueOrDefault(channel_set.translation_channels, node);
@@ -260,13 +258,13 @@ OptionalError SerializeSqtAnimation(
   const std::vector<AnimationSampler>& animation_samplers =
       lookup.animations[animation].samplers;
 
-  absl::optional<Domain> trs_domain;
-  absl::optional<Domain> weights_domain;
+  std::optional<Domain> trs_domain;
+  std::optional<Domain> weights_domain;
 
   if (translation_channel || rotation_channel || scale_channel) {
     schemas::ChannelFloat3 translation_type = schemas::ChannelFloat3::NONE;
     flatbuffers::Offset<void> translation;
-    absl::optional<Domain> translation_domain;
+    std::optional<Domain> translation_domain;
 
     if (translation_channel) {
       MP_RETURN_IF_ERROR(AddChannel(
@@ -276,7 +274,7 @@ OptionalError SerializeSqtAnimation(
     }
     schemas::ChannelQuatf rotation_type = schemas::ChannelQuatf::NONE;
     flatbuffers::Offset<void> rotation;
-    absl::optional<Domain> rotation_domain;
+    std::optional<Domain> rotation_domain;
     if (rotation_channel) {
       MP_RETURN_IF_ERROR(AddChannel(
           gltf,
@@ -286,7 +284,7 @@ OptionalError SerializeSqtAnimation(
 
     schemas::ChannelFloat3 scale_type = schemas::ChannelFloat3::NONE;
     flatbuffers::Offset<void> scale;
-    absl::optional<Domain> scale_domain;
+    std::optional<Domain> scale_domain;
     if (scale_channel) {
       MP_RETURN_IF_ERROR(AddChannel(
           gltf, animation_samplers[*animation_channels[scale_channel].sampler],
@@ -412,12 +410,11 @@ absl::StatusOr<FlatBufferAccess<schemas::GltfAnimation>> GetAnimation(
     NodeId node_id = bone.node;
     if (!(node_scratch_flags[node_id] & ScratchFlags::kInThisAnim)) continue;
 
-    absl::optional<flatbuffers::Offset<animation::schemas::GltfNodeAnimation>>
+    std::optional<flatbuffers::Offset<schemas::GltfNodeAnimation>>
         animation_offset;
-    absl::optional<
-        flatbuffers::Offset<animation::schemas::MorphTargetAnimation>>
+    std::optional<flatbuffers::Offset<schemas::MorphTargetAnimation>>
         mt_anim_offset;
-    absl::optional<Domain> animation_domain;
+    std::optional<Domain> animation_domain;
     MP_RETURN_IF_ERROR(SerializeSqtAnimation(gltf, lookup, node_id, animation,
                                           &fbb, &animation_offset,
                                           &mt_anim_offset, &animation_domain))
@@ -448,9 +445,9 @@ absl::StatusOr<FlatBufferAccess<schemas::GltfAnimation>> GetAnimation(
     if (!(material_scratch_flags[material_id] & ScratchFlags::kInThisAnim))
       continue;
 
-    absl::optional<flatbuffers::Offset<animation::schemas::MaterialAnimation>>
+    std::optional<flatbuffers::Offset<schemas::MaterialAnimation>>
         animation_offset;
-    absl::optional<Domain> animation_domain;
+    std::optional<Domain> animation_domain;
     MP_RETURN_IF_ERROR(
         SerializeMaterialAnimation(gltf, lookup, material_id, animation, &fbb,
                                    &animation_offset, &animation_domain))

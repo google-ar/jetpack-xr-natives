@@ -140,7 +140,7 @@ class URL : public JavaWrapper {
  public:
   URL(JNIEnv* env, const std::string& url)
       : JavaWrapper(env, "java/net/URL", "(Ljava/lang/String;)V",
-                    WrapJni(env, ToString(env, url)).get()),
+                    ToJniString(env, url).get()),
         use_http_(absl::StartsWith(url, "http")) {
     open_connection_ =
         GetMethodHandle("openConnection", "()Ljava/net/URLConnection;");

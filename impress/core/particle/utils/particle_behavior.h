@@ -57,6 +57,20 @@ class ParticleBehavior {
       const imp::ParticleEmitterInfo& emitter_info, float delta_seconds,
       ParticleInstance& particle_instance);
 
+  // Returns the current default lifetime for new particles. This value is
+  // measured in seconds.
+  float GetDefaultParticleLifetime() const { return default_lifetime_seconds_; }
+
+  // Sets the default lifetime for particles. If the particle system was not
+  // initialized with a lifetime, this value will be ignored. The value must
+  // be strictly greater than 0.0f. To stop emission of new particles use the
+  // particle system's SetEmissionPaused() method instead.
+  void SetDefaultParticleLifetime(float default_lifetime_seconds) {
+    if (default_lifetime_seconds > 0.0f) {
+      default_lifetime_seconds_ = default_lifetime_seconds;
+    }
+  }
+
  protected:
   // Updates the time a particle will remain active. Returns kActive if the
   // lifetime update was performed successfully, or kExpired if the particle's

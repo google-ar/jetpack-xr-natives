@@ -19,9 +19,10 @@
 
 #include <backend/DriverEnums.h>
 
+#include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/Condition.h"
 #include "filament/libs/utils/include/utils/Invocable.h"
 #include "filament/libs/utils/include/utils/Mutex.h"
-#include "filament/libs/utils/include/utils/Condition.h"
 
 #include <array>
 #include <deque>
@@ -55,12 +56,12 @@ public:
 private:
     using Queue = std::deque<std::pair<program_token_t, Job>>;
     std::vector<std::thread> mCompilerThreads;
-    bool mExitRequested{ false };
+    bool mExitRequested UTILS_GUARDED_BY(mQueueLock){ false };
     utils::Mutex mQueueLock;
     utils::Condition mQueueCondition;
-    std::array<Queue, 3> mQueues;
+    std::array<Queue, 3> mQueues UTILS_GUARDED_BY(mQueueLock);
     // lock must be held for methods below
-    std::pair<Queue&, Queue::iterator> find(program_token_t const& token);
+    std::pair<Queue&, Queue::iterator> find(program_token_t const& token) UTILS_REQUIRES(mQueueLock);
 };
 
 } // namespace filament::backend

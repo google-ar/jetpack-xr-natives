@@ -116,7 +116,7 @@ class DurationMeasurementData : public MeasurementData {
 
   uint64_t GetCancelledSampleCount() const;
 
-  const absl::optional<SimpleHistogram>& GetHistogram() const {
+  const std::optional<SimpleHistogram>& GetHistogram() const {
     return histogram_;
   }
 
@@ -149,7 +149,7 @@ class DurationMeasurementData : public MeasurementData {
   absl::Duration shortest_sample_duration_;
   absl::Duration longest_sample_duration_;
   MovingAverage average_sample_duration_ms_;
-  absl::optional<SimpleHistogram> histogram_;
+  std::optional<SimpleHistogram> histogram_;
 
   uint64_t cancelled_sample_count_;
 

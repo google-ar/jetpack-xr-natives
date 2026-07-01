@@ -40,7 +40,7 @@ GltfModel::GltfModel(Gltf* gltf_root) : gltf_root_(gltf_root) {
   empty_material_.name = "default_material";
 }
 
-const Material& GltfModel::GetMaterial(absl::optional<uint32_t> index) const {
+const Material& GltfModel::GetMaterial(std::optional<uint32_t> index) const {
   return index ? gltf_root_->materials[*index] : empty_material_;
 }
 

@@ -23,6 +23,7 @@
 #include <iterator>
 #include <vector>
 
+#include "absl/base/no_destructor.h"
 #include "absl/base/optimization.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/statusor.h"
@@ -69,6 +70,10 @@ absl::Span<SampleNode* const> ProcessedSamples::GetSamplesByName(
 
 const ProcessedSamples& SampleProcessor::GetProcessedFrame(
     const int frame_index) const {
+  if (!Profiler::HasFrameRecorded(frame_index)) {
+    static const absl::NoDestructor<ProcessedSamples> kEmptyProcessedSamples;
+    return *kEmptyProcessedSamples;
+  }
   return GetOrCreateState()
       .processed_samples[frame_index % MainThreadProfilerState::kMaxFrames];
 }

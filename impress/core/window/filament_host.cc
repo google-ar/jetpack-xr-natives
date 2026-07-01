@@ -458,18 +458,6 @@ absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
   MP_RETURN_IF_ERROR(PreBeginRender());
 
   {
-    // called before the filament::Engine::beginFrame if we are writing to a
-    // an offscreen image that will be written to a video file or remote editor
-    // Check if dev runtime and remote display mode is enabled before calling
-    // PreRenderToWriter. Some of the existing tests run in dev mode so the
-    // scuba tests do not match since they are being rendered to a remote
-    // screen.
-#if IMP_RUNTIME(DEV) && IMP_PLATFORM(IOS)
-    if (dev_mode_extension_) {
-      dev_mode_extension_->RerouteUiRendering();
-    }
-#endif  // IMP_DEV_RUNTIME
-
     IMP_TRACE_NAME("FilamentHost::FilamentRenderPass");
     ScopedDurationMeasurement filament_frame_duration(GetMonitor(),
                                                       kFilamentFrameTiming);
@@ -536,10 +524,7 @@ absl::StatusOr<FilamentHost::RenderResult> FilamentHost::RenderNextFrame(
       GetView()->setViewport(viewport);
 #endif  // IMP_RUNTIME(DEV)
 
-      bool should_render_dev_mode = false;
       if (dev_mode_extension_) {
-      }
-      if (should_render_dev_mode) {
         dev_mode_extension_->Render();
       }
 
@@ -1016,6 +1001,10 @@ uint64_t FilamentHost::UpdateSwapChainFlagsFromState(uint64_t flags) const {
     }
   }
   return flags;
+}
+
+bool FilamentHost::IsOnFrameThread() const {
+  return frame_thread_id_ == std::this_thread::get_id();
 }
 
 void FilamentHost::CheckOnFrameThread() const {

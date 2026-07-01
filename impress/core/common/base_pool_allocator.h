@@ -62,7 +62,8 @@ class PoolAllocatorKey {
   constexpr explicit PoolAllocatorKey(ValueType value) : value_(value) {}
 
   constexpr PoolAllocatorKey(SlotType slot, GenerationType generation)
-      : value_((slot & kSlotMask) |
+      // Store slot + 1 because keys interpret 0 as empty.
+      : value_(((slot + 1) & kSlotMask) |
                ((generation << kGenerationShift) & kGenerationMask)) {}
 
   // Checks if the Key is empty.
@@ -147,18 +148,6 @@ class BasePoolAllocator {
   // Does *not* update the occupancy, that is done by PoolAllocator for
   // performance.
   void* ClaimSlot(uint32_t* out_index);
-
-  // Checks if the object is in the small blocks region and returns true if it
-  // is.
-  //
-  // If true, the index and pointer to the start of the small block are written
-  // to out_small_block_start_index and out_small_block_start_ptr.
-  //
-  // Does *not* update the small_block_pointers_ array, that is done by
-  // PoolAllocator for performance.
-  bool FindInSmallBlock(std::byte* obj_bytes,
-                        uint32_t* out_small_block_start_index,
-                        std::byte** out_small_block_start_ptr) const;
 
   // Releases a slot back to the pool.
   //
@@ -300,23 +289,6 @@ void* BasePoolAllocator<EnableGenerations, MaxBlockPower>::ClaimSlot(
   allocated_count_++;
   *out_index = index;
   return ptr;
-}
-
-template <bool EnableGenerations, uint32_t MaxBlockPower>
-bool BasePoolAllocator<EnableGenerations, MaxBlockPower>::FindInSmallBlock(
-    std::byte* obj_bytes, uint32_t* out_small_block_start_index,
-    std::byte** out_small_block_start_ptr) const {
-  uint32_t small_block_start_index = 0;
-  for (size_t i = 0; i < small_blocks_.size(); ++i) {
-    const imp_pool_allocator_internal::SmallBlock& block = small_blocks_[i];
-    if (obj_bytes >= block.start && obj_bytes < block.end) {
-      *out_small_block_start_index = small_block_start_index;
-      *out_small_block_start_ptr = block.start;
-      return true;
-    }
-    small_block_start_index += block.count;
-  }
-  return false;
 }
 
 template <bool EnableGenerations, uint32_t MaxBlockPower>

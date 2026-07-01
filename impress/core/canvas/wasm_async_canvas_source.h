@@ -33,6 +33,7 @@
 #include "core/geometry/shapes/rect.h"
 #include "core/math/vec.h"
 #include "core/render/texture.h"
+#include "core/render/wasm_gl_texture.h"
 #include "core/text/text_helpers.h"
 #include "core/text/text_metrics.proto.h"
 #include "core/view/base_view.h"
@@ -46,6 +47,7 @@ namespace imp {
 class WasmAsyncCanvasSource : public AsyncCanvasSource {
  public:
   WasmAsyncCanvasSource(bool enable_label_prep_profile_logging = false);
+  ~WasmAsyncCanvasSource() override = default;
 
   // Because this class passes a pointer to itself to callbacks, it may not be
   // copied or moved.
@@ -168,7 +170,11 @@ class WasmAsyncCanvasSource : public AsyncCanvasSource {
   };
 
  private:
+  // Helper function to initialize the drawing canvas and impress texture
+  void InitializeCanvasAndTexture(BaseView& view);
+
   OwnedTexturePtr texture_;
+  WasmGlTexture gl_texture_;
   uint2 pixel_size_;
   absl::Mutex canvas_mutex_;
 

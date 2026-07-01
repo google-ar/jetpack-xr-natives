@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include <math.h>
+#include "filament/libs/math/include/math/half.h"
+#include "filament/libs/math/include/math/vec4.h"
 
 #include <gtest/gtest.h>
 
-#include "filament/libs/math/include/math/half.h"
-#include "filament/libs/math/include/math/vec4.h"
+#include <math.h>
 
 using namespace filament::math;
 

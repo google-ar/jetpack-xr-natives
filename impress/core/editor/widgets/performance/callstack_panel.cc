@@ -18,11 +18,14 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <thread>  // NOLINT: Need to use std::thread::id.
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "absl/debugging/symbolize.h"
+#include "absl/hash/hash.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
@@ -31,9 +34,10 @@
 #include "dear_imgui/imgui.h"
 #include "dear_imgui/imgui_internal.h"
 #include "core/common/trace.h"
-#include "core/editor/widgets/performance/frame_time_panel.h"
+#include "core/editor/widgets/performance/profiler_data_provider.h"
 #include "core/editor/widgets/performance/sample_processor.h"
 #include "core/editor/widgets/performance/sample_processor_types.h"
+#include "core/editor/widgets/performance/search_filter.h"
 #include "core/performance/memory_stats.h"
 #include "core/performance/profiler.h"
 #include "core/performance/profiler_structs.h"
@@ -59,13 +63,41 @@ constexpr float kUpperPanelMinHeight = 100.0f;
 
 // Min height for the lower panel when resizing with the splitter.
 constexpr float kLowerPanelMinHeight = 100.0f;
+
+// Width of the column in collapsed mode that displays the count of call stacks.
+constexpr float kCountColumnWidth = 50.0f;
+
+struct CallstackKey {
+  const imp::MemoryStats::Callstack* callstack;
+
+  bool operator==(const CallstackKey& other) const {
+    if (callstack->depth != other.callstack->depth) return false;
+
+    for (uint32_t k = 0; k < callstack->depth; ++k) {
+      if (callstack->callstack[k] == other.callstack->callstack[k]) continue;
+
+      return false;
+    }
+
+    return true;
+  }
+
+  template <typename H>
+  friend H AbslHashValue(H h, const CallstackKey& key) {
+    // Absl hashing function optimized for an array of value types.
+    // Hashes all the pointers in the call stack from start to call stack depth.
+    return H::combine_contiguous(std::move(h), key.callstack->callstack.data(),
+                                 key.callstack->depth);
+  }
+};
 }  // namespace
 
 namespace imp::editor {
 
 absl::StatusOr<absl::Span<SampleNode* const>> CallstackPanel::GetSamples(
-    int frame_index, SampleProcessor& sample_processor,
-    std::thread::id thread_id, absl::string_view selected_sample_name) {
+    const int frame_index, SampleProcessor& sample_processor,
+    const std::thread::id thread_id,
+    const absl::string_view selected_sample_name) {
   if (selected_sample_name.empty()) {
     return absl::InvalidArgumentError(
         "Select a sample to view any recorded call stack data.");
@@ -90,14 +122,25 @@ absl::StatusOr<absl::Span<SampleNode* const>> CallstackPanel::GetSamples(
       "Callstack data is not supported for worker threads.");
 }
 
-void CallstackPanel::DrawPanel(const float width, const int start_frame,
-                               const int end_frame,
-                               FrameTimePanel& frame_time_panel,
-                               SampleProcessor& sample_processor,
-                               std::thread::id thread_id) {
+void CallstackPanel::DrawPanel(const float width,
+                               ProfilerDataProvider& data_provider,
+                               const std::thread::id thread_id,
+                               const absl::string_view search_query,
+                               const bool collapse_callstacks) {
   IMP_TRACE();
+
+  if (collapse_callstacks != collapse_callstacks_) {
+    collapse_callstacks_ = collapse_callstacks;
+    rebuild_table_entries_ = true;
+    selected_sample_node_index_ = kInvalidId;
+    selected_start_index_ = kInvalidId;
+    selected_end_index_ = kInvalidId;
+  }
+
+  const int end_frame = data_provider.GetSelectedFrameEnd();
+  SampleProcessor& sample_processor = data_provider.GetSampleProcessor();
   const absl::string_view selected_sample_name =
-      frame_time_panel.GetSelectedSampleName();
+      data_provider.GetSelectedSampleName();
 
   // Reset the selected sample if we change the selected frame or sample.
   if (end_frame != last_frame_index_ ||
@@ -107,6 +150,12 @@ void CallstackPanel::DrawPanel(const float width, const int start_frame,
     selected_end_index_ = kInvalidId;
     last_frame_index_ = end_frame;
     last_selected_sample_name_ = selected_sample_name;
+    rebuild_table_entries_ = true;
+  }
+
+  if (search_query != last_search_query_) {
+    last_search_query_ = std::string(search_query);
+    rebuild_table_entries_ = true;
   }
 
   // Dynamic height based on available space with a minimum.
@@ -122,7 +171,7 @@ void CallstackPanel::DrawPanel(const float width, const int start_frame,
 
   if (samples.ok()) {
     // If there are samples for this frame, draw the callstack table.
-    DrawCallstackPanel(*samples);
+    DrawCallstackPanel(*samples, search_query);
   } else {
     // Otherwise, instruct the user on what to do to see callstack data.
     ImGui::Text("%s", samples.status().message().data());
@@ -132,14 +181,15 @@ void CallstackPanel::DrawPanel(const float width, const int start_frame,
   ImGui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
 }
 
-void CallstackPanel::DrawCallstackPanel(absl::Span<SampleNode* const> samples) {
+void CallstackPanel::DrawCallstackPanel(absl::Span<SampleNode* const> samples,
+                                        const absl::string_view search_query) {
   if (upper_panel_height_ <= 0.0f) {
     upper_panel_height_ =
         ImGui::GetContentRegionAvail().y - kLowerPanelStartingHeight - 20.0f;
   }
 
   // Draw the table showing the last function in each callstack and bytes alloc.
-  DrawCallstackTable(samples);
+  DrawCallstackTable(samples, search_query);
 
   // Draw a splitter between the table and the full callstack panel.
   DrawSplitter();
@@ -148,13 +198,27 @@ void CallstackPanel::DrawCallstackPanel(absl::Span<SampleNode* const> samples) {
   DrawFullCallstackReadout();
 }
 
-void CallstackPanel::DrawCallstackTable(absl::Span<SampleNode* const> samples) {
-  IMP_TRACE();
-  ImGui::BeginChild("##callstacktable", ImVec2(-1, upper_panel_height_));
+bool CallstackPanel::AnyStackFrameMatchesSearch(
+    const MemoryStats::Callstack& callstack,
+    const absl::string_view search_query) {
+  if (search_query.empty()) return true;
 
+  for (int k = 0; k < callstack.depth; ++k) {
+    const void* addr = callstack.callstack[k];
+    const std::string& func_name = GetCallstackSymbol(addr);
+    if (MatchesSearchQuery(func_name, search_query)) return true;
+  }
+  return false;
+}
+
+void CallstackPanel::RebuildTableEntries(absl::Span<SampleNode* const> samples,
+                                         const absl::string_view search_query) {
   callstack_table_entries_.clear();
   const size_t sample_count = samples.size();
-  bool has_stale_callstacks = false;
+  has_stale_callstacks_ = false;
+
+  static absl::flat_hash_map<CallstackKey, size_t> unique_callstacks;
+  unique_callstacks.clear();
 
   for (int i = 0; i < sample_count; ++i) {
     const ProfileResult* result = samples[i]->result;
@@ -168,7 +232,7 @@ void CallstackPanel::DrawCallstackTable(absl::Span<SampleNode* const> samples) {
     if (callstack_index > MemoryStats::kMaxCallstacks &&
         static_cast<size_t>(start_index) <
             callstack_index - MemoryStats::kMaxCallstacks) {
-      has_stale_callstacks = true;
+      has_stale_callstacks_ = true;
       break;
     }
 
@@ -181,18 +245,52 @@ void CallstackPanel::DrawCallstackTable(absl::Span<SampleNode* const> samples) {
       // If the callstack is empty or from a different thread, skip it.
       if (callstack.depth == 0 || callstack.thread_id != thread_id) continue;
 
-      callstack_table_entries_.push_back({i, j});
+      // Filter out any callstacks that don't match the search query.
+      // Checks the entire callstack for any matching frames.
+      if (!AnyStackFrameMatchesSearch(callstack, search_query)) continue;
+
+      if (collapse_callstacks_) {
+        const CallstackKey key{&callstack};
+        auto [it, inserted] =
+            unique_callstacks.try_emplace(key, callstack_table_entries_.size());
+
+        if (!inserted) {
+          callstack_table_entries_[it->second].count++;
+          callstack_table_entries_[it->second].total_size += callstack.size;
+          continue;
+        }
+      }
+
+      callstack_table_entries_.push_back(
+          {i, j, 1, static_cast<uint32_t>(callstack.size)});
     }
   }
+}
 
-  if (ImGui::BeginTable("callstacks", 2,
+void CallstackPanel::DrawCallstackTable(absl::Span<SampleNode* const> samples,
+                                        const absl::string_view search_query) {
+  IMP_TRACE();
+  ImGui::BeginChild("##callstacktable", ImVec2(-1, upper_panel_height_));
+
+  if (rebuild_table_entries_) {
+    RebuildTableEntries(samples, search_query);
+    rebuild_table_entries_ = false;
+  }
+
+  const int column_count = collapse_callstacks_ ? 3 : 2;
+  ImGui::PushID(collapse_callstacks_ ? 1 : 0);
+  if (ImGui::BeginTable("callstacks", column_count,
                         ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
     ImGui::TableSetupColumn("Function");
+    if (collapse_callstacks_) {
+      ImGui::TableSetupColumn("Count", ImGuiTableColumnFlags_WidthFixed,
+                              kCountColumnWidth);
+    }
     ImGui::TableSetupColumn("Memory", ImGuiTableColumnFlags_WidthFixed,
                             kMemoryColumnWidth);
     ImGui::TableHeadersRow();
 
-    if (has_stale_callstacks) {
+    if (has_stale_callstacks_) {
       ImGui::TableNextRow();
       ImGui::TableSetColumnIndex(0);
       ImGui::Text("Callstacks stale for this sample.");
@@ -235,12 +333,19 @@ void CallstackPanel::DrawCallstackTable(absl::Span<SampleNode* const> samples) {
         ImGui::PopID();
         ImGui::PopID();
 
-        ImGui::TableSetColumnIndex(1);
-        ImGui::Text("%u bytes", callstack.size);
+        if (collapse_callstacks_) {
+          ImGui::TableSetColumnIndex(1);
+          ImGui::Text("%d", entry.count);
+          ImGui::TableSetColumnIndex(2);
+        } else {
+          ImGui::TableSetColumnIndex(1);
+        }
+        ImGui::Text("%u bytes", entry.total_size);
       }
     }
     ImGui::EndTable();
   }
+  ImGui::PopID();
   ImGui::EndChild();
 }
 
@@ -286,8 +391,25 @@ void CallstackPanel::DrawFullCallstackReadout() {
     return;
   }
 
-  std::string full_callstack_text = absl::StrFormat(
-      "Allocation %d (%u bytes):\n", selected_start_index_, callstack.size);
+  int count = 1;
+  uint32_t display_size = callstack.size;
+  for (const TableEntry& entry : callstack_table_entries_) {
+    if (entry.sample_index == selected_sample_node_index_ &&
+        entry.callstack_index == selected_start_index_) {
+      count = entry.count;
+      display_size = entry.total_size;
+      break;
+    }
+  }
+
+  std::string full_callstack_text;
+  if (count > 1) {
+    full_callstack_text = absl::StrFormat(
+        "Allocations: %d times (total %u bytes):\n", count, display_size);
+  } else {
+    full_callstack_text = absl::StrFormat(
+        "Allocation %d (%u bytes):\n", selected_start_index_, callstack.size);
+  }
 
   // Iterate over all the function pointers in the call stack and create a
   // string representation of it with symbolized function names if available.

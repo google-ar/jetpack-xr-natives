@@ -410,7 +410,7 @@ void LimitJointIndices(DenseDataAccess& joints_data,
 absl::StatusOr<BufferAccess> GenerateOrientationsFromNormalsAndTexcoords(
     const gltf::imp_proto::Gltf& gltf, const DenseDataAccess& positions,
     const DenseDataAccess& normals, const DenseDataAccess& texcoords,
-    const absl::optional<DenseDataAccess>& indices_data) {
+    const std::optional<DenseDataAccess>& indices_data) {
   // The SurfaceOrientation builder will not accept strided data when building
   // orientations with UVs. Use AccessorReader::GetPackedFloatData() to prepare
   // data before passing in.
@@ -485,7 +485,7 @@ BufferAccess ConvertFloat4ToShort4Buffer(const uint8_t* input_ptr,
 OptionalError AppendMorphTargetAttributes(
     const gltf::imp_proto::Gltf& gltf, const AttributeLookup& attribute_lookup,
     const std::vector<PrimitiveTarget> targets,
-    const absl::optional<DenseDataAccess>& indices_data,
+    const std::optional<DenseDataAccess>& indices_data,
     AccessorId normal_map_texcoord_id,
     std::vector<LoadedModelBuilder::MorphTargetBlock>* out_attributes) {
   AccessorId base_positions_accessor_id =
@@ -851,7 +851,7 @@ absl::StatusOr<DenseDataAndType> CreateBufferForAttribute(
 
 OptionalError GetVertexBufferInfoFromAttributeLookup(
     const gltf::imp_proto::Gltf& gltf, const AttributeLookup& attribute_lookup,
-    const absl::optional<DenseDataAccess>& indices_data,
+    const std::optional<DenseDataAccess>& indices_data,
     AccessorId normal_map_texcoord_id, uint16_t sampled_joint_count,
     bool advanced_skinning,
     std::vector<LoadedModelBuilder::VertexBlock>* out_blocks) {
@@ -1047,7 +1047,7 @@ OptionalError ProcessPrimitives(
     }
     size_t vertex_count = gltf.accessors[position_accessor].count;
 
-    absl::optional<DenseDataAccess> indices_data;
+    std::optional<DenseDataAccess> indices_data;
     if (primitive_accessors.indices) {
       MP_ASSIGN_OR_RETURN(
           AccessorReader indices_reader,

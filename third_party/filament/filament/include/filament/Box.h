@@ -27,7 +27,6 @@
 #include "filament/libs/math/include/math/vec4.h"
 
 #include <float.h>
-
 #include <stddef.h>
 
 namespace filament {

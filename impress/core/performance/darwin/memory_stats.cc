@@ -21,6 +21,7 @@
 #include <cstddef>
 
 #include "absl/debugging/stacktrace.h"
+#include "core/performance/allocator_addresses.h"
 
 namespace {
 std::thread::id GetCachedThreadId() {
@@ -70,18 +71,37 @@ void MemoryStats::IncrementMemoryCounters(size_t size) {
                       kMaxCallstacks;
     Callstack& callstack_entry = callstacks_[index];
 
-    // Skip 3 frames, TrackAllocation, IncrementMemoryCounters, and malloc.
-    static constexpr int kSkippedStackFrames = 3;
-    void* stack[kMaxCallstackDepth + kSkippedStackFrames];
+    static constexpr int kMaxAllocatorFrames = 5;
+    static constexpr int kMinSkippedFrames = 2;
+    void* stack[kMaxCallstackDepth + kMaxAllocatorFrames];
     // MacOS backtrace is orders of magnitude faster than absl::GetStackTrace.
     const int depth =
-        backtrace(stack, kMaxCallstackDepth + kSkippedStackFrames);
+        backtrace(stack, kMaxCallstackDepth + kMaxAllocatorFrames);
+
+    int last_allocator_index = -1;
+    const int max_check = std::min(depth, kMaxAllocatorFrames);
+    // We know the first two frames are always wrappers. Afterwards we assume
+    // we'll have gotten through all alloc frames by kMaxAllocatorFrames.
+    for (int i = kMinSkippedFrames; i < max_check; ++i) {
+      if (IsAllocatorAddress(stack[i])) {
+        last_allocator_index = i;
+      }
+    }
+
+    // If we found an allocator, skip until we get past it.
+    // Otherwise, skip the usual two frames.
+    const bool allocator_found = last_allocator_index != -1;
+    const int skipped_frames =
+        allocator_found ? (last_allocator_index + 1) : kMinSkippedFrames;
     const int frames_to_copy =
-        std::max(0, std::min(depth - kSkippedStackFrames, kMaxCallstackDepth));
+        std::max(0, std::min(depth - skipped_frames, kMaxCallstackDepth));
     callstack_entry.depth = frames_to_copy;
-    // Copy the relevant stack frames into the callstack entry.
-    memcpy(callstack_entry.callstack.data(), stack + kSkippedStackFrames,
-           frames_to_copy * sizeof(void*));
+
+    if (frames_to_copy > 0) {
+      memcpy(callstack_entry.callstack.data(), stack + skipped_frames,
+             frames_to_copy * sizeof(void*));
+    }
+
     callstack_entry.size = size;
     callstack_entry.thread_id = GetCachedThreadId();
   }

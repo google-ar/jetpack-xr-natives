@@ -17,148 +17,148 @@ include "split_engine/schemas/split_engine_attributes.fbs";
 namespace android_xr.schemas;
 
 struct Bool (requires_api: 1) {
-  value : bool (id: 0, requires_api: 1);
+  value:bool (id: 0, requires_api: 1);
 }
 
 struct Bool2 (requires_api: 1) {
-  x : bool (id: 0, requires_api: 1);
-  y : bool (id: 1, requires_api: 1);
+  x:bool (id: 0, requires_api: 1);
+  y:bool (id: 1, requires_api: 1);
 }
 
 struct Bool3 (requires_api: 1) {
-  x : bool (id: 0, requires_api: 1);
-  y : bool (id: 1, requires_api: 1);
-  z : bool (id: 2, requires_api: 1);
+  x:bool (id: 0, requires_api: 1);
+  y:bool (id: 1, requires_api: 1);
+  z:bool (id: 2, requires_api: 1);
 }
 
 struct Bool4 (requires_api: 1) {
-  x : bool (id: 0, requires_api: 1);
-  y : bool (id: 1, requires_api: 1);
-  z : bool (id: 2, requires_api: 1);
-  w : bool (id: 3, requires_api: 1);
+  x:bool (id: 0, requires_api: 1);
+  y:bool (id: 1, requires_api: 1);
+  z:bool (id: 2, requires_api: 1);
+  w:bool (id: 3, requires_api: 1);
 }
 
 struct Int (requires_api: 1) {
-  value : int (id: 0, requires_api: 1);
+  value:int (id: 0, requires_api: 1);
 }
 
 struct Int2 (requires_api: 1) {
-  x : int (id: 0, requires_api: 1);
-  y : int (id: 1, requires_api: 1);
+  x:int (id: 0, requires_api: 1);
+  y:int (id: 1, requires_api: 1);
 }
 
 struct Int3 (requires_api: 1) {
-  x : int (id: 0, requires_api: 1);
-  y : int (id: 1, requires_api: 1);
-  z : int (id: 2, requires_api: 1);
+  x:int (id: 0, requires_api: 1);
+  y:int (id: 1, requires_api: 1);
+  z:int (id: 2, requires_api: 1);
 }
 
 struct Int4 (requires_api: 1) {
-  x : int (id: 0, requires_api: 1);
-  y : int (id: 1, requires_api: 1);
-  z : int (id: 2, requires_api: 1);
-  w : int (id: 3, requires_api: 1);
+  x:int (id: 0, requires_api: 1);
+  y:int (id: 1, requires_api: 1);
+  z:int (id: 2, requires_api: 1);
+  w:int (id: 3, requires_api: 1);
 }
 
 struct Uint {
-  value : uint (id: 0);
+  value:uint (id: 0);
 }
 
 struct Uint2 {
-  x : uint (id: 0);
-  y : uint (id: 1);
+  x:uint (id: 0);
+  y:uint (id: 1);
 }
 
 struct Uint3 {
-  x : uint (id: 0);
-  y : uint (id: 1);
-  z : uint (id: 2);
+  x:uint (id: 0);
+  y:uint (id: 1);
+  z:uint (id: 2);
 }
 
 struct Uint4 {
-  x : uint (id: 0);
-  y : uint (id: 1);
-  z : uint (id: 2);
-  w : uint (id: 3);
+  x:uint (id: 0);
+  y:uint (id: 1);
+  z:uint (id: 2);
+  w:uint (id: 3);
 }
 
 struct Float (requires_api: 1) {
-  value : float (id: 0, requires_api: 1);
+  value:float (id: 0, requires_api: 1);
 }
 
 struct Float2 (requires_api: 1) {
-  x : float (id: 0, requires_api: 1);
-  y : float (id: 1, requires_api: 1);
+  x:float (id: 0, requires_api: 1);
+  y:float (id: 1, requires_api: 1);
 }
 
 struct Float3 (requires_api: 1) {
-  x : float (id: 0, requires_api: 1);
-  y : float (id: 1, requires_api: 1);
-  z : float (id: 2, requires_api: 1);
+  x:float (id: 0, requires_api: 1);
+  y:float (id: 1, requires_api: 1);
+  z:float (id: 2, requires_api: 1);
 }
 
 struct Float4 (requires_api: 1) {
-  x : float (id: 0, requires_api: 1);
-  y : float (id: 1, requires_api: 1);
-  z : float (id: 2, requires_api: 1);
-  w : float (id: 3, requires_api: 1);
+  x:float (id: 0, requires_api: 1);
+  y:float (id: 1, requires_api: 1);
+  z:float (id: 2, requires_api: 1);
+  w:float (id: 3, requires_api: 1);
 }
 
 struct Quatf (requires_api: 1) {
-  x : float (id: 0, requires_api: 1);
-  y : float (id: 1, requires_api: 1);
-  z : float (id: 2, requires_api: 1);
-  w : float (id: 3, requires_api: 1);
+  x:float (id: 0, requires_api: 1);
+  y:float (id: 1, requires_api: 1);
+  z:float (id: 2, requires_api: 1);
+  w:float (id: 3, requires_api: 1);
 }
 
 struct Mat3f (requires_api: 1) {
-  m00 : float (id: 0, requires_api: 1);
-  m01 : float (id: 1, requires_api: 1);
-  m02 : float (id: 2, requires_api: 1);
-  m10 : float (id: 3, requires_api: 1);
-  m11 : float (id: 4, requires_api: 1);
-  m12 : float (id: 5, requires_api: 1);
-  m20 : float (id: 6, requires_api: 1);
-  m21 : float (id: 7, requires_api: 1);
-  m22 : float (id: 8, requires_api: 1);
+  m00:float (id: 0, requires_api: 1);
+  m01:float (id: 1, requires_api: 1);
+  m02:float (id: 2, requires_api: 1);
+  m10:float (id: 3, requires_api: 1);
+  m11:float (id: 4, requires_api: 1);
+  m12:float (id: 5, requires_api: 1);
+  m20:float (id: 6, requires_api: 1);
+  m21:float (id: 7, requires_api: 1);
+  m22:float (id: 8, requires_api: 1);
 }
 
 struct Mat4f (requires_api: 1) {
-  m00 : float (id: 0, requires_api: 1);
-  m01 : float (id: 1, requires_api: 1);
-  m02 : float (id: 2, requires_api: 1);
-  m03 : float (id: 3, requires_api: 1);
-  m10 : float (id: 4, requires_api: 1);
-  m11 : float (id: 5, requires_api: 1);
-  m12 : float (id: 6, requires_api: 1);
-  m13 : float (id: 7, requires_api: 1);
-  m20 : float (id: 8, requires_api: 1);
-  m21 : float (id: 9, requires_api: 1);
-  m22 : float (id: 10, requires_api: 1);
-  m23 : float (id: 11, requires_api: 1);
-  m30 : float (id: 12, requires_api: 1);
-  m31 : float (id: 13, requires_api: 1);
-  m32 : float (id: 14, requires_api: 1);
-  m33 : float (id: 15, requires_api: 1);
+  m00:float (id: 0, requires_api: 1);
+  m01:float (id: 1, requires_api: 1);
+  m02:float (id: 2, requires_api: 1);
+  m03:float (id: 3, requires_api: 1);
+  m10:float (id: 4, requires_api: 1);
+  m11:float (id: 5, requires_api: 1);
+  m12:float (id: 6, requires_api: 1);
+  m13:float (id: 7, requires_api: 1);
+  m20:float (id: 8, requires_api: 1);
+  m21:float (id: 9, requires_api: 1);
+  m22:float (id: 10, requires_api: 1);
+  m23:float (id: 11, requires_api: 1);
+  m30:float (id: 12, requires_api: 1);
+  m31:float (id: 13, requires_api: 1);
+  m32:float (id: 14, requires_api: 1);
+  m33:float (id: 15, requires_api: 1);
 }
 
 struct Mat4 (requires_api: 1) {
-  m00 : double (id: 0, requires_api: 1);
-  m01 : double (id: 1, requires_api: 1);
-  m02 : double (id: 2, requires_api: 1);
-  m03 : double (id: 3, requires_api: 1);
-  m10 : double (id: 4, requires_api: 1);
-  m11 : double (id: 5, requires_api: 1);
-  m12 : double (id: 6, requires_api: 1);
-  m13 : double (id: 7, requires_api: 1);
-  m20 : double (id: 8, requires_api: 1);
-  m21 : double (id: 9, requires_api: 1);
-  m22 : double (id: 10, requires_api: 1);
-  m23 : double (id: 11, requires_api: 1);
-  m30 : double (id: 12, requires_api: 1);
-  m31 : double (id: 13, requires_api: 1);
-  m32 : double (id: 14, requires_api: 1);
-  m33 : double (id: 15, requires_api: 1);
+  m00:double (id: 0, requires_api: 1);
+  m01:double (id: 1, requires_api: 1);
+  m02:double (id: 2, requires_api: 1);
+  m03:double (id: 3, requires_api: 1);
+  m10:double (id: 4, requires_api: 1);
+  m11:double (id: 5, requires_api: 1);
+  m12:double (id: 6, requires_api: 1);
+  m13:double (id: 7, requires_api: 1);
+  m20:double (id: 8, requires_api: 1);
+  m21:double (id: 9, requires_api: 1);
+  m22:double (id: 10, requires_api: 1);
+  m23:double (id: 11, requires_api: 1);
+  m30:double (id: 12, requires_api: 1);
+  m31:double (id: 13, requires_api: 1);
+  m32:double (id: 14, requires_api: 1);
+  m33:double (id: 15, requires_api: 1);
 }
 
 table FloatVector {
@@ -226,39 +226,39 @@ table Bool4Vector {
 }
 
 table Mat3fVector (requires_api: 1) {
-  mats : [Mat3f] (required, id: 0, requires_api: 1);
+  mats:[Mat3f] (required, id: 0, requires_api: 1);
 }
 
 table Mat4fVector (requires_api: 1) {
-  mats : [Mat4f] (required, id: 0, requires_api: 1);
+  mats:[Mat4f] (required, id: 0, requires_api: 1);
 }
 
 struct Box (requires_api: 1) {
-  center : Float3 (id: 0, requires_api: 1);
-  half_extent : Float3 (id: 1, requires_api: 1);
+  center:Float3 (id: 0, requires_api: 1);
+  half_extent:Float3 (id: 1, requires_api: 1);
 }
 
 // Wrapper for uint8 to allow for nullable values when used in a table.
 struct UInt8 (requires_api: 1) {
-  value: uint8 (id: 0, requires_api: 1);
+  value:uint8 (id: 0, requires_api: 1);
 }
 
 // Wrapper for uint16 to allow for nullable values when used in a table.
 struct UInt16 (requires_api: 1) {
-  value: uint16 (id: 0, requires_api: 1);
+  value:uint16 (id: 0, requires_api: 1);
 }
 
 // Wrapper for uint32 to allow for nullable values when used in a table.
 struct UInt32 (requires_api: 1) {
-  value: uint32 (id: 0, requires_api: 1);
+  value:uint32 (id: 0, requires_api: 1);
 }
 
 // Wrapper for uint64 to allow for nullable values when used in a table.
 struct UInt64 (requires_api: 1) {
-  value: uint64 (id: 0, requires_api: 1);
+  value:uint64 (id: 0, requires_api: 1);
 }
 
 // Wrapper for string to allow for nullable values when used in a table.
 table String (requires_api: 1) {
-  value : string (id: 0, requires_api: 1);
+  value:string (id: 0, requires_api: 1);
 }

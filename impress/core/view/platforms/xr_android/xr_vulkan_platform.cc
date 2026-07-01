@@ -18,31 +18,28 @@
 #include <dlfcn.h>
 #include <jni.h>
 
-#include <array>
 #include <cstdint>
+#include <memory>
 
 #include "absl/log/check.h"
 #include "core/common/log.h"
-#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "filament/filament/backend/include/backend/Platform.h"
 #include "filament/filament/backend/include/backend/platforms/VulkanPlatform.h"
 #include "filament/filament/include/filament/SwapChain.h"
 #include "filament/libs/bluevk/include/vulkan/vulkan_core.h"
-#include "filament/libs/utils/include/utils/CString.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
-#include "filament/libs/utils/include/utils/Invocable.h"
 #include "filament/libs/utils/include/utils/Panic.h"
-#include "filament/libs/utils/include/utils/compiler.h"
-#include "filament/libs/utils/include/utils/debug.h"
 #include "core/common/platform_helpers.h"
 #include "core/common/trace.h"
 #include "core/config.h"
 #include "core/math/vec.h"
 #include "core/render/content_security_level.h"
 #include "core/view/platforms/xr_android/openxr_includes.h"
+#include "core/view/platforms/xr_android/xr_native_window.h"
 #include "core/view/platforms/xr_android/xr_session_host.h"
 #include "core/view/platforms/xr_android/xr_swap_chain.h"
+#include "core/view/platforms/xr_android/xr_vulkan_swap_chain_image_handler.h"
 
 #if IMP_PLATFORM(ANDROID)
 #include <android/hardware_buffer.h>
@@ -197,7 +194,7 @@ XrVulkanPlatform::SwapChainBundle XrVulkanPlatform::getSwapChainBundle(
   bundle.depth = depth_image;
   bundle.colors = colors;
   bundle.colorFormat = XrVulkanSwapChainImageHandler::kVkImageFormat;
-  bundle.layerCount = swap_chain->GetHost()->IsMultiviewStereo()
+  bundle.layerCount = swap_chain->GetSwapchainImageHandler().IsStereo()
                           ? swap_chain->GetHost()->GetLogicalEyeCount()
                           : 1;
   bundle.extent = {
@@ -348,25 +345,49 @@ VkDevice XrVulkanPlatform::createVkDevice(
 filament::backend::Platform::SwapChain* XrVulkanPlatform::createSwapChain(
     void* nativewindow, uint64_t flags, VkExtent2D extent) noexcept {
   IMP_TRACE();
-  XrSessionHost* host = reinterpret_cast<XrSessionHost*>(nativewindow);
-#if IMP_PLATFORM(ANDROID)
-  auto status = host->SetThreadType(XR_ANDROID_THREAD_TYPE_RENDERER_MAIN_KHR);
-  if (!status.ok()) {
-    IMP_LOG(imp::INFO) << "Failed to reported thread type to OpenXR due to " << status;
-  }
-#endif
-  // BUG((broken link)): The thread name should already be "FEngine::loop", but
-  // SysUI renames threads.  This puts the original setting back.
-  SetThreadName("FEngine::loop");
+
   XrSwapchainCreateFlags xr_flags = 0;
   if (flags & filament::SwapChain::CONFIG_PROTECTED_CONTENT) {
     xr_flags = XR_SWAPCHAIN_CREATE_PROTECTED_CONTENT_BIT;
   }
-  absl::StatusOr<std::unique_ptr<XrSwapChain>> swap_chain =
-      XrSwapChain::Create(this, host, xr_flags);
-  if (!swap_chain.ok()) {
-    IMP_LOG(imp::FATAL) << "Unable to create XrSwapChain: " << swap_chain.status();
+
+  XrNativeWindow* xr_window = reinterpret_cast<XrNativeWindow*>(nativewindow);
+  XrSessionHost* host = xr_window->host;
+  absl::StatusOr<std::unique_ptr<XrSwapChain>> swap_chain;
+
+  if (xr_window->quad_layer_data.has_value()) {
+    swap_chain = XrSwapChain::CreateForQuadLayer(
+        *this, *host, xr_window->quad_layer_data->size,
+        xr_window->quad_layer_data->sample_count, xr_flags);
+    if (!swap_chain.ok()) {
+      IMP_LOG(imp::FATAL) << "Unable to create XrSwapChain for quad layer: "
+                 << swap_chain.status();
+    }
+    // Resolve the swapchain Future promise asynchronously.
+    std::unique_ptr<XrVulkanSwapChainImageHandler::SwapchainLayers>&
+        swapchain_layers =
+            swap_chain.value()->GetSwapchainImageHandler().GetSwapchainLayers();
+    XrSwapchain color = swapchain_layers->active_color
+                            ? swapchain_layers->active_color->handle
+                            : XR_NULL_HANDLE;
+    xr_window->quad_layer_data->swapchain.Return(color);
+  } else {
+#if IMP_PLATFORM(ANDROID)
+    absl::Status status =
+        host->SetThreadType(XR_ANDROID_THREAD_TYPE_RENDERER_MAIN_KHR);
+    if (!status.ok()) {
+      IMP_LOG(imp::INFO) << "Failed to reported thread type to OpenXR due to " << status;
+    }
+#endif
+    SetThreadName("FEngine::loop");
+
+    swap_chain = XrSwapChain::Create(*this, *host, xr_flags);
+    if (!swap_chain.ok()) {
+      IMP_LOG(imp::FATAL) << "Unable to create primary XrSwapChain: "
+                 << swap_chain.status();
+    }
   }
+
   return swap_chain.value().release();
 }
 

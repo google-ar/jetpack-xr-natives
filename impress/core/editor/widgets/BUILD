@@ -88,6 +88,36 @@ cc_library(
 )
 
 cc_library(
+    name = "box_selection_widget",
+    srcs = [
+        "box_selection_widget.cc",
+    ],
+    hdrs = [
+        "box_selection_widget.h",
+    ],
+    copts = imp_google3_copts(),
+    deps = [
+        "//core/camera",
+        "//core/common:rememberer",
+        "//core/editor",
+        "//core/editor:selection_controller",
+        "//core/editor:widget",
+        "//core/geometry/shapes",
+        "//core/input",
+        "//core/math",
+        "//core/ncsb",
+        "//core/render:mesh_renderer",
+        "//core/view:base_view",
+        "//core/view/framework",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/strings:string_view",
+        "@dear_imgui",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "asset_thumbnail_provider",
     srcs = [
         "asset_thumbnail_provider.cc",
@@ -142,7 +172,9 @@ cc_library(
         "//core/proto:proto_writer",
         "//core/proto:textproto_writer",
         "//core/render",
+        "//core/render:material_registry",
         "//core/resources",
+        "//core/scene_handles:material_handle",
         "//core/view:base_view",
         "//core/view/framework",
         "//core/view/framework:framework_proto_cc",
@@ -324,24 +356,52 @@ cc_library(
 )
 
 cc_library(
+    name = "settings_widget_constants",
+    hdrs = [
+        "settings_widget_constants.h",
+    ],
+    copts = imp_test_copts(),
+    deps = [
+        "@com_google_absl//absl/strings:string_view",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "input_settings_widget_constants",
+    hdrs = [
+        "input_settings_widget_constants.h",
+    ],
+    copts = imp_test_copts(),
+    deps = [
+        "@com_google_absl//absl/strings:string_view",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "settings_widget",
     srcs = [
         "settings_widget.cc",
     ],
     hdrs = [
         "settings_widget.h",
-        "settings_widget_constants.h",
     ],
     copts = imp_test_copts(),
     deps = [
         ":asset_library",
-        "//core:config",
+        ":settings_widget_constants",
+        ":visualize_bounds",
+        ":visualize_colliders",
+        ":visualize_origins",
+        "//core/common:platform_storage_interface",
         "//core/common:registry",
         "//core/editor",
         "//core/editor:events",
         "//core/editor:widget",
-        "//core/ncsb",
+        "//core/editor/components:grid",
         "//core/view:base_view",
+        "//core/window:filament_host",
         "@com_google_absl//absl/strings:string_view",
         "@dear_imgui",
         "@third_party//filament/filament:filament_hdrs",
@@ -369,6 +429,34 @@ cc_library(
         "//core/view:base_view",
         "//core/view/framework",
         "@com_google_absl//absl/strings",
+        "@dear_imgui",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "material_editor_widget",
+    srcs = [
+        "material_editor_widget.cc",
+    ],
+    hdrs = [
+        "material_editor_widget.h",
+    ],
+    copts = imp_google3_copts(),
+    deps = [
+        "//core/common:invocable",
+        "//core/common:rememberer",
+        "//core/editor:editor_field_control",
+        "//core/editor:widget",
+        "//core/editor/layout:editor_control_flags",
+        "//core/materials",
+        "//core/render:material_registry",
+        "//core/scene_handles:material_handle",
+        "//core/view:base_view",
+        "//core/view/framework",
+        "//core/view/framework:framework_proto_cc",
+        "@com_google_absl//absl/strings",
+        "@com_google_impress//core/common:log",
         "@dear_imgui",
     ],
     alwayslink = 1,
@@ -453,6 +541,7 @@ cc_library(
         ":transform_assets",
         ":transform_widget_aspect",
         ":transform_widget_mode_control",
+        ":transform_widget_state_imp_cc_proto",
         "//core/common:registry",
         "//core/common:rememberer",
         "//core/editor",
@@ -464,6 +553,7 @@ cc_library(
         "//core/editor:node_value_command",
         "//core/editor:widget",
         "//core/editor/ui:euler_angle_field",
+        "//core/input",
         "//core/math",
         "//core/ncsb",
         "//core/view:base_view",
@@ -480,9 +570,15 @@ cc_library(
     name = "transform_widget_aspect",
     srcs = [
         "transform_widget_aspect.cc",
+        "transform_widget_aspect_rotate.cc",
+        "transform_widget_aspect_scale.cc",
+        "transform_widget_aspect_translate.cc",
     ],
     hdrs = [
         "transform_widget_aspect.h",
+        "transform_widget_aspect_rotate.h",
+        "transform_widget_aspect_scale.h",
+        "transform_widget_aspect_translate.h",
     ],
     copts = imp_google3_copts(),
     linkopts = imp_linkopts(),
@@ -492,6 +588,7 @@ cc_library(
         "//core/camera",
         "//core/collision:collision_helpers",
         "//core/collision:ray",
+        "//core/common:enum_flags",
         "//core/common:registry",
         "//core/editor",
         "//core/editor:command",
@@ -503,7 +600,6 @@ cc_library(
         "//core/materials",
         "//core/math",
         "//core/ncsb",
-        "//core/scene_handles:scene_handle_status_utils",
         "//core/view/framework",
         "//core/view/utils:asset",
         "//core/view/utils:frame_time",
@@ -512,7 +608,6 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:string_view",
         "@com_google_impress//core/common:log",
-        "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament/libs:math_hdrs",
     ],
     alwayslink = 1,
@@ -622,6 +717,21 @@ imp_cc_proto_library(
     ],
 )
 
+proto_library(
+    name = "transform_widget_state_proto",
+    srcs = ["transform_widget_state.proto"],
+    deps = ["//core/scene_handles:scene_handles_proto"],
+)
+
+imp_cc_proto_library(
+    name = "transform_widget_state_imp_cc_proto",
+    proto = ":transform_widget_state_proto",
+    deps = [
+        "//core/math:math_proto_cc",
+        "//core/scene_handles:scene_handles_imp_cc_proto",
+    ],
+)
+
 imp_assets(
     name = "transform_assets",
     srcs = [
@@ -639,6 +749,7 @@ imp_isf_data(
     deps = [
         ":transform_widget_aspect_state_proto",
         ":transform_widget_mode_control_state_proto",
+        ":transform_widget_state_proto",
     ],
 )
 
@@ -654,6 +765,7 @@ cc_library(
     deps = [
         "//core/camera",
         "//core/common:debug_draw",
+        "//core/common:platform_storage_interface",
         "//core/common:registry",
         "//core/common:rememberer",
         "//core/editor",
@@ -694,6 +806,7 @@ cc_library(
         "//core:config",
         "//core/collision:collision_flags",
         "//core/common:debug_draw",
+        "//core/common:platform_storage_interface",
         "//core/common:registry",
         "//core/common:rememberer",
         "//core/editor",
@@ -750,6 +863,7 @@ cc_library(
     copts = imp_google3_copts(),
     deps = [
         "//core/common:debug_draw",
+        "//core/common:platform_storage_interface",
         "//core/common:registry",
         "//core/common:rememberer",
         "//core/editor",

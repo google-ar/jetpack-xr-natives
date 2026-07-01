@@ -133,7 +133,7 @@ VertexSelectWidget::VertexSelectWidget(BaseView& view, Dispatcher& dispatcher,
       this);
 }
 
-absl::optional<std::array<double3, 3>>
+std::optional<std::array<double3, 3>>
 VertexSelectWidget::GetVertexPositionsPrecise() {
   if (!active_node_) {
     return absl::nullopt;

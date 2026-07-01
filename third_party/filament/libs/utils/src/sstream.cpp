@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include "filament/libs/utils/include/utils/sstream.h"
-#include "filament/libs/utils/include/utils/ostream.h"
-
 #include "ostream_.h"
+
+#include "filament/libs/utils/include/utils/ostream.h"
+#include "filament/libs/utils/include/utils/sstream.h"
 
 namespace utils::io {
 

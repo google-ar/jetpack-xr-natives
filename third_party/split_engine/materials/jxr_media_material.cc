@@ -20,22 +20,26 @@
 #include <memory>
 #include <utility>
 
+#include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
+#include "core/common/owned_ptr.h"
 #include "core/common/type_helpers.h"
 #include "core/materials/material.h"
 #include "core/math/vec.h"
 #include "core/media/media_color_space.h"
 #include "core/media/media_type.h"
 #include "core/render/texture.h"
+#include "core/split_engine/flatbuffer_size_calculator.h"
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
 #include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "core/split_engine/split_engine_serializer.h"
+#include "core/split_engine/transport/request_sender.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 #include "split_engine/schemas/split_engine_primitive_generated.h"
@@ -246,7 +250,17 @@ imp::Future<std::unique_ptr<JxrMediaMaterial>> JxrMediaMaterial::Create(
           "state's given shape type."));
   }
 
-  auto fbb = std::make_unique<flatbuffers::FlatBufferBuilder>();
+  absl::StatusOr<imp::split_engine::RequestSender::RequestBuilder> builder =
+      imp::split_engine::SplitEngineBuiltinMaterial::CreateFlatBufferBuilder(
+          view, imp::split_engine::FlatbufferSizeCalculator()
+                    .AddRequestBuiltInJxrMediaMaterial()
+                    .Finish()
+                    .AddScratchSpace()
+                    .ComputeSize());
+  if (!builder.ok()) {
+    return builder.status();
+  }
+  auto fbb = *std::move(builder);
   android_xr::schemas::BuiltInMaterial1b616c8aBuilder builder_(*fbb);
   builder_.add_shape(
       static_cast<android_xr::schemas::BuiltInMaterial1b616c8aShapeType>(

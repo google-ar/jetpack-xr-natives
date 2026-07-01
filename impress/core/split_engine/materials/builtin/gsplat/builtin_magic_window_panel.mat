@@ -29,9 +29,13 @@ material {
 vertex {
   void materialVertex(inout MaterialVertexInputs material) {
 #if defined(VARIANT_HAS_STEREO)
-   material.hasStereoAndEyeIndex.x = float(getEyeIndex());
+    // This shader is used with offscreen texture and projection quad setup,
+    // and thus we only render to the left and right eyes, and ignore the
+    // remaining foveation setup. See SetCameraEyesForProjectionQuad() in
+    // //third_party/impress/core/view/platforms/xr_android/xr_helpers.cc
+    material.hasStereoAndEyeIndex.x = float(getEyeIndex() % 2);
 #else
-   material.hasStereoAndEyeIndex.x = 0.0;
+    material.hasStereoAndEyeIndex.x = 0.0;
 #endif
   }
 }

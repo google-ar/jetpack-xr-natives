@@ -18,10 +18,9 @@
 
 #include <filament/Camera.h>
 
-#include "filament/libs/math/include/math/mat4.h"
-
 #include "filament/libs/utils/include/utils/Panic.h"
 
+#include "filament/libs/math/include/math/mat4.h"
 #include "filament/libs/math/include/math/vec2.h"
 #include "filament/libs/math/include/math/vec3.h"
 #include "filament/libs/math/include/math/vec4.h"
@@ -140,6 +139,10 @@ mat4 Camera::getModelMatrix() const noexcept {
 
 mat4 Camera::getViewMatrix() const noexcept {
     return downcast(this)->getViewMatrix();
+}
+
+mat4 Camera::getEyeFromViewMatrix(uint8_t const eyeId) const noexcept {
+    return downcast(this)->getEyeFromViewMatrix(eyeId);
 }
 
 double3 Camera::getPosition() const noexcept {

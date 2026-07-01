@@ -46,6 +46,7 @@ enum RenderTargetTextureFormat:uint32 {
   RG32UI = 24,
   RGB32UI = 25,
   RGBA32UI = 26,
+  R11G11B10F = 27,
 }
 
 table NewRegisteredTexture {
@@ -153,6 +154,7 @@ table TexturePipelinePass {
   depth_texture:NewRegisteredTexture (id: 5);
   texture_size:TextureSizeConfig (id: 7);
   use_main_view_settings:Bool (id: 8);
+
   // render_settings will be applied on top of the default view render settings.
   render_settings:ViewRenderSettings (id: 9);
   view_port_left_bottom:Int2 (id: 10);

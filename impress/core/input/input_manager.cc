@@ -14,6 +14,7 @@
 
 #include "core/input/input_manager.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <utility>
@@ -25,6 +26,7 @@
 #include "absl/time/time.h"
 #include "core/actions/input_action_event.h"
 #include "core/common/trace.h"
+#include "core/input/input_events_pool.h"
 #include "core/input/keyboard_event.h"
 #include "core/input/pointer_event.h"
 #include "core/input/wheel_event.h"
@@ -42,9 +44,10 @@ InputManager::~InputManager() {}
 absl::Status InputManager::ProcessPointerInput(
     uint8_t action, const std::vector<Pointer::Id>& ids,
     const std::vector<float2>& points, absl::Duration elapsed_time,
-    PointerEvent::DeviceType device_type) {
-  if (!pointer_events_.empty()) {
-    PointerEvent& last = pointer_events_.back();
+    PointerEvent::DeviceType device_type, InputEventSource source) {
+  std::vector<PointerEvent>& events = pointer_events_[source].events;
+  if (!events.empty()) {
+    PointerEvent& last = events.back();
     if (last.ElapsedTime() == elapsed_time &&
         last.Type() == PointerEventType::kMove &&
         last.Type() == static_cast<PointerEventType>(action) &&
@@ -55,13 +58,14 @@ absl::Status InputManager::ProcessPointerInput(
       return pointer_event_processor_.UpdatePointerEvent(last, ids, points);
     }
   }
-  pointer_events_.push_back(pointer_event_processor_.CreatePointerEvent(
+  events.push_back(pointer_event_processor_.CreatePointerEvent(
       action, ids, points, elapsed_time, device_type));
   return absl::OkStatus();
 }
 
 absl::Status InputManager::ProcessKeyboardInput(uint8_t action, Key key,
-                                                absl::Duration elapsed_time) {
+                                                absl::Duration elapsed_time,
+                                                InputEventSource source) {
   // Validates the keyboard event (action).
   if (action <= static_cast<uint8_t>(KeyboardEventType::kNone) &&
       action >= static_cast<uint8_t>(KeyboardEventType::kMax)) {
@@ -69,18 +73,23 @@ absl::Status InputManager::ProcessKeyboardInput(uint8_t action, Key key,
                << ") sent to InputManager.";
     return absl::InvalidArgumentError("Invalid keyboard event/action.");
   }
-  keyboard_events_.push_back(
+  std::vector<KeyboardEvent>& events = keyboard_events_[source].events;
+  events.push_back(
       KeyboardEvent(static_cast<KeyboardEventType>(action), key, elapsed_time));
   return absl::OkStatus();
 }
 
-void InputManager::ProcessTextInput(absl::string_view contents) {
-  text_input_events_.push_back(TextInputEvent(contents));
+void InputManager::ProcessTextInput(absl::string_view contents,
+                                    InputEventSource source) {
+  std::vector<TextInputEvent>& events = text_input_events_[source].events;
+  events.push_back(TextInputEvent(contents));
 }
 
 absl::Status InputManager::ProcessWheelInput(float2 delta, float2 point,
-                                             absl::Duration elapsed_time) {
-  wheel_events_.push_back(WheelEvent(delta, point, elapsed_time));
+                                             absl::Duration elapsed_time,
+                                             InputEventSource source) {
+  std::vector<WheelEvent>& events = wheel_events_[source].events;
+  events.push_back(WheelEvent(delta, point, elapsed_time));
   return absl::OkStatus();
 }
 
@@ -96,48 +105,59 @@ void InputManager::PopInputHandler() {
   }
 }
 
-bool InputManager::HasPointerEvent() { return !pointer_events_.empty(); }
+bool InputManager::HasPointerEvent() { return pointer_events_.HasEvents(); }
 
 std::vector<PointerEvent> InputManager::PopPointerEvents() {
-  std::vector<PointerEvent> result;
-  std::swap(result, pointer_events_);
-  return result;
+  return pointer_events_.PopMergedEvents();
 }
 
-bool InputManager::HasKeyboardEvent() { return !keyboard_events_.empty(); }
+bool InputManager::HasKeyboardEvent() { return keyboard_events_.HasEvents(); }
 
 std::vector<KeyboardEvent> InputManager::PopKeyboardEvents() {
-  std::vector<KeyboardEvent> result;
-  std::swap(result, keyboard_events_);
-  return result;
+  return keyboard_events_.PopMergedEvents();
 }
 
-bool InputManager::HasTextInputEvent() { return !text_input_events_.empty(); }
+bool InputManager::HasTextInputEvent() {
+  return text_input_events_.HasEvents();
+}
 
 std::vector<TextInputEvent> InputManager::PopTextInputEvents() {
-  std::vector<TextInputEvent> result;
-  std::swap(result, text_input_events_);
-  return result;
+  return text_input_events_.PopMergedEvents();
 }
 
-bool InputManager::HasWheelEvent() { return !wheel_events_.empty(); }
+bool InputManager::HasWheelEvent() { return wheel_events_.HasEvents(); }
 
 std::vector<WheelEvent> InputManager::PopWheelEvents() {
-  std::vector<WheelEvent> result;
-  std::swap(result, wheel_events_);
-  return result;
+  return wheel_events_.PopMergedEvents();
 }
 
 void InputManager::Update() {
   IMP_TRACE();
 
+  // Input processing pipeline order:
+  // 1. Merge/Sanitize: Consolidate events from different sources and resolve
+  //    conflicts (e.g., local vs. remote pointer jumps).
+  // 2. Intercept/Filter: Allow interceptors to consume or modify events before
+  //    they reach the application.
+  // 3. Handle/Dispatch: Pass the remaining events to the active InputHandler
+  //    for high-level processing and scene dispatch.
+
   for (std::unique_ptr<InputInterceptor>& interceptor : input_interceptors_) {
-    interceptor->FilterPointerEvents(pointer_events_);
-    interceptor->FilterKeyboardEvents(keyboard_events_, text_input_events_);
-    interceptor->FilterWheelEvents(wheel_events_);
-    interceptor->FilterInputActionEvents(input_action_events_);
+    for (size_t i = 0; i < kInputEventSourceCount; ++i) {
+      InputEventSource source = static_cast<InputEventSource>(i);
+      interceptor->FilterPointerEvents(pointer_events_[source]);
+      interceptor->FilterKeyboardEvents(keyboard_events_[source],
+                                        text_input_events_[source]);
+      interceptor->FilterWheelEvents(wheel_events_[source]);
+      interceptor->FilterInputActionEvents(input_action_events_[source]);
+    }
   }
-  text_input_events_.clear();
+  // The default engine input handlers do not consume text input events via
+  // PopTextInputEvents(). They must be explicitly cleared here every frame
+  // to prevent memory leaks.
+  for (size_t i = 0; i < kInputEventSourceCount; ++i) {
+    text_input_events_[static_cast<InputEventSource>(i)].events.clear();
+  }
 
   if (!input_handlers_.empty()) {
     // Calls the input handler at the top of the stack.
@@ -156,18 +176,18 @@ void InputManager::AddInterceptor(
   input_interceptors_.push_back(std::move(input_interceptor));
 }
 
-void InputManager::PushInputActionEvent(InputActionEvent input_action_event) {
-  input_action_events_.push_back(input_action_event);
+void InputManager::PushInputActionEvent(InputActionEvent input_action_event,
+                                        InputEventSource source) {
+  std::vector<InputActionEvent>& events = input_action_events_[source].events;
+  events.push_back(input_action_event);
 }
 
 bool InputManager::HasInputActionEvent() {
-  return !input_action_events_.empty();
+  return input_action_events_.HasEvents();
 }
 
 std::vector<InputActionEvent> InputManager::PopInputActionEvents() {
-  std::vector<InputActionEvent> result;
-  std::swap(result, input_action_events_);
-  return result;
+  return input_action_events_.PopMergedEvents();
 }
 
 }  // namespace imp

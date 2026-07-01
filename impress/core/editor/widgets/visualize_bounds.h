@@ -27,6 +27,10 @@
 
 namespace imp::editor {
 
+inline constexpr absl::string_view kShowBoundsEnabledKey =
+    "editor_show_bounds_enabled";
+inline constexpr bool kShowBoundsEnabledDefault = false;
+
 // Visualizes the bounds of the nodes within a glTF for the previewer.
 class VisualizeBounds : public editor::Widget, public imp::Rememberer {
  public:

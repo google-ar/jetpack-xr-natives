@@ -33,6 +33,7 @@
 #include "core/common/entity_absl_hasher.h"
 #include "core/common/holdable.h"
 #include "core/common/invocable.h"
+#include "core/common/paged_pointer_array.h"
 #include "core/common/rememberer.h"
 #include "core/config.h"
 #include "core/ncsb/component_id.h"
@@ -124,7 +125,7 @@ class BaseComponentPool {
 
   // Returns the id of this type of component.
   //
-  // This is equivalent to kComponentId<ComponentT>, but accessible in a
+  // This is equivalent to GetComponentTypeId<ComponentT>(), but accessible in a
   // type-erased manner.
   inline ComponentId GetComponentId() const { return component_id_; }
 
@@ -282,8 +283,7 @@ class BaseComponentPool {
   ComponentStore components_;
 
   // Only used if allocator is enabled.
-  absl::flat_hash_map<utils::Entity, Component*, EntityHasher>
-      entities_to_components_;
+  PagedPointerArray<Component> components_lookup_;
 
   absl::flat_hash_map<utils::Entity, Rememberer, EntityHasher> rememberers_;
   absl::flat_hash_map<utils::Entity, WeakFuture<absl::Status>, EntityHasher>

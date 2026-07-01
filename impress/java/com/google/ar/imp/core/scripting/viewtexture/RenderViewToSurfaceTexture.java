@@ -23,6 +23,7 @@ import android.graphics.PixelFormat;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
 import android.os.Build;
+import android.os.Build.VERSION;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.DisplayMetrics;
@@ -107,31 +108,41 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
     // Create a VirtualDisplay that will render into the Surface from the SurfaceTexture based on
     // the size of the view.
     int displayFlags = DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY;
+
+    // New Pico devices do not correctly call onDisplayAdded, despite the virtualDisplay being
+    // valid.
+    // This a likely an OS bug, but we can work around it by immediately calling startPresentation()
+    // and not using a displayListener.
+    boolean needsImmediatePresentation = isPicoDevice() && VERSION.SDK_INT >= 33;
+
     if (!isPicoDevice()) {
       // This flag does not work on Pico devices.
       // Causes: PxrPresentationManager: no suitable presentation found
       displayFlags |= DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION;
     }
 
-    // Start the presentation when the virtualDisplay is added.
-    DisplayManager.DisplayListener displayListener =
-        new DisplayManager.DisplayListener() {
-          @Override
-          public void onDisplayAdded(int displayId) {
-            if (virtualDisplay != null && displayId == virtualDisplay.getDisplay().getDisplayId()) {
-              dm.unregisterDisplayListener(this);
-              startPresentation();
+    // Don't create a displayListener if we are immediately calling startPresentations()
+    if (!needsImmediatePresentation) {
+      // Start the presentation when the virtualDisplay is added.
+      DisplayManager.DisplayListener displayListener =
+          new DisplayManager.DisplayListener() {
+            @Override
+            public void onDisplayAdded(int displayId) {
+              if (virtualDisplay != null
+                  && displayId == virtualDisplay.getDisplay().getDisplayId()) {
+                dm.unregisterDisplayListener(this);
+                startPresentation();
+              }
             }
-          }
 
-          @Override
-          public void onDisplayRemoved(int displayId) {}
+            @Override
+            public void onDisplayRemoved(int displayId) {}
 
-          @Override
-          public void onDisplayChanged(int displayId) {}
-        };
-
+            @Override
+            public void onDisplayChanged(int displayId) {}
+          };
     dm.registerDisplayListener(displayListener, new Handler(Looper.getMainLooper()));
+    }
 
     virtualDisplay =
         dm.createVirtualDisplay(
@@ -141,6 +152,9 @@ public class RenderViewToSurfaceTexture implements View.OnLayoutChangeListener {
             metrics.densityDpi,
             surface,
             displayFlags);
+    if (needsImmediatePresentation) {
+      startPresentation();
+    }
   }
 
   private void startPresentation() {

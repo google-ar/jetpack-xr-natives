@@ -37,7 +37,7 @@ class MultiDragGesture : public Gesture {
   MultiDragGesture(Dispatcher* dispatcher, GesturePointerUtils* pointer_utils,
                    const PointerHitEvent& pointer_hit,
                    std::vector<Pointer::Id> pointer_ids);
-  using CreateFn = std::function<absl::optional<MultiDragGesture>(
+  using CreateFn = std::function<std::optional<MultiDragGesture>(
       const PointerHitEvent& pointer_hit,
       absl::Span<const MultiDragGesture> gestures)>;
   static CreateFn GetCreateFunction(Dispatcher* dispatcher,
@@ -94,7 +94,7 @@ class MultiDragGesture : public Gesture {
 
  private:
   // Update centroid_current_position_ and return (dx, dy) since last update.
-  absl::optional<float2> TryUpdateCentroidPosition(
+  std::optional<float2> TryUpdateCentroidPosition(
       const PointerHitEvent& pointer_hit);
   void UpdateCentroidPositionAndSendEvent(const PointerHitEvent& pointer_hit);
   bool EventHasRelevantChangedPointer(const PointerHitEvent& pointer_hit);

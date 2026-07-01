@@ -56,14 +56,6 @@ JniUniquePtr<jlongArray> ToLongArray(
   return texture_ids_array;
 }
 
-JniUniquePtr<jbyteArray> ToByteArray(JNIEnv* env,
-                                     absl::Span<const uint8_t> data) {
-  JniUniquePtr<jbyteArray> data_array = CreateJniByteArray(env, data.size());
-  env->SetByteArrayRegion(data_array.get(), 0, data.size(),
-                          reinterpret_cast<const jbyte*>(data.data()));
-  return data_array;
-}
-
 class SplitEngineBufferHandle : public BufferHandle {
  public:
   explicit SplitEngineBufferHandle(JNIEnv* env,
@@ -186,8 +178,10 @@ absl::Status SplitEngineBridge::SendRequest(
   // in the native callback when it resolves.
   SplitEngineRequestCallback* request_callback =
       new SplitEngineRequestCallback(Env(), std::move(callback));
-  auto data_array = ToByteArray(Env(), data);
-  JavaWrapper::CallVoidMethod(send_request_, data_array.release(),
+  JniUniquePtr<jbyteArray> data_array = imp::ToJniByteArray(
+      Env(), absl::string_view(reinterpret_cast<const char*>(data.data()),
+                               data.size()));
+  JavaWrapper::CallVoidMethod(send_request_, data_array.get(),
                               request_callback->Release());
   FatalIfUnspecifiedExceptionOccurred(*Env());
   return absl::OkStatus();

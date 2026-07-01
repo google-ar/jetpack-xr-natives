@@ -26,7 +26,6 @@
 #include "core/common/invocable.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/owned_ptr.h"
-#include "core/split_engine/transport/flatbuffer_builder_holder.h"
 #include "core/split_engine/transport/transport.h"
 
 namespace imp::split_engine {
@@ -68,7 +67,6 @@ namespace imp::split_engine {
 class MessageSender {
  public:
   using SessionID = Transport::SessionID;
-  using FlatbufferBuilderHolder = FlatbufferBuilderHolder<MessageSender>;
 
   MessageSender(imp::OwnedOrBorrowedPtr<Transport> transport,
                 imp::BorrowedPtr<BackgroundScheduler> scheduler);
@@ -85,19 +83,19 @@ class MessageSender {
   absl::StatusOr<SessionID> OpenSession(size_t session_max_size_bytes);
 
   // Creates a flatbuffer builder, backed by the session memory block.
-  absl::StatusOr<imp::OwnedPtr<FlatbufferBuilderHolder>> CreateMessageBuilder(
-      SessionID session_id, size_t initial_size);
+  absl::StatusOr<imp::OwnedPtr<flatbuffers::FlatBufferBuilder>>
+  CreateMessageBuilder(SessionID session_id, size_t initial_size);
 
   // Sends a message over the session.
   //
   // Call to `Transport::SendMessage` is scheduled on the background
   // scheduler.
   absl::Status SendMessage(SessionID session_id,
-                           imp::OwnedPtr<FlatbufferBuilderHolder> fbb,
+                           imp::OwnedPtr<flatbuffers::FlatBufferBuilder> fbb,
                            Transport::MessageCallback callback);
 
   using FlatbufferBuilderProducer =
-      imp::Invocable<imp::OwnedPtr<FlatbufferBuilderHolder>()>;
+      imp::Invocable<imp::OwnedPtr<flatbuffers::FlatBufferBuilder>()>;
 
   // Sends a message over the session.
   //

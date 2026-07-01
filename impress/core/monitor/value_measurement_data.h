@@ -31,7 +31,7 @@ namespace imp {
 // The data stored for ValueMeasurements
 class ValueMeasurementData : public MeasurementData {
  public:
-  using MonitorValue = absl::variant<absl::monostate, int64_t, double>;
+  using MonitorValue = std::variant<std::monostate, int64_t, double>;
 
   explicit ValueMeasurementData(absl::string_view name);
   ValueMeasurementData(absl::string_view name, MonitorValue value);

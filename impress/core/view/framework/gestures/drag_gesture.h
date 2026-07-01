@@ -35,7 +35,7 @@ class DragGesture : public Gesture {
  public:
   DragGesture(Dispatcher* dispatcher, GesturePointerUtils* pointer_utils,
               const PointerHitEvent& pointer_hit);
-  using CreateFn = std::function<absl::optional<DragGesture>(
+  using CreateFn = std::function<std::optional<DragGesture>(
       const PointerHitEvent& pointer_hit,
       absl::Span<const DragGesture> gestures)>;
   static CreateFn GetCreateFunction(Dispatcher* dispatcher,
@@ -59,13 +59,13 @@ class DragGesture : public Gesture {
   struct StartEvent : public DragEvent {
     StartEvent(Id id, CancelFn cancel, NodeHandle target_node,
                Pointer::Id pointer_id, float2 pointer_position,
-               float2 activation_delta, absl::optional<RayHit> start_hit)
+               float2 activation_delta, std::optional<RayHit> start_hit)
         : DragEvent(id, cancel, target_node, pointer_id, pointer_position),
           activation_delta(activation_delta),
           start_hit(start_hit) {}
     // Delta in pixels from the initial touch to the activation point.
     float2 activation_delta;
-    absl::optional<RayHit> start_hit;  // From the initial tap-down.
+    std::optional<RayHit> start_hit;  // From the initial tap-down.
   };
 
   struct UpdateEvent : public DragEvent {
@@ -95,13 +95,13 @@ class DragGesture : public Gesture {
   void OnCancel() override;
 
  private:
-  absl::optional<float2> TryUpdatePosition(const PointerHitEvent& pointer_hit);
+  std::optional<float2> TryUpdatePosition(const PointerHitEvent& pointer_hit);
   void UpdatePositionAndSendEvent(const PointerHitEvent& pointer_hit);
   static constexpr float kDragStartThresholdPixels = 16.0f;
   Pointer::Id pointer_id_;
   GesturePointerUtils::ScopedPointerRetainer pointer_retainer_;
   float2 start_position_;
-  absl::optional<RayHit> start_hit_;
+  std::optional<RayHit> start_hit_;
   float2 position_;
 };
 

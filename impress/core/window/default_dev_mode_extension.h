@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Google LLC
+ * Copyright 2026 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,8 +76,6 @@ class DefaultDevModeExtension : public FilamentHost::DevModeExtension {
   // Schedules all ImGui work for this frame.
   void PreRender(absl::Duration previous_vsync, absl::Duration next_vsync,
                  bool force) override;
-  // Reroute UI rendering to alternative target if needed.
-  void RerouteUiRendering() override;
   // Submits the ImGui-specific view for rendering.
   void Render() override;
   // Informs ImGui of swap chain resize events.
@@ -112,10 +110,10 @@ class DefaultDevModeExtension : public FilamentHost::DevModeExtension {
   ImGuiContext* imgui_context_ = nullptr;
 
  private:
+
+  // Returns true if the UI should be rendered on the remote screen.
+  bool ShouldRenderOnRemoteScreen();
   void ProcessImGuiCommands();
-  // Returns true if the UI should be rendered in place instead of being
-  // rerouted to an alternative target.
-  bool ShouldRenderUiInPlace();
 
   // Pointer to the host that owns this dev mode extension.
   FilamentHost* host_ = nullptr;
@@ -137,9 +135,9 @@ class DefaultDevModeExtension : public FilamentHost::DevModeExtension {
   // Saved window sizes so we can properly switch back to screen-space Editor.
   uint2 cached_screen_size_;
   float2 cached_subpixel_ratio_;
+  uint2 native_screen_size_ = {0, 0};
+  float2 native_subpixel_ratio_ = {0, 0};
   bool is_enabled_ = true;
-
-  std::unique_ptr<imp::video::VideoWriter> video_writer_ = nullptr;
 };
 
 }  // namespace imp::window

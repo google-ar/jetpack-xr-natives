@@ -114,11 +114,12 @@ class MemoryStats {
 #endif
   }
   Callstack& GetCallstack(size_t index) {
-    if (kMaxCallstacks == 0) {
-      static Callstack empty_callstack{};
-      return empty_callstack;
-    }
+#if SUPPORT_CALLSTACKS
     return callstacks_[index % kMaxCallstacks];
+#else
+    static Callstack empty_callstack{};
+    return empty_callstack;
+#endif
   }
   bool IsRecordingCallstacks() {
     if (!IsCallstackTrackingSupported()) {

@@ -32,7 +32,6 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
-        "//core/common:platform_helpers",
         "//core/math",
         "//core/view/utils:string_map",
         "@com_google_absl//absl/strings",
@@ -53,7 +52,6 @@ cc_library(
         ":input_action_event",
         "//:api",
         "//core/collision:ray",
-        "//core/common:platform_helpers",
         "//core/input",
         "//core/math",
         "//core/ncsb",
@@ -61,6 +59,7 @@ cc_library(
         "//core/view/framework",
         "//core/view/utils:string_map",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:variant",
     ],
     alwayslink = 1,
 )

@@ -28,6 +28,7 @@
 #include "GLTexture.h"
 #include "JobQueue.h"
 #include "ShaderCompilerService.h"
+#include "filament/libs/utils/include/utils/Mutex.h"
 
 #include <backend/AcquiredImage.h>
 #include <backend/CallbackHandler.h>
@@ -122,8 +123,8 @@ public:
 
     struct GLVertexBuffer : public HwVertexBuffer {
         GLVertexBuffer() noexcept = default;
-        GLVertexBuffer(uint32_t vertexCount, Handle<HwVertexBufferInfo> vbih)
-                : HwVertexBuffer(vertexCount), vbih(vbih) {
+        GLVertexBuffer(uint32_t vertexCount, Handle<HwVertexBufferInfo> vbih, bool async = false)
+                : HwVertexBuffer(vertexCount, async), vbih(vbih) {
         }
         Handle<HwVertexBufferInfo> vbih;
         struct {
@@ -178,6 +179,10 @@ public:
          math::mat3f transform;
     };
 
+    // Cached classification of each color attachment's clear semantics. Computed once when the
+    // attachment is bound to the render target and used on the clear path.
+    enum class ColorClearKind : uint8_t { Float, SignedInt, UnsignedInt };
+
     struct GLRenderTarget : public HwRenderTarget {
         using HwRenderTarget::HwRenderTarget;
         struct {
@@ -188,6 +193,7 @@ public:
             GLuint fbo = 0;
             mutable GLuint fbo_read = 0;
             mutable TargetBufferFlags resolve = TargetBufferFlags::NONE; // attachments in fbo_draw to resolve
+            ColorClearKind colorClearKind[MRT::MAX_SUPPORTED_RENDER_TARGET_COUNT] = {};
             uint8_t samples = 1;
             bool isDefault = false;
         } gl;
@@ -211,7 +217,7 @@ public:
             Platform::Sync* sync;
             void* userData;
         };
-        std::mutex lock;
+        utils::Mutex lock;
         std::vector<std::unique_ptr<CallbackData>> conversionCallbacks;
     };
 
@@ -408,6 +414,7 @@ private:
     void destroyTextureCommon(OpenGLState& gl, Handle<HwTexture> th);
     void destroyBufferObjectCommon(OpenGLState& gl, Handle<HwBufferObject> boh);
     void destroyIndexBufferCommon(OpenGLState& gl, Handle<HwIndexBuffer> ibh);
+    void destroyVertexBufferCommon(Handle<HwVertexBuffer> vbh);
 
     // state required to represent the current render pass
     Handle<HwRenderTarget> mRenderPassTarget;
@@ -432,7 +439,7 @@ private:
     } mBoundDescriptorSets[MAX_DESCRIPTOR_SET_COUNT] = {};
 
     void clearWithRasterPipe(TargetBufferFlags clearFlags,
-            math::float4 const& linearColor, GLfloat depth, GLint stencil) noexcept;
+            ClearColorValue const& clearColor, GLfloat depth, GLint stencil) noexcept;
 
     void setScissor(Viewport const& scissor) noexcept;
 

@@ -24,6 +24,7 @@
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/isf_info.h"
+#include "core/ncsb/node_handle.h"
 #include "core/render_passes/group_to_projection_quad_texture_renderer/group_to_projection_quad_texture_renderer_state.proto.imp.h"
 #include "core/render_passes/texture_pipeline_renderer.h"
 #include "core/render_passes/texture_pipeline_renderer_state.proto.imp.h"
@@ -46,6 +47,7 @@ class GroupToProjectionQuadTextureRenderer : public imp::Component {
   Future<absl::Status> SetupWithState();
 
   void Update(const imp::FrameTime& frame_time);
+  void Cleanup();
 
   // Set the state information for the Projection Quad used by the
   // TexturePipelineRenderer.
@@ -69,8 +71,11 @@ class GroupToProjectionQuadTextureRenderer : public imp::Component {
   absl::Status UpdateTexturePipelineRendererProjectionQuad();
 
   // The TexturePipelineRenderer responsible for facilitating the rendering
-  // process to the texture.
-  ComponentHandle<imp::TexturePipelineRenderer> texture_pipeline_renderer_;
+  // process to the texture. The TexturePipelineRenderer component should be
+  // added under the new node `texture_pipeline_node_` created / destroyed by
+  // this component.
+  NodeHandle texture_pipeline_node_;
+  ComponentHandle<TexturePipelineRenderer> texture_pipeline_renderer_;
 
   GroupToProjectionQuadTextureRendererState state_;
 

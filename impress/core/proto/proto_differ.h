@@ -456,7 +456,7 @@ ProtoDiffer::Cursor* ProtoDiffer::VisitVariant(
       }
       if (sub_cursor.result == Result::kFoundAllFieldsMatch) {
         if (cursor->mode == Mode::kRemoveMatchingFields) {
-          *field = absl::monostate();
+          *field = std::monostate();
         }
       } else {
         cursor->result = Result::kFoundDifferences;

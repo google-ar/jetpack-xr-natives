@@ -27,6 +27,10 @@
 
 namespace imp::editor {
 
+inline constexpr absl::string_view kShowAllOriginsEnabledKey =
+    "editor_show_all_origins_enabled";
+inline constexpr bool kShowAllOriginsEnabledDefault = false;
+
 // Visualizes the origins of the nodes within a glTF for the previewer.
 class VisualizeOrigins : public editor::Widget, public imp::Rememberer {
  public:

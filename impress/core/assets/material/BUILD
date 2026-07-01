@@ -31,6 +31,9 @@ licenses(["notice"])
 proto_library(
     name = "material_load_options_proto",
     srcs = ["material_load_options.proto"],
+    deps = [
+        "//core/proto:imp_proto",
+    ],
 )
 
 imp_cc_proto_library(
@@ -77,10 +80,13 @@ cc_library(
     deps = [
         ":material_load_options_proto_cc",
         "//core/async:future",
+        "//core/view:base_view",
+        "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
         "@third_party//filament/libs:filabridge_hdrs",
+        "@third_party//filament/libs:utils_hdrs",
     ],
     alwayslink = 1,
 )

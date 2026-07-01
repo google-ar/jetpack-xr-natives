@@ -114,7 +114,7 @@ class BaseMessageHandler {
   }
 
   template <typename T>
-  absl::optional<absl::Status> CheckInvalidNodeTarget(
+  std::optional<absl::Status> CheckInvalidNodeTarget(
       const T& message_with_target) {
     if (!message_with_target.target) {
       return absl::InvalidArgumentError("Invalid target Node");

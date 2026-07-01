@@ -102,7 +102,7 @@ Future<absl::Status> XrMediaViewer::LoadImage() {
       .LoadImage(state_.asset_url)
       .Then([this](AssetPtr<imp::ImageAsset> source) {
         ScaleRenderer({source->GetWidth(), source->GetHeight()});
-        SetTexture(GetView().GetTextureFactory().CreateTexture(*source));
+        SetTexture(GetView().GetTextureFactory().CreateTexture(source));
       });
 }
 
@@ -361,6 +361,12 @@ void XrMediaViewer::SetTexture(TexturePtr texture) {
   mesh_renderer_->GetMaterial()->TrySetParameter(kTextureParameter,
                                                  std::move(texture));
 }
+
+void XrMediaViewer::SetTexture(OwnedTexturePtr texture) {
+  mesh_renderer_->GetMaterial()->TrySetParameter(kTextureParameter,
+                                                 std::move(texture));
+}
+
 void XrMediaViewer::SetTextures(
     RobinMap<SurfaceViewType, imp::Texture*> textures) {
   Material* material = mesh_renderer_->GetMaterial();

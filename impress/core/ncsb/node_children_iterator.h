@@ -22,7 +22,10 @@
 #include <cstdint>
 #include <iterator>
 
+#include "absl/base/optimization.h"
 #include "filament/filament/include/filament/TransformManager.h"
+#include "core/ncsb/node_attachment_manager.h"
+#include "core/ncsb/node_controller.h"
 #include "core/ncsb/node_handle.h"
 
 namespace imp {
@@ -53,6 +56,9 @@ class NodeChildrenIterator {
       // destroy and reconstruct the object in-place via placement new. This
       // leverages the existing copy-constructor and matches exactly how
       // std::optional and std::variant reseat non-assignable member variations.
+      // TODO: Simplify this once
+      // filament::TransformManager::children_iterator has a copy-assignment
+      // operator.
       this->~NodeChildrenIterator();
       new (this) NodeChildrenIterator(other);
     }
@@ -66,9 +72,7 @@ class NodeChildrenIterator {
   }
 
   NodeChildrenIterator operator++(int) {
-    NodeChildrenIterator previous_iterator(
-        *transform_manager_, filament_iterator_, end_filament_iterator_,
-        current_node_);
+    NodeChildrenIterator previous_iterator = *this;
     ++(*this);
     return previous_iterator;
   }
@@ -81,46 +85,56 @@ class NodeChildrenIterator {
     return filament_iterator_ != other.filament_iterator_;
   }
 
-  reference operator*() const { return current_node_; }
+  reference operator*() const { return current_->GetNode(); }
 
  private:
   NodeChildrenIterator(
       filament::TransformManager& transform_manager,
-      filament::TransformManager::children_iterator filament_iterator,
-      filament::TransformManager::children_iterator
-          end_filament_iterator) noexcept
+      filament::TransformManager::children_iterator filament_iterator) noexcept
       : transform_manager_(&transform_manager),
-        filament_iterator_(filament_iterator),
-        end_filament_iterator_(end_filament_iterator) {
+        filament_iterator_(filament_iterator) {
     AssignNextValid();
   }
 
   NodeChildrenIterator(
       filament::TransformManager& transform_manager,
       filament::TransformManager::children_iterator filament_iterator,
-      filament::TransformManager::children_iterator end_filament_iterator,
-      NodeHandle node) noexcept
+      ::imp::imp_internal::NodeController* current) noexcept
       : transform_manager_(&transform_manager),
         filament_iterator_(filament_iterator),
-        end_filament_iterator_(end_filament_iterator),
-        current_node_(node) {}
+        current_(current) {}
 
   void AssignNextValid() {
-    while (filament_iterator_ != end_filament_iterator_) {
-      current_node_ =
-          NodeHandle(transform_manager_->getEntity(*filament_iterator_));
-      if (current_node_) {
+    // Iterate through the filament entities until we find one that is a node
+    // or we reach the end of the list. This takes advantage of the fact that
+    // the end iterator dereferences to a null instance to check for the end
+    // without having to store an additional end iterator. This in benchmarks is
+    // about 20% faster than storing an end iterator.
+    // TODO: This relies on undocumented behavior of
+    // filament::TransformManager::children_iterator. Replace with
+    // filament::TransformManager::children_iterator::isEnd once that is
+    // available.
+    while (*filament_iterator_) {
+      // Look up the node controller associated with the filament entity.
+      // This will return nullptr if the filament entity is not a node.
+      current_ = imp_internal::NodeAttachmentManager::Get(
+          transform_manager_->getEntity(*filament_iterator_));
+
+      // If the filament entity is a node, then we are done.
+      // Otherwise, we continue to the next filament entity.
+      //
+      // This case is extremely rare, and so we use an unlikely branch
+      // prediction to avoid a branch penalty.
+      if (ABSL_PREDICT_TRUE(current_ != nullptr)) {
         return;
       }
       ++filament_iterator_;
     }
-    current_node_ = NodeHandle();
   }
 
   filament::TransformManager* transform_manager_ = nullptr;
   filament::TransformManager::children_iterator filament_iterator_;
-  filament::TransformManager::children_iterator end_filament_iterator_;
-  NodeHandle current_node_;
+  ::imp::imp_internal::NodeController* current_;
 
   friend class ::imp::NodeChildrenRange;
 };
@@ -139,14 +153,13 @@ class NodeChildrenRange {
   NodeChildrenIterator begin() const {
     return NodeChildrenIterator(
         transform_manager_,
-        transform_manager_.getChildrenBegin(parent_instance_),
-        transform_manager_.getChildrenEnd(parent_instance_));
+        transform_manager_.getChildrenBegin(parent_instance_));
   }
 
   NodeChildrenIterator end() const {
     return NodeChildrenIterator(
         transform_manager_, transform_manager_.getChildrenEnd(parent_instance_),
-        transform_manager_.getChildrenEnd(parent_instance_), NodeHandle{});
+        nullptr);
   }
 
   // Returns the number of children of this node.

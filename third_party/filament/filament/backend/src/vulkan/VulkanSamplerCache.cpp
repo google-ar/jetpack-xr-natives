@@ -17,6 +17,7 @@
 #include "VulkanSamplerCache.h"
 
 #include "VulkanConstants.h"
+
 #include "vulkan/utils/Conversion.h"
 
 #include "filament/libs/utils/include/utils/Panic.h"

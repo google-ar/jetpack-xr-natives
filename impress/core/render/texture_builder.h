@@ -33,6 +33,7 @@
 #include "filament/filament/include/filament/Texture.h"
 #include "filament/filament/include/filament/VertexBuffer.h"
 #include "core/assets/asset_ptr.h"
+#include "core/async/future.h"
 #include "core/image/image_contents.h"
 #include "core/render/base_texture_builder.h"
 #include "core/render/image_asset.h"
@@ -76,6 +77,8 @@ class TextureBuilder : public BaseTextureBuilder {
   void Finalize(filament::Texture* texture) override;
 
   filament::Texture* /*absl_nullable*/  Build(filament::Engine& engine);
+  imp::Future<filament::Texture* /*absl_nullable*/ > BuildAsync(
+      filament::Engine& engine);
 
  protected:
   TextureBuilder& ImageInternal(filament::Engine& engine,

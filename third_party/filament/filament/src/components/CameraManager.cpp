@@ -16,12 +16,12 @@
 
 #include "components/CameraManager.h"
 
-#include "details/Engine.h"
 #include "details/Camera.h"
+#include "details/Engine.h"
 
+#include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "filament/libs/utils/include/utils/Logger.h"
-#include "filament/libs/utils/include/utils/debug.h"
 
 using namespace utils;
 using namespace filament::math;

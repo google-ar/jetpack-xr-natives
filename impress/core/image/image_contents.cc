@@ -35,9 +35,8 @@ constexpr size_t kFacesPerCube = 6;
 using ::filament::backend::PixelBufferDescriptor;
 }  // namespace
 
-absl::Status ImageContents::CreateStitched(
-    std::vector<std::unique_ptr<ImageContents>> images, size_t* offsets,
-    std::unique_ptr<ImageContents>* result) {
+absl::StatusOr<std::unique_ptr<ImageContents>> ImageContents::CreateStitched(
+    std::vector<std::unique_ptr<ImageContents>> images) {
   if (images.size() != kFacesPerCube) {
     return absl::InternalError("Wrong number of faces");
   }
@@ -61,20 +60,16 @@ absl::Status ImageContents::CreateStitched(
 
   for (size_t face_index = 0; face_index < kFacesPerCube; face_index++) {
     std::unique_ptr<ImageContents>& image = images[face_index];
-    offsets[face_index] = face_index * face_size;
+    size_t offset = face_index * face_size;
     for (uint32_t row = 0; row < image->GetHeight(); ++row) {
       std::copy_n(image->GetData() + row * image->GetStride(),
                   stitched_image_stride,
-                  stitched_image.data() + offsets[face_index] +
-                      row * stitched_image_stride);
+                  stitched_image.data() + offset + row * stitched_image_stride);
     }
   }
   images.clear();
-  *result = std::make_unique<StitchedImageContents>(
+  return std::make_unique<StitchedImageContents>(
       dim, dim * 6, has_alpha ? 4 : 3, std::move(stitched_image));
-  assert((*result)->GetSize() == stitched_size);
-
-  return absl::OkStatus();
 }
 
 absl::StatusOr<std::unique_ptr<ImageContents>>

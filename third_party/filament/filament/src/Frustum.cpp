@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-#include <filament/Frustum.h>
-
 #include "Culler.h"
+
+#include <filament/Frustum.h>
 
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/ostream.h"
 
+#include "filament/libs/math/include/math/mat4.h"
 #include "filament/libs/math/include/math/vec3.h"
 #include "filament/libs/math/include/math/vec4.h"
-#include "filament/libs/math/include/math/mat4.h"
 
 #include <algorithm>
 

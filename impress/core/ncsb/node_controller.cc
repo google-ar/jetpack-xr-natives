@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <iterator>
 #include <optional>
 #include <string>
@@ -37,6 +38,8 @@
 #include "core/math/vec.h"
 #include "core/ncsb/groups_manager.h"
 #include "core/ncsb/node.h"
+#include "core/ncsb/node_attachment_manager.h"
+#include "core/ncsb/node_children_iterator.h"
 #include "core/ncsb/node_flag.h"
 #include "core/ncsb/path_manager.h"
 #include "core/split_engine/split_engine_serializer.h"
@@ -92,23 +95,7 @@ void NodeController::SetEnabled(bool enabled) {
   UpdateActive();
 }
 
-bool NodeController::IsEnabled() const {
-  return CheckBit(flags_, imp::NodeFlags::kIsEnabled);
-}
-
-bool NodeController::IsRoot() const {
-  return CheckBit(flags_, imp::NodeFlags::kIsRoot);
-}
-
-bool NodeController::IsActive() const {
-  return CheckBit(flags_, imp::NodeFlags::kIsActive);
-}
-
 #if IMP_RUNTIME(DEV)
-bool NodeController::IsEditorStaging() const {
-  return CheckBit(flags_, imp::NodeFlags::kIsEditorStaging);
-}
-
 void NodeController::SetAsEditorStaging(bool is_editor_staging) {
   if (IsParentEditorStaging()) {
     if (!is_editor_staging) {
@@ -132,28 +119,6 @@ bool NodeController::IsParentEditorStaging() {
   return false;
 }
 #endif
-
-std::size_t NodeController::GetIndex() const { return index_; }
-
-void NodeController::SetIndex(std::size_t index) { index_ = index; }
-
-BitFlag NodeController::GetFlags() const { return flags_; }
-
-void NodeController::SetLocalRotation(const quatf& rotation) {
-  local_rotation_ = rotation;
-}
-
-const quatf& NodeController::GetLocalRotation() const {
-  return local_rotation_;
-}
-
-void NodeController::SetLocalScale(const float3& scale) {
-  local_scale_ = scale;
-}
-
-const float3& NodeController::GetLocalScale() const { return local_scale_; }
-
-absl::string_view NodeController::GetName() const { return name_; }
 
 void NodeController::SetName(absl::string_view name) {
   name_ = std::string(name);
@@ -334,11 +299,34 @@ void NodeController::UpdateActiveRecursive(bool is_parent_active) {
   // active state.
   bool is_active = IsActive();
   if (was_active != is_active) {
-    // TODO (Fix by March 16) Optimize NotifyActiveForEntity as
-    // it's quite expensive.
-    view_->GetComponentManager().NotifyActiveForEntity(GetEntity(), is_active);
-    for (auto child : GetNode()->GetChildren()) {
-      child->node_controller_->UpdateActiveRecursive(is_active);
+    // Store the node in a local variable in case it is destroyed in the call to
+    // NotifyActiveForEntity.
+    NodeHandle node = GetNode();
+
+    view_->GetComponentManager().NotifyActiveForEntity(
+        node.GetEntity(), component_bitset_, is_active);
+
+    // If the node was destroyed in NotifyActiveForEntity, then return early.
+    if (!node) {
+      return;
+    }
+
+    NodeChildrenRange children_range = GetNode()->GetChildrenRange();
+    int32_t children_count = children_range.GetCount();
+    if (children_count > 0) {
+      // Snapshot the children because the children may change during the
+      // recursive update.
+      absl::InlinedVector<NodeHandle, 16> children;
+      children.reserve(children_count);
+      for (auto child : children_range) {
+        children.push_back(child);
+      }
+
+      for (auto child : children) {
+        if (child) {
+          child->node_controller_->UpdateActiveRecursive(is_active);
+        }
+      }
     }
   }
 }
@@ -357,8 +345,22 @@ void NodeController::UpdateActiveSelf(bool is_parent_active) {
 }
 
 void NodeController::PropagateInheritedGroupsRecursive() {
-  for (auto child : GetNode()->GetChildren()) {
-    child->node_controller_->UpdateInheritedGroupsRecursive();
+  NodeChildrenRange children_range = GetNode()->GetChildrenRange();
+  int32_t children_count = children_range.GetCount();
+  if (children_count > 0) {
+    // Snapshot the children because the children may change during the
+    // recursive update.
+    absl::InlinedVector<NodeHandle, 16> children;
+    children.reserve(children_count);
+    for (auto child : children_range) {
+      children.push_back(child);
+    }
+
+    for (auto child : children) {
+      if (child) {
+        child->node_controller_->UpdateInheritedGroupsRecursive();
+      }
+    }
   }
 }
 
@@ -367,8 +369,22 @@ void NodeController::UpdateInheritedGroupsRecursive() {
     bool updated = UpdateInheritedGroupsSelf();
 
     if (updated) {
-      for (auto child : GetNode()->GetChildren()) {
-        child->node_controller_->UpdateInheritedGroupsRecursive();
+      NodeChildrenRange children_range = GetNode()->GetChildrenRange();
+      int32_t children_count = children_range.GetCount();
+      if (children_count > 0) {
+        // Snapshot the children because the children may change during the
+        // recursive update.
+        absl::InlinedVector<NodeHandle, 16> children;
+        children.reserve(children_count);
+        for (auto child : children_range) {
+          children.push_back(child);
+        }
+
+        for (auto child : children) {
+          if (child) {
+            child->node_controller_->UpdateInheritedGroupsRecursive();
+          }
+        }
       }
     }
   }

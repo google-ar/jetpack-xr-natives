@@ -21,6 +21,7 @@
 #include <memory>
 #include <vector>
 
+#include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
 #include "core/material_library/material_package.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
@@ -36,6 +37,9 @@ using MaterialId = uint64_t;
 // Built-in materials are defined by android_xr::schemas::BuiltInMaterialSpec.
 class SplitEngineBuiltinMaterialFactory {
  public:
+  static const MaterialPreCompileOptions::MaterialPreCompileByView&
+      kDefaultMaterialPreCompileByViewOptions;
+
   // Handles a request to create a built-in material on the remote renderer.
   // Note: this variant cannot create generic materials, only custom builtins.
   static Future<BuiltInMaterialPtr> HandleCreateRequest(

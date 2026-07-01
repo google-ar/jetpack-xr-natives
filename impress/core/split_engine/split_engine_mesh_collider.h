@@ -30,8 +30,8 @@ namespace imp {
 // SplitEngineRenderer.
 class SplitEngineMeshCollider : public Component {
  public:
-  absl::optional<RayHit> Intersect(const Ray& world_ray);
-  absl::optional<DoubleRayHit> IntersectPrecise(const DoubleRay& world_ray);
+  std::optional<RayHit> Intersect(const Ray& world_ray);
+  std::optional<DoubleRayHit> IntersectPrecise(const DoubleRay& world_ray);
   void Visualize(VisualizationStyle visualization_style) const;
 
   // ComponentSystem for registering the SplitEngineMeshCollider to the relevant

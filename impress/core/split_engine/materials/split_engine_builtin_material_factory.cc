@@ -27,6 +27,8 @@
 #include "absl/strings/string_view.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
+#include "core/assets/gltf/gltf_asset.h"
+#include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
 #include "core/material_library/generic_material_spec.h"
 #include "core/material_library/generic_materials.h"
@@ -38,22 +40,40 @@
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
-#include "core/view/framework/assets/gltf_asset.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
 namespace imp::split_engine {
+
+const MaterialPreCompileOptions::MaterialPreCompileByView&
+    SplitEngineBuiltinMaterialFactory::kDefaultMaterialPreCompileByViewOptions =
+        *new MaterialPreCompileOptions::MaterialPreCompileByView{
+            .priority = MaterialPreCompileOptions::MaterialPreCompileByView::
+                PRIORITY_HIGH,
+            .shadow_receiver = MaterialPreCompileOptions::
+                MaterialPreCompileByView::VARIANT_FILTER_OPTION_DISABLED,
+            .skinning = MaterialPreCompileOptions::MaterialPreCompileByView::
+                VARIANT_FILTER_OPTION_ENABLED,
+        };
 
 SplitEngineBuiltinMaterialFactory::SplitEngineBuiltinMaterialFactory(
     BaseView& view)
     : view_(view) {
   const GltfAsset::LoadOptions& load_options =
       view_.GetAssetManager().GetDefaultLoadOptions();
+  // Precompile all the permutations of: shadow_receiver, skinning, and
+  // shadow_receiver & skinning, unless overridden by the ViewConfig.
+  MaterialPreCompileOptions precompile_options =
+      view_.GetConfig().material_pre_compile_options.HasValue()
+          ? *view_.GetConfig().material_pre_compile_options
+          : MaterialPreCompileOptions{
+                .compile_by_view = kDefaultMaterialPreCompileByViewOptions,
+            };
   material_package_ = std::make_unique<MaterialPackage>(
       view_.GetAssetManager().LoadResource(
           (load_options.materials_url_override.has_value()
                ? *load_options.materials_url_override
                : materials::kCompiledImpDefaultGltfMaterialsZip.GetUrl())),
-      GltfAsset::kDefaultMaterialPreCompileOptions);
+      precompile_options);
 }
 
 Future<BuiltInMaterialPtr>
@@ -146,6 +166,11 @@ std::vector<Future<BuiltInMaterialPtr>> SplitEngineBuiltinMaterialFactory::
     // Skip NONE as it is not a actionable spec type.
     // Skip the generic and gsplat material specs, as they are not custom
     // materials.
+    // TODO: (broken link) - Removing Gsplat material here means it no longer
+    // preloads at startup. On Android XR, this means SpaceFlinger will no
+    // longer preloads this material during boot, and instead the first app to
+    // use it will have a longer delay. We need to investigate and see if
+    // Gsplat material needs to be able to preload by using default parameters.
     if (spec_type == android_xr::schemas::BuiltInMaterialSpec::NONE ||
         spec_type ==
             android_xr::schemas::BuiltInMaterialSpec::GenericMaterialSpec ||

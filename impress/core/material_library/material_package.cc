@@ -252,9 +252,18 @@ Future<MaterialCache> MaterialPackage::GetOrLoadMaterials(
                                   loaded_material->getFeatureLevel();
               if (material_pre_compile_options_ && should_pre_compile &&
                   is_supported) {
-                pre_compile_futures.push_back(
-                    material_helpers::PreCompileMaterial(
-                        loaded_material, *material_pre_compile_options_));
+                Future<absl::Status> pre_compile_future;
+                if (material_pre_compile_options_->compile_by_view
+                        .has_value()) {
+                  pre_compile_future =
+                      material_helpers::PreCompileMaterialByView(
+                          loaded_material, *material_pre_compile_options_,
+                          &view);
+                } else {
+                  pre_compile_future = material_helpers::PreCompileMaterial(
+                      loaded_material, *material_pre_compile_options_);
+                }
+                pre_compile_futures.push_back(std::move(pre_compile_future));
               }
             }
 

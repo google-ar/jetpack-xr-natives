@@ -463,11 +463,14 @@ bool Profiler::HasFrameRecorded(int frame_index) {
 }
 
 void Profiler::SetThreadName(absl::string_view name) {
+  if (ABSL_PREDICT_FALSE(!g_worker_state)) return;
   absl::MutexLock lock(g_worker_state->thread_name_mu);
   g_worker_state->thread_names[GetCachedThreadId()] = name;
 }
 
 absl::string_view Profiler::GetThreadName(std::thread::id thread_id) {
+  if (ABSL_PREDICT_FALSE(!g_worker_state)) return kMainThreadName;
+
   absl::MutexLock lock(g_worker_state->thread_name_mu);
   auto it = g_worker_state->thread_names.find(thread_id);
   if (it != g_worker_state->thread_names.end()) {

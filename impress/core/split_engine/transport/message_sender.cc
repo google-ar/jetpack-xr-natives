@@ -29,8 +29,6 @@
 #include "core/async/executor.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/owned_ptr.h"
-#include "core/common/pass_key.h"
-#include "core/split_engine/transport/flatbuffer_builder_holder.h"
 #include "core/split_engine/transport/transport.h"
 #include "mediapipe/framework/port/status_macros.h"
 
@@ -38,19 +36,21 @@ namespace imp::split_engine {
 
 class MessageSender::Allocator : public flatbuffers::Allocator {
  public:
-  Allocator(imp::BorrowedPtr<Transport> transport, SessionID session_id)
-      : transport_(std::move(transport)), session_id_(session_id) {}
+  Allocator(Transport& transport, SessionID session_id)
+      : transport_(transport), session_id_(session_id) {}
 
   uint8_t* allocate(size_t size) override {
-    return transport_->AllocateMessageMemory(session_id_, size);
+    return transport_.AllocateMessageMemory(session_id_, size);
   }
 
   void deallocate(uint8_t* ptr, size_t size) override {
-    transport_->DeallocateMessageMemory(session_id_, ptr);
+    transport_.DeallocateMessageMemory(session_id_, ptr);
   }
 
  private:
-  imp::BorrowedPtr<Transport> transport_;
+  // Allocator may be destroyed on any thread.
+  // BorrowedPtr is not thread-safe, hence using a reference.
+  Transport& transport_;
   const SessionID session_id_;
 };
 
@@ -66,11 +66,11 @@ absl::StatusOr<MessageSender::SessionID> MessageSender::OpenSession(
                    transport_->OpenSession(session_max_size_bytes));
 
   flatbuffer_allocators_.emplace(
-      session_id, std::make_unique<Allocator>(transport_.Borrow(), session_id));
+      session_id, std::make_unique<Allocator>(*transport_, session_id));
   return session_id;
 }
 
-absl::StatusOr<imp::OwnedPtr<FlatbufferBuilderHolder<MessageSender>>>
+absl::StatusOr<imp::OwnedPtr<flatbuffers::FlatBufferBuilder>>
 MessageSender::CreateMessageBuilder(SessionID session_id, size_t initial_size) {
   
 
@@ -79,14 +79,12 @@ MessageSender::CreateMessageBuilder(SessionID session_id, size_t initial_size) {
     return absl::InternalError("Failed to create flatbuffer builder");
   }
 
-  return imp::OwnedPtr<FlatbufferBuilderHolder>(new FlatbufferBuilderHolder(
-      PassKey<MessageSender>(),
-      std::make_unique<flatbuffers::FlatBufferBuilder>(initial_size,
-                                                       it->second.get())));
+  return imp::MakeOwned<flatbuffers::FlatBufferBuilder>(initial_size,
+                                                        it->second.get());
 }
 
 absl::Status MessageSender::SendMessage(
-    SessionID session_id, imp::OwnedPtr<FlatbufferBuilderHolder> fbb,
+    SessionID session_id, imp::OwnedPtr<flatbuffers::FlatBufferBuilder> fbb,
     Transport::MessageCallback callback) {
   
 
@@ -94,7 +92,7 @@ absl::Status MessageSender::SendMessage(
                         callback = std::move(callback)]() mutable {
     return transport_->SendMessage(
         session_id,
-        absl::MakeConstSpan((*fbb)->GetBufferPointer(), (*fbb)->GetSize()),
+        absl::MakeConstSpan(fbb->GetBufferPointer(), fbb->GetSize()),
         std::move(callback));
   });
 
@@ -111,7 +109,7 @@ absl::Status MessageSender::SendMessage(SessionID session_id,
     auto fbb = fbb_fn();
     return transport_->SendMessage(
         session_id,
-        absl::MakeConstSpan((*fbb)->GetBufferPointer(), (*fbb)->GetSize()),
+        absl::MakeConstSpan(fbb->GetBufferPointer(), fbb->GetSize()),
         std::move(callback));
   });
 

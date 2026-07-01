@@ -45,7 +45,7 @@ TwistGesture::CreateFn TwistGesture::GetCreateFunction(
     Dispatcher* dispatcher, GesturePointerUtils* pointer_utils) {
   return [dispatcher, pointer_utils](const PointerHitEvent& pointer_hit,
                                      absl::Span<const TwistGesture> gestures)
-             -> absl::optional<TwistGesture> {
+             -> std::optional<TwistGesture> {
     if (pointer_hit.event.Type() != PointerEventType::kDown) {
       return absl::nullopt;
     }

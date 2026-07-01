@@ -39,6 +39,7 @@
 #include "core/common/owned_ptr.h"
 #include "core/lighting/environment_light.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client_mock.h"
+#include "core/split_engine/material_requester_legacy_impl.h"
 #include "core/split_engine/renderer_policy_handler_mock.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_renderer.h"
@@ -129,12 +130,17 @@ class SplitEngineTestFixture
 
       auto sender = std::make_unique<TestSplitEngineBridgeSender>(*bridge);
 
+      auto material_requester =
+          std::make_unique<imp::split_engine::MaterialRequesterLegacyImpl>(
+              *bridge);
+
       auto transport = imp::MakeOwned<SplitEngineSerializerTransportLegacyImpl>(
           std::move(bridge), std::move(sender));
       sender_ = sender.get();
       auto split_engine_serializer_impl =
           std::make_unique<split_engine::SplitEngineSerializerImpl>(
               *serializer_view_.GetView(), api_level, std::move(transport),
+              std::move(material_requester),
               // default shared memory size is ~10MB, same as in
               // ImpSplitEngineApi
               1024 * 10000);

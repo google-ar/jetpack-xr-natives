@@ -16,10 +16,12 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <utility>
 
 #include "core/common/log.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/types/span.h"
 #include "core/model/mesh/mesh_data_helper.h"
 #include "core/model/mesh/mesh_description.h"
 
@@ -64,6 +66,17 @@ void MeshIndexData::TruncateIndices(size_t new_count) {
     description_.index_count = new_count;
     index_data_.size = new_size;
   }
+}
+
+void MeshIndexData::UpdateData(size_t offset,
+                               absl::Span<const uint8_t> new_data) {
+  CheckIndicesNotMoved();
+  if (offset + new_data.size() > index_data_.size) {
+    IMP_LOG(imp::FATAL) << "MeshIndexData UpdateData out of bounds: offset=" << offset
+               << " size=" << new_data.size() << " max=" << index_data_.size;
+  }
+  std::memcpy(static_cast<uint8_t*>(index_data_.buffer) + offset,
+              new_data.data(), new_data.size());
 }
 
 void MeshIndexData::CheckIndicesNotMoved() const {

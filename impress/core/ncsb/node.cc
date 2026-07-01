@@ -49,13 +49,6 @@ Node::Node(utils::Entity entity) : entity_(entity) {
   }
 }
 
-Node::Node(utils::Entity entity, imp_internal::NodeController* node_controller)
-    : entity_(entity), node_controller_(node_controller) {
-  
-}
-
-absl::string_view Node::GetName() const { return node_controller_->GetName(); }
-
 NodeHandle Node::FindByName(absl::string_view name) {
   return GetView().GetPathManager().FindDescendantOrSelfIf(
       NodeHandle(*this),
@@ -78,19 +71,9 @@ void Node::SetEnabled(bool enabled) {
   node_controller_->SetEnabled(enabled);
 }
 
-bool Node::IsEnabled() const { return node_controller_->IsEnabled(); }
-
-bool Node::IsActive() const { return node_controller_->IsActive(); }
-
-bool Node::IsRoot() const { return node_controller_->IsRoot(); }
-
 #if IMP_RUNTIME(DEV)
 void Node::SetAsEditorStaging(bool is_editor_staging) {
   node_controller_->SetAsEditorStaging(is_editor_staging);
-}
-
-bool Node::IsEditorStaging() const {
-  return node_controller_->IsEditorStaging();
 }
 #endif
 
@@ -232,7 +215,9 @@ std::vector<NodeHandle> Node::GetChildren() const {
   NodeChildrenRange range = GetChildrenRange();
   std::vector<NodeHandle> result;
   result.reserve(range.GetCount());
-  result.assign(range.begin(), range.end());
+  for (auto child : range) {
+    result.push_back(child);
+  }
   return result;
 }
 
@@ -307,8 +292,6 @@ void Node::SetLocalScale(const float3& scale) {
   }
 }
 
-float3 Node::GetLocalScale() const { return node_controller_->GetLocalScale(); }
-
 void Node::SetLocalRotation(const quatf& rotation) {
   node_controller_->SetLocalRotation(rotation);
 
@@ -324,12 +307,6 @@ void Node::SetLocalRotation(const quatf& rotation) {
     SetFilamentTransformInternal(transform);
   }
 }
-
-quatf Node::GetLocalRotation() const {
-  return node_controller_->GetLocalRotation();
-}
-
-float3 Node::GetLocalForward() const { return GetLocalRotation() * kForward; }
 
 void Node::SetLocalForward(const float3& look_direction) {
   SetLocalForward(look_direction, kUp);

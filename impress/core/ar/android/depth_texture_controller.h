@@ -46,7 +46,7 @@ class DepthTextureController {
   TextureFactory* texture_factory_;
   std::function<void(imp::Texture const&)> texture_created_handler_;
   imp::OwnedTexturePtr texture_;
-  absl::optional<int64_t> last_acquire_image_timestamp_ns_;
+  std::optional<int64_t> last_acquire_image_timestamp_ns_;
   absl::Time timeout_end_ = absl::InfinitePast();
 
   // Uses the image data in image to update the internal filament texture.

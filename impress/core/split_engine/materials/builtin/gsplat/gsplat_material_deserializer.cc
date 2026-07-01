@@ -21,13 +21,14 @@
 #include <tuple>
 #include <utility>
 
+#include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
-#include "filament/filament/backend/include/backend/DriverEnums.h"
+#include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/MaterialInstance.h"
 #include "filament/filament/include/filament/Options.h"
 #include "filament/libs/utils/include/utils/Entity.h"
@@ -46,6 +47,7 @@
 #include "core/math/transform.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
+#include "core/render/degenerate_triangle_renderer_for_driver_bug_workaround.h"
 #include "core/render/texture.h"
 #include "core/render_passes/group_to_projection_quad_texture_renderer/group_to_projection_quad_texture_renderer.h"
 #include "core/render_passes/group_to_projection_quad_texture_renderer/group_to_projection_quad_texture_renderer_state.proto.imp.h"
@@ -81,7 +83,7 @@ constexpr char kMagicWindowTextureNamePrefix[] = "magic_window_texture_";
 constexpr int kMaxFramesToWaitForGsplatNode = 30;
 
 // Helper to get the size of the data textures.
-absl::StatusOr<imp::uint2> GetTextureSizeFromFlatbuffer(
+absl::StatusOr<uint2> GetTextureSizeFromFlatbuffer(
     const TextureBorrower& texture_borrower,
     const android_xr::schemas::GsplatParameters& serialized_parameters) {
   const android_xr::schemas::BuiltInTextureParameter* serialized_texture =
@@ -135,7 +137,7 @@ absl::Status MakeParameterNotImplementedError(
 // Updates the precompute material target view resolution to either the main
 // view resolution, or the given offscreen texture resolution.
 absl::Status UpdatePrecomputeViewResolution(
-    BaseView& view, std::optional<imp::uint2> offscreen_texture_resolution,
+    BaseView& view, std::optional<uint2> offscreen_texture_resolution,
     BorrowedMaterialPtr precompute_material) {
   if (offscreen_texture_resolution.has_value()) {
     precompute_material->SetParameter(kMainViewResolutionParameter,
@@ -144,12 +146,10 @@ absl::Status UpdatePrecomputeViewResolution(
     window::FilamentHost& host = *view.GetHost();
     const filament::DynamicResolutionOptions drs_options =
         host.GetView()->getDynamicResolutionOptions();
-    const imp::float2 scale =
-        drs_options.enabled ? drs_options.maxScale : imp::kOne2;
+    const float2 scale = drs_options.enabled ? drs_options.maxScale : kOne2;
 
-    precompute_material->SetParameter(
-        kMainViewResolutionParameter,
-        imp::uint2(host.GetPixelDimensions() * scale));
+    precompute_material->SetParameter(kMainViewResolutionParameter,
+                                      uint2(host.GetPixelDimensions() * scale));
   }
 
   return absl::OkStatus();
@@ -163,7 +163,8 @@ absl::StatusOr<NodeHandle> DeserializeNodeId(BaseView& view,
     // Using Split Engine: return the system side node ID based on the given
     // client side node ID.
     MP_ASSIGN_OR_RETURN(
-        auto node_handle, renderer->get().GetNodeForCurrentApp(gsplat_node_id),
+        NodeHandle node_handle,
+        renderer->get().GetNodeForCurrentApp(gsplat_node_id),
         _ << "Failed to deserialize client side node id: " << gsplat_node_id);
     return node_handle;
   } else {
@@ -201,7 +202,7 @@ BuildPrecomputeTexturePipeline(NodeHandle gsplat_node) {
 // Returns a projection quad in the World Space from the given
 // `magic_window_projection_quad` flatbuffer, and the `node` it is associated
 // with.
-imp::TexturePipelineRendererProjectionQuad GetWorldProjectionQuad(
+TexturePipelineRendererProjectionQuad GetWorldProjectionQuad(
     const android_xr::schemas::ProjectionQuad& magic_window_projection_quad,
     NodeHandle node) {
   const float2 local_size = UnPack(*magic_window_projection_quad.size());
@@ -209,7 +210,7 @@ imp::TexturePipelineRendererProjectionQuad GetWorldProjectionQuad(
   const quatf local_rotation = UnPack(*magic_window_projection_quad.rotation());
 
   const Transform<float> world_from_local(node->GetWorldTrs());
-  return imp::TexturePipelineRendererProjectionQuad{
+  return TexturePipelineRendererProjectionQuad{
       .size = local_size * world_from_local.scale.xy,
       .center =
           world_from_local.rotation * (world_from_local.scale * local_center) +
@@ -262,7 +263,7 @@ Future<BuiltInMaterialPtr> GsplatMaterialDeserializer::Create(
 
   Future<NodeHandle> gsplat_node_future = GetOrWaitForGsplatNode(
       view, spec.entity(), kMaxFramesToWaitForGsplatNode);
-  ::imp::resources::ResourceDefinition source =
+  resources::ResourceDefinition source =
       GsplatDefaultRenderResource(view, material_mode);
 
   if (material_mode == android_xr::schemas::GsplatMode::MAGIC_WINDOW) {
@@ -292,7 +293,7 @@ Future<BuiltInMaterialPtr> GsplatMaterialDeserializer::Create(
           "specified!");
     }
 
-    const imp::uint2 offscreen_texture_resolution =
+    const uint2 offscreen_texture_resolution =
         UnPack(*magic_window_spec->magic_window_offscreen_resolution());
     const std::string render_group_name =
         magic_window_spec->render_group()->str();
@@ -359,7 +360,8 @@ Future<BuiltInMaterialPtr> GsplatMaterialDeserializer::Create(
                                        .value = use_triangles}}});
 
     return gsplat_node_future.Merge(material_asset_future)
-        .Then([bridge_id, material_mode, has_precomputed_texture, render_group](
+        .Then([&view, bridge_id, material_mode, has_precomputed_texture,
+               render_group](
                   std::tuple<NodeHandle, AssetPtr<MaterialAsset>> result)
                   -> Future<BuiltInMaterialPtr> {
           NodeHandle gsplat_node = std::get<0>(result);
@@ -367,27 +369,48 @@ Future<BuiltInMaterialPtr> GsplatMaterialDeserializer::Create(
           if (render_group.has_value()) {
             gsplat_node->SetGroups({*render_group});
           }
-          // When the spec provides precomputed texture, we create the builtin
-          // material without a PrecomputeTexturePipeline. Otherwise, the
-          // pipeline will be created and used by the builtin material.
-          if (has_precomputed_texture) {
-            return Future<BuiltInMaterialPtr>(Create(
-                gsplat_node, bridge_id, material_mode, material_asset,
-                /*offscreen_texture_resolution=*/std::nullopt,
-                ComponentHandle<PrecomputeTexturePipeline>(),
-                ComponentHandle<GroupToProjectionQuadTextureRenderer>()));
+
+          auto create_material =
+              [gsplat_node, bridge_id, material_mode, material_asset,
+               has_precomputed_texture]() -> Future<BuiltInMaterialPtr> {
+            if (has_precomputed_texture) {
+              return Future<BuiltInMaterialPtr>(Create(
+                  gsplat_node, bridge_id, material_mode, material_asset,
+                  /*offscreen_texture_resolution=*/std::nullopt,
+                  ComponentHandle<PrecomputeTexturePipeline>(),
+                  ComponentHandle<GroupToProjectionQuadTextureRenderer>()));
+            }
+            // TODO: Pass in aabb of the gsplat scene so that the precompute
+            // pass doesn't run if the scene is frustum culled.
+            return BuildPrecomputeTexturePipeline(gsplat_node)
+                .Then([gsplat_node, bridge_id, material_mode, material_asset](
+                          ComponentHandle<PrecomputeTexturePipeline>
+                              pipeline) mutable -> BuiltInMaterialPtr {
+                  return Create(
+                      gsplat_node, bridge_id, material_mode, material_asset,
+                      /*offscreen_texture_resolution=*/std::nullopt, pipeline,
+                      ComponentHandle<GroupToProjectionQuadTextureRenderer>());
+                });
+          };
+
+          // This component exists to work around a Qualcomm driver heuristic.
+          // See (broken link) for more context.
+          if (view.GetHost()->IsInXr() &&
+              view.GetHost()->GetEngine()->getBackend() ==
+                  filament::Engine::Backend::VULKAN) {
+            return gsplat_node
+                ->AddComponent<
+                    DegenerateTriangleRendererForDriverBugWorkaround>()
+                .Then(
+                    [create_material](
+                        const ComponentHandle<
+                            DegenerateTriangleRendererForDriverBugWorkaround>&)
+                        -> Future<BuiltInMaterialPtr> {
+                      return create_material();
+                    });
           }
-          // TODO: Pass in aabb of the gsplat scene so that the precompute pass
-          // doesn't run if the scene is frustum culled.
-          return BuildPrecomputeTexturePipeline(gsplat_node)
-              .Then([gsplat_node, bridge_id, material_mode, material_asset](
-                        ComponentHandle<PrecomputeTexturePipeline>
-                            pipeline) mutable -> BuiltInMaterialPtr {
-                return Create(
-                    gsplat_node, bridge_id, material_mode, material_asset,
-                    /*offscreen_texture_resolution=*/std::nullopt, pipeline,
-                    ComponentHandle<GroupToProjectionQuadTextureRenderer>());
-              });
+
+          return create_material();
         });
   }
 }
@@ -396,7 +419,7 @@ BuiltInMaterialPtr GsplatMaterialDeserializer::Create(
     NodeHandle gsplat_node, BridgeId bridge_id,
     android_xr::schemas::GsplatMode material_mode,
     AssetPtr<MaterialAsset> material_asset,
-    std::optional<imp::uint2> offscreen_texture_resolution,
+    std::optional<uint2> offscreen_texture_resolution,
     ComponentHandle<PrecomputeTexturePipeline> precompute_texture_pipeline,
     ComponentHandle<GroupToProjectionQuadTextureRenderer>
         group_to_projection_quad_texture_renderer) {
@@ -411,7 +434,7 @@ BuiltInMaterialPtr GsplatMaterialDeserializer::Create(
 GsplatMaterialDeserializer::GsplatMaterialDeserializer(
     NodeHandle gsplat_node, BridgeId bridge_id,
     android_xr::schemas::GsplatMode material_mode, OwnedMaterialPtr material,
-    std::optional<imp::uint2> offscreen_texture_resolution,
+    std::optional<uint2> offscreen_texture_resolution,
     ComponentHandle<PrecomputeTexturePipeline> precompute_texture_pipeline,
     ComponentHandle<GroupToProjectionQuadTextureRenderer>
         group_to_projection_quad_texture_renderer)
@@ -425,25 +448,69 @@ GsplatMaterialDeserializer::GsplatMaterialDeserializer(
       group_to_projection_quad_texture_renderer;
 
   if (material_mode == android_xr::schemas::GsplatMode::MAGIC_WINDOW) {
-    GetRenderMaterial()->SetParameter(
-        kBaseColorParameter,
-        view_.GetTextureRegistry().BorrowTexture(
-            group_to_projection_quad_texture_renderer_->GetState()
-                .texture_name.Value()));
+    projection_quad_texture_ = view_.GetTextureRegistry().BorrowTexture(
+        group_to_projection_quad_texture_renderer_->GetState()
+            .texture_name.Value());
+    GetRenderMaterial()->SetParameter(kBaseColorParameter,
+                                      projection_quad_texture_);
   }
 }
 
 GsplatMaterialDeserializer::~GsplatMaterialDeserializer() {
-  if (precompute_texture_pipeline_) {
-    // Release the pass texture before destroying the pass.
-    BorrowedTexturePtr placeholder_texture =
-        view_.GetTextureFactory().BorrowRGBA32UIPlaceholderTexture();
-    GetRenderMaterial()->SetParameter(kSplatDataPrecomputedParameter,
-                                      placeholder_texture,
-                                      placeholder_texture->GetSampler());
-    // A node was added for the precompute texture pipeline.
-    // If it hasn't already been destroyed, destroy it now.
-    view_.DestroyNode(precompute_texture_pipeline_->GetNode());
+  
+
+  if (material_mode_ == android_xr::schemas::GsplatMode::MAGIC_WINDOW) {
+    // MAGIC_WINDOW mode.
+    
+    if (group_to_projection_quad_texture_renderer_) {
+      if (projection_quad_texture_) {
+        // The texture was passed to the BuiltInCustomMaterial.  It must be
+        // unset before the component is destroyed.
+        absl::StatusOr<BorrowedTexturePtr> placeholder =
+            view_.GetTextureFactory().BorrowMatchingPlaceholderTexture(
+                projection_quad_texture_);
+        if (placeholder.ok()) {
+          GetRenderMaterial()->SetParameter(kBaseColorParameter,
+                                            placeholder.value(),
+                                            placeholder.value()->GetSampler());
+        } else {
+          IMP_LOG(imp::ERROR)
+              << "Failed to borrow placeholder texture for magic window, the "
+                 "existing texture will continue to be used by the material: "
+              << placeholder.status();
+        }
+        projection_quad_texture_ = nullptr;
+      }
+      gsplat_node_->RemoveComponent<GroupToProjectionQuadTextureRenderer>();
+    }
+
+  } else {
+    // GSPLAT mode.
+    
+    if (precompute_texture_pipeline_) {
+      // Release the pass texture before destroying the pass.
+      if (precompute_pass_texture_) {
+        // The texture was passed to the BuiltInCustomMaterial.  It must be
+        // unset before the component is destroyed.
+        absl::StatusOr<BorrowedTexturePtr> placeholder =
+            view_.GetTextureFactory().BorrowMatchingPlaceholderTexture(
+                precompute_pass_texture_);
+        if (placeholder.ok()) {
+          GetRenderMaterial()->SetParameter(kSplatDataPrecomputedParameter,
+                                            placeholder.value(),
+                                            placeholder.value()->GetSampler());
+        } else {
+          IMP_LOG(imp::ERROR) << "Failed to borrow placeholder texture for precompute "
+                        "texture pipeline, the existing texture will continue "
+                        "to be used by the material: "
+                     << placeholder.status();
+        }
+        precompute_pass_texture_ = nullptr;
+      }
+      view_.DestroyNode(precompute_texture_pipeline_->GetNode());
+    }
+    gsplat_node_
+        ->RemoveComponent<DegenerateTriangleRendererForDriverBugWorkaround>();
   }
 }
 
@@ -544,11 +611,10 @@ split_engine::BuiltInMaterialPtr GsplatMaterialDeserializer::Duplicate() const {
 
   OwnedMaterialPtr material = view_.GetMaterialFactory().WrapMaterial(
       filament::MaterialInstance::duplicate(GetFilamentMaterialInstance()));
-  split_engine::BuiltInMaterialPtr result =
-      absl::WrapUnique(new GsplatMaterialDeserializer(
-          gsplat_node_, GetBridgeId(), material_mode_, std::move(material),
-          offscreen_texture_resolution_, pipeline,
-          group_to_projection_quad_texture_renderer));
+  BuiltInMaterialPtr result = absl::WrapUnique(new GsplatMaterialDeserializer(
+      gsplat_node_, GetBridgeId(), material_mode_, std::move(material),
+      offscreen_texture_resolution_, pipeline,
+      group_to_projection_quad_texture_renderer));
   return result;
 }
 
@@ -587,10 +653,10 @@ absl::Status GsplatMaterialDeserializer::SetMagicWindowMaterialParameters(
     if (const android_xr::schemas::ProjectionQuad*
             magic_window_projection_quad =
                 serialized_parameters.magic_window_projection_quad()) {
-      const imp::TexturePipelineRendererProjectionQuad projection_quad =
+      const TexturePipelineRendererProjectionQuad projection_quad =
           GetWorldProjectionQuad(*magic_window_projection_quad, gsplat_node_);
       MP_RETURN_IF_ERROR(group_to_projection_quad_texture_renderer_
-                          ->SetProjectionQuadStateInfo(imp::ProjectionQuadState{
+                          ->SetProjectionQuadStateInfo(ProjectionQuadState{
                               .size = projection_quad.size,
                               .center = projection_quad.center,
                               .rotation = projection_quad.rotation,
@@ -652,7 +718,7 @@ absl::Status GsplatMaterialDeserializer::UpdatePrecomputeTexturePipeline(
   }
   // Resize the pass texture based on the size provided in data textures.
   MP_ASSIGN_OR_RETURN(
-      imp::uint2 position_data_texture_size,
+      uint2 position_data_texture_size,
       GetTextureSizeFromFlatbuffer(texture_borrower, serialized_parameters));
   MP_RETURN_IF_ERROR(precompute_texture_pipeline_->ResizePassTexture(
       0, position_data_texture_size));
@@ -698,14 +764,13 @@ absl::Status GsplatMaterialDeserializer::UpdatePrecomputeTexturePipeline(
   }
 
   // Set the precompute texture on the render material.
-  BorrowedTexturePtr precompute_texture =
-      precompute_texture_pipeline_->BorrowTexture();
-  if (!precompute_texture) {
+  precompute_pass_texture_ = precompute_texture_pipeline_->BorrowTexture();
+  if (!precompute_pass_texture_) {
     return absl::InternalError("Failed to borrow precompute texture");
   }
   GetRenderMaterial()->SetParameter(kSplatDataPrecomputedParameter,
-                                    precompute_texture,
-                                    precompute_texture->GetSampler());
+                                    precompute_pass_texture_,
+                                    precompute_pass_texture_->GetSampler());
   return absl::OkStatus();
 }
 

@@ -65,6 +65,7 @@ add_library(
     ${LOADER_EXTERNAL_GEN_FILES}
 )
 set_target_properties(openxr_loader PROPERTIES FOLDER ${LOADER_FOLDER})
+#add_sanitizers(openxr_loader)
 
 target_include_directories(
     openxr_loader
@@ -388,11 +389,18 @@ if(NOT ANDROID)
     # https://gitlab.khronos.org/openxr/openxr/-/merge_requests/4020 highlighted that
     # teams often have stricter compiler settings for the openxr_loader
     if(HAVE_MISSING_PROTOTYPES)
-        # apply only for C source files
-        target_compile_options(
-            openxr_loader
-            PRIVATE $<IF:$<COMPILE_LANGUAGE:C>,-Werror=missing-prototypes,>
-        )
+        # https://gitlab.khronos.org/openxr/openxr/-/merge_requests/4120
+        # Limit check to clang until this is supported more widely.
+        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+            target_compile_options(
+                openxr_loader PRIVATE -Werror=missing-prototypes
+            )
+        else()
+            target_compile_options(
+                openxr_loader
+                PRIVATE $<IF:$<COMPILE_LANGUAGE:C>,-Werror=missing-prototypes,>
+            )
+        endif()
     endif()
 endif()
 
@@ -403,6 +411,7 @@ endif()
 check_c_compiler_flag(-Wtautological-type-limit-compare HAVE_TAUTOLOGICAL_TYPE_LIMIT)
 check_c_compiler_flag(-Wmissing-braces HAVE_MISSING_BRACES)
 check_c_compiler_flag(-Wunreachable-code HAVE_UNREACHABLE_CODE)
+check_c_compiler_flag(-Wc++20-extensions HAVE_CPP20_EXTENSIONS)
 # check_c_compiler_flag(-Wswitch-default HAVE_SWITCH_DEFAULT)
 # check_c_compiler_flag(-Wswitch-enum HAVE_SWITCH_ENUM)
 
@@ -424,6 +433,10 @@ endif()
 if(HAVE_UNREACHABLE_CODE)
     target_compile_options(
             openxr_loader PRIVATE -Werror=unreachable-code)
+endif()
+if(HAVE_CPP20_EXTENSIONS)
+    target_compile_options(
+            openxr_loader PRIVATE -Werror=c++20-extensions)
 endif()
 # json_value.cpp fails this right now
 # if(HAVE_SWITCH_DEFAULT)

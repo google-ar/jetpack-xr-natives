@@ -38,10 +38,12 @@ cc_library(
     deps = [
         "//core:config",
         "//core/common:debug_draw",
+        "//core/common:platform_storage_interface",
         "//core/common:rememberer",
         "//core/editor",
         "//core/editor:events",
         "//core/editor:widget",
+        "//core/editor/widgets:settings_widget_constants",
         "//core/ncsb",
         "//core/physics",
         "//core/view:base_view",

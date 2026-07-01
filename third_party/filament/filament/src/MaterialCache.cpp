@@ -15,12 +15,13 @@
  */
 
 #include "MaterialCache.h"
+
 #include "MaterialParser.h"
 
-#include <backend/DriverEnums.h>
+#include "details/Engine.h"
+#include "details/Material.h"
 
-#include <details/Engine.h>
-#include <details/Material.h>
+#include <backend/DriverEnums.h>
 
 #include "filament/libs/utils/include/utils/Logger.h"
 

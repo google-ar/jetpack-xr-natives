@@ -19,10 +19,14 @@
 
 #include "core/common/log.h"
 #include "core/actions/input_action_event.h"
+#include "core/common/platform_storage.h"
 #include "core/common/registry.h"
 #include "core/editor/editor.h"
+#include "core/editor/editor_info.h"
 #include "core/editor/editor_plugin.h"
 #include "core/editor/events.h"
+#include "core/editor/widgets/input_settings_widget_constants.h"
+#include "core/input/input_events_pool.h"
 #include "core/input/input_manager.h"
 #include "core/input/key_codes.h"
 #include "core/input/keyboard_event.h"
@@ -62,33 +66,53 @@ class FreecamInterceptor : public InputInterceptor {
   explicit FreecamInterceptor(ComponentHandle<CameraRotate> camera_rotate)
       : camera_rotate_(camera_rotate) {}
 
-  void FilterPointerEvents(std::vector<PointerEvent>& pointer_events) override {
+  void FilterPointerEvents(
+      InputEventsBatch<PointerEvent>& pointer_batch) override {
     if (camera_rotate_) {
-      Editor& editor =
-          camera_rotate_->GetView().GetRegistry().Get<Editor>()->get();
-      if (editor.UseLegacyCameraControls()) return;
+      if (camera_rotate_->UseLegacyCameraControls()) return;
 
-      camera_rotate_->FilterPointerEvents(pointer_events);
+      if (IsUsingRemoteScreen()) {
+        // Only filter the remote inputs when UI is on remote screen.
+        if (pointer_batch.source != InputEventSource::kRemote) return;
+      } else {
+        // Only filter the local inputs when UI is on local screen.
+        if (pointer_batch.source != InputEventSource::kLocal) return;
+      }
+
+      camera_rotate_->FilterPointerEvents(pointer_batch.events);
     }
   }
 
   void FilterKeyboardEvents(
-      std::vector<KeyboardEvent>& keyboard_events,
-      std::vector<TextInputEvent>& text_input_events) override {
+      InputEventsBatch<KeyboardEvent>& keyboard_batch,
+      InputEventsBatch<TextInputEvent>& text_input_batch) override {
     if (camera_rotate_) {
-      Editor& editor =
-          camera_rotate_->GetView().GetRegistry().Get<Editor>()->get();
-      if (editor.UseLegacyCameraControls()) return;
+      if (camera_rotate_->UseLegacyCameraControls()) return;
 
-      camera_rotate_->FilterKeyboardEvents(keyboard_events);
+      if (IsUsingRemoteScreen()) {
+        // Only filter the remote inputs when UI is on remote screen.
+        if (keyboard_batch.source != InputEventSource::kRemote) return;
+      } else {
+        // Only filter the local inputs when UI is on local screen.
+        if (keyboard_batch.source != InputEventSource::kLocal) return;
+      }
+
+      camera_rotate_->FilterKeyboardEvents(keyboard_batch.events);
     }
   }
 
-  void FilterWheelEvents(std::vector<WheelEvent>& wheel_events) override {}
+  void FilterWheelEvents(InputEventsBatch<WheelEvent>& wheel_batch) override {}
   void FilterInputActionEvents(
-      std::vector<InputActionEvent>& input_action_events) override {}
+      InputEventsBatch<InputActionEvent>& input_action_batch) override {}
 
  private:
+  bool IsUsingRemoteScreen() const {
+    if (!camera_rotate_) return false;
+    Editor& editor =
+        camera_rotate_->GetView().GetRegistry().Get<Editor>()->get();
+    return editor.GetDisplayMode() == EditorInfo::DisplayMode::kRemoteScreen;
+  }
+
   ComponentHandle<CameraRotate> camera_rotate_;
 };
 
@@ -102,6 +126,11 @@ void CameraRotate::Setup(NodeHandle pivot, float pitch, float yaw) {
   yaw_ = yaw;
   pivot_->SetLocalRotation(QuatFromEuler({pitch_, yaw_, 0}));
 
+  PlatformStorage& storage = *GetView().GetRegistry().Get<PlatformStorage>();
+  invert_y_enabled_ = storage.GetBool(kInvertCameraYKey, kInvertCameraYDefault);
+  use_legacy_camera_controls_ = storage.GetBool(
+      kUseLegacyCameraControlsKey, kUseLegacyCameraControlsDefault);
+
   Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
   Dispatcher& editor_dispatcher = editor.GetDispatcher();
 
@@ -112,8 +141,7 @@ void CameraRotate::Setup(NodeHandle pivot, float pitch, float yaw) {
   // Camera transformations
   auto drag_gesture_event_listener =
       [this](const DragGesture::UpdateEvent& event) mutable {
-        Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
-        if (!editor.UseLegacyCameraControls()) return;
+        if (!use_legacy_camera_controls_) return;
 
         if (event.pointer != kMousePointerIdLeft) return;
 
@@ -133,8 +161,14 @@ void CameraRotate::Setup(NodeHandle pivot, float pitch, float yaw) {
         invert_y_enabled_ = event.enabled;
       };
 
+  auto use_legacy_controls_event_listener =
+      [this](const UseLegacyCameraControlsEvent& event) mutable {
+        use_legacy_camera_controls_ = event.enabled;
+      };
+
   editor_dispatcher.Connect(drag_gesture_event_listener, this);
   editor_dispatcher.Connect(invert_camera_event_listener, this);
+  editor_dispatcher.Connect(use_legacy_controls_event_listener, this);
 
   // When the app camera is ignored, the editor camera is always active and can
   // be controlled by the app dispatcher.
@@ -143,6 +177,7 @@ void CameraRotate::Setup(NodeHandle pivot, float pitch, float yaw) {
     Dispatcher& app_dispatcher = GetView().GetDispatcher();
     app_dispatcher.Connect(drag_gesture_event_listener, this);
     app_dispatcher.Connect(invert_camera_event_listener, this);
+    app_dispatcher.Connect(use_legacy_controls_event_listener, this);
   }
 }
 

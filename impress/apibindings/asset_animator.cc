@@ -47,7 +47,8 @@ AssetAnimator::AssetAnimator(JNIEnv* env, jobject j_asset_animator)
 void AssetAnimator::OnComplete() { CallVoidMethod(on_complete_); }
 
 void AssetAnimator::OnFailure(std::string error_message) {
-  CallVoidMethod(on_failure_, ToString(Env(), error_message));
+  JniUniquePtr<jstring> jerror = ToJniString(Env(), error_message);
+  CallVoidMethod(on_failure_, jerror.get());
 }
 
 }  // namespace imp

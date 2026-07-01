@@ -15,61 +15,65 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_HIERARCHY_PANEL_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_PERFORMANCE_HIERARCHY_PANEL_H_
 
-#include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <thread>  // NOLINT: Need to use std::thread::id.
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
+#include "absl/strings/string_view.h"
 #include "core/editor/widgets/performance/sample_processor.h"
 #include "core/editor/widgets/performance/sample_processor_types.h"
-#include "core/performance/profiler.h"
 #include "core/performance/profiler_structs.h"
 
 namespace imp::editor {
 
-class FrameTimePanel;
+class ProfilerDataProvider;
 
 // Panel containing a tree view of performance profiling data.
 // Each node in the tree represents a sample taken across a scope.
-// Rendered as a subpanel of the FrameTimePanel.
 class HierarchyPanel {
  public:
   HierarchyPanel() {}
   ~HierarchyPanel() = default;
 
-  void DrawPanel(float width, int start_frame, int end_frame,
-                 SampleProcessor& sample_processor,
-                 FrameTimePanel& frame_time_panel);
-
-  std::thread::id GetSelectedThreadId() const { return current_thread_id_; }
+  void DrawPanel(float width, ProfilerDataProvider& data_provider,
+                 std::thread::id thread_id, absl::string_view search_query);
 
  private:
   constexpr static int kMaxTreeDepth = 30;
-  // The total duration of the root node for the current tree.
-  // This is used to calculate the percentage of time a sample takes up.
-  // For instances where >1 root nodes are present, their children will show
-  // their frametime percentage relative to their root's duration.
-  int64_t root_duration_ns_ = 0;
+
+  // Arguments for DrawTreeNode.
+  // Constantly updated and passed by reference to reduce stack pressure.
+  struct HierarchyDrawArgs {
+    ProfilerDataProvider& data_provider;
+    std::thread::id thread_id;
+    int& row_index;
+    // The total duration of the root node for the current tree.
+    // This is used to calculate the percentage of time a sample takes up.
+    int64_t root_duration_ns;
+    SampleNode* node;
+    int depth;
+    absl::string_view search_query;
+    bool should_expand_selected;
+    absl::string_view selected_sample_name;
+    absl::flat_hash_map<uint32_t, bool>& saved_node_states;
+    bool should_restore_states;
+  };
+
   // Draws a node in the tree as a row in the table.
   // Recursively calls itself for child nodes.
-  void DrawTreeNode(FrameTimePanel& frame_time_panel, SampleNode* node,
-                    int depth, int& row_index);
-  void DrawWorkerTreeNode(FrameTimePanel& frame_time_panel, SampleNode* node,
-                          int depth, int& row_index);
-  bool DrawMainThreadSamples(int start_frame, int end_frame,
-                             SampleProcessor& sample_processor,
-                             FrameTimePanel& frame_time_panel);
+  void DrawTreeNode(HierarchyDrawArgs& args);
+  bool DrawMainThreadSamples(ProfilerDataProvider& data_provider,
+                             absl::string_view search_query);
   bool DrawMainThreadFrame(int frame_index, SampleProcessor& sample_processor,
-                           FrameTimePanel& frame_time_panel);
-  bool DrawWorkerThreadSamples(int start_frame, int end_frame,
-                               SampleProcessor& sample_processor,
-                               std::thread::id thread_id,
-                               FrameTimePanel& frame_time_panel);
-  void DrawTableRow(FrameTimePanel& frame_time_panel, const char* name,
-                    uint32_t time, int calls, size_t memory_allocated,
-                    size_t allocations_count, int& row_index);
-  void DrawThreadSelector();
+                           ProfilerDataProvider& data_provider,
+                           absl::string_view search_query);
+  bool DrawWorkerThreadSamples(std::thread::id thread_id,
+                               ProfilerDataProvider& data_provider,
+                               absl::string_view search_query);
+  void DrawTableRow(HierarchyDrawArgs& args);
   // Returns a hard copy of a tree of samples.
   // This is used to modify the tree without affecting the original data.
   // Original data is owned by the SampleProcessor and will not be modified
@@ -82,14 +86,16 @@ class HierarchyPanel {
   std::unique_ptr<SampleNode> CreateFakeRootSample(
       const std::vector<SampleNode*>& roots, uint64_t start_time,
       uint64_t end_time, WorkerProfileResult& fake_result);
+  bool ShouldNodeBeOpen(const HierarchyDrawArgs& args, SampleNode* node,
+                        uint32_t id) const;
 
   // Pool of nodes to be reused each time a tree is drawn.
   MainThreadNodePool main_thread_node_pool_;
-
-  // For thread selection:
-  const char* current_thread_ = Profiler::kMainThreadName.data();
-  std::thread::id current_thread_id_;
-  bool thread_set_ = false;
+  absl::flat_hash_map<uint32_t, bool> saved_node_states_;
+  std::string last_search_query_;
+  bool should_restore_states_ = false;
+  bool should_expand_selected_ = false;
+  bool selected_during_search_ = false;
 };
 
 }  // namespace imp::editor

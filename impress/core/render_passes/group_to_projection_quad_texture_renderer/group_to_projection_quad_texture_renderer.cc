@@ -68,10 +68,18 @@ void GroupToProjectionQuadTextureRenderer::Update(
   // TODO: Delay initial use of TPR to workaround black screen.
   static int kFrameDelayForTPR = GetFrameDelayForTPR(GetNode()->GetView());
   static int frame_delay_counter = 0;
-  if (texture_pipeline_renderer_.IsValid() &&
-      frame_delay_counter++ > kFrameDelayForTPR) {
+  if (texture_pipeline_renderer_ && frame_delay_counter++ > kFrameDelayForTPR) {
     texture_pipeline_renderer_->GetNode()->SetEnabled(true);
   }
+}
+
+void GroupToProjectionQuadTextureRenderer::Cleanup() {
+  // Make sure all nodes created by this component is destroyed.
+  if (texture_pipeline_node_) {
+    GetView().DestroyNode(texture_pipeline_node_);
+  }
+  texture_pipeline_node_ = {};
+  texture_pipeline_renderer_ = {};
 }
 
 Future<absl::Status>
@@ -97,14 +105,15 @@ GroupToProjectionQuadTextureRenderer::CreateTexturePipelineRenderer() {
         "texture_size is invalid.");
   }
 
-  imp::TexturePipelineRendererState renderer_state;
+  TexturePipelineRendererState renderer_state;
   renderer_state.passes.emplace_back(ConfigurePass());
 
-  imp::NodeHandle texture_pipeline_node = GetNode()->CreateChildNode();
+  texture_pipeline_node_ = GetNode()->CreateChildNode();
   // TODO: Delay initial use of TPR to workaround black screen.
-  texture_pipeline_node->SetEnabled(false);
-  texture_pipeline_node->SetName("TexturePipeline");
-  return texture_pipeline_node
+  texture_pipeline_node_->SetEnabled(false);
+  texture_pipeline_node_->SetName(
+      "GroupToProjectionQuadTextureRenderer_TexturePipelineRenderer");
+  return texture_pipeline_node_
       ->AddComponentWithState<imp::TexturePipelineRenderer>(renderer_state)
       .Then(
           [this](
@@ -130,7 +139,9 @@ GroupToProjectionQuadTextureRenderer::ConfigurePass() {
       .color_texture_config =
           imp::TexturePipelineRendererState::Texture{
               .name = std::string(*state_.texture_name),
-              .format = imp::TexturePipelineRendererState::Texture::RGBA8,
+              // Intermediate offscreen textures should use a higher precision
+              // than RGBA8 to avoid precision loss and color artifacts.
+              .format = imp::TexturePipelineRendererState::Texture::R11G11B10F,
           },
       .depth_texture =
           imp::TexturePipelineRendererState::Texture{

@@ -31,6 +31,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "core/common/buffer_access.h"
+#include "core/common/jni_context.h"
 #include "core/common/optional_error.h"
 
 namespace imp {
@@ -96,21 +97,13 @@ void JniObjectArray::Set(jsize index, jobject value) {
   }
 }
 
-jstring ToString(JNIEnv* env, const std::string& str) {
-  return env->NewStringUTF(str.c_str());
-}
-
-jstring ToString(JNIEnv* env, absl::string_view view) {
-  std::string null_terminated_string(view.data(), view.size());
-  return env->NewStringUTF(null_terminated_string.data());
-}
-
 JniUniquePtr<jstring> ToJniString(JNIEnv* env, const std::string& str) {
-  return WrapJni(env, ToString(env, str));
+  return WrapJni(env, env->NewStringUTF(str.c_str()));
 }
 
 JniUniquePtr<jstring> ToJniString(JNIEnv* env, absl::string_view view) {
-  return WrapJni(env, ToString(env, view));
+  std::string null_terminated_string(view.data(), view.size());
+  return WrapJni(env, env->NewStringUTF(null_terminated_string.data()));
 }
 
 jobjectArray ToStringArray(JNIEnv* env, std::vector<absl::string_view> views) {
@@ -129,22 +122,31 @@ jobjectArray ToStringArray(JNIEnv* env, std::vector<absl::string_view> views) {
   return strings.Release();
 }
 
-jbyteArray ToByteArray(JNIEnv* env, const BufferAccess& access) {
-  jbyteArray result = env->NewByteArray(access.Size());
+JniUniquePtr<jbyteArray> ToJniByteArray(JNIEnv* env,
+                                        const BufferAccess& access) {
+  jbyteArray array = env->NewByteArray(access.Size());
+  if (array == nullptr) {
+    ThrowError(env, Error("Failed to allocate byte[]"));
+    return EmptyJniUniquePtr<jbyteArray>(env);
+  }
   if (!access.Empty()) {
-    env->SetByteArrayRegion(result, 0, access.Size(),
+    env->SetByteArrayRegion(array, 0, access.Size(),
                             reinterpret_cast<const jbyte*>(access.Data()));
   }
-  return result;
+  return WrapJni(env, array);
 }
 
-jbyteArray ToByteArray(JNIEnv* env, absl::string_view str) {
+JniUniquePtr<jbyteArray> ToJniByteArray(JNIEnv* env, absl::string_view str) {
   jbyteArray array = env->NewByteArray(str.size());
+  if (array == nullptr) {
+    ThrowError(env, Error("Failed to allocate byte[]"));
+    return EmptyJniUniquePtr<jbyteArray>(env);
+  }
   if (!str.empty()) {
     env->SetByteArrayRegion(array, 0, str.size(),
-                            reinterpret_cast<const jbyte*>(&str[0]));
+                            reinterpret_cast<const jbyte*>(str.data()));
   }
-  return array;
+  return WrapJni(env, array);
 }
 
 BufferAccess FromByteArray(JNIEnv* env, jbyteArray byte_array) {
@@ -184,13 +186,15 @@ absl::Cord ByteArrayToCord(JNIEnv* env, jbyteArray byte_array) {
 }
 
 void ThrowError(JNIEnv* env, const OptionalError& error) {
-  jclass exception_class = env->FindClass("java/lang/RuntimeException");
-  env->ThrowNew(exception_class, std::string(error.message()).c_str());
+  JniUniquePtr<jclass> exception_class =
+      FindClass(env, "java/lang/RuntimeException");
+  env->ThrowNew(exception_class.get(), std::string(error.message()).c_str());
 }
 
 void ThrowJsonError(JNIEnv* env, const OptionalError& error) {
-  jclass exception_class = env->FindClass("org/json/JSONException");
-  env->ThrowNew(exception_class, std::string(error.message()).c_str());
+  JniUniquePtr<jclass> exception_class =
+      FindClass(env, "org/json/JSONException");
+  env->ThrowNew(exception_class.get(), std::string(error.message()).c_str());
 }
 
 std::string GetString(JNIEnv* env, jstring java_string) {
@@ -219,7 +223,7 @@ jfieldID GetFieldID(JNIEnv* env, jclass clazz, const char* field_name,
 }
 
 JniUniquePtr<jclass> FindClass(JNIEnv* env, const char* class_path) {
-  return WrapJni(env, env->FindClass(class_path));
+  return WrapJni(env, JniContext::FindClass(env, class_path));
 }
 
 JniUniquePtr<jclass> GetObjectClass(JNIEnv* env, jobject object) {

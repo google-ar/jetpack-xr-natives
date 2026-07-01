@@ -63,7 +63,7 @@ CompoundShape CompoundCollider::GetCompoundShape() const {
   return CompoundShape{.center = state_.center};
 }
 
-absl::optional<RayHit> CompoundCollider::Intersect(const Ray& ray) {
+std::optional<RayHit> CompoundCollider::Intersect(const Ray& ray) {
   std::optional<RayHit> result;
   auto check_hit = [&](auto collider) {
     auto hit = collider->Intersect(ray);
@@ -91,7 +91,7 @@ absl::optional<RayHit> CompoundCollider::Intersect(const Ray& ray) {
   return result;
 }
 
-absl::optional<DoubleRayHit> CompoundCollider::IntersectPrecise(
+std::optional<DoubleRayHit> CompoundCollider::IntersectPrecise(
     const DoubleRay& ray) {
   std::optional<DoubleRayHit> result;
   auto check_hit = [&](auto collider) {

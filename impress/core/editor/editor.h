@@ -210,13 +210,6 @@ class Editor : public System {
 
   // Returns the screen-space rect of the 3D viewport widget.
   virtual std::optional<Rect> GetViewportRect() const = 0;
-
-  // Toggles the legacy camera controls (left click drag to rotate, right click
-  // drag to pan).
-  virtual void SetUseLegacyCameraControls(bool use_legacy) = 0;
-
-  // Returns true if legacy camera controls are enabled.
-  virtual bool UseLegacyCameraControls() const = 0;
 };
 
 // Gets the Editor from the Registry. If no Editor is present in the Registry,

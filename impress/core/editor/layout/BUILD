@@ -100,6 +100,7 @@ cc_library(
     deps = [
         ":editor_control_flags",
         "//core/common:bit_flag",
+        "//core/editor:editor_style",
         "//core/math",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",

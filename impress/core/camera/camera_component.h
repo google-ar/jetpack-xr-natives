@@ -121,7 +121,7 @@ class CameraComponent : public Component {
   // Overrides the transform of the camera instead of using the transform of the
   // Node to which this component is attached.
   // If nullopt is passed, any override is unset.
-  void SetCameraTransformOverride(absl::optional<mat4f> override);
+  void SetCameraTransformOverride(std::optional<mat4f> override);
 
   // Overrides the default call to update the projection whenever one is needed.
   // Once set, anything that invokes an update to the CameraComponent's

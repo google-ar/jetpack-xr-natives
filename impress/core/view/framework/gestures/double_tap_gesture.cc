@@ -36,7 +36,7 @@ DoubleTapGesture::CreateFn DoubleTapGesture::GetCreateFunction(
       [dispatcher, pointer_utils](const PointerHitEvent& pointer_hit,
                                   absl::Span<const DoubleTapGesture> gestures) {
         return pointer_hit.event.Type() == PointerEventType::kDown
-                   ? absl::optional<DoubleTapGesture>(DoubleTapGesture(
+                   ? std::optional<DoubleTapGesture>(DoubleTapGesture(
                          dispatcher, pointer_utils, pointer_hit))
                    : absl::nullopt;
       };

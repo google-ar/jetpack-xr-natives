@@ -126,6 +126,22 @@ cc_library(
 )
 
 cc_library(
+    name = "basic_transport_request_stub",
+    srcs = ["basic_transport_request_stub.cc"],
+    hdrs = ["basic_transport_request_stub.h"],
+    copts = imp_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":transport",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/types:span",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "split_engine_binder_transport",
     hdrs = ["split_engine_binder_transport.h"],
     copts = imp_copts(),
@@ -193,12 +209,10 @@ cc_library(
 cc_library(
     name = "senders",
     srcs = [
-        "message_group_sender.cc",
         "message_sender.cc",
         "request_sender.cc",
     ],
     hdrs = [
-        "flatbuffer_builder_holder.h",
         "message_group_sender.h",
         "message_sender.h",
         "request_sender.h",
@@ -213,13 +227,16 @@ cc_library(
         "//core/common:invocable",
         "//core/common:owned_or_borrowed_ptr",
         "//core/common:owned_ptr",
-        "//core/common:pass_key",
         "//core/split_engine:flatbuffer_utils",
         "//core/split_engine:split_engine_shared",
+        "@com_google_absl//absl/base:core_headers",
+        "@com_google_absl//absl/base:nullability",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/types:span",
         "@com_google_impress//core/common:log",
         "@flatbuffers",
@@ -245,7 +262,6 @@ cc_library(
         "//core/split_engine:split_engine_shared",
         "//core/view:base_view",
         "//core/view/utils:frame_time",
-        "//third_party/gloop/util/status:status_macros",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:flat_hash_set",
@@ -255,6 +271,7 @@ cc_library(
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/types:span",
         "@com_google_impress//core/common:log",
+        "@mediapipe//mediapipe/framework/port:status",
     ],
     alwayslink = 1,
 )

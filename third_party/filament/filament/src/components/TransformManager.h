@@ -22,8 +22,8 @@
 #include <filament/TransformManager.h>
 
 #include "filament/libs/utils/include/utils/compiler.h"
-#include "filament/libs/utils/include/utils/SingleInstanceComponentManager.h"
 #include "filament/libs/utils/include/utils/Entity.h"
+#include "filament/libs/utils/include/utils/SingleInstanceComponentManager.h"
 #include "filament/libs/utils/include/utils/Slice.h"
 
 #include "filament/libs/math/include/math/mat4.h"
@@ -69,6 +69,10 @@ public:
         return mManager.getEntities();
     }
 
+    const utils::PagedArenaBitset& getEntityBitset() const noexcept {
+        return mManager.getEntityBitset();
+    }
+
     void setAccurateTranslationsEnabled(bool enable) noexcept;
 
     bool isAccurateTranslationsEnabled() const noexcept {
@@ -94,6 +98,8 @@ public:
     children_iterator getChildrenBegin(Instance parent) const noexcept;
 
     children_iterator getChildrenEnd(Instance parent) const noexcept;
+
+    children_range getChildrenRange(Instance parent) const noexcept;
 
     void openLocalTransformTransaction() noexcept;
 

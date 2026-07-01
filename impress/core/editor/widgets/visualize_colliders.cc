@@ -11,12 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 #include "core/editor/widgets/visualize_colliders.h"
+
+#include <optional>
 
 #include "absl/container/flat_hash_set.h"
 #include "core/common/log.h"
 #include "core/collision/collision_flags.h"
+#include "core/common/platform_storage.h"
 #include "core/common/registry.h"
 #include "core/config.h"
 #include "core/editor/editor.h"
@@ -30,10 +32,15 @@
 namespace imp::editor {
 
 VisualizeColliders::VisualizeColliders(BaseView& view, bool use_view_dispatcher,
-                                       bool show_all_colliders)
+                                       std::optional<bool> show_all_colliders)
     : view_(view) {
-  mode_ = show_all_colliders ? Mode::kShowAllColliders
-                             : Mode::kShowSelectedAndDescendantColliders;
+  PlatformStorage& storage = *view_.GetRegistry().Get<PlatformStorage>();
+  bool show_all = show_all_colliders.has_value()
+                      ? *show_all_colliders
+                      : storage.GetBool(kShowAllCollidersEnabledKey,
+                                        kShowAllCollidersEnabledDefault);
+  mode_ = show_all ? Mode::kShowAllColliders
+                   : Mode::kShowSelectedAndDescendantColliders;
 
   Editor& editor = view_.GetRegistry().Get<Editor>()->get();
   selected_nodes_ = editor.GetSelectedNodes();

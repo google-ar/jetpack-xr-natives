@@ -49,7 +49,9 @@ class Event {
   // node. The nodes are automatically filled in when the event is sent.
   Event();
 
-  virtual ~Event() {}
+  virtual ~Event() = default;
+  Event(const Event&) = default;
+  Event& operator=(const Event&) = default;
 
   // Returns the propagation mode that Send was called with.
   PropagationMode GetPropagationMode() const;

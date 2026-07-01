@@ -180,7 +180,7 @@ OptionalError AddChannel(const imp::gltf::imp_proto::Gltf& gltf,
                          const AnimationSampler sampler,
                          flatbuffers::FlatBufferBuilder* fbb, T* out_type,
                          flatbuffers::Offset<void>* out_union,
-                         absl::optional<Domain>* out_domain) {
+                         std::optional<Domain>* out_domain) {
   if (!sampler.output) return absl::InternalError("Invalid sampler");
   MP_ASSIGN_OR_RETURN(
       loader::details::AccessorReader reader,
@@ -228,8 +228,8 @@ OptionalError AddChannel(const imp::gltf::imp_proto::Gltf& gltf,
   return NoError();
 }
 
-absl::optional<Domain> MergeDomains(const absl::optional<Domain>& a,
-                                    const absl::optional<Domain>& b);
+std::optional<Domain> MergeDomains(const std::optional<Domain>& a,
+                                   const std::optional<Domain>& b);
 
 }  // namespace imp::animation
 

@@ -268,6 +268,9 @@ class MeshRenderer : public Component {
   // Gets the AABB for this MeshRenderer.
   const Box& GetRenderableAabb() const;
 
+  // Gets the bounds for this MeshRenderer in world space.
+  Box GetWorldFullBounds() const;
+
   // Sets the shadow mode that this node can cast onto other nodes.
   // Shadow casting and shadow receiving do not impact each other. For instance,
   // this can cast shadows without receiving shadows.

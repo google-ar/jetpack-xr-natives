@@ -16,72 +16,25 @@
 
 #include <string>
 
-#include "absl/log/check.h"
-#include "core/common/log.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "filament/libs/utils/include/utils/Entity.h"
-#include "filament/libs/utils/include/utils/EntityManager.h"
 #include "core/ncsb/node.h"
-#include "core/ncsb/node_controller.h"
 #include "core/view/base_view.h"
 
 namespace imp {
 
-NodeHandle::NodeHandle() : node_(utils::Entity()) {}
-
 NodeHandle::NodeHandle(utils::Entity entity) : node_(entity) {}
-
-NodeHandle::NodeHandle(const Node& node) : node_(node) {}
-
-NodeHandle::NodeHandle(utils::Entity entity,
-                       imp_internal::NodeController* node_controller)
-    : node_(entity, node_controller) {}
-
-Node& NodeHandle::operator*() const noexcept { return *operator->(); }
-
-Node* NodeHandle::operator->() const noexcept {
-  AssertIsValid();
-  return &node_;
-}
-
-bool NodeHandle::operator==(const NodeHandle& other) const {
-  return node_ == other.node_;
-}
-
-bool NodeHandle::operator!=(const NodeHandle& other) const {
-  return node_ != other.node_;
-}
-
-NodeHandle::operator bool() const noexcept { return IsValid(); }
 
 bool NodeHandle::IsValid() const {
   utils::Entity entity = node_.GetEntity();
-  if (!utils::EntityManager::get().isAlive(entity)) {
-    // The contained value is currently not a valid filament entity.
-    return false;
-  }
 
-  // If the entity is valid & alive, but the node controller is null, then the
-  // filament entity isn't attached to the view and therefore isn't a node.
-  //
-  // If the node is destroyed, then the node_controller_ will be a dangling
-  // pointer, but we will have returned already because the entity won't be
-  // alive.
-  return node_.node_controller_ != nullptr;
+  imp_internal::NodeController* lookup =
+      imp_internal::NodeAttachmentManager::Get(entity);
+
+  return lookup != nullptr && lookup == node_.node_controller_ &&
+         lookup->GetEntity() == entity;
 }
-
-bool NodeHandle::IsDefaultValue() const { return node_.GetEntity().isNull(); }
-
-void NodeHandle::AssertIsValid() const {
-  
-
-  // This has a mild cost to it, which accumulates over large numbers of calls
-  // to NodeHandle. Disable in opt builds.
-  
-}
-
-utils::Entity NodeHandle::GetEntity() const { return node_.GetEntity(); }
 
 std::string ToString(const NodeHandle& handle) {
   if (handle.IsValid()) {

@@ -14,19 +14,18 @@
  * limitations under the License.
  */
 
-#include "FilamentAPI-impl.h"
-
-#include "RenderPrimitive.h"
-
 #include "components/RenderableManager.h"
 
-#include "ds/DescriptorSet.h"
+#include "FilamentAPI-impl.h"
+#include "RenderPrimitive.h"
 
 #include "details/Engine.h"
-#include "details/VertexBuffer.h"
 #include "details/IndexBuffer.h"
 #include "details/InstanceBuffer.h"
 #include "details/Material.h"
+#include "details/VertexBuffer.h"
+
+#include "ds/DescriptorSet.h"
 
 #include <private/filament/EngineEnums.h>
 #include <private/filament/UibStructs.h>
@@ -39,15 +38,15 @@
 #include <backend/DriverEnums.h>
 #include <backend/Handle.h>
 
+#include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/EntityManager.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/Log.h"
 #include "filament/libs/utils/include/utils/Logger.h"
+#include "filament/libs/utils/include/utils/ostream.h"
 #include "filament/libs/utils/include/utils/Panic.h"
 #include "filament/libs/utils/include/utils/Slice.h"
-#include "filament/libs/utils/include/utils/compiler.h"
-#include "filament/libs/utils/include/utils/debug.h"
-#include "filament/libs/utils/include/utils/ostream.h"
 
 #include "filament/libs/math/include/math/mat4.h"
 #include "filament/libs/math/include/math/scalar.h"
@@ -172,6 +171,25 @@ RenderableManager::Builder& RenderableManager::Builder::geometry(size_t const in
     if (index < entries.size()) {
         entries[index].vertices = vertices;
         entries[index].indices = indices;
+        entries[index].offset = offset;
+        entries[index].count = count;
+        entries[index].type = type;
+    }
+    return *this;
+}
+
+RenderableManager::Builder& RenderableManager::Builder::geometry(size_t const index,
+        PrimitiveType const type, VertexBuffer* vertices) noexcept {
+    return geometry(index, type, vertices, 0, vertices->getVertexCount());
+}
+
+RenderableManager::Builder& RenderableManager::Builder::geometry(size_t const index,
+        PrimitiveType const type, VertexBuffer* vertices,
+        size_t const offset, size_t const count) noexcept {
+    std::vector<BuilderDetails::Entry>& entries = mImpl->mEntries;
+    if (index < entries.size()) {
+        entries[index].vertices = vertices;
+        entries[index].indices = nullptr;
         entries[index].offset = offset;
         entries[index].count = count;
         entries[index].type = type;
@@ -519,8 +537,10 @@ RenderableManager::Builder::Result RenderableManager::Builder::build(Engine& eng
             material = downcast(entry.materialInstance->getMaterial());
         }
 
-        // primitives without indices or vertices will be ignored
-        if (!entry.indices || !entry.vertices) {
+        // primitives without vertices will be ignored. Note that a null index buffer is valid
+        // for attribute-less / non-indexed rendering and should NOT cause the primitive to be
+        // dropped here.
+        if (!entry.vertices) {
             continue;
         }
 
@@ -532,10 +552,29 @@ RenderableManager::Builder::Result RenderableManager::Builder::build(Engine& eng
                 << " which is not supported by this Engine: " << activeFeatureLevel;
 
         // reject invalid geometry parameters
-        FILAMENT_CHECK_PRECONDITION(entry.offset + entry.count <= entry.indices->getIndexCount())
-                << "[entity=" << entity.getId() << ", primitive @ " << i << "] offset ("
-                << entry.offset << ") + count (" << entry.count << ") > indexCount ("
-                << entry.indices->getIndexCount() << ")";
+        if (entry.indices) {
+            FILAMENT_CHECK_PRECONDITION(
+                    entry.offset + entry.count <= entry.indices->getIndexCount())
+                    << "[entity=" << entity.getId() << ", primitive @ " << i << "] offset ("
+                    << entry.offset << ") + count (" << entry.count << ") > indexCount ("
+                    << entry.indices->getIndexCount() << ")";
+        } else {
+            // Non-indexed (attribute-less) primitive: enforce no skinning/morphing because the
+            // GPU shader expects vertex attributes that simply aren't there.
+            FILAMENT_CHECK_PRECONDITION(mImpl->mSkinningBoneCount == 0)
+                    << "[entity=" << entity.getId() << ", primitive @ " << i
+                    << "] non-indexed (null IndexBuffer) primitives are incompatible with "
+                       "skinning";
+            FILAMENT_CHECK_PRECONDITION(mImpl->mMorphTargetCount == 0)
+                    << "[entity=" << entity.getId() << ", primitive @ " << i
+                    << "] non-indexed (null IndexBuffer) primitives are incompatible with "
+                       "morphing";
+            FILAMENT_CHECK_PRECONDITION(
+                    entry.offset + entry.count <= entry.vertices->getVertexCount())
+                    << "[entity=" << entity.getId() << ", primitive @ " << i << "] offset ("
+                    << entry.offset << ") + count (" << entry.count << ") > vertexCount ("
+                    << entry.vertices->getVertexCount() << ")";
+        }
 
         // this can't be an error because (1) those values are not immutable, so the caller
         // could fix later, and (2) the material's shader will work (i.e. compile), and
@@ -920,6 +959,18 @@ void FRenderableManager::setGeometryAt(Instance const instance, uint8_t const le
         if (primitiveIndex < primitives.size()) {
             primitives[primitiveIndex].set(mHwRenderPrimitiveFactory, mEngine.getDriverApi(),
                     type, vertices, indices, offset, count);
+        }
+    }
+}
+
+void FRenderableManager::setGeometryAt(Instance const instance, uint8_t const level, size_t const primitiveIndex,
+        PrimitiveType const type, FVertexBuffer* vertices,
+        size_t const offset, size_t const count) noexcept {
+    if (instance) {
+        Slice<FRenderPrimitive> const primitives = getRenderPrimitives(instance, level);
+        if (primitiveIndex < primitives.size()) {
+            primitives[primitiveIndex].set(mHwRenderPrimitiveFactory, mEngine.getDriverApi(),
+                    type, vertices, nullptr, offset, count);
         }
     }
 }

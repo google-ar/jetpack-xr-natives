@@ -19,7 +19,9 @@
 #include <sys/types.h>
 
 #include <cstdint>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/common/log.h"
@@ -75,18 +77,31 @@ Future<std::vector<uint8_t>> RuntimeMaterialCompiler::CompileMaterialInternal(
     return Future<std::vector<uint8_t>>(*cached_cmat);
   }
 
+  MaterialCompilerClient::OperationId operation_id = ++last_operation_id_;
   return Future<FlatBufferAccess<const schemas::CompileResponse>>::Schedule(
              // Copy the source material string to a std::string since the
              // lambda may outlives the memory under the source_material_string
              // parameter.
-             [this, source = std::string(source_material_string), config]() {
-               return native_client_->CompileMaterial(source, config);
+             [this, source = std::string(source_material_string), config,
+              operation_id]() {
+               return native_client_->CompileMaterial(source, config,
+                                                      operation_id);
              },
              {.executor = Executor::Type::kBackground})
       .Then(
-          [this,
-           hash](FlatBufferAccess<const schemas::CompileResponse> response)
-              -> absl::StatusOr<std::vector<uint8_t>> {
+          [this, operation_id, hash](
+              absl::StatusOr<FlatBufferAccess<const schemas::CompileResponse>>
+                  result) -> absl::StatusOr<std::vector<uint8_t>> {
+            if (!result.ok()) {
+              // If the future for CompileMaterial was cancelled the caller does
+              // not need the result anymore, which means we can cancel the
+              // compilation request on the service.
+              if (result.status().code() == absl::StatusCode::kCancelled) {
+                native_client_->CancelOperation(operation_id);
+              }
+              return result.status();
+            }
+            auto response = std::move(*result);
             const flatbuffers::Vector<uint8_t>* compiled_material =
                 response->compiled_material();
 

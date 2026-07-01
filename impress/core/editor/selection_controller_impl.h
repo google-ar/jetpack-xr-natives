@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Google LLC
+ * Copyright 2026 Google LLC
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,6 +49,9 @@ class SelectionControllerImpl : public SelectionController, public System {
   // When the node is invalid, deselect all nodes.
   void TrySelectNode(NodeHandle node_to_select,
                      EditorInfo::SelectionMode selection_mode) override;
+
+  // Sets the selected nodes to the provided nodes.
+  void SetSelectedNodes(const absl::flat_hash_set<NodeHandle>& nodes) override;
 
   // Disables selecting the model on ModelLoadedEvents. Enabled by default.
   void DisableSelectModelWhenLoaded(bool disable_select_model_on_load) {

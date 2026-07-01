@@ -120,6 +120,13 @@ class IndexBufferBuilder : public BaseIndexBufferBuilder {
   filament::IndexBuffer* index_buffer_;
 
   std::string name_;
+
+  // TODO: (broken link) - Remove this hack once split engine supports empty index
+  // buffers properly.
+  uint32_t index_count_ = 0;
+  filament::IndexBuffer::IndexType index_type_ =
+      filament::IndexBuffer::IndexType::USHORT;
+  bool has_buffer_ = false;
 };
 
 class MorphTargetBufferBuilder : public BaseMorphTargetBufferBuilder {

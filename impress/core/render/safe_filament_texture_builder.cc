@@ -17,11 +17,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <utility>
 
 #include "absl/base/nullability.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
+#include "filament/filament/backend/include/backend/BufferDescriptor.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/Texture.h"
@@ -128,6 +130,14 @@ SafeFilamentTextureBuilder::Builder& SafeFilamentTextureBuilder::import(
   return *this;
 }
 
+SafeFilamentTextureBuilder::Builder& SafeFilamentTextureBuilder::async(
+    filament::backend::CallbackHandler* /*absl_nullable*/  handler,
+    filament::Texture::AsyncCompletionCallback callback,
+    void* /*absl_nullable*/  user) noexcept {
+  builder_.async(handler, std::move(callback), user);
+  return *this;
+}
+
 absl::StatusOr<filament::Texture* /*absl_nonnull*/ >
 SafeFilamentTextureBuilder::build(filament::Engine& engine) noexcept {
   // Replication of all checks in filament::Texture::Builder::build
@@ -197,8 +207,17 @@ SafeFilamentTextureBuilder::build(filament::Engine& engine) noexcept {
   if (usage_ == Usage::NONE) {
     // Following logic from filament::Texture::Builder::build
     usage_ = Usage::DEFAULT;  // UPLOADABLE | SAMPLEABLE
+    if (levels_ > 1) {
+      usage_ |= Usage::GEN_MIPMAPPABLE;
+    }
     // Skipping all other usage updates that are done in
     // filament::Texture::Builder::build, because none of affect any panics.
+    builder_.usage(usage_);
+  }
+
+  if (levels_ > 1 && !(usage_ & Usage::GEN_MIPMAPPABLE)) {
+    usage_ |= Usage::GEN_MIPMAPPABLE;
+    builder_.usage(usage_);
   }
 
   const bool sampleable = static_cast<bool>(usage_ & Usage::SAMPLEABLE);

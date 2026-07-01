@@ -20,6 +20,7 @@
 #include "core/collision/collision_helpers.h"
 #include "core/collision/plane.h"
 #include "core/collision/ray.h"
+#include "core/common/platform_storage.h"
 #include "core/common/registry.h"
 #include "core/editor/components/grid_asset.h"
 #include "core/editor/editor.h"
@@ -60,7 +61,11 @@ Future<absl::Status> Grid::Setup() {
       ->AddComponentWithState<PrimitiveShapeRenderer>(primitive_shape_state)
       .Then([this, &editor](
                 ComponentHandle<PrimitiveShapeRenderer> primitive_renderer) {
-        grid_renderer_ = GetNode()->GetComponent<PrimitiveShapeRenderer>();
+        grid_renderer_ = primitive_renderer;
+        PlatformStorage& storage =
+            *GetView().GetRegistry().Get<PlatformStorage>();
+        grid_renderer_->SetEnabled(
+            storage.GetBool(kGridEnabledKey, kGridEnabledDefault));
         editor.GetDispatcher().Connect(
             [this](const EditorSettingChangedEvent& event) mutable {
               if (event.grid_enabled.has_value()) {

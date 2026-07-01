@@ -15,7 +15,7 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:objc_library.bzl", "objc_library")
-load("//build_tools:imp.bzl", "if_android", "if_ios", "imp_default_jni_linkopts")
+load("//build_tools:imp.bzl", "if_android", "if_ios", "if_non_android", "imp_default_jni_linkopts")
 load("//core/scripting/testing:build_defs.bzl", "scripting_end_to_end_test", "standalone_jasmine_test_script")
 
 package(
@@ -47,7 +47,7 @@ cc_library(
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
-    ],
+    ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )
 

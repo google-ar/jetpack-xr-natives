@@ -17,14 +17,15 @@
 #ifndef TNT_MATH_QUAT_H
 #define TNT_MATH_QUAT_H
 
-#include "filament/libs/math/include/math/TQuatHelpers.h"
 #include "filament/libs/math/include/math/compiler.h"
 #include "filament/libs/math/include/math/half.h"
+#include "filament/libs/math/include/math/TQuatHelpers.h"
 #include "filament/libs/math/include/math/vec3.h"
 #include "filament/libs/math/include/math/vec4.h"
 
-#include <stdint.h>
 #include <sys/types.h>
+
+#include <stdint.h>
 
 namespace filament::math {
 namespace details {

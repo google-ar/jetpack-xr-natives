@@ -67,10 +67,10 @@ class SceneMetadata : public Component {
   void SetBaseLocalRotation(quatf rotation);
   void SetBaseLocalScale(float3 scale);
 
-  std::optional<bool> IsBaseDisabled();
-  std::optional<float3> GetBaseLocalPosition();
-  std::optional<quatf> GetBaseLocalRotation();
-  std::optional<float3> GetBaseLocalScale();
+  std::optional<bool> IsBaseDisabled() const;
+  std::optional<float3> GetBaseLocalPosition() const;
+  std::optional<quatf> GetBaseLocalRotation() const;
+  std::optional<float3> GetBaseLocalScale() const;
 
   void PushBaseComponentSources(HashValue component_type, bool disabled,
                                 absl::string_view component_source_bytes);

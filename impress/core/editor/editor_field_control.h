@@ -22,6 +22,7 @@
 #include <string>
 #include <type_traits>
 
+#include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
@@ -31,12 +32,14 @@
 #include "dear_imgui/imgui_internal.h"
 #include "dear_imgui/misc/cpp/imgui_stdlib.h"
 #include "core/common/bit_flag.h"
+#include "core/common/file_helpers.h"
 #include "core/common/registry.h"
 #include "core/editor/editor_style.h"
 #include "core/editor/layout/editor_control_flags.h"
 #include "core/editor/layout/helpers.h"
 #include "core/editor/selection_controller.h"
 #include "core/editor/ui/drag_and_drop.h"
+#include "core/editor/ui/drag_and_drop_material.h"
 #include "core/editor/ui/drag_and_drop_node.h"
 #include "core/geometry/shapes/box.h"
 #include "core/math/math.h"
@@ -46,6 +49,8 @@
 #include "core/proto/imp_editor.proto.imp.h"
 #include "core/proto/proto_common.h"
 #include "core/proto/proto_differ.h"
+#include "core/render/material_registry.h"
+#include "core/scene_handles/material_handle.h"
 #include "core/scene_handles/scene_handle_interface.h"
 #include "core/view/base_view.h"
 
@@ -57,12 +62,21 @@ class NodeSceneHandle;
 class BaseView;
 template <typename T>
 class ComponentSceneHandle;
+class MaterialHandle;
 
 // Collection of helper static methods to create ImGui UI to edit fields
 // specified from an Impress proto field with an option specified here:
 // (broken link)
 class EditorFieldControl {
  public:
+  static constexpr absl::string_view kMixedValueString = "-";
+
+  // Returns true if the current ImGui item has the mixed value flag set.
+  static bool IsMixedValue() {
+    return (ImGui::GetCurrentContext()->CurrentItemFlags &
+            ImGuiItemFlags_MixedValue) != 0;
+  }
+
   // List all handled "primitive" types of fields so we can determine if a field
   // type needs to be recursed, i.e. it is a nested message.
   template <typename T>
@@ -89,9 +103,71 @@ class EditorFieldControl {
   struct is_handled_type<bool> : std::true_type {};
 
   template <>
+  struct is_handled_type<MaterialHandle> : std::true_type {};
+  template <>
   struct is_handled_type<NodeSceneHandle> : std::true_type {};
   template <typename T>
   struct is_handled_type<ComponentSceneHandle<T>> : std::true_type {};
+
+  // Renders a group of 3 scalar input fields (e.g., for a float3 or double3)
+  // with support for mixed values across multiple selected objects.
+  template <typename T>
+  static bool DrawMultiInput3(const char* label, T* value,
+                              const bool all_same[3], const char* format,
+                              const ImGuiInputTextFlags flags) {
+    // While T is float3 our double3, T* is a pointer to the first element.
+    // That first element is a single float/double so this check works.
+    static_assert(std::is_same_v<T, float> || std::is_same_v<T, double>,
+                  "DrawMultiInput3 only supports float or double types.");
+    constexpr ImGuiDataType data_type =
+        std::is_same_v<T, double> ? ImGuiDataType_Double : ImGuiDataType_Float;
+
+    ImGui::BeginGroup();
+    ImGui::PushID(label);
+    ImGui::PushMultiItemsWidths(3, ImGui::CalcItemWidth());
+
+    bool value_changed = false;
+
+    for (int i = 0; i < 3; i++) {
+      ImGui::PushID(i);
+
+      if (i > 0) {
+        ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x);
+      }
+
+      const char* field_format =
+          all_same[i] ? format : kMixedValueString.data();
+
+      if (!all_same[i]) {
+        ImGui::PushItemFlag(ImGuiItemFlags_MixedValue, true);
+      }
+
+      // Find the address of the current field we're iterating over.
+      void* value_addr = (char*)value + i * sizeof(T);
+
+      value_changed |= ImGui::InputScalar("", data_type, value_addr, nullptr,
+                                          nullptr, field_format, flags);
+
+      if (!all_same[i]) {
+        ImGui::PopItemFlag();  // ImGuiItemFlags_MixedValue
+      }
+
+      ImGui::PopID();  // i
+      ImGui::PopItemWidth();
+    }
+    ImGui::PopID();  // label
+
+    const char* label_end = ImGui::FindRenderedTextEnd(label);
+
+    // Render the label on the same line as the input fields.
+    if (label != label_end) {
+      ImGui::SameLine(0.0f, ImGui::GetStyle().ItemInnerSpacing.x);
+      ImGui::TextEx(label, label_end);
+    }
+
+    ImGui::EndGroup();
+    return value_changed;
+  }
 
   template <typename ControlT, typename FieldT>
   static absl::StatusOr<bool> ShowControl(
@@ -846,6 +922,97 @@ class EditorFieldControl {
 
     return updated;
   }
+
+  static bool ShowDefaultControl(
+      absl::string_view name, MaterialHandle* val, MaterialHandle* base,
+      editor::EditorControlFlags editor_control_flags =
+          editor::EditorControlFlags::kDefault,
+      BaseView* view = nullptr) {
+    bool updated = false;
+
+    EditingElementMode mode = EditingElementMode::kNormal;
+    if (base && val->GetUrl() == base->GetUrl()) {
+      editor::PushBaseIsfElementStyle();
+      mode = EditingElementMode::kMatchesBase;
+    }
+
+    ImVec2 padding = ImGui::GetStyle().FramePadding;
+
+    std::string label;
+    if (val->GetUrl().empty()) {
+      label = absl::StrFormat("<Unassigned Material>");
+    } else {
+      if (!val->GetUrl().empty()) {
+        label = GetLocalFilenameFromFilename(val->GetUrl());
+      } else {
+        label = "<Unnamed>";
+      }
+    }
+
+    ImVec2 text_size = ImGui::CalcTextSize(label.c_str());
+    text_size.x += padding.x * 2.0f;
+    text_size.y += padding.y * 2.0f;
+
+    ImVec2 cursor = ImGui::GetCursorPos();
+    ImGui::InvisibleButton("##jump_to_asset_button", text_size);
+    ImVec2 final_cursor = ImGui::GetCursorPos();
+
+    ImVec2 min = ImGui::GetItemRectMin();
+    ImVec2 max = ImGui::GetItemRectMax();
+    ImVec4 fill_color = mode == EditingElementMode::kMatchesBase
+                            ? editor::kGrey900
+                            : editor::kBlue900;
+    ImVec4 border_color = mode == EditingElementMode::kMatchesBase
+                              ? editor::kGrey700
+                              : editor::kBlue700;
+
+    if (!val->GetUrl().empty()) {
+      ImGui::GetWindowDrawList()->AddRectFilled(
+          min, max, ImGui::GetColorU32(editor::WithAlpha(fill_color, 0.6f)),
+          3.0f);
+    }
+
+    ImGui::GetWindowDrawList()->AddRect(
+        min, max, ImGui::GetColorU32(editor::WithAlpha(border_color, 0.8f)),
+        3.0f);
+
+    cursor.x += padding.x;
+    cursor.y += padding.y;
+    ImGui::SetCursorPos(cursor);
+    ImGui::Text("%s", label.c_str());
+    ImGui::SetCursorPos(final_cursor);
+
+    if (ImGui::BeginDragDropTarget()) {
+      std::optional<editor::DragAndDropMaterialResult> result =
+          editor::AcceptDragAndDropPayloadMaterial(view);
+
+      if (result.has_value()) {
+        // Since this field is a drag and drop target, we assume that the
+        // material is already loaded. Otherwise, that material cannot be a drag
+        // and drop source.
+        if (view && !result->url.empty()) {
+          val->AssignMaterial(
+              result->url,
+              view->GetRegistry().GetOrCreate<MaterialRegistry>().GetMaterial(
+                  result->url));
+        }
+        updated = true;
+      }
+      ImGui::EndDragDropTarget();
+    }
+
+    ImGui::SameLine(0, ImGui::GetStyle().ItemInnerSpacing.x + padding.x);
+
+    ImGui::Text("%s", std::string(name).c_str());
+
+    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + padding.y);
+
+    if (mode == EditingElementMode::kMatchesBase) {
+      editor::PopBaseIsfElementStyle();
+    }
+
+    return updated;
+  }
 };
 
 // Specializations for quaternion and float3 fields to use AlmostEqual for
@@ -862,7 +1029,16 @@ template <>
 bool EditorFieldControl::CompareField(quatf& val, quatf& base);
 
 template <>
+bool EditorFieldControl::CompareField(float2& val, float2& base);
+
+template <>
 bool EditorFieldControl::CompareField(float3& val, float3& base);
+
+template <>
+bool EditorFieldControl::CompareField(float4& val, float4& base);
+
+template <>
+bool EditorFieldControl::CompareField(Box& val, Box& base);
 
 }  // namespace imp
 

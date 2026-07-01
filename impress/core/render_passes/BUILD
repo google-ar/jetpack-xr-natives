@@ -14,7 +14,7 @@
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("//build_tools:assets.bzl", "imp_assets")
-load("//build_tools:imp.bzl", "imp_copts", "imp_google3_copts")
+load("//build_tools:imp.bzl", "if_android", "imp_copts", "imp_google3_copts")
 load("//build_tools:imp_material.bzl", "imp_material")
 load(
     "//core/proto:imp_cc_proto_library.bzl",
@@ -127,6 +127,32 @@ imp_cc_proto_library(
         "//core/scene_handles:scene_handles_imp_cc_proto",
         "//core/view/utils:render_settings_proto_cc_imp",
     ],
+)
+
+cc_library(
+    name = "projection_quad_camera_helper",
+    srcs = ["projection_quad_camera_helper.cc"],
+    hdrs = ["projection_quad_camera_helper.h"],
+    copts = imp_copts(),
+    deps = [
+        ":texture_pipeline_renderer_projection_quad",
+        "//core/camera",
+        "//core/math",
+        "//core/ncsb",
+        "//core/view:base_view",
+        "//core/view/utils:frame_time",
+        "//core/window:projection_helpers",
+        "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/status",
+        "@com_google_impress//core/common:log",
+        "@third_party//filament/filament:filament_hdrs",
+    ] + if_android([
+        # TODO: XrSessionHost's swapchain relies on OpenGL/Vulkan specific structures which aren't fully supported on Metal. Remove if_android once XrSessionHost supports Metal completely.
+        "//core/view/platforms/xr_android:xr",
+        "//core/view/platforms/xr_android:xr_helpers",
+        "//core/view/platforms/xr_android:xr_session_host",
+    ]),
+    alwayslink = 1,
 )
 
 cc_library(

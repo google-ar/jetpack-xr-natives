@@ -17,10 +17,10 @@
 
 #include "PerformanceCounters.h"
 
-#include <benchmark/benchmark.h>
-
 #include "filament/libs/math/include/math/fast.h"
 #include "filament/libs/math/include/math/half.h"
+
+#include <benchmark/benchmark.h>
 
 #include <cmath>
 

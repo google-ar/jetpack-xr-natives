@@ -22,12 +22,13 @@
 #include <backend/Platform.h>
 
 #include "filament/libs/utils/include/utils/compiler.h"
-#include "filament/libs/utils/include/utils/Invocable.h"
 #include "filament/libs/utils/include/utils/CString.h"
+#include "filament/libs/utils/include/utils/Invocable.h"
+
+#include "filament/libs/math/include/math/mat3.h"
 
 #include <stddef.h>
 #include <stdint.h>
-#include "filament/libs/math/include/math/mat3.h"
 
 namespace filament::backend {
 
@@ -40,7 +41,7 @@ class Driver;
  *          upon return.
  *
  */
-class OpenGLPlatform : public Platform {
+class UTILS_SHARED_LINKING OpenGLPlatform : public Platform {
 protected:
 
     /*
@@ -53,7 +54,7 @@ protected:
     ~OpenGLPlatform() noexcept override;
 
     utils::CString getDeviceInfo(DeviceInfoType infoType,
-            Driver* UTILS_NULLABLE driver) const noexcept override;
+            Driver* UTILS_NULLABLE driver) const override;
 
 public:
     struct ExternalTexture {

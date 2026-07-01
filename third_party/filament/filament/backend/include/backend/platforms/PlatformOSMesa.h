@@ -43,7 +43,7 @@ namespace filament::backend {
  * context that can be used in conjunction with Mesa for software rasterization.
  * See (broken link) for more information.
  */
-class PlatformOSMesa : public OpenGLPlatform {
+class UTILS_SHARED_LINKING PlatformOSMesa : public OpenGLPlatform {
 protected:
     // --------------------------------------------------------------------------------------------
     // Platform Interface

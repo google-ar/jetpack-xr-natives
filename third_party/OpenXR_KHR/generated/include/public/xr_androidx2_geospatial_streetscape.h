@@ -22,14 +22,15 @@ extern "C" {
 
 // XR_ANDROIDX2_geospatial_streetscape is a preprocessor guard. Do not pass it to API calls.
 #define XR_ANDROIDX2_geospatial_streetscape 1
-#define XR_ANDROIDX2_geospatial_streetscape_SPEC_VERSION 1
-#define XR_ANDROIDX2_GEOSPATIAL_STREETSCAPE_EXTENSION_NAME "XR_ANDROIDX2_geospatial_streetscape"
 #define XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_STREETSCAPE_GEOMETRY_ANDROIDX2 ((XrStructureType) 1000798000U)
 #define XR_TYPE_SPATIAL_COMPONENT_STREETSCAPE_GEOMETRY_METADATA_LIST_ANDROIDX2 ((XrStructureType) 1000798001U)
 // Streetscape geometry
 #define XR_SPATIAL_CAPABILITY_STREETSCAPE_GEOMETRY_ANDROIDX2 ((XrSpatialCapabilityEXT) 1000798000U)
 // Component that provides the metadata for a streetscape geometry; Corresponding list structure is slink:XrSpatialComponentStreetscapeGeometryMetadataListANDROIDX2; Corresponding data structure is slink:XrSpatialStreetscapeGeometryMetadataANDROIDX2
 #define XR_SPATIAL_COMPONENT_TYPE_STREETSCAPE_GEOMETRY_METADATA_ANDROIDX2 ((XrSpatialComponentTypeEXT) 1000798000U)
+
+#define XR_ANDROIDX2_geospatial_streetscape_SPEC_VERSION 1
+#define XR_ANDROIDX2_GEOSPATIAL_STREETSCAPE_EXTENSION_NAME "XR_ANDROIDX2_geospatial_streetscape"
 
 typedef enum XrStreetscapeGeometrySemanticLabelANDROIDX2 {
     // This geometry represents the ground or floor.
@@ -68,6 +69,36 @@ typedef struct XrSpatialComponentStreetscapeGeometryMetadataListANDROIDX2 {
     uint32_t                                          metadataCount;
     XrSpatialStreetscapeGeometryMetadataANDROIDX2*    metadatas;
 } XrSpatialComponentStreetscapeGeometryMetadataListANDROIDX2;
+
+
+// Reflection macros
+#define XR_LIST_ENUM_XrStreetscapeGeometrySemanticLabelANDROIDX2(_) \
+    _(XR_STREETSCAPE_GEOMETRY_SEMANTIC_LABEL_TERRAIN_ANDROIDX2, 1) \
+    _(XR_STREETSCAPE_GEOMETRY_SEMANTIC_LABEL_BUILDING_ANDROIDX2, 2) \
+    _(XR_STREETSCAPE_GEOMETRY_SEMANTIC_LABEL_ANDROIDX2_MAX_ENUM, 0x7FFFFFFF)
+
+#define XR_LIST_ENUM_XrStreetscapeGeometryQualityANDROIDX2(_) \
+    _(XR_STREETSCAPE_GEOMETRY_QUALITY_NONE_ANDROIDX2, 0) \
+    _(XR_STREETSCAPE_GEOMETRY_QUALITY_BUILDING_LOD1_ANDROIDX2, 1) \
+    _(XR_STREETSCAPE_GEOMETRY_QUALITY_BUILDING_LOD2_ANDROIDX2, 2) \
+    _(XR_STREETSCAPE_GEOMETRY_QUALITY_ANDROIDX2_MAX_ENUM, 0x7FFFFFFF)
+
+#define XR_LIST_STRUCT_XrSpatialCapabilityConfigurationStreetscapeGeometryANDROIDX2(_) \
+    _(type) \
+    _(next) \
+    _(capability) \
+    _(enabledComponentCount) \
+    _(enabledComponents)
+
+#define XR_LIST_STRUCT_XrSpatialStreetscapeGeometryMetadataANDROIDX2(_) \
+    _(semanticLabel) \
+    _(quality)
+
+#define XR_LIST_STRUCT_XrSpatialComponentStreetscapeGeometryMetadataListANDROIDX2(_) \
+    _(type) \
+    _(next) \
+    _(metadataCount) \
+    _(metadatas)
 
 #endif /* XR_ANDROIDX2_geospatial_streetscape */
 

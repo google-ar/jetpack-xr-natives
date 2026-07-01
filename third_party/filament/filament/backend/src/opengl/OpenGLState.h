@@ -17,15 +17,14 @@
 #ifndef TNT_FILAMENT_BACKEND_OPENGL_OPENGLSTATE_H
 #define TNT_FILAMENT_BACKEND_OPENGL_OPENGLSTATE_H
 
+#include "gl_headers.h"
 #include "OpenGLContext.h"
 #include "OpenGLTimerQuery.h"
 
 #include <backend/DriverEnums.h>
 
-#include "gl_headers.h"
-
-#include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/bitset.h"
+#include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/debug.h"
 
 #include "filament/libs/math/include/math/vec2.h"

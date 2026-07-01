@@ -518,7 +518,7 @@ absl::Status BuiltInJxrMediaMaterial::SetupColorCorrectionParameters(
     post_frame_update_connection_.Disconnect();
     post_frame_update_connected_ = false;
     // Apply the provided color space parameters directly.
-    OverrideColorSpaceParameters(view_, color_space);
+    OverrideColorSpaceParameters(view_, color_space, primary_media_texture_id_);
     IMP_LOG(imp::INFO) << "JXR media material: Color correction mode is user override, "
                  "disconnected from post frame update event.";
   } else {

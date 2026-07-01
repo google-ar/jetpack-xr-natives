@@ -93,7 +93,7 @@ class BaseStateVisitor {
 
   // Takes a type-erased state for a component, and the node
   // that the component was attached to.
-  virtual absl::optional<Future<absl::Status>> Accept(
+  virtual std::optional<Future<absl::Status>> Accept(
       NodeHandle node, HashValue state_type_hash, void* erased_state,
       bool should_enable_component) = 0;
 };
@@ -359,7 +359,7 @@ struct IsfInfoWithExplicitComp {
   // Helper for visiting the component before the default Setup is called.
   // If the visitor calls a setup overload, returns the result. Otherwise
   // returns nullopt.
-  static absl::optional<Future<absl::Status>> Visit(
+  static std::optional<Future<absl::Status>> Visit(
       NodeHandle node, ComponentManager* component_manager,
       BaseStateVisitor* state_visitor, bool should_enable_component) {
     auto comp_handle = component_manager->Get<ComponentT>(node.GetEntity());
@@ -496,7 +496,7 @@ struct StatelessIsfInfo {
   // called. Currently, this does nothing for StatelessIsfInfo.
   // TODO: Support passing parameters to Setup via .isf for
   // Stateless components.
-  static absl::optional<Future<absl::Status>> Visit(
+  static std::optional<Future<absl::Status>> Visit(
       NodeHandle node, ComponentManager* component_manager,
       BaseStateVisitor* state_visitor, bool should_enable_component) {
     return absl::nullopt;

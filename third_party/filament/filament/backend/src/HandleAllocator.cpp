@@ -14,17 +14,21 @@
  * limitations under the License.
  */
 
-#include "private/backend/HandleAllocator.h"
+#include <private/backend/HandleAllocator.h>
 
 #include <backend/Handle.h>
 
 #include "filament/libs/utils/include/utils/Allocator.h"
-#include "filament/libs/utils/include/utils/CString.h"
-#include "filament/libs/utils/include/utils/Logger.h"
-#include "filament/libs/utils/include/utils/Panic.h"
 #include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/CString.h"
+#include "filament/libs/utils/include/utils/CString.h"
 #include "filament/libs/utils/include/utils/debug.h"
+#include "filament/libs/utils/include/utils/Logger.h"
+#include "filament/libs/utils/include/utils/Logger.h"
+#include "filament/libs/utils/include/utils/Mutex.h"
 #include "filament/libs/utils/include/utils/ostream.h"
+#include "filament/libs/utils/include/utils/Panic.h"
+#include "filament/libs/utils/include/utils/Panic.h"
 
 #include <algorithm>
 #include <exception>
@@ -108,12 +112,47 @@ template <size_t P0, size_t P1, size_t P2>
 UTILS_NOINLINE
 void* HandleAllocator<P0, P1, P2>::handleToPointerSlow(HandleBase::HandleId id) const noexcept {
     auto& overflowMap = mOverflowMap;
-    std::lock_guard const lock(mLock);
+    LockGuard const lock(mLock);
     auto pos = overflowMap.find(id);
     if (pos != overflowMap.end()) {
         return pos.value();
     }
     return nullptr;
+}
+
+template<size_t P0, size_t P1, size_t P2>
+UTILS_NOINLINE
+void* HandleAllocator<P0, P1, P2>::handleCast(HandleBase::HandleId id) const {
+    auto [p, tag] = handleToPointer(id);
+    if (isPoolHandle(id)) {
+        // check for pool handle use-after-free
+        if (UTILS_UNLIKELY(!mUseAfterFreeCheckDisabled)) {
+            uint8_t const age = (tag & HANDLE_AGE_MASK) >> HANDLE_AGE_SHIFT;
+            auto const pNode = static_cast<typename Allocator::Node*>(p);
+            uint8_t const expectedAge = pNode[-1].age;
+            // getHandleTag() is only called if the check fails.
+            FILAMENT_CHECK_POSTCONDITION(expectedAge == age)
+                    << "use-after-free of Handle with id=" << id
+                    << ", tag=" << getHandleTag(id).c_str_safe();
+        }
+    } else {
+        // check for heap handle use-after-free
+        if (UTILS_UNLIKELY(!mUseAfterFreeCheckDisabled)) {
+            HandleBase::HandleId const index = (id & HANDLE_INDEX_MASK);
+            // if we've already handed out this handle index before, it's definitely a
+            // use-after-free, otherwise it's probably just a corrupted handle
+            if (index < mId.load(std::memory_order_relaxed)) {
+                FILAMENT_CHECK_POSTCONDITION(p != nullptr)
+                        << "use-after-free of heap Handle with id=" << id
+                        << ", tag=" << getHandleTag(id).c_str_safe();
+            } else {
+                FILAMENT_CHECK_POSTCONDITION(p != nullptr)
+                        << "corrupted heap Handle with id=" << id
+                        << ", tag=" << getHandleTag(id).c_str_safe();
+            }
+        }
+    }
+    return p;
 }
 
 template <size_t P0, size_t P1, size_t P2>
@@ -127,7 +166,7 @@ HandleBase::HandleId HandleAllocator<P0, P1, P2>::allocateHandleSlow(size_t size
 
     HandleBase::HandleId id = nextId | HANDLE_HEAP_FLAG;
 
-    std::unique_lock lock(mLock);
+    UniqueLock lock(mLock);
     mOverflowMap.emplace(id, p);
     lock.unlock();
 
@@ -144,7 +183,7 @@ void HandleAllocator<P0, P1, P2>::deallocateHandleSlow(HandleBase::HandleId id, 
     void* p = nullptr;
     auto& overflowMap = mOverflowMap;
 
-    std::unique_lock lock(mLock);
+    UniqueLock lock(mLock);
     auto pos = overflowMap.find(id);
     if (pos != overflowMap.end()) {
         p = pos.value();
@@ -166,6 +205,25 @@ ImmutableCString HandleAllocator<P0, P1, P2>::getHandleTag(HandleBase::HandleId 
     return findHandleTag(key);
 }
 
+template<size_t P0, size_t P1, size_t P2>
+void HandleAllocator<P0, P1, P2>::associateTagToHandle(HandleBase::HandleId id, ImmutableCString&& tag) noexcept {
+    if (tag.empty()) {
+        return;
+    }
+    uint32_t key = id;
+    if (UTILS_LIKELY(isPoolHandle(id))) {
+        // Truncate the age to get the debug tag
+        key &= ~(HANDLE_DEBUG_TAG_MASK ^ HANDLE_AGE_MASK);
+        writePoolHandleTag(key, std::move(tag));
+    } else {
+        if (!mHeapHandleTagsDisabled) {
+            writeHeapHandleTag(key, std::move(tag));
+        }
+    }
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+
 DebugTag::DebugTag() {
     // Reserve initial space for debug tags. This prevents excessive calls to malloc when the first
     // few tags are set.
@@ -174,7 +232,7 @@ DebugTag::DebugTag() {
 
 UTILS_NOINLINE
 ImmutableCString DebugTag::findHandleTag(HandleBase::HandleId key) const noexcept {
-    std::unique_lock const lock(mDebugTagLock);
+    LockGuard const lock(mDebugTagLock);
     if (auto pos = mDebugTags.find(key); pos != mDebugTags.end()) {
         return pos->second;
     }
@@ -185,7 +243,7 @@ UTILS_NOINLINE
 void DebugTag::writePoolHandleTag(HandleBase::HandleId key, ImmutableCString&& tag) noexcept {
     // This line is the costly part. In the future, we could potentially use a custom
     // allocator.
-    std::unique_lock const lock(mDebugTagLock);
+    LockGuard const lock(mDebugTagLock);
     // Pool based tags will be recycled after a certain age.
     mDebugTags[key] = std::move(tag);
 }
@@ -194,7 +252,7 @@ UTILS_NOINLINE
 void DebugTag::writeHeapHandleTag(HandleBase::HandleId key, ImmutableCString&& tag) noexcept {
     // This line is the costly part. In the future, we could potentially use a custom
     // allocator.
-    std::unique_lock const lock(mDebugTagLock);
+    LockGuard const lock(mDebugTagLock);
     // FIXME: Heap-based tag will never be recycled, therefore, this can grow indefinitely, once we're in the slow mode.
     mDebugTags[key] = std::move(tag);
 }

@@ -12,29 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#import "core/video/video_writer.h"
+#include "core/video/video_writer_noop.h"
+
+#include "absl/status/status.h"
+#include "absl/strings/string_view.h"
+#include "core/async/future.h"
+#include "core/math/vec.h"
+#include "core/window/filament_host.h"
 
 namespace imp::video {
 
-// Stub implementation of VideoWriter for unsupported platforms.
-class VideoWriterNoop : public VideoWriter {
- public:
-  ~VideoWriterNoop() override = default;
-  absl::Status Open(uint2 dimensions, absl::string_view filename) override {
-    return absl::UnimplementedError(
-        "Video Writer not supported on this platform");
-  }
-  void CaptureFrame(window::FilamentHost* filament_host) override {}
-  void WriteFrame() override {}
-  Future<absl::Status> Close() override {
-    return Future<absl::Status>(absl::UnimplementedError(
-        "Video Writer not supported on this platform"));
-  }
-};
-
-std::unique_ptr<VideoWriter> VideoWriter::CreateVideoWriter(
-    bool record_microphone_audio) {
-  return std::make_unique<VideoWriterNoop>();
+absl::Status VideoWriterNoop::Open(uint2 dimensions,
+                                   absl::string_view filename) {
+  return absl::OkStatus();
 }
+
+void VideoWriterNoop::CaptureFrame(window::FilamentHost* filament_host) {}
+
+void VideoWriterNoop::WriteFrame() {}
+
+Future<absl::Status> VideoWriterNoop::Close() { return absl::OkStatus(); }
 
 }  // namespace imp::video

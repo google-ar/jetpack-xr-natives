@@ -23,7 +23,6 @@
 #include "absl/base/nullability.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
-#include "filament/filament/include/filament/Texture.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "flatbuffers/vector.h"
@@ -42,12 +41,10 @@ flatbuffers::Offset<android_xr::schemas::CubemapLevelImageContents>
 PackCubemapImageLevelContents(
     flatbuffers::FlatBufferBuilder& fbb,
     const CubemapLevelImageContents& cubemap_level_image_contents) {
-  filament::Texture::FaceOffsets face_offsets =
-      cubemap_level_image_contents.cubemap_level.face_offsets;
+  // We don't use face_offsets anymore, but the schema requires it. so here we
+  // just send some mock data.
   flatbuffers::Offset<android_xr::schemas::FaceOffsets> face_offset_offset =
-      android_xr::schemas::CreateFaceOffsets(
-          fbb, face_offsets.px, face_offsets.nx, face_offsets.py,
-          face_offsets.ny, face_offsets.pz, face_offsets.nz);
+      android_xr::schemas::CreateFaceOffsets(fbb, 0, 0, 0, 0, 0, 0);
   flatbuffers::Offset<android_xr::schemas::CubemapLevel> cubemap_level_offset =
       android_xr::schemas::CreateCubemapLevel(
           fbb, face_offset_offset,
@@ -129,20 +126,7 @@ absl::StatusOr<CubemapLevelImageContents> UnpackCubemapLevelImageContents(
   }
   const android_xr::schemas::CubemapLevel* cubemap_level_schema =
       cubemap_level_image_contents->cubemap_level();
-  if (!cubemap_level_schema->face_offsets()) {
-    return absl::InvalidArgumentError("face_offsets was null.");
-  }
-  const android_xr::schemas::FaceOffsets* face_offsets_schema =
-      cubemap_level_schema->face_offsets();
-  filament::Texture::FaceOffsets face_offsets;
-  face_offsets.nx = face_offsets_schema->nx();
-  face_offsets.ny = face_offsets_schema->ny();
-  face_offsets.nz = face_offsets_schema->nz();
-  face_offsets.px = face_offsets_schema->px();
-  face_offsets.py = face_offsets_schema->py();
-  face_offsets.pz = face_offsets_schema->pz();
   const CubemapLevel cubemap_level{
-      .face_offsets = face_offsets,
       .face_size = cubemap_level_schema->face_size()};
 
   // Unpack CubemapLevelImageContents.

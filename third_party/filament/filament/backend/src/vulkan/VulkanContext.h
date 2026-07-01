@@ -17,18 +17,17 @@
 #ifndef TNT_FILAMENT_BACKEND_VULKANCONTEXT_H
 #define TNT_FILAMENT_BACKEND_VULKANCONTEXT_H
 
-#include "vulkan/utils/Image.h"
-#include "vulkan/utils/Definitions.h"
-
 #include "vulkan/memory/ResourcePointer.h"
+#include "vulkan/utils/Definitions.h"
+#include "vulkan/utils/Image.h"
 
-#include <vector>
+#include <bluevk/BlueVK.h>
 
 #include "filament/libs/utils/include/utils/bitset.h"
 #include "filament/libs/utils/include/utils/Mutex.h"
 #include "filament/libs/utils/include/utils/Slice.h"
 
-#include <bluevk/BlueVK.h>
+#include <vector>
 
 VK_DEFINE_HANDLE(VmaAllocator)
 VK_DEFINE_HANDLE(VmaPool)
@@ -61,11 +60,11 @@ struct VulkanAttachment {
 
 struct VulkanRenderPassContext {
     // Between the begin and end command render pass we cache the command buffer
-    VulkanCommandBuffer* commandBuffer;
-    fvkmemory::resource_ptr<VulkanRenderTarget> renderTarget;
-    fvkmemory::resource_ptr<VulkanRenderPass> renderPass;
-    RenderPassParams params;
-    int currentSubpass;
+    VulkanCommandBuffer* commandBuffer= nullptr;
+    fvkmemory::resource_ptr<VulkanRenderTarget> renderTarget {};
+    fvkmemory::resource_ptr<VulkanRenderPass> renderPass {};
+    RenderPassParams params = {};
+    int currentSubpass = 0;
 };
 
 // This is a collection of immutable data about the vulkan context. This actual handles to the

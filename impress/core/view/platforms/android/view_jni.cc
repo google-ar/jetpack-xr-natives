@@ -155,9 +155,10 @@ JNI_METHOD(jlong, nCreateView)
 }
 
 JNI_METHOD(jlong, nCreateViewWithoutHost)
-(JNIEnv* env, jclass /*clazz*/, jobject context, jstring identifier) {
-  std::unique_ptr<View> view =
-      CreateImpressView(env, context, identifier, nullptr, nullptr, nullptr);
+(JNIEnv* env, jclass /*clazz*/, jobject context, jstring identifier,
+ jbyteArray view_config) {
+  std::unique_ptr<View> view = CreateImpressView(env, context, identifier,
+                                                 nullptr, nullptr, view_config);
   return ToJava(static_cast<BaseView*>(view.release()));
 }
 
@@ -314,6 +315,14 @@ JNI_METHOD(void, nCaptureVsyncTime)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
   IMP_TRACE();
   FromJava<ViewHost>(view_host_handle)->CaptureVsyncTime();
+}
+
+JNI_METHOD(void, nAdvanceForegroundExecutor)
+(JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
+  IMP_TRACE();
+  auto* view_host = FromJava<ViewHost>(view_host_handle);
+  auto* view = view_host->GetView();
+  view->AdvanceForegroundExecutor();
 }
 
 JNI_METHOD(jlong, nRenderNextFrame)

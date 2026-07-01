@@ -72,7 +72,7 @@
 
   // Schedule a key up events at the end of the frame.
   self.view->GetDispatcher().Connect(
-      [self, key, elapsed_time](const imp::ViewPostFrameEvent &ev) {
+      [self, key, elapsed_time](const imp::ViewPostFrameUpdateEvent &ev) {
         uint8_t action = static_cast<uint8_t>(imp::KeyboardEventType::kOnUp);
         auto res = self.view->GetInputManager().ProcessKeyboardInput(action, key, elapsed_time);
         if (!res.ok()) {

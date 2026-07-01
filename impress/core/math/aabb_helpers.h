@@ -17,6 +17,8 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_MATH_AABB_H_
 #define THIRD_PARTY_IMPRESS_CORE_MATH_AABB_H_
 
+#include <limits>
+
 #include "core/geometry/shapes/box.h"
 #include "core/math/math.h"
 
@@ -35,8 +37,12 @@ class AabbCalculator {
   }
 
  private:
+  // NOTE: std::numeric_limits<float>::min() does _not_ return a negative value,
+  // it instead returns the smallest positive value that can be represented by
+  // a float (e.g. 1e-38). Using min() would stretch our aabb to the origin if
+  // the mesh has negative vertices.
   float3 min_ = std::numeric_limits<float>::max();
-  float3 max_ = std::numeric_limits<float>::min();
+  float3 max_ = std::numeric_limits<float>::lowest();
 };
 }  // namespace imp
 

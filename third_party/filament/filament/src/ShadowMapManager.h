@@ -19,35 +19,36 @@
 
 #include "AtlasAllocator.h"
 #include "ShadowMap.h"
-#include "ds/TypedBuffer.h"
-
-#include <filament/LightManager.h>
-#include <filament/Options.h>
-#include <filament/Viewport.h>
-
-#include <private/filament/EngineEnums.h>
-#include <private/filament/UibStructs.h>
 
 #include "components/RenderableManager.h"
 
 #include "details/Engine.h"
 #include "details/Scene.h"
 
+#include "ds/TypedBuffer.h"
+
 #include "fg/FrameGraphId.h"
 #include "fg/FrameGraphTexture.h"
+
+#include <private/filament/EngineEnums.h>
+#include <private/filament/UibStructs.h>
+
+#include <filament/LightManager.h>
+#include <filament/Options.h>
+#include <filament/Viewport.h>
 
 #include <backend/DriverEnums.h>
 #include <backend/Handle.h>
 
 #include "filament/libs/utils/include/utils/BitmaskEnum.h"
 #include "filament/libs/utils/include/utils/compiler.h"
-#include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/debug.h"
+#include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/Range.h"
 #include "filament/libs/utils/include/utils/Slice.h"
 
-#include "filament/libs/math/include/math/mat4.h"
 #include "filament/libs/math/include/math/half.h"
+#include "filament/libs/math/include/math/mat4.h"
 #include "filament/libs/math/include/math/vec2.h"
 #include "filament/libs/math/include/math/vec4.h"
 
@@ -59,8 +60,8 @@
 #include <type_traits>
 #include <vector>
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 namespace filament {
 

@@ -88,6 +88,7 @@ cc_library(
         ":particle_behavior",
         ":particle_emitter_state_proto_cc",
         "//core/async:future",
+        "//core/materials",
         "//core/ncsb",
         "//core/particle/utils:particle_emitter",
         "//core/view/utils:frame_time",

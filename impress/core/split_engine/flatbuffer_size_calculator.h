@@ -20,6 +20,8 @@
 #include <cstddef>
 #include <vector>
 
+#include "core/assets/material/material_load_options.proto.imp.h"
+
 namespace imp::split_engine {
 
 // A helper class that can be used to calculate the max size of a flatbuffer
@@ -80,9 +82,29 @@ class FlatbufferSizeCalculator {
   FlatbufferSizeCalculator& AddAddTextureRequest(size_t num_textures);
   FlatbufferSizeCalculator& AddAddImageBasedLightingAssets();
   FlatbufferSizeCalculator& AddAddMorphTargetBuffers();
+  FlatbufferSizeCalculator& AddRequestBuiltInGenericMaterial();
+  FlatbufferSizeCalculator& AddRequestBuiltInGsplatMaterial(
+      bool is_magic_window_mode, size_t render_group_length = 0);
+  FlatbufferSizeCalculator& AddRequestBuiltInJxrMediaMaterial();
+  FlatbufferSizeCalculator& AddRequestBuiltInPhotosTexture3DMaterial();
+  FlatbufferSizeCalculator& AddRequestBuiltInSVXRPlaneMaterial();
+  FlatbufferSizeCalculator& AddRequestBuiltInSVXRFootprintMaterial();
+  FlatbufferSizeCalculator& AddRequestBuiltInTextureExternalMaterial();
+  FlatbufferSizeCalculator& AddRequestBuiltInVignetteMaterial();
+  FlatbufferSizeCalculator& AddRequestBuiltInWaterReflectionMaterial();
+  FlatbufferSizeCalculator& AddRequestBuiltInYouTubeStereoPlayerMaterial();
 
   FlatbufferSizeCalculator& AddAddMeshData();
+  FlatbufferSizeCalculator& AddUpdateMeshData();
   FlatbufferSizeCalculator& AddRequest();
+
+  // Adds a struct of given size and alignment.
+  FlatbufferSizeCalculator& AddStruct(size_t size, size_t alignment);
+
+  // Computes the size of a RequestCustomFilamentMaterial request and all
+  // dependent data.
+  FlatbufferSizeCalculator& AddRequestCustomFilamentMaterial(
+      size_t material_source_length, const MaterialPreCompileOptions& options);
 
   // During flatbuffer construction, there is some amount of scratch space that
   // is temporarily used. Use this function to include that overhead in the
@@ -90,7 +112,10 @@ class FlatbufferSizeCalculator {
   FlatbufferSizeCalculator& AddScratchSpace();
 
   // Finishes the flatbuffer. This must be the final operation after all Add*
-  // methods have been called. ComputeSize() can still be called after Finish().
+  // methods have been called.
+  // The following methods shall be called after Finish():
+  //   - AddScratchSpace()
+  //   - ComputeSize()
   FlatbufferSizeCalculator& Finish();
 
   // Given a vector of buffer sizes, computes the size of a texture and all the

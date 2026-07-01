@@ -48,7 +48,7 @@ MultiDragGesture::CreateFn MultiDragGesture::GetCreateFunction(
   return
       [dispatcher, pointer_utils](const PointerHitEvent& pointer_hit,
                                   absl::Span<const MultiDragGesture> gestures)
-          -> absl::optional<MultiDragGesture> {
+          -> std::optional<MultiDragGesture> {
         if (pointer_hit.event.Type() != PointerEventType::kDown) {
           return absl::nullopt;
         }
@@ -63,7 +63,7 @@ MultiDragGesture::CreateFn MultiDragGesture::GetCreateFunction(
 
         return pointer_ids.size() >= kMinPointersPerMultiDrag &&
                        pointer_ids.size() <= kMaxPointersPerMultiDrag
-                   ? absl::optional<MultiDragGesture>(MultiDragGesture(
+                   ? std::optional<MultiDragGesture>(MultiDragGesture(
                          dispatcher, pointer_utils, pointer_hit, pointer_ids))
                    : absl::nullopt;
       };
@@ -226,7 +226,7 @@ void MultiDragGesture::OnFinish(const PointerHitEvent& pointer_hit) {
 
 void MultiDragGesture::OnCancel() {}
 
-absl::optional<float2> MultiDragGesture::TryUpdateCentroidPosition(
+std::optional<float2> MultiDragGesture::TryUpdateCentroidPosition(
     const PointerHitEvent& pointer_hit) {
   PointerEvent event = pointer_hit.event;
 

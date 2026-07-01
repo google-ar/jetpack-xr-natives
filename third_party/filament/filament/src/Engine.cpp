@@ -37,8 +37,8 @@
 
 #include <filament/Engine.h>
 
-#include <backend/DriverEnums.h>
 #include <backend/CallbackHandler.h>
+#include <backend/DriverEnums.h>
 
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/Invocable.h"

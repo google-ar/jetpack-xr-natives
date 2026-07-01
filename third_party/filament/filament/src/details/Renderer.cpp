@@ -42,44 +42,44 @@
 #include <private/filament/EngineEnums.h>
 #include <private/filament/Variant.h>
 
-#include <private/utils/Tracing.h>
-
 #include <filament/Camera.h>
 #include <filament/Fence.h>
 #include <filament/Options.h>
 #include <filament/Renderer.h>
 
-#include <backend/DriverEnums.h>
 #include <backend/DriverApiForward.h>
+#include <backend/DriverEnums.h>
 #include <backend/Handle.h>
 #include <backend/PixelBufferDescriptor.h>
 
-#include "filament/libs/math/include/math/vec2.h"
-#include "filament/libs/math/include/math/vec3.h"
-#include "filament/libs/math/include/math/mat4.h"
+#include <private/utils/Tracing.h>
 
-#include "filament/libs/utils/include/utils/architecture.h"
 #include "filament/libs/utils/include/utils/Allocator.h"
+#include "filament/libs/utils/include/utils/architecture.h"
 #include "filament/libs/utils/include/utils/bitset.h"
+#include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/JobSystem.h"
 #include "filament/libs/utils/include/utils/Logger.h"
 #include "filament/libs/utils/include/utils/Panic.h"
-#include "filament/libs/utils/include/utils/compiler.h"
-#include "filament/libs/utils/include/utils/debug.h"
+
+#include "filament/libs/math/include/math/mat4.h"
+#include "filament/libs/math/include/math/vec2.h"
+#include "filament/libs/math/include/math/vec3.h"
 
 #include <algorithm>
-#include <cmath>
 #include <chrono>
+#include <cmath>
 #include <limits>
 #include <memory>
 #include <utility>
 
-#include <stddef.h>
-#include <stdint.h>
-
 #ifdef __ANDROID__
 #include <sys/system_properties.h>
 #endif
+
+#include <stddef.h>
+#include <stdint.h>
 
 // this helps visualize what dynamic-scaling is doing
 #define DEBUG_DYNAMIC_SCALING false
@@ -288,7 +288,6 @@ void FRenderer::skipFrame(uint64_t vsyncSteadyClockTimeNano) {
             "skipFrame() can't be called between beginFrame() and endFrame()";
 
     if (!vsyncSteadyClockTimeNano) {
-        vsyncSteadyClockTimeNano = mVsyncSteadyClockTimeNano;
         mVsyncSteadyClockTimeNano = 0;
     }
 
@@ -574,7 +573,7 @@ void FRenderer::copyFrame(FSwapChain* dstSwapChain, filament::Viewport const& ds
     // Clear color to black if the CLEAR flag is set.
     if (flags & CLEAR) {
         RenderPassParams params = {};
-        params.clearColor = {0.f, 0.f, 0.f, 1.f};
+        params.clearColor = ClearColorValue{ 0.f, 0.f, 0.f, 1.f };
         params.flags.clear = TargetBufferFlags::COLOR;
         params.flags.discardStart = TargetBufferFlags::ALL;
         params.flags.discardEnd = TargetBufferFlags::NONE;
@@ -955,8 +954,6 @@ void FRenderer::renderJob(DriverApi& driver, RootArenaScope& rootArenaScope, FVi
      * Allocate command buffer
      */
 
-    FScene& scene = *view.getScene();
-
     // Allocate some space for our commands in the per-frame Arena, and use that space as
     // an Arena for commands. All this space is released when we exit this method.
     size_t const perFrameCommandsSize = engine.getPerFrameCommandsSize();
@@ -1011,7 +1008,7 @@ void FRenderer::renderJob(DriverApi& driver, RootArenaScope& rootArenaScope, FVi
     //        into a temporary buffer (common case), the clearColor is color-graded. A problem
     //        arises when transparent views are used, in this case the clear color is not
     //        color-graded.
-    const float4 clearColor = mClearOptions.clearColor;
+    const ClearColorValue clearColor = mClearOptions.clearColor;
 
     const uint8_t clearStencil = mClearOptions.clearStencil;
     const TargetBufferFlags clearFlags = mClearFlags;
@@ -1061,7 +1058,7 @@ void FRenderer::renderJob(DriverApi& driver, RootArenaScope& rootArenaScope, FVi
             .clearFlags = getClearFlags(),
             .clearColor = clearColor,
             .clearStencil = clearStencil,
-            .hasContactShadows = scene.hasContactShadows(),
+            .hasContactShadows = view.hasContactShadows(),
             // at this point we don't know if we have refraction, but that's handled later
             .hasScreenSpaceReflectionsOrRefractions = ssReflectionsOptions.enabled,
             .enabledStencilBuffer = view.isStencilBufferEnabled(),
@@ -1076,11 +1073,11 @@ void FRenderer::renderJob(DriverApi& driver, RootArenaScope& rootArenaScope, FVi
 
     // updatePrimitivesLod must be run before appendCommands and once for each set
     // of RenderPass::setCamera / RenderPass::setGeometry calls.
-    FView::updatePrimitivesLod(scene.getRenderableData(),
+    FView::updatePrimitivesLod(view.getRenderableData(),
             engine, cameraInfo, view.getVisibleRenderables());
 
     passBuilder.camera(cameraInfo.getPosition(), cameraInfo.getForwardVector());
-    passBuilder.geometry(scene.getRenderableData(), view.getVisibleRenderables());
+    passBuilder.geometry(view.getRenderableData(), view.getVisibleRenderables());
 
     // --------------------------------------------------------------------------------------------
     // structure pass -- automatically culled if not used

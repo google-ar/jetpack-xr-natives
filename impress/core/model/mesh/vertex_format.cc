@@ -172,7 +172,7 @@ size_t VertexFormat::GetNumAttributes(size_t group_idx) const {
              : attribute_groups_[group_idx].num_attributes;
 }
 
-absl::optional<size_t> VertexFormat::GetIndexForAttribute(
+std::optional<size_t> VertexFormat::GetIndexForAttribute(
     VertexAttribute attribute, size_t group_idx) const {
   if (group_idx >= attribute_groups_.size()) {
     return absl::nullopt;
@@ -186,7 +186,7 @@ absl::optional<size_t> VertexFormat::GetIndexForAttribute(
   return absl::nullopt;
 }
 
-absl::optional<VertexFormat::AttributeKey> VertexFormat::GetKeyForAttribute(
+std::optional<VertexFormat::AttributeKey> VertexFormat::GetKeyForAttribute(
     VertexAttribute attribute) const {
   for (size_t i = 0; i < attribute_groups_.size(); ++i) {
     size_t offset = 0;

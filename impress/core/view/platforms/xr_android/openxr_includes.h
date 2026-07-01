@@ -57,8 +57,11 @@
 // Now it is safe to include OpenXR headers.
 #include <openxr/openxr.h>           // NOLINT
 #include <openxr/openxr_platform.h>  // NOLINT
+#include <openxr/public/all_extensions.h>
+#include <openxr/public/all_platform_extensions.h>
 #if IMP_PLATFORM(ANDROID)
 #include <openxr/public/xr_android_global_passthrough_dimming.h>
+#include <openxr/public/xr_androidx_occupancy_grid.h>
 #include <openxr/public/xr_androidx_spatial_interaction.h>
 #endif
 

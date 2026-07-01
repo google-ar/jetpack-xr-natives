@@ -18,8 +18,8 @@
 #define TNT_FILAMENT_FILAMENTAPI_H
 
 #include "filament/libs/utils/include/utils/compiler.h"
-#include "filament/libs/utils/include/utils/PrivateImplementation.h"
 #include "filament/libs/utils/include/utils/ImmutableCString.h"
+#include "filament/libs/utils/include/utils/PrivateImplementation.h"
 #include "filament/libs/utils/include/utils/StaticString.h"
 
 #include <stddef.h>

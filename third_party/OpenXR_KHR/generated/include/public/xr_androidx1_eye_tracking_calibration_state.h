@@ -22,6 +22,7 @@ extern "C" {
 
 // XR_ANDROIDX1_eye_tracking_calibration_state is a preprocessor guard. Do not pass it to API calls.
 #define XR_ANDROIDX1_eye_tracking_calibration_state 1
+
 #define XR_ANDROIDX1_eye_tracking_calibration_state_SPEC_VERSION 1
 #define XR_ANDROIDX1_EYE_TRACKING_CALIBRATION_STATE_EXTENSION_NAME "XR_ANDROIDX1_eye_tracking_calibration_state"
 
@@ -43,6 +44,17 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetEyeTrackerCalibrationStateANDROIDX1(
     XrEyeTrackerCalibrationStateANDROIDX1*      stateOutput);
 #endif /* XR_EXTENSION_PROTOTYPES */
 #endif /* !XR_NO_PROTOTYPES */
+
+// Reflection macros
+#define XR_LIST_ENUM_XrEyeTrackerCalibrationStateANDROIDX1(_) \
+    _(XR_EYE_TRACKER_CALIBRATION_STATE_UNKNOWN_ANDROIDX1, 0) \
+    _(XR_EYE_TRACKER_CALIBRATION_STATE_DEFAULT_ANDROIDX1, 1) \
+    _(XR_EYE_TRACKER_CALIBRATION_STATE_USER_ANDROIDX1, 2) \
+    _(XR_EYE_TRACKER_CALIBRATION_STATE_ANDROIDX1_MAX_ENUM, 0x7FFFFFFF)
+
+#define XR_LIST_FUNCTIONS_XR_ANDROIDX1_eye_tracking_calibration_state(_) \
+    _(GetEyeTrackerCalibrationStateANDROIDX1, ANDROIDX1_eye_tracking_calibration_state)
+
 #endif /* XR_ANDROIDX1_eye_tracking_calibration_state */
 
 #ifdef __cplusplus

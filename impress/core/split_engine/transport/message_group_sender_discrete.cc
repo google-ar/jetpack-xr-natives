@@ -27,12 +27,12 @@
 #include "absl/strings/str_cat.h"
 #include "absl/types/span.h"
 #include "flatbuffers/buffer.h"
+#include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/executor.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/owned_ptr.h"
 #include "core/split_engine/flatbuffer_size_calculator.h"
 #include "core/split_engine/shared/split_engine_defines.h"
-#include "core/split_engine/transport/flatbuffer_builder_holder.h"
 #include "core/split_engine/transport/message_group_id_generator.h"
 #include "core/split_engine/transport/message_group_sender.h"
 #include "core/split_engine/transport/message_sender.h"
@@ -81,7 +81,7 @@ absl::StatusOr<MessageGroupId> DiscreteMessageGroupSender::Start(
                            max_message_group_size_bytes + GetEndMessageSize()));
 
   MP_ASSIGN_OR_RETURN(
-      imp::OwnedPtr<FlatbufferBuilderHolder> fbb,
+      imp::OwnedPtr<flatbuffers::FlatBufferBuilder> fbb,
       sender_->CreateMessageBuilder(session_id, GetBeginMessageSize()));
 
   const MessageGroupId message_group_id =
@@ -103,10 +103,10 @@ absl::StatusOr<MessageGroupId> DiscreteMessageGroupSender::Start(
       break;
   }
 
-  (*fbb)->Finish(android_xr::schemas::CreateMessageGroupOperation(
-      **fbb, message_group_id,
+  fbb->Finish(android_xr::schemas::CreateMessageGroupOperation(
+      *fbb, message_group_id,
       android_xr::schemas::MessageGroupOperationTypes::BeginMessageGroup,
-      android_xr::schemas::CreateBeginMessageGroup(**fbb).Union()));
+      android_xr::schemas::CreateBeginMessageGroup(*fbb).Union()));
 
   MP_RETURN_IF_ERROR(
       sender_->SendMessage(session_id, std::move(fbb),
@@ -115,7 +115,7 @@ absl::StatusOr<MessageGroupId> DiscreteMessageGroupSender::Start(
   return message_group_id;
 }
 
-absl::StatusOr<MessageGroupSender::OwnedOrBorrowedFlatbufferBuilderHolder>
+absl::StatusOr<imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder>>
 DiscreteMessageGroupSender::CreateBuilder(MessageGroupId message_group_id,
                                           size_t initial_size_bytes) {
   
@@ -127,14 +127,16 @@ DiscreteMessageGroupSender::CreateBuilder(MessageGroupId message_group_id,
   const Transport::SessionID session_id = group_info_it->second.session_id;
 
   MP_ASSIGN_OR_RETURN(
-      imp::OwnedPtr<FlatbufferBuilderHolder> fbb,
+      imp::OwnedPtr<flatbuffers::FlatBufferBuilder> fbb,
       sender_->CreateMessageBuilder(session_id, initial_size_bytes));
 
-  return OwnedOrBorrowedFlatbufferBuilderHolder(std::move(fbb));
+  return imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder>(
+      std::move(fbb));
 }
 
 absl::Status DiscreteMessageGroupSender::AddMessage(
-    MessageGroupId message_group_id, OwnedOrBorrowedFlatbufferBuilderHolder fbb,
+    MessageGroupId message_group_id,
+    imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder> fbb,
     const flatbuffers::Offset<android_xr::schemas::Command>& offset) {
   
 
@@ -144,18 +146,18 @@ absl::Status DiscreteMessageGroupSender::AddMessage(
   }
   const Transport::SessionID session_id = group_info_it->second.session_id;
 
-  (*fbb)->Finish(offset);
+  fbb->Finish(offset);
 
-  absl::StatusOr<imp::OwnedPtr<FlatbufferBuilderHolder>> owned_fbb =
-      fbb.ExtractOwned(GetKey());
-  
-
-  return sender_->SendMessage(session_id, std::move(*owned_fbb),
-                              [](absl::Span<const uint8_t> response_bytes) {});
+  return sender_->SendMessage(
+      session_id,
+      std::move(std::get<imp::OwnedPtr<flatbuffers::FlatBufferBuilder>>(
+          fbb.Extract())),
+      [](absl::Span<const uint8_t> response_bytes) {});
 }
 
 absl::Status DiscreteMessageGroupSender::AddMessage(
-    MessageGroupId message_group_id, OwnedOrBorrowedFlatbufferBuilderHolder fbb,
+    MessageGroupId message_group_id,
+    imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder> fbb,
     OffsetProducer offset_fn) {
   
 
@@ -165,15 +167,13 @@ absl::Status DiscreteMessageGroupSender::AddMessage(
   }
   const Transport::SessionID session_id = group_info_it->second.session_id;
 
-  absl::StatusOr<imp::OwnedPtr<FlatbufferBuilderHolder>> owned_fbb =
-      fbb.ExtractOwned(GetKey());
-  
+  imp::OwnedPtr<flatbuffers::FlatBufferBuilder> owned_fbb =
+      std::get<imp::OwnedPtr<flatbuffers::FlatBufferBuilder>>(fbb.Extract());
 
   return sender_->SendMessage(
       session_id,
-      [fbb = std::move(*owned_fbb),
-       offset_fn = std::move(offset_fn)]() mutable {
-        (*fbb)->Finish(offset_fn(**fbb));
+      [fbb = std::move(owned_fbb), offset_fn = std::move(offset_fn)]() mutable {
+        fbb->Finish(offset_fn(*fbb));
         return std::move(fbb);
       },
       [](absl::Span<const uint8_t> response_bytes) {});
@@ -196,13 +196,13 @@ absl::Status DiscreteMessageGroupSender::Finish(
   message_group_info_.erase(group_info_it);
 
   MP_ASSIGN_OR_RETURN(
-      imp::OwnedPtr<FlatbufferBuilderHolder> fbb,
+      imp::OwnedPtr<flatbuffers::FlatBufferBuilder> fbb,
       sender_->CreateMessageBuilder(session_id, GetEndMessageSize()));
 
-  (*fbb)->Finish(android_xr::schemas::CreateMessageGroupOperation(
-      **fbb, message_group_id,
+  fbb->Finish(android_xr::schemas::CreateMessageGroupOperation(
+      *fbb, message_group_id,
       android_xr::schemas::MessageGroupOperationTypes::EndMessageGroup,
-      android_xr::schemas::CreateEndMessageGroup(**fbb).Union()));
+      android_xr::schemas::CreateEndMessageGroup(*fbb).Union()));
 
   MP_RETURN_IF_ERROR(sender_->SendMessage(
       session_id, std::move(fbb),

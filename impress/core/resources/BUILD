@@ -44,6 +44,7 @@ cc_library(
         ":download_progress_info",
         "//core/async:future",
         "//core/async:future_interrupter",
+        "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:cord",
@@ -206,6 +207,22 @@ cc_library(
 )
 
 cc_library(
+    name = "http_utils",
+    srcs = [
+        "http_utils.cc",
+    ],
+    hdrs = [
+        "http_utils.h",
+    ],
+    copts = imp_google3_copts(),
+    deps = [
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "emscripten_url_loader",
     srcs = [
         "emscripten_url_loader.cc",
@@ -214,14 +231,18 @@ cc_library(
         "emscripten_url_loader.h",
     ],
     copts = imp_google3_copts(),
+    linkopts = [
+        "-s FETCH=1",
+    ],
     tags = ["nobuilder"],
     deps = [
+        ":http_utils",
         ":url_loader",
         "//core/async:future",
         "@com_google_absl//absl/memory",
-        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/strings:str_format",
     ],
     alwayslink = 1,
 )

@@ -80,7 +80,6 @@ class PointerEvent {
                const std::vector<Pointer>& pointers, int changed_pointer_count,
                absl::Duration elapsed_time,
                DeviceType device_type = DeviceType::UNKNOWN);
-  ~PointerEvent();
 
   // The event type that triggered this event.
   PointerEventType Type() const { return type_; }

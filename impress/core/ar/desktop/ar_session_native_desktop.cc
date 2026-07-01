@@ -235,7 +235,7 @@ TexturePtr CreateCameraTexture(BaseView* view, uint2 texture_dimensions) {
   return texture;
 }
 
-absl::optional<ArFrame> ArSessionNativeDesktop::Update(
+std::optional<ArFrame> ArSessionNativeDesktop::Update(
     absl::Time last_submitted_timestamp) {
   UpdateUI();
   if (desktop_camera_controller_) {
@@ -262,7 +262,7 @@ absl::optional<ArFrame> ArSessionNativeDesktop::Update(
 uint4 ArSessionNativeDesktop::GetDebugSessionId() { return uint4(1, 2, 3, 4); }
 
 std::vector<ArHitResult> ArSessionNativeDesktop::HitTest(
-    float2 screen_pos, absl::optional<float> guessed_distance,
+    float2 screen_pos, std::optional<float> guessed_distance,
     TrackableTuple* out_generated_trackables) {
   // Instant hit test always generates a new point.
   if (!find_instant_placement_point_) {
@@ -344,7 +344,7 @@ std::vector<ArHitResult> ArSessionNativeDesktop::HitTestRay(
 }
 
 absl::StatusOr<ArAnchor> ArSessionNativeDesktop::CreateAnchor(
-    float3 position, quatf rotation, absl::optional<ArTrackableId> id) {
+    float3 position, quatf rotation, std::optional<ArTrackableId> id) {
   mat4f anchor_transform(rotation);
   anchor_transform[3].xyz = position;
 

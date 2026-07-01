@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include "private/backend/BackendUtils.h"
-
 #include "DataReshaper.h"
 
-#include <backend/PixelBufferDescriptor.h>
+#include <private/backend/BackendUtils.h>
+
 #include <backend/DriverEnums.h>
+#include <backend/PixelBufferDescriptor.h>
 
 #include "filament/libs/utils/include/utils/BitmaskEnum.h"
 #include "filament/libs/utils/include/utils/compiler.h"
@@ -27,8 +27,8 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <utility>
 #include <string_view>
+#include <utility>
 
 namespace filament::backend {
 

@@ -51,6 +51,7 @@
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "filament/libs/utils/include/utils/EntityManager.h"
 #include "core/common/debug_draw_resources.h"
+#include "core/common/debug_draw_resources_fl0.h"
 #include "core/common/filament_engine_helpers.h"
 #include "core/common/filament_helpers.h"
 #include "core/common/resource_helpers.h"
@@ -139,12 +140,24 @@ class Details final {
         material_(material),
         screenspace_material_(screenspace_material) {
     if (material_ == nullptr || screenspace_material_ == nullptr) {
-      RegisterPackagedResources(debug_draw_resources_create());
+      if (engine_->getActiveFeatureLevel() ==
+          filament::backend::FeatureLevel::FEATURE_LEVEL_0) {
+        RegisterPackagedResources(debug_draw_resources_fl0_create());
+      } else {
+        RegisterPackagedResources(debug_draw_resources_create());
+      }
     }
 
     if (material_ == nullptr) {
-      absl::StatusOr<filament::Material*> packaged_material =
-          LoadPackagedMaterial(engine_, "debug_draw_unlit.cmat");
+      absl::StatusOr<filament::Material*> packaged_material;
+      if (engine_->getActiveFeatureLevel() ==
+          filament::backend::FeatureLevel::FEATURE_LEVEL_0) {
+        packaged_material =
+            LoadPackagedMaterial(engine_, "debug_draw_unlit_fl0.cmat");
+      } else {
+        packaged_material =
+            LoadPackagedMaterial(engine_, "debug_draw_unlit.cmat");
+      }
       
       material_ = *packaged_material;
       assert(material_ != nullptr);
@@ -153,8 +166,15 @@ class Details final {
     assert(material_instance_ != nullptr);
 
     if (screenspace_material_ == nullptr) {
-      absl::StatusOr<filament::Material*> packaged_material =
-          LoadPackagedMaterial(engine_, "debug_draw_unlit_screenspace.cmat");
+      absl::StatusOr<filament::Material*> packaged_material;
+      if (engine_->getActiveFeatureLevel() ==
+          filament::backend::FeatureLevel::FEATURE_LEVEL_0) {
+        packaged_material = LoadPackagedMaterial(
+            engine_, "debug_draw_unlit_screenspace_fl0.cmat");
+      } else {
+        packaged_material =
+            LoadPackagedMaterial(engine_, "debug_draw_unlit_screenspace.cmat");
+      }
       
       screenspace_material_ = *packaged_material;
       assert(screenspace_material_ != nullptr);

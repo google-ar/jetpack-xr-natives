@@ -68,13 +68,10 @@ def _generate_ibl_impl(ctx):
         [
             command,
             "&&",
-            "cd",
-            ctx.executable.zip.dirname,
-            "&&",
             "zip",
             "-Xrq",
-            "../../../../../" + ctx.outputs.output_path.path,
-            "../../../../../" + source_image_name,
+            ctx.outputs.output_path.path,
+            source_image_name,
         ],
     )
 

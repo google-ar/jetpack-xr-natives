@@ -14,6 +14,7 @@
 
 #include "core/view/platforms/xr_android/xr_session_host.h"
 
+#include "filament/libs/utils/include/utils/JobSystem.h"
 #include "core/camera/camera_component.h"
 #include "core/common/optional_error.h"
 #include "core/monitor/default_monitor_summary.h"
@@ -81,10 +82,11 @@
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/gltf_renderer.h"
-#include "core/view/framework/camera/camera_component.h"
-#include "core/view/framework/camera/camera_manager.h"
+#include "core/view/framework/camera/camera_component.h"  // IWYU pragma: keep
+#include "core/view/framework/camera/camera_manager.h"  // IWYU pragma: keep
 #include "core/view/platforms/xr_android/openxr_includes.h"
 #include "core/view/platforms/xr_android/xr_helpers.h"
+#include "core/view/platforms/xr_android/xr_native_window.h"
 #include "java/com/google/ar/imp/view/xr/xr_setup_params.proto.imp.h"
 
 #if IMP_MATERIAL_API(VULKAN)
@@ -209,6 +211,10 @@ std::array<const char*, 1> kOpenXRExtensionsAndroidXGlobalPassthroughDimming = {
     // TODO: Add official extension once api is finalized.
     "XR_ANDROIDX1_global_passthrough_dimming",
 };
+
+std::array<const char*, 1> kOpenXRExtensionsAndroidXSpatialTrackpad = {
+    "XR_ANDROIDX1_spatial_trackpad_interaction",
+};
 #endif
 
 absl::Time GetFilamentTimeNow() {
@@ -268,6 +274,15 @@ constexpr absl::Duration kXrCreateSessionTimeoutDuration = absl::Seconds(2);
 
 }  // namespace
 
+XrSessionHost::SyncCallbackHandler::SyncCallbackHandler()
+    : job_queue_("XrSessionHost::SyncCallbackHandler",
+                 utils::JobSystem::Priority::URGENT_DISPLAY) {}
+
+void XrSessionHost::SyncCallbackHandler::post(
+    void* user, filament::backend::CallbackHandler::Callback callback) {
+  job_queue_.push([callback, user]() { callback(user); });
+}
+
 XrSessionHost::XrSessionHost(
     std::unique_ptr<BaseView> view,
     com::google::ar::imp::view::xr::XrSetupParams setup_params)
@@ -307,6 +322,8 @@ XrSessionHost::XrSessionHost(
           setup_params.use_global_passthrough_dimming_extensions.Value()),
       is_hand_occlusion_extensions_enabled_(
           setup_params.use_hand_occlusion_extensions.Value()),
+      is_spatial_trackpad_extension_enabled_(
+          setup_params.use_spatial_trackpad_extension.Value()),
       create_session_on_render_thread_(
           setup_params.create_session_on_render_thread.Value()) {
   SetupXrTimingSummary(GetXrTimingSummary(), xr_performance_state_.metrics);
@@ -315,7 +332,11 @@ XrSessionHost::XrSessionHost(
   }
 }
 
-XrSessionHost::~XrSessionHost() = default;
+XrSessionHost::~XrSessionHost() {
+  if (GetEngine() != nullptr) {
+    GetEngine()->flushAndWait();
+  }
+}
 
 absl::Status XrSessionHost::PreBeginRender() {
   // Set current swap chain according to the ContentSecurityLevel setting.
@@ -552,10 +573,13 @@ absl::Status XrSessionHost::InitializeSessionInternal() {
   MP_ASSIGN_OR_RETURN(view_configs_, ObtainViewConfigs());
   display_size_ = CalculateDisplaySize(view_configs_);
 
+  native_window_ = std::make_unique<XrNativeWindow>();
+  native_window_->host = this;
+
   // This will ultimately trigger XrPlatform::createSwapChain to be called.
   imp::output::Xr("Creating SwapChain.");
   MP_ASSIGN_OR_RETURN(swap_chain_standard_,
-                   AddSwapChain(static_cast<XrSessionHost*>(this),
+                   AddSwapChain(native_window_.get(),
                                 filament::SwapChain::CONFIG_TRANSPARENT));
 
   MP_RETURN_IF_ERROR(SetActiveSwapChain(swap_chain_standard_));
@@ -577,6 +601,8 @@ absl::Status XrSessionHost::InitializeSessionInternal() {
 absl::Status XrSessionHost::AdvanceFrame() {
   IMP_TRACE();
   
+
+  sync_destruction_queue_.Flush(GetEngine());
 
   if (init_state_ == XrInitState::kWaitingForSystem) {
     auto system_id_or = ObtainSystemId();
@@ -839,6 +865,10 @@ bool XrSessionHost::IsXrAndroidGlobalPassthroughDimmingExtensionsEnabled()
     const {
   return is_global_passthrough_dimming_extensions_enabled_;
 }
+
+bool XrSessionHost::IsXrAndroidSpatialTrackpadExtensionEnabled() const {
+  return is_spatial_trackpad_extension_enabled_;
+}
 #endif  // IMP_PLATFORM(ANDROID)
 
 absl::Status XrSessionHost::EnsureSupportedExtensions(
@@ -1021,6 +1051,12 @@ absl::StatusOr<XrInstance> XrSessionHost::CreateInstance(JNIEnv* env,
                       kOpenXRExtensionsAndroidXGlobalPassthroughDimming.begin(),
                       kOpenXRExtensionsAndroidXGlobalPassthroughDimming.end());
   }
+
+  if (IsXrAndroidSpatialTrackpadExtensionEnabled()) {
+    extensions.insert(extensions.end(),
+                      kOpenXRExtensionsAndroidXSpatialTrackpad.begin(),
+                      kOpenXRExtensionsAndroidXSpatialTrackpad.end());
+  }
 #endif  // IMP_PLATFORM(ANDROID)
 
   if (absl::Status all_supported = EnsureSupportedExtensions(extensions);
@@ -1180,6 +1216,16 @@ absl::Status XrSessionHost::DestroySession() {
 
   // Destruction of the underlying XrSwapchain is handled by the XrPlatform
   // when the filament::SwapChain is destroyed.
+  if (GetEngine() != nullptr) {
+    if (swap_chain_standard_ != nullptr) {
+      GetEngine()->destroy(
+          const_cast<filament::SwapChain*>(swap_chain_standard_));
+    }
+    if (swap_chain_protected_ != nullptr) {
+      GetEngine()->destroy(
+          const_cast<filament::SwapChain*>(swap_chain_protected_));
+    }
+  }
   swap_chain_standard_ = nullptr;
   swap_chain_protected_ = nullptr;
 
@@ -1675,6 +1721,10 @@ absl::Status XrSessionHost::SetDisplayState(XrHelpers::DisplayState new_state) {
   return absl::OkStatus();
 }
 
+XrHelpers::DisplayState XrSessionHost::GetDisplayState() const {
+  return display_state_;
+}
+
 absl::StatusOr<XrFrameState> XrSessionHost::WaitFrame() {
   IMP_TRACE();
   
@@ -1848,6 +1898,26 @@ void XrSessionHost::ResizeImpressView() {
 }
 
 absl::Status XrSessionHost::BeginFrame() {
+  // This guard is necessary because Filament's Platform API is
+  // swapchain-centric, while OpenXR is frame-centric. With multiple quad
+  // layers, we have multiple Filament swapchains per OpenXR frame. Since
+  // xrBeginFrame must be called on the Render thread (e.g., for OpenGL), and
+  // we don't know which swapchain will reach the Render thread first (or if the
+  // main layer is enabled), this allows the first one to transition the OpenXR
+  // frame state. All rendering calls for a single frame occur sequentially on
+  // the Filament Render thread, and consecutive frames are synchronized via a
+  // fence in BeginAndDiscardFrame to prevent cross-thread overlap.
+  bool should_begin = false;
+  {
+    absl::MutexLock lock(frame_active_mutex_);
+    if (!is_frame_active_) {
+      is_frame_active_ = true;
+      should_begin = true;
+    }
+  }
+  if (!should_begin) {
+    return absl::OkStatus();
+  }
   // WARNING: This method can be called from both the Impress Thread and
   // Filament's Render Thread. As such, it is generally not safe to call either
   // Impress View APIs or Filament APIs because they cannot be called from
@@ -1863,6 +1933,10 @@ absl::Status XrSessionHost::BeginFrame() {
   XrFrameBeginInfo frame_begin_info{.type = XR_TYPE_FRAME_BEGIN_INFO,
                                     .next = nullptr};
   XrResult result = xrBeginFrame(session_, &frame_begin_info);
+  if (result < XR_SUCCESS) {
+    absl::MutexLock lock(frame_active_mutex_);
+    is_frame_active_ = false;
+  }
   if (result > XR_SUCCESS) {
     // All non-negative values other than XR_SUCCESS are considered success. But
     // we still want to log the value just in case.
@@ -1899,83 +1973,89 @@ absl::Status XrSessionHost::EndFrame(XrSwapchain swapchain,
     }
   }
 
+  std::vector<XrCompositionLayerBaseHeader*> layers;
+  XrCompositionLayerProjection layer{};
+  void* next = nullptr;
   std::vector<XrCompositionLayerProjectionView> layer_views;
-  layer_depth_infos_.clear();
-  layer_depth_infos_.reserve(frame_info.views.size());
-  int32_t x_offset = 0;
-  int32_t y_offset = 0;
-  for (int view_index = 0; view_index < frame_info.views.size(); ++view_index) {
-    XrViewConfigurationView& view_config =
-        frame_info.should_render_varjo_foveation
-            ? varjo_foveation_view_configs_[view_index]
-            : view_configs_[view_index];
-    int32_t width = static_cast<int32_t>(GetViewWidth(view_config));
-    int32_t height = static_cast<int32_t>(GetViewHeight(view_config));
 
-    XrSwapchainSubImage color_sub_image = {
-        .swapchain = swapchain,
-        .imageRect =
-            {
-                .offset = {x_offset, y_offset},
-                .extent = {width, height},
-            },
-    };
-    if (IsMultiviewStereo()) {
-      color_sub_image.imageArrayIndex = static_cast<uint32_t>(view_index);
-    } else {
-      // Move the start offset of X-axis for the next view.
-      x_offset += width;
+  if (is_main_projection_layer_enabled_) {
+    layer_depth_infos_.clear();
+    layer_depth_infos_.reserve(frame_info.views.size());
+    int32_t x_offset = 0;
+    int32_t y_offset = 0;
+    for (int view_index = 0; view_index < frame_info.views.size();
+         ++view_index) {
+      XrViewConfigurationView& view_config =
+          frame_info.should_render_varjo_foveation
+              ? varjo_foveation_view_configs_[view_index]
+              : view_configs_[view_index];
+      int32_t width = static_cast<int32_t>(GetViewWidth(view_config));
+      int32_t height = static_cast<int32_t>(GetViewHeight(view_config));
+
+      XrSwapchainSubImage color_sub_image = {
+          .swapchain = swapchain,
+          .imageRect =
+              {
+                  .offset = {x_offset, y_offset},
+                  .extent = {width, height},
+              },
+      };
+      if (IsMultiviewStereo()) {
+        color_sub_image.imageArrayIndex = static_cast<uint32_t>(view_index);
+      } else {
+        // Move the start offset of X-axis for the next view.
+        x_offset += width;
+      }
+
+      XrCompositionLayerDepthInfoKHR* next_depth_info = nullptr;
+      if (depth_swapchain != XR_NULL_HANDLE &&
+          is_composition_layer_depth_enabled_) {
+        XrSwapchainSubImage depth_sub_image = color_sub_image;
+        depth_sub_image.swapchain = depth_swapchain;
+        layer_depth_infos_.push_back({
+            .type = XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR,
+            .next = nullptr,
+            .subImage = depth_sub_image,
+            .minDepth = 0.f,
+            .maxDepth = 1.f,
+            .nearZ = GetView()->GetCameraManager().GetCamera()->GetFarClip(),
+            .farZ = GetView()->GetCameraManager().GetCamera()->GetNearClip(),
+        });
+        next_depth_info = &layer_depth_infos_[view_index];
+      }
+      imp::output::Xr("Ending frame of depth swapchain: %d; %d",
+                      depth_swapchain != XR_NULL_HANDLE,
+                      next_depth_info != nullptr);
+      layer_views.push_back({
+          .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW,
+          .next = next_depth_info,
+          .pose = frame_info.views[view_index].pose,
+          .fov = frame_info.views[view_index].fov,
+          .subImage = color_sub_image,
+      });
     }
 
-    XrCompositionLayerDepthInfoKHR* next_depth_info = nullptr;
+    XrCompositionLayerDepthTestFB depth_test;
+    next = nullptr;
     if (depth_swapchain != XR_NULL_HANDLE &&
         is_composition_layer_depth_enabled_) {
-      XrSwapchainSubImage depth_sub_image = color_sub_image;
-      depth_sub_image.swapchain = depth_swapchain;
-      layer_depth_infos_.push_back({
-          .type = XR_TYPE_COMPOSITION_LAYER_DEPTH_INFO_KHR,
-          .next = nullptr,
-          .subImage = depth_sub_image,
-          .minDepth = 0.f,
-          .maxDepth = 1.f,
-          .nearZ = GetView()->GetCameraManager().GetCamera()->GetFarClip(),
-          .farZ = GetView()->GetCameraManager().GetCamera()->GetNearClip(),
-      });
-      next_depth_info = &layer_depth_infos_[view_index];
+      depth_test.type = XR_TYPE_COMPOSITION_LAYER_DEPTH_TEST_FB;
+      depth_test.next = nullptr;
+      depth_test.depthMask = XR_TRUE;
+      depth_test.compareOp = XrCompareOpFB::XR_COMPARE_OP_LESS_OR_EQUAL_FB;
+      next = &depth_test;
     }
-    imp::output::Xr("Ending frame of depth swapchain: %d; %d",
-                    depth_swapchain != XR_NULL_HANDLE,
-                    next_depth_info != nullptr);
-    layer_views.push_back({
-        .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW,
-        .next = next_depth_info,
-        .pose = frame_info.views[view_index].pose,
-        .fov = frame_info.views[view_index].fov,
-        .subImage = color_sub_image,
-    });
-  }
 
-  XrCompositionLayerDepthTestFB depth_test;
-  void* next = nullptr;
-  if (depth_swapchain != XR_NULL_HANDLE &&
-      is_composition_layer_depth_enabled_) {
-    depth_test.type = XR_TYPE_COMPOSITION_LAYER_DEPTH_TEST_FB;
-    depth_test.next = nullptr;
-    depth_test.depthMask = XR_TRUE;
-    depth_test.compareOp = XrCompareOpFB::XR_COMPARE_OP_LESS_OR_EQUAL_FB;
-    next = &depth_test;
+    layer = {
+        .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION,
+        .next = next,
+        .layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
+        .space = reference_space_,
+        .viewCount = static_cast<uint32_t>(layer_views.size()),
+        .views = layer_views.data(),
+    };
+    layers.push_back(reinterpret_cast<XrCompositionLayerBaseHeader*>(&layer));
   }
-
-  std::vector<XrCompositionLayerBaseHeader*> layers;
-  XrCompositionLayerProjection layer = {
-      .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION,
-      .next = next,
-      .layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
-      .space = reference_space_,
-      .viewCount = static_cast<uint32_t>(layer_views.size()),
-      .views = layer_views.data(),
-  };
-  layers.push_back(reinterpret_cast<XrCompositionLayerBaseHeader*>(&layer));
 
   // Add non-projection composition layers.
   for (auto& [layer, weight] : composition_layers_) {
@@ -2048,10 +2128,11 @@ absl::Status XrSessionHost::EndFrame(XrSwapchain swapchain,
       auto callback_data = new FenceCallbackData{
           .display_time = frame_info.display_time,
           .platform = platform_.get(),
-          .engine = GetEngine(),
           .sync = frame_info.sync,
           .after_end_frame_callback = std::move(after_end_frame_callback),
+          .sync_destruction_queue = &sync_destruction_queue_,
       };
+
       auto invoke_callback_with_fence = [](FilamentSync* sync,
                                            void* user_data) {
         // Wrap callback_data in unique_ptr to ensure that it's destroyed at the
@@ -2079,10 +2160,17 @@ absl::Status XrSessionHost::EndFrame(XrSwapchain swapchain,
 #endif
 
         (*callback_data->after_end_frame_callback)(file_descriptor);
-        callback_data->engine->destroy(callback_data->sync);
+
+        // Reconcile UAF: Safely queue the Sync object for destruction on the
+        // main thread. The SyncDestructionQueue is managed via a shared_ptr, so
+        // this call and the queue remain 100% valid and thread-safe even if the
+        // XrSessionHost has already been deleted.
+        if (callback_data->sync_destruction_queue) {
+          callback_data->sync_destruction_queue->Push(callback_data->sync);
+        }
       };
       frame_info.sync->getExternalHandle(
-          /*handler=*/nullptr, invoke_callback_with_fence, callback_data);
+          &sync_callback_handler_, invoke_callback_with_fence, callback_data);
     } else {
       // The call to create the sync was not invoked, so there's no sync to
       // get a file descriptor from. Instead, provide -1, which signals not
@@ -2091,6 +2179,10 @@ absl::Status XrSessionHost::EndFrame(XrSwapchain swapchain,
     }
   }
 
+  {
+    absl::MutexLock lock(frame_active_mutex_);
+    is_frame_active_ = false;
+  }
   return return_value;
 }
 
@@ -2182,6 +2274,11 @@ absl::Status XrSessionHost::BeginAndDiscardFrame(XrTime predictedDisplayTime) {
     SYSTRACE_CONTEXT();
     SYSTRACE_ASYNC_END("Impress Frame", predictedDisplayTime);
   }
+  {
+    absl::MutexLock lock(frame_active_mutex_);
+    is_frame_active_ = false;
+  }
+
   return result;
 }
 
@@ -2189,15 +2286,26 @@ void XrSessionHost::PerformRender(filament::View* view,
                                   ViewHost::RenderPassOptions options) {
   IMP_TRACE();
 
-  if (view_configuration_type_ == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
-    PerformMonoRender(view);
-    return;
+  uint8_t previous_layers = 0xFF;
+  if (!is_main_projection_layer_enabled_) {
+    // We disable the main projection layer by hiding all layers rather than
+    // skipping it outright. This allows the main projection layer to drive the
+    // call to xrEndFrame and maintain the frame lifecycle, even in the presence
+    // of quad layers, for example.
+    previous_layers = view->getVisibleLayers();
+    view->setVisibleLayers(0xFF, 0x00);
   }
 
-  if (is_enhanced_stereoscopic_rendering_enabled_) {
+  if (view_configuration_type_ == XR_VIEW_CONFIGURATION_TYPE_PRIMARY_MONO) {
+    PerformMonoRender(view);
+  } else if (is_enhanced_stereoscopic_rendering_enabled_) {
     PerformEnhancedStereoscopicRender(view, options);
   } else {
     PerformNaiveStereoscopicRender(view);
+  }
+
+  if (!is_main_projection_layer_enabled_) {
+    view->setVisibleLayers(0xFF, previous_layers);
   }
 }
 
@@ -2502,7 +2610,7 @@ void XrSessionHost::SetAfterEndFrameCallback(Invocable<void(int)> callback) {
 
 void XrSessionHost::MarkPostRenderAndCreateSync() {
 #if IMP_PLATFORM(ANDROID)
-  absl::MutexLock lock(&frame_queue_mutex_);
+  absl::MutexLock lock(frame_queue_mutex_);
   if (frame_queue_.empty()) {
     return;
   }
@@ -2529,6 +2637,10 @@ std::optional<XrSystemProperties> XrSessionHost::GetSystemProperties() const {
     return std::nullopt;
   }
   return system_properties;
+}
+
+void XrSessionHost::SetMainProjectionLayerEnabled(bool enabled) {
+  is_main_projection_layer_enabled_ = enabled;
 }
 
 RobinSet<std::string> XrSessionHost::GetEnabledExtensions() const {

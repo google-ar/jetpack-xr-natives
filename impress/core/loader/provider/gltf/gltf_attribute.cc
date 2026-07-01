@@ -192,12 +192,12 @@ const char* GetAttributeName(Gltf2Attribute attribute) {
   }
 }
 
-absl::optional<Gltf2Attribute> GetGlTF2VertexAttribute(
+std::optional<Gltf2Attribute> GetGlTF2VertexAttribute(
     const std::string& attribute_name) {
   auto map = GetGlTF2VertexAttributeMap();
   auto it = map.find(attribute_name);
-  return (it == map.end()) ? absl::optional<Gltf2Attribute>{}
-                           : absl::optional<Gltf2Attribute>{it->second};
+  return (it == map.end()) ? std::optional<Gltf2Attribute>{}
+                           : std::optional<Gltf2Attribute>{it->second};
 }
 
 schemas::VertexAttribute GetVertexAttribute(Gltf2Attribute gltf2_attr) {

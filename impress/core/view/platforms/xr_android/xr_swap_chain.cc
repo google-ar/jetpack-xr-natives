@@ -112,6 +112,37 @@ absl::StatusOr<XrSwapchain> CreateSwapChain(XrSessionHost* host,
   return swapchain;
 }
 
+absl::StatusOr<XrSwapchain> CreateQuadSwapChain(XrSessionHost* host,
+                                                int2 quad_size,
+                                                int sample_count,
+                                                XrSwapchainCreateFlags flags) {
+  MP_ASSIGN_OR_RETURN(uint32_t swapchain_color_format,
+                   GetSwapchainColorFormat(host));
+
+  XrSwapchainCreateInfo swapchain_create_info = {
+      .type = XR_TYPE_SWAPCHAIN_CREATE_INFO,
+      .next = nullptr,
+      .createFlags = flags,
+      .usageFlags = XR_SWAPCHAIN_USAGE_SAMPLED_BIT |
+                    XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT |
+                    XR_SWAPCHAIN_USAGE_TRANSFER_SRC_BIT |
+                    XR_SWAPCHAIN_USAGE_TRANSFER_DST_BIT,
+      .format = swapchain_color_format,
+      .sampleCount = static_cast<uint32_t>(sample_count),
+      .width = static_cast<uint32_t>(quad_size.x),
+      .height = static_cast<uint32_t>(quad_size.y),
+      .faceCount = 1,
+      .arraySize = 1,
+      .mipCount = 1,
+  };
+
+  XrSwapchain swapchain = XR_NULL_HANDLE;
+  MP_RETURN_IF_ERROR(host->ToStatus(xrCreateSwapchain(
+      host->GetXrSession(), &swapchain_create_info, &swapchain)));
+
+  return swapchain;
+}
+
 absl::StatusOr<XrSwapchain> CreateDepthSwapChain(
     XrSessionHost* host, XrSwapchainCreateFlags flags = 0) {
   // WARNING: Called from Filament's Render Thread. It is NOT SAFE to call most
@@ -165,35 +196,35 @@ CreateSwapChainImages(XrSessionHost* host, XrSwapchain swapchain) {
 }
 
 absl::StatusOr<std::unique_ptr<XrSwapChain>> XrSwapChain::Create(
-    XrSwapChain::ImageHandlerType::XrPlatformType* platform,
-    XrSessionHost* host, XrSwapchainCreateFlags flags) {
+    XrSwapChain::ImageHandlerType::XrPlatformType& platform,
+    XrSessionHost& host, XrSwapchainCreateFlags flags, bool should_end_frame) {
   // WARNING: Called from Filament's Render Thread. It is NOT SAFE to call most
   // Impress or Filament APIs from here.
 
-  MP_ASSIGN_OR_RETURN(XrSwapchain swapchain_color, CreateSwapChain(host, flags));
+  MP_ASSIGN_OR_RETURN(XrSwapchain swapchain_color, CreateSwapChain(&host, flags));
   MP_ASSIGN_OR_RETURN(std::vector<XrSwapChain::ImageHandlerType::XrSwapChainImage>
                        swapchain_color_images,
-                   CreateSwapChainImages(host, swapchain_color));
+                   CreateSwapChainImages(&host, swapchain_color));
 
   XrSwapchain swapchain_varjo_foveation_color = XR_NULL_HANDLE;
   std::vector<XrSwapChain::ImageHandlerType::XrSwapChainImage>
       swapchain_varjo_foveation_color_images;
-  if (host->IsXrVarjoFoveatedRenderingEnabled()) {
+  if (host.IsXrVarjoFoveatedRenderingEnabled()) {
     MP_ASSIGN_OR_RETURN(
         swapchain_varjo_foveation_color,
-        CreateSwapChain(host, flags, /*use_varjo_foveation=*/true));
+        CreateSwapChain(&host, flags, /*use_varjo_foveation=*/true));
     MP_ASSIGN_OR_RETURN(
         swapchain_varjo_foveation_color_images,
-        CreateSwapChainImages(host, swapchain_varjo_foveation_color));
+        CreateSwapChainImages(&host, swapchain_varjo_foveation_color));
   }
 
   XrSwapchain swapchain_depth = XR_NULL_HANDLE;
   std::vector<XrSwapChain::ImageHandlerType::XrSwapChainImage>
       swapchain_depth_images;
-  if (host->IsCompositionLayerDepthEnabled()) {
-    MP_ASSIGN_OR_RETURN(swapchain_depth, CreateDepthSwapChain(host, flags));
+  if (host.IsCompositionLayerDepthEnabled()) {
+    MP_ASSIGN_OR_RETURN(swapchain_depth, CreateDepthSwapChain(&host, flags));
     MP_ASSIGN_OR_RETURN(swapchain_depth_images,
-                     CreateSwapChainImages(host, swapchain_depth));
+                     CreateSwapChainImages(&host, swapchain_depth));
   }
 
   XrSwapChain::ImageHandlerType::SwapchainLayers swapchain_layers;
@@ -203,30 +234,59 @@ absl::StatusOr<std::unique_ptr<XrSwapChain>> XrSwapChain::Create(
       swapchain_varjo_foveation_color,
       std::move(swapchain_varjo_foveation_color_images)};
   swapchain_layers.depth = {swapchain_depth, std::move(swapchain_depth_images)};
+  swapchain_layers.is_stereo = host.IsMultiviewStereo();
+  swapchain_layers.display_size = host.GetDisplaySize();
 
   std::unique_ptr<XrSwapChain> xr_swapchain = absl::WrapUnique(
-      new XrSwapChain(platform, host, swapchain_layers,
+      new XrSwapChain(&platform, &host, swapchain_layers,
                       flags & XR_SWAPCHAIN_CREATE_PROTECTED_CONTENT_BIT
                           ? ContentSecurityLevel::kProtected
-                          : ContentSecurityLevel::kNone));
-  if (host->IsXrFbFoveationEnabled()) {
+                          : ContentSecurityLevel::kNone,
+                      should_end_frame));
+  if (host.IsXrFbFoveationEnabled()) {
     MP_RETURN_IF_ERROR(xr_swapchain->ResolveFoveationFunctionPointers());
   }
 
   return xr_swapchain;
 }
 
+absl::StatusOr<std::unique_ptr<XrSwapChain>> XrSwapChain::CreateForQuadLayer(
+    XrSwapChain::ImageHandlerType::XrPlatformType& platform,
+    XrSessionHost& host, int2 quad_size, int sample_count,
+    XrSwapchainCreateFlags flags, bool should_end_frame) {
+  MP_ASSIGN_OR_RETURN(XrSwapchain swapchain_color,
+                   CreateQuadSwapChain(&host, quad_size, sample_count, flags));
+  MP_ASSIGN_OR_RETURN(std::vector<XrSwapChain::ImageHandlerType::XrSwapChainImage>
+                       swapchain_color_images,
+                   CreateSwapChainImages(&host, swapchain_color));
+
+  XrSwapChain::ImageHandlerType::SwapchainLayers swapchain_layers;
+  swapchain_layers.default_color = {swapchain_color,
+                                    std::move(swapchain_color_images)};
+  swapchain_layers.is_stereo = false;
+  swapchain_layers.display_size = {static_cast<uint32_t>(quad_size.x),
+                                   static_cast<uint32_t>(quad_size.y)};
+
+  std::unique_ptr<XrSwapChain> xr_swapchain = absl::WrapUnique(
+      new XrSwapChain(&platform, &host, std::move(swapchain_layers),
+                      flags & XR_SWAPCHAIN_CREATE_PROTECTED_CONTENT_BIT
+                          ? ContentSecurityLevel::kProtected
+                          : ContentSecurityLevel::kNone,
+                      should_end_frame));
+  return xr_swapchain;
+}
+
 XrSwapChain::XrSwapChain(
     XrSwapChain::ImageHandlerType::XrPlatformType* platform,
     XrSessionHost* host, XrSwapChain::ImageHandlerType::SwapchainLayers layers,
-    ContentSecurityLevel content_security_level)
+    ContentSecurityLevel content_security_level, bool should_end_frame)
     : host_(host),
       content_security_level_(content_security_level),
       image_handler_(
           platform, host,
           std::make_unique<XrSwapChain::ImageHandlerType::SwapchainLayers>(
               layers),
-          content_security_level) {}
+          content_security_level, should_end_frame) {}
 
 XrSwapChain::~XrSwapChain() {
   if (image_handler_.GetSwapchainLayers()->default_color.handle !=
@@ -275,6 +335,12 @@ absl::Status XrSwapChain::ResolveFoveationFunctionPointers() {
 }
 
 absl::Status XrSwapChain::UpdateFoveationProperties() {
+  // If the foveation function pointers are not resolved, return early. This is
+  // a valid case for quad layer swapchains.
+  if (!xr_create_foveation_profile_fn_) {
+    return absl::OkStatus();
+  }
+
   XrFoveationLevelFB host_foveation_level = host_->GetCurrentFoveationLevel();
   if (host_foveation_level == current_foveation_level_) {
     return absl::OkStatus();

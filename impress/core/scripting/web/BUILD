@@ -14,7 +14,7 @@
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:objc_library.bzl", "objc_library")
-load("//build_tools:imp.bzl", "if_native_debug_enabled", "imp_google3_copts")
+load("//build_tools:imp.bzl", "if_native_debug_enabled", "if_non_android", "imp_google3_copts")
 
 package(
     default_visibility = ["//visibility:public"],
@@ -85,7 +85,7 @@ cc_library(
         "//core/scripting/proto:bridge_cc_proto",
         "//core/view/scripting",
         "@com_google_impress//core/common:log",
-    ],
+    ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )
 

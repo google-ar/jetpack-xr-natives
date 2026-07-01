@@ -28,7 +28,6 @@
 #include "core/editor/ui/directory_ui.h"
 #include "core/editor/ui/drag_and_drop.h"
 #include "core/editor/widget.h"
-#include "core/editor/widgets/asset_thumbnail_provider.h"
 #include "core/render/texture.h"
 #include "core/view/base_view.h"
 #include "core/view/utils/string_map.h"
@@ -99,6 +98,10 @@ class AssetLibrary : public editor::Widget, public imp::Rememberer {
 
   std::string AddResource(const PendingResource& pending_resource);
 
+  void PrepareMaterialHandleDragAndDrop(const std::string& resource);
+
+  void SetAsDefaultDragAndDropSource(std::string resource_path);
+
   // Handles drag-and-drop from other parts of the editor into the library.
   void HandleDragAndDropNewResource();
 
@@ -133,6 +136,10 @@ class AssetLibrary : public editor::Widget, public imp::Rememberer {
 
   std::unique_ptr<DirectoryUi> directory_ui_;
   bool saving_to_disk_enabled_ = false;
+
+  // Tracks materials that are currently being loaded to avoid duplicate
+  // requests.
+  StringSet loading_materials_;
 
   Rememberer rememberer_;
 };

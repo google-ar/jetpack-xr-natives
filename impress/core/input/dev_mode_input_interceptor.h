@@ -21,9 +21,9 @@
 #include <optional>
 #include <vector>
 
-#include "absl/types/optional.h"
 #include "core/actions/input_action_event.h"
 #include "core/geometry/shapes/rect.h"
+#include "core/input/input_events_pool.h"
 #include "core/input/input_manager.h"
 #include "core/input/keyboard_controller.h"
 #include "core/input/keyboard_event.h"
@@ -47,28 +47,31 @@ class DevModeInputInterceptor : public InputInterceptor {
   // 2. Prevents captured input from getting to the app.
   // When using remote editor:
   // 1. Sends input event to ImGui.
-  void FilterPointerEvents(std::vector<PointerEvent>& pointer_events) override;
+  void FilterPointerEvents(
+      InputEventsBatch<PointerEvent>& pointer_batch) override;
   // The interceptor should process and filter out any keyboard or text input
   // events that it does not want to propagate to the rest of the view.
   void FilterKeyboardEvents(
-      std::vector<KeyboardEvent>& keyboard_events,
-      std::vector<TextInputEvent>& text_input_events) override;
+      InputEventsBatch<KeyboardEvent>& keyboard_batch,
+      InputEventsBatch<TextInputEvent>& text_input_batch) override;
   // The interceptor should process and filter out any wheel events that it does
   // not want to propagate to the rest of the view.
-  void FilterWheelEvents(std::vector<WheelEvent>& wheel_events) override;
+  void FilterWheelEvents(InputEventsBatch<WheelEvent>& wheel_batch) override;
   // The interceptor should process and filter out any input action events that
   // it does not want to propagate to the rest of the view.
   void FilterInputActionEvents(
-      std::vector<InputActionEvent>& input_action_events) override;
+      InputEventsBatch<InputActionEvent>& input_action_batch) override;
 
   // Returns true if the wheel event was consumed.
   bool TryConsumeWheelEvent(const WheelEvent& wheel_event);
 
  private:
+  bool IsUsingRemoteScreen() const;
+  bool IsViewportWidgetActive() const;
   std::optional<Rect> GetViewportRect() const;
   // For platforms with soft keyboards, e.g. Android and iOS.
   std::unique_ptr<KeyboardController> soft_keyboard_controller_;
-  absl::optional<Pointer::Id> captured_id_;
+  std::optional<Pointer::Id> captured_id_;
   BaseView* view_;
 };
 

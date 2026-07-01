@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
+#include "generated/resources/taa.h"
 #include "taa.h"
 
-#include "generated/resources/taa.h"
-
-#include <materials/StaticMaterialInfo.h>
+#include "materials/StaticMaterialInfo.h"
 
 #include "filament/libs/utils/include/utils/Slice.h"
 

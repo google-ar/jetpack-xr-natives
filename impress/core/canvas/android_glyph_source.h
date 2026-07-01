@@ -20,6 +20,7 @@
 #include <jni.h>
 
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 #include "absl/strings/string_view.h"
@@ -42,7 +43,9 @@ namespace imp {
  * encapsulates all glyph-specific methods of CanvasSource and ScopedCanvas for
  * Android.
  */
-class AndroidGlyphSource : public JavaWrapper {
+class AndroidGlyphSource
+    : public JavaWrapper,
+      public std::enable_shared_from_this<AndroidGlyphSource> {
  public:
   /** What method to use when rendering glyphs. */
   enum class Method {
@@ -66,6 +69,13 @@ class AndroidGlyphSource : public JavaWrapper {
                               int cache_size_bytes,
                               bool force_individual_glyph_source_instances);
 
+  // WARNING: Do NOT implement an eager "Dispose()" or "Clear()" method that
+  // invalidates JNI handles (like class_ or self_) before the destructor runs.
+  //
+  // ReleaseTextGlyphs can be called asynchronously from background threads
+  // when GlyphId objects are destroyed. We rely on std::shared_ptr destructor
+  // synchronization to ensure ReleaseTextGlyphs never runs concurrently with
+  // JNI teardown. Eager disposal would break this guarantee and cause races.
   ~AndroidGlyphSource() override;
 
   /**

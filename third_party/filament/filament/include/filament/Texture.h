@@ -29,9 +29,9 @@
 #include "filament/libs/utils/include/utils/Invocable.h"
 #include "filament/libs/utils/include/utils/StaticString.h"
 
+#include <functional>
 #include <utility>
 
-#include <functional>
 #include <stddef.h>
 #include <stdint.h>
 

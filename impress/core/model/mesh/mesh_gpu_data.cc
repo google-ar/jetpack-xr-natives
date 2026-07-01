@@ -68,10 +68,14 @@ void MeshGpuData::UploadMeshDataToGpu(MeshDataPtr mesh_data) {
   filament::Engine* engine = view_.GetSharedEngine();
   size_t attribute_groups_count =
       mesh_data->GetDescription().vertex_format.GetAttributeGroupsCount();
-  for (size_t i = 0; i < attribute_groups_count; ++i) {
-    vertex_buffer_->setBufferAt(*engine, i, mesh_data->MoveVertexData(i), 0);
+  if (vertex_buffer_) {
+    for (size_t i = 0; i < attribute_groups_count; ++i) {
+      vertex_buffer_->setBufferAt(*engine, i, mesh_data->MoveVertexData(i), 0);
+    }
   }
-  index_buffer_->setBuffer(*engine, mesh_data->MoveIndexData(), 0);
+  if (index_buffer_) {
+    index_buffer_->setBuffer(*engine, mesh_data->MoveIndexData(), 0);
+  }
 }
 
 void MeshGpuData::UploadMeshDataToGpu(MeshData* mesh_data) {
@@ -87,10 +91,14 @@ void MeshGpuData::UploadMeshDataToGpu(MeshData* mesh_data) {
   filament::Engine* engine = view_.GetSharedEngine();
   size_t attribute_groups_count =
       mesh_data->GetDescription().vertex_format.GetAttributeGroupsCount();
-  for (size_t i = 0; i < attribute_groups_count; ++i) {
-    vertex_buffer_->setBufferAt(*engine, i, mesh_data->CopyVertexData(i), 0);
+  if (vertex_buffer_) {
+    for (size_t i = 0; i < attribute_groups_count; ++i) {
+      vertex_buffer_->setBufferAt(*engine, i, mesh_data->CopyVertexData(i), 0);
+    }
   }
-  index_buffer_->setBuffer(*engine, mesh_data->CopyIndexData(), 0);
+  if (index_buffer_) {
+    index_buffer_->setBuffer(*engine, mesh_data->CopyIndexData(), 0);
+  }
 }
 
 filament::VertexBuffer* MeshGpuData::GetVertexBuffer() {

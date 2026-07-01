@@ -54,10 +54,10 @@ OptionalError FillChannelOfParameter(
     const imp::gltf::imp_proto::Gltf& gltf,
     const std::vector<AnimationSampler>& animation_samplers,
     TypedSpan<const imp::gltf::imp_proto::AnimationChannel>& animation_channels,
-    absl::optional<Domain>& material_parameter_domain,
+    std::optional<Domain>& material_parameter_domain,
     flatbuffers::FlatBufferBuilder* fbb, T& type,
     flatbuffers::Offset<void>& offset, ChannelId channel) {
-  absl::optional<Domain> domain;
+  std::optional<Domain> domain;
   if (channel) {
     MP_RETURN_IF_ERROR(AddChannel(
         gltf, animation_samplers[*animation_channels[channel].sampler], fbb,
@@ -74,11 +74,10 @@ OptionalError SerializeTextureTransformAnimation(
     TextureTransformChannelSet& texture_transform_channels,
     TexturableParameters target_texturable_parameter,
     flatbuffers::FlatBufferBuilder* fbb,
-    absl::optional<
-        flatbuffers::Offset<animation::schemas::TextureTransformAnimation>>*
+    std::optional<flatbuffers::Offset<schemas::TextureTransformAnimation>>*
         out_offset,
-    absl::optional<Domain>* out_domain) {
-  absl::optional<Domain> texturable_parameter_domain;
+    std::optional<Domain>* out_domain) {
+  std::optional<Domain> texturable_parameter_domain;
 
   std::optional<ChannelId> offset_channel =
       texture_transform_channels.offset_channel;
@@ -142,7 +141,7 @@ OptionalError GetTextureTransformAnimation(
     std::vector<
         flatbuffers::Offset<animation::schemas::TextureTransformAnimation>>&
         out_texture_transform_animations,
-    absl::optional<Domain>* out_domain) {
+    std::optional<Domain>* out_domain) {
   // Go through all the textures in order. If a texture transform animation is
   // found, add the animation and texture target to the respective vector.
   TexturableParameters all_texturable_parameters[12] = {
@@ -163,10 +162,9 @@ OptionalError GetTextureTransformAnimation(
   for (TexturableParameters texturable_parameter : all_texturable_parameters) {
     if (!texture_transforms[texturable_parameter].has_value()) continue;
 
-    absl::optional<
-        flatbuffers::Offset<animation::schemas::TextureTransformAnimation>>
+    std::optional<flatbuffers::Offset<schemas::TextureTransformAnimation>>
         animation_offset;
-    absl::optional<Domain> animation_domain;
+    std::optional<Domain> animation_domain;
     MP_RETURN_IF_ERROR(SerializeTextureTransformAnimation(
         gltf, animation_channels, animation_samplers,
         /*lookup table*/ *(texture_transforms[texturable_parameter]),
@@ -189,9 +187,8 @@ OptionalError SerializeMaterialAnimation(
     const imp::gltf::imp_proto::Gltf& gltf, const GltfLookup& lookup,
     MaterialId material, AnimationId animation,
     flatbuffers::FlatBufferBuilder* fbb,
-    absl::optional<flatbuffers::Offset<animation::schemas::MaterialAnimation>>*
-        out_offset,
-    absl::optional<Domain>* out_domain) {
+    std::optional<flatbuffers::Offset<schemas::MaterialAnimation>>* out_offset,
+    std::optional<Domain>* out_domain) {
   const GltfLookup::MaterialChannelSet& material_channel_set =
       lookup.material_channel_sets[animation];
   ChannelId base_color_factor_channel =
@@ -219,7 +216,7 @@ OptionalError SerializeMaterialAnimation(
   const std::vector<AnimationSampler>& animation_samplers =
       lookup.animations[animation].samplers;
 
-  absl::optional<Domain> material_parameter_domain;
+  std::optional<Domain> material_parameter_domain;
 
   if (base_color_factor_channel || metallic_factor_channel ||
       roughness_factor_channel || alpha_cutoff_channel ||
@@ -228,7 +225,7 @@ OptionalError SerializeMaterialAnimation(
       transmission_channel || !texture_transforms.empty()) {
     schemas::ChannelFloat4 base_color_type = schemas::ChannelFloat4::NONE;
     flatbuffers::Offset<void> base_color;
-    absl::optional<Domain> base_color_domain;
+    std::optional<Domain> base_color_domain;
     if (base_color_factor_channel) {
       MP_RETURN_IF_ERROR(AddChannel(
           gltf,
@@ -294,7 +291,7 @@ OptionalError SerializeMaterialAnimation(
     std::vector<
         flatbuffers::Offset<animation::schemas::TextureTransformAnimation>>
         texture_transform_animations;
-    absl::optional<Domain> texture_transform_domain;
+    std::optional<Domain> texture_transform_domain;
     MP_RETURN_IF_ERROR(GetTextureTransformAnimation(
         gltf, animation_channels, animation_samplers,
         const_cast<TextureTransformChannelMap&>(texture_transforms), fbb,
@@ -319,10 +316,9 @@ OptionalError SerializeLightPunctualAnimation(
     const imp::gltf::imp_proto::Gltf& gltf, const GltfLookup& lookup,
     LightPunctualId light, AnimationId animation,
     flatbuffers::FlatBufferBuilder* fbb,
-    absl::optional<
-        flatbuffers::Offset<animation::schemas::LightPunctualAnimation>>*
+    std::optional<flatbuffers::Offset<schemas::LightPunctualAnimation>>*
         out_offset,
-    absl::optional<Domain>* out_domain) {
+    std::optional<Domain>* out_domain) {
   const GltfLookup::LightChannelSet& light_channel_set =
       lookup.light_channel_sets[animation];
   ChannelId color_channel = light_channel_set.color_channel[light];
@@ -337,13 +333,13 @@ OptionalError SerializeLightPunctualAnimation(
   const std::vector<AnimationSampler>& animation_samplers =
       lookup.animations[animation].samplers;
 
-  absl::optional<Domain> material_parameter_domain;
+  std::optional<Domain> material_parameter_domain;
 
   if (color_channel || intensity_channel || range_channel ||
       inner_cone_angle_channel || outer_cone_angle_channel) {
     schemas::ChannelFloat3 color_type = schemas::ChannelFloat3::NONE;
     flatbuffers::Offset<void> color;
-    absl::optional<Domain> color_domain;
+    std::optional<Domain> color_domain;
     if (color_channel) {
       MP_RETURN_IF_ERROR(AddChannel(
           gltf, animation_samplers[*animation_channels[color_channel].sampler],
@@ -353,7 +349,7 @@ OptionalError SerializeLightPunctualAnimation(
 
     schemas::ChannelFloat intensity_type = schemas::ChannelFloat::NONE;
     flatbuffers::Offset<void> intensity;
-    absl::optional<Domain> intensity_domain;
+    std::optional<Domain> intensity_domain;
     if (intensity_channel) {
       MP_RETURN_IF_ERROR(AddChannel(
           gltf,
@@ -365,7 +361,7 @@ OptionalError SerializeLightPunctualAnimation(
 
     schemas::ChannelFloat range_type = schemas::ChannelFloat::NONE;
     flatbuffers::Offset<void> range;
-    absl::optional<Domain> range_domain;
+    std::optional<Domain> range_domain;
     if (range_channel) {
       MP_RETURN_IF_ERROR(AddChannel(
           gltf, animation_samplers[*animation_channels[range_channel].sampler],
@@ -376,7 +372,7 @@ OptionalError SerializeLightPunctualAnimation(
 
     schemas::ChannelFloat inner_cone_angle_type = schemas::ChannelFloat::NONE;
     flatbuffers::Offset<void> inner_cone_angle;
-    absl::optional<Domain> inner_cone_angle_domain;
+    std::optional<Domain> inner_cone_angle_domain;
     if (inner_cone_angle_channel) {
       MP_RETURN_IF_ERROR(AddChannel(
           gltf,
@@ -390,7 +386,7 @@ OptionalError SerializeLightPunctualAnimation(
 
     schemas::ChannelFloat outer_cone_angle_type = schemas::ChannelFloat::NONE;
     flatbuffers::Offset<void> outer_cone_angle;
-    absl::optional<Domain> outer_cone_angle_domain;
+    std::optional<Domain> outer_cone_angle_domain;
     if (outer_cone_angle_channel) {
       MP_RETURN_IF_ERROR(AddChannel(
           gltf,
@@ -460,10 +456,9 @@ OptionalError GetLightAnimation(
     LightPunctualId light_id = LightPunctualId::At(light_index);
     if (!(light_scratch_flags[light_id] & ScratchFlags::kInThisAnim)) continue;
 
-    absl::optional<
-        flatbuffers::Offset<animation::schemas::LightPunctualAnimation>>
+    std::optional<flatbuffers::Offset<schemas::LightPunctualAnimation>>
         animation_offset;
-    absl::optional<Domain> animation_domain;
+    std::optional<Domain> animation_domain;
     MP_RETURN_IF_ERROR(
         SerializeLightPunctualAnimation(gltf, lookup, light_id, animation, fbb,
                                         &animation_offset, &animation_domain))

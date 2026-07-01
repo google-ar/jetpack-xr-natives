@@ -16,17 +16,18 @@
 
 #include "details/Stream.h"
 
+#include "FilamentAPI-impl.h"
+
 #include "details/Engine.h"
 #include "details/Fence.h"
 
-#include "FilamentAPI-impl.h"
+#include <filament/Stream.h>
 
 #include <backend/PixelBufferDescriptor.h>
 
 #include "filament/libs/utils/include/utils/CString.h"
-#include "filament/libs/utils/include/utils/StaticString.h"
 #include "filament/libs/utils/include/utils/Panic.h"
-#include <filament/Stream.h>
+#include "filament/libs/utils/include/utils/StaticString.h"
 
 namespace filament {
 

@@ -32,6 +32,8 @@ absl::string_view GetDragAndDropTypeId(DragAndDropType drag_and_drop_type) {
       return "kDragAndDropMaterialAsset";
     case DragAndDropType::kTexture:
       return "kDragAndDropTextureAsset";
+    case DragAndDropType::kMaterialHandle:
+      return "kDragAndDropMaterialHandle";
   }
 }
 
@@ -44,6 +46,11 @@ bool BeginDragAndDropSource(DragAndDropType drag_and_drop_type,
     return true;
   }
   return false;
+}
+
+void BeginDefaultDragAndDropSource(absl::string_view label,
+                                   absl::string_view payload) {
+  BeginDragAndDropSource(DragAndDropType::kNodeAsset, label, payload);
 }
 
 void SetDragAndDropPayload(DragAndDropType drag_and_drop_type,

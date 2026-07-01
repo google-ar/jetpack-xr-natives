@@ -21,6 +21,7 @@
 #include "filament/filament/include/filament/Material.h"
 #include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
+#include "core/view/base_view.h"
 
 namespace imp::material_helpers {
 
@@ -55,6 +56,29 @@ void SetDefaultHighPriorityVariants(
 Future<absl::Status> PreCompileMaterial(
     filament::Material* material,
     const MaterialPreCompileOptions& pre_compile_options);
+
+// Precompiles the filament::Material using a given View's active features as
+// a baseline. `MaterialPreCompileByView` must be specified within
+// `MaterialPreCompileOptions` to use this API.
+//
+// There are two main differences between this and `PreCompileMaterial`:
+// 1. Baseline View: Instead of compiling variants in isolation, it inspects the
+//    provided `BaseView` for its active view-global features (e.g., fog,
+//    dynamic lighting, SSR) to determine the exact baseline permutations
+//    required to render the material in that view.
+// 2. Explicit Variant Filtering: Rather than providing a raw variant filter
+//    mask, the caller explicitly specifies whether the remaining per-renderable
+//    variant features (`shadow_receiver` and `skinning`) should be compiled for
+//    the enabled permutation, the disabled permutation, or both.
+//
+// If `MaterialPreCompileByView::priority` is set to `PRIORITY_HIGH`, the
+// returned future will not be ready until the high-priority variants have
+// finished compiling in the backend. Otherwise, for `PRIORITY_LOW`, the future
+// is ready immediately.
+// TODO: Support non-main Views as well.
+Future<absl::Status> PreCompileMaterialByView(
+    filament::Material* material,
+    const MaterialPreCompileOptions& pre_compile_options, BaseView* view);
 
 }  // namespace imp::material_helpers
 

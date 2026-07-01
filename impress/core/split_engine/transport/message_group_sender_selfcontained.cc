@@ -24,6 +24,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "flatbuffers/buffer.h"
+#include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/executor.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/split_engine/shared/split_engine_defines.h"
@@ -45,14 +46,15 @@ absl::StatusOr<MessageGroupId> SelfContainedMessageGroupSender::Start(
   return absl::UnimplementedError("Not implemented.");
 }
 
-absl::StatusOr<MessageGroupSender::OwnedOrBorrowedFlatbufferBuilderHolder>
+absl::StatusOr<OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder>>
 SelfContainedMessageGroupSender::CreateBuilder(MessageGroupId message_group_id,
                                                size_t initial_size_bytes) {
   return absl::UnimplementedError("Not implemented.");
 }
 
 absl::Status SelfContainedMessageGroupSender::AddMessage(
-    MessageGroupId message_group_id, OwnedOrBorrowedFlatbufferBuilderHolder fbb,
+    MessageGroupId message_group_id,
+    OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder> fbb,
     const flatbuffers::Offset<android_xr::schemas::Command>& offset) {
   
 
@@ -60,7 +62,8 @@ absl::Status SelfContainedMessageGroupSender::AddMessage(
 }
 
 absl::Status SelfContainedMessageGroupSender::AddMessage(
-    MessageGroupId message_group_id, OwnedOrBorrowedFlatbufferBuilderHolder fbb,
+    MessageGroupId message_group_id,
+    OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder> fbb,
     OffsetProducer offset_fn) {
   
 

@@ -63,8 +63,9 @@ class BuiltInCustomMaterial : public BuiltInMaterialWrapper<Material> {
 
   // Overrides the material's color space parameters using the color space
   // explicitly provided by the user.
-  void OverrideColorSpaceParameters(BaseView& view,
-                                    MediaColorSpace color_space);
+  void OverrideColorSpaceParameters(
+      BaseView& view, MediaColorSpace color_space,
+      std::optional<TextureId> texture_id = std::nullopt);
 
  private:
   // The bridge ID of the app using the material. This is required to get the
@@ -77,6 +78,8 @@ class BuiltInCustomMaterial : public BuiltInMaterialWrapper<Material> {
   MediaColorSpace default_color_space_{MediaColorSpace::Standard::kBT709,
                                        MediaColorSpace::Transfer::kSRGB,
                                        MediaColorSpace::Range::kFull};
+  // Tracks the last color space to detect changes across frames (for logging).
+  std::optional<MediaColorSpace> last_color_space_;
 };
 
 }  // namespace imp::split_engine

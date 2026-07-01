@@ -104,6 +104,20 @@ struct InvertMouseScrollEvent : public Event {
   bool enabled;
 };
 
+// Event sent to enable or disable legacy camera controls.
+struct UseLegacyCameraControlsEvent : public Event {
+  explicit UseLegacyCameraControlsEvent(bool use_legacy_camera_controls_enabled)
+      : enabled(use_legacy_camera_controls_enabled) {}
+  bool enabled;
+};
+
+// Event sent when the transform widget scale is changed.
+struct TransformWidgetScaleChangedEvent : public Event {
+  explicit TransformWidgetScaleChangedEvent(float new_scale)
+      : scale(new_scale) {}
+  float scale;
+};
+
 }  // namespace imp::editor
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_EDITOR_EVENTS_H_

@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-#include <gtest/gtest.h>
-
-#include <limits>
-#include <random>
-#include <functional>
-
 #include "filament/libs/math/include/math/mat2.h"
-#include "filament/libs/math/include/math/mat4.h"
 #include "filament/libs/math/include/math/mat3.h"
+#include "filament/libs/math/include/math/mat4.h"
 #include "filament/libs/math/include/math/quat.h"
 #include "filament/libs/math/include/math/scalar.h"
+
+#include <gtest/gtest.h>
+
+#include <functional>
+#include <limits>
+#include <random>
 
 using namespace filament::math;
 

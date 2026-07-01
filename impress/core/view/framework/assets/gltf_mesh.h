@@ -259,8 +259,13 @@ class GltfMesh : public Component {
   // Update skinned mesh with new skinning data.
   void UpdateSkinnedMesh();
 
-  // Returns the transforms used for instancing the mesh, if any.
+  // Returns the transforms used for instancing the mesh, if there are none,
+  // this returns an empty vector.
   const std::vector<mat4f>& GetInstanceTransforms() const;
+
+  // Updates the transforms used for instancing the mesh.
+  // The transforms are expected to be relative to the glTF root node.
+  void UpdateInstanceTransforms(absl::Span<const mat4f> transforms);
 
   // Returns the GltfRenderer that created this GltfMesh.
   //
@@ -292,6 +297,9 @@ class GltfMesh : public Component {
   uint8_t channel_ = kDefaultChannel;
   BaseRenderableManager& GetRenderableManager() const;
   filament::RenderableManager::Instance GetInstance() const;
+
+  // Recalculates the bounding box for all instances.
+  void UpdateInstanceBounds();
 };
 
 }  // namespace imp

@@ -279,7 +279,14 @@ OptionalError ViewState::Resume() {
 }
 
 filament::Engine::Config ViewState::GetEngineConfig() const {
-  return view_->GetEngineConfig();
+  auto config = view_->GetEngineConfig();
+  if (view_->GetConfig()
+          .experimental_feature_flags->enable_async_graphics_resource_loading
+          .Value()) {
+    config.asynchronousMode =
+        filament::Engine::AsynchronousMode::THREAD_PREFERRED;
+  }
+  return config;
 }
 
 filament::backend::FeatureLevel ViewState::GetMaximumEngineFeatureLevel()
@@ -288,7 +295,22 @@ filament::backend::FeatureLevel ViewState::GetMaximumEngineFeatureLevel()
 }
 
 std::vector<FilamentFeatureFlag> ViewState::GetFilamentFeatureFlags() const {
-  return view_->GetConfig().filament_feature_flags;
+  std::vector<FilamentFeatureFlag> flags =
+      view_->GetConfig().filament_feature_flags;
+
+  bool enable_async_gpu_resource_loading =
+      view_->GetConfig()
+          .experimental_feature_flags->enable_async_graphics_resource_loading
+          .Value();
+  if (enable_async_gpu_resource_loading &&
+      std::find_if(
+          flags.begin(), flags.end(), [](const FilamentFeatureFlag& flag) {
+            return flag.name == "backend.enable_asynchronous_operation";
+          }) == flags.end()) {
+    flags.push_back(
+        {.name = "backend.enable_asynchronous_operation", .enabled = true});
+  }
+  return flags;
 }
 
 bool ViewState::ShouldStartPaused() const { return view_->ShouldStartPaused(); }

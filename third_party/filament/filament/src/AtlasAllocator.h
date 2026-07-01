@@ -17,14 +17,14 @@
 #ifndef TNT_FILAMENT_ATLASALLOCATOR_H
 #define TNT_FILAMENT_ATLASALLOCATOR_H
 
-#include "filament/libs/utils/include/utils/QuadTree.h"
+#include <private/filament/EngineEnums.h>
 
 #include <filament/Viewport.h>
 
-#include <private/filament/EngineEnums.h>
+#include "filament/libs/utils/include/utils/QuadTree.h"
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 class AtlasAllocator_AllocateFirstLevel_Test;
 class AtlasAllocator_AllocateSecondLevel_Test;

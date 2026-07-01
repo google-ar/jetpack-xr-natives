@@ -17,14 +17,13 @@
 #include <sys/stat.h>
 
 #include <cstdint>
-#include <memory>
 #include <optional>
 #include <utility>
 
 #include "absl/base/no_destructor.h"
 #include "absl/container/flat_hash_set.h"
+#include "absl/log/check.h"
 #include "core/common/log.h"
-#include "absl/memory/memory.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "filament/filament/include/filament/Color.h"
@@ -43,10 +42,12 @@
 #include "core/ncsb/node.h"
 #include "core/render/texture.h"
 #include "core/render_passes/texture_pipeline_renderer_projection_quad.h"
+#include "core/split_engine/flatbuffer_size_calculator.h"
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
 #include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "core/split_engine/split_engine_serializer.h"
+#include "core/split_engine/transport/request_sender.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 #include "split_engine/schemas/split_engine_primitive_generated.h"
@@ -134,11 +135,23 @@ GsplatMaterialSerializer::Create(
     std::optional<imp::uint2> magic_window_offscreen_resolution) {
   imp::BaseView& view = gsplat_node->GetView();
   uint32_t gsplat_renderer_entity_id = gsplat_node.GetEntity().getId();
-  auto fbb = std::make_unique<flatbuffers::FlatBufferBuilder>();
+
+  absl::StatusOr<imp::split_engine::RequestSender::RequestBuilder> builder =
+      imp::split_engine::SplitEngineBuiltinMaterial::CreateFlatBufferBuilder(
+          view, imp::split_engine::FlatbufferSizeCalculator()
+                    .AddRequestBuiltInGsplatMaterial(
+                        material_mode == schemas::GsplatMode::MAGIC_WINDOW,
+                        render_group.size())
+                    .Finish()
+                    .ComputeSize());
+  if (!builder.ok()) {
+    return builder.status();
+  }
+  auto fbb = *std::move(builder);
+
   auto use_triangles_bool = android_xr::schemas::Bool(use_triangles_for_splats);
   auto has_precomputed_texture_bool =
       android_xr::schemas::Bool(precomputed_data_texture != nullptr);
-
   std::optional<android_xr::schemas::Uint2>
       magic_window_offscreen_texture_resolution =
           magic_window_offscreen_resolution.has_value()

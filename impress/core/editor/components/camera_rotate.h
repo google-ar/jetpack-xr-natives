@@ -19,7 +19,8 @@
 
 #include <vector>
 
-#include "core/config.h"
+#include "absl/strings/string_view.h"
+#include "core/editor/widgets/input_settings_widget_constants.h"
 #include "core/input/keyboard_event.h"
 #include "core/input/pointer_event.h"
 #include "core/math/math.h"
@@ -39,6 +40,8 @@ class CameraRotate : public Component {
   void Setup(NodeHandle pivot, float pitch, float yaw);
   void Update(const FrameTime& frame_time);
 
+  bool UseLegacyCameraControls() const { return use_legacy_camera_controls_; }
+
   // Called by the FreecamInterceptor
   void FilterPointerEvents(std::vector<PointerEvent>& pointer_events);
   void FilterKeyboardEvents(std::vector<KeyboardEvent>& keyboard_events);
@@ -52,7 +55,8 @@ class CameraRotate : public Component {
   float pitch_;
   float yaw_;
   NodeHandle pivot_;
-  bool invert_y_enabled_ = IMP_INVERT_EDITOR_INPUT_DEFAULT_VALUE;
+  bool invert_y_enabled_ = kInvertCameraYDefault;
+  bool use_legacy_camera_controls_ = kUseLegacyCameraControlsDefault;
 
   bool w_pressed_ = false;
   bool a_pressed_ = false;

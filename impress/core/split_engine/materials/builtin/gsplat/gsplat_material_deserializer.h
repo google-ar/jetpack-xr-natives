@@ -74,7 +74,7 @@ namespace imp::split_engine {
 //    look.
 //
 class GsplatMaterialDeserializer : public BuiltInCustomMaterial,
-                                   public imp::Rememberer {
+                                   public Rememberer {
  public:
   static Future<BuiltInMaterialPtr> Create(
       BaseView& view, BridgeId bridge_id,
@@ -82,7 +82,7 @@ class GsplatMaterialDeserializer : public BuiltInCustomMaterial,
 
   ~GsplatMaterialDeserializer() override;
 
-  split_engine::BuiltInMaterialPtr Duplicate() const override;
+  BuiltInMaterialPtr Duplicate() const override;
 
   absl::Status SetParameters(
       flatbuffers::Verifier& verifier,
@@ -94,7 +94,7 @@ class GsplatMaterialDeserializer : public BuiltInCustomMaterial,
       NodeHandle gsplat_node, BridgeId bridge_id,
       android_xr::schemas::GsplatMode material_mode,
       AssetPtr<MaterialAsset> material_asset,
-      std::optional<imp::uint2> offscreen_texture_resolution,
+      std::optional<uint2> offscreen_texture_resolution,
       ComponentHandle<PrecomputeTexturePipeline> precompute_texture_pipeline,
       ComponentHandle<GroupToProjectionQuadTextureRenderer>
           group_to_projection_quad_texture_renderer);
@@ -102,7 +102,7 @@ class GsplatMaterialDeserializer : public BuiltInCustomMaterial,
   GsplatMaterialDeserializer(
       NodeHandle gsplat_node, BridgeId bridge_id,
       android_xr::schemas::GsplatMode material_mode, OwnedMaterialPtr material,
-      std::optional<imp::uint2> offscreen_texture_resolution,
+      std::optional<uint2> offscreen_texture_resolution,
       ComponentHandle<PrecomputeTexturePipeline> precompute_texture_pipeline,
       ComponentHandle<GroupToProjectionQuadTextureRenderer>
           group_to_projection_quad_texture_renderer);
@@ -141,10 +141,25 @@ class GsplatMaterialDeserializer : public BuiltInCustomMaterial,
   BaseView& view_;
   NodeHandle gsplat_node_;
   android_xr::schemas::GsplatMode material_mode_;
+  // PrecomputeTexturePipeline is only created in GSPLAT mode, and it is
+  // added under a new child node created under `gsplat_node_`.
   ComponentHandle<PrecomputeTexturePipeline> precompute_texture_pipeline_;
+  // GroupToProjectionQuadTextureRenderer is only created in MAGIC_WINDOW mode,
+  // and it is added under `gsplat_node_`.
   ComponentHandle<GroupToProjectionQuadTextureRenderer>
       group_to_projection_quad_texture_renderer_;
-  std::optional<imp::uint2> offscreen_texture_resolution_;
+  std::optional<uint2> offscreen_texture_resolution_;
+
+  // Texture output from GroupToProjectionQuadTextureRenderer.
+  // Only used in MAGIC_WINDOW mode.
+  // Passed to BuiltInCustomMaterial and must be unset from there before
+  // the destruction of GroupToProjectionQuadTextureRenderer.
+  BorrowedTexturePtr projection_quad_texture_;
+  // Texture output from PrecomputeTexturePipeline.
+  // Only used in GSPLAT mode.
+  // Passed to BuiltInCustomMaterial and must be unset from there before
+  // the destruction of PrecomputeTexturePipeline.
+  BorrowedTexturePtr precompute_pass_texture_;
 };
 
 }  // namespace imp::split_engine

@@ -60,29 +60,37 @@ cc_library(
     name = "memory_stats",
     srcs = select({
         "@platforms//os:osx": [
+            "darwin/allocator_addresses.cc",
             "darwin/editor_malloc.cc",
             "darwin/memory_stats.cc",
         ],
         "@platforms//os:ios": [
+            "darwin/allocator_addresses.cc",
             "darwin/editor_malloc.cc",
             "darwin/memory_stats.cc",
         ],
         ":android_and_memory_graph": [
             "android/editor_malloc.cc",
             "android/memory_stats.cc",
+            "default/allocator_addresses.cc",
         ],
         "@platforms//os:android": [
+            "default/allocator_addresses.cc",
             "default/memory_stats.cc",
         ],
         "@platforms//os:emscripten": [
+            "default/allocator_addresses.cc",  # No memory callstacks on wasm, use default.
             "wasm/editor_malloc.cc",
             "wasm/memory_stats.cc",
         ],
         "//conditions:default": [
+            "default/allocator_addresses.cc",
             "default/memory_stats.cc",
         ],
     }),
-    hdrs = select({
+    hdrs = [
+        "allocator_addresses.h",
+    ] + select({
         ":android_and_memory_graph": [
             "android/editor_malloc.h",
             "memory_stats.h",

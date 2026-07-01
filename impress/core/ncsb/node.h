@@ -40,14 +40,42 @@
 
 namespace imp {
 
+inline absl::string_view Node::GetName() const {
+  return node_controller_->GetName();
+}
+
+inline bool Node::IsEnabled() const { return node_controller_->IsEnabled(); }
+
+inline bool Node::IsActive() const { return node_controller_->IsActive(); }
+
+inline bool Node::IsRoot() const { return node_controller_->IsRoot(); }
+
+#if IMP_RUNTIME(DEV)
+inline bool Node::IsEditorStaging() const {
+  return node_controller_->IsEditorStaging();
+}
+#endif
+
+inline float3 Node::GetLocalScale() const {
+  return node_controller_->GetLocalScale();
+}
+
+inline quatf Node::GetLocalRotation() const {
+  return node_controller_->GetLocalRotation();
+}
+
+inline float3 Node::GetLocalForward() const {
+  return GetLocalRotation() * kForward;
+}
+
 inline BaseView& Node::GetView() const { return node_controller_->GetView(); }
 
 inline filament::Engine* Node::GetEngine() const {
-  return BaseView::GetSharedEngine();
+  return GetView().GetEngine();
 }
 
 inline filament::TransformManager& Node::GetTransformManager() const {
-  return GetEngine()->getTransformManager();
+  return *GetView().GetTransformManager();
 }
 
 inline ComponentManager& Node::GetComponentManager() const {

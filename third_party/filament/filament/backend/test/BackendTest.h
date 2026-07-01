@@ -17,18 +17,18 @@
 #ifndef TNT_BACKEND_TEST_H
 #define TNT_BACKEND_TEST_H
 
-#include <gtest/gtest.h>
+#include "ImageExpectations.h"
+#include "Lifetimes.h"
+#include "PlatformRunner.h"
 
-#include <filesystem>
+#include <private/backend/CommandBufferQueue.h>
+#include <private/backend/DriverApi.h>
 
 #include <backend/Platform.h>
 
-#include "private/backend/CommandBufferQueue.h"
-#include "private/backend/DriverApi.h"
+#include <gtest/gtest.h>
 
-#include "PlatformRunner.h"
-#include "ImageExpectations.h"
-#include "Lifetimes.h"
+#include <filesystem>
 
 namespace test {
 
@@ -65,9 +65,11 @@ protected:
 
     // Gets the full back buffer's viewport
     filament::backend::Viewport getFullViewport() const;
-    // If color is unset this defaults to using opaque cyan
-    static filament::backend::RenderPassParams getClearColorRenderPass(
-            filament::math::float4 color = filament::math::float4(0, 1, 1, 1));
+    // If color is unset this defaults to using opaque cyan. The double4 value is converted by the
+    // backend into the matching native clear entry-point based on the attachment's format.
+    static filament::backend::RenderPassParams getClearColorDepthRenderPass(
+            filament::math::double4 color = filament::math::double4(0, 1, 1, 1),
+            double depth = 1.0);
     static filament::backend::RenderPassParams getNoClearRenderPass();
 
     filament::backend::DriverApi& getDriverApi() { return *commandStream; }

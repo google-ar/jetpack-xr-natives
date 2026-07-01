@@ -20,7 +20,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <functional>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -52,6 +51,7 @@
 #include "core/async/future.h"
 #include "core/common/buffer_access.h"
 #include "core/common/invocable.h"
+#include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/owned_ptr.h"
 #include "core/common/type_helpers.h"
 #include "core/config.h"
@@ -68,8 +68,10 @@
 #include "core/math/math.h"
 #include "core/math/vec.h"
 #include "core/model/mesh/base_mesh_builder.h"
+#include "core/model/mesh/mesh.h"
+#include "core/model/mesh/mesh_data.h"
+#include "core/model/mesh/mesh_factory.h"
 #include "core/render/base_texture_builder.h"
-#include "core/split_engine/android/split_engine_android_bridge.h"
 #include "core/split_engine/flatbuffer_utils.h"
 #include "core/split_engine/image_based_lighting_helpers.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
@@ -92,6 +94,7 @@
 #endif
 #include "core/render_passes/texture_pipeline_renderer_state.proto.imp.h"
 #include "core/split_engine/flatbuffer_size_calculator.h"
+#include "core/split_engine/material_requester.h"  // IWYU pragma: keep
 #include "core/split_engine/materials/split_engine_generic_material.h"
 #include "core/split_engine/split_engine_mesh_builder.h"
 #include "core/split_engine/split_engine_serializer_batch_manager.h"
@@ -258,14 +261,26 @@ using filament::VertexBuffer;
 SplitEngineSerializerImpl::SplitEngineSerializerImpl(
     BaseView& view, int32_t api_level,
     imp::OwnedPtr<SplitEngineSerializerTransport> transport,
+    std::unique_ptr<MaterialRequester> material_requester,
     size_t bridge_buffer_size_bytes)
     : Updater(view),
       view_(view),
       api_level_(api_level),
       transport_(std::move(transport)),
+      material_requester_(std::move(material_requester)),
       bridge_buffer_size_bytes_(bridge_buffer_size_bytes),
       batch_manager_() {
   view_.GetRenderableManager().SetSpy(*this);
+  view_.GetMeshFactory().SetMeshDataObserver(
+      [this](Mesh* mesh, size_t group_idx, size_t offset, MeshData* mesh_data) {
+        OnUpdateMeshData(mesh, group_idx, offset, mesh_data);
+      });
+}
+
+SplitEngineSerializerImpl::~SplitEngineSerializerImpl() {
+  view_.GetMeshFactory().SetMeshDataObserver(nullptr);
+  // TODO: (broken link) - Change RenderableManager to take a pointer.
+  // view_.GetRenderableManager().SetSpy(nullptr);
 }
 
 void SplitEngineSerializerImpl::SetSpy(BaseRenderableManager& spy) {}
@@ -310,6 +325,47 @@ void SplitEngineSerializerImpl::SetMaterialInstanceAt(
           {entity}, {material_instance_id});
   batch.data[entity].primitives[primitiveIndex].material_instance_id =
       material_instance_id;
+}
+
+void SplitEngineSerializerImpl::OnUpdateMeshData(Mesh* mesh, size_t group_idx,
+                                                 size_t offset,
+                                                 MeshData* mesh_data) {
+  const filament::VertexBuffer* vertex_buffer = mesh->GetVertexBuffer();
+  const filament::IndexBuffer* index_buffer = mesh->GetIndexBuffer();
+
+  std::vector<SplitEngineSerializer::VertexBufferUpdateInfo> vb_updates;
+  std::vector<SplitEngineSerializer::IndexBufferUpdateInfo> ib_updates;
+
+  if (vertex_buffer) {
+    MeshData::BufferDescriptor vb_desc = mesh_data->CopyVertexData(group_idx);
+    if (vb_desc.buffer && vb_desc.size > 0) {
+      SplitEngineSerializer::VertexBlockUpdateInfo block_update;
+      block_update.block_index = group_idx;
+      block_update.offset = offset;
+      block_update.buffer =
+          SplitEngineSerializer::ScopedBufferDescriptor(std::move(vb_desc));
+
+      SplitEngineSerializer::VertexBufferUpdateInfo vb_update;
+      vb_update.id = GetId(vertex_buffer);
+      vb_update.block_updates.push_back(std::move(block_update));
+      vb_updates.push_back(std::move(vb_update));
+    }
+  }
+
+  // Check the group index to avoid redundant index buffer updates.
+  if (index_buffer && group_idx == 0) {
+    MeshData::BufferDescriptor ib_desc = mesh_data->CopyIndexData();
+    if (ib_desc.buffer && ib_desc.size > 0) {
+      SplitEngineSerializer::IndexBufferUpdateInfo ib_update;
+      ib_update.id = GetId(index_buffer);
+      ib_update.offset = offset;
+      ib_update.buffer =
+          SplitEngineSerializer::ScopedBufferDescriptor(std::move(ib_desc));
+      ib_updates.push_back(std::move(ib_update));
+    }
+  }
+
+  UpdateMeshData(std::move(vb_updates), std::move(ib_updates));
 }
 
 void SplitEngineSerializerImpl::ClearMaterialInstanceAt(
@@ -358,11 +414,11 @@ void SplitEngineSerializerImpl::SetBonesInternal(
   SerializerDataTypes::Batch<CommandTypes::UpdateRenderables>& batch =
       batch_manager_.GetOrCreateBatch<CommandTypes::UpdateRenderables>(
           {entity});
-  imp::BorrowedPtr<SplitEngineSerializerTransport::MessageBuilder> fbb =
+  imp::BorrowedPtr<flatbuffers::FlatBufferBuilder> fbb =
       BorrowFlatBufferBuilder(batch);
   batch.data[entity].bones = android_xr::schemas::CreateBones(
-      **fbb, (*fbb)->CreateVectorOfNativeStructs<android_xr::schemas::Mat4f>(
-                 transforms, boneCount, Pack));
+      *fbb, fbb->CreateVectorOfNativeStructs<android_xr::schemas::Mat4f>(
+                transforms, boneCount, Pack));
 }
 
 void SplitEngineSerializerImpl::SetAxisAlignedBoundingBox(
@@ -467,11 +523,11 @@ void SplitEngineSerializerImpl::SetMorphWeights(
   SerializerDataTypes::Batch<CommandTypes::UpdateRenderables>& batch =
       batch_manager_.GetOrCreateBatch<CommandTypes::UpdateRenderables>(
           {entity});
-  imp::BorrowedPtr<SplitEngineSerializerTransport::MessageBuilder> fbb =
+  imp::BorrowedPtr<flatbuffers::FlatBufferBuilder> fbb =
       BorrowFlatBufferBuilder(batch);
 
   batch.data[entity].morph_weights = android_xr::schemas::CreateMorphWeights(
-      **fbb, (*fbb)->CreateVector(weights, count), offset);
+      *fbb, fbb->CreateVector(weights, count), offset);
 }
 
 bool SplitEngineSerializerImpl::IsCullingEnabled(
@@ -499,7 +555,7 @@ SplitEngineSerializerImpl::NewBuilder(size_t count) {
       count);
 }
 
-imp::OwnedPtr<SplitEngineSerializerTransport::MessageBuilder>
+imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder>
 SplitEngineSerializerImpl::CreateFlatBufferBuilder(size_t size_bytes) {
   // Message groups are lazily began the first time anyone attempts to build a
   // message (create a FlatBufferBuilder) in a frame, and ended in Update() if
@@ -516,7 +572,7 @@ SplitEngineSerializerImpl::CreateFlatBufferBuilder(size_t size_bytes) {
   return transport_->CreateBuilder(*frame_update_group_id_, size_bytes);
 }
 
-imp::OwnedPtr<SplitEngineSerializerTransport::MessageBuilder>
+imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder>
 SplitEngineSerializerImpl::CreateFlatBufferBuilder() {
   constexpr size_t kInitialSize = 1024;
   return CreateFlatBufferBuilder(kInitialSize);
@@ -533,7 +589,7 @@ void SplitEngineSerializerImpl::SerializeTexture(
   
 
   // MessageBuilder has to be shared between different tasks.
-  imp::OwnedPtr<SplitEngineSerializerTransport::MessageBuilder> builder =
+  imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder> builder =
       transport_->CreateBuilder(*group_id, kBufferSize);
 
   // Offload potentially expensive serialization (copying huge amount of data)
@@ -573,6 +629,37 @@ void SplitEngineSerializerImpl::RemoveTexture(filament::Texture& texture) {
   RemoveId(texture_id);
 }
 
+void SplitEngineSerializerImpl::UpdateMeshData(
+    std::vector<SplitEngineSerializer::VertexBufferUpdateInfo>
+        vertex_buffer_updates,
+    std::vector<SplitEngineSerializer::IndexBufferUpdateInfo>
+        index_buffer_updates) {
+  SerializerDataTypes::Batch<CommandTypes::UpdateMeshData>& batch =
+      batch_manager_.GetOrCreateBatch<CommandTypes::UpdateMeshData>();
+
+  for (auto& update : vertex_buffer_updates) {
+    VertexBufferUpdateInfo info;
+    info.id = update.id;
+    info.block_updates.reserve(update.block_updates.size());
+    for (auto& block : update.block_updates) {
+      VertexBlockUpdateInfo block_info;
+      block_info.block_index = block.block_index;
+      block_info.offset = block.offset;
+      block_info.buffer = std::move(block.buffer);
+      info.block_updates.push_back(std::move(block_info));
+    }
+    batch.data.vertex_buffers.push_back(std::move(info));
+  }
+
+  for (auto& update : index_buffer_updates) {
+    IndexBufferUpdateInfo info;
+    info.id = update.id;
+    info.offset = update.offset;
+    info.buffer = std::move(update.buffer);
+    batch.data.index_buffers.push_back(std::move(info));
+  }
+}
+
 void SplitEngineSerializerImpl::SerializeMesh(
     std::unique_ptr<const SplitEngineMeshSerializer>
         split_engine_mesh_serializer) {
@@ -598,7 +685,7 @@ void SplitEngineSerializerImpl::SerializeMeshIndicesAndVertices(
       transport_->BeginOneShot(kAddMeshBufferSize);
   
 
-  imp::OwnedPtr<SplitEngineSerializerTransport::MessageBuilder> mesh_builder =
+  imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder> mesh_builder =
       transport_->CreateBuilder(*group_id, kAddMeshBufferSize);
 
   // Offload potentially expensive serialization (copying huge amount of data)
@@ -652,7 +739,7 @@ void SplitEngineSerializerImpl::SerializeMeshMorphTargets(
       transport_->BeginOneShot(kAddMorphTargetBufferSize);
   
 
-  imp::OwnedPtr<SplitEngineSerializerTransport::MessageBuilder>
+  imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder>
       morph_target_buffer_builder =
           transport_->CreateBuilder(*group_id, kAddMorphTargetBufferSize);
 
@@ -723,7 +810,7 @@ void SplitEngineSerializerImpl::SerializeImageBasedLightingAsset(
       transport_->BeginOneShot(kBufferSize);
   
 
-  imp::OwnedPtr<SplitEngineSerializerTransport::MessageBuilder> builder =
+  imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder> builder =
       transport_->CreateBuilder(*group_id, kBufferSize);
 
   // Offload potentially expensive serialization (copying huge amount of data)
@@ -807,7 +894,8 @@ void SplitEngineSerializerImpl::RemoveVertexBuffer(
   RemoveId(buffer_id);
 }
 
-void SplitEngineSerializerImpl::RemoveIndexBuffer(IndexBuffer* index_buffer) {
+void SplitEngineSerializerImpl::RemoveIndexBuffer(
+    filament::IndexBuffer* index_buffer) {
   const ResourceId buffer_id = GetId(index_buffer);
   SerializerDataTypes::Batch<CommandTypes::RemoveMeshData>& batch =
       batch_manager_.GetOrCreateBatch<CommandTypes::RemoveMeshData>();
@@ -818,7 +906,7 @@ void SplitEngineSerializerImpl::RemoveIndexBuffer(IndexBuffer* index_buffer) {
   RemoveId(buffer_id);
 }
 
-imp::BorrowedPtr<SplitEngineSerializerTransport::MessageBuilder>
+imp::BorrowedPtr<flatbuffers::FlatBufferBuilder>
 SplitEngineSerializerImpl::BorrowFlatBufferBuilder(
     SerializerDataTypes::CommandBatchBase& batch) {
   // Return existing or create new FlatBufferBuilder.
@@ -830,7 +918,7 @@ SplitEngineSerializerImpl::BorrowFlatBufferBuilder(
   return fbb_.emplace(&batch, CreateFlatBufferBuilder()).first->second.Borrow();
 }
 
-imp::OwnedPtr<SplitEngineSerializerTransport::MessageBuilder>
+imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder>
 SplitEngineSerializerImpl::ReleaseFlatBufferBuilder(
     SerializerDataTypes::CommandBatchBase& batch) {
   auto it = fbb_.find(&batch);
@@ -839,7 +927,7 @@ SplitEngineSerializerImpl::ReleaseFlatBufferBuilder(
     // creation. In this case we just return an empty builder.
     return CreateFlatBufferBuilder();
   }
-  imp::OwnedPtr<SplitEngineSerializerTransport::MessageBuilder> fbb =
+  imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder> fbb =
       std::move(it->second);
   fbb_.erase(it);
   return fbb;
@@ -847,12 +935,8 @@ SplitEngineSerializerImpl::ReleaseFlatBufferBuilder(
 
 int32_t SplitEngineSerializerImpl::GetApiLevel() const { return api_level_; }
 
-SplitEngineAndroidBridge& SplitEngineSerializerImpl::GetBridge() {
-  absl::StatusOr<
-      std::reference_wrapper<imp::split_engine::SplitEngineAndroidBridge>>
-      bridge = transport_->GetBridge();
-  
-  return *bridge;
+MaterialRequester& SplitEngineSerializerImpl::GetMaterialRequester() const {
+  return *material_requester_;
 }
 
 bool SplitEngineSerializerImpl::ReadyForNextFrame() const {
@@ -875,7 +959,7 @@ void SplitEngineSerializerImpl::AddMaterial(
   SerializerDataTypes::Batch<CommandTypes::AddMaterials>& batch =
       batch_manager_.GetOrCreateBatch<CommandTypes::AddMaterials>(
           {}, {material_id});
-  imp::BorrowedPtr<SplitEngineSerializerTransport::MessageBuilder> fbb =
+  imp::BorrowedPtr<flatbuffers::FlatBufferBuilder> fbb =
       BorrowFlatBufferBuilder(batch);
 
   std::vector<
@@ -890,9 +974,9 @@ void SplitEngineSerializerImpl::AddMaterial(
       case MaterialPreCompileConstant::kValue_IntValue:
         constants.push_back(
             android_xr::schemas::CreateMaterialPrecompileConstant(
-                **fbb, (*fbb)->CreateString(constant.name),
+                *fbb, fbb->CreateString(constant.name),
                 android_xr::schemas::MaterialPrecompileConstantValue::Int,
-                (*fbb)->CreateStruct(Pack(*constant.int_value())).Union()));
+                fbb->CreateStruct(Pack(*constant.int_value())).Union()));
         IMP_LOG(imp::INFO) << kTag << kIndent
                    << "material precompile constant: " << constant.name
                    << " int value: " << *constant.int_value();
@@ -900,9 +984,9 @@ void SplitEngineSerializerImpl::AddMaterial(
       case MaterialPreCompileConstant::kValue_FloatValue:
         constants.push_back(
             android_xr::schemas::CreateMaterialPrecompileConstant(
-                **fbb, (*fbb)->CreateString(constant.name),
+                *fbb, fbb->CreateString(constant.name),
                 android_xr::schemas::MaterialPrecompileConstantValue::Float,
-                (*fbb)->CreateStruct(Pack(*constant.float_value())).Union()));
+                fbb->CreateStruct(Pack(*constant.float_value())).Union()));
         IMP_LOG(imp::INFO) << kTag << kIndent
                    << "material precompile constant: " << constant.name
                    << " float value: " << *constant.float_value();
@@ -910,9 +994,9 @@ void SplitEngineSerializerImpl::AddMaterial(
       case MaterialPreCompileConstant::kValue_BoolValue:
         constants.push_back(
             android_xr::schemas::CreateMaterialPrecompileConstant(
-                **fbb, (*fbb)->CreateString(constant.name),
+                *fbb, fbb->CreateString(constant.name),
                 android_xr::schemas::MaterialPrecompileConstantValue::Bool,
-                (*fbb)->CreateStruct(Pack(*constant.bool_value())).Union()));
+                fbb->CreateStruct(Pack(*constant.bool_value())).Union()));
         IMP_LOG(imp::INFO) << kTag << kIndent
                    << "material precompile constant: " << constant.name
                    << " boolean value: " << *constant.bool_value();
@@ -925,11 +1009,10 @@ void SplitEngineSerializerImpl::AddMaterial(
 
   flatbuffers::Offset<android_xr::schemas::MaterialPrecompileOptions> options =
       android_xr::schemas::CreateMaterialPrecompileOptions(
-          **fbb, (*fbb)->CreateVector(constants));
+          *fbb, fbb->CreateVector(constants));
 
   batch.data.push_back(android_xr::schemas::CreateMaterial(
-      **fbb, material_id, (*fbb)->CreateVector(data.Data(), data.Size()),
-      options));
+      *fbb, material_id, fbb->CreateVector(data.Data(), data.Size()), options));
 }
 
 void SplitEngineSerializerImpl::RemoveMaterial(
@@ -1393,11 +1476,10 @@ void SplitEngineSerializerImpl::SetMaterialParameter(
   SerializerDataTypes::Batch<CommandTypes::SetMaterialParameters>& batch =
       batch_manager_.GetOrCreateBatch<CommandTypes::SetMaterialParameters>(
           {}, {material_id});
-  imp::BorrowedPtr<SplitEngineSerializerTransport::MessageBuilder> fbb =
+  imp::BorrowedPtr<flatbuffers::FlatBufferBuilder> fbb =
       BorrowFlatBufferBuilder(batch);
 
-  batch.data[material_id].params.push_back(
-      AddMaterialParam(**fbb, name, value));
+  batch.data[material_id].params.push_back(AddMaterialParam(*fbb, name, value));
 }
 
 void SplitEngineSerializerImpl::SetMaterialParameter(
@@ -1407,14 +1489,14 @@ void SplitEngineSerializerImpl::SetMaterialParameter(
   SerializerDataTypes::Batch<CommandTypes::SetMaterialParameters>& batch =
       batch_manager_.GetOrCreateBatch<CommandTypes::SetMaterialParameters>(
           {}, {material_id});
-  imp::BorrowedPtr<SplitEngineSerializerTransport::MessageBuilder> fbb =
+  imp::BorrowedPtr<flatbuffers::FlatBufferBuilder> fbb =
       BorrowFlatBufferBuilder(batch);
 
   flatbuffers::Offset<android_xr::schemas::TextureSampler> sampler_offset =
-      CreateTextureSampler<SplitEngineTextureSamplerCreator>(**fbb, sampler);
+      CreateTextureSampler<SplitEngineTextureSamplerCreator>(*fbb, sampler);
   batch.data[material_id].texture_params.push_back(
       android_xr::schemas::CreateMaterialTextureParameter(
-          **fbb, (*fbb)->CreateString(std::string(name)), GetId(texture),
+          *fbb, fbb->CreateString(std::string(name)), GetId(texture),
           sampler_offset));
 }
 
@@ -1457,12 +1539,12 @@ void SplitEngineSerializerImpl::SetBuiltInMaterialParameters(
       batch = batch_manager_
                   .GetOrCreateBatch<CommandTypes::SetBuiltInMaterialParameters>(
                       {}, {material_id});
-  imp::BorrowedPtr<SplitEngineSerializerTransport::MessageBuilder> fbb =
+  imp::BorrowedPtr<flatbuffers::FlatBufferBuilder> fbb =
       BorrowFlatBufferBuilder(batch);
 
   batch.data.push_back(
       android_xr::schemas::CreateBuiltInMaterialInstanceParameters(
-          **fbb, material_id, schema_type, serialize_func(**fbb)));
+          *fbb, material_id, schema_type, serialize_func(*fbb)));
 }
 
 void SplitEngineSerializerImpl::DuplicateMaterialInstance(
@@ -1689,13 +1771,13 @@ void SplitEngineSerializerImpl::UnregisterNamedTexture(
 
 void SplitEngineSerializerImpl::SendMessage(
     SerializerDataTypes::CommandBatchBase* batch_base) {
-  imp::OwnedPtr<SplitEngineSerializerTransport::MessageBuilder> fbb =
+  imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder> fbb =
       ReleaseFlatBufferBuilder(*batch_base);
 
   // Assumption is that serialization for frame updates happens fast and does
   // not require offloading to the background thread.
   const std::optional<flatbuffers::Offset<android_xr::schemas::Command>>
-      offset = batch_base->Serialize(**fbb);
+      offset = batch_base->Serialize(*fbb);
 
   if (offset) {
     if (absl::Status status = transport_->AddMessage(*frame_update_group_id_, std::move(fbb),

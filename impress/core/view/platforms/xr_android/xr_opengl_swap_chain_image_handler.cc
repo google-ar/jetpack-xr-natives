@@ -38,10 +38,11 @@ namespace imp {
 XrOpenGLSwapChainImageHandler::XrOpenGLSwapChainImageHandler(
     XrPlatformType* platform, XrSessionHost* host,
     std::unique_ptr<SwapchainLayers> layers,
-    ContentSecurityLevel content_security_level)
+    ContentSecurityLevel content_security_level, bool should_end_frame)
     : platform_(platform),
       host_(host),
       layers_(std::move(layers)),
+      should_end_frame_(should_end_frame),
       content_security_level_(content_security_level) {
   layers_->active_color = host->ShouldRenderVarjoFoveationThisFrame()
                               ? &layers_->varjo_foveation_color
@@ -84,7 +85,11 @@ absl::Status XrOpenGLSwapChainImageHandler::Commit(uint32_t fbo) {
     }
     xr_frames_acquired_ = false;
   }
-  return host_->EndFrame(layers_->active_color->handle, layers_->depth.handle);
+  if (should_end_frame_) {
+    return host_->EndFrame(layers_->active_color->handle,
+                           layers_->depth.handle);
+  }
+  return absl::OkStatus();
 }
 
 absl::StatusOr<
@@ -150,7 +155,7 @@ void XrOpenGLSwapChainImageHandler::BindTexturesToFbo(uint32_t fbo,
                                       : GL_DEPTH_ATTACHMENT;
 
   // Bind the textures to the fbo.
-  if (host_->IsMultiviewStereo()) {
+  if (IsStereo()) {
     if (host_->GetMsaaSampleCount() > 0) {
       glFramebufferTextureMultisampleMultiviewOVR(
           GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, color_texture, /*level=*/0,
@@ -194,13 +199,11 @@ uint32_t XrOpenGLSwapChainImageHandler::GetDepthTexture(
 
   // Get the previously bound texture.
   GLint previously_bound_texture;
-  GLenum texture_binding_target = host_->IsMultiviewStereo()
-                                      ? GL_TEXTURE_BINDING_2D_ARRAY
-                                      : GL_TEXTURE_BINDING_2D;
+  GLenum texture_binding_target =
+      IsStereo() ? GL_TEXTURE_BINDING_2D_ARRAY : GL_TEXTURE_BINDING_2D;
   glGetIntegerv(texture_binding_target, &previously_bound_texture);
 
-  GLenum texture_target =
-      host_->IsMultiviewStereo() ? GL_TEXTURE_2D_ARRAY : GL_TEXTURE_2D;
+  GLenum texture_target = IsStereo() ? GL_TEXTURE_2D_ARRAY : GL_TEXTURE_2D;
 
   // Get the width and height of the color texture so that we can create the
   // depth texture with the same size.

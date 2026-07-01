@@ -17,7 +17,7 @@
 #ifndef TNT_TRIANGLEPRIMITIVE_H
 #define TNT_TRIANGLEPRIMITIVE_H
 
-#include "private/backend/DriverApi.h"
+#include <private/backend/DriverApi.h>
 
 #include "filament/libs/math/include/math/vec2.h"
 

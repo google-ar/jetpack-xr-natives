@@ -21,8 +21,10 @@
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "filament/libs/utils/include/utils/EntityManager.h"
+#include "core/common/pool_allocator.h"
 #include "core/common/vector_helpers.h"
 #include "core/ncsb/node_controller.h"
+#include "core/ncsb/shared_memory_pool.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
 
@@ -41,35 +43,31 @@ NodeAttachmentManager::~NodeAttachmentManager() {
   
 }
 
-NodeAttachmentManager::EntitiesToControllersMap&
-NodeAttachmentManager::GetEntitiesToControllersMap() {
-  thread_local EntitiesToControllersMap entities_to_controllers;
-  return entities_to_controllers;
+NodeAttachmentManager::NodeControllerLookup&
+NodeAttachmentManager::GetNodeControllerLookup() {
+  thread_local NodeControllerLookup node_controller_lookup(
+      ::imp_internal::GetPagedPointerArrayBlockPool());
+  return node_controller_lookup;
 }
 
 NodeController* NodeAttachmentManager::Get(utils::Entity entity) {
-  EntitiesToControllersMap& entities_to_controllers =
-      GetEntitiesToControllersMap();
-  auto itr = entities_to_controllers.find(entity);
-  if (itr != entities_to_controllers.end()) {
-    return itr->second;
-  } else {
-    return nullptr;
-  }
+  return GetNodeControllerLookup().Get(utils::EntityManager::getIndex(entity));
 }
 
 NodeHandle NodeAttachmentManager::Attach(utils::Entity entity) {
+  
+
   if (!entity) {
     return {};
   }
 
   // If the entity is already associated with a NodeController, then return it.
-  EntitiesToControllersMap& entities_to_controllers =
-      GetEntitiesToControllersMap();
-  auto itr = entities_to_controllers.find(entity);
-  if (itr != entities_to_controllers.end()) {
+  NodeControllerLookup& node_controller_lookup = GetNodeControllerLookup();
+  NodeController* node_controller =
+      node_controller_lookup.Get(utils::EntityManager::getIndex(entity));
+  if (node_controller && node_controller->GetEntity() == entity) {
     
-    return NodeHandle(entity, itr->second);
+    return NodeHandle(entity, node_controller);
   }
 
   // Ensure that the entity has a transform.
@@ -79,31 +77,35 @@ NodeHandle NodeAttachmentManager::Attach(utils::Entity entity) {
     tm.create(entity);
   }
 
-  NodeController* node_controller_ptr;
   if (allocator_) {
-    node_controller_ptr = allocator_->Allocate(view_, entity, 0);
+    using AllocateResult = PoolAllocator<NodeController, false>::AllocateResult;
+    AllocateResult result = allocator_->Allocate(view_, entity, 0);
+    node_controller = result.ptr;
   } else {
-    node_controller_ptr =
+    node_controller =
         new NodeController(view_, entity, node_controllers_.size());
-    node_controllers_.push_back(node_controller_ptr);
+    node_controllers_.push_back(node_controller);
   }
 
   // Track the association between the entity and the node controller.
-  entities_to_controllers.emplace(entity, node_controller_ptr);
+  node_controller_lookup.Set(utils::EntityManager::getIndex(entity),
+                             node_controller);
 
   // Call PostCreated. This work isn't done in the constructor because it
   // requires the NodeController to already be in the NodeAttachmentManager.
-  node_controller_ptr->PostCreated();
+  node_controller->PostCreated();
 
   if (split_engine::SplitEngineSerializer* serializer =
           view_->GetSplitEngineSerializer()) {
     serializer->CreateNode(entity);
   }
 
-  return NodeHandle(entity, node_controller_ptr);
+  return NodeHandle(entity, node_controller);
 }
 
 void NodeAttachmentManager::Destroy(NodeHandle node) noexcept {
+  
+
   if (!node) {
     // Do nothing if the node is already destroyed or empty.
     //
@@ -128,9 +130,8 @@ void NodeAttachmentManager::Destroy(NodeHandle node) noexcept {
 
   utils::Entity entity = node_controller->GetEntity();
 
-  EntitiesToControllersMap& entities_to_controllers =
-      GetEntitiesToControllersMap();
-  entities_to_controllers.erase(entity);
+  NodeControllerLookup& node_controller_lookup = GetNodeControllerLookup();
+  node_controller_lookup.Set(utils::EntityManager::getIndex(entity), nullptr);
 
   if (allocator_) {
     allocator_->Deallocate(node_controller);
@@ -174,12 +175,14 @@ void NodeAttachmentManager::Destroy(NodeHandle node) noexcept {
 }
 
 std::size_t NodeAttachmentManager::GetCount() const {
-  return node_controllers_.size();
+  return allocator_ ? allocator_->GetAllocatedCount()
+                    : node_controllers_.size();
 }
 
 void NodeAttachmentManager::Cleanup() {
-  EntitiesToControllersMap& entities_to_controllers =
-      GetEntitiesToControllersMap();
+  
+
+  NodeControllerLookup& node_controller_lookup = GetNodeControllerLookup();
   utils::EntityManager& em = utils::EntityManager::get();
   filament::Engine* engine = BaseView::GetSharedEngine();
 
@@ -202,19 +205,21 @@ void NodeAttachmentManager::Cleanup() {
   };
 
   if (allocator_) {
-    while (!entities_to_controllers.empty()) {
-      auto itr = entities_to_controllers.begin();
-      utils::Entity entity = itr->first;
-      NodeController* node_controller = itr->second;
-      cleanup_fn(entity, node_controller);
-      entities_to_controllers.erase(itr);
-      allocator_->Deallocate(node_controller);
-    }
+    allocator_->ForEach(
+        [this, cleanup_fn = std::move(cleanup_fn),
+         &node_controller_lookup](NodeController* node_controller) {
+          utils::Entity entity = node_controller->GetEntity();
+          cleanup_fn(entity, node_controller);
+          node_controller_lookup.Set(utils::EntityManager::getIndex(entity),
+                                     nullptr);
+          allocator_->Deallocate(node_controller);
+        });
   } else {
     for (NodeController* node_controller : node_controllers_) {
       utils::Entity entity = node_controller->GetEntity();
       cleanup_fn(entity, node_controller);
-      entities_to_controllers.erase(entity);
+      node_controller_lookup.Set(utils::EntityManager::getIndex(entity),
+                                 nullptr);
       delete node_controller;
     }
     node_controllers_.clear();

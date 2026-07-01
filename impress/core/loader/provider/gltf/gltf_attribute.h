@@ -39,8 +39,8 @@ OptionalError GetAttributeType(absl::string_view type, int component_type,
 
 const char *GetAttributeName(Gltf2Attribute attribute);
 
-absl::optional<Gltf2Attribute> GetGlTF2VertexAttribute(
-    const std::string &attribute_name);
+std::optional<Gltf2Attribute> GetGlTF2VertexAttribute(
+    const std::string& attribute_name);
 
 schemas::VertexAttribute GetVertexAttribute(Gltf2Attribute gltf2_attr);
 

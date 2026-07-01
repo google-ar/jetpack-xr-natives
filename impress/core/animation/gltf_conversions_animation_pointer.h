@@ -33,18 +33,16 @@ OptionalError SerializeMaterialAnimation(
     const imp::gltf::imp_proto::Gltf& gltf, const GltfLookup& lookup,
     MaterialId material, AnimationId animation,
     flatbuffers::FlatBufferBuilder* fbb,
-    absl::optional<flatbuffers::Offset<animation::schemas::MaterialAnimation>>*
-        out_offset,
-    absl::optional<Domain>* out_domain);
+    std::optional<flatbuffers::Offset<schemas::MaterialAnimation>>* out_offset,
+    std::optional<Domain>* out_domain);
 
 OptionalError SerializeLightPunctualAnimation(
     const imp::gltf::imp_proto::Gltf& gltf, const GltfLookup& lookup,
     LightPunctualId light, AnimationId animation,
     flatbuffers::FlatBufferBuilder* fbb,
-    absl::optional<
-        flatbuffers::Offset<animation::schemas::LightPunctualAnimation>>*
+    std::optional<flatbuffers::Offset<schemas::LightPunctualAnimation>>*
         out_offset,
-    absl::optional<Domain>* out_domain);
+    std::optional<Domain>* out_domain);
 
 OptionalError GetLightAnimation(
     const imp::gltf::imp_proto::Gltf& gltf, const GltfLookup& lookup,

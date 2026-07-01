@@ -39,6 +39,29 @@ constexpr absl::string_view kEnableLoadMeshDataOnCpu =
 constexpr absl::string_view kEnableBvhMeshCollisionAcceleration =
     "Enable BVH Mesh Collision Acceleration";
 
+inline constexpr absl::string_view kSkyboxEnabledKey = "editor_skybox_enabled";
+inline constexpr bool kSkyboxEnabledDefault = true;
+
+inline constexpr absl::string_view kVertexSelectionEnabledKey =
+    "editor_vertex_selection_enabled";
+inline constexpr bool kVertexSelectionEnabledDefault = false;
+
+inline constexpr absl::string_view kLoadMeshDataOnCpuEnabledKey =
+    "editor_load_mesh_data_on_cpu_enabled";
+inline constexpr bool kLoadMeshDataOnCpuEnabledDefault = false;
+
+inline constexpr absl::string_view kBvhMeshCollisionAccelerationEnabledKey =
+    "editor_bvh_mesh_collision_acceleration_enabled";
+inline constexpr bool kBvhMeshCollisionAccelerationEnabledDefault = false;
+
+inline constexpr absl::string_view kPostProcessingEnabledKey =
+    "editor_post_processing_enabled";
+inline constexpr bool kPostProcessingEnabledDefault = true;
+
+inline constexpr absl::string_view kShowPhysicsVisualizerEnabledKey =
+    "editor_show_physics_visualizer_enabled";
+inline constexpr bool kShowPhysicsVisualizerEnabledDefault = false;
+
 }  // namespace imp::editor
 
 #endif  // THIRD_PARTY_IMPRESS_EDITOR_WIDGETS_SETTINGS_WIDGET_CONSTANTS_H_

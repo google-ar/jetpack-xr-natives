@@ -20,6 +20,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -51,8 +52,11 @@ public class RemoteEditorWebSocketServer extends WebSocketServer {
   private static final int MIN_POOL_BUFFER_SIZE = 1024;
   private static final int MAX_POOL_BUFFER_SIZE = 1024 * 1024;
   private static final int MAX_BUFFERS_PER_BUCKET = 10;
+  public static final int CLOSE_CODE_SESSION_CLOSED = 4005;
+  public static final String CLOSE_REASON_SESSION_CLOSED = "Session Closed";
   private final Handler mainThreadHandler = new Handler(Looper.getMainLooper());
   private final List<WebSocketListener> listeners = new CopyOnWriteArrayList<>();
+  private boolean isStarted = false;
 
   /**
    * A pool of reusable byte buffers to reduce allocations during message handling. Uses
@@ -99,12 +103,39 @@ public class RemoteEditorWebSocketServer extends WebSocketServer {
   }
 
   /**
+   * Listener interface for handling session closed events. Called when an existing session is
+   * closed by a new connection. All callbacks are guaranteed to be executed on the Android main
+   * thread.
+   *
+   * <p><b>Important:</b> Because callbacks are on the main thread, implementations must be fast and
+   * non-blocking to avoid causing ANRs (Application Not Responding). If a listener needs to perform
+   * a long-running task in response to a session closed event, it must dispatch that work to its
+   * own background thread.
+   */
+  public interface SessionClosedListener {
+    void onSessionClosed();
+  }
+
+  private SessionClosedListener sessionClosedListener;
+
+  public void setSessionClosedListener(SessionClosedListener listener) {
+    sessionClosedListener = listener;
+  }
+
+  public void disconnectAllConnections(String reason) {
+    for (WebSocket conn : getConnections()) {
+      conn.close(CLOSE_CODE_SESSION_CLOSED, reason);
+    }
+  }
+
+  /**
    * Interface for listening to WebSocket events. All callbacks are guaranteed to be executed on the
    * Android main thread.
    *
    * <p><b>Important:</b> Because callbacks are on the main thread, implementations must be fast and
-   * non-blocking to avoid causing ANRs. If a listener needs to perform a long-running task in
-   * response to a message, it must dispatch that work to its own background thread.
+   * non-blocking to avoid causing ANRs (Application Not Responding). If a listener needs to perform
+   * a long-running task in response to a message, it must dispatch that work to its own background
+   * thread.
    */
   public interface WebSocketListener {
     /** Called when a new client connects to the WebSocket server. */
@@ -138,23 +169,48 @@ public class RemoteEditorWebSocketServer extends WebSocketServer {
     setReuseAddr(true);
   }
 
-  public void addListener(WebSocketListener listener) {
+  public void addWebSocketListener(WebSocketListener listener) {
     if (!listeners.contains(listener)) {
       listeners.add(listener);
     }
   }
 
-  public void removeListener(WebSocketListener listener) {
+  public void removeWebSocketListener(WebSocketListener listener) {
     listeners.remove(listener);
   }
 
   public void startServer() {
+    isStarted = true;
     start();
+  }
+
+  
+  boolean isStarted() {
+    return isStarted;
   }
 
   @Override
   public void onOpen(WebSocket conn, ClientHandshake handshake) {
     Log.i(TAG, "New connection from [address = " + conn.getRemoteSocketAddress() + "]");
+
+    // Enforce a single connection by closing any existing connections.
+    boolean sessionClosed = false;
+    for (WebSocket existingConn : getConnections()) {
+      if (!existingConn.equals(conn)) {
+        Log.w(
+            TAG,
+            "Closing existing connection from "
+                + existingConn.getRemoteSocketAddress()
+                + " in favor of new connection.");
+        existingConn.close(CLOSE_CODE_SESSION_CLOSED, CLOSE_REASON_SESSION_CLOSED);
+        sessionClosed = true;
+      }
+    }
+    if (sessionClosed && sessionClosedListener != null) {
+      Log.i(TAG, "Remote Editor session closed by a new connection.");
+      mainThreadHandler.post(sessionClosedListener::onSessionClosed);
+    }
+
     mainThreadHandler.post(
         () -> {
           for (WebSocketListener listener : listeners) {

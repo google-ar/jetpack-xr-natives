@@ -69,8 +69,21 @@ enum class TextureSize {
   k2048_4096,
   // Uses a 4096x4096 texture for the glyph atlas.
   k4096,
-  // Experimental: 256x256 textures in an 8x8 grid.
+  // Uses 256x256 textures in an 8x8 grid.
   k256_256_8_8,
+  // Uses 512x256 textures in a 4x8 grid.
+  k512_256_4_8,
+  // Uses 512x128 textures in a 4x16 grid.
+  k512_128_4_16,
+  // Uses 512x512 textures in a 4x4 grid.
+  k512_512_4_4,
+  // Uses 1024x512 textures in a 2x4 grid.
+  k1024_512_2_4,
+  // Uses 1024x1024 textures in a 2x2 grid.
+  k1024_1024_2_2,
+  // Uses 2048x128 textures in a 1x16 grid.
+  k2048_128_1_16,
+  // TODO add kAuto_2048_2048 et al to simplify this choice.
 };
 
 // Information about a glyph needed to render it and lay it out relative to

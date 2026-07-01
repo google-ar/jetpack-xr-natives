@@ -19,14 +19,15 @@
 
 #include <backend/PixelBufferDescriptor.h>
 
-#include "filament/libs/math/include/math/scalar.h"
-#include "filament/libs/math/include/math/half.h"
-
 #include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/Logger.h"
 
+#include "filament/libs/math/include/math/half.h"
+#include "filament/libs/math/include/math/scalar.h"
+
 #include <cstdint>
 #include <cstring>
+
 #include <stddef.h>
 #include <stdint.h>
 #include <cstring>

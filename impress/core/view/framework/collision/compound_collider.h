@@ -55,8 +55,8 @@ class CompoundCollider : public Component,
   // Optionally returns RayHit collision info if a collision occurred.
   // N.B. The Intersect methods are not used by the collision system, but are
   // provided only for convenience to the user.
-  absl::optional<RayHit> Intersect(const Ray& ray);
-  absl::optional<DoubleRayHit> IntersectPrecise(const DoubleRay& ray);
+  std::optional<RayHit> Intersect(const Ray& ray);
+  std::optional<DoubleRayHit> IntersectPrecise(const DoubleRay& ray);
 
   void OnActiveStatusChanged(bool is_active);
 

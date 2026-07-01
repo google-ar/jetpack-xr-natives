@@ -125,10 +125,13 @@ static_assert(
 static_assert(
     DoEnumsMatch(TexturePipelineRendererState::Texture::Format::RGBA32UI,
                  android_xr::schemas::RenderTargetTextureFormat::RGBA32UI));
+static_assert(
+    DoEnumsMatch(TexturePipelineRendererState::Texture::Format::R11G11B10F,
+                 android_xr::schemas::RenderTargetTextureFormat::R11G11B10F));
 
 static_assert(
     android_xr::schemas::RenderTargetTextureFormat::MAX ==
-        android_xr::schemas::RenderTargetTextureFormat::RGBA32UI,
+        android_xr::schemas::RenderTargetTextureFormat::R11G11B10F,
     "New fields added to RenderTargetTextureFormat but assert not updated");
 
 // Verify imp::TexturePipelineRendererState::AutomaticTextureSize::Mode and

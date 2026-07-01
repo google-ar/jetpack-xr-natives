@@ -90,10 +90,12 @@ cc_library(
 cc_library(
     name = "particle_emitter",
     srcs = [
+        "instanced_particle_emitter.cc",
         "node_particle_emitter.cc",
         "particle_emitter.cc",
     ],
     hdrs = [
+        "instanced_particle_emitter.h",
         "node_particle_emitter.h",
         "particle_emitter.h",
     ],
@@ -105,6 +107,7 @@ cc_library(
         "//core/async:future",
         "//core/camera",
         "//core/common:owned_ptr",
+        "//core/materials",
         "//core/math",
         "//core/ncsb",
         "//core/particle:particle_behavior",
@@ -114,6 +117,7 @@ cc_library(
         "//core/view/framework",
         "//core/view/utils:frame_time",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
         "@com_google_impress//core/common:log",
     ],
     alwayslink = 1,

@@ -17,12 +17,13 @@
 #ifndef TNT_MATH_MAT2_H
 #define TNT_MATH_MAT2_H
 
-#include "filament/libs/math/include/math/TMatHelpers.h"
 #include "filament/libs/math/include/math/compiler.h"
+#include "filament/libs/math/include/math/TMatHelpers.h"
 #include "filament/libs/math/include/math/vec2.h"
 
-#include <stdint.h>
 #include <sys/types.h>
+
+#include <stdint.h>
 
 namespace filament {
 namespace math {

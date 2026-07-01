@@ -16,12 +16,12 @@
 
 #pragma once
 
+#include "filament/libs/utils/include/utils/Hash.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
-
-#include "filament/libs/utils/include/utils/Hash.h"
 
 namespace filament {
 

@@ -135,16 +135,51 @@ constructor(
    * ID.
    */
   @UsedByNative("android_glyph_source.cc")
-  fun releaseTextGlyphs(glyphIds: IntArray) =
-    withImpl("releaseTextGlyphs") {
-      for (glyphId in glyphIds) {
-        it.releaseTextGlyph(glyphId)
+  fun releaseTextGlyphs(glyphIds: IntArray) {
+    lock.withLock {
+      val impl = impl
+      if (impl != null) {
+        try {
+          for (glyphId in glyphIds) {
+            impl.releaseTextGlyph(glyphId)
+          }
+        } catch (e: Throwable) {
+          logger
+            .atSevere()
+            .withCause(e)
+            .log(
+              "Exception %s in GlyphSource.%s",
+              NonSensitiveLogParameterFactory.fromConstantString("releaseTextGlyphs"),
+              NonSensitiveLogParameterFactory.fromClassName(e::class.java),
+            )
+          throw e
+        }
       }
     }
+  }
 
   /** Release a single glyph ID. */
   @UsedByNative("android_glyph_source.cc")
-  fun releaseTextGlyph(glyphId: Int) = withImpl("releaseTextGlyph") { it.releaseTextGlyph(glyphId) }
+  fun releaseTextGlyph(glyphId: Int) {
+    lock.withLock {
+      val impl = impl
+      if (impl != null) {
+        try {
+          impl.releaseTextGlyph(glyphId)
+        } catch (e: Throwable) {
+          logger
+            .atSevere()
+            .withCause(e)
+            .log(
+              "Exception %s in GlyphSource.%s",
+              NonSensitiveLogParameterFactory.fromConstantString("releaseTextGlyph"),
+              NonSensitiveLogParameterFactory.fromClassName(e::class.java),
+            )
+          throw e
+        }
+      }
+    }
+  }
 
   /**
    * Analogous to GetCombinedCharacterGroups.

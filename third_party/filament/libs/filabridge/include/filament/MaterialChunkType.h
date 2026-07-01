@@ -17,9 +17,9 @@
 #ifndef TNT_FILAMAT_MATERIAL_CHUNK_TYPES_H
 #define TNT_FILAMAT_MATERIAL_CHUNK_TYPES_H
 
-#include <stdint.h>
-
 #include "filament/libs/utils/include/utils/compiler.h"
+
+#include <stdint.h>
 
 namespace filamat {
 

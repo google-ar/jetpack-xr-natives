@@ -23,6 +23,7 @@
 #include "core/async/future.h"
 #include "core/particle/custom_particle_behavior.h"
 #include "core/particle/particle_emitter_state.proto.imp.h"
+#include "core/particle/utils/instanced_particle_emitter.h"
 #include "core/particle/utils/node_particle_emitter.h"
 #include "core/particle/utils/particle_emitter.h"
 #include "core/view/utils/frame_time.h"
@@ -38,6 +39,13 @@ Future<absl::Status> ParticleSystem::SetupWithState(
         .Then([this](imp_particle::OwnedParticleEmitterPtr emitter) {
           emitter_ = std::move(emitter);
         });
+  } else if (state_.renderer ==
+             ParticleEmitterState::PARTICLE_RENDERER_INSTANCED_DEFAULT) {
+    return imp_particle::InstancedParticleEmitter::Create(
+               GetNode(), state_, std::move(custom_particle_behavior))
+        .Then([this](imp_particle::OwnedParticleEmitterPtr emitter) {
+          emitter_ = std::move(emitter);
+        });
   }
 
   // No other render types are supported yet.
@@ -46,23 +54,35 @@ Future<absl::Status> ParticleSystem::SetupWithState(
 }
 
 void ParticleSystem::Update(const FrameTime& frame_time) {
-  emitter_->UpdateParticleSystem(frame_time);
+  if (emitter_) {
+    emitter_->UpdateParticleSystem(frame_time);
+  }
 }
 
 float ParticleSystem::GetEmissionRate() const {
-  return emitter_->GetEmissionRate();
+  if (emitter_) {
+    return emitter_->GetEmissionRate();
+  }
+  return 0.0f;
 }
 
 void ParticleSystem::SetEmissionRate(float particles_per_second) {
-  emitter_->SetEmissionRate(particles_per_second);
+  if (emitter_) {
+    emitter_->SetEmissionRate(particles_per_second);
+  }
 }
 
 bool ParticleSystem::IsEmissionPaused() const {
-  return emitter_->IsEmissionPaused();
+  if (emitter_) {
+    return emitter_->IsEmissionPaused();
+  }
+  return true;
 }
 
 void ParticleSystem::SetEmissionPaused(bool pause) {
-  emitter_->SetEmissionPaused(pause);
+  if (emitter_) {
+    emitter_->SetEmissionPaused(pause);
+  }
 }
 
 }  // namespace imp

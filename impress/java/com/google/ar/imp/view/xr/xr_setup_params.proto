@@ -95,4 +95,6 @@ message XrSetupParams {
   // Whether or not to create the XrSession on the render thread.
   // This is required by some runtimes (e.g. Pico).
   bool create_session_on_render_thread = 21 [default = false];
+  // When building for XR, whether or not to use the Spatial Trackpad extension.
+  bool use_spatial_trackpad_extension = 22 [default = false];
 }

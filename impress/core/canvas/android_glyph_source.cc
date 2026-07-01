@@ -249,9 +249,12 @@ std::vector<ScopedCanvas::GlyphAdvance> AndroidGlyphSource::GetTextGlyphs(
     result.push_back(ScopedCanvas::GlyphAdvance{
         .glyph = ScopedCanvas::GlyphId(
             GlyphAdvanceGetId(glyph_advance.get()),
-            std::make_optional([this](int32_t glyph_id) {
-              ReleaseTextGlyphs(absl::MakeSpan(&glyph_id, 1));
-            })),
+            std::make_optional(
+                [weak_self = weak_from_this()](int32_t glyph_id) {
+                  if (auto self = weak_self.lock()) {
+                    self->ReleaseTextGlyphs(absl::MakeSpan(&glyph_id, 1));
+                  }
+                })),
         .width = GlyphAdvanceGetWidth(glyph_advance.get()),
         .fallback_font = std::move(fallback_font),
         .is_emoji = GlyphAdvanceIsEmoji(glyph_advance.get()),

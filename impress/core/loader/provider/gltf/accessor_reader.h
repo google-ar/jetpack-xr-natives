@@ -171,7 +171,7 @@ absl::Status AccessorReader::FillValues(DenseDataAccess& out_data,
     } else {
       // This line finally calls kReplace branch and checks for sparse values
       // there.
-      DenseDataAccess dense_data = GetData();
+      const DenseDataAccess dense_data = GetData();
       for (size_t i = 0; i < count_; ++i) {
         *out_data.At<T>(i) += *dense_data.At<T>(i);
       }
@@ -275,14 +275,14 @@ BufferAccess AccessorReader::GetFloatBufferFromType(
       GetAccessorTypeSize(type_, imp::gltf::imp_proto::ComponentType::FLOAT);
   size_t component_count = float_type_size / sizeof(float);
 
-  DenseDataAccess dense_data = GetPackedData();
+  const DenseDataAccess dense_data = GetPackedData();
 
   BufferAccess float_buffer_access;
   float* float_buffer_ptr = reinterpret_cast<float*>(
       BufferAccess::Create(count_ * float_type_size, &float_buffer_access));
 
   for (size_t i = 0; i < count_; i++) {
-    ComponentType* source_element = dense_data.At<ComponentType>(i);
+    const ComponentType* source_element = dense_data.At<ComponentType>(i);
     for (size_t j = 0; j < component_count; j++) {
       float_buffer_ptr[i * component_count + j] = (*unpack)(source_element[j]);
     }

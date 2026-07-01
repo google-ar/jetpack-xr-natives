@@ -16,32 +16,32 @@
 
 #include "details/Texture.h"
 
+#include "FilamentAPI-impl.h"
+
 #include "details/AsyncHelpers.h"
 #include "details/Engine.h"
 #include "details/Stream.h"
 
-#include "private/backend/BackendUtils.h"
-
-#include "FilamentAPI-impl.h"
-
 #include <filament/Texture.h>
+
+#include <private/backend/BackendUtils.h>
 
 #include <backend/DriverEnums.h>
 #include <backend/Handle.h>
 
-#include "filament/libs/math/include/math/half.h"
-#include "filament/libs/math/include/math/scalar.h"
-#include "filament/libs/math/include/math/vec3.h"
-
-#include "filament/libs/utils/include/utils/Allocator.h"
 #include "filament/libs/utils/include/utils/algorithm.h"
+#include "filament/libs/utils/include/utils/Allocator.h"
 #include "filament/libs/utils/include/utils/BitmaskEnum.h"
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/CString.h"
-#include "filament/libs/utils/include/utils/StaticString.h"
 #include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/Panic.h"
+#include "filament/libs/utils/include/utils/StaticString.h"
+
+#include "filament/libs/math/include/math/half.h"
+#include "filament/libs/math/include/math/scalar.h"
+#include "filament/libs/math/include/math/vec3.h"
 
 #include <algorithm>
 #include <array>

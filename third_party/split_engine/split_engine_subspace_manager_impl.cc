@@ -24,7 +24,6 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "filament/libs/utils/include/utils/Entity.h"
-#include "core/async/executor.h"
 #include "core/async/future.h"
 #include "core/async/future_common.h"
 #include "core/config.h"
@@ -32,6 +31,7 @@
 #include "core/math/vec.h"
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
+#include "core/window/shared_host_state.h"
 #include "split_engine/input/split_engine_input_event.h"
 #include "split_engine/subspace_events.h"
 #include "split_engine/subspace_root.h"
@@ -44,7 +44,10 @@ namespace android_xr {
 
 SplitEngineSubspaceManagerImpl::SplitEngineSubspaceManagerImpl(
     imp::BaseView& view)
-    : view_(view), foreground_executor_(imp::Executor::ForegroundExecutor()) {}
+    : view_(view),
+      foreground_executor_(
+          imp::window::SharedHostState::GetInstance().GetForegroundExecutor()) {
+}
 
 void SplitEngineSubspaceManagerImpl::DestroyAllSubspaces() {
   // DestroySubspace can be executed synchronously, so we need to copy out the

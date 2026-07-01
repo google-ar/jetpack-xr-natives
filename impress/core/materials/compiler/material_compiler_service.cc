@@ -29,6 +29,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/synchronization/notification.h"
 #include "filament/filament/backend/include/backend/Platform.h"
 #include "filament/libs/filamat/include/filamat/MaterialBuilder.h"
 #include "filament/libs/filamat/include/filamat/Package.h"
@@ -94,10 +95,14 @@ inline schemas::ErrorStatusCode PackStatusCode(absl::StatusCode status_code) {
       return schemas::ErrorStatusCode::Internal;
     case absl::StatusCode::kUnimplemented:
       return schemas::ErrorStatusCode::Unsupported;
+    case absl::StatusCode::kCancelled:
+      return schemas::ErrorStatusCode::Cancelled;
     default:
       IMP_LOG(imp::FATAL) << "Unexpected Abseil StatusCode: " << status_code;
   }
 }
+
+constexpr uint64_t kInvalidOperationId = 0;
 }  // namespace
 
 MaterialCompilerService::MaterialCompilerService(
@@ -118,6 +123,7 @@ MaterialCompilerService::MaterialCompilerService(
             if (service->on_close_) {
               service->on_close_();
             }
+            service->CancelAllJobs();
           },
           this, "MaterialCompilerServicePipe") {}
 
@@ -153,6 +159,10 @@ ipc::MessagePipe::OnMessageResult MaterialCompilerService::OnMessage(
       HandleCompileRequest(request->operation_id(),
                            request->request_as<schemas::CompileRequest>());
       break;
+    case schemas::RequestType::CancelRequest:
+      HandleCancelRequest(request->operation_id(),
+                          request->request_as<schemas::CancelRequest>());
+      break;
     case schemas::RequestType::CloseRequest:
       // This will close the pipe on the correct thread, thus there no need to
       // explicitly call `Close()` here. Actually we shouldn't, as it will close
@@ -169,10 +179,10 @@ ipc::MessagePipe::OnMessageResult MaterialCompilerService::OnMessage(
 }
 
 void MaterialCompilerService::HandleCompileRequest(
-    uint64_t operation_id, const schemas::CompileRequest* request) {
-  if (operation_id == 0) {
-    SendErrorResponse(
-        0, absl::InvalidArgumentError("Operation id must be greater than 0"));
+    OperationId operation_id, const schemas::CompileRequest* request) {
+  if (operation_id == kInvalidOperationId) {
+    SendErrorResponse(operation_id, absl::InvalidArgumentError(
+                                        "Operation id must be greater than 0"));
     return;
   }
   if (request == nullptr) {
@@ -201,13 +211,33 @@ void MaterialCompilerService::HandleCompileRequest(
     target_api = UnpackTargetApi(request->config()->target_api());
   }
 
+  // We use shared_ptr here so that MaterialCompilerService can signal
+  // cancellation to the background compilation job, and even if the job
+  // finishes and is removed from active_jobs_, or if a cancellation request
+  // arrives concurrently with job completion, access to the flag is safe.
+  auto cancelled = std::make_shared<absl::Notification>();
+
   auto compile_lambda = [this, operation_id, source_material, platform,
-                         target_api] {
+                         target_api, cancelled] {
+    if (cancelled->HasBeenNotified()) {
+      SendErrorResponse(operation_id,
+                        absl::CancelledError("Operation cancelled early"));
+      {
+        absl::MutexLock lock(jobs_lock_);
+        active_jobs_.erase(operation_id);
+      }
+      return;
+    }
+
     absl::StatusOr<std::string> compile_result =
-        CompileMaterial(source_material, platform, target_api);
+        CompileMaterial(source_material, platform, target_api, cancelled);
 
     if (!compile_result.ok()) {
       SendErrorResponse(operation_id, compile_result.status());
+      {
+        absl::MutexLock lock(jobs_lock_);
+        active_jobs_.erase(operation_id);
+      }
       return;
     }
 
@@ -227,6 +257,11 @@ void MaterialCompilerService::HandleCompileRequest(
       IMP_LOG(imp::ERROR) << "Failed to send compile response for operation "
                  << operation_id << ": " << send_response_status;
     }
+
+    {
+      absl::MutexLock lock(jobs_lock_);
+      active_jobs_.erase(operation_id);
+    }
   };
 
   utils::JobSystem::Job* compile_job = utils::jobs::createJob(
@@ -239,6 +274,11 @@ void MaterialCompilerService::HandleCompileRequest(
     return;
   }
 
+  {
+    absl::MutexLock lock(jobs_lock_);
+    active_jobs_.emplace(operation_id, cancelled);
+  }
+
   // Note: adopt will be called multiple times, but it will be ignored if the
   // thread is already adopted. Also this should be called in
   // HandleCompilerRequest as we want to adopt the worker thread, not the main
@@ -247,10 +287,38 @@ void MaterialCompilerService::HandleCompileRequest(
   job_system_->run(compile_job);
 }
 
+void MaterialCompilerService::HandleCancelRequest(
+    OperationId operation_id, const schemas::CancelRequest* request) {
+  if (request == nullptr) {
+    SendErrorResponse(operation_id,
+                      absl::InvalidArgumentError("CancelRequest is null"));
+    return;
+  }
+
+  auto* operation_ids = request->operation_ids();
+  if (operation_ids == nullptr) {
+    SendErrorResponse(operation_id, absl::InvalidArgumentError(
+                                        "Operation IDs vector is null"));
+    return;
+  }
+
+  {
+    absl::MutexLock lock(jobs_lock_);
+    for (auto id : *operation_ids) {
+      auto it = active_jobs_.find(id);
+      if (it != active_jobs_.end()) {
+        it->second->Notify();
+        active_jobs_.erase(it);
+      }
+    }
+  }
+}
+
 absl::StatusOr<std::string> MaterialCompilerService::CompileMaterial(
     absl::string_view source_material_string,
     filamat::MaterialBuilder::Platform platform,
-    filamat::MaterialBuilder::TargetApi target_api) {
+    filamat::MaterialBuilder::TargetApi target_api,
+    std::shared_ptr<absl::Notification> cancelled) {
   matp::MaterialParser parser;
   filamat::MaterialBuilder builder;
 
@@ -287,7 +355,17 @@ absl::StatusOr<std::string> MaterialCompilerService::CompileMaterial(
     return parse_status;
   }
 
+  // build() is the most expensive call in this method, so we check for
+  // cancellation before and after the call.
+  if (cancelled->HasBeenNotified()) {
+    return absl::CancelledError("Operation cancelled");
+  }
+
   filamat::Package package = builder.build(*job_system_);
+
+  if (cancelled->HasBeenNotified()) {
+    return absl::CancelledError("Operation cancelled");
+  }
 
   if (!package.isValid()) {
     return absl::InvalidArgumentError(
@@ -320,7 +398,7 @@ absl::Status MaterialCompilerService::SendResponse(
   return absl::OkStatus();
 }
 
-void MaterialCompilerService::SendErrorResponse(uint64_t operation_id,
+void MaterialCompilerService::SendErrorResponse(OperationId operation_id,
                                                 absl::Status error_status) {
   flatbuffers::FlatBufferBuilder builder;
   flatbuffers::Offset<schemas::ErrorResponse> error_response =
@@ -342,6 +420,14 @@ void MaterialCompilerService::Close() {
   if (!pipe_.IsClosed()) {
     pipe_.Close();
   }
+}
+
+void MaterialCompilerService::CancelAllJobs() {
+  absl::MutexLock lock(jobs_lock_);
+  for (auto& [id, cancelled] : active_jobs_) {
+    cancelled->Notify();
+  }
+  active_jobs_.clear();
 }
 
 }  // namespace imp

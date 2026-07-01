@@ -175,6 +175,7 @@ android_library(
         ":setup_params_java_proto_lite",
         ":view",
         "//core/view/utils:view_config_java_proto_lite",
+        "//java/com/google/ar/imp/core/media:media_no_jni",  # buildcleaner: keep
         "//java/com/google/ar/imp/core/scripting:script_endpoint",
         "//java/com/google/ar/imp/core/web:fragment_host",
         "@maven//:androidx_annotation_annotation",

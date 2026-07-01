@@ -32,6 +32,7 @@
 #include "core/editor/widgets/performance/hierarchy_panel.h"
 #include "core/editor/widgets/performance/imgui_helper.h"
 #include "core/editor/widgets/performance/monitor_panel.h"
+#include "core/editor/widgets/performance/profiler_data_provider.h"
 #include "core/editor/widgets/performance/sample_processor.h"
 #include "core/editor/widgets/performance/sample_processor_types.h"
 #include "core/performance/profiler.h"
@@ -40,36 +41,21 @@
 
 namespace imp::editor {
 
-class PerformanceWindow;
-
 // A panel for the performance monitor to show the various information on the
 // lifetime of a frame
 class FrameTimePanel : public MonitorPanel {
  public:
-  FrameTimePanel(PerformanceWindow& performance_window, BaseView& view,
+  FrameTimePanel(ProfilerDataProvider& data_provider, BaseView& view,
                  int buffer_size);
   ~FrameTimePanel() override;
 
   void DrawPanel(int width, int height, int time_span_seconds) override;
   void Update(absl::Duration elapsed_time, absl::Duration delta_time) override;
-
-  absl::string_view GetSelectedSampleName() const {
-    return selected_sample_name_;
-  }
-
-  void SetSelectedSampleName(absl::string_view selected_sample_name) {
-    selected_sample_name_ = selected_sample_name;
-    selected_sample_changed_ = true;
-  }
-  bool IsCallstackPanelEnabled() const { return show_callstack_ != 0; }
   bool IsDragging() const { return is_dragging_; }
 
  private:
   // Number of labels to draw next to the vertical line on the plot.
   static constexpr int kNumFrameValueLabels = 2;
-
-  // Width of the call stack panel when it is first opened.
-  static constexpr float kCallstackPanelStartingWidth = 450.0f;
 
   // An internal class for structuring data for ImPlot to draw. ImPlot can only
   // draw data on axes of the same type, so everything here has to be stored as
@@ -98,8 +84,6 @@ class FrameTimePanel : public MonitorPanel {
       labels.clear();
     }
   };
-
-  enum class ProfilerDetailsViewMode { kHierarchy, kFlameGraph };
 
   // Draws the legend to the left of the frame time plot.
   void DrawLegend(float width, float height);
@@ -132,11 +116,6 @@ class FrameTimePanel : public MonitorPanel {
   // Draws the tick labels based on the valid ticks.
   void DrawTickLabels(ImDrawList* draw_list, ValidTicks valid_ticks);
 
-  // Draws the options to swap between hierarchy/flame graph views.
-  void DrawOptionsBar();
-  // Draws the splitter between the sample view and the call stack view.
-  void DrawSplitter();
-
   // Draws a label next to each plot showing its value at the selected frame.
   void DrawSelectedFrameLabels(int frame_number, ImDrawList* draw_list);
 
@@ -145,7 +124,7 @@ class FrameTimePanel : public MonitorPanel {
       absl::string_view sample_name, int frame_index,
       std::thread::id thread_id);
 
-  PerformanceWindow& performance_window_;
+  ProfilerDataProvider& data_provider_;
   BaseView& view_;
   CircularBuffer<FrameTimeInfo> buffer_;
   std::array<SelectedSampleInfo, MainThreadProfilerState::kMaxFrames>
@@ -156,24 +135,10 @@ class FrameTimePanel : public MonitorPanel {
   int frame_number_;
 
   ViewConfig view_config_;
-  HierarchyPanel hierarchy_panel_;
-  CallstackPanel callstack_panel_;
-  FlameGraph flame_graph_;
-  SampleProcessor sample_processor_;
-  absl::string_view selected_sample_name_ = "";
-  bool samples_processed_since_last_update_ = false;
   bool show_vsync_ = true;
   bool show_frametime_ = true;
-  bool selected_sample_changed_ = false;
-  int show_callstack_ = 0;
-  float sample_view_width_ = -1.0f;
-  float callstack_panel_width_ = kCallstackPanelStartingWidth;
   ValidTicks valid_ticks_;
   std::array<ImGuiHelper::LabelData, kNumFrameValueLabels> frame_value_data_;
-
-  // Which view to display (hierarchy or flame graph)
-  ProfilerDetailsViewMode profiler_details_view_mode_ =
-      ProfilerDetailsViewMode::kHierarchy;
 
   // Frame selection.
   void HandleFrameSelection(int hovered_frame);

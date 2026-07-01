@@ -20,8 +20,9 @@
 #include "filament/libs/math/include/math/half.h"
 #include "filament/libs/math/include/math/vec2.h"
 
-#include <stdint.h>
 #include <sys/types.h>
+
+#include <stdint.h>
 
 namespace filament {
 namespace math {

@@ -26,9 +26,8 @@
 
 namespace imp::loader::details::provider_gltf {
 
-OptionalError TryParseGltf(
-    const imp::BufferAccess& primary_resource,
-    absl::optional<imp::gltf::imp_proto::Gltf>& out_gltf);
+OptionalError TryParseGltf(const imp::BufferAccess& primary_resource,
+                           std::optional<gltf::imp_proto::Gltf>& out_gltf);
 
 }  // namespace imp::loader::details::provider_gltf
 

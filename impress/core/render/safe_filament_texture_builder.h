@@ -73,6 +73,10 @@ class SafeFilamentTextureBuilder {
   Builder& external() noexcept;
   Builder& import(intptr_t id) noexcept;
 
+  Builder& async(filament::backend::CallbackHandler* /*absl_nullable*/  handler,
+                 filament::Texture::AsyncCompletionCallback callback = nullptr,
+                 void* /*absl_nullable*/  user = nullptr) noexcept;
+
   absl::StatusOr<filament::Texture* /*absl_nonnull*/ > build(
       filament::Engine& engine) noexcept;
 

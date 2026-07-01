@@ -18,10 +18,14 @@
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_COMPONENTS_GRID_H_
 
 #include "absl/status/status.h"
+#include "absl/strings/string_view.h"
 #include "core/ncsb/component.h"
 #include "core/render/primitive_shape_renderer.h"
 
 namespace imp::editor {
+
+inline constexpr absl::string_view kGridEnabledKey = "editor_grid_enabled";
+inline constexpr bool kGridEnabledDefault = true;
 
 // Create a quad with a grid shader to easily view the model size.
 class Grid : public Component {

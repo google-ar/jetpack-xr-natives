@@ -20,11 +20,12 @@
 #include "VulkanCommands.h"
 #include "VulkanHandles.h"
 #include "VulkanTexture.h"
+
 #include "vulkan/utils/Conversion.h"  // getComponentType()
 #include "vulkan/utils/Image.h"
 
-#include "filament/libs/utils/include/utils/Log.h"
 #include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/Log.h"
 
 using namespace bluevk;
 
@@ -126,7 +127,7 @@ void VulkanReadPixels::run(fvkmemory::resource_ptr<VulkanRenderTarget> srcTarget
         OnReadCompleteFunction const& readCompleteFunc) {
     bool const isDepthStencil = pbd.format == PixelDataFormat::DEPTH_COMPONENT ||
                          pbd.format == PixelDataFormat::DEPTH_STENCIL;
-    VulkanAttachment const srcAttachment = isDepthStencil ? srcTarget->getDepthStencil() : srcTarget->getColor0();
+    VulkanAttachment const srcAttachment = isDepthStencil ? srcTarget->getDepthStencil() : srcTarget->getColor(0);
     run(srcAttachment.texture, srcAttachment.level, srcAttachment.layer, x, y, width, height,
             graphicsQueueFamilyIndex, std::move(pbd), selectMemoryFunc, readCompleteFunc);
 }

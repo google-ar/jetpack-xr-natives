@@ -16,14 +16,14 @@
 
 #include "OpenGLProgram.h"
 
-#include "GLUtils.h"
 #include "GLTexture.h"
+#include "GLUtils.h"
 #include "OpenGLDriver.h"
 #include "ShaderCompilerService.h"
 
 #include <backend/DriverEnums.h>
-#include <backend/Program.h>
 #include <backend/Handle.h>
+#include <backend/Program.h>
 
 #include <private/utils/Tracing.h>
 
@@ -34,8 +34,8 @@
 #include "filament/libs/utils/include/utils/Log.h"
 
 #include <algorithm>
-#include <array>
 #include <algorithm>
+#include <array>
 #include <new>
 #include <string_view>
 #include <utility>
@@ -61,7 +61,7 @@ struct OpenGLProgram::LazyInitializationData {
 OpenGLProgram::OpenGLProgram() noexcept = default;
 
 OpenGLProgram::OpenGLProgram(OpenGLDriver& gld, Program&& program) noexcept
-        : HwProgram(std::move(program.getName())), mRec709Location(-1) {
+        : HwProgram(std::move(program.getName())), mRec709Location(-1), mPushConstantFragmentStageOffset(0) {
     auto* const lazyInitializationData = new(std::nothrow) LazyInitializationData();
     if (UTILS_UNLIKELY(gld.getContext().isES2())) {
         lazyInitializationData->bindingUniformInfo = std::move(program.getBindingUniformInfo());

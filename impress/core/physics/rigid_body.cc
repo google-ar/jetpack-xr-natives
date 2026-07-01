@@ -232,7 +232,7 @@ void RigidBody::SetMass(float mass) {
 
 void RigidBody::SetFriction(float friction) { SetFrictionInternal(friction); }
 
-void RigidBody::SetFrictionInternal(absl::optional<float> friction) {
+void RigidBody::SetFrictionInternal(std::optional<float> friction) {
   if (!friction.has_value()) {
     friction = kDefaultFriction;
   }

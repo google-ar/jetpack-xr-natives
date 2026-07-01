@@ -155,14 +155,4 @@ void CanvasSource::ForceReset() {
   platform_source_->ForceReset();
 }
 
-void CanvasSource::OnPause() {
-  absl::MutexLock lock(platform_source_mutex_);
-  platform_source_->OnPause();
-}
-
-void CanvasSource::OnResume() {
-  absl::MutexLock lock(platform_source_mutex_);
-  platform_source_->OnResume();
-}
-
 }  // namespace imp

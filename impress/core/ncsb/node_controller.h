@@ -18,7 +18,6 @@
 #define THIRD_PARTY_IMPRESS_CORE_NCSB_NODE_CONROLLER_H_
 
 #include <cstddef>
-#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -27,7 +26,9 @@
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "filament/libs/utils/include/utils/Entity.h"
+#include "core/common/base_pool_allocator.h"
 #include "core/common/bit_flag.h"
+#include "core/common/compact_bitset.h"
 #include "core/common/hash.h"
 #include "core/common/holdable.h"
 #include "core/common/invocable.h"
@@ -35,6 +36,8 @@
 #include "core/config.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
+#include "core/ncsb/component_id.h"
+#include "core/ncsb/node_flag.h"
 #include "core/ncsb/node_handle.h"
 #include "core/view/base_view.h"
 
@@ -49,6 +52,8 @@ namespace imp::imp_internal {
 // of this controller or the components attached to it.
 class NodeController {
  public:
+  using ComponentBitset = CompactBitset<4>;
+
   NodeController(BaseView* view, utils::Entity entity, std::size_t index);
 
   // Called after the NodeController is created and tracked by the
@@ -69,11 +74,13 @@ class NodeController {
 
   void SetEnabled(bool enabled);
 
-  bool IsEnabled() const;
+  bool IsEnabled() const {
+    return CheckBit(flags_, imp::NodeFlags::kIsEnabled);
+  }
 
-  bool IsActive() const;
+  bool IsActive() const { return CheckBit(flags_, imp::NodeFlags::kIsActive); }
 
-  bool IsRoot() const;
+  bool IsRoot() const { return CheckBit(flags_, imp::NodeFlags::kIsRoot); }
 
 #if IMP_RUNTIME(DEV)
   // Sets if this node is considered to be part of the Editor staging.
@@ -88,27 +95,33 @@ class NodeController {
   // work.
   void SetAsEditorStaging(bool is_editor_staging);
 
-  bool IsEditorStaging() const;
+  bool IsEditorStaging() const {
+    return CheckBit(flags_, imp::NodeFlags::kIsEditorStaging);
+  }
 #endif
 
-  inline BaseView& GetView() const { return *view_; }
+  BaseView& GetView() const { return *view_; }
 
-  inline NodeHandle GetNode() { return NodeHandle(entity_, this); }
+  NodeHandle GetNode() { return NodeHandle(entity_, this); }
 
-  inline utils::Entity GetEntity() const { return entity_; }
+  utils::Entity GetEntity() const { return entity_; }
 
   // Returns the index of this NodeController in the list of NodeControllers
   // stored by the View.
   //
   // This is stored in the NodeController itself to avoid an extra map lookup to
   // get the index when nodes are removed in NodeAttachmentManager.
-  std::size_t GetIndex() const;
+  std::size_t GetIndex() const { return index_; }
+
+  PoolAllocatorKey GetPoolAllocatorKey() const { return key_; }
+
+  void SetPoolAllocatorKey(PoolAllocatorKey key) { key_ = key; }
 
   // Sets the index representing this NodeController in the list of
   // NodeControllers stored by the View.
-  void SetIndex(std::size_t index);
+  void SetIndex(std::size_t index) { index_ = index; }
 
-  BitFlag GetFlags() const;
+  BitFlag GetFlags() const { return flags_; }
 
   void OnParentChanged();
 
@@ -138,16 +151,28 @@ class NodeController {
 
   bool IsInGroup(absl::string_view group_name) const;
 
-  void SetLocalRotation(const quatf& rotation);
-  const quatf& GetLocalRotation() const;
-  void SetLocalScale(const float3& scale);
-  const float3& GetLocalScale() const;
+  void SetLocalRotation(const quatf& rotation) { local_rotation_ = rotation; }
+  const quatf& GetLocalRotation() const { return local_rotation_; }
+  void SetLocalScale(const float3& scale) { local_scale_ = scale; }
+  const float3& GetLocalScale() const { return local_scale_; }
 
-  absl::string_view GetName() const;
+  absl::string_view GetName() const { return name_; }
 
   void SetName(absl::string_view name);
 
   Invocable<void()> Remember(Holdable holdable);
+
+  void RegisterComponent(ComponentId component_id) {
+    component_bitset_.SetBit(component_id);
+  }
+
+  void UnregisterComponent(ComponentId component_id) {
+    component_bitset_.ClearBit(component_id);
+  }
+
+  const ComponentBitset& GetComponentBitset() const {
+    return component_bitset_;
+  }
 
  private:
   bool CheckParentActive();
@@ -194,13 +219,26 @@ class NodeController {
   quatf local_rotation_ = kIdentityQuatf;
   float3 local_scale_ = kOne3;
 
+  // Bitset that tracks which component types are attached to this node.
+  //
+  // Component Ids are sequential and start at 0 and increment by 1 for each
+  // component type added to the view. 255 component types can be stored without
+  // heap allocation, afterwards the bitset will switch to be heap allocated.
+  ComponentBitset component_bitset_;
+
   std::string name_;
 
-  // This is the index of this NodeController in the list of NodeControllers
-  // stored by the View.
-  // TODO: Remove this when pool allocator flag is cleaned up as it
-  // will be no longer needed.
-  std::size_t index_;
+  // When the pool allocator is disabled, this stores the index of this
+  // NodeController in the NodeAttachmentManager's list of controllers, allowing
+  // O(1) removal. When the pool allocator is enabled, this memory is reused to
+  // store the PoolAllocatorKey to avoid increasing the size of NodeController.
+  //
+  // TODO: Remove this union and just store key_ directly when the
+  // pool allocator is fully launched and the fallback path is removed.
+  union {
+    std::size_t index_;
+    PoolAllocatorKey key_;
+  };
 
   std::optional<Rememberer> rememberer_;
 

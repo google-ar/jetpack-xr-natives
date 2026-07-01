@@ -48,7 +48,7 @@ static constexpr bool HasVisualizeFunc(...) {
 
 // Uses SFINAE to detect if T has 'Intersect(Ray)' function.
 template <typename T,
-          std::enable_if_t<std::is_same_v<absl::optional<RayHit>,
+          std::enable_if_t<std::is_same_v<std::optional<RayHit>,
                                           decltype(std::declval<T>().Intersect(
                                               std::declval<const Ray&>()))>,
                            int> = 0>
@@ -80,7 +80,7 @@ static constexpr bool HasMultipleIntersectWithRayFunc(...) {
 // Uses SFINAE to detect if T has 'IntersectPrecise(DoubleRay)' function.
 template <
     typename T,
-    std::enable_if_t<std::is_same_v<absl::optional<DoubleRayHit>,
+    std::enable_if_t<std::is_same_v<std::optional<DoubleRayHit>,
                                     decltype(std::declval<T>().IntersectPrecise(
                                         std::declval<const DoubleRay&>()))>,
                      int> = 0>
@@ -112,7 +112,7 @@ static constexpr bool HasMultipleIntersectPreciseWithDoubleRayFunc(...) {
 
 // Uses SFINAE to detect if T has 'Intersect(float2)' function.
 template <typename T,
-          std::enable_if_t<std::is_same_v<absl::optional<RayHit>,
+          std::enable_if_t<std::is_same_v<std::optional<RayHit>,
                                           decltype(std::declval<T>().Intersect(
                                               std::declval<float2>()))>,
                            int> = 0>
@@ -144,7 +144,7 @@ static constexpr bool HasMultipleIntersectWithScreenPosFunc(...) {
 // Uses SFINAE to detect if T has 'IntersectPrecise(float2)' function.
 template <
     typename T,
-    std::enable_if_t<std::is_same_v<absl::optional<DoubleRayHit>,
+    std::enable_if_t<std::is_same_v<std::optional<DoubleRayHit>,
                                     decltype(std::declval<T>().IntersectPrecise(
                                         std::declval<float2>()))>,
                      int> = 0>

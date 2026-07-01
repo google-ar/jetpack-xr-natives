@@ -82,8 +82,7 @@ Future<absl::Status> DetachAndShutdownExecutors(
         executors->background_executor->Shutdown();
       }
 
-      if (absl::optional<Future<absl::Status>> result_opt =
-              weak_result.Lock()) {
+      if (std::optional<Future<absl::Status>> result_opt = weak_result.Lock()) {
         return result_opt.value().Return(absl::OkStatus());
       }
     };

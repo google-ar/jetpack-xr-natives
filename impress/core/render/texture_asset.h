@@ -28,6 +28,7 @@
 #include "core/image/image_contents.h"
 #if IMP_PLATFORM(WASM)
 #include "core/image/wasm_texture_contents.h"
+#include "core/render/wasm_gl_texture.h"
 #endif
 #include "core/render/texture_options.h"
 #include "core/resources/resource_manager.h"
@@ -55,17 +56,48 @@ class TextureAsset {
   absl::string_view GetName() const { return texture_name_; }
 
   filament::Texture* GetFilamentTexture() const { return texture_; }
+
+  // Releases the filament::Texture pointer.
+  //
+  // WARNING: On WASM, the underlying GLES texture is still owned by this
+  // TextureAsset instance. To prevent rendering errors due to premature GPU
+  // texture deletion, you MUST keep this TextureAsset instance alive as long
+  // as the released filament::Texture is in use.
   filament::Texture* ReleaseFilamentTexture();
 
   size_t GetWidth() const { return texture_->getWidth(); }
   size_t GetHeight() const { return texture_->getHeight(); }
 
  private:
+  TextureAsset(BaseView* view, absl::string_view texture_name,
+               filament::Texture* texture)
+      : view_(view), texture_name_(texture_name), texture_(texture) {}
+
+#if IMP_PLATFORM(WASM)
+  TextureAsset(BaseView* view, absl::string_view texture_name,
+               filament::Texture* texture, GLuint gl_texture_id)
+      : view_(view),
+        texture_name_(texture_name),
+        texture_(texture),
+        gl_texture_(gl_texture_id) {}
+#endif
+
+  static Future<std::unique_ptr<TextureAsset>> CreateAsync(
+      BaseView* view, absl::string_view texture_name,
+      std::unique_ptr<image::ImageContents> image_contents,
+      TextureGenerationOptions options);
+
+#if IMP_PLATFORM(WASM)
+  static Future<std::unique_ptr<TextureAsset>> CreateAsync(
+      BaseView* view, absl::string_view texture_name,
+      WasmTextureContents texture_contents, TextureGenerationOptions options);
+#endif
+
   BaseView* view_;
   std::string texture_name_;
   filament::Texture* texture_;
 #if IMP_PLATFORM(WASM)
-  GLuint gl_texture_id_ = 0;
+  WasmGlTexture gl_texture_;
 #endif
 };
 

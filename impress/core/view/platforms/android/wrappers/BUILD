@@ -50,6 +50,7 @@ cc_library(
         "//core/async:future",
         "//core/common",
         "//core/common:context",
+        "//core/common:invocable",
         "//core/common:jni_helpers",
         "//core/math",
         "@com_google_absl//absl/memory",
@@ -57,6 +58,25 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_impress//core/common:log",
+    ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "surface_texture_gc",
+    srcs = ["surface_texture_gc.cc"],
+    hdrs = ["surface_texture_gc.h"],
+    copts = imp_google3_copts(),
+    deps = [
+        "//core/async:executor",
+        "//core/common:jni_helpers",
+        "//core/ncsb",
+        "//core/view:base_view",
+        "//core/view:view_events",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/time",
+        "@com_google_impress//core/common:log",
+        "@third_party//filament/filament:filament_hdrs",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )

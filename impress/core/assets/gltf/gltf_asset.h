@@ -158,7 +158,7 @@ class GltfAsset {
     // An optional URL override for the default materials.  Only applicable
     // before the first gltf asset load is attempted.  Used for unit tests that
     // cannot hit gstatic.
-    absl::optional<std::string> materials_url_override;
+    std::optional<std::string> materials_url_override;
 
     // Determines which (if any) collider components will be automatically added
     // to the nodes in the glTF scene.

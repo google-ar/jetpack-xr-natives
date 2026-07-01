@@ -17,7 +17,6 @@
 #ifndef TNT_UTILS_STRUCTUREOFARRAYS_H
 #define TNT_UTILS_STRUCTUREOFARRAYS_H
 
-#include <type_traits>
 #include "filament/libs/utils/include/utils/Allocator.h"
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/Slice.h"
@@ -27,6 +26,7 @@
 #include <cstddef>
 #include <iterator>     // for std::random_access_iterator_tag
 #include <tuple>
+#include <type_traits>
 #include <utility>
 
 #include <assert.h>
@@ -297,7 +297,8 @@ public:
         // allocate enough space for "capacity" elements of each array
         // capacity cannot change when optional storage is specified
         if (capacity >= mSize) {
-            // TODO: not entirely sure if "max" of all alignments is always correct
+            // Because all alignments are powers of two, the maximum alignment is equivalent 
+            // to the Least Common Multiple.
             constexpr size_t align = std::max({ std::max(alignof(std::max_align_t), alignof(Elements))... });
             const size_t sizeNeeded = getNeededSize(capacity);
             void* buffer = mAllocator.alloc(sizeNeeded, align);

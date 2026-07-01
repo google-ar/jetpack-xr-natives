@@ -45,9 +45,9 @@ using EnableIfConnectionOwner =
     std::enable_if_t<std::is_constructible<ConnectionOwner, Owner>::value, int>;
 
 class DispatcherEventHandlerMap;
-typedef std::shared_ptr<DispatcherEventHandlerMap> DispatcherEventHandlerMapPtr;
-typedef std::weak_ptr<DispatcherEventHandlerMap>
-    DispatcherEventHandlerMapWeakPtr;
+using DispatcherEventHandlerMapPtr = std::shared_ptr<DispatcherEventHandlerMap>;
+using DispatcherEventHandlerMapWeakPtr =
+    std::weak_ptr<DispatcherEventHandlerMap>;
 
 // Handle for event registrations with the Dispatcher. This handle is used to
 // disconnect the connection.
@@ -449,10 +449,10 @@ class Dispatcher {
   void SetForgetter(const Connection& conn, Invocable<void()> forgetter);
 
   // Autoincrementing value for generating unique connection IDs.
-  ConnectionId id_ = 0;
+  //
   // kNullConnectionId represents "all connections" and kNullType represents
-  // "all types".
-  // These are used for ConnectToAll(), DisconnectAll(), and DisconnectByType().
+  // "all types". Used by DisconnectAll().
+  ConnectionId id_ = 0;
 
   // Map of HashValue to EventHandlers.  Uses a shared_ptr to allow Connection
   // objects to safely "disconnect" from Dispatchers that have been destroyed.

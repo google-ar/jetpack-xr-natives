@@ -29,9 +29,9 @@
 namespace imp::animation {
 
 TextureTransformAnimation::TextureTransformParameter::TextureTransformParameter(
-    absl::optional<float2> in_texture_transform_offset,
-    absl::optional<float> in_texture_transform_rotation,
-    absl::optional<float2> in_texture_transform_scale) {
+    std::optional<float2> in_texture_transform_offset,
+    std::optional<float> in_texture_transform_rotation,
+    std::optional<float2> in_texture_transform_scale) {
   animated_texture_transform_parameter =
       AnimatedTextureTransformParameter::None;
 

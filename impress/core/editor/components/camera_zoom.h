@@ -17,7 +17,8 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_COMPONENTS_CAMERA_ZOOM_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_COMPONENTS_CAMERA_ZOOM_H_
 
-#include "core/config.h"
+#include "absl/strings/string_view.h"
+#include "core/editor/widgets/input_settings_widget_constants.h"
 #include "core/math/math.h"
 #include "core/ncsb/component.h"
 
@@ -35,7 +36,7 @@ class CameraZoom : public Component {
 
   NodeHandle pivot_;
   float3 target_position_;
-  bool invert_scroll_enabled_ = IMP_INVERT_EDITOR_INPUT_DEFAULT_VALUE;
+  bool invert_scroll_enabled_ = kInvertMouseScrollDefault;
 };
 
 }  // namespace imp::editor

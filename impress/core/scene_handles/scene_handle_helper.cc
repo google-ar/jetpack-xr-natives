@@ -39,7 +39,7 @@ SceneHandleInterface::Identifier& SceneHandleHelper::GetIdentifier() {
 }
 
 std::string SceneHandleHelper::GetIdentifierString() const {
-  if (absl::holds_alternative<absl::monostate>(identifier_)) {
+  if (absl::holds_alternative<std::monostate>(identifier_)) {
     return "Empty";
   } else if (absl::holds_alternative<std::string>(identifier_)) {
     return absl::StrFormat("name=%s", absl::get<std::string>(identifier_));

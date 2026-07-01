@@ -21,6 +21,7 @@
 
 #include "absl/status/status.h"
 #include "core/async/future.h"
+#include "core/materials/material.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/isf_info.h"
 #include "core/particle/custom_particle_behavior.h"
@@ -58,7 +59,8 @@ class ParticleSystem : public Component {
   void SetEmissionRate(float particles_per_second);
 
   // Returns the paused state of particle emission. See SetEmissionPaused for
-  // more detail about this state.
+  // more detail about this state. This will return true until the emitter has
+  // finished initializing.
   bool IsEmissionPaused() const;
 
   // Sets whether the system's active particle emission is paused.
@@ -69,6 +71,35 @@ class ParticleSystem : public Component {
   // This does not affect existing particles. Emission remains limited by the
   // maximum particle count requested when the system was initialized.
   void SetEmissionPaused(bool pause);
+
+  // Returns the custom material used by the particle system, specified in the
+  // ParticleConfig.
+  //
+  // If no material was specified, a null pointer is returned.
+  //
+  // The returned pointer is owned by the ParticleSystem and should not be held
+  // beyond the scope of the calling function.
+  BorrowedMaterialPtr GetMaterial() const {
+    return emitter_ ? emitter_->GetMaterial() : BorrowedMaterialPtr();
+  }
+
+  // Returns the current default lifetime for new particles. This value is
+  // measured in seconds.
+  float GetDefaultParticleLifetime() const {
+    return emitter_ ? emitter_->GetDefaultParticleLifetime() : 0.0f;
+  }
+
+  // Sets the default lifetime for particles. If the particle system was not
+  // initialized with a lifetime, this value will be retained, but ignored. The
+  // new value will apply to all newly created particles and will not affect
+  // existing particles. The value must be strictly greater than 0.0f. To stop
+  // emission of new particles use the particle system's `SetEmissionPaused()`
+  // method instead.
+  void SetDefaultParticleLifetime(float default_lifetime_seconds) {
+    if (emitter_) {
+      emitter_->SetDefaultParticleLifetime(default_lifetime_seconds);
+    }
+  }
 
  private:
   ParticleEmitterState state_;

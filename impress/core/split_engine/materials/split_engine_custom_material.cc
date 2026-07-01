@@ -18,19 +18,23 @@
 #include <utility>
 
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "filament/filament/include/filament/Material.h"
 #include "flatbuffers/buffer.h"
-#include "flatbuffers/flatbuffer_builder.h"
 #include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
+#include "core/common/owned_ptr.h"
 #include "core/materials/material.h"
-#include "core/split_engine/android/split_engine_android_bridge.h"
+#include "core/split_engine/flatbuffer_size_calculator.h"
 #include "core/split_engine/flatbuffer_utils.h"
+#include "core/split_engine/material_requester.h"  // IWYU pragma: keep
 #include "core/split_engine/materials/split_engine_material.h"
 #include "core/split_engine/split_engine_serializer.h"
+#include "core/split_engine/transport/request_sender.h"
 #include "core/view/base_view.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
+#include "mediapipe/framework/port/status_macros.h"
 
 namespace imp::split_engine {
 
@@ -40,20 +44,30 @@ Future<absl::Status> SplitEngineCustomMaterial::RequestCustomFilamentMaterial(
     const MaterialPreCompileOptions& precompile_options) {
   const uint64_t material_id = SplitEngineSerializer::GetId(filament_material);
 
-  flatbuffers::FlatBufferBuilder fbb;
+  MaterialRequester& requester =
+      view.GetSplitEngineSerializer()->GetMaterialRequester();
+  absl::StatusOr<RequestSender::RequestBuilder> builder =
+      requester.CreateFlatBufferBuilder(
+          FlatbufferSizeCalculator()
+              .AddRequestCustomFilamentMaterial(material_source.size(),
+                                                precompile_options)
+              .Finish()
+              .AddScratchSpace()
+              .ComputeSize());
+  MP_RETURN_IF_ERROR(builder.status());
+  auto fbb = std::move(*builder);
+
   flatbuffers::Offset<android_xr::schemas::FilamentMaterialSpec>
       material_spec_offset = android_xr::schemas::CreateFilamentMaterialSpec(
-          fbb, fbb.CreateString(material_source),
-          Pack(fbb, precompile_options));
+          *fbb, fbb->CreateString(material_source),
+          Pack(*fbb, precompile_options));
   flatbuffers::Offset<android_xr::schemas::AddCustomMaterialRequest> request =
       android_xr::schemas::CreateAddCustomMaterialRequest(
-          fbb, material_id,
+          *fbb, material_id,
           android_xr::schemas::CustomMaterialSpec::FilamentMaterialSpec,
           material_spec_offset.Union());
 
-  return SendRequest<android_xr::schemas::AddCustomMaterialRequest,
-                     absl::Status>(view.GetSplitEngineSerializer()->GetBridge(),
-                                   fbb, request);
+  return requester.AddCustomMaterial(std::move(fbb), request);
 }
 
 SplitEngineCustomMaterial::SplitEngineCustomMaterial(BaseView& view,

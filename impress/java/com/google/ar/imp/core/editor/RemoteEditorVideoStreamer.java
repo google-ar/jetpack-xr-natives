@@ -69,6 +69,12 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
   private static final byte AVCC_NUM_SPS_1 = (byte) 0xE1; // 1 SPS | 0xE0 reserved
   private static final byte AVCC_NUM_PPS_1 = 1;
 
+  // Resolution Queueing State
+  // Prevents rapid resize requests from clobbering the native MediaCodec setup.
+  private boolean isResizing = false;
+  private int pendingWidth = 0;
+  private int pendingHeight = 0;
+
   // Video Encoding Parameters
   private int videoWidth = VIDEO_WIDTH_1080P;
   private int videoHeight = VIDEO_HEIGHT_1080P;
@@ -82,6 +88,7 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
 
   // WebSocket Server State
   private volatile RemoteEditorWebSocketServer server;
+  private RemoteEditorWebSocketServer.SessionClosedListener sessionClosedListener;
 
   // Client Configuration State
   private volatile JSONObject config = new JSONObject();
@@ -143,15 +150,6 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
   @Override
   public void onConnected(WebSocket conn) {
     nativeInterface.onClientConnected(nativeRemoteEditorWrapperPtr);
-    // If a client connects before onOutputFormatChanged has populated the config,
-    // config.length() will be 0. In that case, we skip sending config here;
-    // the client will receive it when buildAndSendConfig() broadcasts it.
-    // Frame sending in onOutputBufferAvailable is blocked until config is ready,
-    // ensuring clients don't receive video data before configuration.
-    if (config.length() > 0 && conn.isOpen()) {
-      conn.send(config.toString());
-      requestKeyFrame();
-    }
   }
 
   @Override
@@ -176,15 +174,38 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
     }
   }
 
+  /**
+   * Called when a resolution change has fully completed (the new codec is outputting frames). It
+   * releases the resize lock. If another resize request arrived while the lock was held, it
+   * immediately triggers the next resize with the most recent dimensions.
+   */
+  private void completeResolutionChange() {
+    if (pendingWidth != 0 && pendingHeight != 0) {
+      int w = pendingWidth;
+      int h = pendingHeight;
+      pendingWidth = 0;
+      pendingHeight = 0;
+      isResizing = false; // Reset before calling so it can proceed
+      changeResolution(w, h);
+    } else {
+      isResizing = false;
+    }
+  }
+
   private void changeResolution(int width, int height) {
+    if (isResizing) {
+      // Overwrite any previously queued resize. We only care about the most recent dimensions.
+      pendingWidth = width;
+      pendingHeight = height;
+      return;
+    }
+    isResizing = true;
+
+    lastConfigSent = null;
     // We do NOT call nativeReleaseEditorUiRenderSurface here because we are reusing the persistent
     // surface. Instead, we stop the current codec and start a new one with the new resolution,
     // attaching it to the same persistent surface.
     stopCodec();
-
-    // Ensure dimensions are even numbers (requirement for many video encoders)
-    width &= ~1;
-    height &= ~1;
 
     setVideoSize(width, height);
 
@@ -202,6 +223,7 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
 
     } catch (IOException e) {
       Log.e(TAG, "Failed to restart MediaCodec with new resolution", e);
+      completeResolutionChange();
     }
   }
 
@@ -356,6 +378,7 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
             ByteBuffer ppsBuffer = format.getByteBuffer("csd-1");
 
             if (spsBuffer == null || ppsBuffer == null) {
+              completeResolutionChange();
               return;
             }
 
@@ -396,6 +419,7 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
 
   private synchronized void buildAndSendConfig(int rotation) {
     if (codecString == null || description == null) {
+      completeResolutionChange();
       return; // Not ready yet.
     }
     int deviceRotationDegrees = 0;
@@ -436,6 +460,7 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
     } catch (JSONException e) {
       Log.e(TAG, "Error building or sending config", e);
     }
+    completeResolutionChange();
   }
 
   private void setVideoSize(int width, int height) {
@@ -457,6 +482,9 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
 
   /** Stops the video encoder. The streamer can be restarted after calling this. */
   void stopStreaming() {
+    isResizing = false;
+    pendingWidth = 0;
+    pendingHeight = 0;
     stopCodec();
     stopServer();
     if (nativeRemoteEditorWrapperPtr != 0) {
@@ -478,11 +506,27 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
     }
   }
 
+  public void setSessionClosedListener(RemoteEditorWebSocketServer.SessionClosedListener listener) {
+    sessionClosedListener = listener;
+    if (server != null) {
+      server.setSessionClosedListener(listener);
+    }
+  }
+
+  public void disconnectAllConnections(String reason) {
+    if (server != null) {
+      server.disconnectAllConnections(reason);
+    }
+  }
+
   private void startServer(int port) {
     if (server == null || server.getPort() != port) {
       stopServer();
       server = new RemoteEditorWebSocketServer(port);
-      server.addListener(this);
+      if (sessionClosedListener != null) {
+        server.setSessionClosedListener(sessionClosedListener);
+      }
+      server.addWebSocketListener(this);
       server.startServer();
     } else if (!server.getConnections().isEmpty()) {
       requestKeyFrame(); // Client might still be connected during a restart
@@ -491,7 +535,8 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
 
   private void stopServer() {
     if (server != null) {
-      server.removeListener(this);
+      server.removeWebSocketListener(this);
+      server.setSessionClosedListener(null);
       try {
         server.stop();
       } catch (IOException | InterruptedException e) {
@@ -564,20 +609,20 @@ public class RemoteEditorVideoStreamer implements RemoteEditorWebSocketServer.We
   private native boolean nativeSetEditorUiRenderSurface(
       long nativeRemoteEditorWrapperPtr, Surface surface, int width, int height);
 
-  // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/remote_editor_video_streamer_jni.cc:nativeSetEditorUiRenderSurface)
+  // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/android/remote_editor_video_streamer_jni.cc:nativeSetEditorUiRenderSurface)
 
   // LINT.IfChange(nativeReleaseEditorUiRenderSurface)
   private native boolean nativeReleaseEditorUiRenderSurface(long nativeRemoteEditorWrapperPtr);
 
-  // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/remote_editor_video_streamer_jni.cc:nativeReleaseEditorUiRenderSurface)
+  // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/android/remote_editor_video_streamer_jni.cc:nativeReleaseEditorUiRenderSurface)
 
   // LINT.IfChange(nativeOnClientConnected)
   private native boolean nativeOnClientConnected(long nativeRemoteEditorWrapperPtr);
 
-  // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/remote_editor_video_streamer_jni.cc:nativeOnClientConnected)
+  // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/android/remote_editor_video_streamer_jni.cc:nativeOnClientConnected)
 
   // LINT.IfChange(nativeOnClientDisconnected)
   private native boolean nativeOnClientDisconnected(long nativeRemoteEditorWrapperPtr);
 
-  // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/remote_editor_video_streamer_jni.cc:nativeOnClientDisconnected)
+  // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/android/remote_editor_video_streamer_jni.cc:nativeOnClientDisconnected)
 }

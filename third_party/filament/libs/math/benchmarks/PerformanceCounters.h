@@ -17,9 +17,9 @@
 #ifndef TNT_MATH_BENCHMARK_PEROFRMANCECOUNTERS_H
 #define TNT_MATH_BENCHMARK_PEROFRMANCECOUNTERS_H
 
-#include <benchmark/benchmark.h>
-
 #include "filament/libs/utils/include/utils/Profiler.h"
+
+#include <benchmark/benchmark.h>
 
 #include <cmath>
 

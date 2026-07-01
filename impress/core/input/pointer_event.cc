@@ -44,8 +44,6 @@ PointerEvent::PointerEvent(const PointerEventType& type,
       changed_pointer_count_(changed_pointer_count),
       device_type_(device_type) {}
 
-PointerEvent::~PointerEvent() {}
-
 const Pointer& PointerEvent::GetChangedPointer(int index) const {
   assert(index < changed_pointer_count_);
   return pointers_[index];

@@ -22,14 +22,15 @@ extern "C" {
 
 // XR_ANDROIDX_spatial_interaction is a preprocessor guard. Do not pass it to API calls.
 #define XR_ANDROIDX_spatial_interaction 1
-XR_DEFINE_HANDLE(XrHandSurfaceTouchTrackerANDROIDX)
-#define XR_ANDROIDX_spatial_interaction_SPEC_VERSION 2
-#define XR_ANDROIDX_SPATIAL_INTERACTION_EXTENSION_NAME "XR_ANDROIDX_spatial_interaction"
 #define XR_TYPE_HAND_SURFACE_TOUCH_TRACKER_CREATE_INFO_ANDROIDX ((XrStructureType) 1000705000U)
 #define XR_TYPE_HAND_SURFACE_TOUCHES_ANDROIDX ((XrStructureType) 1000705001U)
 #define XR_TYPE_HAND_SURFACE_TOUCH_LOCATE_INFO_ANDROIDX ((XrStructureType) 1000705002U)
 // XrHandSurfaceTouchTrackerANDROIDX
 #define XR_OBJECT_TYPE_HAND_SURFACE_TOUCH_TRACKER_ANDROIDX ((XrObjectType) 1000705000U)
+
+XR_DEFINE_HANDLE(XrHandSurfaceTouchTrackerANDROIDX)
+#define XR_ANDROIDX_spatial_interaction_SPEC_VERSION 2
+#define XR_ANDROIDX_SPATIAL_INTERACTION_EXTENSION_NAME "XR_ANDROIDX_spatial_interaction"
 #define XR_HAND_SURFACE_TOUCH_POINT_COUNT_ANDROIDX 6
 #define XR_HAND_SURFACE_TOUCH_MAX_COUNT_ANDROIDX 12
 
@@ -88,6 +89,44 @@ XRAPI_ATTR XrResult XRAPI_CALL xrLocateHandSurfaceTouchesANDROIDX(
     XrHandSurfaceTouchesANDROIDX*               touches);
 #endif /* XR_EXTENSION_PROTOTYPES */
 #endif /* !XR_NO_PROTOTYPES */
+
+// Reflection macros
+#define XR_LIST_ENUM_XrHandSurfaceTouchPointANDROIDX(_) \
+    _(XR_HAND_SURFACE_TOUCH_POINT_THUMB_TIP_ANDROIDX, 0) \
+    _(XR_HAND_SURFACE_TOUCH_POINT_INDEX_TIP_ANDROIDX, 1) \
+    _(XR_HAND_SURFACE_TOUCH_POINT_MIDDLE_TIP_ANDROIDX, 2) \
+    _(XR_HAND_SURFACE_TOUCH_POINT_RING_TIP_ANDROIDX, 3) \
+    _(XR_HAND_SURFACE_TOUCH_POINT_LITTLE_TIP_ANDROIDX, 4) \
+    _(XR_HAND_SURFACE_TOUCH_POINT_PALM_ANDROIDX, 5) \
+    _(XR_HAND_SURFACE_TOUCH_POINT_MAX_ENUM_ANDROIDX, 0x7FFFFFFF)
+
+#define XR_LIST_STRUCT_XrHandSurfaceTouchTrackerCreateInfoANDROIDX(_) \
+    _(type) \
+    _(next)
+
+#define XR_LIST_STRUCT_XrHandSurfaceTouchStateANDROIDX(_) \
+    _(isTouching) \
+    _(contactPosition)
+
+#define XR_LIST_STRUCT_XrHandSurfaceTouchesANDROIDX(_) \
+    _(type) \
+    _(next) \
+    _(surfacePose) \
+    _(touchStateCapacityInput) \
+    _(touchStateCountOutput) \
+    _(touchStates)
+
+#define XR_LIST_STRUCT_XrHandSurfaceTouchLocateInfoANDROIDX(_) \
+    _(type) \
+    _(next) \
+    _(baseSpace) \
+    _(time)
+
+#define XR_LIST_FUNCTIONS_XR_ANDROIDX_spatial_interaction(_) \
+    _(CreateHandSurfaceTouchTrackerANDROIDX, ANDROIDX_spatial_interaction) \
+    _(DestroyHandSurfaceTouchTrackerANDROIDX, ANDROIDX_spatial_interaction) \
+    _(LocateHandSurfaceTouchesANDROIDX, ANDROIDX_spatial_interaction)
+
 #endif /* XR_ANDROIDX_spatial_interaction */
 
 #ifdef __cplusplus

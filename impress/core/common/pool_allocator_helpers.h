@@ -18,8 +18,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <type_traits>
+#include <utility>
+
+#include "absl/log/check.h"
 
 namespace imp {
+
+class PoolAllocatorKey;
 
 namespace imp_pool_allocator_internal {
 
@@ -88,28 +93,83 @@ inline uint64_t* GetPageOccupancy(std::byte* page_base,
 }
 
 // Sets the occupancy bit for the given slot.
-inline void SetOccupancy(std::byte* ptr, uintptr_t page_mask, size_t slot_size,
-                         uint32_t footer_offset_bytes) {
+inline void SetOccupancy(std::byte* ptr, uintptr_t page_mask, uint32_t index,
+                         uint32_t footer_offset_bytes,
+                         [[maybe_unused]] uint32_t slot_size_bytes) {
   std::byte* page_base = reinterpret_cast<std::byte*>(
       reinterpret_cast<uintptr_t>(ptr) & page_mask);
-  size_t slot = (ptr - page_base) / slot_size;
+  using PageFooter = imp_pool_allocator_internal::PageFooter;
+  PageFooter* footer =
+      reinterpret_cast<PageFooter*>(page_base + footer_offset_bytes);
+  size_t slot = index - footer->start_index;
+
+#if !defined(NDEBUG)
+  size_t expected_slot = (ptr - page_base) / slot_size_bytes;
+  
+#endif
+
   GetPageOccupancy(page_base, footer_offset_bytes)[slot / 64] |=
       (uint64_t{1} << (slot % 64));
 }
 
 // Unsets the occupancy bit for the given slot.
-inline uint32_t UnsetOccupancy(std::byte* ptr, uintptr_t page_mask,
-                               size_t slot_size, uint32_t footer_offset_bytes) {
+inline void UnsetOccupancy(std::byte* ptr, uintptr_t page_mask, uint32_t index,
+                           uint32_t footer_offset_bytes,
+                           [[maybe_unused]] uint32_t slot_size_bytes) {
   std::byte* page_base = reinterpret_cast<std::byte*>(
       reinterpret_cast<uintptr_t>(ptr) & page_mask);
-  size_t slot = (ptr - page_base) / slot_size;
+  using PageFooter = imp_pool_allocator_internal::PageFooter;
+  PageFooter* footer =
+      reinterpret_cast<PageFooter*>(page_base + footer_offset_bytes);
+  size_t slot = index - footer->start_index;
+
+#if !defined(NDEBUG)
+  size_t expected_slot = (ptr - page_base) / slot_size_bytes;
+  
+#endif
+
   GetPageOccupancy(page_base, footer_offset_bytes)[slot / 64] &=
       ~(uint64_t{1} << (slot % 64));
-  using PageFooter = imp_pool_allocator_internal::PageFooter;
-  return reinterpret_cast<PageFooter*>(page_base + footer_offset_bytes)
-             ->start_index +
-         slot;
 }
+
+namespace internal {
+
+template <typename T,
+          std::enable_if_t<std::is_same_v<PoolAllocatorKey,
+                                          decltype(std::declval<const T&>()
+                                                       .GetPoolAllocatorKey())>,
+                           int> = 0>
+static constexpr bool HasGetPoolKeyFunc(int) {
+  return true;
+}
+
+template <typename T>
+static constexpr bool HasGetPoolKeyFunc(...) {
+  return false;
+}
+
+template <
+    typename T,
+    std::enable_if_t<
+        std::is_same_v<void, decltype(std::declval<T&>().SetPoolAllocatorKey(
+                                 std::declval<PoolAllocatorKey>()))>,
+        int> = 0>
+static constexpr bool HasSetPoolKeyFunc(int) {
+  return true;
+}
+
+template <typename T>
+static constexpr bool HasSetPoolKeyFunc(...) {
+  return false;
+}
+
+}  // namespace internal
+
+template <typename T>
+static constexpr bool kHasGetPoolKey = internal::HasGetPoolKeyFunc<T>(0);
+
+template <typename T>
+static constexpr bool kHasSetPoolKey = internal::HasSetPoolKeyFunc<T>(0);
 
 }  // namespace imp_pool_allocator_internal
 

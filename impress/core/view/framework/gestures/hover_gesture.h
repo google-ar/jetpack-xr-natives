@@ -91,7 +91,7 @@ class HoverGesture : public Gesture {
 
   HoverGesture(Dispatcher* dispatcher, GesturePointerUtils* pointer_utils,
                const PointerHitEvent& pointer_hit);
-  using CreateFn = std::function<absl::optional<HoverGesture>(
+  using CreateFn = std::function<std::optional<HoverGesture>(
       const PointerHitEvent& pointer_hit,
       absl::Span<const HoverGesture> gestures)>;
   static CreateFn GetCreateFunction(Dispatcher* dispatcher,

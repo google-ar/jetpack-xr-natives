@@ -85,7 +85,7 @@ NodeHandle SphereCollider::GetHitNode() const {
   return hit_node_;
 }
 
-absl::optional<RayHit> SphereCollider::Intersect(const Ray& world_ray) {
+std::optional<RayHit> SphereCollider::Intersect(const Ray& world_ray) {
   if (!IsActive()) {
     return {};
   }
@@ -109,7 +109,7 @@ absl::optional<RayHit> SphereCollider::Intersect(const Ray& world_ray) {
   return {};
 }
 
-absl::optional<DoubleRayHit> SphereCollider::IntersectPrecise(
+std::optional<DoubleRayHit> SphereCollider::IntersectPrecise(
     const DoubleRay& world_ray) {
   if (!IsActive()) {
     return {};

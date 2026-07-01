@@ -393,7 +393,10 @@ cc_library(
     name = "video_writer",
     hdrs = [
         "video_writer.h",
-    ],
+    ] + if_ios([
+        "video_file_writer_ios.h",
+        "web_server_video_stream_writer_ios.h",
+    ]),
     copts = imp_google3_copts(),
     deps = [
         "//core/async:future",
@@ -402,10 +405,15 @@ cc_library(
         "//core/window:filament_host",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:string_view",
-    ] + if_ios(
-        [":video_writer_ios"],
-        otherwise = [":video_writer_noop"],
-    ),
+    ] + if_ios([
+        ":video_writer_ios",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:optional",
+        "@third_party//filament/filament:filament_hdrs",
+        "//core/ui_stream:web_server_ios",
+    ]),
     alwayslink = 1,
 )
 
@@ -419,7 +427,7 @@ cc_library(
     ],
     copts = imp_google3_copts(),
     deps = [
-        ":video_writer",
+        "//core:config",
         "//core/async:future",
         "//core/common",
         "//core/common:context",
@@ -448,8 +456,10 @@ cc_library(
     srcs = ["video_writer_noop.cc"],
     hdrs = [
         "video_writer.h",
+        "video_writer_noop.h",
     ],
     deps = [
+        ":video_writer",
         "//core/async:future",
         "//core/common",
         "//core/math",
@@ -464,12 +474,13 @@ objc_library(
     name = "video_writer_ios",
     srcs = [
         "video_file_writer_ios.mm",
-        "video_writer_ios.mm",
         "web_server_video_stream_writer_ios.mm",
     ],
     hdrs = [
+        "video_file_writer_ios.h",
         "video_writer.h",
         "video_writer_frame.h",
+        "web_server_video_stream_writer_ios.h",
     ],
     copts = imp_google3_copts(),
     features = ["-layering_check"],
@@ -482,10 +493,13 @@ objc_library(
         "//third_party/apple_frameworks:AVFoundation",
         "//third_party/apple_frameworks:CoreMedia",
         "//third_party/apple_frameworks:CoreVideo",
+        "//third_party/apple_frameworks:Foundation",
         "//third_party/apple_frameworks:VideoToolbox",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:optional",

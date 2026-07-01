@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_MODEL_MESH_MESH_H_
 
 #include <cstddef>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -55,6 +56,19 @@ class MeshFactory;
 // new mesh data, if it has no submeshes.
 class Mesh {
  public:
+  using MeshDataObserver = std::function<void(
+      Mesh* mesh, size_t group_idx, size_t offset, MeshData* mesh_data)>;
+
+  // Sets the observer for this mesh. The observer will be notified of mesh
+  // updates.
+  //
+  // Note: Submeshes do not own their MeshData, and calling UpdateMeshData on
+  // them triggers a FATAL error, so updates on submeshes are not supported and
+  // they do not need observing.
+  void SetMeshDataObserver(MeshDataObserver observer) {
+    observer_ = std::move(observer);
+  }
+
   // Indicates the source of AABB.
   enum class AabbSource {
     // AABB is assigned by the user.
@@ -177,6 +191,8 @@ class Mesh {
   absl::Mutex collision_acceleration_structure_mutex_;
   std::unique_ptr<Bvh> collision_acceleration_structure_
       ABSL_GUARDED_BY(collision_acceleration_structure_mutex_);
+
+  MeshDataObserver observer_ = nullptr;
 
   friend class MeshFactory;
 };

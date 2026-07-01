@@ -15,10 +15,9 @@
  */
 
 #include "fxaa.h"
-
 #include "generated/resources/fxaa.h"
 
-#include <materials/StaticMaterialInfo.h>
+#include "materials/StaticMaterialInfo.h"
 
 #include "filament/libs/utils/include/utils/Slice.h"
 

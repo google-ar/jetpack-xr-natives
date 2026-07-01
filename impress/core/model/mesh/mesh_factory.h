@@ -205,6 +205,12 @@ class MeshFactory {
 
   explicit MeshFactory(BaseView& view);
 
+  // Sets a global observer for all meshes created by this factory.
+  // The observer will be automatically attached to newly created meshes.
+  void SetMeshDataObserver(Mesh::MeshDataObserver observer) {
+    mesh_data_observer_ = std::move(observer);
+  }
+
   MeshPtr CreateBox(
       CreateBoxSettings settings = {},
       // Specifies if the mesh information should be
@@ -307,6 +313,7 @@ class MeshFactory {
 
  private:
   BaseView& view_;
+  Mesh::MeshDataObserver mesh_data_observer_ = nullptr;
   filament::Engine* GetEngine();
 };
 

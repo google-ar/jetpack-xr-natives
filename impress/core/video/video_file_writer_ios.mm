@@ -205,7 +205,6 @@ class VideoFileWriterIos : public VideoWriter, AudioSampleHandler {
     if (record_microphone_audio_) {
       [audio_capture_ startRunning];
     }
-
     return absl::OkStatus();
   }
 
@@ -267,6 +266,8 @@ class VideoFileWriterIos : public VideoWriter, AudioSampleHandler {
   }
 
   bool IsReady() const override { return is_ready_; }
+
+  uint2 GetDimensions() const override { return dimensions_; }
 
   void OnNewAudioSample(CMSampleBufferRef sample_buffer) override {
     absl::MutexLock lock(&mutex_);

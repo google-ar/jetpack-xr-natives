@@ -56,13 +56,13 @@ set_target_properties(filament-js PROPERTIES
     LINK_DEPENDS "${EXTERN_POSTJS_SRC}"
     OUTPUT_NAME filament)
 
-target_link_libraries(filament-js PRIVATE filament math utils ktxreader filameshio uberarchive gltfio_core viewer)
+target_link_libraries(filament-js PRIVATE filament math utils ktxreader filameshio uberarchive gltfio_core viewer camutils)
 
 # Copy package.json (et al) into the output folder to allow "npm publish" to gather the
 # artifacts that it needs.
 
 set(RESOURCES )
-foreach (RESOURCE package.json README.md filament.d.ts filament-viewer.js)
+foreach (RESOURCE package.json README.md filament.d.ts)
     add_custom_command(
         OUTPUT ${PROJECT_BINARY_DIR}/${RESOURCE}
         DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/${RESOURCE}

@@ -129,9 +129,14 @@ Future<std::unique_ptr<MaterialAsset>> CreateMaterialFromResource(
     }
 
     // Pre compiles variants of the material.
-    Future<absl::Status> pre_compile_status =
-        material_helpers::PreCompileMaterial(filament_material,
-                                             material_pre_compile_options);
+    Future<absl::Status> pre_compile_status;
+    if (material_pre_compile_options.compile_by_view.has_value()) {
+      pre_compile_status = material_helpers::PreCompileMaterialByView(
+          filament_material, material_pre_compile_options, view);
+    } else {
+      pre_compile_status = material_helpers::PreCompileMaterial(
+          filament_material, material_pre_compile_options);
+    }
 
     // Waits for high priority variants' compilation to complete before
     // returning the MaterialAsset.

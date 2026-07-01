@@ -57,9 +57,15 @@ Mesh::~Mesh() {
   }
 }
 
-// TODO: Support UpdateMeshData in SplitEngine or throw an error.
 void Mesh::UpdateMeshData(MeshDataPtr mesh_data, AabbSource aabb_source,
                           bool store_mesh_data_on_cpu) {
+  if (observer_) {
+    const size_t groups_count =
+        mesh_data->GetDescription().vertex_format.GetAttributeGroupsCount();
+    for (size_t group_idx = 0; group_idx < groups_count; ++group_idx) {
+      observer_(this, group_idx, 0, mesh_data.get());
+    }
+  }
   if (!mesh_data_gpu_) {
     IMP_LOG(imp::FATAL)
         << "UpdateMeshData called on a submesh that does not own its MeshData.";
@@ -74,7 +80,9 @@ void Mesh::UpdateMeshData(MeshDataPtr mesh_data, AabbSource aabb_source,
     aabb_ = CalculateAabb(mesh_data.get());
   }
   mesh_range_.offset = 0;
-  mesh_range_.count = mesh_data->GetDescription().index_count;
+  mesh_range_.count = mesh_data->GetDescription().index_count > 0
+                          ? mesh_data->GetDescription().index_count
+                          : mesh_data->GetDescription().vertex_count;
 
   if (store_mesh_data_on_cpu) {
     mesh_data_ = std::move(mesh_data);
@@ -88,6 +96,13 @@ void Mesh::UpdateMeshData(MeshDataPtr mesh_data, AabbSource aabb_source,
 }
 
 void Mesh::UpdateMeshData(MeshData* mesh_data, AabbSource aabb_source) {
+  if (observer_) {
+    const size_t groups_count =
+        mesh_data->GetDescription().vertex_format.GetAttributeGroupsCount();
+    for (size_t group_idx = 0; group_idx < groups_count; ++group_idx) {
+      observer_(this, group_idx, 0, mesh_data);
+    }
+  }
   if (!mesh_data_gpu_) {
     IMP_LOG(imp::FATAL) << "Cannot update mesh data on a submesh.";
     return;
@@ -150,22 +165,46 @@ MeshDescription Mesh::GetDescription() const {
 const Box& Mesh::GetAabb() const { return aabb_; }
 
 Box Mesh::CalculateAabb(MeshData* mesh_data, size_t offset, size_t count) {
-  size_t index_max = mesh_data->GetDescription().index_count;
-  size_t index_render_offset = std::min(offset, index_max);
-  size_t index_render_count = std::min(count, index_max - index_render_offset);
+  // Check if the mesh has any vertices or a position attribute (can have no
+  // position attribute if we are generating a procedural mesh)
+  if (mesh_data->GetDescription().vertex_count == 0 ||
+      !mesh_data->GetDescription()
+           .vertex_format
+           .GetKeyForAttribute(VertexFormat::VertexAttribute::POSITION)
+           .has_value()) {
+    return Box{};
+  }
 
+  size_t index_max = mesh_data->GetDescription().index_count;
   AabbCalculator aabb_calculator;
   MeshVertexData* vertex_data = mesh_data->GetVertexData();
-  MeshIndexData* index_data = mesh_data->GetIndexData();
 
-  for (size_t i = index_render_offset;
-       i < index_render_offset + index_render_count; i++) {
-    uint32_t id = index_data->GetDescription().index_type ==
-                          MeshDescription::IndexType::USHORT
-                      ? index_data->IndexAt<uint16_t>(i)
-                      : index_data->IndexAt<uint32_t>(i);
-    aabb_calculator.AddVertex(vertex_data->VertexAttributeAt<float3>(
-        id, VertexFormat::VertexAttribute::POSITION));
+  if (index_max == 0) {
+    size_t vertex_max = mesh_data->GetDescription().vertex_count;
+    size_t vertex_render_offset = std::min(offset, vertex_max);
+    size_t vertex_render_count =
+        std::min(count, vertex_max - vertex_render_offset);
+
+    for (size_t i = vertex_render_offset;
+         i < vertex_render_offset + vertex_render_count; i++) {
+      aabb_calculator.AddVertex(vertex_data->VertexAttributeAt<float3>(
+          i, VertexFormat::VertexAttribute::POSITION));
+    }
+  } else {
+    size_t index_render_offset = std::min(offset, index_max);
+    size_t index_render_count =
+        std::min(count, index_max - index_render_offset);
+    MeshIndexData* index_data = mesh_data->GetIndexData();
+
+    for (size_t i = index_render_offset;
+         i < index_render_offset + index_render_count; i++) {
+      uint32_t id = index_data->GetDescription().index_type ==
+                            MeshDescription::IndexType::USHORT
+                        ? index_data->IndexAt<uint16_t>(i)
+                        : index_data->IndexAt<uint32_t>(i);
+      aabb_calculator.AddVertex(vertex_data->VertexAttributeAt<float3>(
+          id, VertexFormat::VertexAttribute::POSITION));
+    }
   }
 
   return aabb_calculator.GetAabb();
@@ -247,7 +286,9 @@ Mesh::Mesh(MeshGpuDataPtr mesh_data_gpu, MeshDataPtr mesh_data, const Box& aabb)
     : mesh_data_gpu_(std::move(mesh_data_gpu)),
       mesh_data_(std::move(mesh_data)) {
   mesh_range_.offset = 0;
-  mesh_range_.count = mesh_data_gpu_->GetDescription().index_count;
+  mesh_range_.count = mesh_data_gpu_->GetDescription().index_count > 0
+                          ? mesh_data_gpu_->GetDescription().index_count
+                          : mesh_data_gpu_->GetDescription().vertex_count;
   aabb_ = aabb;
   primitive_type_ = mesh_data_gpu_->GetPrimitiveType();
 }

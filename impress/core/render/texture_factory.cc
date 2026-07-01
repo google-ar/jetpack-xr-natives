@@ -28,6 +28,7 @@
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/memory/memory.h"
+#include "absl/status/status.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
@@ -186,10 +187,7 @@ OwnedTexturePtr TextureFactory::CreateExternalTexture(
                                                    .height(settings.height)
                                                    .format(settings.format)
                                                    .external();
-  if (settings.sampler_type) {
-    texture_builder.sampler(*settings.sampler_type);
-  } else if (settings.sampler_options &&
-             settings.sampler_options->sampler_type) {
+  if (settings.sampler_options && settings.sampler_options->sampler_type) {
     texture_builder.sampler(settings.sampler_options->sampler_type.value());
   }
   if (settings.usage) {
@@ -201,7 +199,14 @@ OwnedTexturePtr TextureFactory::CreateExternalTexture(
     return {};
   }
   texture->setExternalImage(*engine, handle);
-  filament::TextureSampler sampler(MagFilter::LINEAR, WrapMode::CLAMP_TO_EDGE);
+  filament::TextureSampler sampler =
+      filament::TextureSampler(MagFilter::LINEAR, WrapMode::CLAMP_TO_EDGE);
+  if (settings.sampler_options) {
+    sampler = filament::TextureSampler(settings.sampler_options->min_filter,
+                                       settings.sampler_options->mag_filter,
+                                       settings.sampler_options->wrap_mode);
+    sampler.setAnisotropy(settings.sampler_options->anisotropy);
+  }
   auto texture_ptr = absl::WrapUnique(
       new Texture(view_, /*stream=*/nullptr, texture, sampler));
   // This version of CreateTexture is not compatible with Split Engine.
@@ -224,141 +229,6 @@ OwnedTexturePtr TextureFactory::CreateTexture(
   return texture_ptr;
 }
 
-ABSL_DEPRECATED("Use CreateTexture(AssetPtr<ImageAsset>, ...) instead.")
-TexturePtr TextureFactory::CreateTexture(const ImageAsset& image) {
-  filament::Engine* engine = view_.GetSharedEngine();
-
-  TextureBuilder texture_builder(view_);
-  if (!image.GetName().empty()) {
-    texture_builder.Name(absl::StrFormat(
-        "%s_tex", GetLocalFilenameFromFilename(image.GetName())));
-  }
-  texture_builder.Sampler(filament::Texture::Sampler::SAMPLER_2D);
-  texture_builder.Format(image.GetTextureFormat());
-  texture_builder.Width(image.GetWidth());
-  texture_builder.Height(image.GetHeight());
-  image::ImageContents& image_contents = image.GetImageContents();
-  texture_builder.Image(*engine, image_contents, {});
-  filament::Texture* texture = texture_builder.Build(*engine);
-  if (!texture) {
-    IMP_LOG(imp::ERROR) << "Could not create texture from image, name: \""
-               << image.GetName() << "\"";
-    return {};
-  }
-
-  filament::TextureSampler sampler(MinFilter::LINEAR, MagFilter::LINEAR,
-                                   WrapMode::CLAMP_TO_EDGE);
-  sampler.setAnisotropy(1.0f);
-
-  // Using `new` to access a non-public constructor, see (broken link).
-  TexturePtr result =
-      absl::WrapUnique(new Texture(view_, nullptr, texture, sampler));
-  result->SetName(image.GetName());
-  return result;
-}
-
-TexturePtr TextureFactory::CreateTexture(
-    int width, int height, TextureFactory::Format format,
-    std::optional<absl::string_view> name) {
-  std::string name_str =
-      name.has_value() ? absl::StrFormat("%s_tex", *name) : "";
-
-  TextureBuilder texture_builder(view_);
-  texture_builder.Format(format);
-  texture_builder.Width(width);
-  texture_builder.Height(height);
-  texture_builder.Levels(1u);
-  texture_builder.Name(name_str);
-  filament::Texture* texture = texture_builder.Build(*view_.GetSharedEngine());
-  if (!texture) {
-    IMP_LOG(imp::ERROR) << "Could not create texture, name: \"" << name_str << "\"";
-    return {};
-  }
-  filament::TextureSampler sampler(MagFilter::LINEAR, WrapMode::CLAMP_TO_EDGE);
-
-  return absl::WrapUnique(new Texture(view_, nullptr, texture, sampler));
-}
-
-TexturePtr TextureFactory::CreateTexture(int width, int height,
-                                         TextureFactory::Format format,
-                                         TextureFactory::Usage usage) {
-  return CreateTexture(width, height, format, usage, TextureSamplerOptions{});
-}
-
-TexturePtr TextureFactory::CreateTexture(
-    int width, int height, TextureFactory::Format format,
-    TextureFactory::Usage usage, Options options,
-    std::optional<absl::string_view> name) {
-  return CreateTexture(width, height, format, usage,
-                       TextureSamplerOptions{
-                           .wrap_mode = options.wrap_mode,
-                           .mag_filter = options.mag_filter,
-                           .min_filter = options.min_filter,
-                           .anisotropy = options.anisotropy,
-                       },
-                       name);
-}
-
-// Creates an empty texture of specified size, format, usage, and options.
-TexturePtr TextureFactory::CreateTexture(
-    int width, int height, TextureFactory::Format format,
-    TextureFactory::Usage usage, TextureSamplerOptions sampler_options,
-    std::optional<absl::string_view> name) {
-  std::string name_str =
-      name.has_value() ? absl::StrFormat("%s_tex", *name) : "";
-
-  TextureBuilder texture_builder(view_);
-  texture_builder.Format(format)
-      .Width(width)
-      .Height(height)
-      .Levels(1u)
-      .Name(name_str)
-      .Usage(usage)
-      .Sampler(sampler_options.sampler_type.value_or(
-          filament::Texture::Sampler::SAMPLER_2D));
-
-  filament::Texture* texture = texture_builder.Build(*view_.GetSharedEngine());
-  if (!texture) {
-    IMP_LOG(imp::ERROR) << "Could not create texture, name: \"" << name_str << "\"";
-    return {};
-  }
-
-  filament::TextureSampler sampler(sampler_options.min_filter,
-                                   sampler_options.mag_filter,
-                                   sampler_options.wrap_mode);
-  sampler.setAnisotropy(sampler_options.anisotropy);
-
-  auto texture_ptr =
-      absl::WrapUnique(new Texture(view_, nullptr, texture, sampler));
-  // This version of CreateTexture is not compatible with Split Engine.
-  // TODO: (broken link) - remove call to SetSuppressSplitEngineRemoval().
-  texture_ptr->SetSuppressSplitEngineRemoval(true);
-  return texture_ptr;
-}
-
-TexturePtr TextureFactory::CreateTexture(intptr_t id, uint32_t width,
-                                         uint32_t height, uint8_t levels,
-                                         TextureFactory::Format format,
-                                         TextureFactory::Usage usage) {
-  auto texture = filament::Texture::Builder{}
-                     .width(width)
-                     .height(height)
-                     .levels(levels)
-                     .format(format)
-                     .sampler(filament::Texture::Sampler::SAMPLER_2D)
-                     .import(id)
-                     .usage(usage)
-                     .build(*view_.GetSharedEngine());
-
-  auto sampler =
-      filament::TextureSampler(MagFilter::LINEAR, WrapMode::CLAMP_TO_EDGE);
-  auto texture_ptr =
-      absl::WrapUnique(new Texture(view_, nullptr, texture, sampler));
-  // This version of CreateTexture is not compatible with Split Engine.
-  // TODO: (broken link) - remove call to SetSuppressSplitEngineRemoval().
-  texture_ptr->SetSuppressSplitEngineRemoval(true);
-  return texture_ptr;
-}
 
 OwnedTexturePtr TextureFactory::CreateTexture(
     TextureCreationSettings settings) {
@@ -371,7 +241,9 @@ OwnedTexturePtr TextureFactory::CreateTexture(
   }
 
   if (settings.usage) {
-    texture_builder.Usage(*settings.usage);
+    texture_builder.Usage(settings.levels.value_or(1) > 1
+                              ? (*settings.usage | Usage::GEN_MIPMAPPABLE)
+                              : *settings.usage);
   }
 
   if (settings.levels) {
@@ -384,8 +256,6 @@ OwnedTexturePtr TextureFactory::CreateTexture(
 
   if (settings.sampler_options && settings.sampler_options->sampler_type) {
     texture_builder.Sampler(settings.sampler_options->sampler_type.value());
-  } else if (settings.sampler_type) {
-    texture_builder.Sampler(*settings.sampler_type);
   }
 
   if (settings.name) {
@@ -419,22 +289,6 @@ OwnedTexturePtr TextureFactory::CreateTexture(
   return texture_ptr;
 }
 
-TexturePtr TextureFactory::CreateTexture(
-    absl::Span<const AssetPtr<ImageAsset>> images, Options options) {
-  return CreateTexture(
-      images,
-      TextureGenerationOptions{
-          .generated_mipmap_levels = options.generated_mipmap_levels,
-          .texture_format_override = options.texture_format_override,
-      },
-      TextureSamplerOptions{
-          .wrap_mode = options.wrap_mode,
-          .mag_filter = options.mag_filter,
-          .min_filter = options.min_filter,
-          .anisotropy = options.anisotropy,
-      });
-}
-
 OwnedTexturePtr TextureFactory::CreateTexture(
     AssetPtr<ImageAsset> image, TextureGenerationOptions generation_options,
     TextureSamplerOptions sampler_options) {
@@ -448,7 +302,12 @@ OwnedTexturePtr TextureFactory::CreateTexture(
   }
 
   absl::Span<AssetPtr<ImageAsset>> single_item_span(std::addressof(image), 1);
-  return CreateTexture(single_item_span, generation_options, sampler_options);
+  OwnedTexturePtr result =
+      CreateTexture(single_item_span, generation_options, sampler_options);
+  if (result && !image->GetName().empty()) {
+    result->SetName(image->GetName());
+  }
+  return result;
 }
 
 TexturePtr TextureFactory::CreateTexture(
@@ -486,6 +345,8 @@ TexturePtr TextureFactory::CreateTexture(
   }
 
   if (generation_options.generated_mipmap_levels.has_value()) {
+    texture_builder.Usage(filament::Texture::Usage::DEFAULT |
+                          filament::Texture::Usage::GEN_MIPMAPPABLE);
     texture_builder.GenerateMipmaps(*engine);
   }
 
@@ -513,24 +374,6 @@ TexturePtr TextureFactory::CreateTexture(
 }
 
 OwnedTexturePtr TextureFactory::CreateTexture(
-    image::ImageContents& image_contents, Options options,
-    std::optional<absl::string_view> name) {
-  return CreateTexture(
-      image_contents,
-      TextureGenerationOptions{
-          .generated_mipmap_levels = options.generated_mipmap_levels,
-          .texture_format_override = options.texture_format_override,
-      },
-      TextureSamplerOptions{
-          .wrap_mode = options.wrap_mode,
-          .mag_filter = options.mag_filter,
-          .min_filter = options.min_filter,
-          .anisotropy = options.anisotropy,
-      },
-      name);
-}
-
-OwnedTexturePtr TextureFactory::CreateTexture(
     image::ImageContents& image_contents,
     TextureGenerationOptions generation_options,
     TextureSamplerOptions sampler_options,
@@ -545,7 +388,8 @@ OwnedTexturePtr TextureFactory::CreateTexture(
         absl::StrFormat("%s_tex", GetLocalFilenameFromFilename(*name)));
   }
 
-  texture_builder.Sampler(filament::Texture::Sampler::SAMPLER_2D);
+  texture_builder.Sampler(sampler_options.sampler_type.value_or(
+      filament::Texture::Sampler::SAMPLER_2D));
   texture_builder.Format(generation_options.texture_format_override.has_value()
                              ? *generation_options.texture_format_override
                              : image_contents.GetTextureFormat());
@@ -554,6 +398,10 @@ OwnedTexturePtr TextureFactory::CreateTexture(
   texture_builder.Height(image_contents.GetHeight());
   if (generation_options.generated_mipmap_levels.has_value()) {
     texture_builder.Levels(generation_options.generated_mipmap_levels.value());
+    if (generation_options.generated_mipmap_levels.value() > 1) {
+      texture_builder.Usage(filament::Texture::Usage::DEFAULT |
+                            filament::Texture::Usage::GEN_MIPMAPPABLE);
+    }
   } else {
     texture_builder.Levels(image_contents.GetLevelCount());
   }
@@ -572,8 +420,7 @@ OwnedTexturePtr TextureFactory::CreateTexture(
                                    sampler_options.wrap_mode);
   sampler.setAnisotropy(sampler_options.anisotropy);
 
-  // Using `new` to access a non-public constructor, see (broken link).
-  OwnedTexturePtr result = WrapTexture(texture);
+  OwnedTexturePtr result = WrapTexture(texture, sampler.getSamplerParams());
 
   if (name.has_value()) {
     result->SetName(*name);
@@ -602,6 +449,11 @@ OwnedTexturePtr TextureFactory::CreateTextureWithMipmaps(
   texture_builder.width(base_image.GetWidth());
   texture_builder.height(base_image.GetHeight());
   texture_builder.depth(1);
+
+  if (generation_options.generated_mipmap_levels.has_value()) {
+    texture_builder.usage(filament::Texture::Usage::DEFAULT |
+                          filament::Texture::Usage::GEN_MIPMAPPABLE);
+  }
 
   filament::Texture* texture = texture_builder.build(*engine);
   if (texture == nullptr) {
@@ -657,20 +509,65 @@ TexturePtr TextureFactory::WrapTexture(
   return texture_ptr;
 }
 
+absl::StatusOr<BorrowedTexturePtr>
+TextureFactory::BorrowMatchingPlaceholderTexture(
+    const BorrowedTexturePtr& texture, SmallSourceLocation loc) {
+  if (!texture || !texture->GetTexture()) {
+    return absl::InvalidArgumentError(
+        "There is no valid match for a null texture.");
+  }
+
+  const filament::Texture::Sampler sampler_type =
+      texture->GetTexture()->getTarget();
+  const filament::Texture::InternalFormat format =
+      texture->GetTexture()->getFormat();
+
+  if (sampler_type == filament::Texture::Sampler::SAMPLER_CUBEMAP) {
+    if (format == filament::Texture::InternalFormat::RGBA8) {
+      return BorrowPlaceholderCubemapTexture(loc);
+    }
+  } else if (sampler_type == filament::Texture::Sampler::SAMPLER_2D_ARRAY) {
+    if (format == filament::Texture::InternalFormat::RGBA32UI) {
+      return BorrowRGBA32UIArrayPlaceholderTexture(loc);
+    } else if (format == filament::Texture::InternalFormat::R11F_G11F_B10F) {
+      return BorrowR11G11B10FArrayPlaceholderTexture(loc);
+    } else if (format == filament::Texture::InternalFormat::RGBA8) {
+      return BorrowRGBA8ArrayPlaceholderTexture(loc);
+    }
+  } else if (sampler_type == filament::Texture::Sampler::SAMPLER_2D) {
+    if (format == filament::Texture::InternalFormat::RGBA32UI) {
+      return BorrowRGBA32UIPlaceholderTexture(loc);
+    } else if (format == filament::Texture::InternalFormat::RGBA32F) {
+      return BorrowRGBA32FPlaceholderTexture(loc);
+    } else if (format == filament::Texture::InternalFormat::R11F_G11F_B10F) {
+      return BorrowR11G11B10FPlaceholderTexture(loc);
+    } else if (format == filament::Texture::InternalFormat::RGBA8) {
+      return BorrowPlaceholderTexture(loc);
+    }
+  }
+
+  return absl::NotFoundError(
+      absl::StrFormat("No matching placeholder texture found for sampler "
+                      "sampler_type: %s and format: %d",
+                      to_string(sampler_type), static_cast<int>(format)));
+}
+
 BorrowedTexturePtr TextureFactory::BorrowPlaceholderTexture(
     SmallSourceLocation loc) {
-  if (!placeholder_texture_) {
-    placeholder_texture_ = CreatePlaceholderTexture(kPixelWhite);
+  if (!rgba8_white_placeholder_texture_) {
+    rgba8_white_placeholder_texture_ =
+        CreateRGBA8PlaceholderTexture(kPixelWhite);
   }
-  return placeholder_texture_.Borrow(loc);
+  return rgba8_white_placeholder_texture_.Borrow(loc);
 }
 
 BorrowedTexturePtr TextureFactory::BorrowPlaceholderTextureBlack(
     SmallSourceLocation loc) {
-  if (!placeholder_texture_black_) {
-    placeholder_texture_black_ = CreatePlaceholderTexture(kPixelBlack);
+  if (!rgba8_black_placeholder_texture_) {
+    rgba8_black_placeholder_texture_ =
+        CreateRGBA8PlaceholderTexture(kPixelBlack);
   }
-  return placeholder_texture_black_.Borrow(loc);
+  return rgba8_black_placeholder_texture_.Borrow(loc);
 }
 
 BorrowedTexturePtr TextureFactory::BorrowPlaceholderCubemapTexture(
@@ -697,22 +594,71 @@ BorrowedTexturePtr TextureFactory::BorrowRGBA32UIPlaceholderTexture(
   return rgba32ui_placeholder_texture_.Borrow(loc);
 }
 
-OwnedTexturePtr TextureFactory::CreatePlaceholderTexture(const uint32_t pixel) {
-  constexpr int kPlaceholderTextureSize = 2;
+BorrowedTexturePtr TextureFactory::BorrowR11G11B10FPlaceholderTexture(
+    SmallSourceLocation loc) {
+  if (!r11g11b10f_placeholder_texture_) {
+    r11g11b10f_placeholder_texture_ = CreateR11G11B10FPlaceholderTexture();
+  }
+  return r11g11b10f_placeholder_texture_.Borrow(loc);
+}
 
-  std::unique_ptr<std::vector<uint32_t>> kPlaceholderTexturePixels =
-      std::make_unique<std::vector<uint32_t>>(
-          std::vector<uint32_t>{pixel, pixel, pixel, pixel});
+BorrowedTexturePtr TextureFactory::BorrowRGBA8ArrayPlaceholderTexture(
+    SmallSourceLocation loc) {
+  if (!rgba8_array_placeholder_texture_) {
+    rgba8_array_placeholder_texture_ = CreateRGBA8ArrayPlaceholderTexture();
+  }
+  return rgba8_array_placeholder_texture_.Borrow(loc);
+}
 
-  image::OwnedImageContents<uint32_t> image_contents(
-      kPlaceholderTextureSize, kPlaceholderTextureSize,
-      std::move(kPlaceholderTexturePixels),
-      filament::backend::TextureFormat::RGBA8,
+BorrowedTexturePtr TextureFactory::BorrowRGBA32UIArrayPlaceholderTexture(
+    SmallSourceLocation loc) {
+  if (!rgba32ui_array_placeholder_texture_) {
+    rgba32ui_array_placeholder_texture_ =
+        CreateRGBA32UIArrayPlaceholderTexture();
+  }
+  return rgba32ui_array_placeholder_texture_.Borrow(loc);
+}
+
+BorrowedTexturePtr TextureFactory::BorrowR11G11B10FArrayPlaceholderTexture(
+    SmallSourceLocation loc) {
+  if (!r11g11b10f_array_placeholder_texture_) {
+    r11g11b10f_array_placeholder_texture_ =
+        CreateR11G11B10FArrayPlaceholderTexture();
+  }
+  return r11g11b10f_array_placeholder_texture_.Borrow(loc);
+}
+
+OwnedTexturePtr TextureFactory::CreateRGBA8PlaceholderTexture(
+    const uint32_t pixel) {
+  return Create2x2PlaceholderTexture<uint32_t>(
+      pixel, filament::backend::TextureFormat::RGBA8,
       filament::backend::PixelDataFormat::RGBA,
-      filament::backend::PixelDataType::UBYTE);
+      filament::backend::PixelDataType::UBYTE, TextureSamplerOptions{},
+      "PlaceholderTexture");
+}
 
-  return CreateTexture(image_contents, TextureGenerationOptions{},
-                       TextureSamplerOptions{}, "PlaceholderTexture");
+OwnedTexturePtr TextureFactory::CreateRGBA8ArrayPlaceholderTexture() {
+  return Create2x2PlaceholderTexture<uint32_t>(
+      kPixelWhite, filament::backend::TextureFormat::RGBA8,
+      filament::backend::PixelDataFormat::RGBA,
+      filament::backend::PixelDataType::UBYTE,
+      TextureSamplerOptions{
+          .sampler_type = TextureSamplerOptions::SamplerType::SAMPLER_2D_ARRAY,
+      },
+      "RGBA8ArrayPlaceholderTexture");
+}
+
+OwnedTexturePtr TextureFactory::CreateRGBA32UIArrayPlaceholderTexture() {
+  filament::math::uint4 pixel_data = {0xffffffff, 0xffffffff, 0xffffffff,
+                                      0xffffffff};
+  return Create2x2PlaceholderTexture<filament::math::uint4>(
+      pixel_data, filament::backend::TextureFormat::RGBA32UI,
+      filament::backend::PixelDataFormat::RGBA_INTEGER,
+      filament::backend::PixelDataType::UINT,
+      TextureSamplerOptions{
+          .sampler_type = TextureSamplerOptions::SamplerType::SAMPLER_2D_ARRAY,
+      },
+      "RGBA32UIArrayPlaceholderTexture");
 }
 
 OwnedTexturePtr TextureFactory::CreatePlaceholderCubemapTexture() {
@@ -738,12 +684,12 @@ OwnedTexturePtr TextureFactory::CreatePlaceholderCubemapTexture() {
                   TextureSamplerOptions::SamplerType::SAMPLER_CUBEMAP}});
 
   filament::Engine* engine = view_.GetSharedEngine();
-  filament::Texture::FaceOffsets face_offsets(kBytesPerFace);
   result->GetTexture()->setImage(
-      *engine, /*level=*/0,
+      *engine, /*level=*/0, /*xOffset=*/0,
+      /*yOffset=*/0, /*zOffset=*/0, kPlaceholderTextureSize,
+      kPlaceholderTextureSize, /* depth= */ 6,
       image_contents.CreatePixelBufferDescriptor(
-          /*callback=*/nullptr, /*is_r11_g11_b10=*/false),
-      face_offsets);
+          /*callback=*/nullptr, /*is_r11_g11_b10=*/false));
 
   result->SetName("PlaceholderCubemapTexture");
 
@@ -774,25 +720,30 @@ OwnedTexturePtr TextureFactory::CreateRGBA32FPlaceholderTexture() {
 OwnedTexturePtr TextureFactory::CreateRGBA32UIPlaceholderTexture() {
   filament::math::uint4 pixel_data = {0xffffffff, 0xffffffff, 0xffffffff,
                                       0xffffffff};
-
-  std::vector<uint4> kPlaceholderTextureUints = {pixel_data,   // pixel 1
-                                                 pixel_data,   // pixel 2
-                                                 pixel_data,   // pixel 3
-                                                 pixel_data};  // pixel 4
-
-  std::unique_ptr<std::vector<uint4>> image_data =
-      std::make_unique<std::vector<uint4>>(
-          std::vector<uint4>(std::move(kPlaceholderTextureUints)));
-
-  constexpr int kPlaceholderTextureSize = 2;
-
-  image::OwnedImageContents<uint4> image_content(
-      kPlaceholderTextureSize, kPlaceholderTextureSize, std::move(image_data),
-      filament::backend::TextureFormat::RGBA32UI,
+  return Create2x2PlaceholderTexture<filament::math::uint4>(
+      pixel_data, filament::backend::TextureFormat::RGBA32UI,
       filament::backend::PixelDataFormat::RGBA_INTEGER,
-      filament::backend::PixelDataType::UINT);
-
-  return CreateTexture(image_content, TextureGenerationOptions(),
-                       TextureSamplerOptions(), "RGBA32UI Placeholder Texture");
+      filament::backend::PixelDataType::UINT, TextureSamplerOptions{},
+      "RGBA32UI Placeholder Texture");
 }
+
+OwnedTexturePtr TextureFactory::CreateR11G11B10FPlaceholderTexture() {
+  return Create2x2PlaceholderTexture<uint32_t>(
+      kPixelWhite, filament::backend::TextureFormat::R11F_G11F_B10F,
+      filament::backend::PixelDataFormat::RGB,
+      filament::backend::PixelDataType::UINT_10F_11F_11F_REV,
+      TextureSamplerOptions{}, "R11G11B10F Placeholder Texture");
+}
+
+OwnedTexturePtr TextureFactory::CreateR11G11B10FArrayPlaceholderTexture() {
+  return Create2x2PlaceholderTexture<uint32_t>(
+      kPixelWhite, filament::backend::TextureFormat::R11F_G11F_B10F,
+      filament::backend::PixelDataFormat::RGB,
+      filament::backend::PixelDataType::UINT_10F_11F_11F_REV,
+      TextureSamplerOptions{
+          .sampler_type = TextureSamplerOptions::SamplerType::SAMPLER_2D_ARRAY,
+      },
+      "R11G11B10F Array Placeholder Texture");
+}
+
 }  // namespace imp

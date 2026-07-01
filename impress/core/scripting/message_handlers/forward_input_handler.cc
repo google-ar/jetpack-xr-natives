@@ -68,7 +68,8 @@ Future<absl::Status> ForwardInputHandler::HandleMessage(
 
   if (auto status = input_manager.ProcessPointerInput(
           static_cast<uint8_t>(native_type), ids, points,
-          absl::Milliseconds(message.elapsed_time), message.device_type);
+          absl::Milliseconds(message.elapsed_time), message.device_type,
+          source_);
       !status.ok()) {
     return Future<absl::Status>(absl::InvalidArgumentError(kProcessError));
   }
@@ -82,7 +83,8 @@ Future<absl::Status> ForwardInputHandler::HandleMessage(
   KeyboardEventType action = KeyboardEventType::kNone;
   if (message.type == KeyboardEventMessage::KeyboardEventTypeMessage::DOWN) {
     action = KeyboardEventType::kOnDown;
-    if (message.key.length() == 1) input_manager.ProcessTextInput(message.key);
+    if (message.key.length() == 1)
+      input_manager.ProcessTextInput(message.key, source_);
   } else if (message.type ==
              KeyboardEventMessage::KeyboardEventTypeMessage::UP) {
     action = KeyboardEventType::kOnUp;
@@ -95,7 +97,7 @@ Future<absl::Status> ForwardInputHandler::HandleMessage(
   Key key = Key(ToVirtualKeyCode(message.code), modifier_flags);
   absl::Duration elapsed_time = absl::Milliseconds(0.1);
   return Future<absl::Status>(input_manager.ProcessKeyboardInput(
-      static_cast<uint8_t>(action), key, elapsed_time));
+      static_cast<uint8_t>(action), key, elapsed_time, source_));
 }
 
 Future<absl::Status> ForwardInputHandler::HandleMessage(
@@ -111,7 +113,7 @@ Future<absl::Status> ForwardInputHandler::HandleMessage(
   auto& input_manager = view_.GetInputManager();
   if (auto status = input_manager.ProcessWheelInput(
           message.delta, message.point,
-          absl::Milliseconds(message.elapsed_time));
+          absl::Milliseconds(message.elapsed_time), source_);
       !status.ok()) {
     return Future<absl::Status>(absl::InvalidArgumentError(kProcessError));
   }

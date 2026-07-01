@@ -112,7 +112,7 @@ class OnDemandTexturePipelineRenderer {
     ColorTexture color_texture;
     // Registration for the depth texture that the pass outputs, if there is
     // one.
-    absl::optional<TextureRegistry::ScopedTextureRegistration>
+    std::optional<TextureRegistry::ScopedTextureRegistration>
         depth_texture_registration;
     // Group name that the pass renders.
     std::string group;

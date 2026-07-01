@@ -113,6 +113,7 @@ cc_library(
         "//third_party/skia/HEAD:skparagraph_harfbuzz_skunicode",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/strings:string_view",
+        "@com_google_absl//absl/synchronization",
         "@com_google_impress//core/common:log",
     ] + if_linux([
         "@com_google_absl//absl/debugging:leak_check",

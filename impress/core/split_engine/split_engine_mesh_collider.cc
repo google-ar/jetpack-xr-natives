@@ -48,8 +48,7 @@ Box GetLocalBounds(const BaseRenderableManager& renderable_manager,
 
 }  // namespace
 
-absl::optional<RayHit> SplitEngineMeshCollider::Intersect(
-    const Ray& world_ray) {
+std::optional<RayHit> SplitEngineMeshCollider::Intersect(const Ray& world_ray) {
   if (!IsActive()) {
     return {};
   }
@@ -116,7 +115,7 @@ absl::optional<RayHit> SplitEngineMeshCollider::Intersect(
                 world_point, GetNode(), collision_normal, col_triangle);
 }
 
-absl::optional<DoubleRayHit> SplitEngineMeshCollider::IntersectPrecise(
+std::optional<DoubleRayHit> SplitEngineMeshCollider::IntersectPrecise(
     const DoubleRay& world_ray) {
   if (!IsActive()) {
     return {};

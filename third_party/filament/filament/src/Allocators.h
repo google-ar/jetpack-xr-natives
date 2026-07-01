@@ -17,9 +17,9 @@
 #ifndef TNT_FILAMENT_DETAILS_ALLOCATORS_H
 #define TNT_FILAMENT_DETAILS_ALLOCATORS_H
 
-#include "filament/libs/utils/include/utils/Allocator.h"
+#include <private/backend/BackendUtils.h>
 
-#include "private/backend/BackendUtils.h"
+#include "filament/libs/utils/include/utils/Allocator.h"
 
 namespace filament {
 

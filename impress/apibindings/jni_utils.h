@@ -20,22 +20,20 @@
 #include <jni.h>
 
 #include <cstdint>
-#include <vector>
 
 #include "absl/status/statusor.h"
+#include "absl/types/span.h"
 #include "apibindings/stereo_surface.h"
 
 namespace imp {
 
-// Converts a jobject FloatBuffer to a std::vector<float>.
-// TODO: Investigate returning absl::span to prevent a copy
-absl::StatusOr<std::vector<float>> FloatBufferToVector(JNIEnv* env,
-                                                       jobject floatBuffer);
+// Converts a jobject FloatBuffer to an absl::Span<const float>.
+absl::StatusOr<absl::Span<const float>> FloatBufferToSpan(JNIEnv* env,
+                                                          jobject floatBuffer);
 
-// Converts a jobject IntBuffer to a std::vector<uint32_t>.
-// TODO: Investigate returning absl::span to prevent a copy
-absl::StatusOr<std::vector<uint32_t>> IntBufferToVector(JNIEnv* env,
-                                                        jobject intBuffer);
+// Converts a jobject IntBuffer to an absl::Span<const uint32_t>.
+absl::StatusOr<absl::Span<const uint32_t>> IntBufferToSpan(JNIEnv* env,
+                                                           jobject intBuffer);
 
 // Creates a StereoMesh struct from JNI buffers.
 absl::StatusOr<StereoSurface::StereoMesh> BuildStereoMesh(

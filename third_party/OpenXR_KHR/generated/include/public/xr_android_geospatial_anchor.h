@@ -25,14 +25,15 @@ extern "C" {
 
 // XR_ANDROID_geospatial_anchor is a preprocessor guard. Do not pass it to API calls.
 #define XR_ANDROID_geospatial_anchor 1
-#define XR_ANDROID_geospatial_anchor_SPEC_VERSION 1
-#define XR_ANDROID_GEOSPATIAL_ANCHOR_EXTENSION_NAME "XR_ANDROID_geospatial_anchor"
 #define XR_TYPE_GEOSPATIAL_ANCHOR_CREATE_INFO_ANDROID ((XrStructureType) 1000797000U)
 #define XR_TYPE_SURFACE_ANCHOR_CREATE_INFO_ANDROID ((XrStructureType) 1000797001U)
 #define XR_TYPE_SURFACE_ANCHOR_CREATE_COMPLETION_ANDROID ((XrStructureType) 1000797002U)
 #define XR_TYPE_SYSTEM_GEOSPATIAL_ANCHOR_PROPERTIES_ANDROID ((XrStructureType) 1000797003U)
 #define XR_TYPE_GEOSPATIAL_TRACKER_ANCHOR_TRACKING_INFO_ANDROID ((XrStructureType) 1000797004U)
 #define XR_ERROR_SURFACE_ANCHOR_LOCATION_UNSUPPORTED_ANDROID ((XrResult) -1000797000U)
+
+#define XR_ANDROID_geospatial_anchor_SPEC_VERSION 1
+#define XR_ANDROID_GEOSPATIAL_ANCHOR_EXTENSION_NAME "XR_ANDROID_geospatial_anchor"
 
 typedef enum XrSurfaceAnchorTypeANDROID {
     // Type of an anchor placed relative to the ground.
@@ -101,6 +102,50 @@ XRAPI_ATTR XrResult XRAPI_CALL xrCreateSurfaceAnchorCompleteANDROID(
     XrSurfaceAnchorCreateCompletionANDROID*     completion);
 #endif /* XR_EXTENSION_PROTOTYPES */
 #endif /* !XR_NO_PROTOTYPES */
+
+// Reflection macros
+#define XR_LIST_ENUM_XrSurfaceAnchorTypeANDROID(_) \
+    _(XR_SURFACE_ANCHOR_TYPE_TERRAIN_ANDROID, 1) \
+    _(XR_SURFACE_ANCHOR_TYPE_ROOFTOP_ANDROID, 2) \
+    _(XR_SURFACE_ANCHOR_TYPE_MAX_ENUM_ANDROID, 0x7FFFFFFF)
+
+#define XR_LIST_STRUCT_XrSystemGeospatialAnchorPropertiesANDROID(_) \
+    _(type) \
+    _(next) \
+    _(maxSurfaceAnchorCount)
+
+#define XR_LIST_STRUCT_XrGeospatialTrackerAnchorTrackingInfoANDROID(_) \
+    _(type) \
+    _(next) \
+    _(shouldTrackPlanes)
+
+#define XR_LIST_STRUCT_XrGeospatialAnchorCreateInfoANDROID(_) \
+    _(type) \
+    _(next) \
+    _(geospatialTracker) \
+    _(geospatialPose)
+
+#define XR_LIST_STRUCT_XrSurfaceAnchorCreateInfoANDROID(_) \
+    _(type) \
+    _(next) \
+    _(geospatialTracker) \
+    _(surfaceAnchorType) \
+    _(eastUpSouthOrientation) \
+    _(latitude) \
+    _(longitude) \
+    _(altitudeRelativeToSurface)
+
+#define XR_LIST_STRUCT_XrSurfaceAnchorCreateCompletionANDROID(_) \
+    _(type) \
+    _(next) \
+    _(futureResult) \
+    _(anchorEntityId)
+
+#define XR_LIST_FUNCTIONS_XR_ANDROID_geospatial_anchor(_) \
+    _(CreateGeospatialAnchorANDROID, ANDROID_geospatial_anchor) \
+    _(CreateSurfaceAnchorAsyncANDROID, ANDROID_geospatial_anchor) \
+    _(CreateSurfaceAnchorCompleteANDROID, ANDROID_geospatial_anchor)
+
 #endif /* XR_ANDROID_geospatial_anchor */
 
 #ifdef __cplusplus

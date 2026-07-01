@@ -17,8 +17,6 @@
 #ifndef TNT_FILAMENT_POSTPROCESSMANAGER_H
 #define TNT_FILAMENT_POSTPROCESSMANAGER_H
 
-#include "backend/DriverApiForward.h"
-
 #include "FrameHistory.h"
 #include "MaterialInstanceManager.h"
 
@@ -27,33 +25,34 @@
 #include "ds/StructureDescriptorSet.h"
 #include "ds/TypedUniformBuffer.h"
 
+#include "fg/FrameGraphId.h"
+#include "fg/FrameGraphResources.h"
+#include "fg/FrameGraphTexture.h"
+
 #include "materials/StaticMaterialInfo.h"
-
-#include <fg/FrameGraphId.h>
-#include <fg/FrameGraphResources.h>
-#include <fg/FrameGraphTexture.h>
-
-#include <filament/Options.h>
-#include <filament/Viewport.h>
 
 #include <private/filament/EngineEnums.h>
 #include <private/filament/Variant.h>
 
+#include <filament/Options.h>
+#include <filament/Viewport.h>
+
+#include <backend/DriverApiForward.h>
 #include <backend/DriverEnums.h>
 #include <backend/Handle.h>
 #include <backend/PipelineState.h>
 
+#include "filament/libs/utils/include/utils/Slice.h"
+
 #include "filament/libs/math/include/math/vec2.h"
 #include "filament/libs/math/include/math/vec4.h"
-
-#include "filament/libs/utils/include/utils/Slice.h"
 
 #include "robin_map/include/tsl/robin_map.h"
 
 #include <array>
+#include <optional>
 #include <random>
 #include <string_view>
-#include <optional>
 
 #include <stddef.h>
 #include <stdint.h>
@@ -422,18 +421,13 @@ public:
 
     void resetForRender();
 
-    MaterialInstanceManager& getMaterialInstanceManager() noexcept {
-            return mMaterialInstanceManager;
-    }
-
     static void unbindAllDescriptorSets(backend::DriverApi& driver) noexcept;
-
-private:
 
     // Helpers to get MaterialInstances.
     //
-    // These funcions additionally ensure that the necessary shader programs are compiled via
+    // These functions additionally ensure that the necessary shader programs are compiled via
     // prepareProgram().
+
     FMaterialInstance* getMaterialInstance(backend::DriverApi& driver, FMaterial const* ma,
             Variant::type_t variant) const;
 
@@ -452,17 +446,17 @@ private:
             uint32_t tag, Variant::type_t variant) const;
 
     FMaterialInstance* getMaterialInstanceWithTag(backend::DriverApi& driver, FMaterial const* ma,
-            uint32_t tag, PostProcessVariant variant = PostProcessVariant::OPAQUE) const {
+            uint32_t const tag, PostProcessVariant variant = PostProcessVariant::OPAQUE) const {
         return getMaterialInstanceWithTag(driver, ma, tag, Variant::type_t(variant));
     }
 
     FMaterialInstance* getMaterialInstanceWithTag(FEngine& engine, backend::DriverApi& driver,
-            PostProcessMaterial const& material, uint32_t tag,
+            PostProcessMaterial const& material, uint32_t const tag,
             PostProcessVariant variant = PostProcessVariant::OPAQUE) const {
-        return getMaterialInstanceWithTag(driver, material.getMaterial(engine), tag,
-                Variant::type_t(variant));
+        return getMaterialInstanceWithTag(driver, material.getMaterial(engine), tag, Variant::type_t(variant));
     }
 
+private:
     UboManager* getUboManager() const noexcept;
 
     backend::RenderPrimitiveHandle mFullScreenQuadRph;

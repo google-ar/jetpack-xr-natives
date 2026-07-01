@@ -16,10 +16,10 @@
 #ifndef TNT_UTILS_REFCOUNTEDMAP_H
 #define TNT_UTILS_REFCOUNTEDMAP_H
 
-#include "filament/libs/utils/include/utils/Panic.h"
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/LruCache.h"
+#include "filament/libs/utils/include/utils/Panic.h"
 
 #include "robin_map/include/tsl/robin_map.h"
 

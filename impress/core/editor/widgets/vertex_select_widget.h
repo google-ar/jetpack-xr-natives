@@ -49,13 +49,13 @@ class VertexSelectWidget : public Widget, public Rememberer {
   // Highlight the collision point and candidate vertex to be selected.
   void Draw();
   // Make sure picked_triangle_ has value before calling this.
-  absl::optional<std::array<double3, 3>> GetVertexPositionsPrecise();
+  std::optional<std::array<double3, 3>> GetVertexPositionsPrecise();
 
   BaseView& view_;
   Dispatcher& dispatcher_;
   NodeHandle editor_root_node_;
   NodeHandle active_node_;
-  absl::optional<collision::CollidedTriangle> picked_triangle_;
+  std::optional<collision::CollidedTriangle> picked_triangle_;
   // The vertex in the triangle, that is the closest to the collision point.
   // Returns 0, 1 or 2.
   size_t picked_vertex_id_;

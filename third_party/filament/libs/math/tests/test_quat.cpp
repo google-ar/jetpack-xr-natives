@@ -14,18 +14,19 @@
  * limitations under the License.
  */
 
-#include <math.h>
-#include <random>
-#include <functional>
-#include <type_traits>
+#include "filament/libs/math/include/math/mat4.h"
+#include "filament/libs/math/include/math/quat.h"
+#include "filament/libs/math/include/math/scalar.h"
+#include "filament/libs/math/include/math/vec3.h"
+#include "filament/libs/math/include/math/vec4.h"
 
 #include <gtest/gtest.h>
 
-#include "filament/libs/math/include/math/quat.h"
-#include "filament/libs/math/include/math/mat4.h"
-#include "filament/libs/math/include/math/vec4.h"
-#include "filament/libs/math/include/math/vec3.h"
-#include "filament/libs/math/include/math/scalar.h"
+#include <functional>
+#include <random>
+#include <type_traits>
+
+#include <math.h>
 
 using namespace filament::math;
 

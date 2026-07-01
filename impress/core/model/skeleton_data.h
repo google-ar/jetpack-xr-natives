@@ -81,7 +81,7 @@ struct SkeletonData {
   BoneLookup<HashValue> hashes;
   RobinMap<HashValue, BoneId> first_bone_from_hash;
   // Optional because generally there are no hash collisions or duplicate names.
-  absl::optional<BoneLookup<BoneChildId>> next_bone_from_hash;
+  std::optional<BoneLookup<BoneChildId>> next_bone_from_hash;
 };
 
 }  // namespace imp::model

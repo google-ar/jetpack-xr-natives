@@ -125,8 +125,8 @@ cc_library(
             [],
             [],
             [],
-            False,
-            False,
+            True,
+            True,
         ),
         (
             # The main filament library, configured to link to OpenGL 4/5 on desktop.
@@ -418,8 +418,8 @@ cc_library(
             [],
             [],
             [],
-            False,
-            False,
+            True,
+            True,
         ),
         (
             # The main filament library, configured to link to both OpenGL and Vulkan on Android

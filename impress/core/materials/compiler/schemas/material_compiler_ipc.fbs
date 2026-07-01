@@ -36,6 +36,7 @@ enum ErrorStatusCode : uint8 {
   InvalidArgument,
   Internal,
   Unsupported,
+  Cancelled,
 }
 
 table Config {
@@ -56,9 +57,15 @@ table CompileRequest {
 
 table CloseRequest {}
 
+table CancelRequest {
+  // The operation ids of the jobs to cancel.
+  operation_ids: [uint64];
+}
+
 union RequestType {
   CompileRequest,
-  CloseRequest
+  CloseRequest,
+  CancelRequest,
 }
 
 table Request {

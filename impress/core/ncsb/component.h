@@ -22,8 +22,10 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "filament/libs/utils/include/utils/Entity.h"
+#include "core/common/base_pool_allocator.h"
 #include "core/common/bit_flag.h"
 #include "core/common/hash.h"
+#include "core/common/invocable.h"
 #include "core/config.h"
 #include "core/ncsb/base_component_pool.h"
 #include "core/ncsb/component_handle.h"
@@ -263,7 +265,7 @@ class Component {
 
   // You should not do work in the constructor or define a non-default
   // constructor, instead you should implement a Setup() method.
-  Component();
+  Component() {}
 
   // Sets this component to enabled/disabled. If this causes the component's
   // active state to change, OnActiveStatusChanged will then be called.
@@ -281,20 +283,26 @@ class Component {
   //
   // Components are also automatically disabled before Cleanup when they are
   // removed.
-  bool IsEnabled() const;
+  bool IsEnabled() const {
+    return CheckBit(status_flags_, StatusFlags::kComponentIsEnabled);
+  }
 
   // Returns if this component is active. A component is only active if it is
   // enabled and its node is active.
-  bool IsActive() const;
+  bool IsActive() const {
+    return CheckBit(status_flags_, StatusFlags::kComponentIsActive);
+  }
 
   // Returns if this component is being removed.
-  bool IsRemoving() const;
+  bool IsRemoving() const {
+    return CheckBit(status_flags_, StatusFlags::kComponentIsBeingRemoved);
+  }
 
 #if IMP_RUNTIME(DEV)
   // Returns if this component is attached to a node that belongs to background
   // staging of the Editor, which should always still run even when the Editor
   // is not in play mode.
-  bool IsEditorStaging() const;
+  bool IsEditorStaging() const { return GetNode()->IsEditorStaging(); }
 #endif
 
   // Called when the component is first created to pass in the underlying node
@@ -330,29 +338,29 @@ class Component {
 #endif  // IMP_RUNTIME(DEV)
 
   // Returns the Node that this component is attached to. This is always valid.
-  NodeHandle GetNode() const;
+  NodeHandle GetNode() const { return node_; }
 
   // Returns the View that the Node this component is attached to is part of.
-  BaseView& GetView() const;
+  BaseView& GetView() const { return GetNode()->GetView(); }
 
   // Returns the underlying filament entity of the Node that this component is
   // attached to. Do not use this API unless you understand the underlying
   // details of filament.
-  utils::Entity GetEntity() const;
+  utils::Entity GetEntity() const { return node_.GetEntity(); }
 
   // Gets the id for this type of component. Note, this method may return
   // a different result than the static method T::GetComponentId. This is
   // because GetHash() behaves polymorphically.
-  ComponentId GetComponentId() const;
+  ComponentId GetComponentId() const { return pool_->GetComponentId(); }
 
   // Returns true if the component's Setup method returned a future that has
   // not yet completed.
-  inline bool IsRunningAsyncSetup() const {
+  bool IsRunningAsyncSetup() const {
     return CheckBit(status_flags_, StatusFlags::kComponentIsRunningAsyncSetup);
   }
 
   // Returns the key for this component used by the underlying PoolAllocator.
-  inline ComponentKey GetComponentKey() const { return key_; }
+  PoolAllocatorKey GetPoolAllocatorKey() const { return key_; }
 
   // Associates the lifetime of the holdable with the component.
   // Part of the Remember protocol, which makes it possible to pass a component
@@ -395,7 +403,7 @@ class Component {
   template <typename T>
   static ComponentHandle<T> GetHandle(const T* component);
 
-  BaseComponentPool& GetBaseComponentPool() const;
+  BaseComponentPool& GetBaseComponentPool() const { return *pool_; }
 
  private:
   // Flags used to track if a Component is enabled.
@@ -416,11 +424,21 @@ class Component {
 
   Dispatcher& GetDispatcher() const;
 
-  void SetActiveFlagInternal(bool active);
+  void SetActiveFlagInternal(bool active) {
+    status_flags_ =
+        SetBitFromBool(status_flags_, StatusFlags::kComponentIsActive, active);
+  }
 
-  void SetRunningAsyncSetupFlagInternal(bool is_running_async_setup);
+  void SetRunningAsyncSetupFlagInternal(bool is_running_async_setup) {
+    status_flags_ = SetBitFromBool(status_flags_,
+                                   StatusFlags::kComponentIsRunningAsyncSetup,
+                                   is_running_async_setup);
+  }
 
-  void SetRemovingFlagInternal(bool is_removing);
+  void SetRemovingFlagInternal(bool is_removing) {
+    status_flags_ = SetBitFromBool(
+        status_flags_, StatusFlags::kComponentIsBeingRemoved, is_removing);
+  }
 
   NodeHandle node_;
   ComponentKey key_;

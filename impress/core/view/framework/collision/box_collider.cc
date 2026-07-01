@@ -53,7 +53,7 @@ NodeHandle BoxCollider::GetHitNode() const {
   return hit_node_;
 }
 
-absl::optional<RayHit> BoxCollider::Intersect(const Ray& world_ray) {
+std::optional<RayHit> BoxCollider::Intersect(const Ray& world_ray) {
   if (!IsActive()) {
     return {};
   }
@@ -77,7 +77,7 @@ absl::optional<RayHit> BoxCollider::Intersect(const Ray& world_ray) {
   return {};
 }
 
-absl::optional<DoubleRayHit> BoxCollider::IntersectPrecise(
+std::optional<DoubleRayHit> BoxCollider::IntersectPrecise(
     const DoubleRay& world_ray) {
   if (!IsActive()) {
     return {};

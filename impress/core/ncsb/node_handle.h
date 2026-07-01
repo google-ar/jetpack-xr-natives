@@ -21,6 +21,7 @@
 #include <utility>
 
 #include "absl/hash/hash.h"
+#include "absl/log/check.h"
 #include "absl/strings/string_view.h"
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "core/common/hash.h"
@@ -42,7 +43,7 @@ class NodeAttachmentManager;
 class NodeHandle {
  public:
   // Creates an invalid NodeHandle.
-  NodeHandle();
+  NodeHandle() : node_(utils::Entity(), nullptr) {}
 
   // Creates a NodeHandle for the entity passed in. The NodeHandle will be
   // invalid if the entity is invalid or if the entity isn't attached to the
@@ -50,20 +51,28 @@ class NodeHandle {
   explicit NodeHandle(utils::Entity entity);
 
   // Creates a NodeHandle for the already existing Node.
-  explicit NodeHandle(const Node& node);
+  explicit NodeHandle(const Node& node) : node_(node) {}
 
   // Accesses the Node as a reference. Asserts that the Node is valid.
-  Node& operator*() const noexcept;
+  Node& operator*() const noexcept { return *operator->(); }
 
   // Accesses the Node as a pointer. Asserts that the Node is valid.
-  Node* operator->() const noexcept;
+  Node* operator->() const noexcept {
+    
+    
+    return &node_;
+  }
 
   // Checks if two NodeHandles reference the same Node.
-  bool operator==(const NodeHandle& other) const;
-  bool operator!=(const NodeHandle& other) const;
+  bool operator==(const NodeHandle& other) const {
+    return node_ == other.node_;
+  }
+  bool operator!=(const NodeHandle& other) const {
+    return node_ != other.node_;
+  }
 
   // Returns true if the NodeHandle references a valid node.
-  explicit operator bool() const noexcept;
+  explicit operator bool() const noexcept { return IsValid(); }
 
   // Returns true if the NodeHandle references a valid node.
   bool IsValid() const;
@@ -76,12 +85,12 @@ class NodeHandle {
   // before. Prefer to use IsValid() or operator bool() instead, as they take
   // into account the Node's destroyed state. NodeHandles can be not null, but
   // destroyed, and will therefore still assert if you dereference it.
-  bool IsDefaultValue() const;
+  bool IsDefaultValue() const { return node_.GetEntity().isNull(); }
 
   // Returns the filament entity that this NodeHandle is wrapping.
   // Do not use this API unless you understand the underlying details of
   // filament.
-  utils::Entity GetEntity() const;
+  utils::Entity GetEntity() const { return node_.GetEntity(); }
 
   // These kTypeUrl fields allow NodeHandle to be used directly as a proto.
   // This works in conjunction with NodeHandleMessage.
@@ -101,11 +110,10 @@ class NodeHandle {
 
  private:
   NodeHandle(utils::Entity entity,
-             imp_internal::NodeController* node_controller);
+             imp_internal::NodeController* node_controller)
+      : node_(entity, node_controller) {}
 
   friend struct std::hash<NodeHandle>;
-
-  void AssertIsValid() const;
 
   // Marking node_ mutable because a const NodeHandle should not be a handle to
   // a constant node - instead it's a constant handle to a mutable node (meaning

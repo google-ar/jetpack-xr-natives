@@ -325,6 +325,8 @@ class MediaColorSpace {
   void SetLumaBitDepth(int luma_bitdepth);
   void SetChromaBitDepth(int chroma_bitdepth);
   void SetMaxContentLightLevel(uint16_t max_content_light_level);
+  // Indicates whether this texture will be linearized at hardware level.
+  void SetHardwareLinearized(bool is_hardware_linearized);
 
   Standard GetStandard() const;
   Transfer GetTransfer() const;
@@ -332,6 +334,7 @@ class MediaColorSpace {
   int GetLumaBitDepth() const;
   int GetChromaBitDepth() const;
   uint16_t GetMaxContentLightLevel() const;
+  bool GetHardwareLinearized() const;
 
   absl::StatusOr<mat3f> GetColorTransformMatrixSRGB();
   absl::StatusOr<mat3f> GetColorTransformMatrixDisplayP3();
@@ -358,6 +361,7 @@ class MediaColorSpace {
   int32_t chroma_bitdepth_ = 8;
   // Default to 0 for unset max content light level.
   uint16_t max_content_light_level_ = kMaxContentLightLevelUnknown;
+  bool is_hardware_linearized_ = false;
 
   // Supported display color spaces for color conversion.
   enum class DisplayColorSpace : int {

@@ -29,9 +29,10 @@
 #include "dear_imgui/imgui.h"
 #include "core/common/trace.h"
 #include "core/editor/widgets/performance/flame_graph_colors.h"
-#include "core/editor/widgets/performance/frame_time_panel.h"
+#include "core/editor/widgets/performance/profiler_data_provider.h"
 #include "core/editor/widgets/performance/sample_processor.h"
 #include "core/editor/widgets/performance/sample_processor_types.h"
+#include "core/editor/widgets/performance/search_filter.h"
 #include "core/performance/profiler.h"
 #include "core/performance/profiler_structs.h"
 
@@ -107,12 +108,27 @@ constexpr ImU32 kWorkerThreadLabelColor = IM_COL32(0, 0, 0, 150);
 // Nanoseconds in a millisecond.
 constexpr float kNanosPerMs = 1000000.0f;
 
+// Alpha value representing search unmatched elements.
+constexpr ImU32 kSearchFadedAlpha = 40;
+
+// Alpha value representing unselected frame elements.
+constexpr ImU32 kFadedAlpha = 150;
+
+// Color of the text representing search faded elements.
+constexpr ImU32 kSearchFadedTextColor =
+    IM_COL32(255, 255, 255, kSearchFadedAlpha);
+
+// Color of the text representing unselected frame faded elements.
+constexpr ImU32 kFadedTextColor = IM_COL32(255, 255, 255, kFadedAlpha);
+
+// Alpha mask for search faded colors (alpha value of 40 as high byte in ABGR).
+constexpr ImU32 kSearchFadedAlphaMask = kSearchFadedAlpha << 24;
+
 }  // namespace
 
-void FlameGraph::DrawPanel(const float width, const int start_frame,
-                           const int end_frame,
-                           SampleProcessor& sample_processor,
-                           FrameTimePanel& frame_time_panel) {
+void FlameGraph::DrawPanel(const float width,
+                           ProfilerDataProvider& data_provider,
+                           const absl::string_view search_query) {
   IMP_TRACE();
   // Minimum height for the panel no matter how small the window is.
   // Flame graph takes up the remaining space in the window.
@@ -134,6 +150,10 @@ void FlameGraph::DrawPanel(const float width, const int start_frame,
 
     // Mouse input for zoom and pan
     HandleInput(flame_canvas_pos);
+
+    const int start_frame = data_provider.GetSelectedFrameStart();
+    const int end_frame = data_provider.GetSelectedFrameEnd();
+    SampleProcessor& sample_processor = data_provider.GetSampleProcessor();
 
     // Check to see if we've selected a single frame or a range of frames.
     const bool range_selected = start_frame != end_frame && start_frame != -1;
@@ -214,7 +234,7 @@ void FlameGraph::DrawPanel(const float width, const int start_frame,
 
     // Draw the nodes for each frame.
     DrawNodeArgs draw_node_args = {
-        .frame_time_panel = frame_time_panel,
+        .data_provider = data_provider,
         .draw_list = draw_list,
         .node = nullptr,
         .depth = 0,
@@ -225,6 +245,7 @@ void FlameGraph::DrawPanel(const float width, const int start_frame,
         .display_style = DisplayStyle::kNormal,
         .frame_start_time_ns = min_frame_start_time_ns,
         .selected_frame_start_time_ns = selected_frame_start_time_ns,
+        .search_query = search_query,
     };
 
     DrawMainThreadGraph(draw_node_args, sample_processor, min_frame, max_frame,
@@ -385,10 +406,15 @@ void FlameGraph::DrawFlameGraphNode(DrawNodeArgs& args) {
 
   const absl::string_view name = node->result->GetName();
 
+  DrawNodeArgs rect_args = args;
+  if (!MatchesSearchQuery(name, args.search_query)) {
+    rect_args.display_style = DisplayStyle::kSearchFaded;
+  }
+
   // Draw the rectangle for this node.
   // If the rectangle gets culled this returns false and we return early.
   Rect rect;
-  if (!DrawRectangle(args, name.data(), absolute_start_time_ns,
+  if (!DrawRectangle(rect_args, name.data(), absolute_start_time_ns,
                      absolute_end_time_ns, rect)) {
     return;
   }
@@ -396,7 +422,8 @@ void FlameGraph::DrawFlameGraphNode(DrawNodeArgs& args) {
   // Select this sample if the rectangle is clicked.
   if (ImGui::IsMouseHoveringRect(rect.min, rect.max) &&
       ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-    args.frame_time_panel.SetSelectedSampleName(name);
+    args.data_provider.SetSelectedSampleName(name);
+    args.data_provider.SetSelectedSampleThreadId(Profiler::GetMainThreadId());
   }
 
   // Hover Tooltip
@@ -406,7 +433,7 @@ void FlameGraph::DrawFlameGraphNode(DrawNodeArgs& args) {
   }
 
   // If this is the selected sample, draw a white border around it.
-  if (name == args.frame_time_panel.GetSelectedSampleName()) {
+  if (name == args.data_provider.GetSelectedSampleName()) {
     args.draw_list->AddRect(rect.min, rect.max, kSelectedSampleBorderColor,
                             0.0f, ImDrawFlags_None, 2.0f);
   }
@@ -512,6 +539,11 @@ void FlameGraph::DrawWorkerGraphNode(DrawNodeArgs& args) {
 
   DrawNodeArgs rect_args = args;
   rect_args.display_style = DisplayStyle::kNormal;
+
+  if (!MatchesSearchQuery(name, args.search_query)) {
+    rect_args.display_style = DisplayStyle::kSearchFaded;
+  }
+
   Rect rect;
   if (!DrawRectangle(rect_args, name.data(), start_time, end_time, rect)) {
     return;
@@ -523,7 +555,18 @@ void FlameGraph::DrawWorkerGraphNode(DrawNodeArgs& args) {
                 node->total_memory_allocations_count);
   }
 
-  // Cannot select samples in worker threads so that is not present here.
+  // Select this sample if the rectangle is clicked.
+  if (ImGui::IsMouseHoveringRect(rect.min, rect.max) &&
+      ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+    args.data_provider.SetSelectedSampleName(name);
+    args.data_provider.SetSelectedSampleThreadId(node->result->GetThreadId());
+  }
+
+  // If this is the selected sample, draw a white border around it.
+  if (name == args.data_provider.GetSelectedSampleName()) {
+    args.draw_list->AddRect(rect.min, rect.max, kSelectedSampleBorderColor,
+                            0.0f, ImDrawFlags_None, 2.0f);
+  }
 
   // Recursively draw children.
   const SampleNode* child = node->first_child;
@@ -704,8 +747,19 @@ bool FlameGraph::DrawRectangle(const DrawNodeArgs& args, const char* name,
         rect.min.y + (args.row_height - text_size.y) * 0.5f);
     // Text clipping
     ImVec4 clip_rect(rect.min.x, rect.min.y, rect.max.x, rect.max.y);
-    args.draw_list->AddText(ImGui::GetFont(), font_size, text_pos,
-                            IM_COL32_WHITE, name, nullptr, 0.0f, &clip_rect);
+    ImU32 text_color = IM_COL32_WHITE;
+    switch (args.display_style) {
+      case DisplayStyle::kSearchFaded:
+        text_color = kSearchFadedTextColor;
+        break;
+      case DisplayStyle::kFaded:
+        text_color = kFadedTextColor;
+        break;
+      case DisplayStyle::kNormal:
+        break;
+    }
+    args.draw_list->AddText(ImGui::GetFont(), font_size, text_pos, text_color,
+                            name, nullptr, 0.0f, &clip_rect);
   }
 
   return true;  // Rectangle is visible.
@@ -788,9 +842,15 @@ ImU32 FlameGraph::GetColorForName(const absl::string_view name,
   // a consistent color across all samples with the same name.
   const size_t hash = absl::Hash<absl::string_view>{}(name);
   const size_t index = hash % flame_graph_colors::kNumColors;
-  if (display_style == DisplayStyle::kFaded) {
-    return flame_graph_colors::kUnselectedFrameColors[index];
+  switch (display_style) {
+    case DisplayStyle::kSearchFaded:
+      // Most significant byte is the alpha value. ARGB
+      return (flame_graph_colors::kFrameColors[index] & 0x00FFFFFF) |
+             kSearchFadedAlphaMask;
+    case DisplayStyle::kFaded:
+      return flame_graph_colors::kUnselectedFrameColors[index];
+    case DisplayStyle::kNormal:
+      return flame_graph_colors::kFrameColors[index];
   }
-  return flame_graph_colors::kFrameColors[index];
 }
 }  // namespace imp::editor

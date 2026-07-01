@@ -96,18 +96,25 @@ class XrVulkanSwapChainImageHandler {
     SwapchainData varjo_foveation_depth = {XR_NULL_HANDLE, {}};
     // The active depth swapchain is the one that is currently being used.
     SwapchainData* active_depth = nullptr;
-    // The current display size of the swapchain being used.
+    // The size of the swapchain images.
     uint2 display_size = {0, 0};
+    // Whether the swapchain is stereo. This may be false for quad layer
+    // swapchains.
+    bool is_stereo = true;
   };
   XrVulkanSwapChainImageHandler(XrPlatformType* platform, XrSessionHost* host,
                                 std::unique_ptr<SwapchainLayers> layers,
-                                ContentSecurityLevel);
+                                ContentSecurityLevel, bool should_end_frame);
   ~XrVulkanSwapChainImageHandler();
   XrVulkanSwapChainImageHandler(const XrVulkanSwapChainImageHandler&) = delete;
   XrVulkanSwapChainImageHandler& operator=(
       const XrVulkanSwapChainImageHandler&) = delete;
 
   std::unique_ptr<SwapchainLayers>& GetSwapchainLayers() { return layers_; }
+  // Returns whether the swapchain is stereo. This may be false for quad layer
+  // swapchains.
+  bool IsStereo() const { return layers_->is_stereo; }
+
   void SwitchSwapchainLayers(bool use_varjo_foveation);
   VkResult acquire(ImageSyncData* outImageSyncData);
   VkResult present(uint32_t index, VkSemaphore finishedDrawing);
@@ -116,6 +123,7 @@ class XrVulkanSwapChainImageHandler {
   XrPlatformType* platform_;
   XrSessionHost* host_;
   std::unique_ptr<SwapchainLayers> layers_;
+  bool should_end_frame_ = false;
 
   // Create all the needed depth swapchains.
   void CreateDepthSwapchains();

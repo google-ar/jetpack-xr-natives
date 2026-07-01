@@ -28,6 +28,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/log/check.h"
 #include "absl/status/status.h"
+#include "absl/types/span.h"
 #include "filament/filament/include/filament/RenderableManager.h"
 #include "apibindings/media_material_cache.h"
 #include "core/async/future.h"
@@ -64,18 +65,27 @@ class StereoSurface : public Component {
   };
 
   struct StereoMesh {
+    StereoMesh() = default;
+    StereoMesh(const StereoMesh&) = delete;
+    StereoMesh& operator=(const StereoMesh&) = delete;
+    StereoMesh(StereoMesh&&) = default;
+    StereoMesh& operator=(StereoMesh&&) = default;
+
+    // Owned index vectors for synthesized indices.
+    // This will be empty if the application provided indices with the mesh.
+    std::vector<std::vector<uint32_t>> owned_index_vectors;
     // Left eye vertex positions.
-    std::vector<float> left_positions;
+    absl::Span<const float> left_positions;
     // Left eye vertex texture coordinates.
-    std::vector<float> left_texcoords;
+    absl::Span<const float> left_texcoords;
     // Left eye vertex indices.
-    std::optional<std::vector<uint32_t>> left_indices;
+    std::optional<absl::Span<const uint32_t>> left_indices;
     // Right eye vertex positions.
-    std::optional<std::vector<float>> right_positions;
+    std::optional<absl::Span<const float>> right_positions;
     // Right eye vertex texture coordinates.
-    std::optional<std::vector<float>> right_texcoords;
+    std::optional<absl::Span<const float>> right_texcoords;
     // Right eye vertex indices.
-    std::optional<std::vector<uint32_t>> right_indices;
+    std::optional<absl::Span<const uint32_t>> right_indices;
     // Draw mode.
     filament::RenderableManager::PrimitiveType draw_mode;
   };
@@ -109,7 +119,7 @@ class StereoSurface : public Component {
   void SetBlendingMode(MediaBlendingMode blending_mode);
 
   // Dynamically updates the shape of the canvas.
-  absl::Status SetCanvasShape(const CanvasShape& canvas_shape);
+  absl::Status SetCanvasShape(CanvasShape canvas_shape);
 
   // Dynamically enables or disables the collider.
   // The collider shape is determined by the canvas shape.

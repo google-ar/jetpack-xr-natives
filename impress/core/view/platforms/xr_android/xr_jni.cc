@@ -84,6 +84,10 @@ absl::Status InitializeLoader(JNIEnv* env, jobject context) {
 #endif
 }
 
+void ThrowInvalidSessionHostError(JNIEnv* env) {
+  ThrowError(env, absl::InvalidArgumentError("SessionHost handle is invalid"));
+}
+
 }  // namespace
 
 extern "C" {
@@ -96,13 +100,22 @@ JNI_METHOD(jlong, nCreateSessionHost)
   absl::Status status = InitializeLoader(env, context);
   if (!status.ok()) {
     ThrowError(env, status);
+    env->DeleteGlobalRef(context);
+    return 0;
   }
   auto view = std::unique_ptr<View>(FromJava<View>(view_handle));
+  if (view == nullptr) {
+    ThrowError(env, absl::InvalidArgumentError("View handle is invalid"));
+    env->DeleteGlobalRef(context);
+    return 0;
+  }
 
   imp::BufferAccess byte_buffer = imp::FromByteArray(env, setup_params_bytes);
   com::google::ar::imp::view::SetupParams setup_params;
   if (!imp::proto::ParseMessage(byte_buffer.StringView(), &setup_params)) {
     ThrowError(env, absl::InternalError("Failed to parse setup params"));
+    env->DeleteGlobalRef(context);
+    return 0;
   }
   const com::google::ar::imp::view::xr::XrSetupParams& xr_setup_params =
       setup_params.xr_setup_params.Value();
@@ -126,6 +139,10 @@ JNI_METHOD(jlong, nCreateSessionHost)
 JNI_METHOD(void, nSetup)
 (JNIEnv* env, jclass /*clazz*/, jobject context, jlong view_host_handle) {
   XrSessionHost* host = FromJava<XrSessionHost>(view_host_handle);
+  if (host == nullptr) {
+    ThrowInvalidSessionHostError(env);
+    return;
+  }
 
   JavaVM* app_vm = nullptr;
   env->GetJavaVM(&app_vm);
@@ -139,6 +156,10 @@ JNI_METHOD(void, nSetup)
 JNI_METHOD(void, nOnWindowAttached)
 (JNIEnv* env, jclass /*clazz*/, jobject context, jlong view_host_handle) {
   XrSessionHost* host = FromJava<XrSessionHost>(view_host_handle);
+  if (host == nullptr) {
+    ThrowInvalidSessionHostError(env);
+    return;
+  }
 
   absl::Status status = host->onWindowAttached();
   if (!status.ok()) {
@@ -149,6 +170,10 @@ JNI_METHOD(void, nOnWindowAttached)
 JNI_METHOD(void, nAdvanceFrame)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
   XrSessionHost* host = FromJava<XrSessionHost>(view_host_handle);
+  if (host == nullptr) {
+    ThrowInvalidSessionHostError(env);
+    return;
+  }
   absl::Status status = host->AdvanceFrame();
   if (!status.ok()) {
     ThrowError(env, status);
@@ -158,9 +183,14 @@ JNI_METHOD(void, nAdvanceFrame)
 JNI_METHOD(jstring, nDump)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
   XrSessionHost* host = FromJava<XrSessionHost>(view_host_handle);
+  if (host == nullptr) {
+    ThrowInvalidSessionHostError(env);
+    return nullptr;
+  }
   imp::Monitor* monitor = host->GetMonitor();
   if (monitor == nullptr) {
     ThrowError(env, absl::InternalError("Monitor is null"));
+    return nullptr;
   }
   return env->NewStringUTF(
       DumpXrFrameTiming(*monitor, host->GetXrTimingSummary()).c_str());
@@ -169,6 +199,10 @@ JNI_METHOD(jstring, nDump)
 JNI_METHOD(void, nHide)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
   XrSessionHost* host = FromJava<XrSessionHost>(view_host_handle);
+  if (host == nullptr) {
+    ThrowInvalidSessionHostError(env);
+    return;
+  }
   absl::Status status =
       host->SetShownState(imp::XrSessionHost::ShownState::kHidden);
   if (!status.ok()) {
@@ -179,6 +213,10 @@ JNI_METHOD(void, nHide)
 JNI_METHOD(void, nShow)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
   XrSessionHost* host = FromJava<XrSessionHost>(view_host_handle);
+  if (host == nullptr) {
+    ThrowInvalidSessionHostError(env);
+    return;
+  }
   absl::Status status =
       host->SetShownState(imp::XrSessionHost::ShownState::kShown);
   if (!status.ok()) {
@@ -189,6 +227,10 @@ JNI_METHOD(void, nShow)
 JNI_METHOD(void, nEnableDisplay)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
   XrSessionHost* host = FromJava<XrSessionHost>(view_host_handle);
+  if (host == nullptr) {
+    ThrowInvalidSessionHostError(env);
+    return;
+  }
   absl::Status status =
       host->SetDisplayState(imp::XrHelpers::DisplayState::kDisplayEnabled);
   if (!status.ok()) {
@@ -199,6 +241,10 @@ JNI_METHOD(void, nEnableDisplay)
 JNI_METHOD(void, nDisableDisplay)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle) {
   XrSessionHost* host = FromJava<XrSessionHost>(view_host_handle);
+  if (host == nullptr) {
+    ThrowInvalidSessionHostError(env);
+    return;
+  }
   absl::Status status =
       host->SetDisplayState(imp::XrHelpers::DisplayState::kDisplayDisabled);
   if (!status.ok()) {
@@ -209,6 +255,10 @@ JNI_METHOD(void, nDisableDisplay)
 JNI_METHOD(void, nSetDrmProtectionModeEnabled)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle, jboolean enabled) {
   XrSessionHost* host = FromJava<XrSessionHost>(view_host_handle);
+  if (host == nullptr) {
+    ThrowInvalidSessionHostError(env);
+    return;
+  }
   host->SetContentSecurityLevel(enabled ? imp::ContentSecurityLevel::kProtected
                                         : imp::ContentSecurityLevel::kNone);
 }

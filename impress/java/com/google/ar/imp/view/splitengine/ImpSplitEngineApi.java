@@ -42,9 +42,10 @@ public final class ImpSplitEngineApi {
   private static volatile boolean libraryLoaded = false;
 
   private final Context context;
-  private IRendererConnection mConnection;
-  private final int mBridgeBufferSizeKb;
-  private View mView;
+  private IRendererConnection connection;
+  private final int bridgeBufferSizeKb;
+  private View view;
+  private XrExtensions xrExtensions;
   private volatile Boolean isViewSetup = false;
   private volatile Boolean pendingResume = false;
 
@@ -81,7 +82,8 @@ public final class ImpSplitEngineApi {
       // Create the standard Impress View Jni object.
       View view = View.createView(nativeLibrary, viewIdentifier, context, frameSchedulerExecutor);
       // Create the bridge service.
-      ImpSplitEngineApi api = new ImpSplitEngineApi(context, view, bridgeBufferSizeKb);
+      ImpSplitEngineApi api =
+          new ImpSplitEngineApi(context, view, xrExtensions, bridgeBufferSizeKb);
       api.loadLibrary(nativeLibrary);
       if (rendererConnection == null) {
         rendererConnection =
@@ -98,10 +100,12 @@ public final class ImpSplitEngineApi {
     }
   }
 
-  private ImpSplitEngineApi(Context context, View view, int bridgeBufferSizeKb) {
+  private ImpSplitEngineApi(
+      Context context, View view, XrExtensions xrExtensions, int bridgeBufferSizeKb) {
     this.context = context;
-    this.mView = view;
-    this.mBridgeBufferSizeKb = bridgeBufferSizeKb;
+    this.view = view;
+    this.xrExtensions = xrExtensions;
+    this.bridgeBufferSizeKb = bridgeBufferSizeKb;
   }
 
   public void onResume() {
@@ -109,7 +113,7 @@ public final class ImpSplitEngineApi {
       pendingResume = true;
       return;
     }
-    this.mView.onResume();
+    this.view.onResume();
   }
 
   public void onPause() {
@@ -117,17 +121,17 @@ public final class ImpSplitEngineApi {
       pendingResume = false;
       return;
     }
-    this.mView.onPause();
+    this.view.onPause();
   }
 
   /** Returns the Impress view associated with this Split Engine API. */
   public View getView() {
-    return this.mView;
+    return this.view;
   }
 
   /** Returns the renderer connection associated with this Split Engine API. */
   public IRendererConnection getRendererConnection() {
-    return this.mConnection;
+    return this.connection;
   }
 
   /** Initializes the Split Engine bridge service. */
@@ -139,8 +143,9 @@ public final class ImpSplitEngineApi {
     // This will immediately happen via directExecutor on XROS, but will be delayed on the phone.
     rendererConnection.onBridgeReady(
         (bridge) -> {
-          mConnection = bridge;
-          nSetup(this.mView.getViewHostHandle(), mConnection, 1024 * mBridgeBufferSizeKb);
+          connection = bridge;
+          int apiLevel = xrExtensions == null ? 1 : xrExtensions.getApiVersion();
+          nSetup(this.view.getViewHostHandle(), connection, 1024 * bridgeBufferSizeKb, apiLevel);
           isViewSetup = true;
         });
   }
@@ -155,10 +160,10 @@ public final class ImpSplitEngineApi {
     // Handle any pending lifecycle state changes.
     if (pendingResume) {
       pendingResume = false;
-      this.mView.onResume();
+      this.view.onResume();
     }
     return nRenderNextFrame(
-        this.mView.getViewHostHandle(),
+        this.view.getViewHostHandle(),
         lastFrameTimeNanos,
         frameTimeNanos,
         cameraUpdateParamsHandle);
@@ -167,7 +172,7 @@ public final class ImpSplitEngineApi {
   /** Destroys the native Impress view. */
   public void destroy() {
     if (isViewSetup) {
-      this.mView.destroy();
+      this.view.destroy();
       isViewSetup = false;
     }
   }
@@ -188,7 +193,7 @@ public final class ImpSplitEngineApi {
 
   // LINT.IfChange(api)
   private static native void nSetup(
-      long viewHandle, IRendererConnection bridge, int bridgeBufferSizeBytes);
+      long viewHandle, IRendererConnection bridge, int bridgeBufferSizeBytes, int apiLevel);
 
   private static native long nRenderNextFrame(
       long viewHandle, long lastFrameTimeNanos, long frameTimeNanos, long cameraUpdateParamsHandle);

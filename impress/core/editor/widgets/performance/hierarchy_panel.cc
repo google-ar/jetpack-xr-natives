@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <string>
 #include <thread>  // NOLINT: Need to use std::thread::id.
 #include <vector>
 
@@ -27,9 +28,10 @@
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
 #include "core/common/trace.h"
-#include "core/editor/widgets/performance/frame_time_panel.h"
+#include "core/editor/widgets/performance/profiler_data_provider.h"
 #include "core/editor/widgets/performance/sample_processor.h"
 #include "core/editor/widgets/performance/sample_processor_types.h"
+#include "core/editor/widgets/performance/search_filter.h"
 #include "core/performance/profiler.h"
 #include "core/performance/profiler_structs.h"
 
@@ -41,27 +43,29 @@ constexpr ImU32 kSelectedRowColor = IM_COL32(11, 87, 208, 128);
 // Minimum height for the panel no matter how small the window is.
 constexpr float kMinPanelHeight = 250.0f;
 // Width of the columns that display details about the sample.
-constexpr float kDetailColumnWidthWide = 100.0f;
-constexpr float kDetailColumnWidthNarrow = 50.0f;
+constexpr float kDetailColumnWidthWide = 85.0f;
+constexpr float kDetailColumnWidthNarrow = 40.0f;
 constexpr bool kShowMemoryColumns = Profiler::IsMemoryTrackingSupported();
 // Number of columns to display in the table.
 constexpr int kNumColumns = kShowMemoryColumns ? 6 : 4;
 constexpr float kNanosPerMs = 1000000.0f;
 }  // namespace
 
-void HierarchyPanel::DrawPanel(const float width, const int start_frame,
-                               const int end_frame,
-                               SampleProcessor& sample_processor,
-                               FrameTimePanel& frame_time_panel) {
+void HierarchyPanel::DrawPanel(const float width,
+                               ProfilerDataProvider& data_provider,
+                               const std::thread::id thread_id,
+                               const absl::string_view search_query) {
   IMP_TRACE();
 
-  if (!thread_set_) {
-    current_thread_id_ = Profiler::GetCachedThreadId();
-    thread_set_ = true;
+  // Detect transitions on search query
+  if (search_query.empty() && !last_search_query_.empty()) {
+    should_restore_states_ = true;
+    should_expand_selected_ = selected_during_search_;
+    selected_during_search_ = false;
+  } else if (!search_query.empty() && last_search_query_.empty()) {
+    selected_during_search_ = false;
   }
-
-  // Choose which thread to display samples for.
-  DrawThreadSelector();
+  last_search_query_ = std::string(search_query);
 
   // Build Table UI and draw recursively.
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
@@ -94,13 +98,11 @@ void HierarchyPanel::DrawPanel(const float width, const int start_frame,
     ImGui::PushStyleColor(ImGuiCol_HeaderHovered, kSelectedRowColor);
     ImGui::PushStyleColor(ImGuiCol_HeaderActive, kSelectedRowColor);
     bool any_valid_frames = false;
-    if (current_thread_id_ == Profiler::GetMainThreadId()) {
-      any_valid_frames = DrawMainThreadSamples(
-          start_frame, end_frame, sample_processor, frame_time_panel);
+    if (thread_id == Profiler::GetMainThreadId()) {
+      any_valid_frames = DrawMainThreadSamples(data_provider, search_query);
     } else {
       any_valid_frames =
-          DrawWorkerThreadSamples(start_frame, end_frame, sample_processor,
-                                  current_thread_id_, frame_time_panel);
+          DrawWorkerThreadSamples(thread_id, data_provider, search_query);
     }
     ImGui::PopStyleColor();  // ImGuiCol_HeaderActive
     ImGui::PopStyleColor();  // ImGuiCol_HeaderHovered
@@ -114,12 +116,20 @@ void HierarchyPanel::DrawPanel(const float width, const int start_frame,
     ImGui::EndTable();
   }
   ImGui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
+
+  if (!search_query.empty() && data_provider.HasSelectedSampleChanged()) {
+    selected_during_search_ = true;
+  }
+  should_restore_states_ = false;
+  should_expand_selected_ = false;
 }
 
-bool HierarchyPanel::DrawMainThreadSamples(const int start_frame,
-                                           const int end_frame,
-                                           SampleProcessor& sample_processor,
-                                           FrameTimePanel& frame_time_panel) {
+bool HierarchyPanel::DrawMainThreadSamples(
+    ProfilerDataProvider& data_provider, const absl::string_view search_query) {
+  const int start_frame = data_provider.GetSelectedFrameStart();
+  const int end_frame = data_provider.GetSelectedFrameEnd();
+  SampleProcessor& sample_processor = data_provider.GetSampleProcessor();
+
   bool any_valid_frames = false;
   for (int frame_index = start_frame, i = 0; frame_index <= end_frame;
        ++frame_index, ++i) {
@@ -141,7 +151,8 @@ bool HierarchyPanel::DrawMainThreadSamples(const int start_frame,
     // (TODO: (broken link)) - Support grouping main thread samples when multiple
     // frames are selected. Push/PopID would no longer be needed.
     ImGui::PushID(i);
-    if (DrawMainThreadFrame(frame_index, sample_processor, frame_time_panel)) {
+    if (DrawMainThreadFrame(frame_index, sample_processor, data_provider,
+                            search_query)) {
       any_valid_frames = true;
     }
     ImGui::PopID();
@@ -151,33 +162,63 @@ bool HierarchyPanel::DrawMainThreadSamples(const int start_frame,
 
 bool HierarchyPanel::DrawMainThreadFrame(const int frame_index,
                                          SampleProcessor& sample_processor,
-                                         FrameTimePanel& frame_time_panel) {
+                                         ProfilerDataProvider& data_provider,
+                                         const absl::string_view search_query) {
   const ProcessedSamples& processed_frame =
       sample_processor.GetProcessedFrame(frame_index);
 
   if (processed_frame.sample_roots.empty()) return false;
 
   int row_index = 0;
-  SampleNode* root;
   // Create a hard copy of the tree before we start modifying its data.
   // We modify the sample data, children, and ordering in DrawTreeNode.
   const std::vector<SampleNode*> tree_copy =
       GetTreeHardCopy(processed_frame.sample_roots, main_thread_node_pool_);
   const size_t root_count = tree_copy.size();
+
+  HierarchyDrawArgs args = {
+      .data_provider = data_provider,
+      .thread_id = Profiler::GetMainThreadId(),
+      .row_index = row_index,
+      .root_duration_ns = 0,
+      .node = nullptr,
+      .depth = 0,
+      .search_query = search_query,
+      .should_expand_selected = should_expand_selected_,
+      .selected_sample_name = data_provider.GetSelectedSampleName(),
+      .saved_node_states = saved_node_states_,
+      .should_restore_states = should_restore_states_,
+  };
+
+  // Static vector to avoid reallocating every time.
+  static std::vector<SampleNode*> filtered_roots;
+  filtered_roots.clear();
+  filtered_roots.reserve(root_count);
   for (size_t i = 0; i < root_count; ++i) {
-    root = tree_copy[i];
-    root_duration_ns_ = root->total_time_ns;
-    DrawTreeNode(frame_time_panel, root, 0, row_index);
+    SampleNode* root = tree_copy[i];
+    if (FilterTree(root, search_query)) {
+      filtered_roots.push_back(root);
+    }
+  }
+
+  const size_t filtered_root_count = filtered_roots.size();
+  for (size_t i = 0; i < filtered_root_count; ++i) {
+    args.node = filtered_roots[i];
+    args.root_duration_ns = args.node->total_time_ns;
+    args.depth = 0;
+    DrawTreeNode(args);
   }
 
   return true;
 }
 
-bool HierarchyPanel::DrawWorkerThreadSamples(const int start_frame,
-                                             const int end_frame,
-                                             SampleProcessor& sample_processor,
-                                             const std::thread::id thread_id,
-                                             FrameTimePanel& frame_time_panel) {
+bool HierarchyPanel::DrawWorkerThreadSamples(
+    const std::thread::id thread_id, ProfilerDataProvider& data_provider,
+    const absl::string_view search_query) {
+  const int start_frame = data_provider.GetSelectedFrameStart();
+  const int end_frame = data_provider.GetSelectedFrameEnd();
+  SampleProcessor& sample_processor = data_provider.GetSampleProcessor();
+
   absl::StatusOr<FrameMetaData> start_frame_metadata =
       Profiler::GetFrameMetaData(start_frame);
 
@@ -201,7 +242,6 @@ bool HierarchyPanel::DrawWorkerThreadSamples(const int start_frame,
       sample_processor.ProcessWorkerThreadSamples(raw_samples);
 
   int row_index = 0;
-  root_duration_ns_ = end_time - start_time;
 
   // Create a fake root sample to contain all the actual root samples and allow
   // them to be grouped/sorted together.
@@ -210,13 +250,30 @@ bool HierarchyPanel::DrawWorkerThreadSamples(const int start_frame,
   std::unique_ptr<SampleNode> fake_root = CreateFakeRootSample(
       current_worker_samples_.sample_roots, start_time, end_time, fake_result);
 
-  DrawTreeNode(frame_time_panel, fake_root.get(), 0, row_index);
+  if (!FilterTree(fake_root.get(), search_query)) return true;
+
+  HierarchyDrawArgs args = {
+      .data_provider = data_provider,
+      .thread_id = thread_id,
+      .row_index = row_index,
+      .root_duration_ns = static_cast<int64_t>(end_time - start_time),
+      .node = fake_root.get(),
+      .depth = 0,
+      .search_query = search_query,
+      .should_expand_selected = should_expand_selected_,
+      .selected_sample_name = data_provider.GetSelectedSampleName(),
+      .saved_node_states = saved_node_states_,
+      .should_restore_states = should_restore_states_,
+  };
+
+  DrawTreeNode(args);
 
   return true;
 }
 
-void HierarchyPanel::DrawTreeNode(FrameTimePanel& frame_time_panel,
-                                  SampleNode* node, int depth, int& row_index) {
+void HierarchyPanel::DrawTreeNode(HierarchyDrawArgs& args) {
+  SampleNode* node = args.node;
+  const int depth = args.depth;
   if (depth > kMaxTreeDepth) return;
 
   ImGuiTreeNodeFlags flag = ImGuiTreeNodeFlags_OpenOnArrow;
@@ -285,46 +342,82 @@ void HierarchyPanel::DrawTreeNode(FrameTimePanel& frame_time_panel,
 
   const absl::string_view name = node->result->GetName();
 
-  DrawTableRow(frame_time_panel, name.data(), node->total_time_ns, node->calls,
-               node->total_memory_allocated,
-               node->total_memory_allocations_count, row_index);
+  DrawTableRow(args);
 
   // Recursively draw children.
   ImGui::TableSetColumnIndex(0);
 
+  const ImGuiID id = ImGui::GetID(name.data());
+
+  if (args.should_restore_states || !args.search_query.empty()) {
+    ImGui::SetNextItemOpen(ShouldNodeBeOpen(args, node, id), ImGuiCond_Always);
+  }
+
   const bool is_open = ImGui::TreeNodeEx(name.data(), flag);
+  if (args.search_query.empty()) {
+    args.saved_node_states[id] = is_open;
+  }
+
   if (ImGui::IsItemClicked()) {
-    frame_time_panel.SetSelectedSampleName(name);
+    args.data_provider.SetSelectedSampleName(name);
+    args.data_provider.SetSelectedSampleThreadId(args.thread_id);
   }
 
   if (is_open) {
     SampleNode* child = node->first_child;
     while (child != nullptr) {
-      DrawTreeNode(frame_time_panel, child, depth + 1, row_index);
+      args.node = child;
+      args.depth = depth + 1;
+      DrawTreeNode(args);
       child = child->next_sibling;
     }
     ImGui::TreePop();
   }
 }
 
-void HierarchyPanel::DrawTableRow(FrameTimePanel& frame_time_panel,
-                                  const char* name, uint32_t time, int calls,
-                                  size_t memory_allocated,
-                                  size_t allocations_count, int& row_index) {
+bool HierarchyPanel::ShouldNodeBeOpen(const HierarchyDrawArgs& args,
+                                      SampleNode* node,
+                                      const uint32_t id) const {
+  // We're actively searching so we want to open all nodes that have matching
+  // search results below them.
+  if (!args.should_restore_states) {
+    return !args.search_query.empty() && node->first_child != nullptr;
+  }
+
+  // We're done searching and want to expand the node if it's an ancestor of
+  // the selected sample.
+  if (args.should_expand_selected &&
+      IsAncestorOfSelected(node, args.selected_sample_name)) {
+    return true;
+  }
+
+  // Restoring states after search. Revert to the user's previously saved
+  // open/closed state for this node if it exists; otherwise, default to closed.
+  const auto it = args.saved_node_states.find(id);
+  return it != args.saved_node_states.end() ? it->second : false;
+}
+
+void HierarchyPanel::DrawTableRow(HierarchyDrawArgs& args) {
+  const SampleNode* node = args.node;
+  const absl::string_view name = node->result->GetName();
+  const uint64_t time = node->total_time_ns;
+  const int calls = node->calls;
+  const size_t memory_allocated = node->total_memory_allocated;
+  const size_t allocations_count = node->total_memory_allocations_count;
+
   // Alternate background colors for each row.
   ImGui::TableNextRow();
   ImU32 row_color;
-  const absl::string_view selected_sample_name =
-      frame_time_panel.GetSelectedSampleName();
-  if (selected_sample_name == name) {
+  if (args.data_provider.GetSelectedSampleName() == name) {
     // Highlight color for the selected row
     row_color = ImGui::GetColorU32(ImGuiCol_HeaderHovered);
   } else {
-    row_color = row_index % 2 == 0 ? ImGui::GetColorU32(ImGuiCol_TableRowBg)
-                                   : ImGui::GetColorU32(ImGuiCol_TableRowBgAlt);
+    row_color = args.row_index % 2 == 0
+                    ? ImGui::GetColorU32(ImGuiCol_TableRowBg)
+                    : ImGui::GetColorU32(ImGuiCol_TableRowBgAlt);
   }
   ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg0, row_color);
-  row_index++;
+  args.row_index++;
 
   int column_index = 1;  // Skip the first column, it's handled last.
 
@@ -357,31 +450,7 @@ void HierarchyPanel::DrawTableRow(FrameTimePanel& frame_time_panel,
 
   ImGui::TableSetColumnIndex(column_index++);
   ImGui::Text("%.1f %%", 100.0f * static_cast<float>(time) /
-                             static_cast<float>(root_duration_ns_));
-}
-
-void HierarchyPanel::DrawThreadSelector() {
-  // Allow us to switch between threads and see their samples.
-  if (!ImGui::BeginCombo("##combo", current_thread_)) return;
-
-  absl::string_view it_thread_name;
-  const std::vector<std::thread::id> thread_ids = Profiler::GetThreadIds();
-
-  for (int i = 0; i < thread_ids.size(); ++i) {
-    it_thread_name = Profiler::GetThreadName(thread_ids[i]);
-    const bool is_selected = (current_thread_ == it_thread_name);
-
-    if (ImGui::Selectable(it_thread_name.data(), is_selected)) {
-      current_thread_ = it_thread_name.data();
-      current_thread_id_ = thread_ids[i];
-    }
-
-    if (is_selected) {
-      ImGui::SetItemDefaultFocus();
-    }
-  }
-
-  ImGui::EndCombo();
+                             static_cast<float>(args.root_duration_ns));
 }
 
 std::vector<SampleNode*>& HierarchyPanel::GetTreeHardCopy(

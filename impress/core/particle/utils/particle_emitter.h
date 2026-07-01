@@ -20,7 +20,11 @@
 #include <memory>
 #include <string>
 
+#include "core/assets/asset_ptr.h"
+#include "core/assets/gltf/gltf_asset.h"
+#include "core/async/future.h"
 #include "core/common/owned_ptr.h"
+#include "core/materials/material.h"
 #include "core/ncsb/node_handle.h"
 #include "core/particle/custom_particle_behavior.h"
 #include "core/particle/particle_emitter_info.h"
@@ -38,6 +42,11 @@ namespace imp::imp_particle {
 class ParticleEmitter {
  public:
   virtual ~ParticleEmitter() = default;
+
+  // Creates a new Future for the custom material. If the material is not set,
+  // the future contains a null pointer.
+  static Future<OwnedMaterialPtr> GetMaterialFuture(
+      const ParticleEmitterState& emitter_state, NodeHandle emitter_node);
 
   // Updates all active particles in the system, creates and destroys particles
   // as defined by the ParticleEmitterConfig.
@@ -74,10 +83,35 @@ class ParticleEmitter {
     particle_emission_paused_ = pause;
   }
 
+  // Returns the material used by the particle system.
+  //
+  // If no material was specified, a null pointer is returned.
+  //
+  // The returned pointer is owned by the ParticleEmitter and should not be held
+  // beyond the scope of the calling function.
+  virtual BorrowedMaterialPtr GetMaterial() const {
+    return material_instance_.Borrow();
+  }
+
+  // Returns the current default lifetime for new particles. This value is
+  // measured in seconds.
+  float GetDefaultParticleLifetime() const {
+    return particle_behavior_.GetDefaultParticleLifetime();
+  }
+
+  // Sets the default lifetime for particles. If the particle system was not
+  // initialized with a lifetime, this value will be ignored. The value must
+  // be strictly greater than 0.0f. To stop emission of new particles use the
+  // particle system's SetEmissionPaused() method instead.
+  void SetDefaultParticleLifetime(float default_lifetime_seconds) {
+    particle_behavior_.SetDefaultParticleLifetime(default_lifetime_seconds);
+  }
+
  protected:
   ParticleEmitter(
       NodeHandle emitter_node, const ParticleEmitterState& emitter_state,
-      std::unique_ptr<CustomParticleBehavior> custom_particle_behavior);
+      std::unique_ptr<CustomParticleBehavior> custom_particle_behavior,
+      AssetPtr<GltfAsset> gltf_asset, OwnedMaterialPtr material_instance);
 
   // Performs updates that effect the emitter itself, such as it's own lifetime.
   virtual void UpdateEmitterBehavior(const FrameTime& frame_time);
@@ -100,6 +134,13 @@ class ParticleEmitter {
 
   // Behaviors to perform behaviors on particles.
   ParticleBehavior particle_behavior_;
+
+  // Particle asset, by holding this when the emitter is created, we ensure
+  // that the asset is loaded and available when instantiating particles.
+  AssetPtr<GltfAsset> gltf_asset_;
+
+  // Material instance shared by all particles in this emitter.
+  OwnedMaterialPtr material_instance_;
 
   // Emitter lifetime.
   bool emitter_duration_finite_ = false;

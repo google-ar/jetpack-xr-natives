@@ -15,10 +15,9 @@
  */
 
 #include "evsm.h"
-
 #include "generated/resources/evsm.h"
 
-#include <materials/StaticMaterialInfo.h>
+#include "materials/StaticMaterialInfo.h"
 
 #include "filament/libs/utils/include/utils/Slice.h"
 

@@ -17,6 +17,10 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SCRIPTING_MESSAGE_HANDLERS_FORWARD_INPUT_HANDLER_H_
 #define THIRD_PARTY_IMPRESS_CORE_SCRIPTING_MESSAGE_HANDLERS_FORWARD_INPUT_HANDLER_H_
 
+#include "absl/status/status.h"
+#include "absl/strings/string_view.h"
+#include "core/async/future.h"
+#include "core/input/input_events_pool.h"
 #include "core/input/keyboard_event.proto.imp.h"
 #include "core/input/pointer_event.proto.imp.h"
 #include "core/input/wheel_event.proto.imp.h"
@@ -28,7 +32,9 @@ namespace imp::scripting {
 // A MessageHandler for input event forwarding.
 class ForwardInputHandler : public MultiMessageHandler {
  public:
-  explicit ForwardInputHandler(BaseView& view) : view_(view) {
+  explicit ForwardInputHandler(
+      BaseView& view, InputEventSource source = InputEventSource::kLocal)
+      : view_(view), source_(source) {
     AddHandler<PointerEventMessage, absl::Status>(this);
     AddHandler<KeyboardEventMessage, absl::Status>(this);
     AddHandler<WheelEventMessage, absl::Status>(this);
@@ -45,6 +51,7 @@ class ForwardInputHandler : public MultiMessageHandler {
 
  private:
   BaseView& view_;
+  InputEventSource source_;
 };
 
 }  // namespace imp::scripting

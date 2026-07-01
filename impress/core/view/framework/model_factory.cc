@@ -38,13 +38,13 @@ ModelFactory::ModelFactory(BaseView* view) : view_(view) {}
 
 Future<NodeHandle> ModelFactory::LoadModel(
     const AssetDefinition& asset_definition,
-    absl::optional<GltfAsset::LoadOptions> options) {
+    std::optional<GltfAsset::LoadOptions> options) {
   return LoadModel(asset_definition.GetUrl(), std::move(options));
 }
 
 Future<NodeHandle> ModelFactory::LoadModel(
     absl::string_view asset_url,
-    absl::optional<GltfAsset::LoadOptions> options) {
+    std::optional<GltfAsset::LoadOptions> options) {
   IMP_TRACE();
   NodeHandle node = view_->CreateNode();
   return node->AddComponent<GltfRenderer>(asset_url, std::move(options))
@@ -62,7 +62,7 @@ Future<NodeHandle> ModelFactory::LoadModel(
 
 Future<NodeHandle> ModelFactory::LoadModel(
     absl::Cord contents, absl::string_view asset_url,
-    absl::optional<GltfAsset::LoadOptions> options) {
+    std::optional<GltfAsset::LoadOptions> options) {
   IMP_TRACE();
   NodeHandle node = view_->CreateNode();
   return node

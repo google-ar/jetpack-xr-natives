@@ -14,11 +14,17 @@
 
 #include "core/editor/widgets/performance/performance_window.h"
 
+#include <algorithm>
+#include <cstdint>
 #include <memory>
+#include <string>
+#include <thread>  // NOLINT: Need to sort by thread id.
 #include <utility>
 
 #include "absl/debugging/leak_check.h"
+#include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
+#include "dear_imgui/imgui_internal.h"
 #include "implot/implot.h"
 #include "core/common/trace.h"
 #include "core/config.h"
@@ -26,6 +32,7 @@
 #include "core/editor/widgets/performance/frame_time_panel.h"
 #include "core/editor/widgets/performance/memory_panel.h"
 #include "core/editor/widgets/performance/monitor_panel.h"
+#include "core/editor/widgets/performance/profiler_details_section.h"
 #include "core/editor/widgets/performance/render_info_panel.h"
 #include "core/ncsb/update_system.h"
 #include "core/performance/profiler.h"
@@ -40,8 +47,26 @@ namespace {
 #if IMP_PLATFORM(ANDROID)
 constexpr int kPanelHeight = 50;
 #else
-constexpr int kPanelHeight = 200;
+constexpr int kPanelHeight = 120;
 #endif
+
+// Height of the splitter between the graphs and the details.
+constexpr float kSplitterHeight = 2.0f;
+
+// Height of the selection area for the splitter.
+constexpr float kSplitterSelectionHeight = 8.0f;
+
+// Color of the splitter between panels.
+constexpr ImU32 kSplitterColor = IM_COL32(255, 255, 255, 150);
+
+// Minimum height for the graphs panel when resizing.
+constexpr float kGraphsMinHeight = 100.0f;
+
+// Minimum height for the details panel when resizing.
+constexpr float kDetailsMinHeight = 300.0f;
+
+// Width value that tells ImGui to make this element fill the remaining space.
+constexpr int kFlexibleWidth = -1;
 
 }  // namespace
 
@@ -65,6 +90,9 @@ PerformanceWindow::PerformanceWindow(BaseView& view) : view_(view) {
       *this, view,
       details::kNumDisplayValuesPerSecond * details::kMaxTimeSpanSeconds));
 
+  selected_sample_thread_id_ = Profiler::GetMainThreadId();
+  details_panel_ = std::make_unique<ProfilerDetailsSection>(*this);
+
   post_frame_connection_ = view.GetDispatcher().Connect(
       [this](const ViewPostRenderEvent&) { OnViewPostRender(); });
 }
@@ -81,11 +109,9 @@ void PerformanceWindow::DrawImGui() { DrawMonitorPanels(); }
 // plotting now that we're using ImPlot
 void PerformanceWindow::DrawMonitorPanels() {
   IMP_TRACE();
-  ImGui::SliderFloat("Time span", &time_span_seconds_, 1,
-                     details::kMaxTimeSpanSeconds, "%.1f s");
   const MonitorState monitor_state = GetMonitorState();
   bool clicked = ImGui::Button(
-      monitor_state == MonitorState::kPaused ? "Resume" : "Pause");
+      monitor_state == MonitorState::kPaused ? "Record" : "Pause");
   if (clicked) {
     MonitorState new_state = monitor_state == MonitorState::kPaused
                                  ? MonitorState::kRunning
@@ -93,15 +119,81 @@ void PerformanceWindow::DrawMonitorPanels() {
     SetMonitorState(new_state);
   }
 
+  const int num_panels = monitor_panels_.size();
+  if (num_panels == 0) return;
+
+  const float full_graphs_height =
+      static_cast<float>(num_panels) * kPanelHeight +
+      ImGui::GetStyle().ItemSpacing.y * static_cast<float>(num_panels - 1);
+
+  // If the graphs height is not set, set it to whatever is needed to display
+  // all graphs with no clipping.
+  if (graphs_height_ <= 0.0f) {
+    graphs_height_ = full_graphs_height;
+  }
+
+  // Keeps the height of the graphs section from growing larger than is needed
+  // to display all graphs.
+  graphs_height_ = std::min(graphs_height_, full_graphs_height);
+
+  // Calculate the available height for the graphs and details sections.
+  // We want the details section to fill the remaining space in the window,
+  // but stay at least kDetailsMinHeight.
+  const float available_height = ImGui::GetContentRegionAvail().y;
+  details_height_ =
+      std::max(kDetailsMinHeight,
+               available_height - graphs_height_ - kSplitterSelectionHeight);
+
+  ImGui::BeginChild("##graphs_section", ImVec2(kFlexibleWidth, graphs_height_),
+                    ImGuiChildFlags_None);
   for (auto& monitor_panel : monitor_panels_) {
     monitor_panel->DrawPanel(-1, kPanelHeight, time_span_seconds_);
   }
+  ImGui::EndChild();
+
+  DrawSplitter();
+
+  ImGui::BeginChild("##details_section",
+                    ImVec2(kFlexibleWidth, details_height_));
+
+  // The details section is currently only used by the CPU/Frame profiling.
+  details_panel_->Draw();
+
+  ImGui::EndChild();
+}
+
+void PerformanceWindow::DrawSplitter() {
+  ImGui::BeginChild("##splitter_child",
+                    ImVec2(kFlexibleWidth, kSplitterSelectionHeight));
+
+  const ImVec2 child_pos = ImGui::GetCursorScreenPos();
+  const float child_width = ImGui::GetContentRegionAvail().x;
+
+  // Make the splitter selection area taller than the visible rectangle.
+  ImVec2 rect_min = child_pos;
+  rect_min.y += kSplitterSelectionHeight / 2.0f - kSplitterHeight / 2.0f;
+  const ImVec2 rect_max =
+      ImVec2(child_pos.x + child_width, rect_min.y + kSplitterHeight);
+
+  ImGui::GetWindowDrawList()->AddRectFilled(rect_min, rect_max, kSplitterColor);
+
+  ImGui::SplitterBehavior(
+      ImRect(child_pos, ImVec2(child_pos.x + child_width,
+                               child_pos.y + kSplitterSelectionHeight)),
+      ImGui::GetID("##performance_splitter"), ImGuiAxis_Y, &graphs_height_,
+      &details_height_, kGraphsMinHeight, kDetailsMinHeight, 0.0f);
+  ImGui::EndChild();
 }
 
 void PerformanceWindow::OnViewPostRender() {
   if (GetMonitorState() == MonitorState::kPaused) {
     return;
   }
+
+  const int64_t frame_index = Profiler::GetCurrentFrameIndex() - 1;
+  sample_processor_.ProcessMainThreadSamples(frame_index);
+  samples_processed_since_last_update_ = true;
+
   FrameTime frame_time = view_.GetFrameTime();
   for (auto& monitor_panel : monitor_panels_) {
     monitor_panel->Update(frame_time.GetElapsedTime(),
@@ -113,6 +205,16 @@ void PerformanceWindow::SelectFrame(int frame_number) {
   SetMonitorState(MonitorState::kPaused);
   selected_frame_start_ = frame_number;
   selected_frame_end_ = frame_number;
+}
+
+void PerformanceWindow::SetSelectedSampleName(absl::string_view name) {
+  selected_sample_name_ = std::string(name);
+  selected_sample_changed_ = true;
+}
+
+void PerformanceWindow::SetSelectedSampleThreadId(std::thread::id thread_id) {
+  selected_sample_thread_id_ = thread_id;
+  selected_sample_changed_ = true;
 }
 
 void PerformanceWindow::SelectFrames(int start_frame, int end_frame) {

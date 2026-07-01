@@ -381,6 +381,10 @@ class GltfRenderer : public Component {
   absl::Status SetMeshMorphTargetWeight(float weight, size_t mesh_index,
                                         size_t target_index);
 
+  // Updates the transforms used for instancing all meshes in this model.
+  // The transforms are expected to be relative to the glTF root node.
+  void UpdateInstanceTransforms(absl::Span<const mat4f> transforms);
+
   // Returns true if skinning is scheduled to be updated.
   bool IsSkinningScheduled() const { return skinning_scheduled_; }
 

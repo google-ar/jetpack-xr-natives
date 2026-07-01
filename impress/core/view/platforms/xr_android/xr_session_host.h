@@ -27,6 +27,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "absl/base/thread_annotations.h"
@@ -39,6 +40,7 @@
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/SwapChain.h"
 #include "filament/filament/include/filament/View.h"
+#include "filament/libs/utils/include/utils/AsyncJobQueue.h"
 #include "core/camera/camera_component.h"
 #include "core/common/invocable.h"
 #include "core/common/optional_error.h"
@@ -249,6 +251,10 @@ class XrSessionHost : public ViewHost {
   bool IsXrFbColorSpaceEnabled() const;
   bool IsXrEyeGazeInteractionEnabled() const;
 
+  // Set to true to enable the primary 3D projection viewport layer, or
+  // false to bypass it.
+  void SetMainProjectionLayerEnabled(bool enabled);
+
 #if IMP_PLATFORM(ANDROID)
   // Checks for the presence of various Android-specific OpenXR extensions.
   bool IsXrAndroidXOccupancyGridEnabled() const;
@@ -259,6 +265,7 @@ class XrSessionHost : public ViewHost {
   bool IsXrAndroidGlobalPassthroughDimmingExtensionsEnabled() const;
   bool IsXrAndroidEyeTrackingCalibrationEnabled() const;
   bool IsXrAndroidHandOcclusionExtensionsEnabled() const;
+  bool IsXrAndroidSpatialTrackpadExtensionEnabled() const;
 #endif  // IMP_PLATFORM(ANDROID)
 
   // Returns true if this frame should be rendered with varjo foveation. Should
@@ -283,6 +290,7 @@ class XrSessionHost : public ViewHost {
   int32_t GetMsaaSampleCount() const;
 
   absl::Status SetDisplayState(XrHelpers::DisplayState new_state);
+  XrHelpers::DisplayState GetDisplayState() const;
 
   filament::Engine::Config GetEngineConfig() override;
 
@@ -396,13 +404,77 @@ class XrSessionHost : public ViewHost {
     LocateSpaceStatus status;
   };
 
+  // Thread-safe queue used to defer the destruction of Filament Sync objects.
+  //
+  // Filament requires that all engine resources (including Sync objects) be
+  // destroyed on the main/engine thread. However, GPU fence completion
+  // callbacks are executed asynchronously on a background thread.
+  //
+  // To avoid thread-confinement violations, background callbacks push completed
+  // Sync objects to this queue via Push(). The main thread then safely drains
+  // and destroys them during its frame tick or session teardown via Flush().
+  class SyncDestructionQueue {
+   public:
+    SyncDestructionQueue() = default;
+    ~SyncDestructionQueue() = default;
+
+    void Push(filament::Sync* sync) {
+      absl::MutexLock lock(mutex_);
+      syncs_.push_back(sync);
+    }
+
+    void Flush(filament::Engine* engine) {
+      std::vector<filament::Sync*> to_destroy;
+      {
+        absl::MutexLock lock(mutex_);
+        to_destroy = std::move(syncs_);
+      }
+      for (auto* sync : to_destroy) {
+        if (engine != nullptr && sync != nullptr) {
+          engine->destroy(sync);
+        }
+      }
+    }
+
+   private:
+    absl::Mutex mutex_;
+    std::vector<filament::Sync*> syncs_;
+  };
+
+  // Offloads asynchronous swapchain buffer release fence callbacks from the
+  // Filament driver thread to a dedicated thread wrapper.
+  //
+  // Exporting a Vulkan Sync fence to an Android file descriptor (system call)
+  // is relatively expensive (~150-300 microseconds). Executing it directly on
+  // the core Filament backend driver thread (FEngine::loop) is sub-optimal and
+  // can block command submitting, eating into the frame time budget.
+  //
+  // This class wraps a dedicated utils::AsyncJobQueue thread with
+  // URGENT_DISPLAY priority. This is the same priority Filament uses internally
+  // for OpenGL/Vk timer query fence polling. URGENT_DISPLAY is necessary
+  // because buffer release lies directly on the critical path for display
+  // composition rendering; running on a shared thread pool (like
+  // Executor::BackgroundExecutor()) would add non-deterministic
+  // queue/scheduling delay, leading to scrolling jank.
+  class SyncCallbackHandler : public filament::backend::CallbackHandler {
+   public:
+    SyncCallbackHandler();
+    ~SyncCallbackHandler() override = default;
+
+    void post(void* user,
+              filament::backend::CallbackHandler::Callback callback) override;
+
+   private:
+    utils::AsyncJobQueue job_queue_;
+  };
+
   struct FenceCallbackData {
     XrTime display_time;
     PlatformType* platform;
-    filament::Engine* engine;
     filament::Sync* sync;
     std::unique_ptr<Invocable<void(int /*fence_file_descriptor*/)>>
         after_end_frame_callback;
+    SyncDestructionQueue* sync_destruction_queue;
   };
 
   // Used to enqueue frame information to the Filament Render thread to ensure
@@ -495,6 +567,7 @@ class XrSessionHost : public ViewHost {
   static std::vector<const char*> FilterUnsupportedExtensions(
       const absl::Span<const char* const>& extensions);
 
+ private:
   // Tracks if the XrSession is currently running.
   // The session is considered to be running after a successful call to
   // xrBeginSession and before calling xrEndSession.
@@ -592,7 +665,6 @@ class XrSessionHost : public ViewHost {
   bool is_varjo_foveated_rendering_enabled_ = false;
   int msaa_sample_count_ = 0;
   bool eye_tracking_enabled_ = false;
-  bool ipd_eye_calibration_enabled_ = false;
   bool eye_tracking_calibration_enabled_ = false;
   // Whether the current frame should render with varjo foveation. Should only
   // be used on Impress thread.
@@ -617,6 +689,9 @@ class XrSessionHost : public ViewHost {
   // Whether the hand occlusion extensions are enabled.
   bool is_hand_occlusion_extensions_enabled_ = false;
 
+  // Whether the spatial trackpad extension is enabled.
+  bool is_spatial_trackpad_extension_enabled_ = false;
+
   // Whether or not to create the XrSession on the render thread.
   bool create_session_on_render_thread_ = false;
 
@@ -630,6 +705,28 @@ class XrSessionHost : public ViewHost {
   // layer, and positive weights are drawn behind.  A weight of 0 is
   // indeterminate compared to the projection layer.
   RobinMap<XrCompositionLayerBaseHeader*, int> composition_layers_;
+  bool is_main_projection_layer_enabled_ = true;
+  std::unique_ptr<struct XrNativeWindow> native_window_;
+  mutable absl::Mutex frame_active_mutex_;
+  bool is_frame_active_ ABSL_GUARDED_BY(frame_active_mutex_) = false;
+
+  // Queue to defer Filament Sync object destructions.
+  //
+  // Fence completion callbacks are offloaded to our background
+  // sync_callback_handler_ to avoid blocking the main compositor rendering
+  // path. Because Filament requires that all Engine Sync objects be destroyed
+  // on the main thread, the background thread pushes completed syncs to this
+  // queue, which is then safely flushed on the main thread during
+  // AdvanceFrame().
+  //
+  // Lifetime Safety:
+  // Because sync_destruction_queue_ is declared BEFORE
+  // sync_callback_handler_, C++ guarantees that the callback handler (and its
+  // associated background thread) is blockingly joined and terminated first
+  // on destruction, ensuring that the background thread can never access a
+  // dangling queue pointer.
+  SyncDestructionQueue sync_destruction_queue_;
+  SyncCallbackHandler sync_callback_handler_;
 };
 
 }  // namespace imp

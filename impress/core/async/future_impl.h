@@ -372,7 +372,7 @@ class FutureImpl {
 
   mutable absl::Mutex mu_;
 
-  absl::optional<absl::Status> pending_result_status_ ABSL_GUARDED_BY(mu_);
+  std::optional<absl::Status> pending_result_status_ ABSL_GUARDED_BY(mu_);
 
   // Type-erased value held by the future as a std::shared_ptr.
   ResultHolder result_ ABSL_GUARDED_BY(mu_);

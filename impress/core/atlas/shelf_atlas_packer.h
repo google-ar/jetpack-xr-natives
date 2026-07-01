@@ -50,7 +50,7 @@ class ShelfAtlasPacker : public AtlasPacker {
  public:
   explicit ShelfAtlasPacker(uint2 texture_size);
 
-  absl::optional<ScopedAtlasEntry> AddEntry(uint2 size) override;
+  std::optional<AtlasPacker::ScopedAtlasEntry> AddEntry(uint2 size) override;
 
   void RemoveEntry(ScopedAtlasEntry::Id id) override;
 

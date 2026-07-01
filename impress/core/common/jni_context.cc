@@ -17,9 +17,11 @@
 #include <jni.h>
 
 #include <atomic>
+#include <cassert>
+#include <string>
 
+#include "absl/algorithm/container.h"
 #include "core/common/log.h"
-#include "core/common/platform_helpers.h"
 
 #ifdef __ANDROID__
 #include <pthread.h>
@@ -40,6 +42,12 @@ namespace {
 // synchronized.
 std::atomic<JavaVM*> g_jvm{nullptr};
 std::atomic<jint> g_jni_version{JNI_VERSION_1_6};
+
+// These two are needed when loading custom Java classes in a background thread.
+// This is because by default JVM assigns a system default ClassLoader to the
+// background thread.
+std::atomic<jobject> g_class_loader{nullptr};
+std::atomic<jmethodID> g_load_class_method_id{nullptr};
 
 // Attaches the current thread to the JVM with its pthread name.
 JNIEnv* AttachCurrentThreadToJvm(JavaVM* jvm) {
@@ -161,6 +169,9 @@ class ThreadLocalJniEnv {
     return AttachCurrentThreadToJvm(jvm);
   }
 
+  // Returns whether the local thread is attached.
+  bool IsAttached() const { return attached_ != nullptr; }
+
  private:
   JNIEnv* env_ = nullptr;
   JNIEnv* attached_ = nullptr;
@@ -168,6 +179,40 @@ class ThreadLocalJniEnv {
 thread_local ThreadLocalJniEnv tl_jni_env;
 
 }  // namespace
+
+void InitClassLoader(JNIEnv* env) {
+  if (g_class_loader.load() != nullptr) {
+    return;
+  }
+
+  // Get the current thread (which is main)
+  jclass thread_class = env->FindClass("java/lang/Thread");
+  jmethodID current_thread_method_id = env->GetStaticMethodID(
+      thread_class, "currentThread", "()Ljava/lang/Thread;");
+  jobject current_thread =
+      env->CallStaticObjectMethod(thread_class, current_thread_method_id);
+
+  // Get context ClassLoader from the thread
+  jmethodID get_context_cl_method_id = env->GetMethodID(
+      thread_class, "getContextClassLoader", "()Ljava/lang/ClassLoader;");
+  jobject class_loader =
+      env->CallObjectMethod(current_thread, get_context_cl_method_id);
+
+  // Then store Global Ref and method ID
+  if (class_loader != nullptr) {
+    g_class_loader.store(env->NewGlobalRef(class_loader));
+    jclass class_loader_class = env->FindClass("java/lang/ClassLoader");
+    g_load_class_method_id.store(
+        env->GetMethodID(class_loader_class, "loadClass",
+                         "(Ljava/lang/String;)Ljava/lang/Class;"));
+  }
+
+  // Clean up
+  env->DeleteLocalRef(current_thread);
+  if (class_loader != nullptr) {
+    env->DeleteLocalRef(class_loader);
+  }
+}
 
 JniContext::JniContext(JNIEnv* env) {
   if (!env) {
@@ -192,6 +237,8 @@ JniContext::JniContext(JNIEnv* env) {
   }
 
   g_jni_version = env->GetVersion();
+
+  InitClassLoader(env);
 }
 
 JniContext::JniContext(JavaVM* vm) {
@@ -206,6 +253,8 @@ JniContext::JniContext(JavaVM* vm) {
   }
 
   g_jni_version = GetJniEnv()->GetVersion();
+
+  InitClassLoader(GetJniEnv());
 }
 
 void JniContext::SetJniEnv(JNIEnv* env) { tl_jni_env.SetJniEnv(env); }
@@ -214,8 +263,63 @@ JNIEnv* JniContext::GetJniEnv() const { return tl_jni_env.GetJniEnv(); }
 JNIEnv* JniContext::TryGetJniEnv() const { return tl_jni_env.GetJniEnvConst(); }
 
 void JniContext::ResetJVM() {
+  if (jobject old_loader = g_class_loader.exchange(nullptr)) {
+    if (JNIEnv* env = tl_jni_env.GetJniEnvConst()) {
+      env->DeleteGlobalRef(old_loader);
+    }
+  }
+  g_load_class_method_id.exchange(nullptr);
   g_jvm.exchange(nullptr);
   tl_jni_env = ThreadLocalJniEnv();
+}
+
+jclass JniContext::FindClass(JNIEnv* env, const char* class_path) {
+  // When loading custom Java classes, normally one can use env->FindClass.
+  // However, this doesn't work when loading on a background thread as the Java
+  // ClassLoader is local to the thread. When a new C++ thread is spawned and
+  // attached to the JVM, Dalvik/ART assigns the base Zygote SystemClassLoader
+  // to it, which only knows about system defaults and doesn't know about APK
+  // custom classes. To mitigate this, we store a global reference to the main
+  // thread's ClassLoader when initiating JniContext, and use
+  // ClassLoader::loadClass. We still use env->FindClass for foreground loading,
+  // as it avoids JNI reflection overhead and is slightly more performant than
+  // ClassLoader::loadClass.
+
+  if (env == nullptr || class_path == nullptr) {
+    return nullptr;
+  }
+
+  jobject class_loader = g_class_loader.load();
+  jmethodID load_class_mid = g_load_class_method_id.load();
+
+  // When thread local is attached, meaning if it's a background thread, we use
+  // Global ClassLoader::loadClass. Otherwise we use env->FindClass.
+  if (tl_jni_env.IsAttached() && class_loader != nullptr &&
+      load_class_mid != nullptr) {
+    std::string class_name(class_path);
+    // ClassLoader expects '.', unlike env->FindClass that expects '/'.
+    absl::c_replace(class_name, '/', '.');
+    jstring java_name = env->NewStringUTF(class_name.c_str());
+
+    jobject clazz_obj =
+        env->CallObjectMethod(class_loader, load_class_mid, java_name);
+    env->DeleteLocalRef(java_name);
+    if (env->ExceptionCheck()) {
+      // We don't clear the exception here, as the caller is supposed to handle
+      // the failure case.
+      return nullptr;
+    } else if (clazz_obj != nullptr) {
+      return static_cast<jclass>(clazz_obj);
+    }
+  }
+
+  // Fallback to standard JNI FindClass.
+  if (env != nullptr) {
+    jclass clazz = env->FindClass(class_path);
+    return clazz;
+  }
+
+  return nullptr;
 }
 
 }  // namespace imp

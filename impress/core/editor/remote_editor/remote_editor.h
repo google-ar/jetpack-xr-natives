@@ -26,7 +26,6 @@
 #include "core/view/base_view.h"
 
 namespace imp::editor {
-
 // Interface for managing Impress remote editing, allowing a remote client
 // to connect to the application.
 class RemoteEditor : public Rememberer {
@@ -38,6 +37,10 @@ class RemoteEditor : public Rememberer {
 
   virtual ~RemoteEditor() = default;
 
+  // Returns true if the remote editor is ready to receive input and stream
+  // frames.
+  virtual bool IsReadyToSendDataToRemote() const { return false; }
+
   // Starts the remote editor with the provided configuration.
   void Start(const RemoteEditorInfo::RemoteUiConfig& config);
 
@@ -47,7 +50,8 @@ class RemoteEditor : public Rememberer {
   // Returns true if the remote editor is currently running.
   bool IsRunning() const { return running_; }
 
-  // Returns true if the provided config differs from the current configuration.
+  // Returns true if the provided config differs from the current
+  // configuration.
   virtual bool HasConfigChanged(
       const RemoteEditorInfo::RemoteUiConfig& config) const = 0;
 
@@ -91,7 +95,6 @@ class RemoteEditor : public Rememberer {
   int connection_count_ = 0;
   std::unique_ptr<editor::LayoutComposer> native_layout_composer_;
 };
-
 }  // namespace imp::editor
 
 #endif  // THIRD_PARTY_IMPRESS_CORE_EDITOR_REMOTE_EDITOR_REMOTE_EDITOR_H_

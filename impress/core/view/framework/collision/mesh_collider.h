@@ -43,8 +43,8 @@ class MeshCollider : public Component,
   absl::Status SetupWithState();
   void Cleanup();
 
-  absl::optional<RayHit> Intersect(const Ray& world_ray);
-  absl::optional<DoubleRayHit> IntersectPrecise(const DoubleRay& world_ray);
+  std::optional<RayHit> Intersect(const Ray& world_ray);
+  std::optional<DoubleRayHit> IntersectPrecise(const DoubleRay& world_ray);
 
   void Visualize(VisualizationStyle visualization_style =
                      VisualizationStyle::kNotSelected) const;

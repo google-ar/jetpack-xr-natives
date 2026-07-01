@@ -33,7 +33,7 @@ class ValueMeasurement {
  public:
   // TODO: make a logging proto to write out MonitorValue. Add
   // Report function to write proto.
-  using MonitorValue = absl::variant<absl::monostate, int64_t, double>;
+  using MonitorValue = std::variant<std::monostate, int64_t, double>;
 
   // Construction does not take ownership of the monitor, but uses it.
   // The Monitor must be valid for the lifetime of this class.

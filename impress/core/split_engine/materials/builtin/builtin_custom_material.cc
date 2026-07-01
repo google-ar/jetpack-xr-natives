@@ -50,6 +50,7 @@ BridgeId BuiltInCustomMaterial::GetBridgeId() const { return bridge_id_; }
 
 void BuiltInCustomMaterial::UpdateColorSpaceParameters(
     BaseView& view, std::optional<TextureId> texture_id) {
+  MediaColorSpace current_color_space = default_color_space_;
   // Start with the default color space parameters.
   imp::mat3f color_transform_matrix =
       default_color_space_.GetColorTransformMatrixDisplayP3().value_or(
@@ -79,13 +80,20 @@ void BuiltInCustomMaterial::UpdateColorSpaceParameters(
     if (source_texture_color_space.ok() &&
         source_texture_color_space->GetStandard() !=
             MediaColorSpace::Standard::kUnknown) {
-      color_transform_matrix = source_texture_color_space.value()
+      current_color_space = *source_texture_color_space;
+      color_transform_matrix = (*source_texture_color_space)
                                    .GetColorTransformMatrixDisplayP3()
                                    .value_or(imp::kIdentityMat3f);
       transfer_function =
-          static_cast<int>(source_texture_color_space.value().GetTransfer());
+          static_cast<int>((*source_texture_color_space).GetTransfer());
+
+      // We skip linearization if it's handled at the hardware level.
+      if ((*source_texture_color_space).GetHardwareLinearized()) {
+        transfer_function =
+            static_cast<int>(MediaColorSpace::Transfer::kLinear);
+      }
       max_content_light_level =
-          source_texture_color_space.value().GetMaxContentLightLevel();
+          (*source_texture_color_space).GetMaxContentLightLevel();
     }
   }
 
@@ -98,6 +106,13 @@ void BuiltInCustomMaterial::UpdateColorSpaceParameters(
     transfer_function = static_cast<int>(MediaColorSpace::Transfer::kSRGB);
   }
 #endif
+  // Check if the color space changed since the last frame
+  if (!last_color_space_.has_value() ||
+      (*last_color_space_ != current_color_space)) {
+    IMP_LOG(imp::INFO) << "Color space changed for material " << material_->GetName()
+              << ": " << current_color_space.ToString();
+    last_color_space_ = current_color_space;
+  }
 
   SetParameter(kColorConversionMatrixParameter, color_transform_matrix);
   SetParameter(kTransferFunctionParameter, transfer_function);
@@ -105,7 +120,8 @@ void BuiltInCustomMaterial::UpdateColorSpaceParameters(
 }
 
 void BuiltInCustomMaterial::OverrideColorSpaceParameters(
-    BaseView& view, MediaColorSpace color_space) {
+    BaseView& view, MediaColorSpace color_space,
+    std::optional<TextureId> texture_id) {
   imp::mat3f color_transform_matrix;
 
   switch (GetRequiredDisplayColorSpace()) {
@@ -127,7 +143,34 @@ void BuiltInCustomMaterial::OverrideColorSpaceParameters(
       break;
   }
   int transfer_function = static_cast<int>(color_space.GetTransfer());
+  // Check if the underlying texture is hardware-linearized, we should skip
+  // the software linearization in that case.
+  if (texture_id.has_value()) {
+    absl::StatusOr<
+        std::reference_wrapper<SplitEngineExternalTextureColorSpaceStore>>
+        color_space_manager =
+            view.GetRegistry().Get<SplitEngineExternalTextureColorSpaceStore>();
+    if (color_space_manager.ok()) {
+      absl::StatusOr<MediaColorSpace> source_texture_color_space =
+          color_space_manager->get().GetTextureColorSpace(GetBridgeId(),
+                                                          *texture_id);
+      if (source_texture_color_space.ok() &&
+          source_texture_color_space->GetHardwareLinearized()) {
+        transfer_function =
+            static_cast<int>(MediaColorSpace::Transfer::kLinear);
+        color_space.SetHardwareLinearized(true);
+      }
+    }
+  }
+
   int max_content_light_level = color_space.GetMaxContentLightLevel();
+
+  // Check if the color space changed since the last frame
+  if (!last_color_space_.has_value() || (*last_color_space_ != color_space)) {
+    IMP_LOG(imp::INFO) << "Color space changed for material " << material_->GetName()
+              << ": " << color_space.ToString();
+    last_color_space_ = color_space;
+  }
 
   SetParameter(kColorConversionMatrixParameter, color_transform_matrix);
   SetParameter(kTransferFunctionParameter, transfer_function);

@@ -50,6 +50,11 @@ final class ImpXrApi {
       nativeLibrary = DEFAULT_LIBRARY_NAME;
     }
 
+    @Nullable byte[] viewConfigBytes = null;
+    if (setupParams.hasViewConfig()) {
+      viewConfigBytes = setupParams.getViewConfig().toByteArray();
+    }
+
     // For OpenXR, we use a special subclass of ViewHost called XrSessionHost that adds OpenXR
     // specific functionality for running the frame loop and rendering.
     //
@@ -60,6 +65,7 @@ final class ImpXrApi {
             nativeLibrary,
             setupParams.getViewIdentifier(),
             context,
+            viewConfigBytes,
             (long viewHandle) ->
                 nCreateSessionHost(context, viewHandle, setupParams.toByteArray()));
 

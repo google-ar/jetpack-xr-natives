@@ -39,7 +39,7 @@ DragGesture::CreateFn DragGesture::GetCreateFunction(
   return [dispatcher, pointer_utils](const PointerHitEvent& pointer_hit,
                                      absl::Span<const DragGesture> gestures) {
     return pointer_hit.event.Type() == PointerEventType::kDown
-               ? absl::optional<DragGesture>(
+               ? std::optional<DragGesture>(
                      DragGesture(dispatcher, pointer_utils, pointer_hit))
                : absl::nullopt;
   };
@@ -154,7 +154,7 @@ void DragGesture::OnFinish(const PointerHitEvent& pointer_hit) {
 
 void DragGesture::OnCancel() {}
 
-absl::optional<float2> DragGesture::TryUpdatePosition(
+std::optional<float2> DragGesture::TryUpdatePosition(
     const PointerHitEvent& pointer_hit) {
   PointerEvent event = pointer_hit.event;
   int move_index = event.GetIndexForChangedPointerId(pointer_id_);

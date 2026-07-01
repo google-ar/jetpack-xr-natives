@@ -184,8 +184,7 @@ SplitEngineTextureBuilder& SplitEngineTextureBuilder::Format(
 
 SplitEngineTextureBuilder& SplitEngineTextureBuilder::Usage(
     filament::backend::TextureUsage usage) {
-  // TODO: Implement this.
-  IMP_LOG(imp::FATAL) << "SplitEngineTextureBuilder::Usage is not implemented.";
+  IMP_LOG(imp::ERROR) << "SplitEngineTextureBuilder::Usage is not implemented.";
   return *this;
 }
 

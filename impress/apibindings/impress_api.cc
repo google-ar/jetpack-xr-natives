@@ -904,7 +904,7 @@ JNI_METHOD_AOSP(void, nSetStereoSurfaceEntityCanvasShapeCustomMesh)
 
   (void)imp::android::ThrowIfError(
       env, view->GetStereoSurfaceManager().SetStereoSurfaceEntityCanvasShape(
-               node_id, *mesh));
+               node_id, std::move(*mesh)));
 }
 
 JNI_METHOD_AOSP_OLD(void, nSetStereoSurfaceEntityCanvasShapeCustomMesh)

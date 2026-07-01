@@ -33,9 +33,12 @@ namespace imp {
 XrVulkanSwapChainImageHandler::XrVulkanSwapChainImageHandler(
     XrPlatformType* platform, XrSessionHost* host,
     std::unique_ptr<SwapchainLayers> layers,
-    ContentSecurityLevel /*content_security_level*/)
-    : platform_(platform), host_(host), layers_(std::move(layers)) {
-  if (!host->IsCompositionLayerDepthEnabled()) {
+    ContentSecurityLevel /*content_security_level*/, bool should_end_frame)
+    : platform_(platform),
+      host_(host),
+      layers_(std::move(layers)),
+      should_end_frame_(should_end_frame) {
+  if (layers_->depth.images.empty()) {
     CreateDepthSwapchains();
   }
 
@@ -46,7 +49,6 @@ XrVulkanSwapChainImageHandler::XrVulkanSwapChainImageHandler(
   } else {
     layers_->active_color = &layers_->default_color;
     layers_->active_depth = &layers_->depth;
-    layers_->display_size = host->GetDisplaySize();
   }
 }
 
@@ -129,8 +131,11 @@ VkResult XrVulkanSwapChainImageHandler::present(uint32_t index,
     xrReleaseSwapchainImage(layers_->depth.handle, &releaseInfo);
   }
 
-  absl::Status status =
-      host_->EndFrame(layers_->active_color->handle, layers_->depth.handle);
+  absl::Status status = absl::OkStatus();
+  if (should_end_frame_) {
+    status =
+        host_->EndFrame(layers_->active_color->handle, layers_->depth.handle);
+  }
 
   if (!status.ok()) {
     // In the case of an error in `xrEndFrame`, just print the error and
@@ -164,8 +169,7 @@ inline uint32_t selectMemoryType(
 }
 
 void XrVulkanSwapChainImageHandler::CreateDepthSwapchains() {
-  uint32_t layers =
-      host_->IsMultiviewStereo() ? host_->GetLogicalEyeCount() : 1;
+  uint32_t layers = IsStereo() ? host_->GetLogicalEyeCount() : 1;
   layers_->depth = CreateDepthSwapchain(host_->GetDisplaySize(), layers);
 
   if (host_->IsXrVarjoFoveatedRenderingEnabled()) {

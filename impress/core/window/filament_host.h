@@ -296,8 +296,6 @@ class FilamentHost {
     virtual void Cleanup() = 0;
     // Filters legacy MouseInput for FilamentHost.
     virtual bool TryConsumeMouseInput(const MouseInput& latest_input) = 0;
-    // Called before the begin/end render occurs
-    virtual void RerouteUiRendering() = 0;
     // Advances time ahead of rendering.
     virtual void PreRender(absl::Duration previous_vsync,
                            absl::Duration next_vsync, bool force) = 0;
@@ -312,10 +310,6 @@ class FilamentHost {
     // Informs the extension of the current viewport dimensions.
     virtual void UpdateCameraAndViewport(uint2 actual_size,
                                          float2 subpixel_ratio) = 0;
-
-    // Checks to see if there is an image writer extension and the client has
-    // enabled it.
-    virtual bool RemoteUiEnabled(FilamentHost* host) { return false; }
 
     // Queues an ImGui callback to be executed during RenderDev.
     virtual void QueueImGuiCommandBlock(ImGuiCommand cmd) = 0;
@@ -542,6 +536,16 @@ class FilamentHost {
   // Updates flags for a pending call to createSwapChain() based on features
   // requested by State, if any.
   uint64_t UpdateSwapChainFlagsFromState(uint64_t flags) const;
+
+  // Returns true if the current thread is the frame thread.
+  //
+  // The frame thread is the same thread that the ForegroundExecutor runs on.
+  //
+  // This is a little bit more reliable than checking that the CurrentExecutor
+  // is the ForegroundExecutor, because if there are multiple Impress threads
+  // and something is called on the wrong Impress thread, there may be a valid
+  // but incorrect ForegroundExecutor on that thread.
+  bool IsOnFrameThread() const;
 
   // Asserts that the current thread is the frame thread.
   //

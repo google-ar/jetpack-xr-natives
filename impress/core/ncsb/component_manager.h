@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <type_traits>
@@ -31,7 +32,6 @@
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "core/async/future.h"
 #include "core/common/hash.h"
-#include "core/common/robin_map.h"
 #include "core/common/trace.h"
 #include "core/common/type_traits.h"
 #include "core/config.h"
@@ -44,6 +44,7 @@
 #include "core/ncsb/component_pool_with_updater.h"
 #include "core/ncsb/component_system_pool.h"
 #include "core/ncsb/component_traits.h"
+#include "core/ncsb/node_controller.h"
 #include "core/ncsb/node_handle.h"
 #include "core/ncsb/update_system.h"
 
@@ -125,10 +126,24 @@ class ComponentManager {
   void ForEachPool(Fn&& fn);
 
   // Notifies all components attached to the entity of its active state.
-  void NotifyActiveForEntity(utils::Entity entity, bool active);
+  //
+  // The component bitset represents the components associated with the entity
+  // so that we don't need to check every component pool.
+  //
+  // Critically, the bitset is intentionally copied to avoid reentrancy issues
+  // if components are added or removed from the entity during the notification
+  // process. In typical use cases, the bitset is trivial to copy (just a few
+  // integers).
+  void NotifyActiveForEntity(
+      utils::Entity entity,
+      imp_internal::NodeController::ComponentBitset component_bitset,
+      bool active);
 
-  // Removes all components from all the nodes passed in.
-  void RemoveAllFromNodes(const std::vector<NodeHandle>& nodes);
+  // Destroys all components in the subtree of the root node using counting
+  // sort, and returns the found nodes in post-order (deepest first) in
+  // out_nodes.
+  void DestroySubtreeComponents(NodeHandle root,
+                                std::vector<NodeHandle>& out_nodes);
 
   // Completely detaches all components from all entities.
   void DetachAll();
@@ -210,6 +225,12 @@ class ComponentManager {
   template <typename T>
   void AddPoolToCleanupGraph(BaseComponentPool* pool);
 
+  // Re-generates the cleanup ranks based on the cleanup dependency graph.
+  //
+  // When the cleanup graph is modified, the cleanup ranks are cleared so that
+  // they will be re-generated on the next call to UpdateCleanupRanks.
+  void UpdateCleanupRanks();
+
   // Stores a sparse set of all the component pools.
   //
   // ComponentId / GetComponentTypeId<T>() can be used to get the index into
@@ -218,6 +239,21 @@ class ComponentManager {
   //
   // This allows fast lookup of component pools by avoiding hash map overhead.
   std::vector<std::unique_ptr<BaseComponentPool>> component_pools_;
+
+  // Stores the cleanup rank for a component pool. The rank is used to determine
+  // the order in which components are removed when a node is destroyed.
+  //
+  // Lower ranks are destroyed first. The rank is determined by the cleanup
+  // dependency graph.
+  //
+  // The index of this vector is the component id.
+  std::vector<int16_t> cleanup_ranks_;
+
+  // The following fields are used by DestroySubtreeComponents as scratch space
+  // to avoid repeated allocations and deallocations with each call.
+  std::vector<int32_t> counts_scratch_;
+  std::vector<int32_t> offsets_scratch_;
+  std::vector<std::pair<ComponentId, NodeHandle>> ordered_pairs_scratch_;
 
   // This is used to determine the order in which components are removed when a
   // node is destroyed.
@@ -643,6 +679,7 @@ void ComponentManager::AddPoolToCleanupGraph(BaseComponentPool* pool) {
   }
 
   cleanup_graph_.SetExtra(component_hash, pool);
+  cleanup_ranks_.clear();
 }
 
 }  // namespace imp

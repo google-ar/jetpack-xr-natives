@@ -19,11 +19,11 @@
 
 #include <backend/DriverEnums.h>
 
+#include <bluevk/BlueVK.h>
+
 #include "filament/libs/utils/include/utils/bitset.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/Panic.h"
-
-#include <bluevk/BlueVK.h>
 
 #include <utility>
 

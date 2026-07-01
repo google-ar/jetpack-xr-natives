@@ -14,13 +14,19 @@
 
 #include "core/assets/material/material_helpers.h"
 
+#include <cstdint>
+
+#include "absl/log/check.h"
 #include "absl/status/status.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/include/filament/Material.h"
+#include "filament/filament/include/filament/View.h"
 #include "filament/libs/filabridge/include/filament/MaterialEnums.h"
+#include "filament/libs/utils/include/utils/tribool.h"
 #include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
 #include "core/async/future_common.h"
+#include "core/view/base_view.h"
 
 namespace imp::material_helpers {
 
@@ -70,6 +76,25 @@ filament::UserVariantFilterMask GetMaterialVariantMask(
 
   return variant_mask;
 }
+
+utils::tribool ToTribool(
+    MaterialPreCompileOptions::MaterialPreCompileByView::VariantFilterOption
+        option) {
+  switch (option) {
+    case MaterialPreCompileOptions::MaterialPreCompileByView::
+        VARIANT_FILTER_OPTION_ENABLED:
+      return utils::tribool(true);
+    case MaterialPreCompileOptions::MaterialPreCompileByView::
+        VARIANT_FILTER_OPTION_DISABLED:
+      return utils::tribool(false);
+    case imp::MaterialPreCompileOptions::MaterialPreCompileByView::
+        VARIANT_FILTER_OPTION_INDETERMINATE:
+    case imp::MaterialPreCompileOptions::MaterialPreCompileByView::
+        VARIANT_FILTER_OPTION_UNSPECIFIED:
+      return utils::tribool(utils::tribool::Indeterminate);
+  }
+}
+
 }  // namespace
 
 FilamentVariantMask GetMaterialVariantMask(
@@ -144,6 +169,56 @@ Future<absl::Status> PreCompileMaterial(
   }
 
   return compile_status;
+}
+
+Future<absl::Status> PreCompileMaterialByView(
+    filament::Material* material,
+    const MaterialPreCompileOptions& pre_compile_options, BaseView* view) {
+  
+  
+
+  filament::View* filament_view = view->GetHost()->GetView();
+
+  if (pre_compile_options.compile_by_view->priority ==
+      MaterialPreCompileOptions::MaterialPreCompileByView::PRIORITY_HIGH) {
+    Future<absl::Status> compile_status = Future<absl::Status>();
+    view->GetHost()->GetEngine()->compile(
+        filament::backend::CompilerPriorityQueue::HIGH, material, filament_view,
+        ToTribool(pre_compile_options.compile_by_view->shadow_receiver),
+        ToTribool(pre_compile_options.compile_by_view->skinning),
+        /* CallbackHandler= */ nullptr,
+        [compile_status](filament::Material* material) mutable {
+          compile_status.Return(absl::OkStatus());
+        });
+
+    compile_status = compile_status.Then(
+        [](absl::Status status) mutable {
+          // Force the chain of futures to wait until the next time the
+          // foreground executor is pumped before continuing.
+          //
+          // This is because the compile callback can occur within a call to
+          // filament::Renderer::render which is not a safe time to complete
+          // the future. When a material is finished loading it will likely
+          // cause material assignments to change, possibly destroying
+          // materials, which can cause use-after-free issues when done
+          // within a render call.
+          return status;
+        },
+        FutureThenOptions{.executor_mode =
+                              FutureExecutorMode::kScheduleAlways});
+    return compile_status;
+
+  } else {
+    Future<absl::Status> compile_status =
+        Future<absl::Status>(absl::OkStatus());
+
+    view->GetHost()->GetEngine()->compile(
+        filament::backend::CompilerPriorityQueue::LOW, material, filament_view,
+        ToTribool(pre_compile_options.compile_by_view->shadow_receiver),
+        ToTribool(pre_compile_options.compile_by_view->skinning));
+
+    return compile_status;
+  }
 }
 
 }  // namespace imp::material_helpers

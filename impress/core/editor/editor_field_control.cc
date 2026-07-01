@@ -14,6 +14,7 @@
 
 #include "core/editor/editor_field_control.h"
 
+#include "core/geometry/shapes/box.h"
 #include "core/math/almost_equal.h"
 #include "core/math/quat.h"
 #include "core/math/vec.h"
@@ -26,8 +27,24 @@ bool EditorFieldControl::CompareField(quatf& val, quatf& base) {
 }
 
 template <>
+bool EditorFieldControl::CompareField(float2& val, float2& base) {
+  return AlmostEqual(val, base);
+}
+
+template <>
 bool EditorFieldControl::CompareField(float3& val, float3& base) {
   return AlmostEqual(val, base);
+}
+
+template <>
+bool EditorFieldControl::CompareField(float4& val, float4& base) {
+  return AlmostEqual(val, base);
+}
+
+template <>
+bool EditorFieldControl::CompareField(Box& val, Box& base) {
+  return AlmostEqual(val.center, base.center) &&
+         AlmostEqual(val.halfExtent, base.halfExtent);
 }
 
 }  // namespace imp

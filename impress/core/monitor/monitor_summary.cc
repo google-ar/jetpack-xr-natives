@@ -347,7 +347,7 @@ void ValueMetric::Update() {
   double value;
 
   // extract current value as a double.
-  absl::variant<absl::monostate, int64_t, double> value_holder =
+  std::variant<std::monostate, int64_t, double> value_holder =
       value_measurement_data_->GetValue();
   if (absl::holds_alternative<int64_t>(value_holder)) {
     value = absl::get<int64_t>(value_holder);

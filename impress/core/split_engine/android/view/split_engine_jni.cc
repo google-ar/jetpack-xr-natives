@@ -42,10 +42,12 @@
 #include "core/math/transform.h"
 #include "core/split_engine/android/extensions/split_engine_bridge.h"
 #include "core/split_engine/android/split_engine_android_bridge.h"
+#include "core/split_engine/android/split_engine_android_external_texture_surface_service.h"
 #include "core/split_engine/android/split_engine_android_shared_memory_bridge.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_client.h"
 #include "core/split_engine/android/split_engine_shared_memory_bridge_sender.h"
 #include "core/split_engine/android/view/view_update_params.h"
+#include "core/split_engine/material_requester_legacy_impl.h"
 #include "core/split_engine/split_engine_bridge_sender.h"
 #include "core/split_engine/split_engine_serializer_impl.h"
 #include "core/split_engine/split_engine_serializer_transport_legacy_impl.h"
@@ -56,7 +58,6 @@
 #include "core/view/platforms/xr_android/xr_helpers.h"
 #include "core/view/view_host.h"
 #include "core/window/filament_host.h"
-#include "split_engine/schemas/split_engine_schema_version.h"
 
 #if __ANDROID_API__ >= 34
 #include "core/split_engine/android/split_engine_shared_memory_bridge_service.h"
@@ -75,7 +76,6 @@
 using ::imp::GetThreadId;
 using ::imp::GetThreadNiceness;
 using ::imp::JniAllowlist;
-using ::imp::split_engine::SplitEngineBridgeSender;
 
 namespace {
 
@@ -143,7 +143,7 @@ extern "C" {
 // LINT.IfChange(api)
 JNI_METHOD_ACTIVITY(void, nSetup)
 (JNIEnv* env, jclass /*clazz*/, jlong view_host_handle,
- jobject split_engine_bridge, jlong bridge_buffer_size_bytes) {
+ jobject split_engine_bridge, jlong bridge_buffer_size_bytes, jint api_level) {
   // Make the isolated process slightly lower priority than the main thread.
   imp::SetThreadNiceness(GetThreadId(), GetThreadNiceness(GetThreadId()) + 5);
 
@@ -158,6 +158,11 @@ JNI_METHOD_ACTIVITY(void, nSetup)
       std::make_unique<imp::split_engine::SplitEngineSharedMemoryBridgeSender>(
           *bridge_client);
 
+  view->GetRegistry().Register(
+      std::make_unique<
+          imp::split_engine::SplitEngineAndroidExternalTextureSurfaceService>(
+          *bridge_client));
+
   std::unique_ptr<imp::split_engine::SplitEngineAndroidSharedMemoryBridge>
       bridge = std::make_unique<
           imp::split_engine::SplitEngineAndroidSharedMemoryBridge>(
@@ -166,18 +171,20 @@ JNI_METHOD_ACTIVITY(void, nSetup)
   view->SetRenderableManager(
       std::make_unique<imp::RenderableManagerWrapper>(*view));
 
-  int32_t api_level = android_xr::kSplitEngineProductionApiLevel;
 #ifdef IMP_SPLIT_ENGINE_ALLOW_EXPERIMENTAL_APIS
   api_level = android_xr::kSplitEngineExperimentalApiLevel;
 #endif
 
-  auto transport = imp::MakeOwned<
-      imp::split_engine::SplitEngineSerializerTransportLegacyImpl>(
-      std::move(bridge), std::move(bridge_sender));
+  auto material_requester =
+      std::make_unique<imp::split_engine::MaterialRequesterLegacyImpl>(*bridge);
 
   auto split_engine_serializer =
       std::make_unique<imp::split_engine::SplitEngineSerializerImpl>(
-          *view, api_level, std::move(transport), bridge_buffer_size_bytes);
+          *view, api_level,
+          imp::MakeOwned<
+              imp::split_engine::SplitEngineSerializerTransportLegacyImpl>(
+              std::move(bridge), std::move(bridge_sender)),
+          std::move(material_requester), bridge_buffer_size_bytes);
 
   view->SetSplitEngineSerializer(std::move(split_engine_serializer));
 

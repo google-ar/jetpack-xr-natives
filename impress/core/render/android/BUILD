@@ -16,6 +16,7 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load(
     "//build_tools:imp.bzl",
     "if_android_external_texture_surface_uses_image_reader",
+    "if_non_android",
     "imp_defines",
     "imp_google3_copts",
 )
@@ -107,6 +108,8 @@ cc_library(
         ":definitions",
         ":platform_android_external_texture_surface",
         "//core:config",
+        "//core/common:jni_helpers",
+        "//core/common:registry",
         "//core/common:robin_map",
         "//core/common:small_source_location",
         "//core/math",
@@ -116,6 +119,7 @@ cc_library(
         "//core/view:base_view",
         "//core/view/platforms/android/wrappers:graphics",
         "//core/view/platforms/android/wrappers:surface_texture",
+        "//core/view/platforms/android/wrappers:surface_texture_gc",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status",
@@ -123,7 +127,7 @@ cc_library(
         "@com_google_absl//absl/types:span",
         "@com_google_impress//core/common:log",
         "@mediapipe//mediapipe/framework/port:status",
-    ],
+    ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )
 
@@ -157,7 +161,7 @@ cc_library(
         "//core/view/platforms/android/ndkwrappers:image_reader",
         "//core/view/platforms/android/wrappers:graphics",
         "//core/view/utils:frame_time",
-        "//core/window:filament_host",
+        "//core/window:shared_host_state",
         "@com_google_absl//absl/base:core_headers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/container:inlined_vector",

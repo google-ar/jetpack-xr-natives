@@ -19,10 +19,11 @@
 
 #include "fg/FrameGraphTexture.h"
 
+#include <filament/Viewport.h>
+
 #include <backend/DriverEnums.h>
 #include <backend/TargetBufferInfo.h>
 
-#include <filament/Viewport.h>
 #include "filament/libs/utils/include/utils/debug.h"
 
 namespace filament {
@@ -58,7 +59,7 @@ struct FrameGraphRenderPass {
     struct Descriptor {
         Attachments attachments{};
         Viewport viewport{};
-        math::float4 clearColor{};
+        backend::ClearColorValue clearColor{};
         uint8_t samples = 0;    // # of samples (0 = unset, default)
         uint8_t layerCount = 1; // # of layer (# > 1 = multiview)
         backend::TargetBufferFlags clearFlags{};
@@ -67,8 +68,8 @@ struct FrameGraphRenderPass {
     struct ImportDescriptor {
         backend::TargetBufferFlags attachments = backend::TargetBufferFlags::COLOR0;
         Viewport viewport{};
-        math::float4 clearColor{};  // this overrides Descriptor::clearColor
-        uint8_t samples = 0;        // # of samples (0 = unset, default)
+        backend::ClearColorValue clearColor{};   // this overrides Descriptor::clearColor
+        uint8_t samples = 0;                     // # of samples (0 = unset, default)
         backend::TargetBufferFlags clearFlags{}; // this overrides Descriptor::clearFlags
         backend::TargetBufferFlags keepOverrideStart{};
         backend::TargetBufferFlags keepOverrideEnd{};

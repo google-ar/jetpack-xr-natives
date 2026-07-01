@@ -18,10 +18,12 @@
 
 #include <utility>
 
+#include "absl/strings/string_view.h"
 #include "core/common/jni_helpers.h"
 #include "core/geometry/shapes/rect.h"
 #include "core/math/vec.h"
 #include "core/view/platforms/android/wrappers/graphics_helpers.h"
+#include "core/view/platforms/android/wrappers/paint.h"
 
 namespace imp::android {
 
@@ -73,8 +75,8 @@ void Canvas::DrawRoundRect(const imp::Rect& rect, float2 corner_radius,
 }
 
 void Canvas::DrawText(absl::string_view text, float2 pos, Paint& paint) {
-  CallVoidMethod(draw_text_, ToString(Env(), text), pos.x, pos.y,
-                 paint.WeakReference());
+  JniUniquePtr<jstring> jtext = ToJniString(Env(), text);
+  CallVoidMethod(draw_text_, jtext.get(), pos.x, pos.y, paint.WeakReference());
 }
 
 void Canvas::DrawPicture(jobject picture) {

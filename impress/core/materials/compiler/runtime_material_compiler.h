@@ -16,6 +16,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_MATERIALCOMPILER_RUNTIME_MATERIAL_COMPILER_H_
 #define THIRD_PARTY_IMPRESS_CORE_MATERIALCOMPILER_RUNTIME_MATERIAL_COMPILER_H_
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <utility>
@@ -75,6 +76,7 @@ class RuntimeMaterialCompiler {
 
   BaseView& view_;
   std::unique_ptr<MaterialCache> cache_;
+  std::atomic<MaterialCompilerClient::OperationId> last_operation_id_ = 0;
 };
 }  // namespace imp
 

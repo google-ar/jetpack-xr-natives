@@ -16,19 +16,19 @@
 
 #include "fg/details/DependencyGraph.h"
 
-#include <private/utils/Tracing.h>
-
-#include "filament/libs/utils/include/utils/compiler.h"
-#include "filament/libs/utils/include/utils/debug.h"
-#include "filament/libs/utils/include/utils/CString.h"
-#include "filament/libs/utils/include/utils/ostream.h"
-
 #if FILAMENT_ENABLE_FGVIEWER
 #include <fgviewer/FrameGraphInfo.h>
 #endif
 
-#include <iterator>
+#include <private/utils/Tracing.h>
+
+#include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/CString.h"
+#include "filament/libs/utils/include/utils/debug.h"
+#include "filament/libs/utils/include/utils/ostream.h"
+
 #include <cstdint>
+#include <iterator>
 
 namespace filament {
 

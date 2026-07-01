@@ -17,9 +17,9 @@
 #ifndef TNT_FILAMENT_BACKEND_OPENGL_BINDINGMAP_H
 #define TNT_FILAMENT_BACKEND_OPENGL_BINDINGMAP_H
 
-#include <backend/DriverEnums.h>
-
 #include "gl_headers.h"
+
+#include <backend/DriverEnums.h>
 
 #include "filament/libs/utils/include/utils/bitset.h"
 #include "filament/libs/utils/include/utils/debug.h"

@@ -50,7 +50,8 @@ void AssetLoader::OnSuccess(std::intptr_t value) {
 }
 
 void AssetLoader::OnFailure(std::string error_message) {
-  CallVoidMethod(on_failure_, ToString(Env(), error_message));
+  JniUniquePtr<jstring> jerror = ToJniString(Env(), error_message);
+  CallVoidMethod(on_failure_, jerror.get());
 }
 
 }  // namespace imp

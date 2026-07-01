@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-#include "filament/libs/utils/include/utils/EntityManager.h"
-
 #include "EntityManagerImpl.h"
 
 #include "filament/libs/utils/include/utils/Entity.h"
+#include "filament/libs/utils/include/utils/EntityManager.h"
+#include "filament/libs/utils/include/utils/Mutex.h"
+#include "filament/libs/utils/include/utils/PagedArenaBitset.h"
 
 #include <cassert>
 #include <cstddef>
@@ -86,6 +87,12 @@ void EntityManager::dumpActiveEntities(utils::io::ostream& out) const {
 
 bool EntityManager::isAlive(Entity const e) const noexcept {
     return static_cast<EntityManagerImpl const *>(this)->isAlive(e);
+}
+
+PagedArenaBitset EntityManager::getAliveEntities() const noexcept {
+    auto const* impl = static_cast<EntityManagerImpl const*>(this);
+    utils::LockGuard const lock(impl->mFreeListLock);
+    return impl->mAliveEntities.clone();
 }
 
 } // namespace utils

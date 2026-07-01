@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include <gtest/gtest.h>
-
 #include "filament/libs/math/include/math/fast.h"
 #include "filament/libs/math/include/math/scalar.h"
+
+#include <gtest/gtest.h>
 
 using namespace filament::math;
 

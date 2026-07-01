@@ -111,13 +111,14 @@ JNI_METHOD(void, nPostMessage)
 
         std::string serialized;
         imp::proto::SerializeTo(&response, &serialized);
-        jclass script_api_class =
-            env->FindClass("com/google/ar/imp/core/scripting/ScriptBridge");
+        imp::JniUniquePtr<jclass> script_api_class = imp::FindClass(
+            env, "com/google/ar/imp/core/scripting/ScriptBridge");
         jmethodID post_message_method = env->GetMethodID(
-            script_api_class, "postMessage", "([BLjava/lang/Object;)V");
+            script_api_class.get(), "postMessage", "([BLjava/lang/Object;)V");
+        imp::JniUniquePtr<jbyteArray> j_serialized =
+            imp::ToJniByteArray(env, serialized);
         env->CallVoidMethod(script_bridge_global.get(), post_message_method,
-                            imp::ToByteArray(env, serialized),
-                            static_cast<jobject>(out));
+                            j_serialized.get(), static_cast<jobject>(out));
       });
 }
 

@@ -29,6 +29,8 @@ namespace video {
 // Records video files of the app's video/audio output.
 class VideoRecorder {
  public:
+  ~VideoRecorder();
+
   // Start recording a video of the app.
   static Future<std::unique_ptr<VideoRecorder>> Open(
       BaseView* view, absl::string_view filename,

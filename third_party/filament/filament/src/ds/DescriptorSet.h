@@ -26,8 +26,8 @@
 #include <backend/DriverEnums.h>
 #include <backend/Handle.h>
 
-#include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/bitset.h"
+#include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/StaticString.h"
 

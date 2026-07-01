@@ -17,7 +17,7 @@
 
 #pragma once
 
-#include <materials/StaticMaterialInfo.h>
+#include "materials/StaticMaterialInfo.h"
 
 #include "filament/libs/utils/include/utils/Slice.h"
 

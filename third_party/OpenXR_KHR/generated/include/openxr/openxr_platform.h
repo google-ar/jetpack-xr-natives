@@ -812,59 +812,6 @@ XRAPI_ATTR XrResult XRAPI_CALL xrUnshareAnchorANDROID(
 #endif /* !XR_NO_PROTOTYPES */
 #endif /* XR_USE_PLATFORM_ANDROID */
 
-#ifdef XR_USE_PLATFORM_ANDROID
-
-// XR_ANDROIDSYS_background_tracking is a preprocessor guard. Do not pass it to API calls.
-#define XR_ANDROIDSYS_background_tracking 1
-#define XR_ANDROIDSYS_background_tracking_SPEC_VERSION 1
-#define XR_ANDROIDSYS_BACKGROUND_TRACKING_EXTENSION_NAME "XR_ANDROIDSYS_background_tracking"
-// XrInstanceCreateInfoBackgroundTrackingANDROIDSYS extends XrInstanceCreateInfo
-typedef struct XrInstanceCreateInfoBackgroundTrackingANDROIDSYS {
-    XrStructureType             type;
-    const void* XR_MAY_ALIAS    next;
-    struct AIBinder*            token;
-} XrInstanceCreateInfoBackgroundTrackingANDROIDSYS;
-
-#endif /* XR_USE_PLATFORM_ANDROID */
-
-#ifdef XR_USE_PLATFORM_ANDROID
-
-// XR_ANDROIDSYS_anchor_sharing_import is a preprocessor guard. Do not pass it to API calls.
-#define XR_ANDROIDSYS_anchor_sharing_import 1
-#define XR_ANDROIDSYS_anchor_sharing_import_SPEC_VERSION 1
-#define XR_ANDROIDSYS_ANCHOR_SHARING_IMPORT_EXTENSION_NAME "XR_ANDROIDSYS_anchor_sharing_import"
-typedef struct XrSharedAnchorSpaceCreateInfoANDROIDSYS {
-    XrStructureType             type;
-    const void* XR_MAY_ALIAS    next;
-    struct AIBinder*            anchorToken;
-} XrSharedAnchorSpaceCreateInfoANDROIDSYS;
-
-typedef XrResult (XRAPI_PTR *PFN_xrCreateSharedAnchorSpaceANDROIDSYS)(XrSession session, const XrSharedAnchorSpaceCreateInfoANDROIDSYS* sharingInfo, XrSpace* anchor);
-
-#ifndef XR_NO_PROTOTYPES
-#ifdef XR_EXTENSION_PROTOTYPES
-XRAPI_ATTR XrResult XRAPI_CALL xrCreateSharedAnchorSpaceANDROIDSYS(
-    XrSession                                   session,
-    const XrSharedAnchorSpaceCreateInfoANDROIDSYS* sharingInfo,
-    XrSpace*                                    anchor);
-#endif /* XR_EXTENSION_PROTOTYPES */
-#endif /* !XR_NO_PROTOTYPES */
-#endif /* XR_USE_PLATFORM_ANDROID */
-
-#ifdef XR_USE_PLATFORM_ANDROID
-
-// XR_ANDROIDSYS_input_tracing is a preprocessor guard. Do not pass it to API calls.
-#define XR_ANDROIDSYS_input_tracing 1
-#define XR_ANDROIDSYS_input_tracing_SPEC_VERSION 1
-#define XR_ANDROIDSYS_INPUT_TRACING_EXTENSION_NAME "XR_ANDROIDSYS_input_tracing"
-typedef struct XrInputTracingDataANDROIDSYS {
-    XrStructureType       type;
-    void* XR_MAY_ALIAS    next;
-    int64_t               eventTracingId;
-} XrInputTracingDataANDROIDSYS;
-
-#endif /* XR_USE_PLATFORM_ANDROID */
-
 #ifdef __cplusplus
 }
 #endif

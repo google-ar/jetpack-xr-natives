@@ -189,7 +189,7 @@ void GltfAsset::BuildMeshCollisionAcceleratorsInternal(
          model_data_->Entities().Ids<model::ModelData::EntityId>()) {
       const model::ModelData::EntityData::Proxy& entity_data =
           entities[entity_id];
-      const absl::optional<Box>& local_bounds = entity_data.local_bounds;
+      const std::optional<Box>& local_bounds = entity_data.local_bounds;
       model::ModelData::SkinId skin_id = entity_data.skin;
       model::ModelData::MorphTargetBufferId morph_target_buffer =
           entity_data.morph_target_buffer;

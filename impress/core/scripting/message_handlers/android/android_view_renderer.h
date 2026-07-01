@@ -93,10 +93,9 @@ class AndroidViewRenderer : public Component {
       jobject android_view, ViewSize view_size,
       InputForwardingMode input_forwarding_mode =
           InputForwardingMode::INPUT_FORWARDING_MODE_DEFAULT,
-      absl::optional<imp::MaterialDefinition> material_definition =
-          std::nullopt,
-      absl::optional<uint32_t> blend_priority = std::nullopt,
-      absl::optional<float> corner_radius = std::nullopt);
+      std::optional<MaterialDefinition> material_definition = std::nullopt,
+      std::optional<uint32_t> blend_priority = std::nullopt,
+      std::optional<float> corner_radius = std::nullopt);
   void Cleanup();
 
   // Returns the material used to render the Android View.
@@ -137,7 +136,7 @@ class AndroidViewRenderer : public Component {
   void ForwardTouchInputs(const PointerHitEvent& event);
   void ForwardSplitEngineInputs(const android_xr::SplitEngineInputEvent& event);
   Future<TextureMaterialVariant> LoadMaterial(
-      absl::optional<imp::MaterialDefinition> material_definition);
+      std::optional<MaterialDefinition> material_definition);
   void ForwardControllerInputs(const ControllerHitEvent& event);
 
   NodeHandle renderer_node_;

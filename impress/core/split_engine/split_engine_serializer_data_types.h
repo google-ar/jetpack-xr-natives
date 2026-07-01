@@ -36,6 +36,7 @@
 #include "core/math/math.h"
 #include "core/render_passes/texture_pipeline_renderer_projection_quad.h"
 #include "core/render_passes/texture_pipeline_renderer_state.proto.imp.h"
+#include "core/split_engine/split_engine_serializer.h"
 #include "split_engine/schemas/split_engine_data_generated.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
@@ -176,6 +177,11 @@ struct RemoveMeshBuffers {
   std::vector<ResourceId> index_buffers;
 };
 
+struct UpdateMeshDataInfo {
+  std::vector<SplitEngineSerializer::VertexBufferUpdateInfo> vertex_buffers;
+  std::vector<SplitEngineSerializer::IndexBufferUpdateInfo> index_buffers;
+};
+
 struct DuplicateMaterialInstanceInfo {
   ResourceId copy_id;
   ResourceId instance_id;
@@ -216,6 +222,10 @@ template <>
 struct DataSelector<android_xr::schemas::CommandTypes::UpdateRenderables> {
   using data_type =
       SerializerDataTypes::EntityMap<SerializerDataTypes::UpdateRenderableInfo>;
+};
+template <>
+struct DataSelector<android_xr::schemas::CommandTypes::UpdateMeshData> {
+  using data_type = UpdateMeshDataInfo;
 };
 template <>
 struct DataSelector<android_xr::schemas::CommandTypes::RemoveMeshData> {

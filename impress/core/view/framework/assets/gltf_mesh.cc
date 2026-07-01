@@ -30,6 +30,8 @@
 #include "filament/filament/include/filament/Box.h"
 #include "filament/filament/include/filament/InstanceBuffer.h"
 #include "filament/filament/include/filament/RenderableManager.h"
+#include "core/assets/asset_ptr.h"
+#include "core/assets/gltf/gltf_asset.h"
 #include "core/collision/mesh_collision_accelerator.h"
 #include "core/common/filament_helpers.h"
 #include "core/common/owned_or_borrowed_ptr.h"
@@ -63,7 +65,6 @@ namespace imp {
 using model::ModelData;
 using RenderFlags = ModelData::RenderFlags;
 using SampledJointId = model::ModelData::SampledJointId;
-
 
 GltfMesh::GltfMesh() : owner_(), self_() {}
 
@@ -100,10 +101,21 @@ void GltfMesh::Setup(ComponentHandle<GltfRenderer> owner,
     Box bounds = *local_bounds;
     if (instance_info.has_value() &&
         !instance_info->instance_transforms.empty()) {
+      size_t max_instances = engine->getMaxAutomaticInstances();
+      if (instance_info->instance_count > max_instances) {
+        IMP_LOG(imp::ERROR) << "GltfMesh: instance count ("
+                   << instance_info->instance_count
+                   << ") exceeds engine limit (" << max_instances
+                   << "). Truncating.";
+      }
+      size_t instance_count = std::min(
+          static_cast<size_t>(instance_info->instance_count), max_instances);
+
       filament::Aabb base_bounds{.min = bounds.getMin(),
                                  .max = bounds.getMax()};
       filament::Aabb combined_bounds = base_bounds;
-      for (auto instance_transform : instance_info->instance_transforms) {
+      for (size_t i = 0; i < instance_count; ++i) {
+        mat4f instance_transform = instance_info->instance_transforms[i];
         mat4f& transform =
             instance_transforms_.emplace_back(instance_transform);
         // The transform applied by the glTF tree (from the root node down to
@@ -565,6 +577,59 @@ int16_t GltfMesh::GetOriginalGltfMeshIndex() const {
 
 const std::vector<mat4f>& GltfMesh::GetInstanceTransforms() const {
   return instance_transforms_;
+}
+
+void GltfMesh::UpdateInstanceTransforms(absl::Span<const mat4f> transforms) {
+  if (!instance_buffer_) {
+    return;
+  }
+
+  // Ensure we don't exceed the allocated buffer size.
+  size_t count = std::min(transforms.size(), instance_transforms_.size());
+
+  // The transform applied by the glTF tree (from the root node down to
+  // this specific node).
+  mat4f gltf_transform{inverse(owner_->GetNode()->GetWorldTrs()) *
+                       GetNode()->GetWorldTrs()};
+  mat4f inv_gltf_transform = inverse(gltf_transform);
+
+  for (size_t i = 0; i < count; ++i) {
+    // Mirror the logic in Setup: convert root-relative transform to mesh-local.
+    instance_transforms_[i] =
+        inv_gltf_transform * (transforms[i] * gltf_transform);
+  }
+
+  instance_buffer_->setLocalTransforms(instance_transforms_.data(), count, 0);
+
+  // Update the combined AABB for all instances.
+  UpdateInstanceBounds();
+}
+
+void GltfMesh::UpdateInstanceBounds() {
+  if (instance_transforms_.empty()) return;
+
+  if (!owner_.IsValid()) return;
+  AssetPtr<GltfAsset> gltf_asset = owner_->GetGltfAsset();
+  if (!gltf_asset) return;
+
+  const ModelData& model_data = gltf_asset->GetModelData();
+  const ModelData::EntityData::Proxy entity_data = model_data.Entities()[self_];
+  const absl::optional<filament::Box>& local_bounds = entity_data.local_bounds;
+  if (!local_bounds) return;
+
+  filament::Aabb base_bounds{.min = local_bounds->getMin(),
+                             .max = local_bounds->getMax()};
+  filament::Aabb combined_bounds =
+      base_bounds.transform(instance_transforms_[0]);
+  for (size_t i = 1; i < instance_transforms_.size(); ++i) {
+    filament::Aabb current_bounds =
+        base_bounds.transform(instance_transforms_[i]);
+    combined_bounds.min = min(combined_bounds.min, current_bounds.min);
+    combined_bounds.max = max(combined_bounds.max, current_bounds.max);
+  }
+
+  Box final_bounds{combined_bounds.center(), combined_bounds.extent()};
+  GetRenderableManager().SetAxisAlignedBoundingBox(GetInstance(), final_bounds);
 }
 
 ComponentHandle<GltfRenderer> GltfMesh::GetGltfRenderer() const {

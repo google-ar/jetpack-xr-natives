@@ -54,14 +54,15 @@ class AndroidImpWebViewFragment : public JavaWrapper {
         GetMethodHandle("inflate",
                         "(Lcom/google/ar/imp/core/web/FragmentHost;"
                         "JFFIILjava/lang/String;Ljava/lang/String;Z)V");
-    CallVoidMethod(
-        inflate, imp_context_.GetFragmentHost(), ToJava<WebView>(web_view_),
-        params.location_px.x, params.location_px.y, params.dimensions_px.x,
-        params.dimensions_px.y, ToString(imp_context_.GetJniEnv(), params.url),
-        ToString(imp_context_.GetJniEnv(), injection_script.StringView().empty()
-                                               ? ""
-                                               : injection_script.StringView()),
-        clear_cache);
+    JniUniquePtr<jstring> jurl =
+        ToJniString(imp_context_.GetJniEnv(), params.url);
+    JniUniquePtr<jstring> jinjection_script =
+        ToJniString(imp_context_.GetJniEnv(), injection_script.StringView());
+    CallVoidMethod(inflate, imp_context_.GetFragmentHost(),
+                   ToJava<WebView>(web_view_), params.location_px.x,
+                   params.location_px.y, params.dimensions_px.x,
+                   params.dimensions_px.y, jurl.get(), jinjection_script.get(),
+                   clear_cache);
   }
 
   ~AndroidImpWebViewFragment() override {
@@ -75,8 +76,9 @@ class AndroidImpWebViewFragment : public JavaWrapper {
     JniHandle post_message_handle =
         GetMethodHandle("postMessage", "(Ljava/lang/String;)V");
     assert(post_message_handle);
-    CallVoidMethod(post_message_handle, ToString(imp_context_.GetJniEnv(),
-                                                 SerializeToBase64(message)));
+    JniUniquePtr<jstring> jmessage =
+        ToJniString(imp_context_.GetJniEnv(), SerializeToBase64(message));
+    CallVoidMethod(post_message_handle, jmessage.get());
   }
 
  private:
@@ -95,9 +97,8 @@ class AndroidImpWebViewBridge : public JavaWrapper {
             context, "com/google/ar/imp/core/web/ImpWebViewBridge",
             "(JLandroid/webkit/WebView;Ljava/lang/String;Z)V",
             ToJava<WebView>(native_web_view), web_view,
-            ToString(context.GetJniEnv(), injection_script.StringView().empty()
-                                              ? ""
-                                              : injection_script.StringView()),
+            ToJniString(context.GetJniEnv(), injection_script.StringView())
+                .get(),
             static_cast<jboolean>(clear_cache)),
         imp_context_(context) {
     post_message_ = GetMethodHandle("postMessage", "(Ljava/lang/String;)V");
@@ -110,19 +111,17 @@ class AndroidImpWebViewBridge : public JavaWrapper {
   }
 
   void PostMessage(const MessageToScript& message) {
-    CallVoidMethod(post_message_,
-                   ToString(imp_context_.GetJniEnv(),
-                            SerializeToBase64<MessageToScript>(message)));
+    JniUniquePtr<jstring> jmessage = ToJniString(
+        imp_context_.GetJniEnv(), SerializeToBase64<MessageToScript>(message));
+    CallVoidMethod(post_message_, jmessage.get());
   }
 
   void InjectScript() { CallVoidMethod(inject_script_); }
 
   void SetInjectionScript(BufferAccess injection_script) {
-    CallVoidMethod(set_injection_script_,
-                   ToString(imp_context_.GetJniEnv(),
-                            injection_script.StringView().empty()
-                                ? ""
-                                : injection_script.StringView()));
+    JniUniquePtr<jstring> jinjection_script =
+        ToJniString(imp_context_.GetJniEnv(), injection_script.StringView());
+    CallVoidMethod(set_injection_script_, jinjection_script.get());
   }
 
  private:

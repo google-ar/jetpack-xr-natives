@@ -18,10 +18,9 @@
 #define TNT_FILAFLAT_CHUNK_CONTAINER_H
 
 
-#include "filament/libs/utils/include/utils/compiler.h"
-
 #include <filament/MaterialChunkType.h>
 
+#include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 
 #include "robin_map/include/tsl/robin_map.h"

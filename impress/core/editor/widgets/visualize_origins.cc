@@ -15,6 +15,7 @@
 #include "core/editor/widgets/visualize_origins.h"
 
 #include "core/common/debug_draw.h"
+#include "core/common/platform_storage.h"
 #include "core/common/registry.h"
 #include "core/editor/editor.h"
 #include "core/editor/events.h"
@@ -33,6 +34,14 @@ constexpr debug_draw::Color kOriginColor = debug_draw::kPink;
 constexpr float kCrossHalfExtent = 0.05f;
 
 VisualizeOrigins::VisualizeOrigins(BaseView& view) : view_(view) {
+  PlatformStorage& storage = *view_.GetRegistry().Get<PlatformStorage>();
+  if (storage.GetBool(kShowAllOriginsEnabledKey,
+                      kShowAllOriginsEnabledDefault)) {
+    mode_ = Mode::kShowAllOrigins;
+  } else {
+    mode_ = Mode::kShowSelectedOrigins;
+  }
+
   Editor& editor = view_.GetRegistry().Get<Editor>()->get();
   Dispatcher& editor_dispatcher = editor.GetDispatcher();
   editor_dispatcher.Connect(

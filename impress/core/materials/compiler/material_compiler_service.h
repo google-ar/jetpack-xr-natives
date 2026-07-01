@@ -22,10 +22,12 @@
 #include <string>
 
 #include "absl/base/thread_annotations.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/synchronization/notification.h"
 #include "filament/libs/filamat/include/filamat/MaterialBuilder.h"
 #include "filament/libs/utils/include/utils/JobSystem.h"
 #include "flatbuffers/flatbuffer_builder.h"
@@ -38,6 +40,9 @@ namespace imp {
 // Native service for requesting material compilation at runtime.
 class MaterialCompilerService {
  public:
+  // Each compilation request gets a unique operation id.
+  using OperationId = uint64_t;
+
   explicit MaterialCompilerService(int fd,
                                    imp::Invocable<void()> on_close = {});
   ~MaterialCompilerService();
@@ -46,19 +51,25 @@ class MaterialCompilerService {
   ipc::MessagePipe::OnMessageResult OnMessage(
       std::unique_ptr<uint8_t[]> message, size_t size);
 
-  void HandleCompileRequest(uint64_t operation_id,
+  void HandleCompileRequest(OperationId operation_id,
                             const schemas::CompileRequest* request);
+
+  void HandleCancelRequest(OperationId operation_id,
+                           const schemas::CancelRequest* request);
 
   absl::StatusOr<std::string> CompileMaterial(
       absl::string_view source_material_string,
       filamat::MaterialBuilder::Platform platform,
-      filamat::MaterialBuilder::TargetApi target_api);
+      filamat::MaterialBuilder::TargetApi target_api,
+      std::shared_ptr<absl::Notification> canceled);
 
   absl::Status SendResponse(const flatbuffers::FlatBufferBuilder& builder);
 
-  void SendErrorResponse(uint64_t operation_id, absl::Status error_status);
+  void SendErrorResponse(OperationId operation_id, absl::Status error_status);
 
   void Close();
+
+  void CancelAllJobs();
 
   // We need this since `init` should be called before initializing `pipe_`,
   // and `shutdown` should be called after `pipe_` is destroyed.
@@ -90,6 +101,19 @@ class MaterialCompilerService {
   // background jobs finish while `pipe_` is still valid, preventing crashes
   // if a job attempts to send a response during shutdown.
   std::unique_ptr<utils::JobSystem> job_system_;
+
+  // Declared before `pipe_` to ensure it is initialized first. This avoids
+  // a race condition where `pipe_` starts receiving messages before
+  // `jobs_lock_` is initialized.
+  absl::Mutex jobs_lock_;
+  // Maps the job's operation id to a absl::Notification used to signal when
+  // the job has been canceled.
+  // We use shared_ptr here so that MaterialCompilerService can signal
+  // cancellation to the background compilation job, and even if the job
+  // finishes and is removed from active_jobs_, or if a cancellation request
+  // arrives concurrently with job completion, access to the flag is safe.
+  absl::flat_hash_map<OperationId, std::shared_ptr<absl::Notification>>
+      active_jobs_ ABSL_GUARDED_BY(jobs_lock_);
 
   // A callback when the Service closes (optional).
   imp::Invocable<void()> on_close_;

@@ -18,7 +18,6 @@
 #define TNT_UTILS_STATICSTRING_H
 
 #include "filament/libs/utils/include/utils/compiler.h"
-
 #include "filament/libs/utils/include/utils/ostream.h"
 
 #include <string_view>

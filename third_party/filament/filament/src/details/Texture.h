@@ -19,11 +19,11 @@
 
 #include "downcast.h"
 
+#include <filament/Texture.h>
+
 #include <backend/DriverApiForward.h>
 #include <backend/DriverEnums.h>
 #include <backend/Handle.h>
-
-#include <filament/Texture.h>
 
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/Invocable.h"

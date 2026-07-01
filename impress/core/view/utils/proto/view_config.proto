@@ -19,6 +19,7 @@ edition = "2024";
 
 package imp;
 
+import "core/assets/material/material_load_options.proto";
 import "core/view/utils/proto/cache_config.proto";
 import "core/view/utils/proto/filament_feature_flag.proto";
 import "core/view/utils/proto/render_settings.proto";
@@ -159,15 +160,6 @@ message ExperimentalFeatureFlags {
   bool enable_filament_material_instance_destruction_check = 13
       [default = false];
 
-  // If true, we will call getImageData immediately in the WASM GlyphAtlas when
-  // performing drawing operations, rather than waiting to the end of the list
-  // of drawing operations.
-  // OWNERS: faaland
-  // BUG: b/495503496
-  // PLATFORMS: WASM
-  // ACTION: Clean up by 2026-06-10
-  bool enable_immediate_get_image_data = 14 [default = false];
-
   // Guards against using the TexturePipelineRenderer before rendering has
   // started.
   // OWNERS: malikcoates
@@ -194,6 +186,16 @@ message ExperimentalFeatureFlags {
   // PLATFORMS: ANDROID
   // ACTION: Clean up by 2026-08-06
   bool enable_async_graphics_resource_loading = 17 [default = false];
+
+  // If true, we will use a gl texture for the WASM canvas similar to how image
+  // decoding on WASM is done.
+  //  OWNERS: mitsuruo
+  // BUG: b/500045585
+  // PLATFORMS: WASM
+  // ACTION: Clean up by 2026-07-07
+  bool enable_wasm_canvas_gl_texture = 18 [default = false];
+
+  reserved 14;
 }
 
 message ViewConfig {
@@ -238,6 +240,18 @@ message ViewConfig {
     SIZE4096 = 2;
     // A 8x8 grid of 256x256 textures (2048x2048 total).
     SIZE256X256X8X8 = 3;
+    // A 4x8 grid of 512x256 textures (2048x2048 total).
+    SIZE512X256X4X8 = 4;
+    // A 4x16 grid of 512x128 textures (2048x2048 total).
+    SIZE512X128X4X16 = 5;
+    // A 4x4 grid of 512x512 textures (2048x2048 total).
+    SIZE512X512X4X4 = 6;
+    // A 2x4 grid of 1024x512 textures (2048x2048 total).
+    SIZE1024X512X2X4 = 7;
+    // A 2x2 grid of 1024x1024 textures (2048x2048 total).
+    SIZE1024X1024X2X2 = 8;
+    // A 1x16 grid of 2048x128 textures (2048x2048 total)
+    SIZE2048X128X1X16 = 9;
   }
 
   // The size of the texture used by the GlyphAtlas. The default is SIZE2048,
@@ -255,4 +269,8 @@ message ViewConfig {
 
   // If true, the swap chain will be created with an alpha channel.
   bool use_transparent_swap_chain = 13 [default = false];
+
+  // Optional precompile options for built-in materials created by
+  // SplitEngineBuiltinMaterialFactory.
+  MaterialPreCompileOptions material_pre_compile_options = 14;
 }

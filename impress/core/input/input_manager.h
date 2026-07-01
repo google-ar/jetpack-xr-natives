@@ -17,6 +17,8 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_INPUT_INPUT_MANAGER_H_
 #define THIRD_PARTY_IMPRESS_CORE_INPUT_INPUT_MANAGER_H_
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -25,6 +27,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "core/actions/input_action_event.h"
+#include "core/input/input_events_pool.h"
 #include "core/input/keyboard_event.h"
 #include "core/input/pointer_event.h"
 #include "core/input/pointer_event_processor.h"
@@ -60,17 +63,19 @@ struct InputHandlerBase {
 struct InputInterceptor {
   virtual ~InputInterceptor() {}
   virtual void FilterPointerEvents(
-      std::vector<PointerEvent>& pointer_events) = 0;
+      InputEventsBatch<PointerEvent>& pointer_batch) = 0;
   virtual void FilterKeyboardEvents(
-      std::vector<KeyboardEvent>& keyboard_events,
-      std::vector<TextInputEvent>& text_input_events) = 0;
-  virtual void FilterWheelEvents(std::vector<WheelEvent>& wheel_events) = 0;
+      InputEventsBatch<KeyboardEvent>& keyboard_batch,
+      InputEventsBatch<TextInputEvent>& text_input_batch) = 0;
+  virtual void FilterWheelEvents(InputEventsBatch<WheelEvent>& wheel_batch) = 0;
   virtual void FilterInputActionEvents(
-      std::vector<InputActionEvent>& input_action_events) = 0;
+      InputEventsBatch<InputActionEvent>& input_action_batch) = 0;
 };
 
 // The InputManager handles receiving input and queues events to send on the
-// next frame.
+// next frame. Events from all sources (e.g., local and remote) are merged into
+// a single queue after interceptors run. The Pop...Events methods return this
+// merged queue.
 class InputManager {
  public:
   explicit InputManager(std::unique_ptr<InputHandlerBase> default_handler);
@@ -81,26 +86,30 @@ class InputManager {
   absl::Status ProcessPointerInput(
       uint8_t action, const std::vector<Pointer::Id>& ids,
       const std::vector<float2>& points, absl::Duration elapsed_time,
-      PointerEvent::DeviceType device_type = PointerEvent::DeviceType::UNKNOWN);
+      PointerEvent::DeviceType device_type = PointerEvent::DeviceType::UNKNOWN,
+      InputEventSource source = InputEventSource::kLocal);
   // Takes/adds in a keyboard action, key, and elapsed time and add it to the
   // KeyboardEvent queue.
-  absl::Status ProcessKeyboardInput(uint8_t action, Key key,
-                                    absl::Duration elapsed_time);
+  absl::Status ProcessKeyboardInput(
+      uint8_t action, Key key, absl::Duration elapsed_time,
+      InputEventSource source = InputEventSource::kLocal);
   // Take/adds in a text input contents and add it toTextInputEvent queue.
-  void ProcessTextInput(absl::string_view contents);
+  void ProcessTextInput(absl::string_view contents,
+                        InputEventSource source = InputEventSource::kLocal);
   // Takes/adds in a scroll wheel delta, point, and elapsed time and add it to
   // the WheelEvent queue.
-  absl::Status ProcessWheelInput(float2 delta, float2 point,
-                                 absl::Duration elapsed_time);
+  absl::Status ProcessWheelInput(
+      float2 delta, float2 point, absl::Duration elapsed_time,
+      InputEventSource source = InputEventSource::kLocal);
 
   // Pushes an InputActionEvent to the end of the queue.
-  void PushInputActionEvent(InputActionEvent input_action_event);
+  void PushInputActionEvent(InputActionEvent input_action_event,
+                            InputEventSource source = InputEventSource::kLocal);
 
   // Returns true if any InputActionEvents are on the InputActionEvent vector.
   bool HasInputActionEvent();
 
-  // Returns any InputActionEvents queued since the last call, and clears the
-  // queue.
+  // Returns the events for the current frame.
   std::vector<InputActionEvent> PopInputActionEvents();
 
   // Pushes an input handler on top of the input handling stack. The handler on
@@ -112,22 +121,22 @@ class InputManager {
 
   // Returns true if there is at least one queued PointerEvent.
   bool HasPointerEvent();
-  // Returns any events queued since the last request, and clears the queue.
+  // Returns the events for the current frame.
   std::vector<PointerEvent> PopPointerEvents();
 
   // Returns true if there is at least one queued KeyboardEvent.
   bool HasKeyboardEvent();
-  // Returns any events queued since the last request, and clears the queue.
+  // Returns the events for the current frame.
   std::vector<KeyboardEvent> PopKeyboardEvents();
 
   // Returns true if there is at least one queued TextInputEvent.
   bool HasTextInputEvent();
-  // Returns any events queued since the last request, and clears the queue.
+  // Returns the events for the current frame.
   std::vector<TextInputEvent> PopTextInputEvents();
 
   // Returns true if there is a stored wheel event.
   bool HasWheelEvent();
-  // Removes the currently stored wheel event.
+  // Returns the events for the current frame.
   std::vector<WheelEvent> PopWheelEvents();
 
   // Update the current input handler.
@@ -139,12 +148,13 @@ class InputManager {
  private:
   PointerEventProcessor pointer_event_processor_;
   std::vector<std::unique_ptr<InputHandlerBase>> input_handlers_;
-  std::vector<PointerEvent> pointer_events_;
-  std::vector<KeyboardEvent> keyboard_events_;
-  std::vector<TextInputEvent> text_input_events_;
-  std::vector<WheelEvent> wheel_events_;
+  InputEventsPool<PointerEvent> pointer_events_;
+  InputEventsPool<KeyboardEvent> keyboard_events_;
+  InputEventsPool<TextInputEvent> text_input_events_;
+  InputEventsPool<WheelEvent> wheel_events_;
+  InputEventsPool<InputActionEvent> input_action_events_;
+
   std::vector<std::unique_ptr<InputInterceptor>> input_interceptors_;
-  std::vector<InputActionEvent> input_action_events_;
 };
 
 }  // namespace imp

@@ -35,7 +35,10 @@ size_t MeshDescription::GetIndexSize() const {
     case IndexType::UINT:
       return sizeof(uint32_t);
     default:
-      IMP_LOG(imp::FATAL) << "Unsupported index type: " << static_cast<int>(index_type);
+      if (index_count != 0) {
+        IMP_LOG(imp::FATAL) << "Unsupported index type: "
+                   << static_cast<int>(index_type);
+      }
       return 0;
   }
 }

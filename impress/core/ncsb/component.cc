@@ -30,28 +30,11 @@
 
 namespace imp {
 
-Component::Component() {}
-
 void Component::PostCreated(NodeHandle node, ComponentKey key,
                             BaseComponentPool& pool) {
   node_ = node;
   key_ = key;
   pool_ = &pool;
-}
-
-NodeHandle Component::GetNode() const { return node_; }
-
-BaseView& Component::GetView() const { return GetNode()->GetView(); }
-
-utils::Entity Component::GetEntity() const { return node_.GetEntity(); }
-
-ComponentId Component::GetComponentId() const {
-  return pool_->GetComponentId();
-}
-
-BaseComponentPool& Component::GetBaseComponentPool() const {
-  // Guaranteed to exist, because this component exists.
-  return *pool_;
 }
 
 Dispatcher& Component::GetDispatcher() const {
@@ -68,40 +51,8 @@ void Component::SetEnabled(bool enabled) {
   }
 }
 
-bool Component::IsActive() const {
-  return CheckBit(status_flags_, StatusFlags::kComponentIsActive);
-}
-
-bool Component::IsEnabled() const {
-  return CheckBit(status_flags_, StatusFlags::kComponentIsEnabled);
-}
-
-void Component::SetActiveFlagInternal(bool active) {
-  status_flags_ =
-      SetBitFromBool(status_flags_, StatusFlags::kComponentIsActive, active);
-}
-
-void Component::SetRunningAsyncSetupFlagInternal(bool is_running_async_setup) {
-  status_flags_ =
-      SetBitFromBool(status_flags_, StatusFlags::kComponentIsRunningAsyncSetup,
-                     is_running_async_setup);
-}
-
-#if IMP_RUNTIME(DEV)
-bool Component::IsEditorStaging() const { return GetNode()->IsEditorStaging(); }
-#endif
-
 Invocable<void()> Component::Remember(Holdable holdable) {
   return GetBaseComponentPool().Remember(GetEntity(), std::move(holdable));
-}
-
-void Component::SetRemovingFlagInternal(bool is_removing) {
-  status_flags_ = SetBitFromBool(
-      status_flags_, StatusFlags::kComponentIsBeingRemoved, is_removing);
-}
-
-bool Component::IsRemoving() const {
-  return CheckBit(status_flags_, StatusFlags::kComponentIsBeingRemoved);
 }
 
 }  // namespace imp

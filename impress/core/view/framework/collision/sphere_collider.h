@@ -54,8 +54,8 @@ class SphereCollider : public Component,
 
   // Tests this node against a ray.
   // Optionally returns RayHit collision info if a collision occurred.
-  absl::optional<RayHit> Intersect(const Ray& ray);
-  absl::optional<DoubleRayHit> IntersectPrecise(const DoubleRay& ray);
+  std::optional<RayHit> Intersect(const Ray& ray);
+  std::optional<DoubleRayHit> IntersectPrecise(const DoubleRay& ray);
 
   // Sets the node that should be considered the "hit" node when this collider
   // collides with a ray.

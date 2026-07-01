@@ -62,7 +62,7 @@ struct PointerHitEvent : public Event {
 
   // Gets the first RayHit or DoubleRayHit from the intersection list at the
   // provided pointer index, if the intersection list is non-empty.
-  std::variant<absl::monostate, RayHit, DoubleRayHit> GetRayHitOrDoubleRayHit(
+  std::variant<std::monostate, RayHit, DoubleRayHit> GetRayHitOrDoubleRayHit(
       size_t index = 0) const;
 
   PointerEvent event =

@@ -20,7 +20,7 @@ load(
     "flatbuffer_cc_library",
 )
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
-load("//build_tools:imp.bzl", "IMP_FLATBUFFER_INCLUDE_PATHS", "IMP_FLATC_ARGS", "if_android", "if_dev_runtime", "if_non_android", "imp_copts", "imp_defines", "imp_google3_copts")
+load("//build_tools:imp.bzl", "IMP_FLATBUFFER_INCLUDE_PATHS", "IMP_FLATC_ARGS", "if_android", "if_dev_runtime", "if_emscripten", "if_non_android", "imp_copts", "imp_defines", "imp_google3_copts")
 load("//core/loader/data:generic_material.bzl", "process_and_build_material")
 
 package(
@@ -89,6 +89,18 @@ process_and_build_material(
     template_file = "debug_draw_unlit_screenspace.mat",
 )
 
+process_and_build_material(
+    name = "debug_draw_unlit_fl0",
+    force_feature_level_zero = True,
+    template_file = "debug_draw_unlit.mat",
+)
+
+process_and_build_material(
+    name = "debug_draw_unlit_screenspace_fl0",
+    force_feature_level_zero = True,
+    template_file = "debug_draw_unlit_screenspace.mat",
+)
+
 filegroup(
     name = "debug_draw_materials",
     srcs = [
@@ -97,9 +109,23 @@ filegroup(
     ],
 )
 
+filegroup(
+    name = "debug_draw_materials_fl0",
+    srcs = [
+        ":debug_draw_unlit_fl0.cmat",
+        ":debug_draw_unlit_screenspace_fl0.cmat",
+    ],
+)
+
 sapi_cc_embed_data(
     name = "debug_draw_resources",
     srcs = [":debug_draw_materials"],
+    flatten = True,
+)
+
+sapi_cc_embed_data(
+    name = "debug_draw_resources_fl0",
+    srcs = [":debug_draw_materials_fl0"],
     flatten = True,
 )
 
@@ -110,10 +136,11 @@ cc_library(
     copts = imp_google3_copts(),
     defines = imp_defines(),
     deps = [
-        ":common",
         ":debug_draw_resources",
+        ":debug_draw_resources_fl0",
         ":filament_engine_helpers",
         ":filament_helpers",
+        ":resource_helpers",
         "//core/collision:collision_flags",
         "//core/geometry/shapes",
         "//core/math",
@@ -165,6 +192,7 @@ cc_library(
     linkstatic = 1,
     deps = [
         ":platform_helpers",
+        "@com_google_absl//absl/algorithm:container",
         "@com_google_impress//core/common:log",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
@@ -332,7 +360,7 @@ py_test(
 )
 
 # Benchmarks of OwnedPtr vs std::unique_ptr
-# blaze run -c opt //core/common:owned_ptr_benchmark_test -- --benchmark_filter=all --benchmark_memory_usage
+# blaze run --config=benchmark //core/common:owned_ptr_benchmark_test -- --benchmark_filter=all --benchmark_memory_usage --benchmark_format=json
 
 cc_library(
     name = "owned_or_borrowed_ptr",
@@ -450,6 +478,41 @@ cc_library(
 )
 
 cc_library(
+    name = "platform_storage_interface",
+    hdrs = ["platform_storage.h"],
+    copts = imp_copts(),
+    deps = [
+        "@com_google_absl//absl/strings",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "noop_platform_storage",
+    srcs = ["noop_platform_storage.cc"],
+    copts = imp_copts(),
+    deps = [
+        ":platform_storage_interface",
+        "@com_google_absl//absl/strings",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "platform_storage",
+    copts = imp_copts(),
+    deps = [
+        ":platform_storage_interface",
+    ] + if_emscripten(
+        ["//core/view/platforms/wasm:wasm_platform_storage"],
+        otherwise = [":noop_platform_storage"],
+    ),
+    alwayslink = 1,
+)
+
+# (broken link) This test is onoly used for wasm because there is no desktop implementation
+
+cc_library(
     name = "common",
     srcs = [
         "file_helpers.cc",
@@ -461,6 +524,7 @@ cc_library(
         "file_helpers.h",
         "optional_error.h",
         "platform_helpers.h",
+        "platform_storage.h",
         "resource_helpers.h",
         "string_helpers.h",
         "visit.h",
@@ -470,6 +534,7 @@ cc_library(
         ":buffer_access",
         ":optional_error",
         ":platform_helpers",
+        ":platform_storage",
         ":resource_helpers",
         ":visit",
         "@com_google_absl//absl/base:core_headers",
@@ -747,6 +812,8 @@ cc_library(
     deps = [
         ":small_source_location",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/hash",
         "@com_google_absl//absl/log:check",
     ],
     alwayslink = 1,

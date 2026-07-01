@@ -39,6 +39,8 @@ typedef int Bool;
 #include "core/common/trace.h"
 #include "core/config.h"
 #include "core/view/platforms/xr_android/openxr_includes.h"
+#include "core/view/platforms/xr_android/xr_native_window.h"
+#include "core/view/platforms/xr_android/xr_opengl_swap_chain_image_handler.h"
 #include "core/view/platforms/xr_android/xr_session_host.h"
 #include "core/view/platforms/xr_android/xr_swap_chain.h"
 namespace imp {
@@ -90,25 +92,48 @@ filament::backend::Platform::SwapChain* XrOpenGLPlatform::createSwapChain(
     void* nativewindow, uint64_t flags) noexcept {
   IMP_TRACE();
 
-  XrSessionHost* host = reinterpret_cast<XrSessionHost*>(nativewindow);
-#if IMP_PLATFORM(ANDROID) && defined(XR_KHR_android_thread_settings)
-  auto status = host->SetThreadType(XR_ANDROID_THREAD_TYPE_RENDERER_MAIN_KHR);
-  if (!status.ok()) {
-    IMP_LOG(imp::INFO) << "Failed to reported thread type to OpenXR due to " << status;
-  }
-#endif
-  // BUG((broken link)): The thread name should already be "FEngine::loop", but
-  // SysUI renames threads.  This puts the original setting back.
-  SetThreadName("FEngine::loop");
   XrSwapchainCreateFlags xr_flags = 0;
   if (flags & filament::SwapChain::CONFIG_PROTECTED_CONTENT) {
     xr_flags = XR_SWAPCHAIN_CREATE_PROTECTED_CONTENT_BIT;
   }
-  absl::StatusOr<std::unique_ptr<XrSwapChain>> swap_chain =
-      XrSwapChain::Create(this, host, xr_flags);
-  if (!swap_chain.ok()) {
-    IMP_LOG(imp::FATAL) << "Unable to create XrSwapChain: " << swap_chain.status();
+
+  XrNativeWindow* xr_window = reinterpret_cast<XrNativeWindow*>(nativewindow);
+  XrSessionHost* host = xr_window->host;
+  absl::StatusOr<std::unique_ptr<XrSwapChain>> swap_chain;
+
+  if (xr_window->quad_layer_data.has_value()) {
+    swap_chain = XrSwapChain::CreateForQuadLayer(
+        *this, *host, xr_window->quad_layer_data->size,
+        xr_window->quad_layer_data->sample_count, xr_flags);
+    if (!swap_chain.ok()) {
+      IMP_LOG(imp::FATAL) << "Unable to create XrSwapChain for quad layer: "
+                 << swap_chain.status();
+    }
+    std::unique_ptr<XrOpenGLSwapChainImageHandler::SwapchainLayers>&
+        swapchain_layers =
+            swap_chain.value()->GetSwapchainImageHandler().GetSwapchainLayers();
+    XrSwapchain color = swapchain_layers->active_color
+                            ? swapchain_layers->active_color->handle
+                            : XR_NULL_HANDLE;
+    xr_window->quad_layer_data->swapchain.Return(color);
+  } else {
+    // Primary projection swapchain path
+#if IMP_PLATFORM(ANDROID) && defined(XR_KHR_android_thread_settings)
+    absl::Status status =
+        host->SetThreadType(XR_ANDROID_THREAD_TYPE_RENDERER_MAIN_KHR);
+    if (!status.ok()) {
+      IMP_LOG(imp::INFO) << "Failed to reported thread type to OpenXR due to " << status;
+    }
+#endif
+    SetThreadName("FEngine::loop");
+
+    swap_chain = XrSwapChain::Create(*this, *host, xr_flags);
+    if (!swap_chain.ok()) {
+      IMP_LOG(imp::FATAL) << "Unable to create primary XrSwapChain: "
+                 << swap_chain.status();
+    }
   }
+
   return swap_chain.value().release();
 }
 

@@ -442,10 +442,8 @@ foreach(mat_dir ${MATERIAL_DIRS})
 
         check_in_list(MATERIAL_VULKAN_METAL_SRCS ${mat_src} is_vk_metal)
         if (is_vk_metal)
-            # Remove webgpu and related parameters
-            # The variant-filter=stereo is added in the root folder's CMakeLists.txt for webgpu
-            # Context is that webgpu does not support the stereo variant
-            string(REPLACE "-a;webgpu;--variant-filter=stereo" "" MATC_CUSTOM_FLAGS "${MATC_CUSTOM_FLAGS}")
+            # Remove webgpu
+            string(REPLACE "-a;webgpu" "" MATC_CUSTOM_FLAGS "${MATC_CUSTOM_FLAGS}")
 
             # Remove gl
             string(REPLACE "-a;opengl" "" MATC_CUSTOM_FLAGS "${MATC_CUSTOM_FLAGS}")
@@ -804,6 +802,10 @@ target_compile_options(${TARGET} PRIVATE
         $<$<AND:$<PLATFORM_ID:Darwin>,$<CONFIG:Release>>:${DARWIN_OPTIMIZATION_FLAGS}>
         $<$<PLATFORM_ID:Linux>:${LINUX_COMPILER_FLAGS}>
 )
+
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(${TARGET} PRIVATE -Wthread-safety)
+endif()
 
 target_link_libraries(${TARGET} PRIVATE
         $<$<AND:$<PLATFORM_ID:Linux>,$<CONFIG:Release>>:${LINUX_LINKER_OPTIMIZATION_FLAGS}>

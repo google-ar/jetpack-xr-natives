@@ -399,7 +399,7 @@ class View : public BaseView {
       window::FilamentHost* host, absl::Duration last_vsync_time,
       absl::Duration next_vsync_time,
       window::FilamentHost::UpdateStageFlags* out_flags,
-      absl::optional<absl::Duration>* out_time_until_retry) override;
+      std::optional<absl::Duration>* out_time_until_retry) override;
 
   void OnHostUpdate(
       window::FilamentHost* host, absl::Duration last_vsync_time,
@@ -485,6 +485,10 @@ class View : public BaseView {
       absl::ZeroDuration();
 
   scripting::ScriptMessageHandler* script_message_handler_;
+
+  // Scratch space for nodes to destroy. This is used to avoid repeated
+  // allocations and deallocations when destroying nodes.
+  std::vector<NodeHandle> nodes_to_destroy_scratch_;
 };
 
 template <typename T>

@@ -26,6 +26,7 @@ import com.google.ar.imp.core.ViewConfig;
 import com.google.ar.imp.core.scripting.ScriptEndpoint;
 import com.google.ar.imp.core.web.FragmentHost;
 
+import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -420,6 +421,26 @@ public class ImpApi implements ImpApiScuba {
    */
   public FrameScheduler getFrameScheduler() {
     return impViewController.getFrameScheduler();
+  }
+
+  public void setAlwaysAdvanceExecutor(boolean shouldAlwaysAdvanceExecutor) {
+    Preconditions.checkState(impViewController != null, "ImpApi is not initialized yet.");
+    impViewController.setAlwaysAdvanceExecutor(shouldAlwaysAdvanceExecutor);
+  }
+
+  public boolean isAlwaysAdvanceExecutor() {
+    Preconditions.checkState(impViewController != null, "ImpApi is not initialized yet.");
+    return impViewController.isAlwaysAdvanceExecutor();
+  }
+
+  public void setAlwaysPreRender(boolean shouldAlwaysPreRender) {
+    Preconditions.checkState(impViewController != null, "ImpApi is not initialized yet.");
+    impViewController.setAlwaysPreRender(shouldAlwaysPreRender);
+  }
+
+  public boolean isAlwaysPreRender() {
+    Preconditions.checkState(impViewController != null, "ImpApi is not initialized yet.");
+    return impViewController.isAlwaysPreRender();
   }
 
   /**

@@ -23,24 +23,20 @@
 #include "components/TransformManager.h"
 
 #include "details/Engine.h"
+#include "details/Camera.h"
 #include "details/Skybox.h"
-
-#include <backend/Handle.h>
+#include "details/View.h"
 
 #include <private/filament/UibStructs.h>
 
-#include <private/utils/Tracing.h>
-
 #include <filament/Box.h>
-#include <filament/TransformManager.h>
-#include <filament/RenderableManager.h>
 #include <filament/LightManager.h>
+#include <filament/RenderableManager.h>
+#include <filament/TransformManager.h>
 
-#include "filament/libs/math/include/math/mat3.h"
-#include "filament/libs/math/include/math/mat4.h"
-#include "filament/libs/math/include/math/vec2.h"
-#include "filament/libs/math/include/math/vec3.h"
-#include "filament/libs/math/include/math/vec4.h"
+#include <backend/Handle.h>
+
+#include <private/utils/Tracing.h>
 
 #include "filament/libs/utils/include/utils/Allocator.h"
 #include "filament/libs/utils/include/utils/compiler.h"
@@ -51,15 +47,20 @@
 #include "filament/libs/utils/include/utils/JobSystem.h"
 #include "filament/libs/utils/include/utils/Range.h"
 
-#include <algorithm>
-#include <cstdint>
-#include <limits>
-#include <functional>
-#include <memory>
-#include <utility>
-#include <new>
+#include "filament/libs/math/include/math/mat3.h"
+#include "filament/libs/math/include/math/mat4.h"
+#include "filament/libs/math/include/math/vec2.h"
+#include "filament/libs/math/include/math/vec3.h"
+#include "filament/libs/math/include/math/vec4.h"
 
+#include <algorithm>
 #include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <limits>
+#include <memory>
+#include <new>
+#include <utility>
 
 using namespace filament::backend;
 using namespace filament::math;
@@ -79,7 +80,8 @@ FScene::~FScene() noexcept = default;
 void FScene::prepare(JobSystem& js,
         RootArenaScope& rootArenaScope,
         mat4 const& worldTransform,
-        bool shadowReceiversAreCasters) noexcept {
+        bool shadowReceiversAreCasters,
+        FScene::SceneCacheData& cache) noexcept {
     // TODO: can we skip this in most cases? Since we rely on indices staying the same,
     //       we could only skip, if nothing changed in the RCM.
 
@@ -96,8 +98,8 @@ void FScene::prepare(JobSystem& js,
     FTransformManager const& tcm = engine.getTransformManager();
     FLightManager const& lcm = engine.getLightManager();
     // go through the list of entities, and gather the data of those that are renderables
-    auto& sceneData = mRenderableData;
-    auto& lightData = mLightData;
+    auto& sceneData = cache.renderableData;
+    auto& lightData = cache.lightData;
     auto const& entities = mEntities;
 
     using RenderableContainerData = std::pair<RenderableManager::Instance, TransformManager::Instance>;
@@ -124,8 +126,8 @@ void FScene::prepare(JobSystem& js,
      * First compute the exact number of renderables and lights in the scene.
      * Also find the main directional light.
      */
-
-    for (Entity const e: entities) {
+    entities.forEachSetBit([&](uint32_t id) {
+        Entity const e = Entity::import(int32_t(id));
         if (UTILS_LIKELY(em.isAlive(e))) {
             auto ti = tcm.getInstance(e);
             auto li = lcm.getInstance(e);
@@ -146,7 +148,7 @@ void FScene::prepare(JobSystem& js,
                 renderableInstances.emplace_back(ri, ti);
             }
         }
-    }
+    });
 
     FILAMENT_TRACING_NAME_END(FILAMENT_TRACING_CATEGORY_FILAMENT);
 
@@ -224,7 +226,7 @@ void FScene::prepare(JobSystem& js,
             size_t const index = std::distance(first, p) + i;
             assert_invariant(index < sceneData.size());
 
-            sceneData.elementAt<RENDERABLE_INSTANCE>(index) = ri;
+            sceneData.elementAt<RENDERABLE_ENTITY>(index) = rcm.getEntity(ri);
             sceneData.elementAt<WORLD_TRANSFORM>(index)     = shaderWorldTransform;
             sceneData.elementAt<VISIBILITY_STATE>(index)    = visibility;
             sceneData.elementAt<SKINNING_BUFFER>(index)     = rcm.getSkinningBufferInfo(ri);
@@ -245,8 +247,7 @@ void FScene::prepare(JobSystem& js,
         }
     };
 
-    auto lightWork = [first = lightInstances.data(), &lcm, &tcm, &worldTransform,
-            &lightData](auto* p, auto c) {
+    auto lightWork = [first = lightInstances.data(), &lcm, &tcm, &worldTransform, &lightData](auto* p, auto c) {
         FILAMENT_TRACING_NAME(FILAMENT_TRACING_CATEGORY_FILAMENT, "lightWork");
         for (size_t i = 0; i < c; i++) {
             auto [li, ti] = p[i];
@@ -264,7 +265,8 @@ void FScene::prepare(JobSystem& js,
             assert_invariant(index < lightData.size());
             lightData.elementAt<POSITION_RADIUS>(index) = float4{ position.xyz, lcm.getRadius(li) };
             lightData.elementAt<DIRECTION>(index) = d;
-            lightData.elementAt<LIGHT_INSTANCE>(index) = li;
+            lightData.elementAt<SPOT_PARAMS>(index) = float2{lcm.getCosOuterSquared(li), lcm.getSinInverse(li)};
+            lightData.elementAt<LIGHT_ENTITY>(index) = li ? lcm.getEntity(li) : utils::Entity{};
         }
     };
 
@@ -326,9 +328,9 @@ void FScene::prepare(JobSystem& js,
         lightData.elementAt<DIRECTION>(0) = normalize(d);
         lightData.elementAt<SHADOW_DIRECTION>(0) = normalize(s);
         lightData.elementAt<SHADOW_REF>(0) = lsReferencePoint;
-        lightData.elementAt<LIGHT_INSTANCE>(0) = li;
+        lightData.elementAt<LIGHT_ENTITY>(0) = li ? lcm.getEntity(li) : utils::Entity{};
     } else {
-        lightData.elementAt<LIGHT_INSTANCE>(0) = 0;
+        lightData.elementAt<LIGHT_ENTITY>(0) = utils::Entity{};
     }
 
     // some elements past the end of the array will be accessed by SIMD code, we need to make
@@ -354,19 +356,18 @@ void FScene::prepare(JobSystem& js,
     FILAMENT_TRACING_NAME_END(FILAMENT_TRACING_CATEGORY_FILAMENT);
 }
 
-void FScene::prepareVisibleRenderables(Range<uint32_t> visibleRenderables) noexcept {
+void FScene::prepareVisibleRenderables(Range<uint32_t> visibleRenderables, FScene::SceneCacheData& cache) const noexcept {
     FILAMENT_TRACING_CALL(FILAMENT_TRACING_CATEGORY_FILAMENT);
-    RenderableSoa& sceneData = mRenderableData;
-    FRenderableManager const& rcm = mEngine.getRenderableManager();
-
-    mHasContactShadows = false;
+    RenderableSoa& sceneData = cache.renderableData;
+    
+    cache.hasContactShadows = false;
     for (uint32_t const i : visibleRenderables) {
         PerRenderableData& uboData = sceneData.elementAt<UBO>(i);
 
         auto const visibility = sceneData.elementAt<VISIBILITY_STATE>(i);
         auto const skinning = sceneData.elementAt<SKINNING_STATE>(i);
         auto const& model = sceneData.elementAt<WORLD_TRANSFORM>(i);
-        auto const ri = sceneData.elementAt<RENDERABLE_INSTANCE>(i);
+        auto const entity = sceneData.elementAt<RENDERABLE_ENTITY>(i);
 
         // Using mat3f::getTransformForNormals handles non-uniform scaling, but DOESN'T guarantee that
         // the transformed normals will have unit-length, therefore they need to be normalized
@@ -402,23 +403,26 @@ void FScene::prepareVisibleRenderables(Range<uint32_t> visibleRenderables) noexc
 
         uboData.morphTargetCount = sceneData.elementAt<MORPHING_BUFFER>(i).count;
 
-        uboData.objectId = rcm.getEntity(ri).getId();
+        uboData.objectId = int32_t(entity.getId());
 
         // TODO: We need to find a better way to provide the scale information per object
         uboData.userData = sceneData.elementAt<USER_DATA>(i);
 
-        mHasContactShadows = mHasContactShadows || visibility.screenSpaceContactShadows;
+        cache.hasContactShadows = cache.hasContactShadows || visibility.screenSpaceContactShadows;
     }
 }
 
 void FScene::terminate(FEngine&) {
+    while (!mViewCaches.empty()) {
+        mViewCaches.begin()->first->invalidateCache(this);
+    }
 }
 
 void FScene::prepareDynamicLights(const CameraInfo& camera,
-        Handle<HwBufferObject> lightUbh) noexcept {
+        Handle<HwBufferObject> lightUbh, FScene::SceneCacheData& cache) noexcept {
     FEngine::DriverApi& driver = mEngine.getDriverApi();
     FLightManager const& lcm = mEngine.getLightManager();
-    LightSoa& lightData = getLightData();
+    LightSoa& lightData = cache.lightData;
 
     /*
      * Here we copy our lights data into the GPU buffer.
@@ -438,11 +442,11 @@ void FScene::prepareDynamicLights(const CameraInfo& camera,
     LightsUib* const lp = driver.allocatePod<LightsUib>(positionalLightCount);
 
     auto const* UTILS_RESTRICT directions       = lightData.data<DIRECTION>();
-    auto const* UTILS_RESTRICT instances        = lightData.data<LIGHT_INSTANCE>();
+    auto const* UTILS_RESTRICT entities         = lightData.data<LIGHT_ENTITY>();
     auto const* UTILS_RESTRICT shadowInfo       = lightData.data<SHADOW_INFO>();
     for (size_t i = DIRECTIONAL_LIGHTS_COUNT, c = size; i < c; ++i) {
         const size_t gpuIndex = i - DIRECTIONAL_LIGHTS_COUNT;
-        auto const li = instances[i];
+        auto const li = lcm.getInstance(entities[i]);
         lp[gpuIndex].positionFalloff      = { spheres[i].xyz, lcm.getSquaredFalloffInv(li) };
         lp[gpuIndex].direction            = directions[i];
         lp[gpuIndex].reserved1            = {};
@@ -459,7 +463,28 @@ void FScene::prepareDynamicLights(const CameraInfo& camera,
                 shadowInfo[i].castsShadows);
     }
 
-    driver.updateBufferObject(lightUbh, { lp, positionalLightCount * sizeof(LightsUib) }, 0);
+    driver.updateBufferObject(lightUbh, {lp, positionalLightCount * sizeof(LightsUib)}, 0);
+}
+
+bool FScene::hasContactShadows(SceneCacheData const& cache) const noexcept {
+    // at least some renderables in the scene must have contact-shadows enabled
+    if (!cache.hasContactShadows) {
+        return false;
+    }
+
+    // find out if at least one light has contact-shadow enabled
+    auto const& lcm = mEngine.getLightManager();
+    auto const* pLightEntities = cache.lightData.data<FScene::LIGHT_ENTITY>();
+    for (size_t i = 0, c = cache.lightData.size(); i < c; i++) {
+        Entity const entity = pLightEntities[i];
+        if (!entity.isNull()) {
+            auto const& shadowOptions = lcm.getShadowOptions(lcm.getInstance(entity));
+            if (shadowOptions.screenSpaceContactShadows) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 // These methods need to exist so clang honors the __restrict__ keyword, which in turn
@@ -470,13 +495,12 @@ inline void FScene::computeLightRanges(
         float2* UTILS_RESTRICT const zrange,
         CameraInfo const& UTILS_RESTRICT camera,
         float4 const* UTILS_RESTRICT const spheres, size_t count) noexcept {
-
     // without this clang seems to assume the src and dst might overlap even if they're
     // restricted.
     // we're guaranteed to have a multiple of 4 lights (at least)
     count = uint32_t(count + 3u) & ~3u;
 
-    for (size_t i = 0 ; i < count; i++) {
+    for (size_t i = 0; i < count; i++) {
         // this loop gets vectorized x4
         const float4 sphere = spheres[i];
         const float4 center = camera.view * sphere.xyz; // camera points towards the -z axis
@@ -487,7 +511,7 @@ inline void FScene::computeLightRanges(
         f = camera.projection * f;
         // convert to NDC
         const float min = (n.w > camera.zn) ? (n.z / n.w) : -1.0f;
-        const float max = (f.w < camera.zf) ? (f.z / f.w) :  1.0f;
+        const float max = (f.w < camera.zf) ? (f.z / f.w) : 1.0f;
         // convert to screen space
         zrange[i].x = (min + 1.0f) * 0.5f;
         zrange[i].y = (max + 1.0f) * 0.5f;
@@ -496,17 +520,19 @@ inline void FScene::computeLightRanges(
 
 UTILS_NOINLINE
 void FScene::addEntity(Entity const entity) {
-    mEntities.insert(entity);
+    mEntities.add(entity.getId());
 }
 
 UTILS_NOINLINE
 void FScene::addEntities(const Entity* entities, size_t const count) {
-    mEntities.insert(entities, entities + count);
+    for (size_t i = 0; i < count; ++i, ++entities) {
+        addEntity(*entities);
+    }
 }
 
 UTILS_NOINLINE
 void FScene::remove(Entity const entity) {
-    mEntities.erase(entity);
+    mEntities.remove(entity.getId());
 }
 
 UTILS_NOINLINE
@@ -526,12 +552,7 @@ size_t FScene::getRenderableCount() const noexcept {
     FEngine& engine = mEngine;
     EntityManager const& em = engine.getEntityManager();
     FRenderableManager const& rcm = engine.getRenderableManager();
-    size_t count = 0;
-    auto const& entities = mEntities;
-    for (Entity const e : entities) {
-        count += em.isAlive(e) && rcm.getInstance(e) ? 1 : 0;
-    }
-    return count;
+    return PagedArenaBitset::intersectSize(em.getAliveEntities(), rcm.getEntityBitset(), mEntities);
 }
 
 UTILS_NOINLINE
@@ -539,17 +560,12 @@ size_t FScene::getLightCount() const noexcept {
     FEngine& engine = mEngine;
     EntityManager const& em = engine.getEntityManager();
     FLightManager const& lcm = engine.getLightManager();
-    size_t count = 0;
-    auto const& entities = mEntities;
-    for (Entity const e : entities) {
-        count += em.isAlive(e) && lcm.getInstance(e) ? 1 : 0;
-    }
-    return count;
+    return PagedArenaBitset::intersectSize(em.getAliveEntities(), lcm.getEntityBitset(), mEntities);
 }
 
 UTILS_NOINLINE
 bool FScene::hasEntity(Entity const entity) const noexcept {
-    return mEntities.find(entity) != mEntities.end();
+    return mEntities[entity.getId()];
 }
 
 UTILS_NOINLINE
@@ -563,33 +579,24 @@ void FScene::setSkybox(FSkybox* skybox) noexcept {
     }
 }
 
-bool FScene::hasContactShadows() const noexcept {
-    // at least some renderables in the scene must have contact-shadows enabled
-    // TODO: we should refine this with only the visible ones
-    if (!mHasContactShadows) {
-        return false;
+FScene::SceneCacheData* FScene::registerView(FView const* view) noexcept {
+    auto [it, inserted] = mViewCaches.try_emplace(view, nullptr);
+    assert_invariant(inserted);
+    if (inserted) {
+        it->second = std::make_unique<SceneCacheData>();
     }
+    return it->second.get();
+}
 
-    // find out if at least one light has contact-shadow enabled
-    // TODO: we could cache the result of this Loop in the LightManager
-    auto const& lcm = mEngine.getLightManager();
-    const auto *pFirst = mLightData.begin<LIGHT_INSTANCE>();
-    const auto *pLast = mLightData.end<LIGHT_INSTANCE>();
-    while (pFirst != pLast) {
-        if (pFirst->isValid()) {
-            auto const& shadowOptions = lcm.getShadowOptions(*pFirst);
-            if (shadowOptions.screenSpaceContactShadows) {
-                return true;
-            }
-        }
-        ++pFirst;
-    }
-    return false;
+void FScene::unregisterView(FView const* view) noexcept {
+    mViewCaches.erase(view);
 }
 
 UTILS_NOINLINE
 void FScene::forEach(Invocable<void(Entity)>&& functor) const noexcept {
-    std::for_each(mEntities.begin(), mEntities.end(), std::move(functor));
+    mEntities.forEachSetBit([&](uint32_t const bit) {
+        functor(Entity::import(int32_t(bit)));
+    });
 }
 
 } // namespace filament

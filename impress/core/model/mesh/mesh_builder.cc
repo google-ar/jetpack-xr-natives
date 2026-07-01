@@ -17,6 +17,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <memory>
 #include <utility>
 
@@ -169,6 +170,7 @@ IndexBufferBuilder& IndexBufferBuilder::IndexCount(
   if (spy_) {
     spy_->IndexCount(indexCount);
   }
+  index_count_ = indexCount;
   builder_ = builder_.indexCount(indexCount);
   return *this;
 }
@@ -177,12 +179,14 @@ IndexBufferBuilder& IndexBufferBuilder::BufferType(
   if (spy_) {
     spy_->BufferType(indexType);
   }
+  index_type_ = indexType;
   builder_ = builder_.bufferType(indexType);
   return *this;
 }
 IndexBufferBuilder& IndexBufferBuilder::BufferInternal(
     filament::Engine& engine, filament::IndexBuffer::BufferDescriptor&& buffer,
     uint32_t byteOffset) noexcept {
+  has_buffer_ = true;
   if (spy_) {
     spy_->Buffer(engine, std::move(buffer), byteOffset);
     return *this;
@@ -215,6 +219,35 @@ IndexBufferBuilder& IndexBufferBuilder::Name(absl::string_view name) noexcept {
 
 filament::IndexBuffer* IndexBufferBuilder::Build(
     filament::Engine& engine) noexcept {
+  // TODO: (broken link) - Remove this hack once split engine supports empty index
+  // buffers properly.
+  if (spy_) {
+    if (!has_buffer_ && index_count_ > 0) {
+      size_t element_size =
+          index_type_ == filament::IndexBuffer::IndexType::UINT
+              ? sizeof(uint32_t)
+              : sizeof(uint16_t);
+      size_t buffer_size = index_count_ * element_size;
+      void* buffer_data = malloc(buffer_size);
+      if (index_type_ == filament::IndexBuffer::IndexType::UINT) {
+        uint32_t* indices = static_cast<uint32_t*>(buffer_data);
+        for (uint32_t i = 0; i < index_count_; ++i) {
+          indices[i] = i;
+        }
+      } else {
+        uint16_t* indices = static_cast<uint16_t*>(buffer_data);
+        for (uint16_t i = 0; i < index_count_; ++i) {
+          indices[i] = i;
+        }
+      }
+      filament::IndexBuffer::BufferDescriptor bd(
+          buffer_data, buffer_size,
+          [](void* buffer, size_t size, void* user) { free(buffer); });
+      spy_->Buffer(engine, std::move(bd), 0);
+    }
+    has_buffer_ = true;
+  }
+
   if (!index_buffer_) {
     index_buffer_ = builder_.build(engine);
   }
@@ -341,6 +374,17 @@ void MeshBuilder::Build(
   }
 
   if (out_index_buffers != nullptr && !has_failure) {
+    // TODO: (broken link) - Remove this placeholder builder hack once split
+    // engine supports empty index buffers properly.
+    if (spy_ != nullptr && index_buffers_.empty() &&
+        out_vertex_buffers != nullptr && !out_vertex_buffers->empty()) {
+      uint32_t vertex_count = out_vertex_buffers->front()->getVertexCount();
+      BaseIndexBufferBuilder& placeholder_builder = CreateIndexBufferBuilder();
+      placeholder_builder.IndexCount(vertex_count);
+      placeholder_builder.BufferType(
+          vertex_count > 65536 ? filament::IndexBuffer::IndexType::UINT
+                               : filament::IndexBuffer::IndexType::USHORT);
+    }
     for (auto& index_buffer : index_buffers_) {
       filament::IndexBuffer* built_index_buffer =
           index_buffer->Build(*view_.GetSharedEngine());

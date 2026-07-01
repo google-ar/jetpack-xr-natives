@@ -19,7 +19,6 @@
 
 #include <backend/Platform.h>
 
-#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -33,6 +32,7 @@
 #else
 #include "core/view/platforms/xr_android/xr_opengl_swap_chain_image_handler.h"
 #endif
+#include "core/math/vec.h"
 #include "core/view/platforms/xr_android/xr_session_host.h"
 
 namespace imp {
@@ -50,8 +50,13 @@ class XrSwapChain : public filament::backend::Platform::SwapChain {
 #endif
 
   static absl::StatusOr<std::unique_ptr<XrSwapChain>> Create(
-      ImageHandlerType::XrPlatformType* platform, XrSessionHost* host,
-      XrSwapchainCreateFlags flags = 0);
+      ImageHandlerType::XrPlatformType& platform, XrSessionHost& host,
+      XrSwapchainCreateFlags flags = 0, bool should_end_frame = true);
+
+  static absl::StatusOr<std::unique_ptr<XrSwapChain>> CreateForQuadLayer(
+      ImageHandlerType::XrPlatformType& platform, XrSessionHost& host,
+      int2 size, int sample_count, XrSwapchainCreateFlags flags = 0,
+      bool should_end_frame = false);
 
   ~XrSwapChain();
 
@@ -70,7 +75,8 @@ class XrSwapChain : public filament::backend::Platform::SwapChain {
  private:
   XrSwapChain(ImageHandlerType::XrPlatformType* platform, XrSessionHost* host,
               ImageHandlerType::SwapchainLayers layers,
-              ContentSecurityLevel content_security_level);
+              ContentSecurityLevel content_security_level,
+              bool should_end_frame);
 
   PFN_xrUpdateSwapchainFB xr_update_swapchain_fn_;
   PFN_xrCreateFoveationProfileFB xr_create_foveation_profile_fn_;

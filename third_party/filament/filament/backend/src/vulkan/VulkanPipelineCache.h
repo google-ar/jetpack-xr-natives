@@ -31,6 +31,7 @@
 #include "filament/libs/utils/include/utils/Hash.h"
 
 #include "robin_map/include/tsl/robin_map.h"
+
 #include <type_traits>
 
 namespace filament::backend {

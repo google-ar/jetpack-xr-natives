@@ -16,16 +16,16 @@
 
 #include "WebGPUProgram.h"
 
+#include "DriverBase.h"
 #include "WebGPUConstants.h"
 #include "WebGPUStrings.h"
 
-#include "DriverBase.h"
 #include <backend/DriverEnums.h>
 #include <backend/Program.h>
 
+#include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/Panic.h"
-#include "filament/libs/utils/include/utils/debug.h"
 
 #include <webgpu/webgpu_cpp.h>
 

@@ -96,6 +96,23 @@ private object SharedGlyphCache {
  * [Paint.getTextWidths].
  */
 internal class PathGlyphSource(cacheSizeBytes: Int, useLocalCache: Boolean = false) : IGlyphSource {
+
+  private class PathLocalCache {
+    val chars = CharArray(2) // One Unicode codepoint can be at most two UTF-16 codepoints.
+    val fontMetrics = Paint.FontMetrics()
+    val boundingBox = Rect()
+    val boundingBoxF = RectF()
+    val typographicalWidths = FloatArray(MAX_STRING_LENGTH)
+    val stringGlyphMetrics = FloatArray(8)
+    val tempPath = Path()
+    val closedPath = PathBuffer(CLOSED_PATH_BUFFER_CAPACITY)
+  }
+
+  private val cache =
+    object : ThreadLocal<PathLocalCache>() {
+      override fun initialValue() = PathLocalCache()
+    }
+
   companion object {
     const val NULL_GLYPH_MESSAGE = "Attempted to reference a non-existent glyph"
     const val UNKNOWN_GLYPH_MESSAGE = "Unexpected data type in glyph store"
@@ -127,39 +144,46 @@ internal class PathGlyphSource(cacheSizeBytes: Int, useLocalCache: Boolean = fal
   private val glyphs =
     if (useLocalCache) GlyphCache(cacheSizeBytes) else SharedGlyphCache.get(cacheSizeBytes)
 
-  // Reusable buffers.
-  private val tempPath = Path()
-  private val boundingBox = Rect()
-  private val boundingBoxF = RectF()
-  private val fontMetrics = Paint.FontMetrics()
-  private val chars = CharArray(2) // one Unicode codepoint can be at most two UTF-16 codepoints.
-  private val typographicalWidths = FloatArray(MAX_STRING_LENGTH)
-  private val stringGlyphMetrics = FloatArray(8)
-  private val closedPath = PathBuffer(CLOSED_PATH_BUFFER_CAPACITY)
-
   override fun getGlyphMetrics(glyphId: Int, font: Any?, paint: Paint): FloatArray {
+    val localCache = cache.get()!!
+    val chars = localCache.chars
+    val fontMetrics = localCache.fontMetrics
+    val boundingBox = localCache.boundingBox
+    val typographicalWidths = localCache.typographicalWidths
+    val stringGlyphMetrics = localCache.stringGlyphMetrics
+
     if (glyphId and GLYPH_IS_UTF32_MASK != 0) {
       val len = Character.toChars(glyphId and GLYPH_IS_UTF32_MASK.inv(), chars, 0)
-      val numWidths =
-        paint.withNoLetterSpacing {
-          paint.getFontMetrics(fontMetrics)
-          paint.getTextBounds(chars, /* index= */ 0, len, boundingBox)
-          paint.getTextWidths(chars, /* index= */ 0, len, typographicalWidths)
-        }
-      setStringGlyphMetrics(numWidths)
+      val numWidths = paint.withNoLetterSpacing {
+        paint.getFontMetrics(fontMetrics)
+        paint.getTextBounds(chars, /* index= */ 0, len, boundingBox)
+        paint.getTextWidths(chars, /* index= */ 0, len, typographicalWidths)
+      }
+      setStringGlyphMetrics(
+        numWidths,
+        stringGlyphMetrics,
+        boundingBox,
+        fontMetrics,
+        typographicalWidths,
+      )
       return stringGlyphMetrics
     }
 
     val glyph = glyphs[glyphId]
     when (glyph) {
       is ReferenceCountedString -> {
-        val numWidths =
-          paint.withNoLetterSpacing {
-            paint.getFontMetrics(fontMetrics)
-            paint.getTextBounds(glyph.string, /* index= */ 0, glyph.string.length, boundingBox)
-            paint.getTextWidths(glyph.string, typographicalWidths)
-          }
-        setStringGlyphMetrics(numWidths)
+        val numWidths = paint.withNoLetterSpacing {
+          paint.getFontMetrics(fontMetrics)
+          paint.getTextBounds(glyph.string, /* index= */ 0, glyph.string.length, boundingBox)
+          paint.getTextWidths(glyph.string, typographicalWidths)
+        }
+        setStringGlyphMetrics(
+          numWidths,
+          stringGlyphMetrics,
+          boundingBox,
+          fontMetrics,
+          typographicalWidths,
+        )
         return stringGlyphMetrics
       }
       is Glyph -> return glyph.metrics
@@ -168,13 +192,23 @@ internal class PathGlyphSource(cacheSizeBytes: Int, useLocalCache: Boolean = fal
     }
   }
 
-  private fun setStringGlyphMetrics(numWidths: Int) {
+  private fun setStringGlyphMetrics(
+    numWidths: Int,
+    stringGlyphMetrics: FloatArray,
+    boundingBox: Rect,
+    fontMetrics: Paint.FontMetrics,
+    typographicalWidths: FloatArray,
+  ) {
     // Ignore stroke; this is either a colored emoji or a blank character.
     stringGlyphMetrics[1] = boundingBox.left.toFloat()
     stringGlyphMetrics[2] = -boundingBox.bottom.toFloat()
     stringGlyphMetrics[3] = boundingBox.width().toFloat()
     stringGlyphMetrics[4] = boundingBox.height().toFloat()
-    stringGlyphMetrics[5] = typographicalWidths.take(numWidths).sum()
+    var sum = 0f
+    for (i in 0 until numWidths) {
+      sum += typographicalWidths[i]
+    }
+    stringGlyphMetrics[5] = sum
 
     // In some scripts, in particular, emoji, some characters exceed the boundaries of the font
     // metrics. Expand the font metrics to include the actual bounding box in those cases.
@@ -194,6 +228,12 @@ internal class PathGlyphSource(cacheSizeBytes: Int, useLocalCache: Boolean = fal
     if (text.isEmpty()) {
       return arrayOf()
     }
+
+    val localCache = cache.get()!!
+    val tempPath = localCache.tempPath
+    val fontMetrics = localCache.fontMetrics
+    val boundingBoxF = localCache.boundingBoxF
+    val closedPath = localCache.closedPath
 
     paint.withNoLetterSpacing { letterSpacing ->
       val glyphBuilders = createGlyphBuilders(text, paint)
@@ -296,6 +336,10 @@ internal class PathGlyphSource(cacheSizeBytes: Int, useLocalCache: Boolean = fal
     fillPaint: Paint,
     strokePaint: Paint,
   ) {
+    val localCache = cache.get()!!
+    val chars = localCache.chars
+    val boundingBox = localCache.boundingBox
+
     if (glyphId and GLYPH_IS_UTF32_MASK != 0) {
       val len = Character.toChars(glyphId and GLYPH_IS_UTF32_MASK.inv(), chars, 0)
       fillPaint.withNoLetterSpacing {

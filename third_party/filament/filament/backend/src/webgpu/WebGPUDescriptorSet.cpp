@@ -24,8 +24,8 @@
 
 #include <backend/DriverEnums.h>
 
-#include "filament/libs/utils/include/utils/Panic.h"
 #include "filament/libs/utils/include/utils/debug.h"
+#include "filament/libs/utils/include/utils/Panic.h"
 
 #include <webgpu/webgpu_cpp.h>
 

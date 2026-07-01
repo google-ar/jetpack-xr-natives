@@ -14,23 +14,22 @@
  * limitations under the License.
  */
 
-#include <filaflat/MaterialChunk.h>
+#include "private/filament/Variant.h"
 
 #include <private/filament/LineDictionaryUtils.h>
 
-
-#include "private/filament/Variant.h"
-
-#include <filaflat/ChunkContainer.h>
-
 #include <filament/MaterialChunkType.h>
 
+#include <filaflat/ChunkContainer.h>
+#include <filaflat/MaterialChunk.h>
+
 #include "filament/libs/utils/include/utils/compiler.h"
-#include "filament/libs/utils/include/utils/Invocable.h"
 #include "filament/libs/utils/include/utils/debug.h"
+#include "filament/libs/utils/include/utils/Invocable.h"
 #include "filament/libs/utils/include/utils/Log.h"
 
 #include <charconv>
+
 #include <string_view>
 #include <vector>
 

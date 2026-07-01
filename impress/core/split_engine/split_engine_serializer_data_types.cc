@@ -212,6 +212,49 @@ SerializerDataTypes::Batch<CommandTypes::RemoveMorphTargetBuffers>::Serialize(
 
 template <>
 std::optional<flatbuffers::Offset<android_xr::schemas::Command>>
+SerializerDataTypes::Batch<CommandTypes::UpdateMeshData>::Serialize(
+    flatbuffers::FlatBufferBuilder& fbb) {
+  if (data.vertex_buffers.empty() && data.index_buffers.empty()) {
+    return std::nullopt;
+  }
+
+  std::vector<flatbuffers::Offset<android_xr::schemas::VertexBufferUpdate>>
+      vertex_buffer_updates;
+  vertex_buffer_updates.reserve(data.vertex_buffers.size());
+  for (const auto& vertex_buffer : data.vertex_buffers) {
+    std::vector<flatbuffers::Offset<android_xr::schemas::VertexBlockUpdate>>
+        block_updates;
+    block_updates.reserve(vertex_buffer.block_updates.size());
+    for (const auto& block : vertex_buffer.block_updates) {
+      block_updates.push_back(android_xr::schemas::CreateVertexBlockUpdate(
+          fbb, block.block_index, block.offset,
+          fbb.CreateVector(
+              static_cast<const uint8_t*>(block.buffer.get().buffer),
+              block.buffer.get().size)));
+    }
+    vertex_buffer_updates.push_back(
+        android_xr::schemas::CreateVertexBufferUpdate(
+            fbb, vertex_buffer.id, fbb.CreateVector(block_updates)));
+  }
+
+  std::vector<flatbuffers::Offset<android_xr::schemas::IndexBufferUpdate>>
+      index_buffer_updates;
+  index_buffer_updates.reserve(data.index_buffers.size());
+  for (const auto& index_buffer : data.index_buffers) {
+    index_buffer_updates.push_back(android_xr::schemas::CreateIndexBufferUpdate(
+        fbb, index_buffer.id, index_buffer.offset,
+        fbb.CreateVector(
+            static_cast<const uint8_t*>(index_buffer.buffer.get().buffer),
+            index_buffer.buffer.get().size)));
+  }
+
+  return CreateCommand(fbb, android_xr::schemas::CreateUpdateMeshData(
+                                fbb, fbb.CreateVector(vertex_buffer_updates),
+                                fbb.CreateVector(index_buffer_updates)));
+}
+
+template <>
+std::optional<flatbuffers::Offset<android_xr::schemas::Command>>
 SerializerDataTypes::Batch<CommandTypes::RemoveMeshData>::Serialize(
     flatbuffers::FlatBufferBuilder& fbb) {
   if (data.vertex_buffers.empty() && data.index_buffers.empty()) return {};

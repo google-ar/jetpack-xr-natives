@@ -168,11 +168,11 @@ class CollisionManager {
   void SortFrontToBack(std::vector<GenericRayHit<T>>* out_intersections);
 
   std::vector<RayHit> IntersectAllHelper(
-      absl::variant<Ray, float2> world_ray_or_screen_pos,
+      std::variant<Ray, float2> world_ray_or_screen_pos,
       std::optional<Flags<CollisionMask>> mask);
 
   std::vector<DoubleRayHit> IntersectAllPreciseHelper(
-      absl::variant<DoubleRay, float2> world_ray_or_screen_pos,
+      std::variant<DoubleRay, float2> world_ray_or_screen_pos,
       std::optional<Flags<CollisionMask>> mask);
 
   template <typename T>

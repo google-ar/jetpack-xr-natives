@@ -17,6 +17,7 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_MATH_TRANSFORM_H_
 #define THIRD_PARTY_IMPRESS_CORE_MATH_TRANSFORM_H_
 
+#include <cmath>
 #include <limits>
 #include <string>
 #include <type_traits>
@@ -137,7 +138,7 @@ constexpr Transform<T, R, S>::Transform(const Mat4<U>& rhs) noexcept {
   // Remove scale from the matrix if it is not close to zero.
   Mat3<U> upper_left = rhs.upperLeft();
   float eps = std::numeric_limits<float>::epsilon();
-  if (s.x > eps && s.y > eps && s.z > eps) {
+  if (std::abs(s.x) > eps && std::abs(s.y) > eps && std::abs(s.z) > eps) {
     upper_left[0] /= s.x;
     upper_left[1] /= s.y;
     upper_left[2] /= s.z;

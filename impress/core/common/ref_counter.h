@@ -24,6 +24,10 @@
 
 namespace imp {
 
+// Forward declarations.
+struct SourceLocationTracker;
+struct TrackedRefs;
+
 // Utility used for simple reference counting.
 //
 // RefCounter itself is a move-only type that provides Ref objects that
@@ -47,15 +51,6 @@ namespace imp {
 class RefCounter {
  public:
   using CounterType = uint16_t;
-  struct TrackedRefs {
-    // The key is the location from the Retain method, the value is the number
-    // of Retain calls from that location.
-    absl::flat_hash_map<SmallSourceLocation, CounterType> locations_to_counts;
-
-    // True if the RefCounter has been destroyed. This is used to detect the
-    // case where a Ref object outlives the RefCounter object.
-    bool is_destroyed = false;
-  };
 
   class Ref {
    public:
@@ -87,7 +82,7 @@ class RefCounter {
 
     void DecrementCount();
 
-    SmallSourceLocation loc_;
+    SourceLocationTracker* tracker_ptr_ = nullptr;
     TrackedRefs* tracked_refs_ = nullptr;
 
     friend class RefCounter;
@@ -115,7 +110,12 @@ class RefCounter {
   // The count starts at zero.
   CounterType GetCount() const;
 
-  const TrackedRefs& GetTrackedRefs() const;
+  // Returns a map of source locations to reference counts.
+  //
+  // This creates a new map from internal data structures.
+  // Users should consider caching the result if they call this in tight loops.
+  absl::flat_hash_map<SmallSourceLocation, CounterType> GetLocationToCount()
+      const;
 
  private:
   // This pointer is allocated dynamically with new & delete. This is done so

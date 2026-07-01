@@ -33,6 +33,7 @@
 #include "core/async/future.h"
 #include "core/camera/camera_component.h"
 #include "core/camera/camera_manager.h"
+#include "core/common/platform_storage.h"
 #include "core/common/registry.h"
 #include "core/common/robin_set.h"
 #include "core/config.h"
@@ -56,6 +57,7 @@
 #include "core/editor/layout/editor_panel_ids.h"
 #include "core/editor/layout/layout_composer.h"
 #include "core/editor/layout/layout_config.proto.imp.h"
+#include "core/editor/widgets/input_settings_widget_constants.h"
 #include "core/editor/selection_controller.h"
 #include "core/editor/selection_controller_impl.h"
 #include "core/editor/visualizers/camera_visualizer.h"
@@ -65,6 +67,7 @@
 #include "core/editor/widget_layout_info.h"
 #include "core/editor/widget_ui_system.h"
 #include "core/editor/widgets/asset_library.h"
+#include "core/editor/widgets/box_selection_widget.h"
 #include "core/editor/widgets/component_ui.h"
 #include "core/editor/widgets/console.h"
 #include "core/editor/widgets/debug_draw_widget.h"
@@ -74,6 +77,7 @@
 #include "core/editor/widgets/filament_view_settings_widget.h"
 #include "core/editor/widgets/file_drag_and_drop.h"
 #include "core/editor/widgets/hierarchy.h"
+#include "core/editor/widgets/material_editor_widget.h"
 #include "core/editor/widgets/materials_widget.h"
 #include "core/editor/widgets/node_details.h"
 #include "core/editor/widgets/performance/performance_window.h"
@@ -203,9 +207,6 @@ class EditorImpl : public Editor {
   // Returns the rect of the viewport in pixels.
   std::optional<Rect> GetViewportRect() const override;
 
-  void SetUseLegacyCameraControls(bool use_legacy) override;
-  bool UseLegacyCameraControls() const override;
-
  private:
   // Used to provide access to EditorInformation without needing to access the
   // actual full Editor. This is useful to avoid circular dependencies with the
@@ -269,6 +270,9 @@ class EditorImpl : public Editor {
   // Registers common widgets and initializes the WidgetUISystem.
   void InitializeWidgetUiSystem();
 
+  // Prints the instructions for the camera controls.
+  void PrintCameraInstructions() const;
+
   // Applies the given setting of camera mode and input mode to the Editor.
   void ApplyEditorState(EditorState editor_state);
 
@@ -303,6 +307,11 @@ class EditorImpl : public Editor {
   Dispatcher::ScopedConnection gesture_manager_connection_;
   bool is_editor_input_handler_in_use_ = false;
   bool enabled_;
+  // Tracks whether SetEnabled has been called at least once. The initial call
+  // during Initialize() must fully execute to establish the baseline Editor
+  // state and broadcast EditorEnabledEvent, even if the initial enabled value
+  // matches the default enabled_ value.
+  bool set_enabled_called_ = false;
   bool initialized_ = false;
   bool is_sandbox_ = false;
   EditorInfo::RunMode run_mode_ = EditorInfo::RunMode::kPlayMode;
@@ -315,7 +324,7 @@ class EditorImpl : public Editor {
   std::vector<NodeHandle> sandbox_nodes_;
   GltfAsset::LoadOptions gltf_load_options_;
   EditorInfo::PlatformMode platform_mode_ = EditorInfo::PlatformMode::kDefault;
-  bool use_legacy_camera_controls_ = true;
+  bool use_legacy_camera_controls_ = kUseLegacyCameraControlsDefault;
 };
 
 EditorImpl::EditorImpl(BaseView* view, std::unique_ptr<EditorPlugin> plugin,
@@ -326,6 +335,7 @@ EditorImpl::EditorImpl(BaseView* view, std::unique_ptr<EditorPlugin> plugin,
                         std::make_unique<LayoutComposer>(kDefaultLayoutConfig)),
       editor_root_node_(NodeHandle()),
       current_state_({CameraMode::kApp, InputMode::kApp}),
+      saved_state_(current_state_),
       camera_position_initialized_(false),
       command_manager_(view->GetRegistry().GetOrCreate<CommandManager>()),
       enabled_(false),
@@ -358,8 +368,12 @@ void EditorImpl::Initialize() {
     IMP_LOG(imp::INFO) << "Initialize() has already called. Ignoring this call...";
     return;
   }
+  GetView().GetRegistry().Register<PlatformStorage>(CreatePlatformStorage());
+  PlatformStorage& storage = *GetView().GetRegistry().Get<PlatformStorage>();
   GetView().GetRegistry().Register<SelectionController>(
       std::make_unique<SelectionControllerImpl>(&GetView()));
+  use_legacy_camera_controls_ = storage.GetBool(
+      kUseLegacyCameraControlsKey, kUseLegacyCameraControlsDefault);
   editor_root_node_ = GetView().CreateNode();
   editor_root_node_->SetEnabled(false);
 #if IMP_RUNTIME(DEV)
@@ -492,10 +506,7 @@ void EditorImpl::Initialize() {
   }
 #endif
 
-  IMP_LOG(imp::INFO) << "Camera Controls:";
-  IMP_LOG(imp::INFO) << "Left Click & Drag to rotate the camera.";
-  IMP_LOG(imp::INFO) << "Right Click & Drag to move the camera.";
-  IMP_LOG(imp::INFO) << "Rotate the scroll wheel to zoom the camera in & out.";
+  PrintCameraInstructions();
   initialized_ = true;
 
   if (plugin_) {
@@ -527,6 +538,18 @@ void EditorImpl::Initialize() {
 bool EditorImpl::IsEnabled() const { return enabled_; }
 
 void EditorImpl::SetEnabled(bool enabled) {
+  // Protect against redundant calls (e.g., from application startup code or
+  // 3-finger tap toggle events) resetting the active InputManager handler stack
+  // or overwriting saved_state_.
+  //
+  // We ensure SetEnabled runs fully on its very first invocation (during
+  // Initialize()) to establish the baseline Editor state and broadcast
+  // EditorEnabledEvent, even if the requested enabled state matches enabled_.
+  if (set_enabled_called_ && enabled == enabled_) {
+    return;
+  }
+  set_enabled_called_ = true;
+
   if (!initialized_) {
     IMP_LOG(imp::FATAL) << "A call to Initialize() is required before using the Editor.";
   }
@@ -657,6 +680,11 @@ void EditorImpl::InitializeWidgetUiSystem() {
   if (platform_mode_ != EditorInfo::PlatformMode::kXrSplitEngineApp) {
     widget_ui_system_.AddWidget<Console>(WidgetLayoutInfo(PanelId::kTabBar),
                                          view);
+    widget_ui_system_.AddWidget<MaterialEditorWidget>(
+        WidgetLayoutInfo(PanelId::kFreeform,
+                         WidgetPresence::kOnlyIn2DLargeScreen,
+                         WidgetVisibility::kHidden),
+        view);
   }
 
   asset_library_ = widget_ui_system_.AddWidget<AssetLibrary>(
@@ -675,6 +703,10 @@ void EditorImpl::InitializeWidgetUiSystem() {
       WidgetLayoutInfo(PanelId::kFreeform), view);
   widget_ui_system_.AddWidget<VisualizeOrigins>(
       WidgetLayoutInfo(PanelId::kFreeform), view);
+  if (!use_legacy_camera_controls_) {
+    widget_ui_system_.AddWidget<BoxSelectionWidget>(
+        WidgetLayoutInfo(PanelId::kFreeform), view);
+  }
   widget_ui_system_.AddWidget<FileDragAndDrop>(
       WidgetLayoutInfo(PanelId::kFreeform), view);
   widget_ui_system_.AddWidget<PerformanceWindow>(
@@ -878,6 +910,25 @@ void EditorImpl::RegisterEditorSettingChangedEventHandler() {
                 GltfState::ColliderMode::GLTF_COLLIDER_TRIANGLES_PER_MESH;
           }
         }
+      },
+      this);
+
+  dispatcher_.Connect(
+      [this](const UseLegacyCameraControlsEvent& event) {
+        if (use_legacy_camera_controls_ == event.enabled) return;
+
+        use_legacy_camera_controls_ = event.enabled;
+
+        if (use_legacy_camera_controls_) {
+          widget_ui_system_.RemoveWidget<BoxSelectionWidget>();
+        } else {
+          widget_ui_system_.AddWidget<BoxSelectionWidget>(
+              WidgetLayoutInfo(PanelId::kFreeform), GetView());
+        }
+
+        if (current_state_.camera_mode != CameraMode::kEditor) return;
+
+        PrintCameraInstructions();
       },
       this);
 }
@@ -1201,6 +1252,20 @@ void EditorImpl::StepNextFrame() { has_frames_to_step_ = true; }
 
 bool EditorImpl::HasFramesToStep() { return has_frames_to_step_; }
 
+void EditorImpl::PrintCameraInstructions() const {
+  IMP_LOG(imp::INFO) << "Camera Controls:";
+  if (use_legacy_camera_controls_) {
+    IMP_LOG(imp::INFO) << "Left Click & Drag to rotate the camera.";
+    IMP_LOG(imp::INFO) << "Right Click & Drag to move the camera.";
+    IMP_LOG(imp::INFO) << "Rotate the scroll wheel to zoom the camera in & out.";
+  } else {
+    IMP_LOG(imp::INFO) << "Right Click & Drag to rotate the camera.";
+    IMP_LOG(imp::INFO) << "WASD to move the camera.";
+    IMP_LOG(imp::INFO) << "Q/E to move the camera down/up.";
+    IMP_LOG(imp::INFO) << "Shift to move faster.";
+  }
+}
+
 void EditorImpl::SetViewportRect(std::optional<Rect> rect) {
   const float2 pixel_ratio = editor::GetPhysicalPixelRatio(GetView());
 
@@ -1319,14 +1384,6 @@ NodeHandle EditorImpl::GetSingleSelectedNode() {
 
 GltfAsset::LoadOptions EditorImpl::GetGltfLoadOptions() const {
   return gltf_load_options_;
-}
-
-void EditorImpl::SetUseLegacyCameraControls(bool use_legacy) {
-  use_legacy_camera_controls_ = use_legacy;
-}
-
-bool EditorImpl::UseLegacyCameraControls() const {
-  return use_legacy_camera_controls_;
 }
 
 Editor& GetOrCreateEditor(BaseView* view, std::unique_ptr<EditorPlugin> plugin,

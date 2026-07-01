@@ -21,16 +21,19 @@
 #include <utility>
 #include <vector>
 
+#include "absl/base/nullability.h"
+#include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
+#include "absl/synchronization/mutex.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
 #include "core/common/invocable.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/owned_ptr.h"
-#include "core/split_engine/transport/flatbuffer_builder_holder.h"
 #include "core/split_engine/transport/transport.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
 
@@ -70,21 +73,26 @@ namespace imp::split_engine {
 //
 class RequestSender {
  public:
-  using FlatbufferBuilderHolder = FlatbufferBuilderHolder<RequestSender>;
-
   explicit RequestSender(imp::OwnedOrBorrowedPtr<Transport> transport);
   RequestSender(const RequestSender&) = delete;
   RequestSender& operator=(const RequestSender&) = delete;
   RequestSender(RequestSender&&) = default;
   RequestSender& operator=(RequestSender&&) = default;
 
-  absl::StatusOr<imp::OwnedPtr<FlatbufferBuilderHolder>> CreateRequestBuilder(
-      size_t size);
+  struct RequestBuilderDeleter {
+    RequestSender* /*absl_nonnull*/  sender;
+    void operator()(flatbuffers::FlatBufferBuilder* fbb);
+  };
+
+  using RequestBuilder =
+      imp::OwnedPtr<flatbuffers::FlatBufferBuilder, RequestBuilderDeleter>;
+
+  absl::StatusOr<RequestBuilder> CreateRequestBuilder(size_t size);
 
   // Sends a request to the Split Engine backend and return a
   // Future<ResponseT> that will be resolved when the response is received.
   template <typename RequestT, typename ResponseT>
-  Future<ResponseT> SendRequest(imp::OwnedPtr<FlatbufferBuilderHolder> fbb,
+  Future<ResponseT> SendRequest(RequestBuilder fbb,
                                 flatbuffers::Offset<RequestT> request_offset);
 
  private:
@@ -106,26 +114,23 @@ class RequestSender {
   using RequestCallback =
       imp::Invocable<void(absl::StatusOr<std::unique_ptr<Response>>)>;
 
-  absl::Status SendRequest(imp::OwnedPtr<FlatbufferBuilderHolder> fbb,
-                           RequestCallback callback);
+  absl::Status SendRequest(RequestBuilder fbb, RequestCallback callback);
 
   imp::OwnedOrBorrowedPtr<Transport> transport_;
 
-  // Map is accessed from the foreground executor thread only, no need for
-  // additional synchronization.
+  absl::Mutex session_id_mutex_;
   absl::flat_hash_map<uint64_t, Transport::SessionID>
-      flatbuffer_builder_to_session_id_;
+      flatbuffer_builder_to_session_id_ ABSL_GUARDED_BY(session_id_mutex_);
 
   void StoreSessionID(uint64_t key, Transport::SessionID session_id);
-  Transport::SessionID ExtractSessionID(uint64_t key);
+  absl::StatusOr<Transport::SessionID> ExtractSessionID(uint64_t key);
 };
 
 template <typename RequestT, typename ResponseT>
 Future<ResponseT> RequestSender::SendRequest(
-    imp::OwnedPtr<FlatbufferBuilderHolder> fbb,
-    flatbuffers::Offset<RequestT> request_offset) {
-  (*fbb)->Finish(android_xr::schemas::CreateRequest(
-      **fbb, android_xr::schemas::RequestTypesTraits<RequestT>::enum_value,
+    RequestBuilder fbb, flatbuffers::Offset<RequestT> request_offset) {
+  fbb->Finish(android_xr::schemas::CreateRequest(
+      *fbb, android_xr::schemas::RequestTypesTraits<RequestT>::enum_value,
       request_offset.Union()));
 
   Future<ResponseT> result;

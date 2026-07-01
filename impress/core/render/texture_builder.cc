@@ -17,23 +17,43 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
+#include "absl/base/nullability.h"
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "filament/filament/backend/include/backend/CallbackHandler.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/Texture.h"
 #include "core/assets/asset_ptr.h"
+#include "core/async/executor.h"
+#include "core/async/future.h"
+#include "core/async/future_common.h"
 #include "core/image/image_contents.h"
 #include "core/render/image_asset.h"
 #include "core/render/safe_filament_texture_builder.h"
 #include "core/view/base_view.h"
 
 namespace imp {
+
+namespace {
+// A CallbackHandler that simply calls the callback on the same thread that
+// calls post.
+class TextureReadyCallbackHandler : public filament::backend::CallbackHandler {
+ public:
+  void post(void* user,
+            filament::backend::CallbackHandler::Callback callback) override {
+    callback(user);
+  };
+
+  ~TextureReadyCallbackHandler() override = default;
+};
+}  // namespace
 
 TextureBuilder::TextureBuilder(BaseView& view) noexcept
     : view_(&view), spy_(nullptr) {
@@ -225,6 +245,155 @@ TextureBuilder& TextureBuilder::Import(intptr_t id) {
   }
   builder_->import(id);
   return *this;
+}
+
+imp::Future<filament::Texture* /*absl_nullable*/ > TextureBuilder::BuildAsync(
+    filament::Engine& engine) {
+  
+  if (!engine.isAsynchronousModeEnabled()) {
+    IMP_LOG(imp::WARNING) << "Asynchronous mode is not enabled for the engine.";
+    return Future<filament::Texture*>(Build(engine));
+  }
+
+  static TextureReadyCallbackHandler callback_handler;
+
+  imp::Future<filament::Texture*> future;
+
+  // Set the async callback on the builder
+  builder_->async(
+      &callback_handler,
+      [weak_future = WeakFuture<filament::Texture*>(future)](
+          filament::Texture* texture, void*) {
+        std::optional<imp::Future<filament::Texture*>> future =
+            weak_future.Lock();
+
+        if (!texture) {
+          if (future.has_value()) {
+            future->Return(
+                absl::InternalError("Failed to create async texture."));
+          }
+          return;
+        }
+
+        // If the future is already ready, it means it was cancelled right
+        // before the async callback happened. It's also possible that this
+        // future isn't cancelled here but downstream futures are cancelled, so
+        // to ensure the texture is only queued for destruction once, we return
+        // early here and let the downstream future handle the destruction.
+        if (!future.has_value() || future->Ready()) {
+          return;
+        }
+
+        // Otherwise, fulfill the future.
+        future->Return(texture);
+      },
+      nullptr);
+
+  // Call build. This returns immediately and the texture will be populated
+  // asynchronously. The callback above will fire when it's done.
+  texture_ = builder_->build(engine);
+
+  builder_.reset();
+
+  if (!texture_.ok()) {
+    return texture_.status();
+  }
+
+  // We always schedule this callback on the foreground executor to ensure that
+  // any work done will happen on the foreground thread and within the timeframe
+  // of the executor pump.
+  // Any cancellations upstream will result in this future being cancelled, so
+  // we need to destroy the texture if that happens.
+  future = future.Then(
+      [&engine,
+       texture = *texture_](absl::StatusOr<filament::Texture*> result) {
+        if (result.status().code() == absl::StatusCode::kCancelled) {
+          engine.destroy(texture);
+        }
+        return result;
+      },
+      FutureThenOptions{.executor = Executor::ForegroundExecutor(),
+                        .executor_mode = FutureExecutorMode::kScheduleAlways});
+
+  if (!image_assets_.empty()) {
+    future = future.Then([&engine, image_assets = std::move(image_assets_)](
+                             filament::Texture* texture) {
+      std::vector<imp::Future<absl::Status>> futures;
+      futures.reserve(image_assets.size());
+      for (auto& asset : image_assets) {
+        auto descriptors = asset.image->GetLevelDescriptors();
+        for (int level = 0; level < descriptors.size(); ++level) {
+          imp::Future<absl::Status> future;
+          filament::Texture::AsyncCallId id = texture->setImageAsync(
+              engine, level, /*xoffset=*/0, /*yoffset=*/0, asset.index,
+              texture->getWidth(level), texture->getHeight(level), /*depth=*/1,
+              std::move(descriptors[level]), &callback_handler,
+              [future](filament::Texture*, void*) {
+                future.Return(absl::OkStatus());
+              });
+          future = future.Then(
+              [&engine, id](const absl::Status& status) {
+                if (status.code() == absl::StatusCode::kCancelled) {
+                  engine.cancelAsyncCall(id);
+                }
+                return status;
+              },
+              FutureThenOptions{
+                  .executor = Executor::ForegroundExecutor(),
+                  .executor_mode = FutureExecutorMode::kScheduleAlways});
+          futures.push_back(std::move(future));
+        }
+      }
+      return Future<absl::Status>::CombineList(futures).Then(
+          [&engine, texture](const absl::Status& status)
+              -> absl::StatusOr<filament::Texture*> {
+            if (!status.ok()) {
+              engine.destroy(texture);
+              return status;
+            }
+            return texture;
+          });
+    });
+  } else if (!images_.empty()) {
+    future = future.Then([&engine, images = std::move(images_)](
+                             filament::Texture* texture) mutable {
+      std::vector<imp::Future<absl::Status>> futures;
+      futures.reserve(images.size());
+      for (int level = 0; level < images.size(); ++level) {
+        imp::Future<absl::Status> future;
+        filament::Texture::AsyncCallId id = texture->setImageAsync(
+            engine, level, std::move(images[level]), &callback_handler,
+            [future](filament::Texture*, void*) {
+              future.Return(absl::OkStatus());
+            });
+        future = future.Then([&engine, id](const absl::Status& status) {
+          if (status.code() == absl::StatusCode::kCancelled) {
+            engine.cancelAsyncCall(id);
+          }
+          return status;
+        });
+        futures.push_back(std::move(future));
+      }
+      return Future<absl::Status>::CombineList(futures).Then(
+          [&engine, texture](const absl::Status& status)
+              -> absl::StatusOr<filament::Texture*> {
+            if (!status.ok()) {
+              engine.destroy(texture);
+              return status;
+            }
+            return texture;
+          });
+    });
+  }
+
+  if (generate_mipmaps_) {
+    future = future.Then([&engine](filament::Texture* texture) {
+      texture->generateMipmaps(engine);
+      return texture;
+    });
+  }
+
+  return future;
 }
 
 filament::Texture* TextureBuilder::Build(filament::Engine& engine) {

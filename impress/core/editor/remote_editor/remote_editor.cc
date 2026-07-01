@@ -33,11 +33,16 @@
 #include "core/editor/widget_ui_system.h"
 #include "core/view/base_view.h"
 
-#if IMP_PLATFORM(ANDROID)
+#if IMP_PLATFORM(ANDROID) || IMP_PLATFORM(IOS)
 #include "core/common/registry.h"
-#include "core/editor/remote_editor/android_web_ui_remote_editor.h"
 #include "core/scripting/message_handlers/forward_input_handler.h"
 #include "core/scripting/scripting_system.h"
+#endif
+
+#if IMP_PLATFORM(ANDROID)
+#include "core/editor/remote_editor/android/android_web_ui_remote_editor.h"
+#elif IMP_PLATFORM(IOS)
+#include "core/editor/remote_editor/ios/ios_web_ui_remote_editor.h"
 #endif
 
 namespace imp::editor {
@@ -60,7 +65,7 @@ std::unique_ptr<RemoteEditor> RemoteEditor::Create(
     return std::make_unique<NoopRemoteEditor>(view);
   }
 
-#if IMP_PLATFORM(ANDROID)
+#if IMP_PLATFORM(ANDROID) || IMP_PLATFORM(IOS)
   bool is_streaming =
       std::holds_alternative<RemoteEditorInfo::RemoteEditorStreamingConfig>(
           config);
@@ -75,9 +80,15 @@ std::unique_ptr<RemoteEditor> RemoteEditor::Create(
       // UI streaming mode requires the forward input handler to forward input
       // events from the remote client to the Impress engine.
       scripting_system.AddHandler(
-          std::make_unique<scripting::ForwardInputHandler>(view));
+          std::make_unique<scripting::ForwardInputHandler>(
+              view, InputEventSource::kRemote));
     }
+
+#if IMP_PLATFORM(ANDROID)
     return std::make_unique<AndroidWebUiRemoteEditor>(view);
+#elif IMP_PLATFORM(IOS)
+    return std::make_unique<window::ios::IosWebUiRemoteEditor>(view);
+#endif
   }
 #endif
 

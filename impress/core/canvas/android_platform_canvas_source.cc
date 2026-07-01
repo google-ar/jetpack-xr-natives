@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <numeric>
 #include <utility>
@@ -34,6 +35,7 @@
 #include "core/canvas/constants.h"
 #include "core/canvas/scoped_canvas.h"
 #include "core/common/jni_helpers.h"
+#include "core/common/registry.h"
 #include "core/common/small_source_location.h"
 #include "core/geometry/shapes/rect.h"
 #include "core/math/vec.h"
@@ -48,12 +50,9 @@
 #include "core/view/platforms/android/wrappers/rect.h"
 #include "core/view/platforms/android/wrappers/surface.h"
 #include "core/view/platforms/android/wrappers/surface_texture.h"
+#include "core/view/platforms/android/wrappers/surface_texture_gc.h"
 
 namespace imp {
-namespace {
-// Experimentally derived padding to ensure we mark the entire glyph as dirty.
-constexpr float kGlyphPadding = 2.0f;
-}  // namespace
 
 class SurfaceTextureSurfaceProvider
     : public AndroidPlatformCanvasSource::SurfaceProvider {
@@ -62,9 +61,6 @@ class SurfaceTextureSurfaceProvider
       : use_hardware_rendering_(use_hardware_rendering) {}
 
   ~SurfaceTextureSurfaceProvider() override = default;
-
-  void OnPause(Context& context) override;
-  void OnResume(Context& context) override;
 
   bool StartDrawing(BaseView& view, Context& context,
                     uint2 pixel_size) override;
@@ -91,20 +87,12 @@ class SurfaceTextureSurfaceProvider
   std::unique_ptr<android::Surface> surface_;
 };
 
-struct PixelPair {
-  uint32_t count;
-  uint32_t value;
-};
-
 // TODO: Add unit tests for this class.
 class BitmapSurfaceProvider
     : public AndroidPlatformCanvasSource::SurfaceProvider {
  public:
   BitmapSurfaceProvider(Context& context);
-  ~BitmapSurfaceProvider() override = default;
-
-  void OnPause(Context& context) override;
-  void OnResume(Context& context) override;
+  ~BitmapSurfaceProvider() override;
 
   bool StartDrawing(BaseView& view, Context& context,
                     uint2 pixel_size) override;
@@ -127,10 +115,10 @@ class BitmapSurfaceProvider
   void InitializeBitmap(Context& context, uint2 pixel_size);
 
  private:
+  Context context_;
   OwnedTexturePtr texture_;
   std::optional<android::Bitmap> bitmap_;
   uint2 bitmap_size_ = uint2{0, 0};
-  std::vector<PixelPair> preserved_pixels_;
 
   // Cache the Canvas class and constructor for later use.
   jclass canvas_class_;
@@ -197,8 +185,9 @@ AndroidPlatformCanvasSource::AndroidPlatformCanvasSource(
       paint_(context),
       stroke_paint_(context),
       clear_paint_(context),
-      glyph_source_(context, glyph_method, glyph_cache_size_bytes,
-                    force_individual_glyph_source_instances) {
+      glyph_source_(std::make_shared<AndroidGlyphSource>(
+          context, glyph_method, glyph_cache_size_bytes,
+          force_individual_glyph_source_instances)) {
   paint_.SetAntiAlias(true);
   stroke_paint_.SetAntiAlias(true);
   stroke_paint_.SetStyle(android::Paint::Style::kStroke);
@@ -213,19 +202,11 @@ AndroidPlatformCanvasSource::AndroidPlatformCanvasSource(
   }
 }
 
-void AndroidPlatformCanvasSource::OnResume() {
-  surface_provider_->OnResume(context_);
-}
-
-void AndroidPlatformCanvasSource::OnPause() {
-  surface_provider_->OnPause(context_);
-}
-
 bool AndroidPlatformCanvasSource::IsFeatureSupported(
     ScopedCanvas::Feature feature) {
   switch (feature) {
     case ScopedCanvas::Feature::kGlyphs:
-      return glyph_source_.IsAvailable();
+      return glyph_source_->IsAvailable();
     case ScopedCanvas::Feature::kKeepContents:
       return surface_provider_->SupportsKeepContents();
   }
@@ -269,9 +250,9 @@ TextMetrics AndroidPlatformCanvasSource::GetGlyphMetrics(
     const ScopedCanvas::TextOptions& text_options) {
   ConfigurePaintForTextOptions(paint_, text_options,
                                /*configure_for_glyphs=*/true);
-  return glyph_source_.GetGlyphMetrics(glyph.Get(), text_options.font_holder,
-                                       text_options.stroke_width_pixels,
-                                       paint_);
+  return glyph_source_->GetGlyphMetrics(glyph.Get(), text_options.font_holder,
+                                        text_options.stroke_width_pixels,
+                                        paint_);
 }
 
 std::vector<ScopedCanvas::GlyphGroup>
@@ -279,7 +260,7 @@ AndroidPlatformCanvasSource::GetCombinedCharacterGroups(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
   ConfigurePaintForTextOptions(paint_, text_options,
                                /*configure_for_glyphs=*/true);
-  return glyph_source_.GetCombinedCharacterGroups(text, paint_);
+  return glyph_source_->GetCombinedCharacterGroups(text, paint_);
 }
 
 std::vector<float> AndroidPlatformCanvasSource::GetTextWidths(
@@ -300,11 +281,11 @@ AndroidPlatformCanvasSource::GetTextGlyphs(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
   ConfigurePaintForTextOptions(paint_, text_options,
                                /*configure_for_glyphs=*/true);
-  return glyph_source_.GetTextGlyphs(text, paint_);
+  return glyph_source_->GetTextGlyphs(text, paint_);
 }
 
 void AndroidPlatformCanvasSource::ReleaseTextGlyphs(absl::Span<int> glyph_ids) {
-  return glyph_source_.ReleaseTextGlyphs(glyph_ids);
+  return glyph_source_->ReleaseTextGlyphs(glyph_ids);
 }
 
 FontInfo AndroidPlatformCanvasSource::GetFontInfo(
@@ -474,7 +455,7 @@ void AndroidPlatformCanvasSource::AndroidScopedCanvas::DrawText(
   canvas_.DrawText(text, pos, paint_);
 
   std::unique_ptr<android::Rect> bounds = paint_.GetTextBounds(text);
-  float stroke = text_options.stroke_width_pixels + kGlyphPadding;
+  float stroke = text_options.stroke_width_pixels;
   float2 min_p = {pos.x + bounds->GetLeft() - stroke,
                   pos.y + bounds->GetTop() - stroke};
   float2 max_p = {pos.x + bounds->GetRight() + stroke,
@@ -491,7 +472,7 @@ void AndroidPlatformCanvasSource::AndroidScopedCanvas::DrawGlyph(
   }
   ConfigurePaintForTextOptions(paint_, text_options,
                                /*configure_for_glyphs=*/true);
-  source_.glyph_source_.DrawGlyph(
+  source_.glyph_source_->DrawGlyph(
       canvas_, glyph.Get(), pos.x, pos.y, text_options.font_holder,
       text_options.stroke_width_pixels, paint_, stroke_paint_);
 
@@ -500,9 +481,9 @@ void AndroidPlatformCanvasSource::AndroidScopedCanvas::DrawGlyph(
     metrics_storage = source_.GetGlyphMetrics(glyph, text_options);
     pre_cached_metrics = &metrics_storage;
   }
-  float stroke = text_options.stroke_width_pixels + kGlyphPadding;
-  float min_x = pos.x + pre_cached_metrics->origin_x() - stroke;
-  float min_y = pos.y + pre_cached_metrics->origin_y() - stroke;
+  float stroke = text_options.stroke_width_pixels;
+  float min_x = pos.x - stroke;
+  float min_y = pos.y - stroke;
   float max_x = min_x + pre_cached_metrics->size_x() + 2.f * stroke;
   float max_y = min_y + pre_cached_metrics->font_size_y() + 2.f * stroke;
   AddDirtyRect(Rect{float2((min_x + max_x) * 0.5f, (min_y + max_y) * 0.5f),
@@ -519,17 +500,28 @@ void AndroidPlatformCanvasSource::ForceReset() {
   surface_provider_->ForceReset(context_);
 }
 
-void SurfaceTextureSurfaceProvider::OnPause(Context& context) {}
-void SurfaceTextureSurfaceProvider::OnResume(Context& context) {}
-
 bool SurfaceTextureSurfaceProvider::StartDrawing(BaseView& view,
                                                  Context& context,
                                                  uint2 pixel_size) {
   bool did_texture_change = false;
   if (!surface_texture_) {
+    // Register the SurfaceTextureGarbageCollector to ensure that it is not
+    // created when the registry is being destroyed.
+    view.GetRegistry().Register(
+        std::make_unique<SurfaceTextureGarbageCollector>(view));
     // TODO: (broken link) - why do we pass 0 as textureId?
-    surface_texture_ =
-        std::make_unique<android::SurfaceTexture>(context, 0, false);
+    surface_texture_ = std::make_unique<android::SurfaceTexture>(
+        context, 0, false,
+        [&view](JniUniquePtr<jobject> surface_texture_object) {
+          absl::StatusOr<
+              std::reference_wrapper<imp::SurfaceTextureGarbageCollector>>
+              surface_texture_gc =
+                  view.GetRegistry().Get<SurfaceTextureGarbageCollector>();
+          if (surface_texture_gc.ok()) {
+            surface_texture_gc.value().get().QueueForRelease(
+                std::move(surface_texture_object));
+          }
+        });
     surface_ = std::make_unique<android::Surface>(context, *surface_texture_);
 
     texture_ = view.GetTextureFactory().CreateExternalTexture(
@@ -551,9 +543,23 @@ bool SurfaceTextureSurfaceProvider::StartDrawing(
     SmallSourceLocation loc) {
   bool did_texture_change = false;
   if (!surface_texture_) {
+    // Register the SurfaceTextureGarbageCollector to ensure that it is not
+    // created when the registry is being destroyed.
+    view.GetRegistry().Register(
+        std::make_unique<SurfaceTextureGarbageCollector>(view));
     // TODO: (broken link) - why do we pass 0 as textureId?
-    surface_texture_ =
-        std::make_unique<android::SurfaceTexture>(context, 0, false);
+    surface_texture_ = std::make_unique<android::SurfaceTexture>(
+        context, 0, false,
+        [&view](JniUniquePtr<jobject> surface_texture_object) {
+          absl::StatusOr<
+              std::reference_wrapper<imp::SurfaceTextureGarbageCollector>>
+              surface_texture_gc =
+                  view.GetRegistry().Get<SurfaceTextureGarbageCollector>();
+          if (surface_texture_gc.ok()) {
+            surface_texture_gc.value().get().QueueForRelease(
+                std::move(surface_texture_object));
+          }
+        });
     surface_ = std::make_unique<android::Surface>(context, *surface_texture_);
 
     OwnedTexturePtr texture = view.GetTextureFactory().CreateExternalTexture(
@@ -599,68 +605,18 @@ JniUniquePtr<jobject> SurfaceTextureSurfaceProvider::GetCanvas(
   return WrapJni(context.GetJniEnv(), canvas.Reference());
 }
 
-void BitmapSurfaceProvider::OnPause(Context& context) {
-  if (!bitmap_) return;
-
-  absl::StatusOr<AndroidBitmapInfo> info = bitmap_->GetBitmapInfo();
-  if (!info.ok()) return;
-
-  absl::StatusOr<void*> pixels = bitmap_->LockPixels();
-  if (!pixels.ok()) return;
-
-  const uint32_t* ptr = static_cast<const uint32_t*>(pixels.value());
-  size_t num_pixels = (info->stride * info->height) / sizeof(uint32_t);
-
-  if (num_pixels > 0) {
-    uint32_t current_pixel = ptr[0];
-    uint32_t count = 1;
-    for (size_t i = 1; i < num_pixels; ++i) {
-      if (ptr[i] == current_pixel) {
-        count++;
-      } else {
-        preserved_pixels_.push_back(PixelPair{count, current_pixel});
-        current_pixel = ptr[i];
-        count = 1;
-      }
-    }
-    preserved_pixels_.push_back(PixelPair{count, current_pixel});
-  }
-
-  bitmap_->UnlockPixels().IgnoreError();
-}
-
-void BitmapSurfaceProvider::OnResume(Context& context) {
-  if (!bitmap_) return;
-
-  if (preserved_pixels_.empty()) return;
-
-  absl::StatusOr<AndroidBitmapInfo> info = bitmap_->GetBitmapInfo();
-  if (!info.ok()) return;
-
-  absl::StatusOr<void*> pixels = bitmap_->LockPixels();
-  if (!pixels.ok()) return;
-
-  uint32_t* ptr = static_cast<uint32_t*>(pixels.value());
-  size_t num_pixels = (info->stride * info->height) / sizeof(uint32_t);
-  size_t idx = 0;
-
-  for (const auto& p : preserved_pixels_) {
-    if (idx + p.count <= num_pixels) {
-      std::fill_n(ptr + idx, p.count, p.value);
-      idx += p.count;
-    }
-  }
-  preserved_pixels_.clear();
-
-  bitmap_->UnlockPixels().IgnoreError();
-}
-
-BitmapSurfaceProvider::BitmapSurfaceProvider(Context& context) {
+BitmapSurfaceProvider::BitmapSurfaceProvider(Context& context)
+    : context_(context) {
   JNIEnv* env = context.GetJniEnv();
-  jclass local_class = env->FindClass("android/graphics/Canvas");
-  canvas_class_ = (jclass)env->NewGlobalRef(local_class);
+  JniUniquePtr<jclass> local_class = FindClass(env, "android/graphics/Canvas");
+  canvas_class_ = (jclass)env->NewGlobalRef(local_class.get());
   canvas_ctor_ =
       env->GetMethodID(canvas_class_, "<init>", "(Landroid/graphics/Bitmap;)V");
+}
+
+BitmapSurfaceProvider::~BitmapSurfaceProvider() {
+  JNIEnv* env = context_.GetJniEnv();
+  env->DeleteGlobalRef(canvas_class_);
 }
 
 void BitmapSurfaceProvider::InitializeBitmap(Context& context,
@@ -675,11 +631,20 @@ void BitmapSurfaceProvider::InitializeBitmap(Context& context,
       FindClass(env, "android/graphics/Bitmap$Config");
   jfieldID argb8888_id = env->GetStaticFieldID(
       config_class.get(), "ARGB_8888", "Landroid/graphics/Bitmap$Config;");
-  jobject argb8888 = env->GetStaticObjectField(config_class.get(), argb8888_id);
+  JniUniquePtr<jobject> argb8888 =
+      WrapJni(env, env->GetStaticObjectField(config_class.get(), argb8888_id));
 
-  bitmap_.emplace(
-      env, env->CallStaticObjectMethod(bitmap_class.get(), create_bitmap,
-                                       pixel_size.x, pixel_size.y, argb8888));
+  JniUniquePtr<jobject> res_bitmap =
+      WrapJni(env, env->CallStaticObjectMethod(bitmap_class.get(),
+                                               create_bitmap, pixel_size.x,
+                                               pixel_size.y, argb8888.get()));
+
+  if (env->ExceptionCheck()) {
+    env->ExceptionDescribe();
+    env->ExceptionClear();
+    IMP_LOG(imp::FATAL) << "OOM or exception during JNI createBitmap call.";
+  }
+  bitmap_.emplace(env, res_bitmap.get());
   bitmap_size_ = pixel_size;
 }
 

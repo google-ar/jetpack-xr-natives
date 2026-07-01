@@ -29,6 +29,7 @@
 #include "core/split_engine/materials/split_engine_builtin_material_factory.h"
 #include "core/split_engine/request_handlers/request_handler_registry.h"
 #include "core/split_engine/split_engine_renderer_context.h"
+#include "core/split_engine/split_engine_shared_context.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 

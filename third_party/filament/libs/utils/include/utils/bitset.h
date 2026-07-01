@@ -20,14 +20,14 @@
 #include "filament/libs/utils/include/utils/algorithm.h"
 #include "filament/libs/utils/include/utils/compiler.h"
 
-#include <assert.h>
-#include <stddef.h>
-#include <stdint.h>
-
 #include <algorithm> // for std::fill
 #include <iterator>
 #include <limits>
 #include <type_traits>
+
+#include <assert.h>
+#include <stddef.h>
+#include <stdint.h>
 
 #if defined(__ARM_NEON)
 #   if defined(__ARM_ACLE) && defined(__aarch64__)

@@ -18,7 +18,10 @@
 #include <string>
 #include <utility>
 
+#include "absl/status/status.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "core/common/invocable.h"
 #include "core/materials/material.h"
 #include "core/view/framework/render/material_definition.proto.imp.h"
 
@@ -33,7 +36,7 @@ void MaterialRegistry::RegisterMaterial(
 BorrowedMaterialPtr MaterialRegistry::GetMaterial(absl::string_view url) const {
   auto it = materials_.find(url);
   if (it != materials_.end()) {
-    return it->second.material.Borrow();
+    return it->second.material ? it->second.material.Borrow() : nullptr;
   }
   return nullptr;
 }
@@ -47,6 +50,19 @@ const MaterialDefinition* MaterialRegistry::GetMaterialDefinition(
     }
   }
   return nullptr;
+}
+
+absl::Status MaterialRegistry::UpdateMaterialParameters(
+    absl::string_view url, const MaterialDefinition& definition,
+    imp::Invocable<void(BorrowedMaterialPtr)> update_parameters_callback) {
+  auto it = materials_.find(url);
+  if (it != materials_.end()) {
+    materials_[std::string(url)].definition.emplace(definition);
+    update_parameters_callback(
+        it->second.material ? it->second.material.Borrow() : nullptr);
+    return absl::OkStatus();
+  }
+  return absl::NotFoundError(absl::StrCat("Material not found: ", url));
 }
 
 bool MaterialRegistry::HasMaterial(absl::string_view url) const {

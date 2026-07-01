@@ -49,11 +49,8 @@ struct CompressedImageContents {
 class ImageContents {
  public:
   // Stitches six square images into a vertical strip.
-  // TODO Refactor this to return a result instead of using an out
-  // param.
-  static absl::Status CreateStitched(
-      std::vector<std::unique_ptr<ImageContents>> images, size_t* offsets,
-      std::unique_ptr<ImageContents>* result);
+  static absl::StatusOr<std::unique_ptr<ImageContents>> CreateStitched(
+      std::vector<std::unique_ptr<ImageContents>> images);
 
   // Reconstructs an ImageContents given a vector of bytes, a width, and a
   // height.

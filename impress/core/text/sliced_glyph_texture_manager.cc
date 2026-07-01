@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <memory>
 
 #include "filament/filament/include/filament/Camera.h"
@@ -113,24 +114,12 @@ OwnedTexturePtr SlicedGlyphTextureManager::CreateCompositeTexture(
                    Usage::BLIT_DST,
       });
 
-  // Create a fractlish checkerboard on checkerboard pattern to initialize the
-  // composite texture.
+  // Create an empty buffer to initialize the composite texture.
   size_t composite_size_bytes =
       composite_size.x * composite_size.y * sizeof(uint32_t);
-  void* checkerboard_buffer = malloc(composite_size_bytes);
-  constexpr uint32_t kA = 0x40404040;
-  constexpr uint32_t kB = 0x80808080;
-  constexpr uint32_t kC = 0xC0C0C0C0;
-  constexpr uint32_t kD = 0x00000000;
-  for (size_t y = 0; y < composite_size.y; ++y) {
-    for (size_t x = 0; x < composite_size.x; ++x) {
-      uint32_t* pixel = reinterpret_cast<uint32_t*>(checkerboard_buffer) +
-                        y * composite_size.x + x;
-      *pixel = ((x / 8 + y / 8) % 2 ? ((x / 32 + y / 32) % 2 ? kA : kB)
-                                    : ((x / 32 + y / 32) % 2 ? kC : kD)) +
-               ((x + y) % 2 ? 0 : 0x10101010);
-    }
-  }
+  void* empty_buffer = malloc(composite_size_bytes);
+  memset(empty_buffer, 0, composite_size_bytes);
+
   // Make a simple local type to manage the lifetime of the checkerboard buffer
   // while we're waiting for the filament thread to service the setImage call.
   struct Packet {
@@ -140,10 +129,10 @@ OwnedTexturePtr SlicedGlyphTextureManager::CreateCompositeTexture(
   // Filament will call this callback after the setImage call has been completed
   // on the filament thread. At that point, we can release the checkerboard
   // buffer and the packet.
-  auto cb = [](void* checkerboard_buffer, size_t size, void* user) {
+  auto cb = [](void* empty_buffer, size_t size, void* user) {
     Packet* packet = reinterpret_cast<Packet*>(user);
     if (!--packet->refs) {
-      free(checkerboard_buffer);
+      free(empty_buffer);
       delete packet;
     }
   };
@@ -152,7 +141,7 @@ OwnedTexturePtr SlicedGlyphTextureManager::CreateCompositeTexture(
   // Request the texture contents to be set.
   composite_texture->GetTexture()->setImage(
       engine, 0,
-      PixelBufferDescriptor(checkerboard_buffer, composite_size_bytes,
+      PixelBufferDescriptor(empty_buffer, composite_size_bytes,
                             PixelBufferDescriptor::PixelDataFormat::RGBA,
                             PixelBufferDescriptor::PixelDataType::UBYTE,
                             nullptr, cb, packet));

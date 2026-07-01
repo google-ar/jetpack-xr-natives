@@ -166,7 +166,7 @@ class LightManager {
   Future<absl::Status> SetupDefaultLighting();
 
   void UpdateSplitEngineEnvironmentLight(
-      absl::optional<AssetPtr<ImageBasedLightingAsset>> ibl_asset,
+      std::optional<AssetPtr<ImageBasedLightingAsset>> ibl_asset,
       absl::string_view group_name,
       float intensity = kDefaultEnvironmentLightIntensity,
       const float3& tint = kDefaultEnvironmentLightTint);

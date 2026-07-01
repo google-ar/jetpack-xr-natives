@@ -92,7 +92,7 @@ namespace ar {
 namespace {
 UniqueArPose CreateUniqueArPose(
     const UniqueArSession& ar_session,
-    absl::optional<const std::array<float, 7>> pose_raw) {
+    std::optional<const std::array<float, 7>> pose_raw) {
   IMP_TRACE();
   ArPose_* ar_pose;
   ArPose_create(ar_session.get(),
@@ -282,8 +282,8 @@ ArCameraConfig* ObtainBestCameraConfig(ArSession* ar_session,
   ArCameraConfigFilter_destroy(camera_config_filter);
   ArCameraConfigList_getSize(ar_session, all_camera_configs, &num_configs);
 
-  absl::optional<int> best_index;
-  absl::optional<float> best_score;
+  std::optional<int> best_index;
+  std::optional<float> best_score;
 
   // Negative to correct for sign, bias away from higher resolutions.
   constexpr float kHeightPenalty = -2;
@@ -446,7 +446,7 @@ class SessionHelper {
   // A Creator method that handles the Point trackable type.
   template <typename T, IfArPoint<T> = 0>
   ArPoint CreateImpTrackable(UniqueArTrackable trackable,
-                             absl::optional<ArPose_*> pose = absl::nullopt) {
+                             std::optional<ArPose_*> pose = absl::nullopt) {
     IMP_TRACE();
     // Getting a pose from point when using instant (kDistanceGuess) mode,
     // according to ArCore documentation  will get a point found with
@@ -482,7 +482,7 @@ class SessionHelper {
   template <typename T, IfArMagicalSurfacePoint<T> = 0>
   ArMagicalSurfacePoint CreateImpTrackable(
       UniqueArTrackable&& trackable,
-      absl::optional<ArPose_*> pose = absl::nullopt) {
+      std::optional<ArPose_*> pose = absl::nullopt) {
     IMP_TRACE();
     mat4f transform;
     // If no pose is provided, we have no way of updating the pose of a
@@ -511,7 +511,7 @@ class SessionHelper {
   // A creator method that handles the Plane trackable type.
   template <typename T, IfArPlane<T> = 0>
   ArPlane CreateImpTrackable(UniqueArTrackable trackable,
-                             absl::optional<ArPose_*> pose = absl::nullopt) {
+                             std::optional<ArPose_*> pose = absl::nullopt) {
     IMP_TRACE();
     mat4f transform;
     if (pose) {
@@ -607,11 +607,11 @@ class SessionHelper {
   const ArSessionNativeArCore* imp_session_;
 };
 
-static absl::optional<Future<absl::Status>>& GetAvailabilityFuture(
+static std::optional<Future<absl::Status>>& GetAvailabilityFuture(
     const BaseView* view) {
   // ArCoreApk_checkAvailability takes a long time and causes strict mode
   // violations when it is called on the main thread.
-  static auto* instance = new absl::optional<Future<absl::Status>>();
+  static auto* instance = new std::optional<Future<absl::Status>>();
   if (!instance->has_value()) {
     instance->emplace(Future<absl::Status>::Schedule(
         [context = view->GetContext()]() -> absl::Status {
@@ -1034,7 +1034,7 @@ absl::Status ArSessionNativeArCore::GetLatestModelMatrix(
 #endif
 }
 
-absl::optional<ArFrame> ArSessionNativeArCore::Update(
+std::optional<ArFrame> ArSessionNativeArCore::Update(
     absl::Time last_submitted_timestamp) {
   IMP_TRACE();
   ArSession* session = ar_session_.get();
@@ -1141,7 +1141,7 @@ uint4 ArSessionNativeArCore::GetDebugSessionId() {
   return result;
 }
 
-absl::optional<ArHitResult> ArSessionNativeArCore::ConvertArHitResult(
+std::optional<ArHitResult> ArSessionNativeArCore::ConvertArHitResult(
     const ArHitResultPtr& hit_result,
     TrackableTuple* out_generated_trackables) const {
   IMP_TRACE();
@@ -1228,7 +1228,7 @@ std::vector<ArHitResult> ArSessionNativeArCore::ConvertArHitResults(
 }
 
 std::vector<ArHitResult> ArSessionNativeArCore::HitTest(
-    float2 screen_pos, absl::optional<float> guessed_distance,
+    float2 screen_pos, std::optional<float> guessed_distance,
     TrackableTuple* out_generated_trackables) {
   IMP_TRACE();
   ArHitResultListPtr hit_result_list(ar_session_.get());
@@ -1282,7 +1282,7 @@ std::vector<ArPriorMap> ArSessionNativeArCore::GetUpdatedPriorMaps() const {
 #endif
 
 absl::StatusOr<ArAnchor> ArSessionNativeArCore::CreateAnchor(
-    float3 position, quatf rotation, absl::optional<ArTrackableId> id) {
+    float3 position, quatf rotation, std::optional<ArTrackableId> id) {
   IMP_TRACE();
   std::array<float, 7> pose_raw = {rotation.x, rotation.y, rotation.z,
                                    rotation.w, position.x, position.y,

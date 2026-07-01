@@ -48,7 +48,7 @@ class GltfModel {
   explicit GltfModel(imp::gltf::imp_proto::Gltf* gltf_root);
 
   const imp::gltf::imp_proto::Material& GetMaterial(
-      absl::optional<uint32_t> index) const;
+      std::optional<uint32_t> index) const;
   const imp::gltf::imp_proto::Accessor& GetAccessor(int index) const;
   const imp::gltf::imp_proto::Texture& GetTexture(int index) const;
   const imp::gltf::imp_proto::Sampler& GetSampler(int index) const;

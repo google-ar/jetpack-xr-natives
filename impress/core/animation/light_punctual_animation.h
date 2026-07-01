@@ -46,11 +46,11 @@ class LightPunctualAnimation {
     kSpotOuterConeAngle = (1 << 4)
   };
   struct LightParameter {
-    LightParameter(absl::optional<float3> in_color,
-                   absl::optional<float> in_intensity,
-                   absl::optional<float> in_range,
-                   absl::optional<float> in_spot_inner_cone_angle,
-                   absl::optional<float> in_spot_outer_cone_angle) {
+    LightParameter(std::optional<float3> in_color,
+                   std::optional<float> in_intensity,
+                   std::optional<float> in_range,
+                   std::optional<float> in_spot_inner_cone_angle,
+                   std::optional<float> in_spot_outer_cone_angle) {
       animated_light_parameter = AnimatedLightParameter::None;
       if (in_color.has_value()) {
         color = *in_color;

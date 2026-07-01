@@ -14,14 +14,6 @@
 
 """Utility functions for path manipulation in BUILD files."""
 
-load("@bazel_skylib//lib:paths.bzl", "paths")
-
-def externalize_path(ctx, path):
-    """Fixes path to a external-workspace-relative path if built externally."""
-    if ctx.label.workspace_name and ctx.label.workspace_name != ctx.workspace_name:
-        path = paths.join("external", ctx.label.workspace_name, path)
-    return path
-
 def rlocation_path(ctx, file):
     """Fixes up Bazel's short_paths, which are relative (i.e. remove "../").
 

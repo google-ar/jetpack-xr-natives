@@ -30,11 +30,13 @@
 #include "zetasql/base/atomic_sequence_num.h"
 #include "third_party/GL/gl/include/GLES3/gl3.h"
 #include "absl/base/no_destructor.h"
+#include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/types/optional.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/backend/include/backend/PixelBufferDescriptor.h"
@@ -118,6 +120,7 @@ class WasmDecodeImageManager {
   void OnDecodeImage(uint future_id, intptr_t image, int width, int height);
   void OnDecodeTexture(uint future_id, GLuint texture, int width, int height);
   void OnDecodeError(uint future_id, int decodeTarget, emscripten::val error);
+  void CancelDecode(uint future_id);
 
   // TODO: Remove this when removing the
   // enable_label_prep_profile_logging flag.
@@ -157,21 +160,34 @@ class WasmDecodeImageManager {
   }
 
   absl::flat_hash_map<uint16_t, WeakFuture<std::unique_ptr<ImageContents>>>
-      image_futures_;
+      image_futures_ ABSL_GUARDED_BY(image_futures_mutex_);
   absl::flat_hash_map<uint16_t, WeakFuture<WasmTextureContents>>
-      texture_futures_;
+      texture_futures_ ABSL_GUARDED_BY(texture_futures_mutex_);
   base::SequenceNumber unique_future_id_;
+  // Multiple threads can decode images at the same time but flat_hash_map is
+  // not thread-safe, so we need to use a mutex to protect them.
+  absl::Mutex image_futures_mutex_;
+  absl::Mutex texture_futures_mutex_;
 };
 
 Future<std::unique_ptr<ImageContents>> WasmDecodeImageManager::DecodeImage(
     absl::string_view name, resources::Resource resource) {
   uint future_id = GetNextFutureID();
   Future<std::unique_ptr<ImageContents>> image_future;
-  image_futures_.insert(std::make_pair(future_id, image_future));
+  {
+    absl::MutexLock lock(image_futures_mutex_);
+    image_futures_.insert(std::make_pair(future_id, image_future));
+  }
   MAIN_THREAD_EM_ASM(
       { Module['wasmDecodeImageManager'].decodeImage($0, $1, $2); }, future_id,
       resource.GetData().Data(), resource.GetData().Size());
-  return image_future;
+  return image_future.Then(
+      [this, future_id](absl::StatusOr<std::unique_ptr<ImageContents>> image) {
+        if (image.status().code() == absl::StatusCode::kCancelled) {
+          this->CancelDecode(future_id);
+        }
+        return image;
+      });
 }
 
 Future<WasmTextureContents> WasmDecodeImageManager::DecodeImageToTexture(
@@ -179,7 +195,10 @@ Future<WasmTextureContents> WasmDecodeImageManager::DecodeImageToTexture(
     filament::backend::TextureFormat format, uint8_t requested_levels) {
   uint future_id = GetNextFutureID();
   Future<WasmTextureContents> texture_future;
-  texture_futures_.insert(std::make_pair(future_id, texture_future));
+  {
+    absl::MutexLock lock(texture_futures_mutex_);
+    texture_futures_.insert(std::make_pair(future_id, texture_future));
+  }
   GLuint texture;
   glGenTextures(1, &texture);
   GLuint texture_format = FilamentTextureFormatToGLEnum(format);
@@ -190,18 +209,29 @@ Future<WasmTextureContents> WasmDecodeImageManager::DecodeImageToTexture(
       },
       future_id, resource.GetData().Data(), resource.GetData().Size(), texture,
       texture_format, requested_levels);
-  return texture_future;
+  return texture_future.Then(
+      [this, future_id,
+       texture](absl::StatusOr<WasmTextureContents> texture_contents) {
+        if (texture_contents.status().code() == absl::StatusCode::kCancelled) {
+          this->CancelDecode(future_id);
+          glDeleteTextures(1, &texture);
+        }
+        return texture_contents;
+      });
 }
 
 void WasmDecodeImageManager::OnDecodeImage(uint future_id, intptr_t image,
                                            int width, int height) {
-  if (!image_futures_.contains(future_id)) {
-    IMP_LOG(imp::ERROR) << "Future ID not found when resolving onDecodeImage";
-    return;
+  absl::optional<Future<std::unique_ptr<ImageContents>>> image_future;
+  {
+    absl::MutexLock lock(image_futures_mutex_);
+    if (!image_futures_.contains(future_id)) {
+      IMP_LOG(imp::ERROR) << "Future ID not found when resolving onDecodeImage";
+      return;
+    }
+    image_future = image_futures_.at(future_id).Lock();
+    image_futures_.erase(future_id);
   }
-  absl::optional<Future<std::unique_ptr<ImageContents>>> image_future =
-      image_futures_.at(future_id).Lock();
-  image_futures_.erase(future_id);
 
   if (image_future.has_value()) {
     image_future->Return(std::make_unique<WasmImageContents>(
@@ -210,50 +240,69 @@ void WasmDecodeImageManager::OnDecodeImage(uint future_id, intptr_t image,
 }
 void WasmDecodeImageManager::OnDecodeTexture(uint future_id, GLuint texture,
                                              int width, int height) {
-  if (!texture_futures_.contains(future_id)) {
-    IMP_LOG(imp::ERROR) << "Future ID not found when resolving onDecodeTexture";
-    return;
+  absl::optional<Future<WasmTextureContents>> texture_future;
+  {
+    absl::MutexLock lock(texture_futures_mutex_);
+    if (!texture_futures_.contains(future_id)) {
+      IMP_LOG(imp::ERROR) << "Future ID not found when resolving onDecodeTexture";
+      return;
+    }
+    texture_future = texture_futures_.at(future_id).Lock();
+    texture_futures_.erase(future_id);
   }
-  absl::optional<Future<WasmTextureContents>> texture_future =
-      texture_futures_.at(future_id).Lock();
-  texture_futures_.erase(future_id);
   if (texture_future.has_value()) {
     texture_future->Return(WasmTextureContents(texture, width, height));
   }
 }
+
 void WasmDecodeImageManager::OnDecodeError(uint future_id, int decodeTarget,
                                            emscripten::val error) {
-  if (!image_futures_.contains(future_id) &&
-      !texture_futures_.contains(future_id)) {
-    IMP_LOG(imp::ERROR) << "Future ID not found when resolving "
-               << (decodeTarget == kDecodeImageToImageData ? "decodeImage"
-                                                           : "decodeTexture")
-               << " with error: " << error.as<std::string>();
-    return;
-  }
+  absl::optional<Future<std::unique_ptr<ImageContents>>> image_future;
+  absl::optional<Future<WasmTextureContents>> texture_future;
   switch (decodeTarget) {
     case kDecodeImageToImageData: {
-      absl::optional<Future<std::unique_ptr<ImageContents>>> image_future =
-          image_futures_.at(future_id).Lock();
-      image_futures_.erase(future_id);
-      if (image_future.has_value()) {
-        image_future->Return(absl::InternalError(error.as<std::string>()));
+      absl::MutexLock lock(image_futures_mutex_);
+      if (!image_futures_.contains(future_id)) {
+        IMP_LOG(imp::ERROR)
+            << "Future ID not found when resolving decodeImage with error: "
+            << error.as<std::string>();
+        return;
       }
+      image_future = image_futures_.at(future_id).Lock();
+      image_futures_.erase(future_id);
       break;
     }
     case kDecodeImageToTexture: {
-      absl::optional<Future<WasmTextureContents>> texture_future =
-          texture_futures_.at(future_id).Lock();
-      texture_futures_.erase(future_id);
-      if (texture_future.has_value()) {
-        texture_future->Return(absl::InternalError(error.as<std::string>()));
+      absl::MutexLock lock(texture_futures_mutex_);
+      if (!texture_futures_.contains(future_id)) {
+        IMP_LOG(imp::ERROR)
+            << "Future ID not found when resolving decodeTexture with error: "
+            << error.as<std::string>();
+        return;
       }
+      texture_future = texture_futures_.at(future_id).Lock();
+      texture_futures_.erase(future_id);
       break;
     }
-    default:
-      IMP_LOG(imp::ERROR) << "Unknown decode target: " << decodeTarget
-                 << " with error: " << error.as<std::string>();
-      break;
+  }
+  if (image_future.has_value()) {
+    image_future->Return(absl::InternalError(error.as<std::string>()));
+  }
+  if (texture_future.has_value()) {
+    texture_future->Return(absl::InternalError(error.as<std::string>()));
+  }
+}
+
+void WasmDecodeImageManager::CancelDecode(uint future_id) {
+  MAIN_THREAD_EM_ASM(
+      { Module['wasmDecodeImageManager'].cancelDecode($0); }, future_id);
+  {
+    absl::MutexLock lock(image_futures_mutex_);
+    image_futures_.erase(future_id);
+  }
+  {
+    absl::MutexLock lock(texture_futures_mutex_);
+    texture_futures_.erase(future_id);
   }
 }
 

@@ -157,6 +157,7 @@ cc_library(
         "@com_google_impress//core/math",
         "@com_google_impress//core/ncsb",
         "@com_google_impress//core/view:base_view",
+        "@com_google_impress//core/window:shared_host_state",
         "@third_party//filament/libs:utils_hdrs",
         "@third_party//split_engine/input",
         "@third_party//split_engine/input:split_engine_input_event",

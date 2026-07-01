@@ -18,6 +18,7 @@
 #include <functional>
 
 #include "core/common/log.h"
+#include "core/common/platform_storage.h"
 #include "core/common/registry.h"
 #include "core/editor/editor.h"
 #include "core/editor/editor_plugin.h"
@@ -43,6 +44,10 @@ void CameraZoom::Setup(NodeHandle pivot) {
   }
 
   pivot_ = pivot;
+
+  PlatformStorage& storage = *GetView().GetRegistry().Get<PlatformStorage>();
+  invert_scroll_enabled_ =
+      storage.GetBool(kInvertMouseScrollKey, kInvertMouseScrollDefault);
 
   absl::StatusOr<std::reference_wrapper<Editor>> editor_or =
       GetView().GetRegistry().Get<Editor>();

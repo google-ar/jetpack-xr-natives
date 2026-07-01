@@ -50,6 +50,7 @@ public class RemoteEditorScriptApiBridge implements RemoteEditorWebSocketServer.
   private final long executorHandle;
   private long nativeScriptApiBridgeWrapperPtr;
   private RemoteEditorWebSocketServer webSocketServer;
+  private RemoteEditorWebSocketServer.SessionClosedListener sessionClosedListener;
   private NativeInterface nativeInterface =
       new NativeInterface() {
         @Override
@@ -109,15 +110,32 @@ public class RemoteEditorScriptApiBridge implements RemoteEditorWebSocketServer.
   public void startBridge(int webSocketPort, long nativeScriptApiBridgeWrapperPtr) {
     stopBridge();
     this.nativeScriptApiBridgeWrapperPtr = nativeScriptApiBridgeWrapperPtr;
-    this.webSocketServer = new RemoteEditorWebSocketServer(webSocketPort);
-    this.webSocketServer.addListener(this);
-    this.webSocketServer.startServer();
+    webSocketServer = new RemoteEditorWebSocketServer(webSocketPort);
+    if (sessionClosedListener != null) {
+      webSocketServer.setSessionClosedListener(sessionClosedListener);
+    }
+    webSocketServer.addWebSocketListener(this);
+    webSocketServer.startServer();
+  }
+
+  public void setSessionClosedListener(RemoteEditorWebSocketServer.SessionClosedListener listener) {
+    sessionClosedListener = listener;
+    if (webSocketServer != null) {
+      webSocketServer.setSessionClosedListener(listener);
+    }
+  }
+
+  public void disconnectAllConnections(String reason) {
+    if (webSocketServer != null) {
+      webSocketServer.disconnectAllConnections(reason);
+    }
   }
 
   /** Stops the bridge and shuts down the underlying WebSocket server. */
   public void stopBridge() {
     if (webSocketServer != null) {
-      webSocketServer.removeListener(this);
+      webSocketServer.removeWebSocketListener(this);
+      webSocketServer.setSessionClosedListener(null);
       try {
         webSocketServer.stop();
       } catch (IOException | InterruptedException e) {
@@ -207,7 +225,7 @@ public class RemoteEditorScriptApiBridge implements RemoteEditorWebSocketServer.
     }
   }
 
-  // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/android_remote_editor_script_api_bridge_wrapper.cc:postMessageToScript)
+  // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/android/android_remote_editor_script_api_bridge_wrapper.cc:postMessageToScript)
 
   // LINT.IfChange(nativePostMessageToNative)
   /**
@@ -225,15 +243,15 @@ public class RemoteEditorScriptApiBridge implements RemoteEditorWebSocketServer.
       long executorHandle,
       byte[] requestBytes);
 
-  // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/remote_editor_script_api_bridge_jni.cc:nativePostMessageToNative)
+  // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/android/remote_editor_script_api_bridge_jni.cc:nativePostMessageToNative)
 
   // LINT.IfChange(nativeOnClientConnected)
   private native boolean nativeOnClientConnected(long nativeScriptApiBridgeWrapperPtr);
 
-  // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/remote_editor_script_api_bridge_jni.cc:nativeOnClientConnected)
+  // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/android/remote_editor_script_api_bridge_jni.cc:nativeOnClientConnected)
 
   // LINT.IfChange(nativeOnClientDisconnected)
   private native boolean nativeOnClientDisconnected(long nativeScriptApiBridgeWrapperPtr);
 
-  // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/remote_editor_script_api_bridge_jni.cc:nativeOnClientDisconnected)
+  // LINT.ThenChange(//depot/google3/third_party/impress/core/editor/remote_editor/android/remote_editor_script_api_bridge_jni.cc:nativeOnClientDisconnected)
 }

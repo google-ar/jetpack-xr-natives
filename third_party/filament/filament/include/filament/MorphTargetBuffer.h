@@ -17,9 +17,8 @@
 #ifndef TNT_FILAMENT_MORPHTARGETBUFFER_H
 #define TNT_FILAMENT_MORPHTARGETBUFFER_H
 
-#include <filament/FilamentAPI.h>
-
 #include <filament/Engine.h>
+#include <filament/FilamentAPI.h>
 
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/StaticString.h"

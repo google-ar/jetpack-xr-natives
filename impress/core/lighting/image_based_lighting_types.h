@@ -22,9 +22,9 @@
 #include <utility>
 #include <vector>
 
-#include "filament/filament/include/filament/Texture.h"
 #include "core/image/image_contents.h"
 #include "core/math/vec.h"
+
 namespace imp {
 
 // Spherical harmonics coefficients and number of bands. Used to approximate
@@ -37,9 +37,8 @@ struct SphericalHarmonics {
   uint8_t num_bands;
 };
 
-// The dimensions and face offsets of a single mipmap level of a cubemap.
+// The dimensions of a single mipmap level of a cubemap.
 struct CubemapLevel {
-  filament::Texture::FaceOffsets face_offsets;
   uint32_t face_size;
 };
 

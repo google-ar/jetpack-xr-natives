@@ -17,10 +17,13 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_VIEW_PLATFORMS_ANDROID_WRAPPERS_SURFACE_TEXTURE_H_
 #define THIRD_PARTY_IMPRESS_CORE_VIEW_PLATFORMS_ANDROID_WRAPPERS_SURFACE_TEXTURE_H_
 
+#include <jni.h>
+
 #include <cstdint>
 
 #include "absl/status/status.h"
 #include "core/common/context.h"
+#include "core/common/invocable.h"
 #include "core/common/jni_helpers.h"
 #include "core/math/mat.h"
 #include "core/math/vec.h"
@@ -30,9 +33,13 @@ namespace imp::android {
 // JNI wrapper for the Android SurfaceTexture class.
 class SurfaceTexture : public JavaWrapper {
  public:
-  explicit SurfaceTexture(const Context& context);
+  using DestructionCallback = Invocable<void(JniUniquePtr<jobject>)>;
 
-  SurfaceTexture(const Context& context, uint32_t texture_id, bool is_secure);
+  explicit SurfaceTexture(const Context& context,
+                          DestructionCallback on_destruct);
+
+  SurfaceTexture(const Context& context, uint32_t texture_id, bool is_secure,
+                 DestructionCallback on_destruct);
 
   ~SurfaceTexture() override;
 
@@ -52,6 +59,7 @@ class SurfaceTexture : public JavaWrapper {
   uint32_t texture_id_ = 0;
   bool is_secure_ = false;
   bool is_attached_to_secure_gl_context_ = false;
+  DestructionCallback on_destruct_;
 #if __ANDROID_API__ >= 33
   JniHandle get_data_space_;
 #endif  // __ANDROID_API__ >= 33

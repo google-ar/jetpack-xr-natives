@@ -67,6 +67,7 @@ cc_library(
         "//core/material_library:generic_materials",
         "//core/split_engine:split_engine_renderer",
         "//core/split_engine:split_engine_renderer_context",
+        "//core/split_engine:split_engine_shared_context",
         "//core/split_engine/materials:split_engine_builtin_material_factory",
         "//core/split_engine/materials/builtin:builtin_material",
         "@com_google_absl//absl/status",

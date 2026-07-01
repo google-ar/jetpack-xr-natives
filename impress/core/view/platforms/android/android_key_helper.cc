@@ -224,8 +224,8 @@ void ProcessKeyboardEvent(BaseView* view, int char_code, int key_code,
   } else if (getAction(action) == KeyboardEventType::kOnUp) {
     // Schedule a key up events at the end of the frame.
     view->GetDispatcher().Connect(
-        [view, key, elapsed_time](const imp::ViewPostFrameEvent& ev) {
-          uint8_t action = static_cast<uint8_t>(imp::KeyboardEventType::kOnUp);
+        [view, key, elapsed_time](const ViewPostFrameUpdateEvent& ev) {
+          uint8_t action = static_cast<uint8_t>(KeyboardEventType::kOnUp);
           absl::Status res = view->GetInputManager().ProcessKeyboardInput(
               action, key, elapsed_time);
           if (!res.ok()) {

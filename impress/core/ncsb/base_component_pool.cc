@@ -32,6 +32,8 @@
 #include "core/common/vector_helpers.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_id.h"
+#include "core/ncsb/node_controller.h"
+#include "core/ncsb/shared_memory_pool.h"
 #include "core/view/base_view.h"
 
 namespace imp {
@@ -73,19 +75,24 @@ void BaseComponentPool::ComponentStore::Remove(utils::Entity entity) {
 
   ComponentIndex last_index = components_.size() - 1;
 
+  Component* to_delete = components_[index];
+
+  NodeHandle node = to_delete->GetNode();
+  if (node) {
+    node->node_controller_->UnregisterComponent(pool_->GetComponentId());
+  }
+
   // Special case for removing a component while in the midst of iterating over
   // the components. In this case, we can't swap and pop because it can cause
   // the iteration to skip over components. Instead we track the free indices
   // so we can densify the vector later.
   if (iterating_depth_ > 0) {
-    pool_->Deallocate(components_[index]);
+    pool_->Deallocate(to_delete);
     components_[index] = nullptr;
     ++free_indices_count_;
     
     return;
   }
-
-  Component* to_delete = components_[index];
 
   // Swap and pop the last component to ensure the vector of components stays
   // dense.
@@ -136,20 +143,28 @@ BaseComponentPool::BaseComponentPool(BaseView& view,
     : view_(view),
       base_allocator_(base_allocator),
       component_id_(component_id),
-      components_(this) {}
+      components_(this),
+      components_lookup_(::imp_internal::GetPagedPointerArrayBlockPool()) {
+  
+}
 
 BaseComponentPool::~BaseComponentPool() {
+  
   // RemoveAll should be called prior to getting here.
-  assert(components_.Empty());
+  
   
 }
 
 bool BaseComponentPool::Has(utils::Entity entity) const noexcept {
-  return base_allocator_ ? entities_to_components_.count(entity) > 0
-                         : components_.Has(entity);
+  return base_allocator_
+             ? components_lookup_.Get(utils::EntityManager::getIndex(entity)) !=
+                   nullptr
+             : components_.Has(entity);
 }
 
 Component* BaseComponentPool::Add(NodeHandle node) noexcept {
+  
+
   if (UTILS_UNLIKELY(Has(node.GetEntity()))) {
     Remove(node.GetEntity());
   }
@@ -162,11 +177,13 @@ Component* BaseComponentPool::Add(NodeHandle node) noexcept {
   Component* component = Emplace(node, &key);
 
   if (base_allocator_) {
-    entities_to_components_[node.GetEntity()] = component;
+    components_lookup_.Set(utils::EntityManager::getIndex(node.GetEntity()),
+                           component);
   } else {
     components_.Add(node, component);
   }
   component->PostCreated(node, key, *this);
+  node->node_controller_->RegisterComponent(component_id_);
 
   return component;
 }
@@ -183,12 +200,9 @@ void BaseComponentPool::PostSetup(Component& component,
 
 Component* BaseComponentPool::TryGetRawComponentFromEntity(
     utils::Entity entity) noexcept {
-  if (base_allocator_) {
-    auto itr = entities_to_components_.find(entity);
-    return itr != entities_to_components_.end() ? itr->second : nullptr;
-  } else {
-    return components_.TryGetRaw(entity);
-  }
+  return base_allocator_
+             ? components_lookup_.Get(utils::EntityManager::getIndex(entity))
+             : components_.TryGetRaw(entity);
 }
 
 size_t BaseComponentPool::GetComponentCount() const noexcept {
@@ -197,6 +211,8 @@ size_t BaseComponentPool::GetComponentCount() const noexcept {
 }
 
 void BaseComponentPool::Remove(utils::Entity entity) noexcept {
+  
+
   CancelPending(entity);
   Forget(entity);
 
@@ -218,9 +234,13 @@ void BaseComponentPool::Remove(utils::Entity entity) noexcept {
 
   if (base_allocator_) {
     // Lookup the component again in case it was removed by Cleanup.
-    auto itr = entities_to_components_.find(entity);
-    if (itr != entities_to_components_.end()) {
-      entities_to_components_.erase(itr);
+    component = components_lookup_.Get(utils::EntityManager::getIndex(entity));
+    if (component && component->GetEntity() == entity) {
+      NodeHandle node = component->GetNode();
+      if (node) {
+        node->node_controller_->UnregisterComponent(component_id_);
+      }
+      components_lookup_.Set(utils::EntityManager::getIndex(entity), nullptr);
       Deallocate(component);
     }
   } else {
@@ -233,9 +253,11 @@ void BaseComponentPool::Remove(utils::Entity entity) noexcept {
 }
 
 void BaseComponentPool::RemoveAll() noexcept {
+  
+
   if (base_allocator_) {
-    while (!entities_to_components_.empty()) {
-      Remove(entities_to_components_.begin()->first);
+    while (!components_lookup_.IsEmpty()) {
+      Remove(components_lookup_.Back()->GetEntity());
     }
   } else {
     while (!components_.Empty()) {

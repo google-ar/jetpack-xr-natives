@@ -27,26 +27,28 @@
 #include "absl/types/span.h"
 #include "core/editor/widgets/performance/sample_processor.h"
 #include "core/editor/widgets/performance/sample_processor_types.h"
+#include "core/performance/memory_stats.h"
 
 namespace imp::editor {
 
-class FrameTimePanel;
+class ProfilerDataProvider;
 
 // Displays memory allocations and call stacks of where they originated.
-// Rendered as a subpanel of the FrameTimePanel.
 class CallstackPanel {
  public:
   CallstackPanel() {}
   ~CallstackPanel() = default;
 
-  void DrawPanel(float width, int start_frame, int end_frame,
-                 FrameTimePanel& frame_time_panel,
-                 SampleProcessor& sample_processor, std::thread::id thread_id);
+  void DrawPanel(float width, ProfilerDataProvider& data_provider,
+                 std::thread::id thread_id, absl::string_view search_query = "",
+                 bool collapse_callstacks = false);
 
  private:
   struct TableEntry {
     int sample_index;
     int callstack_index;
+    int count = 1;
+    uint32_t total_size = 0;
   };
 
   // Initial height of the lower panel containing the full call stack readout.
@@ -61,10 +63,20 @@ class CallstackPanel {
       std::thread::id thread_id, absl::string_view selected_sample_name);
 
   // Draws the call stack table, splitter, and the full call stack panel.
-  void DrawCallstackPanel(absl::Span<SampleNode* const> samples);
+  void DrawCallstackPanel(absl::Span<SampleNode* const> samples,
+                          absl::string_view search_query);
 
   // Draws the table contents with a row for each allocation in the samples.
-  void DrawCallstackTable(absl::Span<SampleNode* const> samples);
+  void DrawCallstackTable(absl::Span<SampleNode* const> samples,
+                          absl::string_view search_query);
+
+  // Rebuilds the call stack table entries.
+  void RebuildTableEntries(absl::Span<SampleNode* const> samples,
+                           absl::string_view search_query);
+
+  // Returns true if the callstack matches the search query.
+  bool AnyStackFrameMatchesSearch(const MemoryStats::Callstack& callstack,
+                                  absl::string_view search_query);
 
   // Draws the splitter between the table and the full call stack panel.
   void DrawSplitter();
@@ -81,11 +93,15 @@ class CallstackPanel {
   int selected_end_index_ = kInvalidId;
   int last_frame_index_ = kInvalidId;
   absl::string_view last_selected_sample_name_;
+  std::string last_search_query_;
   float upper_panel_height_ = -1.0f;
   float lower_panel_height_ = kLowerPanelStartingHeight;
+  bool rebuild_table_entries_ = true;
+  bool has_stale_callstacks_ = false;
   // Cache of symbolized addresses to avoid repeated calls to absl::Symbolize.
   // May end up being a few KB in size with heavy use of the call stack panel.
   absl::flat_hash_map<const void*, std::string> callstack_cache_;
+  bool collapse_callstacks_ = false;
   std::vector<TableEntry> callstack_table_entries_;
 };
 

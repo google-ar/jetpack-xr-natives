@@ -183,7 +183,7 @@ Future<absl::Status> LightManager::SetupDefaultLighting() {
 }
 
 void LightManager::UpdateSplitEngineEnvironmentLight(
-    absl::optional<AssetPtr<ImageBasedLightingAsset>> ibl_asset,
+    std::optional<AssetPtr<ImageBasedLightingAsset>> ibl_asset,
     absl::string_view group_name, float intensity, const float3& tint) {
   if (!ibl_asset.has_value() || group_name != GroupsManager::kMainGroupName) {
     return;

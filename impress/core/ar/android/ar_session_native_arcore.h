@@ -77,11 +77,11 @@ class ArSessionNativeArCore : public ArSessionNative {
 
   void Pause() override;
   void Resume() override;
-  absl::optional<ArFrame> Update(absl::Time last_submitted_timestamp) override;
+  std::optional<ArFrame> Update(absl::Time last_submitted_timestamp) override;
   uint4 GetDebugSessionId() override;
 
   std::vector<ArHitResult> HitTest(
-      float2 screen_pos, absl::optional<float> guessed_distance,
+      float2 screen_pos, std::optional<float> guessed_distance,
       TrackableTuple* out_generated_trackables) override;
   std::vector<ArHitResult> HitTestRay(
       const Ray& ray, TrackableTuple* out_generated_trackables) override;
@@ -91,7 +91,7 @@ class ArSessionNativeArCore : public ArSessionNative {
 
   absl::StatusOr<ArAnchor> CreateAnchor(
       float3 position, quatf rotation,
-      absl::optional<ArTrackableId> id) override;
+      std::optional<ArTrackableId> id) override;
 
   void DestroyAnchor(ArAnchor anchor) override;
 
@@ -141,7 +141,7 @@ class ArSessionNativeArCore : public ArSessionNative {
 #ifdef IMP_PRIOR_MAP
   std::vector<ArPriorMap> GetUpdatedPriorMaps() const;
 #endif
-  absl::optional<ArHitResult> ConvertArHitResult(
+  std::optional<ArHitResult> ConvertArHitResult(
       const ArHitResultPtr& hit_result,
       TrackableTuple* out_generated_trackables) const;
   std::vector<ArHitResult> ConvertArHitResults(
@@ -164,7 +164,7 @@ class ArSessionNativeArCore : public ArSessionNative {
   float height_;
   float near_ = 0.0;
   float far_ = 0.0;
-  absl::optional<DepthTextureController> depth_texture_controller_;
+  std::optional<DepthTextureController> depth_texture_controller_;
   DeeplightController deeplight_controller_;
   ArSessionConfig::PlacementMode placement_mode_;
 };

@@ -14,14 +14,19 @@
 
 #include "core/render/android/default_platform_android_external_texture_surface.h"
 
+#include <jni.h>
 #include <sys/types.h>
 
+#include <functional>
 #include <memory>
+#include <utility>
 
 #include "core/common/log.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/types/span.h"
+#include "core/common/jni_helpers.h"
+#include "core/common/registry.h"
 #include "core/common/robin_map.h"
 #include "core/common/small_source_location.h"
 #include "core/config.h"
@@ -36,6 +41,7 @@
 #include "core/view/base_view.h"
 #include "core/view/platforms/android/wrappers/surface.h"
 #include "core/view/platforms/android/wrappers/surface_texture.h"
+#include "core/view/platforms/android/wrappers/surface_texture_gc.h"
 #include "mediapipe/framework/port/status_macros.h"
 
 #if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(OPENGL)
@@ -77,17 +83,45 @@ absl::Status DefaultPlatformAndroidExternalTextureSurface::Initialize(
 #if IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(OPENGL)
     uint32_t texture_id = 0;
     glGenTextures(1, &texture_id);
+    // Register the SurfaceTextureGarbageCollector to ensure that it is not
+    // created when the registry is being destroyed.
+    view_.GetRegistry().Register(
+        std::make_unique<SurfaceTextureGarbageCollector>(view_));
     surface_texture_ = std::make_unique<android::SurfaceTexture>(
-        view_.GetContext(), texture_id, /* is_secure= */ true);
+        view_.GetContext(), texture_id, /* is_secure= */ true,
+        [&view = view_](JniUniquePtr<jobject> surface_texture_object) {
+          absl::StatusOr<
+              std::reference_wrapper<imp::SurfaceTextureGarbageCollector>>
+              surface_texture_gc =
+                  view.GetRegistry().Get<SurfaceTextureGarbageCollector>();
+          if (surface_texture_gc.ok()) {
+            surface_texture_gc.value().get().QueueForRelease(
+                std::move(surface_texture_object));
+          }
+        });
 #else
     return absl::InternalError(
         "Protected content is not supported on this platform.");
 #endif  // IMP_PLATFORM(ANDROID) && IMP_MATERIAL_API(OPENGL)
   } else {
+    // Register the SurfaceTextureGarbageCollector to ensure that it is not
+    // created when the registry is being destroyed.
+    view_.GetRegistry().Register(
+        std::make_unique<SurfaceTextureGarbageCollector>(view_));
     // Construct Android SurfaceTexture and Surface
-    surface_texture_ =
-        std::make_unique<android::SurfaceTexture>(view_.GetContext(), 0,
-                                                  /* is_secure= */ false);
+    surface_texture_ = std::make_unique<android::SurfaceTexture>(
+        view_.GetContext(), 0,
+        /* is_secure= */ false,
+        [&view = view_](JniUniquePtr<jobject> surface_texture_object) {
+          absl::StatusOr<
+              std::reference_wrapper<imp::SurfaceTextureGarbageCollector>>
+              surface_texture_gc =
+                  view.GetRegistry().Get<SurfaceTextureGarbageCollector>();
+          if (surface_texture_gc.ok()) {
+            surface_texture_gc.value().get().QueueForRelease(
+                std::move(surface_texture_object));
+          }
+        });
   }
 
   MP_ASSIGN_OR_RETURN(

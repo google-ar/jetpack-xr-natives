@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_CORE_COMMON_OWNED_OR_BORROWED_PTR_H_
 
 #include <cstdint>
+#include <utility>
 #include <variant>
 
 #include "core/common/owned_ptr.h"
@@ -70,6 +71,15 @@ class OwnedOrBorrowedPtr {
   // Returns true if there are any outstanding BorrowedPtr<T> objects excluding
   // itself.
   bool HasOutstandingUsages() const;
+
+  // Extracts (moves out) the stored value.
+  // OwnedOrBorrowedPtr will be empty after this call as if it was default
+  // constructed.
+  //
+  // Returns std::variant that will hold either empty BorrowedPtr (if
+  // OwnedOrBorrowedPtr was default constructed), or OwnedPtr or
+  // BorrowedPtr.
+  std::variant<BorrowedPtr<T>, OwnedPtr<T>> Extract();
 
  private:
   T* GetPointer() const;
@@ -146,6 +156,13 @@ bool OwnedOrBorrowedPtr<T>::HasOutstandingUsages() const {
   } else {
     return GetBorrowedCount() > 1;
   }
+}
+
+template <typename T>
+std::variant<BorrowedPtr<T>, OwnedPtr<T>> OwnedOrBorrowedPtr<T>::Extract() {
+  // std::exchange below sets `ptr_` to the empty BorrowedPtr to match default
+  // constructed state.
+  return std::exchange(ptr_, BorrowedPtr<T>());
 }
 
 }  // namespace imp

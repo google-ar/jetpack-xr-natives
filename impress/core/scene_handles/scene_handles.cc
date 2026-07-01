@@ -40,7 +40,7 @@ NodeSceneHandle::NodeSceneHandle(SceneHandleInterface::Identifier identifier,
 
 absl::Status NodeSceneHandle::AssignSceneHandleForIdentifier(
     NodeHandle identified_node, NodeHandle attached_node) {
-  if (absl::holds_alternative<absl::monostate>(
+  if (absl::holds_alternative<std::monostate>(
           scene_handle_helper_.GetIdentifier())) {
     // No identifier assigned.
     return absl::OkStatus();
@@ -115,7 +115,7 @@ std::string GltfNodeSceneHandle::GetGltfNodeName() const {
 absl::Status GltfNodeSceneHandle::AssignSceneHandleForIdentifier(
     NodeHandle identified_node, NodeHandle attached_node) {
   NodeHandle target_node = attached_node;
-  bool has_identifier = !absl::holds_alternative<absl::monostate>(
+  bool has_identifier = !absl::holds_alternative<std::monostate>(
       scene_handle_helper_.GetIdentifier());
   bool has_target_gltf_node_name = !gltf_node_name_.empty();
 
@@ -125,7 +125,7 @@ absl::Status GltfNodeSceneHandle::AssignSceneHandleForIdentifier(
     return absl::OkStatus();
   }
 
-  if (!absl::holds_alternative<absl::monostate>(
+  if (!absl::holds_alternative<std::monostate>(
           scene_handle_helper_.GetIdentifier())) {
     MP_RETURN_IF_ERROR(
         scene_handle_helper_.RequireIdentifiedNode(identified_node));

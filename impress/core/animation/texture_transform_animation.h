@@ -52,9 +52,9 @@ class TextureTransformAnimation {
 
   struct TextureTransformParameter {
     TextureTransformParameter(
-        absl::optional<float2> in_texture_transform_offset,
-        absl::optional<float> in_texture_transform_rotation,
-        absl::optional<float2> in_texture_transform_scale);
+        std::optional<float2> in_texture_transform_offset,
+        std::optional<float> in_texture_transform_rotation,
+        std::optional<float2> in_texture_transform_scale);
 
     loader::details::provider_gltf::TexturableParameters texture_target;
     float2 texture_transform_offset;

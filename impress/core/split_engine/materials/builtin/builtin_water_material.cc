@@ -81,7 +81,7 @@ BuiltInWaterMaterial::BuiltInWaterMaterial(BaseView& view, BridgeId bridge_id,
   // All samplers must have valid textures so set the placeholder texture.
   GetMaterial()->SetParameter(
       kReflectionCubeParameterName,
-      view.GetTextureFactory().BorrowPlaceholderTexture());
+      view.GetTextureFactory().BorrowPlaceholderCubemapTexture());
   GetMaterial()->SetParameter(
       kNormalMapParameterName,
       view.GetTextureFactory().BorrowPlaceholderTexture());

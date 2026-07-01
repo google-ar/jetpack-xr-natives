@@ -26,7 +26,6 @@
 #include <tuple>
 #include <utility>
 #include <variant>
-#include <vector>
 
 #include "absl/log/check.h"
 #include "core/common/log.h"
@@ -222,7 +221,7 @@ void StereoSurface::Cleanup() {
   }
 }
 
-absl::Status StereoSurface::SetCanvasShape(const CanvasShape& canvas_shape) {
+absl::Status StereoSurface::SetCanvasShape(CanvasShape canvas_shape) {
   // We should only create a new mesh if the shape type is different, otherwise
   // we'll just update the scale to match the new request
   bool is_different_shape = (canvas_shape.index() != canvas_shape_.index());
@@ -423,7 +422,7 @@ absl::Status StereoSurface::SetCanvasShape(const CanvasShape& canvas_shape) {
         "monostate CanvasShape is not supported.");
   }
 
-  canvas_shape_ = canvas_shape;
+  canvas_shape_ = std::move(canvas_shape);
 
   // Once we have a canvas shape set and the material is ready, we can enable
   // the mesh renderer.
@@ -486,7 +485,7 @@ absl::Status StereoSurface::SetCanvasShape(const CanvasShape& canvas_shape) {
   }
 
   if (should_update_collider) {
-    MP_RETURN_IF_ERROR(UpdateColliderTypeByShape(canvas_shape));
+    MP_RETURN_IF_ERROR(UpdateColliderTypeByShape(canvas_shape_));
   }
   return absl::OkStatus();
 }

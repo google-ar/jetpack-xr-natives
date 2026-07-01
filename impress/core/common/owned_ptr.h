@@ -636,14 +636,11 @@ void OwnedPtr<T, Deleter>::AssertSafeToRelinquish() {
       description = absl::StrFormat("of type %s", type_traits::kTypeName<T>);
     }
 
-    const RefCounter::TrackedRefs& tracked_refs =
-        additional_fields_.GetRefCounter().GetTrackedRefs();
     std::string borrowed_locations;
-    if (!tracked_refs.locations_to_counts.empty()) {
-      for (const auto& [loc, counter] : tracked_refs.locations_to_counts) {
-        absl::StrAppendFormat(&borrowed_locations, "  %d from %s:%d\n", counter,
-                              loc.GetFileName(), loc.GetLineNumber());
-      }
+    for (const auto& [loc, count] :
+         additional_fields_.GetRefCounter().GetLocationToCount()) {
+      absl::StrAppendFormat(&borrowed_locations, "  %d from %s:%d\n", count,
+                            loc.GetFileName(), loc.GetLineNumber());
     }
 
     std::string log_message = absl::StrFormat(

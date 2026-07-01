@@ -18,9 +18,8 @@
 #define TNT_UTILS_IMMUTABLECSTRING_H
 
 #include "filament/libs/utils/include/utils/compiler.h"
-
-#include "filament/libs/utils/include/utils/StaticString.h"
 #include "filament/libs/utils/include/utils/ostream.h"
+#include "filament/libs/utils/include/utils/StaticString.h"
 
 #include <cassert>
 #include <cstdint>

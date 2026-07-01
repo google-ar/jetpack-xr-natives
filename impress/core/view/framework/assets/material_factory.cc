@@ -185,7 +185,7 @@ Future<absl::Status> MaterialFactory::SetMaterialParameters(
       absl::visit(
           [material, &parameter](const auto& parameter_value) {
             using ParamT = std::decay_t<decltype(parameter_value)>;
-            if constexpr (!std::is_same_v<ParamT, absl::monostate> &&
+            if constexpr (!std::is_same_v<ParamT, std::monostate> &&
                           !std::is_same_v<ParamT, std::string>) {
               material->SetParameter(parameter.name, parameter_value);
             }

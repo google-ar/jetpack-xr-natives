@@ -17,10 +17,10 @@
 #include "VulkanDescriptorSetCache.h"
 
 #include "VulkanCommands.h"
-#include "VulkanHandles.h"
 #include "VulkanConstants.h"
-#include "filament/libs/utils/include/utils/compiler.h"
+#include "VulkanHandles.h"
 
+#include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/Panic.h"
 

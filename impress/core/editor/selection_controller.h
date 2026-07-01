@@ -55,6 +55,11 @@ struct SelectionController {
                              EditorInfo::SelectionMode selection_mode =
                                  EditorInfo::SelectionMode::kSingleNode) = 0;
 
+  // Sets the currently selected nodes. This will replace the current selection
+  // with the provided nodes.
+  virtual void SetSelectedNodes(
+      const absl::flat_hash_set<NodeHandle>& nodes) = 0;
+
   // Disables selecting the model on ModelLoadedEvents. Enabled by default.
   virtual void DisableSelectModelWhenLoaded(
       bool disable_select_model_on_load) = 0;

@@ -24,34 +24,33 @@
 namespace flame_graph_colors {
 
 // The number of colors to use for the flame graph.
-static constexpr int kNumColors = 17;
+static constexpr int kNumColors = 16;
 
 // Colors to be used for nodes in the flame graph.
 static constexpr std::array<ImU32, kNumColors> kFrameColors = {
-    0xFF2D37DB,  // Red 1 - #DB372D
-    0xFF575EF5,  // Red 2 - #F55E57
+    0xFF1E25B3,  // Red 40 - #B3251E
+    0xFF575EF5,  // Red 60 - #F55E57
 
-    0xFF006EE8,  // Orange 1 - #E86E00
-    0xFF418DFF,  // Orange 2 - #FF8D41
+    0xFF015AC0,  // Orange 50 - #C05A01
+    0xFF418DFF,  // Orange 70 - #FF8D41
 
-    0xFF0098EF,  // Yellow 1 - #EF9800
-    0xFF00BDFC,  // Yellow 2 - #FCBD00
+    0xFF6E0DB6,  // Pink 40 - #B60D6E
+    0xFFD27DFF,  // Pink 70 - #FF7DD2
 
-    0xFF2C5200,  // Green 0 - #00522C
-    0xFF378912,  // Green 1 - #128937
-    0xFF65C244,  // Green 2 - #44C265
+    0xFF378912,  // Green 50 - #128937
+    0xFF65C244,  // Green 70 - #44C265
 
-    0xFFA88100,  // Blue 1 - #0081A8
-    0xFFEABB00,  // Blue 2 - #00BBEA
+    0xFF9B8300,  // Cyan 50 - #00839B
+    0xFFDFBB00,  // Cyan 70 - #00BBDF
 
-    0xFFCE5711,  // Dark Blue 1 - #1157CE
-    0xFFF88F4E,  // Dark Blue 2 - #4E8FF8
+    0xFFD23874,  // Purple 40 - #7438D2
+    0xFFFF72AD,  // Purple 60 - #AD72FF
 
-    0xFFD23874,  // Purple 1 - #7438D2
-    0xFFFF72AD,  // Purple 2 - #AD72FF
+    0xFF007BD3,  // Yellow 60 - #D37B00
+    0xFF00BDFC,  // Yellow 80 - #FCBD00
 
-    0xFF6E0DB6,  // Pink 1 - #B60D6E
-    0xFFAB4AF9,  // Pink 2 - #F94AAB
+    0xFFCE5711,  // Blue 40 - #1157CE
+    0xFFF88F4E,  // Blue 60 - #4E8FF8
 };
 
 // ImU32 is an int32 representing an ABGR color.

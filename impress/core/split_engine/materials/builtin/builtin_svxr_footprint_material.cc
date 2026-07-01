@@ -24,6 +24,7 @@
 #include "flatbuffers/verifier.h"
 #include "core/assets/asset_ptr.h"
 #include "core/assets/material/material_asset.h"
+#include "core/assets/material/material_load_options.proto.imp.h"
 #include "core/async/future.h"
 #include "core/material_library/material_package.h"
 #include "core/materials/material.h"
@@ -44,8 +45,16 @@ namespace imp::split_engine {
 Future<BuiltInMaterialPtr> BuiltInSVXRFootprintMaterial::Create(
     BaseView& view, BridgeId bridge_id,
     const android_xr::schemas::BuiltInMaterial0d0cb9aa& spec) {
+  MaterialPreCompileOptions precompile_options = MaterialPreCompileOptions{
+      .variants =
+          {
+              .skinning = MaterialPreCompileVariants::HIGH_PRIORITY,
+              .ste = MaterialPreCompileVariants::HIGH_PRIORITY,
+          },
+  };
+
   return view.GetAssetManager()
-      .LoadMaterial(kBuiltinSvxrFootprintMatCmat)
+      .LoadMaterial(kBuiltinSvxrFootprintMatCmat, precompile_options)
       .Then([&view, bridge_id](
                 AssetPtr<MaterialAsset> material_asset) -> BuiltInMaterialPtr {
         return absl::WrapUnique(new BuiltInSVXRFootprintMaterial(
@@ -53,7 +62,6 @@ Future<BuiltInMaterialPtr> BuiltInSVXRFootprintMaterial::Create(
             view.GetMaterialFactory().CreateMaterial(material_asset)));
       });
 }
-
 BuiltInMaterialPtr BuiltInSVXRFootprintMaterial::Duplicate() const {
   return absl::WrapUnique(new BuiltInSVXRFootprintMaterial(
       view_, GetBridgeId(),

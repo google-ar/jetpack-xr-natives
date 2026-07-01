@@ -25,7 +25,7 @@ load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load("@third_party//filament:filament.bzl", "by_backend")
 load("//build_tools:assets.bzl", "imp_assets")
-load("//build_tools:imp.bzl", "if_android", "if_apple", "if_dev_runtime", "if_emscripten", "if_linux", "imp_copts", "imp_defines", "imp_google3_copts")
+load("//build_tools:imp.bzl", "if_android", "if_apple", "if_dev_runtime", "if_emscripten", "if_ios", "if_linux", "imp_copts", "imp_defines", "imp_google3_copts")
 load("//build_tools:imp_image_based_lighting.bzl", "imp_image_based_lighting")
 
 package(
@@ -140,6 +140,8 @@ cc_library(
         "//core/video:video_writer",
         "//core/view:base_view",
         "//core/window/clipboard:clipboard_handler",
+        "@com_google_absl//absl/log:log_sink",
+        "@com_google_absl//absl/log:log_sink_registry",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -152,9 +154,13 @@ cc_library(
         "@third_party//filament/libs:filagui",
     ] + if_android([
         ":open_gl_imgui_renderer",
+    ]) + if_ios([
+        "//core/editor/remote_editor:ios_web_ui_remote_editor",
     ]),
     alwayslink = 1,
 )
+
+# (removed target ios_web_ui_remote_editor, moved to core/editor/remote_editor)
 
 cc_library(
     name = "filagui_imgui_renderer",
@@ -233,11 +239,97 @@ cc_library(
 )
 
 cc_library(
+    name = "filament_host_headers",
+    hdrs = [
+        "filament_host.h",
+        "filament_host_input.h",
+        "filament_view.h",
+    ],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    linkstatic = True,
+    tags = ["nobuilder"],
+    deps = [
+        ":window_rotation",
+        "//core:config",
+        "//core/common",
+        "//core/common:pass_key",
+        "//core/common:robin_map",
+        "//core/editor/remote_editor:remote_editor_info",
+        "//core/math",
+        "//core/monitor",
+        "//core/render_passes:texture_pipeline_renderer_projection_quad",
+        "//core/view/utils:filament_feature_flag_proto_cc_imp",
+        "//core/window/clipboard:clipboard_handler",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:optional",
+        "@com_google_absl//absl/types:variant",
+        "@third_party//filament/filament:filament_hdrs",
+        "@third_party//filament/filament/backend:driver_enums",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "shared_host_state",
+    srcs = [
+        "shared_host_state.cc",
+    ],
+    hdrs = [
+        "shared_host_state.h",
+    ],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    linkstatic = True,
+    tags = ["nobuilder"],
+    deps = [
+        ":filament_host_headers",
+        "//core:config",
+        "//core/async:executor",
+        "//core/async:executor_helpers",
+        "//core/async:simple_executor",
+        "//core/async:thread_pool_executor",
+        "//core/view/utils:filament_feature_flag_proto_cc_imp",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_impress//core/common:log",
+        "@third_party//filament/filament:filament_hdrs",
+        "@third_party//filament/filament/backend:driver_enums",
+        "@third_party//filament/libs:utils_hdrs",
+    ] + if_android([
+        "@third_party//filament/filament/backend:backend_hdrs",
+    ]) + if_apple([
+        "@third_party//filament/filament/backend:backend_hdrs",
+    ]) + if_linux([
+        "@third_party//filament/filament/backend:egl_backend_hdrs",
+    ]) + by_backend(
+        gl_vulkan = [
+            "@third_party//gl",
+            "@third_party//filament/filament/backend:backend_vk_hdrs",
+        ],
+        opengl = [
+            "@third_party//gl",
+        ],
+        vulkan = [
+            "@third_party//filament/filament/backend:backend_vk_hdrs",
+        ],
+    ) + if_emscripten(
+        [],
+        [
+        ],
+    ),
+    alwayslink = 1,
+)
+
+cc_library(
     name = "filament_host",
     srcs = [
         "filament_host.cc",
         "filament_view.cc",
-        "shared_host_state.cc",
     ],
     hdrs = [
         "filament_host.h",
@@ -252,6 +344,7 @@ cc_library(
     deps = [
         ":imgui_renderer",
         ":projection_helpers",
+        ":shared_host_state",
         ":window_rotation",
         "//core:config",
         "//core/async:executor",

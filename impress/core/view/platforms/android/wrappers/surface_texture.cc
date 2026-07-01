@@ -15,6 +15,7 @@
 #include "core/view/platforms/android/wrappers/surface_texture.h"
 
 #include <cstdint>
+#include <utility>
 
 #include "absl/status/status.h"
 #include "core/common/context.h"
@@ -24,8 +25,10 @@
 
 namespace imp::android {
 
-SurfaceTexture::SurfaceTexture(const Context& context)
-    : JavaWrapper(context, "android/graphics/SurfaceTexture", "(Z)V", false) {
+SurfaceTexture::SurfaceTexture(const Context& context,
+                               DestructionCallback on_destruct)
+    : JavaWrapper(context, "android/graphics/SurfaceTexture", "(Z)V", false),
+      on_destruct_(std::move(on_destruct)) {
   set_default_buffer_size_ = GetMethodHandle("setDefaultBufferSize", "(II)V");
   update_tex_image_ = GetMethodHandle("updateTexImage", "()V");
   attach_to_gl_context_ = GetMethodHandle("attachToGLContext", "(I)V");
@@ -38,11 +41,12 @@ SurfaceTexture::SurfaceTexture(const Context& context)
 }
 
 SurfaceTexture::SurfaceTexture(const Context& context, uint32_t texture_id,
-                               bool is_secure)
+                               bool is_secure, DestructionCallback on_destruct)
     : JavaWrapper(context, "android/graphics/SurfaceTexture", "(I)V",
                   texture_id),
       texture_id_(texture_id),
-      is_secure_(is_secure) {
+      is_secure_(is_secure),
+      on_destruct_(std::move(on_destruct)) {
   set_default_buffer_size_ = GetMethodHandle("setDefaultBufferSize", "(II)V");
   update_tex_image_ = GetMethodHandle("updateTexImage", "()V");
   attach_to_gl_context_ = GetMethodHandle("attachToGLContext", "(I)V");
@@ -53,13 +57,7 @@ SurfaceTexture::SurfaceTexture(const Context& context, uint32_t texture_id,
 #endif  // __ANDROID_API__ >= 33
 }
 
-SurfaceTexture::~SurfaceTexture() {
-  // TODO: find the correct way of releasing the surface texture
-  // that's still being used. We cannot call Release() here because it breaks
-  // detachFromContext() which happened later in the Filament rendering
-  // thread.
-  // The fix is skip Release() call.
-}
+SurfaceTexture::~SurfaceTexture() { on_destruct_(WrapJni(Env(), Reference())); }
 
 absl::Status SurfaceTexture::SetDefaultBufferSize(int2 size) {
   CallVoidMethod(set_default_buffer_size_, size.x, size.y);

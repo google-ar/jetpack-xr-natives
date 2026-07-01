@@ -14,11 +14,30 @@
 
 #include "core/video/video_recorder.h"
 
+#include <memory>
+
+#include "absl/status/statusor.h"
+#include "core/config.h"
 #include "core/math/vec.h"
+
+#if IMP_PLATFORM(IOS)
+#include "core/video/video_file_writer_ios.h"
+#else
+#include "core/video/video_writer_noop.h"
+#endif
+
 namespace imp {
 namespace video {
 VideoRecorder::VideoRecorder(bool record_microphone_audio)
-    : video_writer_(VideoWriter::CreateVideoWriter(record_microphone_audio)) {}
+#if IMP_PLATFORM(IOS)
+    : video_writer_(CreateVideoFileWriterIos(record_microphone_audio))
+#else
+    : video_writer_(std::make_unique<VideoWriterNoop>())
+#endif
+{
+}
+
+VideoRecorder::~VideoRecorder() { Close().Get().IgnoreError(); }
 
 Future<std::unique_ptr<VideoRecorder>> VideoRecorder::Open(
     BaseView* view, absl::string_view filename, bool record_microphone_audio) {
@@ -26,7 +45,7 @@ Future<std::unique_ptr<VideoRecorder>> VideoRecorder::Open(
   return Future<std::unique_ptr<VideoRecorder>>::Schedule(
              [dimensions, filename = std::string(filename),
               record_microphone_audio]() mutable
-             -> absl::StatusOr<std::unique_ptr<VideoRecorder>> {
+                 -> absl::StatusOr<std::unique_ptr<VideoRecorder>> {
                auto video_recorder =
                    absl::WrapUnique(new VideoRecorder(record_microphone_audio));
                MP_RETURN_IF_ERROR(

@@ -21,9 +21,16 @@ package imp;
 import "core/math/math.proto";
 import "core/proto/imp.proto";
 
+// A generic range of two float values used by various configuration fields.
+// Next ID: 3
+message ParticleRangeF {
+  float min = 1 [default = 0.0];
+  float max = 2 [default = 1.0];
+}
+
 // Configuration information that describes how a type of particle should be
 // created and emitted by a ParticleEmitter.
-// Next ID: 9
+// Next ID: 10
 message ParticleConfig {
   // Rotation of the particle
   Quatf initial_rotation = 1 [(imp.msg_default) = "{0.0f, 0.0f, 0.0f, 1.0f}"];
@@ -32,9 +39,14 @@ message ParticleConfig {
   Float3 initial_scale = 2 [(imp.msg_default) = "{1.0f, 1.0f, 1.0f}"];
 
   // The gltf asset to use as the visual representation of the particle.
-  // This field is required for emitters configured with the
-  // PARTICLE_RENDERER_NODE renderer.
+  // This field is required for all emitters
+  // TODO: b/503829346 - This will change when default assets are supported.
   string gltf_asset = 3 [default = ""];
+
+  // The material to use for the particle. This is only supported correctly for
+  // gltf assets that have only one material. It is not intended to be used in
+  // conjunction with more complex gltf assets.
+  string material_asset = 9 [default = ""];
 
   // The length of time, in seconds, that a particle will remain active.
   float lifetime_in_seconds = 4 [default = 1.0];
@@ -78,9 +90,9 @@ message EmitterConfig {
 message ParticleEmitterState {
   // Definition of the different rendering pathways available for particles.
   enum ParticleRenderer {
-    // Billboard and static mesh particles be fully owned by the emitter.
-    // Will using Filament's instancing API to render copies of the particles.
-    PARTICLE_RENDERER_DRAW_DEFAULT = 0;
+    // Static mesh particles that use Filament's instanced rendering API to
+    // optimally render larger numbers of particles.
+    PARTICLE_RENDERER_INSTANCED_DEFAULT = 0;
 
     // Node particles will be rendered by their assigned MeshRenderer. The
     // emitter will update the state on the node directly each frame.
@@ -89,7 +101,7 @@ message ParticleEmitterState {
 
   // Defines how the particles will be rendered, see the ParticleRenderer
   // definition above for more details.
-  ParticleRenderer renderer = 1 [default = PARTICLE_RENDERER_DRAW_DEFAULT];
+  ParticleRenderer renderer = 1 [default = PARTICLE_RENDERER_INSTANCED_DEFAULT];
 
   // Configuration for how the emitter should behave.
   EmitterConfig emitter_config = 2;

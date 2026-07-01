@@ -13,10 +13,11 @@
 # limitations under the License.
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load(
     "//build_tools:imp.bzl",
     "if_android",
-    "if_non_android",
+    "if_ios",
 )
 
 package(
@@ -28,30 +29,17 @@ package(
 
 licenses(["notice"])
 
+# Backward-compatible redirect for remote_editor_jni.
 cc_library(
     name = "remote_editor_jni",
-    srcs = [
-        "remote_editor_script_api_bridge_jni.cc",
-        "remote_editor_video_streamer_jni.cc",
-    ],
-    linkstatic = 1,
-    deps = [
-        ":remote_editor",
-        "//core:config",
-        "//core/async:executor",
-        "//core/common:buffer_access",
-        "//core/common:jni_helpers",
-        "//core/common:registry",
-        "//core/proto:proto_reader",
-        "//core/scripting",
-        "//core/scripting:message_helpers",
-        "//core/scripting/proto:bridge_cc_proto",
-        "//core/view:base_view",
-        "//core/view/scripting",
-        "@com_google_absl//absl/base",
-        "@com_google_impress//core/common:log",
-    ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
+    deps = ["//core/editor/remote_editor/android:remote_editor_jni"],
     alwayslink = 1,
+)
+
+# Backward-compatible redirect for ios_web_ui_remote_editor.
+objc_library(
+    name = "ios_web_ui_remote_editor",
+    deps = ["//core/editor/remote_editor/ios:ios_web_ui_remote_editor"],
 )
 
 cc_library(
@@ -90,26 +78,37 @@ cc_library(
 )
 
 cc_library(
+    name = "remote_editor_base",
+    srcs = ["web_ui_remote_editor.cc"],
+    hdrs = [
+        "noop_remote_editor.h",
+        "remote_editor.h",
+        "web_ui_remote_editor.h",
+    ],
+    linkstatic = 1,
+    deps = [
+        ":remote_editor_info",
+        "//core/common:rememberer",
+        "//core/editor:editor_info",
+        "//core/editor/layout",
+        "//core/view:base_view",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "remote_editor",
     srcs = [
         "noop_remote_editor.h",
         "remote_editor.cc",
-        "web_ui_remote_editor.cc",
-    ] + if_android([
-        "android_web_ui_remote_editor.cc",
-        "android_remote_editor_script_api_bridge_wrapper.cc",
-        "android_remote_editor_wrapper.cc",
-    ]),
+    ],
     hdrs = [
         "remote_editor.h",
         "web_ui_remote_editor.h",
-    ] + if_android([
-        "android_web_ui_remote_editor.h",
-        "android_remote_editor_wrapper.h",
-        "android_remote_editor_script_api_bridge_wrapper.h",
-    ]),
+    ],
     linkstatic = 1,
     deps = [
+        ":remote_editor_base",
         ":remote_editor_info",
         ":remote_editor_renderer",
         "//core:config",
@@ -124,14 +123,31 @@ cc_library(
         "//core/editor:widget_ui_system",
         "//core/editor/components:world_space_editor_ui_assets",
         "//core/editor/layout",
+        "//core/ncsb",
         "//core/scripting",
         "//core/scripting:basic_api",
         "//core/scripting:basic_api_handlers",
         "//core/view:base_view",
+        "//core/view:view_events",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_impress//core/common:log",
+    ] + if_android([
+        "//core/editor/remote_editor/android:android_remote_editor",
+    ]) + if_ios([
+        "//core/editor/remote_editor/ios:ios_web_ui_remote_editor",
+    ]),
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "noop_remote_editor",
+    hdrs = ["noop_remote_editor.h"],
+    deps = [
+        ":remote_editor_base",
+        ":remote_editor_info",
+        "//core/view:base_view",
     ],
     alwayslink = 1,
 )

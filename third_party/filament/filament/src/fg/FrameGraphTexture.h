@@ -17,10 +17,10 @@
 #ifndef TNT_FILAMENT_FG_FRAMEGRAPHTEXTURE_H
 #define TNT_FILAMENT_FG_FRAMEGRAPHTEXTURE_H
 
-#include "filament/libs/utils/include/utils/StaticString.h"
-
 #include <backend/DriverEnums.h>
 #include <backend/Handle.h>
+
+#include "filament/libs/utils/include/utils/StaticString.h"
 
 namespace filament {
 class TextureCacheInterface;

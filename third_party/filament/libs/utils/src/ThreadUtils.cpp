@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-#include "filament/libs/utils/include/utils/ThreadUtils.h"
-
 #include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/ThreadUtils.h"
 
 namespace utils {
 

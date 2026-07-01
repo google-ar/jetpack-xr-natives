@@ -302,6 +302,9 @@ flatbuffers::Offset<android_xr::schemas::MaterialPrecompileOptions> Pack(
           SHADOW_SAMPLING_QUALITY_UNSPECIFIED) {
     IMP_LOG(imp::WARNING) << "shadow_sampling_quality is not supported.";
   }
+  if (options.compile_by_view.has_value()) {
+    IMP_LOG(imp::WARNING) << "compile_by_view is not supported.";
+  }
 
   std::vector<
       flatbuffers::Offset<android_xr::schemas::MaterialPrecompileConstant>>

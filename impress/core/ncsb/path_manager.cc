@@ -16,8 +16,6 @@
 
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
 #include "absl/strings/match.h"
 #include "absl/strings/string_view.h"
 #include "core/math/mat.h"
@@ -28,13 +26,39 @@ namespace imp {
 namespace {
 constexpr absl::string_view kDoubleSlash = "//";
 constexpr absl::string_view kCaret = "^";
+
+void GetDescendantsInternal(NodeHandle node, std::vector<NodeHandle>& result) {
+  auto children = node->GetChildrenRange();
+  for (NodeHandle child : children) {
+    GetDescendantsInternal(child, result);
+  }
+  for (NodeHandle child : children) {
+    result.push_back(child);
+  }
+}
+
+void FindAllInternal(NodeHandle node, absl::string_view query,
+                     bool starts_with_caret, std::vector<NodeHandle>& result) {
+  if (starts_with_caret) {
+    if (absl::StartsWith(node->GetName(), query)) {
+      result.push_back(node);
+    }
+  } else {
+    if (absl::StrContains(node->GetName(), query)) {
+      result.push_back(node);
+    }
+  }
+  for (NodeHandle child : node->GetChildrenRange()) {
+    FindAllInternal(child, query, starts_with_caret, result);
+  }
+}
+
 }  // namespace
 
 PathManager::PathManager(BaseView* view) : view_(view) {}
 
 void PathManager::SetRoot(NodeHandle node, bool is_root) {
-  bool was_root = root_nodes_.find(node) != root_nodes_.end();
-  if (was_root == is_root) {
+  if (node->IsRoot() == is_root) {
     return;
   }
   if (is_root) {
@@ -63,45 +87,25 @@ std::vector<NodeHandle> PathManager::FindAll(absl::string_view query,
   }
 
   std::vector<NodeHandle> result;
-  bool has_double_slash = false;
+  bool starts_with_caret = false;
   if (absl::StartsWith(query, kCaret)) {
     query = query.substr(kCaret.size());
-    has_double_slash = true;
+    starts_with_caret = true;
   }
 
-  auto find_nodes_by_name = [&result, query,
-                             has_double_slash](NodeHandle node) {
-    if (node->GetName().length() >= query.length() &&
-        (has_double_slash ? absl::StartsWith(node->GetName(), query)
-                          : absl::StrContains(node->GetName(), query))) {
-      result.push_back(node);
-    }
-    // Returning false on all tests of this predicate so that FindIf will
-    // traverse the entire graph
-    return false;
-  };
-
   if (root_node) {
-    FindDescendantOrSelfIf(root_node, find_nodes_by_name);
+    FindAllInternal(root_node, query, starts_with_caret, result);
   } else {
-    FindIf(find_nodes_by_name);
+    for (NodeHandle root : root_nodes_) {
+      FindAllInternal(root, query, starts_with_caret, result);
+    }
   }
   return result;
 }
 
 std::vector<NodeHandle> PathManager::GetDescendants(NodeHandle node) {
-  std::vector<NodeHandle> children = node->GetChildren();
-  if (children.empty()) {
-    return {};
-  }
-
   std::vector<NodeHandle> result;
-  for (NodeHandle child : children) {
-    std::vector<NodeHandle> sub_result = GetDescendants(child);
-    result.insert(result.end(), sub_result.begin(), sub_result.end());
-  }
-
-  result.insert(result.end(), children.begin(), children.end());
+  GetDescendantsInternal(node, result);
   return result;
 }
 

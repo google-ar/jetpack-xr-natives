@@ -41,12 +41,13 @@ class TestWebView : public JavaWrapper {
   jobject GetWebView() { return web_view_.get(); }
 
   bool RunAllTests(BufferAccess script) {
-    return CallBooleanMethod(run_all_tests_,
-                             ToString(Env(), script.StringView()));
+    JniUniquePtr<jstring> jscript = ToJniString(Env(), script.StringView());
+    return CallBooleanMethod(run_all_tests_, jscript.get());
   }
 
   void EvaluateJavaScript(absl::string_view script) {
-    CallVoidMethod(evaluate_, ToString(Env(), script));
+    JniUniquePtr<jstring> jscript = ToJniString(Env(), script);
+    CallVoidMethod(evaluate_, jscript.get());
   }
 
   TestWebView(const TestWebView&) = delete;

@@ -48,6 +48,7 @@ cc_library(
         "wheel_event.cc",
     ],
     hdrs = [
+        "input_events_pool.h",
         "input_manager.h",
         "key_codes.h",
         "keyboard_event.h",
@@ -111,7 +112,6 @@ cc_library(
         "//core/window:filament_host",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/types:optional",
         "@com_google_absl//absl/types:variant",
         "@com_google_impress//core/common:log",
         "@dear_imgui",

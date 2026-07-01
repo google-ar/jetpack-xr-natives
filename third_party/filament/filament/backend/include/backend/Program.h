@@ -17,12 +17,12 @@
 #ifndef TNT_FILAMENT_BACKEND_PRIVATE_PROGRAM_H
 #define TNT_FILAMENT_BACKEND_PRIVATE_PROGRAM_H
 
+#include <backend/DriverEnums.h>
+
 #include "filament/libs/utils/include/utils/CString.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/Invocable.h"
 #include "filament/libs/utils/include/utils/Slice.h"
-
-#include <backend/DriverEnums.h>
 
 #include <array>
 #include <tuple>

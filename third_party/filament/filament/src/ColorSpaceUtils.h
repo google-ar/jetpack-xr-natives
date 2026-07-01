@@ -20,8 +20,8 @@
 #include "filament/libs/utils/include/utils/compiler.h"
 
 #include "filament/libs/math/include/math/mat3.h"
-#include "filament/libs/math/include/math/vec3.h"
 #include "filament/libs/math/include/math/scalar.h"
+#include "filament/libs/math/include/math/vec3.h"
 
 #include <cmath>
 

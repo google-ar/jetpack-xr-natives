@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2026 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -215,6 +215,18 @@ void SelectionControllerImpl::TrySelectNode(
     // If the selected nodes are not updated, do nothing.
     return;
   }
+
+  // Send a NodeSelectionChangedEvent to notify the selection change.
+  Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
+  Dispatcher& editor_dispatcher = editor.GetDispatcher();
+  editor_dispatcher.Send(NodeSelectionChangedEvent());
+}
+
+void SelectionControllerImpl::SetSelectedNodes(
+    const absl::flat_hash_set<NodeHandle>& nodes) {
+  if (selected_nodes_ == nodes) return;
+
+  selected_nodes_ = nodes;
 
   // Send a NodeSelectionChangedEvent to notify the selection change.
   Editor& editor = GetView().GetRegistry().Get<Editor>()->get();

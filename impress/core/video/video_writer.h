@@ -21,6 +21,7 @@
 #include "absl/strings/string_view.h"
 #include "core/async/future.h"
 #include "core/common/buffer_access.h"
+#include "core/math/math.h"
 #include "core/math/vec.h"
 #include "core/window/filament_host.h"
 
@@ -34,7 +35,7 @@ class VideoWriter {
   // Opens a new video for writing with the given filename and dimensions.
   virtual absl::Status Open(uint2 dimensions,
                             absl::string_view filename = "") = 0;
-  virtual absl::Status Open(uint2 dimensions) { return Open(dimensions, ""); };
+
   // Captures the current frame. Must be called between render() and endFrame().
   virtual void CaptureFrame(window::FilamentHost* filament_host) = 0;
   // Writes a frame to the video file. Must be called after endFrame().
@@ -43,16 +44,10 @@ class VideoWriter {
   virtual Future<absl::Status> Close() = 0;
 
   // Returns true if the writer is ready to capture frames.
-  virtual bool IsReady() const { return false; }
+  virtual bool IsReady() const = 0;
 
-  // Process input events from the web client.
-  virtual void ProcessInput(window::FilamentHost* host) {}
-
-  // Creates a new video writer. Must be implemented for each platform.
-  // record_microphone_audio maybe false if e.g. microphone access has not been
-  // granted to the application.
-  static std::unique_ptr<VideoWriter> CreateVideoWriter(
-      bool record_microphone_audio);
+  // Returns the current dimensions of the video writer.
+  virtual uint2 GetDimensions() const = 0;
 };
 
 }  // namespace video

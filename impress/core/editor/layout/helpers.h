@@ -22,6 +22,7 @@
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
 #include "core/common/bit_flag.h"
+#include "core/editor/editor_style.h"
 #include "core/editor/layout/editor_control_flags.h"
 #include "core/math/math.h"
 #include "core/math/vec.h"
@@ -55,6 +56,31 @@ inline ImVec2 LerpImVec2(ImVec2 from, ImVec2 to, float kLerpFactor) {
   float2 lerped_value =
       lerp(float2(from.x, from.y), float2(to.x, to.y), kLerpFactor);
   return {lerped_value.x, lerped_value.y};
+}
+
+/**
+ * Draws a label indicating the active status of the selection.
+ * @param all_active True if all items in the selection are active.
+ * @param all_inactive True if all items in the selection are inactive.
+ */
+inline void DrawActiveLabelUi(bool all_active, bool all_inactive) {
+  ImVec4 color;
+  const char* label;
+
+  if (all_active) {
+    color = kDarkGreen;
+    label = "active";
+  } else if (all_inactive) {
+    color = kDarkRed;
+    label = "inactive";
+  } else {
+    color = ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+    label = "mixed active";
+  }
+
+  ImGui::PushStyleColor(ImGuiCol_Text, color);
+  ImGui::LabelText(label, "");
+  ImGui::PopStyleColor();
 }
 
 }  // namespace imp::editor

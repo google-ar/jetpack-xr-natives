@@ -16,15 +16,15 @@
 #ifndef TNT_UTILS_INTERNPOOL_H
 #define TNT_UTILS_INTERNPOOL_H
 
-#include "filament/libs/utils/include/utils/Slice.h"
+#include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/Hash.h"
 #include "filament/libs/utils/include/utils/Panic.h"
-#include "filament/libs/utils/include/utils/debug.h"
-
-#include <limits>
+#include "filament/libs/utils/include/utils/Slice.h"
 
 #include "robin_map/include/tsl/robin_map.h"
+
+#include <limits>
 
 namespace utils {
 

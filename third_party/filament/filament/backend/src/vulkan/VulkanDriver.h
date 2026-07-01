@@ -129,10 +129,19 @@ private:
     void bindPipelineImpl(PipelineState const& pipelineState, VkPipelineLayout pipelineLayout,
             fvkutils::DescriptorSetMask descriptorSetMask);
 
+    // Common preamble for indexed and non-indexed draws: handles deferred pipeline-layout
+    // binding (for external samplers) and commits descriptor sets.
+    void prepareDraw();
+
     // Flush the current command buffer and reset the pipeline state.
     void endCommandRecording();
 
-    void acquireNextSwapchainImage();
+    // Returns whether the acquire was successful
+    bool acquireNextSwapchainImage();
+
+    bool skipDueToEmptyRenderPass() const {
+        return !bool(mCurrentRenderPass.renderTarget);
+    }
 
     VulkanPlatform* mPlatform = nullptr;
     fvkmemory::ResourceManager mResourceManager;
@@ -190,7 +199,7 @@ private:
         fvkutils::DescriptorSetMask descriptorSetMask = {};
 
         std::pair<bool, BindInDrawBundle> bindInDraw = {false, {}};
-    } mPipelineState = {};
+    } mPipelineState {};
 
     struct {
         // This tracks whether the app has seen external samplers bound to a the descriptor set.
@@ -201,7 +210,12 @@ private:
         bool hasExternalSamplers() const noexcept {
             return hasExternalSamplerLayouts && hasBoundExternalImages;
         }
-    } mAppState;
+    } mAppState {};
+
+    struct {
+        // Indicates whether a render primitive has been bound for draw.
+        bool bound = false;
+    } mRenderPrimitiveState {};
 
     bool const mIsSRGBSwapChainSupported;
     bool const mIsMSAASwapChainSupported;
@@ -209,6 +223,8 @@ private:
     backend::StereoscopicType const mStereoscopicType;
     uint8_t const mStereoscopicEyeCount;
     backend::AsynchronousMode const mAsynchronousMode;
+
+    uint8_t mTicksSinceLastGc = 0;
 
     // setAcquiredImage is a DECL_DRIVER_API_SYNCHRONOUS_N which means we don't necessarily have the
     // data to process it at call time. So we store it and process it during updateStreams.

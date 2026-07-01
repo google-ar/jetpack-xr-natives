@@ -58,17 +58,17 @@ void SceneMetadata::SetBaseLocalScale(float3 scale) {
   base_local_scale_ = scale;
 }
 
-std::optional<bool> SceneMetadata::IsBaseDisabled() {
+std::optional<bool> SceneMetadata::IsBaseDisabled() const {
   return is_base_disabled_;
 }
 
-std::optional<float3> SceneMetadata::GetBaseLocalPosition() {
+std::optional<float3> SceneMetadata::GetBaseLocalPosition() const {
   return base_local_position_;
 }
-std::optional<quatf> SceneMetadata::GetBaseLocalRotation() {
+std::optional<quatf> SceneMetadata::GetBaseLocalRotation() const {
   return base_local_rotation_;
 }
-std::optional<float3> SceneMetadata::GetBaseLocalScale() {
+std::optional<float3> SceneMetadata::GetBaseLocalScale() const {
   return base_local_scale_;
 }
 

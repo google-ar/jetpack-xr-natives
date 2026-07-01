@@ -19,7 +19,7 @@
 
 #include <vector>
 
-#include "absl/strings/string_view.h"
+#include "core/editor/widgets/transform_widget_state.proto.imp.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/isf_info.h"
 #include "core/ncsb/node_handle.h"
@@ -37,16 +37,24 @@ class TransformWidget : public imp::Component {
   void Setup();
   void Update(const FrameTime& frame_time);
 
+  // Cycles through translate, rotate, and scale modes.
+  void CycleMode();
+
   static constexpr UpdateMode kUpdateMode = UpdateMode::kAlwaysUpdate;
   static constexpr UpdatePhase kUpdatePhase = UpdatePhase::kEnd;
 
  private:
-  static constexpr absl::string_view kType = "imp.editor.TransformWidget";
+  enum class Mode { kTranslate, kRotate, kScale };
+  void SetMode(Mode mode);
 
   std::vector<NodeHandle> active_nodes_;
+  int scale_level_ = 0;
+  float scale_ = 1.0f;
+  Mode mode_ = Mode::kTranslate;
+  TransformWidgetState state_;
 
  public:
-  using IsfInfo = StatelessIsfInfo<TransformWidget, kType>;
+  using IsfInfo = IsfInfo<&TransformWidget::state_>;
 };
 
 }  // namespace imp::editor

@@ -175,7 +175,7 @@ OnDemandTexturePipelineRenderer::CreateRuntimePass(
                               color_filament_texture.value()->getHeight()};
 
   // Setup the depth texture, if it exists.
-  absl::optional<TextureRegistry::ScopedTextureRegistration>&
+  std::optional<TextureRegistry::ScopedTextureRegistration>&
       depth_texture_registration = runtime_pass.depth_texture_registration;
   if (pass.depth_texture.has_value()) {
     const TextureConfig& texture_proto = *pass.depth_texture;

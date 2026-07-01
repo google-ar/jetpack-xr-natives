@@ -14,12 +14,11 @@
 
 #include "core/canvas/desktop_platform_canvas_source.h"
 
-#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstddef>
-#include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <utility>
@@ -28,6 +27,7 @@
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
 #include "filament/filament/include/filament/Texture.h"
@@ -92,8 +92,62 @@ bool DesktopPlatformCanvasSource::IsFeatureSupported(
     case ScopedCanvas::Feature::kGlyphs:
       return false;
     case ScopedCanvas::Feature::kKeepContents:
-      return false;
+      return true;
   }
+}
+
+void DesktopPlatformCanvasSource::EnsurePixelBuffer(uint2 pixel_size) {
+  if (bitmap_.isNull() || bitmap_.width() != pixel_size.x ||
+      bitmap_.height() != pixel_size.y) {
+    SkImageInfo image_info = SkImageInfo::Make(
+        pixel_size.x, pixel_size.y, SkColorType::kRGBA_8888_SkColorType,
+        SkAlphaType::kUnpremul_SkAlphaType);
+    if (!bitmap_.tryAllocPixels(image_info)) {
+      IMP_LOG(imp::FATAL) << "Could not allocate pixel buffer.";
+    }
+  }
+}
+
+bool DesktopPlatformCanvasSource::EnsureTextureAndBuffer(
+    BaseView& view, uint2 pixel_size,
+    ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
+    SmallSourceLocation loc) {
+  bool did_texture_change = false;
+  if (!texture_ || pixel_size_ != pixel_size) {
+    pixel_size_ = pixel_size;
+
+    // Don't destroy until after on_texture_changed_fn is called so that the
+    // caller has the opportunity to clear references to the old texture.
+    OwnedTexturePtr old_texture = std::move(texture_);
+
+#if IMP_RUNTIME(DEV)
+    texture_ = view.GetTextureFactory().CreateTexture(
+        imp::TextureFactory::TextureCreationSettings{
+            .width = pixel_size_.x,
+            .height = pixel_size_.y,
+            .format = filament::Texture::InternalFormat::RGBA8,
+            .usage = filament::Texture::Usage::COLOR_ATTACHMENT |
+                     filament::Texture::Usage::BLIT_SRC |
+                     filament::Texture::Usage::DEFAULT,
+        });
+#else
+    texture_ = view.GetTextureFactory().CreateTexture(
+        imp::TextureFactory::TextureCreationSettings{
+            .width = pixel_size_.x,
+            .height = pixel_size_.y,
+            .format = filament::Texture::InternalFormat::RGBA8,
+        });
+#endif
+    did_texture_change = true;
+
+    if (on_texture_changed_fn) {
+      on_texture_changed_fn(texture_.Borrow(loc));
+    }
+  }
+
+  EnsurePixelBuffer(pixel_size);
+
+  return did_texture_change;
 }
 
 Future<absl::Status> DesktopPlatformCanvasSource::PrepareFont(
@@ -103,10 +157,14 @@ Future<absl::Status> DesktopPlatformCanvasSource::PrepareFont(
 
 TextMetrics DesktopPlatformCanvasSource::GetTextMetrics(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
-  std::unique_ptr<Paragraph> paragraph =
-      CreateParagraph(text, text_options, /*draw_stroke_only=*/false);
   LineMetrics metrics;
-  paragraph->getLineMetricsAt(0, &metrics);
+  {
+    // Lock the paragraph mutex to ensure thread-safe access to the Skia state.
+    absl::MutexLock lock(paragraph_mutex_);
+    std::unique_ptr<Paragraph> paragraph =
+        CreateParagraph(text, text_options, /*draw_stroke_only=*/false);
+    paragraph->getLineMetricsAt(0, &metrics);
+  }
   // The stroke straddles the font, half in and half out.
   float stroke_padding = text_options.stroke_width_pixels;
   TextMetrics text_metrics;
@@ -142,13 +200,18 @@ DesktopPlatformCanvasSource::GetCombinedCharacterGroups(
 
 std::vector<float> DesktopPlatformCanvasSource::GetTextWidths(
     absl::string_view text, const ScopedCanvas::TextOptions& text_options) {
-  /**
-   * If the original text was utf16 but we are passed a substring that can be
-   * represented in ASCII, we can wrap it in a string to force the characters to
-   * be 1 byte each.
-   */
-  std::unique_ptr<Paragraph> paragraph = CreateParagraph(
-      std::string(text), text_options, /*draw_stroke_only=*/false);
+  std::unique_ptr<Paragraph> paragraph;
+  {
+    // Lock the paragraph mutex to ensure thread-safe access to the Skia state.
+    absl::MutexLock lock(paragraph_mutex_);
+    /**
+     * If the original text was utf16 but we are passed a substring that can be
+     * represented in ASCII, we can wrap it in a string to force the characters
+     * to be 1 byte each.
+     */
+    paragraph = CreateParagraph(std::string(text), text_options,
+                                /*draw_stroke_only=*/false);
+  }
   skia::textlayout::Paragraph::GlyphClusterInfo cluster_info;
   size_t i = 0;
   UnicodeText unicode_text;
@@ -192,9 +255,14 @@ DesktopPlatformCanvasSource::GetTextGlyphs(
 
 FontInfo DesktopPlatformCanvasSource::GetFontInfo(
     const ScopedCanvas::TextOptions& text_options) {
-  std::unique_ptr<Paragraph> paragraph =
-      CreateParagraph(" ", text_options, /*draw_stroke_only=*/false);
-  SkFont font = paragraph->getFontAt(0);
+  SkFont font;
+  {
+    // Lock the paragraph mutex to ensure thread-safe access to the Skia state.
+    absl::MutexLock lock(paragraph_mutex_);
+    std::unique_ptr<Paragraph> paragraph =
+        CreateParagraph(" ", text_options, /*draw_stroke_only=*/false);
+    font = paragraph->getFontAt(0);
+  }
   SkFontMetrics font_metrics;
   font.getMetrics(&font_metrics);
 
@@ -212,28 +280,10 @@ void DesktopPlatformCanvasSource::ReleaseTextGlyphs(absl::Span<int> glyph_ids) {
 
 std::unique_ptr<ScopedCanvas> DesktopPlatformCanvasSource::StartDrawing(
     BaseView& view, uint2 pixel_size, ScopedCanvas::DrawMode draw_mode) {
-  bool did_texture_change = false;
-  if (!texture_ || pixel_size_ != pixel_size) {
-    pixel_size_ = pixel_size;
-#if IMP_RUNTIME(DEV)
-    texture_ = view.GetTextureFactory().CreateTexture(
-        imp::TextureFactory::TextureCreationSettings{
-            .width = pixel_size_.x,
-            .height = pixel_size_.y,
-            .format = filament::Texture::InternalFormat::RGBA8,
-            .usage = filament::Texture::Usage::COLOR_ATTACHMENT |
-                     filament::Texture::Usage::BLIT_SRC |
-                     filament::Texture::Usage::DEFAULT,
-        });
-#else
-    texture_ = view.GetTextureFactory().CreateTexture(
-        imp::TextureFactory::TextureCreationSettings{
-            .width = pixel_size_.x,
-            .height = pixel_size_.y,
-            .format = filament::Texture::InternalFormat::RGBA8,
-        });
-#endif
-    did_texture_change = true;
+  bool did_texture_change = EnsureTextureAndBuffer(view, pixel_size);
+
+  if (draw_mode == ScopedCanvas::DrawMode::kClear && !did_texture_change) {
+    bitmap_.eraseColor(0);
   }
 
   return std::make_unique<DesktopScopedCanvas>(*this, pixel_size_,
@@ -244,34 +294,11 @@ std::unique_ptr<ScopedCanvas> DesktopPlatformCanvasSource::StartDrawing(
     BaseView& view, uint2 pixel_size,
     ScopedCanvas::OnTextureChangedFn on_texture_changed_fn,
     ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) {
-  bool did_texture_change = false;
-  if (!texture_ || pixel_size_ != pixel_size) {
-    pixel_size_ = pixel_size;
+  bool did_texture_change = EnsureTextureAndBuffer(
+      view, pixel_size, std::move(on_texture_changed_fn), loc);
 
-    // Don't destroy until after on_texture_changed_fn is called so that the
-    // caller has the opportunity to clear references to the old texture.
-    OwnedTexturePtr old_texture = std::move(texture_);
-
-#if IMP_RUNTIME(DEV)
-    texture_ = view.GetTextureFactory().CreateTexture(
-        imp::TextureFactory::TextureCreationSettings{
-            .width = pixel_size_.x,
-            .height = pixel_size_.y,
-            .format = filament::Texture::InternalFormat::RGBA8,
-            .usage = filament::Texture::Usage::COLOR_ATTACHMENT |
-                     filament::Texture::Usage::DEFAULT,
-        });
-#else
-    texture_ = view.GetTextureFactory().CreateTexture(
-        imp::TextureFactory::TextureCreationSettings{
-            .width = pixel_size_.x,
-            .height = pixel_size_.y,
-            .format = filament::Texture::InternalFormat::RGBA8,
-        });
-#endif
-    did_texture_change = true;
-
-    on_texture_changed_fn(texture_.Borrow(loc));
+  if (draw_mode == ScopedCanvas::DrawMode::kClear && !did_texture_change) {
+    bitmap_.eraseColor(0);
   }
 
   return std::make_unique<DesktopScopedCanvas>(*this, pixel_size_,
@@ -375,52 +402,30 @@ DesktopPlatformCanvasSource::CreateParagraph(
 DesktopPlatformCanvasSource::DesktopScopedCanvas::DesktopScopedCanvas(
     DesktopPlatformCanvasSource& source, uint2 pixel_size,
     bool did_texture_change)
-    : source_(source), did_texture_change_(did_texture_change) {
-  // Compute the byte counts required to allocate the buffer then allocate and
-  // setup the `ImageData`.
-  SkImageInfo image_info = SkImageInfo::Make(
-      pixel_size.x, pixel_size.y, SkColorType::kRGBA_8888_SkColorType,
-      SkAlphaType::kUnpremul_SkAlphaType);
-
-  pixel_buffer_size_ = image_info.computeMinByteSize();
-  assert(pixel_buffer_size_ != SIZE_MAX);
-
-  const size_t row_byte_count = image_info.minRowBytes();
-  assert(row_byte_count != 0);
-
-  // Allocate the buffer for the image and then zero out the buffer.
-  pixel_buffer_ = std::make_unique<uint8_t[]>(pixel_buffer_size_);
-  std::fill_n(pixel_buffer_.get(), pixel_buffer_size_, 0);
-
-  if (!bitmap_.installPixels(image_info, pixel_buffer_.get(), row_byte_count)) {
-    IMP_LOG(imp::FATAL) << "Unable to install pixels.";
-  }
-
+    : source_(source),
+      bitmap_(source.bitmap_),
+      did_texture_change_(did_texture_change) {
   canvas_ = std::make_unique<SkCanvas>(bitmap_);
 }
 
 DesktopPlatformCanvasSource::DesktopScopedCanvas::~DesktopScopedCanvas() {
-  if (pixel_buffer_size_ == 0) {
-    pixel_buffer_.reset();
+  size_t byte_size = bitmap_.computeByteSize();
+  if (byte_size == 0) {
     return;
   }
 
   filament::backend::PixelDataFormat format = filament::Texture::Format::RGBA;
   filament::backend::PixelDataType type = filament::Texture::Type::UBYTE;
 
-  // The pixel_buffer_ is released so that it isn't destroyed until filament
-  // finishes uploading the data to the GPU.
+  // The persistent buffer should stay alive in the CanvasSource, so we must
+  // copy the pixels to a temporary buffer for Filament to upload and release.
+  void* temp_buffer = malloc(byte_size);
+  std::memcpy(temp_buffer, bitmap_.getPixels(), byte_size);
+
   filament::Texture::PixelBufferDescriptor pixel_buffer =
       filament::Texture::PixelBufferDescriptor(
-          pixel_buffer_.release(), pixel_buffer_size_, format, type,
-          [](void* buffer, size_t size, void* user) {
-            // Called after filament finishes uploading the data to the GPU.
-            // Converts the buffer back into a unique_ptr to destroy it,
-            // preventing the data from leaking.
-            std::unique_ptr<uint8_t[]> pixel_buffer(
-                reinterpret_cast<uint8_t*>(buffer));
-          },
-          nullptr);
+          temp_buffer, byte_size, format, type,
+          [](void* buffer, size_t size, void* user) { free(buffer); }, nullptr);
 
   source_.texture_->GetTexture()->setImage(
       *BaseView::GetSharedEngine(), /*level=*/0, std::move(pixel_buffer));
@@ -465,8 +470,13 @@ void DesktopPlatformCanvasSource::DesktopScopedCanvas::DrawRoundedRect(
 
 void DesktopPlatformCanvasSource::DesktopScopedCanvas::DrawText(
     absl::string_view text, float2 pos, const TextOptions& text_options) {
-  std::unique_ptr<Paragraph> paragraph =
-      source_.CreateParagraph(text, text_options, /*draw_stroke_only=*/false);
+  std::unique_ptr<Paragraph> paragraph;
+  {
+    // Lock the paragraph mutex to ensure thread-safe access to the Skia state.
+    absl::MutexLock lock(source_.paragraph_mutex_);
+    paragraph =
+        source_.CreateParagraph(text, text_options, /*draw_stroke_only=*/false);
+  }
   LineMetrics metrics;
   paragraph->getLineMetricsAt(0, &metrics);
   float text_width = ceil(paragraph->getMaxIntrinsicWidth());
@@ -526,18 +536,22 @@ void DesktopPlatformCanvasSource::DesktopScopedCanvas::DrawText(
     }
   }
 
-  if (text_options.stroke_width_pixels > 0 &&
-      text_options.stroke_color != kZero4) {
-    std::unique_ptr<Paragraph> paragraph_stroke =
-        source_.CreateParagraph(text, text_options, /*draw_stroke_only=*/true);
-    paragraph_stroke->layout(text_width);
-    paragraph_stroke->paint(canvas_.get(), pos.x + horizontal_offset,
-                            pos.y + vertical_offset);
-  }
+  {
+    // Lock the paragraph mutex for CreateParagraph() and layout() calls.
+    absl::MutexLock lock(source_.paragraph_mutex_);
+    if (text_options.stroke_width_pixels > 0 &&
+        text_options.stroke_color != kZero4) {
+      std::unique_ptr<Paragraph> paragraph_stroke = source_.CreateParagraph(
+          text, text_options, /*draw_stroke_only=*/true);
+      paragraph_stroke->layout(text_width);
+      paragraph_stroke->paint(canvas_.get(), pos.x + horizontal_offset,
+                              pos.y + vertical_offset);
+    }
 
-  paragraph->layout(text_width);
-  paragraph->paint(canvas_.get(), pos.x + horizontal_offset,
-                   pos.y + vertical_offset);
+    paragraph->layout(text_width);
+    paragraph->paint(canvas_.get(), pos.x + horizontal_offset,
+                     pos.y + vertical_offset);
+  }
 }
 
 void DesktopPlatformCanvasSource::DesktopScopedCanvas::DrawGlyph(

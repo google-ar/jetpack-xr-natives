@@ -19,7 +19,9 @@
 #include <string>
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "core/common/invocable.h"
 #include "core/materials/material.h"
 #include "core/view/framework/render/material_definition.proto.imp.h"
 
@@ -41,6 +43,13 @@ class MaterialRegistry {
 
   // Retrieves a pointer to the stored MaterialDefinition if it exists.
   const MaterialDefinition* GetMaterialDefinition(absl::string_view url) const;
+
+  // Updates a material with a new definition and calls the callback to update
+  // the instance.
+  absl::Status UpdateMaterialParameters(
+      absl::string_view url, const MaterialDefinition& definition,
+      imp::Invocable<void(BorrowedMaterialPtr)> update_parameters_callback);
+  // #endif
 
   // Returns true if the material is already registered.
   bool HasMaterial(absl::string_view url) const;

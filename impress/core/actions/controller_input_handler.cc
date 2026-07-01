@@ -19,10 +19,10 @@
 #include <variant>
 #include <vector>
 
+#include "absl/types/variant.h"
 #include "core/actions/controller_events.h"
 #include "core/actions/input_action_event.h"
 #include "core/collision/ray.h"
-#include "core/common/platform_helpers.h"
 #include "core/input/input_manager.h"
 #include "core/math/transform.h"
 #include "core/math/vec.h"

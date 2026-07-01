@@ -19,12 +19,12 @@
 
 #include <filament/MaterialEnums.h>
 
-#include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/bitset.h"
+#include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/Slice.h"
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 namespace filament {
 static constexpr size_t VARIANT_BITS = 8;

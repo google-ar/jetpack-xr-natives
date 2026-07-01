@@ -36,6 +36,7 @@
 #include "core/assets/gltf/gltf_asset_loader.h"
 #include "core/assets/material/material_asset.h"
 #include "core/assets/proto_asset.h"
+#include "core/async/atomic_future.h"
 #include "core/async/executor.h"
 #include "core/async/future.h"
 #include "core/async/future_status_utils.h"

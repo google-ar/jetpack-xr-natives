@@ -16,13 +16,14 @@
 
 #include "VulkanPipelineCache.h"
 
+#include "VulkanConstants.h"
+#include "VulkanHandles.h"
+
+#include "vulkan/utils/Conversion.h"
+
 #include "filament/libs/utils/include/utils/JobSystem.h"
 #include "filament/libs/utils/include/utils/Log.h"
 #include "filament/libs/utils/include/utils/Panic.h"
-
-#include "VulkanConstants.h"
-#include "VulkanHandles.h"
-#include "vulkan/utils/Conversion.h"
 
 #if defined(__clang__)
 // Vulkan functions often immediately dereference pointers, so it's fine to pass in a pointer

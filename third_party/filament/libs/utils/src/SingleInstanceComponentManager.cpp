@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
-#include "filament/libs/utils/include/utils/SingleInstanceComponentManager.h"
 #include "filament/libs/utils/include/utils/Entity.h"
+#include "filament/libs/utils/include/utils/PagedArenaBitset.h"
+#include "filament/libs/utils/include/utils/SingleInstanceComponentManager.h"
 #include "filament/libs/utils/include/utils/Slice.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <utility>
 
 namespace utils {
@@ -37,6 +39,10 @@ void SingleInstanceComponentManagerBase::unregisterChangeCallback(
 }
 
 void SingleInstanceComponentManagerBase::notifyChange(Entity const e) noexcept {
+    for (auto* bitset : mBitsets) {
+        bitset->add(e.getId());
+    }
+
     if constexpr (USE_SORTED_DIRTY_ARRAY) {
         auto const it = std::lower_bound(mDirtyEntities, mDirtyEntities + mDirtyCount, e);
         if (it != mDirtyEntities + mDirtyCount && *it == e) {
@@ -71,4 +77,11 @@ void SingleInstanceComponentManagerBase::flushNotifications() noexcept {
     }
 }
 
+void SingleInstanceComponentManagerBase::registerBitset(PagedArenaBitset* bitset) {
+    mBitsets.push_back(bitset);
+}
+
+void SingleInstanceComponentManagerBase::unregisterBitset(PagedArenaBitset const* bitset) {
+    mBitsets.erase(std::remove(mBitsets.begin(), mBitsets.end(), bitset), mBitsets.end());
+}
 } // namespace utils

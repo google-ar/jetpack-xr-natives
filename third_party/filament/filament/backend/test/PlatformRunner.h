@@ -17,9 +17,10 @@
 #ifndef TNT_PLATFORMRUNNER_H
 #define TNT_PLATFORMRUNNER_H
 
-#include <stdint.h>
-#include <stddef.h>
 #include "filament/libs/utils/include/utils/CString.h"
+
+#include <stddef.h>
+#include <stdint.h>
 
 namespace test {
 

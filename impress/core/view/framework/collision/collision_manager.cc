@@ -123,7 +123,7 @@ std::vector<DoubleRayHit> CollisionManager::IntersectNodePreciseHelper(
 }
 
 std::vector<RayHit> CollisionManager::IntersectAllHelper(
-    absl::variant<Ray, float2> world_ray_or_screen_pos,
+    std::variant<Ray, float2> world_ray_or_screen_pos,
     std::optional<Flags<CollisionMask>> mask) {
   if (!mask.has_value()) {
     mask = collision_mask_;
@@ -145,7 +145,7 @@ std::vector<RayHit> CollisionManager::IntersectAllHelper(
 }
 
 std::vector<DoubleRayHit> CollisionManager::IntersectAllPreciseHelper(
-    absl::variant<DoubleRay, float2> world_ray_or_screen_pos,
+    std::variant<DoubleRay, float2> world_ray_or_screen_pos,
     std::optional<Flags<CollisionMask>> mask) {
   if (!mask.has_value()) {
     mask = collision_mask_;

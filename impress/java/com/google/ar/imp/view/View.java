@@ -146,6 +146,15 @@ public class View {
       @Nullable String identifier,
       Context context,
       CustomHostProvider customHostProvider) {
+    return createViewWithCustomHost(nativeLibrary, identifier, context, null, customHostProvider);
+  }
+
+  public static View createViewWithCustomHost(
+      @Nullable String nativeLibrary,
+      @Nullable String identifier,
+      Context context,
+      @Nullable byte[] viewConfigBytes,
+      CustomHostProvider customHostProvider) {
     if (nativeLibrary == null || nativeLibrary.isEmpty()) {
       nativeLibrary = DEFAULT_LIBRARY_NAME;
     }
@@ -157,7 +166,7 @@ public class View {
     } catch (UnsatisfiedLinkError e) {
       throw new IllegalStateException("Could not load native library \"" + nativeLibrary + "\"", e);
     }
-    long viewHandle = nCreateViewWithoutHost(context, identifier);
+    long viewHandle = nCreateViewWithoutHost(context, identifier, viewConfigBytes);
     return new View(customHostProvider.createCustomHost(viewHandle), context, nativeLibrary);
   }
 
@@ -342,6 +351,12 @@ public class View {
     return nGetForegroundExecutor();
   }
 
+  public void advanceForegroundExecutor() {
+    if (viewHostHandle != 0) {
+      nAdvanceForegroundExecutor(viewHostHandle);
+    }
+  }
+
   @Override
   public String toString() {
     return this.getClass().getSimpleName() + "@" + getViewHostHandle();
@@ -392,7 +407,8 @@ public class View {
       Object callbackExecutor,
       byte[] viewConfig);
 
-  protected static native long nCreateViewWithoutHost(Object context, String identifier);
+  protected static native long nCreateViewWithoutHost(
+      Object context, String identifier, byte[] viewConfig);
 
   protected static native void nDestroyView(long viewHostHandle);
 
@@ -465,6 +481,8 @@ public class View {
   private static native long nGetForegroundExecutor();
 
   private static native void nCaptureVsyncTime(long viewHostHandle);
+
+  private static native void nAdvanceForegroundExecutor(long viewHostHandle);
 
   // LINT.ThenChange(
   //     //depot/google3/third_party/impress/core/view/platforms/android/view_jni.cc:api

@@ -32,8 +32,8 @@
 #include <backend/Handle.h>
 #include <backend/PixelBufferDescriptor.h>
 
-#include "filament/libs/utils/include/utils/CString.h"
 #include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/CString.h"
 #include "filament/libs/utils/include/utils/Log.h"
 
 namespace filament {

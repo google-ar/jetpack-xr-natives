@@ -14,12 +14,18 @@
 
 #include "core/editor/widgets/transform.h"
 
+#include <memory>
 #include <optional>
+#include <utility>
+#include <vector>
 
+#include "absl/container/flat_hash_set.h"
 #include "absl/strings/string_view.h"
 #include "dear_imgui/imgui.h"
 #include "core/common/registry.h"
+#include "core/editor/command.h"
 #include "core/editor/command_manager.h"
+#include "core/editor/composite_command.h"
 #include "core/editor/editor.h"
 #include "core/editor/editor_field_control.h"
 #include "core/editor/editor_style.h"
@@ -28,7 +34,9 @@
 #include "core/editor/node_value_command.h"
 #include "core/editor/widgets/transform_assets.h"
 #include "core/editor/widgets/transform_widget.h"
-#include "core/editor/widgets/transform_widget_aspect.h"
+#include "core/editor/widgets/transform_widget_aspect_rotate.h"
+#include "core/editor/widgets/transform_widget_aspect_scale.h"
+#include "core/editor/widgets/transform_widget_aspect_translate.h"
 #include "core/editor/widgets/transform_widget_mode_control.h"
 #include "core/math/math.h"
 #include "core/math/quat.h"
@@ -40,6 +48,66 @@
 #include "core/view/framework/scene/scene_system.h"
 
 namespace imp::editor {
+namespace {
+
+// Applies a transform change to all selected nodes via a CompositeCommand.
+template <typename ValueType, typename GetValueFn, typename ApplyValueFn>
+void ApplyTransformChanges(const absl::flat_hash_set<NodeHandle>& active_nodes,
+                           CommandManager& command_manager,
+                           const ValueType& new_value,
+                           const GetValueFn get_value_fn,
+                           const ApplyValueFn apply_value_fn) {
+  if (active_nodes.empty()) return;
+
+  std::vector<std::unique_ptr<Command>> commands;
+  commands.reserve(active_nodes.size());
+
+  const ValueType base_old_value = get_value_fn(*active_nodes.begin());
+
+  for (const NodeHandle& node : active_nodes) {
+    const ValueType node_old_value = get_value_fn(node);
+    ValueType node_new_value = node_old_value;
+
+    if constexpr (std::is_same_v<ValueType, float3> ||
+                  std::is_same_v<ValueType, double3>) {
+      // Apply only the components that actually changed.
+      if (!AlmostEqual(base_old_value.x, new_value.x))
+        node_new_value.x = new_value.x;
+      if (!AlmostEqual(base_old_value.y, new_value.y))
+        node_new_value.y = new_value.y;
+      if (!AlmostEqual(base_old_value.z, new_value.z))
+        node_new_value.z = new_value.z;
+    } else {
+      node_new_value = new_value;
+    }
+
+    commands.push_back(std::make_unique<NodeValueCommand<ValueType>>(
+        node, node_old_value, node_new_value, apply_value_fn));
+  }
+  command_manager.PerformCommand<CompositeCommand>(std::move(commands));
+}
+
+// Determines which axes of a property are identical/mixed across each node.
+template <typename ValueType, typename GetValueFn>
+void ComputeMixedAxes(const absl::flat_hash_set<NodeHandle>& active_nodes,
+                      const GetValueFn get_value_fn, bool all_same[3]) {
+  all_same[0] = true;
+  all_same[1] = true;
+  all_same[2] = true;
+
+  if (active_nodes.empty()) return;
+
+  const ValueType base_val = get_value_fn(*active_nodes.begin());
+
+  for (const NodeHandle& node : active_nodes) {
+    const ValueType node_val = get_value_fn(node);
+    if (!AlmostEqual(node_val.x, base_val.x)) all_same[0] = false;
+    if (!AlmostEqual(node_val.y, base_val.y)) all_same[1] = false;
+    if (!AlmostEqual(node_val.z, base_val.z)) all_same[2] = false;
+  }
+}
+
+}  // namespace
 
 // Helper function for editing a float3 element of the nodes transform while
 // correctly handlings the base value.
@@ -77,7 +145,11 @@ Transform::Transform(BaseView& view)
       command_manager_(view.GetRegistry().GetOrCreate<CommandManager>()),
       editor_(view.GetRegistry().Get<Editor>()->get()) {
   view.GetSceneSystem().RegisterComponentsIsfInfo<TransformWidget>();
-  view.GetSceneSystem().RegisterComponentsIsfInfo<TransformWidgetAspect>();
+  view.GetSceneSystem()
+      .RegisterComponentsIsfInfo<TransformWidgetAspectRotate>();
+  view.GetSceneSystem().RegisterComponentsIsfInfo<TransformWidgetAspectScale>();
+  view.GetSceneSystem()
+      .RegisterComponentsIsfInfo<TransformWidgetAspectTranslate>();
   view.GetSceneSystem().RegisterComponentsIsfInfo<TransformWidgetModeControl>();
   view.GetSceneSystem()
       .LoadScene(transform_assets::kTransformWidgetIsf)

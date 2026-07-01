@@ -13,9 +13,8 @@
 * See the License for the specific language governing permissions and
 * limitations under the License.
  */
-#include "filament/libs/utils/include/utils/Status.h"
-
 #include "filament/libs/utils/include/utils/ostream.h"
+#include "filament/libs/utils/include/utils/Status.h"
 
 namespace utils {
 

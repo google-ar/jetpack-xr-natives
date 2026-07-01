@@ -190,7 +190,7 @@ class RigidBody : public Component {
   void SwitchToDirectedInternally();
 
   // Sets the friction, uses default value if not provided.
-  void SetFrictionInternal(absl::optional<float> friction);
+  void SetFrictionInternal(std::optional<float> friction);
 
   // Use this for multiple cleanups during object's lifetime.
   void CleanupInternal();

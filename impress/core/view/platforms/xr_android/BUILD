@@ -110,6 +110,7 @@ cc_library(
     deps = [
         ":openxr_includes",
         ":xr_helpers",
+        ":xr_native_window",
         ":xr_session_host",
         "//core:config",
         "//core/common:platform_helpers",
@@ -142,6 +143,20 @@ cc_library(
 )
 
 cc_library(
+    name = "xr_native_window",
+    hdrs = [
+        "xr_native_window.h",
+    ],
+    defines = imp_defines(),
+    deps = [
+        ":openxr_includes",
+        "//core/async:future",
+        "//core/math",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "xr_session_host",
     hdrs = ["xr_session_host.h"],
     defines = imp_defines(),
@@ -149,6 +164,7 @@ cc_library(
         ":openxr_includes",
         ":xr_events_proto_cc",
         ":xr_helpers",
+        ":xr_native_window",
         "//core:config",
         "//core/camera",
         "//core/common:invocable",
@@ -174,6 +190,8 @@ cc_library(
         "@mediapipe//mediapipe/framework/port:status",
         "@robin_map",
         "@third_party//filament/filament:filament_hdrs",
+        "@third_party//filament/libs:utils",
+        "@third_party//filament/libs:utils_hdrs",
     ] + if_non_android(["@bazel_tools//tools/jdk:jni"]),
     alwayslink = 1,
 )
@@ -194,6 +212,8 @@ cc_library(
         ":xr_color_space_helper",
         ":xr_events_proto_cc",
         ":xr_helpers",
+        ":xr_native_window",
+        ":xr_quad_layer_renderer",
         ":xr_session_host",
         "//core:config",
         "//core/actions:action_config",
@@ -303,6 +323,37 @@ cc_library(
         "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
         "@third_party//filament/libs:math_hdrs",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "xr_quad_layer_renderer",
+    srcs = [
+        "xr_quad_layer_renderer.cc",
+    ],
+    hdrs = [
+        "xr_quad_layer_renderer.h",
+    ],
+    copts = imp_google3_copts(),
+    defines = imp_defines(),
+    deps = [
+        ":openxr_includes",
+        ":xr_events_proto_cc",
+        ":xr_helpers",
+        ":xr_native_window",
+        ":xr_session_host",
+        "//core/async:future",
+        "//core/camera",
+        "//core/math",
+        "//core/ncsb",
+        "//core/view/utils:render_setting_utils",
+        "//core/view/utils:render_settings_proto_cc_imp",
+        "//core/xr:openxr_events",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_impress//core/common:log",
+        "@third_party//filament/filament:filament_hdrs",
     ],
     alwayslink = 1,
 )

@@ -15,7 +15,6 @@
  */
 
 #include "BackendTest.h"
-
 #include "ImageExpectations.h"
 #include "Lifetimes.h"
 #include "Shader.h"
@@ -49,6 +48,7 @@ TEST_F(BackendTest, RenderExternalImageWithoutSet) {
     SKIP_IF(Backend::METAL, "External images aren't supported in Metal");
     SKIP_IF(Backend::VULKAN, "b/453776730");
     SKIP_IF(Backend::WEBGPU, "External images aren't supported in WebGPU");
+    SKIP_IF(Backend::OPENGL, "b//510158903");
     auto& api = getDriverApi();
 
     TrianglePrimitive triangle(api);
@@ -76,7 +76,7 @@ TEST_F(BackendTest, RenderExternalImageWithoutSet) {
     PipelineState state = getColorWritePipelineState();
     shader.addProgramToPipelineState(state);
 
-    RenderPassParams params = getClearColorRenderPass();
+    RenderPassParams params = getClearColorDepthRenderPass();
     params.viewport = getFullViewport();
 
     DescriptorSetHandle descriptorSet = shader.createDescriptorSet(api);
@@ -112,6 +112,7 @@ TEST_F(BackendTest, RenderExternalImage) {
     SKIP_IF(Backend::METAL, "External images aren't supported in Metal");
     SKIP_IF(Backend::VULKAN, "b/453777319");
     SKIP_IF(Backend::WEBGPU, "External images aren't supported in WebGPU");
+    SKIP_IF(Backend::OPENGL, "b//510158903");
     SKIP_IF(SkipEnvironment(OperatingSystem::CI, Backend::OPENGL), "b/453758594");
     auto& api = getDriverApi();
 
@@ -151,6 +152,8 @@ TEST_F(BackendTest, RenderExternalImage) {
             CVPixelBufferCreate(kCFAllocatorDefault, 1024, 1024, kCVPixelFormatType_32BGRA, options,
                     &pixBuffer);
     assert(status == kCVReturnSuccess);
+    CFRelease(options);
+    CFRelease(values[0]);
 
     // Fill image with checker-pattern.
     const size_t tileSize = 64;
@@ -178,7 +181,7 @@ TEST_F(BackendTest, RenderExternalImage) {
     PipelineState state = getColorWritePipelineState();
     shader.addProgramToPipelineState(state);
 
-    RenderPassParams params = getClearColorRenderPass();
+    RenderPassParams params = getClearColorDepthRenderPass();
     params.viewport = getFullViewport();
 
     api.startCapture(0);

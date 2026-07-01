@@ -61,6 +61,7 @@ class XrMediaViewer : public Component {
 
   void SetTexture(imp::Texture* texture);
   void SetTexture(TexturePtr texture);
+  void SetTexture(OwnedTexturePtr texture);
 
   // Sets the textures for each view. Only used if multiview playback support is
   // required.

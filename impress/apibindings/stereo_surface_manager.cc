@@ -119,7 +119,7 @@ absl::Status StereoSurfaceManagerImpl::SetStereoSurfaceEntityCanvasShape(
     int32_t node_id, StereoSurface::CanvasShape canvas_shape) {
   MP_ASSIGN_OR_RETURN(ComponentHandle<StereoSurface> stereo_surface,
                    GetStereoSurface(node_id));
-  return stereo_surface->SetCanvasShape(canvas_shape);
+  return stereo_surface->SetCanvasShape(std::move(canvas_shape));
 }
 
 absl::Status StereoSurfaceManagerImpl::SetStereoSurfaceEntityColliderEnabled(

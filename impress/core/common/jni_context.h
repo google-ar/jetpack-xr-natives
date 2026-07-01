@@ -34,12 +34,12 @@ class JniContext {
   JniContext() {}
 
   // Preferably, call SetJniEnv() with the current thread's |env| so we don't
-  // need to AttachCurrentThread on the JVM.  All JNI calls from Java into C++
+  // need to AttachCurrentThread on the JVM. All JNI calls from Java into C++
   // will provide a valid JNIEnv.
   void SetJniEnv(JNIEnv* env);
 
   // Returns the last JNIEnv set on this thread, or Attaches a new JNIEnv if
-  // none available.  The attached JNIEnv will be automatically Detached when
+  // none available. The attached JNIEnv will be automatically Detached when
   // the thread terminates.  Do not access this returned value from different
   // threads, get a new one for each thread.
   JNIEnv* GetJniEnv() const;
@@ -48,8 +48,12 @@ class JniContext {
   // thread.
   JNIEnv* TryGetJniEnv() const;
 
-  // Nulls out the static JVM pointer.  Should only be calling in Unit Tests.
+  // Nulls out the static JVM pointer. Should only be calling in Unit Tests.
   static void ResetJVM();
+
+  // Find class that works on both main and background threads. Class path is
+  // expected to be passed in '/' (e.g., path/to/my/Class).
+  static jclass FindClass(JNIEnv* env, const char* class_path);
 };
 
 }  // namespace imp

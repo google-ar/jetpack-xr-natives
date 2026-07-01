@@ -19,7 +19,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <variant>
 
 #include "core/common/log.h"
 #include "absl/status/status.h"
@@ -28,11 +27,9 @@
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/common/invocable.h"
+#include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/owned_ptr.h"
-#include "core/common/pass_key.h"
 #include "core/split_engine/shared/split_engine_defines.h"
-#include "core/split_engine/transport/flatbuffer_builder_holder.h"
-#include "core/split_engine/transport/message_sender.h"
 #include "core/split_engine/transport/transport.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
 
@@ -83,58 +80,6 @@ class MessageGroupSender {
   //
   //   msg_sender.Finish()
   //
-
-  using FlatbufferBuilderHolder = FlatbufferBuilderHolder<MessageSender>;
-
-  // This type has striking resemblance with imp::OwnedOrBorrowedPtr.
-  // However, the purpose is different:
-  // - Act as a holder of OwnedPtr or BorrowedPtr.
-  // - Actions on BorrowedPtr / OwnedPtr are not exposed (i.e. no Borrow).
-  // - Callers can access underlying FlatbufferBuilderHolder via operator*
-  // - Callers can regain ownership of the stored instance via ExtractOwned() or
-  // ExtractBorrowed().
-  //
-  // Usage of `OwnedOrBorrowedFlatbufferBuilderHolder` allows to hide
-  // implementation detail (whether implementation uses single instance of
-  // `FlatbufferBuilder` per "message group" or multiple ones) and in the same
-  // time maintain ownership model: caller will not be able to hang on to the
-  // instance of `FlatbufferBuilder` after `AddMessage` call.
-  //
-  class OwnedOrBorrowedFlatbufferBuilderHolder {
-   public:
-    explicit OwnedOrBorrowedFlatbufferBuilderHolder(
-        imp::OwnedPtr<FlatbufferBuilderHolder> fbb);
-    explicit OwnedOrBorrowedFlatbufferBuilderHolder(
-        imp::BorrowedPtr<FlatbufferBuilderHolder> fbb);
-
-    OwnedOrBorrowedFlatbufferBuilderHolder(
-        const OwnedOrBorrowedFlatbufferBuilderHolder&) = delete;
-    OwnedOrBorrowedFlatbufferBuilderHolder& operator=(
-        const OwnedOrBorrowedFlatbufferBuilderHolder&) = delete;
-    OwnedOrBorrowedFlatbufferBuilderHolder(
-        OwnedOrBorrowedFlatbufferBuilderHolder&&) = default;
-    OwnedOrBorrowedFlatbufferBuilderHolder& operator=(
-        OwnedOrBorrowedFlatbufferBuilderHolder&&) = default;
-
-    // Users of MessageGroupSender can use this to access underlying
-    // FlatbufferBuilderHolder
-    FlatbufferBuilderHolder& operator*() { return Get(); }
-
-    // An implementation of MessageGroupSender can use one of these methods to
-    // regain ownership of the stored instance.
-    absl::StatusOr<imp::OwnedPtr<FlatbufferBuilderHolder>> ExtractOwned(
-        PassKey<MessageGroupSender> passkey);
-    absl::StatusOr<imp::BorrowedPtr<FlatbufferBuilderHolder>> ExtractBorrowed(
-        PassKey<MessageGroupSender> passkey);
-
-   private:
-    FlatbufferBuilderHolder& Get();
-
-    std::variant<std::monostate, imp::OwnedPtr<FlatbufferBuilderHolder>,
-                 imp::BorrowedPtr<FlatbufferBuilderHolder>>
-        fbb_;
-  };
-
   enum class MessageGroupType {
     // Tailored for huge messages that are sent not on a regular basis.
     kOneShot,
@@ -156,15 +101,16 @@ class MessageGroupSender {
   // request more memory from the message group buffer of
   // `max_message_group_size_bytes` size.
   static constexpr size_t kInitialMessageSizeBytes = 1024;
-  virtual absl::StatusOr<OwnedOrBorrowedFlatbufferBuilderHolder> CreateBuilder(
-      MessageGroupId message_group_id,
-      size_t initial_size_bytes = kInitialMessageSizeBytes) = 0;
+  virtual absl::StatusOr<
+      imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder>>
+  CreateBuilder(MessageGroupId message_group_id,
+                size_t initial_size_bytes = kInitialMessageSizeBytes) = 0;
 
   // Adds a message to the message group.
   // `offset` is pre-calculated by the caller.
   virtual absl::Status AddMessage(
       MessageGroupId message_group_id,
-      OwnedOrBorrowedFlatbufferBuilderHolder fbb,
+      imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder> fbb,
       const flatbuffers::Offset<android_xr::schemas::Command>& offset) = 0;
 
   using OffsetProducer =
@@ -174,9 +120,10 @@ class MessageGroupSender {
   // Adds a message to the message group.
   // Implementation decides _when_ to calculate the offset using provided
   // producer.
-  virtual absl::Status AddMessage(MessageGroupId message_group_id,
-                                  OwnedOrBorrowedFlatbufferBuilderHolder fbb,
-                                  OffsetProducer offset_fn) = 0;
+  virtual absl::Status AddMessage(
+      MessageGroupId message_group_id,
+      imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder> fbb,
+      OffsetProducer offset_fn) = 0;
 
   // Finishes the message group, no more messages can be added to the message
   // group after this call.
@@ -193,11 +140,6 @@ class MessageGroupSender {
   // processed by the remote side yet.
   virtual absl::StatusOr<int32_t> GetMessageGroupCount(
       MessageGroupType message_group_type) = 0;
-
- protected:
-  // Allows derived classes to interact with
-  // OwnedOrBorrowedFlatbufferBuilderHolder methods.
-  PassKey<MessageGroupSender> GetKey();
 };
 
 }  // namespace imp::split_engine

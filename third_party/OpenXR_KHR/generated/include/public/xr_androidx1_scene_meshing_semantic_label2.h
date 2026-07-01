@@ -22,10 +22,11 @@ extern "C" {
 
 // XR_ANDROIDX1_scene_meshing_semantic_label2 is a preprocessor guard. Do not pass it to API calls.
 #define XR_ANDROIDX1_scene_meshing_semantic_label2 1
-#define XR_ANDROIDX1_scene_meshing_semantic_label2_SPEC_VERSION 1
-#define XR_ANDROIDX1_SCENE_MESHING_SEMANTIC_LABEL2_EXTENSION_NAME "XR_ANDROIDX1_scene_meshing_semantic_label2"
 // This semantic label set represents XrSceneMeshSemanticLabel2ANDROIDX1.
 #define XR_SCENE_MESH_SEMANTIC_LABEL_SET_DEFAULT2_ANDROIDX1 ((XrSceneMeshSemanticLabelSetANDROID) 1000801000U)
+
+#define XR_ANDROIDX1_scene_meshing_semantic_label2_SPEC_VERSION 1
+#define XR_ANDROIDX1_SCENE_MESHING_SEMANTIC_LABEL2_EXTENSION_NAME "XR_ANDROIDX1_scene_meshing_semantic_label2"
 
 typedef enum XrSceneMeshSemanticLabel2ANDROIDX1 {
     // This semantic indicates that the corresponding mesh element represents an unknown object.
@@ -46,6 +47,19 @@ typedef enum XrSceneMeshSemanticLabel2ANDROIDX1 {
     XR_SCENE_MESH_SEMANTIC_LABEL2_BED_ANDROIDX1 = 7,
     XR_SCENE_MESH_SEMANTIC_LABEL_2ANDROIDX1_MAX_ENUM = 0x7FFFFFFF
 } XrSceneMeshSemanticLabel2ANDROIDX1;
+
+// Reflection macros
+#define XR_LIST_ENUM_XrSceneMeshSemanticLabel2ANDROIDX1(_) \
+    _(XR_SCENE_MESH_SEMANTIC_LABEL2_OTHER_ANDROIDX1, 0) \
+    _(XR_SCENE_MESH_SEMANTIC_LABEL2_FLOOR_ANDROIDX1, 1) \
+    _(XR_SCENE_MESH_SEMANTIC_LABEL2_CEILING_ANDROIDX1, 2) \
+    _(XR_SCENE_MESH_SEMANTIC_LABEL2_WALL_ANDROIDX1, 3) \
+    _(XR_SCENE_MESH_SEMANTIC_LABEL2_TABLE_ANDROIDX1, 4) \
+    _(XR_SCENE_MESH_SEMANTIC_LABEL2_CHAIR_ANDROIDX1, 5) \
+    _(XR_SCENE_MESH_SEMANTIC_LABEL2_SOFA_ANDROIDX1, 6) \
+    _(XR_SCENE_MESH_SEMANTIC_LABEL2_BED_ANDROIDX1, 7) \
+    _(XR_SCENE_MESH_SEMANTIC_LABEL_2ANDROIDX1_MAX_ENUM, 0x7FFFFFFF)
+
 #endif /* XR_ANDROIDX1_scene_meshing_semantic_label2 */
 
 #ifdef __cplusplus

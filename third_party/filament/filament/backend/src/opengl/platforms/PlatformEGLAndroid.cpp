@@ -14,42 +14,37 @@
  * limitations under the License.
  */
 
-#include <backend/platforms/PlatformEGLAndroid.h>
+#include "AndroidFrameCallback.h"
+#include "AndroidNativeWindow.h"
+#include "AndroidSwapChainHelper.h"
+#include "ExternalStreamManagerAndroid.h"
 
 #include "opengl/GLUtils.h"
+
+#include <private/backend/BackendUtilsAndroid.h>
+#include <private/backend/VirtualMachineEnv.h>
 
 #include <backend/AcquiredImage.h>
 #include <backend/DriverEnums.h>
 #include <backend/Platform.h>
 #include <backend/platforms/OpenGLPlatform.h>
 #include <backend/platforms/PlatformEGL.h>
-
-#include <private/backend/BackendUtilsAndroid.h>
-#include <private/backend/VirtualMachineEnv.h>
-
-#include "AndroidNativeWindow.h"
-#include "AndroidFrameCallback.h"
-#include "AndroidSwapChainHelper.h"
-#include "ExternalStreamManagerAndroid.h"
-
-#include <android/api-level.h>
-#include <android/native_window.h>
-#include <android/hardware_buffer.h>
+#include <backend/platforms/PlatformEGLAndroid.h>
 
 #include "filament/libs/utils/include/utils/android/PerformanceHintManager.h"
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/Logger.h"
-#include "filament/libs/utils/include/utils/Panic.h"
 #include "filament/libs/utils/include/utils/ostream.h"
+#include "filament/libs/utils/include/utils/Panic.h"
 
 #include "filament/libs/math/include/math/mat3.h"
 
+#include <android/api-level.h>
+#include <android/hardware_buffer.h>
+#include <android/native_window.h>
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
-
-#include <sys/system_properties.h>
-
 #include <jni.h>
 
 #include <array>
@@ -59,7 +54,9 @@
 #include <new>
 #include <string_view>
 
+#include <sys/system_properties.h>
 #include <unistd.h>
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -671,7 +668,11 @@ void PlatformEGLAndroid::destroySync(Sync* sync) noexcept {
             eglDestroySyncKHR(getEglDisplay(), eglSync.sync);
         }
     }
-    delete sync;
+
+    // Cast to SyncEGLAndroid, as Platform::Sync does not have a virtual
+    // destructor, and therefore, it is undefined behavior to delete
+    // the base class.
+    delete static_cast<SyncEGLAndroid*>(sync);
 }
 
 void PlatformEGLAndroid::attach(Stream* stream, intptr_t const tname) noexcept {

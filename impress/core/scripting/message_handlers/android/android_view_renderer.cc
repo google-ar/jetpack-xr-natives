@@ -188,9 +188,9 @@ void RenderViewToSurfaceTextureWrapper::DispatchTouchEvent(
 Future<absl::Status> AndroidViewRenderer::Setup(
     jobject android_view, ViewSize view_size,
     InputForwardingMode input_forwarding_mode,
-    absl::optional<imp::MaterialDefinition> material_definition,
-    absl::optional<uint32_t> blend_priority,
-    absl::optional<float> corner_radius) {
+    std::optional<MaterialDefinition> material_definition,
+    std::optional<uint32_t> blend_priority,
+    std::optional<float> corner_radius) {
   // Adding a child node so that generated Components are not attached to the
   // root node and so that we can set the scale of the renderer node to reflect
   // the aspect ratio of the Android View.
@@ -320,7 +320,7 @@ BorrowedMaterialPtr AndroidViewRenderer::GetMaterial() const {
 
 Future<AndroidViewRenderer::TextureMaterialVariant>
 AndroidViewRenderer::LoadMaterial(
-    absl::optional<imp::MaterialDefinition> material_definition) {
+    std::optional<MaterialDefinition> material_definition) {
   if (material_definition) {
     return GetView()
         .GetMaterialFactory()

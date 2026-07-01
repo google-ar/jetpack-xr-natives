@@ -108,6 +108,7 @@ cc_library(
         "future_impl.cc",
     ],
     hdrs = [
+        "atomic_future.h",
         "future.h",
         "future_common.h",
         "future_impl.h",

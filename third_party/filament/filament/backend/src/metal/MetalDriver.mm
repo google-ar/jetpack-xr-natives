@@ -40,11 +40,12 @@
 #include <Metal/Metal.h>
 #include <QuartzCore/QuartzCore.h>
 
+#include "filament/libs/utils/include/utils/CString.h"
+#include "filament/libs/utils/include/utils/ImmutableCString.h"
 #include "filament/libs/utils/include/utils/Invocable.h"
 #include "filament/libs/utils/include/utils/Logger.h"
 #include "filament/libs/utils/include/utils/Panic.h"
 #include "filament/libs/utils/include/utils/sstream.h"
-#include "filament/libs/utils/include/utils/ImmutableCString.h"
 
 #include <algorithm>
 
@@ -479,6 +480,16 @@ void MetalDriver::createVertexBufferR(Handle<HwVertexBuffer> vbh,
     // No actual GPU memory is allocated here, so no need to check for allocation success.
 }
 
+void MetalDriver::createVertexBufferAsyncR(Handle<HwVertexBuffer> vbh,
+        uint32_t vertexCount, Handle<HwVertexBufferInfo> vbih,
+        CallbackHandler* handler, CallbackHandler::Callback callback,
+        void* user, utils::ImmutableCString&& tag) {
+    MetalVertexBufferInfo const* const vbi = handle_cast<const MetalVertexBufferInfo>(vbih);
+    construct_handle<MetalVertexBuffer>(vbh, *mContext, vertexCount, vbi->bufferCount, vbih, true);
+    mHandleAllocator.associateTagToHandle(vbh.getId(), std::move(tag));
+    scheduleCallback(handler, user, callback);
+}
+
 void MetalDriver::createIndexBufferR(Handle<HwIndexBuffer> ibh, ElementType elementType,
         uint32_t indexCount, BufferUsage usage, utils::ImmutableCString&& tag) {
     auto elementSize = (uint8_t)getElementTypeSize(elementType);
@@ -612,6 +623,8 @@ void MetalDriver::createTextureViewR(Handle<HwTexture> th, Handle<HwTexture> src
             construct_handle<MetalTexture>(th, *mContext, src, baseLevel, levelCount);
     mContext->textures.insert(texture);
     texture->setLabel(tag);
+    DEBUG_LOG("createTextureViewR(th = %d, srch = %d, baseLevel = %d, levelCount = %d)\n",
+            th.getId(), srch.getId(), baseLevel, levelCount);
     mHandleAllocator.associateTagToHandle(th.getId(), std::move(tag));
 }
 
@@ -622,6 +635,8 @@ void MetalDriver::createTextureViewSwizzleR(Handle<HwTexture> th, Handle<HwTextu
     MetalTexture* texture = construct_handle<MetalTexture>(th, *mContext, src, r, g, b, a);
     mContext->textures.insert(texture);
     texture->setLabel(tag);
+    DEBUG_LOG("createTextureViewSwizzleR(th = %d, srch = %d, r = %d, g = %d, b = %d, a = %d)\n",
+            th.getId(), srch.getId(), r, g, b, a);
     mHandleAllocator.associateTagToHandle(th.getId(), std::move(tag));
 }
 
@@ -629,8 +644,15 @@ void MetalDriver::createTextureViewSwizzleAsyncR(Handle<HwTexture> th, Handle<Hw
         backend::TextureSwizzle r, backend::TextureSwizzle g, backend::TextureSwizzle b,
         backend::TextureSwizzle a, CallbackHandler* handler,
         CallbackHandler::Callback const callback, void* user, utils::ImmutableCString&& tag) {
-    createTextureViewSwizzleR(th, srch, r, g, b, a, std::move(tag));
+    MetalTexture const* src = handle_cast<MetalTexture>(srch);
+    MetalTexture* texture = construct_handle<MetalTexture>(th, *mContext, src, r, g, b, a, true);
+    mContext->textures.insert(texture);
+    texture->setLabel(tag);
+    DEBUG_LOG(
+            "createTextureViewSwizzleAsyncR(th = %d, srch = %d, r = %d, g = %d, b = %d, a = %d)\n",
+            th.getId(), srch.getId(), r, g, b, a);
     scheduleCallback(handler, user, callback);
+    mHandleAllocator.associateTagToHandle(th.getId(), std::move(tag));
 }
 
 void MetalDriver::createTextureExternalImage2R(Handle<HwTexture> th,
@@ -815,29 +837,27 @@ void MetalDriver::createTimerQueryR(Handle<HwTimerQuery> tqh, utils::ImmutableCS
 }
 
 UTILS_UNUSED
-static const char* toString(ShaderStageFlags flags) {
-    std::vector<const char*> stages;
+static utils::CString toString(ShaderStageFlags flags) {
+    utils::CString result;
     if (any(flags & ShaderStageFlags::VERTEX)) {
-        stages.push_back("VERTEX");
+        result.append("VERTEX");
     }
     if (any(flags & ShaderStageFlags::FRAGMENT)) {
-        stages.push_back("FRAGMENT");
+        if (!result.empty()) {
+            result.append(" | ");
+        }
+        result.append("FRAGMENT");
     }
     if (any(flags & ShaderStageFlags::COMPUTE)) {
-        stages.push_back("COMPUTE");
+        if (!result.empty()) {
+            result.append(" | ");
+        }
+        result.append("COMPUTE");
     }
-    if (stages.empty()) {
+    if (result.empty()) {
         return "NONE";
     }
-    static char buffer[64];
-    buffer[0] = '\0';
-    for (size_t i = 0; i < stages.size(); i++) {
-        if (i > 0) {
-            strcat(buffer, " | ");
-        }
-        strcat(buffer, stages[i]);
-    }
-    return buffer;
+    return result;
 }
 
 const char* toString(DescriptorFlags flags) {
@@ -904,7 +924,7 @@ void MetalDriver::createDescriptorSetLayoutR(
     for (size_t i = 0; i < info.descriptors.size(); i++) {
         DEBUG_LOG("    {binding = %d, type = %s, count = %d, stage = %s, flags = %s},\n",
                 info.descriptors[i].binding, toString(info.descriptors[i].type),
-                info.descriptors[i].count, toString(info.descriptors[i].stageFlags),
+                info.descriptors[i].count, toString(info.descriptors[i].stageFlags).c_str_safe(),
                 toString(info.descriptors[i].flags));
     }
     DEBUG_LOG("})\n");
@@ -927,6 +947,10 @@ Handle<HwVertexBufferInfo> MetalDriver::createVertexBufferInfoS() noexcept {
 }
 
 Handle<HwVertexBuffer> MetalDriver::createVertexBufferS() noexcept {
+    return alloc_handle<MetalVertexBuffer>();
+}
+
+Handle<HwVertexBuffer> MetalDriver::createVertexBufferAsyncS() noexcept {
     return alloc_handle<MetalVertexBuffer>();
 }
 
@@ -1066,7 +1090,13 @@ void MetalDriver::destroyVertexBufferInfo(Handle<HwVertexBufferInfo> vbih) {
 }
 
 void MetalDriver::destroyVertexBuffer(Handle<HwVertexBuffer> vbh) {
-    if (vbh) {
+    if (UTILS_UNLIKELY(!vbh)) {
+        return;
+    }
+    auto* vb = handle_cast<MetalVertexBuffer>(vbh);
+    if (vb->asynchronous) {
+        getJobQueue()->push([this, vbh]() mutable { destruct_handle<MetalVertexBuffer>(vbh); });
+    } else {
         destruct_handle<MetalVertexBuffer>(vbh);
     }
 }
@@ -1349,7 +1379,7 @@ bool MetalDriver::isTextureFormatFilterable(TextureFormat format) {
         return mContext->highestSupportedGpuFamily.apple >= 7 ||
                mContext->highestSupportedGpuFamily.mac >= 1;
     }
-    if (isUnsignedIntFormat(format) || isSignedIntFormat(format) || 
+    if (isUnsignedIntFormat(format) || isSignedIntFormat(format) ||
         isDepthFormat(format) || isStencilFormat(format)) {
         return false;
     }
@@ -1646,6 +1676,14 @@ void MetalDriver::update3DImageAsyncR(AsyncCallId jobId, Handle<HwTexture> th, u
     auto* tex = handle_cast<MetalTexture>(th);
     auto tag = mHandleAllocator.getHandleTag(th.getId());
 
+    DEBUG_LOG("update3DImageAsyncR(th = %d, level = %d, xoffset = %d, yoffset = %d, zoffset = %d, "
+              "width = "
+              "%d, height = %d, depth = %d, data = ?)\n",
+            th.getId(), level, xoffset, yoffset, zoffset, width, height, depth);
+
+    FILAMENT_CHECK_PRECONDITION(tex->asynchronous)
+            << "update3DImageAsyncR must be called with an asynchronous texture.";
+
     getJobQueue()->push(
             [this, cmdBuffer, tex, level, xoffset, yoffset, zoffset, width, height, depth,
                     data = std::move(data), handler, callback, user,
@@ -1805,7 +1843,8 @@ void MetalDriver::setRenderPrimitiveBuffer(Handle<HwRenderPrimitive> rph, Primit
         Handle<HwVertexBuffer> vbh, Handle<HwIndexBuffer> ibh) {
     auto primitive = handle_cast<MetalRenderPrimitive>(rph);
     auto vertexBuffer = handle_cast<MetalVertexBuffer>(vbh);
-    auto indexBuffer = handle_cast<MetalIndexBuffer>(ibh);
+    // ibh is permitted to be null for non-indexed (attribute-less) primitives.
+    auto indexBuffer = ibh ? handle_cast<MetalIndexBuffer>(ibh) : nullptr;
     primitive->vertexBuffer = vertexBuffer;
     primitive->indexBuffer = indexBuffer;
     primitive->type = pt;
@@ -2365,10 +2404,15 @@ void MetalDriver::bindRenderPrimitive(Handle<HwRenderPrimitive> rph) {
         maxBufferIndex = std::max(maxBufferIndex, vertexBufferIndex);
     }
 
-    const auto bufferCount = maxBufferIndex + 1;
-    MetalBuffer::bindBuffers(getPendingCommandBuffer(mContext), mContext->currentRenderPassEncoder,
-            USER_VERTEX_BUFFER_BINDING_START, MetalBuffer::Stage::VERTEX, vertexBuffers,
-            vertexBufferOffsets, bufferCount);
+    // For attribute-less primitives `vbi->bufferMapping` is empty, in which case the loop above
+    // never runs. Don't bind a phantom buffer in that case (would otherwise be a 1-slot bind of
+    // a nil pointer).
+    if (UTILS_LIKELY(!vbi->bufferMapping.empty())) {
+        const auto bufferCount = maxBufferIndex + 1;
+        MetalBuffer::bindBuffers(getPendingCommandBuffer(mContext),
+                mContext->currentRenderPassEncoder, USER_VERTEX_BUFFER_BINDING_START,
+                MetalBuffer::Stage::VERTEX, vertexBuffers, vertexBufferOffsets, bufferCount);
+    }
 
     // Bind the zero buffer, used for missing vertex attributes.
     static const char bytes[16] = { 0 };
@@ -2444,7 +2488,7 @@ void MetalDriver::draw2(uint32_t indexOffset, uint32_t indexCount, uint32_t inst
     }
 
     // Bind the offset data.
-    if (mContext->dynamicOffsets.isDirty()) {
+    if (UTILS_UNLIKELY(mContext->dynamicOffsets.isDirty())) {
         const auto [size, data] = mContext->dynamicOffsets.getOffsets();
         if (size > 0) {
             [mContext->currentRenderPassEncoder setFragmentBytes:data
@@ -2476,6 +2520,49 @@ void MetalDriver::draw2(uint32_t indexOffset, uint32_t indexCount, uint32_t inst
                                                   indexBuffer:metalIndexBuffer
                                             indexBufferOffset:indexOffset * primitive->indexBuffer->elementSize
                                                 instanceCount:instanceCount];
+}
+
+void MetalDriver::drawArrays(uint32_t vertexOffset, uint32_t vertexCount,
+        uint32_t instanceCount) {
+    if (UTILS_UNLIKELY(mContext->currentRenderPassAbandoned)) {
+        return;
+    }
+
+    FILAMENT_CHECK_PRECONDITION(mContext->currentRenderPassEncoder != nullptr)
+            << "drawArrays() without a valid command encoder.";
+    DEBUG_LOG("drawArrays(...)\n");
+
+    if (FILAMENT_ENABLE_MATDBG && UTILS_UNLIKELY(!mContext->validPipelineBound)) {
+        return;
+    }
+
+    // Bind the offset data.
+    if (UTILS_UNLIKELY(mContext->dynamicOffsets.isDirty())) {
+        const auto [size, data] = mContext->dynamicOffsets.getOffsets();
+        if (size > 0) {
+            [mContext->currentRenderPassEncoder setFragmentBytes:data
+                                                          length:size * sizeof(uint32_t)
+                                                         atIndex:DYNAMIC_OFFSET_BINDING];
+            [mContext->currentRenderPassEncoder setVertexBytes:data
+                                                        length:size * sizeof(uint32_t)
+                                                       atIndex:DYNAMIC_OFFSET_BINDING];
+        }
+        mContext->dynamicOffsets.setDirty(false);
+    }
+
+    // Update push constants.
+    for (size_t i = 0; i < Program::SHADER_TYPE_COUNT; i++) {
+        auto& pushConstants = mContext->currentPushConstants[i];
+        if (UTILS_UNLIKELY(pushConstants.isDirty())) {
+            pushConstants.setBytes(mContext->currentRenderPassEncoder, static_cast<ShaderStage>(i));
+        }
+    }
+
+    auto primitive = handle_cast<MetalRenderPrimitive>(mContext->currentRenderPrimitive);
+    [mContext->currentRenderPassEncoder drawPrimitives:getMetalPrimitiveType(primitive->type)
+                                           vertexStart:vertexOffset
+                                           vertexCount:vertexCount
+                                         instanceCount:instanceCount];
 }
 
 void MetalDriver::draw(PipelineState ps, Handle<HwRenderPrimitive> rph,
@@ -2522,7 +2609,8 @@ void MetalDriver::dispatchCompute(Handle<HwProgram> program, math::uint3 workGro
         auto description = [error.localizedDescription cStringUsingEncoding:NSUTF8StringEncoding];
         LOG(ERROR) << description;
     }
-    assert_invariant(!error);
+    FILAMENT_CHECK_POSTCONDITION(computePipelineState != nil)
+            << "Unable to create Metal compute pipeline state.";
 
     [computeEncoder setComputePipelineState:computePipelineState];
 

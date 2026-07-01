@@ -22,11 +22,23 @@ extern "C" {
 
 // XR_ANDROIDX1_light_estimation_point_lights is a preprocessor guard. Do not pass it to API calls.
 #define XR_ANDROIDX1_light_estimation_point_lights 1
-#define XR_ANDROIDX1_light_estimation_point_lights_SPEC_VERSION 1
-#define XR_ANDROIDX1_LIGHT_ESTIMATION_POINT_LIGHTS_EXTENSION_NAME "XR_ANDROIDX1_light_estimation_point_lights"
 #define XR_TYPE_SYSTEM_POINT_LIGHTS_ESTIMATION_PROPERTIES_ANDROIDX1 ((XrStructureType) 1000731000U)
 #define XR_TYPE_POINT_LIGHTS_ESTIMATOR_CREATE_INFO_ANDROIDX1 ((XrStructureType) 1000731001U)
 #define XR_TYPE_POINT_LIGHTS_ANDROIDX1    ((XrStructureType) 1000731002U)
+
+#define XR_ANDROIDX1_light_estimation_point_lights_SPEC_VERSION 1
+#define XR_ANDROIDX1_LIGHT_ESTIMATION_POINT_LIGHTS_EXTENSION_NAME "XR_ANDROIDX1_light_estimation_point_lights"
+
+// Describes the label of a point light source
+typedef enum XrPointLightSourceLabelANDROIDX1 {
+    // The point light source is other than those listed below.
+    XR_POINT_LIGHT_SOURCE_LABEL_OTHER_ANDROIDX1 = 1,
+    // The point light source is a lamp.
+    XR_POINT_LIGHT_SOURCE_LABEL_LAMP_ANDROIDX1 = 2,
+    // The point light source is a window.
+    XR_POINT_LIGHT_SOURCE_LABEL_WINDOW_ANDROIDX1 = 3,
+    XR_POINT_LIGHT_SOURCE_LABEL_ANDROIDX1_MAX_ENUM = 0x7FFFFFFF
+} XrPointLightSourceLabelANDROIDX1;
 typedef struct XrSystemPointLightsEstimationPropertiesANDROIDX1 {
     XrStructureType       type;
     void* XR_MAY_ALIAS    next;
@@ -41,8 +53,9 @@ typedef struct XrPointLightsEstimatorCreateInfoANDROIDX1 {
 } XrPointLightsEstimatorCreateInfoANDROIDX1;
 
 typedef struct XrPointLightDataANDROIDX1 {
-    XrVector3f    position;
-    XrColor3f     color;
+    XrVector3f                          position;
+    XrColor3f                           color;
+    XrPointLightSourceLabelANDROIDX1    label;
 } XrPointLightDataANDROIDX1;
 
 // XrPointLightsANDROIDX1 extends XrLightEstimateANDROID
@@ -55,6 +68,38 @@ typedef struct XrPointLightsANDROIDX1 {
     uint32_t                       pointLightCountOutput;
     XrPointLightDataANDROIDX1*     pointLights;
 } XrPointLightsANDROIDX1;
+
+
+// Reflection macros
+#define XR_LIST_ENUM_XrPointLightSourceLabelANDROIDX1(_) \
+    _(XR_POINT_LIGHT_SOURCE_LABEL_OTHER_ANDROIDX1, 1) \
+    _(XR_POINT_LIGHT_SOURCE_LABEL_LAMP_ANDROIDX1, 2) \
+    _(XR_POINT_LIGHT_SOURCE_LABEL_WINDOW_ANDROIDX1, 3) \
+    _(XR_POINT_LIGHT_SOURCE_LABEL_ANDROIDX1_MAX_ENUM, 0x7FFFFFFF)
+
+#define XR_LIST_STRUCT_XrSystemPointLightsEstimationPropertiesANDROIDX1(_) \
+    _(type) \
+    _(next) \
+    _(supportsPointLightsEstimation) \
+    _(maxPointLightCount)
+
+#define XR_LIST_STRUCT_XrPointLightsEstimatorCreateInfoANDROIDX1(_) \
+    _(type) \
+    _(next)
+
+#define XR_LIST_STRUCT_XrPointLightDataANDROIDX1(_) \
+    _(position) \
+    _(color) \
+    _(label)
+
+#define XR_LIST_STRUCT_XrPointLightsANDROIDX1(_) \
+    _(type) \
+    _(next) \
+    _(state) \
+    _(ambientIntensity) \
+    _(pointLightCapacityInput) \
+    _(pointLightCountOutput) \
+    _(pointLights)
 
 #endif /* XR_ANDROIDX1_light_estimation_point_lights */
 

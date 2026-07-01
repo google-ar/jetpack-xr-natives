@@ -20,11 +20,15 @@
 #include <list>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <utility>
 
 #include "absl/status/status.h"
+#include "absl/strings/string_view.h"
 #include "core/assets/asset_ptr.h"
+#include "core/assets/gltf/gltf_asset.h"
 #include "core/async/future.h"
+#include "core/materials/material.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/node.h"
 #include "core/ncsb/node_handle.h"
@@ -43,6 +47,8 @@
 
 namespace imp::imp_particle {
 
+constexpr absl::string_view kParticleNodeName = "ParticleNode";
+
 Future<OwnedParticleEmitterPtr> NodeParticleEmitter::Create(
     NodeHandle emitter_node, const ParticleEmitterState& emitter_state,
     std::unique_ptr<CustomParticleBehavior> custom_particle_behavior) {
@@ -53,27 +59,31 @@ Future<OwnedParticleEmitterPtr> NodeParticleEmitter::Create(
         absl::InvalidArgumentError(invalid_reason));
   }
 
-  // Preload the gltf asset to use when creating particles.
-  return emitter_node->GetView()
-      .GetAssetManager()
-      .LoadGltfAsset(emitter_state.particle_config->gltf_asset.Value())
+  Future<AssetPtr<GltfAsset>> gltf_future =
+      emitter_node->GetView().GetAssetManager().LoadGltfAsset(
+          emitter_state.particle_config->gltf_asset.Value());
+  Future<OwnedMaterialPtr> material_future =
+      ParticleEmitter::GetMaterialFuture(emitter_state, emitter_node);
+
+  return gltf_future.Merge(material_future)
       .Then([&emitter_state, emitter_node,
              custom_particle_behavior = std::move(custom_particle_behavior)](
-                AssetPtr<GltfAsset> gltf_asset) mutable
-                -> OwnedParticleEmitterPtr {
+                std::tuple<AssetPtr<GltfAsset>, OwnedMaterialPtr>
+                    results) mutable -> OwnedParticleEmitterPtr {
+        auto [gltf_asset, material_instance] = std::move(results);
         return OwnedParticleEmitterPtr(new NodeParticleEmitter(
             emitter_node, emitter_state, std::move(custom_particle_behavior),
-            gltf_asset));
+            gltf_asset, std::move(material_instance)));
       });
 }
 
 NodeParticleEmitter::NodeParticleEmitter(
     NodeHandle emitter_node, const ParticleEmitterState& emitter_state,
     std::unique_ptr<CustomParticleBehavior> custom_particle_behavior,
-    AssetPtr<GltfAsset> gltf_asset)
+    AssetPtr<GltfAsset> gltf_asset, OwnedMaterialPtr material_instance)
     : ParticleEmitter(emitter_node, emitter_state,
-                      std::move(custom_particle_behavior)),
-      gltf_asset_(gltf_asset) {}
+                      std::move(custom_particle_behavior), gltf_asset,
+                      std::move(material_instance)) {}
 
 NodeParticleEmitter::~NodeParticleEmitter() {
   // Destroy all active particles.
@@ -131,9 +141,13 @@ void NodeParticleEmitter::UpdateParticleSystem(const FrameTime& frame_time) {
 
       // Create a new scene node.
       NodeHandle particle_node = emitter_node_->GetView().CreateNode();
+      particle_node->SetName(kParticleNodeName);
       // TODO: (broken link) - Add test when this affects behavior.
       particle_node->SetParent(emitter_node_);
-      particle_node->AddComponent<GltfRenderer>(gltf_asset_);
+      auto renderer = particle_node->AddComponent<GltfRenderer>(gltf_asset_);
+      if (material_instance_ != nullptr) {
+        renderer->SetMaterialOverrideByIndex(material_instance_.Borrow(), 0);
+      }
 
       // Add to the list of active particles.
       active_particles_.push_back(
@@ -163,17 +177,6 @@ void NodeParticleEmitter::SyncNode(const ParticleInstance& particle_instance,
 
 std::string NodeParticleEmitter::ValidateEmitterState(
     const ParticleEmitterState& emitter_state) {
-  // A particle config is required.
-  if (!emitter_state.particle_config) {
-    return "NodeParticleEmitter - particle_config not set!";
-  }
-
-  // A gltf asset reference is required.
-  if (!emitter_state.particle_config->gltf_asset) {
-    return "NodeParticleEmitter - gltf_asset not set!";
-  }
-
-  // Check the base class state also.
   return ParticleEmitter::ValidateEmitterState(emitter_state);
 }
 

@@ -100,8 +100,10 @@ void MovePixelsToTexture(
       stitched_face_image->CreatePixelBufferDescriptorLevels(
           nullptr, /* is_r11_g11_b10 = */ true);
   for (int mipmap = 0; mipmap < mipmap_descriptors.size(); ++mipmap) {
-    texture->setImage(engine, level, std::move(mipmap_descriptors[mipmap]),
-                      cubemap_level.face_offsets);
+    texture->setImage(engine, level, /*xoffset=*/0, /*yoffset=*/0,
+                      /*zoffset=*/0, cubemap_level.face_size,
+                      cubemap_level.face_size, /*depth=*/6,
+                      std::move(mipmap_descriptors[mipmap]));
   }
 }
 
@@ -185,19 +187,13 @@ absl::StatusOr<CubemapLevelImageContents> CreateCubemapLevelImageContents(
   }
 
   CubemapLevel cubemap_level;
-  std::unique_ptr<image::ImageContents> stitched_face_image;
   cubemap_level.face_size = images.front()->GetWidth();
 
-  absl::Status stitch_status = image::ImageContents::CreateStitched(
-      std::move(images), cubemap_level.face_offsets.offsets,
-      &stitched_face_image);
-
-  if (!stitch_status.ok()) {
-    return stitch_status;
-  }
+  MP_ASSIGN_OR_RETURN(std::unique_ptr<image::ImageContents> stitched_face_image,
+                   image::ImageContents::CreateStitched(std::move(images)));
 
   return CubemapLevelImageContents{cubemap_level,
-                                   std::move(stitched_face_image)};
+                                   (std::move(stitched_face_image))};
 }
 
 Future<CubemapLevelImageContents> LoadCubemapLevel(

@@ -21,9 +21,10 @@
 #include "filament/libs/math/include/math/scalar.h"
 #include "filament/libs/math/include/math/vec3.h"
 
+#include <sys/types.h>
+
 #include <math.h>
 #include <stdint.h>
-#include <sys/types.h>
 
 namespace filament::math::details {
 

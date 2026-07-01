@@ -87,7 +87,7 @@ NodeHandle CapsuleCollider::GetHitNode() const {
   return hit_node_;
 }
 
-absl::optional<RayHit> CapsuleCollider::Intersect(const Ray& world_ray) {
+std::optional<RayHit> CapsuleCollider::Intersect(const Ray& world_ray) {
   if (!IsActive()) {
     return {};
   }
@@ -110,7 +110,7 @@ absl::optional<RayHit> CapsuleCollider::Intersect(const Ray& world_ray) {
                 world_collision_point, GetHitNode(), world_surface_normal);
 }
 
-absl::optional<DoubleRayHit> CapsuleCollider::IntersectPrecise(
+std::optional<DoubleRayHit> CapsuleCollider::IntersectPrecise(
     const DoubleRay& world_ray) {
   if (!IsActive()) {
     return {};

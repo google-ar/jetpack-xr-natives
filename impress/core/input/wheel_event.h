@@ -26,7 +26,6 @@ namespace imp {
 class WheelEvent {
  public:
   WheelEvent(float2 delta, float2 point, absl::Duration elapsed_time);
-  ~WheelEvent() {}
 
   // Duration of time elapsed between system startup and time of event.
   absl::Duration GetElapsedTime() const { return elapsed_time_; }

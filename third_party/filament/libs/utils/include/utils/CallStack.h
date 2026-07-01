@@ -17,12 +17,13 @@
 #ifndef UTILS_CALLSTACK_H
 #define UTILS_CALLSTACK_H
 
-#include <stddef.h>
-#include <stdint.h>
+#include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/CString.h"
+
 #include <typeinfo>
 
-#include "filament/libs/utils/include/utils/CString.h"
-#include "filament/libs/utils/include/utils/compiler.h"
+#include <stddef.h>
+#include <stdint.h>
 
 namespace utils {
 namespace io {

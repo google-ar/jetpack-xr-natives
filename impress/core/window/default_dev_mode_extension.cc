@@ -47,7 +47,6 @@
 #include "core/editor/events.h"
 #include "core/input/key_codes.h"
 #include "core/math/vec.h"
-#include "core/video/video_writer.h"
 #include "core/view/base_view.h"
 #include "core/window/clipboard/clipboard_handler.h"
 #include "core/window/filagui_imgui_renderer.h"
@@ -158,11 +157,6 @@ absl::Status DefaultDevModeExtension::Setup(FilamentHost& host) {
     return absl::InternalError("Failed to create ImGuiRenderer");
   }
 
-  /// set up video streaming writer here
-#if IMP_PLATFORM(IOS)
-  video_writer_ = video::VideoWriter::CreateVideoWriter(false);
-#endif
-
   io.MousePos = ImVec2(-FLT_MAX, -FLT_MAX);
   io.MouseDown[0] = false;
   io.MouseDown[1] = false;
@@ -173,6 +167,7 @@ absl::Status DefaultDevModeExtension::Setup(FilamentHost& host) {
 
   return absl::OkStatus();
 }
+
 
 void DefaultDevModeExtension::PreCleanup() {
   if (imgui_renderer_) {
@@ -238,49 +233,8 @@ void DefaultDevModeExtension::PreRender(absl::Duration previous_vsync,
   }
 }
 
-bool DefaultDevModeExtension::ShouldRenderUiInPlace() {
-  if (!video_writer_) {
-    return true;
-  }
-  absl::StatusOr<std::reference_wrapper<editor::Editor>> editor_status =
-      this->base_view_.GetRegistry().Get<editor::Editor>();
-  if (!editor_status.ok() ||
-      editor_status.status().code() == absl::StatusCode::kUnavailable) {
-    return true;
-  }
-  if ((*editor_status).get().IsEnabled() &&
-      (*editor_status).get().GetDisplayMode() ==
-          editor::EditorInfo::DisplayMode::kRemoteScreen) {
-    return false;
-  }
-  return true;
-}
-
-void DefaultDevModeExtension::RerouteUiRendering() {
-  if (!IsEnabled()) {
-    return;
-  }
-
-  if (ShouldRenderUiInPlace()) {
-    return;
-  }
-
-  uint2 screen_size = {ui_view_.Get()->getViewport().width,
-                       ui_view_.Get()->getViewport().height};
-  // If the image writer is not ready, open it.
-  if (video_writer_ != nullptr && !video_writer_->IsReady()) {
-    absl::Status status = video_writer_->Open(screen_size, "");
-    if (!status.ok()) {
-      IMP_LOG(imp::ERROR) << "Failed to open image writer: " << status;
-      video_writer_ = nullptr;
-    }
-  }
-
-  if (video_writer_ != nullptr && video_writer_->IsReady()) {
-    video_writer_->ProcessInput(base_view_.GetHost());
-    video_writer_->CaptureFrame(base_view_.GetHost());
-    video_writer_->WriteFrame();
-  }
+bool DefaultDevModeExtension::ShouldRenderOnRemoteScreen() {
+  return false;
 }
 
 void DefaultDevModeExtension::RenderDevModeUI() {
@@ -315,10 +269,15 @@ void DefaultDevModeExtension::ApplyTextureRenderTarget(
 }
 
 void DefaultDevModeExtension::OffscreenRender() {
-  IMP_TRACE();
+#if IMP_PLATFORM(IOS)
+  if (ShouldRenderOnRemoteScreen() || !IsEnabled()) {
+    return;
+  }
+#else
   if (!IsEnabled()) {
     return;
   }
+#endif
   // Rendering happens in Render() if no render target is being used.
   if (!render_target_texture_) {
     return;
@@ -330,7 +289,7 @@ void DefaultDevModeExtension::OffscreenRender() {
 
 void DefaultDevModeExtension::Render() {
   IMP_TRACE();
-  if (!IsEnabled()) {
+  if (ShouldRenderOnRemoteScreen() || !IsEnabled()) {
     return;
   }
   // Rendering happens in OffscreenRender() if a render target is being used.
@@ -344,24 +303,26 @@ void DefaultDevModeExtension::Render() {
 
 void DefaultDevModeExtension::UpdateCameraAndViewport(uint2 screen_size,
                                                       float2 subpixel_ratio) {
+
   // Caching window size allows the screen-space Editor to be restored.
   cached_subpixel_ratio_ = subpixel_ratio;
   cached_screen_size_ = screen_size;
   if (render_target_texture_) {
     screen_size = {render_target_texture_->getWidth(),
                    render_target_texture_->getHeight()};
-    subpixel_ratio = kOne2;
   }
 
   if (!std::min(screen_size.x, screen_size.y)) {
     return;
   }
   uint2 virtual_size = uint2{screen_size / subpixel_ratio};
+
   const auto viewport = filament::Viewport{0, 0, screen_size.x, screen_size.y};
   ui_view_.Get()->setViewport(viewport);
   ui_view_.GetViewCamera()->setProjection(filament::Camera::Projection::ORTHO,
                                           0.0, virtual_size.x, virtual_size.y,
                                           0.0, 0.0, 1.0);
+
   if (imgui_renderer_) {
     imgui_renderer_->SetRenderTargetDisplaySize(virtual_size.x, virtual_size.y,
                                                 subpixel_ratio.x,

@@ -28,17 +28,15 @@
 #include "absl/time/time.h"
 #include "absl/types/span.h"
 #include "dear_imgui/imgui.h"
-#include "dear_imgui/imgui_internal.h"
 #include "implot/implot.h"
 #include "core/common/trace.h"
 #include "core/editor/widgets/performance/circular_buffer.h"
 #include "core/editor/widgets/performance/config.h"
 #include "core/editor/widgets/performance/hierarchy_panel.h"
 #include "core/editor/widgets/performance/imgui_helper.h"
-#include "core/editor/widgets/performance/performance_window.h"
+#include "core/editor/widgets/performance/profiler_data_provider.h"
 #include "core/editor/widgets/performance/sample_processor.h"
 #include "core/editor/widgets/performance/sample_processor_types.h"
-#include "core/performance/memory_stats.h"
 #include "core/performance/profiler.h"
 #include "core/performance/profiler_state.h"
 #include "core/view/base_view.h"
@@ -75,9 +73,6 @@ constexpr float kNanosPerMs = 1000000.0f;
 // Lower bound for the frame time plot.
 constexpr float kLowerFrameBound = 0.0f;
 
-// Width of the option bar items (record call stacks, show call stacks, etc).
-constexpr float kOptionBarItemWidth = 200.0f;
-
 // Padding from the left edge of the plot to the tick label text.
 constexpr float kTickLabelLeftPadding = 20.0f;
 
@@ -86,26 +81,11 @@ constexpr float kTickLabelRectMarginWidth = 4.0f;
 
 // Vertical margin around the tick label text rectangle.
 constexpr float kTickLabelRectMarginHeight = 2.0f;
-
-// Options for showing call stacks in the Options Bar.
-constexpr const char* kCallstackOptions[]{"Hide Callstacks", "Show Callstacks"};
-
-// Width of the splitter between the sample view and the call stack view.
-constexpr float kSplitterWidth = 2.0f;
-
-// Width of the selection area for the splitter.
-constexpr float kSplitterSelectionWidth = 8.0f;
-
-// Minimum width for the callstack panel.
-constexpr float kCallstackPanelMinWidth = 200.0f;
-
-// Minimum width for the sample view.
-constexpr float kSampleViewMinWidth = 500.0f;
 }  // namespace
 
-FrameTimePanel::FrameTimePanel(PerformanceWindow& performance_window,
+FrameTimePanel::FrameTimePanel(ProfilerDataProvider& data_provider,
                                BaseView& view, int buffer_size)
-    : performance_window_(performance_window),
+    : data_provider_(data_provider),
       view_(view),
       buffer_(buffer_size),
       view_config_(view.GetConfig()) {}
@@ -145,10 +125,10 @@ void FrameTimePanel::DrawLegend(float width, float height) {
 void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
   IMP_TRACE();
 
-  const int selection_start_frame = performance_window_.GetSelectedFrameStart();
-  const int selection_end_frame = performance_window_.GetSelectedFrameEnd();
+  const int selection_start_frame = data_provider_.GetSelectedFrameStart();
+  const int selection_end_frame = data_provider_.GetSelectedFrameEnd();
 
-  DrawLegend(kLegendWidth, height);
+  DrawLegend(kLegendWidth, static_cast<float>(height));
   ImGui::SameLine();  // Place plot to the right of the legend.
 
   // Provides a border around the plot area since we removed the padding.
@@ -177,7 +157,7 @@ void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
 
       if (!valid_ticks_.values.empty()) {
         ImPlot::SetupAxisTicks(ImAxis_Y1, valid_ticks_.values.data(),
-                               kNumTickLabels);
+                               valid_ticks_.values.size());
       }
 
       ImPlot::SetNextFillStyle(IMPLOT_AUTO_COL, 0.5f);
@@ -227,97 +207,6 @@ void FrameTimePanel::DrawPanel(int width, int height, int time_span_seconds) {
   }
   ImGui::EndChild();
   ImGui::PopStyleVar();  // ImGuiStyleVar_WindowPadding
-
-  // Options for changing the view and thread to display samples for.
-  DrawOptionsBar();
-
-  float content_width = ImGui::GetContentRegionAvail().x;
-  if (show_callstack_) {
-    if (sample_view_width_ < 0) {
-      sample_view_width_ =
-          ImGui::GetContentRegionAvail().x - kCallstackPanelStartingWidth -
-          kSplitterSelectionWidth - ImGui::GetStyle().ItemSpacing.x * 2;
-    }
-    content_width = sample_view_width_;
-  }
-
-  if (profiler_details_view_mode_ == ProfilerDetailsViewMode::kHierarchy) {
-    hierarchy_panel_.DrawPanel(content_width, selection_start_frame,
-                               selection_end_frame, sample_processor_, *this);
-  } else {
-    flame_graph_.DrawPanel(content_width, selection_start_frame,
-                           selection_end_frame, sample_processor_, *this);
-  }
-
-  if (show_callstack_) {
-    ImGui::SameLine();
-    DrawSplitter();
-    ImGui::SameLine();
-    callstack_panel_.DrawPanel(ImGui::GetContentRegionAvail().x,
-                               selection_start_frame, selection_end_frame,
-                               *this, sample_processor_,
-                               hierarchy_panel_.GetSelectedThreadId());
-  }
-}
-
-void FrameTimePanel::DrawOptionsBar() {
-  // Toggle to switch between Hierarchy and Flame Graph.
-  if (ImGui::RadioButton(
-          "Hierarchy",
-          profiler_details_view_mode_ == ProfilerDetailsViewMode::kHierarchy)) {
-    profiler_details_view_mode_ = ProfilerDetailsViewMode::kHierarchy;
-  }
-  ImGui::SameLine();
-  if (ImGui::RadioButton("Flame Graph",
-                         profiler_details_view_mode_ ==
-                             ProfilerDetailsViewMode::kFlameGraph)) {
-    profiler_details_view_mode_ = ProfilerDetailsViewMode::kFlameGraph;
-  }
-
-  if (MemoryStats::IsCallstackTrackingSupported()) {
-    ImGui::SameLine();
-    // Allow us to switch between threads and see their samples.
-    ImGui::PushItemWidth(kOptionBarItemWidth);
-
-    ImGui::SameLine();
-    ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x -
-                            kOptionBarItemWidth * 2 -
-                            ImGui::GetStyle().ItemSpacing.x,
-                        0));
-    ImGui::SameLine();
-    ImGui::Combo("##callstack", &show_callstack_, kCallstackOptions, 2);
-
-    ImGui::SameLine();
-    bool record_callstacks = Profiler::IsRecordingCallstacks();
-    if (ImGui::Checkbox("Memory Callstacks", &record_callstacks)) {
-      Profiler::SetRecordingCallstacks(record_callstacks);
-    }
-    ImGui::PopItemWidth();
-  }
-}
-
-void FrameTimePanel::DrawSplitter() {
-  ImGui::BeginChild("##splitter_callstack",
-                    ImVec2(kSplitterSelectionWidth, -1));
-
-  const ImVec2 child_pos = ImGui::GetCursorScreenPos();
-  const float child_height = ImGui::GetContentRegionAvail().y;
-
-  // Make the splitter selection area taller than the visible rectangle.
-  ImVec2 rect_min = child_pos;
-  rect_min.x += kSplitterSelectionWidth / 2.0f - kSplitterWidth / 2.0f;
-  const ImVec2 rect_max =
-      ImVec2(rect_min.x + kSplitterWidth, child_pos.y + child_height);
-  ImGui::GetWindowDrawList()->AddRectFilled(
-      rect_min, rect_max, ImGui::GetColorU32(IM_COL32(255, 255, 255, 150)));
-
-  ImGui::SplitterBehavior(
-      ImRect(child_pos, ImVec2(child_pos.x + kSplitterSelectionWidth,
-                               child_pos.y + child_height)),
-      ImGui::GetID("##splitter"), ImGuiAxis_X, &sample_view_width_,
-      &callstack_panel_width_, kSampleViewMinWidth, kCallstackPanelMinWidth,
-      0.0f);
-  ImGui::EndChild();
 }
 
 void FrameTimePanel::UpdateValidTicks(float upper_bound) {
@@ -326,6 +215,9 @@ void FrameTimePanel::UpdateValidTicks(float upper_bound) {
     if (kTicks[i] <= upper_bound) {
       valid_ticks_.values.push_back(kTicks[i]);
       valid_ticks_.labels.push_back(kTickLabels[i]);
+      if (valid_ticks_.values.size() >= kNumTickLabels) {
+        break;
+      }
     }
   }
 }
@@ -337,8 +229,7 @@ void FrameTimePanel::DrawTickLabels(ImDrawList* draw_list,
   // Manually draw Y-axis tick labels inside the plot
   ImPlot::PushPlotClipRect();
   const float plot_left_x = ImPlot::GetPlotPos().x;
-  const size_t num_labels_to_draw =
-      std::min(static_cast<size_t>(kNumTickLabels), valid_ticks.labels.size());
+  const size_t num_labels_to_draw = valid_ticks.labels.size();
 
   for (size_t i = 0; i < num_labels_to_draw; ++i) {
     ImVec2 label_pos =
@@ -362,7 +253,7 @@ void FrameTimePanel::DrawTickLabels(ImDrawList* draw_list,
 }
 
 void FrameTimePanel::DrawSelectedSamplePlot() {
-  if (selected_sample_name_.empty()) return;
+  if (data_provider_.GetSelectedSampleName().empty()) return;
   PopulateSelectedSampleBuffer();
 
   ImPlot::SetNextFillStyle(ImVec4(1.0f, 0.0f, 0.0f, -1.0f), 1.0f);
@@ -377,7 +268,8 @@ void FrameTimePanel::PopulateSelectedSampleBuffer() {
 
   // Don't update the buffer if we're viewing the same sample as before and
   // there are no new samples recorded.
-  if (!selected_sample_changed_ && !samples_processed_since_last_update_) {
+  if (!data_provider_.HasSelectedSampleChanged() &&
+      !data_provider_.WereSamplesProcessedSinceLastUpdate()) {
     return;
   }
 
@@ -393,8 +285,8 @@ void FrameTimePanel::PopulateSelectedSampleBuffer() {
     selected_sample_buffer_[i].frame_time_ms = 0.0f;
 
     // Get all samples with the selected sample name for this frame and thread.
-    const absl::StatusOr<absl::Span<SampleNode* const>> samples =
-        GetSamples(selected_sample_name_, frame_index, main_thread_id);
+    const absl::StatusOr<absl::Span<SampleNode* const>> samples = GetSamples(
+        data_provider_.GetSelectedSampleName(), frame_index, main_thread_id);
 
     // If there are no samples for this frame on this thread then we continue.
     if (!samples.ok() || samples->empty()) continue;
@@ -410,8 +302,8 @@ void FrameTimePanel::PopulateSelectedSampleBuffer() {
         static_cast<float>(total_time_ns) / kNanosPerMs;
   }
 
-  samples_processed_since_last_update_ = false;
-  selected_sample_changed_ = false;
+  data_provider_.ClearSamplesProcessed();
+  data_provider_.ClearSelectedSampleChanged();
 }
 
 absl::StatusOr<absl::Span<SampleNode* const>> FrameTimePanel::GetSamples(
@@ -422,7 +314,7 @@ absl::StatusOr<absl::Span<SampleNode* const>> FrameTimePanel::GetSamples(
   }
 
   const ProcessedSamples& processed_frame =
-      sample_processor_.GetProcessedFrame(frame_index);
+      data_provider_.GetSampleProcessor().GetProcessedFrame(frame_index);
 
   return processed_frame.GetSamplesByName(sample_name);
 }
@@ -526,8 +418,6 @@ void FrameTimePanel::Update(absl::Duration elapsed_time,
   // progress and the profiler can't see into the future to know how long it
   // will take. Instead we record the last frame times.
   const int64_t frame_index = Profiler::GetCurrentFrameIndex() - 1;
-  sample_processor_.ProcessMainThreadSamples(frame_index);
-  samples_processed_since_last_update_ = true;
 
   absl::StatusOr<uint32_t> total_frame_duration_nanos =
       Profiler::GetTotalFrameDurationNanos(frame_index);
@@ -555,16 +445,16 @@ void FrameTimePanel::HandleFrameSelection(int hovered_frame) {
   if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
     is_dragging_ = true;
     drag_start_frame_ = hovered_frame;
-    performance_window_.SelectFrame(hovered_frame);
+    data_provider_.SelectFrame(hovered_frame);
   } else if (ImGui::IsMouseDragging(ImGuiMouseButton_Left) && is_dragging_) {
-    performance_window_.SelectFrames(drag_start_frame_, hovered_frame);
+    data_provider_.SelectFrames(drag_start_frame_, hovered_frame);
   } else if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && is_dragging_) {
     is_dragging_ = false;
-    performance_window_.SelectFrames(drag_start_frame_, hovered_frame);
+    data_provider_.SelectFrames(drag_start_frame_, hovered_frame);
     drag_start_frame_ = -1;
   } else if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
     // Right click to select single frame.
-    performance_window_.SelectFrame(hovered_frame);
+    data_provider_.SelectFrame(hovered_frame);
   }
 }
 

@@ -21,6 +21,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
+#include "core/common/jni_helpers.h"
 
 namespace {
 
@@ -47,9 +48,10 @@ void ThrowJavaExceptionFromStatus(JNIEnv* env, const char* class_name,
   }
 
   std::string message = status.ToString();
-  jclass exception_class = env->FindClass(class_name);
+  imp::JniUniquePtr<jclass> exception_class =
+      imp::WrapJni(env, env->FindClass(class_name));
   if (exception_class != nullptr) {
-    env->ThrowNew(exception_class, message.c_str());
+    env->ThrowNew(exception_class.get(), message.c_str());
   } else {
     IMP_LOG(imp::ERROR) << "Java exception was not found and cannot be thrown.";
     env->ExceptionClear();

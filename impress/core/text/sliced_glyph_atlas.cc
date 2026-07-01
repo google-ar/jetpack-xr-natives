@@ -94,6 +94,18 @@ float2 GetTextureSize(SlicedGlyphAtlas::TextureSize texture_size) {
       return {4096.0f, 4096.0f};
     case SlicedGlyphAtlas::TextureSize::k256_256_8_8:
       return {256.0f, 256.0f};
+    case SlicedGlyphAtlas::TextureSize::k512_256_4_8:
+      return {512.0f, 256.0f};
+    case SlicedGlyphAtlas::TextureSize::k512_128_4_16:
+      return {512.0f, 128.0f};
+    case SlicedGlyphAtlas::TextureSize::k512_512_4_4:
+      return {512.0f, 512.0f};
+    case SlicedGlyphAtlas::TextureSize::k1024_512_2_4:
+      return {1024.0f, 512.0f};
+    case SlicedGlyphAtlas::TextureSize::k1024_1024_2_2:
+      return {1024.0f, 1024.0f};
+    case SlicedGlyphAtlas::TextureSize::k2048_128_1_16:
+      return {2048.0f, 128.0f};
   }
 }
 
@@ -107,6 +119,18 @@ uint2 GetGridSize(SlicedGlyphAtlas::TextureSize texture_size) {
       return {1, 1};
     case SlicedGlyphAtlas::TextureSize::k256_256_8_8:
       return {8, 8};
+    case SlicedGlyphAtlas::TextureSize::k512_256_4_8:
+      return {4, 8};
+    case SlicedGlyphAtlas::TextureSize::k512_128_4_16:
+      return {4, 16};
+    case SlicedGlyphAtlas::TextureSize::k512_512_4_4:
+      return {4, 4};
+    case SlicedGlyphAtlas::TextureSize::k1024_512_2_4:
+      return {2, 4};
+    case SlicedGlyphAtlas::TextureSize::k1024_1024_2_2:
+      return {2, 2};
+    case SlicedGlyphAtlas::TextureSize::k2048_128_1_16:
+      return {1, 16};
   }
 }
 

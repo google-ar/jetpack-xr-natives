@@ -17,15 +17,14 @@
 #ifndef TNT_FILAMENT_BACKEND_OPENGLCONTEXT_H
 #define TNT_FILAMENT_BACKEND_OPENGLCONTEXT_H
 
-#include <backend/platforms/OpenGLPlatform.h>
+#include "gl_headers.h"
 
 #include <backend/DriverEnums.h>
 #include <backend/Handle.h>
+#include <backend/platforms/OpenGLPlatform.h>
 
-#include "gl_headers.h"
-
-#include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/bitset.h"
+#include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/debug.h"
 
 #include "filament/libs/math/include/math/vec2.h"

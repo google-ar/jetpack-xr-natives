@@ -74,7 +74,9 @@ void ViewportWidget::DrawImGui() {
 
   viewport_render_target_->SetSize(target_size);
 #if IMP_RUNTIME(DEV)
-  view_.SetSizeOverride(target_size);
+  // SetSizeOverride uses logical pixels instead of physical pixels.
+  view_.SetSizeOverride(uint2{static_cast<uint32_t>(viewport_panel_size.x),
+                              static_cast<uint32_t>(viewport_panel_size.y)});
 #endif
 
   // Must get this value BEFORE drawing the image or it will be incorrect.

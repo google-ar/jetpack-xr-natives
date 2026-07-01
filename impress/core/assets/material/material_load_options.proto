@@ -16,6 +16,8 @@ syntax = "proto3";
 
 package imp;
 
+import "core/proto/imp.proto";
+
 // Specifies the material variants to pre-compile.
 // See filament::UserVariantFilterBit for more information.
 // The DEFAULT can be set for each variant at runtime.
@@ -71,4 +73,35 @@ message MaterialPreCompileOptions {
     UBO_BATCHING_OPTION_DISABLED = 2;
   }
   UboBatchingOption ubo_batching_option = 6;
+
+  // Specifies what variant to precompile using the target View's active
+  // features as a baseline.
+  message MaterialPreCompileByView {
+    // Matches with CompilerPriorityQueue in Filament (except CRITICAL).
+    enum Priority {
+      PRIORITY_UNSPECIFIED = 0;
+      PRIORITY_LOW = 1;
+      PRIORITY_HIGH = 2;
+    }
+    Priority priority = 1;
+
+    // Specifies which material variant to compile.
+    enum VariantFilterOption {
+      VARIANT_FILTER_OPTION_UNSPECIFIED = 0;
+      // Compiles all the permutations of the given variant filter.
+      VARIANT_FILTER_OPTION_INDETERMINATE = 1;
+      // Compiles materials with the given variant disabled.
+      VARIANT_FILTER_OPTION_DISABLED = 2;
+      // Compiles materials with the given variant enabled.
+      VARIANT_FILTER_OPTION_ENABLED = 3;
+    }
+    // Note: All other variant features in Filament (like FOG, DYNAMIC_LIGHTING,
+    // SSR, STE, etc.) are view-global settings.
+    VariantFilterOption shadow_receiver = 2;
+    VariantFilterOption skinning = 3;
+  }
+  // Optional configuration for precompiling material variants per View.
+  // Note that when specified, this takes precedence over the `variants` field.
+  MaterialPreCompileByView compile_by_view = 7
+      [(imp.optional_type) = ABSL_OPTIONAL];
 }

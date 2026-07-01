@@ -16,16 +16,16 @@
 
 #include "fg/details/PassNode.h"
 
-#include "fg/FrameGraph.h"
-#include "fg/details/ResourceNode.h"
-
 #include "TextureCache.h"
 
-#include <details/Texture.h>
+#include "details/Texture.h"
+
+#include "fg/details/ResourceNode.h"
+#include "fg/FrameGraph.h"
 
 #include "filament/libs/utils/include/utils/compiler.h"
-#include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/CString.h"
+#include "filament/libs/utils/include/utils/debug.h"
 
 using namespace filament::backend;
 

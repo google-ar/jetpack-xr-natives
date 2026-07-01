@@ -31,6 +31,7 @@ namespace imp {
 // With that, we can then adjust the frustum's 4 planes to fit the quad
 // perfectly.
 // See (broken link) for an illustration.
+// TODO: (broken link) - Move this function to projection_quad_camera_helper
 mat4 ComputeProjectionMatrixToFitQuad(const double3& eye_pos,
                                       const mat4& quad_trs,
                                       const float2& quad_size, float near_clip,
@@ -39,6 +40,7 @@ mat4 ComputeProjectionMatrixToFitQuad(const double3& eye_pos,
 // Aims camera at a virtual quad defined in world space.
 // Overwrites camera's projection and view matrices so that the Quad fills
 // the viewport. Does not support stereoscopic cameras.
+// TODO: (broken link) - Move this function to projection_quad_camera_helper
 void AimCameraToFitQuad(
     filament::Engine* engine, filament::Camera* camera,
     const TexturePipelineRendererProjectionQuad& quad_in_world);

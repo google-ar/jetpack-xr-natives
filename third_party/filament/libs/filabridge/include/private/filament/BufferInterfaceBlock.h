@@ -19,8 +19,8 @@
 
 #include <backend/DriverEnums.h>
 
-#include "filament/libs/utils/include/utils/CString.h"
 #include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/CString.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 
 #include "filament/libs/math/include/math/vec4.h"

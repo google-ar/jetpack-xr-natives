@@ -356,6 +356,8 @@ This file contains expansion macros (X Macros) for OpenXR structures.
     _avail(XrBodyTrackingCalibrationStatusMETA, XR_TYPE_BODY_TRACKING_CALIBRATION_STATUS_META) \
     _avail(XrBodyTrackingCalibrationInfoMETA, XR_TYPE_BODY_TRACKING_CALIBRATION_INFO_META) \
     _avail(XrSystemPropertiesBodyTrackingCalibrationMETA, XR_TYPE_SYSTEM_PROPERTIES_BODY_TRACKING_CALIBRATION_META) \
+    _avail(XrSystemPropertiesBodyTrackingFidelityMETA, XR_TYPE_SYSTEM_PROPERTIES_BODY_TRACKING_FIDELITY_META) \
+    _avail(XrBodyTrackingFidelityStatusMETA, XR_TYPE_BODY_TRACKING_FIDELITY_STATUS_META) \
     _avail(XrSystemFaceTrackingProperties2FB, XR_TYPE_SYSTEM_FACE_TRACKING_PROPERTIES2_FB) \
     _avail(XrFaceTrackerCreateInfo2FB, XR_TYPE_FACE_TRACKER_CREATE_INFO2_FB) \
     _avail(XrFaceExpressionInfo2FB, XR_TYPE_FACE_EXPRESSION_INFO2_FB) \
@@ -452,6 +454,20 @@ This file contains expansion macros (X Macros) for OpenXR structures.
     _avail(XrSystemSpatialPlanePropertiesBD, XR_TYPE_SYSTEM_SPATIAL_PLANE_PROPERTIES_BD) \
     _avail(XrSpatialEntityComponentDataPlaneOrientationBD, XR_TYPE_SPATIAL_ENTITY_COMPONENT_DATA_PLANE_ORIENTATION_BD) \
     _avail(XrSenseDataFilterPlaneOrientationBD, XR_TYPE_SENSE_DATA_FILTER_PLANE_ORIENTATION_BD) \
+    _avail(XrSpatialAudioRendererCreateInfoBD, XR_TYPE_SPATIAL_AUDIO_RENDERER_CREATE_INFO_BD) \
+    _avail(XrAudioBufferBD, XR_TYPE_AUDIO_BUFFER_BD) \
+    _avail(XrSoundObjectDirectivityCardioidBD, XR_TYPE_SOUND_OBJECT_DIRECTIVITY_CARDIOID_BD) \
+    _avail(XrSoundObjectShapeSphereBD, XR_TYPE_SOUND_OBJECT_SHAPE_SPHERE_BD) \
+    _avail(XrSoundObjectDistanceAttenuationCurveBD, XR_TYPE_SOUND_OBJECT_DISTANCE_ATTENUATION_CURVE_BD) \
+    _avail(XrSoundObjectDistanceAttenuationBD, XR_TYPE_SOUND_OBJECT_DISTANCE_ATTENUATION_BD) \
+    _avail(XrSoundObjectConfigBD, XR_TYPE_SOUND_OBJECT_CONFIG_BD) \
+    _avail(XrSoundFieldConfigBD, XR_TYPE_SOUND_FIELD_CONFIG_BD) \
+    _avail(XrSoundFieldChannelDefinitionSurroundBD, XR_TYPE_SOUND_FIELD_CHANNEL_DEFINITION_SURROUND_BD) \
+    _avail(XrSoundFieldChannelDefinitionAmbixBD, XR_TYPE_SOUND_FIELD_CHANNEL_DEFINITION_AMBIX_BD) \
+    _avail(XrSoundFieldChannelDefinitionFumaBD, XR_TYPE_SOUND_FIELD_CHANNEL_DEFINITION_FUMA_BD) \
+    _avail(XrSoundTriangleMeshBD, XR_TYPE_SOUND_TRIANGLE_MESH_BD) \
+    _avail(XrSoundObstacleConfigBD, XR_TYPE_SOUND_OBSTACLE_CONFIG_BD) \
+    _avail(XrSoundObstacleMaterialConfigBD, XR_TYPE_SOUND_OBSTACLE_MATERIAL_CONFIG_BD) \
     _avail(XrHandTrackingDataSourceInfoEXT, XR_TYPE_HAND_TRACKING_DATA_SOURCE_INFO_EXT) \
     _avail(XrHandTrackingDataSourceStateEXT, XR_TYPE_HAND_TRACKING_DATA_SOURCE_STATE_EXT) \
     _avail(XrSystemPlaneDetectionPropertiesEXT, XR_TYPE_SYSTEM_PLANE_DETECTION_PROPERTIES_EXT) \
@@ -487,19 +503,10 @@ This file contains expansion macros (X Macros) for OpenXR structures.
     _avail(XrSystemPassthroughLayerPropertiesANDROID, XR_TYPE_SYSTEM_PASSTHROUGH_LAYER_PROPERTIES_ANDROID) \
     _avail(XrRaycastInfoANDROID, XR_TYPE_RAYCAST_INFO_ANDROID) \
     _avail(XrRaycastHitResultsANDROID, XR_TYPE_RAYCAST_HIT_RESULTS_ANDROID) \
-    _avail(XrHandTrackingParametersGetInfoANDROIDSYS, XR_TYPE_HAND_TRACKING_PARAMETERS_GET_INFO_ANDROIDSYS) \
-    _avail(XrHandTrackingParametersANDROIDSYS, XR_TYPE_HAND_TRACKING_PARAMETERS_ANDROIDSYS) \
     _avail(XrPerformanceMetricsStateANDROID, XR_TYPE_PERFORMANCE_METRICS_STATE_ANDROID) \
     _avail(XrPerformanceMetricsCounterANDROID, XR_TYPE_PERFORMANCE_METRICS_COUNTER_ANDROID) \
     _avail(XrTrackableObjectANDROID, XR_TYPE_TRACKABLE_OBJECT_ANDROID) \
     _avail(XrTrackableObjectConfigurationANDROID, XR_TYPE_TRACKABLE_OBJECT_CONFIGURATION_ANDROID) \
-    _avail(XrFitTrackerCreateInfoANDROIDSYS, XR_TYPE_FIT_TRACKER_CREATE_INFO_ANDROIDSYS) \
-    _avail(XrFitTrackerGetInfoANDROIDSYS, XR_TYPE_FIT_TRACKER_GET_INFO_ANDROIDSYS) \
-    _avail(XrFitTrackerRxInsertANDROIDSYS, XR_TYPE_FIT_TRACKER_RX_INSERT_ANDROIDSYS) \
-    _avail(XrFitTrackerComparisonInfoANDROIDSYS, XR_TYPE_FIT_TRACKER_COMPARISON_INFO_ANDROIDSYS) \
-    _avail(XrFitTrackerInsertChangeANDROIDSYS, XR_TYPE_FIT_TRACKER_INSERT_CHANGE_ANDROIDSYS) \
-    _avail(XrFitTrackerMountANDROIDSYS, XR_TYPE_FIT_TRACKER_MOUNT_ANDROIDSYS) \
-    _avail(XrFitTrackerFitDataANDROIDSYS, XR_TYPE_FIT_TRACKER_FIT_DATA_ANDROIDSYS) \
     _avail(XrFutureCancelInfoEXT, XR_TYPE_FUTURE_CANCEL_INFO_EXT) \
     _avail(XrFuturePollInfoEXT, XR_TYPE_FUTURE_POLL_INFO_EXT) \
     _avail(XrFuturePollResultEXT, XR_TYPE_FUTURE_POLL_RESULT_EXT) \
@@ -525,9 +532,16 @@ This file contains expansion macros (X Macros) for OpenXR structures.
     _avail(XrFacialExpressionClientCreateInfoML, XR_TYPE_FACIAL_EXPRESSION_CLIENT_CREATE_INFO_ML) \
     _avail(XrFacialExpressionBlendShapeGetInfoML, XR_TYPE_FACIAL_EXPRESSION_BLEND_SHAPE_GET_INFO_ML) \
     _avail(XrFacialExpressionBlendShapePropertiesML, XR_TYPE_FACIAL_EXPRESSION_BLEND_SHAPE_PROPERTIES_ML) \
+    _avail(XrSystemBoundaryVisibilityPropertiesMETA, XR_TYPE_SYSTEM_BOUNDARY_VISIBILITY_PROPERTIES_META) \
+    _avail(XrEventDataBoundaryVisibilityChangedMETA, XR_TYPE_EVENT_DATA_BOUNDARY_VISIBILITY_CHANGED_META) \
     _avail(XrSystemSimultaneousHandsAndControllersPropertiesMETA, XR_TYPE_SYSTEM_SIMULTANEOUS_HANDS_AND_CONTROLLERS_PROPERTIES_META) \
     _avail(XrSimultaneousHandsAndControllersTrackingResumeInfoMETA, XR_TYPE_SIMULTANEOUS_HANDS_AND_CONTROLLERS_TRACKING_RESUME_INFO_META) \
     _avail(XrSimultaneousHandsAndControllersTrackingPauseInfoMETA, XR_TYPE_SIMULTANEOUS_HANDS_AND_CONTROLLERS_TRACKING_PAUSE_INFO_META) \
+    _avail(XrFaceTrackingVisemesMETA, XR_TYPE_FACE_TRACKING_VISEMES_META) \
+    _avail(XrSystemFaceTrackingVisemesPropertiesMETA, XR_TYPE_SYSTEM_FACE_TRACKING_VISEMES_PROPERTIES_META) \
+    _avail(XrRoomMeshFaceIndicesMETA, XR_TYPE_ROOM_MESH_FACE_INDICES_META) \
+    _avail(XrSpaceRoomMeshGetInfoMETA, XR_TYPE_SPACE_ROOM_MESH_GET_INFO_META) \
+    _avail(XrRoomMeshMETA, XR_TYPE_ROOM_MESH_META) \
     _avail(XrColocationDiscoveryStartInfoMETA, XR_TYPE_COLOCATION_DISCOVERY_START_INFO_META) \
     _avail(XrColocationDiscoveryStopInfoMETA, XR_TYPE_COLOCATION_DISCOVERY_STOP_INFO_META) \
     _avail(XrColocationAdvertisementStartInfoMETA, XR_TYPE_COLOCATION_ADVERTISEMENT_START_INFO_META) \
@@ -543,6 +557,14 @@ This file contains expansion macros (X Macros) for OpenXR structures.
     _avail(XrSystemSpatialEntityGroupSharingPropertiesMETA, XR_TYPE_SYSTEM_SPATIAL_ENTITY_GROUP_SHARING_PROPERTIES_META) \
     _avail(XrShareSpacesRecipientGroupsMETA, XR_TYPE_SHARE_SPACES_RECIPIENT_GROUPS_META) \
     _avail(XrSpaceGroupUuidFilterInfoMETA, XR_TYPE_SPACE_GROUP_UUID_FILTER_INFO_META) \
+    _avail(XrSystemEnvironmentRaycastPropertiesMETA, XR_TYPE_SYSTEM_ENVIRONMENT_RAYCAST_PROPERTIES_META) \
+    _avail(XrEnvironmentRaycasterCreateInfoMETA, XR_TYPE_ENVIRONMENT_RAYCASTER_CREATE_INFO_META) \
+    _avail(XrEnvironmentRaycasterCreateCompletionMETA, XR_TYPE_ENVIRONMENT_RAYCASTER_CREATE_COMPLETION_META) \
+    _avail(XrEnvironmentRaycastHitGetInfoMETA, XR_TYPE_ENVIRONMENT_RAYCAST_HIT_GET_INFO_META) \
+    _avail(XrEnvironmentRaycastHitMETA, XR_TYPE_ENVIRONMENT_RAYCAST_HIT_META) \
+    _avail(XrEnvironmentRaycastFilterDistanceMETA, XR_TYPE_ENVIRONMENT_RAYCAST_FILTER_DISTANCE_META) \
+    _avail(XrTilePropertiesMETA, XR_TYPE_TILE_PROPERTIES_META) \
+    _avail(XrTilePropertiesHintMETA, XR_TYPE_TILE_PROPERTIES_HINT_META) \
     _avail(XrSystemLightEstimationPropertiesANDROID, XR_TYPE_SYSTEM_LIGHT_ESTIMATION_PROPERTIES_ANDROID) \
     _avail(XrLightEstimatorCreateInfoANDROID, XR_TYPE_LIGHT_ESTIMATOR_CREATE_INFO_ANDROID) \
     _avail(XrLightEstimateGetInfoANDROID, XR_TYPE_LIGHT_ESTIMATE_GET_INFO_ANDROID) \
@@ -550,16 +572,6 @@ This file contains expansion macros (X Macros) for OpenXR structures.
     _avail(XrDirectionalLightANDROID, XR_TYPE_DIRECTIONAL_LIGHT_ANDROID) \
     _avail(XrAmbientLightANDROID, XR_TYPE_AMBIENT_LIGHT_ANDROID) \
     _avail(XrSphericalHarmonicsANDROID, XR_TYPE_SPHERICAL_HARMONICS_ANDROID) \
-    _avail(XrDepthSwapchainCreateInfoANDROID, XR_TYPE_DEPTH_SWAPCHAIN_CREATE_INFO_ANDROID) \
-    _avail(XrDepthSwapchainImageANDROID, XR_TYPE_DEPTH_SWAPCHAIN_IMAGE_ANDROID) \
-    _avail(XrDepthAcquireInfoANDROID, XR_TYPE_DEPTH_ACQUIRE_INFO_ANDROID) \
-    _avail(XrDepthViewANDROID, XR_TYPE_DEPTH_VIEW_ANDROID) \
-    _avail(XrDepthAcquireResultANDROID, XR_TYPE_DEPTH_ACQUIRE_RESULT_ANDROID) \
-    _avail(XrSystemDepthTrackingPropertiesANDROID, XR_TYPE_SYSTEM_DEPTH_TRACKING_PROPERTIES_ANDROID) \
-    _avail(XrSystemHandMeshTrackingPropertiesANDROID, XR_TYPE_SYSTEM_HAND_MESH_TRACKING_PROPERTIES_ANDROID) \
-    _avail(XrHandMeshTrackerCreateInfoANDROID, XR_TYPE_HAND_MESH_TRACKER_CREATE_INFO_ANDROID) \
-    _avail(XrHandMeshGetInfoANDROID, XR_TYPE_HAND_MESH_GET_INFO_ANDROID) \
-    _avail(XrHandTrackingMeshesANDROID, XR_TYPE_HAND_TRACKING_MESHES_ANDROID) \
     _avail(XrSystemMarkerTrackingPropertiesANDROID, XR_TYPE_SYSTEM_MARKER_TRACKING_PROPERTIES_ANDROID) \
     _avail(XrTrackableMarkerConfigurationANDROID, XR_TYPE_TRACKABLE_MARKER_CONFIGURATION_ANDROID) \
     _avail(XrTrackableMarkerANDROID, XR_TYPE_TRACKABLE_MARKER_ANDROID) \
@@ -573,39 +585,12 @@ This file contains expansion macros (X Macros) for OpenXR structures.
     _avail(XrTrackableImageConfigurationANDROID, XR_TYPE_TRACKABLE_IMAGE_CONFIGURATION_ANDROID) \
     _avail(XrTrackableImageANDROID, XR_TYPE_TRACKABLE_IMAGE_ANDROID) \
     _avail(XrEventDataImageTrackingLostANDROID, XR_TYPE_EVENT_DATA_IMAGE_TRACKING_LOST_ANDROID) \
-    _avail(XrOccupancyGridANDROIDX, XR_TYPE_OCCUPANCY_GRID_ANDROIDX) \
-    _avail(XrPlaneTrackableTrackerCreateInfoANDROIDX, XR_TYPE_PLANE_TRACKABLE_TRACKER_CREATE_INFO_ANDROIDX) \
-    _avail(XrBodyJointLocationsANDROIDSYS, XR_TYPE_BODY_JOINT_LOCATIONS_ANDROIDSYS) \
-    _avail(XrBodyTrackerCreateInfoANDROIDSYS, XR_TYPE_BODY_TRACKER_CREATE_INFO_ANDROIDSYS) \
-    _avail(XrBodyJointsLocateInfoANDROIDSYS, XR_TYPE_BODY_JOINTS_LOCATE_INFO_ANDROIDSYS) \
-    _avail(XrBodyTrackerDimensionsBaseHeaderANDROIDSYS, XR_TYPE_BODY_TRACKER_DIMENSIONS_BASE_HEADER_ANDROIDSYS) \
-    _avail(XrBodyTrackerDimensionsAutoCalibrationANDROIDSYS, XR_TYPE_BODY_TRACKER_DIMENSIONS_AUTO_CALIBRATION_ANDROIDSYS) \
-    _avail(XrBodyTrackerDimensionsBodyHeightANDROIDSYS, XR_TYPE_BODY_TRACKER_DIMENSIONS_BODY_HEIGHT_ANDROIDSYS) \
-    _avail(XrBodyTrackerDimensionsJointPositionsANDROIDSYS, XR_TYPE_BODY_TRACKER_DIMENSIONS_JOINT_POSITIONS_ANDROIDSYS) \
-    _avail(XrBodyTrackerDimensionsBoneLengthsANDROIDSYS, XR_TYPE_BODY_TRACKER_DIMENSIONS_BONE_LENGTHS_ANDROIDSYS) \
     _avail(XrSystemSceneMeshingPropertiesANDROID, XR_TYPE_SYSTEM_SCENE_MESHING_PROPERTIES_ANDROID) \
     _avail(XrSceneMeshingTrackerCreateInfoANDROID, XR_TYPE_SCENE_MESHING_TRACKER_CREATE_INFO_ANDROID) \
     _avail(XrSceneMeshSnapshotCreateInfoANDROID, XR_TYPE_SCENE_MESH_SNAPSHOT_CREATE_INFO_ANDROID) \
     _avail(XrSceneMeshSnapshotCreationResultANDROID, XR_TYPE_SCENE_MESH_SNAPSHOT_CREATION_RESULT_ANDROID) \
     _avail(XrSceneSubmeshStateANDROID, XR_TYPE_SCENE_SUBMESH_STATE_ANDROID) \
     _avail(XrSceneSubmeshDataANDROID, XR_TYPE_SCENE_SUBMESH_DATA_ANDROID) \
-    _avail(XrIpdCalibrationTrackerCreateInfoANDROIDSYS, XR_TYPE_IPD_CALIBRATION_TRACKER_CREATE_INFO_ANDROIDSYS) \
-    _avail(XrIpdCalibrationStateGetInfoANDROIDSYS, XR_TYPE_IPD_CALIBRATION_STATE_GET_INFO_ANDROIDSYS) \
-    _avail(XrIpdCalibrationStateANDROIDSYS, XR_TYPE_IPD_CALIBRATION_STATE_ANDROIDSYS) \
-    _avail(XrIpdCalibrationRenderOriginANDROIDSYS, XR_TYPE_IPD_CALIBRATION_RENDER_ORIGIN_ANDROIDSYS) \
-    _avail(XrEyeTrackerCalibrationStateANDROIDSYS, XR_TYPE_EYE_TRACKER_CALIBRATION_STATE_ANDROIDSYS) \
-    _avail(XrEyeTrackerCalibrationStateGetInfoANDROIDSYS, XR_TYPE_EYE_TRACKER_CALIBRATION_STATE_GET_INFO_ANDROIDSYS) \
-    _avail(XrRxLensOpticalDescriptionANDROIDSYS, XR_TYPE_RX_LENS_OPTICAL_DESCRIPTION_ANDROIDSYS) \
-    _avail(XrRxLensEntryANDROIDSYS, XR_TYPE_RX_LENS_ENTRY_ANDROIDSYS) \
-    _avail(XrEyeCalibrationCreateInfoANDROIDSYS, XR_TYPE_EYE_CALIBRATION_CREATE_INFO_ANDROIDSYS) \
-    _avail(XrEyeTrackerRealtimeCalibrationDataANDROIDSYS, XR_TYPE_EYE_TRACKER_REALTIME_CALIBRATION_DATA_ANDROIDSYS) \
-    _avail(XrTrackableShoeboxANDROIDSYS, XR_TYPE_TRACKABLE_SHOEBOX_ANDROIDSYS) \
-    _avail(XrPcaFaceTrackerCreateInfoANDROIDSYS, XR_TYPE_PCA_FACE_TRACKER_CREATE_INFO_ANDROIDSYS) \
-    _avail(XrFaceJointANDROIDSYS, XR_TYPE_FACE_JOINT_ANDROIDSYS) \
-    _avail(XrPcaFaceStateANDROIDSYS, XR_TYPE_PCA_FACE_STATE_ANDROIDSYS) \
-    _avail(XrAndroidSurfaceSwapchainCreateInfoANDROIDX, XR_TYPE_ANDROID_SURFACE_SWAPCHAIN_CREATE_INFO_ANDROIDX) \
-    _avail(XrCompositionLayerAxisAlignedDistortionANDROIDX, XR_TYPE_COMPOSITION_LAYER_AXIS_ALIGNED_DISTORTION_ANDROIDX) \
-    _avail(XrViewStateTrackingErrorANDROIDSYS, XR_TYPE_VIEW_STATE_TRACKING_ERROR_ANDROIDSYS) \
     _avail(XrSpatialCapabilityComponentTypesEXT, XR_TYPE_SPATIAL_CAPABILITY_COMPONENT_TYPES_EXT) \
     _avail(XrSpatialContextCreateInfoEXT, XR_TYPE_SPATIAL_CONTEXT_CREATE_INFO_EXT) \
     _avail(XrCreateSpatialContextCompletionEXT, XR_TYPE_CREATE_SPATIAL_CONTEXT_COMPLETION_EXT) \
@@ -628,6 +613,8 @@ This file contains expansion macros (X Macros) for OpenXR structures.
     _avail(XrSpatialComponentMesh2DListEXT, XR_TYPE_SPATIAL_COMPONENT_MESH_2D_LIST_EXT) \
     _avail(XrSpatialComponentPolygon2DListEXT, XR_TYPE_SPATIAL_COMPONENT_POLYGON_2D_LIST_EXT) \
     _avail(XrSpatialComponentPlaneSemanticLabelListEXT, XR_TYPE_SPATIAL_COMPONENT_PLANE_SEMANTIC_LABEL_LIST_EXT) \
+    _avail(XrStationaryReferenceSpaceGenerationIdGetInfoEXT, XR_TYPE_STATIONARY_REFERENCE_SPACE_GENERATION_ID_GET_INFO_EXT) \
+    _avail(XrStationaryReferenceSpaceGenerationIdResultEXT, XR_TYPE_STATIONARY_REFERENCE_SPACE_GENERATION_ID_RESULT_EXT) \
     _avail(XrSpatialCapabilityConfigurationQrCodeEXT, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_QR_CODE_EXT) \
     _avail(XrSpatialCapabilityConfigurationMicroQrCodeEXT, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_MICRO_QR_CODE_EXT) \
     _avail(XrSpatialCapabilityConfigurationArucoMarkerEXT, XR_TYPE_SPATIAL_CAPABILITY_CONFIGURATION_ARUCO_MARKER_EXT) \
@@ -643,6 +630,9 @@ This file contains expansion macros (X Macros) for OpenXR structures.
     _avail(XrSpatialContextPersistenceConfigEXT, XR_TYPE_SPATIAL_CONTEXT_PERSISTENCE_CONFIG_EXT) \
     _avail(XrSpatialDiscoveryPersistenceUuidFilterEXT, XR_TYPE_SPATIAL_DISCOVERY_PERSISTENCE_UUID_FILTER_EXT) \
     _avail(XrSpatialComponentPersistenceListEXT, XR_TYPE_SPATIAL_COMPONENT_PERSISTENCE_LIST_EXT) \
+    _avail(XrHapticParametricPropertiesEXT, XR_TYPE_HAPTIC_PARAMETRIC_PROPERTIES_EXT) \
+    _avail(XrHapticParametricVibrationEXT, XR_TYPE_HAPTIC_PARAMETRIC_VIBRATION_EXT) \
+    _avail(XrSystemHapticParametricPropertiesEXT, XR_TYPE_SYSTEM_HAPTIC_PARAMETRIC_PROPERTIES_EXT) \
     _avail(XrSpatialEntityPersistInfoEXT, XR_TYPE_SPATIAL_ENTITY_PERSIST_INFO_EXT) \
     _avail(XrPersistSpatialEntityCompletionEXT, XR_TYPE_PERSIST_SPATIAL_ENTITY_COMPLETION_EXT) \
     _avail(XrSpatialEntityUnpersistInfoEXT, XR_TYPE_SPATIAL_ENTITY_UNPERSIST_INFO_EXT) \
@@ -656,7 +646,10 @@ This file contains expansion macros (X Macros) for OpenXR structures.
     _avail(XrSpatialAnchorParentANDROID, XR_TYPE_SPATIAL_ANCHOR_PARENT_ANDROID) \
     _avail(XrSpatialDiscoveryUniqueEntitiesFilterANDROID, XR_TYPE_SPATIAL_DISCOVERY_UNIQUE_ENTITIES_FILTER_ANDROID) \
     _avail(XrSpatialComponentSubsumedByListANDROID, XR_TYPE_SPATIAL_COMPONENT_SUBSUMED_BY_LIST_ANDROID) \
+    _avail(XrSpatialAnchorSpaceFromIdCreateInfoANDROID, XR_TYPE_SPATIAL_ANCHOR_SPACE_FROM_ID_CREATE_INFO_ANDROID) \
+    _avail(XrBatteryStateDisplayEXT, XR_TYPE_BATTERY_STATE_DISPLAY_EXT) \
     _avail(XrLoaderInitInfoPropertiesEXT, XR_TYPE_LOADER_INIT_INFO_PROPERTIES_EXT) \
+    _avail(XrEventDataViewConfigurationViewsChangedEXT, XR_TYPE_EVENT_DATA_VIEW_CONFIGURATION_VIEWS_CHANGED_EXT) \
 
 
 #if defined(XR_USE_GRAPHICS_API_D3D11)
@@ -814,9 +807,6 @@ This file contains expansion macros (X Macros) for OpenXR structures.
     _avail(XrAnchorSharingInfoANDROID, XR_TYPE_ANCHOR_SHARING_INFO_ANDROID) \
     _avail(XrAnchorSharingTokenANDROID, XR_TYPE_ANCHOR_SHARING_TOKEN_ANDROID) \
     _avail(XrSystemAnchorSharingExportPropertiesANDROID, XR_TYPE_SYSTEM_ANCHOR_SHARING_EXPORT_PROPERTIES_ANDROID) \
-    _avail(XrInstanceCreateInfoBackgroundTrackingANDROIDSYS, XR_TYPE_INSTANCE_CREATE_INFO_BACKGROUND_TRACKING_ANDROIDSYS) \
-    _avail(XrSharedAnchorSpaceCreateInfoANDROIDSYS, XR_TYPE_SHARED_ANCHOR_SPACE_CREATE_INFO_ANDROIDSYS) \
-    _avail(XrInputTracingDataANDROIDSYS, XR_TYPE_INPUT_TRACING_DATA_ANDROIDSYS) \
 
 #else
 #define _impl_XR_LIST_ALL_STRUCTURE_TYPES_XR_USE_PLATFORM_ANDROID(_avail, _unavail) \
@@ -827,9 +817,6 @@ This file contains expansion macros (X Macros) for OpenXR structures.
     _unavail(XrAnchorSharingInfoANDROID, XR_TYPE_ANCHOR_SHARING_INFO_ANDROID) \
     _unavail(XrAnchorSharingTokenANDROID, XR_TYPE_ANCHOR_SHARING_TOKEN_ANDROID) \
     _unavail(XrSystemAnchorSharingExportPropertiesANDROID, XR_TYPE_SYSTEM_ANCHOR_SHARING_EXPORT_PROPERTIES_ANDROID) \
-    _unavail(XrInstanceCreateInfoBackgroundTrackingANDROIDSYS, XR_TYPE_INSTANCE_CREATE_INFO_BACKGROUND_TRACKING_ANDROIDSYS) \
-    _unavail(XrSharedAnchorSpaceCreateInfoANDROIDSYS, XR_TYPE_SHARED_ANCHOR_SPACE_CREATE_INFO_ANDROIDSYS) \
-    _unavail(XrInputTracingDataANDROIDSYS, XR_TYPE_INPUT_TRACING_DATA_ANDROIDSYS) \
 
 #endif
 

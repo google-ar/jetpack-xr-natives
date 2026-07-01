@@ -32,12 +32,18 @@ import java.io.File
  */
 @RequiresApi(31)
 internal class ShaperGlyphSource : IGlyphSource {
-  // Reusable buffers.
-  private val glyphIdPtr = IntArray(1)
-  private val positionPtr = FloatArray(2)
-  private val boundingBoxF = RectF()
-  private val fontMetrics = Paint.FontMetrics()
-  private val glyphMetrics = FloatArray(8)
+
+  private class ShaperLocalCache {
+    val boundingBoxF = RectF()
+    val fontMetrics = Paint.FontMetrics()
+    val glyphMetrics = FloatArray(8)
+    val glyphIdPtr = IntArray(1)
+    val positionPtr = FloatArray(2)
+  }
+
+  private val cache = object : ThreadLocal<ShaperLocalCache>() {
+    override fun initialValue() = ShaperLocalCache()
+  }
 
   // HACK: No proper way to determine if a glyph is a color emoji using the TextRunShaper API.
   // Instead, try turning some test emoji into paths; if the resulting paths are empty, this
@@ -86,6 +92,11 @@ internal class ShaperGlyphSource : IGlyphSource {
 
   override fun getGlyphMetrics(glyphId: Int, font: Any?, paint: Paint): FloatArray {
     val actualFont = font as Font
+
+    val localCache = cache.get()!!
+    val boundingBoxF = localCache.boundingBoxF
+    val fontMetrics = localCache.fontMetrics
+    val glyphMetrics = localCache.glyphMetrics
 
     val advanceWidth = actualFont.getGlyphBounds(glyphId, paint, boundingBoxF)
     actualFont.getMetrics(paint, fontMetrics)
@@ -227,6 +238,12 @@ internal class ShaperGlyphSource : IGlyphSource {
     strokePaint: Paint,
   ) {
     val actualFont = font as Font
+
+    val localCache = cache.get()!!
+    val boundingBoxF = localCache.boundingBoxF
+    val fontMetrics = localCache.fontMetrics
+    val glyphIdPtr = localCache.glyphIdPtr
+    val positionPtr = localCache.positionPtr
 
     actualFont.getGlyphBounds(glyphId, fillPaint, boundingBoxF)
     actualFont.getMetrics(fillPaint, fontMetrics)

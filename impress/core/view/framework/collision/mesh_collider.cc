@@ -68,7 +68,7 @@ void MeshCollider::Cleanup() {
   }
 }
 
-absl::optional<RayHit> MeshCollider::Intersect(const Ray& world_ray) {
+std::optional<RayHit> MeshCollider::Intersect(const Ray& world_ray) {
   if (!IsActive()) {
     return {};
   }
@@ -144,7 +144,7 @@ absl::optional<RayHit> MeshCollider::Intersect(const Ray& world_ray) {
   return {};
 }
 
-absl::optional<DoubleRayHit> MeshCollider::IntersectPrecise(
+std::optional<DoubleRayHit> MeshCollider::IntersectPrecise(
     const DoubleRay& world_ray) {
   if (!IsActive()) {
     return {};

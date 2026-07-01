@@ -130,7 +130,7 @@ filament::Box ModelData::GetAxisAlignedBounds() const {
         if (const std::vector<PartData>& parts = proxy.parts; parts.empty()) {
           return merged_bounds;
         }
-        const absl::optional<filament::Box>& local_bounds = proxy.local_bounds;
+        const std::optional<filament::Box>& local_bounds = proxy.local_bounds;
         const BoneId bone = proxy.bone;
         filament::Box root_bounds =
             TransformBounds(*local_bounds, root_transforms[bone]);

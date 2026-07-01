@@ -25,15 +25,15 @@
 #include <backend/DriverEnums.h>
 #include <backend/Handle.h>
 
-#include "filament/libs/utils/include/utils/Logger.h"
-#include "filament/libs/utils/include/utils/Panic.h"
-#include "filament/libs/utils/include/utils/StaticString.h"
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/debug.h"
+#include "filament/libs/utils/include/utils/Logger.h"
 #include "filament/libs/utils/include/utils/ostream.h"
+#include "filament/libs/utils/include/utils/Panic.h"
+#include "filament/libs/utils/include/utils/StaticString.h"
 
-#include <utility>
 #include <limits>
+#include <utility>
 
 #include <stdint.h>
 

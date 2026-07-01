@@ -20,13 +20,13 @@
 #include "filament/libs/utils/include/utils/Panic.h"
 #include "filament/libs/utils/include/utils/ThreadUtils.h"
 
-#include <X11/Xlib.h>
 #include <GL/glx.h>
 #include <GL/glxext.h>
-
-#include <dlfcn.h>
+#include <X11/Xlib.h>
 
 #include <mutex>
+
+#include <dlfcn.h>
 
 #define LIBRARY_GLX "libGL.so.1"
 #define LIBRARY_X11 "libX11.so.6"

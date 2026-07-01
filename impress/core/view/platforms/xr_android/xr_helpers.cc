@@ -14,6 +14,7 @@
 
 #include "core/view/platforms/xr_android/xr_helpers.h"
 
+#include <algorithm>
 #include <cmath>
 #include <string>
 #include <string_view>
@@ -345,20 +346,36 @@ void SetCameraEyesForProjectionQuad(
   const float near_clip = camera->getNear();
   const float far_clip = camera->getCullingFar();
 
-  for (int eye_index = 0; eye_index < eye_count; eye_index++) {
-    // Logic for setting up the camera through the projection quad:
-    // - The camera is placed at where the eye is.
-    // - The camera optical axis (i.e., perpendicular to the image plane) is
-    //   parallel to the quad normal.
-    // - The camera roll is set so that the image quad is parallel to the
-    //   boundary of the quad. This allows us to move the 4
-    //   frustum edges to exactly match the 4 edges of the quad.
-    // - The camera frustum is set up to be asymmetric / off-axis, i.e., it is
-    //   not symmetrical to the optical axis, and each of the 4 sides falls
-    //   directly on the 4 sides of the quad.
-    // For more details, see (broken link)
+  // Rendering to the projection quad implies this is rendering to an
+  // offscreen texture, instead of to the display buffer. This means we only
+  // need to render up to 2 eyes (left and right), and any additional eyes can
+  // be ignored (by making their frustum degenerate). This is because of the
+  // following:
+  // - We assume the `eye_index` always has 0 and 1 representing the default
+  //   left and right eyes, and all the subsequent indices representing those
+  //   eyes but with a narrower FOV.
+  // - When adjusting the FOV to fit the projection quad, the end result only
+  //   depends on the eye position, and all the remaining properties like
+  //   rotation and FOV are lost.
+  // - Therefore, all subsequent eyes at and after 2 will be doing redundant
+  //   rendering, and thus should be skipped.
+  // TODO: (broken link) - ideally, the rendering pipeline should be configured
+  // for such offscreen pass so only 2 eyes are used, but this depends on the
+  // capability of OpenXR runtime and will require refactor to XrSessionHost.
+  const int primary_eye_count = std::min(eye_count, 2);
 
-    // Set eye model matrix to (EyePos, QuadRot)
+  // Logic for setting up the camera through the projection quad:
+  // - The camera is placed at where the eye is.
+  // - The camera optical axis (i.e., perpendicular to the image plane) is
+  //   parallel to the quad normal.
+  // - The camera roll is set so that the image quad is parallel to the
+  //   boundary of the quad. This allows us to move the 4
+  //   frustum edges to exactly match the 4 edges of the quad.
+  // - The camera frustum is set up to be asymmetric / off-axis, i.e., it is
+  //   not symmetrical to the optical axis, and each of the 4 sides falls
+  //   directly on the 4 sides of the quad.
+  // For more details, see (broken link)
+  for (int eye_index = 0; eye_index < primary_eye_count; eye_index++) {
     Transform<float> world_from_eye_transform =
         ToTransform(latest_views[eye_index].pose);
     world_from_eye_transform.rotation = quad_in_world.rotation;
@@ -366,10 +383,15 @@ void SetCameraEyesForProjectionQuad(
     const mat4 view_from_eye = view_from_world * world_from_eye;
     camera->setEyeModelMatrix(eye_index, view_from_eye);
 
-    mat4 projection = ComputeProjectionMatrixToFitQuad(
+    projection_matrix_array[eye_index] = ComputeProjectionMatrixToFitQuad(
         world_from_eye_transform.translation, world_from_quad,
         quad_in_world.size, near_clip, far_clip);
-    projection_matrix_array[eye_index] = projection;
+  }
+
+  // Make the remaining eyes degenerate so they are not rendered.
+  for (int eye_index = primary_eye_count; eye_index < eye_count; eye_index++) {
+    camera->setEyeModelMatrix(eye_index, kIdentityMat4);
+    projection_matrix_array[eye_index] = mat4(0.0);
   }
 
   // Set the projection culling matrix, which is a projection matrix
@@ -383,6 +405,5 @@ void SetCameraEyesForProjectionQuad(
                                  projection_culling_matrix, near_clip,
                                  far_clip);
 }
-
 
 }  // namespace imp

@@ -386,15 +386,8 @@ void Slice::UpdateTexture() {
 void Slice::UpdateTextureSync() {
   texture_status_ = TextureStatus::kReadyToBlit;
   canvas_.reset();
-#if IMP_PLATFORM(WASM)
-  // TODO: Properly resolve this race condition.
-  for (const auto& future : texture_update_futures_) {
-    future.Return(absl::OkStatus());
-  }
-#else
   absl::c_move(texture_update_futures_,
                std::back_inserter(texture_blit_futures_));
-#endif  // IMP_PLATFORM(WASM)
   texture_update_futures_.clear();
 }
 

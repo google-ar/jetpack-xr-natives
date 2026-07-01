@@ -16,14 +16,14 @@
 
 #include <backend/platforms/PlatformEGLHeadless.h>
 
+#include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/Logger.h"
+#include "filament/libs/utils/include/utils/Panic.h"
+
 #include <bluegl/BlueGL.h>
 
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
-
-#include "filament/libs/utils/include/utils/Logger.h"
-#include "filament/libs/utils/include/utils/Panic.h"
-#include "filament/libs/utils/include/utils/compiler.h"
 
 using namespace utils;
 

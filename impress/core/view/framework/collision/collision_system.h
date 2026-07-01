@@ -144,7 +144,7 @@ void CollisionSystem<T>::IntersectCollider(
     }
   }
   if constexpr (collider_traits::kHasIntersectWithRayFunc<T>) {
-    if (absl::optional<RayHit> result = collider->Intersect(world_ray)) {
+    if (std::optional<RayHit> result = collider->Intersect(world_ray)) {
       out_intersections->push_back(*result);
     }
   } else if constexpr (collider_traits::kHasMultipleIntersectWithRayFunc<T>) {
@@ -182,7 +182,7 @@ void CollisionSystem<T>::IntersectCollider(
     }
   }
   if constexpr (collider_traits::kHasIntersectWithScreenPosFunc<T>) {
-    if (absl::optional<RayHit> result = collider->Intersect(screen_pos)) {
+    if (std::optional<RayHit> result = collider->Intersect(screen_pos)) {
       out_intersections->push_back(*result);
     }
   } else if constexpr (collider_traits::kHasMultipleIntersectWithScreenPosFunc<
@@ -191,7 +191,7 @@ void CollisionSystem<T>::IntersectCollider(
     out_intersections->insert(out_intersections->end(), result.begin(),
                               result.end());
   } else if constexpr (collider_traits::kHasIntersectWithRayFunc<T>) {
-    if (absl::optional<RayHit> result = collider->Intersect(world_ray)) {
+    if (std::optional<RayHit> result = collider->Intersect(world_ray)) {
       out_intersections->push_back(*result);
     }
   } else if constexpr (collider_traits::kHasMultipleIntersectWithRayFunc<T>) {

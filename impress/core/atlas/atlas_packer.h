@@ -84,7 +84,7 @@ class AtlasPacker {
 
   virtual ~AtlasPacker();
 
-  virtual absl::optional<ScopedAtlasEntry> AddEntry(uint2 size) = 0;
+  virtual std::optional<AtlasPacker::ScopedAtlasEntry> AddEntry(uint2 size) = 0;
 
   uint2 GetTextureSize() const;
 

@@ -1,4 +1,4 @@
-// Copyright 2026 Google LLC
+// Copyright 2025 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,15 +17,15 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <memory>
 
 #include "absl/base/nullability.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "flatbuffers/buffer.h"
+#include "flatbuffers/flatbuffer_builder.h"
 #include "core/common/invocable.h"
-#include "core/common/owned_ptr.h"
+#include "core/common/owned_or_borrowed_ptr.h"
 #include "core/split_engine/android/split_engine_android_bridge.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_bridge_sender.h"
@@ -36,6 +36,9 @@ namespace imp::split_engine {
 
 // Legacy implementation of SplitEngineSerializerTransport that uses the
 // SplitEngineAndroidBridge and SplitEngineBridgeSender.
+//
+// TODO: (broken link) - Remove this class after migration to refactored
+// transport.
 class SplitEngineSerializerTransportLegacyImpl
     : public SplitEngineSerializerTransport {
  public:
@@ -44,7 +47,7 @@ class SplitEngineSerializerTransportLegacyImpl
       /*absl_nonnull*/  std::unique_ptr<SplitEngineBridgeSender> bridge_sender);
   ~SplitEngineSerializerTransportLegacyImpl() override = default;
 
-  imp::OwnedPtr<MessageBuilder> CreateBuilder(
+  imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder> CreateBuilder(
       MessageGroupId message_group_id, size_t initial_size_bytes) override;
 
   absl::StatusOr<MessageGroupId> BeginFrameUpdate(
@@ -54,21 +57,21 @@ class SplitEngineSerializerTransportLegacyImpl
       size_t max_message_size_bytes) override;
 
   absl::Status AddMessage(
-      MessageGroupId message_group_id, imp::OwnedPtr<MessageBuilder> builder,
+      MessageGroupId message_group_id,
+      imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder> builder,
       const flatbuffers::Offset<android_xr::schemas::Command>& offset) override;
 
-  absl::Status AddMessage(MessageGroupId message_group_id,
-                          imp::OwnedPtr<MessageBuilder> builder,
-                          OffsetProducer offset_fn) override;
+  absl::Status AddMessage(
+      MessageGroupId message_group_id,
+      imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder> builder,
+      OffsetProducer offset_fn) override;
 
   absl::Status End(MessageGroupId message_group_id) override;
-
-  absl::StatusOr<std::reference_wrapper<SplitEngineAndroidBridge>> GetBridge()
-      override;
 
   void Schedule(imp::Invocable<absl::Status()> fn) override;
 
   absl::StatusOr<int32_t> GetActiveFrameUpdatesCount() const override;
+
   absl::StatusOr<int32_t> GetActiveOneShotsCount() const override;
 
   void ClearReleasedMessageGroups() override;

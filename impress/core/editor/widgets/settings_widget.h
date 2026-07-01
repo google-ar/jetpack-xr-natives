@@ -18,6 +18,7 @@
 #define THIRD_PARTY_IMPRESS_EDITOR_WIDGETS_SETTINGS_WIDGET_H_
 
 #include "absl/strings/string_view.h"
+#include "core/common/platform_storage.h"
 #include "core/common/registry.h"
 #include "core/editor/editor.h"
 #include "core/editor/widget.h"
@@ -30,8 +31,7 @@ namespace imp::editor {
 
 class SettingsWidget : public editor::Widget {
  public:
-  explicit SettingsWidget(BaseView& view)
-      : view_(view), editor_(*view_.GetRegistry().Get<editor::Editor>()) {}
+  explicit SettingsWidget(BaseView& view);
   void DrawImGui() override;
   absl::string_view GetName() const override { return "Settings"; }
 

@@ -18,6 +18,7 @@
 #include "core/common/log.h"
 #include "core/camera/camera_component.h"
 #include "core/common/debug_draw.h"
+#include "core/common/platform_storage.h"
 #include "core/common/registry.h"
 #include "core/editor/editor.h"
 #include "core/editor/events.h"
@@ -49,6 +50,13 @@ constexpr debug_draw::Color kSelectedNodeColor = {0x81, 0xd4, 0xfa,
 constexpr debug_draw::Color kMeshNodeColor = debug_draw::kLightBlue;
 
 VisualizeBounds::VisualizeBounds(BaseView& view) : view_(view) {
+  PlatformStorage& storage = *view_.GetRegistry().Get<PlatformStorage>();
+  if (storage.GetBool(kShowBoundsEnabledKey, kShowBoundsEnabledDefault)) {
+    mode_ = Mode::kShowAllBounds;
+  } else {
+    mode_ = Mode::kShowSelectedBounds;
+  }
+
   Editor& editor = view_.GetRegistry().Get<Editor>()->get();
   Dispatcher& editor_dispatcher = editor.GetDispatcher();
   editor_dispatcher.Connect(

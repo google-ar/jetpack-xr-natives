@@ -45,8 +45,8 @@ TapGesture::CreateFn TapGesture::GetCreateFunction(
                                      absl::Span<const TapGesture> gestures) {
     if (pointer_hit.event.Type() != PointerEventType::kDown ||
         !gestures.empty())
-      return absl::optional<TapGesture>(absl::nullopt);
-    return absl::optional<TapGesture>(
+      return std::optional<TapGesture>(absl::nullopt);
+    return std::optional<TapGesture>(
         TapGesture(dispatcher, pointer_utils, pointer_hit));
   };
 }

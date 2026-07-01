@@ -86,6 +86,8 @@ namespace {
 // In the app-editor case, the app camera needs an initial position.
 constexpr float3 kAppCameraPositionInAppEditorMode = {0, 0, 3};
 constexpr absl::Duration kAssetManagerCacheCleanupInterval = absl::Seconds(4);
+constexpr size_t kReservedScratchSpaceCapacity = 128;
+
 using UpdateStageFlags = window::FilamentHost::UpdateStageFlags;
 
 }  // namespace
@@ -130,6 +132,9 @@ View::View(ViewConfig config)
           ->enable_simple_executor_destroys_tasks_on_shutdown.Value()) {
     ExecutorFlags::EnableSimpleExecutorToDestroyTasksOnShutdown();
   }
+
+  // Reserve space to avoid allocations in DestroyNode.
+  nodes_to_destroy_scratch_.reserve(kReservedScratchSpaceCapacity);
 }
 
 View::~View() {
@@ -196,31 +201,34 @@ void View::DestroyNode(NodeHandle node) {
     return;
   }
 
-  // First, get this node and all of its children sorted depth-first.
-  std::vector<NodeHandle> nodes_to_destroy =
-      GetPathManager().GetDescendants(node);
-  nodes_to_destroy.push_back(node);
+  // In case of recursive calls to DestroyNode, we need to know where the
+  // new nodes to destroy are in the scratch space.
+  size_t start_index = nodes_to_destroy_scratch_.size();
 
-  // Then, remove every component from every node being destroyed.
-  // All components of the same type are removed in depth first order.
+  // Destroy all components on the node and its children in the correct order
+  // based on the cleanup dependency graph.
   //
-  // The order of types can be defined using CleanupDependencies and
-  // CleanupDependents.
-  //
-  // This call can cause recursive calls to DestroyNode.
-  GetComponentManager().RemoveAllFromNodes(nodes_to_destroy);
+  // All the nodes in the subtree including the root node are pushed onto the
+  // nodes_to_destroy_scratch_ vector in depth-first order.
+  GetComponentManager().DestroySubtreeComponents(node,
+                                                 nodes_to_destroy_scratch_);
+
+  // Only the nodes that were added in this call to DestroyNode need to be
+  // processed.
+  size_t num_nodes_to_destroy = nodes_to_destroy_scratch_.size() - start_index;
 
   // Tell the serializer about the nodes being destroyed.
   // We send the entire set of nodes being destroyed as dependencies so that
   // this destruction event can't be split across serializer batches.
   if (split_engine_serializer_) {
     std::vector<utils::Entity> deps;
-    deps.reserve(nodes_to_destroy.size());
-    for (NodeHandle node_to_destroy : nodes_to_destroy) {
-      deps.push_back(node_to_destroy.GetEntity());
+    deps.reserve(num_nodes_to_destroy);
+    for (size_t i = start_index; i < nodes_to_destroy_scratch_.size(); ++i) {
+      deps.push_back(nodes_to_destroy_scratch_[i].GetEntity());
     }
 
-    for (NodeHandle node_to_destroy : nodes_to_destroy) {
+    for (size_t i = start_index; i < nodes_to_destroy_scratch_.size(); ++i) {
+      NodeHandle node_to_destroy = nodes_to_destroy_scratch_[i];
       // We may get here after recursive calls to DestroyNode, so it's possible
       // that the node was already destroyed. If so, don't call the serializer
       // again. Similar check happens in NodeAttachmentManager::Destroy().
@@ -231,8 +239,23 @@ void View::DestroyNode(NodeHandle node) {
     }
   }
 
-  for (NodeHandle node_to_destroy : nodes_to_destroy) {
-    node_attachment_manager_.Destroy(node_to_destroy);
+  // Destroys the NodeController objects associated with the nodes and removes
+  // them from the node attachment manager.
+  for (size_t i = start_index; i < nodes_to_destroy_scratch_.size(); ++i) {
+    node_attachment_manager_.Destroy(nodes_to_destroy_scratch_[i]);
+  }
+
+  // Clear the scratch space that was used for this call to DestroyNode.
+  nodes_to_destroy_scratch_.resize(start_index);
+
+  // Return the scratch space to kReservedScratchSpaceCapacity capacity if it's
+  // larger to prevent unbounded growth when destroying a gigantic tree.
+  //
+  // The empty() check ensures this is the top-level call to DestroyNode.
+  if (nodes_to_destroy_scratch_.empty() &&
+      nodes_to_destroy_scratch_.capacity() > kReservedScratchSpaceCapacity) {
+    nodes_to_destroy_scratch_ = std::vector<NodeHandle>();
+    nodes_to_destroy_scratch_.reserve(kReservedScratchSpaceCapacity);
   }
 }
 
@@ -487,6 +510,9 @@ void View::OnHostSetup(uint2 dimensions,
   size_ = dimensions;
   margins_ = {0, 0, 0, 0};
 
+  engine_ = host_->GetEngine();
+  transform_manager_ = &engine_->getTransformManager();
+
   ApplyViewConfig();
 
   GetDispatcher().Connect(
@@ -583,7 +609,7 @@ void View::OnHostResize(uint2 dimensions, uint4 margins,
 void View::OnHostPreUpdate(
     window::FilamentHost* host, absl::Duration last_vsync,
     absl::Duration next_vsync, UpdateStageFlags* out_flags,
-    absl::optional<absl::Duration>* out_time_until_retry) {
+    std::optional<absl::Duration>* out_time_until_retry) {
   IMP_TRACE();
 
   if (split_engine_serializer_ &&
@@ -602,7 +628,7 @@ void View::OnHostPreUpdate(
   // an opportunity to indicate this frame should be skipped.
   ViewPreFrameUpdateEvent view_pre_frame_update_event(
       [this, out_flags,
-       out_time_until_retry](absl::optional<absl::Duration> time_until_retry) {
+       out_time_until_retry](std::optional<absl::Duration> time_until_retry) {
         if (!GetHost()->IsNextRenderRequired()) {
           IMP_TRACE_BLOCK("Frame-Cancel");
           out_flags->SetFlag(UpdateStageFlags::kSkipFrame);

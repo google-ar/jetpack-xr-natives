@@ -16,8 +16,8 @@
 
 #include "VulkanYcbcrConversionCache.h"
 
-#include "vulkan/VulkanConstants.h"
 #include "vulkan/utils/Conversion.h"
+#include "vulkan/VulkanConstants.h"
 
 #include "filament/libs/utils/include/utils/Panic.h"
 

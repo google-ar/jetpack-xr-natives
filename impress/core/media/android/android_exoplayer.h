@@ -89,17 +89,19 @@ class AndroidExoPlayer : public JavaWrapper {
   }
 
   void SetMediaItem(std::string video_url) {
-    CallVoidMethod(set_media_item_, ToString(Env(), video_url));
+    JniUniquePtr<jstring> jvideo_url = ToJniString(Env(), video_url);
+    CallVoidMethod(set_media_item_, jvideo_url.get());
   }
 
   void SetProtectedMediaItem(std::string video_url, std::string drm_license_url,
                              std::string drm_scheme_uuid) {
     JNIEnv* env = Env();
-    jstring video_url_jstring = ToString(env, video_url);
-    jstring license_url_jstring = ToString(env, drm_license_url);
-    jstring uuid_jstring = ToString(env, drm_scheme_uuid);
-    CallVoidMethod(set_protected_media_item_, video_url_jstring,
-                   license_url_jstring, uuid_jstring);
+    JniUniquePtr<jstring> video_url_jstring = ToJniString(env, video_url);
+    JniUniquePtr<jstring> license_url_jstring =
+        ToJniString(env, drm_license_url);
+    JniUniquePtr<jstring> uuid_jstring = ToJniString(env, drm_scheme_uuid);
+    CallVoidMethod(set_protected_media_item_, video_url_jstring.get(),
+                   license_url_jstring.get(), uuid_jstring.get());
   }
 
   void SetListener(ImpExoPlayerListener* exoplayer_listener) {

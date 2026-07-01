@@ -2068,14 +2068,21 @@ MeshPtr MeshFactory::CreateByCopyingMeshData(
                    vertex_buffer_builder, name,
                    /*should_copy_buffer=*/true);
 
-  BaseIndexBufferBuilder& index_buffer_builder =
-      mesh_builder.CreateIndexBufferBuilder();
-  FillIndexBuffer(view_, engine, mesh_data.GetDescription(),
-                  index_buffer_builder, mesh_data.CopyIndexData(), name);
+  if (mesh_data.GetDescription().index_count > 0) {
+    BaseIndexBufferBuilder& index_buffer_builder =
+        mesh_builder.CreateIndexBufferBuilder();
+    FillIndexBuffer(view_, engine, mesh_data.GetDescription(),
+                    index_buffer_builder, mesh_data.CopyIndexData(), name);
+  }
 
   TypedVector<filament::VertexBuffer*> out_vertex_buffers;
   TypedVector<filament::IndexBuffer*> out_index_buffers;
   mesh_builder.Build(&out_vertex_buffers, &out_index_buffers);
+  // For procedural meshes, we may have empty vertex/index buffers.
+  filament::VertexBuffer* vertex_buffer =
+      out_vertex_buffers.empty() ? nullptr : out_vertex_buffers.front();
+  filament::IndexBuffer* index_buffer =
+      out_index_buffers.empty() ? nullptr : out_index_buffers.front();
 
   Box verified_aabb;
   if (aabb.has_value()) {
@@ -2085,12 +2092,16 @@ MeshPtr MeshFactory::CreateByCopyingMeshData(
   }
 
   // Using `new` to access a non-public constructor, see (broken link).
-  MeshGpuDataPtr mesh_data_gpu = absl::WrapUnique(new MeshGpuData(
-      view_, mesh_data.GetDescription(), out_vertex_buffers.front(),
-      out_index_buffers.front(), primitive_type));
+  MeshGpuDataPtr mesh_data_gpu = absl::WrapUnique(
+      new MeshGpuData(view_, mesh_data.GetDescription(), vertex_buffer,
+                      index_buffer, primitive_type));
 
   MeshPtr mesh = absl::WrapUnique(
       new Mesh(std::move(mesh_data_gpu), nullptr, verified_aabb));
+
+  if (mesh_data_observer_) {
+    mesh->SetMeshDataObserver(mesh_data_observer_);
+  }
 
   return mesh;
 }
@@ -2120,30 +2131,40 @@ MeshPtr MeshFactory::CreateByMovingMeshData(
   FillVertexBuffer(view_, engine, *mesh_data, vertex_buffer_builder, name,
                    data_mode == MeshDataStorageMode::kStoreMeshData);
 
-  BaseIndexBufferBuilder& index_buffer_builder =
-      mesh_builder.CreateIndexBufferBuilder();
-  index_buffer_builder.StoreIndexData(data_mode ==
-                                      MeshDataStorageMode::kStoreMeshData);
-  FillIndexBuffer(view_, engine, description, index_buffer_builder,
-                  data_mode == MeshDataStorageMode::kStoreMeshData
-                      ? mesh_data->CopyIndexData()
-                      : mesh_data->MoveIndexData(),
-                  name);
+  if (description.index_count > 0) {
+    BaseIndexBufferBuilder& index_buffer_builder =
+        mesh_builder.CreateIndexBufferBuilder();
+    index_buffer_builder.StoreIndexData(data_mode ==
+                                        MeshDataStorageMode::kStoreMeshData);
+    FillIndexBuffer(view_, engine, description, index_buffer_builder,
+                    data_mode == MeshDataStorageMode::kStoreMeshData
+                        ? mesh_data->CopyIndexData()
+                        : mesh_data->MoveIndexData(),
+                    name);
+  }
 
   TypedVector<filament::VertexBuffer*> out_vertex_buffers;
   TypedVector<filament::IndexBuffer*> out_index_buffers;
   mesh_builder.Build(&out_vertex_buffers, &out_index_buffers);
+  // For procedural meshes, we may have empty vertex/index buffers.
+  filament::VertexBuffer* vertex_buffer =
+      out_vertex_buffers.empty() ? nullptr : out_vertex_buffers.front();
+  filament::IndexBuffer* index_buffer =
+      out_index_buffers.empty() ? nullptr : out_index_buffers.front();
 
   // Using `new` to access a non-public constructor, see (broken link).
-  MeshGpuDataPtr mesh_data_gpu = absl::WrapUnique(
-      new MeshGpuData(view_, description, out_vertex_buffers.front(),
-                      out_index_buffers.front(), primitive_type));
+  MeshGpuDataPtr mesh_data_gpu = absl::WrapUnique(new MeshGpuData(
+      view_, description, vertex_buffer, index_buffer, primitive_type));
 
   MeshPtr mesh = absl::WrapUnique(new Mesh(
       std::move(mesh_data_gpu),
       data_mode == MeshDataStorageMode::kStoreMeshData ? std::move(mesh_data)
                                                        : nullptr,
       verified_aabb));
+
+  if (mesh_data_observer_) {
+    mesh->SetMeshDataObserver(mesh_data_observer_);
+  }
 
   return mesh;
 }

@@ -31,7 +31,7 @@ ShelfAtlasPacker::ShelfAtlasPacker(uint2 texture_size)
   AddShelf(shelves_.end(), 0, texture_size.y);
 }
 
-absl::optional<AtlasPacker::ScopedAtlasEntry> ShelfAtlasPacker::AddEntry(
+std::optional<AtlasPacker::ScopedAtlasEntry> ShelfAtlasPacker::AddEntry(
     uint2 size) {
   std::optional<ShelfSlotListItr> best_slot;
   int best_slot_free_slot_index = -1;

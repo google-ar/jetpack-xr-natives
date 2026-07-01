@@ -25,6 +25,7 @@
 #include "core/assets/asset_ptr.h"
 #include "core/assets/gltf/gltf_asset.h"
 #include "core/async/future.h"
+#include "core/materials/material.h"
 #include "core/ncsb/node_handle.h"
 #include "core/particle/custom_particle_behavior.h"
 #include "core/particle/particle_emitter_state.proto.imp.h"
@@ -64,7 +65,7 @@ class NodeParticleEmitter : public ParticleEmitter {
   NodeParticleEmitter(
       NodeHandle emitter_node, const ParticleEmitterState& emitter_state,
       std::unique_ptr<CustomParticleBehavior> custom_particle_behavior,
-      AssetPtr<GltfAsset> gltf_asset);
+      AssetPtr<GltfAsset> gltf_asset, OwnedMaterialPtr material_instance);
 
   // Synchronizes the scene node with the current state of the particle.
   void SyncNode(const ParticleInstance& particle_instance, NodeHandle node);
@@ -79,10 +80,6 @@ class NodeParticleEmitter : public ParticleEmitter {
 
   // List of active particles.
   std::list<NodeParticle> active_particles_;
-
-  // Particle asset, by holding this when the emitter is created, we ensure
-  // that the asset is loaded and available when instantiating particles.
-  AssetPtr<GltfAsset> gltf_asset_;
 };
 
 }  // namespace imp::imp_particle

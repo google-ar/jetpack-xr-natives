@@ -19,6 +19,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "core/assets/material/material_load_options.proto.imp.h"
+
 namespace imp::split_engine {
 
 namespace {
@@ -327,6 +329,13 @@ FlatbufferSizeCalculator& FlatbufferSizeCalculator::AddAddMeshData() {
   });
 }
 
+FlatbufferSizeCalculator& FlatbufferSizeCalculator::AddUpdateMeshData() {
+  return AddTable({
+      kReferenceSize,  // vertex_buffer_updates
+      kReferenceSize,  // index_buffer_updates
+  });
+}
+
 FlatbufferSizeCalculator&
 FlatbufferSizeCalculator::AddAddImageBasedLightingAssets() {
   return AddTable({
@@ -338,6 +347,174 @@ FlatbufferSizeCalculator& FlatbufferSizeCalculator::AddAddMorphTargetBuffers() {
   return AddTable({
       kReferenceSize,  // morph_target_buffers
   });
+}
+
+FlatbufferSizeCalculator&
+FlatbufferSizeCalculator::AddRequestBuiltInGenericMaterial() {
+  // GenericMaterialSpec table: lighting_model(1), blend_mode(1),
+  // double_sided_mode(1), depth_clear_material(1)
+  AddTable({1, 1, 1, 1});
+
+  // BuiltInMaterialRequest table: material_instance_id(8), data_type(1),
+  // data(4)
+  AddTable({8, 1, kReferenceSize});
+
+  // Request table: offset(4), type(1)
+  AddRequest();
+
+  return *this;
+}
+
+FlatbufferSizeCalculator&
+FlatbufferSizeCalculator::AddRequestBuiltInGsplatMaterial(
+    bool is_magic_window_mode, size_t render_group_length) {
+  if (render_group_length > 0) {
+    AddVector(render_group_length + 1, 1);
+  }
+
+  if (is_magic_window_mode) {
+    // MagicWindowSpec table: magic_window_offscreen_resolution(8),
+    // render_group(4)
+    AddTable({8, 4});
+  } else {
+    // GsplatSpec table: render_group(4)
+    AddTable({4});
+  }
+
+  // BuiltInMaterialGsplatSpec table: material_mode(4), entity(4),
+  // mode_spec_type(1), mode_spec(4), use_triangles_for_splats(1 - struct),
+  // has_precomputed_data_texture(1 - struct)
+  AddTable({4, 4, 1, 4, 1, 1});
+
+  // BuiltInMaterialRequest table: material_instance_id(8), data_type(1),
+  // data(4)
+  AddTable({8, 1, kReferenceSize});
+
+  // Request table: offset(4), type(1)
+  AddRequest();
+
+  return *this;
+}
+
+FlatbufferSizeCalculator&
+FlatbufferSizeCalculator::AddRequestBuiltInJxrMediaMaterial() {
+  // BuiltInMaterial1b616c8a table: shape(1), use_super_sampling(1 - struct),
+  // render_eye_target(1), blending_mode(1)
+  AddTable({1, 1, 1, 1});
+
+  // BuiltInMaterialRequest table: material_instance_id(8), data_type(1),
+  // data(4)
+  AddTable({8, 1, kReferenceSize});
+
+  // Request table: offset(4), type(1)
+  AddRequest();
+
+  return *this;
+}
+
+FlatbufferSizeCalculator&
+FlatbufferSizeCalculator::AddRequestBuiltInPhotosTexture3DMaterial() {
+  // BuiltInMaterialD1750064 table: empty
+  AddTable({});
+
+  // BuiltInMaterialRequest table: material_instance_id(8), data_type(1),
+  // data(4)
+  AddTable({8, 1, kReferenceSize});
+
+  // Request table: offset(4), type(1)
+  AddRequest();
+
+  return *this;
+}
+
+FlatbufferSizeCalculator&
+FlatbufferSizeCalculator::AddRequestBuiltInSVXRPlaneMaterial() {
+  // BuiltInMaterialbd7fe08c table: empty
+  AddTable({});
+
+  // BuiltInMaterialRequest table: material_instance_id(8), data_type(1),
+  // data(4)
+  AddTable({8, 1, kReferenceSize});
+
+  // Request table: offset(4), type(1)
+  AddRequest();
+
+  return *this;
+}
+
+FlatbufferSizeCalculator&
+FlatbufferSizeCalculator::AddRequestBuiltInSVXRFootprintMaterial() {
+  // BuiltInMaterial0d0cb9aa table: empty
+  AddTable({});
+
+  // BuiltInMaterialRequest table: material_instance_id(8), data_type(1),
+  // data(4)
+  AddTable({8, 1, kReferenceSize});
+
+  // Request table: offset(4), type(1)
+  AddRequest();
+
+  return *this;
+}
+
+FlatbufferSizeCalculator&
+FlatbufferSizeCalculator::AddRequestBuiltInTextureExternalMaterial() {
+  // BuiltInMaterialTextureExternal table: empty
+  AddTable({});
+
+  // BuiltInMaterialRequest table: material_instance_id(8), data_type(1),
+  // data(4)
+  AddTable({8, 1, kReferenceSize});
+
+  // Request table: offset(4), type(1)
+  AddRequest();
+
+  return *this;
+}
+
+FlatbufferSizeCalculator&
+FlatbufferSizeCalculator::AddRequestBuiltInVignetteMaterial() {
+  // BuiltInMaterialE3ca0ab9 table: empty
+  AddTable({});
+
+  // BuiltInMaterialRequest table: material_instance_id(8), data_type(1),
+  // data(4)
+  AddTable({8, 1, kReferenceSize});
+
+  // Request table: offset(4), type(1)
+  AddRequest();
+
+  return *this;
+}
+
+FlatbufferSizeCalculator&
+FlatbufferSizeCalculator::AddRequestBuiltInWaterReflectionMaterial() {
+  // BuiltInMaterial5cf26af8 table: transparent(1)
+  AddTable({1});
+
+  // BuiltInMaterialRequest table: material_instance_id(8), data_type(1),
+  // data(4)
+  AddTable({8, 1, kReferenceSize});
+
+  // Request table: offset(4), type(1)
+  AddRequest();
+
+  return *this;
+}
+
+FlatbufferSizeCalculator&
+FlatbufferSizeCalculator::AddRequestBuiltInYouTubeStereoPlayerMaterial() {
+  // BuiltInMaterialEb117dd9 table: stereo_type(1)
+  AddTable({1});
+
+  // BuiltInMaterialRequest table: material_instance_id(8), data_type(1),
+  // data(4)
+  AddTable({8, 1, kReferenceSize});
+
+  // Request table: offset(4), type(1)
+  AddRequest();
+
+  return *this;
 }
 
 FlatbufferSizeCalculator& FlatbufferSizeCalculator::AddBeginMessageGroup() {
@@ -373,6 +550,53 @@ FlatbufferSizeCalculator& FlatbufferSizeCalculator::AddScratchSpace() {
 }
 
 // LINT.ThenChange(//depot/google3/third_party/split_engine/schemas/split_engine_ipc.fbs)
+
+FlatbufferSizeCalculator& FlatbufferSizeCalculator::AddStruct(
+    size_t size, size_t alignment) {
+  TrackMinAlign(alignment);
+  Pad(alignment);
+  offset_ += size;
+  return *this;
+}
+
+FlatbufferSizeCalculator&
+FlatbufferSizeCalculator::AddRequestCustomFilamentMaterial(
+    size_t material_source_length, const MaterialPreCompileOptions& options) {
+  // Precompile constants.
+  for (const MaterialPreCompileConstant& constant : options.constants) {
+    // constant name string
+    AddVector(constant.name.size() + 1, 1);
+    // constant value struct
+    if (constant.value.index() == MaterialPreCompileConstant::kValue_IntValue ||
+        constant.value.index() ==
+            MaterialPreCompileConstant::kValue_FloatValue) {
+      AddStruct(4, 4);
+    } else if (constant.value.index() ==
+               MaterialPreCompileConstant::kValue_BoolValue) {
+      AddStruct(1, 1);
+    }
+    // MaterialPrecompileConstant table: name(4), value_type(1), value(4)
+    AddTable({4, 1, 4});
+  }
+  // Vector of references to constants
+  AddReferenceVector(options.constants.size());
+  // MaterialPrecompileOptions table: constants(4)
+  AddTable({4});
+
+  // source string
+  AddVector(material_source_length + 1, 1);
+
+  // FilamentMaterialSpec table: source(4), options(4)
+  AddTable({4, 4});
+
+  // AddCustomMaterialRequest table: material_id(8), spec_type(1), spec(4)
+  AddTable({8, 1, 4});
+
+  // Request table: offset(4), type(1)
+  AddRequest();
+
+  return *this;
+}
 
 FlatbufferSizeCalculator& FlatbufferSizeCalculator::Finish() {
   offset_ += kReferenceSize;  // root_offset

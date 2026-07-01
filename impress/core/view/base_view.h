@@ -346,6 +346,38 @@ class BaseView : public Rememberer,
 #endif
 
   ~BaseView() override {}
+
+  // Returns the underlying filament Engine used by this Impress view.
+  //
+  // Guaranteed to be available within and after View::Setup.
+  //
+  // If you are a user of Impress, only access filament APIs directly if you
+  // have a specific reason to do so. Using filament directly is allowed for
+  // advanced users, but can risk creating an inconsistent state between
+  // Impress and Filament.
+  //
+  // See google3/third_party/impress/core/ncsb/overall_architecture.md for
+  // details about the Impress and Filament relationship.
+  filament::Engine* GetEngine() const { return engine_; }
+
+  // Returns the underlying filament TransformManager used by this Impress view.
+  //
+  // Guaranteed to be available within and after View::Setup.
+  //
+  // If you are a user of Impress, only access filament APIs directly if you
+  // have a specific reason to do so. Using filament directly is allowed for
+  // advanced users, but can risk creating an inconsistent state between
+  // Impress and Filament.
+  //
+  // See google3/third_party/impress/core/ncsb/overall_architecture.md for
+  // details about the Impress and Filament relationship.
+  filament::TransformManager* GetTransformManager() const {
+    return transform_manager_;
+  }
+
+ protected:
+  filament::Engine* engine_ = nullptr;
+  filament::TransformManager* transform_manager_ = nullptr;
 };
 
 }  // namespace imp

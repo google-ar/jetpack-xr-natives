@@ -80,7 +80,7 @@ constexpr WrapMode ConvertWrapMode(int wrap_mode) {
 }
 
 OptionalError ParseGltf(const BufferAccess& access,
-                        absl::optional<imp::gltf::imp_proto::Gltf>& out_gltf) {
+                        std::optional<gltf::imp_proto::Gltf>& out_gltf) {
   absl::string_view data(reinterpret_cast<const char*>(access.Data()),
                          access.Size());
   imp::gltf::imp_proto::Gltf parse_result;
@@ -258,7 +258,7 @@ constexpr const char* kErrDataTooShort = "data too short";
 constexpr const char* kErrBadVersion = "bad version";
 
 OptionalError ParseGlb(const BufferAccess& access,
-                       absl::optional<imp::gltf::imp_proto::Gltf>& out_gltf) {
+                       std::optional<gltf::imp_proto::Gltf>& out_gltf) {
   constexpr const size_t kGlbChunkHeaderSize = 8;
   constexpr const uint32_t kGlbVersion = 2;
   constexpr const uint32_t kGlbMagicJsonChunk = 0x4E4F534A;  // 'JSON'
@@ -333,9 +333,8 @@ OptionalError ParseGlb(const BufferAccess& access,
 
 }  // namespace
 
-OptionalError TryParseGltf(
-    const imp::BufferAccess& primary_resource,
-    absl::optional<imp::gltf::imp_proto::Gltf>& out_gltf) {
+OptionalError TryParseGltf(const imp::BufferAccess& primary_resource,
+                           std::optional<gltf::imp_proto::Gltf>& out_gltf) {
   constexpr const uint32_t kGlbMagic = 0x46546C67;  // 'glTF'
   // Check whether the buffer is a .glb file.
   if (primary_resource.Size() < kGlbHeaderSize) {

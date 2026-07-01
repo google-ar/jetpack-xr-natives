@@ -19,8 +19,10 @@
 
 #include <cstdint>
 #include <optional>
+#include <vector>
 
 #include "absl/base/attributes.h"
+#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
 #include "filament/filament/backend/include/backend/DriverEnums.h"
@@ -29,6 +31,7 @@
 #include "core/assets/asset_ptr.h"
 #include "core/common/small_source_location.h"
 #include "core/image/image_contents.h"
+#include "core/image/owned_image_content.h"
 #include "core/math/vec.h"
 #include "core/render/content_security_level.h"
 #include "core/render/image_asset.h"
@@ -53,33 +56,6 @@ class TextureFactory {
   using SamplerType = filament::Texture::Sampler;
   using ExternalImageHandle = filament::Texture::ExternalImageHandle;
 
-  // Options are parameters to change the appearance of textures created by the
-  // TextureFactory.
-  struct ABSL_DEPRECATED(
-      "Use TextureGenerationOptions and TextureSamplerOptions instead.")
-      Options {
-    // Determines how texture coordinates outside of [0,1] are handled.
-    WrapMode wrap_mode = WrapMode::CLAMP_TO_EDGE;
-
-    // Sampling method used when a texel covers multiple pixels.
-    MagFilter mag_filter = MagFilter::LINEAR;
-
-    // Sampling method used when a pixel covers multiple texels.
-    MinFilter min_filter = MinFilter::LINEAR;
-
-    // Adds extra texture samples to improve textures which are displayed at an
-    // oblique angle to the camera. Should be a power-of-two. The default is 1.
-    // The maximum permissible value is 128.
-    float anisotropy = 1.0;
-
-    // Optionally specify the number of mipmap levels to generate at runtime.
-    // If no value is given, mipmaps are not generated.
-    std::optional<uint8_t> generated_mipmap_levels = {};
-
-    // Optional override to the default format in the ImageAsset object.
-    std::optional<Format> texture_format_override = {};
-  };
-
   // Used for configuring how textures are created.
   // These setting are mirroring the available settings in
   // filament::Texture::Builder:
@@ -97,9 +73,6 @@ class TextureFactory {
     std::optional<uint32_t> depth;
     // Number of mip map levels of the texture.
     std::optional<uint8_t> levels;
-    // Sampler type of the texture.
-    ABSL_DEPRECATED("Use TextureCreationSettings::sampler_options instead.")
-    std::optional<SamplerType> sampler_type;
     // Usage of the texture.
     std::optional<Usage> usage;
     // With Metal, the id<MTLTexture> object should be cast to an intptr_t
@@ -155,45 +128,7 @@ class TextureFactory {
       TextureGenerationOptions generation_options = {},
       TextureSamplerOptions sampler_options = {});
 
-  // Create a 'normal' texture from the resource.
-  // TODO: Refactor to use AssetPtr<ImageAsset>
-  ABSL_DEPRECATED("Use CreateTexture(AssetPtr<ImageAsset>) instead.")
-  TexturePtr CreateTexture(const ImageAsset& image);
 
-  // Creates an empty texture of specified size and format.
-  // TODO: This does not send the texture data to split engine.
-  ABSL_DEPRECATED("Use CreateTexture(TextureCreationSettings) instead.")
-  TexturePtr CreateTexture(
-      int width, int height, Format format,
-      std::optional<absl::string_view> name = std::nullopt);
-
-  // Creates an empty texture of specified size, format, and usage.
-  ABSL_DEPRECATED("Use CreateTexture(TextureCreationSettings) instead.")
-  TexturePtr CreateTexture(int width, int height, Format format, Usage usage);
-
-  // Creates an empty texture of specified size, format, usage, and options.
-  ABSL_DEPRECATED("Use CreateTexture(..., TextureSamplerOptions) instead.")
-  TexturePtr CreateTexture(
-      int width, int height, Format format, Usage usage, Options options,
-      std::optional<absl::string_view> name = std::nullopt);
-
-  // Creates an empty texture of specified size, format, usage, and options.
-  ABSL_DEPRECATED("Use CreateTexture(TextureCreationSettings) instead.")
-  TexturePtr CreateTexture(
-      int width, int height, Format format, Usage usage,
-      TextureSamplerOptions sampler_options,
-      std::optional<absl::string_view> name = std::nullopt);
-
-  // Creates a Filament texture by importing a native texture.
-  // With Metal, the id<MTLTexture> object should be cast to an intptr_t
-  // using CFBridgingRetain to transfer ownership to Filament. Filament
-  // will release ownership of the texture object when the Filament texture
-  // is destroyed. The width, height, levels, and format should match what the
-  // metal texture returns.
-  ABSL_DEPRECATED("Use CreateTexture(TextureCreationSettings) instead.")
-  TexturePtr CreateTexture(intptr_t id, uint32_t width, uint32_t height,
-                           uint8_t levels, Format format,
-                           Usage usage = Usage::DEFAULT);
 
   // Creates an empty texture of specified size, levels, format, sampler type,
   // usage, options and native texture id.
@@ -208,11 +143,7 @@ class TextureFactory {
   // The textures' upper left will always be at (0, 0).
   // Here's a minimal shader that shows how to sample the texture array:
   // third_party/impress/core/view/framewoxrk/tests/data/texture_array.mat
-  ABSL_DEPRECATED(
-      "Use CreateTexture(..., TextureGenerationOptions, TextureSamplerOptions) "
-      "instead.")
-  TexturePtr CreateTexture(absl::Span<const AssetPtr<ImageAsset>> images,
-                           Options options);
+
   TexturePtr CreateTexture(absl::Span<const AssetPtr<ImageAsset>> images,
                            TextureGenerationOptions generation_options,
                            TextureSamplerOptions sampler_options);
@@ -224,12 +155,6 @@ class TextureFactory {
   // asynchronously.
   // TODO: This variant correctly sends the texture data to split
   // engine. The other variants should be updated to do the same.
-  ABSL_DEPRECATED(
-      "Use CreateTexture(..., TextureGenerationOptions, TextureSamplerOptions) "
-      "instead.")
-  OwnedTexturePtr CreateTexture(
-      image::ImageContents& contents, Options options,
-      std::optional<absl::string_view> name = std::nullopt);
 
   OwnedTexturePtr CreateTexture(
       image::ImageContents& contents,
@@ -250,6 +175,12 @@ class TextureFactory {
   // unique_ptr, this makes it the official owner of the memory.
   TexturePtr WrapTexture(filament::Texture* texture,
                          const filament::backend::SamplerParams& params = {});
+
+  // Borrows a placeholder texture matching the target and internal format of
+  // the given texture.
+  absl::StatusOr<BorrowedTexturePtr> BorrowMatchingPlaceholderTexture(
+      const BorrowedTexturePtr& texture,
+      SmallSourceLocation loc = SmallSourceLocation::Current());
 
   // Borrows a white placeholder texture for assigning to unused texture
   // samplers.
@@ -274,9 +205,26 @@ class TextureFactory {
   BorrowedTexturePtr BorrowRGBA32UIPlaceholderTexture(
       SmallSourceLocation loc = SmallSourceLocation::Current());
 
+  // Borrows a placeholder texture for assigning to unused texture samplers.
+  BorrowedTexturePtr BorrowR11G11B10FPlaceholderTexture(
+      SmallSourceLocation loc = SmallSourceLocation::Current());
+
+  BorrowedTexturePtr BorrowRGBA8ArrayPlaceholderTexture(
+      SmallSourceLocation loc = SmallSourceLocation::Current());
+
+  BorrowedTexturePtr BorrowRGBA32UIArrayPlaceholderTexture(
+      SmallSourceLocation loc = SmallSourceLocation::Current());
+
+  BorrowedTexturePtr BorrowR11G11B10FArrayPlaceholderTexture(
+      SmallSourceLocation loc = SmallSourceLocation::Current());
+
  private:
-  // Creates a singleton placeholder to borrow via BorrowPlaceholderTexture().
-  OwnedTexturePtr CreatePlaceholderTexture(uint32_t pixel);
+  // Creates a singleton placeholder to borrow via BorrowPlaceholderTexture.
+  OwnedTexturePtr CreateRGBA8PlaceholderTexture(uint32_t pixel);
+  // Creates a singleton placeholder 2D texture array to borrow.
+  OwnedTexturePtr CreateRGBA8ArrayPlaceholderTexture();
+  // Creates a singleton RGBA32UI placeholder 2D texture array to borrow.
+  OwnedTexturePtr CreateRGBA32UIArrayPlaceholderTexture();
   // Creates a singleton placeholder cubemap to borrow via
   // BorrowPlaceholderCubemapTexture().
   OwnedTexturePtr CreatePlaceholderCubemapTexture();
@@ -284,13 +232,37 @@ class TextureFactory {
   OwnedTexturePtr CreateRGBA32FPlaceholderTexture();
   // Creates a singleton RGBA32UI placeholder to borrow.
   OwnedTexturePtr CreateRGBA32UIPlaceholderTexture();
+  // Creates a singleton R11G11B10F placeholder to borrow.
+  OwnedTexturePtr CreateR11G11B10FPlaceholderTexture();
+  // Creates a singleton R11G11B10F placeholder 2D texture array to borrow.
+  OwnedTexturePtr CreateR11G11B10FArrayPlaceholderTexture();
+
+  // Creates a 2x2 placeholder texture with the given pixel
+  // value, format, data format, and data type.
+  template <typename T>
+  OwnedTexturePtr Create2x2PlaceholderTexture(
+      T pixel_value, filament::backend::TextureFormat format,
+      filament::backend::PixelDataFormat data_format,
+      filament::backend::PixelDataType data_type,
+      TextureSamplerOptions sampler_options, absl::string_view name) {
+    constexpr int kSize = 2;
+    auto pixels = std::make_unique<std::vector<T>>(4, pixel_value);
+    image::OwnedImageContents<T> image_contents(kSize, kSize, std::move(pixels),
+                                                format, data_format, data_type);
+    return CreateTexture(image_contents, TextureGenerationOptions{},
+                         sampler_options, name);
+  }
 
   BaseView& view_;
-  OwnedTexturePtr placeholder_texture_;
-  OwnedTexturePtr placeholder_texture_black_;
+  OwnedTexturePtr rgba8_white_placeholder_texture_;
+  OwnedTexturePtr rgba8_black_placeholder_texture_;
   OwnedTexturePtr placeholder_cubemap_texture_;
   OwnedTexturePtr rgba32f_placeholder_texture_;
   OwnedTexturePtr rgba32ui_placeholder_texture_;
+  OwnedTexturePtr r11g11b10f_placeholder_texture_;
+  OwnedTexturePtr rgba8_array_placeholder_texture_;
+  OwnedTexturePtr rgba32ui_array_placeholder_texture_;
+  OwnedTexturePtr r11g11b10f_array_placeholder_texture_;
 };
 
 }  // namespace imp

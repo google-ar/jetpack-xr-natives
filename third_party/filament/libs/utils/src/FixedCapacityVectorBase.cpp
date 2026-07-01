@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 #include "filament/libs/utils/include/utils/Panic.h"
 
 #include <stddef.h>

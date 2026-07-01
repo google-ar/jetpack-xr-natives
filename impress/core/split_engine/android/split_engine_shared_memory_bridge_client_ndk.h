@@ -108,8 +108,6 @@ class SplitEngineSharedMemoryBridgeClientNdk
   // constructor, which is the IBinder referring to the receiving service.
   ndk::SpAIBinder bridge_handle_;
   JavaVM* java_vm_;
-  std::unique_ptr<SplitEngineMessageGroupCallback>
-      release_message_group_callback_;
   int next_message_group_id_ = 0;
 };
 

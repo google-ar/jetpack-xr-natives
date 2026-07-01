@@ -105,13 +105,13 @@ class VertexFormat {
 
   // Returns the index for |attribute|, or nullopt if not present. This
   // is recalculated and not cached to save space and is only a short vector.
-  absl::optional<size_t> GetIndexForAttribute(VertexAttribute attribute,
-                                              size_t group_idx = 0) const;
+  std::optional<size_t> GetIndexForAttribute(VertexAttribute attribute,
+                                             size_t group_idx = 0) const;
 
   // Returns the AttributeKey for |attribute|, or nullopt if not present.
   // The AttributeKey is used to directly access the attribute data in the
   // vertex buffer, and also has information to easily validate the data.
-  absl::optional<AttributeKey> GetKeyForAttribute(
+  std::optional<VertexFormat::AttributeKey> GetKeyForAttribute(
       VertexAttribute attribute) const;
 
   // Returns the attribute at |index|. Fatals if out of bounds.

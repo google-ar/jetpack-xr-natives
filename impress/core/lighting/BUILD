@@ -182,7 +182,6 @@ cc_library(
     deps = [
         "//core/image",
         "//core/math",
-        "@third_party//filament/filament:filament_hdrs",
     ],
     alwayslink = 1,
 )

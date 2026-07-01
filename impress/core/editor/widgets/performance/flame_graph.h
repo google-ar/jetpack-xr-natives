@@ -17,6 +17,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <thread>  // NOLINT: We show graphs by thread id.
 
 #include "absl/container/flat_hash_map.h"
@@ -27,18 +28,16 @@
 
 namespace imp::editor {
 
-class FrameTimePanel;
+class ProfilerDataProvider;
 
 // Displays a flame graph of all samples for a range of frames.
-// Rendered as a subpanel of the FrameTimePanel.
 class FlameGraph {
  public:
   FlameGraph() = default;
   ~FlameGraph() = default;
 
-  void DrawPanel(float width, int start_frame, int end_frame,
-                 SampleProcessor& sample_processor,
-                 FrameTimePanel& frame_time_panel);
+  void DrawPanel(float width, ProfilerDataProvider& data_provider,
+                 absl::string_view search_query);
 
  private:
   struct Rect {
@@ -51,12 +50,13 @@ class FlameGraph {
   enum class DisplayStyle {
     kNormal,
     kFaded,
+    kSearchFaded,
   };
 
   // Arguments for DrawFlameGraphNode.
   // Constantly updated and passed by reference to reduce stack pressure.
   struct DrawNodeArgs {
-    FrameTimePanel& frame_time_panel;
+    ProfilerDataProvider& data_provider;
     ImDrawList* draw_list;
     const SampleNode* node;
     int depth;
@@ -67,6 +67,7 @@ class FlameGraph {
     DisplayStyle display_style;
     uint64_t frame_start_time_ns;
     uint64_t selected_frame_start_time_ns;
+    absl::string_view search_query;
   };
 
   // Draws a rectangle in the flame graph. Width is based on time elapsed.

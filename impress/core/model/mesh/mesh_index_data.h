@@ -65,6 +65,11 @@ class MeshIndexData {
   // index data.
   void TruncateIndices(size_t new_count);
 
+  // Updates a subset of the raw byte buffer with new data.
+  //   offset: The byte offset into the index buffer to start writing.
+  //   new_data: The new raw byte data to copy into the index buffer.
+  void UpdateData(size_t offset, absl::Span<const uint8_t> new_data);
+
  private:
   // If the indices are moved, fatals.
   void CheckIndicesNotMoved() const;

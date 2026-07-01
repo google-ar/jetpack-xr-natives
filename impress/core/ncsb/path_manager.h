@@ -20,7 +20,6 @@
 #include <queue>
 #include <vector>
 
-#include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "core/common/robin_set.h"
 #include "core/math/mat.h"
@@ -135,13 +134,10 @@ NodeHandle PathManager::FindDescendantOrSelfIf(NodeHandle context,
 
 template <typename Fn>
 NodeHandle PathManager::FindIf(const Fn& predicate) {
-  RootNodeSet::const_iterator iter = root_nodes_.begin();
-  while (iter != root_nodes_.end()) {
-    NodeHandle result = FindDescendantOrSelfIf(*iter, predicate);
-    if (result) {
+  for (NodeHandle root : root_nodes_) {
+    if (NodeHandle result = FindDescendantOrSelfIf(root, predicate)) {
       return result;
     }
-    ++iter;
   }
   return NodeHandle();
 }
@@ -150,8 +146,7 @@ template <typename T>
 ComponentHandle<T> PathManager::GetComponentFromAncestorOrSelf(
     NodeHandle node) const {
   while (node) {
-    ComponentHandle<T> comp = node->GetComponent<T>();
-    if (comp) {
+    if (ComponentHandle<T> comp = node->GetComponent<T>()) {
       return comp;
     }
     node = node->GetParent();
@@ -162,28 +157,30 @@ ComponentHandle<T> PathManager::GetComponentFromAncestorOrSelf(
 template <typename T>
 std::vector<ComponentHandle<T>> PathManager::GetComponentsInDescendantsOrSelf(
     NodeHandle node) const {
+  if (!node) {
+    return {};
+  }
+
   std::vector<ComponentHandle<T>> components;
-  std::queue<NodeHandle> search_queue;
-  search_queue.push(node);
+  std::vector<NodeHandle> current_level;
+  std::vector<NodeHandle> next_level;
 
-  while (!search_queue.empty()) {
-    NodeHandle current_node = search_queue.front();
-    search_queue.pop();
+  current_level.push_back(node);
 
-    if (!current_node) {
-      continue;
+  while (!current_level.empty()) {
+    for (NodeHandle current_node : current_level) {
+      if (ComponentHandle<T> comp = current_node->GetComponent<T>()) {
+        components.emplace_back(comp);
+      }
+
+      // Collect the next generation of nodes
+      for (NodeHandle descendant : current_node->GetChildrenRange()) {
+        next_level.push_back(descendant);
+      }
     }
 
-    ComponentHandle<T> comp = current_node->GetComponent<T>();
-
-    if (comp) {
-      components.emplace_back(comp);
-    }
-
-    // Recursively search in descendants
-    for (NodeHandle descendant : current_node->GetChildrenRange()) {
-      search_queue.push(descendant);
-    }
+    current_level.clear();
+    current_level.swap(next_level);
   }
 
   return components;

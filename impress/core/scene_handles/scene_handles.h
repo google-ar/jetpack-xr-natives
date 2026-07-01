@@ -352,7 +352,7 @@ class GltfNodeSceneHandle : public NodeHandle, public SceneHandleInterface {
 template <typename T>
 absl::Status ComponentSceneHandle<T>::AssignSceneHandleForIdentifier(
     NodeHandle identified_node, NodeHandle attached_node) {
-  if (absl::holds_alternative<absl::monostate>(
+  if (absl::holds_alternative<std::monostate>(
           scene_handle_helper_.GetIdentifier())) {
     // No identifier assigned.
     return absl::OkStatus();

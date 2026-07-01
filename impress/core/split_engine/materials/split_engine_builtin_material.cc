@@ -14,6 +14,7 @@
 
 #include "core/split_engine/materials/split_engine_builtin_material.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <utility>
@@ -32,22 +33,38 @@
 #include "core/common/small_source_location.h"
 #include "core/materials/material.h"
 #include "core/render/texture.h"
-#include "core/split_engine/android/split_engine_android_bridge.h"
 #include "core/split_engine/flatbuffer_utils.h"
+#include "core/split_engine/material_requester.h"  // IWYU pragma: keep
+#include "core/split_engine/material_requester_local.h"
 #include "core/split_engine/materials/builtin/builtin_material.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
 #include "core/split_engine/materials/split_engine_builtin_material_factory.h"
 #include "core/split_engine/materials/split_engine_material.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_serializer.h"
+#include "core/split_engine/transport/request_sender.h"
 #include "core/view/base_view.h"
 #include "core/view/utils/frame_time.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
 namespace imp::split_engine {
 
+absl::StatusOr<RequestSender::RequestBuilder>
+SplitEngineBuiltinMaterial::CreateFlatBufferBuilder(BaseView& view,
+                                                    size_t size) {
+  if (view.AreSplitEngineMaterialsInLocalMode()) {
+    return view.GetRegistry()
+        .GetOrCreate<MaterialRequesterLocal>()
+        .CreateFlatBufferBuilder(size);
+  } else {
+    return view.GetSplitEngineSerializer()
+        ->GetMaterialRequester()
+        .CreateFlatBufferBuilder(size);
+  }
+}
+
 Future<OwnedMaterialPtr> SplitEngineBuiltinMaterial::RequestBuiltInMaterial(
-    BaseView& view, std::unique_ptr<flatbuffers::FlatBufferBuilder> fbb,
+    BaseView& view, RequestSender::RequestBuilder fbb,
     android_xr::schemas::BuiltInMaterialSpec material_type,
     flatbuffers::Offset<void> spec) {
   if (view.AreSplitEngineMaterialsInLocalMode()) {
@@ -73,18 +90,19 @@ Future<OwnedMaterialPtr> SplitEngineBuiltinMaterial::RequestBuiltInMaterial(
 
   return CreatePlaceholderMaterial(view).Then(
       [&view, fbb = std::move(fbb), material_type,
-       spec](OwnedMaterialPtr placeholder_material) {
+       spec](OwnedMaterialPtr placeholder_material) mutable {
+        const uint64_t material_instance_id = SplitEngineSerializer::GetId(
+            placeholder_material->GetFilamentMaterialInstance());
+        IMP_LOG(imp::INFO) << "[SplitEngineBuiltinMaterial]: create material instance: "
+                  << material_instance_id;
         flatbuffers::Offset<android_xr::schemas::BuiltInMaterialRequest>
             built_in_material_request =
                 android_xr::schemas::CreateBuiltInMaterialRequest(
-                    *fbb,
-                    SplitEngineSerializer::GetId(
-                        placeholder_material->GetFilamentMaterialInstance()),
-                    material_type, spec);
-        return SendRequest<android_xr::schemas::BuiltInMaterialRequest,
-                           absl::Status>(
-                   view.GetSplitEngineSerializer()->GetBridge(), *fbb,
-                   built_in_material_request)
+                    *fbb, material_instance_id, material_type, spec);
+        return view.GetSplitEngineSerializer()
+            ->GetMaterialRequester()
+            .RequestBuiltInMaterialInstance(std::move(fbb),
+                                            built_in_material_request)
             .Then([placeholder_material =
                        std::move(placeholder_material)]() mutable {
               return OwnedMaterialPtr(std::move(placeholder_material));

@@ -95,8 +95,13 @@ void RenderableManagerWrapper::SetGeometryAt(
   if (spy_)
     spy_->SetGeometryAt(instance, primitiveIndex, type, vertices, indices,
                         offset, count);
-  GetRenderableManager().setGeometryAt(instance, primitiveIndex, type, vertices,
-                                       indices, offset, count);
+  if (indices) {
+    GetRenderableManager().setGeometryAt(instance, primitiveIndex, type,
+                                         vertices, indices, offset, count);
+  } else {
+    GetRenderableManager().setGeometryAt(instance, primitiveIndex, type,
+                                         vertices, offset, count);
+  }
 }
 
 void RenderableManagerWrapper::SetBonesInternal(
@@ -243,16 +248,25 @@ RenderableManagerWrapper::Builder& RenderableManagerWrapper::Builder::Geometry(
   if (spy_)
     spy_->Geometry(index, type, vertices, indices, offset, minIndex, maxIndex,
                    count);
-  real_builder_.geometry(index, type, vertices, indices, offset, minIndex,
-                         maxIndex, count);
+  if (indices) {
+    real_builder_.geometry(index, type, vertices, indices, offset, minIndex,
+                           maxIndex, count);
+  } else {
+    real_builder_.geometry(index, type, vertices, offset, count);
+  }
   return *this;
 }
 
 RenderableManagerWrapper::Builder& RenderableManagerWrapper::Builder::Geometry(
     size_t index, PrimitiveType type, VertexBuffer* vertices,
     IndexBuffer* indices) noexcept {
-  return Geometry(index, type, vertices, indices, 0, 0,
-                  vertices->getVertexCount() - 1, indices->getIndexCount());
+  if (indices) {
+    return Geometry(index, type, vertices, indices, 0, 0,
+                    vertices->getVertexCount() - 1, indices->getIndexCount());
+  } else {
+    return Geometry(index, type, vertices, nullptr, 0, 0, 0,
+                    vertices->getVertexCount());
+  }
 }
 
 RenderableManagerWrapper::Builder& RenderableManagerWrapper::Builder::Geometry(

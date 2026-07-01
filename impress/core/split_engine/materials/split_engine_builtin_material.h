@@ -17,11 +17,13 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_MATERIALS_SPLIT_ENGINE_BUILTIN_MATERIAL_H_
 #define THIRD_PARTY_IMPRESS_CORE_SPLIT_ENGINE_MATERIALS_SPLIT_ENGINE_BUILTIN_MATERIAL_H_
 
-#include <memory>
+#include <cstddef>
 
+#include "absl/status/statusor.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
+#include "core/common/owned_ptr.h"
 #include "core/common/robin_set.h"
 #include "core/common/small_source_location.h"
 #include "core/materials/material.h"
@@ -29,6 +31,7 @@
 #include "core/ncsb/update_system.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
 #include "core/split_engine/materials/split_engine_material.h"
+#include "core/split_engine/transport/request_sender.h"
 #include "core/view/utils/frame_time.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 
@@ -38,8 +41,11 @@ namespace imp::split_engine {
 // encapsulates the boilerplate for serializing material parameters.
 class SplitEngineBuiltinMaterial : public SplitEngineMaterial {
  public:
+  static absl::StatusOr<RequestSender::RequestBuilder> CreateFlatBufferBuilder(
+      BaseView& view, size_t size);
+
   static Future<OwnedMaterialPtr> RequestBuiltInMaterial(
-      BaseView& view, std::unique_ptr<flatbuffers::FlatBufferBuilder> fbb,
+      BaseView& view, RequestSender::RequestBuilder fbb,
       android_xr::schemas::BuiltInMaterialSpec material_type,
       flatbuffers::Offset<void> spec);
 

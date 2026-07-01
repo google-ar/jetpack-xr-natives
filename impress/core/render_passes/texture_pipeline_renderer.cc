@@ -127,6 +127,8 @@ filament::Texture::InternalFormat FormatFromTexture(
       return filament::Texture::InternalFormat::RGB32UI;
     case TexturePipelineRendererState::Texture::RGBA32UI:
       return filament::Texture::InternalFormat::RGBA32UI;
+    case TexturePipelineRendererState::Texture::R11G11B10F:
+      return filament::Texture::InternalFormat::R11F_G11F_B10F;
     default:
       // This should never happen.
       IMP_LOG(imp::FATAL) << "Unsupported texture format in TexturePipelineRenderer.";
@@ -450,14 +452,14 @@ absl::Status TexturePipelineRenderer::InitializeTextures(
   uint2 texture_size = TextureSizeFromPass(pass, GetView());
 
   // Mark old textures for deletion.
-  absl::optional<TextureRegistry::ScopedTextureRegistration>&
+  std::optional<TextureRegistry::ScopedTextureRegistration>&
       color_texture_registration = runtime_pass.color_texture_registration;
   if (color_texture_registration.has_value()) {
     textures_marked_for_deletion_.push_back(
         color_texture_registration->Release());
     color_texture_registration = absl::nullopt;
   }
-  absl::optional<TextureRegistry::ScopedTextureRegistration>&
+  std::optional<TextureRegistry::ScopedTextureRegistration>&
       depth_texture_registration = runtime_pass.depth_texture_registration;
   if (depth_texture_registration.has_value()) {
     textures_marked_for_deletion_.push_back(

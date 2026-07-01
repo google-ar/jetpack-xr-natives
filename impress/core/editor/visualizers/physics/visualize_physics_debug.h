@@ -24,6 +24,7 @@
 #include "core/view/base_view.h"
 
 namespace imp::editor {
+
 // Widget to visualize physics collidables.
 class VisualizePhysicsDebug : public Widget, public Rememberer {
  public:

@@ -73,6 +73,9 @@ class SplitEngineRenderer {
       OnFinishedCallback on_finished) = 0;
   virtual absl::Status RemoveMeshData(
       const android_xr::schemas::RemoveMeshData& command) = 0;
+  virtual absl::Status UpdateMeshData(
+      const android_xr::schemas::UpdateMeshData& command,
+      OnFinishedCallback on_finished) = 0;
 
   virtual absl::Status AddMorphTargetBuffers(
       const android_xr::schemas::AddMorphTargetBuffers& command) = 0;

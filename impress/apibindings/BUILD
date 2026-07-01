@@ -807,14 +807,18 @@ cc_library(
     name = "jni_utils",
     srcs = ["jni_utils.cc"],
     hdrs = ["jni_utils.h"],
+    copts = imp_google3_copts(),
     deps = [
         ":stereo_surface",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/types:span",
         "@mediapipe//mediapipe/framework/port:status",
         "@third_party//filament/filament:filament_hdrs",
-    ],
+    ] + if_non_android([
+        "@bazel_tools//tools/jdk:jni",
+    ]),
     alwayslink = 1,
 )
 

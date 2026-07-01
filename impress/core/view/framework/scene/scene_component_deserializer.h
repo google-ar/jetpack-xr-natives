@@ -78,7 +78,7 @@ class SceneComponentDeserializer {
                                       absl::Span<const std::string>);
   using HasComponentFunc = bool(utils::Entity, ComponentManager*);
   using RemoveComponentFunc = void(utils::Entity, ComponentManager*);
-  using VisitFunc = absl::optional<Future<absl::Status>>(
+  using VisitFunc = std::optional<Future<absl::Status>>(
       NodeHandle, ComponentManager*, BaseStateVisitor*,
       bool should_enable_component);
   using DefaultSetupFunc = Future<absl::Status>(utils::Entity,

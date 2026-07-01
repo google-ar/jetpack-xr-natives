@@ -48,6 +48,8 @@ public class ImpViewController {
   private final View view;
   private final FrameScheduler frameScheduler;
   @Nullable private final android.view.View androidView;
+  private boolean shouldAlwaysAdvanceExecutor = false;
+  private boolean shouldAlwaysPreRender = false;
 
   public ImpViewController(
       FrameScheduler frameScheduler,
@@ -174,6 +176,22 @@ public class ImpViewController {
     return view;
   }
 
+  public void setAlwaysAdvanceExecutor(boolean shouldAlwaysAdvanceExecutor) {
+    this.shouldAlwaysAdvanceExecutor = shouldAlwaysAdvanceExecutor;
+  }
+
+  public boolean isAlwaysAdvanceExecutor() {
+    return shouldAlwaysAdvanceExecutor;
+  }
+
+  public void setAlwaysPreRender(boolean shouldAlwaysPreRender) {
+    this.shouldAlwaysPreRender = shouldAlwaysPreRender;
+  }
+
+  public boolean isAlwaysPreRender() {
+    return shouldAlwaysPreRender;
+  }
+
   public void setDisplayRotation(int rotation) {
     frameScheduler.runOnFrameThread(() -> view.setSurfaceRotation(rotation));
   }
@@ -222,6 +240,11 @@ public class ImpViewController {
     if (getNativeHandle() == 0
         || !view.hasSwapChain()
         || (uiHelper != null && !uiHelper.isReadyToRender())) {
+      if (shouldAlwaysAdvanceExecutor && getNativeHandle() != 0) {
+        view.advanceForegroundExecutor();
+      } else if (shouldAlwaysPreRender && getNativeHandle() != 0) {
+        view.isolatedPreRender(frameTimeNanos);
+      }
       return 0;
     }
     view.captureVsyncTime();

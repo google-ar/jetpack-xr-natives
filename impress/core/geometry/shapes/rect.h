@@ -32,16 +32,46 @@ struct Rect {
   // Computes the largest coordinates corner of the rectangle.
   constexpr float2 GetMax() const { return center + half_extent; }
 
+  // Returns a Rect that encompasses the two points.
+  static constexpr Rect FromPoints(const float2& p1, const float2& p2) {
+    const float2 min_pt = min(p1, p2);
+    const float2 max_pt = max(p1, p2);
+    return {
+        .center = (min_pt + max_pt) * 0.5f,
+        .half_extent = (max_pt - min_pt) * 0.5f,
+    };
+  }
+
   // Returns true if the given point is inside the rectangle.
-  constexpr inline bool Contains(const float2& point) const {
-    return point.x >= GetMin().x && point.x <= GetMax().x &&
-           point.y >= GetMin().y && point.y <= GetMax().y;
+  constexpr bool Contains(const float2& point) const {
+    const float2 min_pt = GetMin();
+    const float2 max_pt = GetMax();
+    return point.x >= min_pt.x && point.x <= max_pt.x && point.y >= min_pt.y &&
+           point.y <= max_pt.y;
+  }
+
+  // Returns true if the two rectangles intersect.
+  constexpr bool Intersects(const Rect& other) const {
+    const float2 min1 = GetMin();
+    const float2 max1 = GetMax();
+    const float2 min2 = other.GetMin();
+    const float2 max2 = other.GetMax();
+    return min1.x <= max2.x && max1.x >= min2.x && min1.y <= max2.y &&
+           max1.y >= min2.y;
+  }
+
+  // Returns true if the given rectangle is fully contained within this one.
+  constexpr bool Contains(const Rect& other) const {
+    const float2 min1 = GetMin();
+    const float2 max1 = GetMax();
+    const float2 min2 = other.GetMin();
+    const float2 max2 = other.GetMax();
+    return min2.x >= min1.x && max2.x <= max1.x && min2.y >= min1.y &&
+           max2.y <= max1.y;
   }
 
   // Returns the ratio of the rectangle's width to its height.
-  constexpr inline float GetAspect() const {
-    return half_extent.x / half_extent.y;
-  }
+  constexpr float GetAspect() const { return half_extent.x / half_extent.y; }
 
   // Center of the 2D rectangle.
   float2 center;

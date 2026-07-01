@@ -40,8 +40,10 @@
 #include "core/async/future_status_utils.h"
 #include "core/common/filament_helpers.h"
 #include "core/common/hash.h"
+#include "core/common/registry.h"
 #include "core/config.h"
 #include "core/graph/dependency_graph.h"
+#include "core/materials/material.h"
 #include "core/math/almost_equal.h"
 #include "core/math/quat.h"
 #include "core/math/transform.h"
@@ -57,12 +59,15 @@
 #include "core/proto/proto_reader.h"
 #include "core/proto/proto_writer.h"
 #include "core/proto/textproto_reader.h"
+#include "core/render/material_registry.h"
 #include "core/resources/resource_manager.h"
+#include "core/scene_handles/material_handle.h"
 #include "core/scene_handles/scene_handle_interface.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/animation/gltf_animator.h"
 #include "core/view/framework/assets/asset_manager.h"
 #include "core/view/framework/assets/gltf_renderer.h"
+#include "core/view/framework/assets/material_factory.h"
 #include "core/view/framework/camera/camera_component.h"
 #include "core/view/framework/collision/box_collider.h"
 #include "core/view/framework/collision/capsule_collider.h"
@@ -71,6 +76,7 @@
 #include "core/view/framework/collision/mesh_collider.h"
 #include "core/view/framework/collision/sphere_collider.h"
 #include "core/view/framework/lighting/light_component.h"
+#include "core/view/framework/render/material_definition.proto.imp.h"
 #include "core/view/framework/scene/load_scene_visitor.h"
 #include "core/view/framework/scene/scene_component_deserializer.h"
 #include "core/view/framework/scene/scene_identifier.h"
@@ -114,7 +120,7 @@ void ApplyTransform(ComponentHandle<SceneMetadata> scene_metadata,
   }
 
   if (scene_metadata && is_base &&
-      !absl::holds_alternative<absl::monostate>(data.rotation_oneof)) {
+      !absl::holds_alternative<std::monostate>(data.rotation_oneof)) {
     scene_metadata->SetBaseLocalRotation(rotation);
   }
 
@@ -769,14 +775,13 @@ Future<absl::Status> SceneSystem::SetupComponents(
   // allows us to support dependencies where component A needs to be setup
   // before component B even if component B is on a different node in the .isf.
   Future<absl::Status> result = graph.ParallelTraverse(
-      [this, load_scene_info = std::move(*load_scene_info),
-       &view = GetView()](HashValue type) mutable {
+      [this, load_scene_info, &view = GetView()](HashValue type) mutable {
         Future<absl::Status> inner_result(absl::OkStatus());
 
         const SceneComponentDeserializer::Handler* handler =
             scene_component_deserializer_.GetHandler(type);
         auto& node_and_component_data_list =
-            load_scene_info.handler_hash_to_node_and_comp_data[type];
+            load_scene_info->handler_hash_to_node_and_comp_data[type];
         auto& cm = view.GetComponentManager();
 
         // Helper for tracking information shared between each visit using
@@ -795,7 +800,7 @@ Future<absl::Status> SceneSystem::SetupComponents(
         // identifiers to the actual instantiated nodes when deserialization
         // occurs. This is used for scene handles.
         proto::ParseMessageVisitor visitor;
-        visitor.OnVisit([&load_scene_info, &visitor_info](
+        visitor.OnVisit([load_scene_info, &visitor_info](
                             SceneHandleInterface& scene_handle_interface) {
           // Map the NodeSceneHandle's identifier to the actual node created
           // from the .isf file.
@@ -804,15 +809,15 @@ Future<absl::Status> SceneSystem::SetupComponents(
               scene_handle_interface.GetIdentifier();
 
           if (absl::holds_alternative<std::string>(identifier)) {
-            auto itr = load_scene_info.names_to_nodes.find(
+            auto itr = load_scene_info->names_to_nodes.find(
                 absl::get<std::string>(identifier));
-            if (itr != load_scene_info.names_to_nodes.end()) {
+            if (itr != load_scene_info->names_to_nodes.end()) {
               identified_node = itr->second;
             }
           } else if (absl::holds_alternative<int32_t>(identifier)) {
-            auto itr = load_scene_info.ids_to_nodes.find(
+            auto itr = load_scene_info->ids_to_nodes.find(
                 absl::get<int32_t>(identifier));
-            if (itr != load_scene_info.ids_to_nodes.end()) {
+            if (itr != load_scene_info->ids_to_nodes.end()) {
               identified_node = itr->second;
             }
           }
@@ -820,6 +825,50 @@ Future<absl::Status> SceneSystem::SetupComponents(
           visitor_info.status.Update(
               scene_handle_interface.AssignSceneHandleForIdentifier(
                   identified_node, visitor_info.current_node));
+        });
+
+        Future<absl::Status> load_materials_future(absl::OkStatus());
+        // TODO: See if it is possible to avoid depending on the
+        // MaterialHandle.
+        visitor.OnVisit([this, &load_materials_future](MaterialHandle& handle) {
+          if (!handle.GetUrl().empty()) {
+            Future<absl::Status> load_material_future =
+                GetView()
+                    .GetAssetManager()
+                    .LoadProto<MaterialDefinition>(handle.GetUrl())
+                    .Then([this,
+                           &handle](AssetPtr<ProtoAsset<MaterialDefinition>>
+                                        proto_asset) {
+                      if (!proto_asset) {
+                        return Future<absl::Status>(absl::InternalError(
+                            "Failed to load MaterialDefinition proto"));
+                      }
+                      const MaterialDefinition& material_definition =
+                          proto_asset->GetProto();
+                      return GetView()
+                          .GetMaterialFactory()
+                          .LoadMaterial(material_definition)
+                          .Then([this, &handle,
+                                 proto_asset = std::move(proto_asset)](
+                                    MaterialPtr material) {
+                            MaterialRegistry& material_registry =
+                                GetView()
+                                    .GetRegistry()
+                                    .GetOrCreate<MaterialRegistry>();
+                            material_registry.RegisterMaterial(
+                                handle.GetUrl(), std::move(material),
+                                proto_asset->GetProto());
+                            OwnedMaterialPtr owned_material =
+                                std::move(material);
+                            handle.AssignMaterial(
+                                handle.GetUrl(),
+                                material_registry.GetMaterial(handle.GetUrl()));
+                            return absl::OkStatus();
+                          });
+                    });
+            load_materials_future =
+                load_materials_future.Combine(load_material_future);
+          }
         });
 
         for (const auto& pair : node_and_component_data_list) {
@@ -849,33 +898,43 @@ Future<absl::Status> SceneSystem::SetupComponents(
 
           bool should_enable_component = !metadata || !metadata->disabled;
 
-          // This visits the LoadSceneVisitor passed in to LoadScene.
-          absl::optional<Future<absl::Status>> visit_result =
-              handler->visit(node, &cm, load_scene_info.load_scene_visitor,
-                             should_enable_component);
+          auto setup_function = [this, node, handler, should_enable_component,
+                                 load_scene_info] {
+            auto& cm = GetView().GetComponentManager();
+            // This visits the LoadSceneVisitor passed in to LoadScene.
+            absl::optional<Future<absl::Status>> visit_result =
+                handler->visit(node, &cm, load_scene_info->load_scene_visitor,
+                               should_enable_component);
+            // Finally, this calls the Setup method of the component if there is
+            // one specified.
+            Future<absl::Status> setup_future;
+            if (visit_result) {
+              setup_future = *visit_result;
+            } else {
+              setup_future = handler->default_setup(node->GetEntity(), &cm,
+                                                    should_enable_component);
+            }
+            return setup_future;
+          };
 
-          // Finally, this calls the Setup method of the component if there is
-          // one specified.
-          Future<absl::Status> setup_future;
-          if (visit_result) {
-            setup_future = *visit_result;
-          } else {
-            setup_future = handler->default_setup(node->GetEntity(), &cm,
-                                                  should_enable_component);
-          }
-          if (setup_future.Ready()) {
+          Future<absl::Status> add_component_future =
+              load_materials_future.Ready()
+                  ? setup_function()
+                  : load_materials_future.Then(std::move(setup_function));
+
+          if (add_component_future.Ready()) {
             // If the future is already ready and has an ok status, then we
             // don't need to bother combining the futures. If the status is not
             // ok, then we can combine the future and break immediately since we
             // know the load has failed.
-            if (!setup_future.Get().ok()) {
-              inner_result = inner_result.Combine(setup_future);
+            if (!add_component_future.Get().ok()) {
+              inner_result = inner_result.Combine(add_component_future);
               break;
             }
           } else {
             // Combine the future, the future isn't ready yet and we don't know
             // the result.
-            inner_result = inner_result.Combine(setup_future);
+            inner_result = inner_result.Combine(add_component_future);
           }
         }
 

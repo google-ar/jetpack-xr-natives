@@ -32,11 +32,15 @@ enum class DragAndDropType {
   kNodeAsset,
   kMaterial,
   kTexture,
+  kMaterialHandle,
 };
 
 // Combo ImGui BeginDragAndDropSource + SetDragAndDropPayload + DragAndDropType.
 bool BeginDragAndDropSource(DragAndDropType drag_and_drop_type,
                             absl::string_view label, absl::string_view payload);
+
+void BeginDefaultDragAndDropSource(absl::string_view label,
+                                   absl::string_view payload);
 
 // Mirror of ImGui::SetDragAndDropPayload w/ DragAndDropType support.
 void SetDragAndDropPayload(DragAndDropType drag_and_drop_type,

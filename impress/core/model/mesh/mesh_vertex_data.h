@@ -97,6 +97,13 @@ class MeshVertexData {
   // vertex data.
   void TruncateVertices(size_t new_count);
 
+  // Updates a subset of the raw byte buffer with new data.
+  //   group_idx: The index of the attribute group (vertex buffer block) to
+  //   update. offset: The byte offset into that group's buffer to start
+  //   writing. new_data: The new raw byte data to copy into the buffer.
+  void UpdateData(size_t group_idx, size_t offset,
+                  absl::Span<const uint8_t> new_data);
+
  private:
   // If the vertices are moved, fatals.
   void CheckVerticesNotMoved(size_t group_idx) const;
@@ -132,7 +139,7 @@ template <typename T>
 T& MeshVertexData::VertexAttributeAt(size_t vertex_index,
                                      VertexFormat::VertexAttribute attribute) {
   const VertexFormat& vertex_format = description_.vertex_format;
-  absl::optional<VertexFormat::AttributeKey> key =
+  std::optional<VertexFormat::AttributeKey> key =
       vertex_format.GetKeyForAttribute(attribute);
   if (!key) {
     IMP_LOG(imp::FATAL) << "Attribute " << attribute

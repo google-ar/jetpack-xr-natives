@@ -142,14 +142,7 @@ GlyphAtlas::GlyphAtlas(BaseView& view,
       },
       this);
 
-  if (config.use_bitmap_surface_provider) {
-    view.GetDispatcher().Connect(
-        [this](const ViewPausedEvent& event) { canvas_source_->OnPause(); },
-        this);
-    view.GetDispatcher().Connect(
-        [this](const ViewResumedEvent& event) { canvas_source_->OnResume(); },
-        this);
-  } else {
+  if (!config.use_bitmap_surface_provider) {
     // Prevents an issue where the texture can get cleared and needs to be
     // redrawn when the view is resumed.
     if (config.force_reset_on_view_resumed) {
@@ -731,6 +724,7 @@ std::optional<AtlasPacker::ScopedAtlasEntry> GlyphAtlas::TryAddAtlasEntry(
 void GlyphAtlas::ClearUnusedGlyphs() {
   absl::MutexLock glyph_map_lock(glyph_map_mutex_);
   absl::MutexLock canvas_lock(canvas_mutex_);
+  bool did_clear_any = false;
   // Remove each glyph that is unused. Detect if it's unused if the ref
   // counter is at zero.
   for (auto glyph_itr = glyph_map_.begin(); glyph_itr != glyph_map_.end();) {
@@ -756,7 +750,14 @@ void GlyphAtlas::ClearUnusedGlyphs() {
       }
 
       glyph_map_.erase(copy_glyph_itr);
+      did_clear_any = true;
     }
+  }
+
+  if (did_clear_any && texture_status_ == TextureStatus::kStable &&
+      canvas_source_->IsFeatureSupported(
+          ScopedCanvas::Feature::kKeepContents)) {
+    texture_status_ = TextureStatus::kReadyToApplyDrawCommands;
   }
 }
 

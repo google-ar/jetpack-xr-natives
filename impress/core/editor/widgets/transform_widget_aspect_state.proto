@@ -12,26 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-syntax = "proto3";
+edition = "2024";
 
 package imp.editor;
 
 import "core/math/math.proto";
 import "core/scene_handles/scene_handles.proto";
 
-enum TransformAspect {
-  TRANSFORM_ASPECT_TRANSLATE = 0;
-  TRANSFORM_ASPECT_ROTATE = 1;
-  TRANSFORM_ASPECT_SCALE = 2;
+message TransformWidgetAspectTranslateState {
+  Float3 axis = 1;
 }
 
-message TransformWidgetAspectState {
-  option (imp.native_include) =
-      "core/editor/widgets/transform_widget_mode_control.h";
-
+message TransformWidgetAspectRotateState {
   Float3 axis = 1;
-  TransformAspect aspect = 2;
-  ComponentSceneHandle transform_widget_mode_control = 3
-      [(imp.template_type) = "TransformWidgetModeControl"];
+  // Implicit to prevent unset/true/false confusion from optional bool.
+  bool camera_facing = 2;
+}
+
+message TransformWidgetAspectScaleState {
+  Float3 axis = 1;
 }

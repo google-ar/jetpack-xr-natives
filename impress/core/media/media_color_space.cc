@@ -321,6 +321,10 @@ void MediaColorSpace::SetMaxContentLightLevel(
   max_content_light_level_ = max_content_light_level;
 }
 
+void MediaColorSpace::SetHardwareLinearized(bool is_hardware_linearized) {
+  is_hardware_linearized_ = is_hardware_linearized;
+}
+
 MediaColorSpace::Standard MediaColorSpace::GetStandard() const {
   return standard_;
 }
@@ -338,6 +342,10 @@ int MediaColorSpace::GetChromaBitDepth() const { return chroma_bitdepth_; }
 uint16_t MediaColorSpace::GetMaxContentLightLevel() const {
   return max_content_light_level_;
 }
+
+bool MediaColorSpace::GetHardwareLinearized() const {
+  return is_hardware_linearized_;
+};
 
 absl::StatusOr<mat3f> MediaColorSpace::GetColorTransformMatrixSRGB() {
   return GetColorTransformMatrix(MediaColorSpace::DisplayColorSpace::kSRGB);
@@ -395,16 +403,18 @@ bool MediaColorSpace::IsUnknown() const {
 std::string MediaColorSpace::ToString() const {
   return absl::StrFormat(
       "MediaColorSpace {standard: %v, transfer: %v, range: %v, luma_bitdepth: "
-      "%d, chroma_bitdepth: %d, max_content_light_level: %f}",
+      "%d, chroma_bitdepth: %d, max_content_light_level: %f, "
+      "is_hardware_linearized: %d}",
       standard_, transfer_, range_, luma_bitdepth_, chroma_bitdepth_,
-      max_content_light_level_);
+      max_content_light_level_, is_hardware_linearized_);
 }
 
 bool MediaColorSpace::operator==(const MediaColorSpace& other) const {
   return standard_ == other.standard_ && transfer_ == other.transfer_ &&
          range_ == other.range_ && luma_bitdepth_ == other.luma_bitdepth_ &&
          chroma_bitdepth_ == other.chroma_bitdepth_ &&
-         max_content_light_level_ == other.max_content_light_level_;
+         max_content_light_level_ == other.max_content_light_level_ &&
+         is_hardware_linearized_ == other.is_hardware_linearized_;
 }
 
 absl::StatusOr<MediaColorSpace::Standard> MediaColorSpace::ToColorStandard(

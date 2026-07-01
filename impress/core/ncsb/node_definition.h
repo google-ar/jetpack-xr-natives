@@ -43,6 +43,7 @@
 
 namespace imp {
 
+class BaseComponentPool;
 class BaseView;
 class ComponentManager;
 class Dispatcher;
@@ -581,7 +582,7 @@ class Node final {
 
   bool operator==(const Node& other) const { return entity_ == other.entity_; }
   bool operator!=(const Node& other) const { return entity_ != other.entity_; }
-  inline utils::Entity GetEntity() const { return entity_; }
+  utils::Entity GetEntity() const { return entity_; }
 
  private:
   // Pass into Node::SetParent to determine what should happen to the node's
@@ -597,7 +598,8 @@ class Node final {
   };
 
   Node(utils::Entity entity);
-  Node(utils::Entity entity, imp_internal::NodeController* node_controller);
+  Node(utils::Entity entity, imp_internal::NodeController* node_controller)
+      : entity_(entity), node_controller_(node_controller) {}
 
   void SetParentInternal(NodeHandle parent, SetParentMode set_parent_mode);
   // Internal calls to set transforms should always go through these methods.
@@ -624,6 +626,8 @@ class Node final {
   friend class NodeHandle;
   friend class imp_internal::NodeController;
   friend class imp_internal::NodeAttachmentManager;
+  friend class BaseComponentPool;
+  friend class ComponentManager;
 };
 
 }  // namespace imp

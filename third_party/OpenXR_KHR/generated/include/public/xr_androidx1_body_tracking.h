@@ -22,10 +22,6 @@ extern "C" {
 
 // XR_ANDROIDX1_body_tracking is a preprocessor guard. Do not pass it to API calls.
 #define XR_ANDROIDX1_body_tracking 1
-XR_DEFINE_HANDLE(XrBodyTrackerANDROIDX1)
-#define XR_ANDROIDX_BODY_TRACKING_MAX_NUM_JOINTS_ANDROIDX1 22
-#define XR_ANDROIDX1_body_tracking_SPEC_VERSION 1
-#define XR_ANDROIDX1_BODY_TRACKING_EXTENSION_NAME "XR_ANDROIDX1_body_tracking"
 #define XR_TYPE_BODY_TRACKER_CREATE_INFO_ANDROIDX1 ((XrStructureType) 1000716000U)
 #define XR_TYPE_AVATAR_SKELETON_ANDROIDX1 ((XrStructureType) 1000716001U)
 #define XR_TYPE_BODY_TRACKER_GET_INFO_ANDROIDX1 ((XrStructureType) 1000716002U)
@@ -34,6 +30,11 @@ XR_DEFINE_HANDLE(XrBodyTrackerANDROIDX1)
 #define XR_TYPE_BODY_TRACKER_CALIBRATION_ANDROIDX1 ((XrStructureType) 1000716005U)
 // XrBodyTrackerANDROIDX1
 #define XR_OBJECT_TYPE_BODY_TRACKER_ANDROIDX1 ((XrObjectType) 1000716000U)
+
+XR_DEFINE_HANDLE(XrBodyTrackerANDROIDX1)
+#define XR_ANDROIDX_BODY_TRACKING_MAX_NUM_JOINTS_ANDROIDX1 22
+#define XR_ANDROIDX1_body_tracking_SPEC_VERSION 1
+#define XR_ANDROIDX1_BODY_TRACKING_EXTENSION_NAME "XR_ANDROIDX1_body_tracking"
 #define XR_ANDROIDX_BODY_TRACKING_UPPER_BODY_JOINT_COUNT_ANDROIDX1 14
 #define XR_ANDROIDX_BODY_TRACKING_FULL_BODY_JOINT_COUNT_ANDROIDX1 22
 
@@ -190,6 +191,119 @@ XRAPI_ATTR XrResult XRAPI_CALL xrGetBodyTrackerCalibrationANDROIDX1(
     XrBodyTrackerCalibrationANDROIDX1*          calibration);
 #endif /* XR_EXTENSION_PROTOTYPES */
 #endif /* !XR_NO_PROTOTYPES */
+
+// Reflection macros
+#define XR_LIST_ENUM_XrUpperBodyJointTypeANDROIDX1(_) \
+    _(XR_UPPER_BODY_JOINT_TYPE_HIPS_ANDROIDX1, 0) \
+    _(XR_UPPER_BODY_JOINT_TYPE_SPINE_ANDROIDX1, 1) \
+    _(XR_UPPER_BODY_JOINT_TYPE_RIBS_ANDROIDX1, 2) \
+    _(XR_UPPER_BODY_JOINT_TYPE_CHEST_ANDROIDX1, 3) \
+    _(XR_UPPER_BODY_JOINT_TYPE_NECK_ANDROIDX1, 4) \
+    _(XR_UPPER_BODY_JOINT_TYPE_HEAD_ANDROIDX1, 5) \
+    _(XR_UPPER_BODY_JOINT_TYPE_LEFT_SHOULDER_ANDROIDX1, 6) \
+    _(XR_UPPER_BODY_JOINT_TYPE_RIGHT_SHOULDER_ANDROIDX1, 7) \
+    _(XR_UPPER_BODY_JOINT_TYPE_LEFT_UPPER_ARM_ANDROIDX1, 8) \
+    _(XR_UPPER_BODY_JOINT_TYPE_RIGHT_UPPER_ARM_ANDROIDX1, 9) \
+    _(XR_UPPER_BODY_JOINT_TYPE_LEFT_LOWER_ARM_ANDROIDX1, 10) \
+    _(XR_UPPER_BODY_JOINT_TYPE_RIGHT_LOWER_ARM_ANDROIDX1, 11) \
+    _(XR_UPPER_BODY_JOINT_TYPE_LEFT_HAND_ANDROIDX1, 12) \
+    _(XR_UPPER_BODY_JOINT_TYPE_RIGHT_HAND_ANDROIDX1, 13) \
+    _(XR_UPPER_BODY_JOINT_TYPE_ANDROIDX1_MAX_ENUM, 0x7FFFFFFF)
+
+#define XR_LIST_ENUM_XrFullBodyJointTypeANDROIDX1(_) \
+    _(XR_FULL_BODY_JOINT_TYPE_HIPS_ANDROIDX1, 0) \
+    _(XR_FULL_BODY_JOINT_TYPE_SPINE_ANDROIDX1, 1) \
+    _(XR_FULL_BODY_JOINT_TYPE_RIBS_ANDROIDX1, 2) \
+    _(XR_FULL_BODY_JOINT_TYPE_CHEST_ANDROIDX1, 3) \
+    _(XR_FULL_BODY_JOINT_TYPE_NECK_ANDROIDX1, 4) \
+    _(XR_FULL_BODY_JOINT_TYPE_HEAD_ANDROIDX1, 5) \
+    _(XR_FULL_BODY_JOINT_TYPE_LEFT_SHOULDER_ANDROIDX1, 6) \
+    _(XR_FULL_BODY_JOINT_TYPE_RIGHT_SHOULDER_ANDROIDX1, 7) \
+    _(XR_FULL_BODY_JOINT_TYPE_LEFT_UPPER_ARM_ANDROIDX1, 8) \
+    _(XR_FULL_BODY_JOINT_TYPE_RIGHT_UPPER_ARM_ANDROIDX1, 9) \
+    _(XR_FULL_BODY_JOINT_TYPE_LEFT_LOWER_ARM_ANDROIDX1, 10) \
+    _(XR_FULL_BODY_JOINT_TYPE_RIGHT_LOWER_ARM_ANDROIDX1, 11) \
+    _(XR_FULL_BODY_JOINT_TYPE_LEFT_HAND_ANDROIDX1, 12) \
+    _(XR_FULL_BODY_JOINT_TYPE_RIGHT_HAND_ANDROIDX1, 13) \
+    _(XR_FULL_BODY_JOINT_TYPE_LEFT_UPPER_LEG_ANDROIDX1, 14) \
+    _(XR_FULL_BODY_JOINT_TYPE_RIGHT_UPPER_LEG_ANDROIDX1, 15) \
+    _(XR_FULL_BODY_JOINT_TYPE_LEFT_LOWER_LEG_ANDROIDX1, 16) \
+    _(XR_FULL_BODY_JOINT_TYPE_RIGHT_LOWER_LEG_ANDROIDX1, 17) \
+    _(XR_FULL_BODY_JOINT_TYPE_LEFT_FOOT_ANDROIDX1, 18) \
+    _(XR_FULL_BODY_JOINT_TYPE_RIGHT_FOOT_ANDROIDX1, 19) \
+    _(XR_FULL_BODY_JOINT_TYPE_LEFT_TOES_ANDROIDX1, 20) \
+    _(XR_FULL_BODY_JOINT_TYPE_RIGHT_TOES_ANDROIDX1, 21) \
+    _(XR_FULL_BODY_JOINT_TYPE_ANDROIDX1_MAX_ENUM, 0x7FFFFFFF)
+
+#define XR_LIST_ENUM_XrAvatarSkeletonJointStatusANDROIDX1(_) \
+    _(XR_AVATAR_SKELETON_JOINT_STATUS_TRACKED_ANDROIDX1, 0) \
+    _(XR_AVATAR_SKELETON_JOINT_STATUS_ESTIMATED_ANDROIDX1, 1) \
+    _(XR_AVATAR_SKELETON_JOINT_STATUS_INVALID_ANDROIDX1, 2) \
+    _(XR_AVATAR_SKELETON_JOINT_STATUS_ANDROIDX1_MAX_ENUM, 0x7FFFFFFF)
+
+#define XR_LIST_ENUM_XrBodyJointSetANDROIDX1(_) \
+    _(XR_BODY_JOINT_SET_UPPER_BODY_ANDROIDX1, 0) \
+    _(XR_BODY_JOINT_SET_FULL_BODY_ANDROIDX1, 1) \
+    _(XR_BODY_JOINT_SET_ANDROIDX1_MAX_ENUM, 0x7FFFFFFF)
+
+#define XR_LIST_STRUCT_XrAvatarSkeletonJointANDROIDX1(_) \
+    _(type) \
+    _(next) \
+    _(jointType) \
+    _(parent) \
+    _(status) \
+    _(pose)
+
+#define XR_LIST_STRUCT_XrAvatarSkeletonANDROIDX1(_) \
+    _(type) \
+    _(next) \
+    _(rootPose) \
+    _(updateTime) \
+    _(restSkeletonUpdateCount) \
+    _(numJoints) \
+    _(joints)
+
+#define XR_LIST_STRUCT_XrBodyTrackerCreateInfoANDROIDX1(_) \
+    _(type) \
+    _(next) \
+    _(jointSet)
+
+#define XR_LIST_STRUCT_XrBodyTrackerGetInfoANDROIDX1(_) \
+    _(type) \
+    _(next) \
+    _(time) \
+    _(space)
+
+#define XR_LIST_STRUCT_XrBodyTrackerAvatarProportionsANDROIDX1(_) \
+    _(type) \
+    _(next) \
+    _(headHeight) \
+    _(hipsWidth) \
+    _(hipsLength) \
+    _(torsoLength) \
+    _(neckLength) \
+    _(shoulderWidth) \
+    _(upperArmLength) \
+    _(lowerArmLength) \
+    _(upperLegLength) \
+    _(lowerLegLength) \
+    _(ankleHeight) \
+    _(footLength)
+
+#define XR_LIST_STRUCT_XrBodyTrackerCalibrationANDROIDX1(_) \
+    _(type) \
+    _(next) \
+    _(enableAutoCalibration) \
+    _(proportions)
+
+#define XR_LIST_FUNCTIONS_XR_ANDROIDX1_body_tracking(_) \
+    _(CreateBodyTrackerANDROIDX1, ANDROIDX1_body_tracking) \
+    _(DestroyBodyTrackerANDROIDX1, ANDROIDX1_body_tracking) \
+    _(GetBodyTrackerSkeletonANDROIDX1, ANDROIDX1_body_tracking) \
+    _(GetBodyTrackerRestSkeletonANDROIDX1, ANDROIDX1_body_tracking) \
+    _(SetBodyTrackerCalibrationANDROIDX1, ANDROIDX1_body_tracking) \
+    _(GetBodyTrackerCalibrationANDROIDX1, ANDROIDX1_body_tracking)
+
 #endif /* XR_ANDROIDX1_body_tracking */
 
 #ifdef __cplusplus

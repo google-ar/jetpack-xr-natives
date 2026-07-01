@@ -42,7 +42,6 @@
 #include "core/common/small_source_location.h"
 #include "core/config.h"
 #include "core/geometry/shapes/rect.h"
-#include "core/image/wasm_decode_image.h"
 #include "core/math/vec.h"
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
@@ -54,12 +53,13 @@
 #if IMP_PLATFORM(WASM)
 #include <emscripten.h>
 #include <emscripten/em_asm.h>
+
+#include "core/image/wasm_decode_image.h"
 #endif  // IMP_PLATFORM(WASM)
 
 namespace imp {
 namespace {
 
-constexpr float kMaxRGB = 255.0f;
 constexpr absl::string_view kDefaultFontName = "sans-serif";
 constexpr absl::string_view kFontWeightLight = "300";
 constexpr absl::string_view kFontWeightNormal = "normal";
@@ -128,7 +128,7 @@ WasmAsyncCanvasSource::WasmAsyncCanvasSource(
                                false),
       enable_label_prep_profile_logging_(enable_label_prep_profile_logging) {
   measuring_canvas_->SetConfigUpdate(enable_label_prep_profile_logging_,
-                                     /*enable_immediate_get_image_data=*/false);
+                                     /*enable_wasm_canvas_gl_texture=*/false);
 }
 
 bool WasmAsyncCanvasSource::IsFeatureSupported(ScopedCanvas::Feature feature) {
@@ -271,38 +271,7 @@ std::unique_ptr<AsyncScopedCanvas> WasmAsyncCanvasSource::StartDrawing(
   bool did_texture_change = false;
   if (!texture_ || pixel_size_ != pixel_size) {
     pixel_size_ = pixel_size;
-#if IMP_RUNTIME(DEV)
-    texture_ = view.GetTextureFactory().CreateTexture(
-        imp::TextureFactory::TextureCreationSettings{
-            .width = pixel_size_.x,
-            .height = pixel_size_.y,
-            .format = filament::Texture::InternalFormat::RGBA8,
-            .usage = filament::Texture::Usage::COLOR_ATTACHMENT |
-                     filament::Texture::Usage::BLIT_SRC |
-                     filament::Texture::Usage::DEFAULT,
-        });
-#else
-    texture_ = view.GetTextureFactory().CreateTexture(
-        imp::TextureFactory::TextureCreationSettings{
-            .width = pixel_size_.x,
-            .height = pixel_size_.y,
-            .format = filament::Texture::InternalFormat::RGBA8,
-        });
-#endif
-    drawing_canvas_ = std::make_unique<WasmCanvasManager>(
-        std::make_unique<WasmCanvasManagerCallbacks>(*this, view), pixel_size_);
-    bool immediate_get_image_data = false;
-    if (view.GetConfig().experimental_feature_flags) {
-      immediate_get_image_data = view.GetConfig()
-                                     .experimental_feature_flags
-                                     ->enable_immediate_get_image_data.Value();
-    }
-    drawing_canvas_->SetConfigUpdate(enable_label_prep_profile_logging_,
-                                     immediate_get_image_data);
-#if IMP_PLATFORM(WASM)
-    image::details::SetLabelPrepProfileLogging(
-        enable_label_prep_profile_logging_);
-#endif  // IMP_PLATFORM(WASM)
+    InitializeCanvasAndTexture(view);
     did_texture_change = true;
   }
 
@@ -323,38 +292,8 @@ std::unique_ptr<AsyncScopedCanvas> WasmAsyncCanvasSource::StartDrawing(
     // Don't destroy until after on_texture_changed_fn is called so that the
     // caller has the opportunity to clear references to the old texture.
     OwnedTexturePtr old_texture = std::move(texture_);
-
-#if IMP_RUNTIME(DEV)
-    texture_ = view.GetTextureFactory().CreateTexture(
-        imp::TextureFactory::TextureCreationSettings{
-            .width = pixel_size_.x,
-            .height = pixel_size_.y,
-            .format = filament::Texture::InternalFormat::RGBA8,
-            .usage = filament::Texture::Usage::COLOR_ATTACHMENT |
-                     filament::Texture::Usage::DEFAULT,
-        });
-#else
-    texture_ = view.GetTextureFactory().CreateTexture(
-        imp::TextureFactory::TextureCreationSettings{
-            .width = pixel_size_.x,
-            .height = pixel_size_.y,
-            .format = filament::Texture::InternalFormat::RGBA8,
-        });
-#endif
-    drawing_canvas_ = std::make_unique<WasmCanvasManager>(
-        std::make_unique<WasmCanvasManagerCallbacks>(*this, view), pixel_size_);
-    bool immediate_get_image_data = false;
-    if (view.GetConfig().experimental_feature_flags) {
-      immediate_get_image_data = view.GetConfig()
-                                     .experimental_feature_flags
-                                     ->enable_immediate_get_image_data.Value();
-    }
-    drawing_canvas_->SetConfigUpdate(enable_label_prep_profile_logging_,
-                                     immediate_get_image_data);
-#if IMP_PLATFORM(WASM)
-    image::details::SetLabelPrepProfileLogging(
-        enable_label_prep_profile_logging_);
-#endif  // IMP_PLATFORM(WASM)
+    WasmGlTexture old_gl_texture = std::move(gl_texture_);
+    InitializeCanvasAndTexture(view);
     did_texture_change = true;
 
     on_texture_changed_fn(texture_.Borrow(loc));
@@ -427,6 +366,12 @@ void WasmAsyncCanvasSource::OnPixelBufferReady(BaseView& view, uint8_t* data,
 }
 
 void WasmAsyncCanvasSource::OnRectCleared(Rect rect) {
+  if (gl_texture_.IsValid()) {
+    // For direct GL texture transfer, the JS canvas renderer clears the texture
+    // asynchronously.
+    return;
+  }
+
   const float x = rect.center.x - rect.half_extent.x;
   const float y = rect.center.y - rect.half_extent.y;
   const float width = rect.half_extent.x * 2;
@@ -447,6 +392,60 @@ void WasmAsyncCanvasSource::OnRectCleared(Rect rect) {
                                    std::move(pixel_buffer));
 }
 
+void WasmAsyncCanvasSource::InitializeCanvasAndTexture(BaseView& view) {
+  bool use_gl_texture = false;
+  if (view.GetConfig().experimental_feature_flags) {
+    use_gl_texture =
+        view.GetConfig()
+            .experimental_feature_flags->enable_wasm_canvas_gl_texture.Value();
+  }
+
+  if (use_gl_texture) {
+    GLuint texture;
+    glGenTextures(1, &texture);
+    gl_texture_.Reset(texture);
+
+    // Allocate GLES texture storage for Level 0.
+    glBindTexture(GL_TEXTURE_2D, gl_texture_.Get());
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, pixel_size_.x, pixel_size_.y, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glBindTexture(GL_TEXTURE_2D, 0);
+  }
+
+#if IMP_RUNTIME(DEV)
+  texture_ = view.GetTextureFactory().CreateTexture(
+      TextureFactory::TextureCreationSettings{
+          .width = pixel_size_.x,
+          .height = pixel_size_.y,
+          .format = filament::Texture::InternalFormat::RGBA8,
+          .usage = filament::Texture::Usage::COLOR_ATTACHMENT |
+                   filament::Texture::Usage::BLIT_SRC |
+                   filament::Texture::Usage::DEFAULT,
+          .native_texture_id = gl_texture_.IsValid()
+                                   ? std::optional<intptr_t>(gl_texture_.Get())
+                                   : std::nullopt,
+      });
+#else
+  texture_ = view.GetTextureFactory().CreateTexture(
+      TextureFactory::TextureCreationSettings{
+          .width = pixel_size_.x,
+          .height = pixel_size_.y,
+          .format = filament::Texture::InternalFormat::RGBA8,
+          .native_texture_id = gl_texture_.IsValid()
+                                   ? std::optional<intptr_t>(gl_texture_.Get())
+                                   : std::nullopt,
+      });
+#endif
+  drawing_canvas_ = std::make_unique<WasmCanvasManager>(
+      std::make_unique<WasmCanvasManagerCallbacks>(*this, view), pixel_size_);
+  drawing_canvas_->SetConfigUpdate(enable_label_prep_profile_logging_,
+                                   use_gl_texture);
+#if IMP_PLATFORM(WASM)
+  image::details::SetLabelPrepProfileLogging(
+      enable_label_prep_profile_logging_);
+#endif  // IMP_PLATFORM(WASM)
+}
+
 WasmAsyncCanvasSource::WasmScopedCanvas::WasmScopedCanvas(
     WasmAsyncCanvasSource& source, WasmCanvasManager* platform_canvas_wrapper,
     uint2 pixel_size, bool did_texture_change)
@@ -455,9 +454,15 @@ WasmAsyncCanvasSource::WasmScopedCanvas::WasmScopedCanvas(
       did_texture_change_(did_texture_change) {}
 
 WasmAsyncCanvasSource::WasmScopedCanvas::~WasmScopedCanvas() {
-  if (this->SupportsSynchronousTextureUpdate()) {
-    (void)platform_canvas_wrapper_->RequestDraw(true);
+  if (source_.gl_texture_.IsValid()) {
+    // Direct WebGL drawing and texture uploads are initiated and managed
+    // asynchronously via PrepareToUpdateTexture()
+    return;
+  }
 
+  if (this->SupportsSynchronousTextureUpdate()) {
+    (void)platform_canvas_wrapper_->RequestDraw(true,
+                                                source_.gl_texture_.Get());
   } else {
     (void)platform_canvas_wrapper_->GetBuffer();
   }
@@ -698,11 +703,17 @@ WasmAsyncCanvasSource::WasmScopedCanvas::MeasureTexts(
 
 Future<absl::Status>
 WasmAsyncCanvasSource::WasmScopedCanvas::PrepareToUpdateTexture() {
-  return platform_canvas_wrapper_->RequestDraw(false);
+  return platform_canvas_wrapper_->RequestDraw(false,
+                                               source_.gl_texture_.Get());
 }
 
 bool WasmAsyncCanvasSource::WasmScopedCanvas::SupportsSynchronousTextureUpdate()
     const {
+  if (source_.gl_texture_.IsValid()) {
+    // Direct GL texture path is asynchronous because it relies on
+    // createImageBitmap on the JS/TS side.
+    return false;
+  }
   return platform_canvas_wrapper_->SupportsSynchronousTextureUpdate();
 }
 

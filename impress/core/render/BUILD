@@ -13,7 +13,9 @@
 # limitations under the License.
 
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("//build_tools:assets.bzl", "imp_assets")
 load("//build_tools:imp.bzl", "if_android", "if_dev_runtime", "if_emscripten", "imp_copts", "imp_defines", "imp_google3_copts", "imp_test_copts")
+load("//build_tools:imp_material.bzl", "imp_material")
 load("//core/proto:imp_cc_proto_library.bzl", "imp_cc_proto_library")
 
 package(
@@ -55,7 +57,7 @@ cc_library(
         "texture_factory.h",
         "texture_options.h",
         "texture_registry.h",
-    ],
+    ] + if_emscripten(["wasm_gl_texture.h"]),
     copts = imp_google3_copts(),
     linkstatic = True,
     deps = [
@@ -92,9 +94,11 @@ cc_library(
         "@com_google_absl//absl/types:span",
         "@com_google_impress//core/common:log",
         "@third_party//filament/filament:filament_hdrs",
+        "@third_party//filament/filament/backend:backend_hdrs",
         "@third_party//filament/filament/backend:driver_enums",
         "@third_party//filament/filament/backend:pixel_buffer_descriptor",
     ] + if_emscripten([
+        "@third_party//gl:GLES3_headers",
         "//core/image:wasm_decode_image",
         "//core/image:wasm_texture_contents",
     ]),
@@ -259,15 +263,94 @@ cc_library(
     alwayslink = 1,
 )
 
+imp_material(
+    name = "blit_material",
+    src = "blit.mat",
+)
+
+imp_assets(
+    name = "blit_assets",
+    srcs = [
+        ":blit_material",
+    ],
+    namespace = "imp::blit_assets",
+)
+
+imp_material(
+    name = "invisible_material",
+    src = "invisible_material.mat",
+)
+
+imp_assets(
+    name = "invisible_material_assets",
+    srcs = [
+        ":invisible_material",
+    ],
+    namespace = "imp::render",
+)
+
+cc_library(
+    name = "degenerate_triangle_renderer_for_driver_bug_workaround",
+    srcs = ["degenerate_triangle_renderer_for_driver_bug_workaround.cc"],
+    hdrs = ["degenerate_triangle_renderer_for_driver_bug_workaround.h"],
+    copts = imp_google3_copts(),
+    linkstatic = True,
+    deps = [
+        ":invisible_material_assets",
+        ":mesh_renderer",
+        "//core/assets",
+        "//core/assets/material:material_asset",
+        "//core/async:future",
+        "//core/geometry/shapes",
+        "//core/math",
+        "//core/model/mesh",
+        "//core/model/mesh:mesh_data",
+        "//core/model/mesh:mesh_factory",
+        "//core/ncsb",
+        "//core/view:base_view",
+        "//core/view/framework",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/types:span",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
+    name = "blitter",
+    srcs = ["blitter.cc"],
+    hdrs = ["blitter.h"],
+    copts = imp_copts(),
+    deps = [
+        ":blit_assets",
+        "//core/assets",
+        "//core/async:future",
+        "//core/materials",
+        "//core/math",
+        "//core/view:base_view",
+        "//core/view/framework",
+        "//core/window:filament_host",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:status_macros",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings:string_view",
+        "@third_party//filament/filament:filament_hdrs",
+        "@third_party//filament/libs:filabridge_hdrs",
+        "@third_party//filament/libs:utils_hdrs",
+    ],
+    alwayslink = 1,
+)
+
 cc_library(
     name = "material_registry",
     srcs = ["material_registry.cc"],
     hdrs = ["material_registry.h"],
     copts = imp_copts(),
     deps = [
+        "//core/common:invocable",
         "//core/materials",
         "//core/view/framework:framework_proto_cc",
         "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
     ],
     alwayslink = 1,
@@ -281,6 +364,7 @@ cc_library(
         ":base_renderable_manager",
         ":render_order_constants",
         "//core:config",
+        "//core/common:filament_helpers",
         "//core/common:owned_or_borrowed_ptr",
         "//core/common:small_source_location",
         "//core/geometry/shapes",

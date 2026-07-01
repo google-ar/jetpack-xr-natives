@@ -16,11 +16,11 @@
 
 #include "HwDescriptorSetLayoutFactory.h"
 
+#include <private/backend/DriverApi.h>
+
 #include <backend/DriverApiForward.h>
 #include <backend/DriverEnums.h>
 #include <backend/Handle.h>
-
-#include <private/backend/DriverApi.h>
 
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/debug.h"

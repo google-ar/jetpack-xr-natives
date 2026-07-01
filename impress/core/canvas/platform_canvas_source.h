@@ -111,8 +111,6 @@ struct PlatformCanvasSource {
       ScopedCanvas::DrawMode draw_mode, SmallSourceLocation loc) = 0;
 
   virtual void ForceReset() {}
-  virtual void OnPause() {}
-  virtual void OnResume() {}
 };
 
 }  // namespace imp

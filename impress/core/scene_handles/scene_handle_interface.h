@@ -40,7 +40,7 @@ struct SceneHandleInterface {
   //
   // See the NodeData proto:
   //   depot/google3/third_party/impress/core/ncsb/node_data.proto
-  using Identifier = absl::variant<absl::monostate, std::string, int32_t>;
+  using Identifier = std::variant<absl::monostate, std::string, int32_t>;
 
   // Defines a TypeUrlHash shared by implementors of SceneHandleInterface used
   // to visit them during deserialization and assign the scene handle. This

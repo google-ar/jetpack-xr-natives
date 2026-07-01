@@ -17,11 +17,11 @@
 #ifndef TNT_FILABRIDGE_UIBSTRUCTS_H
 #define TNT_FILABRIDGE_UIBSTRUCTS_H
 
+#include <private/filament/EngineEnums.h>
+
 #include "filament/libs/math/include/math/mat3.h"
 #include "filament/libs/math/include/math/mat4.h"
 #include "filament/libs/math/include/math/vec4.h"
-
-#include <private/filament/EngineEnums.h>
 
 #include <array>
 #include <string_view>

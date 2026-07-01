@@ -137,6 +137,29 @@ cc_library(
 )
 
 cc_library(
+    name = "drag_and_drop_material",
+    srcs = [
+        "drag_and_drop_material.cc",
+    ],
+    hdrs = [
+        "drag_and_drop_material.h",
+    ],
+    copts = imp_google3_copts(),
+    deps = [
+        ":drag_and_drop",
+        "//core/common:registry",
+        "//core/editor/widgets:asset_type_helpers",
+        "//core/materials",
+        "//core/proto:proto_reader",
+        "//core/render:material_registry",
+        "//core/scene_handles:material_handle",
+        "//core/view:base_view",
+        "@com_google_absl//absl/strings",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "filterable_combo",
     srcs = [
         "filterable_combo.cc",

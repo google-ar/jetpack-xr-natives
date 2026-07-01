@@ -17,6 +17,8 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_VISUALIZE_COLLIDERS_H_
 #define THIRD_PARTY_IMPRESS_CORE_EDITOR_WIDGETS_VISUALIZE_COLLIDERS_H_
 
+#include <optional>
+
 #include "absl/container/flat_hash_set.h"
 #include "absl/strings/string_view.h"
 #include "core/collision/collision_flags.h"
@@ -27,11 +29,16 @@
 
 namespace imp::editor {
 
+inline constexpr absl::string_view kShowAllCollidersEnabledKey =
+    "editor_show_all_colliders_enabled";
+inline constexpr bool kShowAllCollidersEnabledDefault = false;
+
 // Visualizes the bounds of the nodes within a glTF for the previewer.
 class VisualizeColliders : public editor::Widget, public imp::Rememberer {
  public:
-  explicit VisualizeColliders(BaseView& view, bool use_view_dispatcher = false,
-                              bool show_all_colliders = false);
+  explicit VisualizeColliders(
+      BaseView& view, bool use_view_dispatcher = false,
+      std::optional<bool> show_all_colliders = std::nullopt);
   absl::string_view GetName() const override { return "##Visualize Colliders"; }
   void DrawImGui() override;
 

@@ -30,6 +30,7 @@ static constexpr absl::string_view kCmatExt = ".cmat";
 static constexpr absl::string_view kPngExt = ".png";
 static constexpr absl::string_view kMaterialDefinitionExt =
     ".materialdefinition";
+static constexpr absl::string_view kImpMaterialExt = ".imp.material";
 
 // Used to distinguish drag and drop payloads that are protos from
 // editor_proto_visitor so they can be saved in the asset library.

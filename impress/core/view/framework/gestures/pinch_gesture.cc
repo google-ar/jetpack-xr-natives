@@ -49,7 +49,7 @@ PinchGesture::CreateFn PinchGesture::GetCreateFunction(
     Dispatcher* dispatcher, GesturePointerUtils* pointer_utils) {
   return [dispatcher, pointer_utils](const PointerHitEvent& pointer_hit,
                                      absl::Span<const PinchGesture> gestures)
-             -> absl::optional<PinchGesture> {
+             -> std::optional<PinchGesture> {
     if (pointer_hit.event.Type() != PointerEventType::kDown) {
       return absl::nullopt;
     }

@@ -16,8 +16,8 @@
 
 #include "AtlasAllocator.h"
 
-#include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/algorithm.h"
+#include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/QuadTree.h"
 

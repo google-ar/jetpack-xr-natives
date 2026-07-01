@@ -14,23 +14,23 @@
  * limitations under the License.
  */
 
-#include <filament/MaterialInstance.h>
+#include "details/MaterialInstance.h"
 
 #include "details/Material.h"
-#include "details/MaterialInstance.h"
 
 #include <filament/Color.h>
 #include <filament/MaterialEnums.h>
+#include <filament/MaterialInstance.h>
 
 #include <backend/DriverEnums.h>
 
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/debug.h"
 
+#include "filament/libs/math/include/math/mat3.h"
 #include "filament/libs/math/include/math/vec2.h"
 #include "filament/libs/math/include/math/vec3.h"
 #include "filament/libs/math/include/math/vec4.h"
-#include "filament/libs/math/include/math/mat3.h"
 
 #include <algorithm>
 #include <string_view>

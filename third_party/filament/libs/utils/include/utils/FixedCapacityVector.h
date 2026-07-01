@@ -17,9 +17,9 @@
 #ifndef TNT_UTILS_FIXEDCAPACITYVECTOR_H
 #define TNT_UTILS_FIXEDCAPACITYVECTOR_H
 
-#include "filament/libs/utils/include/utils/Slice.h"
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/compressed_pair.h"
+#include "filament/libs/utils/include/utils/Slice.h"
 
 #include <algorithm>
 #include <initializer_list>

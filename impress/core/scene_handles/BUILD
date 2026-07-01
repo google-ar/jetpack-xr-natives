@@ -71,6 +71,26 @@ cc_library(
 )
 
 cc_library(
+    name = "material_handle",
+    srcs = [
+        "material_handle.cc",
+    ],
+    hdrs = [
+        "material_handle.h",
+    ],
+    copts = imp_google3_copts(),
+    linkstatic = True,
+    deps = [
+        "//core/common:hash",
+        "//core/common:small_source_location",
+        "//core/materials",
+        "//core/proto:proto_common",
+        "@com_google_absl//absl/strings:string_view",
+    ],
+    alwayslink = 1,
+)
+
+cc_library(
     name = "scene_handles",
     srcs = [
         "scene_handles.cc",
@@ -83,7 +103,6 @@ cc_library(
     deps = [
         ":scene_handle_helper",
         ":scene_handle_interface",
-        "//core/common",
         "//core/common:hash",
         "//core/common:type_traits",
         "//core/ncsb",
@@ -133,4 +152,42 @@ imp_cc_proto_library(
     name = "scene_handles_imp_cc_proto",
     proto = ":scene_handles_proto",
     deps = [":scene_handles"],
+)
+
+proto_library(
+    name = "material_handle_proto",
+    srcs = [
+        "material_handle.proto",
+    ],
+    exports = ["//core/proto:imp_proto"],
+    deps = [
+        "//core/proto:imp_proto",
+    ],
+)
+
+imp_cc_proto_library(
+    name = "material_handle_imp_cc_proto",
+    proto = ":material_handle_proto",
+    deps = [":material_handle"],
+)
+
+proto_library(
+    name = "material_handle_test_proto",
+    testonly = True,
+    srcs = [
+        "material_handle_test.proto",
+    ],
+    deps = [
+        ":material_handle_proto",
+    ],
+)
+
+imp_cc_proto_library(
+    name = "material_handle_test_imp_cc_proto",
+    testonly = True,
+    proto = ":material_handle_test_proto",
+    deps = [
+        ":material_handle",
+        ":material_handle_imp_cc_proto",
+    ],
 )

@@ -44,7 +44,7 @@ class TapGesture : public Gesture {
  public:
   TapGesture(Dispatcher* dispatcher, GesturePointerUtils* pointer_utils,
              const PointerHitEvent& pointer_hit);
-  using CreateFn = std::function<absl::optional<TapGesture>(
+  using CreateFn = std::function<std::optional<TapGesture>(
       const PointerHitEvent& pointer_hit,
       absl::Span<const TapGesture> gestures)>;
   static CreateFn GetCreateFunction(Dispatcher* dispatcher,

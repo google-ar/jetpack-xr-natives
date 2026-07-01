@@ -224,7 +224,7 @@ class GltfAnimation {
 
     MissingTransformProvider* missing_transform_provider_;
 
-    absl::optional<Transform<float>> cached_transform_;
+    std::optional<Transform<float>> cached_transform_;
     BoneId bone_;
   };
 

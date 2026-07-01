@@ -43,6 +43,7 @@
 #include "core/common/buffer_access.h"
 #include "core/common/entity_absl_hasher.h"
 #include "core/common/invocable.h"
+#include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/owned_ptr.h"
 #include "core/common/robin_map.h"
 #include "core/common/robin_set.h"
@@ -56,11 +57,11 @@
 #include "core/math/mat.h"
 #include "core/math/math.h"
 #include "core/model/mesh/base_mesh_builder.h"
+#include "core/model/mesh/mesh.h"
 #include "core/ncsb/update_id.h"
 #include "core/ncsb/update_phase.h"
 #include "core/ncsb/update_system.h"
 #include "core/render_passes/texture_pipeline_renderer_state.proto.imp.h"
-#include "core/split_engine/android/split_engine_android_bridge.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_mesh_serializer.h"
 #include "core/split_engine/split_engine_serializer_batch_manager.h"
@@ -85,8 +86,8 @@ namespace imp::split_engine {
 // the SplitEngineRenderer on the backend.
 //
 // It implements the SplitEngineSerializer interface and also inherits from
-// BaseRenderableManager so that it can intercept all the calls made to the main
-// RenderableManagerWrapper by normal Impress code.
+// BaseRenderableManager and Mesh::Spy so that it can intercept all the calls
+// made to the main RenderableManagerWrapper and Mesh by normal Impress code.
 //
 // The Update() method of this class is responsible for serializing all the
 // data into flatbuffers and sending them to the SplitEngineRenderer and runs
@@ -119,7 +120,9 @@ class SplitEngineSerializerImpl
   SplitEngineSerializerImpl(
       BaseView& view, int32_t api_level,
       imp::OwnedPtr<SplitEngineSerializerTransport> transport,
+      std::unique_ptr<MaterialRequester> material_requester,
       size_t bridge_buffer_size_bytes);
+  ~SplitEngineSerializerImpl() override;
 
   SplitEngineSerializerImpl(const SplitEngineSerializerImpl&) = delete;
   SplitEngineSerializerImpl(SplitEngineSerializerImpl&&) = delete;
@@ -191,7 +194,7 @@ class SplitEngineSerializerImpl
 
   int32_t GetApiLevel() const override;
 
-  SplitEngineAndroidBridge& GetBridge() override;
+  MaterialRequester& GetMaterialRequester() const override;
 
   bool ReadyForNextFrame() const override;
 
@@ -224,6 +227,13 @@ class SplitEngineSerializerImpl
   void SetGroups(utils::Entity entity,
                  absl::Span<const absl::string_view> groups) override;
   void AssignUserId(utils::Entity entity, uint32_t user_id) override;
+  void UpdateMeshData(std::vector<SplitEngineSerializer::VertexBufferUpdateInfo>
+                          vertex_buffer_updates,
+                      std::vector<SplitEngineSerializer::IndexBufferUpdateInfo>
+                          index_buffer_updates) override;
+
+  void OnUpdateMeshData(Mesh* mesh, size_t group_idx, size_t offset,
+                        MeshData* mesh_data);
   std::unique_ptr<BaseTextureBuilder> CreateTextureBuilder() override;
   std::unique_ptr<BaseMeshBuilder> CreateMeshBuilder() override;
 #if IMP_PLATFORM(ANDROID)
@@ -317,9 +327,9 @@ class SplitEngineSerializerImpl
   utils::Entity GetEntity(
       const filament::RenderableManager::Instance& instance) const;
 
-  imp::OwnedPtr<SplitEngineSerializerTransport::MessageBuilder>
+  imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder>
   CreateFlatBufferBuilder();
-  imp::OwnedPtr<SplitEngineSerializerTransport::MessageBuilder>
+  imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder>
   CreateFlatBufferBuilder(size_t size_bytes);
 
   BaseView& view_;
@@ -329,6 +339,7 @@ class SplitEngineSerializerImpl
 
   // The transport used for sending messages to the split engine renderer.
   const imp::OwnedPtr<SplitEngineSerializerTransport> transport_;
+  const std::unique_ptr<MaterialRequester> material_requester_;
 
   const size_t bridge_buffer_size_bytes_;
 
@@ -338,13 +349,13 @@ class SplitEngineSerializerImpl
   //
   // TODO: (broken link) - Use OwnedPtr and BorrowedPtr for CommandBatchBase when
   // they support implicit upcast and static_cast.
-  imp::BorrowedPtr<SplitEngineSerializerTransport::MessageBuilder>
-  BorrowFlatBufferBuilder(SerializerDataTypes::CommandBatchBase& batch);
+  imp::BorrowedPtr<flatbuffers::FlatBufferBuilder> BorrowFlatBufferBuilder(
+      SerializerDataTypes::CommandBatchBase& batch);
 
   // Transfers ownership of a FlatbufferBuilder associated with the given batch
   // to the caller.
   //
-  imp::OwnedPtr<SplitEngineSerializerTransport::MessageBuilder>
+  imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder>
   ReleaseFlatBufferBuilder(SerializerDataTypes::CommandBatchBase& batch);
 
   // Note: In the best case scenario we would only create a flatbuffer builder
@@ -356,9 +367,8 @@ class SplitEngineSerializerImpl
   // We do not store the builder as part of the Batch class to emphasize that
   // the Batch data should be independent of the builder.
   // The batch pointers are owned by batch_queue_.
-  absl::flat_hash_map<
-      SerializerDataTypes::CommandBatchBase* /*absl_nonnull*/ ,
-      imp::OwnedPtr<SplitEngineSerializerTransport::MessageBuilder>>
+  absl::flat_hash_map<SerializerDataTypes::CommandBatchBase* /*absl_nonnull*/ ,
+                      imp::OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder>>
       fbb_;
 
   // Sends a Flatbuffer for the given batch to the bridge.

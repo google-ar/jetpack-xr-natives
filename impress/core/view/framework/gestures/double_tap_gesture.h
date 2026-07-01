@@ -33,7 +33,7 @@ class DoubleTapGesture : public Gesture {
  public:
   DoubleTapGesture(Dispatcher* dispatcher, GesturePointerUtils* pointer_utils,
                    const PointerHitEvent& pointer_hit);
-  using CreateFn = std::function<absl::optional<DoubleTapGesture>(
+  using CreateFn = std::function<std::optional<DoubleTapGesture>(
       const PointerHitEvent& pointer_hit,
       absl::Span<const DoubleTapGesture> gestures)>;
   static CreateFn GetCreateFunction(Dispatcher* dispatcher,

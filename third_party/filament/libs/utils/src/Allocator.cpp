@@ -15,15 +15,14 @@
  */
 
 #include "filament/libs/utils/include/utils/Allocator.h"
-
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/Log.h"
 
 #include <algorithm>
 
-#include <stdlib.h>
 #include <assert.h>
+#include <stdlib.h>
 #include <string.h>
 
 namespace utils {

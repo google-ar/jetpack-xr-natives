@@ -86,7 +86,7 @@ NodeHandle ConeCollider::GetHitNode() const {
   return hit_node_;
 }
 
-absl::optional<RayHit> ConeCollider::Intersect(const Ray& world_ray) {
+std::optional<RayHit> ConeCollider::Intersect(const Ray& world_ray) {
   if (!IsActive()) {
     return std::nullopt;
   }
@@ -109,7 +109,7 @@ absl::optional<RayHit> ConeCollider::Intersect(const Ray& world_ray) {
       TransformedSurfaceNormal(intersection->normal, world_from_local));
 }
 
-absl::optional<DoubleRayHit> ConeCollider::IntersectPrecise(
+std::optional<DoubleRayHit> ConeCollider::IntersectPrecise(
     const DoubleRay& world_ray) {
   if (!IsActive()) {
     return std::nullopt;

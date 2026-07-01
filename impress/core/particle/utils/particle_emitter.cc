@@ -21,8 +21,12 @@
 #include <utility>
 
 #include "core/common/log.h"
+#include "core/assets/asset_ptr.h"
+#include "core/assets/gltf/gltf_asset.h"
+#include "core/async/future.h"
 #include "core/camera/camera_component.h"
 #include "core/camera/camera_manager.h"
+#include "core/materials/material.h"
 #include "core/math/vec.h"
 #include "core/ncsb/component_handle.h"
 #include "core/ncsb/node_handle.h"
@@ -31,19 +35,44 @@
 #include "core/particle/particle_emitter_state.proto.imp.h"
 #include "core/particle/utils/particle_behavior.h"
 #include "core/particle/utils/particle_pool.h"
+#include "core/view/base_view.h"
+#include "core/view/framework/assets/asset_manager.h"
+#include "core/view/framework/assets/material_factory.h"
 #include "core/view/utils/frame_time.h"
 
 namespace imp::imp_particle {
 
+Future<OwnedMaterialPtr> ParticleEmitter::GetMaterialFuture(
+    const ParticleEmitterState& emitter_state, NodeHandle emitter_node) {
+  if (emitter_state.particle_config->material_asset.HasValue()) {
+    return emitter_node->GetView()
+        .GetAssetManager()
+        .LoadMaterial(emitter_state.particle_config->material_asset.Value())
+        .Then([emitter_node](AssetPtr<MaterialAsset> material_asset) mutable
+                  -> OwnedMaterialPtr {
+          if (material_asset) {
+            return emitter_node->GetView().GetMaterialFactory().CreateMaterial(
+                material_asset);
+          }
+          return OwnedMaterialPtr();
+        });
+  }
+
+  return Future<OwnedMaterialPtr>(OwnedMaterialPtr());
+}
+
 ParticleEmitter::ParticleEmitter(
     NodeHandle emitter_node, const ParticleEmitterState& emitter_state,
-    std::unique_ptr<CustomParticleBehavior> custom_particle_behavior)
+    std::unique_ptr<CustomParticleBehavior> custom_particle_behavior,
+    AssetPtr<GltfAsset> gltf_asset, OwnedMaterialPtr material_instance)
     : emitter_node_(emitter_node),
       particle_pool_(emitter_state.particle_config.Value(),
                      emitter_state.emitter_config->max_particles.Value(),
                      emitter_node),
       particle_behavior_(emitter_node, emitter_state.particle_config.Value(),
                          std::move(custom_particle_behavior)),
+      gltf_asset_(gltf_asset),
+      material_instance_(std::move(material_instance)),
       emitter_duration_finite_(
           emitter_state.emitter_config->duration_in_seconds.Value() > 0.0f),
       remaining_emitter_duration_(
@@ -128,6 +157,11 @@ std::string ParticleEmitter::ValidateEmitterState(
   // The duration must be non-negative.
   if (emitter_state.emitter_config->duration_in_seconds.Value() < 0.0f) {
     return "ParticleEmitter - duration in seconds must be >= 0!";
+  }
+
+  // A gltf asset reference is required.
+  if (!emitter_state.particle_config->gltf_asset) {
+    return "ParticleEmitter - gltf_asset not set!";
   }
 
   return "";

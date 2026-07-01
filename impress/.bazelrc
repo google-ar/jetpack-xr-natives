@@ -36,7 +36,8 @@ build --cxxopt=-Wno-unused-local-typedef
 build --cxxopt=-Wno-unused-parameter
 build --cxxopt=-Wno-unused-result
 build --cxxopt=-Wno-unused-variable
-build --cxxopt=--std=c++20
+build --cxxopt=-std=c++20
+build --host_cxxopt=-std=c++20
 build --javacopt="-source 17 -target 17"
 
 build --action_env=CC

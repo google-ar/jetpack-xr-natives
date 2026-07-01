@@ -16,8 +16,8 @@
 
 #include "PerformanceCounters.h"
 
-#include "filament/libs/utils/include/utils/JobSystem.h"
 #include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/JobSystem.h"
 
 #include <benchmark/benchmark.h>
 

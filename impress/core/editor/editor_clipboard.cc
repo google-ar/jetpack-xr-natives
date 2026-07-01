@@ -37,6 +37,8 @@
 #include "core/editor/selection_controller.h"
 #include "core/input/key_codes.h"
 #include "core/input/keyboard_event.h"
+#include "core/math/quat.h"
+#include "core/math/vec.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/node_data.proto.imp.h"
 #include "core/ncsb/node_handle.h"
@@ -159,10 +161,17 @@ EditorClipboard::ClipboardNode::FromNodeHandle(const NodeHandle& node) {
   const std::string asset_url =
       scene_reference ? std::string(scene_reference->GetAssetUrl()) : "";
 
+  const quatf world_rotation = node->GetWorldRotation();
+  const float3 world_position = node->GetWorldPosition();
+  const float3 world_scale = node->GetWorldScale();
+
   return ClipboardNode{.parent_node_handle = node->GetParent(),
                        .node_handle = node,
                        .node_data = node_data,
-                       .asset_url = asset_url};
+                       .asset_url = asset_url,
+                       .world_rotation = world_rotation,
+                       .world_position = world_position,
+                       .world_scale = world_scale};
 }
 
 absl::StatusOr<std::vector<EditorClipboard::ClipboardNode>>
@@ -405,7 +414,9 @@ Future<std::vector<NodeHandle>> EditorClipboard::PasteImpl(
                 clipboard_node.node_data, clipboard_node.asset_url,
                 SceneSystem::LoadSceneOptions{
                     .metadata_mode = SceneSystem::MetadataMode::kInclude})
-            .Then([this, parent,
+            .Then([this, parent, world_rotation = clipboard_node.world_rotation,
+                   world_position = clipboard_node.world_position,
+                   world_scale = clipboard_node.world_scale,
                    is_name_empty = clipboard_node.node_data.name.empty()](
                       NodeHandle node_handle) {
               if (is_name_empty) {
@@ -415,6 +426,9 @@ Future<std::vector<NodeHandle>> EditorClipboard::PasteImpl(
                     GenerateUniqueSiblingName(node_handle, parent));
               }
               node_handle->SetParent(parent);
+              node_handle->SetWorldPosition(world_position);
+              node_handle->SetWorldRotation(world_rotation);
+              node_handle->SetWorldScale(world_scale);
               // When we paste, we want to select the new node, but we don't
               // want to set it as the parent of the next pasted node.
               ignore_next_selection_changed_event_ = true;

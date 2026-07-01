@@ -66,6 +66,17 @@ public final class RemoteEditor {
     this.context = context;
     scriptApiBridge = new RemoteEditorScriptApiBridge(viewHandle, executorHandle);
     videoStreamer = new RemoteEditorVideoStreamer();
+    // Set up cross-session closing: If a new client connects to one socket, it closes the existing
+    // session on that socket. We must then manually disconnect the *other* socket to ensure
+    // the old client is fully disconnected and the new client gets a clean slate.
+    scriptApiBridge.setSessionClosedListener(
+        () ->
+            videoStreamer.disconnectAllConnections(
+                RemoteEditorWebSocketServer.CLOSE_REASON_SESSION_CLOSED));
+    videoStreamer.setSessionClosedListener(
+        () ->
+            scriptApiBridge.disconnectAllConnections(
+                RemoteEditorWebSocketServer.CLOSE_REASON_SESSION_CLOSED));
   }
 
   /**
@@ -132,4 +143,4 @@ public final class RemoteEditor {
 
 // LINT.ThenChange(
 //
-// //depot/google3/third_party/impress/core/editor/remote_editor/android_remote_editor_wrapper.cc:remote_editor)
+// //depot/google3/third_party/impress/core/editor/remote_editor/android/android_remote_editor_wrapper.cc:remote_editor)

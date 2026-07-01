@@ -22,6 +22,7 @@
 #include <utility>
 
 #include "absl/base/optimization.h"
+#include "absl/log/check.h"
 #include "absl/numeric/bits.h"
 #include "core/common/base_pool_allocator.h"
 #include "core/common/pool_allocator_helpers.h"
@@ -69,9 +70,22 @@ namespace imp {
 // - O(1) ResolveKey (Fast key validation).
 // - Minimal memory waste for small element counts.
 // - Zero memory overhead for per-item headers.
+//
+// API Contract:
+// - The type T must implement a method:
+//     `PoolAllocatorKey GetPoolAllocatorKey() const`
+//   which returns the key associated with the object.
+// - Optionally, T can implement a method:
+//     `void SetPoolAllocatorKey(PoolAllocatorKey key)`
+//   which will be automatically called by the allocator during `Allocate` to
+//   store the key.
 template <typename T, bool EnableGenerations = true, uint32_t MaxBlockPower = 4>
 class PoolAllocator
     : public BasePoolAllocator<EnableGenerations, MaxBlockPower> {
+  static_assert(
+      imp_pool_allocator_internal::kHasGetPoolKey<T>,
+      "T must implement GetPoolAllocatorKey() returning PoolAllocatorKey");
+
  public:
   using Base = BasePoolAllocator<EnableGenerations, MaxBlockPower>;
 
@@ -85,7 +99,7 @@ class PoolAllocator
     PoolAllocatorKey key;
   };
 
-  using AllocateResult = std::conditional_t<EnableGenerations, PtrAndKey, T*>;
+  using AllocateResult = PtrAndKey;
 
   PoolAllocator();
 
@@ -164,18 +178,19 @@ PoolAllocator<T, EnableGenerations, MaxBlockPower>::Allocate(Args&&... args) {
     constexpr MemoryLayout kMemoryLayout = ComputeMemoryLayout();
     imp_pool_allocator_internal::SetOccupancy(
         reinterpret_cast<std::byte*>(ptr),
-        ~(static_cast<uintptr_t>(kMemoryLayout.page_size_bytes) - 1),
-        GetSlotSize(), kMemoryLayout.footer_offset_bytes);
+        ~(static_cast<uintptr_t>(kMemoryLayout.page_size_bytes) - 1), index,
+        kMemoryLayout.footer_offset_bytes, kMemoryLayout.slot_size_bytes);
   }
 
-  // If enabled, create a key with the current generation.
+  uint16_t generation = 0;
   if constexpr (EnableGenerations) {
-    // Map slot index to key.
-    // We use index + 1 because keys interpret 0 as null/invalid.
-    return {ptr, PoolAllocatorKey(index + 1, Base::generations_[index])};
-  } else {
-    return ptr;
+    generation = Base::generations_[index];
   }
+  PoolAllocatorKey key(index, generation);
+  if constexpr (imp_pool_allocator_internal::kHasSetPoolKey<T>) {
+    ptr->SetPoolAllocatorKey(key);
+  }
+  return {ptr, key};
 }
 
 template <typename T, bool EnableGenerations, uint32_t MaxBlockPower>
@@ -184,29 +199,26 @@ void PoolAllocator<T, EnableGenerations, MaxBlockPower>::Deallocate(T* obj) {
     return;
   }
 
+  PoolAllocatorKey key = obj->GetPoolAllocatorKey();
+  constexpr MemoryLayout kMemoryLayout = ComputeMemoryLayout();
+
   // Destruct the object, must be called explicitly when using placement new.
   obj->~T();
 
-  constexpr MemoryLayout kMemoryLayout = ComputeMemoryLayout();
+  
+  uint32_t index = key.GetSlot();
 
-  uint32_t index;
-  uint32_t small_block_start_index;
-  std::byte* small_block_start_ptr;
-
-  if (Base::FindInSmallBlock(reinterpret_cast<std::byte*>(obj),
-                             &small_block_start_index,
-                             &small_block_start_ptr)) {
-    size_t offset = reinterpret_cast<std::byte*>(obj) - small_block_start_ptr;
-    index = small_block_start_index + (offset / GetSlotSize());
+  if (index < Base::kSmallBlocksCapacity) {
+    
     Base::small_block_pointers_[index] = nullptr;
   } else {
     // Track that the slot is unoccupied. This is done outside of ReleaseSlot to
     // allow the compiler to optimize based on the compile-time known memory
     // layout.
-    index = imp_pool_allocator_internal::UnsetOccupancy(
+    imp_pool_allocator_internal::UnsetOccupancy(
         reinterpret_cast<std::byte*>(obj),
-        ~(static_cast<uintptr_t>(kMemoryLayout.page_size_bytes) - 1),
-        GetSlotSize(), kMemoryLayout.footer_offset_bytes);
+        ~(static_cast<uintptr_t>(kMemoryLayout.page_size_bytes) - 1), index,
+        kMemoryLayout.footer_offset_bytes, kMemoryLayout.slot_size_bytes);
   }
 
   Base::ReleaseSlot(obj, index);

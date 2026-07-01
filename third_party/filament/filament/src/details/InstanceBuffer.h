@@ -23,10 +23,10 @@
 
 #include <backend/Handle.h>
 
-#include "filament/libs/math/include/math/mat4.h"
-
 #include "filament/libs/utils/include/utils/CString.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
+
+#include "filament/libs/math/include/math/mat4.h"
 
 #include <cstddef>
 #include <cstdint>

@@ -16,21 +16,20 @@
 
 #include "GLMemoryMappedBuffer.h"
 
+#include "gl_headers.h"
 #include "GLBufferObject.h"
 #include "GLUtils.h"
 #include "OpenGLDriver.h"
 #include "OpenGLState.h"
-
-#include "gl_headers.h"
 
 #include <private/backend/HandleAllocator.h>
 
 #include <backend/DriverEnums.h>
 #include <backend/Handle.h>
 
+#include "filament/libs/utils/include/utils/BitmaskEnum.h"
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/debug.h"
-#include "filament/libs/utils/include/utils/BitmaskEnum.h"
 
 #include <limits>
 #include <utility>

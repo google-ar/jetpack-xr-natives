@@ -27,6 +27,8 @@
 #include "core/async/future.h"
 #include "core/editor/events.h"
 #include "core/input/keyboard_event.h"
+#include "core/math/quat.h"
+#include "core/math/vec.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/node_data.proto.imp.h"
 #include "core/ncsb/node_handle.h"
@@ -96,6 +98,9 @@ class EditorClipboard : public System {
     NodeData node_data;
     // Needed to preserve metadata about the original node.
     std::string asset_url;
+    quatf world_rotation;
+    float3 world_position;
+    float3 world_scale;
   };
 
   // Saves the given clipboard nodes to the clipboard. Returns an error if any

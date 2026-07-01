@@ -24,7 +24,7 @@
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
-#include "absl/status/statusor.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
 #include "flatbuffers/allocator.h"
 #include "flatbuffers/buffer.h"
@@ -34,9 +34,7 @@
 #include "core/common/invocable.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/owned_ptr.h"
-#include "core/common/pass_key.h"
 #include "core/split_engine/flatbuffer_utils.h"
-#include "core/split_engine/transport/flatbuffer_builder_holder.h"
 #include "core/split_engine/transport/transport.h"
 #include "split_engine/schemas/split_engine_ipc_generated.h"
 #include "mediapipe/framework/port/status_macros.h"
@@ -45,46 +43,65 @@ namespace imp::split_engine {
 
 class Allocator : public flatbuffers::Allocator {
  public:
-  Allocator(imp::BorrowedPtr<Transport> transport,
-            Transport::SessionID session_id)
-      : transport_(std::move(transport)), session_id_(session_id) {}
+  Allocator(Transport& transport, Transport::SessionID session_id)
+      : transport_(transport), session_id_(session_id) {}
 
   uint8_t* allocate(size_t size) override {
-    return transport_->AllocateMessageMemory(session_id_, size);
+    return transport_.AllocateMessageMemory(session_id_, size);
   }
 
   void deallocate(uint8_t* ptr, size_t size) override {
-    transport_->DeallocateMessageMemory(session_id_, ptr);
+    transport_.DeallocateMessageMemory(session_id_, ptr);
   }
 
  private:
-  imp::BorrowedPtr<Transport> transport_;
+  // Allocator may be destroyed on any thread.
+  // BorrowedPtr is not thread-safe, hence using a reference.
+  Transport& transport_;
   const Transport::SessionID session_id_;
 };
 
 RequestSender::RequestSender(imp::OwnedOrBorrowedPtr<Transport> transport)
-    : transport_(std::move(transport)) {
-  
-}
+    : transport_(std::move(transport)) {}
 
 void RequestSender::StoreSessionID(uint64_t key,
                                    Transport::SessionID session_id) {
-  if (session_id != Transport::kPermanentSessionID) {
-    flatbuffer_builder_to_session_id_.emplace(key, session_id);
-  }
+  absl::MutexLock lock(session_id_mutex_);
+  flatbuffer_builder_to_session_id_.emplace(key, session_id);
 }
 
-Transport::SessionID RequestSender::ExtractSessionID(uint64_t key) {
+absl::StatusOr<Transport::SessionID> RequestSender::ExtractSessionID(
+    uint64_t key) {
+  // Deleter calls this method from any thread, so we need to lock.
+  absl::MutexLock lock(session_id_mutex_);
   auto it = flatbuffer_builder_to_session_id_.find(key);
   if (it == flatbuffer_builder_to_session_id_.end()) {
-    return Transport::kPermanentSessionID;
+    return absl::NotFoundError("Session not found.");
   }
   const Transport::SessionID session_id = it->second;
   flatbuffer_builder_to_session_id_.erase(it);
   return session_id;
 }
 
-absl::StatusOr<imp::OwnedPtr<FlatbufferBuilderHolder<RequestSender>>>
+void RequestSender::RequestBuilderDeleter::operator()(
+    flatbuffers::FlatBufferBuilder* fbb) {
+  
+
+  const auto session_id =
+      sender->ExtractSessionID(reinterpret_cast<uint64_t>(fbb));
+
+  if (session_id.ok()) {
+    // For the case when `SendRequest` is never called, but result of
+    // `CreateRequestBuilder` is discarded, we need to clean things up by
+    // hand.
+    
+    
+  }
+
+  delete fbb;
+}
+
+absl::StatusOr<RequestSender::RequestBuilder>
 RequestSender::CreateRequestBuilder(size_t size) {
   
 
@@ -92,40 +109,25 @@ RequestSender::CreateRequestBuilder(size_t size) {
                    transport_->OpenSession(size));
 
   // FlatbufferBuilder takes ownership of the allocator.
-  auto fbb = std::make_unique<flatbuffers::FlatBufferBuilder>(
-      size, new Allocator(transport_.Borrow(), session_id),
+  auto fbb = new flatbuffers::FlatBufferBuilder(
+      size, new Allocator(*transport_, session_id),
       /*own_allocator=*/true);
 
-  const uint64_t key = reinterpret_cast<uint64_t>(fbb.get());
+  const uint64_t key = reinterpret_cast<uint64_t>(fbb);
   StoreSessionID(key, session_id);
 
-  return imp::OwnedPtr<FlatbufferBuilderHolder>(new FlatbufferBuilderHolder(
-      PassKey<RequestSender>(), std::move(fbb), [this, key, session_id]() {
-        
-
-        // For the case when `SendRequest` is never called, but result of
-        // `CreateRequestBuilder` is discarded, we need to clean things up by
-        // hand.
-        ExtractSessionID(key);
-
-        
-        
-      }));
+  return RequestBuilder(fbb, RequestBuilderDeleter{.sender = this});
 }
 
 absl::Status RequestSender::SendRequest(
-    imp::OwnedPtr<FlatbufferBuilderHolder> fbb,
-    RequestSender::RequestCallback callback) {
+    RequestBuilder fbb, RequestSender::RequestCallback callback) {
   
 
-  // Cleanup will be performed below, so cancel manual cleanup.
-  fbb->CancelCleanup(PassKey<RequestSender>());
-
-  const Transport::SessionID session_id =
-      ExtractSessionID(reinterpret_cast<uint64_t>(&**fbb));
+  MP_ASSIGN_OR_RETURN(const Transport::SessionID session_id,
+                   ExtractSessionID(reinterpret_cast<uint64_t>(&*fbb)));
 
   const absl::Span<const uint8_t> request_span =
-      absl::MakeConstSpan((*fbb)->GetBufferPointer(), (*fbb)->GetSize());
+      absl::MakeConstSpan(fbb->GetBufferPointer(), fbb->GetSize());
   const absl::Status send_status = transport_->SendMessage(
       session_id, request_span,
       [this, callback = std::move(callback), session_id,

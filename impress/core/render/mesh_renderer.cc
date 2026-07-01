@@ -27,6 +27,7 @@
 #include "absl/types/span.h"
 #include "filament/filament/include/filament/InstanceBuffer.h"
 #include "filament/filament/include/filament/RenderableManager.h"
+#include "core/common/filament_helpers.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/common/small_source_location.h"
 #include "core/config.h"
@@ -529,6 +530,10 @@ void MeshRenderer::UpdateRenderableAabb() {
 
 const Box& MeshRenderer::GetRenderableAabb() const {
   return GetRenderableManager().GetAxisAlignedBoundingBox(GetInstance());
+}
+
+Box MeshRenderer::GetWorldFullBounds() const {
+  return TransformBounds(GetRenderableAabb(), GetNode()->GetWorldTrs());
 }
 
 void MeshRenderer::ApplyAllMeshPropertyChanges() {

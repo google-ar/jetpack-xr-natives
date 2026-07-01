@@ -17,13 +17,17 @@
 #include <memory>
 #include <utility>
 
+#include "absl/log/check.h"
 #include "absl/memory/memory.h"
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
+#include "core/common/owned_ptr.h"
 #include "core/materials/material.h"
+#include "core/split_engine/flatbuffer_size_calculator.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
 #include "core/split_engine/materials/split_engine_builtin_material.h"
+#include "core/split_engine/transport/request_sender.h"
 #include "core/view/base_view.h"
 #include "split_engine/materials/photos_texture_3d_material_params.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
@@ -33,7 +37,18 @@ namespace android_xr {
 imp::Future<std::unique_ptr<PhotosTexture3DMaterial>>
 PhotosTexture3DMaterial::Create(imp::BaseView& view,
                                 const PhotosTexture3DMaterialParams& params) {
-  auto fbb = std::make_unique<flatbuffers::FlatBufferBuilder>();
+  absl::StatusOr<imp::split_engine::RequestSender::RequestBuilder> builder =
+      imp::split_engine::SplitEngineBuiltinMaterial::CreateFlatBufferBuilder(
+          view, imp::split_engine::FlatbufferSizeCalculator()
+                    .AddRequestBuiltInPhotosTexture3DMaterial()
+                    .Finish()
+                    .AddScratchSpace()
+                    .ComputeSize());
+  if (!builder.ok()) {
+    return builder.status();
+  }
+  auto fbb = *std::move(builder);
+
   flatbuffers::Offset<android_xr::schemas::BuiltInMaterialD1750064>
       spec_offset = android_xr::schemas::CreateBuiltInMaterialD1750064(*fbb);
   return imp::split_engine::SplitEngineBuiltinMaterial::RequestBuiltInMaterial(

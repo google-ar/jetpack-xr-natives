@@ -255,6 +255,8 @@ backend_vulkan_only_srcs = [
     "src/vulkan/VulkanDriver.h",
     "src/vulkan/VulkanExternalImageManager.cpp",
     "src/vulkan/VulkanExternalImageManager.h",
+    "src/vulkan/VulkanFencePool.cpp",
+    "src/vulkan/VulkanFencePool.h",
     "src/vulkan/VulkanStreamedImageManager.cpp",
     "src/vulkan/VulkanStreamedImageManager.h",
     "src/vulkan/VulkanFboCache.cpp",

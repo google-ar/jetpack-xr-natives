@@ -27,8 +27,8 @@
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "core/common/entity_absl_hasher.h"
+#include "core/common/paged_pointer_array.h"
 #include "core/common/pool_allocator.h"
-#include "core/ncsb/node.h"
 #include "core/ncsb/node_controller.h"
 #include "core/ncsb/node_flag.h"
 #include "core/ncsb/node_handle.h"
@@ -101,10 +101,8 @@ class NodeAttachmentManager {
   void ForEach(Fn&& fn, NodeFlag filter);
 
  private:
-  using EntitiesToControllersMap =
-      absl::flat_hash_map<utils::Entity, NodeController*, EntityHasher>;
-
-  static EntitiesToControllersMap& GetEntitiesToControllersMap();
+  using NodeControllerLookup = PagedPointerArray<NodeController>;
+  static NodeControllerLookup& GetNodeControllerLookup();
 
   template <typename Fn>
   void ForEachUsingAllocator(Fn&& fn);

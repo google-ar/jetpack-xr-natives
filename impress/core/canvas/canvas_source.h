@@ -208,8 +208,6 @@ class CanvasSource {
   // Samsung Galaxy S24) where an Android Surface can become corrupted after
   // backgrounding and resuming. See (broken link) for more details.
   void ForceReset();
-  void OnPause();
-  void OnResume();
 
  private:
   absl::Mutex platform_source_mutex_;

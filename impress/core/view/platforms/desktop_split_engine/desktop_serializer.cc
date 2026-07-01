@@ -25,6 +25,7 @@
 #include "absl/log/check.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
+#include "absl/status/status_macros.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "filament/filament/include/filament/Engine.h"
@@ -45,6 +46,7 @@
 #include "core/split_engine/desktop/multimachine/split_engine_desktop_bridge_sender.h"
 #include "core/split_engine/desktop/split_engine_desktop_bridge.grpc.pb.h"
 #include "core/split_engine/desktop/split_engine_desktop_bridge_client.h"
+#include "core/split_engine/material_requester_legacy_impl.h"
 #include "core/split_engine/split_engine_serializer_impl.h"
 #include "core/split_engine/split_engine_serializer_transport_legacy_impl.h"
 #include "core/view/framework/render/renderable_manager_wrapper.h"
@@ -54,7 +56,6 @@
 #include "core/window/filament_host.h"
 #include "core/window/sdl_venue.h"
 #include "split_engine/schemas/split_engine_schema_version.h"
-#include "mediapipe/framework/port/status_macros.h"
 
 ABSL_FLAG(std::string, server, "localhost:10000",
           "address of server to connect to");
@@ -134,11 +135,16 @@ absl::Status Main(int argc, char* argv[]) {
             << (api_level == android_xr::kSplitEngineExperimentalApiLevel
                     ? "experimental"
                     : absl::StrCat(api_level));
+
+  auto material_requester =
+      std::make_unique<imp::split_engine::MaterialRequesterLegacyImpl>(*bridge);
+
   auto transport = imp::MakeOwned<SplitEngineSerializerTransportLegacyImpl>(
       std::move(bridge), std::move(bridge_sender));
 
   auto split_engine_serializer = std::make_unique<SplitEngineSerializerImpl>(
-      *view, api_level, std::move(transport), kBridgeBufferSizeBytes);
+      *view, api_level, std::move(transport), std::move(material_requester),
+      kBridgeBufferSizeBytes);
 
   view->SetSplitEngineSerializer(std::move(split_engine_serializer));
 
@@ -179,11 +185,15 @@ absl::Status MultimachineMain(int argc, char* argv[]) {
                     ? "experimental"
                     : absl::StrCat(api_level));
 
+  auto material_requester =
+      std::make_unique<imp::split_engine::MaterialRequesterLegacyImpl>(*bridge);
+
   auto transport = imp::MakeOwned<SplitEngineSerializerTransportLegacyImpl>(
       std::move(bridge), std::move(bridge_sender));
 
   auto split_engine_serializer = std::make_unique<SplitEngineSerializerImpl>(
-      *view, api_level, std::move(transport), kBridgeBufferSizeBytes);
+      *view, api_level, std::move(transport), std::move(material_requester),
+      kBridgeBufferSizeBytes);
 
   view->SetSplitEngineSerializer(std::move(split_engine_serializer));
 

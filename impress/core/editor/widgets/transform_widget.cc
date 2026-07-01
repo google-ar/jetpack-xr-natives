@@ -14,16 +14,21 @@
 
 #include "core/editor/widgets/transform_widget.h"
 
+#include <cmath>
 #include <vector>
 
 #include "absl/container/flat_hash_set.h"
+#include "dear_imgui/imgui.h"
 #include "core/common/registry.h"
 #include "core/editor/editor.h"
 #include "core/editor/events.h"
+#include "core/input/key_codes.h"
+#include "core/input/keyboard_event.h"
 #include "core/math/vec.h"
 #include "core/ncsb/dispatcher/dispatcher.h"
 #include "core/ncsb/node_handle.h"
 #include "core/ncsb/update_system.h"
+#include "core/view/framework/gestures/tap_gesture.h"
 #include "core/view/utils/frame_time.h"
 
 namespace imp::editor {
@@ -33,11 +38,24 @@ namespace {
 // Minimum distance from the camera to the transform widget.
 const float kMinCameraDistance = 1e-5f;
 
+// The base scale for the transform widget.
+// This should match the scale in transform_widget.textproto.
+const float kBaseScale = 0.02f;
+
 }  // namespace
 
 void TransformWidget::Setup() {
   Editor& editor = GetView().GetRegistry().Get<Editor>()->get();
   Dispatcher& editor_dispatcher = editor.GetDispatcher();
+
+  // Catch the TapEvent to prevent the editor from doing anything else.
+  editor_dispatcher.Connect(
+      GetNode(),
+      [this](const imp::TapGesture::TapEvent& event) mutable {
+        CycleMode();
+        return imp::Dispatcher::kAccept;
+      },
+      this);
 
   editor_dispatcher.Connect(
       [this](const editor::NodeSelectionChangedEvent& event) mutable {
@@ -47,6 +65,68 @@ void TransformWidget::Setup() {
         GetNode()->SetEnabled(!active_nodes_.empty());
       },
       this);
+
+  editor_dispatcher.Connect(
+      [this](const imp::KeyboardEvent& event) {
+        if (ImGui::GetIO().WantTextInput) return;
+
+        if (event.type == KeyboardEventType::kOnUp) {
+          switch (event.key.code) {
+            case VirtualKeyCode::VK_LEFTBRACKET:
+              scale_level_--;
+              scale_ = pow(1.1f, scale_level_);
+              GetView().GetDispatcher().Send(
+                  TransformWidgetScaleChangedEvent(scale_));
+              break;
+            case VirtualKeyCode::VK_RIGHTBRACKET:
+              scale_level_++;
+              scale_ = pow(1.1f, scale_level_);
+              GetView().GetDispatcher().Send(
+                  TransformWidgetScaleChangedEvent(scale_));
+              break;
+            default:
+              break;
+          }
+        } else if (event.type == KeyboardEventType::kOnDown) {
+          switch (event.key.code) {
+            case VirtualKeyCode::VK_w:
+              SetMode(Mode::kTranslate);
+              break;
+            case VirtualKeyCode::VK_e:
+              SetMode(Mode::kRotate);
+              break;
+            case VirtualKeyCode::VK_r:
+              SetMode(Mode::kScale);
+              break;
+            default:
+              break;
+          }
+        }
+      },
+      this);
+}
+
+void TransformWidget::CycleMode() {
+  switch (mode_) {
+    case Mode::kTranslate:
+      SetMode(Mode::kRotate);
+      break;
+    case Mode::kRotate:
+      SetMode(Mode::kScale);
+      break;
+    case Mode::kScale:
+      SetMode(Mode::kTranslate);
+      break;
+  }
+}
+
+void TransformWidget::SetMode(Mode mode) {
+  if (!IsActive()) return;
+
+  mode_ = mode;
+  if (state_.translate) state_.translate->SetEnabled(mode_ == Mode::kTranslate);
+  if (state_.rotate) state_.rotate->SetEnabled(mode_ == Mode::kRotate);
+  if (state_.scale) state_.scale->SetEnabled(mode_ == Mode::kScale);
 }
 
 void TransformWidget::Update(const FrameTime& frame_time) {
@@ -89,6 +169,7 @@ void TransformWidget::Update(const FrameTime& frame_time) {
   }
 
   GetNode()->SetWorldPosition(camera_position + dif);
+  GetNode()->SetLocalScale(float3(kBaseScale * scale_));
   // TODO: Enable for local mode.
   // GetNode()->SetWorldRotation(active_nodes_[0]->GetWorldRotation());
 }

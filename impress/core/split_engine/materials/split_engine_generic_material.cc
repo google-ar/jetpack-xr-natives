@@ -34,6 +34,7 @@
 #include "flatbuffers/buffer.h"
 #include "flatbuffers/flatbuffer_builder.h"
 #include "core/async/future.h"
+#include "core/common/owned_ptr.h"
 #include "core/common/small_source_location.h"
 #include "core/common/typed_vector.h"
 #include "core/material_library/generic_material_constants.h"
@@ -46,17 +47,20 @@
 #include "core/math/vec.h"
 #include "core/model/entity_data.h"
 #include "core/render/texture.h"
-#include "core/split_engine/android/split_engine_android_bridge.h"
+#include "core/split_engine/flatbuffer_size_calculator.h"
+#include "core/split_engine/material_requester.h"  // IWYU pragma: keep
 #include "core/split_engine/materials/builtin/builtin_generic_spec_helpers.h"
 #include "core/split_engine/materials/builtin_texture_parameter_creator.h"
 #include "core/split_engine/materials/split_engine_builtin_material.h"
 #include "core/split_engine/split_engine_serializer.h"
+#include "core/split_engine/transport/request_sender.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/assets/material_factory.h"
 #include "core/view/utils/string_map.h"
 #include "split_engine/schemas/split_engine_material_generated.h"
 #include "split_engine/schemas/split_engine_primitive_generated.h"
 #include "split_engine/schemas/split_engine_schema_version.h"
+#include "mediapipe/framework/port/status_macros.h"
 
 namespace imp::split_engine {
 
@@ -172,7 +176,17 @@ SplitEngineGenericMaterial::Create(BaseView& view,
             "GenericMaterialSpec::schema::GenericMaterialDepthClearMaterial is "
             "not supported in Split Engine."));
   }
-  auto fbb = std::make_unique<flatbuffers::FlatBufferBuilder>();
+
+  absl::StatusOr<RequestSender::RequestBuilder> builder =
+      SplitEngineBuiltinMaterial::CreateFlatBufferBuilder(
+          view, FlatbufferSizeCalculator()
+                    .AddRequestBuiltInGenericMaterial()
+                    .Finish()
+                    .AddScratchSpace()
+                    .ComputeSize());
+  MP_RETURN_IF_ERROR(builder.status());
+
+  RequestSender::RequestBuilder fbb = *std::move(builder);
   absl::StatusOr<flatbuffers::Offset<android_xr::schemas::GenericMaterialSpec>>
       spec_offset = Pack(*fbb, spec);
   if (!spec_offset.ok()) {
@@ -182,7 +196,7 @@ SplitEngineGenericMaterial::Create(BaseView& view,
 
   return SplitEngineBuiltinMaterial::CreatePlaceholderMaterial(view).Then(
       [&view, fbb = std::move(fbb),
-       spec_offset](OwnedMaterialPtr placeholder_material) {
+       spec_offset](OwnedMaterialPtr placeholder_material) mutable {
         flatbuffers::Offset<android_xr::schemas::BuiltInMaterialRequest>
             built_in_material_request =
                 android_xr::schemas::CreateBuiltInMaterialRequest(
@@ -192,10 +206,10 @@ SplitEngineGenericMaterial::Create(BaseView& view,
                     android_xr::schemas::BuiltInMaterialSpec::
                         GenericMaterialSpec,
                     spec_offset->Union());
-        return SendRequest<android_xr::schemas::BuiltInMaterialRequest,
-                           absl::Status>(
-                   view.GetSplitEngineSerializer()->GetBridge(), *fbb,
-                   built_in_material_request)
+        return view.GetSplitEngineSerializer()
+            ->GetMaterialRequester()
+            .RequestBuiltInMaterialInstance(std::move(fbb),
+                                            built_in_material_request)
             .Then([&view, placeholder_material =
                               std::move(placeholder_material)]() mutable {
               return absl::WrapUnique(new SplitEngineGenericMaterial(

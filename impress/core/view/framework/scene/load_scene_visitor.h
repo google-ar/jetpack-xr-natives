@@ -231,7 +231,7 @@ void LoadSceneVisitor::OnVisit(Fn fn) {
             [&apply_fn](
                 auto arg) mutable -> absl::optional<Future<absl::Status>> {
               using Arg = decltype(arg);
-              if constexpr (std::is_same_v<Arg, absl::monostate>) {
+              if constexpr (std::is_same_v<Arg, std::monostate>) {
                 // Variant contains a monostate indicating the default Setup
                 // should be called, so we just return nullopt.
                 return absl::nullopt;

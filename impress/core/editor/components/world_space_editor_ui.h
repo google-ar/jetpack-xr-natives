@@ -101,8 +101,8 @@ class WorldSpaceEditorUi : public Component {
   BorrowedTexturePtr texture_;
   float2 texture_resolution_;
   float texture_aspect_ratio_;
-  absl::optional<ControllerHitEvent::Hand> active_hand_;
-  absl::optional<android_xr::SplitEngineInputEvent::PointerType>
+  std::optional<ControllerHitEvent::Hand> active_hand_;
+  std::optional<android_xr::SplitEngineInputEvent::PointerType>
       active_split_engine_pointer_;
 
   // The position of each canvas that is known with Setup.

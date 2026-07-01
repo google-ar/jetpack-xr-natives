@@ -25,9 +25,9 @@
 
 #include "filament/libs/utils/include/utils/BitmaskEnum.h"
 #include "filament/libs/utils/include/utils/CString.h"
+#include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/Panic.h"
 #include "filament/libs/utils/include/utils/StaticString.h"
-#include "filament/libs/utils/include/utils/debug.h"
 
 #include <webgpu/webgpu_cpp.h>
 

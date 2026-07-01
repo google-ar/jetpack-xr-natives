@@ -17,12 +17,12 @@
 #ifndef TNT_METALBLITTER_H
 #define TNT_METALBLITTER_H
 
-#include <Metal/Metal.h>
-
 #include <backend/DriverEnums.h>
 
-#include "robin_map/include/tsl/robin_map.h"
 #include "filament/libs/utils/include/utils/Hash.h"
+
+#include <Metal/Metal.h>
+#include "robin_map/include/tsl/robin_map.h"
 
 namespace filament::backend {
 

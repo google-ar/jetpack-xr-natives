@@ -22,13 +22,14 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <utility>
 #include <vector>
 
-#include "absl/base/attributes.h"
 #include "absl/base/nullability.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
+#include "filament/filament/backend/include/backend/BufferDescriptor.h"
 #include "filament/filament/include/filament/Engine.h"
 #include "filament/filament/include/filament/Material.h"
 #include "filament/filament/include/filament/MorphTargetBuffer.h"
@@ -76,6 +77,7 @@ inline constexpr int32_t kSplitEngineExperimentalApiLevel =
 class SplitEngineMeshSerializer;
 class SplitEngineTextureSerializer;
 class SplitEngineAndroidBridge;
+class MaterialRequester;
 
 // LINT.IfChange
 enum class BuiltInMaterialParameters : uint8_t {
@@ -118,10 +120,9 @@ class SplitEngineSerializer {
   // the backend.
   virtual int32_t GetApiLevel() const = 0;
 
-  // Returns the bridge that this serializer uses to serialize data.
-  ABSL_DEPRECATED(
-      "This method is deprecated and will be removed in the future.")
-  virtual SplitEngineAndroidBridge& GetBridge() = 0;
+  // Returns a MaterialRequester that shall be used by Split Engine materials
+  // to interact with the renderer.
+  virtual MaterialRequester& GetMaterialRequester() const = 0;
 
   // Returns true if the serializer is ready for the next frame, i.e. if the
   // number of in-flight frames is less than the maximum number of allowed
@@ -296,6 +297,79 @@ class SplitEngineSerializer {
 
   // Destroys IndexBuffer that is given.
   virtual void RemoveIndexBuffer(filament::IndexBuffer* index_buffer) = 0;
+
+  // Scoped wrapper around filament::backend::BufferDescriptor that ensures the
+  // release callback is executed when this descriptor falls out of scope,
+  // preventing buffer/callback lifetime leaks.
+  class ScopedBufferDescriptor {
+   public:
+    ScopedBufferDescriptor() = default;
+
+    // Constructs a ScopedBufferDescriptor by moving the given Filament
+    // BufferDescriptor.
+    explicit ScopedBufferDescriptor(filament::backend::BufferDescriptor&& desc)
+        : desc_(std::move(desc)), has_desc_(true) {}
+
+    // Destructor automatically calls Release to free resources via the
+    // callback.
+    ~ScopedBufferDescriptor() { Release(); }
+
+    ScopedBufferDescriptor(const ScopedBufferDescriptor&) = delete;
+    ScopedBufferDescriptor& operator=(const ScopedBufferDescriptor&) = delete;
+
+    // Move constructor initializing desc_ directly.
+    ScopedBufferDescriptor(ScopedBufferDescriptor&& other) noexcept
+        : desc_(std::move(other.desc_)), has_desc_(other.has_desc_) {
+      other.has_desc_ = false;
+    }
+
+    // Move assignment operator.
+    ScopedBufferDescriptor& operator=(ScopedBufferDescriptor&& other) noexcept {
+      if (this != &other) {
+        Release();
+        desc_ = std::move(other.desc_);
+        has_desc_ = other.has_desc_;
+        other.has_desc_ = false;
+      }
+      return *this;
+    }
+
+    // Access the underlying Filament BufferDescriptor const-ref.
+    const filament::backend::BufferDescriptor& get() const { return desc_; }
+
+   private:
+    // Releases ownership of the buffer by executing the Filament callback,
+    // and clears it to prevent double-execution during destructor.
+    void Release() {
+      if (has_desc_ && desc_.hasCallback()) {
+        desc_.getCallback()(desc_.buffer, desc_.size, desc_.getUser());
+        desc_.setCallback(nullptr);
+      }
+      has_desc_ = false;
+    }
+    filament::backend::BufferDescriptor desc_;
+    bool has_desc_ = false;
+  };
+
+  struct VertexBlockUpdateInfo {
+    uint8_t block_index;
+    uint32_t offset;
+    ScopedBufferDescriptor buffer;
+  };
+  struct VertexBufferUpdateInfo {
+    uint64_t id;
+    std::vector<VertexBlockUpdateInfo> block_updates;
+  };
+  struct IndexBufferUpdateInfo {
+    uint64_t id;
+    uint32_t offset;
+    ScopedBufferDescriptor buffer;
+  };
+
+  // Sends sparse updates to existing VertexBuffer and/or IndexBuffer.
+  virtual void UpdateMeshData(
+      std::vector<VertexBufferUpdateInfo> vertex_buffer_updates,
+      std::vector<IndexBufferUpdateInfo> index_buffer_updates) = 0;
 
   // Adds a TexturePipelineRenderer on the node on the remote renderer.
   // The state is serialized as a TexturePipelineRendererState proto.

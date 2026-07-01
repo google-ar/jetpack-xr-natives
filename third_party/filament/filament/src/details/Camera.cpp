@@ -20,15 +20,15 @@
 
 #include "details/Engine.h"
 
-#include <filament/Exposure.h>
 #include <filament/Camera.h>
+#include <filament/Exposure.h>
 
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/debug.h"
 #include "filament/libs/utils/include/utils/Panic.h"
 
-#include "filament/libs/math/include/math/scalar.h"
 #include "filament/libs/math/include/math/mat4.h"
+#include "filament/libs/math/include/math/scalar.h"
 #include "filament/libs/math/include/math/vec2.h"
 #include "filament/libs/math/include/math/vec3.h"
 

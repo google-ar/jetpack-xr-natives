@@ -25,6 +25,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "flatbuffers/buffer.h"
+#include "flatbuffers/flatbuffer_builder.h"
 #include "core/common/owned_or_borrowed_ptr.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/transport/message_group_sender.h"
@@ -51,17 +52,19 @@ class SelfContainedMessageGroupSender : public MessageGroupSender {
       MessageGroupType message_group_type,
       size_t max_message_group_size_bytes) override;
 
-  absl::StatusOr<OwnedOrBorrowedFlatbufferBuilderHolder> CreateBuilder(
-      MessageGroupId message_group_id, size_t initial_size_bytes) override;
+  absl::StatusOr<OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder>>
+  CreateBuilder(MessageGroupId message_group_id,
+                size_t initial_size_bytes) override;
 
   absl::Status AddMessage(
       MessageGroupId message_group_id,
-      OwnedOrBorrowedFlatbufferBuilderHolder fbb,
+      OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder> fbb,
       const flatbuffers::Offset<android_xr::schemas::Command>& offset) override;
 
-  absl::Status AddMessage(MessageGroupId message_group_id,
-                          OwnedOrBorrowedFlatbufferBuilderHolder fbb,
-                          OffsetProducer offset_fn) override;
+  absl::Status AddMessage(
+      MessageGroupId message_group_id,
+      OwnedOrBorrowedPtr<flatbuffers::FlatBufferBuilder> fbb,
+      OffsetProducer offset_fn) override;
 
   absl::Status Finish(
       MessageGroupId message_group_id,

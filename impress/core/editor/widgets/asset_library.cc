@@ -50,8 +50,10 @@
 #include "core/ncsb/node_data.proto.imp.h"
 #include "core/proto/proto_writer.h"
 #include "core/proto/textproto_writer.h"
+#include "core/render/material_registry.h"
 #include "core/render/texture.h"
 #include "core/resources/resource_manager.h"
+#include "core/scene_handles/material_handle.h"
 #include "core/view/base_view.h"
 #include "core/view/framework/scene/scene_reference.h"
 #include "core/view/framework/scene/scene_system.h"
@@ -94,7 +96,8 @@ AssetLibrary::AssetLibrary(BaseView& view)
                        {kGlbExt, DragAndDropType::kNodeAsset},
                        {kGltfExt, DragAndDropType::kNodeAsset},
                        {kCmatExt, DragAndDropType::kMaterial},
-                       {kPngExt, DragAndDropType::kTexture}}) {
+                       {kPngExt, DragAndDropType::kTexture},
+                       {kImpMaterialExt, DragAndDropType::kMaterialHandle}}) {
   // Load the thumbnail provider.
   Future<std::unique_ptr<StandardAssetThumbnailGenerator>> generator_future =
       StandardAssetThumbnailGenerator::Create(view_);
@@ -218,21 +221,14 @@ void AssetLibrary::DrawImGui() {
 
       auto itr = resource_types_.find(extension);
       if (itr != resource_types_.end()) {
-        BeginDragAndDropSource(itr.value(),
-                               absl::StrFormat("Load %s", extension), resource);
-      } else {
-        std::string payload_type = resource.substr(resource.find('.') + 1);
-
-        // Insert the message type if we haven't seen it yet. This allows the
-        // type to show up in the extensions filter.
-        message_types_.insert(payload_type);
-
-        if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
-          ImGui::SetDragDropPayload(payload_type.c_str(), resource.data(),
-                                    resource.size());
-          ImGui::Text("apply");
-          ImGui::EndDragDropSource();
+        if (itr.value() == DragAndDropType::kMaterialHandle) {
+          PrepareMaterialHandleDragAndDrop(resource);
+        } else {
+          BeginDragAndDropSource(
+              itr.value(), absl::StrFormat("Load %s", extension), resource);
         }
+      } else {
+        SetAsDefaultDragAndDropSource(resource);
       }
 
       if (extension == kIsfExt) {
@@ -281,6 +277,40 @@ void AssetLibrary::DrawIsfPopupMenu(absl::string_view resource_path) {
     }
 
     ImGui::EndPopup();
+  }
+}
+
+void AssetLibrary::SetAsDefaultDragAndDropSource(std::string resource_path) {
+  std::string payload_type = resource_path.substr(resource_path.find('.') + 1);
+
+  if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+    ImGui::SetDragDropPayload(payload_type.c_str(), resource_path.data(),
+                              resource_path.size());
+    ImGui::Text("apply");
+    ImGui::EndDragDropSource();
+  }
+}
+
+void AssetLibrary::PrepareMaterialHandleDragAndDrop(
+    const std::string& resource) {
+  auto& registry = view_.GetRegistry().GetOrCreate<MaterialRegistry>();
+  if (registry.HasMaterial(resource)) {
+    std::string payload_type = absl::StrCat(
+        kProtoDragAndDropScheme, GetPayloadTypeForMessage<MaterialHandle>());
+    MaterialHandle handle(resource);
+    std::string payload_bytes;
+    proto::SerializeTo(&handle, &payload_bytes);
+    if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+      ImGui::SetDragDropPayload(payload_type.c_str(), payload_bytes.data(),
+                                payload_bytes.size());
+      ImGui::Text("Apply Material");
+      ImGui::EndDragDropSource();
+    }
+  } else {
+    // TODO: Support the case that the drag&drop resource is not
+    // already loaded. Use MaterialHandle::AsyncPreload() when that is
+    // available.
+    SetAsDefaultDragAndDropSource(resource);
   }
 }
 

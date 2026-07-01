@@ -206,8 +206,8 @@ absl::Status ValidateKeyframeData(absl::Span<const float> time_data,
   return absl::OkStatus();
 }
 
-absl::optional<Domain> MergeDomains(const absl::optional<Domain>& a,
-                                    const absl::optional<Domain>& b) {
+std::optional<Domain> MergeDomains(const std::optional<Domain>& a,
+                                   const std::optional<Domain>& b) {
   if (!a && !b) return {};
   if (!a) return b;
   if (!b) return a;

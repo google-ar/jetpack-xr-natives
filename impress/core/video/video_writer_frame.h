@@ -67,7 +67,7 @@ class VideoFrame {
           // isn't the main Filament thread.
           std::unique_lock<std::mutex> lock(mutex_);
           finished_ = true;
-          cond_.notify_one();
+          cond_.notify_all();
         });
   }
 

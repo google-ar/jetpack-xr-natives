@@ -37,6 +37,7 @@
 #include "core/editor/widgets/viewport/viewport_widget.h"
 #include "core/editor/xr/xr_editor_ui.h"
 #include "core/geometry/shapes/rect.h"
+#include "core/input/input_events_pool.h"
 #include "core/input/input_manager.h"
 #include "core/input/key_codes.h"
 #include "core/input/keyboard_controller.h"
@@ -113,14 +114,15 @@ std::optional<ControllerHitEvent> BuildControllerHitEvent(
 }
 
 // Selectively captures input that may be interacting with the XR Editor.
-void InterceptXrEditorInput(BaseView& view,
+// Returns true if the input was captured by the XR Editor.
+bool InterceptXrEditorInput(BaseView& view,
                             InputActionEvent& input_action_event) {
   // TODO Implement intercompatibility with PointerHitEvent
   // Check if there's controller input in this InputActionEvent.
   std::optional<ControllerHitEvent> controller_hit_event =
       BuildControllerHitEvent(view, input_action_event);
   if (!controller_hit_event.has_value()) {
-    return;
+    return false;
   }
 
   absl::StatusOr<std::reference_wrapper<editor::Editor>> editor_or =
@@ -143,7 +145,9 @@ void InterceptXrEditorInput(BaseView& view,
     input_action_event.action_name_to_input_action_state.clear();
     input_action_event.action_name_to_input_action_state.insert_or_assign(
         std::string(kDefaultAimActionName), raycast_input_action_state);
+    return true;
   }
+  return false;
 }
 
 }  // namespace
@@ -155,18 +159,24 @@ DevModeInputInterceptor::DevModeInputInterceptor(BaseView* view)
 }
 
 void DevModeInputInterceptor::FilterPointerEvents(
-    std::vector<PointerEvent>& pointer_events) {
+    InputEventsBatch<PointerEvent>& pointer_batch) {
+  std::vector<PointerEvent>& pointer_events = pointer_batch.events;
+  InputEventSource source = pointer_batch.source;
   IMP_TRACE();
   if (!ImGui::GetCurrentContext()) return;
 
-  bool use_remote_screen = false;
-  absl::StatusOr<std::reference_wrapper<editor::Editor>> editor =
-      view_->GetRegistry().Get<editor::Editor>();
-  if (editor.ok()) {
-    if (editor->get().GetDisplayMode() ==
-        editor::EditorInfo::DisplayMode::kRemoteScreen) {
-      use_remote_screen = true;
-    }
+  const bool use_remote_screen = IsUsingRemoteScreen();
+
+  if (use_remote_screen && source == InputEventSource::kLocal) {
+    // If the remote editor is active, local touches on the physical screen
+    // should bypass ImGui but still reach the application (e.g. for camera
+    // rotation).
+    return;
+  }
+  if (!use_remote_screen && source == InputEventSource::kRemote) {
+    // If the remote editor is NOT active, ignore all remote events.
+    pointer_events.clear();
+    return;
   }
 
   window::FilamentHost::DevModeExtension* dev_mode_extension =
@@ -220,7 +230,8 @@ void DevModeInputInterceptor::FilterPointerEvents(
           break;
         }
         auto& editor = view_->GetRegistry().Get<editor::Editor>()->get();
-        if (editor.IsEnabled() && !is_over_viewport) {
+        if (!use_remote_screen && editor.IsEnabled() &&
+            IsViewportWidgetActive() && !is_over_viewport) {
           // If the editor is enabled and we are NOT over a viewport,
           // then the editor should capture the input to prevent it
           // from reaching the app.
@@ -281,8 +292,6 @@ void DevModeInputInterceptor::FilterPointerEvents(
       const Pointer& pointer = event.GetPointer(pointer_index);
       io.MousePos = ImVec2(pointer.point.x, pointer.point.y);
 
-      if (use_remote_screen) continue;
-
       if (event.PointerCount() == 1 ||
           (pointer_index == 0 && event.ChangedPointerCount() == 1)) {
         // The removal of this pointer makes the event irrelevant; drop it.
@@ -295,7 +304,7 @@ void DevModeInputInterceptor::FilterPointerEvents(
             event.Type(), new_pointers,
             event.ChangedPointerCount() -
                 (pointer_index < event.ChangedPointerCount() ? 1 : 0),
-            event.ElapsedTime());
+            event.ElapsedTime(), event.GetDeviceType());
       }
     }
 
@@ -311,6 +320,8 @@ void DevModeInputInterceptor::FilterPointerEvents(
   }
 
   // Transform remaining events to viewport space
+  absl::StatusOr<std::reference_wrapper<editor::Editor>> editor =
+      view_->GetRegistry().Get<editor::Editor>();
   if (!editor.ok() || !editor->get().IsEnabled()) return;
 
   const std::optional<Rect> viewport_rect = editor->get().GetViewportRect();
@@ -327,25 +338,32 @@ void DevModeInputInterceptor::FilterPointerEvents(
     }
 
     event = PointerEvent(event.Type(), transformed_pointers,
-                         event.ChangedPointerCount(), event.ElapsedTime());
+                         event.ChangedPointerCount(), event.ElapsedTime(),
+                         event.GetDeviceType());
   }
 }
 
 void DevModeInputInterceptor::FilterKeyboardEvents(
-    std::vector<KeyboardEvent>& keyboard_events,
-    std::vector<TextInputEvent>& text_input_events) {
+    InputEventsBatch<KeyboardEvent>& keyboard_batch,
+    InputEventsBatch<TextInputEvent>& text_input_batch) {
+  std::vector<KeyboardEvent>& keyboard_events = keyboard_batch.events;
+  std::vector<TextInputEvent>& text_input_events = text_input_batch.events;
+  InputEventSource source = keyboard_batch.source;
   IMP_TRACE();
-  ImGuiIO& io = ImGui::GetIO();
 
-  bool use_remote_screen = false;
-  absl::StatusOr<std::reference_wrapper<editor::Editor>> editor =
-      view_->GetRegistry().Get<editor::Editor>();
-  if (editor.ok()) {
-    if (editor->get().GetDisplayMode() ==
-        editor::EditorInfo::DisplayMode::kRemoteScreen) {
-      use_remote_screen = true;
-    }
+  const bool use_remote_screen = IsUsingRemoteScreen();
+
+  if (use_remote_screen && source == InputEventSource::kLocal) {
+    // Local keyboard events bypass the remote ImGui.
+    return;
   }
+  if (!use_remote_screen && source == InputEventSource::kRemote) {
+    keyboard_events.clear();
+    text_input_events.clear();
+    return;
+  }
+
+  ImGuiIO& io = ImGui::GetIO();
 
   // To show/hide soft keyboard. Do nothing if the platform doesn't support
   // soft keyboard.
@@ -394,8 +412,21 @@ void DevModeInputInterceptor::FilterKeyboardEvents(
 }
 
 void DevModeInputInterceptor::FilterWheelEvents(
-    std::vector<WheelEvent>& wheel_events) {
-  auto wheel_itr = wheel_events.begin();
+    InputEventsBatch<WheelEvent>& wheel_batch) {
+  std::vector<WheelEvent>& wheel_events = wheel_batch.events;
+  InputEventSource source = wheel_batch.source;
+  const bool use_remote_screen = IsUsingRemoteScreen();
+
+  if (use_remote_screen && source == InputEventSource::kLocal) {
+    // Local wheel events bypass the remote ImGui.
+    return;
+  }
+  if (!use_remote_screen && source == InputEventSource::kRemote) {
+    wheel_events.clear();
+    return;
+  }
+
+  std::vector<WheelEvent>::iterator wheel_itr = wheel_events.begin();
   while (wheel_itr != wheel_events.end()) {
     if (TryConsumeWheelEvent(*wheel_itr)) {
       wheel_itr = wheel_events.erase(wheel_itr);
@@ -421,8 +452,11 @@ void DevModeInputInterceptor::FilterWheelEvents(
 }
 
 void DevModeInputInterceptor::FilterInputActionEvents(
-    std::vector<InputActionEvent>& input_action_events) {
+    InputEventsBatch<InputActionEvent>& input_action_batch) {
+  std::vector<InputActionEvent>& input_action_events =
+      input_action_batch.events;
   IMP_TRACE();
+
   window::FilamentHost::DevModeExtension* dev_mode_extension =
       view_->GetHost()->TryGetExtension();
   if (!dev_mode_extension || !dev_mode_extension->IsEnabled()) {
@@ -435,14 +469,13 @@ void DevModeInputInterceptor::FilterInputActionEvents(
   //   actions.
   //   - Prioritize the transform widget in raycasts.
   //   - Select Impress nodes using controller ray.
-  for (auto& input_action_event : input_action_events) {
-    InterceptXrEditorInput(*view_, input_action_event);
-  }
-
-  absl::StatusOr<std::reference_wrapper<editor::Editor>> editor =
-      view_->GetRegistry().Get<editor::Editor>();
-  if (editor.ok() && editor->get().IsEnabled()) {
-    input_action_events.clear();
+  auto iter = input_action_events.begin();
+  while (iter != input_action_events.end()) {
+    if (InterceptXrEditorInput(*view_, *iter)) {
+      iter = input_action_events.erase(iter);
+    } else {
+      ++iter;
+    }
   }
 }
 
@@ -468,11 +501,22 @@ bool DevModeInputInterceptor::TryConsumeWheelEvent(
     return true;
   }
 
-  return editor->get().IsEnabled();
+  return IsViewportWidgetActive() && editor->get().IsEnabled();
 }
 
 std::optional<Rect> DevModeInputInterceptor::GetViewportRect() const {
   auto& editor = view_->GetRegistry().Get<editor::Editor>()->get();
   return editor.GetViewportRect();
+}
+
+bool DevModeInputInterceptor::IsUsingRemoteScreen() const {
+  absl::StatusOr<std::reference_wrapper<editor::Editor>> editor =
+      view_->GetRegistry().Get<editor::Editor>();
+  return editor.ok() && editor->get().GetDisplayMode() ==
+                            editor::EditorInfo::DisplayMode::kRemoteScreen;
+}
+
+bool DevModeInputInterceptor::IsViewportWidgetActive() const {
+  return GetViewportRect().has_value();
 }
 }  // namespace imp

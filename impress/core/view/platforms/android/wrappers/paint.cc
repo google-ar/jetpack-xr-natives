@@ -165,35 +165,41 @@ void Paint::SetXfermodeClear(bool clear) {
 std::unique_ptr<Rect> Paint::GetTextBounds(absl::string_view text) {
   auto rect = std::make_unique<Rect>(Env());
 
-  jstring jtext = ToString(Env(), text);
+  JniUniquePtr<jstring> jtext = ToJniString(Env(), text);
 
-  CallVoidMethod(get_text_bounds_, jtext, 0, Env()->GetStringLength(jtext),
-                 rect->WeakReference());
-
-  Env()->DeleteLocalRef(jtext);
+  CallVoidMethod(get_text_bounds_, jtext.get(), 0,
+                 Env()->GetStringLength(jtext.get()), rect->WeakReference());
 
   return rect;
 }
 
 float Paint::MeasureText(absl::string_view text) {
-  return CallFloatMethod(measure_text_, ToString(Env(), text));
+  JniUniquePtr<jstring> jtext = ToJniString(Env(), text);
+  return CallFloatMethod(measure_text_, jtext.get());
 }
 
 std::vector<float> Paint::GetTextWidths(absl::string_view text) {
-  jfloatArray out_widths_array = Env()->NewFloatArray(text.size());
+  JniUniquePtr<jstring> jtext = ToJniString(Env(), text);
+  JniUniquePtr<jfloatArray> out_widths_array =
+      WrapJni(Env(), Env()->NewFloatArray(text.size()));
+  if (!out_widths_array) {
+    return {};
+  }
   int out_widths_count =
-      CallIntMethod(get_text_widths_, ToString(Env(), text), out_widths_array);
+      CallIntMethod(get_text_widths_, jtext.get(), out_widths_array.get());
 
   jfloat* out_widths_array_ptr =
-      Env()->GetFloatArrayElements(out_widths_array, nullptr);
+      Env()->GetFloatArrayElements(out_widths_array.get(), nullptr);
 
   std::vector<float> result;
-  result.reserve(out_widths_count);
-  for (int i = 0; i < out_widths_count; ++i) {
-    result.push_back(out_widths_array_ptr[i]);
+  if (out_widths_array_ptr != nullptr) {
+    result.reserve(out_widths_count);
+    for (int i = 0; i < out_widths_count; ++i) {
+      result.push_back(out_widths_array_ptr[i]);
+    }
+    Env()->ReleaseFloatArrayElements(out_widths_array.get(),
+                                     out_widths_array_ptr, 0);
   }
-
-  Env()->ReleaseFloatArrayElements(out_widths_array, out_widths_array_ptr, 0);
 
   return result;
 }

@@ -56,13 +56,12 @@ namespace details {
 #define IMP_JNI JNIEXPORT
 #endif  // defined(_WINDOWS) || defined(_WIN32)
 
-#define THROW_IF_ERROR(env, expr)                                    \
-  switch (0)                                                         \
-  case 0:                                                            \
-  default:                                                           \
-    if (imp::OptionalError status = (expr); !status.ok())            \
-    ((env)->ThrowNew((env)->FindClass("java/lang/RuntimeException"), \
-                     std::string(status.message()).c_str()))
+#define THROW_IF_ERROR(env, expr)                         \
+  switch (0)                                              \
+  case 0:                                                 \
+  default:                                                \
+    if (imp::OptionalError status = (expr); !status.ok()) \
+    imp::ThrowError(env, status)
 
 // Compile-time helper function for use in static_assert.  Returns true iff
 // T appears in the list of Candidates.
@@ -150,20 +149,10 @@ void AssertNoException(JNIEnv* env);
 // (broken link)
 bool JavaExceptionPrintClear(JNIEnv* env);
 
-// Helper function to convert C++ strings to jstring.
-ABSL_DEPRECATED("Use ToJniString instead")
-jstring ToString(JNIEnv* env, const std::string& str);
-// Helper function to convert absl::string_view to jstring.
-ABSL_DEPRECATED("Use ToJniString instead")
-jstring ToString(JNIEnv* env, absl::string_view view);
 // Helper function to convert string views into string arrays.
 jobjectArray ToStringArray(JNIEnv* env, std::vector<absl::string_view> views);
 
-// Copy the contents of a BufferAccess into a jbyteArray.
-jbyteArray ToByteArray(JNIEnv* env, const BufferAccess& access);
 
-// Copy the contents of the string view into a jbyteArray.
-jbyteArray ToByteArray(JNIEnv* env, absl::string_view str);
 
 // Copy the contents of a jbyteArray into a BufferAccess.
 BufferAccess FromByteArray(JNIEnv* env, jbyteArray byte_array);
@@ -187,7 +176,7 @@ jfieldID GetFieldID(JNIEnv* env, jclass clazz, const char* field_name,
 // ref appropriately.
 void DeleteRef(JNIEnv* env, jobject object);
 
-using JniType = absl::variant<jclass, jobject, jmethodID, jfieldID>;
+using JniType = std::variant<jclass, jobject, jmethodID, jfieldID>;
 using JniHandle = TypedId<JniType, int32_t>;
 
 namespace details {
@@ -244,6 +233,10 @@ JniUniquePtr<T> CloneRef(JNIEnv* env, T ref) {
 JniUniquePtr<jstring> ToJniString(JNIEnv* env, const std::string& str);
 JniUniquePtr<jstring> ToJniString(JNIEnv* env, absl::string_view view);
 
+JniUniquePtr<jbyteArray> ToJniByteArray(JNIEnv* env,
+                                        const BufferAccess& access);
+JniUniquePtr<jbyteArray> ToJniByteArray(JNIEnv* env, absl::string_view str);
+
 JniUniquePtr<jclass> FindClass(JNIEnv* env, const char* class_path);
 
 ABSL_DEPRECATED("Use FindClass with an explicit path instead")
@@ -299,10 +292,6 @@ T GetJniTypeOrNull(const JniType& variant) {
 
 // Base class for representing Java classes in native code.
 // TODO: Add memory leak test
-// TODO: Set ClassLoader when JNI context is attached. The Java
-// ClassLoader is thread-local, so using a background thread to load a custom
-// Java Class will cause a ClassNotFoundException since it will use the system
-// ClassLoader by default.
 class JavaWrapper {
  public:
   template <class... Args>
@@ -505,6 +494,7 @@ class JavaWrapper {
     JNIEnv* env = Env();
     if (!handle) {
       ThrowError(env, Error("Jni handle is invalid."));
+      return;
     }
     jmethodID id = ToMethodID(handle);
     env->CallVoidMethod(Self(), id, std::forward<Args>(args)...);
@@ -515,6 +505,7 @@ class JavaWrapper {
     JNIEnv* env = Env();
     if (!handle) {
       ThrowError(env, Error("Jni handle is invalid."));
+      return;
     }
     jmethodID id = ToMethodID(handle);
     env->CallStaticVoidMethod(Clazz(), id, std::forward<Args>(args)...);
@@ -525,6 +516,7 @@ class JavaWrapper {
     JNIEnv* env = Env();
     if (!handle) {
       ThrowError(env, Error("Jni handle is invalid."));
+      return 0;
     }
     jmethodID id = ToMethodID(handle);
     return env->CallLongMethod(Self(), id, std::forward<Args>(args)...);
@@ -535,6 +527,7 @@ class JavaWrapper {
     JNIEnv* env = Env();
     if (!handle) {
       ThrowError(env, Error("Jni handle is invalid."));
+      return 0.0f;
     }
     jmethodID id = ToMethodID(handle);
     return env->CallFloatMethod(Self(), id, std::forward<Args>(args)...);
@@ -545,6 +538,7 @@ class JavaWrapper {
     JNIEnv* env = Env();
     if (!handle) {
       ThrowError(env, Error("Jni handle is invalid."));
+      return false;
     }
     jmethodID id = ToMethodID(handle);
     return env->CallBooleanMethod(Self(), id, std::forward<Args>(args)...);
@@ -555,6 +549,7 @@ class JavaWrapper {
     JNIEnv* env = Env();
     if (!handle) {
       ThrowError(env, Error("Jni handle is invalid."));
+      return 0;
     }
     jmethodID id = ToMethodID(handle);
     return env->CallIntMethod(Self(), id, std::forward<Args>(args)...);
@@ -565,6 +560,7 @@ class JavaWrapper {
     JNIEnv* env = Env();
     if (!handle) {
       ThrowError(env, Error("Jni handle is invalid."));
+      return 0;
     }
     jmethodID id = ToMethodID(handle);
     return env->CallStaticIntMethod(Clazz(), id, std::forward<Args>(args)...);
@@ -577,6 +573,7 @@ class JavaWrapper {
     JNIEnv* env = Env();
     if (!handle) {
       ThrowError(env, Error("Jni handle is invalid."));
+      return "";
     }
     jmethodID id = ToMethodID(handle);
     jobject java_string =
@@ -657,6 +654,7 @@ class JavaWrapper {
   T CastToJNIType(JniHandle handle) {
     if (!jni_info_list_.IsValid(handle)) {
       ThrowError(Env(), Error("No JNI info for handle (out of range)."));
+      return {};
     }
     return GetJniTypeOrNull<T>(jni_info_list_[handle]);
   }

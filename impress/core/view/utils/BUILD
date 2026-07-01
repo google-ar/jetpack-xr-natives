@@ -189,6 +189,7 @@ proto_library(
         ":cache_config_proto",
         ":filament_feature_flag_proto",
         ":render_settings_proto",
+        "//core/assets/material:material_load_options_proto",
     ],
 )
 
@@ -199,6 +200,7 @@ imp_cc_proto_library(
         ":cache_config_proto_cc_imp",
         ":filament_feature_flag_proto_cc_imp",
         ":render_settings_proto_cc_imp",
+        "//core/assets/material:material_load_options_proto_cc",
         "//core/proto:imp_cc_proto",
     ],
 )

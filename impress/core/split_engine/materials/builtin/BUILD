@@ -268,6 +268,7 @@ cc_library(
         ":builtin_svxr_footprint_material_assets",
         "//core/assets",
         "//core/assets/material:material_asset",
+        "//core/assets/material:material_load_options_proto_cc",
         "//core/async:future",
         "//core/material_library:material_package",
         "//core/materials",

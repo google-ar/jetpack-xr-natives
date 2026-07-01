@@ -16,7 +16,7 @@
 
 namespace imp {
 
-absl::optional<Future<absl::Status>> LoadSceneVisitor::Accept(
+std::optional<Future<absl::Status>> LoadSceneVisitor::Accept(
     NodeHandle node, HashValue state_type_hash, void* erased_state,
     bool should_enable_component) {
   // Finds the registered function (if there is one) for the type of state

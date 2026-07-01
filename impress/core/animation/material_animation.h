@@ -53,14 +53,14 @@ class MaterialAnimation {
   };
   struct MaterialParameter {
     MaterialParameter(
-        absl::optional<float4> in_base_color_factor,
-        absl::optional<float> in_metallic_factor,
-        absl::optional<float> in_roughness_factor,
-        absl::optional<float> in_alpha_cutoff,
-        absl::optional<float3> in_emissive_factor,
-        absl::optional<float> in_normal_texture_scale,
-        absl::optional<float> in_occlusion_texture_strength,
-        absl::optional<float> in_ior, absl::optional<float> in_transmission,
+        std::optional<float4> in_base_color_factor,
+        std::optional<float> in_metallic_factor,
+        std::optional<float> in_roughness_factor,
+        std::optional<float> in_alpha_cutoff,
+        std::optional<float3> in_emissive_factor,
+        std::optional<float> in_normal_texture_scale,
+        std::optional<float> in_occlusion_texture_strength,
+        std::optional<float> in_ior, std::optional<float> in_transmission,
         std::vector<TextureTransformAnimation::TextureTransformParameter>
             in_texture_transform_parameters)
         : texture_transform_parameters(

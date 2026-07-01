@@ -16,8 +16,8 @@
 
 #include "private/filament/BufferInterfaceBlock.h"
 
-#include "filament/libs/utils/include/utils/Panic.h"
 #include "filament/libs/utils/include/utils/compiler.h"
+#include "filament/libs/utils/include/utils/Panic.h"
 
 #include <utility>
 

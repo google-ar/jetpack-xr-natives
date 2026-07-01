@@ -1040,8 +1040,38 @@ class EditorProtoVisitor {
   }
 
   Proto& state_;
+  std::vector<Proto*> active_states_;
   BaseView* view_ = nullptr;
   bool updated_ = false;
+
+  template <typename T>
+  std::vector<T*> GetActiveStateFields(T* field) const {
+    if (active_states_.empty()) return {};
+    // Calculate the offset of the field within the proto.
+    const size_t offset = reinterpret_cast<const char*>(field) -
+                          reinterpret_cast<const char*>(&state_);
+    std::vector<T*> fields;
+    fields.reserve(active_states_.size());
+    for (Proto* s : active_states_) {
+      // Add the field from the active state to the list.
+      fields.push_back(
+          reinterpret_cast<T*>(reinterpret_cast<char*>(s) + offset));
+    }
+    return fields;
+  }
+
+  template <typename T, typename Fn>
+  void ForEachActiveStateField(T* field, Fn&& fn) const {
+    if (active_states_.empty()) return;
+    // Calculate the offset of the field within the proto.
+    const size_t offset = reinterpret_cast<const char*>(field) -
+                          reinterpret_cast<const char*>(&state_);
+    for (Proto* s : active_states_) {
+      if (s == &state_) continue;
+      // Call the function on the field in the active state.
+      fn(reinterpret_cast<T*>(reinterpret_cast<char*>(s) + offset));
+    }
+  }
 };
 
 }  // namespace imp::editor

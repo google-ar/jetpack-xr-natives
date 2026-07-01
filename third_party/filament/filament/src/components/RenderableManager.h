@@ -18,12 +18,11 @@
 #define TNT_FILAMENT_COMPONENTS_RENDERABLEMANAGER_H
 
 #include "downcast.h"
-
 #include "HwRenderPrimitiveFactory.h"
 
-#include "ds/DescriptorSet.h"
+#include "details/InstanceBuffer.h"
 
-#include <details/InstanceBuffer.h>
+#include "ds/DescriptorSet.h"
 
 #include <filament/Box.h>
 #include <filament/MaterialEnums.h>
@@ -121,6 +120,10 @@ public:
 
     utils::Entity const* getEntities() const noexcept {
         return mManager.getEntities();
+    }
+
+    const utils::PagedArenaBitset& getEntityBitset() const noexcept {
+        return mManager.getEntityBitset();
     }
 
     void create(const Builder& builder, utils::Entity entity);
@@ -229,6 +232,9 @@ public:
     MaterialInstance* getMaterialInstanceAt(Instance instance, uint8_t level, size_t primitiveIndex) const noexcept;
     void setGeometryAt(Instance instance, uint8_t level, size_t primitiveIndex,
             PrimitiveType type, FVertexBuffer* vertices, FIndexBuffer* indices,
+            size_t offset, size_t count) noexcept;
+    void setGeometryAt(Instance instance, uint8_t level, size_t primitiveIndex,
+            PrimitiveType type, FVertexBuffer* vertices,
             size_t offset, size_t count) noexcept;
     void setBlendOrderAt(Instance instance, uint8_t level, size_t primitiveIndex, uint16_t blendOrder) noexcept;
     uint16_t getBlendOrderAt(Instance instance, uint8_t level, size_t primitiveIndex) const noexcept;

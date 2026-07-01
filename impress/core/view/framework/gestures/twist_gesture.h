@@ -34,7 +34,7 @@ class TwistGesture : public Gesture {
                const PointerHitEvent& pointer_hit,
                const std::array<Pointer::Id, 2>& pointer_id);
 
-  using CreateFn = std::function<absl::optional<TwistGesture>(
+  using CreateFn = std::function<std::optional<TwistGesture>(
       const PointerHitEvent& pointer_hit,
       absl::Span<const TwistGesture> gestures)>;
   static CreateFn GetCreateFunction(Dispatcher* dispatcher,

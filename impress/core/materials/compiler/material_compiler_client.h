@@ -16,7 +16,6 @@
 #ifndef THIRD_PARTY_IMPRESS_CORE_MATERIALS_COMPILER_MATERIAL_COMPILER_CLIENT_H_
 #define THIRD_PARTY_IMPRESS_CORE_MATERIALS_COMPILER_MATERIAL_COMPILER_CLIENT_H_
 
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -53,6 +52,9 @@ enum class ConnectionState {
 // Native client for requesting material compilation at runtime.
 class MaterialCompilerClient {
  public:
+  using OperationId = uint64_t;
+  constexpr static OperationId kInvalidOperationId = 0;
+
   explicit MaterialCompilerClient(int fd);
   ~MaterialCompilerClient();
 
@@ -61,9 +63,14 @@ class MaterialCompilerClient {
   // Expects the material input to be already inlined.
   // The platform and target_api parameters are used to determine the compiled
   // shader output.
+  // The operation_id is injected by the caller so they can cancel the request.
   absl::StatusOr<FlatBufferAccess<const schemas::CompileResponse>>
   CompileMaterial(absl::string_view source_material_string,
-                  const MaterialCompilerConfig& config);
+                  const MaterialCompilerConfig& config,
+                  OperationId operation_id);
+
+  // Cancels the outstanding request for the given operation_id.
+  void CancelOperation(OperationId operation_id);
 
   // Initiates close by the client. This sends a CloseRequest to the service,
   // ask the service to close the pipe. This closes the pipe itself if it fails
@@ -79,17 +86,14 @@ class MaterialCompilerClient {
   absl::Status SendRequest(const flatbuffers::FlatBufferBuilder& builder);
 
   absl::StatusOr<FlatBufferAccess<const schemas::CompileResponse>>
-  GetCompiledMaterialResponse(uint64_t operation_id);
+  GetCompiledMaterialResponse(OperationId operation_id);
 
   ConnectionState connection_state_ = ConnectionState::kConnected;
 
-  // This is used to track the last operation id sent so the next request has a
-  // unique id.
-  std::atomic<uint64_t> last_operation_id_ = 0;
-
   absl::Mutex lock_;
+  // Maps operation ids to the response or error status for that operation.
   absl::flat_hash_map<
-      uint64_t,
+      OperationId,
       absl::StatusOr<FlatBufferAccess<const schemas::CompileResponse>>>
       processed_messages_ ABSL_GUARDED_BY(lock_);
 

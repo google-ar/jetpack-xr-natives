@@ -16,10 +16,9 @@
 
 #include "VulkanHandles.h"
 
-// TODO: remove this by moving DebugUtils out of VulkanDriver
 #include "VulkanDriver.h"
-
 #include "VulkanMemory.h"
+
 #include "vulkan/memory/ResourcePointer.h"
 #include "vulkan/utils/Conversion.h"
 #include "vulkan/utils/Definitions.h"
@@ -28,8 +27,8 @@
 #include <backend/platforms/VulkanPlatform.h>
 
 #include "filament/libs/utils/include/utils/compiler.h" // UTILS_FALLTHROUGH
-#include "filament/libs/utils/include/utils/Panic.h"    // ASSERT_POSTCONDITION
 #include "filament/libs/utils/include/utils/CString.h"
+#include "filament/libs/utils/include/utils/Panic.h"    // ASSERT_POSTCONDITION
 
 using namespace bluevk;
 
@@ -342,8 +341,15 @@ VulkanRenderTarget::VulkanRenderTarget(VkDevice device, VkPhysicalDevice physica
 
         mProtected |= texture->getIsProtected();
 
+        size_t const compactIdx = attachments.size();
         attachments.push_back(attachment);
         mInfo->colors.set(index);
+
+        TextureFormat const fmt = texture->format;
+        mInfo->colorClearKinds[compactIdx] = isUnsignedIntFormat(fmt) ?
+                VulkanRenderTarget::ColorClearKind::UnsignedInt : isSignedIntFormat(fmt) ?
+                        VulkanRenderTarget::ColorClearKind::SignedInt :
+                        VulkanRenderTarget::ColorClearKind::Float;
 
         rpkey.colorFormat[index] = attachment.getFormat();
         fbkey.color[index] = attachment.getImageView();
@@ -494,7 +500,15 @@ void VulkanRenderTarget::emitBarriersEndRenderPass(VulkanCommandBuffer& commands
 VulkanVertexBufferInfo::VulkanVertexBufferInfo(
         uint8_t bufferCount, uint8_t attributeCount, AttributeArray const& attributes)
     : HwVertexBufferInfo(bufferCount, attributeCount),
-      mInfo(attributes.size()) {
+      mInfo(attributeCount == 0 ? 0 : attributes.size()) {
+    // Attribute-less rendering: when there are no declared attributes (and therefore no buffers),
+    // skip the per-attribute setup entirely. Pipeline creation, VulkanPipelineCache::createPipeline,
+    // will then have vertexAttributeDescriptionCount == 0 and vertexBindingDescriptionCount == 0,
+    // which is what Vulkan wants for attribute-less draws.
+    if (attributeCount == 0) {
+        return;
+    }
+
     auto attribDesc = mInfo.mSoa.data<PipelineInfo::ATTRIBUTE_DESCRIPTION>();
     auto bufferDesc = mInfo.mSoa.data<PipelineInfo::BUFFER_DESCRIPTION>();
     auto offsets = mInfo.mSoa.data<PipelineInfo::OFFSETS>();
@@ -528,6 +542,7 @@ VulkanVertexBufferInfo::VulkanVertexBufferInfo(
             .stride = attrib.stride,
         };
         attribToBufferIndex[attribIndex] = attrib.buffer;
+        mAttributes.set(attribIndex);
     }
 }
 
@@ -547,6 +562,7 @@ void VulkanVertexBuffer::setBuffer(fvkmemory::resource_ptr<VulkanBufferObject> b
     for (uint8_t attribIndex = 0; attribIndex < count; attribIndex++) {
         if (attribToBuffer[attribIndex] == static_cast<int8_t>(index)) {
             vkbuffers[attribIndex] = bufferObject->getVkBuffer();
+            mAttributes.set(attribIndex);
         }
     }
     mResources.push_back(bufferObject);

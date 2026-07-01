@@ -22,8 +22,8 @@
 #include "filament/libs/utils/include/utils/compiler.h"
 #include "filament/libs/utils/include/utils/Slice.h"
 
-#include "filament/libs/math/include/math/vec4.h"
 #include "filament/libs/math/include/math/vec2.h"
+#include "filament/libs/math/include/math/vec4.h"
 
 namespace filament {
 

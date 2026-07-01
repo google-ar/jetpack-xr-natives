@@ -34,9 +34,11 @@
 #include <utility>
 #include <vector>
 
+#include "absl/base/thread_annotations.h"
 #include "core/common/log.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
 #include "core/common/invocable.h"
 #include "core/common/trace.h"
@@ -86,10 +88,14 @@ absl::Status transformStatus(ndk::ScopedAStatus& status) {
 class SplitEngineSharedMemoryReverseBridgeHandler
     : public aidl::imp::split_engine::BnSplitEngineSharedMemoryReverseBridge {
  public:
-  explicit SplitEngineSharedMemoryReverseBridgeHandler(
-      std::function<absl::Status(MessageGroupId)> callback)
-      : callback_(callback) {}
+  SplitEngineSharedMemoryReverseBridgeHandler() = default;
   ~SplitEngineSharedMemoryReverseBridgeHandler() = default;
+
+  void SetMessageGroupCallback(
+      std::unique_ptr<SplitEngineMessageGroupCallback> callback) {
+    absl::MutexLock lock(&mutex_);
+    callback_ = std::move(callback);
+  }
 
   // TODO: For now we only have one type of message going over the
   // reverse bridge, so it's defined explicitly here. If this expands then we
@@ -99,17 +105,26 @@ class SplitEngineSharedMemoryReverseBridgeHandler
   ndk::ScopedAStatus onMessageGroupComplete(int group_id) override {
     IMP_TRACE();
 
-    if (absl::Status release_result = callback_(MessageGroupId(group_id));
-        !release_result.ok()) {
-      IMP_LOG(imp::ERROR) << "Failed to release message group: "
-                 << release_result.ToString();
+    absl::MutexLock lock(&mutex_);
+    if (!callback_) {
+      return ndk::ScopedAStatus::fromExceptionCodeWithMessage(
+          EX_SERVICE_SPECIFIC,
+          "SplitEngineSharedMemoryReverseBridgeHandler has no callback set");
     }
-
+    // Note: we assume that calling the callback will not attempt to remove the
+    // callback, as that would lead to deadlock. In practice, this is true
+    // because the callback is only set once and only removed once the client
+    // calls SplitEngineSharedMemoryBridgeClient::Shutdown, which happens in the
+    // destructor of the client after the destruction of the
+    // SplitEngineSharedMemoryReverseBridgeHandler.
+    callback_->OnMessageGroupComplete(group_id);
     return ndk::ScopedAStatus::ok();
   }
 
  private:
-  std::function<absl::Status(MessageGroupId)> callback_;
+  absl::Mutex mutex_;
+  std::unique_ptr<SplitEngineMessageGroupCallback> callback_
+      ABSL_GUARDED_BY(mutex_);
 };
 
 class SplitEngineResponseHandler
@@ -148,15 +163,7 @@ SplitEngineSharedMemoryBridgeClientNdk::SplitEngineSharedMemoryBridgeClientNdk(
   // concrete SplitEngineSharedMemoryReverseBridgeHandler class, so we use a
   // lambda to pass the message group release callback since it binds later.
   reverse_bridge_ =
-      ndk::SharedRefBase::make<SplitEngineSharedMemoryReverseBridgeHandler>(
-          [this](MessageGroupId group_id) {
-            if (!release_message_group_callback_) {
-              return absl::FailedPreconditionError(
-                  "Message group callback is not set");
-            }
-            release_message_group_callback_->OnMessageGroupComplete(group_id);
-            return absl::OkStatus();
-          });
+      ndk::SharedRefBase::make<SplitEngineSharedMemoryReverseBridgeHandler>();
   jni_env->GetJavaVM(&java_vm_);
   // TODO: Move work out of constructor into static creator, and
   // return an actionable error for the app.
@@ -183,7 +190,10 @@ void SplitEngineSharedMemoryBridgeClientNdk::RegisterMessageGroupCallback(
     std::unique_ptr<SplitEngineMessageGroupCallback> callback) {
   // This is used by the SplitEngineSharedMemoryReverseBridgeHandler to release
   // message groups.
-  release_message_group_callback_ = std::move(callback);
+  auto handler =
+      std::static_pointer_cast<SplitEngineSharedMemoryReverseBridgeHandler>(
+          reverse_bridge_);
+  handler->SetMessageGroupCallback(std::move(callback));
 }
 
 absl::StatusOr<std::unique_ptr<BufferHandle>>

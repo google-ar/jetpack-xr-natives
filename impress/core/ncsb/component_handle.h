@@ -118,7 +118,7 @@ ComponentHandle<T>::ComponentHandle(T& component)
     : entity_(component.GetEntity()),
       pool_(&component.GetBaseComponentPool()),
       component_(&component),
-      key_(component.GetComponentKey()) {}
+      key_(component.GetPoolAllocatorKey()) {}
 
 template <typename T>
 template <typename U>

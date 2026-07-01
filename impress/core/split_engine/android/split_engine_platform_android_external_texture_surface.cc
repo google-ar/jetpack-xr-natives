@@ -31,6 +31,7 @@
 #include "absl/types/span.h"
 #include "core/async/executor.h"
 #include "core/async/future.h"
+#include "core/common/registry.h"
 #include "core/common/robin_map.h"
 #include "core/common/small_source_location.h"
 #include "core/math/mat.h"
@@ -41,11 +42,12 @@
 #include "core/render/content_security_level.h"
 #include "core/render/texture.h"
 #include "core/render/texture_factory.h"
-#include "core/split_engine/android/split_engine_android_bridge.h"
+#include "core/split_engine/android/split_engine_android_external_texture_surface_service.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/split_engine_serializer.h"
 #include "core/view/base_view.h"
 #include "core/view/platforms/android/wrappers/surface.h"
+#include "mediapipe/framework/port/status_macros.h"
 
 // TODO: Remove this once the required unit tests are added.
 namespace imp::split_engine {
@@ -87,12 +89,13 @@ SplitEnginePlatformAndroidExternalTextureSurface::Create(
           -> absl::StatusOr<
               std::unique_ptr<PlatformAndroidExternalTextureSurface>> {
         // Set the bridge and create the external texture surface.
-        SplitEngineSerializer* serializer = view.GetSplitEngineSerializer();
+        auto service =
+            view.GetRegistry()
+                .Get<SplitEngineAndroidExternalTextureSurfaceService>();
         
-        SplitEngineAndroidBridge& bridge = serializer->GetBridge();
 
-        jobject surface_object =
-            bridge.CreateExternalTextureSurface(split_engine_texture_ids);
+        jobject surface_object = service->get().CreateExternalTextureSurface(
+            split_engine_texture_ids);
         if (!surface_object) {
           return absl::InternalError(
               "Failed to create Surface: surface_object is null.");
@@ -195,11 +198,14 @@ SplitEnginePlatformAndroidExternalTextureSurface::SetDefaultBufferSize(
   if (!serializer) {
     return absl::FailedPreconditionError("SplitEngineSerializer is null.");
   }
-  SplitEngineAndroidBridge& bridge = serializer->GetBridge();
+  MP_ASSIGN_OR_RETURN(SplitEngineAndroidExternalTextureSurfaceService & service,
+                   view_.GetRegistry()
+                       .Get<SplitEngineAndroidExternalTextureSurfaceService>());
+
   for (const auto& [surface_view_type, split_engine_texture_id] :
        split_engine_texture_ids_) {
-    if (!bridge.SetExternalTextureSurfaceSize(split_engine_texture_id, size.x,
-                                              size.y)) {
+    if (!service.SetExternalTextureSurfaceSize(split_engine_texture_id, size.x,
+                                               size.y)) {
       return absl::InternalError("Failed to SetDefaultBufferSize");
     }
   }

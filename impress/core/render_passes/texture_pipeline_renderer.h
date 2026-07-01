@@ -198,12 +198,12 @@ class TexturePipelineRenderer : public Component {
 
     // Registration for the color texture that the pass outputs, if there is
     // one.
-    absl::optional<TextureRegistry::ScopedTextureRegistration>
+    std::optional<TextureRegistry::ScopedTextureRegistration>
         color_texture_registration;
 
     // Registration for the depth texture that the pass outputs, if there is
     // one.
-    absl::optional<TextureRegistry::ScopedTextureRegistration>
+    std::optional<TextureRegistry::ScopedTextureRegistration>
         depth_texture_registration;
 
     // Material to use to override all nodes rendered by the pass.

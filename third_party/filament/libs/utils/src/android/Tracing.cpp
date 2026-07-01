@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-#include "filament/libs/utils/include/utils/compiler.h"
 #include <private/utils/Tracing.h>
+
+#include "filament/libs/utils/include/utils/compiler.h"
 
 #include "perfetto/tracing/backend_type.h"
 #include "perfetto/tracing/tracing.h"

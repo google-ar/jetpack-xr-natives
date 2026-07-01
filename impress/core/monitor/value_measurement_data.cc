@@ -39,6 +39,6 @@ const ValueMeasurement::MonitorValue& ValueMeasurementData::GetValue() const {
   return value_;
 }
 
-void ValueMeasurementData::Reset() { value_ = absl::monostate(); }
+void ValueMeasurementData::Reset() { value_ = std::monostate(); }
 
 }  // namespace imp

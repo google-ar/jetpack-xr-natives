@@ -22,11 +22,8 @@
 #include <cstdint>
 #include <vector>
 
-#include "absl/container/flat_hash_map.h"
-#include "absl/hash/hash.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/span.h"
-#include "core/performance/profiler.h"
 #include "core/performance/profiler_state.h"
 #include "core/performance/profiler_structs.h"
 
@@ -78,6 +75,16 @@ struct SampleNode {
 };
 
 struct ProcessedSamples {
+  ProcessedSamples() {
+    // This struct is reused as part of a pool but each instance has to
+    // double in size many times if we don't reserve space.
+    // Doesn't matter after the pool has been run through once but it's good
+    // not to spam the memory call stack panel with allocations.
+    constexpr int kInitialSize = 1024;
+    all_samples.reserve(kInitialSize);
+    sample_roots.reserve(kInitialSize);
+  }
+
   // All samples processed for this frame.
   std::vector<SampleNode*> all_samples;
 

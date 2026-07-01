@@ -26,8 +26,8 @@
 #include "filament/libs/utils/include/utils/Entity.h"
 #include "filament/libs/utils/include/utils/FixedCapacityVector.h"
 
-#include "filament/libs/math/include/math/mathfwd.h"
 #include "filament/libs/math/include/math/mat4.h"
+#include "filament/libs/math/include/math/mathfwd.h"
 
 #include <utility>
 

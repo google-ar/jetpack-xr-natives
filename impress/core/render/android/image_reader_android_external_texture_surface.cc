@@ -390,7 +390,15 @@ ImageReaderAndroidExternalTextureSurface::GetMediaColorSpace() const {
                << data_space.status().ToString();
     data_space = ADATASPACE_UNKNOWN;
   }
-  return MediaColorSpace(*data_space);
+
+  // We set colorspace metadata in `UpdateTexture`, which will hand off
+  // the linearization to the hardware.
+  MediaColorSpace color_space = MediaColorSpace(*data_space);
+  if (color_space.GetTransfer() == MediaColorSpace::Transfer::kSRGB) {
+    color_space.SetHardwareLinearized(true);
+  }
+
+  return color_space;
 }
 
 ImageReaderAndroidExternalTextureSurface::OwnedImageReaderTexturePtr

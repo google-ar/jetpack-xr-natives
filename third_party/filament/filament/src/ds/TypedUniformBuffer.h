@@ -23,6 +23,7 @@
 #include <backend/DriverApiForward.h>
 #include <backend/DriverEnums.h>
 #include <backend/Handle.h>
+
 #include "filament/libs/utils/include/utils/debug.h"
 
 #include <utility>

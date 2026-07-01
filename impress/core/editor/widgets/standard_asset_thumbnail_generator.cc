@@ -51,7 +51,7 @@ Future<absl::Status> StandardAssetThumbnailGenerator::LoadBasicIcon(
       [&view, icons, extension = std::string(extension)](
           AssetPtr<ImageAsset> icon_image) mutable {
         OwnedTexturePtr icon =
-            view.GetTextureFactory().CreateTexture(*icon_image);
+            view.GetTextureFactory().CreateTexture(icon_image);
         icons->insert_or_assign(extension, std::move(icon));
       });
 }

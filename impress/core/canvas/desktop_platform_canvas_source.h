@@ -22,8 +22,11 @@
 #include <memory>
 #include <vector>
 
+#include "absl/base/thread_annotations.h"
+#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
 #include "core/async/future.h"
 #include "core/canvas/fonts/desktop_font_holder.h"
@@ -116,14 +119,26 @@ class DesktopPlatformCanvasSource : public PlatformCanvasSource {
 
    private:
     DesktopPlatformCanvasSource& source_;
-
     SkBitmap bitmap_;
-    std::unique_ptr<uint8_t[]> pixel_buffer_;
-    size_t pixel_buffer_size_;
     bool did_texture_change_;
 
     std::unique_ptr<SkCanvas> canvas_;
   };
+
+  // Allocates or resizes the persistent CPU pixel buffer and installs it into
+  // the SkBitmap backing store if the requested dimensions differ from the
+  // current bitmap dimensions.
+  void EnsurePixelBuffer(uint2 pixel_size);
+
+  // Ensures that the persistent GPU texture exists and matches the requested
+  // dimensions. If the texture is recreated, triggers the on_texture_changed_fn
+  // callback to allow clients to release old texture references.
+  // Also calls EnsurePixelBuffer to keep the CPU buffer in sync.
+  // Returns true if the texture was created or recreated.
+  bool EnsureTextureAndBuffer(
+      BaseView& view, uint2 pixel_size,
+      ScopedCanvas::OnTextureChangedFn on_texture_changed_fn = {},
+      SmallSourceLocation loc = {});
 
   sk_sp<FontCollection> FontCollectionFromTextOptions(
       const ScopedCanvas::TextOptions& text_options);
@@ -134,13 +149,18 @@ class DesktopPlatformCanvasSource : public PlatformCanvasSource {
       const ScopedCanvas::TextOptions& text_options, bool draw_stroke_only);
 
   // Helper function to get Paragraph from text_options
+  // The caller MUST hold paragraph_mutex_ to protect the shared Skia state.
   std::unique_ptr<skia::textlayout::Paragraph> CreateParagraph(
       absl::string_view text, const ScopedCanvas::TextOptions& text_options,
-      bool draw_stroke_only);
+      bool draw_stroke_only) ABSL_EXCLUSIVE_LOCKS_REQUIRED(paragraph_mutex_);
+
+  SkBitmap bitmap_;
 
   DesktopFontHolder font_holder_;
   OwnedTexturePtr texture_;
   uint2 pixel_size_;
+
+  absl::Mutex paragraph_mutex_;
 };
 
 }  // namespace imp

@@ -184,7 +184,7 @@ class GltfScene : public Component {
     PreciseTransform local_transform;
     mat4f local_transform_mat;
   };
-  using RuntimeBoneVariant = absl::variant<VirtualBone, NodeHandle>;
+  using RuntimeBoneVariant = std::variant<VirtualBone, NodeHandle>;
 
   // Returns whether local trs has been updated since the last time this was
   // called, then resets it to false. Should only be called by GltfRenderer.

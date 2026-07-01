@@ -23,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include "core/editor/widgets/input_settings_widget_constants.h"
 #include "core/math/math.h"
 #include "core/ncsb/component.h"
 #include "core/ncsb/component_handle.h"
@@ -44,6 +45,7 @@ class CameraTranslate : public Component {
 
   std::optional<float3> intersection_prev_;
   NodeHandle pivot_;
+  bool use_legacy_camera_controls_ = kUseLegacyCameraControlsDefault;
 };
 
 }  // namespace imp::editor

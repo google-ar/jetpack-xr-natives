@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-
 #ifndef THIRD_PARTY_IMPRESS_CORE_VIEW_PLATFORMS_XR_ANDROID_XR_OPENGL_SWAP_CHAIN_IMAGE_HANDLER_H_
 #define THIRD_PARTY_IMPRESS_CORE_VIEW_PLATFORMS_XR_ANDROID_XR_OPENGL_SWAP_CHAIN_IMAGE_HANDLER_H_
 #include <cstdint>
@@ -26,6 +25,7 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "filament/filament/backend/src/opengl/gl_headers.h"  // NOLINT
+#include "core/math/vec.h"
 #include "core/render/content_security_level.h"
 #include "core/view/platforms/xr_android/openxr_includes.h"
 #include "core/view/platforms/xr_android/xr_opengl_platform.h"
@@ -72,10 +72,15 @@ class XrOpenGLSwapChainImageHandler {
     // depth_swapchain_images_ will remain empty unless
     // XrSessionHost::IsCompositionLayerDepthEnabled is true.
     SwapchainData depth = {XR_NULL_HANDLE, {}};
+    // The size of the swapchain images.
+    uint2 display_size = {0, 0};
+    // Whether the swapchain is stereo. This may be false for quad layer
+    // swapchains.
+    bool is_stereo = true;
   };
   XrOpenGLSwapChainImageHandler(XrPlatformType* platform, XrSessionHost* host,
                                 std::unique_ptr<SwapchainLayers> layers,
-                                ContentSecurityLevel);
+                                ContentSecurityLevel, bool should_end_frame);
   ~XrOpenGLSwapChainImageHandler();
   XrOpenGLSwapChainImageHandler(const XrOpenGLSwapChainImageHandler&) = delete;
   XrOpenGLSwapChainImageHandler& operator=(
@@ -87,6 +92,10 @@ class XrOpenGLSwapChainImageHandler {
   // called on the GL thread.
   absl::Status Commit(uint32_t fbo);
   std::unique_ptr<SwapchainLayers>& GetSwapchainLayers() { return layers_; }
+  // Returns whether the swapchain has at least two layers. This will return
+  // false for quad layer swapchains which are a single layer. Main projection
+  // layer swapchains are stereo.
+  bool IsStereo() const { return layers_->is_stereo; }
 
  private:
   // Returns the color and depth swapchain images for the current frame on the
@@ -102,6 +111,7 @@ class XrOpenGLSwapChainImageHandler {
   XrPlatformType* platform_;
   XrSessionHost* host_;
   std::unique_ptr<SwapchainLayers> layers_;
+  bool should_end_frame_ = false;
   ContentSecurityLevel content_security_level_;
   tsl::robin_map<uint32_t, uint32_t> color_to_depth_texture_;
   // The `BeginFrameAndAcquireSwapChainImages` and `Commit` methods are called

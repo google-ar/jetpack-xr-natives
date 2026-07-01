@@ -72,11 +72,11 @@ class ArSessionNativeDesktop : public ArSessionNative {
 
   std::unique_ptr<HdrLighting> GetHdrLighting() override;
 
-  absl::optional<ArFrame> Update(absl::Time last_submitted_timestamp) override;
+  std::optional<ArFrame> Update(absl::Time last_submitted_timestamp) override;
   uint4 GetDebugSessionId() override;
 
   std::vector<ArHitResult> HitTest(
-      float2 screen_pos, absl::optional<float> guessed_distance,
+      float2 screen_pos, std::optional<float> guessed_distance,
       TrackableTuple* out_generated_trackables) override;
   std::vector<ArHitResult> HitTestRay(
       const Ray& ray, TrackableTuple* out_generated_trackables) override;
@@ -86,7 +86,7 @@ class ArSessionNativeDesktop : public ArSessionNative {
   }
   absl::StatusOr<ArAnchor> CreateAnchor(
       float3 position, quatf rotation,
-      absl::optional<ArTrackableId> id) override;
+      std::optional<ArTrackableId> id) override;
   void DestroyAnchor(ArAnchor anchor) override;
   std::vector<float3> GetSphericalHarmonicsLighting() override;
   // Enables desktop camera controls on the view camera.

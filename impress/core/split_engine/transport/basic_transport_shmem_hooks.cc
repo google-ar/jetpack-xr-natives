@@ -26,13 +26,13 @@
 #include "absl/status/statusor.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
-#include "third_party/gloop/util/status/status_macros.h"
 #include "core/async/executor.h"
 #include "core/split_engine/message_group_monitor.h"
 #include "core/split_engine/shared/split_engine_defines.h"
 #include "core/split_engine/transport/transport.h"
 #include "core/view/base_view.h"
 #include "core/view/utils/frame_time.h"
+#include "mediapipe/framework/port/status_macros.h"
 
 namespace imp::split_engine {
 

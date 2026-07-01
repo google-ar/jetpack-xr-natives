@@ -36,7 +36,7 @@ class PinchGesture : public Gesture {
                const PointerHitEvent& pointer_hit,
                const std::array<Pointer::Id, 2>& pointer_id);
 
-  using CreateFn = std::function<absl::optional<PinchGesture>(
+  using CreateFn = std::function<std::optional<PinchGesture>(
       const PointerHitEvent& pointer_hit,
       absl::Span<const PinchGesture> gestures)>;
   static CreateFn GetCreateFunction(Dispatcher* dispatcher,
